@@ -548,46 +548,12 @@ inline bool isHeDcmCombinationSupported(int mcs, int numberOfSpatialStreams)
            numberOfSpatialStreams >= 1 && numberOfSpatialStreams <= 2;
 }
 
-/**
- * Returns false for <MCS, Nss> combinations that are marked N/A in the
- * IEEE 802.11-2024 HE rate tables (Tables 27-62 through 27-117).
- *
- * Three classes of N/A entries exist across all RU sizes:
- *
- * 1. MCS 6, Nss in {3, 6}: The resulting coded bits per symbol is not an
- *    integer multiple of the code-rate denominator for any BW.  These are
- *    marked N/A throughout Tables 27-62..27-117.
- *    (IEEE 802.11-2024 Clause 27.5, Tables 27-62..27-117)
- *
- * 2. MCS 9, Nss in {3, 6} at 20 MHz (242-tone full-BW RU only): the data
- *    rate formula yields a non-integer number of data bits per symbol.
- *    For wider channels the same Nss values are valid.
- *    (IEEE 802.11-2024 Clause 27.5, Tables 27-74..27-81 onward)
- *
- * 3. MCS 10 and MCS 11 (1024-QAM) require a minimum of 106 data subcarriers
- *    to achieve the smallest standardized data rate. 26-tone (12 data
- *    subcarriers) and 52-tone (24 data subcarriers) RUs produce a zero or
- *    non-standard number of data bits per symbol and are not listed in
- *    Tables 27-62..27-69 (26-tone) or Tables 27-70..27-77 (52-tone).
- *    (IEEE 802.11-2024 Clause 27.5)
- *
- * The ruToneSize argument is the number of tones of the RU to be used;
- * pass 0 or a negative value to skip the tone-size check (e.g., when
- * validating a (MCS, Nss) pair independent of RU geometry).
- */
+/** Validates the ordinary (non-DCM) HE MCS/NSS range. */
 inline bool isHeValidMcsNssCombination(int mcs, int nss, int ruToneSize = 0)
 {
-    // MCS 6, Nss=3 or Nss=6: N/A for all RU sizes and bandwidths.
-    if (mcs == 6 && (nss == 3 || nss == 6))
-        return false;
-    // MCS 9, Nss=3 or Nss=6: N/A for 20 MHz (242-tone full-BW) and smaller RUs.
-    if (mcs == 9 && (nss == 3 || nss == 6) && ruToneSize > 0 && ruToneSize <= 242)
-        return false;
-    // MCS 10/11: require at least 106 data subcarriers; 26-tone and 52-tone RUs
-    // are not listed in the standard's rate tables.
-    if ((mcs == 10 || mcs == 11) && ruToneSize > 0 && ruToneSize < 106)
-        return false;
-    return true;
+    // IEEE Std 802.11-2024, Tables 27-64 and 27-69 include the ordinary
+    // combinations whose DCM columns are N/A. DCM is validated separately.
+    return mcs >= 0 && mcs <= 11 && nss >= 1 && nss <= 8;
 }
 
 /**

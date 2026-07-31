@@ -1,0 +1,57 @@
+%description:
+Test EHT DUP capability and MCS15-disable operation serialization round trip.
+
+%includes:
+#include "inet/common/packet/Packet.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrame_m.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+%activity:
+auto request = makeShared<Ieee80211AssociationRequestFrame>();
+request->setSSID("eht");
+Ieee80211SupportedRatesElement rates;
+rates.numRates = 1;
+rates.rate[0] = 6;
+request->setSupportedRates(rates);
+
+Ieee80211EhtCapabilitiesElement capabilities;
+capabilities.supportedChannelWidth320MHz = true;
+capabilities.dlOfdma = true;
+capabilities.ulOfdma = true;
+capabilities.ldpc = true;
+capabilities.ehtDup6GHz = true;
+request->setEhtCapabilitiesPresent(true);
+request->setEhtCapabilities(capabilities);
+
+Ieee80211EhtOperationElement operation;
+operation.operatingChannelWidthMHz = 320;
+operation.disabledSubchannelBitmap = 0;
+operation.basicEhtMcsNss = 3;
+operation.mcs15Disabled = true;
+request->setEhtOperationPresent(true);
+request->setEhtOperation(operation);
+
+// Association Request fixed fields and SSID/rates occupy 12 octets; the
+// approximate EHT Capabilities and EHT Operation elements occupy 17 and 9.
+request->setChunkLength(B(38));
+Packet packet("eht-mgmt", request);
+auto bytes = packet.peekDataAsBytes();
+ASSERT(bytes->getChunkLength() == B(38));
+
+Packet received("eht-mgmt-rx", bytes);
+auto decoded = received.popAtFront<Ieee80211AssociationRequestFrame>();
+ASSERT(decoded->getEhtCapabilitiesPresent());
+ASSERT(decoded->getEhtCapabilities().ldpc);
+ASSERT(decoded->getEhtCapabilities().ehtDup6GHz);
+ASSERT(decoded->getEhtOperationPresent());
+ASSERT(decoded->getEhtOperation().operatingChannelWidthMHz == 320);
+ASSERT(decoded->getEhtOperation().basicEhtMcsNss == 3);
+ASSERT(decoded->getEhtOperation().mcs15Disabled);
+
+EV << "EHT management capability/operation round trip passed.\n";
+
+%contains: stdout
+EHT management capability/operation round trip passed.

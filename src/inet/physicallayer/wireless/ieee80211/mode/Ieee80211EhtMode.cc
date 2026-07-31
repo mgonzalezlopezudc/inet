@@ -51,8 +51,9 @@ int getNumberOfTotalSubcarriers(Hz bandwidth)
 const ApskModulationBase *getEhtMcsModulation(int mcs)
 {
     // 80211be-2024:chunk:00663 maps constellation index 6 to 4096-QAM.
-    // Tables 36-76, 36-77, 36-79, 36-82, and 36-86 list EHT-MCS 12/13 as
-    // 4096-QAM with coding rates 3/4 and 5/6 for 242/484/996/2x996/4x996 RUs.
+    // IEEE Std 802.11be-2024, 36.3.8 and 36.5: EHT-MCS 14/15 apply DCM
+    // to BPSK EHT-MCS 0. The packet-level mode represents the resulting
+    // effective coded-tone count; it does not synthesize the duplicated waveform.
     switch (mcs) {
         case 0: return &BpskModulation::singleton;
         case 1: return &QpskModulation::singleton;
@@ -68,6 +69,8 @@ const ApskModulationBase *getEhtMcsModulation(int mcs)
         case 11: return &Qam1024Modulation::singleton;
         case 12: return &Qam4096Modulation::singleton;
         case 13: return &Qam4096Modulation::singleton;
+        case 14: return &BpskModulation::singleton;
+        case 15: return &BpskModulation::singleton;
         default: throw cRuntimeError("Invalid EHT MCS: %d", mcs);
     }
 }
@@ -89,6 +92,8 @@ const Ieee80211ConvolutionalCode *getEhtMcsConvolutionalCode(int mcs)
         case 11: return &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6;
         case 12: return &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4;
         case 13: return &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6;
+        case 14: return &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2;
+        case 15: return &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2;
         default: throw cRuntimeError("Invalid EHT MCS: %d", mcs);
     }
 }
@@ -265,11 +270,26 @@ unsigned int Ieee80211Ehtmcs::getNumNss() const
            (stream7Modulation ? 1 : 0) + (stream8Modulation ? 1 : 0);
 }
 
-Ieee80211EhtDataMode::Ieee80211EhtDataMode(const Ieee80211Ehtmcs *modulationAndCodingScheme, const Hz bandwidth, GuardIntervalType guardIntervalType) :
+Ieee80211EhtDataMode::Ieee80211EhtDataMode(const Ieee80211Ehtmcs *modulationAndCodingScheme, const Hz bandwidth, GuardIntervalType guardIntervalType, bool ldpc) :
     Ieee80211EhtModeBase(modulationAndCodingScheme->getMcsIndex(), modulationAndCodingScheme->getNumNss(), bandwidth, guardIntervalType),
     modulationAndCodingScheme(modulationAndCodingScheme),
-    numberOfBccEncoders(computeNumberOfBccEncoders())
+    numberOfBccEncoders(computeNumberOfBccEncoders()),
+    ldpc(ldpc || modulationAndCodingScheme->getMcsIndex() == 14)
 {
+    if (this->ldpc) {
+        auto bccCode = modulationAndCodingScheme->getCode();
+        ldpcCode = Ieee80211VhtCompliantCodes::getCompliantCode(
+                bccCode->getForwardErrorCorrection(),
+                modulationAndCodingScheme->getModulation(),
+                modulationAndCodingScheme->getStreamExtension1Modulation(),
+                modulationAndCodingScheme->getStreamExtension2Modulation(),
+                modulationAndCodingScheme->getStreamExtension3Modulation(),
+                modulationAndCodingScheme->getStreamExtension4Modulation(),
+                modulationAndCodingScheme->getStreamExtension5Modulation(),
+                modulationAndCodingScheme->getStreamExtension6Modulation(),
+                modulationAndCodingScheme->getStreamExtension7Modulation(),
+                bandwidth, true, true);
+    }
 }
 
 const simtime_t Ieee80211EhtDataMode::getSymbolInterval() const
@@ -280,6 +300,26 @@ const simtime_t Ieee80211EhtDataMode::getSymbolInterval() const
         case EHT_GUARD_INTERVAL_LONG: return Ieee80211EhtTimingRelatedParametersBase::getSymbolInterval();
         default: throw cRuntimeError("Unknown EHT guard interval");
     }
+}
+
+int Ieee80211EhtDataMode::getNumberOfDataSubcarriers() const
+{
+    // IEEE Std 802.11be-2024, Tables 36-71..36-86 and 36-87. These are
+    // effective N_SD values for packet-level SU full-bandwidth timing.
+    if (mcsIndex == 15)
+        return Ieee80211EhtModeBase::getNumberOfDataSubcarriers() / 2;
+    else if (mcsIndex == 14) {
+        if (bandwidth == MHz(80))
+            return 234;
+        else if (bandwidth == MHz(160))
+            return 490;
+        else if (bandwidth == MHz(320))
+            return 980;
+        else
+            throw cRuntimeError("EHT-MCS 14 requires 80, 160, or 320 MHz bandwidth");
+    }
+    else
+        return Ieee80211EhtModeBase::getNumberOfDataSubcarriers();
 }
 
 bps Ieee80211EhtDataMode::computeGrossBitrate() const
@@ -351,17 +391,18 @@ Ieee80211EhtCompliantModes::~Ieee80211EhtCompliantModes()
         delete entry.second;
 }
 
-const Ieee80211EhtMode *Ieee80211EhtCompliantModes::getCompliantMode(const Ieee80211Ehtmcs *mcsMode, Ieee80211EhtMode::BandMode centerFrequencyMode, Ieee80211EhtPreambleMode::ExtremelyHighThroughputPreambleFormat preambleFormat, Ieee80211EhtModeBase::GuardIntervalType guardIntervalType)
+const Ieee80211EhtMode *Ieee80211EhtCompliantModes::getCompliantMode(const Ieee80211Ehtmcs *mcsMode, Ieee80211EhtMode::BandMode centerFrequencyMode, Ieee80211EhtPreambleMode::ExtremelyHighThroughputPreambleFormat preambleFormat, Ieee80211EhtModeBase::GuardIntervalType guardIntervalType, bool ldpc)
 {
     const char *name = "";
     unsigned int nss = mcsMode->getNumNss();
+    ldpc = ldpc || mcsMode->getMcsIndex() == 14;
     auto modeId = std::make_tuple(mcsMode->getBandwidth(), mcsMode->getMcsIndex(),
-            guardIntervalType, nss, centerFrequencyMode, preambleFormat);
+            guardIntervalType, nss, centerFrequencyMode, preambleFormat, ldpc);
     auto mode = singleton.modeCache.find(modeId);
     if (mode == singleton.modeCache.end()) {
         const Ieee80211OfdmSignalMode *legacySignal = &Ieee80211OfdmCompliantModes::ofdmHeaderMode6MbpsRate13;
         const Ieee80211EhtSignalMode *ehtSignal = new Ieee80211EhtSignalMode(mcsMode->getMcsIndex(), &Ieee80211OfdmCompliantModulations::subcarriers52QbpskModulation, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, mcsMode->getBandwidth(), guardIntervalType);
-        const Ieee80211EhtDataMode *dataMode = new Ieee80211EhtDataMode(mcsMode, mcsMode->getBandwidth(), guardIntervalType);
+        const Ieee80211EhtDataMode *dataMode = new Ieee80211EhtDataMode(mcsMode, mcsMode->getBandwidth(), guardIntervalType, ldpc);
         const Ieee80211EhtPreambleMode *preambleMode = new Ieee80211EhtPreambleMode(ehtSignal, legacySignal, preambleFormat, dataMode->getNumberOfSpatialStreams());
         const Ieee80211EhtMode *ehtMode = new Ieee80211EhtMode(name, preambleMode, dataMode, centerFrequencyMode);
         singleton.modeCache.insert({modeId, ehtMode});
@@ -398,13 +439,24 @@ const DI<Ieee80211Ehtmcs> Ieee80211EhtmcsTable::ehtMcs##MCS##BW##WIDTH##MHzNss##
     EHT_DEFINE_MCS_FOR_NSS(WIDTH, 6) \
     EHT_DEFINE_MCS_FOR_NSS(WIDTH, 7) \
     EHT_DEFINE_MCS_FOR_NSS(WIDTH, 8)
+#define EHT_DEFINE_SPECIAL_MCS(WIDTH) \
+    EHT_DEFINE_MCS(WIDTH, 1, 15)
 
 EHT_DEFINE_MCS_FOR_BW(20)
 EHT_DEFINE_MCS_FOR_BW(40)
 EHT_DEFINE_MCS_FOR_BW(80)
 EHT_DEFINE_MCS_FOR_BW(160)
 EHT_DEFINE_MCS_FOR_BW(320)
+EHT_DEFINE_SPECIAL_MCS(20)
+EHT_DEFINE_SPECIAL_MCS(40)
+EHT_DEFINE_SPECIAL_MCS(80)
+EHT_DEFINE_SPECIAL_MCS(160)
+EHT_DEFINE_SPECIAL_MCS(320)
+EHT_DEFINE_MCS(80, 1, 14)
+EHT_DEFINE_MCS(160, 1, 14)
+EHT_DEFINE_MCS(320, 1, 14)
 
+#undef EHT_DEFINE_SPECIAL_MCS
 #undef EHT_DEFINE_MCS_FOR_BW
 #undef EHT_DEFINE_MCS_FOR_NSS
 #undef EHT_DEFINE_MCS

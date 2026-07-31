@@ -47,6 +47,7 @@
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
 #include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/networklayer/common/NetworkInterface.h"
@@ -215,6 +216,14 @@ const IIeee80211Mode *Ieee80211Transmitter::computeTransmissionMode(const Packet
                 useLdpc = mib->localHeCapabilities.ldpc;
             }
         }
+        else if (dynamic_cast<const Ieee80211EhtMode *>(transmissionMode) != nullptr) {
+            if (receiverAddress != MacAddress::UNSPECIFIED_ADDRESS && !receiverAddress.isMulticast()) {
+                auto negotiatedEht = mib->findNegotiatedEhtCapabilities(receiverAddress);
+                useLdpc = negotiatedEht ? negotiatedEht->intersection.ldpc : mib->localEhtCapabilities.ldpc;
+            }
+            else
+                useLdpc = mib->localEhtCapabilities.ldpc;
+        }
 
         if (auto htMode = dynamic_cast<const Ieee80211HtMode *>(transmissionMode)) {
             auto mcs = htMode->getDataMode()->getModulationAndCodingScheme();
@@ -237,6 +246,16 @@ const IIeee80211Mode *Ieee80211Transmitter::computeTransmissionMode(const Packet
             auto centerFreqMode = heMode->getCenterFrequencyMode();
             transmissionMode = Ieee80211HeCompliantModes::getCompliantMode(mcs, centerFreqMode, preambleFormat, gi, useLdpc);
         }
+        else if (auto ehtMode = dynamic_cast<const Ieee80211EhtMode *>(transmissionMode)) {
+            auto mcs = ehtMode->getDataMode()->getModulationAndCodingScheme();
+            auto preambleFormat = ehtMode->getPreambleMode()->getPreambleFormat();
+            auto gi = ehtMode->getDataMode()->getGuardIntervalType();
+            auto centerFreqMode = ehtMode->getCenterFrequencyMode();
+            transmissionMode = Ieee80211EhtCompliantModes::getCompliantMode(mcs, centerFreqMode, preambleFormat, gi, useLdpc);
+        }
+
+        if (!mib->isEhtModeAllowedForPeer(transmissionMode, receiverAddress))
+            throw cRuntimeError("Selected EHT mode is not allowed by the effective peer capability and operation state");
     }
 
     return transmissionMode;

@@ -55,6 +55,7 @@ struct Ieee80211EhtCapabilities
     bool ulMuMimo = false;
     bool ldpc = true;
     bool support4096Qam = true;
+    bool ehtDup6GHz = false;
     bool preamblePuncturing = true;
     bool mlo = false;
     bool str = true;
@@ -72,6 +73,7 @@ struct Ieee80211EhtOperation
     Hz operatingChannelWidth = Hz(20e6);
     uint16_t disabledSubchannelBitmap = 0;
     int basicEhtMcsNss = 0;
+    bool mcs15Disabled = false;
 };
 
 /** Usable EHT feature set and operation produced for a local/peer association. */
@@ -139,6 +141,7 @@ inline Ieee80211NegotiatedEhtCapabilities negotiateEhtCapabilities(
     negotiated.intersection.support4096Qam =
             local.support4096Qam && peer.support4096Qam &&
             supportsEhtMcs13(negotiated.intersection.txMcsNss);
+    negotiated.intersection.ehtDup6GHz = local.ehtDup6GHz && peer.ehtDup6GHz;
     negotiated.intersection.preamblePuncturing =
             local.preamblePuncturing && peer.preamblePuncturing;
     negotiated.intersection.mlo = local.mlo && peer.mlo;
@@ -164,6 +167,7 @@ inline std::ostream& operator<<(std::ostream& os, const Ieee80211EhtCapabilities
        << " dlOfdma=" << (capabilities.dlOfdma ? "yes" : "no")
        << " ulOfdma=" << (capabilities.ulOfdma ? "yes" : "no")
        << " 4096Qam=" << (capabilities.support4096Qam ? "yes" : "no")
+       << " ehtDup6GHz=" << (capabilities.ehtDup6GHz ? "yes" : "no")
        << " puncturing=" << (capabilities.preamblePuncturing ? "yes" : "no")
        << " mlo=" << (capabilities.mlo ? "yes" : "no")
        << " str=" << (capabilities.str ? "yes" : "no")
@@ -179,7 +183,8 @@ inline std::ostream& operator<<(std::ostream& os, const Ieee80211EhtOperation& o
 {
     os << "width=" << operation.operatingChannelWidth
        << " disabledSubchannels=0x" << std::hex << operation.disabledSubchannelBitmap << std::dec
-       << " basicMcsNss=" << operation.basicEhtMcsNss;
+       << " basicMcsNss=" << operation.basicEhtMcsNss
+       << " mcs15=" << (operation.mcs15Disabled ? "disabled" : "enabled");
     return os;
 }
 

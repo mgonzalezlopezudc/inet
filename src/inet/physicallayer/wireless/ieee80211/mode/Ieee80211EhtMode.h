@@ -96,7 +96,7 @@ class INET_API Ieee80211EhtSignalMode : public IIeee80211HeaderMode, public Ieee
     virtual const Ieee80211OfdmModulation *getModulation() const override { return modulation; }
     virtual const Ieee80211VhtCode *getCode() const { return code; }
 
-    virtual Ptr<Ieee80211PhyHeader> createHeader() const override { return makeShared<Ieee80211HtPhyHeader>(); }
+    virtual Ptr<Ieee80211PhyHeader> createHeader() const override { return makeShared<Ieee80211EhtPhyHeader>(); }
 };
 
 /** EHT SU preamble mode, including the legacy-compatible preamble portion. */
@@ -133,7 +133,7 @@ class INET_API Ieee80211EhtPreambleMode : public IIeee80211PreambleMode, public 
 
     virtual const simtime_t getDuration() const override;
 
-    virtual Ptr<Ieee80211PhyPreamble> createPreamble() const override { return makeShared<Ieee80211VhtPhyPreamble>(); }
+    virtual Ptr<Ieee80211PhyPreamble> createPreamble() const override { return makeShared<Ieee80211EhtPhyPreamble>(); }
 };
 
 /** One EHT MCS definition: per-stream modulation, FEC, and channel bandwidth. */
@@ -176,6 +176,8 @@ class INET_API Ieee80211EhtDataMode : public IIeee80211DataMode, public Ieee8021
   protected:
     const Ieee80211Ehtmcs *modulationAndCodingScheme;
     const unsigned int numberOfBccEncoders;
+    const bool ldpc;
+    const Ieee80211VhtCode *ldpcCode = nullptr;
 
   protected:
     bps computeGrossBitrate() const override;
@@ -184,12 +186,15 @@ class INET_API Ieee80211EhtDataMode : public IIeee80211DataMode, public Ieee8021
     unsigned int computeNumberOfBccEncoders() const;
 
   public:
-    Ieee80211EhtDataMode(const Ieee80211Ehtmcs *modulationAndCodingScheme, const Hz bandwidth, GuardIntervalType guardIntervalType);
+    Ieee80211EhtDataMode(const Ieee80211Ehtmcs *modulationAndCodingScheme, const Hz bandwidth, GuardIntervalType guardIntervalType, bool ldpc = false);
+    virtual ~Ieee80211EhtDataMode() { delete ldpcCode; }
 
     b getServiceFieldLength() const { return b(16); }
-    b getTailFieldLength() const { return b(6) * numberOfBccEncoders; }
+    b getTailFieldLength() const { return ldpc ? b(0) : b(6) * numberOfBccEncoders; }
+    bool isLdpc() const { return ldpc; }
 
     virtual int getNumberOfSpatialStreams() const override { return Ieee80211EhtModeBase::getNumberOfSpatialStreams(); }
+    virtual int getNumberOfDataSubcarriers() const override;
     virtual Hz getBandwidth() const override { return bandwidth; }
     virtual b getPaddingLength(b dataLength) const override { return b(0); }
     virtual b getCompleteLength(b dataLength) const override;
@@ -197,7 +202,7 @@ class INET_API Ieee80211EhtDataMode : public IIeee80211DataMode, public Ieee8021
     virtual bps getNetBitrate() const override { return Ieee80211EhtModeBase::getNetBitrate(); }
     virtual bps getGrossBitrate() const override { return Ieee80211EhtModeBase::getGrossBitrate(); }
     virtual const Ieee80211Ehtmcs *getModulationAndCodingScheme() const { return modulationAndCodingScheme; }
-    virtual const Ieee80211VhtCode *getCode() const { return modulationAndCodingScheme->getCode(); }
+    virtual const Ieee80211VhtCode *getCode() const { return ldpc ? ldpcCode : modulationAndCodingScheme->getCode(); }
     virtual const simtime_t getSymbolInterval() const override;
     virtual const Ieee80211OfdmModulation *getModulation() const override { return modulationAndCodingScheme->getModulation(); }
 };
@@ -272,12 +277,24 @@ class INET_API Ieee80211EhtmcsTable
     EHT_DECLARE_MCS_FOR_NSS(WIDTH, 7) \
     EHT_DECLARE_MCS_FOR_NSS(WIDTH, 8)
 
+#define EHT_DECLARE_SPECIAL_MCS(WIDTH) \
+    EHT_DECLARE_MCS(WIDTH, 1, 15)
+
     EHT_DECLARE_MCS_FOR_BW(20)
     EHT_DECLARE_MCS_FOR_BW(40)
     EHT_DECLARE_MCS_FOR_BW(80)
     EHT_DECLARE_MCS_FOR_BW(160)
     EHT_DECLARE_MCS_FOR_BW(320)
+    EHT_DECLARE_SPECIAL_MCS(20)
+    EHT_DECLARE_SPECIAL_MCS(40)
+    EHT_DECLARE_SPECIAL_MCS(80)
+    EHT_DECLARE_SPECIAL_MCS(160)
+    EHT_DECLARE_SPECIAL_MCS(320)
+    EHT_DECLARE_MCS(80, 1, 14)
+    EHT_DECLARE_MCS(160, 1, 14)
+    EHT_DECLARE_MCS(320, 1, 14)
 
+#undef EHT_DECLARE_SPECIAL_MCS
 #undef EHT_DECLARE_MCS_FOR_BW
 #undef EHT_DECLARE_MCS_FOR_NSS
 #undef EHT_DECLARE_MCS
@@ -293,13 +310,14 @@ class INET_API Ieee80211EhtCompliantModes
 
     mutable std::map<std::tuple<Hz, unsigned int, Ieee80211EhtModeBase::GuardIntervalType,
             unsigned int, Ieee80211EhtMode::BandMode,
-            Ieee80211EhtPreambleMode::ExtremelyHighThroughputPreambleFormat>, const Ieee80211EhtMode *> modeCache;
+            Ieee80211EhtPreambleMode::ExtremelyHighThroughputPreambleFormat,
+            bool>, const Ieee80211EhtMode *> modeCache;
 
   public:
     Ieee80211EhtCompliantModes();
     virtual ~Ieee80211EhtCompliantModes();
 
-    static const Ieee80211EhtMode *getCompliantMode(const Ieee80211Ehtmcs *mcsMode, Ieee80211EhtMode::BandMode centerFrequencyMode, Ieee80211EhtPreambleMode::ExtremelyHighThroughputPreambleFormat preambleFormat, Ieee80211EhtModeBase::GuardIntervalType guardIntervalType);
+    static const Ieee80211EhtMode *getCompliantMode(const Ieee80211Ehtmcs *mcsMode, Ieee80211EhtMode::BandMode centerFrequencyMode, Ieee80211EhtPreambleMode::ExtremelyHighThroughputPreambleFormat preambleFormat, Ieee80211EhtModeBase::GuardIntervalType guardIntervalType, bool ldpc = false);
 };
 
 } // namespace physicallayer

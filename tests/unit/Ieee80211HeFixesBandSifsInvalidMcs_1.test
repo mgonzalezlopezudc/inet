@@ -2,7 +2,7 @@
 Test HE implementation fixes:
   (1) SIFS is 10 us for 2.4 GHz and 16 us for 5 GHz (IEEE 802.11-2024 Table 27-61)
   (2) Uncompressed HE-SIG-B MCS 0 accounts for every User Block CRC and tail
-  (3) Invalid (MCS, Nss, RU) combinations are rejected by computeHePpduParameters()
+  (3) Ordinary HE MCS/Nss/RU combinations are accepted while actual MCS/Nss boundaries are rejected
 
 %includes:
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
@@ -85,7 +85,7 @@ static Ieee80211HeUserPhyParameters makeUser(int mcs, int nss, int toneSize, Iee
 }
 
 // -----------------------------------------------------------------------
-// Fix 3: Invalid (MCS, Nss, RU) combinations must be rejected
+// Fix 3: Ordinary MCS/Nss/RU combinations are valid; only actual range boundaries are rejected
 // -----------------------------------------------------------------------
 {
     auto tryUser = [](Ieee80211HeUserPhyParameters u) -> std::string {
@@ -94,49 +94,50 @@ static Ieee80211HeUserPhyParameters makeUser(int mcs, int nss, int toneSize, Iee
         return result ? std::string("") : result.error;
     };
 
-    // Should be REJECTED
+    // Ordinary non-DCM combinations remain valid even where the DCM-specific
+    // entries in the standard's MCS/Nss/RU tables are marked N/A.
     std::string e;
 
     e = tryUser(makeUser(6, 3, 106));
-    EV << "MCS6 Nss3 106-tone: " << (e.empty() ? "accepted (WRONG)" : "rejected") << "\n";
-    ASSERT(!e.empty());
+    EV << "MCS6 Nss3 106-tone: " << (e.empty() ? "accepted" : "rejected (WRONG)") << "\n";
+    ASSERT(e.empty());
 
     e = tryUser(makeUser(6, 6, 106));
-    EV << "MCS6 Nss6 106-tone: " << (e.empty() ? "accepted (WRONG)" : "rejected") << "\n";
-    ASSERT(!e.empty());
+    EV << "MCS6 Nss6 106-tone: " << (e.empty() ? "accepted" : "rejected (WRONG)") << "\n";
+    ASSERT(e.empty());
 
     e = tryUser(makeUser(9, 3, 242));
-    EV << "MCS9 Nss3 242-tone: " << (e.empty() ? "accepted (WRONG)" : "rejected") << "\n";
-    ASSERT(!e.empty());
+    EV << "MCS9 Nss3 242-tone: " << (e.empty() ? "accepted" : "rejected (WRONG)") << "\n";
+    ASSERT(e.empty());
 
     e = tryUser(makeUser(9, 6, 106));
-    EV << "MCS9 Nss6 106-tone: " << (e.empty() ? "accepted (WRONG)" : "rejected") << "\n";
-    ASSERT(!e.empty());
+    EV << "MCS9 Nss6 106-tone: " << (e.empty() ? "accepted" : "rejected (WRONG)") << "\n";
+    ASSERT(e.empty());
 
     e = tryUser(makeUser(10, 1, 52));
-    EV << "MCS10 Nss1 52-tone: " << (e.empty() ? "accepted (WRONG)" : "rejected") << "\n";
-    ASSERT(!e.empty());
+    EV << "MCS10 Nss1 52-tone: " << (e.empty() ? "accepted" : "rejected (WRONG)") << "\n";
+    ASSERT(e.empty());
 
     e = tryUser(makeUser(11, 1, 26));
-    EV << "MCS11 Nss1 26-tone: " << (e.empty() ? "accepted (WRONG)" : "rejected") << "\n";
+    EV << "MCS11 Nss1 26-tone: " << (e.empty() ? "accepted" : "rejected (WRONG)") << "\n";
+    ASSERT(e.empty());
+
+    // Values outside the HE MCS and spatial-stream ranges must still be rejected.
+    e = tryUser(makeUser(-1, 1, 106));
+    EV << "MCS-1 Nss1 106-tone: " << (e.empty() ? "accepted (WRONG)" : "rejected") << "\n";
     ASSERT(!e.empty());
 
-    // Should be ACCEPTED
-    e = tryUser(makeUser(6, 1, 106));
-    EV << "MCS6 Nss1 106-tone: " << (e.empty() ? "accepted" : "rejected (WRONG)") << "\n";
-    ASSERT(e.empty());
+    e = tryUser(makeUser(12, 1, 106));
+    EV << "MCS12 Nss1 106-tone: " << (e.empty() ? "accepted (WRONG)" : "rejected") << "\n";
+    ASSERT(!e.empty());
 
-    e = tryUser(makeUser(9, 3, 484));
-    EV << "MCS9 Nss3 484-tone: " << (e.empty() ? "accepted" : "rejected (WRONG)") << "\n";
-    ASSERT(e.empty());
+    e = tryUser(makeUser(0, 0, 106));
+    EV << "MCS0 Nss0 106-tone: " << (e.empty() ? "accepted (WRONG)" : "rejected") << "\n";
+    ASSERT(!e.empty());
 
-    e = tryUser(makeUser(10, 1, 106));
-    EV << "MCS10 Nss1 106-tone: " << (e.empty() ? "accepted" : "rejected (WRONG)") << "\n";
-    ASSERT(e.empty());
-
-    e = tryUser(makeUser(11, 1, 242));
-    EV << "MCS11 Nss1 242-tone: " << (e.empty() ? "accepted" : "rejected (WRONG)") << "\n";
-    ASSERT(e.empty());
+    e = tryUser(makeUser(0, 9, 106));
+    EV << "MCS0 Nss9 106-tone: " << (e.empty() ? "accepted (WRONG)" : "rejected") << "\n";
+    ASSERT(!e.empty());
 }
 
 EV << ".\n";
@@ -148,14 +149,14 @@ SIG-B symbols (1 user, 20 MHz): 2
 SIG-B symbols (3 users, 40 MHz): 3
 SIG-B symbols (8 users, 80 MHz): 6
 SIG-B symbols (9 users, 20 MHz): 10
-MCS6 Nss3 106-tone: rejected
-MCS6 Nss6 106-tone: rejected
-MCS9 Nss3 242-tone: rejected
-MCS9 Nss6 106-tone: rejected
-MCS10 Nss1 52-tone: rejected
-MCS11 Nss1 26-tone: rejected
-MCS6 Nss1 106-tone: accepted
-MCS9 Nss3 484-tone: accepted
-MCS10 Nss1 106-tone: accepted
-MCS11 Nss1 242-tone: accepted
+MCS6 Nss3 106-tone: accepted
+MCS6 Nss6 106-tone: accepted
+MCS9 Nss3 242-tone: accepted
+MCS9 Nss6 106-tone: accepted
+MCS10 Nss1 52-tone: accepted
+MCS11 Nss1 26-tone: accepted
+MCS-1 Nss1 106-tone: rejected
+MCS12 Nss1 106-tone: rejected
+MCS0 Nss0 106-tone: rejected
+MCS0 Nss9 106-tone: rejected
 .

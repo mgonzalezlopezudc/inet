@@ -625,6 +625,7 @@ Register_Serializer(Ieee80211HeSuPhyHeader, Ieee80211HeSuPhyHeaderSerializer);
 Register_Serializer(Ieee80211HeErSuPhyHeader, Ieee80211HeErSuPhyHeaderSerializer);
 Register_Serializer(Ieee80211HeMuPhyHeader, Ieee80211HeMuPhyHeaderSerializer);
 Register_Serializer(Ieee80211HeTbPhyHeader, Ieee80211HeTbPhyHeaderSerializer);
+Register_Serializer(Ieee80211EhtPhyHeader, Ieee80211EhtPhyHeaderSerializer);
 Register_Serializer(Ieee80211EhtRuPayloadHeader, Ieee80211EhtRuPayloadHeaderSerializer);
 
 /**
@@ -1082,6 +1083,62 @@ const Ptr<Chunk> Ieee80211HePhyHeaderSerializer::deserialize(MemoryInputStream& 
     header->setPuncturedSubchannelMask(puncturedSubchannelMask);
     header->setPuncturedSubchannelMaskKnown(puncturedSubchannelMaskKnown);
     header->setChunkLength(b(100 + channelCount * bitsPerChannel));
+    return header;
+}
+
+/**
+ * EHT PHY Header
+ *
+ * Fixed 12-byte packet-level representation for the currently modeled
+ * single-user EHT MU-format path. The PPDU format, U-SIG SU indication,
+ * coding, puncturing, and selected MCS/NSS survive byte conversion.
+ */
+void Ieee80211EhtPhyHeaderSerializer::serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const
+{
+    auto header = dynamicPtrCast<const Ieee80211EhtPhyHeader>(chunk);
+    if (header->getUsersArraySize() != 1)
+        throw cRuntimeError("The packet-level EHT PHY header serializer requires exactly one user");
+    const auto& uSig = header->getUSig();
+    uint8_t common = (header->getPpduFormat() & 0x01) |
+            ((header->getGuardInterval() & 0x03) << 1) |
+            ((header->getCoding() & 0x01) << 3) |
+            ((uSig.signalingValid ? 1 : 0) << 4) |
+            ((uSig.ppduTypeAndCompressionMode & 0x03) << 5);
+    const auto& user = header->getUsers(0);
+    uint8_t mcsNss = (user.mcs & 0x0f) | (((user.numberOfSpatialStreams - 1) & 0x07) << 4);
+    stream.writeUint16Le(header->getLengthField().get<B>());
+    stream.writeByte(common);
+    stream.writeByte(header->getBssColor());
+    stream.writeUint16Le(header->getPuncturedSubchannelMask());
+    stream.writeByte(mcsNss);
+    stream.writeUint16Le(user.mruToneSize);
+    stream.writeUint16Le(user.psduLength.get<B>());
+    stream.writeByte(0);
+}
+
+const Ptr<Chunk> Ieee80211EhtPhyHeaderSerializer::deserialize(MemoryInputStream& stream) const
+{
+    auto header = makeShared<Ieee80211EhtPhyHeader>();
+    header->setLengthField(B(stream.readUint16Le()));
+    uint8_t common = stream.readByte();
+    header->setPpduFormat(common & 0x01);
+    header->setGuardInterval((common >> 1) & 0x03);
+    header->setCoding((common >> 3) & 0x01);
+    Ieee80211EhtUSigFields uSig;
+    uSig.signalingValid = (common >> 4) & 0x01;
+    uSig.ppduTypeAndCompressionMode = (common >> 5) & 0x03;
+    header->setUSig(uSig);
+    header->setBssColor(stream.readByte());
+    header->setPuncturedSubchannelMask(stream.readUint16Le());
+    uint8_t mcsNss = stream.readByte();
+    Ieee80211EhtUserInfo user;
+    user.mcs = mcsNss & 0x0f;
+    user.numberOfSpatialStreams = ((mcsNss >> 4) & 0x07) + 1;
+    user.mruToneSize = stream.readUint16Le();
+    user.psduLength = B(stream.readUint16Le());
+    stream.readByte();
+    header->appendUsers(user);
+    header->setChunkLength(B(12));
     return header;
 }
 

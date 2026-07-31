@@ -16,6 +16,8 @@
 namespace inet {
 namespace ieee80211 {
 
+class Ieee80211Mib;
+
 /*
  * This class implements the following subclauses:
  *
@@ -33,6 +35,7 @@ class INET_API RateSelection : public IRateSelection, public SimpleModule, publi
 {
   protected:
     IRateControl *dataOrMgmtRateControl = nullptr;
+    Ieee80211Mib *mib = nullptr;
     const physicallayer::IIeee80211Mode *fastestMandatoryMode = nullptr;
 
     const physicallayer::Ieee80211ModeSet *modeSet = nullptr;
@@ -77,4 +80,3 @@ class INET_API RateSelection : public IRateSelection, public SimpleModule, publi
 } // namespace inet
 
 #endif
-

@@ -999,7 +999,8 @@ const DI<Ieee80211Vhtmcs> Ieee80211VhtmcsTable::vhtMcs5BW80MHzNss6([](){ return 
 const DI<Ieee80211Vhtmcs> Ieee80211VhtmcsTable::vhtMcs6BW80MHzNss6([](){ return new Ieee80211Vhtmcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 6);});
 const DI<Ieee80211Vhtmcs> Ieee80211VhtmcsTable::vhtMcs7BW80MHzNss6([](){ return new Ieee80211Vhtmcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(80), 6);});
 const DI<Ieee80211Vhtmcs> Ieee80211VhtmcsTable::vhtMcs8BW80MHzNss6([](){ return new Ieee80211Vhtmcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 6);});
-const DI<Ieee80211Vhtmcs> Ieee80211VhtmcsTable::vhtMcs9BW80MHzNss6([](){ return new Ieee80211Vhtmcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(80), 6);});
+// IEEE Std 802.11-2024, Table 21-30: this MCS/NSS combination is not valid.
+const DI<Ieee80211Vhtmcs> Ieee80211VhtmcsTable::vhtMcs9BW80MHzNss6([](){ return nullptr;});
 
 const DI<Ieee80211Vhtmcs> Ieee80211VhtmcsTable::vhtMcs0BW80MHzNss7([](){ return new Ieee80211Vhtmcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(80), 7);});
 const DI<Ieee80211Vhtmcs> Ieee80211VhtmcsTable::vhtMcs1BW80MHzNss7([](){ return new Ieee80211Vhtmcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(80), 7);});

@@ -49,6 +49,7 @@ inline Ieee80211EhtCapabilitiesElement makeEhtCapabilitiesElement(const Ieee8021
     element.ulMuMimo = capabilities.ulMuMimo;
     element.ldpc = capabilities.ldpc;
     element.support4096Qam = capabilities.support4096Qam;
+    element.ehtDup6GHz = capabilities.ehtDup6GHz;
     element.preamblePuncturing = capabilities.preamblePuncturing;
     element.mlo = capabilities.mlo;
     element.str = capabilities.str;
@@ -87,6 +88,7 @@ inline Ieee80211EhtCapabilities makeEhtCapabilities(const Ieee80211EhtCapabiliti
     capabilities.ulMuMimo = element.ulMuMimo;
     capabilities.ldpc = element.ldpc;
     capabilities.support4096Qam = element.support4096Qam;
+    capabilities.ehtDup6GHz = element.ehtDup6GHz;
     capabilities.preamblePuncturing = element.preamblePuncturing;
     capabilities.mlo = element.mlo;
     capabilities.str = element.str;
@@ -105,6 +107,7 @@ inline Ieee80211EhtOperationElement makeEhtOperationElement(const Ieee80211EhtOp
     element.operatingChannelWidthMHz = std::lround(operation.operatingChannelWidth.get() / 1e6);
     element.disabledSubchannelBitmap = operation.disabledSubchannelBitmap;
     element.basicEhtMcsNss = operation.basicEhtMcsNss;
+    element.mcs15Disabled = operation.mcs15Disabled;
     return element;
 }
 
@@ -114,6 +117,7 @@ inline Ieee80211EhtOperation makeEhtOperation(const Ieee80211EhtOperationElement
     operation.operatingChannelWidth = Hz(element.operatingChannelWidthMHz * 1e6);
     operation.disabledSubchannelBitmap = element.disabledSubchannelBitmap;
     operation.basicEhtMcsNss = element.basicEhtMcsNss;
+    operation.mcs15Disabled = element.mcs15Disabled;
     return operation;
 }
 

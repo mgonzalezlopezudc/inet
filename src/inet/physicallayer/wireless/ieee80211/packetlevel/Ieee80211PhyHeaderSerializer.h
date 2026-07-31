@@ -140,6 +140,14 @@ class INET_API Ieee80211HePhyHeaderSerializer : public FieldsChunkSerializer
     explicit Ieee80211HePhyHeaderSerializer(Ieee80211HePpduFormat expectedPpduFormat) : FieldsChunkSerializer(), expectedPpduFormat(expectedPpduFormat) {}
 };
 
+/** Serializes the fixed single-user EHT PHY-header slice used by the packet-level mode path. */
+class INET_API Ieee80211EhtPhyHeaderSerializer : public FieldsChunkSerializer
+{
+  protected:
+    virtual void serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const override;
+    virtual const Ptr<Chunk> deserialize(MemoryInputStream& stream) const override;
+};
+
 /**
  * Serializes the 12-byte INET-internal per-RU payload delimiter prepended to
  * each MPDU inside an EHT MU PPDU container.

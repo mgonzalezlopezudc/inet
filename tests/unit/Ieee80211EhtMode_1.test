@@ -1,5 +1,5 @@
 %description:
-Test IEEE 802.11be EHT mode-set bitrates, 320 MHz support, and 4096-QAM MCS entries
+Test IEEE 802.11be EHT mode-set bitrates, including EHT-MCS 14/15 special modes
 
 %includes:
 #include "inet/physicallayer/wireless/common/modulation/Qam4096Modulation.h"
@@ -38,6 +38,26 @@ EV << "Mode 13 bandwidth: " << ehtMode13->getDataMode()->getBandwidth() << "\n";
 EV << "Mode 13 data subcarriers: " << ehtMode13->getDataMode()->getNumberOfDataSubcarriers() << "\n";
 EV << "4096-QAM code word size: " << Qam4096Modulation::singleton.getCodeWordSize() << "\n";
 
+// IEEE Std 802.11be-2024, 36.5, Tables 36-76 and 36-87:
+// MCS 15 is BPSK-DCM with half the MCS 0 coded tones, while MCS 14 is
+// EHT DUP and is defined only for SU 80/160/320 MHz with NSS=1.
+const IIeee80211Mode *mode15 = modeSet->getMode(bps(3.65625e6), MHz(20), 1);
+const IIeee80211Mode *mode14 = modeSet->getMode(bps(7.3125e6), MHz(80), 1);
+auto ehtMode15 = check_and_cast<const Ieee80211EhtMode *>(mode15);
+auto ehtMode14 = check_and_cast<const Ieee80211EhtMode *>(mode14);
+ASSERT(ehtMode15->getDataMode()->getMcsIndex() == 15);
+ASSERT(ehtMode15->getDataMode()->getNumberOfSpatialStreams() == 1);
+ASSERT(ehtMode15->getDataMode()->getNumberOfDataSubcarriers() == 117);
+ASSERT(ehtMode15->getDataMode()->getDuration(B(1000)) == SimTime(2224, SIMTIME_US));
+ASSERT(ehtMode14->getDataMode()->getMcsIndex() == 14);
+ASSERT(ehtMode14->getDataMode()->getNumberOfSpatialStreams() == 1);
+ASSERT(ehtMode14->getDataMode()->getNumberOfDataSubcarriers() == 234);
+ASSERT(ehtMode14->getDataMode()->isLdpc());
+ASSERT(ehtMode14->getDataMode()->getTailFieldLength() == b(0));
+ASSERT(ehtMode14->getDataMode()->getDuration(B(1000)) == SimTime(1104, SIMTIME_US));
+EV << "Mode 15 (BW=20MHz): netBitrate=" << mode15->getDataMode()->getNetBitrate() << "\n";
+EV << "Mode 14 (BW=80MHz): netBitrate=" << mode14->getDataMode()->getNetBitrate() << "\n";
+
 auto band320 = Ieee80211CompliantBands::getBand("6 GHz (320 MHz)");
 EV << "6 GHz 320 MHz channels: " << band320->getNumChannels() << "\n";
 EV << "6 GHz 320 MHz first center frequency: " << band320->getCenterFrequency(0) << "\n";
@@ -48,13 +68,15 @@ EV << ".\n";
 ModeSet name: be
 Slot time: 0.000009
 SIFS time: 0.000016
-Number of modes: 560
+Number of modes: 568
 Mode 0 (MCS 0 Nss=1): netBitrate=7.3125 Mbps grossBitrate=14.625 Mbps
 Mode 13 (MCS 13 BW=320MHz Nss=1): netBitrate=2.45 Gbps grossBitrate=2.94 Gbps
 Mode 13 MCS index: 13
 Mode 13 bandwidth: 320 MHz
 Mode 13 data subcarriers: 3920
 4096-QAM code word size: 12
+Mode 15 (BW=20MHz): netBitrate=3.65625 Mbps
+Mode 14 (BW=80MHz): netBitrate=7.3125 Mbps
 6 GHz 320 MHz channels: 6
 6 GHz 320 MHz first center frequency: 6.105 GHz
 .

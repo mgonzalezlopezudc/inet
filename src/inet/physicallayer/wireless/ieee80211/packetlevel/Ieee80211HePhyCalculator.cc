@@ -969,14 +969,14 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
                     "dcm", "unsupported HE DCM combination", userIndex);
             return result;
         }
-        // IEEE 802.11-2024 Tables 27-62..27-117: reject N/A (MCS, Nss, RU) triples.
+        // IEEE Std 802.11-2024, 27.3.7 and 27.5.1: validate the ordinary
+        // MCS/NSS range. DCM-only N/A cells are handled by the DCM check above.
         if (!isHeValidMcsNssCombination(user.mcs, user.numberOfSpatialStreams, user.ru.toneSize)) {
             setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_MCS_NSS_COMBINATION,
                     "mcs/numberOfSpatialStreams",
-                    std::string("HE MCS ") + std::to_string(user.mcs)
+                    std::string("Invalid ordinary HE MCS/NSS range: MCS ") + std::to_string(user.mcs)
                             + ", Nss=" + std::to_string(user.numberOfSpatialStreams)
-                            + ", RU=" + std::to_string(user.ru.toneSize)
-                            + "-tone is N/A per IEEE 802.11-2024 Tables 27-62..27-117",
+                            + ", RU=" + std::to_string(user.ru.toneSize) + "-tone",
                     userIndex);
             return result;
         }

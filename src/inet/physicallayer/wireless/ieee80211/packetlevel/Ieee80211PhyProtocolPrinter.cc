@@ -27,6 +27,7 @@ Register_Protocol_Printer(&Protocol::ieee80211ErpOfdmPhy, Ieee80211PhyProtocolPr
 Register_Protocol_Printer(&Protocol::ieee80211HtPhy, Ieee80211PhyProtocolPrinter);
 Register_Protocol_Printer(&Protocol::ieee80211VhtPhy, Ieee80211PhyProtocolPrinter);
 Register_Protocol_Printer(&Protocol::ieee80211HePhy, Ieee80211PhyProtocolPrinter);
+Register_Protocol_Printer(&Protocol::ieee80211EhtPhy, Ieee80211PhyProtocolPrinter);
 
 namespace {
 

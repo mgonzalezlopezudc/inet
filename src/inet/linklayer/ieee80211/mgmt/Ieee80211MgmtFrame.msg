@@ -243,6 +243,7 @@ struct Ieee80211EhtCapabilitiesElement
     bool ulMuMimo;
     bool ldpc;
     bool support4096Qam;
+    bool ehtDup6GHz;
     bool preamblePuncturing;
     bool mlo;
     bool str;
@@ -262,6 +263,7 @@ struct Ieee80211EhtOperationElement
     int operatingChannelWidthMHz;
     short disabledSubchannelBitmap;
     short basicEhtMcsNss;
+    bool mcs15Disabled;
 }
 
 //

@@ -19,6 +19,10 @@
 
 namespace inet {
 
+namespace physicallayer {
+class IIeee80211Mode;
+}
+
 namespace ieee80211 {
 
 class INET_API Ieee80211Mib : public SimpleModule
@@ -121,6 +125,7 @@ class INET_API Ieee80211Mib : public SimpleModule
             const Ieee80211EhtOperation& operation);
     void removePeerEhtCapabilities(const MacAddress& address);
     const Ieee80211NegotiatedEhtCapabilities *findNegotiatedEhtCapabilities(const MacAddress& address) const;
+    bool isEhtModeAllowedForPeer(const physicallayer::IIeee80211Mode *mode, const MacAddress& address) const;
     void setPeerVhtCapabilities(const MacAddress& address, const Ieee80211VhtCapabilities& capabilities,
             const Ieee80211VhtOperation& operation);
     void removePeerVhtCapabilities(const MacAddress& address);

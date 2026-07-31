@@ -334,6 +334,17 @@ struct Ieee80211EhtUserInfo
     double leakageSum = 0;
 }
 
+//
+// Logical U-SIG fields needed to distinguish an EHT SU transmission while
+// retaining the EHT MU PPDU format. IEEE Std 802.11be-2024 Table 36-28 uses
+// PPDU Type And Compression Mode value 1 for EHT SU.
+//
+struct Ieee80211EhtUSigFields
+{
+    bool signalingValid = false;
+    uint8_t ppduTypeAndCompressionMode = 0;
+}
+
 class Ieee80211EhtPhyHeader extends Ieee80211PhyHeader
 {
     uint8_t bssColor = 0;
@@ -344,6 +355,7 @@ class Ieee80211EhtPhyHeader extends Ieee80211PhyHeader
     uint8_t packetExtensionDurationUs = 0;
     uint16_t puncturedSubchannelMask = 0; // 20 MHz subchannels
     uint32_t triggerId = 0;
+    Ieee80211EhtUSigFields uSig;
     simtime_t commonDuration;
     Ieee80211EhtUserInfo users[];
     bool muMimo = false;

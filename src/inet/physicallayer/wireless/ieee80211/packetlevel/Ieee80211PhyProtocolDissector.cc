@@ -26,6 +26,7 @@ Register_Protocol_Dissector(&Protocol::ieee80211ErpOfdmPhy, Ieee80211PhyProtocol
 Register_Protocol_Dissector(&Protocol::ieee80211HtPhy, Ieee80211PhyProtocolDissector);
 Register_Protocol_Dissector(&Protocol::ieee80211VhtPhy, Ieee80211PhyProtocolDissector);
 Register_Protocol_Dissector(&Protocol::ieee80211HePhy, Ieee80211PhyProtocolDissector);
+Register_Protocol_Dissector(&Protocol::ieee80211EhtPhy, Ieee80211PhyProtocolDissector);
 
 namespace {
 

@@ -4,6 +4,7 @@ Test EHT capability negotiation and MIB peer capability cache.
 %includes:
 #include "inet/linklayer/ieee80211/mib/Ieee80211EhtCapabilities.h"
 #include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
 
 %file: TestNetwork.ned
 import inet.linklayer.ieee80211.mib.Ieee80211Mib;
@@ -26,11 +27,14 @@ network = TestNetwork
 **.mib.ehtStr = false
 **.mib.ehtNstr = true
 **.mib.ehtEmlsr = true
+**.mib.ehtDup6GHz = true
+**.mib.ehtMcs15Disabled = true
 
 %global:
 using namespace inet;
 using namespace inet::ieee80211;
 using namespace inet::units::values;
+using namespace inet::physicallayer;
 
 static Ieee80211EhtCapabilities makePeerEhtCapabilities()
 {
@@ -43,6 +47,7 @@ static Ieee80211EhtCapabilities makePeerEhtCapabilities()
     peer.txMcsNss.maxMcsPerNss[0] = 12;
     peer.txMcsNss.maxMcsPerNss[1] = 10;
     peer.ldpc = false;
+    peer.ehtDup6GHz = true;
     peer.preamblePuncturing = false;
     peer.mlo = true;
     peer.str = false;
@@ -66,6 +71,8 @@ ASSERT(mib->localEhtCapabilities.nstr);
 ASSERT(mib->localEhtCapabilities.emlsr);
 ASSERT(mib->ehtOperation.operatingChannelWidth == Hz(320e6));
 ASSERT(mib->ehtOperation.disabledSubchannelBitmap == 3);
+ASSERT(mib->localEhtCapabilities.ehtDup6GHz);
+ASSERT(mib->ehtOperation.mcs15Disabled);
 
 auto peer = makePeerEhtCapabilities();
 auto negotiated = negotiateEhtCapabilities(mib->localEhtCapabilities, peer, mib->ehtOperation);
@@ -77,6 +84,7 @@ ASSERT(negotiated.intersection.rxMcsNss.maxMcsPerNss[0] == 12);
 ASSERT(negotiated.intersection.rxMcsNss.maxMcsPerNss[1] == 10);
 ASSERT(negotiated.intersection.support4096Qam);
 ASSERT(!negotiated.intersection.ldpc);
+ASSERT(negotiated.intersection.ehtDup6GHz);
 ASSERT(!negotiated.intersection.preamblePuncturing);
 ASSERT(negotiated.intersection.mlo);
 ASSERT(!negotiated.intersection.str);
@@ -100,6 +108,29 @@ ASSERT(cached != nullptr);
 ASSERT(cached->valid);
 ASSERT(cached->intersection.txMcsNss.maxMcsPerNss[1] == 11);
 ASSERT(mib->bssAccessPointData.advertisedEhtCapabilities.count(sta) == 1);
+
+auto mode14 = Ieee80211EhtCompliantModes::getCompliantMode(
+        &Ieee80211EhtmcsTable::ehtMcs14BW80MHzNss1,
+        Ieee80211EhtMode::BAND_6GHZ, Ieee80211EhtPreambleMode::EHT_PREAMBLE_SU,
+        Ieee80211EhtModeBase::EHT_GUARD_INTERVAL_LONG);
+auto mode15 = Ieee80211EhtCompliantModes::getCompliantMode(
+        &Ieee80211EhtmcsTable::ehtMcs15BW20MHzNss1,
+        Ieee80211EhtMode::BAND_6GHZ, Ieee80211EhtPreambleMode::EHT_PREAMBLE_SU,
+        Ieee80211EhtModeBase::EHT_GUARD_INTERVAL_LONG);
+ASSERT(dynamicPtrCast<Ieee80211EhtPhyHeader>(mode14->getHeaderMode()->createHeader()) != nullptr);
+ASSERT(dynamicPtrCast<Ieee80211EhtPhyPreamble>(mode14->getPreambleMode()->createPreamble()) != nullptr);
+ASSERT(!mib->isEhtModeAllowedForPeer(mode14, sta)); // Peer LDPC is not negotiated.
+
+auto eligiblePeer = peer;
+eligiblePeer.ldpc = true;
+auto unpuncturedOperation = mib->ehtOperation;
+unpuncturedOperation.disabledSubchannelBitmap = 0;
+mib->setPeerEhtCapabilities(sta, eligiblePeer, unpuncturedOperation);
+ASSERT(mib->isEhtModeAllowedForPeer(mode14, sta));
+ASSERT(!mib->isEhtModeAllowedForPeer(mode15, sta));
+unpuncturedOperation.mcs15Disabled = false;
+mib->setPeerEhtCapabilities(sta, eligiblePeer, unpuncturedOperation);
+ASSERT(mib->isEhtModeAllowedForPeer(mode15, sta));
 
 mib->removePeerEhtCapabilities(sta);
 ASSERT(mib->findNegotiatedEhtCapabilities(sta) == nullptr);

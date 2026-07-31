@@ -52,6 +52,7 @@ simple Ieee80211Mib extends SimpleModule
         bool ehtDlMuMimo = default(false); // Advertises EHT downlink MU-MIMO support
         bool ehtUlMuMimo = default(false); // Advertises EHT uplink MU-MIMO support
         bool eht4096Qam = default(true); // Advertises EHT 4096-QAM / MCS 12-13 support when MCS permits it
+        bool ehtDup6GHz = default(false); // Advertises EHT-MCS 14 EHT DUP support in the 6 GHz band
         bool ehtPreamblePuncturing = default(true); // Advertises EHT puncturing support
         bool ehtMlo = default(false); // Advertises EHT Multi-Link Operation support
         bool ehtStr = default(true); // Advertises simultaneous transmit/receive support when MLO is enabled
@@ -63,6 +64,7 @@ simple Ieee80211Mib extends SimpleModule
         double ehtOperatingChannelWidth @unit(Hz) = default(20MHz); // EHT operating width advertised to peers
         int ehtDisabledSubchannelBitmap = default(0); // EHT Operation disabled 20 MHz subchannel bitmap
         int ehtBasicMcsNss = default(0); // Basic EHT-MCS/NSS set advertised to peers
+        bool ehtMcs15Disabled = default(false); // EHT Operation MCS 15 Disable state advertised by an AP
         int vhtMaxNss = default(8); // Maximum VHT spatial streams advertised by this MIB
         int vhtMaxAmpduLengthExponent = default(7); // VHT maximum A-MPDU-length exponent advertised to peers
         bool vhtBeamforming = default(false); // Enables VHT transmit beamforming capability negotiation

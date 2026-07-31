@@ -1,0 +1,86 @@
+%description:
+Test IEEE 802.11be EHT-MCS 14/15 legality, capability gates, and packet-level timing
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211EhtPhyCalculator.h"
+
+%global:
+using namespace inet;
+using namespace inet::physicallayer;
+
+static Ieee80211EhtUserPhyParameters makeUser(int mcs, int nss, int toneSize, B psduLength)
+{
+    Ieee80211EhtUserPhyParameters user;
+    user.mcs = mcs;
+    user.numberOfSpatialStreams = nss;
+    user.mru.toneSize = toneSize;
+    user.psduLength = psduLength;
+    return user;
+}
+
+%activity:
+// IEEE Std 802.11be-2024, 36.5: both special MCSs require NSS=1,
+// and EHT-MCS 14 is SU-only for 80, 160, and 320 MHz.
+ASSERT(isEhtValidMcsNssCombination(14, 1, 996));
+ASSERT(!isEhtValidMcsNssCombination(14, 2, 996));
+ASSERT(!isEhtValidMcsNssCombination(14, 1, 484));
+ASSERT(isEhtValidMcsNssCombination(15, 1, 26));
+ASSERT(!isEhtValidMcsNssCombination(15, 2, 996));
+ASSERT(!isEhtValidMcsNssCombination(16, 1, 996));
+
+auto mcs14User = makeUser(14, 1, 996, B(1000));
+mcs14User.coding = HE_CODING_LDPC;
+auto mcs14WithoutCapability = computeEhtPpduParameters(
+        {mcs14User}, MHz(80), EHT_MU, HE_GI_3_2_US, HE_LTF_4X, 0, true,
+        true, EHT_BAND_6_GHZ, 0, false, false);
+ASSERT(!mcs14WithoutCapability.valid);
+
+auto mcs14 = computeEhtPpduParameters(
+        {mcs14User}, MHz(80), EHT_MU, HE_GI_3_2_US, HE_LTF_4X, 0, true,
+        true, EHT_BAND_6_GHZ, 0, true, false);
+ASSERT(mcs14.valid);
+ASSERT(mcs14.parameters.users[0].tailBits == 0);
+ASSERT(mcs14.parameters.users[0].dataBitsPerSymbol == 234);
+ASSERT(mcs14.parameters.users[0].numberOfDataSymbols == 69);
+ASSERT(mcs14.parameters.users[0].dataDuration == SimTime(1104, SIMTIME_US));
+
+auto mcs14WithoutSuIndication = computeEhtPpduParameters(
+        {mcs14User}, MHz(80), EHT_MU, HE_GI_3_2_US, HE_LTF_4X, 0, true,
+        false, EHT_BAND_6_GHZ, 0, true, false);
+ASSERT(!mcs14WithoutSuIndication.valid);
+
+auto mcs14Punctured = computeEhtPpduParameters(
+        {mcs14User}, MHz(80), EHT_MU, HE_GI_3_2_US, HE_LTF_4X, 0, true,
+        true, EHT_BAND_6_GHZ, 1, true, false);
+ASSERT(!mcs14Punctured.valid);
+
+auto mcs14WrongBand = computeEhtPpduParameters(
+        {mcs14User}, MHz(80), EHT_MU, HE_GI_3_2_US, HE_LTF_4X, 0, true,
+        true, EHT_BAND_5_GHZ, 0, true, false);
+ASSERT(!mcs14WrongBand.valid);
+
+auto mcs14BccUser = mcs14User;
+mcs14BccUser.coding = HE_CODING_BCC;
+auto mcs14Bcc = computeEhtPpduParameters(
+        {mcs14BccUser}, MHz(80), EHT_MU, HE_GI_3_2_US, HE_LTF_4X, 0, true,
+        true, EHT_BAND_6_GHZ, 0, true, false);
+ASSERT(!mcs14Bcc.valid);
+
+auto mcs15User = makeUser(15, 1, 242, B(1000));
+auto mcs15Disabled = computeEhtPpduParameters(
+        {mcs15User}, MHz(20), EHT_MU, HE_GI_3_2_US, HE_LTF_4X, 0, true,
+        true, EHT_BAND_6_GHZ, 0, false, true);
+ASSERT(!mcs15Disabled.valid);
+
+auto mcs15 = computeEhtPpduParameters(
+        {mcs15User}, MHz(20), EHT_MU, HE_GI_3_2_US, HE_LTF_4X, 0, true,
+        true, EHT_BAND_6_GHZ, 0, false, false);
+ASSERT(mcs15.valid);
+ASSERT(mcs15.parameters.users[0].dataBitsPerSymbol == 117);
+ASSERT(mcs15.parameters.users[0].numberOfDataSymbols == 139);
+ASSERT(mcs15.parameters.users[0].dataDuration == SimTime(2224, SIMTIME_US));
+
+EV << "EHT-MCS 14/15 legality and timing passed.\n";
+
+%contains: stdout
+EHT-MCS 14/15 legality and timing passed.

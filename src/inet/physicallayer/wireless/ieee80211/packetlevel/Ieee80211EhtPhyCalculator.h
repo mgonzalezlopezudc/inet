@@ -24,8 +24,13 @@ using namespace inet::units::values;
 
 /** EHT PPDU formats */
 enum Ieee80211EhtPpduFormat {
-    EHT_MU = 0,                     // EHT MU PPDU format (DL OFDMA/MU-MIMO or SU)
+    EHT_MU = 0,                     // EHT MU PPDU format (DL OFDMA/MU-MIMO)
     EHT_TRIGGER_BASED_UPLINK = 1,   // EHT TB PPDU format (UL OFDMA/MU-MIMO triggered by AP)
+};
+
+enum Ieee80211EhtOperatingBand {
+    EHT_BAND_5_GHZ,
+    EHT_BAND_6_GHZ,
 };
 
 /** EHT Guard Intervals (same durations as HE) */
@@ -37,6 +42,9 @@ using Ieee80211EhtLtfType = Ieee80211HeLtfType;
 struct Ieee80211EhtCommonPhyParameters
 {
     Ieee80211EhtPpduFormat ppduFormat = EHT_MU;
+    bool singleUser = false;
+    Ieee80211EhtOperatingBand operatingBand = EHT_BAND_6_GHZ;
+    uint16_t puncturedSubchannelMask = 0;
     Hz channelBandwidth = Hz(NaN);
     Ieee80211EhtGuardInterval guardInterval = HE_GI_3_2_US;
     Ieee80211EhtLtfType ltfType = HE_LTF_4X;
@@ -105,6 +113,7 @@ struct Ieee80211EhtPhyValidationResult
 int getEhtMcsBitsPerSubcarrier(int mcs);
 std::pair<int, int> getEhtMcsCodeRate(int mcs);
 bool isEhtValidMcsNssCombination(int mcs, int nss, int ruToneSize = 0);
+int getEhtMcsDataSubcarrierCount(int mcs, int ruToneSize);
 int getEhtNumberOfLtfSymbols(int spaceTimeStreams);
 
 Ieee80211EhtPhyValidationResult computeEhtPpduParameters(
@@ -114,7 +123,12 @@ Ieee80211EhtPhyValidationResult computeEhtPpduParameters(
         Ieee80211EhtGuardInterval guardInterval,
         Ieee80211EhtLtfType ltfType,
         int packetExtensionDurationUs,
-        bool enforceDurationLimit);
+        bool enforceDurationLimit,
+        bool singleUser,
+        Ieee80211EhtOperatingBand operatingBand,
+        uint16_t puncturedSubchannelMask,
+        bool ehtDupMcs14Supported,
+        bool mcs15Disabled);
 
 } // namespace physicallayer
 } // namespace inet

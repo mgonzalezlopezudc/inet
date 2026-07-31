@@ -49,6 +49,7 @@
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211EhtPhyCalculator.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyHeader.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
@@ -819,6 +820,41 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
         }
         phyHeader->setChunkLength(b(totalBits));
     }
+    else if (auto ehtPhyHeader = dynamicPtrCast<Ieee80211EhtPhyHeader>(phyHeader)) {
+        auto ehtMode = dynamic_cast<const Ieee80211EhtMode *>(mode);
+        if (ehtMode == nullptr)
+            throw cRuntimeError("EHT PHY header requires an EHT transmission mode");
+        auto dataMode = ehtMode->getDataMode();
+        Ieee80211EhtUSigFields uSig;
+        uSig.signalingValid = true;
+        uSig.ppduTypeAndCompressionMode = 1; // Table 36-28: EHT SU in an EHT MU PPDU
+        ehtPhyHeader->setUSig(uSig);
+        ehtPhyHeader->setPpduFormat(EHT_MU);
+        ehtPhyHeader->setGuardInterval(dataMode->getGuardIntervalType());
+        ehtPhyHeader->setCoding(dataMode->isLdpc() ? HE_CODING_LDPC : HE_CODING_BCC);
+        ehtPhyHeader->setPuncturedSubchannelMask(0);
+        ehtPhyHeader->setCommonDuration(mode->getDuration(packet->getDataLength()));
+        auto networkInterface = getContainingNicModule(this);
+        auto mib = networkInterface == nullptr ? nullptr :
+                dynamic_cast<const ieee80211::Ieee80211Mib *>(networkInterface->getSubmodule("mib"));
+        ehtPhyHeader->setBssColor(mib == nullptr ? 0 : mib->heOperation.bssColor);
+        Ieee80211EhtUserInfo user;
+        user.mruIndex = 0;
+        user.mruToneOffset = 0;
+        Hz modeBandwidth = dataMode->getBandwidth();
+        user.mruToneSize = modeBandwidth == MHz(20) ? 242 : modeBandwidth == MHz(40) ? 484 :
+                modeBandwidth == MHz(80) ? 996 : modeBandwidth == MHz(160) ? 1992 : 3984;
+        user.mcs = dataMode->getMcsIndex();
+        user.numberOfSpatialStreams = dataMode->getNumberOfSpatialStreams();
+        user.psduLength = B((packet->getDataLength().get<b>() + 7) / 8);
+        user.duration = mode->getDuration(packet->getDataLength());
+        ehtPhyHeader->appendUsers(user);
+        if (user.mcs == 14 && (ehtMode->getCenterFrequencyMode() != Ieee80211EhtMode::BAND_6GHZ ||
+                !dataMode->isLdpc() || user.numberOfSpatialStreams != 1 ||
+                (modeBandwidth != MHz(80) && modeBandwidth != MHz(160) && modeBandwidth != MHz(320))))
+            throw cRuntimeError("EHT-MCS 14 requires 6 GHz, LDPC, NSS=1, and 80/160/320 MHz full-channel EHT SU operation");
+        phyHeader->setChunkLength(B(12));
+    }
     else
         phyHeader->setChunkLength(b(mode->getHeaderMode()->getLength()));
 
@@ -845,6 +881,10 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
                 vhtPhyHeader->setCoding(vhtMode->getDataMode()->getCode()->isLdpc() ? 1 : 0);
             }
         }
+    }
+    else if (auto ehtPhyHeader = dynamicPtrCast<Ieee80211EhtPhyHeader>(phyHeader)) {
+        if (auto ehtMode = dynamic_cast<const Ieee80211EhtMode *>(mode))
+            ehtPhyHeader->setCoding(ehtMode->getDataMode()->isLdpc() ? HE_CODING_LDPC : HE_CODING_BCC);
     }
 
     phyHeader->setLengthField(B((packet->getDataLength().get<b>() + 7) / 8));
@@ -883,6 +923,8 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
         protocol = &Protocol::ieee80211VhtPhy;
     else if (dynamic_cast<Ieee80211HePhyHeader *>(phyHeader.get()))
         protocol = &Protocol::ieee80211HePhy;
+    else if (dynamic_cast<Ieee80211EhtPhyHeader *>(phyHeader.get()))
+        protocol = &Protocol::ieee80211EhtPhy;
     else
         throw cRuntimeError("Invalid IEEE 802.11 PHY header type.");
     packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(protocol);
@@ -945,6 +987,8 @@ const Ptr<const Ieee80211PhyHeader> Ieee80211Radio::popIeee80211PhyHeaderAtFront
             default: return packet->popAtFront<Ieee80211HePhyHeader>(length, flags);
         }
     }
+    else if (id == Protocol::ieee80211EhtPhy.getId() || dynamicPtrCast<const Ieee80211EhtPhyHeader>(packet->peekAtFront()) != nullptr)
+        return packet->popAtFront<Ieee80211EhtPhyHeader>(length, flags);
     else
         throw cRuntimeError("Invalid IEEE 802.11 PHY protocol.");
 }
@@ -978,6 +1022,8 @@ const Ptr<const Ieee80211PhyHeader> Ieee80211Radio::peekIeee80211PhyHeaderAtFron
             default: return packet->peekAtFront<Ieee80211HePhyHeader>(length, flags);
         }
     }
+    else if (id == Protocol::ieee80211EhtPhy.getId() || dynamicPtrCast<const Ieee80211EhtPhyHeader>(packet->peekAtFront()) != nullptr)
+        return packet->peekAtFront<Ieee80211EhtPhyHeader>(length, flags);
     else
         throw cRuntimeError("Invalid IEEE 802.11 PHY protocol.");
 }

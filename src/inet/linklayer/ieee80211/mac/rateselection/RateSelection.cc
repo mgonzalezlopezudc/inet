@@ -10,6 +10,7 @@
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/Simsignals.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRateControl.h"
+#include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
 #include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
@@ -28,6 +29,7 @@ void RateSelection::initialize(int stage)
         getContainingNicModule(this)->subscribe(modesetChangedSignal, this);
     }
     else if (stage == INITSTAGE_LINK_LAYER) {
+        mib = check_and_cast<Ieee80211Mib *>(getContainingNicModule(this)->getSubmodule("mib"));
         dataOrMgmtRateControl = dynamic_cast<IRateControl *>(findModuleByPath(par("rateControlModule")));
         double multicastFrameBitrate = par("multicastFrameBitrate");
         multicastFrameMode = (multicastFrameBitrate == -1) ? nullptr : modeSet->getMode(bps(multicastFrameBitrate));
@@ -145,10 +147,14 @@ const IIeee80211Mode *RateSelection::computeControlFrameMode(const Ptr<const Iee
 
 const IIeee80211Mode *RateSelection::computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
 {
+    const IIeee80211Mode *selectedMode;
     if (auto dataOrMgmtHeader = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(header))
-        return computeDataOrMgmtFrameMode(dataOrMgmtHeader);
+        selectedMode = computeDataOrMgmtFrameMode(dataOrMgmtHeader);
     else
-        return computeControlFrameMode(header);
+        selectedMode = computeControlFrameMode(header);
+    if (!mib->isEhtModeAllowedForPeer(selectedMode, header->getReceiverAddress()))
+        throw cRuntimeError("Explicitly selected EHT mode is prohibited by the effective peer capability or operation state");
+    return selectedMode;
 }
 
 void RateSelection::receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details)

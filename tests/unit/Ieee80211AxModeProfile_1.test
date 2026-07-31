@@ -150,7 +150,7 @@ REQUIRE(throwsRuntimeError([&]() { profile5->validateChannel(&Ieee80211Compliant
 REQUIRE(throwsRuntimeError([&]() { Ieee80211ModeSet::getChannelWidth(&Ieee80211CompliantBands::band5GHz80_80MHz); }));
 REQUIRE(Ieee80211ModeSet::getModeSet("a")->getNumModes() == 8);
 REQUIRE(Ieee80211ModeSet::getModeSet("g(mixed)")->getNumModes() == 12);
-REQUIRE(Ieee80211ModeSet::getModeSet("n(mixed-2.4Ghz)")->getNumModes() == 64);
+REQUIRE(Ieee80211ModeSet::getModeSet("n(mixed-2.4Ghz)")->getNumModes() == 153);
 REQUIRE(Ieee80211ModeSet::getModeSet("ac")->getNumModes() == 310);
 
 EV << "Band-aware ax profiles: PASS\n";

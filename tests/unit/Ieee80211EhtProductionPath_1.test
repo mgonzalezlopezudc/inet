@@ -1,0 +1,251 @@
+%description:
+Exercise EHT-MCS 14/15 through rate selection, transmitter validation, radio header construction, and serialization
+
+%includes:
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/mac/rateselection/RateSelection.h"
+#include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
+#include "inet/networklayer/common/NetworkInterface.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211EhtPhyCalculator.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
+
+%file: TestNetwork.ned
+import inet.linklayer.ieee80211.mib.Ieee80211Mib;
+import inet.mobility.static.StationaryMobility;
+import inet.networklayer.common.InterfaceTable;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211RadioMedium;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadio;
+
+simple TestRateSelection
+{
+    parameters:
+        @class(TestRateSelection);
+}
+
+module InspectableEhtRadio extends Ieee80211ScalarRadio
+{
+    parameters:
+        @class(InspectableEhtRadio);
+}
+
+module MockEhtNic
+{
+    parameters:
+        @class(MockEhtNicModule);
+    submodules:
+        mib: Ieee80211Mib;
+        radio: InspectableEhtRadio;
+        rateSelection: TestRateSelection;
+    connections allowunconnected:
+        radio.upperLayerOut --> radio.upperLayerIn;
+}
+
+network TestNetwork
+{
+    parameters:
+        @networkNode;
+    submodules:
+        test: Test;
+        interfaceTable: InterfaceTable;
+        radioMedium: Ieee80211RadioMedium;
+        mobility: StationaryMobility;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+**.nic.interfaceTableModule = "^.interfaceTable"
+**.mobilityModule = "^.^.^.mobility"
+**.mobility.subjectModule = ""
+**.radio.opMode = "be"
+**.radio.bandName = "6 GHz (80 MHz)"
+**.radio.channelNumber = 0
+**.radio.transmitter.power = 20mW
+**.radio.transmitter.bitrate = 30.625Mbps
+**.radio.antenna.numAntennas = 1
+**.constraintAreaMinX = 0m
+**.constraintAreaMinY = 0m
+**.constraintAreaMinZ = 0m
+**.constraintAreaMaxX = 100m
+**.constraintAreaMaxY = 100m
+**.constraintAreaMaxZ = 0m
+**.nic.mib.ehtMaxNss = 1
+**.nic.mib.ehtMaxMcs = 13
+**.nic.mib.ehtOperatingChannelWidth = 80MHz
+**.nic.mib.ehtDisabledSubchannelBitmap = 0
+**.nic.mib.ehtDup6GHz = true
+**.nic.mib.ehtLdpc = true
+**.nic.mib.ehtMcs15Disabled = false
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+class TestRateSelection : public RateSelection
+{
+  protected:
+    virtual void initialize(int) override {}
+
+  public:
+    void configure(Ieee80211Mib *mib, const Ieee80211ModeSet *modeSet,
+            const IIeee80211Mode *dataMode)
+    {
+        this->mib = mib;
+        this->modeSet = modeSet;
+        this->dataFrameMode = dataMode;
+        this->fastestMandatoryMode = modeSet->getFastestBasicMode(MHz(80));
+    }
+};
+
+class InspectableEhtRadio : public Ieee80211Radio
+{
+  public:
+    void testEncapsulate(Packet *packet) const { encapsulate(packet); }
+};
+
+class MockEhtNicModule : public NetworkInterface
+{
+  protected:
+    virtual void initialize(int stage) override
+    {
+        if (stage == INITSTAGE_LOCAL) {
+            state = UP;
+            carrier = true;
+        }
+    }
+    virtual int numInitStages() const override { return 1; }
+};
+
+Define_Module(TestRateSelection);
+Define_Module(InspectableEhtRadio);
+Define_Module(MockEhtNicModule);
+
+static bool throwsRuntimeError(const std::function<void()>& action)
+{
+    try { action(); }
+    catch (cRuntimeError&) { return true; }
+    return false;
+}
+
+static Ptr<Ieee80211DataHeader> makeHeader(const MacAddress& receiver)
+{
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setType(ST_DATA_WITH_QOS);
+    header->setReceiverAddress(receiver);
+    header->setChunkLength(b(288));
+    return header;
+}
+
+static Packet *makePacket(const Ptr<Ieee80211DataHeader>& header, const IIeee80211Mode *mode)
+{
+    auto packet = new Packet("eht-production-path");
+    packet->insertAtBack(header);
+    packet->insertAtBack(makeShared<ByteCountChunk>(B(100)));
+    packet->addTag<Ieee80211ModeReq>()->setMode(mode);
+    return packet;
+}
+
+static Ieee80211EhtCapabilities makeEligiblePeer()
+{
+    Ieee80211EhtCapabilities peer;
+    peer.supportedChannelWidths = {MHz(80)};
+    peer.rxMcsNss.maxMcsPerNss.fill(-1);
+    peer.txMcsNss.maxMcsPerNss.fill(-1);
+    peer.rxMcsNss.maxMcsPerNss[0] = 13;
+    peer.txMcsNss.maxMcsPerNss[0] = 13;
+    peer.ldpc = true;
+    peer.ehtDup6GHz = true;
+    return peer;
+}
+
+%activity:
+cModuleType *nicType = cModuleType::find("MockEhtNic");
+REQUIRE(nicType != nullptr);
+cModule *nic = nicType->create("nic", getSystemModule());
+nic->buildInside();
+auto networkInterface = check_and_cast<MockEhtNicModule *>(nic);
+networkInterface->setMacAddress(MacAddress("02:00:00:00:00:01"));
+nic->callInitialize();
+
+auto mib = check_and_cast<Ieee80211Mib *>(nic->getSubmodule("mib"));
+auto radio = check_and_cast<InspectableEhtRadio *>(nic->getSubmodule("radio"));
+auto rateSelection = check_and_cast<TestRateSelection *>(nic->getSubmodule("rateSelection"));
+auto transmitter = check_and_cast<const Ieee80211Transmitter *>(radio->getTransmitter());
+auto modeSet = Ieee80211ModeSet::getModeSet("be");
+auto mode14 = Ieee80211EhtCompliantModes::getCompliantMode(
+        &Ieee80211EhtmcsTable::ehtMcs14BW80MHzNss1,
+        Ieee80211EhtMode::BAND_6GHZ, Ieee80211EhtPreambleMode::EHT_PREAMBLE_SU,
+        Ieee80211EhtModeBase::EHT_GUARD_INTERVAL_LONG, true);
+auto mode15 = Ieee80211EhtCompliantModes::getCompliantMode(
+        &Ieee80211EhtmcsTable::ehtMcs15BW80MHzNss1,
+        Ieee80211EhtMode::BAND_6GHZ, Ieee80211EhtPreambleMode::EHT_PREAMBLE_SU,
+        Ieee80211EhtModeBase::EHT_GUARD_INTERVAL_LONG, true);
+MacAddress peerAddress("02:00:00:00:00:be");
+auto macHeader = makeHeader(peerAddress);
+
+rateSelection->configure(mib, modeSet, mode14);
+auto deniedPacket = makePacket(macHeader, mode14);
+REQUIRE(throwsRuntimeError([&] { rateSelection->computeMode(deniedPacket, macHeader); }));
+REQUIRE(throwsRuntimeError([&] { transmitter->computeTransmissionMode(deniedPacket); }));
+delete deniedPacket;
+
+auto peer = makeEligiblePeer();
+Ieee80211EhtOperation operation = mib->ehtOperation;
+operation.disabledSubchannelBitmap = 0;
+operation.mcs15Disabled = false;
+mib->setPeerEhtCapabilities(peerAddress, peer, operation);
+
+auto packet = makePacket(macHeader, mode14);
+REQUIRE(rateSelection->computeMode(packet, macHeader) == mode14);
+REQUIRE(transmitter->computeTransmissionMode(packet) == mode14);
+radio->testEncapsulate(packet);
+auto ehtHeader = packet->peekAtFront<Ieee80211EhtPhyHeader>();
+REQUIRE(ehtHeader != nullptr);
+REQUIRE(ehtHeader->getPpduFormat() == EHT_MU);
+REQUIRE(ehtHeader->getUSig().signalingValid);
+REQUIRE(ehtHeader->getUSig().ppduTypeAndCompressionMode == 1);
+REQUIRE(ehtHeader->getCoding() == HE_CODING_LDPC);
+REQUIRE(ehtHeader->getUsersArraySize() == 1);
+REQUIRE(ehtHeader->getUsers(0).mcs == 14);
+
+auto serialized = packet->peekDataAsBytes();
+Packet roundTrip("eht-round-trip", serialized);
+roundTrip.addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211EhtPhy);
+auto decoded = roundTrip.popAtFront<Ieee80211EhtPhyHeader>();
+REQUIRE(decoded->getPpduFormat() == EHT_MU);
+REQUIRE(decoded->getUSig().signalingValid);
+REQUIRE(decoded->getUSig().ppduTypeAndCompressionMode == 1);
+REQUIRE(decoded->getCoding() == HE_CODING_LDPC);
+REQUIRE(decoded->getUsersArraySize() == 1);
+REQUIRE(decoded->getUsers(0).mcs == 14);
+delete packet;
+
+peer.ldpc = false;
+mib->setPeerEhtCapabilities(peerAddress, peer, operation);
+auto noLdpcPacket = makePacket(macHeader, mode14);
+REQUIRE(throwsRuntimeError([&] { rateSelection->computeMode(noLdpcPacket, macHeader); }));
+REQUIRE(throwsRuntimeError([&] { transmitter->computeTransmissionMode(noLdpcPacket); }));
+delete noLdpcPacket;
+
+peer.ldpc = true;
+operation.mcs15Disabled = true;
+mib->setPeerEhtCapabilities(peerAddress, peer, operation);
+rateSelection->configure(mib, modeSet, mode15);
+auto disabledMcs15Packet = makePacket(macHeader, mode15);
+REQUIRE(throwsRuntimeError([&] { rateSelection->computeMode(disabledMcs15Packet, macHeader); }));
+REQUIRE(throwsRuntimeError([&] { transmitter->computeTransmissionMode(disabledMcs15Packet); }));
+delete disabledMcs15Packet;
+
+nic->deleteModule();
+EV << "EHT production path and serializer round-trip passed.\n";
+
+%contains: stdout
+EHT production path and serializer round-trip passed.

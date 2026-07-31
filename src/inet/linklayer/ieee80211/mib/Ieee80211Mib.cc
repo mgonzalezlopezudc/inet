@@ -7,6 +7,8 @@
 
 #include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
 
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
+
 #include <cmath>
 #include <sstream>
 
@@ -92,6 +94,7 @@ void Ieee80211Mib::initialize(int stage)
         localEhtCapabilities.dlMuMimo = par("ehtDlMuMimo").boolValue();
         localEhtCapabilities.ulMuMimo = par("ehtUlMuMimo").boolValue();
         localEhtCapabilities.support4096Qam = par("eht4096Qam").boolValue();
+        localEhtCapabilities.ehtDup6GHz = par("ehtDup6GHz").boolValue();
         localEhtCapabilities.preamblePuncturing = par("ehtPreamblePuncturing").boolValue();
         localEhtCapabilities.mlo = par("ehtMlo").boolValue();
         localEhtCapabilities.str = par("ehtStr").boolValue();
@@ -118,6 +121,7 @@ void Ieee80211Mib::initialize(int stage)
             throw cRuntimeError("ehtDisabledSubchannelBitmap must be between 0 and 65535");
         ehtOperation.disabledSubchannelBitmap = disabledSubchannelBitmap;
         ehtOperation.basicEhtMcsNss = par("ehtBasicMcsNss").intValue();
+        ehtOperation.mcs15Disabled = par("ehtMcs15Disabled").boolValue();
 
         vhtOperation.operatingChannelWidth = Hz(par("vhtOperatingChannelWidth").doubleValue());
         vhtOperation.ldpc = localVhtCapabilities.ldpc;
@@ -150,6 +154,7 @@ void Ieee80211Mib::initialize(int stage)
         WATCH(localEhtCapabilities.dlOfdma);
         WATCH(localEhtCapabilities.ulOfdma);
         WATCH(localEhtCapabilities.support4096Qam);
+        WATCH(localEhtCapabilities.ehtDup6GHz);
         WATCH(localEhtCapabilities.preamblePuncturing);
         WATCH(localEhtCapabilities.mlo);
         WATCH(localEhtCapabilities.str);
@@ -159,6 +164,7 @@ void Ieee80211Mib::initialize(int stage)
         WATCH(ehtOperation.operatingChannelWidth);
         WATCH(ehtOperation.disabledSubchannelBitmap);
         WATCH(ehtOperation.basicEhtMcsNss);
+        WATCH(ehtOperation.mcs15Disabled);
         WATCH_MAP(bssAccessPointData.links);
         WATCH_MAP(bssAccessPointData.advertisedHeCapabilities);
         WATCH_MAP(bssAccessPointData.negotiatedHeCapabilities);
@@ -219,6 +225,7 @@ std::string Ieee80211Mib::getEhtCapabilitiesSummary() const
            << ", DL-OFDMA=" << (localEhtCapabilities.dlOfdma ? "yes" : "no")
            << ", UL-OFDMA=" << (localEhtCapabilities.ulOfdma ? "yes" : "no")
            << ", 4096-QAM=" << (localEhtCapabilities.support4096Qam ? "yes" : "no")
+           << ", EHT-DUP-6GHz=" << (localEhtCapabilities.ehtDup6GHz ? "yes" : "no")
            << ", puncturing=" << (localEhtCapabilities.preamblePuncturing ? "yes" : "no")
            << ", MLO=" << (localEhtCapabilities.mlo ? "yes" : "no")
            << ", EMLSR=" << (localEhtCapabilities.emlsr ? "yes" : "no")
@@ -245,7 +252,8 @@ std::string Ieee80211Mib::getEhtOperationSummary() const
     std::stringstream stream;
     stream << "width=" << ehtOperation.operatingChannelWidth
            << ", disabledSubchannels=0x" << std::hex << ehtOperation.disabledSubchannelBitmap << std::dec
-           << ", basicMcsNss=" << ehtOperation.basicEhtMcsNss;
+           << ", basicMcsNss=" << ehtOperation.basicEhtMcsNss
+           << ", MCS15=" << (ehtOperation.mcs15Disabled ? "disabled" : "enabled");
     return stream.str();
 }
 
@@ -371,6 +379,32 @@ const Ieee80211NegotiatedEhtCapabilities *Ieee80211Mib::findNegotiatedEhtCapabil
 {
     auto it = bssAccessPointData.negotiatedEhtCapabilities.find(address);
     return it == bssAccessPointData.negotiatedEhtCapabilities.end() ? nullptr : &it->second;
+}
+
+bool Ieee80211Mib::isEhtModeAllowedForPeer(const physicallayer::IIeee80211Mode *mode,
+        const MacAddress& peerAddress) const
+{
+    auto ehtMode = dynamic_cast<const physicallayer::Ieee80211EhtMode *>(mode);
+    if (ehtMode == nullptr)
+        return true;
+    auto dataMode = ehtMode->getDataMode();
+    int mcs = dataMode->getMcsIndex();
+    if (mcs == 14) {
+        auto negotiated = peerAddress.isMulticast() ? nullptr : findNegotiatedEhtCapabilities(peerAddress);
+        bool validWidth = dataMode->getBandwidth() == MHz(80) ||
+                dataMode->getBandwidth() == MHz(160) || dataMode->getBandwidth() == MHz(320);
+        return ehtMode->getCenterFrequencyMode() == physicallayer::Ieee80211EhtMode::BAND_6GHZ &&
+                validWidth && dataMode->getNumberOfSpatialStreams() == 1 && dataMode->isLdpc() &&
+                negotiated != nullptr && negotiated->valid &&
+                negotiated->intersection.ehtDup6GHz && negotiated->intersection.ldpc &&
+                negotiated->operation.disabledSubchannelBitmap == 0;
+    }
+    if (mcs == 15) {
+        auto negotiated = peerAddress.isMulticast() ? nullptr : findNegotiatedEhtCapabilities(peerAddress);
+        return dataMode->getNumberOfSpatialStreams() == 1 &&
+                (negotiated == nullptr || !negotiated->operation.mcs15Disabled);
+    }
+    return true;
 }
 
 void Ieee80211Mib::setPeerVhtCapabilities(const MacAddress& address,

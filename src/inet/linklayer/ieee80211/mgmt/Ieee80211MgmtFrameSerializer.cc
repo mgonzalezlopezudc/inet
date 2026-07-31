@@ -330,6 +330,7 @@ static void writeEhtCapabilitiesElement(MemoryOutputStream& stream, const Ieee80
     setBits(phyCap, 4, 1, capabilities.dlMuMimo ? 1 : 0);
     setBits(phyCap, 5, 1, capabilities.ulMuMimo ? 1 : 0);
     setBits(phyCap, 6, 1, capabilities.ldpc ? 1 : 0);
+    setBits(phyCap, 7, 1, capabilities.ehtDup6GHz ? 1 : 0);
     stream.writeUint32Le(phyCap);
     
     // EHT MCS NSS (approximated)
@@ -340,11 +341,12 @@ static void writeEhtCapabilitiesElement(MemoryOutputStream& stream, const Ieee80
 static void writeEhtOperationElement(MemoryOutputStream& stream, const Ieee80211EhtOperationElement& operation)
 {
     stream.writeByte(ELEMENT_ID_EXTENSION);
-    stream.writeByte(1 + 5);
+    stream.writeByte(1 + 6);
     stream.writeByte(ELEMENT_ID_EXTENSION_EHT_OPERATION);
     stream.writeUint16Le(operation.operatingChannelWidthMHz);
     stream.writeUint16Le(operation.disabledSubchannelBitmap);
     stream.writeByte(operation.basicEhtMcsNss);
+    stream.writeByte(operation.mcs15Disabled ? 1 : 0);
 }
 
 static void writeMultiLinkElement(MemoryOutputStream& stream, const Ieee80211MultiLinkElement& ml)
@@ -517,8 +519,8 @@ static void readBroadcastTwtElement(MemoryInputStream& stream, int payloadLength
 static void readEhtCapabilitiesElement(MemoryInputStream& stream, int payloadLength, const Ptr<Ieee80211MgmtFrame>& frame)
 {
     // Minimal read for EHT Capabilities
-    stream.readUint16Le();
-    stream.readUint32Le();
+    uint16_t macCap = stream.readUint16Le();
+    uint32_t phyCap = stream.readUint32Le();
     stream.readUint32Le();
     stream.readUint32Le();
     // Assuming 14 bytes read, skip rest
@@ -526,16 +528,20 @@ static void readEhtCapabilitiesElement(MemoryInputStream& stream, int payloadLen
     for (int i = 0; i < payloadLength - readLen; i++) stream.readByte();
     
     Ieee80211EhtCapabilitiesElement cap;
-    cap.support4096Qam = true;
-    cap.mlo = true;
-    cap.str = true;
-    cap.emlsr = false;
-    cap.emlmr = false;
-    cap.maxAmpduLengthExponent = 7;
-    cap.supportedChannelWidth320MHz = true;
-    cap.dlOfdma = true;
-    cap.ulOfdma = true;
-    cap.ldpc = true;
+    cap.support4096Qam = getBits(macCap, 0, 1);
+    cap.mlo = getBits(macCap, 1, 1);
+    cap.str = getBits(macCap, 2, 1);
+    cap.emlsr = getBits(macCap, 3, 1);
+    cap.emlmr = getBits(macCap, 4, 1);
+    cap.maxAmpduLengthExponent = getBits(macCap, 5, 2);
+    cap.supportedChannelWidth320MHz = getBits(phyCap, 0, 1);
+    cap.preamblePuncturing = getBits(phyCap, 1, 1);
+    cap.dlOfdma = getBits(phyCap, 2, 1);
+    cap.ulOfdma = getBits(phyCap, 3, 1);
+    cap.dlMuMimo = getBits(phyCap, 4, 1);
+    cap.ulMuMimo = getBits(phyCap, 5, 1);
+    cap.ldpc = getBits(phyCap, 6, 1);
+    cap.ehtDup6GHz = getBits(phyCap, 7, 1);
     
     frame->setEhtCapabilitiesPresent(true);
     frame->setEhtCapabilities(cap);
@@ -547,7 +553,8 @@ static void readEhtOperationElement(MemoryInputStream& stream, int payloadLength
     op.operatingChannelWidthMHz = stream.readUint16Le();
     op.disabledSubchannelBitmap = stream.readUint16Le();
     op.basicEhtMcsNss = stream.readByte();
-    for (int i = 0; i < payloadLength - 5; i++) stream.readByte();
+    op.mcs15Disabled = stream.readByte() != 0;
+    for (int i = 0; i < payloadLength - 6; i++) stream.readByte();
     
     frame->setEhtOperationPresent(true);
     frame->setEhtOperation(op);

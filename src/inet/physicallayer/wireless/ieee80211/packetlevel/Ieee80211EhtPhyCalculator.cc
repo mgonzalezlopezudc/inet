@@ -11,8 +11,8 @@ namespace physicallayer {
 
 int getEhtMcsBitsPerSubcarrier(int mcs)
 {
-    static const int values[] = {1, 2, 2, 4, 4, 6, 6, 6, 8, 8, 10, 10, 12, 12};
-    if (mcs < 0 || mcs > 13)
+    static const int values[] = {1, 2, 2, 4, 4, 6, 6, 6, 8, 8, 10, 10, 12, 12, 1, 1};
+    if (mcs < 0 || mcs > 15)
         throw cRuntimeError("Invalid EHT MCS: %d", mcs);
     return values[mcs];
 }
@@ -22,25 +22,41 @@ std::pair<int, int> getEhtMcsCodeRate(int mcs)
     static const std::pair<int, int> values[] = {
         {1, 2}, {1, 2}, {3, 4}, {1, 2}, {3, 4}, {2, 3},
         {3, 4}, {5, 6}, {3, 4}, {5, 6}, {3, 4}, {5, 6},
-        {3, 4}, {5, 6}
+        {3, 4}, {5, 6}, {1, 2}, {1, 2}
     };
-    if (mcs < 0 || mcs > 13)
+    if (mcs < 0 || mcs > 15)
         throw cRuntimeError("Invalid EHT MCS: %d", mcs);
     return values[mcs];
 }
 
 bool isEhtValidMcsNssCombination(int mcs, int nss, int ruToneSize)
 {
-    // EHT inherits the HE constraints and extends them.
-    if (mcs == 6 && (nss == 3 || nss == 6 || nss == 9 || nss == 12))
+    if (mcs < 0 || mcs > 15 || nss < 1 || nss > 8)
         return false;
-    if (mcs == 9 && (nss == 3 || nss == 6 || nss == 9 || nss == 12) && ruToneSize > 0 && ruToneSize <= 242)
+    // IEEE Std 802.11be-2024, 36.5: EHT-MCS 14/15 require NSS=1;
+    // EHT-MCS 14 is EHT DUP for SU 80/160/320 MHz full-bandwidth operation.
+    if ((mcs == 14 || mcs == 15) && nss != 1)
         return false;
-    // MCS 10, 11, 12, 13 (1024-QAM and 4096-QAM) require at least 106 data subcarriers.
-    // They are not allowed on 26-tone and 52-tone RUs.
-    if (mcs >= 10 && ruToneSize > 0 && ruToneSize < 106)
+    if (mcs == 14 && ruToneSize != 996 && ruToneSize != 1992 && ruToneSize != 3984)
         return false;
     return true;
+}
+
+int getEhtMcsDataSubcarrierCount(int mcs, int ruToneSize)
+{
+    int dataSubcarriers = getEhtMruDataSubcarrierCount(ruToneSize);
+    if (mcs == 15)
+        return dataSubcarriers / 2;
+    else if (mcs == 14) {
+        switch (ruToneSize) {
+            case 996: return 234;
+            case 1992: return 490;
+            case 3984: return 980;
+            default: throw cRuntimeError("EHT-MCS 14 requires a full-bandwidth 80, 160, or 320 MHz RU");
+        }
+    }
+    else
+        return dataSubcarriers;
 }
 
 int getEhtNumberOfLtfSymbols(int spaceTimeStreams)
@@ -60,7 +76,12 @@ Ieee80211EhtPhyValidationResult computeEhtPpduParameters(
         Ieee80211EhtGuardInterval guardInterval,
         Ieee80211EhtLtfType ltfType,
         int packetExtensionDurationUs,
-        bool enforceDurationLimit)
+        bool enforceDurationLimit,
+        bool singleUser,
+        Ieee80211EhtOperatingBand operatingBand,
+        uint16_t puncturedSubchannelMask,
+        bool ehtDupMcs14Supported,
+        bool mcs15Disabled)
 {
     Ieee80211EhtPhyValidationResult result;
     if (requestedUsers.empty()) {
@@ -69,6 +90,9 @@ Ieee80211EhtPhyValidationResult computeEhtPpduParameters(
     }
 
     result.parameters.common.ppduFormat = ppduFormat;
+    result.parameters.common.singleUser = singleUser;
+    result.parameters.common.operatingBand = operatingBand;
+    result.parameters.common.puncturedSubchannelMask = puncturedSubchannelMask;
     result.parameters.common.channelBandwidth = channelBandwidth;
     result.parameters.common.guardInterval = guardInterval;
     result.parameters.common.ltfType = ltfType;
@@ -92,18 +116,34 @@ Ieee80211EhtPhyValidationResult computeEhtPpduParameters(
     int maxDataSymbols = 0;
 
     for (auto user : requestedUsers) {
+        // IEEE Std 802.11be-2024, 35.14.2 and 36.5. The caller supplies the
+        // effective negotiated/operational gates; this PHY helper does not own
+        // association state. The current EHT SU model covers full bandwidth only.
+        if (user.mcs == 14 && (!ehtDupMcs14Supported || ppduFormat != EHT_MU || !singleUser ||
+                operatingBand != EHT_BAND_6_GHZ || puncturedSubchannelMask != 0 ||
+                requestedUsers.size() != 1 || user.coding != HE_CODING_LDPC ||
+                user.mru.toneSize != getEhtChannelToneCount(channelBandwidth))) {
+            result.error = "EHT-MCS 14 requires negotiated EHT DUP support, EHT MU with U-SIG SU indication, 6 GHz, LDPC, and unpunctured full bandwidth";
+            return result;
+        }
+        if (user.mcs == 15 && mcs15Disabled) {
+            result.error = "EHT-MCS 15 is disabled by the effective EHT operation state";
+            return result;
+        }
         if (!isEhtValidMcsNssCombination(user.mcs, user.numberOfSpatialStreams, user.mru.toneSize)) {
             result.error = "Invalid EHT MCS/NSS combination for user";
             return result;
         }
 
-        user.dataBitsPerSymbol = getEhtMruDataSubcarrierCount(user.mru.toneSize)
+        user.dataBitsPerSymbol = getEhtMcsDataSubcarrierCount(user.mcs, user.mru.toneSize)
                 * getEhtMcsBitsPerSubcarrier(user.mcs)
                 * user.numberOfSpatialStreams;
 
         auto codeRate = getEhtMcsCodeRate(user.mcs);
         
         // Compute symbols required for user PSDU length
+        if (user.coding == HE_CODING_LDPC)
+            user.tailBits = 0;
         long long bits = user.psduLength.get<b>() + user.serviceBits + user.tailBits;
         long long dataBitsPerSymbol = user.dataBitsPerSymbol * codeRate.first / codeRate.second;
         

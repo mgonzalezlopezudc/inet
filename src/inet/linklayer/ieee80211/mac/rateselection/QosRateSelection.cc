@@ -9,6 +9,7 @@
 
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/Simsignals.h"
+#include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/networklayer/common/NetworkInterface.h"
 
@@ -23,6 +24,7 @@ void QosRateSelection::initialize(int stage)
 {
     ModeSetListener::initialize(stage);
     if (stage == INITSTAGE_LINK_LAYER) {
+        mib = check_and_cast<Ieee80211Mib *>(getContainingNicModule(this)->getSubmodule("mib"));
         dataOrMgmtRateControl = dynamic_cast<IRateControl *>(findModuleByPath(par("rateControlModule")));
         double multicastFrameBitrate = par("multicastFrameBitrate");
         multicastFrameMode = (multicastFrameBitrate == -1) ? nullptr : modeSet->getMode(bps(multicastFrameBitrate));
@@ -235,10 +237,14 @@ const IIeee80211Mode *QosRateSelection::computeControlFrameMode(const Ptr<const 
 
 const IIeee80211Mode *QosRateSelection::computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, TxopProcedure *txopProcedure)
 {
+    const IIeee80211Mode *selectedMode;
     if (auto dataOrMgmtHeader = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(header))
-        return computeDataOrMgmtFrameMode(dataOrMgmtHeader);
+        selectedMode = computeDataOrMgmtFrameMode(dataOrMgmtHeader);
     else
-        return computeControlFrameMode(header, txopProcedure);
+        selectedMode = computeControlFrameMode(header, txopProcedure);
+    if (!mib->isEhtModeAllowedForPeer(selectedMode, header->getReceiverAddress()))
+        throw cRuntimeError("Explicitly selected EHT mode is prohibited by the effective peer capability or operation state");
+    return selectedMode;
 }
 
 void QosRateSelection::receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details)
