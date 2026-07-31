@@ -53,6 +53,10 @@ for (int mcs = 33; mcs <= 76; ++mcs)
 auto htMcs1Short = check_and_cast<const Ieee80211HtMode *>(htSet->getMode(Mbps(14.4444), MHz(20), 1));
 REQUIRE(htMcs1Short->getDataMode()->getMcsIndex() == 1);
 REQUIRE(htMcs1Short->getDataMode()->getGuardIntervalType() == Ieee80211HtModeBase::HT_GUARD_INTERVAL_SHORT);
+auto htFallbackMcs1Short = check_and_cast<const Ieee80211HtMode *>(htSet->getMode(Mbps(14.4444), MHz(20), -1));
+REQUIRE(htFallbackMcs1Short->getDataMode()->getMcsIndex() == 1);
+REQUIRE(htFallbackMcs1Short->getDataMode()->getNumberOfSpatialStreams() == 1);
+REQUIRE(htFallbackMcs1Short->getDataMode()->getGuardIntervalType() == Ieee80211HtModeBase::HT_GUARD_INTERVAL_SHORT);
 
 auto htMcs32 = Ieee80211HtCompliantModes::getCompliantMode(
         &Ieee80211HtmcsTable::htMcs32BW40MHz, Ieee80211HtMode::BAND_2_4GHZ,

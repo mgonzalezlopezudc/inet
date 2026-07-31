@@ -1283,6 +1283,7 @@ const IIeee80211Mode *Ieee80211ModeSet::findMode(bps bitrate, Hz bandwidth, int 
 
 const IIeee80211Mode *Ieee80211ModeSet::findMode(bps minBitrate, bps maxBitrate, Hz bandwidth, int numSpatialStreams) const
 {
+    const IIeee80211Mode *bestMode = nullptr;
     for (size_t index = 0; index < entries.size(); index++) {
         auto mode = entries[index].mode;
         auto dataMode = mode->getDataMode();
@@ -1291,10 +1292,11 @@ const IIeee80211Mode *Ieee80211ModeSet::findMode(bps minBitrate, bps maxBitrate,
             (std::isnan(bandwidth.get()) || dataMode->getBandwidth() == bandwidth) &&
             (numSpatialStreams == -1 || dataMode->getNumberOfSpatialStreams() == numSpatialStreams))
         {
-            return entries[index].mode;
+            if (bestMode == nullptr || dataMode->getNumberOfSpatialStreams() < bestMode->getDataMode()->getNumberOfSpatialStreams())
+                bestMode = mode;
         }
     }
-    return nullptr;
+    return bestMode;
 }
 
 const IIeee80211Mode *Ieee80211ModeSet::getMode(bps bitrate, Hz bandwidth, int numSpatialStreams) const
