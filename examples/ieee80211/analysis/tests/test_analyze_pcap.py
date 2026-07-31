@@ -313,6 +313,56 @@ class DecodeLegacyFieldsTest(unittest.TestCase):
         )
 
 
+class BssColorStatisticsTest(unittest.TestCase):
+
+    def test_groups_he_observations_by_known_bss_color(self):
+        def he_observation(frame_number, bss_color, signal):
+            fields = [""] * 46
+            fields[0] = "0"
+            fields[1] = "2"
+            fields[2] = "8"
+            fields[3] = "100"
+            fields[4] = "20"
+            fields[6] = str(signal)
+            fields[23] = "1"
+            fields[25] = "0"
+            fields[26] = "0"
+            fields[27] = "1"
+            fields[28] = "2"
+            fields[29] = "1"
+            fields[35] = "0"
+            fields[43] = str(frame_number)
+            fields[44] = "1"
+            fields[45] = str(bss_color)
+            return "\t".join(fields)
+
+        result = SimpleNamespace(
+            returncode=0,
+            stdout="\n".join([
+                he_observation(1, 1, -60),
+                he_observation(2, 2, -80),
+            ]) + "\n",
+            stderr="",
+        )
+        with patch("analyze_pcap.get_sim_time_limit", return_value=1), \
+                patch("analyze_pcap.validate_capture_decode"), \
+                patch("analyze_pcap.subprocess.run", return_value=result):
+            statistics, total = get_config_pcap_stats(
+                ["capture.pcapng"], "Config", "bss_coloring"
+            )
+
+        self.assertEqual(total, 2)
+        self.assertEqual({key[10] for key in statistics}, {"1", "2"})
+        self.assertEqual(
+            {key[10]: statistic["rx_sig"] for key, statistic in statistics.items()},
+            {"1": "-60.0 dBm", "2": "-80.0 dBm"},
+        )
+        markdown = analyze_pcap.make_table_md(statistics, total)
+        self.assertIn("| BSS Color |", markdown)
+        self.assertIn("| 1 | 1 | 50.00%", markdown)
+        self.assertIn("| 2 | 1 | 50.00%", markdown)
+
+
 class GeneratedSectionTest(unittest.TestCase):
 
     def test_marker_bounded_update_preserves_manual_tail(self):

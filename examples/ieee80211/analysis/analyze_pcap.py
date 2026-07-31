@@ -139,6 +139,10 @@ def unpack_key_to_name(key):
         is_he_mu = key[2] if len(key) > 2 else False
         return get_packet_type_name(fc_type, fc_subtype, is_he_mu=is_he_mu)
 
+
+def bss_color_from_key(key):
+    return key[10] if len(key) > 10 and key[10] else "-"
+
 def get_packet_type_name(fc_type, fc_subtype, fc_version=None, is_he_mu=False, standard=None, mcs=None, bw=None, gi=None, nss=None, coding=None, is_ampdu=False, is_sounding=False):
     suffix = ""
     if is_sounding:
@@ -1495,6 +1499,8 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
         "radiotap.eht.user_info.coding",      # 41
         "radiotap.eht.user_info.nss",         # 42
         "frame.number",                        # 43
+        "radiotap.he.data_1.bss_color_known", # 44
+        "radiotap.he.data_3.bss_color",       # 45
     ]
 
     def get_field_val(parts, idx):
@@ -1653,6 +1659,13 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                             decode_legacy_fields(datarate_val)
                         )
 
+                    bss_color = ""
+                    if (get_field_val(parts, 23) in ("True", "1") and
+                            get_field_val(parts, 44) in ("True", "1")):
+                        bss_color = get_field_val(parts, 45)
+                if not is_wlan_present:
+                    bss_color = ""
+
                 try:
                     size = int(size_str)
                 except ValueError:
@@ -1672,13 +1685,13 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
 
                 if (not fc_type or fc_type == "") and (not fc_subtype or fc_subtype == ""):
                     if config_name in ["NdpFeedbackReport", "FeedbackUnderInterference"]:
-                        key = ("HE TB feedback NDP", "", standard, mcs, bw, gi, nss, coding, is_ampdu, True)
+                        key = ("HE TB feedback NDP", "", standard, mcs, bw, gi, nss, coding, is_ampdu, True, bss_color)
                     else:
-                        key = ("Aggregation Overhead", "", standard, mcs, bw, gi, nss, coding, is_ampdu, is_sounding)
+                        key = ("Aggregation Overhead", "", standard, mcs, bw, gi, nss, coding, is_ampdu, is_sounding, bss_color)
                 elif v > 0:
-                    key = ("Aggregation Overhead", "", standard, mcs, bw, gi, nss, coding, is_ampdu, is_sounding)
+                    key = ("Aggregation Overhead", "", standard, mcs, bw, gi, nss, coding, is_ampdu, is_sounding, bss_color)
                 else:
-                    key = (fc_type, fc_subtype, standard, mcs, bw, gi, nss, coding, is_ampdu, is_sounding)
+                    key = (fc_type, fc_subtype, standard, mcs, bw, gi, nss, coding, is_ampdu, is_sounding, bss_color)
 
                 if key not in stats:
                     stats[key] = {
@@ -1984,8 +1997,8 @@ def make_table_md(stats, total):
     if total == 0:
         return "No packets captured.\n\n"
     md = []
-    md.append("| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |\n")
-    md.append("|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n")
+    md.append("| Color | Frame Type & Subtype | BSS Color | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |\n")
+    md.append("|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n")
 
     sorted_stats = sorted(stats.items(), key=lambda x: get_sort_key(unpack_key_to_name(x[0])))
 
@@ -1997,7 +2010,7 @@ def make_table_md(stats, total):
         category = name.split(":")[0] if ":" in name else "Other"
         if prev_category is not None and category != prev_category:
             # Insert a separator row with horizontal lines in each cell
-            md.append("| " + " | ".join(["<hr>"] * 13) + " |\n")
+            md.append("| " + " | ".join(["<hr>"] * 14) + " |\n")
 
         prev_category = category
 
@@ -2015,7 +2028,8 @@ def make_table_md(stats, total):
         tx_pwr_str = stat.get("tx_pwr", "-")
         air_pct = f"{stat['airtime_pct']:.2f}%" if airtime_available else "N/A"
         air_sim_pct = f"{stat['airtime_sim_pct']:.2f}%" if airtime_available else "N/A"
-        md.append(f"| {color_svg} | {name} | {stat['count']} | {pct:.2f}% | {mean_sz} | {std_sz} | {mean_dur} | {std_dur} | {freq_str} | {rx_sig_str} | {tx_pwr_str} | {air_pct} | {air_sim_pct} |\n")
+        bss_color = bss_color_from_key(key)
+        md.append(f"| {color_svg} | {name} | {bss_color} | {stat['count']} | {pct:.2f}% | {mean_sz} | {std_sz} | {mean_dur} | {std_dur} | {freq_str} | {rx_sig_str} | {tx_pwr_str} | {air_pct} | {air_sim_pct} |\n")
     return "".join(md)
 
 ORDERED_BASE_TYPES = [

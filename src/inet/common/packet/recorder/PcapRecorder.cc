@@ -87,6 +87,7 @@ enum RadiotapHeData1 {
     RADIOTAP_HE_FORMAT_EXT_SU = 1,
     RADIOTAP_HE_FORMAT_MU = 2,
     RADIOTAP_HE_FORMAT_TRIG = 3,
+    RADIOTAP_HE_BSS_COLOR_KNOWN = 0x0004,
     RADIOTAP_HE_UL_DL_KNOWN = 0x0010,
     RADIOTAP_HE_DATA_MCS_KNOWN = 0x0020,
     RADIOTAP_HE_DATA_DCM_KNOWN = 0x0040,
@@ -665,7 +666,9 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, b frontOffset, b b
             const auto& common = txVector.getCommon().getParameters();
             auto ppduFormat = common.ppduFormat;
             auto radiotapFormat = getRadiotapHeFormat(ppduFormat);
-            data1 |= radiotapFormat | RADIOTAP_HE_SPATIAL_REUSE_KNOWN;
+            data1 |= radiotapFormat | RADIOTAP_HE_BSS_COLOR_KNOWN |
+                    RADIOTAP_HE_SPATIAL_REUSE_KNOWN;
+            data3 |= common.sigA.bssColor & 0x3f;
             if (ppduFormat == physicallayer::HE_MU_DOWNLINK || ppduFormat == physicallayer::HE_TRIGGER_BASED_UPLINK) {
                 data1 |= RADIOTAP_HE_UL_DL_KNOWN;
                 if (ppduFormat == physicallayer::HE_TRIGGER_BASED_UPLINK)
@@ -706,7 +709,9 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, b frontOffset, b b
             const auto& common = rxVector.getCommon();
             const auto& user = rxVector.getUser();
             auto ppduFormat = common.getPpduFormat();
-            data1 |= getRadiotapHeFormat(ppduFormat) | RADIOTAP_HE_SPATIAL_REUSE_KNOWN;
+            data1 |= getRadiotapHeFormat(ppduFormat) |
+                    RADIOTAP_HE_BSS_COLOR_KNOWN | RADIOTAP_HE_SPATIAL_REUSE_KNOWN;
+            data3 |= common.getBssColor() & 0x3f;
             if (ppduFormat == physicallayer::HE_MU_DOWNLINK || ppduFormat == physicallayer::HE_TRIGGER_BASED_UPLINK) {
                 data1 |= RADIOTAP_HE_UL_DL_KNOWN;
                 if (ppduFormat == physicallayer::HE_TRIGGER_BASED_UPLINK)
