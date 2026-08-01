@@ -458,6 +458,7 @@ SPATIAL_REUSE_DECISION_VECTORS = {
     "bss_type": "heSpatialReuseBssType:vector",
     "received_bss_color": "heSpatialReuseReceivedBssColor:vector",
     "local_bss_color": "heSpatialReuseLocalBssColor:vector",
+    "received_power": "heSpatialReuseReceivedPower:vector",
     "eligible": "heSpatialReuseEligible:vector",
     "ignored_ppdu": "heSpatialReuseIgnoredPpdu:vector",
     "threshold": "heSpatialReuseObssPdThreshold:vector",
@@ -569,8 +570,11 @@ def _validate_bss_spatial_reuse(condition: Condition) -> None:
 
     thresholds = candidate_decisions.threshold.to_numpy(dtype=float)
     power_limits = candidate_decisions.power_limit.to_numpy(dtype=float)
-    if not np.all(np.isfinite(thresholds)) or not np.all(np.isfinite(power_limits)):
-        raise RuntimeError(f"{condition.config}: OBSS/PD threshold or coupled TX-power telemetry is missing")
+    received_powers = candidate_decisions.received_power.to_numpy(dtype=float)
+    if (not np.all(np.isfinite(received_powers)) or
+            not np.all(np.isfinite(thresholds)) or
+            not np.all(np.isfinite(power_limits))):
+        raise RuntimeError(f"{condition.config}: received-power, OBSS/PD threshold, or coupled TX-power telemetry is missing")
     expected_threshold = float(condition.condition_metadata["obss_pd_dbm"])
     expected_power_limit = 21.0 - max(0.0, expected_threshold - (-82.0))
     # The native result API normalizes logarithmic dBm samples to linear mW
@@ -610,6 +614,7 @@ def plot_bss(conditions: list[Condition], output: Path) -> None:
             {"type": "vector", "module": "**.ap*.wlan[0].radio", "name": "transmissionState:vector", "transmitting_code": TRANSMISSION_STATE_TRANSMITTING},
             {"type": "vector", "module": "**.receiver", "name": "heSpatialReuseReason:vector", "reason_codes": {"11": "below OBSS/PD", "12": "at/above OBSS/PD"}},
             {"type": "vector", "module": "**.receiver", "name": "heSpatialReuseBssType:vector", "inter_bss_codes": [2, 3]},
+            {"type": "vector", "module": "**.receiver", "name": "heSpatialReuseReceivedPower:vector", "unit": "dBm"},
             {"type": "vector", "module": "**.receiver", "name": "heSpatialReuseEligible:vector"},
             {"type": "vector", "module": "**.receiver", "name": "heSpatialReuseObssPdThreshold:vector", "unit": "dBm"},
             {"type": "vector", "module": "**.receiver", "name": "heSpatialReuseTransmitPowerLimit:vector", "unit": "dBm"},

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 from collections import Counter
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -626,15 +627,56 @@ def evaluate_bss_spatial_reuse_join(conditions: list[Condition]) -> Evaluation:
         _validate_bss_spatial_reuse(condition)
         decisions = _spatial_reuse_decisions(condition)
         candidate_decisions = decisions[decisions.reason.isin([11, 12])]
-        observations.append({
+        observation = {
             "config": condition.config,
             "decision_count": len(decisions),
             "inter_bss_candidate_count": len(candidate_decisions),
             "ignored_ppdu_count": int(np.count_nonzero(decisions.ignored_ppdu)),
-        })
+        }
+        ap1_decisions = decisions[
+            decisions.module.str.endswith(".ap1.wlan[0].radio.receiver")
+        ]
+        if ap1_decisions.empty:
+            raise RuntimeError(f"{condition.config}: no AP1 spatial-reuse decisions")
+        representative_run = sorted(ap1_decisions.runID.unique(), key=str)[0]
+        ap1_decisions = ap1_decisions[ap1_decisions.runID == representative_run]
+        if isinstance(representative_run, (int, np.integer)):
+            run_number = int(representative_run)
+        else:
+            run_number_match = re.search(r"-(\d+)-\d{8}-", str(representative_run))
+            if run_number_match is None:
+                raise RuntimeError(
+                    f"{condition.config}: cannot determine run number from "
+                    f"result ID {representative_run!r}"
+                )
+            run_number = int(run_number_match.group(1))
+        ap1_candidates = ap1_decisions[ap1_decisions.reason.isin([11, 12])]
+        trace_source = ap1_candidates if not ap1_candidates.empty else ap1_decisions
+        trace_source = trace_source.sort_values(["time", "sample_index"])
+        selected_indices = np.linspace(0, len(trace_source) - 1, num=10, dtype=int)
+        trace = []
+        for row in trace_source.iloc[selected_indices].itertuples(index=False):
+            received_power = float(row.received_power)
+            obss_pd_threshold = float(row.threshold)
+            transmit_power_limit = float(row.power_limit)
+            trace.append({
+                "run_number": run_number,
+                "simulation_time": float(row.time),
+                "local_bss_color": int(row.local_bss_color),
+                "received_bss_color": int(row.received_bss_color),
+                "bss_type": int(row.bss_type),
+                "eligible": bool(row.eligible),
+                "received_power_mw": received_power if math.isfinite(received_power) else None,
+                "obss_pd_threshold_mw": obss_pd_threshold if math.isfinite(obss_pd_threshold) else None,
+                "reason": int(row.reason),
+                "ignored_ppdu": bool(row.ignored_ppdu),
+                "transmit_power_limit_mw": transmit_power_limit if math.isfinite(transmit_power_limit) else None,
+            })
+        observation["representative_ap1_decisions"] = trace
+        observations.append(observation)
     return Evaluation(
         "PASS",
-        "Every retained receiver decision has aligned BSS classification, eligibility, OBSS/PD threshold, power limit, reason, and ignore outcome.",
+        "Every retained receiver decision has aligned BSS classification, received power, eligibility, OBSS/PD threshold, power limit, reason, and ignore outcome.",
         observations,
     )
 

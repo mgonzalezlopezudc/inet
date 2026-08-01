@@ -49,6 +49,15 @@ def format_number(value: object) -> str:
     return escape_cell(value)
 
 
+def format_mw_as_dbm(value: object) -> str:
+    if value is None:
+        return "N/A"
+    milliwatts = float(value)
+    if not math.isfinite(milliwatts) or milliwatts <= 0:
+        return "N/A"
+    return f"{10 * math.log10(milliwatts):.2f} dBm"
+
+
 def metric_label(name: str) -> str:
     return name.replace("_", " ")
 
@@ -206,6 +215,52 @@ def render_evidence_markdown(
                     f"\nShowing 100 of {len(config_observations)} joined decisions "
                     f"for {escape_cell(config)}; the session-bound evidence "
                     "ledger retains every observation.\n"
+                )
+    bss_check = next(
+        (
+            check for check in group_evidence.get("checks", [])
+            if check.get("handler") == "bss_spatial_reuse_join"
+        ),
+        None,
+    )
+    if bss_check is not None:
+        for observation in bss_check.get("observations", []):
+            trace = observation.get("representative_ap1_decisions", [])
+            if not trace:
+                continue
+            lines.extend([
+                f"\n#### [script] Representative AP decisions: {escape_cell(observation['config'])}\n\n",
+                "The rows are ten evenly spaced AP1 run-0 decision samples. "
+                "Treatments sample eligible inter-BSS decisions; controls sample all "
+                "retained decisions. Received power is full-channel power; the receiver "
+                "applies its RU-aware OBSS/PD test before recording the outcome.\n\n",
+                "| Time (s) | Local / PPDU color | BSS class | Eligible | PPDU power | Configured OBSS/PD | Reason | Ignore PPDU | TX power limit |\n",
+                "|---:|---|---|---|---:|---:|---|---|---:|\n",
+            ])
+            for row in trace:
+                bss_class = {
+                    0: "unspecified",
+                    1: "intra-BSS",
+                    2: "inter-BSS non-SRG",
+                    3: "inter-BSS SRG",
+                }.get(row["bss_type"], "unknown")
+                reason = {
+                    0: "spatial reuse disabled",
+                    1: "not an HE PPDU",
+                    2: "received color disabled",
+                    3: "local color disabled",
+                    4: "intra-BSS PPDU",
+                    11: "below OBSS/PD",
+                    12: "at/above OBSS/PD",
+                }.get(row["reason"], "unknown")
+                lines.append(
+                    f"| {row['simulation_time']:.9f} | "
+                    f"{row['local_bss_color']} / {row['received_bss_color']} | "
+                    f"{bss_class} | {'yes' if row['eligible'] else 'no'} | "
+                    f"{format_mw_as_dbm(row['received_power_mw'])} | "
+                    f"{format_mw_as_dbm(row['obss_pd_threshold_mw'])} | {reason} | "
+                    f"{'yes' if row['ignored_ppdu'] else 'no'} | "
+                    f"{format_mw_as_dbm(row['transmit_power_limit_mw'])} |\n"
                 )
     return "".join(lines)
 

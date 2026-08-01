@@ -61,6 +61,7 @@ GROUP_PERFORMANCE_VECTOR_STATISTICS = {
         "heSpatialReuseBssType",
         "heSpatialReuseReceivedBssColor",
         "heSpatialReuseLocalBssColor",
+        "heSpatialReuseReceivedPower",
         "heSpatialReuseEligible",
         "heSpatialReuseIgnoredPpdu",
         "heSpatialReuseObssPdThreshold",

@@ -61,6 +61,7 @@ class AnalysisCoreTest(unittest.TestCase):
             "heSpatialReuseBssType:vector": [2, 2, 2],
             "heSpatialReuseReceivedBssColor:vector": [2, 2, 2],
             "heSpatialReuseLocalBssColor:vector": [1, 1, 1],
+            "heSpatialReuseReceivedPower:vector": [1e-8, 1e-8, 1e-8],
             "heSpatialReuseEligible:vector": [1, 1, 1],
             "heSpatialReuseIgnoredPpdu:vector": [0, 1, 0],
             "heSpatialReuseObssPdThreshold:vector": [1e-8, 1e-8, 1e-8],

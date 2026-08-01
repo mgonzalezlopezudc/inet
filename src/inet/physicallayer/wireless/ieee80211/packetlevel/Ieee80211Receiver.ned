@@ -44,6 +44,7 @@ module Ieee80211Receiver extends NarrowbandReceiverBase
         @signal[heSpatialReuseBssType](type=long);
         @signal[heSpatialReuseReceivedBssColor](type=long);
         @signal[heSpatialReuseLocalBssColor](type=long);
+        @signal[heSpatialReuseReceivedPower](type=double; unit=dBm);
         @signal[heSpatialReuseEligible](type=long);
         @signal[heSpatialReuseIgnoredPpdu](type=long);
         @signal[heSpatialReuseObssPdThreshold](type=double; unit=dBm);
@@ -52,6 +53,7 @@ module Ieee80211Receiver extends NarrowbandReceiverBase
         @statistic[heSpatialReuseBssType](record=vector,count; interpolationmode=none);
         @statistic[heSpatialReuseReceivedBssColor](record=vector; interpolationmode=none);
         @statistic[heSpatialReuseLocalBssColor](record=vector; interpolationmode=none);
+        @statistic[heSpatialReuseReceivedPower](unit=dBm; record=vector; interpolationmode=none);
         @statistic[heSpatialReuseEligible](record=vector,count; interpolationmode=none);
         @statistic[heSpatialReuseIgnoredPpdu](record=vector,count; interpolationmode=none);
         @statistic[heSpatialReuseObssPdThreshold](unit=dBm; record=vector; interpolationmode=none);

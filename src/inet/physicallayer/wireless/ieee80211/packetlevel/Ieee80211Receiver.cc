@@ -64,6 +64,7 @@ namespace physicallayer {
 simsignal_t Ieee80211Receiver::heSpatialReuseBssTypeSignal = cComponent::registerSignal("heSpatialReuseBssType");
 simsignal_t Ieee80211Receiver::heSpatialReuseReceivedBssColorSignal = cComponent::registerSignal("heSpatialReuseReceivedBssColor");
 simsignal_t Ieee80211Receiver::heSpatialReuseLocalBssColorSignal = cComponent::registerSignal("heSpatialReuseLocalBssColor");
+simsignal_t Ieee80211Receiver::heSpatialReuseReceivedPowerSignal = cComponent::registerSignal("heSpatialReuseReceivedPower");
 simsignal_t Ieee80211Receiver::heSpatialReuseEligibleSignal = cComponent::registerSignal("heSpatialReuseEligible");
 simsignal_t Ieee80211Receiver::heSpatialReuseIgnoredPpduSignal = cComponent::registerSignal("heSpatialReuseIgnoredPpdu");
 simsignal_t Ieee80211Receiver::heSpatialReuseObssPdThresholdSignal = cComponent::registerSignal("heSpatialReuseObssPdThreshold");
@@ -436,6 +437,8 @@ void Ieee80211Receiver::recordHeSpatialReuseDecision(const HeSpatialReuseDecisio
         self->emit(heSpatialReuseBssTypeSignal, (long)decision.bssType);
         self->emit(heSpatialReuseReceivedBssColorSignal, (long)decision.receivedBssColor);
         self->emit(heSpatialReuseLocalBssColorSignal, (long)decision.localBssColor);
+        self->emit(heSpatialReuseReceivedPowerSignal,
+            std::isnan(decision.receivedPower.get()) ? NaN : math::mW2dBmW(decision.receivedPower.get<mW>()));
         self->emit(heSpatialReuseEligibleSignal, decision.eligible ? 1L : 0L);
         self->emit(heSpatialReuseIgnoredPpduSignal, decision.ignorePpdu ? 1L : 0L);
         self->emit(heSpatialReuseObssPdThresholdSignal,
@@ -635,6 +638,8 @@ bool Ieee80211Receiver::shouldIgnoreReceptionDueToHeSpatialReuse(const IListenin
 Ieee80211Receiver::HeSpatialReuseDecision Ieee80211Receiver::computeHeSpatialReuseDecision(const IListening *listening, const IReception *reception) const
 {
     HeSpatialReuseDecision decision;
+    if (auto narrowbandReception = dynamic_cast<const INarrowbandSignalAnalogModel *>(reception->getAnalogModel()))
+        decision.receivedPower = narrowbandReception->computeMinPower(reception->getStartTime(), reception->getEndTime());
     auto hePhyHeader = peekHePhyHeader(reception->getTransmission());
     if (!enableSpatialReuse) {
         decision.reason = "spatial reuse disabled";

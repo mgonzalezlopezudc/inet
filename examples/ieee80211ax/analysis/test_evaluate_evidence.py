@@ -44,7 +44,35 @@ class BssEvidenceTest(unittest.TestCase):
         decisions = pd.DataFrame([{
             "reason": 11,
             "ignored_ppdu": 1,
+            "module": "Network.ap1.wlan[0].radio.receiver",
+            "runID": 0,
+            "time": 0.4,
+            "sample_index": 1,
+            "local_bss_color": 1,
+            "received_bss_color": 2,
+            "bss_type": 2,
+            "eligible": 1,
+            "received_power": 1e-8,
+            "threshold": 1e-8,
+            "power_limit": 1e-7,
+        }, {
+            "reason": 12,
+            "ignored_ppdu": 0,
+            "module": "Network.ap1.wlan[0].radio.receiver",
+            "runID": 0,
+            "time": 0.5,
+            "sample_index": 2,
+            "local_bss_color": 1,
+            "received_bss_color": 2,
+            "bss_type": 2,
+            "eligible": 1,
+            "received_power": 1e-8,
+            "threshold": 1e-8,
+            "power_limit": 1e-7,
         }])
+        decisions = pd.concat([decisions] * 5, ignore_index=True)
+        decisions["time"] = [0.4 + index * 0.01 for index in range(len(decisions))]
+        decisions["sample_index"] = list(range(len(decisions)))
         with (
             patch("evaluate_evidence._validate_bss_spatial_reuse"),
             patch(
@@ -55,9 +83,10 @@ class BssEvidenceTest(unittest.TestCase):
             result, filters = evaluate_contract(contract, [condition])
 
         self.assertEqual(result.status, "PASS")
-        self.assertEqual(result.observations[0]["decision_count"], 1)
-        self.assertEqual(result.observations[0]["ignored_ppdu_count"], 1)
-        self.assertEqual(len(filters), 8)
+        self.assertEqual(result.observations[0]["decision_count"], 10)
+        self.assertEqual(result.observations[0]["ignored_ppdu_count"], 5)
+        self.assertEqual(len(result.observations[0]["representative_ap1_decisions"]), 10)
+        self.assertEqual(len(filters), 9)
 
 
 class MatchedDeliveryEvidenceTest(unittest.TestCase):

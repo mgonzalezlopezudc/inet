@@ -3,8 +3,8 @@
 <!-- BEGIN SCRIPT RESULTS SESSIONS -->
 `[script]` results sessions:
 
-- Scalar/vector: `20260731T222028Z`
-- PCAP: `20260731T222028Z`
+- Scalar/vector: `20260731T225927Z`
+- PCAP: `20260731T225927Z`
 <!-- END SCRIPT RESULTS SESSIONS -->
 
 `[agent]` results sessions: `NOT RECORDED`.
@@ -26,8 +26,8 @@ permits more candidate reuse and can also admit more interference.
 
 This is a receiver decision, not a conclusion that follows from throughput or
 packet counts. The decisive evidence is therefore the receiver telemetry that
-correlates classification, eligibility, threshold, power limit, reason, and
-ignore outcome for each retained reception.
+correlates color classification, received power, eligibility, threshold, power
+limit, reason, and ignore outcome for each retained reception.
 
 ## [agent] Scenario description
 
@@ -92,26 +92,30 @@ sets all local colors to 1; all other material settings are matched.
 
 ## [agent] Reproduction
 
-The published session is `20260731T222028Z`: five independent runs per
+The published session is `20260731T225927Z`: five independent runs per
 condition plus PCAPng from representative run 0. From the repository root:
 
 ```sh
 python3 examples/ieee80211/analysis/wifi_analysis.py inspect bss_coloring \
-  --session-id 20260731T222028Z
+  --session-id 20260731T225927Z
 python3 examples/ieee80211/analysis/wifi_analysis.py report bss_coloring \
-  --session-id 20260731T222028Z
+  --session-id 20260731T225927Z
 python3 examples/ieee80211/analysis/wifi_analysis.py publish bss_coloring \
-  --session-id 20260731T222028Z --update
+  --session-id 20260731T225927Z --update
 ```
 
 ## [agent] Scalar and vector analysis
 
 The session's `.vec` artifacts answer the learning question directly. The
-generated scalar/vector bundle joins every retained receiver decision with BSS type,
-eligibility, OBSS/PD threshold, power limit, reason, and ignore outcome.
-The controls record no ignored PPDUs. The conservative, enabled, and
-aggressive treatments record `4,435`, `10,188`, and `13,059` ignores,
-respectively. This supports a `PASS` for the modeled receiver mechanism.
+generated scalar/vector bundle joins every retained receiver decision with BSS
+type, local and received color, received power, eligibility, OBSS/PD threshold,
+power limit, reason, and ignore outcome. Each configuration has ten evenly
+spaced AP1 run-0 rows. The treatment rows show color `1` receiving color `2`
+and crossing the configured threshold; the disabled and same-color controls
+show why no OBSS/PD ignore is available. The controls record no ignored PPDUs.
+The conservative, enabled, and aggressive treatments record `4,435`, `10,188`,
+and `13,059` ignores, respectively. This supports a `PASS` for the modeled
+receiver mechanism.
 
 The bundle also reports goodput, Jain fairness, and concurrent AP airtime over
 `[0.3, 0.95) s`, with run-level 95% Student-t confidence intervals. Those
@@ -122,13 +126,13 @@ performance ranking.
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-bss -->
 ### [script] Generated scalar/vector plot and table
 
-![bss scalar/vector analysis](results/20260731T222028Z/bss-coloring-comparison.png)
+![bss scalar/vector analysis](results/20260731T225927Z/bss-coloring-comparison.png)
 
-Figure provenance: [`results/20260731T222028Z/bss-coloring-comparison.png.json`](results/20260731T222028Z/bss-coloring-comparison.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
+Figure provenance: [`results/20260731T225927Z/bss-coloring-comparison.png.json`](results/20260731T225927Z/bss-coloring-comparison.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
 Common table provenance:
 
-- Source result filters / modules / units: vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B<br>vector / **.ap*.wlan[0].radio / transmissionState:vector<br>vector / **.receiver / heSpatialReuseReason:vector<br>vector / **.receiver / heSpatialReuseBssType:vector<br>vector / **.receiver / heSpatialReuseEligible:vector<br>vector / **.receiver / heSpatialReuseObssPdThreshold:vector / unit=dBm<br>vector / **.receiver / heSpatialReuseTransmitPowerLimit:vector / unit=dBm
+- Source result filters / modules / units: vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B<br>vector / **.ap*.wlan[0].radio / transmissionState:vector<br>vector / **.receiver / heSpatialReuseReason:vector<br>vector / **.receiver / heSpatialReuseBssType:vector<br>vector / **.receiver / heSpatialReuseReceivedPower:vector / unit=dBm<br>vector / **.receiver / heSpatialReuseEligible:vector<br>vector / **.receiver / heSpatialReuseObssPdThreshold:vector / unit=dBm<br>vector / **.receiver / heSpatialReuseTransmitPowerLimit:vector / unit=dBm
 - Window / per-run aggregation / exclusions: [0.3, 0.95) s; observation=per-run measurement-window aggregate; uncertainty=95% Student-t CI; validation=joins each receiver decision by run, module, and aligned vector sample; requires inter-BSS OBSS/PD decisions and validates the 21 dBm/-82 dBm threshold-to-power relation
 - Independent runs: run-level summaries: n=5
 
@@ -156,8 +160,93 @@ The table is a presentation view of the session-bound run-level summary; the com
 
 | Status | Requirement | Evaluation |
 |---|---|---|
-| **PASS** | OBSS classification, OBSS/PD threshold, CCA, and power-limit decisions are observable | Every retained receiver decision has aligned BSS classification, eligibility, OBSS/PD threshold, power limit, reason, and ignore outcome. |
+| **PASS** | OBSS classification, received PPDU power, OBSS/PD threshold, CCA, and power-limit decisions are observable | Every retained receiver decision has aligned BSS classification, received power, eligibility, OBSS/PD threshold, power limit, reason, and ignore outcome. |
 | **INCONCLUSIVE** | Reuse comparison reports delivery, fairness, and concurrent airtime | The multi-condition delivery, fairness, and airtime ordering lacks a manifest-defined executable threshold. |
+
+#### [script] Representative AP decisions: BssColoringDisabled
+
+The rows are ten evenly spaced AP1 run-0 decision samples. Treatments sample eligible inter-BSS decisions; controls sample all retained decisions. Received power is full-channel power; the receiver applies its RU-aware OBSS/PD test before recording the outcome.
+
+| Time (s) | Local / PPDU color | BSS class | Eligible | PPDU power | Configured OBSS/PD | Reason | Ignore PPDU | TX power limit |
+|---:|---|---|---|---:|---:|---|---|---:|
+| 0.301236134 | 0 / 0 | unspecified | no | -75.09 dBm | N/A | spatial reuse disabled | no | N/A |
+| 0.355439809 | 0 / 0 | unspecified | no | -75.85 dBm | N/A | spatial reuse disabled | no | N/A |
+| 0.386293036 | 0 / 0 | unspecified | no | -77.98 dBm | N/A | spatial reuse disabled | no | N/A |
+| 0.428707269 | 0 / 0 | unspecified | no | -63.49 dBm | N/A | spatial reuse disabled | no | N/A |
+| 0.564407457 | 0 / 0 | unspecified | no | -78.25 dBm | N/A | spatial reuse disabled | no | N/A |
+| 0.595305478 | 0 / 0 | unspecified | no | -78.56 dBm | N/A | spatial reuse disabled | no | N/A |
+| 0.699965771 | 0 / 0 | unspecified | no | -80.75 dBm | N/A | spatial reuse disabled | no | N/A |
+| 0.778312681 | 0 / 0 | unspecified | no | -81.30 dBm | N/A | spatial reuse disabled | no | N/A |
+| 0.841407435 | 0 / 0 | unspecified | no | -81.75 dBm | N/A | spatial reuse disabled | no | N/A |
+| 0.948989971 | 0 / 0 | unspecified | no | -81.46 dBm | N/A | spatial reuse disabled | no | N/A |
+
+#### [script] Representative AP decisions: ObssPdConservative
+
+The rows are ten evenly spaced AP1 run-0 decision samples. Treatments sample eligible inter-BSS decisions; controls sample all retained decisions. Received power is full-channel power; the receiver applies its RU-aware OBSS/PD test before recording the outcome.
+
+| Time (s) | Local / PPDU color | BSS class | Eligible | PPDU power | Configured OBSS/PD | Reason | Ignore PPDU | TX power limit |
+|---:|---|---|---|---:|---:|---|---|---:|
+| 0.301236134 | 1 / 2 | inter-BSS non-SRG | yes | -75.09 dBm | -81.00 dBm | at/above OBSS/PD | no | 20.00 dBm |
+| 0.372323820 | 1 / 2 | inter-BSS non-SRG | yes | -76.07 dBm | -81.00 dBm | at/above OBSS/PD | no | 20.00 dBm |
+| 0.401421839 | 1 / 2 | inter-BSS non-SRG | yes | -76.44 dBm | -81.00 dBm | at/above OBSS/PD | no | 20.00 dBm |
+| 0.517362011 | 1 / 2 | inter-BSS non-SRG | yes | -77.72 dBm | -81.00 dBm | at/above OBSS/PD | no | 20.00 dBm |
+| 0.577310466 | 1 / 2 | inter-BSS non-SRG | yes | -78.39 dBm | -81.00 dBm | at/above OBSS/PD | no | 20.00 dBm |
+| 0.609549698 | 1 / 2 | inter-BSS non-SRG | yes | -78.69 dBm | -81.00 dBm | at/above OBSS/PD | no | 20.00 dBm |
+| 0.679156978 | 1 / 2 | inter-BSS non-SRG | yes | -79.34 dBm | -81.00 dBm | at/above OBSS/PD | no | 20.00 dBm |
+| 0.762118043 | 1 / 2 | inter-BSS non-SRG | yes | -80.05 dBm | -81.00 dBm | at/above OBSS/PD | no | 20.00 dBm |
+| 0.791870063 | 1 / 2 | inter-BSS non-SRG | yes | -80.29 dBm | -81.00 dBm | at/above OBSS/PD | no | 20.00 dBm |
+| 0.949986399 | 1 / 2 | inter-BSS non-SRG | yes | -81.46 dBm | -81.00 dBm | below OBSS/PD | yes | 20.00 dBm |
+
+#### [script] Representative AP decisions: BssColoringEnabled
+
+The rows are ten evenly spaced AP1 run-0 decision samples. Treatments sample eligible inter-BSS decisions; controls sample all retained decisions. Received power is full-channel power; the receiver applies its RU-aware OBSS/PD test before recording the outcome.
+
+| Time (s) | Local / PPDU color | BSS class | Eligible | PPDU power | Configured OBSS/PD | Reason | Ignore PPDU | TX power limit |
+|---:|---|---|---|---:|---:|---|---|---:|
+| 0.301236134 | 1 / 2 | inter-BSS non-SRG | yes | -75.09 dBm | -79.00 dBm | at/above OBSS/PD | no | 18.00 dBm |
+| 0.359967812 | 1 / 2 | inter-BSS non-SRG | yes | -75.91 dBm | -79.00 dBm | at/above OBSS/PD | no | 18.00 dBm |
+| 0.377645823 | 1 / 2 | inter-BSS non-SRG | yes | -76.14 dBm | -79.00 dBm | at/above OBSS/PD | no | 18.00 dBm |
+| 0.394757835 | 1 / 2 | inter-BSS non-SRG | yes | -76.36 dBm | -79.00 dBm | at/above OBSS/PD | no | 18.00 dBm |
+| 0.417183058 | 1 / 2 | inter-BSS non-SRG | yes | -76.58 dBm | -79.00 dBm | at/above OBSS/PD | no | 18.00 dBm |
+| 0.517546674 | 1 / 2 | inter-BSS non-SRG | yes | -77.76 dBm | -79.00 dBm | at/above OBSS/PD | no | 18.00 dBm |
+| 0.613768314 | 1 / 2 | inter-BSS non-SRG | yes | -78.74 dBm | -79.00 dBm | at/above OBSS/PD | no | 18.00 dBm |
+| 0.718162861 | 1 / 2 | inter-BSS non-SRG | yes | -79.68 dBm | -79.00 dBm | below OBSS/PD | yes | 18.00 dBm |
+| 0.821382924 | 1 / 2 | inter-BSS non-SRG | yes | -80.51 dBm | -79.00 dBm | below OBSS/PD | yes | 18.00 dBm |
+| 0.949986620 | 1 / 2 | inter-BSS non-SRG | yes | -81.46 dBm | -79.00 dBm | below OBSS/PD | yes | 18.00 dBm |
+
+#### [script] Representative AP decisions: ObssPdAggressive
+
+The rows are ten evenly spaced AP1 run-0 decision samples. Treatments sample eligible inter-BSS decisions; controls sample all retained decisions. Received power is full-channel power; the receiver applies its RU-aware OBSS/PD test before recording the outcome.
+
+| Time (s) | Local / PPDU color | BSS class | Eligible | PPDU power | Configured OBSS/PD | Reason | Ignore PPDU | TX power limit |
+|---:|---|---|---|---:|---:|---|---|---:|
+| 0.301236134 | 1 / 2 | inter-BSS non-SRG | yes | -75.09 dBm | -78.00 dBm | at/above OBSS/PD | no | 17.00 dBm |
+| 0.359568812 | 1 / 2 | inter-BSS non-SRG | yes | -75.91 dBm | -78.00 dBm | at/above OBSS/PD | no | 17.00 dBm |
+| 0.376577822 | 1 / 2 | inter-BSS non-SRG | yes | -76.12 dBm | -78.00 dBm | at/above OBSS/PD | no | 17.00 dBm |
+| 0.393557834 | 1 / 2 | inter-BSS non-SRG | yes | -76.34 dBm | -78.00 dBm | at/above OBSS/PD | no | 17.00 dBm |
+| 0.409929845 | 1 / 2 | inter-BSS non-SRG | yes | -76.55 dBm | -78.00 dBm | at/above OBSS/PD | no | 17.00 dBm |
+| 0.541110247 | 1 / 2 | inter-BSS non-SRG | yes | -78.02 dBm | -78.00 dBm | below OBSS/PD | yes | 17.00 dBm |
+| 0.643485888 | 1 / 2 | inter-BSS non-SRG | yes | -79.01 dBm | -78.00 dBm | below OBSS/PD | yes | 17.00 dBm |
+| 0.747719740 | 1 / 2 | inter-BSS non-SRG | yes | -79.93 dBm | -78.00 dBm | below OBSS/PD | yes | 17.00 dBm |
+| 0.849765671 | 1 / 2 | inter-BSS non-SRG | yes | -80.73 dBm | -78.00 dBm | below OBSS/PD | yes | 17.00 dBm |
+| 0.947983831 | 1 / 2 | inter-BSS non-SRG | yes | -81.45 dBm | -78.00 dBm | below OBSS/PD | yes | 17.00 dBm |
+
+#### [script] Representative AP decisions: BssColoringCollision
+
+The rows are ten evenly spaced AP1 run-0 decision samples. Treatments sample eligible inter-BSS decisions; controls sample all retained decisions. Received power is full-channel power; the receiver applies its RU-aware OBSS/PD test before recording the outcome.
+
+| Time (s) | Local / PPDU color | BSS class | Eligible | PPDU power | Configured OBSS/PD | Reason | Ignore PPDU | TX power limit |
+|---:|---|---|---|---:|---:|---|---|---:|
+| 0.301236134 | 1 / 1 | intra-BSS | no | -75.09 dBm | N/A | intra-BSS PPDU | no | N/A |
+| 0.355439809 | 1 / 1 | intra-BSS | no | -75.85 dBm | N/A | intra-BSS PPDU | no | N/A |
+| 0.386293036 | 1 / 1 | intra-BSS | no | -77.98 dBm | N/A | intra-BSS PPDU | no | N/A |
+| 0.428707269 | 1 / 1 | intra-BSS | no | -63.49 dBm | N/A | intra-BSS PPDU | no | N/A |
+| 0.564407457 | 1 / 1 | intra-BSS | no | -78.25 dBm | N/A | intra-BSS PPDU | no | N/A |
+| 0.595305478 | 1 / 1 | intra-BSS | no | -78.56 dBm | N/A | intra-BSS PPDU | no | N/A |
+| 0.699965771 | 1 / 1 | intra-BSS | no | -80.75 dBm | N/A | intra-BSS PPDU | no | N/A |
+| 0.778312681 | 1 / 1 | intra-BSS | no | -81.30 dBm | N/A | intra-BSS PPDU | no | N/A |
+| 0.841407435 | 1 / 1 | intra-BSS | no | -81.75 dBm | N/A | intra-BSS PPDU | no | N/A |
+| 0.948989971 | 1 / 1 | intra-BSS | no | -81.46 dBm | N/A | intra-BSS PPDU | no | N/A |
 <!-- END GENERATED: ieee80211-scalar-vector-bss -->
 
 ## [agent] PCAP statistics
@@ -174,13 +263,13 @@ is useful context for the exchange but cannot itself prove a receiver decision.
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
 ### [script] Generated PCAP plots and tables
-![802.11 Packet Type Statistics](results/20260731T222028Z/packet_statistics.png)
+![802.11 Packet Type Statistics](results/20260731T225927Z/packet_statistics.png)
 
-Figure provenance: [`packet_statistics.png.json`](results/20260731T222028Z/packet_statistics.png.json).
+Figure provenance: [`packet_statistics.png.json`](results/20260731T225927Z/packet_statistics.png.json).
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 
-Capture session `20260731T222028Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260731T222028Z.json` (SHA-256 `63f49aecdfd657b4a634fd2ba0548f6ea4084e85977ff34eb9a7ae82eb476c89`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
+Capture session `20260731T225927Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260731T225927Z.json` (SHA-256 `a67016f188acbcc714169bec679fc33dbf4adc322a92f71af4c6467fa3dd1e69`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
 
 Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.

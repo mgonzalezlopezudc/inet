@@ -26,6 +26,7 @@ class INET_API Ieee80211Receiver : public FlatReceiverBase
     static simsignal_t heSpatialReuseBssTypeSignal;
     static simsignal_t heSpatialReuseReceivedBssColorSignal;
     static simsignal_t heSpatialReuseLocalBssColorSignal;
+    static simsignal_t heSpatialReuseReceivedPowerSignal;
     static simsignal_t heSpatialReuseEligibleSignal;
     static simsignal_t heSpatialReuseIgnoredPpduSignal;
     static simsignal_t heSpatialReuseObssPdThresholdSignal;
@@ -84,6 +85,7 @@ class INET_API Ieee80211Receiver : public FlatReceiverBase
         HeSpatialReuseBssType bssType = HeSpatialReuseBssType::UNSPECIFIED;
         int receivedBssColor = 0;
         int localBssColor = 0;
+        W receivedPower = W(NaN);
         bool eligible = false;
         bool ignorePpdu = false;
         W obssPdThreshold = W(NaN);
