@@ -1101,7 +1101,7 @@ void Hcf::originatorProcessFailedFrame(Packet *failedPacket)
             for (int i = 0; i < edcaf->getInProgressFrames()->getLength(); i++) {
                 auto packet = edcaf->getInProgressFrames()->getFrames(i);
                 auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(packet->peekAtFront<Ieee80211MacHeader>());
-                if (dataHeader == nullptr || dataHeader->getType() != ST_DATA_WITH_QOS)
+                if (dataHeader == nullptr || dataHeader->getType() != ST_DATA_WITH_QOS || !dataHeader->getSequenceNumber().isValid())
                     continue;
                 auto id = std::make_pair(dataHeader->getReceiverAddress(), std::make_pair(dataHeader->getTid(),
                         SequenceControlField(dataHeader->getSequenceNumber().get(), dataHeader->getFragmentNumber())));
@@ -1148,7 +1148,7 @@ std::vector<Packet *> Hcf::recoverHtImplicitBlockAckTimeout(
         auto frame = inProgressFrames->getFrames(i);
         auto header = dynamicPtrCast<const Ieee80211DataHeader>(
                 frame->peekAtFront<Ieee80211MacHeader>());
-        if (header == nullptr)
+        if (header == nullptr || !header->getSequenceNumber().isValid())
             continue;
         auto id = std::make_pair(header->getReceiverAddress(),
                 std::make_pair(header->getTid(), SequenceControlField(

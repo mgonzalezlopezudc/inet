@@ -41,18 +41,24 @@ QosAckHandler::Status QosAckHandler::getMgmtOrNonQoSAckStatus(const Key& id)
 
 QosAckHandler::Status QosAckHandler::getMgmtOrNonQoSAckStatus(const Ptr<const Ieee80211DataOrMgmtHeader>& header)
 {
+    if (!header->getSequenceNumber().isValid())
+        return Status::FRAME_NOT_YET_TRANSMITTED;
     auto id = std::make_pair(header->getReceiverAddress(), SequenceControlField(header->getSequenceNumber().get(), header->getFragmentNumber()));
     return getMgmtOrNonQoSAckStatus(id);
 }
 
 QosAckHandler::Status QosAckHandler::getQoSDataAckStatus(const Ptr<const Ieee80211DataHeader>& header)
 {
+    if (!header->getSequenceNumber().isValid())
+        return Status::FRAME_NOT_YET_TRANSMITTED;
     auto id = std::make_pair(header->getReceiverAddress(), std::make_pair(header->getTid(), SequenceControlField(header->getSequenceNumber().get(), header->getFragmentNumber())));
     return getQoSDataAckStatus(id);
 }
 
 void QosAckHandler::processReceivedAck(const Ptr<const Ieee80211AckFrame>& ack, const Ptr<const Ieee80211DataOrMgmtHeader>& ackedHeader)
 {
+    if (!ackedHeader->getSequenceNumber().isValid())
+        return;
     if (ackedHeader->getType() == ST_DATA_WITH_QOS) {
         auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(ackedHeader);
         auto id = std::make_pair(dataHeader->getReceiverAddress(), std::make_pair(dataHeader->getTid(), SequenceControlField(dataHeader->getSequenceNumber().get(), dataHeader->getFragmentNumber())));
@@ -72,6 +78,8 @@ void QosAckHandler::processReceivedAck(const Ptr<const Ieee80211AckFrame>& ack, 
 
 void QosAckHandler::processFailedFrame(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader)
 {
+    if (!dataOrMgmtHeader->getSequenceNumber().isValid())
+        return;
     if (dataOrMgmtHeader->getType() == ST_DATA_WITH_QOS) {
         auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(dataOrMgmtHeader);
         auto id = std::make_pair(dataHeader->getReceiverAddress(), std::make_pair(dataHeader->getTid(), SequenceControlField(dataHeader->getSequenceNumber().get(), dataHeader->getFragmentNumber())));
@@ -98,6 +106,8 @@ void QosAckHandler::processFailedFrame(const Ptr<const Ieee80211DataOrMgmtHeader
 
 void QosAckHandler::dropFrame(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader)
 {
+    if (!dataOrMgmtHeader->getSequenceNumber().isValid())
+        return;
     if (dataOrMgmtHeader->getType() == ST_DATA_WITH_QOS) {
         auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(dataOrMgmtHeader);
         auto id = std::make_pair(dataHeader->getReceiverAddress(), std::make_pair(dataHeader->getTid(), SequenceControlField(dataHeader->getSequenceNumber().get(), dataHeader->getFragmentNumber())));
@@ -245,6 +255,8 @@ std::set<std::pair<MacAddress, std::pair<Tid, SequenceControlField>>> QosAckHand
 
 void QosAckHandler::processTransmittedDataOrMgmtFrame(const Ptr<const Ieee80211DataOrMgmtHeader>& header)
 {
+    if (!header->getSequenceNumber().isValid())
+        return;
     if (header->getType() == ST_DATA_WITH_QOS) {
         auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header);
         auto id = std::make_pair(dataHeader->getReceiverAddress(), std::make_pair(dataHeader->getTid(), SequenceControlField(dataHeader->getSequenceNumber().get(), dataHeader->getFragmentNumber())));
@@ -265,6 +277,8 @@ void QosAckHandler::processTransmittedHtImplicitBlockAckFrame(
 {
     ASSERT(header->getType() == ST_DATA_WITH_QOS);
     ASSERT(header->getAckPolicy() == NORMAL_ACK);
+    if (!header->getSequenceNumber().isValid())
+        return;
     auto id = std::make_pair(header->getReceiverAddress(),
             std::make_pair(header->getTid(),
                     SequenceControlField(header->getSequenceNumber().get(),

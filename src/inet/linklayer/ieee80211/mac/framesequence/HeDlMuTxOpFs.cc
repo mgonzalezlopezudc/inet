@@ -69,7 +69,7 @@ std::map<Tid, SequenceNumberCyclic> collectStartingSequenceNumbersByTid(const st
     std::map<Tid, SequenceNumberCyclic> records;
     for (auto packet : packets) {
         auto header = dynamicPtrCast<const Ieee80211DataHeader>(packet->peekAtFront<Ieee80211MacHeader>());
-        if (header == nullptr)
+        if (header == nullptr || !header->getSequenceNumber().isValid())
             continue;
         auto it = records.find(header->getTid());
         if (it == records.end() || header->getSequenceNumber().get() < it->second.get())

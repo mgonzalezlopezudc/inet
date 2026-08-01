@@ -258,7 +258,7 @@ void HeHcf::originatorProcessBlockAckResult(
         for (auto packet : allocation.packets) {
             auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(
                     packet->peekAtFront<Ieee80211MacHeader>());
-            if (dataHeader == nullptr)
+            if (dataHeader == nullptr || !dataHeader->getSequenceNumber().isValid())
                 continue;
             auto key = std::make_pair(dataHeader->getReceiverAddress(),
                     std::make_pair(dataHeader->getTid(),

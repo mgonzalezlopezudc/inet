@@ -145,6 +145,8 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
                 std::vector<int> limitNss(tempGroup.size());
                 for (size_t i = 0; i < tempGroup.size(); ++i) {
                     int maxRxNss = getMaxNss(tempGroup[i].negotiatedHeCapabilities.localTxPeerRx.mcsNss);
+                    if (tempGroup[i].hasAdvertisedHeCapabilities && tempGroup[i].advertisedHeCapabilities.beamformeeSts20Mhz > 0)
+                        maxRxNss = std::min(maxRxNss, tempGroup[i].advertisedHeCapabilities.beamformeeSts20Mhz);
                     if (tempGroup[i].operatingModeRxNss > 0)
                         maxRxNss = std::min(maxRxNss, tempGroup[i].operatingModeRxNss);
                     limitNss[i] = std::min(maxRxNss, 4);

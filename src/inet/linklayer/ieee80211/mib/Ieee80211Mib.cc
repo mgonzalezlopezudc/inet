@@ -71,6 +71,27 @@ void Ieee80211Mib::initialize(int stage)
         localHeCapabilities.beamformeeSts20Mhz = par("heBeamformeeSts20Mhz").intValue();
         localHeCapabilities.beamformeeStsAbove20Mhz = par("heBeamformeeStsAbove20Mhz").intValue();
         localHeCapabilities.feedbackMode = par("heFeedbackMode").intValue();
+        int heMaxNss = par("heMaxNss").intValue();
+        if (heMaxNss < 1 || heMaxNss > 8)
+            throw cRuntimeError("heMaxNss must be between 1 and 8");
+        cModule *wlan = getParentModule();
+        if (wlan != nullptr) {
+            cModule *radioModule = wlan->getSubmodule("radio");
+            if (radioModule != nullptr) {
+                cModule *antennaModule = radioModule->getSubmodule("antenna");
+                if (antennaModule != nullptr && antennaModule->hasPar("numAntennas")) {
+                    int numAntennas = antennaModule->par("numAntennas").intValue();
+                    if (numAntennas > 0)
+                        heMaxNss = std::min(heMaxNss, numAntennas);
+                }
+            }
+        }
+        localHeCapabilities.rxMcsNss.maxMcsPerNss.fill(-1);
+        localHeCapabilities.txMcsNss.maxMcsPerNss.fill(-1);
+        for (int i = 0; i < heMaxNss; ++i) {
+            localHeCapabilities.rxMcsNss.maxMcsPerNss[i] = 11;
+            localHeCapabilities.txMcsNss.maxMcsPerNss[i] = 11;
+        }
         int defaultPeDurationUs = par("heDefaultPeDurationUs").intValue();
         if (defaultPeDurationUs != 0 && defaultPeDurationUs != 4 &&
                 defaultPeDurationUs != 8 && defaultPeDurationUs != 12 &&

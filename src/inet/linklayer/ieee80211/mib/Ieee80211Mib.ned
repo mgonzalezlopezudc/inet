@@ -45,6 +45,7 @@ simple Ieee80211Mib extends SimpleModule
         int heBeamformeeSts20Mhz = default(0);
         int heBeamformeeStsAbove20Mhz = default(0);
         int heFeedbackMode = default(0); // 0=None, 1=SU, 2=MU, 3=Both
+        int heMaxNss = default(8); // Maximum HE spatial streams supported by receiver/transmitter
         // EHT features are packet-level capability inputs for 802.11be negotiation.
         bool ehtLdpc = default(true); // Advertises and enables EHT LDPC when the peer also supports it
         bool ehtDlOfdma = default(true); // Advertises EHT downlink OFDMA support
