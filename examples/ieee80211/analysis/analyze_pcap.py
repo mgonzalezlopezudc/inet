@@ -1096,6 +1096,11 @@ def select_representative_timeline(rows, subdir, limit=TIMELINE_LIMIT):
         identities.add(identity)
         unique_rows.append(row)
 
+    if subdir in {"dl_mu_mimo", "multi_user/mu_mimo"}:
+        part1 = [row for row in unique_rows if row["simulation_time_s"] <= 0.304]
+        part2 = [row for row in unique_rows if row["simulation_time_s"] >= 0.5][:20]
+        return part1 + part2
+
     def is_anchor(row):
         if subdir == "twt":
             # Center on responder traffic so the preceding wake-presence
