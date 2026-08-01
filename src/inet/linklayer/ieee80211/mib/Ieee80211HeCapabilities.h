@@ -26,8 +26,7 @@ struct Ieee80211HeMcsNssMap
 
     Ieee80211HeMcsNssMap()
     {
-        maxMcsPerNss.fill(-1);
-        maxMcsPerNss[0] = 11;
+        maxMcsPerNss.fill(11);
     }
 };
 
@@ -296,17 +295,11 @@ inline bool isDlMuMimoEligible(
     if (staCapabilities.feedbackMode != 2 && staCapabilities.feedbackMode != 3)
         return false;
 
-    int negotiatedNss = getMaxNss(negotiated.localTxPeerRx.mcsNss);
-    if (negotiatedNss < 1)
+    int maxSupportedNss = std::min(getMaxNss(negotiated.localTxPeerRx.mcsNss),
+            operatingBandwidth == Hz(20e6) ? staCapabilities.beamformeeSts20Mhz :
+                                             staCapabilities.beamformeeStsAbove20Mhz);
+    if (maxSupportedNss < 1)
         return false;
-
-    if (operatingBandwidth == Hz(20e6)) {
-        if (staCapabilities.beamformeeSts20Mhz < negotiatedNss)
-            return false;
-    } else {
-        if (staCapabilities.beamformeeStsAbove20Mhz < negotiatedNss)
-            return false;
-    }
     return true;
 }
 
