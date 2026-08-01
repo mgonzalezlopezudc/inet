@@ -56,7 +56,7 @@ GENERATED_BEGIN = f"<!-- BEGIN GENERATED: {GENERATED_MARKER} -->"
 GENERATED_END = f"<!-- END GENERATED: {GENERATED_MARKER} -->"
 SUITE_SCENARIOS = {}
 EVIDENCE_STATUSES = {"PASS", "FAIL", "INCONCLUSIVE", "NOT RUN"}
-TIMELINE_LIMIT = 30
+TIMELINE_LIMIT = 50
 
 subdirs_configs = {}
 CONFIG_ORDER = {}
@@ -196,7 +196,7 @@ def get_packet_type_name(fc_type, fc_subtype, fc_version=None, is_he_mu=False, s
     elif t == 1:
         return f"Control: {subtypes_ctrl.get(st, f'Subtype {st}')}" + suffix
     elif t == 2:
-        return f"Data: {subtypes_data.get(st, f'Subtype {st}')}" + suffix
+        return f"{subtypes_data.get(st, f'Subtype {st}')}" + suffix
     else:
         return f"Unknown (Type {t}, Subtype {st})" + suffix
 
@@ -1100,7 +1100,10 @@ def select_representative_timeline(rows, subdir, limit=TIMELINE_LIMIT):
         if subdir == "twt":
             # Center on responder traffic so the preceding wake-presence
             # signal and the following acknowledgment fit in the same window.
-            return row["frame_name"].startswith("Data:")
+            return (
+                row["frame_name"].startswith(("Data:", "Data", "QoS Data"))
+                or str(row.get("frame_type")) == "2"
+            )
         if subdir in {
             "dl_ofdma_sched", "dl_ofdma_asym", "ul_ofdma", "dl_ul_ofdma", "dl_mu_mimo", "ul_mu_mimo",
             "ndp_feedback", "bsr", "multi_user/mu_mimo", "multi_user/ndp_feedback", "he_bsr",
@@ -2007,7 +2010,7 @@ def make_table_md(stats, total):
         name = unpack_key_to_name(key)
 
         # Determine category to insert horizontal line separator
-        category = name.split(":")[0] if ":" in name else "Other"
+        category = name.split(":")[0] if ":" in name else "Data"
         if prev_category is not None and category != prev_category:
             # Insert a separator row with horizontal lines in each cell
             md.append("| " + " | ".join(["<hr>"] * 14) + " |\n")
@@ -2034,6 +2037,9 @@ def make_table_md(stats, total):
 
 ORDERED_BASE_TYPES = [
     # Data
+    "Data",
+    "QoS Data",
+    "QoS Null",
     "Data: Data",
     "Data: QoS Data",
     "Data: QoS Null",
@@ -2074,11 +2080,11 @@ def get_packet_color(pt):
         # Keep single-user PPDU variants in the yellow family in both packet
         # statistics plots and the matching table swatches.
         h, s, l = 50, 95, 48
-    elif base == "Data: Data":  # Regular data (Light Green)
+    elif base in ("Data", "Data: Data"):  # Regular data (Light Green)
         h, s, l = 120, 65, 75
-    elif base == "Data: QoS Data":  # QoS (Green)
+    elif base in ("QoS Data", "Data: QoS Data"):  # QoS (Green)
         h, s, l = 120, 70, 45
-    elif base == "Data: QoS Null":  # QoS Null (Dark Green)
+    elif base in ("QoS Null", "Data: QoS Null"):  # QoS Null (Dark Green)
         h, s, l = 120, 75, 22
     elif base == "Control: Ack":  # Ack (Blue)
         h, s, l = 210, 80, 60
@@ -2564,6 +2570,38 @@ def timeline_role(frame):
     return "Provides frame-order context for the representative exchange."
 
 
+def format_type_phy(frame):
+    phy = frame.get("phy") or {}
+    standard = phy.get("format")
+    if frame.get("frame_type") is not None and frame.get("frame_subtype") is not None:
+        return get_packet_type_name(
+            frame["frame_type"], frame["frame_subtype"],
+            standard=standard if standard not in ("Legacy", "Legacy/HT/VHT") else None,
+            mcs=phy.get("mcs"), bw=phy.get("bandwidth_or_ru"),
+            gi=phy.get("guard_interval"), nss=phy.get("nss"), coding=phy.get("coding"),
+            is_ampdu=frame.get("ampdu", False)
+        )
+    name = frame.get("frame_name", "")
+    if name.startswith("Data: "):
+        name = name[6:]
+    if "[" in name or not standard or standard in ("Legacy", "Legacy/HT/VHT"):
+        return name
+    parts = []
+    if standard: parts.append(standard)
+    mcs = phy.get("mcs")
+    if mcs and mcs != standard: parts.append(mcs)
+    bw = phy.get("bandwidth_or_ru")
+    if bw: parts.append(bw)
+    gi = phy.get("guard_interval")
+    if gi: parts.append(f"GI {gi}" if not str(gi).startswith("GI ") else gi)
+    nss = phy.get("nss")
+    if nss and str(nss) != "1": parts.append(f"NSS {nss}" if not str(nss).startswith("NSS ") else nss)
+    coding = phy.get("coding")
+    if coding: parts.append(coding)
+    if frame.get("ampdu"): parts.append("A-MPDU")
+    return f"{name} [{', '.join(parts)}]"
+
+
 def timeline_markdown(timeline):
     if not timeline:
         return (
@@ -2571,20 +2609,11 @@ def timeline_markdown(timeline):
             "`INCONCLUSIVE` exchange evidence.\n\n"
         )
     lines = [
-        "| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | "
-        "Decisive fields | Role in exchange |\n",
-        "|---:|---:|---|---|---|---|\n",
+        "| Color | Frame | Simulation time (s) | Transmitter → receiver | "
+        "Type/PHY | Decisive fields |\n",
+        "|:---:|---:|---:|---|---|---|\n",
     ]
     for frame in timeline:
-        phy = frame["phy"]
-        phy_parts = [
-            value for value in (
-                phy["format"], phy["mcs"], phy["bandwidth_or_ru"],
-                f"NSS {phy['nss']}" if phy["nss"] else None,
-                f"GI {phy['guard_interval']}" if phy["guard_interval"] else None,
-                phy["coding"],
-            ) if value
-        ]
         decisive = [
             f"direction={frame.get('direction', '-')}",
             f"retry={int(frame['retry'])}",
@@ -2599,16 +2628,16 @@ def timeline_markdown(timeline):
             f"{frame['transmitter'] or '?'} → {frame['receiver'] or '?'}"
         )
         frame_id = str(frame["frame_number"])
-        type_phy = frame["frame_name"]
-        if phy_parts:
-            type_phy += " / " + ", ".join(phy_parts)
+        type_phy = format_type_phy(frame)
+        color = get_packet_color(type_phy)
+        color_svg = f'<svg width="16" height="16"><rect width="16" height="16" rx="3" fill="{color}" /></svg>'
         cells = [
+            color_svg,
             frame_id,
             f"{frame['simulation_time_s']:.9f}",
             address_pair,
             type_phy,
             ", ".join(decisive),
-            timeline_role(frame),
         ]
         lines.append("| " + " | ".join(
             str(cell).replace("|", "\\|") for cell in cells

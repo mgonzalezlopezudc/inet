@@ -641,7 +641,7 @@ class CaptureValidationTest(unittest.TestCase):
             markdown,
         )
         self.assertIn(
-            "HE-MU, HE-MCS 3, 52-tone RU, NSS 1, GI 0.8 us, LDPC",
+            "QoS Data [HE-MU, HE-MCS 3, 52-tone RU, GI 0.8 us, LDPC, A-MPDU]",
             markdown,
         )
 
@@ -714,7 +714,7 @@ class CaptureValidationTest(unittest.TestCase):
             markdown,
         )
         self.assertIn("| `Treatment` | `wlan.fc.type == 2` | 4 |", markdown)
-        self.assertIn("Data: QoS Data [HE-SU", markdown)
+        self.assertIn("QoS Data [HE-SU", markdown)
         self.assertIn("Not delivery or de-duplicated transmissions", markdown)
 
 
