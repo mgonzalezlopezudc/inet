@@ -67,6 +67,7 @@ bool HeSoundingCoordinator::tryStartSoundingSequence(AccessCategory ac,
 {
     int lackCsiCount = 0;
     std::vector<HeSoundingFs::TargetSta> soundingStas;
+    std::vector<HeSoundingFs::TargetSta> staleSoundingStas;
     for (const auto& candidate : scheduleContext.candidates) {
         auto negotiated = candidate.hasNegotiatedHeCapabilities ?
                 &candidate.negotiatedHeCapabilities : nullptr;
@@ -77,19 +78,27 @@ bool HeSoundingCoordinator::tryStartSoundingSequence(AccessCategory ac,
         if (staCapabilities == nullptr)
             continue;
         if (isDlMuMimoEligible(scheduleContext.localHeCapabilities, *staCapabilities, *negotiated, scheduleContext.channelBandwidth, scheduleContext.numApAntennas)) {
-            if (!csiManager.hasFreshCsi(candidate.staAddress, scheduleContext.channelBandwidth))
+            const bool staleCsi = !csiManager.hasFreshCsi(candidate.staAddress, scheduleContext.channelBandwidth);
+            if (staleCsi)
                 lackCsiCount++;
             HeSoundingFs::TargetSta target;
             target.address = candidate.staAddress;
             target.aid = mac->getMib()->getAssociationId(candidate.staAddress);
             target.maxNss = std::min(getMaxNss(negotiated->localTxPeerRx.mcsNss), 4);
-            soundingStas.push_back(target);
+            (staleCsi ? staleSoundingStas : soundingStas).push_back(target);
         }
     }
-    if (lackCsiCount >= 2) {
+    if (lackCsiCount >= 1) {
+        // Sound stale candidates first so the eight-STA sounding limit cannot
+        // repeatedly omit the station that needs a CSI refresh.
+        soundingStas.insert(soundingStas.begin(), staleSoundingStas.begin(), staleSoundingStas.end());
         if (soundingStas.size() > 8)
             soundingStas.resize(8);
-        EV_INFO << "At least two MU-capable backlogged STAs lack fresh CSI. Initiating sounding sequence." << std::endl;
+        // A station omitted from the preceding sounding exchange must be
+        // refreshed even when it is the sole stale MU-capable candidate.
+        // Otherwise the DL scheduler's fresh-CSI gate can exclude it
+        // indefinitely while the already-sounded peers keep transmitting.
+        EV_INFO << "At least one MU-capable backlogged STA lacks fresh CSI. Initiating sounding sequence." << std::endl;
         auto soundingSequence = new HeSoundingFs(mac->getMib(), soundingStas, modeSet,
                                                  &csiManager, scheduleContext.channelCenterFrequency,
                                                  scheduleContext.channelBandwidth,

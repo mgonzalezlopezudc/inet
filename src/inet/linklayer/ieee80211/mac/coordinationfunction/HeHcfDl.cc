@@ -411,6 +411,41 @@ bool HeHcf::tryStartDlMuFrameSequence(AccessCategory ac)
         auto ackMethod = par("dlMuAckMethod").stdstringValue() == "sequentialBar" ?
                 HeDlMuTxOpFs::AckMethod::EXPLICIT_SEQUENTIAL_BAR :
                 HeDlMuTxOpFs::AckMethod::MU_BAR_TRIGGER;
+        if (ackMethod == HeDlMuTxOpFs::AckMethod::MU_BAR_TRIGGER) {
+            const auto fullBandwidthRu = physicallayer::getHeEqualRuLayout(
+                    scheduleContext.channelCenterFrequency, scheduleContext.channelBandwidth, 1).front();
+            const auto fullBandwidthUlMuMimo = std::count_if(dlPlan->getAllocations().begin(),
+                    dlPlan->getAllocations().end(), [&] (const auto& allocation) {
+                        return allocation.ru.toneSize == fullBandwidthRu.toneSize &&
+                                allocation.ru.toneOffset == fullBandwidthRu.toneOffset;
+                    }) >= 2;
+            bool fullBandwidthUlMuMimoSupported = !fullBandwidthUlMuMimo;
+            for (const auto& allocation : dlPlan->getAllocations()) {
+                if (!fullBandwidthUlMuMimo)
+                    continue;
+                auto candidate = std::find_if(scheduleContext.candidates.begin(),
+                        scheduleContext.candidates.end(), [&] (const auto& entry) {
+                            return entry.staAddress == allocation.staAddress;
+                        });
+                if (candidate == scheduleContext.candidates.end() ||
+                        !candidate->hasNegotiatedHeCapabilities ||
+                        !candidate->negotiatedHeCapabilities.localRxPeerTx.valid ||
+                        !candidate->negotiatedHeCapabilities.localRxPeerTx.
+                                transmitterCanTransmitFullBandwidthUlMuMimo) {
+                    fullBandwidthUlMuMimoSupported = false;
+                    break;
+                }
+            }
+            if (!fullBandwidthUlMuMimoSupported) {
+                // IEEE Std 802.11-2024, 26.5.2.2.1 prohibits a Trigger that
+                // solicits full-bandwidth UL MU-MIMO from a non-AP STA that
+                // has not advertised the capability.  A DL MU PPDU remains
+                // valid; use its per-STA BAR/BA response sequence instead.
+                EV_INFO << "HE DL MU: falling back from MU-BAR trigger to sequential BAR "
+                        << "because full-bandwidth UL MU-MIMO is not negotiated for every recipient\n";
+                ackMethod = HeDlMuTxOpFs::AckMethod::EXPLICIT_SEQUENTIAL_BAR;
+            }
+        }
         // 26.4.4.3 permits SU BlockAck responses to an HE MU PPDU; 9.3.1.22.4
         // plus 26.4.4.4/26.5.2 model the MU-BAR-triggered HE TB BlockAck path.
         EV_INFO << "Start HE DL MU TxOp FS: using "
