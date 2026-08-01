@@ -702,6 +702,9 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, b frontOffset, b b
                     data5 |= bandwidthOrRu;
                 }
                 data6 |= std::clamp<int>(user.numberOfSpatialStreams, 1, 15);
+                if (ppduFormat == physicallayer::HE_MU_DOWNLINK) {
+                    data6 |= (std::clamp<int>(user.streamStartIndex, 0, 7) & 0x7) << 5;
+                }
             }
         }
         else if (heRxVectorInd != nullptr && heRxVectorInd->getRxVector() != nullptr) {
@@ -794,6 +797,35 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, b frontOffset, b b
         appendUint16(bytes, data4);
         appendUint16(bytes, data5);
         appendUint16(bytes, data6);
+    }
+
+    // 12. RADIOTAP_HE_MU (24)
+    if (isHe && heTxVectorReq != nullptr && heTxVectorReq->getTxVector() != nullptr) {
+        const auto& txVector = *heTxVectorReq->getTxVector();
+        const auto& common = txVector.getCommon().getParameters();
+        if (common.ppduFormat == physicallayer::HE_MU_DOWNLINK) {
+            setPresentBit(RADIOTAP_HE_MU);
+            appendPadding(bytes, 2);
+
+            uint16_t flags1 = 0x0001; // SIG-B compression known / enabled
+            uint16_t flags2 = 0x0001; // SIG-B MCS known
+            uint8_t ruChannel1[4] = {0};
+            uint8_t ruChannel2[4] = {0};
+
+            if (!txVector.getUsers().empty()) {
+                const auto& firstUser = txVector.getUsers().front().getParameters();
+                int ruAlloc = getRadiotapHeRuAllocation(firstUser.ru.toneSize);
+                if (ruAlloc >= 0)
+                    ruChannel1[0] = static_cast<uint8_t>(ruAlloc);
+            }
+
+            appendUint16(bytes, flags1);
+            appendUint16(bytes, flags2);
+            for (int i = 0; i < 4; ++i)
+                bytes.push_back(ruChannel1[i]);
+            for (int i = 0; i < 4; ++i)
+                bytes.push_back(ruChannel2[i]);
+        }
     }
 
     // 13. RADIOTAP_0_LENGTH_PSDU (26)
