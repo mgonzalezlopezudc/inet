@@ -7,6 +7,8 @@
 
 #include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
 
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IAntenna.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
 
 #include <cmath>
@@ -78,12 +80,27 @@ void Ieee80211Mib::initialize(int stage)
         if (wlan != nullptr) {
             cModule *radioModule = wlan->getSubmodule("radio");
             if (radioModule != nullptr) {
-                cModule *antennaModule = radioModule->getSubmodule("antenna");
-                if (antennaModule != nullptr && antennaModule->hasPar("numAntennas")) {
-                    int numAntennas = antennaModule->par("numAntennas").intValue();
-                    if (numAntennas > 0)
-                        heMaxNss = std::min(heMaxNss, numAntennas);
+                int numAntennas = -1;
+                auto radio = dynamic_cast<physicallayer::IRadio *>(radioModule);
+                if (radio != nullptr && radio->getAntenna() != nullptr)
+                    numAntennas = radio->getAntenna()->getNumAntennas();
+                if (numAntennas <= 0) {
+                    cModule *antennaModule = radioModule->getSubmodule("antenna");
+                    if (antennaModule != nullptr && antennaModule->hasPar("numAntennas"))
+                        numAntennas = antennaModule->par("numAntennas").intValue();
                 }
+                if (numAntennas <= 0) {
+                    for (cModule::SubmoduleIterator it(radioModule); !it.end(); ++it) {
+                        cModule *sub = *it;
+                        if (sub->hasPar("numAntennas")) {
+                            numAntennas = sub->par("numAntennas").intValue();
+                            break;
+                        }
+                    }
+                }
+                if (numAntennas > 0)
+                    heMaxNss = std::min(heMaxNss, numAntennas);
+                EV_DETAIL << "Ieee80211Mib: " << getFullPath() << " resolved numAntennas=" << numAntennas << " final heMaxNss=" << heMaxNss << endl;
             }
         }
         localHeCapabilities.rxMcsNss.maxMcsPerNss.fill(-1);

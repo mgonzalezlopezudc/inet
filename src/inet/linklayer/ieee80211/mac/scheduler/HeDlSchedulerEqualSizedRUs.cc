@@ -225,6 +225,14 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
                             fullChannelRu.toneSize, alloc.mcs, finalNss[i], false, context.guardInterval);
                     result.push_back(alloc);
                 }
+                // IEEE 802.11-2024 Table 27-31 encodes the per-user NSTS sequence in
+                // nonincreasing order. Keep the rotating candidate cursor as the user-selection
+                // policy, then canonicalize only the emitted HE-SIG-B user order.
+                std::sort(result.begin(), result.end(), [](const RuAllocation& left, const RuAllocation& right) {
+                    if (left.numberOfSpatialStreams != right.numberOfSpatialStreams)
+                        return left.numberOfSpatialStreams > right.numberOfSpatialStreams;
+                    return left.staAddress < right.staAddress;
+                });
                 EV_INFO << "DL EqualSizedRUs scheduler: selected DL MU-MIMO group of "
                         << result.size() << " STAs on full-channel RU\n";
                 recordSchedule(context, groupCandidates, result, true, "DL MU-MIMO group");
