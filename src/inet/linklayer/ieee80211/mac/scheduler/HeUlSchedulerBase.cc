@@ -123,7 +123,7 @@ int HeUlSchedulerBase::selectMcsBySnr(double snrDb, const CandidateInfo& candida
 {
     if (!candidate.hasFreshPathLoss || !std::isfinite(snrDb))
         return defaultMcs;
-    int maxMcs = 9; // Keep HE-TB robust unless a later policy explicitly widens this cap.
+    int maxMcs = candidate.coding == physicallayer::HE_CODING_BCC ? 9 : 11;
     if (candidate.hasNegotiatedHeCapabilities &&
             candidate.negotiatedHeCapabilities.localRxPeerTx.valid) {
         int nssIndex = std::clamp(nss - 1, 0, 7);
@@ -153,7 +153,8 @@ int HeUlSchedulerBase::selectMcs(const ScheduleContext& context, const Candidate
     if (heRateControl == nullptr)
         return defaultMcs;
     IIeee80211HeRateControl::Constraints constraints;
-    constraints.maxMcs = 9; // keep HE-TB robust unless LDPC/user constraints explicitly widen later
+    constraints.ldpc = candidate.coding == physicallayer::HE_CODING_LDPC;
+    constraints.maxMcs = constraints.ldpc ? 11 : 9;
     if (candidate.hasNegotiatedHeCapabilities &&
             candidate.negotiatedHeCapabilities.localRxPeerTx.valid)
         constraints.directionalCapabilities =
