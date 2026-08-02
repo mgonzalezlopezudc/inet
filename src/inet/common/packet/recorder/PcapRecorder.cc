@@ -681,6 +681,8 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, b frontOffset, b b
             if (selectedHeMuUserIndex >= 0 &&
                     selectedHeMuUserIndex < static_cast<int>(txVector.getUsers().size()))
                 selectedUser = &txVector.getUsers()[selectedHeMuUserIndex].getParameters();
+            else if (ppduFormat == physicallayer::HE_TRIGGER_BASED_UPLINK && !txVector.getUsers().empty())
+                selectedUser = &txVector.getUsers().front().getParameters();
             else if (txVector.getUsers().size() == 1)
                 selectedUser = &txVector.getUsers().front().getParameters();
             if (selectedUser != nullptr) {
