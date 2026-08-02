@@ -3,8 +3,8 @@
 <!-- BEGIN SCRIPT RESULTS SESSIONS -->
 `[script]` results sessions:
 
-- Scalar/vector: `20260802T102734Z`
-- PCAP: `20260802T102734Z`
+- Scalar/vector: `20260802T103416Z`
+- PCAP: `20260802T103416Z`
 <!-- END SCRIPT RESULTS SESSIONS -->
 
 `[agent]` results sessions: `20260802T093100Z`.
@@ -82,11 +82,11 @@ python3 examples/ieee80211/analysis/wifi_analysis.py publish dl_ofdma_bar --sess
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-dl_bar -->
 ### [script] Generated scalar/vector plot and table
 
-![dl_bar scalar/vector analysis](results/20260802T102734Z/dl-bar-acknowledgment-dashboard.png)
+![dl_bar scalar/vector analysis](results/20260802T103416Z/dl-bar-acknowledgment-dashboard.png)
 
-![dl_bar 1ms scalar/vector analysis](results/20260802T102734Z/dl-bar-acknowledgment-dashboard-1ms.png)
+![dl_bar 1ms scalar/vector analysis](results/20260802T103416Z/dl-bar-acknowledgment-dashboard-1ms.png)
 
-Figure provenance: [`results/20260802T102734Z/dl-bar-acknowledgment-dashboard.png.json`](results/20260802T102734Z/dl-bar-acknowledgment-dashboard.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
+Figure provenance: [`results/20260802T103416Z/dl-bar-acknowledgment-dashboard.png.json`](results/20260802T103416Z/dl-bar-acknowledgment-dashboard.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
 Common table provenance:
 
@@ -122,19 +122,19 @@ The table is a presentation view of the session-bound run-level summary; the com
 ### [script] Generated PCAP plots and tables
 #### [script] sendInterval = 0.5ms (High Load)
 
-![802.11 Packet Type Statistics (0.5ms)](results/20260802T102734Z/packet_statistics.png)
+![802.11 Packet Type Statistics (0.5ms)](results/20260802T103416Z/packet_statistics.png)
 
-Figure provenance: [`packet_statistics.png.json`](results/20260802T102734Z/packet_statistics.png.json).
+Figure provenance: [`packet_statistics.png.json`](results/20260802T103416Z/packet_statistics.png.json).
 
 #### [script] sendInterval = 1.0ms (Moderate Load)
 
-![802.11 Packet Type Statistics (1.0ms)](results/20260802T102734Z/packet_statistics_1ms.png)
+![802.11 Packet Type Statistics (1.0ms)](results/20260802T103416Z/packet_statistics_1ms.png)
 
-Figure provenance: [`packet_statistics_1ms.png.json`](results/20260802T102734Z/packet_statistics_1ms.png.json).
+Figure provenance: [`packet_statistics_1ms.png.json`](results/20260802T103416Z/packet_statistics_1ms.png.json).
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 
-Capture session `20260802T102734Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260802T102734Z.json` (SHA-256 `2aabf5479442509e3bb26c9c89f87cc8ee3c5ffb2908b4069288dbe793cb62d8`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
+Capture session `20260802T103416Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260802T103416Z.json` (SHA-256 `037238d581964a98c41ee626d073c895350c8dcaa2080bfa2eb7b9f5449caab2`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
 
 Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
