@@ -1011,6 +1011,46 @@ def plot_ul_ofdma(conditions: list[Condition], output: Path) -> None:
             "uncertainty": "95% Student-t CI across independent runs",
         },
     )
+
+def plot_dl_bar(conditions: list[Condition], output: Path) -> None:
+    """Compare DL-BAR acknowledgment methods using aggregate goodput and 95th-percentile delay."""
+    goodputs = [per_run_goodput(condition) for condition in conditions]
+    delays = [per_run_delay_percentile(condition, 95) for condition in conditions]
+    labels = [condition.label for condition in conditions]
+    fig, axes = plt.subplots(1, 2, figsize=(max(12, len(conditions) * 2.2), 5.0))
+    bar_with_ci(axes[0], labels, goodputs, "goodput_bps", scale=1e-6)
+    bar_with_ci(axes[1], labels, delays, "delay_s", scale=1e3)
+    axes[0].set_ylabel("Aggregate goodput [Mbit/s]")
+    axes[1].set_ylabel("95th-percentile end-to-end delay [ms]")
+    axes[0].set_title("Application goodput")
+    axes[1].set_title("95th-percentile delay")
+    for axis in axes:
+        axis.grid(axis="y", alpha=0.3)
+    fig.suptitle("Downlink OFDMA Block Ack Request comparison")
+    save(fig, output)
+    write_provenance(
+        output,
+        conditions=conditions,
+        result_filters=[
+            {
+                "type": "vector",
+                "module": "**.app[*]",
+                "name": "packetReceived:vector(packetBytes)",
+                "value_semantics": "delivered application bytes",
+            },
+            {
+                "type": "vector",
+                "module": "**.app[*]",
+                "name": "endToEndDelay:vector",
+                "value_semantics": "end-to-end packet delivery delay",
+            },
+        ],
+        aggregation={
+            "observation": "one aggregate goodput and 95th-percentile delay per run",
+            "uncertainty": "95% Student-t CI",
+        },
+    )
+
 PLOTS: dict[str, Callable[[list[Condition], Path], None]] = {
     "fragmentation": plot_fragmentation,
     "uora": plot_uora,
@@ -1023,7 +1063,7 @@ PLOTS: dict[str, Callable[[list[Condition], Path], None]] = {
     "width": plot_width,
     "dl_sched": plot_dl,
     "dl_asym": plot_dl,
-    "dl_bar": plot_delivery,
+    "dl_bar": plot_dl_bar,
     "bsr": plot_bsr,
     "multi_tid": plot_delivery,
     "operating_mode": plot_delivery,

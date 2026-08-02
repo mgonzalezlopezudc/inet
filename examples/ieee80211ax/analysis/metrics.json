@@ -1,6 +1,6 @@
 {
   "_provenance": {
-    "generated_at_utc": "2026-08-02T09:57:40.084697+00:00",
+    "generated_at_utc": "2026-08-02T10:14:19.374398+00:00",
     "groups": {
       "dl_bar": {
         "conditions": [
@@ -18,44 +18,44 @@
             },
             "result_files": [
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/TriggeredBar/TriggeredBar-#0.sca",
-                "sha256": "c648bb63853fbd43b4cf3be8f7df11434b6e265b9345f8d9c4f5d75aa1b99881"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/TriggeredBar/TriggeredBar-#0.sca",
+                "sha256": "609b16e6d32c5cc5b082c2fbcae24cb4650a0f08d1c5e6ecb559e089e3d2f518"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/TriggeredBar/TriggeredBar-#0.vec",
-                "sha256": "d05ac0cf86d42ba01ca10ab70d88ad5b2cb15c21d8506b8e03af205d556053c3"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/TriggeredBar/TriggeredBar-#0.vec",
+                "sha256": "a46aced9f611b68dcdd208fd2c4dcd5322f14a7c00f09ee83f700a0dae208d5e"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/TriggeredBar/TriggeredBar-#1.sca",
-                "sha256": "01ae53da642d60b3433833ba8f1fcd4fa70427e959e5c1dd101378952b34df02"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/TriggeredBar/TriggeredBar-#1.sca",
+                "sha256": "f9643d120ff469e08b85600f1293b2bcc6f0657a9475e18863e637c61ef374d8"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/TriggeredBar/TriggeredBar-#1.vec",
-                "sha256": "858559660f2cc96dfe2baca8b32405c0014f69639994f743b056f8fdc5b76d23"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/TriggeredBar/TriggeredBar-#1.vec",
+                "sha256": "0d7cf3488ebe273e79466be9c1a38306824532828f598ef0de8fad09774a5de0"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/TriggeredBar/TriggeredBar-#2.sca",
-                "sha256": "34ea1ea974eaef390d9fb852fbca804dee5128fb09535b8fbad4c156244b40d7"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/TriggeredBar/TriggeredBar-#2.sca",
+                "sha256": "ceb50149004585e7d101ce00c398c0305fcbcb5bbad5ffa0ad3f7830b0847678"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/TriggeredBar/TriggeredBar-#2.vec",
-                "sha256": "99c9485be29789d9f7c93e2fc793a1a8a06dd1eac1502b75409bc423adfc16a3"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/TriggeredBar/TriggeredBar-#2.vec",
+                "sha256": "6f28714854f00e45abba037c143d6f1ffdf43185325c083d3f99bb442805a1a7"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/TriggeredBar/TriggeredBar-#3.sca",
-                "sha256": "dbaedbb4880c615140036f28629f069aba2d2e8048ce306d4968364ae5c17a9f"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/TriggeredBar/TriggeredBar-#3.sca",
+                "sha256": "e367fb8e33d4b00584c7bca59d17ebe21d93d1b3da4689514faebd581cca4d42"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/TriggeredBar/TriggeredBar-#3.vec",
-                "sha256": "b68a9e0f80a4ac7762dddb030ffbad320f7a9c2ecfc87b802bd166ac59ba58f3"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/TriggeredBar/TriggeredBar-#3.vec",
+                "sha256": "035b369e0b492f60b1427cfdb9f5ec20e56e8efad338efc7f62b66e3a141b815"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/TriggeredBar/TriggeredBar-#4.sca",
-                "sha256": "f0ae041e9a4c0dbb9faa33a94eacfb274bd877457b8f670191d8c1f6c12710ae"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/TriggeredBar/TriggeredBar-#4.sca",
+                "sha256": "233e468860c53cc5be3594d8d9b24f31863ad214da63335a540f0a847947cdfc"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/TriggeredBar/TriggeredBar-#4.vec",
-                "sha256": "c57375a80b5ca992cb93e44679aed21917a26bcf8239d8f00e888118bbc6ca96"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/TriggeredBar/TriggeredBar-#4.vec",
+                "sha256": "d5f4b836801967fbee90ce415a1bc83f7906da00532cf8e21b1787a476cd9213"
               }
             ]
           },
@@ -73,44 +73,44 @@
             },
             "result_files": [
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SequentialBar/SequentialBar-#0.sca",
-                "sha256": "3587d701e58139c5fca30d537d192c3f2a84990dfaf14947ceded7135a4234b8"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SequentialBar/SequentialBar-#0.sca",
+                "sha256": "dcd7284985355b73ba6d6d1b9e5539b72bb0ab308d706b53e25cc46e7b3dbedf"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SequentialBar/SequentialBar-#0.vec",
-                "sha256": "1829b9641cdc6c360a398a2da2b6b8a157bfddfcf9a4e086318f4f3008d6f067"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SequentialBar/SequentialBar-#0.vec",
+                "sha256": "c44f7bcaede46b9a6191a7c9d6333749efbb892af2b15ed2533fcf946c36b8b5"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SequentialBar/SequentialBar-#1.sca",
-                "sha256": "15db5250a44948b03c2fc3f62d7d66ce3dfe266d9f7be80fd39b630238157bb7"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SequentialBar/SequentialBar-#1.sca",
+                "sha256": "25f6980663ab3131054e90e1991b839642ede2c549cb83ca3f29bcc43222aac7"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SequentialBar/SequentialBar-#1.vec",
-                "sha256": "096fb575197158aad72d870943ef4e4f69b5a26f7763fe6980e3862e5bf1fe00"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SequentialBar/SequentialBar-#1.vec",
+                "sha256": "8d38bf86c88ded388200d3e5b4124f61432af94895eaf2a813ff20d50e3a2e76"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SequentialBar/SequentialBar-#2.sca",
-                "sha256": "a00582a9928c03ef58756afbb6f63f8cda16978762e0fea0057c1ac15ae36509"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SequentialBar/SequentialBar-#2.sca",
+                "sha256": "530e45cdbcab69dd9a766b5fa6816df6dde5ea8c402462f3863397f8c6d6fc09"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SequentialBar/SequentialBar-#2.vec",
-                "sha256": "26c144544fcec9a036d339b2301d48b282b2413827634bf70f44aa9ec596c089"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SequentialBar/SequentialBar-#2.vec",
+                "sha256": "a3a43dfea0f00ebe1da068c4b517be301cb10550da8ed229ec2f6b30a8bda58a"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SequentialBar/SequentialBar-#3.sca",
-                "sha256": "fa7f6912cd452227569eee1580c05fc2ed54754c877a8f0810ae8d36ae1d7cde"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SequentialBar/SequentialBar-#3.sca",
+                "sha256": "252488f80ad8629b61c7c7dcb11656ae2f70fbf8419505ccfdee8ab96bce85fc"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SequentialBar/SequentialBar-#3.vec",
-                "sha256": "06a4604a2d2f97bc8a91ca9e2564fb39d13035af5cab9685fe4b34c28717fa16"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SequentialBar/SequentialBar-#3.vec",
+                "sha256": "7e56fd629b3e1dc9f2ef30ec69cf4de1d25171319fa95d0f18b11e4cfcd1c77f"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SequentialBar/SequentialBar-#4.sca",
-                "sha256": "379a389aa6778cc6a44f836212d0369f909ef8872cc6a33ba6ba1f3ce7a227e4"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SequentialBar/SequentialBar-#4.sca",
+                "sha256": "d29a6a5eb7cdd2cbfc1bd2ba44179c4046be986c8226b868f026745f24efd2ae"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SequentialBar/SequentialBar-#4.vec",
-                "sha256": "7e89093b2799ed80504d304d32b50f3757bcdee35a0ef8814093083f26aaeaeb"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SequentialBar/SequentialBar-#4.vec",
+                "sha256": "1cdb620af26f8363910ea180e5f13345d1eb25b809d4159eb028b0baa78d613a"
               }
             ]
           },
@@ -128,44 +128,44 @@
             },
             "result_files": [
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/TriggeredBarfHoL/TriggeredBarfHoL-#0.sca",
-                "sha256": "fe5455ba83f583ac4485e6faf51be913bf2454c102fbc1e46a84ff5aa0f8361c"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/TriggeredBarfHoL/TriggeredBarfHoL-#0.sca",
+                "sha256": "32578126ae924ce81297a87f8491390e3188ce04881e5573ca3761dc746c2f80"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/TriggeredBarfHoL/TriggeredBarfHoL-#0.vec",
-                "sha256": "e66d6aa1259a5cf53828e4732dfa0096e0a152602d5656c5c7c5fae8a77e7ad5"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/TriggeredBarfHoL/TriggeredBarfHoL-#0.vec",
+                "sha256": "aaba4469960235fe39ac926e78c651989aca3c3954346e7a1903f844093e17f2"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/TriggeredBarfHoL/TriggeredBarfHoL-#1.sca",
-                "sha256": "453fe757081ff783ce234bbef37aad9bde96388881d8278d8e36bfb7d402cb25"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/TriggeredBarfHoL/TriggeredBarfHoL-#1.sca",
+                "sha256": "4fe864ca42908fae93e481808216177d53af57ad8faa89977524137c3d88da3d"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/TriggeredBarfHoL/TriggeredBarfHoL-#1.vec",
-                "sha256": "2d92758fbff5d024d9e6792514a3db45fac5e86be9b4ff5520390a2b7482a242"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/TriggeredBarfHoL/TriggeredBarfHoL-#1.vec",
+                "sha256": "540e683861dfe67a000ef1033110c9809526e8949644732ac6e203d21245faf6"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/TriggeredBarfHoL/TriggeredBarfHoL-#2.sca",
-                "sha256": "d8d3e1b4216b01c5631b616c636b93bb4bf926f74f2d80efdebd8b157449a59f"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/TriggeredBarfHoL/TriggeredBarfHoL-#2.sca",
+                "sha256": "054f929ec054f1f32b6a6ab7a7fd389b869463f2ddefdebff1885f9ebfe667e9"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/TriggeredBarfHoL/TriggeredBarfHoL-#2.vec",
-                "sha256": "8a0455d8711e05321ec5e37458b9de29535ce0819e88a27b9c4a1a27133c50aa"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/TriggeredBarfHoL/TriggeredBarfHoL-#2.vec",
+                "sha256": "bf4f49bec9c551abdf832df9e3fd132a4aa9abf163913532b6959912c1f011a2"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/TriggeredBarfHoL/TriggeredBarfHoL-#3.sca",
-                "sha256": "a915ec4041787d6e5f3c04b47eb4850b5d9c253828ffae6314449e4a83792c9e"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/TriggeredBarfHoL/TriggeredBarfHoL-#3.sca",
+                "sha256": "8ca0fbcb02af9a9b462e93d5ad81d323d25db0ccf0bcb73973f2a306294ab994"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/TriggeredBarfHoL/TriggeredBarfHoL-#3.vec",
-                "sha256": "771ce391a55bc764c93387a0fe7d040d6b4dadeb86d70a2b01a2a308d29facb8"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/TriggeredBarfHoL/TriggeredBarfHoL-#3.vec",
+                "sha256": "040094d8bf71cc7b60d8307ce004e47f5f3554677c297c165633ab8ec0c824d4"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/TriggeredBarfHoL/TriggeredBarfHoL-#4.sca",
-                "sha256": "3694c04bca2ce074d79b1249e4a8159e7bf11ba2709f6aa157ca88d908395d63"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/TriggeredBarfHoL/TriggeredBarfHoL-#4.sca",
+                "sha256": "5fb51f1e1138bff9ae2733c0e799aa711a178820dff5b0682ce7d6dda2c83883"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/TriggeredBarfHoL/TriggeredBarfHoL-#4.vec",
-                "sha256": "264aed036b84b59df56d40863e36610ff6b1c53602fe395b818b5593f50e9769"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/TriggeredBarfHoL/TriggeredBarfHoL-#4.vec",
+                "sha256": "31ab03fe70c698827061e6021caad840899a4742038a7e917b106c49c929679b"
               }
             ]
           },
@@ -183,44 +183,44 @@
             },
             "result_files": [
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SequentialBarfHoL/SequentialBarfHoL-#0.sca",
-                "sha256": "79e1abe523a529c66faeddb48bc2243c3b6e77d572a0c8c911a8df31652eb2bb"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SequentialBarfHoL/SequentialBarfHoL-#0.sca",
+                "sha256": "c76c6af9000a48873955e87504e435f71c4a42b971c439d38ddc2d4c0d682cc2"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SequentialBarfHoL/SequentialBarfHoL-#0.vec",
-                "sha256": "f086a0aebdae9562d070b6000f7327196afc3ffff00233cbfcf81d973025c160"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SequentialBarfHoL/SequentialBarfHoL-#0.vec",
+                "sha256": "7abeccc0db5c2a6c3a3b4210567bce08dfaad5f48bd47fab3b589e4c4ca1e30d"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SequentialBarfHoL/SequentialBarfHoL-#1.sca",
-                "sha256": "eb3309341c59242a734a63ca5880d94cd29b95f36accd6c14db23fd8e453bde3"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SequentialBarfHoL/SequentialBarfHoL-#1.sca",
+                "sha256": "114429fbfd7906de6b95ee43f78eb6e3a94a4524857e819d4dc4e4dbc8609998"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SequentialBarfHoL/SequentialBarfHoL-#1.vec",
-                "sha256": "e4734696db2ed3434687cc75949178216501f0231431c49f6d45db534771accd"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SequentialBarfHoL/SequentialBarfHoL-#1.vec",
+                "sha256": "538447f0eba7b57561fa73fe853a445d03ba3ce0a0b7690da421e42b9b8b620e"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SequentialBarfHoL/SequentialBarfHoL-#2.sca",
-                "sha256": "53af0b045522cb1cd71df26bb4a853a2df738dd67bd430d40ea98143bf23d404"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SequentialBarfHoL/SequentialBarfHoL-#2.sca",
+                "sha256": "a544fa10a066cf6e5610175ef5c83aaaf274120b9a25f71e54300499f0c685f8"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SequentialBarfHoL/SequentialBarfHoL-#2.vec",
-                "sha256": "35ba74c32a9113a131f67d5dfdb511cc6c7895e4e828fef02776669425e73dc0"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SequentialBarfHoL/SequentialBarfHoL-#2.vec",
+                "sha256": "3cbc536668c3c8dfeb3ac1bd42859733e624ec7faa8f910c6673e2d2129a34a1"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SequentialBarfHoL/SequentialBarfHoL-#3.sca",
-                "sha256": "b379d3d334eaec50678dcc6952713f88fc1e8b7ecc60cde4ca996a46544dd2bb"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SequentialBarfHoL/SequentialBarfHoL-#3.sca",
+                "sha256": "bc9a538ad13abba630ecd846a91dabf2414172ca55c77a143ddacc4250ab6914"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SequentialBarfHoL/SequentialBarfHoL-#3.vec",
-                "sha256": "3222bdf9323d179a5e845b4ea5e5be0001011594e75e69829d4ee2b4e804b00c"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SequentialBarfHoL/SequentialBarfHoL-#3.vec",
+                "sha256": "585de9b5821939b43c1c0dc0013a91c65b157d660aec58e16c309722bc4a5156"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SequentialBarfHoL/SequentialBarfHoL-#4.sca",
-                "sha256": "261ad12af4a9d3e05ecd84179e70d204974814d3d40b39bc5c3d098b32234354"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SequentialBarfHoL/SequentialBarfHoL-#4.sca",
+                "sha256": "79ca6ef554003476875a19f97c679755e88efcff0a65dfe3d0f1e03cb9b0252c"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SequentialBarfHoL/SequentialBarfHoL-#4.vec",
-                "sha256": "dd004f2f9844c11418096ffebd95131feaa07e56c63f01ba092fbf1ea7758307"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SequentialBarfHoL/SequentialBarfHoL-#4.vec",
+                "sha256": "896d1e2d451ae28fa0a314dc860b906c5a8eb72061b080469748f6c1538cc459"
               }
             ]
           },
@@ -238,69 +238,69 @@
             },
             "result_files": [
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SuBaseline/SuBaseline-#0.sca",
-                "sha256": "4f49a281e4465d9877fd11a6ba880092a29e06149d7a85fdfdae64dcacffc4ae"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SuBaseline/SuBaseline-#0.sca",
+                "sha256": "3051df85de17692ce73fd7c781f3921f39f5712fa6950b1b6a5781e03968356e"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SuBaseline/SuBaseline-#0.vec",
-                "sha256": "7070c3359565a300b5a7c12757ddc3f01dbe8068d839ccf9be187971245690c9"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SuBaseline/SuBaseline-#0.vec",
+                "sha256": "09f518a3b03723731529df7ffe80dc24776d4c14cba2dd4d0471a8ac7d1db134"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SuBaseline/SuBaseline-#1.sca",
-                "sha256": "a7b2063ec3eb33bdbd631ce70f03ee34258d2c058a6343fdadf0567159083d80"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SuBaseline/SuBaseline-#1.sca",
+                "sha256": "07b662d983b94e9af460c976b73baca48af741fc0c15759100ae71a71ea7c06a"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SuBaseline/SuBaseline-#1.vec",
-                "sha256": "c15c18aa89c5bbc563f4c2dc2e16a2ee619cd15311eb814ce691fedcd38af21f"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SuBaseline/SuBaseline-#1.vec",
+                "sha256": "712ed28fa7e0a4ef31ae66389b2c5b742afe6be79f1fae46800588848370d786"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SuBaseline/SuBaseline-#2.sca",
-                "sha256": "0b3cef17a5f5291b91ec239dc0e972bfcc7df131f411410516b8ff7d18eb6d24"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SuBaseline/SuBaseline-#2.sca",
+                "sha256": "89c6c3e989d0530ccd8d623cbb459da9267a7cc5c28eb853a0cc9426819fb8c4"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SuBaseline/SuBaseline-#2.vec",
-                "sha256": "c92ee46f1896d85528d4c1887a83c33b890a2c56cf48098438341b89fc6e6169"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SuBaseline/SuBaseline-#2.vec",
+                "sha256": "372f14dfe8858efcd1daa0bf38248ad52776ae42e23dc5a6c21a77d2b97c646c"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SuBaseline/SuBaseline-#3.sca",
-                "sha256": "d740ca9ac1324ab612e155ffbce18a9edd258aceea16f94da01052fc7b8f58ac"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SuBaseline/SuBaseline-#3.sca",
+                "sha256": "93d234bc04096710a6cdba0218dd532073ae328a6caae3df7a8e28f81d5e99b5"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SuBaseline/SuBaseline-#3.vec",
-                "sha256": "9084962ff9b36acf1139f613df63d5a955d61d2fdb4c66bf090bde69a302aeba"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SuBaseline/SuBaseline-#3.vec",
+                "sha256": "6094b67ba25f23e9420afb2c4fcff8d15ccf133e05441053af4dfd48c5f45cff"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SuBaseline/SuBaseline-#4.sca",
-                "sha256": "aca322da2bcb0b2eb195372e824fd91fa3265eb507875823570981c1ea1464b4"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SuBaseline/SuBaseline-#4.sca",
+                "sha256": "93ad7bc1ff1095a61e2cf350a3e43989ba284f7606e4ff46a07afd6d9b9071e3"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T095718Z/SuBaseline/SuBaseline-#4.vec",
-                "sha256": "c5d84961911581d94b81d54047152abc6cfc71bb891c922506ae165859eda558"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T101347Z/SuBaseline/SuBaseline-#4.vec",
+                "sha256": "adc5d216588a7aa861694f1ee6b2e1dd0a010227ae5bfa426a682ef85c265f8c"
               }
             ]
           }
         ],
-        "session_id": "20260802T095718Z",
+        "session_id": "20260802T101347Z",
         "status": "PASS"
       }
     },
-    "repository_revision": "3c1c88cade512979ae312ce5d939aa725af8642a",
-    "requested_session_id": "20260802T095718Z",
+    "repository_revision": "04d682e5131aefd5aa39a829bcf87481166cee62",
+    "requested_session_id": "20260802T101347Z",
     "schema_version": 1
   },
   "dl_bar": {
     "DL SU Baseline": {
       "goodput_mbps": {
-        "ci95": 0.0,
+        "ci95": 0.011384847324783719,
         "count": 5,
-        "mean": 2.4000000000000004
+        "mean": 4.059076923076924
       }
     },
     "Sequential BAR (fBW)": {
       "goodput_mbps": {
-        "ci95": 0.0013668652825590665,
+        "ci95": 0.0,
         "count": 5,
-        "mean": 2.395569230769231
+        "mean": 4.248615384615385
       }
     },
     "Sequential BAR (fHoL)": {
@@ -312,16 +312,16 @@
     },
     "Triggered BAR (fBW)": {
       "goodput_mbps": {
-        "ci95": 0.0,
+        "ci95": 0.0020502979238385998,
         "count": 5,
-        "mean": 2.4000000000000004
+        "mean": 4.786953846153846
       }
     },
     "Triggered BAR (fHoL)": {
       "goodput_mbps": {
         "ci95": 0.0,
         "count": 5,
-        "mean": 2.4000000000000004
+        "mean": 3.456000000000001
       }
     }
   }
