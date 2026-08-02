@@ -1063,6 +1063,49 @@ def plot_dl_bar(conditions: list[Condition], output: Path) -> None:
         },
     )
 
+def plot_ul_mu_mimo(conditions: list[Condition], output: Path) -> None:
+    """Compare UL SU, OFDMA, and UL MU-MIMO across offered loads using aggregate goodput and 95th-percentile delay."""
+    goodputs = [per_run_goodput(condition) for condition in conditions]
+    delays = [per_run_delay_percentile(condition, 95) for condition in conditions]
+    labels = [condition.label for condition in conditions]
+    fig, axes = plt.subplots(1, 2, figsize=(max(12, len(conditions) * 0.8), 5.5))
+    bar_with_ci(axes[0], labels, goodputs, "goodput_bps", scale=1e-6)
+    bar_with_ci(axes[1], labels, delays, "delay_s", scale=1e3)
+    axes[0].set_ylabel("Aggregate goodput [Mbit/s]")
+    axes[1].set_ylabel("95th-percentile end-to-end delay [ms]")
+    axes[0].set_title("Aggregate goodput")
+    axes[1].set_title("95th-percentile delay")
+    for axis in axes:
+        axis.tick_params(axis="x", rotation=45, labelsize=8)
+        for label in axis.get_xticklabels():
+            label.set_horizontalalignment("right")
+        axis.grid(axis="y", alpha=0.3)
+    fig.suptitle("Uplink MU-MIMO, OFDMA, and SU delivery and delay comparison")
+    save(fig, output)
+    write_provenance(
+        output,
+        conditions=conditions,
+        result_filters=[
+            {
+                "type": "vector",
+                "module": "**.app[*]",
+                "name": "packetReceived:vector(packetBytes)",
+                "value_semantics": "delivered application bytes",
+            },
+            {
+                "type": "vector",
+                "module": "**.app[*]",
+                "name": "endToEndDelay:vector",
+                "value_semantics": "end-to-end packet delivery delay",
+            },
+        ],
+        aggregation={
+            "goodput": "sum delivered application bytes over each manifest measurement window, convert to bit/s; one value per run",
+            "delay": "pool delivered-packet delays within each run over each manifest measurement window, then take the 95th percentile; one value per run",
+            "uncertainty": "95% Student-t CI across independent runs",
+        },
+    )
+
 PLOTS: dict[str, Callable[[list[Condition], Path], None]] = {
     "fragmentation": plot_fragmentation,
     "uora": plot_uora,
@@ -1084,7 +1127,7 @@ PLOTS: dict[str, Callable[[list[Condition], Path], None]] = {
     "dense_iot": plot_delivery,
     "eht_features": plot_delivery,
     "bcc_ldpc": plot_delivery,
-    "ul_mu_mimo": plot_delivery,
+    "ul_mu_mimo": plot_ul_mu_mimo,
     "ul_ofdma": plot_ul_ofdma,
     "dl_ul_ofdma": plot_ul_ofdma,
 }
