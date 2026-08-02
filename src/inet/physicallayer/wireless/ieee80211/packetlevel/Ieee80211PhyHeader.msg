@@ -191,7 +191,6 @@ struct Ieee80211HeMuUserInfo
     B psduLength;
     simtime_t duration;
     int streamStartIndex = 0;
-    double leakageSum = 0;
 }
 
 // Validated logical L-SIG and HE-SIG-A values for an HE MU PPDU. HE-SIG-B

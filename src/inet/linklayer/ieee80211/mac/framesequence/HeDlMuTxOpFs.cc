@@ -1055,6 +1055,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         user.numberOfSpatialStreams = selectedAllocation.allocation.numberOfSpatialStreams;
         user.streamStartIndex = selectedAllocation.streamStartIndex;
         user.dcm = selectedAllocation.allocation.dcm;
+        user.leakageSum = selectedAllocation.allocation.leakageSum;
         user.coding = scheduleContext.coding;
         user.psduLength = selectedAllocation.psduLength;
         canonicalRequest.users.push_back(user);

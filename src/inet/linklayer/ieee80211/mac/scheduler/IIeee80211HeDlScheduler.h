@@ -84,6 +84,7 @@ class INET_API IIeee80211HeDlScheduler
         int mcs = 0;
         int numberOfSpatialStreams = 1;
         bool dcm = false;
+        double leakageSum = 0;
         double estimatedSnrDb = NaN;
         simtime_t estimatedDuration = SIMTIME_ZERO;
     };
@@ -136,6 +137,7 @@ inline std::ostream& operator<<(std::ostream& os, const IIeee80211HeDlScheduler:
        << " mcs=" << allocation.mcs
        << " nss=" << allocation.numberOfSpatialStreams
        << " dcm=" << (allocation.dcm ? "yes" : "no")
+       << " leakageSum=" << allocation.leakageSum
        << " snr=" << allocation.estimatedSnrDb
        << " duration=" << allocation.estimatedDuration;
     return os;

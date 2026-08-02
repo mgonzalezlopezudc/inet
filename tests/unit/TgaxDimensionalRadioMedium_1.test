@@ -304,10 +304,12 @@ auto createTransmission = [&](const char *packetName, bool triggerBasedUplink = 
         bool muMimo = false, int triggerId = 0, int streamStartIndex = 0,
         const IRadio *sourceRadio = nullptr, int ruPosition = 0,
         bool ndpFeedbackReport = false, int ndpRuToneSetIndex = 0,
-        int ndpStartingStsNumber = 0) {
+        int ndpStartingStsNumber = 0, bool retainPeerGeometry = false) {
     if (sourceRadio == nullptr)
         sourceRadio = txRadio;
-    const auto& assignedRu = rus.at(ruPosition);
+    auto assignedRu = retainPeerGeometry || ndpFeedbackReport ?
+            getHeEqualRuLayout(centerFrequency, channelBandwidth, 1).front() :
+            rus.at(ruPosition);
     auto packet = new Packet(packetName);
     auto phyHeader = createIeee80211HePhyHeader(triggerBasedUplink ? HE_TRIGGER_BASED_UPLINK : HE_MU_DOWNLINK);
     phyHeader->setMuMimo(muMimo);
@@ -318,14 +320,20 @@ auto createTransmission = [&](const char *packetName, bool triggerBasedUplink = 
     user.ruToneSize = assignedRu.toneSize;
     user.ruToneOffset = assignedRu.toneOffset;
     user.staId = computeHeMuStaId(rxNetworkInterface->getMacAddress());
-    user.psduLength = B(100);
+    user.psduLength = ndpFeedbackReport ? B(0) : B(100);
     user.numberOfSpatialStreams = 1;
     user.streamStartIndex = streamStartIndex;
-    user.leakageSum = muMimo ? 1 : 0;
     user.ndpFeedbackReport = ndpFeedbackReport;
     user.ndpRuToneSetIndex = ndpRuToneSetIndex;
     user.ndpStartingStsNumber = ndpStartingStsNumber;
     phyHeader->appendUsers(user);
+    if (retainPeerGeometry) {
+        Ieee80211HeMuUserInfo peer = user;
+        peer.staId++;
+        peer.psduLength = B(0);
+        peer.streamStartIndex++;
+        phyHeader->appendUsers(peer);
+    }
     phyHeader->setNdp(ndpFeedbackReport);
     phyHeader->setChunkLength(b(16 + 73));
     packet->insertAtFront(phyHeader);
@@ -337,20 +345,43 @@ auto createTransmission = [&](const char *packetName, bool triggerBasedUplink = 
     canonicalRequest.centerFrequency = centerFrequency;
     canonicalRequest.channelBandwidth = channelBandwidth;
     canonicalRequest.ppduFormat = triggerBasedUplink ? HE_TRIGGER_BASED_UPLINK : HE_MU_DOWNLINK;
+    canonicalRequest.ndp = ndpFeedbackReport;
     if (triggerBasedUplink) {
-        canonicalRequest.lSigLength = 742;
-        canonicalRequest.triggerMethod = Ieee80211HeTriggerMethod::TRIGGER_FRAME;
-        canonicalRequest.preFecPaddingFactor = 4;
-        canonicalRequest.numberOfHeLtfSymbols = 1;
+        canonicalRequest.guardInterval = ndpFeedbackReport ? HE_GI_3_2_US : HE_GI_1_6_US;
+        canonicalRequest.ltfType = ndpFeedbackReport ? HE_LTF_4X : HE_LTF_2X;
+        canonicalRequest.numberOfHeLtfSymbols = retainPeerGeometry ? 2 : 1;
+        if (ndpFeedbackReport) {
+            canonicalRequest.lSigLength = 34;
+            canonicalRequest.requestedTxTime = SimTime(72, SIMTIME_US);
+            canonicalRequest.requestedTxTimeExact = true;
+        }
+        else {
+            canonicalRequest.lSigLength = 742;
+            canonicalRequest.triggerMethod = Ieee80211HeTriggerMethod::TRIGGER_FRAME;
+            canonicalRequest.preFecPaddingFactor = 4;
+        }
     }
     Ieee80211HeUserTxVectorRequest canonicalUser;
     canonicalUser.ru = assignedRu;
-    canonicalUser.psduLength = B(100);
+    canonicalUser.psduLength = ndpFeedbackReport ? B(0) : B(100);
     canonicalUser.staId = user.staId;
     canonicalUser.streamStartIndex = user.streamStartIndex;
+    canonicalUser.leakageSum = muMimo ? 1 : 0;
+    canonicalUser.ndpFeedbackReport = ndpFeedbackReport;
+    canonicalUser.ndpRuToneSetIndex = ndpRuToneSetIndex;
+    canonicalUser.ndpStartingStsNumber = ndpStartingStsNumber;
     canonicalRequest.users.push_back(canonicalUser);
+    if (retainPeerGeometry) {
+        Ieee80211HeUserTxVectorRequest canonicalPeer = canonicalUser;
+        canonicalPeer.staId++;
+        canonicalPeer.psduLength = B(0);
+        canonicalPeer.streamStartIndex++;
+        canonicalRequest.users.push_back(canonicalPeer);
+    }
     auto canonical = Ieee80211HeTxVectorFactory::create(canonicalRequest);
-    ASSERT(canonical);
+    if (!canonical)
+        throw cRuntimeError("Cannot create canonical test HE TXVECTOR: %s",
+                canonical.getContext().detail.c_str());
     auto duration = canonical.getPpduLayout()->getDuration();
     auto preambleDuration = canonical.getPpduLayout()->getCommonPreambleDuration();
     auto flatTransmitter = check_and_cast<const FlatTransmitterBase *>(sourceRadio->getTransmitter());
@@ -362,7 +393,7 @@ auto createTransmission = [&](const char *packetName, bool triggerBasedUplink = 
             preambleDuration, SIMTIME_ZERO, duration - preambleDuration,
             Coord(), Coord(), Quaternion(), Quaternion(), nullptr, nullptr, nullptr, nullptr,
             transmissionAnalogModel, mode, channel,
-            canonical.getTxVector(), canonical.getPpduLayout());
+            canonical.getTxVector(), canonical.getPpduLayout(), triggerId);
 };
 
 auto transmitterGain = txRadio->getAntenna()->getGain().get();
@@ -602,6 +633,15 @@ REQUIRE(!rbir->computeHeMpduErrorRate(triggerSnir, 0, 377));
 REQUIRE(!rbir->computeHeMpduErrorRate(triggerSnir, 99, 376));
 medium->testRemoveTransmission(triggerTransmission);
 
+auto sharedRuTbTransmission = createTransmission(
+        "shared-RU-HE-TB-active-user", true, true, 4321, 0,
+        nullptr, 0, false, 0, 0, true);
+medium->testAddTransmission(txRadio, sharedRuTbTransmission);
+auto sharedRuTbSnir = medium->getSNIR(rxRadio, sharedRuTbTransmission);
+ASSERT(rbir->computePacketErrorRate(sharedRuTbSnir,
+        IRadioSignal::SIGNAL_PART_WHOLE) < 1);
+medium->testRemoveTransmission(sharedRuTbTransmission);
+
 auto sameTriggerNfrp = createTransmission("same-trigger-NFRP-1", true, false,
         7001, 0, txRadio, 0, true, 1, 0);
 auto sameTriggerOtherTone = createTransmission("same-trigger-NFRP-2", true, false,
@@ -614,6 +654,12 @@ auto unknownTriggerNfrp = createTransmission("unknown-trigger-NFRP-1", true, fal
         0, 0, txRadio, 0, true, 1, 0);
 auto unknownTriggerOtherTone = createTransmission("unknown-trigger-NFRP-2", true, false,
         0, 0, interfererTxRadio, 0, true, 2, 0);
+auto ndpPerTransmission = createTransmission("NFRP-header-only-PER", true, false,
+        8001, 0, txRadio, 0, true, 1, 0);
+medium->testAddTransmission(txRadio, ndpPerTransmission);
+ASSERT(rbir->computePacketErrorRate(medium->getSNIR(rxRadio, ndpPerTransmission),
+        IRadioSignal::SIGNAL_PART_WHOLE) < 1);
+medium->testRemoveTransmission(ndpPerTransmission);
 REQUIRE(medium->testAreSpatiallyOrthogonalHeTbUsers(sameTriggerNfrp, sameTriggerOtherTone));
 REQUIRE(!medium->testAreSpatiallyOrthogonalHeTbUsers(sameTriggerNfrp, differentTriggerNfrp));
 REQUIRE(!medium->testAreSpatiallyOrthogonalHeTbUsers(sameTriggerNfrp, duplicateResourceNfrp));

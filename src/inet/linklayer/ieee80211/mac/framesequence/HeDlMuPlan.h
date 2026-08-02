@@ -36,6 +36,7 @@ enum class HeMuPlanErrorCode {
     INVALID_NSS,
     INVALID_DURATION,
     UNSUPPORTED_CAPABILITY,
+    INVALID_LEAKAGE,
 };
 
 struct HeMuPlanDiagnostic
@@ -157,6 +158,11 @@ class INET_API HeDlMuPlan
             if (allocation.numberOfSpatialStreams < 1 || allocation.numberOfSpatialStreams > 8) {
                 fail(diagnostic, HeMuPlanErrorCode::INVALID_NSS, i,
                         allocation.staAddress, "NSS is outside 1..8");
+                return std::nullopt;
+            }
+            if (!std::isfinite(allocation.leakageSum) || allocation.leakageSum < 0) {
+                fail(diagnostic, HeMuPlanErrorCode::INVALID_LEAKAGE, i,
+                        allocation.staAddress, "leakage sum must be finite and nonnegative");
                 return std::nullopt;
             }
             if (allocation.estimatedDuration <= SIMTIME_ZERO) {

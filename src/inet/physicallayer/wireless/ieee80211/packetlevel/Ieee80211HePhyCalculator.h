@@ -293,6 +293,7 @@ struct Ieee80211HeUserPhyParameters
     int mcs = 0;
     int numberOfSpatialStreams = 1;
     bool dcm = false;                                      // Dual Carrier Modulation
+    double leakageSum = 0;                                 // model-only inter-user interference factor
     bool ndpFeedbackReport = false;
     uint8_t ndpFeedbackStatus = 0;
     uint8_t ndpRuToneSetIndex = 0;
@@ -377,6 +378,7 @@ inline std::ostream& operator<<(std::ostream& os, const Ieee80211HeUserPhyParame
        << " mcs=" << user.mcs
        << " nss=" << user.numberOfSpatialStreams
        << " dcm=" << (user.dcm ? "yes" : "no")
+       << " leakageSum=" << user.leakageSum
        << " coding=" << (user.coding == HE_CODING_LDPC ? "LDPC" : "BCC")
        << " psdu=" << user.psduLength
        << " dataBitsPerSymbol=" << user.dataBitsPerSymbol
@@ -422,6 +424,7 @@ enum class Ieee80211HeValidationErrorCode {
     INVALID_TRIGGER_CONTEXT = 28,
     UNSUPPORTED_STBC = 29,
     INVALID_SPATIAL_REUSE = 30,
+    INVALID_LEAKAGE_SUM = 31,
 };
 
 /** Machine-readable location and human-readable detail for an HE validation error. */

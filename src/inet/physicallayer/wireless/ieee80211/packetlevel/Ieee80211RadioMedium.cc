@@ -66,35 +66,32 @@ static Ptr<const Ieee80211HePhyHeader> peekHeMuOrTbPhyHeader(const ITransmission
             dynamicPtrCast<const Ieee80211HeTbPhyHeader>(hePhyHeader) != nullptr ? hePhyHeader : nullptr;
 }
 
-static const Ieee80211HeTbPhyHeader *peekOrthogonalHeTbHeader(const ITransmission *transmission)
-{
-    auto allocationPhyHeader = peekHeMuOrTbPhyHeader(transmission);
-    auto header = dynamicPtrCast<const Ieee80211HeTbPhyHeader>(allocationPhyHeader);
-    return header != nullptr && header->getUsersArraySize() == 1 &&
-            (header->getMuMimo() || header->getUsers(0).ndpFeedbackReport) ? header.get() : nullptr;
-}
-
 bool Ieee80211RadioMedium::areSpatiallyOrthogonalHeTbUsers(const ITransmission *desired, const ITransmission *other)
 {
-    auto desiredHeader = peekOrthogonalHeTbHeader(desired);
-    auto otherHeader = peekOrthogonalHeTbHeader(other);
-    if (desiredHeader == nullptr || otherHeader == nullptr ||
-            desiredHeader->getTriggerId() == 0 ||
-            desiredHeader->getTriggerId() != otherHeader->getTriggerId())
+    auto desiredTransmission = dynamic_cast<const Ieee80211Transmission *>(desired);
+    auto otherTransmission = dynamic_cast<const Ieee80211Transmission *>(other);
+    auto desiredLayout = desiredTransmission == nullptr ? nullptr : desiredTransmission->getHePpduLayout();
+    auto otherLayout = otherTransmission == nullptr ? nullptr : otherTransmission->getHePpduLayout();
+    if (desiredLayout == nullptr || otherLayout == nullptr ||
+            desiredLayout->getPpduFormat() != HE_TRIGGER_BASED_UPLINK ||
+            otherLayout->getPpduFormat() != HE_TRIGGER_BASED_UPLINK ||
+            desiredLayout->getUsers().empty() || otherLayout->getUsers().empty() ||
+            desiredTransmission->getHeTriggerCorrelationId() == 0 ||
+            desiredTransmission->getHeTriggerCorrelationId() != otherTransmission->getHeTriggerCorrelationId())
         return false;
 
-    const auto& desiredUser = desiredHeader->getUsers(0);
-    const auto& otherUser = otherHeader->getUsers(0);
+    // One STA emits each HE-TB packet. The immutable layout puts that local
+    // user first; following zero-PSDU users only retain the common shared-RU
+    // spatial geometry.
+    const auto& desiredUser = desiredLayout->getUsers().front();
+    const auto& otherUser = otherLayout->getUsers().front();
     // 27.3.18 maps simultaneous NFRP feedback NDPs onto orthogonal tone-set
-    // and (when multiplexing is enabled) starting-STS resources even though
-    // every response reports the maximum RU for the Trigger bandwidth. The
-    // packet-level scalar model represents that standard separation exactly;
-    // a duplicate tuple remains interference and is rejected by collection.
+    // and (when multiplexing is enabled) starting-STS resources.
     if (desiredUser.ndpFeedbackReport && otherUser.ndpFeedbackReport)
         return desiredUser.ndpRuToneSetIndex != otherUser.ndpRuToneSetIndex ||
                 desiredUser.ndpStartingStsNumber != otherUser.ndpStartingStsNumber;
-    if (desiredUser.ruToneSize != otherUser.ruToneSize ||
-            desiredUser.ruToneOffset != otherUser.ruToneOffset)
+    if (desiredUser.ru.toneSize != otherUser.ru.toneSize ||
+            desiredUser.ru.toneOffset != otherUser.ru.toneOffset)
         return false;
 
     int desiredFirst = desiredUser.streamStartIndex;
@@ -123,19 +120,23 @@ bool Ieee80211RadioMedium::findHeMuRuForReceiver(const IRadio *receiver, const I
     auto ieee80211Transmission = dynamic_cast<const Ieee80211Transmission *>(transmission);
     if (narrowbandTransmissionAnalogModel == nullptr || ieee80211Transmission == nullptr)
         return false;
-    if (isTriggerBasedUplink && allocationPhyHeader->getUsersArraySize() == 1) {
+    if (isTriggerBasedUplink && ieee80211Transmission->getHePpduLayout() != nullptr &&
+            !ieee80211Transmission->getHePpduLayout()->getUsers().empty()) {
         // HE TB transmitters are centered on their assigned RU by the
         // transmitter model. Reconstruct the full-channel center from the RU
-        // offset, then return the user RU for reception/interference filtering.
-        const auto& user = allocationPhyHeader->getUsers(0);
+        // offset, then return the transmitting (first/local) user's RU for
+        // reception/interference filtering. Additional zero-PSDU entries in
+        // UL MU-MIMO retain peer stream geometry and are not transmitters in
+        // this packet.
+        const auto& user = ieee80211Transmission->getHePpduLayout()->getUsers().front();
         auto channelBandwidth = ieee80211Transmission->getMode()->getDataMode()->getBandwidth();
         int channelTones = getHeChannelToneCount(channelBandwidth);
         auto relativeRu = makeHeRu(Hz(0), channelTones,
-                user.ruIndex, user.ruToneSize, user.ruToneOffset);
+                user.ru.index, user.ru.toneSize, user.ru.toneOffset);
         auto fullChannelCenter = narrowbandTransmissionAnalogModel->getCenterFrequency() -
                 relativeRu.centerFrequency;
         ru = makeHeRu(fullChannelCenter, channelTones,
-                user.ruIndex, user.ruToneSize, user.ruToneOffset);
+                user.ru.index, user.ru.toneSize, user.ru.toneOffset);
         return true;
     }
     for (unsigned int i = 0; i < allocationPhyHeader->getUsersArraySize(); ++i) {

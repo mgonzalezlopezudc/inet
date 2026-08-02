@@ -131,6 +131,7 @@ HeDlMuPackingPlanner::Plan HeDlMuPackingPlanner::plan(const Parameters& paramete
             user.mcs = selectedAllocation.allocation.mcs;
             user.numberOfSpatialStreams = selectedAllocation.allocation.numberOfSpatialStreams;
             user.dcm = selectedAllocation.allocation.dcm;
+            user.leakageSum = selectedAllocation.allocation.leakageSum;
             user.coding = parameters.scheduleContext.coding;
             user.psduLength = selectedAllocation.psduLength;
             user.staId = selectedAllocation.associationId;

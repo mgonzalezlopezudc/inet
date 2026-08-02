@@ -300,7 +300,7 @@ class INET_API HeUlMuPlan
                         capabilities.localRxPeerTx.mcsNss.maxMcsPerNss[nssIndex] < allocation.mcs ||
                         (allocation.coding == HE_CODING_LDPC && !capabilities.mutual.ldpc) ||
                         (allocation.muMimo &&
-                         !capabilities.localRxPeerTx.transmitterCanTransmitFullBandwidthUlMuMimo))
+                         !capabilities.localRxPeerTx.fullBandwidthUlMuMimo))
                     return rejected(HeUlMuPlanErrorCode::UNSUPPORTED_CAPABILITY, i,
                             allocation.staAddress, "allocation exceeds negotiated peer-TX/local-RX capabilities");
             }

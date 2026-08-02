@@ -246,7 +246,7 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerBacklogBased::schedule(
         std::vector<int> muMimoCandidates;
         for (int i = 0; i < static_cast<int>(candidates.size()); ++i)
             if (candidates[i].negotiatedHeCapabilities.localRxPeerTx.
-                    transmitterCanTransmitFullBandwidthUlMuMimo)
+                    fullBandwidthUlMuMimo)
                 muMimoCandidates.push_back(i);
         if (muMimoCandidates.size() >= 2) {
             const auto fullBandwidthRu = physicallayer::getHeEqualRuLayout(

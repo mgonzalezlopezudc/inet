@@ -97,6 +97,7 @@ cmdenv-event-banners = false
 **.mac.hcf.dlExchange.cmdenv-log-level = TRACE
 **.mac.hcf.dlScheduler.cmdenv-log-level = TRACE
 *.host[*].wlan[*].mib.heFullBandwidthUlMuMimo = true
+*.ap.wlan[*].mib.heFullBandwidthUlMuMimo = true
 *.visualizer.typename = ""
 **.numLoInterfaces = 0
 

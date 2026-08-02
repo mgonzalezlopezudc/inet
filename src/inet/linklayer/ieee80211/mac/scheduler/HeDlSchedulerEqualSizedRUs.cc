@@ -210,6 +210,13 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
                     alloc.ru = fullChannelRu;
                     alloc.numberOfSpatialStreams = finalNss[i];
                     alloc.estimatedSnrDb = finalSnirDb[i];
+                    // Recompute against the final accepted group: every expansion changes
+                    // the interference sum of users that were accepted earlier.
+                    for (size_t j = 0; j < groupCandidates.size(); ++j)
+                        if (i != j)
+                            alloc.leakageSum += context.csiManager->getLeakage(
+                                    groupCandidates[i].staAddress, groupCandidates[j].staAddress,
+                                    context.channelBandwidth);
                     alloc.mcs = selectMcs(context, groupCandidates[i], alloc.ru,
                             selectMcs(alloc.estimatedSnrDb, groupCandidates[i].hasFreshPathLoss),
                             finalNss[i]);

@@ -6,6 +6,7 @@ conservation, TXVECTOR handoff, response timing, and fallback paths.
 #include <map>
 #include <set>
 #include <algorithm>
+#include <limits>
 
 #include "inet/common/TimeTag_m.h"
 #include "inet/common/packet/chunk/ByteCountChunk.h"
@@ -417,6 +418,23 @@ Tid tid = 3;
     EV << "DL MU plan retained oversized backlog estimates for exact packing.\n";
 }
 
+{
+    auto context = makeScheduleContext({sta1, sta2});
+    MockDlMuScheduler scheduler({makeAllocation(sta1, 0, 106), makeAllocation(sta2, 1, 106)});
+    for (auto& candidate : context.candidates)
+        candidate.sourceQueue = pendingQueue;
+    for (double invalidLeakage : {-0.001, std::numeric_limits<double>::quiet_NaN(),
+            std::numeric_limits<double>::infinity()}) {
+        scheduler.allocations[0].leakageSum = invalidLeakage;
+        HeMuPlanDiagnostic diagnostic;
+        auto plan = HeDlMuPlan::create(context, scheduler.schedule(context), diagnostic);
+        requireTrue(!plan && diagnostic.code == HeMuPlanErrorCode::INVALID_LEAKAGE &&
+                diagnostic.allocationIndex == 0,
+                "DL MU plan must reject negative or nonfinite scheduler leakage metadata");
+    }
+    EV << "DL MU plan rejected invalid scheduler leakage metadata.\n";
+}
+
 auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::SelectedAllocation>& selections,
         const std::set<std::pair<MacAddress, Tid>>& inactiveAgreements = {},
         const std::map<std::pair<MacAddress, Tid>, int>& slotLimits = {}) {
@@ -624,6 +642,8 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     auto radioAllocation2 = makeAllocation(sta2, 1, 106);
     radioAllocation1.ru = radioRus[0];
     radioAllocation2.ru = radioRus[1];
+    radioAllocation1.leakageSum = 0.0125;
+    radioAllocation2.leakageSum = 0.0375;
     MockDlMuScheduler scheduler({radioAllocation1, radioAllocation2});
     MockDlMuAckHandler ackHandler;
     MockDlMuInProgressFrames inProgress;
@@ -658,6 +678,9 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     requireTrue(canonicalRequest->getTxVector()->getUsers().size() == fs.getActiveAllocations().size(),
             "DL frame-sequence TXVECTOR and active plan must have the same allocation count");
     radio->testEncapsulate(container);
+    auto phyHeader = container->peekAtFront<Ieee80211HeMuPhyHeader>();
+    requireTrue(phyHeader->getUsersArraySize() == fs.getActiveAllocations().size(),
+            "encapsulated HE MU PHY header must retain one entry per planned user");
     auto handoff = container->getTag<Ieee80211HeTxVectorReq>();
     auto transmission = check_and_cast<const Ieee80211Transmission *>(
             transmitter->createTransmission(radio, container, SimTime(1, SIMTIME_S)));
@@ -696,9 +719,11 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
                 actual.numberOfSpatialStreams == planned.numberOfSpatialStreams &&
                 actual.streamStartIndex == fs.getActiveAllocations()[index].streamStartIndex &&
                 actual.dcm == planned.dcm &&
+                actual.leakageSum == planned.leakageSum &&
                 actual.coding == dlScheduleContext.coding &&
                 actual.staId == active.associationId &&
                 areIeee80211HeUserParametersEqual(actual, layoutUser) &&
+                layoutUser.leakageSum == planned.leakageSum &&
                 psduRange.getUserIndex() == index &&
                 psduRange.getStaId() == actual.staId &&
                 psduRange.getBitLength() == b(actual.psduLength.get<B>() * 8)))

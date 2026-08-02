@@ -105,8 +105,8 @@ struct Ieee80211HeDirectionalCapabilities
     bool receiverCanReceiveMuBarTrigger = false;
     bool transmitterCanTransmitHeTbBlockAck = false;
     bool transmitterCanTransmitNdpFeedbackReport = false;
-    bool transmitterCanTransmitFullBandwidthUlMuMimo = false;
-    bool transmitterCanTransmitPartialBandwidthUlMuMimo = false;
+    bool fullBandwidthUlMuMimo = false;
+    bool partialBandwidthUlMuMimo = false;
     int receiverDynamicFragmentationLevel = 0;
     int receiverMaxAmpduLengthExponent = 0;
     int receiverMaxMpduLength = 0;
@@ -192,10 +192,22 @@ inline Ieee80211NegotiatedHeCapabilities negotiateHeCapabilities(
     negotiated.localRxPeerTx.transmitterCanTransmitHeTbBlockAck = peer.heTbBlockAckTx;
     negotiated.localTxPeerRx.transmitterCanTransmitNdpFeedbackReport = local.ndpFeedbackReport;
     negotiated.localRxPeerTx.transmitterCanTransmitNdpFeedbackReport = peer.ndpFeedbackReport;
-    negotiated.localTxPeerRx.transmitterCanTransmitFullBandwidthUlMuMimo = local.fullBandwidthUlMuMimo;
-    negotiated.localRxPeerTx.transmitterCanTransmitFullBandwidthUlMuMimo = peer.fullBandwidthUlMuMimo;
-    negotiated.localTxPeerRx.transmitterCanTransmitPartialBandwidthUlMuMimo = local.partialBandwidthUlMuMimo;
-    negotiated.localRxPeerTx.transmitterCanTransmitPartialBandwidthUlMuMimo = peer.partialBandwidthUlMuMimo;
+    // IEEE Std 802.11-2024, Table 9-376 gives these capability bits
+    // complementary role-dependent meanings: AP receive support and non-AP
+    // transmit support.  Expose only a usable UL directional contract, which
+    // therefore requires both advertisements.
+    if (localIsAccessPoint) {
+        negotiated.localRxPeerTx.fullBandwidthUlMuMimo =
+                local.fullBandwidthUlMuMimo && peer.fullBandwidthUlMuMimo;
+        negotiated.localRxPeerTx.partialBandwidthUlMuMimo =
+                local.partialBandwidthUlMuMimo && peer.partialBandwidthUlMuMimo;
+    }
+    else {
+        negotiated.localTxPeerRx.fullBandwidthUlMuMimo =
+                local.fullBandwidthUlMuMimo && peer.fullBandwidthUlMuMimo;
+        negotiated.localTxPeerRx.partialBandwidthUlMuMimo =
+                local.partialBandwidthUlMuMimo && peer.partialBandwidthUlMuMimo;
+    }
     negotiated.localTxPeerRx.receiverDynamicFragmentationLevel = peer.dynamicFragmentationLevel;
     negotiated.localRxPeerTx.receiverDynamicFragmentationLevel = local.dynamicFragmentationLevel;
     negotiated.localTxPeerRx.receiverMaxAmpduLengthExponent = peer.maxAmpduLengthExponent;

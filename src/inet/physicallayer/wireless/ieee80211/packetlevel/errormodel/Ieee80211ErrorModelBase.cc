@@ -56,31 +56,13 @@ Ieee80211HeMpduErrorRateResult Ieee80211ErrorModelBase::computeHeDataErrorRate(
             result.error = "missing HE PHY header";
             return result;
         }
-        const Ieee80211HeMuUserInfo *headerUser = nullptr;
-        for (unsigned int i = 0; i < phyHeader->getUsersArraySize(); ++i) {
-            const auto& candidate = phyHeader->getUsers(i);
-            if (candidate.staId == parameters.staId &&
-                    candidate.ruToneSize == parameters.ru.toneSize &&
-                    candidate.ruToneOffset == parameters.ru.toneOffset) {
-                if (headerUser != nullptr) {
-                    result.error = "ambiguous HE PHY user mapping";
-                    return result;
-                }
-                headerUser = &candidate;
-            }
-        }
-        if (headerUser == nullptr) {
-            result.error = "canonical HE user is absent from the PHY header";
-            return result;
-        }
-
         double userSnir = getScalarSnir(snir);
         auto dimensionalSnir = dynamic_cast<const DimensionalSnir *>(snir);
         bool channelMatrixLmmse = dimensionalSnir != nullptr && dimensionalSnir->isChannelMatrixLmmse();
         if (phyHeader->getMuMimo() && phyHeader->getTotalNsts() > 0 && !channelMatrixLmmse) {
             double signalShare = parameters.numberOfSpatialStreams /
                     static_cast<double>(phyHeader->getTotalNsts());
-            double interferenceShare = headerUser->leakageSum /
+            double interferenceShare = parameters.leakageSum /
                     static_cast<double>(phyHeader->getTotalNsts());
             userSnir = (userSnir * signalShare) /
                     (1.0 + userSnir * interferenceShare);
@@ -188,48 +170,67 @@ double Ieee80211ErrorModelBase::computePacketErrorRate(const ISnir *snir, IRadio
             (dynamicPtrCast<const Ieee80211HeMuPhyHeader>(hePhyHeader) != nullptr ||
              dynamicPtrCast<const Ieee80211HeTbPhyHeader>(hePhyHeader) != nullptr) ? hePhyHeader : nullptr;
     if (allocationPhyHeader != nullptr) {
-        const Ieee80211HeMuUserInfo *selectedUser = nullptr;
-        size_t selectedUserIndex = 0;
-        if (dynamicPtrCast<const Ieee80211HeTbPhyHeader>(phyHeader) != nullptr &&
-                allocationPhyHeader->getUsersArraySize() == 1)
-            selectedUser = &allocationPhyHeader->getUsers(0);
-        else {
-            auto receiver = snir->getReception()->getReceiverRadio();
-            auto networkInterface = getContainingNicModule(check_and_cast<const cModule *>(receiver));
-            auto staId = resolveHeMuStaIdForReception(networkInterface, networkInterface->getMacAddress());
-            if (staId.has_value())
-                for (unsigned int i = 0; i < allocationPhyHeader->getUsersArraySize(); ++i)
-                    if (allocationPhyHeader->getUsers(i).staId == *staId) {
-                        selectedUser = &allocationPhyHeader->getUsers(i);
-                        break;
-                    }
+        const auto& layout = transmission->getHePpduLayout();
+        if (layout != nullptr && layout->isNdp()) {
+            // An NDP has no DATA field; the common HE signaling decision is
+            // the complete packet outcome.
+            dataSuccessRate = 1;
         }
-        if (selectedUser == nullptr)
-            dataSuccessRate = 0;
         else {
-            const auto& canonicalUsers = transmission->getHePpduLayout()->getUsers();
-            bool foundCanonicalUser = false;
-            for (size_t i = 0; i < canonicalUsers.size(); ++i)
-                if (canonicalUsers[i].staId == selectedUser->staId &&
-                        canonicalUsers[i].ru.toneSize == selectedUser->ruToneSize &&
-                        canonicalUsers[i].ru.toneOffset == selectedUser->ruToneOffset) {
-                    if (foundCanonicalUser) {
-                        foundCanonicalUser = false;
-                        break;
+            std::optional<size_t> selectedUserIndex;
+            bool ambiguousUser = false;
+            if (dynamicPtrCast<const Ieee80211HeTbPhyHeader>(phyHeader) != nullptr) {
+                // One STA emits each HE-TB PPDU. Shared-RU UL MU-MIMO layouts also
+                // retain zero-PSDU peer users to describe the common spatial
+                // geometry, so select the sole active PSDU instead of relying on
+                // header user count or the receiving AP's STA-ID.
+                if (layout != nullptr)
+                    for (const auto& range : layout->getPsduBitRanges()) {
+                        if (range.getBitLength() == b(0))
+                            continue;
+                        if (selectedUserIndex.has_value()) {
+                            ambiguousUser = true;
+                            break;
+                        }
+                        selectedUserIndex = range.getUserIndex();
                     }
-                    selectedUserIndex = i;
-                    foundCanonicalUser = true;
+            }
+            else {
+                const Ieee80211HeMuUserInfo *selectedUser = nullptr;
+                auto receiver = snir->getReception()->getReceiverRadio();
+                auto networkInterface = getContainingNicModule(check_and_cast<const cModule *>(receiver));
+                auto staId = resolveHeMuStaIdForReception(networkInterface, networkInterface->getMacAddress());
+                if (staId.has_value())
+                    for (unsigned int i = 0; i < allocationPhyHeader->getUsersArraySize(); ++i)
+                        if (allocationPhyHeader->getUsers(i).staId == *staId) {
+                            selectedUser = &allocationPhyHeader->getUsers(i);
+                            break;
+                        }
+                if (selectedUser != nullptr && layout != nullptr) {
+                    const auto& canonicalUsers = layout->getUsers();
+                    for (size_t i = 0; i < canonicalUsers.size(); ++i)
+                        if (canonicalUsers[i].staId == selectedUser->staId &&
+                                canonicalUsers[i].ru.toneSize == selectedUser->ruToneSize &&
+                                canonicalUsers[i].ru.toneOffset == selectedUser->ruToneOffset) {
+                            if (selectedUserIndex.has_value()) {
+                                ambiguousUser = true;
+                                break;
+                            }
+                            selectedUserIndex = i;
+                        }
                 }
-            if (foundCanonicalUser) {
-                const auto& parameters = canonicalUsers[selectedUserIndex];
+            }
+            if (!selectedUserIndex.has_value() || ambiguousUser || layout == nullptr ||
+                    *selectedUserIndex >= layout->getUsers().size())
+                dataSuccessRate = 0;
+            else {
+                const auto& parameters = layout->getUsers()[*selectedUserIndex];
                 dataLength = parameters.serviceBits +
                         parameters.psduLength.get<B>() * 8 + parameters.tailBits;
+                auto mpduError = computeHeDataErrorRate(snir, *selectedUserIndex,
+                        parameters, dataLength);
+                dataSuccessRate = mpduError ? 1.0 - mpduError.packetErrorRate : 0;
             }
-            auto mpduError = foundCanonicalUser ?
-                    computeHeDataErrorRate(snir, selectedUserIndex,
-                            canonicalUsers[selectedUserIndex], dataLength) :
-                    Ieee80211HeMpduErrorRateResult();
-            dataSuccessRate = mpduError ? 1.0 - mpduError.packetErrorRate : 0;
         }
     }
     else

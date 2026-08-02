@@ -112,15 +112,17 @@ requireTrue(!negotiated.localRxPeerTx.transmitterCanTransmitHeTbBlockAck,
 requireTrue(!negotiated.localTxPeerRx.transmitterCanTransmitNdpFeedbackReport &&
         negotiated.localRxPeerTx.transmitterCanTransmitNdpFeedbackReport,
         "NDP feedback producer capability must follow the transmitter");
-requireTrue(!negotiated.localTxPeerRx.transmitterCanTransmitFullBandwidthUlMuMimo &&
-        negotiated.localRxPeerTx.transmitterCanTransmitFullBandwidthUlMuMimo,
-        "UL MU-MIMO producer capability must follow the transmitter");
+requireTrue(!negotiated.localTxPeerRx.fullBandwidthUlMuMimo &&
+        !negotiated.localRxPeerTx.fullBandwidthUlMuMimo,
+        "full-bandwidth UL MU-MIMO must require AP RX and STA TX support");
 requireTrue(!negotiated.mutual.ldpc, "LDPC must require support at both endpoints");
 requireTrue(negotiated.localAdvertisement.twtRequester && negotiated.peerAdvertisement.twtResponder,
         "raw TWT advertisements must remain auditable independently of OFDMA");
 
 auto apLocal = local;
 auto apPeer = peer;
+apLocal.fullBandwidthUlMuMimo = true;
+apLocal.partialBandwidthUlMuMimo = true;
 apLocal.dlOfdma = apPeer.dlOfdma = true;
 apLocal.ulOfdma = apPeer.ulOfdma = false;
 auto apView = negotiateHeCapabilities(apLocal, apPeer, operation, true);
@@ -132,6 +134,25 @@ requireTrue(staView.localRxPeerTx.ofdma && !staView.localTxPeerRx.ofdma,
 requireTrue(apView.localTxPeerRx.mcsNss.maxMcsPerNss == staView.localRxPeerTx.mcsNss.maxMcsPerNss &&
         apView.localRxPeerTx.mcsNss.maxMcsPerNss == staView.localTxPeerRx.mcsNss.maxMcsPerNss,
         "AP and STA directional MCS contracts must be perspective inverses");
+requireTrue(!apView.localTxPeerRx.fullBandwidthUlMuMimo &&
+        apView.localRxPeerTx.fullBandwidthUlMuMimo &&
+        staView.localTxPeerRx.fullBandwidthUlMuMimo &&
+        !staView.localRxPeerTx.fullBandwidthUlMuMimo,
+        "full-bandwidth UL MU-MIMO must be usable only in the STA-to-AP direction");
+requireTrue(apView.localRxPeerTx.partialBandwidthUlMuMimo &&
+        staView.localTxPeerRx.partialBandwidthUlMuMimo,
+        "partial-bandwidth UL MU-MIMO must require support at both endpoints");
+
+auto noApRx = apLocal;
+noApRx.fullBandwidthUlMuMimo = false;
+requireTrue(!negotiateHeCapabilities(noApRx, apPeer, operation, true).
+        localRxPeerTx.fullBandwidthUlMuMimo,
+        "STA TX support without AP RX support must not negotiate full-bandwidth UL MU-MIMO");
+auto noStaTx = apPeer;
+noStaTx.fullBandwidthUlMuMimo = false;
+requireTrue(!negotiateHeCapabilities(apLocal, noStaTx, operation, true).
+        localRxPeerTx.fullBandwidthUlMuMimo,
+        "AP RX support without STA TX support must not negotiate full-bandwidth UL MU-MIMO");
 
 auto mib = check_and_cast<Ieee80211Mib *>(getParentModule()->getSubmodule("mib"));
 mib->bssStationData.stationType = Ieee80211Mib::ACCESS_POINT;

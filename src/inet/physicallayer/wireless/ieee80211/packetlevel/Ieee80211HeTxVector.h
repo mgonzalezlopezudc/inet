@@ -73,6 +73,7 @@ inline bool areIeee80211HeUserParametersEqual(const Ieee80211HeUserPhyParameters
 {
     return areIeee80211HeRuParametersEqual(left.ru, right.ru) && left.mcs == right.mcs &&
             left.numberOfSpatialStreams == right.numberOfSpatialStreams && left.dcm == right.dcm &&
+            left.leakageSum == right.leakageSum &&
             left.ndpFeedbackReport == right.ndpFeedbackReport &&
             left.ndpFeedbackStatus == right.ndpFeedbackStatus &&
             left.ndpRuToneSetIndex == right.ndpRuToneSetIndex &&
@@ -128,6 +129,7 @@ struct Ieee80211HeUserTxVectorRequest
     int numberOfSpatialStreams = 1;
     int streamStartIndex = 0;
     bool dcm = false;
+    double leakageSum = 0;
     bool ndpFeedbackReport = false;
     uint8_t ndpFeedbackStatus = 0;
     uint8_t ndpRuToneSetIndex = 0;
@@ -626,6 +628,7 @@ class INET_API Ieee80211HeTxVectorFactory final
                 user.numberOfSpatialStreams = input.numberOfSpatialStreams;
                 user.streamStartIndex = input.streamStartIndex;
                 user.dcm = input.dcm;
+                user.leakageSum = input.leakageSum;
                 user.ndpFeedbackReport = input.ndpFeedbackReport;
                 user.ndpFeedbackStatus = input.ndpFeedbackStatus;
                 user.ndpRuToneSetIndex = input.ndpRuToneSetIndex;

@@ -622,7 +622,7 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
                     (getPeerOperatingMode(station.first, mode) && mode.ulMuDisable);
             if (hasServiceRequest && !disabled && negotiated != nullptr &&
                     negotiated->localRxPeerTx.valid &&
-                    negotiated->localRxPeerTx.transmitterCanTransmitFullBandwidthUlMuMimo &&
+                    negotiated->localRxPeerTx.fullBandwidthUlMuMimo &&
                     negotiated->localRxPeerTx.supportedRuToneSizes.count(
                             fullBandwidthRu.toneSize) != 0 &&
                     negotiated->localRxPeerTx.mcsNss.maxMcsPerNss[0] >= 0)
@@ -1503,7 +1503,7 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
                 negotiated->localTxPeerRx.mcsNss.maxMcsPerNss[nssIndex] >= user.mcs &&
                 (user.coding != physicallayer::HE_CODING_LDPC || negotiated->mutual.ldpc) &&
                 (!user.muMimo ||
-                 negotiated->localTxPeerRx.transmitterCanTransmitFullBandwidthUlMuMimo) &&
+                 negotiated->localTxPeerRx.fullBandwidthUlMuMimo) &&
                 !ulMuDisabled;
     };
     const Ieee80211HeTriggerUserInfo *selected = nullptr;

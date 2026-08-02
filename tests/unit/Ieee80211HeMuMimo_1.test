@@ -312,7 +312,8 @@ class TestHeSoundingFs : public HeSoundingFs
             throw cRuntimeError("Unequal-NSS MU-MIMO regression did not schedule all stations");
         for (size_t i = 0; i < allocations.size(); ++i) {
             if (allocations[i].staAddress != addresses[i] ||
-                    allocations[i].numberOfSpatialStreams != maxNss[i])
+                    allocations[i].numberOfSpatialStreams != maxNss[i] ||
+                    std::abs(allocations[i].leakageSum - 0.002) >= 1e-12)
                 throw cRuntimeError("Unequal-NSS MU-MIMO allocation is not in canonical 3,2,1 order");
         }
         HeMuPlanDiagnostic diagnostic;

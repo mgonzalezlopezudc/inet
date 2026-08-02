@@ -696,6 +696,11 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
                     "numberOfSpatialStreams", "invalid HE number of spatial streams", userIndex);
             return result;
         }
+        if (!std::isfinite(requested.leakageSum) || requested.leakageSum < 0) {
+            setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_LEAKAGE_SUM,
+                    "leakageSum", "HE leakage sum must be finite and nonnegative", userIndex);
+            return result;
+        }
         if (requested.streamStartIndex < 0 ||
                 requested.streamStartIndex > 8 - requested.numberOfSpatialStreams) {
             setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_STREAM_MAPPING,

@@ -339,7 +339,7 @@ ulSchedule.allocations.front().muMimo = true;
 ulSchedule.allocations.front().streamStartIndex = 1;
 auto muMimoCapableUlContext = ulFixture.context;
 muMimoCapableUlContext.stations.front().capabilities.localRxPeerTx.
-        transmitterCanTransmitFullBandwidthUlMuMimo = true;
+        fullBandwidthUlMuMimo = true;
 requireRejectedUl(muMimoCapableUlContext, ulSchedule,
         IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER,
         HeUlMuPlanErrorCode::INVALID_NSS,

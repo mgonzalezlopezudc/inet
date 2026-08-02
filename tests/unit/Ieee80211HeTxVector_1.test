@@ -269,6 +269,13 @@ REQUIRE(invalidMcsFirst.getContext().userIndex == invalidMcsSecond.getContext().
 REQUIRE(invalidMcsFirst.getContext().fieldName == invalidMcsSecond.getContext().fieldName);
 REQUIRE(invalidMcsFirst.getContext().detail == invalidMcsSecond.getContext().detail);
 malformedRequest = baseRequest;
+malformedRequest.users[0].leakageSum = -0.001;
+assertInvalid(Ieee80211HeTxVectorFactory::create(malformedRequest),
+        Ieee80211HeValidationErrorCode::INVALID_LEAKAGE_SUM, "leakageSum");
+malformedRequest.users[0].leakageSum = std::numeric_limits<double>::infinity();
+assertInvalid(Ieee80211HeTxVectorFactory::create(malformedRequest),
+        Ieee80211HeValidationErrorCode::INVALID_LEAKAGE_SUM, "leakageSum");
+malformedRequest = baseRequest;
 malformedRequest.users[0].staId = 2048;
 assertInvalid(Ieee80211HeTxVectorFactory::create(malformedRequest),
         Ieee80211HeValidationErrorCode::INVALID_STA_ID, "staId");

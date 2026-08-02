@@ -419,7 +419,7 @@ bool HeHcf::tryStartDlMuFrameSequence(AccessCategory ac)
                         return allocation.ru.toneSize == fullBandwidthRu.toneSize &&
                                 allocation.ru.toneOffset == fullBandwidthRu.toneOffset;
                     }) >= 2;
-            bool fullBandwidthUlMuMimoSupported = !fullBandwidthUlMuMimo;
+            bool fullBandwidthUlMuMimoSupported = true;
             for (const auto& allocation : dlPlan->getAllocations()) {
                 if (!fullBandwidthUlMuMimo)
                     continue;
@@ -431,7 +431,17 @@ bool HeHcf::tryStartDlMuFrameSequence(AccessCategory ac)
                         !candidate->hasNegotiatedHeCapabilities ||
                         !candidate->negotiatedHeCapabilities.localRxPeerTx.valid ||
                         !candidate->negotiatedHeCapabilities.localRxPeerTx.
-                                transmitterCanTransmitFullBandwidthUlMuMimo) {
+                                fullBandwidthUlMuMimo) {
+                    EV_INFO << "HE DL MU: full-bandwidth UL MU-MIMO unavailable for "
+                            << allocation.staAddress
+                            << ", candidate=" << (candidate != scheduleContext.candidates.end())
+                            << ", negotiated=" << (candidate != scheduleContext.candidates.end() &&
+                                    candidate->hasNegotiatedHeCapabilities)
+                            << ", valid=" << (candidate != scheduleContext.candidates.end() &&
+                                    candidate->negotiatedHeCapabilities.localRxPeerTx.valid)
+                            << ", usable=" << (candidate != scheduleContext.candidates.end() &&
+                                    candidate->negotiatedHeCapabilities.localRxPeerTx.
+                                            fullBandwidthUlMuMimo) << "\n";
                     fullBandwidthUlMuMimoSupported = false;
                     break;
                 }
