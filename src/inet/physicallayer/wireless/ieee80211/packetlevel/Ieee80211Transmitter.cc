@@ -463,7 +463,8 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
                 for (const auto *candidate : ruUsers)
                     nsts.push_back(candidate->numberOfSpatialStreams);
                 const bool muMimo = ruUsers.size() > 1;
-                const uint8_t spatialConfiguration = muMimo ? encodeHeMuSpatialConfiguration(nsts) : 0;
+                const uint8_t spatialConfiguration = ppduFormat == HE_MU_DOWNLINK && muMimo ?
+                        encodeHeMuSpatialConfiguration(nsts) : 0;
                 if (projected.ruIndex != canonical.ru.index ||
                         projected.ruToneSize != canonical.ru.toneSize ||
                         projected.ruToneOffset != canonical.ru.toneOffset ||

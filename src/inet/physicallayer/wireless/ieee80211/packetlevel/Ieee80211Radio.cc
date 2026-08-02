@@ -718,7 +718,12 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
                     for (const auto *candidate : ruUsers)
                         nsts.push_back(candidate->numberOfSpatialStreams);
                     user.muMimo = true;
-                    user.spatialConfiguration = encodeHeMuSpatialConfiguration(nsts);
+                    // HE-SIG-B Spatial Configuration (Table 27-31) exists
+                    // only in an HE MU downlink PPDU. HE-TB uplink users get
+                    // their NSS and starting stream directly from the Trigger
+                    // User Info SS Allocation field.
+                    if (ppduFormat == HE_MU_DOWNLINK)
+                        user.spatialConfiguration = encodeHeMuSpatialConfiguration(nsts);
                 }
                 user.psduLength = canonicalUser.psduLength;
                 user.duration = ppduLayout->getDuration();
