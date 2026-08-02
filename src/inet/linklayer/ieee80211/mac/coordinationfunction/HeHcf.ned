@@ -8,6 +8,7 @@ package inet.linklayer.ieee80211.mac.coordinationfunction;
 import inet.common.Module;
 import inet.linklayer.ieee80211.mac.scheduler.IIeee80211HeDlScheduler;
 import inet.linklayer.ieee80211.mac.scheduler.IIeee80211HeUlScheduler;
+import inet.linklayer.ieee80211.mac.contract.IIeee80211HeRateControl;
 
 //
 // IEEE 802.11ax HCF with downlink and optional trigger-based uplink OFDMA.
@@ -86,6 +87,10 @@ module HeHcf extends Hcf
         ulScheduler: <default("HeUlSchedulerBacklogBased")> like IIeee80211HeUlScheduler {
             parameters:
                 @display("p=900,100");
+        }
+        muRateControl: <default("")> like IIeee80211HeRateControl if typename != "" {
+            parameters:
+                @display("p=1040,100");
         }
         ulTriggerPolicy: <default("HeUlDefaultTriggerPolicy")> like IIeee80211HeUlTriggerPolicy {
             parameters:

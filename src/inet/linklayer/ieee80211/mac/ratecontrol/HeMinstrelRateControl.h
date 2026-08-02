@@ -9,6 +9,7 @@
 
 #include <map>
 #include <ostream>
+#include <string>
 #include <vector>
 
 #include "inet/linklayer/ieee80211/mac/contract/IIeee80211HeRateControl.h"
@@ -88,6 +89,7 @@ class INET_API HeMinstrelRateControl : public RateControlBase, public IIeee80211
     bool seedFromSnir = true;
     bool enableExtendedRangeSu = false;
     bool preferDcm = false;
+    std::string selectionPolicy;
     double snirMcs0ThresholdDb = 4;
     double snirMcsStepDb = 3;
     int minMcs = 0;

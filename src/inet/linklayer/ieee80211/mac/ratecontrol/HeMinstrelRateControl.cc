@@ -30,6 +30,9 @@ void HeMinstrelRateControl::initialize(int stage)
         seedFromSnir = par("seedFromSnir");
         enableExtendedRangeSu = par("enableExtendedRangeSu");
         preferDcm = par("preferDcm");
+        selectionPolicy = par("selectionPolicy").stdstringValue();
+        if (selectionPolicy != "minstrel" && selectionPolicy != "snrThresholds")
+            throw cRuntimeError("Unknown HE rate selection policy '%s'", selectionPolicy.c_str());
         snirMcs0ThresholdDb = par("snirMcs0Threshold");
         snirMcsStepDb = par("snirMcsStep");
         minMcs = par("minMcs");
@@ -197,7 +200,17 @@ IIeee80211HeRateControl::Selection HeMinstrelRateControl::selectHeMode(const Mac
     state.selectionCount++;
     bool probe = lookaroundRatio > 0 && intuniform(0, 999) < (int)std::round(lookaroundRatio * 1000);
     auto best = candidates.front();
-    if (probe) {
+    if (selectionPolicy == "snrThresholds") {
+        probe = false;
+        int selectedMcs = minMcs;
+        if (hasFreshSnir)
+            selectedMcs = std::clamp((int)std::floor((state.latestSnirDb - snirMcs0ThresholdDb) / snirMcsStepDb), minMcs, maxMcs);
+        for (const auto& candidate : candidates)
+            if (candidate.first.numberOfSpatialStreams == requestedMaxNss && candidate.first.mcs <= selectedMcs &&
+                    (candidate.first.mcs > best.first.mcs || best.first.numberOfSpatialStreams != requestedMaxNss))
+                best = candidate;
+    }
+    else if (probe) {
         int index = intuniform(0, candidates.size() - 1);
         best = candidates[index];
         state.rates[best.first].lastProbe = simTime();

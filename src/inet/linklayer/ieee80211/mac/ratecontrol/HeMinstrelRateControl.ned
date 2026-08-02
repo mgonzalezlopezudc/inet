@@ -25,6 +25,7 @@ simple HeMinstrelRateControl extends SimpleModule like IRateControl, IIeee80211H
         bool seedFromSnir = default(true);
         bool enableExtendedRangeSu = default(false);
         bool preferDcm = default(false);
+        string selectionPolicy = default("minstrel"); // "minstrel" or deterministic "snrThresholds"
         double snirMcs0Threshold @unit(dB) = default(4dB);
         double snirMcsStep @unit(dB) = default(3dB);
         int minMcs = default(0);

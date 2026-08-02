@@ -3,8 +3,8 @@
 <!-- BEGIN SCRIPT RESULTS SESSIONS -->
 `[script]` results sessions:
 
-- Scalar/vector: `20260802T135659Z`
-- PCAP: `20260802T135659Z`
+- Scalar/vector: `20260802T190557Z`
+- PCAP: `20260802T190557Z`
 <!-- END SCRIPT RESULTS SESSIONS -->
 
 `[agent]` results sessions: `20260802T140300Z`.
@@ -104,9 +104,9 @@ The scalar and vector analysis evaluates `.vec` and `.sca` result files to compu
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-ul_mu_mimo -->
 ### [script] Generated scalar/vector plot and table
 
-![ul_mu_mimo scalar/vector analysis](results/20260802T135659Z/ul-mu-mimo-delivery.png)
+![ul_mu_mimo scalar/vector analysis](results/20260802T190557Z/ul-mu-mimo-delivery.png)
 
-Figure provenance: [`results/20260802T135659Z/ul-mu-mimo-delivery.png.json`](results/20260802T135659Z/ul-mu-mimo-delivery.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
+Figure provenance: [`results/20260802T190557Z/ul-mu-mimo-delivery.png.json`](results/20260802T190557Z/ul-mu-mimo-delivery.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
 Common table provenance:
 
@@ -116,12 +116,12 @@ Common table provenance:
 
 | Configuration / observation | Mean or direct value | 95% CI half-width |
 |---|---:|---:|
-| MU-MIMO, 24 Mbps, leakage 0.001 / goodput mbps | 5.952 | 0.303262 |
-| MU-MIMO, 48 Mbps, leakage 0.001 / goodput mbps | 5.89046 | 0.198842 |
-| MU-MIMO, 72 Mbps, leakage 0.001 / goodput mbps | 5.93969 | 0.338903 |
-| OFDMA, 24 Mbps / goodput mbps | 8.98954 | 0.204631 |
-| OFDMA, 48 Mbps / goodput mbps | 8.98708 | 0.219178 |
-| OFDMA, 72 Mbps / goodput mbps | 8.97477 | 0.194928 |
+| MU-MIMO, 24 Mbps, leakage 0.001 / goodput mbps | 11.8966 | 0.0426804 |
+| MU-MIMO, 48 Mbps, leakage 0.001 / goodput mbps | 11.9335 | 0.020503 |
+| MU-MIMO, 72 Mbps, leakage 0.001 / goodput mbps | 11.9434 | 0.0398506 |
+| OFDMA, 24 Mbps / goodput mbps | 10.0431 | 0.295738 |
+| OFDMA, 48 Mbps / goodput mbps | 10.016 | 0.349387 |
+| OFDMA, 72 Mbps / goodput mbps | 10.0505 | 0.292682 |
 | UL SU, 24 Mbps / goodput mbps | 8.18215 | 0.196123 |
 | UL SU, 48 Mbps / goodput mbps | 8.18708 | 0.130748 |
 | UL SU, 72 Mbps / goodput mbps | 8.20185 | 0.0688539 |
@@ -141,13 +141,13 @@ Captured `.pcapng` traces record frame exchanges on the wireless medium captured
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
 ### [script] Generated PCAP plots and tables
-![802.11 Packet Type Statistics](results/20260802T135659Z/packet_statistics.png)
+![802.11 Packet Type Statistics](results/20260802T190557Z/packet_statistics.png)
 
-Figure provenance: [`packet_statistics.png.json`](results/20260802T135659Z/packet_statistics.png.json).
+Figure provenance: [`packet_statistics.png.json`](results/20260802T190557Z/packet_statistics.png.json).
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 
-Capture session `20260802T135659Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260802T135659Z.json` (SHA-256 `a858cfb3679c50fb66d0401aaba0af9214601da245c5bb513a92a748bc4062e2`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
+Capture session `20260802T190557Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260802T190557Z.json` (SHA-256 `35d5853c229067f2993b818bf1fe5a9957e4ad5971cb855a5cf1a4fcfe5738a0`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
 
 Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
@@ -160,25 +160,25 @@ Observation point: Access Point (AP) wireless interfaces.
 | Configuration | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---:|---|---:|---|
 | `UlSu24Mbps` | `none (all decoded frames)` | 1429 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (729), Control: Ack (700) | 47.02% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `Ofdma24Mbps` | `none (all decoded frames)` | 1993 | Control: Trigger (380), Control: Block Ack (BA) (379), QoS Data [HE-TB, HE-MCS 2, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (270) | 72.43% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `UlMuMimo24MbpsLeakage001` | `none (all decoded frames)` | 1306 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (378), Control: Ack (372), Control: Trigger (169) | 34.70% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `Ofdma24Mbps` | `none (all decoded frames)` | 2192 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (526), Control: Ack (524), Control: Trigger (253) | 61.67% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `UlMuMimo24MbpsLeakage001` | `none (all decoded frames)` | 1995 | Control: Trigger (379), Control: Block Ack (BA) (378), QoS Data [HE-TB, HE-MCS 2, 242-tone RU, GI 3.2 us, NSS 2, LDPC, A-MPDU] (311) | 63.19% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 | `UlSu48Mbps` | `none (all decoded frames)` | 1440 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (731), Control: Ack (709) | 47.17% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `Ofdma48Mbps` | `none (all decoded frames)` | 2000 | Control: Trigger (377), Control: Block Ack (BA) (376), QoS Data [HE-TB, HE-MCS 2, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (285) | 73.38% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `UlMuMimo48MbpsLeakage001` | `none (all decoded frames)` | 1318 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (399), Control: Ack (396), Control: Trigger (158) | 35.73% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `Ofdma48Mbps` | `none (all decoded frames)` | 2191 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (528), Control: Ack (525), Control: Trigger (253) | 61.74% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `UlMuMimo48MbpsLeakage001` | `none (all decoded frames)` | 1992 | Control: Trigger (384), Control: Block Ack (BA) (384), QoS Data [HE-TB, HE-MCS 2, 242-tone RU, GI 3.2 us, NSS 3, LDPC, A-MPDU] (318) | 63.27% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 | `UlSu72Mbps` | `none (all decoded frames)` | 1457 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (737), Control: Ack (720) | 47.57% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `Ofdma72Mbps` | `none (all decoded frames)` | 1992 | Control: Trigger (384), Control: Block Ack (BA) (383), QoS Data [HE-TB, HE-MCS 2, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (278) | 72.61% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `UlMuMimo72MbpsLeakage001` | `none (all decoded frames)` | 1292 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (388), Control: Ack (384), Control: Trigger (157) | 35.11% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `Ofdma72Mbps` | `none (all decoded frames)` | 2194 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (524), Control: Ack (522), Control: Trigger (255) | 61.75% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `UlMuMimo72MbpsLeakage001` | `none (all decoded frames)` | 1996 | Control: Trigger (381), Control: Block Ack (BA) (381), QoS Data [HE-TB, HE-MCS 2, 242-tone RU, GI 3.2 us, NSS 3, LDPC, A-MPDU] (315) | 63.35% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### [script] Evidence checks
 
 | Status | Requirement | Observed evidence |
 |---|---|---|
-| **PASS** | Ofdma24Mbps produced protocol-visible wireless observations | 1993 AP/global transmission observations |
-| **PASS** | Ofdma48Mbps produced protocol-visible wireless observations | 2000 AP/global transmission observations |
-| **PASS** | Ofdma72Mbps produced protocol-visible wireless observations | 1992 AP/global transmission observations |
-| **PASS** | UlMuMimo24MbpsLeakage001 produced protocol-visible wireless observations | 1306 AP/global transmission observations |
-| **PASS** | UlMuMimo48MbpsLeakage001 produced protocol-visible wireless observations | 1318 AP/global transmission observations |
-| **PASS** | UlMuMimo72MbpsLeakage001 produced protocol-visible wireless observations | 1292 AP/global transmission observations |
+| **PASS** | Ofdma24Mbps produced protocol-visible wireless observations | 2192 AP/global transmission observations |
+| **PASS** | Ofdma48Mbps produced protocol-visible wireless observations | 2191 AP/global transmission observations |
+| **PASS** | Ofdma72Mbps produced protocol-visible wireless observations | 2194 AP/global transmission observations |
+| **PASS** | UlMuMimo24MbpsLeakage001 produced protocol-visible wireless observations | 1995 AP/global transmission observations |
+| **PASS** | UlMuMimo48MbpsLeakage001 produced protocol-visible wireless observations | 1992 AP/global transmission observations |
+| **PASS** | UlMuMimo72MbpsLeakage001 produced protocol-visible wireless observations | 1996 AP/global transmission observations |
 | **PASS** | UlSu24Mbps produced protocol-visible wireless observations | 1429 AP/global transmission observations |
 | **PASS** | UlSu48Mbps produced protocol-visible wireless observations | 1440 AP/global transmission observations |
 | **PASS** | UlSu72Mbps produced protocol-visible wireless observations | 1457 AP/global transmission observations |
@@ -251,43 +251,24 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1429*
 Frame numbers are local to capture `UlSu24Mbps-#0Lan80211AxUlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
 ### [script] Configuration: `Ofdma24Mbps`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1993**
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2192**
 
 | Color | Frame Type & Subtype | BSS Color | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 0x0000 | 112 | 5.62% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -75.4 dBm | - | 9.61% | 6.96% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#39c224" /></svg> | QoS Data [HE-TB, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 20 | 1.00% | 1070.0 B | 0.0 B | 1378.7 us | 0.0 us | 5005 MHz, 5015 MHz | -79.0 dBm | - | 3.81% | 2.76% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#31d62e" /></svg> | QoS Data [HE-TB, HE-MCS 2, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 270 | 13.55% | 1070.0 B | 0.0 B | 931.2 us | 0.0 us | 5005 MHz, 5015 MHz | -75.0 dBm | - | 34.71% | 25.14% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24a831" /></svg> | QoS Data [HE-TB, HE-MCS 3, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 11 | 0.55% | 1070.0 B | 0.0 B | 707.4 us | 0.0 us | 5005 MHz, 5015 MHz | -76.5 dBm | - | 1.07% | 0.78% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#35bf2b" /></svg> | QoS Data [HE-TB, HE-MCS 4, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 10 | 0.50% | 1070.0 B | 0.0 B | 483.6 us | 0.0 us | 5005 MHz, 5015 MHz | -76.6 dBm | - | 0.67% | 0.48% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17a627" /></svg> | QoS Data [HE-TB, HE-MCS 4, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 19 | 0.95% | 1070.0 B | 0.0 B | 987.1 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz, 5017 MHz | -76.5 dBm | - | 2.59% | 1.88% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#3acf41" /></svg> | QoS Data [HE-TB, HE-MCS 5, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 13 | 0.65% | 1070.0 B | 0.0 B | 371.7 us | 0.0 us | 5005 MHz, 5015 MHz | -76.2 dBm | - | 0.67% | 0.48% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#27b91d" /></svg> | QoS Data [HE-TB, HE-MCS 5, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 29 | 1.46% | 1070.0 B | 0.0 B | 749.3 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz, 5017 MHz | -76.4 dBm | - | 3.00% | 2.17% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#28bc15" /></svg> | QoS Data [HE-TB, HE-MCS 6, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 14 | 0.70% | 1070.0 B | 0.0 B | 334.4 us | 0.0 us | 5005 MHz, 5015 MHz | -76.4 dBm | - | 0.65% | 0.47% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2eb830" /></svg> | QoS Data [HE-TB, HE-MCS 6, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 21 | 1.05% | 1070.0 B | 0.0 B | 1304.1 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz, 5008 MHz, 5010 MHz, 5012 MHz, 5014 MHz, 5016 MHz, 5018 MHz | -77.7 dBm | - | 3.78% | 2.74% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24cc2a" /></svg> | QoS Data [HE-TB, HE-MCS 6, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 32 | 1.61% | 1070.0 B | 0.0 B | 670.1 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz, 5017 MHz | -76.5 dBm | - | 2.96% | 2.14% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1ad51a" /></svg> | QoS Data [HE-TB, HE-MCS 7, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 20 | 1.00% | 1070.0 B | 0.0 B | 304.5 us | 0.0 us | 5005 MHz, 5015 MHz | -76.6 dBm | - | 0.84% | 0.61% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1ce333" /></svg> | QoS Data [HE-TB, HE-MCS 7, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 21 | 1.05% | 1070.0 B | 0.0 B | 1177.3 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz, 5010 MHz, 5012 MHz, 5014 MHz, 5016 MHz, 5018 MHz | -76.5 dBm | - | 3.41% | 2.47% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#33d748" /></svg> | QoS Data [HE-TB, HE-MCS 7, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 22 | 1.10% | 1070.0 B | 0.0 B | 606.7 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz, 5017 MHz | -76.3 dBm | - | 1.84% | 1.33% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2ce241" /></svg> | QoS Data [HE-TB, HE-MCS 8, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 16 | 0.80% | 1070.0 B | 0.0 B | 259.8 us | 0.0 us | 5005 MHz, 5015 MHz | -76.0 dBm | - | 0.57% | 0.42% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#22aa18" /></svg> | QoS Data [HE-TB, HE-MCS 8, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 39 | 1.96% | 1070.0 B | 0.0 B | 987.1 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz, 5008 MHz, 5010 MHz, 5012 MHz, 5014 MHz, 5016 MHz, 5018 MHz | -76.7 dBm | - | 5.32% | 3.85% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2ba725" /></svg> | QoS Data [HE-TB, HE-MCS 8, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 34 | 1.71% | 1070.0 B | 0.0 B | 511.6 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz, 5017 MHz | -76.3 dBm | - | 2.40% | 1.74% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24ba1c" /></svg> | QoS Data [HE-TB, HE-MCS 9, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 19 | 0.95% | 1070.0 B | 0.0 B | 237.4 us | 0.0 us | 5005 MHz, 5015 MHz | -76.9 dBm | - | 0.62% | 0.45% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1fbd24" /></svg> | QoS Data [HE-TB, HE-MCS 9, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 51 | 2.56% | 1070.0 B | 0.0 B | 892.0 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz, 5008 MHz, 5010 MHz, 5012 MHz, 5014 MHz, 5016 MHz, 5018 MHz | -76.0 dBm | - | 6.28% | 4.55% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2db934" /></svg> | QoS Data [HE-TB, HE-MCS 9, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 32 | 1.61% | 1070.0 B | 0.0 B | 464.0 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz, 5017 MHz | -76.4 dBm | - | 2.05% | 1.48% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0c420b" /></svg> | QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 0x0000 | 75 | 3.76% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -76.3 dBm | - | 4.13% | 2.99% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#07400c" /></svg> | QoS Null [HE-TB, HE-MCS 1, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 59 | 2.96% | 34.0 B | 0.0 B | 217.3 us | 0.0 us | 5010 MHz | -79.0 dBm | - | 1.77% | 1.28% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0d4512" /></svg> | QoS Null [HE-TB, HE-MCS 1, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 69 | 3.46% | 34.0 B | 0.0 B | 126.7 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz, 5017 MHz | -78.9 dBm | - | 1.21% | 0.87% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#13560b" /></svg> | QoS Null [HE-TB, HE-MCS 2, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 26 | 1.30% | 34.0 B | 0.0 B | 156.9 us | 0.0 us | 5010 MHz | -75.2 dBm | - | 0.56% | 0.41% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#185912" /></svg> | QoS Null [HE-TB, HE-MCS 2, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 64 | 3.21% | 34.0 B | 0.0 B | 96.4 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz, 5017 MHz | -75.1 dBm | - | 0.85% | 0.62% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#106a10" /></svg> | QoS Null [HE-TB, HE-MCS 3, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 2 | 0.10% | 34.0 B | 0.0 B | 126.7 us | 0.0 us | 5006 MHz, 5012 MHz | -79.0 dBm | - | 0.03% | 0.03% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0b7a0c" /></svg> | QoS Null [HE-TB, HE-MCS 3, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 2 | 0.10% | 34.0 B | 0.0 B | 81.3 us | 0.0 us | 5013 MHz, 5017 MHz | -77.0 dBm | - | 0.02% | 0.02% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#157e20" /></svg> | QoS Null [HE-TB, HE-MCS 4, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 6 | 0.30% | 34.0 B | 0.0 B | 96.4 us | 0.0 us | 5002 MHz, 5010 MHz, 5014 MHz | -79.0 dBm | - | 0.08% | 0.06% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#13490e" /></svg> | QoS Null [HE-TB, HE-MCS 5, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 15 | 0.75% | 34.0 B | 0.0 B | 81.3 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz, 5010 MHz, 5012 MHz, 5014 MHz, 5018 MHz | -76.3 dBm | - | 0.17% | 0.12% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 0x0000 | 526 | 24.00% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -78.8 dBm | - | 52.99% | 32.68% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1ddd30" /></svg> | QoS Data [HE-TB, HE-MCS 2, 106-tone RU, GI 3.2 us, NSS 2, LDPC, A-MPDU] | 0x0000 | 186 | 8.49% | 1070.0 B | 0.0 B | 483.6 us | 0.0 us | 5015 MHz | -75.0 dBm | - | 14.59% | 8.99% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#22d334" /></svg> | QoS Data [HE-TB, HE-MCS 2, 106-tone RU, GI 3.2 us, NSS 3, LDPC, A-MPDU] | 0x0000 | 183 | 8.35% | 1070.0 B | 0.0 B | 334.4 us | 0.0 us | 5005 MHz | -75.0 dBm | - | 9.92% | 6.12% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#22c933" /></svg> | QoS Data [HE-TB, HE-MCS 2, 52-tone RU, GI 3.2 us, NSS 2, LDPC, A-MPDU] | 0x0000 | 1 | 0.05% | 1070.0 B | 0.0 B | 987.1 us | 0.0 us | 5007 MHz | -75.0 dBm | - | 0.16% | 0.10% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#27be36" /></svg> | QoS Data [HE-TB, HE-MCS 2, 52-tone RU, GI 3.2 us, NSS 3, LDPC, A-MPDU] | 0x0000 | 3 | 0.14% | 1070.0 B | 0.0 B | 670.1 us | 0.0 us | 5003 MHz | -75.0 dBm | - | 0.33% | 0.20% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0a480c" /></svg> | QoS Null [HE-TB, HE-MCS 0, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 1 | 0.05% | 34.0 B | 0.0 B | 121.3 us | 0.0 us | 5015 MHz | -79.0 dBm | - | 0.02% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0c420b" /></svg> | QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 0x0000 | 75 | 3.42% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -76.3 dBm | - | 4.85% | 2.99% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0d790b" /></svg> | QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 183 | 8.35% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5010 MHz | -79.0 dBm | - | 11.83% | 7.30% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#147b14" /></svg> | QoS Null [HE-TB, HE-MCS 0, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 3 | 0.14% | 34.0 B | 0.0 B | 217.3 us | 0.0 us | 5007 MHz | -79.0 dBm | - | 0.11% | 0.07% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1e7416" /></svg> | QoS Null [HE-TB, HE-MCS 2, 26-tone RU, GI 3.2 us, NSS 3, LDPC, A-MPDU] | 0x0000 | 1 | 0.05% | 34.0 B | 0.0 B | 76.3 us | 0.0 us | 5002 MHz | -75.0 dBm | - | 0.01% | 0.01% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | - | 380 | 19.07% | 47.7 B | 6.7 B | 35.9 us | 2.2 us | 5010 MHz | - | 20.0 dBm | 1.88% | 1.36% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | - | 379 | 19.02% | 57.9 B | 1.4 B | 39.3 us | 0.5 us | 5010 MHz | - | 20.0 dBm | 2.06% | 1.49% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | - | 111 | 5.57% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 0.38% | 0.27% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | - | 253 | 11.54% | 48.6 B | 8.1 B | 36.2 us | 2.7 us | 5010 MHz | - | 20.0 dBm | 1.49% | 0.92% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | - | 253 | 11.54% | 57.9 B | 1.7 B | 39.3 us | 0.6 us | 5010 MHz | - | 20.0 dBm | 1.61% | 0.99% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | - | 524 | 23.91% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 2.10% | 1.29% |
 
 #### [script] Representative frame-exchange timeline
 
@@ -347,31 +328,20 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1993*
 Frame numbers are local to capture `Ofdma24Mbps-#0Lan80211AxUlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
 ### [script] Configuration: `UlMuMimo24MbpsLeakage001`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1306**
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1995**
 
 | Color | Frame Type & Subtype | BSS Color | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 0x0000 | 378 | 28.94% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -75.5 dBm | - | 67.69% | 23.49% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#31d831" /></svg> | QoS Data [HE-TB, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 21 | 1.61% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -79.0 dBm | - | 3.76% | 1.30% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24ae34" /></svg> | QoS Data [HE-TB, HE-MCS 2, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 95 | 7.27% | 1070.0 B | 0.0 B | 426.2 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 11.67% | 4.05% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24a831" /></svg> | QoS Data [HE-TB, HE-MCS 3, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 1 | 0.08% | 1070.0 B | 0.0 B | 707.4 us | 0.0 us | 5015 MHz | -79.0 dBm | - | 0.20% | 0.07% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#33c52b" /></svg> | QoS Data [HE-TB, HE-MCS 3, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 1 | 0.08% | 1070.0 B | 0.0 B | 328.6 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 0.09% | 0.03% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#3acf41" /></svg> | QoS Data [HE-TB, HE-MCS 5, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 5 | 0.38% | 1070.0 B | 0.0 B | 371.7 us | 0.0 us | 5005 MHz, 5015 MHz | -75.0 dBm | - | 0.54% | 0.19% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#38ab2b" /></svg> | QoS Data [HE-TB, HE-MCS 5, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 2 | 0.15% | 1070.0 B | 0.0 B | 182.3 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 0.11% | 0.04% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#28bc15" /></svg> | QoS Data [HE-TB, HE-MCS 6, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 2 | 0.15% | 1070.0 B | 0.0 B | 334.4 us | 0.0 us | 5005 MHz | -79.0 dBm | - | 0.19% | 0.07% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1ad51a" /></svg> | QoS Data [HE-TB, HE-MCS 7, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 2 | 0.15% | 1070.0 B | 0.0 B | 304.5 us | 0.0 us | 5005 MHz, 5015 MHz | -75.0 dBm | - | 0.18% | 0.06% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#16a729" /></svg> | QoS Data [HE-TB, HE-MCS 7, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 2 | 0.15% | 1070.0 B | 0.0 B | 153.1 us | 0.0 us | 5010 MHz | -77.0 dBm | - | 0.09% | 0.03% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#33d748" /></svg> | QoS Data [HE-TB, HE-MCS 7, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 2 | 0.15% | 1070.0 B | 0.0 B | 606.7 us | 0.0 us | 5003 MHz, 5007 MHz | -77.0 dBm | - | 0.35% | 0.12% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#21c01b" /></svg> | QoS Data [HE-TB, HE-MCS 8, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 1 | 0.08% | 1070.0 B | 0.0 B | 133.5 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 0.04% | 0.01% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24ba1c" /></svg> | QoS Data [HE-TB, HE-MCS 9, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 4 | 0.31% | 1070.0 B | 0.0 B | 237.4 us | 0.0 us | 5005 MHz, 5015 MHz | -76.0 dBm | - | 0.27% | 0.09% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#22d831" /></svg> | QoS Data [HE-TB, HE-MCS 9, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 2 | 0.15% | 1070.0 B | 0.0 B | 123.8 us | 0.0 us | 5010 MHz | -77.0 dBm | - | 0.07% | 0.02% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2db934" /></svg> | QoS Data [HE-TB, HE-MCS 9, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 2 | 0.15% | 1070.0 B | 0.0 B | 464.0 us | 0.0 us | 5013 MHz, 5017 MHz | -79.0 dBm | - | 0.27% | 0.09% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0c420b" /></svg> | QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 0x0000 | 75 | 5.74% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -76.3 dBm | - | 8.62% | 2.99% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#167b14" /></svg> | QoS Null [HE-TB, HE-MCS 2, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 1 | 0.08% | 34.0 B | 0.0 B | 64.4 us | 0.0 us | 5005 MHz | -75.0 dBm | - | 0.02% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 0x0000 | 116 | 5.81% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -75.5 dBm | - | 11.41% | 7.21% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#36c723" /></svg> | QoS Data [HE-TB, HE-MCS 0, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 311 | 15.59% | 1070.0 B | 0.0 B | 1206.6 us | 0.0 us | 5010 MHz | -79.0 dBm | - | 59.39% | 37.53% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2dbe36" /></svg> | QoS Data [HE-TB, HE-MCS 2, 242-tone RU, GI 3.2 us, NSS 2, LDPC, A-MPDU] | 0x0000 | 311 | 15.59% | 1070.0 B | 0.0 B | 231.1 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 11.37% | 7.19% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#19cc25" /></svg> | QoS Data [HE-TB, HE-MCS 2, 242-tone RU, GI 3.2 us, NSS 3, LDPC, A-MPDU] | 0x0000 | 310 | 15.54% | 1070.0 B | 0.0 B | 166.1 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 8.15% | 5.15% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0c420b" /></svg> | QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 0x0000 | 75 | 3.76% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -76.3 dBm | - | 4.73% | 2.99% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0a6710" /></svg> | QoS Null [HE-TB, HE-MCS 2, 242-tone RU, GI 3.2 us, NSS 3, LDPC, A-MPDU] | 0x0000 | 1 | 0.05% | 34.0 B | 0.0 B | 40.1 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 0.01% | 0.00% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | - | 169 | 12.94% | 39.8 B | 13.8 B | 33.3 us | 4.6 us | 5010 MHz | - | 20.0 dBm | 1.62% | 0.56% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | - | 169 | 12.94% | 37.6 B | 8.5 B | 32.5 us | 2.8 us | 5010 MHz | - | 20.0 dBm | 1.58% | 0.55% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | - | 372 | 28.48% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 2.64% | 0.92% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | - | 379 | 19.00% | 47.7 B | 6.7 B | 35.9 us | 2.2 us | 5010 MHz | - | 20.0 dBm | 2.15% | 1.36% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | - | 378 | 18.95% | 57.9 B | 1.4 B | 39.3 us | 0.5 us | 5010 MHz | - | 20.0 dBm | 2.35% | 1.49% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | - | 114 | 5.71% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 0.45% | 0.28% |
 
 #### [script] Representative frame-exchange timeline
 
@@ -497,44 +467,22 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1440*
 Frame numbers are local to capture `UlSu48Mbps-#0Lan80211AxUlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
 ### [script] Configuration: `Ofdma48Mbps`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2000**
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2191**
 
 | Color | Frame Type & Subtype | BSS Color | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 0x0000 | 122 | 6.10% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -75.7 dBm | - | 10.33% | 7.58% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#39c224" /></svg> | QoS Data [HE-TB, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 20 | 1.00% | 1070.0 B | 0.0 B | 1378.7 us | 0.0 us | 5005 MHz, 5015 MHz | -79.0 dBm | - | 3.76% | 2.76% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#31d62e" /></svg> | QoS Data [HE-TB, HE-MCS 2, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 285 | 14.25% | 1070.0 B | 0.0 B | 931.2 us | 0.0 us | 5005 MHz, 5015 MHz | -75.0 dBm | - | 36.17% | 26.54% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24a831" /></svg> | QoS Data [HE-TB, HE-MCS 3, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 8 | 0.40% | 1070.0 B | 0.0 B | 707.4 us | 0.0 us | 5005 MHz, 5015 MHz | -77.5 dBm | - | 0.77% | 0.57% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#35bf2b" /></svg> | QoS Data [HE-TB, HE-MCS 4, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 12 | 0.60% | 1070.0 B | 0.0 B | 483.6 us | 0.0 us | 5005 MHz, 5015 MHz | -76.3 dBm | - | 0.79% | 0.58% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17a627" /></svg> | QoS Data [HE-TB, HE-MCS 4, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 14 | 0.70% | 1070.0 B | 0.0 B | 987.1 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz, 5017 MHz | -77.0 dBm | - | 1.88% | 1.38% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#3acf41" /></svg> | QoS Data [HE-TB, HE-MCS 5, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 12 | 0.60% | 1070.0 B | 0.0 B | 371.7 us | 0.0 us | 5005 MHz, 5015 MHz | -76.3 dBm | - | 0.61% | 0.45% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#27b91d" /></svg> | QoS Data [HE-TB, HE-MCS 5, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 28 | 1.40% | 1070.0 B | 0.0 B | 749.3 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz, 5017 MHz | -76.6 dBm | - | 2.86% | 2.10% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#28bc15" /></svg> | QoS Data [HE-TB, HE-MCS 6, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 19 | 0.95% | 1070.0 B | 0.0 B | 334.4 us | 0.0 us | 5005 MHz, 5015 MHz | -76.5 dBm | - | 0.87% | 0.64% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2eb830" /></svg> | QoS Data [HE-TB, HE-MCS 6, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 15 | 0.75% | 1070.0 B | 0.0 B | 1304.1 us | 0.0 us | 5002 MHz, 5004 MHz, 5008 MHz, 5010 MHz, 5014 MHz, 5016 MHz, 5018 MHz | -77.1 dBm | - | 2.67% | 1.96% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24cc2a" /></svg> | QoS Data [HE-TB, HE-MCS 6, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 25 | 1.25% | 1070.0 B | 0.0 B | 670.1 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz, 5017 MHz | -76.6 dBm | - | 2.28% | 1.68% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1ad51a" /></svg> | QoS Data [HE-TB, HE-MCS 7, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 18 | 0.90% | 1070.0 B | 0.0 B | 304.5 us | 0.0 us | 5005 MHz, 5015 MHz | -76.8 dBm | - | 0.75% | 0.55% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1ce333" /></svg> | QoS Data [HE-TB, HE-MCS 7, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 21 | 1.05% | 1070.0 B | 0.0 B | 1177.3 us | 0.0 us | 5004 MHz, 5008 MHz, 5010 MHz, 5012 MHz, 5014 MHz, 5016 MHz | -76.9 dBm | - | 3.37% | 2.47% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#33d748" /></svg> | QoS Data [HE-TB, HE-MCS 7, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 32 | 1.60% | 1070.0 B | 0.0 B | 606.7 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz, 5017 MHz | -76.4 dBm | - | 2.65% | 1.94% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2ce241" /></svg> | QoS Data [HE-TB, HE-MCS 8, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 15 | 0.75% | 1070.0 B | 0.0 B | 259.8 us | 0.0 us | 5005 MHz, 5015 MHz | -75.8 dBm | - | 0.53% | 0.39% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#22aa18" /></svg> | QoS Data [HE-TB, HE-MCS 8, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 43 | 2.15% | 1070.0 B | 0.0 B | 987.1 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz, 5008 MHz, 5010 MHz, 5012 MHz, 5014 MHz, 5016 MHz, 5018 MHz | -76.0 dBm | - | 5.78% | 4.24% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2ba725" /></svg> | QoS Data [HE-TB, HE-MCS 8, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 25 | 1.25% | 1070.0 B | 0.0 B | 511.6 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz, 5017 MHz | -77.1 dBm | - | 1.74% | 1.28% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24ba1c" /></svg> | QoS Data [HE-TB, HE-MCS 9, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 15 | 0.75% | 1070.0 B | 0.0 B | 237.4 us | 0.0 us | 5005 MHz, 5015 MHz | -76.3 dBm | - | 0.49% | 0.36% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1fbd24" /></svg> | QoS Data [HE-TB, HE-MCS 9, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 56 | 2.80% | 1070.0 B | 0.0 B | 892.0 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz, 5008 MHz, 5010 MHz, 5012 MHz, 5014 MHz, 5016 MHz, 5018 MHz | -76.1 dBm | - | 6.81% | 5.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2db934" /></svg> | QoS Data [HE-TB, HE-MCS 9, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 28 | 1.40% | 1070.0 B | 0.0 B | 464.0 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz, 5017 MHz | -76.0 dBm | - | 1.77% | 1.30% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0c420b" /></svg> | QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 0x0000 | 75 | 3.75% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -76.3 dBm | - | 4.07% | 2.99% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0d790b" /></svg> | QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 2 | 0.10% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5010 MHz | -79.0 dBm | - | 0.11% | 0.08% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#07400c" /></svg> | QoS Null [HE-TB, HE-MCS 1, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 71 | 3.55% | 34.0 B | 0.0 B | 217.3 us | 0.0 us | 5010 MHz | -79.0 dBm | - | 2.10% | 1.54% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0d4512" /></svg> | QoS Null [HE-TB, HE-MCS 1, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 58 | 2.90% | 34.0 B | 0.0 B | 126.7 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz, 5017 MHz | -79.0 dBm | - | 1.00% | 0.73% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#13560b" /></svg> | QoS Null [HE-TB, HE-MCS 2, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 22 | 1.10% | 34.0 B | 0.0 B | 156.9 us | 0.0 us | 5010 MHz | -75.4 dBm | - | 0.47% | 0.35% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#185912" /></svg> | QoS Null [HE-TB, HE-MCS 2, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 65 | 3.25% | 34.0 B | 0.0 B | 96.4 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz, 5017 MHz | -75.1 dBm | - | 0.85% | 0.63% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#106a10" /></svg> | QoS Null [HE-TB, HE-MCS 3, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 3 | 0.15% | 34.0 B | 0.0 B | 126.7 us | 0.0 us | 5010 MHz | -77.7 dBm | - | 0.05% | 0.04% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0b7a0c" /></svg> | QoS Null [HE-TB, HE-MCS 3, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 6 | 0.30% | 34.0 B | 0.0 B | 81.3 us | 0.0 us | 5007 MHz, 5013 MHz, 5017 MHz | -77.0 dBm | - | 0.07% | 0.05% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#157e20" /></svg> | QoS Null [HE-TB, HE-MCS 4, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 3 | 0.15% | 34.0 B | 0.0 B | 96.4 us | 0.0 us | 5010 MHz, 5012 MHz | -76.3 dBm | - | 0.04% | 0.03% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#13490e" /></svg> | QoS Null [HE-TB, HE-MCS 5, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 9 | 0.45% | 34.0 B | 0.0 B | 81.3 us | 0.0 us | 5002 MHz, 5010 MHz, 5012 MHz, 5014 MHz, 5016 MHz, 5018 MHz | -77.7 dBm | - | 0.10% | 0.07% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 0x0000 | 528 | 24.10% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -79.0 dBm | - | 53.13% | 32.80% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1ddd30" /></svg> | QoS Data [HE-TB, HE-MCS 2, 106-tone RU, GI 3.2 us, NSS 2, LDPC, A-MPDU] | 0x0000 | 185 | 8.44% | 1070.0 B | 0.0 B | 483.6 us | 0.0 us | 5015 MHz | -75.0 dBm | - | 14.49% | 8.95% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#22d334" /></svg> | QoS Data [HE-TB, HE-MCS 2, 106-tone RU, GI 3.2 us, NSS 3, LDPC, A-MPDU] | 0x0000 | 185 | 8.44% | 1070.0 B | 0.0 B | 334.4 us | 0.0 us | 5005 MHz | -75.0 dBm | - | 10.02% | 6.19% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#3dd02f" /></svg> | QoS Data [HE-TB, HE-MCS 2, 26-tone RU, GI 3.2 us, NSS 3, LDPC, A-MPDU] | 0x0000 | 1 | 0.05% | 1070.0 B | 0.0 B | 1304.1 us | 0.0 us | 5002 MHz | -75.0 dBm | - | 0.21% | 0.13% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#22c933" /></svg> | QoS Data [HE-TB, HE-MCS 2, 52-tone RU, GI 3.2 us, NSS 2, LDPC, A-MPDU] | 0x0000 | 1 | 0.05% | 1070.0 B | 0.0 B | 987.1 us | 0.0 us | 5007 MHz | -75.0 dBm | - | 0.16% | 0.10% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0a480c" /></svg> | QoS Null [HE-TB, HE-MCS 0, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 1 | 0.05% | 34.0 B | 0.0 B | 121.3 us | 0.0 us | 5015 MHz | -79.0 dBm | - | 0.02% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0c420b" /></svg> | QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 0x0000 | 75 | 3.42% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -76.3 dBm | - | 4.84% | 2.99% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0d790b" /></svg> | QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 185 | 8.44% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5010 MHz | -79.0 dBm | - | 11.94% | 7.38% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | - | 377 | 18.85% | 47.7 B | 6.8 B | 35.9 us | 2.3 us | 5010 MHz | - | 20.0 dBm | 1.85% | 1.35% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | - | 376 | 18.80% | 57.9 B | 1.4 B | 39.3 us | 0.5 us | 5010 MHz | - | 20.0 dBm | 2.01% | 1.48% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | - | 120 | 6.00% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 0.40% | 0.30% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | - | 253 | 11.55% | 48.6 B | 8.1 B | 36.2 us | 2.7 us | 5010 MHz | - | 20.0 dBm | 1.48% | 0.92% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | - | 252 | 11.50% | 57.9 B | 1.7 B | 39.3 us | 0.6 us | 5010 MHz | - | 20.0 dBm | 1.60% | 0.99% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | - | 525 | 23.96% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 2.10% | 1.30% |
 
 #### [script] Representative frame-exchange timeline
 
@@ -594,33 +542,19 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2000*
 Frame numbers are local to capture `Ofdma48Mbps-#0Lan80211AxUlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
 ### [script] Configuration: `UlMuMimo48MbpsLeakage001`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1318**
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1992**
 
 | Color | Frame Type & Subtype | BSS Color | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 0x0000 | 399 | 30.27% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -75.6 dBm | - | 69.38% | 24.79% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#36c723" /></svg> | QoS Data [HE-TB, HE-MCS 0, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 1 | 0.08% | 1070.0 B | 0.0 B | 1206.6 us | 0.0 us | 5010 MHz | -79.0 dBm | - | 0.34% | 0.12% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#31d831" /></svg> | QoS Data [HE-TB, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 23 | 1.75% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -78.7 dBm | - | 4.00% | 1.43% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#31d62e" /></svg> | QoS Data [HE-TB, HE-MCS 2, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 1 | 0.08% | 1070.0 B | 0.0 B | 931.2 us | 0.0 us | 5005 MHz | -75.0 dBm | - | 0.26% | 0.09% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24ae34" /></svg> | QoS Data [HE-TB, HE-MCS 2, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 87 | 6.60% | 1070.0 B | 0.0 B | 426.2 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 10.38% | 3.71% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#33c52b" /></svg> | QoS Data [HE-TB, HE-MCS 3, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 2 | 0.15% | 1070.0 B | 0.0 B | 328.6 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 0.18% | 0.07% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#35bf2b" /></svg> | QoS Data [HE-TB, HE-MCS 4, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 1 | 0.08% | 1070.0 B | 0.0 B | 483.6 us | 0.0 us | 5005 MHz | -79.0 dBm | - | 0.14% | 0.05% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#3acf41" /></svg> | QoS Data [HE-TB, HE-MCS 5, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 2 | 0.15% | 1070.0 B | 0.0 B | 371.7 us | 0.0 us | 5005 MHz, 5015 MHz | -75.0 dBm | - | 0.21% | 0.07% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#28bc15" /></svg> | QoS Data [HE-TB, HE-MCS 6, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 2 | 0.15% | 1070.0 B | 0.0 B | 334.4 us | 0.0 us | 5005 MHz | -75.0 dBm | - | 0.19% | 0.07% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1adb1d" /></svg> | QoS Data [HE-TB, HE-MCS 6, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 1 | 0.08% | 1070.0 B | 0.0 B | 166.1 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 0.05% | 0.02% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1ad51a" /></svg> | QoS Data [HE-TB, HE-MCS 7, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 2 | 0.15% | 1070.0 B | 0.0 B | 304.5 us | 0.0 us | 5005 MHz, 5015 MHz | -75.0 dBm | - | 0.17% | 0.06% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#16a729" /></svg> | QoS Data [HE-TB, HE-MCS 7, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 1 | 0.08% | 1070.0 B | 0.0 B | 153.1 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 0.04% | 0.02% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2ce241" /></svg> | QoS Data [HE-TB, HE-MCS 8, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 1 | 0.08% | 1070.0 B | 0.0 B | 259.8 us | 0.0 us | 5005 MHz | -75.0 dBm | - | 0.07% | 0.03% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#21c01b" /></svg> | QoS Data [HE-TB, HE-MCS 8, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 1 | 0.08% | 1070.0 B | 0.0 B | 133.5 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 0.04% | 0.01% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2ba725" /></svg> | QoS Data [HE-TB, HE-MCS 8, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 1 | 0.08% | 1070.0 B | 0.0 B | 511.6 us | 0.0 us | 5017 MHz | -75.0 dBm | - | 0.14% | 0.05% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24ba1c" /></svg> | QoS Data [HE-TB, HE-MCS 9, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 3 | 0.23% | 1070.0 B | 0.0 B | 237.4 us | 0.0 us | 5005 MHz, 5015 MHz | -75.0 dBm | - | 0.20% | 0.07% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#22d831" /></svg> | QoS Data [HE-TB, HE-MCS 9, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 2 | 0.15% | 1070.0 B | 0.0 B | 123.8 us | 0.0 us | 5010 MHz | -77.0 dBm | - | 0.07% | 0.02% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2db934" /></svg> | QoS Data [HE-TB, HE-MCS 9, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 1 | 0.08% | 1070.0 B | 0.0 B | 464.0 us | 0.0 us | 5003 MHz | -79.0 dBm | - | 0.13% | 0.05% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0c420b" /></svg> | QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 0x0000 | 75 | 5.69% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -76.3 dBm | - | 8.37% | 2.99% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 0x0000 | 99 | 4.97% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -76.0 dBm | - | 9.72% | 6.15% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#36c723" /></svg> | QoS Data [HE-TB, HE-MCS 0, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 318 | 15.96% | 1070.0 B | 0.0 B | 1206.6 us | 0.0 us | 5010 MHz | -79.0 dBm | - | 60.65% | 38.37% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2dbe36" /></svg> | QoS Data [HE-TB, HE-MCS 2, 242-tone RU, GI 3.2 us, NSS 2, LDPC, A-MPDU] | 0x0000 | 318 | 15.96% | 1070.0 B | 0.0 B | 231.1 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 11.62% | 7.35% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#19cc25" /></svg> | QoS Data [HE-TB, HE-MCS 2, 242-tone RU, GI 3.2 us, NSS 3, LDPC, A-MPDU] | 0x0000 | 318 | 15.96% | 1070.0 B | 0.0 B | 166.1 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 8.35% | 5.28% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0c420b" /></svg> | QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 0x0000 | 75 | 3.77% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -76.3 dBm | - | 4.73% | 2.99% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | - | 158 | 11.99% | 40.2 B | 14.2 B | 33.4 us | 4.7 us | 5010 MHz | - | 20.0 dBm | 1.48% | 0.53% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | - | 158 | 11.99% | 37.8 B | 8.8 B | 32.6 us | 2.9 us | 5010 MHz | - | 20.0 dBm | 1.44% | 0.52% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | - | 396 | 30.05% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 2.73% | 0.98% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | - | 384 | 19.28% | 47.7 B | 6.7 B | 35.9 us | 2.2 us | 5010 MHz | - | 20.0 dBm | 2.18% | 1.38% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | - | 384 | 19.28% | 57.9 B | 1.4 B | 39.3 us | 0.5 us | 5010 MHz | - | 20.0 dBm | 2.39% | 1.51% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | - | 96 | 4.82% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 0.37% | 0.24% |
 
 #### [script] Representative frame-exchange timeline
 
@@ -746,43 +680,22 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1457*
 Frame numbers are local to capture `UlSu72Mbps-#0Lan80211AxUlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
 ### [script] Configuration: `Ofdma72Mbps`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1992**
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2194**
 
 | Color | Frame Type & Subtype | BSS Color | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 0x0000 | 100 | 5.02% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -75.7 dBm | - | 8.56% | 6.21% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#39c224" /></svg> | QoS Data [HE-TB, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 15 | 0.75% | 1070.0 B | 0.0 B | 1378.7 us | 0.0 us | 5005 MHz, 5015 MHz | -78.7 dBm | - | 2.85% | 2.07% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#31d62e" /></svg> | QoS Data [HE-TB, HE-MCS 2, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 278 | 13.96% | 1070.0 B | 0.0 B | 931.2 us | 0.0 us | 5005 MHz, 5015 MHz | -75.1 dBm | - | 35.65% | 25.89% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24a831" /></svg> | QoS Data [HE-TB, HE-MCS 3, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 13 | 0.65% | 1070.0 B | 0.0 B | 707.4 us | 0.0 us | 5005 MHz, 5015 MHz | -75.6 dBm | - | 1.27% | 0.92% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#35bf2b" /></svg> | QoS Data [HE-TB, HE-MCS 4, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 8 | 0.40% | 1070.0 B | 0.0 B | 483.6 us | 0.0 us | 5005 MHz, 5015 MHz | -76.5 dBm | - | 0.53% | 0.39% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17a627" /></svg> | QoS Data [HE-TB, HE-MCS 4, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 22 | 1.10% | 1070.0 B | 0.0 B | 987.1 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz, 5017 MHz | -77.2 dBm | - | 2.99% | 2.17% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#3acf41" /></svg> | QoS Data [HE-TB, HE-MCS 5, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 22 | 1.10% | 1070.0 B | 0.0 B | 371.7 us | 0.0 us | 5005 MHz, 5015 MHz | -76.5 dBm | - | 1.13% | 0.82% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#27b91d" /></svg> | QoS Data [HE-TB, HE-MCS 5, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 21 | 1.05% | 1070.0 B | 0.0 B | 749.3 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz, 5017 MHz | -76.7 dBm | - | 2.17% | 1.57% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#28bc15" /></svg> | QoS Data [HE-TB, HE-MCS 6, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 21 | 1.05% | 1070.0 B | 0.0 B | 334.4 us | 0.0 us | 5005 MHz, 5015 MHz | -76.1 dBm | - | 0.97% | 0.70% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2eb830" /></svg> | QoS Data [HE-TB, HE-MCS 6, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 17 | 0.85% | 1070.0 B | 0.0 B | 1304.1 us | 0.0 us | 5002 MHz, 5004 MHz, 5008 MHz, 5010 MHz, 5012 MHz, 5014 MHz, 5016 MHz, 5018 MHz | -77.1 dBm | - | 3.05% | 2.22% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24cc2a" /></svg> | QoS Data [HE-TB, HE-MCS 6, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 23 | 1.15% | 1070.0 B | 0.0 B | 670.1 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz, 5017 MHz | -76.6 dBm | - | 2.12% | 1.54% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1ad51a" /></svg> | QoS Data [HE-TB, HE-MCS 7, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 12 | 0.60% | 1070.0 B | 0.0 B | 304.5 us | 0.0 us | 5005 MHz, 5015 MHz | -76.3 dBm | - | 0.50% | 0.37% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1ce333" /></svg> | QoS Data [HE-TB, HE-MCS 7, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 28 | 1.41% | 1070.0 B | 0.0 B | 1177.3 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz, 5010 MHz, 5012 MHz, 5014 MHz, 5016 MHz, 5018 MHz | -76.7 dBm | - | 4.54% | 3.30% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#33d748" /></svg> | QoS Data [HE-TB, HE-MCS 7, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 36 | 1.81% | 1070.0 B | 0.0 B | 606.7 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz, 5017 MHz | -76.6 dBm | - | 3.01% | 2.18% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2ce241" /></svg> | QoS Data [HE-TB, HE-MCS 8, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 10 | 0.50% | 1070.0 B | 0.0 B | 259.8 us | 0.0 us | 5005 MHz, 5015 MHz | -76.6 dBm | - | 0.36% | 0.26% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#22aa18" /></svg> | QoS Data [HE-TB, HE-MCS 8, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 38 | 1.91% | 1070.0 B | 0.0 B | 987.1 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz, 5008 MHz, 5010 MHz, 5012 MHz, 5014 MHz, 5016 MHz, 5018 MHz | -76.5 dBm | - | 5.17% | 3.75% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2ba725" /></svg> | QoS Data [HE-TB, HE-MCS 8, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 32 | 1.61% | 1070.0 B | 0.0 B | 511.6 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz, 5017 MHz | -76.4 dBm | - | 2.25% | 1.64% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24ba1c" /></svg> | QoS Data [HE-TB, HE-MCS 9, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 20 | 1.00% | 1070.0 B | 0.0 B | 237.4 us | 0.0 us | 5005 MHz, 5015 MHz | -77.0 dBm | - | 0.65% | 0.47% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1fbd24" /></svg> | QoS Data [HE-TB, HE-MCS 9, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 58 | 2.91% | 1070.0 B | 0.0 B | 892.0 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz, 5008 MHz, 5010 MHz, 5012 MHz, 5014 MHz, 5016 MHz, 5018 MHz | -76.0 dBm | - | 7.13% | 5.17% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2db934" /></svg> | QoS Data [HE-TB, HE-MCS 9, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 28 | 1.41% | 1070.0 B | 0.0 B | 464.0 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz, 5017 MHz | -76.9 dBm | - | 1.79% | 1.30% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0c420b" /></svg> | QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 0x0000 | 75 | 3.77% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -76.3 dBm | - | 4.12% | 2.99% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#07400c" /></svg> | QoS Null [HE-TB, HE-MCS 1, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 68 | 3.41% | 34.0 B | 0.0 B | 217.3 us | 0.0 us | 5010 MHz | -79.0 dBm | - | 2.04% | 1.48% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0d4512" /></svg> | QoS Null [HE-TB, HE-MCS 1, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 65 | 3.26% | 34.0 B | 0.0 B | 126.7 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz, 5017 MHz | -78.9 dBm | - | 1.13% | 0.82% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#13560b" /></svg> | QoS Null [HE-TB, HE-MCS 2, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 25 | 1.26% | 34.0 B | 0.0 B | 156.9 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 0.54% | 0.39% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#185912" /></svg> | QoS Null [HE-TB, HE-MCS 2, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 68 | 3.41% | 34.0 B | 0.0 B | 96.4 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz, 5017 MHz | -75.0 dBm | - | 0.90% | 0.66% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#106a10" /></svg> | QoS Null [HE-TB, HE-MCS 3, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 1 | 0.05% | 34.0 B | 0.0 B | 126.7 us | 0.0 us | 5010 MHz | -79.0 dBm | - | 0.02% | 0.01% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0b7a0c" /></svg> | QoS Null [HE-TB, HE-MCS 3, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 7 | 0.35% | 34.0 B | 0.0 B | 81.3 us | 0.0 us | 5007 MHz, 5013 MHz, 5017 MHz | -76.7 dBm | - | 0.08% | 0.06% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#157e20" /></svg> | QoS Null [HE-TB, HE-MCS 4, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 5 | 0.25% | 34.0 B | 0.0 B | 96.4 us | 0.0 us | 5006 MHz, 5010 MHz, 5016 MHz | -78.2 dBm | - | 0.07% | 0.05% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#13490e" /></svg> | QoS Null [HE-TB, HE-MCS 5, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 10 | 0.50% | 34.0 B | 0.0 B | 81.3 us | 0.0 us | 5002 MHz, 5008 MHz, 5010 MHz, 5014 MHz, 5016 MHz | -76.2 dBm | - | 0.11% | 0.08% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 0x0000 | 524 | 23.88% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -78.9 dBm | - | 52.73% | 32.56% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1ddd30" /></svg> | QoS Data [HE-TB, HE-MCS 2, 106-tone RU, GI 3.2 us, NSS 2, LDPC, A-MPDU] | 0x0000 | 187 | 8.52% | 1070.0 B | 0.0 B | 483.6 us | 0.0 us | 5015 MHz | -75.0 dBm | - | 14.65% | 9.04% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#22d334" /></svg> | QoS Data [HE-TB, HE-MCS 2, 106-tone RU, GI 3.2 us, NSS 3, LDPC, A-MPDU] | 0x0000 | 187 | 8.52% | 1070.0 B | 0.0 B | 334.4 us | 0.0 us | 5005 MHz | -75.0 dBm | - | 10.13% | 6.25% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#3dd02f" /></svg> | QoS Data [HE-TB, HE-MCS 2, 26-tone RU, GI 3.2 us, NSS 3, LDPC, A-MPDU] | 0x0000 | 1 | 0.05% | 1070.0 B | 0.0 B | 1304.1 us | 0.0 us | 5002 MHz | -75.0 dBm | - | 0.21% | 0.13% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#22c933" /></svg> | QoS Data [HE-TB, HE-MCS 2, 52-tone RU, GI 3.2 us, NSS 2, LDPC, A-MPDU] | 0x0000 | 1 | 0.05% | 1070.0 B | 0.0 B | 987.1 us | 0.0 us | 5007 MHz | -75.0 dBm | - | 0.16% | 0.10% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0a480c" /></svg> | QoS Null [HE-TB, HE-MCS 0, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 1 | 0.05% | 34.0 B | 0.0 B | 121.3 us | 0.0 us | 5015 MHz | -79.0 dBm | - | 0.02% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0c420b" /></svg> | QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 0x0000 | 75 | 3.42% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -76.3 dBm | - | 4.84% | 2.99% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0d790b" /></svg> | QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 187 | 8.52% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5010 MHz | -79.0 dBm | - | 12.07% | 7.46% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | - | 384 | 19.28% | 47.7 B | 6.7 B | 35.9 us | 2.2 us | 5010 MHz | - | 20.0 dBm | 1.90% | 1.38% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | - | 383 | 19.23% | 57.9 B | 1.4 B | 39.3 us | 0.5 us | 5010 MHz | - | 20.0 dBm | 2.07% | 1.51% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | - | 99 | 4.97% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 0.34% | 0.24% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | - | 255 | 11.62% | 48.6 B | 8.1 B | 36.2 us | 2.7 us | 5010 MHz | - | 20.0 dBm | 1.49% | 0.92% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | - | 254 | 11.58% | 57.9 B | 1.7 B | 39.3 us | 0.6 us | 5010 MHz | - | 20.0 dBm | 1.62% | 1.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | - | 522 | 23.79% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 2.09% | 1.29% |
 
 #### [script] Representative frame-exchange timeline
 
@@ -842,30 +755,19 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1992*
 Frame numbers are local to capture `Ofdma72Mbps-#0Lan80211AxUlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
 ### [script] Configuration: `UlMuMimo72MbpsLeakage001`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1292**
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1996**
 
 | Color | Frame Type & Subtype | BSS Color | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 0x0000 | 388 | 30.03% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -75.6 dBm | - | 68.66% | 24.11% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#31d831" /></svg> | QoS Data [HE-TB, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 30 | 2.32% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -79.0 dBm | - | 5.31% | 1.86% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#31d62e" /></svg> | QoS Data [HE-TB, HE-MCS 2, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 2 | 0.15% | 1070.0 B | 0.0 B | 931.2 us | 0.0 us | 5005 MHz | -75.0 dBm | - | 0.53% | 0.19% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24ae34" /></svg> | QoS Data [HE-TB, HE-MCS 2, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 82 | 6.35% | 1070.0 B | 0.0 B | 426.2 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 9.95% | 3.49% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#33c52b" /></svg> | QoS Data [HE-TB, HE-MCS 3, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 1 | 0.08% | 1070.0 B | 0.0 B | 328.6 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 0.09% | 0.03% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#3acf41" /></svg> | QoS Data [HE-TB, HE-MCS 5, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 1 | 0.08% | 1070.0 B | 0.0 B | 371.7 us | 0.0 us | 5005 MHz | -75.0 dBm | - | 0.11% | 0.04% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#28bc15" /></svg> | QoS Data [HE-TB, HE-MCS 6, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 2 | 0.15% | 1070.0 B | 0.0 B | 334.4 us | 0.0 us | 5005 MHz | -77.0 dBm | - | 0.19% | 0.07% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1adb1d" /></svg> | QoS Data [HE-TB, HE-MCS 6, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 1 | 0.08% | 1070.0 B | 0.0 B | 166.1 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 0.05% | 0.02% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1ad51a" /></svg> | QoS Data [HE-TB, HE-MCS 7, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 2 | 0.15% | 1070.0 B | 0.0 B | 304.5 us | 0.0 us | 5015 MHz | -77.0 dBm | - | 0.17% | 0.06% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#16a729" /></svg> | QoS Data [HE-TB, HE-MCS 7, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 2 | 0.15% | 1070.0 B | 0.0 B | 153.1 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 0.09% | 0.03% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2ce241" /></svg> | QoS Data [HE-TB, HE-MCS 8, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 1 | 0.08% | 1070.0 B | 0.0 B | 259.8 us | 0.0 us | 5005 MHz | -75.0 dBm | - | 0.07% | 0.03% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#21c01b" /></svg> | QoS Data [HE-TB, HE-MCS 8, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 1 | 0.08% | 1070.0 B | 0.0 B | 133.5 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 0.04% | 0.01% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24ba1c" /></svg> | QoS Data [HE-TB, HE-MCS 9, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 2 | 0.15% | 1070.0 B | 0.0 B | 237.4 us | 0.0 us | 5005 MHz | -77.0 dBm | - | 0.14% | 0.05% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#22d831" /></svg> | QoS Data [HE-TB, HE-MCS 9, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 1 | 0.08% | 1070.0 B | 0.0 B | 123.8 us | 0.0 us | 5010 MHz | -79.0 dBm | - | 0.04% | 0.01% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2db934" /></svg> | QoS Data [HE-TB, HE-MCS 9, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 3 | 0.23% | 1070.0 B | 0.0 B | 464.0 us | 0.0 us | 5003 MHz, 5013 MHz, 5017 MHz | -79.0 dBm | - | 0.40% | 0.14% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0c420b" /></svg> | QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 0x0000 | 75 | 5.80% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -76.3 dBm | - | 8.52% | 2.99% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 0x0000 | 108 | 5.41% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -76.2 dBm | - | 10.59% | 6.71% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#36c723" /></svg> | QoS Data [HE-TB, HE-MCS 0, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 315 | 15.78% | 1070.0 B | 0.0 B | 1206.6 us | 0.0 us | 5010 MHz | -79.0 dBm | - | 60.00% | 38.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2dbe36" /></svg> | QoS Data [HE-TB, HE-MCS 2, 242-tone RU, GI 3.2 us, NSS 2, LDPC, A-MPDU] | 0x0000 | 315 | 15.78% | 1070.0 B | 0.0 B | 231.1 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 11.49% | 7.28% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#19cc25" /></svg> | QoS Data [HE-TB, HE-MCS 2, 242-tone RU, GI 3.2 us, NSS 3, LDPC, A-MPDU] | 0x0000 | 315 | 15.78% | 1070.0 B | 0.0 B | 166.1 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 8.26% | 5.23% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0c420b" /></svg> | QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 0x0000 | 75 | 3.76% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -76.3 dBm | - | 4.72% | 2.99% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | - | 157 | 12.15% | 40.2 B | 14.3 B | 33.4 us | 4.8 us | 5010 MHz | - | 20.0 dBm | 1.49% | 0.52% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | - | 157 | 12.15% | 37.8 B | 8.8 B | 32.6 us | 2.9 us | 5010 MHz | - | 20.0 dBm | 1.46% | 0.51% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | - | 384 | 29.72% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 2.70% | 0.95% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | - | 381 | 19.09% | 47.7 B | 6.7 B | 35.9 us | 2.2 us | 5010 MHz | - | 20.0 dBm | 2.16% | 1.37% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | - | 381 | 19.09% | 57.9 B | 1.4 B | 39.3 us | 0.5 us | 5010 MHz | - | 20.0 dBm | 2.36% | 1.50% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | - | 106 | 5.31% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 0.41% | 0.26% |
 
 #### [script] Representative frame-exchange timeline
 
