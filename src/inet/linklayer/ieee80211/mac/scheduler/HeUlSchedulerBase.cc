@@ -8,6 +8,9 @@
 
 #include <sstream>
 
+#include "inet/common/ModuleAccess.h"
+#include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
+#include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 
 // Base class for HE UL OFDMA schedulers.
@@ -99,9 +102,19 @@ int HeUlSchedulerBase::selectMcs(const ScheduleContext& context, const Candidate
             candidate.negotiatedHeCapabilities.localRxPeerTx.valid)
         constraints.directionalCapabilities =
                 candidate.negotiatedHeCapabilities.localRxPeerTx;
-    if (candidate.hasFreshPathLoss)
-        heRateControl->reportHeRxSnir(candidate.staAddress,
-                context.targetRssiMarginDb + context.apSensitivityDbm - context.apSensitivityDbm);
+    if (candidate.hasFreshPathLoss) {
+        double targetRssiDbm = context.apSensitivityDbm + context.targetRssiMarginDb;
+        double staTxPowerDbm = targetRssiDbm + candidate.pathLossDb;
+        cModule *nic = getContainingNicModule(this);
+        if (auto mib = dynamic_cast<Ieee80211Mib *>(nic->getSubmodule("mib"))) {
+            if (const auto link = mib->findStationLink(candidate.staAddress)) {
+                staTxPowerDbm = std::min(link->transmitPowerDbm, targetRssiDbm + candidate.pathLossDb);
+            }
+        }
+        double rxPowerDbm = staTxPowerDbm - candidate.pathLossDb;
+        double estimatedSnrDb = rxPowerDbm - context.apSensitivityDbm;
+        heRateControl->reportHeRxSnir(candidate.staAddress, estimatedSnrDb);
+    }
     auto selection = heRateControl->selectHeMode(candidate.staAddress, context.channelBandwidth,
             ru.toneSize, physicallayer::HE_TRIGGER_BASED_UPLINK, 1, constraints);
     return selection.mode == nullptr ? defaultMcs : selection.mcs;
