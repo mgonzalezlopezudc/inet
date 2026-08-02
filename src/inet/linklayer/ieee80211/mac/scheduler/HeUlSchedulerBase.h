@@ -29,6 +29,8 @@ class INET_API HeUlSchedulerBase : public IIeee80211HeUlScheduler, public Simple
     int minRandomAccessRus = 1;
     int maxRandomAccessRus = 4;
     int defaultMcs = 0;
+    std::string mcsSelectionPolicy;
+    std::vector<double> mcsSnrThresholds;
     IIeee80211HeRateControl *heRateControl = nullptr;
     int lastCandidateCount = 0;
     int lastScheduledUserCount = 0;
@@ -44,6 +46,9 @@ class INET_API HeUlSchedulerBase : public IIeee80211HeUlScheduler, public Simple
     virtual void initialize(int stage) override;
     virtual int computeRandomAccessRuCount(const ScheduleContext& context, int availableRus) const;
     virtual int computeTargetRssiDbm(const ScheduleContext& context) const;
+    virtual double estimateSnrDb(const ScheduleContext& context, const CandidateInfo& candidate) const;
+    virtual int selectMcsBySnr(double snrDb, const CandidateInfo& candidate,
+            const physicallayer::Ieee80211HeRu& ru, int nss) const;
     virtual int selectMcs(const ScheduleContext& context, const CandidateInfo& candidate,
             const physicallayer::Ieee80211HeRu& ru, int nss = 1) const;
     virtual simtime_t computeCommonDuration(const ScheduleContext& context,

@@ -39,6 +39,18 @@ void HeUlSchedulerBase::initialize(int stage)
         minRandomAccessRus = par("minRandomAccessRus");
         maxRandomAccessRus = par("maxRandomAccessRus");
         defaultMcs = par("defaultMcs");
+        mcsSelectionPolicy = par("mcsSelectionPolicy").stdstringValue();
+        if (mcsSelectionPolicy != "rateControl" && mcsSelectionPolicy != "snrThresholds")
+            throw cRuntimeError("Unknown HE UL MCS selection policy '%s'", mcsSelectionPolicy.c_str());
+        std::stringstream stream(par("heMcsSnrThresholds").stdstringValue());
+        double value;
+        while (stream >> value)
+            mcsSnrThresholds.push_back(value);
+        if (mcsSnrThresholds.size() != 12)
+            throw cRuntimeError("heMcsSnrThresholds must contain exactly 12 values");
+        for (size_t i = 1; i < mcsSnrThresholds.size(); ++i)
+            if (mcsSnrThresholds[i] < mcsSnrThresholds[i - 1])
+                throw cRuntimeError("heMcsSnrThresholds must be nondecreasing");
         const char *heRateControlModule = par("heRateControlModule");
         heRateControl = *heRateControlModule == '\0' ? nullptr :
                 dynamic_cast<IIeee80211HeRateControl *>(getModuleByPath(heRateControlModule));
@@ -91,10 +103,54 @@ int HeUlSchedulerBase::computeTargetRssiDbm(const ScheduleContext& context) cons
     return (int)std::round(context.apSensitivityDbm + context.targetRssiMarginDb);
 }
 
+double HeUlSchedulerBase::estimateSnrDb(const ScheduleContext& context, const CandidateInfo& candidate) const
+{
+    if (!candidate.hasFreshPathLoss)
+        return NaN;
+    double targetRssiDbm = context.apSensitivityDbm + context.targetRssiMarginDb;
+    double staTxPowerDbm = targetRssiDbm + candidate.pathLossDb;
+    cModule *nic = getContainingNicModule(this);
+    if (auto mib = dynamic_cast<Ieee80211Mib *>(nic->getSubmodule("mib"))) {
+        if (const auto link = mib->findStationLink(candidate.staAddress))
+            staTxPowerDbm = std::min(link->transmitPowerDbm, targetRssiDbm + candidate.pathLossDb);
+    }
+    double rxPowerDbm = staTxPowerDbm - candidate.pathLossDb;
+    return rxPowerDbm - context.apSensitivityDbm;
+}
+
+int HeUlSchedulerBase::selectMcsBySnr(double snrDb, const CandidateInfo& candidate,
+        const physicallayer::Ieee80211HeRu& ru, int nss) const
+{
+    if (!candidate.hasFreshPathLoss || !std::isfinite(snrDb))
+        return defaultMcs;
+    int maxMcs = 9; // Keep HE-TB robust unless a later policy explicitly widens this cap.
+    if (candidate.hasNegotiatedHeCapabilities &&
+            candidate.negotiatedHeCapabilities.localRxPeerTx.valid) {
+        int nssIndex = std::clamp(nss - 1, 0, 7);
+        maxMcs = std::min(maxMcs,
+                candidate.negotiatedHeCapabilities.localRxPeerTx.mcsNss.maxMcsPerNss[nssIndex]);
+    }
+    if (maxMcs < 0)
+        return defaultMcs;
+    int mcs = 0;
+    for (int i = 0; i <= maxMcs; ++i) {
+        if (snrDb >= mcsSnrThresholds[i])
+            mcs = i;
+    }
+    while (mcs > 0 && !physicallayer::isHeValidMcsNssCombination(mcs, nss, ru.toneSize))
+        --mcs;
+    return mcs;
+}
+
 int HeUlSchedulerBase::selectMcs(const ScheduleContext& context, const CandidateInfo& candidate,
         const physicallayer::Ieee80211HeRu& ru, int nss) const
 {
-    if (heRateControl == nullptr || candidate.associationId == 0)
+    if (candidate.associationId == 0)
+        return defaultMcs;
+    double estimatedSnrDb = estimateSnrDb(context, candidate);
+    if (mcsSelectionPolicy == "snrThresholds")
+        return selectMcsBySnr(estimatedSnrDb, candidate, ru, nss);
+    if (heRateControl == nullptr)
         return defaultMcs;
     IIeee80211HeRateControl::Constraints constraints;
     constraints.maxMcs = 9; // keep HE-TB robust unless LDPC/user constraints explicitly widen later
@@ -102,19 +158,8 @@ int HeUlSchedulerBase::selectMcs(const ScheduleContext& context, const Candidate
             candidate.negotiatedHeCapabilities.localRxPeerTx.valid)
         constraints.directionalCapabilities =
                 candidate.negotiatedHeCapabilities.localRxPeerTx;
-    if (candidate.hasFreshPathLoss) {
-        double targetRssiDbm = context.apSensitivityDbm + context.targetRssiMarginDb;
-        double staTxPowerDbm = targetRssiDbm + candidate.pathLossDb;
-        cModule *nic = getContainingNicModule(this);
-        if (auto mib = dynamic_cast<Ieee80211Mib *>(nic->getSubmodule("mib"))) {
-            if (const auto link = mib->findStationLink(candidate.staAddress)) {
-                staTxPowerDbm = std::min(link->transmitPowerDbm, targetRssiDbm + candidate.pathLossDb);
-            }
-        }
-        double rxPowerDbm = staTxPowerDbm - candidate.pathLossDb;
-        double estimatedSnrDb = rxPowerDbm - context.apSensitivityDbm;
+    if (std::isfinite(estimatedSnrDb))
         heRateControl->reportHeRxSnir(candidate.staAddress, estimatedSnrDb);
-    }
     auto selection = heRateControl->selectHeMode(candidate.staAddress, context.channelBandwidth,
             ru.toneSize, physicallayer::HE_TRIGGER_BASED_UPLINK, nss, constraints);
     return selection.mode == nullptr ? defaultMcs : selection.mcs;

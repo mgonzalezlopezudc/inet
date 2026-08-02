@@ -18,5 +18,7 @@ simple HeUlSchedulerBacklogBased like IIeee80211HeUlScheduler
         int minRandomAccessRus = default(1); // Minimum RUs reserved for UORA when space permits
         int maxRandomAccessRus = default(4); // Maximum RUs reserved for UORA
         int defaultMcs = default(0); // MCS encoded for scheduled and random-access HE-TB responses
+        string mcsSelectionPolicy = default("rateControl"); // "rateControl" or direct estimated-SNR threshold selection
+        string heMcsSnrThresholds = default("4 7 10 13 16 19 21 24 27 30 33 36"); // Minimum estimated SNRs in dB for HE MCS 0..11
         string heRateControlModule = default(""); // Optional IIeee80211HeRateControl provider for scheduled users
 }
