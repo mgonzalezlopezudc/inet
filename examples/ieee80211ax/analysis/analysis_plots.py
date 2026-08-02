@@ -897,7 +897,7 @@ def plot_mimo(conditions: list[Condition], output: Path) -> None:
     plot_labels = []
     for condition in conditions:
         load = condition.condition_metadata.get("offered_aggregate_mbps")
-        method = "OFDMA" if "OFDMA" in condition.label else "MU-MIMO"
+        method = "SU-MIMO" if "SU" in condition.label else ("OFDMA" if "OFDMA" in condition.label else "MU-MIMO")
         label = f"{method}\n{load:g}" if load is not None else method
         if condition.condition_metadata.get("csi_leakage") == 0.001:
             label += "\nleak .001"

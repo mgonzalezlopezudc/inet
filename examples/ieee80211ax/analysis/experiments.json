@@ -158,17 +158,15 @@
       "expected_repetitions": 5,
       "measurement": {"start": 0.55, "end": 0.88},
       "conditions": [
-        {"label": "OFDMA, 24 Mbps", "config": "EqualSizedRUs_fBW", "metadata": {"offered_aggregate_mbps": 24, "csi_leakage": null}},
-        {"label": "MU-MIMO, 24 Mbps, leakage 0.01", "config": "DlMuMimo", "metadata": {"offered_aggregate_mbps": 24, "csi_leakage": 0.01}},
-        {"label": "MU-MIMO, 24 Mbps, leakage 0.001", "config": "DlMuMimo24MbpsLeakage001", "metadata": {"offered_aggregate_mbps": 24, "csi_leakage": 0.001}},
-        {"label": "OFDMA, 48 Mbps", "config": "EqualSizedRUs48Mbps", "metadata": {"offered_aggregate_mbps": 48, "csi_leakage": null}},
-        {"label": "MU-MIMO, 48 Mbps, leakage 0.01", "config": "DlMuMimo48MbpsLeakage01", "metadata": {"offered_aggregate_mbps": 48, "csi_leakage": 0.01}},
-        {"label": "OFDMA, 72 Mbps", "config": "EqualSizedRUs72Mbps", "metadata": {"offered_aggregate_mbps": 72, "csi_leakage": null}},
-        {"label": "MU-MIMO, 72 Mbps, leakage 0.01", "config": "DlMuMimo72MbpsLeakage01", "metadata": {"offered_aggregate_mbps": 72, "csi_leakage": 0.01}},
-        {"label": "OFDMA, 96 Mbps", "config": "EqualSizedRUs96Mbps", "metadata": {"offered_aggregate_mbps": 96, "csi_leakage": null}},
-        {"label": "MU-MIMO, 96 Mbps, leakage 0.01", "config": "DlMuMimo96MbpsLeakage01", "metadata": {"offered_aggregate_mbps": 96, "csi_leakage": 0.01}},
-        {"label": "OFDMA, 24 Mbps, NSS {3,1,2}", "config": "EqualSizedRUs24MbpsSta1Antenna", "metadata": {"offered_aggregate_mbps": 24, "csi_leakage": null, "sta_receive_nss": [3, 1, 2]}},
-        {"label": "MU-MIMO, 24 Mbps, leakage 0.001, NSS {3,1,2}", "config": "DlMuMimo24MbpsLeakage001Sta1Antenna", "metadata": {"offered_aggregate_mbps": 24, "csi_leakage": 0.001, "sta_receive_nss": [3, 1, 2]}}
+        {"label": "SU-MIMO, 24 Mbps", "config": "SuMimo24Mbps", "metadata": {"offered_aggregate_mbps": 24, "csi_leakage": null, "mode": "su_mimo"}},
+        {"label": "OFDMA, 24 Mbps", "config": "OfdmaSuMimo24Mbps", "metadata": {"offered_aggregate_mbps": 24, "csi_leakage": null, "mode": "ofdma_su_mimo"}},
+        {"label": "MU-MIMO, 24 Mbps, leakage 0.001", "config": "DlMuMimo24MbpsLeakage001", "metadata": {"offered_aggregate_mbps": 24, "csi_leakage": 0.001, "mode": "mu_mimo"}},
+        {"label": "SU-MIMO, 48 Mbps", "config": "SuMimo48Mbps", "metadata": {"offered_aggregate_mbps": 48, "csi_leakage": null, "mode": "su_mimo"}},
+        {"label": "OFDMA, 48 Mbps", "config": "OfdmaSuMimo48Mbps", "metadata": {"offered_aggregate_mbps": 48, "csi_leakage": null, "mode": "ofdma_su_mimo"}},
+        {"label": "MU-MIMO, 48 Mbps, leakage 0.001", "config": "DlMuMimo48MbpsLeakage001", "metadata": {"offered_aggregate_mbps": 48, "csi_leakage": 0.001, "mode": "mu_mimo"}},
+        {"label": "SU-MIMO, 72 Mbps", "config": "SuMimo72Mbps", "metadata": {"offered_aggregate_mbps": 72, "csi_leakage": null, "mode": "su_mimo"}},
+        {"label": "OFDMA, 72 Mbps", "config": "OfdmaSuMimo72Mbps", "metadata": {"offered_aggregate_mbps": 72, "csi_leakage": null, "mode": "ofdma_su_mimo"}},
+        {"label": "MU-MIMO, 72 Mbps, leakage 0.001", "config": "DlMuMimo72MbpsLeakage001", "metadata": {"offered_aggregate_mbps": 72, "csi_leakage": 0.001, "mode": "mu_mimo"}}
       ]
     },
     "bss": {
