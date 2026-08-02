@@ -5,6 +5,9 @@
 //
 
 #include "inet/linklayer/ieee80211/mac/scheduler/HeUlSchedulerEqualSizedRUs.h"
+
+#include <algorithm>
+
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 
 namespace inet {
@@ -45,11 +48,20 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerEqualSizedRUs::schedule(const Sch
         allocation.tid = candidate.selectedTid;
         allocation.accessCategory = candidate.selectedAccessCategory;
         allocation.ru = layout[i];
-        allocation.mcs = selectMcs(context, candidate, allocation.ru);
+        int maximumNss = 1;
+        if (candidate.hasNegotiatedHeCapabilities &&
+                candidate.negotiatedHeCapabilities.localRxPeerTx.valid)
+            maximumNss = getMaxNss(candidate.negotiatedHeCapabilities.localRxPeerTx.mcsNss);
+        maximumNss = std::clamp(maximumNss, 1,
+                candidate.coding == physicallayer::HE_CODING_BCC ? 4 : 8);
+        allocation.numberOfSpatialStreams = maximumNss;
+        allocation.coding = candidate.coding;
+        allocation.mcs = selectMcs(context, candidate, allocation.ru, maximumNss);
         allocation.targetRssiDbm = targetRssiDbm;
         allocation.estimatedDuration = physicallayer::estimateHeMuUserDuration(
                 B(std::max<int64_t>(1, candidate.getSelectedBacklogBytes())),
-                allocation.ru.toneSize, allocation.mcs);
+                allocation.ru.toneSize, allocation.mcs, allocation.numberOfSpatialStreams,
+                false);
         result.allocations.push_back(allocation);
     }
     for (int i = 0; i < raCount; i++) {

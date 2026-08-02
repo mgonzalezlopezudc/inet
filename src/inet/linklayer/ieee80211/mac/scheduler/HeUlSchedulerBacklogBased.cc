@@ -188,7 +188,13 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerBacklogBased::schedule(
         if (maxSupportedNss < 1)
             maxSupportedNss = 1;
 
-        int nss = (requestedNss > 0) ? std::min(requestedNss, maxSupportedNss) : 1;
+        // UL OFDMA assigns users to separate RUs, so each non-MU user may use
+        // all of its negotiated spatial streams within its assigned RU. Keep
+        // the explicit request for the full-bandwidth UL MU-MIMO path, but
+        // constrain both paths by the coding rules enforced by the PHY.
+        maxSupportedNss = std::min(maxSupportedNss,
+                candidate.coding == physicallayer::HE_CODING_BCC ? 4 : 8);
+        int nss = requestedNss > 0 ? std::min(requestedNss, maxSupportedNss) : maxSupportedNss;
         allocation.numberOfSpatialStreams = nss;
         allocation.mcs = selectMcs(context, candidate, ru, nss);
         allocation.coding = candidate.coding;

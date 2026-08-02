@@ -459,6 +459,50 @@ EV << "UL scheduled and UORA layouts passed for 20/40/80/160 MHz.\n";
 }
 
 {
+    auto context = makeContext(MHz(20));
+    context.candidates.resize(3);
+    context.estimatedRandomAccessContenders = 0;
+    const int supportedNss[] = {3, 1, 2};
+    for (int i = 0; i < 3; ++i) {
+        auto& candidate = context.candidates[i];
+        candidate.hasTypedBacklogEstimates = true;
+        candidate.hasFreshReport = true;
+        candidate.backlogBytes = {};
+        candidate.backlogBytes[AC_BE] = 4000;
+        candidate.hasNegotiatedHeCapabilities = true;
+        auto& capabilities = candidate.negotiatedHeCapabilities.localRxPeerTx;
+        capabilities.valid = true;
+        capabilities.ofdma = true;
+        capabilities.supportedChannelWidths = {MHz(20)};
+        capabilities.supportedRuToneSizes = {26, 52, 106, 242};
+        capabilities.mcsNss.maxMcsPerNss.fill(-1);
+        for (int nss = 0; nss < supportedNss[i]; ++nss)
+            capabilities.mcsNss.maxMcsPerNss[nss] = 11;
+    }
+    auto schedule = probeScheduler->schedule(context);
+    ASSERT(schedule.allocations.size() == 3);
+    for (int i = 0; i < 3; ++i) {
+        const auto& allocation = schedule.allocations[i];
+        ASSERT(allocation.numberOfSpatialStreams == supportedNss[i]);
+        ASSERT(!allocation.muMimo);
+        ASSERT(allocation.streamStartIndex == 0);
+    }
+    auto equalSchedule = equalScheduler->schedule(context);
+    std::vector<IIeee80211HeUlScheduler::RuAllocation> equalAllocations;
+    for (const auto& allocation : equalSchedule.allocations)
+        if (!allocation.randomAccess)
+            equalAllocations.push_back(allocation);
+    ASSERT(equalAllocations.size() == 3);
+    for (int i = 0; i < 3; ++i) {
+        const auto& allocation = equalAllocations[i];
+        ASSERT(allocation.numberOfSpatialStreams == supportedNss[i]);
+        ASSERT(!allocation.muMimo);
+        ASSERT(allocation.streamStartIndex == 0);
+    }
+    EV << "OFDMA users used their negotiated per-RU NSS independently.\n";
+}
+
+{
     auto context = makeContext(MHz(160));
     context.candidates.clear();
     context.estimatedRandomAccessContenders = 0;

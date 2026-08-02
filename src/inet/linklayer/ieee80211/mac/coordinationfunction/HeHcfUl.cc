@@ -600,6 +600,8 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
     else {
         int staleOrUnknown = 0;
         int fullBandwidthMuMimoCandidates = 0;
+        int maximumOFDMAUserNss = 1;
+        int totalUlMuMimoNss = 0;
         const auto fullBandwidthRu = physicallayer::getHeEqualRuLayout(
                 centerFrequency, channelBandwidth, 1).front();
         for (const auto& station : mac->getMib()->bssAccessPointData.stations) {
@@ -627,9 +629,23 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
                             fullBandwidthRu.toneSize) != 0 &&
                     negotiated->localRxPeerTx.mcsNss.maxMcsPerNss[0] >= 0)
                 fullBandwidthMuMimoCandidates++;
+            if (hasServiceRequest && !disabled && negotiated != nullptr &&
+                    negotiated->localRxPeerTx.valid &&
+                    negotiated->localRxPeerTx.ofdma &&
+                    negotiated->localRxPeerTx.supportedChannelWidths.count(channelBandwidth) != 0 &&
+                    !negotiated->localRxPeerTx.supportedRuToneSizes.empty()) {
+                int maximumNss = getMaxNss(negotiated->localRxPeerTx.mcsNss);
+                if (!(mac->getMib()->localHeCapabilities.ldpc && negotiated->mutual.ldpc))
+                    maximumNss = std::min(maximumNss, 4);
+                maximumOFDMAUserNss = std::max(maximumOFDMAUserNss, maximumNss);
+                if (negotiated->localRxPeerTx.fullBandwidthUlMuMimo)
+                    totalUlMuMimoNss += std::min(maximumNss, 4);
+            }
         }
         useUlMuMimoPolicy = par("enableUlMuMimo").boolValue() &&
                 fullBandwidthMuMimoCandidates >= 2;
+        int boundaryNss = useUlMuMimoPolicy ? std::min(totalUlMuMimoNss, 8) :
+                maximumOFDMAUserNss;
         physicallayer::Ieee80211HeTbCapacityBoundary capacityBoundary;
         const auto boundaryLayout = physicallayer::getHeEqualRuLayout(centerFrequency,
                 channelBandwidth, physicallayer::getHeMaxRuCount(channelBandwidth));
@@ -637,10 +653,12 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
         boundaryUser.ru = boundaryLayout.front();
         boundaryUser.mcs = 0;
         boundaryUser.coding = physicallayer::HE_CODING_BCC;
+        boundaryUser.numberOfSpatialStreams = std::min(boundaryNss, 4);
         boundaryUser.psduLength = B(1);
         auto boundaryLdpcUser = boundaryUser;
         boundaryLdpcUser.ru = boundaryLayout[1];
         boundaryLdpcUser.coding = physicallayer::HE_CODING_LDPC;
+        boundaryLdpcUser.numberOfSpatialStreams = boundaryNss;
         physicallayer::Ieee80211HeTriggerResponseFinalizationRequest boundaryRequest;
         // Seed both coding families so the immutable common boundary is not
         // derived from a one-user BCC-only approximation.
