@@ -227,11 +227,16 @@
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 0.95},
       "conditions": [
-        {"label": "Triggered BAR (fBW)", "config": "TriggeredBar", "metadata": {"workload": "symmetric"}},
-        {"label": "Sequential BAR (fBW)", "config": "SequentialBar", "metadata": {"workload": "symmetric"}},
-        {"label": "Triggered BAR (fHoL)", "config": "TriggeredBarfHoL", "metadata": {"workload": "symmetric"}},
-        {"label": "Sequential BAR (fHoL)", "config": "SequentialBarfHoL", "metadata": {"workload": "symmetric"}},
-        {"label": "DL SU Baseline", "config": "SuBaseline", "metadata": {"workload": "symmetric"}}
+        {"label": "Triggered BAR (fBW, 0.5ms)", "config": "TriggeredBar", "metadata": {"workload": "symmetric", "send_interval": "0.5ms"}},
+        {"label": "Sequential BAR (fBW, 0.5ms)", "config": "SequentialBar", "metadata": {"workload": "symmetric", "send_interval": "0.5ms"}},
+        {"label": "Triggered BAR (fHoL, 0.5ms)", "config": "TriggeredBarfHoL", "metadata": {"workload": "symmetric", "send_interval": "0.5ms"}},
+        {"label": "Sequential BAR (fHoL, 0.5ms)", "config": "SequentialBarfHoL", "metadata": {"workload": "symmetric", "send_interval": "0.5ms"}},
+        {"label": "DL SU Baseline (0.5ms)", "config": "SuBaseline", "metadata": {"workload": "symmetric", "send_interval": "0.5ms"}},
+        {"label": "Triggered BAR (fBW, 1ms)", "config": "TriggeredBar_1ms", "metadata": {"workload": "symmetric", "send_interval": "1ms"}},
+        {"label": "Sequential BAR (fBW, 1ms)", "config": "SequentialBar_1ms", "metadata": {"workload": "symmetric", "send_interval": "1ms"}},
+        {"label": "Triggered BAR (fHoL, 1ms)", "config": "TriggeredBarfHoL_1ms", "metadata": {"workload": "symmetric", "send_interval": "1ms"}},
+        {"label": "Sequential BAR (fHoL, 1ms)", "config": "SequentialBarfHoL_1ms", "metadata": {"workload": "symmetric", "send_interval": "1ms"}},
+        {"label": "DL SU Baseline (1ms)", "config": "SuBaseline_1ms", "metadata": {"workload": "symmetric", "send_interval": "1ms"}}
       ]
     },
     "bsr": {

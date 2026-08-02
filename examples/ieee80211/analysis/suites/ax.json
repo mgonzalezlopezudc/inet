@@ -107,7 +107,7 @@
     "dl_ofdma_bar": {
       "scalar_vector_group": "dl_bar",
       "ini": "dl_ofdma_bar/omnetpp.ini",
-      "configurations": ["TriggeredBar", "SequentialBar", "TriggeredBarfHoL", "SequentialBarfHoL", "SuBaseline"],
+      "configurations": ["TriggeredBar", "SequentialBar", "TriggeredBarfHoL", "SequentialBarfHoL", "SuBaseline", "TriggeredBar_1ms", "SequentialBar_1ms", "TriggeredBarfHoL_1ms", "SequentialBarfHoL_1ms", "SuBaseline_1ms"],
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["ofdma", "block-ack"]
     },

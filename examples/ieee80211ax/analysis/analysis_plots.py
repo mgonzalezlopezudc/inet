@@ -1013,21 +1013,33 @@ def plot_ul_ofdma(conditions: list[Condition], output: Path) -> None:
     )
 
 def plot_dl_bar(conditions: list[Condition], output: Path) -> None:
-    """Compare DL-BAR acknowledgment methods using aggregate goodput and 95th-percentile delay."""
-    goodputs = [per_run_goodput(condition) for condition in conditions]
-    delays = [per_run_delay_percentile(condition, 95) for condition in conditions]
-    labels = [condition.label for condition in conditions]
-    fig, axes = plt.subplots(1, 2, figsize=(max(12, len(conditions) * 2.2), 5.0))
-    bar_with_ci(axes[0], labels, goodputs, "goodput_bps", scale=1e-6)
-    bar_with_ci(axes[1], labels, delays, "delay_s", scale=1e3)
-    axes[0].set_ylabel("Aggregate goodput [Mbit/s]")
-    axes[1].set_ylabel("95th-percentile end-to-end delay [ms]")
-    axes[0].set_title("Application goodput")
-    axes[1].set_title("95th-percentile delay")
-    for axis in axes:
-        axis.grid(axis="y", alpha=0.3)
-    fig.suptitle("Downlink OFDMA Block Ack Request comparison")
-    save(fig, output)
+    """Compare DL-BAR acknowledgment methods using aggregate goodput and 95th-percentile delay for 0.5ms and 1ms workloads."""
+    conds_0_5ms = [c for c in conditions if c.condition_metadata.get("send_interval") == "0.5ms" or "1ms" not in c.config]
+    conds_1ms = [c for c in conditions if c.condition_metadata.get("send_interval") == "1ms" or "1ms" in c.config]
+
+    def render_fig(sub_conds: list[Condition], target_output: Path, title_suffix: str) -> None:
+        if not sub_conds:
+            return
+        goodputs = [per_run_goodput(condition) for condition in sub_conds]
+        delays = [per_run_delay_percentile(condition, 95) for condition in sub_conds]
+        labels = [condition.label.replace(" (0.5ms)", "").replace(" (1ms)", "") for condition in sub_conds]
+        fig, axes = plt.subplots(1, 2, figsize=(max(10, len(sub_conds) * 2.0), 4.8))
+        bar_with_ci(axes[0], labels, goodputs, "goodput_bps", scale=1e-6)
+        bar_with_ci(axes[1], labels, delays, "delay_s", scale=1e3)
+        axes[0].set_ylabel("Aggregate goodput [Mbit/s]")
+        axes[1].set_ylabel("95th-percentile end-to-end delay [ms]")
+        axes[0].set_title("Application goodput")
+        axes[1].set_title("95th-percentile delay")
+        for axis in axes:
+            axis.grid(axis="y", alpha=0.3)
+        fig.suptitle(f"Downlink OFDMA Block Ack Request comparison ({title_suffix})")
+        save(fig, target_output)
+
+    render_fig(conds_0_5ms if conds_0_5ms else conditions, output, "sendInterval = 0.5ms")
+    if conds_1ms and conds_0_5ms:
+        output_1ms = output.parent / "dl-bar-acknowledgment-dashboard-1ms.png"
+        render_fig(conds_1ms, output_1ms, "sendInterval = 1.0ms")
+
     write_provenance(
         output,
         conditions=conditions,

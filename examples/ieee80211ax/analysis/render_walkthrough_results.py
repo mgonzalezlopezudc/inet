@@ -409,10 +409,19 @@ def render_group(
     source_summary = source_filter_summary(sidecar_document)
     aggregation_summary = window_aggregation_summary(sidecar_document)
     runs_summary = independent_runs_summary(metrics_document[group_name])
+    figure_1ms = (
+        result_session_directory(group, session_id)
+        / "dl-bar-acknowledgment-dashboard-1ms.png"
+    )
+    figure_1ms_text = ""
+    if figure_1ms.is_file():
+        figure_1ms_link = relative_link(figure_1ms, walkthrough)
+        figure_1ms_text = f"![{group_name} 1ms scalar/vector analysis]({figure_1ms_link})\n\n"
 
     lines = [
         "### [script] Generated scalar/vector plot and table\n\n",
         f"![{group_name} scalar/vector analysis]({figure_link})\n\n",
+        figure_1ms_text,
         f"Figure provenance: [`{sidecar_link}`]({sidecar_link}). "
         f"Run-level metric source: [`{metrics_link}`]({metrics_link}).\n\n",
         "Common table provenance:\n\n",
