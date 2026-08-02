@@ -7,18 +7,18 @@
 - PCAP: `20260802T103416Z`
 <!-- END SCRIPT RESULTS SESSIONS -->
 
-`[agent]` results sessions: `20260802T093100Z`.
+`[agent]` results sessions: `20260802T103416Z`.
 
-This walkthrough compares **Triggered BAR (MU-BAR Trigger)**, **Sequential BAR**, and a **Downlink Single-User (DL SU)** baseline with Block Ack (BA) in IEEE 802.11ax Downlink OFDMA transmissions across 5 independent simulation repetitions.
+This walkthrough compares **Triggered BAR (MU-BAR Trigger)**, **Sequential BAR**, and a **Downlink Single-User (DL SU)** baseline with Block Ack (BA) in IEEE 802.11ax Downlink OFDMA transmissions across 10 configurations (two offered load regimes: `sendInterval = 0.5ms` high load and `sendInterval = 1.0ms` moderate load) across 5 independent simulation repetitions (50 runs total).
 
 ## [agent] Learning objectives and feature primer
 
 After completing this walkthrough, the reader can:
 
 - explain how downlink OFDMA acknowledges multi-user transmissions using either sequential unicast BARs or parallel trigger-based Block Acks via MU-BAR (direct observation);
-- compare the throughput, MAC overhead, and end-to-end latency of Triggered BAR (`muBarTrigger`), Sequential BAR (`sequentialBar`), and the single-user EDCA/HCF baseline (`SuBaseline`) from scalar/vector results (`SuBaseline-#0.sca`, `TriggeredBar-#0.vec`) (derived measurement);
-- inspect PCAP packet statistics and frame exchanges confirming MU-BAR Trigger allocation versus sequential BAR exchanges; and
-- reproduce the 5-run simulation campaign and validate the walkthrough.
+- compare the throughput, MAC overhead, and 95th-percentile end-to-end latency of Triggered BAR (`muBarTrigger`), Sequential BAR (`sequentialBar`), and single-user EDCA/HCF (`SuBaseline`) under `fBW` (bandwidth-maximizing) and `fHoL` (head-of-line fair) scheduler policies from scalar/vector results (`SuBaseline-#0.sca`, `TriggeredBar-#0.vec`) (derived measurement);
+- inspect PCAP packet statistics and frame exchanges confirming MU-BAR Trigger allocation versus sequential BAR exchanges across high offered load (`0.5ms` interval) and moderate offered load (`1.0ms` interval); and
+- reproduce the 50-run simulation campaign and validate the walkthrough.
 
 In Downlink OFDMA, after transmitting a DL MU PPDU containing A-MPDU payloads to multiple target stations (STAs), the Access Point (AP) must collect Block Ack (BA) responses:
 - **Triggered BAR (`muBarTrigger`)**: The AP sends a single MU-BAR Trigger control frame after SIFS. The Trigger frame assigns specific Uplink Resource Units (UL RUs) to each station. All destination stations respond concurrently in parallel UL HE-TB PPDUs after SIFS containing their Block Ack frames.
@@ -27,7 +27,10 @@ In Downlink OFDMA, after transmitting a DL MU PPDU containing A-MPDU payloads to
 
 ## [agent] Scenario description
 
-The [network](Lan80211AxDlOfdmaBar.ned) extends the common single-BSS HE network (`HeSingleBssNetwork`) with three fixed stations. The [configuration](omnetpp.ini) places the AP at `(250,200)` m, uses a 5 GHz 20 MHz channel, and sends three 1000-byte UDP flows from a wired server to `host[0]`, `host[1]`, and `host[2]` at 1 ms intervals (AC_VO / port 5000). A 100-byte warmup stream per host runs from 0.2 s to 0.25 s to establish ADDBA Block Ack agreements; measured data flows run from 0.3 s to 1.0 s.
+The [network](Lan80211AxDlOfdmaBar.ned) extends the common single-BSS HE network (`HeSingleBssNetwork`) with three fixed stations. The [configuration](omnetpp.ini) places the AP at `(250,200)` m, uses a 5 GHz 20 MHz channel, and sends three 100-byte UDP flows from a wired server to `host[0]`, `host[1]`, and `host[2]` (AC_VO / port 5000). A 100-byte warmup stream per host runs from 0.2 s to 0.25 s to establish ADDBA Block Ack agreements; measured data flows run from 0.3 s to 1.0 s across 10 configurations:
+
+- **High Offered Load (`sendInterval = 0.5ms` / ~4.8 Mbit/s aggregate)**: `TriggeredBar`, `SequentialBar`, `TriggeredBarfHoL`, `SequentialBarfHoL`, `SuBaseline`.
+- **Moderate Offered Load (`sendInterval = 1.0ms` / ~2.4 Mbit/s aggregate)**: `TriggeredBar_1ms`, `SequentialBar_1ms`, `TriggeredBarfHoL_1ms`, `SequentialBarfHoL_1ms`, `SuBaseline_1ms`.
 
 ```text
 server === wired LAN === AP  -- HE-MU DL (OFDMA) -->  host[0]
@@ -45,18 +48,25 @@ In INET, `HeHcf` implements `dlMuAckMethod = "muBarTrigger"` and `dlMuAckMethod 
 
 | Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
-| Triggered BAR transmits MU-BAR Trigger and parallel UL HE-TB Block Acks | `PASS` | run-0 AP PCAP (`TriggeredBar-#0Lan80211AxDlOfdmaBar.ap.wlan[0].pcap`), decoded MU-BAR and HE-TB frames | Session `20260802T093100Z`, run 0 | Direct observation |
+| Triggered BAR transmits MU-BAR Trigger and parallel UL HE-TB Block Acks | `PASS` | run-0 AP PCAP (`TriggeredBar-#0Lan80211AxDlOfdmaBar.ap.wlan[0].pcap`), decoded MU-BAR and HE-TB frames | Session `20260802T103416Z`, run 0 | Direct observation |
 | Sequential BAR transmits sequential unicast BAR and BA frames | `PASS` | run-0 AP PCAP (`SequentialBar-#0Lan80211AxDlOfdmaBar.ap.wlan[0].pcap`), sequential BAR/BA exchanges | Same session, run 0 | Direct observation |
 | DL SU baseline uses HE-SU PPDUs with Block Ack | `PASS` | run-0 AP PCAP (`SuBaseline-#0Lan80211AxDlOfdmaBar.ap.wlan[0].pcap`), HE-SU data and Block Ack | Same session, run 0 | Direct observation |
 | Triggered BAR reduces acknowledgment airtime overhead compared to Sequential BAR | `PASS` | application goodput (`packetReceived:vector(packetBytes)`) and delay statistics from `.vec` / `.sca` files | Same session, runs 0–4 | Derived measurement |
 
 ## [agent] Configuration matrix
 
-| Configuration | Role | Causal delta | Runs/seeds | Expected invariant |
-|---|---|---|---|---|
-| `SuBaseline` | Control | Single-user HE-SU, full bandwidth, Block Ack | 5 runs (seeds 0–4) | Sequential HE-SU transmissions and unicast Block Acks |
-| `SequentialBar` | Treatment | DL OFDMA (`HeHcf`), `dlMuAckMethod = "sequentialBar"` | 5 runs (seeds 0–4) | DL MU PPDU followed by sequential unicast BAR/BA frames |
-| `TriggeredBar` | Treatment | DL OFDMA (`HeHcf`), `dlMuAckMethod = "muBarTrigger"` | 5 runs (seeds 0–4) | DL MU PPDU followed by MU-BAR Trigger and parallel UL HE-TB Block Acks |
+| Configuration | Offered Load | DL MU Ack Method | Scheduler Policy | Runs/seeds | Expected invariant |
+|---|---|---|---|---|---|
+| `SuBaseline` | High (0.5ms) | Baseline (SU) | Single-User (`Hcf`) | 5 runs (seeds 0–4) | Single-user HE-SU PPDUs and unicast Block Acks |
+| `SequentialBar` | High (0.5ms) | `sequentialBar` | Equal-Sized RUs (`fBW`) | 5 runs (seeds 0–4) | DL MU PPDUs followed by sequential unicast BAR/BA frames |
+| `TriggeredBar` | High (0.5ms) | `muBarTrigger` | Equal-Sized RUs (`fBW`) | 5 runs (seeds 0–4) | DL MU PPDUs followed by MU-BAR Trigger and parallel UL HE-TB BAs |
+| `SequentialBarfHoL` | High (0.5ms) | `sequentialBar` | Equal-Sized RUs (`fHoL`) | 5 runs (seeds 0–4) | 4x52-tone RUs with sequential BAR/BA control overhead |
+| `TriggeredBarfHoL` | High (0.5ms) | `muBarTrigger` | Equal-Sized RUs (`fHoL`) | 5 runs (seeds 0–4) | 4x52-tone RUs with MU-BAR Trigger and parallel UL HE-TB BAs |
+| `SuBaseline_1ms` | Moderate (1.0ms) | Baseline (SU) | Single-User (`Hcf`) | 5 runs (seeds 0–4) | 100% offered load delivery (2.4 Mbit/s) with low delay |
+| `SequentialBar_1ms` | Moderate (1.0ms) | `sequentialBar` | Equal-Sized RUs (`fBW`) | 5 runs (seeds 0–4) | 100% offered load delivery (2.4 Mbit/s) with low delay |
+| `TriggeredBar_1ms` | Moderate (1.0ms) | `muBarTrigger` | Equal-Sized RUs (`fBW`) | 5 runs (seeds 0–4) | 100% offered load delivery (2.4 Mbit/s) with low delay |
+| `SequentialBarfHoL_1ms` | Moderate (1.0ms) | `sequentialBar` | Equal-Sized RUs (`fHoL`) | 5 runs (seeds 0–4) | Throughput bottlenecked at 1.746 Mbit/s by 52-tone BAR/BA overhead |
+| `TriggeredBarfHoL_1ms` | Moderate (1.0ms) | `muBarTrigger` | Equal-Sized RUs (`fHoL`) | 5 runs (seeds 0–4) | 100% offered load delivery (2.4 Mbit/s) with low delay |
 
 ## [agent] Expected invariants and diagnostic map
 
@@ -72,7 +82,8 @@ Run from the INET repository root:
 
 ```sh
 python3 examples/ieee80211/analysis/wifi_analysis.py inspect dl_ofdma_bar
-python3 examples/ieee80211/analysis/wifi_analysis.py run dl_ofdma_bar --evidence both --session-id 20260802T093100Z
+python3 examples/ieee80211/analysis/wifi_analysis.py run dl_ofdma_bar --evidence both --session-id 20260802T103416Z
+```093100Z
 python3 examples/ieee80211/analysis/wifi_analysis.py report dl_ofdma_bar --session-id 20260802T093100Z
 python3 examples/ieee80211/analysis/wifi_analysis.py publish dl_ofdma_bar --session-id 20260802T093100Z --update
 ```
@@ -920,20 +931,41 @@ The scenario compares acknowledgment mechanisms (`muBarTrigger` vs `sequentialBa
 
 ## [agent] Frame exchange analysis
 
-The frame exchange sequence compares the three acknowledgment methods:
-- **`TriggeredBar`**: The AP sends a DL MU PPDU containing QoS Data to all 3 stations. After SIFS, the AP transmits a single MU-BAR Trigger frame (Control Subtype Trigger, variant MU-BAR) specifying RU allocations for `host[0]`, `host[1]`, and `host[2]`. After SIFS, all 3 stations respond concurrently in parallel UL HE-TB PPDUs carrying their Block Ack frames.
-- **`SequentialBar`**: The AP sends a DL MU PPDU. After SIFS, the AP sends a unicast BAR to `host[0]`, receives BA after SIFS, sends a unicast BAR to `host[1]`, receives BA after SIFS, and sends a unicast BAR to `host[2]`, receiving BA after SIFS.
-- **`SuBaseline`**: The AP transmits single-user HE-SU PPDUs sequentially to each host, each followed after SIFS by a unicast Block Ack (BA) response.
+The frame exchange sequences illustrate the fundamental protocol differences among acknowledgment methods and scheduler policies across offered load regimes:
 
-Direct observation of run 0 PCAP captures (`TriggeredBar-#0Lan80211AxDlOfdmaBar.ap.wlan[0].pcap` and `SequentialBar-#0Lan80211AxDlOfdmaBar.ap.wlan[0].pcap`) verifies these exact frame exchange sequences.
+- **`TriggeredBar` / `TriggeredBar_1ms` (`muBarTrigger`)**:
+  - The AP transmits a DL HE-MU PPDU containing A-MPDU QoS Data to the scheduled stations.
+  - After SIFS (16 µs), the AP transmits a single **Control: Trigger** frame (variant **MU-BAR**). The User Info fields specify the station AID, assigned Uplink Resource Unit (106-tone or 52-tone RU), and Target RSSI.
+  - After SIFS (16 µs), all addressed stations transmit concurrently in parallel **UL HE-TB PPDUs**, each carrying a **Control: Block Ack (BA)** frame on its assigned RU.
+  - *Observed evidence*: In capture `TriggeredBar-#0Lan80211AxDlOfdmaBar.ap.wlan[0].pcap` at simulation time ~0.3005 s, the AP sends a DL HE-MU PPDU to `host[1]` and `host[2]`, followed at 0.300553 s by a Control Trigger frame, and at 0.300703 s by parallel UL HE-TB Block Ack responses on 5005 MHz and 5015 MHz RUs.
+
+- **`SequentialBar` / `SequentialBar_1ms` (`sequentialBar`)**:
+  - The AP transmits a DL HE-MU PPDU containing A-MPDU QoS Data to the scheduled stations.
+  - After SIFS, the AP transmits a unicast **Control: Block Ack Request (BAR)** frame to the first station (`host[1]`).
+  - The station responds after SIFS with a unicast **Control: Block Ack (BA)** frame.
+  - The AP then transmits a unicast BAR to the second station (`host[2]`), which responds after SIFS with a unicast BA.
+  - *Observed evidence*: In capture `SequentialBar-#0Lan80211AxDlOfdmaBar.ap.wlan[0].pcap` at 0.300497 s, the AP sends a DL HE-MU PPDU, followed sequentially by BAR to `host[1]` (0.300545 s), BA from `host[1]` (0.300633 s), BAR to `host[2]` (0.300681 s), and BA from `host[2]` (0.300770 s).
+
+- **`fBW` vs `fHoL` Scheduler Interactions**:
+  - Under `fBW`, 2 x 106-tone RUs are chosen in 20 MHz bandwidth for 3 active STAs (`ruCount <= 3` candidates selects 2 RUs). Under high load (`0.5ms`), the 1-STA unserved gap in `TriggeredBar` leaves queued frames that cause HE-SU single-user fallbacks when the AP next gains access. In `SequentialBar`, longer BAR/BA exchange overhead allows all 3 STAs to queue packets between accesses, maintaining 100% HE-MU PPDUs.
+  - Under `fHoL`, 4 x 52-tone RUs are chosen (`count >= 3` candidates selects 4 RUs), scheduling all 3 STAs into every DL HE-MU PPDU simultaneously and eliminating single-STA queuing gaps.
 
 ## [agent] Cross-layer findings and verdict
 
-The simulation results and packet captures prove (derived measurement and direct observation):
-1. **Triggered BAR (`muBarTrigger`)** eliminates the multiple SIFS delays and individual unicast BAR frame transmissions required by Sequential BAR. By sending a single MU-BAR Trigger frame, all 3 stations transmit their Block Acks concurrently in UL HE-TB PPDUs on separate 26-tone or 106-tone RUs.
-2. **Sequential BAR (`sequentialBar`)** incurs additional channel contention and overhead due to multiple sequential BAR/BA frame exchanges following each DL MU PPDU.
-3. **DL SU Baseline (`SuBaseline`)** demonstrates the performance of single-user sequential channel access using full 20 MHz bandwidth per station with Block Ack agreements recorded in `.sca` and `.vec` results.
+The simulation results (`metrics.json`, `dl-bar-acknowledgment-dashboard.png`, `dl-bar-acknowledgment-dashboard-1ms.png`) and packet captures prove (derived measurement and direct observation):
+
+1. **Triggered BAR (`muBarTrigger`) Efficiency**:
+   - Under High Offered Load (`sendInterval = 0.5ms`), `TriggeredBar` (`fBW`) achieves the highest overall aggregate goodput (**4.787 Mbit/s**) and lowest tail delay (**4.88 ms**). Parallel UL HE-TB Block Acks replace multiple sequential unicast BAR/BA medium access cycles with a single SIFS + Trigger + SIFS + HE-TB exchange.
+2. **Sequential BAR (`sequentialBar`) Overhead**:
+   - Under High Offered Load (`sendInterval = 0.5ms`), `SequentialBar` (`fBW`) achieves **4.249 Mbit/s** goodput with **5.56 ms** delay—a **11.2% throughput penalty** relative to Triggered BAR due to sequential control frame overhead.
+   - Under 52-tone RUs (`SequentialBarfHoL`), sequential BAR/BA control overhead caps throughput at **1.746 Mbit/s** with **12.21 ms** delay regardless of offered load.
+3. **Scheduler Policy Impact (`fBW` vs `fHoL`)**:
+   - `fBW` prioritizes per-user bandwidth (106-tone RUs, MCS 1), delivering **4.787 Mbit/s** in `TriggeredBar`.
+   - `fHoL` prioritizes strict head-of-line multi-user concurrency (4x52-tone RUs), delivering **3.456 Mbit/s** goodput with lower 95th-percentile delay (**3.51 ms**).
+4. **Offered Load Dynamics (`0.5ms` vs `1.0ms`)**:
+   - Under Moderate Offered Load (`sendInterval = 1.0ms` / 2.4 Mbit/s aggregate offered), `TriggeredBar`, `SequentialBar`, `TriggeredBarfHoL`, and `SuBaseline` all achieve **100% offered load delivery (2.400 Mbit/s)** with sub-millisecond end-to-end delays (**0.44–0.52 ms**).
 
 ## [agent] Limitations and inconclusive claims
 
-- The scenario uses stationary stations with high SNR (20 MHz, 5 GHz); lossy channel conditions with dynamic rate adaptation or packet errors are not evaluated.
+- **Clean Channel Assumption**: Simulations use a stationary 3-host topology, fixed MCS 1, and no path loss variation or external interference.
+- **Fixed Block Ack Buffer**: Stations operate with static ADDBA Block Ack agreements (WINSIZE 64); variable Block Ack bitmap compression is not evaluated.
