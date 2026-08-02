@@ -79,7 +79,7 @@
     "dl_mu_mimo": {
       "scalar_vector_group": "mimo",
       "ini": "dl_mu_mimo/omnetpp.ini",
-      "configurations": ["EqualSizedRUs_fBW", "DlMuMimo", "DlMuMimo24MbpsLeakage001", "EqualSizedRUs48Mbps", "DlMuMimo48MbpsLeakage01", "EqualSizedRUs72Mbps", "DlMuMimo72MbpsLeakage01", "EqualSizedRUs96Mbps", "DlMuMimo96MbpsLeakage01", "EqualSizedRUs24MbpsSta1Antenna", "DlMuMimo24MbpsLeakage001Sta1Antenna", "DlMuMimo80MHz"],
+      "configurations": ["SuMimo24Mbps", "OfdmaSuMimo24Mbps", "DlMuMimo24MbpsLeakage001", "SuMimo48Mbps", "OfdmaSuMimo48Mbps", "DlMuMimo48MbpsLeakage001", "SuMimo72Mbps", "OfdmaSuMimo72Mbps", "DlMuMimo72MbpsLeakage001"],
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["mu-mimo"]
     },
