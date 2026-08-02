@@ -317,28 +317,44 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
     std::vector<RuAllocation> result;
     result.reserve(numSelected);
     for (int i = 0; i < numSelected; ++i) {
+        const auto& candidate = selectedCandidates[i];
         RuAllocation alloc;
-        alloc.staAddress = selectedCandidates[i].staAddress;
+        alloc.staAddress = candidate.staAddress;
         alloc.ru = rus[i];
-        alloc.estimatedSnrDb = estimateSnrDb(context, selectedCandidates[i], alloc.ru);
-        alloc.mcs = selectMcs(context, selectedCandidates[i], alloc.ru,
-                selectMcs(alloc.estimatedSnrDb, selectedCandidates[i].hasFreshPathLoss));
+        // IEEE Std 802.11-2024, 9.4.2.247.4/Table 9-378, 26.9.2, and 27.1.1:
+        // limit a recipient's NSS by its HE-MCS/NSS map and most recent OMI Rx NSS.
+        // Distinct OFDMA RUs are orthogonal, so the AP transmit-dimension limit is
+        // applied independently to each single-user RU rather than summed across RUs.
+        if (candidate.hasNegotiatedHeCapabilities &&
+                candidate.negotiatedHeCapabilities.localTxPeerRx.valid) {
+            int maxNss = std::min(context.coding == HE_CODING_BCC ? 4 : 8,
+                    context.numApAntennas);
+            maxNss = std::min(maxNss,
+                    getMaxNss(candidate.negotiatedHeCapabilities.localTxPeerRx.mcsNss));
+            if (candidate.operatingModeRxNss > 0)
+                maxNss = std::min(maxNss, candidate.operatingModeRxNss);
+            if (maxNss > 1)
+                alloc.numberOfSpatialStreams = maxNss;
+        }
+        alloc.estimatedSnrDb = estimateSnrDb(context, candidate, alloc.ru);
+        alloc.mcs = selectMcs(context, candidate, alloc.ru,
+                selectMcs(alloc.estimatedSnrDb, candidate.hasFreshPathLoss),
+                alloc.numberOfSpatialStreams);
         if (context.coding == HE_CODING_BCC)
             alloc.mcs = std::min(alloc.mcs, 9);
         int maxMcs = -1;
-        if (selectedCandidates[i].hasNegotiatedHeCapabilities) {
-            maxMcs = selectedCandidates[i].negotiatedHeCapabilities.localTxPeerRx.mcsNss.maxMcsPerNss[0];
-        }
-        if (maxMcs >= 0) {
+        if (candidate.hasNegotiatedHeCapabilities)
+            maxMcs = candidate.negotiatedHeCapabilities.localTxPeerRx.mcsNss
+                    .maxMcsPerNss[alloc.numberOfSpatialStreams - 1];
+        if (maxMcs >= 0)
             alloc.mcs = std::min(alloc.mcs, maxMcs);
-        }
-        // The packing planner uses this value as the common per-user packing
-        // horizon. Estimate it from all currently eligible MPDUs instead of
-        // the HoL MPDU alone, otherwise a symmetric equal-RU schedule can
-        // never grow beyond one MPDU per user despite maxAmpduMpduCount.
+        // The packing planner uses this value as a common per-user packing
+        // hint. Exact common-duration calculation requires the complete RU
+        // layout and is performed by the packing/PHY path. Keep the existing
+        // per-RU estimator here: it cannot encode one partial RU on its own
+        // when that allocation has multiple spatial streams.
         alloc.estimatedDuration = estimateDuration(
-                std::max<int64_t>({selectedCandidates[i].backlogBytes,
-                        selectedCandidates[i].holPacketBytes, 1}),
+                std::max<int64_t>({candidate.backlogBytes, candidate.holPacketBytes, 1}),
                 alloc.ru.toneSize, alloc.mcs, context.guardInterval);
         result.push_back(alloc);
     }

@@ -247,6 +247,63 @@ auto schedulerExternal = check_and_cast<TestableHeDlScheduler *>(
 }
 
 {
+    // IEEE Std 802.11-2024, 9.4.2.247.4/Table 9-378 and 26.9.2:
+    // HE-MCS/NSS support and the most recent OMI Rx NSS bound each recipient.
+    auto context = makeContext(3, Hz(20e6));
+    context.numApAntennas = 4;
+    context.totalTransmitPower = W(0.1);
+    context.noiseFigureDb = 7;
+    const int supportedNss[] = {3, 2, 4};
+    const int operatingModeRxNss[] = {3, 0, 1};
+    for (int i = 0; i < 3; ++i) {
+        auto& candidate = context.candidates[i];
+        candidate.hasFreshPathLoss = true;
+        candidate.pathLossDb = 45;
+        candidate.hasNegotiatedHeCapabilities = true;
+        auto& capabilities = candidate.negotiatedHeCapabilities.localTxPeerRx;
+        capabilities.valid = true;
+        capabilities.ofdma = true;
+        capabilities.supportedChannelWidths = {Hz(20e6)};
+        capabilities.supportedRuToneSizes = {26, 52, 106, 242};
+        capabilities.mcsNss.maxMcsPerNss.fill(-1);
+        for (int nss = 0; nss < supportedNss[i]; ++nss)
+            capabilities.mcsNss.maxMcsPerNss[nss] = 9;
+        candidate.operatingModeRxNss = operatingModeRxNss[i];
+    }
+    context.candidates[0].negotiatedHeCapabilities.localTxPeerRx.mcsNss.maxMcsPerNss[2] = 3;
+
+    auto allocations = schedulerFhol->schedule(context);
+    ASSERT(allocations.size() == 3);
+    ASSERT(allocations[0].numberOfSpatialStreams == 3);
+    ASSERT(allocations[1].numberOfSpatialStreams == 2);
+    ASSERT(allocations[2].numberOfSpatialStreams == 1);
+    ASSERT(allocations[0].mcs <= 3);
+    for (const auto& allocation : allocations)
+        ASSERT(allocation.estimatedDuration > SIMTIME_ZERO);
+
+    context.numApAntennas = 1;
+    allocations = schedulerFhol->schedule(context);
+    ASSERT(allocations.size() == 3);
+    for (const auto& allocation : allocations)
+        ASSERT(allocation.numberOfSpatialStreams == 1);
+
+    context.candidates.resize(1);
+    context.numApAntennas = 8;
+    context.candidates[0].operatingModeRxNss = 0;
+    context.candidates[0].negotiatedHeCapabilities.localTxPeerRx.mcsNss.maxMcsPerNss.fill(9);
+    allocations = schedulerFhol->schedule(context);
+    ASSERT(allocations.size() == 1);
+    ASSERT(allocations[0].numberOfSpatialStreams == 4);
+
+    context.coding = HE_CODING_LDPC;
+    context.candidates[0].negotiatedHeCapabilities.mutual.ldpc = true;
+    allocations = schedulerFhol->schedule(context);
+    ASSERT(allocations.size() == 1);
+    ASSERT(allocations[0].numberOfSpatialStreams == 8);
+    EV << "Single-user OFDMA RUs used capability-limited NSS independently.\n";
+}
+
+{
     RecordingHeRateControl externalRateControl;
     schedulerExternal->setRateControlForTest(&externalRateControl);
     MacAddress peer("02:00:00:00:00:F1");
@@ -272,6 +329,9 @@ fBW prioritized backlog, fHoL prioritized delay, and packing duration used eligi
 
 %contains: stdout
 Negotiated HE width, RU, DL-OFDMA, and MCS limits were enforced.
+
+%contains: stdout
+Single-user OFDMA RUs used capability-limited NSS independently.
 
 %contains: stdout
 Scheduler lifecycle invalidation reached its external HE rate controller.
