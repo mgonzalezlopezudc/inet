@@ -21,6 +21,7 @@ for the exact contract and migration table.
 | Area | Example | Main mechanisms |
 |------|---------|-----------------|
 | Downlink multi-user access | [dl_ofdma_sched](dl_ofdma_sched/walkthrough.md) | RU scheduling, SU baseline, wide channels, Multi-TID Block Ack |
+| Downlink BAR acknowledgment | [dl_ofdma_bar](dl_ofdma_bar/walkthrough.md) | Sequential vs triggered (MU-BAR) Block Ack Request in DL OFDMA with DL SU baseline |
 | Bidirectional multi-user access | [dl_ul_ofdma](dl_ul_ofdma/README.md) | Simultaneous DL and UL traffic, independent DL/UL OFDMA schedulers, matched SU baseline |
 | Asymmetric downlink scheduling | [dl_ofdma_asym](dl_ofdma_asym/walkthrough.md) | Backlog-based and head-of-line minimum-delay scheduling under asymmetric load |
 | Downlink MU-MIMO | [dl_mu_mimo](dl_mu_mimo/walkthrough.md) | Downlink MU-MIMO spatial multiplexing and sequential BAR acknowledgment |

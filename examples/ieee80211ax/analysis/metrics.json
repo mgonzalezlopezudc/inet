@@ -1,720 +1,197 @@
 {
   "_provenance": {
-    "generated_at_utc": "2026-08-02T07:59:59.913565+00:00",
+    "generated_at_utc": "2026-08-02T09:32:14.262223+00:00",
     "groups": {
-      "mimo": {
+      "dl_bar": {
         "conditions": [
           {
-            "configuration": "EqualSizedRUs_fBW",
-            "group": "mimo",
-            "ini": "examples/ieee80211ax/dl_mu_mimo/omnetpp.ini",
-            "label": "OFDMA, 24 Mbps",
+            "configuration": "TriggeredBar",
+            "group": "dl_bar",
+            "ini": "examples/ieee80211ax/dl_ofdma_bar/omnetpp.ini",
+            "label": "Triggered BAR",
             "measurement": {
-              "end_s": 0.88,
-              "start_s": 0.55
+              "end_s": 0.95,
+              "start_s": 0.3
             },
-            "metadata": {
-              "csi_leakage": null,
-              "offered_aggregate_mbps": 24
-            },
+            "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#0.sca",
-                "sha256": "a3d7fd87f9d68c0c0620b50d5f602e801cfef34ea393659ae1227da7c693e7e1"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/TriggeredBar/TriggeredBar-#0.sca",
+                "sha256": "b20e10d91f32e372601cb191739ec2c88ca4b0ee9f1c3ccb2d25bc1845b9eb03"
               },
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#0.vec",
-                "sha256": "515b87294d060965e8ba1136b530e3716d573069f9640eb7c42b2e5383b2c847"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/TriggeredBar/TriggeredBar-#0.vec",
+                "sha256": "926abd225c1ec71371cfe00761aa29284129e9deada05acb6e7a4d30c2538e92"
               },
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#1.sca",
-                "sha256": "87a5fa52de730e075def622bf707a569e178c035b9d8accc5e6cfc5303ad23d5"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/TriggeredBar/TriggeredBar-#1.sca",
+                "sha256": "890cc8bca524883a788c66d27b22fa041d2f31c9795cbec7076482a14ca6a0ee"
               },
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#1.vec",
-                "sha256": "6ad073e32fcf79351399806de8a7105bb4ae9af968ebe89b4b0ba1a32fc5e214"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/TriggeredBar/TriggeredBar-#1.vec",
+                "sha256": "e4ad87eadc10ec0ff6afa13ceffa7918e480bdeca942ec2e2499e02a8cc91e9b"
               },
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#2.sca",
-                "sha256": "611aa09f4cda9da17127603375df1a98bf37c3975ddcb729e8d3d7035ceed374"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/TriggeredBar/TriggeredBar-#2.sca",
+                "sha256": "79d37ea9055c41acca4a0108a6b52155e901904ef755897e51a285f7f540508d"
               },
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#2.vec",
-                "sha256": "a4c35246d8e9bcef76335ae16f47f36b50432b1dbfb86d5befc503a13350d551"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/TriggeredBar/TriggeredBar-#2.vec",
+                "sha256": "c4bbf516061b44a8cf854d5f4b4ba0e0b6757923a22a09f60d882a94630a70a0"
               },
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#3.sca",
-                "sha256": "6c8f5c37ea5ef72f5d90e88015f649415164a511ffb33767490115aa5278a7e2"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/TriggeredBar/TriggeredBar-#3.sca",
+                "sha256": "c83e0bb6431e3834520f3068c3f6e77894c8a1710d2ab472d41b52da05728329"
               },
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#3.vec",
-                "sha256": "39d92929b1cad89652e33c2a62cadef2444ad04da2f3c1e96e8e64b5edfd584f"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/TriggeredBar/TriggeredBar-#3.vec",
+                "sha256": "cc5c496fc81ba20182e0407f57b3b9037b03d7b3e80a48408c779edc3d70aca8"
               },
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#4.sca",
-                "sha256": "1103d4a51ff7057fa844e7888783dfefd0b4a0d1f3aaa9fbeb3d2ff8632939ce"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/TriggeredBar/TriggeredBar-#4.sca",
+                "sha256": "84fe5112b37e06e5a9be24df0ee7de28ac83d722f82d75b532013865f7e4b5af"
               },
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#4.vec",
-                "sha256": "25e8115ca7a89d663012581b8a371d31320613b364d370d0120cc9028c2c621e"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/TriggeredBar/TriggeredBar-#4.vec",
+                "sha256": "c8570146e0fb2d2e308526f9471ca53393fb25af26eb5d6accf59b43d4ad82fb"
               }
             ]
           },
           {
-            "configuration": "DlMuMimo",
-            "group": "mimo",
-            "ini": "examples/ieee80211ax/dl_mu_mimo/omnetpp.ini",
-            "label": "MU-MIMO, 24 Mbps, leakage 0.01",
+            "configuration": "SequentialBar",
+            "group": "dl_bar",
+            "ini": "examples/ieee80211ax/dl_ofdma_bar/omnetpp.ini",
+            "label": "Sequential BAR",
             "measurement": {
-              "end_s": 0.88,
-              "start_s": 0.55
+              "end_s": 0.95,
+              "start_s": 0.3
             },
-            "metadata": {
-              "csi_leakage": 0.01,
-              "offered_aggregate_mbps": 24
-            },
+            "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo/DlMuMimo-#0.sca",
-                "sha256": "973427228e28ffd44c1eccaabfa0e836fc9dd2f1d11017626a49a1b2104e7ab0"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SequentialBar/SequentialBar-#0.sca",
+                "sha256": "e844dcca5d010b0184c6e29ab11c7b3453d6a804fe09047f1314ff4c95087e8e"
               },
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo/DlMuMimo-#0.vec",
-                "sha256": "731b13e0dfc8ac57e9b9ac2a203014938f6d12e3e080078b246920b59177ac72"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SequentialBar/SequentialBar-#0.vec",
+                "sha256": "4dace3581da073f0156b8081b86f17c59ce8cd4e413658b517ce3a6dacc0fa52"
               },
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo/DlMuMimo-#1.sca",
-                "sha256": "20d50879d022fd3454fd73646ed3ecd01da395e3e4db7b7018d2881e0604f4b3"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SequentialBar/SequentialBar-#1.sca",
+                "sha256": "e26f6b788f46679e7763800aa2201a5846dba6c403b15deca8fe74dd636f8e1d"
               },
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo/DlMuMimo-#1.vec",
-                "sha256": "3cdbbad9aca75d31cfd345c00c5b4979e950e2fcb3f1e09aaeece128d66b53c3"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SequentialBar/SequentialBar-#1.vec",
+                "sha256": "787a01e02e602b0495828af5aec7e4bfbb72c1a4d6d3579db412182f33afd4ab"
               },
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo/DlMuMimo-#2.sca",
-                "sha256": "72869a2318b342f93ac827babedccb0b3c928b05593f3a553038de625f6b1d74"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SequentialBar/SequentialBar-#2.sca",
+                "sha256": "b39cd6c555f8c5fd26080557baf1a1644f50a9735462b2678042a6aef4182ed3"
               },
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo/DlMuMimo-#2.vec",
-                "sha256": "2d2e8053d82719ef6837ab4e704a2b5396eb86ecbef55aa422c8a4007587c0d7"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SequentialBar/SequentialBar-#2.vec",
+                "sha256": "e04a61970884d84564a0d690e0a35b48d840b733de75521c998061d3bb9b5b85"
               },
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo/DlMuMimo-#3.sca",
-                "sha256": "2d00983542fd6e173842de152b340387b82e83a9937e720dd07a34bcd7b8bd55"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SequentialBar/SequentialBar-#3.sca",
+                "sha256": "3e8a950491a5ed973bbb184f54e4a5d0224c57d973852a278c9339b58d24cb3c"
               },
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo/DlMuMimo-#3.vec",
-                "sha256": "1af24d68622776b36de757a55c9b9bf1ac77ef0945c9397c80fef4b31baeefb0"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SequentialBar/SequentialBar-#3.vec",
+                "sha256": "7fc3ce33b8199b04a01ca1e04502ea04444f44c39b97f6cea1456bcdc1d80201"
               },
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo/DlMuMimo-#4.sca",
-                "sha256": "215f939dc20e0b8bbf100043a0e4924495e73d3f1f8a946c9cb899233ac70d46"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SequentialBar/SequentialBar-#4.sca",
+                "sha256": "de5919c88777c416e3f042c023f1eddac32804c15e32123c85aaa26654d7e5bf"
               },
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo/DlMuMimo-#4.vec",
-                "sha256": "3520d88d23be401dfe26723665d581ac8c709c52f8060c3a4ae8f1cbeec7d6d9"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SequentialBar/SequentialBar-#4.vec",
+                "sha256": "34726b8e02b9ed40589ecf7c2debd921599b4de1b5b633a12ad390c6690f19e6"
               }
             ]
           },
           {
-            "configuration": "DlMuMimo24MbpsLeakage001",
-            "group": "mimo",
-            "ini": "examples/ieee80211ax/dl_mu_mimo/omnetpp.ini",
-            "label": "MU-MIMO, 24 Mbps, leakage 0.001",
+            "configuration": "SuBaseline",
+            "group": "dl_bar",
+            "ini": "examples/ieee80211ax/dl_ofdma_bar/omnetpp.ini",
+            "label": "DL SU Baseline",
             "measurement": {
-              "end_s": 0.88,
-              "start_s": 0.55
+              "end_s": 0.95,
+              "start_s": 0.3
             },
-            "metadata": {
-              "csi_leakage": 0.001,
-              "offered_aggregate_mbps": 24
-            },
+            "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo24MbpsLeakage001/DlMuMimo24MbpsLeakage001-#0.sca",
-                "sha256": "8154fd96d814c686a8cc36c707ab617bc2ec8e624afd625288e47a829714b92e"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SuBaseline/SuBaseline-#0.sca",
+                "sha256": "95354d604d50816d6ee71c30e2ed39fcfade7727c09624306df954b4be681a48"
               },
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo24MbpsLeakage001/DlMuMimo24MbpsLeakage001-#0.vec",
-                "sha256": "194cabaaf66928794a5f3100ff95966a8a0c6c68330e63104daa74229cafc55e"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SuBaseline/SuBaseline-#0.vec",
+                "sha256": "1302e229e33984eea3ff145b83a67797ac4f39cf1c0e3802809bd1e53b5a28b9"
               },
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo24MbpsLeakage001/DlMuMimo24MbpsLeakage001-#1.sca",
-                "sha256": "44c748dcce87204381e0f58af1d1f4ae57a879a5e5d73096345c6952aca28e65"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SuBaseline/SuBaseline-#1.sca",
+                "sha256": "f6686d1728f7568f8b16e861468cf64244da275ee7b2a5962bd965b6948b7c9a"
               },
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo24MbpsLeakage001/DlMuMimo24MbpsLeakage001-#1.vec",
-                "sha256": "a3560e6f7525c5d876ec6c9edc710bc4cad7e2c66c1fe334116fb47f39591f6c"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SuBaseline/SuBaseline-#1.vec",
+                "sha256": "37f89e8ea4d0092628a1158ba223d07532955a5241a9927e2611bb46c5f12d0a"
               },
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo24MbpsLeakage001/DlMuMimo24MbpsLeakage001-#2.sca",
-                "sha256": "8c052408222e74648441f3b71ef45770cf9e921e0da2578b0de40316dcdcb05f"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SuBaseline/SuBaseline-#2.sca",
+                "sha256": "4060e8831bac72b41c446312c42f91a90a422d9ddcf348d65d1af44957830cdb"
               },
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo24MbpsLeakage001/DlMuMimo24MbpsLeakage001-#2.vec",
-                "sha256": "b598906f0fabff8018c46e549afa9cdcb5b71dcdcba932f19767386960cf69d5"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SuBaseline/SuBaseline-#2.vec",
+                "sha256": "a45a549fe84164ad1b16c1068677bc2e9bc66edfbdab07edcb2f9debb3cf670a"
               },
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo24MbpsLeakage001/DlMuMimo24MbpsLeakage001-#3.sca",
-                "sha256": "97bfe55c7664d874b7bb50af878d8cc34dbbfaf37c240ffebfddff842095bed5"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SuBaseline/SuBaseline-#3.sca",
+                "sha256": "3656e4d8048786703ef2c97b5aa1c3fa09554d5b592886660803310342e7eb65"
               },
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo24MbpsLeakage001/DlMuMimo24MbpsLeakage001-#3.vec",
-                "sha256": "2b51aae18339f7d3b0c3bbb64f67b96ac51b84205e2ed4e7a877c0c612382618"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SuBaseline/SuBaseline-#3.vec",
+                "sha256": "3d1d60203a730fe9bd897e8842d3571aa19249911c9fc9f8a974b4578422e800"
               },
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo24MbpsLeakage001/DlMuMimo24MbpsLeakage001-#4.sca",
-                "sha256": "991cd4cdb672618bb6eb7f6e1bc1c5e575a211992e9daed6b45a1590877e1091"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SuBaseline/SuBaseline-#4.sca",
+                "sha256": "c0beb7aa46490512d070ebd84e4950149b4259318a3e9cca16be36d708824634"
               },
               {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo24MbpsLeakage001/DlMuMimo24MbpsLeakage001-#4.vec",
-                "sha256": "7fd11b7e3357126de950d1165683f21a2c1be9dca907433300183d59fee1a6c4"
-              }
-            ]
-          },
-          {
-            "configuration": "EqualSizedRUs48Mbps",
-            "group": "mimo",
-            "ini": "examples/ieee80211ax/dl_mu_mimo/omnetpp.ini",
-            "label": "OFDMA, 48 Mbps",
-            "measurement": {
-              "end_s": 0.88,
-              "start_s": 0.55
-            },
-            "metadata": {
-              "csi_leakage": null,
-              "offered_aggregate_mbps": 48
-            },
-            "result_files": [
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs48Mbps/EqualSizedRUs48Mbps-#0.sca",
-                "sha256": "510129eb040eaaa579486df66c81f425ed507476188f938f63dd06d9ce4fbde8"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs48Mbps/EqualSizedRUs48Mbps-#0.vec",
-                "sha256": "e9fc1789fb8b20ed0d9be4604a6ffa2da2ac440457dd781634d5eb3d5c7181d9"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs48Mbps/EqualSizedRUs48Mbps-#1.sca",
-                "sha256": "407b14b80428dd5a836a5af02d463c7e36f831c392f680bb5dfd90c48adc085b"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs48Mbps/EqualSizedRUs48Mbps-#1.vec",
-                "sha256": "1e3110595a778b741bb839993dc199e122ab27cca3e6dffa54f2d384e6454d23"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs48Mbps/EqualSizedRUs48Mbps-#2.sca",
-                "sha256": "8f922545c5c5513d4ba5872c705aacdee80e88d400e7ab129a7a67986e317651"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs48Mbps/EqualSizedRUs48Mbps-#2.vec",
-                "sha256": "0f7a640543de6a41e5188c67344c496b9c9d1a0d97a2fe2de414319d067b13b4"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs48Mbps/EqualSizedRUs48Mbps-#3.sca",
-                "sha256": "bcab0545dcef687b8635855b8f97350655dc1bea844960ba2553780ac3c04a5e"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs48Mbps/EqualSizedRUs48Mbps-#3.vec",
-                "sha256": "cc7c53b4d633b22b1ebbc7b01360acf3de53f8feb4ca6f73064ca7d70912e9a5"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs48Mbps/EqualSizedRUs48Mbps-#4.sca",
-                "sha256": "c35b894256892a371790fe82c6a5fb0e118137af3880bcf3239090ef385c6d66"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs48Mbps/EqualSizedRUs48Mbps-#4.vec",
-                "sha256": "4c25d3e8adc627e549c4e340c2a01408c2ce37f7310ad2b8bf0fd9215d89ce9e"
-              }
-            ]
-          },
-          {
-            "configuration": "DlMuMimo48MbpsLeakage01",
-            "group": "mimo",
-            "ini": "examples/ieee80211ax/dl_mu_mimo/omnetpp.ini",
-            "label": "MU-MIMO, 48 Mbps, leakage 0.01",
-            "measurement": {
-              "end_s": 0.88,
-              "start_s": 0.55
-            },
-            "metadata": {
-              "csi_leakage": 0.01,
-              "offered_aggregate_mbps": 48
-            },
-            "result_files": [
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo48MbpsLeakage01/DlMuMimo48MbpsLeakage01-#0.sca",
-                "sha256": "5bddf3b74b627e14a9769db7aa5fee435d4a07e8e6e9423f77a0fb2807881461"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo48MbpsLeakage01/DlMuMimo48MbpsLeakage01-#0.vec",
-                "sha256": "59d47a2289450e86cca7631c5ecfdce231b622fe553f09f8f257c58209e75dce"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo48MbpsLeakage01/DlMuMimo48MbpsLeakage01-#1.sca",
-                "sha256": "ecdb6d686cb936497b6f6742d28f125091a1a7ba6f0f8a1fc3d4530c648820e1"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo48MbpsLeakage01/DlMuMimo48MbpsLeakage01-#1.vec",
-                "sha256": "91080877de0b591d15e707f6668b949a9c110dc4df7f206da4696756132115aa"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo48MbpsLeakage01/DlMuMimo48MbpsLeakage01-#2.sca",
-                "sha256": "b1f9cf1bafd631539fc424dd379eb63cc5f3a007c7e77b7dfe081a69007d4e13"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo48MbpsLeakage01/DlMuMimo48MbpsLeakage01-#2.vec",
-                "sha256": "a39205cb1dfadf435671b3f63066e0decb7b0c86128521a31b0667577fbc0c3b"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo48MbpsLeakage01/DlMuMimo48MbpsLeakage01-#3.sca",
-                "sha256": "cb5b2e7cfa2479872fa6c4105b1c6e8a006c48ff246710c727bb64ba0a5a0615"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo48MbpsLeakage01/DlMuMimo48MbpsLeakage01-#3.vec",
-                "sha256": "24c5708b2fdeb8b2a4b81b10a4890341eaf57dc546758dd0f23536989a467163"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo48MbpsLeakage01/DlMuMimo48MbpsLeakage01-#4.sca",
-                "sha256": "9a3e11a187fd4b0a1b8bec3d807f79bf9a8ec75d387804356ae50324f8644674"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo48MbpsLeakage01/DlMuMimo48MbpsLeakage01-#4.vec",
-                "sha256": "4835d1c46865a1c9aba2fceb2b1b16afce46f40858710c08ad95e021d96c3dc6"
-              }
-            ]
-          },
-          {
-            "configuration": "EqualSizedRUs72Mbps",
-            "group": "mimo",
-            "ini": "examples/ieee80211ax/dl_mu_mimo/omnetpp.ini",
-            "label": "OFDMA, 72 Mbps",
-            "measurement": {
-              "end_s": 0.88,
-              "start_s": 0.55
-            },
-            "metadata": {
-              "csi_leakage": null,
-              "offered_aggregate_mbps": 72
-            },
-            "result_files": [
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs72Mbps/EqualSizedRUs72Mbps-#0.sca",
-                "sha256": "b1c7c545f56f0c5e7f2893f6369b1fcbcde6eb245bac1ad196a4e593bd93836a"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs72Mbps/EqualSizedRUs72Mbps-#0.vec",
-                "sha256": "1ee198f19e6d04d71fa64f1487a32c1461b4e8dff771719b371a90b238bffa7f"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs72Mbps/EqualSizedRUs72Mbps-#1.sca",
-                "sha256": "c58b5ea433554afcf9eb75497619d464a8f167adfddaa55255ddcdb714069b35"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs72Mbps/EqualSizedRUs72Mbps-#1.vec",
-                "sha256": "870958f04cdc5778dc723aa014afcc42b23a182e49e21a15e303c7459c807c20"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs72Mbps/EqualSizedRUs72Mbps-#2.sca",
-                "sha256": "7c44392cd6b7106408c8fb260492d8acc24bab456d0270f66e0b4c21b35b46cb"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs72Mbps/EqualSizedRUs72Mbps-#2.vec",
-                "sha256": "327c722e1b896da66b43d9d8473c3f5b7ffb4c81ecd5eaaa0e9c16e5a5362810"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs72Mbps/EqualSizedRUs72Mbps-#3.sca",
-                "sha256": "2c09e7a50bcb8ab6e5a6f6f94cc2d280139b1ce3a738c7cb5a05c458ebc5a0d6"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs72Mbps/EqualSizedRUs72Mbps-#3.vec",
-                "sha256": "d981cca9fecbac9fd4398e2a24293670bb5da516fc4cabcb40a6d715b762cc89"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs72Mbps/EqualSizedRUs72Mbps-#4.sca",
-                "sha256": "39e31730f023075bf273d21ba3f2e773e3291a44f3270a631e1e76d1ecd917cb"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs72Mbps/EqualSizedRUs72Mbps-#4.vec",
-                "sha256": "2b3b3bb74412a69468ed33d877dcfac5143e3c816333d147d26fba7e10a3f86c"
-              }
-            ]
-          },
-          {
-            "configuration": "DlMuMimo72MbpsLeakage01",
-            "group": "mimo",
-            "ini": "examples/ieee80211ax/dl_mu_mimo/omnetpp.ini",
-            "label": "MU-MIMO, 72 Mbps, leakage 0.01",
-            "measurement": {
-              "end_s": 0.88,
-              "start_s": 0.55
-            },
-            "metadata": {
-              "csi_leakage": 0.01,
-              "offered_aggregate_mbps": 72
-            },
-            "result_files": [
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo72MbpsLeakage01/DlMuMimo72MbpsLeakage01-#0.sca",
-                "sha256": "d654de20009649e1b4622e7d6f830583686a9a24a81bb6b8f7bbb36bce59bada"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo72MbpsLeakage01/DlMuMimo72MbpsLeakage01-#0.vec",
-                "sha256": "d3b48aaf261128cfbf739ab62ec2e4bc40e4d5e1280ed5516601d4bf159a58de"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo72MbpsLeakage01/DlMuMimo72MbpsLeakage01-#1.sca",
-                "sha256": "a551bd68f75d6685b52b255fa9c00cd46f60dc4cf6f4328df34cdff4bb658572"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo72MbpsLeakage01/DlMuMimo72MbpsLeakage01-#1.vec",
-                "sha256": "e1f49537f8b433f1036cc9d8b080fcc6962c57b3301ba711c83b1bbee56b9ef0"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo72MbpsLeakage01/DlMuMimo72MbpsLeakage01-#2.sca",
-                "sha256": "e49660a5a0cfad1d1b40019ec7784eb99cbf2abba4ba106b04a4bfa7643fed02"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo72MbpsLeakage01/DlMuMimo72MbpsLeakage01-#2.vec",
-                "sha256": "8fd9dae10e91f8ee759215e14a0401a7039bd2dcd61f677bde33e6875fd5a65e"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo72MbpsLeakage01/DlMuMimo72MbpsLeakage01-#3.sca",
-                "sha256": "572738549b33b24c6f255b22f02fd057ec5e293cc424d2d2cfa21b6d51336987"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo72MbpsLeakage01/DlMuMimo72MbpsLeakage01-#3.vec",
-                "sha256": "4819343b6a7817ed61ef514d662778e9b1a00edb4f159c0cab94269aadc4c51b"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo72MbpsLeakage01/DlMuMimo72MbpsLeakage01-#4.sca",
-                "sha256": "ba5c191fd75233d35d8adf59674c764b5f00f6d75369c4fb9fa40a5e60ca6a65"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo72MbpsLeakage01/DlMuMimo72MbpsLeakage01-#4.vec",
-                "sha256": "7968c0b7b4f5ab9ce24abb8aadcf04c1c495c03eae7c0c7388259ab84899e7e6"
-              }
-            ]
-          },
-          {
-            "configuration": "EqualSizedRUs96Mbps",
-            "group": "mimo",
-            "ini": "examples/ieee80211ax/dl_mu_mimo/omnetpp.ini",
-            "label": "OFDMA, 96 Mbps",
-            "measurement": {
-              "end_s": 0.88,
-              "start_s": 0.55
-            },
-            "metadata": {
-              "csi_leakage": null,
-              "offered_aggregate_mbps": 96
-            },
-            "result_files": [
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs96Mbps/EqualSizedRUs96Mbps-#0.sca",
-                "sha256": "3f07ae4aff3cda588490bee1aa379c78784cc6adf4ad294abe45f42e40257dde"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs96Mbps/EqualSizedRUs96Mbps-#0.vec",
-                "sha256": "9c9ab918c4a6f1f3f0bda4a557a91734a14cd66e21bc2747df12f8573dfeb65d"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs96Mbps/EqualSizedRUs96Mbps-#1.sca",
-                "sha256": "5e8af0e5282c9bd1ad881fbd02ca22e20f00c620010266d560e3eb1a7bbb7fe9"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs96Mbps/EqualSizedRUs96Mbps-#1.vec",
-                "sha256": "f939470f6e7639cfa755da0c090c43044726d88925aff28d2993a95fd4f74152"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs96Mbps/EqualSizedRUs96Mbps-#2.sca",
-                "sha256": "3678ed951da5e310c34232220aea36f2fee566615b7ef67792a4ade59c0f6f8a"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs96Mbps/EqualSizedRUs96Mbps-#2.vec",
-                "sha256": "3e25a5fbe5d2f71c5afbb5c115a9314fda8170b81498e91f41570a4fc087f51f"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs96Mbps/EqualSizedRUs96Mbps-#3.sca",
-                "sha256": "24d9f2fe183edfb97555646a757dd20879fcbc817f7e956015711ed821a30c26"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs96Mbps/EqualSizedRUs96Mbps-#3.vec",
-                "sha256": "62acb234322a2184475c1c606795f05adf981ebd2569e522cf5cf19ae15a9fab"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs96Mbps/EqualSizedRUs96Mbps-#4.sca",
-                "sha256": "b66c27d27a8c801045a6c9b9538831d32eaf63a218452afdc5a066e401978924"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs96Mbps/EqualSizedRUs96Mbps-#4.vec",
-                "sha256": "2114fc6c0f10012e5fdc5ae5b034411152136fde1c5c0a7fc28fabb6b2fa4bc9"
-              }
-            ]
-          },
-          {
-            "configuration": "DlMuMimo96MbpsLeakage01",
-            "group": "mimo",
-            "ini": "examples/ieee80211ax/dl_mu_mimo/omnetpp.ini",
-            "label": "MU-MIMO, 96 Mbps, leakage 0.01",
-            "measurement": {
-              "end_s": 0.88,
-              "start_s": 0.55
-            },
-            "metadata": {
-              "csi_leakage": 0.01,
-              "offered_aggregate_mbps": 96
-            },
-            "result_files": [
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo96MbpsLeakage01/DlMuMimo96MbpsLeakage01-#0.sca",
-                "sha256": "57073e749f52d7c74628a9dde3ffcb1692befe14c25909a0ab64915f542282d2"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo96MbpsLeakage01/DlMuMimo96MbpsLeakage01-#0.vec",
-                "sha256": "d6b7051a54efd20537a34980b99a437c6e771a8884e70546f6d45acab345aebb"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo96MbpsLeakage01/DlMuMimo96MbpsLeakage01-#1.sca",
-                "sha256": "990907b418c9427f3a2768bc5bc841e115a0a5397ee5e4adfb294037a9abf051"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo96MbpsLeakage01/DlMuMimo96MbpsLeakage01-#1.vec",
-                "sha256": "41fe5078abd126cfe62f99a7a81562b37c2169dbbfc9eadaead3b7ab86f338e0"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo96MbpsLeakage01/DlMuMimo96MbpsLeakage01-#2.sca",
-                "sha256": "1b58af95906d025fdd2d05e7a4c1b2e8f4c8f392f6eec6e9104b1d93cb481a40"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo96MbpsLeakage01/DlMuMimo96MbpsLeakage01-#2.vec",
-                "sha256": "7ea86a93e60899de340edd4afa60d189053dc7f7071e74c65a797a5632dc31fa"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo96MbpsLeakage01/DlMuMimo96MbpsLeakage01-#3.sca",
-                "sha256": "5e85d0a5940df2181c0369aa3655704eec91db9dc1134a1efd2782e20ac56aa5"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo96MbpsLeakage01/DlMuMimo96MbpsLeakage01-#3.vec",
-                "sha256": "5a04c90ed407b4bb46de59d13a91fbab15bcf4a33cabf9dc8b7b1c96f7aae1b8"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo96MbpsLeakage01/DlMuMimo96MbpsLeakage01-#4.sca",
-                "sha256": "270741bba0623c500004d394bcc4a081b635c81e6f6176f76f2147e45463d18a"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo96MbpsLeakage01/DlMuMimo96MbpsLeakage01-#4.vec",
-                "sha256": "8bf991e402537d313a44a33172c949923228c0659c26ecf6deb088c8696422b8"
-              }
-            ]
-          },
-          {
-            "configuration": "EqualSizedRUs24MbpsSta1Antenna",
-            "group": "mimo",
-            "ini": "examples/ieee80211ax/dl_mu_mimo/omnetpp.ini",
-            "label": "OFDMA, 24 Mbps, NSS {3,1,2}",
-            "measurement": {
-              "end_s": 0.88,
-              "start_s": 0.55
-            },
-            "metadata": {
-              "csi_leakage": null,
-              "offered_aggregate_mbps": 24,
-              "sta_receive_nss": [
-                3,
-                1,
-                2
-              ]
-            },
-            "result_files": [
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs24MbpsSta1Antenna/EqualSizedRUs24MbpsSta1Antenna-#0.sca",
-                "sha256": "9731b3868612af15a7a3d9ca6edcb643914cd347ec2446a6935b7e219316cf07"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs24MbpsSta1Antenna/EqualSizedRUs24MbpsSta1Antenna-#0.vec",
-                "sha256": "180e9b5d5032b7ab10615931cd1de9525a29b4df655b7fe339ff076044d46dc4"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs24MbpsSta1Antenna/EqualSizedRUs24MbpsSta1Antenna-#1.sca",
-                "sha256": "843181c3c616a52b27e0c60cf6fcdfe55f39174fecc170c9421187412f9b75a3"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs24MbpsSta1Antenna/EqualSizedRUs24MbpsSta1Antenna-#1.vec",
-                "sha256": "a2e877b85eb3a4cef0269f17fac088527d4ab7ca77bc50a32672bebea8faed3d"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs24MbpsSta1Antenna/EqualSizedRUs24MbpsSta1Antenna-#2.sca",
-                "sha256": "23602a986bfbe5da8ee655022e47b288684ba094c48cfa8424415cf20f086831"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs24MbpsSta1Antenna/EqualSizedRUs24MbpsSta1Antenna-#2.vec",
-                "sha256": "48e6273faf504a037102af38a00aa0a3ec78f0ef1fc290606f0cf0f583cf4537"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs24MbpsSta1Antenna/EqualSizedRUs24MbpsSta1Antenna-#3.sca",
-                "sha256": "b0e077576b0c689dad104ec22fdeb947bfa75995e6b2528d39290720fde99cbe"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs24MbpsSta1Antenna/EqualSizedRUs24MbpsSta1Antenna-#3.vec",
-                "sha256": "3b0396c0c6863df2f092881dffed7501020246b69da39d5fabb5986e58aecd79"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs24MbpsSta1Antenna/EqualSizedRUs24MbpsSta1Antenna-#4.sca",
-                "sha256": "b5ae214e666d45123dcf371ca84eafe6c54980a518d1766f61f2e3b9c66cc84d"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/EqualSizedRUs24MbpsSta1Antenna/EqualSizedRUs24MbpsSta1Antenna-#4.vec",
-                "sha256": "12587b5934b12edede4df49d4ae1c82309d968b505551fc6c069d08dbe9ef304"
-              }
-            ]
-          },
-          {
-            "configuration": "DlMuMimo24MbpsLeakage001Sta1Antenna",
-            "group": "mimo",
-            "ini": "examples/ieee80211ax/dl_mu_mimo/omnetpp.ini",
-            "label": "MU-MIMO, 24 Mbps, leakage 0.001, NSS {3,1,2}",
-            "measurement": {
-              "end_s": 0.88,
-              "start_s": 0.55
-            },
-            "metadata": {
-              "csi_leakage": 0.001,
-              "offered_aggregate_mbps": 24,
-              "sta_receive_nss": [
-                3,
-                1,
-                2
-              ]
-            },
-            "result_files": [
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo24MbpsLeakage001Sta1Antenna/DlMuMimo24MbpsLeakage001Sta1Antenna-#0.sca",
-                "sha256": "c31688c1fd9a5e9282a9b2785d6efab8be42fb130ef851ab9b90320ecd3ddffd"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo24MbpsLeakage001Sta1Antenna/DlMuMimo24MbpsLeakage001Sta1Antenna-#0.vec",
-                "sha256": "b1c64fb974cce16649cc9afc596dd211189e23ff0569bc73e75e25f3c1a0c7cd"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo24MbpsLeakage001Sta1Antenna/DlMuMimo24MbpsLeakage001Sta1Antenna-#1.sca",
-                "sha256": "b47fd8a771654967715d7013dfc1f3325229bb75c55f9dd485bc7c4f2d622c39"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo24MbpsLeakage001Sta1Antenna/DlMuMimo24MbpsLeakage001Sta1Antenna-#1.vec",
-                "sha256": "14cdda80ca84d95b2b624c510868a3a2025e48bf0c13d65fb7ef71604174e2be"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo24MbpsLeakage001Sta1Antenna/DlMuMimo24MbpsLeakage001Sta1Antenna-#2.sca",
-                "sha256": "82c258242cc75b32322c9959a749c11a17f430a052d72c84af428aad800d184a"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo24MbpsLeakage001Sta1Antenna/DlMuMimo24MbpsLeakage001Sta1Antenna-#2.vec",
-                "sha256": "7b0e3fa1d129f61cb6f07846483b580a46276b04fedefeeac3920a9e6b961ecb"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo24MbpsLeakage001Sta1Antenna/DlMuMimo24MbpsLeakage001Sta1Antenna-#3.sca",
-                "sha256": "f3c399e9bf2f1f8bbabbdaf4f8b1144ee2562ebe727eabf4782e401815e522a6"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo24MbpsLeakage001Sta1Antenna/DlMuMimo24MbpsLeakage001Sta1Antenna-#3.vec",
-                "sha256": "d599e4e6656fac1586fbcc99e3ee635242f859226f6f7e8f0e6b5302fad134b1"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo24MbpsLeakage001Sta1Antenna/DlMuMimo24MbpsLeakage001Sta1Antenna-#4.sca",
-                "sha256": "085e6195f99400d6807a7af6fed6c485fb08fcd28cdfbbbd35615e71cd625411"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260802T075916Z/DlMuMimo24MbpsLeakage001Sta1Antenna/DlMuMimo24MbpsLeakage001Sta1Antenna-#4.vec",
-                "sha256": "4b051b8a0afc86ced781e6148703c95f90c98fed1b8f1102b99b00eb4fe3b1d5"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SuBaseline/SuBaseline-#4.vec",
+                "sha256": "91143b6fac59f9d2bc870f647bc7a8aa29e4704046f82cc25f3f11bf5b759dd7"
               }
             ]
           }
         ],
-        "session_id": "20260802T075916Z",
+        "session_id": "20260802T093100Z",
         "status": "PASS"
       }
     },
-    "repository_revision": "a96d4acd2b4abbf95307220664bc7f501574887c",
-    "requested_session_id": "20260802T075916Z",
+    "repository_revision": "798f83241cbdc6827372f12b46b82763f842fc87",
+    "requested_session_id": "20260802T093100Z",
     "schema_version": 1
   },
-  "mimo": {
-    "MU-MIMO, 24 Mbps, leakage 0.01": {
+  "dl_bar": {
+    "DL SU Baseline": {
       "goodput_mbps": {
-        "ci95": 0.05384620810080405,
+        "ci95": 2.465978625918724e-15,
         "count": 5,
-        "mean": 24.004848484848488
+        "mean": 13.070769230769233
       }
     },
-    "MU-MIMO, 24 Mbps, leakage 0.001": {
+    "Sequential BAR": {
       "goodput_mbps": {
-        "ci95": 0.07555277335880423,
+        "ci95": 0.01278585395302811,
         "count": 5,
-        "mean": 24.01454545454546
+        "mean": 11.18523076923077
       }
     },
-    "MU-MIMO, 24 Mbps, leakage 0.001, NSS {3,1,2}": {
+    "Triggered BAR": {
       "goodput_mbps": {
-        "ci95": 0.07555277335880423,
+        "ci95": 0.01278585395302811,
         "count": 5,
-        "mean": 24.01454545454546
-      }
-    },
-    "MU-MIMO, 48 Mbps, leakage 0.01": {
-      "goodput_mbps": {
-        "ci95": 0.6769701953726617,
-        "count": 5,
-        "mean": 29.561212121212122
-      }
-    },
-    "MU-MIMO, 72 Mbps, leakage 0.01": {
-      "goodput_mbps": {
-        "ci95": 0.7076603590136511,
-        "count": 5,
-        "mean": 29.362424242424243
-      }
-    },
-    "MU-MIMO, 96 Mbps, leakage 0.01": {
-      "goodput_mbps": {
-        "ci95": 1.3790044381502506,
-        "count": 5,
-        "mean": 29.124848484848492
-      }
-    },
-    "OFDMA, 24 Mbps": {
-      "goodput_mbps": {
-        "ci95": 0.02692310405040203,
-        "count": 5,
-        "mean": 23.990303030303032
-      }
-    },
-    "OFDMA, 24 Mbps, NSS {3,1,2}": {
-      "goodput_mbps": {
-        "ci95": 0.02692310405040203,
-        "count": 5,
-        "mean": 23.990303030303032
-      }
-    },
-    "OFDMA, 48 Mbps": {
-      "goodput_mbps": {
-        "ci95": 0.02692310405040203,
-        "count": 5,
-        "mean": 48.014545454545456
-      }
-    },
-    "OFDMA, 72 Mbps": {
-      "goodput_mbps": {
-        "ci95": 0.11540876762685823,
-        "count": 5,
-        "mean": 72.01939393939395
-      }
-    },
-    "OFDMA, 96 Mbps": {
-      "goodput_mbps": {
-        "ci95": 0.24767060810854485,
-        "count": 5,
-        "mean": 95.94666666666667
+        "mean": 11.18523076923077
       }
     }
   }

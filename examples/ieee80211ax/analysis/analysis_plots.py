@@ -1023,6 +1023,7 @@ PLOTS: dict[str, Callable[[list[Condition], Path], None]] = {
     "width": plot_width,
     "dl_sched": plot_dl,
     "dl_asym": plot_dl,
+    "dl_bar": plot_dl,
     "bsr": plot_bsr,
     "multi_tid": plot_delivery,
     "operating_mode": plot_delivery,

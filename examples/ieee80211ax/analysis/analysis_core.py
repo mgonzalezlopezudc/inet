@@ -46,6 +46,7 @@ FIGURE_FILENAMES = {
     "width": "channel-width-dashboard.png",
     "dl_sched": "dl-scheduler-dashboard.png",
     "dl_asym": "dl-asymmetric-scheduler-dashboard.png",
+    "dl_bar": "dl-bar-acknowledgment-dashboard.png",
     "bsr": "bsr-reported-vs-scheduled.png",
     "multi_tid": "multi-tid-delivery.png",
     "operating_mode": "operating-mode-delivery.png",

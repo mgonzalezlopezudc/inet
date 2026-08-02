@@ -104,6 +104,13 @@
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["ofdma"]
     },
+    "dl_ofdma_bar": {
+      "scalar_vector_group": "dl_bar",
+      "ini": "dl_ofdma_bar/omnetpp.ini",
+      "configurations": ["TriggeredBar", "SequentialBar", "SuBaseline"],
+      "phy_profiles": ["legacy", "he"],
+      "feature_plugins": ["ofdma", "block-ack"]
+    },
     "rate_adaptation": {
       "scalar_vector_group": "rate",
       "ini": "rate_adaptation/omnetpp.ini",

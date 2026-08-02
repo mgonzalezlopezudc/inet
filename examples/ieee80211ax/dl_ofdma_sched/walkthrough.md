@@ -3,8 +3,8 @@
 <!-- BEGIN SCRIPT RESULTS SESSIONS -->
 `[script]` results sessions:
 
-- Scalar/vector: `20260726T150000Z`
-- PCAP: `20260726T150000Z`
+- Scalar/vector: `20260802T091407Z`
+- PCAP: `20260802T091407Z`
 <!-- END SCRIPT RESULTS SESSIONS -->
 
 `[agent]` results sessions: `20260726T150000Z`.
@@ -224,6 +224,41 @@ Common table provenance:
 The table is a presentation view of the session-bound run-level summary; the common provenance applies to every row.
 <!-- END GENERATED: ieee80211-scalar-vector-dl -->
 
+<!-- BEGIN GENERATED: ieee80211-scalar-vector-dl_sched -->
+### [script] Generated scalar/vector plot and table
+
+![dl_sched scalar/vector analysis](results/20260802T091407Z/dl-scheduler-dashboard.png)
+
+Figure provenance: [`results/20260802T091407Z/dl-scheduler-dashboard.png.json`](results/20260802T091407Z/dl-scheduler-dashboard.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
+
+Common table provenance:
+
+- Source result filters / modules / units: vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B<br>vector / **.app[*] / endToEndDelay:vector / unit=s<br>vector / **.ap.wlan[0].radio / heStaId:vector<br>vector / **.ap.wlan[0].radio / heScheduledPsduBytes:vector / unit=B<br>vector / **.ap.wlan[0].radio / heUserPpduDuration:vector / unit=s
+- Window / per-run aggregation / exclusions: [0.3, 0.88) s; delay=pooled packet p95 within run; observation=one per run; per_user=STA-ID aligned scheduled PSDU bytes and PPDU duration; uncertainty=95% Student-t CI
+- Independent runs: run-level summaries: n=5
+
+| Configuration / observation | Mean or direct value | 95% CI half-width |
+|---|---:|---:|
+| EDCA / delay p95 ms | 145.308 | 0.685096 |
+| EDCA / goodput mbps | 1.69545 | 0.00443306 |
+| EDCA / jain fairness | 0.99352 | 0.00131184 |
+| fBW / delay p95 ms | 21.5947 | 7.18809 |
+| fBW / goodput mbps | 2.35614 | 0.0125503 |
+| fBW / jain fairness | 0.999276 | 0.000427084 |
+| fHoL / delay p95 ms | 0.830519 | 0.066423 |
+| fHoL / goodput mbps | 2.4 | 0 |
+| fHoL / jain fairness | 1 | 0 |
+
+The table is a presentation view of the session-bound run-level summary; the common provenance applies to every row.
+
+### [script] Executable evidence checks
+
+| Status | Requirement | Evaluation |
+|---|---|---|
+| **INCONCLUSIVE** | Per-user scheduling is keyed by STA ID without MAC-address filtering | The evaluator does not yet correlate each STA ID with its same-PPDU scheduled bytes and duration. |
+| **INCONCLUSIVE** | Per-user delivery and delay come from application results | No manifest-defined acceptance criterion exists for the per-user delivery and delay matrix. |
+<!-- END GENERATED: ieee80211-scalar-vector-dl_sched -->
+
 ## [agent] PCAP statistics
 
 Capture point: `Lan80211AxDlOfdma.ap.wlan[0]`, with per-host captures retained.
@@ -252,13 +287,13 @@ attribution for this core matrix.
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
 ### [script] Generated PCAP plots and tables
-![802.11 Packet Type Statistics](results/20260726T150000Z/packet_statistics.png)
+![802.11 Packet Type Statistics](results/20260802T091407Z/packet_statistics.png)
 
-Figure provenance: [`packet_statistics.png.json`](results/20260726T150000Z/packet_statistics.png.json).
+Figure provenance: [`packet_statistics.png.json`](results/20260802T091407Z/packet_statistics.png.json).
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 
-Capture session `20260726T150000Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260726T150000Z.json` (SHA-256 `2009a5e8dad2cbb1258ae6cd90ac8c68c6007dc92acd6af3d87fa065913d6e8c`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
+Capture session `20260802T091407Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260802T091407Z.json` (SHA-256 `ded3a6ddb58f92558f6de510d36c3ddb00efb186dbf0d5512ce3c299b18576a8`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
 
 Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
@@ -270,143 +305,245 @@ Observation point: Access Point (AP) wireless interfaces.
 
 | Configuration | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---:|---|---:|---|
-| `EqualSizedRUs_fBW` | `none (all decoded frames)` | 4414 | Data: QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (1378), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] (1378), Control: Trigger (689) | 60.54% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `EqualSizedRUs_fHoL` | `none (all decoded frames)` | 4668 | Data: QoS Data [HE-MU, HE-MCS 1, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] (852), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] (852), Data: QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (832) | 94.69% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `SuEdcaBaseline` | `none (all decoded frames)` | 1790 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1487), Control: Block Ack Request (BAR) (130), Control: Block Ack (BA) (130) | 20.06% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `EqualSizedRUs_fBW` | `none (all decoded frames)` | 4385 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (1388), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] (1388), Control: Trigger (694) | 60.32% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `EqualSizedRUs_fHoL` | `none (all decoded frames)` | 4772 | QoS Data [HE-MU, HE-MCS 1, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] (1374), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] (1374), Control: Trigger (700) | 114.95% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `SuEdcaBaseline` | `none (all decoded frames)` | 1738 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1435), Control: Block Ack Request (BAR) (128), Control: Block Ack (BA) (128) | 19.46% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### [script] Evidence checks
 
 | Status | Requirement | Observed evidence |
 |---|---|---|
-| **PASS** | EqualSizedRUs_fBW produced protocol-visible wireless observations | 4414 AP/global transmission observations |
-| **PASS** | EqualSizedRUs_fHoL produced protocol-visible wireless observations | 4668 AP/global transmission observations |
-| **PASS** | SuEdcaBaseline produced protocol-visible wireless observations | 1790 AP/global transmission observations |
-| **PASS** | HE-MU payload observations decode as QoS Data with A-MPDU status | 3062 of 3062 HE-MU observations |
+| **PASS** | EqualSizedRUs_fBW produced protocol-visible wireless observations | 4385 AP/global transmission observations |
+| **PASS** | EqualSizedRUs_fHoL produced protocol-visible wireless observations | 4772 AP/global transmission observations |
+| **PASS** | SuEdcaBaseline produced protocol-visible wireless observations | 1738 AP/global transmission observations |
+| **PASS** | HE-MU payload observations decode as QoS Data with A-MPDU status | 3246 of 3246 HE-MU observations |
 | **NOT RUN** | HE-MU recipient addresses support per-flow PCAP grouping | No asymmetric backlog/HoL configuration was selected |
 
 ### [script] Configuration: `EqualSizedRUs_fBW`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **4414**
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **4385**
 
-| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | Data: QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 1378 | 31.22% | 166.0 B | 0.0 B | 244.3 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 55.61% | 33.67% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17cf23" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 134 | 3.04% | 166.0 B | 0.0 B | 108.8 us | 18.0 us | 5010 MHz | - | 20.0 dBm | 2.41% | 1.46% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 574 | 13.00% | 166.0 B | 0.0 B | 126.8 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 12.02% | 7.28% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 689 | 15.61% | 46.0 B | 0.0 B | 35.3 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 4.02% | 2.43% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 123 | 2.79% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 0.57% | 0.34% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 123 | 2.79% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | -66.6 dBm | - | 0.62% | 0.38% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | 1378 | 31.22% | 32.0 B | 0.0 B | 108.3 us | 0.0 us | 5005 MHz, 5015 MHz | -64.7 dBm | - | 24.65% | 14.92% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 3 | 0.07% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -65.3 dBm | - | 0.01% | 0.01% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 6 | 0.14% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -65.3 dBm | 20.0 dBm | 0.02% | 0.01% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 6 | 0.14% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -65.3 dBm | 20.0 dBm | 0.07% | 0.04% |
+| Color | Frame Type & Subtype | BSS Color | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 1388 | 31.65% | 166.0 B | 0.0 B | 244.3 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 56.21% | 33.91% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f5dc00" /></svg> | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 146 | 3.33% | 166.0 B | 0.0 B | 108.8 us | 18.0 us | 5010 MHz | - | 20.0 dBm | 2.63% | 1.59% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 0x0000 | 520 | 11.86% | 166.0 B | 0.0 B | 126.8 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 10.93% | 6.59% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | - | 694 | 15.83% | 46.0 B | 0.0 B | 35.3 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 4.06% | 2.45% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | - | 117 | 2.67% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 0.54% | 0.33% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | - | 117 | 2.67% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | -66.7 dBm | - | 0.59% | 0.36% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | 0x0000 | 1388 | 31.65% | 32.0 B | 0.0 B | 108.3 us | 0.0 us | 5005 MHz, 5015 MHz | -64.6 dBm | - | 24.91% | 15.03% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | - | 3 | 0.07% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -65.3 dBm | - | 0.01% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | - | 6 | 0.14% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -65.3 dBm | 20.0 dBm | 0.02% | 0.01% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | - | 6 | 0.14% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -65.3 dBm | 20.0 dBm | 0.07% | 0.04% |
 
 #### [script] Representative frame-exchange timeline
 
-| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
-|---:|---:|---|---|---|---|
-| 20 | 0.300605000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | Data: QoS Data / HE-MU, HE-MCS 1, 106-tone RU, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=2654435975 | Carries protocol-visible MAC payload in the representative exchange. |
-| 21 | 0.300605000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Data: QoS Data / HE-MU, HE-MCS 1, 106-tone RU, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=1013903436 | Carries protocol-visible MAC payload in the representative exchange. |
-| 22 | 0.300661000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
-| 23 | 0.300811000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: Block Ack (BA) / HE-TB, HE-MCS 0, 106-tone RU, NSS 1, GI 1.6 us, LDPC | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
-| 24 | 0.300812000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Control: Block Ack (BA) / HE-TB, HE-MCS 0, 106-tone RU, NSS 1, GI 1.6 us, LDPC | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
-| 25 | 0.301148000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=2, frag=0, more-frag=0, TID=0 | Carries protocol-visible MAC payload in the representative exchange. |
-| 26 | 0.301488000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | Data: QoS Data / HE-MU, HE-MCS 1, 106-tone RU, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=2654436787 | Carries protocol-visible MAC payload in the representative exchange. |
-| 27 | 0.301488000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Data: QoS Data / HE-MU, HE-MCS 1, 106-tone RU, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=1013905272 | Carries protocol-visible MAC payload in the representative exchange. |
-| 28 | 0.301544000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
-| 29 | 0.301694000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: Block Ack (BA) / HE-TB, HE-MCS 0, 106-tone RU, NSS 1, GI 1.6 us, LDPC | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
-| 30 | 0.301695000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Control: Block Ack (BA) / HE-TB, HE-MCS 0, 106-tone RU, NSS 1, GI 1.6 us, LDPC | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
-| 31 | 0.302148000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=3, frag=0, more-frag=0, TID=0 | Carries protocol-visible MAC payload in the representative exchange. |
-| 32 | 0.302479000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | Data: QoS Data / HE-MU, HE-MCS 1, 106-tone RU, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=3, frag=0, more-frag=0, TID=0, A-MPDU=2654436719 | Carries protocol-visible MAC payload in the representative exchange. |
-| 33 | 0.302479000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Data: QoS Data / HE-MU, HE-MCS 1, 106-tone RU, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=3, frag=0, more-frag=0, TID=0, A-MPDU=1013905316 | Carries protocol-visible MAC payload in the representative exchange. |
-| 34 | 0.302535000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
-| 35 | 0.302685000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: Block Ack (BA) / HE-TB, HE-MCS 0, 106-tone RU, NSS 1, GI 1.6 us, LDPC | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| Color | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields |
+|:---:|---:|---:|---|---|---|
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | 20 | 0.300551000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=2654435975 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | 21 | 0.300551000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=1013903436 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | 22 | 0.300607000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | 23 | 0.300757000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | 24 | 0.300758000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 25 | 0.301148000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=2, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | 26 | 0.301515000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=2654436787 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | 27 | 0.301515000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=1013905272 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | 28 | 0.301571000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | 29 | 0.301721000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | 30 | 0.301722000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 31 | 0.302148000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=3, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | 32 | 0.302614000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=3, frag=0, more-frag=0, TID=0, A-MPDU=2654436719 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | 33 | 0.302614000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=3, frag=0, more-frag=0, TID=0, A-MPDU=1013905316 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | 34 | 0.302670000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | 35 | 0.302820000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | 36 | 0.302821000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 37 | 0.303148000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=4, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | 38 | 0.303596000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=4, frag=0, more-frag=0, TID=0, A-MPDU=2654436379 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | 39 | 0.303596000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=4, frag=0, more-frag=0, TID=0, A-MPDU=1013905104 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | 40 | 0.303652000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | 41 | 0.303802000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | 42 | 0.303803000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 43 | 0.304148000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=5, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | 44 | 0.304560000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=5, frag=0, more-frag=0, TID=0, A-MPDU=2654437335 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | 45 | 0.304560000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=5, frag=0, more-frag=0, TID=0, A-MPDU=1013904668 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | 46 | 0.304616000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | 47 | 0.304766000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | 48 | 0.304767000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | 49 | 0.305032000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | Control: Block Ack Request (BAR) | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | 50 | 0.305080000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Control: Block Ack (BA) | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | 51 | 0.305474000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=6, frag=0, more-frag=0, TID=0, A-MPDU=2654437103 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | 52 | 0.305474000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=6, frag=0, more-frag=0, TID=0, A-MPDU=1013904420 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | 53 | 0.305530000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | 54 | 0.305681000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | 55 | 0.305681000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 56 | 0.306016000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=6, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | 57 | 0.306365000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=7, frag=0, more-frag=0, TID=0, A-MPDU=2654433691 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | 58 | 0.306365000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=7, frag=0, more-frag=0, TID=0, A-MPDU=1013906256 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | 59 | 0.306421000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | 60 | 0.306572000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | 61 | 0.306572000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 62 | 0.306844000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=7, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 63 | 0.307148000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=8, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | 64 | 0.307515000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=8, frag=0, more-frag=0, TID=0, A-MPDU=2654433463 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | 65 | 0.307515000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=8, frag=0, more-frag=0, TID=0, A-MPDU=1013906044 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | 66 | 0.307571000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | 67 | 0.307721000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | 68 | 0.307722000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 69 | 0.308148000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=9, frag=0, more-frag=0, TID=0 |
 
 Frame numbers are local to capture `EqualSizedRUs_fBW-#0Lan80211AxDlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
 ### [script] Configuration: `EqualSizedRUs_fHoL`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **4668**
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **4772**
 
-| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | Data: QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 832 | 17.82% | 166.0 B | 0.0 B | 244.3 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 21.47% | 20.33% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#16c022" /></svg> | Data: QoS Data [HE-MU, HE-MCS 1, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 852 | 18.25% | 166.0 B | 0.0 B | 478.7 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 43.07% | 40.78% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 419 | 8.98% | 166.0 B | 0.0 B | 126.8 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 5.61% | 5.31% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 700 | 15.00% | 49.7 B | 4.4 B | 36.6 us | 1.5 us | 5010 MHz | - | 20.0 dBm | 2.70% | 2.56% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 83 | 1.78% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 0.25% | 0.23% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 83 | 1.78% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | -66.0 dBm | - | 0.27% | 0.25% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | 832 | 17.82% | 32.0 B | 0.0 B | 108.3 us | 0.0 us | 5005 MHz, 5015 MHz | -65.0 dBm | - | 9.51% | 9.01% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1332ae" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] | 852 | 18.25% | 32.0 B | 0.0 B | 189.6 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz | -65.3 dBm | - | 17.06% | 16.15% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 3 | 0.06% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -65.3 dBm | - | 0.01% | 0.01% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 6 | 0.13% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -65.3 dBm | 20.0 dBm | 0.02% | 0.01% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 6 | 0.13% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -65.3 dBm | 20.0 dBm | 0.04% | 0.04% |
+| Color | Frame Type & Subtype | BSS Color | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 484 | 10.14% | 166.0 B | 0.0 B | 244.3 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 10.29% | 11.82% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#16c022" /></svg> | QoS Data [HE-MU, HE-MCS 1, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 1374 | 28.79% | 166.0 B | 0.0 B | 478.7 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 57.22% | 65.77% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 0x0000 | 245 | 5.13% | 166.0 B | 0.0 B | 126.8 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 2.70% | 3.11% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | - | 700 | 14.67% | 51.9 B | 4.3 B | 37.3 us | 1.4 us | 5010 MHz | - | 20.0 dBm | 2.27% | 2.61% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | - | 48 | 1.01% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 0.12% | 0.13% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | - | 48 | 1.01% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | -66.0 dBm | - | 0.13% | 0.15% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | 0x0000 | 484 | 10.14% | 32.0 B | 0.0 B | 108.3 us | 0.0 us | 5005 MHz, 5015 MHz | -65.0 dBm | - | 4.56% | 5.24% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1332ae" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] | 0x0000 | 1374 | 28.79% | 32.0 B | 0.0 B | 189.6 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz | -65.3 dBm | - | 22.66% | 26.05% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | - | 3 | 0.06% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -65.3 dBm | - | 0.01% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | - | 6 | 0.13% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -65.3 dBm | 20.0 dBm | 0.01% | 0.01% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | - | 6 | 0.13% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -65.3 dBm | 20.0 dBm | 0.04% | 0.04% |
 
 #### [script] Representative frame-exchange timeline
 
-| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
-|---:|---:|---|---|---|---|
-| 20 | 0.300605000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | Data: QoS Data / HE-MU, HE-MCS 1, 106-tone RU, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=2654435975 | Carries protocol-visible MAC payload in the representative exchange. |
-| 21 | 0.300605000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Data: QoS Data / HE-MU, HE-MCS 1, 106-tone RU, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=1013903436 | Carries protocol-visible MAC payload in the representative exchange. |
-| 22 | 0.300661000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
-| 23 | 0.300811000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: Block Ack (BA) / HE-TB, HE-MCS 0, 106-tone RU, NSS 1, GI 1.6 us, LDPC | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
-| 24 | 0.300812000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Control: Block Ack (BA) / HE-TB, HE-MCS 0, 106-tone RU, NSS 1, GI 1.6 us, LDPC | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
-| 25 | 0.301148000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=2, frag=0, more-frag=0, TID=0 | Carries protocol-visible MAC payload in the representative exchange. |
-| 26 | 0.301488000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | Data: QoS Data / HE-MU, HE-MCS 1, 106-tone RU, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=2654436787 | Carries protocol-visible MAC payload in the representative exchange. |
-| 27 | 0.301488000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Data: QoS Data / HE-MU, HE-MCS 1, 106-tone RU, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=1013905272 | Carries protocol-visible MAC payload in the representative exchange. |
-| 28 | 0.301544000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
-| 29 | 0.301694000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: Block Ack (BA) / HE-TB, HE-MCS 0, 106-tone RU, NSS 1, GI 1.6 us, LDPC | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
-| 30 | 0.301695000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Control: Block Ack (BA) / HE-TB, HE-MCS 0, 106-tone RU, NSS 1, GI 1.6 us, LDPC | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
-| 31 | 0.302148000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=3, frag=0, more-frag=0, TID=0 | Carries protocol-visible MAC payload in the representative exchange. |
-| 32 | 0.302479000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | Data: QoS Data / HE-MU, HE-MCS 1, 106-tone RU, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=3, frag=0, more-frag=0, TID=0, A-MPDU=2654436719 | Carries protocol-visible MAC payload in the representative exchange. |
-| 33 | 0.302479000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Data: QoS Data / HE-MU, HE-MCS 1, 106-tone RU, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=3, frag=0, more-frag=0, TID=0, A-MPDU=1013905316 | Carries protocol-visible MAC payload in the representative exchange. |
-| 34 | 0.302535000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
-| 35 | 0.302685000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: Block Ack (BA) / HE-TB, HE-MCS 0, 106-tone RU, NSS 1, GI 1.6 us, LDPC | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| Color | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields |
+|:---:|---:|---:|---|---|---|
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | 20 | 0.300551000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=2654435975 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | 21 | 0.300551000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=1013903436 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | 22 | 0.300607000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | 23 | 0.300757000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | 24 | 0.300758000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 25 | 0.301148000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=2, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | 26 | 0.301515000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=2654436787 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | 27 | 0.301515000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=1013905272 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | 28 | 0.301571000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | 29 | 0.301721000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | 30 | 0.301722000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 31 | 0.302148000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=3, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | 32 | 0.302614000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=3, frag=0, more-frag=0, TID=0, A-MPDU=2654436719 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | 33 | 0.302614000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=3, frag=0, more-frag=0, TID=0, A-MPDU=1013905316 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | 34 | 0.302670000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | 35 | 0.302820000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | 36 | 0.302821000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 37 | 0.303148000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=4, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | 38 | 0.303596000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=4, frag=0, more-frag=0, TID=0, A-MPDU=2654436379 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | 39 | 0.303596000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=4, frag=0, more-frag=0, TID=0, A-MPDU=1013905104 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | 40 | 0.303652000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | 41 | 0.303802000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | 42 | 0.303803000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 43 | 0.304148000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=5, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | 44 | 0.304560000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=5, frag=0, more-frag=0, TID=0, A-MPDU=2654437335 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | 45 | 0.304560000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=5, frag=0, more-frag=0, TID=0, A-MPDU=1013904668 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | 46 | 0.304616000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | 47 | 0.304766000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | 48 | 0.304767000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | 49 | 0.305032000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | Control: Block Ack Request (BAR) | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | 50 | 0.305080000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Control: Block Ack (BA) | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | 51 | 0.305474000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=6, frag=0, more-frag=0, TID=0, A-MPDU=2654437103 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bc021" /></svg> | 52 | 0.305474000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=6, frag=0, more-frag=0, TID=0, A-MPDU=1013904420 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | 53 | 0.305530000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | 54 | 0.305681000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | 55 | 0.305681000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 56 | 0.306016000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=6, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#16c022" /></svg> | 57 | 0.306613000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | QoS Data [HE-MU, HE-MCS 1, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=7, frag=0, more-frag=0, TID=0, A-MPDU=2654433691 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#16c022" /></svg> | 58 | 0.306613000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | QoS Data [HE-MU, HE-MCS 1, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=7, frag=0, more-frag=0, TID=0, A-MPDU=1013906256 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#16c022" /></svg> | 59 | 0.306613000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | QoS Data [HE-MU, HE-MCS 1, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=7, frag=0, more-frag=0, TID=0, A-MPDU=3668337929 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | 60 | 0.306669000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1332ae" /></svg> | 61 | 0.306907000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1332ae" /></svg> | 62 | 0.306907000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1332ae" /></svg> | 63 | 0.306907000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#16c022" /></svg> | 64 | 0.307604000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | QoS Data [HE-MU, HE-MCS 1, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=8, frag=0, more-frag=0, TID=0, A-MPDU=2654433606 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#16c022" /></svg> | 65 | 0.307604000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | QoS Data [HE-MU, HE-MCS 1, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=8, frag=0, more-frag=0, TID=0, A-MPDU=1013906317 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#16c022" /></svg> | 66 | 0.307604000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | QoS Data [HE-MU, HE-MCS 1, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=8, frag=0, more-frag=0, TID=0, A-MPDU=3668338132 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | 67 | 0.307660000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1332ae" /></svg> | 68 | 0.307898000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1332ae" /></svg> | 69 | 0.307898000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
 
 Frame numbers are local to capture `EqualSizedRUs_fHoL-#0Lan80211AxDlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
 ### [script] Configuration: `SuEdcaBaseline`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1790**
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1738**
 
-| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17cf23" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 28 | 1.56% | 166.0 B | 0.0 B | 108.8 us | 18.0 us | 5010 MHz | - | 20.0 dBm | 1.52% | 0.30% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 1487 | 83.07% | 166.9 B | 12.1 B | 127.3 us | 6.6 us | 5010 MHz | - | 20.0 dBm | 94.36% | 18.93% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 130 | 7.26% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 1.81% | 0.36% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 130 | 7.26% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | -65.2 dBm | - | 1.99% | 0.40% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 3 | 0.17% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -65.3 dBm | - | 0.04% | 0.01% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 6 | 0.34% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -65.3 dBm | 20.0 dBm | 0.07% | 0.01% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 6 | 0.34% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -65.3 dBm | 20.0 dBm | 0.21% | 0.04% |
+| Color | Frame Type & Subtype | BSS Color | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f5dc00" /></svg> | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 0x0000 | 32 | 1.84% | 166.0 B | 0.0 B | 108.8 us | 18.0 us | 5010 MHz | - | 20.0 dBm | 1.79% | 0.35% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 0x0000 | 1435 | 82.57% | 167.3 B | 14.5 B | 127.5 us | 7.9 us | 5010 MHz | - | 20.0 dBm | 94.02% | 18.30% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | - | 128 | 7.36% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 1.84% | 0.36% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | - | 128 | 7.36% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | -65.1 dBm | - | 2.02% | 0.39% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | - | 3 | 0.17% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -65.3 dBm | - | 0.04% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | - | 6 | 0.35% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -65.3 dBm | 20.0 dBm | 0.08% | 0.01% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | - | 6 | 0.35% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -65.3 dBm | 20.0 dBm | 0.21% | 0.04% |
 
 #### [script] Representative frame-exchange timeline
 
-| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
-|---:|---:|---|---|---|---|
-| 1 | 0.200148000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=0, frag=0, more-frag=0, TID=0 | Carries protocol-visible MAC payload in the representative exchange. |
-| 2 | 0.200196000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 4 | 0.200338000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 6 | 0.200461000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 7 | 0.200715000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=0, frag=0, more-frag=0, TID=0 | Carries protocol-visible MAC payload in the representative exchange. |
-| 8 | 0.200763000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 10 | 0.201073000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 12 | 0.201214000 | ? → 0a:aa:00:00:00:02 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 13 | 0.201405000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=0, frag=0, more-frag=0, TID=0 | Carries protocol-visible MAC payload in the representative exchange. |
-| 14 | 0.201454000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 16 | 0.201587000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 18 | 0.201701000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 19 | 0.300148000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=1, frag=0, more-frag=0, TID=0 | Carries protocol-visible MAC payload in the representative exchange. |
-| 20 | 0.300393000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=1, frag=0, more-frag=0, TID=0 | Carries protocol-visible MAC payload in the representative exchange. |
-| 21 | 0.300843000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=1, frag=0, more-frag=0, TID=0 | Carries protocol-visible MAC payload in the representative exchange. |
-| 22 | 0.301148000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=2, frag=0, more-frag=0, TID=0 | Carries protocol-visible MAC payload in the representative exchange. |
+| Color | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields |
+|:---:|---:|---:|---|---|---|
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 1 | 0.200148000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=0, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | 2 | 0.200196000 | ? → 10:00:00:00:00:00 | Control: Ack | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | 4 | 0.200338000 | ? → 10:00:00:00:00:00 | Control: Ack | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | 6 | 0.200461000 | ? → 0a:aa:00:00:00:01 | Control: Ack | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 7 | 0.200715000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=0, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | 8 | 0.200763000 | ? → 10:00:00:00:00:00 | Control: Ack | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | 10 | 0.201089000 | ? → 10:00:00:00:00:00 | Control: Ack | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | 12 | 0.201230000 | ? → 0a:aa:00:00:00:02 | Control: Ack | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 13 | 0.201421000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=0, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | 14 | 0.201470000 | ? → 10:00:00:00:00:00 | Control: Ack | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | 16 | 0.201603000 | ? → 10:00:00:00:00:00 | Control: Ack | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | 18 | 0.201717000 | ? → 0a:aa:00:00:00:03 | Control: Ack | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 19 | 0.300148000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=1, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 20 | 0.300393000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=1, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 21 | 0.300859000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=1, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 22 | 0.301148000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=2, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 23 | 0.301384000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=2, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 24 | 0.301868000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=2, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 25 | 0.302148000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=3, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 26 | 0.302366000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=3, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 27 | 0.302769000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=3, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 28 | 0.303148000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=4, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 29 | 0.303474000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=4, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 30 | 0.303877000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=4, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 31 | 0.304148000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=5, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | 32 | 0.304250000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | Control: Block Ack Request (BAR) | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | 33 | 0.304298000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Control: Block Ack (BA) | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 34 | 0.304606000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=5, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 35 | 0.305036000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=5, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 36 | 0.305227000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=6, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 37 | 0.305639000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=6, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 38 | 0.306123000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=6, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 39 | 0.306449000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=7, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 40 | 0.306942000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=7, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f5dc00" /></svg> | 41 | 0.307477000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=7, frag=0, more-frag=0, TID=0, A-MPDU=1616 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f5dc00" /></svg> | 42 | 0.307477000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=8, frag=0, more-frag=0, TID=0, A-MPDU=1616 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 43 | 0.307767000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=8, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f5dc00" /></svg> | 44 | 0.308284000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=8, frag=0, more-frag=0, TID=0, A-MPDU=1709 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f5dc00" /></svg> | 45 | 0.308284000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=9, frag=0, more-frag=0, TID=0, A-MPDU=1709 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | 46 | 0.308359000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | Control: Block Ack Request (BAR) | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | 47 | 0.308408000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: Block Ack (BA) | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 48 | 0.308599000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=9, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 49 | 0.309038000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=9, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 50 | 0.309301000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=10, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 51 | 0.309740000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=10, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f5dc00" /></svg> | 52 | 0.310248000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=10, frag=0, more-frag=0, TID=0, A-MPDU=1976 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f5dc00" /></svg> | 53 | 0.310248000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | direction=from DS, retry=0, seq=11, frag=0, more-frag=0, TID=0, A-MPDU=1976 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 54 | 0.310529000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=11, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 55 | 0.311022000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=11, frag=0, more-frag=0, TID=0 |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | 56 | 0.311222000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | direction=from DS, retry=0, seq=12, frag=0, more-frag=0, TID=0 |
 
 Frame numbers are local to capture `SuEdcaBaseline-#0Lan80211AxDlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
 ### [script] Analysis of Packet Distribution
-The scheduled downlink captures contain the expected **Trigger** frames and HE-TB **Block Ack** responses for the DL-MU acknowledgment exchange described by IEEE Std 802.11-2024 Clauses 26.5.1 and 26.5.2.3.3. The radiotap suffixes also distinguish HE-MU transmissions from HE-TB responses. **PASS: HE-MU payload decoding.** 3062 of 3062 HE-MU observations decode as **QoS Data** with radiotap A-MPDU status; none are misclassified as Association Request or Control Subtype 0.
+The scheduled downlink captures contain the expected **Trigger** frames and HE-TB **Block Ack** responses for the DL-MU acknowledgment exchange described by IEEE Std 802.11-2024 Clauses 26.5.1 and 26.5.2.3.3. The radiotap suffixes also distinguish HE-MU transmissions from HE-TB responses. **PASS: HE-MU payload decoding.** 3246 of 3246 HE-MU observations decode as **QoS Data** with radiotap A-MPDU status; none are misclassified as Association Request or Control Subtype 0.
 
 The packet tables verify the protocol-visible exchange structure and the corrected aggregate serialization boundary, but scheduler telemetry remains authoritative for per-user RU allocation. The corrected MPDUs expose unicast receiver addresses, so the asymmetric tables can group observations by STA. These address-scoped counts include protocol observations rather than delivered application packets; measure scheduler priorities and offered-load satisfaction from aligned per-user scheduler and application results. IEEE 802.11 does not prescribe INET's backlog- or head-of-line scheduling policies.
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->

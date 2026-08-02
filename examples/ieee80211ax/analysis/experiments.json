@@ -47,6 +47,9 @@
       {"id": "dl-asym-staid-scheduling-attribution", "kind": "model", "requirement": "Asymmetric per-user scheduling is attributable to STA IDs", "results": ["heStaId", "heScheduledPsduBytes", "heUserPpduDuration"], "evaluation": {"handler": "unimplemented", "reason": "The evaluator does not yet correlate asymmetric per-STA scheduling telemetry with each application flow."}},
       {"id": "dl-asym-application-delivery-delay", "kind": "metric", "requirement": "Asymmetric per-user delivery and delay come from application results", "results": ["packetReceived", "endToEndDelay"], "evaluation": {"handler": "unimplemented", "reason": "No manifest-defined acceptance criterion exists for the asymmetric per-user delivery and delay matrix."}}
     ],
+    "dl_bar": [
+      {"id": "dl-bar-application-delivery-delay", "kind": "metric", "requirement": "Sequential BAR, Triggered BAR, and DL SU delivery and delay come from application results", "results": ["packetReceived", "endToEndDelay"], "evaluation": {"handler": "unimplemented", "reason": "No manifest-defined acceptance criterion exists for the DL BAR comparison."}}
+    ],
     "bsr": [
       {"id": "bsr-reported-scheduled-join", "kind": "model", "requirement": "Reported backlog is joined to scheduler-consumed backlog", "results": ["heUlTriggerDecisionId", "heUlTriggerDecisionReportedBytes", "heUlTriggerDecisionPlannedBytes"], "evaluation": {"handler": "bsr_decision_join", "configs": ["FreshBsr", "StaleBsr", "LongTriggerCheck", "BurstyTraffic"], "module": "**.ap.wlan[0].mac.hcf.ulCoordinator", "vectors": {"trigger_id": "heUlTriggerDecisionTriggerId:vector", "trigger_type": "heUlTriggerDecisionTriggerType:vector", "user_ordinal": "heUlTriggerDecisionUserOrdinal:vector", "association_id": "heUlTriggerDecisionAssociationId:vector", "reported_bytes": "heUlTriggerDecisionReportedBytes:vector", "planned_bytes": "heUlTriggerDecisionPlannedBytes:vector"}}}
     ],
@@ -216,6 +219,17 @@
         {"label": "HoL min delay (2.0ms)", "config": "HoLMinDelay2_0ms", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [4000000, 1600000, 400000]}},
         {"label": "Backlog (1.5ms)", "config": "BacklogBased1_5ms", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [5333333, 2133333, 533333]}},
         {"label": "HoL min delay (1.5ms)", "config": "HoLMinDelay1_5ms", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [5333333, 2133333, 533333]}}
+      ]
+    },
+    "dl_bar": {
+      "walkthrough": "examples/ieee80211ax/dl_ofdma_bar/walkthrough.md",
+      "ini": "examples/ieee80211ax/dl_ofdma_bar/omnetpp.ini",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.3, "end": 0.95},
+      "conditions": [
+        {"label": "Triggered BAR", "config": "TriggeredBar"},
+        {"label": "Sequential BAR", "config": "SequentialBar"},
+        {"label": "DL SU Baseline", "config": "SuBaseline"}
       ]
     },
     "bsr": {
