@@ -170,7 +170,7 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerBacklogBased::schedule(
             context.channelCenterFrequency, context.channelBandwidth);
     const int targetRssiDbm = computeTargetRssiDbm(context);
 
-    auto makeAllocation = [&] (int stationIndex, const physicallayer::Ieee80211HeRu& ru) {
+    auto makeAllocation = [&] (int stationIndex, const physicallayer::Ieee80211HeRu& ru, int requestedNss = 0) {
         RuAllocation allocation;
         const auto& candidate = candidates[stationIndex];
         allocation.staAddress = candidate.staAddress;
@@ -178,7 +178,19 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerBacklogBased::schedule(
         allocation.tid = candidate.selectedTid;
         allocation.accessCategory = candidate.selectedAccessCategory;
         allocation.ru = ru;
-        allocation.mcs = selectMcs(context, candidate, ru);
+
+        int maxSupportedNss = 1;
+        if (candidate.hasNegotiatedHeCapabilities &&
+                candidate.negotiatedHeCapabilities.localRxPeerTx.valid) {
+            maxSupportedNss = getMaxNss(candidate.negotiatedHeCapabilities.localRxPeerTx.mcsNss);
+            maxSupportedNss = std::min(maxSupportedNss, 8);
+        }
+        if (maxSupportedNss < 1)
+            maxSupportedNss = 1;
+
+        int nss = (requestedNss > 0) ? std::min(requestedNss, maxSupportedNss) : 1;
+        allocation.numberOfSpatialStreams = nss;
+        allocation.mcs = selectMcs(context, candidate, ru, nss);
         allocation.coding = candidate.coding;
         allocation.targetRssiDbm = targetRssiDbm;
         allocation.estimatedDuration = result.commonDuration;
@@ -186,17 +198,18 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerBacklogBased::schedule(
         if (candidate.hasTypedBacklogEstimates) {
             const auto& capabilities =
                     candidate.negotiatedHeCapabilities.localRxPeerTx;
+            int nssIndex = std::min(std::max(0, nss - 1), 7);
             if (capabilities.supportedRuToneSizes.count(ru.toneSize) == 0 ||
-                    capabilities.mcsNss.maxMcsPerNss[0] < 0 ||
+                    capabilities.mcsNss.maxMcsPerNss[nssIndex] < 0 ||
                     (allocation.coding == physicallayer::HE_CODING_LDPC &&
                      !candidate.negotiatedHeCapabilities.mutual.ldpc))
                 return std::make_pair(allocation, INT64_C(-1));
             allocation.mcs = std::min(allocation.mcs,
-                    capabilities.mcsNss.maxMcsPerNss[0]);
+                    capabilities.mcsNss.maxMcsPerNss[nssIndex]);
             // IEEE 802.11 HE BCC is limited to MCS 0-9 and RUs no larger
             // than 242 tones; larger-RU/MCS edges require negotiated LDPC.
             if (allocation.coding == physicallayer::HE_CODING_BCC &&
-                    (allocation.mcs > 9 || ru.toneSize > 242))
+                    (allocation.mcs > 9 || ru.toneSize > 242 || allocation.numberOfSpatialStreams > 4))
                 return std::make_pair(allocation, INT64_C(-1));
         }
 
@@ -252,16 +265,35 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerBacklogBased::schedule(
             const auto fullBandwidthRu = physicallayer::getHeEqualRuLayout(
                     context.channelCenterFrequency, context.channelBandwidth, 1).front();
             const int selectedUsers = std::min<int>(muMimoCandidates.size(), maxMuStations);
-            for (int stream = 0; stream < selectedUsers; ++stream) {
-                auto edge = makeAllocation(muMimoCandidates[stream], fullBandwidthRu);
+            int currentStreamStartIndex = 0;
+            const int maxTotalStreams = 8;
+            for (int user = 0; user < selectedUsers; ++user) {
+                const auto& candidate = candidates[muMimoCandidates[user]];
+                int maxStaNss = 1;
+                if (candidate.hasNegotiatedHeCapabilities &&
+                        candidate.negotiatedHeCapabilities.localRxPeerTx.valid) {
+                    maxStaNss = getMaxNss(candidate.negotiatedHeCapabilities.localRxPeerTx.mcsNss);
+                    maxStaNss = std::min(maxStaNss, 4);
+                }
+                if (maxStaNss < 1)
+                    maxStaNss = 1;
+                int allocatedNss = std::min(maxStaNss, maxTotalStreams - currentStreamStartIndex);
+                if (allocatedNss < 1)
+                    break;
+                auto edge = makeAllocation(muMimoCandidates[user], fullBandwidthRu, allocatedNss);
                 if (edge.second < 0)
                     continue;
-                edge.first.muMimo = true;
-                edge.first.streamStartIndex = stream;
+                edge.first.muMimo = (selectedUsers > 1);
+                edge.first.streamStartIndex = currentStreamStartIndex;
+                currentStreamStartIndex += allocatedNss;
                 if (edge.first.plannedBytes > 0) {
                     result.totalPlannedBytes += edge.first.plannedBytes;
                     result.allocations.push_back(edge.first);
                 }
+            }
+            if (result.allocations.size() == 1) {
+                result.allocations[0].muMimo = false;
+                result.allocations[0].streamStartIndex = 0;
             }
             result.exactOptimization = false;
             result.decisionReason = "UL MU-MIMO policy bypass";

@@ -86,7 +86,7 @@
     "ul_mu_mimo": {
       "scalar_vector_group": "ul_mu_mimo",
       "ini": "ul_mu_mimo/omnetpp.ini",
-      "configurations": ["UlSu24Mbps", "Ofdma24Mbps", "UlMuMimo24MbpsLeakage01", "UlMuMimo24MbpsLeakage001", "UlSu48Mbps", "Ofdma48Mbps", "UlMuMimo48MbpsLeakage01", "UlMuMimo48MbpsLeakage001", "UlSu72Mbps", "Ofdma72Mbps", "UlMuMimo72MbpsLeakage01", "UlMuMimo72MbpsLeakage001", "UlSu96Mbps", "Ofdma96Mbps", "UlMuMimo96MbpsLeakage01", "UlMuMimo96MbpsLeakage001"],
+      "configurations": ["UlSu24Mbps", "Ofdma24Mbps", "UlMuMimo24MbpsLeakage001", "UlSu48Mbps", "Ofdma48Mbps", "UlMuMimo48MbpsLeakage001", "UlSu72Mbps", "Ofdma72Mbps", "UlMuMimo72MbpsLeakage001"],
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["mu-mimo"]
     },

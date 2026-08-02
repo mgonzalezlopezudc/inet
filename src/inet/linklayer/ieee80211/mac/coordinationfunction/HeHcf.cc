@@ -164,6 +164,7 @@ class Ieee80211HeLinkPhyContext : public IIeee80211HeLinkPhyContext
 } // namespace
 
 Define_Module(HeHcf);
+Register_Class(HeTbResponseEvent);
 
 HeHcf::~HeHcf()
 {

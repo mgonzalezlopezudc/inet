@@ -92,7 +92,7 @@ int HeUlSchedulerBase::computeTargetRssiDbm(const ScheduleContext& context) cons
 }
 
 int HeUlSchedulerBase::selectMcs(const ScheduleContext& context, const CandidateInfo& candidate,
-        const physicallayer::Ieee80211HeRu& ru) const
+        const physicallayer::Ieee80211HeRu& ru, int nss) const
 {
     if (heRateControl == nullptr || candidate.associationId == 0)
         return defaultMcs;
@@ -116,7 +116,7 @@ int HeUlSchedulerBase::selectMcs(const ScheduleContext& context, const Candidate
         heRateControl->reportHeRxSnir(candidate.staAddress, estimatedSnrDb);
     }
     auto selection = heRateControl->selectHeMode(candidate.staAddress, context.channelBandwidth,
-            ru.toneSize, physicallayer::HE_TRIGGER_BASED_UPLINK, 1, constraints);
+            ru.toneSize, physicallayer::HE_TRIGGER_BASED_UPLINK, nss, constraints);
     return selection.mode == nullptr ? defaultMcs : selection.mcs;
 }
 

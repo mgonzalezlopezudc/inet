@@ -323,20 +323,13 @@
       "conditions": [
         {"label": "UL SU, 24 Mbps", "config": "UlSu24Mbps", "metadata": {"offered_aggregate_mbps": 24, "mode": "UL SU", "csi_leakage": null, "sink_module_regex": "\\.server\\.app\\["}},
         {"label": "OFDMA, 24 Mbps", "config": "Ofdma24Mbps", "metadata": {"offered_aggregate_mbps": 24, "mode": "OFDMA", "csi_leakage": null, "sink_module_regex": "\\.server\\.app\\["}},
-        {"label": "MU-MIMO, 24 Mbps, leakage 0.01", "config": "UlMuMimo24MbpsLeakage01", "metadata": {"offered_aggregate_mbps": 24, "mode": "MU-MIMO", "csi_leakage": 0.01, "sink_module_regex": "\\.server\\.app\\["}},
         {"label": "MU-MIMO, 24 Mbps, leakage 0.001", "config": "UlMuMimo24MbpsLeakage001", "metadata": {"offered_aggregate_mbps": 24, "mode": "MU-MIMO", "csi_leakage": 0.001, "sink_module_regex": "\\.server\\.app\\["}},
         {"label": "UL SU, 48 Mbps", "config": "UlSu48Mbps", "metadata": {"offered_aggregate_mbps": 48, "mode": "UL SU", "csi_leakage": null, "sink_module_regex": "\\.server\\.app\\["}},
         {"label": "OFDMA, 48 Mbps", "config": "Ofdma48Mbps", "metadata": {"offered_aggregate_mbps": 48, "mode": "OFDMA", "csi_leakage": null, "sink_module_regex": "\\.server\\.app\\["}},
-        {"label": "MU-MIMO, 48 Mbps, leakage 0.01", "config": "UlMuMimo48MbpsLeakage01", "metadata": {"offered_aggregate_mbps": 48, "mode": "MU-MIMO", "csi_leakage": 0.01, "sink_module_regex": "\\.server\\.app\\["}},
         {"label": "MU-MIMO, 48 Mbps, leakage 0.001", "config": "UlMuMimo48MbpsLeakage001", "metadata": {"offered_aggregate_mbps": 48, "mode": "MU-MIMO", "csi_leakage": 0.001, "sink_module_regex": "\\.server\\.app\\["}},
         {"label": "UL SU, 72 Mbps", "config": "UlSu72Mbps", "metadata": {"offered_aggregate_mbps": 72, "mode": "UL SU", "csi_leakage": null, "sink_module_regex": "\\.server\\.app\\["}},
         {"label": "OFDMA, 72 Mbps", "config": "Ofdma72Mbps", "metadata": {"offered_aggregate_mbps": 72, "mode": "OFDMA", "csi_leakage": null, "sink_module_regex": "\\.server\\.app\\["}},
-        {"label": "MU-MIMO, 72 Mbps, leakage 0.01", "config": "UlMuMimo72MbpsLeakage01", "metadata": {"offered_aggregate_mbps": 72, "mode": "MU-MIMO", "csi_leakage": 0.01, "sink_module_regex": "\\.server\\.app\\["}},
-        {"label": "MU-MIMO, 72 Mbps, leakage 0.001", "config": "UlMuMimo72MbpsLeakage001", "metadata": {"offered_aggregate_mbps": 72, "mode": "MU-MIMO", "csi_leakage": 0.001, "sink_module_regex": "\\.server\\.app\\["}},
-        {"label": "UL SU, 96 Mbps", "config": "UlSu96Mbps", "metadata": {"offered_aggregate_mbps": 96, "mode": "UL SU", "csi_leakage": null, "sink_module_regex": "\\.server\\.app\\["}},
-        {"label": "OFDMA, 96 Mbps", "config": "Ofdma96Mbps", "metadata": {"offered_aggregate_mbps": 96, "mode": "OFDMA", "csi_leakage": null, "sink_module_regex": "\\.server\\.app\\["}},
-        {"label": "MU-MIMO, 96 Mbps, leakage 0.01", "config": "UlMuMimo96MbpsLeakage01", "metadata": {"offered_aggregate_mbps": 96, "mode": "MU-MIMO", "csi_leakage": 0.01, "sink_module_regex": "\\.server\\.app\\["}},
-        {"label": "MU-MIMO, 96 Mbps, leakage 0.001", "config": "UlMuMimo96MbpsLeakage001", "metadata": {"offered_aggregate_mbps": 96, "mode": "MU-MIMO", "csi_leakage": 0.001, "sink_module_regex": "\\.server\\.app\\["}}
+        {"label": "MU-MIMO, 72 Mbps, leakage 0.001", "config": "UlMuMimo72MbpsLeakage001", "metadata": {"offered_aggregate_mbps": 72, "mode": "MU-MIMO", "csi_leakage": 0.001, "sink_module_regex": "\\.server\\.app\\["}}
       ]
     },
     "ul_ofdma": {

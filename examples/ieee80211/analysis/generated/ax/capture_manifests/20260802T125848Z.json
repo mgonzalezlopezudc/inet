@@ -1,0 +1,2162 @@
+{
+  "analysis_script_sha256": "fdfeeb7c772ec8d4eb9350abfa562a1157d17cba3ecdf9094853c0e918408e20",
+  "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
+  "capture_source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "entries": [
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 824300,
+            "duration_seconds": 0.79906,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999704,
+            "file_size_bytes": 887284,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1429,
+            "snapshot_length": null,
+            "start_seconds": 0.200644,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlSu24Mbps/UlSu24Mbps-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "a30409703caac3d132e1b9515a5cc7e7c3a2b5d072a46b6bd4ca8e5a10508c24",
+          "size_bytes": 887284
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 824300,
+            "duration_seconds": 0.799061,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999705,
+            "file_size_bytes": 887292,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1429,
+            "snapshot_length": null,
+            "start_seconds": 0.200644,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlSu24Mbps/UlSu24Mbps-#0Lan80211AxUlOfdma.host[0].wlan[0].pcap",
+          "sha256": "96a18cf474e5e0bab8a554952b648c65a1433d04f6ea26e2b5a811e65a77fe08",
+          "size_bytes": 887292
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 824300,
+            "duration_seconds": 0.799061,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999705,
+            "file_size_bytes": 887292,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1429,
+            "snapshot_length": null,
+            "start_seconds": 0.200644,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlSu24Mbps/UlSu24Mbps-#0Lan80211AxUlOfdma.host[1].wlan[0].pcap",
+          "sha256": "7a22b3825e42ec536216fbcf0114338258ddd6cb7bc3e8ce41f170927ff850d7",
+          "size_bytes": 887292
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 824300,
+            "duration_seconds": 0.799061,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999705,
+            "file_size_bytes": 887292,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[2].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1429,
+            "snapshot_length": null,
+            "start_seconds": 0.200644,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlSu24Mbps/UlSu24Mbps-#0Lan80211AxUlOfdma.host[2].wlan[0].pcap",
+          "sha256": "7f27ece5d65b055dd82b9b46c5c76bf0ab0a92316c5f9fd975faceb212746b6c",
+          "size_bytes": 887292
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "UlSu24Mbps",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_mu_mimo/omnetpp.ini",
+      "ini_sha256": "b91265723db8db90a3ef330ee3672b8c6ece791c0078cf0a107c0f3103453bab",
+      "run_number": 0,
+      "scalar": {
+        "configname": "UlSu24Mbps",
+        "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlSu24Mbps/UlSu24Mbps-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "8dbb1a4a55d27a99ece576701f0ac36f954f64e8210a7e86f4ecc9d17b9c4a87"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_mu_mimo"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 973259,
+            "duration_seconds": 0.997992,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.99904,
+            "file_size_bytes": 1063108,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1993,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/Ofdma24Mbps/Ofdma24Mbps-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "b05ccc4c8ce51510a89047ab39b62384e9767e33b2a7cb64bc58c11a19224c6b",
+          "size_bytes": 1063108
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 974295,
+            "duration_seconds": 0.997992,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.99904,
+            "file_size_bytes": 1064152,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1993,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/Ofdma24Mbps/Ofdma24Mbps-#0Lan80211AxUlOfdma.host[0].wlan[0].pcap",
+          "sha256": "1ee79124fa3f4e4cbd107bb98852410bb7b91cd17e0998ebfa39555119548609",
+          "size_bytes": 1064152
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 974295,
+            "duration_seconds": 0.997992,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999041,
+            "file_size_bytes": 1064152,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1993,
+            "snapshot_length": null,
+            "start_seconds": 0.001049,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/Ofdma24Mbps/Ofdma24Mbps-#0Lan80211AxUlOfdma.host[1].wlan[0].pcap",
+          "sha256": "64a95f180ce4d2708be4462db243759c5719efc05973fac96a19eecc89d0b441",
+          "size_bytes": 1064152
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 974295,
+            "duration_seconds": 0.997992,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.99904,
+            "file_size_bytes": 1064152,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[2].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1993,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/Ofdma24Mbps/Ofdma24Mbps-#0Lan80211AxUlOfdma.host[2].wlan[0].pcap",
+          "sha256": "143267b3e2b7551941aaab35038b38135f7e6537ea9045711270e7fae58c04d1",
+          "size_bytes": 1064152
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "Ofdma24Mbps",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_mu_mimo/omnetpp.ini",
+      "ini_sha256": "b91265723db8db90a3ef330ee3672b8c6ece791c0078cf0a107c0f3103453bab",
+      "run_number": 0,
+      "scalar": {
+        "configname": "Ofdma24Mbps",
+        "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/Ofdma24Mbps/Ofdma24Mbps-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "88ee186f30a7e3731a1ca9219799083d56bdd641bf0ecd920e6deef81cd70cb8"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_mu_mimo"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 610099,
+            "duration_seconds": 0.993594,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.994642,
+            "file_size_bytes": 668132,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1306,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo24MbpsLeakage01/UlMuMimo24MbpsLeakage01-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "d04a6a08298a7d7447d27a724d89dbc79db17d8914c2790d63c6414c63a92478",
+          "size_bytes": 668132
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 611147,
+            "duration_seconds": 0.993595,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.994643,
+            "file_size_bytes": 669188,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1306,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo24MbpsLeakage01/UlMuMimo24MbpsLeakage01-#0Lan80211AxUlOfdma.host[0].wlan[0].pcap",
+          "sha256": "0618d336e1a7e20f969279bcaf47e1a20b3fdfff5fa75725955c4864d70eb78f",
+          "size_bytes": 669188
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 611147,
+            "duration_seconds": 0.993594,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.994643,
+            "file_size_bytes": 669188,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1306,
+            "snapshot_length": null,
+            "start_seconds": 0.001049,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo24MbpsLeakage01/UlMuMimo24MbpsLeakage01-#0Lan80211AxUlOfdma.host[1].wlan[0].pcap",
+          "sha256": "6ee5cfb441d2eff49ff845a01f6c6cdbeeb7a129d03303b91ec0c408feb78832",
+          "size_bytes": 669188
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 611147,
+            "duration_seconds": 0.993595,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.994643,
+            "file_size_bytes": 669188,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[2].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1306,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo24MbpsLeakage01/UlMuMimo24MbpsLeakage01-#0Lan80211AxUlOfdma.host[2].wlan[0].pcap",
+          "sha256": "4dcfece3086f1ce2a683332a0a2c9260cf580094da67a0db936bdf7d2e195da8",
+          "size_bytes": 669188
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "UlMuMimo24MbpsLeakage01",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_mu_mimo/omnetpp.ini",
+      "ini_sha256": "b91265723db8db90a3ef330ee3672b8c6ece791c0078cf0a107c0f3103453bab",
+      "run_number": 0,
+      "scalar": {
+        "configname": "UlMuMimo24MbpsLeakage01",
+        "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo24MbpsLeakage01/UlMuMimo24MbpsLeakage01-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "e7c17227187b487f39bbdc34c2a9990446acba68a7981a070ac4014583d6db96"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_mu_mimo"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 610099,
+            "duration_seconds": 0.993594,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.994642,
+            "file_size_bytes": 668132,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1306,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo24MbpsLeakage001/UlMuMimo24MbpsLeakage001-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "d04a6a08298a7d7447d27a724d89dbc79db17d8914c2790d63c6414c63a92478",
+          "size_bytes": 668132
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 611147,
+            "duration_seconds": 0.993595,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.994643,
+            "file_size_bytes": 669188,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1306,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo24MbpsLeakage001/UlMuMimo24MbpsLeakage001-#0Lan80211AxUlOfdma.host[0].wlan[0].pcap",
+          "sha256": "0618d336e1a7e20f969279bcaf47e1a20b3fdfff5fa75725955c4864d70eb78f",
+          "size_bytes": 669188
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 611147,
+            "duration_seconds": 0.993594,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.994643,
+            "file_size_bytes": 669188,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1306,
+            "snapshot_length": null,
+            "start_seconds": 0.001049,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo24MbpsLeakage001/UlMuMimo24MbpsLeakage001-#0Lan80211AxUlOfdma.host[1].wlan[0].pcap",
+          "sha256": "6ee5cfb441d2eff49ff845a01f6c6cdbeeb7a129d03303b91ec0c408feb78832",
+          "size_bytes": 669188
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 611147,
+            "duration_seconds": 0.993595,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.994643,
+            "file_size_bytes": 669188,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[2].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1306,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo24MbpsLeakage001/UlMuMimo24MbpsLeakage001-#0Lan80211AxUlOfdma.host[2].wlan[0].pcap",
+          "sha256": "4dcfece3086f1ce2a683332a0a2c9260cf580094da67a0db936bdf7d2e195da8",
+          "size_bytes": 669188
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "UlMuMimo24MbpsLeakage001",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_mu_mimo/omnetpp.ini",
+      "ini_sha256": "b91265723db8db90a3ef330ee3672b8c6ece791c0078cf0a107c0f3103453bab",
+      "run_number": 0,
+      "scalar": {
+        "configname": "UlMuMimo24MbpsLeakage001",
+        "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo24MbpsLeakage001/UlMuMimo24MbpsLeakage001-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "bee9c84cb9356b85328768289642a0cb813a83d840e1cd87cc0630c153186777"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_mu_mimo"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 826788,
+            "duration_seconds": 0.798824,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999468,
+            "file_size_bytes": 890256,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1440,
+            "snapshot_length": null,
+            "start_seconds": 0.200644,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlSu48Mbps/UlSu48Mbps-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "9da1ff3fe61605c059e64deb7c1c96f44a1457913d9f37441c6e150961f3402c",
+          "size_bytes": 890256
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 826788,
+            "duration_seconds": 0.798824,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999468,
+            "file_size_bytes": 890264,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1440,
+            "snapshot_length": null,
+            "start_seconds": 0.200644,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlSu48Mbps/UlSu48Mbps-#0Lan80211AxUlOfdma.host[0].wlan[0].pcap",
+          "sha256": "9414c10b558540eb6dd5b3c904aacea3f08160b869a376da1f852b6f53dadaac",
+          "size_bytes": 890264
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 826788,
+            "duration_seconds": 0.798825,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999469,
+            "file_size_bytes": 890264,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1440,
+            "snapshot_length": null,
+            "start_seconds": 0.200644,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlSu48Mbps/UlSu48Mbps-#0Lan80211AxUlOfdma.host[1].wlan[0].pcap",
+          "sha256": "9d29b51fec7e019fc69c0fd73f037074f41d8dae39f4f9c828ed57e2df8630c6",
+          "size_bytes": 890264
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 826788,
+            "duration_seconds": 0.798824,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999468,
+            "file_size_bytes": 890264,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[2].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1440,
+            "snapshot_length": null,
+            "start_seconds": 0.200644,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlSu48Mbps/UlSu48Mbps-#0Lan80211AxUlOfdma.host[2].wlan[0].pcap",
+          "sha256": "cc9cf04ef46a677e6c03132111544a718fb4221a3a46182bfd6d006515af79b8",
+          "size_bytes": 890264
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "UlSu48Mbps",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_mu_mimo/omnetpp.ini",
+      "ini_sha256": "b91265723db8db90a3ef330ee3672b8c6ece791c0078cf0a107c0f3103453bab",
+      "run_number": 0,
+      "scalar": {
+        "configname": "UlSu48Mbps",
+        "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlSu48Mbps/UlSu48Mbps-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "cfc3cd7ce7d6ac5844df07653f3ab1edeb660e865936581acd7e57c358b6bf69"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_mu_mimo"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 981611,
+            "duration_seconds": 0.997992,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.99904,
+            "file_size_bytes": 1071756,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 2000,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/Ofdma48Mbps/Ofdma48Mbps-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "c29f3ffac03ee4fbead29619ac07868ad708b47a83f7acdc77fb70ad903458ed",
+          "size_bytes": 1071756
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 981611,
+            "duration_seconds": 0.997992,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.99904,
+            "file_size_bytes": 1071764,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 2000,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/Ofdma48Mbps/Ofdma48Mbps-#0Lan80211AxUlOfdma.host[0].wlan[0].pcap",
+          "sha256": "cfc6708e30085a7bcb7801c217bbd495b11c22e20b0c9aa83088da8ce89eaa0e",
+          "size_bytes": 1071764
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 981611,
+            "duration_seconds": 0.997992,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999041,
+            "file_size_bytes": 1071764,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 2000,
+            "snapshot_length": null,
+            "start_seconds": 0.001049,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/Ofdma48Mbps/Ofdma48Mbps-#0Lan80211AxUlOfdma.host[1].wlan[0].pcap",
+          "sha256": "90635e1772045fd3ca883cabee222d0b712e3068730363db0a19651d5c8b50af",
+          "size_bytes": 1071764
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 981611,
+            "duration_seconds": 0.997992,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.99904,
+            "file_size_bytes": 1071764,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[2].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 2000,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/Ofdma48Mbps/Ofdma48Mbps-#0Lan80211AxUlOfdma.host[2].wlan[0].pcap",
+          "sha256": "9142426d224c9b47ce90114c69c13bc229bd77d37259aa1e0cae947d32274384",
+          "size_bytes": 1071764
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "Ofdma48Mbps",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_mu_mimo/omnetpp.ini",
+      "ini_sha256": "b91265723db8db90a3ef330ee3672b8c6ece791c0078cf0a107c0f3103453bab",
+      "run_number": 0,
+      "scalar": {
+        "configname": "Ofdma48Mbps",
+        "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/Ofdma48Mbps/Ofdma48Mbps-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "9e3ed92aa0879fd6998505db3f90075e29fa161addc742aa3c11d469ba0e0f23"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_mu_mimo"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 621649,
+            "duration_seconds": 0.998339,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999387,
+            "file_size_bytes": 680188,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1318,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo48MbpsLeakage01/UlMuMimo48MbpsLeakage01-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "210bbb18064074ea6ca4131abcebfc4b9bf36ec809c1ae4c89fa9cf2353ec45c",
+          "size_bytes": 680188
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 622697,
+            "duration_seconds": 0.99834,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999388,
+            "file_size_bytes": 681244,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1318,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo48MbpsLeakage01/UlMuMimo48MbpsLeakage01-#0Lan80211AxUlOfdma.host[0].wlan[0].pcap",
+          "sha256": "d144573bd21b8029f4097bc72ce625fabc6c21e702d0b79ce3276e42f38a39ed",
+          "size_bytes": 681244
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 622697,
+            "duration_seconds": 0.998339,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999388,
+            "file_size_bytes": 681244,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1318,
+            "snapshot_length": null,
+            "start_seconds": 0.001049,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo48MbpsLeakage01/UlMuMimo48MbpsLeakage01-#0Lan80211AxUlOfdma.host[1].wlan[0].pcap",
+          "sha256": "daccda6757b0ffe4f8ff302eb426f5b51cf44ba28c6adf030ff79a68bcd67170",
+          "size_bytes": 681244
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 622697,
+            "duration_seconds": 0.99834,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999388,
+            "file_size_bytes": 681244,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[2].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1318,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo48MbpsLeakage01/UlMuMimo48MbpsLeakage01-#0Lan80211AxUlOfdma.host[2].wlan[0].pcap",
+          "sha256": "18fa65bba0559541b87ae254c516efa066a2996517cfe0bd56ceda827629ce14",
+          "size_bytes": 681244
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "UlMuMimo48MbpsLeakage01",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_mu_mimo/omnetpp.ini",
+      "ini_sha256": "b91265723db8db90a3ef330ee3672b8c6ece791c0078cf0a107c0f3103453bab",
+      "run_number": 0,
+      "scalar": {
+        "configname": "UlMuMimo48MbpsLeakage01",
+        "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo48MbpsLeakage01/UlMuMimo48MbpsLeakage01-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "fe6e56af0a13336836d91e95566aff17082e34a250cafcd6f6d19a8713ed6700"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_mu_mimo"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 621649,
+            "duration_seconds": 0.998339,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999387,
+            "file_size_bytes": 680188,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1318,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo48MbpsLeakage001/UlMuMimo48MbpsLeakage001-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "210bbb18064074ea6ca4131abcebfc4b9bf36ec809c1ae4c89fa9cf2353ec45c",
+          "size_bytes": 680188
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 622697,
+            "duration_seconds": 0.99834,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999388,
+            "file_size_bytes": 681244,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1318,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo48MbpsLeakage001/UlMuMimo48MbpsLeakage001-#0Lan80211AxUlOfdma.host[0].wlan[0].pcap",
+          "sha256": "d144573bd21b8029f4097bc72ce625fabc6c21e702d0b79ce3276e42f38a39ed",
+          "size_bytes": 681244
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 622697,
+            "duration_seconds": 0.998339,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999388,
+            "file_size_bytes": 681244,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1318,
+            "snapshot_length": null,
+            "start_seconds": 0.001049,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo48MbpsLeakage001/UlMuMimo48MbpsLeakage001-#0Lan80211AxUlOfdma.host[1].wlan[0].pcap",
+          "sha256": "daccda6757b0ffe4f8ff302eb426f5b51cf44ba28c6adf030ff79a68bcd67170",
+          "size_bytes": 681244
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 622697,
+            "duration_seconds": 0.99834,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999388,
+            "file_size_bytes": 681244,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[2].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1318,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo48MbpsLeakage001/UlMuMimo48MbpsLeakage001-#0Lan80211AxUlOfdma.host[2].wlan[0].pcap",
+          "sha256": "18fa65bba0559541b87ae254c516efa066a2996517cfe0bd56ceda827629ce14",
+          "size_bytes": 681244
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "UlMuMimo48MbpsLeakage001",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_mu_mimo/omnetpp.ini",
+      "ini_sha256": "b91265723db8db90a3ef330ee3672b8c6ece791c0078cf0a107c0f3103453bab",
+      "run_number": 0,
+      "scalar": {
+        "configname": "UlMuMimo48MbpsLeakage001",
+        "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo48MbpsLeakage001/UlMuMimo48MbpsLeakage001-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "5e133db4a5d8cb3e8c165a215be7d20e5d9102d0e4ab084c6a325476cc5ff593"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_mu_mimo"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 833740,
+            "duration_seconds": 0.798271,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.998915,
+            "file_size_bytes": 897956,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1457,
+            "snapshot_length": null,
+            "start_seconds": 0.200644,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlSu72Mbps/UlSu72Mbps-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "b19fd655a5b1e1f23cff239fa229d45790ef2a778a0945cc436d5911c71fcfb0",
+          "size_bytes": 897956
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 833740,
+            "duration_seconds": 0.798272,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.998916,
+            "file_size_bytes": 897964,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1457,
+            "snapshot_length": null,
+            "start_seconds": 0.200644,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlSu72Mbps/UlSu72Mbps-#0Lan80211AxUlOfdma.host[0].wlan[0].pcap",
+          "sha256": "c7c67c699a97b8202f347d524487dfb8b2902aff63a260be5ac6e7747ec69dce",
+          "size_bytes": 897964
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 833740,
+            "duration_seconds": 0.798273,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.998917,
+            "file_size_bytes": 897964,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1457,
+            "snapshot_length": null,
+            "start_seconds": 0.200644,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlSu72Mbps/UlSu72Mbps-#0Lan80211AxUlOfdma.host[1].wlan[0].pcap",
+          "sha256": "ba8fc2f31e9bb191774a9e3c1ea5063feade709f4791558fbf74031941c2ae72",
+          "size_bytes": 897964
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 833740,
+            "duration_seconds": 0.798272,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.998916,
+            "file_size_bytes": 897964,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[2].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1457,
+            "snapshot_length": null,
+            "start_seconds": 0.200644,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlSu72Mbps/UlSu72Mbps-#0Lan80211AxUlOfdma.host[2].wlan[0].pcap",
+          "sha256": "1e368af145f9fb05ffe4ecf38331cbfedf97bba3c135ea24085f15d9d10d6734",
+          "size_bytes": 897964
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "UlSu72Mbps",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_mu_mimo/omnetpp.ini",
+      "ini_sha256": "b91265723db8db90a3ef330ee3672b8c6ece791c0078cf0a107c0f3103453bab",
+      "run_number": 0,
+      "scalar": {
+        "configname": "UlSu72Mbps",
+        "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlSu72Mbps/UlSu72Mbps-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "3bf142046305fdc61046f23993e762d5bbe3f88b8bc9a2810b9089a35d107a70"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_mu_mimo"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 970669,
+            "duration_seconds": 0.997992,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.99904,
+            "file_size_bytes": 1060504,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1992,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/Ofdma72Mbps/Ofdma72Mbps-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "62ebf76dec38e22c2a56ccc6c8a83a3a4481111ad2bf26b4c84e45ba96696701",
+          "size_bytes": 1060504
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 970669,
+            "duration_seconds": 0.997992,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.99904,
+            "file_size_bytes": 1060512,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1992,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/Ofdma72Mbps/Ofdma72Mbps-#0Lan80211AxUlOfdma.host[0].wlan[0].pcap",
+          "sha256": "b17cd380aba1310785d1c080354c818ac14e9b3c41dda0f313f1735864660068",
+          "size_bytes": 1060512
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 970669,
+            "duration_seconds": 0.997992,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999041,
+            "file_size_bytes": 1060512,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1992,
+            "snapshot_length": null,
+            "start_seconds": 0.001049,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/Ofdma72Mbps/Ofdma72Mbps-#0Lan80211AxUlOfdma.host[1].wlan[0].pcap",
+          "sha256": "07c373a65d22cbded2a7bfb68057fb87fdf31ff55a88adf7f752a3be99f5fc1d",
+          "size_bytes": 1060512
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 970669,
+            "duration_seconds": 0.997992,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.99904,
+            "file_size_bytes": 1060512,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[2].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1992,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/Ofdma72Mbps/Ofdma72Mbps-#0Lan80211AxUlOfdma.host[2].wlan[0].pcap",
+          "sha256": "08d3393acc38b7b10a4f25fee5df4b3c856c1b824fe24e9b93c18e392578ce66",
+          "size_bytes": 1060512
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "Ofdma72Mbps",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_mu_mimo/omnetpp.ini",
+      "ini_sha256": "b91265723db8db90a3ef330ee3672b8c6ece791c0078cf0a107c0f3103453bab",
+      "run_number": 0,
+      "scalar": {
+        "configname": "Ofdma72Mbps",
+        "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/Ofdma72Mbps/Ofdma72Mbps-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "e664b481a36b3a78e9f6c9634849cea7c6b6ab4406b7416be2d14542a24b5dea"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_mu_mimo"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 607951,
+            "duration_seconds": 0.997694,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.998742,
+            "file_size_bytes": 665344,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1292,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo72MbpsLeakage01/UlMuMimo72MbpsLeakage01-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "e1de2388c5a4e31c18bc8ec9cb3f910ec6ae2001d2fbfa9517c2ab6a1885d329",
+          "size_bytes": 665344
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 607951,
+            "duration_seconds": 0.997695,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.998743,
+            "file_size_bytes": 665352,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1292,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo72MbpsLeakage01/UlMuMimo72MbpsLeakage01-#0Lan80211AxUlOfdma.host[0].wlan[0].pcap",
+          "sha256": "c4caa2e77b389f3f66f6f3568adc42b2bd756aa5479630de67288ee274ae1ae4",
+          "size_bytes": 665352
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 607951,
+            "duration_seconds": 0.997694,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.998743,
+            "file_size_bytes": 665352,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1292,
+            "snapshot_length": null,
+            "start_seconds": 0.001049,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo72MbpsLeakage01/UlMuMimo72MbpsLeakage01-#0Lan80211AxUlOfdma.host[1].wlan[0].pcap",
+          "sha256": "3ec71ca9b57b3f6c464a9a3d1a09ef2be7da95424034e9a7af759a6baf23f034",
+          "size_bytes": 665352
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 607951,
+            "duration_seconds": 0.997695,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.998743,
+            "file_size_bytes": 665352,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[2].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1292,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo72MbpsLeakage01/UlMuMimo72MbpsLeakage01-#0Lan80211AxUlOfdma.host[2].wlan[0].pcap",
+          "sha256": "8d200c855810ca0c34bdd5c07ec8cb26696e1b06dc1bab4f417098c1a0a0656e",
+          "size_bytes": 665352
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "UlMuMimo72MbpsLeakage01",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_mu_mimo/omnetpp.ini",
+      "ini_sha256": "b91265723db8db90a3ef330ee3672b8c6ece791c0078cf0a107c0f3103453bab",
+      "run_number": 0,
+      "scalar": {
+        "configname": "UlMuMimo72MbpsLeakage01",
+        "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo72MbpsLeakage01/UlMuMimo72MbpsLeakage01-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "eefb7751efcff41a0ae37bf9cb4c868ec94fc72aa15d5d254c6f46a0856cb943"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_mu_mimo"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 607951,
+            "duration_seconds": 0.997694,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.998742,
+            "file_size_bytes": 665344,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1292,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo72MbpsLeakage001/UlMuMimo72MbpsLeakage001-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "e1de2388c5a4e31c18bc8ec9cb3f910ec6ae2001d2fbfa9517c2ab6a1885d329",
+          "size_bytes": 665344
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 607951,
+            "duration_seconds": 0.997695,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.998743,
+            "file_size_bytes": 665352,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1292,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo72MbpsLeakage001/UlMuMimo72MbpsLeakage001-#0Lan80211AxUlOfdma.host[0].wlan[0].pcap",
+          "sha256": "c4caa2e77b389f3f66f6f3568adc42b2bd756aa5479630de67288ee274ae1ae4",
+          "size_bytes": 665352
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 607951,
+            "duration_seconds": 0.997694,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.998743,
+            "file_size_bytes": 665352,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1292,
+            "snapshot_length": null,
+            "start_seconds": 0.001049,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo72MbpsLeakage001/UlMuMimo72MbpsLeakage001-#0Lan80211AxUlOfdma.host[1].wlan[0].pcap",
+          "sha256": "3ec71ca9b57b3f6c464a9a3d1a09ef2be7da95424034e9a7af759a6baf23f034",
+          "size_bytes": 665352
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 607951,
+            "duration_seconds": 0.997695,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.998743,
+            "file_size_bytes": 665352,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[2].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1292,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo72MbpsLeakage001/UlMuMimo72MbpsLeakage001-#0Lan80211AxUlOfdma.host[2].wlan[0].pcap",
+          "sha256": "8d200c855810ca0c34bdd5c07ec8cb26696e1b06dc1bab4f417098c1a0a0656e",
+          "size_bytes": 665352
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "UlMuMimo72MbpsLeakage001",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_mu_mimo/omnetpp.ini",
+      "ini_sha256": "b91265723db8db90a3ef330ee3672b8c6ece791c0078cf0a107c0f3103453bab",
+      "run_number": 0,
+      "scalar": {
+        "configname": "UlMuMimo72MbpsLeakage001",
+        "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo72MbpsLeakage001/UlMuMimo72MbpsLeakage001-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "4af853a291cf7da66447a2ff90ca6bca42e0137b8742274004883d93c02aff23"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_mu_mimo"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 827952,
+            "duration_seconds": 0.799025,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999669,
+            "file_size_bytes": 891552,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1443,
+            "snapshot_length": null,
+            "start_seconds": 0.200644,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlSu96Mbps/UlSu96Mbps-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "4ff6faa6c7c0f1f5c02e76e344d032e0ef36c05f087bc88ad8a8bd769050fce0",
+          "size_bytes": 891552
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 827952,
+            "duration_seconds": 0.799025,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999669,
+            "file_size_bytes": 891560,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1443,
+            "snapshot_length": null,
+            "start_seconds": 0.200644,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlSu96Mbps/UlSu96Mbps-#0Lan80211AxUlOfdma.host[0].wlan[0].pcap",
+          "sha256": "69a8c482a7b435524e355cea365bf90cd96c3635ea65ca695ebf329310ee37c6",
+          "size_bytes": 891560
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 827952,
+            "duration_seconds": 0.799026,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.99967,
+            "file_size_bytes": 891560,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1443,
+            "snapshot_length": null,
+            "start_seconds": 0.200644,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlSu96Mbps/UlSu96Mbps-#0Lan80211AxUlOfdma.host[1].wlan[0].pcap",
+          "sha256": "8efb0476512015db197fa914a4fe09e2d962b0f43d5c5f78f9e2af1450a2a64e",
+          "size_bytes": 891560
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 827952,
+            "duration_seconds": 0.799025,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999669,
+            "file_size_bytes": 891560,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[2].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1443,
+            "snapshot_length": null,
+            "start_seconds": 0.200644,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlSu96Mbps/UlSu96Mbps-#0Lan80211AxUlOfdma.host[2].wlan[0].pcap",
+          "sha256": "86863081cca9ab38777f7f37371e2b0f7a57441beac650254495f4b1b7b54019",
+          "size_bytes": 891560
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "UlSu96Mbps",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_mu_mimo/omnetpp.ini",
+      "ini_sha256": "b91265723db8db90a3ef330ee3672b8c6ece791c0078cf0a107c0f3103453bab",
+      "run_number": 0,
+      "scalar": {
+        "configname": "UlSu96Mbps",
+        "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlSu96Mbps/UlSu96Mbps-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "29cef8f570d3ab4515cfdcbb460b9910b9cbd4ff59bd3b0be1c9a5c60c547e6f"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_mu_mimo"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 977701,
+            "duration_seconds": 0.998577,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999625,
+            "file_size_bytes": 1067984,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 2003,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/Ofdma96Mbps/Ofdma96Mbps-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "0ea53cd861151b9c2628df77762cf88b742072153eda0f1410068517d9a02ac3",
+          "size_bytes": 1067984
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 977701,
+            "duration_seconds": 0.998577,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999625,
+            "file_size_bytes": 1067992,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 2003,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/Ofdma96Mbps/Ofdma96Mbps-#0Lan80211AxUlOfdma.host[0].wlan[0].pcap",
+          "sha256": "971270a4c5569c9e72e6b06f2fd61533e4403589068d71e42560babada66f0e8",
+          "size_bytes": 1067992
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 977701,
+            "duration_seconds": 0.998577,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999626,
+            "file_size_bytes": 1067992,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 2003,
+            "snapshot_length": null,
+            "start_seconds": 0.001049,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/Ofdma96Mbps/Ofdma96Mbps-#0Lan80211AxUlOfdma.host[1].wlan[0].pcap",
+          "sha256": "3e7d34623da27accb7641248b384381d3abc4276cac02ee1b6a346929debb123",
+          "size_bytes": 1067992
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 977701,
+            "duration_seconds": 0.998577,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999625,
+            "file_size_bytes": 1067992,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[2].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 2003,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/Ofdma96Mbps/Ofdma96Mbps-#0Lan80211AxUlOfdma.host[2].wlan[0].pcap",
+          "sha256": "6ee0af16dda7467aa63dd83754e1d718959929e5a3a443a96852cb45554b2cbd",
+          "size_bytes": 1067992
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "Ofdma96Mbps",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_mu_mimo/omnetpp.ini",
+      "ini_sha256": "b91265723db8db90a3ef330ee3672b8c6ece791c0078cf0a107c0f3103453bab",
+      "run_number": 0,
+      "scalar": {
+        "configname": "Ofdma96Mbps",
+        "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/Ofdma96Mbps/Ofdma96Mbps-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "a0893fcbb6457624147e3b7dbd722373233b2e954ef8af407df42811fdb0f181"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_mu_mimo"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 601415,
+            "duration_seconds": 0.998565,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999613,
+            "file_size_bytes": 658420,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1283,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo96MbpsLeakage01/UlMuMimo96MbpsLeakage01-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "6b16f473885e5ffbae2abd39f29921b08393e5c35135047b81bce0494cef8103",
+          "size_bytes": 658420
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 601415,
+            "duration_seconds": 0.998565,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999613,
+            "file_size_bytes": 658428,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1283,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo96MbpsLeakage01/UlMuMimo96MbpsLeakage01-#0Lan80211AxUlOfdma.host[0].wlan[0].pcap",
+          "sha256": "23bb6672b8fabf839e4b18230cee5a8b9376bbd4575ad8b820874e4fab5915dc",
+          "size_bytes": 658428
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 601415,
+            "duration_seconds": 0.998565,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999614,
+            "file_size_bytes": 658428,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1283,
+            "snapshot_length": null,
+            "start_seconds": 0.001049,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo96MbpsLeakage01/UlMuMimo96MbpsLeakage01-#0Lan80211AxUlOfdma.host[1].wlan[0].pcap",
+          "sha256": "a0f18b68ce27e4dd62da4bcd16ad639ab0a631b4ba4a6513d2fac4eb7b2b2306",
+          "size_bytes": 658428
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 601415,
+            "duration_seconds": 0.998565,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999613,
+            "file_size_bytes": 658428,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[2].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1283,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo96MbpsLeakage01/UlMuMimo96MbpsLeakage01-#0Lan80211AxUlOfdma.host[2].wlan[0].pcap",
+          "sha256": "7cd2f1f2dcf35e4a099abc5e992e99e5c1e16e194cb2ce3ae235a54647887a94",
+          "size_bytes": 658428
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "UlMuMimo96MbpsLeakage01",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_mu_mimo/omnetpp.ini",
+      "ini_sha256": "b91265723db8db90a3ef330ee3672b8c6ece791c0078cf0a107c0f3103453bab",
+      "run_number": 0,
+      "scalar": {
+        "configname": "UlMuMimo96MbpsLeakage01",
+        "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo96MbpsLeakage01/UlMuMimo96MbpsLeakage01-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "a00c952039844cf679b5c31379260f8f1dcf9f599caa3fb17f27dcb7a8893441"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_mu_mimo"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 601415,
+            "duration_seconds": 0.998565,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999613,
+            "file_size_bytes": 658420,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1283,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo96MbpsLeakage001/UlMuMimo96MbpsLeakage001-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "6b16f473885e5ffbae2abd39f29921b08393e5c35135047b81bce0494cef8103",
+          "size_bytes": 658420
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 601415,
+            "duration_seconds": 0.998565,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999613,
+            "file_size_bytes": 658428,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1283,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo96MbpsLeakage001/UlMuMimo96MbpsLeakage001-#0Lan80211AxUlOfdma.host[0].wlan[0].pcap",
+          "sha256": "23bb6672b8fabf839e4b18230cee5a8b9376bbd4575ad8b820874e4fab5915dc",
+          "size_bytes": 658428
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 601415,
+            "duration_seconds": 0.998565,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999614,
+            "file_size_bytes": 658428,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1283,
+            "snapshot_length": null,
+            "start_seconds": 0.001049,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo96MbpsLeakage001/UlMuMimo96MbpsLeakage001-#0Lan80211AxUlOfdma.host[1].wlan[0].pcap",
+          "sha256": "a0f18b68ce27e4dd62da4bcd16ad639ab0a631b4ba4a6513d2fac4eb7b2b2306",
+          "size_bytes": 658428
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 601415,
+            "duration_seconds": 0.998565,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999613,
+            "file_size_bytes": 658428,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[2].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1283,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo96MbpsLeakage001/UlMuMimo96MbpsLeakage001-#0Lan80211AxUlOfdma.host[2].wlan[0].pcap",
+          "sha256": "7cd2f1f2dcf35e4a099abc5e992e99e5c1e16e194cb2ce3ae235a54647887a94",
+          "size_bytes": 658428
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "UlMuMimo96MbpsLeakage001",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_mu_mimo/omnetpp.ini",
+      "ini_sha256": "b91265723db8db90a3ef330ee3672b8c6ece791c0078cf0a107c0f3103453bab",
+      "run_number": 0,
+      "scalar": {
+        "configname": "UlMuMimo96MbpsLeakage001",
+        "path": "examples/ieee80211ax/ul_mu_mimo/results/20260802T125848Z/UlMuMimo96MbpsLeakage001/UlMuMimo96MbpsLeakage001-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "f22e94c66690e323d74a12fc46d20959db57397b46507726222420a0ebf29323"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_mu_mimo"
+    }
+  ],
+  "generated_at_utc": "2026-08-02T12:59:03.852782+00:00",
+  "inet_library": "out/clang-release/src/libINET.so",
+  "inet_library_sha256": "7531f14f04ca43671955b1d3657145a1b3ab4fa1dcf90a0e6e241442f09ef942",
+  "repository_revision": "77d5236ce45a31d0698680b29a00b65cecd7af33",
+  "session_id": "20260802T125848Z",
+  "suite": "ax",
+  "suite_descriptor": {
+    "path": "examples/ieee80211/analysis/suites/ax.json",
+    "sha256": "72e90ccc6c79d1d378b6680c2af0a8ce6ff2ce201c42f28438e96274079ce5d1"
+  },
+  "tshark_version": "TShark (Wireshark) 4.6.4."
+}

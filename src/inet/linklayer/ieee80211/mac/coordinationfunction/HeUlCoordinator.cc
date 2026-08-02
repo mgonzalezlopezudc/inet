@@ -28,6 +28,7 @@ namespace inet {
 namespace ieee80211 {
 
 Define_Module(HeUlCoordinator);
+Register_Class(HeUlTriggerDecisionEvent);
 
 void HeUlCoordinator::initialize(int stage)
 {

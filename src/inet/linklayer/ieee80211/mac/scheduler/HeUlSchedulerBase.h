@@ -45,7 +45,7 @@ class INET_API HeUlSchedulerBase : public IIeee80211HeUlScheduler, public Simple
     virtual int computeRandomAccessRuCount(const ScheduleContext& context, int availableRus) const;
     virtual int computeTargetRssiDbm(const ScheduleContext& context) const;
     virtual int selectMcs(const ScheduleContext& context, const CandidateInfo& candidate,
-            const physicallayer::Ieee80211HeRu& ru) const;
+            const physicallayer::Ieee80211HeRu& ru, int nss = 1) const;
     virtual simtime_t computeCommonDuration(const ScheduleContext& context,
             const std::vector<RuAllocation>& allocations) const;
     void recordSchedule(const ScheduleContext& context, const Schedule& schedule, const char *reason);
