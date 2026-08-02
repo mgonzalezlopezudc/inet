@@ -59,7 +59,8 @@ class INET_API HeDlSchedulerBase : public IIeee80211HeDlScheduler, public Simple
             const physicallayer::Ieee80211HeRu& ru) const;
     virtual int selectMcs(double snrDb, bool hasFreshPathLoss) const;
     virtual int selectMcs(const ScheduleContext& context, const CandidateInfo& candidate,
-            const physicallayer::Ieee80211HeRu& ru, int fallbackMcs, int maxNss = 1) const;
+            const physicallayer::Ieee80211HeRu& ru, double estimatedSnrDb,
+            int fallbackMcs, int maxNss = 1) const;
     virtual simtime_t estimateDuration(int64_t bytes, int toneSize, int mcs,
             physicallayer::Ieee80211HeGuardInterval guardInterval) const;
 

@@ -3,6 +3,7 @@ Test standard equal-sized IEEE 802.11ax RU scheduling for fBW and fHoL.
 
 %includes:
 #include "inet/linklayer/ieee80211/mac/scheduler/HeDlSchedulerEqualSizedRUs.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeMuMimoCsiManager.h"
 #include "inet/linklayer/common/MacAddress.h"
 #include "inet/common/Units.h"
 
@@ -62,6 +63,12 @@ class TestableHeDlScheduler : public HeDlSchedulerEqualSizedRUs
     {
         heRateControl = rateControl;
     }
+
+    double estimateSnrDbForTest(const ScheduleContext& context, const CandidateInfo& candidate,
+            const Ieee80211HeRu& ru)
+    {
+        return estimateSnrDb(context, candidate, ru);
+    }
 };
 
 Define_Module(TestableHeDlScheduler);
@@ -70,11 +77,15 @@ class RecordingHeRateControl : public IIeee80211HeRateControl
 {
   public:
     std::vector<MacAddress> invalidatedPeers;
+    std::vector<std::pair<MacAddress, double>> reportedSnirDb;
 
     virtual Selection selectHeMode(const MacAddress&, Hz, int, uint8_t, int,
             const Constraints&) override { return {}; }
     virtual void reportHeTxResult(const MacAddress&, int, int, int, int, bool, int64_t) override {}
-    virtual void reportHeRxSnir(const MacAddress&, double) override {}
+    virtual void reportHeRxSnir(const MacAddress& peer, double snirDb) override
+    {
+        reportedSnirDb.emplace_back(peer, snirDb);
+    }
     virtual void invalidatePeer(const MacAddress& peer) override
     {
         invalidatedPeers.push_back(peer);
@@ -306,11 +317,71 @@ auto schedulerExternal = check_and_cast<TestableHeDlScheduler *>(
 {
     RecordingHeRateControl externalRateControl;
     schedulerExternal->setRateControlForTest(&externalRateControl);
+
+    Ieee80211HeCapabilities apCapabilities;
+    apCapabilities.dlMuMimoBeamformer = true;
+    apCapabilities.soundingDimensions = 2;
+    Ieee80211HeCapabilities staCapabilities;
+    staCapabilities.dlMuMimoBeamformee = true;
+    staCapabilities.feedbackMode = 2;
+    staCapabilities.beamformeeSts20Mhz = 1;
+    Ieee80211HeOperation operation;
+    operation.operatingChannelWidth = Hz(20e6);
+
+    auto context = makeContext(2, Hz(20e6));
+    context.totalTransmitPower = W(0.1);
+    context.noiseFigureDb = 7;
+    context.numApAntennas = 2;
+    context.enableDlMuMimo = true;
+    context.localHeCapabilities = apCapabilities;
+    std::vector<MacAddress> addresses;
+    for (const auto& candidate : context.candidates)
+        addresses.push_back(candidate.staAddress);
+    HeMuMimoCsiManager csi;
+    csi.configure(SimTime(1, SIMTIME_S), 0.01, "");
+    csi.setTimeProvider([]() { return SIMTIME_ZERO; });
+    auto getAid = [&] (const MacAddress& address) {
+        auto it = std::find(addresses.begin(), addresses.end(), address);
+        return it == addresses.end() ? 0 : static_cast<int>(std::distance(addresses.begin(), it) + 1);
+    };
+    for (const auto& address : addresses)
+        csi.updateCsi(address, context.channelBandwidth, addresses, getAid);
+    context.csiManager = &csi;
+    for (auto& candidate : context.candidates) {
+        candidate.pathLossDb = 75;
+        candidate.hasFreshPathLoss = true;
+        candidate.hasAdvertisedHeCapabilities = true;
+        candidate.advertisedHeCapabilities = staCapabilities;
+        candidate.hasNegotiatedHeCapabilities = true;
+        candidate.negotiatedHeCapabilities = negotiateHeCapabilities(
+                apCapabilities, staCapabilities, operation, true);
+        candidate.hasFreshCsi = true;
+    }
+
+    auto allocations = schedulerExternal->schedule(context);
+    ASSERT(allocations.size() == 2);
+    ASSERT(externalRateControl.reportedSnirDb.size() == allocations.size());
+    for (const auto& allocation : allocations) {
+        auto observation = std::find_if(externalRateControl.reportedSnirDb.begin(),
+                externalRateControl.reportedSnirDb.end(), [&] (const auto& item) {
+                    return item.first == allocation.staAddress;
+                });
+        ASSERT(observation != externalRateControl.reportedSnirDb.end());
+        ASSERT(std::abs(observation->second - allocation.estimatedSnrDb) < 1e-12);
+        ASSERT(allocation.leakageSum > 0);
+    }
+    const auto& target = allocations.front();
+    auto candidate = std::find_if(context.candidates.begin(), context.candidates.end(),
+            [&] (const auto& item) { return item.staAddress == target.staAddress; });
+    ASSERT(candidate != context.candidates.end());
+    double rawSnrDb = schedulerExternal->estimateSnrDbForTest(context, *candidate, target.ru);
+    ASSERT(std::abs(target.estimatedSnrDb - rawSnrDb) > 1);
+
     MacAddress peer("02:00:00:00:00:F1");
     schedulerExternal->invalidatePeer(peer);
     ASSERT(externalRateControl.invalidatedPeers.size() == 1);
     ASSERT(externalRateControl.invalidatedPeers.front() == peer);
-    EV << "Scheduler lifecycle invalidation reached its external HE rate controller.\n";
+    EV << "MU-MIMO scheduler forwarded leakage-adjusted SNIR and lifecycle invalidation to external HE rate control.\n";
 }
 
 EV << ".\n";
@@ -334,7 +405,7 @@ Negotiated HE width, RU, DL-OFDMA, and MCS limits were enforced.
 Single-user OFDMA RUs used capability-limited NSS independently.
 
 %contains: stdout
-Scheduler lifecycle invalidation reached its external HE rate controller.
+MU-MIMO scheduler forwarded leakage-adjusted SNIR and lifecycle invalidation to external HE rate control.
 
 %contains: stdout
 .

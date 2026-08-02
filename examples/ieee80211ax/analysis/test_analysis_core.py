@@ -214,6 +214,29 @@ class AnalysisCoreTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             validate_evidence_contracts(manifest)
 
+    def test_evidence_contract_config_must_be_a_group_condition(self):
+        manifest = {
+            "groups": {"sample": {"conditions": [{"config": "Current"}]}},
+            "evidence_contracts": {
+                "sample": [{
+                    "id": "sample-check",
+                    "kind": "normative",
+                    "requirement": "observable invariant",
+                    "results": ["signal"],
+                    "evaluation": {
+                        "handler": "mimo_disjoint_streams",
+                        "config": "Retired",
+                        "module": "**.radio",
+                        "station_id": "stationId",
+                        "stream_count": "streamCount",
+                        "stream_start": "streamStart",
+                    },
+                }]
+            },
+        }
+        with self.assertRaisesRegex(RuntimeError, "Retired"):
+            validate_evidence_contracts(manifest)
+
     def test_summarizer_accepts_manifest_and_group(self):
         manifest_path = Path("/tmp/scenario-manifest.json")
         manifest = {

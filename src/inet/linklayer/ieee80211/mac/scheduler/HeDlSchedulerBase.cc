@@ -166,7 +166,7 @@ int HeDlSchedulerBase::selectMcs(double snrDb, bool hasFreshPathLoss) const
 }
 
 int HeDlSchedulerBase::selectMcs(const ScheduleContext& context, const CandidateInfo& candidate,
-        const Ieee80211HeRu& ru, int fallbackMcs, int maxNss) const
+        const Ieee80211HeRu& ru, double estimatedSnrDb, int fallbackMcs, int maxNss) const
 {
     if (heRateControl == nullptr)
         return fallbackMcs;
@@ -178,7 +178,7 @@ int HeDlSchedulerBase::selectMcs(const ScheduleContext& context, const Candidate
         constraints.directionalCapabilities =
                 candidate.negotiatedHeCapabilities.localTxPeerRx;
     }
-    auto estimatedSnrDb = estimateSnrDb(context, candidate, ru);
+    // The caller's estimate may include allocation-specific effects such as MU-MIMO leakage.
     if (std::isfinite(estimatedSnrDb))
         heRateControl->reportHeRxSnir(candidate.staAddress, estimatedSnrDb);
     auto selection = heRateControl->selectHeMode(candidate.staAddress, context.channelBandwidth,
@@ -315,7 +315,7 @@ std::vector<IIeee80211HeDlScheduler::RuAllocation> HeDlSchedulerBase::fitRequest
             allocation.staAddress = candidates[i].staAddress;
             allocation.ru = rusByCandidate[i];
             allocation.estimatedSnrDb = estimateSnrDb(context, candidates[i], allocation.ru);
-            allocation.mcs = selectMcs(context, candidates[i], allocation.ru,
+            allocation.mcs = selectMcs(context, candidates[i], allocation.ru, allocation.estimatedSnrDb,
                     selectMcs(allocation.estimatedSnrDb, candidates[i].hasFreshPathLoss));
             if (context.coding == HE_CODING_BCC)
                 allocation.mcs = std::min(allocation.mcs, 9);

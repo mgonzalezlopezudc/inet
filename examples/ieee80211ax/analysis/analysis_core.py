@@ -149,6 +149,19 @@ def validate_evidence_contracts(manifest: dict[str, Any]) -> None:
     for group_name, requirements in contracts.items():
         if not isinstance(requirements, list) or not requirements:
             raise RuntimeError(f"{group_name}: evidence contract must contain requirements")
+        condition_configs = {
+            condition.get("config")
+            for condition in manifest["groups"][group_name].get("conditions", [])
+        }
+
+        def require_conditions(identifier: str, configs: list[str]) -> None:
+            missing = sorted(set(configs) - condition_configs)
+            if missing:
+                raise RuntimeError(
+                    f"{identifier}: evidence-contract configuration(s) are not "
+                    f"conditions in {group_name}: {missing}"
+                )
+
         for requirement in requirements:
             identifier = requirement.get("id")
             if not isinstance(identifier, str) or not identifier.strip():
@@ -177,6 +190,7 @@ def validate_evidence_contracts(manifest: dict[str, Any]) -> None:
                 missing = required - evaluation.keys()
                 if missing:
                     raise RuntimeError(f"{identifier}: missing parameters {sorted(missing)}")
+                require_conditions(identifier, [evaluation["config"]])
             elif handler == "matched_delivery_ratio":
                 required = {"baseline_config", "treatment_config", "result", "minimum_ratio"}
                 missing = required - evaluation.keys()
@@ -185,6 +199,10 @@ def validate_evidence_contracts(manifest: dict[str, Any]) -> None:
                 ratio = evaluation["minimum_ratio"]
                 if not isinstance(ratio, (int, float)) or not math.isfinite(ratio) or ratio <= 0:
                     raise RuntimeError(f"{identifier}: minimum_ratio must be finite and positive")
+                require_conditions(
+                    identifier,
+                    [evaluation["baseline_config"], evaluation["treatment_config"]],
+                )
             elif handler == "ul_trigger_allocation_join":
                 required = {
                     "configs", "diagnostic_run", "module",
@@ -197,6 +215,7 @@ def validate_evidence_contracts(manifest: dict[str, Any]) -> None:
                     )
                 if not isinstance(evaluation["configs"], list) or not evaluation["configs"]:
                     raise RuntimeError(f"{identifier}: configs must be a nonempty list")
+                require_conditions(identifier, evaluation["configs"])
                 required_vectors = {
                     "trigger_id", "trigger_type", "user_ordinal",
                     "association_id", "backlog_bytes", "reported_bytes",
@@ -208,6 +227,7 @@ def validate_evidence_contracts(manifest: dict[str, Any]) -> None:
                         f"{identifier}: vectors must define "
                         f"{sorted(required_vectors)}"
                     )
+                require_conditions(identifier, evaluation["configs"])
             elif handler == "bsr_decision_join":
                 required = {"configs", "module", "vectors"}
                 missing = required - evaluation.keys()

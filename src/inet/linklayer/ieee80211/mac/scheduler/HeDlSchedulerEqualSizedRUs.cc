@@ -217,7 +217,7 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
                             alloc.leakageSum += context.csiManager->getLeakage(
                                     groupCandidates[i].staAddress, groupCandidates[j].staAddress,
                                     context.channelBandwidth);
-                    alloc.mcs = selectMcs(context, groupCandidates[i], alloc.ru,
+                    alloc.mcs = selectMcs(context, groupCandidates[i], alloc.ru, alloc.estimatedSnrDb,
                             selectMcs(alloc.estimatedSnrDb, groupCandidates[i].hasFreshPathLoss),
                             finalNss[i]);
                     if (context.coding == HE_CODING_BCC)
@@ -344,7 +344,7 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
                 alloc.numberOfSpatialStreams = maxNss;
         }
         alloc.estimatedSnrDb = estimateSnrDb(context, candidate, alloc.ru);
-        alloc.mcs = selectMcs(context, candidate, alloc.ru,
+        alloc.mcs = selectMcs(context, candidate, alloc.ru, alloc.estimatedSnrDb,
                 selectMcs(alloc.estimatedSnrDb, candidate.hasFreshPathLoss),
                 alloc.numberOfSpatialStreams);
         if (context.coding == HE_CODING_BCC)
