@@ -19,6 +19,8 @@
 
 #include "inet/common/INETDefs.h"
 
+#ifdef INET_WITH_IPv6
+
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/Protocol.h"
 #include "inet/common/ProtocolTag_m.h"
@@ -423,3 +425,5 @@ void TestMld::parseIpv6AddressVector(const char *str, Ipv6AddressVector &result)
 }
 
 } // namespace inet
+
+#endif // ifdef INET_WITH_IPv6

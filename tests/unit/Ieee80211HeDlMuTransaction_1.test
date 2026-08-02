@@ -806,7 +806,9 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     baHandler.addAgreement(sta3, tid);
     auto qosContext = new QoSContext(nullptr, nullptr, &baHandler, nullptr);
     auto fsContext = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), modeSet, &inProgress, nullptr, nullptr, nullptr, qosContext);
-    HeDlMuTxOpFs fs(makeDlPlan(scheduler, makeScheduleContext({sta1, sta2, sta3}, SimTime(2400, SIMTIME_US)), pendingQueue),
+    // Three sequential BAR/BA exchanges reserve 1080 us, leaving 1420 us for
+    // a PPDU: enough for one MPDU per user, but not the complete backlog.
+    HeDlMuTxOpFs fs(makeDlPlan(scheduler, makeScheduleContext({sta1, sta2, sta3}, SimTime(2500, SIMTIME_US)), pendingQueue),
             modeSet, pendingQueue, &ackHandler, callback, 8, 6500631, SimTime(1500, SIMTIME_US));
     fs.startSequence(fsContext, 0);
     auto step = fs.prepareStep(fsContext);
