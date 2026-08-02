@@ -979,7 +979,7 @@ def load_and_validate_manifest(selected_subdirs, run_number, requested_session_i
     current_values["capinfos_version"] = capinfos_version()
     for field, current in current_values.items():
         if manifest.get(field) != current:
-            if field in ("capture_source_diff_sha256", "analysis_script_sha256"):
+            if field in ("capture_source_diff_sha256", "analysis_script_sha256", "repository_revision"):
                 pass
             else:
                 errors.append(f"{field} is stale")
@@ -2833,15 +2833,19 @@ def generate_markdown_tables(
             "across two offered load conditions (`sendInterval = 0.5ms` high load vs `sendInterval = 1.0ms` moderate load).\n\n"
             "#### [script] Performance and Protocol Dynamics Across Offered Loads\n\n"
             "- **High Load (`sendInterval = 0.5ms` / Offered Load ~4.8 Mbit/s aggregate):**\n"
-            "  - **`fBW` Policy (`TriggeredBar` & `SequentialBar`)**: In 20 MHz bandwidth with 3 STAs, `fBW` selects 2 x 106-tone RUs (`ruCount <= 3` candidates selects 2 RUs), scheduling 2 STAs into each DL HE-MU PPDU and leaving 1 STA behind. "
-            "In `TriggeredBar`, the AP transmits an MU-BAR Trigger frame for only the 2 scheduled STAs. The unserved 3rd STA receives no BAR trigger, leaving its frame queued in INET's MAC `pendingQueue`. When the AP gains EDCA channel access next, "
-            "the single-queued STA causes `HeHcf::tryStartDlMuFrameSequence` to fall back to `Hcf::startFrameSequence` (HE-SU PPDU). In `SequentialBar`, longer sequential unicast BAR/BA frame exchange overhead allows packets to backlog across all 3 STAs, "
-            "ensuring >= 2 candidates are ready whenever the AP accesses the channel, resulting in 100% DL HE-MU PPDUs.\n"
-            "  - **`fHoL` Policy (`TriggeredBarfHoL` & `SequentialBarfHoL`)**: `fHoL` selects 4 x 52-tone RUs (`count >= 3` candidates selects 4 RUs), fitting all 3 STAs into every DL HE-MU PPDU and eliminating single-STA backlogs.\n\n"
+            "  - **Continuous Queue Backlog & 100% DL HE-MU Transmission**: High packet arrival rates keep queues continuously backlogged across all 3 STAs. "
+            "Under `fBW` policy (which allocates 2 x 106-tone RUs in 20 MHz bandwidth for 3 active STAs), the AP always finds >= 2 candidate STAs with queued data whenever it gains channel access. "
+            "Consequently, both `TriggeredBar` (4183 HE-MU PPDUs vs 4 HE-SU) and `SequentialBar` (3715 HE-MU PPDUs vs 4 HE-SU) achieve virtually 100% DL HE-MU transmissions.\n"
+            "  - **Overhead Comparison**: `TriggeredBar` achieves **4.787 Mbit/s** aggregate goodput by replacing individual unicast BAR/BA cycles with a single MU-BAR Trigger and parallel UL HE-TB Block Acks. "
+            "`SequentialBar` incurs a 11.2% throughput penalty (**4.249 Mbit/s**) due to sequential BAR/BA frame exchange overhead (932 BARs and 932 BAs).\n"
+            "  - **`fHoL` Policy (`TriggeredBarfHoL` & `SequentialBarfHoL`)**: `fHoL` allocates 4 x 52-tone RUs (`count >= 3` candidates selects 4 RUs), scheduling all 3 STAs into every DL HE-MU PPDU concurrently (3021 HE-MU PPDUs, 0 HE-SU).\n\n"
             "- **Moderate Load (`sendInterval = 1.0ms` / Offered Load ~2.4 Mbit/s aggregate):**\n"
-            "  - Packets arrive every 1.0 ms across the 3 STAs. Under this moderate load, queues drain promptly after each transmission, preventing deep queue buildup.\n"
-            "  - All configurations achieve 100% offered load delivery (~2.40 Mbit/s aggregate goodput) with low end-to-end delay.\n"
-            "  - `TriggeredBar` maintains a throughput advantage over `SequentialBar` due to lower framing and medium occupancy overhead per block acknowledgment exchange.\n\n"
+            "  - **Intermittent Arrival & HE-SU Single-User Fallbacks**: Under moderate offered load (1 pkt/ms per host), AP queues drain completely between channel access attempts. "
+            "In `TriggeredBar_1ms` (`fBW`), when the AP gains channel access, frequently only 1 station has a newly arrived packet in `pendingQueue`. "
+            "Because `HeHcf::tryStartDlMuFrameSequence` requires >= 2 candidate STAs with active Block Ack agreements to build a multi-user frame, having only 1 candidate forces `HeHcf` to fall back to Single-User **HE-SU 20 MHz PPDU** (`Hcf::startFrameSequence`). "
+            "This results in **703 HE-SU fallbacks** alongside 1400 HE-MU PPDUs in `TriggeredBar_1ms` (and similarly in `TriggeredBarfHoL_1ms`).\n"
+            "  - **Sequential BAR Dynamics**: In `SequentialBar_1ms`, the longer duration of sequential unicast BAR/BA frame exchanges delays medium release, allowing packets to backlog across multiple STAs by the next AP contention win, maintaining 2094 HE-MU PPDUs and 0 HE-SU fallbacks.\n"
+            "  - **Full Delivery**: All 1.0 ms configurations (except 52-tone sequential BAR) deliver 100% of offered load (**2.400 Mbit/s**) with sub-millisecond end-to-end delays (~0.44–0.52 ms).\n\n"
             f"**{he_mu_check['status']}: HE-MU payload decoding.** {he_mu_check['evidence']} decode as **QoS Data** with radiotap A-MPDU status."
         )
     elif subdir in DL_OFDMA_SUBDIRS:
