@@ -3,8 +3,8 @@
 <!-- BEGIN SCRIPT RESULTS SESSIONS -->
 `[script]` results sessions:
 
-- Scalar/vector: `20260802T094134Z`
-- PCAP: `20260802T094134Z`
+- Scalar/vector: `20260802T095312Z`
+- PCAP: `20260802T095312Z`
 <!-- END SCRIPT RESULTS SESSIONS -->
 
 `[agent]` results sessions: `20260802T093100Z`.
@@ -82,9 +82,9 @@ python3 examples/ieee80211/analysis/wifi_analysis.py publish dl_ofdma_bar --sess
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-dl_bar -->
 ### [script] Generated scalar/vector plot and table
 
-![dl_bar scalar/vector analysis](results/20260802T094134Z/dl-bar-acknowledgment-dashboard.png)
+![dl_bar scalar/vector analysis](results/20260802T095312Z/dl-bar-acknowledgment-dashboard.png)
 
-Figure provenance: [`results/20260802T094134Z/dl-bar-acknowledgment-dashboard.png.json`](results/20260802T094134Z/dl-bar-acknowledgment-dashboard.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
+Figure provenance: [`results/20260802T095312Z/dl-bar-acknowledgment-dashboard.png.json`](results/20260802T095312Z/dl-bar-acknowledgment-dashboard.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
 Common table provenance:
 
@@ -111,13 +111,13 @@ The table is a presentation view of the session-bound run-level summary; the com
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
 ### [script] Generated PCAP plots and tables
-![802.11 Packet Type Statistics](results/20260802T094134Z/packet_statistics.png)
+![802.11 Packet Type Statistics](results/20260802T095312Z/packet_statistics.png)
 
-Figure provenance: [`packet_statistics.png.json`](results/20260802T094134Z/packet_statistics.png.json).
+Figure provenance: [`packet_statistics.png.json`](results/20260802T095312Z/packet_statistics.png.json).
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 
-Capture session `20260802T094134Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260802T094134Z.json` (SHA-256 `cb757fba127b253c338d5da66f00f10ab3191719fa26871a6af8861601f17eee`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
+Capture session `20260802T095312Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260802T095312Z.json` (SHA-256 `89ccac2a655697af61b957d1a033c28d4e5bc69d0d8f34f63577fc4f0b4814c0`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
 
 Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
@@ -140,6 +140,8 @@ Observation point: Access Point (AP) wireless interfaces.
 | **PASS** | SequentialBar produced protocol-visible wireless observations | 4598 AP/global transmission observations |
 | **PASS** | SuBaseline produced protocol-visible wireless observations | 2440 AP/global transmission observations |
 | **PASS** | TriggeredBar produced protocol-visible wireless observations | 4496 AP/global transmission observations |
+| **PASS** | HE-MU payload observations decode as QoS Data with A-MPDU status | 3494 of 3494 HE-MU observations |
+| **NOT RUN** | HE-MU recipient addresses support per-flow PCAP grouping | No asymmetric backlog/HoL configuration was selected |
 
 ### [script] Configuration: `TriggeredBar`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **4496**
@@ -359,7 +361,13 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2440*
 Frame numbers are local to capture `SuBaseline-#0Lan80211AxDlOfdmaBar.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
 ### [script] Analysis of Packet Distribution
-Across these configurations, **QoS Data** frames constitute the primary payload delivery mechanism, while **Block Ack (BA)** and **Block Ack Request (BAR)** control frames ensure reliable transport via the MAC-level acknowledgment protocol. Management frames, specifically **Beacons**, are transmitted periodically by the Access Point to maintain BSS time synchronization and broadcast network capabilities. The ratio of control/management overhead to actual data frames indicates the relative MAC efficiency of the chosen configurations.
+Both `TriggeredBar` and `SequentialBar` configurations use the same `fBW` downlink OFDMA scheduler policy. In 20 MHz bandwidth with 3 active STAs, `fBW` selects 2 x 106-tone RUs to maximize per-user bandwidth (since `ruCount <= 3` candidates selects 2 RUs), scheduling 2 STAs into each DL HE-MU PPDU and leaving 1 STA behind.
+
+In `TriggeredBar`, the AP transmits an MU-BAR Trigger frame containing User Info fields only for the 2 scheduled STAs. The unserved 3rd STA receives no BAR trigger, leaving its frame in INET's MAC `pendingQueue`. When the AP next gains EDCA channel access, the non-empty `pendingQueue` causes `HeHcf::tryStartDlMuFrameSequence` to fall back to `Hcf::startFrameSequence` (HE-SU 20 MHz PPDU) for that single station.
+
+In `SequentialBar`, the longer overhead of sequential unicast BAR/BA frame exchanges gives the traffic generator time to backlog packets across all 3 hosts, ensuring at least 2 candidates are available whenever the AP accesses the channel, resulting in 100% DL HE-MU PPDUs.
+
+**PASS: HE-MU payload decoding.** 3494 of 3494 HE-MU observations decode as **QoS Data** with radiotap A-MPDU status.
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->
 
 ## [agent] Frame exchange analysis

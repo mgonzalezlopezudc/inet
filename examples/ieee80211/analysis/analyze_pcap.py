@@ -60,7 +60,7 @@ TIMELINE_LIMIT = 50
 
 subdirs_configs = {}
 CONFIG_ORDER = {}
-DL_OFDMA_SUBDIRS = {"dl_ofdma_sched", "dl_ofdma_asym"}
+DL_OFDMA_SUBDIRS = {"dl_ofdma_sched", "dl_ofdma_asym", "dl_ofdma_bar"}
 DL_OFDMA_ASYM_CONFIGS = {
     "BacklogBased", "HoLMinDelay", "BacklogBased2_0ms", "HoLMinDelay2_0ms",
     "BacklogBased4ms", "HoLMinDelay4ms", "BacklogBased3ms", "HoLMinDelay3ms",
@@ -2813,6 +2813,19 @@ def generate_markdown_tables(
             "(IEEE Std 802.11-2024, Clause 26.5.2; see informative Annex G.5). Frame-subtype totals alone do not establish that queued payload "
             "was carried in the solicited responses or distinguish the two scheduler policies. Use decoded Trigger user allocations, "
             "HE-TB payload observations, and aligned scheduler/application telemetry for those decisions."
+        )
+    elif subdir == "dl_ofdma_bar":
+        he_mu_check = next(check for check in checks if check["id"] == "dl-ofdma-he-mu-payload-decode")
+        analysis_text = (
+            "Both `TriggeredBar` and `SequentialBar` configurations use the same `fBW` downlink OFDMA scheduler policy. "
+            "In 20 MHz bandwidth with 3 active STAs, `fBW` selects 2 x 106-tone RUs to maximize per-user bandwidth (since `ruCount <= 3` candidates selects 2 RUs), "
+            "scheduling 2 STAs into each DL HE-MU PPDU and leaving 1 STA behind.\n\n"
+            "In `TriggeredBar`, the AP transmits an MU-BAR Trigger frame containing User Info fields only for the 2 scheduled STAs. "
+            "The unserved 3rd STA receives no BAR trigger, leaving its frame in INET's MAC `pendingQueue`. When the AP next gains EDCA channel access, "
+            "the non-empty `pendingQueue` causes `HeHcf::tryStartDlMuFrameSequence` to fall back to `Hcf::startFrameSequence` (HE-SU 20 MHz PPDU) for that single station.\n\n"
+            "In `SequentialBar`, the longer overhead of sequential unicast BAR/BA frame exchanges gives the traffic generator time to backlog packets across all 3 hosts, "
+            "ensuring at least 2 candidates are available whenever the AP accesses the channel, resulting in 100% DL HE-MU PPDUs.\n\n"
+            f"**{he_mu_check['status']}: HE-MU payload decoding.** {he_mu_check['evidence']} decode as **QoS Data** with radiotap A-MPDU status."
         )
     elif subdir in DL_OFDMA_SUBDIRS:
         he_mu_check = next(check for check in checks if check["id"] == "dl-ofdma-he-mu-payload-decode")
