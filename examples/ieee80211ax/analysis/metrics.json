@@ -1,6 +1,6 @@
 {
   "_provenance": {
-    "generated_at_utc": "2026-08-02T09:32:14.262223+00:00",
+    "generated_at_utc": "2026-08-02T09:41:51.743174+00:00",
     "groups": {
       "dl_bar": {
         "conditions": [
@@ -13,47 +13,49 @@
               "end_s": 0.95,
               "start_s": 0.3
             },
-            "metadata": {},
+            "metadata": {
+              "workload": "symmetric"
+            },
             "result_files": [
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/TriggeredBar/TriggeredBar-#0.sca",
-                "sha256": "b20e10d91f32e372601cb191739ec2c88ca4b0ee9f1c3ccb2d25bc1845b9eb03"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/TriggeredBar/TriggeredBar-#0.sca",
+                "sha256": "06d239c989dfe43f617a57a305cbd3caf3e051db1f7ca198519e33643ff1f9eb"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/TriggeredBar/TriggeredBar-#0.vec",
-                "sha256": "926abd225c1ec71371cfe00761aa29284129e9deada05acb6e7a4d30c2538e92"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/TriggeredBar/TriggeredBar-#0.vec",
+                "sha256": "70cd10510f89ec09166d4a3b858d15dbcea4f4e9731267b8fe12036c56f1556f"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/TriggeredBar/TriggeredBar-#1.sca",
-                "sha256": "890cc8bca524883a788c66d27b22fa041d2f31c9795cbec7076482a14ca6a0ee"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/TriggeredBar/TriggeredBar-#1.sca",
+                "sha256": "9fe3832f5ff1eea88b46b3ea4c23ea3cc532dc1adef5b87eeaa991acba1417ab"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/TriggeredBar/TriggeredBar-#1.vec",
-                "sha256": "e4ad87eadc10ec0ff6afa13ceffa7918e480bdeca942ec2e2499e02a8cc91e9b"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/TriggeredBar/TriggeredBar-#1.vec",
+                "sha256": "3abfabd63a6a971f65214089dfd98aa0523de9e72eac185b2b8d27fe95f9cc40"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/TriggeredBar/TriggeredBar-#2.sca",
-                "sha256": "79d37ea9055c41acca4a0108a6b52155e901904ef755897e51a285f7f540508d"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/TriggeredBar/TriggeredBar-#2.sca",
+                "sha256": "dc100af9e31901b1e4f159e00e6772b64950a5dcd9bf2522026ac566f25ddc24"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/TriggeredBar/TriggeredBar-#2.vec",
-                "sha256": "c4bbf516061b44a8cf854d5f4b4ba0e0b6757923a22a09f60d882a94630a70a0"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/TriggeredBar/TriggeredBar-#2.vec",
+                "sha256": "51e3999513433a27f3f7a8080c348541505ad048c6c5c8818a22435706dcf3fc"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/TriggeredBar/TriggeredBar-#3.sca",
-                "sha256": "c83e0bb6431e3834520f3068c3f6e77894c8a1710d2ab472d41b52da05728329"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/TriggeredBar/TriggeredBar-#3.sca",
+                "sha256": "243c0e26df35e0634b4e3444b14783c7b034aef2944006bb0f6985a1cf0264e6"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/TriggeredBar/TriggeredBar-#3.vec",
-                "sha256": "cc5c496fc81ba20182e0407f57b3b9037b03d7b3e80a48408c779edc3d70aca8"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/TriggeredBar/TriggeredBar-#3.vec",
+                "sha256": "e7e3435440f6203b10d148c73a12fc03f74ddbe661b21ab4dfb6fd97e0a7c3bd"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/TriggeredBar/TriggeredBar-#4.sca",
-                "sha256": "84fe5112b37e06e5a9be24df0ee7de28ac83d722f82d75b532013865f7e4b5af"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/TriggeredBar/TriggeredBar-#4.sca",
+                "sha256": "bfc1aa9e08c25e809530e1ebb3418cb6a6dc4e9a4d4616d6ec82ec6538c60e61"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/TriggeredBar/TriggeredBar-#4.vec",
-                "sha256": "c8570146e0fb2d2e308526f9471ca53393fb25af26eb5d6accf59b43d4ad82fb"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/TriggeredBar/TriggeredBar-#4.vec",
+                "sha256": "2b17a4ee711371fe0fd604f1e37b70421cf6dc78b101a312a4139a22a06706dc"
               }
             ]
           },
@@ -66,47 +68,49 @@
               "end_s": 0.95,
               "start_s": 0.3
             },
-            "metadata": {},
+            "metadata": {
+              "workload": "symmetric"
+            },
             "result_files": [
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SequentialBar/SequentialBar-#0.sca",
-                "sha256": "e844dcca5d010b0184c6e29ab11c7b3453d6a804fe09047f1314ff4c95087e8e"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/SequentialBar/SequentialBar-#0.sca",
+                "sha256": "0a0cdd78c89dfe502f2a36da8ee08c96f6394110d132e3805ad1455c2a7f58b9"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SequentialBar/SequentialBar-#0.vec",
-                "sha256": "4dace3581da073f0156b8081b86f17c59ce8cd4e413658b517ce3a6dacc0fa52"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/SequentialBar/SequentialBar-#0.vec",
+                "sha256": "f818048ca23e5631f4f10c201b1212a7019887f8ff58f1a7ac339e918e3d5593"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SequentialBar/SequentialBar-#1.sca",
-                "sha256": "e26f6b788f46679e7763800aa2201a5846dba6c403b15deca8fe74dd636f8e1d"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/SequentialBar/SequentialBar-#1.sca",
+                "sha256": "5e2a779cdf5e098607e90102c6366ee22537b6f99f5e5e7fb4b860a3881a3ae0"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SequentialBar/SequentialBar-#1.vec",
-                "sha256": "787a01e02e602b0495828af5aec7e4bfbb72c1a4d6d3579db412182f33afd4ab"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/SequentialBar/SequentialBar-#1.vec",
+                "sha256": "90f4ffdc4303705cc91eb4e119df05c088561e539b926e0cd72226f057fa3ee5"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SequentialBar/SequentialBar-#2.sca",
-                "sha256": "b39cd6c555f8c5fd26080557baf1a1644f50a9735462b2678042a6aef4182ed3"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/SequentialBar/SequentialBar-#2.sca",
+                "sha256": "71cb1d32605656d2976cab3fa13bef0da552aca646825ae932af193692e14fdd"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SequentialBar/SequentialBar-#2.vec",
-                "sha256": "e04a61970884d84564a0d690e0a35b48d840b733de75521c998061d3bb9b5b85"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/SequentialBar/SequentialBar-#2.vec",
+                "sha256": "3ac6e1fb682df1f05ee422f3405d5484b4134af51b738b054b4b0ff5c049de91"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SequentialBar/SequentialBar-#3.sca",
-                "sha256": "3e8a950491a5ed973bbb184f54e4a5d0224c57d973852a278c9339b58d24cb3c"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/SequentialBar/SequentialBar-#3.sca",
+                "sha256": "89d2d093456c9dbe1a5aea6d602b73a3cdc25aedd061977e0e0ca4fcbf0f16f6"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SequentialBar/SequentialBar-#3.vec",
-                "sha256": "7fc3ce33b8199b04a01ca1e04502ea04444f44c39b97f6cea1456bcdc1d80201"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/SequentialBar/SequentialBar-#3.vec",
+                "sha256": "9c3445e546488f2e7f23d26fd07bdc660d58b91ae3289bbdc13596be877ca9bf"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SequentialBar/SequentialBar-#4.sca",
-                "sha256": "de5919c88777c416e3f042c023f1eddac32804c15e32123c85aaa26654d7e5bf"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/SequentialBar/SequentialBar-#4.sca",
+                "sha256": "27970e2ed5b483c0214bbe0eb297dc0cab4639379587d65984a5250020988490"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SequentialBar/SequentialBar-#4.vec",
-                "sha256": "34726b8e02b9ed40589ecf7c2debd921599b4de1b5b633a12ad390c6690f19e6"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/SequentialBar/SequentialBar-#4.vec",
+                "sha256": "49bf92a687a5e7759d896fe79dc13434a60efa9c6436e98bfb4655ae592cb24b"
               }
             ]
           },
@@ -119,79 +123,81 @@
               "end_s": 0.95,
               "start_s": 0.3
             },
-            "metadata": {},
+            "metadata": {
+              "workload": "symmetric"
+            },
             "result_files": [
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SuBaseline/SuBaseline-#0.sca",
-                "sha256": "95354d604d50816d6ee71c30e2ed39fcfade7727c09624306df954b4be681a48"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/SuBaseline/SuBaseline-#0.sca",
+                "sha256": "6ecfdeca00adbef76925f6047d148af6bca1fc77c65bc0156ce8b1370e4441a6"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SuBaseline/SuBaseline-#0.vec",
-                "sha256": "1302e229e33984eea3ff145b83a67797ac4f39cf1c0e3802809bd1e53b5a28b9"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/SuBaseline/SuBaseline-#0.vec",
+                "sha256": "8282e80070d97edd5ef8fe0b470d5a6ba34dfdeb528980c53dd7b907f33874fc"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SuBaseline/SuBaseline-#1.sca",
-                "sha256": "f6686d1728f7568f8b16e861468cf64244da275ee7b2a5962bd965b6948b7c9a"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/SuBaseline/SuBaseline-#1.sca",
+                "sha256": "bf0fd1590eea0cd9d646c607683629a749ea20f7513c138d626afcb465b81ee2"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SuBaseline/SuBaseline-#1.vec",
-                "sha256": "37f89e8ea4d0092628a1158ba223d07532955a5241a9927e2611bb46c5f12d0a"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/SuBaseline/SuBaseline-#1.vec",
+                "sha256": "da8fa7ae9e2f8a65d06ee6c1019eef895e12df683f688062545c218ca953f36e"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SuBaseline/SuBaseline-#2.sca",
-                "sha256": "4060e8831bac72b41c446312c42f91a90a422d9ddcf348d65d1af44957830cdb"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/SuBaseline/SuBaseline-#2.sca",
+                "sha256": "e907d333ea743c0acb8ef85bf050c45f5424915c9ac7da77bbf08a46051754a9"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SuBaseline/SuBaseline-#2.vec",
-                "sha256": "a45a549fe84164ad1b16c1068677bc2e9bc66edfbdab07edcb2f9debb3cf670a"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/SuBaseline/SuBaseline-#2.vec",
+                "sha256": "e87aba70464e22fafde628f8164ae2bc737cd03164ba06fd9696b09753a67c3d"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SuBaseline/SuBaseline-#3.sca",
-                "sha256": "3656e4d8048786703ef2c97b5aa1c3fa09554d5b592886660803310342e7eb65"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/SuBaseline/SuBaseline-#3.sca",
+                "sha256": "a305582f633a77044fd20fd8a582bddea8fba9bfe3db414ce7b2bd75ecc02e52"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SuBaseline/SuBaseline-#3.vec",
-                "sha256": "3d1d60203a730fe9bd897e8842d3571aa19249911c9fc9f8a974b4578422e800"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/SuBaseline/SuBaseline-#3.vec",
+                "sha256": "d24b534fae2682ff6d8d03ed3bdc3c6091efe512ead8a355b4b3ec0b592a78a4"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SuBaseline/SuBaseline-#4.sca",
-                "sha256": "c0beb7aa46490512d070ebd84e4950149b4259318a3e9cca16be36d708824634"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/SuBaseline/SuBaseline-#4.sca",
+                "sha256": "efde01b283e858d0d666a0d2c04a8f9dc91568824ab2051d4820bfc6b5d14fb0"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T093100Z/SuBaseline/SuBaseline-#4.vec",
-                "sha256": "91143b6fac59f9d2bc870f647bc7a8aa29e4704046f82cc25f3f11bf5b759dd7"
+                "path": "examples/ieee80211ax/dl_ofdma_bar/results/20260802T094134Z/SuBaseline/SuBaseline-#4.vec",
+                "sha256": "fb589a8c09b9b87240d52e03dd1151c772a005e0cba5709ec6323fc294e55a90"
               }
             ]
           }
         ],
-        "session_id": "20260802T093100Z",
+        "session_id": "20260802T094134Z",
         "status": "PASS"
       }
     },
-    "repository_revision": "798f83241cbdc6827372f12b46b82763f842fc87",
-    "requested_session_id": "20260802T093100Z",
+    "repository_revision": "42caf5fd327fffa61c3d5a58bb1b1ba3d977227c",
+    "requested_session_id": "20260802T094134Z",
     "schema_version": 1
   },
   "dl_bar": {
     "DL SU Baseline": {
       "goodput_mbps": {
-        "ci95": 2.465978625918724e-15,
+        "ci95": 0.0,
         "count": 5,
-        "mean": 13.070769230769233
+        "mean": 2.4000000000000004
       }
     },
     "Sequential BAR": {
       "goodput_mbps": {
-        "ci95": 0.01278585395302811,
+        "ci95": 0.0013668652825590665,
         "count": 5,
-        "mean": 11.18523076923077
+        "mean": 2.395569230769231
       }
     },
     "Triggered BAR": {
       "goodput_mbps": {
-        "ci95": 0.01278585395302811,
+        "ci95": 0.0,
         "count": 5,
-        "mean": 11.18523076923077
+        "mean": 2.4000000000000004
       }
     }
   }

@@ -227,9 +227,9 @@
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 0.95},
       "conditions": [
-        {"label": "Triggered BAR", "config": "TriggeredBar"},
-        {"label": "Sequential BAR", "config": "SequentialBar"},
-        {"label": "DL SU Baseline", "config": "SuBaseline"}
+        {"label": "Triggered BAR", "config": "TriggeredBar", "metadata": {"workload": "symmetric"}},
+        {"label": "Sequential BAR", "config": "SequentialBar", "metadata": {"workload": "symmetric"}},
+        {"label": "DL SU Baseline", "config": "SuBaseline", "metadata": {"workload": "symmetric"}}
       ]
     },
     "bsr": {
