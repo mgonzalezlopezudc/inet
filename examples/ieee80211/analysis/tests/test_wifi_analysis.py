@@ -458,6 +458,16 @@ class WifiAnalysisCliTest(unittest.TestCase):
         )
         self.assertEqual(group, "eht_features")
 
+    def test_scalar_analysis_directory_resolution(self):
+        n_manifest = wifi_analysis.REPOSITORY_ROOT / "examples/ieee80211n/analysis/experiments.json"
+        analysis_dir = wifi_analysis.scalar_analysis_directory(n_manifest)
+        self.assertTrue((analysis_dir / "summarize_results.py").is_file())
+        self.assertEqual(
+            analysis_dir,
+            wifi_analysis.REPOSITORY_ROOT / "examples/ieee80211ax/analysis",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
+

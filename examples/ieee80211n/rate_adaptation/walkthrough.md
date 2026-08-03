@@ -3,7 +3,7 @@
 <!-- BEGIN SCRIPT RESULTS SESSIONS -->
 `[script]` results sessions:
 
-- Scalar/vector: `NOT RUN`
+- Scalar/vector: `20260803T190458Z`
 - PCAP: `NOT RUN`
 <!-- END SCRIPT RESULTS SESSIONS -->
 
@@ -32,3 +32,32 @@ Two configurations are evaluated:
 
 - **HT Minstrel Algorithm**: Implements multi-rate retry chain logic and empirical sampling for HT MCS sets.
 - **INET Model Boundary**: Rate control logic is implemented in `inet::ieee80211::Ieee80211HtMinstrel`.
+
+## [agent] Scalar and vector analysis
+
+<!-- BEGIN GENERATED: ieee80211-scalar-vector-rate_adaptation -->
+### [script] Generated scalar/vector plot and table
+
+![rate_adaptation scalar/vector analysis](results/20260803T190458Z/rate-adaptation-delivery-delay.png)
+
+Figure provenance: [`results/20260803T190458Z/rate-adaptation-delivery-delay.png.json`](results/20260803T190458Z/rate-adaptation-delivery-delay.png.json). Run-level metric source: [`../../ieee80211ax/analysis/metrics.json`](../../ieee80211ax/analysis/metrics.json).
+
+Common table provenance:
+
+- Source result filters / modules / units: vector / **.app[*] / packetReceived:vector(packetBytes)<br>vector / **.app[*] / endToEndDelay:vector
+- Window / per-run aggregation / exclusions: [0.3, 1.9) s; delay=pool delivered-packet delays within each run over each manifest measurement window, then take the 95th percentile; one value per run; goodput=sum delivered application bytes over each manifest measurement window, convert to bit/s; one value per run; uncertainty=95% Student-t CI across independent runs
+- Independent runs: run-level summaries: n=5
+
+| Configuration / observation | Mean or direct value | 95% CI half-width |
+|---|---:|---:|
+| Fixed MCS 7 / goodput mbps | 8 | 0 |
+| HT Minstrel Adaptation / goodput mbps | 8 | 0 |
+
+The table is a presentation view of the session-bound run-level summary; the common provenance applies to every row.
+
+### [script] Executable evidence checks
+
+| Status | Requirement | Evaluation |
+|---|---|---|
+| **INCONCLUSIVE** | Compare application delivered bytes between Fixed MCS 7 and HT Minstrel dynamic adaptation | No manifest acceptance threshold defined for rate adaptation comparison |
+<!-- END GENERATED: ieee80211-scalar-vector-rate_adaptation -->

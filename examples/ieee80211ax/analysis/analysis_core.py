@@ -58,6 +58,20 @@ FIGURE_FILENAMES = {
     "ul_mu_mimo": "ul-mu-mimo-delivery.png",
     "ul_ofdma": "ul-ofdma-delivery-delay.png",
     "dl_ul_ofdma": "dl-ul-ofdma-delivery-delay.png",
+    "frame_aggregation": "frame-aggregation-delivery-delay.png",
+    "block_ack": "block-ack-delivery-delay.png",
+    "channel_widths": "channel-widths-delivery-delay.png",
+    "guard_interval": "guard-interval-delivery-delay.png",
+    "mimo_spatial_streams": "mimo-spatial-streams-delivery-delay.png",
+    "preamble_modes": "preamble-modes-delivery-delay.png",
+    "rate_adaptation": "rate-adaptation-delivery-delay.png",
+    "wide_channels": "wide-channels-delivery-delay.png",
+    "vht_mcs_256qam": "vht-mcs-256qam-delivery-delay.png",
+    "extended_ampdu": "extended-ampdu-delivery-delay.png",
+    "spatial_streams_8x8": "spatial-streams-8x8-delivery-delay.png",
+    "vht_rate_adaptation": "vht-rate-adaptation-delivery-delay.png",
+    "short_gi_vht": "short-gi-vht-delivery-delay.png",
+    "dl_mu_mimo_baseline": "dl-mu-mimo-baseline-delivery-delay.png",
 }
 SESSION_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z$")
 EVIDENCE_HANDLERS = {

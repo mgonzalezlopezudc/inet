@@ -927,31 +927,42 @@ def plot_mimo(conditions: list[Condition], output: Path) -> None:
 
 
 def plot_delivery(conditions: list[Condition], output: Path) -> None:
-    """Plot the shared five-run application-delivery baseline."""
+    """Plot aggregate goodput and 95th-percentile end-to-end delay."""
     goodputs = [per_run_goodput(condition) for condition in conditions]
-    fig, axis = plt.subplots(figsize=(max(8, len(conditions) * 1.4), 4.8))
-    bar_with_ci(
-        axis,
-        [condition.label for condition in conditions],
-        goodputs,
-        "goodput_bps",
-        scale=1e-6,
-    )
-    axis.set_ylabel("Aggregate goodput [Mbit/s]")
-    axis.set_title("Five-run application delivery")
+    delays = [per_run_delay_percentile(condition, 95) for condition in conditions]
+    labels = [condition.label for condition in conditions]
+    fig, axes = plt.subplots(1, 2, figsize=(max(10, len(conditions) * 1.4), 4.8))
+    bar_with_ci(axes[0], labels, goodputs, "goodput_bps", scale=1e-6)
+    bar_with_ci(axes[1], labels, delays, "delay_s", scale=1e3)
+    axes[0].set_ylabel("Aggregate goodput [Mbit/s]")
+    axes[1].set_ylabel("95th-percentile end-to-end delay [ms]")
+    axes[0].set_title("Aggregate goodput")
+    axes[1].set_title("95th-percentile delay")
+    for axis in axes:
+        axis.grid(axis="y", alpha=0.3)
+    fig.suptitle("Application delivery and tail delay comparison")
     save(fig, output)
     write_provenance(
         output,
         conditions=conditions,
-        result_filters=[{
-            "type": "vector",
-            "module": "**.app[*]",
-            "name": "packetReceived:vector(packetBytes)",
-            "value_semantics": "delivered application bytes",
-        }],
+        result_filters=[
+            {
+                "type": "vector",
+                "module": "**.app[*]",
+                "name": "packetReceived:vector(packetBytes)",
+                "value_semantics": "delivered application bytes",
+            },
+            {
+                "type": "vector",
+                "module": "**.app[*]",
+                "name": "endToEndDelay:vector",
+                "value_semantics": "end-to-end packet delivery delay",
+            },
+        ],
         aggregation={
-            "observation": "one aggregate goodput value per run",
-            "uncertainty": "95% Student-t CI",
+            "goodput": "sum delivered application bytes over each manifest measurement window, convert to bit/s; one value per run",
+            "delay": "pool delivered-packet delays within each run over each manifest measurement window, then take the 95th percentile; one value per run",
+            "uncertainty": "95% Student-t CI across independent runs",
         },
     )
 
@@ -1130,4 +1141,18 @@ PLOTS: dict[str, Callable[[list[Condition], Path], None]] = {
     "ul_mu_mimo": plot_ul_mu_mimo,
     "ul_ofdma": plot_ul_ofdma,
     "dl_ul_ofdma": plot_ul_ofdma,
+    "frame_aggregation": plot_delivery,
+    "block_ack": plot_delivery,
+    "channel_widths": plot_delivery,
+    "guard_interval": plot_delivery,
+    "mimo_spatial_streams": plot_delivery,
+    "preamble_modes": plot_delivery,
+    "rate_adaptation": plot_delivery,
+    "wide_channels": plot_delivery,
+    "vht_mcs_256qam": plot_delivery,
+    "extended_ampdu": plot_delivery,
+    "spatial_streams_8x8": plot_delivery,
+    "vht_rate_adaptation": plot_delivery,
+    "short_gi_vht": plot_delivery,
+    "dl_mu_mimo_baseline": plot_delivery,
 }

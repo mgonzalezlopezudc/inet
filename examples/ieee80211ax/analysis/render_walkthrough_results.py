@@ -387,51 +387,64 @@ def render_group(
     session_id = provenance.get("session_id")
     if not session_id:
         raise RuntimeError(f"{group_name}: metrics provenance has no session_id")
-    figure = (
-        result_session_directory(group, session_id)
-        / FIGURE_FILENAMES[group_name]
-    )
-    sidecar = figure.with_suffix(figure.suffix + ".json")
-    figure_link = relative_link(figure, walkthrough)
-    sidecar_link = relative_link(sidecar, walkthrough)
-    if not figure.is_file():
-        raise RuntimeError(f"{group_name}: figure does not exist: {figure}")
-    if not sidecar.is_file():
-        raise RuntimeError(
-            f"{group_name}: figure provenance does not exist: {sidecar}"
-        )
-    if sidecar_document is None:
-        sidecar_document = json.loads(sidecar.read_text(encoding="utf-8"))
-    validate_bundle_provenance(
-        group_name, metrics_document, sidecar_document, figure
-    )
+    figure_filename = FIGURE_FILENAMES.get(group_name)
     metrics_link = relative_link(metrics_path.resolve(), walkthrough)
-    source_summary = source_filter_summary(sidecar_document)
-    aggregation_summary = window_aggregation_summary(sidecar_document)
     runs_summary = independent_runs_summary(metrics_document[group_name])
-    figure_1ms = (
-        result_session_directory(group, session_id)
-        / "dl-bar-acknowledgment-dashboard-1ms.png"
-    )
-    figure_1ms_text = ""
-    if figure_1ms.is_file():
-        figure_1ms_link = relative_link(figure_1ms, walkthrough)
-        figure_1ms_text = f"![{group_name} 1ms scalar/vector analysis]({figure_1ms_link})\n\n"
 
-    lines = [
-        "### [script] Generated scalar/vector plot and table\n\n",
-        f"![{group_name} scalar/vector analysis]({figure_link})\n\n",
-        figure_1ms_text,
-        f"Figure provenance: [`{sidecar_link}`]({sidecar_link}). "
-        f"Run-level metric source: [`{metrics_link}`]({metrics_link}).\n\n",
-        "Common table provenance:\n\n",
-        f"- Source result filters / modules / units: {source_summary}\n",
-        f"- Window / per-run aggregation / exclusions: {aggregation_summary}\n",
-        f"- Independent runs: {runs_summary}\n\n",
-        "| Configuration / observation | Mean or direct value | "
-        "95% CI half-width |\n",
-        "|---|---:|---:|\n",
-    ]
+    if figure_filename:
+        figure = (
+            result_session_directory(group, session_id)
+            / figure_filename
+        )
+        sidecar = figure.with_suffix(figure.suffix + ".json")
+        figure_link = relative_link(figure, walkthrough)
+        sidecar_link = relative_link(sidecar, walkthrough)
+        if not figure.is_file():
+            raise RuntimeError(f"{group_name}: figure does not exist: {figure}")
+        if not sidecar.is_file():
+            raise RuntimeError(
+                f"{group_name}: figure provenance does not exist: {sidecar}"
+            )
+        if sidecar_document is None:
+            sidecar_document = json.loads(sidecar.read_text(encoding="utf-8"))
+        validate_bundle_provenance(
+            group_name, metrics_document, sidecar_document, figure
+        )
+        source_summary = source_filter_summary(sidecar_document)
+        aggregation_summary = window_aggregation_summary(sidecar_document)
+        figure_1ms = (
+            result_session_directory(group, session_id)
+            / "dl-bar-acknowledgment-dashboard-1ms.png"
+        )
+        figure_1ms_text = ""
+        if figure_1ms.is_file():
+            figure_1ms_link = relative_link(figure_1ms, walkthrough)
+            figure_1ms_text = f"![{group_name} 1ms scalar/vector analysis]({figure_1ms_link})\n\n"
+
+        lines = [
+            "### [script] Generated scalar/vector plot and table\n\n",
+            f"![{group_name} scalar/vector analysis]({figure_link})\n\n",
+            figure_1ms_text,
+            f"Figure provenance: [`{sidecar_link}`]({sidecar_link}). "
+            f"Run-level metric source: [`{metrics_link}`]({metrics_link}).\n\n",
+            "Common table provenance:\n\n",
+            f"- Source result filters / modules / units: {source_summary}\n",
+            f"- Window / per-run aggregation / exclusions: {aggregation_summary}\n",
+            f"- Independent runs: {runs_summary}\n\n",
+            "| Configuration / observation | Mean or direct value | "
+            "95% CI half-width |\n",
+            "|---|---:|---:|\n",
+        ]
+    else:
+        lines = [
+            "### [script] Generated scalar/vector table\n\n",
+            f"Run-level metric source: [`{metrics_link}`]({metrics_link}).\n\n",
+            "Common table provenance:\n\n",
+            f"- Independent runs: {runs_summary}\n\n",
+            "| Configuration / observation | Mean or direct value | "
+            "95% CI half-width |\n",
+            "|---|---:|---:|\n",
+        ]
     for row in metric_rows(metrics_document[group_name]):
         expanded = [f"{row[0]} / {row[1]}", row[3], row[4]]
         lines.append(
@@ -479,7 +492,11 @@ def replace_generated_section(
         None,
     )
     if heading_index is None:
-        raise ValueError(f"Missing walkthrough section: {heading}")
+        return (
+            content.rstrip()
+            + f"\n\n## [agent] {heading}\n\n{generated}".rstrip()
+            + "\n"
+        )
     heading_match = headings[heading_index]
     section_end = (
         headings[heading_index + 1].start()
@@ -489,6 +506,7 @@ def replace_generated_section(
     prefix = content[:section_end].rstrip()
     suffix = content[section_end:].lstrip("\n")
     return f"{prefix}\n\n{generated}\n{suffix}".rstrip() + "\n"
+
 
 
 def update_walkthrough(

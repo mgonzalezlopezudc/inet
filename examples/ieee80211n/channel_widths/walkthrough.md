@@ -3,7 +3,7 @@
 <!-- BEGIN SCRIPT RESULTS SESSIONS -->
 `[script]` results sessions:
 
-- Scalar/vector: `NOT RUN`
+- Scalar/vector: `20260803T185930Z`
 - PCAP: `NOT RUN`
 <!-- END SCRIPT RESULTS SESSIONS -->
 
@@ -34,3 +34,34 @@ Four configurations are evaluated:
 
 - **IEEE Std 802.11n-2009 / 802.11-2020 Clause 19.3.3 & 19.3.11**: Specifies 20 MHz and 40 MHz OFDM subcarrier layouts (52 data subcarriers in 20 MHz vs 108 data subcarriers in 40 MHz).
 - **INET Model Boundary**: Channel width and subchannel frequency spectrum allocation are set via radio and radioMedium parameters (`channelWidth = 40MHz`).
+
+## [agent] Scalar and vector analysis
+
+<!-- BEGIN GENERATED: ieee80211-scalar-vector-channel_widths -->
+### [script] Generated scalar/vector plot and table
+
+![channel_widths scalar/vector analysis](results/20260803T185930Z/channel-widths-delivery-delay.png)
+
+Figure provenance: [`results/20260803T185930Z/channel-widths-delivery-delay.png.json`](results/20260803T185930Z/channel-widths-delivery-delay.png.json). Run-level metric source: [`../../ieee80211ax/analysis/metrics.json`](../../ieee80211ax/analysis/metrics.json).
+
+Common table provenance:
+
+- Source result filters / modules / units: vector / **.app[*] / packetReceived:vector(packetBytes)<br>vector / **.app[*] / endToEndDelay:vector
+- Window / per-run aggregation / exclusions: [0.3, 0.9) s; delay=pool delivered-packet delays within each run over each manifest measurement window, then take the 95th percentile; one value per run; goodput=sum delivered application bytes over each manifest measurement window, convert to bit/s; one value per run; uncertainty=95% Student-t CI across independent runs
+- Independent runs: run-level summaries: n=5
+
+| Configuration / observation | Mean or direct value | 95% CI half-width |
+|---|---:|---:|
+| HT 20 MHz / goodput mbps | 21.9904 | 0.159923 |
+| HT 40 MHz / goodput mbps | 21.9904 | 0.159923 |
+| HT 40 MHz (Secondary Above) / goodput mbps | 21.9904 | 0.159923 |
+| HT 40 MHz (Secondary Below) / goodput mbps | 21.9904 | 0.159923 |
+
+The table is a presentation view of the session-bound run-level summary; the common provenance applies to every row.
+
+### [script] Executable evidence checks
+
+| Status | Requirement | Evaluation |
+|---|---|---|
+| **INCONCLUSIVE** | Compare application delivered bytes across 20 MHz and 40 MHz channel widths | No manifest acceptance threshold defined for channel width comparison |
+<!-- END GENERATED: ieee80211-scalar-vector-channel_widths -->

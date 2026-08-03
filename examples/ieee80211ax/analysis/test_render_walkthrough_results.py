@@ -5,6 +5,7 @@ from render_walkthrough_results import (
     independent_runs_summary,
     metric_rows,
     render_evidence_markdown,
+    render_group,
     replace_generated_section,
     update_walkthrough,
     validate_bundle_provenance,
@@ -227,6 +228,40 @@ class ProvenanceTest(unittest.TestCase):
                 "width", metrics, {"conditions": [figure_condition]}
             )
 
+    def test_render_group_without_figure(self):
+        metrics_document = {
+            "_provenance": {
+                "groups": {
+                    "group_without_figure": {
+                        "session_id": "20260803T184134Z",
+                        "status": "PASS",
+                    }
+                }
+            },
+            "group_without_figure": {
+                "StandardAck": {
+                    "goodput mbps": {
+                        "count": 5,
+                        "mean": 8.0,
+                        "ci95_half_width": 0.0,
+                    }
+                }
+            },
+        }
+        group = {"walkthrough": "examples/ieee80211n/block_ack/walkthrough.md"}
+        rendered = render_group("group_without_figure", group, metrics_document)
+        self.assertIn("Generated scalar/vector table", rendered)
+        self.assertIn("StandardAck / goodput mbps", rendered)
+
+    def test_inserts_when_heading_missing(self):
+        original = "# Walkthrough\n\nNo scalar heading here.\n"
+        updated = replace_generated_section(
+            original, "ieee80211-scalar-vector-sample", "table content"
+        )
+        self.assertIn("## [agent] Scalar and vector analysis", updated)
+        self.assertIn("table content", updated)
+
 
 if __name__ == "__main__":
     unittest.main()
+

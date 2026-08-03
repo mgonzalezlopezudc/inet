@@ -109,6 +109,14 @@ def scalar_mapping(
     return manifest_path, group
 
 
+def scalar_analysis_directory(scalar_manifest: Path) -> Path:
+    candidate = scalar_manifest.parent
+    if (candidate / "summarize_results.py").is_file():
+        return candidate
+    return REPOSITORY_ROOT / "examples" / "ieee80211ax" / "analysis"
+
+
+
 def scalar_document(
     suite: Suite, scenario_name: str, scenario: dict[str, Any]
 ) -> tuple[Path, str, dict[str, Any]]:
@@ -340,7 +348,8 @@ def validate_scalar_report_session(
     scalar_manifest: Path,
     scalar_group: str,
 ) -> None:
-    metrics_path = scalar_manifest.parent / "metrics.json"
+    analysis_dir = scalar_analysis_directory(scalar_manifest)
+    metrics_path = analysis_dir / "metrics.json"
     if not metrics_path.is_file():
         raise CliError(
             f"Scalar/vector report does not exist: {relative_path(metrics_path)}"
@@ -501,10 +510,10 @@ def report_command(args: argparse.Namespace) -> None:
             suite, args.scenario, scenario
         )
         filtered_manifest = REPOSITORY_ROOT / logical["scalar_vector_manifest"]
-        ax_analysis = scalar_manifest.parent
+        analysis_dir = scalar_analysis_directory(scalar_manifest)
         run_command([
             sys.executable,
-            str(ax_analysis / "summarize_results.py"),
+            str(analysis_dir / "summarize_results.py"),
             "--manifest",
             str(filtered_manifest),
             "--group",
@@ -514,7 +523,7 @@ def report_command(args: argparse.Namespace) -> None:
         ])
         run_command([
             sys.executable,
-            str(ax_analysis / "first_tranche.py"),
+            str(analysis_dir / "first_tranche.py"),
             scalar_group,
             "--manifest",
             str(filtered_manifest),
@@ -542,7 +551,7 @@ def report_command(args: argparse.Namespace) -> None:
     if evidence in {"scalar-vector", "both"}:
         run_command([
             sys.executable,
-            str(ax_analysis / "evaluate_evidence.py"),
+            str(analysis_dir / "evaluate_evidence.py"),
             "--manifest",
             str(filtered_manifest),
             "--session-id",
@@ -576,14 +585,15 @@ def publish_command(args: argparse.Namespace) -> None:
         validate_scalar_report_session(
             logical, scalar_manifest, scalar_group
         )
+        analysis_dir = scalar_analysis_directory(scalar_manifest)
         run_command([
             sys.executable,
-            str(scalar_manifest.parent / "render_walkthrough_results.py"),
+            str(analysis_dir / "render_walkthrough_results.py"),
             scalar_group,
             "--manifest",
             str(REPOSITORY_ROOT / logical["scalar_vector_manifest"]),
             "--metrics",
-            str(scalar_manifest.parent / "metrics.json"),
+            str(analysis_dir / "metrics.json"),
             "--evidence-ledger",
             str(session_directory(args.session_id) / "evidence-ledger.json"),
             "--update",
