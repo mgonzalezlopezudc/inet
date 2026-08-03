@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "suite": "n",
+  "example_root": "examples/ieee80211n",
+  "generated_marker": "ieee80211-pcap-statistics",
+  "capture": {
+    "interface_patterns": ["**.wlan[*]"],
+    "observer_selector": "all-wireless-interfaces"
+  },
+  "scenarios": {
+    "frame_aggregation": {
+      "scalar_vector_group": "frame_aggregation",
+      "ini": "frame_aggregation/omnetpp.ini",
+      "configurations": ["NoAggregation", "AMsduOnly", "AMpduOnly", "TwoLevelAggregation"],
+      "phy_profiles": ["ht"],
+      "feature_plugins": ["aggregation"]
+    },
+    "block_ack": {
+      "scalar_vector_group": "block_ack",
+      "ini": "block_ack/omnetpp.ini",
+      "configurations": ["StandardAck", "ImmediateBlockAck", "CompressedBlockAck", "HtImplicitBlockAck"],
+      "phy_profiles": ["ht"],
+      "feature_plugins": ["block-ack"]
+    },
+    "channel_widths": {
+      "scalar_vector_group": "channel_widths",
+      "ini": "channel_widths/omnetpp.ini",
+      "configurations": ["Ht20MHz", "Ht40MHz", "Ht40MHzSecondaryAbove", "Ht40MHzSecondaryBelow"],
+      "phy_profiles": ["ht"],
+      "feature_plugins": ["channel-width"]
+    },
+    "guard_interval": {
+      "scalar_vector_group": "guard_interval",
+      "ini": "guard_interval/omnetpp.ini",
+      "configurations": ["LongGI800ns", "ShortGI400ns"],
+      "phy_profiles": ["ht"],
+      "feature_plugins": ["guard-interval"]
+    },
+    "mimo_spatial_streams": {
+      "scalar_vector_group": "mimo_spatial_streams",
+      "ini": "mimo_spatial_streams/omnetpp.ini",
+      "configurations": ["SingleStreamMcs7", "DualStreamMcs15", "QuadStreamMcs31"],
+      "phy_profiles": ["ht"],
+      "feature_plugins": ["mimo"]
+    },
+    "preamble_modes": {
+      "scalar_vector_group": "preamble_modes",
+      "ini": "preamble_modes/omnetpp.ini",
+      "configurations": ["HtMixedMode", "HtGreenfield"],
+      "phy_profiles": ["ht"],
+      "feature_plugins": ["preamble"]
+    },
+    "rate_adaptation": {
+      "scalar_vector_group": "rate_adaptation",
+      "ini": "rate_adaptation/omnetpp.ini",
+      "configurations": ["FixedMcs7", "HtMinstrelAdaptation"],
+      "phy_profiles": ["ht"],
+      "feature_plugins": ["rate-adaptation"]
+    }
+  }
+}

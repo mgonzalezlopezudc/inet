@@ -27,7 +27,7 @@ In Downlink OFDMA, after transmitting a DL MU PPDU containing A-MPDU payloads to
 
 ## [agent] Scenario description
 
-The [network](Lan80211AxDlOfdmaBar.ned) extends the common single-BSS HE network (`HeSingleBssNetwork`) with three fixed stations. The [configuration](omnetpp.ini) places the AP at `(250,200)` m, uses a 5 GHz 20 MHz channel, and sends three 100-byte UDP flows from a wired server to `host[0]`, `host[1]`, and `host[2]` (AC_VO / port 5000). A 100-byte warmup stream per host runs from 0.2 s to 0.25 s to establish ADDBA Block Ack agreements; measured data flows run from 0.3 s to 1.0 s across 10 configurations:
+The [network](Lan80211AxDlOfdmaBar.ned) extends the common single-BSS network (`SingleBssNetwork`) with three fixed stations. The [configuration](omnetpp.ini) places the AP at `(250,200)` m, uses a 5 GHz 20 MHz channel, and sends three 100-byte UDP flows from a wired server to `host[0]`, `host[1]`, and `host[2]` (AC_VO / port 5000). A 100-byte warmup stream per host runs from 0.2 s to 0.25 s to establish ADDBA Block Ack agreements; measured data flows run from 0.3 s to 1.0 s across 10 configurations:
 
 - **High Offered Load (`sendInterval = 0.5ms` / ~4.8 Mbit/s aggregate)**: `TriggeredBar`, `SequentialBar`, `TriggeredBarfHoL`, `SequentialBarfHoL`, `SuBaseline`.
 - **Moderate Offered Load (`sendInterval = 1.0ms` / ~2.4 Mbit/s aggregate)**: `TriggeredBar_1ms`, `SequentialBar_1ms`, `TriggeredBarfHoL_1ms`, `SequentialBarfHoL_1ms`, `SuBaseline_1ms`.

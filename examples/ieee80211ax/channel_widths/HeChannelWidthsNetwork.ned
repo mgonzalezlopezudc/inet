@@ -4,16 +4,15 @@
 
 package inet.examples.ieee80211ax.channel_widths;
 
-import inet.examples.ieee80211ax.common.HeSingleBssNetwork;
+import inet.examples.ieee80211.common.SingleBssNetwork;
 
 //
-// \brief Contiguous channel width comparison simulation network.
+// \brief Channel Widths simulation network.
 //
-// This network extends the base \p HeSingleBssNetwork with a default of 4 wireless hosts.
-// It is used to compare physical layer bandwidth and transmission delay differences
-// across contiguous 20, 40, 80, and 160 MHz configurations.
+// This network extends the base \p SingleBssNetwork with a default of 4 wireless hosts.
+// It is used to simulate different bandwidth configurations (20, 40, 80, 160 MHz).
 //
-network HeChannelWidthsNetwork extends HeSingleBssNetwork
+network HeChannelWidthsNetwork extends SingleBssNetwork
 {
     parameters:
         numHosts = default(4);

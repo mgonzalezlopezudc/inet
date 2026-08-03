@@ -4,17 +4,17 @@
 
 package inet.examples.ieee80211ax.rate_adaptation;
 
-import inet.examples.ieee80211ax.common.HeSingleBssNetwork;
+import inet.examples.ieee80211.common.SingleBssNetwork;
 
 //
 // \brief Rate adaptation algorithm comparison simulation network.
 //
-// This network extends the base \p HeSingleBssNetwork with a default of 4 wireless hosts.
+// This network extends the base \p SingleBssNetwork with a default of 4 wireless hosts.
 // It is used to evaluate rate adaptation algorithms (such as Minstrel and Minstrel Mobile)
 // under various SNR and packet error conditions, showing how they dynamically adjust
 // modulation and coding schemes (MCS) to maximize throughput.
 //
-network HeRateAdaptationNetwork extends HeSingleBssNetwork
+network HeRateAdaptationNetwork extends SingleBssNetwork
 {
     parameters:
         numHosts = default(4);

@@ -6,16 +6,16 @@
 
 package inet.examples.ieee80211ax.dl_ofdma_bar;
 
-import inet.examples.ieee80211ax.common.HeSingleBssNetwork;
+import inet.examples.ieee80211.common.SingleBssNetwork;
 
 //
-// \brief Downlink OFDMA Block Ack Request (BAR) signaling comparison network.
+// \brief Downlink OFDMA Block Ack Request (BAR) simulation network.
 //
-// Extends \p HeSingleBssNetwork with 3 wireless hosts to compare the performance
-// and overhead of sequential unicast BARs versus MU-BAR Trigger frames in DL OFDMA,
-// along with a Downlink Single-User (DL SU) baseline.
+// Extends \p SingleBssNetwork with 3 wireless hosts to compare the performance
+// of sequential un-triggered Block Ack Requests versus scheduled Multi-User BAR
+// (MU-BAR) Trigger frames in downlink OFDMA scenarios.
 //
-network Lan80211AxDlOfdmaBar extends HeSingleBssNetwork
+network Lan80211AxDlOfdmaBar extends SingleBssNetwork
 {
     parameters:
         numHosts = default(3);

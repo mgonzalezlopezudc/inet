@@ -4,16 +4,16 @@
 
 package inet.examples.ieee80211ax.dl_ul_ofdma;
 
-import inet.examples.ieee80211ax.common.HeSingleBssNetwork;
+import inet.examples.ieee80211.common.SingleBssNetwork;
 
 //
-// \brief Bidirectional downlink and uplink OFDMA comparison network.
+// \brief Simultaneous Downlink and Uplink OFDMA simulation network.
 //
-// Three stations generate downlink and uplink traffic at the same time. The
-// corresponding INI configurations compare HE multi-user scheduling with a
-// matched single-user EDCA baseline.
+// Extends \p SingleBssNetwork with 3 wireless hosts to model bidirectional
+// multi-user traffic where the AP and client stations contend and trigger
+// simultaneous transmissions in opposite directions.
 //
-network Lan80211AxDlUlOfdma extends HeSingleBssNetwork
+network Lan80211AxDlUlOfdma extends SingleBssNetwork
 {
     parameters:
         numHosts = default(3);

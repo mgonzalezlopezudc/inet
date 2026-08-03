@@ -363,7 +363,7 @@ Define_Module(VhtDlMuNegativeObserver);
 
 %file: TestNetwork.ned
 
-import inet.examples.ieee80211ax.common.HeSingleBssNetwork;
+import inet.examples.ieee80211.common.SingleBssNetwork;
 import inet.linklayer.ieee80211.mac.coordinationfunction.VhtHcf;
 import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211Receiver;
 
@@ -387,7 +387,7 @@ module FaultInjectingVhtHcf extends VhtHcf
         @class(FaultInjectingVhtHcf);
 }
 
-network TestNetwork extends HeSingleBssNetwork
+network TestNetwork extends SingleBssNetwork
 {
     submodules:
         observer: VhtDlMuNegativeObserver {

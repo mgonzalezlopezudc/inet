@@ -608,6 +608,34 @@ def publish_command(args: argparse.Namespace) -> None:
         run_command(command, matplotlib=True)
 
 
+def init_walkthrough_command(args: argparse.Namespace) -> None:
+    suite_path = resolve_suite_path(args.suite)
+    suite = load_suite(suite_path, REPOSITORY_ROOT)
+    example_root = REPOSITORY_ROOT / suite.example_root
+    scenarios = [args.scenario] if args.scenario != "all" else list(suite.scenarios.keys())
+
+    from inet_wifi_analysis.walkthrough import (
+        SCRIPT_SESSIONS_BEGIN,
+        update_script_results_session,
+    )
+
+    for scenario_name in scenarios:
+        walkthrough_path = example_root / scenario_name / "walkthrough.md"
+        if not walkthrough_path.is_file():
+            print(f"Skipping missing walkthrough: {walkthrough_path}")
+            continue
+        content = walkthrough_path.read_text(encoding="utf-8")
+        updated = content
+        if SCRIPT_SESSIONS_BEGIN not in updated:
+            updated = update_script_results_session(updated, "Scalar/vector", "NOT RUN")
+            updated = update_script_results_session(updated, "PCAP", "NOT RUN")
+        if updated != content:
+            walkthrough_path.write_text(updated, encoding="utf-8")
+            print(f"Initialized script sections in {walkthrough_path.relative_to(REPOSITORY_ROOT)}")
+        else:
+            print(f"Walkthrough script sections already initialized: {walkthrough_path.relative_to(REPOSITORY_ROOT)}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -670,6 +698,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="explicitly allow marker-bounded walkthrough updates",
     )
     publish_parser.set_defaults(handler=publish_command)
+
+    init_parser = commands.add_parser(
+        "init-walkthrough", help="initialize script marker sections in walkthrough files"
+    )
+    init_parser.add_argument("scenario", help="scenario name or 'all'")
+    init_parser.add_argument("--suite", default="ax")
+    init_parser.set_defaults(handler=init_walkthrough_command)
+
     return parser
 
 
@@ -684,3 +720,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

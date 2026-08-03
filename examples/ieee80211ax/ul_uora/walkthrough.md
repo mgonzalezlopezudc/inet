@@ -45,7 +45,7 @@ contention state.
 
 The [INI file](omnetpp.ini) selects the
 [uplink OFDMA network](../ul_ofdma/Lan80211AxUlOfdma.ned), which extends the
-[common single-BSS network](../common/HeSingleBssNetwork.ned):
+[common single-BSS network](../../ieee80211/common/SingleBssNetwork.ned):
 
 ```text
 host[0..7] -- 802.11ax uplink --> AP === 100-Gbit/s Ethernet === server

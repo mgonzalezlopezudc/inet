@@ -32,7 +32,7 @@ traffic without the Trigger prefix.
 ## [agent] Scenario description
 
 The [network](Lan80211AxUlOfdma.ned) extends
-[`HeSingleBssNetwork`](../common/HeSingleBssNetwork.ned) with three stationary
+[`SingleBssNetwork`](../../ieee80211/common/SingleBssNetwork.ned) with three stationary
 hosts sending UDP traffic through the AP to `server.app[0]`:
 
 ```text

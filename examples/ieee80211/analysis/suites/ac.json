@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "suite": "ac",
+  "example_root": "examples/ieee80211ac",
+  "generated_marker": "ieee80211-pcap-statistics",
+  "capture": {
+    "interface_patterns": ["**.wlan[*]"],
+    "observer_selector": "all-wireless-interfaces"
+  },
+  "scenarios": {
+    "wide_channels": {
+      "scalar_vector_group": "wide_channels",
+      "ini": "wide_channels/omnetpp.ini",
+      "configurations": ["Vht20MHz", "Vht40MHz", "Vht80MHz", "Vht160MHz"],
+      "phy_profiles": ["vht"],
+      "feature_plugins": ["channel-width"]
+    },
+    "vht_mcs_256qam": {
+      "scalar_vector_group": "vht_mcs_256qam",
+      "ini": "vht_mcs_256qam/omnetpp.ini",
+      "configurations": ["BaselineHtMcs7", "VhtMcs7", "VhtMcs8_256QAM", "VhtMcs9_256QAM"],
+      "phy_profiles": ["vht"],
+      "feature_plugins": ["modulation"]
+    },
+    "extended_ampdu": {
+      "scalar_vector_group": "extended_ampdu",
+      "ini": "extended_ampdu/omnetpp.ini",
+      "configurations": ["StandardHtAmpduLimit", "ExtendedVhtAmpduLimit"],
+      "phy_profiles": ["vht"],
+      "feature_plugins": ["aggregation"]
+    },
+    "spatial_streams_8x8": {
+      "scalar_vector_group": "spatial_streams_8x8",
+      "ini": "spatial_streams_8x8/omnetpp.ini",
+      "configurations": ["SingleStreamVht", "FourStreamVht", "EightStreamVht"],
+      "phy_profiles": ["vht"],
+      "feature_plugins": ["mimo"]
+    },
+    "vht_rate_adaptation": {
+      "scalar_vector_group": "vht_rate_adaptation",
+      "ini": "vht_rate_adaptation/omnetpp.ini",
+      "configurations": ["FixedVhtMcs", "VhtMinstrelAdaptation"],
+      "phy_profiles": ["vht"],
+      "feature_plugins": ["rate-adaptation"]
+    },
+    "short_gi_vht": {
+      "scalar_vector_group": "short_gi_vht",
+      "ini": "short_gi_vht/omnetpp.ini",
+      "configurations": ["VhtLongGI", "VhtShortGI"],
+      "phy_profiles": ["vht"],
+      "feature_plugins": ["guard-interval"]
+    },
+    "dl_mu_mimo_baseline": {
+      "scalar_vector_group": "dl_mu_mimo_baseline",
+      "ini": "dl_mu_mimo_baseline/omnetpp.ini",
+      "configurations": ["VhtSingleUserBaseline", "VhtDlMuMimoTwoUsers"],
+      "phy_profiles": ["vht"],
+      "feature_plugins": ["mu-mimo"]
+    }
+  }
+}

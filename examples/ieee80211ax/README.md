@@ -83,7 +83,7 @@ a scenario explicitly needs settling time or a different time scale.
 ## Shared topology
 
 Conventional single-BSS examples derive from
-[`common/HeSingleBssNetwork.ned`](common/HeSingleBssNetwork.ned). The base keeps
+[`../ieee80211/common/SingleBssNetwork.ned`](../ieee80211/common/SingleBssNetwork.ned). The base keeps
 the `server`, `ap`, `host[]`, `radioMedium`, and `configurator` paths stable, so
 scenario INI files remain explicit. Examples with materially different
 topology or management behavior retain dedicated networks.

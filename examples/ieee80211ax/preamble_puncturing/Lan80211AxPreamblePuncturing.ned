@@ -6,10 +6,10 @@
 
 package inet.examples.ieee80211ax.preamble_puncturing;
 
-import inet.examples.ieee80211ax.common.HeSingleBssNetwork;
+import inet.examples.ieee80211.common.SingleBssNetwork;
 import inet.node.inet.WirelessHost;
 
-network Lan80211AxPreamblePuncturing extends HeSingleBssNetwork
+network Lan80211AxPreamblePuncturing extends SingleBssNetwork
 {
     parameters:
         numHosts = default(4);

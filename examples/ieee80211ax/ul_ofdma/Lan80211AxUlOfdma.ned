@@ -4,18 +4,16 @@
 
 package inet.examples.ieee80211ax.ul_ofdma;
 
-import inet.examples.ieee80211ax.common.HeSingleBssNetwork;
+import inet.examples.ieee80211.common.SingleBssNetwork;
 
 //
-// \brief Uplink OFDMA, Uplink MU-MIMO, and UORA simulation network.
+// \brief Uplink Multi-User OFDMA simulation network.
 //
-// This network extends the base \p HeSingleBssNetwork with a default of 3 wireless hosts.
-// It is used to simulate uplink multi-user transmissions where multiple client stations
-// transmit concurrently to the AP. Transactions are either scheduled by the AP coordinator
-// (via Basic or BSRP Trigger frames) or contested by the stations on random-access RUs
-// using Uplink OFDMA Random Access (UORA).
+// This network extends the base \p SingleBssNetwork with a default of 3 wireless hosts.
+// It models scheduled uplink OFDMA transmissions where the AP issues Trigger frames
+// and stations transmit simultaneously on assigned RUs.
 //
-network Lan80211AxUlOfdma extends HeSingleBssNetwork
+network Lan80211AxUlOfdma extends SingleBssNetwork
 {
     parameters:
         numHosts = default(3);

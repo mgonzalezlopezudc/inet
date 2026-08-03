@@ -644,7 +644,7 @@ Define_Module(SharedModesObserver);
 
 %file: TestNetwork.ned
 
-import inet.examples.ieee80211ax.common.HeSingleBssNetwork;
+import inet.examples.ieee80211.common.SingleBssNetwork;
 import inet.linklayer.ieee80211.mac.coordinationfunction.VhtSoundingCoordinator;
 import inet.linklayer.ieee80211.mac.recipient.QosCtsPolicy;
 
@@ -678,7 +678,7 @@ simple DropFirstVhtFeedbackCoordinator extends VhtSoundingCoordinator
         bool suppressFirstFeedback = default(false);
 }
 
-network TestNetwork extends HeSingleBssNetwork
+network TestNetwork extends SingleBssNetwork
 {
     submodules:
         observer: SharedModesObserver {
