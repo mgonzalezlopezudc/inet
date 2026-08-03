@@ -1,0 +1,166 @@
+{
+  "default_repetitions": 5,
+  "evidence_contracts": {
+    "wide_channels": [
+      {
+        "id": "wide-channels-delivery-comparison",
+        "kind": "metric",
+        "requirement": "Compare application delivered bytes across VHT 20, 40, 80, and 160 MHz channel widths",
+        "results": ["packetReceived"],
+        "evaluation": {
+          "handler": "unimplemented",
+          "reason": "No manifest acceptance threshold defined for wide channel comparison"
+        }
+      }
+    ],
+    "vht_mcs_256qam": [
+      {
+        "id": "vht-mcs-256qam-delivery-comparison",
+        "kind": "metric",
+        "requirement": "Compare application delivered bytes across HT MCS 7 baseline and VHT 256-QAM MCS rates",
+        "results": ["packetReceived"],
+        "evaluation": {
+          "handler": "unimplemented",
+          "reason": "No manifest acceptance threshold defined for 256-QAM MCS comparison"
+        }
+      }
+    ],
+    "extended_ampdu": [
+      {
+        "id": "extended-ampdu-delivery-comparison",
+        "kind": "metric",
+        "requirement": "Compare application delivered bytes between Standard HT A-MPDU limit and Extended VHT A-MPDU limit",
+        "results": ["packetReceived"],
+        "evaluation": {
+          "handler": "unimplemented",
+          "reason": "No manifest acceptance threshold defined for extended A-MPDU limit comparison"
+        }
+      }
+    ],
+    "spatial_streams_8x8": [
+      {
+        "id": "spatial-streams-8x8-delivery-comparison",
+        "kind": "metric",
+        "requirement": "Compare application delivered bytes across Single (1x1), Four (4x4), and Eight (8x8) VHT Spatial Streams",
+        "results": ["packetReceived"],
+        "evaluation": {
+          "handler": "unimplemented",
+          "reason": "No manifest acceptance threshold defined for VHT spatial stream comparison"
+        }
+      }
+    ],
+    "vht_rate_adaptation": [
+      {
+        "id": "vht-rate-adaptation-delivery-comparison",
+        "kind": "metric",
+        "requirement": "Compare application delivered bytes between Fixed VHT MCS 9 and VHT Minstrel dynamic adaptation",
+        "results": ["packetReceived"],
+        "evaluation": {
+          "handler": "unimplemented",
+          "reason": "No manifest acceptance threshold defined for VHT rate adaptation comparison"
+        }
+      }
+    ],
+    "short_gi_vht": [
+      {
+        "id": "short-gi-vht-delivery-comparison",
+        "kind": "metric",
+        "requirement": "Compare application delivered bytes between VHT Long (800 ns) and Short (400 ns) Guard Intervals",
+        "results": ["packetReceived"],
+        "evaluation": {
+          "handler": "unimplemented",
+          "reason": "No manifest acceptance threshold defined for VHT Guard Interval comparison"
+        }
+      }
+    ],
+    "dl_mu_mimo_baseline": [
+      {
+        "id": "dl-mu-mimo-baseline-delivery-comparison",
+        "kind": "metric",
+        "requirement": "Compare application delivered bytes between Single-User baseline and Downlink MU-MIMO two-user spatial multiplexing",
+        "results": ["packetReceived"],
+        "evaluation": {
+          "handler": "unimplemented",
+          "reason": "No manifest acceptance threshold defined for DL MU-MIMO baseline comparison"
+        }
+      }
+    ]
+  },
+  "groups": {
+    "wide_channels": {
+      "walkthrough": "examples/ieee80211ac/wide_channels/walkthrough.md",
+      "ini": "examples/ieee80211ac/wide_channels/omnetpp.ini",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.3, "end": 0.9},
+      "conditions": [
+        {"label": "VHT 20 MHz", "config": "Vht20MHz"},
+        {"label": "VHT 40 MHz", "config": "Vht40MHz"},
+        {"label": "VHT 80 MHz", "config": "Vht80MHz"},
+        {"label": "VHT 160 MHz", "config": "Vht160MHz"}
+      ]
+    },
+    "vht_mcs_256qam": {
+      "walkthrough": "examples/ieee80211ac/vht_mcs_256qam/walkthrough.md",
+      "ini": "examples/ieee80211ac/vht_mcs_256qam/omnetpp.ini",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.3, "end": 0.9},
+      "conditions": [
+        {"label": "HT MCS 7 Baseline", "config": "BaselineHtMcs7"},
+        {"label": "VHT MCS 7", "config": "VhtMcs7"},
+        {"label": "VHT MCS 8 (256-QAM)", "config": "VhtMcs8_256QAM"},
+        {"label": "VHT MCS 9 (256-QAM)", "config": "VhtMcs9_256QAM"}
+      ]
+    },
+    "extended_ampdu": {
+      "walkthrough": "examples/ieee80211ac/extended_ampdu/walkthrough.md",
+      "ini": "examples/ieee80211ac/extended_ampdu/omnetpp.ini",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.3, "end": 0.9},
+      "conditions": [
+        {"label": "Standard HT A-MPDU Limit", "config": "StandardHtAmpduLimit"},
+        {"label": "Extended VHT A-MPDU Limit", "config": "ExtendedVhtAmpduLimit"}
+      ]
+    },
+    "spatial_streams_8x8": {
+      "walkthrough": "examples/ieee80211ac/spatial_streams_8x8/walkthrough.md",
+      "ini": "examples/ieee80211ac/spatial_streams_8x8/omnetpp.ini",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.3, "end": 0.9},
+      "conditions": [
+        {"label": "Single Stream (1x1)", "config": "SingleStreamVht"},
+        {"label": "Four Streams (4x4)", "config": "FourStreamVht"},
+        {"label": "Eight Streams (8x8)", "config": "EightStreamVht"}
+      ]
+    },
+    "vht_rate_adaptation": {
+      "walkthrough": "examples/ieee80211ac/vht_rate_adaptation/walkthrough.md",
+      "ini": "examples/ieee80211ac/vht_rate_adaptation/omnetpp.ini",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.3, "end": 1.9},
+      "conditions": [
+        {"label": "Fixed VHT MCS 9", "config": "FixedVhtMcs"},
+        {"label": "VHT Minstrel Adaptation", "config": "VhtMinstrelAdaptation"}
+      ]
+    },
+    "short_gi_vht": {
+      "walkthrough": "examples/ieee80211ac/short_gi_vht/walkthrough.md",
+      "ini": "examples/ieee80211ac/short_gi_vht/omnetpp.ini",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.3, "end": 0.9},
+      "conditions": [
+        {"label": "VHT Long GI (800 ns)", "config": "VhtLongGI"},
+        {"label": "VHT Short GI (400 ns)", "config": "VhtShortGI"}
+      ]
+    },
+    "dl_mu_mimo_baseline": {
+      "walkthrough": "examples/ieee80211ac/dl_mu_mimo_baseline/walkthrough.md",
+      "ini": "examples/ieee80211ac/dl_mu_mimo_baseline/omnetpp.ini",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.3, "end": 0.9},
+      "conditions": [
+        {"label": "Single-User Baseline", "config": "VhtSingleUserBaseline"},
+        {"label": "DL MU-MIMO Two Users", "config": "VhtDlMuMimoTwoUsers"}
+      ]
+    }
+  }
+}

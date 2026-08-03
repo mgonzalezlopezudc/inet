@@ -18,6 +18,8 @@ from inet_wifi_analysis import scenario_configuration_ini
 
 AX_SUITE = ANALYSIS_ROOT / "suites" / "ax.json"
 BE_SUITE = ANALYSIS_ROOT / "suites" / "be-eht-features.json"
+N_SUITE = ANALYSIS_ROOT / "suites" / "n.json"
+AC_SUITE = ANALYSIS_ROOT / "suites" / "ac.json"
 SESSION = "20260726T120000Z"
 
 
@@ -44,32 +46,33 @@ class WifiAnalysisCliTest(unittest.TestCase):
             be.example_root / "eht_features",
         )
 
-    def test_ax_mapped_groups_are_available_to_both_pipelines(self):
-        suite = wifi_analysis.load_suite(
-            AX_SUITE, wifi_analysis.REPOSITORY_ROOT
-        )
-        self.assertTrue(
-            all(
-                "scalar_vector_group" in scenario
-                for scenario in suite.scenarios.values()
-            )
-        )
-        for scenario_name, scenario in suite.scenarios.items():
-            if "scalar_vector_group" not in scenario:
-                continue
-            self.assertTrue(
-                (suite.example_root / scenario["ini"]).is_file(),
-                scenario_name,
-            )
-            _, group, document = wifi_analysis.scalar_document(
-                suite, scenario_name, scenario
+    def test_all_suite_mapped_groups_are_available_to_both_pipelines(self):
+        for suite_path in (AX_SUITE, N_SUITE, AC_SUITE, BE_SUITE):
+            suite = wifi_analysis.load_suite(
+                suite_path, wifi_analysis.REPOSITORY_ROOT
             )
             self.assertTrue(
-                wifi_analysis.scalar_configs(document, group).issubset(
-                    scenario["configurations"]
-                ),
-                scenario_name,
+                all(
+                    "scalar_vector_group" in scenario
+                    for scenario in suite.scenarios.values()
+                )
             )
+            for scenario_name, scenario in suite.scenarios.items():
+                if "scalar_vector_group" not in scenario:
+                    continue
+                self.assertTrue(
+                    (suite.example_root / scenario["ini"]).is_file(),
+                    f"{suite.suite}/{scenario_name}",
+                )
+                _, group, document = wifi_analysis.scalar_document(
+                    suite, scenario_name, scenario
+                )
+                self.assertTrue(
+                    wifi_analysis.scalar_configs(document, group).issubset(
+                        scenario["configurations"]
+                    ),
+                    f"{suite.suite}/{scenario_name}",
+                )
 
     def test_inspect_is_read_only(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -2,6 +2,7 @@
   "schema_version": 1,
   "suite": "n",
   "example_root": "examples/ieee80211n",
+  "scalar_vector_manifest": "examples/ieee80211n/analysis/experiments.json",
   "generated_marker": "ieee80211-pcap-statistics",
   "capture": {
     "interface_patterns": ["**.wlan[*]"],

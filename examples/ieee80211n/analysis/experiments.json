@@ -1,0 +1,168 @@
+{
+  "default_repetitions": 5,
+  "evidence_contracts": {
+    "frame_aggregation": [
+      {
+        "id": "frame-aggregation-delivery-comparison",
+        "kind": "metric",
+        "requirement": "Compare application delivered bytes across frame aggregation policies",
+        "results": ["packetReceived"],
+        "evaluation": {
+          "handler": "unimplemented",
+          "reason": "No manifest acceptance threshold defined for frame aggregation delivery comparison"
+        }
+      }
+    ],
+    "block_ack": [
+      {
+        "id": "block-ack-delivery-comparison",
+        "kind": "metric",
+        "requirement": "Compare application delivered bytes across Block ACK policies",
+        "results": ["packetReceived"],
+        "evaluation": {
+          "handler": "unimplemented",
+          "reason": "No manifest acceptance threshold defined for Block ACK policy comparison"
+        }
+      }
+    ],
+    "channel_widths": [
+      {
+        "id": "channel-widths-delivery-comparison",
+        "kind": "metric",
+        "requirement": "Compare application delivered bytes across 20 MHz and 40 MHz channel widths",
+        "results": ["packetReceived"],
+        "evaluation": {
+          "handler": "unimplemented",
+          "reason": "No manifest acceptance threshold defined for channel width comparison"
+        }
+      }
+    ],
+    "guard_interval": [
+      {
+        "id": "guard-interval-delivery-comparison",
+        "kind": "metric",
+        "requirement": "Compare application delivered bytes across Long (800 ns) and Short (400 ns) Guard Intervals",
+        "results": ["packetReceived"],
+        "evaluation": {
+          "handler": "unimplemented",
+          "reason": "No manifest acceptance threshold defined for Guard Interval comparison"
+        }
+      }
+    ],
+    "mimo_spatial_streams": [
+      {
+        "id": "mimo-spatial-streams-delivery-comparison",
+        "kind": "metric",
+        "requirement": "Compare application delivered bytes across Single, Dual, and Quad Spatial Streams",
+        "results": ["packetReceived"],
+        "evaluation": {
+          "handler": "unimplemented",
+          "reason": "No manifest acceptance threshold defined for spatial stream comparison"
+        }
+      }
+    ],
+    "preamble_modes": [
+      {
+        "id": "preamble-modes-delivery-comparison",
+        "kind": "metric",
+        "requirement": "Compare application delivered bytes across Mixed-Mode and Greenfield HT preambles",
+        "results": ["packetReceived"],
+        "evaluation": {
+          "handler": "unimplemented",
+          "reason": "No manifest acceptance threshold defined for preamble mode comparison"
+        }
+      }
+    ],
+    "rate_adaptation": [
+      {
+        "id": "rate-adaptation-delivery-comparison",
+        "kind": "metric",
+        "requirement": "Compare application delivered bytes between Fixed MCS 7 and HT Minstrel dynamic adaptation",
+        "results": ["packetReceived"],
+        "evaluation": {
+          "handler": "unimplemented",
+          "reason": "No manifest acceptance threshold defined for rate adaptation comparison"
+        }
+      }
+    ]
+  },
+  "groups": {
+    "frame_aggregation": {
+      "walkthrough": "examples/ieee80211n/frame_aggregation/walkthrough.md",
+      "ini": "examples/ieee80211n/frame_aggregation/omnetpp.ini",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.3, "end": 0.9},
+      "conditions": [
+        {"label": "No Aggregation", "config": "NoAggregation"},
+        {"label": "A-MSDU Only", "config": "AMsduOnly"},
+        {"label": "A-MPDU Only", "config": "AMpduOnly"},
+        {"label": "Two-Level Aggregation", "config": "TwoLevelAggregation"}
+      ]
+    },
+    "block_ack": {
+      "walkthrough": "examples/ieee80211n/block_ack/walkthrough.md",
+      "ini": "examples/ieee80211n/block_ack/omnetpp.ini",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.3, "end": 0.9},
+      "conditions": [
+        {"label": "Standard ACK", "config": "StandardAck"},
+        {"label": "Immediate Block ACK", "config": "ImmediateBlockAck"},
+        {"label": "Compressed Block ACK", "config": "CompressedBlockAck"},
+        {"label": "HT Implicit Block ACK", "config": "HtImplicitBlockAck"}
+      ]
+    },
+    "channel_widths": {
+      "walkthrough": "examples/ieee80211n/channel_widths/walkthrough.md",
+      "ini": "examples/ieee80211n/channel_widths/omnetpp.ini",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.3, "end": 0.9},
+      "conditions": [
+        {"label": "HT 20 MHz", "config": "Ht20MHz"},
+        {"label": "HT 40 MHz", "config": "Ht40MHz"},
+        {"label": "HT 40 MHz (Secondary Above)", "config": "Ht40MHzSecondaryAbove"},
+        {"label": "HT 40 MHz (Secondary Below)", "config": "Ht40MHzSecondaryBelow"}
+      ]
+    },
+    "guard_interval": {
+      "walkthrough": "examples/ieee80211n/guard_interval/walkthrough.md",
+      "ini": "examples/ieee80211n/guard_interval/omnetpp.ini",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.3, "end": 0.9},
+      "conditions": [
+        {"label": "Long GI (800 ns)", "config": "LongGI800ns"},
+        {"label": "Short GI (400 ns)", "config": "ShortGI400ns"}
+      ]
+    },
+    "mimo_spatial_streams": {
+      "walkthrough": "examples/ieee80211n/mimo_spatial_streams/walkthrough.md",
+      "ini": "examples/ieee80211n/mimo_spatial_streams/omnetpp.ini",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.3, "end": 0.9},
+      "conditions": [
+        {"label": "Single Stream (MCS 7)", "config": "SingleStreamMcs7"},
+        {"label": "Dual Stream (MCS 15)", "config": "DualStreamMcs15"},
+        {"label": "Quad Stream (MCS 31)", "config": "QuadStreamMcs31"}
+      ]
+    },
+    "preamble_modes": {
+      "walkthrough": "examples/ieee80211n/preamble_modes/walkthrough.md",
+      "ini": "examples/ieee80211n/preamble_modes/omnetpp.ini",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.3, "end": 0.9},
+      "conditions": [
+        {"label": "HT Mixed-Mode", "config": "HtMixedMode"},
+        {"label": "HT Greenfield", "config": "HtGreenfield"}
+      ]
+    },
+    "rate_adaptation": {
+      "walkthrough": "examples/ieee80211n/rate_adaptation/walkthrough.md",
+      "ini": "examples/ieee80211n/rate_adaptation/omnetpp.ini",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.3, "end": 1.9},
+      "conditions": [
+        {"label": "Fixed MCS 7", "config": "FixedMcs7"},
+        {"label": "HT Minstrel Adaptation", "config": "HtMinstrelAdaptation"}
+      ]
+    }
+  }
+}
