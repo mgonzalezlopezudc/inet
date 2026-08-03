@@ -10,6 +10,7 @@
 #include <tuple>
 
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtCode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211LdpcPhyCalculator.h"
 #include "inet/physicallayer/wireless/common/modulation/BpskModulation.h"
 #include "inet/physicallayer/wireless/common/modulation/Qam16Modulation.h"
 #include "inet/physicallayer/wireless/common/modulation/Qam64Modulation.h"
@@ -309,17 +310,61 @@ unsigned int Ieee80211HtDataMode::computeNumberOfBccEncoders() const
     return getGrossBitrate() > Mbps(300) ? 2 : 1;
 }
 
-const simtime_t Ieee80211HtDataMode::getDuration(b dataLength) const
+int64_t Ieee80211HtDataMode::getNumberOfDataSymbols(b dataLength) const
 {
-    // IEEE Std 802.11-2024 19.3.11 and 19.4.3: N_SYM is derived from
-    // SERVICE + 8*LENGTH + 6*N_ES tail bits divided by N_DBPS. This simplified
-    // packet-level path assumes m_STBC = 1 and no explicit signal extension.
+    // IEEE Std 802.11-2024 19.3.11.7.5 and 19.4.3. This packet-level adapter
+    // assumes m_STBC=1; the amendment-neutral helper owns only Table 19-16
+    // codeword/shortening/puncturing/repetition geometry.
     unsigned int numberOfCodedBitsPerSubcarrierSum = computeNumberOfCodedBitsPerSubcarrierSum();
     unsigned int numberOfCodedBitsPerSymbol = numberOfCodedBitsPerSubcarrierSum * getNumberOfDataSubcarriers();
     const IForwardErrorCorrection *forwardErrorCorrection = getCode() ? getCode()->getForwardErrorCorrection() : nullptr;
     unsigned int dataBitsPerSymbol = forwardErrorCorrection ? forwardErrorCorrection->getDecodedLength(numberOfCodedBitsPerSymbol) : numberOfCodedBitsPerSymbol;
-    int numberOfSymbols = lrint(ceil((double)getCompleteLength(dataLength).get<b>() / dataBitsPerSymbol)); // TODO getBitLength(dataLength) should be divisible by dataBitsPerSymbol
-    return numberOfSymbols * getSymbolInterval();
+    int64_t payloadBits = getCompleteLength(dataLength).get<b>();
+    int64_t numberOfSymbols = (payloadBits + dataBitsPerSymbol - 1) / dataBitsPerSymbol;
+    if (getCode() != nullptr && getCode()->isLdpc()) {
+        int rateNumerator, rateDenominator;
+        if (!getIeee80211LdpcRateParameters(forwardErrorCorrection->getCodeRate(), rateNumerator, rateDenominator))
+            throw cRuntimeError("Unsupported HT LDPC code rate");
+        int64_t availableBits = numberOfSymbols * numberOfCodedBitsPerSymbol;
+        auto geometry = calculateIeee80211LdpcCodewordGeometry(
+                payloadBits, availableBits, rateNumerator, rateDenominator);
+        if (!geometry)
+            throw cRuntimeError("Invalid HT LDPC geometry: %s", geometry.error.c_str());
+        if (geometry.requiresAdditionalCodedBits) {
+            numberOfSymbols++;
+            availableBits += numberOfCodedBitsPerSymbol;
+        }
+        auto allocation = calculateIeee80211LdpcBitAllocation(
+                geometry, payloadBits, availableBits, rateNumerator, rateDenominator);
+        if (!allocation)
+            throw cRuntimeError("Invalid HT LDPC bit allocation: %s", allocation.error.c_str());
+    }
+    return numberOfSymbols;
+}
+
+const simtime_t Ieee80211HtDataMode::getDuration(b dataLength) const
+{
+    auto numberOfSymbols = getNumberOfDataSymbols(dataLength);
+    if (guardIntervalType == HT_GUARD_INTERVAL_LONG)
+        return numberOfSymbols * getSymbolInterval();
+    // Preserve the standalone data-mode contract's mixed-format rounding.
+    // Ieee80211HtMode owns the preamble-dependent Equations 19-90/19-92 choice.
+    return SimTime(4 * (int64_t)std::ceil(numberOfSymbols * 3.6 / 4.0), SIMTIME_US);
+}
+
+const simtime_t Ieee80211HtMode::getDataDuration(b dataLength) const
+{
+    if (dataMode->getGuardIntervalType() == Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG)
+        return dataMode->getDuration(dataLength);
+    auto numberOfSymbols = dataMode->getNumberOfDataSymbols(dataLength);
+    if (preambleMode->getPreambleFormat() == Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED)
+        // IEEE Std 802.11-2024 Equation (19-90).
+        return SimTime(4 * (int64_t)std::ceil(numberOfSymbols * 3.6 / 4.0), SIMTIME_US);
+    else if (preambleMode->getPreambleFormat() == Ieee80211HtPreambleMode::HT_PREAMBLE_GREENFIELD)
+        // IEEE Std 802.11-2024 Equation (19-92).
+        return numberOfSymbols * dataMode->getShortGISymbolInterval();
+    else
+        throw cRuntimeError("Unknown HT preamble format");
 }
 
 const simtime_t Ieee80211HtMode::getSlotTime() const
@@ -363,7 +408,8 @@ Ieee80211HtCompliantModes::~Ieee80211HtCompliantModes()
 const Ieee80211HtMode *Ieee80211HtCompliantModes::getCompliantMode(const Ieee80211Htmcs *mcsMode, Ieee80211HtMode::BandMode centerFrequencyMode, Ieee80211HtPreambleMode::HighTroughputPreambleFormat preambleFormat, Ieee80211HtModeBase::GuardIntervalType guardIntervalType, bool ldpc)
 {
     const char *name = ""; // TODO
-    auto htModeId = std::make_tuple(mcsMode->getBandwidth(), mcsMode->getMcsIndex(), guardIntervalType, ldpc);
+    auto htModeId = std::make_tuple(mcsMode->getBandwidth(), mcsMode->getMcsIndex(),
+            centerFrequencyMode, preambleFormat, guardIntervalType, ldpc);
     auto mode = singleton.modeCache.find(htModeId);
     if (mode == singleton.modeCache.end()) {
         const Ieee80211OfdmModulation *modulation = nullptr;
@@ -385,7 +431,7 @@ const Ieee80211HtMode *Ieee80211HtCompliantModes::getCompliantMode(const Ieee802
         const Ieee80211HtDataMode *dataMode = new Ieee80211HtDataMode(mcsMode, mcsMode->getBandwidth(), guardIntervalType, ldpc);
         const Ieee80211HtPreambleMode *preambleMode = new Ieee80211HtPreambleMode(htSignal, legacySignal, preambleFormat, dataMode->getNumberOfSpatialStreams());
         const Ieee80211HtMode *htMode = new Ieee80211HtMode(name, preambleMode, dataMode, centerFrequencyMode);
-        singleton.modeCache.insert(std::pair<std::tuple<Hz, unsigned int, Ieee80211HtModeBase::GuardIntervalType, bool>, const Ieee80211HtMode *>(htModeId, htMode));
+        singleton.modeCache.emplace(htModeId, htMode);
         return htMode;
     }
     return mode->second;

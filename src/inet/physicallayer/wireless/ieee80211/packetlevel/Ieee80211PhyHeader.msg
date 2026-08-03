@@ -155,13 +155,40 @@ class Ieee80211VhtPhyPreamble extends Ieee80211PhyPreamble
 {
 }
 
+// Canonical per-user logical VHT MU signaling. Model-only receiver identity,
+// gain, leakage, and PSDU ranges remain in Ieee80211VhtTxVector; this struct
+// carries the VHT-SIG-A/B fields needed by the packet-level serializer.
+struct Ieee80211VhtMuUserInfo
+{
+    uint16_t associationId;
+    uint8_t userPosition;
+    uint8_t numberOfSpatialStreams = 1;
+    uint8_t mcs = 0;
+    uint8_t coding = 0;
+    B psduLength;
+    simtime_t duration;
+}
+
 //
 // VHT PHY header modelled at packet level. coding selects BCC (0) or LDPC (1)
 // for the associated VHT data field.
 //
 class Ieee80211VhtPhyHeader extends Ieee80211PhyHeader
 {
+    chunkLength = b(50); // Ieee80211VhtSignalMode packet-level field budget
+    bool signalingValid = false;
+    bool ndp = false;
+    bool stbc = false;
+    uint8_t bandwidth = 0; // Table 21-11: 0=20, 1=40, 2=80, 3=160 or 80+80 MHz
+    uint8_t groupId = 63;
+    uint8_t numberOfSpaceTimeStreams = 1;
+    uint16_t partialAid = 0;
+    uint8_t mcs = 0;
     uint8_t coding = 0; // 0: BCC, 1: LDPC
+    bool ldpcExtraOfdmSymbol = false; // VHT-SIG-A LDPC Extra OFDM Symbol
+    bool beamformed = false;
+    simtime_t commonDuration;
+    Ieee80211VhtMuUserInfo users[];
 }
 
 //

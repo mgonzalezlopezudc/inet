@@ -27,8 +27,8 @@ auto request = makeShared<Ieee80211AssociationRequestFrame>();
 request->setSSID("he");
 Ieee80211SupportedRatesElement rates;
 rates.numRates = 2;
-rates.rate[0] = 6;
-rates.rate[1] = 12;
+rates.rates[0].rate = 12;
+rates.rates[1].rate = 24;
 request->setSupportedRates(rates);
 request->setTransmitPowerDbm(12.5);
 

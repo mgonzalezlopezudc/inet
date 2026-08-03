@@ -27,6 +27,18 @@ namespace physicallayer {
 
 Register_Abstract_Class(Ieee80211ModeSet);
 
+bool Ieee80211ModeSet::isHtOrVhtMode(const IIeee80211Mode *mode)
+{
+    return dynamic_cast<const Ieee80211HtMode *>(mode) != nullptr ||
+            dynamic_cast<const Ieee80211VhtMode *>(mode) != nullptr;
+}
+
+bool Ieee80211ModeSet::isPeerNegotiatedFecMode(const IIeee80211Mode *mode)
+{
+    return isHtOrVhtMode(mode) || dynamic_cast<const Ieee80211HeMode *>(mode) != nullptr ||
+            dynamic_cast<const Ieee80211EhtMode *>(mode) != nullptr;
+}
+
 #define EHT_MODE_ENTRY(WIDTH, NSS, MCS, MANDATORY) \
         { MANDATORY, Ieee80211EhtCompliantModes::getCompliantMode(&Ieee80211EhtmcsTable::ehtMcs##MCS##BW##WIDTH##MHzNss##NSS, Ieee80211EhtMode::BAND_6GHZ, Ieee80211EhtPreambleMode::EHT_PREAMBLE_SU, Ieee80211EhtModeBase::EHT_GUARD_INTERVAL_LONG) },
 #define EHT_MODE_ENTRIES_FOR_NSS(WIDTH, NSS) \
@@ -156,6 +168,9 @@ std::vector<Ieee80211ModeSet::Entry> Ieee80211ModeSet::completeGuardIntervalVari
             }
         }
     }
+    for (auto& entry : completeEntries)
+        if (entry.phyFamily == Ieee80211PhyFamily::UNSPECIFIED)
+            entry.phyFamily = classifyPhyFamily(entry.mode);
     return completeEntries;
 }
 
@@ -204,7 +219,9 @@ Ieee80211ModeSet Ieee80211ModeSet::createHeProfile(const char *profileName,
             if (modeSet.profileName != "n(mixed-2.4Ghz)")
                 continue;
             for (const auto& source : modeSet.entries) {
-                auto sourceMode = check_and_cast<const Ieee80211HtMode *>(source.mode);
+                auto sourceMode = dynamic_cast<const Ieee80211HtMode *>(source.mode);
+                if (sourceMode == nullptr)
+                    continue;
                 auto dataMode = sourceMode->getDataMode();
                 auto mode = Ieee80211HtCompliantModes::getCompliantMode(
                         dataMode->getModulationAndCodingScheme(), Ieee80211HtMode::BAND_5GHZ,
@@ -312,8 +329,11 @@ const DelayedInitializer<std::vector<Ieee80211ModeSet>> Ieee80211ModeSet::modeSe
         { false, &Ieee80211OfdmCompliantModes::ofdmMode18MbpsCS10MHz },
         { false, &Ieee80211OfdmCompliantModes::ofdmMode24MbpsCS10MHz },
         { false, &Ieee80211OfdmCompliantModes::ofdmMode27Mbps },
-        }),
+    }),
     Ieee80211ModeSet("n(mixed-2.4Ghz)", { // This table is not complete; it only contains 2.4GHz homogeneous spatial streams, all mandatory and optional modes
+        { true, &Ieee80211ErpOfdmCompliantModes::erpOfdmMode6Mbps },
+        { true, &Ieee80211ErpOfdmCompliantModes::erpOfdmMode12Mbps },
+        { true, &Ieee80211ErpOfdmCompliantModes::erpOfdmMode24Mbps },
         { true, Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs0BW20MHz, Ieee80211HtMode::BAND_2_4GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG) },
         { true, Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs1BW20MHz, Ieee80211HtMode::BAND_2_4GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG) },
         { true, Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs2BW20MHz, Ieee80211HtMode::BAND_2_4GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG) },
@@ -383,6 +403,9 @@ const DelayedInitializer<std::vector<Ieee80211ModeSet>> Ieee80211ModeSet::modeSe
         HT_UEQM_MODE_ENTRIES(40)
     }),
     Ieee80211ModeSet("ac", {
+        { true, &Ieee80211OfdmCompliantModes::ofdmMode6MbpsCS20MHz },
+        { true, &Ieee80211OfdmCompliantModes::ofdmMode12MbpsCS20MHz },
+        { true, &Ieee80211OfdmCompliantModes::ofdmMode24MbpsCS20MHz },
         { true, Ieee80211VhtCompliantModes::getCompliantMode(&Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss1, Ieee80211VhtMode::BAND_5GHZ, Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG) },
         { true, Ieee80211VhtCompliantModes::getCompliantMode(&Ieee80211VhtmcsTable::vhtMcs1BW20MHzNss1, Ieee80211VhtMode::BAND_5GHZ, Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG) },
         { true, Ieee80211VhtCompliantModes::getCompliantMode(&Ieee80211VhtmcsTable::vhtMcs2BW20MHzNss1, Ieee80211VhtMode::BAND_5GHZ, Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG) },
@@ -1270,10 +1293,46 @@ const IIeee80211Mode *Ieee80211ModeSet::findHeMode(int mcs, int numSpatialStream
         auto dataMode = heMode->getDataMode();
         if ((int)dataMode->getMcsIndex() == mcs &&
                 dataMode->getNumberOfSpatialStreams() == numSpatialStreams &&
-                dataMode->getBandwidth() == bandwidth && dataMode->isLdpc() == ldpc)
+                dataMode->getBandwidth() == bandwidth &&
+                (dataMode->getCode() != nullptr && dataMode->getCode()->isLdpc()) == ldpc)
             return heMode;
     }
     return nullptr;
+}
+
+const IIeee80211Mode *Ieee80211ModeSet::findVhtMode(int mcs,
+        int numSpatialStreams, Hz bandwidth, bool ldpc) const
+{
+    for (const auto& entry : entries) {
+        auto vhtMode = dynamic_cast<const Ieee80211VhtMode *>(entry.mode);
+        if (vhtMode == nullptr)
+            continue;
+        auto dataMode = vhtMode->getDataMode();
+        if ((int)dataMode->getMcsIndex() == mcs &&
+                dataMode->getNumberOfSpatialStreams() == numSpatialStreams &&
+                dataMode->getBandwidth() == bandwidth &&
+                (dataMode->getCode() != nullptr && dataMode->getCode()->isLdpc()) == ldpc)
+            return vhtMode;
+    }
+    return nullptr;
+}
+
+const IIeee80211Mode *Ieee80211ModeSet::getVhtSuNdpMode(
+        const IIeee80211Mode *referenceMode, int numberOfSpaceTimeStreams) const
+{
+    if (referenceMode == nullptr || !containsMode(referenceMode) ||
+            getPhyFamily(referenceMode) != Ieee80211PhyFamily::VHT)
+        throw cRuntimeError("VHT SU NDP mode derivation requires a VHT reference mode from this mode set");
+    if (referenceMode->getDataMode()->getBandwidth() != MHz(20))
+        throw cRuntimeError("Packet-level VHT SU NDP mode derivation currently supports only 20 MHz");
+    if (numberOfSpaceTimeStreams != 2)
+        throw cRuntimeError("Packet-level VHT SU NDP mode derivation currently requires two space-time streams");
+    auto vhtMode = check_and_cast<const Ieee80211VhtMode *>(referenceMode);
+    return Ieee80211VhtCompliantModes::getCompliantMode(
+            &Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss2,
+            vhtMode->getCenterFrequencyMode(),
+            vhtMode->getPreambleMode()->getPreambleFormat(),
+            Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG);
 }
 
 const IIeee80211Mode *Ieee80211ModeSet::findMode(bps bitrate, Hz bandwidth, int numSpatialStreams) const
@@ -1374,6 +1433,49 @@ const IIeee80211Mode *Ieee80211ModeSet::getFastestMandatoryMode(Hz bandwidth) co
 const IIeee80211Mode *Ieee80211ModeSet::getFastestBasicMode(Hz operatingChannelWidth) const
 {
     return getFastestMandatoryMode(channelWidthScopedBasicRates ? operatingChannelWidth : Hz(NaN));
+}
+
+const IIeee80211Mode *Ieee80211ModeSet::getFastestLegacyBasicMode() const
+{
+    for (int i = (int)entries.size() - 1; i >= 0; i--)
+        if (entries[i].isMandatory &&
+                dynamic_cast<const Ieee80211HtMode *>(entries[i].mode) == nullptr &&
+                dynamic_cast<const Ieee80211VhtMode *>(entries[i].mode) == nullptr &&
+                dynamic_cast<const Ieee80211HeMode *>(entries[i].mode) == nullptr &&
+                dynamic_cast<const Ieee80211EhtMode *>(entries[i].mode) == nullptr)
+            return entries[i].mode;
+    return nullptr;
+}
+
+bps Ieee80211ModeSet::getNonHtReferenceRate(const IIeee80211Mode *mode) const
+{
+    if (mode == nullptr)
+        throw cRuntimeError("Non-HT reference-rate mapping requires a mode");
+    // IEEE Std 802.11-2024, Table 10-10: non-HT reference rates for HT/VHT MCSs.
+    auto mapModulationAndCoding = [](const Ieee80211OfdmModulation *modulation,
+            double codeRate) {
+        if (modulation == nullptr)
+            throw cRuntimeError("HT/VHT non-HT reference-rate mapping requires stream-1 modulation and coding");
+        int constellationBits = modulation->getSubcarrierModulation()->getCodeWordSize();
+        if (constellationBits <= 1) return codeRate <= 0.51 ? Mbps(6) : Mbps(9);
+        if (constellationBits == 2) return codeRate <= 0.51 ? Mbps(12) : Mbps(18);
+        if (constellationBits == 4) return codeRate <= 0.51 ? Mbps(24) : Mbps(36);
+        if (constellationBits == 6) return codeRate <= 0.68 ? Mbps(48) : Mbps(54);
+        return Mbps(54);
+    };
+    if (auto htMode = dynamic_cast<const Ieee80211HtMode *>(mode)) {
+        auto dataMode = htMode->getDataMode();
+        return mapModulationAndCoding(dataMode->getModulation(),
+                dataMode->getCode()->getForwardErrorCorrection()->getCodeRate());
+    }
+    if (auto vhtMode = dynamic_cast<const Ieee80211VhtMode *>(mode)) {
+        auto dataMode = vhtMode->getDataMode();
+        return mapModulationAndCoding(dataMode->getModulation(),
+                dataMode->getCode()->getForwardErrorCorrection()->getCodeRate());
+    }
+    if (!containsMode(mode))
+        throw cRuntimeError("Legacy non-HT reference-rate mapping requires a mode from this mode set");
+    return mode->getDataMode()->getNetBitrate();
 }
 
 const IIeee80211Mode *Ieee80211ModeSet::getSlowerMandatoryMode(const IIeee80211Mode *mode) const

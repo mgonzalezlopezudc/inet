@@ -12,8 +12,10 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyHeader.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+#include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211VhtPacketRadio.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/networklayer/common/NetworkInterface.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
@@ -142,17 +144,39 @@ double Ieee80211ErrorModelBase::computePacketErrorRate(const ISnir *snir, IRadio
     auto transmission = check_and_cast<const Ieee80211Transmission *>(snir->getReception()->getTransmission());
     auto mode = transmission->getMode();
     auto phyHeader = Ieee80211Radio::peekIeee80211PhyHeaderAtFront(transmission->getPacket());
+    const auto& vhtTxVector = transmission->getVhtTxVector();
+    const Ieee80211VhtMuUser *vhtMuUser = nullptr;
+    if (vhtTxVector != nullptr && vhtTxVector->isMu()) {
+        auto receiver = snir->getReception()->getReceiverRadio();
+        auto radio = dynamic_cast<const IIeee80211VhtPacketRadio *>(receiver);
+        if (radio != nullptr) {
+            auto selection = radio->getVhtMuRxSelection();
+            if (selection.active && selection.groupId == vhtTxVector->getGroupId() &&
+                    selection.channelWidth == vhtTxVector->getChannelWidth())
+                vhtMuUser = vhtTxVector->findMuUser(selection.userPosition);
+        }
+        if (vhtMuUser != nullptr) {
+            auto acModeSet = Ieee80211ModeSet::getModeSet("ac");
+            mode = acModeSet->findVhtMode(vhtMuUser->mcs,
+                    vhtMuUser->numberOfSpatialStreams,
+                    vhtTxVector->getChannelWidth(), vhtMuUser->ldpcCoding);
+            if (mode == nullptr)
+                throw cRuntimeError("Canonical VHT MU user has no matching VHT mode");
+        }
+    }
     auto headerLength = mode->getHeaderMode()->getLength();
-    unsigned int dataLength = mode->getDataMode()->getCompleteLength(B(phyHeader->getLengthField())).get<b>();
+    B selectedPsduLength = vhtMuUser == nullptr ? B(phyHeader->getLengthField()) :
+            vhtMuUser->psduLength;
+    unsigned int dataLength = mode->getDataMode()->getCompleteLength(selectedPsduLength).get<b>();
     // TODO check header length and data length for OFDM (signal) field
     double snr = getScalarSnir(snir);
-    auto vhtTag = transmission->getPacket() ? transmission->getPacket()->findTag<Ieee80211VhtTransmissionTag>() : nullptr;
-    if (vhtTag) {
-        if (vhtTag->getBeamformed())
-            snr *= std::pow(10.0, vhtTag->getBeamformingGainDb() / 10.0);
-        if (vhtTag->getMuMimo())
-            snr /= std::pow(10.0, vhtTag->getMuMimoPenaltyDb() / 10.0);
-    }
+    // The receiver consumes the immutable PHY handoff, never the sender's
+    // mutable VHT request tag (AR-WLAN-PHY-AUTHORITY).
+    if (vhtMuUser != nullptr)
+        snr *= std::pow(10.0,
+                (vhtMuUser->beamformingGainDb - vhtMuUser->leakagePenaltyDb) / 10.0);
+    else if (vhtTxVector != nullptr && vhtTxVector->isBeamformed() && !vhtTxVector->isMu())
+        snr *= std::pow(10.0, vhtTxVector->getBeamformingGainDb() / 10.0);
 
     double headerSnr = snr;
     // IEEE 802.11-2024, 27.3.6.6: HE ER-SU repeats the HE-SIG-A field (two copies of each OFDM
@@ -169,7 +193,17 @@ double Ieee80211ErrorModelBase::computePacketErrorRate(const ISnir *snir, IRadio
     auto allocationPhyHeader = hePhyHeader != nullptr &&
             (dynamicPtrCast<const Ieee80211HeMuPhyHeader>(hePhyHeader) != nullptr ||
              dynamicPtrCast<const Ieee80211HeTbPhyHeader>(hePhyHeader) != nullptr) ? hePhyHeader : nullptr;
-    if (allocationPhyHeader != nullptr) {
+    if (vhtTxVector != nullptr && vhtTxVector->isMu() && vhtMuUser == nullptr) {
+        // A nonmember, stale member, or wrong-position STA has no PSDU in
+        // this PPDU (IEEE Std 802.11-2024 21.3.11.4).
+        dataSuccessRate = 0;
+    }
+    else if (vhtTxVector != nullptr && vhtTxVector->isNdp()) {
+        // IEEE Std 802.11-2024 Figure 21-28: VHT NDP has no DATA field.
+        // Its whole-PPDU result is therefore exactly the preamble/header result.
+        dataSuccessRate = 1;
+    }
+    else if (allocationPhyHeader != nullptr) {
         const auto& layout = transmission->getHePpduLayout();
         if (layout != nullptr && layout->isNdp()) {
             // An NDP has no DATA field; the common HE signaling decision is

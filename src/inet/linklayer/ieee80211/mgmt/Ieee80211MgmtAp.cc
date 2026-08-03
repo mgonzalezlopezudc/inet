@@ -21,6 +21,7 @@
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211SubtypeTag_m.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211HeMgmtElements.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211HtVhtMgmtElements.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtAp.h"
 #include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211Primitives_m.h"
@@ -48,6 +49,23 @@ static void addApHeManagementElements(const Ptr<Ieee80211MgmtFrame>& body, Ieee8
     body->setHeCapabilities(makeHeCapabilitiesElement(mib->localHeCapabilities));
     body->setHeOperationPresent(true);
     body->setHeOperation(makeHeOperationElement(mib->heOperation));
+}
+
+static void addApHtVhtManagementElements(const Ptr<Ieee80211MgmtFrame>& body, Ieee80211Mib *mib,
+        bool htSupported, bool vhtSupported)
+{
+    if (htSupported) {
+        body->setHtCapabilitiesPresent(true);
+        body->setHtCapabilities(makeHtCapabilitiesElement(mib->localHtCapabilities));
+        body->setHtOperationPresent(true);
+        body->setHtOperation(makeHtOperationElement(mib->htOperation));
+    }
+    if (vhtSupported) {
+        body->setVhtCapabilitiesPresent(true);
+        body->setVhtCapabilities(makeVhtCapabilitiesElement(mib->localVhtCapabilities));
+        body->setVhtOperationPresent(true);
+        body->setVhtOperation(makeVhtOperationElement(mib->vhtOperation));
+    }
 }
 
 static void setTwtSetupFrameFields(const Ptr<Ieee80211TwtSetupFrame>& frame, const TwtAgreement& agreement)
@@ -104,6 +122,8 @@ void Ieee80211MgmtAp::initialize(int stage)
         // start beacon timer (randomize startup time)
         beaconTimer = new cMessage("beaconTimer");
     }
+    else if (stage == INITSTAGE_LINK_LAYER)
+        requireDetailedLegacyRateSupport();
 }
 
 void Ieee80211MgmtAp::handleTimer(cMessage *msg)
@@ -283,11 +303,12 @@ void Ieee80211MgmtAp::sendBeacon()
     EV << "Sending beacon\n";
     const auto& body = makeShared<Ieee80211BeaconFrame>();
     body->setSSID(ssid.c_str());
-    body->setSupportedRates(supportedRates);
+    addLegacyRateElements(body);
     body->setBeaconInterval(beaconInterval);
     body->setChannelNumber(channelNumber);
     if (isHeManagementSupported())
         addApHeManagementElements(body, mib);
+    addApHtVhtManagementElements(body, mib, isHtManagementSupported(), isVhtManagementSupported());
     if (auto manager = dynamic_cast<ITwtManager *>(findModuleFromPar<cModule>(par("twtModule"), this)); manager != nullptr && manager->isEnabled()) {
         auto schedules = manager->getBroadcastSchedules();
         if (!schedules.empty()) {
@@ -307,7 +328,7 @@ void Ieee80211MgmtAp::sendBeacon()
             }
         }
     }
-    body->setChunkLength(B(8 + 2 + 2 + (2 + ssid.length()) + (2 + supportedRates.numRates)) + getHeMgmtElementsLength(body));
+    body->setChunkLength(B(8 + 2 + 2 + (2 + ssid.length())) + getLegacyRateElementsLength(body) + getHeMgmtElementsLength(body) + getHtVhtMgmtElementsLength(body));
     sendManagementFrame("Beacon", body, ST_BEACON, MacAddress::BROADCAST_ADDRESS);
 }
 
@@ -335,6 +356,7 @@ void Ieee80211MgmtAp::handleAuthenticationFrame(Packet *packet, const Ptr<const 
     // receives authentication frame number 1 from STA, which will cause the AP to return an Auth-Error
     // making the MN STA to start the handover process all over again.
     if (frameAuthSeq == 1) {
+        invalidatePeerState(sta->address);
         if (mib->bssAccessPointData.stations[sta->address] == Ieee80211Mib::ASSOCIATED) {
             sendDisAssocNotification(sta->address);
             mib->releaseAssociationId(sta->address);
@@ -387,6 +409,7 @@ void Ieee80211MgmtAp::handleAuthenticationFrame(Packet *packet, const Ptr<const 
     // update status
     if (isLast) {
         if (mib->bssAccessPointData.stations[sta->address] == Ieee80211Mib::ASSOCIATED) {
+            invalidatePeerState(sta->address);
             sendDisAssocNotification(sta->address);
             mib->releaseAssociationId(sta->address);
 
@@ -421,6 +444,7 @@ void Ieee80211MgmtAp::handleDeauthenticationFrame(Packet *packet, const Ptr<cons
     delete packet;
 
     if (sta) {
+        invalidatePeerState(sta->address);
         // mark STA as not authenticated; alternatively, it could also be removed from staList
         if (mib->bssAccessPointData.stations[sta->address] == Ieee80211Mib::ASSOCIATED) {
             sendDisAssocNotification(sta->address);
@@ -461,11 +485,23 @@ void Ieee80211MgmtAp::handleAssociationRequestFrame(Packet *packet, const Ptr<co
     }
 
     auto associationRequest = packet->peekData<Ieee80211AssociationRequestFrame>();
+    invalidatePeerState(sta->address);
+    mib->setPeerLegacyRates(sta->address,
+            associationRequest->getSupportedRates(),
+            associationRequest->getExtendedSupportedRates());
     mib->setStationTransmitPower(sta->address, associationRequest->getTransmitPowerDbm());
     if (isHeManagementSupported() && associationRequest->getHeCapabilitiesPresent())
         mib->setPeerHeCapabilities(sta->address, makeHeCapabilities(associationRequest->getHeCapabilities()), mib->heOperation);
     else
         mib->removePeerHeCapabilities(sta->address);
+    if (isHtManagementSupported() && associationRequest->getHtCapabilitiesPresent())
+        mib->setPeerHtCapabilities(sta->address, makeHtCapabilities(associationRequest->getHtCapabilities()), mib->htOperation);
+    else
+        mib->removePeerHtCapabilities(sta->address);
+    if (isVhtManagementSupported() && associationRequest->getVhtCapabilitiesPresent())
+        mib->setPeerVhtCapabilities(sta->address, makeVhtCapabilities(associationRequest->getVhtCapabilities()), mib->vhtOperation);
+    else
+        mib->removePeerVhtCapabilities(sta->address);
     delete packet;
 
     // Create per-STA queue bank only for APs operating in ax mode.
@@ -489,10 +525,11 @@ void Ieee80211MgmtAp::handleAssociationRequestFrame(Packet *packet, const Ptr<co
     const auto& body = makeShared<Ieee80211AssociationResponseFrame>();
     body->setStatusCode(SC_SUCCESSFUL);
     body->setAid(mib->allocateAssociationId(sta->address));
-    body->setSupportedRates(supportedRates);
+    addLegacyRateElements(body);
     if (isHeManagementSupported())
         addApHeManagementElements(body, mib);
-    body->setChunkLength(B(2 + 2 + 2 + body->getSupportedRates().numRates + 2) + getHeMgmtElementsLength(body));
+    addApHtVhtManagementElements(body, mib, isHtManagementSupported(), isVhtManagementSupported());
+    body->setChunkLength(B(2 + 2 + 2) + getLegacyRateElementsLength(body) + getHeMgmtElementsLength(body) + getHtVhtMgmtElementsLength(body));
     sendManagementFrame("AssocResp-OK", body, ST_ASSOCIATIONRESPONSE, sta->address);
 }
 
@@ -517,10 +554,22 @@ void Ieee80211MgmtAp::handleReassociationRequestFrame(Packet *packet, const Ptr<
     }
 
     auto reassociationRequest = packet->peekData<Ieee80211ReassociationRequestFrame>();
+    invalidatePeerState(sta->address);
+    mib->setPeerLegacyRates(sta->address,
+            reassociationRequest->getSupportedRates(),
+            reassociationRequest->getExtendedSupportedRates());
     if (isHeManagementSupported() && reassociationRequest->getHeCapabilitiesPresent())
         mib->setPeerHeCapabilities(sta->address, makeHeCapabilities(reassociationRequest->getHeCapabilities()), mib->heOperation);
     else
         mib->removePeerHeCapabilities(sta->address);
+    if (isHtManagementSupported() && reassociationRequest->getHtCapabilitiesPresent())
+        mib->setPeerHtCapabilities(sta->address, makeHtCapabilities(reassociationRequest->getHtCapabilities()), mib->htOperation);
+    else
+        mib->removePeerHtCapabilities(sta->address);
+    if (isVhtManagementSupported() && reassociationRequest->getVhtCapabilitiesPresent())
+        mib->setPeerVhtCapabilities(sta->address, makeVhtCapabilities(reassociationRequest->getVhtCapabilities()), mib->vhtOperation);
+    else
+        mib->removePeerVhtCapabilities(sta->address);
     delete packet;
 
     // Create per-STA queue bank only for APs operating in ax mode.
@@ -544,10 +593,11 @@ void Ieee80211MgmtAp::handleReassociationRequestFrame(Packet *packet, const Ptr<
     const auto& body = makeShared<Ieee80211ReassociationResponseFrame>();
     body->setStatusCode(SC_SUCCESSFUL);
     body->setAid(mib->allocateAssociationId(sta->address));
-    body->setSupportedRates(supportedRates);
+    addLegacyRateElements(body);
     if (isHeManagementSupported())
         addApHeManagementElements(body, mib);
-    body->setChunkLength(B(2 + 2 + 2 + (2 + supportedRates.numRates)) + getHeMgmtElementsLength(body));
+    addApHtVhtManagementElements(body, mib, isHtManagementSupported(), isVhtManagementSupported());
+    body->setChunkLength(B(2 + 2 + 2) + getLegacyRateElementsLength(body) + getHeMgmtElementsLength(body) + getHtVhtMgmtElementsLength(body));
     sendManagementFrame("ReassocResp-OK", body, ST_REASSOCIATIONRESPONSE, sta->address);
 }
 
@@ -562,10 +612,9 @@ void Ieee80211MgmtAp::handleDisassociationFrame(Packet *packet, const Ptr<const 
     delete packet;
 
     if (sta) {
-        if (mib->bssAccessPointData.stations[sta->address] == Ieee80211Mib::ASSOCIATED) {
+        invalidatePeerState(sta->address);
+        if (mib->bssAccessPointData.stations[sta->address] == Ieee80211Mib::ASSOCIATED)
             sendDisAssocNotification(sta->address);
-            mib->releaseAssociationId(sta->address);
-        }
         mib->bssAccessPointData.stations[sta->address] = Ieee80211Mib::AUTHENTICATED;
         mib->releaseAssociationId(sta->address);
 
@@ -582,6 +631,18 @@ void Ieee80211MgmtAp::handleDisassociationFrame(Packet *packet, const Ptr<const 
             EV_DEBUG << "Could not get MAC module for queue bank destruction: " << e.what() << "\n";
         }
     }
+}
+
+void Ieee80211MgmtAp::invalidatePeerState(const MacAddress& peer)
+{
+    try {
+        if (auto macModule = getModuleFromPar<cModule>(par("macModule"), this))
+            check_and_cast<Ieee80211Mac *>(macModule)->invalidatePeerDerivedState(peer);
+    }
+    catch (const cException& e) {
+        EV_DEBUG << "Could not invalidate MAC-derived peer state: " << e.what() << "\n";
+    }
+    mib->removePeerCapabilities(peer);
 }
 
 void Ieee80211MgmtAp::handleBeaconFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>& header)
@@ -606,12 +667,13 @@ void Ieee80211MgmtAp::handleProbeRequestFrame(Packet *packet, const Ptr<const Ie
     EV << "Sending ProbeResponse frame\n";
     const auto& body = makeShared<Ieee80211ProbeResponseFrame>();
     body->setSSID(ssid.c_str());
-    body->setSupportedRates(supportedRates);
+    addLegacyRateElements(body);
     body->setBeaconInterval(beaconInterval);
     body->setChannelNumber(channelNumber);
     if (isHeManagementSupported())
         addApHeManagementElements(body, mib);
-    body->setChunkLength(B(8 + 2 + 2 + (2 + ssid.length()) + (2 + supportedRates.numRates)) + getHeMgmtElementsLength(body));
+    addApHtVhtManagementElements(body, mib, isHtManagementSupported(), isVhtManagementSupported());
+    body->setChunkLength(B(8 + 2 + 2 + (2 + ssid.length())) + getLegacyRateElementsLength(body) + getHeMgmtElementsLength(body) + getHtVhtMgmtElementsLength(body));
     sendManagementFrame("ProbeResp", body, ST_PROBERESPONSE, staAddress);
 }
 

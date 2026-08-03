@@ -86,6 +86,9 @@ class INET_API Ieee80211MgmtAp : public Ieee80211MgmtApBase
     virtual void sendTwtActionFrame(const char *name, const Ptr<Ieee80211ActionFrame>& frame, const MacAddress& destAddr);
     virtual TwtAgreement makeTwtAgreement(const Ptr<const Ieee80211TwtSetupFrame>& frame, const MacAddress& peer) const;
 
+    /** Invalidates MAC-derived state before replacing or removing peer capabilities. */
+    virtual void invalidatePeerState(const MacAddress& peer);
+
     /** Utility function: creates and sends a beacon frame */
     virtual void sendBeacon();
 

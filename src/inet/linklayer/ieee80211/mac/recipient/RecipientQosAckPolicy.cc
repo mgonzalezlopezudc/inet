@@ -45,7 +45,8 @@ simtime_t RecipientQosAckPolicy::computeAckDuration(Packet *packet, const Ptr<co
 //
 bool RecipientQosAckPolicy::isAckNeeded(const Ptr<const Ieee80211DataOrMgmtHeader>& header) const
 {
-    // TODO add mgmt frame NoAck check
+    if (header->getType() == ST_NOACKACTION)
+        return false;
     if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header))
         if (dataHeader->getAckPolicy() != NORMAL_ACK)
             return false;

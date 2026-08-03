@@ -7,6 +7,8 @@
 
 #include "inet/linklayer/ieee80211/mac/recipient/RecipientQosMacDataService.h"
 
+#include <algorithm>
+
 #include "inet/common/Simsignals.h"
 #include "inet/linklayer/ieee80211/mac/aggregation/MpduDeaggregation.h"
 #include "inet/linklayer/ieee80211/mac/aggregation/MsduDeaggregation.h"
@@ -28,6 +30,40 @@ void RecipientQosMacDataService::initialize()
     aMsduDeaggregation = new MsduDeaggregation();
     aMpduDeaggregation = new MpduDeaggregation();
     blockAckReordering = new BlockAckReordering();
+    auto mpduSecurityModule = getSubmodule("mpduSecurity");
+    mpduSecurity = mpduSecurityModule == nullptr ? nullptr :
+            check_and_cast<IRecipientMpduSecurity *>(mpduSecurityModule);
+}
+
+bool RecipientQosMacDataService::passesMpduSecurity(Packet *packet,
+        const Ptr<const Ieee80211DataOrMgmtHeader>& header,
+        IRecipientMpduSecurity::Stage stage)
+{
+    if (mpduSecurity == nullptr)
+        return true;
+    auto outcome = mpduSecurity->checkReceivedMpdu(packet, header, stage);
+    if (outcome == IRecipientMpduSecurity::Outcome::ACCEPT)
+        return true;
+    if (stage == IRecipientMpduSecurity::Stage::INTEGRITY_AND_DECRYPTION &&
+            outcome == IRecipientMpduSecurity::Outcome::REPLAY_DETECTED)
+        throw cRuntimeError("Recipient MPDU security reported replay during integrity stage");
+    if (stage == IRecipientMpduSecurity::Stage::REPLAY_DETECTION &&
+            outcome == IRecipientMpduSecurity::Outcome::INTEGRITY_FAILED)
+        throw cRuntimeError("Recipient MPDU security reported integrity failure during replay stage");
+
+    EV_WARN << "Dropping packet " << *packet << " because recipient MPDU security reported "
+            << (outcome == IRecipientMpduSecurity::Outcome::INTEGRITY_FAILED ?
+                    "an integrity failure" : "a replay") << ".\n";
+    emit(outcome == IRecipientMpduSecurity::Outcome::INTEGRITY_FAILED ?
+            packetIntegrityCheckFailedSignal : packetReplayDetectedSignal,
+            packet);
+    PacketDropDetails details;
+    // Security rejection is deliberately distinct from the modeled FCS check
+    // (INCORRECTLY_RECEIVED) and MAC retry duplicate detection.
+    details.setReason(OTHER_PACKET_DROP);
+    emit(packetDroppedSignal, packet, &details);
+    delete packet;
+    return false;
 }
 
 Packet *RecipientQosMacDataService::defragment(std::vector<Packet *> completeFragments)
@@ -56,8 +92,19 @@ Packet *RecipientQosMacDataService::defragment(Packet *mgmtFragment)
 }
 
 std::vector<Packet *> RecipientQosMacDataService::processReorderBuffer(
-        const BlockAckReordering::ReorderBuffer& frames)
+        BlockAckReordering::ReorderBuffer frames)
 {
+    // IEEE Std 802.11-2024, 12.5.2.4.4(h), and Figure 5-1: replay
+    // detection follows Block Ack reordering and precedes defragmentation.
+    for (auto& entry : frames) {
+        auto& fragments = entry.second;
+        fragments.erase(std::remove_if(fragments.begin(), fragments.end(),
+                [this](Packet *packet) {
+                    auto header = packet->peekAtFront<Ieee80211DataHeader>();
+                    return !passesMpduSecurity(packet, header,
+                            IRecipientMpduSecurity::Stage::REPLAY_DETECTION);
+                }), fragments.end());
+    }
     std::vector<Packet *> defragmentedFrames;
     if (basicReassembly) { // FIXME defragmentation
         for (const auto& entry : frames) {
@@ -98,7 +145,7 @@ std::vector<Packet *> RecipientQosMacDataService::dataFrameReceived(Packet *data
 {
     Enter_Method("dataFrameReceived");
     take(dataPacket);
-    // TODO A-MPDU Deaggregation, MPDU Header+FCS Validation, Address1 Filtering, Duplicate Removal, MPDU Decryption
+    // A-MPDU member admission and FCS fidelity are handled before this service.
     if (duplicateRemoval && duplicateRemoval->isDuplicate(dataHeader)) {
         EV_WARN << "Dropping duplicate packet " << *dataPacket << ".\n";
         PacketDropDetails details;
@@ -107,6 +154,9 @@ std::vector<Packet *> RecipientQosMacDataService::dataFrameReceived(Packet *data
         delete dataPacket;
         return std::vector<Packet *>();
     }
+    if (!passesMpduSecurity(dataPacket, dataHeader,
+            IRecipientMpduSecurity::Stage::INTEGRITY_AND_DECRYPTION))
+        return {};
     BlockAckReordering::ReorderBuffer frames;
     frames[dataHeader->getSequenceNumber().get()].push_back(dataPacket);
     if (blockAckReordering && blockAckAgreementHandler) {
@@ -124,12 +174,26 @@ std::vector<Packet *> RecipientQosMacDataService::managementFrameReceived(Packet
 {
     Enter_Method("managementFrameReceived");
     take(mgmtPacket);
-    // TODO MPDU Header+FCS Validation, Address1 Filtering, Duplicate Removal, MPDU Decryption
-    if (duplicateRemoval && duplicateRemoval->isDuplicate(mgmtHeader))
-        return std::vector<Packet *>();
+    // Address admission and FCS fidelity are handled before this service.
+    if (duplicateRemoval && duplicateRemoval->isDuplicate(mgmtHeader)) {
+        EV_WARN << "Dropping duplicate packet " << *mgmtPacket << ".\n";
+        PacketDropDetails details;
+        details.setReason(DUPLICATE_DETECTED);
+        emit(packetDroppedSignal, mgmtPacket, &details);
+        delete mgmtPacket;
+        return {};
+    }
+    if (!passesMpduSecurity(mgmtPacket, mgmtHeader,
+            IRecipientMpduSecurity::Stage::INTEGRITY_AND_DECRYPTION))
+        return {};
+    if (!passesMpduSecurity(mgmtPacket, mgmtHeader,
+            IRecipientMpduSecurity::Stage::REPLAY_DETECTION))
+        return {};
     if (basicReassembly) { // FIXME defragmentation
         mgmtPacket = defragment(mgmtPacket);
     }
+    if (mgmtPacket == nullptr)
+        return {};
     if (auto delba = dynamicPtrCast<const Ieee80211Delba>(mgmtHeader))
         blockAckReordering->processReceivedDelba(delba);
     // TODO Defrag, MSDU Integrity, Replay Detection, RX MSDU Rate Limiting

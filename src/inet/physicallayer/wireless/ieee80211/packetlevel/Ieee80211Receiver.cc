@@ -41,6 +41,8 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+#include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211VhtPacketRadio.h"
+#include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211HePacketRadio.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211ErrorModelBase.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/networklayer/common/NetworkInterface.h"
@@ -72,6 +74,9 @@ simsignal_t Ieee80211Receiver::heSpatialReuseTransmitPowerLimitSignal = cCompone
 simsignal_t Ieee80211Receiver::heSpatialReuseReasonSignal = cComponent::registerSignal("heSpatialReuseReason");
 
 Define_Module(Ieee80211Receiver);
+
+static bool isReceptionSuccessful(
+        const std::vector<const IReceptionDecision *> *decisions);
 
 static bool parseHeBssColor(const char *token, int& color)
 {
@@ -122,8 +127,97 @@ static Ptr<Ieee80211HePhyHeader> copyHeMuPhyHeader(const Ptr<const Ieee80211HePh
     return staticPtrCast<Ieee80211HePhyHeader>(phyHeader->dupShared());
 }
 
+static const Ieee80211VhtMuUser *resolveVhtMuUserForReception(
+        const Ieee80211Transmission *transmission,
+        const IIeee80211VhtPacketRadio *radio)
+{
+    const auto& txVector = transmission->getVhtTxVector();
+    if (txVector == nullptr || !txVector->isMu() || radio == nullptr)
+        return nullptr;
+    auto selection = radio->getVhtMuRxSelection();
+    if (!selection.active || selection.groupId != txVector->getGroupId() ||
+            selection.channelWidth != txVector->getChannelWidth())
+        return nullptr;
+    return txVector->findMuUser(selection.userPosition);
+}
+
+static Packet *extractVhtMuPsdu(const Ieee80211Transmission *transmission,
+        const Ieee80211VhtMuUser& user)
+{
+    constexpr int parsingFlags = Chunk::PF_ALLOW_INCORRECT |
+            Chunk::PF_ALLOW_INCOMPLETE | Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED |
+            Chunk::PF_ALLOW_REINTERPRETATION;
+    const auto& txVector = transmission->getVhtTxVector();
+    const Ieee80211VhtPsduBitRange *selectedRange = nullptr;
+    for (const auto& range : txVector->getPsduBitRanges())
+        if (range.userIndex == user.userPosition) {
+            if (selectedRange != nullptr)
+                return nullptr;
+            selectedRange = &range;
+        }
+    auto transmittedPacket = transmission->getPacket();
+    auto copy = transmittedPacket->dup();
+    auto phyHeader = copy->popAtFront<Ieee80211VhtPhyHeader>(b(-1), parsingFlags);
+    if (selectedRange == nullptr || txVector->getPsduBitRanges().empty() ||
+            copy->getDataLength() != txVector->getPsduBitRanges().back().getEndBitOffset()) {
+        delete copy;
+        return nullptr;
+    }
+    if (selectedRange->startBitOffset > b(0))
+        copy->popAtFront(selectedRange->startBitOffset, parsingFlags);
+    auto result = new Packet(transmittedPacket->getName());
+    result->insertAtBack(copy->popAtFront(selectedRange->bitLength, parsingFlags));
+    auto parser = result->dup();
+    auto delimiter = dynamicPtrCast<const ieee80211::Ieee80211MpduSubframeHeader>(
+            parser->peekAtFront(b(-1), parsingFlags));
+    if (delimiter == nullptr || delimiter->getLength() == 0 ||
+            parser->getDataLength() < B(4) + B(delimiter->getLength())) {
+        delete parser;
+        delete result;
+        delete copy;
+        return nullptr;
+    }
+    Ieee80211MpduReceiveResult receiveResult;
+    receiveResult.offset = B(0);
+    receiveResult.length = B(delimiter->getLength());
+    receiveResult.status = delimiter->isIncorrect() ?
+            MPDU_DELIMITER_ERROR : MPDU_NOT_EVALUATED;
+    result->addTagIfAbsent<Ieee80211MpduReceiveInd>()->appendResults(receiveResult);
+    delete parser;
+    auto headerCopy = staticPtrCast<Ieee80211VhtPhyHeader>(phyHeader->dupShared());
+    headerCopy->setLengthField(user.psduLength);
+    result->insertAtFront(headerCopy);
+    result->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211VhtPhy);
+    delete copy;
+    return result;
+}
+
+static Packet *buildVhtMuNonmemberIndication(
+        const Ieee80211Transmission *transmission)
+{
+    auto phyHeader = transmission->getPacket()->peekAtFront<Ieee80211VhtPhyHeader>();
+    auto result = new Packet("VHT-MU-nonmember",
+            staticPtrCast<Ieee80211VhtPhyHeader>(phyHeader->dupShared()));
+    result->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211VhtPhy);
+    result->setBitError(true);
+    return result;
+}
+
+bool Ieee80211Receiver::computeIsVhtMuUserReceptionSuccessful(
+        const Ieee80211Transmission *transmission,
+        const Ieee80211VhtMuUser& user,
+        const std::vector<const IReceptionDecision *> *decisions) const
+{
+    return isReceptionSuccessful(decisions);
+}
+
 static void addReceptionIndications(Packet *packet, const IReception *reception, const IInterference *interference, const ISnir *snir)
 {
+    auto provenance = packet->addTagIfAbsent<Ieee80211PhyProvenanceInd>();
+    provenance->setTransmissionId(reception->getTransmission()->getId());
+    provenance->setTransmitterRadioId(reception->getTransmission()->getTransmitterRadioId());
+    provenance->setStartTime(reception->getStartTime());
+    provenance->setEndTime(reception->getEndTime());
     auto snirInd = packet->addTagIfAbsent<SnirInd>();
     snirInd->setMinimumSnir(snir->getMin());
     snirInd->setMaximumSnir(snir->getMax());
@@ -659,16 +753,15 @@ Ieee80211Receiver::HeSpatialReuseDecision Ieee80211Receiver::computeHeSpatialReu
         decision.reason = "received BSS color disabled";
         return decision;
     }
-    auto networkInterface = getContainingNicModule(this);
-    auto mib = networkInterface ? dynamic_cast<const ieee80211::Ieee80211Mib *>(networkInterface->getSubmodule("mib")) : nullptr;
-    if (mib != nullptr)
-        decision.localBssColor = mib->heOperation.bssColor;
-    if (mib == nullptr || mib->heOperation.bssColor == 0) {
+    auto radio = dynamic_cast<const IIeee80211HePacketRadio *>(getParentModule());
+    if (radio != nullptr)
+        decision.localBssColor = radio->getHeBssColor();
+    if (radio == nullptr || radio->getHeBssColor() == 0) {
         decision.reasonCode = HeSpatialReuseReason::LOCAL_COLOR_DISABLED;
         decision.reason = "local BSS color disabled";
         return decision;
     }
-    if (receivedBssColor == mib->heOperation.bssColor) {
+    if (receivedBssColor == radio->getHeBssColor()) {
         // Clause 26.11 spatial reuse applies to inter-BSS PPDUs; same-color
         // PPDUs remain intra-BSS and are not ignored by OBSS/PD.
         decision.bssType = HeSpatialReuseBssType::INTRA_BSS;
@@ -746,6 +839,7 @@ const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListeni
     auto transmission = check_and_cast<const Ieee80211Transmission *>(reception->getTransmission());
     auto transmittedPacket = transmission->getPacket();
     auto hePhyHeader = peekHePhyHeader(transmission);
+    const auto& vhtTxVector = transmission->getVhtTxVector();
     if (hePhyHeader != nullptr) {
         lastHeReception = true;
         lastHePpduFormat = getIeee80211HePpduFormat(*hePhyHeader);
@@ -759,6 +853,24 @@ const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListeni
         lastHeUserCount = 0;
         lastHeBssColor = 0;
         lastHeRuAssigned = false;
+    }
+
+    if (vhtTxVector != nullptr && vhtTxVector->isMu()) {
+        auto radio = dynamic_cast<const IIeee80211VhtPacketRadio *>(getParentModule());
+        auto user = resolveVhtMuUserForReception(transmission, radio);
+        auto packet = user == nullptr ? buildVhtMuNonmemberIndication(transmission) :
+                extractVhtMuPsdu(transmission, *user);
+        if (packet == nullptr) {
+            packet = buildVhtMuNonmemberIndication(transmission);
+            user = nullptr;
+        }
+        if (user != nullptr && !computeIsVhtMuUserReceptionSuccessful(
+                transmission, *user, decisions))
+            packet->setBitError(true);
+        addReceptionIndications(packet, reception, interference, snir);
+        packet->addTagIfAbsent<Ieee80211ModeInd>()->setMode(transmission->getMode());
+        packet->addTagIfAbsent<Ieee80211ChannelInd>()->setChannel(transmission->getChannel());
+        return new ReceptionResult(reception, decisions, packet);
     }
 
     auto allocationPhyHeader = peekHeMuOrTbPhyHeader(transmission);
@@ -858,6 +970,7 @@ const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListeni
     // the decoded payload.
     auto receptionResult = FlatReceiverBase::computeReceptionResult(listening, reception, interference, snir, decisions);
     auto packet = const_cast<Packet *>(receptionResult->getPacket());
+    addReceptionIndications(packet, reception, interference, snir);
     packet->addTagIfAbsent<Ieee80211ModeInd>()->setMode(transmission->getMode());
     packet->addTagIfAbsent<Ieee80211ChannelInd>()->setChannel(transmission->getChannel());
     if (transmission->getHeTriggerCorrelationId() != 0)

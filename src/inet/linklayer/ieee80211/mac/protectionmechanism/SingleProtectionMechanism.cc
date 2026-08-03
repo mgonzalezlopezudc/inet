@@ -11,11 +11,33 @@
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/rateselection/RateSelection.h"
 #include "inet/linklayer/ieee80211/mac/recipient/RecipientAckProcedure.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+
+#include <cmath>
 
 namespace inet {
 namespace ieee80211 {
 
 Define_Module(SingleProtectionMechanism);
+
+simtime_t SingleProtectionMechanism::computeMultipleProtectionDuration(simtime_t txopStart,
+        simtime_t txopLimit, simtime_t currentTime, simtime_t ifs,
+        simtime_t ppduDuration)
+{
+    if (txopLimit < SIMTIME_ZERO || ifs < SIMTIME_ZERO || ppduDuration < SIMTIME_ZERO)
+        throw cRuntimeError("TXOP limit, IFS and PPDU duration must be nonnegative");
+    simtime_t remainingAfterPpdu = txopStart + txopLimit -
+            (currentTime + ifs + ppduDuration);
+    if (remainingAfterPpdu <= SIMTIME_ZERO)
+        return SIMTIME_ZERO;
+    // IEEE Std 802.11-2024, 9.2.5.2: Duration/ID is expressed in
+    // microseconds and fractional microseconds are rounded upward. Using one
+    // absolute TXOP end makes every protected frame advertise the same NAV end.
+    int64_t durationUs = static_cast<int64_t>(std::ceil(remainingAfterPpdu.dbl() * 1e6));
+    if (durationUs > 32767)
+        throw cRuntimeError("Multiple-protection Duration/ID exceeds 32767 us");
+    return SimTime(durationUs, SIMTIME_US);
+}
 
 void SingleProtectionMechanism::initialize(int stage)
 {
@@ -177,8 +199,17 @@ simtime_t SingleProtectionMechanism::computeDataOrMgmtFrameDurationField(Packet 
     throw cRuntimeError("Unknown frame");
 }
 
-simtime_t SingleProtectionMechanism::computeDurationField(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, Packet *pendingPacket, const Ptr<const Ieee80211DataOrMgmtHeader>& pendingHeader, TxopProcedure *txop, IRecipientQosAckPolicy *ackPolicy)
+simtime_t SingleProtectionMechanism::computeDurationField(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, Packet *pendingPacket, const Ptr<const Ieee80211DataOrMgmtHeader>& pendingHeader, TxopProcedure *txop, IRecipientQosAckPolicy *ackPolicy, simtime_t ifs)
 {
+    if (txop->getProtectionMechanism() == TxopProcedure::ProtectionMechanism::MULTIPLE_PROTECTION && txop->getLimit() > SIMTIME_ZERO) {
+        auto modeReq = packet->findTag<physicallayer::Ieee80211ModeReq>();
+        if (modeReq == nullptr || modeReq->getMode() == nullptr)
+            throw cRuntimeError("Multiple protection requires the selected PHY mode");
+        return computeMultipleProtectionDuration(txop->getStart(), txop->getLimit(), simTime(), ifs,
+                modeReq->getMode()->getDuration(packet->getDataLength()));
+    }
+    // A zero TXOP limit denotes the single allowed exchange (9.2.5.2 and
+    // 10.23.2.9), for which the existing single-protection calculation applies.
     if (auto rtsFrame = dynamicPtrCast<const Ieee80211RtsFrame>(header))
         return computeRtsDurationField(packet, rtsFrame, pendingPacket, pendingHeader, txop, ackPolicy);
     else if (auto ctsFrame = dynamicPtrCast<const Ieee80211CtsFrame>(header))

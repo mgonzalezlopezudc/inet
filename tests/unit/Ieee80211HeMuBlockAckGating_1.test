@@ -10,6 +10,7 @@ allocation index; all Block Ack responses require an explicit BAR or MU-BAR.
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 #include "inet/linklayer/ieee80211/mac/Rx.h"
+#include "inet/linklayer/ethernet/common/Ethernet.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
@@ -69,6 +70,7 @@ class MockMac : public Ieee80211Mac
     MacAddress address = MacAddress("10:20:30:40:50:60");
     int capturedLowerFrames = 0;
     std::vector<physicallayer::Ieee80211MpduReceiveStatus> capturedStatuses;
+    std::function<void(Packet *)> lowerHandler;
 
     virtual int numInitStages() const override { return 1; }
     virtual void initialize(int stage) override {
@@ -78,6 +80,11 @@ class MockMac : public Ieee80211Mac
     virtual void sendUpFrame(Packet *frame) override { delete frame; }
     virtual void processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header) override {
         take(packet);
+        if (lowerHandler) {
+            packet->removeFromOwnershipTree();
+            lowerHandler(packet);
+            return;
+        }
         capturedLowerFrames++;
         capturedStatuses.clear();
         auto indication = packet->getTag<physicallayer::Ieee80211MpduReceiveInd>();
@@ -85,7 +92,11 @@ class MockMac : public Ieee80211Mac
             capturedStatuses.push_back(indication->getResults(i).status);
         delete packet;
     }
-    void deliverLower(Packet *packet) { handleLowerPacket(packet); }
+    void deliverLower(Packet *packet) {
+        Enter_Method("deliverLower");
+        handleLowerPacket(packet);
+    }
+    void setHcf(Hcf *value) { hcf = value; }
 };
 
 Define_Module(MockMac);
@@ -154,7 +165,12 @@ class MockRecipientAckPolicy : public IRecipientQosAckPolicy
 class MockRecipientDataService : public IRecipientQosMacDataService
 {
   public:
+    int receivedDataCount = 0;
+    std::vector<uint16_t> receivedSequenceNumbers;
+
     virtual std::vector<Packet *> dataFrameReceived(Packet *dataPacket, const Ptr<const Ieee80211DataHeader>& dataHeader, IRecipientBlockAckAgreementHandler *blockAckAgreementHandler) override {
+        receivedDataCount++;
+        receivedSequenceNumbers.push_back(dataHeader->getSequenceNumber().get());
         delete dataPacket;
         return {};
     }
@@ -164,6 +180,24 @@ class MockRecipientDataService : public IRecipientQosMacDataService
     virtual std::vector<Packet *> managementFrameReceived(Packet *mgmtPacket, const Ptr<const Ieee80211MgmtHeader>& mgmtHeader) override {
         delete mgmtPacket;
         return {};
+    }
+};
+
+class PacketDropListener : public cListener
+{
+  public:
+    int notAddressedToUsCount = 0;
+    int incorrectlyReceivedCount = 0;
+
+    virtual void receiveSignal(cComponent *, simsignal_t, cObject *,
+            cObject *details) override {
+        auto dropDetails = dynamic_cast<PacketDropDetails *>(details);
+        if (dropDetails != nullptr &&
+                dropDetails->getReason() == NOT_ADDRESSED_TO_US)
+            notAddressedToUsCount++;
+        if (dropDetails != nullptr &&
+                dropDetails->getReason() == INCORRECTLY_RECEIVED)
+            incorrectlyReceivedCount++;
     }
 };
 
@@ -202,6 +236,7 @@ class MockRecipientBlockAckAgreementHandler : public IRecipientBlockAckAgreement
 class TestHcf : public Hcf
 {
   public:
+    bool htImplicitBlockAckEnabled = false;
     virtual int numInitStages() const override { return 1; }
     virtual void initialize(int stage) override {}
 
@@ -224,6 +259,10 @@ class TestHcf : public Hcf
 
     void receiveAmpdu(Packet *packet) {
         recipientProcessReceivedFrame(packet, Ptr<const Ieee80211MacHeader>());
+    }
+
+    virtual bool isHtImplicitBlockAckEnabled() const override {
+        return htImplicitBlockAckEnabled;
     }
 
     void receiveControl(Packet *packet) {
@@ -345,6 +384,80 @@ static Packet *makePartialAmpdu(const MacAddress& receiver, const MacAddress& tr
     return ampdu;
 }
 
+static Packet *makeMixedReceiverAmpdu(const MacAddress& localReceiver,
+        const MacAddress& foreignReceiver, const MacAddress& transmitter,
+        Tid tid)
+{
+    auto ampdu = new Packet("mixed-receiver-ampdu");
+    std::vector<MacAddress> receivers {foreignReceiver, localReceiver,
+            localReceiver};
+    for (int i = 0; i < 3; ++i) {
+        auto mpdu = makeHeMuDataPacket(i == 0 ? "foreign" :
+                (i == 1 ? "local-valid" : "local-invalid"),
+                receivers[i], transmitter, tid, 0, 20 + i);
+        auto header = mpdu->removeAtFront<Ieee80211DataHeader>();
+        header->setAckPolicy(NORMAL_ACK);
+        mpdu->insertAtFront(header);
+        auto trailer = makeShared<Ieee80211MacTrailer>();
+        trailer->setFcsMode(i == 0 ? FCS_DECLARED_CORRECT : FCS_COMPUTED);
+        if (i != 0) {
+            auto fcs = computeEthernetFcs(mpdu, FCS_COMPUTED);
+            trailer->setFcs(i == 1 ? fcs : fcs ^ 1);
+        }
+        mpdu->insertAtBack(trailer);
+        auto mpduData = mpdu->peekData();
+        auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
+        delimiter->setEof(false);
+        delimiter->setReserved(0);
+        delimiter->setChunkLength(B(4));
+        delimiter->setLength(mpduData->getChunkLength().get<B>());
+        ampdu->insertAtBack(delimiter);
+        ampdu->insertAtBack(mpduData);
+        int paddingLength = (4 - (B(4) + mpduData->getChunkLength()).get<B>() % 4) % 4;
+        if (i != 2 && paddingLength != 0)
+            ampdu->insertAtBack(makeShared<ByteCountChunk>(B(paddingLength)));
+        delete mpdu;
+    }
+    attachHeMuRxVector(ampdu, localReceiver);
+    return ampdu;
+}
+
+static Packet *makeTruncatedLedgerAmpdu(const MacAddress& receiver,
+        const MacAddress& transmitter, Tid tid)
+{
+    auto ampdu = new Packet("truncated-ledger-ampdu");
+    auto indication = ampdu->addTag<physicallayer::Ieee80211MpduReceiveInd>();
+    for (int i = 0; i < 2; ++i) {
+        auto mpdu = makeHeMuDataPacket(i == 0 ? "represented-success" :
+                "missing-outcome", receiver, transmitter, tid, 0, 30 + i);
+        auto header = mpdu->removeAtFront<Ieee80211DataHeader>();
+        header->setAckPolicy(NORMAL_ACK);
+        mpdu->insertAtFront(header);
+        auto trailer = makeShared<Ieee80211MacTrailer>();
+        trailer->setFcsMode(FCS_DECLARED_CORRECT);
+        mpdu->insertAtBack(trailer);
+        auto mpduData = mpdu->peekData();
+        auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
+        delimiter->setLength(mpduData->getChunkLength().get<B>());
+        ampdu->insertAtBack(delimiter);
+        ampdu->insertAtBack(mpduData);
+        int paddingLength = (4 - (B(4) + mpduData->getChunkLength()).get<B>() % 4) % 4;
+        if (i == 0 && paddingLength != 0)
+            ampdu->insertAtBack(makeShared<ByteCountChunk>(B(paddingLength)));
+        if (i == 0) {
+            physicallayer::Ieee80211MpduReceiveResult result;
+            result.sequenceNumber = 30;
+            result.fragmentNumber = 0;
+            result.tid = tid;
+            result.length = mpduData->getChunkLength();
+            result.status = physicallayer::MPDU_SUCCESS;
+            indication->appendResults(result);
+        }
+        delete mpdu;
+    }
+    return ampdu;
+}
+
 %activity:
 auto hcf = check_and_cast<TestHcf *>(getParentModule()->getSubmodule("hcf"));
 auto mac = check_and_cast<MockMac *>(getParentModule()->getSubmodule("mac"));
@@ -360,6 +473,8 @@ MockRecipientAckPolicy ackPolicy;
 MockRecipientDataService dataService;
 auto agreementHandler = new MockRecipientBlockAckAgreementHandler(ap, tid);
 hcf->setup(mac, &tx, &rateSelection, &ackPolicy, &dataService, agreementHandler);
+PacketDropListener packetDropListener;
+hcf->subscribe(packetDroppedSignal, &packetDropListener);
 
 hcf->receiveData(makeHeMuDataPacket("he-mu-data-sta0", sta, ap, tid, 0));
 ASSERT(tx.transmitCount == 0);
@@ -387,6 +502,38 @@ REQUIRE(mac->capturedStatuses == std::vector<physicallayer::Ieee80211MpduReceive
         physicallayer::MPDU_FCS_ERROR,
         physicallayer::MPDU_SUCCESS}));
 EV << "Real MAC ingress preserves the outcome aggregate.\n";
+
+int dataCountBeforeMixedAggregate = dataService.receivedDataCount;
+int qosCountBeforeMixedAggregate = agreementHandler->qosFrameReceivedCount;
+int incorrectCountBeforeMixedAggregate = packetDropListener.incorrectlyReceivedCount;
+hcf->htImplicitBlockAckEnabled = true;
+mac->setHcf(hcf);
+mac->lowerHandler = [hcf](Packet *packet) { hcf->receiveAmpdu(packet); };
+mac->deliverLower(makeMixedReceiverAmpdu(sta,
+        MacAddress("00:11:22:33:44:99"), ap, tid));
+REQUIRE(dataService.receivedDataCount == dataCountBeforeMixedAggregate + 1);
+REQUIRE(dataService.receivedSequenceNumbers.back() == 21);
+REQUIRE(agreementHandler->qosFrameReceivedCount == qosCountBeforeMixedAggregate);
+REQUIRE(!agreementHandler->agreement->getBlockAckRecord()->getAckState(
+        SequenceNumberCyclic(20), 0));
+REQUIRE(agreementHandler->agreement->getBlockAckRecord()->getAckState(
+        SequenceNumberCyclic(21), 0));
+REQUIRE(packetDropListener.notAddressedToUsCount == 1);
+REQUIRE(packetDropListener.incorrectlyReceivedCount ==
+        incorrectCountBeforeMixedAggregate + 1);
+EV << "A-MPDU fallback validates member FCS and admits only the valid local member.\n";
+
+int dataCountBeforeTruncatedLedger = dataService.receivedDataCount;
+int incorrectCountBeforeTruncatedLedger = packetDropListener.incorrectlyReceivedCount;
+mac->deliverLower(makeTruncatedLedgerAmpdu(sta, ap, tid));
+REQUIRE(dataService.receivedDataCount == dataCountBeforeTruncatedLedger + 1);
+REQUIRE(dataService.receivedSequenceNumbers.back() == 30);
+REQUIRE(packetDropListener.incorrectlyReceivedCount ==
+        incorrectCountBeforeTruncatedLedger + 1);
+mac->lowerHandler = nullptr;
+hcf->htImplicitBlockAckEnabled = false;
+tx.transmitCount = 0;
+EV << "A truncated MPDU outcome ledger never admits its missing member optimistically.\n";
 
 auto laterHeader = makeShared<Ieee80211DataHeader>();
 laterHeader->setType(ST_DATA_WITH_QOS);
@@ -477,6 +624,12 @@ Partial A-MPDU acknowledged bitmap 101.
 
 %contains: stdout
 Real MAC ingress preserves the outcome aggregate.
+
+%contains: stdout
+A-MPDU fallback validates member FCS and admits only the valid local member.
+
+%contains: stdout
+A truncated MPDU outcome ledger never admits its missing member optimistically.
 
 %contains: stdout
 MU-BAR response bitmap starts at the trigger-requested sequence number.

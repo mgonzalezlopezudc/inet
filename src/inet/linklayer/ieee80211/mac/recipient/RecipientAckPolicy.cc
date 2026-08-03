@@ -34,8 +34,8 @@ simtime_t RecipientAckPolicy::computeAckDuration(Packet *dataOrMgmtPacket, const
 //
 bool RecipientAckPolicy::isAckNeeded(const Ptr<const Ieee80211DataOrMgmtHeader>& header) const
 {
-    // TODO add mgmt NoAck check
-    return !header->getReceiverAddress().isMulticast();
+    return header->getType() != ST_NOACKACTION &&
+            !header->getReceiverAddress().isMulticast();
 }
 
 //
@@ -64,4 +64,3 @@ simtime_t RecipientAckPolicy::computeAckDurationField(Packet *packet, const Ptr<
 
 } /* namespace ieee80211 */
 } /* namespace inet */
-

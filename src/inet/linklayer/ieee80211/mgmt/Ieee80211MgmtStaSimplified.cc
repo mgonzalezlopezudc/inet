@@ -36,6 +36,37 @@ void Ieee80211MgmtStaSimplified::initialize(int stage)
         apMib->bssAccessPointData.stations[mib->address] = Ieee80211Mib::ASSOCIATED;
         mib->bssStationData.associationId = apMib->allocateAssociationId(mib->address);
         mib->bssData.ssid = apMib->bssData.ssid;
+        if (!mib->localOperationalRates.empty() && !apMib->localOperationalRates.empty()) {
+            apMib->setPeerLegacyRates(mib->address,
+                    mib->getSupportedRatesElement(),
+                    mib->getExtendedSupportedRatesElement());
+            mib->setPeerLegacyRates(apMib->address,
+                    apMib->getSupportedRatesElement(),
+                    apMib->getExtendedSupportedRatesElement());
+            mib->installCurrentBssBasicLegacyRates(apMib->getSupportedRatesElement(),
+                    apMib->getExtendedSupportedRatesElement());
+        }
+        else {
+            apMib->removePeerCapabilities(mib->address);
+            mib->removePeerCapabilities(apMib->address);
+            mib->clearCurrentBssBasicLegacyRates();
+        }
+        if (isHtManagementSupported()) {
+            apMib->setPeerHtCapabilities(mib->address, mib->localHtCapabilities, apMib->htOperation);
+            mib->setPeerHtCapabilities(apMib->address, apMib->localHtCapabilities, apMib->htOperation);
+        }
+        else {
+            apMib->removePeerHtCapabilities(mib->address);
+            mib->removePeerHtCapabilities(apMib->address);
+        }
+        if (isVhtManagementSupported()) {
+            apMib->setPeerVhtCapabilities(mib->address, mib->localVhtCapabilities, apMib->vhtOperation);
+            mib->setPeerVhtCapabilities(apMib->address, apMib->localVhtCapabilities, apMib->vhtOperation);
+        }
+        else {
+            apMib->removePeerVhtCapabilities(mib->address);
+            mib->removePeerVhtCapabilities(apMib->address);
+        }
         if (isHeManagementSupported()) {
             apMib->setPeerHeCapabilities(mib->address, mib->localHeCapabilities, apMib->heOperation);
             mib->setPeerHeCapabilities(apMib->address, apMib->localHeCapabilities, apMib->heOperation);
@@ -43,8 +74,8 @@ void Ieee80211MgmtStaSimplified::initialize(int stage)
             EV_INFO << "Peer HE capabilities set for AP address=" << apMib->address << ", BSS color=" << (int)mib->heOperation.bssColor << "\n";
         }
         else {
-            apMib->removePeerCapabilities(mib->address);
-            mib->removePeerCapabilities(apMib->address);
+            apMib->removePeerHeCapabilities(mib->address);
+            mib->removePeerHeCapabilities(apMib->address);
             mib->heOperation.bssColor = 0;
         }
         if (isEhtManagementSupported()) {

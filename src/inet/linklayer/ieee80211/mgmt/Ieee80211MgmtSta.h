@@ -56,6 +56,14 @@ class INET_API Ieee80211MgmtSta : public Ieee80211MgmtBase
         Ieee80211HeCapabilitiesElement heCapabilities;
         bool heOperationPresent;
         Ieee80211HeOperationElement heOperation;
+        bool htCapabilitiesPresent;
+        Ieee80211HtCapabilitiesElement htCapabilities;
+        bool htOperationPresent;
+        Ieee80211HtOperationElement htOperation;
+        bool vhtCapabilitiesPresent;
+        Ieee80211VhtCapabilitiesElement vhtCapabilities;
+        bool vhtOperationPresent;
+        Ieee80211VhtOperationElement vhtOperation;
 
         bool isAuthenticated;
         int authSeqExpected; // valid while authenticating; values: 1,3,5...
@@ -67,6 +75,8 @@ class INET_API Ieee80211MgmtSta : public Ieee80211MgmtBase
             beaconInterval = rxPower = 0;
             heCapabilitiesPresent = false;
             heOperationPresent = false;
+            htCapabilitiesPresent = htOperationPresent = false;
+            vhtCapabilitiesPresent = vhtOperationPresent = false;
             authSeqExpected = -1;
             isAuthenticated = false;
             authTimeoutMsg = nullptr;

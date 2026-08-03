@@ -59,12 +59,29 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211VhtTxVector.h"
 
 namespace inet {
 
 namespace physicallayer {
 
 Define_Module(Ieee80211Radio);
+
+int Ieee80211Radio::getVhtAntennaCount() const
+{
+    if (antenna != nullptr)
+        return antenna->getNumAntennas();
+    auto antennaModule = getSubmodule("antenna");
+    return antennaModule == nullptr ? 0 : antennaModule->par("numAntennas").intValue();
+}
+
+Hz Ieee80211Radio::getVhtChannelWidth() const
+{
+    if (transmitter != nullptr)
+        return getChannelWidth();
+    auto configuredBand = Ieee80211CompliantBands::getBand(par("bandName").stringValue());
+    return Ieee80211ModeSet::getChannelWidth(configuredBand, Hz(par("bandwidth").doubleValue()));
+}
 
 simsignal_t Ieee80211Radio::radioChannelChangedSignal = cComponent::registerSignal("radioChannelChanged");
 simsignal_t Ieee80211Radio::heRuIndexSignal = cComponent::registerSignal("heRuIndex");
@@ -264,6 +281,12 @@ Ieee80211Radio::Ieee80211Radio() :
 {
 }
 
+const Ieee80211Channel *Ieee80211Radio::getChannel() const
+{
+    auto ieee80211Transmitter = check_and_cast<const Ieee80211Transmitter *>(transmitter);
+    return ieee80211Transmitter->getChannel();
+}
+
 bool Ieee80211Radio::supportsParallelReception(const ITransmission *transmission) const
 {
     auto packet = transmission == nullptr ? nullptr : transmission->getPacket();
@@ -281,6 +304,10 @@ void Ieee80211Radio::initialize(int stage)
     FlatRadioBase::initialize(stage);
 
     if (stage == INITSTAGE_LOCAL) {
+        const char *primary80 = par("primary80ChannelPosition");
+        primary80ChannelPosition = !strcmp(primary80, "lower") ? Ieee80211Primary80ChannelPosition::LOWER :
+                !strcmp(primary80, "upper") ? Ieee80211Primary80ChannelPosition::UPPER :
+                Ieee80211Primary80ChannelPosition::UNSPECIFIED;
         const char *fcsModeString = par("fcsMode");
         fcsMode = parseFcsMode(fcsModeString, true);
         opMode = par("opMode").stringValue();
@@ -882,8 +909,78 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
     }
     else if (auto vhtPhyHeader = dynamicPtrCast<Ieee80211VhtPhyHeader>(phyHeader)) {
         if (auto vhtMode = dynamic_cast<const Ieee80211VhtMode *>(mode)) {
+            auto vhtRequest = packet->findTag<Ieee80211VhtTransmissionTag>();
+            auto vhtMuHandoff = packet->findTag<Ieee80211VhtTxVectorReq>();
+            const bool ndp = packet->getDataLength() == b(0);
+            auto channelWidth = vhtMode->getDataMode()->getBandwidth();
+            if (vhtRequest != nullptr && vhtRequest->getNdp() && !ndp)
+                throw cRuntimeError("VHT NDP request must have zero APEP/PSDU length");
+            if (vhtMuHandoff != nullptr) {
+                const auto& txVector = vhtMuHandoff->getTxVector();
+                if (txVector == nullptr || !txVector->isMu() ||
+                        txVector->getChannelWidth() != MHz(20) || channelWidth != MHz(20) ||
+                        txVector->getPsduLength() != B(packet->getDataLength()) ||
+                        txVector->getUsers().size() != 2)
+                    throw cRuntimeError("Invalid canonical VHT MU TXVECTOR handoff");
+                vhtPhyHeader->setChunkLength(b(100));
+                vhtPhyHeader->setSignalingValid(true);
+                vhtPhyHeader->setNdp(false);
+                vhtPhyHeader->setStbc(false);
+                vhtPhyHeader->setBandwidth(0);
+                vhtPhyHeader->setGroupId(txVector->getGroupId());
+                vhtPhyHeader->setNumberOfSpaceTimeStreams(2);
+                vhtPhyHeader->setPartialAid(0);
+                vhtPhyHeader->setMcs(0);
+                vhtPhyHeader->setCoding(0);
+                vhtPhyHeader->setLdpcExtraOfdmSymbol(false);
+                vhtPhyHeader->setBeamformed(true);
+                vhtPhyHeader->setCommonDuration(txVector->getCommonDuration());
+                vhtPhyHeader->setUsersArraySize(txVector->getUsers().size());
+                for (size_t i = 0; i < txVector->getUsers().size(); ++i) {
+                    const auto& canonical = txVector->getUsers()[i];
+                    Ieee80211VhtMuUserInfo user;
+                    user.associationId = canonical.associationId;
+                    user.userPosition = canonical.userPosition;
+                    user.numberOfSpatialStreams = canonical.numberOfSpatialStreams;
+                    user.mcs = canonical.mcs;
+                    user.coding = canonical.ldpcCoding ? 1 : 0;
+                    user.psduLength = canonical.psduLength;
+                    user.duration = canonical.duration;
+                    vhtPhyHeader->setUsers(i, user);
+                }
+            }
+            else if (vhtRequest != nullptr && vhtRequest->getMuMimo())
+                throw cRuntimeError("VHT MU-MIMO requires a canonical TXVECTOR handoff");
+            if ((ndp || (vhtRequest != nullptr && vhtRequest->getBeamformed())) &&
+                    channelWidth != MHz(20))
+                throw cRuntimeError("Packet-level VHT sounding/beamforming currently supports only 20 MHz");
+            if (vhtMuHandoff == nullptr) {
+            vhtPhyHeader->setSignalingValid(true);
+            vhtPhyHeader->setNdp(ndp);
+            vhtPhyHeader->setStbc(false);
+            vhtPhyHeader->setBandwidth(getIeee80211VhtBandwidthCode(channelWidth));
+            vhtPhyHeader->setGroupId(vhtRequest == nullptr ? 63 :
+                    vhtRequest->getGroupId());
+            vhtPhyHeader->setNumberOfSpaceTimeStreams(
+                    vhtMode->getDataMode()->getNumberOfSpatialStreams());
+            vhtPhyHeader->setPartialAid(vhtRequest == nullptr ? 0 :
+                    vhtRequest->getPartialAid());
+            vhtPhyHeader->setMcs(vhtPhyHeader->getNdp() ? 0 :
+                    vhtMode->getDataMode()->getMcsIndex());
+            vhtPhyHeader->setBeamformed(vhtRequest != nullptr &&
+                    vhtRequest->getBeamformed());
             if (vhtMode->getDataMode()->getCode()) {
-                vhtPhyHeader->setCoding(vhtMode->getDataMode()->getCode()->isLdpc() ? 1 : 0);
+                vhtPhyHeader->setCoding(vhtPhyHeader->getNdp() ? 0 :
+                        vhtMode->getDataMode()->getCode()->isLdpc() ? 1 : 0);
+                vhtPhyHeader->setLdpcExtraOfdmSymbol(
+                        !vhtPhyHeader->getNdp() &&
+                        vhtMode->getDataMode()->getLdpcExtraOfdmSymbol(packet->getDataLength()));
+            }
+            if (vhtPhyHeader->getNdp() && packet->getDataLength() != b(0))
+                throw cRuntimeError("VHT NDP must not contain a PSDU");
+            if (vhtPhyHeader->getNdp() &&
+                    vhtPhyHeader->getNumberOfSpaceTimeStreams() < 2)
+                throw cRuntimeError("VHT NDP requires at least two space-time streams");
             }
         }
     }
@@ -941,6 +1038,23 @@ void Ieee80211Radio::decapsulate(Packet *packet) const
     const auto& phyHeader = popIeee80211PhyHeaderAtFront(packet, b(-1), Chunk::PF_ALLOW_INCORRECT | Chunk::PF_ALLOW_INCOMPLETE | Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED);
     if (phyHeader->isIncorrect() || phyHeader->isIncomplete() || phyHeader->isImproperlyRepresented() || !verifyFcs(phyHeader))
         packet->setBitError(true);
+
+    if (!packet->hasBitError() && packet->getDataLength() == b(0)) {
+        if (auto vhtHeader = dynamicPtrCast<const Ieee80211VhtPhyHeader>(phyHeader);
+                vhtHeader != nullptr && vhtHeader->getNdp()) {
+            auto indication = packet->addTagIfAbsent<Ieee80211NdpInd>();
+            indication->setPhyFormat(IEEE80211_NDP_PHY_VHT);
+            indication->setChannelWidth(mode->getDataMode()->getBandwidth().get());
+            indication->setNumberOfSpaceTimeStreams(vhtHeader->getNumberOfSpaceTimeStreams());
+        }
+        else if (auto heHeader = dynamicPtrCast<const Ieee80211HePhyHeader>(phyHeader);
+                heHeader != nullptr && heHeader->getNdp()) {
+            auto indication = packet->addTagIfAbsent<Ieee80211NdpInd>();
+            indication->setPhyFormat(IEEE80211_NDP_PHY_HE_SU);
+            indication->setChannelWidth(mode->getDataMode()->getBandwidth().get());
+            indication->setNumberOfSpaceTimeStreams(1);
+        }
+    }
 
     if (auto indication = packet->findTagForUpdate<Ieee80211MpduReceiveInd>()) {
         for (unsigned int i = 0; i < indication->getResultsArraySize(); ++i) {

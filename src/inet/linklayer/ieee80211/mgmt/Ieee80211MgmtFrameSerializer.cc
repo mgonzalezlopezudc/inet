@@ -12,6 +12,7 @@
 
 #include "inet/common/packet/serializer/ChunkSerializerRegistry.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211HeMgmtElements.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211HtVhtMgmtElements.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrame_m.h"
 
 namespace inet {
@@ -30,6 +31,8 @@ Register_Serializer(Ieee80211ReassociationRequestFrame, Ieee80211MgmtFrameSerial
 Register_Serializer(Ieee80211ReassociationResponseFrame, Ieee80211MgmtFrameSerializer);
 Register_Serializer(Ieee80211HeNdpAnnouncement, Ieee80211HeSoundingMgmtFrameSerializer);
 Register_Serializer(Ieee80211HeCompressedBeamformingFeedback, Ieee80211HeSoundingMgmtFrameSerializer);
+Register_Serializer(Ieee80211VhtCompressedBeamformingFeedback, Ieee80211VhtActionFrameBodySerializer);
+Register_Serializer(Ieee80211VhtGroupIdManagement, Ieee80211VhtActionFrameBodySerializer);
 
 static const uint8_t ELEMENT_ID_EXTENSION = 255;
 static const uint8_t ELEMENT_ID_EXTENSION_HE_CAPABILITIES = 35;
@@ -40,6 +43,10 @@ static const uint8_t ELEMENT_ID_EXTENSION_MULTI_LINK = 107;
 static const uint8_t ELEMENT_ID_EXTENSION_EHT_CAPABILITIES = 108;
 static const uint8_t ELEMENT_ID_EXTENSION_TID_TO_LINK_MAPPING = 111;
 static const uint8_t ELEMENT_ID_TWT = 216;
+static const uint8_t ELEMENT_ID_HT_CAPABILITIES = 45;
+static const uint8_t ELEMENT_ID_HT_OPERATION = 61;
+static const uint8_t ELEMENT_ID_VHT_CAPABILITIES = 191;
+static const uint8_t ELEMENT_ID_VHT_OPERATION = 192;
 
 static uint64_t getBits(uint64_t value, int offset, int length)
 {
@@ -172,6 +179,111 @@ static void skipBytes(MemoryInputStream& stream, int length)
 {
     for (int i = 0; i < length; ++i)
         stream.readByte();
+}
+
+static int encodeVhtMcs(int maxMcs)
+{
+    return maxMcs < 0 ? 3 : maxMcs <= 7 ? 0 : maxMcs == 8 ? 1 : 2;
+}
+
+static int decodeVhtMcs(int encoded)
+{
+    static const int values[] = {7, 8, 9, -1};
+    return values[encoded & 3];
+}
+
+static void writeHtCapabilitiesElement(MemoryOutputStream& stream, const Ieee80211HtCapabilitiesElement& capabilities)
+{
+    // IEEE Std 802.11-2024, 9.4.2.54 and Tables 9-224/9-225.
+    stream.writeByte(ELEMENT_ID_HT_CAPABILITIES);
+    stream.writeByte(26);
+    uint16_t information = (capabilities.ldpc ? 1 : 0) |
+            (capabilities.supportedChannelWidth40MHz ? 1 << 1 : 0) |
+            (capabilities.shortGi20 ? 1 << 5 : 0) |
+            (capabilities.shortGi40 ? 1 << 6 : 0);
+    stream.writeUint16Le(information);
+    stream.writeByte(capabilities.maxAmpduLengthExponent & 3);
+    std::vector<uint8_t> mcs(16);
+    for (int nss = 0; nss < 4; nss++)
+        for (int mcsIndex = 0; mcsIndex <= capabilities.rxMaxMcsForNss[nss] && mcsIndex < 8; mcsIndex++)
+            setBits(mcs, nss * 8 + mcsIndex, 1, 1);
+    bool unequal = false;
+    int txMaxNss = 0;
+    for (int nss = 0; nss < 4; nss++) {
+        unequal |= capabilities.txMaxMcsForNss[nss] != capabilities.rxMaxMcsForNss[nss];
+        if (capabilities.txMaxMcsForNss[nss] >= 0) txMaxNss = nss + 1;
+    }
+    if (txMaxNss == 0)
+        throw cRuntimeError("HT Capabilities requires at least one transmit MCS spatial stream");
+    if (unequal) {
+        for (int nss = 0; nss < 4; nss++) {
+            int expected = nss < txMaxNss ? capabilities.rxMaxMcsForNss[nss] : -1;
+            if (capabilities.txMaxMcsForNss[nss] != expected)
+                throw cRuntimeError("HT transmit MCS map is not representable by Tx Max NSS with equal modulation");
+        }
+    }
+    setBits(mcs, 96, 1, 1);
+    setBits(mcs, 97, 1, unequal);
+    setBits(mcs, 98, 2, std::max(0, txMaxNss - 1));
+    for (auto byte : mcs) stream.writeByte(byte);
+    stream.writeUint16Le(0);
+    stream.writeUint32Le(0);
+    stream.writeByte(0);
+}
+
+static void writeHtOperationElement(MemoryOutputStream& stream, const Ieee80211HtOperationElement& operation)
+{
+    stream.writeByte(ELEMENT_ID_HT_OPERATION);
+    stream.writeByte(22);
+    stream.writeByte(operation.primaryChannel);
+    uint64_t information = (operation.secondaryChannelOffset & 3) |
+            (operation.staChannelWidth40MHz ? uint64_t(1) << 2 : 0) |
+            (uint64_t(operation.protectionMode & 3) << 8);
+    for (int i = 0; i < 5; i++) stream.writeByte((information >> (8 * i)) & 0xff);
+    std::vector<uint8_t> basic(16);
+    for (int nss = 0; nss < 4; nss++)
+        for (int mcs = 0; mcs <= operation.basicMaxMcsForNss[nss] && mcs < 8; mcs++)
+            setBits(basic, nss * 8 + mcs, 1, 1);
+    for (auto byte : basic) stream.writeByte(byte);
+}
+
+static void writeVhtCapabilitiesElement(MemoryOutputStream& stream, const Ieee80211VhtCapabilitiesElement& capabilities)
+{
+    // IEEE Std 802.11-2024, 9.4.2.156 and Tables 9-313/9-315.
+    stream.writeByte(ELEMENT_ID_VHT_CAPABILITIES);
+    stream.writeByte(12);
+    uint32_t information = (uint32_t(capabilities.supportedChannelWidthSet & 3) << 2) |
+            (capabilities.rxLdpc ? 1 << 4 : 0) | (capabilities.shortGi80 ? 1 << 5 : 0) |
+            (capabilities.shortGi160 ? 1 << 6 : 0) |
+            (capabilities.suBeamformer ? 1 << 11 : 0) |
+            (capabilities.suBeamformee ? 1 << 12 : 0) |
+            (uint32_t((capabilities.beamformeeSts - 1) & 7) << 13) |
+            (uint32_t((capabilities.soundingDimensions - 1) & 7) << 16) |
+            (capabilities.muBeamformer ? 1 << 19 : 0) |
+            (capabilities.muBeamformee ? 1 << 20 : 0) |
+            (uint32_t(capabilities.maxAmpduLengthExponent & 7) << 23);
+    stream.writeUint32Le(information);
+    uint16_t rxMap = 0, txMap = 0;
+    for (int i = 0; i < 8; i++) {
+        rxMap |= encodeVhtMcs(capabilities.rxMaxMcsForNss[i]) << (2 * i);
+        txMap |= encodeVhtMcs(capabilities.txMaxMcsForNss[i]) << (2 * i);
+    }
+    stream.writeUint16Le(rxMap);
+    stream.writeUint16Le(0);
+    stream.writeUint16Le(txMap);
+    stream.writeUint16Le(0);
+}
+
+static void writeVhtOperationElement(MemoryOutputStream& stream, const Ieee80211VhtOperationElement& operation)
+{
+    stream.writeByte(ELEMENT_ID_VHT_OPERATION);
+    stream.writeByte(5);
+    stream.writeByte(operation.channelWidth);
+    stream.writeByte(operation.centerFrequencySegment0);
+    stream.writeByte(operation.centerFrequencySegment1);
+    uint16_t basic = 0;
+    for (int i = 0; i < 8; i++) basic |= encodeVhtMcs(operation.basicMaxMcsForNss[i]) << (2 * i);
+    stream.writeUint16Le(basic);
 }
 
 static void writeHeCapabilitiesElement(MemoryOutputStream& stream, const Ieee80211HeCapabilitiesElement& capabilities)
@@ -370,6 +482,10 @@ static void writeTidToLinkMappingElement(MemoryOutputStream& stream, const Ieee8
 
 static void writeHeMgmtElements(MemoryOutputStream& stream, const Ptr<const Ieee80211MgmtFrame>& frame)
 {
+    if (frame->getHtCapabilitiesPresent()) writeHtCapabilitiesElement(stream, frame->getHtCapabilities());
+    if (frame->getHtOperationPresent()) writeHtOperationElement(stream, frame->getHtOperation());
+    if (frame->getVhtCapabilitiesPresent()) writeVhtCapabilitiesElement(stream, frame->getVhtCapabilities());
+    if (frame->getVhtOperationPresent()) writeVhtOperationElement(stream, frame->getVhtOperation());
     if (frame->getHeCapabilitiesPresent())
         writeHeCapabilitiesElement(stream, frame->getHeCapabilities());
     if (frame->getHeOperationPresent())
@@ -387,6 +503,89 @@ static void writeHeMgmtElements(MemoryOutputStream& stream, const Ptr<const Ieee
         writeTidToLinkMappingElement(stream, frame->getTidToLinkMapping());
         
     writeBroadcastTwtElement(stream, frame);
+}
+
+static void readHtCapabilitiesElement(MemoryInputStream& stream, int length, const Ptr<Ieee80211MgmtFrame>& frame)
+{
+    if (length != 26) throw cRuntimeError("Malformed HT Capabilities element: length is %d", length);
+    Ieee80211HtCapabilitiesElement capabilities;
+    uint16_t information = stream.readUint16Le();
+    capabilities.ldpc = information & 1;
+    capabilities.supportedChannelWidth40MHz = information & (1 << 1);
+    capabilities.shortGi20 = information & (1 << 5);
+    capabilities.shortGi40 = information & (1 << 6);
+    capabilities.maxAmpduLengthExponent = stream.readByte() & 3;
+    std::vector<uint8_t> mcs(16);
+    for (auto& byte : mcs) byte = stream.readByte();
+    bool unequal = getBits(mcs, 97, 1);
+    int txMaxNss = getBits(mcs, 98, 2) + 1;
+    for (int nss = 0; nss < 4; nss++) {
+        capabilities.rxMaxMcsForNss[nss] = -1;
+        for (int index = 0; index < 8; index++) if (getBits(mcs, nss * 8 + index, 1)) capabilities.rxMaxMcsForNss[nss] = index;
+        capabilities.txMaxMcsForNss[nss] = !unequal || nss < txMaxNss ? capabilities.rxMaxMcsForNss[nss] : -1;
+    }
+    skipBytes(stream, 7);
+    frame->setHtCapabilitiesPresent(true);
+    frame->setHtCapabilities(capabilities);
+}
+
+static void readHtOperationElement(MemoryInputStream& stream, int length, const Ptr<Ieee80211MgmtFrame>& frame)
+{
+    if (length != 22) throw cRuntimeError("Malformed HT Operation element: length is %d", length);
+    Ieee80211HtOperationElement operation;
+    operation.primaryChannel = stream.readByte();
+    uint64_t information = 0;
+    for (int i = 0; i < 5; i++) information |= uint64_t(stream.readByte()) << (8 * i);
+    operation.secondaryChannelOffset = information & 3;
+    operation.staChannelWidth40MHz = information & (1 << 2);
+    operation.protectionMode = (information >> 8) & 3;
+    std::vector<uint8_t> basic(16);
+    for (auto& byte : basic) byte = stream.readByte();
+    for (int nss = 0; nss < 4; nss++) {
+        operation.basicMaxMcsForNss[nss] = -1;
+        for (int index = 0; index < 8; index++) if (getBits(basic, nss * 8 + index, 1)) operation.basicMaxMcsForNss[nss] = index;
+    }
+    frame->setHtOperationPresent(true);
+    frame->setHtOperation(operation);
+}
+
+static void readVhtCapabilitiesElement(MemoryInputStream& stream, int length, const Ptr<Ieee80211MgmtFrame>& frame)
+{
+    if (length != 12) throw cRuntimeError("Malformed VHT Capabilities element: length is %d", length);
+    Ieee80211VhtCapabilitiesElement capabilities;
+    uint32_t information = stream.readUint32Le();
+    capabilities.supportedChannelWidthSet = (information >> 2) & 3;
+    capabilities.rxLdpc = information & (1 << 4);
+    capabilities.shortGi80 = information & (1 << 5);
+    capabilities.shortGi160 = information & (1 << 6);
+    capabilities.suBeamformer = information & (1 << 11);
+    capabilities.suBeamformee = information & (1 << 12);
+    capabilities.beamformeeSts = ((information >> 13) & 7) + 1;
+    capabilities.soundingDimensions = ((information >> 16) & 7) + 1;
+    capabilities.muBeamformer = information & (1 << 19);
+    capabilities.muBeamformee = information & (1 << 20);
+    capabilities.maxAmpduLengthExponent = (information >> 23) & 7;
+    uint16_t rxMap = stream.readUint16Le(); stream.readUint16Le();
+    uint16_t txMap = stream.readUint16Le(); stream.readUint16Le();
+    for (int i = 0; i < 8; i++) {
+        capabilities.rxMaxMcsForNss[i] = decodeVhtMcs(rxMap >> (2 * i));
+        capabilities.txMaxMcsForNss[i] = decodeVhtMcs(txMap >> (2 * i));
+    }
+    frame->setVhtCapabilitiesPresent(true);
+    frame->setVhtCapabilities(capabilities);
+}
+
+static void readVhtOperationElement(MemoryInputStream& stream, int length, const Ptr<Ieee80211MgmtFrame>& frame)
+{
+    if (length != 5) throw cRuntimeError("Malformed VHT Operation element: length is %d", length);
+    Ieee80211VhtOperationElement operation;
+    operation.channelWidth = stream.readByte();
+    operation.centerFrequencySegment0 = stream.readByte();
+    operation.centerFrequencySegment1 = stream.readByte();
+    uint16_t basic = stream.readUint16Le();
+    for (int i = 0; i < 8; i++) operation.basicMaxMcsForNss[i] = decodeVhtMcs(basic >> (2 * i));
+    frame->setVhtOperationPresent(true);
+    frame->setVhtOperation(operation);
 }
 
 static void readHeCapabilitiesElement(MemoryInputStream& stream, int payloadLength, const Ptr<Ieee80211MgmtFrame>& frame)
@@ -638,7 +837,28 @@ static void readHeMgmtElements(MemoryInputStream& stream, const Ptr<Ieee80211Mgm
         if (stream.getRemainingLength() < B(length))
             throw cRuntimeError("Malformed IEEE 802.11 management element: id=%d length=%d remaining=%" PRId64,
                     elementId, length, stream.getRemainingLength().get<B>());
-        if (elementId == ELEMENT_ID_TWT) {
+        if (elementId == 50) {
+            if (length == 0)
+                throw cRuntimeError("Malformed Extended Supported Rates element length: 0");
+            Ieee80211ExtendedSupportedRatesElement rates;
+            rates.numRates = length;
+            for (int i = 0; i < rates.numRates; ++i) {
+                auto encoded = stream.readByte();
+                rates.rates[i].rate = encoded & 0x7f;
+                if (rates.rates[i].rate == 0)
+                    throw cRuntimeError("Malformed Extended Supported Rates rate code: %d", encoded);
+                rates.rates[i].basic = (encoded & 0x80) != 0;
+            }
+            if (auto value = dynamicPtrCast<Ieee80211ProbeRequestFrame>(frame)) value->setExtendedSupportedRates(rates);
+            else if (auto value = dynamicPtrCast<Ieee80211AssociationRequestFrame>(frame)) value->setExtendedSupportedRates(rates);
+            else if (auto value = dynamicPtrCast<Ieee80211AssociationResponseFrame>(frame)) value->setExtendedSupportedRates(rates);
+            else if (auto value = dynamicPtrCast<Ieee80211BeaconFrame>(frame)) value->setExtendedSupportedRates(rates);
+        }
+        else if (elementId == ELEMENT_ID_HT_CAPABILITIES) readHtCapabilitiesElement(stream, length, frame);
+        else if (elementId == ELEMENT_ID_HT_OPERATION) readHtOperationElement(stream, length, frame);
+        else if (elementId == ELEMENT_ID_VHT_CAPABILITIES) readVhtCapabilitiesElement(stream, length, frame);
+        else if (elementId == ELEMENT_ID_VHT_OPERATION) readVhtOperationElement(stream, length, frame);
+        else if (elementId == ELEMENT_ID_TWT) {
             readBroadcastTwtElement(stream, length, frame);
         }
         else if (elementId == ELEMENT_ID_EXTENSION && length >= 1) {
@@ -676,6 +896,57 @@ static void readHeMgmtElements(MemoryInputStream& stream, const Ptr<Ieee80211Mgm
     }
 }
 
+static void writeLegacyRates(MemoryOutputStream& stream,
+        const Ieee80211SupportedRatesElement& supportedRates,
+        const Ieee80211ExtendedSupportedRatesElement& extendedSupportedRates)
+{
+    if (supportedRates.numRates < 1 || supportedRates.numRates > 8)
+        throw cRuntimeError("Supported Rates element length must be between 1 and 8, got %d",
+                supportedRates.numRates);
+    if (extendedSupportedRates.numRates < 0 || extendedSupportedRates.numRates > 255)
+        throw cRuntimeError("Extended Supported Rates element length must be between 0 and 255, got %d",
+                extendedSupportedRates.numRates);
+    auto validateRate = [](const Ieee80211LegacyRate& rate) {
+        if (rate.rate < 1 || rate.rate > 127)
+            throw cRuntimeError("Legacy rate code must be between 1 and 127, got %d",
+                    rate.rate);
+    };
+    stream.writeByte(1);
+    stream.writeByte(supportedRates.numRates);
+    for (int i = 0; i < supportedRates.numRates; ++i) {
+        validateRate(supportedRates.rates[i]);
+        stream.writeByte(supportedRates.rates[i].rate |
+                (supportedRates.rates[i].basic ? 0x80 : 0));
+    }
+    if (extendedSupportedRates.numRates != 0) {
+        stream.writeByte(50);
+        stream.writeByte(extendedSupportedRates.numRates);
+        for (int i = 0; i < extendedSupportedRates.numRates; ++i) {
+            validateRate(extendedSupportedRates.rates[i]);
+            stream.writeByte(extendedSupportedRates.rates[i].rate |
+                    (extendedSupportedRates.rates[i].basic ? 0x80 : 0));
+        }
+    }
+}
+
+static Ieee80211SupportedRatesElement readSupportedRates(MemoryInputStream& stream)
+{
+    if (stream.readByte() != 1)
+        throw cRuntimeError("Expected Supported Rates element");
+    Ieee80211SupportedRatesElement rates;
+    rates.numRates = stream.readByte();
+    if (rates.numRates < 1 || rates.numRates > 8)
+        throw cRuntimeError("Malformed Supported Rates element length: %d", rates.numRates);
+    for (int i = 0; i < rates.numRates; ++i) {
+        auto encoded = stream.readByte();
+        rates.rates[i].rate = encoded & 0x7f;
+        if (rates.rates[i].rate == 0)
+            throw cRuntimeError("Malformed Supported Rates rate code: %d", encoded);
+        rates.rates[i].basic = (encoded & 0x80) != 0;
+    }
+    return rates;
+}
+
 void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const
 {
     if (auto authenticationFrame = dynamicPtrCast<const Ieee80211AuthenticationFrame>(chunk)) {
@@ -706,20 +977,16 @@ void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const P
         stream.writeByte(length);
         stream.writeBytes((uint8_t *)SSID, B(length));
         // 2    Supported rates
-        const Ieee80211SupportedRatesElement& supportedRates = probeRequestFrame->getSupportedRates();
-        stream.writeByte(1);
-        stream.writeByte(supportedRates.numRates);
-        for (int i = 0; i < supportedRates.numRates; i++) {
-            uint8_t rate = ceil(supportedRates.rate[i] / 0.5);
-            // rate |= 0x80 if rate contained in the BSSBasicRateSet parameter
-            stream.writeByte(rate);
-        }
+        writeLegacyRates(stream, probeRequestFrame->getSupportedRates(),
+                probeRequestFrame->getExtendedSupportedRates());
         writeHeMgmtElements(stream, probeRequestFrame);
         // 3    Request information         May be included if dot11MultiDomainCapabilityEnabled is true.
         // 4    Extended Supported Rates    The Extended Supported Rates element is present whenever there are more than eight supported rates, and it is optional otherwise.
         // Last Vendor Specific             One or more vendor-specific information elements may appear in this frame. This information element follows all other information elements.
     }
-    else if (auto associationRequestFrame = dynamicPtrCast<const Ieee80211AssociationRequestFrame>(chunk)) {
+    else if (auto associationRequestFrame = dynamicPtrCast<const Ieee80211AssociationRequestFrame>(chunk);
+            associationRequestFrame != nullptr &&
+            dynamicPtrCast<const Ieee80211ReassociationRequestFrame>(chunk) == nullptr) {
 //        type = ST_ASSOCIATIONREQUEST;
         // 1    Capability
         stream.writeUint16Be(0); // FIXME
@@ -732,14 +999,8 @@ void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const P
         stream.writeByte(length);
         stream.writeBytes((uint8_t *)SSID, B(length));
         // 4    Supported rates
-        const Ieee80211SupportedRatesElement& supportedRates = associationRequestFrame->getSupportedRates();
-        stream.writeByte(1);
-        stream.writeByte(supportedRates.numRates);
-        for (int i = 0; i < supportedRates.numRates; i++) {
-            uint8_t rate = ceil(supportedRates.rate[i] / 0.5);
-            // rate |= 0x80 if rate contained in the BSSBasicRateSet parameter
-            stream.writeByte(rate);
-        }
+        writeLegacyRates(stream, associationRequestFrame->getSupportedRates(),
+                associationRequestFrame->getExtendedSupportedRates());
         writeHeMgmtElements(stream, associationRequestFrame);
         // 5    Extended Supported Rates   The Extended Supported Rates element is present whenever there are more than eight supported rates, and it is optional otherwise.
         // 6    Power Capability           The Power Capability element shall be present if dot11SpectrumManagementRequired is true.
@@ -764,14 +1025,8 @@ void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const P
         stream.writeByte(length);
         stream.writeBytes((uint8_t *)SSID, B(length));
         // 5    Supported rates
-        const Ieee80211SupportedRatesElement& supportedRates = reassociationRequestFrame->getSupportedRates();
-        stream.writeByte(1);
-        stream.writeByte(supportedRates.numRates);
-        for (int i = 0; i < supportedRates.numRates; i++) {
-            uint8_t rate = ceil(supportedRates.rate[i] / 0.5);
-            // rate |= 0x80 if rate contained in the BSSBasicRateSet parameter
-            stream.writeByte(rate);
-        }
+        writeLegacyRates(stream, reassociationRequestFrame->getSupportedRates(),
+                reassociationRequestFrame->getExtendedSupportedRates());
         writeHeMgmtElements(stream, reassociationRequestFrame);
         // 6    Extended Supported Rates   The Extended Supported Rates element is present whenever there are more than eight supported rates, and it is optional otherwise.
         // 7    Power Capability           The Power Capability element shall be present if dot11SpectrumManagementRequired is true.
@@ -780,7 +1035,9 @@ void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const P
         // 10   QoS Capability             The QoS Capability element is present when dot11QosOption- Implemented is true.
         // Last Vendor Specific            One or more vendor-specific information elements may appear in this frame. This information element follows all other information elements.
     }
-    else if (auto associationResponseFrame = dynamicPtrCast<const Ieee80211AssociationResponseFrame>(chunk)) {
+    else if (auto associationResponseFrame = dynamicPtrCast<const Ieee80211AssociationResponseFrame>(chunk);
+            associationResponseFrame != nullptr &&
+            dynamicPtrCast<const Ieee80211ReassociationResponseFrame>(chunk) == nullptr) {
 //        type = ST_ASSOCIATIONRESPONSE;
         // 1    Capability
         stream.writeUint16Be(0); // FIXME
@@ -789,13 +1046,8 @@ void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const P
         // 3    AID
         stream.writeUint16Be(associationResponseFrame->getAid());
         // 4    Supported rates
-        stream.writeByte(1);
-        stream.writeByte(associationResponseFrame->getSupportedRates().numRates);
-        for (int i = 0; i < associationResponseFrame->getSupportedRates().numRates; i++) {
-            uint8_t rate = ceil(associationResponseFrame->getSupportedRates().rate[i] / 0.5);
-            // rate |= 0x80 if rate contained in the BSSBasicRateSet parameter
-            stream.writeByte(rate);
-        }
+        writeLegacyRates(stream, associationResponseFrame->getSupportedRates(),
+                associationResponseFrame->getExtendedSupportedRates());
         writeHeMgmtElements(stream, associationResponseFrame);
         // 5    Extended Supported Rates   The Extended Supported Rates element is present whenever there are more than eight supported rates, and it is optional otherwise.
         // 6    EDCA Parameter Set
@@ -810,19 +1062,16 @@ void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const P
         // 3    AID
         stream.writeUint16Be(reassociationResponseFrame->getAid());
         // 4    Supported rates
-        stream.writeByte(1);
-        stream.writeByte(reassociationResponseFrame->getSupportedRates().numRates);
-        for (int i = 0; i < reassociationResponseFrame->getSupportedRates().numRates; i++) {
-            uint8_t rate = ceil(reassociationResponseFrame->getSupportedRates().rate[i] / 0.5);
-            // rate |= 0x80 if rate contained in the BSSBasicRateSet parameter
-            stream.writeByte(rate);
-        }
+        writeLegacyRates(stream, reassociationResponseFrame->getSupportedRates(),
+                reassociationResponseFrame->getExtendedSupportedRates());
         writeHeMgmtElements(stream, reassociationResponseFrame);
         // 5    Extended Supported Rates   The Extended Supported Rates element is present whenever there are more than eight supported rates, and it is optional otherwise.
         // 6    EDCA Parameter Set
         // Last Vendor Specific            One or more vendor-specific information elements may appear in this frame. This information element follows all other information elements.
     }
-    else if (auto beaconFrame = dynamicPtrCast<const Ieee80211BeaconFrame>(chunk)) {
+    else if (auto beaconFrame = dynamicPtrCast<const Ieee80211BeaconFrame>(chunk);
+            beaconFrame != nullptr &&
+            dynamicPtrCast<const Ieee80211ProbeResponseFrame>(chunk) == nullptr) {
 //        type = ST_BEACON;
         // 1    Timestamp
         stream.writeUint64Be(simTime().raw()); // FIXME
@@ -837,13 +1086,8 @@ void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const P
         stream.writeByte(length);
         stream.writeBytes((uint8_t *)SSID, B(length));
         // 5    Supported rates
-        stream.writeByte(1);
-        stream.writeByte(beaconFrame->getSupportedRates().numRates);
-        for (int i = 0; i < beaconFrame->getSupportedRates().numRates; i++) {
-            uint8_t rate = ceil(beaconFrame->getSupportedRates().rate[i] / 0.5);
-            // rate |= 0x80 if rate contained in the BSSBasicRateSet parameter
-            stream.writeByte(rate);
-        }
+        writeLegacyRates(stream, beaconFrame->getSupportedRates(),
+                beaconFrame->getExtendedSupportedRates());
         writeHeMgmtElements(stream, beaconFrame);
         // 6    Frequency-Hopping (FH) Parameter Set   The FH Parameter Set information element is present within Beacon frames generated by STAs using FH PHYs.
         // 7    DS Parameter Set                       The DS Parameter Set information element is present within Beacon frames generated by STAs using Clause 15, Clause 18, and Clause 19 PHYs.
@@ -881,13 +1125,8 @@ void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const P
         stream.writeByte(length);
         stream.writeBytes((uint8_t *)SSID, B(length));
         // 5      Supported rates
-        stream.writeByte(1);
-        stream.writeByte(probeResponseFrame->getSupportedRates().numRates);
-        for (int i = 0; i < probeResponseFrame->getSupportedRates().numRates; i++) {
-            uint8_t rate = ceil(probeResponseFrame->getSupportedRates().rate[i] / 0.5);
-            // rate |= 0x80 if rate contained in the BSSBasicRateSet parameter
-            stream.writeByte(rate);
-        }
+        writeLegacyRates(stream, probeResponseFrame->getSupportedRates(),
+                probeResponseFrame->getExtendedSupportedRates());
         writeHeMgmtElements(stream, probeResponseFrame);
         // 6      FH Parameter Set                The FH Parameter Set information element is present within Probe Response frames generated by STAs using FH PHYs.
         // 7      DS Parameter Set                The DS Parameter Set information element is present within Probe Response frames generated by STAs using Clause 15, Clause 18, and Clause 19 PHYs.
@@ -991,12 +1230,7 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserialize(MemoryInputStream& st
             SSID[length] = '\0';
             f->setSSID(SSID);
 
-            Ieee80211SupportedRatesElement supRat;
-            stream.readByte();
-            supRat.numRates = stream.readByte();
-            for (int i = 0; i < supRat.numRates; i++)
-                supRat.rate[i] = (double)(stream.readByte() & 0x7F) * 0.5;
-            f->setSupportedRates(supRat);
+            f->setSupportedRates(readSupportedRates(stream));
             readHeMgmtElements(stream, f);
             frame = f;
             break;
@@ -1015,12 +1249,7 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserialize(MemoryInputStream& st
             SSID[length] = '\0';
             f->setSSID(SSID);
 
-            Ieee80211SupportedRatesElement supRat;
-            stream.readByte();
-            supRat.numRates = stream.readByte();
-            for (int i = 0; i < supRat.numRates; i++)
-                supRat.rate[i] = (double)(stream.readByte() & 0x7F) * 0.5;
-            f->setSupportedRates(supRat);
+            f->setSupportedRates(readSupportedRates(stream));
             readHeMgmtElements(stream, f);
             frame = f;
             break;
@@ -1041,12 +1270,7 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserialize(MemoryInputStream& st
             SSID[length] = '\0';
             f->setSSID(SSID);
 
-            Ieee80211SupportedRatesElement supRat;
-            stream.readByte();
-            supRat.numRates = stream.readByte();
-            for (int i = 0; i < supRat.numRates; i++)
-                supRat.rate[i] = (double)(stream.readByte() & 0x7F) * 0.5;
-            f->setSupportedRates(supRat);
+            f->setSupportedRates(readSupportedRates(stream));
             readHeMgmtElements(stream, f);
             frame = f;
             break;
@@ -1059,12 +1283,7 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserialize(MemoryInputStream& st
             f->setStatusCode((Ieee80211StatusCode)stream.readUint16Be());
             f->setAid(stream.readUint16Be());
 
-            Ieee80211SupportedRatesElement supRat;
-            stream.readByte();
-            supRat.numRates = stream.readByte();
-            for (int i = 0; i < supRat.numRates; i++)
-                supRat.rate[i] = (double)(stream.readByte() & 0x7F) * 0.5;
-            f->setSupportedRates(supRat);
+            f->setSupportedRates(readSupportedRates(stream));
             readHeMgmtElements(stream, f);
             frame = f;
             break;
@@ -1077,12 +1296,7 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserialize(MemoryInputStream& st
             f->setStatusCode((Ieee80211StatusCode)stream.readUint16Be());
             f->setAid(stream.readUint16Be());
 
-            Ieee80211SupportedRatesElement supRat;
-            stream.readByte();
-            supRat.numRates = stream.readByte();
-            for (int i = 0; i < supRat.numRates; i++)
-                supRat.rate[i] = (double)(stream.readByte() & 0x7F) * 0.5;
-            f->setSupportedRates(supRat);
+            f->setSupportedRates(readSupportedRates(stream));
             readHeMgmtElements(stream, f);
             frame = f;
             break;
@@ -1105,12 +1319,7 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserialize(MemoryInputStream& st
             SSID[length] = '\0';
             f->setSSID(SSID);
 
-            Ieee80211SupportedRatesElement supRat;
-            stream.readByte();
-            supRat.numRates = stream.readByte();
-            for (int i = 0; i < supRat.numRates; i++)
-                supRat.rate[i] = (double)(stream.readByte() & 0x7F) * 0.5;
-            f->setSupportedRates(supRat);
+            f->setSupportedRates(readSupportedRates(stream));
             readHeMgmtElements(stream, f);
             frame = f;
             break;
@@ -1133,12 +1342,7 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserialize(MemoryInputStream& st
             SSID[length] = '\0';
             f->setSSID(SSID);
 
-            Ieee80211SupportedRatesElement supRat;
-            stream.readByte();
-            supRat.numRates = stream.readByte();
-            for (int i = 0; i < supRat.numRates; i++)
-                supRat.rate[i] = (double)(stream.readByte() & 0x7F) * 0.5;
-            f->setSupportedRates(supRat);
+            f->setSupportedRates(readSupportedRates(stream));
             readHeMgmtElements(stream, f);
             frame = f;
             break;
@@ -1270,6 +1474,84 @@ const Ptr<Chunk> Ieee80211HeSoundingMgmtFrameSerializer::deserialize(MemoryInput
     }
     else
         throw cRuntimeError("Ieee80211HeSoundingMgmtFrameSerializer: unsupported HE Action code %u", action);
+}
+
+// IEEE Std 802.11-2024 9.6.22.1 through 9.6.22.3. Category 21 is VHT;
+// Action 0 is VHT Compressed Beamforming and Action 1 is Group ID Management.
+static constexpr uint8_t VHT_CATEGORY_CODE = 21;
+static constexpr uint8_t VHT_ACTION_COMPRESSED_BEAMFORMING = 0;
+static constexpr uint8_t VHT_ACTION_GROUP_ID_MANAGEMENT = 1;
+
+void Ieee80211VhtActionFrameBodySerializer::serialize(MemoryOutputStream& stream,
+        const Ptr<const Chunk>& chunk) const
+{
+    if (auto feedback = dynamicPtrCast<const Ieee80211VhtCompressedBeamformingFeedback>(chunk)) {
+        if (feedback->getChunkLength() != B(18) ||
+                feedback->getSoundingDialogTokenNumber() > 63)
+            throw cRuntimeError("Malformed constrained VHT Compressed Beamforming feedback");
+        stream.writeByte(VHT_CATEGORY_CODE);
+        stream.writeByte(VHT_ACTION_COMPRESSED_BEAMFORMING);
+        // Figure 9-186/Table 9-100: Nc=1, Nr=2, 20 MHz, Ng=4,
+        // SU 2-bit psi/4-bit phi codebook, unsegmented first/only report.
+        uint32_t mimoControl = (1u << 3) | (2u << 8) | (1u << 15) |
+                (static_cast<uint32_t>(feedback->getSoundingDialogTokenNumber()) << 18);
+        stream.writeByte(mimoControl & 0xff);
+        stream.writeByte((mimoControl >> 8) & 0xff);
+        stream.writeByte((mimoControl >> 16) & 0xff);
+        stream.writeByte(static_cast<uint8_t>(feedback->getAverageSnr()));
+        for (size_t i = 0; i < feedback->getCompressedBeamformingReportArraySize(); i++)
+            stream.writeByte(feedback->getCompressedBeamformingReport(i));
+    }
+    else if (auto group = dynamicPtrCast<const Ieee80211VhtGroupIdManagement>(chunk)) {
+        if (group->getChunkLength() != B(26))
+            throw cRuntimeError("Malformed VHT Group ID Management body");
+        stream.writeByte(VHT_CATEGORY_CODE);
+        stream.writeByte(VHT_ACTION_GROUP_ID_MANAGEMENT);
+        for (size_t i = 0; i < group->getMembershipStatusArraySize(); i++)
+            stream.writeByte(group->getMembershipStatus(i));
+        for (size_t i = 0; i < group->getUserPositionArraySize(); i++)
+            stream.writeByte(group->getUserPosition(i));
+    }
+    else
+        throw cRuntimeError("Unsupported VHT action-frame body type");
+}
+
+const Ptr<Chunk> Ieee80211VhtActionFrameBodySerializer::deserialize(MemoryInputStream& stream) const
+{
+    if (stream.getRemainingLength() < B(1))
+        throw cRuntimeError("Truncated VHT action-frame body");
+    auto category = stream.readByte();
+    if (category != VHT_CATEGORY_CODE)
+        throw cRuntimeError("Expected VHT action category 21, received %u", category);
+    auto action = stream.readByte();
+    if (action == VHT_ACTION_COMPRESSED_BEAMFORMING) {
+        if (stream.getRemainingLength() != B(16))
+            throw cRuntimeError("Constrained VHT Compressed Beamforming body must be 18 octets");
+        uint32_t mimoControl = stream.readByte();
+        mimoControl |= static_cast<uint32_t>(stream.readByte()) << 8;
+        mimoControl |= static_cast<uint32_t>(stream.readByte()) << 16;
+        constexpr uint32_t REQUIRED_FIELDS = (1u << 3) | (2u << 8) | (1u << 15);
+        constexpr uint32_t TOKEN_MASK = 0x3fu << 18;
+        if ((mimoControl & ~TOKEN_MASK) != REQUIRED_FIELDS)
+            throw cRuntimeError("Unsupported or malformed VHT MIMO Control field");
+        auto feedback = makeShared<Ieee80211VhtCompressedBeamformingFeedback>();
+        feedback->setSoundingDialogTokenNumber((mimoControl >> 18) & 0x3f);
+        feedback->setAverageSnr(static_cast<int8_t>(stream.readByte()));
+        for (size_t i = 0; i < feedback->getCompressedBeamformingReportArraySize(); i++)
+            feedback->setCompressedBeamformingReport(i, stream.readByte());
+        return feedback;
+    }
+    else if (action == VHT_ACTION_GROUP_ID_MANAGEMENT) {
+        if (stream.getRemainingLength() != B(24))
+            throw cRuntimeError("VHT Group ID Management body must be 26 octets");
+        auto group = makeShared<Ieee80211VhtGroupIdManagement>();
+        for (size_t i = 0; i < group->getMembershipStatusArraySize(); i++)
+            group->setMembershipStatus(i, stream.readByte());
+        for (size_t i = 0; i < group->getUserPositionArraySize(); i++)
+            group->setUserPosition(i, stream.readByte());
+        return group;
+    }
+    throw cRuntimeError("Reserved VHT Action value %u", action);
 }
 
 } // namespace ieee80211

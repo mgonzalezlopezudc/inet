@@ -71,6 +71,18 @@ static bool isHeTbPacket(const Packet *packet)
                      packet->peekAtFront()) != nullptr);
 }
 
+bool HeHcf::processHeaderlessNdpIndication(Packet *packet)
+{
+    auto indication = packet->findTag<physicallayer::Ieee80211NdpInd>();
+    if (indication == nullptr || indication->getPhyFormat() !=
+            physicallayer::IEEE80211_NDP_PHY_HE_SU)
+        return false;
+    auto soundingCoordinator = check_and_cast<HeSoundingCoordinator *>(
+            getSubmodule("soundingCoordinator"));
+    return soundingCoordinator->processSoundingFrame(packet, nullptr, mac,
+            modeSet, csiManager, getLinkPhyContext(), tx, this);
+}
+
 void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
 {
     auto soundingCoordinator = check_and_cast<HeSoundingCoordinator *>(getSubmodule("soundingCoordinator"));

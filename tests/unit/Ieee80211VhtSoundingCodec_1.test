@@ -1,0 +1,236 @@
+%description:
+Validate exact packet-level IEEE 802.11 VHT sounding control/action wire formats.
+
+%includes:
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/mac/originator/OriginatorAckPolicy.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/VhtSoundingFs.h"
+#include "inet/linklayer/ieee80211/mac/originator/OriginatorQosAckPolicy.h"
+#include "inet/linklayer/ieee80211/mac/recipient/RecipientAckPolicy.h"
+#include "inet/linklayer/ieee80211/mac/recipient/RecipientQosAckPolicy.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrame_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+%activity:
+// IEEE Std 802.11-2024 Figures 9-75..9-77: subtype 0101, token type 0,
+// and one 16-bit SU STA Info field.
+auto ndpa = makeShared<Ieee80211VhtNdpAnnouncementFrame>();
+ndpa->setDurationField(SimTime(44, SIMTIME_US));
+ndpa->setReceiverAddress(MacAddress("00:00:00:00:00:01"));
+ndpa->setTransmitterAddress(MacAddress("00:00:00:00:00:02"));
+ndpa->setSoundingDialogTokenNumber(37);
+ndpa->setStationsArraySize(1);
+Ieee80211VhtNdpStaInfo sta;
+sta.aid = 0x345;
+sta.muFeedback = false;
+sta.ncIndex = 0;
+ndpa->setStations(0, sta);
+ndpa->setChunkLength(B(19));
+auto trailer = makeShared<Ieee80211MacTrailer>();
+trailer->setFcsMode(FCS_COMPUTED);
+trailer->setFcs(0xC00D);
+Packet ndpaPacket("vht-ndpa", ndpa);
+ndpaPacket.insertAtBack(trailer);
+auto ndpaBytes = ndpaPacket.peekDataAsBytes();
+REQUIRE(ndpaBytes->getChunkLength() == B(23));
+const auto& ndpaRaw = ndpaBytes->getBytes();
+REQUIRE((ndpaRaw[0] & 0xfc) == 0x54); // control subtype 0101
+REQUIRE(ndpaRaw[16] == (37u << 2));
+REQUIRE(ndpaRaw[17] == 0x45 && ndpaRaw[18] == 0x03);
+Packet receivedNdpa("vht-ndpa-rx", ndpaBytes);
+auto decodedNdpa = receivedNdpa.popAtFront<Ieee80211VhtNdpAnnouncementFrame>();
+REQUIRE(decodedNdpa->getStationsArraySize() == 1);
+REQUIRE(decodedNdpa->getSoundingDialogTokenNumber() == 37);
+REQUIRE(decodedNdpa->getStations(0).aid == 0x345);
+REQUIRE(!decodedNdpa->getStations(0).muFeedback);
+REQUIRE(receivedNdpa.getDataLength() == B(4));
+
+// Figure 9-87: fixed 17-byte MAC header plus the ordinary four-byte FCS.
+auto poll = makeShared<Ieee80211VhtBeamformingReportPollFrame>();
+poll->setDurationField(SimTime(20, SIMTIME_US));
+poll->setReceiverAddress(MacAddress("00:00:00:00:00:01"));
+poll->setTransmitterAddress(MacAddress("00:00:00:00:00:02"));
+poll->setFeedbackSegmentRetransmissionBitmap(0x81);
+Packet pollPacket("vht-bf-poll", poll);
+auto pollBytes = pollPacket.peekDataAsBytes();
+REQUIRE(pollBytes->getChunkLength() == B(17));
+REQUIRE((pollBytes->getBytes()[0] & 0xfc) == 0x44); // control subtype 0100
+REQUIRE(pollBytes->getBytes()[16] == 0x81);
+
+// 9.6.22.2, Figure 9-186, Tables 9-100/101/105/106: constrained
+// Nc=1 Nr=2, 20 MHz, Ng=4, SU small codebook, one unsegmented report.
+auto feedback = makeShared<Ieee80211VhtCompressedBeamformingFeedback>();
+feedback->setSoundingDialogTokenNumber(37);
+feedback->setAverageSnr(-12);
+for (size_t i = 0; i < feedback->getCompressedBeamformingReportArraySize(); i++)
+    feedback->setCompressedBeamformingReport(i, i + 1);
+Packet feedbackPacket("vht-feedback", feedback);
+auto feedbackBytes = feedbackPacket.peekDataAsBytes();
+REQUIRE(feedbackBytes->getChunkLength() == B(18));
+const auto& feedbackRaw = feedbackBytes->getBytes();
+REQUIRE(feedbackRaw[0] == 21 && feedbackRaw[1] == 0);
+REQUIRE(feedbackRaw[2] == 0x08 && feedbackRaw[3] == 0x82 && feedbackRaw[4] == 0x94);
+REQUIRE(feedbackRaw[5] == static_cast<uint8_t>(-12));
+Packet receivedFeedback("vht-feedback-rx", feedbackBytes);
+auto decodedFeedback = receivedFeedback.popAtFront<Ieee80211VhtCompressedBeamformingFeedback>(B(18));
+REQUIRE(decodedFeedback->getSoundingDialogTokenNumber() == 37);
+REQUIRE(decodedFeedback->getAverageSnr() == -12);
+REQUIRE(decodedFeedback->getCompressedBeamformingReport(11) == 12);
+
+auto noAckHeader = makeShared<Ieee80211MgmtHeader>();
+noAckHeader->setType(ST_NOACKACTION);
+noAckHeader->setReceiverAddress(MacAddress("00:00:00:00:00:01"));
+noAckHeader->setTransmitterAddress(MacAddress("00:00:00:00:00:02"));
+noAckHeader->setAddress3(MacAddress("00:00:00:00:00:03"));
+Packet feedbackEnvelope("vht-feedback-envelope", noAckHeader);
+feedbackEnvelope.insertAtBack(feedback);
+feedbackEnvelope.insertAtBack(trailer);
+auto feedbackEnvelopeBytes = feedbackEnvelope.peekDataAsBytes();
+REQUIRE((feedbackEnvelopeBytes->getBytes()[0] & 0xfc) == 0xe0);
+Packet decodedFeedbackEnvelope("vht-feedback-envelope-rx", feedbackEnvelopeBytes);
+auto decodedNoAckHeader = decodedFeedbackEnvelope.popAtFront<Ieee80211MgmtHeader>(B(24));
+REQUIRE(decodedNoAckHeader->getType() == ST_NOACKACTION);
+auto decodedEnvelopeFeedback = decodedFeedbackEnvelope.popAtFront<Ieee80211VhtCompressedBeamformingFeedback>(B(18));
+REQUIRE(decodedEnvelopeFeedback->getSoundingDialogTokenNumber() == 37);
+
+const MacAddress local("00:00:00:00:00:01");
+const MacAddress peer("00:00:00:00:00:02");
+auto makeFeedbackResponse = [&](const MacAddress& sender, uint8_t token,
+        Ieee80211FrameType type = ST_NOACKACTION, uint8_t category = 21) {
+    auto header = makeShared<Ieee80211ActionFrame>();
+    header->setType(type);
+    header->setCategory(category);
+    header->setReceiverAddress(local);
+    header->setTransmitterAddress(sender);
+    auto report = makeShared<Ieee80211VhtCompressedBeamformingFeedback>();
+    report->setSoundingDialogTokenNumber(token);
+    auto packet = new Packet("validator-feedback", header);
+    packet->insertAtBack(report);
+    return packet;
+};
+auto matchingFeedback = makeFeedbackResponse(peer, 37);
+REQUIRE(VhtSoundingFs::matchesFeedback(matchingFeedback, local, peer, 37));
+delete matchingFeedback;
+auto timelyFeedback = makeFeedbackResponse(peer, 37);
+auto timelyProvenance = timelyFeedback->addTag<physicallayer::Ieee80211PhyProvenanceInd>();
+timelyProvenance->setStartTime(SimTime(100, SIMTIME_US));
+REQUIRE(VhtSoundingFs::matchesFeedback(timelyFeedback, local, peer, 37,
+        SimTime(100, SIMTIME_US), SimTime(9, SIMTIME_US)));
+delete timelyFeedback;
+auto delayedFeedback = makeFeedbackResponse(peer, 37);
+auto delayedProvenance = delayedFeedback->addTag<physicallayer::Ieee80211PhyProvenanceInd>();
+delayedProvenance->setStartTime(SimTime(110, SIMTIME_US));
+REQUIRE(!VhtSoundingFs::matchesFeedback(delayedFeedback, local, peer, 37,
+        SimTime(100, SIMTIME_US), SimTime(9, SIMTIME_US)));
+delete delayedFeedback;
+auto feedbackWithoutProvenance = makeFeedbackResponse(peer, 37);
+REQUIRE(!VhtSoundingFs::matchesFeedback(feedbackWithoutProvenance, local, peer, 37,
+        SimTime(100, SIMTIME_US), SimTime(9, SIMTIME_US)));
+delete feedbackWithoutProvenance;
+auto wrongToken = makeFeedbackResponse(peer, 38);
+REQUIRE(!VhtSoundingFs::matchesFeedback(wrongToken, local, peer, 37));
+delete wrongToken;
+auto wrongSender = makeFeedbackResponse(MacAddress("00:00:00:00:00:09"), 37);
+REQUIRE(!VhtSoundingFs::matchesFeedback(wrongSender, local, peer, 37));
+delete wrongSender;
+auto wrongOrder = makeFeedbackResponse(peer, 37, ST_ACTION);
+REQUIRE(!VhtSoundingFs::matchesFeedback(wrongOrder, local, peer, 37));
+delete wrongOrder;
+auto wrongCategory = makeFeedbackResponse(peer, 37, ST_NOACKACTION, 20);
+REQUIRE(!VhtSoundingFs::matchesFeedback(wrongCategory, local, peer, 37));
+delete wrongCategory;
+
+bool rejectedMalformedMimoControl = false;
+try {
+    auto malformedRaw = feedbackRaw;
+    malformedRaw[2] |= 1; // unsupported Nc=2
+    Packet malformed("malformed-vht-feedback", makeShared<BytesChunk>(malformedRaw));
+    malformed.popAtFront<Ieee80211VhtCompressedBeamformingFeedback>(B(18));
+}
+catch (const cRuntimeError&) {
+    rejectedMalformedMimoControl = true;
+}
+REQUIRE(rejectedMalformedMimoControl);
+
+bool rejectedReservedSuNc = false;
+try {
+    auto invalid = makeShared<Ieee80211VhtNdpAnnouncementFrame>();
+    invalid->setSoundingDialogTokenNumber(1);
+    invalid->setStationsArraySize(1);
+    Ieee80211VhtNdpStaInfo invalidSta;
+    invalidSta.aid = 1;
+    invalidSta.muFeedback = false;
+    invalidSta.ncIndex = 1;
+    invalid->setStations(0, invalidSta);
+    invalid->setChunkLength(B(19));
+    Packet invalidPacket("invalid-vht-ndpa", invalid);
+    invalidPacket.peekDataAsBytes();
+}
+catch (const cRuntimeError&) {
+    rejectedReservedSuNc = true;
+}
+REQUIRE(rejectedReservedSuNc);
+
+auto group = makeShared<Ieee80211VhtGroupIdManagement>();
+for (size_t i = 0; i < group->getMembershipStatusArraySize(); i++)
+    group->setMembershipStatus(i, 0xa0 + i);
+for (size_t i = 0; i < group->getUserPositionArraySize(); i++)
+    group->setUserPosition(i, i);
+Packet groupPacket("vht-group-id", group);
+auto groupBytes = groupPacket.peekDataAsBytes();
+REQUIRE(groupBytes->getChunkLength() == B(26));
+REQUIRE(groupBytes->getBytes()[0] == 21 && groupBytes->getBytes()[1] == 1);
+
+auto actionHeader = makeShared<Ieee80211ActionFrame>();
+actionHeader->setType(ST_ACTION);
+actionHeader->setCategory(21);
+actionHeader->setChunkLength(B(24));
+actionHeader->setReceiverAddress(MacAddress("00:00:00:00:00:01"));
+actionHeader->setTransmitterAddress(MacAddress("00:00:00:00:00:02"));
+actionHeader->setAddress3(MacAddress("00:00:00:00:00:03"));
+Packet groupEnvelope("vht-group-envelope", actionHeader);
+groupEnvelope.insertAtBack(group);
+auto groupTrailer = makeShared<Ieee80211MacTrailer>();
+groupTrailer->setFcsMode(FCS_COMPUTED);
+groupTrailer->setFcs(0xC00D);
+groupEnvelope.insertAtBack(groupTrailer);
+REQUIRE(actionHeader->getCategory() == 21);
+auto groupEnvelopeBytes = groupEnvelope.peekDataAsBytes();
+REQUIRE((groupEnvelopeBytes->getBytes()[0] & 0xfc) == 0xd0);
+REQUIRE(groupEnvelopeBytes->getBytes()[24] == 21);
+REQUIRE(groupEnvelopeBytes->getBytes()[25] == 1);
+Packet decodedGroupEnvelope("vht-group-envelope-rx", groupEnvelopeBytes);
+auto decodedAction = dynamicPtrCast<const Ieee80211ActionFrame>(
+        decodedGroupEnvelope.popAtFront<Ieee80211MacHeader>());
+REQUIRE(decodedAction->getType() == ST_ACTION && decodedAction->getCategory() == 21);
+auto decodedGroup = decodedGroupEnvelope.popAtFront<Ieee80211VhtGroupIdManagement>(B(26));
+REQUIRE(decodedGroup->getMembershipStatus(0) == 0xa0);
+
+auto recipientAckPolicy = new RecipientAckPolicy();
+auto recipientQosAckPolicy = new RecipientQosAckPolicy();
+auto originatorAckPolicy = new OriginatorAckPolicy();
+auto originatorQosAckPolicy = new OriginatorQosAckPolicy();
+REQUIRE(!recipientAckPolicy->isAckNeeded(noAckHeader));
+REQUIRE(!recipientQosAckPolicy->isAckNeeded(noAckHeader));
+REQUIRE(!originatorAckPolicy->isAckNeeded(noAckHeader));
+REQUIRE(!originatorQosAckPolicy->isAckNeeded(noAckHeader));
+REQUIRE(recipientAckPolicy->isAckNeeded(actionHeader));
+REQUIRE(recipientQosAckPolicy->isAckNeeded(actionHeader));
+REQUIRE(originatorAckPolicy->isAckNeeded(actionHeader));
+REQUIRE(originatorQosAckPolicy->isAckNeeded(actionHeader));
+delete recipientAckPolicy;
+delete recipientQosAckPolicy;
+delete originatorAckPolicy;
+delete originatorQosAckPolicy;
+EV << "VHT sounding control/action codecs passed.\n";
+
+%contains: stdout
+VHT sounding control/action codecs passed.

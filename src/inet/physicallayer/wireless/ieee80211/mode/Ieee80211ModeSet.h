@@ -15,6 +15,8 @@
 namespace inet {
 namespace physicallayer {
 
+class Ieee80211Channel;
+
 enum class Ieee80211PhyFamily {
     UNSPECIFIED,
     DSSS,
@@ -38,6 +40,12 @@ enum class Ieee80211OperatingBand {
     BAND_2_4_GHZ,
     BAND_5_GHZ,
     BAND_6_GHZ,
+};
+
+enum class Ieee80211Primary80ChannelPosition {
+    UNSPECIFIED,
+    LOWER,
+    UPPER,
 };
 
 enum Ieee80211ChannelWidthMask {
@@ -91,6 +99,8 @@ class INET_API Ieee80211ModeSet : public IPrintableObject, public cObject
 
     const char *getName() const override { return name.c_str(); }
     const char *getProfileName() const { return profileName.c_str(); }
+    static bool isHtOrVhtMode(const IIeee80211Mode *mode);
+    static bool isPeerNegotiatedFecMode(const IIeee80211Mode *mode);
     Ieee80211OperatingBand getOperatingBand() const { return operatingBand; }
     uint8_t getSupportedChannelWidths() const { return supportedChannelWidths; }
     bool isBandAware() const { return bandAware; }
@@ -107,6 +117,9 @@ class INET_API Ieee80211ModeSet : public IPrintableObject, public cObject
     Ieee80211SupportRequirement getSupportRequirement(const IIeee80211Mode *mode) const { return entries[getModeIndex(mode)].supportRequirement; }
 
     const IIeee80211Mode *findHeMode(int mcs, int numSpatialStreams, Hz bandwidth, bool ldpc) const;
+    const IIeee80211Mode *findVhtMode(int mcs, int numSpatialStreams, Hz bandwidth, bool ldpc) const;
+    const IIeee80211Mode *getVhtSuNdpMode(const IIeee80211Mode *referenceMode,
+            int numberOfSpaceTimeStreams) const;
 
     const IIeee80211Mode *findMode(bps bitrate, Hz bandwidth = Hz(NaN), int numSpatialStreams = -1) const;
     const IIeee80211Mode *findMode(bps minBitrate, bps maxBitrate, Hz bandwidth = Hz(NaN), int numSpatialStreams = -1) const;
@@ -119,6 +132,8 @@ class INET_API Ieee80211ModeSet : public IPrintableObject, public cObject
     const IIeee80211Mode *getSlowestMandatoryMode(Hz bandwidth = Hz(NaN)) const;
     const IIeee80211Mode *getFastestMandatoryMode(Hz bandwidth = Hz(NaN)) const;
     const IIeee80211Mode *getFastestBasicMode(Hz operatingChannelWidth = Hz(NaN)) const;
+    const IIeee80211Mode *getFastestLegacyBasicMode() const;
+    bps getNonHtReferenceRate(const IIeee80211Mode *mode) const;
     const IIeee80211Mode *getSlowerMandatoryMode(const IIeee80211Mode *mode) const;
     const IIeee80211Mode *getFasterMandatoryMode(const IIeee80211Mode *mode) const;
 
@@ -150,6 +165,8 @@ class INET_API IIeee80211ModeSetProvider
     virtual ~IIeee80211ModeSetProvider() = default;
     virtual const Ieee80211ModeSet *getModeSet() const = 0;
     virtual const IIeee80211Band *getBand() const = 0;
+    virtual const Ieee80211Channel *getChannel() const = 0;
+    virtual Ieee80211Primary80ChannelPosition getPrimary80ChannelPosition() const = 0;
     virtual Hz getChannelWidth() const = 0;
     virtual Hz getModeBandwidth() const = 0;
 };

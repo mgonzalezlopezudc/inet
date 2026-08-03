@@ -20,8 +20,12 @@ simple Ieee80211Mib extends SimpleModule
 {
     parameters:
         @class(Ieee80211Mib);
+        string radioModule = default(""); // IEEE 802.11 mode-set provider; assigned by Ieee80211Interface
+        string bssBasicRateCodes = default(""); // Space-separated 500-kbit/s codes; empty selects the PHY mandatory legacy rates
         bool vhtLdpc = default(false); // Advertises and enables VHT LDPC when the peer also supports it
         bool htLdpc = default(false); // Advertises and enables HT LDPC when the peer also supports it
+        int htMaxNss = default(4); // Maximum HT spatial streams advertised by this MIB (1..4)
+        int htProtectionMode = default(0); // HT Protection: 0=no protection, 1=nonmember, 2=20 MHz, 3=non-HT mixed
         // HE features are opt-in so existing configurations retain BCC and
         // the unextended PPDU geometry.
         bool heLdpc = default(true); // Advertises and enables HE LDPC when the peer also supports it
@@ -70,7 +74,12 @@ simple Ieee80211Mib extends SimpleModule
         int vhtMaxAmpduLengthExponent = default(7); // VHT maximum A-MPDU-length exponent advertised to peers
         bool vhtBeamforming = default(false); // Enables VHT transmit beamforming capability negotiation
         bool vhtMuMimo = default(false); // Enables VHT multi-user MIMO capability negotiation
-        double vhtOperatingChannelWidth @unit(Hz) = default(20MHz); // VHT operating width advertised to peers
+        bool vhtSuBeamformer = default(false);
+        bool vhtSuBeamformee = default(false);
+        int vhtBeamformeeSts = default(2); // Maximum VHT sounding NSTS accepted when SU beamformee
+        int vhtSoundingDimensions = default(2); // Maximum VHT sounding NSTS transmitted when SU beamformer
+        bool vhtMuBeamformer = default(false);
+        bool vhtMuBeamformee = default(false);
         displayStringTextFormat = default("Address: {address}{ssidStr}\n{modeStr}{stationTypeStr}{qosStr}{associatedStr}");
         @display("i=block/table");
 }

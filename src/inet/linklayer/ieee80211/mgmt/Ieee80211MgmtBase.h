@@ -34,8 +34,7 @@ class INET_API Ieee80211MgmtBase : public OperationalBase, public cListener
     ModuleRefByPar<Ieee80211Mib> mib;
     ModuleRefByPar<IInterfaceTable> interfaceTable;
     NetworkInterface *myIface = nullptr;
-    physicallayer::Ieee80211ModeSet *modeSet = nullptr;
-    Ieee80211SupportedRatesElement supportedRates;
+    const physicallayer::Ieee80211ModeSet *modeSet = nullptr;
 
     // statistics
     long numMgmtFramesReceived;
@@ -62,7 +61,12 @@ class INET_API Ieee80211MgmtBase : public OperationalBase, public cListener
     virtual void dropManagementFrame(Packet *frame);
 
     virtual bool isHeManagementSupported();
+    virtual bool isHtManagementSupported();
+    virtual bool isVhtManagementSupported();
     virtual bool isEhtManagementSupported();
+    virtual void addLegacyRateElements(const Ptr<Ieee80211MgmtFrame>& frame) const;
+    virtual B getLegacyRateElementsLength(const Ptr<const Ieee80211MgmtFrame>& frame) const;
+    virtual void requireDetailedLegacyRateSupport() const;
 
     /** Dispatch to frame processing methods according to frame type */
     virtual void processFrame(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header);

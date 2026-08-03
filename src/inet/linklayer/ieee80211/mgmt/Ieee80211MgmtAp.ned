@@ -28,7 +28,7 @@ simple Ieee80211MgmtAp extends SimpleModule like IIeee80211Mgmt
         double beaconInterval @unit(s) = default(100ms);
         int numAuthSteps = default(4); // Use 2 for Open System auth, 4 for WEP
         string interfaceTableModule;
-        string radioModule = default("^.radio");   // The path to the Radio module  //FIXME remove default value
+        string radioModule;             // The path to the IEEE 802.11 mode-set provider
         string mibModule;
         string macModule;               // The path to the MAC module
         string twtModule = default("^.twt");

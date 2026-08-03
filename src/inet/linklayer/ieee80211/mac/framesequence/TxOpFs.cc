@@ -18,7 +18,9 @@ bool canUseHtImplicitBlockAck(FrameSequenceContext *context,
         Packet *frameToTransmit,
         const Ptr<const Ieee80211DataHeader>& dataHeader)
 {
+    auto txop = context->getQoSContext()->txopProcedure;
     if (!context->getUseHtImplicitBlockAck() ||
+            !txop->allowsMpduAggregation() ||
             dataHeader == nullptr ||
             dataHeader->getType() != ST_DATA_WITH_QOS ||
             dataHeader->getReceiverAddress().isMulticast() ||
@@ -116,7 +118,8 @@ int TxOpFs::selectTxOpSequence(AlternativesFs *frameSequence, FrameSequenceConte
 bool TxOpFs::isRtsCtsNeeded(OptionalFs *frameSequence, FrameSequenceContext *context)
 {
     auto protectedFrame = context->getInProgressFrames()->getFrameToTransmit();
-    return context->getRtsPolicy()->isRtsNeeded(protectedFrame, protectedFrame->peekAtFront<Ieee80211MacHeader>());
+    return context->getQoSContext()->txopProcedure->isInitialProtectionPending() ||
+            context->getRtsPolicy()->isRtsNeeded(protectedFrame, protectedFrame->peekAtFront<Ieee80211MacHeader>());
 }
 
 bool TxOpFs::isBlockAckReqRtsCtsNeeded(OptionalFs *frameSequence, FrameSequenceContext *context)

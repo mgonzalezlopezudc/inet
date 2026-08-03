@@ -12,15 +12,23 @@
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211VhtPacketRadio.h"
+#include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211HePacketRadio.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
 
 namespace inet {
 namespace physicallayer {
 
-class INET_API Ieee80211Radio : public FlatRadioBase, public IIeee80211ModeSetProvider
+class INET_API Ieee80211Radio : public FlatRadioBase, public IIeee80211ModeSetProvider, public IIeee80211VhtPacketRadio, public IIeee80211HePacketRadio
 {
   public:
+    virtual int getVhtAntennaCount() const override;
+    virtual Hz getVhtChannelWidth() const override;
+    virtual Ieee80211VhtMuRxSelection getVhtMuRxSelection() const override { return vhtMuRxSelection; }
+    virtual void setVhtMuRxSelection(const Ieee80211VhtMuRxSelection& selection) override { vhtMuRxSelection = selection; }
+    virtual uint8_t getHeBssColor() const override { return heBssColor; }
+    virtual void setHeBssColor(uint8_t value) override { heBssColor = value; }
     /**
      * This signal is emitted every time the radio channel changes.
      * The signal value is the new radio channel.
@@ -41,6 +49,7 @@ class INET_API Ieee80211Radio : public FlatRadioBase, public IIeee80211ModeSetPr
     static const Ptr<const Ieee80211PhyHeader> peekIeee80211PhyHeaderAtFront(const Packet *packet, b length = b(-1), int flags = 0);
 
   protected:
+    Ieee80211Primary80ChannelPosition primary80ChannelPosition = Ieee80211Primary80ChannelPosition::UNSPECIFIED;
     FcsMode fcsMode = FCS_MODE_UNDEFINED;
     const Ieee80211ModeSet *modeSet = nullptr;
     const IIeee80211Band *band = nullptr;
@@ -49,6 +58,8 @@ class INET_API Ieee80211Radio : public FlatRadioBase, public IIeee80211ModeSetPr
     bool listeningChangePending = false;
     bool channelChangePending = false;
     int pendingChannelNumber = -1;
+    Ieee80211VhtMuRxSelection vhtMuRxSelection;
+    uint8_t heBssColor = 0;
 
   protected:
     virtual void initialize(int stage) override;
@@ -71,6 +82,8 @@ class INET_API Ieee80211Radio : public FlatRadioBase, public IIeee80211ModeSetPr
 
     virtual const Ieee80211ModeSet *getModeSet() const override { return modeSet; }
     virtual const IIeee80211Band *getBand() const override { return band; }
+    virtual const Ieee80211Channel *getChannel() const override;
+    virtual Ieee80211Primary80ChannelPosition getPrimary80ChannelPosition() const override { return primary80ChannelPosition; }
     virtual Hz getChannelWidth() const override;
     virtual Hz getModeBandwidth() const override;
 

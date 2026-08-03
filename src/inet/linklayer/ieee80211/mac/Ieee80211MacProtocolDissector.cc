@@ -13,6 +13,7 @@
 #include "inet/linklayer/ieee802/Ieee802EpdHeader_m.h"
 #include "inet/linklayer/ieee80211/llc/LlcProtocolTag_m.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrame_m.h"
 #include "inet/linklayer/ieee8022/Ieee8022LlcHeader_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 
@@ -243,8 +244,38 @@ void Ieee80211MacProtocolDissector::dissect(Packet *packet, const Protocol *prot
         else
             callback.dissectPacket(packet, computeLlcProtocol(packet));
     }
-    else if (dynamicPtrCast<const inet::ieee80211::Ieee80211ActionFrame>(header)) {
-        if (packet->getDataLength() != b(0)) {
+    else if (header->getType() == ieee80211::ST_NOACKACTION && packet->getDataLength() >= B(2)) {
+        auto bytes = packet->peekDataAsBytes()->getBytes();
+        if (bytes[0] == 21 && bytes[1] == 0) {
+            if (packet->getDataLength() != B(18)) {
+                callback.markIncorrect();
+                visitRemainingData(packet, callback, &Protocol::ieee80211Mgmt);
+            }
+            else {
+                auto body = packet->popAtFront<ieee80211::Ieee80211VhtCompressedBeamformingFeedback>(B(18), tolerantParsingFlags);
+                if (isMalformed(body))
+                    callback.markIncorrect();
+                callback.visitChunk(body, &Protocol::ieee80211Mgmt);
+            }
+        }
+        else
+            visitRemainingData(packet, callback, &Protocol::ieee80211Mgmt);
+    }
+    else if (auto action = dynamicPtrCast<const inet::ieee80211::Ieee80211ActionFrame>(header)) {
+        if (action->getCategory() == 21 && packet->getDataLength() >= B(2)) {
+            auto bytes = packet->peekDataAsBytes()->getBytes();
+            if (bytes[0] == 21 && bytes[1] == 1 && packet->getDataLength() == B(26)) {
+                auto body = packet->popAtFront<ieee80211::Ieee80211VhtGroupIdManagement>(B(26), tolerantParsingFlags);
+                if (isMalformed(body))
+                    callback.markIncorrect();
+                callback.visitChunk(body, &Protocol::ieee80211Mgmt);
+            }
+            else {
+                callback.markIncorrect();
+                visitRemainingData(packet, callback, &Protocol::ieee80211Mgmt);
+            }
+        }
+        else if (packet->getDataLength() != b(0)) {
             const auto& body = packet->popAtFront(packet->getDataLength(), tolerantParsingFlags);
             callback.visitChunk(body, &Protocol::ieee80211Mac);
         }

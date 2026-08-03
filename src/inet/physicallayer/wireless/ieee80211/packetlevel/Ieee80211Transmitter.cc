@@ -44,13 +44,11 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211FecCodingReq.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
-#include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
-#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
-#include "inet/networklayer/common/NetworkInterface.h"
 
 namespace inet {
 
@@ -167,64 +165,10 @@ const IIeee80211Mode *Ieee80211Transmitter::computeTransmissionMode(const Packet
     if (transmissionMode == nullptr)
         throw cRuntimeError("Transmission mode is undefined");
 
-    // Map to LDPC variant if enabled/negotiated. IEEE Std 802.11-2024 uses the
-    // HT FEC_CODING field (Table 19-11) and VHT/HE TXVECTOR FEC_CODING fields
-    // (Table 21-1 / Table 27-1); the packet-level model chooses the matching
-    // cached mode before airtime calculation.
-    cModule *nic = getContainingNicModule(this);
-    auto mib = nic ? dynamic_cast<const ieee80211::Ieee80211Mib *>(nic->getSubmodule("mib")) : nullptr;
-    if (mib != nullptr) {
-        Ptr<const ieee80211::Ieee80211MacHeader> macHeader;
-        if (packet->getDataLength() > b(0)) {
-            auto frontChunk = packet->peekAtFront();
-            if (dynamic_cast<const Ieee80211PhyHeader *>(frontChunk.get()) != nullptr) {
-                auto packetCopy = packet->dup();
-                packetCopy->popAtFront<Ieee80211PhyHeader>();
-                if (packetCopy->getDataLength() > b(0)) {
-                    auto innerFront = packetCopy->peekAtFront();
-                    if (dynamic_cast<const ieee80211::Ieee80211MacHeader *>(innerFront.get()) != nullptr) {
-                        macHeader = packetCopy->peekAtFront<ieee80211::Ieee80211MacHeader>();
-                    }
-                }
-                delete packetCopy;
-            }
-            else if (dynamic_cast<const ieee80211::Ieee80211MacHeader *>(frontChunk.get()) != nullptr) {
-                macHeader = packet->peekAtFront<ieee80211::Ieee80211MacHeader>();
-            }
-        }
-        MacAddress receiverAddress = macHeader != nullptr ? macHeader->getReceiverAddress() : MacAddress::UNSPECIFIED_ADDRESS;
-
-        bool useLdpc = false;
-        if (dynamic_cast<const Ieee80211HtMode *>(transmissionMode) != nullptr) {
-            useLdpc = mib->localHtLdpc;
-        }
-        else if (dynamic_cast<const Ieee80211VhtMode *>(transmissionMode) != nullptr) {
-            if (receiverAddress != MacAddress::UNSPECIFIED_ADDRESS && !receiverAddress.isMulticast()) {
-                auto negotiatedVht = mib->findNegotiatedVhtCapabilities(receiverAddress);
-                useLdpc = negotiatedVht ? negotiatedVht->intersection.ldpc : mib->localVhtCapabilities.ldpc;
-            }
-            else {
-                useLdpc = mib->localVhtCapabilities.ldpc;
-            }
-        }
-        else if (dynamic_cast<const Ieee80211HeMode *>(transmissionMode) != nullptr) {
-            if (receiverAddress != MacAddress::UNSPECIFIED_ADDRESS && !receiverAddress.isMulticast()) {
-                auto negotiatedHe = mib->findNegotiatedHeCapabilities(receiverAddress);
-                useLdpc = negotiatedHe ? negotiatedHe->mutual.ldpc : mib->localHeCapabilities.ldpc;
-            }
-            else {
-                useLdpc = mib->localHeCapabilities.ldpc;
-            }
-        }
-        else if (dynamic_cast<const Ieee80211EhtMode *>(transmissionMode) != nullptr) {
-            if (receiverAddress != MacAddress::UNSPECIFIED_ADDRESS && !receiverAddress.isMulticast()) {
-                auto negotiatedEht = mib->findNegotiatedEhtCapabilities(receiverAddress);
-                useLdpc = negotiatedEht ? negotiatedEht->intersection.ldpc : mib->localEhtCapabilities.ldpc;
-            }
-            else
-                useLdpc = mib->localEhtCapabilities.ldpc;
-        }
-
+    // The MAC supplies only peer-negotiated permission. The PHY remains the
+    // authority that maps the selected HT/VHT mode to its BCC or LDPC variant.
+    if (auto fecCodingReq = const_cast<Packet *>(packet)->findTag<Ieee80211FecCodingReq>()) {
+        bool useLdpc = fecCodingReq->getLdpcAllowed();
         if (auto htMode = dynamic_cast<const Ieee80211HtMode *>(transmissionMode)) {
             auto mcs = htMode->getDataMode()->getModulationAndCodingScheme();
             auto preambleFormat = htMode->getPreambleMode()->getPreambleFormat();
@@ -253,9 +197,6 @@ const IIeee80211Mode *Ieee80211Transmitter::computeTransmissionMode(const Packet
             auto centerFreqMode = ehtMode->getCenterFrequencyMode();
             transmissionMode = Ieee80211EhtCompliantModes::getCompliantMode(mcs, centerFreqMode, preambleFormat, gi, useLdpc);
         }
-
-        if (!mib->isEhtModeAllowedForPeer(transmissionMode, receiverAddress))
-            throw cRuntimeError("Selected EHT mode is not allowed by the effective peer capability and operation state");
     }
 
     return transmissionMode;
@@ -350,6 +291,32 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     int requiredSpatialStreams = transmissionMode->getDataMode()->getNumberOfSpatialStreams();
     std::shared_ptr<const Ieee80211HeTxVector> heTxVector;
     std::shared_ptr<const Ieee80211HePpduLayout> hePpduLayout;
+    std::shared_ptr<const Ieee80211VhtTxVector> vhtTxVector;
+    if (auto vhtHeader = dynamicPtrCast<const Ieee80211VhtPhyHeader>(phyHeader)) {
+        if (vhtHeader->getSignalingValid()) {
+            if (auto handoff = packet->findTag<Ieee80211VhtTxVectorReq>()) {
+                vhtTxVector = handoff->getTxVector();
+                if (vhtTxVector == nullptr || !vhtTxVector->isMu() ||
+                        vhtTxVector->getGroupId() != vhtHeader->getGroupId() ||
+                        vhtTxVector->getPsduLength() != B(vhtHeader->getLengthField()))
+                    throw cRuntimeError("VHT transmission has a mismatched canonical MU TXVECTOR handoff");
+                requiredSpatialStreams = 2;
+            }
+            else {
+                auto vhtRequest = packet->findTag<Ieee80211VhtTransmissionTag>();
+                auto gainDb = vhtHeader->getBeamformed() && vhtRequest != nullptr ?
+                        vhtRequest->getBeamformingGainDb() : 0;
+                vhtTxVector = std::make_shared<const Ieee80211VhtTxVector>(
+                        transmissionBandwidth,
+                        B(vhtHeader->getLengthField()), vhtHeader->getGroupId(),
+                        vhtHeader->getNumberOfSpaceTimeStreams(),
+                        vhtHeader->getMcs(), vhtHeader->getCoding() != 0,
+                        vhtHeader->getLdpcExtraOfdmSymbol(),
+                        vhtHeader->getPartialAid(), vhtHeader->getBeamformed(),
+                        gainDb);
+            }
+        }
+    }
     if (heMuHeader != nullptr) {
         auto handoff = packet->findTag<Ieee80211HeTxVectorReq>();
         if (handoff == nullptr || !handoff->getTxVector() || !handoff->getPpduLayout())
@@ -380,6 +347,17 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     simtime_t duration = transmissionMode->getDuration(B(phyHeader->getLengthField()));
     simtime_t preambleDuration = transmissionMode->getPreambleMode()->getDuration();
     simtime_t headerDuration = transmissionMode->getHeaderMode()->getDuration();
+    if (vhtTxVector != nullptr && vhtTxVector->isMu()) {
+        duration = vhtTxVector->getCommonDuration();
+        preambleDuration = vhtTxVector->getPreambleDuration();
+        headerDuration = vhtTxVector->getHeaderDuration();
+    }
+    if (vhtTxVector != nullptr && vhtTxVector->isNdp()) {
+        // IEEE Std 802.11-2024 Figure 21-28: a VHT NDP contains the complete
+        // VHT preamble (including VHT-SIG-B) and no Data field.
+        duration = preambleDuration;
+        headerDuration = SIMTIME_ZERO;
+    }
     // For non-HE modes, the mode classes implement the PHY-specific TXTIME
     // formulas: DSSS 15.4.6.7, HR/DSSS 16.3.4, OFDM 17.4.3, ERP 18.5.3.2,
     // HT 19.4.3, and VHT 21.4.3. The analog model then splits the result into
@@ -533,7 +511,7 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     }
     auto triggerCorrelation = packet->findTag<Ieee80211HeTriggerCorrelationTag>();
     auto triggerCorrelationId = triggerCorrelation == nullptr ? 0 : triggerCorrelation->getTriggerId();
-    return new Ieee80211Transmission(transmitter, packet, startTime, endTime, preambleDuration, headerDuration, dataDuration, startPosition, endPosition, startOrientation, endOrientation, nullptr, nullptr, nullptr, nullptr, analogModel, transmissionMode, transmissionChannel, heTxVector, hePpduLayout, triggerCorrelationId);
+    return new Ieee80211Transmission(transmitter, packet, startTime, endTime, preambleDuration, headerDuration, dataDuration, startPosition, endPosition, startOrientation, endOrientation, nullptr, nullptr, nullptr, nullptr, analogModel, transmissionMode, transmissionChannel, heTxVector, hePpduLayout, triggerCorrelationId, vhtTxVector);
 }
 
 } // namespace physicallayer

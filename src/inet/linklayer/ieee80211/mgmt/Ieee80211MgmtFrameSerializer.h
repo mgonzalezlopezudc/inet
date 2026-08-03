@@ -42,9 +42,18 @@ class INET_API Ieee80211HeSoundingMgmtFrameSerializer : public FieldsChunkSerial
     Ieee80211HeSoundingMgmtFrameSerializer() : FieldsChunkSerializer() {}
 };
 
+class INET_API Ieee80211VhtActionFrameBodySerializer : public FieldsChunkSerializer
+{
+  protected:
+    virtual void serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const override;
+    virtual const Ptr<Chunk> deserialize(MemoryInputStream& stream) const override;
+
+  public:
+    Ieee80211VhtActionFrameBodySerializer() : FieldsChunkSerializer() {}
+};
+
 } // namespace ieee80211
 
 } // namespace inet
 
 #endif
-

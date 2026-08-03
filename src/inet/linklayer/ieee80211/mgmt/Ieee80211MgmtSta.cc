@@ -18,6 +18,7 @@
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211SubtypeTag_m.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211HeMgmtElements.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211HtVhtMgmtElements.h"
 #include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadioMedium.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/RadioControlInfo_m.h"
@@ -112,6 +113,8 @@ void Ieee80211MgmtSta::initialize(int stage)
         WATCH(assocAP);
         WATCH(apList);
     }
+    else if (stage == INITSTAGE_LINK_LAYER)
+        requireDetailedLegacyRateSupport();
 }
 
 void Ieee80211MgmtSta::handleTimer(cMessage *msg)
@@ -420,13 +423,21 @@ void Ieee80211MgmtSta::startAssociation(ApInfo *ap, simtime_t timeout)
     const auto& body = makeShared<Ieee80211AssociationRequestFrame>();
     body->setTransmitPowerDbm(par("associationTransmitPower"));
     body->setSSID(ap->ssid.c_str());
-    body->setSupportedRates(supportedRates);
+    addLegacyRateElements(body);
     if (isHeManagementSupported()) {
         body->setHeCapabilitiesPresent(true);
         body->setHeCapabilities(makeHeCapabilitiesElement(mib->localHeCapabilities));
     }
+    if (isHtManagementSupported()) {
+        body->setHtCapabilitiesPresent(true);
+        body->setHtCapabilities(makeHtCapabilitiesElement(mib->localHtCapabilities));
+    }
+    if (isVhtManagementSupported()) {
+        body->setVhtCapabilitiesPresent(true);
+        body->setVhtCapabilities(makeVhtCapabilitiesElement(mib->localVhtCapabilities));
+    }
 
-    body->setChunkLength(B(2 + 2 + (2 + strlen(body->getSSID())) + (2 + body->getSupportedRates().numRates)) + getHeMgmtElementsLength(body));
+    body->setChunkLength(B(2 + 2 + (2 + strlen(body->getSSID()))) + getLegacyRateElementsLength(body) + getHeMgmtElementsLength(body) + getHtVhtMgmtElementsLength(body));
     sendManagementFrame("Assoc", body, ST_ASSOCIATIONREQUEST, ap->address);
 
     // schedule timeout
@@ -449,14 +460,22 @@ void Ieee80211MgmtSta::startReassociation(ApInfo *ap, simtime_t timeout)
     const auto& body = makeShared<Ieee80211ReassociationRequestFrame>();
     body->setTransmitPowerDbm(par("associationTransmitPower"));
     body->setSSID(ap->ssid.c_str());
-    body->setSupportedRates(supportedRates);
+    addLegacyRateElements(body);
     body->setCurrentAP(assocAP.address);
     if (isHeManagementSupported()) {
         body->setHeCapabilitiesPresent(true);
         body->setHeCapabilities(makeHeCapabilitiesElement(mib->localHeCapabilities));
     }
-    body->setChunkLength(B(2 + 2 + 6 + (2 + strlen(body->getSSID())) +
-            (2 + body->getSupportedRates().numRates)) + getHeMgmtElementsLength(body));
+    if (isHtManagementSupported()) {
+        body->setHtCapabilitiesPresent(true);
+        body->setHtCapabilities(makeHtCapabilitiesElement(mib->localHtCapabilities));
+    }
+    if (isVhtManagementSupported()) {
+        body->setVhtCapabilitiesPresent(true);
+        body->setVhtCapabilities(makeVhtCapabilitiesElement(mib->localVhtCapabilities));
+    }
+    body->setChunkLength(B(2 + 2 + 6 + (2 + strlen(body->getSSID()))) +
+            getLegacyRateElementsLength(body) + getHeMgmtElementsLength(body) + getHtVhtMgmtElementsLength(body));
     sendManagementFrame("Reassoc", body, ST_REASSOCIATIONREQUEST, ap->address);
 
     assocTimeoutMsg = new cMessage("reassocTimeout", MK_ASSOC_TIMEOUT);
@@ -577,12 +596,20 @@ void Ieee80211MgmtSta::sendProbeRequest()
     EV << "Sending Probe Request, BSSID=" << scanning.bssid << ", SSID=\"" << scanning.ssid << "\"\n";
     const auto& body = makeShared<Ieee80211ProbeRequestFrame>();
     body->setSSID(scanning.ssid.c_str());
-    body->setSupportedRates(supportedRates);
+    addLegacyRateElements(body);
     if (isHeManagementSupported()) {
         body->setHeCapabilitiesPresent(true);
         body->setHeCapabilities(makeHeCapabilitiesElement(mib->localHeCapabilities));
     }
-    body->setChunkLength(B((2 + scanning.ssid.length()) + (2 + body->getSupportedRates().numRates)) + getHeMgmtElementsLength(body));
+    if (isHtManagementSupported()) {
+        body->setHtCapabilitiesPresent(true);
+        body->setHtCapabilities(makeHtCapabilitiesElement(mib->localHtCapabilities));
+    }
+    if (isVhtManagementSupported()) {
+        body->setVhtCapabilitiesPresent(true);
+        body->setVhtCapabilities(makeVhtCapabilitiesElement(mib->localVhtCapabilities));
+    }
+    body->setChunkLength(B(2 + scanning.ssid.length()) + getLegacyRateElementsLength(body) + getHeMgmtElementsLength(body) + getHtVhtMgmtElementsLength(body));
     sendManagementFrame("ProbeReq", body, ST_PROBEREQUEST, scanning.bssid);
 }
 
@@ -695,6 +722,7 @@ void Ieee80211MgmtSta::disassociate()
     ASSERT(mib->bssStationData.isAssociated);
     invalidatePeerDerivedState(assocAP.address);
     mib->removePeerCapabilities(assocAP.address);
+    mib->clearCurrentBssBasicLegacyRates();
     mib->heOperation.bssColor = 0;
     mib->bssStationData.isAssociated = false;
     mib->bssStationData.associationId = -1;
@@ -851,8 +879,8 @@ void Ieee80211MgmtSta::handleDeauthenticationFrame(Packet *packet, const Ptr<con
     if (mib->bssStationData.isAssociated && address == assocAP.address)
         disassociate();
     else {
-        mib->removePeerCapabilities(address);
         invalidatePeerDerivedState(address);
+        mib->removePeerCapabilities(address);
     }
     delete packet;
 }
@@ -897,7 +925,17 @@ void Ieee80211MgmtSta::handleAssociationResponse(Packet *packet,
     Ieee80211HeCapabilitiesElement heCapabilities = responseBody->getHeCapabilities();
     bool heOperationPresent = heManagementSupported && responseBody->getHeOperationPresent();
     Ieee80211HeOperationElement heOperation = responseBody->getHeOperation();
-    // TODO Ieee80211SupportedRatesElement supportedRates;
+    bool htCapabilitiesPresent = isHtManagementSupported() && responseBody->getHtCapabilitiesPresent();
+    Ieee80211HtCapabilitiesElement htCapabilities = responseBody->getHtCapabilities();
+    bool htOperationPresent = isHtManagementSupported() && responseBody->getHtOperationPresent();
+    Ieee80211HtOperationElement htOperation = responseBody->getHtOperation();
+    bool vhtCapabilitiesPresent = isVhtManagementSupported() && responseBody->getVhtCapabilitiesPresent();
+    Ieee80211VhtCapabilitiesElement vhtCapabilities = responseBody->getVhtCapabilities();
+    bool vhtOperationPresent = isVhtManagementSupported() && responseBody->getVhtOperationPresent();
+    Ieee80211VhtOperationElement vhtOperation = responseBody->getVhtOperation();
+    Ieee80211SupportedRatesElement supportedRates = responseBody->getSupportedRates();
+    Ieee80211ExtendedSupportedRatesElement extendedSupportedRates =
+            responseBody->getExtendedSupportedRates();
     delete packet;
 
     // look up AP data structure
@@ -915,8 +953,8 @@ void Ieee80211MgmtSta::handleAssociationResponse(Packet *packet,
         if (reassociation && mib->bssStationData.isAssociated)
             changeChannel(assocAP.channel);
         if (!mib->bssStationData.isAssociated || ap->address != assocAP.address) {
-            mib->removePeerCapabilities(ap->address);
             invalidatePeerDerivedState(ap->address);
+            mib->removePeerCapabilities(ap->address);
         }
     }
     else {
@@ -927,10 +965,14 @@ void Ieee80211MgmtSta::handleAssociationResponse(Packet *packet,
             auto oldApAddress = assocAP.address;
             cancelAndDelete(assocAP.beaconTimeoutMsg);
             assocAP.beaconTimeoutMsg = nullptr;
-            mib->removePeerCapabilities(oldApAddress);
             invalidatePeerDerivedState(oldApAddress);
+            mib->removePeerCapabilities(oldApAddress);
         }
         invalidatePeerDerivedState(ap->address);
+        mib->setPeerLegacyRates(ap->address, supportedRates,
+                extendedSupportedRates);
+        mib->installCurrentBssBasicLegacyRates(supportedRates,
+                extendedSupportedRates);
 
         // change our state to "associated"
         mib->bssData.ssid = ap->ssid;
@@ -956,6 +998,30 @@ void Ieee80211MgmtSta::handleAssociationResponse(Packet *packet,
             mib->heOperation.bssColor = 0;
             EV_INFO << "Peer HE capabilities removed for AP address=" << ap->address << ", BSS color=" << (int)mib->heOperation.bssColor << "\n";
         }
+        if (htCapabilitiesPresent) {
+            auto operation = htOperationPresent ? makeHtOperation(htOperation) : mib->htOperation;
+            mib->setPeerHtCapabilities(ap->address, makeHtCapabilities(htCapabilities), operation);
+            mib->htOperation = operation;
+        }
+        else if (ap->htCapabilitiesPresent) {
+            auto operation = ap->htOperationPresent ? makeHtOperation(ap->htOperation) : mib->htOperation;
+            mib->setPeerHtCapabilities(ap->address, makeHtCapabilities(ap->htCapabilities), operation);
+            mib->htOperation = operation;
+        }
+        else
+            mib->removePeerHtCapabilities(ap->address);
+        if (vhtCapabilitiesPresent) {
+            auto operation = vhtOperationPresent ? makeVhtOperation(vhtOperation, mib->htOperation) : mib->vhtOperation;
+            mib->setPeerVhtCapabilities(ap->address, makeVhtCapabilities(vhtCapabilities), operation);
+            mib->vhtOperation = operation;
+        }
+        else if (ap->vhtCapabilitiesPresent) {
+            auto operation = ap->vhtOperationPresent ? makeVhtOperation(ap->vhtOperation, mib->htOperation) : mib->vhtOperation;
+            mib->setPeerVhtCapabilities(ap->address, makeVhtCapabilities(ap->vhtCapabilities), operation);
+            mib->vhtOperation = operation;
+        }
+        else
+            mib->removePeerVhtCapabilities(ap->address);
 
         emit(l2AssociatedSignal, myIface, ap);
 
@@ -991,8 +1057,8 @@ void Ieee80211MgmtSta::handleDisassociationFrame(Packet *packet, const Ptr<const
         cancelAssociationTransition(true);
     if (!mib->bssStationData.isAssociated || address != assocAP.address) {
         EV << "Not associated with that AP -- ignoring frame\n";
-        mib->removePeerCapabilities(address);
         invalidatePeerDerivedState(address);
+        mib->removePeerCapabilities(address);
         delete packet;
         return;
     }
@@ -1101,6 +1167,14 @@ void Ieee80211MgmtSta::storeAPInfo(Packet *packet, const Ptr<const Ieee80211Mgmt
     ap->heOperationPresent = heManagementSupported && body->getHeOperationPresent();
     if (ap->heOperationPresent)
         ap->heOperation = body->getHeOperation();
+    ap->htCapabilitiesPresent = isHtManagementSupported() && body->getHtCapabilitiesPresent();
+    if (ap->htCapabilitiesPresent) ap->htCapabilities = body->getHtCapabilities();
+    ap->htOperationPresent = isHtManagementSupported() && body->getHtOperationPresent();
+    if (ap->htOperationPresent) ap->htOperation = body->getHtOperation();
+    ap->vhtCapabilitiesPresent = isVhtManagementSupported() && body->getVhtCapabilitiesPresent();
+    if (ap->vhtCapabilitiesPresent) ap->vhtCapabilities = body->getVhtCapabilities();
+    ap->vhtOperationPresent = isVhtManagementSupported() && body->getVhtOperationPresent();
+    if (ap->vhtOperationPresent) ap->vhtOperation = body->getVhtOperation();
     auto signalPowerInd = packet->getTag<SignalPowerInd>();
     if (signalPowerInd != nullptr) {
         ap->rxPower = signalPowerInd->getPower().get<W>();

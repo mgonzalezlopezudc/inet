@@ -10,6 +10,7 @@
 #include <tuple>
 
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtCode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211LdpcPhyCalculator.h"
 #include "inet/physicallayer/wireless/common/modulation/BpskModulation.h"
 #include "inet/physicallayer/wireless/common/modulation/Qam16Modulation.h"
 #include "inet/physicallayer/wireless/common/modulation/Qam256Modulation.h"
@@ -277,6 +278,19 @@ const simtime_t Ieee80211VhtPreambleMode::getDuration() const
     // VHT-SIG-A, VHT-STF, N_VHT-LTF VHT-LTF symbols, and VHT-SIG-B.
     simtime_t sumOfHTLTFs = getSecondAndSubsequentHTLongTrainingFielDuration() * numberOfHTLongTrainings;
     return getNonHTShortTrainingSequenceDuration() + getNonHTLongTrainingFieldDuration() + getLSIGDuration() + getVHTSignalFieldA() + getVHTShortTrainingFieldDuration() + sumOfHTLTFs + getVHTSignalFieldB();
+}
+
+simtime_t Ieee80211VhtPreambleMode::getMuPreambleDuration(
+        unsigned int totalNumberOfSpaceTimeStreams)
+{
+    if (totalNumberOfSpaceTimeStreams == 0 || totalNumberOfSpaceTimeStreams > 8)
+        throw cRuntimeError("VHT MU total NSTS must be in the range 1..8");
+    auto numberOfVhtLtfs = totalNumberOfSpaceTimeStreams == 3 ? 4 :
+            totalNumberOfSpaceTimeStreams;
+    // Figure 21-4 fixed fields total 36 us; Table 21-13 contributes one 4 us
+    // VHT-LTF per mapped training field. This is the single construction-free
+    // timing authority used by canonical packet-level MU layouts.
+    return SimTime(36, SIMTIME_US) + numberOfVhtLtfs * SimTime(4, SIMTIME_US);
 }
 
 bps Ieee80211VhtSignalMode::computeGrossBitrate() const
@@ -667,17 +681,57 @@ unsigned int Ieee80211VhtDataMode::computeNumberOfBccEncoders() const
         throw cRuntimeError("Invalid bandwidth evaluating  NumberOfBccEncoders");
 }
 
-const simtime_t Ieee80211VhtDataMode::getDuration(b dataLength) const
+int64_t Ieee80211VhtDataMode::computeNumberOfDataSymbols(b dataLength, bool *ldpcExtraOfdmSymbol) const
 {
-    // IEEE Std 802.11-2024 21.4.3: for BCC SU VHT, N_SYM is based on
-    // SERVICE + 8*APEP_LENGTH + N_tail*N_ES divided by N_DBPS. This simplified
-    // packet-level path treats LENGTH as PSDU bits and does not model STBC.
+    // IEEE Std 802.11-2024 21.3.10.5.2 and 21.4.3, VHT SU adapter. VHT first
+    // pads N_pld to the initial N_SYM*N_DBPS boundary before applying the
+    // amendment-neutral Clause 19 LDPC codeword geometry.
     unsigned int numberOfCodedBitsPerSubcarrierSum = computeNumberOfCodedBitsPerSubcarrierSum();
     unsigned int numberOfCodedBitsPerSymbol = numberOfCodedBitsPerSubcarrierSum * getNumberOfDataSubcarriers();
     const IForwardErrorCorrection *forwardErrorCorrection = getCode() ? getCode()->getForwardErrorCorrection() : nullptr;
     unsigned int dataBitsPerSymbol = forwardErrorCorrection ? forwardErrorCorrection->getDecodedLength(numberOfCodedBitsPerSymbol) : numberOfCodedBitsPerSymbol;
-    int numberOfSymbols = lrint(ceil((double)getCompleteLength(dataLength).get<b>() / dataBitsPerSymbol)); // TODO getBitLength(dataBitLength) should be divisible by dataBitsPerSymbol
-    return numberOfSymbols * getSymbolInterval();
+    int64_t serviceAndPayloadBits = getCompleteLength(dataLength).get<b>();
+    int64_t numberOfSymbols = (serviceAndPayloadBits + dataBitsPerSymbol - 1) / dataBitsPerSymbol;
+    if (ldpcExtraOfdmSymbol != nullptr)
+        *ldpcExtraOfdmSymbol = false;
+    if (getCode() != nullptr && getCode()->isLdpc()) {
+        int rateNumerator, rateDenominator;
+        if (!getIeee80211LdpcRateParameters(forwardErrorCorrection->getCodeRate(), rateNumerator, rateDenominator))
+            throw cRuntimeError("Unsupported VHT LDPC code rate");
+        int64_t payloadBits = numberOfSymbols * dataBitsPerSymbol;
+        int64_t availableBits = numberOfSymbols * numberOfCodedBitsPerSymbol;
+        auto geometry = calculateIeee80211LdpcCodewordGeometry(
+                payloadBits, availableBits, rateNumerator, rateDenominator);
+        if (!geometry)
+            throw cRuntimeError("Invalid VHT LDPC geometry: %s", geometry.error.c_str());
+        if (geometry.requiresAdditionalCodedBits) {
+            numberOfSymbols++;
+            availableBits += numberOfCodedBitsPerSymbol;
+            if (ldpcExtraOfdmSymbol != nullptr)
+                *ldpcExtraOfdmSymbol = true;
+        }
+        auto allocation = calculateIeee80211LdpcBitAllocation(
+                geometry, payloadBits, availableBits, rateNumerator, rateDenominator);
+        if (!allocation)
+            throw cRuntimeError("Invalid VHT LDPC bit allocation: %s", allocation.error.c_str());
+    }
+    return numberOfSymbols;
+}
+
+const simtime_t Ieee80211VhtDataMode::getDuration(b dataLength) const
+{
+    int64_t numberOfSymbols = computeNumberOfDataSymbols(dataLength);
+    if (guardIntervalType == HT_GUARD_INTERVAL_LONG)
+        return numberOfSymbols * getSymbolInterval();
+    // Equation 21-109 rounds short-GI DATA time to 4 us.
+    return SimTime(4 * (int64_t)std::ceil(numberOfSymbols * 3.6 / 4.0), SIMTIME_US);
+}
+
+bool Ieee80211VhtDataMode::getLdpcExtraOfdmSymbol(b dataLength) const
+{
+    bool extraOfdmSymbol = false;
+    computeNumberOfDataSymbols(dataLength, &extraOfdmSymbol);
+    return extraOfdmSymbol;
 }
 
 const simtime_t Ieee80211VhtMode::getSlotTime() const

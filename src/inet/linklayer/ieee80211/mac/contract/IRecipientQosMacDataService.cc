@@ -12,7 +12,8 @@ namespace ieee80211 {
 
 simsignal_t IRecipientQosMacDataService::packetDefragmentedSignal = cComponent::registerSignal("packetDefragmented");
 simsignal_t IRecipientQosMacDataService::packetDeaggregatedSignal = cComponent::registerSignal("packetDeaggregated");
+simsignal_t IRecipientQosMacDataService::packetIntegrityCheckFailedSignal = cComponent::registerSignal("packetIntegrityCheckFailed");
+simsignal_t IRecipientQosMacDataService::packetReplayDetectedSignal = cComponent::registerSignal("packetReplayDetected");
 
 } // namespace ieee80211
 } // namespace inet
-

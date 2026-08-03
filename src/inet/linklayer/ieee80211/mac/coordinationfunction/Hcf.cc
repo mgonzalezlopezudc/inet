@@ -6,21 +6,25 @@
 
 
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
+#include "inet/linklayer/ieee80211/mac/contract/DurationFinalizedReq.h"
 
 #include <cstring>
 
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/packet/chunk/ByteCountChunk.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
+#include "inet/linklayer/ieee80211/mac/common/Ieee80211FcsChecker.h"
 #include "inet/linklayer/ieee80211/twt/ITwtManager.h"
 #include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreementHandler.h"
 #include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckProcedure.h"
 #include "inet/linklayer/ieee80211/mac/blockack/RecipientBlockAckAgreementHandler.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HcfFs.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/Ieee80211HeMuContainerTag_m.h"
+#include "inet/linklayer/ieee80211/mac/protectionmechanism/HtProtectionPolicy.h"
 #include "inet/linklayer/ieee80211/mac/recipient/RecipientAckProcedure.h"
 #include "inet/linklayer/ethernet/common/Ethernet.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211FecCodingReq.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
@@ -42,8 +46,18 @@ static bool isHeMuContainerPacket(Packet *packet)
     return packet != nullptr && packet->findTag<Ieee80211HeMuContainerReq>() != nullptr;
 }
 
-static Packet *buildAmpduPacket(const std::vector<Packet *>& frames, FcsMode fcsMode)
+Packet *Hcf::buildAmpduPacket(const std::vector<Packet *>& frames, FcsMode fcsMode)
 {
+    Ptr<const Ieee80211FecCodingReq> fecCodingReq;
+    for (auto frame : frames) {
+        auto frameFecCodingReq = frame->findTag<Ieee80211FecCodingReq>();
+        if (frameFecCodingReq != nullptr) {
+            if (fecCodingReq != nullptr &&
+                    fecCodingReq->getLdpcAllowed() != frameFecCodingReq->getLdpcAllowed())
+                throw cRuntimeError("Cannot build an A-MPDU from MPDUs with different FEC coding requests");
+            fecCodingReq = frameFecCodingReq;
+        }
+    }
     auto aggregatedPacket = new Packet();
     std::string aggregatedName;
     for (size_t i = 0; i < frames.size(); i++) {
@@ -70,6 +84,8 @@ static Packet *buildAmpduPacket(const std::vector<Packet *>& frames, FcsMode fcs
         aggregatedName.append(frame->getName());
     }
     aggregatedPacket->setName(aggregatedName.c_str());
+    if (fecCodingReq != nullptr)
+        aggregatedPacket->addTag<Ieee80211FecCodingReq>()->setLdpcAllowed(fecCodingReq->getLdpcAllowed());
     return aggregatedPacket;
 }
 
@@ -365,6 +381,12 @@ void Hcf::processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>&
     EV_INFO << "Processing lower frame: " << packet->getName() << endl;
     auto edcaf = edca->getChannelOwner();
     if (header == nullptr) {
+        auto ndpIndication = packet->findTag<physicallayer::Ieee80211NdpInd>();
+        if (ndpIndication != nullptr && packet->getDataLength() == b(0) &&
+                processHeaderlessNdpIndication(packet)) {
+            handleDeferredStartRxTimeout();
+            return;
+        }
         auto rxVectorInd = packet->findTag<physicallayer::Ieee80211HeRxVectorInd>();
         auto recipientContext =
                 packet->findTag<physicallayer::Ieee80211HeTbRecipientContextInd>();
@@ -380,20 +402,8 @@ void Hcf::processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>&
                 recipientContext != nullptr &&
                 recipientContext->getRecipientParameters() != nullptr &&
                 recipientContext->getRecipientParameters()->ndpFeedbackReport;
-        const bool soundingNdp = rxVectorInd != nullptr &&
-                rxVectorInd->getRxVector() != nullptr &&
-                rxVectorInd->getRxVector()->getCommon().getPpduFormat() ==
-                        physicallayer::HE_SINGLE_USER &&
-                packet->getDataLength() == b(0);
         auto receiveStep = edcaf && frameSequenceHandler->isSequenceRunning() ?
                 dynamic_cast<IReceiveStep *>(frameSequenceHandler->getContext()->getLastStep()) : nullptr;
-        if (soundingNdp) {
-            // A sounding NDP has no MAC header, but the HE recipient still
-            // needs its RXVECTOR to advance the NDPA/NDP/BFRP state.
-            recipientProcessReceivedFrame(packet, header);
-            handleDeferredStartRxTimeout();
-            return;
-        }
         if (intactAmpdu && receiveStep != nullptr) {
             processResponseAndCancelStartRxTimerIfCompleted(packet, receiveStep);
             handleDeferredStartRxTimeout();
@@ -493,7 +503,9 @@ void Hcf::channelGranted(IChannelAccess *channelAccess)
 FrameSequenceContext *Hcf::buildContext(AccessCategory ac)
 {
     auto edcaf = edca->getEdcaf(ac);
-    auto qosContext = new QoSContext(originatorAckPolicy, originatorBlockAckProcedure, originatorBlockAckAgreementHandler, edcaf->getTxopProcedure());
+    auto qosContext = new QoSContext(originatorAckPolicy, originatorBlockAckProcedure,
+            originatorBlockAckAgreementHandler, edcaf->getTxopProcedure(),
+            rateSelection);
     return new FrameSequenceContext(mac->getAddress(), modeSet, edcaf->getInProgressFrames(), rtsProcedure, rtsPolicy, nullptr, qosContext,
             isLegacyHtMultiTidBlockAckEnabled(), isHtImplicitBlockAckEnabled());
 }
@@ -519,6 +531,33 @@ bool Hcf::isHtImplicitBlockAckEnabled() const
 
 void Hcf::startFrameSequence(AccessCategory ac)
 {
+    auto edcaf = edca->getEdcaf(ac);
+    auto txop = edcaf->getTxopProcedure();
+    auto frameToTransmit = edcaf->getInProgressFrames()->getFrameToTransmit();
+    if (!txop->isProtectionConfigured()) {
+        TxopProcedure::InitialProtection initialProtection = TxopProcedure::InitialProtection::NONE;
+        if (frameToTransmit != nullptr) {
+            auto frameHeader = frameToTransmit->peekAtFront<Ieee80211MacHeader>();
+            // Select the first actual PHY mode once. The request tag is reused by
+            // transmitFrame, so protection does not cause a second rate decision.
+            auto existingMode = frameToTransmit->findTag<physicallayer::Ieee80211ModeReq>();
+            auto firstMode = existingMode == nullptr ?
+                    rateSelection->computeMode(frameToTransmit, frameHeader, txop) :
+                    existingMode->getMode();
+            setFrameMode(frameToTransmit, frameHeader, firstMode);
+            auto mib = mac->getMib();
+            auto negotiatedHt = mib->findNegotiatedHtCapabilities(frameHeader->getReceiverAddress());
+            bool isHtMode = modeSet->getPhyFamily(firstMode) == Ieee80211PhyFamily::HT;
+            auto htProtection = HtProtectionPolicy::select(isHtMode, frameHeader->getReceiverAddress(),
+                    negotiatedHt);
+            if (htProtection == HtProtectionPolicy::Protection::LEGACY_RTS_CTS)
+                initialProtection = TxopProcedure::InitialProtection::LEGACY_RTS_CTS;
+        }
+        // IEEE Std 802.11-2024, 10.23.2.4, 10.23.2.9, 10.23.2.11 and
+        // 10.27.3: protection is immutable for this TXOP; the supported HT
+        // subset performs one initial legacy RTS/CTS exchange.
+        txop->configureProtection(initialProtection);
+    }
     frameSequenceHandler->startFrameSequence(new HcfFs(), buildContext(ac), this);
     emit(IFrameSequenceHandler::frameSequenceStartedSignal, frameSequenceHandler->getContext());
 }
@@ -635,11 +674,16 @@ void Hcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee8021
                 // EOF/null delimiters carry no MPDU outcome and therefore do
                 // not advance the ordered receive-result index.
                 continue;
-            auto status = delimiter->isIncorrect() ? MPDU_DELIMITER_ERROR : MPDU_SUCCESS;
-            if (receiveInd != nullptr && resultIndex < receiveInd->getResultsArraySize())
+            auto status = delimiter->isIncorrect() ? MPDU_DELIMITER_ERROR : MPDU_NOT_EVALUATED;
+            if (!delimiter->isIncorrect() && receiveInd != nullptr &&
+                    resultIndex < receiveInd->getResultsArraySize())
                 status = receiveInd->getResults(resultIndex).status;
-            if (mpduLength > packet->getDataLength())
+            if (mpduLength > packet->getDataLength()) {
                 status = MPDU_PAYLOAD_ERROR;
+                PacketDropDetails details;
+                details.setReason(INCORRECTLY_RECEIVED);
+                emit(packetDroppedSignal, packet, &details);
+            }
             else {
                 auto mpdu = new Packet(packet->getName());
                 mpdu->copyTags(*packet);
@@ -647,10 +691,18 @@ void Hcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee8021
                 mpdu->insertAtBack(packet->popAtFront(mpduLength, parsingFlags));
                 auto mpduHeader = dynamicPtrCast<const Ieee80211MacHeader>(
                         mpdu->peekAtFront(b(-1), parsingFlags));
+                if (!delimiter->isIncorrect() && receiveInd == nullptr)
+                    status = Ieee80211FcsChecker::isFcsOk(mpdu,
+                            AggregateReceptionContext::ORDINARY_FRAME) ?
+                            MPDU_SUCCESS : MPDU_FCS_ERROR;
                 if (status == MPDU_SUCCESS && mpduHeader != nullptr)
                     receivedMpdus.emplace_back(mpdu, mpduHeader);
-                else
+                else {
+                    PacketDropDetails details;
+                    details.setReason(INCORRECTLY_RECEIVED);
+                    emit(packetDroppedSignal, mpdu, &details);
                     delete mpdu;
+                }
             }
             resultIndex++;
             int padding = (4 - (B(4) + mpduLength).get<B>() % 4) % 4;
@@ -670,21 +722,18 @@ void Hcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee8021
                 isHtImplicitBlockAckEnabled() &&
                 classifyHtAmpduAckContext(resultIndex, decodedHeaders) ==
                         HtAmpduAckContext::IMPLICIT_BLOCK_ACK;
-        if (!dataHeaders.empty() && !isForUs(dataHeaders.front())) {
-            EV_INFO << "Discarding intact A-MPDU not addressed to us.\n";
-            for (const auto& entry : receivedMpdus)
-                delete entry.first;
-            delete elicitingAmpdu;
-            delete packet;
-            return;
-        }
+        std::vector<Ptr<const Ieee80211DataHeader>> admittedDataHeaders;
+        for (const auto& dataHeader : dataHeaders)
+            if (isForUs(dataHeader))
+                admittedDataHeaders.push_back(dataHeader);
         bool implicitBlockAckSent = implicitBlockAckAggregate &&
+                !admittedDataHeaders.empty() &&
                 dataHeaders.size() == receivedMpdus.size() &&
                 recipientBlockAckProcedure != nullptr &&
                 recipientBlockAckAgreementHandler != nullptr &&
                 recipientBlockAckProcedure->
                         processReceivedHtImplicitBlockAckRequest(
-                                elicitingAmpdu, dataHeaders,
+                                elicitingAmpdu, admittedDataHeaders,
                                 recipientBlockAckAgreementHandler, this, this);
         if (implicitBlockAckAggregate) {
             if (!implicitBlockAckSent)
@@ -701,13 +750,26 @@ void Hcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee8021
                 }
                 else {
                     EV_WARN << "Dropping invalid or foreign member from an HT implicit-BlockAck A-MPDU.\n";
+                    PacketDropDetails details;
+                    details.setReason(dataHeader != nullptr && !isForUs(dataHeader) ?
+                            NOT_ADDRESSED_TO_US : OTHER_PACKET_DROP);
+                    emit(packetDroppedSignal, entry.first, &details);
                     delete entry.first;
                 }
             }
         }
         else {
-            for (const auto& entry : receivedMpdus)
-                recipientProcessReceivedFrame(entry.first, entry.second);
+            for (const auto& entry : receivedMpdus) {
+                if (isForUs(entry.second))
+                    recipientProcessReceivedFrame(entry.first, entry.second);
+                else {
+                    EV_INFO << "Dropping foreign member from an intact A-MPDU.\n";
+                    PacketDropDetails details;
+                    details.setReason(NOT_ADDRESSED_TO_US);
+                    emit(packetDroppedSignal, entry.first, &details);
+                    delete entry.first;
+                }
+            }
         }
         delete elicitingAmpdu;
         delete packet;
@@ -1408,10 +1470,13 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
 
         Packet *packetToTransmit = packet;
         bool deletePacketToTransmit = false;
-        auto mode = rateSelection->computeMode(packet, header, txop);
+        auto modeReq = packet->findTag<Ieee80211ModeReq>();
+        auto mode = modeReq == nullptr ? rateSelection->computeMode(packet, header, txop) : modeReq->getMode();
         if (!isHeMuContainerPacket(packet))
           if (auto dataFrame = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
-            if (dataFrame->getAckPolicy() == AckPolicy::BLOCK_ACK && !rtsPolicy->isRtsNeeded(packet, header)) {
+            if (dataFrame->getAckPolicy() == AckPolicy::BLOCK_ACK &&
+                    txop->allowsMpduAggregation() &&
+                    !rtsPolicy->isRtsNeeded(packet, header)) {
                 bool useHtImplicitBlockAck = isHtImplicitBlockAckEnabled();
                 int maxAmpduLengthExponent = useHtImplicitBlockAck ? 3 : 7;
                 auto mib = mac->getMib();
@@ -1422,9 +1487,12 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
                     }
                     else {
                         auto negotiatedVht = mib->findNegotiatedVhtCapabilities(dataFrame->getReceiverAddress());
-                        if (negotiatedVht != nullptr && negotiatedVht->valid) {
-                            maxAmpduLengthExponent = negotiatedVht->intersection.maxAmpduLengthExponent;
+                        if (negotiatedVht != nullptr && negotiatedVht->localTxPeerRx.valid) {
+                            maxAmpduLengthExponent = negotiatedVht->localTxPeerRx.receiverMaxAmpduLengthExponent;
                         }
+                        else if (auto negotiatedHt = mib->findNegotiatedHtCapabilities(dataFrame->getReceiverAddress());
+                                negotiatedHt != nullptr && negotiatedHt->localTxPeerRx.valid)
+                            maxAmpduLengthExponent = negotiatedHt->localTxPeerRx.receiverMaxAmpduLengthExponent;
                     }
                 }
                 auto originatorModule = dynamic_cast<cModule *>(originatorDataService);
@@ -1509,11 +1577,12 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
         EV_DEBUG << "Datarate for " << packetToTransmit->getName() << " is set to " << mode->getDataMode()->getNetBitrate() << ".\n";
         if (txop->getProtectionMechanism() == TxopProcedure::ProtectionMechanism::SINGLE_PROTECTION) {
             if (packetToTransmit == packet && !isHeMuContainerPacket(packet) &&
+                    packet->findTag<DurationFinalizedReq>() == nullptr &&
                     !dynamicPtrCast<const Ieee80211TriggerFrame>(header) &&
                     !dynamicPtrCast<const Ieee80211MultiStaBlockAck>(header)) {
                 auto pendingPacket = channelOwner->getInProgressFrames()->getPendingFrameFor(packet);
                 const auto& pendingHeader = pendingPacket == nullptr ? nullptr : pendingPacket->peekAtFront<Ieee80211DataOrMgmtHeader>();
-                auto duration = singleProtectionMechanism->computeDurationField(packet, header, pendingPacket, pendingHeader, txop, recipientAckPolicy);
+                auto duration = singleProtectionMechanism->computeDurationField(packet, header, pendingPacket, pendingHeader, txop, recipientAckPolicy, ifs);
                 auto header = packet->removeAtFront<Ieee80211MacHeader>();
                 // IEEE Std 802.11-2024, 10.3.1, 10.3.2.6 and 10.23.2.8:
                 // Duration protects the remaining exchange or TXOP portion.
@@ -1522,8 +1591,14 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
                 packet->insertAtFront(header);
             }
         }
-        else if (txop->getProtectionMechanism() == TxopProcedure::ProtectionMechanism::MULTIPLE_PROTECTION)
-            throw cRuntimeError("Multiple protection is unsupported");
+        else if (txop->getProtectionMechanism() == TxopProcedure::ProtectionMechanism::MULTIPLE_PROTECTION) {
+            if (packet->findTag<DurationFinalizedReq>() == nullptr) {
+                auto duration = singleProtectionMechanism->computeDurationField(packet, header, nullptr, nullptr, txop, recipientAckPolicy, ifs);
+                auto mutableHeader = packet->removeAtFront<Ieee80211MacHeader>();
+                mutableHeader->setDurationField(duration);
+                packet->insertAtFront(mutableHeader);
+            }
+        }
         else
             throw cRuntimeError("Undefined protection mechanism");
         tx->transmitFrame(packetToTransmit, header, ifs, this);

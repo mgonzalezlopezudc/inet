@@ -10,10 +10,12 @@
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/Simsignals.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRateControl.h"
+#include "inet/linklayer/ieee80211/mac/rateselection/Ieee80211RateSelectionPolicy.h"
 #include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
 #include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211FecCodingReq.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 
 namespace inet {
@@ -86,24 +88,20 @@ const IIeee80211Mode *RateSelection::getMode(Packet *packet, const Ptr<const Iee
 //
 const IIeee80211Mode *RateSelection::computeResponseAckFrameMode(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader)
 {
-    if (responseAckFrameMode)
-        return responseAckFrameMode;
-    else {
-        auto mode = getMode(packet, dataOrMgmtHeader);
-        ASSERT(modeSet->containsMode(mode));
-        return modeSet->getIsMandatory(mode) ? mode : modeSet->getSlowerMandatoryMode(mode); // TODO BSSBasicRateSet
-    }
+    auto mode = getMode(packet, dataOrMgmtHeader);
+    ASSERT(modeSet->containsMode(mode));
+    auto basicRates = mib->getBssBasicLegacyRates();
+    Ieee80211RateSelectionPolicy::Context context {modeSet, &mib->localOperationalRates, &basicRates, nullptr};
+    return Ieee80211RateSelectionPolicy::selectResponse(context, mode, responseAckFrameMode);
 }
 
 const IIeee80211Mode *RateSelection::computeResponseCtsFrameMode(Packet *packet, const Ptr<const Ieee80211RtsFrame>& rtsFrame)
 {
-    if (responseCtsFrameMode)
-        return responseCtsFrameMode;
-    else {
-        auto mode = getMode(packet, rtsFrame);
-        ASSERT(modeSet->containsMode(mode));
-        return modeSet->getIsMandatory(mode) ? mode : modeSet->getSlowerMandatoryMode(mode); // TODO BSSBasicRateSet
-    }
+    auto mode = getMode(packet, rtsFrame);
+    ASSERT(modeSet->containsMode(mode));
+    auto basicRates = mib->getBssBasicLegacyRates();
+    Ieee80211RateSelectionPolicy::Context context {modeSet, &mib->localOperationalRates, &basicRates, nullptr};
+    return Ieee80211RateSelectionPolicy::selectResponse(context, mode, responseCtsFrameMode);
 }
 
 // 802.11-1999 Std.
@@ -121,16 +119,23 @@ const IIeee80211Mode *RateSelection::computeResponseCtsFrameMode(Packet *packet,
 //
 const IIeee80211Mode *RateSelection::computeDataOrMgmtFrameMode(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader)
 {
-    if (dataOrMgmtHeader->getReceiverAddress().isMulticast() && multicastFrameMode)
-        return multicastFrameMode;
-    if (dynamicPtrCast<const Ieee80211DataHeader>(dataOrMgmtHeader) && dataFrameMode)
-        return dataFrameMode;
-    if (dynamicPtrCast<const Ieee80211MgmtHeader>(dataOrMgmtHeader) && mgmtFrameMode)
-        return mgmtFrameMode;
+    auto basicRates = mib->getBssBasicLegacyRates();
+    auto peerRates = mib->findPeerLegacyRates(dataOrMgmtHeader->getReceiverAddress());
+    Ieee80211RateSelectionPolicy::Context context {modeSet, &mib->localOperationalRates, &basicRates, peerRates,
+            &mib->htOperation, &mib->vhtOperation};
+    if (dataOrMgmtHeader->getReceiverAddress().isMulticast())
+        return Ieee80211RateSelectionPolicy::selectGroupOrControl(context, multicastFrameMode,
+                multicastFrameMode == nullptr ? Ieee80211RateSelectionPolicy::DEFAULT_SELECTION :
+                Ieee80211RateSelectionPolicy::EXPLICIT_CONFIGURATION);
+    const IIeee80211Mode *configured = dynamicPtrCast<const Ieee80211DataHeader>(dataOrMgmtHeader) ? dataFrameMode : mgmtFrameMode;
+    if (configured != nullptr)
+        return Ieee80211RateSelectionPolicy::selectUnicast(context, configured,
+                Ieee80211RateSelectionPolicy::EXPLICIT_CONFIGURATION);
     if (dataOrMgmtRateControl)
-        return dataOrMgmtRateControl->getRate();
-    else
-        return fastestMandatoryMode;
+        return Ieee80211RateSelectionPolicy::selectUnicast(context, dataOrMgmtRateControl->getRate(),
+                Ieee80211RateSelectionPolicy::RATE_CONTROL);
+    return Ieee80211RateSelectionPolicy::selectUnicast(context, fastestMandatoryMode,
+            Ieee80211RateSelectionPolicy::DEFAULT_SELECTION);
 }
 
 // 802.11-1999 Std.
@@ -141,8 +146,12 @@ const IIeee80211Mode *RateSelection::computeDataOrMgmtFrameMode(const Ptr<const 
 //
 const IIeee80211Mode *RateSelection::computeControlFrameMode(const Ptr<const Ieee80211MacHeader>& header)
 {
-    // TODO BSSBasicRateSet
-    return fastestMandatoryMode;
+    auto basicRates = mib->getBssBasicLegacyRates();
+    Ieee80211RateSelectionPolicy::Context context {modeSet, &mib->localOperationalRates, &basicRates,
+            mib->findPeerLegacyRates(header->getReceiverAddress()), &mib->htOperation, &mib->vhtOperation};
+    return Ieee80211RateSelectionPolicy::selectGroupOrControl(context, controlFrameMode,
+            controlFrameMode == nullptr ? Ieee80211RateSelectionPolicy::DEFAULT_SELECTION :
+            Ieee80211RateSelectionPolicy::EXPLICIT_CONFIGURATION);
 }
 
 const IIeee80211Mode *RateSelection::computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
@@ -154,6 +163,13 @@ const IIeee80211Mode *RateSelection::computeMode(Packet *packet, const Ptr<const
         selectedMode = computeControlFrameMode(header);
     if (!mib->isEhtModeAllowedForPeer(selectedMode, header->getReceiverAddress()))
         throw cRuntimeError("Explicitly selected EHT mode is prohibited by the effective peer capability or operation state");
+    if (!mib->isHtModeAllowedForPeer(selectedMode, header->getReceiverAddress()))
+        throw cRuntimeError("Selected HT mode is prohibited by the effective peer capability or operation state");
+    if (!mib->isVhtModeAllowedForPeer(selectedMode, header->getReceiverAddress()))
+        throw cRuntimeError("Selected VHT mode is prohibited by the effective peer capability or operation state");
+    if (Ieee80211ModeSet::isPeerNegotiatedFecMode(selectedMode))
+        packet->addTagIfAbsent<Ieee80211FecCodingReq>()->setLdpcAllowed(
+                mib->isLdpcAllowedForPeer(selectedMode, header->getReceiverAddress()));
     return selectedMode;
 }
 

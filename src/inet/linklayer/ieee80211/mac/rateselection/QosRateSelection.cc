@@ -10,6 +10,8 @@
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/Simsignals.h"
 #include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
+#include "inet/linklayer/ieee80211/mac/rateselection/Ieee80211RateSelectionPolicy.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211FecCodingReq.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/networklayer/common/NetworkInterface.h"
 
@@ -19,6 +21,26 @@ namespace ieee80211 {
 using namespace inet::physicallayer;
 
 Define_Module(QosRateSelection);
+
+static bool isHeOrEhtMode(const Ieee80211ModeSet *modeSet, const IIeee80211Mode *mode)
+{
+    auto family = modeSet->getPhyFamily(mode);
+    return family == Ieee80211PhyFamily::HE || family == Ieee80211PhyFamily::EHT;
+}
+
+static const IIeee80211Mode *selectHeOrEhtResponseMode(const Ieee80211ModeSet *modeSet,
+        const IIeee80211Mode *precedingMode, const IIeee80211Mode *configuredMode)
+{
+    if (!isHeOrEhtMode(modeSet, precedingMode))
+        return nullptr;
+    if (configuredMode != nullptr)
+        return configuredMode;
+    if (modeSet->getIsMandatory(precedingMode))
+        return precedingMode;
+    if (auto slowerMode = modeSet->getSlowerMandatoryMode(precedingMode))
+        return slowerMode;
+    throw cRuntimeError("Mandatory HE/EHT response mode not found");
+}
 
 void QosRateSelection::initialize(int stage)
 {
@@ -82,36 +104,24 @@ bool QosRateSelection::isControlResponseFrame(const Ptr<const Ieee80211MacHeader
 //
 const IIeee80211Mode *QosRateSelection::computeResponseAckFrameMode(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader)
 {
-    // TODO BSSBasicRateSet, alternate rate
     auto mode = getMode(packet, dataOrMgmtHeader);
     ASSERT(modeSet->containsMode(mode));
-    if (!responseAckFrameMode) {
-        if (modeSet->getIsMandatory(mode))
-            return mode;
-        else if (auto slowerMode = modeSet->getSlowerMandatoryMode(mode))
-            return slowerMode;
-        else
-            throw cRuntimeError("Mandatory mode not found");
-    }
-    else
-        return responseAckFrameMode;
+    if (auto selected = selectHeOrEhtResponseMode(modeSet, mode, responseAckFrameMode))
+        return selected; // HE/EHT-specific response rules are outside this policy's scope.
+    auto basicRates = mib->getBssBasicLegacyRates();
+    Ieee80211RateSelectionPolicy::Context context {modeSet, &mib->localOperationalRates, &basicRates, nullptr};
+    return Ieee80211RateSelectionPolicy::selectResponse(context, mode, responseAckFrameMode);
 }
 
 const IIeee80211Mode *QosRateSelection::computeResponseCtsFrameMode(Packet *packet, const Ptr<const Ieee80211RtsFrame>& rtsFrame)
 {
-    // TODO BSSBasicRateSet, alternate rate
     auto mode = getMode(packet, rtsFrame);
     ASSERT(modeSet->containsMode(mode));
-    if (!responseCtsFrameMode) {
-        if (modeSet->getIsMandatory(mode))
-            return mode;
-        else if (auto slowerMode = modeSet->getSlowerMandatoryMode(mode))
-            return slowerMode;
-        else
-            throw cRuntimeError("Mandatory mode not found");
-    }
-    else
-        return responseCtsFrameMode;
+    if (auto selected = selectHeOrEhtResponseMode(modeSet, mode, responseCtsFrameMode))
+        return selected; // HE/EHT-specific response rules are outside this policy's scope.
+    auto basicRates = mib->getBssBasicLegacyRates();
+    Ieee80211RateSelectionPolicy::Context context {modeSet, &mib->localOperationalRates, &basicRates, nullptr};
+    return Ieee80211RateSelectionPolicy::selectResponse(context, mode, responseCtsFrameMode);
 }
 
 //
@@ -122,18 +132,31 @@ const IIeee80211Mode *QosRateSelection::computeResponseCtsFrameMode(Packet *pack
 //
 const IIeee80211Mode *QosRateSelection::computeResponseBlockAckFrameMode(Packet *packet, const Ptr<const Ieee80211BlockAckReq>& blockAckReq)
 {
-    if (dynamicPtrCast<const Ieee80211BlockAckReq>(blockAckReq))
-        return responseBlockAckFrameMode ? responseBlockAckFrameMode : getMode(packet, blockAckReq);
-    else
-        throw cRuntimeError("Unknown BlockAckReq frame type");
+    auto precedingMode = getMode(packet, blockAckReq);
+    if (isHeOrEhtMode(modeSet, precedingMode))
+        return responseBlockAckFrameMode != nullptr ? responseBlockAckFrameMode : precedingMode;
+    auto precedingFamily = modeSet->getPhyFamily(precedingMode);
+    bool precedingIsLegacy = precedingFamily == Ieee80211PhyFamily::DSSS ||
+            precedingFamily == Ieee80211PhyFamily::ERP_OFDM || precedingFamily == Ieee80211PhyFamily::OFDM;
+    if (dynamicPtrCast<const Ieee80211BasicBlockAckReq>(blockAckReq) && precedingIsLegacy) {
+        if (responseBlockAckFrameMode != nullptr && responseBlockAckFrameMode != precedingMode)
+            throw cRuntimeError("Configured Basic Block Ack response mode conflicts with the required Block Ack Request rate and modulation class");
+        return precedingMode;
+    }
+    auto basicRates = mib->getBssBasicLegacyRates();
+    Ieee80211RateSelectionPolicy::Context context {modeSet, &mib->localOperationalRates, &basicRates,
+            mib->findPeerLegacyRates(blockAckReq->getTransmitterAddress())};
+    return responseBlockAckFrameMode != nullptr ?
+            Ieee80211RateSelectionPolicy::selectResponse(context, precedingMode, responseBlockAckFrameMode) :
+            Ieee80211RateSelectionPolicy::selectResponse(context, precedingMode);
 }
 
 const IIeee80211Mode *QosRateSelection::computeDataOrMgmtFrameMode(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader)
 {
-    if (dynamicPtrCast<const Ieee80211DataHeader>(dataOrMgmtHeader) && dataFrameMode)
-        return dataFrameMode;
-    if (dynamicPtrCast<const Ieee80211MgmtHeader>(dataOrMgmtHeader) && mgmtFrameMode)
-        return mgmtFrameMode;
+    auto basicRates = mib->getBssBasicLegacyRates();
+    auto peerRates = mib->findPeerLegacyRates(dataOrMgmtHeader->getReceiverAddress());
+    Ieee80211RateSelectionPolicy::Context context {modeSet, &mib->localOperationalRates, &basicRates, peerRates,
+            &mib->htOperation, &mib->vhtOperation};
     // This subclause describes the rate selection rules for group addressed data and management frames, excluding
     // the following:
     //   — Non-STBC Beacon and non-STBC PSMP frames
@@ -151,10 +174,20 @@ const IIeee80211Mode *QosRateSelection::computeDataOrMgmtFrameMode(const Ptr<con
         // If both the BSSBasicRateSet parameter and the BSSBasicMCSSet parameter are empty (e.g., a scanning STA
         // that is not yet associated with a BSS), the frame shall be transmitted in a non-HT PPDU using one of the
         // mandatory PHY rates.
-        if (dataOrMgmtRateControl)
-            return dataOrMgmtRateControl->getRate();
-        else
-            return fastestMandatoryMode;
+        auto groupMode = multicastFrameMode;
+        if (groupMode == nullptr && dataFrameMode != nullptr &&
+                !Ieee80211ModeSet::isHtOrVhtMode(dataFrameMode)) {
+            auto family = modeSet->getPhyFamily(dataFrameMode);
+            if (family != Ieee80211PhyFamily::DSSS && family != Ieee80211PhyFamily::ERP_OFDM &&
+                    family != Ieee80211PhyFamily::OFDM)
+                groupMode = dataFrameMode; // Preserve HE/EHT behavior, which is outside this policy's scope.
+        }
+        if (groupMode == nullptr && dataOrMgmtRateControl != nullptr &&
+                isHeOrEhtMode(modeSet, dataOrMgmtRateControl->getRate()))
+            groupMode = dataOrMgmtRateControl->getRate(); // Preserve the prior HE/EHT rate-control dispatch.
+        return Ieee80211RateSelectionPolicy::selectGroupOrControl(context, groupMode,
+                multicastFrameMode == nullptr ? Ieee80211RateSelectionPolicy::DEFAULT_SELECTION :
+                Ieee80211RateSelectionPolicy::EXPLICIT_CONFIGURATION);
     }
     // A data or management frame not identified in 9.7.5.1 through 9.7.5.5 shall be sent using any data rate or MCS
     // subject to the following constraints:
@@ -167,12 +200,15 @@ const IIeee80211Mode *QosRateSelection::computeDataOrMgmtFrameMode(const Ptr<con
     //      OperationalRateSet or the HTOperationalMCSset, which are parameters of the MLME-
     //      JOIN.request primitive.
     else {
-        // TODO Supported Rates element, Extended Supported Rates element
-        // TODO OperationalRateSet or the HTOperationalMCSset
+        const IIeee80211Mode *configured = dynamicPtrCast<const Ieee80211DataHeader>(dataOrMgmtHeader) ? dataFrameMode : mgmtFrameMode;
+        if (configured != nullptr)
+            return Ieee80211RateSelectionPolicy::selectUnicast(context, configured,
+                    Ieee80211RateSelectionPolicy::EXPLICIT_CONFIGURATION);
         if (dataOrMgmtRateControl)
-            return dataOrMgmtRateControl->getRate();
-        else
-            return fastestMandatoryMode;
+            return Ieee80211RateSelectionPolicy::selectUnicast(context, dataOrMgmtRateControl->getRate(),
+                    Ieee80211RateSelectionPolicy::RATE_CONTROL);
+        return Ieee80211RateSelectionPolicy::selectUnicast(context, fastestMandatoryMode,
+                Ieee80211RateSelectionPolicy::DEFAULT_SELECTION);
     }
 }
 
@@ -181,8 +217,18 @@ const IIeee80211Mode *QosRateSelection::computeControlFrameMode(const Ptr<const 
     if (dynamicPtrCast<const Ieee80211MultiStaBlockAck>(header))
         return controlFrameMode ? controlFrameMode : fastestMandatoryMode;
     ASSERT(!isControlResponseFrame(header, txopProcedure));
-    if (controlFrameMode)
-        return controlFrameMode;
+    auto basicRates = mib->getBssBasicLegacyRates();
+    Ieee80211RateSelectionPolicy::Context context {modeSet, &mib->localOperationalRates, &basicRates,
+            mib->findPeerLegacyRates(header->getReceiverAddress()), &mib->htOperation, &mib->vhtOperation};
+    if (txopProcedure->isInitialProtectionPending() && dynamicPtrCast<const Ieee80211RtsFrame>(header)) {
+        // IEEE Std 802.11-2024, 10.27.3: non-HT mixed-mode protection
+        // starts with an RTS carried in a legacy PPDU. CTS derives its mode
+        // from this received RTS in computeResponseCtsFrameMode().
+        auto mode = Ieee80211RateSelectionPolicy::selectGroupOrControl(context);
+        if (Ieee80211ModeSet::isHtOrVhtMode(mode))
+            throw cRuntimeError("HT legacy RTS/CTS protection requires a legacy BSS Basic or mandatory PHY mode");
+        return mode;
+    }
     // This subclause describes the rate selection rules for control frames that initiate a TXOP and that are not carried
     // in an A-MPDU.
     if (txopProcedure->isTxopInitiator(header)) {
@@ -190,8 +236,9 @@ const IIeee80211Mode *QosRateSelection::computeControlFrameMode(const Ptr<const 
         // transmitting STA shall transmit the frame using one of the rates in the BSSBasicRateSet parameter or a rate
         // from the mandatory rate set of the attached PHY if the BSSBasicRateSet is empty.
         if (!dynamicPtrCast<const Ieee80211BlockAck>(header) && !dynamicPtrCast<const Ieee80211BlockAckReq>(header)) {
-            // TODO BSSBasicRateSet
-            return fastestMandatoryMode;
+            return Ieee80211RateSelectionPolicy::selectGroupOrControl(context, controlFrameMode,
+                    controlFrameMode == nullptr ? Ieee80211RateSelectionPolicy::DEFAULT_SELECTION :
+                    Ieee80211RateSelectionPolicy::EXPLICIT_CONFIGURATION);
         }
         // If a Basic BlockAckReq or Basic BlockAck frame is carried in a non-HT PPDU, the transmitting STA shall
         // transmit the frame using a rate supported by the receiver STA, if known (as reported in the Supported Rates
@@ -200,8 +247,10 @@ const IIeee80211Mode *QosRateSelection::computeControlFrameMode(const Ptr<const 
         // BSSBasicRateSet parameter or using a rate from the mandatory rate set of the attached PHY if the
         // BSSBasicRateSet is empty.
         else {
-            // TODO supported rate set of the receiving STA
-            return fastestMandatoryMode;
+            if (controlFrameMode != nullptr)
+                return Ieee80211RateSelectionPolicy::selectUnicast(context, controlFrameMode,
+                        Ieee80211RateSelectionPolicy::EXPLICIT_CONFIGURATION);
+            return Ieee80211RateSelectionPolicy::selectBlockAck(context);
         }
     }
     // This subclause describes the rate selection rules for control frames that are not control response frames, are not
@@ -216,9 +265,15 @@ const IIeee80211Mode *QosRateSelection::computeControlFrameMode(const Ptr<const 
         // receiving STA.
         // TODO BSSBasicRateSet
         if (!dynamicPtrCast<const Ieee80211BlockAck>(header) && !dynamicPtrCast<const Ieee80211BlockAckReq>(header)) {
-            // TODO frame sequence context
             auto it = lastTransmittedFrameMode.find(header->getReceiverAddress());
-            return (it != lastTransmittedFrameMode.end()) ? it->second : fastestMandatoryMode;
+            if (it != lastTransmittedFrameMode.end()) {
+                if (isHeOrEhtMode(modeSet, it->second))
+                    return controlFrameMode != nullptr ? controlFrameMode : it->second;
+                return Ieee80211RateSelectionPolicy::selectResponse(context, it->second, controlFrameMode);
+            }
+            return Ieee80211RateSelectionPolicy::selectGroupOrControl(context, controlFrameMode,
+                    controlFrameMode == nullptr ? Ieee80211RateSelectionPolicy::DEFAULT_SELECTION :
+                    Ieee80211RateSelectionPolicy::EXPLICIT_CONFIGURATION);
         }
         // A BlockAckReq or BlockAck that is carried in a non-HT PPDU shall be transmitted by the STA using a rate
         // supported by the receiver STA, as reported in the Supported Rates element and/or Extended Supported Rates
@@ -226,9 +281,10 @@ const IIeee80211Mode *QosRateSelection::computeControlFrameMode(const Ptr<const 
         // known, the transmitting STA shall transmit using a rate from the BSSBasicRateSet parameter or from the
         // mandatory rate set of the attached PHY if the BSSBasicRateSet is empty.
         else {
-            // TODO BSSBasicRateSet
-            // TODO Supported Rates element and/or Extended Supported Rates
-            return fastestMandatoryMode;
+            if (controlFrameMode != nullptr)
+                return Ieee80211RateSelectionPolicy::selectUnicast(context, controlFrameMode,
+                        Ieee80211RateSelectionPolicy::EXPLICIT_CONFIGURATION);
+            return Ieee80211RateSelectionPolicy::selectBlockAck(context);
         }
     }
     else
@@ -244,6 +300,13 @@ const IIeee80211Mode *QosRateSelection::computeMode(Packet *packet, const Ptr<co
         selectedMode = computeControlFrameMode(header, txopProcedure);
     if (!mib->isEhtModeAllowedForPeer(selectedMode, header->getReceiverAddress()))
         throw cRuntimeError("Explicitly selected EHT mode is prohibited by the effective peer capability or operation state");
+    if (!mib->isHtModeAllowedForPeer(selectedMode, header->getReceiverAddress()))
+        throw cRuntimeError("Selected HT mode is prohibited by the effective peer capability or operation state");
+    if (!mib->isVhtModeAllowedForPeer(selectedMode, header->getReceiverAddress()))
+        throw cRuntimeError("Selected VHT mode is prohibited by the effective peer capability or operation state");
+    if (Ieee80211ModeSet::isPeerNegotiatedFecMode(selectedMode))
+        packet->addTagIfAbsent<Ieee80211FecCodingReq>()->setLdpcAllowed(
+                mib->isLdpcAllowedForPeer(selectedMode, header->getReceiverAddress()));
     return selectedMode;
 }
 

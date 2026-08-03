@@ -1,0 +1,178 @@
+%description:
+Validate common IEEE 802.11 LDPC geometry and amendment-specific HT/VHT duration adapters.
+
+%includes:
+#include <limits>
+#include <set>
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BitsChunk.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/physicallayer/wireless/ieee80211/bitlevel/Ieee80211LayeredOfdmTransmitter.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211LdpcPhyCalculator.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+
+%global:
+using namespace inet;
+using namespace inet::physicallayer;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+class TestLayeredOfdmTransmitter : public Ieee80211LayeredOfdmTransmitter
+{
+  public:
+    using Ieee80211LayeredOfdmTransmitter::computeDataDuration;
+};
+
+%activity:
+struct TableFixture { int64_t payload; int64_t available; int count; int length; };
+const TableFixture fixtures[] = {
+    {200, 600, 1, 648}, {100, 600, 1, 1296},
+    {400, 1000, 1, 1296}, {200, 1000, 1, 1944},
+    {800, 1500, 1, 1944}, {800, 2200, 2, 1296},
+    {600, 2200, 2, 1944}, {4000, 7400, 5, 1944},
+};
+for (const auto& fixture : fixtures) {
+    auto geometry = calculateIeee80211LdpcCodewordGeometry(fixture.payload, fixture.available, 1, 2);
+    REQUIRE(geometry && geometry.codewordCount == fixture.count && geometry.codewordLength == fixture.length);
+    auto allocation = calculateIeee80211LdpcBitAllocation(geometry, fixture.payload,
+            fixture.available, 1, 2);
+    REQUIRE(allocation);
+}
+REQUIRE(!calculateIeee80211LdpcCodewordGeometry(0, 600, 1, 2));
+REQUIRE(!calculateIeee80211LdpcCodewordGeometry(100, 600, 2, 2));
+REQUIRE(!calculateIeee80211LdpcCodewordGeometry(std::numeric_limits<int64_t>::max(), 600, 1, 2));
+for (auto expectedRate : {std::pair<int, int>{1, 2}, {2, 3}, {3, 4}, {5, 6}}) {
+    int numerator = 0, denominator = 0;
+    REQUIRE(getIeee80211LdpcRateParameters(
+            (double)expectedRate.first / expectedRate.second, numerator, denominator));
+    REQUIRE(numerator == expectedRate.first && denominator == expectedRate.second);
+    REQUIRE(calculateIeee80211LdpcCodewordGeometry(100, 600, numerator, denominator));
+}
+auto primaryEquality = calculateIeee80211LdpcCodewordGeometry(4374, 8748, 1, 2);
+REQUIRE(primaryEquality && !primaryEquality.primaryAdditionalCapacityCondition &&
+        !primaryEquality.requiresAdditionalCodedBits);
+auto extremeEquality = calculateIeee80211LdpcCodewordGeometry(4000, 7402, 1, 2);
+REQUIRE(extremeEquality && !extremeEquality.extremePuncturingCondition &&
+        extremeEquality.primaryAdditionalCapacityCondition && extremeEquality.requiresAdditionalCodedBits);
+
+auto htLong = Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs0BW20MHz,
+        Ieee80211HtMode::BAND_5GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG, true);
+auto htShort = Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs0BW20MHz,
+        Ieee80211HtMode::BAND_5GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211HtModeBase::HT_GUARD_INTERVAL_SHORT, true);
+auto htGreenfieldShort = Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs0BW20MHz,
+        Ieee80211HtMode::BAND_5GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_GREENFIELD,
+        Ieee80211HtModeBase::HT_GUARD_INTERVAL_SHORT, true);
+auto vhtLong = Ieee80211VhtCompliantModes::getCompliantMode(&Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss1,
+        Ieee80211VhtMode::BAND_5GHZ, Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG, true);
+auto vhtShort = Ieee80211VhtCompliantModes::getCompliantMode(&Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss1,
+        Ieee80211VhtMode::BAND_5GHZ, Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211VhtModeBase::HT_GUARD_INTERVAL_SHORT, true);
+REQUIRE(htLong->getDataMode()->getDuration(B(63)) == SimTime(84, SIMTIME_US));
+REQUIRE(htLong->getDataMode()->getDuration(B(100)) == SimTime(128, SIMTIME_US));
+REQUIRE(htShort->getDataMode()->getDuration(B(63)) == SimTime(76, SIMTIME_US));
+REQUIRE(htShort->getDataMode()->getDuration(B(100)) == SimTime(116, SIMTIME_US));
+REQUIRE(htShort->getDataDuration(B(63)) == SimTime(76, SIMTIME_US));
+REQUIRE(htGreenfieldShort->getDataDuration(B(63)) == SimTime(75600, SIMTIME_NS));
+REQUIRE(htGreenfieldShort->getDuration(B(63)) ==
+        htGreenfieldShort->getPreambleMode()->getDuration() + SimTime(75600, SIMTIME_NS));
+REQUIRE(TestLayeredOfdmTransmitter::computeDataDuration(htShort, B(63)) == SimTime(76, SIMTIME_US));
+REQUIRE(TestLayeredOfdmTransmitter::computeDataDuration(htGreenfieldShort, B(63)) ==
+        SimTime(75600, SIMTIME_NS));
+REQUIRE(vhtLong->getDataMode()->getDuration(B(63)) == SimTime(84, SIMTIME_US));
+REQUIRE(vhtLong->getDataMode()->getDuration(B(100)) == SimTime(132, SIMTIME_US));
+REQUIRE(vhtShort->getDataMode()->getDuration(B(63)) == SimTime(76, SIMTIME_US));
+REQUIRE(vhtShort->getDataMode()->getDuration(B(100)) == SimTime(120, SIMTIME_US));
+REQUIRE(vhtLong->getDataMode()->getLdpcExtraOfdmSymbol(B(63)));
+REQUIRE(vhtLong->getDataMode()->getLdpcExtraOfdmSymbol(B(100)));
+REQUIRE(!vhtLong->getDataMode()->getLdpcExtraOfdmSymbol(B(37)));
+REQUIRE(vhtLong->getDataMode()->getLdpcExtraOfdmSymbol(B(38)));
+
+int htModes = 0, vhtModes = 0;
+std::set<int64_t> htWidths, vhtWidths;
+for (auto profile : {Ieee80211ModeSet::getModeSet("n(mixed-2.4Ghz)"), Ieee80211ModeSet::getModeSet("ac")}) {
+    for (int i = 0; i < profile->getNumModes(); i++) {
+        if (auto ht = dynamic_cast<const Ieee80211HtMode *>(profile->getMode(i))) {
+            auto data = ht->getDataMode();
+            auto ldpc = Ieee80211HtCompliantModes::getCompliantMode(data->getModulationAndCodingScheme(),
+                    ht->getCenterFrequencyMode(), ht->getPreambleMode()->getPreambleFormat(),
+                    data->getGuardIntervalType(), true);
+            REQUIRE(ldpc->getDataMode()->getDuration(B(1500)) > SIMTIME_ZERO);
+            htWidths.insert(data->getBandwidth().get<Hz>()); htModes++;
+        }
+        if (auto vht = dynamic_cast<const Ieee80211VhtMode *>(profile->getMode(i))) {
+            auto data = vht->getDataMode();
+            auto ldpc = Ieee80211VhtCompliantModes::getCompliantMode(data->getModulationAndCodingScheme(),
+                    vht->getCenterFrequencyMode(), vht->getPreambleMode()->getPreambleFormat(),
+                    data->getGuardIntervalType(), true);
+            REQUIRE(ldpc->getDataMode()->getDuration(B(1500)) > SIMTIME_ZERO);
+            vhtWidths.insert(data->getBandwidth().get<Hz>()); vhtModes++;
+        }
+    }
+}
+REQUIRE(htModes > 100 && htWidths.size() == 2);
+REQUIRE(vhtModes > 100 && vhtWidths.size() == 4);
+
+auto vhtHeader = makeShared<Ieee80211VhtPhyHeader>();
+REQUIRE(vhtHeader->getChunkLength() == b(50));
+vhtHeader->setSignalingValid(true);
+vhtHeader->setLengthField(B(1));
+vhtHeader->setCoding(1);
+vhtHeader->setLdpcExtraOfdmSymbol(true);
+Packet serialized("vht-signaling");
+serialized.insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0xAB}));
+serialized.insertAtFront(vhtHeader);
+auto bits = serialized.peekDataAsBits();
+REQUIRE(bits->getChunkLength() == b(58));
+REQUIRE(bits->getBits()[26] && bits->getBits()[27]);
+Packet received("vht-signaling-rx", bits);
+auto decoded = received.popAtFront<Ieee80211VhtPhyHeader>(b(50));
+REQUIRE(decoded->getCoding() == 1 && decoded->getLdpcExtraOfdmSymbol());
+REQUIRE(received.getDataLength() == b(8));
+
+bool rejectedBccExtraSymbol = false;
+try {
+    auto invalid = makeShared<Ieee80211VhtPhyHeader>();
+    invalid->setCoding(0);
+    invalid->setLdpcExtraOfdmSymbol(true);
+    Packet invalidPacket("vht-invalid-bcc-extra", invalid);
+    invalidPacket.peekDataAsBits();
+}
+catch (const cRuntimeError&) {
+    rejectedBccExtraSymbol = true;
+}
+REQUIRE(rejectedBccExtraSymbol);
+
+bool rejectedReceivedBccExtraSymbol = false;
+try {
+    std::vector<bool> invalidBits(50, false);
+    invalidBits[27] = true;
+    Packet invalidReceived("vht-invalid-bcc-extra-rx", makeShared<BitsChunk>(invalidBits));
+    invalidReceived.popAtFront<Ieee80211VhtPhyHeader>(b(50));
+}
+catch (const cRuntimeError&) {
+    rejectedReceivedBccExtraSymbol = true;
+}
+REQUIRE(rejectedReceivedBccExtraSymbol);
+
+bool rejectedInvalidVhtCoding = false;
+try {
+    auto invalid = makeShared<Ieee80211VhtPhyHeader>();
+    invalid->setCoding(2);
+    Packet invalidPacket("vht-invalid-coding", invalid);
+    invalidPacket.peekDataAsBits();
+}
+catch (const cRuntimeError&) {
+    rejectedInvalidVhtCoding = true;
+}
+REQUIRE(rejectedInvalidVhtCoding);
+
+EV << "HT/VHT LDPC geometry, timing, matrix, and VHT signaling passed.\n";
+
+%contains: stdout
+HT/VHT LDPC geometry, timing, matrix, and VHT signaling passed.

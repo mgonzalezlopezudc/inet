@@ -53,6 +53,22 @@ namespace {
 
 // IEEE Std 802.11-2024 Figure 17-5 and 17.3.4: SIGNAL bit 0 is RATE bit R1
 // and the LSB is transmitted first; the shared field helper packs that order.
+
+void writeUnsignedLogicalField(MemoryOutputStream& stream, uint32_t value, int width)
+{
+    for (int bit = 0; bit < width; bit++)
+        stream.writeBit((value >> bit) & 1);
+}
+
+uint32_t readUnsignedLogicalField(MemoryInputStream& stream, int width)
+{
+    uint32_t value = 0;
+    for (int bit = 0; bit < width; bit++)
+        if (stream.readBit())
+            value |= 1u << bit;
+    return value;
+}
+
 class Ieee80211HeSuPhyHeaderSerializer : public Ieee80211HePhyHeaderSerializer
 {
   public:
@@ -807,14 +823,195 @@ const Ptr<Chunk> Ieee80211HtPhyHeaderSerializer::deserialize(MemoryInputStream& 
 void Ieee80211VhtPhyHeaderSerializer::serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const
 {
     auto vhtPhyHeader = dynamicPtrCast<const Ieee80211VhtPhyHeader>(chunk);
+    if (!vhtPhyHeader->getSignalingValid())
+        throw cRuntimeError("VHT serialization requires validated logical signaling");
+    if (vhtPhyHeader->getBandwidth() > 3)
+        throw cRuntimeError("Invalid VHT-SIG-A bandwidth code");
+    if (vhtPhyHeader->getCoding() > 1)
+        throw cRuntimeError("VHT coding must be 0 for BCC or 1 for LDPC");
+    if (vhtPhyHeader->getCoding() == 0 && vhtPhyHeader->getLdpcExtraOfdmSymbol())
+        throw cRuntimeError("VHT LDPC Extra OFDM Symbol cannot be set for BCC coding");
+    const bool mu = vhtPhyHeader->getGroupId() >= 1 && vhtPhyHeader->getGroupId() <= 62;
+    if (mu) {
+        if (vhtPhyHeader->getChunkLength() != b(100) || vhtPhyHeader->getBandwidth() != 0 ||
+                vhtPhyHeader->getGroupId() != 1 || vhtPhyHeader->getStbc() ||
+                vhtPhyHeader->getNdp() || !vhtPhyHeader->getBeamformed() ||
+                vhtPhyHeader->getNumberOfSpaceTimeStreams() != 2 ||
+                vhtPhyHeader->getUsersArraySize() != 2)
+            throw cRuntimeError("Unsupported constrained packet-level VHT MU signaling");
+        // IEEE Std 802.11-2024 Table 21-12: VHT-SIG-A1 BW, reserved,
+        // STBC=0, GID=1, and MU NSTS[1,1,0,0].
+        writeUnsignedLogicalField(stream, 0, 2);
+        stream.writeBit(true);
+        stream.writeBit(false);
+        writeUnsignedLogicalField(stream, 1, 6);
+        for (size_t position = 0; position < 4; ++position)
+            writeUnsignedLogicalField(stream, position < 2 ? 1 : 0, 3);
+        stream.writeBit(true); // TXOP_PS_NOT_ALLOWED
+        stream.writeBit(true); // reserved
+        // Table 21-12 VHT-SIG-A2. Coding for unused positions is reserved 1.
+        stream.writeBit(false); // Short GI
+        stream.writeBit(false); // Short GI NSYM disambiguation
+        for (size_t position = 0; position < 4; ++position) {
+            if (position < 2) {
+                const auto& user = vhtPhyHeader->getUsers(position);
+                if (user.userPosition != position || user.numberOfSpatialStreams != 1 ||
+                        user.mcs > 9 || user.coding > 1 || user.psduLength <= B(0) ||
+                        user.psduLength.get<B>() % 4 != 0 || user.psduLength > B(262140))
+                    throw cRuntimeError("Invalid constrained VHT MU user signaling");
+                stream.writeBit(user.coding != 0);
+            }
+            else
+                stream.writeBit(true);
+        }
+        stream.writeBit(true); // B7 reserved
+        stream.writeBit(true); // MU Beamformed field reserved 1
+        stream.writeBit(true); // B9 reserved
+        stream.writeBitRepeatedly(false, 8); // packet-level logical CRC placeholder
+        stream.writeBitRepeatedly(false, 6); // tail
+        // Table 21-14: each 20 MHz MU user has Length[16], VHT-MCS[4], Tail[6].
+        for (size_t i = 0; i < 2; ++i) {
+            const auto& user = vhtPhyHeader->getUsers(i);
+            writeUnsignedLogicalField(stream, user.psduLength.get<B>() / 4, 16);
+            writeUnsignedLogicalField(stream, user.mcs, 4);
+            stream.writeBitRepeatedly(false, 6);
+        }
+        return;
+    }
+    if (vhtPhyHeader->getChunkLength() != b(50))
+        throw cRuntimeError("VHT packet-level SU/NDP PHY header must be exactly 50 bits");
+    if (vhtPhyHeader->getStbc() ||
+             (vhtPhyHeader->getGroupId() != 0 && vhtPhyHeader->getGroupId() != 63) ||
+             vhtPhyHeader->getNumberOfSpaceTimeStreams() == 0 ||
+             vhtPhyHeader->getNumberOfSpaceTimeStreams() > 8 ||
+             vhtPhyHeader->getPartialAid() > 511 || vhtPhyHeader->getMcs() > 9)
+        throw cRuntimeError("Unsupported or invalid packet-level VHT SU signaling");
+    if (vhtPhyHeader->getNdp() &&
+            (vhtPhyHeader->getNumberOfSpaceTimeStreams() < 2 ||
+             vhtPhyHeader->getMcs() != 0 || vhtPhyHeader->getCoding() != 0 ||
+             vhtPhyHeader->getLdpcExtraOfdmSymbol() ||
+             vhtPhyHeader->getBeamformed()))
+        throw cRuntimeError("Malformed packet-level VHT NDP signaling");
     // IEEE Std 802.11-2024 21.3.2, 21.3.8, and 21.3.9 define VHT-SIG fields.
-    // INET currently models VHT signaling as packet metadata only; no VHT-SIG
-    // bits are serialized here.
+    // Preserve the two modeled logical VHT-SIG-A2 fields at B2/B3 (Table
+    // 21-12). Scrambling, convolutional encoding, interleaving, and modulation
+    // of VHT-SIG-A remain outside this packet-level serializer.
+    auto startPosition = stream.getLength();
+    // Table 21-11: BW, reserved B2=1, STBC=0,
+    // Group ID=0/63, SU NSTS, and Partial AID. NDP is determined by a zero
+    // APEP length in the canonical TXVECTOR, never by Group ID.
+    writeUnsignedLogicalField(stream, vhtPhyHeader->getBandwidth(), 2);
+    stream.writeBit(true); // normative reserved B2
+    stream.writeBit(vhtPhyHeader->getStbc());
+    writeUnsignedLogicalField(stream, vhtPhyHeader->getGroupId(), 6);
+    writeUnsignedLogicalField(stream, vhtPhyHeader->getNumberOfSpaceTimeStreams() - 1, 3);
+    writeUnsignedLogicalField(stream, vhtPhyHeader->getPartialAid(), 9);
+    stream.writeBit(true); // TXOP_PS_NOT_ALLOWED for this constrained subset
+    stream.writeBit(true); // reserved
+    stream.writeBit(false); // Short GI
+    stream.writeBit(false); // Short GI NSYM disambiguation
+    stream.writeBit(vhtPhyHeader->getCoding() != 0);
+    stream.writeBit(vhtPhyHeader->getLdpcExtraOfdmSymbol());
+    writeUnsignedLogicalField(stream, vhtPhyHeader->getMcs(), 4);
+    stream.writeBit(vhtPhyHeader->getBeamformed());
+    stream.writeBit(true); // reserved
+    b remainder = vhtPhyHeader->getChunkLength() - (stream.getLength() - startPosition);
+    if (remainder < b(0))
+        throw cRuntimeError("VHT PHY header is too short for modeled signaling fields");
+    stream.writeBitRepeatedly(false, remainder.get<b>());
 }
 
 const Ptr<Chunk> Ieee80211VhtPhyHeaderSerializer::deserialize(MemoryInputStream& stream) const
 {
+    constexpr int64_t suSerializedLength = 50;
+    if (stream.getRemainingLength() < b(suSerializedLength))
+        throw cRuntimeError("VHT PHY header is too short for modeled signaling fields");
     auto vhtPhyHeader = makeShared<Ieee80211VhtPhyHeader>();
+    auto bandwidth = readUnsignedLogicalField(stream, 2);
+    auto reservedB2 = stream.readBit();
+    auto stbc = stream.readBit();
+    auto groupId = readUnsignedLogicalField(stream, 6);
+    if (groupId >= 1 && groupId <= 62) {
+        if (stream.getRemainingLength() < b(90))
+            throw cRuntimeError("VHT MU PHY header is too short for VHT-SIG-A/B");
+        std::array<uint8_t, 4> nsts;
+        for (auto& value : nsts)
+            value = readUnsignedLogicalField(stream, 3);
+        auto txopPsNotAllowed = stream.readBit();
+        auto reservedA1 = stream.readBit();
+        auto shortGi = stream.readBit();
+        auto shortGiDisambiguation = stream.readBit();
+        std::array<bool, 4> coding;
+        for (auto& value : coding)
+            value = stream.readBit();
+        auto reservedA2B7 = stream.readBit();
+        auto beamformedReserved = stream.readBit();
+        auto reservedA2B9 = stream.readBit();
+        for (int i = 0; i < 8; ++i)
+            (void)stream.readBit(); // logical CRC is not evaluated by this packet-level codec
+        for (int i = 0; i < 6; ++i)
+            if (stream.readBit())
+                throw cRuntimeError("Malformed VHT-SIG-A tail");
+        if (!reservedB2 || stbc || groupId != 1 || nsts != std::array<uint8_t, 4>{1, 1, 0, 0} ||
+                !txopPsNotAllowed || !reservedA1 || shortGi || shortGiDisambiguation ||
+                !coding[2] || !coding[3] || !reservedA2B7 || !beamformedReserved ||
+                !reservedA2B9)
+            throw cRuntimeError("Unsupported or malformed constrained VHT MU SIG-A");
+        vhtPhyHeader->setUsersArraySize(2);
+        B totalLength(0);
+        for (size_t i = 0; i < 2; ++i) {
+            Ieee80211VhtMuUserInfo user;
+            user.userPosition = i;
+            user.numberOfSpatialStreams = 1;
+            user.coding = coding[i] ? 1 : 0;
+            user.psduLength = B(4 * readUnsignedLogicalField(stream, 16));
+            user.mcs = readUnsignedLogicalField(stream, 4);
+            for (int bit = 0; bit < 6; ++bit)
+                if (stream.readBit())
+                    throw cRuntimeError("Malformed VHT-SIG-B tail");
+            if (user.psduLength <= B(0) || user.mcs > 9)
+                throw cRuntimeError("Malformed constrained VHT MU SIG-B user");
+            totalLength += user.psduLength;
+            vhtPhyHeader->setUsers(i, user);
+        }
+        vhtPhyHeader->setSignalingValid(true);
+        vhtPhyHeader->setBandwidth(bandwidth);
+        vhtPhyHeader->setGroupId(groupId);
+        vhtPhyHeader->setStbc(false);
+        vhtPhyHeader->setNumberOfSpaceTimeStreams(2);
+        vhtPhyHeader->setBeamformed(true);
+        vhtPhyHeader->setLengthField(totalLength);
+        vhtPhyHeader->setChunkLength(b(100));
+        return vhtPhyHeader;
+    }
+    auto nsts = readUnsignedLogicalField(stream, 3) + 1;
+    auto partialAid = readUnsignedLogicalField(stream, 9);
+    auto txopPsNotAllowed = stream.readBit();
+    auto reservedA1 = stream.readBit();
+    auto shortGi = stream.readBit();
+    auto shortGiDisambiguation = stream.readBit();
+    vhtPhyHeader->setCoding(stream.readBit() ? 1 : 0);
+    vhtPhyHeader->setLdpcExtraOfdmSymbol(stream.readBit());
+    vhtPhyHeader->setMcs(readUnsignedLogicalField(stream, 4));
+    vhtPhyHeader->setBeamformed(stream.readBit());
+    auto reservedA2 = stream.readBit();
+    vhtPhyHeader->setSignalingValid(true);
+    vhtPhyHeader->setBandwidth(bandwidth);
+    vhtPhyHeader->setGroupId(groupId);
+    vhtPhyHeader->setStbc(stbc);
+    vhtPhyHeader->setNumberOfSpaceTimeStreams(nsts);
+    vhtPhyHeader->setPartialAid(partialAid);
+    if (!reservedB2 || stbc ||
+            (groupId != 0 && groupId != 63) ||
+            !txopPsNotAllowed || !reservedA1 || shortGi ||
+            shortGiDisambiguation || !reservedA2)
+        throw cRuntimeError("Unsupported or malformed packet-level VHT SU signaling");
+    if (vhtPhyHeader->getCoding() == 0 && vhtPhyHeader->getLdpcExtraOfdmSymbol())
+        throw cRuntimeError("VHT LDPC Extra OFDM Symbol cannot be set for BCC coding");
+    for (int64_t i = 34; i < suSerializedLength; i++)
+        if (stream.readBit())
+            throw cRuntimeError("Unsupported nonzero packet-level VHT signaling remainder");
+    vhtPhyHeader->setChunkLength(b(suSerializedLength));
     return vhtPhyHeader;
 }
 

@@ -1,0 +1,189 @@
+%description:
+Validate VHT CSI lifecycle and immutable packet-level VHT SU/NDP PHY authority.
+
+%includes:
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BitsChunk.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/VhtCsiCache.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/VhtHcf.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211VhtTxVector.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+class TestableVhtHcf : public VhtHcf
+{
+  public:
+    using VhtHcf::updateEffectiveChannelWidth;
+};
+
+%activity:
+simtime_t now = SimTime(1);
+VhtCsiCache cache;
+cache.configure(SimTime(50, SIMTIME_MS));
+cache.setTimeProvider([&now] { return now; });
+MacAddress peer("00:00:00:00:00:11");
+cache.update(peer, MHz(20), 7, 3.5);
+REQUIRE(cache.findFresh(peer, MHz(20), 7) != nullptr);
+REQUIRE(cache.findFresh(peer, MHz(40), 7) == nullptr);
+REQUIRE(cache.findFresh(peer, MHz(20), 8) == nullptr);
+now += SimTime(50, SIMTIME_MS);
+REQUIRE(cache.findFresh(peer, MHz(20), 7) != nullptr); // inclusive boundary
+now += SimTime(1, SIMTIME_NS);
+REQUIRE(cache.findFresh(peer, MHz(20), 7) == nullptr);
+cache.update(peer, MHz(20), 8, 4.0);
+cache.invalidatePeer(peer);
+REQUIRE(cache.findFresh(peer, MHz(20), 8) == nullptr);
+cache.update(peer, MHz(20), 9, 4.0);
+cache.update(peer, MHz(40), 9, 4.0);
+cache.invalidateOtherWidths(MHz(40));
+REQUIRE(cache.findFresh(peer, MHz(20), 9) == nullptr);
+REQUIRE(cache.findFresh(peer, MHz(40), 9) != nullptr);
+cache.clear();
+REQUIRE(cache.findFresh(peer, MHz(40), 9) == nullptr);
+
+Hz activeWidth = MHz(20);
+cache.update(peer, MHz(20), 10, 4.0);
+TestableVhtHcf::updateEffectiveChannelWidth(cache, activeWidth, MHz(20));
+REQUIRE(cache.findFresh(peer, MHz(20), 10) != nullptr);
+TestableVhtHcf::updateEffectiveChannelWidth(cache, activeWidth, MHz(40));
+REQUIRE(activeWidth == MHz(40) && cache.findFresh(peer, MHz(20), 10) == nullptr);
+cache.update(peer, MHz(40), 10, 4.0);
+TestableVhtHcf::updateEffectiveChannelWidth(cache, activeWidth, MHz(20));
+REQUIRE(activeWidth == MHz(20) && cache.findFresh(peer, MHz(40), 10) == nullptr);
+
+bool rejectedLayeredRadio = false;
+try {
+    cModule nonPacketLevelRadio;
+    VhtHcf::validatePacketLevelRadio(&nonPacketLevelRadio);
+}
+catch (const cRuntimeError&) { rejectedLayeredRadio = true; }
+REQUIRE(rejectedLayeredRadio);
+
+auto acModeSet = Ieee80211ModeSet::getModeSet("ac");
+auto vhtReferenceMode = acModeSet->getMode(Mbps(6.5), MHz(20), 1);
+auto vhtNdpMode = acModeSet->getVhtSuNdpMode(vhtReferenceMode, 2);
+REQUIRE(acModeSet->getPhyFamily(vhtNdpMode) == Ieee80211PhyFamily::VHT);
+REQUIRE(vhtNdpMode->getDataMode()->getBandwidth() == MHz(20));
+REQUIRE(vhtNdpMode->getDataMode()->getNumberOfSpatialStreams() == 2);
+bool rejectedNonVhtReference = false;
+try {
+    auto htModeSet = Ieee80211ModeSet::getModeSet("n(mixed-2.4Ghz)");
+    acModeSet->getVhtSuNdpMode(htModeSet->getSlowestMandatoryMode(MHz(20)), 2);
+}
+catch (const cRuntimeError&) { rejectedNonVhtReference = true; }
+REQUIRE(rejectedNonVhtReference);
+
+Ieee80211VhtTxVector su(MHz(20), B(100), 0, 2, 5, true, false, 17, true, 3.5);
+REQUIRE(!su.isNdp() && su.isBeamformed());
+REQUIRE(su.getNumberOfSpaceTimeStreams() == 2 && su.getMcs() == 5);
+Ieee80211VhtTxVector ndp(MHz(20), B(0), 63, 2, 0, false, false, 17, false, 0);
+REQUIRE(ndp.isNdp() && ndp.getGroupId() == 63 && ndp.getPartialAid() == 17);
+
+for (auto width : {MHz(20), MHz(40), MHz(80), MHz(160)}) {
+    Ieee80211VhtTxVector ordinarySu(width, B(100), 63, 1, 0, false, false, 0, false, 0);
+    REQUIRE(ordinarySu.getChannelWidth() == width);
+    REQUIRE(getIeee80211VhtChannelWidth(getIeee80211VhtBandwidthCode(width)) == width);
+}
+
+bool rejectedWideBeamforming = false;
+try {
+    Ieee80211VhtTxVector unsupported(MHz(40), B(100), 63, 1, 0, false, false, 0, true, 3);
+}
+catch (const cRuntimeError&) { rejectedWideBeamforming = true; }
+REQUIRE(rejectedWideBeamforming);
+
+bool rejectedMalformedNdp = false;
+try {
+    Ieee80211VhtTxVector malformed(MHz(20), B(0), 63, 2, 1, false, false, 0, false, 0);
+}
+catch (const cRuntimeError&) {
+    rejectedMalformedNdp = true;
+}
+REQUIRE(rejectedMalformedNdp);
+
+bool rejectedOneNssNdp = false;
+try {
+    Ieee80211VhtTxVector malformed(MHz(20), B(0), 63, 1, 0, false, false, 17, false, 0);
+}
+catch (const cRuntimeError&) {
+    rejectedOneNssNdp = true;
+}
+REQUIRE(rejectedOneNssNdp);
+
+auto header = makeShared<Ieee80211VhtPhyHeader>();
+header->setSignalingValid(true);
+header->setNdp(false);
+header->setGroupId(0); // ordinary STA-to-AP VHT SU
+header->setLengthField(B(100));
+header->setNumberOfSpaceTimeStreams(2);
+header->setPartialAid(17);
+header->setMcs(5);
+header->setCoding(1);
+header->setBeamformed(true);
+Packet headerPacket("vht-su-header", header);
+auto bits = headerPacket.peekDataAsBits();
+REQUIRE(bits->getChunkLength() == b(50));
+REQUIRE(bits->getBits()[2]); // normative reserved B2, not signalingValid
+for (int i = 4; i < 10; i++) REQUIRE(!bits->getBits()[i]); // SU Group ID 0
+REQUIRE(bits->getBits()[26]); // LDPC
+REQUIRE(bits->getBits()[32]); // Beamformed
+Packet received("vht-su-header-rx", bits);
+auto decoded = received.popAtFront<Ieee80211VhtPhyHeader>(b(50));
+REQUIRE(decoded->getSignalingValid() && !decoded->getNdp());
+REQUIRE(decoded->getGroupId() == 0); // Group ID never infers NDP
+REQUIRE(decoded->getNumberOfSpaceTimeStreams() == 2);
+REQUIRE(decoded->getPartialAid() == 17 && decoded->getMcs() == 5);
+REQUIRE(decoded->getBeamformed());
+
+auto ndpHeader = makeShared<Ieee80211VhtPhyHeader>();
+ndpHeader->setSignalingValid(true);
+ndpHeader->setNdp(true);
+ndpHeader->setGroupId(63);
+ndpHeader->setNumberOfSpaceTimeStreams(2);
+ndpHeader->setPartialAid(17);
+Packet ndpHeaderPacket("vht-ndp-header", ndpHeader);
+auto ndpBits = ndpHeaderPacket.peekDataAsBits();
+for (int i = 4; i < 10; i++) REQUIRE(ndpBits->getBits()[i]);
+
+bool rejectedLocalInvalid = false;
+try {
+    auto invalid = makeShared<Ieee80211VhtPhyHeader>();
+    Packet invalidPacket("invalid-local-vht-signaling", invalid);
+    invalidPacket.peekDataAsBits();
+}
+catch (const cRuntimeError&) { rejectedLocalInvalid = true; }
+REQUIRE(rejectedLocalInvalid);
+
+bool rejectedReservedB2 = false;
+try {
+    auto malformedBits = bits->getBits();
+    malformedBits[2] = false;
+    Packet malformedPacket("malformed-vht-reserved", makeShared<BitsChunk>(malformedBits));
+    malformedPacket.popAtFront<Ieee80211VhtPhyHeader>(b(50));
+}
+catch (const cRuntimeError&) { rejectedReservedB2 = true; }
+REQUIRE(rejectedReservedB2);
+
+auto wideHeader = makeShared<Ieee80211VhtPhyHeader>();
+wideHeader->setSignalingValid(true);
+wideHeader->setBandwidth(getIeee80211VhtBandwidthCode(MHz(40)));
+wideHeader->setGroupId(63);
+wideHeader->setNumberOfSpaceTimeStreams(1);
+wideHeader->setLengthField(B(100));
+Packet wideHeaderPacket("vht-40mhz-header", wideHeader);
+auto wideBits = wideHeaderPacket.peekDataAsBits();
+REQUIRE(wideBits->getBits()[0] && !wideBits->getBits()[1]);
+Packet receivedWide("vht-40mhz-header-rx", wideBits);
+auto decodedWide = receivedWide.popAtFront<Ieee80211VhtPhyHeader>(b(50));
+REQUIRE(decodedWide->getBandwidth() == getIeee80211VhtBandwidthCode(MHz(40)));
+
+EV << "VHT CSI lifecycle and immutable SU/NDP TXVECTOR passed.\n";
+
+%contains: stdout
+VHT CSI lifecycle and immutable SU/NDP TXVECTOR passed.

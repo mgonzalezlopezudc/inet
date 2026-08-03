@@ -24,7 +24,8 @@ void OriginatorAckPolicy::initialize(int stage)
 bool OriginatorAckPolicy::isAckNeeded(const Ptr<const Ieee80211DataOrMgmtHeader>& header) const
 {
     if (auto dataOrMgmtHeader = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(header)) {
-        return !dataOrMgmtHeader->getReceiverAddress().isMulticast(); // TODO + mgmt with NoAck check
+        return dataOrMgmtHeader->getType() != ST_NOACKACTION &&
+                !dataOrMgmtHeader->getReceiverAddress().isMulticast();
     }
     return false;
 }
@@ -43,4 +44,3 @@ simtime_t OriginatorAckPolicy::getAckTimeout(Packet *packet, const Ptr<const Iee
 
 } /* namespace ieee80211 */
 } /* namespace inet */
-

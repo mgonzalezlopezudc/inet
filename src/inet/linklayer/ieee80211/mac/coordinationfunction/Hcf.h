@@ -141,6 +141,7 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     static HtAmpduAckContext classifyHtAmpduAckContext(
             unsigned int numAggregateMembers,
             const std::vector<Ptr<const Ieee80211MacHeader>>& headers);
+    static Packet *buildAmpduPacket(const std::vector<Packet *>& frames, FcsMode fcsMode);
 
     virtual void startFrameSequence(AccessCategory ac);
     void resumeContention();
@@ -152,6 +153,7 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     virtual bool hasFrameToTransmit(AccessCategory ac);
     virtual bool isReceptionInProgress();
     virtual bool isLegacyHtMultiTidBlockAckEnabled() const;
+    virtual bool processHeaderlessNdpIndication(Packet *packet) { return false; }
 
     // Recipient
     virtual void recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header);

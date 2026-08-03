@@ -14,13 +14,15 @@ namespace inet {
 namespace ieee80211 {
 
 /**
- * HT/VHT TXOP frame-sequence selector.
+ * Deprecated compatibility selector for dormant HT TXOP alternatives.
  *
- * It chooses the appropriate aggregation and RTS/CTS alternatives for an HT
- * TXOP; VHT extensions reuse this path to keep TXOP and aggregation handling
- * consistent across the two PHY families.
+ * This exported type is retained for source and ABI compatibility, but the
+ * production HCF path does not construct it. The current supported HT
+ * protection subset uses the ordinary TxOpFs RTS/CTS path; L-SIG TXOP,
+ * initiator-as-method, and dual-CTS alternatives remain intentionally
+ * unsupported.
  */
-class INET_API HtTxOpFs : public AlternativesFs
+class [[deprecated("Use TxOpFs; only its initial legacy RTS/CTS HT protection subset is supported")]] INET_API HtTxOpFs : public AlternativesFs
 {
   public:
     HtTxOpFs();

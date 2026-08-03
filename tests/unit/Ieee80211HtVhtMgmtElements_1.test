@@ -1,0 +1,168 @@
+%description:
+Test IEEE 802.11 HT and VHT capability element exact lengths and serializer round trip.
+
+%includes:
+#include "inet/common/packet/Packet.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrame_m.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211HtVhtMgmtElements.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+%activity:
+auto request = makeShared<Ieee80211AssociationRequestFrame>();
+request->setSSID("hv");
+Ieee80211SupportedRatesElement rates;
+rates.numRates = 2;
+rates.rates[0].rate = 12;
+rates.rates[1].rate = 24;
+request->setSupportedRates(rates);
+request->setTransmitPowerDbm(10);
+
+Ieee80211HtCapabilitiesElement ht;
+ht.ldpc = true;
+ht.supportedChannelWidth40MHz = true;
+ht.shortGi20 = true;
+ht.shortGi40 = true;
+ht.maxAmpduLengthExponent = 2;
+for (int i = 0; i < 4; i++) {
+    ht.rxMaxMcsForNss[i] = i < 2 ? 7 : -1;
+    ht.txMaxMcsForNss[i] = i == 0 ? 7 : -1;
+}
+request->setHtCapabilitiesPresent(true);
+request->setHtCapabilities(ht);
+Ieee80211HtOperationElement htOperation;
+htOperation.primaryChannel = 36;
+htOperation.staChannelWidth40MHz = true;
+htOperation.protectionMode = 2;
+for (int i = 0; i < 4; i++) htOperation.basicMaxMcsForNss[i] = i == 0 ? 7 : -1;
+request->setHtOperationPresent(true);
+request->setHtOperation(htOperation);
+
+Ieee80211VhtCapabilitiesElement vht;
+vht.rxLdpc = true;
+vht.supportedChannelWidthSet = 1;
+vht.shortGi80 = true;
+vht.shortGi160 = true;
+vht.maxAmpduLengthExponent = 5;
+for (int i = 0; i < 8; i++) {
+    vht.rxMaxMcsForNss[i] = i < 2 ? 9 : -1;
+    vht.txMaxMcsForNss[i] = i == 0 ? 8 : -1;
+}
+request->setVhtCapabilitiesPresent(true);
+request->setVhtCapabilities(vht);
+Ieee80211VhtOperationElement vhtOperation;
+vhtOperation.channelWidth = 1;
+vhtOperation.centerFrequencySegment0 = 42;
+for (int i = 0; i < 8; i++) vhtOperation.basicMaxMcsForNss[i] = i == 0 ? 7 : -1;
+request->setVhtOperationPresent(true);
+request->setVhtOperation(vhtOperation);
+request->setChunkLength(B(85));
+
+auto packet = new Packet("ht-vht", request);
+auto bytes = packet->peekDataAsBytes();
+ASSERT(bytes->getChunkLength() == B(85));
+const auto& raw = bytes->getBytes();
+ASSERT(raw[12] == 45 && raw[13] == 26);
+ASSERT(raw[40] == 61 && raw[41] == 22);
+ASSERT(raw[64] == 191 && raw[65] == 12);
+ASSERT(raw[78] == 192 && raw[79] == 5);
+
+auto received = new Packet("ht-vht-rx", bytes);
+auto decoded = received->popAtFront<Ieee80211AssociationRequestFrame>();
+ASSERT(decoded->getHtCapabilitiesPresent());
+ASSERT(decoded->getHtCapabilities().ldpc);
+ASSERT(decoded->getHtCapabilities().rxMaxMcsForNss[1] == 7);
+ASSERT(decoded->getHtCapabilities().txMaxMcsForNss[1] == -1);
+ASSERT(decoded->getHtOperationPresent());
+ASSERT(decoded->getHtOperation().primaryChannel == 36);
+ASSERT(decoded->getVhtCapabilitiesPresent());
+ASSERT(decoded->getVhtCapabilities().rxLdpc);
+ASSERT(decoded->getVhtCapabilities().rxMaxMcsForNss[1] == 9);
+ASSERT(decoded->getVhtCapabilities().txMaxMcsForNss[0] == 8);
+ASSERT(decoded->getVhtOperationPresent());
+ASSERT(decoded->getVhtOperation().centerFrequencySegment0 == 42);
+delete packet;
+delete received;
+
+auto legacy = makeShared<Ieee80211AssociationRequestFrame>();
+legacy->setSSID("legacy");
+legacy->setSupportedRates(rates);
+legacy->setTransmitPowerDbm(10);
+legacy->setChunkLength(B(16));
+auto legacyPacket = new Packet("legacy", legacy);
+auto legacyBytes = legacyPacket->peekDataAsBytes();
+auto legacyReceived = new Packet("legacy-rx", legacyBytes);
+auto decodedLegacy = legacyReceived->popAtFront<Ieee80211AssociationRequestFrame>();
+ASSERT(!decodedLegacy->getHtCapabilitiesPresent());
+ASSERT(!decodedLegacy->getVhtCapabilitiesPresent());
+delete legacyPacket;
+delete legacyReceived;
+
+bool rejectedNonrepresentableHtTxMcs = false;
+try {
+    auto invalid = makeShared<Ieee80211AssociationRequestFrame>();
+    invalid->setSSID("invalid");
+    invalid->setSupportedRates(rates);
+    Ieee80211HtCapabilitiesElement invalidHt = ht;
+    invalidHt.txMaxMcsForNss[0] = 5; // HT Tx MCS fields cannot encode a per-NSS maximum distinct from Rx.
+    invalid->setHtCapabilitiesPresent(true);
+    invalid->setHtCapabilities(invalidHt);
+    invalid->setChunkLength(B(44));
+    Packet invalidPacket("invalid", invalid);
+    invalidPacket.peekDataAsBytes();
+}
+catch (const cRuntimeError&) {
+    rejectedNonrepresentableHtTxMcs = true;
+}
+ASSERT(rejectedNonrepresentableHtTxMcs);
+
+for (int widthMHz : {20, 40, 80, 160}) {
+    Ieee80211HtOperation htModel;
+    htModel.operatingChannelWidth = widthMHz == 40 ? MHz(40) : MHz(20);
+    Ieee80211VhtOperation model;
+    model.operatingChannelWidth = MHz(widthMHz);
+    model.centerFrequencySegment0 = widthMHz >= 80 ? 42 : 0;
+    model.centerFrequencySegment1 = widthMHz == 160 ? 50 : 0;
+    auto element = makeVhtOperationElement(model);
+    auto decodedModel = makeVhtOperation(element, htModel);
+    ASSERT(decodedModel.operatingChannelWidth == MHz(widthMHz));
+    ASSERT(decodedModel.centerFrequencySegment0 == model.centerFrequencySegment0);
+    ASSERT(decodedModel.centerFrequencySegment1 == model.centerFrequencySegment1);
+}
+auto operation20 = deriveIeee80211VhtOperation(GHz(5.180), MHz(20));
+auto operation40 = deriveIeee80211VhtOperation(GHz(5.190), MHz(40));
+auto operation80 = deriveIeee80211VhtOperation(GHz(5.210), MHz(80));
+auto operation160Lower = deriveIeee80211VhtOperation(GHz(5.250), MHz(160),
+        physicallayer::Ieee80211Primary80ChannelPosition::LOWER);
+auto operation160Upper = deriveIeee80211VhtOperation(GHz(5.250), MHz(160),
+        physicallayer::Ieee80211Primary80ChannelPosition::UPPER);
+ASSERT(operation20.centerFrequencySegment0 == 36 && operation20.centerFrequencySegment1 == 0);
+ASSERT(operation40.centerFrequencySegment0 == 38 && operation40.centerFrequencySegment1 == 0);
+ASSERT(operation80.centerFrequencySegment0 == 42 && operation80.centerFrequencySegment1 == 0);
+ASSERT(operation160Lower.centerFrequencySegment0 == 42 && operation160Lower.centerFrequencySegment1 == 50);
+ASSERT(operation160Upper.centerFrequencySegment0 == 58 && operation160Upper.centerFrequencySegment1 == 50);
+
+Ieee80211HtOperation htModel20;
+htModel20.operatingChannelWidth = MHz(20);
+for (const auto& operation160 : {operation160Lower, operation160Upper}) {
+    auto element = makeVhtOperationElement(operation160);
+    auto decodedOperation160 = makeVhtOperation(element, htModel20);
+    ASSERT(decodedOperation160.operatingChannelWidth == MHz(160));
+    ASSERT(decodedOperation160.centerFrequencySegment0 == operation160.centerFrequencySegment0);
+    ASSERT(decodedOperation160.centerFrequencySegment1 == operation160.centerFrequencySegment1);
+}
+
+bool rejectedUnspecifiedPrimary80 = false;
+try {
+    deriveIeee80211VhtOperation(GHz(5.250), MHz(160));
+}
+catch (const cRuntimeError&) {
+    rejectedUnspecifiedPrimary80 = true;
+}
+ASSERT(rejectedUnspecifiedPrimary80);
+EV << "HT/VHT element lengths and round trip passed.\n";
+
+%contains: stdout
+HT/VHT element lengths and round trip passed.

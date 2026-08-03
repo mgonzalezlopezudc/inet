@@ -110,12 +110,74 @@ enum Ieee80211HwmpCode
 }
 
 //
-// Structure to store supported rates
+// IEEE Std 802.11-2024, 9.4.2.3 and 9.4.2.11: one rate octet uses
+// 500-kbit/s units and carries the BSS Basic Rate Set membership bit.
 //
+struct Ieee80211LegacyRate
+{
+    short rate; // unsigned 7-bit number of 500-kbit/s units
+    bool basic;
+}
+
 struct Ieee80211SupportedRatesElement
 {
     short numRates; // number of rates (max 8)
-    double rate[8]; // in Mbit/s; should be multiple of 500 kbit/s
+    Ieee80211LegacyRate rates[8];
+}
+
+struct Ieee80211ExtendedSupportedRatesElement
+{
+    short numRates;
+    Ieee80211LegacyRate rates[255];
+}
+
+// IEEE Std 802.11-2024, 9.4.2.54: model-backed fields in the 26-octet HT Capabilities body.
+struct Ieee80211HtCapabilitiesElement
+{
+    bool ldpc;
+    bool supportedChannelWidth40MHz;
+    bool shortGi20;
+    bool shortGi40;
+    short maxAmpduLengthExponent;
+    short rxMaxMcsForNss[4];
+    short txMaxMcsForNss[4];
+}
+
+// IEEE Std 802.11-2024, 9.4.2.55: model-backed fields in the 22-octet HT Operation body.
+struct Ieee80211HtOperationElement
+{
+    short primaryChannel;
+    short secondaryChannelOffset;
+    bool staChannelWidth40MHz;
+    short protectionMode;
+    short basicMaxMcsForNss[4];
+}
+
+// IEEE Std 802.11-2024, 9.4.2.156: model-backed fields in the 12-octet VHT Capabilities body.
+struct Ieee80211VhtCapabilitiesElement
+{
+    bool rxLdpc;
+    short supportedChannelWidthSet;
+    bool shortGi80;
+    bool shortGi160;
+    short maxAmpduLengthExponent;
+    bool suBeamformer;
+    bool suBeamformee;
+    short beamformeeSts = 1;
+    short soundingDimensions = 1;
+    bool muBeamformer;
+    bool muBeamformee;
+    short rxMaxMcsForNss[8];
+    short txMaxMcsForNss[8];
+}
+
+// IEEE Std 802.11-2024, 9.4.2.157: complete 5-octet VHT Operation body.
+struct Ieee80211VhtOperationElement
+{
+    short channelWidth;
+    short centerFrequencySegment0;
+    short centerFrequencySegment1;
+    short basicMaxMcsForNss[8];
 }
 
 //
@@ -289,6 +351,14 @@ struct Ieee80211TidToLinkMappingElement
 //
 class Ieee80211MgmtFrame extends FieldsChunk
 {
+    bool htCapabilitiesPresent;
+    Ieee80211HtCapabilitiesElement htCapabilities;
+    bool htOperationPresent;
+    Ieee80211HtOperationElement htOperation;
+    bool vhtCapabilitiesPresent;
+    Ieee80211VhtCapabilitiesElement vhtCapabilities;
+    bool vhtOperationPresent;
+    Ieee80211VhtOperationElement vhtOperation;
     bool heCapabilitiesPresent;
     Ieee80211HeCapabilitiesElement heCapabilities;
     bool heOperationPresent;
@@ -354,6 +424,7 @@ class Ieee80211ProbeRequestFrame extends Ieee80211MgmtFrame
 {
     string SSID;
     Ieee80211SupportedRatesElement supportedRates;
+    Ieee80211ExtendedSupportedRatesElement extendedSupportedRates;
 }
 
 //
@@ -363,6 +434,7 @@ class Ieee80211AssociationRequestFrame extends Ieee80211MgmtFrame
 {
     string SSID;
     Ieee80211SupportedRatesElement supportedRates;
+    Ieee80211ExtendedSupportedRatesElement extendedSupportedRates;
     double transmitPowerDbm = 15;
 }
 
@@ -382,6 +454,7 @@ class Ieee80211AssociationResponseFrame extends Ieee80211MgmtFrame
     Ieee80211StatusCode statusCode;
     short aid;
     Ieee80211SupportedRatesElement supportedRates;
+    Ieee80211ExtendedSupportedRatesElement extendedSupportedRates;
 }
 
 //
@@ -398,6 +471,7 @@ class Ieee80211BeaconFrame extends Ieee80211MgmtFrame
 {
     string SSID;
     Ieee80211SupportedRatesElement supportedRates;
+    Ieee80211ExtendedSupportedRatesElement extendedSupportedRates;
     simtime_t beaconInterval;
     int channelNumber;
     Ieee80211HandoverParameters handoverParameters;     //TODO is it a vendor-specific parameter in serializer?
@@ -431,4 +505,25 @@ class Ieee80211HeCompressedBeamformingFeedback extends Ieee80211MgmtFrame
     uint8_t nc;
     uint8_t nr;
     bool valid = true;
+}
+
+// IEEE Std 802.11-2024 9.6.22.2 and 9.4.1.46. This packet-level subset is
+// deliberately limited to unsegmented 20 MHz SU feedback with Nc=1, Nr=2,
+// Ng=4. The 13-byte report is one Average SNR octet followed by the 16
+// compressed matrices using the SU codebook sizes from Table 9-100.
+class Ieee80211VhtCompressedBeamformingFeedback extends Ieee80211MgmtFrame
+{
+    chunkLength = B(18);
+    uint8_t soundingDialogTokenNumber;
+    int8_t averageSnr;
+    uint8_t compressedBeamformingReport[12];
+}
+
+// Typed representation only; Group ID state and the DL MU scheduler are
+// outside Phase 3A. IEEE Std 802.11-2024 9.6.22.3.
+class Ieee80211VhtGroupIdManagement extends Ieee80211MgmtFrame
+{
+    chunkLength = B(26);
+    uint8_t membershipStatus[8];
+    uint8_t userPosition[16];
 }

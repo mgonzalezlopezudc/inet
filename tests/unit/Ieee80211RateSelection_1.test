@@ -1,0 +1,335 @@
+%description:
+Verify shared legacy/BSS Basic rate policy, non-HT reference mapping, and MIB snapshot ownership.
+
+%includes:
+#include <functional>
+#include "inet/linklayer/ieee80211/mac/originator/TxopProcedure.h"
+#include "inet/linklayer/ieee80211/mac/rateselection/QosRateSelection.h"
+#include "inet/linklayer/ieee80211/mac/rateselection/Ieee80211RateSelectionPolicy.h"
+#include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+
+%file: TestNetwork.ned
+import inet.linklayer.ieee80211.mib.Ieee80211Mib;
+import inet.linklayer.ieee80211.mac.originator.TxopProcedure;
+import inet.linklayer.ieee80211.mac.rateselection.QosRateSelection;
+
+simple TestMib extends Ieee80211Mib
+{
+    parameters:
+        @class(TestMib);
+}
+
+simple TestQosRateSelection extends QosRateSelection
+{
+    parameters:
+        @class(TestQosRateSelectionModule);
+        rateControlModule = "";
+}
+
+simple TestTxopProcedure extends TxopProcedure
+{
+    parameters:
+        @class(TestTxopProcedureModule);
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        mib: TestMib;
+        qosRateSelection: TestQosRateSelection;
+        txopProcedure: TestTxopProcedure;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+class TestMib : public Ieee80211Mib
+{
+  public:
+    virtual int numInitStages() const override { return 1; }
+    virtual void initialize(int) override {}
+    void derive(const Ieee80211ModeSet *modeSet, const std::string& configuredBasicRateCodes) { updateLocalOperationalRates(modeSet, configuredBasicRateCodes); }
+};
+
+Define_Module(TestMib);
+
+class TestRateControl : public IRateControl
+{
+  public:
+    const IIeee80211Mode *rate = nullptr;
+    virtual const IIeee80211Mode *getRate() override { return rate; }
+    virtual void frameTransmitted(Packet *, int, bool, bool) override {}
+    virtual void frameReceived(Packet *) override {}
+};
+
+class TestQosRateSelectionModule : public QosRateSelection
+{
+  public:
+    virtual int numInitStages() const override { return 1; }
+    virtual void initialize(int) override {}
+    void configure(const Ieee80211ModeSet *newModeSet, Ieee80211Mib *newMib,
+            const IIeee80211Mode *blockAckMode = nullptr, IRateControl *rateControl = nullptr)
+    {
+        modeSet = newModeSet;
+        mib = newMib;
+        responseBlockAckFrameMode = blockAckMode;
+        dataOrMgmtRateControl = rateControl;
+    }
+    void remember(const MacAddress& receiver, const IIeee80211Mode *mode) { lastTransmittedFrameMode[receiver] = mode; }
+    const IIeee80211Mode *selectDataOrMgmt(const Ptr<const Ieee80211DataOrMgmtHeader>& header) { return computeDataOrMgmtFrameMode(header); }
+    const IIeee80211Mode *selectControl(const Ptr<const Ieee80211MacHeader>& header, TxopProcedure *txop) { return computeControlFrameMode(header, txop); }
+};
+
+Define_Module(TestQosRateSelectionModule);
+
+class TestTxopProcedureModule : public TxopProcedure
+{
+  public:
+    virtual int numInitStages() const override { return 1; }
+    virtual void initialize(int) override {}
+    virtual bool isTxopInitiator(const Ptr<const Ieee80211MacHeader>&) const override { return false; }
+    virtual bool isTxopTerminator(const Ptr<const Ieee80211MacHeader>&) const override { return false; }
+    virtual bool isInitialProtectionPending() const override { return false; }
+};
+
+Define_Module(TestTxopProcedureModule);
+
+static Ieee80211LegacyRate rate(int code, bool basic = false)
+{
+    Ieee80211LegacyRate value;
+    value.rate = code;
+    value.basic = basic;
+    return value;
+}
+
+static bool throws(const std::function<void()>& operation)
+{
+    try { operation(); }
+    catch (const cRuntimeError&) { return true; }
+    return false;
+}
+
+%activity:
+auto mib = check_and_cast<TestMib *>(getParentModule()->getSubmodule("mib"));
+auto legacySet = Ieee80211ModeSet::getModeSet("g(mixed)");
+mib->localOperationalRates = {rate(2), rate(4), rate(11), rate(12), rate(18), rate(22), rate(24), rate(36), rate(48), rate(72), rate(96), rate(108)};
+mib->localBssBasicRates = {rate(12, true), rate(48, true)};
+std::vector<Ieee80211LegacyRate> peerRates = {rate(12), rate(24)};
+auto basicRates = mib->getBssBasicLegacyRates();
+Ieee80211RateSelectionPolicy::Context context {legacySet, &mib->localOperationalRates,
+        &basicRates, &peerRates, &mib->htOperation, &mib->vhtOperation};
+
+auto mode54 = legacySet->getMode(Mbps(54));
+auto mode12 = legacySet->getMode(Mbps(12));
+auto mode24 = legacySet->getMode(Mbps(24));
+auto mode6 = legacySet->getMode(Mbps(6));
+auto mode5_5 = legacySet->getMode(Mbps(5.5));
+REQUIRE(Ieee80211RateSelectionPolicy::selectUnicast(context, mode54,
+        Ieee80211RateSelectionPolicy::RATE_CONTROL) == mode12);
+REQUIRE(throws([&] { Ieee80211RateSelectionPolicy::selectUnicast(context, mode54,
+        Ieee80211RateSelectionPolicy::EXPLICIT_CONFIGURATION); }));
+REQUIRE(Ieee80211RateSelectionPolicy::selectGroupOrControl(context) == mode24);
+REQUIRE(Ieee80211RateSelectionPolicy::selectBlockAck(context) == mode12);
+context.peerRates = nullptr;
+REQUIRE(Ieee80211RateSelectionPolicy::selectBlockAck(context) == mode24);
+REQUIRE(Ieee80211RateSelectionPolicy::selectResponse(context, mode54) == mode24);
+REQUIRE(Ieee80211RateSelectionPolicy::selectUnicast(context, mode12,
+        Ieee80211RateSelectionPolicy::RATE_CONTROL) == mode12);
+EV << "Asymmetric peer, group/control, response, and BAR/BA policy passed.\n";
+
+std::vector<Ieee80211LegacyRate> crossClassBasicRates = {rate(11, true), rate(12, true)};
+Ieee80211RateSelectionPolicy::Context crossClassContext {legacySet, &mib->localOperationalRates,
+        &crossClassBasicRates, nullptr, &mib->htOperation, &mib->vhtOperation};
+REQUIRE(Ieee80211RateSelectionPolicy::selectResponse(crossClassContext, mode6) == mode6);
+REQUIRE(throws([&] { Ieee80211RateSelectionPolicy::selectResponse(crossClassContext, mode6, mode5_5); }));
+EV << "Response modulation-class default and configured-mode constraints passed.\n";
+
+std::vector<Ieee80211LegacyRate> noBasicRates;
+auto htSet = Ieee80211ModeSet::getModeSet("n(mixed-2.4Ghz)");
+Ieee80211RateSelectionPolicy::Context htContext {htSet, &mib->localOperationalRates,
+        &noBasicRates, nullptr, &mib->htOperation, &mib->vhtOperation};
+auto selectedHt = Ieee80211RateSelectionPolicy::selectGroupOrControl(htContext);
+REQUIRE(dynamic_cast<const Ieee80211HtMode *>(selectedHt) != nullptr);
+
+auto vhtSet = Ieee80211ModeSet::getModeSet("ac");
+Ieee80211RateSelectionPolicy::Context vhtContext {vhtSet, &mib->localOperationalRates,
+        &noBasicRates, nullptr, nullptr, &mib->vhtOperation};
+auto selectedVht = Ieee80211RateSelectionPolicy::selectGroupOrControl(vhtContext);
+REQUIRE(dynamic_cast<const Ieee80211VhtMode *>(selectedVht) != nullptr);
+
+Ieee80211RateSelectionPolicy::Context mandatoryContext {legacySet, &mib->localOperationalRates,
+        &noBasicRates, nullptr, nullptr, nullptr};
+REQUIRE(Ieee80211RateSelectionPolicy::selectGroupOrControl(mandatoryContext) == mode24);
+EV << "Group/control Basic HT, Basic VHT, and mandatory-legacy fallback hierarchy passed.\n";
+
+auto htMcs0 = Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs0BW20MHz,
+        Ieee80211HtMode::BAND_2_4GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+auto htMcs33 = Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs33BW20MHz,
+        Ieee80211HtMode::BAND_2_4GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+auto htMcs34 = Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs34BW20MHz,
+        Ieee80211HtMode::BAND_2_4GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+auto htMcs39 = Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs39BW20MHz,
+        Ieee80211HtMode::BAND_2_4GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+auto htMcs53 = Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs53BW20MHz,
+        Ieee80211HtMode::BAND_2_4GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+auto htMcs76 = Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs76BW20MHz,
+        Ieee80211HtMode::BAND_2_4GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+auto htMcs32 = Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs32BW40MHz,
+        Ieee80211HtMode::BAND_2_4GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+REQUIRE(legacySet->getNonHtReferenceRate(htMcs0) == Mbps(6));
+REQUIRE(legacySet->getNonHtReferenceRate(htMcs32) == Mbps(6));
+REQUIRE(legacySet->getNonHtReferenceRate(htMcs33) == Mbps(24));
+REQUIRE(legacySet->getNonHtReferenceRate(htMcs34) == Mbps(48));
+REQUIRE(legacySet->getNonHtReferenceRate(htMcs39) == Mbps(24));
+REQUIRE(legacySet->getNonHtReferenceRate(htMcs53) == Mbps(24));
+REQUIRE(legacySet->getNonHtReferenceRate(htMcs76) == Mbps(54));
+
+#define REQUIRE_VHT_REFERENCE(scheme, referenceMbps) do { \
+    auto mode = Ieee80211VhtCompliantModes::getCompliantMode(&scheme, \
+            Ieee80211VhtMode::BAND_5GHZ, Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED, \
+            Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG); \
+    REQUIRE(legacySet->getNonHtReferenceRate(mode) == Mbps(referenceMbps)); \
+} while (false)
+REQUIRE_VHT_REFERENCE(Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss1, 6);
+REQUIRE_VHT_REFERENCE(Ieee80211VhtmcsTable::vhtMcs1BW20MHzNss1, 12);
+REQUIRE_VHT_REFERENCE(Ieee80211VhtmcsTable::vhtMcs2BW20MHzNss1, 18);
+REQUIRE_VHT_REFERENCE(Ieee80211VhtmcsTable::vhtMcs3BW20MHzNss1, 24);
+REQUIRE_VHT_REFERENCE(Ieee80211VhtmcsTable::vhtMcs4BW20MHzNss1, 36);
+REQUIRE_VHT_REFERENCE(Ieee80211VhtmcsTable::vhtMcs5BW20MHzNss1, 48);
+REQUIRE_VHT_REFERENCE(Ieee80211VhtmcsTable::vhtMcs6BW20MHzNss1, 54);
+REQUIRE_VHT_REFERENCE(Ieee80211VhtmcsTable::vhtMcs7BW20MHzNss1, 54);
+REQUIRE_VHT_REFERENCE(Ieee80211VhtmcsTable::vhtMcs8BW20MHzNss1, 54);
+REQUIRE_VHT_REFERENCE(Ieee80211VhtmcsTable::vhtMcs9BW40MHzNss1, 54);
+#undef REQUIRE_VHT_REFERENCE
+EV << "HT UEQM stream-1 and VHT Table 10-10 reference mappings passed.\n";
+
+auto qosRateSelection = check_and_cast<TestQosRateSelectionModule *>(
+        getParentModule()->getSubmodule("qosRateSelection"));
+auto txopProcedure = check_and_cast<TestTxopProcedureModule *>(
+        getParentModule()->getSubmodule("txopProcedure"));
+auto findFamilyMode = [](const Ieee80211ModeSet *set, Ieee80211PhyFamily family) {
+    for (int i = 0; i < set->getNumModes(); ++i)
+        if (set->getPhyFamily(i) == family)
+            return set->getMode(i);
+    return (const IIeee80211Mode *)nullptr;
+};
+auto heSet = Ieee80211ModeSet::getModeSet("ax");
+auto ehtSet = Ieee80211ModeSet::getModeSet("be");
+auto heMode = findFamilyMode(heSet, Ieee80211PhyFamily::HE);
+auto ehtMode = findFamilyMode(ehtSet, Ieee80211PhyFamily::EHT);
+REQUIRE(heMode != nullptr && ehtMode != nullptr);
+
+auto requireCompressedBlockAckDispatch = [&](const Ieee80211ModeSet *set, const IIeee80211Mode *precedingMode) {
+    qosRateSelection->configure(set, mib);
+    auto request = makeShared<Ieee80211CompressedBlockAckReq>();
+    request->setTransmitterAddress(MacAddress("02:00:00:00:00:01"));
+    auto packet = new Packet("compressed-bar");
+    packet->addTag<Ieee80211ModeInd>()->setMode(precedingMode);
+    REQUIRE(qosRateSelection->computeResponseBlockAckFrameMode(packet, request) == precedingMode);
+    delete packet;
+};
+requireCompressedBlockAckDispatch(heSet, heMode);
+requireCompressedBlockAckDispatch(ehtSet, ehtMode);
+const IIeee80211Mode *ehtOverride = nullptr;
+for (int i = 0; i < ehtSet->getNumModes(); ++i)
+    if (ehtSet->getPhyFamily(i) == Ieee80211PhyFamily::EHT && ehtSet->getMode(i) != ehtMode) {
+        ehtOverride = ehtSet->getMode(i);
+        break;
+    }
+REQUIRE(ehtOverride != nullptr);
+qosRateSelection->configure(ehtSet, mib, ehtOverride);
+auto ehtOverrideRequest = makeShared<Ieee80211CompressedBlockAckReq>();
+auto ehtOverridePacket = new Packet("eht-compressed-bar-override");
+ehtOverridePacket->addTag<Ieee80211ModeInd>()->setMode(ehtMode);
+REQUIRE(qosRateSelection->computeResponseBlockAckFrameMode(
+        ehtOverridePacket, ehtOverrideRequest) == ehtOverride);
+delete ehtOverridePacket;
+
+qosRateSelection->configure(legacySet, mib);
+auto legacyCompressedRequest = makeShared<Ieee80211CompressedBlockAckReq>();
+legacyCompressedRequest->setTransmitterAddress(MacAddress("02:00:00:00:00:04"));
+auto legacyCompressedPacket = new Packet("legacy-compressed-bar");
+legacyCompressedPacket->addTag<Ieee80211ModeInd>()->setMode(mode54);
+REQUIRE(qosRateSelection->computeResponseBlockAckFrameMode(
+        legacyCompressedPacket, legacyCompressedRequest) == mode24);
+delete legacyCompressedPacket;
+
+auto basicRequest = makeShared<Ieee80211BasicBlockAckReq>();
+basicRequest->setTransmitterAddress(MacAddress("02:00:00:00:00:02"));
+auto basicPacket = new Packet("basic-bar");
+basicPacket->addTag<Ieee80211ModeInd>()->setMode(mode12);
+qosRateSelection->configure(legacySet, mib, mode24);
+REQUIRE(throws([&] { qosRateSelection->computeResponseBlockAckFrameMode(basicPacket, basicRequest); }));
+qosRateSelection->configure(legacySet, mib, mode12);
+REQUIRE(qosRateSelection->computeResponseBlockAckFrameMode(basicPacket, basicRequest) == mode12);
+delete basicPacket;
+
+TestRateControl rateControl;
+rateControl.rate = ehtMode;
+qosRateSelection->configure(ehtSet, mib, nullptr, &rateControl);
+auto multicastData = makeShared<Ieee80211DataHeader>();
+multicastData->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
+REQUIRE(qosRateSelection->selectDataOrMgmt(multicastData) == ehtMode);
+
+MacAddress controlReceiver("02:00:00:00:00:03");
+auto control = makeShared<Ieee80211RtsFrame>();
+control->setReceiverAddress(controlReceiver);
+qosRateSelection->configure(heSet, mib);
+qosRateSelection->remember(controlReceiver, heMode);
+REQUIRE(qosRateSelection->selectControl(control, txopProcedure) == heMode);
+EV << "HE/EHT Block Ack, multicast rate-control, and prior-control dispatch preservation passed.\n";
+
+Ieee80211SupportedRatesElement advertised;
+advertised.numRates = 3;
+advertised.rates[0] = rate(12, true);
+advertised.rates[1] = rate(24, false);
+advertised.rates[2] = rate(48, true);
+mib->installCurrentBssBasicLegacyRates(advertised, Ieee80211ExtendedSupportedRatesElement());
+REQUIRE(mib->currentBssBasicRates.size() == 2);
+mib->clearCurrentBssBasicLegacyRates();
+REQUIRE(mib->currentBssBasicRates.empty());
+
+mib->derive(legacySet, "12 48");
+REQUIRE(mib->localBssBasicRates.size() == 2);
+for (const char *invalid : {"0", "128", "12x", "12 12", "13"}) {
+    REQUIRE(throws([&] { mib->derive(legacySet, invalid); }));
+    REQUIRE(mib->localBssBasicRates.size() == 2);
+}
+EV << "Current-BSS snapshot lifecycle and strict Basic-rate configuration passed.\n";
+
+%contains: stdout
+Asymmetric peer, group/control, response, and BAR/BA policy passed.
+
+%contains: stdout
+Response modulation-class default and configured-mode constraints passed.
+
+%contains: stdout
+Group/control Basic HT, Basic VHT, and mandatory-legacy fallback hierarchy passed.
+
+%contains: stdout
+HT UEQM stream-1 and VHT Table 10-10 reference mappings passed.
+
+%contains: stdout
+HE/EHT Block Ack, multicast rate-control, and prior-control dispatch preservation passed.
+
+%contains: stdout
+Current-BSS snapshot lifecycle and strict Basic-rate configuration passed.

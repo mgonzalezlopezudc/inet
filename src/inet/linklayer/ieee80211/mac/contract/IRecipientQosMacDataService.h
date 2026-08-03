@@ -20,6 +20,8 @@ class INET_API IRecipientQosMacDataService
   public:
     static simsignal_t packetDefragmentedSignal;
     static simsignal_t packetDeaggregatedSignal;
+    static simsignal_t packetIntegrityCheckFailedSignal;
+    static simsignal_t packetReplayDetectedSignal;
 
   public:
     virtual ~IRecipientQosMacDataService() {}
@@ -33,4 +35,3 @@ class INET_API IRecipientQosMacDataService
 } // namespace inet
 
 #endif
-

@@ -7,6 +7,8 @@
 
 #include "inet/linklayer/ieee80211/mac/framesequence/HcfFs.h"
 
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+
 #include "inet/linklayer/ieee80211/mac/framesequence/PrimitiveFrameSequences.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/TxOpFs.h"
 
@@ -64,7 +66,49 @@ bool HcfFs::hasMoreTxOps(RepeatingFs *frameSequence, FrameSequenceContext *conte
     if (hasFrameToTransmit) {
         auto nextFrameToTransmit = context->getInProgressFrames()->getFrameToTransmit();
         const auto& nextHeader = nextFrameToTransmit->peekAtFront<Ieee80211MacHeader>();
-        return frameSequence->getCount() == 0 || (!nextHeader->getReceiverAddress().isMulticast() && context->getQoSContext()->txopProcedure->getRemaining() > 0);
+        if (frameSequence->getCount() == 0)
+            // IEEE Std 802.11-2024, 10.23.2.9: a zero TXOP limit still
+            // permits the single frame exchange that obtained the medium.
+            return true;
+        if (nextHeader->getReceiverAddress().isMulticast())
+            return false;
+
+        auto qosContext = context->getQoSContext();
+        auto txop = qosContext->txopProcedure;
+        auto rateSelection = qosContext->rateSelection;
+        if (rateSelection == nullptr)
+            throw cRuntimeError("HCF TXOP admission requires QoS rate selection");
+
+        auto modeReq = nextFrameToTransmit->findTag<physicallayer::Ieee80211ModeReq>();
+        auto dataMode = modeReq == nullptr ?
+                rateSelection->computeMode(nextFrameToTransmit, nextHeader, txop) :
+                modeReq->getMode();
+        if (modeReq == nullptr)
+            nextFrameToTransmit->addTag<physicallayer::Ieee80211ModeReq>()->setMode(dataMode);
+
+        simtime_t requiredDuration = context->getIfs() +
+                dataMode->getDuration(nextFrameToTransmit->getDataLength());
+        bool ackNeeded = false;
+        if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(nextHeader)) {
+            OriginatorBlockAckAgreement *agreement = qosContext->blockAckAgreementHandler == nullptr ?
+                    nullptr : qosContext->blockAckAgreementHandler->getAgreement(
+                            dataHeader->getReceiverAddress(), dataHeader->getTid());
+            ackNeeded = qosContext->ackPolicy->computeAckPolicy(
+                    nextFrameToTransmit, dataHeader, agreement) == NORMAL_ACK;
+        }
+        else if (auto mgmtHeader = dynamicPtrCast<const Ieee80211MgmtHeader>(nextHeader))
+            ackNeeded = qosContext->ackPolicy->isAckNeeded(mgmtHeader);
+        if (ackNeeded) {
+            auto dataOrMgmtHeader = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(nextHeader);
+            requiredDuration += context->getIfs() +
+                    rateSelection->computeResponseAckFrameMode(nextFrameToTransmit,
+                            dataOrMgmtHeader)->getDuration(LENGTH_ACK);
+        }
+        // IEEE Std 802.11-2024, 10.23.2.8 and 10.23.2.10: start another
+        // exchange only if its complete PPDU/response sequence fits within
+        // the remaining TXOP. All durations come from the selected modes and
+        // the active ACK policy; no independent timing table is maintained.
+        return requiredDuration <= txop->getRemaining();
     }
     return false;
 }

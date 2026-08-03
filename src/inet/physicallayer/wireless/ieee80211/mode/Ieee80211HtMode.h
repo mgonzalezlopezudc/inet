@@ -231,6 +231,7 @@ class INET_API Ieee80211HtDataMode : public IIeee80211DataMode, public Ieee80211
     virtual int getNumberOfSpatialStreams() const override { return Ieee80211HtModeBase::getNumberOfSpatialStreams(); }
     virtual b getPaddingLength(b dataLength) const override { return b(0); }
     virtual b getCompleteLength(b dataLength) const override;
+    int64_t getNumberOfDataSymbols(b dataLength) const;
     virtual const simtime_t getDuration(b dataLength) const override;
     virtual bps getNetBitrate() const override { return Ieee80211HtModeBase::getNetBitrate(); }
     virtual bps getGrossBitrate() const override { return Ieee80211HtModeBase::getGrossBitrate(); }
@@ -280,7 +281,8 @@ class INET_API Ieee80211HtMode : public Ieee80211ModeBase
     virtual int getMpduMaxLength() const override { return 65535; } // in octets
     virtual BandMode getCenterFrequencyMode() const { return centerFrequencyMode; }
 
-    virtual const simtime_t getDuration(b dataLength) const override { return preambleMode->getDuration() + dataMode->getDuration(dataLength); }
+    virtual const simtime_t getDataDuration(b dataLength) const override;
+    virtual const simtime_t getDuration(b dataLength) const override { return preambleMode->getDuration() + getDataDuration(dataLength); }
 };
 
 // A specification of the high-throughput (HT) physical layer (PHY)
@@ -481,7 +483,9 @@ class INET_API Ieee80211HtCompliantModes
   protected:
     static OPP_THREAD_LOCAL const Ieee80211HtCompliantModes singleton;
 
-    mutable std::map<std::tuple<Hz, unsigned int, Ieee80211HtModeBase::GuardIntervalType, bool>, const Ieee80211HtMode *> modeCache;
+    mutable std::map<std::tuple<Hz, unsigned int, Ieee80211HtMode::BandMode,
+            Ieee80211HtPreambleMode::HighTroughputPreambleFormat,
+            Ieee80211HtModeBase::GuardIntervalType, bool>, const Ieee80211HtMode *> modeCache;
 
   public:
     Ieee80211HtCompliantModes();

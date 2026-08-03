@@ -6,10 +6,13 @@ Test HT and VHT transmitter LDPC mapping and PHY header serialization.
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211RadioMedium.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211FecCodingReq.h"
 #include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
@@ -25,6 +28,12 @@ module InspectableRadio extends Ieee80211ScalarRadio
 {
     parameters:
         @class(InspectableRadio);
+}
+
+module InspectableRadioMedium extends Ieee80211RadioMedium
+{
+    parameters:
+        @class(InspectableRadioMedium);
 }
 
 module MockNic
@@ -45,7 +54,7 @@ network TestNetwork
     submodules:
         test: Test;
         interfaceTable: InterfaceTable;
-        radioMedium: Ieee80211RadioMedium;
+        radioMedium: InspectableRadioMedium;
         mobility: StationaryMobility;
 }
 
@@ -69,6 +78,7 @@ network = TestNetwork
 **.constraintAreaMaxZ = 0m
 **.nic.mib.htLdpc = true
 **.nic.mib.vhtLdpc = true
+**.nic.mib.radioModule = "^.radio"
 
 %global:
 using namespace inet;
@@ -79,6 +89,13 @@ class InspectableRadio : public Ieee80211Radio
 {
   public:
     void testEncapsulate(Packet *packet) const { encapsulate(packet); }
+};
+
+class InspectableRadioMedium : public Ieee80211RadioMedium
+{
+  public:
+    void testAddTransmission(const IRadio *radio, const ITransmission *transmission) { addTransmission(radio, transmission); }
+    void testRemoveTransmission(const ITransmission *transmission) { removeTransmission(transmission); }
 };
 
 class MockNicModule : public NetworkInterface
@@ -94,6 +111,7 @@ class MockNicModule : public NetworkInterface
 };
 
 Define_Module(InspectableRadio);
+Define_Module(InspectableRadioMedium);
 Define_Module(MockNicModule);
 
 %activity:
@@ -109,6 +127,8 @@ nic->callInitialize();
 auto radio = check_and_cast<InspectableRadio *>(nic->getSubmodule("radio"));
 auto transmitter = check_and_cast<const Ieee80211Transmitter *>(radio->getTransmitter());
 const_cast<Ieee80211Transmitter *>(transmitter)->setModeSet(nullptr);
+auto mib = check_and_cast<Ieee80211Mib *>(nic->getSubmodule("mib"));
+MacAddress peerAddress("02:00:00:00:00:02");
 
 // 1. Test HT transmission mapping with htLdpc=true
 {
@@ -126,20 +146,86 @@ const_cast<Ieee80211Transmitter *>(transmitter)->setModeSet(nullptr);
         Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
         Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
     packet->addTag<Ieee80211ModeReq>()->setMode(mode);
-
-    radio->testEncapsulate(packet);
-    auto phyHeader = packet->peekAtFront<Ieee80211HtPhyHeader>();
-    EV << "HT encapsulated header coding field: " << (int)phyHeader->getCoding() << "\n";
+    packet->addTag<Ieee80211FecCodingReq>()->setLdpcAllowed(mib->isLdpcAllowedForPeer(mode, peerAddress));
 
     auto resolvedMode = transmitter->computeTransmissionMode(packet);
     auto htMode = dynamic_cast<const Ieee80211HtMode *>(resolvedMode);
     ASSERT(htMode != nullptr);
     EV << "HT resolved mode isLdpc: " << htMode->getDataMode()->getCode()->isLdpc() << "\n";
 
+    radio->testEncapsulate(packet);
+    auto phyHeader = packet->peekAtFront<Ieee80211HtPhyHeader>();
+    EV << "HT encapsulated header coding field: " << (int)phyHeader->getCoding() << "\n";
+
     delete packet;
 }
 
-// 2. Test VHT transmission mapping with vhtLdpc=true
+{
+    auto packet = new Packet("vht-group");
+    auto macHeader = makeShared<Ieee80211DataHeader>();
+    macHeader->setType(ST_DATA_WITH_QOS);
+    macHeader->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
+    macHeader->setChunkLength(b(288));
+    packet->insertAtBack(macHeader);
+    packet->insertAtBack(makeShared<ByteCountChunk>(B(100)));
+    auto mode = Ieee80211VhtCompliantModes::getCompliantMode(&Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss1,
+        Ieee80211VhtMode::BAND_5GHZ, Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG);
+    packet->addTag<Ieee80211ModeReq>()->setMode(mode);
+    packet->addTag<Ieee80211FecCodingReq>()->setLdpcAllowed(mib->isLdpcAllowedForPeer(mode, MacAddress::BROADCAST_ADDRESS));
+    radio->testEncapsulate(packet);
+    EV << "VHT group coding field: " << (int)packet->peekAtFront<Ieee80211VhtPhyHeader>()->getCoding() << "\n";
+    delete packet;
+}
+
+Ieee80211HtCapabilities peerHt = mib->localHtCapabilities;
+peerHt.ldpc = true;
+mib->bssStationData.isAssociated = true;
+mib->setPeerHtCapabilities(peerAddress, peerHt, mib->htOperation);
+
+// 2. Negotiated HT receiver capability permits LDPC.
+{
+    auto packet = new Packet("ht-negotiated");
+    auto macHeader = makeShared<Ieee80211DataHeader>();
+    macHeader->setType(ST_DATA_WITH_QOS);
+    macHeader->setReceiverAddress(peerAddress);
+    macHeader->setChunkLength(b(288));
+    packet->insertAtBack(macHeader);
+    packet->insertAtBack(makeShared<ByteCountChunk>(B(100)));
+    auto mode = Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs0BW20MHz,
+        Ieee80211HtMode::BAND_5GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+    packet->addTag<Ieee80211ModeReq>()->setMode(mode);
+    packet->addTag<Ieee80211FecCodingReq>()->setLdpcAllowed(mib->isLdpcAllowedForPeer(mode, peerAddress));
+    radio->testEncapsulate(packet);
+    EV << "HT negotiated coding field: " << (int)packet->peekAtFront<Ieee80211HtPhyHeader>()->getCoding() << "\n";
+    delete packet;
+}
+
+// Absent VHT peer state also fails closed to BCC.
+{
+    auto packet = new Packet("vht-absent");
+    auto macHeader = makeShared<Ieee80211DataHeader>();
+    macHeader->setType(ST_DATA_WITH_QOS);
+    macHeader->setReceiverAddress(peerAddress);
+    macHeader->setChunkLength(b(288));
+    packet->insertAtBack(macHeader);
+    packet->insertAtBack(makeShared<ByteCountChunk>(B(100)));
+    auto mode = Ieee80211VhtCompliantModes::getCompliantMode(&Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss1,
+        Ieee80211VhtMode::BAND_5GHZ, Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG);
+    packet->addTag<Ieee80211ModeReq>()->setMode(mode);
+    packet->addTag<Ieee80211FecCodingReq>()->setLdpcAllowed(mib->isLdpcAllowedForPeer(mode, peerAddress));
+    radio->testEncapsulate(packet);
+    EV << "VHT absent coding field: " << (int)packet->peekAtFront<Ieee80211VhtPhyHeader>()->getCoding() << "\n";
+    delete packet;
+}
+
+Ieee80211VhtCapabilities peerVht = mib->localVhtCapabilities;
+peerVht.rxLdpc = true;
+mib->setPeerVhtCapabilities(peerAddress, peerVht, mib->vhtOperation);
+
+// 3. Negotiated VHT receiver capability permits LDPC.
 {
     auto packet = new Packet("vht-pkt");
     auto macHeader = makeShared<Ieee80211DataHeader>();
@@ -155,24 +241,217 @@ const_cast<Ieee80211Transmitter *>(transmitter)->setModeSet(nullptr);
         Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED,
         Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG);
     packet->addTag<Ieee80211ModeReq>()->setMode(mode);
-
-    radio->testEncapsulate(packet);
-    auto phyHeader = packet->peekAtFront<Ieee80211VhtPhyHeader>();
-    EV << "VHT encapsulated header coding field: " << (int)phyHeader->getCoding() << "\n";
+    packet->addTag<Ieee80211FecCodingReq>()->setLdpcAllowed(mib->isLdpcAllowedForPeer(mode, peerAddress));
 
     auto resolvedMode = transmitter->computeTransmissionMode(packet);
     auto vhtMode = dynamic_cast<const Ieee80211VhtMode *>(resolvedMode);
     ASSERT(vhtMode != nullptr);
     EV << "VHT resolved mode isLdpc: " << vhtMode->getDataMode()->getCode()->isLdpc() << "\n";
 
+    radio->testEncapsulate(packet);
+    auto phyHeader = packet->peekAtFront<Ieee80211VhtPhyHeader>();
+    EV << "VHT encapsulated header coding field: " << (int)phyHeader->getCoding() << "\n";
+
     delete packet;
 }
+
+peerVht.rxLdpc = false;
+mib->setPeerVhtCapabilities(peerAddress, peerVht, mib->vhtOperation);
+{
+    auto packet = new Packet("vht-incapable");
+    auto macHeader = makeShared<Ieee80211DataHeader>();
+    macHeader->setType(ST_DATA_WITH_QOS);
+    macHeader->setReceiverAddress(peerAddress);
+    macHeader->setChunkLength(b(288));
+    packet->insertAtBack(macHeader);
+    packet->insertAtBack(makeShared<ByteCountChunk>(B(100)));
+    auto mode = Ieee80211VhtCompliantModes::getCompliantMode(&Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss1,
+        Ieee80211VhtMode::BAND_5GHZ, Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG);
+    packet->addTag<Ieee80211ModeReq>()->setMode(mode);
+    packet->addTag<Ieee80211FecCodingReq>()->setLdpcAllowed(mib->isLdpcAllowedForPeer(mode, peerAddress));
+    radio->testEncapsulate(packet);
+    EV << "VHT incapable coding field: " << (int)packet->peekAtFront<Ieee80211VhtPhyHeader>()->getCoding() << "\n";
+    delete packet;
+}
+
+// 4. Production VHT SU/NDP authority: Group ID is independent of NDP,
+// NDP is zero-length and has no DATA interval, and post-handoff request-tag
+// mutation cannot alter the immutable transmission or error-model result.
+cModule *receiverNicModule = nicType->create("receiverNic", getSystemModule());
+receiverNicModule->buildInside();
+auto receiverNic = check_and_cast<MockNicModule *>(receiverNicModule);
+receiverNic->setMacAddress(MacAddress("02:00:00:00:00:03"));
+receiverNic->callInitialize();
+auto receiverRadio = check_and_cast<InspectableRadio *>(receiverNic->getSubmodule("radio"));
+auto receiver = check_and_cast<const Ieee80211Receiver *>(receiverRadio->getReceiver());
+auto medium = check_and_cast<InspectableRadioMedium *>(getSystemModule()->getSubmodule("radioMedium"));
+
+auto suMode = Ieee80211VhtCompliantModes::getCompliantMode(
+        &Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss1,
+        Ieee80211VhtMode::BAND_5GHZ,
+        Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG);
+auto suPacket = new Packet("vht-sta-to-ap-su");
+auto suMacHeader = makeShared<Ieee80211DataHeader>();
+suMacHeader->setType(ST_DATA_WITH_QOS);
+suMacHeader->setReceiverAddress(receiverNic->getMacAddress());
+suMacHeader->setTransmitterAddress(networkInterface->getMacAddress());
+suMacHeader->setChunkLength(b(288));
+suPacket->insertAtBack(suMacHeader);
+suPacket->insertAtBack(makeShared<ByteCountChunk>(B(100)));
+suPacket->addTag<Ieee80211ModeReq>()->setMode(suMode);
+auto suRequest = suPacket->addTag<Ieee80211VhtTransmissionTag>();
+suRequest->setGroupId(0);
+suRequest->setPartialAid(17);
+suRequest->setBeamformed(true);
+suRequest->setBeamformingGainDb(3);
+radio->testEncapsulate(suPacket);
+auto suPhyHeader = suPacket->peekAtFront<Ieee80211VhtPhyHeader>();
+ASSERT(!suPhyHeader->getNdp() && suPhyHeader->getGroupId() == 0 &&
+        suPhyHeader->getLengthField() > B(0));
+auto suTransmission = check_and_cast<const Ieee80211Transmission *>(
+        transmitter->createTransmission(radio, suPacket, SIMTIME_ZERO));
+ASSERT(!suTransmission->getVhtTxVector()->isNdp());
+ASSERT(suTransmission->getVhtTxVector()->getGroupId() == 0);
+ASSERT(suTransmission->getVhtTxVector()->getBeamformingGainDb() == 3);
+medium->testAddTransmission(radio, suTransmission);
+auto suSnir = medium->getSNIR(receiverRadio, suTransmission);
+double suWholePerBeforeMutation = receiver->getErrorModel()->computePacketErrorRate(
+        suSnir, IRadioSignal::SIGNAL_PART_WHOLE);
+auto mutableSuRequest = suPacket->getTagForUpdate<Ieee80211VhtTransmissionTag>();
+mutableSuRequest->setBeamformed(false);
+mutableSuRequest->setBeamformingGainDb(30);
+double suWholePerAfterMutation = receiver->getErrorModel()->computePacketErrorRate(
+        suSnir, IRadioSignal::SIGNAL_PART_WHOLE);
+ASSERT(suWholePerBeforeMutation == suWholePerAfterMutation);
+ASSERT(suTransmission->getVhtTxVector()->isBeamformed());
+ASSERT(suTransmission->getVhtTxVector()->getBeamformingGainDb() == 3);
+medium->testRemoveTransmission(suTransmission);
+
+auto ndpMode = Ieee80211VhtCompliantModes::getCompliantMode(
+        &Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss2,
+        Ieee80211VhtMode::BAND_5GHZ,
+        Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG);
+auto ndpPacket = new Packet("vht-ap-to-sta-ndp");
+ndpPacket->addTag<Ieee80211ModeReq>()->setMode(ndpMode);
+auto ndpRequest = ndpPacket->addTag<Ieee80211VhtTransmissionTag>();
+ndpRequest->setNdp(true);
+ndpRequest->setGroupId(63);
+ndpRequest->setPartialAid(17);
+radio->testEncapsulate(ndpPacket);
+auto ndpPhyHeader = ndpPacket->peekAtFront<Ieee80211VhtPhyHeader>();
+ASSERT(ndpPhyHeader->getNdp() && ndpPhyHeader->getGroupId() == 63 &&
+        ndpPhyHeader->getPartialAid() == 17 && ndpPhyHeader->getLengthField() == B(0));
+auto ndpTransmission = check_and_cast<const Ieee80211Transmission *>(
+        transmitter->createTransmission(radio, ndpPacket, SIMTIME_ZERO));
+ASSERT(ndpTransmission->getDataDuration() == SIMTIME_ZERO);
+ASSERT(ndpTransmission->getDuration() == ndpTransmission->getPreambleDuration());
+medium->testAddTransmission(radio, ndpTransmission);
+auto ndpSnir = medium->getSNIR(receiverRadio, ndpTransmission);
+double ndpDataPer = receiver->getErrorModel()->computePacketErrorRate(
+        ndpSnir, IRadioSignal::SIGNAL_PART_DATA);
+double ndpHeaderPer = receiver->getErrorModel()->computePacketErrorRate(
+        ndpSnir, IRadioSignal::SIGNAL_PART_HEADER);
+double ndpWholePer = receiver->getErrorModel()->computePacketErrorRate(
+        ndpSnir, IRadioSignal::SIGNAL_PART_WHOLE);
+ASSERT(ndpDataPer == 0);
+ASSERT(ndpWholePer == ndpHeaderPer);
+medium->testRemoveTransmission(ndpTransmission);
+
+bool oneNssNdpRejected = false;
+try {
+    auto invalidNdpPacket = new Packet("invalid-one-nss-vht-ndp");
+    invalidNdpPacket->addTag<Ieee80211ModeReq>()->setMode(suMode);
+    invalidNdpPacket->addTag<Ieee80211VhtTransmissionTag>()->setNdp(true);
+    try { radio->testEncapsulate(invalidNdpPacket); }
+    catch (...) { delete invalidNdpPacket; throw; }
+    delete invalidNdpPacket;
+}
+catch (const cRuntimeError&) { oneNssNdpRejected = true; }
+ASSERT(oneNssNdpRejected);
+
+auto expectVhtHeaderModeMismatch = [&](const Ptr<Ieee80211VhtPhyHeader>& header,
+        const Ieee80211VhtMode *selectedMode) {
+    auto packet = new Packet("invalid-vht-canonical-projection", header);
+    packet->insertAtBack(makeShared<ByteCountChunk>(B(100)));
+    packet->addTag<Ieee80211ModeReq>()->setMode(selectedMode);
+    bool rejected = false;
+    try {
+        auto transmission = transmitter->createTransmission(radio, packet, SIMTIME_ZERO);
+        delete transmission;
+    }
+    catch (const cRuntimeError&) { rejected = true; }
+    delete packet;
+    ASSERT(rejected);
+};
+auto makeSuProjection = [] {
+    auto header = makeShared<Ieee80211VhtPhyHeader>();
+    header->setSignalingValid(true);
+    header->setNdp(false);
+    header->setGroupId(0);
+    header->setNumberOfSpaceTimeStreams(1);
+    header->setLengthField(B(100));
+    return header;
+};
+auto mismatchedMcs = makeSuProjection();
+mismatchedMcs->setMcs(1);
+expectVhtHeaderModeMismatch(mismatchedMcs, suMode);
+auto mismatchedNsts = makeSuProjection();
+mismatchedNsts->setNumberOfSpaceTimeStreams(2);
+expectVhtHeaderModeMismatch(mismatchedNsts, suMode);
+auto mismatchedFec = makeSuProjection();
+mismatchedFec->setCoding(1);
+expectVhtHeaderModeMismatch(mismatchedFec, suMode);
+auto mismatchedExtra = makeSuProjection();
+mismatchedExtra->setCoding(1);
+mismatchedExtra->setLdpcExtraOfdmSymbol(true);
+expectVhtHeaderModeMismatch(mismatchedExtra, suMode);
+auto mismatchedNdpLength = makeSuProjection();
+mismatchedNdpLength->setNdp(true);
+expectVhtHeaderModeMismatch(mismatchedNdpLength, suMode);
+auto mode40 = Ieee80211VhtCompliantModes::getCompliantMode(
+        &Ieee80211VhtmcsTable::vhtMcs0BW40MHzNss1,
+        Ieee80211VhtMode::BAND_5GHZ,
+        Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG);
+auto widePacket = new Packet("ordinary-vht-40mhz-su");
+auto wideMacHeader = makeShared<Ieee80211DataHeader>();
+wideMacHeader->setType(ST_DATA_WITH_QOS);
+wideMacHeader->setReceiverAddress(receiverNic->getMacAddress());
+wideMacHeader->setTransmitterAddress(networkInterface->getMacAddress());
+wideMacHeader->setChunkLength(b(288));
+widePacket->insertAtBack(wideMacHeader);
+widePacket->insertAtBack(makeShared<ByteCountChunk>(B(100)));
+widePacket->addTag<Ieee80211ModeReq>()->setMode(mode40);
+radio->testEncapsulate(widePacket);
+auto widePhyHeader = widePacket->peekAtFront<Ieee80211VhtPhyHeader>();
+ASSERT(widePhyHeader->getBandwidth() == getIeee80211VhtBandwidthCode(MHz(40)));
+auto wideTransmission = check_and_cast<const Ieee80211Transmission *>(
+        transmitter->createTransmission(radio, widePacket, SIMTIME_ZERO));
+ASSERT(wideTransmission->getVhtTxVector()->getChannelWidth() == MHz(40));
+ASSERT(wideTransmission->getDataDuration() > SIMTIME_ZERO);
+delete wideTransmission;
+delete widePacket;
+
+// The same ordinary SU projection remains invalid when its VHT-SIG-A BW
+// field (20 MHz) disagrees with the selected 40 MHz mode.
+expectVhtHeaderModeMismatch(makeSuProjection(), mode40);
+
+delete suPacket;
+delete ndpPacket;
+receiverNic->deleteModule();
 
 nic->deleteModule();
 EV << ".\n";
 
 %contains: stdout
-HT encapsulated header coding field: 1
-HT resolved mode isLdpc: 1
-VHT encapsulated header coding field: 1
+HT resolved mode isLdpc: 0
+HT encapsulated header coding field: 0
+VHT group coding field: 0
+HT negotiated coding field: 1
+VHT absent coding field: 0
 VHT resolved mode isLdpc: 1
+VHT encapsulated header coding field: 1
+VHT incapable coding field: 0

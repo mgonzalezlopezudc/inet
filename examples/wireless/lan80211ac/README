@@ -1,2 +1,13 @@
-Network for testing the new 802.11ac model (NetworkInterfaces/Ieee80211)
-in infrastructure mode.
+Basic infrastructure-mode VHT network using Ieee80211 interfaces.
+
+VHT sounding, packet-level beamforming, and DL MU-MIMO are disabled by
+default. Their supported subset and other HT/VHT fidelity limits are described
+under "HT and VHT feature scope" in the IEEE 802.11 chapter of the INET User's
+Guide.
+
+The optional VHT MU model is deliberately constrained to an AP, exactly two
+associated 20 MHz users, one spatial stream per user, deterministic Group ID 1
+assignment, and serialized BAR/BA exchanges. It does not model waveform
+precoding or general multi-user configurations. This example is a basic VHT
+network and does not configure the traffic and sounding choreography needed to
+demonstrate that opt-in MU subset.

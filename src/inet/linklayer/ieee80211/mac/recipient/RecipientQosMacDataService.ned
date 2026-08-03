@@ -8,6 +8,7 @@
 package inet.linklayer.ieee80211.mac.recipient;
 
 import inet.common.Module;
+import inet.linklayer.ieee80211.mac.contract.IRecipientMpduSecurity;
 
 //
 // Implements the QoS MAC data service for the recipient side in IEEE 802.11 networks.
@@ -25,9 +26,16 @@ module RecipientQosMacDataService extends Module
         @display("i=block/join");
         @signal[packetDefragmented](type=inet::Packet);
         @signal[packetDeaggregated](type=inet::Packet);
+        @signal[packetIntegrityCheckFailed](type=inet::Packet);
+        @signal[packetReplayDetected](type=inet::Packet);
         @signal[packetDropped](type=inet::Packet);
         @statistic[packetDefragmented](title="packets defragmented"; record=count);
         @statistic[packetDeaggregated](title="packets deaggregated"; record=count);
+        @statistic[packetIntegrityCheckFailed](title="MPDU integrity check failures"; record=count);
+        @statistic[packetReplayDetected](title="MPDU replay detections"; record=count);
         @statistic[packetDropDuplicateDetected](title="packet drops: duplicate detected"; source=packetDropReasonIsDuplicateDetected(packetDropped); record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
+    submodules:
+        mpduSecurity: <default("")> like IRecipientMpduSecurity if typename != "" {
+            @display("p=100,100");
+        }
 }
-

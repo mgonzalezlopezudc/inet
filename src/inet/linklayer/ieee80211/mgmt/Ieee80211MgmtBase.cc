@@ -26,6 +26,15 @@ namespace ieee80211 {
 
 using namespace inet::physicallayer;
 
+static bool isHtCapableModeSet(const Ieee80211ModeSet *modeSet)
+{
+    if (modeSet == nullptr)
+        return false;
+    const char *name = modeSet->getName();
+    return (name[0] == 'n' && (name[1] == '\0' || name[1] == '(')) || !strcmp(name, "ac") ||
+            !strcmp(name, "ax") || !strcmp(name, "be");
+}
+
 void Ieee80211MgmtBase::initialize(int stage)
 {
     OperationalBase::initialize(stage);
@@ -40,6 +49,12 @@ void Ieee80211MgmtBase::initialize(int stage)
         WATCH(numMgmtFramesReceived);
         WATCH(numMgmtFramesDropped);
     }
+    else if (stage == INITSTAGE_LINK_LAYER && modeSet == nullptr) {
+        auto radioModule = getModuleFromPar<cModule>(par("radioModule"), this);
+        auto modeSetProvider = dynamic_cast<physicallayer::IIeee80211ModeSetProvider *>(radioModule);
+        if (modeSetProvider != nullptr)
+            modeSet = modeSetProvider->getModeSet();
+    }
 }
 
 void Ieee80211MgmtBase::receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details)
@@ -48,12 +63,60 @@ void Ieee80211MgmtBase::receiveSignal(cComponent *source, simsignal_t signalID, 
 
     if (signalID == modesetChangedSignal) {
         modeSet = check_and_cast<physicallayer::Ieee80211ModeSet *>(obj);
-        int rateIndex = 0;
-        for (int i = 0; i < modeSet->getNumModes() && rateIndex < 8; i++)
-            if (modeSet->isMandatory(i))
-                supportedRates.rate[rateIndex++] = modeSet->getMode(i)->getDataMode()->getNetBitrate().get<Mbps>();
-        supportedRates.numRates = rateIndex;
     }
+}
+
+void Ieee80211MgmtBase::addLegacyRateElements(const Ptr<Ieee80211MgmtFrame>& frame) const
+{
+    auto supported = mib->getSupportedRatesElement();
+    auto extended = mib->getExtendedSupportedRatesElement();
+    if (auto value = dynamicPtrCast<Ieee80211ProbeRequestFrame>(frame)) {
+        value->setSupportedRates(supported);
+        value->setExtendedSupportedRates(extended);
+    }
+    else if (auto value = dynamicPtrCast<Ieee80211AssociationRequestFrame>(frame)) {
+        value->setSupportedRates(supported);
+        value->setExtendedSupportedRates(extended);
+    }
+    else if (auto value = dynamicPtrCast<Ieee80211AssociationResponseFrame>(frame)) {
+        value->setSupportedRates(supported);
+        value->setExtendedSupportedRates(extended);
+    }
+    else if (auto value = dynamicPtrCast<Ieee80211BeaconFrame>(frame)) {
+        value->setSupportedRates(supported);
+        value->setExtendedSupportedRates(extended);
+    }
+    else
+        throw cRuntimeError("Management frame type has no Supported Rates element");
+}
+
+B Ieee80211MgmtBase::getLegacyRateElementsLength(const Ptr<const Ieee80211MgmtFrame>& frame) const
+{
+    int supportedCount = 0;
+    int extendedCount = 0;
+    if (auto value = dynamicPtrCast<const Ieee80211ProbeRequestFrame>(frame)) {
+        supportedCount = value->getSupportedRates().numRates;
+        extendedCount = value->getExtendedSupportedRates().numRates;
+    }
+    else if (auto value = dynamicPtrCast<const Ieee80211AssociationRequestFrame>(frame)) {
+        supportedCount = value->getSupportedRates().numRates;
+        extendedCount = value->getExtendedSupportedRates().numRates;
+    }
+    else if (auto value = dynamicPtrCast<const Ieee80211AssociationResponseFrame>(frame)) {
+        supportedCount = value->getSupportedRates().numRates;
+        extendedCount = value->getExtendedSupportedRates().numRates;
+    }
+    else if (auto value = dynamicPtrCast<const Ieee80211BeaconFrame>(frame)) {
+        supportedCount = value->getSupportedRates().numRates;
+        extendedCount = value->getExtendedSupportedRates().numRates;
+    }
+    return B(2 + supportedCount + (extendedCount == 0 ? 0 : 2 + extendedCount));
+}
+
+void Ieee80211MgmtBase::requireDetailedLegacyRateSupport() const
+{
+    if (mib->localOperationalRates.empty())
+        throw cRuntimeError("Detailed IEEE 802.11 management requires at least one representable legacy Supported Rate; pure-EHT/6 GHz detailed management is unsupported");
 }
 
 void Ieee80211MgmtBase::handleMessageWhenUp(cMessage *msg)
@@ -134,6 +197,37 @@ bool Ieee80211MgmtBase::isHeManagementSupported()
     }
     catch (const cException& e) {
         EV_DEBUG << "Could not resolve MAC mode set for HE management support: " << e.what() << "\n";
+        return false;
+    }
+}
+
+bool Ieee80211MgmtBase::isHtManagementSupported()
+{
+    if (modeSet != nullptr)
+        return isHtCapableModeSet(modeSet);
+    try {
+        auto mac = check_and_cast<Ieee80211Mac *>(getModuleFromPar<cModule>(par("macModule"), this));
+        auto macModeSet = mac->getModeSet();
+        return isHtCapableModeSet(macModeSet);
+    }
+    catch (const cException& e) {
+        EV_DEBUG << "Could not resolve MAC mode set for HT management support: " << e.what() << "\n";
+        return false;
+    }
+}
+
+bool Ieee80211MgmtBase::isVhtManagementSupported()
+{
+    if (modeSet != nullptr)
+        return !strcmp(modeSet->getName(), "ac") || !strcmp(modeSet->getName(), "ax") || !strcmp(modeSet->getName(), "be");
+    try {
+        auto mac = check_and_cast<Ieee80211Mac *>(getModuleFromPar<cModule>(par("macModule"), this));
+        auto macModeSet = mac->getModeSet();
+        return macModeSet != nullptr && (!strcmp(macModeSet->getName(), "ac") || !strcmp(macModeSet->getName(), "ax") ||
+                !strcmp(macModeSet->getName(), "be"));
+    }
+    catch (const cException& e) {
+        EV_DEBUG << "Could not resolve MAC mode set for VHT management support: " << e.what() << "\n";
         return false;
     }
 }

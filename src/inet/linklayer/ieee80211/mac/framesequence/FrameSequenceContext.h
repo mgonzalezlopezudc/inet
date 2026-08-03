@@ -15,6 +15,7 @@
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementHandler.h"
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckProcedure.h"
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorQoSAckPolicy.h"
+#include "inet/linklayer/ieee80211/mac/contract/IQosRateSelection.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRtsPolicy.h"
 #include "inet/linklayer/ieee80211/mac/originator/RtsProcedure.h"
 #include "inet/linklayer/ieee80211/mac/originator/TxopProcedure.h"
@@ -27,17 +28,19 @@ namespace ieee80211 {
 class INET_API QoSContext
 {
   public:
-    QoSContext(IOriginatorQoSAckPolicy *ackPolicy, IOriginatorBlockAckProcedure *blockAckProcedure, IOriginatorBlockAckAgreementHandler *blockAckAgreementHandler, TxopProcedure *txopProcedure) :
+    QoSContext(IOriginatorQoSAckPolicy *ackPolicy, IOriginatorBlockAckProcedure *blockAckProcedure, IOriginatorBlockAckAgreementHandler *blockAckAgreementHandler, TxopProcedure *txopProcedure, IQosRateSelection *rateSelection = nullptr) :
         ackPolicy(ackPolicy),
         blockAckProcedure(blockAckProcedure),
         blockAckAgreementHandler(blockAckAgreementHandler),
-        txopProcedure(txopProcedure)
+        txopProcedure(txopProcedure),
+        rateSelection(rateSelection)
     {}
 
     IOriginatorQoSAckPolicy *ackPolicy = nullptr;
     IOriginatorBlockAckProcedure *blockAckProcedure = nullptr;
     IOriginatorBlockAckAgreementHandler *blockAckAgreementHandler = nullptr;
     TxopProcedure *txopProcedure = nullptr;
+    IQosRateSelection *rateSelection = nullptr;
 };
 
 class INET_API NonQoSContext

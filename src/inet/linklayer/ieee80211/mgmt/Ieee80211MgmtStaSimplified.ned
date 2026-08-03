@@ -24,6 +24,7 @@ simple Ieee80211MgmtStaSimplified extends SimpleModule like IIeee80211Mgmt
         string interfaceTableModule;
         string mibModule;
         string macModule;               // The path to the MAC module
+        string radioModule;             // The path to the IEEE 802.11 mode-set provider
         @display("i=block/cogwheel");
     gates:
         input macIn @labels(Ieee80211MacHeader);

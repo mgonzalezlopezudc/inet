@@ -1,0 +1,85 @@
+%description:
+Test immutable IEEE 802.11 FEC request propagation when HCF replaces MPDUs with an A-MPDU packet.
+
+%includes:
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/ByteCountChunk.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211FecCodingReq.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+class TestHcf : public Hcf
+{
+  public:
+    using Hcf::buildAmpduPacket;
+};
+
+%activity:
+auto makeMpdu = [] (const char *name, bool ldpcAllowed) {
+    auto packet = new Packet(name);
+    packet->insertAtBack(makeShared<ByteCountChunk>(B(8)));
+    packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+    packet->addTag<Ieee80211FecCodingReq>()->setLdpcAllowed(ldpcAllowed);
+    return packet;
+};
+
+auto mpdu1 = makeMpdu("mpdu-1", true);
+auto mpdu2 = makeMpdu("mpdu-2", true);
+std::vector<Packet *> members {mpdu1, mpdu2};
+auto ampdu = TestHcf::buildAmpduPacket(members, FCS_DECLARED_CORRECT);
+ASSERT(ampdu->getTag<Ieee80211FecCodingReq>()->getLdpcAllowed());
+ASSERT(ampdu->getName() == std::string("mpdu-1+mpdu-2"));
+
+auto firstTaggedMpdu = makeMpdu("first-tagged", false);
+auto subsequentUntaggedMpdu = new Packet("subsequent-untagged");
+subsequentUntaggedMpdu->insertAtBack(makeShared<ByteCountChunk>(B(8)));
+subsequentUntaggedMpdu->insertAtBack(makeShared<Ieee80211MacTrailer>());
+std::vector<Packet *> partiallyTaggedMembers {firstTaggedMpdu, subsequentUntaggedMpdu};
+auto partiallyTaggedAmpdu = TestHcf::buildAmpduPacket(partiallyTaggedMembers, FCS_DECLARED_CORRECT);
+ASSERT(!partiallyTaggedAmpdu->getTag<Ieee80211FecCodingReq>()->getLdpcAllowed());
+
+auto untaggedMpdu = new Packet("untagged-mpdu");
+auto untaggedAmpdu = new Packet("untagged-ampdu");
+propagateIeee80211FecCodingReq(untaggedMpdu, untaggedAmpdu);
+ASSERT(untaggedAmpdu->findTag<Ieee80211FecCodingReq>() == nullptr);
+
+bool rejectedReplacementDecision = false;
+try {
+    ampdu->getTagForUpdate<Ieee80211FecCodingReq>()->setLdpcAllowed(false);
+}
+catch (const cRuntimeError&) {
+    rejectedReplacementDecision = true;
+}
+ASSERT(rejectedReplacementDecision);
+
+auto disagreeingLdpcMpdu = makeMpdu("ldpc-mpdu", true);
+auto disagreeingBccMpdu = makeMpdu("bcc-mpdu", false);
+bool rejectedConstituentDisagreement = false;
+try {
+    std::vector<Packet *> disagreeingMembers {disagreeingLdpcMpdu, disagreeingBccMpdu};
+    delete TestHcf::buildAmpduPacket(disagreeingMembers, FCS_DECLARED_CORRECT);
+}
+catch (const cRuntimeError&) {
+    rejectedConstituentDisagreement = true;
+}
+ASSERT(rejectedConstituentDisagreement);
+
+delete mpdu1;
+delete mpdu2;
+delete ampdu;
+delete firstTaggedMpdu;
+delete subsequentUntaggedMpdu;
+delete partiallyTaggedAmpdu;
+delete disagreeingLdpcMpdu;
+delete disagreeingBccMpdu;
+delete untaggedMpdu;
+delete untaggedAmpdu;
+EV << "HCF A-MPDU FEC request propagation passed.\n";
+
+%contains: stdout
+HCF A-MPDU FEC request propagation passed.

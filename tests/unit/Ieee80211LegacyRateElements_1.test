@@ -1,0 +1,295 @@
+%description:
+Verify typed legacy rate entries, Supported/Extended Supported Rates splitting,
+Basic-bit preservation, serializer symmetry, and MIB-owned peer lifecycle.
+
+%includes:
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrame_m.h"
+#include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
+
+%file: TestNetwork.ned
+import inet.linklayer.ieee80211.mib.Ieee80211Mib;
+
+simple TestMib extends Ieee80211Mib
+{
+    parameters:
+        @class(TestMib);
+}
+
+simple LayeredRadioStub
+{
+    parameters:
+        string opMode = default("g(mixed)");
+        @class(LayeredRadioStub);
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        mib: TestMib;
+        fallbackMib: Ieee80211Mib {
+            parameters:
+                radioModule = "^.layeredRadio";
+        }
+        layeredRadio: LayeredRadioStub;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+class TestMib : public Ieee80211Mib
+{
+  public:
+    virtual int numInitStages() const override { return 1; }
+    virtual void initialize(int) override {}
+};
+
+Define_Module(TestMib);
+
+class LayeredRadioStub : public cSimpleModule {};
+
+Define_Module(LayeredRadioStub);
+
+static void requireRates(const Ieee80211SupportedRatesElement& supported,
+        const Ieee80211ExtendedSupportedRatesElement& extended)
+{
+    REQUIRE(supported.numRates == 8);
+    REQUIRE(extended.numRates == 3);
+    for (int i = 0; i < 8; ++i) {
+        REQUIRE(supported.rates[i].rate == i + 2);
+        REQUIRE(supported.rates[i].basic == (i % 3 == 0));
+    }
+    for (int i = 0; i < 3; ++i) {
+        REQUIRE(extended.rates[i].rate == i + 10);
+        REQUIRE(extended.rates[i].basic == ((i + 8) % 3 == 0));
+    }
+}
+
+template<typename T>
+static Ptr<const T> roundTrip(const Ptr<T>& frame)
+{
+    auto packet = new Packet("legacy-rate-elements", frame);
+    auto bytes = packet->peekDataAsBytes();
+    auto received = new Packet("legacy-rate-elements-rx", bytes);
+    auto decoded = received->popAtFront<T>();
+    delete packet;
+    delete received;
+    return decoded;
+}
+
+template<typename T>
+static void setRates(const Ptr<T>& frame,
+        const Ieee80211SupportedRatesElement& supported,
+        const Ieee80211ExtendedSupportedRatesElement& extended)
+{
+    frame->setSupportedRates(supported);
+    frame->setExtendedSupportedRates(extended);
+}
+
+static void requireSerializationRejected(const Ieee80211SupportedRatesElement& supported,
+        const Ieee80211ExtendedSupportedRatesElement& extended = Ieee80211ExtendedSupportedRatesElement())
+{
+    auto frame = makeShared<Ieee80211ProbeRequestFrame>();
+    frame->setSSID("r");
+    frame->setSupportedRates(supported);
+    frame->setExtendedSupportedRates(extended);
+    frame->setChunkLength(B(5 + supported.numRates));
+    Packet packet("invalid-legacy-rate-elements", frame);
+    bool rejected = false;
+    try {
+        packet.peekDataAsBytes();
+    }
+    catch (const cRuntimeError&) {
+        rejected = true;
+    }
+    REQUIRE(rejected);
+}
+
+static void requireDeserializationRejected(const std::vector<uint8_t>& bytes)
+{
+    Packet packet("malformed-legacy-rate-elements", makeShared<BytesChunk>(bytes));
+    bool rejected = false;
+    try {
+        packet.popAtFront<Ieee80211ProbeRequestFrame>();
+    }
+    catch (const cRuntimeError&) {
+        rejected = true;
+    }
+    REQUIRE(rejected);
+}
+
+%activity:
+auto mib = check_and_cast<TestMib *>(getParentModule()->getSubmodule("mib"));
+auto fallbackMib = check_and_cast<Ieee80211Mib *>(getParentModule()->getSubmodule("fallbackMib"));
+REQUIRE(!fallbackMib->localOperationalRates.empty());
+REQUIRE(fallbackMib->getSupportedRatesElement().numRates > 0);
+EV << "Layered-radio opMode fallback initializes the MIB legacy operational rates.\n";
+for (int i = 0; i < 11; ++i) {
+    Ieee80211LegacyRate rate;
+    rate.rate = i + 2;
+    rate.basic = i % 3 == 0;
+    mib->localOperationalRates.push_back(rate);
+}
+auto supported = mib->getSupportedRatesElement();
+auto extended = mib->getExtendedSupportedRatesElement();
+requireRates(supported, extended);
+EV << "MIB projects the first eight legacy rates and the extended remainder.\n";
+
+auto probeRequest = makeShared<Ieee80211ProbeRequestFrame>();
+probeRequest->setSSID("r"); setRates(probeRequest, supported, extended);
+probeRequest->setChunkLength(B(18));
+auto decodedProbeRequest = roundTrip(probeRequest);
+requireRates(decodedProbeRequest->getSupportedRates(),
+        decodedProbeRequest->getExtendedSupportedRates());
+
+auto associationRequest = makeShared<Ieee80211AssociationRequestFrame>();
+associationRequest->setSSID("r"); setRates(associationRequest, supported, extended);
+associationRequest->setChunkLength(B(22));
+auto decodedAssociationRequest = roundTrip(associationRequest);
+requireRates(decodedAssociationRequest->getSupportedRates(),
+        decodedAssociationRequest->getExtendedSupportedRates());
+
+auto reassociationRequest = makeShared<Ieee80211ReassociationRequestFrame>();
+reassociationRequest->setSSID("r");
+reassociationRequest->setCurrentAP(MacAddress("02:00:00:00:00:01"));
+setRates(reassociationRequest, supported, extended);
+reassociationRequest->setChunkLength(B(28));
+auto decodedReassociationRequest = roundTrip(reassociationRequest);
+requireRates(decodedReassociationRequest->getSupportedRates(),
+        decodedReassociationRequest->getExtendedSupportedRates());
+REQUIRE(decodedReassociationRequest->getCurrentAP() ==
+        MacAddress("02:00:00:00:00:01"));
+
+auto associationResponse = makeShared<Ieee80211AssociationResponseFrame>();
+associationResponse->setStatusCode(SC_SUCCESSFUL);
+associationResponse->setAid(7); setRates(associationResponse, supported, extended);
+associationResponse->setChunkLength(B(21));
+auto decodedAssociationResponse = roundTrip(associationResponse);
+requireRates(decodedAssociationResponse->getSupportedRates(),
+        decodedAssociationResponse->getExtendedSupportedRates());
+
+auto reassociationResponse = makeShared<Ieee80211ReassociationResponseFrame>();
+reassociationResponse->setStatusCode(SC_SUCCESSFUL);
+reassociationResponse->setAid(8); setRates(reassociationResponse, supported, extended);
+reassociationResponse->setChunkLength(B(21));
+auto decodedReassociationResponse = roundTrip(reassociationResponse);
+requireRates(decodedReassociationResponse->getSupportedRates(),
+        decodedReassociationResponse->getExtendedSupportedRates());
+
+auto beacon = makeShared<Ieee80211BeaconFrame>();
+beacon->setSSID("r"); beacon->setBeaconInterval(SimTime(1024, SIMTIME_US));
+setRates(beacon, supported, extended); beacon->setChunkLength(B(30));
+auto decodedBeacon = roundTrip(beacon);
+requireRates(decodedBeacon->getSupportedRates(),
+        decodedBeacon->getExtendedSupportedRates());
+
+auto probeResponse = makeShared<Ieee80211ProbeResponseFrame>();
+probeResponse->setSSID("r");
+probeResponse->setBeaconInterval(SimTime(1024, SIMTIME_US));
+setRates(probeResponse, supported, extended);
+probeResponse->setChunkLength(B(30));
+auto decodedProbeResponse = roundTrip(probeResponse);
+requireRates(decodedProbeResponse->getSupportedRates(),
+        decodedProbeResponse->getExtendedSupportedRates());
+EV << "All management-frame rate elements round-trip with exact units and Basic bits.\n";
+
+Ieee80211SupportedRatesElement invalidCount;
+invalidCount.numRates = 0;
+requireSerializationRejected(invalidCount);
+invalidCount.numRates = 9;
+requireSerializationRejected(invalidCount);
+Ieee80211SupportedRatesElement invalidCode;
+invalidCode.numRates = 1;
+invalidCode.rates[0].rate = 0;
+requireSerializationRejected(invalidCode);
+invalidCode.rates[0].rate = 128;
+requireSerializationRejected(invalidCode);
+Ieee80211ExtendedSupportedRatesElement invalidExtendedCount;
+invalidExtendedCount.numRates = 256;
+requireSerializationRejected(supported, invalidExtendedCount);
+
+Packet validProbePacket("valid-probe-for-malformed-cases", probeRequest);
+auto validProbeBytes = validProbePacket.peekDataAsBytes()->getBytes();
+REQUIRE(validProbeBytes[3] == 1 && validProbeBytes[4] == 8);
+REQUIRE(validProbeBytes[13] == 50 && validProbeBytes[14] == 3);
+EV << "Supported Rates EID 1 precedes Extended Supported Rates EID 50 on the wire.\n";
+auto invalidRead = validProbeBytes;
+invalidRead[4] = 0;
+requireDeserializationRejected(invalidRead);
+invalidRead = validProbeBytes;
+invalidRead[4] = 9;
+requireDeserializationRejected(invalidRead);
+invalidRead = validProbeBytes;
+invalidRead[5] = 0;
+requireDeserializationRejected(invalidRead);
+invalidRead[5] = 128;
+requireDeserializationRejected(invalidRead);
+invalidRead = validProbeBytes;
+invalidRead.pop_back();
+requireDeserializationRejected(invalidRead);
+EV << "Malformed Supported Rates lengths and rate codes are rejected.\n";
+
+for (int i = 0; i < 8; ++i)
+    mib->vhtOperation.basicMcsNss.maxMcsPerNss[i] = i;
+MacAddress peer("02:00:00:00:00:44");
+mib->setPeerLegacyRates(peer, supported, extended);
+auto peerRates = mib->findPeerLegacyRates(peer);
+REQUIRE(peerRates != nullptr && peerRates->size() == 11);
+auto preservedFirstRate = (*peerRates)[0];
+Ieee80211ExtendedSupportedRatesElement invalidPeerExtended;
+invalidPeerExtended.numRates = 2;
+invalidPeerExtended.rates[0].rate = 24;
+invalidPeerExtended.rates[1].rate = 0;
+bool rejectedPeerUpdate = false;
+try {
+    mib->setPeerLegacyRates(peer, supported, invalidPeerExtended);
+}
+catch (const cRuntimeError&) {
+    rejectedPeerUpdate = true;
+}
+REQUIRE(rejectedPeerUpdate);
+peerRates = mib->findPeerLegacyRates(peer);
+REQUIRE(peerRates != nullptr && peerRates->size() == 11 &&
+        (*peerRates)[0].rate == preservedFirstRate.rate &&
+        (*peerRates)[0].basic == preservedFirstRate.basic);
+MacAddress malformedNewPeer("02:00:00:00:00:45");
+bool rejectedNewPeer = false;
+try {
+    mib->setPeerLegacyRates(malformedNewPeer, supported, invalidPeerExtended);
+}
+catch (const cRuntimeError&) {
+    rejectedNewPeer = true;
+}
+REQUIRE(rejectedNewPeer && mib->findPeerLegacyRates(malformedNewPeer) == nullptr);
+for (int i = 0; i < 8; ++i)
+    REQUIRE(mib->vhtOperation.basicMcsNss.maxMcsPerNss[i] == i);
+mib->removePeerCapabilities(peer);
+REQUIRE(mib->findPeerLegacyRates(peer) == nullptr);
+EV << "MIB owns peer advertisements and removes them without changing the VHT basic MCS/NSS map.\n";
+
+%contains: stdout
+Layered-radio opMode fallback initializes the MIB legacy operational rates.
+
+%contains: stdout
+MIB projects the first eight legacy rates and the extended remainder.
+
+%contains: stdout
+All management-frame rate elements round-trip with exact units and Basic bits.
+
+%contains: stdout
+Supported Rates EID 1 precedes Extended Supported Rates EID 50 on the wire.
+
+%contains: stdout
+Malformed Supported Rates lengths and rate codes are rejected.
+
+%contains: stdout
+MIB owns peer advertisements and removes them without changing the VHT basic MCS/NSS map.

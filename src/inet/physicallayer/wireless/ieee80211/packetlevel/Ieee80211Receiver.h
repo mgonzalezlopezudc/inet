@@ -20,6 +20,9 @@ namespace inet {
 
 namespace physicallayer {
 
+class Ieee80211Transmission;
+struct Ieee80211VhtMuUser;
+
 class INET_API Ieee80211Receiver : public FlatReceiverBase
 {
   protected:
@@ -99,6 +102,10 @@ class INET_API Ieee80211Receiver : public FlatReceiverBase
     bool shouldIgnoreReceptionDueToHeSpatialReuse(const IListening *listening, const IReception *reception, bool logDecision) const;
     virtual HeSpatialReuseDecision computeHeSpatialReuseDecision(const IListening *listening, const IReception *reception) const;
     virtual W computeSpatialReuseTransmitPowerLimit(W threshold) const;
+    virtual bool computeIsVhtMuUserReceptionSuccessful(
+            const Ieee80211Transmission *transmission,
+            const Ieee80211VhtMuUser& user,
+            const std::vector<const IReceptionDecision *> *decisions) const;
 
   protected:
     virtual void initialize(int stage) override;

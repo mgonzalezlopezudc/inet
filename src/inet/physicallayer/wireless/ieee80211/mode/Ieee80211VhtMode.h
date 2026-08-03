@@ -153,6 +153,7 @@ class INET_API Ieee80211VhtPreambleMode : public IIeee80211PreambleMode, public 
     virtual const simtime_t getFirstHTLongTrainingFieldDuration() const;
     virtual const simtime_t getSecondAndSubsequentHTLongTrainingFielDuration() const { return 4E-6; } // HT-LTFs, s = 2,3,..,n
     virtual unsigned int getNumberOfHtLongTrainings() const { return numberOfHTLongTrainings; }
+    static simtime_t getMuPreambleDuration(unsigned int totalNumberOfSpaceTimeStreams);
 
     virtual const simtime_t getDuration() const override;
 
@@ -259,6 +260,7 @@ class INET_API Ieee80211VhtDataMode : public IIeee80211DataMode, public Ieee8021
     unsigned int getNumberOfBccEncoders40MHz() const;
     unsigned int getNumberOfBccEncoders80MHz() const;
     unsigned int getNumberOfBccEncoders160MHz() const;
+    int64_t computeNumberOfDataSymbols(b dataLength, bool *ldpcExtraOfdmSymbol = nullptr) const;
 
   public:
     Ieee80211VhtDataMode(const Ieee80211Vhtmcs *modulationAndCodingScheme, const Hz bandwidth, GuardIntervalType guardIntervalType, bool ldpc = false);
@@ -272,6 +274,7 @@ class INET_API Ieee80211VhtDataMode : public IIeee80211DataMode, public Ieee8021
     virtual b getPaddingLength(b dataLength) const override { return b(0); }
     virtual b getCompleteLength(b dataLength) const override;
     virtual const simtime_t getDuration(b dataLength) const override;
+    bool getLdpcExtraOfdmSymbol(b dataLength) const;
     virtual bps getNetBitrate() const override { return Ieee80211VhtModeBase::getNetBitrate(); }
     virtual bps getGrossBitrate() const override { return Ieee80211VhtModeBase::getGrossBitrate(); }
     virtual const Ieee80211Vhtmcs *getModulationAndCodingScheme() const { return modulationAndCodingScheme; }

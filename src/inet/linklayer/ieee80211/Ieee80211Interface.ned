@@ -65,6 +65,7 @@ module Ieee80211Interface extends NetworkInterface like IWirelessInterface
         string interfaceTableModule;
         string energySourceModule = default("");
         string opMode @enum("a","b","g(erp)","g(mixed)","n(mixed-2.4Ghz)","p","ac","ax","be") = default("g(mixed)");
+        string primary80ChannelPosition @enum("automatic", "lower", "upper") = default("automatic");
         string address @mutable = default("auto"); // MAC address as hex string (12 hex digits), or
                                                    // "auto". "auto" values will be replaced by
                                                    // a generated MAC address in init stage 0.
@@ -72,9 +73,11 @@ module Ieee80211Interface extends NetworkInterface like IWirelessInterface
         double bitrate @unit(bps) = default(-1bps);
         **.opMode = this.opMode;
         **.bitrate = this.bitrate;
+        radio.primary80ChannelPosition = default(this.primary80ChannelPosition);
         mac.modeSet = default(this.opMode);
         mac.*.rateSelection.dataFrameBitrate = default(this.bitrate);
         *.macModule = default(absPath(".mac"));
+        *.radioModule = default(absPath(".radio"));
         *.mibModule = default(absPath(".mib"));
         *.twtModule = default(exists(twt) ? absPath(".twt") : "");
         *.interfaceTableModule = default(absPath(this.interfaceTableModule));

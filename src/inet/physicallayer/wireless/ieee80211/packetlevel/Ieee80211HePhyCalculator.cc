@@ -5,6 +5,7 @@
 //
 
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211LdpcPhyCalculator.h"
 
 #include <algorithm>
 #include <limits>
@@ -318,74 +319,20 @@ bool isHeLtfGiCombinationAllowed(Ieee80211HePpduFormat ppduFormat,
 Ieee80211HeLdpcCalculationResult computeHeLdpcParameters(int64_t payloadBits,
         int64_t availableBits, int rateNumerator, int rateDenominator)
 {
-    using Wide = __int128;
     Ieee80211HeLdpcCalculationResult result;
-    const bool supportedRate =
-            (rateNumerator == 1 && rateDenominator == 2) ||
-            (rateNumerator == 2 && rateDenominator == 3) ||
-            (rateNumerator == 3 && rateDenominator == 4) ||
-            (rateNumerator == 5 && rateDenominator == 6);
-    if (payloadBits <= 0 || availableBits <= 0 || !supportedRate) {
-        result.error = "invalid HE LDPC payload, capacity, or code rate";
+    auto geometry = calculateIeee80211LdpcCodewordGeometry(
+            payloadBits, availableBits, rateNumerator, rateDenominator);
+    if (!geometry) {
+        result.error = geometry.error;
         return result;
     }
-    if (availableBits <= 648) {
-        result.codewordCount = 1;
-        result.codewordLength = (Wide)availableBits * rateDenominator >=
-                (Wide)payloadBits * rateDenominator + 912LL * (rateDenominator - rateNumerator) ? 1296 : 648;
-    }
-    else if (availableBits <= 1296) {
-        result.codewordCount = 1;
-        result.codewordLength = (Wide)availableBits * rateDenominator >=
-                (Wide)payloadBits * rateDenominator + 1464LL * (rateDenominator - rateNumerator) ? 1944 : 1296;
-    }
-    else if (availableBits <= 1944) {
-        result.codewordCount = 1;
-        result.codewordLength = 1944;
-    }
-    else if (availableBits <= 2592) {
-        result.codewordCount = 2;
-        result.codewordLength = (Wide)availableBits * rateDenominator >=
-                (Wide)payloadBits * rateDenominator + 2916LL * (rateDenominator - rateNumerator) ? 1944 : 1296;
-    }
-    else {
-        result.codewordLength = 1944;
-        const Wide numerator = (Wide)payloadBits * rateDenominator;
-        const Wide denominator = 1944LL * rateNumerator;
-        const Wide count = numerator / denominator + (numerator % denominator != 0);
-        if (count > std::numeric_limits<int>::max()) {
-            result.error = "HE PSDU requires too many LDPC codewords";
-            return result;
-        }
-        result.codewordCount = static_cast<int>(count);
-    }
-    const Wide codedBits = (Wide)result.codewordCount * result.codewordLength;
-    const Wide informationCapacity = codedBits * rateNumerator / rateDenominator;
-    if ((Wide)payloadBits > informationCapacity) {
-        result.error = "HE LDPC payload exceeds the selected information capacity";
-        return result;
-    }
-    const Wide shortening = std::max<Wide>(0, informationCapacity - (Wide)payloadBits);
-    const Wide puncturing = std::max<Wide>(0,
-            codedBits - (Wide)availableBits - shortening);
-    if (informationCapacity > std::numeric_limits<int64_t>::max() ||
-            shortening > std::numeric_limits<int>::max() ||
-            puncturing > std::numeric_limits<int>::max()) {
-        result.error = "HE LDPC bit counts exceed the model range";
-        return result;
-    }
-    result.shorteningBits = shortening;
-    result.puncturingBits = puncturing;
-    const Wide parityRate = rateDenominator - rateNumerator;
-    const Wide scaledPuncturing = (Wide)10 * rateDenominator * result.puncturingBits;
-    result.primaryExtraSymbolCondition =
-            scaledPuncturing > codedBits * parityRate &&
-            (Wide)5 * parityRate * result.shorteningBits <
-                    (Wide)6 * rateNumerator * result.puncturingBits;
-    result.extremePuncturingCondition =
-            scaledPuncturing > (Wide)3 * codedBits * parityRate;
-    result.extraSymbolRequired = result.primaryExtraSymbolCondition ||
-            result.extremePuncturingCondition;
+    result.codewordCount = geometry.codewordCount;
+    result.codewordLength = geometry.codewordLength;
+    result.shorteningBits = geometry.shorteningBits;
+    result.puncturingBits = geometry.initialPuncturingBits;
+    result.primaryExtraSymbolCondition = geometry.primaryAdditionalCapacityCondition;
+    result.extremePuncturingCondition = geometry.extremePuncturingCondition;
+    result.extraSymbolRequired = geometry.requiresAdditionalCodedBits;
     result.valid = true;
     return result;
 }

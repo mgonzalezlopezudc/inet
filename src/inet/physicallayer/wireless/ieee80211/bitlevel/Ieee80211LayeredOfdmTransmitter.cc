@@ -264,6 +264,11 @@ const ITransmissionAnalogModel *Ieee80211LayeredOfdmTransmitter::createAnalogMod
     return analogModel;
 }
 
+simtime_t Ieee80211LayeredOfdmTransmitter::computeDataDuration(const IIeee80211Mode *mode, b dataLength)
+{
+    return mode->getDataDuration(dataLength);
+}
+
 const Ieee80211OfdmMode *Ieee80211LayeredOfdmTransmitter::computeMode(Hz bandwidth) const
 {
     const Ieee80211OfdmEncoderModule *ofdmSignalEncoderModule = check_and_cast<const Ieee80211OfdmEncoderModule *>(signalEncoder);
@@ -286,6 +291,9 @@ const Ieee80211OfdmMode *Ieee80211LayeredOfdmTransmitter::getMode(const Packet *
 
 const ITransmission *Ieee80211LayeredOfdmTransmitter::createTransmission(const IRadio *transmitter, const Packet *packet, const simtime_t startTime) const
 {
+    if (auto vhtRequest = packet->findTag<Ieee80211VhtTransmissionTag>())
+        if (vhtRequest->getNdp() || vhtRequest->getBeamformed() || vhtRequest->getMuMimo())
+            throw cRuntimeError("VHT sounding and beamforming are supported only by the packet-level transmitter");
     mode = getMode(packet);
     const ITransmissionBitModel *bitModel = nullptr;
     const ITransmissionBitModel *signalFieldBitModel = nullptr;
@@ -312,7 +320,7 @@ const ITransmission *Ieee80211LayeredOfdmTransmitter::createTransmission(const I
     // TODO: compute channel
     const simtime_t preambleDuration = mode->getPreambleLength();
     const simtime_t headerDuration = mode->getHeaderMode()->getDuration();
-    const simtime_t dataDuration = mode->getDataMode()->getDuration(packet->getDataLength());
+    const simtime_t dataDuration = computeDataDuration(mode, packet->getDataLength());
     return new Ieee80211Transmission(transmitter, packet, startTime, endTime, preambleDuration, headerDuration, dataDuration, startPosition, endPosition, startOrientation, endOrientation, packetModel, bitModel, symbolModel, sampleModel, analogModel, mode, nullptr);
 }
 
@@ -331,4 +339,3 @@ Ieee80211LayeredOfdmTransmitter::~Ieee80211LayeredOfdmTransmitter()
 } // namespace physicallayer
 
 } // namespace inet
-

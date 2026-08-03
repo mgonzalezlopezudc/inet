@@ -43,12 +43,15 @@ class INET_API SingleProtectionMechanism : public ModeSetListener
   public:
     virtual ~SingleProtectionMechanism() {}
 
+    static simtime_t computeMultipleProtectionDuration(simtime_t txopStart,
+            simtime_t txopLimit, simtime_t currentTime, simtime_t ifs,
+            simtime_t ppduDuration);
+
     // TODO QoSAckPolicy, IQosRateSelection may give wrong answers when communicating with a Non-QoS STA.
-    virtual simtime_t computeDurationField(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, Packet *pendingPacket, const Ptr<const Ieee80211DataOrMgmtHeader>& pendingHeader, TxopProcedure *txop, IRecipientQosAckPolicy *ackPolicy);
+    virtual simtime_t computeDurationField(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, Packet *pendingPacket, const Ptr<const Ieee80211DataOrMgmtHeader>& pendingHeader, TxopProcedure *txop, IRecipientQosAckPolicy *ackPolicy, simtime_t ifs = SIMTIME_ZERO);
 };
 
 } /* namespace ieee80211 */
 } /* namespace inet */
 
 #endif
-

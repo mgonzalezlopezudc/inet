@@ -7,11 +7,22 @@
 
 #include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
 
+#include "inet/common/ModuleAccess.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IAntenna.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211VhtPacketRadio.h"
+#include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211HePacketRadio.h"
 
+#include <algorithm>
 #include <cmath>
+#include <cstdlib>
+#include <set>
 #include <sstream>
 
 namespace inet {
@@ -19,6 +30,74 @@ namespace inet {
 namespace ieee80211 {
 
 Define_Module(Ieee80211Mib);
+
+void Ieee80211Mib::updateLocalOperationalRates(const physicallayer::Ieee80211ModeSet *modeSet)
+{
+    updateLocalOperationalRates(modeSet, par("bssBasicRateCodes").stdstringValue());
+}
+
+void Ieee80211Mib::updateLocalOperationalRates(const physicallayer::Ieee80211ModeSet *modeSet, const std::string& configuredBasicRateCodes)
+{
+    if (modeSet == nullptr)
+        throw cRuntimeError("Cannot derive legacy operational rates without an IEEE 802.11 mode set");
+    std::vector<Ieee80211LegacyRate> operationalRates;
+    for (int i = 0; i < modeSet->getNumModes(); ++i) {
+        auto family = modeSet->getPhyFamily(i);
+        if (family != physicallayer::Ieee80211PhyFamily::DSSS &&
+                family != physicallayer::Ieee80211PhyFamily::ERP_OFDM &&
+                family != physicallayer::Ieee80211PhyFamily::OFDM)
+            continue;
+        auto units = (int)std::ceil(modeSet->getMode(i)->getDataMode()->
+                getNetBitrate().get<Mbps>() * 2);
+        if (units < 1 || units > 127)
+            continue;
+        Ieee80211LegacyRate rate;
+        rate.rate = units;
+        rate.basic = modeSet->isMandatory(i);
+        bool duplicate = false;
+        for (auto& existing : operationalRates)
+            if (existing.rate == rate.rate) {
+                existing.basic = existing.basic || rate.basic;
+                duplicate = true;
+                break;
+            }
+        if (!duplicate)
+            operationalRates.push_back(rate);
+    }
+    std::vector<Ieee80211LegacyRate> basicRates;
+    if (configuredBasicRateCodes.empty()) {
+        // Project default policy: use the PHY mandatory legacy rates as the BSS Basic Rate Set.
+        for (const auto& rate : operationalRates)
+            if (rate.basic)
+                basicRates.push_back(rate);
+    }
+    else {
+        cStringTokenizer tokenizer(configuredBasicRateCodes.c_str());
+        std::set<int> seenCodes;
+        while (tokenizer.hasMoreTokens()) {
+            const char *token = tokenizer.nextToken();
+            char *end = nullptr;
+            long parsedCode = strtol(token, &end, 10);
+            if (end == token || *end != '\0' || parsedCode < 1 || parsedCode > 127)
+                throw cRuntimeError("Invalid BSS Basic rate code token '%s'; expected an integer from 1 to 127", token);
+            int code = parsedCode;
+            if (!seenCodes.insert(code).second)
+                throw cRuntimeError("Duplicate BSS Basic rate code %d", code);
+            auto it = std::find_if(operationalRates.begin(), operationalRates.end(),
+                    [code](const auto& rate) { return rate.rate == code; });
+            if (it == operationalRates.end())
+                throw cRuntimeError("Configured BSS Basic rate code %d is not in the local Operational Rate Set", code);
+            auto basicRate = *it;
+            basicRate.basic = true;
+            basicRates.push_back(basicRate);
+        }
+        for (auto& rate : operationalRates)
+            rate.basic = std::any_of(basicRates.begin(), basicRates.end(),
+                    [&rate](const auto& basicRate) { return basicRate.rate == rate.rate; });
+    }
+    localOperationalRates = std::move(operationalRates);
+    localBssBasicRates = std::move(basicRates);
+}
 
 void Ieee80211Mib::initialize(int stage)
 {
@@ -41,12 +120,27 @@ void Ieee80211Mib::initialize(int stage)
 
         // Initialize local VHT capabilities
         localVhtCapabilities.ldpc = par("vhtLdpc").boolValue();
+        localVhtCapabilities.rxLdpc = localVhtCapabilities.ldpc;
         localVhtCapabilities.maxNss = par("vhtMaxNss").intValue();
+        if (localVhtCapabilities.maxNss < 1 || localVhtCapabilities.maxNss > 8)
+            throw cRuntimeError("vhtMaxNss must be between 1 and 8");
         localVhtCapabilities.maxAmpduLengthExponent = par("vhtMaxAmpduLengthExponent").intValue();
-        localVhtCapabilities.txBeamforming = par("vhtBeamforming").boolValue();
-        localVhtCapabilities.muMimo = par("vhtMuMimo").boolValue();
+        localVhtCapabilities.suBeamformer = par("vhtSuBeamformer").boolValue() || par("vhtBeamforming").boolValue();
+        localVhtCapabilities.suBeamformee = par("vhtSuBeamformee").boolValue();
+        localVhtCapabilities.beamformeeSts = par("vhtBeamformeeSts");
+        localVhtCapabilities.soundingDimensions = par("vhtSoundingDimensions");
+        if (localVhtCapabilities.beamformeeSts < 1 || localVhtCapabilities.beamformeeSts > 8 ||
+                localVhtCapabilities.soundingDimensions < 1 || localVhtCapabilities.soundingDimensions > 8)
+            throw cRuntimeError("VHT beamformee STS and sounding dimensions must be in the range 1..8");
+        localVhtCapabilities.muBeamformer = par("vhtMuBeamformer").boolValue() || par("vhtMuMimo").boolValue();
+        localVhtCapabilities.muBeamformee = par("vhtMuBeamformee").boolValue();
 
         localHtLdpc = par("htLdpc").boolValue();
+        localHtCapabilities.ldpc = localHtLdpc;
+        int htProtectionMode = par("htProtectionMode").intValue();
+        if (htProtectionMode < 0 || htProtectionMode > 3)
+            throw cRuntimeError("htProtectionMode must be between 0 and 3");
+        htOperation.protectionMode = static_cast<Ieee80211HtProtectionMode>(htProtectionMode);
         localHeCapabilities.ldpc = par("heLdpc").boolValue();
         localHeCapabilities.twtRequester = par("heTwtRequester").boolValue();
         localHeCapabilities.twtResponder = par("heTwtResponder").boolValue();
@@ -76,10 +170,24 @@ void Ieee80211Mib::initialize(int stage)
         int heMaxNss = par("heMaxNss").intValue();
         if (heMaxNss < 1 || heMaxNss > 8)
             throw cRuntimeError("heMaxNss must be between 1 and 8");
-        cModule *wlan = getParentModule();
-        if (wlan != nullptr) {
-            cModule *radioModule = wlan->getSubmodule("radio");
-            if (radioModule != nullptr) {
+        cModule *radioModule = *par("radioModule").stringValue() ? getModuleFromPar<cModule>(par("radioModule"), this) : nullptr;
+        // The opMode parameter is stable during local initialization, unlike a
+        // provider's runtime mode-set pointer. Populate the snapshot here so
+        // simplified peer management never depends on same-stage module order.
+        if (radioModule != nullptr && radioModule->hasPar("opMode"))
+            updateLocalOperationalRates(physicallayer::Ieee80211ModeSet::getModeSet(
+                    radioModule->par("opMode").stringValue()));
+        if (auto heRadio = dynamic_cast<physicallayer::IIeee80211HePacketRadio *>(radioModule))
+            heRadio->setHeBssColor(heOperation.bssColor);
+        if (auto vhtRadio = dynamic_cast<physicallayer::IIeee80211VhtPacketRadio *>(radioModule)) {
+            int antennaCount = vhtRadio->getVhtAntennaCount();
+            if (antennaCount < 1 || antennaCount > 8)
+                throw cRuntimeError("Packet-level VHT radio antenna count must be in the range 1..8");
+            localVhtCapabilities.maxNss = std::min(localVhtCapabilities.maxNss, antennaCount);
+            localVhtCapabilities.beamformeeSts = std::min(localVhtCapabilities.beamformeeSts, antennaCount);
+            localVhtCapabilities.soundingDimensions = std::min(localVhtCapabilities.soundingDimensions, antennaCount);
+        }
+        if (radioModule != nullptr) {
                 int numAntennas = -1;
                 auto radio = dynamic_cast<physicallayer::IRadio *>(radioModule);
                 if (radio != nullptr && radio->getAntenna() != nullptr)
@@ -101,7 +209,6 @@ void Ieee80211Mib::initialize(int stage)
                 if (numAntennas > 0)
                     heMaxNss = std::min(heMaxNss, numAntennas);
                 EV_DETAIL << "Ieee80211Mib: " << getFullPath() << " resolved numAntennas=" << numAntennas << " final heMaxNss=" << heMaxNss << endl;
-            }
         }
         localHeCapabilities.rxMcsNss.maxMcsPerNss.fill(-1);
         localHeCapabilities.txMcsNss.maxMcsPerNss.fill(-1);
@@ -161,10 +268,28 @@ void Ieee80211Mib::initialize(int stage)
         ehtOperation.basicEhtMcsNss = par("ehtBasicMcsNss").intValue();
         ehtOperation.mcs15Disabled = par("ehtMcs15Disabled").boolValue();
 
-        vhtOperation.operatingChannelWidth = Hz(par("vhtOperatingChannelWidth").doubleValue());
         vhtOperation.ldpc = localVhtCapabilities.ldpc;
         vhtOperation.numSpatialStreams = localVhtCapabilities.maxNss;
-
+        vhtOperation.basicMcsNss.maxMcsPerNss.fill(-1);
+        for (int i = 0; i < vhtOperation.numSpatialStreams; ++i)
+            vhtOperation.basicMcsNss.maxMcsPerNss[i] = 7;
+        localVhtCapabilities.rxMcsNss.maxMcsPerNss.fill(-1);
+        localVhtCapabilities.txMcsNss.maxMcsPerNss.fill(-1);
+        if (localVhtCapabilities.maxNss < 1 || localVhtCapabilities.maxNss > 8)
+            throw cRuntimeError("vhtMaxNss must be between 1 and 8");
+        for (int i = 0; i < localVhtCapabilities.maxNss; i++) {
+            localVhtCapabilities.rxMcsNss.maxMcsPerNss[i] = localVhtCapabilities.maxMcs;
+            localVhtCapabilities.txMcsNss.maxMcsPerNss[i] = localVhtCapabilities.maxMcs;
+        }
+        localHtCapabilities.rxMcsNss.maxMcsPerNss.fill(-1);
+        localHtCapabilities.txMcsNss.maxMcsPerNss.fill(-1);
+        int htMaxNss = par("htMaxNss").intValue();
+        if (htMaxNss < 1 || htMaxNss > 4)
+            throw cRuntimeError("htMaxNss must be between 1 and 4");
+        for (int i = 0; i < htMaxNss; i++) {
+            localHtCapabilities.rxMcsNss.maxMcsPerNss[i] = 7;
+            localHtCapabilities.txMcsNss.maxMcsPerNss[i] = 7;
+        }
         WATCH(localHtLdpc);
         WATCH(localHeCapabilities.ldpc);
         WATCH(localHeCapabilities.twtRequester);
@@ -208,12 +333,42 @@ void Ieee80211Mib::initialize(int stage)
         WATCH_MAP(bssAccessPointData.negotiatedHeCapabilities);
         WATCH_MAP(bssAccessPointData.advertisedEhtCapabilities);
         WATCH_MAP(bssAccessPointData.negotiatedEhtCapabilities);
+        WATCH_MAP(bssAccessPointData.advertisedLegacyRates);
         WATCH_EXPR("heCapabilitiesSummary", getHeCapabilitiesSummary());
         WATCH_EXPR("heOperationSummary", getHeOperationSummary());
         WATCH_EXPR("ehtCapabilitiesSummary", getEhtCapabilitiesSummary());
         WATCH_EXPR("ehtOperationSummary", getEhtOperationSummary());
         WATCH_EXPR("negotiatedHePeers", getNegotiatedHePeerCount());
         WATCH_EXPR("negotiatedEhtPeers", getNegotiatedEhtPeerCount());
+    }
+    else if (stage == INITSTAGE_LINK_LAYER) {
+        if (!*par("radioModule").stringValue())
+            return;
+        auto providerModule = getModuleFromPar<cModule>(par("radioModule"), this);
+        modeSetProvider = dynamic_cast<physicallayer::IIeee80211ModeSetProvider *>(providerModule);
+        const physicallayer::Ieee80211ModeSet *modeSet = modeSetProvider == nullptr &&
+                providerModule->hasPar("opMode") ?
+                physicallayer::Ieee80211ModeSet::getModeSet(
+                        providerModule->par("opMode").stringValue()) :
+                (modeSetProvider == nullptr ? nullptr : modeSetProvider->getModeSet());
+        if (modeSet == nullptr)
+            throw cRuntimeError("The configured IEEE 802.11 radio provides neither a mode set nor an opMode fallback");
+        updateLocalOperationalRates(modeSet);
+        // Layered IEEE 802.11 radios do not expose the packet-level mode-set
+        // provider. Keep their legacy initialization intact; opt-in features
+        // that require packet-level PHY authority reject them explicitly.
+        if (modeSetProvider == nullptr)
+            return;
+        auto channel = modeSetProvider->getChannel();
+        if (channel == nullptr)
+            throw cRuntimeError("The configured IEEE 802.11 mode-set provider has no current channel");
+        vhtOperation = deriveIeee80211VhtOperation(channel->getCenterFrequency(), modeSetProvider->getChannelWidth(),
+                modeSetProvider->getPrimary80ChannelPosition());
+        vhtOperation.ldpc = localVhtCapabilities.ldpc;
+        vhtOperation.numSpatialStreams = localVhtCapabilities.maxNss;
+        if (vhtOperation.operatingChannelWidth == MHz(160))
+            localVhtCapabilities.supportedChannelWidths.insert(MHz(160));
+        htOperation.operatingChannelWidth = vhtOperation.operatingChannelWidth > MHz(40) ? Hz(MHz(40)) : vhtOperation.operatingChannelWidth;
     }
 }
 
@@ -389,6 +544,91 @@ void Ieee80211Mib::removePeerCapabilities(const MacAddress& address)
     removePeerHeCapabilities(address);
     removePeerEhtCapabilities(address);
     removePeerVhtCapabilities(address);
+    removePeerHtCapabilities(address);
+    bssAccessPointData.advertisedLegacyRates.erase(address);
+}
+
+Ieee80211SupportedRatesElement Ieee80211Mib::getSupportedRatesElement() const
+{
+    Ieee80211SupportedRatesElement element;
+    element.numRates = std::min<size_t>(8, localOperationalRates.size());
+    for (int i = 0; i < element.numRates; ++i)
+        element.rates[i] = localOperationalRates[i];
+    return element;
+}
+
+Ieee80211ExtendedSupportedRatesElement Ieee80211Mib::getExtendedSupportedRatesElement() const
+{
+    Ieee80211ExtendedSupportedRatesElement element;
+    auto count = localOperationalRates.size() > 8 ? localOperationalRates.size() - 8 : 0;
+    element.numRates = std::min<size_t>(255, count);
+    for (int i = 0; i < element.numRates; ++i)
+        element.rates[i] = localOperationalRates[i + 8];
+    return element;
+}
+
+void Ieee80211Mib::setPeerLegacyRates(const MacAddress& address,
+        const Ieee80211SupportedRatesElement& supportedRates,
+        const Ieee80211ExtendedSupportedRatesElement& extendedSupportedRates)
+{
+    if (supportedRates.numRates < 1 || supportedRates.numRates > 8 ||
+            extendedSupportedRates.numRates < 0 ||
+            extendedSupportedRates.numRates > 255)
+        throw cRuntimeError("Malformed peer Supported Rates element counts");
+    std::vector<Ieee80211LegacyRate> rates;
+    rates.reserve(supportedRates.numRates + extendedSupportedRates.numRates);
+    for (int i = 0; i < supportedRates.numRates; ++i)
+        if (supportedRates.rates[i].rate < 1 || supportedRates.rates[i].rate > 127)
+            throw cRuntimeError("Malformed peer legacy rate code");
+        else
+            rates.push_back(supportedRates.rates[i]);
+    for (int i = 0; i < extendedSupportedRates.numRates; ++i)
+        if (extendedSupportedRates.rates[i].rate < 1 || extendedSupportedRates.rates[i].rate > 127)
+            throw cRuntimeError("Malformed peer extended legacy rate code");
+        else
+            rates.push_back(extendedSupportedRates.rates[i]);
+    bssAccessPointData.advertisedLegacyRates[address] = std::move(rates);
+}
+
+const std::vector<Ieee80211LegacyRate> *Ieee80211Mib::findPeerLegacyRates(
+        const MacAddress& address) const
+{
+    auto it = bssAccessPointData.advertisedLegacyRates.find(address);
+    return it == bssAccessPointData.advertisedLegacyRates.end() ? nullptr : &it->second;
+}
+
+std::vector<Ieee80211LegacyRate> Ieee80211Mib::getBssBasicLegacyRates() const
+{
+    if (bssStationData.stationType == STATION)
+        return currentBssBasicRates;
+    if (!localBssBasicRates.empty())
+        return localBssBasicRates;
+    std::vector<Ieee80211LegacyRate> fallback;
+    for (const auto& rate : localOperationalRates)
+        if (rate.basic)
+            fallback.push_back(rate);
+    return fallback;
+}
+
+void Ieee80211Mib::installCurrentBssBasicLegacyRates(
+        const Ieee80211SupportedRatesElement& supportedRates,
+        const Ieee80211ExtendedSupportedRatesElement& extendedSupportedRates)
+{
+    std::vector<Ieee80211LegacyRate> rates;
+    auto appendBasic = [&rates](const Ieee80211LegacyRate& rate) {
+        if (rate.rate < 1 || rate.rate > 127)
+            throw cRuntimeError("Malformed current-BSS legacy rate code");
+        if (rate.basic)
+            rates.push_back(rate);
+    };
+    if (supportedRates.numRates < 1 || supportedRates.numRates > 8 ||
+            extendedSupportedRates.numRates < 0 || extendedSupportedRates.numRates > 255)
+        throw cRuntimeError("Malformed current-BSS Supported Rates element counts");
+    for (int i = 0; i < supportedRates.numRates; ++i)
+        appendBasic(supportedRates.rates[i]);
+    for (int i = 0; i < extendedSupportedRates.numRates; ++i)
+        appendBasic(extendedSupportedRates.rates[i]);
+    currentBssBasicRates = std::move(rates);
 }
 
 const Ieee80211NegotiatedHeCapabilities *Ieee80211Mib::findNegotiatedHeCapabilities(
@@ -445,9 +685,111 @@ bool Ieee80211Mib::isEhtModeAllowedForPeer(const physicallayer::IIeee80211Mode *
     return true;
 }
 
+bool Ieee80211Mib::isHtModeAllowedForPeer(const physicallayer::IIeee80211Mode *mode,
+        const MacAddress& peerAddress) const
+{
+    auto htMode = dynamic_cast<const physicallayer::Ieee80211HtMode *>(mode);
+    if (htMode == nullptr)
+        return true;
+    if (peerAddress.isMulticast()) {
+        auto dataMode = htMode->getDataMode();
+        int nss = dataMode->getNumberOfSpatialStreams();
+        int perStreamMcs = dataMode->getMcsIndex() % 8;
+        return nss >= 1 && nss <= 4 &&
+                htOperation.basicMcsNss.maxMcsPerNss[nss - 1] >= perStreamMcs &&
+                dataMode->getBandwidth() <= htOperation.operatingChannelWidth;
+    }
+    auto station = bssAccessPointData.stations.find(peerAddress);
+    if (!bssStationData.isAssociated &&
+            (station == bssAccessPointData.stations.end() || station->second != ASSOCIATED))
+        return false;
+    auto negotiated = findNegotiatedHtCapabilities(peerAddress);
+    if (negotiated == nullptr || !negotiated->localTxPeerRx.valid)
+        return false;
+    auto dataMode = htMode->getDataMode();
+    int nss = dataMode->getNumberOfSpatialStreams();
+    int perStreamMcs = dataMode->getMcsIndex() % 8;
+    if (nss < 1 || nss > 4 || negotiated->localTxPeerRx.mcsNss.maxMcsPerNss[nss - 1] < perStreamMcs ||
+            negotiated->localTxPeerRx.supportedChannelWidths.count(dataMode->getBandwidth()) == 0)
+        return false;
+    return dataMode->getGuardIntervalType() != physicallayer::Ieee80211HtModeBase::HT_GUARD_INTERVAL_SHORT ||
+            (dataMode->getBandwidth() == MHz(20) ? negotiated->localTxPeerRx.shortGi20 : negotiated->localTxPeerRx.shortGi40);
+}
+
+bool Ieee80211Mib::isVhtModeAllowedForPeer(const physicallayer::IIeee80211Mode *mode,
+        const MacAddress& peerAddress) const
+{
+    auto vhtMode = dynamic_cast<const physicallayer::Ieee80211VhtMode *>(mode);
+    if (vhtMode == nullptr)
+        return true;
+    if (peerAddress.isMulticast()) {
+        auto dataMode = vhtMode->getDataMode();
+        int nss = dataMode->getNumberOfSpatialStreams();
+        return nss >= 1 && nss <= 8 &&
+                vhtOperation.basicMcsNss.maxMcsPerNss[nss - 1] >= dataMode->getMcsIndex() &&
+                dataMode->getBandwidth() <= vhtOperation.operatingChannelWidth;
+    }
+    auto station = bssAccessPointData.stations.find(peerAddress);
+    if (!bssStationData.isAssociated &&
+            (station == bssAccessPointData.stations.end() || station->second != ASSOCIATED))
+        return false;
+    auto negotiated = findNegotiatedVhtCapabilities(peerAddress);
+    if (negotiated == nullptr || !negotiated->localTxPeerRx.valid)
+        return false;
+    auto dataMode = vhtMode->getDataMode();
+    int nss = dataMode->getNumberOfSpatialStreams();
+    int mcs = dataMode->getMcsIndex();
+    if (nss < 1 || nss > 8 || negotiated->localTxPeerRx.mcsNss.maxMcsPerNss[nss - 1] < mcs ||
+            negotiated->localTxPeerRx.supportedChannelWidths.count(dataMode->getBandwidth()) == 0)
+        return false;
+    if (dataMode->getGuardIntervalType() != physicallayer::Ieee80211VhtModeBase::HT_GUARD_INTERVAL_SHORT)
+        return true;
+    return dataMode->getBandwidth() == MHz(160) ? negotiated->localTxPeerRx.shortGi160 :
+            dataMode->getBandwidth() == MHz(80) ? negotiated->localTxPeerRx.shortGi80 : true;
+}
+
+bool Ieee80211Mib::isLdpcAllowedForPeer(const physicallayer::IIeee80211Mode *mode,
+        const MacAddress& peerAddress) const
+{
+    if (dynamic_cast<const physicallayer::Ieee80211HtMode *>(mode) != nullptr) {
+        if (peerAddress.isMulticast())
+            return false;
+        if (!isHtModeAllowedForPeer(mode, peerAddress))
+            return false;
+        auto negotiated = findNegotiatedHtCapabilities(peerAddress);
+        return negotiated != nullptr && negotiated->localTxPeerRx.valid && negotiated->localTxPeerRx.ldpc;
+    }
+    if (dynamic_cast<const physicallayer::Ieee80211VhtMode *>(mode) != nullptr) {
+        if (peerAddress.isMulticast())
+            return false;
+        if (!isVhtModeAllowedForPeer(mode, peerAddress))
+            return false;
+        auto negotiated = findNegotiatedVhtCapabilities(peerAddress);
+        return negotiated != nullptr && negotiated->localTxPeerRx.valid && negotiated->localTxPeerRx.ldpc;
+    }
+    if (dynamic_cast<const physicallayer::Ieee80211HeMode *>(mode) != nullptr) {
+        if (!peerAddress.isMulticast()) {
+            auto negotiated = findNegotiatedHeCapabilities(peerAddress);
+            if (negotiated != nullptr)
+                return negotiated->mutual.ldpc;
+        }
+        return localHeCapabilities.ldpc;
+    }
+    if (dynamic_cast<const physicallayer::Ieee80211EhtMode *>(mode) != nullptr) {
+        if (!peerAddress.isMulticast()) {
+            auto negotiated = findNegotiatedEhtCapabilities(peerAddress);
+            if (negotiated != nullptr)
+                return negotiated->intersection.ldpc;
+        }
+        return localEhtCapabilities.ldpc;
+    }
+    return false;
+}
+
 void Ieee80211Mib::setPeerVhtCapabilities(const MacAddress& address,
         const Ieee80211VhtCapabilities& capabilities, const Ieee80211VhtOperation& operation)
 {
+    ++bssAccessPointData.vhtAssociationGenerations[address];
     bssAccessPointData.advertisedVhtCapabilities[address] = capabilities;
     bssAccessPointData.negotiatedVhtCapabilities[address] =
             negotiateVhtCapabilities(localVhtCapabilities, capabilities, operation);
@@ -455,8 +797,15 @@ void Ieee80211Mib::setPeerVhtCapabilities(const MacAddress& address,
 
 void Ieee80211Mib::removePeerVhtCapabilities(const MacAddress& address)
 {
+    ++bssAccessPointData.vhtAssociationGenerations[address];
     bssAccessPointData.advertisedVhtCapabilities.erase(address);
     bssAccessPointData.negotiatedVhtCapabilities.erase(address);
+}
+
+uint64_t Ieee80211Mib::getVhtAssociationGeneration(const MacAddress& address) const
+{
+    auto it = bssAccessPointData.vhtAssociationGenerations.find(address);
+    return it == bssAccessPointData.vhtAssociationGenerations.end() ? 0 : it->second;
 }
 
 const Ieee80211NegotiatedVhtCapabilities *Ieee80211Mib::findNegotiatedVhtCapabilities(
@@ -464,6 +813,25 @@ const Ieee80211NegotiatedVhtCapabilities *Ieee80211Mib::findNegotiatedVhtCapabil
 {
     auto it = bssAccessPointData.negotiatedVhtCapabilities.find(address);
     return it == bssAccessPointData.negotiatedVhtCapabilities.end() ? nullptr : &it->second;
+}
+
+void Ieee80211Mib::setPeerHtCapabilities(const MacAddress& address,
+        const Ieee80211HtCapabilities& capabilities, const Ieee80211HtOperation& operation)
+{
+    bssAccessPointData.advertisedHtCapabilities[address] = capabilities;
+    bssAccessPointData.negotiatedHtCapabilities[address] = negotiateHtCapabilities(localHtCapabilities, capabilities, operation);
+}
+
+void Ieee80211Mib::removePeerHtCapabilities(const MacAddress& address)
+{
+    bssAccessPointData.advertisedHtCapabilities.erase(address);
+    bssAccessPointData.negotiatedHtCapabilities.erase(address);
+}
+
+const Ieee80211NegotiatedHtCapabilities *Ieee80211Mib::findNegotiatedHtCapabilities(const MacAddress& address) const
+{
+    auto it = bssAccessPointData.negotiatedHtCapabilities.find(address);
+    return it == bssAccessPointData.negotiatedHtCapabilities.end() ? nullptr : &it->second;
 }
 
 const char *Ieee80211Mib::getModeStr(Ieee80211Mib::Mode mode)

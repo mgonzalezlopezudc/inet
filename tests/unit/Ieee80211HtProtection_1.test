@@ -1,0 +1,133 @@
+%description:
+Focused IEEE 802.11 HT protection policy and multiple-protection Duration/ID boundaries.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/protectionmechanism/HtProtectionPolicy.h"
+#include "inet/linklayer/ieee80211/mac/protectionmechanism/SingleProtectionMechanism.h"
+#include "inet/linklayer/ieee80211/mac/originator/TxopProcedure.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+%activity:
+// IEEE Std 802.11-2024, Table 9-230 and 10.27.3: this focused
+// implementation protects only negotiated, individually addressed HT in
+// non-HT mixed mode.
+Ieee80211NegotiatedHtCapabilities negotiated;
+negotiated.localTxPeerRx.valid = true;
+negotiated.operation.protectionMode = Ieee80211HtProtectionMode::NON_HT_MIXED;
+MacAddress individual("00:00:00:00:00:01");
+ASSERT(HtProtectionPolicy::select(true, individual, &negotiated) ==
+        HtProtectionPolicy::Protection::LEGACY_RTS_CTS);
+ASSERT(HtProtectionPolicy::select(false, individual, &negotiated) ==
+        HtProtectionPolicy::Protection::NONE);
+ASSERT(HtProtectionPolicy::select(true, MacAddress::BROADCAST_ADDRESS, &negotiated) ==
+        HtProtectionPolicy::Protection::NONE);
+ASSERT(HtProtectionPolicy::select(true, individual, nullptr) ==
+        HtProtectionPolicy::Protection::NONE);
+negotiated.localTxPeerRx.valid = false;
+ASSERT(HtProtectionPolicy::select(true, individual, &negotiated) ==
+        HtProtectionPolicy::Protection::NONE);
+negotiated.localTxPeerRx.valid = true;
+negotiated.operation.protectionMode = Ieee80211HtProtectionMode::NO_PROTECTION;
+ASSERT(HtProtectionPolicy::select(true, individual, &negotiated) ==
+        HtProtectionPolicy::Protection::NONE);
+
+// The initial protection exchange must have a usable legacy basic mode even
+// when the selected protected data mode is HT.
+auto htModeSet = physicallayer::Ieee80211ModeSet::getModeSet("n(mixed-2.4Ghz)");
+auto selectedHtMode = htModeSet->getMode(Mbps(6.5), MHz(20), 1);
+auto legacyProtectionMode = htModeSet->getFastestLegacyBasicMode();
+ASSERT(dynamic_cast<const physicallayer::Ieee80211HtMode *>(selectedHtMode) != nullptr);
+ASSERT(htModeSet->getPhyFamily(selectedHtMode) == physicallayer::Ieee80211PhyFamily::HT);
+ASSERT(legacyProtectionMode != nullptr);
+ASSERT(dynamic_cast<const physicallayer::Ieee80211HtMode *>(legacyProtectionMode) == nullptr);
+
+// IEEE Std 802.11-2024, 9.2.5.2 and 10.3.2.9/.11: selection is one-shot,
+// a valid CTS completes the pending initial exchange, and TXOP end/timeout
+// resets the state for the next contention opportunity.
+TxopProcedure::ProtectionState protectionState;
+protectionState.configure(TxopProcedure::ProtectionMechanism::MULTIPLE_PROTECTION,
+        TxopProcedure::InitialProtection::LEGACY_RTS_CTS);
+ASSERT(protectionState.isConfigured());
+ASSERT(protectionState.isPending());
+ASSERT(protectionState.getMechanism() == TxopProcedure::ProtectionMechanism::MULTIPLE_PROTECTION);
+ASSERT(!protectionState.allowsMpduAggregation());
+bool reconfigurationRejected = false;
+try {
+    protectionState.configure(TxopProcedure::ProtectionMechanism::SINGLE_PROTECTION,
+            TxopProcedure::InitialProtection::NONE);
+}
+catch (const cRuntimeError&) {
+    reconfigurationRejected = true;
+}
+ASSERT(reconfigurationRejected);
+protectionState.complete();
+ASSERT(!protectionState.isPending());
+ASSERT(protectionState.isCompleted());
+bool repeatedCompletionRejected = false;
+try {
+    protectionState.complete();
+}
+catch (const cRuntimeError&) {
+    repeatedCompletionRejected = true;
+}
+ASSERT(repeatedCompletionRejected);
+protectionState.reset();
+ASSERT(!protectionState.isConfigured());
+ASSERT(!protectionState.isPending());
+ASSERT(protectionState.getMechanism() == TxopProcedure::ProtectionMechanism::UNDEFINED_PROTECTION);
+ASSERT(protectionState.allowsMpduAggregation());
+
+// A CTS timeout aborts the frame sequence and ends the TXOP. The reset state
+// must therefore accept a fresh initial-protection attempt on the next channel
+// grant; only that later valid CTS completes it.
+protectionState.configure(TxopProcedure::ProtectionMechanism::MULTIPLE_PROTECTION,
+        TxopProcedure::InitialProtection::LEGACY_RTS_CTS);
+ASSERT(protectionState.isPending());
+ASSERT(!protectionState.allowsMpduAggregation());
+protectionState.complete();
+ASSERT(!protectionState.isPending());
+ASSERT(!protectionState.allowsMpduAggregation());
+protectionState.reset();
+
+protectionState.configure(TxopProcedure::ProtectionMechanism::SINGLE_PROTECTION,
+        TxopProcedure::InitialProtection::NONE);
+ASSERT(!protectionState.isPending());
+ASSERT(protectionState.allowsMpduAggregation());
+protectionState.reset();
+
+// IEEE Std 802.11-2024, 9.2.5.2: exact fit clamps to zero, fractional
+// microseconds round upward, and different PPDUs retain one absolute NAV end.
+auto exactFit = SingleProtectionMechanism::computeMultipleProtectionDuration(
+        SIMTIME_ZERO, SimTime(100, SIMTIME_US), SimTime(60, SIMTIME_US), SIMTIME_ZERO, SimTime(40, SIMTIME_US));
+ASSERT(exactFit == SIMTIME_ZERO);
+auto rounded = SingleProtectionMechanism::computeMultipleProtectionDuration(
+        SIMTIME_ZERO, SimTime(100, SIMTIME_US), SimTime(20, SIMTIME_US), SimTime(10, SIMTIME_US), SimTime(30.4, SIMTIME_US));
+ASSERT(rounded == SimTime(40, SIMTIME_US));
+auto clamped = SingleProtectionMechanism::computeMultipleProtectionDuration(
+        SIMTIME_ZERO, SimTime(100, SIMTIME_US), SimTime(90, SIMTIME_US), SIMTIME_ZERO, SimTime(20, SIMTIME_US));
+ASSERT(clamped == SIMTIME_ZERO);
+auto firstDuration = SingleProtectionMechanism::computeMultipleProtectionDuration(
+        SIMTIME_ZERO, SimTime(100, SIMTIME_US), SimTime(10, SIMTIME_US), SimTime(5, SIMTIME_US), SimTime(20, SIMTIME_US));
+auto secondDuration = SingleProtectionMechanism::computeMultipleProtectionDuration(
+        SIMTIME_ZERO, SimTime(100, SIMTIME_US), SimTime(40, SIMTIME_US), SimTime(7, SIMTIME_US), SimTime(10, SIMTIME_US));
+ASSERT(SimTime(10, SIMTIME_US) + SimTime(5, SIMTIME_US) + SimTime(20, SIMTIME_US) + firstDuration == SimTime(100, SIMTIME_US));
+ASSERT(SimTime(40, SIMTIME_US) + SimTime(7, SIMTIME_US) + SimTime(10, SIMTIME_US) + secondDuration == SimTime(100, SIMTIME_US));
+bool overflowRejected = false;
+try {
+    SingleProtectionMechanism::computeMultipleProtectionDuration(
+            SIMTIME_ZERO, SimTime(40, SIMTIME_MS), SIMTIME_ZERO, SIMTIME_ZERO, SIMTIME_ZERO);
+}
+catch (const cRuntimeError&) {
+    overflowRejected = true;
+}
+ASSERT(overflowRejected);
+
+EV << "HT protection policy and Duration/ID boundaries passed.\n";
+
+%contains: stdout
+HT protection policy and Duration/ID boundaries passed.

@@ -28,7 +28,8 @@ void OriginatorQosAckPolicy::initialize(int stage)
 
 bool OriginatorQosAckPolicy::isAckNeeded(const Ptr<const Ieee80211MgmtHeader>& header) const
 {
-    return !header->getReceiverAddress().isMulticast();
+    return header->getType() != ST_NOACKACTION &&
+            !header->getReceiverAddress().isMulticast();
 }
 
 std::map<MacAddress, std::vector<Packet *>> OriginatorQosAckPolicy::getOutstandingFramesPerReceiver(InProgressFrames *inProgressFrames) const
@@ -140,4 +141,3 @@ simtime_t OriginatorQosAckPolicy::getBlockAckTimeout(Packet *packet, const Ptr<c
 
 } /* namespace ieee80211 */
 } /* namespace inet */
-

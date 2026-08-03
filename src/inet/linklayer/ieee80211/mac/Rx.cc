@@ -10,9 +10,9 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 
 #include "inet/common/ModuleAccess.h"
-#include "inet/common/checksum/Checksum.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211MldMac.h"
+#include "inet/linklayer/ieee80211/mac/common/Ieee80211FcsChecker.h"
 #include "inet/linklayer/ieee80211/mac/contract/IContention.h"
 #include "inet/linklayer/ieee80211/mac/contract/ITx.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
@@ -177,43 +177,7 @@ bool Rx::isReceptionInProgress() const
 bool Rx::isFcsOk(Packet *packet,
         AggregateReceptionContext aggregateContext) const
 {
-    if (packet->getDataLength() == b(0))
-        return !packet->hasBitError();
-    if (dynamicPtrCast<const Ieee80211MpduSubframeHeader>(
-                packet->peekAtFront()) != nullptr &&
-            (packet->findTag<Ieee80211MpduReceiveInd>() != nullptr ||
-                    aggregateContext ==
-                            AggregateReceptionContext::INTACT_AMPDU))
-        // The aggregate has no single MAC FCS. Common/physical failure is
-        // still carried by bitError; delimiter and MPDU FCS outcomes are
-        // applied individually by HCF from Ieee80211MpduReceiveInd.
-        // Packet::hasBitError() also reflects an incorrect delimiter/header
-        // chunk. Those errors are already represented per MPDU in the ordered
-        // outcome ledger; only the explicit cPacket bit-error flag denotes a
-        // common/physical aggregate failure at this boundary.
-        return !packet->cPacket::hasBitError();
-    if (packet->hasBitError() || !packet->peekData()->isCorrect())
-        return false;
-    else {
-        const auto& trailer = packet->peekAtBack<Ieee80211MacTrailer>(B(4));
-        switch (trailer->getFcsMode()) {
-            case FCS_DECLARED_INCORRECT:
-                return false;
-            case FCS_DECLARED_CORRECT:
-                return true;
-            case FCS_COMPUTED: {
-                const auto& fcsBytes = packet->peekDataAt<BytesChunk>(B(0), packet->getDataLength() - trailer->getChunkLength());
-                auto bufferLength = fcsBytes->getChunkLength().get<B>();
-                auto buffer = new uint8_t[bufferLength];
-                fcsBytes->copyToBuffer(buffer, bufferLength);
-                auto computedFcs = ethernetFcs(buffer, bufferLength);
-                delete[] buffer;
-                return computedFcs == trailer->getFcs();
-            }
-            default:
-                throw cRuntimeError("Unknown FCS mode");
-        }
-    }
+    return Ieee80211FcsChecker::isFcsOk(packet, aggregateContext);
 }
 
 void Rx::recomputeMediumFree()

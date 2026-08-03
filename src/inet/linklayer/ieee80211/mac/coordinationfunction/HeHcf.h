@@ -288,6 +288,7 @@ class INET_API HeHcf : public Hcf
     virtual void handleInternalCollision(std::vector<Edcaf *> internallyCollidedEdcafs) override;
     virtual bool hasFrameToTransmit() override;
     virtual bool hasFrameToTransmit(AccessCategory ac) override;
+    virtual bool processHeaderlessNdpIndication(Packet *packet) override;
     virtual void recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header) override;
     virtual void transmissionComplete(Packet *packet, const Ptr<const Ieee80211MacHeader>& header) override;
     virtual void transmitFrame(Packet *packet, simtime_t ifs) override;

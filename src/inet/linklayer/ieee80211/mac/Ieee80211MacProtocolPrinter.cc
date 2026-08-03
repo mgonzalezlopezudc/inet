@@ -44,6 +44,8 @@ const char *frameTypeName(Ieee80211FrameType type)
         case ST_BLOCKACK_REQ: return "BlockAckReq";
         case ST_BLOCKACK: return "BlockAck";
         case ST_TRIGGER: return "Trigger";
+        case ST_BEAMFORMING_REPORT_POLL: return "VHT BF Report Poll";
+        case ST_VHT_NDP_ANNOUNCEMENT: return "VHT NDPA";
         case ST_DATA: return "DATA";
         case ST_DATA_WITH_QOS: return "QoS DATA";
         case ST_QOS_NULL: return "QoS Null";
@@ -278,6 +280,13 @@ void Ieee80211MacProtocolPrinter::print(const Ptr<const Chunk>& chunk, const Pro
         }
         if (auto trigger = dynamicPtrCast<const Ieee80211TriggerFrame>(chunk))
             printTriggerInfo(stream, *trigger);
+        if (auto ndpa = dynamicPtrCast<const Ieee80211VhtNdpAnnouncementFrame>(chunk))
+            stream << " token=" << static_cast<int>(ndpa->getSoundingDialogTokenNumber())
+                   << " stations=" << ndpa->getStationsArraySize();
+        if (auto poll = dynamicPtrCast<const Ieee80211VhtBeamformingReportPollFrame>(chunk))
+            stream << " segmentBitmap=0x" << std::hex
+                   << static_cast<int>(poll->getFeedbackSegmentRetransmissionBitmap())
+                   << std::dec;
         if (auto blockAckReq = dynamicPtrCast<const Ieee80211BlockAckReq>(chunk))
             printBlockAckReqInfo(stream, *blockAckReq);
         if (auto blockAck = dynamicPtrCast<const Ieee80211BlockAck>(chunk))

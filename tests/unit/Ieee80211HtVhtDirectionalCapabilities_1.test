@@ -1,0 +1,115 @@
+%description:
+Test directional HT/VHT capability negotiation and legacy absence.
+
+%includes:
+#include "inet/linklayer/ieee80211/mib/Ieee80211HtCapabilities.h"
+#include "inet/linklayer/ieee80211/mib/Ieee80211VhtCapabilities.h"
+#include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
+
+%file: TestNetwork.ned
+import inet.linklayer.ieee80211.mib.Ieee80211Mib;
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        mib: Ieee80211Mib;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+%activity:
+Ieee80211HtCapabilities localHt;
+Ieee80211HtCapabilities peerHt;
+localHt.rxMcsNss.maxMcsPerNss.fill(-1);
+localHt.txMcsNss.maxMcsPerNss.fill(-1);
+peerHt.rxMcsNss.maxMcsPerNss.fill(-1);
+peerHt.txMcsNss.maxMcsPerNss.fill(-1);
+localHt.rxMcsNss.maxMcsPerNss[0] = 7;
+localHt.txMcsNss.maxMcsPerNss[0] = 7;
+localHt.txMcsNss.maxMcsPerNss[1] = 7;
+peerHt.rxMcsNss.maxMcsPerNss[0] = 5;
+peerHt.txMcsNss.maxMcsPerNss[0] = 3;
+localHt.ldpc = true;
+peerHt.ldpc = false;
+localHt.shortGi20 = peerHt.shortGi20 = true;
+localHt.maxAmpduLengthExponent = 3;
+peerHt.maxAmpduLengthExponent = 1;
+Ieee80211HtOperation htOperation;
+htOperation.operatingChannelWidth = MHz(20);
+auto ht = negotiateHtCapabilities(localHt, peerHt, htOperation);
+ASSERT(ht.localTxPeerRx.valid && ht.localRxPeerTx.valid);
+ASSERT(ht.localTxPeerRx.mcsNss.maxMcsPerNss[0] == 5);
+ASSERT(ht.localRxPeerTx.mcsNss.maxMcsPerNss[0] == 3);
+ASSERT(!ht.localTxPeerRx.ldpc && !ht.localRxPeerTx.ldpc);
+ASSERT(ht.localTxPeerRx.receiverMaxAmpduLengthExponent == 1);
+ASSERT(ht.localRxPeerTx.receiverMaxAmpduLengthExponent == 3);
+
+Ieee80211VhtCapabilities localVht;
+Ieee80211VhtCapabilities peerVht;
+localVht.rxMcsNss.maxMcsPerNss.fill(-1);
+localVht.txMcsNss.maxMcsPerNss.fill(-1);
+peerVht.rxMcsNss.maxMcsPerNss.fill(-1);
+peerVht.txMcsNss.maxMcsPerNss.fill(-1);
+localVht.rxMcsNss.maxMcsPerNss[0] = 9;
+localVht.txMcsNss.maxMcsPerNss[0] = 9;
+localVht.txMcsNss.maxMcsPerNss[1] = 8;
+peerVht.rxMcsNss.maxMcsPerNss[0] = 8;
+peerVht.txMcsNss.maxMcsPerNss[0] = 7;
+localVht.rxLdpc = true;
+peerVht.rxLdpc = false;
+localVht.shortGi80 = peerVht.shortGi80 = true;
+localVht.supportedChannelWidths = {MHz(20), MHz(40), MHz(80)};
+peerVht.supportedChannelWidths = {MHz(20), MHz(40), MHz(80)};
+Ieee80211VhtOperation vhtOperation;
+vhtOperation.operatingChannelWidth = MHz(80);
+auto vht = negotiateVhtCapabilities(localVht, peerVht, vhtOperation);
+ASSERT(vht.localTxPeerRx.valid && vht.localRxPeerTx.valid);
+ASSERT(vht.localTxPeerRx.mcsNss.maxMcsPerNss[0] == 8);
+ASSERT(vht.localRxPeerTx.mcsNss.maxMcsPerNss[0] == 7);
+ASSERT(!vht.localTxPeerRx.ldpc && !vht.localRxPeerTx.ldpc);
+
+auto mib = check_and_cast<Ieee80211Mib *>(getParentModule()->getSubmodule("mib"));
+MacAddress peerAddress("02:00:00:00:00:01");
+mib->localHtCapabilities = localHt;
+mib->localVhtCapabilities = localVht;
+mib->setPeerHtCapabilities(peerAddress, peerHt, htOperation);
+mib->setPeerVhtCapabilities(peerAddress, peerVht, vhtOperation);
+ASSERT(mib->findNegotiatedHtCapabilities(peerAddress) != nullptr);
+ASSERT(mib->findNegotiatedVhtCapabilities(peerAddress) != nullptr);
+mib->removePeerCapabilities(peerAddress);
+ASSERT(mib->findNegotiatedHtCapabilities(peerAddress) == nullptr);
+ASSERT(mib->findNegotiatedVhtCapabilities(peerAddress) == nullptr);
+
+auto htMode = Ieee80211HtCompliantModes::getCompliantMode(
+        &Ieee80211HtmcsTable::htMcs0BW20MHz, Ieee80211HtMode::BAND_5GHZ,
+        Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+auto vhtMode = Ieee80211VhtCompliantModes::getCompliantMode(
+        &Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss1, Ieee80211VhtMode::BAND_5GHZ,
+        Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG);
+mib->bssStationData.isAssociated = true;
+ASSERT(!mib->isHtModeAllowedForPeer(htMode, peerAddress));
+ASSERT(!mib->isVhtModeAllowedForPeer(vhtMode, peerAddress));
+mib->setPeerHtCapabilities(peerAddress, peerHt, htOperation);
+mib->setPeerVhtCapabilities(peerAddress, peerVht, vhtOperation);
+ASSERT(mib->isHtModeAllowedForPeer(htMode, peerAddress));
+ASSERT(mib->isVhtModeAllowedForPeer(vhtMode, peerAddress));
+mib->bssStationData.isAssociated = false;
+ASSERT(!mib->isHtModeAllowedForPeer(htMode, peerAddress));
+ASSERT(!mib->isVhtModeAllowedForPeer(vhtMode, peerAddress));
+ASSERT(!mib->isHtModeAllowedForPeer(htMode, MacAddress::BROADCAST_ADDRESS));
+ASSERT(!mib->isVhtModeAllowedForPeer(vhtMode, MacAddress::BROADCAST_ADDRESS));
+
+EV << "Directional HT/VHT contracts passed.\n";
+
+%contains: stdout
+Directional HT/VHT contracts passed.

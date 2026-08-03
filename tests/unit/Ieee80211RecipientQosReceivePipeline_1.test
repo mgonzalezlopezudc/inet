@@ -1,0 +1,333 @@
+%description:
+Verify recipient QoS receive-pipeline ownership, duplicate removal, optional
+security classification, and Block Ack reorder-window behavior.
+
+%includes:
+#include <map>
+
+#include "inet/linklayer/ieee80211/mac/blockack/RecipientBlockAckAgreement.h"
+#include "inet/linklayer/ieee80211/mac/contract/IRecipientMpduSecurity.h"
+#include "inet/linklayer/ieee80211/mac/recipient/RecipientQosMacDataService.h"
+#include "inet/linklayer/ieee80211/mac/Rx.h"
+#include "inet/linklayer/ethernet/common/Ethernet.h"
+
+%file: TestNetwork.ned
+import inet.linklayer.ieee80211.mac.contract.IRecipientMpduSecurity;
+import inet.linklayer.ieee80211.mac.recipient.RecipientQosMacDataService;
+
+simple TestRecipientMpduSecurity like IRecipientMpduSecurity
+{
+    parameters:
+        @class(TestRecipientMpduSecurity);
+}
+
+simple TestFcsRx
+{
+    parameters:
+        @class(TestFcsRx);
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        fcsRx: TestFcsRx;
+        dataService: RecipientQosMacDataService {
+            mpduSecurity.typename = "TestRecipientMpduSecurity";
+        }
+        disabledDataService: RecipientQosMacDataService;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+class TestRecipientMpduSecurity : public cSimpleModule, public IRecipientMpduSecurity
+{
+  public:
+    Outcome integrityOutcome = Outcome::ACCEPT;
+    Outcome replayOutcome = Outcome::ACCEPT;
+    int integrityCheckCount = 0;
+    int replayCheckCount = 0;
+    std::vector<std::pair<Stage, uint16_t>> checks;
+
+    virtual Outcome checkReceivedMpdu(const Packet *,
+            const Ptr<const Ieee80211DataOrMgmtHeader>& header,
+            Stage stage) override {
+        checks.emplace_back(stage, header->getSequenceNumber().get());
+        if (stage == Stage::INTEGRITY_AND_DECRYPTION) {
+            integrityCheckCount++;
+            return integrityOutcome;
+        }
+        replayCheckCount++;
+        return replayOutcome;
+    }
+};
+
+Define_Module(TestRecipientMpduSecurity);
+
+class TestFcsRx : public Rx
+{
+  public:
+    virtual int numInitStages() const override { return 1; }
+    virtual void initialize(int) override {}
+
+    bool checkFcs(Packet *packet) const {
+        return isFcsOk(packet, AggregateReceptionContext::ORDINARY_FRAME);
+    }
+};
+
+Define_Module(TestFcsRx);
+
+class ObjectSignalCounter : public cListener
+{
+  public:
+    int count = 0;
+
+    virtual void receiveSignal(cComponent *, simsignal_t, cObject *,
+            cObject *) override { count++; }
+};
+
+class TrackedPacket : public Packet
+{
+  public:
+    static int destructionCount;
+
+    using Packet::Packet;
+    virtual ~TrackedPacket() { destructionCount++; }
+};
+
+int TrackedPacket::destructionCount = 0;
+
+class TestRecipientBlockAckAgreementHandler : public IRecipientBlockAckAgreementHandler
+{
+  protected:
+    std::map<std::pair<Tid, MacAddress>, RecipientBlockAckAgreement *> agreements;
+
+  public:
+    virtual ~TestRecipientBlockAckAgreementHandler() {
+        for (const auto& entry : agreements)
+            delete entry.second;
+    }
+
+    void addAgreement(Tid tid, const MacAddress& originatorAddress,
+            uint16_t startingSequenceNumber) {
+        agreements[std::make_pair(tid, originatorAddress)] =
+                new RecipientBlockAckAgreement(originatorAddress, tid,
+                        SequenceNumberCyclic(startingSequenceNumber), 64,
+                        SIMTIME_ZERO);
+    }
+
+    virtual RecipientBlockAckAgreement *getAgreement(
+            Tid tid, MacAddress originatorAddress) override {
+        auto it = agreements.find(std::make_pair(tid, originatorAddress));
+        return it == agreements.end() ? nullptr : it->second;
+    }
+
+    virtual void processTransmittedAddbaResp(const Ptr<const Ieee80211AddbaResponse>&,
+            IBlockAckAgreementHandlerCallback *) override {}
+    virtual void processReceivedAddbaRequest(const Ptr<const Ieee80211AddbaRequest>&,
+            IRecipientBlockAckAgreementPolicy *, IProcedureCallback *) override {}
+    virtual void processReceivedDelba(const Ptr<const Ieee80211Delba>&,
+            IRecipientBlockAckAgreementPolicy *) override {}
+    virtual void processTransmittedDelba(const Ptr<const Ieee80211Delba>&) override {}
+    virtual void qosFrameReceived(const Ptr<const Ieee80211DataHeader>&,
+            IBlockAckAgreementHandlerCallback *) override {}
+    virtual bool implicitBlockAckRequestFrameReceived(
+            const Ptr<const Ieee80211DataHeader>&,
+            IBlockAckAgreementHandlerCallback *) override { return false; }
+    virtual void blockAckAgreementExpired(IProcedureCallback *,
+            IBlockAckAgreementHandlerCallback *) override {}
+};
+
+static Ptr<Ieee80211DataHeader> makeQosHeader(
+        const MacAddress& receiverAddress,
+        const MacAddress& originatorAddress, Tid tid,
+        uint16_t sequenceNumber, bool retry = false)
+{
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setType(ST_DATA_WITH_QOS);
+    header->setReceiverAddress(receiverAddress);
+    header->setTransmitterAddress(originatorAddress);
+    header->setTid(tid);
+    header->setSequenceNumber(SequenceNumberCyclic(sequenceNumber));
+    header->setFragmentNumber(0);
+    header->setMoreFragments(false);
+    header->setRetry(retry);
+    header->setAckPolicy(BLOCK_ACK);
+    return header;
+}
+
+static std::vector<Packet *> receiveData(RecipientQosMacDataService *service,
+        const char *name, const MacAddress& receiverAddress,
+        const MacAddress& originatorAddress, Tid tid,
+        uint16_t sequenceNumber,
+        IRecipientBlockAckAgreementHandler *agreementHandler = nullptr,
+        bool retry = false)
+{
+    auto header = makeQosHeader(receiverAddress, originatorAddress, tid,
+            sequenceNumber, retry);
+    return service->dataFrameReceived(new Packet(name, header), header,
+            agreementHandler);
+}
+
+static Packet *makeFcsPacket(const char *name, FcsMode fcsMode,
+        bool validComputedFcs = true)
+{
+    auto packet = new Packet(name);
+    packet->insertAtBack(makeShared<BytesChunk>(
+            std::vector<uint8_t> {0x10, 0x20, 0x30, 0x40}));
+    auto trailer = makeShared<Ieee80211MacTrailer>();
+    trailer->setFcsMode(fcsMode);
+    if (fcsMode == FCS_COMPUTED) {
+        uint32_t fcs = computeEthernetFcs(packet, FCS_COMPUTED);
+        trailer->setFcs(validComputedFcs ? fcs : fcs ^ 1);
+    }
+    packet->insertAtBack(trailer);
+    return packet;
+}
+
+static void deleteReturned(Packet *packet)
+{
+    packet->removeFromOwnershipTree();
+    delete packet;
+}
+
+%activity:
+auto dataService = check_and_cast<RecipientQosMacDataService *>(
+        getParentModule()->getSubmodule("dataService"));
+auto fcsRx = check_and_cast<TestFcsRx *>(
+        getParentModule()->getSubmodule("fcsRx"));
+auto disabledDataService = check_and_cast<RecipientQosMacDataService *>(
+        getParentModule()->getSubmodule("disabledDataService"));
+auto security = check_and_cast<TestRecipientMpduSecurity *>(
+        dataService->getSubmodule("mpduSecurity"));
+ObjectSignalCounter integrityFailureCounter;
+ObjectSignalCounter replayCounter;
+dataService->subscribe(IRecipientQosMacDataService::packetIntegrityCheckFailedSignal,
+        &integrityFailureCounter);
+dataService->subscribe(IRecipientQosMacDataService::packetReplayDetectedSignal,
+        &replayCounter);
+
+MacAddress receiverAddress("02:00:00:00:00:07");
+MacAddress originatorAddress("02:00:00:00:00:01");
+
+auto declaredCorrect = makeFcsPacket("declared-correct",
+        FCS_DECLARED_CORRECT);
+auto declaredIncorrect = makeFcsPacket("declared-incorrect",
+        FCS_DECLARED_INCORRECT);
+auto computedValid = makeFcsPacket("computed-valid", FCS_COMPUTED);
+auto computedMismatch = makeFcsPacket("computed-mismatch", FCS_COMPUTED,
+        false);
+REQUIRE(fcsRx->checkFcs(declaredCorrect));
+REQUIRE(!fcsRx->checkFcs(declaredIncorrect));
+REQUIRE(fcsRx->checkFcs(computedValid));
+REQUIRE(!fcsRx->checkFcs(computedMismatch));
+delete declaredCorrect;
+delete declaredIncorrect;
+delete computedValid;
+delete computedMismatch;
+EV << "Existing FCS fidelity distinguishes declared and computed success and failure.\n";
+
+auto disabledDelivered = receiveData(disabledDataService,
+        "disabled-hook", receiverAddress, originatorAddress, 1, 1);
+REQUIRE(disabledDelivered.size() == 1);
+deleteReturned(disabledDelivered.front());
+EV << "The optional recipient MPDU security hook is disabled by default.\n";
+
+security->integrityOutcome = IRecipientMpduSecurity::Outcome::ACCEPT;
+security->replayOutcome = IRecipientMpduSecurity::Outcome::ACCEPT;
+auto firstDelivered = receiveData(dataService, "first", receiverAddress,
+        originatorAddress, 2, 10);
+REQUIRE(firstDelivered.size() == 1);
+deleteReturned(firstDelivered.front());
+REQUIRE(security->integrityCheckCount == 1);
+REQUIRE(security->replayCheckCount == 1);
+auto duplicateDelivered = receiveData(dataService, "duplicate",
+        receiverAddress, originatorAddress, 2, 10, nullptr, true);
+REQUIRE(duplicateDelivered.empty());
+REQUIRE(security->integrityCheckCount == 1);
+REQUIRE(security->replayCheckCount == 1);
+EV << "Duplicate removal rejects a retry before invoking MPDU security.\n";
+
+security->integrityOutcome = IRecipientMpduSecurity::Outcome::INTEGRITY_FAILED;
+REQUIRE(receiveData(dataService, "integrity-failed", receiverAddress,
+        originatorAddress, 3, 20).empty());
+security->integrityOutcome = IRecipientMpduSecurity::Outcome::ACCEPT;
+security->replayOutcome = IRecipientMpduSecurity::Outcome::REPLAY_DETECTED;
+REQUIRE(receiveData(dataService, "replay-detected", receiverAddress,
+        originatorAddress, 3, 21).empty());
+REQUIRE(security->integrityCheckCount == 3);
+REQUIRE(security->replayCheckCount == 2);
+REQUIRE(integrityFailureCounter.count == 1);
+REQUIRE(replayCounter.count == 1);
+EV << "Integrity and replay outcomes reject MPDUs through the typed hook.\n";
+
+auto managementHeader = makeShared<Ieee80211MgmtHeader>();
+managementHeader->setReceiverAddress(receiverAddress);
+managementHeader->setTransmitterAddress(originatorAddress);
+managementHeader->setSequenceNumber(SequenceNumberCyclic(30));
+managementHeader->setFragmentNumber(0);
+managementHeader->setMoreFragments(false);
+security->replayOutcome = IRecipientMpduSecurity::Outcome::ACCEPT;
+auto managementDelivered = dataService->managementFrameReceived(
+        new TrackedPacket("management", managementHeader), managementHeader);
+REQUIRE(managementDelivered.size() == 1);
+deleteReturned(managementDelivered.front());
+int destructionsBeforeDuplicate = TrackedPacket::destructionCount;
+auto duplicateManagementHeader = makeShared<Ieee80211MgmtHeader>(*managementHeader);
+duplicateManagementHeader->setRetry(true);
+REQUIRE(dataService->managementFrameReceived(
+        new TrackedPacket("duplicate-management", duplicateManagementHeader),
+        duplicateManagementHeader).empty());
+REQUIRE(TrackedPacket::destructionCount == destructionsBeforeDuplicate + 1);
+EV << "A duplicate management MPDU is dropped and its packet ownership is released.\n";
+
+TestRecipientBlockAckAgreementHandler agreementHandler;
+MacAddress reorderOriginator("02:00:00:00:00:02");
+Tid reorderTid = 4;
+agreementHandler.addAgreement(reorderTid, reorderOriginator, 40);
+security->checks.clear();
+REQUIRE(receiveData(dataService, "seq41", receiverAddress,
+        reorderOriginator, reorderTid, 41, &agreementHandler).empty());
+auto sequence40 = receiveData(dataService, "seq40", receiverAddress,
+        reorderOriginator, reorderTid, 40, &agreementHandler);
+REQUIRE(sequence40.size() == 1);
+REQUIRE(!strcmp(sequence40.front()->getName(), "seq40"));
+deleteReturned(sequence40.front());
+auto sequence42 = receiveData(dataService, "seq42", receiverAddress,
+        reorderOriginator, reorderTid, 42, &agreementHandler);
+REQUIRE(sequence42.size() == 1);
+REQUIRE(!strcmp(sequence42.front()->getName(), "seq41"));
+deleteReturned(sequence42.front());
+REQUIRE(security->checks == std::vector<std::pair<IRecipientMpduSecurity::Stage, uint16_t>>({
+        {IRecipientMpduSecurity::Stage::INTEGRITY_AND_DECRYPTION, 41},
+        {IRecipientMpduSecurity::Stage::INTEGRITY_AND_DECRYPTION, 40},
+        {IRecipientMpduSecurity::Stage::REPLAY_DETECTION, 40},
+        {IRecipientMpduSecurity::Stage::INTEGRITY_AND_DECRYPTION, 42},
+        {IRecipientMpduSecurity::Stage::REPLAY_DETECTION, 41}}));
+EV << "The Block Ack reorder window withholds and releases frames in sequence order.\n";
+
+%contains: stdout
+Existing FCS fidelity distinguishes declared and computed success and failure.
+
+%contains: stdout
+The optional recipient MPDU security hook is disabled by default.
+
+%contains: stdout
+Duplicate removal rejects a retry before invoking MPDU security.
+
+%contains: stdout
+Integrity and replay outcomes reject MPDUs through the typed hook.
+
+%contains: stdout
+A duplicate management MPDU is dropped and its packet ownership is released.
+
+%contains: stdout
+The Block Ack reorder window withholds and releases frames in sequence order.

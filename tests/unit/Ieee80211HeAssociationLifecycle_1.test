@@ -16,6 +16,7 @@ simple TestMgmtSta extends Ieee80211MgmtSta
         interfaceTableModule = "";
         mibModule = "^.mib";
         macModule = "";
+        radioModule = "";
 }
 
 network TestNetwork
@@ -108,6 +109,11 @@ class TestMgmtSta : public Ieee80211MgmtSta
         mib->bssStationData.associationId = 7;
         (ApInfo&)assocAP = *ap;
         assocAP.beaconTimeoutMsg = nullptr;
+        Ieee80211SupportedRatesElement supportedRates;
+        supportedRates.numRates = 1;
+        supportedRates.rates[0].rate = 2;
+        supportedRates.rates[0].basic = true;
+        mib->installCurrentBssBasicLegacyRates(supportedRates, Ieee80211ExtendedSupportedRatesElement());
     }
 
     void setAuthenticated(const MacAddress& address, bool authenticated)
@@ -126,6 +132,7 @@ class TestMgmtSta : public Ieee80211MgmtSta
         pendingReassociation = false;
         mib->bssStationData.isAssociated = false;
         mib->bssStationData.associationId = -1;
+        mib->clearCurrentBssBasicLegacyRates();
         assocAP = AssociatedApInfo();
     }
 
@@ -153,6 +160,13 @@ class TestMgmtSta : public Ieee80211MgmtSta
         auto response = makeShared<Ieee80211ReassociationResponseFrame>();
         response->setStatusCode(SC_SUCCESSFUL);
         response->setAid(9);
+        Ieee80211SupportedRatesElement supportedRates;
+        supportedRates.numRates = 2;
+        supportedRates.rates[0].rate = 12;
+        supportedRates.rates[0].basic = true;
+        supportedRates.rates[1].rate = 24;
+        supportedRates.rates[1].basic = false;
+        response->setSupportedRates(supportedRates);
         response->setChunkLength(B(6));
         auto packet = new Packet("ReassocResp-success", response);
         auto header = makeShared<Ieee80211MgmtHeader>();
@@ -205,6 +219,7 @@ class TestMgmtSta : public Ieee80211MgmtSta
         return invalidatedPeers.count(peer) != 0;
     }
     void clearInvalidatedPeers() { invalidatedPeers.clear(); }
+    void validateDetailedLegacyRateSupport() const { requireDetailedLegacyRateSupport(); }
 };
 
 Define_Module(TestMgmtSta);
@@ -214,6 +229,11 @@ static void cacheAllCapabilities(Ieee80211Mib *mib, const MacAddress& address)
     mib->setPeerHeCapabilities(address, Ieee80211HeCapabilities(), Ieee80211HeOperation());
     mib->setPeerEhtCapabilities(address, Ieee80211EhtCapabilities(), Ieee80211EhtOperation());
     mib->setPeerVhtCapabilities(address, Ieee80211VhtCapabilities(), Ieee80211VhtOperation());
+    Ieee80211SupportedRatesElement supportedRates;
+    supportedRates.numRates = 1;
+    supportedRates.rates[0].rate = 2;
+    supportedRates.rates[0].basic = true;
+    mib->setPeerLegacyRates(address, supportedRates, Ieee80211ExtendedSupportedRatesElement());
 }
 
 static void requireAllCapabilities(Ieee80211Mib *mib, const MacAddress& address, bool present)
@@ -224,11 +244,28 @@ static void requireAllCapabilities(Ieee80211Mib *mib, const MacAddress& address,
             "EHT cache presence mismatch");
     requireLifecycle((mib->findNegotiatedVhtCapabilities(address) != nullptr) == present,
             "VHT cache presence mismatch");
+    requireLifecycle((mib->findPeerLegacyRates(address) != nullptr) == present,
+            "legacy-rate cache presence mismatch");
 }
 
 %activity:
 auto mib = check_and_cast<Ieee80211Mib *>(getParentModule()->getSubmodule("mib"));
 auto mgmt = check_and_cast<TestMgmtSta *>(getParentModule()->getSubmodule("mgmt"));
+bool rejectedPureEhtDetailedManagement = false;
+try {
+    mgmt->validateDetailedLegacyRateSupport();
+}
+catch (const cRuntimeError& error) {
+    rejectedPureEhtDetailedManagement =
+            std::string(error.what()).find("pure-EHT/6 GHz detailed management is unsupported") != std::string::npos;
+}
+requireLifecycle(rejectedPureEhtDetailedManagement,
+        "detailed management must reject a profile without representable legacy rates early");
+Ieee80211LegacyRate localRate;
+localRate.rate = 2;
+localRate.basic = true;
+mib->localOperationalRates.push_back(localRate);
+mgmt->validateDetailedLegacyRateSupport();
 MacAddress oldAp("02:00:00:00:00:01");
 MacAddress targetAp("02:00:00:00:00:02");
 MacAddress wrongAp("02:00:00:00:00:03");
@@ -245,6 +282,10 @@ requireLifecycle(mgmt->getLastSubtype() == ST_REASSOCIATIONREQUEST,
 auto request = dynamicPtrCast<Ieee80211ReassociationRequestFrame>(mgmt->getLastFrame());
 requireLifecycle(request != nullptr && request->getCurrentAP() == oldAp,
         "Reassociation Request must identify the current AP");
+requireLifecycle(request->getSupportedRates().numRates == 1 &&
+        request->getSupportedRates().rates[0].rate == 2 &&
+        request->getSupportedRates().rates[0].basic,
+        "Reassociation Request must project the local MIB legacy-rate snapshot");
 requireLifecycle(mgmt->getLastChannel() == 6, "reassociation must tune to the target AP");
 
 mgmt->refuseReassociation(wrongAp);
@@ -261,6 +302,9 @@ mgmt->refuseReassociation(targetAp);
 requireLifecycle(mib->bssStationData.isAssociated &&
         mgmt->getAssociatedApForTest().address == oldAp,
         "refused reassociation must preserve the old association");
+requireLifecycle(mib->currentBssBasicRates.size() == 1 &&
+        mib->currentBssBasicRates[0].rate == 2,
+        "refused reassociation must preserve the old BSS Basic Rate Set");
 requireAllCapabilities(mib, oldAp, true);
 requireAllCapabilities(mib, targetAp, false);
 requireLifecycle(mgmt->getLastChannel() == 1,
@@ -281,6 +325,9 @@ requireLifecycle(!mgmt->hasPendingAssociationTransition() &&
         mib->bssStationData.isAssociated && mgmt->getAssociatedApForTest().address == oldAp &&
         mgmt->getLastChannel() == 1,
         "canceling the target reassociation must preserve and retune to the old AP");
+requireLifecycle(mib->currentBssBasicRates.size() == 1 &&
+        mib->currentBssBasicRates[0].rate == 2,
+        "canceling reassociation must preserve the old BSS Basic Rate Set");
 requireAllCapabilities(mib, targetAp, false);
 requireLifecycle(mgmt->wasPeerInvalidated(targetAp) &&
         !mgmt->wasPeerInvalidated(oldAp),
@@ -314,7 +361,17 @@ requireLifecycle(mib->bssStationData.isAssociated &&
 requireLifecycle(mgmt->wasPeerInvalidated(oldAp) &&
         mgmt->wasPeerInvalidated(targetAp),
         "successful reassociation must invalidate old and replacement peer epochs");
+auto targetRates = mib->findPeerLegacyRates(targetAp);
+requireLifecycle(targetRates != nullptr && targetRates->size() == 2 &&
+        (*targetRates)[0].rate == 12 && (*targetRates)[0].basic &&
+        (*targetRates)[1].rate == 24 && !(*targetRates)[1].basic,
+        "successful reassociation must replace stale rates with the peer advertisement");
+requireLifecycle(mib->currentBssBasicRates.size() == 1 &&
+        mib->currentBssBasicRates[0].rate == 12 && mib->currentBssBasicRates[0].basic,
+        "successful reassociation must install the target BSS Basic Rate Set");
 mgmt->locallyDisassociate(targetAp);
+requireLifecycle(mib->currentBssBasicRates.empty(),
+        "disassociation must clear the current BSS Basic Rate Set");
 
 mgmt->setAuthenticated(targetAp, true);
 mgmt->associateWith(oldAp);
@@ -330,6 +387,10 @@ requireLifecycle(mgmt->wasPeerInvalidated(oldAp) &&
         "scan cancellation must invalidate both live and pending peer epochs");
 
 EV << "Reassociation target validation, cancellation safety, and cache invalidation passed.\n";
+EV << "Detailed pure-EHT/6 GHz management rejects its unsupported boundary early.\n";
 
 %contains: stdout
 Reassociation target validation, cancellation safety, and cache invalidation passed.
+
+%contains: stdout
+Detailed pure-EHT/6 GHz management rejects its unsupported boundary early.

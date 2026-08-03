@@ -61,10 +61,11 @@ The following sections examine the above components.
 MAC
 ---
 
-The :ned:`Ieee80211Mac` module type represents the IEEE 802.11 MAC. The
-structure of the implementation closely follows the architecture described in
-the standard, IEEE 802.11-2012 Part 11: Wireless LAN Medium Access Control (MAC)
-and Physical Layer (PHY) Specifications.
+The :ned:`Ieee80211Mac` module type represents the IEEE 802.11 MAC. The modular
+implementation provides selected procedures from the IEEE 802.11 family of
+standards. The fidelity and supported subsets of later amendments are
+explicitly scoped below; the model is not a claim of complete amendment
+conformance.
 
 The :ned:`Ieee80211Mac` performs transmission of frames according to the
 CSMA/CA protocol. Data and management frames are received from the upper
@@ -171,6 +172,48 @@ The MAC model has the following replaceable built-in policy submodules by defaul
 
 -  Fragmentation policy (e.g. :ned:`BasicFragmentationPolicy`): controls when
    and how fragmentation occurs
+
+HT and VHT feature scope
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Infrastructure management carries the modeled HT and VHT capability and
+operation fields through beacon, probe, association, and reassociation
+exchanges. Detailed and simplified management both install the resulting
+directional, per-peer contract in the MIB. Width, MCS/NSS, aggregation, FEC,
+and VHT beamforming decisions consume this negotiated state. The capability
+elements contain the fields used by the model, not every field defined by the
+standard.
+
+For HT and VHT, BCC remains the default. Negotiated LDPC is an opt-in packet
+model that changes coded geometry, PHY signaling, payload capacity, and
+duration; it does not model a coded bitstream or decoder. The current-standard
+non-HT-mixed protected-TXOP path uses an initial legacy RTS/CTS reservation and
+admits subsequent exchanges only while they fit the TXOP. Obsolete L-SIG TXOP
+and dual-CTS protection variants are not modeled.
+
+The optional :ned:`VhtHcf` models a narrow VHT sounding and beamforming subset.
+Fresh CSI is established by an NDPA, NDP, and VHT Compressed Beamforming
+exchange and can apply a configured packet-level receive-power benefit to later
+SU traffic; this is not waveform precoding. Its AP-only DL MU-MIMO path performs
+Group-ID management and sounding, builds one immutable two-user plan, transmits
+one VHT MU PPDU, and uses serialized per-user BAR/BA exchanges. This subset is
+limited to 20 MHz, two associated users in Group ID 1 positions 0 and 1, one
+spatial stream per user, and deterministic scheduling. Wider, larger, or more
+general VHT MU configurations, STBC, VHT MU LDPC equalization, and a complete
+PHY SIG bit chain are not modeled.
+
+Receive processing validates aggregate members, headers, FCS, and Address1
+before duplicate removal, Block Ack reordering, and reassembly. Setting
+``fcsMode = "computed"`` enables calculated FCS validation; the default
+``declared`` mode preserves existing scenarios. Optional integrity/decryption
+and replay hooks provide explicit policy boundaries but do not implement
+WEP/RSN/WPA or cryptography, and their default implementation is a no-op.
+
+Rate selection shares one policy between DCF and HCF. It uses Supported and
+Extended Supported Rates, the current BSS Basic Rate Set, peer HT/VHT
+capability and operation limits, and the response/control fallback rules. The
+BSS basic set is distinct from the local operational and PHY mandatory sets.
+Existing adaptive rate-control algorithms remain separate from this policy.
 
 .. For example, many of these modules are located in the *hcf* submodule of the MAC:
 

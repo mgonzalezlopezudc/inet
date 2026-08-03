@@ -78,7 +78,7 @@ auto beacon = makeShared<Ieee80211BeaconFrame>();
 beacon->setSSID("twt");
 Ieee80211SupportedRatesElement rates;
 rates.numRates = 1;
-rates.rate[0] = 6;
+rates.rates[0].rate = 12;
 beacon->setSupportedRates(rates);
 beacon->setBeaconInterval(SimTime(100, SIMTIME_MS));
 beacon->setBroadcastTwtPresent(true);

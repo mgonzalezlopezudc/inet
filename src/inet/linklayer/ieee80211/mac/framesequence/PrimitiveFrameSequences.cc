@@ -331,7 +331,14 @@ bool RtsCtsFs::completeStep(FrameSequenceContext *context)
             step++;
             auto receivedPacket = receiveStep->getReceivedFrame();
             const auto& receivedHeader = receivedPacket->peekAtFront<Ieee80211MacHeader>();
-            return context->isForUs(receivedHeader) && receivedHeader->getType() == ST_CTS;
+            bool validCts = context->isForUs(receivedHeader) && receivedHeader->getType() == ST_CTS;
+            auto txop = context->getQoSContext() == nullptr ? nullptr : context->getQoSContext()->txopProcedure;
+            if (validCts && txop != nullptr && txop->isInitialProtectionPending())
+                // IEEE Std 802.11-2024, 10.3.2.9 and 10.23.2.8: only the
+                // valid CTS in the initial RTS/CTS sequence completes the
+                // immutable TXOP protection state.
+                txop->completeInitialProtection();
+            return validCts;
         }
         default:
             throw cRuntimeError("Unknown step");

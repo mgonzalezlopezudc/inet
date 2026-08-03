@@ -9,6 +9,7 @@ HE TB/PSR handling, and threshold-based ignoring.
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
+#include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211HePacketRadio.h"
 #include "inet/physicallayer/wireless/common/analogmodel/scalar/ScalarReceptionAnalogModel.h"
 #include "inet/physicallayer/wireless/common/radio/packetlevel/Reception.h"
 #include "inet/physicallayer/wireless/common/signal/Interference.h"
@@ -245,6 +246,7 @@ rxModule->setSensitivity(mW(math::dBmW2mW(-90)));
 
 // Set local BSS color in MIB to 5
 mibModule->heOperation.bssColor = 5;
+check_and_cast<IIeee80211HePacketRadio *>(nic->getSubmodule("radio"))->setHeBssColor(5);
 
 // Retrieve mode and channel for mock transmissions
 auto modeSet = Ieee80211ModeSet::getModeSet("ax");

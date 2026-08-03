@@ -13,6 +13,10 @@ namespace inet {
 namespace ieee80211 {
 
 HtTxOpFs::HtTxOpFs() :
+    // Historical G.4 grammar retained only by the deprecated compatibility
+    // type. The production HCF path uses TxOpFs and never selects these
+    // placeholders for unsupported L-SIG TXOP or dual-CTS protection.
+    //
     // G.4 HT sequences
     // ht-txop-sequence =
     //   L-sig-protected-sequence |
@@ -62,4 +66,3 @@ bool HtTxOpFs::isRtsCtsNeeded(OptionalFs *frameSequence, FrameSequenceContext *c
 
 } // namespace ieee80211
 } // namespace inet
-

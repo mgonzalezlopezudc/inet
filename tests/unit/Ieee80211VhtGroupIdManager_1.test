@@ -1,0 +1,62 @@
+%description:
+Test constrained VHT Group ID state transitions, ACK promotion, timeout, and invalidation.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/VhtGroupIdManager.h"
+
+%file: TestNetwork.ned
+import inet.linklayer.ieee80211.mac.coordinationfunction.VhtGroupIdManager;
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        manager: VhtGroupIdManager { parameters: pendingTimeout = 10us; }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::units::values;
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+%activity:
+auto manager = check_and_cast<VhtGroupIdManager *>(getParentModule()->getSubmodule("manager"));
+MacAddress peer0("02:00:00:00:00:01");
+MacAddress peer1("02:00:00:00:00:02");
+
+auto action0 = makeShared<Ieee80211VhtGroupIdManagement>();
+VhtGroupIdManager::setMembership(*action0, 1, 0);
+REQUIRE(VhtGroupIdManager::isMember(*action0, 1));
+REQUIRE(VhtGroupIdManager::getUserPosition(*action0, 1) == 0);
+auto action1 = makeShared<Ieee80211VhtGroupIdManagement>();
+VhtGroupIdManager::setMembership(*action1, 1, 1);
+REQUIRE(VhtGroupIdManager::getUserPosition(*action1, 1) == 1);
+
+manager->beginPending(peer0, 1, 0, 7, MHz(20));
+REQUIRE(manager->getState(peer0, 1, 7, MHz(20)) == IVhtGroupIdManager::State::PENDING);
+REQUIRE(!manager->isActive(peer0, 1, 0, 7, MHz(20)));
+REQUIRE(manager->acknowledge(peer0, 1, 7, MHz(20)));
+REQUIRE(manager->isActive(peer0, 1, 0, 7, MHz(20)));
+REQUIRE(!manager->isActive(peer0, 1, 0, 8, MHz(20)));
+REQUIRE(!manager->isActive(peer0, 1, 0, 7, MHz(40)));
+
+manager->beginPending(peer1, 1, 1, 9, MHz(20));
+wait(SimTime(11, SIMTIME_US));
+REQUIRE(manager->getState(peer1, 1, 9, MHz(20)) == IVhtGroupIdManager::State::ABSENT);
+
+REQUIRE(manager->consume(peer1, action1, 9, MHz(20)));
+REQUIRE(manager->isActive(peer1, 1, 1, 9, MHz(20)));
+manager->invalidatePeer(peer1);
+REQUIRE(!manager->isActive(peer1, 1, 1, 9, MHz(20)));
+manager->invalidateAll();
+REQUIRE(!manager->isActive(peer0, 1, 0, 7, MHz(20)));
+
+EV << "VHT Group ID pending/ACK/timeout/invalidation: PASS\n";
+
+%contains-regex: stdout
+VHT Group ID pending/ACK/timeout/invalidation: PASS

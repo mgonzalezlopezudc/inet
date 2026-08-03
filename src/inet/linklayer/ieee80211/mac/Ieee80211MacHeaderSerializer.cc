@@ -173,6 +173,8 @@ Register_Serializer(Ieee80211AckFrame, Ieee80211MacHeaderSerializer);
 Register_Serializer(Ieee80211RtsFrame, Ieee80211MacHeaderSerializer);
 Register_Serializer(Ieee80211CtsFrame, Ieee80211MacHeaderSerializer);
 Register_Serializer(Ieee80211TriggerFrame, Ieee80211MacHeaderSerializer);
+Register_Serializer(Ieee80211VhtNdpAnnouncementFrame, Ieee80211MacHeaderSerializer);
+Register_Serializer(Ieee80211VhtBeamformingReportPollFrame, Ieee80211MacHeaderSerializer);
 
 Register_Serializer(Ieee80211BasicBlockAckReq, Ieee80211MacHeaderSerializer);
 Register_Serializer(Ieee80211CompressedBlockAckReq, Ieee80211MacHeaderSerializer);
@@ -401,10 +403,10 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                             throw cRuntimeError("Unsupported S1G action frame");
                         break;
                     }
+                    case 21:
                     case 30: {
-                        // HE category (IEEE 802.11-2024 Table 9-51).
+                        // VHT/HE category (IEEE 802.11-2024 Table 9-51).
                         // The action body is serialized by a separate body chunk.
-                        // The MAC header chunk covers only the 24-byte 802.11 header.
                         ASSERT(stream.getLength() - startPos == actionFrame->getChunkLength());
                         break;
                     }
@@ -682,6 +684,40 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
             ASSERT(stream.getLength() - startPos == trigger->getChunkLength());
             break;
         }
+        case ST_VHT_NDP_ANNOUNCEMENT: {
+            auto ndpa = dynamicPtrCast<const Ieee80211VhtNdpAnnouncementFrame>(chunk);
+            if (ndpa == nullptr || ndpa->getStationsArraySize() == 0 ||
+                    ndpa->getSoundingDialogTokenNumber() > 63 ||
+                    ndpa->getChunkLength() != B(17 + 2 * ndpa->getStationsArraySize()))
+                throw cRuntimeError("Malformed VHT NDP Announcement frame");
+            stream.writeUint16Le(ndpa->getDurationField().inUnit(SIMTIME_US));
+            stream.writeMacAddress(ndpa->getReceiverAddress());
+            stream.writeMacAddress(ndpa->getTransmitterAddress());
+            // Figure 9-76: type 0 in B0-B1, token number in B2-B7.
+            stream.writeByte(ndpa->getSoundingDialogTokenNumber() << 2);
+            for (unsigned int i = 0; i < ndpa->getStationsArraySize(); i++) {
+                const auto& sta = ndpa->getStations(i);
+                if (sta.aid > 4095 || (!sta.muFeedback && sta.ncIndex != 0) ||
+                        sta.ncIndex > 7)
+                    throw cRuntimeError("Invalid VHT NDP Announcement STA Info field");
+                uint16_t staInfo = sta.aid | (sta.muFeedback ? 0x1000 : 0) |
+                        (static_cast<uint16_t>(sta.ncIndex) << 13);
+                stream.writeUint16Le(staInfo);
+            }
+            ASSERT(stream.getLength() - startPos == ndpa->getChunkLength());
+            break;
+        }
+        case ST_BEAMFORMING_REPORT_POLL: {
+            auto poll = dynamicPtrCast<const Ieee80211VhtBeamformingReportPollFrame>(chunk);
+            if (poll == nullptr || poll->getChunkLength() != B(17))
+                throw cRuntimeError("Malformed VHT Beamforming Report Poll frame");
+            stream.writeUint16Le(poll->getDurationField().inUnit(SIMTIME_US));
+            stream.writeMacAddress(poll->getReceiverAddress());
+            stream.writeMacAddress(poll->getTransmitterAddress());
+            stream.writeByte(poll->getFeedbackSegmentRetransmissionBitmap());
+            ASSERT(stream.getLength() - startPos == poll->getChunkLength());
+            break;
+        }
         case ST_BLOCKACK_REQ: {
             auto blockAckReq = dynamicPtrCast<const Ieee80211BlockAckReq>(chunk);
             stream.writeUint16Le(blockAckReq->getDurationField().inUnit(SIMTIME_US));
@@ -901,6 +937,7 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
             actionFrame->setSequenceNumber(sequenceNumber);
             if (order)
                 stream.readUint32Be();
+            auto categoryPosition = stream.getPosition();
             actionFrame->setCategory(stream.readByte());
             switch (actionFrame->getCategory()) {
                 case 3: {
@@ -1042,6 +1079,12 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                     actionFrame->markIncorrect();
                     return actionFrame;
                 }
+                case 21:
+                    // Category 21 belongs to the separately typed VHT action
+                    // body. Retain it for routing without consuming body data.
+                    stream.seek(categoryPosition);
+                    actionFrame->setChunkLength(B(24));
+                    return actionFrame;
                 default: {
                     actionFrame->markIncorrect();
                     return actionFrame;
@@ -1336,6 +1379,50 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                 trigger->setUsers(i, users[i]);
             trigger->setChunkLength(B(stream.getPosition().get<B>()));
             return trigger;
+        }
+        case ST_VHT_NDP_ANNOUNCEMENT: {
+            auto ndpa = makeShared<Ieee80211VhtNdpAnnouncementFrame>();
+            copyBasicFields(ndpa, macHeader);
+            ndpa->setDurationField(SimTime(stream.readUint16Le(), SIMTIME_US));
+            ndpa->setReceiverAddress(stream.readMacAddress());
+            ndpa->setTransmitterAddress(stream.readMacAddress());
+            auto dialog = stream.readByte();
+            if ((dialog & 0x3) != 0)
+                ndpa->markIncorrect();
+            ndpa->setSoundingDialogTokenNumber(dialog >> 2);
+            std::vector<Ieee80211VhtNdpStaInfo> stations;
+            // The only bytes following this variable header are the ordinary
+            // four-octet MAC trailer.
+            while (stream.getRemainingLength() > B(4)) {
+                if (stream.getRemainingLength() < B(6)) {
+                    ndpa->markIncorrect();
+                    break;
+                }
+                auto encoded = stream.readUint16Le();
+                Ieee80211VhtNdpStaInfo sta;
+                sta.aid = encoded & 0x0fff;
+                sta.muFeedback = (encoded & 0x1000) != 0;
+                sta.ncIndex = (encoded >> 13) & 0x7;
+                if (!sta.muFeedback && sta.ncIndex != 0)
+                    ndpa->markIncorrect();
+                stations.push_back(sta);
+            }
+            if (stations.empty())
+                ndpa->markIncorrect();
+            ndpa->setStationsArraySize(stations.size());
+            for (size_t i = 0; i < stations.size(); i++)
+                ndpa->setStations(i, stations[i]);
+            ndpa->setChunkLength(B(17 + 2 * stations.size()));
+            return ndpa;
+        }
+        case ST_BEAMFORMING_REPORT_POLL: {
+            auto poll = makeShared<Ieee80211VhtBeamformingReportPollFrame>();
+            copyBasicFields(poll, macHeader);
+            poll->setDurationField(SimTime(stream.readUint16Le(), SIMTIME_US));
+            poll->setReceiverAddress(stream.readMacAddress());
+            poll->setTransmitterAddress(stream.readMacAddress());
+            poll->setFeedbackSegmentRetransmissionBitmap(stream.readByte());
+            return poll;
         }
         case ST_BLOCKACK_REQ: {
             auto blockAckReq = makeShared<Ieee80211BlockAckReq>();

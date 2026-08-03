@@ -17,10 +17,10 @@ moduleinterface IIeee80211Mgmt
     parameters:
         @display("i=block/cogwheel");
         string macModule;               // The path to the MAC module
+        string radioModule;             // The path to the IEEE 802.11 mode-set provider
     gates:
         input macIn @labels(Ieee80211MacHeader);
         output macOut @labels(Ieee80211MacHeader);
         input agentIn;   // Optional gates used for the agent in stations
         output agentOut; // Optional gates used for the agent in stations
 }
-

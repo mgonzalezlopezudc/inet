@@ -1,0 +1,477 @@
+%description:
+Deterministic VHT DL MU receiver-negative regression.  After one valid MU
+PPDU, it changes one STA to the other user's Group-ID position and removes
+the other STA's membership.  Each receiver must reject subsequent MU PPDUs
+before MAC/UDP delivery.
+
+%file: VhtDlMuNegativeObserver.cc
+
+#include <cstring>
+#include <vector>
+
+#include "inet/common/Simsignals.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/VhtHcf.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/VhtGroupIdManager.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/VhtDlMuTxOpFs.h"
+#include "inet/linklayer/ieee80211/mac/originator/QosAckHandler.h"
+#include "inet/linklayer/ieee80211/mac/queue/InProgressFrames.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211VhtTxVector.h"
+#include "inet/queueing/contract/IPacketQueue.h"
+
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+namespace Ieee80211VhtDlMuNegative_1 {
+
+#define REQUIRE_VHT_MU_NEGATIVE(condition, message) \
+    do { if (!(condition)) throw cRuntimeError("VHT DL MU negative regression: %s", message); } while (false)
+
+class DropSecondVhtMuUserReceiver : public Ieee80211Receiver
+{
+  protected:
+    virtual bool computeIsVhtMuUserReceptionSuccessful(
+            const Ieee80211Transmission *transmission, const Ieee80211VhtMuUser& user,
+            const std::vector<const IReceptionDecision *> *decisions) const override
+    {
+        return user.userPosition != 1 &&
+                Ieee80211Receiver::computeIsVhtMuUserReceptionSuccessful(
+                        transmission, user, decisions);
+    }
+};
+
+Define_Module(DropSecondVhtMuUserReceiver);
+
+class FaultInjectingVhtDlMuTxOpFs : public VhtDlMuTxOpFs
+{
+  protected:
+    bool *injected = nullptr;
+    cComponent *owner = nullptr;
+    bool announced = false;
+
+    virtual void beforePacketCommit(int packetIndex) override
+    {
+        if (!announced && !*injected) {
+            announced = true;
+            owner->emit(cComponent::registerSignal("vhtDlMuPreCommitFault"), static_cast<cObject *>(nullptr));
+        }
+    }
+
+    virtual void afterCommitMutation(CommitMutation mutation, int packetIndex) override
+    {
+        if (mutation == CommitMutation::ACK_STATE && packetIndex == 1 && !*injected) {
+            *injected = true;
+            throw VhtDlMuStalePlan("deterministic VHT DL MU transactional stale-plan fault");
+        }
+    }
+
+  public:
+    FaultInjectingVhtDlMuTxOpFs(const VhtDlMuPlan& plan, Ieee80211ModeSet *modeSet,
+            IAckHandler *ackHandler, IFrameSequenceHandler::ICallback *callback,
+            bool *injected, cComponent *owner) :
+        VhtDlMuTxOpFs(plan, modeSet, ackHandler, callback), injected(injected), owner(owner) {}
+};
+
+class FaultInjectingVhtHcf : public VhtHcf
+{
+  protected:
+    bool injected = false;
+
+    virtual VhtDlMuTxOpFs *createVhtDlMuTxOpFs(const VhtDlMuPlan& plan,
+            IAckHandler *ackHandler) override
+    {
+        return new FaultInjectingVhtDlMuTxOpFs(plan, modeSet, ackHandler, this,
+                &injected, this);
+    }
+};
+
+Define_Module(FaultInjectingVhtHcf);
+
+class VhtDlMuNegativeObserver : public cSimpleModule, public cListener
+{
+  protected:
+    cModule *apRadio = nullptr;
+    std::vector<cComponent *> sinks;
+    std::vector<cComponent *> receivers;
+    std::vector<int> delivered;
+    std::vector<int> deliveredAtMembershipChange;
+    std::vector<int> nonmemberDrops;
+    std::vector<int> corruptDrops;
+    cMessage *membershipChangeTimer = nullptr;
+    cMessage *rollbackCheckTimer = nullptr;
+    bool membershipChanged = false;
+    bool exercisePerUserFailure = false;
+    bool exercisePreCommitRollback = false;
+    int preCommitFaults = 0;
+    bool rollbackStateVerified = false;
+    int vhtMuPpdus = 0;
+    int retriedHost0Ppdus = 0;
+    int retriedHost1Ppdus = 0;
+    int rollbackPendingCount = -1;
+    int rollbackInProgressCount = -1;
+    std::vector<const Packet *> rollbackPendingPackets;
+    simtime_t navEndpoint = -1;
+    int verifiedNavBars = 0;
+    bool observeRollbackSignals = false;
+    int rollbackOwnershipSignals = 0;
+
+    void checkRollbackAfterAbort()
+    {
+        auto edcafPath = "^.ap.wlan[0].mac.hcf.edca.edcaf[3]";
+        auto pending = check_and_cast<queueing::IPacketQueue *>(findModuleByPath((std::string(edcafPath) + ".pendingQueue").c_str()));
+        auto inProgress = check_and_cast<InProgressFrames *>(findModuleByPath((std::string(edcafPath) + ".inProgressFrames").c_str()));
+        auto ackHandler = check_and_cast<QosAckHandler *>(findModuleByPath((std::string(edcafPath) + ".ackHandler").c_str()));
+        if (pending->getNumPackets() != rollbackPendingCount ||
+                inProgress->getLength() != rollbackInProgressCount)
+            throw cRuntimeError("VHT DL MU negative regression: rollback counts pending=%d/%d inProgress=%d/%d",
+                    pending->getNumPackets(), rollbackPendingCount,
+                    inProgress->getLength(), rollbackInProgressCount);
+        for (const auto *expectedPacket : rollbackPendingPackets) {
+            Packet *actualPacket = nullptr;
+            for (int i = 0; i < pending->getNumPackets(); ++i)
+                if (pending->getPacket(i) == expectedPacket)
+                    actualPacket = pending->getPacket(i);
+            REQUIRE_VHT_MU_NEGATIVE(actualPacket != nullptr,
+                    "pre-commit fault removed a selected real packet from its queue");
+            auto header = actualPacket->peekAtFront<Ieee80211DataHeader>();
+            REQUIRE_VHT_MU_NEGATIVE(!header->getRetry() &&
+                            ackHandler->getQoSDataAckStatus(header) == QosAckHandler::Status::FRAME_NOT_YET_TRANSMITTED,
+                    "pre-commit fault changed real ACK/retry state");
+        }
+        REQUIRE_VHT_MU_NEGATIVE(rollbackOwnershipSignals == 0,
+                "aborted transaction emitted queue/in-progress ownership signals");
+        observeRollbackSignals = false;
+        rollbackStateVerified = true;
+    }
+
+    void changeMembership()
+    {
+        auto host0Manager = check_and_cast<VhtGroupIdManager *>(findModuleByPath("^.host[0].wlan[0].mac.hcf.groupIdManager"));
+        auto host1Manager = check_and_cast<VhtGroupIdManager *>(findModuleByPath("^.host[1].wlan[0].mac.hcf.groupIdManager"));
+        const auto membership = host0Manager->getLocalMembership();
+        REQUIRE_VHT_MU_NEGATIVE(membership.has_value() && membership->groupId == 1 &&
+                        membership->userPosition < 2,
+                "first MU PPDU did not follow acknowledged Group-ID membership");
+        auto action = makeShared<Ieee80211VhtGroupIdManagement>();
+        VhtGroupIdManager::setMembership(*action, membership->groupId,
+                membership->userPosition == 0 ? 1 : 0);
+        REQUIRE_VHT_MU_NEGATIVE(host0Manager->consume(membership->peer, action,
+                        membership->associationGeneration, membership->channelWidth),
+                "failed to replace local membership through its owner");
+        auto host1Membership = host1Manager->getLocalMembership();
+        REQUIRE_VHT_MU_NEGATIVE(host1Membership.has_value(), "second STA owner had no local membership");
+        host1Manager->invalidatePeer(host1Membership->peer);
+        auto host0Radio = check_and_cast<Ieee80211Radio *>(findModuleByPath("^.host[0].wlan[0].radio"));
+        auto host1Radio = check_and_cast<Ieee80211Radio *>(findModuleByPath("^.host[1].wlan[0].radio"));
+        REQUIRE_VHT_MU_NEGATIVE(host0Radio->getVhtMuRxSelection().userPosition ==
+                        (membership->userPosition == 0 ? 1 : 0) &&
+                        !host1Radio->getVhtMuRxSelection().active,
+                "Group-ID owner projection did not update both radios atomically");
+        deliveredAtMembershipChange = delivered;
+        membershipChanged = true;
+        EV_INFO << "VHT DL MU negative injection: host[0] has wrong position and host[1] is a nonmember" << EV_ENDL;
+    }
+
+    virtual void initialize() override
+    {
+        exercisePerUserFailure = par("exercisePerUserFailure").boolValue();
+        exercisePreCommitRollback = par("exercisePreCommitRollback").boolValue();
+        apRadio = findModuleByPath("^.ap.wlan[0].radio");
+        REQUIRE_VHT_MU_NEGATIVE(apRadio != nullptr, "AP radio is missing");
+        apRadio->subscribe(transmissionStartedSignal, this);
+        if (exercisePerUserFailure) {
+            auto edcaf = findModuleByPath("^.ap.wlan[0].mac.hcf.edca.edcaf[3]");
+            REQUIRE_VHT_MU_NEGATIVE(edcaf != nullptr, "AP voice EDCAF is missing");
+            edcaf->subscribe(cComponent::registerSignal("packetSentToPeer"), this);
+        }
+        if (exercisePreCommitRollback) {
+            auto hcf = findModuleByPath("^.ap.wlan[0].mac.hcf");
+            REQUIRE_VHT_MU_NEGATIVE(dynamic_cast<FaultInjectingVhtHcf *>(hcf) != nullptr,
+                    "rollback scenario did not instantiate its fault-injecting VHT HCF");
+            hcf->subscribe(cComponent::registerSignal("vhtDlMuPreCommitFault"), this);
+            auto edcafPath = "^.ap.wlan[0].mac.hcf.edca.edcaf[3]";
+            for (const auto& suffix : {".pendingQueue", ".inProgressFrames"}) {
+                auto component = findModuleByPath((std::string(edcafPath) + suffix).c_str());
+                component->subscribe(cComponent::registerSignal("packetEnqueued"), this);
+                component->subscribe(cComponent::registerSignal("packetDequeued"), this);
+            }
+        }
+        for (int i = 0; i < 2; ++i) {
+            auto host = getParentModule()->getSubmodule("host", i);
+            auto sink = host->getSubmodule("app", 0);
+            auto receiver = host->getSubmodule("wlan", 0)->getSubmodule("mac")->getSubmodule("rx");
+            REQUIRE_VHT_MU_NEGATIVE(sink != nullptr && receiver != nullptr,
+                    "STA sink or Rx module is missing");
+            sinks.push_back(sink);
+            receivers.push_back(receiver);
+            delivered.push_back(0);
+            nonmemberDrops.push_back(0);
+            corruptDrops.push_back(0);
+            sink->subscribe(packetReceivedSignal, this);
+            receiver->subscribe(packetDroppedSignal, this);
+        }
+        membershipChangeTimer = new cMessage("change-vht-mu-membership");
+        rollbackCheckTimer = new cMessage("check-vht-mu-rollback");
+    }
+
+    virtual ~VhtDlMuNegativeObserver() override
+    {
+        cancelAndDelete(membershipChangeTimer);
+        cancelAndDelete(rollbackCheckTimer);
+    }
+
+    virtual void handleMessage(cMessage *message) override
+    {
+        if (message == membershipChangeTimer)
+            changeMembership();
+        else if (message == rollbackCheckTimer)
+            checkRollbackAfterAbort();
+        else
+            REQUIRE_VHT_MU_NEGATIVE(false, "unexpected observer self-message");
+    }
+
+    virtual void receiveSignal(cComponent *source, simsignal_t signal,
+            cObject *object, cObject *details) override
+    {
+        if (signal == packetReceivedSignal) {
+            auto packet = dynamic_cast<Packet *>(object);
+            REQUIRE_VHT_MU_NEGATIVE(packet != nullptr, "UDP sink signal did not carry a Packet");
+            for (size_t i = 0; i < sinks.size(); ++i)
+                if (source == sinks[i])
+                    delivered[i]++;
+        }
+        else if (exercisePreCommitRollback && signal == cComponent::registerSignal("vhtDlMuPreCommitFault")) {
+            preCommitFaults++;
+            auto edcafPath = "^.ap.wlan[0].mac.hcf.edca.edcaf[3]";
+            auto pending = check_and_cast<queueing::IPacketQueue *>(findModuleByPath((std::string(edcafPath) + ".pendingQueue").c_str()));
+            auto inProgress = check_and_cast<InProgressFrames *>(findModuleByPath((std::string(edcafPath) + ".inProgressFrames").c_str()));
+            REQUIRE_VHT_MU_NEGATIVE(pending->getNumPackets() >= 2 && !rollbackCheckTimer->isScheduled(),
+                    "pre-commit fault did not occur with the selected queue entries intact");
+            rollbackPendingCount = pending->getNumPackets();
+            rollbackInProgressCount = inProgress->getLength();
+            for (int i = 0; i < pending->getNumPackets(); ++i) {
+                rollbackPendingPackets.push_back(pending->getPacket(i));
+            }
+            observeRollbackSignals = true;
+            scheduleAt(simTime() + SimTime::fromRaw(1), rollbackCheckTimer);
+        }
+        else if (exercisePreCommitRollback && observeRollbackSignals &&
+                (signal == cComponent::registerSignal("packetEnqueued") ||
+                 signal == cComponent::registerSignal("packetDequeued")))
+            rollbackOwnershipSignals++;
+        else if (exercisePerUserFailure && signal == cComponent::registerSignal("packetSentToPeer")) {
+            auto packet = check_and_cast<Packet *>(object);
+            auto header = dynamicPtrCast<const Ieee80211DataHeader>(
+                    packet->peekAtFront<Ieee80211MacHeader>());
+            if (header != nullptr && header->getRetry()) {
+                auto host0 = check_and_cast<Ieee80211Mac *>(findModuleByPath("^.host[0].wlan[0].mac"));
+                auto host1 = check_and_cast<Ieee80211Mac *>(findModuleByPath("^.host[1].wlan[0].mac"));
+                if (header->getReceiverAddress() == host0->getAddress())
+                    retriedHost0Ppdus++;
+                else if (header->getReceiverAddress() == host1->getAddress())
+                    retriedHost1Ppdus++;
+            }
+        }
+        else if (signal == packetDroppedSignal) {
+            auto packet = dynamic_cast<Packet *>(object);
+            if (packet == nullptr)
+                return;
+            for (size_t i = 0; i < receivers.size(); ++i)
+                if (source == receivers[i]) {
+                    if (!std::strcmp(packet->getName(), "VHT-MU-nonmember"))
+                        nonmemberDrops[i]++;
+                    else if (exercisePerUserFailure && !std::strcmp(packet->getName(), "VHT-MU-PPDU"))
+                        corruptDrops[i]++;
+                }
+        }
+        else if (signal == transmissionStartedSignal && source == apRadio) {
+            auto transmission = dynamic_cast<const Ieee80211Transmission *>(object);
+            REQUIRE_VHT_MU_NEGATIVE(transmission != nullptr,
+                    "radio transmissionStarted did not carry Ieee80211Transmission");
+            const auto& vector = transmission->getVhtTxVector();
+            if (vector != nullptr && vector->isMu()) {
+                vhtMuPpdus++;
+                REQUIRE_VHT_MU_NEGATIVE(vector->getGroupId() == 1 && vector->getUsers().size() == 2,
+                        "MU PPDU did not carry the constrained Group-ID 1 two-user vector");
+                if (!exercisePerUserFailure && !membershipChanged && !membershipChangeTimer->isScheduled())
+                    scheduleAt(transmission->getEndTime() + SimTime::fromRaw(1), membershipChangeTimer);
+                auto copy = std::unique_ptr<Packet>(transmission->getPacket()->dup());
+                Ieee80211Radio::popIeee80211PhyHeaderAtFront(copy.get());
+                copy->popAtFront<Ieee80211MpduSubframeHeader>();
+                auto dataHeader = copy->peekAtFront<Ieee80211DataHeader>();
+                navEndpoint = transmission->getEndTime() + dataHeader->getDurationField();
+            }
+            else if (navEndpoint >= SIMTIME_ZERO &&
+                    !std::strcmp(transmission->getPacket()->getName(), "VHT-MU-BasicBlockAckReq")) {
+                auto copy = std::unique_ptr<Packet>(transmission->getPacket()->dup());
+                Ieee80211Radio::popIeee80211PhyHeaderAtFront(copy.get());
+                auto bar = copy->peekAtFront<Ieee80211BlockAckReq>();
+                auto barEndpoint = transmission->getEndTime() + bar->getDurationField();
+                if (barEndpoint.inUnit(SIMTIME_US) != navEndpoint.inUnit(SIMTIME_US))
+                    throw cRuntimeError("VHT NAV endpoint mismatch: MU=%s BAR=%s duration=%s",
+                            navEndpoint.str().c_str(), barEndpoint.str().c_str(),
+                            bar->getDurationField().str().c_str());
+                verifiedNavBars++;
+            }
+        }
+    }
+
+    virtual void finish() override
+    {
+        if (exercisePreCommitRollback) {
+            REQUIRE_VHT_MU_NEGATIVE(preCommitFaults == 1 && rollbackStateVerified,
+                    "pre-commit fault did not preserve the transactional state exactly once");
+            REQUIRE_VHT_MU_NEGATIVE(vhtMuPpdus >= 1 && delivered[0] >= 1 && delivered[1] >= 1,
+                    "a subsequent VHT DL MU transaction did not commit and deliver both planned users");
+            REQUIRE_VHT_MU_NEGATIVE(verifiedNavBars >= 2,
+                    "BAR0/BAR1 NAV endpoint chain was not observed");
+            EV_INFO << "VHT DL MU pre-commit rollback/retry contract: PASS" << EV_ENDL;
+            return;
+        }
+        if (exercisePerUserFailure) {
+            REQUIRE_VHT_MU_NEGATIVE(vhtMuPpdus >= 1,
+                    "per-user corruption scenario did not produce a two-user MU PPDU");
+            REQUIRE_VHT_MU_NEGATIVE(corruptDrops[0] == 0 && corruptDrops[1] >= 1,
+                    "only the selected VHT MU user must receive a forced PHY failure");
+            REQUIRE_VHT_MU_NEGATIVE(retriedHost0Ppdus == 0 && retriedHost1Ppdus >= 1,
+                    "only the failed MU user's MPDU entered a retry transmission");
+            REQUIRE_VHT_MU_NEGATIVE(delivered[0] >= 1 && delivered[1] >= 1,
+                    "successful user did not receive a BA-backed delivery or failed user did not recover by retry");
+            EV_INFO << "VHT DL MU per-user corruption/retry contract: PASS" << EV_ENDL;
+            return;
+        }
+        REQUIRE_VHT_MU_NEGATIVE(membershipChanged,
+                "no VHT MU PPDU was observed before the negative injection");
+        REQUIRE_VHT_MU_NEGATIVE(vhtMuPpdus >= 2,
+                "no VHT MU PPDU followed the membership mismatch");
+        REQUIRE_VHT_MU_NEGATIVE(nonmemberDrops[1] >= 1,
+                "nonmember receiver did not drop an MU PPDU at the PHY boundary");
+        REQUIRE_VHT_MU_NEGATIVE(delivered == deliveredAtMembershipChange,
+                "a nonmember or wrong-position STA received a PSDU after membership changed");
+        EV_INFO << "VHT DL MU nonmember/wrong-position receiver contract: PASS" << EV_ENDL;
+    }
+};
+
+Define_Module(VhtDlMuNegativeObserver);
+
+} // namespace Ieee80211VhtDlMuNegative_1
+
+%file: TestNetwork.ned
+
+import inet.examples.ieee80211ax.common.HeSingleBssNetwork;
+import inet.linklayer.ieee80211.mac.coordinationfunction.VhtHcf;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211Receiver;
+
+simple VhtDlMuNegativeObserver
+{
+    parameters:
+        @class(VhtDlMuNegativeObserver);
+        bool exercisePerUserFailure = default(false);
+        bool exercisePreCommitRollback = default(false);
+}
+
+module DropSecondVhtMuUserReceiver extends Ieee80211Receiver
+{
+    parameters:
+        @class(DropSecondVhtMuUserReceiver);
+}
+
+module FaultInjectingVhtHcf extends VhtHcf
+{
+    parameters:
+        @class(FaultInjectingVhtHcf);
+}
+
+network TestNetwork extends HeSingleBssNetwork
+{
+    submodules:
+        observer: VhtDlMuNegativeObserver {
+            @display("p=500,60");
+        }
+}
+
+%inifile: omnetpp.ini
+
+[General]
+network = TestNetwork
+ned-path = .;../../../../src;../../../../examples
+sim-time-limit = 50ms
+seed-set = 0
+record-vector-results = false
+cmdenv-express-mode = false
+cmdenv-event-banners = false
+
+**.numLoInterfaces = 0
+*.visualizer.typename = ""
+*.configurator.typename = "Ipv4NetworkConfigurator"
+*.arp.typename = "GlobalArp"
+*.numHosts = 2
+*.ap.wlan[0].address = "10:00:00:00:00:01"
+*.host[*].wlan[0].mgmt.accessPointAddress = "10:00:00:00:00:01"
+
+*.ap.mobility.typename = "StationaryMobility"
+*.host[*].mobility.typename = "StationaryMobility"
+*.ap.mobility.initFromDisplayString = false
+*.host[*].mobility.initFromDisplayString = false
+*.ap.mobility.initialX = 50m
+*.ap.mobility.initialY = 50m
+*.host[*].mobility.initialX = 55m
+*.host[*].mobility.initialY = 50m
+
+**.wlan[0].opMode = "ac"
+**.wlan[0].bandName = "5 GHz (20 MHz)"
+**.wlan[0].bitrate = 6.5Mbps
+**.wlan[0].channelNumber = 0
+**.wlan[0].radio.receiver.snirThreshold = 0dB
+**.wlan[0].radio.receiver.bandwidth = 20MHz
+**.wlan[0].radio.antenna.numAntennas = 2
+**.wlan[0].mac.qosStation = true
+*.host[*].wlan[0].mac.hcf.typename = "VhtHcf"
+**.wlan[0].mac.hcf.enableVhtSuBeamforming = true
+**.wlan[0].mac.hcf.enableVhtDlMuMimo = true
+**.wlan[0].mac.hcf.isBlockAckSupported = true
+**.wlan[0].mac.hcf.originatorAckPolicy.blockAckReqThreshold = 1
+**.wlan[0].mac.hcf.vhtCsiValidityDuration = 100ms
+**.wlan[0].mib.vhtBeamforming = true
+*.ap.wlan[0].mib.vhtSuBeamformer = true
+*.host[*].wlan[0].mib.vhtSuBeamformee = true
+**.wlan[0].mib.vhtMaxNss = 1
+**.wlan[0].mib.vhtMuMimo = true
+*.ap.wlan[0].mib.vhtMuBeamformer = true
+*.host[*].wlan[0].mib.vhtMuBeamformee = true
+**.wlan[0].classifier.typename = "ExampleQosClassifier"
+**.wlan[0].mac.hcf.originatorMacDataService.msduAggregationPolicy.typename = ""
+
+*.observer.exercisePerUserFailure = ${perUserFailure=false, true, false}
+*.observer.exercisePreCommitRollback = ${rollback=false, false, true ! perUserFailure}
+*.ap.wlan[0].mac.hcf.typename = ${hcf="VhtHcf", "VhtHcf", "FaultInjectingVhtHcf" ! perUserFailure}
+*.host[1].wlan[0].radio.receiver.typename = ${receiver="Ieee80211Receiver", "DropSecondVhtMuUserReceiver", "Ieee80211Receiver" ! perUserFailure}
+
+*.server.numApps = 2
+*.server.app[*].typename = "UdpBasicApp"
+*.server.app[*].packetName = "vht-dl-mu-negative"
+*.server.app[0].destAddresses = "host[0]"
+*.server.app[1].destAddresses = "host[1]"
+*.server.app[*].destPort = 5000
+*.server.app[*].messageLength = 200B
+*.server.app[*].sendInterval = ${sendInterval=1ms, 1ms, 1ms ! perUserFailure}
+*.server.app[*].startTime = 20ms
+*.server.app[*].stopTime = ${stopTime=40ms, 40ms, 40ms ! perUserFailure}
+
+*.host[*].numApps = 1
+*.host[*].app[0].typename = "UdpSink"
+*.host[*].app[0].localPort = 5000
+
+%contains: stdout
+VHT DL MU nonmember/wrong-position receiver contract: PASS
+
+%contains: stdout
+VHT DL MU per-user corruption/retry contract: PASS
+
+%contains: stdout
+VHT DL MU pre-commit rollback/retry contract: PASS

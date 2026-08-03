@@ -1,0 +1,103 @@
+%description:
+Test deterministic constrained VHT DL MU scheduling and immutable plan gates.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/framesequence/VhtDlMuPlan.h"
+#include "inet/linklayer/ieee80211/mac/scheduler/VhtDlMuScheduler.h"
+
+%file: TestNetwork.ned
+import inet.linklayer.ieee80211.mac.scheduler.VhtDlMuScheduler;
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        scheduler: VhtDlMuScheduler;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::units::values;
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+static IIeee80211VhtDlMuScheduler::Candidate candidate(const char *address,
+        uint16_t aid, uint8_t userPosition, simtime_t enqueueTime, Packet *packet)
+{
+    IIeee80211VhtDlMuScheduler::Candidate result;
+    result.peer = MacAddress(address);
+    result.associationId = aid;
+    result.tid = 0;
+    result.associationGeneration = 3;
+    result.userPosition = userPosition;
+    result.mcs = 4;
+    result.enqueueTime = enqueueTime;
+    result.sourceQueue = reinterpret_cast<queueing::IPacketQueue *>(uintptr_t(1));
+    result.packet = packet;
+    result.psduLength = B(128);
+    result.beamformingGainDb = 3;
+    result.leakagePenaltyDb = 1;
+    result.associated = true;
+    result.negotiatedMuMimo = true;
+    result.exactlyOneSpatialStream = true;
+    result.freshCsi = true;
+    result.activeGroup = true;
+    result.activeBlockAckAgreement = true;
+    result.unsegmented = true;
+    return result;
+}
+
+%activity:
+auto scheduler = check_and_cast<VhtDlMuScheduler *>(getParentModule()->getSubmodule("scheduler"));
+Packet p0("p0"), p1("p1"), p2("p2");
+IIeee80211VhtDlMuScheduler::Context context;
+context.enabled = true;
+context.accessPoint = true;
+context.packetLevelRadio = true;
+context.channelWidth = MHz(20);
+context.transmitDimensions = 2;
+context.groupId = 1;
+context.candidates = {
+    candidate("02:00:00:00:00:03", 3, 0, SimTime(2, SIMTIME_MS), &p2),
+    candidate("02:00:00:00:00:02", 2, 1, SimTime(1, SIMTIME_MS), &p1),
+    candidate("02:00:00:00:00:01", 1, 0, SimTime(1, SIMTIME_MS), &p0),
+};
+auto selected = scheduler->schedule(context);
+REQUIRE(selected.size() == 2);
+REQUIRE(selected[0].associationId == 1 && selected[0].userPosition == 0);
+REQUIRE(selected[1].associationId == 2 && selected[1].userPosition == 1);
+
+VhtDlMuPlanDiagnostic diagnostic;
+auto plan = VhtDlMuPlan::create(context, selected, diagnostic);
+REQUIRE(plan.has_value() && !diagnostic);
+
+auto stale = context;
+stale.candidates[2].freshCsi = false;
+REQUIRE(scheduler->schedule(stale).size() == 2); // third candidate still supplies the pair
+stale.candidates[0].freshCsi = false;
+REQUIRE(scheduler->schedule(stale).empty());
+
+auto disabled = context;
+disabled.enabled = false;
+REQUIRE(scheduler->schedule(disabled).empty());
+auto badWidth = context;
+badWidth.channelWidth = MHz(40);
+REQUIRE(scheduler->schedule(badWidth).empty());
+auto badBa = selected;
+badBa[1].activeBlockAckAgreement = false;
+REQUIRE(!VhtDlMuPlan::create(context, badBa, diagnostic).has_value());
+auto badPosition = selected;
+badPosition[1].userPosition = 0;
+REQUIRE(!VhtDlMuPlan::create(context, badPosition, diagnostic).has_value());
+auto mismatchedTid = selected;
+mismatchedTid[1].tid = 1;
+REQUIRE(!VhtDlMuPlan::create(context, mismatchedTid, diagnostic).has_value());
+
+EV << "VHT DL MU scheduler determinism and all-gate plan validation: PASS\n";
+
+%contains-regex: stdout
+VHT DL MU scheduler determinism and all-gate plan validation: PASS

@@ -79,6 +79,8 @@ enum Ieee80211FrameType
     ST_BLOCKACK_REQ = 0x18;
     ST_BLOCKACK     = 0x19;
     ST_TRIGGER      = 0x12;
+    ST_BEAMFORMING_REPORT_POLL = 0x14;
+    ST_VHT_NDP_ANNOUNCEMENT = 0x15;
 
     // data (CFPOLL/CFACK subtypes omitted):
     ST_DATA = 0x20;
@@ -174,6 +176,32 @@ class Ieee80211RtsFrame extends Ieee80211TwoAddressHeader
 {
     chunkLength = LENGTH_RTS - B(4);
     type = ST_RTS;
+}
+
+struct Ieee80211VhtNdpStaInfo
+{
+    uint16_t aid;
+    bool muFeedback = false;
+    uint8_t ncIndex = 0;
+}
+
+// IEEE Std 802.11-2024 Figure 9-75 and Figure 9-77. The header chunk includes
+// the Sounding Dialog Token and complete STA Info list; the FCS remains the
+// ordinary Ieee80211MacTrailer.
+class Ieee80211VhtNdpAnnouncementFrame extends Ieee80211TwoAddressHeader
+{
+    chunkLength = B(17);
+    type = ST_VHT_NDP_ANNOUNCEMENT;
+    uint8_t soundingDialogTokenNumber;
+    Ieee80211VhtNdpStaInfo stations[];
+}
+
+// IEEE Std 802.11-2024 Figure 9-87.
+class Ieee80211VhtBeamformingReportPollFrame extends Ieee80211TwoAddressHeader
+{
+    chunkLength = B(17);
+    type = ST_BEAMFORMING_REPORT_POLL;
+    uint8_t feedbackSegmentRetransmissionBitmap = 0;
 }
 
 // Power Save-Poll control frame. TWT announced service periods use this to

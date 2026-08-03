@@ -33,15 +33,26 @@ EV << "HT BCC tail bits: " << htBccMode->getDataMode()->getTailFieldLength().get
 EV << "HT LDPC tail bits: " << htLdpcMode->getDataMode()->getTailFieldLength().get() << "\n";
 
 b testLength(8000);
-b testLengthShort(504);
+b equalDurationLength(504);
+b ldpcShorterLength(296);
 simtime_t htBccDuration = htBccMode->getDuration(testLength);
 simtime_t htLdpcDuration = htLdpcMode->getDuration(testLength);
-simtime_t htBccDurationShort = htBccMode->getDuration(testLengthShort);
-simtime_t htLdpcDurationShort = htLdpcMode->getDuration(testLengthShort);
+simtime_t htBccDurationEqual = htBccMode->getDuration(equalDurationLength);
+simtime_t htLdpcDurationEqual = htLdpcMode->getDuration(equalDurationLength);
+simtime_t htBccDurationShorter = htBccMode->getDuration(ldpcShorterLength);
+simtime_t htLdpcDurationShorter = htLdpcMode->getDuration(ldpcShorterLength);
+ASSERT(htLdpcDuration <= htBccDuration);
+// At MCS 0, 504 payload bits plus SERVICE fill 20 LDPC information symbols,
+// but the Clause 19 puncturing rule adds one symbol. BCC also needs 21 symbols.
+ASSERT(htLdpcDurationEqual == htBccDurationEqual);
+// At 296 payload bits, LDPC exactly fills 12 information symbols without the
+// extra-symbol condition, while the six BCC tail bits require a 13th symbol.
+ASSERT(htBccDurationShorter - htLdpcDurationShorter == SimTime(4, SIMTIME_US));
 EV << "HT BCC duration (8000): " << htBccDuration << "\n";
 EV << "HT LDPC duration (8000): " << htLdpcDuration << "\n";
 EV << "HT LDPC duration <= BCC duration (8000): " << (htLdpcDuration <= htBccDuration) << "\n";
-EV << "HT LDPC duration < BCC duration (504): " << (htLdpcDurationShort < htBccDurationShort) << "\n";
+EV << "HT BCC duration == LDPC duration (504): " << (htBccDurationEqual == htLdpcDurationEqual) << "\n";
+EV << "HT LDPC duration < BCC duration (296): " << (htLdpcDurationShorter < htBccDurationShorter) << "\n";
 
 // Test VHT Mode Duration and Tail Bits
 const Ieee80211VhtMode *vhtBccMode = Ieee80211VhtCompliantModes::getCompliantMode(
@@ -65,12 +76,18 @@ EV << "VHT LDPC tail bits: " << vhtLdpcMode->getDataMode()->getTailFieldLength()
 
 simtime_t vhtBccDuration = vhtBccMode->getDuration(testLength);
 simtime_t vhtLdpcDuration = vhtLdpcMode->getDuration(testLength);
-simtime_t vhtBccDurationShort = vhtBccMode->getDuration(testLengthShort);
-simtime_t vhtLdpcDurationShort = vhtLdpcMode->getDuration(testLengthShort);
+simtime_t vhtBccDurationEqual = vhtBccMode->getDuration(equalDurationLength);
+simtime_t vhtLdpcDurationEqual = vhtLdpcMode->getDuration(equalDurationLength);
+simtime_t vhtBccDurationShorter = vhtBccMode->getDuration(ldpcShorterLength);
+simtime_t vhtLdpcDurationShorter = vhtLdpcMode->getDuration(ldpcShorterLength);
+ASSERT(vhtLdpcDuration <= vhtBccDuration);
+ASSERT(vhtLdpcDurationEqual == vhtBccDurationEqual);
+ASSERT(vhtBccDurationShorter - vhtLdpcDurationShorter == SimTime(4, SIMTIME_US));
 EV << "VHT BCC duration (8000): " << vhtBccDuration << "\n";
 EV << "VHT LDPC duration (8000): " << vhtLdpcDuration << "\n";
 EV << "VHT LDPC duration <= BCC duration (8000): " << (vhtLdpcDuration <= vhtBccDuration) << "\n";
-EV << "VHT LDPC duration < BCC duration (504): " << (vhtLdpcDurationShort < vhtBccDurationShort) << "\n";
+EV << "VHT BCC duration == LDPC duration (504): " << (vhtBccDurationEqual == vhtLdpcDurationEqual) << "\n";
+EV << "VHT LDPC duration < BCC duration (296): " << (vhtLdpcDurationShorter < vhtBccDurationShorter) << "\n";
 
 EV << ".\n";
 
@@ -81,7 +98,8 @@ HT BCC tail bits: 6
 HT LDPC tail bits: 0
 
 %contains: stdout
-HT LDPC duration < BCC duration (504): 1
+HT BCC duration == LDPC duration (504): 1
+HT LDPC duration < BCC duration (296): 1
 
 %contains: stdout
 VHT BCC isLdpc: 0
@@ -90,4 +108,5 @@ VHT BCC tail bits: 6
 VHT LDPC tail bits: 0
 
 %contains: stdout
-VHT LDPC duration < BCC duration (504): 1
+VHT BCC duration == LDPC duration (504): 1
+VHT LDPC duration < BCC duration (296): 1

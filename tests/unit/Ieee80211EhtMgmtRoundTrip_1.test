@@ -14,7 +14,7 @@ auto request = makeShared<Ieee80211AssociationRequestFrame>();
 request->setSSID("eht");
 Ieee80211SupportedRatesElement rates;
 rates.numRates = 1;
-rates.rate[0] = 6;
+rates.rates[0].rate = 12;
 request->setSupportedRates(rates);
 
 Ieee80211EhtCapabilitiesElement capabilities;

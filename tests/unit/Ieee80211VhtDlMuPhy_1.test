@@ -1,0 +1,98 @@
+%description:
+Test canonical constrained VHT MU TXVECTOR, layout, SIG-A/B, and user selection.
+
+%includes:
+#include "inet/common/packet/Packet.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211VhtTxVector.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
+
+%global:
+using namespace inet;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+static Ieee80211VhtMuUser user(const char *address, uint16_t aid,
+        uint8_t position, B length, int mcs, bool ldpc, simtime_t duration)
+{
+    Ieee80211VhtMuUser result;
+    (void)address; // MAC receiver metadata is intentionally not part of PHY demultiplexing.
+    result.associationId = aid;
+    result.userPosition = position;
+    result.numberOfSpatialStreams = 1;
+    result.mcs = mcs;
+    result.ldpcCoding = ldpc;
+    result.psduLength = length;
+    result.duration = duration;
+    result.beamformingGainDb = 3;
+    result.leakagePenaltyDb = 1;
+    return result;
+}
+
+%activity:
+auto muPreambleDuration = Ieee80211VhtPreambleMode::getMuPreambleDuration(2);
+auto tx = Ieee80211VhtTxVector::createMu(MHz(20), 1, {
+    user("02:00:00:00:00:01", 1, 0, B(128), 3, false, SimTime(80, SIMTIME_US)),
+    user("02:00:00:00:00:02", 2, 1, B(256), 5, true, SimTime(120, SIMTIME_US)),
+}, muPreambleDuration);
+REQUIRE(tx->isMu() && tx->getGroupId() == 1);
+REQUIRE(tx->getNumberOfSpaceTimeStreams() == 2);
+REQUIRE(tx->getPreambleDuration() == muPreambleDuration);
+REQUIRE(tx->getHeaderDuration() == SIMTIME_ZERO);
+REQUIRE(tx->getDataDuration() == SimTime(120, SIMTIME_US));
+REQUIRE(tx->getCommonDuration() == SimTime(164, SIMTIME_US));
+REQUIRE(tx->getPsduBitRanges().size() == 2);
+REQUIRE(tx->getPsduBitRanges()[0].startBitOffset == b(0));
+REQUIRE(tx->getPsduBitRanges()[1].startBitOffset == b(B(128)));
+REQUIRE(tx->getPsduBitRanges()[1].getEndBitOffset() == b(B(384)));
+REQUIRE(tx->findMuUser(0)->mcs == 3);
+REQUIRE(tx->findMuUser(1)->ldpcCoding);
+
+auto header = makeShared<Ieee80211VhtPhyHeader>();
+header->setChunkLength(b(100));
+header->setSignalingValid(true);
+header->setBandwidth(0);
+header->setGroupId(1);
+header->setNumberOfSpaceTimeStreams(2);
+header->setBeamformed(true);
+header->setUsersArraySize(2);
+for (size_t i = 0; i < tx->getUsers().size(); ++i) {
+    const auto& canonical = tx->getUsers()[i];
+    Ieee80211VhtMuUserInfo encoded;
+    encoded.associationId = canonical.associationId;
+    encoded.userPosition = canonical.userPosition;
+    encoded.numberOfSpatialStreams = canonical.numberOfSpatialStreams;
+    encoded.mcs = canonical.mcs;
+    encoded.coding = canonical.ldpcCoding;
+    encoded.psduLength = canonical.psduLength;
+    encoded.duration = canonical.duration;
+    header->setUsers(i, encoded);
+}
+Packet encoded("VHT-MU", header);
+auto bits = encoded.peekDataAsBits();
+REQUIRE(bits->getChunkLength() == b(100));
+// Table 21-12: GID=1 and NSTS[1,1,0,0].
+REQUIRE(bits->getBits()[4] && !bits->getBits()[5]);
+REQUIRE(bits->getBits()[10] && bits->getBits()[13]);
+for (int bit = 16; bit < 22; ++bit) REQUIRE(!bits->getBits()[bit]);
+Packet decodedPacket("VHT-MU-decoded", bits);
+auto decoded = decodedPacket.popAtFront<Ieee80211VhtPhyHeader>(b(100));
+REQUIRE(decoded->getGroupId() == 1 && decoded->getUsersArraySize() == 2);
+REQUIRE(decoded->getUsers(0).psduLength == B(128) && decoded->getUsers(0).mcs == 3);
+REQUIRE(decoded->getUsers(1).psduLength == B(256) && decoded->getUsers(1).mcs == 5);
+REQUIRE(decoded->getUsers(1).coding == 1);
+
+bool rejectedWide = false;
+try { (void)Ieee80211VhtTxVector::createMu(MHz(40), 1, tx->getUsers(), muPreambleDuration); }
+catch (const cRuntimeError&) { rejectedWide = true; }
+REQUIRE(rejectedWide);
+bool rejectedCount = false;
+try { (void)Ieee80211VhtTxVector::createMu(MHz(20), 1, {tx->getUsers()[0]}, muPreambleDuration); }
+catch (const cRuntimeError&) { rejectedCount = true; }
+REQUIRE(rejectedCount);
+
+EV << "VHT MU canonical TXVECTOR/layout/SIG-A/SIG-B/user selection: PASS\n";
+
+%contains-regex: stdout
+VHT MU canonical TXVECTOR/layout/SIG-A/SIG-B/user selection: PASS

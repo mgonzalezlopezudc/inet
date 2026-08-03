@@ -9,18 +9,28 @@ inherited HE SU fallback.
 
 %file: SharedModesObserver.cc
 
+#include <algorithm>
 #include <cstring>
 
 #include "inet/common/Simsignals.h"
 #include "inet/common/packet/Packet.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/VhtHcf.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/VhtSoundingCoordinator.h"
+#include "inet/linklayer/ieee80211/mac/originator/TxopProcedure.h"
+#include "inet/linklayer/ieee80211/mac/recipient/QosCtsPolicy.h"
+#include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ErpOfdmMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211VhtTxVector.h"
 
 using namespace inet;
 using namespace inet::ieee80211;
@@ -31,14 +41,100 @@ namespace Ieee80211SharedMacModes_1 {
 #define REQUIRE_SHARED(condition, message) \
     do { if (!(condition)) throw cRuntimeError("shared MAC traffic contract: %s", message); } while (false)
 
+class DropFirstCtsPolicy : public QosCtsPolicy
+{
+  protected:
+    mutable bool firstCtsSuppressed = false;
+
+  public:
+    virtual bool isCtsNeeded(const Ptr<const Ieee80211RtsFrame>& rtsFrame) const override
+    {
+        if (par("suppressFirstCts").boolValue() && !firstCtsSuppressed) {
+            firstCtsSuppressed = true;
+            EV_INFO << "Intentionally suppressing the first CTS for timeout recovery coverage" << EV_ENDL;
+            return false;
+        }
+        return QosCtsPolicy::isCtsNeeded(rtsFrame);
+    }
+};
+
+Define_Module(DropFirstCtsPolicy);
+
+class DropFirstVhtFeedbackCoordinator : public VhtSoundingCoordinator
+{
+  protected:
+    bool suppressed = false;
+
+  public:
+    virtual bool processHeaderlessNdp(Packet *packet, Ieee80211Mac *mac,
+            Ieee80211ModeSet *modeSet, ITx *tx, ITx::ICallback *callback,
+            bool enabled) override
+    {
+        auto indication = packet->findTag<Ieee80211NdpInd>();
+        if (par("suppressFirstFeedback").boolValue() && !suppressed && enabled &&
+                !std::strcmp(packet->getName(), "VHT-NDP") &&
+                ndpAnnouncementAccepted && indication != nullptr &&
+                indication->getPhyFormat() == IEEE80211_NDP_PHY_VHT) {
+            suppressed = true;
+            reset();
+            delete packet;
+            EV_INFO << "Intentionally suppressing first VHT feedback" << EV_ENDL;
+            return true;
+        }
+        return VhtSoundingCoordinator::processHeaderlessNdp(packet, mac, modeSet,
+                tx, callback, enabled);
+    }
+};
+
+Define_Module(DropFirstVhtFeedbackCoordinator);
+
 class SharedModesObserver : public cSimpleModule, public cListener
 {
   protected:
     int packetsReceived = 0;
     int expectedDataTransmissions = 0;
     cModule *apRadio = nullptr;
+    cModule *staRadio = nullptr;
+    cModule *staMacSource = nullptr;
+    MacAddress apAddress;
+    MacAddress staAddress;
+    simtime_t vhtSifs = SIMTIME_ZERO;
     std::string expectedModeFamily;
     bool expectHeMuFallback = false;
+    bool expectHtProtection = false;
+    int expectedPacketCount = 3;
+    int expectedProtectedDataExchanges = 0;
+    bool expectFirstCtsSuppressed = false;
+    bool expectVhtSounding = false;
+    bool expectVhtOptIn = false;
+    bool expectVhtFeedbackTimeout = false;
+    bool expectVhtMu = false;
+    bool expectAsymmetricBasicAck = false;
+    bool awaitingAsymmetricDataAck = false;
+    int asymmetricBasicAckTransmissions = 0;
+    int vhtGroupActions = 0;
+    int vhtMuPpdus = 0;
+    int vhtNdpAnnouncements = 0;
+    int vhtNdps = 0;
+    int vhtFeedbacks = 0;
+    int beamformedVhtData = 0;
+    bool ordinaryVhtDataAfterBeamformed = false;
+    int ordinaryVhtDataBeforeBeamformed = 0;
+    std::vector<std::string> vhtExchange;
+    std::vector<simtime_t> vhtNdpaEnds;
+    std::vector<simtime_t> vhtNdpStarts;
+    std::vector<simtime_t> vhtNdpEnds;
+    std::vector<simtime_t> vhtNdpReceptionEnds;
+    std::vector<simtime_t> vhtFeedbackStarts;
+    cMessage *negativeProbeTimer = nullptr;
+    int rtsTransmissions = 0;
+    std::vector<int> protectedExchange;
+    std::vector<std::vector<simtime_t>> protectedNavEnds;
+    std::vector<int> protectedDataByTxop;
+    std::vector<int> protectedTxopSerials;
+    std::vector<simtime_t> protectedTxopEnds;
+    TxopProcedure *apVoiceTxop = nullptr;
+    int txopSerial = 0;
 
     bool isExpectedMode(const IIeee80211Mode *mode) const
     {
@@ -59,6 +155,15 @@ class SharedModesObserver : public cSimpleModule, public cListener
     {
         expectedModeFamily = par("expectedModeFamily").stdstringValue();
         expectHeMuFallback = par("expectHeMuFallback").boolValue();
+        expectHtProtection = par("expectHtProtection").boolValue();
+        expectedPacketCount = par("expectedPacketCount").intValue();
+        expectedProtectedDataExchanges = par("expectedProtectedDataExchanges").intValue();
+        expectFirstCtsSuppressed = par("expectFirstCtsSuppressed").boolValue();
+        expectVhtSounding = par("expectVhtSounding").boolValue();
+        expectVhtOptIn = par("expectVhtOptIn").boolValue();
+        expectVhtFeedbackTimeout = par("expectVhtFeedbackTimeout").boolValue();
+        expectVhtMu = par("expectVhtMu").boolValue();
+        expectAsymmetricBasicAck = par("expectAsymmetricBasicAck").boolValue();
         auto numHosts = getParentModule()->par("numHosts").intValue();
         for (int i = 0; i < numHosts; ++i) {
             auto sink = getParentModule()->getSubmodule("host", i)->getSubmodule("app", 0);
@@ -70,7 +175,13 @@ class SharedModesObserver : public cSimpleModule, public cListener
         auto apDcf = apMac == nullptr ? nullptr : apMac->getSubmodule("dcf");
         auto apHcf = apMac == nullptr ? nullptr : apMac->getSubmodule("hcf");
         REQUIRE_SHARED(apRadio != nullptr, "AP radio path is missing");
+        apAddress = check_and_cast<Ieee80211Mac *>(apMac)->getAddress();
         REQUIRE_SHARED(apDcf != nullptr, "shared DCF submodule is missing");
+        if (apHcf != nullptr) {
+            apVoiceTxop = check_and_cast<TxopProcedure *>(findModuleByPath(
+                    "^.ap.wlan[0].mac.hcf.edca.edcaf[3].txopProcedure"));
+            apVoiceTxop->subscribe(TxopProcedure::txopStartedSignal, this);
+        }
         EV_INFO << "Effective AP HCF type: "
                 << (apHcf == nullptr ? "<none>" : apHcf->getNedTypeName())
                 << ", qosStation="
@@ -79,11 +190,15 @@ class SharedModesObserver : public cSimpleModule, public cListener
         if (expectedModeFamily == "g")
             REQUIRE_SHARED(apHcf == nullptr, "legacy non-QoS profile unexpectedly instantiated HCF");
         else if (expectedModeFamily == "ht" || expectedModeFamily == "vht") {
-            REQUIRE_SHARED(apHcf != nullptr &&
-                    std::string(apHcf->getNedTypeName()).find(".Hcf") != std::string::npos,
+            REQUIRE_SHARED(dynamic_cast<Hcf *>(apHcf) != nullptr,
                     "HT/VHT profile did not instantiate HCF");
             REQUIRE_SHARED(std::string(apHcf->getNedTypeName()).find(".HeHcf") == std::string::npos,
                     "HT/VHT profile unexpectedly instantiated HeHcf");
+            if (expectedModeFamily == "vht") {
+                REQUIRE_SHARED((dynamic_cast<VhtHcf *>(apHcf) != nullptr) == expectVhtOptIn,
+                        "VHT sounding enablement selected the wrong HCF implementation");
+                vhtSifs = check_and_cast<Ieee80211Mac *>(apMac)->getModeSet()->getSifsTime();
+            }
         }
         else
             REQUIRE_SHARED(apHcf != nullptr &&
@@ -97,7 +212,115 @@ class SharedModesObserver : public cSimpleModule, public cListener
             REQUIRE_SHARED(heHcf->getOriginatorBlockAckAgreementHandler() == nullptr,
                     "HE MU fallback scenario unexpectedly installed a Block Ack handler");
         }
+        if (expectFirstCtsSuppressed) {
+            auto hostHcf = findModuleByPath("^.host[0].wlan[0].mac.hcf");
+            auto hostCtsPolicy = hostHcf == nullptr ? nullptr : hostHcf->getSubmodule("ctsPolicy");
+            REQUIRE_SHARED(dynamic_cast<DropFirstCtsPolicy *>(hostCtsPolicy) != nullptr,
+                    "CTS-timeout scenario did not instantiate the suppressing HCF CTS policy");
+            REQUIRE_SHARED(hostCtsPolicy->par("suppressFirstCts").boolValue(),
+                    "CTS-timeout scenario did not enable first-CTS suppression");
+        }
+        if (expectVhtSounding) {
+            negativeProbeTimer = new cMessage("vht-negative-probes");
+            scheduleAt(SimTime(19, SIMTIME_MS), negativeProbeTimer);
+        }
         apRadio->subscribe(transmissionStartedSignal, this);
+        for (int i = 0; i < numHosts; ++i) {
+            auto hostRadio = findModuleByPath(("^.host[" + std::to_string(i) + "].wlan[0].radio").c_str());
+            REQUIRE_SHARED(hostRadio != nullptr, "STA radio path is missing");
+            if (i == 0)
+                staRadio = hostRadio;
+            if (i == 0)
+                staAddress = check_and_cast<Ieee80211Mac *>(findModuleByPath(
+                        "^.host[0].wlan[0].mac"))->getAddress();
+            hostRadio->subscribe(transmissionStartedSignal, this);
+        }
+        staMacSource = findModuleByPath("^.host[0].wlan[0].mac");
+        staMacSource->subscribe(packetReceivedFromLowerSignal, this);
+    }
+
+    virtual ~SharedModesObserver() override
+    {
+        cancelAndDelete(negativeProbeTimer);
+    }
+
+    virtual void handleMessage(cMessage *message) override
+    {
+        REQUIRE_SHARED(message == negativeProbeTimer, "unexpected observer message");
+        auto staMac = check_and_cast<Ieee80211Mac *>(findModuleByPath("^.host[0].wlan[0].mac"));
+        auto coordinator = check_and_cast<VhtSoundingCoordinator *>(
+                findModuleByPath("^.host[0].wlan[0].mac.hcf.soundingCoordinator"));
+        auto staMib = staMac->getMib();
+        REQUIRE_SHARED(staMib->bssStationData.isAssociated,
+                "VHT negative probes ran before association");
+        auto ap = staMib->bssData.bssid;
+        REQUIRE_SHARED(coordinator->mayAttempt(ap), "fresh sounding cooldown was unexpectedly active");
+        coordinator->recordAttempt(ap);
+        REQUIRE_SHARED(!coordinator->mayAttempt(ap), "sounding retry cooldown was not enforced");
+        auto staHcf = check_and_cast<VhtHcf *>(findModuleByPath("^.host[0].wlan[0].mac.hcf"));
+        staHcf->invalidatePeerDerivedState(ap);
+        REQUIRE_SHARED(coordinator->mayAttempt(ap),
+                "peer lifecycle invalidation retained sounding cooldown state");
+
+        auto rejectAnnouncement = [&](const MacAddress& sender, uint16_t aid,
+                int transmitterRadioId = -1, simtime_t receptionEnd = -1,
+                bool followWithNdp = true) {
+            auto header = makeShared<Ieee80211VhtNdpAnnouncementFrame>();
+            header->setReceiverAddress(staMac->getAddress());
+            header->setTransmitterAddress(sender);
+            header->setStationsArraySize(1);
+            Ieee80211VhtNdpStaInfo station;
+            station.aid = aid;
+            header->setStations(0, station);
+            auto packet = new Packet("negative-VHT-NDPA", header);
+            if (transmitterRadioId >= 0) {
+                auto provenance = packet->addTag<Ieee80211PhyProvenanceInd>();
+                provenance->setTransmitterRadioId(transmitterRadioId);
+                provenance->setEndTime(receptionEnd);
+            }
+            REQUIRE_SHARED(coordinator->processNdpAnnouncement(packet, header, staMac,
+                    true, MHz(20)), "typed VHT NDPA was not consumed");
+            if (!followWithNdp)
+                return;
+            auto ndp = new Packet("unsolicited-VHT-NDP");
+            auto indication = ndp->addTag<Ieee80211NdpInd>();
+            indication->setPhyFormat(IEEE80211_NDP_PHY_VHT);
+            indication->setChannelWidth(Hz(MHz(20)).get());
+            indication->setNumberOfSpaceTimeStreams(2);
+            REQUIRE_SHARED(coordinator->processHeaderlessNdp(ndp, staMac, nullptr,
+                    nullptr, nullptr, true), "typed VHT NDP was not consumed");
+        };
+        rejectAnnouncement(MacAddress("00:00:00:00:00:09"),
+                staMib->bssStationData.associationId); // wrong sender
+        rejectAnnouncement(ap, staMib->bssStationData.associationId + 1); // wrong AID/order
+        auto modeSet = const_cast<Ieee80211ModeSet *>(staMac->getModeSet());
+        auto rejectCorrelatedNdp = [&](int ndpaRadioId, int ndpRadioId,
+                simtime_t ndpStartOffset) {
+            auto ndpaEnd = simTime();
+            rejectAnnouncement(ap, staMib->bssStationData.associationId,
+                    ndpaRadioId, ndpaEnd, false);
+            auto ndp = new Packet("correlation-negative-VHT-NDP");
+            auto indication = ndp->addTag<Ieee80211NdpInd>();
+            indication->setPhyFormat(IEEE80211_NDP_PHY_VHT);
+            indication->setChannelWidth(Hz(MHz(20)).get());
+            indication->setNumberOfSpaceTimeStreams(2);
+            auto provenance = ndp->addTag<Ieee80211PhyProvenanceInd>();
+            provenance->setTransmitterRadioId(ndpRadioId);
+            provenance->setStartTime(ndpaEnd + modeSet->getSifsTime() + ndpStartOffset);
+            REQUIRE_SHARED(coordinator->processHeaderlessNdp(ndp, staMac, modeSet,
+                    nullptr, nullptr, true), "correlation-negative VHT NDP was not consumed");
+        };
+        rejectCorrelatedNdp(41, 42, SIMTIME_ZERO); // foreign transmitter radio
+        rejectCorrelatedNdp(41, 41, SimTime::fromRaw(2)); // delayed beyond exact SIFS tolerance
+        coordinator->reset();
+        auto unsolicited = new Packet("unsolicited-VHT-NDP");
+        auto indication = unsolicited->addTag<Ieee80211NdpInd>();
+        indication->setPhyFormat(IEEE80211_NDP_PHY_VHT);
+        indication->setChannelWidth(Hz(MHz(20)).get());
+        indication->setNumberOfSpaceTimeStreams(2);
+        REQUIRE_SHARED(coordinator->processHeaderlessNdp(unsolicited, staMac, nullptr,
+                nullptr, nullptr, true), "unsolicited VHT NDP was not consumed");
+        EV_INFO << "Shared MAC traffic/vht-negative-gates contract: PASS" << EV_ENDL;
     }
 
     virtual void receiveSignal(cComponent *source, simsignal_t signal,
@@ -108,12 +331,131 @@ class SharedModesObserver : public cSimpleModule, public cListener
                     "UdpSink packetReceived did not carry Packet");
             packetsReceived++;
         }
-        else if (signal == transmissionStartedSignal && source == apRadio) {
+        else if (signal == packetReceivedFromLowerSignal && source == staMacSource) {
+            auto packet = check_and_cast<Packet *>(object);
+            if (!std::strcmp(packet->getName(), "VHT-NDP")) {
+                auto provenance = packet->findTag<Ieee80211PhyProvenanceInd>();
+                REQUIRE_SHARED(provenance != nullptr,
+                        "received VHT NDP has no physical provenance");
+                vhtNdpReceptionEnds.push_back(provenance->getEndTime());
+            }
+        }
+        else if (signal == TxopProcedure::txopStartedSignal) {
+            REQUIRE_SHARED(source == apVoiceTxop, "unexpected TXOP signal source");
+            txopSerial++;
+            REQUIRE_SHARED(!apVoiceTxop->isProtectionConfigured(),
+                    "new TXOP retained protection state from the preceding TXOP");
+        }
+        else if (signal == transmissionStartedSignal) {
             auto transmission = dynamic_cast<const Ieee80211Transmission *>(object);
             REQUIRE_SHARED(transmission != nullptr,
                     "radio transmissionStarted did not carry Ieee80211Transmission");
+            apAddress = check_and_cast<Ieee80211Mac *>(
+                    findModuleByPath("^.ap.wlan[0].mac"))->getAddress();
+            staAddress = check_and_cast<Ieee80211Mac *>(
+                    findModuleByPath("^.host[0].wlan[0].mac"))->getAddress();
             const char *name = transmission->getPacket()->getName();
-            if (std::strncmp(name, "shared-modes-data-", 18) == 0) {
+            if (expectAsymmetricBasicAck && awaitingAsymmetricDataAck && source == staRadio &&
+                    !std::strcmp(name, "WlanAck")) {
+                REQUIRE_SHARED(transmission->getMode()->getDataMode()->getNetBitrate() == Mbps(24),
+                        "STA ACK did not use the AP-advertised highest BSS Basic rate");
+                awaitingAsymmetricDataAck = false;
+                asymmetricBasicAckTransmissions++;
+            }
+            if (!std::strcmp(name, "VHT-NDPA")) {
+                REQUIRE_SHARED(source == apRadio, "VHT NDPA was not transmitted by the AP radio");
+                auto phyHeader = Ieee80211Radio::peekIeee80211PhyHeaderAtFront(transmission->getPacket());
+                auto macHeader = dynamicPtrCast<const Ieee80211VhtNdpAnnouncementFrame>(
+                        transmission->getPacket()->peekAt<Ieee80211MacHeader>(phyHeader->getChunkLength()));
+                REQUIRE_SHARED(macHeader != nullptr &&
+                        macHeader->getTransmitterAddress() == apAddress &&
+                        (expectVhtMu ? !macHeader->getReceiverAddress().isMulticast() :
+                                macHeader->getReceiverAddress() == staAddress),
+                        "VHT NDPA ownership or addresses are wrong");
+                vhtNdpAnnouncements++;
+                vhtExchange.push_back("NDPA");
+                vhtNdpaEnds.push_back(transmission->getEndTime());
+            }
+            else if (!std::strcmp(name, "VHT-NDP")) {
+                REQUIRE_SHARED(source == apRadio, "VHT NDP was not transmitted by the AP radio");
+                REQUIRE_SHARED(vhtNdpaEnds.size() == vhtNdpStarts.size() + 1 &&
+                        transmission->getStartTime() - vhtNdpaEnds.back() == vhtSifs,
+                        "VHT NDP did not start exactly one SIFS after its NDPA");
+                vhtNdps++;
+                vhtExchange.push_back("NDP");
+                vhtNdpStarts.push_back(transmission->getStartTime());
+                vhtNdpEnds.push_back(transmission->getEndTime());
+            }
+            else if (!std::strcmp(name, "VHT-Compressed-Beamforming")) {
+                REQUIRE_SHARED(expectVhtMu ? source != apRadio : source == staRadio,
+                        "VHT feedback was not transmitted by a STA radio");
+                auto phyHeader = Ieee80211Radio::peekIeee80211PhyHeaderAtFront(transmission->getPacket());
+                auto macHeader = dynamicPtrCast<const Ieee80211ActionFrame>(
+                        transmission->getPacket()->peekAt<Ieee80211MacHeader>(phyHeader->getChunkLength()));
+                REQUIRE_SHARED(macHeader != nullptr && macHeader->getType() == ST_NOACKACTION &&
+                        (expectVhtMu ? !macHeader->getTransmitterAddress().isMulticast() :
+                                macHeader->getTransmitterAddress() == staAddress) &&
+                        macHeader->getReceiverAddress() == apAddress,
+                        "VHT feedback ownership, subtype, or addresses are wrong");
+                REQUIRE_SHARED(expectVhtMu || (!vhtNdpReceptionEnds.empty() &&
+                        transmission->getStartTime() - vhtNdpReceptionEnds.back() == vhtSifs),
+                        "VHT feedback did not start exactly one SIFS after its NDP");
+                vhtFeedbacks++;
+                vhtExchange.push_back("FEEDBACK");
+                vhtFeedbackStarts.push_back(transmission->getStartTime());
+            }
+            else if (!std::strcmp(name, "VHT-Group-ID-Management")) {
+                REQUIRE_SHARED(source == apRadio,
+                        "VHT Group ID Management was not transmitted by the AP");
+                vhtGroupActions++;
+            }
+            else if (!std::strcmp(name, "VHT-MU-PPDU")) {
+                REQUIRE_SHARED(source == apRadio, "VHT MU PPDU was not transmitted by the AP");
+                auto request = transmission->getPacket()->findTag<Ieee80211VhtTxVectorReq>();
+                REQUIRE_SHARED(request != nullptr && request->getTxVector() != nullptr &&
+                        request->getTxVector()->isMu() &&
+                        request->getTxVector()->getGroupId() == 1 &&
+                        request->getTxVector()->getUsers().size() == 2,
+                        "VHT MU PPDU lacks the canonical two-user GID1 TXVECTOR");
+                vhtMuPpdus++;
+                expectedDataTransmissions += 2;
+            }
+            if (source == apRadio && !std::strcmp(name, "RTS")) {
+                rtsTransmissions++;
+                if (expectHtProtection) {
+                    protectedExchange.push_back(ST_RTS);
+                    protectedNavEnds.emplace_back();
+                    protectedDataByTxop.push_back(0);
+                    protectedTxopSerials.push_back(txopSerial);
+                    protectedTxopEnds.push_back(apVoiceTxop->getStart() + apVoiceTxop->getLimit());
+                }
+            }
+            else if (expectHtProtection && !protectedExchange.empty()) {
+                if (!std::strcmp(name, "CTS"))
+                    protectedExchange.push_back(ST_CTS);
+                else if (std::strncmp(name, "shared-modes-data-", 18) == 0) {
+                    protectedExchange.push_back(ST_DATA);
+                    REQUIRE_SHARED(!protectedDataByTxop.empty(), "protected Data preceded its RTS");
+                    protectedDataByTxop.back()++;
+                }
+                else if (!std::strcmp(name, "WlanAck"))
+                    protectedExchange.push_back(ST_ACK);
+            }
+            if (expectHtProtection && source == apRadio &&
+                    (!std::strcmp(name, "RTS") || std::strncmp(name, "shared-modes-data-", 18) == 0)) {
+                auto phyHeader = Ieee80211Radio::peekIeee80211PhyHeaderAtFront(transmission->getPacket());
+                auto macHeader = transmission->getPacket()->peekAt<Ieee80211MacHeader>(phyHeader->getChunkLength());
+                REQUIRE_SHARED(macHeader->getDurationField() > SIMTIME_ZERO,
+                        "multiple-protected AP frame did not advertise a positive Duration/ID");
+                REQUIRE_SHARED(!protectedNavEnds.empty(), "protected AP frame preceded its TXOP RTS");
+                protectedNavEnds.back().push_back(transmission->getEndTime() + macHeader->getDurationField());
+            }
+            if (source == apRadio && std::strncmp(name, "shared-modes-data-", 18) == 0) {
+                if (expectAsymmetricBasicAck)
+                    awaitingAsymmetricDataAck = true;
+                if (expectHtProtection && apVoiceTxop->getLimit() > SIMTIME_ZERO)
+                    REQUIRE_SHARED(transmission->getEndTime() <= protectedTxopEnds.back(),
+                            "application-data PPDU overran its TXOP end");
                 REQUIRE_SHARED(isExpectedMode(transmission->getMode()),
                         "AP application-data PPDU used the wrong PHY family");
                 if (expectedModeFamily == "he") {
@@ -121,6 +463,20 @@ class SharedModesObserver : public cSimpleModule, public cListener
                     REQUIRE_SHARED(layout != nullptr, "HE data PPDU has no canonical layout");
                     REQUIRE_SHARED(layout->getPpduFormat() == HE_SINGLE_USER,
                             "shared HE path unexpectedly emitted MU/TB application data");
+                }
+                if (expectedModeFamily == "vht") {
+                    auto vhtHeader = dynamicPtrCast<const Ieee80211VhtPhyHeader>(
+                            Ieee80211Radio::peekIeee80211PhyHeaderAtFront(transmission->getPacket()));
+                    REQUIRE_SHARED(vhtHeader != nullptr, "VHT data has no VHT PHY header");
+                    if (vhtHeader->getBeamformed()) {
+                        beamformedVhtData++;
+                        EV_INFO << "VHT protocol observer: beamformed data=" << name
+                                << ", start=" << transmission->getStartTime() << EV_ENDL;
+                    }
+                    else if (beamformedVhtData > 0)
+                        ordinaryVhtDataAfterBeamformed = true;
+                    else
+                        ordinaryVhtDataBeforeBeamformed++;
                 }
                 if (expectedModeFamily == "eht")
                     REQUIRE_SHARED(transmission->getHePpduLayout() == nullptr,
@@ -132,14 +488,153 @@ class SharedModesObserver : public cSimpleModule, public cListener
 
     virtual void finish() override
     {
-        REQUIRE_SHARED(packetsReceived >= 3, "fewer than three UDP packets were delivered");
-        REQUIRE_SHARED(expectedDataTransmissions >= 3,
-                "fewer than three AP application-data PPDUs used the expected family");
+        REQUIRE_SHARED(packetsReceived >= expectedPacketCount, "too few UDP packets were delivered");
+        REQUIRE_SHARED(expectedDataTransmissions >= expectedPacketCount,
+                "too few AP application-data PPDUs used the expected family");
+        auto apMib = check_and_cast<Ieee80211Mib *>(findModuleByPath("^.ap.wlan[0].mib"));
+        auto numHosts = getParentModule()->par("numHosts").intValue();
+        for (int i = 0; i < numHosts; ++i) {
+            auto staMib = check_and_cast<Ieee80211Mib *>(findModuleByPath(
+                    ("^.host[" + std::to_string(i) + "].wlan[0].mib").c_str()));
+            auto apRatesForSta = staMib->findPeerLegacyRates(apMib->address);
+            auto staRatesForAp = apMib->findPeerLegacyRates(staMib->address);
+            if (expectedModeFamily != "eht")
+                REQUIRE_SHARED(apRatesForSta != nullptr && !apRatesForSta->empty() &&
+                        staRatesForAp != nullptr && !staRatesForAp->empty(),
+                        "simplified association did not populate bidirectional legacy-rate state");
+            else
+                REQUIRE_SHARED(apRatesForSta == nullptr && staRatesForAp == nullptr,
+                        "pure EHT association unexpectedly populated legacy-rate state");
+        }
+        if (expectAsymmetricBasicAck) {
+            auto staMib = check_and_cast<Ieee80211Mib *>(findModuleByPath("^.host[0].wlan[0].mib"));
+            REQUIRE_SHARED(staMib->localBssBasicRates.size() == 1 &&
+                    staMib->localBssBasicRates[0].rate == 12,
+                    "STA local BSS Basic Rate Set does not retain its asymmetric configuration");
+            REQUIRE_SHARED(staMib->currentBssBasicRates.size() == 2 &&
+                    staMib->currentBssBasicRates[0].rate == 12 &&
+                    staMib->currentBssBasicRates[1].rate == 48,
+                    "STA current-BSS snapshot does not match the AP advertisement");
+            REQUIRE_SHARED(asymmetricBasicAckTransmissions >= expectedPacketCount,
+                    "too few data ACKs used the AP-advertised BSS Basic rate");
+            EV_INFO << "Shared MAC traffic/asymmetric-bss-basic-ack contract: PASS" << EV_ENDL;
+        }
+        if (expectedModeFamily == "ht" || expectedModeFamily == "vht") {
+            auto staMib = check_and_cast<Ieee80211Mib *>(findModuleByPath("^.host[0].wlan[0].mib"));
+            REQUIRE_SHARED(apMib->findNegotiatedHtCapabilities(staMib->address) != nullptr &&
+                    staMib->findNegotiatedHtCapabilities(apMib->address) != nullptr,
+                    "simplified n/ac association did not populate bidirectional HT peer state");
+            bool expectVht = expectedModeFamily == "vht";
+            REQUIRE_SHARED((apMib->findNegotiatedVhtCapabilities(staMib->address) != nullptr) == expectVht &&
+                    (staMib->findNegotiatedVhtCapabilities(apMib->address) != nullptr) == expectVht,
+                    "simplified n/ac association populated the wrong VHT peer state");
+            REQUIRE_SHARED(apMib->findNegotiatedHeCapabilities(staMib->address) == nullptr &&
+                    staMib->findNegotiatedHeCapabilities(apMib->address) == nullptr,
+                    "simplified n/ac association unexpectedly populated HE peer state");
+        }
         if (expectHeMuFallback)
             EV_INFO << "Shared MAC traffic/he-mu-ineligible-su-fallback contract: PASS" << EV_ENDL;
         else
             EV_INFO << "Shared MAC traffic/" << expectedModeFamily
                     << " PHY contract: PASS" << EV_ENDL;
+        if (expectHtProtection) {
+            bool expectInsufficientRemainder = apVoiceTxop->getLimit() == SimTime(700, SIMTIME_US);
+            int expectedProtectedTxops = expectFirstCtsSuppressed || expectInsufficientRemainder ? 2 : 1;
+            REQUIRE_SHARED(rtsTransmissions == expectedProtectedTxops,
+                    "HT protection transmitted an unexpected number of RTS frames");
+            std::vector<int> expectedExchange;
+            if (expectFirstCtsSuppressed)
+                expectedExchange.push_back(ST_RTS);
+            int successfulProtectedTxops = expectedProtectedTxops -
+                    (expectFirstCtsSuppressed ? 1 : 0);
+            for (int txop = 0; txop < successfulProtectedTxops; ++txop) {
+                expectedExchange.push_back(ST_RTS);
+                expectedExchange.push_back(ST_CTS);
+                int numData = expectInsufficientRemainder ? 1 :
+                        (expectFirstCtsSuppressed ? 1 : expectedProtectedDataExchanges);
+                for (int i = 0; i < numData; ++i) {
+                    expectedExchange.push_back(ST_DATA);
+                    expectedExchange.push_back(ST_ACK);
+                }
+            }
+            REQUIRE_SHARED(protectedExchange == expectedExchange,
+                    "HT protected on-air sequence did not match the expected timeout/TXOP exchanges");
+            if (expectFirstCtsSuppressed) {
+                REQUIRE_SHARED(protectedDataByTxop == std::vector<int>({0, 1}),
+                        "CTS timeout did not abort Data or retry in a fresh protected TXOP");
+                REQUIRE_SHARED(protectedTxopSerials.size() == 2 &&
+                        protectedTxopSerials[0] != protectedTxopSerials[1],
+                        "CTS retry did not follow TXOP termination and re-contention");
+                EV_INFO << "Shared MAC traffic/ht-cts-timeout-recovery contract: PASS" << EV_ENDL;
+            }
+            if (expectInsufficientRemainder) {
+                REQUIRE_SHARED(protectedDataByTxop == std::vector<int>({1, 1}),
+                        "insufficient TXOP remainder admitted a second Data exchange");
+                REQUIRE_SHARED(protectedTxopSerials[0] != protectedTxopSerials[1],
+                        "insufficient TXOP remainder did not defer Data to a fresh TXOP");
+                EV_INFO << "Shared MAC traffic/ht-txop-admission-boundary contract: PASS" << EV_ENDL;
+            }
+            for (const auto& navEnds : protectedNavEnds) {
+                if (navEnds.size() > 1) {
+                    auto navBounds = std::minmax_element(navEnds.begin(), navEnds.end());
+                    REQUIRE_SHARED(*navBounds.second - *navBounds.first <= SimTime(1, SIMTIME_US),
+                            "HT multiple-protection Duration/ID values do not preserve one absolute NAV end within microsecond quantization");
+                }
+            }
+            EV_INFO << "Shared MAC traffic/ht-protected-exchange contract: PASS" << EV_ENDL;
+        }
+        else if (expectedModeFamily == "ht")
+            REQUIRE_SHARED(rtsTransmissions == 0, "unprotected HT path unexpectedly transmitted RTS");
+        if (expectedModeFamily == "vht") {
+            if (expectVhtMu) {
+                REQUIRE_SHARED(vhtGroupActions >= 2,
+                        "VHT MU path did not complete both Group ID Management transmissions");
+                REQUIRE_SHARED(vhtFeedbacks >= 2,
+                        "VHT MU path did not collect fresh CSI from both users");
+                REQUIRE_SHARED(vhtMuPpdus >= 1,
+                        "eligible VHT MU path did not transmit a two-user PPDU");
+                EV_INFO << "Shared MAC traffic/vht-dl-mu contract: PASS" << EV_ENDL;
+            }
+            else if (expectVhtSounding) {
+                REQUIRE_SHARED(vhtExchange.size() >= 3 && vhtExchange[0] == "NDPA" &&
+                        vhtExchange[1] == "NDP", "VHT sounding did not start NDPA/NDP");
+                if (expectVhtFeedbackTimeout) {
+                    REQUIRE_SHARED(vhtNdpAnnouncements == 2 && vhtNdps == 2 &&
+                            vhtFeedbacks == 1 && ordinaryVhtDataBeforeBeamformed >= 1,
+                            "VHT timeout/cooldown/recovery exchange counts are wrong");
+                    REQUIRE_SHARED(vhtExchange.size() >= 5 && vhtExchange[2] == "NDPA" &&
+                            vhtExchange[3] == "NDP" && vhtExchange[4] == "FEEDBACK",
+                            "VHT timeout recovery did not complete fresh sounding");
+                    REQUIRE_SHARED(beamformedVhtData >= 1,
+                            "VHT timeout recovery did not restore beamformed SU data");
+                    EV_INFO << "Shared MAC traffic/vht-sounding-timeout-recovery contract: PASS" << EV_ENDL;
+                }
+                else {
+                    REQUIRE_SHARED(vhtFeedbacks == 1 && vhtExchange[2] == "FEEDBACK",
+                            "VHT sounding frames were not ordered NDPA/NDP/feedback");
+                    REQUIRE_SHARED(beamformedVhtData >= 1,
+                            "successful VHT feedback did not benefit subsequent SU data");
+                    REQUIRE_SHARED(ordinaryVhtDataAfterBeamformed,
+                            "expired VHT CSI did not fall back to ordinary SU data during cooldown");
+                    REQUIRE_SHARED(vhtNdpAnnouncements == 1,
+                            "VHT sounding retry cooldown did not prevent immediate retry");
+                }
+                EV_INFO << "Shared MAC traffic/vht-sounding contract: PASS" << EV_ENDL;
+                auto completedExchange = expectVhtFeedbackTimeout ? 1 : 0;
+                EV_INFO << "VHT protocol observer: AP NDPA end=" << vhtNdpaEnds.at(completedExchange)
+                        << ", AP NDP start=" << vhtNdpStarts.at(completedExchange)
+                        << ", STA feedback start=" << vhtFeedbackStarts.front()
+                        << ", SIFS=" << vhtSifs << EV_ENDL;
+            }
+            else {
+                REQUIRE_SHARED(vhtNdpAnnouncements == 0 && vhtNdps == 0 && vhtFeedbacks == 0 &&
+                        beamformedVhtData == 0,
+                        "default-off VHT path emitted sounding or beamformed data");
+                EV_INFO << "Shared MAC traffic/"
+                        << (expectVhtOptIn ? "vht-one-antenna-ineligible" : "vht-sounding-disabled")
+                        << " contract: PASS" << EV_ENDL;
+            }
+        }
     }
 };
 
@@ -150,12 +645,37 @@ Define_Module(SharedModesObserver);
 %file: TestNetwork.ned
 
 import inet.examples.ieee80211ax.common.HeSingleBssNetwork;
+import inet.linklayer.ieee80211.mac.coordinationfunction.VhtSoundingCoordinator;
+import inet.linklayer.ieee80211.mac.recipient.QosCtsPolicy;
 
 simple SharedModesObserver
 {
     parameters:
         string expectedModeFamily;
         bool expectHeMuFallback = default(false);
+        bool expectHtProtection = default(false);
+        int expectedPacketCount = default(3);
+        int expectedProtectedDataExchanges = default(0);
+        bool expectFirstCtsSuppressed = default(false);
+        bool expectVhtSounding = default(false);
+        bool expectVhtFeedbackTimeout = default(false);
+        bool expectVhtMu = default(false);
+        bool expectVhtOptIn = default(false);
+        bool expectAsymmetricBasicAck = default(false);
+}
+
+simple DropFirstCtsPolicy extends QosCtsPolicy
+{
+    parameters:
+        @class(DropFirstCtsPolicy);
+        bool suppressFirstCts = default(false);
+}
+
+simple DropFirstVhtFeedbackCoordinator extends VhtSoundingCoordinator
+{
+    parameters:
+        @class(DropFirstVhtFeedbackCoordinator);
+        bool suppressFirstFeedback = default(false);
 }
 
 network TestNetwork extends HeSingleBssNetwork
@@ -171,7 +691,9 @@ network TestNetwork extends HeSingleBssNetwork
 [General]
 network = TestNetwork
 ned-path = .;../../../../src;../../../../examples
-sim-time-limit = 80ms
+sim-time-limit = 140ms
+repeat = 3
+seed-set = ${repetition}
 record-vector-results = false
 cmdenv-express-mode = false
 cmdenv-event-banners = false
@@ -193,27 +715,59 @@ cmdenv-event-banners = false
 *.host[*].mobility.initialY = 50m
 **.wlan[0].radio.receiver.snirThreshold = 0dB
 **.wlan[0].radio.receiver.bandwidth = 20MHz
+**.wlan[0].radio.antenna.numAntennas = ${antennas=1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 1, 2 ! hosts}
 **.wlan[0].channelNumber = 0
-*.numHosts = ${hosts=1, 1, 1, 1, 1, 2}
-**.wlan[0].opMode = ${opMode="g(mixed)", "n(mixed-2.4Ghz)", "ac", "ax", "be", "ax" ! hosts}
-**.wlan[0].bitrate = ${bitrate=54Mbps, 6.5Mbps, 6.5Mbps, 7.3125Mbps, 7.3125Mbps, 7.3125Mbps ! hosts}
-*.observer.expectedModeFamily = ${family="g", "ht", "vht", "he", "eht", "he" ! hosts}
-*.observer.expectHeMuFallback = ${fallback=false, false, false, false, false, true ! hosts}
-**.wlan[0].bandName = ${band="2.4 GHz", "2.4 GHz", "5 GHz (20 MHz)", "5 GHz (20 MHz)", "6 GHz (20 MHz)", "5 GHz (20 MHz)" ! hosts}
-**.wlan[0].mac.qosStation = ${qos=false, true, true, true, true, true ! hosts}
-**.wlan[0].mac.hcf.typename = ${hcf="Hcf", "Hcf", "Hcf", "HeHcf", "HeHcf", "HeHcf" ! hosts}
-**.wlan[0].mac.hcf.forceSingleUser = ${forceSu=false, false, false, true, true, false ! hosts}
+*.numHosts = ${hosts=1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2}
+**.wlan[0].opMode = ${opMode="g(mixed)", "n(mixed-2.4Ghz)", "ac", "ax", "be", "ax", "n(mixed-2.4Ghz)", "n(mixed-2.4Ghz)", "n(mixed-2.4Ghz)", "n(mixed-2.4Ghz)", "ac", "ac", "ac", "ac" ! hosts}
+**.wlan[0].bitrate = ${bitrate=54Mbps, 6.5Mbps, 6.5Mbps, 7.3125Mbps, 7.3125Mbps, 7.3125Mbps, 6.5Mbps, 6.5Mbps, 6.5Mbps, 6.5Mbps, 6.5Mbps, 6.5Mbps, 6.5Mbps, 6.5Mbps ! hosts}
+*.observer.expectedModeFamily = ${family="g", "ht", "vht", "he", "eht", "he", "ht", "ht", "ht", "ht", "vht", "vht", "vht", "vht" ! hosts}
+*.observer.expectHeMuFallback = ${fallback=false, false, false, false, false, true, false, false, false, false, false, false, false, false ! hosts}
+*.observer.expectHtProtection = ${protect=false, false, false, false, false, false, false, true, true, true, false, false, false, false ! hosts}
+*.observer.expectedPacketCount = ${pc=3, 3, 3, 3, 3, 3, 1, 2, 2, 1, 3, 2, 3, 3 ! hosts}
+*.observer.expectedProtectedDataExchanges = ${px=0, 0, 0, 0, 0, 0, 0, 2, 2, 1, 0, 0, 0, 0 ! hosts}
+*.observer.expectFirstCtsSuppressed = ${drop=false, false, false, false, false, false, false, false, false, true, false, false, false, false ! hosts}
+*.observer.expectVhtSounding = ${sound=false, false, false, false, false, false, false, false, false, false, true, true, false, true ! hosts}
+*.observer.expectVhtOptIn = ${hcf} == "VhtHcf"
+*.observer.expectVhtFeedbackTimeout = ${pc} == 2 && ${sound}
+*.observer.expectVhtMu = ${hosts} == 2 && ${hcf} == "VhtHcf"
+*.observer.expectAsymmetricBasicAck = ${family} == "g"
+*.ap.wlan[0].mib.bssBasicRateCodes = ${family} == "g" ? "12 48" : ""
+*.host[*].wlan[0].mib.bssBasicRateCodes = ${family} == "g" ? "12" : ""
+*.ap.wlan[0].mib.htProtectionMode = ${htProtection=0, 0, 0, 0, 0, 0, 0, 3, 3, 3, 0, 0, 0, 0 ! hosts}
+**.wlan[0].bandName = ${band="2.4 GHz", "2.4 GHz", "5 GHz (20 MHz)", "5 GHz (20 MHz)", "6 GHz (20 MHz)", "5 GHz (20 MHz)", "2.4 GHz", "2.4 GHz", "2.4 GHz", "2.4 GHz", "5 GHz (20 MHz)", "5 GHz (20 MHz)", "5 GHz (20 MHz)", "5 GHz (20 MHz)" ! hosts}
+**.wlan[0].mac.qosStation = ${qos=false, true, true, true, true, true, true, true, true, true, true, true, true, true ! hosts}
+**.wlan[0].mac.hcf.typename = ${hcf="Hcf", "Hcf", "Hcf", "HeHcf", "HeHcf", "HeHcf", "Hcf", "Hcf", "Hcf", "Hcf", "VhtHcf", "VhtHcf", "VhtHcf", "VhtHcf" ! hosts}
+**.wlan[0].mac.hcf.enableVhtSuBeamforming = ${hcf} == "VhtHcf"
+**.wlan[0].mac.hcf.enableVhtDlMuMimo = ${hosts} == 2 && ${hcf} == "VhtHcf"
+**.wlan[0].mac.hcf.isBlockAckSupported = ${hosts} == 2 && ${hcf} == "VhtHcf"
+**.wlan[0].mac.hcf.originatorAckPolicy.blockAckReqThreshold = 1
+**.wlan[0].mac.hcf.vhtCsiValidityDuration = (${hosts} == 2 && ${hcf} == "VhtHcf") ? 100ms : 2ms
+**.wlan[0].mac.hcf.soundingCoordinator.typename = "DropFirstVhtFeedbackCoordinator"
+**.wlan[0].mac.hcf.soundingCoordinator.suppressFirstFeedback = ${pc} == 2 && ${sound}
+**.wlan[0].mib.vhtBeamforming = ${hcf} == "VhtHcf"
+*.ap.wlan[0].mib.vhtSuBeamformer = ${hcf} == "VhtHcf"
+*.host[*].wlan[0].mib.vhtSuBeamformee = ${hcf} == "VhtHcf"
+**.wlan[0].mib.vhtMaxNss = (${hosts} == 2 && ${hcf} == "VhtHcf") ? 1 : 8
+**.wlan[0].mib.vhtMuMimo = ${hosts} == 2 && ${hcf} == "VhtHcf"
+*.ap.wlan[0].mib.vhtMuBeamformer = ${hosts} == 2 && ${hcf} == "VhtHcf"
+*.host[*].wlan[0].mib.vhtMuBeamformee = ${hosts} == 2 && ${hcf} == "VhtHcf"
+**.wlan[0].mac.hcf.forceSingleUser = ${forceSu=false, false, false, true, true, false, false, false, false, false, false, false, false, false ! hosts}
+**.wlan[0].classifier.typename = "ExampleQosClassifier"
+**.wlan[0].mac.hcf.originatorMacDataService.msduAggregationPolicy.typename = ""
+*.ap.wlan[0].mac.hcf.edca.edcaf[3].txopProcedure.txopLimit = ${txl=-1s, -1s, -1s, -1s, -1s, -1s, -1s, -1s, 700us, -1s, -1s, -1s, -1s, -1s ! hosts}
+*.host[*].wlan[0].mac.hcf.ctsPolicy.typename = "DropFirstCtsPolicy"
+*.host[*].wlan[0].mac.hcf.ctsPolicy.suppressFirstCts = ${drop}
 
-*.server.numApps = ${serverApps=1, 1, 1, 1, 1, 2 ! hosts}
+*.server.numApps = ${serverApps=1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2 ! hosts}
 *.server.app[*].typename = "UdpBasicApp"
 *.server.app[*].packetName = "shared-modes-data"
 *.server.app[0].destAddresses = "host[0]"
 *.server.app[1].destAddresses = "host[1]"
 *.server.app[*].destPort = 5000
 *.server.app[*].messageLength = 200B
-*.server.app[*].sendInterval = 5ms
+*.server.app[*].sendInterval = ${si=5ms, 5ms, 5ms, 5ms, 5ms, 5ms, 5ms, 1us, 1us, 5ms, 5ms, 105ms, 5ms, 1ms ! hosts}
 *.server.app[*].startTime = 20ms
-*.server.app[*].stopTime = 45ms
+*.server.app[*].stopTime = ${stopTime=45ms, 45ms, 45ms, 45ms, 45ms, 45ms, 21ms, 20.0015ms, 20.0015ms, 21ms, 45ms, 126ms, 45ms, 30ms ! hosts}
 
 *.host[*].numApps = 1
 *.host[*].app[0].typename = "UdpSink"
@@ -223,10 +777,31 @@ cmdenv-event-banners = false
 Shared MAC traffic/g PHY contract: PASS
 
 %contains: stdout
+Shared MAC traffic/asymmetric-bss-basic-ack contract: PASS
+
+%contains: stdout
 Shared MAC traffic/ht PHY contract: PASS
 
 %contains: stdout
 Shared MAC traffic/vht PHY contract: PASS
+
+%contains: stdout
+Shared MAC traffic/vht-sounding-disabled contract: PASS
+
+%contains: stdout
+Shared MAC traffic/vht-one-antenna-ineligible contract: PASS
+
+%contains: stdout
+Shared MAC traffic/vht-sounding contract: PASS
+
+%contains: stdout
+Shared MAC traffic/vht-sounding-timeout-recovery contract: PASS
+
+%contains: stdout
+Shared MAC traffic/vht-negative-gates contract: PASS
+
+%contains: stdout
+Shared MAC traffic/vht-dl-mu contract: PASS
 
 %contains: stdout
 Shared MAC traffic/he PHY contract: PASS
@@ -236,3 +811,12 @@ Shared MAC traffic/eht PHY contract: PASS
 
 %contains: stdout
 Shared MAC traffic/he-mu-ineligible-su-fallback contract: PASS
+
+%contains: stdout
+Shared MAC traffic/ht-protected-exchange contract: PASS
+
+%contains: stdout
+Shared MAC traffic/ht-txop-admission-boundary contract: PASS
+
+%contains: stdout
+Shared MAC traffic/ht-cts-timeout-recovery contract: PASS

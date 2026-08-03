@@ -112,8 +112,36 @@ class Ieee80211ChannelInd extends Ieee80211ChannelTagBase
 //
 class Ieee80211VhtTransmissionTag extends TagBase
 {
+    bool ndp = false;
     bool beamformed = false;
     bool muMimo = false;
     double beamformingGainDb = 3.0;
-    double muMimoPenaltyDb = 2.0;
+    uint8_t groupId = 63;
+    uint16_t partialAid = 0;
+}
+
+enum Ieee80211NdpPhyFormat
+{
+    IEEE80211_NDP_PHY_VHT = 1;
+    IEEE80211_NDP_PHY_HE_SU = 2;
+}
+
+// PHY-format-neutral indication for a successfully decoded headerless
+// sounding NDP. Family-specific RXVECTOR metadata remains authoritative for
+// all other PHY parameters.
+class Ieee80211NdpInd extends TagBase
+{
+    Ieee80211NdpPhyFormat phyFormat;
+    double channelWidth;
+    uint8_t numberOfSpaceTimeStreams;
+}
+
+// Immutable PHY provenance for correlating headerless exchanges with their
+// eliciting MAC control frame without inferring a transmitter from payload.
+class Ieee80211PhyProvenanceInd extends TagBase
+{
+    int64_t transmissionId = -1;
+    int transmitterRadioId = -1;
+    simtime_t startTime = -1;
+    simtime_t endTime = -1;
 }

@@ -25,6 +25,34 @@ simsignal_t TxopProcedure::txopEndedSignal = cComponent::registerSignal("txopEnd
 
 Define_Module(TxopProcedure);
 
+void TxopProcedure::ProtectionState::configure(ProtectionMechanism newMechanism,
+        InitialProtection newProtection)
+{
+    if (configured)
+        throw cRuntimeError("TXOP protection is already configured");
+    if (newMechanism == ProtectionMechanism::UNDEFINED_PROTECTION)
+        throw cRuntimeError("TXOP protection duration class is undefined");
+    mechanism = newMechanism;
+    protection = newProtection;
+    configured = true;
+    completed = false;
+}
+
+void TxopProcedure::ProtectionState::complete()
+{
+    if (!isPending())
+        throw cRuntimeError("Initial TXOP protection is not pending");
+    completed = true;
+}
+
+void TxopProcedure::ProtectionState::reset()
+{
+    mechanism = ProtectionMechanism::UNDEFINED_PROTECTION;
+    protection = InitialProtection::NONE;
+    configured = false;
+    completed = false;
+}
+
 static bool isErpOrLaterMode(const IIeee80211Mode *mode)
 {
     return dynamic_cast<const Ieee80211OfdmMode *>(mode) ||
@@ -39,7 +67,7 @@ void TxopProcedure::initialize(int stage)
     if (stage == INITSTAGE_LOCAL) {
         limit = par("txopLimit");
         WATCH(start);
-        WATCH(protectionMechanism);
+        WATCH_EXPR("protectionMechanism", static_cast<int>(protectionState.getMechanism()));
     }
 }
 
@@ -58,11 +86,6 @@ s TxopProcedure::getTxopLimit(const IIeee80211Mode *mode, AccessCategory ac)
             else return s(0);
         default: throw cRuntimeError("Unknown access category = %d", ac);
     }
-}
-
-TxopProcedure::ProtectionMechanism TxopProcedure::selectProtectionMechanism(AccessCategory ac) const
-{
-    return ProtectionMechanism::SINGLE_PROTECTION;
 }
 
 simtime_t TxopProcedure::getStart() const
@@ -84,12 +107,27 @@ void TxopProcedure::startTxop(AccessCategory ac)
         auto referenceMode = modeSet->getSlowestMandatoryMode();
         limit = getTxopLimit(referenceMode, ac).get<s>();
     }
-    // The STA selects between single and multiple protection when it transmits the first frame of a TXOP.
-    // All subsequent frames transmitted by the STA in the same TXOP use the same class of duration settings.
-    protectionMechanism = selectProtectionMechanism(ac);
+    // IEEE Std 802.11-2024, 9.2.5.2: the duration class is selected with
+    // the first actual transmission, after its protection policy is known.
+    protectionState.reset();
     start = simTime();
     emit(txopStartedSignal, this);
     EV_INFO << "Txop started: limit = " << limit << ".\n";
+}
+
+void TxopProcedure::configureProtection(InitialProtection protection)
+{
+    Enter_Method("configureProtection");
+    if (start == -1)
+        throw cRuntimeError("Cannot configure protection before the TXOP starts");
+    auto mechanism = protection == InitialProtection::LEGACY_RTS_CTS && limit > SIMTIME_ZERO ?
+            ProtectionMechanism::MULTIPLE_PROTECTION : ProtectionMechanism::SINGLE_PROTECTION;
+    protectionState.configure(mechanism, protection);
+}
+
+void TxopProcedure::completeInitialProtection()
+{
+    protectionState.complete();
 }
 
 void TxopProcedure::endTxop()
@@ -97,7 +135,7 @@ void TxopProcedure::endTxop()
     Enter_Method("endTxop");
     emit(txopEndedSignal, this);
     start = -1;
-    protectionMechanism = ProtectionMechanism::UNDEFINED_PROTECTION;
+    protectionState.reset();
     EV_INFO << "Txop ended.\n";
 }
 

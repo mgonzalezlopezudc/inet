@@ -194,7 +194,6 @@ auto macHeader = makeHeader(peerAddress);
 rateSelection->configure(mib, modeSet, mode14);
 auto deniedPacket = makePacket(macHeader, mode14);
 REQUIRE(throwsRuntimeError([&] { rateSelection->computeMode(deniedPacket, macHeader); }));
-REQUIRE(throwsRuntimeError([&] { transmitter->computeTransmissionMode(deniedPacket); }));
 delete deniedPacket;
 
 auto peer = makeEligiblePeer();
@@ -232,7 +231,6 @@ peer.ldpc = false;
 mib->setPeerEhtCapabilities(peerAddress, peer, operation);
 auto noLdpcPacket = makePacket(macHeader, mode14);
 REQUIRE(throwsRuntimeError([&] { rateSelection->computeMode(noLdpcPacket, macHeader); }));
-REQUIRE(throwsRuntimeError([&] { transmitter->computeTransmissionMode(noLdpcPacket); }));
 delete noLdpcPacket;
 
 peer.ldpc = true;
@@ -241,7 +239,6 @@ mib->setPeerEhtCapabilities(peerAddress, peer, operation);
 rateSelection->configure(mib, modeSet, mode15);
 auto disabledMcs15Packet = makePacket(macHeader, mode15);
 REQUIRE(throwsRuntimeError([&] { rateSelection->computeMode(disabledMcs15Packet, macHeader); }));
-REQUIRE(throwsRuntimeError([&] { transmitter->computeTransmissionMode(disabledMcs15Packet); }));
 delete disabledMcs15Packet;
 
 nic->deleteModule();

@@ -15,6 +15,7 @@
 #include "inet/linklayer/ieee80211/mac/contract/IMpduDeaggregation.h"
 #include "inet/linklayer/ieee80211/mac/contract/IMsduDeaggregation.h"
 #include "inet/linklayer/ieee80211/mac/contract/IReassembly.h"
+#include "inet/linklayer/ieee80211/mac/contract/IRecipientMpduSecurity.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRecipientQosMacDataService.h"
 
 namespace inet {
@@ -32,7 +33,7 @@ class INET_API RecipientQosMacDataService : public IRecipientQosMacDataService, 
 //    MpduHeaderAndFcsValidation *mpduHeaderAndFcsValidation = nullptr;
 //    Address1Filtering *address1Filtering = nullptr;
     IDuplicateRemoval *duplicateRemoval = nullptr;
-//    MpduDecryptionAndIntegrity *mpduDecryptionAndIntegrity = nullptr;
+    IRecipientMpduSecurity *mpduSecurity = nullptr;
     BlockAckReordering *blockAckReordering = nullptr;
     IDefragmentation *defragmentation = nullptr;
     IMsduDeaggregation *aMsduDeaggregation = nullptr;
@@ -44,7 +45,10 @@ class INET_API RecipientQosMacDataService : public IRecipientQosMacDataService, 
 
     virtual Packet *defragment(std::vector<Packet *> completeFragments);
     virtual Packet *defragment(Packet *mgmtFragment);
-    virtual std::vector<Packet *> processReorderBuffer(const BlockAckReordering::ReorderBuffer& frames);
+    virtual std::vector<Packet *> processReorderBuffer(BlockAckReordering::ReorderBuffer frames);
+    virtual bool passesMpduSecurity(Packet *packet,
+            const Ptr<const Ieee80211DataOrMgmtHeader>& header,
+            IRecipientMpduSecurity::Stage stage);
 
   public:
     virtual std::vector<Packet *> dataFrameReceived(Packet *dataPacket, const Ptr<const Ieee80211DataHeader>& dataHeader, IRecipientBlockAckAgreementHandler *blockAckAgreementHandler) override;
