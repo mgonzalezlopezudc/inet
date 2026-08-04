@@ -1,137 +1,257 @@
 {
   "_provenance": {
-    "generated_at_utc": "2026-08-03T19:05:00.905048+00:00",
+    "generated_at_utc": "2026-08-04T23:09:38.643055+00:00",
     "groups": {
-      "rate_adaptation": {
+      "frame_aggregation": {
         "conditions": [
           {
-            "configuration": "FixedMcs7",
-            "group": "rate_adaptation",
-            "ini": "examples/ieee80211n/rate_adaptation/omnetpp.ini",
-            "label": "Fixed MCS 7",
+            "configuration": "NoAggregation",
+            "group": "frame_aggregation",
+            "ini": "examples/ieee80211n/frame_aggregation/omnetpp.ini",
+            "label": "No Aggregation",
             "measurement": {
-              "end_s": 1.9,
+              "end_s": 0.9,
               "start_s": 0.3
             },
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260803T190458Z/FixedMcs7/FixedMcs7-#0.sca",
-                "sha256": "b0632e784a19d58e02677219db6e6be338fe83cc4dddc15cc0e3de2788fd4928"
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/NoAggregation/NoAggregation-#0.sca",
+                "sha256": "cbe2c3b91cd7563bbe8247c0cadaa2f8f8e725fe74b30d97ba69a6585e97de86"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260803T190458Z/FixedMcs7/FixedMcs7-#0.vec",
-                "sha256": "52e1c83cb4bee370324d3487f142d3c0afd78fd4fdb326b819f5c9efc3c7ea2a"
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/NoAggregation/NoAggregation-#0.vec",
+                "sha256": "eb15b0abe94463ad5fa9d7d47b8411a9f97ad2e0034496d08ada936c2e9b5220"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260803T190458Z/FixedMcs7/FixedMcs7-#1.sca",
-                "sha256": "8b371645c301895b5fd11da2ca156d2b7ccce28eb11e5f52b7fa5611e309b47f"
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/NoAggregation/NoAggregation-#1.sca",
+                "sha256": "c4db6b69a775a6fd67e144556b4bb38822408d791ff76c0c61347260484ed8b5"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260803T190458Z/FixedMcs7/FixedMcs7-#1.vec",
-                "sha256": "3b80d5a06fc7c28d4d04f7c034457c7877183a759ccb85846caccfc7be590751"
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/NoAggregation/NoAggregation-#1.vec",
+                "sha256": "3ec94023c50b5291b5330add95895edd0b2bd5bfe75049ca03d172505fab5fa0"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260803T190458Z/FixedMcs7/FixedMcs7-#2.sca",
-                "sha256": "24319dbc45c8d86f6741c5b70497b28279ed926985e74d761c793b5a560c6cf2"
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/NoAggregation/NoAggregation-#2.sca",
+                "sha256": "428b2aa9f37aafedd39030f90c10156b43ea9f11d13f31516539661881ef8617"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260803T190458Z/FixedMcs7/FixedMcs7-#2.vec",
-                "sha256": "8fcc544df2e6ff74950906006cef560831cbeb73ea77a35ac66a46818d0ce19b"
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/NoAggregation/NoAggregation-#2.vec",
+                "sha256": "d6f0ccd2ae1276c580a400ec94253f603fd2e67052dca655ce5fff4d9bbd5f0b"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260803T190458Z/FixedMcs7/FixedMcs7-#3.sca",
-                "sha256": "7f4feb6560624f9e9aebf035a91b309e3d0dd0cff79834bd53bf9ca1bcb4a625"
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/NoAggregation/NoAggregation-#3.sca",
+                "sha256": "7e9f2d1b38fa4099d483866f6743805ab35c0296cb10296c986aa005b9305bde"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260803T190458Z/FixedMcs7/FixedMcs7-#3.vec",
-                "sha256": "c80412c95c8953d7a2bde55abe0dd3fd7c3b6b904f27207951ca40b6910c2b01"
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/NoAggregation/NoAggregation-#3.vec",
+                "sha256": "bd42ec6801197567b81d9a498f4e3102413027a76e52d0539459a8ac9178d93d"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260803T190458Z/FixedMcs7/FixedMcs7-#4.sca",
-                "sha256": "6f6a6de4854b2caea409d952bc0f7ea67f3dff828d9428a3d9756a35ee61f556"
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/NoAggregation/NoAggregation-#4.sca",
+                "sha256": "639d43a50d9cb32cdd51ae71f6392d4e34559e751161deeabeb94b32c3a4d4ae"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260803T190458Z/FixedMcs7/FixedMcs7-#4.vec",
-                "sha256": "01302379a3b2c1136bbf0109273ea3b45f8b62d2c6d819da56fcabdb09c67b8e"
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/NoAggregation/NoAggregation-#4.vec",
+                "sha256": "99d25fbcedbdc95c20a6690cbc96eb2dd7bc7aca3e1ccca91b9804743f5da121"
               }
             ]
           },
           {
-            "configuration": "HtMinstrelAdaptation",
-            "group": "rate_adaptation",
-            "ini": "examples/ieee80211n/rate_adaptation/omnetpp.ini",
-            "label": "HT Minstrel Adaptation",
+            "configuration": "AMsduOnly",
+            "group": "frame_aggregation",
+            "ini": "examples/ieee80211n/frame_aggregation/omnetpp.ini",
+            "label": "A-MSDU Only",
             "measurement": {
-              "end_s": 1.9,
+              "end_s": 0.9,
               "start_s": 0.3
             },
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260803T190458Z/HtMinstrelAdaptation/HtMinstrelAdaptation-#0.sca",
-                "sha256": "b4d4d5e68f53bf13987bdf760905cc9164d1d2ba5ec9c0560734be2ecdac4fb6"
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/AMsduOnly/AMsduOnly-#0.sca",
+                "sha256": "cb1a59b9faa2565cbfa0deb1be1bca37d9493237ae69bf95f39e400237978946"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260803T190458Z/HtMinstrelAdaptation/HtMinstrelAdaptation-#0.vec",
-                "sha256": "7a069e7774bcf55b4889792be7e664c594a212bd2977cf0e890082524170585e"
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/AMsduOnly/AMsduOnly-#0.vec",
+                "sha256": "abd3016bcaded7e57fb1a40b133af35446a7fa811101fe9f01cfb66638b6b156"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260803T190458Z/HtMinstrelAdaptation/HtMinstrelAdaptation-#1.sca",
-                "sha256": "6523604f1da51027d5a35af2f7b4f1f046feb3a90d7c8a9cf24042e993175565"
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/AMsduOnly/AMsduOnly-#1.sca",
+                "sha256": "b04eabcb8cf39d6d783c932dd994f381c68418ef6a3ef845a7ed943f1b47f91b"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260803T190458Z/HtMinstrelAdaptation/HtMinstrelAdaptation-#1.vec",
-                "sha256": "1a868bdafc865975ba40b010bae4f43147d1dca1c077f143dcdfebecf63548fa"
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/AMsduOnly/AMsduOnly-#1.vec",
+                "sha256": "114fc1ee77fd7409a44011ed9c36ef24c3f09306c28c5273b9797d923dceb833"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260803T190458Z/HtMinstrelAdaptation/HtMinstrelAdaptation-#2.sca",
-                "sha256": "7e0cf437b59e952cc50bd0f96d6a563ac2eac48dc649a208097c3999d82311a0"
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/AMsduOnly/AMsduOnly-#2.sca",
+                "sha256": "1193dcab1cfe6315c9d5121d94948dc3be3cd9ff4aeb98a14ed9828f0c6a2261"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260803T190458Z/HtMinstrelAdaptation/HtMinstrelAdaptation-#2.vec",
-                "sha256": "2635fdfffc210d4c68c7c93c3dc008e719a681d695f70ab19d359a126e490314"
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/AMsduOnly/AMsduOnly-#2.vec",
+                "sha256": "9dc66ae23b060d8869e9e6c797d22e3e0a55b0a83b603f2394d4d4f5a73a9d89"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260803T190458Z/HtMinstrelAdaptation/HtMinstrelAdaptation-#3.sca",
-                "sha256": "51e8464d1b761f1fee82ac6f94193de2741b75529e920070e71b83b4b3432f0d"
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/AMsduOnly/AMsduOnly-#3.sca",
+                "sha256": "900ee202f675b73fe38099aafc5675335ade6689cfb37e814ffd131f4b7c56f3"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260803T190458Z/HtMinstrelAdaptation/HtMinstrelAdaptation-#3.vec",
-                "sha256": "c1e661a0d6a375b8262a78cff4c9a87734c3ed0e32e161f9c3ed4c1e28cc9f37"
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/AMsduOnly/AMsduOnly-#3.vec",
+                "sha256": "82e632238c448d8a493598a743a33726daf938ed77c1844b724a2d2044b27244"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260803T190458Z/HtMinstrelAdaptation/HtMinstrelAdaptation-#4.sca",
-                "sha256": "9194c12fe08535959ed5fe08310ddd72bf9ac5f711ecb13ae76af3871a4afd8b"
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/AMsduOnly/AMsduOnly-#4.sca",
+                "sha256": "5f01957ed0fbe4d6f9066cf3b84d9fc9ad99a140ca0fd76e1dbb167fb4c90edb"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260803T190458Z/HtMinstrelAdaptation/HtMinstrelAdaptation-#4.vec",
-                "sha256": "e4709003ee7efa538f37f715f8c636bfcfd6285e08efb8ece070678744d80b13"
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/AMsduOnly/AMsduOnly-#4.vec",
+                "sha256": "722da5eda40538a02c33c05c07a161fb47cb763086207e175c9c8f774bc3cbb0"
+              }
+            ]
+          },
+          {
+            "configuration": "AMpduOnly",
+            "group": "frame_aggregation",
+            "ini": "examples/ieee80211n/frame_aggregation/omnetpp.ini",
+            "label": "A-MPDU Only",
+            "measurement": {
+              "end_s": 0.9,
+              "start_s": 0.3
+            },
+            "metadata": {},
+            "result_files": [
+              {
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/AMpduOnly/AMpduOnly-#0.sca",
+                "sha256": "d84ef087c6522ba83430a4d34a23116793cbdec798ebb29547358b354c09bb69"
+              },
+              {
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/AMpduOnly/AMpduOnly-#0.vec",
+                "sha256": "c0b0997368f81a04dcf5ce0072000f09c19b15abc72b8a85d09fa5be0ff614d8"
+              },
+              {
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/AMpduOnly/AMpduOnly-#1.sca",
+                "sha256": "fb44105745787e2e72024ed457d81f8c7553507fd2b8255442af265d07cbf9bd"
+              },
+              {
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/AMpduOnly/AMpduOnly-#1.vec",
+                "sha256": "22d0d9a66e4e8fdedbf705e27875caf163764d902313a72ae1e340fd2f289291"
+              },
+              {
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/AMpduOnly/AMpduOnly-#2.sca",
+                "sha256": "15e3e5d960f0aee8dccf61911006e946dbd7e09238092ebfc8ed3092f808f632"
+              },
+              {
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/AMpduOnly/AMpduOnly-#2.vec",
+                "sha256": "c82f31e7d91bced9f47adc1e41318439a18622c8c3a25ef9a1d315b992496da9"
+              },
+              {
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/AMpduOnly/AMpduOnly-#3.sca",
+                "sha256": "195a5b498655ef3d27ed6886a5897d3d76708757c8f792b3e215ebff13da2669"
+              },
+              {
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/AMpduOnly/AMpduOnly-#3.vec",
+                "sha256": "e76ad3e9ba1fcbfef7c9945e5099ab09b71b98512a3d17896b815e09448fdf34"
+              },
+              {
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/AMpduOnly/AMpduOnly-#4.sca",
+                "sha256": "d7fd8984c45713dd349440eda89dd073387f2d507daa799873d28277c6af331a"
+              },
+              {
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/AMpduOnly/AMpduOnly-#4.vec",
+                "sha256": "4dda1387a7110f32894154acec1ef52c7a507e50785d7f556f2e73070e680361"
+              }
+            ]
+          },
+          {
+            "configuration": "TwoLevelAggregation",
+            "group": "frame_aggregation",
+            "ini": "examples/ieee80211n/frame_aggregation/omnetpp.ini",
+            "label": "Two-Level Aggregation",
+            "measurement": {
+              "end_s": 0.9,
+              "start_s": 0.3
+            },
+            "metadata": {},
+            "result_files": [
+              {
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/TwoLevelAggregation/TwoLevelAggregation-#0.sca",
+                "sha256": "896674e9c0b942440748d57fac9dba00dec4d325b33923329c05184b268d0c17"
+              },
+              {
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/TwoLevelAggregation/TwoLevelAggregation-#0.vec",
+                "sha256": "69af129275a63258ab2686a91a1b6bdefb4e31803efe0f76e58bceb12b9db080"
+              },
+              {
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/TwoLevelAggregation/TwoLevelAggregation-#1.sca",
+                "sha256": "83877dc26adf5e7e0a2836abb28a448c6981808abd7d7bab8cdc515807355190"
+              },
+              {
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/TwoLevelAggregation/TwoLevelAggregation-#1.vec",
+                "sha256": "fab8ad58e2ae54de8a096a9d647dd9880c7ed367533ffa1e8086344404161794"
+              },
+              {
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/TwoLevelAggregation/TwoLevelAggregation-#2.sca",
+                "sha256": "9632f708fc2b90e3adfb8aab37f370af5e5f760c4c3bdf62ac0aa971cab5f137"
+              },
+              {
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/TwoLevelAggregation/TwoLevelAggregation-#2.vec",
+                "sha256": "cf40e9737fd3f769bd816c10b6e81008c914c56ce0365f1113f284ffed59ff92"
+              },
+              {
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/TwoLevelAggregation/TwoLevelAggregation-#3.sca",
+                "sha256": "330eff2b0ea4ddf226b67f86f31b73eff092864e66e103bc611550e4d3b17942"
+              },
+              {
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/TwoLevelAggregation/TwoLevelAggregation-#3.vec",
+                "sha256": "b00c97305afa60c55c73e46d05441f3bb64736aa8c9197a3142355b0df92218e"
+              },
+              {
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/TwoLevelAggregation/TwoLevelAggregation-#4.sca",
+                "sha256": "5a27cd50293a882136eabe3b419830aa301b6a2d31f1319a775429d5be3d0bc2"
+              },
+              {
+                "path": "examples/ieee80211n/frame_aggregation/results/20260804T230805Z/TwoLevelAggregation/TwoLevelAggregation-#4.vec",
+                "sha256": "a0fe45bf91b90b5737ac7881aa5c2c40525373caad298e0567beeb63e6a3abc4"
               }
             ]
           }
         ],
-        "session_id": "20260803T190458Z",
+        "session_id": "20260804T230805Z",
         "status": "PASS"
       }
     },
-    "repository_revision": "676bfc9d3a76799a2ab4d6e8c243b6d2c90738a7",
-    "requested_session_id": "20260803T190458Z",
+    "repository_revision": "14416be81e1af70178aafdf51927a3c919e1e827",
+    "requested_session_id": "20260804T230805Z",
     "schema_version": 1
   },
-  "rate_adaptation": {
-    "Fixed MCS 7": {
+  "frame_aggregation": {
+    "A-MPDU Only": {
       "goodput_mbps": {
-        "ci95": 0.0,
+        "ci95": 0.2787749986125322,
         "count": 5,
-        "mean": 8.000000000000002
+        "mean": 6.590666666666666
       }
     },
-    "HT Minstrel Adaptation": {
+    "A-MSDU Only": {
       "goodput_mbps": {
-        "ci95": 0.0,
+        "ci95": 0.041925036134475714,
         "count": 5,
-        "mean": 8.000000000000002
+        "mean": 6.423466666666665
+      }
+    },
+    "No Aggregation": {
+      "goodput_mbps": {
+        "ci95": 0.003701926806930415,
+        "count": 5,
+        "mean": 3.1959999999999997
+      }
+    },
+    "Two-Level Aggregation": {
+      "goodput_mbps": {
+        "ci95": 0.041925036134475714,
+        "count": 5,
+        "mean": 6.423466666666665
       }
     }
   }

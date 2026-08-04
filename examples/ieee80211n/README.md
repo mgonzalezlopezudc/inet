@@ -10,7 +10,7 @@ These examples demonstrate High Throughput (HT) PHY and MAC mechanisms introduce
 | **Block Acknowledgement** | [`block_ack`](block_ack/walkthrough.md) | ADDBA/DELBA management dialogs, Compressed Block ACK bitmaps, and SIFS HT implicit Block ACK timing (`StandardAck`, `ImmediateBlockAck`, `CompressedBlockAck`, `HtImplicitBlockAck`). |
 | **Channel Bonding** | [`channel_widths`](channel_widths/walkthrough.md) | 20 MHz vs 40 MHz subchannel operation, primary/secondary 20 MHz subchannel selection in 2.4 GHz and 5 GHz (`Ht20MHz`, `Ht40MHz`, `Ht40MHzSecondaryAbove`, `Ht40MHzSecondaryBelow`). |
 | **Guard Interval** | [`guard_interval`](guard_interval/walkthrough.md) | Short Guard Interval (400 ns) vs Long Guard Interval (800 ns) symbol timing and throughput gains (`LongGI800ns`, `ShortGI400ns`). |
-| **MIMO & Spatial Streams** | [`mimo_spatial_streams`](mimo_spatial_streams/walkthrough.md) | Multi-antenna spatial multiplexing (1x1, 2x2, and 4x4 spatial streams) across HT MCS 0 to MCS 31 (`SingleStreamMcs7`, `DualStreamMcs15`, `QuadStreamMcs31`). |
+| **MIMO & Spatial Streams** | [`mimo_spatial_streams`](mimo_spatial_streams/walkthrough.md) | Multi-antenna spatial multiplexing (1x1, 2x2, and 4x4 spatial streams) at HT MCS 1, 9, and 25 (`SingleStreamMcs1`, `DualStreamMcs9`, `QuadStreamMcs25`). |
 | **Preamble Modes** | [`preamble_modes`](preamble_modes/walkthrough.md) | HT Mixed-Mode preamble (legacy L-SIG protection) versus HT Greenfield preamble PHY headers (`HtMixedMode`, `HtGreenfield`). |
 | **Rate Adaptation** | [`rate_adaptation`](rate_adaptation/walkthrough.md) | Dynamic HT rate adaptation using `Ieee80211HtMinstrel` under node mobility and distance path loss (`FixedMcs7`, `HtMinstrelAdaptation`). |
 

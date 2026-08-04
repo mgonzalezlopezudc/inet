@@ -77,6 +77,11 @@ void Ieee80211Mac::initialize(int stage)
         ds = check_and_cast<IDs *>(getSubmodule("ds"));
         rx = check_and_cast<IRx *>(getSubmodule("rx"));
         tx = check_and_cast<ITx *>(getSubmodule("tx"));
+        auto ccaProvider = dynamic_cast<IIeee80211CcaProvider *>(radio.get());
+        if (ccaProvider != nullptr) {
+            radioModule->subscribe(IIeee80211CcaProvider::ccaStateChangedSignal, this);
+            rx->ccaStateChanged(ccaProvider->getCcaSnapshot());
+        }
         emit(modesetChangedSignal, modeSet);
         if (isUp())
             initializeRadioMode();
@@ -467,6 +472,8 @@ void Ieee80211Mac::receiveSignal(cComponent *source, simsignal_t signalID, cObje
             throw cRuntimeError("Radio published an inconsistent 802.11 mode profile");
         modeSet = updatedModeSet;
     }
+    else if (signalID == IIeee80211CcaProvider::ccaStateChangedSignal)
+        rx->ccaStateChanged(*check_and_cast<Ieee80211CcaSnapshot *>(value));
 }
 
 void Ieee80211Mac::configureRadioMode(IRadio::RadioMode radioMode)

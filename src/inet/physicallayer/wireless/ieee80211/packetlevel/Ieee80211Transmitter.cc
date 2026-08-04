@@ -245,7 +245,7 @@ void Ieee80211Transmitter::setBand(const IIeee80211Band *band)
 {
     if (this->band != band) {
         if (channel != nullptr)
-            setChannel(new Ieee80211Channel(band, channel->getChannelNumber()));
+            setChannel(new Ieee80211Channel(band, channel->getChannelNumber(), channel->getSecondaryChannelOffset()));
         else
             this->band = band;
     }
@@ -265,7 +265,8 @@ void Ieee80211Transmitter::setChannel(const Ieee80211Channel *channel)
 void Ieee80211Transmitter::setChannelNumber(int channelNumber)
 {
     if (channel == nullptr || channelNumber != channel->getChannelNumber())
-        setChannel(new Ieee80211Channel(band, channelNumber));
+        setChannel(new Ieee80211Channel(band, channelNumber, channel == nullptr ?
+                IEEE80211_SECONDARY_CHANNEL_NONE : channel->getSecondaryChannelOffset()));
 }
 
 std::ostream& Ieee80211Transmitter::printToStream(std::ostream& stream, int level, int evFlags) const
@@ -347,6 +348,12 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     simtime_t duration = transmissionMode->getDuration(B(phyHeader->getLengthField()));
     simtime_t preambleDuration = transmissionMode->getPreambleMode()->getDuration();
     simtime_t headerDuration = transmissionMode->getHeaderMode()->getDuration();
+    if (vhtTxVector != nullptr) {
+        // VHT-SIG-A/B are included in Ieee80211VhtPreambleMode::getDuration().
+        // Unlike legacy PHYs, the VHT signal mode is not a separate analog
+        // header interval, so subtracting it here would remove DATA airtime.
+        headerDuration = SIMTIME_ZERO;
+    }
     if (vhtTxVector != nullptr && vhtTxVector->isMu()) {
         duration = vhtTxVector->getCommonDuration();
         preambleDuration = vhtTxVector->getPreambleDuration();
@@ -362,7 +369,11 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     // formulas: DSSS 15.4.6.7, HR/DSSS 16.3.4, OFDM 17.4.3, ERP 18.5.3.2,
     // HT 19.4.3, and VHT 21.4.3. The analog model then splits the result into
     // preamble, header/signaling, and DATA intervals.
-    Hz transmissionCenterFrequency = centerFrequency;
+    // IEEE Std 802.11-2024, 19.3.15.4: an HT40 PPDU occupies the primary
+    // and secondary 20 MHz channels and is centered halfway between them.
+    Hz transmissionCenterFrequency = dynamic_cast<const Ieee80211HtMode *>(transmissionMode) != nullptr &&
+            transmissionBandwidth == MHz(40) ? transmissionChannel->getBondedCenterFrequency() :
+            transmissionChannel->getCenterFrequency();
     if (heMuHeader != nullptr) {
         if (getIeee80211HePpduFormat(*heMuHeader) != hePpduLayout->getPpduFormat() ||
                 heMuHeader->getNdp() != hePpduLayout->isNdp() ||

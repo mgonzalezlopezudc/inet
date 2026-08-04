@@ -121,10 +121,16 @@ void Ieee80211Mib::initialize(int stage)
         // Initialize local VHT capabilities
         localVhtCapabilities.ldpc = par("vhtLdpc").boolValue();
         localVhtCapabilities.rxLdpc = localVhtCapabilities.ldpc;
+        // IEEE 802.11-2024 Figure 9-707 encodes VHT MCS maps as 0-7, 0-8, or 0-9.
+        localVhtCapabilities.maxMcs = par("vhtMaxMcs").intValue();
+        if (localVhtCapabilities.maxMcs != 7 && localVhtCapabilities.maxMcs != 8 && localVhtCapabilities.maxMcs != 9)
+            throw cRuntimeError("vhtMaxMcs must be 7, 8, or 9");
         localVhtCapabilities.maxNss = par("vhtMaxNss").intValue();
         if (localVhtCapabilities.maxNss < 1 || localVhtCapabilities.maxNss > 8)
             throw cRuntimeError("vhtMaxNss must be between 1 and 8");
         localVhtCapabilities.maxAmpduLengthExponent = par("vhtMaxAmpduLengthExponent").intValue();
+        localVhtCapabilities.shortGi80 = par("vhtShortGi80").boolValue();
+        localVhtCapabilities.shortGi160 = par("vhtShortGi160").boolValue();
         localVhtCapabilities.suBeamformer = par("vhtSuBeamformer").boolValue() || par("vhtBeamforming").boolValue();
         localVhtCapabilities.suBeamformee = par("vhtSuBeamformee").boolValue();
         localVhtCapabilities.beamformeeSts = par("vhtBeamformeeSts");
@@ -167,6 +173,10 @@ void Ieee80211Mib::initialize(int stage)
         localHeCapabilities.beamformeeSts20Mhz = par("heBeamformeeSts20Mhz").intValue();
         localHeCapabilities.beamformeeStsAbove20Mhz = par("heBeamformeeStsAbove20Mhz").intValue();
         localHeCapabilities.feedbackMode = par("heFeedbackMode").intValue();
+        // IEEE 802.11-2024 Table 9-378 encodes HE MCS maps as 0-7, 0-9, or 0-11.
+        int heMaxMcs = par("heMaxMcs").intValue();
+        if (heMaxMcs != 7 && heMaxMcs != 9 && heMaxMcs != 11)
+            throw cRuntimeError("heMaxMcs must be 7, 9, or 11");
         int heMaxNss = par("heMaxNss").intValue();
         if (heMaxNss < 1 || heMaxNss > 8)
             throw cRuntimeError("heMaxNss must be between 1 and 8");
@@ -213,8 +223,8 @@ void Ieee80211Mib::initialize(int stage)
         localHeCapabilities.rxMcsNss.maxMcsPerNss.fill(-1);
         localHeCapabilities.txMcsNss.maxMcsPerNss.fill(-1);
         for (int i = 0; i < heMaxNss; ++i) {
-            localHeCapabilities.rxMcsNss.maxMcsPerNss[i] = 11;
-            localHeCapabilities.txMcsNss.maxMcsPerNss[i] = 11;
+            localHeCapabilities.rxMcsNss.maxMcsPerNss[i] = heMaxMcs;
+            localHeCapabilities.txMcsNss.maxMcsPerNss[i] = heMaxMcs;
         }
         int defaultPeDurationUs = par("heDefaultPeDurationUs").intValue();
         if (defaultPeDurationUs != 0 && defaultPeDurationUs != 4 &&
@@ -283,13 +293,17 @@ void Ieee80211Mib::initialize(int stage)
         }
         localHtCapabilities.rxMcsNss.maxMcsPerNss.fill(-1);
         localHtCapabilities.txMcsNss.maxMcsPerNss.fill(-1);
+        int htMaxMcs = par("htMaxMcs").intValue();
+        if (htMaxMcs < 0 || htMaxMcs > 7)
+            throw cRuntimeError("htMaxMcs must be between 0 and 7");
         int htMaxNss = par("htMaxNss").intValue();
         if (htMaxNss < 1 || htMaxNss > 4)
             throw cRuntimeError("htMaxNss must be between 1 and 4");
         for (int i = 0; i < htMaxNss; i++) {
-            localHtCapabilities.rxMcsNss.maxMcsPerNss[i] = 7;
-            localHtCapabilities.txMcsNss.maxMcsPerNss[i] = 7;
+            localHtCapabilities.rxMcsNss.maxMcsPerNss[i] = htMaxMcs;
+            localHtCapabilities.txMcsNss.maxMcsPerNss[i] = htMaxMcs;
         }
+        localHtCapabilities.shortGi40 = par("htShortGi40").boolValue();
         WATCH(localHtLdpc);
         WATCH(localHeCapabilities.ldpc);
         WATCH(localHeCapabilities.twtRequester);
@@ -368,7 +382,21 @@ void Ieee80211Mib::initialize(int stage)
         vhtOperation.numSpatialStreams = localVhtCapabilities.maxNss;
         if (vhtOperation.operatingChannelWidth == MHz(160))
             localVhtCapabilities.supportedChannelWidths.insert(MHz(160));
-        htOperation.operatingChannelWidth = vhtOperation.operatingChannelWidth > MHz(40) ? Hz(MHz(40)) : vhtOperation.operatingChannelWidth;
+        auto configuredSecondaryChannelOffset = physicallayer::Ieee80211Channel::parseSecondaryChannelOffset(
+                par("htSecondaryChannelOffset"));
+        if (configuredSecondaryChannelOffset != channel->getSecondaryChannelOffset())
+            throw cRuntimeError("MIB and radio htSecondaryChannelOffset parameters disagree");
+        bool ht40Operation = !strcmp(modeSet->getProfileName(), "n(mixed-2.4Ghz)") &&
+                configuredSecondaryChannelOffset != physicallayer::IEEE80211_SECONDARY_CHANNEL_NONE;
+        // IEEE Std 802.11-2024, 9.4.2.55 (Figures 9-462/9-463 and Table
+        // 9-134): width and secondary offset are advertised only for HT40.
+        htOperation.operatingChannelWidth = ht40Operation ? Hz(MHz(40)) : Hz(MHz(20));
+        htOperation.secondaryChannelOffset = ht40Operation ? configuredSecondaryChannelOffset :
+                physicallayer::IEEE80211_SECONDARY_CHANNEL_NONE;
+        // The 2.4 GHz band stores a zero-based vector index internally; the
+        // HT Operation field carries the IEEE channel number (1 through 14).
+        if (!strcmp(modeSet->getProfileName(), "n(mixed-2.4Ghz)"))
+            htOperation.primaryChannel = channel->getChannelNumber() + 1;
     }
 }
 

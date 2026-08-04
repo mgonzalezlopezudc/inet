@@ -1,18 +1,18 @@
 {
   "analysis_script_sha256": "fdfeeb7c772ec8d4eb9350abfa562a1157d17cba3ecdf9094853c0e918408e20",
   "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
-  "capture_source_diff_sha256": "41779617e90ac895562270443c1971a35296b9dc367bd908e49a65fc9fbb398d",
+  "capture_source_diff_sha256": "511b098b156b97880e4e72b70ebdbdd15ab55af0c4779d1d0df49b44365cf7e4",
   "entries": [
     {
       "captures": [
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 656349,
-            "duration_seconds": 0.789724,
+            "data_size_bytes": 2908347,
+            "duration_seconds": 0.799767,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 0.989782,
-            "file_size_bytes": 923328,
+            "end_seconds": 0.999825,
+            "file_size_bytes": 3140616,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -23,24 +23,24 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 5997,
+            "packet_count": 5217,
             "snapshot_length": null,
             "start_seconds": 0.200058,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/frame_aggregation/results/20260804T231457Z/NoAggregation/NoAggregation-#0SingleBssNetwork.ap.wlan[0].pcap",
-          "sha256": "37bf285a6cf175899e679827cc8a60e7da4f1b5ae9c712975bc6a2bf308569b6",
-          "size_bytes": 923328
+          "path": "examples/ieee80211n/frame_aggregation/results/20260804T222120Z/NoAggregation/NoAggregation-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "9b8a51f28fab59fbcde07c811c417f89eeb7bda54cd339f89cbf559455aad083",
+          "size_bytes": 3140616
         },
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 656349,
-            "duration_seconds": 0.789724,
+            "data_size_bytes": 2908347,
+            "duration_seconds": 0.799767,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 0.989782,
-            "file_size_bytes": 923336,
+            "end_seconds": 0.999825,
+            "file_size_bytes": 3140624,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -51,24 +51,24 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 5997,
+            "packet_count": 5217,
             "snapshot_length": null,
             "start_seconds": 0.200058,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/frame_aggregation/results/20260804T231457Z/NoAggregation/NoAggregation-#0SingleBssNetwork.host[0].wlan[0].pcap",
-          "sha256": "fd5b955fd013dd6f747c960eec9e60c8f63aeeaa30e524aa16693ada9a06970a",
-          "size_bytes": 923336
+          "path": "examples/ieee80211n/frame_aggregation/results/20260804T222120Z/NoAggregation/NoAggregation-#0SingleBssNetwork.host[0].wlan[0].pcap",
+          "sha256": "fad470fd02a8f821856e1ce93f2e79b8aded11e482da29d1ceac0cdb53c265d6",
+          "size_bytes": 3140624
         },
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 656349,
-            "duration_seconds": 0.789724,
+            "data_size_bytes": 2908347,
+            "duration_seconds": 0.799767,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 0.989782,
-            "file_size_bytes": 923336,
+            "end_seconds": 0.999825,
+            "file_size_bytes": 3140624,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -79,24 +79,24 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 5997,
+            "packet_count": 5217,
             "snapshot_length": null,
             "start_seconds": 0.200058,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/frame_aggregation/results/20260804T231457Z/NoAggregation/NoAggregation-#0SingleBssNetwork.host[1].wlan[0].pcap",
-          "sha256": "4546da2a975e4b463ee60093c51747cdb254bfecd8e26dda9db247a528b6aa62",
-          "size_bytes": 923336
+          "path": "examples/ieee80211n/frame_aggregation/results/20260804T222120Z/NoAggregation/NoAggregation-#0SingleBssNetwork.host[1].wlan[0].pcap",
+          "sha256": "459cac35d6efb4463288c3da61871802a63003e7fa4993c56f382d5c444daf90",
+          "size_bytes": 3140624
         },
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 656349,
-            "duration_seconds": 0.789724,
+            "data_size_bytes": 2908347,
+            "duration_seconds": 0.799767,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 0.989782,
-            "file_size_bytes": 923336,
+            "end_seconds": 0.999825,
+            "file_size_bytes": 3140624,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -107,15 +107,15 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 5997,
+            "packet_count": 5217,
             "snapshot_length": null,
             "start_seconds": 0.200058,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/frame_aggregation/results/20260804T231457Z/NoAggregation/NoAggregation-#0SingleBssNetwork.host[2].wlan[0].pcap",
-          "sha256": "99df99afebceb650872892f2fddd23c8dc98d237281dd118ba9f4aace9c352df",
-          "size_bytes": 923336
+          "path": "examples/ieee80211n/frame_aggregation/results/20260804T222120Z/NoAggregation/NoAggregation-#0SingleBssNetwork.host[2].wlan[0].pcap",
+          "sha256": "0c1a7b98181c6c5f068c8b41967c9ce9267addbfeb09b4f9839cadd1aad4cdc1",
+          "size_bytes": 3140624
         }
       ],
       "command": null,
@@ -123,15 +123,15 @@
       "config": "NoAggregation",
       "exit_status": 0,
       "ini_file": "examples/ieee80211n/frame_aggregation/omnetpp.ini",
-      "ini_sha256": "50898a3a6cac79259eea14bbac1b71319b8e94ceec2ad4b133ffffedc729f5c9",
+      "ini_sha256": "e2eb46f796b3c4929e6256f339fefd0402350110afb1195dd9f56e98b57e7e07",
       "run_number": 0,
       "scalar": {
         "configname": "NoAggregation",
-        "path": "examples/ieee80211n/frame_aggregation/results/20260804T231457Z/NoAggregation/NoAggregation-#0.sca",
+        "path": "examples/ieee80211n/frame_aggregation/results/20260804T222120Z/NoAggregation/NoAggregation-#0.sca",
         "replication": "#0",
         "runnumber": 0,
         "seedset": 0,
-        "sha256": "912905e0a144c2689527afd57bd8f1afda00441557012942f92a1a2c8dab0d1c"
+        "sha256": "35902b739bf0942e9efd9ebe23fe99521b88348aae9079e768348abb265002d9"
       },
       "seed_set": 0,
       "simulation_time_limit_s": 1.0,
@@ -142,11 +142,11 @@
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 1168008,
-            "duration_seconds": 0.747314,
+            "data_size_bytes": 2924712,
+            "duration_seconds": 0.799212,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 0.947372,
-            "file_size_bytes": 1461996,
+            "end_seconds": 0.99927,
+            "file_size_bytes": 3151280,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -157,24 +157,24 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 6391,
+            "packet_count": 5044,
             "snapshot_length": null,
             "start_seconds": 0.200058,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/frame_aggregation/results/20260804T231457Z/AMsduOnly/AMsduOnly-#0SingleBssNetwork.ap.wlan[0].pcap",
-          "sha256": "f41a03172c03efc81ce8c143cf1ed52ba73ad31d8ab9347b6918f346af6f876d",
-          "size_bytes": 1461996
+          "path": "examples/ieee80211n/frame_aggregation/results/20260804T222120Z/AMsduOnly/AMsduOnly-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "474871fe4c583645264c1fcb58605f78c133bf5c6cfd6746e00adbdaf35333e4",
+          "size_bytes": 3151280
         },
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 1168008,
-            "duration_seconds": 0.747314,
+            "data_size_bytes": 2924712,
+            "duration_seconds": 0.799212,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 0.947372,
-            "file_size_bytes": 1462004,
+            "end_seconds": 0.99927,
+            "file_size_bytes": 3151288,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -185,24 +185,24 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 6391,
+            "packet_count": 5044,
             "snapshot_length": null,
             "start_seconds": 0.200058,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/frame_aggregation/results/20260804T231457Z/AMsduOnly/AMsduOnly-#0SingleBssNetwork.host[0].wlan[0].pcap",
-          "sha256": "eff07bcffbe069bcabe1a5d6b640b84a9b6c9145d9e6a4d8396b7345afd4d906",
-          "size_bytes": 1462004
+          "path": "examples/ieee80211n/frame_aggregation/results/20260804T222120Z/AMsduOnly/AMsduOnly-#0SingleBssNetwork.host[0].wlan[0].pcap",
+          "sha256": "2169819a736829da1171bdb1c7e236e81286cb517256f71edbff0b4ac5dcb20f",
+          "size_bytes": 3151288
         },
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 1168008,
-            "duration_seconds": 0.747314,
+            "data_size_bytes": 2924712,
+            "duration_seconds": 0.799212,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 0.947372,
-            "file_size_bytes": 1462004,
+            "end_seconds": 0.99927,
+            "file_size_bytes": 3151288,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -213,24 +213,24 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 6391,
+            "packet_count": 5044,
             "snapshot_length": null,
             "start_seconds": 0.200058,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/frame_aggregation/results/20260804T231457Z/AMsduOnly/AMsduOnly-#0SingleBssNetwork.host[1].wlan[0].pcap",
-          "sha256": "8159bd719f67ff1edfba4296d5859aaa4d22b1ec924484934b4dd457f955ff33",
-          "size_bytes": 1462004
+          "path": "examples/ieee80211n/frame_aggregation/results/20260804T222120Z/AMsduOnly/AMsduOnly-#0SingleBssNetwork.host[1].wlan[0].pcap",
+          "sha256": "4c4247e06b9bb2fe4ea99b0d83c6b46afeacc0e21e05587d75cf3e6e97224be3",
+          "size_bytes": 3151288
         },
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 1168008,
-            "duration_seconds": 0.747314,
+            "data_size_bytes": 2924712,
+            "duration_seconds": 0.799212,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 0.947372,
-            "file_size_bytes": 1462004,
+            "end_seconds": 0.99927,
+            "file_size_bytes": 3151288,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -241,15 +241,15 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 6391,
+            "packet_count": 5044,
             "snapshot_length": null,
             "start_seconds": 0.200058,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/frame_aggregation/results/20260804T231457Z/AMsduOnly/AMsduOnly-#0SingleBssNetwork.host[2].wlan[0].pcap",
-          "sha256": "dffa9a75d35595a3ec0baa40a3d9666acba57f2a2ae6b4262c3d3aadf2260953",
-          "size_bytes": 1462004
+          "path": "examples/ieee80211n/frame_aggregation/results/20260804T222120Z/AMsduOnly/AMsduOnly-#0SingleBssNetwork.host[2].wlan[0].pcap",
+          "sha256": "53173bbc31762a2e8b786bbf9970cbda4215546e137cd9c1981ee7fb7d92a6ba",
+          "size_bytes": 3151288
         }
       ],
       "command": null,
@@ -257,15 +257,15 @@
       "config": "AMsduOnly",
       "exit_status": 0,
       "ini_file": "examples/ieee80211n/frame_aggregation/omnetpp.ini",
-      "ini_sha256": "50898a3a6cac79259eea14bbac1b71319b8e94ceec2ad4b133ffffedc729f5c9",
+      "ini_sha256": "e2eb46f796b3c4929e6256f339fefd0402350110afb1195dd9f56e98b57e7e07",
       "run_number": 0,
       "scalar": {
         "configname": "AMsduOnly",
-        "path": "examples/ieee80211n/frame_aggregation/results/20260804T231457Z/AMsduOnly/AMsduOnly-#0.sca",
+        "path": "examples/ieee80211n/frame_aggregation/results/20260804T222120Z/AMsduOnly/AMsduOnly-#0.sca",
         "replication": "#0",
         "runnumber": 0,
         "seedset": 0,
-        "sha256": "892b3c5171aaa3f9b7a29849c088eb9fdea44b2ba7db38663ca0d4d6ef459381"
+        "sha256": "7e904cb08f07152defd42f5616ec39de017a3818bf741376737d08d90fa00d73"
       },
       "seed_set": 0,
       "simulation_time_limit_s": 1.0,
@@ -276,11 +276,11 @@
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 1165694,
-            "duration_seconds": 0.721782,
+            "data_size_bytes": 2908347,
+            "duration_seconds": 0.799767,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 0.92184,
-            "file_size_bytes": 1465400,
+            "end_seconds": 0.999825,
+            "file_size_bytes": 3140616,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -291,24 +291,24 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 6516,
+            "packet_count": 5217,
             "snapshot_length": null,
             "start_seconds": 0.200058,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/frame_aggregation/results/20260804T231457Z/AMpduOnly/AMpduOnly-#0SingleBssNetwork.ap.wlan[0].pcap",
-          "sha256": "1f450a0f739095994d66b075cd96151a8bcda1aae3f4b6881c3713b1a806520d",
-          "size_bytes": 1465400
+          "path": "examples/ieee80211n/frame_aggregation/results/20260804T222120Z/AMpduOnly/AMpduOnly-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "9b8a51f28fab59fbcde07c811c417f89eeb7bda54cd339f89cbf559455aad083",
+          "size_bytes": 3140616
         },
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 1165694,
-            "duration_seconds": 0.721782,
+            "data_size_bytes": 2908347,
+            "duration_seconds": 0.799767,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 0.92184,
-            "file_size_bytes": 1465408,
+            "end_seconds": 0.999825,
+            "file_size_bytes": 3140624,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -319,24 +319,24 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 6516,
+            "packet_count": 5217,
             "snapshot_length": null,
             "start_seconds": 0.200058,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/frame_aggregation/results/20260804T231457Z/AMpduOnly/AMpduOnly-#0SingleBssNetwork.host[0].wlan[0].pcap",
-          "sha256": "6fe80dff4359c6d39d476cc24003609151fea79889f540dcac203d43fecdd284",
-          "size_bytes": 1465408
+          "path": "examples/ieee80211n/frame_aggregation/results/20260804T222120Z/AMpduOnly/AMpduOnly-#0SingleBssNetwork.host[0].wlan[0].pcap",
+          "sha256": "fad470fd02a8f821856e1ce93f2e79b8aded11e482da29d1ceac0cdb53c265d6",
+          "size_bytes": 3140624
         },
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 1165694,
-            "duration_seconds": 0.721782,
+            "data_size_bytes": 2908347,
+            "duration_seconds": 0.799767,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 0.92184,
-            "file_size_bytes": 1465408,
+            "end_seconds": 0.999825,
+            "file_size_bytes": 3140624,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -347,24 +347,24 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 6516,
+            "packet_count": 5217,
             "snapshot_length": null,
             "start_seconds": 0.200058,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/frame_aggregation/results/20260804T231457Z/AMpduOnly/AMpduOnly-#0SingleBssNetwork.host[1].wlan[0].pcap",
-          "sha256": "b0d451c44db763d10dff4ae166c2ae6982f71177e5f1ab4a1bc17dcc40b12d98",
-          "size_bytes": 1465408
+          "path": "examples/ieee80211n/frame_aggregation/results/20260804T222120Z/AMpduOnly/AMpduOnly-#0SingleBssNetwork.host[1].wlan[0].pcap",
+          "sha256": "459cac35d6efb4463288c3da61871802a63003e7fa4993c56f382d5c444daf90",
+          "size_bytes": 3140624
         },
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 1165694,
-            "duration_seconds": 0.721782,
+            "data_size_bytes": 2908347,
+            "duration_seconds": 0.799767,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 0.92184,
-            "file_size_bytes": 1465408,
+            "end_seconds": 0.999825,
+            "file_size_bytes": 3140624,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -375,15 +375,15 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 6516,
+            "packet_count": 5217,
             "snapshot_length": null,
             "start_seconds": 0.200058,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/frame_aggregation/results/20260804T231457Z/AMpduOnly/AMpduOnly-#0SingleBssNetwork.host[2].wlan[0].pcap",
-          "sha256": "97693044e15fb138fa5d1120739039df702d2fcf892ac181f775d1bbdb5ef5a8",
-          "size_bytes": 1465408
+          "path": "examples/ieee80211n/frame_aggregation/results/20260804T222120Z/AMpduOnly/AMpduOnly-#0SingleBssNetwork.host[2].wlan[0].pcap",
+          "sha256": "0c1a7b98181c6c5f068c8b41967c9ce9267addbfeb09b4f9839cadd1aad4cdc1",
+          "size_bytes": 3140624
         }
       ],
       "command": null,
@@ -391,15 +391,15 @@
       "config": "AMpduOnly",
       "exit_status": 0,
       "ini_file": "examples/ieee80211n/frame_aggregation/omnetpp.ini",
-      "ini_sha256": "50898a3a6cac79259eea14bbac1b71319b8e94ceec2ad4b133ffffedc729f5c9",
+      "ini_sha256": "e2eb46f796b3c4929e6256f339fefd0402350110afb1195dd9f56e98b57e7e07",
       "run_number": 0,
       "scalar": {
         "configname": "AMpduOnly",
-        "path": "examples/ieee80211n/frame_aggregation/results/20260804T231457Z/AMpduOnly/AMpduOnly-#0.sca",
+        "path": "examples/ieee80211n/frame_aggregation/results/20260804T222120Z/AMpduOnly/AMpduOnly-#0.sca",
         "replication": "#0",
         "runnumber": 0,
         "seedset": 0,
-        "sha256": "83ad5370df5a65c6bc8fb53b90895d685804698bec57bd0c56ee0d6d7186ddf2"
+        "sha256": "a930ca9008ff9360910ba4735a6ac9385a570cc08ecd0910f142bdc0c79b9fe0"
       },
       "seed_set": 0,
       "simulation_time_limit_s": 1.0,
@@ -410,11 +410,11 @@
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 1162673,
-            "duration_seconds": 0.727694,
+            "data_size_bytes": 2924712,
+            "duration_seconds": 0.799212,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 0.927752,
-            "file_size_bytes": 1455264,
+            "end_seconds": 0.99927,
+            "file_size_bytes": 3151280,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -425,24 +425,24 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 6360,
+            "packet_count": 5044,
             "snapshot_length": null,
             "start_seconds": 0.200058,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/frame_aggregation/results/20260804T231457Z/TwoLevelAggregation/TwoLevelAggregation-#0SingleBssNetwork.ap.wlan[0].pcap",
-          "sha256": "7dfc7203456cb0591744c838caa6e6614593e24ea73c405193f712990e4a6c1c",
-          "size_bytes": 1455264
+          "path": "examples/ieee80211n/frame_aggregation/results/20260804T222120Z/TwoLevelAggregation/TwoLevelAggregation-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "474871fe4c583645264c1fcb58605f78c133bf5c6cfd6746e00adbdaf35333e4",
+          "size_bytes": 3151280
         },
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 1162673,
-            "duration_seconds": 0.727694,
+            "data_size_bytes": 2924712,
+            "duration_seconds": 0.799212,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 0.927752,
-            "file_size_bytes": 1455272,
+            "end_seconds": 0.99927,
+            "file_size_bytes": 3151288,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -453,24 +453,24 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 6360,
+            "packet_count": 5044,
             "snapshot_length": null,
             "start_seconds": 0.200058,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/frame_aggregation/results/20260804T231457Z/TwoLevelAggregation/TwoLevelAggregation-#0SingleBssNetwork.host[0].wlan[0].pcap",
-          "sha256": "fe57e73aff647ba3ccfaa4ce76ddb5b08391d289cf9bf2f541003d0758633a1b",
-          "size_bytes": 1455272
+          "path": "examples/ieee80211n/frame_aggregation/results/20260804T222120Z/TwoLevelAggregation/TwoLevelAggregation-#0SingleBssNetwork.host[0].wlan[0].pcap",
+          "sha256": "2169819a736829da1171bdb1c7e236e81286cb517256f71edbff0b4ac5dcb20f",
+          "size_bytes": 3151288
         },
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 1162673,
-            "duration_seconds": 0.727694,
+            "data_size_bytes": 2924712,
+            "duration_seconds": 0.799212,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 0.927752,
-            "file_size_bytes": 1455272,
+            "end_seconds": 0.99927,
+            "file_size_bytes": 3151288,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -481,24 +481,24 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 6360,
+            "packet_count": 5044,
             "snapshot_length": null,
             "start_seconds": 0.200058,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/frame_aggregation/results/20260804T231457Z/TwoLevelAggregation/TwoLevelAggregation-#0SingleBssNetwork.host[1].wlan[0].pcap",
-          "sha256": "503330d6e2246ca796047b5d30f87675d795bc0b64e3eb60bfc88e74cdd0f749",
-          "size_bytes": 1455272
+          "path": "examples/ieee80211n/frame_aggregation/results/20260804T222120Z/TwoLevelAggregation/TwoLevelAggregation-#0SingleBssNetwork.host[1].wlan[0].pcap",
+          "sha256": "4c4247e06b9bb2fe4ea99b0d83c6b46afeacc0e21e05587d75cf3e6e97224be3",
+          "size_bytes": 3151288
         },
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 1162673,
-            "duration_seconds": 0.727694,
+            "data_size_bytes": 2924712,
+            "duration_seconds": 0.799212,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 0.927752,
-            "file_size_bytes": 1455272,
+            "end_seconds": 0.99927,
+            "file_size_bytes": 3151288,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -509,15 +509,15 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 6360,
+            "packet_count": 5044,
             "snapshot_length": null,
             "start_seconds": 0.200058,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/frame_aggregation/results/20260804T231457Z/TwoLevelAggregation/TwoLevelAggregation-#0SingleBssNetwork.host[2].wlan[0].pcap",
-          "sha256": "c9e400bb06616de6c6c9a19675e364016b49d83a862284d4b88fe3395bfe17a8",
-          "size_bytes": 1455272
+          "path": "examples/ieee80211n/frame_aggregation/results/20260804T222120Z/TwoLevelAggregation/TwoLevelAggregation-#0SingleBssNetwork.host[2].wlan[0].pcap",
+          "sha256": "53173bbc31762a2e8b786bbf9970cbda4215546e137cd9c1981ee7fb7d92a6ba",
+          "size_bytes": 3151288
         }
       ],
       "command": null,
@@ -525,26 +525,26 @@
       "config": "TwoLevelAggregation",
       "exit_status": 0,
       "ini_file": "examples/ieee80211n/frame_aggregation/omnetpp.ini",
-      "ini_sha256": "50898a3a6cac79259eea14bbac1b71319b8e94ceec2ad4b133ffffedc729f5c9",
+      "ini_sha256": "e2eb46f796b3c4929e6256f339fefd0402350110afb1195dd9f56e98b57e7e07",
       "run_number": 0,
       "scalar": {
         "configname": "TwoLevelAggregation",
-        "path": "examples/ieee80211n/frame_aggregation/results/20260804T231457Z/TwoLevelAggregation/TwoLevelAggregation-#0.sca",
+        "path": "examples/ieee80211n/frame_aggregation/results/20260804T222120Z/TwoLevelAggregation/TwoLevelAggregation-#0.sca",
         "replication": "#0",
         "runnumber": 0,
         "seedset": 0,
-        "sha256": "13d6684ae0623f138a6c6e86e848d25a97b9a9dba5f07e703d9c38728b69c482"
+        "sha256": "4493732f48ee2d72d2f7e803600130cfcfbcd4ca73fa021108cf8762b3b52c99"
       },
       "seed_set": 0,
       "simulation_time_limit_s": 1.0,
       "subdir": "frame_aggregation"
     }
   ],
-  "generated_at_utc": "2026-08-04T23:16:17.437561+00:00",
+  "generated_at_utc": "2026-08-04T22:21:27.464511+00:00",
   "inet_library": "out/clang-release/src/libINET.so",
-  "inet_library_sha256": "767fb4ee4bb9a189a603ea93127872e1d1a7c6f6d4ad17c0301bca1315d5ff45",
+  "inet_library_sha256": "a9abbcf017e844d56457e47afa00ffd680909d52e865dd9f2d9020d06e70843b",
   "repository_revision": "14416be81e1af70178aafdf51927a3c919e1e827",
-  "session_id": "20260804T231457Z",
+  "session_id": "20260804T222120Z",
   "suite": "n",
   "suite_descriptor": {
     "path": "examples/ieee80211/analysis/suites/n.json",

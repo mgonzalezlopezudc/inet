@@ -1,0 +1,64 @@
+%description:
+Test IEEE 802.11 HT40 primary/secondary channel geometry and HT Operation offsets.
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211HtVhtMgmtElements.h"
+
+%global:
+using namespace inet;
+using namespace inet::physicallayer;
+using namespace inet::ieee80211;
+using namespace inet::units::values;
+
+%activity:
+const auto *band = Ieee80211CompliantBands::getBand("2.4 GHz");
+Ieee80211Channel secondaryAbove(band, 0, IEEE80211_SECONDARY_CHANNEL_ABOVE);
+Ieee80211Channel secondaryBelow(band, 4, IEEE80211_SECONDARY_CHANNEL_BELOW);
+
+ASSERT(secondaryAbove.getCenterFrequency() == MHz(2412));
+ASSERT(secondaryAbove.getSecondaryCenterFrequency() == MHz(2432));
+ASSERT(secondaryAbove.getBondedCenterFrequency() == MHz(2422));
+ASSERT(secondaryBelow.getCenterFrequency() == MHz(2432));
+ASSERT(secondaryBelow.getSecondaryCenterFrequency() == MHz(2412));
+ASSERT(secondaryBelow.getBondedCenterFrequency() == MHz(2422));
+
+ASSERT(Ieee80211Channel::parseSecondaryChannelOffset("none") == IEEE80211_SECONDARY_CHANNEL_NONE);
+ASSERT(Ieee80211Channel::parseSecondaryChannelOffset("above") == IEEE80211_SECONDARY_CHANNEL_ABOVE);
+ASSERT(Ieee80211Channel::parseSecondaryChannelOffset("below") == IEEE80211_SECONDARY_CHANNEL_BELOW);
+bool rejectedReservedOffsetText = false;
+try {
+    Ieee80211Channel::parseSecondaryChannelOffset("reserved");
+}
+catch (const cRuntimeError&) {
+    rejectedReservedOffsetText = true;
+}
+ASSERT(rejectedReservedOffsetText);
+bool rejectedReservedOffsetValue = false;
+try {
+    Ieee80211Channel(band, 0, static_cast<Ieee80211SecondaryChannelOffset>(2));
+}
+catch (const cRuntimeError&) {
+    rejectedReservedOffsetValue = true;
+}
+ASSERT(rejectedReservedOffsetValue);
+
+for (int offset : {int(IEEE80211_SECONDARY_CHANNEL_ABOVE), int(IEEE80211_SECONDARY_CHANNEL_BELOW)}) {
+    Ieee80211HtOperation operation;
+    operation.primaryChannel = offset == IEEE80211_SECONDARY_CHANNEL_ABOVE ? 1 : 5;
+    operation.secondaryChannelOffset = offset;
+    operation.operatingChannelWidth = MHz(40);
+    auto element = makeHtOperationElement(operation);
+    ASSERT(element.primaryChannel == operation.primaryChannel);
+    ASSERT(element.secondaryChannelOffset == offset);
+    ASSERT(element.staChannelWidth40MHz);
+    auto decoded = makeHtOperation(element);
+    ASSERT(decoded.primaryChannel == operation.primaryChannel);
+    ASSERT(decoded.secondaryChannelOffset == operation.secondaryChannelOffset);
+    ASSERT(decoded.operatingChannelWidth == MHz(40));
+}
+EV << "HT40 secondary-channel geometry and HT Operation offsets passed.\n";
+
+%contains: stdout
+HT40 secondary-channel geometry and HT Operation offsets passed.

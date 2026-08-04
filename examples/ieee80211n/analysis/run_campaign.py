@@ -9,6 +9,7 @@ from pathlib import Path
 ANALYSIS_ROOT = Path(__file__).resolve().parent
 REPOSITORY_ROOT = ANALYSIS_ROOT.parents[2]
 AX_ANALYSIS_ROOT = REPOSITORY_ROOT / "examples" / "ieee80211ax" / "analysis"
+DEFAULT_MANIFEST = ANALYSIS_ROOT / "experiments.json"
 
 if str(AX_ANALYSIS_ROOT) not in sys.path:
     sys.path.insert(0, str(AX_ANALYSIS_ROOT))
@@ -16,4 +17,6 @@ if str(AX_ANALYSIS_ROOT) not in sys.path:
 from run_campaign import main
 
 if __name__ == "__main__":
+    if "--manifest" not in sys.argv[1:]:
+        sys.argv.extend(("--manifest", str(DEFAULT_MANIFEST)))
     main()

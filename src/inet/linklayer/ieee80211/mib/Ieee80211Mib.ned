@@ -24,6 +24,9 @@ simple Ieee80211Mib extends SimpleModule
         string bssBasicRateCodes = default(""); // Space-separated 500-kbit/s codes; empty selects the PHY mandatory legacy rates
         bool vhtLdpc = default(false); // Advertises and enables VHT LDPC when the peer also supports it
         bool htLdpc = default(false); // Advertises and enables HT LDPC when the peer also supports it
+        string htSecondaryChannelOffset @enum("none", "above", "below") = default("none"); // HT40 secondary channel relative to the primary channel
+        int htMaxMcs = default(7); // Maximum HT MCS advertised for each enabled spatial stream (0..7)
+        bool htShortGi40 = default(false); // Advertises HT short guard interval support for 40 MHz operation
         int htMaxNss = default(4); // Maximum HT spatial streams advertised by this MIB (1..4)
         int htProtectionMode = default(0); // HT Protection: 0=no protection, 1=nonmember, 2=20 MHz, 3=non-HT mixed
         // HE features are opt-in so existing configurations retain BCC and
@@ -49,6 +52,7 @@ simple Ieee80211Mib extends SimpleModule
         int heBeamformeeSts20Mhz = default(0);
         int heBeamformeeStsAbove20Mhz = default(0);
         int heFeedbackMode = default(0); // 0=None, 1=SU, 2=MU, 3=Both
+        int heMaxMcs = default(11); // Maximum HE MCS advertised for each enabled spatial stream (7, 9, or 11)
         int heMaxNss = default(8); // Maximum HE spatial streams supported by receiver/transmitter
         // EHT features are packet-level capability inputs for 802.11be negotiation.
         bool ehtLdpc = default(true); // Advertises and enables EHT LDPC when the peer also supports it
@@ -70,8 +74,11 @@ simple Ieee80211Mib extends SimpleModule
         int ehtDisabledSubchannelBitmap = default(0); // EHT Operation disabled 20 MHz subchannel bitmap
         int ehtBasicMcsNss = default(0); // Basic EHT-MCS/NSS set advertised to peers
         bool ehtMcs15Disabled = default(false); // EHT Operation MCS 15 Disable state advertised by an AP
+        int vhtMaxMcs = default(9); // Maximum VHT MCS advertised for each enabled spatial stream (7, 8, or 9)
         int vhtMaxNss = default(8); // Maximum VHT spatial streams advertised by this MIB
         int vhtMaxAmpduLengthExponent = default(7); // VHT maximum A-MPDU-length exponent advertised to peers
+        bool vhtShortGi80 = default(false); // Advertises VHT short guard interval support for 80 MHz operation
+        bool vhtShortGi160 = default(false); // Advertises VHT short guard interval support for 160 MHz operation
         bool vhtBeamforming = default(false); // Enables VHT transmit beamforming capability negotiation
         bool vhtMuMimo = default(false); // Enables VHT multi-user MIMO capability negotiation
         bool vhtSuBeamformer = default(false);

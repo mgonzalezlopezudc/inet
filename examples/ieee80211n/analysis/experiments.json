@@ -1,5 +1,6 @@
 {
   "default_repetitions": 5,
+  "station_count": 3,
   "evidence_contracts": {
     "frame_aggregation": [
       {
@@ -139,9 +140,9 @@
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 0.9},
       "conditions": [
-        {"label": "Single Stream (MCS 7)", "config": "SingleStreamMcs7"},
-        {"label": "Dual Stream (MCS 15)", "config": "DualStreamMcs15"},
-        {"label": "Quad Stream (MCS 31)", "config": "QuadStreamMcs31"}
+        {"label": "Single Stream (MCS 1)", "config": "SingleStreamMcs1"},
+        {"label": "Dual Stream (MCS 9)", "config": "DualStreamMcs9"},
+        {"label": "Quad Stream (MCS 25)", "config": "QuadStreamMcs25"}
       ]
     },
     "preamble_modes": {

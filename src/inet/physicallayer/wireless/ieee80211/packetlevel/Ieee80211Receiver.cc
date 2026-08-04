@@ -990,7 +990,7 @@ void Ieee80211Receiver::setBand(const IIeee80211Band *band)
 {
     if (this->band != band) {
         if (channel != nullptr)
-            setChannel(new Ieee80211Channel(band, channel->getChannelNumber()));
+            setChannel(new Ieee80211Channel(band, channel->getChannelNumber(), channel->getSecondaryChannelOffset()));
         else
             this->band = band;
     }
@@ -999,7 +999,10 @@ void Ieee80211Receiver::setBand(const IIeee80211Band *band)
 void Ieee80211Receiver::setChannel(const Ieee80211Channel *channel)
 {
     if (this->channel != channel) {
-        auto centerFrequency = channel->getCenterFrequency();
+        // IEEE Std 802.11-2024, 19.3.15.4 and 19.3.19.6.5: HT40 listening
+        // spans both 20 MHz channels around their bonded center.
+        auto centerFrequency = channel->getSecondaryChannelOffset() == IEEE80211_SECONDARY_CHANNEL_NONE ?
+                channel->getCenterFrequency() : channel->getBondedCenterFrequency();
         delete this->channel;
         this->channel = channel;
         this->band = channel->getBand();
@@ -1010,7 +1013,8 @@ void Ieee80211Receiver::setChannel(const Ieee80211Channel *channel)
 void Ieee80211Receiver::setChannelNumber(int channelNumber)
 {
     if (channel == nullptr || channelNumber != channel->getChannelNumber())
-        setChannel(new Ieee80211Channel(band, channelNumber));
+        setChannel(new Ieee80211Channel(band, channelNumber, channel == nullptr ?
+                IEEE80211_SECONDARY_CHANNEL_NONE : channel->getSecondaryChannelOffset()));
 }
 
 } // namespace physicallayer

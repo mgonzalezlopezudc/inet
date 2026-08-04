@@ -509,6 +509,16 @@ def diagnostic_run(group: dict[str, Any]) -> int | None:
     return None if selected is None else int(selected)
 
 
+def station_count_overrides(manifest: dict[str, Any]) -> tuple[str, ...]:
+    """Return the campaign override declared for the example STA count."""
+    station_count = manifest.get("station_count")
+    if station_count is None:
+        return ()
+    if not isinstance(station_count, int) or station_count < 1:
+        raise ValueError("station_count must be a positive integer")
+    return (f"--**.numHosts={station_count}",)
+
+
 def build_command(
     ini: Path,
     result_dir: Path,
@@ -586,6 +596,7 @@ def collect_jobs(
             selected_configs,
             pcap_run,
             pcap_interface_patterns,
+            station_count_overrides(manifest),
         )
         selected_diagnostic_run = diagnostic_run(group)
         for job in group_jobs:

@@ -14,13 +14,14 @@
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 #include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211VhtPacketRadio.h"
 #include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211HePacketRadio.h"
+#include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211CcaProvider.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
 
 namespace inet {
 namespace physicallayer {
 
-class INET_API Ieee80211Radio : public FlatRadioBase, public IIeee80211ModeSetProvider, public IIeee80211VhtPacketRadio, public IIeee80211HePacketRadio
+class INET_API Ieee80211Radio : public FlatRadioBase, public IIeee80211ModeSetProvider, public IIeee80211VhtPacketRadio, public IIeee80211HePacketRadio, public IIeee80211CcaProvider
 {
   public:
     virtual int getVhtAntennaCount() const override;
@@ -50,6 +51,7 @@ class INET_API Ieee80211Radio : public FlatRadioBase, public IIeee80211ModeSetPr
 
   protected:
     Ieee80211Primary80ChannelPosition primary80ChannelPosition = Ieee80211Primary80ChannelPosition::UNSPECIFIED;
+    Ieee80211SecondaryChannelOffset htSecondaryChannelOffset = IEEE80211_SECONDARY_CHANNEL_NONE;
     FcsMode fcsMode = FCS_MODE_UNDEFINED;
     const Ieee80211ModeSet *modeSet = nullptr;
     const IIeee80211Band *band = nullptr;
@@ -60,9 +62,13 @@ class INET_API Ieee80211Radio : public FlatRadioBase, public IIeee80211ModeSetPr
     int pendingChannelNumber = -1;
     Ieee80211VhtMuRxSelection vhtMuRxSelection;
     uint8_t heBssColor = 0;
+    std::unique_ptr<Ieee80211CcaSnapshot> ccaSnapshot = std::make_unique<Ieee80211CcaSnapshot>();
 
   protected:
     virtual void initialize(int stage) override;
+    virtual void updateTransceiverState() override;
+    virtual void updateCcaState();
+    virtual bool computeIsBandBusy(Hz centerFrequency) const;
 
     virtual void handleUpperCommand(cMessage *message) override;
 
@@ -86,6 +92,7 @@ class INET_API Ieee80211Radio : public FlatRadioBase, public IIeee80211ModeSetPr
     virtual Ieee80211Primary80ChannelPosition getPrimary80ChannelPosition() const override { return primary80ChannelPosition; }
     virtual Hz getChannelWidth() const override;
     virtual Hz getModeBandwidth() const override;
+    virtual const Ieee80211CcaSnapshot& getCcaSnapshot() const override { return *ccaSnapshot; }
 
     virtual void setModeSet(const Ieee80211ModeSet *modeSet);
     virtual void setModeSetAndMode(const Ieee80211ModeSet *modeSet, const IIeee80211Mode *mode);

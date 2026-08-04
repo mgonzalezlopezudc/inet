@@ -485,19 +485,42 @@ void Hcf::channelGranted(IChannelAccess *channelAccess)
         }
         AccessCategory ac = edcaf->getAccessCategory();
         EV_DETAIL << "Channel access granted to the " << printAccessCategory(ac) << " queue" << std::endl;
-        // IEEE Std 802.11-2024, 10.23.2.3 and 10.23.2.4: an EDCAF whose
-        // backoff reaches zero obtains an EDCA TXOP for its primary AC.
-        edcaf->getTxopProcedure()->startTxop(ac);
         auto internallyCollidedEdcafs = edca->getInternallyCollidedEdcafs();
         if (internallyCollidedEdcafs.size() > 0) {
             EV_INFO << "Internal collision happened with the following queues:" << std::endl;
             handleInternalCollision(internallyCollidedEdcafs);
             emit(edcaCollisionDetectedSignal, (unsigned long)internallyCollidedEdcafs.size());
         }
+        if (shouldRestartHt40ChannelAccess(edcaf)) {
+            edcaf->restartChannelAccess(this);
+            return;
+        }
+        // IEEE Std 802.11-2024, 10.23.2.3 and 10.23.2.4: an EDCAF whose
+        // backoff reaches zero obtains an EDCA TXOP for its primary AC.
+        edcaf->getTxopProcedure()->startTxop(ac);
         startFrameSequence(ac);
     }
     else
         throw cRuntimeError("Channel access granted but channel owner not found!");
+}
+
+bool Hcf::shouldRestartHt40ChannelAccess(Edcaf *edcaf)
+{
+    auto packet = edcaf->getInProgressFrames()->getFrameToTransmit();
+    if (packet == nullptr)
+        return false;
+    auto header = packet->peekAtFront<Ieee80211MacHeader>();
+    auto modeReq = packet->findTag<Ieee80211ModeReq>();
+    auto mode = modeReq == nullptr ? rateSelection->computeMode(packet, header, edcaf->getTxopProcedure()) : modeReq->getMode();
+    setFrameMode(packet, header, mode);
+    bool ht40 = modeSet != nullptr && modeSet->getPhyFamily(mode) == Ieee80211PhyFamily::HT &&
+            mode->getDataMode()->getBandwidth() == MHz(40);
+    if (!ht40)
+        return false;
+    // IEEE Std 802.11-2024, 11.15.9: 2.4 GHz HT40 EDCA requires secondary
+    // CCA idle throughout the DIFS immediately before backoff expiration.
+    simtime_t difs = modeSet->getSifsTime() + 2 * modeSet->getSlotTime();
+    return !rx->isSecondaryChannelIdleFor(difs);
 }
 
 FrameSequenceContext *Hcf::buildContext(AccessCategory ac)

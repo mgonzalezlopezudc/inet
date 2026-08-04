@@ -84,6 +84,7 @@ def collect_campaign_jobs(
     selected_configs: set[str] | None = None,
     pcap_run: int | None = None,
     pcap_interface_patterns: Iterable[str] = (),
+    global_config_overrides: Iterable[str] = (),
 ) -> list[CampaignJob]:
     group_names = (
         sorted(manifest["groups"])
@@ -143,7 +144,10 @@ def collect_campaign_jobs(
                             if run == pcap_run
                             else ()
                         ),
-                        entry.get("command_overrides", ()),
+                        (
+                            *global_config_overrides,
+                            *entry.get("command_overrides", ()),
+                        ),
                     ),
                 ))
     return jobs

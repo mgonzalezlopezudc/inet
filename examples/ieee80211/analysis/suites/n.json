@@ -40,7 +40,7 @@
     "mimo_spatial_streams": {
       "scalar_vector_group": "mimo_spatial_streams",
       "ini": "mimo_spatial_streams/omnetpp.ini",
-      "configurations": ["SingleStreamMcs7", "DualStreamMcs15", "QuadStreamMcs31"],
+      "configurations": ["SingleStreamMcs1", "DualStreamMcs9", "QuadStreamMcs25"],
       "phy_profiles": ["ht"],
       "feature_plugins": ["mimo"]
     },

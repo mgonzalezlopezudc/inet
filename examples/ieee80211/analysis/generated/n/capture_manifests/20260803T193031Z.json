@@ -1,0 +1,442 @@
+{
+  "analysis_script_sha256": "fdfeeb7c772ec8d4eb9350abfa562a1157d17cba3ecdf9094853c0e918408e20",
+  "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
+  "capture_source_diff_sha256": "436ac8d01331ca17659e46d4fd8a957f8029ba463a0c8a657148ee6fdcd9ee6f",
+  "entries": [
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 866821,
+            "duration_seconds": 0.69961,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.899668,
+            "file_size_bytes": 991664,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 2803,
+            "snapshot_length": null,
+            "start_seconds": 0.200058,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211n/block_ack/results/20260803T193031Z/StandardAck/StandardAck-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "d2c775d4530a6f853c161d4a88074be5c22363a6a5a45cdab1133b820c3a6592",
+          "size_bytes": 991664
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 866821,
+            "duration_seconds": 0.69961,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.899668,
+            "file_size_bytes": 991672,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 2803,
+            "snapshot_length": null,
+            "start_seconds": 0.200058,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211n/block_ack/results/20260803T193031Z/StandardAck/StandardAck-#0SingleBssNetwork.host[0].wlan[0].pcap",
+          "sha256": "ca5a1ce6f99dc4d3d2d6b40003af15a8148b95cedc0a848a43c70eaae7a84953",
+          "size_bytes": 991672
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 866821,
+            "duration_seconds": 0.69961,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.899668,
+            "file_size_bytes": 991672,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 2803,
+            "snapshot_length": null,
+            "start_seconds": 0.200058,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211n/block_ack/results/20260803T193031Z/StandardAck/StandardAck-#0SingleBssNetwork.host[1].wlan[0].pcap",
+          "sha256": "8ccbdb68e55b77189e44044f6effc5007d8125bfdcaa0dec9c7b2dbced09bbb5",
+          "size_bytes": 991672
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "StandardAck",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211n/block_ack/omnetpp.ini",
+      "ini_sha256": "5f90a43ba1f45e846328566c94e5b225a77a404252da8771c888f1d414f60c01",
+      "run_number": 0,
+      "scalar": {
+        "configname": "StandardAck",
+        "path": "examples/ieee80211n/block_ack/results/20260803T193031Z/StandardAck/StandardAck-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "c9bfc142a99ae74179938524fabcaa319d1e04aea2eddd63cdc912bda7e1c4cf"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "block_ack"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 1023317,
+            "duration_seconds": 0.69987,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.899928,
+            "file_size_bytes": 1190272,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 3749,
+            "snapshot_length": null,
+            "start_seconds": 0.200058,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211n/block_ack/results/20260803T193031Z/ImmediateBlockAck/ImmediateBlockAck-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "48186f17937253309dc0dd753945c52e1722d5cb976bcdfda0cbec24d42ee18e",
+          "size_bytes": 1190272
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 1023317,
+            "duration_seconds": 0.69987,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.899928,
+            "file_size_bytes": 1190280,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 3749,
+            "snapshot_length": null,
+            "start_seconds": 0.200058,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211n/block_ack/results/20260803T193031Z/ImmediateBlockAck/ImmediateBlockAck-#0SingleBssNetwork.host[0].wlan[0].pcap",
+          "sha256": "60bea1e057f7a7867377a636eda54abedf3abbdbc7e2e8738768c62be4d204fc",
+          "size_bytes": 1190280
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 1023317,
+            "duration_seconds": 0.69987,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.899928,
+            "file_size_bytes": 1190280,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 3749,
+            "snapshot_length": null,
+            "start_seconds": 0.200058,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211n/block_ack/results/20260803T193031Z/ImmediateBlockAck/ImmediateBlockAck-#0SingleBssNetwork.host[1].wlan[0].pcap",
+          "sha256": "faeebdb0a56eaa4f7e166b82450b8ee600f3fbd0b356e37700b963624bdf9dfb",
+          "size_bytes": 1190280
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "ImmediateBlockAck",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211n/block_ack/omnetpp.ini",
+      "ini_sha256": "5f90a43ba1f45e846328566c94e5b225a77a404252da8771c888f1d414f60c01",
+      "run_number": 0,
+      "scalar": {
+        "configname": "ImmediateBlockAck",
+        "path": "examples/ieee80211n/block_ack/results/20260803T193031Z/ImmediateBlockAck/ImmediateBlockAck-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "050cef4799b18ed4c1ae468dfba719277b0546c9634d1eccf700d39cff84d98f"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "block_ack"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 848123,
+            "duration_seconds": 0.69955,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.899608,
+            "file_size_bytes": 937480,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1971,
+            "snapshot_length": null,
+            "start_seconds": 0.200058,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211n/block_ack/results/20260803T193031Z/CompressedBlockAck/CompressedBlockAck-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "9127b75c7e7c83d20c37504c9247eff33282917072e411aba4637c52dcd7a82b",
+          "size_bytes": 937480
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 848123,
+            "duration_seconds": 0.69955,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.899608,
+            "file_size_bytes": 937488,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1971,
+            "snapshot_length": null,
+            "start_seconds": 0.200058,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211n/block_ack/results/20260803T193031Z/CompressedBlockAck/CompressedBlockAck-#0SingleBssNetwork.host[0].wlan[0].pcap",
+          "sha256": "e975c60e8147a05e7ee64a6aec6a0a1f9b24ad93861ff2d3623728b3f5b78c4a",
+          "size_bytes": 937488
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 848123,
+            "duration_seconds": 0.69955,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.899608,
+            "file_size_bytes": 937488,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1971,
+            "snapshot_length": null,
+            "start_seconds": 0.200058,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211n/block_ack/results/20260803T193031Z/CompressedBlockAck/CompressedBlockAck-#0SingleBssNetwork.host[1].wlan[0].pcap",
+          "sha256": "3465d793cec5d0f97df316c9117f7fa7fcb08ff124000a19ee02f0152d4e04a5",
+          "size_bytes": 937488
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "CompressedBlockAck",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211n/block_ack/omnetpp.ini",
+      "ini_sha256": "5f90a43ba1f45e846328566c94e5b225a77a404252da8771c888f1d414f60c01",
+      "run_number": 0,
+      "scalar": {
+        "configname": "CompressedBlockAck",
+        "path": "examples/ieee80211n/block_ack/results/20260803T193031Z/CompressedBlockAck/CompressedBlockAck-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "df8b8ff7f52e6ed5fa458aae6d95c817d6d32324c4dd28496dbe38e079b1ba2c"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "block_ack"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 848173,
+            "duration_seconds": 0.699706,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.899764,
+            "file_size_bytes": 937576,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1972,
+            "snapshot_length": null,
+            "start_seconds": 0.200058,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211n/block_ack/results/20260803T193031Z/HtImplicitBlockAck/HtImplicitBlockAck-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "6ead4dec403580d77e7f5709a31af2e218e6ac57c14c35c5fd1acc5189d64609",
+          "size_bytes": 937576
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 848173,
+            "duration_seconds": 0.699706,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.899764,
+            "file_size_bytes": 937584,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1972,
+            "snapshot_length": null,
+            "start_seconds": 0.200058,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211n/block_ack/results/20260803T193031Z/HtImplicitBlockAck/HtImplicitBlockAck-#0SingleBssNetwork.host[0].wlan[0].pcap",
+          "sha256": "7b0ab2bd881fb287e1c8274925b8eade0edfc0587b0e2f37654f9c866d925055",
+          "size_bytes": 937584
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 848173,
+            "duration_seconds": 0.699706,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.899764,
+            "file_size_bytes": 937584,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1972,
+            "snapshot_length": null,
+            "start_seconds": 0.200058,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211n/block_ack/results/20260803T193031Z/HtImplicitBlockAck/HtImplicitBlockAck-#0SingleBssNetwork.host[1].wlan[0].pcap",
+          "sha256": "03dc4994670f4bfc09faaf22484aa00f3b1b9eeb002f2dde2e5abe2dda06ff84",
+          "size_bytes": 937584
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "HtImplicitBlockAck",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211n/block_ack/omnetpp.ini",
+      "ini_sha256": "5f90a43ba1f45e846328566c94e5b225a77a404252da8771c888f1d414f60c01",
+      "run_number": 0,
+      "scalar": {
+        "configname": "HtImplicitBlockAck",
+        "path": "examples/ieee80211n/block_ack/results/20260803T193031Z/HtImplicitBlockAck/HtImplicitBlockAck-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "355e23cab8c5d47c78c02cb8d1ba7aaf2f64f29e62da50b862e89b1a3426a83c"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "block_ack"
+    }
+  ],
+  "generated_at_utc": "2026-08-03T19:30:34.991688+00:00",
+  "inet_library": "out/clang-release/src/libINET.so",
+  "inet_library_sha256": "3a6ec4dcc6d88e026ed513f704b40e60a291f81ed299517b5e2fcd94399f0bd0",
+  "repository_revision": "14416be81e1af70178aafdf51927a3c919e1e827",
+  "session_id": "20260803T193031Z",
+  "suite": "n",
+  "suite_descriptor": {
+    "path": "examples/ieee80211/analysis/suites/n.json",
+    "sha256": "b1ca59c8e06c8fe84d8a5c67723f8e9006f0c40e37101a7c042213d31f5d64e8"
+  },
+  "tshark_version": "TShark (Wireshark) 4.6.4."
+}
