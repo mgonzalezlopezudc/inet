@@ -1,0 +1,172 @@
+%description:
+Test IEEE 802.11 HT CCA sensitivity classification on primary and secondary 20 MHz channels.
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/physicallayer/wireless/common/analogmodel/scalar/ScalarReceptionAnalogModel.h"
+#include "inet/physicallayer/wireless/common/radio/packetlevel/Reception.h"
+#include "inet/physicallayer/wireless/common/signal/Interference.h"
+#include "inet/networklayer/common/NetworkInterface.h"
+
+%file: TestNetwork.ned
+
+import inet.networklayer.common.InterfaceTable;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211RadioMedium;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211Receiver;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadio;
+import inet.mobility.static.StationaryMobility;
+
+module TestReceiver extends Ieee80211Receiver
+{
+    parameters:
+        @class(TestReceiverModule);
+}
+
+module MockNic
+{
+    parameters:
+        @class(MockNicModule);
+    submodules:
+        radio: Ieee80211ScalarRadio {
+            receiver.typename = "TestReceiver";
+        }
+    connections allowunconnected:
+        radio.upperLayerOut --> radio.upperLayerIn;
+}
+
+network TestNetwork
+{
+    parameters:
+        @networkNode;
+    submodules:
+        test: Test;
+        interfaceTable: InterfaceTable;
+        radioMedium: Ieee80211RadioMedium;
+        mobility: StationaryMobility;
+}
+
+%inifile: omnetpp.ini
+
+[General]
+network = TestNetwork
+**.mobilityModule = "^.^.^.mobility"
+**.mobility.subjectModule = ""
+**.constraintAreaMinX = 0m
+**.constraintAreaMinY = 0m
+**.constraintAreaMinZ = 0m
+**.constraintAreaMaxX = 100m
+**.constraintAreaMaxY = 100m
+**.constraintAreaMaxZ = 0m
+**.opMode = "n(mixed-2.4Ghz)"
+**.bandName = "2.4 GHz"
+**.channelNumber = 0
+**.htSecondaryChannelOffset = "above"
+**.receiver.bandwidth = 40MHz
+**.receiver.centerFrequency = 2.422GHz
+**.receiver.energyDetection = -85dBm
+**.receiver.sensitivity = -85dBm
+**.receiver.snirThreshold = 4dB
+**.transmitter.bitrate = 13Mbps
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+class TestReceiverModule : public Ieee80211Receiver {
+  public:
+    bool checkListeningPossible(const IListening *listening, const IInterference *interference) const {
+        auto decision = computeListeningDecision(listening, interference);
+        bool busy = !decision->isListeningPossible();
+        delete decision;
+        return busy;
+    }
+};
+
+class MockNicModule : public NetworkInterface {
+  protected:
+    virtual void initialize(int stage) override {
+        if (stage == INITSTAGE_LOCAL) {
+            state = UP;
+            carrier = true;
+        }
+    }
+    virtual int numInitStages() const override { return 1; }
+};
+
+Define_Module(TestReceiverModule);
+Define_Module(MockNicModule);
+
+%activity:
+    auto nicType = cModuleType::find("MockNic");
+    ASSERT(nicType != nullptr);
+    auto nic = nicType->create("nic", getSystemModule());
+    nic->buildInside();
+    nic->callInitialize();
+
+    auto radio = check_and_cast<Ieee80211Radio *>(nic->getSubmodule("radio"));
+    auto receiver = check_and_cast<const TestReceiverModule *>(radio->getReceiver());
+    auto modeSet = Ieee80211ModeSet::getModeSet("n(mixed-2.4Ghz)");
+    auto ht20Mode = modeSet->getMode(Mbps(6.5), MHz(20), 1);
+    auto ht40Mode = modeSet->getMode(Mbps(13.5), MHz(40), 1);
+    auto legacyMode = Ieee80211ModeSet::getModeSet("a")->getFastestMode(MHz(20));
+    ASSERT(ht20Mode != nullptr);
+    ASSERT(ht40Mode != nullptr);
+    ASSERT(legacyMode != nullptr);
+
+    auto makeListening = [&](Hz centerFrequency) {
+        return receiver->getAnalogModel()->createListening(radio, SIMTIME_ZERO, SimTime(1, SIMTIME_MS),
+                Coord(), Coord(), centerFrequency, MHz(20));
+    };
+
+    auto check = [&](const char *name, const IIeee80211Mode *mode, Hz centerFrequency,
+            Hz signalBandwidth, double powerDbm, Hz listeningCenter, bool expectedBusy) {
+        const simtime_t duration = SimTime(1, SIMTIME_MS);
+        auto channel = radio->getChannel();
+        auto transmission = new Ieee80211Transmission(radio, nullptr, SIMTIME_ZERO, duration,
+                SimTime(100, SIMTIME_US), SimTime(100, SIMTIME_US), SimTime(800, SIMTIME_US), Coord(), Coord(), Quaternion(), Quaternion(),
+                nullptr, nullptr, nullptr, nullptr, nullptr, mode, channel);
+        auto analogModel = new ScalarReceptionAnalogModel(SimTime(100, SIMTIME_US), SimTime(100, SIMTIME_US), SimTime(800, SIMTIME_US),
+                centerFrequency, signalBandwidth, mW(math::dBmW2mW(powerDbm)));
+        auto reception = new Reception(radio, transmission, SIMTIME_ZERO, duration,
+                Coord(), Coord(), Quaternion(), Quaternion(), analogModel);
+        auto receptions = new std::vector<const IReception *> {reception};
+        auto interference = new Interference(nullptr, receptions);
+        auto listening = makeListening(listeningCenter);
+        bool busy = receiver->checkListeningPossible(listening, interference);
+        EV_INFO << name << ": " << (busy ? "BUSY" : "IDLE") << EV_ENDL;
+        ASSERT(busy == expectedBusy);
+        delete listening;
+        delete interference;
+        delete reception;
+        delete transmission;
+    };
+
+    auto primary = radio->getChannel()->getCenterFrequency();
+    auto secondary = radio->getChannel()->getSecondaryCenterFrequency();
+    auto bonded = radio->getChannel()->getBondedCenterFrequency();
+
+    // 20 MHz HT preamble sensitivity applies only to the primary channel.
+    check("HT20 primary at -82 dBm", ht20Mode, primary, MHz(20), -82, primary, true);
+    check("HT20 primary below -82 dBm", ht20Mode, primary, MHz(20), -82.01, primary, false);
+    check("HT20 secondary below energy threshold", ht20Mode, secondary, MHz(20), -82, secondary, false);
+
+    // 40 MHz HT signal level is evaluated over the PPDU bandwidth and marks both channels.
+    check("HT40 bonded at -79 dBm primary", ht40Mode, bonded, MHz(40), -79, primary, true);
+    check("HT40 bonded at -79 dBm secondary", ht40Mode, bonded, MHz(40), -79, secondary, true);
+    check("HT40 bonded below -79 dBm", ht40Mode, bonded, MHz(40), -79.01, primary, false);
+    check("shifted HT40 at -79 dBm", ht40Mode, MHz(2452), MHz(40), -79, secondary, false);
+
+    // Unsupported/unrecognized energy uses the per-20 MHz -62 dBm ED threshold.
+    check("energy at -62 dBm secondary", legacyMode, secondary, MHz(20), -62, secondary, true);
+    check("energy below -62 dBm secondary", legacyMode, secondary, MHz(20), -62.01, secondary, false);
+
+    EV << "HT CCA sensitivity classification passed.\n";
+
+%contains: stdout
+HT CCA sensitivity classification passed.

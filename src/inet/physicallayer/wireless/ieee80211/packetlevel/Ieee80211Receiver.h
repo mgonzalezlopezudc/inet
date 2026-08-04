@@ -43,6 +43,9 @@ class INET_API Ieee80211Receiver : public FlatReceiverBase
     W obssPdThreshold = W(NaN);
     W nonSrgObssPdThreshold = W(NaN);
     W srgObssPdThreshold = W(NaN);
+    W htCca20Sensitivity = W(NaN);
+    W htCca40Sensitivity = W(NaN);
+    W htCcaEnergyDetection = W(NaN);
     bool enableNonSrgSpatialReuse = true;
     bool enableSrgSpatialReuse = true;
     bool enableParameterizedSpatialReuse = false;
@@ -118,6 +121,8 @@ class INET_API Ieee80211Receiver : public FlatReceiverBase
     virtual bool computeIsReceptionAttempted(const IListening *listening, const IReception *reception,
             IRadioSignal::SignalPart part, const IInterference *interference) const override;
     virtual const IListeningDecision *computeListeningDecision(const IListening *listening, const IInterference *interference) const override;
+    virtual bool isHtCcaOperation() const;
+    virtual bool computeHtCcaBusy(const IListening *listening, const IInterference *interference) const;
     virtual bool computeIsReceptionSuccessful(const IListening *listening, const IReception *reception,
             IRadioSignal::SignalPart part, const IInterference *interference, const ISnir *snir) const override;
 

@@ -53,6 +53,8 @@
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IInterference.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/INoise.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/INarrowbandSignalAnalogModel.h"
+#include "inet/physicallayer/wireless/common/radio/packetlevel/BandListening.h"
+#include "inet/physicallayer/wireless/common/radio/packetlevel/ListeningDecision.h"
 #include "inet/physicallayer/wireless/common/radio/packetlevel/ReceptionResult.h"
 #include "inet/physicallayer/wireless/common/base/packetlevel/NarrowbandNoiseBase.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadioMedium.h"
@@ -486,6 +488,9 @@ void Ieee80211Receiver::initialize(int stage)
         obssPdThreshold = mW(math::dBmW2mW(par("obssPdThreshold")));
         nonSrgObssPdThreshold = mW(math::dBmW2mW(par("nonSrgObssPdThreshold")));
         srgObssPdThreshold = mW(math::dBmW2mW(par("srgObssPdThreshold")));
+        htCca20Sensitivity = mW(math::dBmW2mW(par("htCca20Sensitivity")));
+        htCca40Sensitivity = mW(math::dBmW2mW(par("htCca40Sensitivity")));
+        htCcaEnergyDetection = mW(math::dBmW2mW(par("htCcaEnergyDetection")));
         enableNonSrgSpatialReuse = par("enableNonSrgSpatialReuse");
         enableSrgSpatialReuse = par("enableSrgSpatialReuse");
         enableParameterizedSpatialReuse = par("enableParameterizedSpatialReuse");
@@ -691,7 +696,92 @@ const IListeningDecision *Ieee80211Receiver::computeListeningDecision(const ILis
             ccaReceptions.push_back(reception);
     }
     FilteredInterferenceView ccaInterference(interference->getBackgroundNoise(), &ccaReceptions);
+    if (isHtCcaOperation() && dynamic_cast<const BandListening *>(listening) != nullptr &&
+            dynamic_cast<const BandListening *>(listening)->getBandwidth() == MHz(20))
+        return new ListeningDecision(listening, computeHtCcaBusy(listening, &ccaInterference));
     return FlatReceiverBase::computeListeningDecision(listening, &ccaInterference);
+}
+
+bool Ieee80211Receiver::isHtCcaOperation() const
+{
+    return modeSet != nullptr && !strcmp(modeSet->getProfileName(), "n(mixed-2.4Ghz)") &&
+            channel != nullptr && (bandwidth == MHz(20) ||
+            (bandwidth == MHz(40) && channel->getSecondaryChannelOffset() != IEEE80211_SECONDARY_CHANNEL_NONE));
+}
+
+static bool isBandOverlapping(const BandListening *listening, const INarrowbandSignalAnalogModel *signal)
+{
+    auto listeningMin = listening->getCenterFrequency() - listening->getBandwidth() / 2;
+    auto listeningMax = listening->getCenterFrequency() + listening->getBandwidth() / 2;
+    auto signalMin = signal->getCenterFrequency() - signal->getBandwidth() / 2;
+    auto signalMax = signal->getCenterFrequency() + signal->getBandwidth() / 2;
+    return signalMin <= listeningMax && signalMax >= listeningMin;
+}
+
+static bool isPrimaryChannel(const Ieee80211Channel *channel, const BandListening *listening)
+{
+    return channel != nullptr && listening->getCenterFrequency() == channel->getCenterFrequency();
+}
+
+static bool isSecondaryChannel(const Ieee80211Channel *channel, const BandListening *listening)
+{
+    return channel != nullptr && channel->getSecondaryChannelOffset() != IEEE80211_SECONDARY_CHANNEL_NONE &&
+            listening->getCenterFrequency() == channel->getSecondaryCenterFrequency();
+}
+
+static bool isHt40SignalOccupyingChannel(const Ieee80211Channel *channel, const INarrowbandSignalAnalogModel *signal)
+{
+    return channel != nullptr && signal->getBandwidth() == MHz(40) &&
+            signal->getCenterFrequency() == channel->getBondedCenterFrequency();
+}
+
+bool Ieee80211Receiver::computeHtCcaBusy(const IListening *listening, const IInterference *interference) const
+{
+    const auto *bandListening = check_and_cast<const BandListening *>(listening);
+    const auto *mediumAnalogModel = listening->getReceiverRadio()->getMedium()->getAnalogModel();
+    const INoise *noise = mediumAnalogModel->computeNoise(listening, interference);
+    bool busy = noise->computeMaxPower(listening->getStartTime(), listening->getEndTime()) >= htCcaEnergyDetection;
+    delete noise;
+    if (busy)
+        return true;
+
+    const bool primary = isPrimaryChannel(channel, bandListening);
+    const bool secondary = isSecondaryChannel(channel, bandListening);
+    if (!primary && !secondary)
+        return false;
+
+    for (auto reception : *interference->getInterferingReceptions()) {
+        const auto *transmission = dynamic_cast<const Ieee80211Transmission *>(reception->getTransmission());
+        const auto *signal = dynamic_cast<const INarrowbandSignalAnalogModel *>(reception->getAnalogModel());
+        if (transmission == nullptr || transmission->getMode() == nullptr || signal == nullptr ||
+                !modeSet->containsMode(transmission->getMode()) || !isBandOverlapping(bandListening, signal))
+            continue;
+
+        const W signalPower = signal->computeMinPower(reception->getStartTime(), reception->getEndTime());
+        const auto family = modeSet->getPhyFamily(transmission->getMode());
+        const Hz signalBandwidth = transmission->getMode()->getDataMode()->getBandwidth();
+        if (family == Ieee80211PhyFamily::HT) {
+            // IEEE Std 802.11-2024, 19.3.19.6.4 and 19.3.19.6.5:
+            // a 20 MHz HT signal is detected on the primary channel at
+            // -82 dBm; a 40 MHz HT signal is detected on each occupied
+            // channel at -79 dBm. The comparison uses the received signal
+            // level over the PPDU bandwidth, not the power apportioned to a
+            // 20 MHz slice by the analog interference model.
+            if (signalBandwidth == MHz(40) && isHtCcaOperation() &&
+                    isHt40SignalOccupyingChannel(channel, signal) && signalPower >= htCca40Sensitivity)
+                return true;
+            if (signalBandwidth == MHz(20) && primary && signalPower >= htCca20Sensitivity)
+                return true;
+        }
+        else if (primary && (family == Ieee80211PhyFamily::OFDM || family == Ieee80211PhyFamily::ERP_OFDM) &&
+                signalPower >= htCca20Sensitivity) {
+            // Clause 19.3.19.6.3 delegates non-HT CCA to the OFDM/ERP-OFDM
+            // preamble-detection requirement, which uses the 20 MHz
+            // sensitivity threshold.
+            return true;
+        }
+    }
+    return false;
 }
 
 bool Ieee80211Receiver::computeIsReceptionSuccessful(const IListening *listening,
