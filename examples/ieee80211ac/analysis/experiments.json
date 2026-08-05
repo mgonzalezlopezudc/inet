@@ -92,7 +92,7 @@
       "walkthrough": "examples/ieee80211ac/wide_channels/walkthrough.md",
       "ini": "examples/ieee80211ac/wide_channels/omnetpp.ini",
       "expected_repetitions": 5,
-      "measurement": {"start": 0.3, "end": 0.9},
+      "measurement": {"start": 0.3, "end": 0.5},
       "conditions": [
         {"label": "VHT 20 MHz", "config": "Vht20MHz"},
         {"label": "VHT 40 MHz", "config": "Vht40MHz"},
@@ -104,7 +104,7 @@
       "walkthrough": "examples/ieee80211ac/vht_mcs_256qam/walkthrough.md",
       "ini": "examples/ieee80211ac/vht_mcs_256qam/omnetpp.ini",
       "expected_repetitions": 5,
-      "measurement": {"start": 0.3, "end": 0.9},
+      "measurement": {"start": 0.3, "end": 0.5},
       "conditions": [
         {"label": "HT MCS 7 Baseline", "config": "BaselineHtMcs7"},
         {"label": "VHT MCS 7", "config": "VhtMcs7"},
@@ -116,7 +116,7 @@
       "walkthrough": "examples/ieee80211ac/extended_ampdu/walkthrough.md",
       "ini": "examples/ieee80211ac/extended_ampdu/omnetpp.ini",
       "expected_repetitions": 5,
-      "measurement": {"start": 0.3, "end": 0.9},
+      "measurement": {"start": 0.3, "end": 0.5},
       "conditions": [
         {"label": "Standard HT A-MPDU Limit", "config": "StandardHtAmpduLimit"},
         {"label": "Extended VHT A-MPDU Limit", "config": "ExtendedVhtAmpduLimit"}
@@ -126,7 +126,7 @@
       "walkthrough": "examples/ieee80211ac/spatial_streams_8x8/walkthrough.md",
       "ini": "examples/ieee80211ac/spatial_streams_8x8/omnetpp.ini",
       "expected_repetitions": 5,
-      "measurement": {"start": 0.3, "end": 0.9},
+      "measurement": {"start": 0.3, "end": 0.5},
       "conditions": [
         {"label": "Single Stream (1x1)", "config": "SingleStreamVht"},
         {"label": "Four Streams (4x4)", "config": "FourStreamVht"},
@@ -147,7 +147,7 @@
       "walkthrough": "examples/ieee80211ac/short_gi_vht/walkthrough.md",
       "ini": "examples/ieee80211ac/short_gi_vht/omnetpp.ini",
       "expected_repetitions": 5,
-      "measurement": {"start": 0.3, "end": 0.9},
+      "measurement": {"start": 0.3, "end": 0.5},
       "conditions": [
         {"label": "VHT Long GI (800 ns)", "config": "VhtLongGI"},
         {"label": "VHT Short GI (400 ns)", "config": "VhtShortGI"}
@@ -157,7 +157,7 @@
       "walkthrough": "examples/ieee80211ac/dl_mu_mimo_baseline/walkthrough.md",
       "ini": "examples/ieee80211ac/dl_mu_mimo_baseline/omnetpp.ini",
       "expected_repetitions": 5,
-      "measurement": {"start": 0.3, "end": 0.9},
+      "measurement": {"start": 0.3, "end": 0.5},
       "conditions": [
         {"label": "Single-User Baseline", "config": "VhtSingleUserBaseline"},
         {"label": "DL MU-MIMO Two Users", "config": "VhtDlMuMimoTwoUsers"}

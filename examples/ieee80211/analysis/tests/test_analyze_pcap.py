@@ -173,7 +173,7 @@ class PcapMarkdownTest(unittest.TestCase):
     def test_extracts_acknowledged_sequences_from_compressed_block_ack_bitmap(self):
         result = SimpleNamespace(
             returncode=0,
-            stdout="42\t0.300100000\t0x0004\t4094\t05:00:00:00:00:00:00:00\n",
+            stdout="42\t0.300100000\t0a:aa:00:00:00:01\t10:00:00:00:00:00\t0x0004\t4094\t05:00:00:00:00:00:00:00\n",
             stderr="",
         )
         with patch("analyze_pcap.subprocess.run", return_value=result):
@@ -181,12 +181,48 @@ class PcapMarkdownTest(unittest.TestCase):
                 analyze_pcap.REPOSITORY_ROOT / "capture.pcapng"
             ])
         self.assertEqual(rows[0]["acknowledged_sequence_numbers"], [4094, 0])
+        self.assertEqual(rows[0]["origin_address"], "0a:aa:00:00:00:01")
+        self.assertEqual(rows[0]["destination_address"], "10:00:00:00:00:00")
+
+    def test_compressed_block_ack_tables_are_separated_by_group_by_address(self):
+        records = [
+            {
+                "frame_number": 2,
+                "simulation_time_s": 0.2,
+                "origin_address": "0a:aa:00:00:00:02",
+                "destination_address": "10:00:00:00:00:00",
+                "starting_sequence_number": 5,
+                "bitmap": "03:00:00:00:00:00:00:00",
+                "acknowledged_sequence_numbers": [5, 6],
+            },
+            {
+                "frame_number": 1,
+                "simulation_time_s": 0.1,
+                "origin_address": "0a:aa:00:00:00:01",
+                "destination_address": "10:00:00:00:00:00",
+                "starting_sequence_number": 1,
+                "bitmap": "01:00:00:00:00:00:00:00",
+                "acknowledged_sequence_numbers": [1],
+            },
+        ]
+        markdown_origin = compressed_block_ack_records_markdown(records, group_by="origin")
+        idx1 = markdown_origin.find("##### Origin address: 0a:aa:00:00:00:01")
+        idx2 = markdown_origin.find("##### Origin address: 0a:aa:00:00:00:02")
+        self.assertGreater(idx1, -1)
+        self.assertGreater(idx2, -1)
+        self.assertLess(idx1, idx2)
+        self.assertEqual(markdown_origin.count("|---:|---:|---:|---|---|"), 2)
+
+        markdown_dest = compressed_block_ack_records_markdown(records, group_by="destination")
+        self.assertIn("##### Destination address: 10:00:00:00:00:00", markdown_dest)
+        self.assertEqual(markdown_dest.count("|---:|---:|---:|---|---|"), 1)
 
     def test_compressed_block_ack_table_is_limited_to_100_rows(self):
         records = [
             {
                 "frame_number": frame_number,
                 "simulation_time_s": 0.3,
+                "destination_address": "10:00:00:00:00:00",
                 "starting_sequence_number": frame_number,
                 "bitmap": "01:00:00:00:00:00:00:00",
                 "acknowledged_sequence_numbers": [frame_number],

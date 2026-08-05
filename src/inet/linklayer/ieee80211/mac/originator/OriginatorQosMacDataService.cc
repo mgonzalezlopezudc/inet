@@ -110,15 +110,26 @@ std::vector<Packet *> *OriginatorQosMacDataService::extractFramesToTransmit(queu
     if (pendingQueue->isEmpty())
         return nullptr;
     else {
-//        if (msduRateLimiting)
-//            txRateLimitingIfNeeded();
         Packet *packet = nullptr;
-        if (aMsduAggregationPolicy)
-            packet = aMsduAggregateIfNeeded(pendingQueue);
-        if (!packet) {
-            packet = pendingQueue->dequeuePacket();
-            take(packet);
+        for (int i = 0; i < pendingQueue->getNumPackets(); i++) {
+            auto candidate = pendingQueue->getPacket(i);
+            auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(candidate->peekAtFront<Ieee80211MacHeader>());
+            if (dataHeader != nullptr && isOriginatorBlockAckAgreementPending(blockAckAgreementHandler, dataHeader->getReceiverAddress(), dataHeader->getTid())) {
+                EV_DETAIL << "Suppressing data frame extraction for receiver=" << dataHeader->getReceiverAddress()
+                          << " tid=" << (int)dataHeader->getTid() << " while ADDBA Request is pending\n";
+                continue;
+            }
+            if (aMsduAggregationPolicy && i == 0)
+                packet = aMsduAggregateIfNeeded(pendingQueue);
+            if (!packet) {
+                pendingQueue->removePacket(candidate);
+                take(candidate);
+                packet = candidate;
+            }
+            break;
         }
+        if (!packet)
+            return nullptr;
         // PS Defer Queueing
         if (sequenceNumberAssignment) {
             auto header = packet->removeAtFront<Ieee80211DataOrMgmtHeader>();

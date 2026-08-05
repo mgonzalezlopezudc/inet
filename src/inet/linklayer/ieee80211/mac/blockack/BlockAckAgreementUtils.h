@@ -22,6 +22,13 @@ inline bool hasActiveOriginatorBlockAckAgreement(IOriginatorBlockAckAgreementHan
     return agreement != nullptr && agreement->getIsAddbaResponseReceived();
 }
 
+inline bool isOriginatorBlockAckAgreementPending(IOriginatorBlockAckAgreementHandler *handler,
+        const MacAddress& receiverAddress, Tid tid)
+{
+    auto agreement = handler == nullptr ? nullptr : handler->getAgreement(receiverAddress, tid);
+    return agreement != nullptr && agreement->getIsAddbaRequestInProgress() && !agreement->getIsAddbaResponseReceived();
+}
+
 } // namespace ieee80211
 } // namespace inet
 

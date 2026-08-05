@@ -1,6 +1,6 @@
 {
   "_provenance": {
-    "generated_at_utc": "2026-08-05T21:35:25.633109+00:00",
+    "generated_at_utc": "2026-08-05T22:29:14.202049+00:00",
     "groups": {
       "block_ack": {
         "conditions": [
@@ -10,50 +10,50 @@
             "ini": "examples/ieee80211n/block_ack/omnetpp.ini",
             "label": "Standard ACK",
             "measurement": {
-              "end_s": 0.9,
+              "end_s": 0.5,
               "start_s": 0.3
             },
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/StandardAck/StandardAck-#0.sca",
-                "sha256": "ce9052024ec251895e0ab573bdfc173be1537a4ee77d0c91abe9c3d208fca4e2"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/StandardAck/StandardAck-#0.sca",
+                "sha256": "31b43d880f17f3a54e58cca64473dbcc43d4434d1ff90f891d903b11eb54a477"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/StandardAck/StandardAck-#0.vec",
-                "sha256": "a754c55c9ed57a2c44bedeb01ef92efd17111c7e0d0d671ea817f9e874145013"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/StandardAck/StandardAck-#0.vec",
+                "sha256": "ae1faeba795bda7ff3295249e501600632b995e564f6c12888440f6208ecee66"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/StandardAck/StandardAck-#1.sca",
-                "sha256": "6a185fec16006ad7933ca79a2535c93ab05b105a77d40f16549cf1ee44e3ee7b"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/StandardAck/StandardAck-#1.sca",
+                "sha256": "f7d44a623c1b79baa38f13e633528b7c1222ed0b677bdb8fefcf50961ce6fa50"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/StandardAck/StandardAck-#1.vec",
-                "sha256": "770b2705a3d185452ada22711601dec95fbc553ddd158c439d6c698a33477123"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/StandardAck/StandardAck-#1.vec",
+                "sha256": "097fba9146ea1ce79581db25a1c423d9014986a821fc9b18baa0d260b3a15aab"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/StandardAck/StandardAck-#2.sca",
-                "sha256": "f1e3330268c829bb232d822456028d6b84352d3238692ee9e8280a997e50554a"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/StandardAck/StandardAck-#2.sca",
+                "sha256": "72562d297db1459ad6104f1794b7dcd4eaeade55c53db1db994b7fafa5a54fae"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/StandardAck/StandardAck-#2.vec",
-                "sha256": "0fa0f14493bf659f61413451bb34474779550dd0a736910bd09ab1b57a9b7fa5"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/StandardAck/StandardAck-#2.vec",
+                "sha256": "d6a5ba204fd18fb561b730bf0763f3223c36737c8a9ea19cad480a6994ba6040"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/StandardAck/StandardAck-#3.sca",
-                "sha256": "bccc99a5fb62a021bf947c7d39db1e8cfba9f25fde3188caee121b111bad5298"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/StandardAck/StandardAck-#3.sca",
+                "sha256": "09eaf4a4724914bf115278c02a31f50b744bf2d8380fe7db6968df18bca652c4"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/StandardAck/StandardAck-#3.vec",
-                "sha256": "003ea42f73e430fd1b054b1fbea381c3ffe143381ff5dd494d390d02362e8360"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/StandardAck/StandardAck-#3.vec",
+                "sha256": "b5626d58eab19bee93ddae35817bff8b07ebf99b40d64c4c352a78b326739ae1"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/StandardAck/StandardAck-#4.sca",
-                "sha256": "37b3d3517891deadf88cf7ef00a586e4f2e54a8f50f9f5a1f1a231e53ecd7023"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/StandardAck/StandardAck-#4.sca",
+                "sha256": "5324c3b029fca4c9db95fe335e8668ba4ebbabdcb277089aaad9f3176682b202"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/StandardAck/StandardAck-#4.vec",
-                "sha256": "d4b83560042b1c7f87a466c7b29f68e74d9c2091b138c0eb533436ff6e649855"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/StandardAck/StandardAck-#4.vec",
+                "sha256": "05f5ad4b7f3ecae5c5ab3fcd415fff71048f0a798f9e95c0957ba48d8767bf21"
               }
             ]
           },
@@ -63,50 +63,50 @@
             "ini": "examples/ieee80211n/block_ack/omnetpp.ini",
             "label": "Immediate Block ACK",
             "measurement": {
-              "end_s": 0.9,
+              "end_s": 0.5,
               "start_s": 0.3
             },
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/ImmediateBlockAck/ImmediateBlockAck-#0.sca",
-                "sha256": "1a82a8c3a081d94dd741d291db559ef680502b1d264a762858f148de07141436"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/ImmediateBlockAck/ImmediateBlockAck-#0.sca",
+                "sha256": "13daac6e45dda9b2b044d66f6aa1048078b7eece75487a1202b53aae1e614631"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/ImmediateBlockAck/ImmediateBlockAck-#0.vec",
-                "sha256": "df0e4f993053bf6bff9ee65a14586b2a54fc32c29bc63c374cfb69c4384f6051"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/ImmediateBlockAck/ImmediateBlockAck-#0.vec",
+                "sha256": "3a70c27ef9f9c63fc8c23f13ed7e5943182025bb2985b6e844262969a819d30b"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/ImmediateBlockAck/ImmediateBlockAck-#1.sca",
-                "sha256": "d3c0cc6c633db254fc7c008c244db7b7f65a7a8f1d119ce65f7e5d15873e4089"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/ImmediateBlockAck/ImmediateBlockAck-#1.sca",
+                "sha256": "39e613908f96014e891119d3dc66c1957fe72614d992539edffcd3e79b72c6b8"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/ImmediateBlockAck/ImmediateBlockAck-#1.vec",
-                "sha256": "0913476a0434051f0c4f341c67b292908de9db7d6efd8873201dd55d2beeabc6"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/ImmediateBlockAck/ImmediateBlockAck-#1.vec",
+                "sha256": "d48cb7b5b4883b309fcd9e77e0848a90229f9a8d3826270e3386fa22e194cac6"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/ImmediateBlockAck/ImmediateBlockAck-#2.sca",
-                "sha256": "7be8b6c2de28c23c5b095a8c29ba7ae49c874a0a144ac0e9562b0e946430c34d"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/ImmediateBlockAck/ImmediateBlockAck-#2.sca",
+                "sha256": "6f38e473f14521081b43e8f0df7dd7dcdcbf2a960bd03429e98b5f4e8f82f00a"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/ImmediateBlockAck/ImmediateBlockAck-#2.vec",
-                "sha256": "43cb7b55c4f380ebdb31d1402a7dc4b9ae436849b78c7efac3233dd25b3d3d62"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/ImmediateBlockAck/ImmediateBlockAck-#2.vec",
+                "sha256": "224e349d7c4ae537010f1b2a4d4423e3907906ca6f1eb2cb5bf8d4d1b5f271b2"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/ImmediateBlockAck/ImmediateBlockAck-#3.sca",
-                "sha256": "f8d84644302f98c1c8ccaf81f4a78b3c3aa688ec81c27a3410500aa3084aaa82"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/ImmediateBlockAck/ImmediateBlockAck-#3.sca",
+                "sha256": "1cba78dbd8b41c133dac8549b81a5192fd88ed538567f21325bc6e81d7e18d6c"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/ImmediateBlockAck/ImmediateBlockAck-#3.vec",
-                "sha256": "d46e42936a2b640a232defeb131ae5adf9ef105ee000d7267461afde11f09db2"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/ImmediateBlockAck/ImmediateBlockAck-#3.vec",
+                "sha256": "2fdc37428aa8f019df5fa37f0a4081230a972d8009dddb66310a91e578516c71"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/ImmediateBlockAck/ImmediateBlockAck-#4.sca",
-                "sha256": "3d984d84b3281c3eb544addee7f0bc33bf5ffea78351adbbacaac730c2398514"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/ImmediateBlockAck/ImmediateBlockAck-#4.sca",
+                "sha256": "1418d2966eb31f730ec2bc44f7ac2004f524ca627e22d8297603ccb1371df5af"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/ImmediateBlockAck/ImmediateBlockAck-#4.vec",
-                "sha256": "d12488bcd20b45cd9b74b8eeed3ea7decca54ec0d24c1fc7d1b28798ab48e37f"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/ImmediateBlockAck/ImmediateBlockAck-#4.vec",
+                "sha256": "e95d85ce730693dfd1bd68be210c02951f3dd1f6349c0a18caf361d71a1a42a8"
               }
             ]
           },
@@ -116,50 +116,50 @@
             "ini": "examples/ieee80211n/block_ack/omnetpp.ini",
             "label": "Compressed Block ACK",
             "measurement": {
-              "end_s": 0.9,
+              "end_s": 0.5,
               "start_s": 0.3
             },
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/CompressedBlockAck/CompressedBlockAck-#0.sca",
-                "sha256": "79a7b4a865b5a5d32049733724f440a08d2c8002e1ec6f9e5c9d02e92054f58b"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/CompressedBlockAck/CompressedBlockAck-#0.sca",
+                "sha256": "36698debb3ce9763b86217c3abdbfe08d51af0e93e0aa77586d5d139747cbc06"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/CompressedBlockAck/CompressedBlockAck-#0.vec",
-                "sha256": "7cc3a0a864e69c0a1639ebc6b0040a7d327bab2195956fe57ed9f4f59705b8fa"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/CompressedBlockAck/CompressedBlockAck-#0.vec",
+                "sha256": "15bc1ca9d6e655e07647204f5ceb055bf99e639938c22c9ff5187e12035cc32c"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/CompressedBlockAck/CompressedBlockAck-#1.sca",
-                "sha256": "6d8e0b1ebbfc40cf3fc6455ab6f2380c74b2cb8e4223cad6d1034fec3e2a1604"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/CompressedBlockAck/CompressedBlockAck-#1.sca",
+                "sha256": "959c1053ee599176851c95d9320fd13be0f4771fa6ce4befc8268bab6475cea7"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/CompressedBlockAck/CompressedBlockAck-#1.vec",
-                "sha256": "80842cb7cbeae9bb418e08c1bf043b459d2f9d2f7531ff0e8818faa82c4b8c60"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/CompressedBlockAck/CompressedBlockAck-#1.vec",
+                "sha256": "9076cb12e7651a79117ee2f24ac0117f4e75b4007f450ac571049686bcf6f0f6"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/CompressedBlockAck/CompressedBlockAck-#2.sca",
-                "sha256": "65c904084fb32971f680ad343c92ca955949143fce60b8f47e656d288aec388f"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/CompressedBlockAck/CompressedBlockAck-#2.sca",
+                "sha256": "4f6603de8be0e80e98a6d5939938703e141ac3d6149303bfd4ea7fadd7d48510"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/CompressedBlockAck/CompressedBlockAck-#2.vec",
-                "sha256": "db0da4cd27d1acf77b50c4b8903d687779eb1eb2ad73bf5cf9a30cd4c95ad963"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/CompressedBlockAck/CompressedBlockAck-#2.vec",
+                "sha256": "6fa7b5e37232618d62fb953d752143570e9790c67cf96f7a2fc323079552068b"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/CompressedBlockAck/CompressedBlockAck-#3.sca",
-                "sha256": "b006b92ca19d61030a984d5a17f7e31835ba074ea0a3a3674bd104148b926b68"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/CompressedBlockAck/CompressedBlockAck-#3.sca",
+                "sha256": "9d0960a0fd1bd4c4b180104545ba590e5a8db0dd41c015f6018ff91d3e9903be"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/CompressedBlockAck/CompressedBlockAck-#3.vec",
-                "sha256": "a38eacb7ba74809eeb634aed9a35302fc81bef836a6e11471cbb5164e5069c2a"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/CompressedBlockAck/CompressedBlockAck-#3.vec",
+                "sha256": "a9ee4d9fb6e38afa29d2100b508789c652716128a83693e1cb2bdf620ad45b98"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/CompressedBlockAck/CompressedBlockAck-#4.sca",
-                "sha256": "57cb14d3480fa8de5946ddf2a4470a59cbf9975302d29490ec748cfa12963204"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/CompressedBlockAck/CompressedBlockAck-#4.sca",
+                "sha256": "dfbc4083fe456b0d145c3ed84cf6165a096712c6882680615a97106c3d108d53"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/CompressedBlockAck/CompressedBlockAck-#4.vec",
-                "sha256": "37200b389c0c7242434187e7cdb19e2ced8b610d486da1c2d3788072f8457fd5"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/CompressedBlockAck/CompressedBlockAck-#4.vec",
+                "sha256": "ea53a2b50f2787cc8fa5a73b38c5656aa56ab80ae8a04bff5d8b9c172da60bef"
               }
             ]
           },
@@ -169,89 +169,89 @@
             "ini": "examples/ieee80211n/block_ack/omnetpp.ini",
             "label": "HT Implicit Block ACK",
             "measurement": {
-              "end_s": 0.9,
+              "end_s": 0.5,
               "start_s": 0.3
             },
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/HtImplicitBlockAck/HtImplicitBlockAck-#0.sca",
-                "sha256": "96b14364bded8d68da7fb98b87056dfa4a81a596a297f49a34623be4ca4cdb11"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/HtImplicitBlockAck/HtImplicitBlockAck-#0.sca",
+                "sha256": "2c3837fc9c6fddcb2911ca7db240d4344cf5f53a803d086aff9feca50a94ef5e"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/HtImplicitBlockAck/HtImplicitBlockAck-#0.vec",
-                "sha256": "96d297f66196f1c10aee6cf2d26ddf4bb94bd84cae8b8f9e0e0e8ada33f3087d"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/HtImplicitBlockAck/HtImplicitBlockAck-#0.vec",
+                "sha256": "7b47c18fa37483209359394c82bb96e1d70025bd51fe2fe101ec5591942154ee"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/HtImplicitBlockAck/HtImplicitBlockAck-#1.sca",
-                "sha256": "2f5ba1d93bdd739dfc84f477e6fddd1b51d20809702c8c67172842ee8e284f9a"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/HtImplicitBlockAck/HtImplicitBlockAck-#1.sca",
+                "sha256": "aee6336bc32357aba10679ae6e72b9c62c22841b912a2bef64a23282c4780ebe"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/HtImplicitBlockAck/HtImplicitBlockAck-#1.vec",
-                "sha256": "89d8f16376612f775683f7bbb7b5d0709904fd82f56ceb8abaabf4a192523411"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/HtImplicitBlockAck/HtImplicitBlockAck-#1.vec",
+                "sha256": "9e4da4d50cd59d4825619b96b6b97d2cd957eaddbe0fae0151502ed4a4e49c45"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/HtImplicitBlockAck/HtImplicitBlockAck-#2.sca",
-                "sha256": "918764741bbe9f81d039c7a9867c77e27ec3a271042539681922cb16bd0cadae"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/HtImplicitBlockAck/HtImplicitBlockAck-#2.sca",
+                "sha256": "465d443a7932ce138dd46a557406c734d841675dea84e77b67acb6eae04798f1"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/HtImplicitBlockAck/HtImplicitBlockAck-#2.vec",
-                "sha256": "7bfdc2628c971c3ae11ee6f54eb65a4f085713606cfb639f7e5fabde15813798"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/HtImplicitBlockAck/HtImplicitBlockAck-#2.vec",
+                "sha256": "b8d4545815d38cf78a04d553f4d0811003e65ccb7e37c133066bd8935f2335d4"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/HtImplicitBlockAck/HtImplicitBlockAck-#3.sca",
-                "sha256": "8e636ecf02b6c5308b8c20b98a63aafe87e2bda6b325a9291bd9e7edee423180"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/HtImplicitBlockAck/HtImplicitBlockAck-#3.sca",
+                "sha256": "4f24dcc25412008ceb4d491605da378b9782789ddbbb8bd85846a18e4a1b9b38"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/HtImplicitBlockAck/HtImplicitBlockAck-#3.vec",
-                "sha256": "2f2d25a7a339bfaadaeed41dc66fda6e5cd49701b003d480a39cc0a4d862b971"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/HtImplicitBlockAck/HtImplicitBlockAck-#3.vec",
+                "sha256": "b5e96edd202cff7e9912952857ad3172ff12c9734eb1225f3f7700a8bdd5b727"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/HtImplicitBlockAck/HtImplicitBlockAck-#4.sca",
-                "sha256": "2a9dc1086caeaa7eafeaadc6f96141b1ff6756b51d6ddb4b8418052a1c6c121b"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/HtImplicitBlockAck/HtImplicitBlockAck-#4.sca",
+                "sha256": "4b81ff3a07d962636b461539a245dcc1fc0fa7e866378666d6e0e5fc9df90ace"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/HtImplicitBlockAck/HtImplicitBlockAck-#4.vec",
-                "sha256": "4df79038fee0de150af3a923185c5927265779a7841c30117daf18d5ee143bc2"
+                "path": "examples/ieee80211n/block_ack/results/20260805T215149Z/HtImplicitBlockAck/HtImplicitBlockAck-#4.vec",
+                "sha256": "530706e6baba78004ead45949f9785217a5532c80c9e7e057cba1a2c21bbba3c"
               }
             ]
           }
         ],
-        "session_id": "20260805T213040Z",
+        "session_id": "20260805T215149Z",
         "status": "PASS"
       }
     },
-    "repository_revision": "ed9c9ce14c9900d70117722e7ed40243f81d35f0",
-    "requested_session_id": "20260805T213040Z",
+    "repository_revision": "7b059be1af2e1107df9fa02462de4cb5335eb8e4",
+    "requested_session_id": "20260805T215149Z",
     "schema_version": 1
   },
   "block_ack": {
     "Compressed Block ACK": {
       "goodput_mbps": {
-        "ci95": 0.008884624336632946,
+        "ci95": 0.22280863851928692,
         "count": 5,
-        "mean": 5.219199999999999
+        "mean": 10.959999999999999
       }
     },
     "HT Implicit Block ACK": {
       "goodput_mbps": {
-        "ci95": 0.02265143643171637,
+        "ci95": 0.2773111369628629,
         "count": 5,
-        "mean": 5.193599999999999
+        "mean": 7.564
       }
     },
     "Immediate Block ACK": {
       "goodput_mbps": {
-        "ci95": 0.047845166302246486,
+        "ci95": 0.18366556868244419,
         "count": 5,
-        "mean": 10.326399999999998
+        "mean": 9.956
       }
     },
     "Standard ACK": {
       "goodput_mbps": {
-        "ci95": 0.02265143643171637,
+        "ci95": 0.058239203855803,
         "count": 5,
-        "mean": 5.161599999999999
+        "mean": 6.12
       }
     }
   }

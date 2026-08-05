@@ -17,6 +17,7 @@
 #include "inet/linklayer/ieee80211/mac/contract/IMsduAggregation.h"
 #include "inet/linklayer/ieee80211/mac/contract/IMsduAggregationPolicy.h"
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorMacDataService.h"
+#include "inet/linklayer/ieee80211/mac/blockack/BlockAckAgreementUtils.h"
 #include "inet/linklayer/ieee80211/mac/contract/ISequenceNumberAssignment.h"
 
 namespace inet {
@@ -39,6 +40,7 @@ class INET_API OriginatorQosMacDataService : public IOriginatorMacDataService, p
 //    PsDeferQueueing *psDeferQueueing = nullptr;
     IMpduAggregationPolicy *aMpduAggregationPolicy = nullptr;
     IMpduAggregation *aMpduAggregation = nullptr;
+    IOriginatorBlockAckAgreementHandler *blockAckAgreementHandler = nullptr;
 
   protected:
     virtual void initialize() override;
@@ -50,6 +52,7 @@ class INET_API OriginatorQosMacDataService : public IOriginatorMacDataService, p
   public:
     virtual ~OriginatorQosMacDataService();
 
+    virtual void setBlockAckAgreementHandler(IOriginatorBlockAckAgreementHandler *handler) { blockAckAgreementHandler = handler; }
     virtual void assignSequenceNumber(const Ptr<Ieee80211DataOrMgmtHeader>& header);
     virtual std::unique_ptr<ISequenceNumberAssignment> cloneSequenceNumberState() const;
     virtual void commitSequenceNumberState(const ISequenceNumberAssignment& state);

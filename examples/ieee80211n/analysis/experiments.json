@@ -92,7 +92,7 @@
       "walkthrough": "examples/ieee80211n/frame_aggregation/walkthrough.md",
       "ini": "examples/ieee80211n/frame_aggregation/omnetpp.ini",
       "expected_repetitions": 5,
-      "measurement": {"start": 0.3, "end": 0.9},
+      "measurement": {"start": 0.3, "end": 0.5},
       "conditions": [
         {"label": "No Aggregation", "config": "NoAggregation"},
         {"label": "A-MSDU Only", "config": "AMsduOnly"},
@@ -104,7 +104,7 @@
       "walkthrough": "examples/ieee80211n/block_ack/walkthrough.md",
       "ini": "examples/ieee80211n/block_ack/omnetpp.ini",
       "expected_repetitions": 5,
-      "measurement": {"start": 0.3, "end": 0.9},
+      "measurement": {"start": 0.3, "end": 0.5},
       "conditions": [
         {"label": "Standard ACK", "config": "StandardAck"},
         {"label": "Immediate Block ACK", "config": "ImmediateBlockAck"},
@@ -116,7 +116,7 @@
       "walkthrough": "examples/ieee80211n/channel_widths/walkthrough.md",
       "ini": "examples/ieee80211n/channel_widths/omnetpp.ini",
       "expected_repetitions": 5,
-      "measurement": {"start": 0.3, "end": 0.9},
+      "measurement": {"start": 0.3, "end": 0.5},
       "conditions": [
         {"label": "HT 20 MHz", "config": "Ht20MHz"},
         {"label": "HT 40 MHz", "config": "Ht40MHz"},
@@ -128,7 +128,7 @@
       "walkthrough": "examples/ieee80211n/guard_interval/walkthrough.md",
       "ini": "examples/ieee80211n/guard_interval/omnetpp.ini",
       "expected_repetitions": 5,
-      "measurement": {"start": 0.3, "end": 0.9},
+      "measurement": {"start": 0.3, "end": 0.5},
       "conditions": [
         {"label": "Long GI (800 ns)", "config": "LongGI800ns"},
         {"label": "Short GI (400 ns)", "config": "ShortGI400ns"},
@@ -140,7 +140,7 @@
       "walkthrough": "examples/ieee80211n/mimo_spatial_streams/walkthrough.md",
       "ini": "examples/ieee80211n/mimo_spatial_streams/omnetpp.ini",
       "expected_repetitions": 5,
-      "measurement": {"start": 0.3, "end": 0.9},
+      "measurement": {"start": 0.3, "end": 0.5},
       "conditions": [
         {"label": "Single Stream (MCS 1)", "config": "SingleStreamMcs1"},
         {"label": "Dual Stream (MCS 9)", "config": "DualStreamMcs9"},
@@ -151,7 +151,7 @@
       "walkthrough": "examples/ieee80211n/preamble_modes/walkthrough.md",
       "ini": "examples/ieee80211n/preamble_modes/omnetpp.ini",
       "expected_repetitions": 5,
-      "measurement": {"start": 0.3, "end": 0.9},
+      "measurement": {"start": 0.3, "end": 0.5},
       "conditions": [
         {"label": "HT Mixed-Mode", "config": "HtMixedMode"},
         {"label": "HT Greenfield", "config": "HtGreenfield"}

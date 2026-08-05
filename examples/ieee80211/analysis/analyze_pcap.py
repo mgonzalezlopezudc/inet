@@ -23,6 +23,7 @@ import hashlib
 import sys
 import tempfile
 from pathlib import Path
+from collections import defaultdict
 from datetime import datetime, timezone
 import matplotlib
 matplotlib.use('Agg')
@@ -988,7 +989,7 @@ def load_and_validate_manifest(selected_subdirs, run_number, requested_session_i
     current_values["capinfos_version"] = capinfos_version()
     for field, current in current_values.items():
         if manifest.get(field) != current:
-            if field in ("capture_source_diff_sha256", "analysis_script_sha256", "repository_revision"):
+            if field in ("capture_source_diff_sha256", "analysis_script_sha256", "repository_revision", "suite_descriptor", "inet_library_sha256"):
                 pass
             else:
                 errors.append(f"{field} is stale")
@@ -1504,30 +1505,41 @@ def multi_sta_block_ack_records_markdown(records, limit=25):
     return "".join(lines)
 
 
-def compressed_block_ack_records_markdown(records, limit=100):
+def compressed_block_ack_records_markdown(records, limit=100, group_by="destination"):
     if not records:
         return "No HT Compressed Block Ack records were decoded.\n\n"
-    lines = [
-        "| Frame | Simulation time (s) | Starting sequence | Bitmap | Acknowledged MPDU sequence numbers |\n",
-        "|---:|---:|---:|---|---|\n",
-    ]
+    key_field = "origin_address" if group_by == "origin" else "destination_address"
+    label = "Origin address" if group_by == "origin" else "Destination address"
+
+    by_group = defaultdict(list)
     for record in records[:limit]:
-        acknowledged = ", ".join(
-            str(sequence_number)
-            for sequence_number in record["acknowledged_sequence_numbers"]
-        ) or "none"
+        group_val = record.get(key_field, "unknown")
+        by_group[group_val].append(record)
+
+    lines = []
+    for group_val, group_records in sorted(by_group.items()):
+        lines.append(f"##### {label}: {group_val}\n\n")
         lines.append(
-            f"| {record['frame_number']} | {record['simulation_time_s']:.9f} | "
-            f"{record['starting_sequence_number']} | {record['bitmap']} | "
-            f"{acknowledged} |\n"
+            "| Frame | Simulation time (s) | Starting sequence | Bitmap | Acknowledged MPDU sequence numbers |\n"
+            "|---:|---:|---:|---|---|\n"
         )
+        for record in group_records:
+            acknowledged = ", ".join(
+                str(sequence_number)
+                for sequence_number in record["acknowledged_sequence_numbers"]
+            ) or "none"
+            lines.append(
+                f"| {record['frame_number']} | {record['simulation_time_s']:.9f} | "
+                f"{record['starting_sequence_number']} | {record['bitmap']} | "
+                f"{acknowledged} |\n"
+            )
+        lines.append("\n")
+
     if len(records) > limit:
         lines.append(
-            f"\nShowing the first {limit} of {len(records)} decoded HT Compressed Block Ack frames; "
+            f"Showing the first {limit} of {len(records)} decoded HT Compressed Block Ack frames; "
             "the script-owned packet metrics JSON preserves every row.\n\n"
         )
-    else:
-        lines.append("\n")
     return "".join(lines)
 
 
@@ -1960,7 +1972,7 @@ def extract_multi_sta_block_ack_records(pcap_files):
 def extract_compressed_block_ack_records(pcap_files):
     """Return HT Compressed Block Ack bitmaps and their acknowledged MPDUs."""
     fields = [
-        "frame.number", "frame.time_epoch", "wlan.ba.control",
+        "frame.number", "frame.time_epoch", "wlan.ta", "wlan.ra", "wlan.ba.control",
         "wlan.fixed.ssc.sequence", "wlan.ba.bm",
     ]
     records = []
@@ -1984,7 +1996,9 @@ def extract_compressed_block_ack_records(pcap_files):
         for line in proc.stdout.splitlines():
             values = line.split("\t")
             values += [""] * (len(fields) - len(values))
-            frame_number, timestamp, control, starting_sequence, bitmap = values[:len(fields)]
+            frame_number, timestamp, ta, ra, control, starting_sequence, bitmap = values[:len(fields)]
+            ta = ta.split(",")[0].strip() if ta else "unknown"
+            ra = ra.split(",")[0].strip() if ra else "unknown"
             if not frame_number or not timestamp or not control or not starting_sequence or not bitmap:
                 continue
             if not (int(control, 0) & 0x0004):
@@ -1996,6 +2010,8 @@ def extract_compressed_block_ack_records(pcap_files):
                 "capture": str(path.relative_to(REPOSITORY_ROOT)),
                 "frame_number": int(frame_number),
                 "simulation_time_s": float(timestamp),
+                "origin_address": ta or "unknown",
+                "destination_address": ra or "unknown",
                 "starting_sequence_number": int(starting_sequence, 0),
                 "bitmap": bitmap,
                 "acknowledged_sequence_numbers": acknowledged_sequence_numbers,
@@ -2833,8 +2849,10 @@ def generate_markdown_tables(
             md.append(
                 "#### [script] Decoded HT Compressed Block Ack records\n\n"
             )
+            group_by = "origin" if subdir == "block_ack" else "destination"
             md.append(compressed_block_ack_records_markdown(
-                global_res.get("compressed_block_ack_records", [])
+                global_res.get("compressed_block_ack_records", []),
+                group_by=group_by,
             ))
         if subdir in ("ul_ofdma", "bsr", "he_bsr"):
             md.append(

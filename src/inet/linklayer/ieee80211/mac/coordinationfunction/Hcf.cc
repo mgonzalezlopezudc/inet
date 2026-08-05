@@ -203,6 +203,9 @@ void Hcf::initialize(int stage)
             originatorBlockAckAgreementHandler = new OriginatorBlockAckAgreementHandler();
             originatorBlockAckProcedure = new OriginatorBlockAckProcedure();
             recipientBlockAckProcedure = new RecipientBlockAckProcedure();
+            auto qosDataService = dynamic_cast<OriginatorQosMacDataService *>(originatorDataService);
+            if (qosDataService)
+                qosDataService->setBlockAckAgreementHandler(originatorBlockAckAgreementHandler);
         }
     }
 }
@@ -349,7 +352,7 @@ void Hcf::processUpperFrame(Packet *packet, const Ptr<const Ieee80211DataOrMgmtH
     // IEEE Std 802.11-2024, 10.23.2.2: queuing a frame for an empty AC can
     // invoke the EDCAF backoff procedure; Edcaf owns AIFS/CW/backoff timing.
     pendingQueue->enqueuePacket(packet);
-    if (!pendingQueue->isEmpty()) {
+    if (hasFrameToTransmit(ac)) {
         auto edcaf = edca->getChannelOwner();
         // A different AC must not contend while a local EDCAF owns an active
         // frame sequence. Queue it now; frameSequenceFinished() resumes all
@@ -486,6 +489,11 @@ void Hcf::channelGranted(IChannelAccess *channelAccess)
         }
         AccessCategory ac = edcaf->getAccessCategory();
         EV_DETAIL << "Channel access granted to the " << printAccessCategory(ac) << " queue" << std::endl;
+        if (!hasFrameToTransmit(ac)) {
+            EV_DETAIL << "Channel access granted to the " << printAccessCategory(ac) << " queue, but no eligible frame to transmit. Releasing channel.\n";
+            edcaf->releaseChannel(this);
+            return;
+        }
         auto internallyCollidedEdcafs = edca->getInternallyCollidedEdcafs();
         if (internallyCollidedEdcafs.size() > 0) {
             EV_INFO << "Internal collision happened with the following queues:" << std::endl;
@@ -1499,13 +1507,28 @@ void Hcf::originatorProcessReceivedDataFrame(const Ptr<const Ieee80211DataHeader
     throw cRuntimeError("Unknown data frame");
 }
 
+static bool isPendingQueueEligible(queueing::IPacketQueue *pendingQueue, IOriginatorBlockAckAgreementHandler *baHandler)
+{
+    if (pendingQueue->isEmpty())
+        return false;
+    for (int i = 0; i < pendingQueue->getNumPackets(); i++) {
+        auto packet = pendingQueue->getPacket(i);
+        auto macHeader = packet->peekAtFront<Ieee80211MacHeader>();
+        auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(macHeader);
+        if (dataHeader != nullptr && isOriginatorBlockAckAgreementPending(baHandler, dataHeader->getReceiverAddress(), dataHeader->getTid()))
+            continue;
+        return true;
+    }
+    return false;
+}
+
 bool Hcf::hasFrameToTransmit(AccessCategory ac)
 {
     if (auto twtManager = mac->getTwtManager(); twtManager != nullptr && !twtManager->isStationAwake())
         return false;
     auto edcaf = edca->getEdcaf(ac);
     if (edcaf)
-        return !edcaf->getPendingQueue()->isEmpty() || edcaf->getInProgressFrames()->hasInProgressFrames();
+        return isPendingQueueEligible(edcaf->getPendingQueue(), originatorBlockAckAgreementHandler) || edcaf->getInProgressFrames()->hasInProgressFrames();
     else
         throw cRuntimeError("Hcca is unimplemented");
 }
@@ -1516,7 +1539,7 @@ bool Hcf::hasFrameToTransmit()
         return false;
     auto edcaf = edca->getChannelOwner();
     if (edcaf)
-        return !edcaf->getPendingQueue()->isEmpty() || edcaf->getInProgressFrames()->hasInProgressFrames();
+        return isPendingQueueEligible(edcaf->getPendingQueue(), originatorBlockAckAgreementHandler) || edcaf->getInProgressFrames()->hasInProgressFrames();
     else
         throw cRuntimeError("Hcca is unimplemented");
 }
