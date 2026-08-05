@@ -55,6 +55,8 @@ class INET_API NonQoSContext
 
 class INET_API FrameSequenceContext : public cObject
 {
+    friend class Hcf;
+
   protected:
     simtime_t startTime = simTime();
     MacAddress address = MacAddress::UNSPECIFIED_ADDRESS;
@@ -68,10 +70,10 @@ class INET_API FrameSequenceContext : public cObject
     NonQoSContext *nonQoSContext = nullptr;
     QoSContext *qosContext = nullptr;
     const bool useLegacyHtMultiTidBlockAck = false;
-    const bool useHtImplicitBlockAck = false;
+    std::vector<Packet *> htImplicitBlockAckFrames;
 
   public:
-    FrameSequenceContext(MacAddress address, physicallayer::Ieee80211ModeSet *modeSet, InProgressFrames *inProgressFrames, IRtsProcedure *rtsProcedure, IRtsPolicy *rtsPolicy, NonQoSContext *nonQosContext, QoSContext *qosContext, bool useLegacyHtMultiTidBlockAck = false, bool useHtImplicitBlockAck = false);
+    FrameSequenceContext(MacAddress address, physicallayer::Ieee80211ModeSet *modeSet, InProgressFrames *inProgressFrames, IRtsProcedure *rtsProcedure, IRtsPolicy *rtsPolicy, NonQoSContext *nonQosContext, QoSContext *qosContext, bool useLegacyHtMultiTidBlockAck = false);
     virtual ~FrameSequenceContext();
 
     virtual simtime_t getDuration() const { return simTime() - startTime; }
@@ -90,8 +92,13 @@ class INET_API FrameSequenceContext : public cObject
     virtual NonQoSContext *getNonQoSContext() const { return nonQoSContext; }
     virtual QoSContext *getQoSContext() const { return qosContext; }
     virtual bool getUseLegacyHtMultiTidBlockAck() const { return useLegacyHtMultiTidBlockAck; }
-    virtual bool getUseHtImplicitBlockAck() const { return useHtImplicitBlockAck; }
+    virtual bool getUseHtImplicitBlockAck() const { return htImplicitBlockAckFrames.size() >= 2; }
+    virtual const std::vector<Packet *>& getHtImplicitBlockAckFrames() const { return htImplicitBlockAckFrames; }
 
+  protected:
+    virtual void setHtImplicitBlockAckFrames(const std::vector<Packet *>& frames) { htImplicitBlockAckFrames = frames; }
+
+  public:
     virtual simtime_t getAckTimeout(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtframe) const;
     virtual simtime_t getCtsTimeout(Packet *packet, const Ptr<const Ieee80211RtsFrame>& rtsFrame) const;
     virtual simtime_t getIfs() const;

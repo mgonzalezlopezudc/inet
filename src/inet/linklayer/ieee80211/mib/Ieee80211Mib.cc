@@ -303,6 +303,7 @@ void Ieee80211Mib::initialize(int stage)
             localHtCapabilities.rxMcsNss.maxMcsPerNss[i] = htMaxMcs;
             localHtCapabilities.txMcsNss.maxMcsPerNss[i] = htMaxMcs;
         }
+        localHtCapabilities.shortGi20 = par("htShortGi20").boolValue();
         localHtCapabilities.shortGi40 = par("htShortGi40").boolValue();
         WATCH(localHtLdpc);
         WATCH(localHeCapabilities.ldpc);

@@ -149,6 +149,9 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
 
     void sendUp(const std::vector<Packet *>& completeFrames);
     FrameSequenceContext *buildContext(AccessCategory ac);
+    virtual std::vector<Packet *> getHtImplicitBlockAckFrames(Edcaf *edcaf) const;
+    virtual int getMaxAmpduLengthExponent(const MacAddress& peer,
+            int defaultExponent, physicallayer::Ieee80211PhyFamily phyFamily) const;
     virtual bool hasFrameToTransmit();
     virtual bool hasFrameToTransmit(AccessCategory ac);
     virtual bool isReceptionInProgress();

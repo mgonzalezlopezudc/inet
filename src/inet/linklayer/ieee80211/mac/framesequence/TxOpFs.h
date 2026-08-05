@@ -14,6 +14,12 @@
 namespace inet {
 namespace ieee80211 {
 
+class FrameSequenceContext;
+
+INET_API bool isHtImplicitBlockAckEligible(const FrameSequenceContext *context,
+        Packet *frameToTransmit,
+        const Ptr<const Ieee80211DataHeader>& dataHeader);
+
 class INET_API TxOpFs : public AlternativesFs
 {
 
@@ -31,4 +37,3 @@ class INET_API TxOpFs : public AlternativesFs
 } // namespace inet
 
 #endif
-

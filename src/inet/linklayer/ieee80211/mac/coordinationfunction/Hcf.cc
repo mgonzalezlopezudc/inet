@@ -20,6 +20,7 @@
 #include "inet/linklayer/ieee80211/mac/blockack/RecipientBlockAckAgreementHandler.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HcfFs.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/Ieee80211HeMuContainerTag_m.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/TxOpFs.h"
 #include "inet/linklayer/ieee80211/mac/protectionmechanism/HtProtectionPolicy.h"
 #include "inet/linklayer/ieee80211/mac/recipient/RecipientAckProcedure.h"
 #include "inet/linklayer/ethernet/common/Ethernet.h"
@@ -529,8 +530,97 @@ FrameSequenceContext *Hcf::buildContext(AccessCategory ac)
     auto qosContext = new QoSContext(originatorAckPolicy, originatorBlockAckProcedure,
             originatorBlockAckAgreementHandler, edcaf->getTxopProcedure(),
             rateSelection);
-    return new FrameSequenceContext(mac->getAddress(), modeSet, edcaf->getInProgressFrames(), rtsProcedure, rtsPolicy, nullptr, qosContext,
-            isLegacyHtMultiTidBlockAckEnabled(), isHtImplicitBlockAckEnabled());
+    auto htImplicitBlockAckFrames = getHtImplicitBlockAckFrames(edcaf);
+    auto context = new FrameSequenceContext(mac->getAddress(), modeSet,
+            edcaf->getInProgressFrames(), rtsProcedure, rtsPolicy, nullptr,
+            qosContext, isLegacyHtMultiTidBlockAckEnabled());
+    context->setHtImplicitBlockAckFrames(htImplicitBlockAckFrames);
+    return context;
+}
+
+std::vector<Packet *> Hcf::getHtImplicitBlockAckFrames(Edcaf *edcaf) const
+{
+    if (!isHtImplicitBlockAckEnabled())
+        return {};
+    auto frameToTransmit = edcaf->getInProgressFrames()->getFrameToTransmit();
+    if (frameToTransmit == nullptr)
+        return {};
+    auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(
+            frameToTransmit->peekAtFront<Ieee80211MacHeader>());
+    if (dataHeader == nullptr || dataHeader->getFragmentNumber() != 0 ||
+            dataHeader->getMoreFragments())
+        return {};
+
+    auto modeReq = frameToTransmit->findTag<Ieee80211ModeReq>();
+    auto mode = modeReq == nullptr ? rateSelection->computeMode(
+            frameToTransmit, frameToTransmit->peekAtFront<Ieee80211MacHeader>(),
+            edcaf->getTxopProcedure()) : modeReq->getMode();
+    if (modeSet->getPhyFamily(mode) != Ieee80211PhyFamily::HT)
+        return {};
+    int maxAmpduLengthExponent = getMaxAmpduLengthExponent(
+            dataHeader->getReceiverAddress(), 3, Ieee80211PhyFamily::HT);
+    long long maxAggregateLength = (1LL << (13 + maxAmpduLengthExponent)) - 1;
+    auto frames = edcaf->getInProgressFrames()->getEligibleFramesLike(
+            frameToTransmit, 64, std::numeric_limits<int>::max());
+    std::vector<Packet *> ampduFrames;
+    for (auto frame : frames) {
+        auto frameHeader = frame->peekAtFront<Ieee80211DataHeader>();
+        OriginatorBlockAckAgreement *agreement = nullptr;
+        if (originatorBlockAckAgreementHandler)
+            agreement = originatorBlockAckAgreementHandler->getAgreement(
+                    frameHeader->getReceiverAddress(), frameHeader->getTid());
+        // IEEE Std 802.11-2024, 10.12.2: an HT A-MPDU member is limited to
+        // 4095 octets, and the aggregate limit is enforced below using the
+        // exact delimiter/padding representation used for transmission.
+        if (frame->getTotalLength() > B(4095) ||
+                frameHeader->getFragmentNumber() != 0 || frameHeader->getMoreFragments() ||
+                originatorAckPolicy->computeAckPolicy(frame, frameHeader, agreement) != AckPolicy::BLOCK_ACK)
+            break;
+        ampduFrames.push_back(frame);
+    }
+    if (ampduFrames.size() < 2)
+        return {};
+
+    auto aggregateLength = calculateAmpduLength(ampduFrames);
+    while (ampduFrames.size() > 1 &&
+            (aggregateLength.get<B>() > maxAggregateLength ||
+             mode->getDuration(aggregateLength) > mode->getPpduMaxDuration())) {
+        auto previousSubframeLength = B(4) + ampduFrames[ampduFrames.size() - 2]->getTotalLength();
+        auto previousSubframePadding = B((4 - previousSubframeLength.get<B>() % 4) % 4);
+        aggregateLength -= B(4) + ampduFrames.back()->getTotalLength() + previousSubframePadding;
+        ampduFrames.pop_back();
+    }
+    return ampduFrames.size() > 1 ? ampduFrames : std::vector<Packet *>();
+}
+
+int Hcf::getMaxAmpduLengthExponent(const MacAddress& peer,
+        int defaultExponent, Ieee80211PhyFamily phyFamily) const
+{
+    int exponent = defaultExponent;
+    auto mib = mac->getMib();
+    if (mib != nullptr) {
+        if (phyFamily == Ieee80211PhyFamily::HT) {
+            auto negotiated = mib->findNegotiatedHtCapabilities(peer);
+            if (negotiated != nullptr && negotiated->localTxPeerRx.valid)
+                exponent = negotiated->localTxPeerRx.receiverMaxAmpduLengthExponent;
+        }
+        else if (phyFamily == Ieee80211PhyFamily::VHT) {
+            auto negotiated = mib->findNegotiatedVhtCapabilities(peer);
+            if (negotiated != nullptr && negotiated->localTxPeerRx.valid)
+                exponent = negotiated->localTxPeerRx.receiverMaxAmpduLengthExponent;
+        }
+        else if (phyFamily == Ieee80211PhyFamily::HE || phyFamily == Ieee80211PhyFamily::EHT) {
+            auto negotiated = mib->findNegotiatedHeCapabilities(peer);
+            if (negotiated != nullptr && negotiated->localTxPeerRx.valid)
+                exponent = negotiated->localTxPeerRx.receiverMaxAmpduLengthExponent;
+        }
+    }
+    auto originatorModule = dynamic_cast<cModule *>(originatorDataService);
+    auto mpduAggregationPolicy = originatorModule ? originatorModule->getSubmodule("mpduAggregationPolicy") : nullptr;
+    if (mpduAggregationPolicy != nullptr && mpduAggregationPolicy->hasPar("maxAmpduLengthExponent"))
+        exponent = std::min(exponent,
+                (int)mpduAggregationPolicy->par("maxAmpduLengthExponent").intValue());
+    return exponent;
 }
 
 bool Hcf::isLegacyHtMultiTidBlockAckEnabled() const
@@ -1469,6 +1559,16 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
         else
             header = packet->peekAtFront<Ieee80211MacHeader>();
         auto txop = channelOwner->getTxopProcedure();
+        auto frameSequenceContext = frameSequenceHandler->getContext();
+        auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header);
+        // IEEE Std 802.11-2024, 10.25.6.5: an HT implicit BlockAck request is
+        // an A-MPDU carrying QoS Data with Ack Policy 00 and elicits a
+        // BlockAck after SIFS. Use the frame-sequence selector's eligibility
+        // decision so aggregate construction cannot outlive its response wait.
+        bool useHtImplicitBlockAck = dataHeader != nullptr &&
+                frameSequenceContext != nullptr &&
+                isHtImplicitBlockAckEligible(frameSequenceContext,
+                        packet, dataHeader);
         if (!isHeMuContainerPacket(packet) && dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(header)) {
             // A missing BlockAck or an unacked BlockAck bitmap entry makes the
             // MPDU eligible again in QosAckHandler. Materialize that retry
@@ -1499,32 +1599,20 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
           if (auto dataFrame = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
             if (dataFrame->getAckPolicy() == AckPolicy::BLOCK_ACK &&
                     txop->allowsMpduAggregation() &&
-                    !rtsPolicy->isRtsNeeded(packet, header)) {
-                bool useHtImplicitBlockAck = isHtImplicitBlockAckEnabled();
-                int maxAmpduLengthExponent = useHtImplicitBlockAck ? 3 : 7;
-                auto mib = mac->getMib();
-                if (mib != nullptr) {
-                    auto negotiated = mib->findNegotiatedHeCapabilities(dataFrame->getReceiverAddress());
-                    if (negotiated != nullptr && negotiated->localTxPeerRx.valid) {
-                        maxAmpduLengthExponent = negotiated->localTxPeerRx.receiverMaxAmpduLengthExponent;
-                    }
-                    else {
-                        auto negotiatedVht = mib->findNegotiatedVhtCapabilities(dataFrame->getReceiverAddress());
-                        if (negotiatedVht != nullptr && negotiatedVht->localTxPeerRx.valid) {
-                            maxAmpduLengthExponent = negotiatedVht->localTxPeerRx.receiverMaxAmpduLengthExponent;
-                        }
-                        else if (auto negotiatedHt = mib->findNegotiatedHtCapabilities(dataFrame->getReceiverAddress());
-                                negotiatedHt != nullptr && negotiatedHt->localTxPeerRx.valid)
-                            maxAmpduLengthExponent = negotiatedHt->localTxPeerRx.receiverMaxAmpduLengthExponent;
-                    }
+                    !rtsPolicy->isRtsNeeded(packet, header) &&
+                    modeSet->getPhyFamily(mode) != Ieee80211PhyFamily::DSSS &&
+                    modeSet->getPhyFamily(mode) != Ieee80211PhyFamily::ERP_OFDM &&
+                    modeSet->getPhyFamily(mode) != Ieee80211PhyFamily::OFDM) {
+                std::vector<Packet *> frames;
+                if (useHtImplicitBlockAck)
+                    frames = frameSequenceContext->getHtImplicitBlockAckFrames();
+                else {
+                    int maxAmpduLengthExponent = getMaxAmpduLengthExponent(
+                            dataFrame->getReceiverAddress(), 7, modeSet->getPhyFamily(mode));
+                    long long maxAggregateLength = (1LL << (13 + maxAmpduLengthExponent)) - 1;
+                    frames = channelOwner->getInProgressFrames()->getEligibleFramesLike(
+                            packet, 64, maxAggregateLength);
                 }
-                auto originatorModule = dynamic_cast<cModule *>(originatorDataService);
-                auto mpduAggregationPolicy = originatorModule ? originatorModule->getSubmodule("mpduAggregationPolicy") : nullptr;
-                if (mpduAggregationPolicy != nullptr && mpduAggregationPolicy->hasPar("maxAmpduLengthExponent")) {
-                    maxAmpduLengthExponent = std::min(maxAmpduLengthExponent, (int)mpduAggregationPolicy->par("maxAmpduLengthExponent").intValue());
-                }
-                long long maxAggregateLength = (1LL << (13 + maxAmpduLengthExponent)) - 1;
-                auto frames = channelOwner->getInProgressFrames()->getEligibleFramesLike(packet, 64, maxAggregateLength);
                 std::vector<Packet *> ampduFrames;
                 for (auto frame : frames) {
                     channelOwner->getAckHandler()->setRetryBitIfNeeded(frame);
@@ -1533,7 +1621,7 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
                     if (originatorBlockAckAgreementHandler)
                         agreement = originatorBlockAckAgreementHandler->getAgreement(frameHeader->getReceiverAddress(), frameHeader->getTid());
                     auto ackPolicy = originatorAckPolicy->computeAckPolicy(frame, frameHeader, agreement);
-                    if (ackPolicy != AckPolicy::BLOCK_ACK)
+                    if (!useHtImplicitBlockAck && ackPolicy != AckPolicy::BLOCK_ACK)
                         break;
                     auto mutableHeader = frame->removeAtFront<Ieee80211DataHeader>();
                     mutableHeader->setAckPolicy(ackPolicy);
@@ -1542,7 +1630,8 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
                     ampduFrames.push_back(frame);
                 }
                 auto phyFamily = modeSet->getPhyFamily(mode);
-                if (phyFamily == Ieee80211PhyFamily::HT || phyFamily == Ieee80211PhyFamily::HE) {
+                if (!useHtImplicitBlockAck &&
+                        (phyFamily == Ieee80211PhyFamily::HT || phyFamily == Ieee80211PhyFamily::HE)) {
                     // IEEE Std 802.11-2024 Clause 10.13 and Tables 19-25 and
                     // 27-61 bound HT and HE PPDUs to aPPDUMaxTime. Trim only
                     // optional trailing MPDUs using the selected PHY mode's

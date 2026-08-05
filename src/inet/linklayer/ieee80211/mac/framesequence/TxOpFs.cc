@@ -12,9 +12,7 @@
 namespace inet {
 namespace ieee80211 {
 
-namespace {
-
-bool canUseHtImplicitBlockAck(FrameSequenceContext *context,
+INET_API bool isHtImplicitBlockAckEligible(const FrameSequenceContext *context,
         Packet *frameToTransmit,
         const Ptr<const Ieee80211DataHeader>& dataHeader)
 {
@@ -35,27 +33,17 @@ bool canUseHtImplicitBlockAck(FrameSequenceContext *context,
     if (context->getQoSContext()->ackPolicy->computeAckPolicy(
                 frameToTransmit, dataHeader, agreement) != BLOCK_ACK)
         return false;
-    // HT's maximum A-MPDU length is 65,535 octets. Asking for two matching
-    // eligible frames here makes the sequence choice agree with Hcf's
-    // actual aggregate-construction gate.
-    auto frames = context->getInProgressFrames()->getEligibleFramesLike(
-            frameToTransmit, 2, 65535);
-    if (frames.size() < 2)
+    const auto& frames = context->getHtImplicitBlockAckFrames();
+    if (frames.size() < 2 || frames.front() != frameToTransmit)
         return false;
     for (auto frame : frames) {
         auto header = frame->peekAtFront<Ieee80211DataHeader>();
-        auto frameAgreement =
-                context->getQoSContext()->blockAckAgreementHandler->
-                getAgreement(header->getReceiverAddress(), header->getTid());
-        if (header->getFragmentNumber() != 0 || header->getMoreFragments() ||
-                context->getQoSContext()->ackPolicy->computeAckPolicy(
-                        frame, header, frameAgreement) != BLOCK_ACK)
+        if (frame->getTotalLength() > B(4095) ||
+                header->getFragmentNumber() != 0 || header->getMoreFragments())
             return false;
     }
     return true;
 }
-
-} // namespace
 
 /*
  * TODO add [ RTS CTS ] (txop-part-requiring-ack txop-part-providing-ack )|
@@ -99,7 +87,7 @@ int TxOpFs::selectTxOpSequence(AlternativesFs *frameSequence, FrameSequenceConte
         return 3;
     else {
         auto dataHeaderToTransmit = dynamicPtrCast<const Ieee80211DataHeader>(macHeader);
-        if (canUseHtImplicitBlockAck(context, frameToTransmit,
+        if (isHtImplicitBlockAckEligible(context, frameToTransmit,
                     dataHeaderToTransmit))
             return 4;
         OriginatorBlockAckAgreement *agreement = nullptr;

@@ -26,6 +26,7 @@ simple Ieee80211Mib extends SimpleModule
         bool htLdpc = default(false); // Advertises and enables HT LDPC when the peer also supports it
         string htSecondaryChannelOffset @enum("none", "above", "below") = default("none"); // HT40 secondary channel relative to the primary channel
         int htMaxMcs = default(7); // Maximum HT MCS advertised for each enabled spatial stream (0..7)
+        bool htShortGi20 = default(false); // Advertises HT short guard interval support for 20 MHz operation
         bool htShortGi40 = default(false); // Advertises HT short guard interval support for 40 MHz operation
         int htMaxNss = default(4); // Maximum HT spatial streams advertised by this MIB (1..4)
         int htProtectionMode = default(0); // HT Protection: 0=no protection, 1=nonmember, 2=20 MHz, 3=non-HT mixed

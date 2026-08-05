@@ -11,6 +11,7 @@ one Compressed BlockAck, and uses its bitmap for sender acknowledgment state.
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/PrimitiveFrameSequences.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/TxOpFs.h"
 #include "inet/linklayer/ieee80211/mac/originator/QosAckHandler.h"
 #include "inet/linklayer/ieee80211/mac/queue/InProgressFrames.h"
 
@@ -31,9 +32,11 @@ class TestInProgressFrames : public InProgressFrames
 class MockOriginatorAckPolicy : public IOriginatorQoSAckPolicy
 {
   public:
+    AckPolicy ackPolicy = BLOCK_ACK;
+
     virtual bool isAckNeeded(const Ptr<const Ieee80211MgmtHeader>&) const override { return false; }
     virtual AckPolicy computeAckPolicy(Packet *, const Ptr<const Ieee80211DataHeader>&,
-            OriginatorBlockAckAgreement *) const override { return BLOCK_ACK; }
+            OriginatorBlockAckAgreement *) const override { return ackPolicy; }
     virtual bool isBlockAckReqNeeded(InProgressFrames *, TxopProcedure *) const override { return false; }
     virtual bool isBlockAckPolicyEligibleFrame(Packet *, const Ptr<const Ieee80211DataHeader>&) const override { return true; }
     virtual std::tuple<MacAddress, SequenceNumberCyclic, Tid>
@@ -45,6 +48,23 @@ class MockOriginatorAckPolicy : public IOriginatorQoSAckPolicy
     }
     virtual simtime_t getBlockAckTimeout(Packet *, const Ptr<const Ieee80211BlockAckReq>&) const override {
         return SimTime(1, SIMTIME_MS);
+    }
+};
+
+class MockRtsPolicy : public IRtsPolicy
+{
+  public:
+    virtual bool isRtsNeeded(Packet *, const Ptr<const Ieee80211MacHeader>&) const override { return false; }
+    virtual simtime_t getCtsTimeout(Packet *, const Ptr<const Ieee80211RtsFrame>&) const override { return SIMTIME_ZERO; }
+    virtual int getRtsThreshold() const override { return -1; }
+};
+
+class TestFrameSequenceContext : public FrameSequenceContext
+{
+  public:
+    using FrameSequenceContext::FrameSequenceContext;
+    void setHtImplicitBlockAckFramesForTest(const std::vector<Packet *>& frames) {
+        setHtImplicitBlockAckFrames(frames);
     }
 };
 
@@ -164,14 +184,35 @@ auto secondHeader = makeHeader(recipient, originator, tid, 11);
 
 TestInProgressFrames inProgress;
 auto firstPacket = new Packet("first", firstHeader);
+auto secondPacket = new Packet("second", secondHeader);
 inProgress.addInProgressFrame(firstPacket);
+inProgress.addInProgressFrame(secondPacket);
 MockOriginatorAckPolicy ackPolicy;
-auto qosContext = new QoSContext(&ackPolicy, nullptr, nullptr, nullptr);
-FrameSequenceContext context(originator,
+TxopProcedure txopProcedure;
+MockRtsPolicy rtsPolicy;
+auto qosContext = new QoSContext(&ackPolicy, nullptr, nullptr, &txopProcedure);
+std::vector<Packet *> implicitBlockAckFrames{firstPacket, secondPacket};
+TestFrameSequenceContext context(originator,
         const_cast<physicallayer::Ieee80211ModeSet *>(
                 physicallayer::Ieee80211ModeSet::getModeSet(
                         "n(mixed-2.4Ghz)")),
-        &inProgress, nullptr, nullptr, nullptr, qosContext, false, true);
+        &inProgress, nullptr, &rtsPolicy, nullptr, qosContext, false);
+context.setHtImplicitBlockAckFramesForTest(implicitBlockAckFrames);
+
+TxOpFs txOpSequence;
+REQUIRE(txOpSequence.selectTxOpSequence(nullptr, &context) == 4);
+EV << "TXOP selection chooses the implicit-BlockAck response state machine for an eligible two-MPDU aggregate.\n";
+context.setHtImplicitBlockAckFramesForTest({});
+REQUIRE(txOpSequence.selectTxOpSequence(nullptr, &context) == 0);
+secondHeader->setMoreFragments(true);
+context.setHtImplicitBlockAckFramesForTest(implicitBlockAckFrames);
+REQUIRE(txOpSequence.selectTxOpSequence(nullptr, &context) == 0);
+secondHeader->setMoreFragments(false);
+context.setHtImplicitBlockAckFramesForTest({});
+ackPolicy.ackPolicy = NORMAL_ACK;
+REQUIRE(txOpSequence.selectTxOpSequence(nullptr, &context) == 1);
+ackPolicy.ackPolicy = BLOCK_ACK;
+context.setHtImplicitBlockAckFramesForTest(implicitBlockAckFrames);
 
 HtAmpduBlockAckFs sequence;
 sequence.startSequence(&context, 0);

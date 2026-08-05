@@ -21,6 +21,7 @@ network TestNetwork
 %inifile: omnetpp.ini
 [General]
 network = TestNetwork
+*.mib.htShortGi20 = true
 
 %global:
 using namespace inet;
@@ -79,6 +80,7 @@ ASSERT(vht.localRxPeerTx.mcsNss.maxMcsPerNss[0] == 7);
 ASSERT(!vht.localTxPeerRx.ldpc && !vht.localRxPeerTx.ldpc);
 
 auto mib = check_and_cast<Ieee80211Mib *>(getParentModule()->getSubmodule("mib"));
+ASSERT(mib->localHtCapabilities.shortGi20);
 MacAddress peerAddress("02:00:00:00:00:01");
 mib->localHtCapabilities = localHt;
 mib->localVhtCapabilities = localVht;
@@ -93,16 +95,26 @@ ASSERT(mib->findNegotiatedVhtCapabilities(peerAddress) == nullptr);
 auto htMode = Ieee80211HtCompliantModes::getCompliantMode(
         &Ieee80211HtmcsTable::htMcs0BW20MHz, Ieee80211HtMode::BAND_5GHZ,
         Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+auto htShortMode = Ieee80211HtCompliantModes::getCompliantMode(
+        &Ieee80211HtmcsTable::htMcs0BW20MHz, Ieee80211HtMode::BAND_5GHZ,
+        Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211HtModeBase::HT_GUARD_INTERVAL_SHORT);
 auto vhtMode = Ieee80211VhtCompliantModes::getCompliantMode(
         &Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss1, Ieee80211VhtMode::BAND_5GHZ,
         Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG);
 mib->bssStationData.isAssociated = true;
 ASSERT(!mib->isHtModeAllowedForPeer(htMode, peerAddress));
+ASSERT(!mib->isHtModeAllowedForPeer(htShortMode, peerAddress));
 ASSERT(!mib->isVhtModeAllowedForPeer(vhtMode, peerAddress));
 mib->setPeerHtCapabilities(peerAddress, peerHt, htOperation);
 mib->setPeerVhtCapabilities(peerAddress, peerVht, vhtOperation);
 ASSERT(mib->isHtModeAllowedForPeer(htMode, peerAddress));
+ASSERT(mib->isHtModeAllowedForPeer(htShortMode, peerAddress));
 ASSERT(mib->isVhtModeAllowedForPeer(vhtMode, peerAddress));
+auto peerWithoutShortGi = peerHt;
+peerWithoutShortGi.shortGi20 = false;
+mib->setPeerHtCapabilities(peerAddress, peerWithoutShortGi, htOperation);
+ASSERT(!mib->isHtModeAllowedForPeer(htShortMode, peerAddress));
+mib->setPeerHtCapabilities(peerAddress, peerHt, htOperation);
 mib->bssStationData.isAssociated = false;
 ASSERT(!mib->isHtModeAllowedForPeer(htMode, peerAddress));
 ASSERT(!mib->isVhtModeAllowedForPeer(vhtMode, peerAddress));

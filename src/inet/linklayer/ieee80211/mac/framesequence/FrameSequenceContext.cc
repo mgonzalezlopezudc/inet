@@ -12,7 +12,7 @@ namespace ieee80211 {
 
 using namespace inet::physicallayer;
 
-FrameSequenceContext::FrameSequenceContext(MacAddress address, Ieee80211ModeSet *modeSet, InProgressFrames *inProgressFrames, IRtsProcedure *rtsProcedure, IRtsPolicy *rtsPolicy, NonQoSContext *nonQoSContext, QoSContext *qosContext, bool useLegacyHtMultiTidBlockAck, bool useHtImplicitBlockAck) :
+FrameSequenceContext::FrameSequenceContext(MacAddress address, Ieee80211ModeSet *modeSet, InProgressFrames *inProgressFrames, IRtsProcedure *rtsProcedure, IRtsPolicy *rtsPolicy, NonQoSContext *nonQoSContext, QoSContext *qosContext, bool useLegacyHtMultiTidBlockAck) :
     address(address),
     modeSet(modeSet),
     inProgressFrames(inProgressFrames),
@@ -20,8 +20,7 @@ FrameSequenceContext::FrameSequenceContext(MacAddress address, Ieee80211ModeSet 
     rtsPolicy(rtsPolicy),
     nonQoSContext(nonQoSContext),
     qosContext(qosContext),
-    useLegacyHtMultiTidBlockAck(useLegacyHtMultiTidBlockAck),
-    useHtImplicitBlockAck(useHtImplicitBlockAck)
+    useLegacyHtMultiTidBlockAck(useLegacyHtMultiTidBlockAck)
 {
 }
 
