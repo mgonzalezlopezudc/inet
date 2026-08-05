@@ -42,7 +42,7 @@
       {
         "id": "guard-interval-delivery-comparison",
         "kind": "metric",
-        "requirement": "Compare application delivered bytes across Long (800 ns) and Short (400 ns) Guard Intervals",
+        "requirement": "Compare application delivered bytes across 20 MHz and 40 MHz Long (800 ns) and Short (400 ns) Guard Interval configurations",
         "results": ["packetReceived"],
         "evaluation": {
           "handler": "unimplemented",
@@ -131,7 +131,9 @@
       "measurement": {"start": 0.3, "end": 0.9},
       "conditions": [
         {"label": "Long GI (800 ns)", "config": "LongGI800ns"},
-        {"label": "Short GI (400 ns)", "config": "ShortGI400ns"}
+        {"label": "Short GI (400 ns)", "config": "ShortGI400ns"},
+        {"label": "Long GI (40 MHz, 108 Mbps)", "config": "LongGI40MHz108Mbps"},
+        {"label": "Short GI (40 MHz, 120 Mbps)", "config": "ShortGI40MHz120Mbps"}
       ]
     },
     "mimo_spatial_streams": {

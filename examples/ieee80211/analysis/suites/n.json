@@ -33,7 +33,7 @@
     "guard_interval": {
       "scalar_vector_group": "guard_interval",
       "ini": "guard_interval/omnetpp.ini",
-      "configurations": ["LongGI800ns", "ShortGI400ns"],
+      "configurations": ["LongGI800ns", "ShortGI400ns", "LongGI40MHz108Mbps", "ShortGI40MHz120Mbps"],
       "phy_profiles": ["ht"],
       "feature_plugins": ["guard-interval"]
     },
