@@ -287,6 +287,7 @@ class INET_API Ieee80211HeMode : public Ieee80211ModeBase
     virtual BandMode getCenterFrequencyMode() const { return centerFrequencyMode; }
 
     virtual const simtime_t getDuration(b dataBitLength) const override { return preambleMode->getDuration() + dataMode->getDuration(dataBitLength); }
+    virtual const simtime_t getPpduMaxDuration() const override { return SimTime(5.484, SIMTIME_MS); } // IEEE Std 802.11-2024 Table 27-61: aPPDUMaxTime
 };
 
 /** Lookup table for standard HE MCS combinations. */

@@ -1541,11 +1541,13 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
                     frame->insertAtFront(mutableHeader);
                     ampduFrames.push_back(frame);
                 }
-                if (dynamic_cast<const Ieee80211HeMode *>(mode) != nullptr) {
-                    // IEEE 802.11-2024 Table 27-61 and Clause 10.13 bound an
-                    // HE PPDU to aPPDUMaxTime. Trim only optional aggregate
-                    // members; the PHY independently validates the final PPDU.
-                    simtime_t durationLimit = SimTime(5.484, SIMTIME_MS);
+                auto phyFamily = modeSet->getPhyFamily(mode);
+                if (phyFamily == Ieee80211PhyFamily::HT || phyFamily == Ieee80211PhyFamily::HE) {
+                    // IEEE Std 802.11-2024 Clause 10.13 and Tables 19-25 and
+                    // 27-61 bound HT and HE PPDUs to aPPDUMaxTime. Trim only
+                    // optional trailing MPDUs using the selected PHY mode's
+                    // authoritative duration calculation and limit.
+                    auto durationLimit = mode->getPpduMaxDuration();
                     auto originalFrameCount = ampduFrames.size();
                     auto aggregateLength = calculateAmpduLength(ampduFrames);
                     while (ampduFrames.size() > 1 &&
@@ -1558,8 +1560,10 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
                                 previousSubframePadding;
                         ampduFrames.pop_back();
                     }
+                    if (!ampduFrames.empty() && mode->getDuration(aggregateLength) > durationLimit)
+                        throw cRuntimeError("Selected PPDU exceeds the maximum duration for the PHY mode");
                     if (ampduFrames.size() != originalFrameCount)
-                        EV_DEBUG << "Trimmed HE SU A-MPDU from " << originalFrameCount
+                        EV_DEBUG << "Trimmed A-MPDU from " << originalFrameCount
                                  << " to " << ampduFrames.size()
                                  << " MPDUs for PPDU/TXOP duration " << durationLimit << ".\n";
                 }

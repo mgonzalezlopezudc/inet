@@ -1,14 +1,14 @@
 {
   "_provenance": {
-    "generated_at_utc": "2026-08-04T23:38:36.690140+00:00",
+    "generated_at_utc": "2026-08-04T23:50:00.639102+00:00",
     "groups": {
-      "frame_aggregation": {
+      "channel_widths": {
         "conditions": [
           {
-            "configuration": "NoAggregation",
-            "group": "frame_aggregation",
-            "ini": "examples/ieee80211n/frame_aggregation/omnetpp.ini",
-            "label": "No Aggregation",
+            "configuration": "Ht20MHz",
+            "group": "channel_widths",
+            "ini": "examples/ieee80211n/channel_widths/omnetpp.ini",
+            "label": "HT 20 MHz",
             "measurement": {
               "end_s": 0.9,
               "start_s": 0.3
@@ -16,52 +16,52 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/NoAggregation/NoAggregation-#0.sca",
-                "sha256": "ef8dfac7e8f5f14b833af627d1e2fb71bf0b837b98a0d0e796e9b872203c2ca6"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht20MHz/Ht20MHz-#0.sca",
+                "sha256": "2cc0741d6a6b821d193c2f57b7375dc705faddb065fdeb776e29826168aac156"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/NoAggregation/NoAggregation-#0.vec",
-                "sha256": "d381775d400c60123709a39c8979503c870030719b30ff90afd1180af3d64e34"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht20MHz/Ht20MHz-#0.vec",
+                "sha256": "3b86316404cc0351913a6a1f0faf314c13bd5b31ab730f4e68ae06080a4f92cb"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/NoAggregation/NoAggregation-#1.sca",
-                "sha256": "515118be59baa74ba7da776d109eab4bae94adcfdef0b2449d739619e7e927bd"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht20MHz/Ht20MHz-#1.sca",
+                "sha256": "609a6c91c14307562a4cc919d01e3ff75ab8c2f4c4e6c3dbfa6e123d869e2fa5"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/NoAggregation/NoAggregation-#1.vec",
-                "sha256": "8b26f192d67ca35e37fb0629614a1a41bacf29939f791078d1651ae3a95cf186"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht20MHz/Ht20MHz-#1.vec",
+                "sha256": "7ae8dbb1c273ed23f280dfa40b9fc3d4a848d0c90d8515f1204c91f587cd9244"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/NoAggregation/NoAggregation-#2.sca",
-                "sha256": "629a6e189d9b32b74bb23330db1e3d790cce405fdb8d4bd24d3921ae244d97a0"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht20MHz/Ht20MHz-#2.sca",
+                "sha256": "d89743717b809abaebb172b052d75cb89c3cef154abe5c156f97b2fb7520b1bb"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/NoAggregation/NoAggregation-#2.vec",
-                "sha256": "0b6b6f263d2e477fde869055ad1f2047f9dcdbf6938a7ab1bd7be39476d212d9"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht20MHz/Ht20MHz-#2.vec",
+                "sha256": "9b786cfcfe334b994cfd90670b43ddb3b12ec2534c01b4a51dc501c743a5603e"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/NoAggregation/NoAggregation-#3.sca",
-                "sha256": "240cc29954046dfd3a4811ca55426d4748fd3a1d1cf7a292920d7e1e635da52e"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht20MHz/Ht20MHz-#3.sca",
+                "sha256": "3dbae8021fcaf6b78558a6a608877e613c4e8304320fd2f5d3a7050c36416fec"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/NoAggregation/NoAggregation-#3.vec",
-                "sha256": "865fdec4185dc1ef42f4e4107177adc50898bfefd851744683ba3a73b9c86a1f"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht20MHz/Ht20MHz-#3.vec",
+                "sha256": "d690edd8ba10313011648594fb0535a86843a779b8436ca3de9deada07470e9e"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/NoAggregation/NoAggregation-#4.sca",
-                "sha256": "dcd08cf98c8ebcb4064e907e5e8be5220cd6f877563f1a352ff19f929859582a"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht20MHz/Ht20MHz-#4.sca",
+                "sha256": "46fadb1cf108c71be0d3e4692e75fea11ccbe9a3b234ea95c1797443e9537ac6"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/NoAggregation/NoAggregation-#4.vec",
-                "sha256": "230d3fb5504dcf3f2c32eb7d80039eeb490681c09966fdc3212f796e4b446fa4"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht20MHz/Ht20MHz-#4.vec",
+                "sha256": "74e25bc31c7774af63e4baf47f422aaf8e5fb2c8d683f42aa2d53f90ec2fdd42"
               }
             ]
           },
           {
-            "configuration": "AMsduOnly",
-            "group": "frame_aggregation",
-            "ini": "examples/ieee80211n/frame_aggregation/omnetpp.ini",
-            "label": "A-MSDU Only",
+            "configuration": "Ht40MHz",
+            "group": "channel_widths",
+            "ini": "examples/ieee80211n/channel_widths/omnetpp.ini",
+            "label": "HT 40 MHz",
             "measurement": {
               "end_s": 0.9,
               "start_s": 0.3
@@ -69,52 +69,52 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/AMsduOnly/AMsduOnly-#0.sca",
-                "sha256": "1b5743e33fa1c85576e72830910c71d28ba4d79ae8f6689d20f57b409397a375"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHz/Ht40MHz-#0.sca",
+                "sha256": "a0dba537575fb31a3e526f81de547b2d7eb5c573f914ba35f4f632d7ff20c4ed"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/AMsduOnly/AMsduOnly-#0.vec",
-                "sha256": "6a28ff56f934964641cb38875033e8c7dfe11129581931e8c4c8abf23146c840"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHz/Ht40MHz-#0.vec",
+                "sha256": "9e157acbb165092ae4e27b1885fb7b7c5af67df30164ae9e60f3521d933de89c"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/AMsduOnly/AMsduOnly-#1.sca",
-                "sha256": "ac9d76818fa9b9f71e046cae794fa2783796bcabcd6a00066cfbd83dfe75b9ad"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHz/Ht40MHz-#1.sca",
+                "sha256": "1cfb44a8636d299b23ee9c4fda5b3ffbfe788b54b5db253a30963fd18d3ff4b9"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/AMsduOnly/AMsduOnly-#1.vec",
-                "sha256": "ca43290106ac9ef582d6e839670536af1b716f909f1b8050b91224ca9825aea5"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHz/Ht40MHz-#1.vec",
+                "sha256": "942d97e1e18314407aac44788997be7ff9538dbdefd5140f7b40b15672b05b35"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/AMsduOnly/AMsduOnly-#2.sca",
-                "sha256": "a1375ac2f0833fa7f9c7881a4867c1992975f6efcf1b80b1ce9f2c905abf9f11"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHz/Ht40MHz-#2.sca",
+                "sha256": "1200f82c04c167cc0fcd2794068432a7947cc238567e8dff848b7ceac88a3408"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/AMsduOnly/AMsduOnly-#2.vec",
-                "sha256": "cf94b4c771aa451a1d71f4729524ac515b24f18ba1705e38e071cd3706ac5ae9"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHz/Ht40MHz-#2.vec",
+                "sha256": "2196a51ec5859b37a5da780ac148ac2c4d4c58ba5aa06fa0d220c21ee15cc85c"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/AMsduOnly/AMsduOnly-#3.sca",
-                "sha256": "540736ef52f094d2e2d70041dfdc5293a05a6b483133766037539b9042761642"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHz/Ht40MHz-#3.sca",
+                "sha256": "52a36eeef3d88da334295ee2a1b7ac721c81d477e4966a788065894d6724f213"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/AMsduOnly/AMsduOnly-#3.vec",
-                "sha256": "a3577478e52377ef732abce75a19ec206e56be6043f1567d7436e9efcb5b6425"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHz/Ht40MHz-#3.vec",
+                "sha256": "af905ccd6a27c602183d99b915ec874ec79562d4fc3252406fe1f10851c4855b"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/AMsduOnly/AMsduOnly-#4.sca",
-                "sha256": "82ba5c662fe0d40e73e20fd4c6ce874cbfecc13e4ed06f1b8c47c9e2396dc288"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHz/Ht40MHz-#4.sca",
+                "sha256": "15bcff6013d44ef14cfd867916032bc39edf9f3529eb69059076a86f4aaf1298"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/AMsduOnly/AMsduOnly-#4.vec",
-                "sha256": "a8f01957ab87cd891087b20f0c7f1c122cb34e98ba8f108d129f535c0f376bc3"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHz/Ht40MHz-#4.vec",
+                "sha256": "7e4598e7831c555f1023da981f2c3e6b6e8381d50af7843e50fd5e155fabba3f"
               }
             ]
           },
           {
-            "configuration": "AMpduOnly",
-            "group": "frame_aggregation",
-            "ini": "examples/ieee80211n/frame_aggregation/omnetpp.ini",
-            "label": "A-MPDU Only",
+            "configuration": "Ht40MHzSecondaryAbove",
+            "group": "channel_widths",
+            "ini": "examples/ieee80211n/channel_widths/omnetpp.ini",
+            "label": "HT 40 MHz (Secondary Above)",
             "measurement": {
               "end_s": 0.9,
               "start_s": 0.3
@@ -122,52 +122,52 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/AMpduOnly/AMpduOnly-#0.sca",
-                "sha256": "655d05841f7a9368d8768ffb2260309f9e6ffdbc0ef242f27a6030a888dbc7ec"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#0.sca",
+                "sha256": "e33b539649b8c252eb8d255defb7ea5222b355adf9bba1266a62057945587357"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/AMpduOnly/AMpduOnly-#0.vec",
-                "sha256": "883add84bfb33694184f5e51bea87e2a5598ddabdf80712bce211ffaf02c8552"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#0.vec",
+                "sha256": "25ad0b1dd8a85bccd777968cd0019c6044686f3af1eb1eb991644b368e5795e5"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/AMpduOnly/AMpduOnly-#1.sca",
-                "sha256": "5391fd6017c752baf5f95f939ac67c68a3dcd8bcddf6aa978ea7e86e8914c7d2"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#1.sca",
+                "sha256": "69c4d0f2c71523249427f595304bacb499f0bc0fbfc67084b0196308643816f6"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/AMpduOnly/AMpduOnly-#1.vec",
-                "sha256": "a87802cc213f00fe13ca6389c266ffb2b2c0b7d70f173c830deaebe43c503c8c"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#1.vec",
+                "sha256": "d17b2ac04fd9142125c0e50055c209a5cbfbc5b58380dde6809e8065ff78ae3a"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/AMpduOnly/AMpduOnly-#2.sca",
-                "sha256": "e24bf7fe07fca2a5118c79953e0797a69fa36d9ab04656e7bc67e1ba8118c6d5"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#2.sca",
+                "sha256": "d642631065ef56ea628bcc5083fd9b3ea57d0a15da48bbc0e5d12f624193a72e"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/AMpduOnly/AMpduOnly-#2.vec",
-                "sha256": "27ad3bf4be9a670e147740c9796bd52f10b6567002a79b0818f4ed78df3790cf"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#2.vec",
+                "sha256": "fced959c5d95c872e09a65f0ae3d1b3a8372b93104581f5596a61c6530a738d1"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/AMpduOnly/AMpduOnly-#3.sca",
-                "sha256": "7e0807de4945268395c00056b1abb1b313070981e479df10e244f9226f5d0518"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#3.sca",
+                "sha256": "4fa3c41e232f5aa43da1f51988c0fe04970121ee1501745511a8615027552a40"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/AMpduOnly/AMpduOnly-#3.vec",
-                "sha256": "0b0c54cd976d1eb7d97e4323da1a2caeedfc2cd4ee96eb0cc518f14f3faa9884"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#3.vec",
+                "sha256": "785560bc30f7b859a0ba09b94a463b4e14f87bdeebc169dc5740fbcfe0d9c003"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/AMpduOnly/AMpduOnly-#4.sca",
-                "sha256": "4e0ff25523118a11c8303ea114fbcca4785512d78abb6529926043f5109a68bc"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#4.sca",
+                "sha256": "b5d481d2192019c5b70e846c3a6ab2a589f9adfe296d3439cae2091e9cd458e9"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/AMpduOnly/AMpduOnly-#4.vec",
-                "sha256": "db528819af8dbf024eea7c98360eefecb9319c5419538ded447d31ff3ba6257d"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#4.vec",
+                "sha256": "0394d0a8debfdb8bd85ddc49a96912eef5c4ecfd9fd6863696978f24f53d065e"
               }
             ]
           },
           {
-            "configuration": "TwoLevelAggregation",
-            "group": "frame_aggregation",
-            "ini": "examples/ieee80211n/frame_aggregation/omnetpp.ini",
-            "label": "Two-Level Aggregation",
+            "configuration": "Ht40MHzSecondaryBelow",
+            "group": "channel_widths",
+            "ini": "examples/ieee80211n/channel_widths/omnetpp.ini",
+            "label": "HT 40 MHz (Secondary Below)",
             "measurement": {
               "end_s": 0.9,
               "start_s": 0.3
@@ -175,83 +175,83 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/TwoLevelAggregation/TwoLevelAggregation-#0.sca",
-                "sha256": "401e93a658d919bb489da8a7f36cd15e6b8ddf352e21cc59f74e80d92e577b6e"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#0.sca",
+                "sha256": "ad80b48ddee6a7e73fbd06b1fe9ee9aa6648c63e84deb333e7039e68e81c110b"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/TwoLevelAggregation/TwoLevelAggregation-#0.vec",
-                "sha256": "276a6c0f17820df02db51b8e360ed0a90b2cdaa321a78d0c30a0f9ab6a46a3ea"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#0.vec",
+                "sha256": "3bfa27735c6eba7ba04d3420fbe78a32121c8bd772eea159dd725401178dfc90"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/TwoLevelAggregation/TwoLevelAggregation-#1.sca",
-                "sha256": "3c54a2087c2ad9395c24ef0d536725012008d887c5b89f2e3640be6d2ffc320b"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#1.sca",
+                "sha256": "e6bc0a465a8abd465c53228534fd4454a7b60869f212cfe68212d1bce288ac0e"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/TwoLevelAggregation/TwoLevelAggregation-#1.vec",
-                "sha256": "98f31689013490ac8e44f1c938c4d58758ef7c6c11d331376fd7b8b267e5159c"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#1.vec",
+                "sha256": "6b5769c48b4fd292fdd6d8b454747431edea7eae741f50031a0dba2f253b0a60"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/TwoLevelAggregation/TwoLevelAggregation-#2.sca",
-                "sha256": "d1b24d6d56da0f98a38ff93092896f7c9fea857d88e5ef0aa65099578aabcc7d"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#2.sca",
+                "sha256": "980538fd55bfa882a7a5d73eb0e0ef44ce5c547754c91bd93ad7c58f74fcac9f"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/TwoLevelAggregation/TwoLevelAggregation-#2.vec",
-                "sha256": "127c5516c83b4b6b6f2ce0528409f35c3f55835c723e71a5e1c40fba95529855"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#2.vec",
+                "sha256": "4a7dc1ceb5194c02739f2cfb2fbaa2443b491bc648870fececc84d71f2cd030d"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/TwoLevelAggregation/TwoLevelAggregation-#3.sca",
-                "sha256": "0be83a03cf3df5829c06c2aae0e4d7851e79704615ae938331bc05881049ded6"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#3.sca",
+                "sha256": "00a41f4a244b92a0d8c6e95696c6a44c43b25208537d7d8ca03e4a94407b9370"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/TwoLevelAggregation/TwoLevelAggregation-#3.vec",
-                "sha256": "4a26e3e799b992ae712b4e299712f24b143a3a738738eb48ecded4568fdc6266"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#3.vec",
+                "sha256": "ca057c859ad4f3f87000527c1bca1de9c5c89ec94f07fbac1bcf2bbccbdb96bd"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/TwoLevelAggregation/TwoLevelAggregation-#4.sca",
-                "sha256": "8faf5d54832c719304eaa1b3c11607d413e0fa05527831d0a38781df0931ec12"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#4.sca",
+                "sha256": "57416687f8331a8ba48838fbe94f4a6e80d3675fb233916e81736f05456ef7c2"
               },
               {
-                "path": "examples/ieee80211n/frame_aggregation/results/20260804T233811Z/TwoLevelAggregation/TwoLevelAggregation-#4.vec",
-                "sha256": "1414270c89cb59b1fad91940f3cee250b779dc31a7d5468eca8a72d89d24ecd4"
+                "path": "examples/ieee80211n/channel_widths/results/20260804T234935Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#4.vec",
+                "sha256": "3d2c4448e7e985b7ef90385f522025ffe8e9c3f4a64f9c93a2dbcf9a61fe8e29"
               }
             ]
           }
         ],
-        "session_id": "20260804T233811Z",
+        "session_id": "20260804T234935Z",
         "status": "PASS"
       }
     },
-    "repository_revision": "f65022b358ab568bf09c0be52b1c51eed23fb11a",
-    "requested_session_id": "20260804T233811Z",
+    "repository_revision": "35cdea4a5d03c77eb6b680378fafbce2f8bd081c",
+    "requested_session_id": "20260804T234935Z",
     "schema_version": 1
   },
-  "frame_aggregation": {
-    "A-MPDU Only": {
+  "channel_widths": {
+    "HT 20 MHz": {
       "goodput_mbps": {
-        "ci95": 0.021919658497806548,
+        "ci95": 0.7484999404194584,
         "count": 5,
-        "mean": 3.895466666666666
+        "mean": 4.064
       }
     },
-    "A-MSDU Only": {
+    "HT 40 MHz": {
       "goodput_mbps": {
-        "ci95": 0.0031845178507998806,
+        "ci95": 2.52432801023541,
         "count": 5,
-        "mean": 3.357066666666666
+        "mean": 11.804799999999998
       }
     },
-    "No Aggregation": {
+    "HT 40 MHz (Secondary Above)": {
       "goodput_mbps": {
-        "ci95": 0.0013851341782448018,
+        "ci95": 2.52432801023541,
         "count": 5,
-        "mean": 3.1983999999999995
+        "mean": 11.804799999999998
       }
     },
-    "Two-Level Aggregation": {
+    "HT 40 MHz (Secondary Below)": {
       "goodput_mbps": {
-        "ci95": 0.11862119598635894,
+        "ci95": 2.52432801023541,
         "count": 5,
-        "mean": 3.9858666666666656
+        "mean": 11.804799999999998
       }
     }
   }

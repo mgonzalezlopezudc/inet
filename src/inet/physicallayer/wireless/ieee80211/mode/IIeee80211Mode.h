@@ -62,6 +62,7 @@ class INET_API IIeee80211Mode : public cObject, public IPrintableObject
     IIeee80211DataMode *_getDataMode() const { return const_cast<IIeee80211DataMode *>(getDataMode()); }
     virtual const simtime_t getDataDuration(b dataLength) const { return getDataMode()->getDuration(dataLength); }
     virtual const simtime_t getDuration(b dataLength) const = 0;
+    virtual const simtime_t getPpduMaxDuration() const { return SIMTIME_MAX; }
     virtual const simtime_t getSlotTime() const = 0;
     virtual const simtime_t getSifsTime() const = 0;
     virtual const simtime_t getRifsTime() const = 0;

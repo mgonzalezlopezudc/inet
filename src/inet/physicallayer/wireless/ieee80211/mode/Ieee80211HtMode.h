@@ -283,6 +283,7 @@ class INET_API Ieee80211HtMode : public Ieee80211ModeBase
 
     virtual const simtime_t getDataDuration(b dataLength) const override;
     virtual const simtime_t getDuration(b dataLength) const override { return preambleMode->getDuration() + getDataDuration(dataLength); }
+    virtual const simtime_t getPpduMaxDuration() const override { return SimTime(10, SIMTIME_MS); } // IEEE Std 802.11-2024 Table 19-25: aPPDUMaxTime
 };
 
 // A specification of the high-throughput (HT) physical layer (PHY)
