@@ -56,7 +56,7 @@ GENERATED_BEGIN = f"<!-- BEGIN GENERATED: {GENERATED_MARKER} -->"
 GENERATED_END = f"<!-- END GENERATED: {GENERATED_MARKER} -->"
 SUITE_SCENARIOS = {}
 EVIDENCE_STATUSES = {"PASS", "FAIL", "INCONCLUSIVE", "NOT RUN"}
-TIMELINE_LIMIT = 50
+TIMELINE_LIMIT = 100
 
 subdirs_configs = {}
 CONFIG_ORDER = {}
@@ -67,6 +67,15 @@ DL_OFDMA_ASYM_CONFIGS = {
     "BacklogBased2_5ms", "HoLMinDelay2_5ms", "BacklogBased1_5ms", "HoLMinDelay1_5ms",
 }
 HT_IMPLICIT_BLOCK_ACK_CONFIG = "UlSUHTAMpduCompressedBlockAck"
+COMPRESSED_BLOCK_ACK_CONFIGS = {
+    "block_ack": {"CompressedBlockAck", "HtImplicitBlockAck"},
+    "ul_multitid": {HT_IMPLICIT_BLOCK_ACK_CONFIG},
+    "mac_features/multi_tid_block_ack": {HT_IMPLICIT_BLOCK_ACK_CONFIG},
+}
+
+
+def has_compressed_block_ack_records(subdir, config_name):
+    return config_name in COMPRESSED_BLOCK_ACK_CONFIGS.get(subdir, set())
 
 
 def configure_suite(suite, output_dir):
@@ -1149,6 +1158,7 @@ def extract_frame_timeline(pcap_files, subdir, limit=TIMELINE_LIMIT):
         "radiotap.u_sig.common", "radiotap.eht.data_0.gi",
         "radiotap.eht.user_info", "radiotap.eht.user_info.mcs",
         "radiotap.eht.user_info.coding", "radiotap.eht.user_info.nss",
+        "wlan.ba.control", "wlan.fixed.ssc.sequence", "wlan.ba.bm",
     ]
     rows = []
     display_filter = timeline_filter_for_subdir(subdir)
@@ -1187,7 +1197,8 @@ def extract_frame_timeline(pcap_files, subdir, limit=TIMELINE_LIMIT):
              ampdu_reference, he_present, he_format, he_mcs, he_coding,
              he_bw_ru, he_gi, he_nsts, to_ds, from_ds, more_fragments) = values[:24]
             present_words, eht_known, u_sig_common, eht_gi, eht_user_info, \
-                eht_mcs, eht_coding, eht_nss = values[24:32]
+                eht_mcs, eht_coding, eht_nss, ba_control, ba_starting_sequence, \
+                ba_bitmap = values[24:35]
             if not frame_number or not timestamp:
                 continue
             present_eht = False
@@ -1260,6 +1271,11 @@ def extract_frame_timeline(pcap_files, subdir, limit=TIMELINE_LIMIT):
                 "tid": int(tid) if tid.isdigit() else None,
                 "ampdu": ampdu_present in ("1", "True"),
                 "ampdu_reference": ampdu_reference or None,
+                "acknowledged_sequence_numbers": (
+                    decode_block_ack_bitmap(ba_control, ba_starting_sequence, ba_bitmap)
+                    if frame_type == "1" and subtype == "9"
+                    else []
+                ),
                 "phy": {
                     "format": standard,
                     "mcs": mcs or None,
@@ -1269,7 +1285,63 @@ def extract_frame_timeline(pcap_files, subdir, limit=TIMELINE_LIMIT):
                     "coding": coding or None,
                 },
             })
+    enrich_block_ack_rows(rows)
     return select_representative_timeline(rows, subdir, limit)
+
+
+def decode_block_ack_bitmap(control, starting_sequence, bitmap):
+    """Decode the sequence numbers represented by a Block Ack bitmap."""
+    if not control or not starting_sequence or not bitmap:
+        return []
+    try:
+        bitmap_bytes = bytes.fromhex(bitmap.replace(":", ""))
+        starting_sequence_number = int(starting_sequence, 0)
+    except (TypeError, ValueError):
+        return []
+    return [
+        (starting_sequence_number + bit_index) % 4096
+        for bit_index in range(len(bitmap_bytes) * 8)
+        if bitmap_bytes[bit_index // 8] & (1 << (bit_index % 8))
+    ]
+
+
+def enrich_block_ack_rows(rows):
+    """Attach the A-MPDU references covered by each decoded Block Ack."""
+    for block_ack in rows:
+        acknowledged_sequences = set(
+            block_ack.get("acknowledged_sequence_numbers", [])
+        )
+        if not acknowledged_sequences:
+            block_ack["acknowledged_ampdu_references"] = []
+            continue
+
+        candidates = {}
+        for data in rows:
+            if (
+                data.get("frame_type") != "2"
+                or not data.get("ampdu")
+                or not data.get("ampdu_reference")
+                or data.get("sequence_number") not in acknowledged_sequences
+                or data.get("simulation_time_s", 0) > block_ack.get("simulation_time_s", 0)
+                or data.get("transmitter") != block_ack.get("receiver")
+                or data.get("receiver") != block_ack.get("transmitter")
+            ):
+                continue
+            # Keep the latest observation for a sequence number before the BA;
+            # a retry can otherwise make one sequence map to stale aggregates.
+            current = candidates.get(data["sequence_number"])
+            observation_key = (
+                data.get("simulation_time_s", 0),
+                data.get("frame_number", 0),
+            )
+            if current is None or observation_key >= current[0]:
+                candidates[data["sequence_number"]] = (
+                    observation_key, data["ampdu_reference"]
+                )
+        block_ack["acknowledged_ampdu_references"] = sorted(
+            {value for _, value in candidates.values()},
+            key=lambda value: (len(str(value)), str(value)),
+        )
 
 
 def _parse_repeated_tshark_integers(value):
@@ -1917,12 +1989,9 @@ def extract_compressed_block_ack_records(pcap_files):
                 continue
             if not (int(control, 0) & 0x0004):
                 continue
-            bitmap_bytes = bytes.fromhex(bitmap.replace(":", ""))
-            acknowledged_sequence_numbers = [
-                (int(starting_sequence, 0) + bit_index) % 4096
-                for bit_index in range(len(bitmap_bytes) * 8)
-                if bitmap_bytes[bit_index // 8] & (1 << (bit_index % 8))
-            ]
+            acknowledged_sequence_numbers = decode_block_ack_bitmap(
+                control, starting_sequence, bitmap
+            )
             records.append({
                 "capture": str(path.relative_to(REPOSITORY_ROOT)),
                 "frame_number": int(frame_number),
@@ -1973,8 +2042,7 @@ def analyze_subdirectory(subdir, considered, config_pcaps):
                 ),
                 "compressed_block_ack_records": (
                     extract_compressed_block_ack_records(target_pcaps)
-                    if subdir in ("ul_multitid", "mac_features/multi_tid_block_ack")
-                    and config_name == HT_IMPLICIT_BLOCK_ACK_CONFIG
+                    if has_compressed_block_ack_records(subdir, config_name)
                     else []
                 ),
             }
@@ -2632,6 +2700,17 @@ def timeline_markdown(timeline):
         ]
         if frame["ampdu"]:
             decisive.append(f"A-MPDU={frame['ampdu_reference'] or 'present'}")
+        acknowledged_sequences = frame.get("acknowledged_sequence_numbers", [])
+        acknowledged_ampdus = frame.get("acknowledged_ampdu_references", [])
+        if acknowledged_ampdus:
+            decisive.append(
+                "A-MPDUs acknowledged=" + ", ".join(map(str, acknowledged_ampdus))
+            )
+        elif acknowledged_sequences:
+            decisive.append(
+                "MPDU sequence(s) acknowledged="
+                + ", ".join(map(str, acknowledged_sequences))
+            )
         address_pair = (
             f"{frame['transmitter'] or '?'} → {frame['receiver'] or '?'}"
         )
@@ -2750,15 +2829,12 @@ def generate_markdown_tables(
             md.append(multi_sta_block_ack_records_markdown(
                 global_res["multi_sta_block_ack_records"]
             ))
-        if (
-            subdir in ("ul_multitid", "mac_features/multi_tid_block_ack")
-            and config_name == HT_IMPLICIT_BLOCK_ACK_CONFIG
-        ):
+        if has_compressed_block_ack_records(subdir, config_name):
             md.append(
                 "#### [script] Decoded HT Compressed Block Ack records\n\n"
             )
             md.append(compressed_block_ack_records_markdown(
-                global_res["compressed_block_ack_records"]
+                global_res.get("compressed_block_ack_records", [])
             ))
         if subdir in ("ul_ofdma", "bsr", "he_bsr"):
             md.append(
@@ -3267,6 +3343,7 @@ def main():
                     "timeline": g["timeline"],
                     "he_trigger_allocations": g["he_trigger_allocations"],
                     "multi_sta_block_ack_records": g["multi_sta_block_ack_records"],
+                    "compressed_block_ack_records": g["compressed_block_ack_records"],
                 }
             if "per_flow" in res:
                 serialized[subdir][config_name]["per_flow"] = {}

@@ -1,14 +1,14 @@
 {
   "_provenance": {
-    "generated_at_utc": "2026-08-05T11:01:03.286254+00:00",
+    "generated_at_utc": "2026-08-05T21:35:25.633109+00:00",
     "groups": {
-      "guard_interval": {
+      "block_ack": {
         "conditions": [
           {
-            "configuration": "LongGI800ns",
-            "group": "guard_interval",
-            "ini": "examples/ieee80211n/guard_interval/omnetpp.ini",
-            "label": "Long GI (800 ns)",
+            "configuration": "StandardAck",
+            "group": "block_ack",
+            "ini": "examples/ieee80211n/block_ack/omnetpp.ini",
+            "label": "Standard ACK",
             "measurement": {
               "end_s": 0.9,
               "start_s": 0.3
@@ -16,52 +16,52 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/LongGI800ns/LongGI800ns-#0.sca",
-                "sha256": "1b0c21d3a4585f8adcfb86db12a25c105711ade2d60f8d23a3ae4b500907883c"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/StandardAck/StandardAck-#0.sca",
+                "sha256": "ce9052024ec251895e0ab573bdfc173be1537a4ee77d0c91abe9c3d208fca4e2"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/LongGI800ns/LongGI800ns-#0.vec",
-                "sha256": "db276307e701726176bd96d4bd21c61d73197a44d0f258573b3cc435dd4618ed"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/StandardAck/StandardAck-#0.vec",
+                "sha256": "a754c55c9ed57a2c44bedeb01ef92efd17111c7e0d0d671ea817f9e874145013"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/LongGI800ns/LongGI800ns-#1.sca",
-                "sha256": "5c519be92c1a8b6ba6574952286bf6e86606d3c335eaad7d7cadf40390d3aecc"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/StandardAck/StandardAck-#1.sca",
+                "sha256": "6a185fec16006ad7933ca79a2535c93ab05b105a77d40f16549cf1ee44e3ee7b"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/LongGI800ns/LongGI800ns-#1.vec",
-                "sha256": "56c2e7cd8178261316c52766f757ddeacb06da3bdceb850438c3aa61903dcba2"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/StandardAck/StandardAck-#1.vec",
+                "sha256": "770b2705a3d185452ada22711601dec95fbc553ddd158c439d6c698a33477123"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/LongGI800ns/LongGI800ns-#2.sca",
-                "sha256": "14e5b32f6ea8f1f9b901410b1d23c10d6ed4353640fdd3999faef29eed1eceb9"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/StandardAck/StandardAck-#2.sca",
+                "sha256": "f1e3330268c829bb232d822456028d6b84352d3238692ee9e8280a997e50554a"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/LongGI800ns/LongGI800ns-#2.vec",
-                "sha256": "099ed66814ea592a3ded4046f6d2a84cef47008c217a3ae8b6b6b4badceb4524"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/StandardAck/StandardAck-#2.vec",
+                "sha256": "0fa0f14493bf659f61413451bb34474779550dd0a736910bd09ab1b57a9b7fa5"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/LongGI800ns/LongGI800ns-#3.sca",
-                "sha256": "907cf2482e8366e6b0fc627ef6dc00e8c9bf82db9927fd8730529363637db477"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/StandardAck/StandardAck-#3.sca",
+                "sha256": "bccc99a5fb62a021bf947c7d39db1e8cfba9f25fde3188caee121b111bad5298"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/LongGI800ns/LongGI800ns-#3.vec",
-                "sha256": "062bd36aa50f8015335e2f5b259a33b639dc2291128195ca054772b030091600"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/StandardAck/StandardAck-#3.vec",
+                "sha256": "003ea42f73e430fd1b054b1fbea381c3ffe143381ff5dd494d390d02362e8360"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/LongGI800ns/LongGI800ns-#4.sca",
-                "sha256": "71588abdd1ceac7d82d990480283203393545c6b6906e6b02434cae9dacd3ba9"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/StandardAck/StandardAck-#4.sca",
+                "sha256": "37b3d3517891deadf88cf7ef00a586e4f2e54a8f50f9f5a1f1a231e53ecd7023"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/LongGI800ns/LongGI800ns-#4.vec",
-                "sha256": "8e5a615f3254bdc5b077dded44438f645c9539bb3e04ab7ff8b7b475ec167375"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/StandardAck/StandardAck-#4.vec",
+                "sha256": "d4b83560042b1c7f87a466c7b29f68e74d9c2091b138c0eb533436ff6e649855"
               }
             ]
           },
           {
-            "configuration": "ShortGI400ns",
-            "group": "guard_interval",
-            "ini": "examples/ieee80211n/guard_interval/omnetpp.ini",
-            "label": "Short GI (400 ns)",
+            "configuration": "ImmediateBlockAck",
+            "group": "block_ack",
+            "ini": "examples/ieee80211n/block_ack/omnetpp.ini",
+            "label": "Immediate Block ACK",
             "measurement": {
               "end_s": 0.9,
               "start_s": 0.3
@@ -69,52 +69,52 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/ShortGI400ns/ShortGI400ns-#0.sca",
-                "sha256": "c693c96ff8b098176c04acb8d3f891502b4453d3bfc59e0c2029b980e9e8b788"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/ImmediateBlockAck/ImmediateBlockAck-#0.sca",
+                "sha256": "1a82a8c3a081d94dd741d291db559ef680502b1d264a762858f148de07141436"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/ShortGI400ns/ShortGI400ns-#0.vec",
-                "sha256": "7731fd6b0ad132b4dd0879a5cdc89e861365f468c9803c8c8bd95b3d70e0703b"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/ImmediateBlockAck/ImmediateBlockAck-#0.vec",
+                "sha256": "df0e4f993053bf6bff9ee65a14586b2a54fc32c29bc63c374cfb69c4384f6051"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/ShortGI400ns/ShortGI400ns-#1.sca",
-                "sha256": "167a197742a1c8df5408352717970e72a65981160b75c5dd8a9438634795a725"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/ImmediateBlockAck/ImmediateBlockAck-#1.sca",
+                "sha256": "d3c0cc6c633db254fc7c008c244db7b7f65a7a8f1d119ce65f7e5d15873e4089"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/ShortGI400ns/ShortGI400ns-#1.vec",
-                "sha256": "12e092eafc88dcbff093b69c8f43ed2a2986381fcbaa692566bb6e5b5d8cb7c8"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/ImmediateBlockAck/ImmediateBlockAck-#1.vec",
+                "sha256": "0913476a0434051f0c4f341c67b292908de9db7d6efd8873201dd55d2beeabc6"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/ShortGI400ns/ShortGI400ns-#2.sca",
-                "sha256": "f395d80acc300afe3ea1d42da236206b371cc1fa9430352a6375bfe67cb8d9e7"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/ImmediateBlockAck/ImmediateBlockAck-#2.sca",
+                "sha256": "7be8b6c2de28c23c5b095a8c29ba7ae49c874a0a144ac0e9562b0e946430c34d"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/ShortGI400ns/ShortGI400ns-#2.vec",
-                "sha256": "59eb5bd47910e03c4bb4b0bf10d6c9b972333137980634e31d2101d6c033ebdd"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/ImmediateBlockAck/ImmediateBlockAck-#2.vec",
+                "sha256": "43cb7b55c4f380ebdb31d1402a7dc4b9ae436849b78c7efac3233dd25b3d3d62"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/ShortGI400ns/ShortGI400ns-#3.sca",
-                "sha256": "8911161a7a22031c36c5edf7a754e105cc0d2296da69315d2fab85b2c4fab2f4"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/ImmediateBlockAck/ImmediateBlockAck-#3.sca",
+                "sha256": "f8d84644302f98c1c8ccaf81f4a78b3c3aa688ec81c27a3410500aa3084aaa82"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/ShortGI400ns/ShortGI400ns-#3.vec",
-                "sha256": "2def861cc25bcbc8d0b8c87b0b6432929c90057ba95e72c595d6b6ea77b76532"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/ImmediateBlockAck/ImmediateBlockAck-#3.vec",
+                "sha256": "d46e42936a2b640a232defeb131ae5adf9ef105ee000d7267461afde11f09db2"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/ShortGI400ns/ShortGI400ns-#4.sca",
-                "sha256": "74f9b4f2610246932f628e1d2ea5d2a6957e008e58deb7f8f249910dd1225529"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/ImmediateBlockAck/ImmediateBlockAck-#4.sca",
+                "sha256": "3d984d84b3281c3eb544addee7f0bc33bf5ffea78351adbbacaac730c2398514"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/ShortGI400ns/ShortGI400ns-#4.vec",
-                "sha256": "17b96df194a94dc901b2d39443cb0ed171f6c0c65748a02caaa009623190311b"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/ImmediateBlockAck/ImmediateBlockAck-#4.vec",
+                "sha256": "d12488bcd20b45cd9b74b8eeed3ea7decca54ec0d24c1fc7d1b28798ab48e37f"
               }
             ]
           },
           {
-            "configuration": "LongGI40MHz108Mbps",
-            "group": "guard_interval",
-            "ini": "examples/ieee80211n/guard_interval/omnetpp.ini",
-            "label": "Long GI (40 MHz, 108 Mbps)",
+            "configuration": "CompressedBlockAck",
+            "group": "block_ack",
+            "ini": "examples/ieee80211n/block_ack/omnetpp.ini",
+            "label": "Compressed Block ACK",
             "measurement": {
               "end_s": 0.9,
               "start_s": 0.3
@@ -122,52 +122,52 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/LongGI40MHz108Mbps/LongGI40MHz108Mbps-#0.sca",
-                "sha256": "31f934a85faeec7839520b1f1f6e99d81aa09ff6124b3dcd43aeb714e761ccda"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/CompressedBlockAck/CompressedBlockAck-#0.sca",
+                "sha256": "79a7b4a865b5a5d32049733724f440a08d2c8002e1ec6f9e5c9d02e92054f58b"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/LongGI40MHz108Mbps/LongGI40MHz108Mbps-#0.vec",
-                "sha256": "607eed91c349f60c4562f1bccd7702694e1d6e2d93e4912c5795730cd14f817c"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/CompressedBlockAck/CompressedBlockAck-#0.vec",
+                "sha256": "7cc3a0a864e69c0a1639ebc6b0040a7d327bab2195956fe57ed9f4f59705b8fa"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/LongGI40MHz108Mbps/LongGI40MHz108Mbps-#1.sca",
-                "sha256": "cc655f6d65078a0093baea4c5aa9c8ae90b693f9a909caef72bc923f53198e55"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/CompressedBlockAck/CompressedBlockAck-#1.sca",
+                "sha256": "6d8e0b1ebbfc40cf3fc6455ab6f2380c74b2cb8e4223cad6d1034fec3e2a1604"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/LongGI40MHz108Mbps/LongGI40MHz108Mbps-#1.vec",
-                "sha256": "fd309897dbd7706be9222f468ebec44777d8041ac78416fa73dc00577f69bcd6"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/CompressedBlockAck/CompressedBlockAck-#1.vec",
+                "sha256": "80842cb7cbeae9bb418e08c1bf043b459d2f9d2f7531ff0e8818faa82c4b8c60"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/LongGI40MHz108Mbps/LongGI40MHz108Mbps-#2.sca",
-                "sha256": "0a8dc36ec54c21753103b2b0ff1f611f7a0e60aae34aee9e0a5a2e9e8c912482"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/CompressedBlockAck/CompressedBlockAck-#2.sca",
+                "sha256": "65c904084fb32971f680ad343c92ca955949143fce60b8f47e656d288aec388f"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/LongGI40MHz108Mbps/LongGI40MHz108Mbps-#2.vec",
-                "sha256": "2fab5ae6e2b39849688610111f6c680a5f215338c0d26530311811f18ffe1347"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/CompressedBlockAck/CompressedBlockAck-#2.vec",
+                "sha256": "db0da4cd27d1acf77b50c4b8903d687779eb1eb2ad73bf5cf9a30cd4c95ad963"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/LongGI40MHz108Mbps/LongGI40MHz108Mbps-#3.sca",
-                "sha256": "1d4e7aca5726edc37932ff16d645188922b51fdce491c63cfac37e33cf040d55"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/CompressedBlockAck/CompressedBlockAck-#3.sca",
+                "sha256": "b006b92ca19d61030a984d5a17f7e31835ba074ea0a3a3674bd104148b926b68"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/LongGI40MHz108Mbps/LongGI40MHz108Mbps-#3.vec",
-                "sha256": "765ddb9c6192ba81732c11d52cef0973f14b8b205c27ea06dbac4086b119f49d"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/CompressedBlockAck/CompressedBlockAck-#3.vec",
+                "sha256": "a38eacb7ba74809eeb634aed9a35302fc81bef836a6e11471cbb5164e5069c2a"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/LongGI40MHz108Mbps/LongGI40MHz108Mbps-#4.sca",
-                "sha256": "8c5489c63ac86f2296220be0016c4ba495634a2c9330935ebc6b7f50e31a7f5b"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/CompressedBlockAck/CompressedBlockAck-#4.sca",
+                "sha256": "57cb14d3480fa8de5946ddf2a4470a59cbf9975302d29490ec748cfa12963204"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/LongGI40MHz108Mbps/LongGI40MHz108Mbps-#4.vec",
-                "sha256": "cfb3594fd14b8b4ecc6bb41556a65cb2acf734058e11699e530a80102acf0536"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/CompressedBlockAck/CompressedBlockAck-#4.vec",
+                "sha256": "37200b389c0c7242434187e7cdb19e2ced8b610d486da1c2d3788072f8457fd5"
               }
             ]
           },
           {
-            "configuration": "ShortGI40MHz120Mbps",
-            "group": "guard_interval",
-            "ini": "examples/ieee80211n/guard_interval/omnetpp.ini",
-            "label": "Short GI (40 MHz, 120 Mbps)",
+            "configuration": "HtImplicitBlockAck",
+            "group": "block_ack",
+            "ini": "examples/ieee80211n/block_ack/omnetpp.ini",
+            "label": "HT Implicit Block ACK",
             "measurement": {
               "end_s": 0.9,
               "start_s": 0.3
@@ -175,83 +175,83 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/ShortGI40MHz120Mbps/ShortGI40MHz120Mbps-#0.sca",
-                "sha256": "5d6c51c74638c232f222949b5251f08f36640502f6c08ba0fb8afe5a483c6cc1"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/HtImplicitBlockAck/HtImplicitBlockAck-#0.sca",
+                "sha256": "96b14364bded8d68da7fb98b87056dfa4a81a596a297f49a34623be4ca4cdb11"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/ShortGI40MHz120Mbps/ShortGI40MHz120Mbps-#0.vec",
-                "sha256": "5ba17a05bcbe16c1ee2a31f596111d239ea86e18a05c8a31fec877ab8a57216c"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/HtImplicitBlockAck/HtImplicitBlockAck-#0.vec",
+                "sha256": "96d297f66196f1c10aee6cf2d26ddf4bb94bd84cae8b8f9e0e0e8ada33f3087d"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/ShortGI40MHz120Mbps/ShortGI40MHz120Mbps-#1.sca",
-                "sha256": "69257847c388f72a4b092947386182c34054b3c3b66ba901ed6dc5bffa1ccb71"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/HtImplicitBlockAck/HtImplicitBlockAck-#1.sca",
+                "sha256": "2f5ba1d93bdd739dfc84f477e6fddd1b51d20809702c8c67172842ee8e284f9a"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/ShortGI40MHz120Mbps/ShortGI40MHz120Mbps-#1.vec",
-                "sha256": "266e5c4a1ac8af227b2804023faf293e35dfb34a06f96a65045bcdd6a6944b3d"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/HtImplicitBlockAck/HtImplicitBlockAck-#1.vec",
+                "sha256": "89d8f16376612f775683f7bbb7b5d0709904fd82f56ceb8abaabf4a192523411"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/ShortGI40MHz120Mbps/ShortGI40MHz120Mbps-#2.sca",
-                "sha256": "9234fc50799497f7c5419e00ae2979b94039f417fa1bc8f79e0b2bbd549d96f9"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/HtImplicitBlockAck/HtImplicitBlockAck-#2.sca",
+                "sha256": "918764741bbe9f81d039c7a9867c77e27ec3a271042539681922cb16bd0cadae"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/ShortGI40MHz120Mbps/ShortGI40MHz120Mbps-#2.vec",
-                "sha256": "0f38c311596c7fc472a6966060c88fbbfbac33a189351ffdf53c4fb4df9ca632"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/HtImplicitBlockAck/HtImplicitBlockAck-#2.vec",
+                "sha256": "7bfdc2628c971c3ae11ee6f54eb65a4f085713606cfb639f7e5fabde15813798"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/ShortGI40MHz120Mbps/ShortGI40MHz120Mbps-#3.sca",
-                "sha256": "1020e1dc46f3beec341e40f9ad407609059c43b1a4fe5f883c64dd0553cb6c02"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/HtImplicitBlockAck/HtImplicitBlockAck-#3.sca",
+                "sha256": "8e636ecf02b6c5308b8c20b98a63aafe87e2bda6b325a9291bd9e7edee423180"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/ShortGI40MHz120Mbps/ShortGI40MHz120Mbps-#3.vec",
-                "sha256": "ce7ea2331b7f85dfaeb23ae936719fd402651dda41150e125c2da459dcb39ad2"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/HtImplicitBlockAck/HtImplicitBlockAck-#3.vec",
+                "sha256": "2f2d25a7a339bfaadaeed41dc66fda6e5cd49701b003d480a39cc0a4d862b971"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/ShortGI40MHz120Mbps/ShortGI40MHz120Mbps-#4.sca",
-                "sha256": "63d9381877b7f4136cf325d4882660cc6fca66f4df31836b95d6ac8321a7d4d9"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/HtImplicitBlockAck/HtImplicitBlockAck-#4.sca",
+                "sha256": "2a9dc1086caeaa7eafeaadc6f96141b1ff6756b51d6ddb4b8418052a1c6c121b"
               },
               {
-                "path": "examples/ieee80211n/guard_interval/results/20260805T130500Z/ShortGI40MHz120Mbps/ShortGI40MHz120Mbps-#4.vec",
-                "sha256": "9146f72d95559449ef66a96cea883e330d94ae6731cc0dc9c6774610fd048817"
+                "path": "examples/ieee80211n/block_ack/results/20260805T213040Z/HtImplicitBlockAck/HtImplicitBlockAck-#4.vec",
+                "sha256": "4df79038fee0de150af3a923185c5927265779a7841c30117daf18d5ee143bc2"
               }
             ]
           }
         ],
-        "session_id": "20260805T130500Z",
+        "session_id": "20260805T213040Z",
         "status": "PASS"
       }
     },
-    "repository_revision": "69456996b60ca9fd67a952f77320f9f174269ea7",
-    "requested_session_id": "20260805T130500Z",
+    "repository_revision": "ed9c9ce14c9900d70117722e7ed40243f81d35f0",
+    "requested_session_id": "20260805T213040Z",
     "schema_version": 1
   },
-  "guard_interval": {
-    "Long GI (40 MHz, 108 Mbps)": {
+  "block_ack": {
+    "Compressed Block ACK": {
       "goodput_mbps": {
-        "ci95": 0.07939748458597584,
+        "ci95": 0.008884624336632946,
         "count": 5,
-        "mean": 36.533333333333324
+        "mean": 5.219199999999999
       }
     },
-    "Long GI (800 ns)": {
+    "HT Implicit Block ACK": {
       "goodput_mbps": {
-        "ci95": 0.0074038536138609536,
+        "ci95": 0.02265143643171637,
         "count": 5,
-        "mean": 5.122666666666666
+        "mean": 5.193599999999999
       }
     },
-    "Short GI (40 MHz, 120 Mbps)": {
+    "Immediate Block ACK": {
       "goodput_mbps": {
-        "ci95": 0.056142499759893674,
+        "ci95": 0.047845166302246486,
         "count": 5,
-        "mean": 38.05333333333333
+        "mean": 10.326399999999998
       }
     },
-    "Short GI (400 ns)": {
+    "Standard ACK": {
       "goodput_mbps": {
-        "ci95": 0.0,
+        "ci95": 0.02265143643171637,
         "count": 5,
-        "mean": 6.706666666666666
+        "mean": 5.161599999999999
       }
     }
   }

@@ -31,10 +31,12 @@ from analyze_pcap import (
     GENERATED_BEGIN,
     GENERATED_END,
     MANIFEST_PATH,
+    TIMELINE_LIMIT,
     capture_map_from_manifest,
     capture_source_state,
     calculate_phy_rate,
     compressed_block_ack_records_markdown,
+    has_compressed_block_ack_records,
     compact_statistics_markdown,
     decode_eht_fields,
     decode_he_fields,
@@ -70,6 +72,9 @@ from analyze_pcap import (
 
 
 class TimelineRoleTest(unittest.TestCase):
+
+    def test_default_frame_exchange_timeline_limit_is_100_rows(self):
+        self.assertEqual(TIMELINE_LIMIT, 100)
 
     def test_qos_null_is_not_described_as_payload(self):
         self.assertEqual(
@@ -137,6 +142,33 @@ class TriggerAllocationDecodeTest(unittest.TestCase):
 
 
 class PcapMarkdownTest(unittest.TestCase):
+
+    def test_block_ack_timeline_prints_acknowledged_ampdu_reference(self):
+        markdown = timeline_markdown([{
+            "capture": "results/ap.wlan0.pcapng",
+            "frame_number": 8,
+            "simulation_time_s": 1.25,
+            "transmitter": "00:00:00:00:00:02",
+            "receiver": "00:00:00:00:00:01",
+            "direction": "direct/IBSS",
+            "frame_name": "Control: Block Ack (BA)",
+            "retry": False,
+            "sequence_number": None,
+            "fragment_number": None,
+            "more_fragments": False,
+            "tid": None,
+            "ampdu": False,
+            "ampdu_reference": None,
+            "acknowledged_sequence_numbers": [42, 43],
+            "acknowledged_ampdu_references": ["9"],
+            "phy": {"format": "Legacy/HT/VHT"},
+        }])
+        self.assertIn("A-MPDUs acknowledged=9", markdown)
+
+    def test_block_ack_table_is_enabled_for_n_block_ack_configs(self):
+        self.assertTrue(has_compressed_block_ack_records("block_ack", "CompressedBlockAck"))
+        self.assertTrue(has_compressed_block_ack_records("block_ack", "HtImplicitBlockAck"))
+        self.assertFalse(has_compressed_block_ack_records("block_ack", "StandardAck"))
 
     def test_extracts_acknowledged_sequences_from_compressed_block_ack_bitmap(self):
         result = SimpleNamespace(
@@ -674,6 +706,40 @@ class CaptureValidationTest(unittest.TestCase):
         self.assertEqual(timeline[1]["direction"], "to DS")
         self.assertTrue(timeline[1]["more_fragments"])
         self.assertEqual(timeline[1]["phy"]["format"], "HE-MU")
+
+    def test_timeline_parser_correlates_block_ack_bitmap_to_ampdu(self):
+        with tempfile.TemporaryDirectory(
+            dir=Path(__file__).resolve().parent
+        ) as directory:
+            capture = Path(directory) / "ap.wlan0.pcapng"
+            capture.write_bytes(b"capture")
+            validation = SimpleNamespace(
+                returncode=0, stdout="1\t0\t2\n", stderr=""
+            )
+            data = [
+                "7", "1.000", "00:01", "00:02", "", "", "2", "8", "0",
+                "42", "0", "5", "1", "9", "", "", "", "", "", "", "",
+                "0", "0", "0", "", "", "", "", "", "", "", "", "", "",
+            ]
+            block_ack = [
+                "8", "1.001", "00:02", "00:01", "", "", "1", "9", "0",
+                "", "", "", "0", "", "", "", "", "", "", "", "", "",
+                "0", "0", "0", "", "", "", "", "", "", "", "0x0004", "42",
+                "03:00:00:00:00:00:00:00",
+            ]
+            decode = SimpleNamespace(
+                returncode=0,
+                stdout="\n".join(("\t".join(data), "\t".join(block_ack))) + "\n",
+                stderr="",
+            )
+            with patch(
+                "analyze_pcap.subprocess.run",
+                side_effect=[validation, decode],
+            ):
+                timeline = extract_frame_timeline([capture], "block_ack", limit=2)
+        block_ack_row = next(row for row in timeline if row["frame_subtype"] == "9")
+        self.assertEqual(block_ack_row["acknowledged_sequence_numbers"], [42, 43])
+        self.assertEqual(block_ack_row["acknowledged_ampdu_references"], ["9"])
 
     def test_unknown_evidence_status_is_rejected(self):
         with self.assertRaisesRegex(RuntimeError, "invalid status"):
