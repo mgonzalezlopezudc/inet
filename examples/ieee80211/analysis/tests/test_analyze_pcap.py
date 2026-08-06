@@ -167,7 +167,7 @@ class PcapMarkdownTest(unittest.TestCase):
 
     def test_block_ack_table_is_enabled_for_n_block_ack_configs(self):
         self.assertTrue(has_compressed_block_ack_records("block_ack", "CompressedBlockAck"))
-        self.assertTrue(has_compressed_block_ack_records("block_ack", "HtImplicitBlockAck"))
+        self.assertTrue(has_compressed_block_ack_records("block_ack", "ImplicitBlockAck"))
         self.assertFalse(has_compressed_block_ack_records("block_ack", "StandardAck"))
 
     def test_extracts_acknowledged_sequences_from_compressed_block_ack_bitmap(self):
@@ -206,15 +206,15 @@ class PcapMarkdownTest(unittest.TestCase):
             },
         ]
         markdown_origin = compressed_block_ack_records_markdown(records, group_by="origin")
-        idx1 = markdown_origin.find("##### Origin address: 0a:aa:00:00:00:01")
-        idx2 = markdown_origin.find("##### Origin address: 0a:aa:00:00:00:02")
+        idx1 = markdown_origin.find("##### [script] Origin address: 0a:aa:00:00:00:01")
+        idx2 = markdown_origin.find("##### [script] Origin address: 0a:aa:00:00:00:02")
         self.assertGreater(idx1, -1)
         self.assertGreater(idx2, -1)
         self.assertLess(idx1, idx2)
         self.assertEqual(markdown_origin.count("|---:|---:|---:|---|---|"), 2)
 
         markdown_dest = compressed_block_ack_records_markdown(records, group_by="destination")
-        self.assertIn("##### Destination address: 10:00:00:00:00:00", markdown_dest)
+        self.assertIn("##### [script] Destination address: 10:00:00:00:00:00", markdown_dest)
         self.assertEqual(markdown_dest.count("|---:|---:|---:|---|---|"), 1)
 
     def test_compressed_block_ack_table_is_limited_to_100_rows(self):

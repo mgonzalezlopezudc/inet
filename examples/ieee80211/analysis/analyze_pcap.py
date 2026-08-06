@@ -69,7 +69,7 @@ DL_OFDMA_ASYM_CONFIGS = {
 }
 HT_IMPLICIT_BLOCK_ACK_CONFIG = "UlSUHTAMpduCompressedBlockAck"
 COMPRESSED_BLOCK_ACK_CONFIGS = {
-    "block_ack": {"CompressedBlockAck", "HtImplicitBlockAck"},
+    "block_ack": {"CompressedBlockAck", "ImplicitBlockAck"},
     "ul_multitid": {HT_IMPLICIT_BLOCK_ACK_CONFIG},
     "mac_features/multi_tid_block_ack": {HT_IMPLICIT_BLOCK_ACK_CONFIG},
 }
@@ -1518,7 +1518,7 @@ def compressed_block_ack_records_markdown(records, limit=100, group_by="destinat
 
     lines = []
     for group_val, group_records in sorted(by_group.items()):
-        lines.append(f"##### {label}: {group_val}\n\n")
+        lines.append(f"##### [script] {label}: {group_val}\n\n")
         lines.append(
             "| Frame | Simulation time (s) | Starting sequence | Bitmap | Acknowledged MPDU sequence numbers |\n"
             "|---:|---:|---:|---|---|\n"

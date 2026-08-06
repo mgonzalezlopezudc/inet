@@ -107,9 +107,9 @@
       "measurement": {"start": 0.3, "end": 0.5},
       "conditions": [
         {"label": "Standard ACK", "config": "StandardAck"},
-        {"label": "Immediate Block ACK", "config": "ImmediateBlockAck"},
-        {"label": "Compressed Block ACK", "config": "CompressedBlockAck"},
-        {"label": "HT Implicit Block ACK", "config": "HtImplicitBlockAck"}
+        {"label": "Frag. Basic BACK", "config": "FragBasicBlockAck"},
+        {"label": "Compressed BACK", "config": "CompressedBlockAck"},
+        {"label": "Implicit BACK", "config": "ImplicitBlockAck"}
       ]
     },
     "channel_widths": {

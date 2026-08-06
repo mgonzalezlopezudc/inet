@@ -19,7 +19,7 @@
     "block_ack": {
       "scalar_vector_group": "block_ack",
       "ini": "block_ack/omnetpp.ini",
-      "configurations": ["StandardAck", "ImmediateBlockAck", "CompressedBlockAck", "HtImplicitBlockAck"],
+      "configurations": ["StandardAck", "FragBasicBlockAck", "CompressedBlockAck", "ImplicitBlockAck"],
       "phy_profiles": ["ht"],
       "feature_plugins": ["block-ack"]
     },
