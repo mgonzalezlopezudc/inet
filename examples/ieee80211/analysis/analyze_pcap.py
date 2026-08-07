@@ -139,12 +139,156 @@ subtypes_data = {
     12: "QoS Null",
 }
 
+action_categories = {
+    0: "Spectrum Management",
+    1: "QoS",
+    2: "DLS",
+    3: "Block Ack",
+    4: "Public",
+    5: "Radio Measurement",
+    6: "Fast BSS Transition",
+    7: "HT",
+    8: "SA Query",
+    9: "Protected Dual of Public Action",
+    10: "WNM",
+    11: "Unprotected WNM",
+    12: "TDLS",
+    13: "Mesh",
+    14: "Multihop Action",
+    15: "Self-protected",
+    16: "DMG",
+    17: "WFA / Vendor Specific",
+    18: "Fast Session Transfer",
+    19: "Robust AV Streaming",
+    20: "Unprotected DMG",
+    21: "VHT",
+    26: "HE",
+    30: "EHT",
+    127: "Vendor Specific",
+}
+
+action_details = {
+    0: {
+        0: "Measurement Req",
+        1: "Measurement Report",
+        2: "TPC Req",
+        3: "TPC Report",
+        4: "Channel Switch Announcement",
+    },
+    1: {
+        0: "ADDTS Req",
+        1: "ADDTS Resp",
+        2: "DELTS",
+        3: "Schedule",
+    },
+    2: {
+        0: "DLS Req",
+        1: "DLS Resp",
+        2: "DLS Teardown",
+    },
+    3: {
+        0: "ADDBA Req",
+        1: "ADDBA Resp",
+        2: "DELBA",
+    },
+    4: {
+        0: "20/40 BSS Coexistence",
+        4: "Extended Channel Switch Announcement",
+        7: "Vendor Specific",
+        9: "GAS Initial Req",
+        10: "GAS Initial Resp",
+        11: "GAS Comeback Req",
+        12: "GAS Comeback Resp",
+    },
+    5: {
+        0: "RM Req",
+        1: "RM Report",
+        2: "Link Measurement Req",
+        3: "Link Measurement Report",
+        4: "Neighbor Report Req",
+        5: "Neighbor Report Resp",
+    },
+    6: {
+        1: "FT Req",
+        2: "FT Resp",
+    },
+    7: {
+        0: "Notify Channel Width",
+        1: "SM Power Save",
+        2: "Set MIMO PS State",
+    },
+    10: {
+        0: "Event Req",
+        1: "Event Report",
+        2: "Diagnostic Req",
+        3: "Diagnostic Report",
+        6: "BSS Transition Management Query",
+        7: "BSS Transition Management Req",
+        8: "BSS Transition Management Resp",
+        18: "TWT Setup",
+        19: "TWT Teardown",
+        20: "TWT Information",
+    },
+    12: {
+        0: "TDLS Setup Req",
+        1: "TDLS Setup Resp",
+        2: "TDLS Setup Confirm",
+        3: "TDLS Teardown",
+        4: "TDLS Discovery Req",
+        5: "TDLS Discovery Resp",
+    },
+    21: {
+        0: "VHT Compressed Beamforming",
+        1: "Group ID Management",
+        2: "Operating Mode Notification",
+    },
+    26: {
+        0: "HE Compressed Beamforming/CQI",
+        1: "BSS Color Change Announcement",
+        2: "Spatial Reuse Parameter Set",
+        3: "OMI",
+        4: "TWT Setup",
+        5: "TWT Teardown",
+        6: "TWT Information",
+    },
+    30: {
+        0: "EHT Compressed Beamforming/CQI",
+        1: "EHT Operating Mode Notification",
+        2: "Multi-Link Setup Req",
+        3: "Multi-Link Setup Resp",
+        4: "Multi-Link Teardown",
+    },
+}
+
+def format_action_details(category_code, action_code):
+    cat = parse_tshark_int(category_code)
+    act = parse_tshark_int(action_code)
+    if cat is None:
+        return ""
+    cat_name = action_categories.get(cat, f"Category {cat}")
+    act_name = None
+    if act is not None:
+        if cat in action_details and act in action_details[cat]:
+            act_name = action_details[cat][act]
+        else:
+            act_name = f"Action {act}"
+    if act_name:
+        return f": {cat_name}: {act_name}"
+    else:
+        return f": {cat_name}"
+
 def unpack_key_to_name(key):
     fc_type = key[0]
     fc_subtype = key[1]
     if len(key) > 3:
         standard, mcs, bw, gi, nss, coding, is_ampdu, is_sounding = key[2:10]
-        return get_packet_type_name(fc_type, fc_subtype, standard=standard, mcs=mcs, bw=bw, gi=gi, nss=nss, coding=coding, is_ampdu=is_ampdu, is_sounding=is_sounding)
+        category_code = key[11] if len(key) > 11 else None
+        action_code = key[12] if len(key) > 12 else None
+        return get_packet_type_name(
+            fc_type, fc_subtype, standard=standard, mcs=mcs, bw=bw, gi=gi, nss=nss,
+            coding=coding, is_ampdu=is_ampdu, is_sounding=is_sounding,
+            category_code=category_code, action_code=action_code
+        )
     else:
         is_he_mu = key[2] if len(key) > 2 else False
         return get_packet_type_name(fc_type, fc_subtype, is_he_mu=is_he_mu)
@@ -153,7 +297,7 @@ def unpack_key_to_name(key):
 def bss_color_from_key(key):
     return key[10] if len(key) > 10 and key[10] else "-"
 
-def get_packet_type_name(fc_type, fc_subtype, fc_version=None, is_he_mu=False, standard=None, mcs=None, bw=None, gi=None, nss=None, coding=None, is_ampdu=False, is_sounding=False):
+def get_packet_type_name(fc_type, fc_subtype, fc_version=None, is_he_mu=False, standard=None, mcs=None, bw=None, gi=None, nss=None, coding=None, is_ampdu=False, is_sounding=False, category_code=None, action_code=None):
     suffix = ""
     if is_sounding:
         suffix += " [NDP Sounding]"
@@ -202,7 +346,11 @@ def get_packet_type_name(fc_type, fc_subtype, fc_version=None, is_he_mu=False, s
         return "Other/Malformed" + suffix
 
     if t == 0:
-        return f"Management: {subtypes_mgmt.get(st, f'Subtype {st}')}" + suffix
+        base_mgmt = subtypes_mgmt.get(st, f"Subtype {st}")
+        if st in (13, 14):
+            action_desc = format_action_details(category_code, action_code)
+            return f"Management: {base_mgmt}{action_desc}" + suffix
+        return f"Management: {base_mgmt}" + suffix
     elif t == 1:
         return f"Control: {subtypes_ctrl.get(st, f'Subtype {st}')}" + suffix
     elif t == 2:
@@ -1160,6 +1308,7 @@ def extract_frame_timeline(pcap_files, subdir, limit=TIMELINE_LIMIT):
         "radiotap.eht.user_info", "radiotap.eht.user_info.mcs",
         "radiotap.eht.user_info.coding", "radiotap.eht.user_info.nss",
         "wlan.ba.control", "wlan.fixed.ssc.sequence", "wlan.ba.bm",
+        "wlan.fixed.category_code", "wlan.fixed.action_code",
     ]
     rows = []
     display_filter = timeline_filter_for_subdir(subdir)
@@ -1200,6 +1349,7 @@ def extract_frame_timeline(pcap_files, subdir, limit=TIMELINE_LIMIT):
             present_words, eht_known, u_sig_common, eht_gi, eht_user_info, \
                 eht_mcs, eht_coding, eht_nss, ba_control, ba_starting_sequence, \
                 ba_bitmap = values[24:35]
+            category_code, action_code = values[35:37]
             if not frame_number or not timestamp:
                 continue
             present_eht = False
@@ -1264,7 +1414,12 @@ def extract_frame_timeline(pcap_files, subdir, limit=TIMELINE_LIMIT):
                 "from_ds": from_ds in ("1", "True"),
                 "frame_type": frame_type or None,
                 "frame_subtype": subtype or None,
-                "frame_name": get_packet_type_name(frame_type, subtype),
+                "category_code": category_code or None,
+                "action_code": action_code or None,
+                "frame_name": get_packet_type_name(
+                    frame_type, subtype,
+                    category_code=category_code, action_code=action_code
+                ),
                 "retry": retry in ("1", "True"),
                 "sequence_number": int(sequence) if sequence.isdigit() else None,
                 "fragment_number": int(fragment) if fragment.isdigit() else None,
@@ -2160,8 +2315,12 @@ def get_base_type(pt):
 
 def get_sort_key(pt):
     base = get_base_type(pt)
-    if base in ORDERED_BASE_TYPES:
-        return (ORDERED_BASE_TYPES.index(base), pt)
+    if base.startswith("Management: Action") or base.startswith("Management: Action No Ack"):
+        base_key = "Management: Action"
+    else:
+        base_key = base
+    if base_key in ORDERED_BASE_TYPES:
+        return (ORDERED_BASE_TYPES.index(base_key), pt)
     else:
         return (len(ORDERED_BASE_TYPES), pt)
 
@@ -2193,7 +2352,7 @@ def get_packet_color(pt):
         h, s, l = 50, 95, 48
     elif base == "Control: PS-Poll":  # Light Blue/Steel Blue
         h, s, l = 195, 75, 65
-    elif base == "Management: Action":  # Action (Red)
+    elif base.startswith("Management: Action") or base.startswith("Management: Action No Ack"):  # Action (Red)
         h, s, l = 0, 85, 50
     elif base == "Management: Beacon":  # Beacon (Crimson/Dark Red)
         h, s, l = 350, 90, 32
@@ -2219,15 +2378,10 @@ def get_packet_color(pt):
     # Perturb HSL based on the suffix (to distinguish subtypes visually)
     if suffix:
         val = zlib.adler32(suffix.encode('utf-8'))
-        # Perturb Hue by +/- 8 degrees
         h_offset = (val % 17) - 8
         h = (h + h_offset) % 360
-
-        # Perturb Saturation by +/- 10%, keeping within [10, 100]
         s_offset = ((val >> 4) % 21) - 10
         s = max(10, min(100, s + s_offset))
-
-        # Perturb Lightness by +/- 8%, keeping within [10, 90]
         l_offset = ((val >> 8) % 17) - 8
         l = max(10, min(90, l + l_offset))
 
@@ -2654,6 +2808,8 @@ def timeline_role(frame):
     name = frame["frame_name"]
     if "Trigger" in name:
         return "Coordinates the following HE multi-user response."
+    if "ADDBA" in name or "DELBA" in name:
+        return "Establishes or tears down a Block Ack agreement prior to block transmission."
     if "Block Ack" in name:
         return "Acknowledges a preceding aggregate or scheduled transmission."
     if name.endswith("Ack"):

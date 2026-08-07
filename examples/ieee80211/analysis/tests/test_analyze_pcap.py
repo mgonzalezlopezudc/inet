@@ -82,6 +82,49 @@ class TimelineRoleTest(unittest.TestCase):
             "Responds without MAC payload while preserving QoS control information.",
         )
 
+    def test_addba_delba_action_role(self):
+        self.assertEqual(
+            timeline_role({"frame_name": "Management: Action: Block Ack: ADDBA Req"}),
+            "Establishes or tears down a Block Ack agreement prior to block transmission.",
+        )
+        self.assertEqual(
+            timeline_role({"frame_name": "Control: Block Ack (BA)"}),
+            "Acknowledges a preceding aggregate or scheduled transmission.",
+        )
+
+
+class ManagementActionNameTest(unittest.TestCase):
+
+    def test_management_action_category_and_action_code_formatting(self):
+        self.assertEqual(
+            analyze_pcap.get_packet_type_name("0", "13", category_code="3", action_code="0x00"),
+            "Management: Action: Block Ack: ADDBA Req",
+        )
+        self.assertEqual(
+            analyze_pcap.get_packet_type_name("0", "13", category_code="3", action_code="0x01"),
+            "Management: Action: Block Ack: ADDBA Resp",
+        )
+        self.assertEqual(
+            analyze_pcap.get_packet_type_name("0", "13", category_code="3", action_code="0x02"),
+            "Management: Action: Block Ack: DELBA",
+        )
+        self.assertEqual(
+            analyze_pcap.get_packet_type_name("0", "13", category_code="26", action_code="3"),
+            "Management: Action: HE: OMI",
+        )
+        self.assertEqual(
+            analyze_pcap.get_packet_type_name("0", "13", category_code="30"),
+            "Management: Action: EHT",
+        )
+        self.assertEqual(
+            analyze_pcap.get_packet_type_name("0", "13"),
+            "Management: Action",
+        )
+        self.assertEqual(
+            analyze_pcap.get_packet_type_name("0", "14", category_code="3", action_code="0"),
+            "Management: Action No Ack: Block Ack: ADDBA Req",
+        )
+
 
 class TriggerAllocationDecodeTest(unittest.TestCase):
 
