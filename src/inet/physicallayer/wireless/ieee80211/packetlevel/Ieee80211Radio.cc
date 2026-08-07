@@ -321,7 +321,7 @@ void Ieee80211Radio::updateCcaState()
     auto channel = ieee80211Receiver == nullptr ? nullptr : ieee80211Receiver->getChannel();
     bool ht40Configured = channel != nullptr &&
             channel->getSecondaryChannelOffset() != IEEE80211_SECONDARY_CHANNEL_NONE &&
-            modeSet != nullptr && !strcmp(modeSet->getProfileName(), "n(mixed-2.4Ghz)") &&
+            modeSet != nullptr && Ieee80211ModeSet::isHtProfileName(modeSet->getProfileName()) &&
             ieee80211Receiver->getBandwidth() == MHz(40);
     bool ht40 = ht40Configured && isReceiverMode(radioMode);
     bool primaryBusy = false;
@@ -364,14 +364,14 @@ void Ieee80211Radio::initialize(int stage)
         setModeSet(*opMode.c_str() ? Ieee80211ModeSet::getModeSet(opMode.c_str(), band) : nullptr);
         htSecondaryChannelOffset = Ieee80211Channel::parseSecondaryChannelOffset(par("htSecondaryChannelOffset"));
         auto ieee80211Receiver = check_and_cast<const Ieee80211Receiver *>(receiver);
-        if (modeSet != nullptr && !strcmp(modeSet->getProfileName(), "n(mixed-2.4Ghz)") &&
+        if (modeSet != nullptr && Ieee80211ModeSet::isHtProfileName(modeSet->getProfileName()) &&
                 ieee80211Receiver->getBandwidth() == MHz(40) &&
                 htSecondaryChannelOffset == IEEE80211_SECONDARY_CHANNEL_NONE)
             throw cRuntimeError("HT 40 MHz operation requires a secondary channel offset of above or below");
         if (htSecondaryChannelOffset != IEEE80211_SECONDARY_CHANNEL_NONE) {
             // IEEE Std 802.11-2024, 19.2.3 and 19.3.15.4: the secondary
             // channel is an HT40-only operating-channel property.
-            if (modeSet == nullptr || strcmp(modeSet->getProfileName(), "n(mixed-2.4Ghz)") ||
+            if (modeSet == nullptr || !Ieee80211ModeSet::isHtProfileName(modeSet->getProfileName()) ||
                     ieee80211Receiver->getBandwidth() != MHz(40))
                 throw cRuntimeError("htSecondaryChannelOffset above/below requires HT 40 MHz operation");
         }
@@ -430,7 +430,7 @@ void Ieee80211Radio::handleUpperCommand(cMessage *message)
                     resolvedMode = targetBitrate != bps(-1) ?
                             targetModeSet->getMode(targetBitrate, targetModeBandwidth) :
                             targetModeSet->getFastestMode(targetModeBandwidth);
-                if (targetModeSet != nullptr && !strcmp(targetModeSet->getProfileName(), "n(mixed-2.4Ghz)") &&
+                if (targetModeSet != nullptr && Ieee80211ModeSet::isHtProfileName(targetModeSet->getProfileName()) &&
                         ((targetModeBandwidth == MHz(40)) ||
                          (resolvedMode != nullptr && dynamic_cast<const Ieee80211HtMode *>(resolvedMode) != nullptr &&
                           resolvedMode->getDataMode()->getBandwidth() == MHz(40))) &&

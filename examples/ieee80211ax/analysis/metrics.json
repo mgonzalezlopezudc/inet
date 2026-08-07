@@ -1,14 +1,14 @@
 {
   "_provenance": {
-    "generated_at_utc": "2026-08-07T11:37:18.953160+00:00",
+    "generated_at_utc": "2026-08-07T12:36:21.156589+00:00",
     "groups": {
-      "channel_widths": {
+      "mimo_spatial_streams": {
         "conditions": [
           {
-            "configuration": "Ht20MHz",
-            "group": "channel_widths",
-            "ini": "examples/ieee80211n/channel_widths/omnetpp.ini",
-            "label": "HT 20 MHz",
+            "configuration": "SingleStreamMcs1",
+            "group": "mimo_spatial_streams",
+            "ini": "examples/ieee80211n/mimo_spatial_streams/omnetpp.ini",
+            "label": "Single Stream (MCS 1)",
             "measurement": {
               "end_s": 0.5,
               "start_s": 0.3
@@ -16,52 +16,52 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht20MHz/Ht20MHz-#0.sca",
-                "sha256": "3f41a675b0cd3e882eab98ef37f7565942fa76bc73a1ab9e029f1e9572c2ec61"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/SingleStreamMcs1/SingleStreamMcs1-#0.sca",
+                "sha256": "e850b28b257867e1a4ce5f88dbc733ed1da6259b0b94508c414e9376039088e7"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht20MHz/Ht20MHz-#0.vec",
-                "sha256": "d05c7f236a160b57e91698f895b10133d7a9c0b682dc5166d1c041c1fcb0021e"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/SingleStreamMcs1/SingleStreamMcs1-#0.vec",
+                "sha256": "c35cd5e118814f14132d87b563df7d9556d803aa4e54aaeecd8536b4c909a897"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht20MHz/Ht20MHz-#1.sca",
-                "sha256": "a4e27affb8181a0c8a590c950a74631cf023e8464034b0d9407e2550feac2454"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/SingleStreamMcs1/SingleStreamMcs1-#1.sca",
+                "sha256": "cca56f0257b904db05408786232ce919ce0f6c9c974216f3d116fe69a3a34f13"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht20MHz/Ht20MHz-#1.vec",
-                "sha256": "fd764f360a9672522970a050f118efaa890ea46b9caa062e41f971604daa9c35"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/SingleStreamMcs1/SingleStreamMcs1-#1.vec",
+                "sha256": "0657cd13b799e122b53630fda2bbf4716216f6954c82451bae1fe391dfa71507"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht20MHz/Ht20MHz-#2.sca",
-                "sha256": "3e61039c78443adbb7693183b27b5d9eecd57ff880ce289032bb3d98ab5a0524"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/SingleStreamMcs1/SingleStreamMcs1-#2.sca",
+                "sha256": "a17cdc2de23f9ef8ad7b5f7d7ce857c2dc88437043297a17cd95fe79caf0b608"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht20MHz/Ht20MHz-#2.vec",
-                "sha256": "4468dbee9481280bc9504a9efc87f0f9c0537eb5d0b31fe16d3a3ce92d70fbac"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/SingleStreamMcs1/SingleStreamMcs1-#2.vec",
+                "sha256": "76274635569d08fa57285f4832edb2866b717e84b644fc9606da8345bfe01e09"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht20MHz/Ht20MHz-#3.sca",
-                "sha256": "5219fb4eeab99bb60f83488b140ecb4ca468d3a14a9ff5bdef1ff99bcb00ca8c"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/SingleStreamMcs1/SingleStreamMcs1-#3.sca",
+                "sha256": "384e693668c150405b4bcba386db5c14b0968a91f76146e01b42bfa8f80ad1f6"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht20MHz/Ht20MHz-#3.vec",
-                "sha256": "88632dd3e40339d9d5866442e2a9fef2b276ae38ff95c4be974753ec8e9784a9"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/SingleStreamMcs1/SingleStreamMcs1-#3.vec",
+                "sha256": "5784305730235472b2fb0c951e9503d27a52c1edf77a559809cadd287b79f060"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht20MHz/Ht20MHz-#4.sca",
-                "sha256": "bebe4c82716876869b5018a967203120083119edf2133384f9e3c35a34e8531b"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/SingleStreamMcs1/SingleStreamMcs1-#4.sca",
+                "sha256": "ff8a4b268f18dd5e505d5789578793b9909170c1fb2ae7b8802d0aa6096e776b"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht20MHz/Ht20MHz-#4.vec",
-                "sha256": "16f96e7bd7d5ae09c13ce6b3d282230607931d5805954e5dfe79e4b10efd36a5"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/SingleStreamMcs1/SingleStreamMcs1-#4.vec",
+                "sha256": "b7a7a9021b29d53ba419a9b736a2c53f603089135a5fbc0fc9303a356dba121b"
               }
             ]
           },
           {
-            "configuration": "Ht40MHz",
-            "group": "channel_widths",
-            "ini": "examples/ieee80211n/channel_widths/omnetpp.ini",
-            "label": "HT 40 MHz",
+            "configuration": "DualStreamMcs9",
+            "group": "mimo_spatial_streams",
+            "ini": "examples/ieee80211n/mimo_spatial_streams/omnetpp.ini",
+            "label": "Dual Stream (MCS 9)",
             "measurement": {
               "end_s": 0.5,
               "start_s": 0.3
@@ -69,52 +69,52 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHz/Ht40MHz-#0.sca",
-                "sha256": "902f10eee94b9c3b562130c7a67fb6a327fd903b9572fad61089b45d5f81a2e1"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/DualStreamMcs9/DualStreamMcs9-#0.sca",
+                "sha256": "be750fe65050fd406bdc4a01f6ce2c4ef30301002399fe1a0d22d5f8de1f2094"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHz/Ht40MHz-#0.vec",
-                "sha256": "19f08edfd79674f796b10429d8a06ef9260b76a9555b0384d70188e56e2c0791"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/DualStreamMcs9/DualStreamMcs9-#0.vec",
+                "sha256": "f45eed2fbcc1a0553ad19025d9845b841205bab775d5b02bea743ca480ef4e0e"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHz/Ht40MHz-#1.sca",
-                "sha256": "099acfcd7094f9326abe122e0a654bfd61a4bf39bf03c2581b3777c5ec62ce1f"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/DualStreamMcs9/DualStreamMcs9-#1.sca",
+                "sha256": "f36f5397af2b936789f5a8221863e58df0b069ee86e65cf6a80c35bd16ebf2fc"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHz/Ht40MHz-#1.vec",
-                "sha256": "fbe8aa70eddc3bf133a759cd12e3b2399329bc57a65df3473d2b35300a29f7d5"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/DualStreamMcs9/DualStreamMcs9-#1.vec",
+                "sha256": "2ace40b2b08cc118141b9a9a0f9317f56b3076156685d8f391f5cbb081a39e46"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHz/Ht40MHz-#2.sca",
-                "sha256": "6d9ed69aa15922db3362b69648dbd445933c6b0486c5ca9eccd232132a7b473d"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/DualStreamMcs9/DualStreamMcs9-#2.sca",
+                "sha256": "37af9c2830b4118a6d969c805385ad2d1b9dfa3f7a906460f57c088701c09c57"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHz/Ht40MHz-#2.vec",
-                "sha256": "938f33766713eb87022bc74f38f4c824e54ede133aa9d94540712bfc9513c62d"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/DualStreamMcs9/DualStreamMcs9-#2.vec",
+                "sha256": "1d6c50a13da9142a26918d42242022af4a90ff56902838a4583c831160339f89"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHz/Ht40MHz-#3.sca",
-                "sha256": "ab2bc4808c79a7f6920601e484546050d407be746e992276ba4cef6b5e604745"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/DualStreamMcs9/DualStreamMcs9-#3.sca",
+                "sha256": "11536258aeb274764aaf7697c5eab84408a6ee2f329b4265396bd0bb46eed953"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHz/Ht40MHz-#3.vec",
-                "sha256": "984a2565625a10b8c28c799257fd6fd4050dfca9da5f0f411056db668bd2679a"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/DualStreamMcs9/DualStreamMcs9-#3.vec",
+                "sha256": "c479301fed3d37a96a023428b94e78afbd4a3ab1b0c735949461e16352cc77ec"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHz/Ht40MHz-#4.sca",
-                "sha256": "1026aa9497cb857baa45413bc742c912c96768666b34b1725b5510bd7b9dc3a0"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/DualStreamMcs9/DualStreamMcs9-#4.sca",
+                "sha256": "f555038378f46c1a6d7fde49e458f9c4ca665238fa58bbbecd6ff83235f414bd"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHz/Ht40MHz-#4.vec",
-                "sha256": "5f34fd38fddd36ce7543d39f2d8d61b26f473cd1ad20f1b62ac56617deadbcee"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/DualStreamMcs9/DualStreamMcs9-#4.vec",
+                "sha256": "818f78d7ce460b5598c040550076fe4ae7704ee8b58ee573606fe2af3e1b261d"
               }
             ]
           },
           {
-            "configuration": "Ht40MHzSecondaryAboveWithInterferer",
-            "group": "channel_widths",
-            "ini": "examples/ieee80211n/channel_widths/omnetpp.ini",
-            "label": "HT 40 MHz (Secondary Above)",
+            "configuration": "QuadStreamMcs25",
+            "group": "mimo_spatial_streams",
+            "ini": "examples/ieee80211n/mimo_spatial_streams/omnetpp.ini",
+            "label": "Quad Stream (MCS 25)",
             "measurement": {
               "end_s": 0.5,
               "start_s": 0.3
@@ -122,136 +122,76 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#0.sca",
-                "sha256": "8ce83ca7ba38d41cd9408b72d12af65616e488bba9bca83c71cc310cbbe1e94b"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/QuadStreamMcs25/QuadStreamMcs25-#0.sca",
+                "sha256": "fd7683b032f9f08d343be6bea6d735cb6da5db1b384baa511285471f9f9a8964"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#0.vec",
-                "sha256": "3f809f2214c3387269b5b595a71a53aaf03147032c5b2b82e53be762003e989a"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/QuadStreamMcs25/QuadStreamMcs25-#0.vec",
+                "sha256": "09eb1a0126d19632d4de33cb859d5f639704d2f0d57784bebbb3179d14a74be7"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#1.sca",
-                "sha256": "e6420f0b0ab38ab8c2d4cf364f40c3eb36d10d36afe7dc744ac21f95b8d9ba8b"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/QuadStreamMcs25/QuadStreamMcs25-#1.sca",
+                "sha256": "e762a17de7436350d9e87ea4679493e8491d59fd7debe791da63f5d032465895"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#1.vec",
-                "sha256": "97f6aef3a8ab3be1080f4e259af5555a0fe42a003e6975f0f00a1f448f4debd1"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/QuadStreamMcs25/QuadStreamMcs25-#1.vec",
+                "sha256": "b7166cbfddf78b2a539f0fc23da9ac0efca71c3d10673dcc3539836b28228fa4"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#2.sca",
-                "sha256": "abd08f2f8a835f63a743b4ac8c5c81ff2c382d9c327d47dd7971e441b70ff760"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/QuadStreamMcs25/QuadStreamMcs25-#2.sca",
+                "sha256": "36767ed7089f81db6e51b844ba7881981727b3996ae0a6ba6aadddb52dfcd6ff"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#2.vec",
-                "sha256": "3886b1c82553589e939647a67b1b006c5434d3d9016fdaee39a064c68811475c"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/QuadStreamMcs25/QuadStreamMcs25-#2.vec",
+                "sha256": "de12b1d0ed7ae921442f0828ff385af0a8d688b57391fb377188c0882614acc8"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#3.sca",
-                "sha256": "d3198b0a5c2c374b285dbfdf29623352331568e4845de09c00836c5767d2da9b"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/QuadStreamMcs25/QuadStreamMcs25-#3.sca",
+                "sha256": "2c56584caef7933b20f27c4a66128fd7381a2dd818a0474dd0b925a4c059e3a9"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#3.vec",
-                "sha256": "3d9fe7e8c995ee0b15988761ad427f2325eb139af2521258da3433286f5a759a"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/QuadStreamMcs25/QuadStreamMcs25-#3.vec",
+                "sha256": "c035fb3ddea372fab0025fd24334d51c9c6d232af48890a4a360c32a270d0667"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#4.sca",
-                "sha256": "b191abacd46b9ca7ed692dee977449a2b083c87414de1dcc9bb098006f0d5371"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/QuadStreamMcs25/QuadStreamMcs25-#4.sca",
+                "sha256": "b444f53cbbf889b5b565d73925a8477a3c1f27025d79514c94b2773a902bbd80"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#4.vec",
-                "sha256": "a7aebbe601535bb567cc234ac4da3a2b773f641ab27376f03e4470e199a8671d"
-              }
-            ]
-          },
-          {
-            "configuration": "Ht40MHzSecondaryBelowWithInterferer",
-            "group": "channel_widths",
-            "ini": "examples/ieee80211n/channel_widths/omnetpp.ini",
-            "label": "HT 40 MHz (Secondary Below)",
-            "measurement": {
-              "end_s": 0.5,
-              "start_s": 0.3
-            },
-            "metadata": {},
-            "result_files": [
-              {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#0.sca",
-                "sha256": "d8d751f5b2f43efc033a7a90ac5442e385dc46fc9e37daea5fff15b79d74a75d"
-              },
-              {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#0.vec",
-                "sha256": "014d7496bc7b94d11a36521be8398737494e32d4404d6e57bb2de8ee9f23eb31"
-              },
-              {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#1.sca",
-                "sha256": "520a3365bdf7684c2b0981b27c7688362c607b0a3cf101d687b09c8e3306a102"
-              },
-              {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#1.vec",
-                "sha256": "93ac13c8e18e3c8e7ff0bc0df19432975f5980c9430cbe957b1271c281ad56e8"
-              },
-              {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#2.sca",
-                "sha256": "7d15df960cfc49c4b22c3f5f756676c2a295a075d04a6d543413dba370209e40"
-              },
-              {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#2.vec",
-                "sha256": "7b8e5ba0b4e001a343dd93ba2344acead81cf8be9189130ec13e1b62da2eb846"
-              },
-              {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#3.sca",
-                "sha256": "c860761f883110d7a6e07e0460a586f8f0108709b6a050b943fa341ef9da4f28"
-              },
-              {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#3.vec",
-                "sha256": "3ff95788cba19219dd5d980d497c1f162bba1582bc6261f1e8ac9870ef67252b"
-              },
-              {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#4.sca",
-                "sha256": "6142b27d705c2fb82324bf82a3f60a1993d44201d0f70372056c958faa8cd700"
-              },
-              {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#4.vec",
-                "sha256": "b0de2985efdf11ce002e941c44192fda7c99cfb18edc203f0704e89eca27604e"
+                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/QuadStreamMcs25/QuadStreamMcs25-#4.vec",
+                "sha256": "9d53b4436696b3d03cc27e78fcfd66992d6c4a61c17ed8d86e7acab6d14e2a7d"
               }
             ]
           }
         ],
-        "session_id": "20260807T113658Z",
+        "session_id": "20260807T123549Z",
         "status": "PASS"
       }
     },
-    "repository_revision": "ddd0626b1fd2d6dc40f258294e3fc31c6f51d876",
-    "requested_session_id": "20260807T113658Z",
+    "repository_revision": "a428c085615ec43f2186642fab8feb07ab81d927",
+    "requested_session_id": "20260807T123549Z",
     "schema_version": 1
   },
-  "channel_widths": {
-    "HT 20 MHz": {
+  "mimo_spatial_streams": {
+    "Dual Stream (MCS 9)": {
       "goodput_mbps": {
-        "ci95": 0.08428694717616803,
+        "ci95": 0.06795430929514912,
         "count": 5,
-        "mean": 4.752000000000001
+        "mean": 13.4112
       }
     },
-    "HT 40 MHz": {
+    "Quad Stream (MCS 25)": {
       "goodput_mbps": {
-        "ci95": 0.10826854398235403,
+        "ci95": 0.21735575662367432,
         "count": 5,
-        "mean": 8.0352
+        "mean": 23.3088
       }
     },
-    "HT 40 MHz (Secondary Above)": {
+    "Single Stream (MCS 1)": {
       "goodput_mbps": {
-        "ci95": 0.3192907042373629,
+        "ci95": 0.07770872566601783,
         "count": 5,
-        "mean": 0.3744
-      }
-    },
-    "HT 40 MHz (Secondary Below)": {
-      "goodput_mbps": {
-        "ci95": 0.11464264262879904,
-        "count": 5,
-        "mean": 0.2496
+        "mean": 5.0784
       }
     }
   }

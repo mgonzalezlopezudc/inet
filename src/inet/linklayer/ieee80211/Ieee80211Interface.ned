@@ -64,7 +64,7 @@ module Ieee80211Interface extends NetworkInterface like IWirelessInterface
     parameters:
         string interfaceTableModule;
         string energySourceModule = default("");
-        string opMode @enum("a","b","g(erp)","g(mixed)","n(mixed-2.4Ghz)","p","ac","ax","be") = default("g(mixed)");
+        string opMode @enum("a","b","g(erp)","g(mixed)","n(mixed-2.4Ghz)","n(greenfield-2.4Ghz)","p","ac","ax","be") = default("g(mixed)");
         string primary80ChannelPosition @enum("automatic", "lower", "upper") = default("automatic");
         string htSecondaryChannelOffset @enum("none", "above", "below") = default("none");
         string address @mutable = default("auto"); // MAC address as hex string (12 hex digits), or

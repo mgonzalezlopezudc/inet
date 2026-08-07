@@ -387,7 +387,7 @@ void Ieee80211Mib::initialize(int stage)
                 par("htSecondaryChannelOffset"));
         if (configuredSecondaryChannelOffset != channel->getSecondaryChannelOffset())
             throw cRuntimeError("MIB and radio htSecondaryChannelOffset parameters disagree");
-        bool ht40Operation = !strcmp(modeSet->getProfileName(), "n(mixed-2.4Ghz)") &&
+        bool ht40Operation = physicallayer::Ieee80211ModeSet::isHtProfileName(modeSet->getProfileName()) &&
                 configuredSecondaryChannelOffset != physicallayer::IEEE80211_SECONDARY_CHANNEL_NONE;
         // IEEE Std 802.11-2024, 9.4.2.55 (Figures 9-462/9-463 and Table
         // 9-134): width and secondary offset are advertised only for HT40.
@@ -396,7 +396,7 @@ void Ieee80211Mib::initialize(int stage)
                 physicallayer::IEEE80211_SECONDARY_CHANNEL_NONE;
         // The 2.4 GHz band stores a zero-based vector index internally; the
         // HT Operation field carries the IEEE channel number (1 through 14).
-        if (!strcmp(modeSet->getProfileName(), "n(mixed-2.4Ghz)"))
+        if (physicallayer::Ieee80211ModeSet::isHtProfileName(modeSet->getProfileName()))
             htOperation.primaryChannel = channel->getChannelNumber() + 1;
     }
 }

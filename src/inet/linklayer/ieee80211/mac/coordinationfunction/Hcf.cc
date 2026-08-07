@@ -25,6 +25,7 @@
 #include "inet/linklayer/ieee80211/mac/recipient/RecipientAckProcedure.h"
 #include "inet/linklayer/ethernet/common/Ethernet.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211FecCodingReq.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
@@ -638,7 +639,7 @@ bool Hcf::isLegacyHtMultiTidBlockAckEnabled() const
     // must not affect VHT/HE/EHT operation.
     return par("useLegacyHtMultiTidBlockAck").boolValue() &&
             modeSet != nullptr &&
-            !strcmp(modeSet->getName(), "n(mixed-2.4Ghz)");
+            Ieee80211ModeSet::isHtProfileName(modeSet->getName());
 }
 
 bool Hcf::isHtImplicitBlockAckEnabled() const
@@ -647,7 +648,7 @@ bool Hcf::isHtImplicitBlockAckEnabled() const
     // advertisement and peer negotiation are represented by the MIB.
     return par("useHtImplicitBlockAck").boolValue() &&
             modeSet != nullptr &&
-            !strcmp(modeSet->getName(), "n(mixed-2.4Ghz)");
+            Ieee80211ModeSet::isHtProfileName(modeSet->getName());
 }
 
 void Hcf::startFrameSequence(AccessCategory ac)

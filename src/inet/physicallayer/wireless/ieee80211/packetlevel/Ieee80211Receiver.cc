@@ -704,7 +704,7 @@ const IListeningDecision *Ieee80211Receiver::computeListeningDecision(const ILis
 
 bool Ieee80211Receiver::isHtCcaOperation() const
 {
-    return modeSet != nullptr && !strcmp(modeSet->getProfileName(), "n(mixed-2.4Ghz)") &&
+    return modeSet != nullptr && Ieee80211ModeSet::isHtProfileName(modeSet->getProfileName()) &&
             channel != nullptr && (bandwidth == MHz(20) ||
             (bandwidth == MHz(40) && channel->getSecondaryChannelOffset() != IEEE80211_SECONDARY_CHANNEL_NONE));
 }
