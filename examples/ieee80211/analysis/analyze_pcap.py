@@ -1520,6 +1520,7 @@ def compressed_block_ack_records_markdown(records, limit=100, group_by="destinat
     for group_val, group_records in sorted(by_group.items()):
         lines.append(f"##### [script] {label}: {group_val}\n\n")
         lines.append(
+            "<small>\n\n"
             "| Frame | Simulation time (s) | Starting sequence | Bitmap | Acknowledged MPDU sequence numbers |\n"
             "|---:|---:|---:|---|---|\n"
         )
@@ -1533,7 +1534,7 @@ def compressed_block_ack_records_markdown(records, limit=100, group_by="destinat
                 f"{record['starting_sequence_number']} | {record['bitmap']} | "
                 f"{acknowledged} |\n"
             )
-        lines.append("\n")
+        lines.append("\n</small>\n\n")
 
     if len(records) > limit:
         lines.append(
@@ -2092,6 +2093,7 @@ def make_table_md(stats, total):
     if total == 0:
         return "No packets captured.\n\n"
     md = []
+    md.append("<small>\n\n")
     md.append("| Color | Frame Type & Subtype | BSS Color | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |\n")
     md.append("|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n")
 
@@ -2125,6 +2127,7 @@ def make_table_md(stats, total):
         air_sim_pct = f"{stat['airtime_sim_pct']:.2f}%" if airtime_available else "N/A"
         bss_color = bss_color_from_key(key)
         md.append(f"| {color_svg} | {name} | {bss_color} | {stat['count']} | {pct:.2f}% | {mean_sz} | {std_sz} | {mean_dur} | {std_dur} | {freq_str} | {rx_sig_str} | {tx_pwr_str} | {air_pct} | {air_sim_pct} |\n")
+    md.append("\n</small>\n")
     return "".join(md)
 
 ORDERED_BASE_TYPES = [
@@ -2398,6 +2401,7 @@ def count_frames(config_results, config_name, frame_type=None, frame_subtype=Non
 def compact_statistics_markdown(config_results):
     lines = [
         "Observation point: Access Point (AP) wireless interfaces.\n\n",
+        "<small>\n\n",
         "| Configuration | Selection/filter | Observations | "
         "Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |\n",
         "|---|---|---:|---|---:|---|\n",
@@ -2435,6 +2439,7 @@ def compact_statistics_markdown(config_results):
         lines.append("| " + " | ".join(
             cell.replace("|", "\\|") for cell in cells
         ) + " |\n")
+    lines.append("\n</small>\n")
     return "".join(lines)
 
 
@@ -2701,6 +2706,7 @@ def timeline_markdown(timeline):
             "`INCONCLUSIVE` exchange evidence.\n\n"
         )
     lines = [
+        "<small>\n\n",
         "| Color | Frame | Simulation time (s) | Transmitter → receiver | "
         "Type/PHY | Decisive fields |\n",
         "|:---:|---:|---:|---|---|---|\n",
@@ -2745,6 +2751,7 @@ def timeline_markdown(timeline):
         lines.append("| " + " | ".join(
             str(cell).replace("|", "\\|") for cell in cells
         ) + " |\n")
+    lines.append("\n</small>\n")
     captures = sorted(list(dict.fromkeys(
         Path(frame["capture"]).name for frame in timeline if "capture" in frame and frame["capture"]
     )))

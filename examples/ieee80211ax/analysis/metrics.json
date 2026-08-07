@@ -1,6 +1,6 @@
 {
   "_provenance": {
-    "generated_at_utc": "2026-08-07T09:16:00.156743+00:00",
+    "generated_at_utc": "2026-08-07T09:45:48.758783+00:00",
     "groups": {
       "channel_widths": {
         "conditions": [
@@ -16,44 +16,44 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht20MHz/Ht20MHz-#0.sca",
-                "sha256": "fb69e1e8a334263c63c06cf3976786e887e61e99c827472af53022831f300dc1"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht20MHz/Ht20MHz-#0.sca",
+                "sha256": "f5f8c89f003daca3bf90d94dce509f4a82a831df7e4abf8e2e6017411fb2f5ef"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht20MHz/Ht20MHz-#0.vec",
-                "sha256": "aac0a73f5ef7c6be6afad927fde3bcf8dbc39e1ebc6de94c52f7596f28e9ae5f"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht20MHz/Ht20MHz-#0.vec",
+                "sha256": "6e2177da36639f5df2b913c7fb7a13f0c452248393d5c0dab2289eeff6afb952"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht20MHz/Ht20MHz-#1.sca",
-                "sha256": "89b450cc2e65e2631494b3d791fee5fa341244641caf8e404095f3c2114f9893"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht20MHz/Ht20MHz-#1.sca",
+                "sha256": "1656a9ef2af9e976a219768242f6bb4079789912107006a34c1b14eb1d917b76"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht20MHz/Ht20MHz-#1.vec",
-                "sha256": "a6f7dff2621b721e3dc1e7a4d386fc7dcfde879bc716c5c5d35572a11749b9c8"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht20MHz/Ht20MHz-#1.vec",
+                "sha256": "4fce9a7497d62261ebafdc0ceb14ed1786d8ed3d920daa08058599c591db38c5"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht20MHz/Ht20MHz-#2.sca",
-                "sha256": "2d3afa638c9089636c9e450877ec2894b6d696089a2441c7d97f89db6d2f4aca"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht20MHz/Ht20MHz-#2.sca",
+                "sha256": "ec850191be51df597ff4c7f50f220b8b9a64013f9ff089f2fa354717903d0d22"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht20MHz/Ht20MHz-#2.vec",
-                "sha256": "0f729c235533d80417d49aa6f1c1854a8b9a327819cf235b49291ff454eaf33a"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht20MHz/Ht20MHz-#2.vec",
+                "sha256": "6aa763c987859849d3dac015bf7397a9cfefe8e69e2a377c2a901c1c407dcc68"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht20MHz/Ht20MHz-#3.sca",
-                "sha256": "a45102958d73a6431c20ef50bdb59b7a9e1b5bb1639e13d1163ecdf138a177a4"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht20MHz/Ht20MHz-#3.sca",
+                "sha256": "80ea03ca3270bb5d2a69181de7ff4975f2c2f0a8ef073d70a9aa6e66de93219a"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht20MHz/Ht20MHz-#3.vec",
-                "sha256": "cf080c0c6abc89d6984d4e50679aac6c9e68f739e51dc1139458beba915aa9b4"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht20MHz/Ht20MHz-#3.vec",
+                "sha256": "29225517a516bc2b1a2decb7930e27927fff50163fda00592bdf09ea72831b2e"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht20MHz/Ht20MHz-#4.sca",
-                "sha256": "a3cf2e8dcfedf4f88ee0f45cfec345c6a2f9c81b0de6c30747098b0017fdcd99"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht20MHz/Ht20MHz-#4.sca",
+                "sha256": "33919dd10a8b67b36d9ad606a2a01302e1092b4325654833ff2c7a36cf6ce13b"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht20MHz/Ht20MHz-#4.vec",
-                "sha256": "0e4f26873fc95b505bdb6170591dccdb243d493e9b69c961170b89f8c94002b2"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht20MHz/Ht20MHz-#4.vec",
+                "sha256": "2d950b6885cbad0afa90abed32a2e3aca92ba6b3ac28409ffee940096583134a"
               }
             ]
           },
@@ -69,44 +69,44 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHz/Ht40MHz-#0.sca",
-                "sha256": "26c789d8cb3cd282ae7d035be57ff1e0fc65e074c3fa6fc4d44eade9e9e788a5"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHz/Ht40MHz-#0.sca",
+                "sha256": "81e7beaa0f5a87f6776a2ad665ae5eda865cdc08166a1ebf0f204ddbd7590482"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHz/Ht40MHz-#0.vec",
-                "sha256": "5417283601684bf247e53e9624e32acb7eced65ede66019c828bfcbfc4430ac9"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHz/Ht40MHz-#0.vec",
+                "sha256": "4324c5ac0f7842985421ea87af54ebb9aaf192138fb6479f5f380b798a3a3710"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHz/Ht40MHz-#1.sca",
-                "sha256": "71b5829c376da07aba93b455696b5c5e7cd30bf5c033b2974a36c30db2982332"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHz/Ht40MHz-#1.sca",
+                "sha256": "313082f8ead35d2ab8c1f340d2b0864a25dfd5e441f4e6ada8776d058d869ae1"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHz/Ht40MHz-#1.vec",
-                "sha256": "f2cfb3438aa953d2ad3d968107f3078995e1e9caa854800880fc89d49215d15b"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHz/Ht40MHz-#1.vec",
+                "sha256": "4f38e5f27e7763c98f098b9b7d2d5805491927ebf8cd9141ab48ca83fae1d4af"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHz/Ht40MHz-#2.sca",
-                "sha256": "9f780198eee807c284ed2953cf5cf7f27ac29c9eac24cf5ffc9030be6a1d14af"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHz/Ht40MHz-#2.sca",
+                "sha256": "70e4b7c974cc384e29708bad394672610dd1a908831aa487888118814e79047b"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHz/Ht40MHz-#2.vec",
-                "sha256": "3ecc3abb7177165e9dd32de62b4cd38617ff2ac71e5ceb68413596be59fddd1b"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHz/Ht40MHz-#2.vec",
+                "sha256": "fa264875e1563b98b2ccb6709f50eeaaf9fc48654a3847018eaaf8eef270e1ee"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHz/Ht40MHz-#3.sca",
-                "sha256": "3c43ff6148a9e416e786289906ba8b46cdd2946f73b764450afd87aa8b735bf1"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHz/Ht40MHz-#3.sca",
+                "sha256": "7e960d8c852da41689d0a88bde93b8221fa980817630a19354d7ffcde4b10ea2"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHz/Ht40MHz-#3.vec",
-                "sha256": "72278c29e6383caf7d1022481a6b1aa446d1b332a2b978c949d055f10dfc3f24"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHz/Ht40MHz-#3.vec",
+                "sha256": "a7496c26e204985b6849a12dff56cd726892fe4cc238bde8a7746ec339217837"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHz/Ht40MHz-#4.sca",
-                "sha256": "b3f722a5c35cd6f84500f14907381876a5d346c80d78886d8bb4ae8120fe2fc3"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHz/Ht40MHz-#4.sca",
+                "sha256": "abbf05a23f0a3973fdc0baa99603b265e0990955698b1687120e47350c31e432"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHz/Ht40MHz-#4.vec",
-                "sha256": "9ee075554a8dda44709c6e7a8e516e67376355159923048f25833a55ecd9a1d2"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHz/Ht40MHz-#4.vec",
+                "sha256": "7b991e24b10dfcc3479907c30dbe3ce47a5ce7c40722e77af81cd3c75d19307f"
               }
             ]
           },
@@ -122,44 +122,44 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#0.sca",
-                "sha256": "71e289a81f7c42f10039405d4798972d9e39ead539b25a6141ed8c36c2d08603"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#0.sca",
+                "sha256": "ed8f13e428a8617bdc3125a131c3f5efc3d593aed5a067be95bffdf8731177cb"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#0.vec",
-                "sha256": "912afca5418e53de116a6360e55c29e55158064710bd51372c3178e9c7f32abc"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#0.vec",
+                "sha256": "dd97598c34176a11abdd9d31ed1732a7e0fcf90a72f1a791148bfd6a06bd5ed4"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#1.sca",
-                "sha256": "b8d0c5e7db76a010829c7b902a814f678d7b9107ef1bb2e54f053649bdaf00f1"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#1.sca",
+                "sha256": "41843910ae6f19fb6bed42345ac449e6606849a1ddb79421378d1e39bccd2b9d"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#1.vec",
-                "sha256": "312d355832a1df5b43bc09cc2a22af891ce2cd60ef7995b59b6fa8e23918868a"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#1.vec",
+                "sha256": "23ae6168b2a6b404acc1418860e3ef9ebbaa707dc2db05b609f55d08d104135f"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#2.sca",
-                "sha256": "4e482a48a99713ec8083e573436e7afc8a69de16fa7288a1ac35c3a621cb21ff"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#2.sca",
+                "sha256": "bf42cf3b423067554b4a520d61489d3407f85f5273a0e385b3bc02c96f4f9204"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#2.vec",
-                "sha256": "8eea0b5f92b38a573ee1207bf58a9526bb6befafbb39da22b4e63d50642da871"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#2.vec",
+                "sha256": "cfeb94d339d6cd2730bf9bc6b4e349b6975235873aa0b72f255053825d405005"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#3.sca",
-                "sha256": "98944408dfc3181894e305b6069a73ded23af6990e4d6eb3e2630cafa7c51761"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#3.sca",
+                "sha256": "0f2799dbfe086241562d6bdcac96f79e74faeb96a5ad455196cb33b0ce928039"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#3.vec",
-                "sha256": "073ad1063fccff40408cfe0f80bebc28707f73136e86b6ca51b2139c1f43335f"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#3.vec",
+                "sha256": "a9505f48763500a0ab4a39a94decee8d4d60704677034f7aa8a608188bc3614d"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#4.sca",
-                "sha256": "95c3fbdd79108c305cf816656ee27b385d0fd273be0ff77c5ae7011dacffc2ff"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#4.sca",
+                "sha256": "62f366a20b40db2067b35965a821774f4fe22c27fdd58f56e8f7d7247c8261d5"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#4.vec",
-                "sha256": "c4c91ca392ab7f037c8dd047224ef38ba36b83b8f168a4fcaf89e5fec224dd46"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#4.vec",
+                "sha256": "2026bc004d76c16f7004c8419d3a2f32a351f229a3bc9daccafd93154a5a2594"
               }
             ]
           },
@@ -175,83 +175,83 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#0.sca",
-                "sha256": "c35abad2b7fb986d870eb328519d123d92bafc834366478602f9e0cce1b65c46"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#0.sca",
+                "sha256": "8b9bc51146a56d8a06f181539cd785b77ec48551f39465492f5a3f2f3419a819"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#0.vec",
-                "sha256": "f406b9f076ba924a006aa151bf9203c322c591f1d2e283dcf5cb3c638b9cb8ed"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#0.vec",
+                "sha256": "47994a027d0d79aac7df1a7a2f3b8987bb53d16e5d31465c60bcadccd22b43f6"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#1.sca",
-                "sha256": "cb9d3f23d68156acb817734bc8d9b7c9ccdd9c8298cf78262794e64a6ee18e20"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#1.sca",
+                "sha256": "0ee86b4d04f06a98c374fd89bab527b980543750abd213bbdfd420d4c450a87e"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#1.vec",
-                "sha256": "cf6a7a8e033f7ebcd308168202f3e6f8f55c5bca7749f3e2ff49a5831fafad3e"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#1.vec",
+                "sha256": "aacc996925e635be342d97c67d9de34d1237338e013f9e747ce67a18ac72c8c0"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#2.sca",
-                "sha256": "b3e9f0d1317bc1cad5c6c39ec742db53ae9404bd941f27748b3ef46e8494d1cf"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#2.sca",
+                "sha256": "09f152fcbde0e6423129a003396e4ba4b48a85badb60fbb60f16475c47fddc11"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#2.vec",
-                "sha256": "e587f7b86c5fd04b1220f3f244c9a50a8ece6e3c6fb8ce2bca207e15db62b77d"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#2.vec",
+                "sha256": "9bb77bcc866774cebda4ba833c5c80902316c84b7237804ffc8e4c31a3a930e5"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#3.sca",
-                "sha256": "51a13e5a890819187804c05ccf9bd0b5103e45c5cf81edb094508d1a61af49a9"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#3.sca",
+                "sha256": "51b70293c2ecf6444af57f685151050edcf1e46787c51f55855215b2ed882301"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#3.vec",
-                "sha256": "ff54920dbef6fc3e5cfb28c2ede7bb533ac497ac2c80a094adc050fcfc8bafc4"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#3.vec",
+                "sha256": "2d29b808cad5aa1147b0196901294a41a691a8e0ceeb759a87eb57be327c452f"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#4.sca",
-                "sha256": "0e3a6f346cc5891a7cccdff9ea8884052aa02a9073d216ce3bf397a4e363dd54"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#4.sca",
+                "sha256": "fc512005582ec6cfe4df13e0c2764b2d07fed71e945831aea62de5e846cb4a14"
               },
               {
-                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#4.vec",
-                "sha256": "bbbb1e23def261bb1d71aa5bca4540222b15398236b4e11bf7f391a9848ba41d"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T092603Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#4.vec",
+                "sha256": "3413241f620ec4b3f138e8a52f2590204c09370146850cba6580e3741530b46a"
               }
             ]
           }
         ],
-        "session_id": "20260807T091530Z",
+        "session_id": "20260807T092603Z",
         "status": "PASS"
       }
     },
-    "repository_revision": "47c43b5b35c780def54c17ad6b5b13e7973a67ef",
-    "requested_session_id": "20260807T091530Z",
+    "repository_revision": "8f3bf498c6fe4121bcdbf13adb02f1ec288a8c67",
+    "requested_session_id": "20260807T092603Z",
     "schema_version": 1
   },
   "channel_widths": {
     "HT 20 MHz": {
       "goodput_mbps": {
-        "ci95": 0.07299463746199857,
+        "ci95": 0.08428694717616803,
         "count": 5,
-        "mean": 5.088
+        "mean": 4.752000000000001
       }
     },
     "HT 40 MHz": {
       "goodput_mbps": {
-        "ci95": 0.1632209713579815,
+        "ci95": 0.10826854398235403,
         "count": 5,
-        "mean": 13.536000000000001
+        "mean": 6.9792000000000005
       }
     },
     "HT 40 MHz (Secondary Above)": {
       "goodput_mbps": {
-        "ci95": 0.1632209713579815,
+        "ci95": 0.10826854398235403,
         "count": 5,
-        "mean": 13.536000000000001
+        "mean": 6.9792000000000005
       }
     },
     "HT 40 MHz (Secondary Below)": {
       "goodput_mbps": {
-        "ci95": 0.1484024842759117,
+        "ci95": 0.04214347358808401,
         "count": 5,
-        "mean": 13.958400000000001
+        "mean": 6.960000000000001
       }
     }
   }

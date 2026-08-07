@@ -164,6 +164,8 @@ class PcapMarkdownTest(unittest.TestCase):
             "phy": {"format": "Legacy/HT/VHT"},
         }])
         self.assertIn("A-MPDUs acknowledged=9", markdown)
+        self.assertIn("<small>\n\n| Color | Frame |", markdown)
+        self.assertIn("</small>", markdown)
 
     def test_block_ack_table_is_enabled_for_n_block_ack_configs(self):
         self.assertTrue(has_compressed_block_ack_records("block_ack", "CompressedBlockAck"))
@@ -212,10 +214,14 @@ class PcapMarkdownTest(unittest.TestCase):
         self.assertGreater(idx2, -1)
         self.assertLess(idx1, idx2)
         self.assertEqual(markdown_origin.count("|---:|---:|---:|---|---|"), 2)
+        self.assertEqual(markdown_origin.count("<small>"), 2)
+        self.assertEqual(markdown_origin.count("</small>"), 2)
 
         markdown_dest = compressed_block_ack_records_markdown(records, group_by="destination")
         self.assertIn("##### [script] Destination address: 10:00:00:00:00:00", markdown_dest)
         self.assertEqual(markdown_dest.count("|---:|---:|---:|---|---|"), 1)
+        self.assertEqual(markdown_dest.count("<small>"), 1)
+        self.assertEqual(markdown_dest.count("</small>"), 1)
 
     def test_compressed_block_ack_table_is_limited_to_100_rows(self):
         records = [
@@ -426,6 +432,8 @@ class BssColorStatisticsTest(unittest.TestCase):
             {"1": "-60.0 dBm", "2": "-80.0 dBm"},
         )
         markdown = analyze_pcap.make_table_md(statistics, total)
+        self.assertIn("<small>\n\n| Color | Frame Type & Subtype |", markdown)
+        self.assertIn("</small>", markdown)
         self.assertIn("| BSS Color |", markdown)
         self.assertIn("| 1 | 1 | 50.00%", markdown)
         self.assertIn("| 2 | 1 | 50.00%", markdown)
@@ -815,6 +823,8 @@ class CaptureValidationTest(unittest.TestCase):
             "Observation point: Access Point (AP) wireless interfaces.",
             markdown,
         )
+        self.assertIn("<small>\n\n| Configuration |", markdown)
+        self.assertIn("</small>", markdown)
         self.assertIn("| `Treatment` | `wlan.fc.type == 2` | 4 |", markdown)
         self.assertIn("QoS Data [HE-SU", markdown)
         self.assertIn("Not delivery or de-duplicated transmissions", markdown)
