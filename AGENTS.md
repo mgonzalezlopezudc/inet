@@ -45,6 +45,7 @@ Keep orchestration shallow and evidence-driven:
 * Do not supply `ArtifactMetadata` when creating or modifying standard project files (C++, NED, INI, scripts, or workspace docs); `ArtifactMetadata` is strictly for artifact markdown files under the session brain directory (`.gemini/antigravity-ide/brain/...`).
 * Always specify `EndLine >= StartLine` when supplying `StartLine` to `view_file`.
 * Use `opp_scavetool export -F CSV-R` (or `-F CSV-S`), as `-F CSV` is an unrecognized format option.
+* Align `CommandLine` argument paths with `Cwd` in `run_command`: when `Cwd` is set to an example subdirectory (e.g., `examples/...`), specify command argument paths relative to that `Cwd` (e.g., `results/*.sca`), NOT relative to the workspace root, to avoid path duplication (`No such file or directory`). Conversely, when `Cwd` is the workspace root (`/home/user/omnetpp_ws/inet`), specify full relative paths from the root.
 
 ### Agent learning procedure
 
