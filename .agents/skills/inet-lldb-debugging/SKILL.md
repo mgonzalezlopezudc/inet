@@ -18,7 +18,14 @@ Do not mix release and debug runners or model libraries. `--debug-on-errors=true
 ## Workflow
 
 1. Reproduce the problem narrowly and preserve the simulation command.
-2. Launch that command under LLDB with `opp_run_dbg`, debug model libraries, and `--debug-on-errors=true`.
+2. Launch that command under LLDB with `opp_run_dbg`, debug model libraries, and `--debug-on-errors=true`. Pass the simulator executable and all simulator arguments after LLDB's `--` delimiter; do not let LLDB parse `-u`, `-f`, `-c`, or other simulator options:
+
+   ```sh
+   SIM_ARGS=( -u Cmdenv -f "$INI_FILE" -c "$CONFIG" -r "$RUN" )
+   lldb -- "$LLDB_TARGET" "${SIM_ARGS[@]}"
+   ```
+
+   For a non-interactive backtrace, use batch LLDB (for example, `lldb -b -o run -o bt -- ...`). If an interactive LLDB transport reports a handshake failure, preserve the error and fall back to this batch form or to a direct Cmdenv reproduction; do not repeatedly retry the same handshake.
 3. Set a targeted breakpoint before running when the suspicious path is known; avoid stepping from `main()`.
 4. At the first relevant stop, record the stop reason and full backtrace before continuing.
 5. Select the first project or INET frame that exposes the invalid state; the trap or exception frame is usually only the consequence.

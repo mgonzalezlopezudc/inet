@@ -10,6 +10,8 @@ Use Cmdenv by default. Use Qtenv only when interactive inspection is useful or t
 ## Common Syntax Pitfalls
 
 * **Root Executable Missing**: Do NOT execute `./run` from the repository root directory (fails with `No such file or directory`). Use `opp_run` (or `opp_run_dbg`) as shown in the templates below.
+* **Working-directory mismatch**: Keep every relative `-f`, result, NED-path, and library path consistent with the selected working directory. If the command runs from an example directory, use paths relative to that directory; if it runs from the repository root, use repository-root-relative paths.
+* **Undocumented query flags**: Do not improvise `opp_run -q` or `-h` category arguments. Use the run templates below for execution and consult the installed command's help only when a supported option is genuinely needed.
 
 ## Inputs
 

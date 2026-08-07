@@ -47,6 +47,15 @@ Keep orchestration shallow and evidence-driven:
 * Use `opp_scavetool export -F CSV-R` (or `-F CSV-S`), as `-F CSV` is an unrecognized format option.
 * Align `CommandLine` argument paths with `Cwd` in `run_command`: when `Cwd` is set to an example subdirectory (e.g., `examples/...`), specify command argument paths relative to that `Cwd` (e.g., `results/*.sca`), NOT relative to the workspace root, to avoid path duplication (`No such file or directory`). Conversely, when `Cwd` is the workspace root (`/home/user/omnetpp_ws/inet`), specify full relative paths from the root.
 
+### Tool-call reliability
+
+* Treat the working directory, command paths, configuration, run number, build mode, loaded library, and expected artifacts as one command context. Recheck that context before invoking a command; do not combine workspace-root paths with an example-directory working directory.
+* Do not retry an identical failed invocation. Classify the failure first: correct the syntax or context for invocation failures, refresh the target for stale patch failures, restart a process for a stale tool/session handle, and only then rerun.
+* For `apply_patch`, reread the target immediately before patching, keep each patch small and single-purpose, and inspect the resulting diff. After a verification failure, regenerate the hunk from the newly read file instead of repeating the old hunk.
+* Keep `functions.exec` orchestration simple: prefer a direct nested tool call; use parallel composition only for independent calls and validate the outer JavaScript before adding more control flow. A JavaScript syntax error is an orchestration failure, not evidence about the repository command.
+* Use `wait` only with the live cell identifier returned by the immediately preceding running `functions.exec` call. Use `write_stdin` only with a live command session; start a fresh command when a cell or session handle is stale, and request a TTY for interactive tools.
+* Prefer repository-native commands and direct text tools (`rg`, `sed`, `awk`) over optional wrappers such as `rtk` or `jq`. If an optional helper fails, switch to the documented native workflow rather than installing tools or retrying the missing helper.
+
 ### Agent learning procedure
 
 When an agent solves a problem in a way that is clearly reusable, it should consider whether the lesson should be persisted.

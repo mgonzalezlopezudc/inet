@@ -7,6 +7,8 @@ description: Build INET and run unit tests in this repository. Use when asked to
 
 Run unit-test commands from the repository root.
 
+Do not use `./runtest` or infer a test runner path from another project. The repository-supported entry point is `inet_run_unit_tests` from the repository root.
+
 ## Disable ccache
 
 Disable ccache before building or running tests in this workspace:
