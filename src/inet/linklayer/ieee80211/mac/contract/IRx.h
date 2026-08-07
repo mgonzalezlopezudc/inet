@@ -9,10 +9,13 @@
 #define __INET_IRX_H
 
 #include "inet/linklayer/common/MacAddress.h"
+#include "inet/common/Units.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/contract/IContention.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
 #include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211CcaProvider.h"
+
+using namespace inet::units::values;
 
 namespace inet {
 namespace ieee80211 {
@@ -41,7 +44,10 @@ class INET_API IRx
 
     // from Contention
     virtual bool isMediumFree() const = 0;
-    virtual bool isSecondaryChannelIdleFor(simtime_t interval) const = 0;
+    // Returns true when every secondary 20 MHz subchannel occupied by a PPDU
+    // of the given bandwidth has been idle for at least the given interval
+    // (IEEE Std 802.11-2024, 10.23.2.5).
+    virtual bool isWideChannelIdleFor(Hz bandwidth, simtime_t interval) const = 0;
     virtual void frameTransmitted(simtime_t durationField) = 0;
     virtual void legacySignalReceived(simtime_t durationField) = 0;
 

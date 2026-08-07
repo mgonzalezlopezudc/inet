@@ -66,6 +66,8 @@ module Ieee80211Interface extends NetworkInterface like IWirelessInterface
         string energySourceModule = default("");
         string opMode @enum("a","b","g(erp)","g(mixed)","n(mixed-2.4Ghz)","n(greenfield-2.4Ghz)","p","ac","ax","be") = default("g(mixed)");
         string primary80ChannelPosition @enum("automatic", "lower", "upper") = default("automatic");
+        string primary160ChannelPosition @enum("automatic", "lower", "upper") = default("automatic");
+        int primary20SubchannelIndex = default(-1);
         string htSecondaryChannelOffset @enum("none", "above", "below") = default("none");
         string address @mutable = default("auto"); // MAC address as hex string (12 hex digits), or
                                                    // "auto". "auto" values will be replaced by
@@ -75,6 +77,8 @@ module Ieee80211Interface extends NetworkInterface like IWirelessInterface
         **.opMode = this.opMode;
         **.bitrate = this.bitrate;
         radio.primary80ChannelPosition = default(this.primary80ChannelPosition);
+        radio.primary160ChannelPosition = default(this.primary160ChannelPosition);
+        radio.primary20SubchannelIndex = default(this.primary20SubchannelIndex);
         radio.htSecondaryChannelOffset = default(this.htSecondaryChannelOffset);
         mib.htSecondaryChannelOffset = default(this.htSecondaryChannelOffset);
         mac.modeSet = default(this.opMode);

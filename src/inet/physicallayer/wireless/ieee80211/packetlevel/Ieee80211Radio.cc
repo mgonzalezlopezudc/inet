@@ -319,24 +319,72 @@ void Ieee80211Radio::updateCcaState()
 {
     auto ieee80211Receiver = dynamic_cast<const Ieee80211Receiver *>(receiver);
     auto channel = ieee80211Receiver == nullptr ? nullptr : ieee80211Receiver->getChannel();
-    bool ht40Configured = channel != nullptr &&
-            channel->getSecondaryChannelOffset() != IEEE80211_SECONDARY_CHANNEL_NONE &&
-            modeSet != nullptr && Ieee80211ModeSet::isHtProfileName(modeSet->getProfileName()) &&
-            ieee80211Receiver->getBandwidth() == MHz(40);
-    bool ht40 = ht40Configured && isReceiverMode(radioMode);
-    bool primaryBusy = false;
-    bool secondaryBusy = false;
-    if (ht40) {
-        // IEEE Std 802.11-2024, 8.3.5.12/Table 8-5 and 19.3.19.6.5:
-        // preserve {primary}, {secondary}, and {primary,secondary} CCA state.
-        primaryBusy = computeIsBandBusy(channel->getCenterFrequency());
-        secondaryBusy = computeIsBandBusy(channel->getSecondaryCenterFrequency());
+    // IEEE Std 802.11-2024, 8.3.5.12/Table 8-5 and 27.3.22.6.5: for operating
+    // channels wider than 20 MHz, preserve the CCA state of each 20 MHz
+    // subchannel (the PHY-CCA.indication per20bitmap parameter).
+    bool wideCca = channel != nullptr && channel->getNumSubchannels() > 1 && isReceiverMode(radioMode);
+    int numSubchannels = 1;
+    int primarySubchannelIndex = 0;
+    uint32_t busySubchannelMask = 0;
+    if (wideCca) {
+        numSubchannels = channel->getNumSubchannels();
+        primarySubchannelIndex = channel->getPrimarySubchannelIndex();
+        for (int i = 0; i < numSubchannels; i++)
+            if (computeIsBandBusy(channel->getSubchannelCenterFrequency(i)))
+                busySubchannelMask |= 1u << i;
     }
-    if (ccaSnapshot->isHt40() != ht40 || ccaSnapshot->isPrimaryBusy() != primaryBusy ||
-            ccaSnapshot->isSecondaryBusy() != secondaryBusy) {
-        ccaSnapshot = std::make_unique<Ieee80211CcaSnapshot>(ht40, primaryBusy, secondaryBusy);
+    if (ccaSnapshot->getNumSubchannels() != numSubchannels ||
+            ccaSnapshot->getPrimarySubchannelIndex() != primarySubchannelIndex ||
+            ccaSnapshot->getBusySubchannelMask() != busySubchannelMask) {
+        ccaSnapshot = std::make_unique<Ieee80211CcaSnapshot>(numSubchannels, primarySubchannelIndex, busySubchannelMask);
         emit(IIeee80211CcaProvider::ccaStateChangedSignal, ccaSnapshot.get());
     }
+}
+
+void Ieee80211Radio::validateChannelPlan(const IIeee80211Band *band, Hz channelWidth) const
+{
+    if (channelWidth > MHz(40) && band != nullptr && band->getBandFamily() != Ieee80211BandFamily::BAND_5_GHZ &&
+            band->getBandFamily() != Ieee80211BandFamily::BAND_6_GHZ)
+        throw cRuntimeError("IEEE 802.11 operation with a channel width greater than 40 MHz requires a 5 GHz or 6 GHz band");
+    if (channelWidth == MHz(320) && (band == nullptr || band->getBandFamily() != Ieee80211BandFamily::BAND_6_GHZ))
+        throw cRuntimeError("IEEE 802.11 320 MHz channel operation requires the 6 GHz band");
+    if (htSecondaryChannelOffset != IEEE80211_SECONDARY_CHANNEL_NONE && channelWidth < MHz(40))
+        throw cRuntimeError("htSecondaryChannelOffset above/below requires at least 40 MHz operation");
+}
+
+Ieee80211SecondaryChannelOffset Ieee80211Radio::resolveSecondaryChannelOffset(const IIeee80211Band *band, Hz channelWidth, int channelNumber) const
+{
+    if (htSecondaryChannelOffset != IEEE80211_SECONDARY_CHANNEL_NONE || channelWidth < MHz(40))
+        return htSecondaryChannelOffset;
+    if (primary20SubchannelIndex >= 0)
+        return (primary20SubchannelIndex & 1) == 0 ? IEEE80211_SECONDARY_CHANNEL_ABOVE : IEEE80211_SECONDARY_CHANNEL_BELOW;
+    if (band != nullptr && band->getChannelTopology() == Ieee80211ChannelTopology::CONTIGUOUS &&
+            band->getChannelWidth() == channelWidth) {
+        int index = 0;
+        int numSubchannels = (int)std::round(channelWidth.get<MHz>() / 20.0);
+        if (numSubchannels == 16 && primary160ChannelPosition == Ieee80211Primary80ChannelPosition::UPPER)
+            index += 8;
+        if (numSubchannels >= 8 && primary80ChannelPosition == Ieee80211Primary80ChannelPosition::UPPER)
+            index += 4;
+        return (index & 1) == 0 ? IEEE80211_SECONDARY_CHANNEL_ABOVE : IEEE80211_SECONDARY_CHANNEL_BELOW;
+    }
+    // IEEE Std 802.11-2024, 21.2.2: for VHT/HE/EHT operation the secondary
+    // 20 MHz channel is the other 20 MHz half of the primary 40 MHz channel,
+    // so the offset follows from the primary channel position on the grid.
+    if (band == nullptr || band->getSpacing() != MHz(5) ||
+            (band->getBandFamily() != Ieee80211BandFamily::BAND_5_GHZ && band->getBandFamily() != Ieee80211BandFamily::BAND_6_GHZ))
+        throw cRuntimeError("Cannot derive the secondary channel offset for %g MHz operation on band '%s'; set the htSecondaryChannelOffset parameter",
+                channelWidth.get<MHz>(), band != nullptr ? band->getName() : "<unspecified>");
+    Hz anchor = band->getCenterFrequency(band->getBandFamily() == Ieee80211BandFamily::BAND_5_GHZ ? 36 : 1);
+    int index = (int)std::round((band->getCenterFrequency(channelNumber) - anchor).get<MHz>() / 20.0);
+    return (index & 1) == 0 ? IEEE80211_SECONDARY_CHANNEL_ABOVE : IEEE80211_SECONDARY_CHANNEL_BELOW;
+}
+
+const Ieee80211Channel *Ieee80211Radio::createChannel(const IIeee80211Band *band, int channelNumber, Hz channelWidth) const
+{
+    auto secondaryChannelOffset = resolveSecondaryChannelOffset(band, channelWidth, channelNumber);
+    return new Ieee80211Channel(band, channelNumber, secondaryChannelOffset, channelWidth,
+            primary80ChannelPosition, primary160ChannelPosition, primary20SubchannelIndex);
 }
 
 void Ieee80211Radio::updateTransceiverState()
@@ -354,6 +402,13 @@ void Ieee80211Radio::initialize(int stage)
         primary80ChannelPosition = !strcmp(primary80, "lower") ? Ieee80211Primary80ChannelPosition::LOWER :
                 !strcmp(primary80, "upper") ? Ieee80211Primary80ChannelPosition::UPPER :
                 Ieee80211Primary80ChannelPosition::UNSPECIFIED;
+        const char *primary160 = par("primary160ChannelPosition");
+        primary160ChannelPosition = !strcmp(primary160, "lower") ? Ieee80211Primary80ChannelPosition::LOWER :
+                !strcmp(primary160, "upper") ? Ieee80211Primary80ChannelPosition::UPPER :
+                Ieee80211Primary80ChannelPosition::UNSPECIFIED;
+        primary20SubchannelIndex = par("primary20SubchannelIndex").intValue();
+        if (primary20SubchannelIndex < -1 || primary20SubchannelIndex > 15)
+            throw cRuntimeError("primary20SubchannelIndex must be -1 or between 0 and 15");
         const char *fcsModeString = par("fcsMode");
         fcsMode = parseFcsMode(fcsModeString, true);
         opMode = par("opMode").stringValue();
@@ -363,18 +418,14 @@ void Ieee80211Radio::initialize(int stage)
         setBand(*bandName ? Ieee80211CompliantBands::getBand(bandName) : nullptr);
         setModeSet(*opMode.c_str() ? Ieee80211ModeSet::getModeSet(opMode.c_str(), band) : nullptr);
         htSecondaryChannelOffset = Ieee80211Channel::parseSecondaryChannelOffset(par("htSecondaryChannelOffset"));
-        auto ieee80211Receiver = check_and_cast<const Ieee80211Receiver *>(receiver);
+        Hz channelWidth = getChannelWidth();
+        // IEEE Std 802.11-2024, 19.2.3 (HT), 21.2.2 (VHT), 27.2.2 (HE): the
+        // secondary 20 MHz channel offset is an operating-channel property of
+        // 40 MHz and wider operation, not an HT40-only property.
         if (modeSet != nullptr && Ieee80211ModeSet::isHtProfileName(modeSet->getProfileName()) &&
-                ieee80211Receiver->getBandwidth() == MHz(40) &&
-                htSecondaryChannelOffset == IEEE80211_SECONDARY_CHANNEL_NONE)
+                channelWidth == MHz(40) && htSecondaryChannelOffset == IEEE80211_SECONDARY_CHANNEL_NONE)
             throw cRuntimeError("HT 40 MHz operation requires a secondary channel offset of above or below");
-        if (htSecondaryChannelOffset != IEEE80211_SECONDARY_CHANNEL_NONE) {
-            // IEEE Std 802.11-2024, 19.2.3 and 19.3.15.4: the secondary
-            // channel is an HT40-only operating-channel property.
-            if (modeSet == nullptr || !Ieee80211ModeSet::isHtProfileName(modeSet->getProfileName()) ||
-                    ieee80211Receiver->getBandwidth() != MHz(40))
-                throw cRuntimeError("htSecondaryChannelOffset above/below requires HT 40 MHz operation");
-        }
+        validateChannelPlan(band, channelWidth);
         int channelNumber = par("channelNumber");
         if (channelNumber != -1)
             setChannelNumber(channelNumber);
@@ -415,8 +466,17 @@ void Ieee80211Radio::handleUpperCommand(cMessage *message)
                         htSecondaryChannelOffset;
                 if (targetChannelNumber != -1 && (targetBand == nullptr || targetChannelNumber < 0 || targetChannelNumber >= targetBand->getNumChannels()))
                     throw cRuntimeError("Invalid target 802.11 channel number %d", targetChannelNumber);
-                if (targetChannelNumber != -1)
-                    (void)Ieee80211Channel(targetBand, targetChannelNumber, targetSecondaryChannelOffset).getCenterFrequency();
+                Hz targetChannelWidth = Ieee80211ModeSet::getChannelWidth(targetBand, targetBandwidth);
+                if (targetChannelNumber != -1) {
+                    validateChannelPlan(targetBand, targetChannelWidth);
+                    if (targetModeSet != nullptr && Ieee80211ModeSet::isHtProfileName(targetModeSet->getProfileName()) &&
+                            targetChannelWidth == MHz(40) && targetSecondaryChannelOffset == IEEE80211_SECONDARY_CHANNEL_NONE)
+                        throw cRuntimeError("HT 40 MHz operation requires a secondary channel offset of above or below");
+                    targetSecondaryChannelOffset = targetSecondaryChannelOffset != IEEE80211_SECONDARY_CHANNEL_NONE ?
+                            targetSecondaryChannelOffset : resolveSecondaryChannelOffset(targetBand, targetChannelWidth, targetChannelNumber);
+                    (void)Ieee80211Channel(targetBand, targetChannelNumber, targetSecondaryChannelOffset, targetChannelWidth,
+                            primary80ChannelPosition, primary160ChannelPosition, primary20SubchannelIndex);
+                }
 
                 bps newBitrate = configureCommand->getBitrate();
                 bps targetBitrate = std::isnan(newBitrate.get()) ? ieee80211Transmitter->getBitrate() : newBitrate;
@@ -447,8 +507,10 @@ void Ieee80211Radio::handleUpperCommand(cMessage *message)
                     setBitrate(newBitrate);
                 if (targetChannelNumber != -1 &&
                         (currentChannel == nullptr || targetBand != this->band || targetChannelNumber != currentChannel->getChannelNumber() ||
-                         targetSecondaryChannelOffset != currentChannel->getSecondaryChannelOffset()))
-                    setChannel(new Ieee80211Channel(targetBand, targetChannelNumber, targetSecondaryChannelOffset));
+                         targetSecondaryChannelOffset != currentChannel->getSecondaryChannelOffset() ||
+                         targetChannelWidth != currentChannel->getOperatingChannelWidth()))
+                    setChannel(new Ieee80211Channel(targetBand, targetChannelNumber, targetSecondaryChannelOffset, targetChannelWidth,
+                            primary80ChannelPosition, primary160ChannelPosition, primary20SubchannelIndex));
                 else if (targetBand != this->band)
                     setBand(targetBand);
                 this->opMode = targetOpMode;
@@ -523,9 +585,12 @@ void Ieee80211Radio::setChannel(const Ieee80211Channel *channel)
     Ieee80211Transmitter *ieee80211Transmitter = const_cast<Ieee80211Transmitter *>(check_and_cast<const Ieee80211Transmitter *>(transmitter));
     Ieee80211Receiver *ieee80211Receiver = const_cast<Ieee80211Receiver *>(check_and_cast<const Ieee80211Receiver *>(receiver));
     ieee80211Transmitter->setChannel(channel);
-    ieee80211Receiver->setChannel(new Ieee80211Channel(channel->getBand(), channel->getChannelNumber(), channel->getSecondaryChannelOffset()));
+    ieee80211Receiver->setChannel(new Ieee80211Channel(*channel));
     band = channel->getBand();
     htSecondaryChannelOffset = channel->getSecondaryChannelOffset();
+    primary20SubchannelIndex = channel->getPrimary20SubchannelIndex();
+    primary80ChannelPosition = channel->getPrimary80ChannelPosition();
+    primary160ChannelPosition = channel->getPrimary160ChannelPosition();
     EV << "Changing radio channel to " << channel->getChannelNumber() << endl;
     receptionTimer = nullptr;
     notifyChannelChanged(channel->getChannelNumber());
@@ -535,8 +600,10 @@ void Ieee80211Radio::setChannelNumber(int newChannelNumber)
 {
     Ieee80211Transmitter *ieee80211Transmitter = const_cast<Ieee80211Transmitter *>(check_and_cast<const Ieee80211Transmitter *>(transmitter));
     Ieee80211Receiver *ieee80211Receiver = const_cast<Ieee80211Receiver *>(check_and_cast<const Ieee80211Receiver *>(receiver));
-    ieee80211Transmitter->setChannel(new Ieee80211Channel(band, newChannelNumber, htSecondaryChannelOffset));
-    ieee80211Receiver->setChannel(new Ieee80211Channel(band, newChannelNumber, htSecondaryChannelOffset));
+    Hz channelWidth = getChannelWidth();
+    validateChannelPlan(band, channelWidth);
+    ieee80211Transmitter->setChannel(createChannel(band, newChannelNumber, channelWidth));
+    ieee80211Receiver->setChannel(createChannel(band, newChannelNumber, channelWidth));
     EV << "Changing radio channel to " << newChannelNumber << ".\n";
     receptionTimer = nullptr;
     notifyChannelChanged(newChannelNumber);

@@ -245,7 +245,8 @@ void Ieee80211Transmitter::setBand(const IIeee80211Band *band)
 {
     if (this->band != band) {
         if (channel != nullptr)
-            setChannel(new Ieee80211Channel(band, channel->getChannelNumber(), channel->getSecondaryChannelOffset()));
+            setChannel(new Ieee80211Channel(band, channel->getChannelNumber(), channel->getSecondaryChannelOffset(),
+                    channel->getOperatingChannelWidth(), channel->getPrimary80ChannelPosition(), channel->getPrimary160ChannelPosition()));
         else
             this->band = band;
     }
@@ -265,8 +266,9 @@ void Ieee80211Transmitter::setChannel(const Ieee80211Channel *channel)
 void Ieee80211Transmitter::setChannelNumber(int channelNumber)
 {
     if (channel == nullptr || channelNumber != channel->getChannelNumber())
-        setChannel(new Ieee80211Channel(band, channelNumber, channel == nullptr ?
-                IEEE80211_SECONDARY_CHANNEL_NONE : channel->getSecondaryChannelOffset()));
+        setChannel(channel == nullptr ? new Ieee80211Channel(band, channelNumber) :
+                new Ieee80211Channel(band, channelNumber, channel->getSecondaryChannelOffset(),
+                        channel->getOperatingChannelWidth(), channel->getPrimary80ChannelPosition(), channel->getPrimary160ChannelPosition()));
 }
 
 std::ostream& Ieee80211Transmitter::printToStream(std::ostream& stream, int level, int evFlags) const
@@ -369,11 +371,13 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     // formulas: DSSS 15.4.6.7, HR/DSSS 16.3.4, OFDM 17.4.3, ERP 18.5.3.2,
     // HT 19.4.3, and VHT 21.4.3. The analog model then splits the result into
     // preamble, header/signaling, and DATA intervals.
-    // IEEE Std 802.11-2024, 19.3.15.4: an HT40 PPDU occupies the primary
-    // and secondary 20 MHz channels and is centered halfway between them.
-    Hz transmissionCenterFrequency = dynamic_cast<const Ieee80211HtMode *>(transmissionMode) != nullptr &&
-            transmissionBandwidth == MHz(40) ? transmissionChannel->getBondedCenterFrequency() :
-            transmissionChannel->getCenterFrequency();
+    // IEEE Std 802.11-2024, 19.3.15.4 and 21.3.7.3: a PPDU that spans the
+    // whole operating channel is centered on the bonded channel center; a
+    // narrower PPDU is centered on the primary segment of its bandwidth.
+    Hz transmissionCenterFrequency = transmissionBandwidth >= MHz(40) &&
+            transmissionBandwidth == transmissionChannel->getOperatingChannelWidth() ?
+            transmissionChannel->getBondedCenterFrequency() :
+            transmissionChannel->getCenterFrequencyForBandwidth(std::min(transmissionBandwidth, transmissionChannel->getOperatingChannelWidth()));
     if (heMuHeader != nullptr) {
         if (getIeee80211HePpduFormat(*heMuHeader) != hePpduLayout->getPpduFormat() ||
                 heMuHeader->getNdp() != hePpduLayout->isNdp() ||

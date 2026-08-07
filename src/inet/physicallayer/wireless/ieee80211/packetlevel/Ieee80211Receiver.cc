@@ -491,6 +491,7 @@ void Ieee80211Receiver::initialize(int stage)
         htCca20Sensitivity = mW(math::dBmW2mW(par("htCca20Sensitivity")));
         htCca40Sensitivity = mW(math::dBmW2mW(par("htCca40Sensitivity")));
         htCcaEnergyDetection = mW(math::dBmW2mW(par("htCcaEnergyDetection")));
+        secondaryCcaSensitivity = mW(math::dBmW2mW(par("secondaryCcaSensitivity")));
         enableNonSrgSpatialReuse = par("enableNonSrgSpatialReuse");
         enableSrgSpatialReuse = par("enableSrgSpatialReuse");
         enableParameterizedSpatialReuse = par("enableParameterizedSpatialReuse");
@@ -696,9 +697,10 @@ const IListeningDecision *Ieee80211Receiver::computeListeningDecision(const ILis
             ccaReceptions.push_back(reception);
     }
     FilteredInterferenceView ccaInterference(interference->getBackgroundNoise(), &ccaReceptions);
-    if (isHtCcaOperation() && dynamic_cast<const BandListening *>(listening) != nullptr &&
+    if ((isHtCcaOperation() || isWideCcaOperation()) && dynamic_cast<const BandListening *>(listening) != nullptr &&
             dynamic_cast<const BandListening *>(listening)->getBandwidth() == MHz(20))
-        return new ListeningDecision(listening, computeHtCcaBusy(listening, &ccaInterference));
+        return new ListeningDecision(listening, isHtCcaOperation() ?
+                computeHtCcaBusy(listening, &ccaInterference) : computeWideCcaBusy(listening, &ccaInterference));
     return FlatReceiverBase::computeListeningDecision(listening, &ccaInterference);
 }
 
@@ -707,6 +709,15 @@ bool Ieee80211Receiver::isHtCcaOperation() const
     return modeSet != nullptr && Ieee80211ModeSet::isHtProfileName(modeSet->getProfileName()) &&
             channel != nullptr && (bandwidth == MHz(20) ||
             (bandwidth == MHz(40) && channel->getSecondaryChannelOffset() != IEEE80211_SECONDARY_CHANNEL_NONE));
+}
+
+bool Ieee80211Receiver::isWideCcaOperation() const
+{
+    // Per-20 MHz subchannel CCA for VHT/HE/EHT operating channels of 40 MHz
+    // and wider (IEEE Std 802.11-2024, 21.3.18.5, 27.3.22.6; 802.11be
+    // 36.3.21.6). HT operation keeps the clause 19 CCA model.
+    return modeSet != nullptr && !Ieee80211ModeSet::isHtProfileName(modeSet->getProfileName()) &&
+            channel != nullptr && channel->getOperatingChannelWidth() >= MHz(40) && bandwidth >= MHz(40);
 }
 
 static bool isBandOverlapping(const BandListening *listening, const INarrowbandSignalAnalogModel *signal)
@@ -780,6 +791,41 @@ bool Ieee80211Receiver::computeHtCcaBusy(const IListening *listening, const IInt
             // sensitivity threshold.
             return true;
         }
+    }
+    return false;
+}
+
+bool Ieee80211Receiver::computeWideCcaBusy(const IListening *listening, const IInterference *interference) const
+{
+    const auto *bandListening = check_and_cast<const BandListening *>(listening);
+    const auto *mediumAnalogModel = listening->getReceiverRadio()->getMedium()->getAnalogModel();
+    // IEEE Std 802.11-2024, 21.3.18.5.4 and 27.3.22.6.4, 802.11be 36.3.21.6.4:
+    // each 20 MHz subchannel is busy if any signal reaches the energy
+    // detection threshold within it.
+    const INoise *noise = mediumAnalogModel->computeNoise(listening, interference);
+    bool busy = noise->computeMaxPower(listening->getStartTime(), listening->getEndTime()) >= htCcaEnergyDetection;
+    delete noise;
+    if (busy)
+        return true;
+
+    // Preamble detection per 20 MHz subchannel: -82 dBm on the primary
+    // channel (21.3.18.5.3, 27.3.22.6.3, 36.3.21.6.3) and -72 dBm on
+    // non-primary channels (21.3.18.5.4, 27.3.22.6.4, 36.3.21.6.4).
+    const W sensitivity = isPrimaryChannel(channel, bandListening) ? htCca20Sensitivity : secondaryCcaSensitivity;
+    for (auto reception : *interference->getInterferingReceptions()) {
+        const auto *transmission = dynamic_cast<const Ieee80211Transmission *>(reception->getTransmission());
+        const auto *signal = dynamic_cast<const INarrowbandSignalAnalogModel *>(reception->getAnalogModel());
+        if (transmission == nullptr || transmission->getMode() == nullptr || signal == nullptr ||
+                !isBandOverlapping(bandListening, signal))
+            continue;
+        const W signalPower = signal->computeMinPower(reception->getStartTime(), reception->getEndTime());
+        const Hz signalBandwidth = signal->getBandwidth();
+        // The threshold applies to the power measured within the 20 MHz
+        // subchannel; for wider PPDUs with a uniform power spectral density,
+        // only the corresponding share of the total power falls within it.
+        const W subchannelPower = signalBandwidth > MHz(20) ? signalPower * (MHz(20) / signalBandwidth).get() : signalPower;
+        if (subchannelPower >= sensitivity)
+            return true;
     }
     return false;
 }
@@ -1080,7 +1126,8 @@ void Ieee80211Receiver::setBand(const IIeee80211Band *band)
 {
     if (this->band != band) {
         if (channel != nullptr)
-            setChannel(new Ieee80211Channel(band, channel->getChannelNumber(), channel->getSecondaryChannelOffset()));
+            setChannel(new Ieee80211Channel(band, channel->getChannelNumber(), channel->getSecondaryChannelOffset(),
+                    channel->getOperatingChannelWidth(), channel->getPrimary80ChannelPosition(), channel->getPrimary160ChannelPosition()));
         else
             this->band = band;
     }
@@ -1089,9 +1136,10 @@ void Ieee80211Receiver::setBand(const IIeee80211Band *band)
 void Ieee80211Receiver::setChannel(const Ieee80211Channel *channel)
 {
     if (this->channel != channel) {
-        // IEEE Std 802.11-2024, 19.3.15.4 and 19.3.19.6.5: HT40 listening
-        // spans both 20 MHz channels around their bonded center.
-        auto centerFrequency = channel->getSecondaryChannelOffset() == IEEE80211_SECONDARY_CHANNEL_NONE ?
+        // IEEE Std 802.11-2024, 19.3.15.4, 19.3.19.6.5, and 21.3.18.5:
+        // listening for operating channels wider than 20 MHz spans the whole
+        // operating channel around its bonded center.
+        auto centerFrequency = channel->getNumSubchannels() == 1 ?
                 channel->getCenterFrequency() : channel->getBondedCenterFrequency();
         delete this->channel;
         this->channel = channel;
@@ -1103,8 +1151,9 @@ void Ieee80211Receiver::setChannel(const Ieee80211Channel *channel)
 void Ieee80211Receiver::setChannelNumber(int channelNumber)
 {
     if (channel == nullptr || channelNumber != channel->getChannelNumber())
-        setChannel(new Ieee80211Channel(band, channelNumber, channel == nullptr ?
-                IEEE80211_SECONDARY_CHANNEL_NONE : channel->getSecondaryChannelOffset()));
+        setChannel(channel == nullptr ? new Ieee80211Channel(band, channelNumber) :
+                new Ieee80211Channel(band, channelNumber, channel->getSecondaryChannelOffset(),
+                        channel->getOperatingChannelWidth(), channel->getPrimary80ChannelPosition(), channel->getPrimary160ChannelPosition()));
 }
 
 } // namespace physicallayer

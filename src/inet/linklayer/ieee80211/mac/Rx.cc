@@ -28,6 +28,7 @@ Define_Module(Rx);
 
 Rx::Rx()
 {
+    std::fill(std::begin(subchannelIdleSince), std::end(subchannelIdleSince), simtime_t(-1));
 }
 
 Rx::~Rx()
@@ -192,7 +193,7 @@ void Rx::recomputeMediumFree()
         }
     }
     // note: the duration of mode switching (rx-to-tx or tx-to-rx) should also count as busy
-    bool primaryPhysicallyIdle = ht40Cca ? !primaryCcaBusy : receptionState == IRadio::RECEPTION_STATE_IDLE;
+    bool primaryPhysicallyIdle = wideCca ? !(busySubchannelMask & (1u << primarySubchannelIndex)) : receptionState == IRadio::RECEPTION_STATE_IDLE;
     mediumFree = primaryPhysicallyIdle && transmissionState == IRadio::TRANSMISSION_STATE_UNDEFINED && !endNavTimer->isScheduled() && !endIntraBssNavTimer->isScheduled() && !otherLinkTx;
     if (mediumFree != oldMediumFree) {
         for (auto contention : contentions)
@@ -200,26 +201,44 @@ void Rx::recomputeMediumFree()
     }
 }
 
-bool Rx::isSecondaryChannelIdleFor(simtime_t interval) const
+bool Rx::isWideChannelIdleFor(Hz bandwidth, simtime_t interval) const
 {
-    return !ht40Cca || (!secondaryCcaBusy && secondaryCcaIdleSince >= SIMTIME_ZERO &&
-            simTime() - secondaryCcaIdleSince >= interval);
+    if (!wideCca)
+        return true;
+    // IEEE Std 802.11-2024, 10.23.2.5: all secondary 20 MHz subchannels that
+    // the PPDU would occupy must have been idle for the given interval. The
+    // primary subchannel is covered by the regular channel access procedure.
+    int numSubchannels = (int)(bandwidth / MHz(20)).get();
+    int firstSubchannel = primarySubchannelIndex & ~(numSubchannels - 1);
+    simtime_t now = simTime();
+    for (int i = firstSubchannel; i < firstSubchannel + numSubchannels && i < 16; i++) {
+        if (i == primarySubchannelIndex)
+            continue;
+        if ((busySubchannelMask & (1u << i)) != 0)
+            return false;
+        if (subchannelIdleSince[i] < SIMTIME_ZERO || now - subchannelIdleSince[i] < interval)
+            return false;
+    }
+    return true;
 }
 
 void Rx::ccaStateChanged(const Ieee80211CcaSnapshot& snapshot)
 {
     Enter_Method("ccaStateChanged");
-    bool wasHt40Cca = ht40Cca;
-    bool wasSecondaryBusy = secondaryCcaBusy;
-    ht40Cca = snapshot.isHt40();
-    primaryCcaBusy = snapshot.isPrimaryBusy();
-    secondaryCcaBusy = snapshot.isSecondaryBusy();
-    if (!ht40Cca)
-        secondaryCcaIdleSince = -1;
-    else if (!wasHt40Cca || (wasSecondaryBusy && !secondaryCcaBusy))
-        secondaryCcaIdleSince = simTime();
-    else if (secondaryCcaBusy)
-        secondaryCcaIdleSince = -1;
+    bool wasWideCca = wideCca;
+    uint32_t wasBusySubchannelMask = busySubchannelMask;
+    wideCca = snapshot.isWideCca();
+    primarySubchannelIndex = snapshot.getPrimarySubchannelIndex();
+    busySubchannelMask = snapshot.getBusySubchannelMask();
+    for (int i = 0; i < 16; i++) {
+        bool busy = wideCca && snapshot.isSubchannelBusy(i);
+        if (!wideCca)
+            subchannelIdleSince[i] = -1;
+        else if (!wasWideCca || ((wasBusySubchannelMask & (1u << i)) != 0 && !busy))
+            subchannelIdleSince[i] = busy ? -1 : simTime();
+        else if (busy)
+            subchannelIdleSince[i] = -1;
+    }
     recomputeMediumFree();
 }
 

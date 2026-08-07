@@ -377,15 +377,25 @@ void Ieee80211Mib::initialize(int stage)
         auto channel = modeSetProvider->getChannel();
         if (channel == nullptr)
             throw cRuntimeError("The configured IEEE 802.11 mode-set provider has no current channel");
-        vhtOperation = deriveIeee80211VhtOperation(channel->getCenterFrequency(), modeSetProvider->getChannelWidth(),
-                modeSetProvider->getPrimary80ChannelPosition());
+        // VHT operation information has no 320 MHz encoding. EHT carries the
+        // 320 MHz operation separately, so do not try to force a 320 MHz
+        // channel through the VHT CCFS derivation.
+        if (channel->getOperatingChannelWidth() <= MHz(160))
+            vhtOperation = deriveIeee80211VhtOperation(channel->getCenterFrequency(), channel->getOperatingChannelWidth(),
+                    channel->getPrimary80ChannelPosition());
+        else
+            vhtOperation = Ieee80211VhtOperation();
         vhtOperation.ldpc = localVhtCapabilities.ldpc;
         vhtOperation.numSpatialStreams = localVhtCapabilities.maxNss;
         if (vhtOperation.operatingChannelWidth == MHz(160))
             localVhtCapabilities.supportedChannelWidths.insert(MHz(160));
         auto configuredSecondaryChannelOffset = physicallayer::Ieee80211Channel::parseSecondaryChannelOffset(
                 par("htSecondaryChannelOffset"));
-        if (configuredSecondaryChannelOffset != channel->getSecondaryChannelOffset())
+        // The radio derives the secondary channel offset from the channel
+        // grid for wide VHT/HE/EHT operation when the parameter is "none";
+        // only an explicit disagreement is an error.
+        if (configuredSecondaryChannelOffset != physicallayer::IEEE80211_SECONDARY_CHANNEL_NONE &&
+                configuredSecondaryChannelOffset != channel->getSecondaryChannelOffset())
             throw cRuntimeError("MIB and radio htSecondaryChannelOffset parameters disagree");
         bool ht40Operation = physicallayer::Ieee80211ModeSet::isHtProfileName(modeSet->getProfileName()) &&
                 configuredSecondaryChannelOffset != physicallayer::IEEE80211_SECONDARY_CHANNEL_NONE;

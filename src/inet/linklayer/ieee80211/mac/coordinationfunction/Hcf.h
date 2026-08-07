@@ -155,7 +155,7 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     virtual bool hasFrameToTransmit();
     virtual bool hasFrameToTransmit(AccessCategory ac);
     virtual bool isReceptionInProgress();
-    virtual bool shouldRestartHt40ChannelAccess(Edcaf *edcaf);
+    virtual bool shouldRestartWideChannelAccess(Edcaf *edcaf);
     virtual bool isLegacyHtMultiTidBlockAckEnabled() const;
     virtual bool processHeaderlessNdpIndication(Packet *packet) { return false; }
 

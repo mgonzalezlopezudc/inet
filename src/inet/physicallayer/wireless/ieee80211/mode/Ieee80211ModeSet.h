@@ -54,6 +54,7 @@ enum Ieee80211ChannelWidthMask {
     IEEE80211_WIDTH_80 = 1 << 2,
     IEEE80211_WIDTH_160 = 1 << 3,
     IEEE80211_WIDTH_80P80 = 1 << 4,
+    IEEE80211_WIDTH_320 = 1 << 5,
 };
 
 class INET_API Ieee80211ModeSet : public IPrintableObject, public cObject

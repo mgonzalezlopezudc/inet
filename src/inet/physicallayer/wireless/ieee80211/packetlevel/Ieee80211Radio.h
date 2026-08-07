@@ -51,6 +51,8 @@ class INET_API Ieee80211Radio : public FlatRadioBase, public IIeee80211ModeSetPr
 
   protected:
     Ieee80211Primary80ChannelPosition primary80ChannelPosition = Ieee80211Primary80ChannelPosition::UNSPECIFIED;
+    Ieee80211Primary80ChannelPosition primary160ChannelPosition = Ieee80211Primary80ChannelPosition::UNSPECIFIED;
+    int primary20SubchannelIndex = -1;
     Ieee80211SecondaryChannelOffset htSecondaryChannelOffset = IEEE80211_SECONDARY_CHANNEL_NONE;
     FcsMode fcsMode = FCS_MODE_UNDEFINED;
     const Ieee80211ModeSet *modeSet = nullptr;
@@ -69,6 +71,9 @@ class INET_API Ieee80211Radio : public FlatRadioBase, public IIeee80211ModeSetPr
     virtual void updateTransceiverState() override;
     virtual void updateCcaState();
     virtual bool computeIsBandBusy(Hz centerFrequency) const;
+    virtual void validateChannelPlan(const IIeee80211Band *band, Hz channelWidth) const;
+    virtual Ieee80211SecondaryChannelOffset resolveSecondaryChannelOffset(const IIeee80211Band *band, Hz channelWidth, int channelNumber) const;
+    virtual const Ieee80211Channel *createChannel(const IIeee80211Band *band, int channelNumber, Hz channelWidth) const;
 
     virtual void handleUpperCommand(cMessage *message) override;
 
@@ -90,6 +95,8 @@ class INET_API Ieee80211Radio : public FlatRadioBase, public IIeee80211ModeSetPr
     virtual const IIeee80211Band *getBand() const override { return band; }
     virtual const Ieee80211Channel *getChannel() const override;
     virtual Ieee80211Primary80ChannelPosition getPrimary80ChannelPosition() const override { return primary80ChannelPosition; }
+    virtual Ieee80211Primary80ChannelPosition getPrimary160ChannelPosition() const { return primary160ChannelPosition; }
+    virtual int getPrimary20SubchannelIndex() const { return primary20SubchannelIndex; }
     virtual Hz getChannelWidth() const override;
     virtual Hz getModeBandwidth() const override;
     virtual const Ieee80211CcaSnapshot& getCcaSnapshot() const override { return *ccaSnapshot; }

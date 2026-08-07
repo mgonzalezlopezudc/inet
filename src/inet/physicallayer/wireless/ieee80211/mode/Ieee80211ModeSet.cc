@@ -1173,6 +1173,9 @@ Ieee80211ModeSet::Ieee80211ModeSet(const char *name, const std::vector<Entry> en
             // FIXME throw cRuntimeError("Sifs, slot and phyRxStartDelay time must be identical within a ModeSet");
         }
     }
+    if (!strcmp(name, "be"))
+        supportedChannelWidths = IEEE80211_WIDTH_20 | IEEE80211_WIDTH_40 | IEEE80211_WIDTH_80 |
+                IEEE80211_WIDTH_160 | IEEE80211_WIDTH_320;
 }
 
 Ieee80211ModeSet::Ieee80211ModeSet(const char *profileName, const char *name,
@@ -1612,7 +1615,8 @@ bool Ieee80211ModeSet::supportsChannel(const IIeee80211Band *band, Hz configured
     uint8_t widthMask = width == MHz(20) ? IEEE80211_WIDTH_20 :
             width == MHz(40) ? IEEE80211_WIDTH_40 :
             width == MHz(80) ? IEEE80211_WIDTH_80 :
-            width == MHz(160) ? IEEE80211_WIDTH_160 : 0;
+            width == MHz(160) ? IEEE80211_WIDTH_160 :
+            width == MHz(320) ? IEEE80211_WIDTH_320 : 0;
     return widthMask != 0 && (supportedChannelWidths & widthMask) != 0;
 }
 

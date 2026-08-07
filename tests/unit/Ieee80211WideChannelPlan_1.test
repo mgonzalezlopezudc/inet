@@ -1,0 +1,139 @@
+%description:
+Test IEEE 802.11 wide (> 40 MHz) operating channel plans: primary/secondary
+20/40/80/160 MHz subchannel geometry, bonded center frequencies, grid
+alignment validation, and secondary channel offset consistency.
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+
+%global:
+using namespace inet;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+static bool throwsRuntimeError(std::function<void()> f)
+{
+    try {
+        f();
+    }
+    catch (const cRuntimeError&) {
+        return true;
+    }
+    return false;
+}
+
+%activity:
+const auto *band5GHz = Ieee80211CompliantBands::getBand("5 GHz");
+const auto *band6GHz = Ieee80211CompliantBands::getBand("6 GHz");
+const auto *band6GHz320 = Ieee80211CompliantBands::getBand("6 GHz (320 MHz)");
+const auto *band2_4GHz = Ieee80211CompliantBands::getBand("2.4 GHz");
+// The generic 5 GHz band computes center(ch) = 5002.5 MHz + 5 MHz * ch, so
+// the channel 36 center is 5182.5 MHz; all expectations below follow.
+
+// 80 MHz plan, primary channel 36 (lowest subchannel), secondary above.
+Ieee80211Channel ch36_80(band5GHz, 36, IEEE80211_SECONDARY_CHANNEL_ABOVE, MHz(80),
+        Ieee80211Primary80ChannelPosition::UNSPECIFIED, Ieee80211Primary80ChannelPosition::UNSPECIFIED);
+ASSERT(ch36_80.getNumSubchannels() == 4);
+ASSERT(ch36_80.getPrimarySubchannelIndex() == 0);
+ASSERT(ch36_80.getCenterFrequency() == MHz(5182.5));
+ASSERT(ch36_80.getSecondaryCenterFrequency() == MHz(5202.5));
+ASSERT(ch36_80.getBondedCenterFrequency() == MHz(5212.5));
+ASSERT(ch36_80.getSecondary40CenterFrequency() == MHz(5232.5));
+ASSERT(ch36_80.getSubchannelCenterFrequency(0) == MHz(5182.5));
+ASSERT(ch36_80.getSubchannelCenterFrequency(3) == MHz(5242.5));
+ASSERT(ch36_80.getCenterFrequencyForBandwidth(MHz(20)) == MHz(5182.5));
+ASSERT(ch36_80.getCenterFrequencyForBandwidth(MHz(40)) == MHz(5192.5));
+ASSERT(ch36_80.getCenterFrequencyForBandwidth(MHz(80)) == MHz(5212.5));
+
+// 80 MHz plan, primary channel 44: same operating channel as channel 36.
+Ieee80211Channel ch44_80(band5GHz, 44, IEEE80211_SECONDARY_CHANNEL_ABOVE, MHz(80),
+        Ieee80211Primary80ChannelPosition::UNSPECIFIED, Ieee80211Primary80ChannelPosition::UNSPECIFIED);
+ASSERT(ch44_80.getPrimarySubchannelIndex() == 2);
+ASSERT(ch44_80.getBondedCenterFrequency() == MHz(5212.5));
+ASSERT(ch44_80.getSecondary40CenterFrequency() == MHz(5192.5));
+ASSERT(ch44_80.getCenterFrequencyForBandwidth(MHz(40)) == MHz(5232.5));
+
+// 80 MHz plan, primary channel 40 with the secondary channel below.
+Ieee80211Channel ch40_80(band5GHz, 40, IEEE80211_SECONDARY_CHANNEL_BELOW, MHz(80),
+        Ieee80211Primary80ChannelPosition::UNSPECIFIED, Ieee80211Primary80ChannelPosition::UNSPECIFIED);
+ASSERT(ch40_80.getPrimarySubchannelIndex() == 1);
+ASSERT(ch40_80.getBondedCenterFrequency() == MHz(5212.5));
+ASSERT(ch40_80.getSecondaryCenterFrequency() == MHz(5182.5));
+
+// 160 MHz plan, primary channel 36: the primary 80 MHz channel is the lower half.
+Ieee80211Channel ch36_160(band5GHz, 36, IEEE80211_SECONDARY_CHANNEL_ABOVE, MHz(160),
+        Ieee80211Primary80ChannelPosition::UNSPECIFIED, Ieee80211Primary80ChannelPosition::UNSPECIFIED);
+ASSERT(ch36_160.getNumSubchannels() == 8);
+ASSERT(ch36_160.getBondedCenterFrequency() == MHz(5252.5));
+ASSERT(ch36_160.getSecondary80CenterFrequency() == MHz(5292.5));
+ASSERT(ch36_160.getPrimary80ChannelPosition() == Ieee80211Primary80ChannelPosition::LOWER);
+ASSERT(ch36_160.getCenterFrequencyForBandwidth(MHz(80)) == MHz(5212.5));
+
+// An explicit primary80ChannelPosition must agree with the channel number.
+ASSERT(!throwsRuntimeError([&] {
+    Ieee80211Channel channel(band5GHz, 36, IEEE80211_SECONDARY_CHANNEL_ABOVE, MHz(160),
+            Ieee80211Primary80ChannelPosition::LOWER, Ieee80211Primary80ChannelPosition::UNSPECIFIED));
+});
+ASSERT(throwsRuntimeError([&] {
+    Ieee80211Channel channel(band5GHz, 36, IEEE80211_SECONDARY_CHANNEL_ABOVE, MHz(160),
+            Ieee80211Primary80ChannelPosition::UPPER, Ieee80211Primary80ChannelPosition::UNSPECIFIED));
+});
+
+// 6 GHz 80 MHz plan, primary channel 1 (center 5960 MHz in this band).
+Ieee80211Channel ch1_80_6GHz(band6GHz, 1, IEEE80211_SECONDARY_CHANNEL_ABOVE, MHz(80),
+        Ieee80211Primary80ChannelPosition::UNSPECIFIED, Ieee80211Primary80ChannelPosition::UNSPECIFIED);
+ASSERT(ch1_80_6GHz.getPrimarySubchannelIndex() == 0);
+ASSERT(ch1_80_6GHz.getBondedCenterFrequency() == MHz(5990));
+
+// 320 MHz-1, primary 20 MHz at the lower edge of the bonded channel.
+// The six enumerated 6 GHz 320 MHz entries are the standard 320 MHz-1/2
+// center-frequency channels; the primary index disambiguates the 16 subchannels.
+Ieee80211Channel ch320(band6GHz320, 0, IEEE80211_SECONDARY_CHANNEL_ABOVE, MHz(320),
+        Ieee80211Primary80ChannelPosition::UNSPECIFIED, Ieee80211Primary80ChannelPosition::UNSPECIFIED, 0);
+ASSERT(ch320.getNumSubchannels() == 16);
+ASSERT(ch320.getPrimarySubchannelIndex() == 0);
+ASSERT(ch320.getCenterFrequency() == MHz(5955));
+ASSERT(ch320.getBondedCenterFrequency() == MHz(6105));
+ASSERT(ch320.getSecondary40CenterFrequency() == MHz(6005));
+ASSERT(ch320.getSecondary80CenterFrequency() == MHz(6065));
+ASSERT(ch320.getSecondary160CenterFrequency() == MHz(6185));
+ASSERT(ch320.getPrimary80ChannelPosition() == Ieee80211Primary80ChannelPosition::LOWER);
+ASSERT(ch320.getPrimary160ChannelPosition() == Ieee80211Primary80ChannelPosition::LOWER);
+
+// Validation: 20 MHz operation has no secondary channel.
+ASSERT(throwsRuntimeError([&] {
+    Ieee80211Channel channel(band5GHz, 36, IEEE80211_SECONDARY_CHANNEL_ABOVE, MHz(20),
+            Ieee80211Primary80ChannelPosition::UNSPECIFIED, Ieee80211Primary80ChannelPosition::UNSPECIFIED));
+});
+// Validation: wide operation requires a secondary channel offset.
+ASSERT(throwsRuntimeError([&] {
+    Ieee80211Channel channel(band5GHz, 36, IEEE80211_SECONDARY_CHANNEL_NONE, MHz(80),
+            Ieee80211Primary80ChannelPosition::UNSPECIFIED, Ieee80211Primary80ChannelPosition::UNSPECIFIED));
+});
+// Validation: the offset parity must match the primary channel position.
+ASSERT(throwsRuntimeError([&] {
+    Ieee80211Channel channel(band5GHz, 40, IEEE80211_SECONDARY_CHANNEL_ABOVE, MHz(80),
+            Ieee80211Primary80ChannelPosition::UNSPECIFIED, Ieee80211Primary80ChannelPosition::UNSPECIFIED));
+});
+// Validation: wide operation requires the 5 GHz or 6 GHz channel grid.
+ASSERT(throwsRuntimeError([&] {
+    Ieee80211Channel channel(band2_4GHz, 0, IEEE80211_SECONDARY_CHANNEL_ABOVE, MHz(80),
+            Ieee80211Primary80ChannelPosition::UNSPECIFIED, Ieee80211Primary80ChannelPosition::UNSPECIFIED));
+});
+// Validation: the primary channel must be a valid 20 MHz channel on the grid.
+ASSERT(throwsRuntimeError([&] {
+    Ieee80211Channel channel(band5GHz, 37, IEEE80211_SECONDARY_CHANNEL_ABOVE, MHz(80),
+            Ieee80211Primary80ChannelPosition::UNSPECIFIED, Ieee80211Primary80ChannelPosition::UNSPECIFIED));
+});
+// Validation: secondary 40/80 MHz channels require a wide enough operating channel.
+Ieee80211Channel ch0_40_2_4GHz(band2_4GHz, 0, IEEE80211_SECONDARY_CHANNEL_ABOVE);
+ASSERT(throwsRuntimeError([&] { (void)ch0_40_2_4GHz.getSecondary40CenterFrequency(); }));
+ASSERT(throwsRuntimeError([&] { (void)ch36_80.getSecondary80CenterFrequency(); }));
+ASSERT(throwsRuntimeError([&] { (void)ch36_80.getCenterFrequencyForBandwidth(MHz(160)); }));
+
+EV << "Wide channel plan geometry and validation passed.\n";
+
+%contains: stdout
+Wide channel plan geometry and validation passed.

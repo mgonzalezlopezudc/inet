@@ -501,7 +501,7 @@ void Hcf::channelGranted(IChannelAccess *channelAccess)
             handleInternalCollision(internallyCollidedEdcafs);
             emit(edcaCollisionDetectedSignal, (unsigned long)internallyCollidedEdcafs.size());
         }
-        if (shouldRestartHt40ChannelAccess(edcaf)) {
+        if (shouldRestartWideChannelAccess(edcaf)) {
             edcaf->restartChannelAccess(this);
             return;
         }
@@ -514,7 +514,7 @@ void Hcf::channelGranted(IChannelAccess *channelAccess)
         throw cRuntimeError("Channel access granted but channel owner not found!");
 }
 
-bool Hcf::shouldRestartHt40ChannelAccess(Edcaf *edcaf)
+bool Hcf::shouldRestartWideChannelAccess(Edcaf *edcaf)
 {
     auto packet = edcaf->getInProgressFrames()->getFrameToTransmit();
     if (packet == nullptr)
@@ -523,14 +523,18 @@ bool Hcf::shouldRestartHt40ChannelAccess(Edcaf *edcaf)
     auto modeReq = packet->findTag<Ieee80211ModeReq>();
     auto mode = modeReq == nullptr ? rateSelection->computeMode(packet, header, edcaf->getTxopProcedure()) : modeReq->getMode();
     setFrameMode(packet, header, mode);
-    bool ht40 = modeSet != nullptr && modeSet->getPhyFamily(mode) == Ieee80211PhyFamily::HT &&
-            mode->getDataMode()->getBandwidth() == MHz(40);
-    if (!ht40)
+    Hz bandwidth = mode->getDataMode()->getBandwidth();
+    if (modeSet == nullptr || bandwidth < MHz(40))
         return false;
-    // IEEE Std 802.11-2024, 11.15.9: 2.4 GHz HT40 EDCA requires secondary
-    // CCA idle throughout the DIFS immediately before backoff expiration.
-    simtime_t difs = modeSet->getSifsTime() + 2 * modeSet->getSlotTime();
-    return !rx->isSecondaryChannelIdleFor(difs);
+    // IEEE Std 802.11-2024, 10.23.2.5 and 11.15.9: a PPDU of 40 MHz or wider
+    // may start only if every secondary subchannel it occupies has been idle
+    // throughout a PIFS (5/6 GHz) or DIFS (2.4 GHz) interval immediately
+    // before backoff expiration; otherwise the EDCAF invokes backoff.
+    simtime_t sifs = modeSet->getSifsTime();
+    simtime_t slotTime = modeSet->getSlotTime();
+    simtime_t interval = modeSet->getOperatingBand() == Ieee80211OperatingBand::BAND_2_4_GHZ ?
+            sifs + 2 * slotTime : sifs + slotTime;
+    return !rx->isWideChannelIdleFor(bandwidth, interval);
 }
 
 FrameSequenceContext *Hcf::buildContext(AccessCategory ac)

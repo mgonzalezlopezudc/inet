@@ -34,7 +34,8 @@ module Ieee80211Receiver extends NarrowbandReceiverBase
         double srgObssPdThreshold @unit(dBm) = default(this.obssPdThreshold);
         double htCca20Sensitivity @unit(dBm) = default(-82 dBm); // IEEE 802.11 HT 20 MHz CCA sensitivity
         double htCca40Sensitivity @unit(dBm) = default(-79 dBm); // IEEE 802.11 HT 40 MHz CCA sensitivity
-        double htCcaEnergyDetection @unit(dBm) = default(-62 dBm); // IEEE 802.11 HT energy-detection threshold
+        double htCcaEnergyDetection @unit(dBm) = default(-62 dBm); // IEEE 802.11 energy-detection threshold per 20 MHz subchannel
+        double secondaryCcaSensitivity @unit(dBm) = default(-72 dBm); // IEEE 802.11 VHT/HE/EHT preamble-detection CCA sensitivity per non-primary 20 MHz subchannel
         bool enableNonSrgSpatialReuse = default(true);
         bool enableSrgSpatialReuse = default(true);
         string srgBssColors = default(""); // space/comma separated HE BSS colors treated as SRG members

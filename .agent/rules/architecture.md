@@ -1,8 +1,8 @@
 ---
 trigger: always_on
-glob:
 description: This document provides a comprehensive guide for AI agents and developers to navigate, understand, and work with the INET Framework repository.
 ---
+
 # INET Framework Workspace Rules & Agent Guide
 
 ## 1. Project Overview
@@ -32,7 +32,7 @@ The INET Framework is an open-source communication networks simulation package f
 1.  **Environment Setup**: Ensure OMNeT++ and INET is in your PATH. i.e. `opp_run`, `inet` and `inet_dbg` are available in the PATH after sourcing the environment. If not, notify the user.
 
 2.  **Compile**: Build the project using `make`. Use `MODE=debug` or `MODE=release` to
-    select the build mode. Prefer debug mode for development.
+    select the build mode. 
     Use parallel build for speed:
     ```bash
     make -j$(nproc) MODE=debug
@@ -100,4 +100,3 @@ Simulations are defined by `.ned` files (network topology) and `omnetpp.ini` (co
 - **Search First**: Before modifying, search for existing implementations or base classes.
 - **Check Dependencies**: When modifying a module, check its `.ned` file for dependencies (imports).
 - **Verify**: After changes, try to compile (`make`) and run a relevant example to ensure no regressions.
-

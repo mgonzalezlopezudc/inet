@@ -38,10 +38,10 @@ class INET_API Rx : public SimpleModule, public IRx
     physicallayer::IRadio::TransmissionState transmissionState = physicallayer::IRadio::TRANSMISSION_STATE_UNDEFINED;
     physicallayer::IRadioSignal::SignalPart receivedPart = physicallayer::IRadioSignal::SIGNAL_PART_NONE;
     bool mediumFree = true; // cached state
-    bool ht40Cca = false;
-    bool primaryCcaBusy = false;
-    bool secondaryCcaBusy = false;
-    simtime_t secondaryCcaIdleSince = -1;
+    bool wideCca = false; // PHY-CCA state is tracked per 20 MHz subchannel
+    int primarySubchannelIndex = 0;
+    uint32_t busySubchannelMask = 0;
+    simtime_t subchannelIdleSince[16]; // per 20 MHz subchannel, -1 when busy or untracked
 
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
@@ -61,7 +61,7 @@ class INET_API Rx : public SimpleModule, public IRx
     virtual void recomputeMediumFree();
     virtual bool isReceptionInProgress() const override;
     virtual bool isMediumFree() const override { return mediumFree; }
-    virtual bool isSecondaryChannelIdleFor(simtime_t interval) const override;
+    virtual bool isWideChannelIdleFor(Hz bandwidth, simtime_t interval) const override;
     virtual void receptionStateChanged(physicallayer::IRadio::ReceptionState newReceptionState) override;
     virtual void ccaStateChanged(const physicallayer::Ieee80211CcaSnapshot& snapshot) override;
     virtual void transmissionStateChanged(physicallayer::IRadio::TransmissionState transmissionState) override;
