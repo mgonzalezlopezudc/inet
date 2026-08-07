@@ -2832,7 +2832,9 @@ def format_type_phy(frame):
             standard=standard if standard not in ("Legacy", "Legacy/HT/VHT") else None,
             mcs=phy.get("mcs"), bw=phy.get("bandwidth_or_ru"),
             gi=phy.get("guard_interval"), nss=phy.get("nss"), coding=phy.get("coding"),
-            is_ampdu=frame.get("ampdu", False)
+            is_ampdu=frame.get("ampdu", False),
+            category_code=frame.get("category_code"),
+            action_code=frame.get("action_code"),
         )
     name = frame.get("frame_name", "")
     if name.startswith("Data: "):
