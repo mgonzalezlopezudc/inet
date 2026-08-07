@@ -1236,7 +1236,7 @@ def timeline_filter_for_subdir(subdir):
 
 
 def select_representative_timeline(rows, subdir, limit=TIMELINE_LIMIT):
-    """Deduplicate capture observations and retain a feature-centered window."""
+    """Deduplicate capture observations and retain a timeline starting at t=0."""
     unique_rows = []
     identities = set()
     for row in sorted(rows, key=lambda item: (
@@ -1262,33 +1262,8 @@ def select_representative_timeline(rows, subdir, limit=TIMELINE_LIMIT):
         part2 = [row for row in unique_rows if row["simulation_time_s"] >= 0.5][:20]
         return part1 + part2
 
-    def is_anchor(row):
-        if subdir == "twt":
-            # Center on responder traffic so the preceding wake-presence
-            # signal and the following acknowledgment fit in the same window.
-            return (
-                row["frame_name"].startswith(("Data:", "Data", "QoS Data"))
-                or str(row.get("frame_type")) == "2"
-            )
-        if subdir in {
-            "dl_ofdma_sched", "dl_ofdma_asym", "ul_ofdma", "dl_ul_ofdma", "dl_mu_mimo", "ul_mu_mimo",
-            "ndp_feedback", "bsr", "multi_user/mu_mimo", "multi_user/ndp_feedback", "he_bsr",
-        }:
-            return "Trigger" in row["frame_name"]
-        if subdir in {"dynamic_frag", "mac_features/dynamic_fragmentation"}:
-            return (
-                row["more_fragments"]
-                or (row["fragment_number"] is not None
-                    and row["fragment_number"] > 0)
-            )
-        return False
+    return unique_rows[:limit]
 
-    anchor = next(
-        (index for index, row in enumerate(unique_rows) if is_anchor(row)),
-        0,
-    )
-    start = max(0, anchor - 2)
-    return unique_rows[start:start + limit]
 
 
 def extract_frame_timeline(pcap_files, subdir, limit=TIMELINE_LIMIT):

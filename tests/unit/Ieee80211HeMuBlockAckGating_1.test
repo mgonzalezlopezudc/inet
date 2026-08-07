@@ -34,7 +34,7 @@ module TestHcf
 {
     parameters:
         @class(TestHcf);
-        bool useHtImplicitBlockAck = default(false);
+        bool useImplicitBlockAck = default(false);
 }
 
 network TestNetwork

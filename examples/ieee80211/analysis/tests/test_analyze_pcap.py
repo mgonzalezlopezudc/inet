@@ -697,7 +697,7 @@ class CaptureValidationTest(unittest.TestCase):
             "wlan.fc.subtype == 2", timeline_filter_for_subdir("dl_ofdma_sched")
         )
 
-    def test_twt_timeline_keeps_ps_poll_before_responder_data(self):
+    def test_timeline_starts_at_t_zero(self):
         def row(number, time, name):
             return {
                 "capture": f"capture-{number % 2}.pcapng",
@@ -720,12 +720,10 @@ class CaptureValidationTest(unittest.TestCase):
             row(9, 0.9, "Data: QoS Data"),
         ]
         selected = select_representative_timeline(rows, "twt", limit=4)
-        names = [item["frame_name"] for item in selected]
-        self.assertIn("Control: PS-Poll", names)
-        self.assertIn("Data: QoS Data", names)
-        self.assertLess(
-            names.index("Control: PS-Poll"), names.index("Data: QoS Data")
-        )
+        times = [item["simulation_time_s"] for item in selected]
+        self.assertEqual(times[0], 0.0)
+        self.assertEqual(len(selected), 4)
+
 
     def test_timeline_reports_capture_local_frame_and_he_fields(self):
         markdown = timeline_markdown([{

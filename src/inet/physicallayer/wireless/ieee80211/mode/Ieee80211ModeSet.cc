@@ -33,6 +33,14 @@ bool Ieee80211ModeSet::isHtOrVhtMode(const IIeee80211Mode *mode)
             dynamic_cast<const Ieee80211VhtMode *>(mode) != nullptr;
 }
 
+bool Ieee80211ModeSet::isHighThroughputMode(const IIeee80211Mode *mode)
+{
+    return dynamic_cast<const Ieee80211HtMode *>(mode) != nullptr ||
+            dynamic_cast<const Ieee80211VhtMode *>(mode) != nullptr ||
+            dynamic_cast<const Ieee80211HeMode *>(mode) != nullptr ||
+            dynamic_cast<const Ieee80211EhtMode *>(mode) != nullptr;
+}
+
 bool Ieee80211ModeSet::isHtProfileName(const char *profileName)
 {
     return profileName != nullptr && (!strcmp(profileName, "n(mixed-2.4Ghz)") || !strcmp(profileName, "n(greenfield-2.4Ghz)"));

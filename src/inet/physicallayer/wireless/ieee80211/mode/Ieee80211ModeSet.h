@@ -101,6 +101,7 @@ class INET_API Ieee80211ModeSet : public IPrintableObject, public cObject
     const char *getName() const override { return name.c_str(); }
     const char *getProfileName() const { return profileName.c_str(); }
     static bool isHtOrVhtMode(const IIeee80211Mode *mode);
+    static bool isHighThroughputMode(const IIeee80211Mode *mode);
     static bool isHtProfileName(const char *profileName);
     static bool isPeerNegotiatedFecMode(const IIeee80211Mode *mode);
     Ieee80211OperatingBand getOperatingBand() const { return operatingBand; }

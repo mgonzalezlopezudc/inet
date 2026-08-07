@@ -1,6 +1,6 @@
 {
   "_provenance": {
-    "generated_at_utc": "2026-08-07T21:43:29.391619+00:00",
+    "generated_at_utc": "2026-08-07T23:19:40.647800+00:00",
     "groups": {
       "short_gi_vht": {
         "conditions": [
@@ -16,44 +16,44 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtLongGI/VhtLongGI-#0.sca",
-                "sha256": "e1c3891e9c496c146e138293dff94e77ba62ca2a98ed562b4874224a71051538"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T231918Z/VhtLongGI/VhtLongGI-#0.sca",
+                "sha256": "3b766c1d5d97a937af1403d83af388fdbcb4036088cb9036f4563021bf94d409"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtLongGI/VhtLongGI-#0.vec",
-                "sha256": "e3bcf852f9193b6b738c322c2e8ba342b6f4089bd1aac97e6a81d2a508e03e50"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T231918Z/VhtLongGI/VhtLongGI-#0.vec",
+                "sha256": "625b3af8e76d441558d52a5ac79405446ef8d89b5646bca23a08838348321d37"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtLongGI/VhtLongGI-#1.sca",
-                "sha256": "bc2e6340d2f303babe0bfaabaf10622c1768e47309a46d7a09477ac747145d67"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T231918Z/VhtLongGI/VhtLongGI-#1.sca",
+                "sha256": "bcc921986d456e47303bb82186c8c0dcc285cb49f785e3d2bced618e511f2657"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtLongGI/VhtLongGI-#1.vec",
-                "sha256": "3f3edc6d6fd519b9803f5b1c571274b19092469770c59797d70971d32d01b6c6"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T231918Z/VhtLongGI/VhtLongGI-#1.vec",
+                "sha256": "4e86b3ff4d48a78af397fa95d86cc41119cadd9696551e1350d134f529eece55"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtLongGI/VhtLongGI-#2.sca",
-                "sha256": "b41b611974ee22be26eb499948a2221c0cb7eb3553a5c97b29de8f0a4f6b9fd1"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T231918Z/VhtLongGI/VhtLongGI-#2.sca",
+                "sha256": "7ad0f3f3572137ab80bb046e7dc08eb33eb73e175b68355f2aa94811ed8f27e0"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtLongGI/VhtLongGI-#2.vec",
-                "sha256": "b4bbc7467360686b72c26424487259dfd7f58c8c2bfcca15ab1c69288dc5a641"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T231918Z/VhtLongGI/VhtLongGI-#2.vec",
+                "sha256": "db25e0cb741761ea0783246faef90b4c5847ea5ff326ef4a452c2ffe242ddb17"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtLongGI/VhtLongGI-#3.sca",
-                "sha256": "eb9b3ee03f29f2757bf89a5e83a064c22ab14d1975dc84975b89410f2365056f"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T231918Z/VhtLongGI/VhtLongGI-#3.sca",
+                "sha256": "fe04e4e6770f089313c0e85f9685e4db29bcee63bb1adeea0cfbd009c3559057"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtLongGI/VhtLongGI-#3.vec",
-                "sha256": "52d1617b4956c1043982edabee10739deee6d41afe7486c4f18765a6953f9842"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T231918Z/VhtLongGI/VhtLongGI-#3.vec",
+                "sha256": "50658980cd717df6e6102fae98ba2279c2d7d4a45fd9515b27dbd3b4dc4549bb"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtLongGI/VhtLongGI-#4.sca",
-                "sha256": "aa6baa851f4c99a2b5b37403530eafe6f8807416722b69e7eae9494fc340ef6c"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T231918Z/VhtLongGI/VhtLongGI-#4.sca",
+                "sha256": "ffba05d9cb2f17441515c50a3fdab84856131dbc41f2d3481c9e693cbfed8916"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtLongGI/VhtLongGI-#4.vec",
-                "sha256": "4a39f18b7519f0b3bcb87027dca4d022b6d5a1205e01f846eef8febeafafb599"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T231918Z/VhtLongGI/VhtLongGI-#4.vec",
+                "sha256": "1f58e2a51d5ec0213b8bb7689f650fde535f4ca885c9b1fe58f5fe9609d27c74"
               }
             ]
           },
@@ -69,69 +69,69 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtShortGI/VhtShortGI-#0.sca",
-                "sha256": "3a9c86a71e7fb8bc8d15e7074120673faac462710a6d0040865b156fe06ca5a0"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T231918Z/VhtShortGI/VhtShortGI-#0.sca",
+                "sha256": "47e7bc7275ff0b776fa9d1bb5717dd29458e0217a227328907507be815102d97"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtShortGI/VhtShortGI-#0.vec",
-                "sha256": "908a87ed720debd71ef5979096a7fc8c6a7badb741dfb57f80af2feb1f4f9b35"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T231918Z/VhtShortGI/VhtShortGI-#0.vec",
+                "sha256": "4c00b5e32b26824e30edcfce09af5c9f9709b9eb83ddd28ab03a7a4db4b7e555"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtShortGI/VhtShortGI-#1.sca",
-                "sha256": "24488a707a357af3d822f0730cf36d0b9a25940d22f13f1f3085ed6b34d39dc0"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T231918Z/VhtShortGI/VhtShortGI-#1.sca",
+                "sha256": "b20e2d2ac3221e1a7c4701352f9bc2da75da8ec6babe8270921d8223246c6399"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtShortGI/VhtShortGI-#1.vec",
-                "sha256": "e912e04ffa9ce6c3fba59b1b4099e144ae8c003feb6d690c82888de8f464d3bf"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T231918Z/VhtShortGI/VhtShortGI-#1.vec",
+                "sha256": "a7fce84a531d8dc2f73a967f85d20388a47de7d9ae24f2315f7f335898e1f2f3"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtShortGI/VhtShortGI-#2.sca",
-                "sha256": "4023e7063070e4ef060b1f442738d7e69bfee1fe27726f746284a501a40fded5"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T231918Z/VhtShortGI/VhtShortGI-#2.sca",
+                "sha256": "b65eab4aac950c39629d65434b7c794e35887cb53d0dda7ffdd4bea2b240bb9f"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtShortGI/VhtShortGI-#2.vec",
-                "sha256": "9a4c412911e6f59af47c9500314ccb0e1531cd6123466328a90725f5affe524c"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T231918Z/VhtShortGI/VhtShortGI-#2.vec",
+                "sha256": "c26490711487ab52a77695cfdb01ef1143de92915c8081767e0aaf499c01447e"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtShortGI/VhtShortGI-#3.sca",
-                "sha256": "c96bd0636f8cdc5f5213d754e43af9ac44bf9c04e3966e8a743364c12e764325"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T231918Z/VhtShortGI/VhtShortGI-#3.sca",
+                "sha256": "bc030b94293624895afc94e59c89ca62b88b42c5b6189da914c68a7b67cb1731"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtShortGI/VhtShortGI-#3.vec",
-                "sha256": "f1a14aa7594db11fbca8b24afe4c01101fdef0cdba510d0008404d7d168c184d"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T231918Z/VhtShortGI/VhtShortGI-#3.vec",
+                "sha256": "0e6c5035ed8f1993049915d8d8c9aeadfae31e08f382cc306f3a785793180e2f"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtShortGI/VhtShortGI-#4.sca",
-                "sha256": "ca290be8ce53c2d90a635b0cc43fe707576f954c5e2e5a64818dd4e2439efe5c"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T231918Z/VhtShortGI/VhtShortGI-#4.sca",
+                "sha256": "6ff820880ae3cbbde5e1a0d64da2ab20fec8718ddb61e69fbc1ee6c05a81d8b8"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtShortGI/VhtShortGI-#4.vec",
-                "sha256": "7a0a768d25afeb9bdba3d2f875f1fd25a8007c0a242bdad2060876acb3c36267"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T231918Z/VhtShortGI/VhtShortGI-#4.vec",
+                "sha256": "0ba154a0c841c275b09aa18bda5764c425eb11900e9e3cc5778f36f399a8f79e"
               }
             ]
           }
         ],
-        "session_id": "20260807T214309Z",
+        "session_id": "20260807T231918Z",
         "status": "PASS"
       }
     },
-    "repository_revision": "163aef65f2407fef3161c214aa3860a5ea667cd5",
-    "requested_session_id": "20260807T214309Z",
+    "repository_revision": "a546243ec7ec39620650335887a5170178ab9ae5",
+    "requested_session_id": "20260807T231918Z",
     "schema_version": 1
   },
   "short_gi_vht": {
     "VHT Long GI (800 ns)": {
       "goodput_mbps": {
-        "ci95": 0.08310805069468535,
+        "ci95": 0.17769248673265875,
         "count": 5,
-        "mean": 16.656
+        "mean": 19.736
       }
     },
     "VHT Short GI (400 ns)": {
       "goodput_mbps": {
-        "ci95": 0.06082886455166592,
+        "ci95": 0.1878157890164746,
         "count": 5,
-        "mean": 16.96
+        "mean": 20.056
       }
     }
   }

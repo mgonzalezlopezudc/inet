@@ -568,10 +568,12 @@ std::vector<Packet *> Hcf::getHtImplicitBlockAckFrames(Edcaf *edcaf) const
     auto mode = modeReq == nullptr ? rateSelection->computeMode(
             frameToTransmit, frameToTransmit->peekAtFront<Ieee80211MacHeader>(),
             edcaf->getTxopProcedure()) : modeReq->getMode();
-    if (modeSet->getPhyFamily(mode) != Ieee80211PhyFamily::HT)
+    auto phyFamily = modeSet->getPhyFamily(mode);
+    if (phyFamily != Ieee80211PhyFamily::HT && phyFamily != Ieee80211PhyFamily::VHT &&
+        phyFamily != Ieee80211PhyFamily::HE && phyFamily != Ieee80211PhyFamily::EHT)
         return {};
     int maxAmpduLengthExponent = getMaxAmpduLengthExponent(
-            dataHeader->getReceiverAddress(), 3, Ieee80211PhyFamily::HT);
+            dataHeader->getReceiverAddress(), 3, phyFamily);
     long long maxAggregateLength = (1LL << (13 + maxAmpduLengthExponent)) - 1;
     auto frames = edcaf->getInProgressFrames()->getEligibleFramesLike(
             frameToTransmit, 64, std::numeric_limits<int>::max());
@@ -650,9 +652,10 @@ bool Hcf::isHtImplicitBlockAckEnabled() const
 {
     // This is an explicit local model capability until HT capability
     // advertisement and peer negotiation are represented by the MIB.
-    return par("useHtImplicitBlockAck").boolValue() &&
+    return par("useImplicitBlockAck").boolValue() &&
             modeSet != nullptr &&
-            Ieee80211ModeSet::isHtProfileName(modeSet->getName());
+            modeSet->getNumModes() > 0 &&
+            physicallayer::Ieee80211ModeSet::isHighThroughputMode(modeSet->getMode(0));
 }
 
 void Hcf::startFrameSequence(AccessCategory ac)
