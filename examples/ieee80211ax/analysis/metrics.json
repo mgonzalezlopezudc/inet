@@ -1,14 +1,14 @@
 {
   "_provenance": {
-    "generated_at_utc": "2026-08-06T08:36:10.667924+00:00",
+    "generated_at_utc": "2026-08-07T09:16:00.156743+00:00",
     "groups": {
-      "block_ack": {
+      "channel_widths": {
         "conditions": [
           {
-            "configuration": "StandardAck",
-            "group": "block_ack",
-            "ini": "examples/ieee80211n/block_ack/omnetpp.ini",
-            "label": "Standard ACK",
+            "configuration": "Ht20MHz",
+            "group": "channel_widths",
+            "ini": "examples/ieee80211n/channel_widths/omnetpp.ini",
+            "label": "HT 20 MHz",
             "measurement": {
               "end_s": 0.5,
               "start_s": 0.3
@@ -16,52 +16,52 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/StandardAck/StandardAck-#0.sca",
-                "sha256": "daf8948c45d0f40106cb17551697664f125e678a883df6b93f053c6e21c40d25"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht20MHz/Ht20MHz-#0.sca",
+                "sha256": "fb69e1e8a334263c63c06cf3976786e887e61e99c827472af53022831f300dc1"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/StandardAck/StandardAck-#0.vec",
-                "sha256": "b66ae42896ebb650c3f10e7c8d169113dcb7c70f4970ca0e665af8f666156dfa"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht20MHz/Ht20MHz-#0.vec",
+                "sha256": "aac0a73f5ef7c6be6afad927fde3bcf8dbc39e1ebc6de94c52f7596f28e9ae5f"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/StandardAck/StandardAck-#1.sca",
-                "sha256": "e3c3cefced46611aa29a0e8265960e9044737edf6af3d3a683347d1300e125b8"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht20MHz/Ht20MHz-#1.sca",
+                "sha256": "89b450cc2e65e2631494b3d791fee5fa341244641caf8e404095f3c2114f9893"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/StandardAck/StandardAck-#1.vec",
-                "sha256": "ea1dcc008807e11a7f0c0d15de58aa9444df964dc6c3e20eb13ced6ef913a037"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht20MHz/Ht20MHz-#1.vec",
+                "sha256": "a6f7dff2621b721e3dc1e7a4d386fc7dcfde879bc716c5c5d35572a11749b9c8"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/StandardAck/StandardAck-#2.sca",
-                "sha256": "b9df377f91e428171b95847fbc52018e0e11f3fc96789e753170feacd7655615"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht20MHz/Ht20MHz-#2.sca",
+                "sha256": "2d3afa638c9089636c9e450877ec2894b6d696089a2441c7d97f89db6d2f4aca"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/StandardAck/StandardAck-#2.vec",
-                "sha256": "cbabbb7520700cd49848ce8e140d4d2bac80eefe2d489467a57ae9c5a3d10455"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht20MHz/Ht20MHz-#2.vec",
+                "sha256": "0f729c235533d80417d49aa6f1c1854a8b9a327819cf235b49291ff454eaf33a"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/StandardAck/StandardAck-#3.sca",
-                "sha256": "343562b0c66931c5b21f707006efc53f86ac14c20d0589e77f3183aa59d52d85"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht20MHz/Ht20MHz-#3.sca",
+                "sha256": "a45102958d73a6431c20ef50bdb59b7a9e1b5bb1639e13d1163ecdf138a177a4"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/StandardAck/StandardAck-#3.vec",
-                "sha256": "007683acae8c5927c8551dec9e1ad2dafdb308cf4db5c5a7825f1e7b332a1afd"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht20MHz/Ht20MHz-#3.vec",
+                "sha256": "cf080c0c6abc89d6984d4e50679aac6c9e68f739e51dc1139458beba915aa9b4"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/StandardAck/StandardAck-#4.sca",
-                "sha256": "cc6d1a86261d26f6060bd22ac491fa53644f1e80b208062affe449fa7887de9a"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht20MHz/Ht20MHz-#4.sca",
+                "sha256": "a3cf2e8dcfedf4f88ee0f45cfec345c6a2f9c81b0de6c30747098b0017fdcd99"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/StandardAck/StandardAck-#4.vec",
-                "sha256": "ed5b67fa55691e8530c617f0156d29a476a73cf8ea466a7c9b5b4bec02a931b8"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht20MHz/Ht20MHz-#4.vec",
+                "sha256": "0e4f26873fc95b505bdb6170591dccdb243d493e9b69c961170b89f8c94002b2"
               }
             ]
           },
           {
-            "configuration": "FragBasicBlockAck",
-            "group": "block_ack",
-            "ini": "examples/ieee80211n/block_ack/omnetpp.ini",
-            "label": "Frag. Basic BACK",
+            "configuration": "Ht40MHz",
+            "group": "channel_widths",
+            "ini": "examples/ieee80211n/channel_widths/omnetpp.ini",
+            "label": "HT 40 MHz",
             "measurement": {
               "end_s": 0.5,
               "start_s": 0.3
@@ -69,52 +69,52 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/FragBasicBlockAck/FragBasicBlockAck-#0.sca",
-                "sha256": "9ddbf0ed2d1a2bfeee2ca66eb5e52b3a2c2cd744181c3669edddd530cd0ed5ec"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHz/Ht40MHz-#0.sca",
+                "sha256": "26c789d8cb3cd282ae7d035be57ff1e0fc65e074c3fa6fc4d44eade9e9e788a5"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/FragBasicBlockAck/FragBasicBlockAck-#0.vec",
-                "sha256": "04965b17ef539dada5b4026f8f538a6db1409197120d4e5c9ccd2012a5b5c6fa"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHz/Ht40MHz-#0.vec",
+                "sha256": "5417283601684bf247e53e9624e32acb7eced65ede66019c828bfcbfc4430ac9"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/FragBasicBlockAck/FragBasicBlockAck-#1.sca",
-                "sha256": "119924ac0e297a2ed687fb2bd23cafa85e16f3584b5d098257b7544b3cf9480c"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHz/Ht40MHz-#1.sca",
+                "sha256": "71b5829c376da07aba93b455696b5c5e7cd30bf5c033b2974a36c30db2982332"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/FragBasicBlockAck/FragBasicBlockAck-#1.vec",
-                "sha256": "5de09ce3e79d0b33a228f655da10e0e558e40c5ffb9f51e8fadb4451fc6ab6d6"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHz/Ht40MHz-#1.vec",
+                "sha256": "f2cfb3438aa953d2ad3d968107f3078995e1e9caa854800880fc89d49215d15b"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/FragBasicBlockAck/FragBasicBlockAck-#2.sca",
-                "sha256": "53dadba4726d2a583d131d3cab8643234d3d2b86cd6335451cb92df58e1a1727"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHz/Ht40MHz-#2.sca",
+                "sha256": "9f780198eee807c284ed2953cf5cf7f27ac29c9eac24cf5ffc9030be6a1d14af"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/FragBasicBlockAck/FragBasicBlockAck-#2.vec",
-                "sha256": "cce696abda88347f1430097decd057fc4f924336ce137b7958726e363b5e61a6"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHz/Ht40MHz-#2.vec",
+                "sha256": "3ecc3abb7177165e9dd32de62b4cd38617ff2ac71e5ceb68413596be59fddd1b"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/FragBasicBlockAck/FragBasicBlockAck-#3.sca",
-                "sha256": "3e8a58dfb32926f2cd1f6f90972e1ab9d8fbd7c56cdd8183aea49b74519904b6"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHz/Ht40MHz-#3.sca",
+                "sha256": "3c43ff6148a9e416e786289906ba8b46cdd2946f73b764450afd87aa8b735bf1"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/FragBasicBlockAck/FragBasicBlockAck-#3.vec",
-                "sha256": "3a51aee20ad18151a7535364aad10f5c514b7ff3cb9c387b1a541006d830484d"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHz/Ht40MHz-#3.vec",
+                "sha256": "72278c29e6383caf7d1022481a6b1aa446d1b332a2b978c949d055f10dfc3f24"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/FragBasicBlockAck/FragBasicBlockAck-#4.sca",
-                "sha256": "b35ce1a99633f676019fa31f9ca59ea17487e278b28efac448fcdbe413510c1f"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHz/Ht40MHz-#4.sca",
+                "sha256": "b3f722a5c35cd6f84500f14907381876a5d346c80d78886d8bb4ae8120fe2fc3"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/FragBasicBlockAck/FragBasicBlockAck-#4.vec",
-                "sha256": "95e1054eb650505f16d8fae2139f6846f60ba38a6488d83b0b0bba1b0ad9a854"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHz/Ht40MHz-#4.vec",
+                "sha256": "9ee075554a8dda44709c6e7a8e516e67376355159923048f25833a55ecd9a1d2"
               }
             ]
           },
           {
-            "configuration": "CompressedBlockAck",
-            "group": "block_ack",
-            "ini": "examples/ieee80211n/block_ack/omnetpp.ini",
-            "label": "Compressed BACK",
+            "configuration": "Ht40MHzSecondaryAbove",
+            "group": "channel_widths",
+            "ini": "examples/ieee80211n/channel_widths/omnetpp.ini",
+            "label": "HT 40 MHz (Secondary Above)",
             "measurement": {
               "end_s": 0.5,
               "start_s": 0.3
@@ -122,52 +122,52 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/CompressedBlockAck/CompressedBlockAck-#0.sca",
-                "sha256": "23809b879d034b5744e4f3f75059e34756771792f3b84f70cc14b1b7923631d9"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#0.sca",
+                "sha256": "71e289a81f7c42f10039405d4798972d9e39ead539b25a6141ed8c36c2d08603"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/CompressedBlockAck/CompressedBlockAck-#0.vec",
-                "sha256": "36764ad1bfcbbab2b80d0a48ded82e017d83697e6e5d0eac7394562cd9c589c3"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#0.vec",
+                "sha256": "912afca5418e53de116a6360e55c29e55158064710bd51372c3178e9c7f32abc"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/CompressedBlockAck/CompressedBlockAck-#1.sca",
-                "sha256": "3a860402a4656fb5bb08239dd87e0fb7a18e418766c9e46ec0c88e88350eb2bc"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#1.sca",
+                "sha256": "b8d0c5e7db76a010829c7b902a814f678d7b9107ef1bb2e54f053649bdaf00f1"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/CompressedBlockAck/CompressedBlockAck-#1.vec",
-                "sha256": "5c00d2b454d47d9bc37d7ced5aad21b723d01db6223a2d1b5ed6f64867c73672"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#1.vec",
+                "sha256": "312d355832a1df5b43bc09cc2a22af891ce2cd60ef7995b59b6fa8e23918868a"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/CompressedBlockAck/CompressedBlockAck-#2.sca",
-                "sha256": "653f7c92b154e4b474ce5f8eaacd29dfd34e72037148b2bef6af6fad48da24e0"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#2.sca",
+                "sha256": "4e482a48a99713ec8083e573436e7afc8a69de16fa7288a1ac35c3a621cb21ff"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/CompressedBlockAck/CompressedBlockAck-#2.vec",
-                "sha256": "ca9354e41ce46c7d26ccc2b41af56846b800b0a69d54f739248f0f2504a6d724"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#2.vec",
+                "sha256": "8eea0b5f92b38a573ee1207bf58a9526bb6befafbb39da22b4e63d50642da871"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/CompressedBlockAck/CompressedBlockAck-#3.sca",
-                "sha256": "103453ac17602a74d411f2feb4e527e32611bc5ef929b02940e8bdc1682b1c5d"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#3.sca",
+                "sha256": "98944408dfc3181894e305b6069a73ded23af6990e4d6eb3e2630cafa7c51761"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/CompressedBlockAck/CompressedBlockAck-#3.vec",
-                "sha256": "a47876e46d26297c8e44dc3908410b014d2f14f0ffa2a2668cb5efc42a77b7e6"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#3.vec",
+                "sha256": "073ad1063fccff40408cfe0f80bebc28707f73136e86b6ca51b2139c1f43335f"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/CompressedBlockAck/CompressedBlockAck-#4.sca",
-                "sha256": "7141dba3c63e59d18c05b8cfa02eb23239f9fd27e0a3164eb9a1f53e41b7c420"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#4.sca",
+                "sha256": "95c3fbdd79108c305cf816656ee27b385d0fd273be0ff77c5ae7011dacffc2ff"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/CompressedBlockAck/CompressedBlockAck-#4.vec",
-                "sha256": "86d2fc73187bd333833705f1c05c319dadba3ab4abe06308f07d511f3ae02ca2"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryAbove/Ht40MHzSecondaryAbove-#4.vec",
+                "sha256": "c4c91ca392ab7f037c8dd047224ef38ba36b83b8f168a4fcaf89e5fec224dd46"
               }
             ]
           },
           {
-            "configuration": "ImplicitBlockAck",
-            "group": "block_ack",
-            "ini": "examples/ieee80211n/block_ack/omnetpp.ini",
-            "label": "Implicit BACK",
+            "configuration": "Ht40MHzSecondaryBelow",
+            "group": "channel_widths",
+            "ini": "examples/ieee80211n/channel_widths/omnetpp.ini",
+            "label": "HT 40 MHz (Secondary Below)",
             "measurement": {
               "end_s": 0.5,
               "start_s": 0.3
@@ -175,83 +175,83 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/ImplicitBlockAck/ImplicitBlockAck-#0.sca",
-                "sha256": "1c5494f6f5354d324e0bd1de244fb13f6fd1c26ad62802e710577f08d6dc636f"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#0.sca",
+                "sha256": "c35abad2b7fb986d870eb328519d123d92bafc834366478602f9e0cce1b65c46"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/ImplicitBlockAck/ImplicitBlockAck-#0.vec",
-                "sha256": "797a39dd470b976b9c55aae43cfd74626fe379d90d5df871801727cda1250777"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#0.vec",
+                "sha256": "f406b9f076ba924a006aa151bf9203c322c591f1d2e283dcf5cb3c638b9cb8ed"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/ImplicitBlockAck/ImplicitBlockAck-#1.sca",
-                "sha256": "b03d95fee93b8b060a0b1034510d2a1951597f480f3ec5250f433aab27accb6a"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#1.sca",
+                "sha256": "cb9d3f23d68156acb817734bc8d9b7c9ccdd9c8298cf78262794e64a6ee18e20"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/ImplicitBlockAck/ImplicitBlockAck-#1.vec",
-                "sha256": "32ebbac72aa7c9f0349946900ecebfac528b306a242e1bd4bbbcaad16ae7feed"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#1.vec",
+                "sha256": "cf6a7a8e033f7ebcd308168202f3e6f8f55c5bca7749f3e2ff49a5831fafad3e"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/ImplicitBlockAck/ImplicitBlockAck-#2.sca",
-                "sha256": "e0ec0a997af7eff7035a4e7ec3b7aaf400bc42271903b2b645f5c549ac0b8d0d"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#2.sca",
+                "sha256": "b3e9f0d1317bc1cad5c6c39ec742db53ae9404bd941f27748b3ef46e8494d1cf"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/ImplicitBlockAck/ImplicitBlockAck-#2.vec",
-                "sha256": "b6b11d8a2c920cce691bd9888c73869233313363e33fd483b2891084101b0d99"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#2.vec",
+                "sha256": "e587f7b86c5fd04b1220f3f244c9a50a8ece6e3c6fb8ce2bca207e15db62b77d"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/ImplicitBlockAck/ImplicitBlockAck-#3.sca",
-                "sha256": "91e4472d6462eaff1baf9911584dfc480605d9f3a0175b7d647b41f228e4f1f2"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#3.sca",
+                "sha256": "51a13e5a890819187804c05ccf9bd0b5103e45c5cf81edb094508d1a61af49a9"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/ImplicitBlockAck/ImplicitBlockAck-#3.vec",
-                "sha256": "4506569184f8fee009a180f42116c755310cca0cc9d460d93c098cd936a61343"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#3.vec",
+                "sha256": "ff54920dbef6fc3e5cfb28c2ede7bb533ac497ac2c80a094adc050fcfc8bafc4"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/ImplicitBlockAck/ImplicitBlockAck-#4.sca",
-                "sha256": "6c33d69e32feefe8d8bcc4a5b44b213e1a8a77182d48a4609390052aee80ebb9"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#4.sca",
+                "sha256": "0e3a6f346cc5891a7cccdff9ea8884052aa02a9073d216ce3bf397a4e363dd54"
               },
               {
-                "path": "examples/ieee80211n/block_ack/results/20260806T083403Z/ImplicitBlockAck/ImplicitBlockAck-#4.vec",
-                "sha256": "05b948b7e2bae50d1102be7eb3da5ee7669eb0e619128ed9e6df7ac474ebc45e"
+                "path": "examples/ieee80211n/channel_widths/results/20260807T091530Z/Ht40MHzSecondaryBelow/Ht40MHzSecondaryBelow-#4.vec",
+                "sha256": "bbbb1e23def261bb1d71aa5bca4540222b15398236b4e11bf7f391a9848ba41d"
               }
             ]
           }
         ],
-        "session_id": "20260806T083403Z",
+        "session_id": "20260807T091530Z",
         "status": "PASS"
       }
     },
-    "repository_revision": "3d997ef62e9a34c6dd7365bdc8c580903a3f747c",
-    "requested_session_id": "20260806T083403Z",
+    "repository_revision": "47c43b5b35c780def54c17ad6b5b13e7973a67ef",
+    "requested_session_id": "20260807T091530Z",
     "schema_version": 1
   },
-  "block_ack": {
-    "Compressed BACK": {
+  "channel_widths": {
+    "HT 20 MHz": {
       "goodput_mbps": {
-        "ci95": 0.013601747613164824,
+        "ci95": 0.07299463746199857,
         "count": 5,
-        "mean": 10.611999999999998
+        "mean": 5.088
       }
     },
-    "Frag. Basic BACK": {
+    "HT 40 MHz": {
       "goodput_mbps": {
-        "ci95": 0.0333173412623738,
+        "ci95": 0.1632209713579815,
         "count": 5,
-        "mean": 9.568000000000001
+        "mean": 13.536000000000001
       }
     },
-    "Implicit BACK": {
+    "HT 40 MHz (Secondary Above)": {
       "goodput_mbps": {
-        "ci95": 0.2966511738921151,
+        "ci95": 0.1632209713579815,
         "count": 5,
-        "mean": 10.935999999999998
+        "mean": 13.536000000000001
       }
     },
-    "Standard ACK": {
+    "HT 40 MHz (Secondary Below)": {
       "goodput_mbps": {
-        "ci95": 0.03926486322955117,
+        "ci95": 0.1484024842759117,
         "count": 5,
-        "mean": 4.04
+        "mean": 13.958400000000001
       }
     }
   }
