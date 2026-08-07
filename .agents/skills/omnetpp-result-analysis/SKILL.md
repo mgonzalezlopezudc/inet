@@ -1,11 +1,16 @@
 ---
 name: omnetpp-result-analysis
-description: Inspect, filter, query, and export OMNeT++ scalar and vector result files using opp_scavetool. Use after a simulation has generated .sca or .vec files, or when asked to find, compare, or extract recorded simulation statistics.
+description: Inspect, filter, query, and export OMNeT++ scalar and vector result files using opp_scavetool (export -F CSV-R or CSV-S). Use after a simulation has generated .sca or .vec files, or when asked to find, compare, or extract recorded simulation statistics.
 ---
 
 # Analyzing OMNeT++ results
 
 Select `.sca` and `.vec` files using run metadata; do not assume every file in a result directory belongs to the requested configuration or run.
+
+## Common Syntax Pitfalls
+
+* **Export Format Error**: Do NOT use `-F CSV` or `-f CSV`. `opp_scavetool` will fail with `Unrecognized export format`. You MUST specify either `-F CSV-R` (raw tabular data) or `-F CSV-S` (scalar summary).
+* **Missing Result Files**: Always verify that `.sca` / `.vec` files exist in the specified directory before running `opp_scavetool` queries or exports.
 
 ## Workflow
 

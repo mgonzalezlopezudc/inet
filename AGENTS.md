@@ -41,6 +41,10 @@ Keep orchestration shallow and evidence-driven:
 * Never update fingerprint CSV files without explicit user approval, even when the changed trajectory is explained and `.UPDATED` files have been generated.
 * Always use `-j$(nproc)` for `make` and other parallel build commands unless the user explicitly requests a different job count.
 * When a simulation error requires source-level C++ debugging, use a debug build with `opp_run_dbg`, the corresponding debug model libraries, and the `inet-lldb-debugging` skill. Do not mix release and debug binaries.
+* Scope `grep_search` to target subdirectories (e.g., `src/inet/linklayer/ieee80211`) or include pattern filters (`Includes: ["*.cc", "*.h"]`); do not run unconstrained searches across large root directories like `src/inet` to avoid context deadline timeouts.
+* Do not supply `ArtifactMetadata` when creating or modifying standard project files (C++, NED, INI, scripts, or workspace docs); `ArtifactMetadata` is strictly for artifact markdown files under the session brain directory (`.gemini/antigravity-ide/brain/...`).
+* Always specify `EndLine >= StartLine` when supplying `StartLine` to `view_file`.
+* Use `opp_scavetool export -F CSV-R` (or `-F CSV-S`), as `-F CSV` is an unrecognized format option.
 
 ### Agent learning procedure
 

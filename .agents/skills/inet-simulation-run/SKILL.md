@@ -1,11 +1,15 @@
 ---
 name: inet-simulation-run
-description: Run and diagnose INET simulations using Cmdenv or Qtenv. Use for normal simulation execution, short diagnostic runs, initialization failures, runtime errors, or requests for interactive graphical debugging.
+description: Run and diagnose INET simulations using opp_run (or opp_run_dbg) with Cmdenv or Qtenv. Use for normal simulation execution, short diagnostic runs, initialization failures, runtime errors, or requests for interactive graphical debugging.
 ---
 
 # Running INET simulations
 
 Use Cmdenv by default. Use Qtenv only when interactive inspection is useful or the user explicitly asks for it.
+
+## Common Syntax Pitfalls
+
+* **Root Executable Missing**: Do NOT execute `./run` from the repository root directory (fails with `No such file or directory`). Use `opp_run` (or `opp_run_dbg`) as shown in the templates below.
 
 ## Inputs
 
