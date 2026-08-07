@@ -1,0 +1,43 @@
+%description:
+Test IEEE 802.11be EHT preamble-puncturing pattern semantics for 20/40/80/160/320 MHz.
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtPreamblePuncturing.h"
+
+%activity:
+using namespace inet;
+using namespace inet::physicallayer;
+
+// The bitmap is ordered from the lowest-frequency 20 MHz subchannel and bit 0
+// is the configured primary subchannel for these vectors.
+ASSERT(isValidIeee80211EhtPreamblePuncturing(0, MHz(20), 0));
+ASSERT(!isValidIeee80211EhtPreamblePuncturing(1, MHz(20), 0));
+ASSERT(isValidIeee80211EhtPreamblePuncturing(0, MHz(40), 0));
+ASSERT(!isValidIeee80211EhtPreamblePuncturing(1, MHz(40), 0));
+
+ASSERT(isValidIeee80211EhtPreamblePuncturing(0, MHz(80), 0));
+ASSERT(isValidIeee80211EhtPreamblePuncturing(2, MHz(80), 0));
+ASSERT(!isValidIeee80211EhtPreamblePuncturing(1, MHz(80), 0));
+ASSERT(!isValidIeee80211EhtPreamblePuncturing(6, MHz(80), 0));
+
+ASSERT(isValidIeee80211EhtPreamblePuncturing(2, MHz(160), 0));
+ASSERT(isValidIeee80211EhtPreamblePuncturing(0xc, MHz(160), 0));
+ASSERT(!isValidIeee80211EhtPreamblePuncturing(0x6, MHz(160), 0));
+
+// 320 MHz non-OFDMA puncturing is expressed at 40 MHz granularity.
+ASSERT(isValidIeee80211EhtPreamblePuncturing(0xc, MHz(320), 0));
+ASSERT(isValidIeee80211EhtPreamblePuncturing(0xf0, MHz(320), 0));
+ASSERT(!isValidIeee80211EhtPreamblePuncturing(0x4, MHz(320), 0));
+
+// OFDMA uses an independent 20 MHz pattern in every 80 MHz block.
+ASSERT(isValidIeee80211EhtPreamblePuncturing(0x2, MHz(80), 0,
+        Ieee80211EhtPreamblePuncturingMode::OFDMA));
+ASSERT(isValidIeee80211EhtPreamblePuncturing(0xf0, MHz(160), 0,
+        Ieee80211EhtPreamblePuncturingMode::OFDMA));
+ASSERT(!isValidIeee80211EhtPreamblePuncturing(0x5, MHz(80), 0,
+        Ieee80211EhtPreamblePuncturingMode::OFDMA));
+
+EV << "EHT preamble-puncturing semantics passed.\n";
+
+%contains: stdout
+EHT preamble-puncturing semantics passed.

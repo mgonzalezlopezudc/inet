@@ -188,6 +188,10 @@ auto mode15 = Ieee80211EhtCompliantModes::getCompliantMode(
         &Ieee80211EhtmcsTable::ehtMcs15BW80MHzNss1,
         Ieee80211EhtMode::BAND_6GHZ, Ieee80211EhtPreambleMode::EHT_PREAMBLE_SU,
         Ieee80211EhtModeBase::EHT_GUARD_INTERVAL_LONG, true);
+auto mode13 = Ieee80211EhtCompliantModes::getCompliantMode(
+        &Ieee80211EhtmcsTable::ehtMcs13BW80MHzNss1,
+        Ieee80211EhtMode::BAND_6GHZ, Ieee80211EhtPreambleMode::EHT_PREAMBLE_SU,
+        Ieee80211EhtModeBase::EHT_GUARD_INTERVAL_LONG, true);
 MacAddress peerAddress("02:00:00:00:00:be");
 auto macHeader = makeHeader(peerAddress);
 
@@ -226,6 +230,28 @@ REQUIRE(decoded->getCoding() == HE_CODING_LDPC);
 REQUIRE(decoded->getUsersArraySize() == 1);
 REQUIRE(decoded->getUsers(0).mcs == 14);
 delete packet;
+
+// The EHT Operation Disabled Subchannel Bitmap is the persistent BSS
+// puncturing constraint. It is ordered by increasing frequency; the channel
+// used by this test has the primary 20 MHz subchannel at bit 0.
+mib->ehtOperation.disabledSubchannelBitmap = 2;
+auto puncturedPacket = makePacket(macHeader, mode13);
+radio->testEncapsulate(puncturedPacket);
+auto puncturedHeader = puncturedPacket->peekAtFront<Ieee80211EhtPhyHeader>();
+REQUIRE(puncturedHeader != nullptr);
+REQUIRE(puncturedHeader->getPuncturedSubchannelMask() == 2);
+auto puncturedSerialized = puncturedPacket->peekDataAsBytes();
+Packet puncturedRoundTrip("eht-punctured-round-trip", puncturedSerialized);
+puncturedRoundTrip.addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211EhtPhy);
+auto puncturedDecoded = puncturedRoundTrip.popAtFront<Ieee80211EhtPhyHeader>();
+REQUIRE(puncturedDecoded->getPuncturedSubchannelMask() == 2);
+delete puncturedPacket;
+
+mib->ehtOperation.disabledSubchannelBitmap = 1;
+auto primaryPuncturedPacket = makePacket(macHeader, mode13);
+REQUIRE(throwsRuntimeError([&] { radio->testEncapsulate(primaryPuncturedPacket); }));
+delete primaryPuncturedPacket;
+mib->ehtOperation.disabledSubchannelBitmap = 0;
 
 peer.ldpc = false;
 mib->setPeerEhtCapabilities(peerAddress, peer, operation);

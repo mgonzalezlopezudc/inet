@@ -42,6 +42,7 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtPreamblePuncturing.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211FecCodingReq.h"
@@ -287,10 +288,16 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
 {
     auto phyHeader = Ieee80211Radio::peekIeee80211PhyHeaderAtFront(packet);
     auto heMuHeader = dynamicPtrCast<const Ieee80211HePhyHeader>(phyHeader);
+    auto ehtHeader = dynamicPtrCast<const Ieee80211EhtPhyHeader>(phyHeader);
     const IIeee80211Mode *transmissionMode = computeTransmissionMode(packet);
     const Ieee80211Channel *transmissionChannel = computeTransmissionChannel(packet);
     W transmissionPower = computeTransmissionPower(packet);
     Hz transmissionBandwidth = transmissionMode->getDataMode()->getBandwidth();
+    if (ehtHeader != nullptr && !isValidIeee80211EhtPreamblePuncturing(
+            ehtHeader->getPuncturedSubchannelMask(), transmissionBandwidth,
+            transmissionChannel->getPrimary20SubchannelIndex(),
+            Ieee80211EhtPreamblePuncturingMode::NON_OFDMA))
+        throw cRuntimeError("EHT PHY header contains an illegal non-OFDMA preamble puncturing mask");
     int requiredSpatialStreams = transmissionMode->getDataMode()->getNumberOfSpatialStreams();
     std::shared_ptr<const Ieee80211HeTxVector> heTxVector;
     std::shared_ptr<const Ieee80211HePpduLayout> hePpduLayout;

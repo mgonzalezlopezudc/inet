@@ -52,6 +52,7 @@
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211EhtPhyCalculator.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtPreamblePuncturing.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyHeader.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
@@ -1000,11 +1001,27 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
         ehtPhyHeader->setPpduFormat(EHT_MU);
         ehtPhyHeader->setGuardInterval(dataMode->getGuardIntervalType());
         ehtPhyHeader->setCoding(dataMode->isLdpc() ? HE_CODING_LDPC : HE_CODING_BCC);
-        ehtPhyHeader->setPuncturedSubchannelMask(0);
         ehtPhyHeader->setCommonDuration(mode->getDuration(packet->getDataLength()));
         auto networkInterface = getContainingNicModule(this);
         auto mib = networkInterface == nullptr ? nullptr :
                 dynamic_cast<const ieee80211::Ieee80211Mib *>(networkInterface->getSubmodule("mib"));
+        uint16_t puncturedSubchannelMask = 0;
+        if (mib != nullptr) {
+            puncturedSubchannelMask = mib->ehtOperation.disabledSubchannelBitmap;
+            if (puncturedSubchannelMask != 0 && !mib->localEhtCapabilities.preamblePuncturing)
+                throw cRuntimeError("EHT puncturing is configured but the local EHT capability is disabled");
+            if (puncturedSubchannelMask != 0 &&
+                    mib->ehtOperation.operatingChannelWidth != dataMode->getBandwidth())
+                throw cRuntimeError("EHT Disabled Subchannel Bitmap width does not match the selected EHT mode");
+        }
+        auto transmissionChannel = ieee80211Transmitter->computeTransmissionChannel(packet);
+        int primary20SubchannelIndex = transmissionChannel->getPrimary20SubchannelIndex();
+        if (!isValidIeee80211EhtPreamblePuncturing(puncturedSubchannelMask,
+                dataMode->getBandwidth(), primary20SubchannelIndex,
+                Ieee80211EhtPreamblePuncturingMode::NON_OFDMA))
+            throw cRuntimeError("Illegal EHT non-OFDMA preamble puncturing mask 0x%04x for %g MHz channel",
+                    puncturedSubchannelMask, dataMode->getBandwidth().get() / 1e6);
+        ehtPhyHeader->setPuncturedSubchannelMask(puncturedSubchannelMask);
         ehtPhyHeader->setBssColor(mib == nullptr ? 0 : mib->heOperation.bssColor);
         Ieee80211EhtUserInfo user;
         user.mruIndex = 0;

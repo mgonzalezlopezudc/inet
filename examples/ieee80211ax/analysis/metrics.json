@@ -1,137 +1,137 @@
 {
   "_provenance": {
-    "generated_at_utc": "2026-08-07T20:26:17.582931+00:00",
+    "generated_at_utc": "2026-08-07T21:43:29.391619+00:00",
     "groups": {
-      "rate_adaptation": {
+      "short_gi_vht": {
         "conditions": [
           {
-            "configuration": "FixedConfig3",
-            "group": "rate_adaptation",
-            "ini": "examples/ieee80211n/rate_adaptation/omnetpp.ini",
-            "label": "Fixed MCS 3",
+            "configuration": "VhtLongGI",
+            "group": "short_gi_vht",
+            "ini": "examples/ieee80211ac/short_gi_vht/omnetpp.ini",
+            "label": "VHT Long GI (800 ns)",
             "measurement": {
-              "end_s": 1.9,
+              "end_s": 0.5,
               "start_s": 0.3
             },
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/FixedConfig3/FixedConfig3-#0.sca",
-                "sha256": "c7a46688974716f64b8ef5bfb6547fa0c58380aa82994e755d8b430d25e99c5e"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtLongGI/VhtLongGI-#0.sca",
+                "sha256": "e1c3891e9c496c146e138293dff94e77ba62ca2a98ed562b4874224a71051538"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/FixedConfig3/FixedConfig3-#0.vec",
-                "sha256": "93095ca29375a1fcc30c3b4e8a05c1e35f53a9ad89cbd6dea0641e42fea380da"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtLongGI/VhtLongGI-#0.vec",
+                "sha256": "e3bcf852f9193b6b738c322c2e8ba342b6f4089bd1aac97e6a81d2a508e03e50"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/FixedConfig3/FixedConfig3-#1.sca",
-                "sha256": "1c176b455fbfed983f3951a4daa67d03e99d0571a18ba0badeba4478bcfef93f"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtLongGI/VhtLongGI-#1.sca",
+                "sha256": "bc2e6340d2f303babe0bfaabaf10622c1768e47309a46d7a09477ac747145d67"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/FixedConfig3/FixedConfig3-#1.vec",
-                "sha256": "444abbef00944fa2051ed93dac419808ea42a4558574589eca6c5cc9cf84e8fa"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtLongGI/VhtLongGI-#1.vec",
+                "sha256": "3f3edc6d6fd519b9803f5b1c571274b19092469770c59797d70971d32d01b6c6"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/FixedConfig3/FixedConfig3-#2.sca",
-                "sha256": "d5687531ab6fd2203b6a74461cb56528d9d7bc90346f1c0d5ae0ecdb37a91bf1"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtLongGI/VhtLongGI-#2.sca",
+                "sha256": "b41b611974ee22be26eb499948a2221c0cb7eb3553a5c97b29de8f0a4f6b9fd1"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/FixedConfig3/FixedConfig3-#2.vec",
-                "sha256": "9f1fceaf6796ad2486cbf0ab93079629cdd057022b4275c6354806a9054951fe"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtLongGI/VhtLongGI-#2.vec",
+                "sha256": "b4bbc7467360686b72c26424487259dfd7f58c8c2bfcca15ab1c69288dc5a641"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/FixedConfig3/FixedConfig3-#3.sca",
-                "sha256": "d41aee5a4be79251ce62bea4e44129945743092f820407b594f1150f4e740e40"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtLongGI/VhtLongGI-#3.sca",
+                "sha256": "eb9b3ee03f29f2757bf89a5e83a064c22ab14d1975dc84975b89410f2365056f"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/FixedConfig3/FixedConfig3-#3.vec",
-                "sha256": "7e83963d5462be5586df2612c5a9e2f4f1c9a4d4b0bcca09c98fec643b45a3a1"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtLongGI/VhtLongGI-#3.vec",
+                "sha256": "52d1617b4956c1043982edabee10739deee6d41afe7486c4f18765a6953f9842"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/FixedConfig3/FixedConfig3-#4.sca",
-                "sha256": "292c186b0e88effd6bc932aa8ded10024241f96301365a52626742a416c065de"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtLongGI/VhtLongGI-#4.sca",
+                "sha256": "aa6baa851f4c99a2b5b37403530eafe6f8807416722b69e7eae9494fc340ef6c"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/FixedConfig3/FixedConfig3-#4.vec",
-                "sha256": "f03d0778861d336f7653d07ba863a90dc0a15eabf4f0cb009b69c034e24f7b86"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtLongGI/VhtLongGI-#4.vec",
+                "sha256": "4a39f18b7519f0b3bcb87027dca4d022b6d5a1205e01f846eef8febeafafb599"
               }
             ]
           },
           {
-            "configuration": "HtAarfAdaptation",
-            "group": "rate_adaptation",
-            "ini": "examples/ieee80211n/rate_adaptation/omnetpp.ini",
-            "label": "HT AARF Adaptation",
+            "configuration": "VhtShortGI",
+            "group": "short_gi_vht",
+            "ini": "examples/ieee80211ac/short_gi_vht/omnetpp.ini",
+            "label": "VHT Short GI (400 ns)",
             "measurement": {
-              "end_s": 1.9,
+              "end_s": 0.5,
               "start_s": 0.3
             },
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/HtAarfAdaptation/HtAarfAdaptation-#0.sca",
-                "sha256": "3e76b5426cfe1e0e9c20af92a0ad212ddd4f897553dffe0ae4077392428c9991"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtShortGI/VhtShortGI-#0.sca",
+                "sha256": "3a9c86a71e7fb8bc8d15e7074120673faac462710a6d0040865b156fe06ca5a0"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/HtAarfAdaptation/HtAarfAdaptation-#0.vec",
-                "sha256": "6d7f31f4a11fe2d74f18262eae42376f761976878b34d5a93d91e463dd235a19"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtShortGI/VhtShortGI-#0.vec",
+                "sha256": "908a87ed720debd71ef5979096a7fc8c6a7badb741dfb57f80af2feb1f4f9b35"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/HtAarfAdaptation/HtAarfAdaptation-#1.sca",
-                "sha256": "0fdde6be83a2a10c35336e48f37f7d03b1cfc37a5b4b5ddaeff4eebe73ee582c"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtShortGI/VhtShortGI-#1.sca",
+                "sha256": "24488a707a357af3d822f0730cf36d0b9a25940d22f13f1f3085ed6b34d39dc0"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/HtAarfAdaptation/HtAarfAdaptation-#1.vec",
-                "sha256": "5a3a41c780883995759a8edac768b4ba45299ba8130a1ee2340d5802e91dccba"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtShortGI/VhtShortGI-#1.vec",
+                "sha256": "e912e04ffa9ce6c3fba59b1b4099e144ae8c003feb6d690c82888de8f464d3bf"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/HtAarfAdaptation/HtAarfAdaptation-#2.sca",
-                "sha256": "d38cc6264e5ebdc6a3704ad6b9d16e30af03ead71c9f404189087676a861d349"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtShortGI/VhtShortGI-#2.sca",
+                "sha256": "4023e7063070e4ef060b1f442738d7e69bfee1fe27726f746284a501a40fded5"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/HtAarfAdaptation/HtAarfAdaptation-#2.vec",
-                "sha256": "a8c82befc1ba1155eb5ad476c82e0e19a96af0d4b2eadf0b1b14a5a95e9c3595"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtShortGI/VhtShortGI-#2.vec",
+                "sha256": "9a4c412911e6f59af47c9500314ccb0e1531cd6123466328a90725f5affe524c"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/HtAarfAdaptation/HtAarfAdaptation-#3.sca",
-                "sha256": "a74b5fa1a7e81537fae8ac27b6ce8de7d7c49e5a856b45ced1f3daa13ef352f7"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtShortGI/VhtShortGI-#3.sca",
+                "sha256": "c96bd0636f8cdc5f5213d754e43af9ac44bf9c04e3966e8a743364c12e764325"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/HtAarfAdaptation/HtAarfAdaptation-#3.vec",
-                "sha256": "e42b311f555759ceb651d91123060d951ad9f1221cf33ec8fb5eb396fd3aa137"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtShortGI/VhtShortGI-#3.vec",
+                "sha256": "f1a14aa7594db11fbca8b24afe4c01101fdef0cdba510d0008404d7d168c184d"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/HtAarfAdaptation/HtAarfAdaptation-#4.sca",
-                "sha256": "c94ab2b5ebd69cc5a06aeb2b0637bd445a1d0d431c87e6d7f79e082855f5c914"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtShortGI/VhtShortGI-#4.sca",
+                "sha256": "ca290be8ce53c2d90a635b0cc43fe707576f954c5e2e5a64818dd4e2439efe5c"
               },
               {
-                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/HtAarfAdaptation/HtAarfAdaptation-#4.vec",
-                "sha256": "d162183b0d71ff6c39a6c66515c60d63f5332e8adc74ac966cd57875af21dc3b"
+                "path": "examples/ieee80211ac/short_gi_vht/results/20260807T214309Z/VhtShortGI/VhtShortGI-#4.vec",
+                "sha256": "7a0a768d25afeb9bdba3d2f875f1fd25a8007c0a242bdad2060876acb3c36267"
               }
             ]
           }
         ],
-        "session_id": "20260807T202602Z",
+        "session_id": "20260807T214309Z",
         "status": "PASS"
       }
     },
-    "repository_revision": "73468ceae36fc31bd5f685a1c0f41596d7c93b0b",
-    "requested_session_id": "20260807T202602Z",
+    "repository_revision": "163aef65f2407fef3161c214aa3860a5ea667cd5",
+    "requested_session_id": "20260807T214309Z",
     "schema_version": 1
   },
-  "rate_adaptation": {
-    "Fixed MCS 3": {
+  "short_gi_vht": {
+    "VHT Long GI (800 ns)": {
       "goodput_mbps": {
-        "ci95": 0.01665867063118662,
+        "ci95": 0.08310805069468535,
         "count": 5,
-        "mean": 2.754
+        "mean": 16.656
       }
     },
-    "HT AARF Adaptation": {
+    "VHT Short GI (400 ns)": {
       "goodput_mbps": {
-        "ci95": 0.022810824206874494,
+        "ci95": 0.06082886455166592,
         "count": 5,
-        "mean": 4.065
+        "mean": 16.96
       }
     }
   }

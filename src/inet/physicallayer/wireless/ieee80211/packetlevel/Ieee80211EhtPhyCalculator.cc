@@ -5,6 +5,7 @@
 //
 
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211EhtPhyCalculator.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtPreamblePuncturing.h"
 
 namespace inet {
 namespace physicallayer {
@@ -86,6 +87,19 @@ Ieee80211EhtPhyValidationResult computeEhtPpduParameters(
     Ieee80211EhtPhyValidationResult result;
     if (requestedUsers.empty()) {
         result.error = "EHT PPDU has no users";
+        return result;
+    }
+
+    // EHT-TB carries no puncturing indication in U-SIG (36.3.12.11.4).
+    if (ppduFormat == EHT_TRIGGER_BASED_UPLINK && puncturedSubchannelMask != 0) {
+        result.error = "EHT-TB PPDU cannot carry an EHT puncturing indication";
+        return result;
+    }
+    auto puncturingMode = singleUser ? Ieee80211EhtPreamblePuncturingMode::NON_OFDMA :
+            Ieee80211EhtPreamblePuncturingMode::OFDMA;
+    if (!isValidIeee80211EhtPreamblePuncturing(puncturedSubchannelMask,
+            channelBandwidth, -1, puncturingMode)) {
+        result.error = "Illegal EHT preamble puncturing pattern for PPDU bandwidth or format";
         return result;
     }
 

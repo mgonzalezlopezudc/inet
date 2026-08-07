@@ -16,6 +16,7 @@
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtPreamblePuncturing.h"
 #include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211VhtPacketRadio.h"
 #include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211HePacketRadio.h"
 
@@ -275,6 +276,12 @@ void Ieee80211Mib::initialize(int stage)
         if (disabledSubchannelBitmap < 0 || disabledSubchannelBitmap > 0xffff)
             throw cRuntimeError("ehtDisabledSubchannelBitmap must be between 0 and 65535");
         ehtOperation.disabledSubchannelBitmap = disabledSubchannelBitmap;
+        if (disabledSubchannelBitmap != 0 && !localEhtCapabilities.preamblePuncturing)
+            throw cRuntimeError("ehtDisabledSubchannelBitmap requires ehtPreamblePuncturing=true");
+        if (!physicallayer::isValidIeee80211EhtPreamblePuncturing(
+                ehtOperation.disabledSubchannelBitmap, ehtOperation.operatingChannelWidth))
+            throw cRuntimeError("ehtDisabledSubchannelBitmap is not a permitted EHT Operation pattern for %g MHz",
+                    ehtOperation.operatingChannelWidth.get() / 1e6);
         ehtOperation.basicEhtMcsNss = par("ehtBasicMcsNss").intValue();
         ehtOperation.mcs15Disabled = par("ehtMcs15Disabled").boolValue();
 
