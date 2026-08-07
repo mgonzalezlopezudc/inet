@@ -1,7 +1,7 @@
 {
-  "analysis_script_sha256": "734b6decacf8d4edd96a4ba4bd4d4925cc24b9dc3eb98410be492d96da9439c2",
+  "analysis_script_sha256": "8d290e0f09b172a1ea6c26ed99a320ab33504a09d1511340eece11753fd460ec",
   "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
-  "capture_source_diff_sha256": "2de7b07f1e1280bc309902d916f2f06aaf54d3f4c460781e114955f09e336d22",
+  "capture_source_diff_sha256": "7c7944bc2c9d1bc44e70c4b3a27f49bc2764506d9828a08502261a141f387614",
   "entries": [
     {
       "captures": [
@@ -29,7 +29,7 @@
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht20MHz/Ht20MHz-#0ChannelWidthsNetwork.ap.wlan[0].pcap",
+          "path": "examples/ieee80211n/channel_widths/results/20260807T111958Z/Ht20MHz/Ht20MHz-#0ChannelWidthsNetwork.ap.wlan[0].pcap",
           "sha256": "8b9c512afccd9c3d118ef25e8e9160ea962d432b376ffbf1aaf6407e95de283f",
           "size_bytes": 440896
         },
@@ -57,7 +57,7 @@
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht20MHz/Ht20MHz-#0ChannelWidthsNetwork.host[0].wlan[0].pcap",
+          "path": "examples/ieee80211n/channel_widths/results/20260807T111958Z/Ht20MHz/Ht20MHz-#0ChannelWidthsNetwork.host[0].wlan[0].pcap",
           "sha256": "5fca845e90ad3f41c5920164786bfb9366425660b817dab7198e58b65ce29348",
           "size_bytes": 440904
         },
@@ -85,7 +85,7 @@
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht20MHz/Ht20MHz-#0ChannelWidthsNetwork.host[1].wlan[0].pcap",
+          "path": "examples/ieee80211n/channel_widths/results/20260807T111958Z/Ht20MHz/Ht20MHz-#0ChannelWidthsNetwork.host[1].wlan[0].pcap",
           "sha256": "fec73c4477739e6cd48d7dfe87592db353be31ba85eadb1071488d3f69e5394a",
           "size_bytes": 440904
         },
@@ -113,7 +113,7 @@
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht20MHz/Ht20MHz-#0ChannelWidthsNetwork.host[2].wlan[0].pcap",
+          "path": "examples/ieee80211n/channel_widths/results/20260807T111958Z/Ht20MHz/Ht20MHz-#0ChannelWidthsNetwork.host[2].wlan[0].pcap",
           "sha256": "65190540a5b8a1fb561224e26f8cf8a4fcfd93aece0270c894a590d91cd7fbdf",
           "size_bytes": 440904
         }
@@ -123,15 +123,15 @@
       "config": "Ht20MHz",
       "exit_status": 0,
       "ini_file": "examples/ieee80211n/channel_widths/omnetpp.ini",
-      "ini_sha256": "080293fc154003d270b7fbd10c6440230c6567d36861c72b6934ee05793240a1",
+      "ini_sha256": "98a2e8ad7fc6744f9e2ca13bc23a95cb5fd54a1639a774c30df0d41ea2255218",
       "run_number": 0,
       "scalar": {
         "configname": "Ht20MHz",
-        "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht20MHz/Ht20MHz-#0.sca",
+        "path": "examples/ieee80211n/channel_widths/results/20260807T111958Z/Ht20MHz/Ht20MHz-#0.sca",
         "replication": "#0",
         "runnumber": 0,
         "seedset": 0,
-        "sha256": "3f41a675b0cd3e882eab98ef37f7565942fa76bc73a1ab9e029f1e9572c2ec61"
+        "sha256": "c528b101882d1cd88656b54fc9a5214b6314c9ca0c893a63bcab7d0d601e2e85"
       },
       "seed_set": 0,
       "simulation_time_limit_s": 1.0,
@@ -163,7 +163,7 @@
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHz/Ht40MHz-#0ChannelWidthsNetwork.ap.wlan[0].pcap",
+          "path": "examples/ieee80211n/channel_widths/results/20260807T111958Z/Ht40MHz/Ht40MHz-#0ChannelWidthsNetwork.ap.wlan[0].pcap",
           "sha256": "0552b5544defa37eaf1d93eab098c4c36e3f727f860ccacfe87b3f043f0b3650",
           "size_bytes": 525504
         },
@@ -191,7 +191,7 @@
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHz/Ht40MHz-#0ChannelWidthsNetwork.host[0].wlan[0].pcap",
+          "path": "examples/ieee80211n/channel_widths/results/20260807T111958Z/Ht40MHz/Ht40MHz-#0ChannelWidthsNetwork.host[0].wlan[0].pcap",
           "sha256": "212fd4588bc4c64330e5ce2ce95563cf9bd021089e3bd29384706a32d9a3f1ea",
           "size_bytes": 525512
         },
@@ -219,7 +219,7 @@
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHz/Ht40MHz-#0ChannelWidthsNetwork.host[1].wlan[0].pcap",
+          "path": "examples/ieee80211n/channel_widths/results/20260807T111958Z/Ht40MHz/Ht40MHz-#0ChannelWidthsNetwork.host[1].wlan[0].pcap",
           "sha256": "aa03bb3fccf4b1baeb3ed6efe1df60c202cd6334dfc4692730632358a424d709",
           "size_bytes": 525512
         },
@@ -247,7 +247,7 @@
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHz/Ht40MHz-#0ChannelWidthsNetwork.host[2].wlan[0].pcap",
+          "path": "examples/ieee80211n/channel_widths/results/20260807T111958Z/Ht40MHz/Ht40MHz-#0ChannelWidthsNetwork.host[2].wlan[0].pcap",
           "sha256": "48b0049ccb7f2900b90a6b88c9a5c5f106a7c14d8e24078d139db25d80d41a51",
           "size_bytes": 525512
         }
@@ -257,15 +257,15 @@
       "config": "Ht40MHz",
       "exit_status": 0,
       "ini_file": "examples/ieee80211n/channel_widths/omnetpp.ini",
-      "ini_sha256": "080293fc154003d270b7fbd10c6440230c6567d36861c72b6934ee05793240a1",
+      "ini_sha256": "98a2e8ad7fc6744f9e2ca13bc23a95cb5fd54a1639a774c30df0d41ea2255218",
       "run_number": 0,
       "scalar": {
         "configname": "Ht40MHz",
-        "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHz/Ht40MHz-#0.sca",
+        "path": "examples/ieee80211n/channel_widths/results/20260807T111958Z/Ht40MHz/Ht40MHz-#0.sca",
         "replication": "#0",
         "runnumber": 0,
         "seedset": 0,
-        "sha256": "902f10eee94b9c3b562130c7a67fb6a327fd903b9572fad61089b45d5f81a2e1"
+        "sha256": "78c01a6074fffcef03b6b30d4c2c7423845eb6616010442a0667edaa273faa25"
       },
       "seed_set": 0,
       "simulation_time_limit_s": 1.0,
@@ -276,11 +276,11 @@
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 223028,
-            "duration_seconds": 0.799152,
+            "data_size_bytes": 526073,
+            "duration_seconds": 0.799028,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 0.999564,
-            "file_size_bytes": 233164,
+            "end_seconds": 0.99944,
+            "file_size_bytes": 552684,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -291,24 +291,24 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 224,
+            "packet_count": 586,
             "snapshot_length": null,
             "start_seconds": 0.200412,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#0ChannelWidthsNetwork.ap.wlan[0].pcap",
-          "sha256": "bbc32faedf0d4f24826711aa9462e51e515cc151577fce2ea243e1d60d531a1b",
-          "size_bytes": 233164
+          "path": "examples/ieee80211n/channel_widths/results/20260807T111958Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#0ChannelWidthsNetwork.ap.wlan[0].pcap",
+          "sha256": "a3143ebd776c51543d2ec32e5cb220465fc12d45b4131dad1b400b4a852a839f",
+          "size_bytes": 552684
         },
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 223028,
-            "duration_seconds": 0.799152,
+            "data_size_bytes": 526073,
+            "duration_seconds": 0.799028,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 0.999564,
-            "file_size_bytes": 233172,
+            "end_seconds": 0.99944,
+            "file_size_bytes": 552692,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -319,24 +319,24 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 224,
+            "packet_count": 586,
             "snapshot_length": null,
             "start_seconds": 0.200412,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#0ChannelWidthsNetwork.host[0].wlan[0].pcap",
-          "sha256": "cbc57ffc05905c276a7a750447e50fe0c1e35814427434eed6133875aa0d3b35",
-          "size_bytes": 233172
+          "path": "examples/ieee80211n/channel_widths/results/20260807T111958Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#0ChannelWidthsNetwork.host[0].wlan[0].pcap",
+          "sha256": "a1f8bc280e39be4dbe6f07baa86c92b406b6a3c1b2179a6d5fa54935e87730ca",
+          "size_bytes": 552692
         },
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 223028,
-            "duration_seconds": 0.799152,
+            "data_size_bytes": 526073,
+            "duration_seconds": 0.799028,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 0.999564,
-            "file_size_bytes": 233172,
+            "end_seconds": 0.99944,
+            "file_size_bytes": 552692,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -347,24 +347,24 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 224,
+            "packet_count": 586,
             "snapshot_length": null,
             "start_seconds": 0.200412,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#0ChannelWidthsNetwork.host[1].wlan[0].pcap",
-          "sha256": "e935ae490983525c4ae3ff0363280ebb6cfc7a47ecb8f907c455a2ccef17458b",
-          "size_bytes": 233172
+          "path": "examples/ieee80211n/channel_widths/results/20260807T111958Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#0ChannelWidthsNetwork.host[1].wlan[0].pcap",
+          "sha256": "2acdc306f77d14e964729a6c5ebd87a39f34ca4ec27b919d5525a9767c162db4",
+          "size_bytes": 552692
         },
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 223028,
-            "duration_seconds": 0.799152,
+            "data_size_bytes": 526073,
+            "duration_seconds": 0.799028,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 0.999564,
-            "file_size_bytes": 233172,
+            "end_seconds": 0.99944,
+            "file_size_bytes": 552692,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -375,24 +375,24 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 224,
+            "packet_count": 586,
             "snapshot_length": null,
             "start_seconds": 0.200412,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#0ChannelWidthsNetwork.host[2].wlan[0].pcap",
-          "sha256": "218f86f604fc58ddb0208bef336e807edc05e4b0972f78b3235c5edd29f84ac1",
-          "size_bytes": 233172
+          "path": "examples/ieee80211n/channel_widths/results/20260807T111958Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#0ChannelWidthsNetwork.host[2].wlan[0].pcap",
+          "sha256": "53cdea88f9cbee2dae8ddfbcaeabe8a84a5a2b82a5584490cb6c6aef5e53e47b",
+          "size_bytes": 552692
         },
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 863948,
-            "duration_seconds": 0.798936,
+            "data_size_bytes": 147200,
+            "duration_seconds": 0.799137,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 0.999914,
-            "file_size_bytes": 899132,
+            "end_seconds": 0.999815,
+            "file_size_bytes": 182516,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -403,15 +403,15 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 797,
+            "packet_count": 800,
             "snapshot_length": null,
-            "start_seconds": 0.200978,
+            "start_seconds": 0.200678,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#0ChannelWidthsNetwork.interferer.wlan[0].pcap",
-          "sha256": "451b924aaf65078fdbc3a86017507baaaf2f3e824450e9b304a982b0f209c59d",
-          "size_bytes": 899132
+          "path": "examples/ieee80211n/channel_widths/results/20260807T111958Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#0ChannelWidthsNetwork.interferer.wlan[0].pcap",
+          "sha256": "b25fe7598d2ac72bbf5ab67375d53dbd2c5379d2644d6b23e5df56d64497091e",
+          "size_bytes": 182516
         }
       ],
       "command": null,
@@ -419,15 +419,15 @@
       "config": "Ht40MHzSecondaryAboveWithInterferer",
       "exit_status": 0,
       "ini_file": "examples/ieee80211n/channel_widths/omnetpp.ini",
-      "ini_sha256": "080293fc154003d270b7fbd10c6440230c6567d36861c72b6934ee05793240a1",
+      "ini_sha256": "98a2e8ad7fc6744f9e2ca13bc23a95cb5fd54a1639a774c30df0d41ea2255218",
       "run_number": 0,
       "scalar": {
         "configname": "Ht40MHzSecondaryAboveWithInterferer",
-        "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#0.sca",
+        "path": "examples/ieee80211n/channel_widths/results/20260807T111958Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#0.sca",
         "replication": "#0",
         "runnumber": 0,
         "seedset": 0,
-        "sha256": "8ce83ca7ba38d41cd9408b72d12af65616e488bba9bca83c71cc310cbbe1e94b"
+        "sha256": "d2ad7e65a17cc83e03c3e0bd950c94e710f50e954fe75b61f3f71f6565b4c0e6"
       },
       "seed_set": 0,
       "simulation_time_limit_s": 1.0,
@@ -438,11 +438,11 @@
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 138477,
-            "duration_seconds": 0.79056,
+            "data_size_bytes": 554358,
+            "duration_seconds": 0.799057,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 0.990972,
-            "file_size_bytes": 144456,
+            "end_seconds": 0.999469,
+            "file_size_bytes": 581824,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -453,24 +453,24 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 131,
+            "packet_count": 604,
             "snapshot_length": null,
             "start_seconds": 0.200412,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#0ChannelWidthsNetwork.ap.wlan[0].pcap",
-          "sha256": "e9ff0437edd5b822700eea1803ca76d88bb7438701a40c52ca35d41bfb62d7c2",
-          "size_bytes": 144456
+          "path": "examples/ieee80211n/channel_widths/results/20260807T111958Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#0ChannelWidthsNetwork.ap.wlan[0].pcap",
+          "sha256": "7271b7927203c3ecc7160052e5fae249acf22dc724f01f7d6c0ea09d16712535",
+          "size_bytes": 581824
         },
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 138477,
-            "duration_seconds": 0.79056,
+            "data_size_bytes": 554358,
+            "duration_seconds": 0.799057,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 0.990972,
-            "file_size_bytes": 144464,
+            "end_seconds": 0.999469,
+            "file_size_bytes": 581832,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -481,24 +481,24 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 131,
+            "packet_count": 604,
             "snapshot_length": null,
             "start_seconds": 0.200412,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#0ChannelWidthsNetwork.host[0].wlan[0].pcap",
-          "sha256": "8c869bf58c4c343ce3f69b98250c206427211de16cb6d3ec90bd8fa09ed60ab7",
-          "size_bytes": 144464
+          "path": "examples/ieee80211n/channel_widths/results/20260807T111958Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#0ChannelWidthsNetwork.host[0].wlan[0].pcap",
+          "sha256": "6a4a7a8751e6ef89d56f7e010d74e19f8579329698c458a5c535c2c5f1c1e96a",
+          "size_bytes": 581832
         },
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 138477,
-            "duration_seconds": 0.79056,
+            "data_size_bytes": 554358,
+            "duration_seconds": 0.799057,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 0.990972,
-            "file_size_bytes": 144464,
+            "end_seconds": 0.999469,
+            "file_size_bytes": 581832,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -509,24 +509,24 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 131,
+            "packet_count": 604,
             "snapshot_length": null,
             "start_seconds": 0.200412,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#0ChannelWidthsNetwork.host[1].wlan[0].pcap",
-          "sha256": "db6e1c7acf42d65a6420e95784370380ee6901ecb721b6675a62a38ef46329a7",
-          "size_bytes": 144464
+          "path": "examples/ieee80211n/channel_widths/results/20260807T111958Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#0ChannelWidthsNetwork.host[1].wlan[0].pcap",
+          "sha256": "fdba13650d443bf7e895333013b4f3fc0c232a66832f706beb95c4646a9674c5",
+          "size_bytes": 581832
         },
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 138477,
-            "duration_seconds": 0.79056,
+            "data_size_bytes": 554358,
+            "duration_seconds": 0.799057,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 0.990972,
-            "file_size_bytes": 144464,
+            "end_seconds": 0.999469,
+            "file_size_bytes": 581832,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -537,24 +537,24 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 131,
+            "packet_count": 604,
             "snapshot_length": null,
             "start_seconds": 0.200412,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#0ChannelWidthsNetwork.host[2].wlan[0].pcap",
-          "sha256": "a23ef34c03672150532d9092e56624a71916f82ff6a3efa879c39b7851a09379",
-          "size_bytes": 144464
+          "path": "examples/ieee80211n/channel_widths/results/20260807T111958Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#0ChannelWidthsNetwork.host[2].wlan[0].pcap",
+          "sha256": "7d605266bb8642adebc624dfd2b1933dca3b556ae6d195d63b332bf3ebb85810",
+          "size_bytes": 581832
         },
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 863948,
-            "duration_seconds": 0.798152,
+            "data_size_bytes": 147200,
+            "duration_seconds": 0.798566,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 0.99913,
-            "file_size_bytes": 899132,
+            "end_seconds": 0.999244,
+            "file_size_bytes": 182516,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -565,15 +565,15 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 797,
+            "packet_count": 800,
             "snapshot_length": null,
-            "start_seconds": 0.200978,
+            "start_seconds": 0.200678,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#0ChannelWidthsNetwork.interferer.wlan[0].pcap",
-          "sha256": "3fd920a2aaed4802c5d11fd537887daf5fbea6382221ed8667e1ff1e1b2fca24",
-          "size_bytes": 899132
+          "path": "examples/ieee80211n/channel_widths/results/20260807T111958Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#0ChannelWidthsNetwork.interferer.wlan[0].pcap",
+          "sha256": "1c591210097ba4820b6e82dd601a3dc0c19881a95b8eb11a2619a8a6905266ee",
+          "size_bytes": 182516
         }
       ],
       "command": null,
@@ -581,26 +581,26 @@
       "config": "Ht40MHzSecondaryBelowWithInterferer",
       "exit_status": 0,
       "ini_file": "examples/ieee80211n/channel_widths/omnetpp.ini",
-      "ini_sha256": "080293fc154003d270b7fbd10c6440230c6567d36861c72b6934ee05793240a1",
+      "ini_sha256": "98a2e8ad7fc6744f9e2ca13bc23a95cb5fd54a1639a774c30df0d41ea2255218",
       "run_number": 0,
       "scalar": {
         "configname": "Ht40MHzSecondaryBelowWithInterferer",
-        "path": "examples/ieee80211n/channel_widths/results/20260807T113658Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#0.sca",
+        "path": "examples/ieee80211n/channel_widths/results/20260807T111958Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#0.sca",
         "replication": "#0",
         "runnumber": 0,
         "seedset": 0,
-        "sha256": "d8d751f5b2f43efc033a7a90ac5442e385dc46fc9e37daea5fff15b79d74a75d"
+        "sha256": "e894675528cdedbc171a794e21a4f1dee64ab48c37f3ead92bc5368d6dec977d"
       },
       "seed_set": 0,
       "simulation_time_limit_s": 1.0,
       "subdir": "channel_widths"
     }
   ],
-  "generated_at_utc": "2026-08-07T11:37:04.680748+00:00",
+  "generated_at_utc": "2026-08-07T11:20:04.816327+00:00",
   "inet_library": "out/clang-release/src/libINET.so",
   "inet_library_sha256": "36b7f1545c55c8ee353ed7dea3da9dfd7a5a1ec632c63c529b8076974346c137",
   "repository_revision": "ddd0626b1fd2d6dc40f258294e3fc31c6f51d876",
-  "session_id": "20260807T113658Z",
+  "session_id": "20260807T111958Z",
   "suite": "n",
   "suite_descriptor": {
     "path": "examples/ieee80211/analysis/suites/n.json",

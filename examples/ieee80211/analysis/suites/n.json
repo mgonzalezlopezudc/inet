@@ -26,7 +26,7 @@
     "channel_widths": {
       "scalar_vector_group": "channel_widths",
       "ini": "channel_widths/omnetpp.ini",
-      "configurations": ["Ht20MHz", "Ht40MHz", "Ht40MHzSecondaryAbove", "Ht40MHzSecondaryBelow"],
+      "configurations": ["Ht20MHz", "Ht40MHz", "Ht40MHzSecondaryAboveWithInterferer", "Ht40MHzSecondaryBelowWithInterferer"],
       "phy_profiles": ["ht"],
       "feature_plugins": ["channel-width"]
     },

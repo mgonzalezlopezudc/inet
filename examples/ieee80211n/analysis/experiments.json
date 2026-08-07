@@ -120,8 +120,8 @@
       "conditions": [
         {"label": "HT 20 MHz", "config": "Ht20MHz"},
         {"label": "HT 40 MHz", "config": "Ht40MHz"},
-        {"label": "HT 40 MHz (Secondary Above)", "config": "Ht40MHzSecondaryAbove"},
-        {"label": "HT 40 MHz (Secondary Below)", "config": "Ht40MHzSecondaryBelow"}
+        {"label": "HT 40 MHz (Secondary Above)", "config": "Ht40MHzSecondaryAboveWithInterferer"},
+        {"label": "HT 40 MHz (Secondary Below)", "config": "Ht40MHzSecondaryBelowWithInterferer"}
       ]
     },
     "guard_interval": {
