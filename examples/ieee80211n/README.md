@@ -12,7 +12,7 @@ These examples demonstrate High Throughput (HT) PHY and MAC mechanisms introduce
 | **Guard Interval** | [`guard_interval`](guard_interval/walkthrough.md) | Short Guard Interval (400 ns) vs Long Guard Interval (800 ns), including 40 MHz HT rates of 120 and 108 Mbps (`LongGI800ns`, `ShortGI400ns`, `LongGI40MHz108Mbps`, `ShortGI40MHz120Mbps`). |
 | **MIMO & Spatial Streams** | [`mimo_spatial_streams`](mimo_spatial_streams/walkthrough.md) | Multi-antenna spatial multiplexing (1x1, 2x2, and 4x4 spatial streams) at HT MCS 1, 9, and 25 (`SingleStreamMcs1`, `DualStreamMcs9`, `QuadStreamMcs25`). |
 | **Preamble Modes** | [`preamble_modes`](preamble_modes/walkthrough.md) | HT Mixed-Mode preamble (legacy L-SIG protection) versus HT Greenfield preamble PHY headers (`HtMixedMode`, `HtGreenfield`). |
-| **Rate Adaptation** | [`rate_adaptation`](rate_adaptation/walkthrough.md) | Dynamic HT rate adaptation using `Ieee80211HtMinstrel` under node mobility and distance path loss (`FixedMcs7`, `HtMinstrelAdaptation`). |
+| **Rate Adaptation** | [`rate_adaptation`](rate_adaptation/walkthrough.md) | Dynamic HT rate adaptation using `AarfRateControl` under node mobility and distance path loss (`FixedConfig3`, `HtAarfAdaptation`). |
 
 ## Execution Instructions
 

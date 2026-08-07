@@ -78,7 +78,7 @@
       {
         "id": "rate-adaptation-delivery-comparison",
         "kind": "metric",
-        "requirement": "Compare application delivered bytes between Fixed MCS 7 and HT Minstrel dynamic adaptation",
+        "requirement": "Compare application delivered bytes between Fixed MCS 3 and HT dynamic adaptation",
         "results": ["packetReceived"],
         "evaluation": {
           "handler": "unimplemented",
@@ -163,8 +163,8 @@
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 1.9},
       "conditions": [
-        {"label": "Fixed MCS 7", "config": "FixedMcs7"},
-        {"label": "HT Minstrel Adaptation", "config": "HtMinstrelAdaptation"}
+        {"label": "Fixed MCS 3", "config": "FixedConfig3"},
+        {"label": "HT AARF Adaptation", "config": "HtAarfAdaptation"}
       ]
     }
   }

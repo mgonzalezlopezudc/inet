@@ -40,7 +40,7 @@
     "vht_rate_adaptation": {
       "scalar_vector_group": "vht_rate_adaptation",
       "ini": "vht_rate_adaptation/omnetpp.ini",
-      "configurations": ["FixedVhtMcs", "VhtMinstrelAdaptation"],
+      "configurations": ["FixedVhtMcs", "VhtAarfAdaptation"],
       "phy_profiles": ["vht"],
       "feature_plugins": ["rate-adaptation"]
     },

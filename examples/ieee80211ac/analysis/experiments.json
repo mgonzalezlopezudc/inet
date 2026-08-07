@@ -140,7 +140,7 @@
       "measurement": {"start": 0.3, "end": 1.9},
       "conditions": [
         {"label": "Fixed VHT MCS 9", "config": "FixedVhtMcs"},
-        {"label": "VHT Minstrel Adaptation", "config": "VhtMinstrelAdaptation"}
+        {"label": "VHT AARF Adaptation", "config": "VhtAarfAdaptation"}
       ]
     },
     "short_gi_vht": {

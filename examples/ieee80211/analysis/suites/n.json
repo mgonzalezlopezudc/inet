@@ -54,7 +54,7 @@
     "rate_adaptation": {
       "scalar_vector_group": "rate_adaptation",
       "ini": "rate_adaptation/omnetpp.ini",
-      "configurations": ["FixedMcs7", "HtMinstrelAdaptation"],
+      "configurations": ["FixedConfig3", "HtAarfAdaptation"],
       "phy_profiles": ["ht"],
       "feature_plugins": ["rate-adaptation"]
     }

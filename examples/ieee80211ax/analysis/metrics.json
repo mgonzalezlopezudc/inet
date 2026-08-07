@@ -1,197 +1,137 @@
 {
   "_provenance": {
-    "generated_at_utc": "2026-08-07T12:36:21.156589+00:00",
+    "generated_at_utc": "2026-08-07T20:26:17.582931+00:00",
     "groups": {
-      "mimo_spatial_streams": {
+      "rate_adaptation": {
         "conditions": [
           {
-            "configuration": "SingleStreamMcs1",
-            "group": "mimo_spatial_streams",
-            "ini": "examples/ieee80211n/mimo_spatial_streams/omnetpp.ini",
-            "label": "Single Stream (MCS 1)",
+            "configuration": "FixedConfig3",
+            "group": "rate_adaptation",
+            "ini": "examples/ieee80211n/rate_adaptation/omnetpp.ini",
+            "label": "Fixed MCS 3",
             "measurement": {
-              "end_s": 0.5,
+              "end_s": 1.9,
               "start_s": 0.3
             },
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/SingleStreamMcs1/SingleStreamMcs1-#0.sca",
-                "sha256": "e850b28b257867e1a4ce5f88dbc733ed1da6259b0b94508c414e9376039088e7"
+                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/FixedConfig3/FixedConfig3-#0.sca",
+                "sha256": "c7a46688974716f64b8ef5bfb6547fa0c58380aa82994e755d8b430d25e99c5e"
               },
               {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/SingleStreamMcs1/SingleStreamMcs1-#0.vec",
-                "sha256": "c35cd5e118814f14132d87b563df7d9556d803aa4e54aaeecd8536b4c909a897"
+                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/FixedConfig3/FixedConfig3-#0.vec",
+                "sha256": "93095ca29375a1fcc30c3b4e8a05c1e35f53a9ad89cbd6dea0641e42fea380da"
               },
               {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/SingleStreamMcs1/SingleStreamMcs1-#1.sca",
-                "sha256": "cca56f0257b904db05408786232ce919ce0f6c9c974216f3d116fe69a3a34f13"
+                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/FixedConfig3/FixedConfig3-#1.sca",
+                "sha256": "1c176b455fbfed983f3951a4daa67d03e99d0571a18ba0badeba4478bcfef93f"
               },
               {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/SingleStreamMcs1/SingleStreamMcs1-#1.vec",
-                "sha256": "0657cd13b799e122b53630fda2bbf4716216f6954c82451bae1fe391dfa71507"
+                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/FixedConfig3/FixedConfig3-#1.vec",
+                "sha256": "444abbef00944fa2051ed93dac419808ea42a4558574589eca6c5cc9cf84e8fa"
               },
               {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/SingleStreamMcs1/SingleStreamMcs1-#2.sca",
-                "sha256": "a17cdc2de23f9ef8ad7b5f7d7ce857c2dc88437043297a17cd95fe79caf0b608"
+                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/FixedConfig3/FixedConfig3-#2.sca",
+                "sha256": "d5687531ab6fd2203b6a74461cb56528d9d7bc90346f1c0d5ae0ecdb37a91bf1"
               },
               {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/SingleStreamMcs1/SingleStreamMcs1-#2.vec",
-                "sha256": "76274635569d08fa57285f4832edb2866b717e84b644fc9606da8345bfe01e09"
+                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/FixedConfig3/FixedConfig3-#2.vec",
+                "sha256": "9f1fceaf6796ad2486cbf0ab93079629cdd057022b4275c6354806a9054951fe"
               },
               {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/SingleStreamMcs1/SingleStreamMcs1-#3.sca",
-                "sha256": "384e693668c150405b4bcba386db5c14b0968a91f76146e01b42bfa8f80ad1f6"
+                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/FixedConfig3/FixedConfig3-#3.sca",
+                "sha256": "d41aee5a4be79251ce62bea4e44129945743092f820407b594f1150f4e740e40"
               },
               {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/SingleStreamMcs1/SingleStreamMcs1-#3.vec",
-                "sha256": "5784305730235472b2fb0c951e9503d27a52c1edf77a559809cadd287b79f060"
+                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/FixedConfig3/FixedConfig3-#3.vec",
+                "sha256": "7e83963d5462be5586df2612c5a9e2f4f1c9a4d4b0bcca09c98fec643b45a3a1"
               },
               {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/SingleStreamMcs1/SingleStreamMcs1-#4.sca",
-                "sha256": "ff8a4b268f18dd5e505d5789578793b9909170c1fb2ae7b8802d0aa6096e776b"
+                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/FixedConfig3/FixedConfig3-#4.sca",
+                "sha256": "292c186b0e88effd6bc932aa8ded10024241f96301365a52626742a416c065de"
               },
               {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/SingleStreamMcs1/SingleStreamMcs1-#4.vec",
-                "sha256": "b7a7a9021b29d53ba419a9b736a2c53f603089135a5fbc0fc9303a356dba121b"
+                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/FixedConfig3/FixedConfig3-#4.vec",
+                "sha256": "f03d0778861d336f7653d07ba863a90dc0a15eabf4f0cb009b69c034e24f7b86"
               }
             ]
           },
           {
-            "configuration": "DualStreamMcs9",
-            "group": "mimo_spatial_streams",
-            "ini": "examples/ieee80211n/mimo_spatial_streams/omnetpp.ini",
-            "label": "Dual Stream (MCS 9)",
+            "configuration": "HtAarfAdaptation",
+            "group": "rate_adaptation",
+            "ini": "examples/ieee80211n/rate_adaptation/omnetpp.ini",
+            "label": "HT AARF Adaptation",
             "measurement": {
-              "end_s": 0.5,
+              "end_s": 1.9,
               "start_s": 0.3
             },
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/DualStreamMcs9/DualStreamMcs9-#0.sca",
-                "sha256": "be750fe65050fd406bdc4a01f6ce2c4ef30301002399fe1a0d22d5f8de1f2094"
+                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/HtAarfAdaptation/HtAarfAdaptation-#0.sca",
+                "sha256": "3e76b5426cfe1e0e9c20af92a0ad212ddd4f897553dffe0ae4077392428c9991"
               },
               {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/DualStreamMcs9/DualStreamMcs9-#0.vec",
-                "sha256": "f45eed2fbcc1a0553ad19025d9845b841205bab775d5b02bea743ca480ef4e0e"
+                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/HtAarfAdaptation/HtAarfAdaptation-#0.vec",
+                "sha256": "6d7f31f4a11fe2d74f18262eae42376f761976878b34d5a93d91e463dd235a19"
               },
               {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/DualStreamMcs9/DualStreamMcs9-#1.sca",
-                "sha256": "f36f5397af2b936789f5a8221863e58df0b069ee86e65cf6a80c35bd16ebf2fc"
+                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/HtAarfAdaptation/HtAarfAdaptation-#1.sca",
+                "sha256": "0fdde6be83a2a10c35336e48f37f7d03b1cfc37a5b4b5ddaeff4eebe73ee582c"
               },
               {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/DualStreamMcs9/DualStreamMcs9-#1.vec",
-                "sha256": "2ace40b2b08cc118141b9a9a0f9317f56b3076156685d8f391f5cbb081a39e46"
+                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/HtAarfAdaptation/HtAarfAdaptation-#1.vec",
+                "sha256": "5a3a41c780883995759a8edac768b4ba45299ba8130a1ee2340d5802e91dccba"
               },
               {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/DualStreamMcs9/DualStreamMcs9-#2.sca",
-                "sha256": "37af9c2830b4118a6d969c805385ad2d1b9dfa3f7a906460f57c088701c09c57"
+                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/HtAarfAdaptation/HtAarfAdaptation-#2.sca",
+                "sha256": "d38cc6264e5ebdc6a3704ad6b9d16e30af03ead71c9f404189087676a861d349"
               },
               {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/DualStreamMcs9/DualStreamMcs9-#2.vec",
-                "sha256": "1d6c50a13da9142a26918d42242022af4a90ff56902838a4583c831160339f89"
+                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/HtAarfAdaptation/HtAarfAdaptation-#2.vec",
+                "sha256": "a8c82befc1ba1155eb5ad476c82e0e19a96af0d4b2eadf0b1b14a5a95e9c3595"
               },
               {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/DualStreamMcs9/DualStreamMcs9-#3.sca",
-                "sha256": "11536258aeb274764aaf7697c5eab84408a6ee2f329b4265396bd0bb46eed953"
+                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/HtAarfAdaptation/HtAarfAdaptation-#3.sca",
+                "sha256": "a74b5fa1a7e81537fae8ac27b6ce8de7d7c49e5a856b45ced1f3daa13ef352f7"
               },
               {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/DualStreamMcs9/DualStreamMcs9-#3.vec",
-                "sha256": "c479301fed3d37a96a023428b94e78afbd4a3ab1b0c735949461e16352cc77ec"
+                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/HtAarfAdaptation/HtAarfAdaptation-#3.vec",
+                "sha256": "e42b311f555759ceb651d91123060d951ad9f1221cf33ec8fb5eb396fd3aa137"
               },
               {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/DualStreamMcs9/DualStreamMcs9-#4.sca",
-                "sha256": "f555038378f46c1a6d7fde49e458f9c4ca665238fa58bbbecd6ff83235f414bd"
+                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/HtAarfAdaptation/HtAarfAdaptation-#4.sca",
+                "sha256": "c94ab2b5ebd69cc5a06aeb2b0637bd445a1d0d431c87e6d7f79e082855f5c914"
               },
               {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/DualStreamMcs9/DualStreamMcs9-#4.vec",
-                "sha256": "818f78d7ce460b5598c040550076fe4ae7704ee8b58ee573606fe2af3e1b261d"
-              }
-            ]
-          },
-          {
-            "configuration": "QuadStreamMcs25",
-            "group": "mimo_spatial_streams",
-            "ini": "examples/ieee80211n/mimo_spatial_streams/omnetpp.ini",
-            "label": "Quad Stream (MCS 25)",
-            "measurement": {
-              "end_s": 0.5,
-              "start_s": 0.3
-            },
-            "metadata": {},
-            "result_files": [
-              {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/QuadStreamMcs25/QuadStreamMcs25-#0.sca",
-                "sha256": "fd7683b032f9f08d343be6bea6d735cb6da5db1b384baa511285471f9f9a8964"
-              },
-              {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/QuadStreamMcs25/QuadStreamMcs25-#0.vec",
-                "sha256": "09eb1a0126d19632d4de33cb859d5f639704d2f0d57784bebbb3179d14a74be7"
-              },
-              {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/QuadStreamMcs25/QuadStreamMcs25-#1.sca",
-                "sha256": "e762a17de7436350d9e87ea4679493e8491d59fd7debe791da63f5d032465895"
-              },
-              {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/QuadStreamMcs25/QuadStreamMcs25-#1.vec",
-                "sha256": "b7166cbfddf78b2a539f0fc23da9ac0efca71c3d10673dcc3539836b28228fa4"
-              },
-              {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/QuadStreamMcs25/QuadStreamMcs25-#2.sca",
-                "sha256": "36767ed7089f81db6e51b844ba7881981727b3996ae0a6ba6aadddb52dfcd6ff"
-              },
-              {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/QuadStreamMcs25/QuadStreamMcs25-#2.vec",
-                "sha256": "de12b1d0ed7ae921442f0828ff385af0a8d688b57391fb377188c0882614acc8"
-              },
-              {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/QuadStreamMcs25/QuadStreamMcs25-#3.sca",
-                "sha256": "2c56584caef7933b20f27c4a66128fd7381a2dd818a0474dd0b925a4c059e3a9"
-              },
-              {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/QuadStreamMcs25/QuadStreamMcs25-#3.vec",
-                "sha256": "c035fb3ddea372fab0025fd24334d51c9c6d232af48890a4a360c32a270d0667"
-              },
-              {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/QuadStreamMcs25/QuadStreamMcs25-#4.sca",
-                "sha256": "b444f53cbbf889b5b565d73925a8477a3c1f27025d79514c94b2773a902bbd80"
-              },
-              {
-                "path": "examples/ieee80211n/mimo_spatial_streams/results/20260807T123549Z/QuadStreamMcs25/QuadStreamMcs25-#4.vec",
-                "sha256": "9d53b4436696b3d03cc27e78fcfd66992d6c4a61c17ed8d86e7acab6d14e2a7d"
+                "path": "examples/ieee80211n/rate_adaptation/results/20260807T202602Z/HtAarfAdaptation/HtAarfAdaptation-#4.vec",
+                "sha256": "d162183b0d71ff6c39a6c66515c60d63f5332e8adc74ac966cd57875af21dc3b"
               }
             ]
           }
         ],
-        "session_id": "20260807T123549Z",
+        "session_id": "20260807T202602Z",
         "status": "PASS"
       }
     },
-    "repository_revision": "a428c085615ec43f2186642fab8feb07ab81d927",
-    "requested_session_id": "20260807T123549Z",
+    "repository_revision": "73468ceae36fc31bd5f685a1c0f41596d7c93b0b",
+    "requested_session_id": "20260807T202602Z",
     "schema_version": 1
   },
-  "mimo_spatial_streams": {
-    "Dual Stream (MCS 9)": {
+  "rate_adaptation": {
+    "Fixed MCS 3": {
       "goodput_mbps": {
-        "ci95": 0.06795430929514912,
+        "ci95": 0.01665867063118662,
         "count": 5,
-        "mean": 13.4112
+        "mean": 2.754
       }
     },
-    "Quad Stream (MCS 25)": {
+    "HT AARF Adaptation": {
       "goodput_mbps": {
-        "ci95": 0.21735575662367432,
+        "ci95": 0.022810824206874494,
         "count": 5,
-        "mean": 23.3088
-      }
-    },
-    "Single Stream (MCS 1)": {
-      "goodput_mbps": {
-        "ci95": 0.07770872566601783,
-        "count": 5,
-        "mean": 5.0784
+        "mean": 4.065
       }
     }
   }
