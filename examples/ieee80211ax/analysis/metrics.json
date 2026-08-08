@@ -1,14 +1,14 @@
 {
   "_provenance": {
-    "generated_at_utc": "2026-08-08T14:46:16.108125+00:00",
+    "generated_at_utc": "2026-08-08T20:07:16.524519+00:00",
     "groups": {
-      "spatial_streams_8x8": {
+      "dl_mu_mimo_baseline": {
         "conditions": [
           {
-            "configuration": "SingleStreamVht",
-            "group": "spatial_streams_8x8",
-            "ini": "examples/ieee80211ac/spatial_streams_8x8/omnetpp.ini",
-            "label": "Single Stream (1x1)",
+            "configuration": "VhtSingleUserBaseline",
+            "group": "dl_mu_mimo_baseline",
+            "ini": "examples/ieee80211ac/dl_mu_mimo_baseline/omnetpp.ini",
+            "label": "Single-User Baseline",
             "measurement": {
               "end_s": 0.5,
               "start_s": 0.3
@@ -16,52 +16,52 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/SingleStreamVht/SingleStreamVht-#0.sca",
-                "sha256": "08f2c7813badae1a530467cba1fbc4b7e498e7a4f97c954062a37487533a619c"
+                "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260808T200701Z/VhtSingleUserBaseline/VhtSingleUserBaseline-#0.sca",
+                "sha256": "d11a1f9f998c4c24ac21eb8a78b8da3b852f6f684fbc342870f8e970a0f0c14d"
               },
               {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/SingleStreamVht/SingleStreamVht-#0.vec",
-                "sha256": "96d49d9f9fe7278fe33e202ecbd40707f42126030c5bdb6168d5f292618b923b"
+                "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260808T200701Z/VhtSingleUserBaseline/VhtSingleUserBaseline-#0.vec",
+                "sha256": "0b96a1dc921611b1c7b50132aa9c76997745491a597f55f0ec293bab6a6a2e46"
               },
               {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/SingleStreamVht/SingleStreamVht-#1.sca",
-                "sha256": "730c40d455b115a3ec238845557d4c7904137e5b4e575e493d19e1cd25863c1a"
+                "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260808T200701Z/VhtSingleUserBaseline/VhtSingleUserBaseline-#1.sca",
+                "sha256": "9c77e4c953a3d0c8689894f39c4655d45d41d0a7d795dd1886bda2b7a6a430fd"
               },
               {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/SingleStreamVht/SingleStreamVht-#1.vec",
-                "sha256": "ae5d2ef4909a5f4cb3a7694bfcd01f7fceac6b472ae0112d0370d544f797802b"
+                "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260808T200701Z/VhtSingleUserBaseline/VhtSingleUserBaseline-#1.vec",
+                "sha256": "b0b31af9d4e5b4c477489fe75d1e64adc2edd89b59a0fe4614977a68f518ac6d"
               },
               {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/SingleStreamVht/SingleStreamVht-#2.sca",
-                "sha256": "46b58ff4f22abda327d64d73608cc9a8e37f5646a7bc7eef675b755b462a01f4"
+                "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260808T200701Z/VhtSingleUserBaseline/VhtSingleUserBaseline-#2.sca",
+                "sha256": "a29b58e671807bf1ea21a24c466642f20d796c72209edd545c36f6a9bb35fd4a"
               },
               {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/SingleStreamVht/SingleStreamVht-#2.vec",
-                "sha256": "f0393957978e3fa2765de9fca013f0468a06fc220b3c51ef0258c999a7f0305c"
+                "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260808T200701Z/VhtSingleUserBaseline/VhtSingleUserBaseline-#2.vec",
+                "sha256": "391a11ca878aa9fe1d09b2a4f36c18634978f755ef4647280db122a7407bc71d"
               },
               {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/SingleStreamVht/SingleStreamVht-#3.sca",
-                "sha256": "c1b2268f593f4b5fcd1afa06d35dad18da6ef8fe5650e5ebac02f49aa19c4ccb"
+                "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260808T200701Z/VhtSingleUserBaseline/VhtSingleUserBaseline-#3.sca",
+                "sha256": "675d60e58ec6638cc914c4900edeaadf6bc8505c5b774920fb164d5f2e1331a5"
               },
               {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/SingleStreamVht/SingleStreamVht-#3.vec",
-                "sha256": "7341c1ac4ee6bd496e14277c0e8024f21c507f6053e9907aa080ee76461cb734"
+                "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260808T200701Z/VhtSingleUserBaseline/VhtSingleUserBaseline-#3.vec",
+                "sha256": "244379c373f490eef23cc3b6ad14e8c70d6f3f880d1dfa6e8595dd8146152005"
               },
               {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/SingleStreamVht/SingleStreamVht-#4.sca",
-                "sha256": "ce501fe9df8e00b80230d4651f36180b4aff368c637f691ea57b73eede24f4e5"
+                "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260808T200701Z/VhtSingleUserBaseline/VhtSingleUserBaseline-#4.sca",
+                "sha256": "c78ee98809de8a0142f2c5a5864608c746efa2207b9150efb9df127ffe776532"
               },
               {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/SingleStreamVht/SingleStreamVht-#4.vec",
-                "sha256": "762178c048b12f6fc5576b019f882bd761579b9869e15e764adbc4a7814dcc44"
+                "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260808T200701Z/VhtSingleUserBaseline/VhtSingleUserBaseline-#4.vec",
+                "sha256": "6c84f94c7b138835ac189a90c7806fc7c8acc601223f39d1a1b5a797427d45b7"
               }
             ]
           },
           {
-            "configuration": "FourStreamVht",
-            "group": "spatial_streams_8x8",
-            "ini": "examples/ieee80211ac/spatial_streams_8x8/omnetpp.ini",
-            "label": "Four Streams (4x4)",
+            "configuration": "VhtDlMuMimoTwoUsers",
+            "group": "dl_mu_mimo_baseline",
+            "ini": "examples/ieee80211ac/dl_mu_mimo_baseline/omnetpp.ini",
+            "label": "DL MU-MIMO Two Users",
             "measurement": {
               "end_s": 0.5,
               "start_s": 0.3
@@ -69,129 +69,69 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/FourStreamVht/FourStreamVht-#0.sca",
-                "sha256": "957744de1938aa006a5238e9659c5d7203e37b6d55b3e1149d41627bfcb26b55"
+                "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260808T200701Z/VhtDlMuMimoTwoUsers/VhtDlMuMimoTwoUsers-#0.sca",
+                "sha256": "b7d78bb1689bfd54501bb844381f47288588c1971eecb6809d0d87ccc38a7e5a"
               },
               {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/FourStreamVht/FourStreamVht-#0.vec",
-                "sha256": "88b1604ad49a4afacc84863a402272314ff9bdd5e301a615b73f95f93cb0d164"
+                "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260808T200701Z/VhtDlMuMimoTwoUsers/VhtDlMuMimoTwoUsers-#0.vec",
+                "sha256": "6cf4c770834a13371569d2ad8a69f9cda2488ab880614c01835b17c432fda4d5"
               },
               {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/FourStreamVht/FourStreamVht-#1.sca",
-                "sha256": "53287b0a55c1055f1bd08656ab5e93e3c9151cccabff4853178bda0eb7a5aced"
+                "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260808T200701Z/VhtDlMuMimoTwoUsers/VhtDlMuMimoTwoUsers-#1.sca",
+                "sha256": "45786150808b64ddd17feda11d99fdd6a9502eeed8d985ad0767e6e767b1d195"
               },
               {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/FourStreamVht/FourStreamVht-#1.vec",
-                "sha256": "86375f3a841dd0125e898cdf35b5453156591e1d8c81902029dae46570ca5a58"
+                "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260808T200701Z/VhtDlMuMimoTwoUsers/VhtDlMuMimoTwoUsers-#1.vec",
+                "sha256": "38be5f41596a4a5b09ab1dbe2c1c7f3b93684a9e9a4edd64dc0223bb8d1cefb4"
               },
               {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/FourStreamVht/FourStreamVht-#2.sca",
-                "sha256": "fabd4cfb3d83347a52f2ed9b7ad1c76fb36d36a328cbf31e85d8e545920d4d22"
+                "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260808T200701Z/VhtDlMuMimoTwoUsers/VhtDlMuMimoTwoUsers-#2.sca",
+                "sha256": "82c2ad58d093bf0b2dfbc358b5cb2ba0282705f389ab2f076e7d9105e848b132"
               },
               {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/FourStreamVht/FourStreamVht-#2.vec",
-                "sha256": "b38eea67deae0853db93cf86227c1e69512915a6e9a00a8f76a23a0d54637ae5"
+                "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260808T200701Z/VhtDlMuMimoTwoUsers/VhtDlMuMimoTwoUsers-#2.vec",
+                "sha256": "0a8224aa50f3e04e069c37045e25c0a70c5276ae73d33653ef7d5717b5bcfd2e"
               },
               {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/FourStreamVht/FourStreamVht-#3.sca",
-                "sha256": "d345f3979384fb25e6b8c19506c565fc908bd7ce1c64117aada4c34a5c11e40d"
+                "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260808T200701Z/VhtDlMuMimoTwoUsers/VhtDlMuMimoTwoUsers-#3.sca",
+                "sha256": "b05f1a9af6215015fdaa2971ce3a60cf2cf72887352724171c9413bdc5b21d8d"
               },
               {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/FourStreamVht/FourStreamVht-#3.vec",
-                "sha256": "34a151c89f116c506692dd0250cf497efff08d825a9b5de3f919426bff9bf6d3"
+                "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260808T200701Z/VhtDlMuMimoTwoUsers/VhtDlMuMimoTwoUsers-#3.vec",
+                "sha256": "1dd42546506c0fc0d1b5e9c34d339d1b58080a48f1e785d2f2699c0452f312c4"
               },
               {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/FourStreamVht/FourStreamVht-#4.sca",
-                "sha256": "f04fe325c700150ff5096b910167c806f054036b58878b4d8c3f55b35317ff40"
+                "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260808T200701Z/VhtDlMuMimoTwoUsers/VhtDlMuMimoTwoUsers-#4.sca",
+                "sha256": "0c7a0076b49efbb7f6e3d43dfeff3781dc5d5a28b5fe7a2c11624f8b9bc15096"
               },
               {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/FourStreamVht/FourStreamVht-#4.vec",
-                "sha256": "e36aa8460caae74972d90f3c73a43308dadfbc4f0bd8ec38bf878a5a19ffb2ae"
-              }
-            ]
-          },
-          {
-            "configuration": "EightStreamVht",
-            "group": "spatial_streams_8x8",
-            "ini": "examples/ieee80211ac/spatial_streams_8x8/omnetpp.ini",
-            "label": "Eight Streams (8x8)",
-            "measurement": {
-              "end_s": 0.5,
-              "start_s": 0.3
-            },
-            "metadata": {},
-            "result_files": [
-              {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/EightStreamVht/EightStreamVht-#0.sca",
-                "sha256": "78d1221757fb692f4a011428dbd6c45f8a332b349fa997851980f3021ad6498d"
-              },
-              {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/EightStreamVht/EightStreamVht-#0.vec",
-                "sha256": "2d7762a4550cab092b43ba666f8b2c88df6050de8329f0b932bc6dff10e4052b"
-              },
-              {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/EightStreamVht/EightStreamVht-#1.sca",
-                "sha256": "f9ed7053b76f48ce86297a4a9a5599992393e714fa27994ce8d82ed1ae0906ff"
-              },
-              {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/EightStreamVht/EightStreamVht-#1.vec",
-                "sha256": "73bf185ecb98a336aa09158ff524e5c96df591af090775c3a25b95c009335b5e"
-              },
-              {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/EightStreamVht/EightStreamVht-#2.sca",
-                "sha256": "f8fcfa525b458cb84333bda263b3300ad73687f57a4f45c945adddc2feef7c84"
-              },
-              {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/EightStreamVht/EightStreamVht-#2.vec",
-                "sha256": "4b8ce3d7db8d26e89987e445775a2e39916be1f87c4d879bdc73e1896b17678b"
-              },
-              {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/EightStreamVht/EightStreamVht-#3.sca",
-                "sha256": "6faed91ab7b074bcb711b88a596510aa4644be4d0ab16433c51de928e7ee4c44"
-              },
-              {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/EightStreamVht/EightStreamVht-#3.vec",
-                "sha256": "45098c0d6219c98d169b227e3b1c4426adb19c86c4b884e6a56d71ce7392ac9f"
-              },
-              {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/EightStreamVht/EightStreamVht-#4.sca",
-                "sha256": "66fa1d91a6e485990a9b1d8a6966075404d2d7aee41163914db639e143cb6927"
-              },
-              {
-                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/EightStreamVht/EightStreamVht-#4.vec",
-                "sha256": "73b0528aa04b55cc96f6012057bd8aa23d01e4d61e686f96e87b1fb69f8105c8"
+                "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260808T200701Z/VhtDlMuMimoTwoUsers/VhtDlMuMimoTwoUsers-#4.vec",
+                "sha256": "e544f376bb788130c574712e76110f2b34839e384b28c136d231625d54a4054a"
               }
             ]
           }
         ],
-        "session_id": "20260808T144537Z",
+        "session_id": "20260808T200701Z",
         "status": "PASS"
       }
     },
-    "repository_revision": "2734d0ad808dc7ba363336e2682c823289a823d0",
-    "requested_session_id": "20260808T144537Z",
+    "repository_revision": "c60f531b9044eab22f0ae08bca72fbb3ca6c2184",
+    "requested_session_id": "20260808T200701Z",
     "schema_version": 1
   },
-  "spatial_streams_8x8": {
-    "Eight Streams (8x8)": {
+  "dl_mu_mimo_baseline": {
+    "DL MU-MIMO Two Users": {
       "goodput_mbps": {
-        "ci95": 12.920025246731308,
+        "ci95": 0.0666346825247466,
         "count": 5,
-        "mean": 406.6832
+        "mean": 8.264000000000001
       }
     },
-    "Four Streams (4x4)": {
+    "Single-User Baseline": {
       "goodput_mbps": {
-        "ci95": 11.198620947582567,
+        "ci95": 0.0,
         "count": 5,
-        "mean": 373.52
-      }
-    },
-    "Single Stream (1x1)": {
-      "goodput_mbps": {
-        "ci95": 4.604808526708711,
-        "count": 5,
-        "mean": 226.8672
+        "mean": 8.4
       }
     }
   }

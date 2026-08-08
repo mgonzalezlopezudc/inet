@@ -73,6 +73,20 @@ enum RadiotapFlags {
     RADIOTAP_F_BADFCS = 0x40,
 };
 
+enum RadiotapVhtKnown {
+    RADIOTAP_VHT_STBC_KNOWN = 1U << 0,
+    RADIOTAP_VHT_TXOP_PS_NOT_ALLOWED_KNOWN = 1U << 1,
+    RADIOTAP_VHT_GI_KNOWN = 1U << 2,
+    RADIOTAP_VHT_SGI_NSYM_DISAMBIG_KNOWN = 1U << 3,
+    RADIOTAP_VHT_LDPC_EXTRA_OFDM_SYM_KNOWN = 1U << 4,
+    RADIOTAP_VHT_BEAMFORMED_KNOWN = 1U << 5,
+    RADIOTAP_VHT_BANDWIDTH_KNOWN = 1U << 6,
+};
+
+enum RadiotapVhtFlags {
+    RADIOTAP_VHT_BEAMFORMED = 1U << 5,
+};
+
 enum RadiotapChannelFlags {
     RADIOTAP_CHANNEL_2GHZ = 0x0080,
     RADIOTAP_CHANNEL_5GHZ = 0x0100,
@@ -147,6 +161,20 @@ int getRadiotapHeRuAllocation(int toneSize)
         case 1992: return 10;
         default: return -1;
     }
+}
+
+uint8_t getRadiotapVhtBandwidth(Hz bandwidth)
+{
+    auto value = bandwidth.get();
+    if (value < 30e6)
+        return 0;
+    if (value < 60e6)
+        return 1;
+    if (value < 100e6)
+        return 4;
+    if (value < 180e6)
+        return 11;
+    throw cRuntimeError("Unsupported VHT radiotap channel width: %g Hz", value);
 }
 
 #endif
@@ -356,6 +384,7 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, b frontOffset, b b
     const physicallayer::Ieee80211HeMode *heMode = nullptr;
     const physicallayer::Ieee80211EhtMode *ehtMode = nullptr;
     const physicallayer::Ieee80211VhtMode *vhtMode = nullptr;
+    const physicallayer::Ieee80211VhtTxVector *vhtTxVector = nullptr;
     const physicallayer::Ieee80211HtMode *htMode = nullptr;
 
 #ifdef INET_WITH_IEEE80211
@@ -367,9 +396,16 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, b frontOffset, b b
     }
     else {
         const physicallayer::IIeee80211Mode *mode = nullptr;
+        auto vhtTxVectorReq = packet->findTag<physicallayer::Ieee80211VhtTxVectorReq>();
+        if (vhtTxVectorReq != nullptr && vhtTxVectorReq->getTxVector() != nullptr)
+            vhtTxVector = vhtTxVectorReq->getTxVector().get();
         auto ieee80211Transmission = dynamic_cast<const physicallayer::Ieee80211Transmission *>(transmission);
-        if (ieee80211Transmission != nullptr)
+        if (ieee80211Transmission != nullptr) {
             mode = ieee80211Transmission->getMode();
+            auto txVector = ieee80211Transmission->getVhtTxVector();
+            if (txVector != nullptr)
+                vhtTxVector = txVector.get();
+        }
         else {
             auto modeReq = packet->findTag<physicallayer::Ieee80211ModeReq>();
             if (modeReq != nullptr)
@@ -461,10 +497,10 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, b frontOffset, b b
                         isVht = true;
                         auto vhtDm = dynamic_cast<const physicallayer::Ieee80211VhtDataMode *>(dm);
                         if (vhtDm != nullptr) {
-                            vhtKnown = 0x0001 | 0x0004 | 0x0040; // STBC, GI, BW known
+                            vhtKnown = RADIOTAP_VHT_STBC_KNOWN | RADIOTAP_VHT_GI_KNOWN |
+                                    RADIOTAP_VHT_BANDWIDTH_KNOWN;
                             vhtFlags = (vhtDm->getGuardIntervalType() == physicallayer::Ieee80211VhtModeBase::HT_GUARD_INTERVAL_SHORT ? 0x04 : 0);
-                            double bw = vhtDm->getBandwidth().get();
-                            vhtBandwidth = (bw < 30e6 ? 0 : bw < 60e6 ? 1 : bw < 100e6 ? 4 : 11);
+                            vhtBandwidth = getRadiotapVhtBandwidth(vhtDm->getBandwidth());
                             auto mcs = vhtDm->getModulationAndCodingScheme()->getMcsIndex();
                             auto nss = vhtDm->getNumberOfSpatialStreams();
                             vhtMcsNss[0] = (mcs << 4) | nss;
@@ -485,6 +521,30 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, b frontOffset, b b
                             }
                         }
                     }
+                }
+            }
+        }
+
+        // The packet-level VHT TXVECTOR is authoritative for MU user
+        // signaling. The mode describes only the common PHY mode, while the
+        // VHT radiotap field has one MCS/NSS byte and one coding bit per user.
+        if (vhtTxVector != nullptr) {
+            isVht = true;
+            vhtBandwidth = getRadiotapVhtBandwidth(vhtTxVector->getChannelWidth());
+            vhtGroupId = vhtTxVector->getGroupId();
+            vhtPartialAid = vhtTxVector->getPartialAid();
+            if (vhtTxVector->isMu()) {
+                vhtKnown |= RADIOTAP_VHT_BEAMFORMED_KNOWN;
+                if (vhtTxVector->isBeamformed())
+                    vhtFlags |= RADIOTAP_VHT_BEAMFORMED;
+                for (const auto& user : vhtTxVector->getUsers()) {
+                    if (user.userPosition >= 4)
+                        throw cRuntimeError("VHT MU user position cannot be represented by radiotap");
+                    if (user.mcs > 9 || user.numberOfSpatialStreams == 0 || user.numberOfSpatialStreams > 8)
+                        throw cRuntimeError("Invalid VHT MU user MCS/NSS for radiotap");
+                    vhtMcsNss[user.userPosition] = (user.mcs << 4) | user.numberOfSpatialStreams;
+                    if (user.ldpcCoding)
+                        vhtCoding |= 1U << user.userPosition;
                 }
             }
         }

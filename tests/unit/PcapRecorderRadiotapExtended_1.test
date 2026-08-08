@@ -12,6 +12,7 @@ Test that PcapRecorder dynamically sizes the Radiotap present bitmap and populat
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211VhtTxVector.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
@@ -286,6 +287,55 @@ auto printRecord = [this](int idx, const std::vector<uint8_t>& rec) {
     REQUIRE(record[13] == 0);
     REQUIRE(record[14] == 1);
     REQUIRE(record[18] == 0);
+}
+
+// Test 3b: VHT MU Packet. The VHT radiotap field carries one MCS/NSS byte
+// and one coding bit for each multiplexed user, together with Group ID.
+{
+    writer->records.clear();
+    Packet packet("vht-mu-packet");
+    packet.insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{1, 2, 3, 4}));
+    auto modeReq = packet.addTag<Ieee80211ModeReq>();
+    auto vhtMode = Ieee80211VhtCompliantModes::getCompliantMode(&Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss1, Ieee80211VhtMode::BAND_5GHZ, Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG);
+    modeReq->setMode(vhtMode);
+
+    Ieee80211VhtMuUser firstUser;
+    firstUser.associationId = 1;
+    firstUser.userPosition = 0;
+    firstUser.mcs = 3;
+    firstUser.psduLength = B(4);
+    firstUser.duration = SimTime(80, SIMTIME_US);
+    firstUser.beamformingGainDb = 3;
+    firstUser.leakagePenaltyDb = 1;
+    Ieee80211VhtMuUser secondUser;
+    secondUser.associationId = 2;
+    secondUser.userPosition = 1;
+    secondUser.mcs = 5;
+    secondUser.ldpcCoding = true;
+    secondUser.psduLength = B(4);
+    secondUser.duration = SimTime(80, SIMTIME_US);
+    secondUser.beamformingGainDb = 3;
+    secondUser.leakagePenaltyDb = 1;
+    auto txVector = Ieee80211VhtTxVector::createMu(MHz(20), 1,
+            {firstUser, secondUser}, SimTime(40, SIMTIME_US));
+    packet.addTag<Ieee80211VhtTxVectorReq>()->setTxVector(txVector);
+
+    recorder->writeIeee80211(&packet);
+
+    REQUIRE(writer->records.size() == 1);
+    const auto& record = writer->records[0];
+    printRecord(4, record);
+    REQUIRE(record.size() == 22 + 4);
+    REQUIRE(readUint16(record, 2) == 22);
+    REQUIRE(readUint16(record, 10) == 0x0065); // STBC, GI, beamformed, BW known
+    REQUIRE(record[12] == 0x20); // beamformed
+    REQUIRE(record[13] == 0); // 20 MHz
+    REQUIRE(record[14] == 0x31); // user 0: MCS 3, NSS 1
+    REQUIRE(record[15] == 0x51); // user 1: MCS 5, NSS 1
+    REQUIRE(record[16] == 0 && record[17] == 0);
+    REQUIRE(record[18] == 0x02); // user 1 uses LDPC
+    REQUIRE(record[19] == 1); // Group ID
+    REQUIRE(readUint16(record, 20) == 0); // Partial AID is not used by MU
 }
 
 // Test 4: A-MPDU Packet

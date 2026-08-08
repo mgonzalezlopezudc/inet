@@ -121,6 +121,7 @@ subtypes_mgmt = {
 
 subtypes_ctrl = {
     2: "Trigger",
+    5: "NDP Announcement (NDPA)",
     7: "Control Wrapper",
     8: "Block Ack Request (BAR)",
     9: "Block Ack (BA)",
@@ -325,6 +326,8 @@ def get_packet_type_name(fc_type, fc_subtype, fc_version=None, is_he_mu=False, s
         return "A-MPDU Delimiter / Aggregation Overhead" + suffix
     if fc_type == "HE TB feedback NDP":
         return "Control: HE TB feedback NDP" + suffix
+    if fc_type in ("NDP Sounding", "VHT Sounding NDP", "HE Sounding NDP", "EHT Sounding NDP", "VHT NDP Sounding"):
+        return f"Control: {fc_type}" + suffix
 
     # Handle multiple values (e.g. from reassembled frames)
     version_str = fc_version.split(',')[0] if fc_version else ""
@@ -343,6 +346,9 @@ def get_packet_type_name(fc_type, fc_subtype, fc_version=None, is_he_mu=False, s
         t = int(type_str, 0)
         st = int(subtype_str, 0)
     except (ValueError, TypeError):
+        if is_sounding or (standard and standard not in ("Legacy", "Legacy/HT/VHT")):
+            ndp_name = f"{standard} Sounding NDP" if standard and standard not in ("Legacy", "Legacy/HT/VHT") else "NDP Sounding"
+            return f"Control: {ndp_name}" + suffix
         return "Other/Malformed" + suffix
 
     if t == 0:
@@ -1212,8 +1218,10 @@ def timeline_filter_for_subdir(subdir):
     data_and_responses = (
         "(wlan.fc.type == 2) || "
         "(wlan.fc.type == 1 && "
-        "(wlan.fc.subtype == 2 || wlan.fc.subtype == 8 || "
-        "wlan.fc.subtype == 9 || wlan.fc.subtype == 13))"
+        "(wlan.fc.subtype == 2 || wlan.fc.subtype == 5 || wlan.fc.subtype == 8 || "
+        "wlan.fc.subtype == 9 || wlan.fc.subtype == 13)) || "
+        "(wlan.fc.type == 0 && (wlan.fc.subtype == 13 || wlan.fc.subtype == 14)) || "
+        "not (wlan.fc.type == 0 or wlan.fc.type == 1 or wlan.fc.type == 2 or wlan.fc.type == 3)"
     )
     if subdir == "twt":
         return (
@@ -1225,7 +1233,8 @@ def timeline_filter_for_subdir(subdir):
     if subdir in {
         "dl_ofdma_sched", "dl_ofdma_asym", "ul_ofdma", "dl_ul_ofdma", "dl_mu_mimo", "ul_mu_mimo",
         "ndp_feedback", "bsr", "multi_user/mu_mimo", "multi_user/ndp_feedback", "he_bsr",
-    }:
+        "dl_mu_mimo_baseline",
+    } or "mu_mimo" in subdir or "ndp" in subdir:
         return data_and_responses
     if subdir in {"dynamic_frag", "mac_features/dynamic_fragmentation"}:
         return (
@@ -1257,7 +1266,7 @@ def select_representative_timeline(rows, subdir, limit=TIMELINE_LIMIT):
         identities.add(identity)
         unique_rows.append(row)
 
-    if subdir in {"dl_mu_mimo", "multi_user/mu_mimo"}:
+    if subdir in {"dl_mu_mimo", "multi_user/mu_mimo", "dl_mu_mimo_baseline"} or "mu_mimo" in subdir:
         part1 = [row for row in unique_rows if row["simulation_time_s"] <= 0.304]
         part2 = [row for row in unique_rows if row["simulation_time_s"] >= 0.5][:20]
         return part1 + part2
@@ -1284,6 +1293,10 @@ def extract_frame_timeline(pcap_files, subdir, limit=TIMELINE_LIMIT):
         "radiotap.eht.user_info.coding", "radiotap.eht.user_info.nss",
         "wlan.ba.control", "wlan.fixed.ssc.sequence", "wlan.ba.bm",
         "wlan.fixed.category_code", "wlan.fixed.action_code",
+        "radiotap.present.vht", "radiotap.vht.bw",
+        "radiotap.vht.mcs.0", "radiotap.vht.nss.0",
+        "radiotap.vht.gi", "radiotap.vht.coding.0",
+        "wlan.vht.action", "wlan.he.action", "wlan.eht.action",
     ]
     rows = []
     display_filter = timeline_filter_for_subdir(subdir)
@@ -1325,6 +1338,9 @@ def extract_frame_timeline(pcap_files, subdir, limit=TIMELINE_LIMIT):
                 eht_mcs, eht_coding, eht_nss, ba_control, ba_starting_sequence, \
                 ba_bitmap = values[24:35]
             category_code, action_code = values[35:37]
+            vht_present, vht_bw_val, vht_mcs_val, vht_nss_val, vht_gi_val, vht_coding_val, \
+                vht_act, he_act, eht_act = values[37:46]
+            action_code = action_code or vht_act or he_act or eht_act
             if not frame_number or not timestamp:
                 continue
             present_eht = False
@@ -1367,9 +1383,20 @@ def extract_frame_timeline(pcap_files, subdir, limit=TIMELINE_LIMIT):
                 standard, mcs, bw_ru, gi, nss, coding = decode_he_fields(
                     he_format, he_mcs, he_coding, he_bw_ru, he_gi, he_nsts
                 )
+            elif vht_present in ("1", "True"):
+                standard = "VHT"
+                if vht_bw_val == "0": bw_ru = "20 MHz"
+                elif vht_bw_val == "1": bw_ru = "40 MHz"
+                elif vht_bw_val == "4": bw_ru = "80 MHz"
+                elif vht_bw_val == "11": bw_ru = "160 MHz"
+                else: bw_ru = "20 MHz"
+                mcs = f"VHT-MCS {vht_mcs_val}" if vht_mcs_val else "VHT-MCS 0"
+                nss = vht_nss_val or "1"
+                gi = "0.4 us" if vht_gi_val == "1" else "0.8 us"
+                coding = "LDPC" if vht_coding_val == "1" else "BCC"
             else:
                 standard, mcs, bw_ru, gi, nss, coding = (
-                    "Legacy/HT/VHT", "", "", "", "", ""
+                    "Legacy/HT", "", "", "", "", ""
                 )
             direction = {
                 (False, False): "direct/IBSS",
@@ -1377,6 +1404,7 @@ def extract_frame_timeline(pcap_files, subdir, limit=TIMELINE_LIMIT):
                 (False, True): "from DS",
                 (True, True): "WDS",
             }[(to_ds in ("1", "True"), from_ds in ("1", "True"))]
+            is_sounding = (not frame_type or frame_type == "") and (not subtype or subtype == "") and not sequence and not tid
             rows.append({
                 "capture": str(Path(path).relative_to(REPOSITORY_ROOT)),
                 "frame_number": int(frame_number),
@@ -1393,6 +1421,9 @@ def extract_frame_timeline(pcap_files, subdir, limit=TIMELINE_LIMIT):
                 "action_code": action_code or None,
                 "frame_name": get_packet_type_name(
                     frame_type, subtype,
+                    is_sounding=is_sounding,
+                    standard=standard if standard not in ("Legacy", "Legacy/HT") else None,
+                    mcs=mcs, bw=bw_ru, gi=gi, nss=nss, coding=coding,
                     category_code=category_code, action_code=action_code
                 ),
                 "retry": retry in ("1", "True"),
@@ -1609,6 +1640,295 @@ def trigger_allocations_markdown(triggers, limit=100):
     return "".join(lines)
 
 
+def extract_ndp_announcement_records(pcap_files):
+    """Extract and decode Control: Subtype 5 (NDP Announcement / NDPA) frames."""
+    fields = [
+        "frame.number",
+        "frame.time_epoch",
+        "wlan.ta",
+        "wlan.ra",
+        "wlan.ndp.token.number",
+        "wlan.vht.mimo_control.sounding_dialog_token_nbr",
+        "wlan.he.mimo.sounding_dialog_token_num",
+        "wlan.ndp.token.variant",
+        "wlan.vht_ndp.sta_info.aid12",
+        "wlan.vht_ndp.sta_info.feedback_type",
+        "wlan.vht_ndp.sta_info.nc_index",
+        "wlan.he_ndp.sta_info.aid11",
+        "wlan.he_ndp.sta_info.feedback_type_and_ng",
+        "wlan.he_ndp.sta_info.nc",
+        "wlan.ndp_eht.sta_info.aid11",
+        "wlan.ndp_eht.sta_info.nc_index",
+    ]
+    records = []
+    for path in pcap_files:
+        command = [
+            "tshark", "-n", "-r", str(path),
+            "-Y", "wlan.fc.type == 1 && wlan.fc.subtype == 5",
+            "-T", "fields", "-E", "occurrence=a", "-E", "aggregator=,",
+        ]
+        for field in fields:
+            command.extend(["-e", field])
+        proc = subprocess.run(
+            command, cwd=str(REPOSITORY_ROOT), check=False,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        if proc.returncode != 0:
+            detail = proc.stderr.strip() or "no decoder diagnostic"
+            raise RuntimeError(
+                f"TShark NDP Announcement decode failed for {path}: "
+                f"exit {proc.returncode}: {detail}"
+            )
+        for line in proc.stdout.splitlines():
+            values = line.split("\t")
+            values += [""] * (len(fields) - len(values))
+            frame_number = parse_tshark_int(values[0].strip())
+            timestamp = values[1].strip()
+            ta = values[2].strip() or None
+            ra = values[3].strip() or None
+            if frame_number is None or not timestamp:
+                continue
+
+            token_num = (
+                parse_tshark_int(values[4].split(",")[0].strip())
+                if values[4].strip() else None
+            )
+            if token_num is None and values[5].strip():
+                token_num = parse_tshark_int(values[5].split(",")[0].strip())
+            if token_num is None and values[6].strip():
+                token_num = parse_tshark_int(values[6].split(",")[0].strip())
+
+            variant_val = parse_tshark_int(values[7].split(",")[0].strip()) if values[7].strip() else None
+            variant_str = "VHT"
+            if variant_val == 1:
+                variant_str = "HE/Ranging"
+            elif variant_val == 2:
+                variant_str = "EHT"
+            elif values[11].strip():
+                variant_str = "HE"
+            elif values[14].strip():
+                variant_str = "EHT"
+
+            vht_aids = [parse_tshark_int(x) for x in values[8].split(",") if x.strip() and parse_tshark_int(x) is not None]
+            vht_fb_types = [x.strip() for x in values[9].split(",") if x.strip()]
+            vht_ncs = [parse_tshark_int(x) for x in values[10].split(",") if x.strip() and parse_tshark_int(x) is not None]
+
+            he_aids = [parse_tshark_int(x) for x in values[11].split(",") if x.strip() and parse_tshark_int(x) is not None]
+            he_fb_types = [x.strip() for x in values[12].split(",") if x.strip()]
+            he_ncs = [parse_tshark_int(x) for x in values[13].split(",") if x.strip() and parse_tshark_int(x) is not None]
+
+            eht_aids = [parse_tshark_int(x) for x in values[14].split(",") if x.strip() and parse_tshark_int(x) is not None]
+            eht_ncs = [parse_tshark_int(x) for x in values[15].split(",") if x.strip() and parse_tshark_int(x) is not None]
+
+            stations = []
+            if vht_aids:
+                for idx, aid in enumerate(vht_aids):
+                    fb = vht_fb_types[idx] if idx < len(vht_fb_types) else ""
+                    fb_desc = "MU" if fb in ("1", "True", "0x01") else "SU"
+                    nc = (vht_ncs[idx] + 1) if idx < len(vht_ncs) else 1
+                    stations.append({"aid": aid, "feedback_type": fb_desc, "nc": nc})
+            elif he_aids:
+                for idx, aid in enumerate(he_aids):
+                    fb = he_fb_types[idx] if idx < len(he_fb_types) else ""
+                    fb_desc = "MU" if "MU" in fb.upper() or fb in ("1", "True") else "SU"
+                    nc = (he_ncs[idx] + 1) if idx < len(he_ncs) else 1
+                    stations.append({"aid": aid, "feedback_type": fb_desc, "nc": nc})
+            elif eht_aids:
+                for idx, aid in enumerate(eht_aids):
+                    nc = (eht_ncs[idx] + 1) if idx < len(eht_ncs) else 1
+                    stations.append({"aid": aid, "feedback_type": "SU/MU", "nc": nc})
+
+            records.append({
+                "capture": str(Path(path).resolve().relative_to(REPOSITORY_ROOT.resolve())),
+                "frame_number": frame_number,
+                "simulation_time": timestamp,
+                "simulation_time_s": float(timestamp),
+                "transmitter": ta,
+                "receiver": ra,
+                "dialog_token": token_num,
+                "variant": variant_str,
+                "stations": stations,
+            })
+    return records
+
+
+def ndp_announcement_records_markdown(records, limit=100):
+    if not records:
+        return "No Control: Subtype 5 (NDP Announcement) frames were decoded.\n\n"
+    lines = [
+        "| Frame | Simulation time (s) | Transmitter | Receiver | Dialog token | Variant | Target STAs (AID, Feedback, Nc) |\n",
+        "|---:|---:|---|---|---:|---|---|\n",
+    ]
+    for rec in records[:limit]:
+        if rec["stations"]:
+            stas_str = "; ".join(
+                f"AID={sta['aid']}, Feedback={sta['feedback_type']}, Nc={sta['nc']}"
+                for sta in rec["stations"]
+            )
+        else:
+            stas_str = "RA target"
+        lines.append(
+            f"| {rec['frame_number']} | {rec['simulation_time']} | "
+            f"{rec['transmitter'] or '-'} | {rec['receiver'] or '-'} | "
+            f"{rec['dialog_token'] if rec['dialog_token'] is not None else '-'} | "
+            f"{rec['variant']} | {stas_str} |\n"
+        )
+    if len(records) > limit:
+        lines.append(
+            f"\nShowing the first {limit} of {len(records)} decoded NDP Announcement frames; "
+            "the script-owned packet metrics JSON preserves every row.\n\n"
+        )
+    else:
+        lines.append("\n")
+    return "".join(lines)
+
+
+def extract_ndp_records(pcap_files):
+    """Extract and decode NDP (Null Data Packet) sounding and feedback frames."""
+    fields = [
+        "frame.number",
+        "frame.time_epoch",
+        "wlan.ta",
+        "wlan.ra",
+        "wlan.sa",
+        "wlan.da",
+        "radiotap.present.vht",
+        "radiotap.vht.bw",
+        "radiotap.vht.mcs.0",
+        "radiotap.vht.nss.0",
+        "radiotap.vht.gi",
+        "radiotap.vht.coding.0",
+        "radiotap.present.he",
+        "radiotap.he.data_1.ppdu_format",
+        "radiotap.he.data_3.data_mcs",
+        "radiotap.he.data_3.coding",
+        "radiotap.he.data_5.data_bw_ru_allocation",
+        "radiotap.he.data_5.gi",
+        "radiotap.he.data_6.nsts",
+        "radiotap.present.word",
+        "radiotap.eht.known",
+        "wlan.fc.type",
+        "wlan.fc.subtype",
+    ]
+    records = []
+    for path in pcap_files:
+        command = [
+            "tshark", "-n", "-r", str(path),
+            "-Y", "not (wlan.fc.type == 0 or wlan.fc.type == 1 or wlan.fc.type == 2 or wlan.fc.type == 3)",
+            "-T", "fields",
+        ]
+        for field in fields:
+            command.extend(["-e", field])
+        proc = subprocess.run(
+            command, cwd=str(REPOSITORY_ROOT), check=False,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        if proc.returncode != 0:
+            detail = proc.stderr.strip() or "no decoder diagnostic"
+            raise RuntimeError(
+                f"TShark NDP decode failed for {path}: exit {proc.returncode}: {detail}"
+            )
+        for line in proc.stdout.splitlines():
+            values = line.split("\t")
+            values += [""] * (len(fields) - len(values))
+            frame_number = parse_tshark_int(values[0].strip())
+            timestamp = values[1].strip()
+            ta = values[2].strip() or values[4].strip() or None
+            ra = values[3].strip() or values[5].strip() or None
+
+            vht_present = values[6].strip() in ("1", "True")
+            he_present = values[12].strip() in ("1", "True")
+            present_words = values[19].strip()
+            eht_known = values[20].strip()
+
+            if frame_number is None or not timestamp:
+                continue
+
+            is_eht = False
+            try:
+                words = [int(w, 0) for w in present_words.split(",") if w.strip()]
+                is_eht = bool(eht_known) or (len(words) > 1 and bool(words[1] & 0x4))
+            except ValueError:
+                pass
+
+            if is_eht:
+                standard = "EHT"
+                variant = "EHT Sounding NDP"
+                mcs, bw_ru, gi, nss, coding = "", "20 MHz", "0.8 us", "1", "BCC"
+            elif he_present:
+                standard = "HE"
+                he_format = values[13].strip()
+                if he_format == "3" or "TB" in he_format:
+                    variant = "HE TB Feedback NDP"
+                else:
+                    variant = "HE Sounding NDP"
+                _, mcs, bw_ru, gi, nss, coding = decode_he_fields(
+                    values[13].strip(), values[14].strip(), values[15].strip(),
+                    values[16].strip(), values[17].strip(), values[18].strip()
+                )
+            elif vht_present:
+                standard = "VHT"
+                variant = "VHT Sounding NDP"
+                vht_bw = values[7].strip()
+                if vht_bw == "0": bw_ru = "20 MHz"
+                elif vht_bw == "1": bw_ru = "40 MHz"
+                elif vht_bw == "4": bw_ru = "80 MHz"
+                elif vht_bw == "11": bw_ru = "160 MHz"
+                else: bw_ru = "20 MHz"
+
+                vht_mcs = values[8].strip()
+                mcs = f"VHT-MCS {vht_mcs}" if vht_mcs else "VHT-MCS 0"
+                nss = values[9].strip() or "1"
+                vht_gi = values[10].strip()
+                gi = "0.4 us" if vht_gi == "1" else "0.8 us"
+                vht_coding = values[11].strip()
+                coding = "LDPC" if vht_coding == "1" else "BCC"
+            else:
+                standard = "Legacy/HT"
+                variant = "NDP Sounding"
+                mcs, bw_ru, gi, nss, coding = "", "20 MHz", "0.8 us", "1", "BCC"
+
+            records.append({
+                "capture": str(Path(path).resolve().relative_to(REPOSITORY_ROOT.resolve())),
+                "frame_number": frame_number,
+                "simulation_time": timestamp,
+                "simulation_time_s": float(timestamp),
+                "transmitter": ta,
+                "receiver": ra,
+                "variant": variant,
+                "standard": standard,
+                "bandwidth_or_ru": bw_ru or "20 MHz",
+                "nss": nss or "1",
+                "guard_interval": gi or "0.8 us",
+                "coding": coding or "BCC",
+            })
+    return records
+
+
+def ndp_records_markdown(records, limit=100):
+    if not records:
+        return "No NDP (Null Data Packet) frames were decoded.\n\n"
+    lines = [
+        "| Frame | Simulation time (s) | Transmitter | Receiver | NDP Variant | Standard | Bandwidth / RU | Spatial Streams (Nss) | Guard Interval | Coding |\n",
+        "|---:|---:|---|---|---|---|---|---:|---|---| \n",
+    ]
+    for rec in records[:limit]:
+        lines.append(
+            f"| {rec['frame_number']} | {rec['simulation_time']} | "
+            f"{rec['transmitter'] or '-'} | {rec['receiver'] or '-'} | "
+            f"{rec['variant']} | {rec['standard']} | {rec['bandwidth_or_ru']} | "
+            f"{rec['nss']} | {rec['guard_interval']} | {rec['coding']} |\n"
+        )
+    if len(records) > limit:
+        lines.append(
+            f"\nShowing the first {limit} of {len(records)} decoded NDP frames; "
+            "the script-owned packet metrics JSON preserves every row.\n\n"
+        )
+    else:
+        lines.append("\n")
+    return "".join(lines)
+
+
 def multi_sta_block_ack_records_markdown(records, limit=25):
     if not records:
         return "No Multi-STA Block Ack BA Type 11 records were decoded.\n\n"
@@ -1727,6 +2047,11 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
         "frame.number",                        # 43
         "radiotap.he.data_1.bss_color_known", # 44
         "radiotap.he.data_3.bss_color",       # 45
+        "wlan.fixed.category_code",           # 46
+        "wlan.fixed.action_code",             # 47
+        "wlan.vht.action",                    # 48
+        "wlan.he.action",                     # 49
+        "wlan.eht.action",                    # 50
     ]
 
     def get_field_val(parts, idx):
@@ -1765,7 +2090,13 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                     continue
 
                 fc_version = get_field_val(parts, 0)
-                is_wlan_present = fc_version in ["0", "1", "2"]
+                is_wlan_present = (
+                    fc_version in ["0", "1", "2"] or
+                    get_field_val(parts, 5) != "" or
+                    get_field_val(parts, 17) in ("True", "1") or
+                    get_field_val(parts, 23) in ("True", "1") or
+                    get_field_val(parts, 30) in ("True", "1")
+                )
 
                 if not is_wlan_present:
                     fc_version = ""
@@ -1786,6 +2117,8 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                     gi = "0.8 us"
                     nss = "1"
                     coding = ""
+                    category_code = ""
+                    action_code = ""
                 else:
                     fc_type = get_field_val(parts, 1)
                     fc_subtype = get_field_val(parts, 2)
@@ -1802,6 +2135,13 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                     is_sounding = get_field_val(parts, 30) in ("True", "1")
                     is_ampdu = get_field_val(parts, 14) in ("True", "1")
                     ampdu_reference = get_field_val(parts, 15)
+                    category_code = get_field_val(parts, 46)
+                    action_code = (
+                        get_field_val(parts, 47) or
+                        get_field_val(parts, 48) or
+                        get_field_val(parts, 49) or
+                        get_field_val(parts, 50)
+                    )
 
                     eht_known = get_field_val(parts, 36)
                     is_eht = bool(eht_known)
@@ -1909,15 +2249,21 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                 except (ValueError, TypeError):
                     v = 0
 
-                if (not fc_type or fc_type == "") and (not fc_subtype or fc_subtype == ""):
+                if is_sounding or (fc_type == "1" and fc_subtype == "0") or ((not fc_type or fc_type == "") and (not fc_subtype or fc_subtype == "")):
                     if config_name in ["NdpFeedbackReport", "FeedbackUnderInterference"]:
                         key = ("HE TB feedback NDP", "", standard, mcs, bw, gi, nss, coding, is_ampdu, True, bss_color)
+                    elif is_sounding or standard in ("VHT", "HE", "EHT"):
+                        ndp_name = f"{standard} Sounding NDP" if standard and standard != "Legacy" else "NDP Sounding"
+                        key = (ndp_name, "", standard, mcs, bw, gi, nss, coding, is_ampdu, True, bss_color)
                     else:
                         key = ("Aggregation Overhead", "", standard, mcs, bw, gi, nss, coding, is_ampdu, is_sounding, bss_color)
                 elif v > 0:
                     key = ("Aggregation Overhead", "", standard, mcs, bw, gi, nss, coding, is_ampdu, is_sounding, bss_color)
                 else:
-                    key = (fc_type, fc_subtype, standard, mcs, bw, gi, nss, coding, is_ampdu, is_sounding, bss_color)
+                    if fc_type == "0" and fc_subtype in ("13", "14"):
+                        key = (fc_type, fc_subtype, standard, mcs, bw, gi, nss, coding, is_ampdu, is_sounding, bss_color, category_code, action_code)
+                    else:
+                        key = (fc_type, fc_subtype, standard, mcs, bw, gi, nss, coding, is_ampdu, is_sounding, bss_color)
 
                 if key not in stats:
                     stats[key] = {
@@ -2181,6 +2527,12 @@ def analyze_subdirectory(subdir, considered, config_pcaps):
                 "he_trigger_allocations": extract_he_trigger_allocations(
                     target_pcaps
                 ),
+                "ndp_announcement_records": extract_ndp_announcement_records(
+                    target_pcaps
+                ),
+                "ndp_records": extract_ndp_records(
+                    target_pcaps
+                ),
                 "multi_sta_block_ack_records": (
                     extract_multi_sta_block_ack_records(target_pcaps)
                     if subdir in ("ul_multitid", "mac_features/multi_tid_block_ack")
@@ -2270,6 +2622,11 @@ ORDERED_BASE_TYPES = [
     "Data: QoS Null",
     # Control
     "Control: Trigger",
+    "Control: NDP Announcement (NDPA)",
+    "Control: VHT Sounding NDP",
+    "Control: HE Sounding NDP",
+    "Control: EHT Sounding NDP",
+    "Control: NDP Sounding",
     "Control: PS-Poll",
     "Control: HE TB feedback NDP",
     "Control: Block Ack Request",
@@ -2323,7 +2680,9 @@ def get_packet_color(pt):
         h, s, l = 225, 85, 35
     elif base == "Control: Trigger":  # Trigger (Orange)
         h, s, l = 35, 95, 50
-    elif base == "Control: HE TB feedback NDP":  # Gold/Yellow
+    elif base in ("Control: NDP Announcement (NDPA)", "Control: NDP Announcement"):  # Sounding NDPA (Gold/Yellow)
+        h, s, l = 45, 90, 52
+    elif base in ("Control: HE TB feedback NDP", "Control: VHT Sounding NDP", "Control: HE Sounding NDP", "Control: EHT Sounding NDP", "Control: NDP Sounding", "VHT Sounding NDP", "HE Sounding NDP", "NDP Sounding"):  # Gold/Yellow
         h, s, l = 50, 95, 48
     elif base == "Control: PS-Poll":  # Light Blue/Steel Blue
         h, s, l = 195, 75, 65
@@ -2781,10 +3140,16 @@ def validate_evidence_checks(checks, subdir):
 
 def timeline_role(frame):
     name = frame["frame_name"]
+    if "NDP Announcement" in name or "NDPA" in name:
+        return "Announces an upcoming Null Data Packet (NDP) for channel sounding/feedback."
+    if "NDP Sounding" in name or "feedback NDP" in name or name.endswith("NDP"):
+        return "Transmits zero-length Null Data Packet (NDP) for PHY channel sounding or feedback."
     if "Trigger" in name:
         return "Coordinates the following HE multi-user response."
     if "ADDBA" in name or "DELBA" in name:
         return "Establishes or tears down a Block Ack agreement prior to block transmission."
+    if "Beamforming" in name or "Action" in name:
+        return "Carries management action parameters or beamforming feedback matrix / CSI report."
     if "Block Ack" in name:
         return "Acknowledges a preceding aggregate or scheduled transmission."
     if name.endswith("Ack"):
@@ -2804,7 +3169,7 @@ def format_type_phy(frame):
     if frame.get("frame_type") is not None and frame.get("frame_subtype") is not None:
         return get_packet_type_name(
             frame["frame_type"], frame["frame_subtype"],
-            standard=standard if standard not in ("Legacy", "Legacy/HT/VHT") else None,
+            standard=standard if standard not in ("Legacy", "Legacy/HT/VHT", "Legacy/HT") else None,
             mcs=phy.get("mcs"), bw=phy.get("bandwidth_or_ru"),
             gi=phy.get("guard_interval"), nss=phy.get("nss"), coding=phy.get("coding"),
             is_ampdu=frame.get("ampdu", False),
@@ -2812,6 +3177,8 @@ def format_type_phy(frame):
             action_code=frame.get("action_code"),
         )
     name = frame.get("frame_name", "")
+    if "NDP" in name or "Sounding" in name or name.startswith("Control:"):
+        return name
     if name.startswith("Data: "):
         name = name[6:]
     if "[" in name or not standard or standard in ("Legacy", "Legacy/HT/VHT"):
@@ -3000,6 +3367,20 @@ def generate_markdown_tables(
             )
             md.append(trigger_allocations_markdown(
                 global_res["he_trigger_allocations"]
+            ))
+        if global_res.get("ndp_announcement_records"):
+            md.append(
+                "#### [script] Decoded Control: Subtype 5 (NDP Announcement) records\n\n"
+            )
+            md.append(ndp_announcement_records_markdown(
+                global_res["ndp_announcement_records"]
+            ))
+        if global_res.get("ndp_records"):
+            md.append(
+                "#### [script] Decoded NDP (Null Data Packet) records\n\n"
+            )
+            md.append(ndp_records_markdown(
+                global_res["ndp_records"]
             ))
 
         if "mpdu_observations" in res:

@@ -46,6 +46,10 @@ from analyze_pcap import (
     extract_frame_timeline,
     extract_compressed_block_ack_records,
     extract_he_trigger_allocations,
+    extract_ndp_announcement_records,
+    ndp_announcement_records_markdown,
+    extract_ndp_records,
+    ndp_records_markdown,
     get_config_pcap_stats,
     generate_markdown_tables,
     is_generated_analysis_artifact,
@@ -124,6 +128,71 @@ class ManagementActionNameTest(unittest.TestCase):
             analyze_pcap.get_packet_type_name("0", "14", category_code="3", action_code="0"),
             "Management: Action No Ack: Block Ack: ADDBA Req",
         )
+        self.assertEqual(
+            analyze_pcap.get_packet_type_name("1", "5"),
+            "Control: NDP Announcement (NDPA)",
+        )
+        self.assertEqual(
+            analyze_pcap.timeline_role({"frame_name": "Control: NDP Announcement (NDPA)"}),
+            "Announces an upcoming Null Data Packet (NDP) for channel sounding/feedback.",
+        )
+
+
+class ControlSubtype5DecodeTest(unittest.TestCase):
+
+    def test_extract_ndp_announcement_records(self):
+        result = SimpleNamespace(
+            returncode=0,
+            stdout=(
+                "5\t0.200704000\t10:00:00:00:00:00\t0a:aa:00:00:00:01\t"
+                "0x01\t0x00\t0x00\t0x00\t0x0001\tFalse\t0\t\t\t\t\t\n"
+            ),
+            stderr="",
+        )
+        with patch("analyze_pcap.subprocess.run", return_value=result):
+            rows = extract_ndp_announcement_records([
+                analyze_pcap.REPOSITORY_ROOT / "capture.pcapng"
+            ])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["frame_number"], 5)
+        self.assertEqual(rows[0]["dialog_token"], 1)
+        self.assertEqual(rows[0]["variant"], "VHT")
+        self.assertEqual(len(rows[0]["stations"]), 1)
+        self.assertEqual(rows[0]["stations"][0]["aid"], 1)
+        self.assertEqual(rows[0]["stations"][0]["feedback_type"], "SU")
+        self.assertEqual(rows[0]["stations"][0]["nc"], 1)
+
+        markdown = ndp_announcement_records_markdown(rows)
+        self.assertIn("| 5 | 0.200704000 | 10:00:00:00:00:00 | 0a:aa:00:00:00:01 | 1 | VHT | AID=1, Feedback=SU, Nc=1 |", markdown)
+
+
+class NDPFrameDecodeTest(unittest.TestCase):
+
+    def test_extract_ndp_records(self):
+        result = SimpleNamespace(
+            returncode=0,
+            stdout=(
+                "6\t0.200764000\t10:00:00:00:00:00\t0a:aa:00:00:00:01\t"
+                "10:00:00:00:00:00\t0a:aa:00:00:00:01\tTrue\t0\t0\t2\t0\t0\t"
+                "False\t\t\t\t\t\t\t\t\t\t\n"
+            ),
+            stderr="",
+        )
+        with patch("analyze_pcap.subprocess.run", return_value=result):
+            rows = extract_ndp_records([
+                analyze_pcap.REPOSITORY_ROOT / "capture.pcapng"
+            ])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["frame_number"], 6)
+        self.assertEqual(rows[0]["variant"], "VHT Sounding NDP")
+        self.assertEqual(rows[0]["standard"], "VHT")
+        self.assertEqual(rows[0]["bandwidth_or_ru"], "20 MHz")
+        self.assertEqual(rows[0]["nss"], "2")
+        self.assertEqual(rows[0]["guard_interval"], "0.8 us")
+        self.assertEqual(rows[0]["coding"], "BCC")
+
+        markdown = ndp_records_markdown(rows)
+        self.assertIn("| 6 | 0.200764000 | 10:00:00:00:00:00 | 0a:aa:00:00:00:01 | VHT Sounding NDP | VHT | 20 MHz | 2 | 0.8 us | BCC |", markdown)
 
 
 class TriggerAllocationDecodeTest(unittest.TestCase):
