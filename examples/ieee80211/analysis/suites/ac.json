@@ -20,7 +20,7 @@
     "vht_mcs_256qam": {
       "scalar_vector_group": "vht_mcs_256qam",
       "ini": "vht_mcs_256qam/omnetpp.ini",
-      "configurations": ["BaselineHtMcs7", "VhtMcs7", "VhtMcs8_256QAM", "VhtMcs9_256QAM"],
+      "configurations": ["BaselineHtMcs7", "VhtMcs7", "VhtMcs8_256QAM", "VhtMcs9_256QAM", "VhtMcs8_256QAM_80Mhz"],
       "phy_profiles": ["vht"],
       "feature_plugins": ["modulation"]
     },

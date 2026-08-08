@@ -109,7 +109,8 @@
         {"label": "HT MCS 7 Baseline", "config": "BaselineHtMcs7"},
         {"label": "VHT MCS 7", "config": "VhtMcs7"},
         {"label": "VHT MCS 8 (256-QAM)", "config": "VhtMcs8_256QAM"},
-        {"label": "VHT MCS 9 (256-QAM)", "config": "VhtMcs9_256QAM"}
+        {"label": "VHT MCS 9 (256-QAM)", "config": "VhtMcs9_256QAM"},
+        {"label": "VHT MCS 8 (256-QAM, 80 MHz)", "config": "VhtMcs8_256QAM_80Mhz"}
       ]
     },
     "extended_ampdu": {

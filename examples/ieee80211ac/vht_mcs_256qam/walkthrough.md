@@ -23,12 +23,13 @@ After completing this walkthrough, the reader can:
 
 The topology uses [`SingleBssNetwork`](../../ieee80211/common/SingleBssNetwork.ned). UDP data is transmitted from `server` to `host[0]`.
 
-Four configurations are evaluated:
+Five configurations are evaluated:
 
 1. `BaselineHtMcs7`: 802.11n HT MCS 7 baseline (64-QAM 5/6, 65 Mbps).
 2. `VhtMcs7`: 802.11ac VHT MCS 7 (64-QAM 5/6, 78 Mbps in 20 MHz due to 52 subcarriers).
-3. `VhtMcs8_256QAM`: 802.11ac VHT MCS 8 (256-QAM 3/4, 86.7 Mbps in 20 MHz).
-4. `VhtMcs9_256QAM`: 802.11ac VHT MCS 9 (256-QAM 5/6, 96.3 Mbps in 20 MHz).
+3. `VhtMcs8_256QAM`: 802.11ac VHT MCS 8 rate in 40 MHz channel (256-QAM 3/4, 162 Mbps).
+4. `VhtMcs9_256QAM`: 802.11ac VHT MCS 9 rate 256-QAM in 40 MHz channel (256-QAM 5/6, 200 Mbps).
+5. `VhtMcs8_256QAM_80Mhz`: 802.11ac VHT MCS 8 rate in 80 MHz channel (256-QAM 3/4, 351 Mbps).
 
 ## [agent] Standards and INET model boundary
 

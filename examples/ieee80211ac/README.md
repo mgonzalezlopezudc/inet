@@ -7,7 +7,7 @@ These examples demonstrate Very High Throughput (VHT) PHY and MAC mechanisms int
 | Area | Feature Directory | Main Mechanisms & Configurations |
 | :--- | :--- | :--- |
 | **Wide Channels** | [`wide_channels`](wide_channels/walkthrough.md) | Contiguous channel bonding across 20, 40, 80, and 160 MHz operating channels in the 5 GHz band (`Vht20MHz`, `Vht40MHz`, `Vht80MHz`, `Vht160MHz`). |
-| **VHT MCS & 256-QAM** | [`vht_mcs_256qam`](vht_mcs_256qam/walkthrough.md) | High-order 256-QAM modulation schemes (VHT MCS 8 and MCS 9) achieving peak PHY bitrates (`BaselineHtMcs7`, `VhtMcs7`, `VhtMcs8_256QAM`, `VhtMcs9_256QAM`). |
+| **VHT MCS & 256-QAM** | [`vht_mcs_256qam`](vht_mcs_256qam/walkthrough.md) | High-order 256-QAM modulation schemes (VHT MCS 8 and MCS 9) achieving peak PHY bitrates (`BaselineHtMcs7`, `VhtMcs7`, `VhtMcs8_256QAM`, `VhtMcs9_256QAM`, `VhtMcs8_256QAM_80Mhz`). |
 | **Extended A-MPDU** | [`extended_ampdu`](extended_ampdu/walkthrough.md) | VHT maximum A-MPDU frame length scaling (up to 1,048,575 bytes) under high-throughput traffic flows (`StandardHtAmpduLimit`, `ExtendedVhtAmpduLimit`). |
 | **8x8 Spatial Streams** | [`spatial_streams_8x8`](spatial_streams_8x8/walkthrough.md) | Multi-antenna spatial multiplexing extended up to 8 spatial streams (`SingleStreamVht`, `FourStreamVht`, `EightStreamVht`). |
 | **VHT Rate Adaptation** | [`vht_rate_adaptation`](vht_rate_adaptation/walkthrough.md) | Dynamic VHT rate control using `AarfRateControl` under mobile channel conditions (`FixedVhtMcs`, `VhtAarfAdaptation`). |

@@ -1,0 +1,218 @@
+{
+  "analysis_script_sha256": "de0e6d0f228cd4c25e4c3565712e359e6b3945b8acf5c7c18c5d28756cc810bc",
+  "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
+  "capture_source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "entries": [
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 731310,
+            "duration_seconds": 0.455834,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.656054,
+            "file_size_bytes": 774284,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 960,
+            "snapshot_length": null,
+            "start_seconds": 0.20022,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T110121Z/BaselineHtMcs7/BaselineHtMcs7-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "b4dce9d7138920bf2b4a3801091baf0867478f21209d34bb186d1fff7e352c58",
+          "size_bytes": 774284
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "BaselineHtMcs7",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ac/vht_mcs_256qam/omnetpp.ini",
+      "ini_sha256": "0336ab2f68d9f9c08f9ffa4e98e97cbd3e5ada48d0ee93c6611f0aa058e4a9d7",
+      "run_number": 0,
+      "scalar": {
+        "configname": "BaselineHtMcs7",
+        "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T110121Z/BaselineHtMcs7/BaselineHtMcs7-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "d9fb5402f92f6d893cfbeed64010408a4aa8ec01c5ec86c891589894c059a0fd"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "vht_mcs_256qam"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 1359956,
+            "duration_seconds": 0.360378,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.560458,
+            "file_size_bytes": 1438428,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1774,
+            "snapshot_length": null,
+            "start_seconds": 0.20008,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T110121Z/VhtMcs7/VhtMcs7-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "9ec2c5924867cef77a71235c657ed6f72aa8d422e6fd9ab658f6bf0d77cd13c2",
+          "size_bytes": 1438428
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "VhtMcs7",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ac/vht_mcs_256qam/omnetpp.ini",
+      "ini_sha256": "0336ab2f68d9f9c08f9ffa4e98e97cbd3e5ada48d0ee93c6611f0aa058e4a9d7",
+      "run_number": 0,
+      "scalar": {
+        "configname": "VhtMcs7",
+        "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T110121Z/VhtMcs7/VhtMcs7-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "70b510e721a3e3423447c1e41bee28b870687ee3dfbae7c393386bf1ba82b994"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "vht_mcs_256qam"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 1398276,
+            "duration_seconds": 0.362955,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.563031,
+            "file_size_bytes": 1478956,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1824,
+            "snapshot_length": null,
+            "start_seconds": 0.200076,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T110121Z/VhtMcs8_256QAM/VhtMcs8_256QAM-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "943c0c5fc3401a49b622644d06a44fac27ef318d4a776662c01decd775050c9e",
+          "size_bytes": 1478956
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "VhtMcs8_256QAM",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ac/vht_mcs_256qam/omnetpp.ini",
+      "ini_sha256": "0336ab2f68d9f9c08f9ffa4e98e97cbd3e5ada48d0ee93c6611f0aa058e4a9d7",
+      "run_number": 0,
+      "scalar": {
+        "configname": "VhtMcs8_256QAM",
+        "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T110121Z/VhtMcs8_256QAM/VhtMcs8_256QAM-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "fe0a61595e2e902874b6a64c3a978f94c744ef82e9404edbc7e04acccdbd0982"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "vht_mcs_256qam"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 1393542,
+            "duration_seconds": 0.355206,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.555278,
+            "file_size_bytes": 1473948,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1818,
+            "snapshot_length": null,
+            "start_seconds": 0.200072,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T110121Z/VhtMcs9_256QAM/VhtMcs9_256QAM-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "fa238a13d405dc87279a844d926e030856a330b02f5c07a6a3163c288a67c4c8",
+          "size_bytes": 1473948
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "VhtMcs9_256QAM",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ac/vht_mcs_256qam/omnetpp.ini",
+      "ini_sha256": "0336ab2f68d9f9c08f9ffa4e98e97cbd3e5ada48d0ee93c6611f0aa058e4a9d7",
+      "run_number": 0,
+      "scalar": {
+        "configname": "VhtMcs9_256QAM",
+        "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T110121Z/VhtMcs9_256QAM/VhtMcs9_256QAM-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "6e90b54f54b63aa4ebc6fda887da23bbb396da00fae8f1c63d5e6a61ec4cc645"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "vht_mcs_256qam"
+    }
+  ],
+  "generated_at_utc": "2026-08-08T11:01:33.939659+00:00",
+  "inet_library": "out/clang-release/src/libINET.so",
+  "inet_library_sha256": "93f56481c53a3badfa9d96631aa6c9b5290a28e71e7b17ca02e936074b4767e3",
+  "repository_revision": "382d69e0a9eaa2be11f6457d00e54c6ce5bcbc69",
+  "session_id": "20260808T110121Z",
+  "suite": "ac",
+  "suite_descriptor": {
+    "path": "examples/ieee80211/analysis/suites/ac.json",
+    "sha256": "0ba9e6efd6d891ecbc635e03e9239c7a3c8ca1e7a160a808ee5f503a18d0261a"
+  },
+  "tshark_version": "TShark (Wireshark) 4.6.4."
+}

@@ -1,14 +1,14 @@
 {
   "_provenance": {
-    "generated_at_utc": "2026-08-08T10:22:17.361142+00:00",
+    "generated_at_utc": "2026-08-08T12:07:25.478735+00:00",
     "groups": {
-      "short_gi_vht": {
+      "vht_mcs_256qam": {
         "conditions": [
           {
-            "configuration": "VhtLongGI",
-            "group": "short_gi_vht",
-            "ini": "examples/ieee80211ac/short_gi_vht/omnetpp.ini",
-            "label": "VHT Long GI (800 ns)",
+            "configuration": "BaselineHtMcs7",
+            "group": "vht_mcs_256qam",
+            "ini": "examples/ieee80211ac/vht_mcs_256qam/omnetpp.ini",
+            "label": "HT MCS 7 Baseline",
             "measurement": {
               "end_s": 0.5,
               "start_s": 0.3
@@ -16,52 +16,52 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260808T101729Z/VhtLongGI/VhtLongGI-#0.sca",
-                "sha256": "792cf7e437db71bd42c2d0fedc7f1a83ce369df8f697ecf7349c82e4f8ff3d9d"
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/BaselineHtMcs7/BaselineHtMcs7-#0.sca",
+                "sha256": "da4442a8ff4d9ef099a92382b747bbdd4c5d5721382bb0e636cdabafde125c0d"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260808T101729Z/VhtLongGI/VhtLongGI-#0.vec",
-                "sha256": "5746d9f828839dbb178b06b9e96695ade0606e3f5c19cecd897543b8de763f19"
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/BaselineHtMcs7/BaselineHtMcs7-#0.vec",
+                "sha256": "9bd7fce9fbbdd2d1635d2a493654b105a25b9622c3f7804ee251b39d87c0314a"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260808T101729Z/VhtLongGI/VhtLongGI-#1.sca",
-                "sha256": "558901435c547730e740c697b314e7d6ace8e7fe398a833da0ceeb291799cdac"
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/BaselineHtMcs7/BaselineHtMcs7-#1.sca",
+                "sha256": "9636af9ac9068b3fdac586983b63c28fd37f736ff048e9d929f176521c542a1e"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260808T101729Z/VhtLongGI/VhtLongGI-#1.vec",
-                "sha256": "93f08f115392edecc5c44ceb0016a81d9297cbe8f7985c916e20db0470183ae8"
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/BaselineHtMcs7/BaselineHtMcs7-#1.vec",
+                "sha256": "4a1b12cf096f0f479846c0492261c2e00de0bb3740d831c035180a4aa59fd6b7"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260808T101729Z/VhtLongGI/VhtLongGI-#2.sca",
-                "sha256": "9314a00db7d2b23c62b8eda39aa28bccd48d26f58e9fb0e5575289b680372322"
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/BaselineHtMcs7/BaselineHtMcs7-#2.sca",
+                "sha256": "c7f0edadb83b5c48ff50baf7f8f9e6aa456855945103344f6be011ec9d9283e9"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260808T101729Z/VhtLongGI/VhtLongGI-#2.vec",
-                "sha256": "08f7bcec959cf9aaa593e86b40532ae2d26a9beb40595bf71f2411bce6d29869"
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/BaselineHtMcs7/BaselineHtMcs7-#2.vec",
+                "sha256": "aeafa1593f7b0057c9c4a18723a8fffcdd82d90298284354456135a0d041934e"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260808T101729Z/VhtLongGI/VhtLongGI-#3.sca",
-                "sha256": "e3a3f4eba09491076fbd42b57759024da5dce66a217cfda5c134c48b360bdbfb"
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/BaselineHtMcs7/BaselineHtMcs7-#3.sca",
+                "sha256": "7641bde0738eb74496110f95657ffdb0f79ab6586323264b4a02b13569b7c256"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260808T101729Z/VhtLongGI/VhtLongGI-#3.vec",
-                "sha256": "0231c413f0ed67a97f3f26855cdde5d6b9217bc2191bfe62a6b3f25ff0b4f3f3"
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/BaselineHtMcs7/BaselineHtMcs7-#3.vec",
+                "sha256": "6b86d2108a4342e10c624bdfce8167c2a303300b75aac6e887948dd932db5f29"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260808T101729Z/VhtLongGI/VhtLongGI-#4.sca",
-                "sha256": "6e4345bb41df91164dc67adaf7c96e1bd9fa49dbe7140a1ce367f180b9c94dad"
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/BaselineHtMcs7/BaselineHtMcs7-#4.sca",
+                "sha256": "f343dde09383045484c36b1d84b716e4b307205f8262ab2e1b639f26933d4302"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260808T101729Z/VhtLongGI/VhtLongGI-#4.vec",
-                "sha256": "eea351810eb89f2d6964bb655a951e104b210019504dec602e6aed9672d4c245"
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/BaselineHtMcs7/BaselineHtMcs7-#4.vec",
+                "sha256": "9800425e1d527fe2688ac36393ef482b847ac83893a1a3d3a520411045cbc716"
               }
             ]
           },
           {
-            "configuration": "VhtShortGI",
-            "group": "short_gi_vht",
-            "ini": "examples/ieee80211ac/short_gi_vht/omnetpp.ini",
-            "label": "VHT Short GI (400 ns)",
+            "configuration": "VhtMcs7",
+            "group": "vht_mcs_256qam",
+            "ini": "examples/ieee80211ac/vht_mcs_256qam/omnetpp.ini",
+            "label": "VHT MCS 7",
             "measurement": {
               "end_s": 0.5,
               "start_s": 0.3
@@ -69,69 +69,249 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260808T101729Z/VhtShortGI/VhtShortGI-#0.sca",
-                "sha256": "92c2ca59f966b80fbe472f516c2b0d9525824326898bb1f77e9feb0513f6ef56"
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs7/VhtMcs7-#0.sca",
+                "sha256": "09507981fccc523d0fcb42494a67cabd8b48b977668ec47875d8bb1b106c7ccc"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260808T101729Z/VhtShortGI/VhtShortGI-#0.vec",
-                "sha256": "21f413217cad7cedafa73fa64c8f66494d1020211a33e522b4ad454449b750f3"
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs7/VhtMcs7-#0.vec",
+                "sha256": "a4458878472398668b2fbc731a60e802a7670b972a223a1e98499ff73023fd9c"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260808T101729Z/VhtShortGI/VhtShortGI-#1.sca",
-                "sha256": "89777218c2c266c1f1f6362f8a349aedced93875f906b7ce7be0663706868bc3"
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs7/VhtMcs7-#1.sca",
+                "sha256": "44fb79b92d7048ca1013e9809e14c27d3decfe257b29d5b5aabb239c006ff929"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260808T101729Z/VhtShortGI/VhtShortGI-#1.vec",
-                "sha256": "b21e3dec1aac6b6f01542b47a14a1c1bbc8ea8dc6d44bc5f2f0d8951e46d9c5b"
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs7/VhtMcs7-#1.vec",
+                "sha256": "5c6f2c2522ae4978bc0012fc5af25bd6ce86b1f5e03cc1b105680fd4ee84ec92"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260808T101729Z/VhtShortGI/VhtShortGI-#2.sca",
-                "sha256": "b3b146fef9120ffa30f6b11d2bbad2c2ed1f5999168dd03da85e091b16d6b145"
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs7/VhtMcs7-#2.sca",
+                "sha256": "89ef717498077e2e74fc8719d0bb576505f804224ef9d4074d3fc2254cb7f6b9"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260808T101729Z/VhtShortGI/VhtShortGI-#2.vec",
-                "sha256": "ece873cae5b0c6a31775fc6106f754e92daa7edeb86b7e5646aacbe3207dbae6"
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs7/VhtMcs7-#2.vec",
+                "sha256": "b344e5aa7cf92e6a912f829dfe5f58aca5cb4200a4cc15435f55d630a89e3401"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260808T101729Z/VhtShortGI/VhtShortGI-#3.sca",
-                "sha256": "2258ff69855393e28134360123563179fa53e8aca4aff80bb91639f17d5a301e"
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs7/VhtMcs7-#3.sca",
+                "sha256": "3b4dc8f40f9c2e5eb387817103ed89ff0ca479b4171b0c56b682e94e6c6e9f88"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260808T101729Z/VhtShortGI/VhtShortGI-#3.vec",
-                "sha256": "5c22847846199be9da317347f1ef137e4521ff05e8f72c273c2a429334fd8505"
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs7/VhtMcs7-#3.vec",
+                "sha256": "f6a878a48f92829511476d5d317c02a26cac4a1fea594b72c7f0a87ae614c14c"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260808T101729Z/VhtShortGI/VhtShortGI-#4.sca",
-                "sha256": "d44c37fdb48d30881517989ea28920df3adf525ec49eecb2acf72ed39dcd4d80"
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs7/VhtMcs7-#4.sca",
+                "sha256": "4cd3dff614f6330236d920899308f8aae6f70292e3aea20807d16ed82902ae3f"
               },
               {
-                "path": "examples/ieee80211ac/short_gi_vht/results/20260808T101729Z/VhtShortGI/VhtShortGI-#4.vec",
-                "sha256": "a40b6fa2ba4fec734a1d5d8be740c7130248132ff35bae3b5ccbf1148aa94d75"
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs7/VhtMcs7-#4.vec",
+                "sha256": "7cea8cc085c1429b53545e2d964019bda4918d4ae5d6ff0339b30de13a80e760"
+              }
+            ]
+          },
+          {
+            "configuration": "VhtMcs8_256QAM",
+            "group": "vht_mcs_256qam",
+            "ini": "examples/ieee80211ac/vht_mcs_256qam/omnetpp.ini",
+            "label": "VHT MCS 8 (256-QAM)",
+            "measurement": {
+              "end_s": 0.5,
+              "start_s": 0.3
+            },
+            "metadata": {},
+            "result_files": [
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM/VhtMcs8_256QAM-#0.sca",
+                "sha256": "1a703b75a1621d3d34131c49e85a97e03737f82fd2236c00640d7dfe08986545"
+              },
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM/VhtMcs8_256QAM-#0.vec",
+                "sha256": "7312032b2fcdf581888378bbce3488c1029ac3217474ddb114ef70dca5d31c9b"
+              },
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM/VhtMcs8_256QAM-#1.sca",
+                "sha256": "a2e62f261cd24ee80ceb4579b34995f78ad970bd105900a8b46d9440e06dbdbd"
+              },
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM/VhtMcs8_256QAM-#1.vec",
+                "sha256": "896aff602d8467161c3d88b300371ed68ffff862d1dd867722c875b1bebc0daa"
+              },
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM/VhtMcs8_256QAM-#2.sca",
+                "sha256": "dfd4e2349789ad5682dd9ac2b7d870e60fb426ea21031acb7a789f3a5691320f"
+              },
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM/VhtMcs8_256QAM-#2.vec",
+                "sha256": "3fdbf4f36426e679b3d07f554ab5dc8adc51c2b2bde29e2c9aaadbfc67a72d80"
+              },
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM/VhtMcs8_256QAM-#3.sca",
+                "sha256": "70dc282d1ae6d24055b209ccea5ba7e7f6f678d709e0b009b89c8d9626fd9797"
+              },
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM/VhtMcs8_256QAM-#3.vec",
+                "sha256": "b4e1e7e2fe0600b7f5cc35250b68d45fb4407f0039cb3f3113ec1aeb56cd32cc"
+              },
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM/VhtMcs8_256QAM-#4.sca",
+                "sha256": "ebcb48c6de0318c7b23d32d0b9c10f050aa7478223703c2cce2d52a54dddae9d"
+              },
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM/VhtMcs8_256QAM-#4.vec",
+                "sha256": "2bf49772399fbcaa847b1f4ab22d2b68f49d82ab43eda791c2b8249a40d984ee"
+              }
+            ]
+          },
+          {
+            "configuration": "VhtMcs9_256QAM",
+            "group": "vht_mcs_256qam",
+            "ini": "examples/ieee80211ac/vht_mcs_256qam/omnetpp.ini",
+            "label": "VHT MCS 9 (256-QAM)",
+            "measurement": {
+              "end_s": 0.5,
+              "start_s": 0.3
+            },
+            "metadata": {},
+            "result_files": [
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs9_256QAM/VhtMcs9_256QAM-#0.sca",
+                "sha256": "5970d94181b63c2f8229d2708571bef1b804f2b5bf38007f274b67bf7236a0b5"
+              },
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs9_256QAM/VhtMcs9_256QAM-#0.vec",
+                "sha256": "b4d2c01595188c71de2d8c0c5806de25a078f6e65ae43c8aa4fc4b269dde8ef8"
+              },
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs9_256QAM/VhtMcs9_256QAM-#1.sca",
+                "sha256": "a91a3551a000053e2e28cc5a247c6f4c1dc50a0254ab71b0c09b924a094761e7"
+              },
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs9_256QAM/VhtMcs9_256QAM-#1.vec",
+                "sha256": "84f17aac30069b29bdb96f3b03538249afb9a7e3fc17ea44a33b6d4d4dce13dc"
+              },
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs9_256QAM/VhtMcs9_256QAM-#2.sca",
+                "sha256": "f29a4e4b746d065bfbf2543a84b57f6c01664b8960c47943624ecaf48b4035cc"
+              },
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs9_256QAM/VhtMcs9_256QAM-#2.vec",
+                "sha256": "93982fac08e27e7780d74ac9a34a1ca68a389175b75f4eb843ecb69291ee0ce8"
+              },
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs9_256QAM/VhtMcs9_256QAM-#3.sca",
+                "sha256": "489531d10a014c89ab079a12e7fff5c2b3259872e781c3fbde6417c0a79c1834"
+              },
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs9_256QAM/VhtMcs9_256QAM-#3.vec",
+                "sha256": "9f4a339c8a4836092dd2d9449aeed023ed81038a38481caeea3bfa365c9b11ae"
+              },
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs9_256QAM/VhtMcs9_256QAM-#4.sca",
+                "sha256": "4a3a9b129213063df904bb88b2b7514207a4da796d7b38c27a1b79d1898e34dd"
+              },
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs9_256QAM/VhtMcs9_256QAM-#4.vec",
+                "sha256": "6e4ca227554416c518200f3147df509b47d0c7d6d967d55eb1d2c282769cd9a2"
+              }
+            ]
+          },
+          {
+            "configuration": "VhtMcs8_256QAM_80Mhz",
+            "group": "vht_mcs_256qam",
+            "ini": "examples/ieee80211ac/vht_mcs_256qam/omnetpp.ini",
+            "label": "VHT MCS 8 (256-QAM, 80 MHz)",
+            "measurement": {
+              "end_s": 0.5,
+              "start_s": 0.3
+            },
+            "metadata": {},
+            "result_files": [
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM_80Mhz/VhtMcs8_256QAM_80Mhz-#0.sca",
+                "sha256": "9c69458e71fdb58050a76b481444df9eaee5ae2fbc963fe3cbf02d90f1b1de00"
+              },
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM_80Mhz/VhtMcs8_256QAM_80Mhz-#0.vec",
+                "sha256": "6a019c18f7b5e0d9fd97624d6567dc17f69aa39cbfd6c3079f38663fbcdd00c1"
+              },
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM_80Mhz/VhtMcs8_256QAM_80Mhz-#1.sca",
+                "sha256": "0147fb68c5b6166f86cbf2e6ec957f668ec7b4e9b418564524467cf7310b9432"
+              },
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM_80Mhz/VhtMcs8_256QAM_80Mhz-#1.vec",
+                "sha256": "d7b4ba6248cc117bd36af2b7b78f001fbc6fc775941b76f23ebb7a35d1a855ca"
+              },
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM_80Mhz/VhtMcs8_256QAM_80Mhz-#2.sca",
+                "sha256": "f081c1bbaa46034370af95567a2cf84eaa59f0078a13e75f3ed096eddf114054"
+              },
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM_80Mhz/VhtMcs8_256QAM_80Mhz-#2.vec",
+                "sha256": "4525b314dd73acd7702d6a324acf79d2b8fd85cdaaa03e6269c9a3b04e92c3f2"
+              },
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM_80Mhz/VhtMcs8_256QAM_80Mhz-#3.sca",
+                "sha256": "83597b99447476a3379ca66b13265f96d44ec5cc3afe9cbbc07a066d723cf493"
+              },
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM_80Mhz/VhtMcs8_256QAM_80Mhz-#3.vec",
+                "sha256": "e6545251869cba1fd8b1660f67ce9bd0ec822ac70a6a181de6b35b15bae8a722"
+              },
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM_80Mhz/VhtMcs8_256QAM_80Mhz-#4.sca",
+                "sha256": "9302e352faefda19181bf9e969d3b6688f874c98778d126d606e38b669361067"
+              },
+              {
+                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM_80Mhz/VhtMcs8_256QAM_80Mhz-#4.vec",
+                "sha256": "6ceea671bcc6698afb2676853b3de6f90e7892e7dba20da32d58838f0a9b8451"
               }
             ]
           }
         ],
-        "session_id": "20260808T101729Z",
+        "session_id": "20260808T120627Z",
         "status": "PASS"
       }
     },
-    "repository_revision": "aca0cde018c94318970f8bbf9d8ff01215028f95",
-    "requested_session_id": "20260808T101729Z",
+    "repository_revision": "382d69e0a9eaa2be11f6457d00e54c6ce5bcbc69",
+    "requested_session_id": "20260808T120627Z",
     "schema_version": 1
   },
-  "short_gi_vht": {
-    "VHT Long GI (800 ns)": {
+  "vht_mcs_256qam": {
+    "HT MCS 7 Baseline": {
       "goodput_mbps": {
-        "ci95": 1.010564995678152,
+        "ci95": 0.11635127097255968,
         "count": 5,
-        "mean": 49.52
+        "mean": 11.838400000000002
       }
     },
-    "VHT Short GI (400 ns)": {
+    "VHT MCS 7": {
       "goodput_mbps": {
-        "ci95": 0.6266652489769737,
+        "ci95": 0.06219237035642939,
         "count": 5,
-        "mean": 53.36800000000001
+        "mean": 17.718399999999995
+      }
+    },
+    "VHT MCS 8 (256-QAM)": {
+      "goodput_mbps": {
+        "ci95": 0.10545229454751258,
+        "count": 5,
+        "mean": 23.4864
+      }
+    },
+    "VHT MCS 8 (256-QAM, 80 MHz)": {
+      "goodput_mbps": {
+        "ci95": 0.24876948142572144,
+        "count": 5,
+        "mean": 28.1456
+      }
+    },
+    "VHT MCS 9 (256-QAM)": {
+      "goodput_mbps": {
+        "ci95": 0.21431566625027207,
+        "count": 5,
+        "mean": 24.64
       }
     }
   }
