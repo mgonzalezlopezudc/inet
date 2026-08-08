@@ -34,9 +34,8 @@ module Hcf extends Module like IHcf
         // It is neither advertised nor negotiated, and is effective only
         // with modeSet n(mixed-2.4Ghz).
         bool useLegacyHtMultiTidBlockAck = default(false);
-        // Enables the IEEE 802.11 implicit Block Ack exchange for
-        // non-single-MPDU, same-TID A-MPDUs across HT, VHT, HE, and EHT profiles.
-        bool useImplicitBlockAck = default(false);
+        // Enables the IEEE 802.11 implicit Block Ack exchange across HT, VHT, HE, and EHT profiles.
+        bool useImplicitBlockAck = default(true);
 
         string rxModule;
         string txModule;
