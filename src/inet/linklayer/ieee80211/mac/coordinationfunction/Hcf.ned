@@ -28,7 +28,7 @@ import inet.linklayer.ieee80211.mac.recipient.RecipientQosMacDataService;
 module Hcf extends Module like IHcf
 {
     parameters:
-        bool isBlockAckSupported = default(false);
+        bool isBlockAckSupported = default(true);
         // Experimental INET extension modeling the historical IEEE 802.11n
         // Multi-TID BAR/BlockAck exchange; it is not a current 802.11 format.
         // It is neither advertised nor negotiated, and is effective only
