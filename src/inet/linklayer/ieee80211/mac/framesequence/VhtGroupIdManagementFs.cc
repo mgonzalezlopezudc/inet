@@ -82,6 +82,7 @@ Packet *VhtGroupIdManagementFs::buildActionFrame() const
     header->setReceiverAddress(peer);
     header->setTransmitterAddress(mib->address);
     header->setAddress3(mib->bssData.bssid);
+    header->setSequenceNumber(SequenceNumberCyclic(0));
     header->setChunkLength(B(24));
 
     auto body = makeShared<Ieee80211VhtGroupIdManagement>();

@@ -1,14 +1,14 @@
 {
   "_provenance": {
-    "generated_at_utc": "2026-08-08T12:07:25.478735+00:00",
+    "generated_at_utc": "2026-08-08T14:46:16.108125+00:00",
     "groups": {
-      "vht_mcs_256qam": {
+      "spatial_streams_8x8": {
         "conditions": [
           {
-            "configuration": "BaselineHtMcs7",
-            "group": "vht_mcs_256qam",
-            "ini": "examples/ieee80211ac/vht_mcs_256qam/omnetpp.ini",
-            "label": "HT MCS 7 Baseline",
+            "configuration": "SingleStreamVht",
+            "group": "spatial_streams_8x8",
+            "ini": "examples/ieee80211ac/spatial_streams_8x8/omnetpp.ini",
+            "label": "Single Stream (1x1)",
             "measurement": {
               "end_s": 0.5,
               "start_s": 0.3
@@ -16,52 +16,52 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/BaselineHtMcs7/BaselineHtMcs7-#0.sca",
-                "sha256": "da4442a8ff4d9ef099a92382b747bbdd4c5d5721382bb0e636cdabafde125c0d"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/SingleStreamVht/SingleStreamVht-#0.sca",
+                "sha256": "08f2c7813badae1a530467cba1fbc4b7e498e7a4f97c954062a37487533a619c"
               },
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/BaselineHtMcs7/BaselineHtMcs7-#0.vec",
-                "sha256": "9bd7fce9fbbdd2d1635d2a493654b105a25b9622c3f7804ee251b39d87c0314a"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/SingleStreamVht/SingleStreamVht-#0.vec",
+                "sha256": "96d49d9f9fe7278fe33e202ecbd40707f42126030c5bdb6168d5f292618b923b"
               },
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/BaselineHtMcs7/BaselineHtMcs7-#1.sca",
-                "sha256": "9636af9ac9068b3fdac586983b63c28fd37f736ff048e9d929f176521c542a1e"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/SingleStreamVht/SingleStreamVht-#1.sca",
+                "sha256": "730c40d455b115a3ec238845557d4c7904137e5b4e575e493d19e1cd25863c1a"
               },
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/BaselineHtMcs7/BaselineHtMcs7-#1.vec",
-                "sha256": "4a1b12cf096f0f479846c0492261c2e00de0bb3740d831c035180a4aa59fd6b7"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/SingleStreamVht/SingleStreamVht-#1.vec",
+                "sha256": "ae5d2ef4909a5f4cb3a7694bfcd01f7fceac6b472ae0112d0370d544f797802b"
               },
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/BaselineHtMcs7/BaselineHtMcs7-#2.sca",
-                "sha256": "c7f0edadb83b5c48ff50baf7f8f9e6aa456855945103344f6be011ec9d9283e9"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/SingleStreamVht/SingleStreamVht-#2.sca",
+                "sha256": "46b58ff4f22abda327d64d73608cc9a8e37f5646a7bc7eef675b755b462a01f4"
               },
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/BaselineHtMcs7/BaselineHtMcs7-#2.vec",
-                "sha256": "aeafa1593f7b0057c9c4a18723a8fffcdd82d90298284354456135a0d041934e"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/SingleStreamVht/SingleStreamVht-#2.vec",
+                "sha256": "f0393957978e3fa2765de9fca013f0468a06fc220b3c51ef0258c999a7f0305c"
               },
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/BaselineHtMcs7/BaselineHtMcs7-#3.sca",
-                "sha256": "7641bde0738eb74496110f95657ffdb0f79ab6586323264b4a02b13569b7c256"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/SingleStreamVht/SingleStreamVht-#3.sca",
+                "sha256": "c1b2268f593f4b5fcd1afa06d35dad18da6ef8fe5650e5ebac02f49aa19c4ccb"
               },
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/BaselineHtMcs7/BaselineHtMcs7-#3.vec",
-                "sha256": "6b86d2108a4342e10c624bdfce8167c2a303300b75aac6e887948dd932db5f29"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/SingleStreamVht/SingleStreamVht-#3.vec",
+                "sha256": "7341c1ac4ee6bd496e14277c0e8024f21c507f6053e9907aa080ee76461cb734"
               },
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/BaselineHtMcs7/BaselineHtMcs7-#4.sca",
-                "sha256": "f343dde09383045484c36b1d84b716e4b307205f8262ab2e1b639f26933d4302"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/SingleStreamVht/SingleStreamVht-#4.sca",
+                "sha256": "ce501fe9df8e00b80230d4651f36180b4aff368c637f691ea57b73eede24f4e5"
               },
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/BaselineHtMcs7/BaselineHtMcs7-#4.vec",
-                "sha256": "9800425e1d527fe2688ac36393ef482b847ac83893a1a3d3a520411045cbc716"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/SingleStreamVht/SingleStreamVht-#4.vec",
+                "sha256": "762178c048b12f6fc5576b019f882bd761579b9869e15e764adbc4a7814dcc44"
               }
             ]
           },
           {
-            "configuration": "VhtMcs7",
-            "group": "vht_mcs_256qam",
-            "ini": "examples/ieee80211ac/vht_mcs_256qam/omnetpp.ini",
-            "label": "VHT MCS 7",
+            "configuration": "FourStreamVht",
+            "group": "spatial_streams_8x8",
+            "ini": "examples/ieee80211ac/spatial_streams_8x8/omnetpp.ini",
+            "label": "Four Streams (4x4)",
             "measurement": {
               "end_s": 0.5,
               "start_s": 0.3
@@ -69,52 +69,52 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs7/VhtMcs7-#0.sca",
-                "sha256": "09507981fccc523d0fcb42494a67cabd8b48b977668ec47875d8bb1b106c7ccc"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/FourStreamVht/FourStreamVht-#0.sca",
+                "sha256": "957744de1938aa006a5238e9659c5d7203e37b6d55b3e1149d41627bfcb26b55"
               },
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs7/VhtMcs7-#0.vec",
-                "sha256": "a4458878472398668b2fbc731a60e802a7670b972a223a1e98499ff73023fd9c"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/FourStreamVht/FourStreamVht-#0.vec",
+                "sha256": "88b1604ad49a4afacc84863a402272314ff9bdd5e301a615b73f95f93cb0d164"
               },
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs7/VhtMcs7-#1.sca",
-                "sha256": "44fb79b92d7048ca1013e9809e14c27d3decfe257b29d5b5aabb239c006ff929"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/FourStreamVht/FourStreamVht-#1.sca",
+                "sha256": "53287b0a55c1055f1bd08656ab5e93e3c9151cccabff4853178bda0eb7a5aced"
               },
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs7/VhtMcs7-#1.vec",
-                "sha256": "5c6f2c2522ae4978bc0012fc5af25bd6ce86b1f5e03cc1b105680fd4ee84ec92"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/FourStreamVht/FourStreamVht-#1.vec",
+                "sha256": "86375f3a841dd0125e898cdf35b5453156591e1d8c81902029dae46570ca5a58"
               },
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs7/VhtMcs7-#2.sca",
-                "sha256": "89ef717498077e2e74fc8719d0bb576505f804224ef9d4074d3fc2254cb7f6b9"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/FourStreamVht/FourStreamVht-#2.sca",
+                "sha256": "fabd4cfb3d83347a52f2ed9b7ad1c76fb36d36a328cbf31e85d8e545920d4d22"
               },
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs7/VhtMcs7-#2.vec",
-                "sha256": "b344e5aa7cf92e6a912f829dfe5f58aca5cb4200a4cc15435f55d630a89e3401"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/FourStreamVht/FourStreamVht-#2.vec",
+                "sha256": "b38eea67deae0853db93cf86227c1e69512915a6e9a00a8f76a23a0d54637ae5"
               },
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs7/VhtMcs7-#3.sca",
-                "sha256": "3b4dc8f40f9c2e5eb387817103ed89ff0ca479b4171b0c56b682e94e6c6e9f88"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/FourStreamVht/FourStreamVht-#3.sca",
+                "sha256": "d345f3979384fb25e6b8c19506c565fc908bd7ce1c64117aada4c34a5c11e40d"
               },
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs7/VhtMcs7-#3.vec",
-                "sha256": "f6a878a48f92829511476d5d317c02a26cac4a1fea594b72c7f0a87ae614c14c"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/FourStreamVht/FourStreamVht-#3.vec",
+                "sha256": "34a151c89f116c506692dd0250cf497efff08d825a9b5de3f919426bff9bf6d3"
               },
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs7/VhtMcs7-#4.sca",
-                "sha256": "4cd3dff614f6330236d920899308f8aae6f70292e3aea20807d16ed82902ae3f"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/FourStreamVht/FourStreamVht-#4.sca",
+                "sha256": "f04fe325c700150ff5096b910167c806f054036b58878b4d8c3f55b35317ff40"
               },
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs7/VhtMcs7-#4.vec",
-                "sha256": "7cea8cc085c1429b53545e2d964019bda4918d4ae5d6ff0339b30de13a80e760"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/FourStreamVht/FourStreamVht-#4.vec",
+                "sha256": "e36aa8460caae74972d90f3c73a43308dadfbc4f0bd8ec38bf878a5a19ffb2ae"
               }
             ]
           },
           {
-            "configuration": "VhtMcs8_256QAM",
-            "group": "vht_mcs_256qam",
-            "ini": "examples/ieee80211ac/vht_mcs_256qam/omnetpp.ini",
-            "label": "VHT MCS 8 (256-QAM)",
+            "configuration": "EightStreamVht",
+            "group": "spatial_streams_8x8",
+            "ini": "examples/ieee80211ac/spatial_streams_8x8/omnetpp.ini",
+            "label": "Eight Streams (8x8)",
             "measurement": {
               "end_s": 0.5,
               "start_s": 0.3
@@ -122,196 +122,76 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM/VhtMcs8_256QAM-#0.sca",
-                "sha256": "1a703b75a1621d3d34131c49e85a97e03737f82fd2236c00640d7dfe08986545"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/EightStreamVht/EightStreamVht-#0.sca",
+                "sha256": "78d1221757fb692f4a011428dbd6c45f8a332b349fa997851980f3021ad6498d"
               },
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM/VhtMcs8_256QAM-#0.vec",
-                "sha256": "7312032b2fcdf581888378bbce3488c1029ac3217474ddb114ef70dca5d31c9b"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/EightStreamVht/EightStreamVht-#0.vec",
+                "sha256": "2d7762a4550cab092b43ba666f8b2c88df6050de8329f0b932bc6dff10e4052b"
               },
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM/VhtMcs8_256QAM-#1.sca",
-                "sha256": "a2e62f261cd24ee80ceb4579b34995f78ad970bd105900a8b46d9440e06dbdbd"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/EightStreamVht/EightStreamVht-#1.sca",
+                "sha256": "f9ed7053b76f48ce86297a4a9a5599992393e714fa27994ce8d82ed1ae0906ff"
               },
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM/VhtMcs8_256QAM-#1.vec",
-                "sha256": "896aff602d8467161c3d88b300371ed68ffff862d1dd867722c875b1bebc0daa"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/EightStreamVht/EightStreamVht-#1.vec",
+                "sha256": "73bf185ecb98a336aa09158ff524e5c96df591af090775c3a25b95c009335b5e"
               },
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM/VhtMcs8_256QAM-#2.sca",
-                "sha256": "dfd4e2349789ad5682dd9ac2b7d870e60fb426ea21031acb7a789f3a5691320f"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/EightStreamVht/EightStreamVht-#2.sca",
+                "sha256": "f8fcfa525b458cb84333bda263b3300ad73687f57a4f45c945adddc2feef7c84"
               },
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM/VhtMcs8_256QAM-#2.vec",
-                "sha256": "3fdbf4f36426e679b3d07f554ab5dc8adc51c2b2bde29e2c9aaadbfc67a72d80"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/EightStreamVht/EightStreamVht-#2.vec",
+                "sha256": "4b8ce3d7db8d26e89987e445775a2e39916be1f87c4d879bdc73e1896b17678b"
               },
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM/VhtMcs8_256QAM-#3.sca",
-                "sha256": "70dc282d1ae6d24055b209ccea5ba7e7f6f678d709e0b009b89c8d9626fd9797"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/EightStreamVht/EightStreamVht-#3.sca",
+                "sha256": "6faed91ab7b074bcb711b88a596510aa4644be4d0ab16433c51de928e7ee4c44"
               },
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM/VhtMcs8_256QAM-#3.vec",
-                "sha256": "b4e1e7e2fe0600b7f5cc35250b68d45fb4407f0039cb3f3113ec1aeb56cd32cc"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/EightStreamVht/EightStreamVht-#3.vec",
+                "sha256": "45098c0d6219c98d169b227e3b1c4426adb19c86c4b884e6a56d71ce7392ac9f"
               },
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM/VhtMcs8_256QAM-#4.sca",
-                "sha256": "ebcb48c6de0318c7b23d32d0b9c10f050aa7478223703c2cce2d52a54dddae9d"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/EightStreamVht/EightStreamVht-#4.sca",
+                "sha256": "66fa1d91a6e485990a9b1d8a6966075404d2d7aee41163914db639e143cb6927"
               },
               {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM/VhtMcs8_256QAM-#4.vec",
-                "sha256": "2bf49772399fbcaa847b1f4ab22d2b68f49d82ab43eda791c2b8249a40d984ee"
-              }
-            ]
-          },
-          {
-            "configuration": "VhtMcs9_256QAM",
-            "group": "vht_mcs_256qam",
-            "ini": "examples/ieee80211ac/vht_mcs_256qam/omnetpp.ini",
-            "label": "VHT MCS 9 (256-QAM)",
-            "measurement": {
-              "end_s": 0.5,
-              "start_s": 0.3
-            },
-            "metadata": {},
-            "result_files": [
-              {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs9_256QAM/VhtMcs9_256QAM-#0.sca",
-                "sha256": "5970d94181b63c2f8229d2708571bef1b804f2b5bf38007f274b67bf7236a0b5"
-              },
-              {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs9_256QAM/VhtMcs9_256QAM-#0.vec",
-                "sha256": "b4d2c01595188c71de2d8c0c5806de25a078f6e65ae43c8aa4fc4b269dde8ef8"
-              },
-              {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs9_256QAM/VhtMcs9_256QAM-#1.sca",
-                "sha256": "a91a3551a000053e2e28cc5a247c6f4c1dc50a0254ab71b0c09b924a094761e7"
-              },
-              {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs9_256QAM/VhtMcs9_256QAM-#1.vec",
-                "sha256": "84f17aac30069b29bdb96f3b03538249afb9a7e3fc17ea44a33b6d4d4dce13dc"
-              },
-              {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs9_256QAM/VhtMcs9_256QAM-#2.sca",
-                "sha256": "f29a4e4b746d065bfbf2543a84b57f6c01664b8960c47943624ecaf48b4035cc"
-              },
-              {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs9_256QAM/VhtMcs9_256QAM-#2.vec",
-                "sha256": "93982fac08e27e7780d74ac9a34a1ca68a389175b75f4eb843ecb69291ee0ce8"
-              },
-              {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs9_256QAM/VhtMcs9_256QAM-#3.sca",
-                "sha256": "489531d10a014c89ab079a12e7fff5c2b3259872e781c3fbde6417c0a79c1834"
-              },
-              {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs9_256QAM/VhtMcs9_256QAM-#3.vec",
-                "sha256": "9f4a339c8a4836092dd2d9449aeed023ed81038a38481caeea3bfa365c9b11ae"
-              },
-              {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs9_256QAM/VhtMcs9_256QAM-#4.sca",
-                "sha256": "4a3a9b129213063df904bb88b2b7514207a4da796d7b38c27a1b79d1898e34dd"
-              },
-              {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs9_256QAM/VhtMcs9_256QAM-#4.vec",
-                "sha256": "6e4ca227554416c518200f3147df509b47d0c7d6d967d55eb1d2c282769cd9a2"
-              }
-            ]
-          },
-          {
-            "configuration": "VhtMcs8_256QAM_80Mhz",
-            "group": "vht_mcs_256qam",
-            "ini": "examples/ieee80211ac/vht_mcs_256qam/omnetpp.ini",
-            "label": "VHT MCS 8 (256-QAM, 80 MHz)",
-            "measurement": {
-              "end_s": 0.5,
-              "start_s": 0.3
-            },
-            "metadata": {},
-            "result_files": [
-              {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM_80Mhz/VhtMcs8_256QAM_80Mhz-#0.sca",
-                "sha256": "9c69458e71fdb58050a76b481444df9eaee5ae2fbc963fe3cbf02d90f1b1de00"
-              },
-              {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM_80Mhz/VhtMcs8_256QAM_80Mhz-#0.vec",
-                "sha256": "6a019c18f7b5e0d9fd97624d6567dc17f69aa39cbfd6c3079f38663fbcdd00c1"
-              },
-              {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM_80Mhz/VhtMcs8_256QAM_80Mhz-#1.sca",
-                "sha256": "0147fb68c5b6166f86cbf2e6ec957f668ec7b4e9b418564524467cf7310b9432"
-              },
-              {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM_80Mhz/VhtMcs8_256QAM_80Mhz-#1.vec",
-                "sha256": "d7b4ba6248cc117bd36af2b7b78f001fbc6fc775941b76f23ebb7a35d1a855ca"
-              },
-              {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM_80Mhz/VhtMcs8_256QAM_80Mhz-#2.sca",
-                "sha256": "f081c1bbaa46034370af95567a2cf84eaa59f0078a13e75f3ed096eddf114054"
-              },
-              {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM_80Mhz/VhtMcs8_256QAM_80Mhz-#2.vec",
-                "sha256": "4525b314dd73acd7702d6a324acf79d2b8fd85cdaaa03e6269c9a3b04e92c3f2"
-              },
-              {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM_80Mhz/VhtMcs8_256QAM_80Mhz-#3.sca",
-                "sha256": "83597b99447476a3379ca66b13265f96d44ec5cc3afe9cbbc07a066d723cf493"
-              },
-              {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM_80Mhz/VhtMcs8_256QAM_80Mhz-#3.vec",
-                "sha256": "e6545251869cba1fd8b1660f67ce9bd0ec822ac70a6a181de6b35b15bae8a722"
-              },
-              {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM_80Mhz/VhtMcs8_256QAM_80Mhz-#4.sca",
-                "sha256": "9302e352faefda19181bf9e969d3b6688f874c98778d126d606e38b669361067"
-              },
-              {
-                "path": "examples/ieee80211ac/vht_mcs_256qam/results/20260808T120627Z/VhtMcs8_256QAM_80Mhz/VhtMcs8_256QAM_80Mhz-#4.vec",
-                "sha256": "6ceea671bcc6698afb2676853b3de6f90e7892e7dba20da32d58838f0a9b8451"
+                "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260808T144537Z/EightStreamVht/EightStreamVht-#4.vec",
+                "sha256": "73b0528aa04b55cc96f6012057bd8aa23d01e4d61e686f96e87b1fb69f8105c8"
               }
             ]
           }
         ],
-        "session_id": "20260808T120627Z",
+        "session_id": "20260808T144537Z",
         "status": "PASS"
       }
     },
-    "repository_revision": "382d69e0a9eaa2be11f6457d00e54c6ce5bcbc69",
-    "requested_session_id": "20260808T120627Z",
+    "repository_revision": "2734d0ad808dc7ba363336e2682c823289a823d0",
+    "requested_session_id": "20260808T144537Z",
     "schema_version": 1
   },
-  "vht_mcs_256qam": {
-    "HT MCS 7 Baseline": {
+  "spatial_streams_8x8": {
+    "Eight Streams (8x8)": {
       "goodput_mbps": {
-        "ci95": 0.11635127097255968,
+        "ci95": 12.920025246731308,
         "count": 5,
-        "mean": 11.838400000000002
+        "mean": 406.6832
       }
     },
-    "VHT MCS 7": {
+    "Four Streams (4x4)": {
       "goodput_mbps": {
-        "ci95": 0.06219237035642939,
+        "ci95": 11.198620947582567,
         "count": 5,
-        "mean": 17.718399999999995
+        "mean": 373.52
       }
     },
-    "VHT MCS 8 (256-QAM)": {
+    "Single Stream (1x1)": {
       "goodput_mbps": {
-        "ci95": 0.10545229454751258,
+        "ci95": 4.604808526708711,
         "count": 5,
-        "mean": 23.4864
-      }
-    },
-    "VHT MCS 8 (256-QAM, 80 MHz)": {
-      "goodput_mbps": {
-        "ci95": 0.24876948142572144,
-        "count": 5,
-        "mean": 28.1456
-      }
-    },
-    "VHT MCS 9 (256-QAM)": {
-      "goodput_mbps": {
-        "ci95": 0.21431566625027207,
-        "count": 5,
-        "mean": 24.64
+        "mean": 226.8672
       }
     }
   }

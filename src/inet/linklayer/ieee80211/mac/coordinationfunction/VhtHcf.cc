@@ -156,6 +156,12 @@ bool VhtHcf::tryStartVhtDlMu(AccessCategory ac)
         return false;
     auto edcaf = edca->getEdcaf(ac);
     auto queue = edcaf->getPendingQueue();
+    std::vector<Packet *> candidatePackets;
+    if (auto inProgressFrame = edcaf->getInProgressFrames()->getFrameToTransmit())
+        candidatePackets.push_back(inProgressFrame);
+    for (int i = 0; i < queue->getNumPackets(); ++i)
+        candidatePackets.push_back(queue->getPacket(i));
+
     IIeee80211VhtDlMuScheduler::Context context;
     context.enabled = true;
     context.accessPoint = true;
@@ -163,8 +169,8 @@ bool VhtHcf::tryStartVhtDlMu(AccessCategory ac)
     context.channelWidth = MHz(20);
     context.transmitDimensions = 2;
     context.groupId = 1;
-    for (int i = 0; i < queue->getNumPackets(); ++i) {
-        auto packet = queue->getPacket(i);
+    std::set<MacAddress> addedPeers;
+    for (auto packet : candidatePackets) {
         auto header = dynamicPtrCast<const Ieee80211DataHeader>(
                 packet->peekAtFront<Ieee80211MacHeader>());
         if (header == nullptr || header->getType() != ST_DATA_WITH_QOS)
@@ -173,6 +179,9 @@ bool VhtHcf::tryStartVhtDlMu(AccessCategory ac)
         if (peerIt == peers.end())
             continue;
         auto peer = *peerIt;
+        if (addedPeers.count(peer) > 0)
+            continue;
+        addedPeers.insert(peer);
         auto position = std::distance(peers.begin(), peerIt);
         auto negotiated = mac->getMib()->findNegotiatedVhtCapabilities(peer);
         auto generation = mac->getMib()->getVhtAssociationGeneration(peer);
@@ -216,13 +225,23 @@ bool VhtHcf::tryStartVhtDlMu(AccessCategory ac)
                 originatorBlockAckAgreementHandler, peer, header->getTid());
         candidate.unsegmented = header->getFragmentNumber() == 0 &&
                 !header->getMoreFragments();
+        EV_INFO << "tryStartVhtDlMu Candidate for " << peer << ": mcs=" << candidate.mcs
+                << ", assoc=" << candidate.associated << ", muMimo=" << candidate.negotiatedMuMimo
+                << ", 1ss=" << candidate.exactlyOneSpatialStream << ", freshCsi=" << candidate.freshCsi
+                << ", activeGroup=" << candidate.activeGroup << ", activeBA=" << candidate.activeBlockAckAgreement
+                << ", unseg=" << candidate.unsegmented << ", isEligible=" << IIeee80211VhtDlMuScheduler::isEligible(context, candidate) << "\n";
         context.candidates.push_back(candidate);
     }
     auto selected = dlMuScheduler->schedule(context);
+    EV_INFO << "tryStartVhtDlMu candidates count=" << context.candidates.size() << ", selected count=" << selected.size() << "\n";
     VhtDlMuPlanDiagnostic diagnostic;
     auto plan = VhtDlMuPlan::create(context, selected, diagnostic);
-    if (!plan)
+    if (!plan) {
+        EV_INFO << "tryStartVhtDlMu plan creation failed! selected count=" << selected.size() << "\n";
         return false;
+    }
+    EV_INFO << "tryStartVhtDlMu SUCCESS! Plan created for " << selected.size() << " users!\n";
+
     auto txop = edcaf->getTxopProcedure();
     if (!txop->isProtectionConfigured())
         txop->configureProtection(TxopProcedure::InitialProtection::NONE);
@@ -255,19 +274,29 @@ bool VhtHcf::isEligibleVhtSu(const physicallayer::IIeee80211Mode *mode,
         const MacAddress& peer, int& soundingNsts) const
 {
     soundingNsts = 0;
-    if (!enableVhtSuBeamforming || mode == nullptr || !modeSet->containsMode(mode) ||
-            modeSet->getPhyFamily(mode) != physicallayer::Ieee80211PhyFamily::VHT ||
-            peer.isMulticast() || mode->getDataMode()->getBandwidth() != MHz(20) ||
-            !isAssociatedPeer(peer))
+    if (!enableVhtSuBeamforming) { EV_INFO << "isEligibleVhtSu false: enableVhtSuBeamforming false\n"; return false; }
+    if (mode == nullptr) { EV_INFO << "isEligibleVhtSu false: mode nullptr\n"; return false; }
+    if (!modeSet->containsMode(mode)) { EV_INFO << "isEligibleVhtSu false: modeSet does not contain mode\n"; return false; }
+    if (modeSet->getPhyFamily(mode) != physicallayer::Ieee80211PhyFamily::VHT) {
+        EV_INFO << "isEligibleVhtSu false: phyFamily " << (int)modeSet->getPhyFamily(mode) << " is not VHT\n";
         return false;
+    }
+    if (peer.isMulticast()) { EV_INFO << "isEligibleVhtSu false: peer is multicast\n"; return false; }
+    if (mode->getDataMode()->getBandwidth() != MHz(20)) { EV_INFO << "isEligibleVhtSu false: bandwidth != 20MHz\n"; return false; }
+    if (!isAssociatedPeer(peer)) { EV_INFO << "isEligibleVhtSu false: not associated peer " << peer << "\n"; return false; }
     auto negotiated = mac->getMib()->findNegotiatedVhtCapabilities(peer);
-    if (negotiated == nullptr || !negotiated->localTxPeerRx.valid ||
-            !negotiated->localTxPeerRx.suBeamforming ||
-            negotiated->localTxPeerRx.soundingNsts < 2)
+    if (negotiated == nullptr) { EV_INFO << "isEligibleVhtSu false: negotiated == nullptr\n"; return false; }
+    if (!negotiated->localTxPeerRx.valid) { EV_INFO << "isEligibleVhtSu false: localTxPeerRx not valid\n"; return false; }
+    if (!negotiated->localTxPeerRx.suBeamforming) { EV_INFO << "isEligibleVhtSu false: suBeamforming false\n"; return false; }
+    if (negotiated->localTxPeerRx.soundingNsts < 2) {
+        EV_INFO << "isEligibleVhtSu false: soundingNsts " << negotiated->localTxPeerRx.soundingNsts << " < 2\n";
         return false;
+    }
     soundingNsts = negotiated->localTxPeerRx.soundingNsts;
+    EV_INFO << "isEligibleVhtSu TRUE: soundingNsts=" << soundingNsts << " for peer " << peer << "\n";
     return true;
 }
+
 
 void VhtHcf::startFrameSequence(AccessCategory ac)
 {
