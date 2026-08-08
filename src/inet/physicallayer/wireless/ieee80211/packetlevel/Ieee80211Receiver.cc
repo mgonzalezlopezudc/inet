@@ -1145,6 +1145,7 @@ void Ieee80211Receiver::setChannel(const Ieee80211Channel *channel)
         this->channel = channel;
         this->band = channel->getBand();
         setCenterFrequency(centerFrequency);
+        setBandwidth(channel->getOperatingChannelWidth());
     }
 }
 
