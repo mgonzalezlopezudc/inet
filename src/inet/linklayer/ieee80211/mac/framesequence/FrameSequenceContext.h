@@ -92,7 +92,7 @@ class INET_API FrameSequenceContext : public cObject
     virtual NonQoSContext *getNonQoSContext() const { return nonQoSContext; }
     virtual QoSContext *getQoSContext() const { return qosContext; }
     virtual bool getUseLegacyHtMultiTidBlockAck() const { return useLegacyHtMultiTidBlockAck; }
-    virtual bool getUseHtImplicitBlockAck() const { return htImplicitBlockAckFrames.size() >= 2; }
+    virtual bool getUseHtImplicitBlockAck() const { return !htImplicitBlockAckFrames.empty(); }
     virtual const std::vector<Packet *>& getHtImplicitBlockAckFrames() const { return htImplicitBlockAckFrames; }
 
   protected:

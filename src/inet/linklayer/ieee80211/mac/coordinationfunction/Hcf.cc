@@ -593,7 +593,7 @@ std::vector<Packet *> Hcf::getHtImplicitBlockAckFrames(Edcaf *edcaf) const
             break;
         ampduFrames.push_back(frame);
     }
-    if (ampduFrames.size() < 2)
+    if (ampduFrames.empty())
         return {};
 
     auto aggregateLength = calculateAmpduLength(ampduFrames);
@@ -605,7 +605,7 @@ std::vector<Packet *> Hcf::getHtImplicitBlockAckFrames(Edcaf *edcaf) const
         aggregateLength -= B(4) + ampduFrames.back()->getTotalLength() + previousSubframePadding;
         ampduFrames.pop_back();
     }
-    return ampduFrames.size() > 1 ? ampduFrames : std::vector<Packet *>();
+    return ampduFrames;
 }
 
 int Hcf::getMaxAmpduLengthExponent(const MacAddress& peer,
@@ -1628,7 +1628,11 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
         auto mode = modeReq == nullptr ? rateSelection->computeMode(packet, header, txop) : modeReq->getMode();
         if (!isHeMuContainerPacket(packet))
           if (auto dataFrame = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
-            if (dataFrame->getAckPolicy() == AckPolicy::BLOCK_ACK &&
+            OriginatorBlockAckAgreement *agreement = nullptr;
+            if (originatorBlockAckAgreementHandler)
+                agreement = originatorBlockAckAgreementHandler->getAgreement(dataFrame->getReceiverAddress(), dataFrame->getTid());
+            auto computedAckPolicy = originatorAckPolicy != nullptr ? originatorAckPolicy->computeAckPolicy(packet, dataFrame, agreement) : dataFrame->getAckPolicy();
+            if ((dataFrame->getAckPolicy() == AckPolicy::BLOCK_ACK || computedAckPolicy == AckPolicy::BLOCK_ACK) &&
                     txop->allowsMpduAggregation() &&
                     !rtsPolicy->isRtsNeeded(packet, header) &&
                     modeSet->getPhyFamily(mode) != Ieee80211PhyFamily::DSSS &&
@@ -1687,7 +1691,7 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
                                  << " to " << ampduFrames.size()
                                  << " MPDUs for PPDU/TXOP duration " << durationLimit << ".\n";
                 }
-                if (ampduFrames.size() > 1) {
+                if (useHtImplicitBlockAck ? !ampduFrames.empty() : ampduFrames.size() > 1) {
                     if (useHtImplicitBlockAck) {
                         for (auto frame : ampduFrames) {
                             auto mutableHeader =

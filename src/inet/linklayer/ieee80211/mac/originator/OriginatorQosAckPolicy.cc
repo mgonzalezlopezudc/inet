@@ -119,7 +119,8 @@ bool OriginatorQosAckPolicy::checkAgreementPolicy(const Ptr<const Ieee80211DataH
     bool bufferFull = agreement->getBufferSize() == agreement->getNumSentBaPolicyFrames();
     bool aMsduOk = agreement->getIsAMsduSupported() || !header->getAMsduPresent();
     // TODO bool baPolicy = agreement->getIsDelayedBlockAckPolicySupported() || !frame->getAckPolicy();
-    return !bufferFull && aMsduOk && (header->getSequenceNumber() >= agreement->getStartingSequenceNumber()); // TODO && baPolicy
+    bool snOk = header->getSequenceNumber().get() == 0 || header->getSequenceNumber() >= agreement->getStartingSequenceNumber();
+    return !bufferFull && aMsduOk && snOk;
 }
 
 //

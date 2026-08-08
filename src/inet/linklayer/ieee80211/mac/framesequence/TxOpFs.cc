@@ -34,7 +34,7 @@ INET_API bool isHtImplicitBlockAckEligible(const FrameSequenceContext *context,
                 frameToTransmit, dataHeader, agreement) != BLOCK_ACK)
         return false;
     const auto& frames = context->getHtImplicitBlockAckFrames();
-    if (frames.size() < 2 || frames.front() != frameToTransmit)
+    if (frames.empty() || frames.front() != frameToTransmit)
         return false;
     for (auto frame : frames) {
         auto header = frame->peekAtFront<Ieee80211DataHeader>();
@@ -81,15 +81,16 @@ int TxOpFs::selectTxOpSequence(AlternativesFs *frameSequence, FrameSequenceConte
 {
     auto frameToTransmit = context->getInProgressFrames()->getFrameToTransmit();
     const auto& macHeader = frameToTransmit->peekAtFront<Ieee80211MacHeader>();
+    if (auto dataHeaderToTransmit = dynamicPtrCast<const Ieee80211DataHeader>(macHeader)) {
+        if (isHtImplicitBlockAckEligible(context, frameToTransmit, dataHeaderToTransmit))
+            return 4;
+    }
     if (context->getQoSContext()->ackPolicy->isBlockAckReqNeeded(context->getInProgressFrames(), context->getQoSContext()->txopProcedure))
         return 2;
     if (dynamicPtrCast<const Ieee80211MgmtHeader>(macHeader))
         return 3;
     else {
         auto dataHeaderToTransmit = dynamicPtrCast<const Ieee80211DataHeader>(macHeader);
-        if (isHtImplicitBlockAckEligible(context, frameToTransmit,
-                    dataHeaderToTransmit))
-            return 4;
         OriginatorBlockAckAgreement *agreement = nullptr;
         if (context->getQoSContext()->blockAckAgreementHandler)
             agreement = context->getQoSContext()->blockAckAgreementHandler->getAgreement(dataHeaderToTransmit->getReceiverAddress(), dataHeaderToTransmit->getTid());
