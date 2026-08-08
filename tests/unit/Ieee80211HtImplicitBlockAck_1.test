@@ -335,7 +335,7 @@ REQUIRE(TestHcf::isImplicitAggregate(2,
         {firstHeader, nonDataHeader}));
 REQUIRE(TestHcf::isImplicitAggregate(2,
         {nonDataHeader, firstHeader}));
-REQUIRE(!TestHcf::isImplicitAggregate(1, {firstHeader}));
+REQUIRE(TestHcf::isImplicitAggregate(1, {firstHeader}));
 EV << "Aggregate Ack context recognizes the implicit marker in either mixed-member ordering.\n";
 
 QosAckHandler senderAckHandler;

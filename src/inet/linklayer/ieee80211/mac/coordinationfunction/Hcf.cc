@@ -650,12 +650,13 @@ bool Hcf::isLegacyHtMultiTidBlockAckEnabled() const
 
 bool Hcf::isHtImplicitBlockAckEnabled() const
 {
-    // This is an explicit local model capability until HT capability
-    // advertisement and peer negotiation are represented by the MIB.
-    return par("useImplicitBlockAck").boolValue() &&
-            modeSet != nullptr &&
-            modeSet->getNumModes() > 0 &&
-            physicallayer::Ieee80211ModeSet::isHighThroughputMode(modeSet->getMode(0));
+    if (!par("useImplicitBlockAck").boolValue() || modeSet == nullptr)
+        return false;
+    for (int i = 0; i < modeSet->getNumModes(); i++) {
+        if (physicallayer::Ieee80211ModeSet::isHighThroughputMode(modeSet->getMode(i)))
+            return true;
+    }
+    return false;
 }
 
 void Hcf::startFrameSequence(AccessCategory ac)
@@ -1379,7 +1380,7 @@ Hcf::HtAmpduAckContext Hcf::classifyHtAmpduAckContext(
         unsigned int numAggregateMembers,
         const std::vector<Ptr<const Ieee80211MacHeader>>& headers)
 {
-    if (numAggregateMembers <= 1)
+    if (numAggregateMembers == 0)
         return HtAmpduAckContext::ORDINARY;
     for (const auto& header : headers) {
         auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header);
