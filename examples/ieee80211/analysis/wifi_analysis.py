@@ -22,7 +22,12 @@ SESSION_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z$")
 PUBLICATION_RUNS = 5
 
 sys.path.insert(0, str(ANALYSIS_ROOT))
-from inet_wifi_analysis import Suite, load_suite, scenario_configuration_ini
+from inet_wifi_analysis import (
+    Suite,
+    load_suite,
+    pcap_patterns_for_scope,
+    scenario_configuration_ini,
+)
 
 
 class CliError(RuntimeError):
@@ -425,10 +430,18 @@ def run_command_handler(args: argparse.Namespace) -> None:
         command.extend(["--config", config])
     if exhaustive_vectors:
         command.append("--exhaustive-vectors")
+    pcap_scope = None
     if args.evidence == "both":
         command.extend(["--pcap-run", "0"])
         capture = scenario.get("capture", suite.capture)
-        for pattern in capture["interface_patterns"]:
+        pcap_scope = getattr(args, "pcap_scope", None) or capture.get("scope", "ap")
+        if getattr(args, "pcap_scope", None):
+            patterns = pcap_patterns_for_scope(args.pcap_scope)
+        elif "interface_patterns" in capture:
+            patterns = tuple(capture["interface_patterns"])
+        else:
+            patterns = pcap_patterns_for_scope(pcap_scope)
+        for pattern in patterns:
             command.extend(["--pcap-interface-pattern", pattern])
     if args.jobs is not None:
         command.extend(["--jobs", str(args.jobs)])
@@ -484,10 +497,7 @@ def run_command_handler(args: argparse.Namespace) -> None:
         ),
         "exhaustive_vectors": exhaustive_vectors,
         "pcap_run": 0 if args.evidence == "both" else None,
-        "pcap_scope": (
-            "representative run 0 mechanism evidence"
-            if args.evidence == "both" else None
-        ),
+        "pcap_scope": pcap_scope if args.evidence == "both" else None,
     }
     write_json(logical_manifest, document)
     print(f"CREATED {relative_path(logical_manifest)}")
@@ -681,6 +691,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--exhaustive-vectors",
         action="store_true",
         help="record the example's curated diagnostic vectors for run 0",
+    )
+    run_parser.add_argument(
+        "--pcap-scope",
+        choices=("ap", "sta", "both"),
+        help="PCAP recording scope: 'ap' (AP only, default), 'sta' (STAs only), or 'both'",
     )
     run_parser.add_argument("--session-id", type=session_id)
     run_parser.set_defaults(handler=run_command_handler)

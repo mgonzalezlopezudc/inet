@@ -26,6 +26,7 @@ from inet_wifi_analysis import (
     CampaignJob,
     build_cmdenv_command,
     collect_campaign_jobs,
+    pcap_patterns_for_scope,
 )
 
 CORE_PERFORMANCE_RECORDING_OVERRIDES = (
@@ -860,6 +861,12 @@ def main() -> None:
         help="record PCAPng files for this run number (normally 0)",
     )
     parser.add_argument(
+        "--pcap-scope",
+        choices=("ap", "sta", "both"),
+        default="ap",
+        help="PCAP recording scope: 'ap' (AP only, default), 'sta' (STAs only), or 'both'",
+    )
+    parser.add_argument(
         "--pcap-interface-pattern",
         action="append",
         default=[],
@@ -889,11 +896,14 @@ def main() -> None:
         int(group["expected_repetitions"])
         for group in manifest["groups"].values()
     )
+    pcap_patterns = ()
     if args.pcap_run is not None:
-        if not args.pcap_interface_pattern:
-            parser.error("--pcap-run requires --pcap-interface-pattern")
         if args.pcap_run < 0 or args.pcap_run >= repetitions:
             parser.error(f"--pcap-run must be in [0, {repetitions})")
+        if args.pcap_interface_pattern:
+            pcap_patterns = tuple(args.pcap_interface_pattern)
+        else:
+            pcap_patterns = pcap_patterns_for_scope(args.pcap_scope)
     print(f"Campaign session: {campaign_session_id}", flush=True)
     jobs = collect_jobs(
         manifest,
@@ -902,7 +912,7 @@ def main() -> None:
         selected_configs=set(args.config) if args.config else None,
         campaign_session_id=campaign_session_id,
         pcap_run=args.pcap_run,
-        pcap_interface_patterns=tuple(args.pcap_interface_pattern),
+        pcap_interface_patterns=pcap_patterns,
         exhaustive_vectors=args.exhaustive_vectors,
     )
     if not run_jobs(jobs, args.jobs):

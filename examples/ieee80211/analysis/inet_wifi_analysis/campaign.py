@@ -20,6 +20,21 @@ class CampaignJob:
         return f"{self.group}/{self.config} run {self.run}"
 
 
+def pcap_patterns_for_scope(scope: str) -> tuple[str, ...]:
+    """Return OMNeT++ interface module patterns for a PCAP recording scope."""
+    scope_clean = scope.lower()
+    if scope_clean == "ap":
+        return ("**.ap*.wlan[*]",)
+    elif scope_clean in ("sta", "stas"):
+        return ("**.sta*.wlan[*]", "**.host*.wlan[*]")
+    elif scope_clean == "both":
+        return ("**.wlan[*]",)
+    else:
+        raise ValueError(
+            f"Unknown PCAP scope {scope!r}; choose from: 'ap', 'sta', 'both'"
+        )
+
+
 def build_cmdenv_command(
     repository_root: Path,
     ini: Path,

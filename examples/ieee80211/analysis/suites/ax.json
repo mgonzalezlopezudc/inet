@@ -5,8 +5,9 @@
   "scalar_vector_manifest": "examples/ieee80211ax/analysis/experiments.json",
   "generated_marker": "ieee80211ax-pcap-statistics",
   "capture": {
-    "interface_patterns": ["**.wlan[*]"],
-    "observer_selector": "all-wireless-interfaces"
+    "scope": "ap",
+    "interface_patterns": ["**.ap*.wlan[*]"],
+    "observer_selector": "ap-wireless-interface"
   },
   "scenarios": {
     "twt": {
@@ -131,7 +132,8 @@
       "configurations": ["AxUl", "AcUl", "AxDl", "AcDl", "AxMixed", "AcMixed"],
       "phy_profiles": ["legacy", "vht", "he"],
       "capture": {
-        "interface_patterns": ["**.ap.wlan[*]"]
+        "scope": "ap",
+        "interface_patterns": ["**.ap*.wlan[*]"]
       }
     },
     "ul_ofdma": {
@@ -141,7 +143,8 @@
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["ofdma"],
       "capture": {
-        "interface_patterns": ["**.ap.wlan[*]"]
+        "scope": "ap",
+        "interface_patterns": ["**.ap*.wlan[*]"]
       }
     },
     "dl_ul_ofdma": {
@@ -151,7 +154,8 @@
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["ofdma"],
       "capture": {
-        "interface_patterns": ["**.ap.wlan[*]"]
+        "scope": "ap",
+        "interface_patterns": ["**.ap*.wlan[*]"]
       }
     },
     "ul_uora": {
@@ -161,7 +165,8 @@
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["ofdma", "uora"],
       "capture": {
-        "interface_patterns": ["**.ap.wlan[*]"]
+        "scope": "ap",
+        "interface_patterns": ["**.ap*.wlan[*]"]
       }
     },
     "er_su": {

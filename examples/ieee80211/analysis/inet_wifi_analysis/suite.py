@@ -102,9 +102,15 @@ def load_suite(path: str | Path, repository_root: str | Path) -> Suite:
                 f"{path}: scenario {scenario_name!r} scalar_vector_manifest "
                 "must be a string"
             )
-    interface_patterns = document["capture"].get("interface_patterns")
+    capture = document["capture"]
+    if not isinstance(capture, dict):
+        raise ValueError(f"{path}: capture must be an object")
+    interface_patterns = capture.get("interface_patterns")
     if not isinstance(interface_patterns, list) or not interface_patterns:
         raise ValueError(f"{path}: capture.interface_patterns must be non-empty")
+    scope = capture.get("scope")
+    if scope is not None and scope not in ("ap", "sta", "stas", "both"):
+        raise ValueError(f"{path}: capture.scope must be 'ap', 'sta', or 'both'")
     root = repository_root / document["example_root"]
     scalar_vector_manifest = document.get("scalar_vector_manifest")
     if scalar_vector_manifest is not None:

@@ -170,7 +170,58 @@ class WifiAnalysisCliTest(unittest.TestCase):
                 set(logical["configurations"]),
                 {"BaselineEnergy", "TwtEnergySaving"},
             )
+            self.assertEqual(logical["pcap_scope"], "ap")
             self.assertTrue(logical["exhaustive_vectors"])
+
+    def test_pcap_patterns_for_scope_mappings(self):
+        from inet_wifi_analysis import pcap_patterns_for_scope
+        self.assertEqual(pcap_patterns_for_scope("ap"), ("**.ap*.wlan[*]",))
+        self.assertEqual(
+            pcap_patterns_for_scope("sta"),
+            ("**.sta*.wlan[*]", "**.host*.wlan[*]"),
+        )
+        self.assertEqual(
+            pcap_patterns_for_scope("stas"),
+            ("**.sta*.wlan[*]", "**.host*.wlan[*]"),
+        )
+        self.assertEqual(pcap_patterns_for_scope("both"), ("**.wlan[*]",))
+        with self.assertRaisesRegex(ValueError, "Unknown PCAP scope"):
+            pcap_patterns_for_scope("invalid")
+
+    def test_run_supports_explicit_pcap_scope_options(self):
+        for scope, expected_patterns in (
+            ("ap", ["--pcap-interface-pattern", "**.ap*.wlan[*]"]),
+            ("sta", ["--pcap-interface-pattern", "**.sta*.wlan[*]", "--pcap-interface-pattern", "**.host*.wlan[*]"]),
+            ("both", ["--pcap-interface-pattern", "**.wlan[*]"]),
+        ):
+            with tempfile.TemporaryDirectory() as directory:
+                generated = Path(directory) / "generated"
+                args = SimpleNamespace(
+                    suite=str(AX_SUITE),
+                    scenario="twt",
+                    evidence="both",
+                    runs=1,
+                    config=None,
+                    jobs=1,
+                    session_id=SESSION,
+                    exhaustive_vectors=False,
+                    pcap_scope=scope,
+                )
+                with (
+                    patch.object(wifi_analysis, "GENERATED_ROOT", generated),
+                    patch.object(wifi_analysis, "run_command") as run,
+                    redirect_stdout(io.StringIO()),
+                ):
+                    wifi_analysis.run_command_handler(args)
+                commands = [call.args[0] for call in run.call_args_list]
+                for idx in range(0, len(expected_patterns), 2):
+                    flag, pat = expected_patterns[idx], expected_patterns[idx+1]
+                    self.assertIn(flag, commands[0])
+                    self.assertIn(pat, commands[0])
+                logical = json.loads(
+                    (generated / "sessions" / SESSION / "session.json").read_text()
+                )
+                self.assertEqual(logical["pcap_scope"], scope)
 
     def test_ul_ofdma_session_records_the_evidence_profile(self):
         with tempfile.TemporaryDirectory() as directory:

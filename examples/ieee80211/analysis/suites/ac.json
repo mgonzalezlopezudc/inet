@@ -5,8 +5,9 @@
   "scalar_vector_manifest": "examples/ieee80211ac/analysis/experiments.json",
   "generated_marker": "ieee80211-pcap-statistics",
   "capture": {
-    "interface_patterns": ["**.wlan[*]"],
-    "observer_selector": "all-wireless-interfaces"
+    "scope": "ap",
+    "interface_patterns": ["**.ap*.wlan[*]"],
+    "observer_selector": "ap-wireless-interface"
   },
   "scenarios": {
     "wide_channels": {

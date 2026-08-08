@@ -3,7 +3,12 @@
 from .observation import PhyObservation
 from .profiles import decode_phy_observation
 from .suite import Suite, load_suite, scenario_configuration_ini
-from .campaign import CampaignJob, build_cmdenv_command, collect_campaign_jobs
+from .campaign import (
+    CampaignJob,
+    build_cmdenv_command,
+    collect_campaign_jobs,
+    pcap_patterns_for_scope,
+)
 from .io import SESSION_ID_PATTERN, atomic_write_text
 from .walkthrough import (
     normalize_heading_label,
@@ -26,6 +31,7 @@ __all__ = [
     "update_script_results_session",
     "build_cmdenv_command",
     "collect_campaign_jobs",
+    "pcap_patterns_for_scope",
     "decode_phy_observation",
     "decode_eht_radiotap",
     "extract_eht_radiotap",

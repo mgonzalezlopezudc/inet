@@ -409,6 +409,22 @@ class CampaignRunnerTest(unittest.TestCase):
             any("recordPcap=true" in argument for argument in second.command)
         )
 
+    def test_campaign_defaults_to_ap_pcap_scope(self):
+        from inet_wifi_analysis import pcap_patterns_for_scope
+        ap_patterns = pcap_patterns_for_scope("ap")
+        jobs = collect_jobs(
+            self.MANIFEST,
+            "sample",
+            campaign_session_id=self.SESSION_ID,
+            pcap_run=0,
+            pcap_interface_patterns=ap_patterns,
+        )
+        first = next(job for job in jobs if job.config == "First" and job.run == 0)
+        self.assertIn("--**.ap*.wlan[*].recordPcap=true", first.command)
+        self.assertFalse(
+            any("host" in argument and "recordPcap" in argument for argument in first.command)
+        )
+
     def test_ul_ofdma_uses_lean_runs_and_additive_run0_diagnostics(self):
         manifest = {
             "groups": {
