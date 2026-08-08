@@ -15,13 +15,13 @@ Match the runner, libraries, and build mode. Do not debug C++ behavior with stal
 2. Identify the expected INET library for the selected mode:
    * release: `$INET_ROOT/src/libINET.so`
    * debug: `$INET_ROOT/src/libINET_dbg.so`
-3. Use `opp_run` with release libraries and `opp_run_dbg` with debug libraries.
+3. Use `inet --release` for normal release simulations and `inet --debug` for normal debug simulations. Use `opp_run`/`opp_run_dbg` directly only when a tool such as LLDB must target the underlying executable or when an exact runner/library command is required.
 4. If the project has custom C++ modules, load matching release/debug project libraries as well.
 5. When source changes affect messages, packets, or NED-generated artifacts, check whether generated code and dependent objects were rebuilt.
 6. If LLDB cannot resolve source lines, locals, or breakpoints, verify debug symbols, optimization level, loaded image path, and source/binary commit match.
 7. After changing compiled source or generated-code inputs, explicitly rebuild the affected library in the selected mode before running a test or simulation. A test command does not by itself prove that `libINET.so` or `libINET_dbg.so` is fresh. Use `inet-unit-tests` for the required build-before-test sequence and unit-test execution, and `inet-simulation-run` for simulation validation.
 
-Inspect repository state and the relevant `libINET*.so` artifacts when freshness or mode is disputed.
+Inspect repository state and the relevant `libINET*.so` artifacts when freshness or mode is disputed. Use `inet --printcmd` (or put `--printcmd` after an explicit `--release`/`--debug` flag) to verify which runner and library the launcher resolved.
 
 For loaded-library suspicion under LLDB, inspect:
 

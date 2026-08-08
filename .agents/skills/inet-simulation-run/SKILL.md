@@ -1,6 +1,6 @@
 ---
 name: inet-simulation-run
-description: Run and diagnose INET simulations using opp_run (or opp_run_dbg) with Cmdenv or Qtenv. Use for normal simulation execution, short diagnostic runs, initialization failures, runtime errors, or requests for interactive graphical debugging.
+description: Run and diagnose INET simulations using the INET launcher (`inet`) with Cmdenv or Qtenv. Use for normal simulation execution, short diagnostic runs, initialization failures, runtime errors, or requests for interactive graphical debugging.
 ---
 
 # Running INET simulations
@@ -9,9 +9,9 @@ Use Cmdenv by default. Use Qtenv only when interactive inspection is useful or t
 
 ## Common Syntax Pitfalls
 
-* **Root Executable Missing**: Do NOT execute `./run` from the repository root directory (fails with `No such file or directory`). Use `opp_run` (or `opp_run_dbg`) as shown in the templates below.
+* **Root Executable Missing**: Do NOT execute `./run` from the repository root directory (fails with `No such file or directory`). Source both OMNeT++ and INET's `setenv` scripts, then use `inet` (or `inet --debug`) as shown in the templates below.
 * **Working-directory mismatch**: Keep every relative `-f`, result, NED-path, and library path consistent with the selected working directory. If the command runs from an example directory, use paths relative to that directory; if it runs from the repository root, use repository-root-relative paths.
-* **Undocumented query flags**: Do not improvise `opp_run -q` or `-h` category arguments. Use the run templates below for execution and consult the installed command's help only when a supported option is genuinely needed.
+* **Undocumented query flags**: Do not improvise `inet -q` or `-h` category arguments. Use the run templates below for execution and consult the underlying simulator's help only when a supported option is genuinely needed.
 
 ## Inputs
 
@@ -19,33 +19,24 @@ Adapt these inputs to the scenario:
 
 ```sh
 INI_FILE="${INI_FILE:-omnetpp.ini}"
-PROJECT_NED_ROOT="${PROJECT_NED_ROOT:-.}"
 CONFIG=<configuration-name>
 RUN=<run-number>
 ```
 
-## Common INET paths
+The commands below assume that `setenv` has been sourced from both the OMNeT++ and INET roots. The `inet` launcher supplies INET's standard NED folders and image path and selects the matching executable or shared library. Use `inet --printcmd` (or `inet --release --printcmd`/`inet --debug --printcmd` when selecting a mode explicitly) when the resolved runner and library paths must be recorded.
 
-Use:
+For a project with additional NED roots or model libraries, pass the project-specific paths and `-l` options in addition to the launcher defaults.
 
-```sh
-INET_NED_PATH="$PROJECT_NED_ROOT;$INET_ROOT/src;$INET_ROOT/examples;$INET_ROOT/tutorials;$INET_ROOT/showcases"
-INET_IMAGE_PATH="$INET_ROOT/images"
-```
-
-OMNeT++ NED-path entries are separated with semicolons. Always quote the complete argument in a Unix shell.
+When adding custom NED roots manually, OMNeT++ NED-path entries are separated with semicolons. Always quote the complete argument in a Unix shell.
 
 ## Run with Cmdenv
 
 Use Cmdenv for automated and reproducible execution:
 
 ```sh
-opp_run \
+inet --release \
   -u Cmdenv \
   -f "$INI_FILE" \
-  "--image-path=$INET_IMAGE_PATH" \
-  "--ned-path=$INET_NED_PATH" \
-  -l "$INET_ROOT/src/libINET.so" \
   -c "$CONFIG" \
   -r "$RUN"
 ```
@@ -67,13 +58,10 @@ Do not use Qtenv for unattended batch runs.
 ### Release build
 
 ```sh
-opp_run \
+inet --release \
   -u Qtenv \
   -f "$INI_FILE" \
-  "--image-path=$INET_IMAGE_PATH" \
-  "--ned-path=$INET_NED_PATH" \
   --debug-on-errors=true \
-  -l "$INET_ROOT/src/libINET.so" \
   -c "$CONFIG" \
   -r "$RUN"
 ```
@@ -81,18 +69,15 @@ opp_run \
 ### Debug build
 
 ```sh
-opp_run_dbg \
+inet --debug \
   -u Qtenv \
   -f "$INI_FILE" \
-  "--image-path=$INET_IMAGE_PATH" \
-  "--ned-path=$INET_NED_PATH" \
   --debug-on-errors=true \
-  -l "$INET_ROOT/src/libINET_dbg.so" \
   -c "$CONFIG" \
   -r "$RUN"
 ```
 
-The debug runner and debug INET library must be used together. Do not mix release and debug binaries.
+The `--release` and `--debug` launcher modes select the corresponding runner and INET library. Do not mix release and debug binaries. For LLDB, use the direct `opp_run_dbg` form described by `inet-lldb-debugging`, because LLDB must target the actual executable rather than this shell wrapper.
 
 `--debug-on-errors=true` requests a debugger trap; it does not launch a debugger. Use `inet-lldb-debugging` for source-level investigation.
 

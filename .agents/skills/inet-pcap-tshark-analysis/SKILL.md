@@ -9,7 +9,7 @@ Use this skill for protocol-visible packets exchanged by an INET simulation. A c
 
 ## Use adjacent skills
 
-* `inet-simulation-run`: establish the base Cmdenv command, NED path, image path, and model libraries.
+* `inet-simulation-run`: establish the base Cmdenv command and launcher-resolved NED path, image path, and model library.
 * `inet-cmdenv-log-analysis`: inspect internal module decisions and log context.
 * `omnetpp-eventlog-analysis`: reconstruct simulator-level scheduling and message causality.
 * `omnetpp-result-analysis`: inspect counters, drops, vectors, and aggregate statistics.
@@ -32,7 +32,7 @@ Use this skill for protocol-visible packets exchanged by an INET simulation. A c
 
 ## Minimal workflow
 
-1. Start from a known-good `opp_run -u Cmdenv` command.
+1. Start from a known-good `inet --release -u Cmdenv` command. Use `inet --release --printcmd` when the underlying runner and library paths need to be recorded.
 2. Inspect the NED and INI configuration to find the real node path, interface module, and whether `numPcapRecorders` is supported.
 3. Add the narrowest useful PcapRecorder command-line overrides together with computed checksum and FCS overrides.
 4. Run one configuration and one run number.

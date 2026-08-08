@@ -7,7 +7,7 @@ description: Debug INET and OMNeT++ simulations at the C++ source level with LLD
 
 ## Build invariant
 
-Use matching debug components:
+For ordinary debug simulations, use `inet --debug`. For a direct LLDB launch, use matching debug components:
 
 ```text
 opp_run_dbg + libINET_dbg.so + debug project libraries
