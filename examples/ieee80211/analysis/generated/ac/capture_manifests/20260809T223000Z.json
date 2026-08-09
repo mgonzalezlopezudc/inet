@@ -1,0 +1,118 @@
+{
+  "analysis_script_sha256": "80a8d8f3d69d1179292b9ce451fd0ddde079619230aaec5dd6e683abca86dfa8",
+  "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
+  "capture_source_diff_sha256": "4f1bc6a7369a8b33660a4dea0a43a51f4e49f64c8e224214ba06ccb6c718984c",
+  "entries": [
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 8600628,
+            "duration_seconds": 0.307579,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.507655,
+            "file_size_bytes": 8886844,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 65535,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 6224,
+            "snapshot_length": null,
+            "start_seconds": 0.200076,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ac/extended_ampdu/results/20260809T223000Z/StandardVhtAmpduLimit/StandardVhtAmpduLimit-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "3a820a2a1796894e3b8b17a7156ac49512fa1e77bb008c7aee4db5ba6179cf94",
+          "size_bytes": 8886844
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "StandardVhtAmpduLimit",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ac/extended_ampdu/omnetpp.ini",
+      "ini_sha256": "764faa33b0ff8238a4612e8827b649a47903a612b6c31092aec0f2411de217f8",
+      "run_number": 0,
+      "scalar": {
+        "configname": "StandardVhtAmpduLimit",
+        "path": "examples/ieee80211ac/extended_ampdu/results/20260809T223000Z/StandardVhtAmpduLimit/StandardVhtAmpduLimit-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "bc3164ea3cae24b17f97bf0442dadfc842215325acd26b7edb19b84701970f51"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "extended_ampdu"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 8600628,
+            "duration_seconds": 0.307579,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.507655,
+            "file_size_bytes": 8886844,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 65535,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 6224,
+            "snapshot_length": null,
+            "start_seconds": 0.200076,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ac/extended_ampdu/results/20260809T223000Z/ExtendedVhtAmpduLimit/ExtendedVhtAmpduLimit-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "3a820a2a1796894e3b8b17a7156ac49512fa1e77bb008c7aee4db5ba6179cf94",
+          "size_bytes": 8886844
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "ExtendedVhtAmpduLimit",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ac/extended_ampdu/omnetpp.ini",
+      "ini_sha256": "764faa33b0ff8238a4612e8827b649a47903a612b6c31092aec0f2411de217f8",
+      "run_number": 0,
+      "scalar": {
+        "configname": "ExtendedVhtAmpduLimit",
+        "path": "examples/ieee80211ac/extended_ampdu/results/20260809T223000Z/ExtendedVhtAmpduLimit/ExtendedVhtAmpduLimit-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "e5979daa577a164e02680877bd959437cb6034f823f71d450fa0c5e764423d20"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "extended_ampdu"
+    }
+  ],
+  "generated_at_utc": "2026-08-09T17:41:14.561753+00:00",
+  "inet_library": "out/clang-release/src/libINET.so",
+  "inet_library_sha256": "d04e2eca1b3e4a680c1e6b4cc2720fa641d81c6d12fbf0508de54d7640eb13cb",
+  "repository_revision": "6ffac7f8aac3272683a7260a563ac5a562420c80",
+  "session_id": "20260809T223000Z",
+  "suite": "ac",
+  "suite_descriptor": {
+    "path": "examples/ieee80211/analysis/suites/ac.json",
+    "sha256": "127ab36fca155d6a36c076b76daa09b9c0d1f39d9cfec1666222d9fc68ab3be9"
+  },
+  "tshark_version": "TShark (Wireshark) 4.6.4."
+}

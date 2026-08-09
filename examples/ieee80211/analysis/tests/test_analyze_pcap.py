@@ -45,6 +45,7 @@ from analyze_pcap import (
     evaluate_evidence,
     extract_frame_timeline,
     extract_compressed_block_ack_records,
+    extract_node_mac_addresses,
     extract_he_trigger_allocations,
     extract_ndp_announcement_records,
     ndp_announcement_records_markdown,
@@ -346,10 +347,50 @@ class PcapMarkdownTest(unittest.TestCase):
         self.assertIn("<small>\n\n| Color | Frame |", markdown)
         self.assertIn("</small>", markdown)
 
+    def test_timeline_uses_node_names_when_mac_correspondence_is_available(self):
+        markdown = timeline_markdown([{
+            "capture": "results/ap.wlan0.pcapng",
+            "frame_number": 8,
+            "simulation_time_s": 1.25,
+            "transmitter": "10:00:00:00:00:00",
+            "receiver": "0a:aa:00:00:00:01",
+            "direction": "from DS",
+            "frame_name": "Data: QoS Data",
+            "retry": False,
+            "sequence_number": 42,
+            "fragment_number": 0,
+            "more_fragments": False,
+            "tid": 5,
+            "ampdu": False,
+            "ampdu_reference": None,
+            "acknowledged_sequence_numbers": [],
+            "phy": {"format": "Legacy/HT"},
+        }], {
+            "ap": "10:00:00:00:00:00",
+            "host[0]": "0a:aa:00:00:00:01",
+        })
+        self.assertIn("ap → host[0]", markdown)
+        self.assertNotIn("10:00:00:00:00:00 → 0a:aa:00:00:00:01", markdown)
+
     def test_block_ack_table_is_enabled_for_n_block_ack_configs(self):
         self.assertTrue(has_compressed_block_ack_records("block_ack", "CompressedBlockAck"))
         self.assertTrue(has_compressed_block_ack_records("block_ack", "ImplicitBlockAck"))
         self.assertFalse(has_compressed_block_ack_records("block_ack", "StandardAck"))
+
+    def test_scalar_result_resolves_wireless_node_names_to_mac_addresses(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".sca") as scalar:
+            scalar.write(
+                'par SingleBssNetwork.host[0].wlan[0] address "\\"0A-AA-00-00-00-01\\""\n'
+                'par SingleBssNetwork.ap.wlan[0] address "\\"10:00:00:00:00:00\\""\n'
+            )
+            scalar.flush()
+            self.assertEqual(
+                extract_node_mac_addresses(scalar.name),
+                {
+                    "ap": "10:00:00:00:00:00",
+                    "host[0]": "0a:aa:00:00:00:01",
+                },
+            )
 
     def test_extracts_acknowledged_sequences_from_compressed_block_ack_bitmap(self):
         result = SimpleNamespace(
@@ -365,7 +406,7 @@ class PcapMarkdownTest(unittest.TestCase):
         self.assertEqual(rows[0]["origin_address"], "0a:aa:00:00:00:01")
         self.assertEqual(rows[0]["destination_address"], "10:00:00:00:00:00")
 
-    def test_compressed_block_ack_tables_are_separated_by_group_by_address(self):
+    def test_compressed_block_ack_tables_use_node_names_for_groups(self):
         records = [
             {
                 "frame_number": 2,
@@ -386,9 +427,16 @@ class PcapMarkdownTest(unittest.TestCase):
                 "acknowledged_sequence_numbers": [1],
             },
         ]
-        markdown_origin = compressed_block_ack_records_markdown(records, group_by="origin")
-        idx1 = markdown_origin.find("##### [script] Origin address: 0a:aa:00:00:00:01")
-        idx2 = markdown_origin.find("##### [script] Origin address: 0a:aa:00:00:00:02")
+        node_addresses = {
+            "ap": "10:00:00:00:00:00",
+            "host[0]": "0a:aa:00:00:00:01",
+            "host[1]": "0a:aa:00:00:00:02",
+        }
+        markdown_origin = compressed_block_ack_records_markdown(
+            records, group_by="origin", node_addresses=node_addresses
+        )
+        idx1 = markdown_origin.find("##### [script] Origin node: `host[0]`")
+        idx2 = markdown_origin.find("##### [script] Origin node: `host[1]`")
         self.assertGreater(idx1, -1)
         self.assertGreater(idx2, -1)
         self.assertLess(idx1, idx2)
@@ -396,8 +444,10 @@ class PcapMarkdownTest(unittest.TestCase):
         self.assertEqual(markdown_origin.count("<small>"), 2)
         self.assertEqual(markdown_origin.count("</small>"), 2)
 
-        markdown_dest = compressed_block_ack_records_markdown(records, group_by="destination")
-        self.assertIn("##### [script] Destination address: 10:00:00:00:00:00", markdown_dest)
+        markdown_dest = compressed_block_ack_records_markdown(
+            records, group_by="destination", node_addresses=node_addresses
+        )
+        self.assertIn("##### [script] Destination node: `ap`", markdown_dest)
         self.assertEqual(markdown_dest.count("|---:|---:|---:|---|---|"), 1)
         self.assertEqual(markdown_dest.count("<small>"), 1)
         self.assertEqual(markdown_dest.count("</small>"), 1)

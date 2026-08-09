@@ -879,6 +879,49 @@ def scalar_metadata(path):
     }
 
 
+def canonical_mac_address(address):
+    """Return a lower-case, colon-separated MAC address when recognizable."""
+    if not address:
+        return None
+    match = re.search(
+        r"[0-9a-fA-F]{2}(?:[:-][0-9a-fA-F]{2}){5}",
+        str(address),
+    )
+    if not match:
+        return None
+    return match.group(0).replace("-", ":").lower()
+
+
+def extract_node_mac_addresses(path):
+    """Extract wireless node names and addresses from a scalar result file."""
+    if not path:
+        return {}
+    addresses = {}
+    address_pattern = re.compile(r"^par\s+(\S+)\s+address\s+(.+)$")
+    with Path(path).open("r") as stream:
+        for line in stream:
+            match = address_pattern.match(line.rstrip())
+            if not match or ".wlan[0]" not in match.group(1):
+                continue
+            module_path = match.group(1)
+            node_name = module_path.rsplit(".wlan[", 1)[0].rsplit(".", 1)[-1]
+            address = canonical_mac_address(match.group(2))
+            if address:
+                addresses[node_name] = address
+    return addresses
+
+
+def scalar_map_from_manifest(manifest, selected_subdirs, run_number):
+    scalar_map = {subdir: {} for subdir in selected_subdirs}
+    for entry in manifest["entries"]:
+        subdir = entry["subdir"]
+        if subdir in scalar_map and entry["run_number"] == run_number:
+            scalar_map[subdir][entry["config"]] = repository_path(
+                entry["scalar"]["path"]
+            )
+    return scalar_map
+
+
 def campaign_result_directory(subdir, config_name, session_id):
     """Return the canonical raw-artifact directory for a scenario/config."""
     if subdir not in SUITE_SCENARIOS:
@@ -2000,11 +2043,33 @@ def multi_sta_block_ack_records_markdown(records, limit=25):
     return "".join(lines)
 
 
-def compressed_block_ack_records_markdown(records, limit=100, group_by="destination"):
+def node_for_mac_address(address, node_addresses=None):
+    address = canonical_mac_address(address)
+    for node_name, node_address in (node_addresses or {}).items():
+        if address == canonical_mac_address(node_address):
+            return node_name
+    return address or "?"
+
+
+def node_mac_correspondence_markdown(node_addresses):
+    if not node_addresses:
+        return "No node/MAC correspondence was decoded from the scalar result file.\n\n"
+    lines = [
+        "| Node | MAC address |\n",
+        "|---|---|\n",
+    ]
+    for node_name, address in sorted(node_addresses.items()):
+        lines.append(f"| `{node_name}` | `{address}` |\n")
+    return "The endpoint names used below are resolved from this run's scalar result:\n\n" + "".join(lines) + "\n"
+
+
+def compressed_block_ack_records_markdown(
+    records, limit=100, group_by="destination", node_addresses=None
+):
     if not records:
         return "No HT Compressed Block Ack records were decoded.\n\n"
     key_field = "origin_address" if group_by == "origin" else "destination_address"
-    label = "Origin address" if group_by == "origin" else "Destination address"
+    label = "Origin node" if group_by == "origin" else "Destination node"
 
     by_group = defaultdict(list)
     for record in records[:limit]:
@@ -2013,7 +2078,8 @@ def compressed_block_ack_records_markdown(records, limit=100, group_by="destinat
 
     lines = []
     for group_val, group_records in sorted(by_group.items()):
-        lines.append(f"##### [script] {label}: {group_val}\n\n")
+        group_name = node_for_mac_address(group_val, node_addresses)
+        lines.append(f"##### [script] {label}: `{group_name}`\n\n")
         lines.append(
             "<small>\n\n"
             "| Frame | Simulation time (s) | Starting sequence | Bitmap | Acknowledged MPDU sequence numbers |\n"
@@ -2573,7 +2639,7 @@ def extract_compressed_block_ack_records(pcap_files):
             })
     return records
 
-def analyze_subdirectory(subdir, considered, config_pcaps):
+def analyze_subdirectory(subdir, considered, config_pcaps, config_scalars=None):
     dir_path = EXAMPLE_ROOT / subdir
     if not dir_path.exists():
         return None
@@ -2587,6 +2653,9 @@ def analyze_subdirectory(subdir, considered, config_pcaps):
             raise RuntimeError(f"Validated manifest has no captures for {subdir}/{config_name}")
         ap_pcaps = [p for p in pcaps if ".ap." in p.name or ".ap1." in p.name or ".ap2." in p.name]
         target_pcaps = ap_pcaps if ap_pcaps else pcaps
+        node_addresses = extract_node_mac_addresses(
+            (config_scalars or {}).get(config_name)
+        )
 
         print(f"[{subdir}] Analyzing config: {config_name} (Global) with pcaps: {[p.name for p in target_pcaps]}")
         stats, total = get_config_pcap_stats(target_pcaps, config_name, subdir)
@@ -2600,6 +2669,7 @@ def analyze_subdirectory(subdir, considered, config_pcaps):
                     str(path.relative_to(REPOSITORY_ROOT))
                     for path in target_pcaps
                 ],
+                "node_addresses": node_addresses,
                 "display_filter": "none (all decoded frames)",
                 "timeline": extract_frame_timeline(target_pcaps, subdir),
                 "he_trigger_allocations": extract_he_trigger_allocations(
@@ -3310,7 +3380,7 @@ def format_type_phy(frame):
     return f"{name} [{', '.join(parts)}]"
 
 
-def timeline_markdown(timeline):
+def timeline_markdown(timeline, node_addresses=None):
     if not timeline:
         return (
             "No frame matched the feature-oriented timeline filter. This is "
@@ -3345,7 +3415,8 @@ def timeline_markdown(timeline):
                 + ", ".join(map(str, acknowledged_sequences))
             )
         address_pair = (
-            f"{frame['transmitter'] or '?'} → {frame['receiver'] or '?'}"
+            f"{node_for_mac_address(frame['transmitter'], node_addresses)} → "
+            f"{node_for_mac_address(frame['receiver'], node_addresses)}"
         )
         frame_id = str(frame["frame_number"])
         type_phy = format_type_phy(frame)
@@ -3375,7 +3446,7 @@ def timeline_markdown(timeline):
     lines.append(
         f"\nFrame numbers are local to {capture_text}, not OMNeT++ event "
         "numbers. For readability, the table collapses observations with the "
-        "same timestamp and MAC identity across capture interfaces; aggregate "
+        "same timestamp and endpoint identity across capture interfaces; aggregate "
         "PCAP statistics retain the original observation counts.\n\n"
     )
     return "".join(lines)
@@ -3469,10 +3540,16 @@ def generate_markdown_tables(
         md.append(f"Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **{global_res['total']}**\n\n")
         md.append(make_table_md(global_res["stats"], global_res["total"]))
         md.append("\n")
+        md.append("#### [script] Node/MAC correspondence\n\n")
+        md.append(node_mac_correspondence_markdown(
+            global_res.get("node_addresses", {})
+        ))
         md.append(
             "#### [script] Representative frame-exchange timeline\n\n"
         )
-        md.append(timeline_markdown(global_res["timeline"]))
+        md.append(timeline_markdown(
+            global_res["timeline"], global_res.get("node_addresses")
+        ))
         if (
             subdir in ("ul_multitid", "mac_features/multi_tid_block_ack")
             and config_name != HT_IMPLICIT_BLOCK_ACK_CONFIG
@@ -3491,6 +3568,7 @@ def generate_markdown_tables(
             md.append(compressed_block_ack_records_markdown(
                 global_res.get("compressed_block_ack_records", []),
                 group_by=group_by,
+                node_addresses=global_res.get("node_addresses"),
             ))
         if subdir in ("ul_ofdma", "bsr", "he_bsr"):
             md.append(
@@ -3900,12 +3978,18 @@ def main():
     )
     manifest["_selected_manifest"] = manifest_provenance(selected_manifest)
     capture_map = capture_map_from_manifest(manifest, selected_subdirs, args.run)
+    scalar_map = scalar_map_from_manifest(manifest, selected_subdirs, args.run)
 
     all_results = {}
     all_checks = {}
     for subdir in selected_subdirs:
         considered = subdirs_configs[subdir]
-        res = analyze_subdirectory(subdir, considered, capture_map[subdir])
+        res = analyze_subdirectory(
+            subdir,
+            considered,
+            capture_map[subdir],
+            scalar_map.get(subdir),
+        )
         if res:
             all_results[subdir] = res
             all_checks[subdir] = validate_evidence_checks(
@@ -4016,6 +4100,7 @@ def main():
                     "total": g["total"],
                     "used_ap_only": g["used_ap_only"],
                     "captures": g["captures"],
+                    "node_addresses": g.get("node_addresses", {}),
                     "display_filter": g["display_filter"],
                     "stats": {",".join(str(x) for x in k): v for k, v in g["stats"].items()},
                     "timeline": g["timeline"],

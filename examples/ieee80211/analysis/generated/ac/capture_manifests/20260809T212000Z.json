@@ -1,0 +1,168 @@
+{
+  "analysis_script_sha256": "80a8d8f3d69d1179292b9ce451fd0ddde079619230aaec5dd6e683abca86dfa8",
+  "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
+  "capture_source_diff_sha256": "f26e7a6bca9e4d1d5a415ab256814b204bab84097fe541727dc320d8393adc8b",
+  "entries": [
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 9325306,
+            "duration_seconds": 0.306892,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.506964,
+            "file_size_bytes": 9632540,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 65535,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 6681,
+            "snapshot_length": null,
+            "start_seconds": 0.200072,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260809T212000Z/SingleStreamVht/SingleStreamVht-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "8a08894df09e4ac82bb0d33b1afd25ae5cc0ff27f8c7913667232da2f1222f32",
+          "size_bytes": 9632540
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "SingleStreamVht",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ac/spatial_streams_8x8/omnetpp.ini",
+      "ini_sha256": "326c834631c3c0a496739f849910a33558c80df7eafc9d2d0799154e6d9d10e1",
+      "run_number": 0,
+      "scalar": {
+        "configname": "SingleStreamVht",
+        "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260809T212000Z/SingleStreamVht/SingleStreamVht-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "2524c2a5ad8df74cb30803ded29a4aaf0a78ccf6aa89e6d305ae44a8ca3cfac8"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "spatial_streams_8x8"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 15347368,
+            "duration_seconds": 0.303742,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.503802,
+            "file_size_bytes": 15852476,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 65535,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 10985,
+            "snapshot_length": null,
+            "start_seconds": 0.20006,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260809T212000Z/FourStreamVht/FourStreamVht-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "55f324e3613c691a82fce4dbcbb76135d9aee17ed8ab577e0545d6ac83642730",
+          "size_bytes": 15852476
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "FourStreamVht",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ac/spatial_streams_8x8/omnetpp.ini",
+      "ini_sha256": "326c834631c3c0a496739f849910a33558c80df7eafc9d2d0799154e6d9d10e1",
+      "run_number": 0,
+      "scalar": {
+        "configname": "FourStreamVht",
+        "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260809T212000Z/FourStreamVht/FourStreamVht-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "17027635b0abe2a516507ca53dc5a409180e2e8704914ef3e5b7ac63e79c69fb"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "spatial_streams_8x8"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 17035460,
+            "duration_seconds": 0.304755,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.504827,
+            "file_size_bytes": 17595388,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 65535,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 12177,
+            "snapshot_length": null,
+            "start_seconds": 0.200072,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260809T212000Z/EightStreamVht/EightStreamVht-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "0335c6139527cd7e0414bafcf6c22536ad24f2962ba2b43f4b0eddfaa928ee05",
+          "size_bytes": 17595388
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "EightStreamVht",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ac/spatial_streams_8x8/omnetpp.ini",
+      "ini_sha256": "326c834631c3c0a496739f849910a33558c80df7eafc9d2d0799154e6d9d10e1",
+      "run_number": 0,
+      "scalar": {
+        "configname": "EightStreamVht",
+        "path": "examples/ieee80211ac/spatial_streams_8x8/results/20260809T212000Z/EightStreamVht/EightStreamVht-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "1736a50bbe8651f1fb5d03c41fa804ae8aeff1394a05dcf121a1eeaf12803c1d"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "spatial_streams_8x8"
+    }
+  ],
+  "generated_at_utc": "2026-08-09T17:38:04.534256+00:00",
+  "inet_library": "out/clang-release/src/libINET.so",
+  "inet_library_sha256": "d04e2eca1b3e4a680c1e6b4cc2720fa641d81c6d12fbf0508de54d7640eb13cb",
+  "repository_revision": "6ffac7f8aac3272683a7260a563ac5a562420c80",
+  "session_id": "20260809T212000Z",
+  "suite": "ac",
+  "suite_descriptor": {
+    "path": "examples/ieee80211/analysis/suites/ac.json",
+    "sha256": "e42d5ab91c9a1aa520da8227c0531c865aa19c2ce75eb35191fb442f32037c46"
+  },
+  "tshark_version": "TShark (Wireshark) 4.6.4."
+}

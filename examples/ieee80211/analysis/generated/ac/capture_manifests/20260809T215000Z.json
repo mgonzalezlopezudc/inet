@@ -1,0 +1,118 @@
+{
+  "analysis_script_sha256": "80a8d8f3d69d1179292b9ce451fd0ddde079619230aaec5dd6e683abca86dfa8",
+  "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
+  "capture_source_diff_sha256": "48f16fb800dcb2f6757fb3cbc62548a42d41f51e471857b35a2bb4621eda7416",
+  "entries": [
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 1927610,
+            "duration_seconds": 0.315917,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.515977,
+            "file_size_bytes": 2015020,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 65535,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1899,
+            "snapshot_length": null,
+            "start_seconds": 0.20006,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260809T215000Z/VhtSingleUserBaseline/VhtSingleUserBaseline-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "253e7b4c40eeb96988181ee758ebf0b6525dbadcee8b2139186c01f9f232c423",
+          "size_bytes": 2015020
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "VhtSingleUserBaseline",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ac/dl_mu_mimo_baseline/omnetpp.ini",
+      "ini_sha256": "c3eac81d5dc10eff5dfc1e60bc24fc2ccc0388d773ed082d716273a9f4981787",
+      "run_number": 0,
+      "scalar": {
+        "configname": "VhtSingleUserBaseline",
+        "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260809T215000Z/VhtSingleUserBaseline/VhtSingleUserBaseline-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "80065e57fd2ce3e219ae6da8e2e2341427a04d2cb47f7afd6e0ac32b87336b58"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "dl_mu_mimo_baseline"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 2729831,
+            "duration_seconds": 0.302157,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.502253,
+            "file_size_bytes": 2872856,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 65535,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 3108,
+            "snapshot_length": null,
+            "start_seconds": 0.200096,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260809T215000Z/VhtDlMuMimoThreeUsers/VhtDlMuMimoThreeUsers-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "806c684aa263ff16abbca5618cd0ac5e38e911ce85821b4162e38e3e83894ed1",
+          "size_bytes": 2872856
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "VhtDlMuMimoThreeUsers",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ac/dl_mu_mimo_baseline/omnetpp.ini",
+      "ini_sha256": "c3eac81d5dc10eff5dfc1e60bc24fc2ccc0388d773ed082d716273a9f4981787",
+      "run_number": 0,
+      "scalar": {
+        "configname": "VhtDlMuMimoThreeUsers",
+        "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260809T215000Z/VhtDlMuMimoThreeUsers/VhtDlMuMimoThreeUsers-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "6815cb49b232042e2dc4e1aaab1fb4488ba712c68bf988254a124fcc74195341"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "dl_mu_mimo_baseline"
+    }
+  ],
+  "generated_at_utc": "2026-08-09T17:39:05.511972+00:00",
+  "inet_library": "out/clang-release/src/libINET.so",
+  "inet_library_sha256": "d04e2eca1b3e4a680c1e6b4cc2720fa641d81c6d12fbf0508de54d7640eb13cb",
+  "repository_revision": "6ffac7f8aac3272683a7260a563ac5a562420c80",
+  "session_id": "20260809T215000Z",
+  "suite": "ac",
+  "suite_descriptor": {
+    "path": "examples/ieee80211/analysis/suites/ac.json",
+    "sha256": "e42d5ab91c9a1aa520da8227c0531c865aa19c2ce75eb35191fb442f32037c46"
+  },
+  "tshark_version": "TShark (Wireshark) 4.6.4."
+}
