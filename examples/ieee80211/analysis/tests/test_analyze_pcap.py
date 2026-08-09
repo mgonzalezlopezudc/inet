@@ -255,6 +255,73 @@ class TriggerAllocationDecodeTest(unittest.TestCase):
 
 class PcapMarkdownTest(unittest.TestCase):
 
+    def test_vht_mu_timeline_uses_phy_label_and_unknown_outer_mac_fields(self):
+        frame = {
+            "capture": "results/ap.wlan0.pcapng",
+            "frame_number": 36,
+            "simulation_time_s": 0.21,
+            "transmitter": None,
+            "receiver": None,
+            "direction": "unknown",
+            "frame_name": "VHT MU PPDU",
+            "vht_mu_container": True,
+            "retry": None,
+            "sequence_number": None,
+            "fragment_number": None,
+            "more_fragments": None,
+            "tid": None,
+            "ampdu": False,
+            "ampdu_reference": None,
+            "acknowledged_sequence_numbers": [],
+            "acknowledged_ampdu_references": [],
+            "phy": {
+                "format": "VHT", "mcs": "VHT-MCS 8", "bandwidth_or_ru": "20 MHz",
+                "guard_interval": "0.8 us", "coding": "BCC",
+            },
+        }
+        self.assertEqual(
+            analyze_pcap.format_type_phy(frame),
+            "VHT MU PPDU [VHT-MCS 8, 20 MHz, 0.8 us, BCC]",
+        )
+        markdown = timeline_markdown([frame])
+        self.assertIn("? → ?", markdown)
+        self.assertIn("direction=unknown, retry=-, seq=-", markdown)
+
+    def test_vht_mu_user_timeline_preserves_nested_mac_addresses(self):
+        frame = {
+            "capture": "results/ap.wlan0.pcapng",
+            "frame_number": 37,
+            "simulation_time_s": 0.21,
+            "transmitter": "00:00:00:00:00:01",
+            "receiver": "00:00:00:00:00:02",
+            "direction": "to DS",
+            "frame_type": "2",
+            "frame_subtype": "8",
+            "frame_name": "VHT MU QoS Data",
+            "vht_mu_user": True,
+            "vht_mu_container": False,
+            "retry": False,
+            "sequence_number": 4,
+            "fragment_number": 0,
+            "more_fragments": False,
+            "tid": 0,
+            "ampdu": True,
+            "ampdu_reference": "1234",
+            "acknowledged_sequence_numbers": [],
+            "acknowledged_ampdu_references": [],
+            "phy": {
+                "format": "VHT", "mcs": "VHT-MCS 8", "bandwidth_or_ru": "20 MHz",
+                "guard_interval": "0.8 us", "coding": "BCC", "nss": "1",
+            },
+        }
+        self.assertEqual(
+            analyze_pcap.format_type_phy(frame),
+            "VHT MU QoS Data [VHT, VHT-MCS 8, 20 MHz, GI 0.8 us, BCC, A-MPDU]",
+        )
+        markdown = timeline_markdown([frame])
+        self.assertIn("00:00:00:00:00:01 → 00:00:00:00:00:02", markdown)
+        self.assertNotIn("? → ?", markdown)
+
     def test_block_ack_timeline_prints_acknowledged_ampdu_reference(self):
         markdown = timeline_markdown([{
             "capture": "results/ap.wlan0.pcapng",
@@ -540,7 +607,7 @@ class DecodeLegacyFieldsTest(unittest.TestCase):
             for key, value in statistics.items()
         }
         self.assertEqual(
-            names["Control: VHT MU PPDU [VHT, VHT-MCS 8, 20 MHz, GI 0.8 us, BCC]"],
+            names["VHT MU PPDU [VHT, VHT-MCS 8, 20 MHz, GI 0.8 us, BCC]"],
             1,
         )
         self.assertEqual(
@@ -825,11 +892,20 @@ class CaptureValidationTest(unittest.TestCase):
                 "VHT MU PPDU", "", standard="VHT", mcs="VHT-MCS 8",
                 bw="20 MHz", gi="0.8 us", nss="1", coding="BCC",
             ),
-            "Control: VHT MU PPDU [VHT, VHT-MCS 8, 20 MHz, GI 0.8 us, BCC]",
+            "VHT MU PPDU [VHT, VHT-MCS 8, 20 MHz, GI 0.8 us, BCC]",
         )
         self.assertEqual(
-            analyze_pcap.timeline_role({"frame_name": "Control: VHT MU PPDU"}),
+            analyze_pcap.timeline_role({"frame_name": "VHT MU PPDU"}),
             "Carries one per-user A-MPDU, including QoS Data, in simultaneous VHT spatial streams.",
+        )
+
+    def test_vht_mu_user_is_named_as_per_user_data(self):
+        self.assertEqual(
+            analyze_pcap.get_packet_type_name(
+                "VHT MU QoS Data", "", standard="VHT", mcs="VHT-MCS 8",
+                bw="20 MHz", gi="0.8 us", nss="1", coding="BCC", is_ampdu=True,
+            ),
+            "VHT MU QoS Data [VHT, VHT-MCS 8, 20 MHz, GI 0.8 us, BCC, A-MPDU]",
         )
 
     def test_timeline_starts_at_t_zero(self):

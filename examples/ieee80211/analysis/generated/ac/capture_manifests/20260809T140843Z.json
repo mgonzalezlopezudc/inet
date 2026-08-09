@@ -1,0 +1,268 @@
+{
+  "analysis_script_sha256": "80a8d8f3d69d1179292b9ce451fd0ddde079619230aaec5dd6e683abca86dfa8",
+  "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
+  "capture_source_diff_sha256": "63c1284ae2be28bddda044ea9846e7df45834e1066486d78ce2bcb0f6a83d432",
+  "entries": [
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 2768062,
+            "duration_seconds": 0.321334,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.521526,
+            "file_size_bytes": 2859676,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 65535,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1991,
+            "snapshot_length": null,
+            "start_seconds": 0.200192,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ac/wide_channels/results/20260809T140843Z/Vht20MHz/Vht20MHz-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "36a02275e5a0b9a2d7be59945793d12be18e3a94b0a4e016468a2f5518ae7343",
+          "size_bytes": 2859676
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "Vht20MHz",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ac/wide_channels/omnetpp.ini",
+      "ini_sha256": "f858cdd6001f059b2476ba511d1b50c62115fc79a830000d5d912644032f212e",
+      "run_number": 0,
+      "scalar": {
+        "configname": "Vht20MHz",
+        "path": "examples/ieee80211ac/wide_channels/results/20260809T140843Z/Vht20MHz/Vht20MHz-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "16d58a921160a0c41593a7c4c3869a979d189b879a7f235376f09c525ce5d762"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "wide_channels"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 4958600,
+            "duration_seconds": 0.314559,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.514675,
+            "file_size_bytes": 5122300,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 65535,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 3559,
+            "snapshot_length": null,
+            "start_seconds": 0.200116,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ac/wide_channels/results/20260809T140843Z/Vht40MHz/Vht40MHz-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "e94d832289f4aed90c8da71b7283d3bce70fde0192520a5e37e390468ac31b28",
+          "size_bytes": 5122300
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "Vht40MHz",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ac/wide_channels/omnetpp.ini",
+      "ini_sha256": "f858cdd6001f059b2476ba511d1b50c62115fc79a830000d5d912644032f212e",
+      "run_number": 0,
+      "scalar": {
+        "configname": "Vht40MHz",
+        "path": "examples/ieee80211ac/wide_channels/results/20260809T140843Z/Vht40MHz/Vht40MHz-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "4e7bf79bf67865d0b13e3b7d257b7d56b3f205fed926087189884f02482b8fcc"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "wide_channels"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 8307906,
+            "duration_seconds": 0.306565,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.506641,
+            "file_size_bytes": 8581484,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 65535,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 5949,
+            "snapshot_length": null,
+            "start_seconds": 0.200076,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ac/wide_channels/results/20260809T140843Z/Vht80MHz/Vht80MHz-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "f486bbd2bb8424739109f71f27908f348009ef6a2b111ffe999f838b197a8d7a",
+          "size_bytes": 8581484
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "Vht80MHz",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ac/wide_channels/omnetpp.ini",
+      "ini_sha256": "f858cdd6001f059b2476ba511d1b50c62115fc79a830000d5d912644032f212e",
+      "run_number": 0,
+      "scalar": {
+        "configname": "Vht80MHz",
+        "path": "examples/ieee80211ac/wide_channels/results/20260809T140843Z/Vht80MHz/Vht80MHz-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "1d815b010bef9d1c4450346be5a3025552f6d3151037bfc6f4528ccb656696f0"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "wide_channels"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 11670828,
+            "duration_seconds": 0.304915,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.504975,
+            "file_size_bytes": 12055888,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 65535,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 8374,
+            "snapshot_length": null,
+            "start_seconds": 0.20006,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ac/wide_channels/results/20260809T140843Z/Vht160MHz/Vht160MHz-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "7a61a92a2c9357794c2abbe2a2847c4d1fe60add15bbe7c0b31c4d26728764e0",
+          "size_bytes": 12055888
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "Vht160MHz",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ac/wide_channels/omnetpp.ini",
+      "ini_sha256": "f858cdd6001f059b2476ba511d1b50c62115fc79a830000d5d912644032f212e",
+      "run_number": 0,
+      "scalar": {
+        "configname": "Vht160MHz",
+        "path": "examples/ieee80211ac/wide_channels/results/20260809T140843Z/Vht160MHz/Vht160MHz-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "9a1e3f263aaf5756e3461928607d7191e3a2f25498ade645669cd93ec85c31bf"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "wide_channels"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 11975848,
+            "duration_seconds": 0.30383,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.50389,
+            "file_size_bytes": 12370512,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 65535,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 8583,
+            "snapshot_length": null,
+            "start_seconds": 0.20006,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ac/wide_channels/results/20260809T140843Z/Vht80Plus80MHz/Vht80Plus80MHz-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "c4ae2b644c9ac747af6dcdebeff088105613b279e3ed853ae2e4fc9bc1377c7d",
+          "size_bytes": 12370512
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "Vht80Plus80MHz",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ac/wide_channels/omnetpp.ini",
+      "ini_sha256": "f858cdd6001f059b2476ba511d1b50c62115fc79a830000d5d912644032f212e",
+      "run_number": 0,
+      "scalar": {
+        "configname": "Vht80Plus80MHz",
+        "path": "examples/ieee80211ac/wide_channels/results/20260809T140843Z/Vht80Plus80MHz/Vht80Plus80MHz-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "6aea1504111a7480493bccd2bdecd115cb0a0b5745631e4ac26c0aa910833cf8"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "wide_channels"
+    }
+  ],
+  "generated_at_utc": "2026-08-09T14:08:56.792255+00:00",
+  "inet_library": "out/clang-release/src/libINET.so",
+  "inet_library_sha256": "4137a3db0f7bfadd71ee67ea04d5b03bb39161ce66f155f5fa386742340668b0",
+  "repository_revision": "2096b40b3ef470d7b33a6b334a0538467123bb94",
+  "session_id": "20260809T140843Z",
+  "suite": "ac",
+  "suite_descriptor": {
+    "path": "examples/ieee80211/analysis/suites/ac.json",
+    "sha256": "9cf3cbb341de2a6761536cb2361789e9a6883465e9bd5a181007ed7e2f02d1ad"
+  },
+  "tshark_version": "TShark (Wireshark) 4.6.4."
+}

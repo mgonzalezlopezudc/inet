@@ -325,7 +325,9 @@ def get_packet_type_name(fc_type, fc_subtype, fc_version=None, is_he_mu=False, s
     if fc_type == "Aggregation Overhead":
         return "A-MPDU Delimiter / Aggregation Overhead" + suffix
     if fc_type == "VHT MU PPDU":
-        return "Control: VHT MU PPDU" + suffix
+        return "VHT MU PPDU" + suffix
+    if fc_type == "VHT MU QoS Data":
+        return "VHT MU QoS Data" + suffix
     if fc_type == "HE TB feedback NDP":
         return "Control: HE TB feedback NDP" + suffix
     if fc_type in ("NDP Sounding", "VHT Sounding NDP", "HE Sounding NDP", "EHT Sounding NDP", "VHT NDP Sounding"):
@@ -1351,10 +1353,12 @@ def extract_frame_timeline(pcap_files, subdir, limit=TIMELINE_LIMIT):
             vht_act, he_act, eht_act = values[37:46]
             vht_user_mcs = [vht_mcs_val, values[46], values[48], values[50]]
             vht_mu_user_count = sum(bool(value) for value in vht_user_mcs)
-            is_vht_mu_container = (
+            is_vht_mu = (
                 vht_present in ("1", "True") and
-                subtype == "0" and vht_mu_user_count >= 2
+                vht_mu_user_count >= 2
             )
+            is_vht_mu_container = is_vht_mu and subtype == "0"
+            is_vht_mu_user = is_vht_mu and frame_type == "2" and subtype != "0"
             action_code = action_code or vht_act or he_act or eht_act
             if not frame_number or not timestamp:
                 continue
@@ -1419,21 +1423,35 @@ def extract_frame_timeline(pcap_files, subdir, limit=TIMELINE_LIMIT):
                 (False, True): "from DS",
                 (True, True): "WDS",
             }[(to_ds in ("1", "True"), from_ds in ("1", "True"))]
+            if is_vht_mu_container:
+                # A VHT MU PPDU has no single outer MAC header. The bytes
+                # following radiotap contain per-user MPDU subframes, which
+                # TShark may heuristically dissect as one malformed WLAN
+                # frame. Do not publish those fallback MAC fields as if they
+                # described the MU transmission.
+                direction = "unknown"
+                ta = ra = sa = da = None
+                to_ds = from_ds = False
+                frame_type = subtype = None
+                category_code = action_code = None
+                retry = sequence = fragment = tid = more_fragments = None
             is_sounding = (
                 not is_vht_mu_container and
                 (not frame_type or frame_type == "") and
                 (not subtype or subtype == "") and
                 not sequence and not tid
             )
-            frame_name = (
-                "Control: VHT MU PPDU" if is_vht_mu_container else
-                get_packet_type_name(
+            decoded_name = get_packet_type_name(
                     frame_type, subtype,
                     is_sounding=is_sounding,
                     standard=standard if standard not in ("Legacy", "Legacy/HT") else None,
                     mcs=mcs, bw=bw_ru, gi=gi, nss=nss, coding=coding,
                     category_code=category_code, action_code=action_code
                 )
+            frame_name = (
+                "VHT MU PPDU" if is_vht_mu_container else
+                "VHT MU " + decoded_name if is_vht_mu_user else
+                decoded_name
             )
             rows.append({
                 "capture": str(Path(path).relative_to(REPOSITORY_ROOT)),
@@ -1451,12 +1469,13 @@ def extract_frame_timeline(pcap_files, subdir, limit=TIMELINE_LIMIT):
                 "action_code": action_code or None,
                 "frame_name": frame_name,
                 "vht_mu_container": is_vht_mu_container,
-                "vht_mu_user_count": vht_mu_user_count if is_vht_mu_container else 0,
-                "retry": retry in ("1", "True"),
-                "sequence_number": int(sequence) if sequence.isdigit() else None,
-                "fragment_number": int(fragment) if fragment.isdigit() else None,
-                "more_fragments": more_fragments in ("1", "True"),
-                "tid": int(tid) if tid.isdigit() else None,
+                "vht_mu_user": is_vht_mu_user,
+                "vht_mu_user_count": vht_mu_user_count if is_vht_mu else 0,
+                "retry": None if retry is None else retry in ("1", "True"),
+                "sequence_number": int(sequence) if sequence and sequence.isdigit() else None,
+                "fragment_number": int(fragment) if fragment and fragment.isdigit() else None,
+                "more_fragments": None if more_fragments is None else more_fragments in ("1", "True"),
+                "tid": int(tid) if tid and tid.isdigit() else None,
                 "ampdu": ampdu_present in ("1", "True"),
                 "ampdu_reference": ampdu_reference or None,
                 "acknowledged_sequence_numbers": (
@@ -2121,6 +2140,9 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                 if len(parts) < 4:
                     continue
 
+                vht_mu_container = False
+                vht_mu_user = False
+
                 fc_version = get_field_val(parts, 0)
                 is_wlan_present = (
                     fc_version in ["0", "1", "2"] or
@@ -2174,8 +2196,6 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                         get_field_val(parts, 49) or
                         get_field_val(parts, 50)
                     )
-                    vht_mu_container = False
-
                     eht_known = get_field_val(parts, 36)
                     is_eht = bool(eht_known)
                     if present_word_str:
@@ -2220,9 +2240,9 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                             get_field_val(parts, 53), get_field_val(parts, 55),
                         ]
                         vht_mu_user_count = sum(bool(value) for value in vht_mcs_values)
-                        vht_mu_container = (
-                            fc_subtype == "0" and vht_mu_user_count >= 2
-                        )
+                        is_vht_mu = vht_mu_user_count >= 2
+                        vht_mu_container = is_vht_mu and fc_subtype == "0"
+                        vht_mu_user = is_vht_mu and fc_type == "2" and fc_subtype != "0"
                         vht_mcs_val = vht_mcs_values[0]
                         mcs = f"VHT-MCS {vht_mcs_val}" if vht_mcs_val else "VHT"
                         vht_nss_val = get_field_val(parts, 19)
@@ -2308,8 +2328,11 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                         key = (ndp_name, "", standard, mcs, bw, gi, nss, coding, is_ampdu, True, bss_color)
                     else:
                         key = ("Aggregation Overhead", "", standard, mcs, bw, gi, nss, coding, is_ampdu, is_sounding, bss_color)
-                elif vht_mu_container:
-                    key = ("VHT MU PPDU", "", standard, mcs, bw, gi, nss, coding, is_ampdu, False, bss_color)
+                elif vht_mu_container or vht_mu_user:
+                    key = (
+                        "VHT MU QoS Data" if vht_mu_user else "VHT MU PPDU",
+                        "", standard, mcs, bw, gi, nss, coding, is_ampdu, False, bss_color
+                    )
                 elif (not fc_type or fc_type == "") and (not fc_subtype or fc_subtype == ""):
                     key = ("Aggregation Overhead", "", standard, mcs, bw, gi, nss, coding, is_ampdu, is_sounding, bss_color)
                 elif v > 0:
@@ -2679,7 +2702,8 @@ ORDERED_BASE_TYPES = [
     "Control: Trigger",
     "Control: NDP Announcement (NDPA)",
     "Control: VHT Sounding NDP",
-    "Control: VHT MU PPDU",
+    "VHT MU QoS Data",
+    "VHT MU PPDU",
     "Control: HE Sounding NDP",
     "Control: EHT Sounding NDP",
     "Control: NDP Sounding",
@@ -2738,7 +2762,9 @@ def get_packet_color(pt):
         h, s, l = 35, 95, 50
     elif base in ("Control: NDP Announcement (NDPA)", "Control: NDP Announcement"):  # Sounding NDPA (Gold/Yellow)
         h, s, l = 45, 90, 52
-    elif base == "Control: VHT MU PPDU":  # VHT MU container/data (purple)
+    elif base == "VHT MU QoS Data":  # VHT MU per-user QoS Data (green)
+        h, s, l = 120, 70, 45
+    elif base == "VHT MU PPDU":  # VHT MU container (purple)
         h, s, l = 275, 70, 48
     elif base in ("Control: HE TB feedback NDP", "Control: VHT Sounding NDP", "Control: HE Sounding NDP", "Control: EHT Sounding NDP", "Control: NDP Sounding", "VHT Sounding NDP", "HE Sounding NDP", "NDP Sounding"):  # Gold/Yellow
         h, s, l = 50, 95, 48
@@ -3244,11 +3270,14 @@ def format_type_phy(frame):
         ):
             if value:
                 parts.append(value)
-        return "Control: VHT MU PPDU [" + ", ".join(parts[1:]) + "]"
+        mcs = phy.get("mcs")
+        if mcs:
+            parts.insert(1, mcs)
+        return "VHT MU PPDU [" + ", ".join(parts[1:]) + "]"
     phy = frame.get("phy") or {}
     standard = phy.get("format")
     if frame.get("frame_type") is not None and frame.get("frame_subtype") is not None:
-        return get_packet_type_name(
+        type_phy = get_packet_type_name(
             frame["frame_type"], frame["frame_subtype"],
             standard=standard if standard not in ("Legacy", "Legacy/HT/VHT", "Legacy/HT") else None,
             mcs=phy.get("mcs"), bw=phy.get("bandwidth_or_ru"),
@@ -3257,6 +3286,7 @@ def format_type_phy(frame):
             category_code=frame.get("category_code"),
             action_code=frame.get("action_code"),
         )
+        return "VHT MU " + type_phy if frame.get("vht_mu_user") else type_phy
     name = frame.get("frame_name", "")
     if "NDP" in name or "Sounding" in name or name.startswith("Control:"):
         return name
@@ -3295,10 +3325,10 @@ def timeline_markdown(timeline):
     for frame in timeline:
         decisive = [
             f"direction={frame.get('direction', '-')}",
-            f"retry={int(frame['retry'])}",
+            f"retry={'-' if frame['retry'] is None else int(frame['retry'])}",
             f"seq={frame['sequence_number'] if frame['sequence_number'] is not None else '-'}",
             f"frag={frame['fragment_number'] if frame['fragment_number'] is not None else '-'}",
-            f"more-frag={int(frame.get('more_fragments', False))}",
+            f"more-frag={'-' if frame.get('more_fragments') is None else int(frame['more_fragments'])}",
             f"TID={frame['tid'] if frame['tid'] is not None else '-'}",
         ]
         if frame["ampdu"]:
@@ -3394,7 +3424,8 @@ def generate_markdown_tables(
         )
         airtime_limitations = (
             "VHT SU and VHT MU use modeled preambles; per-user VHT MU signaling "
-            "not exposed by radiotap remains approximate."
+            "remains approximate because radiotap carries common MU metadata "
+            "alongside each logical user record."
         )
     else:
         phy_provenance = (
