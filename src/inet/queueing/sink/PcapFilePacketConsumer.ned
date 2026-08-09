@@ -24,8 +24,9 @@ simple PcapFilePacketConsumer extends PassivePacketSinkBase like IPassivePacketS
         int timePrecision = default(6); // Time precision in recorded file. pcap supports only 6 (usec) or 9 (nanosec), pcapng supports more values (see 'if_tsresol' option in pcapng file format).
         bool outbound;  // Direction flag
         bool alwaysFlush = default(false); // Flush the PCAP file after each write to ensure that all packets are captured in case of a crash
+        int outputBufferSize @unit(B) = default(0B); // Stdio buffer size; 0 uses the libc default
+        int flushInterval = default(0); // Flush after this many records; 0 disables periodic flushing and alwaysFlush takes precedence
         @class(PcapFilePacketConsumer);
     gates:
         input in @labels(push);
 }
-

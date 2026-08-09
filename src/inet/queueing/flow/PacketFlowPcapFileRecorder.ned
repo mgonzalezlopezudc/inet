@@ -26,5 +26,7 @@ simple PacketFlowPcapFileRecorder extends PacketFlowBase like IPacketFlow
         int timePrecision = default(6); // Time precison in recorded file. pcap supports only 6 (usec) or 9 (nanosec), pcapng supports more values (see 'if_tsresol' option in pcapng file format).
         string direction @enum(inbound, outbound);  // direction flag
         bool alwaysFlush = default(false); // flush the PCAP file after each write to ensure that all packets are captured in case of a crash
+        int outputBufferSize @unit(B) = default(0B); // stdio buffer size; 0 uses the libc default
+        int flushInterval = default(0); // flush after this many records; 0 disables periodic flushing and alwaysFlush takes precedence
         @class(PacketFlowPcapFileRecorder);
 }

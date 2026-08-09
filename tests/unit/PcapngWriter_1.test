@@ -2,6 +2,7 @@
 Test segmented PCAPng records, finite and unlimited snaplen, padding, and direction metadata.
 
 %includes:
+#include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <iterator>
@@ -42,11 +43,35 @@ using namespace inet;
 
 #define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
 
+class TestPcapngWriter : public PcapngWriter
+{
+  public:
+    bool failWrite = false;
+    bool failFlush = false;
+    bool failClose = false;
+    bool failSetBuffer = false;
+    int numFlushCalls = 0;
+
+  protected:
+    virtual size_t writeFile(const void *data, size_t size, size_t count, FILE *file) override { return failWrite ? 0 : PcapngWriter::writeFile(data, size, count, file); }
+    virtual int flushFile(FILE *file) override { numFlushCalls++; return failFlush ? EOF : PcapngWriter::flushFile(file); }
+    virtual int closeFileHandle(FILE *file) override { auto result = PcapngWriter::closeFileHandle(file); return failClose ? EOF : result; }
+    virtual int setFileBuffer(FILE *file, char *buffer, int mode, size_t size) override { return failSetBuffer ? EOF : PcapngWriter::setFileBuffer(file, buffer, mode, size); }
+};
+
 static std::vector<uint8_t> readFile(const char *fileName)
 {
     std::ifstream stream(fileName, std::ios::binary);
     REQUIRE(stream.good());
     return std::vector<uint8_t>(std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>());
+}
+
+static size_t getFileSize(const char *fileName)
+{
+    std::ifstream stream(fileName, std::ios::binary | std::ios::ate);
+    if (!stream.good())
+        return 0;
+    return static_cast<size_t>(stream.tellg());
 }
 
 static uint16_t readUint16(const std::vector<uint8_t>& bytes, size_t offset)
@@ -77,15 +102,50 @@ static size_t findBlock(const std::vector<uint8_t>& bytes, uint32_t blockType)
     throw cRuntimeError("PCAPng block type %u not found", blockType);
 }
 
-static void checkCapture(const char *fileName, uint32_t expectedSnaplen, uint32_t expectedCapturedLength)
+static size_t roundUp4(size_t value)
+{
+    return (value + 3) & ~3U;
+}
+
+static void checkInterfaceDescriptor(const std::vector<uint8_t>& bytes, size_t interfaceOffset, const PcapInterfaceDescriptor& descriptor)
+{
+    auto optionOffset = interfaceOffset + 16;
+    REQUIRE(readUint16(bytes, optionOffset) == 0x0002);
+    REQUIRE(readUint16(bytes, optionOffset + 2) == descriptor.name.size());
+    REQUIRE(std::equal(descriptor.name.begin(), descriptor.name.end(), bytes.begin() + optionOffset + 4));
+    optionOffset += 4 + roundUp4(descriptor.name.size());
+    REQUIRE(readUint16(bytes, optionOffset) == 0x0003);
+    REQUIRE(readUint16(bytes, optionOffset + 2) == descriptor.description.size());
+    REQUIRE(std::equal(descriptor.description.begin(), descriptor.description.end(), bytes.begin() + optionOffset + 4));
+    optionOffset += 4 + roundUp4(descriptor.description.size());
+    REQUIRE(readUint16(bytes, optionOffset) == 0x0006);
+    REQUIRE(std::equal(descriptor.macAddress.begin(), descriptor.macAddress.end(), bytes.begin() + optionOffset + 4));
+    optionOffset += 12;
+    REQUIRE(readUint16(bytes, optionOffset) == 0x0004);
+    REQUIRE(std::equal(descriptor.ipv4Address.begin(), descriptor.ipv4Address.end(), bytes.begin() + optionOffset + 4));
+    REQUIRE(std::equal(descriptor.ipv4Netmask.begin(), descriptor.ipv4Netmask.end(), bytes.begin() + optionOffset + 8));
+}
+
+static uint8_t readInterfaceTimePrecision(const std::vector<uint8_t>& bytes, size_t interfaceOffset, const PcapInterfaceDescriptor& descriptor)
+{
+    auto optionOffset = interfaceOffset + 16 + 4 + roundUp4(descriptor.name.size()) + 4 + roundUp4(descriptor.description.size()) + 12 + 12;
+    REQUIRE(readUint16(bytes, optionOffset) == 0x0009);
+    return bytes.at(optionOffset + 4);
+}
+
+static void checkCapture(const char *fileName, const PcapInterfaceDescriptor& descriptor, uint32_t expectedSnaplen, uint32_t expectedCapturedLength,
+        uint64_t expectedTimestamp)
 {
     auto bytes = readFile(fileName);
     auto interfaceOffset = findBlock(bytes, 0x00000001);
     REQUIRE(readUint16(bytes, interfaceOffset + 8) == LINKTYPE_ETHERNET);
     REQUIRE(readUint32(bytes, interfaceOffset + 12) == expectedSnaplen);
+    checkInterfaceDescriptor(bytes, interfaceOffset, descriptor);
 
     auto packetOffset = findBlock(bytes, 0x00000006);
     REQUIRE(readUint32(bytes, packetOffset + 8) == 0);
+    REQUIRE(readUint32(bytes, packetOffset + 12) == static_cast<uint32_t>(expectedTimestamp >> 32));
+    REQUIRE(readUint32(bytes, packetOffset + 16) == static_cast<uint32_t>(expectedTimestamp));
     REQUIRE(readUint32(bytes, packetOffset + 20) == expectedCapturedLength);
     REQUIRE(readUint32(bytes, packetOffset + 24) == 6);
     const std::vector<uint8_t> expectedData = {0xA0, 0xA1, 0xA2, 0x11, 0x12, 0x13};
@@ -110,23 +170,33 @@ networkInterface->setMacAddress(MacAddress("02:00:00:00:00:01"));
 Packet packet("packet");
 packet.insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0x10, 0x11, 0x12, 0x13}));
 std::vector<uint8_t> prefix = {0xA0, 0xA1, 0xA2};
+PcapInterfaceDescriptor descriptor;
+descriptor.interfaceId = 42;
+descriptor.name = "descriptorInterface";
+descriptor.description = "node.descriptorInterface";
+descriptor.macAddress = {0x02, 0x00, 0x00, 0x00, 0x00, 0x42};
+descriptor.ipv4Address = {192, 0, 2, 42};
+descriptor.ipv4Netmask = {255, 255, 255, 0};
 
 PcapngWriter truncatedWriter;
 truncatedWriter.open("segmented-truncated.pcapng", 5, 6);
-truncatedWriter.writePacketWithPrefix(SimTime(123, SIMTIME_US), &packet, B(1), b(0), DIRECTION_OUTBOUND, networkInterface, LINKTYPE_ETHERNET, prefix);
+truncatedWriter.writePacketWithPrefix(SimTime(123, SIMTIME_US), &packet, B(1), b(0), DIRECTION_OUTBOUND, descriptor, LINKTYPE_ETHERNET, prefix);
+REQUIRE(truncatedWriter.getNumPayloadBytesWritten() == 5);
+REQUIRE(truncatedWriter.getNumFlushes() == 0);
 truncatedWriter.close();
-checkCapture("segmented-truncated.pcapng", 5, 5);
+checkCapture("segmented-truncated.pcapng", descriptor, 5, 5, 123);
 
 PcapngWriter unlimitedWriter;
 unlimitedWriter.open("segmented-unlimited.pcapng", 0, 6);
-unlimitedWriter.writePacketWithPrefix(SimTime(123, SIMTIME_US), &packet, B(1), b(0), DIRECTION_OUTBOUND, networkInterface, LINKTYPE_ETHERNET, prefix);
+unlimitedWriter.writePacketWithPrefix(SimTime(123, SIMTIME_US), &packet, B(1), b(0), DIRECTION_OUTBOUND, descriptor, LINKTYPE_ETHERNET, prefix);
 unlimitedWriter.close();
-checkCapture("segmented-unlimited.pcapng", 0, 6);
+checkCapture("segmented-unlimited.pcapng", descriptor, 0, 6, 123);
 
 PcapngWriter mixedLinkTypeWriter;
 mixedLinkTypeWriter.open("mixed-linktype.pcapng", 64, 6);
-mixedLinkTypeWriter.writePacket(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_OUTBOUND, networkInterface, LINKTYPE_ETHERNET);
-mixedLinkTypeWriter.writePacket(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_OUTBOUND, networkInterface, LINKTYPE_RAW);
+mixedLinkTypeWriter.writePacketWithPrefix(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_OUTBOUND, descriptor, LINKTYPE_ETHERNET, {});
+mixedLinkTypeWriter.writePacketWithPrefix(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_OUTBOUND, descriptor, LINKTYPE_ETHERNET, {});
+mixedLinkTypeWriter.writePacketWithPrefix(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_OUTBOUND, descriptor, LINKTYPE_RAW, {});
 mixedLinkTypeWriter.close();
 
 auto mixedLinkType = readFile("mixed-linktype.pcapng");
@@ -143,11 +213,229 @@ for (size_t offset = 0; offset + 12 <= mixedLinkType.size();) {
     offset += blockLength;
 }
 REQUIRE(interfaceOffsets.size() == 2);
-REQUIRE(packetOffsets.size() == 2);
+REQUIRE(packetOffsets.size() == 3);
 REQUIRE(readUint16(mixedLinkType, interfaceOffsets[0] + 8) == LINKTYPE_ETHERNET);
 REQUIRE(readUint16(mixedLinkType, interfaceOffsets[1] + 8) == LINKTYPE_RAW);
 REQUIRE(readUint32(mixedLinkType, packetOffsets[0] + 8) == 0);
-REQUIRE(readUint32(mixedLinkType, packetOffsets[1] + 8) == 1);
+REQUIRE(readUint32(mixedLinkType, packetOffsets[1] + 8) == 0);
+REQUIRE(readUint32(mixedLinkType, packetOffsets[2] + 8) == 1);
+
+PcapngWriter legacyWriter;
+legacyWriter.open("legacy-interface.pcapng", 64, 6);
+legacyWriter.writePacket(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_OUTBOUND, networkInterface, LINKTYPE_ETHERNET);
+legacyWriter.close();
+REQUIRE(findBlock(readFile("legacy-interface.pcapng"), 0x00000001) >= 28);
+
+PcapngWriter bufferedWriter;
+bufferedWriter.setBufferSize(4096);
+bufferedWriter.setFlushInterval(2);
+bufferedWriter.open("buffered.pcapng", 64, 6);
+bufferedWriter.writePacketWithPrefix(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_OUTBOUND, descriptor, LINKTYPE_ETHERNET, {});
+REQUIRE(getFileSize("buffered.pcapng") == 0);
+bufferedWriter.writePacketWithPrefix(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_OUTBOUND, descriptor, LINKTYPE_ETHERNET, {});
+auto sizeAfterPeriodicFlush = getFileSize("buffered.pcapng");
+REQUIRE(sizeAfterPeriodicFlush > 0);
+bufferedWriter.writePacketWithPrefix(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_OUTBOUND, descriptor, LINKTYPE_ETHERNET, {});
+REQUIRE(getFileSize("buffered.pcapng") == sizeAfterPeriodicFlush);
+bufferedWriter.setFlush(true);
+bufferedWriter.writePacketWithPrefix(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_OUTBOUND, descriptor, LINKTYPE_ETHERNET, {});
+REQUIRE(getFileSize("buffered.pcapng") > sizeAfterPeriodicFlush);
+REQUIRE(bufferedWriter.getNumPayloadBytesWritten() == 16);
+REQUIRE(bufferedWriter.getNumFlushes() == 2);
+bufferedWriter.close();
+
+auto changedDescriptor = descriptor;
+changedDescriptor.name = "changedInterface";
+PcapngWriter descriptorValidationWriter;
+descriptorValidationWriter.open("descriptor-validation.pcapng", 64, 6);
+descriptorValidationWriter.writePacketWithPrefix(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_OUTBOUND, descriptor, LINKTYPE_ETHERNET, {});
+descriptorValidationWriter.writePacketWithPrefix(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_OUTBOUND, changedDescriptor, LINKTYPE_ETHERNET, {});
+descriptorValidationWriter.writePacketWithPrefix(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_OUTBOUND, descriptor, LINKTYPE_ETHERNET, {});
+descriptorValidationWriter.close();
+auto descriptorMutationBytes = readFile("descriptor-validation.pcapng");
+std::vector<uint32_t> descriptorMutationPacketInterfaces;
+size_t descriptorMutationInterfaceCount = 0;
+for (size_t offset = 0; offset + 12 <= descriptorMutationBytes.size(); offset += readUint32(descriptorMutationBytes, offset + 4)) {
+    auto blockType = readUint32(descriptorMutationBytes, offset);
+    if (blockType == 0x00000001)
+        descriptorMutationInterfaceCount++;
+    else if (blockType == 0x00000006)
+        descriptorMutationPacketInterfaces.push_back(readUint32(descriptorMutationBytes, offset + 8));
+}
+REQUIRE(descriptorMutationInterfaceCount == 2);
+REQUIRE(descriptorMutationPacketInterfaces == std::vector<uint32_t>({0, 1, 0}));
+
+auto secondDescriptor = descriptor;
+secondDescriptor.interfaceId = 43;
+secondDescriptor.name = "secondInterface";
+secondDescriptor.description = "node.secondInterface";
+PcapngWriter distinctDescriptorWriter;
+distinctDescriptorWriter.open("distinct-descriptors.pcapng", 64, 6);
+distinctDescriptorWriter.writePacketWithPrefix(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_OUTBOUND, descriptor, LINKTYPE_ETHERNET, {});
+distinctDescriptorWriter.writePacketWithPrefix(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_OUTBOUND, secondDescriptor, LINKTYPE_ETHERNET, {});
+distinctDescriptorWriter.writePacketWithPrefix(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_OUTBOUND, secondDescriptor, LINKTYPE_RAW, {});
+distinctDescriptorWriter.close();
+auto distinctDescriptorBytes = readFile("distinct-descriptors.pcapng");
+size_t numDistinctInterfaces = 0;
+for (size_t offset = 0; offset + 12 <= distinctDescriptorBytes.size(); offset += readUint32(distinctDescriptorBytes, offset + 4))
+    if (readUint32(distinctDescriptorBytes, offset) == 0x00000001)
+        numDistinctInterfaces++;
+REQUIRE(numDistinctInterfaces == 3);
+
+for (const char *filename : {"", "/definitely/nonexistent/inet-pcap-dir/capture.pcapng"}) {
+    PcapngWriter invalidOpenWriter;
+    bool rejected = false;
+    try {
+        invalidOpenWriter.open(filename, 64, 6);
+    }
+    catch (cRuntimeError&) {
+        rejected = true;
+    }
+    REQUIRE(rejected && !invalidOpenWriter.isOpen());
+}
+
+for (int precision : {0, 18}) {
+    std::string fileName = precision == 0 ? "precision-0.pcapng" : "precision-18.pcapng";
+    PcapngWriter precisionWriter;
+    precisionWriter.open(fileName.c_str(), 64, precision);
+    auto timestamp = precision == 0 ? SimTime(1, SIMTIME_S) : SIMTIME_ZERO;
+    precisionWriter.writePacketWithPrefix(timestamp, &packet, b(0), b(0), DIRECTION_INBOUND, descriptor, LINKTYPE_ETHERNET, {});
+    precisionWriter.close();
+    auto precisionBytes = readFile(fileName.c_str());
+    auto precisionInterfaceOffset = findBlock(precisionBytes, 0x00000001);
+    REQUIRE(readInterfaceTimePrecision(precisionBytes, precisionInterfaceOffset, descriptor) == precision);
+    auto precisionPacketOffset = findBlock(precisionBytes, 0x00000006);
+    REQUIRE(readUint32(precisionBytes, precisionPacketOffset + 12) == 0);
+    REQUIRE(readUint32(precisionBytes, precisionPacketOffset + 16) == (precision == 0 ? 1 : 0));
+}
+
+for (int precision : {-1, 19}) {
+    std::string fileName = precision < 0 ? "invalid-negative-precision.pcapng" : "invalid-large-precision.pcapng";
+    std::remove(fileName.c_str());
+    PcapngWriter invalidPrecisionWriter;
+    bool invalidPrecisionRejected = false;
+    try {
+        invalidPrecisionWriter.open(fileName.c_str(), 64, precision);
+    }
+    catch (cRuntimeError&) {
+        invalidPrecisionRejected = true;
+    }
+    REQUIRE(invalidPrecisionRejected);
+    REQUIRE(!invalidPrecisionWriter.isOpen());
+    std::ifstream unexpectedOutput(fileName, std::ios::binary);
+    REQUIRE(!unexpectedOutput.good());
+}
+
+PcapngWriter negativeTimestampWriter;
+negativeTimestampWriter.open("negative-timestamp.pcapng", 64, 6);
+bool negativeTimestampRejected = false;
+try {
+    negativeTimestampWriter.writePacketWithPrefix(SimTime(-1, SIMTIME_US), &packet, b(0), b(0), DIRECTION_OUTBOUND, descriptor, LINKTYPE_ETHERNET, {});
+}
+catch (cRuntimeError&) {
+    negativeTimestampRejected = true;
+}
+REQUIRE(negativeTimestampRejected);
+negativeTimestampWriter.close();
+REQUIRE(readFile("negative-timestamp.pcapng").size() == 28);
+
+PcapngWriter timestampOverflowWriter;
+timestampOverflowWriter.open("timestamp-overflow.pcapng", 64, 18);
+bool timestampOverflowRejected = false;
+try {
+    timestampOverflowWriter.writePacketWithPrefix(SimTime(20, SIMTIME_S), &packet, b(0), b(0), DIRECTION_OUTBOUND, descriptor, LINKTYPE_ETHERNET, {});
+}
+catch (cRuntimeError&) {
+    timestampOverflowRejected = true;
+}
+REQUIRE(timestampOverflowRejected);
+timestampOverflowWriter.close();
+REQUIRE(readFile("timestamp-overflow.pcapng").size() == 28);
+
+PcapngWriter undefinedDirectionWriter;
+undefinedDirectionWriter.open("undefined-direction.pcapng", 64, 6);
+bool undefinedDirectionRejected = false;
+try {
+    undefinedDirectionWriter.writePacketWithPrefix(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_UNDEFINED, descriptor, LINKTYPE_ETHERNET, {});
+}
+catch (cRuntimeError&) {
+    undefinedDirectionRejected = true;
+}
+REQUIRE(undefinedDirectionRejected);
+undefinedDirectionWriter.close();
+REQUIRE(readFile("undefined-direction.pcapng").size() == 28);
+
+PcapngWriter nullInterfaceWriter;
+nullInterfaceWriter.open("null-interface.pcapng", 64, 6);
+bool nullInterfaceRejected = false;
+try {
+    nullInterfaceWriter.writePacket(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_OUTBOUND, nullptr, LINKTYPE_ETHERNET);
+}
+catch (cRuntimeError&) {
+    nullInterfaceRejected = true;
+}
+REQUIRE(nullInterfaceRejected);
+nullInterfaceWriter.close();
+REQUIRE(readFile("null-interface.pcapng").size() == 28);
+
+TestPcapngWriter failureWriter;
+failureWriter.setFlush(true);
+failureWriter.open("pcapng-failures.pcapng", 64, 6);
+REQUIRE(failureWriter.numFlushCalls == 0);
+bool reopenRejected = false;
+try {
+    failureWriter.open("unexpected-pcapng-reopen.pcapng", 64, 6);
+}
+catch (cRuntimeError&) {
+    reopenRejected = true;
+}
+REQUIRE(reopenRejected);
+failureWriter.failWrite = true;
+bool writeFailureDetected = false;
+try {
+    failureWriter.writePacketWithPrefix(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_OUTBOUND, descriptor, LINKTYPE_ETHERNET, {});
+}
+catch (cRuntimeError&) {
+    writeFailureDetected = true;
+}
+REQUIRE(writeFailureDetected);
+failureWriter.failWrite = false;
+failureWriter.failFlush = true;
+bool flushFailureDetected = false;
+try {
+    failureWriter.writePacketWithPrefix(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_OUTBOUND, descriptor, LINKTYPE_ETHERNET, {});
+}
+catch (cRuntimeError&) {
+    flushFailureDetected = true;
+}
+REQUIRE(flushFailureDetected);
+REQUIRE(failureWriter.numFlushCalls == 1);
+REQUIRE(failureWriter.getNumPayloadBytesWritten() == 4);
+REQUIRE(failureWriter.getNumFlushes() == 0);
+failureWriter.failFlush = false;
+failureWriter.failClose = true;
+bool closeFailureDetected = false;
+try {
+    failureWriter.close();
+}
+catch (cRuntimeError&) {
+    closeFailureDetected = true;
+}
+REQUIRE(closeFailureDetected);
+REQUIRE(!failureWriter.isOpen());
+
+TestPcapngWriter setBufferFailureWriter;
+setBufferFailureWriter.setBufferSize(4096);
+setBufferFailureWriter.failSetBuffer = true;
+bool setBufferFailureDetected = false;
+try {
+    setBufferFailureWriter.open("pcapng-set-buffer-failure.pcapng", 64, 6);
+}
+catch (cRuntimeError&) {
+    setBufferFailureDetected = true;
+}
+REQUIRE(setBufferFailureDetected);
+REQUIRE(!setBufferFailureWriter.isOpen());
 
 EV << "Segmented PCAPng snaplen and direction records tested successfully.\n";
 

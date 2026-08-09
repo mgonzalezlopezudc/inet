@@ -68,7 +68,7 @@ class TestablePcapRecorder : public PcapRecorder
 
     void writeIeee80211(const Packet *packet, b frontOffset = b(0), b backOffset = b(0))
     {
-        writePacket(&Protocol::ieee80211Mac, packet, frontOffset, backOffset, DIRECTION_UNDEFINED, nullptr);
+        writePacket(&Protocol::ieee80211Mac, PcapCaptureObservation(packet, DIRECTION_UNDEFINED), frontOffset, backOffset, nullptr);
     }
 };
 

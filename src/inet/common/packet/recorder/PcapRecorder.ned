@@ -57,8 +57,53 @@ simple PcapRecorder extends SimpleModule
         object packetFilter = default("*"); // Which packets are considered, matches all packets by default
         string helpers = default("");    // Usable PcapRecorder::IHelper helpers for accept packettype and store/convert packet as specified linktype
                                          // currently available: "inet::AckingMacToEthernetPcapRecorderHelper"
+        string captureDirection @enum("both", "inbound", "outbound") = default("both"); // Direction gate after resolving an undefined signal direction from DirectionTag; "both" also accepts unresolved direction
+        double captureStartTime @unit(s) = default(0s); // Inclusive, nonnegative start of the capture time window
+        double captureEndTime @unit(s) = default(-1s); // Inclusive end of the capture time window; exactly -1s means no end
+        int maxNumRecords = default(-1); // Exact output-record cap; exactly -1 is unlimited. Limit rejections count an offered packet already over the cap, or each known record candidate skipped after fanout reaches it.
+        int outputBufferSize @unit(B) = default(0B); // Stdio output buffer size; 0 uses the libc default
+        int flushInterval = default(0); // Flush after this many successfully written records; 0 disables periodic flushing and alwaysFlush takes precedence
         bool alwaysFlush = default(false); // Flush the pcapFile after each write to ensure that all packets are captured in case of a crash
         displayStringTextFormat = default("rec: %n pks");
         @display("i=block/blackboard");
         @signal[packetRecorded](type=Packet);
+        // The following count signals are emitted exactly once at finish. Offered counts Packet observations. Direction/time gates run before filtering; filter and bad-frame rejections are mutually exclusive. Empty rejections occur after conversion.
+        // Direct protocol and fallback dissection count the selected protocol path. Conversion counts each materialized helper conversion or generated segmented prefix. A-MPDU MPDU records count successfully written MPDU records.
+        // Interface resolution counts are mutually exclusive per accepted observation: direct hierarchy lookup, source-module cache hit, tag/table lookup, or unresolved. Payload requested is pre-snaplen record payload; payload written is captured payload accepted by the writer. Writer flushes count successful explicit fflush calls, excluding close.
+        @signal[offeredPacketCount](type=long);
+        @signal[directionRejectedCount](type=long);
+        @signal[timeRejectedCount](type=long);
+        @signal[limitRejectedCount](type=long);
+        @signal[filterRejectedCount](type=long);
+        @signal[badFrameRejectedCount](type=long);
+        @signal[emptyRejectedCount](type=long);
+        @signal[directProtocolCount](type=long);
+        @signal[fallbackDissectionCount](type=long);
+        @signal[conversionCount](type=long);
+        @signal[ampduMpduRecordCount](type=long);
+        @signal[directInterfaceResolutionCount](type=long);
+        @signal[cachedInterfaceResolutionCount](type=long);
+        @signal[taggedInterfaceResolutionCount](type=long);
+        @signal[unresolvedInterfaceResolutionCount](type=long);
+        @signal[payloadBytesRequested](type=long);
+        @signal[payloadBytesWritten](type=long);
+        @signal[writerFlushCount](type=long);
+        @statistic[offeredPacketCount](source=offeredPacketCount; record=last);
+        @statistic[directionRejectedCount](source=directionRejectedCount; record=last);
+        @statistic[timeRejectedCount](source=timeRejectedCount; record=last);
+        @statistic[limitRejectedCount](source=limitRejectedCount; record=last);
+        @statistic[filterRejectedCount](source=filterRejectedCount; record=last);
+        @statistic[badFrameRejectedCount](source=badFrameRejectedCount; record=last);
+        @statistic[emptyRejectedCount](source=emptyRejectedCount; record=last);
+        @statistic[directProtocolCount](source=directProtocolCount; record=last);
+        @statistic[fallbackDissectionCount](source=fallbackDissectionCount; record=last);
+        @statistic[conversionCount](source=conversionCount; record=last);
+        @statistic[ampduMpduRecordCount](source=ampduMpduRecordCount; record=last);
+        @statistic[directInterfaceResolutionCount](source=directInterfaceResolutionCount; record=last);
+        @statistic[cachedInterfaceResolutionCount](source=cachedInterfaceResolutionCount; record=last);
+        @statistic[taggedInterfaceResolutionCount](source=taggedInterfaceResolutionCount; record=last);
+        @statistic[unresolvedInterfaceResolutionCount](source=unresolvedInterfaceResolutionCount; record=last);
+        @statistic[payloadBytesRequested](source=payloadBytesRequested; record=last; unit=B);
+        @statistic[payloadBytesWritten](source=payloadBytesWritten; record=last; unit=B);
+        @statistic[writerFlushCount](source=writerFlushCount; record=last);
 }

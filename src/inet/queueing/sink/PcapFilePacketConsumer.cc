@@ -27,6 +27,14 @@ void PcapFilePacketConsumer::initialize(int stage)
             pcapWriter = new PcapngWriter();
         else
             throw cRuntimeError("Unknown fileFormat parameter");
+        auto outputBufferSize = par("outputBufferSize").intValue();
+        auto flushInterval = par("flushInterval").intValue();
+        if (outputBufferSize < 0 || flushInterval < 0)
+            throw cRuntimeError("outputBufferSize and flushInterval must be nonnegative");
+        if (auto segmentedWriter = dynamic_cast<ISegmentedPcapWriter *>(pcapWriter)) {
+            segmentedWriter->setBufferSize(outputBufferSize);
+            segmentedWriter->setFlushInterval(flushInterval);
+        }
         pcapWriter->setFlush(par("alwaysFlush"));
         pcapWriter->open(getEnvir()->getConfig()->substituteVariables(par("filename")), par("snaplen"), par("timePrecision"));
         networkType = static_cast<PcapLinkType>(par("networkType").intValue());
@@ -65,4 +73,3 @@ void PcapFilePacketConsumer::pushPacket(Packet *packet, const cGate *gate)
 
 } // namespace queueing
 } // namespace inet
-

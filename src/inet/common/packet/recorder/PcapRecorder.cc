@@ -11,14 +11,13 @@
 #include "inet/common/packet/recorder/PcapRecorder.h"
 
 #include <algorithm>
-#include <cmath>
 #include <cstdint>
 #include <vector>
 
 #include "inet/common/DirectionTag_m.h"
-#include "inet/common/INETMath.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/common/packet/recorder/PcapCaptureAdapterRegistry.h"
 #include "inet/common/packet/recorder/PcapngWriter.h"
 #include "inet/common/packet/recorder/PcapWriter.h"
 #include "inet/common/ProtocolTag_m.h"
@@ -27,923 +26,7 @@
 #include "inet/linklayer/common/InterfaceTag_m.h"
 #include "inet/networklayer/common/InterfaceTable.h"
 
-#ifdef INET_WITH_IEEE80211
-#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
-#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
-#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
-#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
-#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
-#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
-#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
-#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
-#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
-#endif
-
-#ifdef INET_WITH_PHYSICALLAYERWIRELESSCOMMON
-#include "inet/physicallayer/common/Signal.h"
-#include "inet/physicallayer/wireless/common/contract/packetlevel/INarrowbandSignalAnalogModel.h"
-#include "inet/physicallayer/wireless/common/contract/packetlevel/IReception.h"
-#include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmission.h"
-#endif
-
 namespace inet {
-
-namespace {
-
-enum RadiotapPresentBit {
-    RADIOTAP_FLAGS = 1,
-    RADIOTAP_RATE = 2,
-    RADIOTAP_CHANNEL = 3,
-    RADIOTAP_ANTENNA_SIGNAL = 5,
-    RADIOTAP_DBM_TX_POWER = 10,
-    RADIOTAP_RX_FLAGS = 14,
-    RADIOTAP_TX_FLAGS = 15,
-    RADIOTAP_MCS = 19,
-    RADIOTAP_AMPDU = 20,
-    RADIOTAP_VHT = 21,
-    RADIOTAP_HE = 23,
-    RADIOTAP_HE_MU = 24,
-    RADIOTAP_0_LENGTH_PSDU = 26,
-    RADIOTAP_U_SIG = 33,
-    RADIOTAP_EHT = 34,
-};
-
-enum RadiotapFlags {
-    RADIOTAP_F_FCS = 0x10,
-    RADIOTAP_F_BADFCS = 0x40,
-};
-
-enum RadiotapVhtKnown {
-    RADIOTAP_VHT_STBC_KNOWN = 1U << 0,
-    RADIOTAP_VHT_TXOP_PS_NOT_ALLOWED_KNOWN = 1U << 1,
-    RADIOTAP_VHT_GI_KNOWN = 1U << 2,
-    RADIOTAP_VHT_SGI_NSYM_DISAMBIG_KNOWN = 1U << 3,
-    RADIOTAP_VHT_LDPC_EXTRA_OFDM_SYM_KNOWN = 1U << 4,
-    RADIOTAP_VHT_BEAMFORMED_KNOWN = 1U << 5,
-    RADIOTAP_VHT_BANDWIDTH_KNOWN = 1U << 6,
-};
-
-enum RadiotapVhtFlags {
-    RADIOTAP_VHT_BEAMFORMED = 1U << 5,
-};
-
-enum RadiotapChannelFlags {
-    RADIOTAP_CHANNEL_2GHZ = 0x0080,
-    RADIOTAP_CHANNEL_5GHZ = 0x0100,
-};
-
-#ifdef INET_WITH_IEEE80211
-
-// See https://www.radiotap.org/fields/HE.html. These are deliberately kept
-// local instead of depending on a platform-specific radiotap header.
-enum RadiotapHeData1 {
-    RADIOTAP_HE_FORMAT_SU = 0,
-    RADIOTAP_HE_FORMAT_EXT_SU = 1,
-    RADIOTAP_HE_FORMAT_MU = 2,
-    RADIOTAP_HE_FORMAT_TRIG = 3,
-    RADIOTAP_HE_BSS_COLOR_KNOWN = 0x0004,
-    RADIOTAP_HE_UL_DL_KNOWN = 0x0010,
-    RADIOTAP_HE_DATA_MCS_KNOWN = 0x0020,
-    RADIOTAP_HE_DATA_DCM_KNOWN = 0x0040,
-    RADIOTAP_HE_CODING_KNOWN = 0x0080,
-    RADIOTAP_HE_SPATIAL_REUSE_KNOWN = 0x0400,
-    RADIOTAP_HE_MU_STA_ID_KNOWN = 0x0800,
-    RADIOTAP_HE_BW_RU_ALLOC_KNOWN = 0x4000,
-};
-
-enum RadiotapHeData2 {
-    RADIOTAP_HE_GI_KNOWN = 0x0002,
-};
-
-enum RadiotapUsigCommon {
-    RADIOTAP_U_SIG_PHY_VERSION_KNOWN = 0x00000001,
-    RADIOTAP_U_SIG_BANDWIDTH_KNOWN = 0x00000002,
-};
-
-enum RadiotapEhtKnown {
-    RADIOTAP_EHT_GI_KNOWN = 0x00000004,
-    RADIOTAP_EHT_NUMBER_NON_OFDMA_USERS_KNOWN = 0x00080000,
-};
-
-enum RadiotapEhtUserInfo {
-    RADIOTAP_EHT_USER_MCS_KNOWN = 0x00000002,
-    RADIOTAP_EHT_USER_CODING_KNOWN = 0x00000004,
-    RADIOTAP_EHT_USER_NSS_KNOWN = 0x00000010,
-    RADIOTAP_EHT_USER_DATA_FOR_USER = 0x00000080,
-};
-
-uint16_t getRadiotapHeFormat(physicallayer::Ieee80211HePpduFormat format)
-{
-    switch (format) {
-        case physicallayer::HE_MU_DOWNLINK: return RADIOTAP_HE_FORMAT_MU;
-        case physicallayer::HE_TRIGGER_BASED_UPLINK: return RADIOTAP_HE_FORMAT_TRIG;
-        case physicallayer::HE_SINGLE_USER: return RADIOTAP_HE_FORMAT_SU;
-        case physicallayer::HE_EXTENDED_RANGE_SU: return RADIOTAP_HE_FORMAT_EXT_SU;
-        default: throw cRuntimeError("Unknown HE PPDU format: %d", (int)format);
-    }
-}
-
-int getRadiotapHeBandwidth(Hz bandwidth)
-{
-    auto value = bandwidth.get();
-    return value < 30e6 ? 0 : value < 60e6 ? 1 : value < 120e6 ? 2 : 3;
-}
-
-int getRadiotapHeRuAllocation(int toneSize)
-{
-    switch (toneSize) {
-        case 26: return 4;
-        case 52: return 5;
-        case 106: return 6;
-        case 242: return 7;
-        case 484: return 8;
-        case 996: return 9;
-        case 1992: return 10;
-        default: return -1;
-    }
-}
-
-uint8_t getRadiotapVhtBandwidth(Hz bandwidth)
-{
-    auto value = bandwidth.get();
-    if (value < 30e6)
-        return 0;
-    if (value < 60e6)
-        return 1;
-    if (value < 100e6)
-        return 4;
-    if (value < 180e6)
-        return 11;
-    throw cRuntimeError("Unsupported VHT radiotap channel width: %g Hz", value);
-}
-
-#endif
-
-void appendPadding(std::vector<uint8_t>& bytes, size_t alignment)
-{
-    bytes.resize(bytes.size() + (alignment - bytes.size() % alignment) % alignment, 0);
-}
-
-void appendUint16(std::vector<uint8_t>& bytes, uint16_t value)
-{
-    bytes.push_back(value & 0xff);
-    bytes.push_back(value >> 8);
-}
-
-void appendUint32(std::vector<uint8_t>& bytes, uint32_t value)
-{
-    for (int i = 0; i < 4; ++i)
-        bytes.push_back((value >> (8 * i)) & 0xff);
-}
-
-void setUint16(std::vector<uint8_t>& bytes, size_t offset, uint16_t value)
-{
-    bytes.at(offset) = value & 0xff;
-    bytes.at(offset + 1) = value >> 8;
-}
-
-void setUint32(std::vector<uint8_t>& bytes, size_t offset, uint32_t value)
-{
-    for (size_t i = 0; i < 4; i++)
-        bytes.at(offset + i) = value >> (8 * i);
-}
-
-#ifdef INET_WITH_IEEE80211
-
-struct MpduRange
-{
-    b offset;
-    b length;
-    int heMuUserIndex = -1;
-};
-
-uint32_t makeAmpduReference(const Packet *packet, int heMuUserIndex)
-{
-    auto treeId = static_cast<uint64_t>(packet->getTreeId());
-    uint32_t reference = static_cast<uint32_t>(treeId) ^ static_cast<uint32_t>(treeId >> 32);
-    if (heMuUserIndex >= 0)
-        reference ^= static_cast<uint32_t>(heMuUserIndex + 1) * 0x9E3779B9U;
-    return reference;
-}
-
-bool getIeee80211AmpduMpduRanges(const Packet *packet, b frontOffset, b backOffset, std::vector<MpduRange>& mpduRanges)
-{
-    const int parsingFlags = Chunk::PF_ALLOW_INCORRECT | Chunk::PF_ALLOW_INCOMPLETE | Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED;
-    auto dataLength = packet->getDataLength();
-    auto endOffset = dataLength - backOffset;
-    if (frontOffset + ieee80211::LENGTH_A_MPDU_SUBFRAME_HEADER > endOffset)
-        return false;
-
-    auto peekDelimiter = [&] (b offset) {
-        return dynamicPtrCast<const ieee80211::Ieee80211MpduSubframeHeader>(packet->peekDataAt(offset, b(-1), parsingFlags));
-    };
-
-    try {
-        if (peekDelimiter(frontOffset) == nullptr)
-            return false;
-        auto offset = frontOffset;
-        while (offset < endOffset) {
-            if (offset + ieee80211::LENGTH_A_MPDU_SUBFRAME_HEADER > endOffset)
-                return false;
-            const auto& delimiter = peekDelimiter(offset);
-            if (delimiter == nullptr || delimiter->getLength() <= 0)
-                return false;
-            auto mpduOffset = offset + delimiter->getChunkLength();
-            auto mpduLength = B(delimiter->getLength());
-            if (mpduOffset + mpduLength > endOffset)
-                return false;
-            mpduRanges.push_back({mpduOffset, mpduLength});
-            offset = mpduOffset + mpduLength;
-            if (offset == endOffset)
-                return true;
-            auto paddingLength = B((4 - (delimiter->getChunkLength() + mpduLength).get<B>() % 4) % 4);
-            if (offset + paddingLength >= endOffset)
-                return false;
-            offset += paddingLength;
-        }
-    }
-    catch (cRuntimeError&) {
-        return false;
-    }
-    return false;
-}
-
-bool getIeee80211HeMuAmpduMpduRanges(const Packet *packet, b frontOffset, b backOffset, std::vector<MpduRange>& mpduRanges)
-{
-    auto heTxVectorReq = packet->findTag<physicallayer::Ieee80211HeTxVectorReq>();
-    if (heTxVectorReq == nullptr || heTxVectorReq->getPpduLayout() == nullptr)
-        return false;
-    const auto& ppduLayout = heTxVectorReq->getPpduLayout();
-    const auto& psduBitRanges = ppduLayout->getPsduBitRanges();
-    if (ppduLayout->getPpduFormat() != physicallayer::HE_MU_DOWNLINK || psduBitRanges.size() < 2)
-        return false;
-
-    auto packetLength = packet->getDataLength();
-    auto dataLength = packetLength - frontOffset - backOffset;
-    if (psduBitRanges.back().getEndBitOffset() != dataLength)
-        return false;
-
-    std::vector<MpduRange> allMpduRanges;
-    for (const auto& psduBitRange : psduBitRanges) {
-        if (psduBitRange.getBitLength() == b(0))
-            continue;
-        auto psduFrontOffset = frontOffset + psduBitRange.getStartBitOffset();
-        auto psduBackOffset = packetLength - frontOffset - psduBitRange.getEndBitOffset();
-        std::vector<MpduRange> psduMpduRanges;
-        if (!getIeee80211AmpduMpduRanges(packet, psduFrontOffset, psduBackOffset, psduMpduRanges))
-            return false;
-        for (auto& mpduRange : psduMpduRanges)
-            mpduRange.heMuUserIndex = static_cast<int>(psduBitRange.getUserIndex());
-        allMpduRanges.insert(allMpduRanges.end(), psduMpduRanges.begin(), psduMpduRanges.end());
-    }
-    if (allMpduRanges.empty())
-        return false;
-    mpduRanges = std::move(allMpduRanges);
-    return true;
-}
-
-bool findIeee80211HeMuAmpduMpduRanges(const Packet *packet, b mpduOffset, std::vector<MpduRange>& mpduRanges)
-{
-    auto heTxVectorReq = packet->findTag<physicallayer::Ieee80211HeTxVectorReq>();
-    if (heTxVectorReq == nullptr || heTxVectorReq->getPpduLayout() == nullptr)
-        return false;
-    const auto& psduBitRanges = heTxVectorReq->getPpduLayout()->getPsduBitRanges();
-    if (psduBitRanges.empty())
-        return false;
-
-    auto packetLength = packet->getDataLength();
-    auto dataLength = psduBitRanges.back().getEndBitOffset();
-    auto dataFrontOffsetResidue = b(mpduOffset.get<b>() % 8);
-    for (b dataFrontOffset = dataFrontOffsetResidue; dataFrontOffset <= mpduOffset; dataFrontOffset += b(8)) {
-        auto dataBackOffset = packetLength - dataFrontOffset - dataLength;
-        if (dataBackOffset < b(0))
-            continue;
-        std::vector<MpduRange> tempRanges;
-        if (!getIeee80211HeMuAmpduMpduRanges(packet, dataFrontOffset, dataBackOffset, tempRanges))
-            continue;
-        for (const auto& mpduRange : tempRanges) {
-            if (mpduRange.offset == mpduOffset) {
-                mpduRanges = std::move(tempRanges);
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-#endif
-
-std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, b frontOffset, b backOffset, Direction direction, const physicallayer::ITransmission *transmission, const physicallayer::IReception *reception)
-{
-    std::vector<uint32_t> presentWords;
-    auto setPresentBit = [&](int bitIndex) {
-        int wordIndex = bitIndex / 32;
-        int bitOffset = bitIndex % 32;
-        ASSERT(bitOffset != 31); // reserved for the extension flag
-        if (wordIndex >= (int)presentWords.size())
-            presentWords.resize(wordIndex + 1, 0);
-        presentWords[wordIndex] |= 1U << bitOffset;
-    };
-
-    setPresentBit(RADIOTAP_FLAGS);
-    std::vector<uint8_t> bytes(4, 0); // version, pad, length
-
-    bool isHe = false;
-    bool isEht = false;
-    bool isVht = false;
-    bool isHt = false;
-    bool hasRate = false;
-    uint8_t radiotapRate = 0;
-
-    uint8_t mcsKnown = 0;
-    uint8_t mcsFlags = 0;
-    uint8_t mcsIndex = 0;
-
-    uint16_t vhtKnown = 0;
-    uint8_t vhtFlags = 0;
-    uint8_t vhtBandwidth = 0;
-    uint8_t vhtMcsNss[4] = {0};
-    uint8_t vhtCoding = 0;
-    uint8_t vhtGroupId = 0;
-    uint16_t vhtPartialAid = 0;
-
-    uint32_t uSigCommon = 0;
-    uint32_t ehtKnown = 0;
-    uint32_t ehtData[9] = {0};
-    std::vector<uint32_t> ehtUserInfo;
-    double ehtBandwidthHz = NAN;
-
-    bool isAmpdu = false;
-    bool isLastSubframe = false;
-    int selectedHeMuUserIndex = -1;
-    uint32_t ampduRef = 0;
-
-    Ptr<const physicallayer::Ieee80211HeTxVectorReq> heTxVectorReq;
-    Ptr<const physicallayer::Ieee80211HeRxVectorInd> heRxVectorInd;
-    Ptr<const physicallayer::Ieee80211HeTbRecipientContextInd> heTbRecipientContext;
-    const physicallayer::Ieee80211HeMode *heMode = nullptr;
-    const physicallayer::Ieee80211EhtMode *ehtMode = nullptr;
-    const physicallayer::Ieee80211VhtMode *vhtMode = nullptr;
-    const physicallayer::Ieee80211VhtTxVector *vhtTxVector = nullptr;
-    const physicallayer::Ieee80211HtMode *htMode = nullptr;
-
-#ifdef INET_WITH_IEEE80211
-    heTxVectorReq = packet->findTag<physicallayer::Ieee80211HeTxVectorReq>();
-    heRxVectorInd = packet->findTag<physicallayer::Ieee80211HeRxVectorInd>();
-    heTbRecipientContext = packet->findTag<physicallayer::Ieee80211HeTbRecipientContextInd>();
-    if (heTxVectorReq != nullptr || heRxVectorInd != nullptr) {
-        isHe = true;
-    }
-    else {
-        const physicallayer::IIeee80211Mode *mode = nullptr;
-        auto vhtTxVectorReq = packet->findTag<physicallayer::Ieee80211VhtTxVectorReq>();
-        if (vhtTxVectorReq != nullptr && vhtTxVectorReq->getTxVector() != nullptr)
-            vhtTxVector = vhtTxVectorReq->getTxVector().get();
-        auto ieee80211Transmission = dynamic_cast<const physicallayer::Ieee80211Transmission *>(transmission);
-        if (ieee80211Transmission != nullptr) {
-            mode = ieee80211Transmission->getMode();
-            auto txVector = ieee80211Transmission->getVhtTxVector();
-            if (txVector != nullptr)
-                vhtTxVector = txVector.get();
-        }
-        else {
-            auto modeReq = packet->findTag<physicallayer::Ieee80211ModeReq>();
-            if (modeReq != nullptr)
-                mode = modeReq->getMode();
-            else {
-                auto modeInd = packet->findTag<physicallayer::Ieee80211ModeInd>();
-                if (modeInd != nullptr)
-                    mode = modeInd->getMode();
-            }
-        }
-        if (mode != nullptr) {
-            auto dm = mode->getDataMode();
-            if (dm != nullptr) {
-                double rateVal = dm->getNetBitrate().get() / 500000.0;
-                if (std::isfinite(rateVal) && rateVal >= 1 && rateVal <= 255) {
-                    hasRate = true;
-                    radiotapRate = static_cast<uint8_t>(std::round(rateVal));
-                }
-            }
-
-            heMode = dynamic_cast<const physicallayer::Ieee80211HeMode *>(mode);
-            if (heMode != nullptr) {
-                isHe = true;
-            }
-            else {
-                ehtMode = dynamic_cast<const physicallayer::Ieee80211EhtMode *>(mode);
-                if (ehtMode != nullptr) {
-                    isEht = true;
-                    // The current EHT mode is SU and owns these PHY facts.
-                    // Radiotap EHT does not carry channel bandwidth, so export
-                    // that independently in U-SIG when its value is
-                    // unambiguous. The two 320 MHz encodings depend on primary
-                    // channel placement, which the mode does not expose.
-                    uSigCommon = RADIOTAP_U_SIG_PHY_VERSION_KNOWN;
-                    auto ehtDm = ehtMode->getDataMode();
-                    if (ehtDm != nullptr) {
-                        auto bandwidth = ehtDm->getBandwidth().get();
-                        ehtBandwidthHz = bandwidth;
-                        int radiotapBandwidth =
-                                bandwidth == 20e6 ? 0 :
-                                bandwidth == 40e6 ? 1 :
-                                bandwidth == 80e6 ? 2 :
-                                bandwidth == 160e6 ? 3 : -1;
-                        if (radiotapBandwidth >= 0) {
-                            uSigCommon |= RADIOTAP_U_SIG_BANDWIDTH_KNOWN;
-                            uSigCommon |= radiotapBandwidth << 15;
-                        }
-
-                        // The currently implemented EHT mode represents one
-                        // non-OFDMA SU user. Radiotap encodes N users as N-1,
-                        // so data[7] remains zero while the known bit is set.
-                        ehtKnown |= RADIOTAP_EHT_NUMBER_NON_OFDMA_USERS_KNOWN;
-                        auto guardInterval = ehtDm->getGuardIntervalType();
-                        int radiotapGi =
-                                guardInterval == physicallayer::Ieee80211EhtModeBase::EHT_GUARD_INTERVAL_SHORT ? 0 :
-                                guardInterval == physicallayer::Ieee80211EhtModeBase::EHT_GUARD_INTERVAL_MEDIUM ? 1 :
-                                guardInterval == physicallayer::Ieee80211EhtModeBase::EHT_GUARD_INTERVAL_LONG ? 2 : -1;
-                        if (radiotapGi >= 0) {
-                            ehtKnown |= RADIOTAP_EHT_GI_KNOWN;
-                            ehtData[0] |= radiotapGi << 7;
-                        }
-
-                        uint32_t userInfo = RADIOTAP_EHT_USER_DATA_FOR_USER;
-                        auto modulationAndCodingScheme = ehtDm->getModulationAndCodingScheme();
-                        if (modulationAndCodingScheme != nullptr) {
-                            auto mcs = modulationAndCodingScheme->getMcsIndex();
-                            if (mcs <= 13) {
-                                userInfo |= RADIOTAP_EHT_USER_MCS_KNOWN;
-                                userInfo |= mcs << 20;
-                            }
-                        }
-                        auto numberOfSpatialStreams = ehtDm->getNumberOfSpatialStreams();
-                        if (numberOfSpatialStreams >= 1 && numberOfSpatialStreams <= 16) {
-                            userInfo |= RADIOTAP_EHT_USER_NSS_KNOWN;
-                            userInfo |= (numberOfSpatialStreams - 1) << 24;
-                        }
-                        auto code = ehtDm->getCode();
-                        if (code != nullptr) {
-                            userInfo |= RADIOTAP_EHT_USER_CODING_KNOWN;
-                            if (code->isLdpc())
-                                userInfo |= 1U << 19;
-                        }
-                        ehtUserInfo.push_back(userInfo);
-                    }
-                }
-                else {
-                    vhtMode = dynamic_cast<const physicallayer::Ieee80211VhtMode *>(mode);
-                    if (vhtMode != nullptr && dm != nullptr) {
-                        isVht = true;
-                        auto vhtDm = dynamic_cast<const physicallayer::Ieee80211VhtDataMode *>(dm);
-                        if (vhtDm != nullptr) {
-                            vhtKnown = RADIOTAP_VHT_STBC_KNOWN | RADIOTAP_VHT_GI_KNOWN |
-                                    RADIOTAP_VHT_BANDWIDTH_KNOWN;
-                            vhtFlags = (vhtDm->getGuardIntervalType() == physicallayer::Ieee80211VhtModeBase::HT_GUARD_INTERVAL_SHORT ? 0x04 : 0);
-                            vhtBandwidth = getRadiotapVhtBandwidth(vhtDm->getBandwidth());
-                            auto mcs = vhtDm->getModulationAndCodingScheme()->getMcsIndex();
-                            auto nss = vhtDm->getNumberOfSpatialStreams();
-                            vhtMcsNss[0] = (mcs << 4) | nss;
-                            vhtCoding = (vhtDm->getCode() != nullptr && vhtDm->getCode()->isLdpc() ? 1 : 0);
-                        }
-                    }
-                    else {
-                        htMode = dynamic_cast<const physicallayer::Ieee80211HtMode *>(mode);
-                        if (htMode != nullptr && dm != nullptr) {
-                            isHt = true;
-                            auto htDm = dynamic_cast<const physicallayer::Ieee80211HtDataMode *>(dm);
-                            if (htDm != nullptr) {
-                                mcsKnown = 0x01 | 0x02 | 0x04 | 0x10; // BW, MCS, GI, FEC known
-                                if (htDm->getBandwidth().get() > 30e6) mcsFlags |= 1; // 40 MHz
-                                if (htDm->getGuardIntervalType() == physicallayer::Ieee80211HtModeBase::HT_GUARD_INTERVAL_SHORT) mcsFlags |= (1 << 2);
-                                if (htDm->getCode() != nullptr && htDm->getCode()->isLdpc()) mcsFlags |= (1 << 4);
-                                mcsIndex = htDm->getModulationAndCodingScheme()->getMcsIndex();
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // The packet-level VHT TXVECTOR is authoritative for MU user
-        // signaling. The mode describes only the common PHY mode, while the
-        // VHT radiotap field has one MCS/NSS byte and one coding bit per user.
-        if (vhtTxVector != nullptr) {
-            isVht = true;
-            vhtBandwidth = getRadiotapVhtBandwidth(vhtTxVector->getChannelWidth());
-            vhtGroupId = vhtTxVector->getGroupId();
-            vhtPartialAid = vhtTxVector->getPartialAid();
-            if (vhtTxVector->isMu()) {
-                vhtKnown |= RADIOTAP_VHT_BEAMFORMED_KNOWN;
-                if (vhtTxVector->isBeamformed())
-                    vhtFlags |= RADIOTAP_VHT_BEAMFORMED;
-                for (const auto& user : vhtTxVector->getUsers()) {
-                    if (user.userPosition >= 4)
-                        throw cRuntimeError("VHT MU user position cannot be represented by radiotap");
-                    if (user.mcs > 9 || user.numberOfSpatialStreams == 0 || user.numberOfSpatialStreams > 8)
-                        throw cRuntimeError("Invalid VHT MU user MCS/NSS for radiotap");
-                    vhtMcsNss[user.userPosition] = (user.mcs << 4) | user.numberOfSpatialStreams;
-                    if (user.ldpcCoding)
-                        vhtCoding |= 1U << user.userPosition;
-                }
-            }
-        }
-    }
-
-    auto matchMpduRange = [&](const std::vector<MpduRange>& ranges) {
-        for (size_t i = 0; i < ranges.size(); i++) {
-            if (ranges[i].offset == frontOffset) {
-                isAmpdu = true;
-                isLastSubframe = i == ranges.size() - 1 ||
-                        ranges[i + 1].heMuUserIndex != ranges[i].heMuUserIndex;
-                selectedHeMuUserIndex = ranges[i].heMuUserIndex;
-                return;
-            }
-        }
-    };
-
-    std::vector<MpduRange> heMuMpduRanges;
-    if (findIeee80211HeMuAmpduMpduRanges(packet, frontOffset, heMuMpduRanges))
-        matchMpduRange(heMuMpduRanges);
-    if (!isAmpdu) {
-        // A PHY header may place the byte-aligned A-MPDU at a non-byte-aligned
-        // packet offset (for example, after the 100-bit HE PHY header). Preserve
-        // the recorded MPDU's bit residues so the candidate grid can include the
-        // actual aggregate boundaries.
-        auto startOffsetResidue = b(frontOffset.get<b>() % 8);
-        auto backOffsetResidue = b(backOffset.get<b>() % 8);
-        for (b startOffset = startOffsetResidue; startOffset <= frontOffset; startOffset += b(8)) {
-            for (b backOffsetIdx = backOffsetResidue; backOffsetIdx <= backOffset; backOffsetIdx += b(8)) {
-                std::vector<MpduRange> tempRanges;
-                if (getIeee80211AmpduMpduRanges(packet, startOffset, backOffsetIdx, tempRanges))
-                    matchMpduRange(tempRanges);
-                if (isAmpdu)
-                    break;
-            }
-            if (isAmpdu)
-                break;
-        }
-    }
-    if (isAmpdu)
-        ampduRef = makeAmpduReference(packet, selectedHeMuUserIndex);
-#endif
-
-    // IEEE 802.11 packets recorded by PcapRecorder contain the MAC trailer.
-    uint8_t flags = RADIOTAP_F_FCS;
-    if (packet->hasBitError())
-        flags |= RADIOTAP_F_BADFCS;
-    bytes.push_back(flags);
-
-    // 2. RADIOTAP_RATE (2)
-    if (hasRate) {
-        setPresentBit(RADIOTAP_RATE);
-        bytes.push_back(radiotapRate);
-    }
-
-#ifdef INET_WITH_PHYSICALLAYERWIRELESSCOMMON
-    const physicallayer::ISignalAnalogModel *analogModel = nullptr;
-    simtime_t startTime;
-    simtime_t endTime;
-    if (reception != nullptr) {
-        analogModel = reception->getAnalogModel();
-        startTime = reception->getStartTime();
-        endTime = reception->getEndTime();
-    }
-    else if (transmission != nullptr) {
-        analogModel = transmission->getAnalogModel();
-        startTime = transmission->getStartTime();
-        endTime = transmission->getEndTime();
-    }
-
-    auto narrowbandAnalogModel = dynamic_cast<const physicallayer::INarrowbandSignalAnalogModel *>(analogModel);
-    if (narrowbandAnalogModel != nullptr) {
-        double frequencyMHz = narrowbandAnalogModel->getCenterFrequency().get() / 1E6;
-        if (std::isfinite(frequencyMHz) && 0 < frequencyMHz && frequencyMHz <= UINT16_MAX) {
-            setPresentBit(RADIOTAP_CHANNEL);
-            appendPadding(bytes, 2);
-            appendUint16(bytes, static_cast<uint16_t>(std::round(frequencyMHz)));
-            uint16_t channelFlags = frequencyMHz < 3000 ? RADIOTAP_CHANNEL_2GHZ :
-                    frequencyMHz < 6000 ? RADIOTAP_CHANNEL_5GHZ : 0;
-            appendUint16(bytes, channelFlags);
-
-            // IEEE 802.11be-2024 Table 36-28 and 36.3.24.2 distinguish two
-            // 320 MHz U-SIG bandwidth encodings by channel-center sequence.
-            // The selected analog-model center frequency supplies the missing
-            // placement fact; leave bandwidth unknown for any non-enumerated
-            // center instead of choosing a variant.
-            if (isEht && ehtBandwidthHz == 320e6) {
-                auto channelNumber = static_cast<int>(
-                        std::round((frequencyMHz - 5950) / 5));
-                auto expectedFrequencyMHz = 5950 + channelNumber * 5;
-                int radiotapBandwidth = -1;
-                if (std::abs(frequencyMHz - expectedFrequencyMHz) < 1e-6) {
-                    if (channelNumber == 31 || channelNumber == 95 || channelNumber == 159)
-                        radiotapBandwidth = 4;
-                    else if (channelNumber == 63 || channelNumber == 127 || channelNumber == 191)
-                        radiotapBandwidth = 5;
-                }
-                if (radiotapBandwidth >= 0) {
-                    uSigCommon |= RADIOTAP_U_SIG_BANDWIDTH_KNOWN;
-                    uSigCommon |= radiotapBandwidth << 15;
-                }
-            }
-        }
-
-        auto power = narrowbandAnalogModel->computeMinPower(startTime, endTime);
-        double powerMilliwatts = power.get<units::values::mW>();
-        if (std::isfinite(powerMilliwatts) && 0 < powerMilliwatts &&
-                (direction == DIRECTION_INBOUND || direction == DIRECTION_OUTBOUND)) {
-            int powerDbm = static_cast<int>(std::round(math::mW2dBmW(powerMilliwatts)));
-            powerDbm = std::clamp(powerDbm, -128, 127);
-            if (direction == DIRECTION_INBOUND)
-                setPresentBit(RADIOTAP_ANTENNA_SIGNAL);
-            else if (direction == DIRECTION_OUTBOUND)
-                setPresentBit(RADIOTAP_DBM_TX_POWER);
-            bytes.push_back(static_cast<uint8_t>(static_cast<int8_t>(powerDbm)));
-        }
-    }
-#endif
-
-    if (direction == DIRECTION_INBOUND) {
-        setPresentBit(RADIOTAP_RX_FLAGS);
-        appendPadding(bytes, 2);
-        appendUint16(bytes, 0);
-    }
-    else if (direction == DIRECTION_OUTBOUND) {
-        setPresentBit(RADIOTAP_TX_FLAGS);
-        appendPadding(bytes, 2);
-        appendUint16(bytes, 0);
-    }
-
-#ifdef INET_WITH_IEEE80211
-    // 8. RADIOTAP_MCS (19)
-    if (isHt) {
-        setPresentBit(RADIOTAP_MCS);
-        bytes.push_back(mcsKnown);
-        bytes.push_back(mcsFlags);
-        bytes.push_back(mcsIndex);
-    }
-
-    // 9. RADIOTAP_AMPDU (20)
-    if (isAmpdu) {
-        setPresentBit(RADIOTAP_AMPDU);
-        appendPadding(bytes, 4);
-        appendUint32(bytes, ampduRef);
-        uint16_t ampduFlags = 0x0004 | (isLastSubframe ? 0x0008 : 0);
-        appendUint16(bytes, ampduFlags);
-        bytes.push_back(0); // delimiter CRC
-        bytes.push_back(0); // reserved
-    }
-
-    // 10. RADIOTAP_VHT (21)
-    if (isVht) {
-        setPresentBit(RADIOTAP_VHT);
-        appendPadding(bytes, 2);
-        appendUint16(bytes, vhtKnown);
-        bytes.push_back(vhtFlags);
-        bytes.push_back(vhtBandwidth);
-        for (int i = 0; i < 4; ++i)
-            bytes.push_back(vhtMcsNss[i]);
-        bytes.push_back(vhtCoding);
-        bytes.push_back(vhtGroupId);
-        appendUint16(bytes, vhtPartialAid);
-    }
-
-    // 11. RADIOTAP_HE (23)
-    if (isHe) {
-        setPresentBit(RADIOTAP_HE);
-
-        appendPadding(bytes, 2);
-        uint16_t data1 = 0;
-        uint16_t data2 = 0;
-        uint16_t data3 = 0;
-        uint16_t data4 = 0;
-        uint16_t data5 = 0;
-        uint16_t data6 = 0;
-
-        if (heTxVectorReq != nullptr && heTxVectorReq->getTxVector() != nullptr) {
-            const auto& txVector = *heTxVectorReq->getTxVector();
-            const auto& common = txVector.getCommon().getParameters();
-            auto ppduFormat = common.ppduFormat;
-            auto radiotapFormat = getRadiotapHeFormat(ppduFormat);
-            data1 |= radiotapFormat | RADIOTAP_HE_BSS_COLOR_KNOWN |
-                    RADIOTAP_HE_SPATIAL_REUSE_KNOWN;
-            data3 |= common.sigA.bssColor & 0x3f;
-            if (ppduFormat == physicallayer::HE_MU_DOWNLINK || ppduFormat == physicallayer::HE_TRIGGER_BASED_UPLINK) {
-                data1 |= RADIOTAP_HE_UL_DL_KNOWN;
-                if (ppduFormat == physicallayer::HE_TRIGGER_BASED_UPLINK)
-                    data3 |= 0x0080;
-            }
-            data2 |= RADIOTAP_HE_GI_KNOWN;
-            data4 |= common.sigA.spatialReuse.front() & 0xf;
-            data5 |= (common.guardInterval & 0x3) << 4;
-            const physicallayer::Ieee80211HeUserPhyParameters *selectedUser = nullptr;
-            if (selectedHeMuUserIndex >= 0 &&
-                    selectedHeMuUserIndex < static_cast<int>(txVector.getUsers().size()))
-                selectedUser = &txVector.getUsers()[selectedHeMuUserIndex].getParameters();
-            else if (ppduFormat == physicallayer::HE_TRIGGER_BASED_UPLINK && !txVector.getUsers().empty())
-                selectedUser = &txVector.getUsers().front().getParameters();
-            else if (txVector.getUsers().size() == 1)
-                selectedUser = &txVector.getUsers().front().getParameters();
-            if (selectedUser != nullptr) {
-                const auto& user = *selectedUser;
-                data1 |= RADIOTAP_HE_DATA_MCS_KNOWN | RADIOTAP_HE_DATA_DCM_KNOWN |
-                        RADIOTAP_HE_CODING_KNOWN;
-                if (ppduFormat == physicallayer::HE_MU_DOWNLINK) {
-                    data1 |= RADIOTAP_HE_MU_STA_ID_KNOWN;
-                    data4 |= (user.staId & 0x7ff) << 4;
-                }
-                data3 |= (user.mcs & 0xf) << 8;
-                data3 |= (user.dcm ? 1U : 0U) << 12;
-                data3 |= (user.coding & 0x1) << 13;
-                auto bandwidthOrRu = ppduFormat == physicallayer::HE_SINGLE_USER ?
-                        getRadiotapHeBandwidth(common.channelBandwidth) :
-                        getRadiotapHeRuAllocation(user.ru.toneSize);
-                if (bandwidthOrRu >= 0) {
-                    data1 |= RADIOTAP_HE_BW_RU_ALLOC_KNOWN;
-                    data5 |= bandwidthOrRu;
-                }
-                data6 |= std::clamp<int>(user.numberOfSpatialStreams, 1, 15);
-                if (ppduFormat == physicallayer::HE_MU_DOWNLINK) {
-                    data6 |= (std::clamp<int>(user.streamStartIndex, 0, 7) & 0x7) << 5;
-                }
-            }
-        }
-        else if (heRxVectorInd != nullptr && heRxVectorInd->getRxVector() != nullptr) {
-            const auto& rxVector = *heRxVectorInd->getRxVector();
-            const auto& common = rxVector.getCommon();
-            const auto& user = rxVector.getUser();
-            auto ppduFormat = common.getPpduFormat();
-            data1 |= getRadiotapHeFormat(ppduFormat) |
-                    RADIOTAP_HE_BSS_COLOR_KNOWN | RADIOTAP_HE_SPATIAL_REUSE_KNOWN;
-            data3 |= common.getBssColor() & 0x3f;
-            if (ppduFormat == physicallayer::HE_MU_DOWNLINK || ppduFormat == physicallayer::HE_TRIGGER_BASED_UPLINK) {
-                data1 |= RADIOTAP_HE_UL_DL_KNOWN;
-                if (ppduFormat == physicallayer::HE_TRIGGER_BASED_UPLINK)
-                    data3 |= 0x0080;
-            }
-            data2 |= RADIOTAP_HE_GI_KNOWN;
-            data4 |= common.getSpatialReuse().front() & 0xf;
-            data5 |= (common.getGuardInterval() & 0x3) << 4;
-
-            const physicallayer::Ieee80211HeUserPhyParameters *recipientParameters = nullptr;
-            if (ppduFormat == physicallayer::HE_TRIGGER_BASED_UPLINK &&
-                    heTbRecipientContext != nullptr &&
-                    heTbRecipientContext->getRecipientParameters() != nullptr)
-                recipientParameters = heTbRecipientContext->getRecipientParameters().get();
-
-            auto mcs = user.getMcs();
-            auto dcm = user.getDcm();
-            auto coding = user.getCoding();
-            auto numberOfSpaceTimeStreams = user.getNumberOfSpaceTimeStreams();
-            auto ruAllocation = user.getRuAllocation();
-            if (recipientParameters != nullptr) {
-                mcs = recipientParameters->mcs;
-                dcm = recipientParameters->dcm;
-                coding = recipientParameters->coding;
-                numberOfSpaceTimeStreams = recipientParameters->numberOfSpatialStreams;
-                ruAllocation = recipientParameters->ru;
-            }
-            if (mcs.has_value()) {
-                data1 |= RADIOTAP_HE_DATA_MCS_KNOWN;
-                data3 |= (*mcs & 0xf) << 8;
-            }
-            if (dcm.has_value()) {
-                data1 |= RADIOTAP_HE_DATA_DCM_KNOWN;
-                data3 |= (*dcm ? 1U : 0U) << 12;
-            }
-            if (coding.has_value()) {
-                data1 |= RADIOTAP_HE_CODING_KNOWN;
-                data3 |= (*coding & 0x1) << 13;
-            }
-            if (numberOfSpaceTimeStreams.has_value())
-                data6 |= std::clamp<int>(*numberOfSpaceTimeStreams, 1, 15);
-            auto bandwidthOrRu = ppduFormat == physicallayer::HE_SINGLE_USER &&
-                    common.getChannelBandwidth().has_value() ?
-                    getRadiotapHeBandwidth(*common.getChannelBandwidth()) :
-                    (ruAllocation.has_value() ? getRadiotapHeRuAllocation(ruAllocation->toneSize) : -1);
-            if (bandwidthOrRu >= 0) {
-                data1 |= RADIOTAP_HE_BW_RU_ALLOC_KNOWN;
-                data5 |= bandwidthOrRu;
-            }
-            if (ppduFormat == physicallayer::HE_MU_DOWNLINK && user.getStaId().has_value()) {
-                data1 |= RADIOTAP_HE_MU_STA_ID_KNOWN;
-                data4 |= (*user.getStaId() & 0x7ff) << 4;
-            }
-        }
-        else if (heMode != nullptr) {
-            auto preambleFormat = heMode->getPreambleMode()->getPreambleFormat();
-            data1 |= preambleFormat == physicallayer::Ieee80211HePreambleMode::HE_PREAMBLE_ER_SU ?
-                    RADIOTAP_HE_FORMAT_EXT_SU : RADIOTAP_HE_FORMAT_SU;
-            auto dm = heMode->getDataMode();
-            if (dm != nullptr) {
-                data1 |= RADIOTAP_HE_DATA_MCS_KNOWN | RADIOTAP_HE_CODING_KNOWN |
-                        RADIOTAP_HE_BW_RU_ALLOC_KNOWN;
-                data2 |= RADIOTAP_HE_GI_KNOWN;
-                data3 |= (dm->getMcsIndex() & 0xf) << 8;
-                data3 |= (dm->isLdpc() ? 1U : 0U) << 13;
-                auto gi = dm->getGuardIntervalType();
-                auto radiotapGi = gi == physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_SHORT ? 0 :
-                        gi == physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_MEDIUM ? 1 : 2;
-                // HE ER SU is modelled with the mandatory 242-tone allocation;
-                // ordinary HE SU uses the channel-width encoding.
-                data5 |= preambleFormat == physicallayer::Ieee80211HePreambleMode::HE_PREAMBLE_ER_SU ?
-                        getRadiotapHeRuAllocation(242) : getRadiotapHeBandwidth(dm->getBandwidth());
-                data5 |= radiotapGi << 4;
-                data6 |= std::clamp<int>(dm->getNumberOfSpatialStreams(), 1, 15);
-            }
-        }
-        appendUint16(bytes, data1);
-        appendUint16(bytes, data2);
-        appendUint16(bytes, data3);
-        appendUint16(bytes, data4);
-        appendUint16(bytes, data5);
-        appendUint16(bytes, data6);
-    }
-
-    // 12. RADIOTAP_HE_MU (24)
-    if (isHe && heTxVectorReq != nullptr && heTxVectorReq->getTxVector() != nullptr) {
-        const auto& txVector = *heTxVectorReq->getTxVector();
-        const auto& common = txVector.getCommon().getParameters();
-        if (common.ppduFormat == physicallayer::HE_MU_DOWNLINK) {
-            setPresentBit(RADIOTAP_HE_MU);
-            appendPadding(bytes, 2);
-
-            uint16_t flags1 = 0x0001; // SIG-B compression known / enabled
-            uint16_t flags2 = 0x0001; // SIG-B MCS known
-            uint8_t ruChannel1[4] = {0};
-            uint8_t ruChannel2[4] = {0};
-
-            if (!txVector.getUsers().empty()) {
-                const auto& firstUser = txVector.getUsers().front().getParameters();
-                int ruAlloc = getRadiotapHeRuAllocation(firstUser.ru.toneSize);
-                if (ruAlloc >= 0)
-                    ruChannel1[0] = static_cast<uint8_t>(ruAlloc);
-            }
-
-            appendUint16(bytes, flags1);
-            appendUint16(bytes, flags2);
-            for (int i = 0; i < 4; ++i)
-                bytes.push_back(ruChannel1[i]);
-            for (int i = 0; i < 4; ++i)
-                bytes.push_back(ruChannel2[i]);
-        }
-    }
-
-    // 13. RADIOTAP_0_LENGTH_PSDU (26)
-    b recordedLength = packet->getDataLength() - frontOffset - backOffset;
-    if (recordedLength == b(0)) {
-        setPresentBit(RADIOTAP_0_LENGTH_PSDU);
-        bytes.push_back(0); // sounding PPDU / zero-length PSDU
-    }
-
-    // 14. RADIOTAP_U_SIG (33)
-    if (isEht && uSigCommon != 0) {
-        setPresentBit(RADIOTAP_U_SIG);
-        appendPadding(bytes, 4);
-        appendUint32(bytes, uSigCommon);
-        appendUint32(bytes, 0); // value: no format-specific U-SIG bits known
-        appendUint32(bytes, 0); // mask
-    }
-
-    // 15. RADIOTAP_EHT (34)
-    if (isEht) {
-        setPresentBit(RADIOTAP_EHT);
-        appendPadding(bytes, 4);
-        appendUint32(bytes, ehtKnown);
-        for (auto data : ehtData)
-            appendUint32(bytes, data);
-        for (auto userInfo : ehtUserInfo)
-            appendUint32(bytes, userInfo);
-    }
-#endif
-
-    // Set the extension flags for all intermediate present words
-    for (size_t i = 0; i < presentWords.size(); i++) {
-        if (i < presentWords.size() - 1) {
-            presentWords[i] |= 1U << 31;
-        }
-    }
-
-    // Insert the present words at index 4
-    std::vector<uint8_t> presentBytes(4 * presentWords.size(), 0);
-    for (size_t i = 0; i < presentWords.size(); i++) {
-        uint32_t val = presentWords[i];
-        presentBytes[4 * i] = val & 0xff;
-        presentBytes[4 * i + 1] = (val >> 8) & 0xff;
-        presentBytes[4 * i + 2] = (val >> 16) & 0xff;
-        presentBytes[4 * i + 3] = (val >> 24) & 0xff;
-    }
-    bytes.insert(bytes.begin() + 4, presentBytes.begin(), presentBytes.end());
-
-    // Update length
-    setUint16(bytes, 2, bytes.size());
-    return bytes;
-}
-
-} // namespace
-
-// ----
 
 Define_Module(PcapRecorder);
 
@@ -956,24 +39,34 @@ PcapRecorder::~PcapRecorder()
         delete helper;
 }
 
+IPcapWriter *PcapRecorder::createPcapWriter(const char *fileFormat) const
+{
+    if (!strcmp(fileFormat, "pcap"))
+        return new PcapWriter();
+    else if (!strcmp(fileFormat, "pcapng"))
+        return new PcapngWriter();
+    else
+        throw cRuntimeError("Unknown fileFormat parameter: '%s'", fileFormat);
+}
+
 PcapRecorder::PcapRecorder() : SimpleModule()
 {
 }
 
 bool PcapRecorder::shouldDissectProtocolDataUnit(const Protocol *protocol)
 {
-    return !contains(dumpProtocols, protocol);
+    return !isDumpProtocol(protocol);
 }
 
 void PcapRecorder::startProtocolDataUnit(const Protocol *protocol)
 {
-    if (contains(dumpProtocols, protocol))
+    if (isDumpProtocol(protocol))
         dumpProtocol = protocol;
 }
 
 void PcapRecorder::visitChunk(const Ptr<const Chunk>& chunk, const Protocol *protocol)
 {
-    if (!contains(dumpProtocols, protocol)) {
+    if (!isDumpProtocol(protocol)) {
         if (dumpProtocol == nullptr)
             frontOffset += chunk->getChunkLength();
         else
@@ -990,6 +83,30 @@ void PcapRecorder::initialize()
     enableConvertingPackets = par("enableConvertingPackets");
     snaplen = this->par("snaplen");
     dumpBadFrames = par("dumpBadFrames");
+    const char *captureDirectionString = par("captureDirection");
+    if (!strcmp(captureDirectionString, "both"))
+        captureDirection = DIRECTION_UNDEFINED;
+    else if (!strcmp(captureDirectionString, "inbound"))
+        captureDirection = DIRECTION_INBOUND;
+    else if (!strcmp(captureDirectionString, "outbound"))
+        captureDirection = DIRECTION_OUTBOUND;
+    else
+        throw cRuntimeError("Unknown captureDirection parameter: '%s'", captureDirectionString);
+    captureStartTime = par("captureStartTime");
+    captureEndTime = par("captureEndTime");
+    maxNumRecords = par("maxNumRecords");
+    int64_t outputBufferSize = par("outputBufferSize");
+    int64_t flushInterval = par("flushInterval");
+    if (outputBufferSize < 0)
+        throw cRuntimeError("outputBufferSize must be nonnegative");
+    if (flushInterval < 0)
+        throw cRuntimeError("flushInterval must be nonnegative");
+    if (captureStartTime < SIMTIME_ZERO)
+        throw cRuntimeError("captureStartTime must be nonnegative");
+    if (captureEndTime != SimTime(-1, SIMTIME_S) && captureEndTime < captureStartTime)
+        throw cRuntimeError("captureEndTime must be -1s or not precede captureStartTime");
+    if (maxNumRecords < -1)
+        throw cRuntimeError("maxNumRecords must be -1 or nonnegative");
     signalList.clear();
     packetFilter.setExpression(par("packetFilter").objectValue());
 
@@ -1011,7 +128,11 @@ void PcapRecorder::initialize()
         cStringTokenizer protocolTokenizer(par("dumpProtocols"));
 
         while (protocolTokenizer.hasMoreTokens())
-            dumpProtocols.push_back(Protocol::getProtocol(protocolTokenizer.nextToken()));
+        {
+            auto protocol = Protocol::getProtocol(protocolTokenizer.nextToken());
+            dumpProtocols.push_back(protocol);
+            dumpProtocolSet.insert(protocol);
+        }
     }
 
     {
@@ -1060,23 +181,29 @@ void PcapRecorder::initialize()
     std::string fileName = getEnvir()->getConfig()->substituteVariables(par("pcapFile"));
     const char *fileFormat = par("fileFormat");
     int timePrecision = par("timePrecision");
-    if (!strcmp(fileFormat, "pcap"))
-        pcapWriter = new PcapWriter();
-    else if (!strcmp(fileFormat, "pcapng"))
-        pcapWriter = new PcapngWriter();
-    else
-        throw cRuntimeError("Unknown fileFormat parameter: '%s'", fileFormat);
+    pcapWriter = createPcapWriter(fileFormat);
 
     recordPcap = !fileName.empty();
     if (recordPcap) {
-        pcapWriter->open(fileName.c_str(), snaplen, timePrecision);
+        if (auto segmentedPcapWriter = dynamic_cast<ISegmentedPcapWriter *>(pcapWriter)) {
+            segmentedPcapWriter->setBufferSize(outputBufferSize);
+            segmentedPcapWriter->setFlushInterval(flushInterval);
+        }
         pcapWriter->setFlush(par("alwaysFlush"));
+        pcapWriter->open(fileName.c_str(), snaplen, timePrecision);
     }
 
     WATCH(recordPcap);
     WATCH(frontOffset);
     WATCH(backOffset);
     WATCH(numRecorded);
+    WATCH(numOfferedPackets);
+    WATCH(numDirectionRejected);
+    WATCH(numTimeRejected);
+    WATCH(numLimitRejected);
+    WATCH(numFilterRejected);
+    WATCH(numBadFrameRejected);
+    WATCH(numEmptyRejected);
 }
 
 void PcapRecorder::handleMessage(cMessage *msg)
@@ -1102,77 +229,73 @@ void PcapRecorder::receiveSignal(cComponent *source, simsignal_t signalID, cObje
         auto i = signalList.find(signalID);
         ASSERT(i != signalList.end());
         Direction direction = i->second;
-        if (false)
-            ;
-#ifdef INET_WITH_PHYSICALLAYERWIRELESSCOMMON
-        else if (auto signal = dynamic_cast<const physicallayer::Signal *>(obj))
-            recordPacket(signal->getEncapsulatedPacket(), direction, source);
-#endif
-        else if (auto packet = dynamic_cast<cPacket *>(obj))
-            recordPacket(packet, direction, source);
-#ifdef INET_WITH_PHYSICALLAYERWIRELESSCOMMON
-        else if (auto transmission = dynamic_cast<const physicallayer::ITransmission *>(obj)) {
-            physicalLayerTransmission = transmission;
-            recordPacket(transmission->getPacket(), direction, source);
-            physicalLayerTransmission = nullptr;
-        }
-        else if (auto reception = dynamic_cast<const physicallayer::IReception *>(obj)) {
-            physicalLayerTransmission = reception->getTransmission();
-            physicalLayerReception = reception;
-            recordPacket(reception->getTransmission()->getPacket(), direction, source);
-            physicalLayerTransmission = nullptr;
-            physicalLayerReception = nullptr;
-        }
-#endif
+        auto observation = PcapCaptureAdapterRegistry::getInstance().tryCreateObservation(obj, direction);
+        if (observation.has_value())
+            recordPacket(*observation, source);
+        else if (auto packet = dynamic_cast<const Packet *>(obj))
+            recordPacket(PcapCaptureObservation(packet, direction), source);
     }
 }
 
-void PcapRecorder::writePacket(const Protocol *protocol, const Packet *packet, b frontOffset, b backOffset, Direction direction, NetworkInterface *networkInterface)
+void PcapRecorder::writePacket(const Protocol *protocol, const PcapCaptureObservation& observation, b frontOffset, b backOffset, NetworkInterface *networkInterface)
 {
-#ifdef INET_WITH_IEEE80211
-    if (*protocol == Protocol::ieee80211Mac) {
-        std::vector<MpduRange> mpduRanges;
-        if (getIeee80211HeMuAmpduMpduRanges(packet, frontOffset, backOffset, mpduRanges) ||
-                getIeee80211AmpduMpduRanges(packet, frontOffset, backOffset, mpduRanges)) {
-            for (const auto& mpduRange : mpduRanges)
-                writePacketRecord(protocol, packet, mpduRange.offset, packet->getDataLength() - mpduRange.offset - mpduRange.length, direction, networkInterface);
-            return;
+    auto adapter = PcapCaptureAdapterRegistry::getInstance().findProtocolAdapter(protocol);
+    if (adapter != nullptr && enableConvertingPackets) {
+        auto records = adapter->createRecords(observation, frontOffset, backOffset);
+        for (const auto& record : records) {
+            if (writePacketRecord(protocol, observation.packet, record.frontOffset, record.backOffset, observation.direction, networkInterface,
+                    adapter->getLinkType(), record.getPrefix(), true) && record.aggregateSubframe)
+                numAmpduMpduRecords++;
         }
+        return;
     }
-#endif
-    writePacketRecord(protocol, packet, frontOffset, backOffset, direction, networkInterface);
+    writePacketRecord(protocol, observation.packet, frontOffset, backOffset, observation.direction, networkInterface);
 }
 
-void PcapRecorder::writePacketRecord(const Protocol *protocol, const Packet *packet, b frontOffset, b backOffset, Direction direction, NetworkInterface *networkInterface)
+bool PcapRecorder::writePacketRecord(const Protocol *protocol, const Packet *packet, b frontOffset, b backOffset, Direction direction, NetworkInterface *networkInterface,
+        PcapLinkType linkType, const std::vector<uint8_t>& packetPrefix, bool adapterConversion)
 {
-    auto pcapLinkType = protocolToLinkType(protocol);
+    if (maxNumRecords >= 0 && numRecorded >= maxNumRecords) {
+        numLimitRejected++;
+        return false;
+    }
+    auto pcapLinkType = linkType == LINKTYPE_INVALID ? protocolToLinkType(protocol) : linkType;
     if (pcapLinkType == LINKTYPE_INVALID)
         throw cRuntimeError("Cannot determine the PCAP link type from protocol '%s'", protocol->getName());
-    bool convertPacket = !matchesLinkType(pcapLinkType, protocol);
-    ISegmentedPcapWriter *segmentedPcapWriter = nullptr;
-    std::vector<uint8_t> packetPrefix;
-#ifdef INET_WITH_IEEE80211
-    if (convertPacket && enableConvertingPackets && *protocol == Protocol::ieee80211Mac && pcapLinkType == LINKTYPE_IEEE802_11_RADIOTAP) {
-        segmentedPcapWriter = dynamic_cast<ISegmentedPcapWriter *>(pcapWriter);
-        if (segmentedPcapWriter != nullptr) {
-            packetPrefix = makeRadiotapHeader(packet, frontOffset, backOffset, direction, physicalLayerTransmission, physicalLayerReception);
-            convertPacket = false;
-        }
+    bool convertPacket = !adapterConversion && !matchesLinkType(pcapLinkType, protocol);
+    auto segmentedPcapWriter = !packetPrefix.empty() ? dynamic_cast<ISegmentedPcapWriter *>(pcapWriter) : nullptr;
+    bool deletePacket = false;
+    if (adapterConversion)
+        numConversions++;
+    if (adapterConversion && segmentedPcapWriter == nullptr && !packetPrefix.empty()) {
+        auto convertedPacket = new Packet(packet->getName());
+        convertedPacket->insertAtBack(makeShared<BytesChunk>(packetPrefix));
+        b dataLength = packet->getDataLength() - frontOffset - backOffset;
+        if (dataLength != b(0))
+            convertedPacket->insertAtBack(packet->peekDataAt(frontOffset, dataLength));
+        convertedPacket->setBitError(packet->hasBitError());
+        packet = convertedPacket;
+        frontOffset = backOffset = b(0);
+        deletePacket = true;
     }
-#endif
     if (convertPacket) {
-        recordingDirection = direction;
         packet = tryConvertToLinkType(packet, frontOffset, backOffset, pcapLinkType, protocol);
-        recordingDirection = DIRECTION_UNDEFINED;
         if (packet == nullptr)
             throw cRuntimeError("The protocol '%s' doesn't match PCAP link type %d", protocol->getName(), pcapLinkType);
+        numConversions++;
         frontOffset = b(0);
         backOffset = b(0);
+        deletePacket = true;
     }
-    b recordedLength = packet->getDataLength() - frontOffset - backOffset + B(packetPrefix.size());
+    b recordedLength = packet->getDataLength() - frontOffset - backOffset;
+    if (segmentedPcapWriter != nullptr)
+        recordedLength += B(packetPrefix.size());
     if (recordEmptyPackets || recordedLength != b(0)) {
-        if (segmentedPcapWriter != nullptr)
-            segmentedPcapWriter->writePacketWithPrefix(simTime(), packet, frontOffset, backOffset, direction, networkInterface, pcapLinkType, packetPrefix);
+        numPayloadBytesRequested += recordedLength.get<B>();
+        if (segmentedPcapWriter != nullptr) {
+            auto interfaceDescriptor = makePcapInterfaceDescriptor(networkInterface);
+            segmentedPcapWriter->writePacketWithPrefix(simTime(), packet, frontOffset, backOffset, direction, interfaceDescriptor, pcapLinkType, packetPrefix);
+        }
         else
             pcapWriter->writePacket(simTime(), packet, frontOffset, backOffset, direction, networkInterface, pcapLinkType);
         numRecorded++;
@@ -1189,63 +312,162 @@ void PcapRecorder::writePacketRecord(const Protocol *protocol, const Packet *pac
         else if (segmentedPcapWriter == nullptr)
             emit(packetRecordedSignal, packet);
     }
-    if (convertPacket)
+    else
+        numEmptyRejected++;
+    if (deletePacket)
         delete packet;
+    return recordEmptyPackets || recordedLength != b(0);
 }
 
-void PcapRecorder::recordPacket(const cPacket *cpacket, Direction direction, cComponent *source)
+bool PcapRecorder::isDumpProtocol(const Protocol *protocol) const
 {
-    if (auto packet = dynamic_cast<const Packet *>(cpacket)) {
-        EV_INFO << "Recording packet" << EV_FIELD(source, source->getFullPath()) << EV_FIELD(direction, direction) << EV_FIELD(packet) << EV_ENDL;
-        if (verbose)
-            EV_DEBUG << "Dumping packet" << EV_FIELD(packet, packetPrinter.printPacketToString(const_cast<Packet *>(packet), "%i")) << EV_ENDL;
-        if (recordPcap && packetFilter.matches(packet) && (dumpBadFrames || !packet->hasBitError())) {
-            // get Direction
-            if (direction == DIRECTION_UNDEFINED) {
-                if (auto directionTag = packet->findTag<DirectionTag>())
-                    direction = directionTag->getDirection();
-            }
+    return dumpProtocolSet.find(protocol) != dumpProtocolSet.end();
+}
 
-            // get NetworkInterface
-            auto srcModule = check_and_cast<cModule *>(source);
-            auto networkInterface = findContainingNicModule(srcModule);
-            if (networkInterface == nullptr) {
-                int ifaceId = -1;
-                if (direction == DIRECTION_OUTBOUND) {
-                    if (auto ifaceTag = packet->findTag<InterfaceReq>())
-                        ifaceId = ifaceTag->getInterfaceId();
-                }
-                else if (direction == DIRECTION_INBOUND) {
-                    if (auto ifaceTag = packet->findTag<InterfaceInd>())
-                        ifaceId = ifaceTag->getInterfaceId();
-                }
-                if (ifaceId != -1) {
-                    auto ift = check_and_cast_nullable<InterfaceTable *>(getContainingNode(srcModule)->getSubmodule("interfaceTable"));
-                    networkInterface = ift->getInterfaceById(ifaceId);
-                }
-            }
+NetworkInterface *PcapRecorder::resolveNetworkInterface(cModule *sourceModule, const Packet *packet, Direction direction)
+{
+    auto sourceModuleId = sourceModule->getId();
+    auto cachedInterface = sourceModuleToInterfaceModule.find(sourceModuleId);
+    if (cachedInterface != sourceModuleToInterfaceModule.end()) {
+        auto networkInterface = dynamic_cast<NetworkInterface *>(getSimulation()->getModule(cachedInterface->second));
+        if (networkInterface != nullptr) {
+            numCachedInterfaceResolutions++;
+            return networkInterface;
+        }
+        sourceModuleToInterfaceModule.erase(cachedInterface);
+    }
 
-            const auto& packetProtocolTag = packet->getTag<PacketProtocolTag>();
-            auto protocol = packetProtocolTag->getProtocol();
-            if (contains(dumpProtocols, protocol))
-                writePacket(protocol, packet, packetProtocolTag->getFrontOffset(), packetProtocolTag->getBackOffset(), direction, networkInterface);
-            else {
-                frontOffset = b(0);
-                backOffset = b(0);
-                dumpProtocol = nullptr;
-                Packet dissectedPacket(*packet);
-                PacketDissector packetDissector(ProtocolDissectorRegistry::getInstance(), *this);
-                packetDissector.dissectPacket(&dissectedPacket);
-                if (dumpProtocol != nullptr)
-                    writePacket(dumpProtocol, packet, frontOffset, backOffset, direction, networkInterface);
+    if (auto networkInterface = findContainingNicModule(sourceModule)) {
+        sourceModuleToInterfaceModule[sourceModuleId] = networkInterface->getId();
+        numDirectInterfaceResolutions++;
+        return networkInterface;
+    }
+
+    int interfaceId = -1;
+    if (direction == DIRECTION_OUTBOUND) {
+        if (auto interfaceTag = packet->findTag<InterfaceReq>())
+            interfaceId = interfaceTag->getInterfaceId();
+    }
+    else if (direction == DIRECTION_INBOUND) {
+        if (auto interfaceTag = packet->findTag<InterfaceInd>())
+            interfaceId = interfaceTag->getInterfaceId();
+    }
+    if (interfaceId != -1) {
+        auto node = findContainingNode(sourceModule);
+        if (node != nullptr) {
+            InterfaceTable *interfaceTable = nullptr;
+            auto cachedInterfaceTable = nodeModuleToInterfaceTableModule.find(node->getId());
+            if (cachedInterfaceTable != nodeModuleToInterfaceTableModule.end()) {
+                interfaceTable = dynamic_cast<InterfaceTable *>(getSimulation()->getModule(cachedInterfaceTable->second));
+                if (interfaceTable == nullptr)
+                    nodeModuleToInterfaceTableModule.erase(cachedInterfaceTable);
+            }
+            if (interfaceTable == nullptr) {
+                interfaceTable = dynamic_cast<InterfaceTable *>(node->getSubmodule("interfaceTable"));
+                if (interfaceTable != nullptr)
+                    nodeModuleToInterfaceTableModule[node->getId()] = interfaceTable->getId();
+            }
+            if (interfaceTable != nullptr) {
+                auto networkInterface = interfaceTable->getInterfaceById(interfaceId);
+                if (networkInterface != nullptr) {
+                    numTaggedInterfaceResolutions++;
+                    return networkInterface;
+                }
             }
         }
+    }
+    numUnresolvedInterfaceResolutions++;
+    return nullptr;
+}
+
+void PcapRecorder::recordPacket(const PcapCaptureObservation& observation, cComponent *source)
+{
+    auto packet = observation.packet;
+    Direction direction = observation.direction;
+    numOfferedPackets++;
+    if (direction == DIRECTION_UNDEFINED) {
+        if (auto directionTag = packet->findTag<DirectionTag>())
+            direction = directionTag->getDirection();
+    }
+    if (captureDirection != DIRECTION_UNDEFINED && direction != captureDirection) {
+        numDirectionRejected++;
+        return;
+    }
+    if (simTime() < captureStartTime || (captureEndTime >= SIMTIME_ZERO && simTime() > captureEndTime)) {
+        numTimeRejected++;
+        return;
+    }
+    if (maxNumRecords >= 0 && numRecorded >= maxNumRecords) {
+        numLimitRejected++;
+        return;
+    }
+
+    EV_INFO << "Recording packet" << EV_FIELD(source, source->getFullPath()) << EV_FIELD(direction, direction) << EV_FIELD(packet) << EV_ENDL;
+    if (verbose)
+        EV_DEBUG << "Dumping packet" << EV_FIELD(packet, packetPrinter.printPacketToString(const_cast<Packet *>(packet), "%i")) << EV_ENDL;
+    if (!recordPcap)
+        return;
+    if (!packetFilter.matches(packet)) {
+        numFilterRejected++;
+        return;
+    }
+    if (!dumpBadFrames && packet->hasBitError()) {
+        numBadFrameRejected++;
+        return;
+    }
+
+    auto sourceModule = check_and_cast<cModule *>(source);
+    auto networkInterface = resolveNetworkInterface(sourceModule, packet, direction);
+    PcapCaptureObservation effectiveObservation(packet, direction, observation.transmission, observation.reception);
+
+    const auto& packetProtocolTag = packet->getTag<PacketProtocolTag>();
+    auto protocol = packetProtocolTag->getProtocol();
+    if (isDumpProtocol(protocol)) {
+        numDirectProtocols++;
+        writePacket(protocol, effectiveObservation, packetProtocolTag->getFrontOffset(), packetProtocolTag->getBackOffset(), networkInterface);
+    }
+    else if (auto resolution = PcapCaptureAdapterRegistry::getInstance().tryResolveProtocol(protocol, packet,
+            packetProtocolTag->getFrontOffset(), packetProtocolTag->getBackOffset());
+            resolution.has_value() && isDumpProtocol(std::get<0>(*resolution))) {
+        numDirectProtocols++;
+        writePacket(std::get<0>(*resolution), effectiveObservation, std::get<1>(*resolution), std::get<2>(*resolution), networkInterface);
+    }
+    else {
+        numFallbackDissections++;
+        frontOffset = b(0);
+        backOffset = b(0);
+        dumpProtocol = nullptr;
+        Packet dissectedPacket(*packet);
+        PacketDissector packetDissector(ProtocolDissectorRegistry::getInstance(), *this);
+        packetDissector.dissectPacket(&dissectedPacket);
+        if (dumpProtocol != nullptr)
+            writePacket(dumpProtocol, effectiveObservation, frontOffset, backOffset, networkInterface);
     }
 }
 
 void PcapRecorder::finish()
 {
+    auto segmentedPcapWriter = dynamic_cast<ISegmentedPcapWriter *>(pcapWriter);
     pcapWriter->close();
+    auto emitCount = [this](const char *signalName, int64_t value) { emit(registerSignal(signalName), value); };
+    emitCount("offeredPacketCount", numOfferedPackets);
+    emitCount("directionRejectedCount", numDirectionRejected);
+    emitCount("timeRejectedCount", numTimeRejected);
+    emitCount("limitRejectedCount", numLimitRejected);
+    emitCount("filterRejectedCount", numFilterRejected);
+    emitCount("badFrameRejectedCount", numBadFrameRejected);
+    emitCount("emptyRejectedCount", numEmptyRejected);
+    emitCount("directProtocolCount", numDirectProtocols);
+    emitCount("fallbackDissectionCount", numFallbackDissections);
+    emitCount("conversionCount", numConversions);
+    emitCount("ampduMpduRecordCount", numAmpduMpduRecords);
+    emitCount("directInterfaceResolutionCount", numDirectInterfaceResolutions);
+    emitCount("cachedInterfaceResolutionCount", numCachedInterfaceResolutions);
+    emitCount("taggedInterfaceResolutionCount", numTaggedInterfaceResolutions);
+    emitCount("unresolvedInterfaceResolutionCount", numUnresolvedInterfaceResolutions);
+    emitCount("payloadBytesRequested", numPayloadBytesRequested);
+    emitCount("payloadBytesWritten", segmentedPcapWriter != nullptr ? segmentedPcapWriter->getNumPayloadBytesWritten() : 0);
+    emitCount("writerFlushCount", segmentedPcapWriter != nullptr ? segmentedPcapWriter->getNumFlushes() : 0);
 }
 
 bool PcapRecorder::matchesLinkType(PcapLinkType pcapLinkType, const Protocol *protocol) const
@@ -1258,9 +480,6 @@ bool PcapRecorder::matchesLinkType(PcapLinkType pcapLinkType, const Protocol *pr
         return pcapLinkType == LINKTYPE_ETHERNET;
     else if (*protocol == Protocol::ppp)
         return pcapLinkType == LINKTYPE_PPP_WITH_DIR;
-    else if (*protocol == Protocol::ieee80211Mac)
-        // A bare MAC frame only matches the non-Radiotap IEEE 802.11 link type.
-        return pcapLinkType == LINKTYPE_IEEE802_11;
     else if (*protocol == Protocol::ipv4)
         return pcapLinkType == LINKTYPE_RAW || pcapLinkType == LINKTYPE_IPV4;
     else if (*protocol == Protocol::ipv6)
@@ -1278,14 +497,15 @@ bool PcapRecorder::matchesLinkType(PcapLinkType pcapLinkType, const Protocol *pr
 
 PcapLinkType PcapRecorder::protocolToLinkType(const Protocol *protocol) const
 {
-    if (*protocol == Protocol::ethernetPhy)
+    auto captureAdapter = PcapCaptureAdapterRegistry::getInstance().findProtocolAdapter(protocol);
+    if (captureAdapter != nullptr)
+        return captureAdapter->getLinkType();
+    else if (*protocol == Protocol::ethernetPhy)
         return LINKTYPE_ETHERNET_MPACKET;
     else if (*protocol == Protocol::ethernetMac)
         return LINKTYPE_ETHERNET;
     else if (*protocol == Protocol::ppp)
         return LINKTYPE_PPP_WITH_DIR;
-    else if (*protocol == Protocol::ieee80211Mac)
-        return LINKTYPE_IEEE802_11_RADIOTAP;
     else if (*protocol == Protocol::ipv4 || *protocol == Protocol::ipv6)
         return LINKTYPE_RAW;
     else if (*protocol == Protocol::ieee802154)
@@ -1303,15 +523,6 @@ PcapLinkType PcapRecorder::protocolToLinkType(const Protocol *protocol) const
 Packet *PcapRecorder::tryConvertToLinkType(const Packet *packet, b frontOffset, b backOffset, PcapLinkType pcapLinkType, const Protocol *protocol) const
 {
     if (enableConvertingPackets) {
-        if (*protocol == Protocol::ieee80211Mac && pcapLinkType == LINKTYPE_IEEE802_11_RADIOTAP) {
-            auto convertedPacket = new Packet(packet->getName());
-            convertedPacket->insertAtBack(makeShared<BytesChunk>(makeRadiotapHeader(packet, frontOffset, backOffset, recordingDirection, physicalLayerTransmission, physicalLayerReception)));
-            b dataLength = packet->getDataLength() - frontOffset - backOffset;
-            if (dataLength != b(0))
-                convertedPacket->insertAtBack(packet->peekDataAt(frontOffset, dataLength));
-            convertedPacket->setBitError(packet->hasBitError());
-            return convertedPacket;
-        }
         for (IHelper *helper : helpers) {
             if (auto newPacket = helper->tryConvertToLinkType(packet, frontOffset, backOffset, pcapLinkType, protocol))
                 return newPacket;

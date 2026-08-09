@@ -43,9 +43,9 @@ struct pcaprec_hdr
     uint32_t orig_len; /* actual length of packet */
 };
 
-static void writeBytes(FILE *file, const void *data, size_t length, const std::string& fileName)
+void PcapWriter::writeBytes(const void *data, size_t length)
 {
-    if (length != 0 && fwrite(data, length, 1, file) != 1)
+    if (length != 0 && writeFile(data, length, 1, dumpfile) != 1)
         throw cRuntimeError("Cannot write pcap file [%s]: %s", fileName.c_str(), strerror(errno));
 }
 
@@ -56,8 +56,12 @@ PcapWriter::~PcapWriter()
 
 void PcapWriter::open(const char *filename, unsigned int snaplen_par, int timePrecision)
 {
+    if (dumpfile != nullptr)
+        throw cRuntimeError("Cannot open pcap file: another file is already open");
     if (opp_isempty(filename))
         throw cRuntimeError("Cannot open pcap file: file name is empty");
+    if (snaplen_par == 0)
+        throw cRuntimeError("Classic pcap snaplen must be positive");
 
     switch (timePrecision) {
         case 6:
@@ -67,17 +71,26 @@ void PcapWriter::open(const char *filename, unsigned int snaplen_par, int timePr
         default: throw cRuntimeError("Unsupported time precision (%d) in PcapWriter.", timePrecision);
     }
     inet::utils::makePathForFile(filename);
-    dumpfile = fopen(filename, "wb");
     fileName = filename;
+    dumpfile = fopen(filename, "wb");
 
     if (!dumpfile)
         throw cRuntimeError("Cannot open pcap file [%s] for writing: %s", filename, strerror(errno));
+    if (bufferSize != 0) {
+        stdioBuffer.resize(bufferSize);
+        if (setFileBuffer(dumpfile, stdioBuffer.data(), _IOFBF, stdioBuffer.size()) != 0) {
+            closeFile(false);
+            throw cRuntimeError("Cannot configure stdio buffer for pcap file [%s]", filename);
+        }
+    }
 
     snaplen = snaplen_par;
     needHeader = true;
     network = LINKTYPE_INVALID;
+    numRecordsWritten = 0;
+    numPayloadBytesWritten = 0;
+    numFlushes = 0;
 
-    flush = false;
 }
 
 void PcapWriter::writeHeader(PcapLinkType linkType)
@@ -95,19 +108,22 @@ void PcapWriter::writeHeader(PcapLinkType linkType)
     fh.sigfigs = 0;
     fh.snaplen = snaplen;
     fh.network = linkType;
-    writeBytes(dumpfile, &fh, sizeof(fh), fileName);
+    writeBytes(&fh, sizeof(fh));
 }
 
 void PcapWriter::writePacket(simtime_t stime, const Packet *packet, b frontOffset, b backOffset, Direction direction, NetworkInterface *ie, PcapLinkType linkTypePar)
 {
-    writePacketWithPrefix(stime, packet, frontOffset, backOffset, direction, ie, linkTypePar, {});
+    (void)ie;
+    writePacketWithPrefix(stime, packet, frontOffset, backOffset, direction, {}, linkTypePar, {});
 }
 
-void PcapWriter::writePacketWithPrefix(simtime_t stime, const Packet *packet, b frontOffset, b backOffset, Direction direction, NetworkInterface *ie, PcapLinkType linkTypePar,
+void PcapWriter::writePacketWithPrefix(simtime_t stime, const Packet *packet, b frontOffset, b backOffset, Direction direction, const PcapInterfaceDescriptor& interfaceDescriptor, PcapLinkType linkTypePar,
         const std::vector<uint8_t>& packetPrefix)
 {
     if (!dumpfile)
         throw cRuntimeError("Cannot write frame: pcap output file is not open");
+    if (stime < SIMTIME_ZERO)
+        throw cRuntimeError("Cannot write packet with a negative timestamp");
 
     if (needHeader) {
         if (linkTypePar == LINKTYPE_INVALID)
@@ -122,7 +138,7 @@ void PcapWriter::writePacketWithPrefix(simtime_t stime, const Packet *packet, b 
     }
 
     (void)direction; // unused
-    (void)ie; // unused
+    (void)interfaceDescriptor; // unused
 
     EV_INFO << "Writing packet" << EV_FIELD(packet) << EV_FIELD(fileName) << EV_ENDL;
     struct pcaprec_hdr ph;
@@ -141,17 +157,30 @@ void PcapWriter::writePacketWithPrefix(simtime_t stime, const Packet *packet, b 
     ph.orig_len = static_cast<uint32_t>(packetDataLengthBytes + packetPrefix.size());
     ph.incl_len = std::min(ph.orig_len, snaplen);
 
-    writeBytes(dumpfile, &ph, sizeof(ph), fileName);
+    writeBytes(&ph, sizeof(ph));
     auto capturedPrefixLength = std::min<size_t>(packetPrefix.size(), ph.incl_len);
-    writeBytes(dumpfile, packetPrefix.data(), capturedPrefixLength, fileName);
+    writeBytes(packetPrefix.data(), capturedPrefixLength);
     auto capturedPacketLength = ph.incl_len - capturedPrefixLength;
     if (capturedPacketLength != 0) {
         auto data = packet->peekDataAt<BytesChunk>(frontOffset, B(capturedPacketLength));
         const auto& bytes = data->getBytes();
-        writeBytes(dumpfile, bytes.data(), bytes.size(), fileName);
+        writeBytes(bytes.data(), bytes.size());
     }
-    if (flush && fflush(dumpfile) != 0)
-        throw cRuntimeError("Cannot flush pcap file [%s]: %s", fileName.c_str(), strerror(errno));
+    numPayloadBytesWritten += ph.incl_len;
+    numRecordsWritten++;
+    if (flush || (flushInterval != 0 && numRecordsWritten % flushInterval == 0)) {
+        if (flushFile(dumpfile) != 0)
+            throw cRuntimeError("Cannot flush pcap file [%s]: %s", fileName.c_str(), strerror(errno));
+        numFlushes++;
+    }
+}
+
+void PcapWriter::setBufferSize(size_t bufferSize)
+{
+    if (dumpfile != nullptr)
+        throw cRuntimeError("Cannot change pcap stdio buffer size while the file is open");
+    this->bufferSize = bufferSize;
+    stdioBuffer.clear();
 }
 
 void PcapWriter::close()
@@ -165,7 +194,9 @@ void PcapWriter::closeFile(bool checkError)
         return;
     auto file = dumpfile;
     dumpfile = nullptr;
-    if (fclose(file) != 0 && checkError)
+    auto result = closeFileHandle(file);
+    stdioBuffer.clear();
+    if (result != 0 && checkError)
         throw cRuntimeError("Cannot close pcap file [%s]: %s", fileName.c_str(), strerror(errno));
 }
 

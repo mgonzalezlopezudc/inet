@@ -1,0 +1,411 @@
+%description:
+Test PcapRecorder performance gates, counters, exact A-MPDU record limits, and lifecycle-safe interface caches.
+
+%includes:
+#include <functional>
+#include <vector>
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/packet/chunk/ByteCountChunk.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/common/packet/recorder/PcapRecorder.h"
+#include "inet/linklayer/common/InterfaceTag_m.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/pcap/Ieee80211RadiotapPcapCaptureAdapter.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/networklayer/common/NetworkInterface.h"
+
+%file: TestNetwork.ned
+
+import inet.common.packet.recorder.PcapRecorder;
+import inet.networklayer.common.InterfaceTable;
+import inet.networklayer.common.NetworkInterface;
+
+module TestNetworkInterface extends NetworkInterface
+{
+    parameters:
+        string interfaceTableModule = default(absPath("^.interfaceTable"));
+    gates:
+        input upperLayerIn;
+        output upperLayerOut;
+}
+
+simple TestablePcapRecorder extends PcapRecorder
+{
+    parameters:
+        @class(TestablePcapRecorder);
+}
+
+network TestNetwork
+{
+    parameters:
+        @networkNode;
+    submodules:
+        interfaceTable: InterfaceTable;
+        nic: TestNetworkInterface;
+        test: Test;
+        defaults: TestablePcapRecorder {
+            parameters:
+                pcapFile = "";
+                moduleNamePatterns = "";
+                verbose = false;
+        }
+        directionGate: TestablePcapRecorder {
+            parameters:
+                pcapFile = "";
+                moduleNamePatterns = "";
+                verbose = false;
+                captureDirection = "inbound";
+        }
+        timeGate: TestablePcapRecorder {
+            parameters:
+                pcapFile = "";
+                moduleNamePatterns = "";
+                verbose = false;
+                captureStartTime = 1s;
+        }
+        limitGate: TestablePcapRecorder {
+            parameters:
+                pcapFile = "";
+                moduleNamePatterns = "";
+                verbose = false;
+                maxNumRecords = 0;
+        }
+        filterGate: TestablePcapRecorder {
+            parameters:
+                pcapFile = "";
+                moduleNamePatterns = "";
+                verbose = false;
+                packetFilter = "accept*";
+        }
+        badFrameGate: TestablePcapRecorder {
+            parameters:
+                pcapFile = "";
+                moduleNamePatterns = "";
+                verbose = false;
+                dumpBadFrames = false;
+        }
+        emptyGate: TestablePcapRecorder {
+            parameters:
+                pcapFile = "";
+                moduleNamePatterns = "";
+                verbose = false;
+                recordEmptyPackets = false;
+        }
+        resolution: TestablePcapRecorder {
+            parameters:
+                pcapFile = "";
+                moduleNamePatterns = "";
+                verbose = false;
+        }
+        fallback: TestablePcapRecorder {
+            parameters:
+                pcapFile = "";
+                moduleNamePatterns = "";
+                verbose = false;
+                dumpProtocols = "ethernetmac";
+        }
+        wifiDirect: TestablePcapRecorder {
+            parameters:
+                pcapFile = "";
+                moduleNamePatterns = "";
+                verbose = false;
+                dumpProtocols = "ieee80211mac";
+        }
+        ampduLimit: TestablePcapRecorder {
+            parameters:
+                pcapFile = "";
+                moduleNamePatterns = "";
+                verbose = false;
+                maxNumRecords = 1;
+        }
+        configOrder: TestablePcapRecorder {
+            parameters:
+                pcapFile = "config-order.pcap";
+                moduleNamePatterns = "";
+                verbose = false;
+                outputBufferSize = 123B;
+                flushInterval = 7;
+                alwaysFlush = true;
+        }
+    connections allowunconnected:
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+
+using namespace inet;
+using namespace inet::ieee80211;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+class RecordingPcapWriter : public IPcapWriter
+{
+  public:
+    int numRecords = 0;
+    std::vector<std::vector<uint8_t>> records;
+
+    virtual void open(const char *, unsigned int, int) override { }
+    virtual void close() override { }
+    virtual bool isOpen() const override { return true; }
+    virtual void setFlush(bool) override { }
+    virtual void writePacket(simtime_t, const Packet *packet, b frontOffset, b backOffset, Direction, NetworkInterface *, PcapLinkType) override {
+        numRecords++;
+        auto length = packet->getDataLength() - frontOffset - backOffset;
+        records.push_back(packet->peekDataAt<BytesChunk>(frontOffset, length)->getBytes());
+    }
+};
+
+class ConfigurationTrackingWriter : public IPcapWriter, public ISegmentedPcapWriter
+{
+  public:
+    static bool configuredBeforeOpen;
+    size_t bufferSize = 0;
+    size_t flushInterval = 0;
+    bool flush = false;
+    virtual void open(const char *, unsigned int, int) override { configuredBeforeOpen = bufferSize == 123 && flushInterval == 7 && flush; }
+    virtual void close() override { }
+    virtual bool isOpen() const override { return true; }
+    virtual void setFlush(bool value) override { flush = value; }
+    virtual void setBufferSize(size_t value) override { bufferSize = value; }
+    virtual void setFlushInterval(size_t value) override { flushInterval = value; }
+    virtual void writePacket(simtime_t, const Packet *, b, b, Direction, NetworkInterface *, PcapLinkType) override { }
+    virtual void writePacketWithPrefix(simtime_t, const Packet *, b, b, Direction, const PcapInterfaceDescriptor&, PcapLinkType, const std::vector<uint8_t>&) override { }
+};
+
+bool ConfigurationTrackingWriter::configuredBeforeOpen = false;
+
+class TestablePcapRecorder : public PcapRecorder
+{
+  public:
+    virtual IPcapWriter *createPcapWriter(const char *) const override { return new ConfigurationTrackingWriter(); }
+    void setWriter(IPcapWriter *writer)
+    {
+        delete pcapWriter;
+        pcapWriter = writer;
+        recordPcap = true;
+    }
+
+    void offer(const Packet *packet, Direction direction, cModule *source) { recordPacket(PcapCaptureObservation(packet, direction), source); }
+    void writeIeee80211(const Packet *packet) { writePacket(&Protocol::ieee80211Mac, PcapCaptureObservation(packet, DIRECTION_UNDEFINED), b(0), b(0), nullptr); }
+    void poisonInterfaceCache(int sourceModuleId) { sourceModuleToInterfaceModule[sourceModuleId] = -1000; }
+
+    int64_t offered() const { return numOfferedPackets; }
+    int64_t directionRejected() const { return numDirectionRejected; }
+    int64_t timeRejected() const { return numTimeRejected; }
+    int64_t limitRejected() const { return numLimitRejected; }
+    int64_t filterRejected() const { return numFilterRejected; }
+    int64_t badFrameRejected() const { return numBadFrameRejected; }
+    int64_t emptyRejected() const { return numEmptyRejected; }
+    int64_t directProtocols() const { return numDirectProtocols; }
+    int64_t fallbackDissections() const { return numFallbackDissections; }
+    int64_t conversions() const { return numConversions; }
+    int64_t ampduRecords() const { return numAmpduMpduRecords; }
+    int64_t directResolutions() const { return numDirectInterfaceResolutions; }
+    int64_t cachedResolutions() const { return numCachedInterfaceResolutions; }
+    int64_t taggedResolutions() const { return numTaggedInterfaceResolutions; }
+    int64_t unresolvedResolutions() const { return numUnresolvedInterfaceResolutions; }
+    int64_t requestedBytes() const { return numPayloadBytesRequested; }
+    void runFinish() { finish(); }
+};
+
+class CountSignalListener : public cListener
+{
+  public:
+    int calls = 0;
+    intval_t value = -1;
+    virtual void receiveSignal(cComponent *, simsignal_t, intval_t value, cObject *) override { calls++; this->value = value; }
+};
+
+Define_Module(TestablePcapRecorder);
+
+static Packet makeEthernetPacket(const char *name, const std::vector<uint8_t>& bytes = {1, 2, 3, 4})
+{
+    Packet packet(name);
+    if (!bytes.empty())
+        packet.insertAtBack(makeShared<BytesChunk>(bytes));
+    packet.addTag<PacketProtocolTag>()->setProtocol(&Protocol::ethernetMac);
+    return packet;
+}
+
+static void appendMpdu(Packet& aggregate, const std::vector<uint8_t>& bytes, bool appendPadding)
+{
+    auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
+    delimiter->setLength(bytes.size());
+    aggregate.insertAtBack(delimiter);
+    aggregate.insertAtBack(makeShared<BytesChunk>(bytes));
+    auto paddingLength = (4 - (4 + bytes.size()) % 4) % 4;
+    if (appendPadding && paddingLength != 0)
+        aggregate.insertAtBack(makeShared<ByteCountChunk>(B(paddingLength)));
+}
+
+%activity:
+
+auto source = getModuleByPath("test");
+auto nic = check_and_cast<NetworkInterface *>(getModuleByPath("nic"));
+auto packet = makeEthernetPacket("packet");
+
+auto defaults = check_and_cast<TestablePcapRecorder *>(getModuleByPath("defaults"));
+REQUIRE(!strcmp(defaults->par("captureDirection"), "both"));
+REQUIRE(SimTime(defaults->par("captureStartTime")) == SIMTIME_ZERO);
+REQUIRE(SimTime(defaults->par("captureEndTime")) == SimTime(-1, SIMTIME_S));
+REQUIRE(defaults->par("maxNumRecords").intValue() == -1);
+REQUIRE(defaults->par("outputBufferSize").intValue() == 0);
+REQUIRE(defaults->par("flushInterval").intValue() == 0);
+REQUIRE(ConfigurationTrackingWriter::configuredBeforeOpen);
+
+auto expectInvalidConfiguration = [&](const char *name, const std::function<void(cModule *)>& configure) {
+    auto module = cModuleType::get("TestablePcapRecorder")->create(name, getParentModule());
+    module->par("pcapFile").setStringValue("");
+    module->par("moduleNamePatterns").setStringValue("");
+    configure(module);
+    module->finalizeParameters();
+    module->buildInside();
+    module->scheduleStart(simTime());
+    bool rejected = false;
+    try {
+        module->callInitialize();
+    }
+    catch (cRuntimeError&) {
+        rejected = true;
+    }
+    module->deleteModule();
+    REQUIRE(rejected);
+};
+expectInvalidConfiguration("negativeBuffer", [](cModule *module) { module->par("outputBufferSize").setIntValue(-1); });
+expectInvalidConfiguration("negativeFlush", [](cModule *module) { module->par("flushInterval").setIntValue(-1); });
+expectInvalidConfiguration("negativeStart", [](cModule *module) { module->par("captureStartTime").setDoubleValue(-1); });
+expectInvalidConfiguration("earlyEnd", [](cModule *module) { module->par("captureStartTime").setDoubleValue(2); module->par("captureEndTime").setDoubleValue(1); });
+expectInvalidConfiguration("invalidLimit", [](cModule *module) { module->par("maxNumRecords").setIntValue(-2); });
+
+auto directionGate = check_and_cast<TestablePcapRecorder *>(getModuleByPath("directionGate"));
+auto directionWriter = new RecordingPcapWriter();
+directionGate->setWriter(directionWriter);
+directionGate->offer(&packet, DIRECTION_OUTBOUND, source);
+directionGate->offer(&packet, DIRECTION_UNDEFINED, source);
+auto taggedDirectionPacket = makeEthernetPacket("taggedDirection");
+taggedDirectionPacket.addTag<DirectionTag>()->setDirection(DIRECTION_INBOUND);
+directionGate->offer(&taggedDirectionPacket, DIRECTION_UNDEFINED, source);
+REQUIRE(directionGate->offered() == 3 && directionGate->directionRejected() == 2);
+REQUIRE(directionWriter->numRecords == 1);
+
+auto timeGate = check_and_cast<TestablePcapRecorder *>(getModuleByPath("timeGate"));
+timeGate->setWriter(new RecordingPcapWriter());
+timeGate->offer(&packet, DIRECTION_INBOUND, source);
+REQUIRE(timeGate->timeRejected() == 1);
+
+auto limitGate = check_and_cast<TestablePcapRecorder *>(getModuleByPath("limitGate"));
+limitGate->setWriter(new RecordingPcapWriter());
+limitGate->offer(&packet, DIRECTION_INBOUND, source);
+REQUIRE(limitGate->limitRejected() == 1);
+
+auto filterGate = check_and_cast<TestablePcapRecorder *>(getModuleByPath("filterGate"));
+filterGate->setWriter(new RecordingPcapWriter());
+filterGate->offer(&packet, DIRECTION_INBOUND, source);
+REQUIRE(filterGate->filterRejected() == 1);
+
+auto badFrameGate = check_and_cast<TestablePcapRecorder *>(getModuleByPath("badFrameGate"));
+badFrameGate->setWriter(new RecordingPcapWriter());
+auto badPacket = makeEthernetPacket("bad");
+badPacket.setBitError(true);
+badFrameGate->offer(&badPacket, DIRECTION_INBOUND, source);
+REQUIRE(badFrameGate->badFrameRejected() == 1);
+
+auto emptyGate = check_and_cast<TestablePcapRecorder *>(getModuleByPath("emptyGate"));
+auto emptyWriter = new RecordingPcapWriter();
+emptyGate->setWriter(emptyWriter);
+auto emptyPacket = makeEthernetPacket("empty", {});
+emptyGate->offer(&emptyPacket, DIRECTION_INBOUND, source);
+REQUIRE(emptyGate->emptyRejected() == 1 && emptyWriter->numRecords == 0);
+
+auto resolution = check_and_cast<TestablePcapRecorder *>(getModuleByPath("resolution"));
+auto resolutionWriter = new RecordingPcapWriter();
+resolution->setWriter(resolutionWriter);
+resolution->offer(&packet, DIRECTION_OUTBOUND, nic);
+resolution->poisonInterfaceCache(nic->getId());
+resolution->offer(&packet, DIRECTION_OUTBOUND, nic);
+resolution->offer(&packet, DIRECTION_OUTBOUND, nic);
+auto taggedPacket = makeEthernetPacket("tagged");
+taggedPacket.addTag<InterfaceReq>()->setInterfaceId(nic->getInterfaceId());
+resolution->offer(&taggedPacket, DIRECTION_OUTBOUND, source);
+resolution->offer(&taggedPacket, DIRECTION_OUTBOUND, source);
+resolution->offer(&packet, DIRECTION_OUTBOUND, source);
+REQUIRE(resolution->directResolutions() == 2);
+REQUIRE(resolution->cachedResolutions() == 1);
+REQUIRE(resolution->taggedResolutions() == 2);
+REQUIRE(resolution->unresolvedResolutions() == 1);
+REQUIRE(resolution->directProtocols() == 6);
+REQUIRE(resolutionWriter->numRecords == 6);
+REQUIRE(resolution->requestedBytes() == 24);
+
+CountSignalListener offeredListener;
+CountSignalListener requestedListener;
+resolution->subscribe("offeredPacketCount", &offeredListener);
+resolution->subscribe("payloadBytesRequested", &requestedListener);
+REQUIRE(offeredListener.calls == 0 && requestedListener.calls == 0);
+resolution->runFinish();
+REQUIRE(offeredListener.calls == 1 && offeredListener.value == 6);
+REQUIRE(requestedListener.calls == 1 && requestedListener.value == 24);
+
+auto fallback = check_and_cast<TestablePcapRecorder *>(getModuleByPath("fallback"));
+auto fallbackWriter = new RecordingPcapWriter();
+fallback->setWriter(fallbackWriter);
+auto fallbackPacket = makeEthernetPacket("fallback");
+fallbackPacket.getTagForUpdate<PacketProtocolTag>()->setProtocol(&Protocol::unknown);
+fallback->offer(&fallbackPacket, DIRECTION_INBOUND, source);
+REQUIRE(fallback->fallbackDissections() == 1);
+
+Packet macPacket("mac", makeShared<BytesChunk>(std::vector<uint8_t>{0x08, 1, 2, 3, 4}));
+auto wifiDirect = check_and_cast<TestablePcapRecorder *>(getModuleByPath("wifiDirect"));
+auto wifiWriter = new RecordingPcapWriter();
+wifiDirect->setWriter(wifiWriter);
+wifiDirect->writeIeee80211(&macPacket);
+auto expectedRadiotapRecord = wifiWriter->records.back();
+Packet phyPacket("phy");
+auto phyHeader = makeShared<physicallayer::Ieee80211OfdmPhyHeader>();
+phyHeader->setLengthField(macPacket.getDataLength());
+phyPacket.insertAtBack(phyHeader);
+phyPacket.insertAtBack(macPacket.peekData());
+phyPacket.insertAtBack(makeShared<BitCountChunk>(b(6)));
+phyPacket.addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211OfdmPhy);
+auto directFallbackCountBeforePhy = wifiDirect->fallbackDissections();
+auto directCountBeforePhy = wifiDirect->directProtocols();
+wifiDirect->offer(&phyPacket, DIRECTION_UNDEFINED, source);
+REQUIRE(wifiDirect->fallbackDissections() == directFallbackCountBeforePhy);
+REQUIRE(wifiDirect->directProtocols() == directCountBeforePhy + 1);
+REQUIRE(wifiWriter->records.back() == expectedRadiotapRecord);
+
+auto nonWifiFallbackBeforePhy = fallback->fallbackDissections();
+auto nonWifiDirectBeforePhy = fallback->directProtocols();
+auto nonWifiRecordsBeforePhy = fallbackWriter->numRecords;
+fallback->offer(&phyPacket, DIRECTION_UNDEFINED, source);
+REQUIRE(fallback->fallbackDissections() == nonWifiFallbackBeforePhy + 1);
+REQUIRE(fallback->directProtocols() == nonWifiDirectBeforePhy);
+REQUIRE(fallbackWriter->numRecords == nonWifiRecordsBeforePhy);
+
+Packet malformedPhyPacket(phyPacket);
+auto malformedHeader = makeShared<physicallayer::Ieee80211OfdmPhyHeader>();
+malformedHeader->setLengthField(B(1000));
+malformedPhyPacket.removeAtFront(phyHeader->getChunkLength());
+malformedPhyPacket.insertAtFront(malformedHeader);
+Ieee80211RadiotapPcapCaptureAdapter radiotapAdapter;
+REQUIRE(!radiotapAdapter.tryResolvePacket(&malformedPhyPacket, b(0), b(0)).has_value());
+
+auto ampduLimit = check_and_cast<TestablePcapRecorder *>(getModuleByPath("ampduLimit"));
+auto ampduWriter = new RecordingPcapWriter();
+ampduLimit->setWriter(ampduWriter);
+Packet aggregate("aggregate");
+appendMpdu(aggregate, {0x08, 1, 2, 3, 4}, true);
+appendMpdu(aggregate, {0x08, 5, 6, 7, 8}, false);
+ampduLimit->writeIeee80211(&aggregate);
+REQUIRE(ampduWriter->numRecords == 1);
+REQUIRE(ampduLimit->ampduRecords() == 1);
+REQUIRE(ampduLimit->limitRejected() == 1);
+REQUIRE(ampduLimit->conversions() == 1);
+
+EV << "PcapRecorder performance gates and counters tested successfully.\n";
+
+%contains: stdout
+PcapRecorder performance gates and counters tested successfully.

@@ -32,8 +32,19 @@ class INET_API PcapWriter : public IPcapWriter, public ISegmentedPcapWriter
     PcapLinkType network = LINKTYPE_INVALID; // the network type header field in the PCAP file, see http://www.tcpdump.org/linktypes.html
     bool flush = false;
     bool needHeader = true;
+    size_t bufferSize = 0;
+    size_t flushInterval = 0;
+    size_t numRecordsWritten = 0;
+    uint64_t numPayloadBytesWritten = 0;
+    uint64_t numFlushes = 0;
+    std::vector<char> stdioBuffer;
 
   protected:
+    virtual size_t writeFile(const void *data, size_t size, size_t count, FILE *file) { return fwrite(data, size, count, file); }
+    virtual int flushFile(FILE *file) { return fflush(file); }
+    virtual int closeFileHandle(FILE *file) { return fclose(file); }
+    virtual int setFileBuffer(FILE *file, char *buffer, int mode, size_t size) { return setvbuf(file, buffer, mode, size); }
+    void writeBytes(const void *data, size_t length);
     void writeHeader(PcapLinkType linkType);
     void closeFile(bool checkError);
 
@@ -65,8 +76,12 @@ class INET_API PcapWriter : public IPcapWriter, public ISegmentedPcapWriter
      * and throws an exception otherwise.
      */
     void writePacket(simtime_t time, const Packet *packet, b frontOffset, b backOffset, Direction direction, NetworkInterface *ie, PcapLinkType linkType) override;
-    void writePacketWithPrefix(simtime_t time, const Packet *packet, b frontOffset, b backOffset, Direction direction, NetworkInterface *ie, PcapLinkType linkType,
+    void writePacketWithPrefix(simtime_t time, const Packet *packet, b frontOffset, b backOffset, Direction direction, const PcapInterfaceDescriptor& interfaceDescriptor, PcapLinkType linkType,
             const std::vector<uint8_t>& packetPrefix) override;
+    void setBufferSize(size_t bufferSize) override;
+    void setFlushInterval(size_t flushInterval) override { this->flushInterval = flushInterval; }
+    uint64_t getNumPayloadBytesWritten() const override { return numPayloadBytesWritten; }
+    uint64_t getNumFlushes() const override { return numFlushes; }
 
     /**
      * Closes the output file if it is open.

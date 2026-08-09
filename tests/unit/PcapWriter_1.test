@@ -15,6 +15,39 @@ using namespace inet;
 
 #define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
 
+class TestPcapWriter : public PcapWriter
+{
+  public:
+    bool failWrite = false;
+    bool failFlush = false;
+    bool failClose = false;
+    bool failSetBuffer = false;
+    int numFlushCalls = 0;
+
+  protected:
+    virtual size_t writeFile(const void *data, size_t size, size_t count, FILE *file) override
+    {
+        return failWrite ? 0 : PcapWriter::writeFile(data, size, count, file);
+    }
+
+    virtual int flushFile(FILE *file) override
+    {
+        numFlushCalls++;
+        return failFlush ? EOF : PcapWriter::flushFile(file);
+    }
+
+    virtual int closeFileHandle(FILE *file) override
+    {
+        auto result = PcapWriter::closeFileHandle(file);
+        return failClose ? EOF : result;
+    }
+
+    virtual int setFileBuffer(FILE *file, char *buffer, int mode, size_t size) override
+    {
+        return failSetBuffer ? EOF : PcapWriter::setFileBuffer(file, buffer, mode, size);
+    }
+};
+
 static std::vector<uint8_t> readFile(const char *fileName)
 {
     std::ifstream stream(fileName, std::ios::binary);
@@ -30,15 +63,46 @@ static uint32_t readUint32(const std::vector<uint8_t>& bytes, size_t offset)
     return value;
 }
 
+static size_t getFileSize(const char *fileName)
+{
+    std::ifstream stream(fileName, std::ios::binary | std::ios::ate);
+    if (!stream.good())
+        return 0;
+    return static_cast<size_t>(stream.tellg());
+}
+
 %activity:
 
 Packet packet("packet");
 packet.insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0x10, 0x11, 0x12, 0x13}));
 std::vector<uint8_t> prefix = {0xA0, 0xA1, 0xA2};
 
+for (const auto& invalidOpen : {std::pair<const char *, unsigned int>("", 64), std::pair<const char *, unsigned int>("zero-snaplen.pcap", 0)}) {
+    PcapWriter invalidWriter;
+    bool rejected = false;
+    try {
+        invalidWriter.open(invalidOpen.first, invalidOpen.second, 6);
+    }
+    catch (cRuntimeError&) {
+        rejected = true;
+    }
+    REQUIRE(rejected && !invalidWriter.isOpen());
+}
+PcapWriter failedOpenWriter;
+bool failedOpenRejected = false;
+try {
+    failedOpenWriter.open("/definitely/nonexistent/inet-pcap-dir/capture.pcap", 64, 6);
+}
+catch (cRuntimeError&) {
+    failedOpenRejected = true;
+}
+REQUIRE(failedOpenRejected && !failedOpenWriter.isOpen());
+
 PcapWriter truncatedWriter;
 truncatedWriter.open("segmented-truncated.pcap", 5, 6);
-truncatedWriter.writePacketWithPrefix(SimTime(123, SIMTIME_US), &packet, B(1), b(0), DIRECTION_UNDEFINED, nullptr, LINKTYPE_ETHERNET, prefix);
+truncatedWriter.writePacketWithPrefix(SimTime(123, SIMTIME_US), &packet, B(1), b(0), DIRECTION_UNDEFINED, {}, LINKTYPE_ETHERNET, prefix);
+REQUIRE(truncatedWriter.getNumPayloadBytesWritten() == 5);
+REQUIRE(truncatedWriter.getNumFlushes() == 0);
 truncatedWriter.close();
 
 auto truncated = readFile("segmented-truncated.pcap");
@@ -65,6 +129,124 @@ REQUIRE(large.size() == 24 + 16 + largeBytes.size());
 REQUIRE(readUint32(large, 32) == largeBytes.size());
 REQUIRE(readUint32(large, 36) == largeBytes.size());
 REQUIRE(std::equal(largeBytes.begin(), largeBytes.end(), large.begin() + 40));
+
+PcapWriter bufferedWriter;
+bufferedWriter.setBufferSize(4096);
+bufferedWriter.setFlushInterval(2);
+bufferedWriter.open("buffered.pcap", 64, 6);
+bool openBufferChangeRejected = false;
+try {
+    bufferedWriter.setBufferSize(8192);
+}
+catch (cRuntimeError&) {
+    openBufferChangeRejected = true;
+}
+REQUIRE(openBufferChangeRejected);
+bufferedWriter.writePacket(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_UNDEFINED, nullptr, LINKTYPE_ETHERNET);
+REQUIRE(getFileSize("buffered.pcap") == 0);
+bufferedWriter.writePacket(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_UNDEFINED, nullptr, LINKTYPE_ETHERNET);
+auto sizeAfterPeriodicFlush = getFileSize("buffered.pcap");
+REQUIRE(sizeAfterPeriodicFlush == 24 + 2 * (16 + 4));
+bufferedWriter.writePacket(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_UNDEFINED, nullptr, LINKTYPE_ETHERNET);
+REQUIRE(getFileSize("buffered.pcap") == sizeAfterPeriodicFlush);
+bufferedWriter.setFlush(true);
+bufferedWriter.writePacket(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_UNDEFINED, nullptr, LINKTYPE_ETHERNET);
+REQUIRE(getFileSize("buffered.pcap") == 24 + 4 * (16 + 4));
+REQUIRE(bufferedWriter.getNumPayloadBytesWritten() == 16);
+REQUIRE(bufferedWriter.getNumFlushes() == 2);
+bufferedWriter.close();
+bufferedWriter.setFlush(false);
+bufferedWriter.open("buffered-reopen.pcap", 64, 6);
+bufferedWriter.writePacket(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_UNDEFINED, nullptr, LINKTYPE_ETHERNET);
+REQUIRE(getFileSize("buffered-reopen.pcap") == 0);
+REQUIRE(bufferedWriter.getNumPayloadBytesWritten() == 4);
+REQUIRE(bufferedWriter.getNumFlushes() == 0);
+bufferedWriter.close();
+
+TestPcapWriter preconfiguredFlushWriter;
+preconfiguredFlushWriter.setFlush(true);
+preconfiguredFlushWriter.open("preconfigured-flush.pcap", 64, 6);
+preconfiguredFlushWriter.writePacket(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_UNDEFINED, nullptr, LINKTYPE_ETHERNET);
+REQUIRE(preconfiguredFlushWriter.numFlushCalls == 1);
+REQUIRE(preconfiguredFlushWriter.getNumPayloadBytesWritten() == 4);
+REQUIRE(preconfiguredFlushWriter.getNumFlushes() == 1);
+bool reopenRejected = false;
+try {
+    preconfiguredFlushWriter.open("unexpected-reopen.pcap", 64, 6);
+}
+catch (cRuntimeError&) {
+    reopenRejected = true;
+}
+REQUIRE(reopenRejected);
+preconfiguredFlushWriter.close();
+
+TestPcapWriter writeFailureWriter;
+writeFailureWriter.open("write-failure.pcap", 64, 6);
+writeFailureWriter.failWrite = true;
+bool writeFailureDetected = false;
+try {
+    writeFailureWriter.writePacket(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_UNDEFINED, nullptr, LINKTYPE_ETHERNET);
+}
+catch (cRuntimeError&) {
+    writeFailureDetected = true;
+}
+REQUIRE(writeFailureDetected);
+writeFailureWriter.failWrite = false;
+writeFailureWriter.close();
+
+TestPcapWriter flushFailureWriter;
+flushFailureWriter.setFlush(true);
+flushFailureWriter.open("flush-failure.pcap", 64, 6);
+flushFailureWriter.failFlush = true;
+bool flushFailureDetected = false;
+try {
+    flushFailureWriter.writePacket(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_UNDEFINED, nullptr, LINKTYPE_ETHERNET);
+}
+catch (cRuntimeError&) {
+    flushFailureDetected = true;
+}
+REQUIRE(flushFailureDetected);
+flushFailureWriter.failFlush = false;
+flushFailureWriter.close();
+
+TestPcapWriter closeFailureWriter;
+closeFailureWriter.open("close-failure.pcap", 64, 6);
+closeFailureWriter.failClose = true;
+bool closeFailureDetected = false;
+try {
+    closeFailureWriter.close();
+}
+catch (cRuntimeError&) {
+    closeFailureDetected = true;
+}
+REQUIRE(closeFailureDetected);
+REQUIRE(!closeFailureWriter.isOpen());
+
+TestPcapWriter setBufferFailureWriter;
+setBufferFailureWriter.setBufferSize(4096);
+setBufferFailureWriter.failSetBuffer = true;
+bool setBufferFailureDetected = false;
+try {
+    setBufferFailureWriter.open("set-buffer-failure.pcap", 64, 6);
+}
+catch (cRuntimeError&) {
+    setBufferFailureDetected = true;
+}
+REQUIRE(setBufferFailureDetected);
+REQUIRE(!setBufferFailureWriter.isOpen());
+
+bool negativeTimestampRejected = false;
+PcapWriter negativeTimestampWriter;
+negativeTimestampWriter.open("negative-timestamp.pcap", 64, 6);
+try {
+    negativeTimestampWriter.writePacket(SimTime(-1, SIMTIME_US), &packet, b(0), b(0), DIRECTION_UNDEFINED, nullptr, LINKTYPE_ETHERNET);
+}
+catch (cRuntimeError&) {
+    negativeTimestampRejected = true;
+}
+REQUIRE(negativeTimestampRejected);
+negativeTimestampWriter.close();
+REQUIRE(readFile("negative-timestamp.pcap").empty());
 
 EV << "Segmented, truncated, and large PCAP records tested successfully.\n";
 

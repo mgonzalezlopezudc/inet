@@ -8,6 +8,8 @@
 #ifndef __INET_IPCAPWRITER_H
 #define __INET_IPCAPWRITER_H
 
+#include <array>
+#include <string>
 #include <vector>
 
 #include "inet/common/DirectionTag_m.h"
@@ -216,12 +218,35 @@ class INET_API IPcapWriter
     virtual void writePacket(simtime_t time, const Packet *packet, b frontOffset, b backOffset, Direction direction, NetworkInterface *ie, PcapLinkType linkType) = 0;
 };
 
+struct INET_API PcapInterfaceDescriptor
+{
+    int interfaceId = -1;
+    std::string name;
+    std::string description;
+    std::array<uint8_t, 6> macAddress = {};
+    std::array<uint8_t, 4> ipv4Address = {};
+    std::array<uint8_t, 4> ipv4Netmask = {};
+
+    bool operator==(const PcapInterfaceDescriptor& other) const
+    {
+        return interfaceId == other.interfaceId && name == other.name && description == other.description &&
+                macAddress == other.macAddress && ipv4Address == other.ipv4Address && ipv4Netmask == other.ipv4Netmask;
+    }
+};
+
+INET_API PcapInterfaceDescriptor makePcapInterfaceDescriptor(NetworkInterface *networkInterface);
+
 class INET_API ISegmentedPcapWriter
 {
   public:
     virtual ~ISegmentedPcapWriter() {}
 
-    virtual void writePacketWithPrefix(simtime_t time, const Packet *packet, b frontOffset, b backOffset, Direction direction, NetworkInterface *ie, PcapLinkType linkType,
+    virtual void setBufferSize(size_t) {}
+    virtual void setFlushInterval(size_t) {}
+    virtual uint64_t getNumPayloadBytesWritten() const { return 0; }
+    virtual uint64_t getNumFlushes() const { return 0; }
+
+    virtual void writePacketWithPrefix(simtime_t time, const Packet *packet, b frontOffset, b backOffset, Direction direction, const PcapInterfaceDescriptor& interfaceDescriptor, PcapLinkType linkType,
             const std::vector<uint8_t>& packetPrefix) = 0;
 };
 
