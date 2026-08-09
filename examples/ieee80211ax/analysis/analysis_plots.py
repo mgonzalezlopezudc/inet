@@ -61,12 +61,13 @@ def bar_with_ci(
     column: str,
     *,
     scale: float = 1.0,
+    color: str | None = None,
 ) -> None:
     summaries = [summary(frame, column) for frame in frames]
     values = [float(item["mean"]) * scale for item in summaries]
     errors = [float(item["ci95"]) * scale for item in summaries]
     yerr = None if any(math.isnan(value) for value in errors) else errors
-    axis.bar(labels, values, yerr=yerr, capsize=4)
+    axis.bar(labels, values, yerr=yerr, capsize=4, color=color)
     axis.tick_params(axis="x", rotation=24)
     axis.grid(axis="y", alpha=0.3)
 
@@ -999,8 +1000,12 @@ def plot_delivery(conditions: list[Condition], output: Path) -> None:
         squeeze=False,
         figsize=(max(10, len(conditions) * 1.4), 8.6 if node_names else 4.8),
     )
-    bar_with_ci(axes[0, 0], labels, aggregate_goodputs, "goodput_bps", scale=1e-6)
-    bar_with_ci(axes[0, 1], labels, aggregate_delays, "delay_s", scale=1e3)
+    bar_with_ci(
+        axes[0, 0], labels, aggregate_goodputs, "goodput_bps", scale=1e-6, color="#8B0000"
+    )
+    bar_with_ci(
+        axes[0, 1], labels, aggregate_delays, "delay_s", scale=1e3, color="#8B0000"
+    )
     axes[0, 0].set_ylabel("AP goodput [Mbit/s]")
     axes[0, 1].set_ylabel("AP 95th-percentile delay [ms]")
     if node_names:
