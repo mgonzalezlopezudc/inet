@@ -164,21 +164,67 @@ static Packet *extractVhtMuPsdu(const Ieee80211Transmission *transmission,
     auto result = new Packet(transmittedPacket->getName());
     result->insertAtBack(copy->popAtFront(selectedRange->bitLength, parsingFlags));
     auto parser = result->dup();
-    auto delimiter = dynamicPtrCast<const ieee80211::Ieee80211MpduSubframeHeader>(
-            parser->peekAtFront(b(-1), parsingFlags));
-    if (delimiter == nullptr || delimiter->getLength() == 0 ||
-            parser->getDataLength() < B(4) + B(delimiter->getLength())) {
+    // IEEE Std 802.11-2024, 9.7.1: a VHT MU user PSDU may carry a complete
+    // A-MPDU. Preserve one receive outcome for every delimiter/member so the
+    // MAC can admit all structurally valid MPDUs instead of only the first.
+    auto indication = result->addTagIfAbsent<Ieee80211MpduReceiveInd>();
+    B mpduOffset(0);
+    bool hasMpdu = false;
+    while (parser->getDataLength() > b(0) &&
+            dynamicPtrCast<const ieee80211::Ieee80211MpduSubframeHeader>(
+                    parser->peekAtFront(b(-1), parsingFlags)) != nullptr) {
+        auto delimiter = parser->popAtFront<ieee80211::Ieee80211MpduSubframeHeader>(
+                b(-1), parsingFlags);
+        auto mpduLength = B(delimiter->getLength());
+        if (mpduLength == B(0)) {
+            mpduOffset += B(4);
+            continue;
+        }
+        hasMpdu = true;
+        Ieee80211MpduReceiveResult receiveResult;
+        receiveResult.offset = mpduOffset;
+        receiveResult.length = mpduLength;
+        receiveResult.status = delimiter->isIncorrect() ?
+                MPDU_DELIMITER_ERROR : MPDU_NOT_EVALUATED;
+        if (parser->getDataLength() >= mpduLength) {
+            auto macHeader = dynamicPtrCast<const ieee80211::Ieee80211MacHeader>(
+                    parser->peekAtFront(b(-1), parsingFlags));
+            if (macHeader != nullptr && !macHeader->isIncorrect() &&
+                    !macHeader->isIncomplete() && !macHeader->isImproperlyRepresented()) {
+                auto dataOrMgmtHeader = dynamicPtrCast<
+                        const ieee80211::Ieee80211DataOrMgmtHeader>(macHeader);
+                if (dataOrMgmtHeader != nullptr) {
+                    receiveResult.sequenceNumber = dataOrMgmtHeader->getSequenceNumber().get();
+                    receiveResult.fragmentNumber = dataOrMgmtHeader->getFragmentNumber();
+                }
+                auto dataHeader = dynamicPtrCast<const ieee80211::Ieee80211DataHeader>(macHeader);
+                if (dataHeader != nullptr)
+                    receiveResult.tid = dataHeader->getTid();
+            }
+            else if (receiveResult.status == MPDU_NOT_EVALUATED)
+                receiveResult.status = MPDU_HEADER_ERROR;
+            parser->popAtFront(mpduLength, parsingFlags);
+        }
+        else {
+            receiveResult.status = MPDU_PAYLOAD_ERROR;
+            parser->popAtFront(parser->getDataLength(), parsingFlags);
+        }
+        indication->appendResults(receiveResult);
+        mpduOffset += B(4) + mpduLength;
+        auto padding = (4 - (B(4) + mpduLength).get<B>() % 4) % 4;
+        if (padding > 0 && parser->getDataLength() >= B(padding)) {
+            parser->popAtFront(B(padding), parsingFlags);
+            mpduOffset += B(padding);
+        }
+        if (receiveResult.status == MPDU_PAYLOAD_ERROR)
+            break;
+    }
+    if (!hasMpdu) {
         delete parser;
         delete result;
         delete copy;
         return nullptr;
     }
-    Ieee80211MpduReceiveResult receiveResult;
-    receiveResult.offset = B(0);
-    receiveResult.length = B(delimiter->getLength());
-    receiveResult.status = delimiter->isIncorrect() ?
-            MPDU_DELIMITER_ERROR : MPDU_NOT_EVALUATED;
-    result->addTagIfAbsent<Ieee80211MpduReceiveInd>()->appendResults(receiveResult);
     delete parser;
     auto headerCopy = staticPtrCast<Ieee80211VhtPhyHeader>(phyHeader->dupShared());
     headerCopy->setLengthField(user.psduLength);

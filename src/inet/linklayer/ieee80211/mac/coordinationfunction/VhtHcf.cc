@@ -554,10 +554,12 @@ void VhtHcf::originatorProcessTransmittedFrame(Packet *packet)
         auto edcaf = edca->getChannelOwner();
         ASSERT(edcaf != nullptr);
         for (const auto& user : muTxop->getActiveUsers()) {
-            auto header = user.packet->peekAtFront<Ieee80211DataHeader>();
-            originatorProcessTransmittedDataFrame(user.packet, header,
-                    edcaf->getAccessCategory());
-            edcaf->getAckHandler()->transitionToWaitingForBlockAck(header);
+            for (auto packet : user.packets) {
+                auto header = packet->peekAtFront<Ieee80211DataHeader>();
+                originatorProcessTransmittedDataFrame(packet, header,
+                        edcaf->getAccessCategory());
+                edcaf->getAckHandler()->transitionToWaitingForBlockAck(header);
+            }
         }
         return;
     }

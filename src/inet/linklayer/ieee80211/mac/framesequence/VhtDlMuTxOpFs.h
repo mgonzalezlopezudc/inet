@@ -28,7 +28,7 @@ class INET_API VhtDlMuTxOpFs : public IFrameSequence
     enum class CommitMutation { ACK_STATE, SEQUENCE_STATE };
     struct ActiveUser {
         IIeee80211VhtDlMuScheduler::Candidate candidate;
-        Packet *packet = nullptr;
+        std::vector<Packet *> packets;
     };
 
   protected:
