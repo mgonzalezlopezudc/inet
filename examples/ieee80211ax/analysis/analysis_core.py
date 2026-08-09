@@ -753,11 +753,24 @@ def per_run_node_goodput(condition: Condition) -> pd.DataFrame:
         records.append({
             "runID": row.runID,
             "runnumber": int(row.runnumber),
-            "module": row.module,
+            "node": application_node_name(row.module),
             "goodput_bps": delivered_bytes * 8 / condition.measurement.duration,
             "delivered_bytes": delivered_bytes,
         })
-    return pd.DataFrame.from_records(records)
+    return (
+        pd.DataFrame.from_records(records)
+        .groupby(["runID", "runnumber", "node"], as_index=False)
+        .agg(
+            goodput_bps=("goodput_bps", "sum"),
+            delivered_bytes=("delivered_bytes", "sum"),
+        )
+    )
+
+
+def application_node_name(module: str) -> str:
+    """Return the network-node name owning an application result module."""
+    application_parent = module.split(".app[", 1)[0]
+    return application_parent.rsplit(".", 1)[-1]
 
 
 def per_run_scalar_sum(
@@ -800,6 +813,41 @@ def per_run_delay_percentile(
             raise RuntimeError(f"{condition.config}/{run_id}: no delay samples")
         records.append({
             "runID": run_id,
+            "delay_s": float(np.percentile(values, percentile)),
+        })
+    return pd.DataFrame.from_records(records)
+
+
+def per_run_node_delay_percentile(
+    condition: Condition, percentile: float
+) -> pd.DataFrame:
+    """Return one pooled delay percentile per node and run."""
+    frame = condition.vectors(
+        "endToEndDelay:vector", module="**.app[*]", expected_unit="s"
+    )
+    sink_pattern = condition.condition_metadata.get(
+        "sink_module_regex", r"\.(?:host|sta\d*|sta)\[\d+\]\.app\["
+    )
+    frame = frame[frame.module.str.contains(sink_pattern, regex=True)]
+    if frame.empty:
+        raise RuntimeError(
+            f"{condition.config}: no delay sinks matched {sink_pattern!r}"
+        )
+    records: list[dict[str, Any]] = []
+    for (run_id, node), rows in frame.assign(
+        node=frame.module.map(application_node_name)
+    ).groupby(["runID", "node"]):
+        samples = []
+        for _, row in rows.iterrows():
+            _, values = crop_vector(row.vectime, row.vecvalue, condition.measurement)
+            samples.append(values)
+        values = np.concatenate(samples) if samples else np.array([])
+        if not len(values):
+            raise RuntimeError(f"{condition.config}/{run_id}/{node}: no delay samples")
+        records.append({
+            "runID": run_id,
+            "runnumber": int(rows.runnumber.iloc[0]),
+            "node": node,
             "delay_s": float(np.percentile(values, percentile)),
         })
     return pd.DataFrame.from_records(records)

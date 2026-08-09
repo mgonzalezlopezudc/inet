@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import math
+import re
 from pathlib import Path
 from typing import Any, Callable
 
@@ -22,6 +23,7 @@ from analysis_core import (
     per_run_delay_percentile,
     per_run_goodput,
     per_run_node_goodput,
+    per_run_node_delay_percentile,
     summarize_ci95,
     time_weighted_integral,
     validate_disjoint_streams,
@@ -67,6 +69,40 @@ def bar_with_ci(
     axis.bar(labels, values, yerr=yerr, capsize=4)
     axis.tick_params(axis="x", rotation=24)
     axis.grid(axis="y", alpha=0.3)
+
+
+def grouped_bar_with_ci(
+    axis: plt.Axes,
+    labels: list[str],
+    node_labels: list[str],
+    frames_by_node: list[list[pd.DataFrame]],
+    column: str,
+    *,
+    scale: float = 1.0,
+) -> None:
+    """Plot one consistently colored bar series for each node."""
+    x = np.arange(len(labels))
+    width = 0.8 / max(1, len(node_labels))
+    colors = plt.get_cmap("tab10")
+    for index, (node, frames) in enumerate(zip(node_labels, frames_by_node)):
+        summaries = [summary(frame, column) for frame in frames]
+        values = [float(item["mean"]) * scale for item in summaries]
+        errors = [float(item["ci95"]) * scale for item in summaries]
+        yerr = None if any(math.isnan(value) for value in errors) else errors
+        offset = (index - (len(node_labels) - 1) / 2) * width
+        axis.bar(
+            x + offset,
+            values,
+            width,
+            yerr=yerr,
+            capsize=3,
+            label=node,
+            color=colors(index % 10),
+        )
+    axis.set_xticks(x, labels)
+    axis.tick_params(axis="x", rotation=24)
+    axis.grid(axis="y", alpha=0.3)
+    axis.legend(title="Node")
 
 
 def representative_run(frame: pd.DataFrame) -> pd.DataFrame:
@@ -927,20 +963,55 @@ def plot_mimo(conditions: list[Condition], output: Path) -> None:
 
 
 def plot_delivery(conditions: list[Condition], output: Path) -> None:
-    """Plot aggregate goodput and 95th-percentile end-to-end delay."""
-    goodputs = [per_run_goodput(condition) for condition in conditions]
-    delays = [per_run_delay_percentile(condition, 95) for condition in conditions]
+    """Plot AP aggregate and per-node goodput and tail delay."""
+    aggregate_goodputs = [per_run_goodput(condition) for condition in conditions]
+    aggregate_delays = [
+        per_run_delay_percentile(condition, 95) for condition in conditions
+    ]
+    node_goodputs = [per_run_node_goodput(condition) for condition in conditions]
+    node_delays = [
+        per_run_node_delay_percentile(condition, 95) for condition in conditions
+    ]
+    node_names = sorted(
+        {
+            node
+            for frame in node_goodputs
+            for node in frame.node.unique()
+            if node != "ap"
+        },
+        key=lambda value: [
+            int(part) if part.isdigit() else part
+            for part in re.split(r"(\d+)", value)
+        ],
+    )
     labels = [condition.label for condition in conditions]
-    fig, axes = plt.subplots(1, 2, figsize=(max(10, len(conditions) * 1.4), 4.8))
-    bar_with_ci(axes[0], labels, goodputs, "goodput_bps", scale=1e-6)
-    bar_with_ci(axes[1], labels, delays, "delay_s", scale=1e3)
-    axes[0].set_ylabel("Aggregate goodput [Mbit/s]")
-    axes[1].set_ylabel("95th-percentile end-to-end delay [ms]")
-    axes[0].set_title("Aggregate goodput")
-    axes[1].set_title("95th-percentile delay")
-    for axis in axes:
-        axis.grid(axis="y", alpha=0.3)
-    fig.suptitle("Application delivery and tail delay comparison")
+    host_goodputs = [
+        [frame[frame.node == node] for frame in node_goodputs]
+        for node in node_names
+    ]
+    host_delays = [
+        [frame[frame.node == node] for frame in node_delays]
+        for node in node_names
+    ]
+    fig, axes = plt.subplots(
+        2 if node_names else 1,
+        2,
+        squeeze=False,
+        figsize=(max(10, len(conditions) * 1.4), 8.6 if node_names else 4.8),
+    )
+    bar_with_ci(axes[0, 0], labels, aggregate_goodputs, "goodput_bps", scale=1e-6)
+    bar_with_ci(axes[0, 1], labels, aggregate_delays, "delay_s", scale=1e3)
+    axes[0, 0].set_ylabel("AP goodput [Mbit/s]")
+    axes[0, 1].set_ylabel("AP 95th-percentile delay [ms]")
+    if node_names:
+        grouped_bar_with_ci(
+            axes[1, 0], labels, node_names, host_goodputs, "goodput_bps", scale=1e-6
+        )
+        grouped_bar_with_ci(
+            axes[1, 1], labels, node_names, host_delays, "delay_s", scale=1e3
+        )
+        axes[1, 0].set_ylabel("Host goodput [Mbit/s]")
+        axes[1, 1].set_ylabel("Host 95th-percentile delay [ms]")
     save(fig, output)
     write_provenance(
         output,
@@ -960,8 +1031,8 @@ def plot_delivery(conditions: list[Condition], output: Path) -> None:
             },
         ],
         aggregation={
-            "goodput": "sum delivered application bytes over each manifest measurement window, convert to bit/s; one value per run",
-            "delay": "pool delivered-packet delays within each run over each manifest measurement window, then take the 95th percentile; one value per run",
+            "goodput": "AP row sums delivered application bytes across sink nodes; host row groups application vectors by host over each manifest measurement window, convert to bit/s; one value per run",
+            "delay": "AP row pools delivered-packet delays across sink nodes; host row groups delays by host over each manifest measurement window, then takes the 95th percentile; one value per run",
             "uncertainty": "95% Student-t CI across independent runs",
         },
     )
