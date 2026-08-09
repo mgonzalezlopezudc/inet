@@ -496,6 +496,17 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
             transmissionCenterFrequency = ru.centerFrequency;
         }
     }
+    std::vector<FrequencySegment> frequencySegments;
+    if (heMuHeader != nullptr && hePpduLayout->getPpduFormat() == HE_TRIGGER_BASED_UPLINK &&
+            hePpduLayout->getUsers().size() == 1) {
+        // HE-TB responses occupy the RU assigned by the Trigger frame. RU
+        // bandwidths can be narrower than the operating channel, so they
+        // cannot be passed through getFrequencySegments(), which accepts
+        // only bonded IEEE 802.11 channel widths.
+        frequencySegments = {{transmissionCenterFrequency, transmissionBandwidth}};
+    }
+    else
+        frequencySegments = transmissionChannel->getFrequencySegments(transmissionBandwidth);
     const simtime_t endTime = startTime + duration;
     IMobility *mobility = transmitter->getAntenna()->getMobility();
     const Coord& startPosition = mobility->getCurrentPosition();
@@ -503,10 +514,6 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     const Quaternion& startOrientation = mobility->getCurrentAngularPosition();
     const Quaternion& endOrientation = mobility->getCurrentAngularPosition();
     const simtime_t dataDuration = std::max(SIMTIME_ZERO, duration - headerDuration - preambleDuration);
-    auto frequencySegments = transmissionChannel->getFrequencySegments(transmissionBandwidth);
-    if (heMuHeader != nullptr && hePpduLayout->getPpduFormat() == HE_TRIGGER_BASED_UPLINK &&
-            hePpduLayout->getUsers().size() == 1)
-        frequencySegments = {{transmissionCenterFrequency, transmissionBandwidth}};
     auto analogModel = getAnalogModel()->createAnalogModel(preambleDuration, headerDuration, dataDuration,
             frequencySegments, transmissionPower);
     lastHePpdu = heMuHeader != nullptr;

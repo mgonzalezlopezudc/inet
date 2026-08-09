@@ -361,6 +361,9 @@ bool HeHcf::tryStartDlMuFrameSequence(AccessCategory ac)
         // TB sounding exchange used here to refresh CSI before scheduling.
         auto scheduleContext = collectScheduleContext(ac);
         auto soundingCoordinator = check_and_cast<HeSoundingCoordinator *>(getSubmodule("soundingCoordinator"));
+        auto txop = edcaf->getTxopProcedure();
+        if (!txop->isProtectionConfigured())
+            txop->configureProtection(TxopProcedure::InitialProtection::NONE);
         if (soundingCoordinator->tryStartSoundingSequence(ac, scheduleContext, frameSequenceHandler, mac, modeSet, csiManager, buildContext(ac), this))
             return true;
     }
@@ -461,6 +464,9 @@ bool HeHcf::tryStartDlMuFrameSequence(AccessCategory ac)
         EV_INFO << "Start HE DL MU TxOp FS: using "
                  << (ackMethod == HeDlMuTxOpFs::AckMethod::MU_BAR_TRIGGER ? "MU-BAR trigger" : "sequential BAR")
                  << " acknowledgment method\n";
+        auto txop = edcaf->getTxopProcedure();
+        if (!txop->isProtectionConfigured())
+            txop->configureProtection(TxopProcedure::InitialProtection::NONE);
         frameSequenceHandler->startFrameSequence(
                 new HeDlMuTxOpFs(*dlPlan, modeSet,
                                  pendingQueue, edcaf->getAckHandler(), this,
