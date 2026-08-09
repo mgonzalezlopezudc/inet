@@ -3,8 +3,8 @@
 <!-- BEGIN SCRIPT RESULTS SESSIONS -->
 `[script]` results sessions:
 
-- Scalar/vector: `20260809T111616Z`
-- PCAP: `20260809T111616Z`
+- Scalar/vector: `20260809T114024Z`
+- PCAP: `20260809T114024Z`
 <!-- END SCRIPT RESULTS SESSIONS -->
 
 `[agent]` results sessions: `NOT RECORDED`.
@@ -42,9 +42,9 @@ The VHT MU frame sequence uses `BLOCK_ACK` in each per-user QoS Data header and 
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-dl_mu_mimo_baseline -->
 ### [script] Generated scalar/vector plot and table
 
-![dl_mu_mimo_baseline scalar/vector analysis](results/20260809T111616Z/dl-mu-mimo-baseline-delivery-delay.png)
+![dl_mu_mimo_baseline scalar/vector analysis](results/20260809T114024Z/dl-mu-mimo-baseline-delivery-delay.png)
 
-Figure provenance: [`results/20260809T111616Z/dl-mu-mimo-baseline-delivery-delay.png.json`](results/20260809T111616Z/dl-mu-mimo-baseline-delivery-delay.png.json). Run-level metric source: [`../../ieee80211ax/analysis/metrics.json`](../../ieee80211ax/analysis/metrics.json).
+Figure provenance: [`results/20260809T114024Z/dl-mu-mimo-baseline-delivery-delay.png.json`](results/20260809T114024Z/dl-mu-mimo-baseline-delivery-delay.png.json). Run-level metric source: [`../../ieee80211ax/analysis/metrics.json`](../../ieee80211ax/analysis/metrics.json).
 
 Common table provenance:
 
@@ -68,13 +68,13 @@ The table is a presentation view of the session-bound run-level summary; the com
 
 <!-- BEGIN GENERATED: ieee80211-pcap-statistics -->
 ### [script] Generated PCAP plots and tables
-![802.11 Packet Type Statistics](results/20260809T111616Z/packet_statistics.png)
+![802.11 Packet Type Statistics](results/20260809T114024Z/packet_statistics.png)
 
-Figure provenance: [`packet_statistics.png.json`](results/20260809T111616Z/packet_statistics.png.json).
+Figure provenance: [`packet_statistics.png.json`](results/20260809T114024Z/packet_statistics.png.json).
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 
-Capture session `20260809T111616Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ac/capture_manifests/20260809T111616Z.json` (SHA-256 `ace6dc88852fc002485f1f30ea9e3a119d63df2b7536ec060a70f5b6a6fb5913`). VHT PPDU format, MCS, coding, bandwidth, GI, and NSTS are decoded directly from standards-compliant radiotap VHT fields; values not marked known by the recorder are omitted.
+Capture session `20260809T114024Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ac/capture_manifests/20260809T114024Z.json` (SHA-256 `6bd684fb68d2fd87169d1fb8d791dc94af76092af82754f96593aeef9ca65821`). VHT PPDU format, MCS, coding, bandwidth, GI, and NSTS are decoded directly from standards-compliant radiotap VHT fields; values not marked known by the recorder are omitted.
 
 Two estimated airtime occupancy percentages are provided. VHT SU and VHT MU use modeled preambles; per-user VHT MU signaling not exposed by radiotap remains approximate.
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.

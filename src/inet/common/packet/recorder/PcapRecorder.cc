@@ -1149,6 +1149,17 @@ void PcapRecorder::writePacketRecord(const Protocol *protocol, const Packet *pac
     if (pcapLinkType == LINKTYPE_INVALID)
         throw cRuntimeError("Cannot determine the PCAP link type from protocol '%s'", protocol->getName());
     bool convertPacket = !matchesLinkType(pcapLinkType, protocol);
+    ISegmentedPcapWriter *segmentedPcapWriter = nullptr;
+    std::vector<uint8_t> packetPrefix;
+#ifdef INET_WITH_IEEE80211
+    if (convertPacket && enableConvertingPackets && *protocol == Protocol::ieee80211Mac && pcapLinkType == LINKTYPE_IEEE802_11_RADIOTAP) {
+        segmentedPcapWriter = dynamic_cast<ISegmentedPcapWriter *>(pcapWriter);
+        if (segmentedPcapWriter != nullptr) {
+            packetPrefix = makeRadiotapHeader(packet, frontOffset, backOffset, direction, physicalLayerTransmission, physicalLayerReception);
+            convertPacket = false;
+        }
+    }
+#endif
     if (convertPacket) {
         recordingDirection = direction;
         packet = tryConvertToLinkType(packet, frontOffset, backOffset, pcapLinkType, protocol);
@@ -1158,11 +1169,25 @@ void PcapRecorder::writePacketRecord(const Protocol *protocol, const Packet *pac
         frontOffset = b(0);
         backOffset = b(0);
     }
-    b recordedLength = packet->getDataLength() - frontOffset - backOffset;
+    b recordedLength = packet->getDataLength() - frontOffset - backOffset + B(packetPrefix.size());
     if (recordEmptyPackets || recordedLength != b(0)) {
-        pcapWriter->writePacket(simTime(), packet, frontOffset, backOffset, direction, networkInterface, pcapLinkType);
+        if (segmentedPcapWriter != nullptr)
+            segmentedPcapWriter->writePacketWithPrefix(simTime(), packet, frontOffset, backOffset, direction, networkInterface, pcapLinkType, packetPrefix);
+        else
+            pcapWriter->writePacket(simTime(), packet, frontOffset, backOffset, direction, networkInterface, pcapLinkType);
         numRecorded++;
-        emit(packetRecordedSignal, packet);
+        if (segmentedPcapWriter != nullptr && hasListeners(packetRecordedSignal)) {
+            auto recordedPacket = new Packet(packet->getName());
+            recordedPacket->insertAtBack(makeShared<BytesChunk>(packetPrefix));
+            b dataLength = packet->getDataLength() - frontOffset - backOffset;
+            if (dataLength != b(0))
+                recordedPacket->insertAtBack(packet->peekDataAt(frontOffset, dataLength));
+            recordedPacket->setBitError(packet->hasBitError());
+            emit(packetRecordedSignal, recordedPacket);
+            delete recordedPacket;
+        }
+        else if (segmentedPcapWriter == nullptr)
+            emit(packetRecordedSignal, packet);
     }
     if (convertPacket)
         delete packet;

@@ -19,8 +19,6 @@
 
 namespace inet {
 
-#define MAXBUFLENGTH    65536
-
 #define PCAP_MAGIC      0xa1b2c3d4
 #define PCAP_MAGIC_NANO 0xa1b23c4d
 
@@ -45,9 +43,15 @@ struct pcaprec_hdr
     uint32_t orig_len; /* actual length of packet */
 };
 
+static void writeBytes(FILE *file, const void *data, size_t length, const std::string& fileName)
+{
+    if (length != 0 && fwrite(data, length, 1, file) != 1)
+        throw cRuntimeError("Cannot write pcap file [%s]: %s", fileName.c_str(), strerror(errno));
+}
+
 PcapWriter::~PcapWriter()
 {
-    PcapWriter::close(); // NOTE: admitting that this will not call overridden methods from the destructor
+    closeFile(false);
 }
 
 void PcapWriter::open(const char *filename, unsigned int snaplen_par, int timePrecision)
@@ -91,10 +95,16 @@ void PcapWriter::writeHeader(PcapLinkType linkType)
     fh.sigfigs = 0;
     fh.snaplen = snaplen;
     fh.network = linkType;
-    fwrite(&fh, sizeof(fh), 1, dumpfile);
+    writeBytes(dumpfile, &fh, sizeof(fh), fileName);
 }
 
 void PcapWriter::writePacket(simtime_t stime, const Packet *packet, b frontOffset, b backOffset, Direction direction, NetworkInterface *ie, PcapLinkType linkTypePar)
+{
+    writePacketWithPrefix(stime, packet, frontOffset, backOffset, direction, ie, linkTypePar, {});
+}
+
+void PcapWriter::writePacketWithPrefix(simtime_t stime, const Packet *packet, b frontOffset, b backOffset, Direction direction, NetworkInterface *ie, PcapLinkType linkTypePar,
+        const std::vector<uint8_t>& packetPrefix)
 {
     if (!dumpfile)
         throw cRuntimeError("Cannot write frame: pcap output file is not open");
@@ -115,9 +125,6 @@ void PcapWriter::writePacket(simtime_t stime, const Packet *packet, b frontOffse
     (void)ie; // unused
 
     EV_INFO << "Writing packet" << EV_FIELD(packet) << EV_FIELD(fileName) << EV_ENDL;
-    uint8_t buf[MAXBUFLENGTH];
-    memset(buf, 0, sizeof(buf));
-
     struct pcaprec_hdr ph;
     ph.ts_sec = (int32_t)stime.inUnit(SIMTIME_S);
     switch(timePrecision) {
@@ -125,33 +132,41 @@ void PcapWriter::writePacket(simtime_t stime, const Packet *packet, b frontOffse
         case 9: ph.ts_usec = (uint32_t)(stime.inUnit(SIMTIME_NS) - (uint32_t)1000000000 * stime.inUnit(SIMTIME_S)); break;
         default: throw cRuntimeError("Unsupported time precision (%d) in PcapWriter.", timePrecision);
     }
-    b capturedLength = packet->getDataLength() - frontOffset - backOffset;
-    auto capturedBytes = capturedLength.get<B>();
-    if (capturedBytes < 0 || capturedBytes > std::numeric_limits<uint32_t>::max())
-        throw cRuntimeError("Invalid captured packet length: %ld bytes", capturedBytes);
+    b packetDataLength = packet->getDataLength() - frontOffset - backOffset;
+    auto packetDataLengthBytes = packetDataLength.get<B>();
+    if (packetDataLengthBytes < 0 || packetPrefix.size() > std::numeric_limits<uint32_t>::max() ||
+            static_cast<uint64_t>(packetDataLengthBytes) + packetPrefix.size() > std::numeric_limits<uint32_t>::max())
+        throw cRuntimeError("Invalid original packet length");
 
-    ph.orig_len = capturedBytes;
-    ph.incl_len = std::min({ph.orig_len, snaplen, (unsigned int)MAXBUFLENGTH});
+    ph.orig_len = static_cast<uint32_t>(packetDataLengthBytes + packetPrefix.size());
+    ph.incl_len = std::min(ph.orig_len, snaplen);
 
-    if (ph.incl_len != 0) {
-        auto data = packet->peekDataAt<BytesChunk>(frontOffset, B(ph.incl_len));
-        auto bytes = data->getBytes();
-        for (size_t i = 0; i < bytes.size(); i++) {
-            buf[i] = bytes[i];
-        }
+    writeBytes(dumpfile, &ph, sizeof(ph), fileName);
+    auto capturedPrefixLength = std::min<size_t>(packetPrefix.size(), ph.incl_len);
+    writeBytes(dumpfile, packetPrefix.data(), capturedPrefixLength, fileName);
+    auto capturedPacketLength = ph.incl_len - capturedPrefixLength;
+    if (capturedPacketLength != 0) {
+        auto data = packet->peekDataAt<BytesChunk>(frontOffset, B(capturedPacketLength));
+        const auto& bytes = data->getBytes();
+        writeBytes(dumpfile, bytes.data(), bytes.size(), fileName);
     }
-    fwrite(&ph, sizeof(ph), 1, dumpfile);
-    fwrite(buf, ph.incl_len, 1, dumpfile);
-    if (flush)
-        fflush(dumpfile);
+    if (flush && fflush(dumpfile) != 0)
+        throw cRuntimeError("Cannot flush pcap file [%s]: %s", fileName.c_str(), strerror(errno));
 }
 
 void PcapWriter::close()
 {
-    if (dumpfile) {
-        fclose(dumpfile);
-        dumpfile = nullptr;
-    }
+    closeFile(true);
+}
+
+void PcapWriter::closeFile(bool checkError)
+{
+    if (dumpfile == nullptr)
+        return;
+    auto file = dumpfile;
+    dumpfile = nullptr;
+    if (fclose(file) != 0 && checkError)
+        throw cRuntimeError("Cannot close pcap file [%s]: %s", fileName.c_str(), strerror(errno));
 }
 
 } // namespace inet

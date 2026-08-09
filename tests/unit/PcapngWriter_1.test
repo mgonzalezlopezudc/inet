@@ -1,0 +1,155 @@
+%description:
+Test segmented PCAPng records, finite and unlimited snaplen, padding, and direction metadata.
+
+%includes:
+#include <cstring>
+#include <fstream>
+#include <iterator>
+#include <vector>
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/common/packet/recorder/PcapngWriter.h"
+
+%file: TestNetwork.ned
+
+import inet.networklayer.common.NetworkInterface;
+
+module TestNetworkInterface extends NetworkInterface
+{
+    parameters:
+        string interfaceTableModule = default("");
+    gates:
+        input upperLayerIn @allowUnconnected;
+        output upperLayerOut @allowUnconnected;
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        networkInterface: TestNetworkInterface {
+            numPcapRecorders = 0;
+        }
+    connections allowunconnected:
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+
+using namespace inet;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+static std::vector<uint8_t> readFile(const char *fileName)
+{
+    std::ifstream stream(fileName, std::ios::binary);
+    REQUIRE(stream.good());
+    return std::vector<uint8_t>(std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>());
+}
+
+static uint16_t readUint16(const std::vector<uint8_t>& bytes, size_t offset)
+{
+    uint16_t value;
+    REQUIRE(offset + sizeof(value) <= bytes.size());
+    std::memcpy(&value, bytes.data() + offset, sizeof(value));
+    return value;
+}
+
+static uint32_t readUint32(const std::vector<uint8_t>& bytes, size_t offset)
+{
+    uint32_t value;
+    REQUIRE(offset + sizeof(value) <= bytes.size());
+    std::memcpy(&value, bytes.data() + offset, sizeof(value));
+    return value;
+}
+
+static size_t findBlock(const std::vector<uint8_t>& bytes, uint32_t blockType)
+{
+    for (size_t offset = 0; offset + 12 <= bytes.size();) {
+        auto length = readUint32(bytes, offset + 4);
+        REQUIRE(length >= 12 && offset + length <= bytes.size());
+        if (readUint32(bytes, offset) == blockType)
+            return offset;
+        offset += length;
+    }
+    throw cRuntimeError("PCAPng block type %u not found", blockType);
+}
+
+static void checkCapture(const char *fileName, uint32_t expectedSnaplen, uint32_t expectedCapturedLength)
+{
+    auto bytes = readFile(fileName);
+    auto interfaceOffset = findBlock(bytes, 0x00000001);
+    REQUIRE(readUint16(bytes, interfaceOffset + 8) == LINKTYPE_ETHERNET);
+    REQUIRE(readUint32(bytes, interfaceOffset + 12) == expectedSnaplen);
+
+    auto packetOffset = findBlock(bytes, 0x00000006);
+    REQUIRE(readUint32(bytes, packetOffset + 8) == 0);
+    REQUIRE(readUint32(bytes, packetOffset + 20) == expectedCapturedLength);
+    REQUIRE(readUint32(bytes, packetOffset + 24) == 6);
+    const std::vector<uint8_t> expectedData = {0xA0, 0xA1, 0xA2, 0x11, 0x12, 0x13};
+    REQUIRE(std::equal(expectedData.begin(), expectedData.begin() + expectedCapturedLength, bytes.begin() + packetOffset + 28));
+
+    auto paddedLength = (expectedCapturedLength + 3) & ~3U;
+    for (size_t i = expectedCapturedLength; i < paddedLength; i++)
+        REQUIRE(bytes[packetOffset + 28 + i] == 0);
+    auto optionOffset = packetOffset + 28 + paddedLength;
+    REQUIRE(readUint16(bytes, optionOffset) == 0x0002);
+    REQUIRE(readUint16(bytes, optionOffset + 2) == 4);
+    REQUIRE(readUint32(bytes, optionOffset + 4) == 0b10);
+}
+
+%activity:
+
+auto networkInterface = check_and_cast<NetworkInterface *>(getModuleByPath("networkInterface"));
+networkInterface->setInterfaceId(7);
+networkInterface->setInterfaceName("testInterface");
+networkInterface->setMacAddress(MacAddress("02:00:00:00:00:01"));
+
+Packet packet("packet");
+packet.insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0x10, 0x11, 0x12, 0x13}));
+std::vector<uint8_t> prefix = {0xA0, 0xA1, 0xA2};
+
+PcapngWriter truncatedWriter;
+truncatedWriter.open("segmented-truncated.pcapng", 5, 6);
+truncatedWriter.writePacketWithPrefix(SimTime(123, SIMTIME_US), &packet, B(1), b(0), DIRECTION_OUTBOUND, networkInterface, LINKTYPE_ETHERNET, prefix);
+truncatedWriter.close();
+checkCapture("segmented-truncated.pcapng", 5, 5);
+
+PcapngWriter unlimitedWriter;
+unlimitedWriter.open("segmented-unlimited.pcapng", 0, 6);
+unlimitedWriter.writePacketWithPrefix(SimTime(123, SIMTIME_US), &packet, B(1), b(0), DIRECTION_OUTBOUND, networkInterface, LINKTYPE_ETHERNET, prefix);
+unlimitedWriter.close();
+checkCapture("segmented-unlimited.pcapng", 0, 6);
+
+PcapngWriter mixedLinkTypeWriter;
+mixedLinkTypeWriter.open("mixed-linktype.pcapng", 64, 6);
+mixedLinkTypeWriter.writePacket(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_OUTBOUND, networkInterface, LINKTYPE_ETHERNET);
+mixedLinkTypeWriter.writePacket(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_OUTBOUND, networkInterface, LINKTYPE_RAW);
+mixedLinkTypeWriter.close();
+
+auto mixedLinkType = readFile("mixed-linktype.pcapng");
+std::vector<size_t> interfaceOffsets;
+std::vector<size_t> packetOffsets;
+for (size_t offset = 0; offset + 12 <= mixedLinkType.size();) {
+    auto blockType = readUint32(mixedLinkType, offset);
+    auto blockLength = readUint32(mixedLinkType, offset + 4);
+    REQUIRE(blockLength >= 12 && offset + blockLength <= mixedLinkType.size());
+    if (blockType == 0x00000001)
+        interfaceOffsets.push_back(offset);
+    else if (blockType == 0x00000006)
+        packetOffsets.push_back(offset);
+    offset += blockLength;
+}
+REQUIRE(interfaceOffsets.size() == 2);
+REQUIRE(packetOffsets.size() == 2);
+REQUIRE(readUint16(mixedLinkType, interfaceOffsets[0] + 8) == LINKTYPE_ETHERNET);
+REQUIRE(readUint16(mixedLinkType, interfaceOffsets[1] + 8) == LINKTYPE_RAW);
+REQUIRE(readUint32(mixedLinkType, packetOffsets[0] + 8) == 0);
+REQUIRE(readUint32(mixedLinkType, packetOffsets[1] + 8) == 1);
+
+EV << "Segmented PCAPng snaplen and direction records tested successfully.\n";
+
+%contains: stdout
+Segmented PCAPng snaplen and direction records tested successfully.

@@ -22,7 +22,7 @@ namespace inet {
  * Note: The file is currently recorded in the "classic" format,
  * not in the "Next Generation" file format also on tcpdump.org.
  */
-class INET_API PcapWriter : public IPcapWriter
+class INET_API PcapWriter : public IPcapWriter, public ISegmentedPcapWriter
 {
   protected:
     std::string fileName;
@@ -35,6 +35,7 @@ class INET_API PcapWriter : public IPcapWriter
 
   protected:
     void writeHeader(PcapLinkType linkType);
+    void closeFile(bool checkError);
 
   public:
     /**
@@ -64,6 +65,8 @@ class INET_API PcapWriter : public IPcapWriter
      * and throws an exception otherwise.
      */
     void writePacket(simtime_t time, const Packet *packet, b frontOffset, b backOffset, Direction direction, NetworkInterface *ie, PcapLinkType linkType) override;
+    void writePacketWithPrefix(simtime_t time, const Packet *packet, b frontOffset, b backOffset, Direction direction, NetworkInterface *ie, PcapLinkType linkType,
+            const std::vector<uint8_t>& packetPrefix) override;
 
     /**
      * Closes the output file if it is open.
@@ -79,4 +82,3 @@ class INET_API PcapWriter : public IPcapWriter
 } // namespace inet
 
 #endif
-

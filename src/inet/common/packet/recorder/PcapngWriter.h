@@ -18,7 +18,7 @@ namespace inet {
  * Dumps packets into a PCAP Next Generation file; see the "pcap-savefile"
  * man page or http://www.tcpdump.org/ for details on the file format.
  */
-class INET_API PcapngWriter : public IPcapWriter
+class INET_API PcapngWriter : public IPcapWriter, public ISegmentedPcapWriter
 {
   protected:
     std::string fileName;
@@ -26,7 +26,11 @@ class INET_API PcapngWriter : public IPcapWriter
     bool flush = false;
     int nextPcapngInterfaceId = 0;
     int timePrecision = 6;
-    std::map<int, int> interfaceModuleIdToPcapngInterfaceId;
+    unsigned int snaplen = 0;
+    std::map<std::pair<int, PcapLinkType>, int> interfaceAndLinkTypeToPcapngInterfaceId;
+
+  protected:
+    void closeFile(bool checkError);
 
   public:
     /**
@@ -60,6 +64,8 @@ class INET_API PcapngWriter : public IPcapWriter
      * and throws an exception otherwise.
      */
     void writePacket(simtime_t time, const Packet *packet, b frontOffset, b backOffset, Direction direction, NetworkInterface *ie, PcapLinkType linkType) override;
+    void writePacketWithPrefix(simtime_t time, const Packet *packet, b frontOffset, b backOffset, Direction direction, NetworkInterface *ie, PcapLinkType linkType,
+            const std::vector<uint8_t>& packetPrefix) override;
 
     /**
      * Closes the output file if it is open.
@@ -75,4 +81,3 @@ class INET_API PcapngWriter : public IPcapWriter
 } // namespace inet
 
 #endif
-

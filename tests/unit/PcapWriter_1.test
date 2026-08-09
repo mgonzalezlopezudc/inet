@@ -1,0 +1,72 @@
+%description:
+Test segmented PCAP records, snaplen truncation, and captures larger than 65536 bytes.
+
+%includes:
+#include <cstring>
+#include <fstream>
+#include <iterator>
+#include <vector>
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/common/packet/recorder/PcapWriter.h"
+
+%global:
+
+using namespace inet;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+static std::vector<uint8_t> readFile(const char *fileName)
+{
+    std::ifstream stream(fileName, std::ios::binary);
+    REQUIRE(stream.good());
+    return std::vector<uint8_t>(std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>());
+}
+
+static uint32_t readUint32(const std::vector<uint8_t>& bytes, size_t offset)
+{
+    uint32_t value;
+    REQUIRE(offset + sizeof(value) <= bytes.size());
+    std::memcpy(&value, bytes.data() + offset, sizeof(value));
+    return value;
+}
+
+%activity:
+
+Packet packet("packet");
+packet.insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0x10, 0x11, 0x12, 0x13}));
+std::vector<uint8_t> prefix = {0xA0, 0xA1, 0xA2};
+
+PcapWriter truncatedWriter;
+truncatedWriter.open("segmented-truncated.pcap", 5, 6);
+truncatedWriter.writePacketWithPrefix(SimTime(123, SIMTIME_US), &packet, B(1), b(0), DIRECTION_UNDEFINED, nullptr, LINKTYPE_ETHERNET, prefix);
+truncatedWriter.close();
+
+auto truncated = readFile("segmented-truncated.pcap");
+REQUIRE(truncated.size() == 24 + 16 + 5);
+REQUIRE(readUint32(truncated, 16) == 5);
+REQUIRE(readUint32(truncated, 32) == 5);
+REQUIRE(readUint32(truncated, 36) == 6);
+REQUIRE(std::equal(prefix.begin(), prefix.end(), truncated.begin() + 40));
+REQUIRE(truncated[43] == 0x11);
+REQUIRE(truncated[44] == 0x12);
+
+std::vector<uint8_t> largeBytes(70000);
+for (size_t i = 0; i < largeBytes.size(); i++)
+    largeBytes[i] = static_cast<uint8_t>(i);
+Packet largePacket("largePacket", makeShared<BytesChunk>(largeBytes));
+
+PcapWriter largeWriter;
+largeWriter.open("large.pcap", largeBytes.size(), 6);
+largeWriter.writePacket(SIMTIME_ZERO, &largePacket, b(0), b(0), DIRECTION_UNDEFINED, nullptr, LINKTYPE_ETHERNET);
+largeWriter.close();
+
+auto large = readFile("large.pcap");
+REQUIRE(large.size() == 24 + 16 + largeBytes.size());
+REQUIRE(readUint32(large, 32) == largeBytes.size());
+REQUIRE(readUint32(large, 36) == largeBytes.size());
+REQUIRE(std::equal(largeBytes.begin(), largeBytes.end(), large.begin() + 40));
+
+EV << "Segmented, truncated, and large PCAP records tested successfully.\n";
+
+%contains: stdout
+Segmented, truncated, and large PCAP records tested successfully.

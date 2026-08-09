@@ -8,6 +8,8 @@
 #ifndef __INET_IPCAPWRITER_H
 #define __INET_IPCAPWRITER_H
 
+#include <vector>
+
 #include "inet/common/DirectionTag_m.h"
 #include "inet/common/packet/Packet.h"
 #include "inet/networklayer/common/NetworkInterface.h"
@@ -214,7 +216,15 @@ class INET_API IPcapWriter
     virtual void writePacket(simtime_t time, const Packet *packet, b frontOffset, b backOffset, Direction direction, NetworkInterface *ie, PcapLinkType linkType) = 0;
 };
 
+class INET_API ISegmentedPcapWriter
+{
+  public:
+    virtual ~ISegmentedPcapWriter() {}
+
+    virtual void writePacketWithPrefix(simtime_t time, const Packet *packet, b frontOffset, b backOffset, Direction direction, NetworkInterface *ie, PcapLinkType linkType,
+            const std::vector<uint8_t>& packetPrefix) = 0;
+};
+
 } // namespace inet
 
 #endif
-

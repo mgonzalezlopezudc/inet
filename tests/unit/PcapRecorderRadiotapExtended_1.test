@@ -50,22 +50,47 @@ using namespace inet::physicallayer;
 
 #define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
 
-class RecordingPcapWriter : public IPcapWriter
+class RecordingPcapWriter : public IPcapWriter, public ISegmentedPcapWriter
 {
   public:
     std::vector<std::vector<uint8_t>> records;
+    std::vector<std::vector<uint8_t>> allRecords;
 
     virtual void open(const char *, unsigned int, int) override { }
     virtual void close() override { }
     virtual bool isOpen() const override { return true; }
     virtual void setFlush(bool) override { }
 
-    virtual void writePacket(simtime_t, const Packet *packet, b frontOffset, b backOffset,
-            Direction, NetworkInterface *, PcapLinkType linkType) override
+    virtual void writePacket(simtime_t time, const Packet *packet, b frontOffset, b backOffset,
+            Direction direction, NetworkInterface *networkInterface, PcapLinkType linkType) override
+    {
+        writePacketWithPrefix(time, packet, frontOffset, backOffset, direction, networkInterface, linkType, {});
+    }
+
+    virtual void writePacketWithPrefix(simtime_t, const Packet *packet, b frontOffset, b backOffset,
+            Direction, NetworkInterface *, PcapLinkType linkType, const std::vector<uint8_t>& packetPrefix) override
     {
         REQUIRE(linkType == LINKTYPE_IEEE802_11_RADIOTAP);
         auto length = packet->getDataLength() - frontOffset - backOffset;
-        records.push_back(packet->peekDataAt<BytesChunk>(frontOffset, length)->getBytes());
+        records.push_back(packetPrefix);
+        if (length != b(0)) {
+            auto bytes = packet->peekDataAt<BytesChunk>(frontOffset, length)->getBytes();
+            records.back().insert(records.back().end(), bytes.begin(), bytes.end());
+        }
+        allRecords.push_back(records.back());
+    }
+};
+
+class RecordedPacketListener : public cListener
+{
+  public:
+    std::vector<std::vector<uint8_t>> records;
+
+    virtual void receiveSignal(cComponent *, simsignal_t, cObject *value, cObject *) override
+    {
+        auto packet = check_and_cast<Packet *>(value);
+        auto length = packet->getDataLength();
+        records.push_back(packet->peekDataAt<BytesChunk>(b(0), length)->getBytes());
     }
 };
 
@@ -76,6 +101,16 @@ class TestablePcapRecorder : public PcapRecorder
     {
         delete pcapWriter;
         pcapWriter = writer;
+    }
+
+    void subscribePacketRecorded(cListener *listener)
+    {
+        subscribe(packetRecordedSignal, listener);
+    }
+
+    void unsubscribePacketRecorded(cListener *listener)
+    {
+        unsubscribe(packetRecordedSignal, listener);
     }
 
     void writeIeee80211(const Packet *packet, b frontOffset = b(0), b backOffset = b(0))
@@ -169,6 +204,8 @@ Define_Module(TestablePcapRecorder);
 auto recorder = check_and_cast<TestablePcapRecorder *>(getModuleByPath("recorder"));
 auto writer = new RecordingPcapWriter();
 recorder->setWriter(writer);
+RecordedPacketListener recordedPacketListener;
+recorder->subscribePacketRecorded(&recordedPacketListener);
 
 auto printRecord = [this](int idx, const std::vector<uint8_t>& rec) {
     std::string hexDump = "";
@@ -726,6 +763,11 @@ auto printRecord = [this](int idx, const std::vector<uint8_t>& rec) {
     REQUIRE(readUint16(record, 18) == 0x0015);
     REQUIRE(readUint16(record, 20) == 0x0001);
 }
+
+REQUIRE(recordedPacketListener.records.size() == writer->allRecords.size());
+for (size_t i = 0; i < writer->allRecords.size(); i++)
+    REQUIRE(recordedPacketListener.records[i] == writer->allRecords[i]);
+recorder->unsubscribePacketRecorded(&recordedPacketListener);
 
 EV << "Radiotap extended fields and present bitmaps tested successfully.\n";
 
