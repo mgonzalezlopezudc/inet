@@ -289,7 +289,9 @@ def inspect_command(args: argparse.Namespace) -> None:
                     document.get("default_repetitions", PUBLICATION_RUNS),
                 )
             ),
-            "station_count": document.get("station_count"),
+            "station_count": group_document.get(
+                "station_count", document.get("station_count")
+            ),
             "measurement_window_s": {
                 "start": group_document["measurement"]["start"],
                 "end": group_document["measurement"]["end"],
@@ -746,4 +748,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

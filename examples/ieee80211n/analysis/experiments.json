@@ -4,86 +4,107 @@
   "evidence_contracts": {
     "frame_aggregation": [
       {
-        "id": "frame-aggregation-delivery-comparison",
+        "id": "frame-aggregation-amsdu-delivery",
         "kind": "metric",
-        "requirement": "Compare application delivered bytes across frame aggregation policies",
+        "requirement": "A-MSDU preserves at least 95% of unaggregated application delivery",
         "results": ["packetReceived"],
-        "evaluation": {
-          "handler": "unimplemented",
-          "reason": "No manifest acceptance threshold defined for frame aggregation delivery comparison"
-        }
+        "evaluation": {"handler": "matched_delivery_ratio", "baseline_config": "NoAggregation", "treatment_config": "AMsduOnly", "result": "packetReceived:vector(packetBytes)", "minimum_ratio": 0.95}
+      },
+      {
+        "id": "frame-aggregation-ampdu-delivery",
+        "kind": "metric",
+        "requirement": "A-MPDU preserves at least 95% of unaggregated application delivery",
+        "results": ["packetReceived"],
+        "evaluation": {"handler": "matched_delivery_ratio", "baseline_config": "NoAggregation", "treatment_config": "AMpduOnly", "result": "packetReceived:vector(packetBytes)", "minimum_ratio": 0.95}
+      },
+      {
+        "id": "frame-aggregation-two-level-delivery",
+        "kind": "metric",
+        "requirement": "Two-level aggregation preserves at least 95% of unaggregated application delivery",
+        "results": ["packetReceived"],
+        "evaluation": {"handler": "matched_delivery_ratio", "baseline_config": "NoAggregation", "treatment_config": "TwoLevelAggregation", "result": "packetReceived:vector(packetBytes)", "minimum_ratio": 0.95}
       }
     ],
     "block_ack": [
       {
-        "id": "block-ack-delivery-comparison",
+        "id": "block-ack-fragmented-delivery",
         "kind": "metric",
-        "requirement": "Compare application delivered bytes across Block ACK policies",
+        "requirement": "Fragmented Basic Block ACK preserves at least 95% of standard ACK delivery",
         "results": ["packetReceived"],
-        "evaluation": {
-          "handler": "unimplemented",
-          "reason": "No manifest acceptance threshold defined for Block ACK policy comparison"
-        }
+        "evaluation": {"handler": "matched_delivery_ratio", "baseline_config": "StandardAck", "treatment_config": "FragBasicBlockAck", "result": "packetReceived:vector(packetBytes)", "minimum_ratio": 0.95}
+      },
+      {
+        "id": "block-ack-compressed-delivery",
+        "kind": "metric",
+        "requirement": "Compressed Block ACK preserves at least 95% of standard ACK delivery",
+        "results": ["packetReceived"],
+        "evaluation": {"handler": "matched_delivery_ratio", "baseline_config": "StandardAck", "treatment_config": "CompressedBlockAck", "result": "packetReceived:vector(packetBytes)", "minimum_ratio": 0.95}
+      },
+      {
+        "id": "block-ack-implicit-delivery",
+        "kind": "metric",
+        "requirement": "Implicit Block ACK preserves at least 95% of standard ACK delivery",
+        "results": ["packetReceived"],
+        "evaluation": {"handler": "matched_delivery_ratio", "baseline_config": "StandardAck", "treatment_config": "ImplicitBlockAck", "result": "packetReceived:vector(packetBytes)", "minimum_ratio": 0.95}
       }
     ],
     "channel_widths": [
       {
-        "id": "channel-widths-delivery-comparison",
+        "id": "channel-widths-clean-delivery",
         "kind": "metric",
-        "requirement": "Compare application delivered bytes across 20 MHz and 40 MHz channel widths",
+        "requirement": "HT 40 MHz preserves at least 95% of HT 20 MHz application delivery in the clean comparison",
         "results": ["packetReceived"],
-        "evaluation": {
-          "handler": "unimplemented",
-          "reason": "No manifest acceptance threshold defined for channel width comparison"
-        }
+        "evaluation": {"handler": "matched_delivery_ratio", "baseline_config": "Ht20MHz", "treatment_config": "Ht40MHz", "result": "packetReceived:vector(packetBytes)", "minimum_ratio": 0.95}
       }
     ],
     "guard_interval": [
       {
-        "id": "guard-interval-delivery-comparison",
+        "id": "guard-interval-20mhz-delivery",
         "kind": "metric",
-        "requirement": "Compare application delivered bytes across 20 MHz and 40 MHz Long (800 ns) and Short (400 ns) Guard Interval configurations",
+        "requirement": "Short GI at 20 MHz preserves at least 95% of Long GI application delivery",
         "results": ["packetReceived"],
-        "evaluation": {
-          "handler": "unimplemented",
-          "reason": "No manifest acceptance threshold defined for Guard Interval comparison"
-        }
+        "evaluation": {"handler": "matched_delivery_ratio", "baseline_config": "LongGI800ns", "treatment_config": "ShortGI400ns", "result": "packetReceived:vector(packetBytes)", "minimum_ratio": 0.95}
+      },
+      {
+        "id": "guard-interval-40mhz-delivery",
+        "kind": "metric",
+        "requirement": "Short GI at 40 MHz preserves at least 95% of Long GI application delivery",
+        "results": ["packetReceived"],
+        "evaluation": {"handler": "matched_delivery_ratio", "baseline_config": "LongGI40MHz108Mbps", "treatment_config": "ShortGI40MHz120Mbps", "result": "packetReceived:vector(packetBytes)", "minimum_ratio": 0.95}
       }
     ],
     "mimo_spatial_streams": [
       {
-        "id": "mimo-spatial-streams-delivery-comparison",
+        "id": "mimo-dual-stream-delivery",
         "kind": "metric",
-        "requirement": "Compare application delivered bytes across Single, Dual, and Quad Spatial Streams",
+        "requirement": "Dual-stream HT preserves at least 95% of single-stream application delivery",
         "results": ["packetReceived"],
-        "evaluation": {
-          "handler": "unimplemented",
-          "reason": "No manifest acceptance threshold defined for spatial stream comparison"
-        }
+        "evaluation": {"handler": "matched_delivery_ratio", "baseline_config": "SingleStreamMcs1", "treatment_config": "DualStreamMcs9", "result": "packetReceived:vector(packetBytes)", "minimum_ratio": 0.95}
+      },
+      {
+        "id": "mimo-quad-stream-delivery",
+        "kind": "metric",
+        "requirement": "Quad-stream HT preserves at least 95% of single-stream application delivery",
+        "results": ["packetReceived"],
+        "evaluation": {"handler": "matched_delivery_ratio", "baseline_config": "SingleStreamMcs1", "treatment_config": "QuadStreamMcs25", "result": "packetReceived:vector(packetBytes)", "minimum_ratio": 0.95}
       }
     ],
     "preamble_modes": [
       {
-        "id": "preamble-modes-delivery-comparison",
+        "id": "preamble-modes-delivery",
         "kind": "metric",
-        "requirement": "Compare application delivered bytes across Mixed-Mode and Greenfield HT preambles",
+        "requirement": "HT Greenfield preserves at least 95% of HT Mixed-Mode application delivery",
         "results": ["packetReceived"],
-        "evaluation": {
-          "handler": "unimplemented",
-          "reason": "No manifest acceptance threshold defined for preamble mode comparison"
-        }
+        "evaluation": {"handler": "matched_delivery_ratio", "baseline_config": "HtMixedMode", "treatment_config": "HtGreenfield", "result": "packetReceived:vector(packetBytes)", "minimum_ratio": 0.95}
       }
     ],
     "rate_adaptation": [
       {
-        "id": "rate-adaptation-delivery-comparison",
+        "id": "rate-adaptation-delivery",
         "kind": "metric",
-        "requirement": "Compare application delivered bytes between Fixed MCS 3 and HT dynamic adaptation",
+        "requirement": "HT AARF preserves at least 95% of fixed-MCS application delivery",
         "results": ["packetReceived"],
-        "evaluation": {
-          "handler": "unimplemented",
-          "reason": "No manifest acceptance threshold defined for rate adaptation comparison"
-        }
+        "evaluation": {"handler": "matched_delivery_ratio", "baseline_config": "FixedConfig3", "treatment_config": "HtAarfAdaptation", "result": "packetReceived:vector(packetBytes)", "minimum_ratio": 0.95}
       }
     ]
   },
@@ -160,8 +181,9 @@
     "rate_adaptation": {
       "walkthrough": "examples/ieee80211n/rate_adaptation/walkthrough.md",
       "ini": "examples/ieee80211n/rate_adaptation/omnetpp.ini",
+      "station_count": 1,
       "expected_repetitions": 5,
-      "measurement": {"start": 0.3, "end": 1.9},
+      "measurement": {"start": 0.3, "end": 0.9},
       "conditions": [
         {"label": "Fixed MCS 3", "config": "FixedConfig3"},
         {"label": "HT AARF Adaptation", "config": "HtAarfAdaptation"}
