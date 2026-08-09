@@ -23,7 +23,7 @@ void Ieee80211MgmtStaSimplified::initialize(int stage)
         mib->bssStationData.stationType = Ieee80211Mib::STATION;
         mib->bssStationData.isAssociated = true;
     }
-    else if (stage == INITSTAGE_LINK_LAYER) {
+    else if (stage == INITSTAGE_LINK_LAYER + 1) {
         L3AddressResolver addressResolver;
         auto accessPointAddress = addressResolver.resolve(par("accessPointAddress"), L3AddressResolver::ADDR_MAC).toMac();
         mib->bssData.bssid = accessPointAddress;
