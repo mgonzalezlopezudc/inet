@@ -18,6 +18,7 @@ import pandas as pd
 from analysis_core import (
     Condition,
     MeasurementWindow,
+    aggregate_queue_vectors,
     crop_vector,
     jain,
     per_run_delay_percentile,
@@ -25,6 +26,7 @@ from analysis_core import (
     per_run_node_goodput,
     per_run_node_delay_percentile,
     summarize_ci95,
+    time_weighted_step_mean,
     time_weighted_integral,
     validate_disjoint_streams,
     write_provenance,
@@ -1190,6 +1192,123 @@ def plot_ul_mu_mimo(conditions: list[Condition], output: Path) -> None:
             "goodput": "sum delivered application bytes over each manifest measurement window, convert to bit/s; one value per run",
             "delay": "pool delivered-packet delays within each run over each manifest measurement window, then take the 95th percentile; one value per run",
             "uncertainty": "95% Student-t CI across independent runs",
+        },
+    )
+
+
+def plot_queue_state(conditions: list[Condition], output: Path) -> None:
+    """Plot the manifest-declared aggregate queue state as a post-step trace."""
+    if not conditions or not conditions[0].queue_state:
+        raise RuntimeError("queue-state plot requested without queue metadata")
+    queue_state = conditions[0].queue_state
+    sources = queue_state.get("sources", [])
+    if not sources:
+        raise RuntimeError(f"{conditions[0].group}: queue source list is empty")
+
+    traces: list[tuple[Condition, int, np.ndarray, np.ndarray]] = []
+    means: list[pd.DataFrame] = []
+    for condition in conditions:
+        source_frames = [condition.queue_vectors(source) for source in sources]
+        available = [frame for frame in source_frames if not frame.empty]
+        if not available:
+            raise RuntimeError(
+                f"{condition.config}: no queue source produced a nonempty vector"
+            )
+        run_numbers = sorted({
+            int(run) for frame in available for run in frame["runnumber"]
+        })
+        if len(run_numbers) != condition.expected_repetitions:
+            raise RuntimeError(
+                f"{condition.config}: queue vectors cover runs {run_numbers}, "
+                f"expected {list(range(condition.expected_repetitions))}"
+            )
+        representative_run = run_numbers[0]
+        times, values = aggregate_queue_vectors(available, representative_run)
+        traces.append((condition, representative_run, times, values))
+        records = []
+        for run_number in run_numbers:
+            run_times, run_values = aggregate_queue_vectors(available, run_number)
+            records.append({
+                "runID": str(run_number),
+                "runnumber": run_number,
+                "queue_mean_pk": time_weighted_step_mean(
+                    run_times, run_values, condition.measurement
+                ),
+                "queue_max_pk": float(np.max(run_values)),
+            })
+        means.append(pd.DataFrame.from_records(records))
+
+    fig, axes = plt.subplots(
+        2,
+        1,
+        figsize=(max(10, len(conditions) * 1.8), 8.2),
+        gridspec_kw={"height_ratios": (2.2, 1)},
+    )
+    trace_axis, summary_axis = axes
+    for condition, run_number, times, values in traces:
+        trace_axis.step(
+            times,
+            values,
+            where="post",
+            linewidth=1.4,
+            label=f"{condition.label} (run {run_number})",
+        )
+    trace_axis.axvspan(
+        conditions[0].measurement.start,
+        conditions[0].measurement.end,
+        color="grey",
+        alpha=0.14,
+        label="measurement window",
+    )
+    display_window = queue_state.get("display_window")
+    if display_window is not None:
+        trace_axis.set_xlim(
+            float(display_window["start"]), float(display_window["end"])
+        )
+    trace_axis.set(
+        ylabel="Queued packets [pk]",
+        title="Queue-state evolution (representative run)",
+    )
+    trace_axis.grid(alpha=0.3)
+    trace_axis.legend(fontsize="small", ncol=2)
+
+    labels = [condition.label for condition in conditions]
+    summaries = [summary(frame, "queue_mean_pk") for frame in means]
+    values = [float(item["mean"]) for item in summaries]
+    errors = [float(item["ci95"]) for item in summaries]
+    yerr = None if any(math.isnan(error) for error in errors) else errors
+    summary_axis.bar(labels, values, yerr=yerr, capsize=4, color="#4C72B0")
+    summary_axis.tick_params(axis="x", rotation=28)
+    summary_axis.set(
+        ylabel="Mean queued packets [pk]",
+        title="Time-weighted queue state over the manifest measurement window",
+    )
+    summary_axis.grid(axis="y", alpha=0.3)
+    fig.suptitle(f"{conditions[0].group}: queue state")
+    save(fig, output)
+    write_provenance(
+        output,
+        conditions=conditions,
+        result_filters=[
+            {
+                "type": "vector",
+                "module": source["module"],
+                "name": source["result"],
+                "unit": source["unit"],
+                "value_semantics": source["label"],
+                "optional": bool(source.get("optional", False)),
+            }
+            for source in sources
+        ],
+        aggregation={
+            "trace": "sum all available manifest-declared queue vectors per run on the union of post-step transition times; representative run is the lowest run number",
+            "mean": "time-weighted sample-and-hold mean over each condition measurement window",
+            "maximum": "maximum observed aggregate queue state per run",
+            "uncertainty": "95% Student-t CI across independent runs for the time-weighted mean",
+        },
+        extra={
+            "display_window": display_window,
+            "step_interpolation": "post",
         },
     )
 

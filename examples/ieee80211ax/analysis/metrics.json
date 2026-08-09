@@ -1,14 +1,14 @@
 {
   "_provenance": {
-    "generated_at_utc": "2026-08-09T18:16:48.190752+00:00",
+    "generated_at_utc": "2026-08-09T19:26:58.058873+00:00",
     "groups": {
-      "extended_ampdu": {
+      "channel_widths": {
         "conditions": [
           {
-            "configuration": "StandardVhtAmpduLimit",
-            "group": "extended_ampdu",
-            "ini": "examples/ieee80211ac/extended_ampdu/omnetpp.ini",
-            "label": "Standard VHT A-MPDU Policy Limit",
+            "configuration": "Ht20MHz",
+            "group": "channel_widths",
+            "ini": "examples/ieee80211n/channel_widths/omnetpp.ini",
+            "label": "HT 20 MHz",
             "measurement": {
               "end_s": 0.5,
               "start_s": 0.3
@@ -16,52 +16,52 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/StandardVhtAmpduLimit/StandardVhtAmpduLimit-#0.sca",
-                "sha256": "a489cd3b624aa205f30705e5febd8be5be51bfd87f8d75c749f473a74a6893b9"
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht20MHz/Ht20MHz-#0.sca",
+                "sha256": "d5516e6c86e86d6a398c39e01caf37d611fa3433414ae6d0837df07aa11b5441"
               },
               {
-                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/StandardVhtAmpduLimit/StandardVhtAmpduLimit-#0.vec",
-                "sha256": "7d5a47e9d7b2d4e022a8afc8717a85039161cb251e211cfe4919214858ac5ed5"
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht20MHz/Ht20MHz-#0.vec",
+                "sha256": "001978e629396961b9464c2b3980a4c2a3d7bb7d0b27cdd6def324fbd18033f1"
               },
               {
-                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/StandardVhtAmpduLimit/StandardVhtAmpduLimit-#1.sca",
-                "sha256": "0ed5f39d46b03c2cf4874b0cd0fe0d75cddb0b8bebe295e9fafa20a5da87036e"
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht20MHz/Ht20MHz-#1.sca",
+                "sha256": "4de0a47c2c6d1a6867687bf9c6b4cc467a195dcfbd09f66b6115d69bb08aa78a"
               },
               {
-                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/StandardVhtAmpduLimit/StandardVhtAmpduLimit-#1.vec",
-                "sha256": "c4e5e0cb3d7d3d2d4bc36c3c50a7d130e9779010c243098ebb16b37c447f94d2"
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht20MHz/Ht20MHz-#1.vec",
+                "sha256": "86d036576378c10021cb62305c5fba82c89f792b098c970adf11c6a022ba0bb0"
               },
               {
-                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/StandardVhtAmpduLimit/StandardVhtAmpduLimit-#2.sca",
-                "sha256": "7ddcbf1f2d8249e0ed9eca22c0fd99f335dc6b7c76a2d3f8d0588ffd8fc04068"
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht20MHz/Ht20MHz-#2.sca",
+                "sha256": "182ca9d73558ce315e85805544aa3e341d485f66d101e95c5393883058e3ffc6"
               },
               {
-                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/StandardVhtAmpduLimit/StandardVhtAmpduLimit-#2.vec",
-                "sha256": "8901032d05d7cb5091d12d77fdd7b2876c822bf0d4e3aeb6a97cd69de999ae18"
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht20MHz/Ht20MHz-#2.vec",
+                "sha256": "a3399b743439d64f698782bf2499d1829aa9bcd543731a7544c29d0a2c8c47e0"
               },
               {
-                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/StandardVhtAmpduLimit/StandardVhtAmpduLimit-#3.sca",
-                "sha256": "aaac466a2d0675a1fa91ec310b74371c3d9fa35b094fe37a33e2e5040f444ece"
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht20MHz/Ht20MHz-#3.sca",
+                "sha256": "903c312707b417d3e0067e8c013535a35a04d9e679ca8cc3a640863d5c780051"
               },
               {
-                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/StandardVhtAmpduLimit/StandardVhtAmpduLimit-#3.vec",
-                "sha256": "3668c3b7cab9160cd053af9c245f3be82e4eb800279417c9ea5ba1f4516dd5b4"
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht20MHz/Ht20MHz-#3.vec",
+                "sha256": "baea3a914fa2e926abd50754e3c4a26d8e39cc1c0313363bd5f315382a2d5a22"
               },
               {
-                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/StandardVhtAmpduLimit/StandardVhtAmpduLimit-#4.sca",
-                "sha256": "9e5c8c2a9e7dfd43a0fe8a9fb3aa46425fb2d4b5aa5cc8c8787cde8de532699e"
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht20MHz/Ht20MHz-#4.sca",
+                "sha256": "ab814a933d1a199dfa93d9aa1b4125b4da704d621a1c3d9bad82ef57909a9615"
               },
               {
-                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/StandardVhtAmpduLimit/StandardVhtAmpduLimit-#4.vec",
-                "sha256": "2cc57602f427d443057f9a5c9ba7ef06d5bdca9181334e8313f5029b38d163a8"
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht20MHz/Ht20MHz-#4.vec",
+                "sha256": "3f2d55bb5b7ad38f24027d5e44446867a6758554ce76e381e26a0b4ef3ba3695"
               }
             ]
           },
           {
-            "configuration": "ExtendedVhtAmpduLimit",
-            "group": "extended_ampdu",
-            "ini": "examples/ieee80211ac/extended_ampdu/omnetpp.ini",
-            "label": "Extended VHT A-MPDU Limit",
+            "configuration": "Ht40MHz",
+            "group": "channel_widths",
+            "ini": "examples/ieee80211n/channel_widths/omnetpp.ini",
+            "label": "HT 40 MHz",
             "measurement": {
               "end_s": 0.5,
               "start_s": 0.3
@@ -69,69 +69,189 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/ExtendedVhtAmpduLimit/ExtendedVhtAmpduLimit-#0.sca",
-                "sha256": "c97dd5266fc1a7b6c2d3c13538309f0787dfc4246359cada11363dc39d4e5101"
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHz/Ht40MHz-#0.sca",
+                "sha256": "4a523b385ac1237b68465c9d64a0abe9da86d206aa831b0ab9c50e8dfce11cf8"
               },
               {
-                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/ExtendedVhtAmpduLimit/ExtendedVhtAmpduLimit-#0.vec",
-                "sha256": "830941ee8ba6312418a7be56d92798372288c360960afd8e8b06fb0e4db0626d"
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHz/Ht40MHz-#0.vec",
+                "sha256": "822a20cd7c18b12c82a6a6fe7158782cfd0a085bd343e4287ddd4f88951e308d"
               },
               {
-                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/ExtendedVhtAmpduLimit/ExtendedVhtAmpduLimit-#1.sca",
-                "sha256": "1f531e9d84438a2e52823a541490a404e347da597516e51f34af9506348137a0"
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHz/Ht40MHz-#1.sca",
+                "sha256": "14fcae1b6c29834db9be5d3f617dc9bc5ee23251cb78683675f638ddf14ef37f"
               },
               {
-                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/ExtendedVhtAmpduLimit/ExtendedVhtAmpduLimit-#1.vec",
-                "sha256": "79a71c1c90dc93a420aadcd709467886707587eadf5cc51442d4585543d9c031"
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHz/Ht40MHz-#1.vec",
+                "sha256": "8aed3b0f44169e28a028ef9435aadd1f10d516c14af14edd541696e9604cd796"
               },
               {
-                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/ExtendedVhtAmpduLimit/ExtendedVhtAmpduLimit-#2.sca",
-                "sha256": "4a40cfff2a7091955961664fb8b6ae91989a94b511705644a8ebda5aa7d3c085"
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHz/Ht40MHz-#2.sca",
+                "sha256": "17886bbd799f25cdd46e7bebe522495b8dc9cab115c73a2781194e0defd74457"
               },
               {
-                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/ExtendedVhtAmpduLimit/ExtendedVhtAmpduLimit-#2.vec",
-                "sha256": "bc8e6f003074a759bf601565f05b79d334e773a5e26347009c34f591f9193c7a"
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHz/Ht40MHz-#2.vec",
+                "sha256": "053342ea7562cb707e328827a8b5cd7df5a534457e58392047d4932582665f5f"
               },
               {
-                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/ExtendedVhtAmpduLimit/ExtendedVhtAmpduLimit-#3.sca",
-                "sha256": "f4528e31d9fcaabac1bfbeef5dc3f81257f0e11e4b185a87643e83e75fddf29e"
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHz/Ht40MHz-#3.sca",
+                "sha256": "14f2baa371363309fcd5017f1562bf59f9f5211dbc65f9d00a77841bd1ef8c9e"
               },
               {
-                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/ExtendedVhtAmpduLimit/ExtendedVhtAmpduLimit-#3.vec",
-                "sha256": "797df9c391d017df56b85e4a51db91917cc0cc61abbf44fce66f8ef7a7a52935"
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHz/Ht40MHz-#3.vec",
+                "sha256": "d0508bea983ddc5b70b1baaabfd27a561eb82a30787d215429161a5d699813ef"
               },
               {
-                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/ExtendedVhtAmpduLimit/ExtendedVhtAmpduLimit-#4.sca",
-                "sha256": "881ce410a6730a8c7f4b52344df21341fa8d9e1128be0736daea6dbb8540d399"
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHz/Ht40MHz-#4.sca",
+                "sha256": "5d616656adfa89bdc5522047f1467f22d07c2a3143da3872da2e07fd8c4fb7c8"
               },
               {
-                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/ExtendedVhtAmpduLimit/ExtendedVhtAmpduLimit-#4.vec",
-                "sha256": "688460a57cedde18afde0e4b8b9ca03ff88efdb87aa28b2c8a31121ffca8be54"
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHz/Ht40MHz-#4.vec",
+                "sha256": "daaed2d8d2062aa4efe13e2e81e83963cd5b71fdfe91375976bc73273e9559c9"
+              }
+            ]
+          },
+          {
+            "configuration": "Ht40MHzSecondaryAboveWithInterferer",
+            "group": "channel_widths",
+            "ini": "examples/ieee80211n/channel_widths/omnetpp.ini",
+            "label": "HT 40 MHz (Secondary Above)",
+            "measurement": {
+              "end_s": 0.5,
+              "start_s": 0.3
+            },
+            "metadata": {},
+            "result_files": [
+              {
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#0.sca",
+                "sha256": "409f4039f50de68f7ef128c019072f08c2dfc7706be796a5d8b602e5862da7f0"
+              },
+              {
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#0.vec",
+                "sha256": "3f7a39f9e1f789cbb97aa93135bc5a9dabb55b9b56b9df52bfa427655917cc37"
+              },
+              {
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#1.sca",
+                "sha256": "66e4e5508d2ed3c42bc0ecf9fcdae619e8035dff230f1f27f2467e83a4656235"
+              },
+              {
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#1.vec",
+                "sha256": "94ba968f2fe813d79ee7683b7696841f29ecbad54e88d73e1fb391a493075679"
+              },
+              {
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#2.sca",
+                "sha256": "7e602efe9e29d69ceca63772af3410d9b28e56d99c49f9e8557a6e946c33b3d3"
+              },
+              {
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#2.vec",
+                "sha256": "6015a6b97c73967abe8fac6cd96051e2a0fbd53e0559919ce1912cf31ad1e6c1"
+              },
+              {
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#3.sca",
+                "sha256": "65b13748d9bc6564f7d88e5be688eecaa02639a088007cca248f3fb486879910"
+              },
+              {
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#3.vec",
+                "sha256": "7763f18bb4509136d1a4e6c911a5791852f17ee68dc60487e4db5590f438cea7"
+              },
+              {
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#4.sca",
+                "sha256": "18c79f5c72d00e0e1d5a821384f87e83503f6d9d7087852d9d029ccc4faaf632"
+              },
+              {
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#4.vec",
+                "sha256": "4ccc29934d60ada58e6e229553ea0b25e5a2573814a22e2990ef3720a48b5a37"
+              }
+            ]
+          },
+          {
+            "configuration": "Ht40MHzSecondaryBelowWithInterferer",
+            "group": "channel_widths",
+            "ini": "examples/ieee80211n/channel_widths/omnetpp.ini",
+            "label": "HT 40 MHz (Secondary Below)",
+            "measurement": {
+              "end_s": 0.5,
+              "start_s": 0.3
+            },
+            "metadata": {},
+            "result_files": [
+              {
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#0.sca",
+                "sha256": "ed94b6df21b23c1a21cfd4aeb200f9ad6741b20524a6b115a756643afabf53a0"
+              },
+              {
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#0.vec",
+                "sha256": "7245e4a703de87a87485168bb7ad64affcabdb084cd13010f1043f33db2c0d27"
+              },
+              {
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#1.sca",
+                "sha256": "3a7f27c64d8fbef5e4ffb386cf3528032d14fb5b48253a8d67021de1cd40b50c"
+              },
+              {
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#1.vec",
+                "sha256": "e793dd515d62f40adcaee14c49c17c7704f64b16ab1e982f37b6606ac905c6e7"
+              },
+              {
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#2.sca",
+                "sha256": "d92c846400585bd165cbbe6accf8cc45d21e88874c834abafcedd6d1d4620545"
+              },
+              {
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#2.vec",
+                "sha256": "58d68092a94ed66fc5a67856c4659676f6c7e6100829203d58a7896663bf2e36"
+              },
+              {
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#3.sca",
+                "sha256": "badced1659c563d641fc5cef8416cec9737752f7135bd07ef632fb42e326647c"
+              },
+              {
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#3.vec",
+                "sha256": "186411eda9545fc44fd4027a0f4cf0fb4908cbebaa06fccc1f12b95e67272747"
+              },
+              {
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#4.sca",
+                "sha256": "db98a9bba045089a8b4b5c49c2118b29ec3db24e35208b7097a251b8aa766631"
+              },
+              {
+                "path": "examples/ieee80211n/channel_widths/results/20260809T170015Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#4.vec",
+                "sha256": "3785122fb029e0ee43e343ab14b4c37b0fb8857c89585867ee1f83da79074057"
               }
             ]
           }
         ],
-        "session_id": "20260809T181633Z",
+        "session_id": "20260809T170015Z",
         "status": "PASS"
       }
     },
-    "repository_revision": "6ffac7f8aac3272683a7260a563ac5a562420c80",
-    "requested_session_id": "20260809T181633Z",
+    "repository_revision": "ea4bfe077d8ceec6f05a9e4e3bd3e17fa9031a56",
+    "requested_session_id": "20260809T170015Z",
     "schema_version": 1
   },
-  "extended_ampdu": {
-    "Extended VHT A-MPDU Limit": {
+  "channel_widths": {
+    "HT 20 MHz": {
       "goodput_mbps": {
-        "ci95": 0.0,
+        "ci95": 0.07299463746199811,
         "count": 5,
-        "mean": 286.72
+        "mean": 4.464
       }
     },
-    "Standard VHT A-MPDU Policy Limit": {
+    "HT 40 MHz": {
       "goodput_mbps": {
-        "ci95": 1.6757353059419795,
+        "ci95": 0.11919974382756145,
         "count": 5,
-        "mean": 257.7344
+        "mean": 7.056
+      }
+    },
+    "HT 40 MHz (Secondary Above)": {
+      "goodput_mbps": {
+        "ci95": 0.27763562575328415,
+        "count": 5,
+        "mean": 0.37439999999999996
+      }
+    },
+    "HT 40 MHz (Secondary Below)": {
+      "goodput_mbps": {
+        "ci95": 0.13590861859029812,
+        "count": 5,
+        "mean": 0.2016
       }
     }
   }

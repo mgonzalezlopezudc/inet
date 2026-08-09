@@ -3,7 +3,7 @@
 <!-- BEGIN SCRIPT RESULTS SESSIONS -->
 `[script]` results sessions:
 
-- Scalar/vector: `20260809T202000Z`
+- Scalar/vector: `20260809T170011Z`
 - PCAP: `20260809T202000Z`
 <!-- END SCRIPT RESULTS SESSIONS -->
 
@@ -41,14 +41,18 @@ Five configurations are evaluated:
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-wide_channels -->
 ### [script] Generated scalar/vector plot and table
 
-![wide_channels scalar/vector analysis](results/20260809T202000Z/wide-channels-delivery-delay.png)
+![wide_channels scalar/vector analysis](results/20260809T170011Z/wide-channels-delivery-delay.png)
 
-Figure provenance: [`results/20260809T202000Z/wide-channels-delivery-delay.png.json`](results/20260809T202000Z/wide-channels-delivery-delay.png.json). Run-level metric source: [`../../ieee80211ax/analysis/metrics.json`](../../ieee80211ax/analysis/metrics.json).
+![wide_channels queue-state evolution](results/20260809T170011Z/queue-state-evolution.png)
+
+Queue-state provenance: [`results/20260809T170011Z/queue-state-evolution.png.json`](results/20260809T170011Z/queue-state-evolution.png.json). Queue filters / units: vector / **.ap.wlan[*].mac.hcf.edca.edcaf[*].pendingQueue / queueLength:vector / unit=pk. Queue aggregation: [0.3, 0.5) s; maximum=maximum observed aggregate queue state per run; mean=time-weighted sample-and-hold mean over each condition measurement window; trace=sum all available manifest-declared queue vectors per run on the union of post-step transition times; representative run is the lowest run number; uncertainty=95% Student-t CI across independent runs for the time-weighted mean.
+
+Figure provenance: [`results/20260809T170011Z/wide-channels-delivery-delay.png.json`](results/20260809T170011Z/wide-channels-delivery-delay.png.json). Run-level metric source: [`results/20260809T170011Z/metrics.json`](results/20260809T170011Z/metrics.json).
 
 Common table provenance:
 
 - Source result filters / modules / units: vector / **.app[*] / packetReceived:vector(packetBytes)<br>vector / **.app[*] / endToEndDelay:vector
-- Window / per-run aggregation / exclusions: [0.3, 0.5) s; delay=pool delivered-packet delays within each run over each manifest measurement window, then take the 95th percentile; one value per run; goodput=sum delivered application bytes over each manifest measurement window, convert to bit/s; one value per run; uncertainty=95% Student-t CI across independent runs
+- Window / per-run aggregation / exclusions: [0.3, 0.5) s; delay=AP row pools delivered-packet delays across sink nodes; host row groups delays by host over each manifest measurement window, then takes the 95th percentile; one value per run; goodput=AP row sums delivered application bytes across sink nodes; host row groups application vectors by host over each manifest measurement window, convert to bit/s; one value per run; uncertainty=95% Student-t CI across independent runs
 - Independent runs: run-level summaries: n=5
 
 | Configuration / observation | Mean or direct value | 95% CI half-width |

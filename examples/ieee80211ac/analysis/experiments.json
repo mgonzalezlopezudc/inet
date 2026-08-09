@@ -1,6 +1,19 @@
 {
   "default_repetitions": 5,
   "station_count": 3,
+  "queue_state": {
+    "figure": "queue-state-evolution.png",
+    "sources": [
+      {
+        "id": "all-edca-pending",
+        "module": "**.ap.wlan[*].mac.hcf.edca.edcaf[*].pendingQueue",
+        "result": "queueLength:vector",
+        "unit": "pk",
+        "label": "VHT EDCA pending queues",
+        "aggregation": "sum"
+      }
+    ]
+  },
   "evidence_contracts": {
     "wide_channels": [
       {

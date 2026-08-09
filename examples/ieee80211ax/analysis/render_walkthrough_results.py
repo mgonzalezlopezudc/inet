@@ -17,6 +17,7 @@ from analysis_core import (
     REPOSITORY_ROOT,
     atomic_write_text,
     load_manifest,
+    queue_figure_filename,
     result_session_directory,
 )
 from inet_wifi_analysis import (
@@ -408,6 +409,7 @@ def render_group(
     if not session_id:
         raise RuntimeError(f"{group_name}: metrics provenance has no session_id")
     figure_filename = FIGURE_FILENAMES.get(group_name)
+    queue_filename = queue_figure_filename(group)
     metrics_link = relative_link(metrics_path.resolve(), walkthrough)
     runs_summary = independent_runs_summary(metrics_document[group_name])
 
@@ -441,10 +443,38 @@ def render_group(
             figure_1ms_link = relative_link(figure_1ms, walkthrough)
             figure_1ms_text = f"![{group_name} 1ms scalar/vector analysis]({figure_1ms_link})\n\n"
 
+        queue_text = ""
+        if queue_filename:
+            queue_figure = result_session_directory(group, session_id) / queue_filename
+            queue_sidecar = queue_figure.with_suffix(queue_figure.suffix + ".json")
+            if not queue_figure.is_file():
+                raise RuntimeError(
+                    f"{group_name}: queue-state figure does not exist: {queue_figure}"
+                )
+            if not queue_sidecar.is_file():
+                raise RuntimeError(
+                    f"{group_name}: queue-state provenance does not exist: {queue_sidecar}"
+                )
+            queue_sidecar_document = json.loads(
+                queue_sidecar.read_text(encoding="utf-8")
+            )
+            validate_bundle_provenance(
+                group_name, metrics_document, queue_sidecar_document, queue_figure
+            )
+            queue_figure_link = relative_link(queue_figure, walkthrough)
+            queue_sidecar_link = relative_link(queue_sidecar, walkthrough)
+            queue_text = (
+                f"![{group_name} queue-state evolution]({queue_figure_link})\n\n"
+                f"Queue-state provenance: [`{queue_sidecar_link}`]({queue_sidecar_link}). "
+                f"Queue filters / units: {source_filter_summary(queue_sidecar_document)}. "
+                f"Queue aggregation: {window_aggregation_summary(queue_sidecar_document)}.\n\n"
+            )
+
         lines = [
             "### [script] Generated scalar/vector plot and table\n\n",
             f"![{group_name} scalar/vector analysis]({figure_link})\n\n",
             figure_1ms_text,
+            queue_text,
             f"Figure provenance: [`{sidecar_link}`]({sidecar_link}). "
             f"Run-level metric source: [`{metrics_link}`]({metrics_link}).\n\n",
             "Common table provenance:\n\n",

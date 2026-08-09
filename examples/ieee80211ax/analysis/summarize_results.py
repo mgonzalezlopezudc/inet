@@ -25,6 +25,7 @@ from analysis_core import (
     per_run_goodput,
     git_revision,
     resolve_manifest_sessions,
+    result_session_directory,
     summarize_ci95,
 )
 from analysis_plots import _ap_overlap, _energy_per_run, _per_run_fairness
@@ -256,10 +257,20 @@ def main() -> None:
             treatment = _energy_per_run(conditions[1]).set_index("runnumber").delivered_bytes
             group_metrics["delivery_ratio_twt_over_baseline"] = ci(treatment / baseline)
         payload[group_name] = group_metrics
-    atomic_write_text(
-        output,
-        json.dumps(sort_payload_keys(payload), indent=2, sort_keys=False, allow_nan=False) + "\n",
-    )
+    serialized = json.dumps(
+        sort_payload_keys(payload), indent=2, sort_keys=False, allow_nan=False
+    ) + "\n"
+    atomic_write_text(output, serialized)
+    if args.group is not None:
+        selected_session = payload["_provenance"]["groups"][args.group].get(
+            "session_id"
+        )
+        if selected_session:
+            session_output = result_session_directory(
+                manifest["groups"][args.group], selected_session
+            ) / "metrics.json"
+            atomic_write_text(session_output, serialized)
+            print(f"CREATED {session_output}")
     print(f"CREATED {output}")
 
 

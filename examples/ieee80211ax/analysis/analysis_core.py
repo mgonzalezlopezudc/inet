@@ -11,6 +11,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
@@ -73,6 +74,14 @@ FIGURE_FILENAMES = {
     "short_gi_vht": "short-gi-vht-delivery-delay.png",
     "dl_mu_mimo_baseline": "dl-mu-mimo-baseline-delivery-delay.png",
 }
+DEFAULT_QUEUE_FIGURE_FILENAME = "queue-state-evolution.png"
+
+
+def queue_figure_filename(group: dict[str, Any]) -> str | None:
+    queue_state = group.get("queue_state")
+    if queue_state is None:
+        return None
+    return str(queue_state.get("figure", DEFAULT_QUEUE_FIGURE_FILENAME))
 SESSION_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z$")
 EVIDENCE_HANDLERS = {
     "unimplemented",
@@ -95,6 +104,12 @@ QUERY_OPTIONS = {
 def load_manifest(path: Path = DEFAULT_MANIFEST) -> dict[str, Any]:
     with path.open(encoding="utf-8") as stream:
         manifest = json.load(stream)
+    queue_defaults = manifest.get("queue_state")
+    if queue_defaults is not None:
+        if not isinstance(queue_defaults, dict):
+            raise RuntimeError("queue_state manifest defaults must be an object")
+        for group in manifest.get("groups", {}).values():
+            group.setdefault("queue_state", deepcopy(queue_defaults))
     validate_result_layout(manifest)
     validate_evidence_contracts(manifest)
     return manifest
@@ -138,6 +153,36 @@ def validate_result_layout(manifest: dict[str, Any]) -> None:
                     f"{group_name}: diagnostic_run must be in "
                     f"[0, {repetitions})"
                 )
+        queue_state = group.get("queue_state")
+        if queue_state is not None:
+            if not isinstance(queue_state, dict):
+                raise RuntimeError(f"{group_name}: queue_state must be an object")
+            figure = queue_state.get("figure", DEFAULT_QUEUE_FIGURE_FILENAME)
+            if not isinstance(figure, str) or not figure:
+                raise RuntimeError(f"{group_name}: queue_state.figure must be a filename")
+            sources = queue_state.get("sources")
+            if not isinstance(sources, list) or not sources:
+                raise RuntimeError(f"{group_name}: queue_state.sources must be nonempty")
+            for source in sources:
+                if not isinstance(source, dict):
+                    raise RuntimeError(f"{group_name}: queue source must be an object")
+                for key in ("id", "module", "result", "unit", "label"):
+                    if not isinstance(source.get(key), str) or not source[key]:
+                        raise RuntimeError(
+                            f"{group_name}: queue source missing {key!r}"
+                        )
+                if source["result"] != "queueLength:vector":
+                    raise RuntimeError(
+                        f"{group_name}: queue source result must be queueLength:vector"
+                    )
+                if source["unit"] != "pk":
+                    raise RuntimeError(
+                        f"{group_name}: queue source unit must be 'pk'"
+                    )
+                if source.get("aggregation", "sum") != "sum":
+                    raise RuntimeError(
+                        f"{group_name}: only queue source aggregation='sum' is supported"
+                    )
         roots = {result_root(REPOSITORY_ROOT, group["ini"])}
         for entry in group.get("conditions", []):
             if "result_dir" in entry:
@@ -361,6 +406,7 @@ class Condition:
         expected_repetitions: int,
         measurement: MeasurementWindow,
         condition_metadata: dict[str, Any] | None = None,
+        queue_state: dict[str, Any] | None = None,
     ) -> None:
         self.group = group
         self.label = label
@@ -370,6 +416,7 @@ class Condition:
         self.expected_repetitions = expected_repetitions
         self.measurement = measurement
         self.condition_metadata = condition_metadata or {}
+        self.queue_state = queue_state or {}
         self.result_files = self._discover_result_files()
 
     @classmethod
@@ -401,6 +448,7 @@ class Condition:
                 float(window_data["start"]), float(window_data["end"])
             ),
             condition_metadata=entry.get("metadata", {}),
+            queue_state=group.get("queue_state"),
         )
 
     def _discover_result_files(self) -> tuple[ResultFiles, ...]:
@@ -478,6 +526,22 @@ class Condition:
         self._validate_unit(frame, name, expected_unit)
         self._print_matches("vector", name, expression, frame)
         return frame
+
+    def queue_vectors(self, source: dict[str, Any]) -> pd.DataFrame:
+        """Load one manifest-declared queue-length vector source."""
+        source_id = source.get("id", "queue")
+        optional = bool(source.get("optional", False))
+        try:
+            return self.vectors(
+                source["result"],
+                module=source["module"],
+                expected_unit=source.get("unit", "pk"),
+                required=not optional,
+            )
+        except RuntimeError as error:
+            raise RuntimeError(
+                f"{self.config}: queue source {source_id!r} failed: {error}"
+            ) from error
 
     def scalars(
         self,
@@ -714,6 +778,84 @@ def crop_vector(
         raise ValueError("Vector timestamps and values are unaligned")
     selected = (times_array >= window.start) & (times_array < window.end)
     return times_array[selected], values_array[selected]
+
+
+def aggregate_queue_vectors(
+    frames: Iterable[pd.DataFrame], run_number: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """Aggregate queue state vectors into one sample-and-hold trace.
+
+    Each source vector records the state after an event. The aggregate is
+    evaluated on the union of all transition times and carries each source's
+    last value forward. Repeated timestamps are resolved to the last recorded
+    value, matching OMNeT++'s post-step interpretation.
+    """
+    rows = []
+    for frame in frames:
+        if frame.empty:
+            continue
+        rows.extend(
+            row for _, row in frame[
+                frame["runnumber"].astype(int) == int(run_number)
+            ].iterrows()
+        )
+    if not rows:
+        raise RuntimeError(f"queue run {run_number}: no queue vectors matched")
+
+    normalised: list[tuple[np.ndarray, np.ndarray]] = []
+    transition_times: list[float] = []
+    for row in rows:
+        times = np.asarray(row.vectime, dtype=float)
+        values = np.asarray(row.vecvalue, dtype=float)
+        order = np.argsort(times, kind="stable")
+        times = times[order]
+        values = values[order]
+        if len(times) != len(values) or not len(times):
+            raise RuntimeError(f"queue run {run_number}: empty or unaligned vector")
+        if len(times) > 1 and np.any(np.diff(times) == 0):
+            keep = np.r_[np.diff(times) != 0, True]
+            last_positions = np.flatnonzero(keep)
+            times = times[last_positions]
+            values = values[last_positions]
+        normalised.append((times, values))
+        transition_times.extend(times.tolist())
+
+    times = np.unique(np.asarray(transition_times, dtype=float))
+    values = np.zeros(len(times), dtype=float)
+    for source_times, source_values in normalised:
+        indices = np.searchsorted(source_times, times, side="right") - 1
+        valid = indices >= 0
+        values[valid] += source_values[indices[valid]]
+    if np.any(~np.isfinite(values)):
+        raise RuntimeError(f"queue run {run_number}: non-finite aggregate state")
+    return times, values
+
+
+def time_weighted_step_mean(
+    times: Iterable[float], values: Iterable[float], window: MeasurementWindow
+) -> float:
+    """Return the time-weighted mean of a post-step queue state."""
+    times_array = np.asarray(times, dtype=float)
+    values_array = np.asarray(values, dtype=float)
+    if len(times_array) != len(values_array) or not len(times_array):
+        raise ValueError("Queue state vector is empty or unaligned")
+    if np.any(np.diff(times_array) < 0):
+        raise ValueError("Queue state timestamps are nonmonotonic")
+    initial_index = np.searchsorted(times_array, window.start, side="right") - 1
+    if initial_index < 0:
+        initial_value = 0.0
+        following_times = times_array
+        following_values = values_array
+    else:
+        initial_value = float(values_array[initial_index])
+        following_times = times_array[initial_index + 1:]
+        following_values = values_array[initial_index + 1:]
+    inside = following_times < window.end
+    breakpoints = np.concatenate((
+        [window.start], following_times[inside], [window.end]
+    ))
+    states = np.concatenate(([initial_value], following_values[inside]))
+    return float(np.sum(states * np.diff(breakpoints)) / window.duration)
 
 
 def app_sink_vectors(condition: Condition, name: str) -> pd.DataFrame:

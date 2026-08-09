@@ -9,11 +9,15 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
+import pandas as pd
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from analysis_core import (
     Condition,
     MeasurementWindow,
+    aggregate_queue_vectors,
+    load_manifest,
     atomic_write_text,
     crop_vector,
     jain,
@@ -22,6 +26,7 @@ from analysis_core import (
     resolve_manifest_sessions,
     summarize_ci95,
     time_weighted_integral,
+    time_weighted_step_mean,
     validate_disjoint_streams,
     validate_evidence_contracts,
     validate_result_layout,
@@ -43,6 +48,7 @@ from run_campaign import (
     performance_vector_statistics,
     positive_int,
     requirements_for_job,
+    queue_vector_overrides,
     result_artifacts,
     run_jobs,
     session_id,
@@ -53,6 +59,71 @@ from analysis_plots import _spatial_reuse_decisions
 
 
 class AnalysisCoreTest(unittest.TestCase):
+    def test_queue_vectors_are_aggregated_as_post_step_state(self):
+        frame = pd.DataFrame([
+            {
+                "runID": "run-0",
+                "runnumber": 0,
+                "module": "Network.ap.wlan[0].queueA",
+                "vectime": [0.0, 1.0, 1.5],
+                "vecvalue": [0.0, 3.0, 1.0],
+            },
+            {
+                "runID": "run-0",
+                "runnumber": 0,
+                "module": "Network.ap.wlan[0].queueB",
+                "vectime": [0.0, 0.5],
+                "vecvalue": [0.0, 2.0],
+            },
+        ])
+
+        times, values = aggregate_queue_vectors([frame], 0)
+
+        self.assertEqual(times.tolist(), [0.0, 0.5, 1.0, 1.5])
+        self.assertEqual(values.tolist(), [0.0, 2.0, 5.0, 3.0])
+        self.assertAlmostEqual(
+            time_weighted_step_mean(
+                times, values, MeasurementWindow(0.5, 1.5)
+            ),
+            3.5,
+        )
+
+    def test_queue_aggregation_keeps_last_duplicate_timestamp(self):
+        frame = pd.DataFrame([{
+            "runID": "run-0",
+            "runnumber": 0,
+            "module": "Network.ap.wlan[0].queue",
+            "vectime": [0.0, 1.0, 1.0, 2.0],
+            "vecvalue": [0.0, 2.0, 4.0, 1.0],
+        }])
+
+        times, values = aggregate_queue_vectors([frame], 0)
+
+        self.assertEqual(times.tolist(), [0.0, 1.0, 2.0])
+        self.assertEqual(values.tolist(), [0.0, 4.0, 1.0])
+
+    def test_generation_manifests_declare_queue_state_defaults(self):
+        for manifest_path in (
+            Path("examples/ieee80211n/analysis/experiments.json"),
+            Path("examples/ieee80211ac/analysis/experiments.json"),
+            Path("examples/ieee80211ax/analysis/experiments.json"),
+        ):
+            manifest = load_manifest(manifest_path)
+            self.assertTrue(manifest["groups"])
+            for group in manifest["groups"].values():
+                self.assertIn("queue_state", group)
+                self.assertTrue(group["queue_state"]["sources"])
+
+    def test_queue_recording_override_is_manifest_driven(self):
+        manifest = load_manifest(Path("examples/ieee80211n/analysis/experiments.json"))
+        overrides = queue_vector_overrides(manifest["groups"]["frame_aggregation"])
+        self.assertEqual(
+            overrides,
+            (
+                "--**.ap.wlan[*].mac.hcf.edca.edcaf[*].pendingQueue.queueLength*.vector-recording=true",
+            ),
+        )
+
     def test_spatial_reuse_decisions_join_aligned_receiver_vectors(self):
         condition = unittest.mock.Mock()
         condition.config = "BssColoringEnabled"

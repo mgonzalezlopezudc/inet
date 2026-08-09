@@ -391,6 +391,24 @@ GROUP_DIAGNOSTIC_VECTOR_OVERRIDES = {
 SESSION_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z$")
 
 
+def queue_state_sources(group: dict[str, Any]) -> tuple[dict[str, Any], ...]:
+    queue_state = group.get("queue_state", {})
+    if not queue_state:
+        return ()
+    return tuple(queue_state.get("sources", ()))
+
+
+def queue_vector_overrides(group: dict[str, Any]) -> tuple[str, ...]:
+    """Enable every manifest-declared queue vector for every repetition."""
+    overrides = []
+    for source in queue_state_sources(group):
+        statistic = source["result"].split(":vector", 1)[0]
+        overrides.append(
+            f"--{source['module']}.{statistic}*.vector-recording=true"
+        )
+    return tuple(overrides)
+
+
 @dataclass(frozen=True)
 class JobResult:
     job: CampaignJob
@@ -554,6 +572,7 @@ def build_command(
     group: str = "",
     diagnostic: bool = False,
     exhaustive_vectors: bool = False,
+    queue_state: dict[str, Any] | None = None,
 ) -> tuple[str, ...]:
     vectors = performance_vector_statistics(group)
     overrides = (
@@ -577,6 +596,8 @@ def build_command(
         overrides += diagnostic_vector_overrides(group)
     if group == "bsr":
         overrides += BSR_TRIGGER_DECISION_VECTOR_OVERRIDES
+    if queue_state is not None:
+        overrides += queue_vector_overrides({"queue_state": queue_state})
     return build_cmdenv_command(
         REPOSITORY_ROOT,
         ini,
@@ -628,6 +649,7 @@ def collect_jobs(
             additional = (
                 CORE_SCALAR_RECORDING_OVERRIDES
                 + CORE_PERFORMANCE_RECORDING_OVERRIDES
+                + queue_vector_overrides(group)
             )
             if exhaustive_vectors and (
                 group_name == "ul_ofdma"
@@ -784,17 +806,27 @@ def requirements_for_job(
 ) -> tuple[RequiredResult, ...]:
     requirements = PERFORMANCE_REQUIREMENTS
     group = manifest["groups"][job.group]
+    queue_requirements = tuple(
+        RequiredResult(
+            "vector",
+            source["module"],
+            source["result"],
+            expectation="nonzero",
+        )
+        for source in queue_state_sources(group)
+        if not source.get("optional", False)
+    )
     if (
         not diagnostic_vectors
         or job.group != "ul_ofdma"
         or job.run != diagnostic_run(group)
     ):
-        return requirements
+        return requirements + queue_requirements
     if job.config in {"EdcaBaseline5ms", "EdcaBaseline2_5ms", "EdcaBaseline1ms"}:
         return requirements + (
             UL_OFDMA_DIAGNOSTIC_REQUIREMENTS[0],
         ) + UL_OFDMA_EDCA_INACTIVE_REQUIREMENTS
-    return requirements + UL_OFDMA_DIAGNOSTIC_REQUIREMENTS
+    return requirements + queue_requirements + UL_OFDMA_DIAGNOSTIC_REQUIREMENTS
 
 
 def validate_requirement(
@@ -850,6 +882,26 @@ def validate_requirement(
     return None
 
 
+def validate_queue_state_sources(
+    records: list[RecordedResult], group: dict[str, Any]
+) -> str | None:
+    """Validate an OR-style queue profile used by mixed UL/DL AX groups."""
+    queue_state = group.get("queue_state", {})
+    if not queue_state.get("require_any", False):
+        return None
+    sources = queue_state_sources(group)
+    if any(
+        record.kind == "vector"
+        and record.name == source["result"]
+        and module_matches(record.module, source["module"])
+        and (record.count or 0) > 0
+        for source in sources
+        for record in records
+    ):
+        return None
+    return "no manifest-declared queue source recorded a nonempty vector"
+
+
 def validate_campaign_results(
     jobs: list[CampaignJob],
     manifest: dict[str, Any],
@@ -870,6 +922,9 @@ def validate_campaign_results(
             error = validate_requirement(records, requirement)
             if error is not None:
                 errors.append(f"{job.label}: {error}")
+        queue_error = validate_queue_state_sources(records, manifest["groups"][job.group])
+        if queue_error is not None:
+            errors.append(f"{job.label}: {queue_error}")
     return errors
 
 

@@ -12,9 +12,10 @@ from analysis_core import (
     FIGURE_FILENAMES,
     conditions_for_group,
     load_manifest,
+    queue_figure_filename,
     sha256,
 )
-from analysis_plots import PLOTS
+from analysis_plots import PLOTS, plot_queue_state
 
 
 def main() -> None:
@@ -59,6 +60,25 @@ def main() -> None:
                 conditions,
                 checked_output,
             )
+
+        queue_filename = queue_figure_filename(group)
+        if queue_filename is None:
+            continue
+        checked_queue_output = conditions[0].result_dir.parent / queue_filename
+        if args.check:
+            with tempfile.TemporaryDirectory(prefix="inet-80211-queue-analysis-") as directory:
+                queue_output = Path(directory) / checked_queue_output.name
+                plot_queue_state(conditions, queue_output)
+                if (
+                    not checked_queue_output.exists()
+                    or sha256(queue_output) != sha256(checked_queue_output)
+                ):
+                    raise RuntimeError(
+                        f"stale checked-in queue figure: {checked_queue_output}"
+                    )
+                print(f"VERIFIED {checked_queue_output}")
+        else:
+            plot_queue_state(conditions, checked_queue_output)
 
 
 if __name__ == "__main__":

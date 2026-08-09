@@ -26,6 +26,7 @@ from inet_wifi_analysis import (
     Suite,
     load_suite,
     pcap_patterns_for_scope,
+    result_session_directory,
     scenario_configuration_ini,
 )
 
@@ -599,6 +600,16 @@ def publish_command(args: argparse.Namespace) -> None:
             logical, scalar_manifest, scalar_group
         )
         analysis_dir = scalar_analysis_directory(scalar_manifest)
+        scalar_document = json.loads(
+            scalar_manifest.read_text(encoding="utf-8")
+        )
+        scalar_group_document = scalar_document["groups"][scalar_group]
+        session_metrics = result_session_directory(
+            REPOSITORY_ROOT,
+            scalar_group_document["ini"],
+            args.session_id,
+        ) / "metrics.json"
+        metrics_path = session_metrics if session_metrics.is_file() else analysis_dir / "metrics.json"
         run_command([
             sys.executable,
             str(analysis_dir / "render_walkthrough_results.py"),
@@ -606,7 +617,7 @@ def publish_command(args: argparse.Namespace) -> None:
             "--manifest",
             str(REPOSITORY_ROOT / logical["scalar_vector_manifest"]),
             "--metrics",
-            str(analysis_dir / "metrics.json"),
+            str(metrics_path),
             "--evidence-ledger",
             str(session_directory(args.session_id) / "evidence-ledger.json"),
             "--update",

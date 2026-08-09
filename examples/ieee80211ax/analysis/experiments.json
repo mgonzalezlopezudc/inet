@@ -1,5 +1,47 @@
 {
   "default_repetitions": 5,
+  "queue_state": {
+    "figure": "queue-state-evolution.png",
+    "require_any": true,
+    "sources": [
+      {
+        "id": "ap-edca-pending",
+        "module": "**.ap.wlan[*].mac.hcf.edca.edcaf[*].pendingQueue",
+        "result": "queueLength:vector",
+        "unit": "pk",
+        "label": "HE EDCA pending queues",
+        "aggregation": "sum",
+        "optional": true
+      },
+      {
+        "id": "host-edca-pending",
+        "module": "**.host[*].wlan[*].mac.hcf.edca.edcaf[*].pendingQueue",
+        "result": "queueLength:vector",
+        "unit": "pk",
+        "label": "HE uplink EDCA pending queues",
+        "aggregation": "sum",
+        "optional": true
+      },
+      {
+        "id": "sta-edca-pending",
+        "module": "**.sta[*].wlan[*].mac.hcf.edca.edcaf[*].pendingQueue",
+        "result": "queueLength:vector",
+        "unit": "pk",
+        "label": "HE station EDCA pending queues",
+        "aggregation": "sum",
+        "optional": true
+      },
+      {
+        "id": "he-dl-station-banks",
+        "module": "**.wlan[*].mac.hcf.queueBanks.queueBank_*.queue*",
+        "result": "queueLength:vector",
+        "unit": "pk",
+        "label": "HE downlink station queue banks",
+        "aggregation": "sum",
+        "optional": true
+      }
+    ]
+  },
   "evidence_contracts": {
     "fragmentation": [
       {"id": "fragmentation-capability-gate", "kind": "normative", "requirement": "Peer capability gates dynamic fragmentation", "results": ["fragment capability state"], "evaluation": {"handler": "unimplemented", "reason": "No retained scalar/vector result exposes the negotiated peer fragmentation capability state."}},
