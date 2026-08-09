@@ -181,6 +181,141 @@ def evaluate_matched_delivery(
     )
 
 
+def _ampdu_lengths(
+    condition: Any, evaluation: dict[str, Any]
+) -> dict[int, dict[str, Any]]:
+    length_frame = condition.vectors(
+        evaluation["result"], module=evaluation["module"]
+    )
+    count_frame = condition.vectors(
+        evaluation["count_result"], module=evaluation["module"]
+    )
+    count_rows = {
+        int(row.runnumber): row for _, row in count_frame.iterrows()
+    }
+    observations: dict[int, dict[str, Any]] = {}
+    minimum = int(evaluation["minimum_aggregate_bytes"])
+    minimum_subframes = int(evaluation["minimum_subframes"])
+    for _, row in length_frame.iterrows():
+        run_number = int(row.runnumber)
+        count_row = count_rows.get(run_number)
+        if count_row is None:
+            raise RuntimeError(
+                f"{condition.config}/{evaluation['count_result']}: missing run {run_number}"
+            )
+        length_times, length_values = crop_vector(
+            row.vectime, row.vecvalue, condition.measurement
+        )
+        count_times, count_values = crop_vector(
+            count_row.vectime, count_row.vecvalue, condition.measurement
+        )
+        if len(length_times) != len(count_times) or not np.allclose(
+            length_times, count_times
+        ):
+            raise RuntimeError(
+                f"{condition.config}: A-MPDU length/count telemetry is not aligned"
+            )
+        lengths = np.asarray(length_values, dtype=float)
+        subframes = np.asarray(count_values, dtype=float)
+        candidates = (lengths >= minimum) & (subframes >= minimum_subframes)
+        item = observations.setdefault(run_number, {
+            "run_number": run_number,
+            "sample_count": 0,
+            "max_aggregate_bytes": None,
+            "max_subframes": None,
+        })
+        item["sample_count"] += int(np.count_nonzero(candidates))
+        if np.any(candidates):
+            maximum = int(np.max(lengths[candidates]))
+            maximum_subframes = int(np.max(subframes[candidates]))
+            previous = item["max_aggregate_bytes"]
+            item["max_aggregate_bytes"] = (
+                maximum if previous is None else max(previous, maximum)
+            )
+            previous_subframes = item["max_subframes"]
+            item["max_subframes"] = (
+                maximum_subframes
+                if previous_subframes is None
+                else max(previous_subframes, maximum_subframes)
+            )
+    return observations
+
+
+def evaluate_ampdu_policy_bounds(
+    baseline: Any, treatment: Any, evaluation: dict[str, Any]
+) -> Evaluation:
+    """Check assembled HCF A-MPDU lengths against the two policy limits."""
+    baseline_observations = _ampdu_lengths(baseline, evaluation)
+    treatment_observations = _ampdu_lengths(treatment, evaluation)
+    expected_runs = sorted(
+        set(baseline_observations) | set(treatment_observations)
+    )
+    observations = []
+    failures = []
+    crossed_boundary = False
+    minimum_subframes = int(evaluation["minimum_subframes"])
+    baseline_limit = int(evaluation["baseline_max_bytes"])
+    treatment_limit = int(evaluation["treatment_max_bytes"])
+    for run_number in expected_runs:
+        base = baseline_observations.get(run_number, {
+            "sample_count": 0, "max_aggregate_bytes": None, "max_subframes": None,
+        })
+        extended = treatment_observations.get(run_number, {
+            "sample_count": 0, "max_aggregate_bytes": None, "max_subframes": None,
+        })
+        base_max = base["max_aggregate_bytes"]
+        extended_max = extended["max_aggregate_bytes"]
+        if base_max is None or extended_max is None:
+            pass
+        else:
+            if base_max > baseline_limit:
+                failures.append(
+                    f"baseline run {run_number}: observed {base_max} > {baseline_limit} bytes"
+                )
+            if extended_max > treatment_limit:
+                failures.append(
+                    f"treatment run {run_number}: observed {extended_max} > {treatment_limit} bytes"
+                )
+            crossed_boundary |= extended_max > baseline_limit
+        observations.append({
+            "run_number": run_number,
+            "baseline_sample_count": base["sample_count"],
+            "baseline_max_aggregate_bytes": base_max,
+            "baseline_max_subframes": base["max_subframes"],
+            "treatment_sample_count": extended["sample_count"],
+            "treatment_max_aggregate_bytes": extended_max,
+            "treatment_max_subframes": extended["max_subframes"],
+            "baseline_max_bytes": baseline_limit,
+            "treatment_max_bytes": treatment_limit,
+        })
+    if failures:
+        return Evaluation("FAIL", "; ".join(failures[:8]), observations)
+    if not observations:
+        return Evaluation("INCONCLUSIVE", "No matched assembled A-MPDU observations exist.", [])
+    missing_runs = [
+        item["run_number"] for item in observations
+        if item["baseline_max_aggregate_bytes"] is None
+        or item["treatment_max_aggregate_bytes"] is None
+    ]
+    if missing_runs:
+        return Evaluation(
+            "INCONCLUSIVE",
+            f"No assembled A-MPDU with at least {minimum_subframes} MPDUs was observed in runs {missing_runs}.",
+            observations,
+        )
+    if not crossed_boundary:
+        return Evaluation(
+            "INCONCLUSIVE",
+            f"Assembled A-MPDU telemetry stayed below the {baseline_limit}-byte policy boundary; the configured extended limit was not exercised.",
+            observations,
+        )
+    return Evaluation(
+        "PASS",
+        f"Observed HCF aggregates respect the configured {baseline_limit}- and {treatment_limit}-byte limits, and the treatment crosses the baseline boundary.",
+        observations,
+    )
+
+
 def _he_ru_offsets(root_tone_size: int, target_tone_size: int) -> list[int]:
     offsets = []
 
@@ -717,6 +852,22 @@ def evaluate_contract(
     handler = evaluation["handler"]
     if handler == "unimplemented":
         return Evaluation("INCONCLUSIVE", evaluation["reason"], []), []
+    if handler == "ampdu_policy_bounds":
+        baseline = _single_condition(conditions, evaluation["baseline_config"])
+        treatment = _single_condition(conditions, evaluation["treatment_config"])
+        result = evaluate_ampdu_policy_bounds(baseline, treatment, evaluation)
+        return result, [
+            {
+                "type": "vector",
+                "module": evaluation["module"],
+                "name": evaluation["result"],
+            },
+            {
+                "type": "vector",
+                "module": evaluation["module"],
+                "name": evaluation["count_result"],
+            },
+        ]
     if handler == "mimo_disjoint_streams":
         condition = _single_condition(conditions, evaluation["config"])
         result = evaluate_mimo_triplets(_aligned_mimo_samples(condition, evaluation))

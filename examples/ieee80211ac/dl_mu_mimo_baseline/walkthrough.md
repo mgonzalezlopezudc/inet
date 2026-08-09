@@ -3,8 +3,8 @@
 <!-- BEGIN SCRIPT RESULTS SESSIONS -->
 `[script]` results sessions:
 
-- Scalar/vector: `20260809T145451Z`
-- PCAP: `20260809T145451Z`
+- Scalar/vector: `20260809T215000Z`
+- PCAP: `20260809T215000Z`
 <!-- END SCRIPT RESULTS SESSIONS -->
 
 `[agent]` results sessions: `NOT RECORDED`.
@@ -35,16 +35,16 @@ The VHT MU frame sequence uses `BLOCK_ACK` in each per-user QoS Data header and 
 ## [agent] Standards and INET model boundary
 
 - **IEEE Std 802.11ac-2013 / 802.11-2020 Clause 21.3.2 & 21.3.12**: Specifies VHT MU PPDU frame format, Group ID field, and beamforming matrix feedback.
-- **INET Model Boundary**: DL MU-MIMO spatial beamforming is coordinated in `inet::ieee80211::VhtHcf`.
+- **INET Model Boundary**: DL MU-MIMO scheduling and VHT PPDU construction are coordinated in `inet::ieee80211::VhtHcf`. The example uses INET's abstract beamforming gain and scalar medium; it does not establish a realistic channel-estimated beamforming matrix.
 
 ## [agent] Scalar and vector analysis
 
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-dl_mu_mimo_baseline -->
 ### [script] Generated scalar/vector plot and table
 
-![dl_mu_mimo_baseline scalar/vector analysis](results/20260809T145451Z/dl-mu-mimo-baseline-delivery-delay.png)
+![dl_mu_mimo_baseline scalar/vector analysis](results/20260809T215000Z/dl-mu-mimo-baseline-delivery-delay.png)
 
-Figure provenance: [`results/20260809T145451Z/dl-mu-mimo-baseline-delivery-delay.png.json`](results/20260809T145451Z/dl-mu-mimo-baseline-delivery-delay.png.json). Run-level metric source: [`../../ieee80211ax/analysis/metrics.json`](../../ieee80211ax/analysis/metrics.json).
+Figure provenance: [`results/20260809T215000Z/dl-mu-mimo-baseline-delivery-delay.png.json`](results/20260809T215000Z/dl-mu-mimo-baseline-delivery-delay.png.json). Run-level metric source: [`../../ieee80211ax/analysis/metrics.json`](../../ieee80211ax/analysis/metrics.json).
 
 Common table provenance:
 
@@ -63,18 +63,18 @@ The table is a presentation view of the session-bound run-level summary; the com
 
 | Status | Requirement | Evaluation |
 |---|---|---|
-| **INCONCLUSIVE** | Compare application delivered bytes between Single-User baseline and Downlink MU-MIMO three-user spatial multiplexing | No manifest acceptance threshold defined for DL MU-MIMO baseline comparison |
+| **PASS** | Compare application delivered bytes between the single-user baseline and the three-user VHT MU-MIMO configuration | Every matched run preserves at least 0.800 of baseline delivery. |
 <!-- END GENERATED: ieee80211-scalar-vector-dl_mu_mimo_baseline -->
 
 <!-- BEGIN GENERATED: ieee80211-pcap-statistics -->
 ### [script] Generated PCAP plots and tables
-![802.11 Packet Type Statistics](results/20260809T145451Z/packet_statistics.png)
+![802.11 Packet Type Statistics](results/20260809T215000Z/packet_statistics.png)
 
-Figure provenance: [`packet_statistics.png.json`](results/20260809T145451Z/packet_statistics.png.json).
+Figure provenance: [`packet_statistics.png.json`](results/20260809T215000Z/packet_statistics.png.json).
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 
-Capture session `20260809T145451Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ac/capture_manifests/20260809T145451Z.json` (SHA-256 `bda0b3a9dbb94ee1dcd13d99b039a635161d9f5410acd4e71930664ab6b64d93`). VHT PPDU format, MCS, coding, bandwidth, GI, and NSTS are decoded directly from standards-compliant radiotap VHT fields; values not marked known by the recorder are omitted.
+Capture session `20260809T215000Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ac/capture_manifests/20260809T215000Z.json` (SHA-256 `e66b29f9f8b616a50ffb7b144811a35674d3310474908f75f4dd6dbd2fb6ea07`). VHT PPDU format, MCS, coding, bandwidth, GI, and NSTS are decoded directly from standards-compliant radiotap VHT fields; values not marked known by the recorder are omitted.
 
 Two estimated airtime occupancy percentages are provided. VHT SU and VHT MU use modeled preambles; per-user VHT MU signaling remains approximate because radiotap carries common MU metadata alongside each logical user record.
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.

@@ -76,6 +76,7 @@ FIGURE_FILENAMES = {
 SESSION_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z$")
 EVIDENCE_HANDLERS = {
     "unimplemented",
+    "ampdu_policy_bounds",
     "mimo_disjoint_streams",
     "matched_delivery_ratio",
     "ul_trigger_allocation_join",
@@ -199,6 +200,27 @@ def validate_evidence_contracts(manifest: dict[str, Any]) -> None:
                 reason = evaluation.get("reason")
                 if not isinstance(reason, str) or not reason.strip():
                     raise RuntimeError(f"{identifier}: unimplemented handler needs a reason")
+            elif handler == "ampdu_policy_bounds":
+                required = {
+                    "baseline_config", "treatment_config", "module", "result",
+                    "count_result",
+                    "minimum_aggregate_bytes", "baseline_max_bytes",
+                    "treatment_max_bytes", "minimum_subframes",
+                }
+                missing = required - evaluation.keys()
+                if missing:
+                    raise RuntimeError(f"{identifier}: missing parameters {sorted(missing)}")
+                require_conditions(
+                    identifier,
+                    [evaluation["baseline_config"], evaluation["treatment_config"]],
+                )
+                for key in (
+                    "minimum_aggregate_bytes", "baseline_max_bytes",
+                    "treatment_max_bytes", "minimum_subframes",
+                ):
+                    value = evaluation[key]
+                    if not isinstance(value, int) or value <= 0:
+                        raise RuntimeError(f"{identifier}: {key} must be a positive integer")
             elif handler == "mimo_disjoint_streams":
                 required = {"config", "module", "station_id", "stream_count", "stream_start"}
                 missing = required - evaluation.keys()

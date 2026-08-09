@@ -1,14 +1,14 @@
 {
   "_provenance": {
-    "generated_at_utc": "2026-08-09T15:35:57.996628+00:00",
+    "generated_at_utc": "2026-08-09T18:16:48.190752+00:00",
     "groups": {
-      "preamble_modes": {
+      "extended_ampdu": {
         "conditions": [
           {
-            "configuration": "HtMixedMode",
-            "group": "preamble_modes",
-            "ini": "examples/ieee80211n/preamble_modes/omnetpp.ini",
-            "label": "HT Mixed-Mode",
+            "configuration": "StandardVhtAmpduLimit",
+            "group": "extended_ampdu",
+            "ini": "examples/ieee80211ac/extended_ampdu/omnetpp.ini",
+            "label": "Standard VHT A-MPDU Policy Limit",
             "measurement": {
               "end_s": 0.5,
               "start_s": 0.3
@@ -16,52 +16,52 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/preamble_modes/results/20260809T153540Z/HtMixedMode/HtMixedMode-#0.sca",
-                "sha256": "3050603bb4b9acf88cc5061341a75445d317ec556a4e8ffec1d1e6d3b5e592d5"
+                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/StandardVhtAmpduLimit/StandardVhtAmpduLimit-#0.sca",
+                "sha256": "a489cd3b624aa205f30705e5febd8be5be51bfd87f8d75c749f473a74a6893b9"
               },
               {
-                "path": "examples/ieee80211n/preamble_modes/results/20260809T153540Z/HtMixedMode/HtMixedMode-#0.vec",
-                "sha256": "13e94284eade3a832172e56c7de55969b115fcc2c1ac298aa5473d741a35ab2e"
+                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/StandardVhtAmpduLimit/StandardVhtAmpduLimit-#0.vec",
+                "sha256": "7d5a47e9d7b2d4e022a8afc8717a85039161cb251e211cfe4919214858ac5ed5"
               },
               {
-                "path": "examples/ieee80211n/preamble_modes/results/20260809T153540Z/HtMixedMode/HtMixedMode-#1.sca",
-                "sha256": "ad137deec38ce7664f50c5626d8ad796e92a4ce85c9ea79d79aaf25bf10fde53"
+                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/StandardVhtAmpduLimit/StandardVhtAmpduLimit-#1.sca",
+                "sha256": "0ed5f39d46b03c2cf4874b0cd0fe0d75cddb0b8bebe295e9fafa20a5da87036e"
               },
               {
-                "path": "examples/ieee80211n/preamble_modes/results/20260809T153540Z/HtMixedMode/HtMixedMode-#1.vec",
-                "sha256": "e2dc1f65d256f2c30d9f5ffc5072f489b3ddf509c055238c3cbcabe927fe44c8"
+                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/StandardVhtAmpduLimit/StandardVhtAmpduLimit-#1.vec",
+                "sha256": "c4e5e0cb3d7d3d2d4bc36c3c50a7d130e9779010c243098ebb16b37c447f94d2"
               },
               {
-                "path": "examples/ieee80211n/preamble_modes/results/20260809T153540Z/HtMixedMode/HtMixedMode-#2.sca",
-                "sha256": "2ba1d922a296bb681ad65c4724d16839cb3b839ad28b71775110144603b80b5b"
+                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/StandardVhtAmpduLimit/StandardVhtAmpduLimit-#2.sca",
+                "sha256": "7ddcbf1f2d8249e0ed9eca22c0fd99f335dc6b7c76a2d3f8d0588ffd8fc04068"
               },
               {
-                "path": "examples/ieee80211n/preamble_modes/results/20260809T153540Z/HtMixedMode/HtMixedMode-#2.vec",
-                "sha256": "f3eee79181eb1fc988ab08b4112bd8db11e7509d918d05bfccf4a27ccd07d04f"
+                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/StandardVhtAmpduLimit/StandardVhtAmpduLimit-#2.vec",
+                "sha256": "8901032d05d7cb5091d12d77fdd7b2876c822bf0d4e3aeb6a97cd69de999ae18"
               },
               {
-                "path": "examples/ieee80211n/preamble_modes/results/20260809T153540Z/HtMixedMode/HtMixedMode-#3.sca",
-                "sha256": "c6b314802b9f9b8dbb9f5d32e631f94daba25a65dcd0a987b8518fbd755dec1f"
+                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/StandardVhtAmpduLimit/StandardVhtAmpduLimit-#3.sca",
+                "sha256": "aaac466a2d0675a1fa91ec310b74371c3d9fa35b094fe37a33e2e5040f444ece"
               },
               {
-                "path": "examples/ieee80211n/preamble_modes/results/20260809T153540Z/HtMixedMode/HtMixedMode-#3.vec",
-                "sha256": "952dd61831af7744da1202c952355e9700d6680eb5828f5ecc47958e1c722b23"
+                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/StandardVhtAmpduLimit/StandardVhtAmpduLimit-#3.vec",
+                "sha256": "3668c3b7cab9160cd053af9c245f3be82e4eb800279417c9ea5ba1f4516dd5b4"
               },
               {
-                "path": "examples/ieee80211n/preamble_modes/results/20260809T153540Z/HtMixedMode/HtMixedMode-#4.sca",
-                "sha256": "b213ff540f8730e8c1181b726283d20164479c495fc5545c13e460b6c12a5e7b"
+                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/StandardVhtAmpduLimit/StandardVhtAmpduLimit-#4.sca",
+                "sha256": "9e5c8c2a9e7dfd43a0fe8a9fb3aa46425fb2d4b5aa5cc8c8787cde8de532699e"
               },
               {
-                "path": "examples/ieee80211n/preamble_modes/results/20260809T153540Z/HtMixedMode/HtMixedMode-#4.vec",
-                "sha256": "ef515ffb1a83d79b9b660dff66ced8235532deb6343b14680c6f4cf4d6900dc8"
+                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/StandardVhtAmpduLimit/StandardVhtAmpduLimit-#4.vec",
+                "sha256": "2cc57602f427d443057f9a5c9ba7ef06d5bdca9181334e8313f5029b38d163a8"
               }
             ]
           },
           {
-            "configuration": "HtGreenfield",
-            "group": "preamble_modes",
-            "ini": "examples/ieee80211n/preamble_modes/omnetpp.ini",
-            "label": "HT Greenfield",
+            "configuration": "ExtendedVhtAmpduLimit",
+            "group": "extended_ampdu",
+            "ini": "examples/ieee80211ac/extended_ampdu/omnetpp.ini",
+            "label": "Extended VHT A-MPDU Limit",
             "measurement": {
               "end_s": 0.5,
               "start_s": 0.3
@@ -69,69 +69,69 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211n/preamble_modes/results/20260809T153540Z/HtGreenfield/HtGreenfield-#0.sca",
-                "sha256": "d2a360e6f2e03c670541dd8c1b67db25b5af960d0bb9ae42ccae30cc28106ec8"
+                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/ExtendedVhtAmpduLimit/ExtendedVhtAmpduLimit-#0.sca",
+                "sha256": "c97dd5266fc1a7b6c2d3c13538309f0787dfc4246359cada11363dc39d4e5101"
               },
               {
-                "path": "examples/ieee80211n/preamble_modes/results/20260809T153540Z/HtGreenfield/HtGreenfield-#0.vec",
-                "sha256": "ed2de9716b1c3fa59509b2437cafcb59e84c12b865726d1568fc996559e965a1"
+                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/ExtendedVhtAmpduLimit/ExtendedVhtAmpduLimit-#0.vec",
+                "sha256": "830941ee8ba6312418a7be56d92798372288c360960afd8e8b06fb0e4db0626d"
               },
               {
-                "path": "examples/ieee80211n/preamble_modes/results/20260809T153540Z/HtGreenfield/HtGreenfield-#1.sca",
-                "sha256": "50fa94513e9ec2a3aa2011d3dc4e08542e8d03cc2004ea222cb2bd310670c99f"
+                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/ExtendedVhtAmpduLimit/ExtendedVhtAmpduLimit-#1.sca",
+                "sha256": "1f531e9d84438a2e52823a541490a404e347da597516e51f34af9506348137a0"
               },
               {
-                "path": "examples/ieee80211n/preamble_modes/results/20260809T153540Z/HtGreenfield/HtGreenfield-#1.vec",
-                "sha256": "32be54a17da284a92a43ac09b8eb248b39c0a125e5dfbf3de574d517811a7a9d"
+                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/ExtendedVhtAmpduLimit/ExtendedVhtAmpduLimit-#1.vec",
+                "sha256": "79a71c1c90dc93a420aadcd709467886707587eadf5cc51442d4585543d9c031"
               },
               {
-                "path": "examples/ieee80211n/preamble_modes/results/20260809T153540Z/HtGreenfield/HtGreenfield-#2.sca",
-                "sha256": "22cc352302183911d229fe75ebaa286194487de1cd522c1d02f2ec9dd54f21c7"
+                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/ExtendedVhtAmpduLimit/ExtendedVhtAmpduLimit-#2.sca",
+                "sha256": "4a40cfff2a7091955961664fb8b6ae91989a94b511705644a8ebda5aa7d3c085"
               },
               {
-                "path": "examples/ieee80211n/preamble_modes/results/20260809T153540Z/HtGreenfield/HtGreenfield-#2.vec",
-                "sha256": "941e07222c9f4675e63e9e766fe692f6ba1daeb0b67f25cfcd28d18bd513b839"
+                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/ExtendedVhtAmpduLimit/ExtendedVhtAmpduLimit-#2.vec",
+                "sha256": "bc8e6f003074a759bf601565f05b79d334e773a5e26347009c34f591f9193c7a"
               },
               {
-                "path": "examples/ieee80211n/preamble_modes/results/20260809T153540Z/HtGreenfield/HtGreenfield-#3.sca",
-                "sha256": "fb1426cdb2fff38636fc4edd722954cbe3d25b1451f11ce112c645b14dd6e859"
+                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/ExtendedVhtAmpduLimit/ExtendedVhtAmpduLimit-#3.sca",
+                "sha256": "f4528e31d9fcaabac1bfbeef5dc3f81257f0e11e4b185a87643e83e75fddf29e"
               },
               {
-                "path": "examples/ieee80211n/preamble_modes/results/20260809T153540Z/HtGreenfield/HtGreenfield-#3.vec",
-                "sha256": "740e3f541c2e6c7bad6e7235eb6736c775e80e6664fce775f9a85156857faffa"
+                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/ExtendedVhtAmpduLimit/ExtendedVhtAmpduLimit-#3.vec",
+                "sha256": "797df9c391d017df56b85e4a51db91917cc0cc61abbf44fce66f8ef7a7a52935"
               },
               {
-                "path": "examples/ieee80211n/preamble_modes/results/20260809T153540Z/HtGreenfield/HtGreenfield-#4.sca",
-                "sha256": "a5d3e568b4bfa6269d7d1685f955b090c09d0ab8f318b3b572cf752be0c3f973"
+                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/ExtendedVhtAmpduLimit/ExtendedVhtAmpduLimit-#4.sca",
+                "sha256": "881ce410a6730a8c7f4b52344df21341fa8d9e1128be0736daea6dbb8540d399"
               },
               {
-                "path": "examples/ieee80211n/preamble_modes/results/20260809T153540Z/HtGreenfield/HtGreenfield-#4.vec",
-                "sha256": "5b74fb199c757b7e0f67bede63ad3febaa6dc1cc7c0813907878def9f709ceca"
+                "path": "examples/ieee80211ac/extended_ampdu/results/20260809T181633Z/ExtendedVhtAmpduLimit/ExtendedVhtAmpduLimit-#4.vec",
+                "sha256": "688460a57cedde18afde0e4b8b9ca03ff88efdb87aa28b2c8a31121ffca8be54"
               }
             ]
           }
         ],
-        "session_id": "20260809T153540Z",
+        "session_id": "20260809T181633Z",
         "status": "PASS"
       }
     },
-    "repository_revision": "3da32110ce80b4d7983b523686d7aa48ce3e0cbc",
-    "requested_session_id": "20260809T153540Z",
+    "repository_revision": "6ffac7f8aac3272683a7260a563ac5a562420c80",
+    "requested_session_id": "20260809T181633Z",
     "schema_version": 1
   },
-  "preamble_modes": {
-    "HT Greenfield": {
+  "extended_ampdu": {
+    "Extended VHT A-MPDU Limit": {
       "goodput_mbps": {
-        "ci95": 0.06383650502071317,
+        "ci95": 0.0,
         "count": 5,
-        "mean": 8.7648
+        "mean": 286.72
       }
     },
-    "HT Mixed-Mode": {
+    "Standard VHT A-MPDU Policy Limit": {
       "goodput_mbps": {
-        "ci95": 0.10188305194096982,
+        "ci95": 1.6757353059419795,
         "count": 5,
-        "mean": 8.8544
+        "mean": 257.7344
       }
     }
   }

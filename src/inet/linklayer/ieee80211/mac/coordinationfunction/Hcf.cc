@@ -45,6 +45,8 @@ using namespace inet::physicallayer;
 simsignal_t Hcf::edcaCollisionDetectedSignal = cComponent::registerSignal("edcaCollisionDetected");
 simsignal_t Hcf::blockAckAgreementAddedSignal = cComponent::registerSignal("blockAckAgreementAdded");
 simsignal_t Hcf::blockAckAgreementDeletedSignal = cComponent::registerSignal("blockAckAgreementDeleted");
+simsignal_t Hcf::ampduCreatedSignal = cComponent::registerSignal("ampduCreated");
+simsignal_t Hcf::ampduNumMpdusSignal = cComponent::registerSignal("ampduNumMpdus");
 
 Define_Module(Hcf);
 
@@ -2087,6 +2089,8 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
                         pendingHtImplicitBlockAckAmpdus.insert(packet);
                     }
                     packetToTransmit = buildAmpduPacket(ampduFrames, mac->getFcsMode());
+                    emit(ampduCreatedSignal, packetToTransmit);
+                    emit(ampduNumMpdusSignal, (unsigned long)ampduFrames.size());
                     deletePacketToTransmit = true;
                     pendingAmpduSubframes[packet] = ampduFrames;
                 }

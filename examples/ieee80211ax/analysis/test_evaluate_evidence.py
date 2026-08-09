@@ -11,6 +11,7 @@ from evaluate_evidence import (
     build_ledger,
     decode_he_trigger_ru,
     evaluate_contract,
+    evaluate_ampdu_policy_bounds,
     evaluate_matched_delivery,
     evaluate_mimo_triplets,
     evaluate_ul_trigger_allocation_join,
@@ -109,6 +110,58 @@ class MatchedDeliveryEvidenceTest(unittest.TestCase):
         self.assertEqual(mismatch.status, "INCONCLUSIVE")
         zero = evaluate_matched_delivery({(0, 10): 0}, {(0, 10): 0}, 0.95)
         self.assertEqual(zero.status, "INCONCLUSIVE")
+
+
+class AmpduEvidenceTest(unittest.TestCase):
+    @staticmethod
+    def condition(lengths, subframes):
+        condition = SimpleNamespace(
+            config="Ampdu",
+            measurement=SimpleNamespace(start=0.3, end=0.5),
+        )
+        vectors = {
+            "ampduCreated:vector(packetBytes)": pd.DataFrame([{
+                "runnumber": 0,
+                "vectime": [0.4],
+                "vecvalue": lengths,
+            }]),
+            "ampduNumMpdus:vector": pd.DataFrame([{
+                "runnumber": 0,
+                "vectime": [0.4],
+                "vecvalue": subframes,
+            }]),
+        }
+        condition.vectors = lambda name, module=None: vectors[name]
+        return condition
+
+    @staticmethod
+    def evaluation():
+        return {
+            "result": "ampduCreated:vector(packetBytes)",
+            "count_result": "ampduNumMpdus:vector",
+            "module": "**.ap.wlan[0].mac.hcf",
+            "minimum_aggregate_bytes": 1400,
+            "minimum_subframes": 2,
+            "baseline_max_bytes": 65535,
+            "treatment_max_bytes": 1048575,
+        }
+
+    def test_assembled_length_crossing_passes_and_preserves_count(self):
+        baseline = self.condition([64000], [40])
+        treatment = self.condition([70000], [50])
+        result = evaluate_ampdu_policy_bounds(
+            baseline, treatment, self.evaluation()
+        )
+        self.assertEqual(result.status, "PASS")
+        self.assertEqual(result.observations[0]["treatment_max_subframes"], 50)
+
+    def test_without_boundary_crossing_is_inconclusive(self):
+        baseline = self.condition([64000], [40])
+        treatment = self.condition([65000], [42])
+        result = evaluate_ampdu_policy_bounds(
+            baseline, treatment, self.evaluation()
+        )
+        self.assertEqual(result.status, "INCONCLUSIVE")
 
 
 class UlTriggerAllocationEvidenceTest(unittest.TestCase):

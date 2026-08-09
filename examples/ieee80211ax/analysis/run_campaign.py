@@ -36,6 +36,19 @@ CORE_PERFORMANCE_RECORDING_OVERRIDES = (
 )
 
 GROUP_PERFORMANCE_VECTOR_STATISTICS = {
+    "extended_ampdu": (
+        "packetSentToPeer",
+        "ampduCreated",
+        "ampduNumMpdus",
+    ),
+    "vht_rate_adaptation": (
+        "datarateChanged",
+        "vhtRateSelectedMcs",
+        "vhtRateSelectedNss",
+        "vhtRateSuccessProbability",
+        "vhtRateTxSuccess",
+        "vhtRateRetryCount",
+    ),
     "fragmentation": (
         "packetSentToPeer",
         "acknowledgmentFrameType",
@@ -97,6 +110,14 @@ BSR_TRIGGER_DECISION_VECTOR_OVERRIDES = tuple(
 )
 
 GROUP_DIAGNOSTIC_VECTOR_STATISTICS = {
+    "extended_ampdu": (
+        "packetSentToPeer",
+    ),
+    "vht_rate_adaptation": (
+        "datarateChanged",
+        "packetSentToPeerWithRetry",
+        "packetDropRetryLimitReached",
+    ),
     "fragmentation": (
         "packetSentToPeerWithRetry",
         "packetDropRetryLimitReached",

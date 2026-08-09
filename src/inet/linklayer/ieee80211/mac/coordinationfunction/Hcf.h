@@ -60,6 +60,8 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     static simsignal_t edcaCollisionDetectedSignal;
     static simsignal_t blockAckAgreementAddedSignal;
     static simsignal_t blockAckAgreementDeletedSignal;
+    static simsignal_t ampduCreatedSignal;
+    static simsignal_t ampduNumMpdusSignal;
 
   protected:
     enum class HtAmpduAckContext {

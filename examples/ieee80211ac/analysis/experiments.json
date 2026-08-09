@@ -9,8 +9,11 @@
         "requirement": "Compare application delivered bytes across VHT 20, 40, 80, 160, and 80+80 MHz channel widths",
         "results": ["packetReceived"],
         "evaluation": {
-          "handler": "unimplemented",
-          "reason": "No manifest acceptance threshold defined for wide channel comparison"
+          "handler": "matched_delivery_ratio",
+          "baseline_config": "Vht20MHz",
+          "treatment_config": "Vht80MHz",
+          "result": "packetReceived:vector(packetBytes)",
+          "minimum_ratio": 0.8
         }
       }
     ],
@@ -18,11 +21,14 @@
       {
         "id": "vht-mcs-256qam-delivery-comparison",
         "kind": "metric",
-        "requirement": "Compare application delivered bytes across HT MCS 7 baseline and VHT 256-QAM MCS rates",
+        "requirement": "Compare application delivered bytes between the HT baseline, supported fixed 80 MHz VHT 256-QAM mode, and a 40 MHz VHT width control",
         "results": ["packetReceived"],
         "evaluation": {
-          "handler": "unimplemented",
-          "reason": "No manifest acceptance threshold defined for 256-QAM MCS comparison"
+          "handler": "matched_delivery_ratio",
+          "baseline_config": "BaselineHtMcs7",
+          "treatment_config": "VhtMcs8_256QAM",
+          "result": "packetReceived:vector(packetBytes)",
+          "minimum_ratio": 0.8
         }
       }
     ],
@@ -30,11 +36,19 @@
       {
         "id": "extended-ampdu-delivery-comparison",
         "kind": "metric",
-        "requirement": "Compare application delivered bytes between Standard HT A-MPDU limit and Extended VHT A-MPDU limit",
-        "results": ["packetReceived"],
+        "requirement": "Compare application delivered bytes while changing the VHT A-MPDU policy limit",
+        "results": ["packetReceived", "ampduCreated", "ampduNumMpdus"],
         "evaluation": {
-          "handler": "unimplemented",
-          "reason": "No manifest acceptance threshold defined for extended A-MPDU limit comparison"
+          "handler": "ampdu_policy_bounds",
+          "baseline_config": "StandardVhtAmpduLimit",
+          "treatment_config": "ExtendedVhtAmpduLimit",
+          "module": "**.ap.wlan[0].mac.hcf",
+          "result": "ampduCreated:vector(packetBytes)",
+          "count_result": "ampduNumMpdus:vector",
+          "minimum_aggregate_bytes": 1400,
+          "minimum_subframes": 2,
+          "baseline_max_bytes": 65535,
+          "treatment_max_bytes": 1048575
         }
       }
     ],
@@ -42,11 +56,14 @@
       {
         "id": "spatial-streams-8x8-delivery-comparison",
         "kind": "metric",
-        "requirement": "Compare application delivered bytes across Single (1x1), Four (4x4), and Eight (8x8) VHT Spatial Streams",
+        "requirement": "Compare application delivered bytes under increasing configured VHT NSS; this is packet-level NSS scaling, not a spatial channel-matrix result",
         "results": ["packetReceived"],
         "evaluation": {
-          "handler": "unimplemented",
-          "reason": "No manifest acceptance threshold defined for VHT spatial stream comparison"
+          "handler": "matched_delivery_ratio",
+          "baseline_config": "SingleStreamVht",
+          "treatment_config": "EightStreamVht",
+          "result": "packetReceived:vector(packetBytes)",
+          "minimum_ratio": 0.8
         }
       }
     ],
@@ -54,11 +71,14 @@
       {
         "id": "vht-rate-adaptation-delivery-comparison",
         "kind": "metric",
-        "requirement": "Compare application delivered bytes between Fixed VHT MCS 9 and VHT Minstrel dynamic adaptation",
+        "requirement": "Compare application delivered bytes between fixed VHT MCS 8 and Minstrel under the same 5 GHz/80 MHz traffic and mobility setup",
         "results": ["packetReceived"],
         "evaluation": {
-          "handler": "unimplemented",
-          "reason": "No manifest acceptance threshold defined for VHT rate adaptation comparison"
+          "handler": "matched_delivery_ratio",
+          "baseline_config": "FixedVhtMcs",
+          "treatment_config": "VhtMinstrelAdaptation",
+          "result": "packetReceived:vector(packetBytes)",
+          "minimum_ratio": 0.5
         }
       }
     ],
@@ -69,8 +89,11 @@
         "requirement": "Compare application delivered bytes between VHT Long (800 ns) and Short (400 ns) Guard Intervals",
         "results": ["packetReceived"],
         "evaluation": {
-          "handler": "unimplemented",
-          "reason": "No manifest acceptance threshold defined for VHT Guard Interval comparison"
+          "handler": "matched_delivery_ratio",
+          "baseline_config": "VhtLongGI",
+          "treatment_config": "VhtShortGI",
+          "result": "packetReceived:vector(packetBytes)",
+          "minimum_ratio": 1.0
         }
       }
     ],
@@ -78,11 +101,14 @@
       {
         "id": "dl-mu-mimo-baseline-delivery-comparison",
         "kind": "metric",
-        "requirement": "Compare application delivered bytes between Single-User baseline and Downlink MU-MIMO three-user spatial multiplexing",
+        "requirement": "Compare application delivered bytes between the single-user baseline and the three-user VHT MU-MIMO configuration",
         "results": ["packetReceived"],
         "evaluation": {
-          "handler": "unimplemented",
-          "reason": "No manifest acceptance threshold defined for DL MU-MIMO baseline comparison"
+          "handler": "matched_delivery_ratio",
+          "baseline_config": "VhtSingleUserBaseline",
+          "treatment_config": "VhtDlMuMimoThreeUsers",
+          "result": "packetReceived:vector(packetBytes)",
+          "minimum_ratio": 0.8
         }
       }
     ]
@@ -108,10 +134,8 @@
       "measurement": {"start": 0.3, "end": 0.5},
       "conditions": [
         {"label": "HT MCS 7 Baseline", "config": "BaselineHtMcs7"},
-        {"label": "VHT MCS 7", "config": "VhtMcs7"},
         {"label": "VHT MCS 8 (256-QAM)", "config": "VhtMcs8_256QAM"},
-        {"label": "VHT MCS 9 (256-QAM)", "config": "VhtMcs9_256QAM"},
-        {"label": "VHT MCS 8 (256-QAM, 80 MHz)", "config": "VhtMcs8_256QAM_80Mhz"}
+        {"label": "VHT MCS 8 at 40 MHz", "config": "VhtMcs8_256QAM_40Mhz"}
       ]
     },
     "extended_ampdu": {
@@ -120,7 +144,7 @@
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 0.5},
       "conditions": [
-        {"label": "Standard HT A-MPDU Limit", "config": "StandardHtAmpduLimit"},
+        {"label": "Standard VHT A-MPDU Policy Limit", "config": "StandardVhtAmpduLimit"},
         {"label": "Extended VHT A-MPDU Limit", "config": "ExtendedVhtAmpduLimit"}
       ]
     },
@@ -141,8 +165,8 @@
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 1.9},
       "conditions": [
-        {"label": "Fixed VHT MCS 9", "config": "FixedVhtMcs"},
-        {"label": "VHT AARF Adaptation", "config": "VhtAarfAdaptation"}
+        {"label": "Fixed VHT MCS 8", "config": "FixedVhtMcs"},
+        {"label": "VHT Minstrel Adaptation", "config": "VhtMinstrelAdaptation"}
       ]
     },
     "short_gi_vht": {

@@ -63,6 +63,9 @@ module Hcf extends Module like IHcf
         @signal[datarateSelected](type=double);
         @signal[blockAckAgreementAdded];
         @signal[blockAckAgreementDeleted];
+        // Emitted for each assembled A-MPDU, including implicit one-MPDU aggregates.
+        @signal[ampduCreated](type=inet::Packet);
+        @signal[ampduNumMpdus](type=unsigned long);
         @statistic[packetSentToPeer](title="packets sent"; record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
         @statistic[packetSentToPeerUnicast](title="packets sent: unicast"; source=ieee80211Unicast(packetSentToPeer); record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
         @statistic[packetSentToPeerMulticast](title="packets sent: multicast"; source=ieee80211Multicast(packetSentToPeer); record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
@@ -89,6 +92,8 @@ module Hcf extends Module like IHcf
         @statistic[blockAckAgreementAdded](title="added block ack agreements"; record=count);
         @statistic[blockAckAgreementDeleted](title="deleted block ack agreements"; record=count);
         @statistic[blockAckAgreementActive](title="active block ack agreements"; source=warmup(count(blockAckAgreementAdded)-count(blockAckAgreementDeleted)); record=vector; interpolationmode=sample-hold; autoWarmupFilter=false);
+        @statistic[ampduCreated](title="A-MPDUs created"; record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
+        @statistic[ampduNumMpdus](title="A-MPDU number of MPDUs"; record=vector; interpolationmode=none);
 
     submodules:
         edca: Edca {

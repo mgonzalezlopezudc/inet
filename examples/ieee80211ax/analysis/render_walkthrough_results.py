@@ -152,6 +152,26 @@ def render_evidence_markdown(
             f"{escape_cell(check['requirement'])} | "
             f"{escape_cell(check['reason'])} |\n"
         )
+    ampdu_check = next(
+        (
+            check for check in group_evidence.get("checks", [])
+            if check.get("handler") == "ampdu_policy_bounds"
+        ),
+        None,
+    )
+    if ampdu_check is not None:
+        lines.extend([
+            "\n#### [script] Observed assembled HCF A-MPDU telemetry\n\n",
+            "| Run | Standard samples / max bytes / max MPDUs | Extended samples / max bytes / max MPDUs | Configured limits |\n",
+            "|---:|---:|---:|---|\n",
+        ])
+        for row in ampdu_check.get("observations", []):
+            lines.append(
+                f"| {row['run_number']} | "
+                f"{row['baseline_sample_count']} / {row['baseline_max_aggregate_bytes']} / {row['baseline_max_subframes']} | "
+                f"{row['treatment_sample_count']} / {row['treatment_max_aggregate_bytes']} / {row['treatment_max_subframes']} | "
+                f"{row['baseline_max_bytes']} / {row['treatment_max_bytes']} bytes |\n"
+            )
     allocation_check = next(
         (
             check for check in group_evidence.get("checks", [])

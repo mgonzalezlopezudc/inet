@@ -20,14 +20,14 @@
     "vht_mcs_256qam": {
       "scalar_vector_group": "vht_mcs_256qam",
       "ini": "vht_mcs_256qam/omnetpp.ini",
-      "configurations": ["BaselineHtMcs7", "VhtMcs7", "VhtMcs8_256QAM", "VhtMcs9_256QAM", "VhtMcs8_256QAM_80Mhz"],
+      "configurations": ["BaselineHtMcs7", "VhtMcs8_256QAM", "VhtMcs8_256QAM_40Mhz"],
       "phy_profiles": ["vht"],
       "feature_plugins": ["modulation"]
     },
     "extended_ampdu": {
       "scalar_vector_group": "extended_ampdu",
       "ini": "extended_ampdu/omnetpp.ini",
-      "configurations": ["StandardHtAmpduLimit", "ExtendedVhtAmpduLimit"],
+      "configurations": ["StandardVhtAmpduLimit", "ExtendedVhtAmpduLimit"],
       "phy_profiles": ["vht"],
       "feature_plugins": ["aggregation"]
     },
@@ -41,7 +41,7 @@
     "vht_rate_adaptation": {
       "scalar_vector_group": "vht_rate_adaptation",
       "ini": "vht_rate_adaptation/omnetpp.ini",
-      "configurations": ["FixedVhtMcs", "VhtAarfAdaptation"],
+      "configurations": ["FixedVhtMcs", "VhtMinstrelAdaptation"],
       "phy_profiles": ["vht"],
       "feature_plugins": ["rate-adaptation"]
     },

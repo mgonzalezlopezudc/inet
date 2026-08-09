@@ -3,8 +3,8 @@
 <!-- BEGIN SCRIPT RESULTS SESSIONS -->
 `[script]` results sessions:
 
-- Scalar/vector: `20260809T140843Z`
-- PCAP: `20260809T140843Z`
+- Scalar/vector: `20260809T202000Z`
+- PCAP: `20260809T202000Z`
 <!-- END SCRIPT RESULTS SESSIONS -->
 
 `[agent]` results sessions: `NOT RECORDED`.
@@ -41,9 +41,9 @@ Five configurations are evaluated:
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-wide_channels -->
 ### [script] Generated scalar/vector plot and table
 
-![wide_channels scalar/vector analysis](results/20260809T140843Z/wide-channels-delivery-delay.png)
+![wide_channels scalar/vector analysis](results/20260809T202000Z/wide-channels-delivery-delay.png)
 
-Figure provenance: [`results/20260809T140843Z/wide-channels-delivery-delay.png.json`](results/20260809T140843Z/wide-channels-delivery-delay.png.json). Run-level metric source: [`../../ieee80211ax/analysis/metrics.json`](../../ieee80211ax/analysis/metrics.json).
+Figure provenance: [`results/20260809T202000Z/wide-channels-delivery-delay.png.json`](results/20260809T202000Z/wide-channels-delivery-delay.png.json). Run-level metric source: [`../../ieee80211ax/analysis/metrics.json`](../../ieee80211ax/analysis/metrics.json).
 
 Common table provenance:
 
@@ -65,18 +65,18 @@ The table is a presentation view of the session-bound run-level summary; the com
 
 | Status | Requirement | Evaluation |
 |---|---|---|
-| **INCONCLUSIVE** | Compare application delivered bytes across VHT 20, 40, 80, 160, and 80+80 MHz channel widths | No manifest acceptance threshold defined for wide channel comparison |
+| **PASS** | Compare application delivered bytes across VHT 20, 40, 80, 160, and 80+80 MHz channel widths | Every matched run preserves at least 0.800 of baseline delivery. |
 <!-- END GENERATED: ieee80211-scalar-vector-wide_channels -->
 
 <!-- BEGIN GENERATED: ieee80211-pcap-statistics -->
 ### [script] Generated PCAP plots and tables
-![802.11 Packet Type Statistics](results/20260809T140843Z/packet_statistics.png)
+![802.11 Packet Type Statistics](results/20260809T202000Z/packet_statistics.png)
 
-Figure provenance: [`packet_statistics.png.json`](results/20260809T140843Z/packet_statistics.png.json).
+Figure provenance: [`packet_statistics.png.json`](results/20260809T202000Z/packet_statistics.png.json).
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 
-Capture session `20260809T140843Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ac/capture_manifests/20260809T140843Z.json` (SHA-256 `e87a98523ed0e37a04c88116a2c72e6ade0b2b58a732fa3b96ff84944979868c`). VHT PPDU format, MCS, coding, bandwidth, GI, and NSTS are decoded directly from standards-compliant radiotap VHT fields; values not marked known by the recorder are omitted.
+Capture session `20260809T202000Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ac/capture_manifests/20260809T202000Z.json` (SHA-256 `2303881b52f6386d2e9749f9e464e9ad9f3c14af4ab82bc92cd3b87d0677f15d`). VHT PPDU format, MCS, coding, bandwidth, GI, and NSTS are decoded directly from standards-compliant radiotap VHT fields; values not marked known by the recorder are omitted.
 
 Two estimated airtime occupancy percentages are provided. VHT SU and VHT MU use modeled preambles; per-user VHT MU signaling remains approximate because radiotap carries common MU metadata alongside each logical user record.
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
