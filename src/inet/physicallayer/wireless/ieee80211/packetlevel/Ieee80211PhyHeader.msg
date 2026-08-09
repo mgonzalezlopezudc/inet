@@ -185,6 +185,7 @@ class Ieee80211VhtPhyHeader extends Ieee80211PhyHeader
     uint16_t partialAid = 0;
     uint8_t mcs = 0;
     uint8_t coding = 0; // 0: BCC, 1: LDPC
+    bool shortGi = false; // Table 21-12: common GI for all VHT MU users
     bool ldpcExtraOfdmSymbol = false; // VHT-SIG-A LDPC Extra OFDM Symbol
     bool beamformed = false;
     simtime_t commonDuration;

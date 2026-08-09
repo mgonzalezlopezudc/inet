@@ -26,6 +26,8 @@ class INET_API VhtSoundingFs : public IFrameSequence
     uint64_t associationGeneration = 0;
     uint8_t dialogToken = 0;
     int soundingNsts = 2;
+    bool feedbackTypeMu = false;
+    uint8_t requestedNc = 1;
     physicallayer::Ieee80211ModeSet *modeSet = nullptr;
     const physicallayer::IIeee80211Mode *ndpMode = nullptr;
     double beamformingGainDb = 0;
@@ -40,19 +42,24 @@ class INET_API VhtSoundingFs : public IFrameSequence
     static bool matchesFeedback(Packet *packet, const MacAddress& localAddress,
             const MacAddress& peer, uint8_t dialogToken,
             simtime_t expectedStart = -1,
-            simtime_t startTolerance = SIMTIME_ZERO);
+            simtime_t startTolerance = SIMTIME_ZERO,
+            Hz expectedBandwidth = Hz(NaN), int expectedNsts = 0,
+            bool expectedFeedbackTypeMu = false, int expectedNc = 0);
 
     VhtSoundingFs(Ieee80211Mib *mib, VhtCsiCache *csiCache,
             const MacAddress& peer, uint16_t associationId,
             uint64_t associationGeneration, uint8_t dialogToken,
             int soundingNsts, physicallayer::Ieee80211ModeSet *modeSet,
             const physicallayer::IIeee80211Mode *ndpMode,
-            double beamformingGainDb);
+            double beamformingGainDb, bool feedbackTypeMu = false,
+            uint8_t requestedNc = 1);
 
     virtual void startSequence(FrameSequenceContext *context, int firstStep) override;
     virtual IFrameSequenceStep *prepareStep(FrameSequenceContext *context) override;
     virtual bool completeStep(FrameSequenceContext *context) override;
-    virtual std::string getHistory() const override { return "VHT-SU-Sounding (NDPA-NDP-Feedback)"; }
+    virtual std::string getHistory() const override { return feedbackTypeMu ?
+            "VHT-MU-Sounding (NDPA-NDP-MU-Feedback)" :
+            "VHT-SU-Sounding (NDPA-NDP-Feedback)"; }
 };
 
 } // namespace ieee80211

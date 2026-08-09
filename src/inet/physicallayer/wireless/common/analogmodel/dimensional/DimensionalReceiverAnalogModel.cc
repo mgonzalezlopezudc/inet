@@ -48,11 +48,19 @@ bool DimensionalReceiverAnalogModel::computeIsReceptionPossible(const IListening
 
     const BandListening *bandListening = check_and_cast<const BandListening *>(listening);
     const DimensionalReceptionAnalogModel *analogModel = check_and_cast<const DimensionalReceptionAnalogModel *>(reception->getAnalogModel());
-    Hz rxMin = bandListening->getCenterFrequency() - bandListening->getBandwidth() / 2;
-    Hz rxMax = bandListening->getCenterFrequency() + bandListening->getBandwidth() / 2;
-    Hz txMin = analogModel->getCenterFrequency() - analogModel->getBandwidth() / 2;
-    Hz txMax = analogModel->getCenterFrequency() + analogModel->getBandwidth() / 2;
-    if (!((txMin.get() >= rxMin.get() - 100.0) && (txMax.get() <= rxMax.get() + 100.0))) {
+    bool contained = true;
+    for (const auto& signal : analogModel->getFrequencySegments()) {
+        const Hz txMin = signal.centerFrequency - signal.bandwidth / 2;
+        const Hz txMax = signal.centerFrequency + signal.bandwidth / 2;
+        bool segmentContained = false;
+        for (const auto& listeningSegment : bandListening->getFrequencySegments()) {
+            const Hz rxMin = listeningSegment.centerFrequency - listeningSegment.bandwidth / 2;
+            const Hz rxMax = listeningSegment.centerFrequency + listeningSegment.bandwidth / 2;
+            segmentContained |= txMin >= rxMin - Hz(100) && txMax <= rxMax + Hz(100);
+        }
+        contained &= segmentContained;
+    }
+    if (!contained) {
         EV_DEBUG << "Computing whether reception is possible: reception band is not within listening band -> reception is impossible" << endl;
         return false;
     }
@@ -70,4 +78,3 @@ bool DimensionalReceiverAnalogModel::computeIsReceptionPossible(const IListening
 
 } // namespace physicallayer
 } // namespace inet
-

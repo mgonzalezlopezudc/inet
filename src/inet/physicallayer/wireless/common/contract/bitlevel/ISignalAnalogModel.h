@@ -8,11 +8,22 @@
 #ifndef __INET_ISIGNALANALOGMODEL_H
 #define __INET_ISIGNALANALOGMODEL_H
 
+#include "inet/common/Units.h"
 #include "inet/common/IPrintableObject.h"
+
+#include <vector>
 
 namespace inet {
 
 namespace physicallayer {
+
+using namespace units::values;
+
+struct INET_API FrequencySegment
+{
+    Hz centerFrequency;
+    Hz bandwidth;
+};
 
 /**
  * This purely virtual interface provides an abstraction for different radio
@@ -40,6 +51,11 @@ class INET_API ISignalAnalogModel : public IPrintableObject
      * Returns the total duration of the PHY frame that includes the PHY frame header and data parts.
      */
     virtual const simtime_t getDuration() const = 0;
+
+    virtual const std::vector<FrequencySegment>& getFrequencySegments() const {
+        static const std::vector<FrequencySegment> noSegments;
+        return noSegments;
+    }
 };
 
 class INET_API ITransmissionAnalogModel : public virtual ISignalAnalogModel
@@ -55,4 +71,3 @@ class INET_API IReceptionAnalogModel : public virtual ISignalAnalogModel
 } // namespace inet
 
 #endif
-

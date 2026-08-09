@@ -14,13 +14,14 @@ using namespace inet::units::values;
 #define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
 
 static Ieee80211VhtMuUser user(const char *address, uint16_t aid,
-        uint8_t position, B length, int mcs, bool ldpc, simtime_t duration)
+        uint8_t position, B length, int mcs, bool ldpc, simtime_t duration,
+        uint8_t nss = 1)
 {
     Ieee80211VhtMuUser result;
     (void)address; // MAC receiver metadata is intentionally not part of PHY demultiplexing.
     result.associationId = aid;
     result.userPosition = position;
-    result.numberOfSpatialStreams = 1;
+    result.numberOfSpatialStreams = nss;
     result.mcs = mcs;
     result.ldpcCoding = ldpc;
     result.psduLength = length;
@@ -94,7 +95,7 @@ REQUIRE(fourUserTx->getNumberOfSpaceTimeStreams() == 4);
 REQUIRE(fourUserTx->getPreambleDuration() == fourUserPreambleDuration);
 
 auto fourUserHeader = makeShared<Ieee80211VhtPhyHeader>();
-fourUserHeader->setChunkLength(getIeee80211VhtMuPhyHeaderLength(4));
+fourUserHeader->setChunkLength(getIeee80211VhtMuPhyHeaderLength(MHz(20), 4));
 fourUserHeader->setSignalingValid(true);
 fourUserHeader->setBandwidth(0);
 fourUserHeader->setGroupId(1);
@@ -115,21 +116,58 @@ for (size_t i = 0; i < fourUserTx->getUsers().size(); ++i) {
 }
 Packet fourUserPacket("VHT-MU-4-user", fourUserHeader);
 auto fourUserBits = fourUserPacket.peekDataAsBits();
-REQUIRE(fourUserBits->getChunkLength() == getIeee80211VhtMuPhyHeaderLength(4));
+REQUIRE(fourUserBits->getChunkLength() == getIeee80211VhtMuPhyHeaderLength(MHz(20), 4));
 REQUIRE(fourUserBits->getBits()[10] && fourUserBits->getBits()[13]);
 REQUIRE(fourUserBits->getBits()[16] && fourUserBits->getBits()[19]);
 Packet fourUserDecodedPacket("VHT-MU-4-user-decoded", fourUserBits);
 auto fourUserDecoded = fourUserDecodedPacket.popAtFront<Ieee80211VhtPhyHeader>(
-        getIeee80211VhtMuPhyHeaderLength(4));
+        getIeee80211VhtMuPhyHeaderLength(MHz(20), 4));
 REQUIRE(fourUserDecoded->getUsersArraySize() == 4);
 REQUIRE(fourUserDecoded->getUsers(2).psduLength == B(384));
 REQUIRE(fourUserDecoded->getUsers(3).psduLength == B(512));
 REQUIRE(fourUserDecoded->getUsers(3).coding == 1);
 
-bool rejectedWide = false;
-try { (void)Ieee80211VhtTxVector::createMu(MHz(40), 1, tx->getUsers(), muPreambleDuration); }
-catch (const cRuntimeError&) { rejectedWide = true; }
-REQUIRE(rejectedWide);
+auto wideMu = Ieee80211VhtTxVector::createMu(MHz(40), 17, {
+    user("02:00:00:00:00:11", 11, 0, B(128), 4, true, SimTime(80, SIMTIME_US), 2),
+    user("02:00:00:00:00:12", 12, 2, B(256), 5, true, SimTime(120, SIMTIME_US), 2),
+}, Ieee80211VhtPreambleMode::getMuPreambleDuration(4), true, true);
+REQUIRE(wideMu->getChannelWidth() == MHz(40) && wideMu->getGroupId() == 17);
+REQUIRE(wideMu->getNumberOfSpaceTimeStreams() == 4 && wideMu->hasShortGuardInterval());
+REQUIRE(wideMu->findMuUser(1) == nullptr && wideMu->findMuUser(2)->numberOfSpatialStreams == 2);
+REQUIRE(getIeee80211VhtMuPhyHeaderLength(MHz(40), 2) == b(102));
+auto wideHeader = makeShared<Ieee80211VhtPhyHeader>();
+wideHeader->setChunkLength(getIeee80211VhtMuPhyHeaderLength(MHz(40), 2));
+wideHeader->setSignalingValid(true);
+wideHeader->setBandwidth(getIeee80211VhtBandwidthCode(MHz(40)));
+wideHeader->setGroupId(17);
+wideHeader->setNumberOfSpaceTimeStreams(4);
+wideHeader->setShortGi(true);
+wideHeader->setCoding(1);
+wideHeader->setLdpcExtraOfdmSymbol(true);
+wideHeader->setBeamformed(true);
+wideHeader->setUsersArraySize(2);
+for (size_t i = 0; i < wideMu->getUsers().size(); ++i) {
+    const auto& canonical = wideMu->getUsers()[i];
+    Ieee80211VhtMuUserInfo encoded;
+    encoded.associationId = canonical.associationId;
+    encoded.userPosition = canonical.userPosition;
+    encoded.numberOfSpatialStreams = canonical.numberOfSpatialStreams;
+    encoded.mcs = canonical.mcs;
+    encoded.coding = canonical.ldpcCoding;
+    encoded.psduLength = canonical.psduLength;
+    encoded.duration = canonical.duration;
+    wideHeader->setUsers(i, encoded);
+}
+Packet widePacket("VHT-MU-40MHz-sparse", wideHeader);
+auto wideBits = widePacket.peekDataAsBits();
+Packet wideDecodedPacket("VHT-MU-40MHz-sparse-decoded", wideBits);
+auto wideDecoded = wideDecodedPacket.popAtFront<Ieee80211VhtPhyHeader>(
+        getIeee80211VhtMuPhyHeaderLength(MHz(40), 2));
+REQUIRE(wideDecoded->getGroupId() == 17 && wideDecoded->getBandwidth() == 1);
+REQUIRE(wideDecoded->getNumberOfSpaceTimeStreams() == 4 && wideDecoded->getShortGi());
+REQUIRE(wideDecoded->getUsers(0).userPosition == 0 &&
+        wideDecoded->getUsers(1).userPosition == 2 &&
+        wideDecoded->getUsers(1).numberOfSpatialStreams == 2);
 bool rejectedCount = false;
 try { (void)Ieee80211VhtTxVector::createMu(MHz(20), 1, {tx->getUsers()[0]}, muPreambleDuration); }
 catch (const cRuntimeError&) { rejectedCount = true; }
@@ -140,6 +178,17 @@ fiveUsers.push_back(user("02:00:00:00:00:05", 5, 4, B(128), 3, false, SimTime(80
 try { (void)Ieee80211VhtTxVector::createMu(MHz(20), 1, fiveUsers, fourUserPreambleDuration); }
 catch (const cRuntimeError&) { rejectedFiveUsers = true; }
 REQUIRE(rejectedFiveUsers);
+
+bool rejectedTooManyStreams = false;
+auto tooManyStreams = wideMu->getUsers();
+tooManyStreams[0].numberOfSpatialStreams = 4;
+tooManyStreams[1].numberOfSpatialStreams = 4;
+tooManyStreams.push_back(user("02:00:00:00:00:13", 13, 1, B(128), 3, true,
+        SimTime(80, SIMTIME_US), 1));
+try { (void)Ieee80211VhtTxVector::createMu(MHz(80), 2, tooManyStreams,
+        Ieee80211VhtPreambleMode::getMuPreambleDuration(6)); }
+catch (const cRuntimeError&) { rejectedTooManyStreams = true; }
+REQUIRE(rejectedTooManyStreams);
 
 EV << "VHT MU canonical TXVECTOR/layout/SIG-A/SIG-B/user selection: PASS\n";
 

@@ -268,8 +268,10 @@ unsigned int Ieee80211VhtPreambleMode::computeNumberOfSpaceTimeStreams(unsigned 
 unsigned int Ieee80211VhtPreambleMode::computeNumberOfHTLongTrainings(unsigned int numberOfSpaceTimeStreams) const
 {
     // IEEE Std 802.11-2024 21.3.2 and Table 21-13: N_VHT-LTF is 1, 2, 4, 6,
-    // or 8. The only nonidentity value below four streams is N_STS = 3 -> 4.
-    return numberOfSpaceTimeStreams == 3 ? 4 : numberOfSpaceTimeStreams;
+    // or 8.
+    return numberOfSpaceTimeStreams <= 2 ? numberOfSpaceTimeStreams :
+            numberOfSpaceTimeStreams <= 4 ? 4 :
+            numberOfSpaceTimeStreams <= 6 ? 6 : 8;
 }
 
 const simtime_t Ieee80211VhtPreambleMode::getDuration() const
@@ -285,8 +287,9 @@ simtime_t Ieee80211VhtPreambleMode::getMuPreambleDuration(
 {
     if (totalNumberOfSpaceTimeStreams == 0 || totalNumberOfSpaceTimeStreams > 8)
         throw cRuntimeError("VHT MU total NSTS must be in the range 1..8");
-    auto numberOfVhtLtfs = totalNumberOfSpaceTimeStreams == 3 ? 4 :
-            totalNumberOfSpaceTimeStreams;
+    auto numberOfVhtLtfs = totalNumberOfSpaceTimeStreams <= 2 ? totalNumberOfSpaceTimeStreams :
+            totalNumberOfSpaceTimeStreams <= 4 ? 4 :
+            totalNumberOfSpaceTimeStreams <= 6 ? 6 : 8;
     // Figure 21-4 fixed fields total 36 us; Table 21-13 contributes one 4 us
     // VHT-LTF per mapped training field. This is the single construction-free
     // timing authority used by canonical packet-level MU layouts.

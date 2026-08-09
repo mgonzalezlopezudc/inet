@@ -154,6 +154,27 @@ for (const auto& operation160 : {operation160Lower, operation160Upper}) {
     ASSERT(decodedOperation160.centerFrequencySegment1 == operation160.centerFrequencySegment1);
 }
 
+auto operation80Plus80 = deriveIeee80211Vht80Plus80Operation(GHz(5.210), GHz(5.775));
+auto operation80Plus80Element = makeVhtOperationElement(operation80Plus80);
+auto decodedOperation80Plus80 = makeVhtOperation(operation80Plus80Element, htModel20);
+ASSERT(decodedOperation80Plus80.operatingChannelWidth == MHz(160));
+ASSERT(decodedOperation80Plus80.nonContiguous);
+ASSERT(decodedOperation80Plus80.centerFrequencySegment0 == 42 &&
+        decodedOperation80Plus80.centerFrequencySegment1 == 155);
+
+for (int separation : {1, 7, 9, 16}) {
+    bool rejectedInvalid80Plus80 = false;
+    try {
+        Ieee80211VhtOperationElement invalid = operation80Plus80Element;
+        invalid.centerFrequencySegment1 = invalid.centerFrequencySegment0 + separation;
+        (void)makeVhtOperation(invalid, htModel20);
+    }
+    catch (const cRuntimeError&) {
+        rejectedInvalid80Plus80 = true;
+    }
+    ASSERT(rejectedInvalid80Plus80);
+}
+
 bool rejectedUnspecifiedPrimary80 = false;
 try {
     deriveIeee80211VhtOperation(GHz(5.250), MHz(160));

@@ -9,6 +9,9 @@
 #define __INET_IEEE80211CHANNEL_H
 
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
+#include "inet/physicallayer/wireless/common/contract/bitlevel/ISignalAnalogModel.h"
+
+#include <vector>
 
 namespace inet {
 
@@ -92,6 +95,8 @@ class INET_API Ieee80211Channel : public IPrintableObject
      * is narrower than the operating channel is centered on this frequency.
      */
     virtual Hz getCenterFrequencyForBandwidth(Hz bandwidth) const;
+    /** Exact occupied intervals for the requested PPDU bandwidth. */
+    virtual std::vector<FrequencySegment> getFrequencySegments(Hz bandwidth) const;
     /** Effective position of the primary 80 MHz channel within a 160 MHz operating channel. */
     virtual Ieee80211Primary80ChannelPosition getPrimary80ChannelPosition() const { return primary80ChannelPosition; }
     /** Effective position of the primary 160 MHz channel within a 320 MHz operating channel. */

@@ -8,6 +8,7 @@
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrameSerializer.h"
 
 #include <algorithm>
+#include <cmath>
 #include <vector>
 
 #include "inet/common/packet/serializer/ChunkSerializerRegistry.h"
@@ -269,9 +270,13 @@ static void writeVhtCapabilitiesElement(MemoryOutputStream& stream, const Ieee80
         txMap |= encodeVhtMcs(capabilities.txMaxMcsForNss[i]) << (2 * i);
     }
     stream.writeUint16Le(rxMap);
-    stream.writeUint16Le(0);
+    uint16_t rxHighestAndNsts = (capabilities.rxHighestLongGiDataRateMbps & 0x1fff) |
+            ((capabilities.maxNstsTotal == 0 ? 0 : capabilities.maxNstsTotal - 1) & 7) << 13;
+    stream.writeUint16Le(rxHighestAndNsts);
     stream.writeUint16Le(txMap);
-    stream.writeUint16Le(0);
+    uint16_t txHighestAndExtendedNss = (capabilities.txHighestLongGiDataRateMbps & 0x1fff) |
+            (capabilities.extendedNssBwCapable ? 1 << 13 : 0);
+    stream.writeUint16Le(txHighestAndExtendedNss);
 }
 
 static void writeVhtOperationElement(MemoryOutputStream& stream, const Ieee80211VhtOperationElement& operation)
@@ -565,8 +570,15 @@ static void readVhtCapabilitiesElement(MemoryInputStream& stream, int length, co
     capabilities.muBeamformer = information & (1 << 19);
     capabilities.muBeamformee = information & (1 << 20);
     capabilities.maxAmpduLengthExponent = (information >> 23) & 7;
-    uint16_t rxMap = stream.readUint16Le(); stream.readUint16Le();
-    uint16_t txMap = stream.readUint16Le(); stream.readUint16Le();
+    uint16_t rxMap = stream.readUint16Le();
+    uint16_t rxHighestAndNsts = stream.readUint16Le();
+    uint16_t txMap = stream.readUint16Le();
+    uint16_t txHighestAndExtendedNss = stream.readUint16Le();
+    capabilities.rxHighestLongGiDataRateMbps = rxHighestAndNsts & 0x1fff;
+    auto encodedMaxNstsTotal = (rxHighestAndNsts >> 13) & 7;
+    capabilities.maxNstsTotal = encodedMaxNstsTotal == 0 ? 0 : encodedMaxNstsTotal + 1;
+    capabilities.txHighestLongGiDataRateMbps = txHighestAndExtendedNss & 0x1fff;
+    capabilities.extendedNssBwCapable = (txHighestAndExtendedNss & (1 << 13)) != 0;
     for (int i = 0; i < 8; i++) {
         capabilities.rxMaxMcsForNss[i] = decodeVhtMcs(rxMap >> (2 * i));
         capabilities.txMaxMcsForNss[i] = decodeVhtMcs(txMap >> (2 * i));
@@ -1482,25 +1494,152 @@ static constexpr uint8_t VHT_CATEGORY_CODE = 21;
 static constexpr uint8_t VHT_ACTION_COMPRESSED_BEAMFORMING = 0;
 static constexpr uint8_t VHT_ACTION_GROUP_ID_MANAGEMENT = 1;
 
+static int getVhtFeedbackWidthCode(double bandwidth)
+{
+    if (bandwidth == 20e6)
+        return 0;
+    if (bandwidth == 40e6)
+        return 1;
+    if (bandwidth == 80e6)
+        return 2;
+    if (bandwidth == 160e6)
+        return 3; // 160 MHz and 80+80 MHz share the VHT encoding
+    throw cRuntimeError("Unsupported VHT feedback bandwidth %.0f Hz", bandwidth);
+}
+
+static double getVhtFeedbackBandwidth(uint8_t widthCode)
+{
+    switch (widthCode) {
+        case 0: return 20e6;
+        case 1: return 40e6;
+        case 2: return 80e6;
+        case 3: return 160e6;
+        default: throw cRuntimeError("Reserved VHT feedback channel-width code %u", widthCode);
+    }
+}
+
+static int getVhtGroupingCode(uint8_t grouping)
+{
+    switch (grouping) {
+        case 1: return 0;
+        case 2: return 1;
+        case 4: return 2;
+        default: throw cRuntimeError("Unsupported VHT feedback subcarrier grouping Ng=%u", grouping);
+    }
+}
+
+static uint8_t getVhtGrouping(uint8_t groupingCode)
+{
+    switch (groupingCode) {
+        case 0: return 1;
+        case 1: return 2;
+        case 2: return 4;
+        default: throw cRuntimeError("Reserved VHT feedback grouping code %u", groupingCode);
+    }
+}
+
+static int getVhtFeedbackSubcarrierCount(double bandwidth, uint8_t grouping)
+{
+    int widthCode = getVhtFeedbackWidthCode(bandwidth);
+    if (widthCode == 0)
+        return grouping == 1 ? 52 : grouping == 2 ? 30 : 16;
+    if (widthCode == 1)
+        return grouping == 1 ? 108 : grouping == 2 ? 58 : 30;
+    if (widthCode == 2)
+        return grouping == 1 ? 234 : grouping == 2 ? 122 : 62;
+    return grouping == 1 ? 468 : grouping == 2 ? 244 : 124;
+}
+
+static int getVhtMuExclusiveSubcarrierCount(double bandwidth, uint8_t grouping)
+{
+    int widthCode = getVhtFeedbackWidthCode(bandwidth);
+    if (widthCode == 0)
+        return grouping == 1 ? 30 : grouping == 2 ? 16 : 10;
+    if (widthCode == 1)
+        return grouping == 1 ? 58 : grouping == 2 ? 30 : 16;
+    if (widthCode == 2)
+        return grouping == 1 ? 122 : grouping == 2 ? 62 : 32;
+    return grouping == 1 ? 244 : grouping == 2 ? 124 : 64;
+}
+
+static int getVhtFeedbackAngleCount(uint8_t nr, uint8_t nc)
+{
+    if (nr < 2 || nr > 8 || nc < 1 || nc > nr)
+        throw cRuntimeError("Invalid VHT feedback matrix dimensions Nr=%u Nc=%u", nr, nc);
+    return nc * (2 * nr - nc - 1);
+}
+
+static size_t getVhtFeedbackMatrixBytes(const Ieee80211VhtCompressedBeamformingFeedback *feedback)
+{
+    const int angleBits = feedback->getFeedbackTypeMu() ?
+            (feedback->getCodebookInformation() ? 8 : 6) :
+            (feedback->getCodebookInformation() ? 5 : 3);
+    const int bits = getVhtFeedbackSubcarrierCount(feedback->getFeedbackBandwidth(), feedback->getGrouping()) *
+            getVhtFeedbackAngleCount(feedback->getNr(), feedback->getNc()) * angleBits;
+    return (bits + 7) / 8;
+}
+
+static size_t getVhtMuExclusiveReportBytes(const Ieee80211VhtCompressedBeamformingFeedback *feedback)
+{
+    if (!feedback->getFeedbackTypeMu())
+        return 0;
+    const int bits = getVhtMuExclusiveSubcarrierCount(feedback->getFeedbackBandwidth(), feedback->getGrouping()) *
+            feedback->getNc() * 4;
+    return (bits + 7) / 8;
+}
+
+static void validateVhtFeedback(const Ieee80211VhtCompressedBeamformingFeedback *feedback)
+{
+    if (feedback->getSoundingDialogTokenNumber() > 63 || feedback->getRemainingFeedbackSegments() > 7)
+        throw cRuntimeError("Malformed VHT Compressed Beamforming feedback control fields");
+    getVhtFeedbackWidthCode(feedback->getFeedbackBandwidth());
+    getVhtGroupingCode(feedback->getGrouping());
+    getVhtFeedbackAngleCount(feedback->getNr(), feedback->getNc());
+    if (feedback->getCompressedBeamformingReportLength() > feedback->getCompressedBeamformingReportArraySize())
+        throw cRuntimeError("VHT compressed beamforming report length exceeds storage");
+    const size_t reportBytes = feedback->getCompressedBeamformingReportLength() +
+            feedback->getCompressedBeamformingReportExtensionArraySize();
+    const size_t matrixBytes = getVhtFeedbackMatrixBytes(feedback);
+    if (feedback->getRemainingFeedbackSegments() == 0 && feedback->getFirstFeedbackSegment() && reportBytes != matrixBytes)
+        throw cRuntimeError("VHT compressed beamforming matrix has %zu bytes, expected %zu", reportBytes, matrixBytes);
+    if (feedback->getAverageSnrAdditionalArraySize() + 1 != feedback->getNc())
+        throw cRuntimeError("VHT compressed beamforming feedback requires one average SNR per Nc column");
+    if (!feedback->getFeedbackTypeMu() && feedback->getMuExclusiveBeamformingReportArraySize() != 0)
+        throw cRuntimeError("SU VHT feedback must not contain an MU Exclusive Beamforming Report");
+    const size_t expectedMuBytes = getVhtMuExclusiveReportBytes(feedback);
+    if (feedback->getFeedbackTypeMu() && feedback->getRemainingFeedbackSegments() == 0 && feedback->getFirstFeedbackSegment() &&
+            feedback->getMuExclusiveBeamformingReportArraySize() != expectedMuBytes)
+        throw cRuntimeError("VHT MU Exclusive Beamforming Report has %zu bytes, expected %zu", feedback->getMuExclusiveBeamformingReportArraySize(), expectedMuBytes);
+}
+
 void Ieee80211VhtActionFrameBodySerializer::serialize(MemoryOutputStream& stream,
         const Ptr<const Chunk>& chunk) const
 {
     if (auto feedback = dynamicPtrCast<const Ieee80211VhtCompressedBeamformingFeedback>(chunk)) {
-        if (feedback->getChunkLength() != B(18) ||
-                feedback->getSoundingDialogTokenNumber() > 63)
-            throw cRuntimeError("Malformed constrained VHT Compressed Beamforming feedback");
+        validateVhtFeedback(feedback.get());
         stream.writeByte(VHT_CATEGORY_CODE);
         stream.writeByte(VHT_ACTION_COMPRESSED_BEAMFORMING);
-        // Figure 9-186/Table 9-100: Nc=1, Nr=2, 20 MHz, Ng=4,
-        // SU 2-bit psi/4-bit phi codebook, unsegmented first/only report.
-        uint32_t mimoControl = (1u << 3) | (2u << 8) | (1u << 15) |
+        const uint32_t mimoControl = ((feedback->getNc() - 1) << 0) |
+                ((feedback->getNr() - 1) << 3) |
+                (getVhtFeedbackWidthCode(feedback->getFeedbackBandwidth()) << 6) |
+                (getVhtGroupingCode(feedback->getGrouping()) << 8) |
+                (feedback->getCodebookInformation() << 10) |
+                (feedback->getFeedbackTypeMu() << 11) |
+                (feedback->getRemainingFeedbackSegments() << 12) |
+                (feedback->getFirstFeedbackSegment() << 15) |
                 (static_cast<uint32_t>(feedback->getSoundingDialogTokenNumber()) << 18);
         stream.writeByte(mimoControl & 0xff);
         stream.writeByte((mimoControl >> 8) & 0xff);
         stream.writeByte((mimoControl >> 16) & 0xff);
         stream.writeByte(static_cast<uint8_t>(feedback->getAverageSnr()));
-        for (size_t i = 0; i < feedback->getCompressedBeamformingReportArraySize(); i++)
+        for (size_t i = 0; i < feedback->getAverageSnrAdditionalArraySize(); i++)
+            stream.writeByte(static_cast<uint8_t>(feedback->getAverageSnrAdditional(i)));
+        for (size_t i = 0; i < feedback->getCompressedBeamformingReportLength(); i++)
             stream.writeByte(feedback->getCompressedBeamformingReport(i));
+        for (size_t i = 0; i < feedback->getCompressedBeamformingReportExtensionArraySize(); i++)
+            stream.writeByte(feedback->getCompressedBeamformingReportExtension(i));
+        for (size_t i = 0; i < feedback->getMuExclusiveBeamformingReportArraySize(); i++)
+            stream.writeByte(feedback->getMuExclusiveBeamformingReport(i));
     }
     else if (auto group = dynamicPtrCast<const Ieee80211VhtGroupIdManagement>(chunk)) {
         if (group->getChunkLength() != B(26))
@@ -1525,20 +1664,43 @@ const Ptr<Chunk> Ieee80211VhtActionFrameBodySerializer::deserialize(MemoryInputS
         throw cRuntimeError("Expected VHT action category 21, received %u", category);
     auto action = stream.readByte();
     if (action == VHT_ACTION_COMPRESSED_BEAMFORMING) {
-        if (stream.getRemainingLength() != B(16))
-            throw cRuntimeError("Constrained VHT Compressed Beamforming body must be 18 octets");
+        if (stream.getRemainingLength() < B(4))
+            throw cRuntimeError("Truncated VHT Compressed Beamforming body");
         uint32_t mimoControl = stream.readByte();
         mimoControl |= static_cast<uint32_t>(stream.readByte()) << 8;
         mimoControl |= static_cast<uint32_t>(stream.readByte()) << 16;
-        constexpr uint32_t REQUIRED_FIELDS = (1u << 3) | (2u << 8) | (1u << 15);
-        constexpr uint32_t TOKEN_MASK = 0x3fu << 18;
-        if ((mimoControl & ~TOKEN_MASK) != REQUIRED_FIELDS)
-            throw cRuntimeError("Unsupported or malformed VHT MIMO Control field");
+        if (mimoControl & (3u << 16))
+            throw cRuntimeError("Reserved bits set in VHT MIMO Control field");
         auto feedback = makeShared<Ieee80211VhtCompressedBeamformingFeedback>();
+        feedback->setNc((mimoControl & 0x7) + 1);
+        feedback->setNr(((mimoControl >> 3) & 0x7) + 1);
+        feedback->setFeedbackBandwidth(getVhtFeedbackBandwidth((mimoControl >> 6) & 0x3));
+        feedback->setGrouping(getVhtGrouping((mimoControl >> 8) & 0x3));
+        feedback->setCodebookInformation((mimoControl >> 10) & 0x1);
+        feedback->setFeedbackTypeMu((mimoControl >> 11) & 0x1);
+        feedback->setRemainingFeedbackSegments((mimoControl >> 12) & 0x7);
+        feedback->setFirstFeedbackSegment((mimoControl >> 15) & 0x1);
         feedback->setSoundingDialogTokenNumber((mimoControl >> 18) & 0x3f);
         feedback->setAverageSnr(static_cast<int8_t>(stream.readByte()));
-        for (size_t i = 0; i < feedback->getCompressedBeamformingReportArraySize(); i++)
+        feedback->setAverageSnrAdditionalArraySize(feedback->getNc() - 1);
+        for (size_t i = 0; i < feedback->getAverageSnrAdditionalArraySize(); i++)
+            feedback->setAverageSnrAdditional(i, static_cast<int8_t>(stream.readByte()));
+        const size_t payloadBytes = stream.getRemainingLength().get<B>();
+        const size_t expectedMatrixBytes = getVhtFeedbackMatrixBytes(feedback.get());
+        const size_t matrixBytes = feedback->getRemainingFeedbackSegments() != 0 || !feedback->getFirstFeedbackSegment() ?
+                payloadBytes : expectedMatrixBytes;
+        if (payloadBytes < matrixBytes)
+            throw cRuntimeError("Truncated VHT compressed beamforming report");
+        feedback->setCompressedBeamformingReportLength(std::min<size_t>(12, matrixBytes));
+        feedback->setCompressedBeamformingReportExtensionArraySize(matrixBytes > 12 ? matrixBytes - 12 : 0);
+        for (size_t i = 0; i < feedback->getCompressedBeamformingReportLength(); i++)
             feedback->setCompressedBeamformingReport(i, stream.readByte());
+        for (size_t i = 0; i < feedback->getCompressedBeamformingReportExtensionArraySize(); i++)
+            feedback->setCompressedBeamformingReportExtension(i, stream.readByte());
+        feedback->setMuExclusiveBeamformingReportArraySize(payloadBytes - matrixBytes);
+        for (size_t i = 0; i < feedback->getMuExclusiveBeamformingReportArraySize(); i++)
+            feedback->setMuExclusiveBeamformingReport(i, stream.readByte());
+        feedback->setChunkLength(B(2 + 3 + 1 + (feedback->getNc() - 1) + payloadBytes));
         return feedback;
     }
     else if (action == VHT_ACTION_GROUP_ID_MANAGEMENT) {

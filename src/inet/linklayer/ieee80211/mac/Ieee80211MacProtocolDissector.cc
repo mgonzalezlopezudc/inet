@@ -247,12 +247,13 @@ void Ieee80211MacProtocolDissector::dissect(Packet *packet, const Protocol *prot
     else if (header->getType() == ieee80211::ST_NOACKACTION && packet->getDataLength() >= B(2)) {
         auto bytes = packet->peekDataAsBytes()->getBytes();
         if (bytes[0] == 21 && bytes[1] == 0) {
-            if (packet->getDataLength() != B(18)) {
+            if (packet->getDataLength() < B(6)) {
                 callback.markIncorrect();
                 visitRemainingData(packet, callback, &Protocol::ieee80211Mgmt);
             }
             else {
-                auto body = packet->popAtFront<ieee80211::Ieee80211VhtCompressedBeamformingFeedback>(B(18), tolerantParsingFlags);
+                auto body = packet->popAtFront<ieee80211::Ieee80211VhtCompressedBeamformingFeedback>(
+                        packet->getDataLength(), tolerantParsingFlags);
                 if (isMalformed(body))
                     callback.markIncorrect();
                 callback.visitChunk(body, &Protocol::ieee80211Mgmt);

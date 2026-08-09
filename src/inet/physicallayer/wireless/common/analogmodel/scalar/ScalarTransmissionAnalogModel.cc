@@ -16,7 +16,14 @@ ScalarTransmissionAnalogModel::ScalarTransmissionAnalogModel(const simtime_t pre
 {
 }
 
+ScalarTransmissionAnalogModel::ScalarTransmissionAnalogModel(const simtime_t preambleDuration, simtime_t headerDuration, simtime_t dataDuration,
+        const std::vector<FrequencySegment>& segments, W power) :
+    ScalarSignalAnalogModel(preambleDuration, headerDuration, dataDuration,
+            segments.front().centerFrequency, segments.front().bandwidth, power)
+{
+    frequencySegments = segments;
+}
+
 } // namespace physicallayer
 
 } // namespace inet
-

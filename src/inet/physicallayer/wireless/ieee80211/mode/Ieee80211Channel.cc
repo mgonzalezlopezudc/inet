@@ -47,9 +47,10 @@ Ieee80211Channel::Ieee80211Channel(const IIeee80211Band *band, int channelNumber
     int numSubchannels = (int)std::round(operatingChannelWidth.get<MHz>() / 20.0);
     if (numSubchannels != 1 && numSubchannels != 2 && numSubchannels != 4 && numSubchannels != 8 && numSubchannels != 16)
         throw cRuntimeError("Invalid IEEE 802.11 operating channel width: %g MHz", operatingChannelWidth.get() / 1e6);
+    bool nonContiguous = band != nullptr && band->getChannelTopology() == Ieee80211ChannelTopology::NONCONTIGUOUS;
     if (numSubchannels == 1 && secondaryChannelOffset != IEEE80211_SECONDARY_CHANNEL_NONE)
         throw cRuntimeError("IEEE 802.11 20 MHz operation does not have a secondary channel");
-    if (numSubchannels >= 2 && secondaryChannelOffset == IEEE80211_SECONDARY_CHANNEL_NONE)
+    if (numSubchannels >= 2 && secondaryChannelOffset == IEEE80211_SECONDARY_CHANNEL_NONE && !nonContiguous)
         throw cRuntimeError("IEEE 802.11 %d MHz operation requires a secondary channel offset of above or below", numSubchannels * 20);
     if (secondaryChannelOffset != IEEE80211_SECONDARY_CHANNEL_NONE) {
         if (band == nullptr)
@@ -57,7 +58,7 @@ Ieee80211Channel::Ieee80211Channel(const IIeee80211Band *band, int channelNumber
         (void)getCenterFrequency();
         (void)getSecondaryCenterFrequency();
     }
-    if (numSubchannels >= 4) {
+    if (numSubchannels >= 4 && !nonContiguous) {
         // Generic wide channels use the 5 MHz standard grid. Width-specific
         // contiguous bands already identify the bonded operating center.
         bool widthSpecificBand = band != nullptr &&
@@ -120,6 +121,8 @@ int Ieee80211Channel::getPrimarySubchannelIndex() const
 {
     int numSubchannels = getNumSubchannels();
     if (numSubchannels == 1)
+        return 0;
+    if (band->getChannelTopology() == Ieee80211ChannelTopology::NONCONTIGUOUS)
         return 0;
     bool widthSpecificBand = band->getChannelTopology() == Ieee80211ChannelTopology::CONTIGUOUS &&
             band->getChannelWidth() == operatingChannelWidth;
@@ -206,6 +209,10 @@ Hz Ieee80211Channel::getSubchannelCenterFrequency(int index) const
 {
     if (index < 0 || index >= getNumSubchannels())
         throw cRuntimeError("IEEE 802.11 subchannel index %d is out of range", index);
+    if (band->getChannelTopology() == Ieee80211ChannelTopology::NONCONTIGUOUS) {
+        auto segmentCenter = index < 4 ? getCenterFrequency() : getSecondary80CenterFrequency();
+        return segmentCenter + MHz(20 * (index % 4 - 1.5));
+    }
     return getSegmentStartCenterFrequency() + MHz(20 * index);
 }
 
@@ -225,6 +232,11 @@ Hz Ieee80211Channel::getSecondary80CenterFrequency() const
     int numSubchannels = getNumSubchannels();
     if (numSubchannels < 8)
         throw cRuntimeError("IEEE 802.11 channel has no secondary 80 MHz channel");
+    if (band->getChannelTopology() == Ieee80211ChannelTopology::NONCONTIGUOUS) {
+        if (band->getNumChannels() != 2)
+            throw cRuntimeError("IEEE 802.11 non-contiguous operation requires two 80 MHz segments");
+        return band->getCenterFrequency(channelNumber == 0 ? 1 : 0);
+    }
     // The secondary 80 MHz channel is the other 80 MHz half of the primary 160 MHz channel.
     int primaryIndex = getPrimarySubchannelIndex();
     int firstSubchannel = (primaryIndex & ~7) + ((((primaryIndex >> 2) & 1) ^ 1) << 2);
@@ -250,8 +262,19 @@ Hz Ieee80211Channel::getCenterFrequencyForBandwidth(Hz bandwidth) const
     if (numSubchannels > getNumSubchannels())
         throw cRuntimeError("IEEE 802.11 PPDU bandwidth (%g MHz) exceeds the operating channel width (%g MHz)",
                 bandwidth.get() / 1e6, operatingChannelWidth.get() / 1e6);
+    if (band->getChannelTopology() == Ieee80211ChannelTopology::NONCONTIGUOUS)
+        return getCenterFrequency();
     int firstSubchannel = getPrimarySubchannelIndex() & ~(numSubchannels - 1);
     return getSegmentStartCenterFrequency() + MHz(20 * firstSubchannel) + MHz(10 * (numSubchannels - 1));
+}
+
+std::vector<FrequencySegment> Ieee80211Channel::getFrequencySegments(Hz bandwidth) const
+{
+    if (bandwidth <= MHz(0) || bandwidth > operatingChannelWidth)
+        throw cRuntimeError("Requested PPDU bandwidth %s is invalid for operating channel %s", bandwidth.str().c_str(), operatingChannelWidth.str().c_str());
+    if (band->getChannelTopology() == Ieee80211ChannelTopology::NONCONTIGUOUS && bandwidth >= MHz(160))
+        return {{getCenterFrequency(), MHz(80)}, {getSecondary80CenterFrequency(), MHz(80)}};
+    return {{getCenterFrequencyForBandwidth(bandwidth), bandwidth}};
 }
 
 std::ostream& Ieee80211Channel::printToStream(std::ostream& stream, int level, int evFlags) const

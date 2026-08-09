@@ -355,6 +355,8 @@ void Ieee80211Radio::validateChannelPlan(const IIeee80211Band *band, Hz channelW
 
 Ieee80211SecondaryChannelOffset Ieee80211Radio::resolveSecondaryChannelOffset(const IIeee80211Band *band, Hz channelWidth, int channelNumber) const
 {
+    if (band != nullptr && band->getChannelTopology() == Ieee80211ChannelTopology::NONCONTIGUOUS)
+        return IEEE80211_SECONDARY_CHANNEL_NONE;
     if (htSecondaryChannelOffset != IEEE80211_SECONDARY_CHANNEL_NONE || channelWidth < MHz(40))
         return htSecondaryChannelOffset;
     if (primary20SubchannelIndex >= 0)
@@ -1071,24 +1073,26 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
             if (vhtMuHandoff != nullptr) {
                 const auto& txVector = vhtMuHandoff->getTxVector();
                 if (txVector == nullptr || !txVector->isMu() ||
-                        txVector->getChannelWidth() != MHz(20) || channelWidth != MHz(20) ||
+                        txVector->getChannelWidth() != channelWidth ||
                         txVector->getPsduLength() != B(packet->getDataLength()) ||
                         txVector->getUsers().size() < 2 || txVector->getUsers().size() > 4 ||
-                        txVector->getNumberOfSpaceTimeStreams() != txVector->getUsers().size())
+                        txVector->getNumberOfSpaceTimeStreams() == 0 ||
+                        txVector->getNumberOfSpaceTimeStreams() > 8)
                     throw cRuntimeError("Invalid canonical VHT MU TXVECTOR handoff");
                 vhtPhyHeader->setChunkLength(getIeee80211VhtMuPhyHeaderLength(
-                        txVector->getUsers().size()));
+                        channelWidth, txVector->getUsers().size()));
                 vhtPhyHeader->setSignalingValid(true);
                 vhtPhyHeader->setNdp(false);
                 vhtPhyHeader->setStbc(false);
-                vhtPhyHeader->setBandwidth(0);
+                vhtPhyHeader->setBandwidth(getIeee80211VhtBandwidthCode(channelWidth));
                 vhtPhyHeader->setGroupId(txVector->getGroupId());
                 vhtPhyHeader->setNumberOfSpaceTimeStreams(
                         txVector->getNumberOfSpaceTimeStreams());
                 vhtPhyHeader->setPartialAid(0);
                 vhtPhyHeader->setMcs(0);
                 vhtPhyHeader->setCoding(0);
-                vhtPhyHeader->setLdpcExtraOfdmSymbol(false);
+                vhtPhyHeader->setShortGi(txVector->hasShortGuardInterval());
+                vhtPhyHeader->setLdpcExtraOfdmSymbol(txVector->hasLdpcExtraOfdmSymbol());
                 vhtPhyHeader->setBeamformed(true);
                 vhtPhyHeader->setCommonDuration(txVector->getCommonDuration());
                 vhtPhyHeader->setUsersArraySize(txVector->getUsers().size());
@@ -1107,9 +1111,6 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
             }
             else if (vhtRequest != nullptr && vhtRequest->getMuMimo())
                 throw cRuntimeError("VHT MU-MIMO requires a canonical TXVECTOR handoff");
-            if ((ndp || (vhtRequest != nullptr && vhtRequest->getBeamformed())) &&
-                    channelWidth != MHz(20))
-                throw cRuntimeError("Packet-level VHT sounding/beamforming currently supports only 20 MHz");
             if (vhtMuHandoff == nullptr) {
             vhtPhyHeader->setSignalingValid(true);
             vhtPhyHeader->setNdp(ndp);
@@ -1123,6 +1124,9 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
                     vhtRequest->getPartialAid());
             vhtPhyHeader->setMcs(vhtPhyHeader->getNdp() ? 0 :
                     vhtMode->getDataMode()->getMcsIndex());
+            vhtPhyHeader->setShortGi(!vhtPhyHeader->getNdp() &&
+                    vhtMode->getDataMode()->getGuardIntervalType() ==
+                    Ieee80211VhtModeBase::HT_GUARD_INTERVAL_SHORT);
             vhtPhyHeader->setBeamformed(vhtRequest != nullptr &&
                     vhtRequest->getBeamformed());
             if (vhtMode->getDataMode()->getCode()) {

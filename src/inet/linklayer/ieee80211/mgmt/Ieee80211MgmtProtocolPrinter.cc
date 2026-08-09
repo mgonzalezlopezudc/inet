@@ -21,7 +21,12 @@ void Ieee80211MgmtProtocolPrinter::print(const Ptr<const Chunk>& chunk, const Pr
     if (auto feedback = dynamicPtrCast<const Ieee80211VhtCompressedBeamformingFeedback>(chunk)) {
         context.typeColumn << "VHT Compressed BF";
         context.infoColumn << "token=" << static_cast<int>(feedback->getSoundingDialogTokenNumber())
-                           << " Nc=1 Nr=2 20MHz Ng=4 SU unsegmented"
+                           << " Nc=" << static_cast<int>(feedback->getNc())
+                           << " Nr=" << static_cast<int>(feedback->getNr())
+                           << " " << feedback->getFeedbackBandwidth() / 1e6 << "MHz"
+                           << " Ng=" << static_cast<int>(feedback->getGrouping())
+                           << " " << (feedback->getFeedbackTypeMu() ? "MU" : "SU")
+                           << " remaining=" << static_cast<int>(feedback->getRemainingFeedbackSegments())
                            << " averageSnr=" << static_cast<int>(feedback->getAverageSnr());
     }
     else if (dynamicPtrCast<const Ieee80211VhtGroupIdManagement>(chunk)) {

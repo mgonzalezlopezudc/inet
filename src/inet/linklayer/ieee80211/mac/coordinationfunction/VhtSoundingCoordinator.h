@@ -23,6 +23,8 @@ class INET_API VhtSoundingCoordinator : public SimpleModule, public IVhtSounding
     MacAddress soundingAccessPoint;
     uint8_t dialogToken = 0;
     uint16_t associationId = 0;
+    bool feedbackTypeMu = false;
+    uint8_t requestedNc = 1;
     Hz channelWidth = Hz(0);
     int soundingTransmitterRadioId = -1;
     simtime_t ndpaReceptionEnd = -1;

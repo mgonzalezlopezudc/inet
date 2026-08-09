@@ -12,6 +12,8 @@
 #include "inet/common/packet/Packet.h"
 #include "inet/physicallayer/wireless/common/contract/bitlevel/ISignalAnalogModel.h"
 
+#include <vector>
+
 namespace inet {
 
 namespace physicallayer {
@@ -26,10 +28,18 @@ class INET_API ITransmitterAnalogModel : public virtual IPrintableObject
 {
   public:
     virtual ITransmissionAnalogModel *createAnalogModel(simtime_t preambleDuration, simtime_t headerDuration, simtime_t dataDuration, Hz centerFrequency, Hz bandwidth, W power) const = 0;
+
+    virtual ITransmissionAnalogModel *createAnalogModel(simtime_t preambleDuration, simtime_t headerDuration, simtime_t dataDuration,
+            const std::vector<FrequencySegment>& segments, W power) const
+    {
+        if (segments.size() != 1)
+            throw cRuntimeError("This transmitter analog model does not support segmented frequency occupancy");
+        return createAnalogModel(preambleDuration, headerDuration, dataDuration,
+                segments.front().centerFrequency, segments.front().bandwidth, power);
+    }
 };
 
 } // namespace physicallayer
 } // namespace inet
 
 #endif
-

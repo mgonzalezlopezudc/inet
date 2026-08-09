@@ -25,6 +25,23 @@ DimensionalReceptionAnalogModel::DimensionalReceptionAnalogModel(const simtime_t
         throw cRuntimeError("Channel-matrix-combined reception requires channel matrix signal metadata");
 }
 
+DimensionalReceptionAnalogModel::DimensionalReceptionAnalogModel(const simtime_t preambleDuration,
+        const simtime_t headerDuration, const simtime_t dataDuration, const std::vector<FrequencySegment>& segments,
+        const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power,
+        const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& interferencePower,
+        bool channelMatrixCombined,
+        const std::shared_ptr<const ChannelMatrixSignal>& channelMatrixSignal) :
+    DimensionalSignalAnalogModel(preambleDuration, headerDuration, dataDuration,
+            segments.front().centerFrequency, segments.front().bandwidth, power),
+    interferencePower(interferencePower == nullptr ? power : interferencePower),
+    channelMatrixCombined(channelMatrixCombined),
+    channelMatrixSignal(channelMatrixSignal)
+{
+    frequencySegments = segments;
+    if (channelMatrixCombined && channelMatrixSignal == nullptr)
+        throw cRuntimeError("Channel-matrix-combined reception requires channel matrix signal metadata");
+}
+
 } // namespace physicallayer
 
 } // namespace inet

@@ -135,6 +135,7 @@ void Ieee80211Mib::initialize(int stage)
         localVhtCapabilities.maxAmpduLengthExponent = par("vhtMaxAmpduLengthExponent").intValue();
         localVhtCapabilities.shortGi80 = par("vhtShortGi80").boolValue();
         localVhtCapabilities.shortGi160 = par("vhtShortGi160").boolValue();
+        localVhtCapabilities.supports80Plus80MHz = par("vht80Plus80MHz").boolValue();
         const bool configuredMuBeamformer = par("vhtMuBeamformer").boolValue() || par("vhtMuMimo").boolValue();
         const bool configuredMuBeamformee = par("vhtMuBeamformee").boolValue();
         // IEEE Std 802.11-2024, Table 9-313: MU beamformer/beamformee
@@ -400,7 +401,9 @@ void Ieee80211Mib::initialize(int stage)
         // VHT operation information has no 320 MHz encoding. EHT carries the
         // 320 MHz operation separately, so do not try to force a 320 MHz
         // channel through the VHT CCFS derivation.
-        if (channel->getOperatingChannelWidth() <= MHz(160))
+        if (channel->getBand()->getChannelTopology() == physicallayer::Ieee80211ChannelTopology::NONCONTIGUOUS)
+            vhtOperation = deriveIeee80211Vht80Plus80Operation(channel->getCenterFrequency(), channel->getSecondary80CenterFrequency());
+        else if (channel->getOperatingChannelWidth() <= MHz(160))
             vhtOperation = deriveIeee80211VhtOperation(channel->getBondedCenterFrequency(), channel->getOperatingChannelWidth(),
                     channel->getPrimary80ChannelPosition());
         else
@@ -409,6 +412,11 @@ void Ieee80211Mib::initialize(int stage)
         vhtOperation.numSpatialStreams = localVhtCapabilities.maxNss;
         if (vhtOperation.operatingChannelWidth == MHz(160))
             localVhtCapabilities.supportedChannelWidths.insert(MHz(160));
+        if (vhtOperation.nonContiguous && !localVhtCapabilities.supports80Plus80MHz)
+            throw cRuntimeError("The current non-contiguous VHT channel requires vht80Plus80MHz=true");
+        vhtOperation.shortGi = vhtOperation.operatingChannelWidth == MHz(160) ?
+                localVhtCapabilities.shortGi160 :
+                vhtOperation.operatingChannelWidth == MHz(80) ? localVhtCapabilities.shortGi80 : false;
         auto configuredSecondaryChannelOffset = physicallayer::Ieee80211Channel::parseSecondaryChannelOffset(
                 par("htSecondaryChannelOffset"));
         // The radio derives the secondary channel offset from the channel

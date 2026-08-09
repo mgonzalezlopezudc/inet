@@ -41,6 +41,25 @@ ITransmissionAnalogModel* DimensionalTransmitterAnalogModel::createAnalogModel(s
     return new DimensionalTransmissionAnalogModel(preambleDuration, headerDuration, dataDuration, transmissionCenterFrequency, transmissionBandwidth, powerFunction);
 }
 
+ITransmissionAnalogModel* DimensionalTransmitterAnalogModel::createAnalogModel(simtime_t preambleDuration, simtime_t headerDuration, simtime_t dataDuration,
+        const std::vector<FrequencySegment>& segments, W power) const
+{
+    if (segments.empty())
+        throw cRuntimeError("Cannot create a transmission with no frequency segments");
+    simtime_t startTime = simTime();
+    simtime_t endTime = startTime + preambleDuration + headerDuration + dataDuration;
+    std::vector<FrequencySegment> computedSegments;
+    std::vector<Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>> powers;
+    for (const auto& segment : segments) {
+        auto centerFrequency = computeCenterFrequency(segment.centerFrequency);
+        auto bandwidth = computeBandwidth(segment.bandwidth);
+        computedSegments.push_back({centerFrequency, bandwidth});
+        powers.push_back(createPowerFunction(startTime, endTime, centerFrequency, bandwidth, computePower(power) / segments.size()));
+    }
+    auto powerFunction = makeShared<SummedFunction<WpHz, Domain<simsec, Hz>>>(powers);
+    return new DimensionalTransmissionAnalogModel(preambleDuration, headerDuration, dataDuration, computedSegments, powerFunction);
+}
+
 template<typename T>
 std::vector<DimensionalTransmitterAnalogModel::GainEntry<T>> DimensionalTransmitterAnalogModel::parseGains(const char *text) const
 {
@@ -238,4 +257,3 @@ Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> DimensionalTransmitterAnalogModel
 
 } // namespace physicallayer
 } // namespace inet
-

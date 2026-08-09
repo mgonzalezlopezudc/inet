@@ -25,7 +25,9 @@ VhtGroupIdManagementFs::VhtGroupIdManagementFs(Ieee80211Mib *mib,
     ASSERT(mib != nullptr && groupIdManager != nullptr);
     ASSERT(!peer.isMulticast() && !peer.isUnspecified());
     ASSERT(groupId > 0 && groupId < 63 && userPosition < 4);
-    ASSERT(associationGeneration > 0 && channelWidth == MHz(20));
+    ASSERT(associationGeneration > 0 &&
+            (channelWidth == MHz(20) || channelWidth == MHz(40) ||
+             channelWidth == MHz(80) || channelWidth == MHz(160)));
 }
 
 void VhtGroupIdManagementFs::startSequence(FrameSequenceContext *context, int firstStep)

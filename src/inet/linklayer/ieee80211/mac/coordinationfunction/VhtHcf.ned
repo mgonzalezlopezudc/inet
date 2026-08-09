@@ -16,6 +16,7 @@ module VhtHcf extends Hcf
         @display("i=block/control");
         bool enableVhtSuBeamforming = default(false);
         bool enableVhtDlMuMimo = default(false);
+        int vhtDlMuGroupId = default(1); // Selected VHT MU group ID, 1..62
         double vhtCsiValidityDuration @unit(s) = default(100ms);
         double vhtSoundingRetryInterval @unit(s) = default(100ms);
         double beamformingGain @unit(dB) = default(3dB); // Packet-level receive-power benefit only

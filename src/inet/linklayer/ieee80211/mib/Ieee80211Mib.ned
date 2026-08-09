@@ -77,9 +77,11 @@ simple Ieee80211Mib extends SimpleModule
         bool ehtMcs15Disabled = default(false); // EHT Operation MCS 15 Disable state advertised by an AP
         int vhtMaxMcs = default(9); // Maximum VHT MCS advertised for each enabled spatial stream (7, 8, or 9)
         int vhtMaxNss = default(8); // Maximum VHT spatial streams advertised by this MIB
+        int vhtMaxNstsTotal = default(0); // VHT MU maximum total NSTS (0 uses Beamformee STS fallback, otherwise 1..8)
         int vhtMaxAmpduLengthExponent = default(7); // VHT maximum A-MPDU-length exponent advertised to peers
         bool vhtShortGi80 = default(false); // Advertises VHT short guard interval support for 80 MHz operation
         bool vhtShortGi160 = default(false); // Advertises VHT short guard interval support for 160 MHz operation
+        bool vht80Plus80MHz = default(false); // Advertises VHT 80+80 MHz support when the radio uses a non-contiguous band
         bool vhtBeamforming = default(false); // Enables VHT transmit beamforming capability negotiation
         bool vhtMuMimo = default(false); // Enables VHT multi-user MIMO capability negotiation
         bool vhtSuBeamformer = default(false);

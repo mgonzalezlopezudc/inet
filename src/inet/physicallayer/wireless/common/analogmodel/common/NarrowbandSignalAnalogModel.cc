@@ -14,7 +14,8 @@ namespace physicallayer {
 NarrowbandSignalAnalogModel::NarrowbandSignalAnalogModel(simtime_t preambleDuration, simtime_t headerDuration, simtime_t dataDuration, Hz centerFrequency, Hz bandwidth) :
     SignalAnalogModel(preambleDuration, headerDuration, dataDuration),
     centerFrequency(centerFrequency),
-    bandwidth(bandwidth)
+    bandwidth(bandwidth),
+    frequencySegments({{centerFrequency, bandwidth}})
 {
 }
 
@@ -30,4 +31,3 @@ std::ostream& NarrowbandSignalAnalogModel::printToStream(std::ostream& stream, i
 } // namespace physicallayer
 
 } // namespace inet
-

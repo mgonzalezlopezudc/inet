@@ -13,8 +13,20 @@ namespace physicallayer {
 BandListening::BandListening(const IRadio *radio, simtime_t startTime, simtime_t endTime, Coord startPosition, Coord endPosition, Hz centerFrequency, Hz bandwidth) :
     ListeningBase(radio, startTime, endTime, startPosition, endPosition),
     centerFrequency(centerFrequency),
-    bandwidth(bandwidth)
+    bandwidth(bandwidth),
+    frequencySegments({{centerFrequency, bandwidth}})
 {
+}
+
+BandListening::BandListening(const IRadio *radio, simtime_t startTime, simtime_t endTime, Coord startPosition, Coord endPosition,
+        const std::vector<FrequencySegment>& frequencySegments) :
+    ListeningBase(radio, startTime, endTime, startPosition, endPosition),
+    centerFrequency(frequencySegments.front().centerFrequency),
+    bandwidth(frequencySegments.front().bandwidth),
+    frequencySegments(frequencySegments)
+{
+    if (frequencySegments.empty())
+        throw cRuntimeError("BandListening requires at least one frequency segment");
 }
 
 std::ostream& BandListening::printToStream(std::ostream& stream, int level, int evFlags) const
@@ -28,4 +40,3 @@ std::ostream& BandListening::printToStream(std::ostream& stream, int level, int 
 
 } // namespace physicallayer
 } // namespace inet
-

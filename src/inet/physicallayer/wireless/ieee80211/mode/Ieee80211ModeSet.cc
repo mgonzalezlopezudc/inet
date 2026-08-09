@@ -1200,6 +1200,8 @@ Ieee80211ModeSet::Ieee80211ModeSet(const char *profileName, const char *name,
     supportedChannelWidths = IEEE80211_WIDTH_20 | IEEE80211_WIDTH_40;
     if (operatingBand != Ieee80211OperatingBand::BAND_2_4_GHZ)
         supportedChannelWidths |= IEEE80211_WIDTH_80 | IEEE80211_WIDTH_160;
+    if (!strcmp(profileName, "ac"))
+        supportedChannelWidths |= IEEE80211_WIDTH_80P80;
     channelWidthScopedBasicRates = false;
     bandAware = true;
 }
@@ -1358,22 +1360,15 @@ const IIeee80211Mode *Ieee80211ModeSet::getVhtSuNdpMode(
     if (referenceMode == nullptr || !containsMode(referenceMode) ||
             getPhyFamily(referenceMode) != Ieee80211PhyFamily::VHT)
         throw cRuntimeError("VHT SU NDP mode derivation requires a VHT reference mode from this mode set");
-    if (referenceMode->getDataMode()->getBandwidth() != MHz(20))
-        throw cRuntimeError("Packet-level VHT SU NDP mode derivation currently supports only 20 MHz");
     if (numberOfSpaceTimeStreams < 2 || numberOfSpaceTimeStreams > 8)
         throw cRuntimeError("Packet-level VHT SU NDP mode derivation requires 2..8 space-time streams");
     auto vhtMode = check_and_cast<const Ieee80211VhtMode *>(referenceMode);
-    const Ieee80211Vhtmcs *mcs = nullptr;
-    switch (numberOfSpaceTimeStreams) {
-        case 2: mcs = &Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss2; break;
-        case 3: mcs = &Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss3; break;
-        case 4: mcs = &Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss4; break;
-        case 5: mcs = &Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss5; break;
-        case 6: mcs = &Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss6; break;
-        case 7: mcs = &Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss7; break;
-        case 8: mcs = &Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss8; break;
-        default: throw cRuntimeError("Invalid VHT SU NDP stream count");
-    }
+    auto bandwidth = referenceMode->getDataMode()->getBandwidth();
+    auto catalogMode = dynamic_cast<const Ieee80211VhtMode *>(
+            findVhtMode(0, numberOfSpaceTimeStreams, bandwidth, false));
+    if (catalogMode == nullptr)
+        throw cRuntimeError("No VHT MCS 0 mode for the requested NDP bandwidth and NSTS");
+    const auto *mcs = catalogMode->getDataMode()->getModulationAndCodingScheme();
     return Ieee80211VhtCompliantModes::getCompliantMode(mcs,
             vhtMode->getCenterFrequencyMode(),
             vhtMode->getPreambleMode()->getPreambleFormat(),
@@ -1602,8 +1597,6 @@ Hz Ieee80211ModeSet::getChannelWidth(const IIeee80211Band *band, Hz configuredBa
 {
     if (band == nullptr)
         return configuredBandwidth;
-    if (band->getChannelTopology() == Ieee80211ChannelTopology::NONCONTIGUOUS)
-        throw cRuntimeError("80+80 MHz topology cannot be represented by a scalar channel width");
     if (!std::isnan(configuredBandwidth.get()))
         return configuredBandwidth;
     if (!std::isnan(band->getChannelWidth().get()))
@@ -1619,7 +1612,7 @@ Hz Ieee80211ModeSet::getModeBandwidth(const IIeee80211Band *band, Hz configuredB
 
 bool Ieee80211ModeSet::supportsChannel(const IIeee80211Band *band, Hz configuredBandwidth) const
 {
-    if (band == nullptr || band->getChannelTopology() == Ieee80211ChannelTopology::NONCONTIGUOUS)
+    if (band == nullptr)
         return false;
     bool matchingBand = operatingBand == Ieee80211OperatingBand::BAND_2_4_GHZ ?
             band->getBandFamily() == Ieee80211BandFamily::BAND_2_4_GHZ :
@@ -1633,7 +1626,7 @@ bool Ieee80211ModeSet::supportsChannel(const IIeee80211Band *band, Hz configured
     uint8_t widthMask = width == MHz(20) ? IEEE80211_WIDTH_20 :
             width == MHz(40) ? IEEE80211_WIDTH_40 :
             width == MHz(80) ? IEEE80211_WIDTH_80 :
-            width == MHz(160) ? IEEE80211_WIDTH_160 :
+            width == MHz(160) ? (band->getChannelTopology() == Ieee80211ChannelTopology::NONCONTIGUOUS ? IEEE80211_WIDTH_80P80 : IEEE80211_WIDTH_160) :
             width == MHz(320) ? IEEE80211_WIDTH_320 : 0;
     return widthMask != 0 && (supportedChannelWidths & widthMask) != 0;
 }
@@ -1642,9 +1635,6 @@ void Ieee80211ModeSet::validateChannel(const IIeee80211Band *band, Hz configured
 {
     if (band == nullptr)
         throw cRuntimeError("802.11 mode profile '%s' requires an operating band", profileName.c_str());
-    if (band->getChannelTopology() == Ieee80211ChannelTopology::NONCONTIGUOUS)
-        throw cRuntimeError("802.11 mode profile '%s' does not support noncontiguous band '%s'",
-                profileName.c_str(), band->getName());
     auto width = getChannelWidth(band, configuredBandwidth);
     if (!supportsChannel(band, configuredBandwidth))
         throw cRuntimeError("802.11 mode profile '%s' does not support channel width %g MHz on band '%s'",

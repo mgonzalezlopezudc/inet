@@ -167,6 +167,10 @@ struct Ieee80211VhtCapabilitiesElement
     short soundingDimensions = 1;
     bool muBeamformer;
     bool muBeamformee;
+    short rxHighestLongGiDataRateMbps;
+    short maxNstsTotal; // decoded value 0 preserves Table 9-315 fallback semantics
+    short txHighestLongGiDataRateMbps;
+    bool extendedNssBwCapable;
     short rxMaxMcsForNss[8];
     short txMaxMcsForNss[8];
 }
@@ -507,16 +511,30 @@ class Ieee80211HeCompressedBeamformingFeedback extends Ieee80211MgmtFrame
     bool valid = true;
 }
 
-// IEEE Std 802.11-2024 9.6.22.2 and 9.4.1.46. This packet-level subset is
-// deliberately limited to unsegmented 20 MHz SU feedback with Nc=1, Nr=2,
-// Ng=4. The 13-byte report is one Average SNR octet followed by the 16
-// compressed matrices using the SU codebook sizes from Table 9-100.
+// IEEE Std 802.11-2024 9.6.22.2 and 9.4.1.46. The report bytes are kept as
+// opaque angle/delta-SNR payloads, while all fields that determine their
+// layout are represented explicitly. The first 12 report bytes retain the
+// original storage/API shape for compatibility; the extension carries the
+// remaining bytes for wider channels, larger matrices, MU feedback, and
+// segmented reports.
 class Ieee80211VhtCompressedBeamformingFeedback extends Ieee80211MgmtFrame
 {
     chunkLength = B(18);
     uint8_t soundingDialogTokenNumber;
     int8_t averageSnr;
+    double feedbackBandwidth = 20e6;
+    uint8_t nc = 1;
+    uint8_t nr = 2;
+    uint8_t grouping = 4;
+    bool codebookInformation = false;
+    bool feedbackTypeMu = false;
+    uint8_t remainingFeedbackSegments = 0;
+    bool firstFeedbackSegment = true;
+    int8_t averageSnrAdditional[];
     uint8_t compressedBeamformingReport[12];
+    uint8_t compressedBeamformingReportLength = 12;
+    uint8_t compressedBeamformingReportExtension[];
+    uint8_t muExclusiveBeamformingReport[];
 }
 
 // Typed representation only; Group ID state and the DL MU scheduler are

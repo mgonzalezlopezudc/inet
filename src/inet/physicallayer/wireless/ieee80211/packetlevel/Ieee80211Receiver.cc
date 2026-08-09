@@ -150,13 +150,7 @@ static Packet *extractVhtMuPsdu(const Ieee80211Transmission *transmission,
             Chunk::PF_ALLOW_INCOMPLETE | Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED |
             Chunk::PF_ALLOW_REINTERPRETATION;
     const auto& txVector = transmission->getVhtTxVector();
-    const Ieee80211VhtPsduBitRange *selectedRange = nullptr;
-    for (const auto& range : txVector->getPsduBitRanges())
-        if (range.userIndex == user.userPosition) {
-            if (selectedRange != nullptr)
-                return nullptr;
-            selectedRange = &range;
-        }
+    const auto *selectedRange = txVector->findMuPsduBitRange(user.userPosition);
     auto transmittedPacket = transmission->getPacket();
     auto copy = transmittedPacket->dup();
     auto phyHeader = copy->popAtFront<Ieee80211VhtPhyHeader>(b(-1), parsingFlags);
@@ -614,6 +608,16 @@ bool Ieee80211Receiver::computeIsReceptionPossible(const IListening *listening, 
     // by the common narrowband receiver abstraction.
     return ieee80211Transmission && modeSet->containsMode(ieee80211Transmission->getMode()) &&
            NarrowbandReceiverBase::computeIsReceptionPossible(listening, transmission);
+}
+
+const IListening *Ieee80211Receiver::createListening(const IRadio *radio, simtime_t startTime, simtime_t endTime,
+        const Coord& startPosition, const Coord& endPosition) const
+{
+    if (channel != nullptr && channel->getBand()->getChannelTopology() == Ieee80211ChannelTopology::NONCONTIGUOUS &&
+            bandwidth >= MHz(160))
+        return new BandListening(radio, startTime, endTime, startPosition, endPosition,
+                channel->getFrequencySegments(bandwidth));
+    return NarrowbandReceiverBase::createListening(radio, startTime, endTime, startPosition, endPosition);
 }
 
 bool Ieee80211Receiver::computeIsReceptionPossible(const IListening *listening, const IReception *reception, IRadioSignal::SignalPart part) const

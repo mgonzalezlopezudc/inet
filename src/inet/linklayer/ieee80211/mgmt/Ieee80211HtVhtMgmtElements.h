@@ -75,7 +75,8 @@ inline Ieee80211VhtCapabilitiesElement makeVhtCapabilitiesElement(const Ieee8021
 {
     Ieee80211VhtCapabilitiesElement element;
     element.rxLdpc = capabilities.rxLdpc;
-    element.supportedChannelWidthSet = capabilities.supportedChannelWidths.count(MHz(160)) ? 1 : 0;
+    element.supportedChannelWidthSet = capabilities.supports80Plus80MHz ? 2 :
+            capabilities.supportedChannelWidths.count(MHz(160)) ? 1 : 0;
     element.shortGi80 = capabilities.shortGi80;
     element.shortGi160 = capabilities.shortGi160;
     element.maxAmpduLengthExponent = capabilities.maxAmpduLengthExponent;
@@ -85,6 +86,10 @@ inline Ieee80211VhtCapabilitiesElement makeVhtCapabilitiesElement(const Ieee8021
     element.soundingDimensions = capabilities.soundingDimensions;
     element.muBeamformer = capabilities.muBeamformer;
     element.muBeamformee = capabilities.muBeamformee;
+    element.rxHighestLongGiDataRateMbps = capabilities.rxHighestLongGiDataRateMbps;
+    element.maxNstsTotal = capabilities.maxNstsTotal;
+    element.txHighestLongGiDataRateMbps = capabilities.txHighestLongGiDataRateMbps;
+    element.extendedNssBwCapable = false;
     for (int i = 0; i < 8; i++) {
         element.rxMaxMcsForNss[i] = capabilities.rxMcsNss.maxMcsPerNss[i];
         element.txMaxMcsForNss[i] = capabilities.txMcsNss.maxMcsPerNss[i];
@@ -96,8 +101,9 @@ inline Ieee80211VhtCapabilities makeVhtCapabilities(const Ieee80211VhtCapabiliti
 {
     Ieee80211VhtCapabilities capabilities;
     capabilities.supportedChannelWidths = {MHz(20), MHz(40), MHz(80)};
-    if (element.supportedChannelWidthSet)
+    if (element.supportedChannelWidthSet == 1 || element.supportedChannelWidthSet == 2)
         capabilities.supportedChannelWidths.insert(MHz(160));
+    capabilities.supports80Plus80MHz = element.supportedChannelWidthSet == 2;
     capabilities.rxLdpc = element.rxLdpc;
     capabilities.ldpc = element.rxLdpc;
     capabilities.shortGi80 = element.shortGi80;
@@ -109,6 +115,9 @@ inline Ieee80211VhtCapabilities makeVhtCapabilities(const Ieee80211VhtCapabiliti
     capabilities.soundingDimensions = element.soundingDimensions;
     capabilities.muBeamformer = element.muBeamformer;
     capabilities.muBeamformee = element.muBeamformee;
+    capabilities.rxHighestLongGiDataRateMbps = element.rxHighestLongGiDataRateMbps;
+    capabilities.maxNstsTotal = element.maxNstsTotal;
+    capabilities.txHighestLongGiDataRateMbps = element.txHighestLongGiDataRateMbps;
     for (int i = 0; i < 8; i++) {
         capabilities.rxMcsNss.maxMcsPerNss[i] = element.rxMaxMcsForNss[i];
         capabilities.txMcsNss.maxMcsPerNss[i] = element.txMaxMcsForNss[i];
@@ -140,6 +149,13 @@ inline Ieee80211VhtOperation makeVhtOperation(const Ieee80211VhtOperationElement
         operation.operatingChannelWidth = MHz(160);
     else if (element.channelWidth == 1 && element.centerFrequencySegment1 == 0)
         operation.operatingChannelWidth = MHz(80);
+    else if (element.channelWidth == 1 && element.centerFrequencySegment1 != 0) {
+        auto separation = std::abs(element.centerFrequencySegment1 - element.centerFrequencySegment0);
+        if (separation <= 16)
+            throw cRuntimeError("Malformed VHT Operation 80+80 CCFS separation: %d", separation);
+        operation.operatingChannelWidth = MHz(160);
+        operation.nonContiguous = true;
+    }
     else
         throw cRuntimeError("Unsupported or malformed VHT Operation channel-width/CCFS combination");
     operation.centerFrequencySegment0 = element.centerFrequencySegment0;

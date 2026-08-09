@@ -503,7 +503,12 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     const Quaternion& startOrientation = mobility->getCurrentAngularPosition();
     const Quaternion& endOrientation = mobility->getCurrentAngularPosition();
     const simtime_t dataDuration = std::max(SIMTIME_ZERO, duration - headerDuration - preambleDuration);
-    auto analogModel = getAnalogModel()->createAnalogModel(preambleDuration, headerDuration, dataDuration, transmissionCenterFrequency, transmissionBandwidth, transmissionPower);
+    auto frequencySegments = transmissionChannel->getFrequencySegments(transmissionBandwidth);
+    if (heMuHeader != nullptr && hePpduLayout->getPpduFormat() == HE_TRIGGER_BASED_UPLINK &&
+            hePpduLayout->getUsers().size() == 1)
+        frequencySegments = {{transmissionCenterFrequency, transmissionBandwidth}};
+    auto analogModel = getAnalogModel()->createAnalogModel(preambleDuration, headerDuration, dataDuration,
+            frequencySegments, transmissionPower);
     lastHePpdu = heMuHeader != nullptr;
     if (lastHePpdu) {
         lastHePpduFormat = getIeee80211HePpduFormat(*heMuHeader);

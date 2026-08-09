@@ -18,6 +18,8 @@ class INET_API ScalarTransmissionAnalogModel : public ScalarSignalAnalogModel, p
 {
   public:
     ScalarTransmissionAnalogModel(const simtime_t preambleDuration, simtime_t headerDuration, simtime_t dataDuration, Hz centerFrequency, Hz bandwidth, W power);
+    ScalarTransmissionAnalogModel(const simtime_t preambleDuration, simtime_t headerDuration, simtime_t dataDuration,
+            const std::vector<FrequencySegment>& segments, W power);
 };
 
 } // namespace physicallayer
@@ -25,4 +27,3 @@ class INET_API ScalarTransmissionAnalogModel : public ScalarSignalAnalogModel, p
 } // namespace inet
 
 #endif
-

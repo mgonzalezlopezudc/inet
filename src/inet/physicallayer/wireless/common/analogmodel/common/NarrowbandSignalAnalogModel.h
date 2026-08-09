@@ -20,6 +20,7 @@ class INET_API NarrowbandSignalAnalogModel : public SignalAnalogModel, public vi
   protected:
     const Hz centerFrequency;
     const Hz bandwidth;
+    std::vector<FrequencySegment> frequencySegments;
 
   public:
     NarrowbandSignalAnalogModel(simtime_t preambleDuration, simtime_t headerDuration, simtime_t dataDuration, Hz centerFrequency, Hz bandwidth);
@@ -28,6 +29,7 @@ class INET_API NarrowbandSignalAnalogModel : public SignalAnalogModel, public vi
 
     virtual Hz getCenterFrequency() const override { return centerFrequency; }
     virtual Hz getBandwidth() const override { return bandwidth; }
+    virtual const std::vector<FrequencySegment>& getFrequencySegments() const override { return frequencySegments; }
 };
 
 } // namespace physicallayer
@@ -35,4 +37,3 @@ class INET_API NarrowbandSignalAnalogModel : public SignalAnalogModel, public vi
 } // namespace inet
 
 #endif
-

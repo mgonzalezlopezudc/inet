@@ -1,5 +1,5 @@
 %description:
-Test deterministic constrained VHT DL MU scheduling and immutable plan gates.
+Test deterministic standard-envelope VHT DL MU scheduling and immutable plan gates.
 
 %includes:
 #include "inet/linklayer/ieee80211/mac/framesequence/VhtDlMuPlan.h"
@@ -26,7 +26,8 @@ using namespace inet::units::values;
 #define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
 
 static IIeee80211VhtDlMuScheduler::Candidate candidate(const char *address,
-        uint16_t aid, uint8_t userPosition, simtime_t enqueueTime, Packet *packet)
+        uint16_t aid, uint8_t userPosition, simtime_t enqueueTime, Packet *packet,
+        int nss = 1)
 {
     IIeee80211VhtDlMuScheduler::Candidate result;
     result.peer = MacAddress(address);
@@ -34,6 +35,7 @@ static IIeee80211VhtDlMuScheduler::Candidate candidate(const char *address,
     result.tid = 0;
     result.associationGeneration = 3;
     result.userPosition = userPosition;
+    result.numberOfSpatialStreams = nss;
     result.mcs = 4;
     result.enqueueTime = enqueueTime;
     result.sourceQueue = reinterpret_cast<queueing::IPacketQueue *>(uintptr_t(1));
@@ -42,6 +44,7 @@ static IIeee80211VhtDlMuScheduler::Candidate candidate(const char *address,
     result.beamformingGainDb = 3;
     result.leakagePenaltyDb = 1;
     result.soundingNsts = 4;
+    result.receiverMaxNstsTotal = 8;
     result.associated = true;
     result.negotiatedMuMimo = true;
     result.exactlyOneSpatialStream = true;
@@ -100,11 +103,38 @@ disabled.enabled = false;
 REQUIRE(scheduler->schedule(disabled).empty());
 auto badWidth = context;
 badWidth.channelWidth = MHz(40);
-REQUIRE(scheduler->schedule(badWidth).empty());
+REQUIRE(scheduler->schedule(badWidth).size() == 2);
+auto sparseWidthContext = context;
+sparseWidthContext.channelWidth = MHz(80);
+sparseWidthContext.groupId = 37;
+sparseWidthContext.transmitDimensions = 8;
+sparseWidthContext.maxNstsTotal = 8;
+sparseWidthContext.candidates[0].userPosition = 2;
+sparseWidthContext.candidates[1].userPosition = 2;
+sparseWidthContext.candidates[2].userPosition = 0;
+auto sparseSelected = scheduler->schedule(sparseWidthContext);
+REQUIRE(sparseSelected.size() == 2 && sparseSelected[0].userPosition == 0 &&
+        sparseSelected[1].userPosition == 2);
+auto multiStreamContext = context;
+multiStreamContext.channelWidth = MHz(160);
+multiStreamContext.transmitDimensions = 6;
+multiStreamContext.maxNstsTotal = 6;
+multiStreamContext.candidates[0].numberOfSpatialStreams = 2;
+multiStreamContext.candidates[1].numberOfSpatialStreams = 4;
+multiStreamContext.candidates[2].numberOfSpatialStreams = 2;
+multiStreamContext.candidates[0].soundingNsts = 6;
+multiStreamContext.candidates[1].soundingNsts = 6;
+multiStreamContext.candidates[2].soundingNsts = 6;
+auto multiStreamSelected = scheduler->schedule(multiStreamContext);
+REQUIRE(multiStreamSelected.size() == 2);
+VhtDlMuPlanDiagnostic multiStreamDiagnostic;
+REQUIRE(VhtDlMuPlan::create(multiStreamContext, multiStreamSelected,
+        multiStreamDiagnostic).has_value());
 auto insufficientSounding = fourUserContext;
 insufficientSounding.candidates[0].soundingNsts = 2;
 insufficientSounding.candidates[2].soundingNsts = 2;
-REQUIRE(scheduler->schedule(insufficientSounding).empty());
+auto insufficientSelected = scheduler->schedule(insufficientSounding);
+REQUIRE(insufficientSelected.size() == 2);
 auto badBa = selected;
 badBa[1].activeBlockAckAgreement = false;
 REQUIRE(!VhtDlMuPlan::create(context, badBa, diagnostic).has_value());

@@ -99,6 +99,8 @@ Packet *VhtDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             dataService->cloneSequenceNumberState();
     std::vector<std::unique_ptr<Packet>> prepared;
     std::vector<Ieee80211VhtMuUser> phyUsers;
+    bool ldpcExtraOfdmSymbol = false;
+    unsigned int totalNsts = 0;
     std::vector<bool> inProgressUsers(users.size(), false);
     prepared.reserve(users.size());
     phyUsers.reserve(users.size());
@@ -136,26 +138,34 @@ Packet *VhtDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         auto psduBytes = B(4) + B(copy->getByteLength());
         auto padding = (4 - psduBytes.get<B>() % 4) % 4;
         psduBytes += B(padding);
-        auto mode = modeSet->findVhtMode(user.mcs, 1, MHz(20), user.ldpc);
+        auto mode = modeSet->findVhtMode(user.mcs, user.numberOfSpatialStreams,
+                plan.getContext().channelWidth, user.ldpc);
         if (mode == nullptr)
             throw cRuntimeError("No legal VHT mode for DL MU user");
+        auto vhtMode = check_and_cast<const Ieee80211VhtMode *>(mode);
         Ieee80211VhtMuUser phyUser;
         phyUser.associationId = user.associationId;
         phyUser.userPosition = user.userPosition;
+        phyUser.numberOfSpatialStreams = user.numberOfSpatialStreams;
         phyUser.mcs = user.mcs;
         phyUser.ldpcCoding = user.ldpc;
         phyUser.psduLength = psduBytes;
         // Each user contributes only its VHT Data-field duration. The common
         // preamble is represented once by the canonical TXVECTOR.
-        phyUser.duration = mode->getDataMode()->getDuration(psduBytes);
+        phyUser.duration = vhtMode->getDataMode()->getDuration(psduBytes);
+        ldpcExtraOfdmSymbol |= user.ldpc &&
+                vhtMode->getDataMode()->getLdpcExtraOfdmSymbol(b(psduBytes));
+        totalNsts += user.numberOfSpatialStreams;
         phyUser.beamformingGainDb = user.beamformingGainDb;
         phyUser.leakagePenaltyDb = user.leakagePenaltyDb;
         phyUsers.push_back(phyUser);
         prepared.push_back(std::move(copy));
     }
 
-    auto txVector = Ieee80211VhtTxVector::createMu(MHz(20), 1, phyUsers,
-            Ieee80211VhtPreambleMode::getMuPreambleDuration(users.size()));
+    auto txVector = Ieee80211VhtTxVector::createMu(plan.getContext().channelWidth,
+            plan.getContext().groupId, phyUsers,
+            Ieee80211VhtPreambleMode::getMuPreambleDuration(totalNsts),
+            plan.getContext().shortGi, ldpcExtraOfdmSymbol);
     auto container = std::make_unique<Packet>("VHT-MU-PPDU");
     for (size_t i = 0; i < prepared.size(); ++i) {
         auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();

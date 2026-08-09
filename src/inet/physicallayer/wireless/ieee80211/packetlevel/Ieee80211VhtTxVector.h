@@ -72,15 +72,24 @@ inline Hz getIeee80211VhtChannelWidth(uint8_t bandwidthCode)
     }
 }
 
-inline b getIeee80211VhtMuPhyHeaderLength(size_t userCount)
+inline int getIeee80211VhtMuSigBLogicalBitsPerUser(Hz channelWidth)
+{
+    // IEEE Std 802.11-2024, Table 21-14: VHT-SIG-B MU logical field widths.
+    if (channelWidth == MHz(20)) return 26;
+    if (channelWidth == MHz(40)) return 27;
+    if (channelWidth == MHz(80) || channelWidth == MHz(160)) return 29;
+    throw cRuntimeError("VHT MU SIG-B requires a 20, 40, 80, or 160 MHz channel");
+}
+
+inline b getIeee80211VhtMuPhyHeaderLength(Hz channelWidth, size_t userCount)
 {
     if (userCount < 2 || userCount > 4)
         throw cRuntimeError("VHT MU user count must be in the range 2..4");
-    return b(48 + 26 * userCount);
+    return b(48 + getIeee80211VhtMuSigBLogicalBitsPerUser(channelWidth) * userCount);
 }
 
 /**
- * Immutable packet-level authority for the supported VHT SU/NDP/MU subset.
+ * Immutable packet-level authority for VHT SU/NDP/MU signaling and timing.
  * IEEE Std 802.11-2024 Tables 21-11, 21-12, 21-14 and Figure 21-28.
  */
 class INET_API Ieee80211VhtTxVector
@@ -94,6 +103,7 @@ class INET_API Ieee80211VhtTxVector
     const uint8_t mcs;
     const bool ldpcCoding;
     const bool ldpcExtraOfdmSymbol;
+    const bool shortGuardInterval;
     const uint16_t partialAid;
     const bool beamformed;
     const double beamformingGainDb;
@@ -107,12 +117,19 @@ class INET_API Ieee80211VhtTxVector
     Ieee80211VhtTxVector(Hz channelWidth, uint8_t groupId,
             const std::vector<Ieee80211VhtMuUser>& users,
             const std::vector<Ieee80211VhtPsduBitRange>& psduBitRanges,
-            simtime_t preambleDuration, simtime_t commonDuration) :
+            simtime_t preambleDuration, simtime_t commonDuration,
+            bool shortGuardInterval, bool ldpcExtraOfdmSymbol) :
         ppduFormat(VHT_MU), channelWidth(channelWidth),
         psduLength(psduBitRanges.empty() ? B(0) :
                 B(psduBitRanges.back().getEndBitOffset())),
-        groupId(groupId), numberOfSpaceTimeStreams(users.size()), mcs(0),
-        ldpcCoding(false), ldpcExtraOfdmSymbol(false), partialAid(0),
+        groupId(groupId), numberOfSpaceTimeStreams([&users] {
+            unsigned int total = 0;
+            for (const auto& user : users)
+                total += user.numberOfSpatialStreams;
+            return static_cast<uint8_t>(total);
+        }()), mcs(0), ldpcCoding(false),
+        ldpcExtraOfdmSymbol(ldpcExtraOfdmSymbol),
+        shortGuardInterval(shortGuardInterval), partialAid(0),
         beamformed(true), beamformingGainDb(0), users(users),
         psduBitRanges(psduBitRanges),
         // VHT signaling is part of the preamble; the packet-level header
@@ -129,6 +146,7 @@ class INET_API Ieee80211VhtTxVector
         channelWidth(channelWidth), psduLength(psduLength), groupId(groupId),
         numberOfSpaceTimeStreams(numberOfSpaceTimeStreams), mcs(mcs),
         ldpcCoding(ldpcCoding), ldpcExtraOfdmSymbol(ldpcExtraOfdmSymbol),
+        shortGuardInterval(false),
         partialAid(partialAid), beamformed(beamformed),
         beamformingGainDb(beamformingGainDb), preambleDuration(SIMTIME_ZERO),
         headerDuration(SIMTIME_ZERO), dataDuration(SIMTIME_ZERO),
@@ -152,39 +170,52 @@ class INET_API Ieee80211VhtTxVector
                 mcs != 0 || ldpcCoding || ldpcExtraOfdmSymbol || beamformed ||
                 beamformingGainDb != 0))
             throw cRuntimeError("VHT NDP must use the fixed packet-level NDP signaling subset");
-        if ((ppduFormat == VHT_NDP || beamformed) && channelWidth != MHz(20))
-            throw cRuntimeError("Packet-level VHT sounding/beamforming currently supports only 20 MHz");
     }
 
     static std::shared_ptr<const Ieee80211VhtTxVector> createMu(
             Hz channelWidth, uint8_t groupId,
             const std::vector<Ieee80211VhtMuUser>& users,
-            simtime_t preambleDuration)
+            simtime_t preambleDuration, bool shortGuardInterval = false,
+            bool ldpcExtraOfdmSymbol = false)
     {
-        if (channelWidth != MHz(20) || groupId != 1 ||
-                users.size() < 2 || users.size() > 4 ||
+        // IEEE Std 802.11-2024, Table 21-1: VHT MU uses GID 1..62 and 2..4
+        // active users; Table 21-12 carries four independently populated positions.
+        getIeee80211VhtBandwidthCode(channelWidth);
+        if (groupId < 1 || groupId > 62 || users.size() < 2 || users.size() > 4 ||
                 preambleDuration <= SIMTIME_ZERO)
-            throw cRuntimeError("Constrained VHT MU requires 20 MHz, GID 1, and 2..4 users");
+            throw cRuntimeError("VHT MU requires GID 1..62, 2..4 users, and a positive preamble duration");
         std::set<int> positions;
         std::vector<Ieee80211VhtPsduBitRange> ranges;
         b offset = b(0);
         simtime_t commonDuration = SIMTIME_ZERO;
+        unsigned int totalNsts = 0;
+        bool hasLdpcUser = false;
         for (size_t i = 0; i < users.size(); ++i) {
             const auto& user = users[i];
             if (user.associationId == 0 ||
-                    user.userPosition != i || !positions.insert(user.userPosition).second ||
-                    user.numberOfSpatialStreams != 1 || user.mcs > 9 ||
+                    user.userPosition > 3 || !positions.insert(user.userPosition).second ||
+                    user.numberOfSpatialStreams < 1 || user.numberOfSpatialStreams > 4 || user.mcs > 9 ||
                     user.psduLength <= B(0) || user.psduLength.get<B>() % 4 != 0 ||
+                    user.psduLength > B(1048572) ||
                     user.duration <= SIMTIME_ZERO || !std::isfinite(user.beamformingGainDb) ||
                     user.beamformingGainDb < 0 || !std::isfinite(user.leakagePenaltyDb) ||
                     user.leakagePenaltyDb < 0)
-                throw cRuntimeError("Invalid constrained VHT MU user at position %zu", i);
+                throw cRuntimeError("Invalid VHT MU user at index %zu", i);
             ranges.push_back({i, offset, b(user.psduLength)});
             offset += b(user.psduLength);
             commonDuration = std::max(commonDuration, user.duration);
+            totalNsts += user.numberOfSpatialStreams;
+            hasLdpcUser |= user.ldpcCoding;
         }
+        // IEEE Std 802.11-2024, 21.1.1 and Table 21-1: at most 4 NSTS per
+        // user and 8 NSTS summed over all users.
+        if (totalNsts == 0 || totalNsts > 8)
+            throw cRuntimeError("VHT MU total NSTS must be in the range 1..8");
+        if (ldpcExtraOfdmSymbol && !hasLdpcUser)
+            throw cRuntimeError("VHT MU LDPC Extra OFDM Symbol requires an LDPC-coded user");
         return std::shared_ptr<const Ieee80211VhtTxVector>(new Ieee80211VhtTxVector(
-                channelWidth, groupId, users, ranges, preambleDuration, commonDuration));
+                channelWidth, groupId, users, ranges, preambleDuration, commonDuration,
+                shortGuardInterval, ldpcExtraOfdmSymbol));
     }
 
     Ieee80211VhtPpduFormat getPpduFormat() const { return ppduFormat; }
@@ -195,6 +226,7 @@ class INET_API Ieee80211VhtTxVector
     uint8_t getMcs() const { return mcs; }
     bool isLdpcCoding() const { return ldpcCoding; }
     bool hasLdpcExtraOfdmSymbol() const { return ldpcExtraOfdmSymbol; }
+    bool hasShortGuardInterval() const { return shortGuardInterval; }
     uint16_t getPartialAid() const { return partialAid; }
     bool isBeamformed() const { return beamformed; }
     double getBeamformingGainDb() const { return beamformingGainDb; }
@@ -216,6 +248,13 @@ class INET_API Ieee80211VhtTxVector
                 result = &user;
             }
         return result;
+    }
+    const Ieee80211VhtPsduBitRange *findMuPsduBitRange(uint8_t userPosition) const
+    {
+        for (size_t i = 0; i < users.size(); ++i)
+            if (users[i].userPosition == userPosition)
+                return &psduBitRanges.at(i);
+        return nullptr;
     }
 };
 

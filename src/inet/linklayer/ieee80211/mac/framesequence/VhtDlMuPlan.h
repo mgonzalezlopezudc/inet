@@ -7,6 +7,7 @@
 #ifndef __INET_VHTDLMUPLAN_H
 #define __INET_VHTDLMUPLAN_H
 
+#include <algorithm>
 #include <optional>
 #include <set>
 #include <string>
@@ -61,18 +62,20 @@ class INET_API VhtDlMuPlan
     {
         diagnostic = {};
         if (!context.enabled || !context.accessPoint || !context.packetLevelRadio ||
-                context.channelWidth != MHz(20) || context.transmitDimensions < 2 ||
-                context.transmitDimensions > 4 ||
-                context.groupId != 1)
+                (context.channelWidth != MHz(20) && context.channelWidth != MHz(40) &&
+                 context.channelWidth != MHz(80) && context.channelWidth != MHz(160)) ||
+                context.transmitDimensions < 2 || context.transmitDimensions > 8 ||
+                context.maxNstsTotal < 2 || context.maxNstsTotal > 8 ||
+                context.groupId < 1 || context.groupId > 62)
             return fail(diagnostic, VhtDlMuPlanError::INVALID_COMMON_GATES, -1,
-                    MacAddress(), "VHT DL MU common gates require AP packet-level 20 MHz, 2..4 dimensions, and GID 1");
-        if (users.size() < 2 || users.size() > 4 ||
-                users.size() > static_cast<size_t>(context.transmitDimensions))
+                    MacAddress(), "VHT DL MU common gates require AP packet-level VHT width, 2..8 dimensions, and GID 1..62");
+        if (users.size() < 2 || users.size() > 4)
             return fail(diagnostic, VhtDlMuPlanError::INVALID_USER_COUNT, -1,
-                    MacAddress(), "constrained VHT DL MU requires 2..4 users within the available dimensions");
+                    MacAddress(), "VHT DL MU requires 2..4 active users");
         std::set<MacAddress> peers;
         std::set<int> positions;
         const auto commonTid = users.front().tid;
+        int totalNsts = 0;
         for (size_t i = 0; i < users.size(); ++i) {
             const auto& user = users[i];
             if (!IIeee80211VhtDlMuScheduler::isEligible(context, user))
@@ -81,13 +84,21 @@ class INET_API VhtDlMuPlan
             if (!peers.insert(user.peer).second)
                 return fail(diagnostic, VhtDlMuPlanError::DUPLICATE_USER, i,
                         user.peer, "duplicate VHT DL MU peer");
-            if (!positions.insert(user.userPosition).second || user.userPosition != i)
+            if (!positions.insert(user.userPosition).second)
                 return fail(diagnostic, VhtDlMuPlanError::INVALID_POSITION, i,
-                        user.peer, "VHT DL MU positions must be canonical 0..N-1");
+                        user.peer, "VHT DL MU user positions must be unique values in 0..3");
             if (user.tid != commonTid)
                 return fail(diagnostic, VhtDlMuPlanError::MISMATCHED_TID, i,
-                        user.peer, "constrained VHT DL MU users must use the same TID");
+                        user.peer, "VHT DL MU users must use the same TID");
+            totalNsts += user.numberOfSpatialStreams;
         }
+        // IEEE Std 802.11-2024, 21.1.1: total VHT MU NSTS is at most eight.
+        if (totalNsts > context.transmitDimensions || totalNsts > context.maxNstsTotal ||
+                std::any_of(users.begin(), users.end(), [totalNsts] (const auto& user) {
+                    return totalNsts > user.receiverMaxNstsTotal || totalNsts > user.soundingNsts;
+                }))
+            return fail(diagnostic, VhtDlMuPlanError::INVALID_USER_COUNT, -1,
+                    MacAddress(), "VHT DL MU total NSTS exceeds the transmitter limit");
         return VhtDlMuPlan(context, users);
     }
 

@@ -29,6 +29,19 @@ ITransmissionAnalogModel *ScalarTransmitterAnalogModel::createAnalogModel(simtim
     return new ScalarTransmissionAnalogModel(preambleDuration, headerDuration, dataDuration, transmissionCenterFrequency, transmissionBandwidth, transmissionPower);
 }
 
+ITransmissionAnalogModel *ScalarTransmitterAnalogModel::createAnalogModel(simtime_t preambleDuration, simtime_t headerDuration, simtime_t dataDuration,
+        const std::vector<FrequencySegment>& segments, W power) const
+{
+    if (segments.empty())
+        throw cRuntimeError("Cannot create a transmission with no frequency segments");
+    std::vector<FrequencySegment> computedSegments = segments;
+    for (auto& segment : computedSegments) {
+        segment.centerFrequency = computeCenterFrequency(segment.centerFrequency);
+        segment.bandwidth = computeBandwidth(segment.bandwidth);
+    }
+    return new ScalarTransmissionAnalogModel(preambleDuration, headerDuration, dataDuration,
+            computedSegments, computePower(power));
+}
+
 } // namespace physicallayer
 } // namespace inet
-

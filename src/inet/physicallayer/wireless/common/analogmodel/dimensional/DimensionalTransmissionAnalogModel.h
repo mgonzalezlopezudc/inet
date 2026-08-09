@@ -18,6 +18,8 @@ class INET_API DimensionalTransmissionAnalogModel : public DimensionalSignalAnal
 {
   public:
     DimensionalTransmissionAnalogModel(const simtime_t preambleDuration, const simtime_t headerDuration, const simtime_t dataDuration, Hz centerFrequency, Hz bandwidth, const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power);
+    DimensionalTransmissionAnalogModel(const simtime_t preambleDuration, const simtime_t headerDuration, const simtime_t dataDuration,
+            const std::vector<FrequencySegment>& segments, const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power);
 };
 
 } // namespace physicallayer
@@ -25,4 +27,3 @@ class INET_API DimensionalTransmissionAnalogModel : public DimensionalSignalAnal
 } // namespace inet
 
 #endif
-

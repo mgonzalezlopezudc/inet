@@ -98,12 +98,8 @@ for (auto width : {MHz(20), MHz(40), MHz(80), MHz(160)}) {
     REQUIRE(getIeee80211VhtChannelWidth(getIeee80211VhtBandwidthCode(width)) == width);
 }
 
-bool rejectedWideBeamforming = false;
-try {
-    Ieee80211VhtTxVector unsupported(MHz(40), B(100), 63, 1, 0, false, false, 0, true, 3);
-}
-catch (const cRuntimeError&) { rejectedWideBeamforming = true; }
-REQUIRE(rejectedWideBeamforming);
+Ieee80211VhtTxVector wideBeamforming(MHz(40), B(100), 63, 2, 0, false, false, 0, true, 3);
+REQUIRE(wideBeamforming.isBeamformed() && wideBeamforming.getChannelWidth() == MHz(40));
 
 bool rejectedMalformedNdp = false;
 try {

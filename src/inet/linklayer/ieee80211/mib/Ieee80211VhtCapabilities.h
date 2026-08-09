@@ -30,6 +30,7 @@ struct Ieee80211VhtMcsNssMap
 struct Ieee80211VhtCapabilities
 {
     std::set<Hz> supportedChannelWidths = {MHz(20), MHz(40), MHz(80)};
+    bool supports80Plus80MHz = false; // Requires two-segment geometry; scalar 160 is not sufficient.
     Ieee80211VhtMcsNssMap rxMcsNss;
     Ieee80211VhtMcsNssMap txMcsNss;
     bool rxLdpc = false;
@@ -38,6 +39,9 @@ struct Ieee80211VhtCapabilities
     int maxAmpduLengthExponent = 7; // up to 7 for VHT (1,048,575 bytes)
     int maxNss = 8;
     int maxMcs = 9;
+    int rxHighestLongGiDataRateMbps = 0;
+    int txHighestLongGiDataRateMbps = 0;
+    int maxNstsTotal = 0; // 0 advertises the standard beamformee-STS fallback.
     bool shortGi80 = false;
     bool shortGi160 = false;
     bool suBeamformer = false;
@@ -58,6 +62,7 @@ struct Ieee80211VhtDirectionalCapabilities
     bool shortGi160 = false;
     bool suBeamforming = false;
     int soundingNsts = 0;
+    int maxNstsTotal = 0;
     bool muMimo = false;
     int receiverMaxAmpduLengthExponent = 0;
 };
@@ -68,6 +73,7 @@ struct Ieee80211VhtOperation
     Hz operatingChannelWidth = Hz(20e6);
     int centerFrequencySegment0 = 0;
     int centerFrequencySegment1 = 0;
+    bool nonContiguous = false;
     int numSpatialStreams = 1;
     bool shortGi = false;
     bool ldpc = false;
@@ -79,13 +85,8 @@ struct Ieee80211VhtOperation
     }
 };
 
-inline Ieee80211VhtOperation deriveIeee80211VhtOperation(Hz centerFrequency, Hz channelWidth,
-        physicallayer::Ieee80211Primary80ChannelPosition primary80ChannelPosition =
-                physicallayer::Ieee80211Primary80ChannelPosition::UNSPECIFIED)
+inline int getIeee80211VhtChannelNumber(Hz centerFrequency)
 {
-    if (channelWidth != MHz(20) && channelWidth != MHz(40) &&
-            channelWidth != MHz(80) && channelWidth != MHz(160))
-        throw cRuntimeError("VHT operation requires a 20, 40, 80, or 160 MHz channel");
     double centerMhz = centerFrequency.get<MHz>();
     double channel = centerMhz == 2484 ? 14 :
             centerMhz < 3000 ? (centerMhz - 2407) / 5 :
@@ -93,6 +94,17 @@ inline Ieee80211VhtOperation deriveIeee80211VhtOperation(Hz centerFrequency, Hz 
     int centerChannel = std::lround(channel);
     if (std::abs(channel - centerChannel) > 1e-6 || centerChannel <= 0 || centerChannel > 255)
         throw cRuntimeError("VHT center frequency does not map to an IEEE 802.11 channel number");
+    return centerChannel;
+}
+
+inline Ieee80211VhtOperation deriveIeee80211VhtOperation(Hz centerFrequency, Hz channelWidth,
+        physicallayer::Ieee80211Primary80ChannelPosition primary80ChannelPosition =
+                physicallayer::Ieee80211Primary80ChannelPosition::UNSPECIFIED)
+{
+    if (channelWidth != MHz(20) && channelWidth != MHz(40) &&
+            channelWidth != MHz(80) && channelWidth != MHz(160))
+        throw cRuntimeError("VHT operation requires a 20, 40, 80, or 160 MHz channel");
+    int centerChannel = getIeee80211VhtChannelNumber(centerFrequency);
     Ieee80211VhtOperation operation;
     operation.operatingChannelWidth = channelWidth;
     if (channelWidth == MHz(160)) {
@@ -108,6 +120,20 @@ inline Ieee80211VhtOperation deriveIeee80211VhtOperation(Hz centerFrequency, Hz 
     }
     else
         operation.centerFrequencySegment0 = centerChannel;
+    return operation;
+}
+
+inline Ieee80211VhtOperation deriveIeee80211Vht80Plus80Operation(Hz primarySegmentCenterFrequency,
+        Hz secondarySegmentCenterFrequency)
+{
+    Ieee80211VhtOperation operation;
+    operation.operatingChannelWidth = MHz(160);
+    operation.centerFrequencySegment0 = getIeee80211VhtChannelNumber(primarySegmentCenterFrequency);
+    operation.centerFrequencySegment1 = getIeee80211VhtChannelNumber(secondarySegmentCenterFrequency);
+    operation.nonContiguous = true;
+    auto separation = std::abs(operation.centerFrequencySegment1 - operation.centerFrequencySegment0);
+    if (separation <= 16)
+        throw cRuntimeError("VHT 80+80 MHz operation requires CCFS separation greater than 16 channel numbers");
     return operation;
 }
 
@@ -164,14 +190,27 @@ inline Ieee80211NegotiatedVhtCapabilities negotiateVhtCapabilities(
             std::min(peer.soundingDimensions, local.beamformeeSts) : 0;
     negotiated.localTxPeerRx.muMimo = local.muBeamformer && peer.muBeamformee;
     negotiated.localRxPeerTx.muMimo = peer.muBeamformer && local.muBeamformee;
+    // IEEE Std 802.11-2024, 9.4.2.156.3/Table 9-315: zero in Maximum
+    // NSTS,total falls back to the Beamformee STS Capability value.
+    negotiated.localTxPeerRx.maxNstsTotal = negotiated.localTxPeerRx.muMimo ?
+            (peer.maxNstsTotal == 0 ? peer.beamformeeSts : peer.maxNstsTotal) : 0;
+    negotiated.localRxPeerTx.maxNstsTotal = negotiated.localRxPeerTx.muMimo ?
+            (local.maxNstsTotal == 0 ? local.beamformeeSts : local.maxNstsTotal) : 0;
     negotiated.localTxPeerRx.receiverMaxAmpduLengthExponent = peer.maxAmpduLengthExponent;
     negotiated.localRxPeerTx.receiverMaxAmpduLengthExponent = local.maxAmpduLengthExponent;
-    negotiated.localTxPeerRx.valid = negotiated.localTxPeerRx.supportedChannelWidths.count(operation.operatingChannelWidth) && negotiated.localTxPeerRx.mcsNss.maxMcsPerNss[0] >= 0;
-    negotiated.localRxPeerTx.valid = negotiated.localRxPeerTx.supportedChannelWidths.count(operation.operatingChannelWidth) && negotiated.localRxPeerTx.mcsNss.maxMcsPerNss[0] >= 0;
+    bool localTxPeerRxWidthValid = negotiated.localTxPeerRx.supportedChannelWidths.count(operation.operatingChannelWidth) != 0 &&
+            (!operation.nonContiguous || (local.supports80Plus80MHz && peer.supports80Plus80MHz));
+    bool localRxPeerTxWidthValid = negotiated.localRxPeerTx.supportedChannelWidths.count(operation.operatingChannelWidth) != 0 &&
+            (!operation.nonContiguous || (local.supports80Plus80MHz && peer.supports80Plus80MHz));
+    negotiated.localTxPeerRx.valid = localTxPeerRxWidthValid && negotiated.localTxPeerRx.mcsNss.maxMcsPerNss[0] >= 0;
+    negotiated.localRxPeerTx.valid = localRxPeerTxWidthValid && negotiated.localRxPeerTx.mcsNss.maxMcsPerNss[0] >= 0;
     negotiated.intersection.ldpc = negotiated.localTxPeerRx.ldpc && negotiated.localRxPeerTx.ldpc;
     negotiated.intersection.stbc = local.stbc && peer.stbc;
     negotiated.intersection.maxAmpduLengthExponent = std::min(local.maxAmpduLengthExponent, peer.maxAmpduLengthExponent);
     negotiated.intersection.maxNss = std::min(local.maxNss, peer.maxNss);
+    negotiated.intersection.maxNstsTotal = std::min(
+            local.maxNstsTotal == 0 ? local.beamformeeSts : local.maxNstsTotal,
+            peer.maxNstsTotal == 0 ? peer.beamformeeSts : peer.maxNstsTotal);
     negotiated.intersection.maxMcs = std::min(local.maxMcs, peer.maxMcs);
     negotiated.valid = negotiated.localTxPeerRx.valid && negotiated.localRxPeerTx.valid;
     return negotiated;

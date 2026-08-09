@@ -85,8 +85,12 @@ const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band5GHz80MHz("5 GHz (8
 const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band5GHz160MHz("5 GHz (160 MHz)",
         Ieee80211BandFamily::BAND_5_GHZ, Ieee80211ChannelTopology::CONTIGUOUS, MHz(160), GHz(5), MHz(160), 2);
 
-const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band5GHz80_80MHz("5 GHz (80+80 MHz)",
-        Ieee80211BandFamily::BAND_5_GHZ, Ieee80211ChannelTopology::NONCONTIGUOUS, MHz(160), GHz(5), MHz(160), 2);
+const Ieee80211EnumeratedBand Ieee80211CompliantBands::band5GHz80_80MHz("5 GHz (80+80 MHz)",
+        Ieee80211BandFamily::BAND_5_GHZ, Ieee80211ChannelTopology::NONCONTIGUOUS, MHz(160),
+{
+    GHz(5.210), // IEEE channel 42, lower 80 MHz segment
+    GHz(5.775), // IEEE channel 155, upper 80 MHz segment
+});
 
 const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band5_9GHz("5.9 GHz",
         Ieee80211BandFamily::BAND_5_9_GHZ, Ieee80211ChannelTopology::CONTIGUOUS, MHz(10), GHz(5.855), MHz(10), 7);

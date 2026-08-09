@@ -86,7 +86,7 @@ void VhtGroupIdManager::setMembership(Ieee80211VhtGroupIdManagement& action,
     if (groupId == 0 || groupId == 63 || userPosition > 3 ||
             action.getMembershipStatusArraySize() != 8 ||
             action.getUserPositionArraySize() != 16)
-        throw cRuntimeError("Invalid constrained VHT Group ID membership");
+        throw cRuntimeError("Invalid VHT Group ID membership");
     auto membership = action.getMembershipStatus(groupId / 8);
     action.setMembershipStatus(groupId / 8,
             membership | (uint8_t(1) << (groupId % 8)));
@@ -121,9 +121,11 @@ bool VhtGroupIdManager::isActive(const MacAddress& peer, uint8_t groupId,
 void VhtGroupIdManager::beginPending(const MacAddress& peer, uint8_t groupId,
         uint8_t userPosition, uint64_t associationGeneration, Hz channelWidth)
 {
-    if (peer.isMulticast() || peer.isUnspecified() || groupId == 0 || groupId == 63 ||
-            userPosition > 3 || associationGeneration == 0 || channelWidth != MHz(20))
-        throw cRuntimeError("Invalid constrained VHT Group ID pending state");
+    if (peer.isMulticast() || peer.isUnspecified() || groupId < 1 || groupId > 62 ||
+            userPosition > 3 || associationGeneration == 0 ||
+            (channelWidth != MHz(20) && channelWidth != MHz(40) &&
+             channelWidth != MHz(80) && channelWidth != MHz(160)))
+        throw cRuntimeError("Invalid VHT Group ID pending state");
     entries[peer] = {State::PENDING, groupId, userPosition,
             associationGeneration, channelWidth, simTime() + pendingTimeout};
     rescheduleExpiryTimer();
@@ -146,16 +148,29 @@ bool VhtGroupIdManager::consume(const MacAddress& peer,
         const Ptr<const Ieee80211VhtGroupIdManagement>& action,
         uint64_t associationGeneration, Hz channelWidth)
 {
-    constexpr uint8_t GROUP_ID = 1;
     if (peer.isMulticast() || peer.isUnspecified() || action == nullptr ||
-            associationGeneration == 0 || channelWidth != MHz(20) ||
-            !isMember(*action, GROUP_ID)) {
+            associationGeneration == 0 ||
+            (channelWidth != MHz(20) && channelWidth != MHz(40) &&
+             channelWidth != MHz(80) && channelWidth != MHz(160))) {
         invalidatePeer(peer);
         return false;
     }
-    entries[peer] = {State::ACTIVE, GROUP_ID, getUserPosition(*action, GROUP_ID),
+    // IEEE Std 802.11-2024, 11.39: GIDs 1..62 are membership-managed. This
+    // model keeps one deterministic active assignment, choosing the lowest
+    // advertised GID instead of assigning a STA to every group.
+    uint8_t groupId = 0;
+    for (uint8_t candidate = 1; candidate <= 62; ++candidate)
+        if (isMember(*action, candidate)) {
+            groupId = candidate;
+            break;
+        }
+    if (groupId == 0) {
+        invalidatePeer(peer);
+        return false;
+    }
+    entries[peer] = {State::ACTIVE, groupId, getUserPosition(*action, groupId),
             associationGeneration, channelWidth, -1};
-    localMembership = Membership{peer, GROUP_ID, getUserPosition(*action, GROUP_ID),
+    localMembership = Membership{peer, groupId, getUserPosition(*action, groupId),
             associationGeneration, channelWidth};
     if (localMembershipListener != nullptr)
         localMembershipListener->localVhtGroupMembershipChanged(localMembership);

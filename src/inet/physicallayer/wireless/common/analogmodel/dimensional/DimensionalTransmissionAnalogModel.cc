@@ -15,7 +15,14 @@ DimensionalTransmissionAnalogModel::DimensionalTransmissionAnalogModel(const sim
 {
 }
 
+DimensionalTransmissionAnalogModel::DimensionalTransmissionAnalogModel(const simtime_t preambleDuration, const simtime_t headerDuration, const simtime_t dataDuration,
+        const std::vector<FrequencySegment>& segments, const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power) :
+    DimensionalSignalAnalogModel(preambleDuration, headerDuration, dataDuration,
+            segments.front().centerFrequency, segments.front().bandwidth, power)
+{
+    frequencySegments = segments;
+}
+
 } // namespace physicallayer
 
 } // namespace inet
-

@@ -44,6 +44,33 @@ bool ScalarMediumAnalogModel::areOverlappingBands(Hz centerFrequency1, Hz bandwi
            centerFrequency1 - bandwidth1 / 2 <= centerFrequency2 + bandwidth2 / 2;
 }
 
+static Hz getOverlappingBandwidth(const std::vector<FrequencySegment>& left,
+        const std::vector<FrequencySegment>& right)
+{
+    Hz overlap(0);
+    for (const auto& l : left) {
+        const Hz lMin = l.centerFrequency - l.bandwidth / 2;
+        const Hz lMax = l.centerFrequency + l.bandwidth / 2;
+        for (const auto& r : right) {
+            const Hz rMin = r.centerFrequency - r.bandwidth / 2;
+            const Hz rMax = r.centerFrequency + r.bandwidth / 2;
+            const Hz minFrequency = lMin > rMin ? lMin : rMin;
+            const Hz maxFrequency = lMax < rMax ? lMax : rMax;
+            if (maxFrequency > minFrequency)
+                overlap += maxFrequency - minFrequency;
+        }
+    }
+    return overlap;
+}
+
+static Hz getTotalBandwidth(const std::vector<FrequencySegment>& segments)
+{
+    Hz result(0);
+    for (const auto& segment : segments)
+        result += segment.bandwidth;
+    return result;
+}
+
 W ScalarMediumAnalogModel::computeReceptionPower(const IRadio *receiverRadio, const ITransmission *transmission, const IArrival *arrival) const
 {
     const IRadioMedium *radioMedium = receiverRadio->getMedium();
@@ -138,47 +165,31 @@ const INoise *ScalarMediumAnalogModel::computeNoise(const IListening *listening,
     for (auto reception : *interferingReceptions) {
         auto signalAnalogModel = reception->getAnalogModel();
         auto receptionAnalogModel = check_and_cast<const ScalarReceptionAnalogModel *>(signalAnalogModel);
-        Hz signalCenterFrequency = receptionAnalogModel->getCenterFrequency();
-        Hz signalBandwidth = receptionAnalogModel->getBandwidth();
-        if (commonCenterFrequency == signalCenterFrequency && commonBandwidth >= signalBandwidth) {
+        const auto& listeningSegments = bandListening->getFrequencySegments();
+        const auto& signalSegments = receptionAnalogModel->getFrequencySegments();
+        Hz signalBandwidth = getTotalBandwidth(signalSegments);
+        Hz overlapBandwidth = getOverlappingBandwidth(listeningSegments, signalSegments);
+        if (overlapBandwidth >= signalBandwidth) {
             addReception(reception, noiseStartTime, noiseEndTime, powerChanges);
         }
-        else if (areOverlappingBands(commonCenterFrequency, commonBandwidth, signalCenterFrequency, signalBandwidth)) {
+        else if (overlapBandwidth > Hz(0)) {
             if (!ignorePartialInterference) {
-                Hz rxMin = commonCenterFrequency - commonBandwidth / 2;
-                Hz rxMax = commonCenterFrequency + commonBandwidth / 2;
-                Hz txMin = signalCenterFrequency - signalBandwidth / 2;
-                Hz txMax = signalCenterFrequency + signalBandwidth / 2;
-                Hz overlapMin = rxMin > txMin ? rxMin : txMin;
-                Hz overlapMax = rxMax < txMax ? rxMax : txMax;
-                Hz overlapBandwidth = overlapMax > overlapMin ? (overlapMax - overlapMin) : Hz(0);
-                
-                if (overlapBandwidth > Hz(0)) {
-                    W power = receptionAnalogModel->getPower() * (overlapBandwidth.get() / signalBandwidth.get());
-                    addReceptionWithPower(reception, power, noiseStartTime, noiseEndTime, powerChanges);
-                }
+                W power = receptionAnalogModel->getPower() * (overlapBandwidth.get() / signalBandwidth.get());
+                addReceptionWithPower(reception, power, noiseStartTime, noiseEndTime, powerChanges);
             }
         }
     }
     const ScalarNoise *scalarBackgroundNoise = dynamic_cast<const ScalarNoise *>(interference->getBackgroundNoise());
     if (scalarBackgroundNoise) {
-        if (commonCenterFrequency == scalarBackgroundNoise->getCenterFrequency() && commonBandwidth >= scalarBackgroundNoise->getBandwidth()) {
+        std::vector<FrequencySegment> backgroundSegments = {{scalarBackgroundNoise->getCenterFrequency(), scalarBackgroundNoise->getBandwidth()}};
+        Hz overlapBandwidth = getOverlappingBandwidth(bandListening->getFrequencySegments(), backgroundSegments);
+        if (overlapBandwidth >= scalarBackgroundNoise->getBandwidth()) {
             addNoise(scalarBackgroundNoise, noiseStartTime, noiseEndTime, powerChanges);
         }
-        else if (areOverlappingBands(commonCenterFrequency, commonBandwidth, scalarBackgroundNoise->getCenterFrequency(), scalarBackgroundNoise->getBandwidth())) {
+        else if (overlapBandwidth > Hz(0)) {
             if (!ignorePartialInterference) {
-                Hz rxMin = commonCenterFrequency - commonBandwidth / 2;
-                Hz rxMax = commonCenterFrequency + commonBandwidth / 2;
-                Hz txMin = scalarBackgroundNoise->getCenterFrequency() - scalarBackgroundNoise->getBandwidth() / 2;
-                Hz txMax = scalarBackgroundNoise->getCenterFrequency() + scalarBackgroundNoise->getBandwidth() / 2;
-                Hz overlapMin = rxMin > txMin ? rxMin : txMin;
-                Hz overlapMax = rxMax < txMax ? rxMax : txMax;
-                Hz overlapBandwidth = overlapMax > overlapMin ? (overlapMax - overlapMin) : Hz(0);
-                
-                if (overlapBandwidth > Hz(0)) {
-                    double scale = overlapBandwidth.get() / scalarBackgroundNoise->getBandwidth().get();
-                    addNoiseWithScale(scalarBackgroundNoise, scale, noiseStartTime, noiseEndTime, powerChanges);
-                }
+                double scale = overlapBandwidth.get() / scalarBackgroundNoise->getBandwidth().get();
+                addNoiseWithScale(scalarBackgroundNoise, scale, noiseStartTime, noiseEndTime, powerChanges);
             }
         }
     }
@@ -228,7 +239,8 @@ const IReception *ScalarMediumAnalogModel::computeReception(const IRadio *receiv
     const Coord& receptionStartPosition = arrival->getStartPosition();
     const Coord& receptionEndPosition = arrival->getEndPosition();
     W receptionPower = computeReceptionPower(receiverRadio, transmission, arrival);
-    auto receptionAnalogModel = new ScalarReceptionAnalogModel(transmissionAnalogModel->getPreambleDuration(), transmissionAnalogModel->getHeaderDuration(), transmissionAnalogModel->getDataDuration(), transmissionAnalogModel->getCenterFrequency(), transmissionAnalogModel->getBandwidth(), receptionPower);
+    auto receptionAnalogModel = new ScalarReceptionAnalogModel(transmissionAnalogModel->getPreambleDuration(), transmissionAnalogModel->getHeaderDuration(), transmissionAnalogModel->getDataDuration(),
+            transmissionAnalogModel->getFrequencySegments(), receptionPower);
     return new Reception(receiverRadio, transmission, receptionStartTime, receptionEndTime, receptionStartPosition, receptionEndPosition, receptionStartOrientation, receptionEndOrientation, receptionAnalogModel);
 }
 

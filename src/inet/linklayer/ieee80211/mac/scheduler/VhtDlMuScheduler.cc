@@ -7,6 +7,7 @@
 #include "inet/linklayer/ieee80211/mac/scheduler/VhtDlMuScheduler.h"
 
 #include <algorithm>
+#include <set>
 
 namespace inet {
 namespace ieee80211 {
@@ -31,13 +32,28 @@ VhtDlMuScheduler::schedule(const Context& context) const
         return {};
     for (const auto& anchor : eligible) {
         std::vector<Candidate> selected;
-        for (int position = 0; position < context.transmitDimensions; ++position) {
-            auto it = std::find_if(eligible.begin(), eligible.end(), [&] (const auto& candidate) {
-                return candidate.tid == anchor.tid && candidate.userPosition == position;
-            });
-            if (it == eligible.end())
+        std::set<int> positions;
+        int totalNsts = 0;
+        int receiverTotalLimit = 8;
+        int soundingLimit = 8;
+        for (const auto& candidate : eligible) {
+            if (candidate.tid != anchor.tid || positions.count(candidate.userPosition))
+                continue;
+            auto prospectiveTotal = totalNsts + candidate.numberOfSpatialStreams;
+            auto prospectiveReceiverLimit = std::min(receiverTotalLimit, candidate.receiverMaxNstsTotal);
+            auto prospectiveSoundingLimit = std::min(soundingLimit, candidate.soundingNsts);
+            if (prospectiveTotal > context.transmitDimensions ||
+                    prospectiveTotal > context.maxNstsTotal ||
+                    prospectiveTotal > prospectiveReceiverLimit ||
+                    prospectiveTotal > prospectiveSoundingLimit)
+                continue;
+            positions.insert(candidate.userPosition);
+            totalNsts += candidate.numberOfSpatialStreams;
+            receiverTotalLimit = prospectiveReceiverLimit;
+            soundingLimit = prospectiveSoundingLimit;
+            selected.push_back(candidate);
+            if (selected.size() == 4)
                 break;
-            selected.push_back(*it);
         }
         if (selected.size() >= 2)
             return selected;

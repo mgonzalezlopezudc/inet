@@ -25,6 +25,7 @@ class INET_API VhtHcf : public Hcf, public IVhtGroupIdManager::ILocalMembershipL
   protected:
     bool enableVhtSuBeamforming = false;
     bool enableVhtDlMuMimo = false;
+    uint8_t vhtDlMuGroupId = 1;
     double beamformingGainDb = 3;
     uint8_t nextDialogToken = 1;
     VhtCsiCache csiCache;

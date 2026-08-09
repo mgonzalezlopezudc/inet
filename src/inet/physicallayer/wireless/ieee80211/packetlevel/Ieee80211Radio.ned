@@ -26,7 +26,7 @@ module Ieee80211Radio extends FlatRadioBase
 {
     parameters:
         string opMode @enum("a", "b", "g(erp)", "g(mixed)", "n(mixed-2.4Ghz)", "n(greenfield-2.4Ghz)", "p", "ac", "ax", "be") = default("g(mixed)"); // Operation mode
-        string bandName @enum("2.4 GHz", "5 GHz", "5 GHz (20 MHz)", "5 GHz (40 MHz)", "5 GHz (80 MHz)", "5 GHz (160 MHz)", "5.9 GHz", "6 GHz", "6 GHz (20 MHz)", "6 GHz (40 MHz)", "6 GHz (80 MHz)", "6 GHz (160 MHz)", "6 GHz (320 MHz)") = default("2.4 GHz"); // Band name
+        string bandName @enum("2.4 GHz", "5 GHz", "5 GHz (20 MHz)", "5 GHz (40 MHz)", "5 GHz (80 MHz)", "5 GHz (160 MHz)", "5 GHz (80+80 MHz)", "5.9 GHz", "6 GHz", "6 GHz (20 MHz)", "6 GHz (40 MHz)", "6 GHz (80 MHz)", "6 GHz (160 MHz)", "6 GHz (320 MHz)") = default("2.4 GHz"); // Band name
         int channelNumber = default(0);                                 // Initial channel number within the band (TODO this is offset by 1)
         string htSecondaryChannelOffset @enum("none", "above", "below") = default("none"); // Secondary 20 MHz channel relative to the primary channel; required for HT 40 MHz operation, derived from the channel grid for wider VHT/HE/EHT operation when "none"
         string primary80ChannelPosition @enum("automatic", "lower", "upper") = default("automatic"); // For 160 MHz: primary 80 MHz segment relative to the 160 MHz center ("automatic" derives it from the channel number)

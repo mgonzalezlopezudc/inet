@@ -19,6 +19,24 @@ namespace inet {
 
 namespace physicallayer {
 
+static bool containsFrequencySegments(const std::vector<FrequencySegment>& listeningSegments,
+        const std::vector<FrequencySegment>& signalSegments)
+{
+    for (const auto& signal : signalSegments) {
+        const Hz signalMin = signal.centerFrequency - signal.bandwidth / 2;
+        const Hz signalMax = signal.centerFrequency + signal.bandwidth / 2;
+        bool contained = false;
+        for (const auto& listening : listeningSegments) {
+            const Hz listeningMin = listening.centerFrequency - listening.bandwidth / 2;
+            const Hz listeningMax = listening.centerFrequency + listening.bandwidth / 2;
+            contained |= signalMin >= listeningMin - Hz(100) && signalMax <= listeningMax + Hz(100);
+        }
+        if (!contained)
+            return false;
+    }
+    return true;
+}
+
 NarrowbandReceiverBase::NarrowbandReceiverBase() :
     SnirReceiverBase(),
     modulation(nullptr),
@@ -55,11 +73,9 @@ bool NarrowbandReceiverBase::computeIsReceptionPossible(const IListening *listen
 {
     // TODO check if modulation matches?
     auto narrowbandTransmission = check_and_cast<const INarrowbandSignalAnalogModel *>(transmission->getAnalogModel());
-    Hz rxMin = centerFrequency - bandwidth / 2;
-    Hz rxMax = centerFrequency + bandwidth / 2;
-    Hz txMin = narrowbandTransmission->getCenterFrequency() - narrowbandTransmission->getBandwidth() / 2;
-    Hz txMax = narrowbandTransmission->getCenterFrequency() + narrowbandTransmission->getBandwidth() / 2;
-    return (txMin.get() >= rxMin.get() - 100.0) && (txMax.get() <= rxMax.get() + 100.0);
+    auto bandListening = check_and_cast<const BandListening *>(listening);
+    return containsFrequencySegments(bandListening->getFrequencySegments(),
+            narrowbandTransmission->getFrequencySegments());
 }
 
 // TODO this is not purely functional, see interface comment
@@ -67,11 +83,7 @@ bool NarrowbandReceiverBase::computeIsReceptionPossible(const IListening *listen
 {
     const BandListening *bandListening = check_and_cast<const BandListening *>(listening);
     auto narrowbandReception = check_and_cast<const INarrowbandSignalAnalogModel *>(reception->getAnalogModel());
-    Hz rxMin = bandListening->getCenterFrequency() - bandListening->getBandwidth() / 2;
-    Hz rxMax = bandListening->getCenterFrequency() + bandListening->getBandwidth() / 2;
-    Hz txMin = narrowbandReception->getCenterFrequency() - narrowbandReception->getBandwidth() / 2;
-    Hz txMax = narrowbandReception->getCenterFrequency() + narrowbandReception->getBandwidth() / 2;
-    if (!((txMin.get() >= rxMin.get() - 100.0) && (txMax.get() <= rxMax.get() + 100.0))) {
+    if (!containsFrequencySegments(bandListening->getFrequencySegments(), narrowbandReception->getFrequencySegments())) {
         EV_DEBUG << "Computing whether reception is possible: reception band is not within listening band -> reception is impossible" << endl;
         return false;
     }
@@ -92,4 +104,3 @@ const IReceptionDecision *NarrowbandReceiverBase::computeReceptionDecision(const
 } // namespace physicallayer
 
 } // namespace inet
-
