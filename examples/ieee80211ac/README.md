@@ -12,7 +12,7 @@ These examples demonstrate Very High Throughput (VHT) PHY and MAC mechanisms int
 | **8x8 Spatial Streams** | [`spatial_streams_8x8`](spatial_streams_8x8/walkthrough.md) | Multi-antenna spatial multiplexing extended up to 8 spatial streams (`SingleStreamVht`, `FourStreamVht`, `EightStreamVht`). |
 | **VHT Rate Adaptation** | [`vht_rate_adaptation`](vht_rate_adaptation/walkthrough.md) | Dynamic VHT rate control using `AarfRateControl` under mobile channel conditions (`FixedVhtMcs`, `VhtAarfAdaptation`). |
 | **VHT Short GI** | [`short_gi_vht`](short_gi_vht/walkthrough.md) | Short Guard Interval (400 ns) timing on 80 MHz and 160 MHz subchannels (`VhtLongGI`, `VhtShortGI`). |
-| **Downlink MU-MIMO** | [`dl_mu_mimo_baseline`](dl_mu_mimo_baseline/walkthrough.md) | VHT Downlink Multi-User MIMO (DL MU-MIMO) beamforming and multi-station simultaneous transmissions (`VhtSingleUserBaseline`, `VhtDlMuMimoTwoUsers`). |
+| **Downlink MU-MIMO** | [`dl_mu_mimo_baseline`](dl_mu_mimo_baseline/walkthrough.md) | VHT Downlink Multi-User MIMO (DL MU-MIMO) beamforming and three-station simultaneous transmissions (`VhtSingleUserBaseline`, `VhtDlMuMimoThreeUsers`). |
 
 ## Execution Instructions
 

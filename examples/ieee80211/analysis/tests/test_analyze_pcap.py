@@ -498,6 +498,56 @@ class DecodeLegacyFieldsTest(unittest.TestCase):
             ("Legacy", "24 Mbps", "", "", "", ""),
         )
 
+    def test_vht_mu_container_is_not_counted_as_sounding_ndp(self):
+        def vht_row(frame_number, frame_type, frame_subtype, sounding=False):
+            fields = [""] * 57
+            fields[0] = "0"
+            fields[1] = frame_type
+            fields[2] = frame_subtype
+            fields[3] = "374"
+            fields[4] = "30"
+            fields[5] = "5010"
+            fields[17] = "True"
+            fields[18] = "8"
+            fields[19] = "1"
+            fields[20] = "0"
+            fields[21] = "0"
+            fields[22] = "0"
+            fields[30] = "True" if sounding else "False"
+            fields[43] = str(frame_number)
+            if frame_type == "1":
+                fields[51] = "8"
+                fields[53] = "8"
+            return "\t".join(fields)
+
+        result = SimpleNamespace(
+            returncode=0,
+            stdout="\n".join((
+                vht_row(1, "1", "0"),
+                vht_row(2, "", "", sounding=True),
+            )) + "\n",
+            stderr="",
+        )
+        with patch("analyze_pcap.get_sim_time_limit", return_value=1), \
+                patch("analyze_pcap.validate_capture_decode"), \
+                patch("analyze_pcap.subprocess.run", return_value=result):
+            statistics, total = get_config_pcap_stats(
+                ["capture.pcapng"], "Config", "sample"
+            )
+        self.assertEqual(total, 2)
+        names = {
+            analyze_pcap.unpack_key_to_name(key): value["count"]
+            for key, value in statistics.items()
+        }
+        self.assertEqual(
+            names["Control: VHT MU PPDU [VHT, VHT-MCS 8, 20 MHz, GI 0.8 us, BCC]"],
+            1,
+        )
+        self.assertEqual(
+            names["Control: VHT Sounding NDP [NDP Sounding]"],
+            1,
+        )
+
 
 class BssColorStatisticsTest(unittest.TestCase):
 
@@ -764,6 +814,22 @@ class CaptureValidationTest(unittest.TestCase):
         self.assertIn("wlan.fc.subtype == 10", timeline_filter_for_subdir("twt"))
         self.assertIn(
             "wlan.fc.subtype == 2", timeline_filter_for_subdir("dl_ofdma_sched")
+        )
+        mu_filter = timeline_filter_for_subdir("dl_mu_mimo_baseline")
+        self.assertIn("radiotap.present.vht", mu_filter)
+        self.assertIn("wlan.fc.subtype == 0", mu_filter)
+
+    def test_vht_mu_container_is_named_as_data_bearing_ppdu(self):
+        self.assertEqual(
+            analyze_pcap.get_packet_type_name(
+                "VHT MU PPDU", "", standard="VHT", mcs="VHT-MCS 8",
+                bw="20 MHz", gi="0.8 us", nss="1", coding="BCC",
+            ),
+            "Control: VHT MU PPDU [VHT, VHT-MCS 8, 20 MHz, GI 0.8 us, BCC]",
+        )
+        self.assertEqual(
+            analyze_pcap.timeline_role({"frame_name": "Control: VHT MU PPDU"}),
+            "Carries one per-user A-MPDU, including QoS Data, in simultaneous VHT spatial streams.",
         )
 
     def test_timeline_starts_at_t_zero(self):

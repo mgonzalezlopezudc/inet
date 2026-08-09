@@ -6,7 +6,7 @@
       {
         "id": "wide-channels-delivery-comparison",
         "kind": "metric",
-        "requirement": "Compare application delivered bytes across VHT 20, 40, 80, and 160 MHz channel widths",
+        "requirement": "Compare application delivered bytes across VHT 20, 40, 80, 160, and 80+80 MHz channel widths",
         "results": ["packetReceived"],
         "evaluation": {
           "handler": "unimplemented",
@@ -78,7 +78,7 @@
       {
         "id": "dl-mu-mimo-baseline-delivery-comparison",
         "kind": "metric",
-        "requirement": "Compare application delivered bytes between Single-User baseline and Downlink MU-MIMO two-user spatial multiplexing",
+        "requirement": "Compare application delivered bytes between Single-User baseline and Downlink MU-MIMO three-user spatial multiplexing",
         "results": ["packetReceived"],
         "evaluation": {
           "handler": "unimplemented",
@@ -97,7 +97,8 @@
         {"label": "VHT 20 MHz", "config": "Vht20MHz"},
         {"label": "VHT 40 MHz", "config": "Vht40MHz"},
         {"label": "VHT 80 MHz", "config": "Vht80MHz"},
-        {"label": "VHT 160 MHz", "config": "Vht160MHz"}
+        {"label": "VHT 160 MHz", "config": "Vht160MHz"},
+        {"label": "VHT 80+80 MHz", "config": "Vht80Plus80MHz"}
       ]
     },
     "vht_mcs_256qam": {
@@ -161,7 +162,7 @@
       "measurement": {"start": 0.3, "end": 0.5},
       "conditions": [
         {"label": "Single-User Baseline", "config": "VhtSingleUserBaseline"},
-        {"label": "DL MU-MIMO Two Users", "config": "VhtDlMuMimoTwoUsers"}
+        {"label": "DL MU-MIMO Three Users", "config": "VhtDlMuMimoThreeUsers"}
       ]
     }
   }

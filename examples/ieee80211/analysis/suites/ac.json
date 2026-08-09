@@ -13,7 +13,7 @@
     "wide_channels": {
       "scalar_vector_group": "wide_channels",
       "ini": "wide_channels/omnetpp.ini",
-      "configurations": ["Vht20MHz", "Vht40MHz", "Vht80MHz", "Vht160MHz"],
+      "configurations": ["Vht20MHz", "Vht40MHz", "Vht80MHz", "Vht160MHz", "Vht80Plus80MHz"],
       "phy_profiles": ["vht"],
       "feature_plugins": ["channel-width"]
     },
@@ -55,7 +55,7 @@
     "dl_mu_mimo_baseline": {
       "scalar_vector_group": "dl_mu_mimo_baseline",
       "ini": "dl_mu_mimo_baseline/omnetpp.ini",
-      "configurations": ["VhtSingleUserBaseline", "VhtDlMuMimoTwoUsers"],
+      "configurations": ["VhtSingleUserBaseline", "VhtDlMuMimoThreeUsers"],
       "phy_profiles": ["vht"],
       "feature_plugins": ["mu-mimo"]
     }

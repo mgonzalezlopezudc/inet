@@ -1,18 +1,18 @@
 {
-  "analysis_script_sha256": "48021b1801c9942f2387a4861843293244ad810d17acdb759c940fc2e6a21b55",
+  "analysis_script_sha256": "280dd2bf91004a42bf5036f90e060bcfd86c5b1f1737b52f9e8572027aef7cf6",
   "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
-  "capture_source_diff_sha256": "9dbe8924dbe2d7b540f63e0d3157ef1a18dbb33532909ffeaee78078cabed639",
+  "capture_source_diff_sha256": "95856cfff7c3ce9bb86592c8a68a250738f12042e55425b36d4a8ec4ca0bf3f0",
   "entries": [
     {
       "captures": [
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 1927610,
-            "duration_seconds": 0.315917,
+            "data_size_bytes": 425706,
+            "duration_seconds": 0.453905,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 0.515977,
-            "file_size_bytes": 2015020,
+            "end_seconds": 0.653997,
+            "file_size_bytes": 460404,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -23,15 +23,15 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 1899,
+            "packet_count": 779,
             "snapshot_length": null,
-            "start_seconds": 0.20006,
+            "start_seconds": 0.200092,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260809T111616Z/VhtSingleUserBaseline/VhtSingleUserBaseline-#0SingleBssNetwork.ap.wlan[0].pcap",
-          "sha256": "fc32243156d810d8a2338f75fd577b1406597347277604d53c74617956e7c468",
-          "size_bytes": 2015020
+          "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260809T100711Z/VhtSingleUserBaseline/VhtSingleUserBaseline-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "6b06b94a82a462e7732f04fa8ba9bd0e26b3cbced1d97fbfa14e2eb1a53edc1c",
+          "size_bytes": 460404
         }
       ],
       "command": null,
@@ -39,15 +39,15 @@
       "config": "VhtSingleUserBaseline",
       "exit_status": 0,
       "ini_file": "examples/ieee80211ac/dl_mu_mimo_baseline/omnetpp.ini",
-      "ini_sha256": "3f1a463ff5c540730df7e79dbdb87c41d738df842dd0ec3c9617285d3fb85c06",
+      "ini_sha256": "ea3f7f2752c0a2b7ea2d5cc34e94a2efb0ea9e5405f890f5dc445ccb59893921",
       "run_number": 0,
       "scalar": {
         "configname": "VhtSingleUserBaseline",
-        "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260809T111616Z/VhtSingleUserBaseline/VhtSingleUserBaseline-#0.sca",
+        "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260809T100711Z/VhtSingleUserBaseline/VhtSingleUserBaseline-#0.sca",
         "replication": "#0",
         "runnumber": 0,
         "seedset": 0,
-        "sha256": "672352f6f6bbfdc74b58c46379a51bf8db7cdba164c67c27b309dc87f043eb40"
+        "sha256": "7f1c32edb54a686ac9abd9ead168244e8507a6041aa4c6cc631da3d911919b70"
       },
       "seed_set": 0,
       "simulation_time_limit_s": 1.0,
@@ -58,11 +58,11 @@
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 908149,
-            "duration_seconds": 0.425775,
+            "data_size_bytes": 829027,
+            "duration_seconds": 0.408932,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 0.625871,
-            "file_size_bytes": 984568,
+            "end_seconds": 0.609028,
+            "file_size_bytes": 902444,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -73,46 +73,46 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 1662,
+            "packet_count": 1600,
             "snapshot_length": null,
             "start_seconds": 0.200096,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260809T111616Z/VhtDlMuMimoThreeUsers/VhtDlMuMimoThreeUsers-#0SingleBssNetwork.ap.wlan[0].pcap",
-          "sha256": "68f5d62e5c70e30e9d344ef2d947904bee11f543af4bb8c16f9d11b8367e7173",
-          "size_bytes": 984568
+          "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260809T100711Z/VhtDlMuMimoTwoUsers/VhtDlMuMimoTwoUsers-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "89da11f0d96f511556ac277dbfc1a14051c011ea763bfdfec4531bd881f24e3e",
+          "size_bytes": 902444
         }
       ],
       "command": null,
       "command_shell": null,
-      "config": "VhtDlMuMimoThreeUsers",
+      "config": "VhtDlMuMimoTwoUsers",
       "exit_status": 0,
       "ini_file": "examples/ieee80211ac/dl_mu_mimo_baseline/omnetpp.ini",
-      "ini_sha256": "3f1a463ff5c540730df7e79dbdb87c41d738df842dd0ec3c9617285d3fb85c06",
+      "ini_sha256": "ea3f7f2752c0a2b7ea2d5cc34e94a2efb0ea9e5405f890f5dc445ccb59893921",
       "run_number": 0,
       "scalar": {
-        "configname": "VhtDlMuMimoThreeUsers",
-        "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260809T111616Z/VhtDlMuMimoThreeUsers/VhtDlMuMimoThreeUsers-#0.sca",
+        "configname": "VhtDlMuMimoTwoUsers",
+        "path": "examples/ieee80211ac/dl_mu_mimo_baseline/results/20260809T100711Z/VhtDlMuMimoTwoUsers/VhtDlMuMimoTwoUsers-#0.sca",
         "replication": "#0",
         "runnumber": 0,
         "seedset": 0,
-        "sha256": "6573ce7b99f136829628d19fda5dbfbdf94da0b0f84059ed96161d7edf351e74"
+        "sha256": "6a60545d4f46183ecb8c38458b0a4c82cea7362fccb606887fd37f0be8e3a32e"
       },
       "seed_set": 0,
       "simulation_time_limit_s": 1.0,
       "subdir": "dl_mu_mimo_baseline"
     }
   ],
-  "generated_at_utc": "2026-08-09T11:17:16.176533+00:00",
+  "generated_at_utc": "2026-08-09T10:07:13.676565+00:00",
   "inet_library": "out/clang-release/src/libINET.so",
   "inet_library_sha256": "531abe1ee2606980c77c8be6d9fe3553d9bd835cdd76481994d4a9796a3e4d28",
   "repository_revision": "4ad66ce08034f755d72063cd1b827c530f8aa5ac",
-  "session_id": "20260809T111616Z",
+  "session_id": "20260809T100711Z",
   "suite": "ac",
   "suite_descriptor": {
     "path": "examples/ieee80211/analysis/suites/ac.json",
-    "sha256": "9cf3cbb341de2a6761536cb2361789e9a6883465e9bd5a181007ed7e2f02d1ad"
+    "sha256": "1c08fd5053389e6e50170fe9b944a8fa16b7ad6e07b0820b90e6aa7648c77127"
   },
   "tshark_version": "TShark (Wireshark) 4.6.4."
 }

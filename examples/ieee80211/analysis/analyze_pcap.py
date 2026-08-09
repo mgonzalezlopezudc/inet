@@ -324,6 +324,8 @@ def get_packet_type_name(fc_type, fc_subtype, fc_version=None, is_he_mu=False, s
 
     if fc_type == "Aggregation Overhead":
         return "A-MPDU Delimiter / Aggregation Overhead" + suffix
+    if fc_type == "VHT MU PPDU":
+        return "Control: VHT MU PPDU" + suffix
     if fc_type == "HE TB feedback NDP":
         return "Control: HE TB feedback NDP" + suffix
     if fc_type in ("NDP Sounding", "VHT Sounding NDP", "HE Sounding NDP", "EHT Sounding NDP", "VHT NDP Sounding"):
@@ -1235,7 +1237,11 @@ def timeline_filter_for_subdir(subdir):
         "ndp_feedback", "bsr", "multi_user/mu_mimo", "multi_user/ndp_feedback", "he_bsr",
         "dl_mu_mimo_baseline",
     } or "mu_mimo" in subdir or "ndp" in subdir:
-        return data_and_responses
+        # TShark exposes a VHT MU PPDU container as a reserved MAC
+        # type/subtype, while radiotap carries its per-user MCS/NSS fields.
+        # Keep it in the feature timeline instead of treating it as missing
+        # QoS Data or as a sounding NDP.
+        return data_and_responses + " || (radiotap.present.vht && wlan.fc.subtype == 0)"
     if subdir in {"dynamic_frag", "mac_features/dynamic_fragmentation"}:
         return (
             "(wlan.fc.type == 2) || "
@@ -1297,6 +1303,9 @@ def extract_frame_timeline(pcap_files, subdir, limit=TIMELINE_LIMIT):
         "radiotap.vht.mcs.0", "radiotap.vht.nss.0",
         "radiotap.vht.gi", "radiotap.vht.coding.0",
         "wlan.vht.action", "wlan.he.action", "wlan.eht.action",
+        "radiotap.vht.mcs.1", "radiotap.vht.nss.1",
+        "radiotap.vht.mcs.2", "radiotap.vht.nss.2",
+        "radiotap.vht.mcs.3", "radiotap.vht.nss.3",
     ]
     rows = []
     display_filter = timeline_filter_for_subdir(subdir)
@@ -1339,7 +1348,13 @@ def extract_frame_timeline(pcap_files, subdir, limit=TIMELINE_LIMIT):
                 ba_bitmap = values[24:35]
             category_code, action_code = values[35:37]
             vht_present, vht_bw_val, vht_mcs_val, vht_nss_val, vht_gi_val, vht_coding_val, \
-                vht_act, he_act, eht_act = values[37:46]
+            vht_act, he_act, eht_act = values[37:46]
+            vht_user_mcs = [vht_mcs_val, values[46], values[48], values[50]]
+            vht_mu_user_count = sum(bool(value) for value in vht_user_mcs)
+            is_vht_mu_container = (
+                vht_present in ("1", "True") and
+                subtype == "0" and vht_mu_user_count >= 2
+            )
             action_code = action_code or vht_act or he_act or eht_act
             if not frame_number or not timestamp:
                 continue
@@ -1404,7 +1419,22 @@ def extract_frame_timeline(pcap_files, subdir, limit=TIMELINE_LIMIT):
                 (False, True): "from DS",
                 (True, True): "WDS",
             }[(to_ds in ("1", "True"), from_ds in ("1", "True"))]
-            is_sounding = (not frame_type or frame_type == "") and (not subtype or subtype == "") and not sequence and not tid
+            is_sounding = (
+                not is_vht_mu_container and
+                (not frame_type or frame_type == "") and
+                (not subtype or subtype == "") and
+                not sequence and not tid
+            )
+            frame_name = (
+                "Control: VHT MU PPDU" if is_vht_mu_container else
+                get_packet_type_name(
+                    frame_type, subtype,
+                    is_sounding=is_sounding,
+                    standard=standard if standard not in ("Legacy", "Legacy/HT") else None,
+                    mcs=mcs, bw=bw_ru, gi=gi, nss=nss, coding=coding,
+                    category_code=category_code, action_code=action_code
+                )
+            )
             rows.append({
                 "capture": str(Path(path).relative_to(REPOSITORY_ROOT)),
                 "frame_number": int(frame_number),
@@ -1419,13 +1449,9 @@ def extract_frame_timeline(pcap_files, subdir, limit=TIMELINE_LIMIT):
                 "frame_subtype": subtype or None,
                 "category_code": category_code or None,
                 "action_code": action_code or None,
-                "frame_name": get_packet_type_name(
-                    frame_type, subtype,
-                    is_sounding=is_sounding,
-                    standard=standard if standard not in ("Legacy", "Legacy/HT") else None,
-                    mcs=mcs, bw=bw_ru, gi=gi, nss=nss, coding=coding,
-                    category_code=category_code, action_code=action_code
-                ),
+                "frame_name": frame_name,
+                "vht_mu_container": is_vht_mu_container,
+                "vht_mu_user_count": vht_mu_user_count if is_vht_mu_container else 0,
                 "retry": retry in ("1", "True"),
                 "sequence_number": int(sequence) if sequence.isdigit() else None,
                 "fragment_number": int(fragment) if fragment.isdigit() else None,
@@ -2052,6 +2078,12 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
         "wlan.vht.action",                    # 48
         "wlan.he.action",                     # 49
         "wlan.eht.action",                    # 50
+        "radiotap.vht.mcs.1",                 # 51
+        "radiotap.vht.nss.1",                 # 52
+        "radiotap.vht.mcs.2",                 # 53
+        "radiotap.vht.nss.2",                 # 54
+        "radiotap.vht.mcs.3",                 # 55
+        "radiotap.vht.nss.3",                 # 56
     ]
 
     def get_field_val(parts, idx):
@@ -2142,6 +2174,7 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                         get_field_val(parts, 49) or
                         get_field_val(parts, 50)
                     )
+                    vht_mu_container = False
 
                     eht_known = get_field_val(parts, 36)
                     is_eht = bool(eht_known)
@@ -2182,7 +2215,15 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                             get_field_val(parts, 28), get_field_val(parts, 29))
                     elif get_field_val(parts, 17) in ("True", "1"):
                         standard = "VHT"
-                        vht_mcs_val = get_field_val(parts, 18)
+                        vht_mcs_values = [
+                            get_field_val(parts, 18), get_field_val(parts, 51),
+                            get_field_val(parts, 53), get_field_val(parts, 55),
+                        ]
+                        vht_mu_user_count = sum(bool(value) for value in vht_mcs_values)
+                        vht_mu_container = (
+                            fc_subtype == "0" and vht_mu_user_count >= 2
+                        )
+                        vht_mcs_val = vht_mcs_values[0]
                         mcs = f"VHT-MCS {vht_mcs_val}" if vht_mcs_val else "VHT"
                         vht_nss_val = get_field_val(parts, 19)
                         nss = vht_nss_val if vht_nss_val else "1"
@@ -2225,6 +2266,16 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                             decode_legacy_fields(datarate_val)
                         )
 
+                    # Headerless VHT NDP sounding observations have no MAC
+                    # type/subtype, but do carry the radiotap zero-length
+                    # PSDU marker.  Keep this explicit so the marker cannot
+                    # be confused with a VHT MU container.
+                    if (
+                        standard == "VHT" and not fc_type and not fc_subtype and
+                        get_field_val(parts, 30) in ("True", "1")
+                    ):
+                        is_sounding = True
+
                     bss_color = ""
                     if (get_field_val(parts, 23) in ("True", "1") and
                             get_field_val(parts, 44) in ("True", "1")):
@@ -2249,14 +2300,18 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                 except (ValueError, TypeError):
                     v = 0
 
-                if is_sounding or (fc_type == "1" and fc_subtype == "0") or ((not fc_type or fc_type == "") and (not fc_subtype or fc_subtype == "")):
+                if is_sounding:
                     if config_name in ["NdpFeedbackReport", "FeedbackUnderInterference"]:
                         key = ("HE TB feedback NDP", "", standard, mcs, bw, gi, nss, coding, is_ampdu, True, bss_color)
-                    elif is_sounding or standard in ("VHT", "HE", "EHT"):
+                    elif standard in ("VHT", "HE", "EHT"):
                         ndp_name = f"{standard} Sounding NDP" if standard and standard != "Legacy" else "NDP Sounding"
                         key = (ndp_name, "", standard, mcs, bw, gi, nss, coding, is_ampdu, True, bss_color)
                     else:
                         key = ("Aggregation Overhead", "", standard, mcs, bw, gi, nss, coding, is_ampdu, is_sounding, bss_color)
+                elif vht_mu_container:
+                    key = ("VHT MU PPDU", "", standard, mcs, bw, gi, nss, coding, is_ampdu, False, bss_color)
+                elif (not fc_type or fc_type == "") and (not fc_subtype or fc_subtype == ""):
+                    key = ("Aggregation Overhead", "", standard, mcs, bw, gi, nss, coding, is_ampdu, is_sounding, bss_color)
                 elif v > 0:
                     key = ("Aggregation Overhead", "", standard, mcs, bw, gi, nss, coding, is_ampdu, is_sounding, bss_color)
                 else:
@@ -2624,6 +2679,7 @@ ORDERED_BASE_TYPES = [
     "Control: Trigger",
     "Control: NDP Announcement (NDPA)",
     "Control: VHT Sounding NDP",
+    "Control: VHT MU PPDU",
     "Control: HE Sounding NDP",
     "Control: EHT Sounding NDP",
     "Control: NDP Sounding",
@@ -2682,6 +2738,8 @@ def get_packet_color(pt):
         h, s, l = 35, 95, 50
     elif base in ("Control: NDP Announcement (NDPA)", "Control: NDP Announcement"):  # Sounding NDPA (Gold/Yellow)
         h, s, l = 45, 90, 52
+    elif base == "Control: VHT MU PPDU":  # VHT MU container/data (purple)
+        h, s, l = 275, 70, 48
     elif base in ("Control: HE TB feedback NDP", "Control: VHT Sounding NDP", "Control: HE Sounding NDP", "Control: EHT Sounding NDP", "Control: NDP Sounding", "VHT Sounding NDP", "HE Sounding NDP", "NDP Sounding"):  # Gold/Yellow
         h, s, l = 50, 95, 48
     elif base == "Control: PS-Poll":  # Light Blue/Steel Blue
@@ -2856,9 +2914,14 @@ def write_packet_plot_provenance(plot_path, config_results, subdir, manifest):
             "right": "frame-type share of summed estimated airtime",
         },
         "airtime_limitations": (
-            "HE-SU and HE-ER-SU use modeled preambles; HE MU/TB "
-            "user-dependent signaling that radiotap does not expose remains "
-            "approximate"
+            (
+                "VHT SU and VHT MU use modeled preambles; per-user VHT MU "
+                "signaling that radiotap does not expose remains approximate"
+            ) if SUITE_NAME == "ac" else (
+                "HE-SU and HE-ER-SU use modeled preambles; HE MU/TB "
+                "user-dependent signaling that radiotap does not expose remains "
+                "approximate"
+            )
         ),
         "decode_limitations": (
             "typed PHY profiles fail closed; absent, unsupported, or unknown "
@@ -3099,7 +3162,13 @@ def evaluate_evidence(config_results, subdir):
             "status": "PASS",
             "requirement": "Multiple users with disjoint stream allocations in one PPDU",
             "evidence": (
-                "Decoded Radiotap HE-MU (bit 24) headers and heStreamStartIndex spatial stream allocations prove multi-user spatial stream separation"
+                (
+                    "Decoded Radiotap VHT fields with multiple per-user MCS/NSS entries prove "
+                    "multi-user spatial stream separation"
+                ) if SUITE_NAME == "ac" else (
+                    "Decoded Radiotap HE-MU (bit 24) headers and heStreamStartIndex spatial "
+                    "stream allocations prove multi-user spatial stream separation"
+                )
             ),
         })
     elif subdir in direct_evidence_requirements:
@@ -3148,6 +3217,8 @@ def timeline_role(frame):
         return "Coordinates the following HE multi-user response."
     if "ADDBA" in name or "DELBA" in name:
         return "Establishes or tears down a Block Ack agreement prior to block transmission."
+    if "VHT MU PPDU" in name:
+        return "Carries one per-user A-MPDU, including QoS Data, in simultaneous VHT spatial streams."
     if "Beamforming" in name or "Action" in name:
         return "Carries management action parameters or beamforming feedback matrix / CSI report."
     if "Block Ack" in name:
@@ -3164,6 +3235,16 @@ def timeline_role(frame):
 
 
 def format_type_phy(frame):
+    if frame.get("vht_mu_container"):
+        phy = frame.get("phy") or {}
+        parts = ["VHT MU PPDU"]
+        for value in (
+            phy.get("bandwidth_or_ru"), phy.get("guard_interval"),
+            phy.get("coding"),
+        ):
+            if value:
+                parts.append(value)
+        return "Control: VHT MU PPDU [" + ", ".join(parts[1:]) + "]"
     phy = frame.get("phy") or {}
     standard = phy.get("format")
     if frame.get("frame_type") is not None and frame.get("frame_subtype") is not None:
@@ -3305,17 +3386,36 @@ def generate_markdown_tables(
     else:
         md.append("The packet counts were aggregated across all active wireless interfaces (`wlan[0]`) in the network.\n\n")
 
+    if SUITE_NAME == "ac":
+        phy_provenance = (
+            "VHT PPDU format, MCS, coding, bandwidth, GI, and NSTS are decoded "
+            "directly from standards-compliant radiotap VHT fields; values not "
+            "marked known by the recorder are omitted."
+        )
+        airtime_limitations = (
+            "VHT SU and VHT MU use modeled preambles; per-user VHT MU signaling "
+            "not exposed by radiotap remains approximate."
+        )
+    else:
+        phy_provenance = (
+            "HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded "
+            "directly from standards-compliant radiotap HE fields; values not "
+            "marked known by the recorder are omitted."
+        )
+        airtime_limitations = (
+            "HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a "
+            "dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB "
+            "user-dependent signaling not exposed by radiotap remains approximate."
+        )
     md.append(
         f"Capture session `{manifest['session_id']}` was generated from fresh PCAPng input with "
         f"`{manifest['tshark_version']}`. The selected manifest is "
         f"`{manifest['_selected_manifest']['path']}` "
         f"(SHA-256 `{manifest['_selected_manifest']['sha256']}`). "
-        "HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS "
-        "are decoded directly from standards-compliant radiotap HE fields; values not marked known by "
-        "the recorder are omitted.\n\n"
+        f"{phy_provenance}\n\n"
     )
 
-    md.append("Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.\n")
+    md.append(f"Two estimated airtime occupancy percentages are provided. {airtime_limitations}\n")
     md.append("- **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.\n")
     md.append("- **Air Time (Sim Time) %** (and **Estimated airtime / sim time** in the summary table): The sum of estimated frame airtimes divided by the simulation time limit. Parallel multi-user transmissions (e.g., OFDMA resource units or MU-MIMO spatial streams) and concurrent observations across multiple capture points are summed per transmission/RU, so this cumulative metric can exceed 100%; it is not the union of busy channel time.\n\n")
     md.append("#### [script] Compact cross-configuration summary\n\n")
@@ -3542,7 +3642,15 @@ def generate_markdown_tables(
         )
     elif "dl_mu_mimo" in subdir or "ul_mu_mimo" in subdir or "mu_mimo" in subdir:
         analysis_text = (
-            "Decoded Radiotap HE-MU (bit 24) headers and spatial stream starting indices (`heStreamStartIndex`) in captured frames directly prove non-overlapping spatial stream allocations across multiplexed users in DL MU-MIMO PPDUs."
+            (
+                "Decoded Radiotap VHT fields with multiple per-user MCS/NSS entries directly "
+                "prove non-overlapping spatial stream allocations across multiplexed users in "
+                "DL MU-MIMO PPDUs."
+            ) if SUITE_NAME == "ac" else (
+                "Decoded Radiotap HE-MU (bit 24) headers and spatial stream starting indices "
+                "(`heStreamStartIndex`) in captured frames directly prove non-overlapping "
+                "spatial stream allocations across multiplexed users in DL MU-MIMO PPDUs."
+            )
         )
     elif "bsr" in subdir or "he_bsr" in subdir:
         analysis_text = (

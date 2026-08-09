@@ -148,7 +148,7 @@ REQUIRE(!profile5->supportsChannel(&Ieee80211CompliantBands::band5_9GHz));
 REQUIRE(!profile6->supportsChannel(&Ieee80211CompliantBands::band6GHz320MHz));
 REQUIRE(throwsRuntimeError([&]() { profile6->validateChannel(&Ieee80211CompliantBands::band6GHz320MHz); }));
 REQUIRE(throwsRuntimeError([&]() { profile5->validateChannel(&Ieee80211CompliantBands::band5GHz80_80MHz); }));
-REQUIRE(throwsRuntimeError([&]() { Ieee80211ModeSet::getChannelWidth(&Ieee80211CompliantBands::band5GHz80_80MHz); }));
+REQUIRE(Ieee80211ModeSet::getChannelWidth(&Ieee80211CompliantBands::band5GHz80_80MHz) == MHz(160));
 REQUIRE(Ieee80211ModeSet::getModeSet("a")->getNumModes() == 8);
 REQUIRE(Ieee80211ModeSet::getModeSet("g(mixed)")->getNumModes() == 12);
 auto nProfile = Ieee80211ModeSet::getModeSet("n(mixed-2.4Ghz)");
@@ -162,6 +162,8 @@ for (int i = 0; i < nProfile->getNumModes(); ++i)
 REQUIRE(nFallbackCount == 1);
 auto acProfile = Ieee80211ModeSet::getModeSet("ac");
 REQUIRE(acProfile->getNumModes() == 621);
+REQUIRE(acProfile->supportsChannel(&Ieee80211CompliantBands::band5GHz80_80MHz));
+acProfile->validateChannel(&Ieee80211CompliantBands::band5GHz80_80MHz);
 int acFallbackCount = 0;
 for (int i = 0; i < acProfile->getNumModes(); ++i)
     if (acProfile->getPhyFamily(i) == Ieee80211PhyFamily::OFDM) {

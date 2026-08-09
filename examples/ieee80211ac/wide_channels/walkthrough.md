@@ -3,7 +3,7 @@
 <!-- BEGIN SCRIPT RESULTS SESSIONS -->
 `[script]` results sessions:
 
-- Scalar/vector: `20260809T091933Z`
+- Scalar/vector: `20260809T100318Z`
 - PCAP: `NOT RUN`
 <!-- END SCRIPT RESULTS SESSIONS -->
 
@@ -41,9 +41,9 @@ Five configurations are evaluated:
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-wide_channels -->
 ### [script] Generated scalar/vector plot and table
 
-![wide_channels scalar/vector analysis](results/20260809T091933Z/wide-channels-delivery-delay.png)
+![wide_channels scalar/vector analysis](results/20260809T100318Z/wide-channels-delivery-delay.png)
 
-Figure provenance: [`results/20260809T091933Z/wide-channels-delivery-delay.png.json`](results/20260809T091933Z/wide-channels-delivery-delay.png.json). Run-level metric source: [`../../ieee80211ax/analysis/metrics.json`](../../ieee80211ax/analysis/metrics.json).
+Figure provenance: [`results/20260809T100318Z/wide-channels-delivery-delay.png.json`](results/20260809T100318Z/wide-channels-delivery-delay.png.json). Run-level metric source: [`../../ieee80211ax/analysis/metrics.json`](../../ieee80211ax/analysis/metrics.json).
 
 Common table provenance:
 
