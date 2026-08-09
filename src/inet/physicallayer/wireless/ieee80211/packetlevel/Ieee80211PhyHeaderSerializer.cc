@@ -44,6 +44,7 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeSigCodec.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211OfdmSignalField.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211VhtTxVector.h"
 
 namespace inet {
 
@@ -833,44 +834,46 @@ void Ieee80211VhtPhyHeaderSerializer::serialize(MemoryOutputStream& stream, cons
         throw cRuntimeError("VHT LDPC Extra OFDM Symbol cannot be set for BCC coding");
     const bool mu = vhtPhyHeader->getGroupId() >= 1 && vhtPhyHeader->getGroupId() <= 62;
     if (mu) {
-        if (vhtPhyHeader->getChunkLength() != b(100) || vhtPhyHeader->getBandwidth() != 0 ||
+        auto userCount = vhtPhyHeader->getUsersArraySize();
+        if (userCount < 2 || userCount > 4 ||
+                vhtPhyHeader->getChunkLength() != getIeee80211VhtMuPhyHeaderLength(userCount) ||
+                vhtPhyHeader->getBandwidth() != 0 ||
                 vhtPhyHeader->getGroupId() != 1 || vhtPhyHeader->getStbc() ||
                 vhtPhyHeader->getNdp() || !vhtPhyHeader->getBeamformed() ||
-                vhtPhyHeader->getNumberOfSpaceTimeStreams() != 2 ||
-                vhtPhyHeader->getUsersArraySize() != 2)
+                vhtPhyHeader->getNumberOfSpaceTimeStreams() != userCount)
             throw cRuntimeError("Unsupported constrained packet-level VHT MU signaling");
         // IEEE Std 802.11-2024 Table 21-12: VHT-SIG-A1 BW, reserved,
-        // STBC=0, GID=1, and MU NSTS[1,1,0,0].
+        // STBC=0, GID=1, and one NSTS at each selected user position.
         writeUnsignedLogicalField(stream, 0, 2);
         stream.writeBit(true);
         stream.writeBit(false);
         writeUnsignedLogicalField(stream, 1, 6);
         for (size_t position = 0; position < 4; ++position)
-            writeUnsignedLogicalField(stream, position < 2 ? 1 : 0, 3);
+            writeUnsignedLogicalField(stream, position < userCount ? 1 : 0, 3);
         stream.writeBit(true); // TXOP_PS_NOT_ALLOWED
         stream.writeBit(true); // reserved
         // Table 21-12 VHT-SIG-A2. Coding for unused positions is reserved 1.
         stream.writeBit(false); // Short GI
         stream.writeBit(false); // Short GI NSYM disambiguation
-        for (size_t position = 0; position < 4; ++position) {
-            if (position < 2) {
-                const auto& user = vhtPhyHeader->getUsers(position);
-                if (user.userPosition != position || user.numberOfSpatialStreams != 1 ||
-                        user.mcs > 9 || user.coding > 1 || user.psduLength <= B(0) ||
-                        user.psduLength.get<B>() % 4 != 0 || user.psduLength > B(262140))
-                    throw cRuntimeError("Invalid constrained VHT MU user signaling");
-                stream.writeBit(user.coding != 0);
-            }
-            else
-                stream.writeBit(true);
+        for (size_t position = 0; position < userCount; ++position) {
+            const auto& user = vhtPhyHeader->getUsers(position);
+            if (user.userPosition != position || user.numberOfSpatialStreams != 1 ||
+                    user.mcs > 9 || user.coding > 1 || user.psduLength <= B(0) ||
+                    user.psduLength.get<B>() % 4 != 0 || user.psduLength > B(262140))
+                throw cRuntimeError("Invalid constrained VHT MU user signaling");
         }
+        stream.writeBit(vhtPhyHeader->getUsers(0).coding != 0); // MU[0] Coding
+        stream.writeBit(vhtPhyHeader->getLdpcExtraOfdmSymbol());
+        for (size_t position = 1; position < 4; ++position)
+            stream.writeBit(position < userCount ?
+                    vhtPhyHeader->getUsers(position).coding != 0 : true);
         stream.writeBit(true); // B7 reserved
         stream.writeBit(true); // MU Beamformed field reserved 1
         stream.writeBit(true); // B9 reserved
         stream.writeBitRepeatedly(false, 8); // packet-level logical CRC placeholder
         stream.writeBitRepeatedly(false, 6); // tail
         // Table 21-14: each 20 MHz MU user has Length[16], VHT-MCS[4], Tail[6].
-        for (size_t i = 0; i < 2; ++i) {
+        for (size_t i = 0; i < userCount; ++i) {
             const auto& user = vhtPhyHeader->getUsers(i);
             writeUnsignedLogicalField(stream, user.psduLength.get<B>() / 4, 16);
             writeUnsignedLogicalField(stream, user.mcs, 4);
@@ -934,16 +937,26 @@ const Ptr<Chunk> Ieee80211VhtPhyHeaderSerializer::deserialize(MemoryInputStream&
     if (groupId >= 1 && groupId <= 62) {
         if (stream.getRemainingLength() < b(90))
             throw cRuntimeError("VHT MU PHY header is too short for VHT-SIG-A/B");
+        auto muRemainingLength = stream.getRemainingLength();
         std::array<uint8_t, 4> nsts;
         for (auto& value : nsts)
             value = readUnsignedLogicalField(stream, 3);
+        size_t userCount = 0;
+        while (userCount < nsts.size() && nsts[userCount] == 1)
+            userCount++;
+        if (userCount < 2 || userCount > 4 ||
+                std::any_of(nsts.begin() + userCount, nsts.end(), [] (auto value) { return value != 0; }) ||
+                muRemainingLength < b(38 + 26 * userCount))
+            throw cRuntimeError("Unsupported or malformed constrained VHT MU NSTS layout");
         auto txopPsNotAllowed = stream.readBit();
         auto reservedA1 = stream.readBit();
         auto shortGi = stream.readBit();
         auto shortGiDisambiguation = stream.readBit();
         std::array<bool, 4> coding;
-        for (auto& value : coding)
-            value = stream.readBit();
+        coding[0] = stream.readBit();
+        auto ldpcExtraOfdmSymbol = stream.readBit();
+        for (size_t position = 1; position < coding.size(); ++position)
+            coding[position] = stream.readBit();
         auto reservedA2B7 = stream.readBit();
         auto beamformedReserved = stream.readBit();
         auto reservedA2B9 = stream.readBit();
@@ -952,14 +965,19 @@ const Ptr<Chunk> Ieee80211VhtPhyHeaderSerializer::deserialize(MemoryInputStream&
         for (int i = 0; i < 6; ++i)
             if (stream.readBit())
                 throw cRuntimeError("Malformed VHT-SIG-A tail");
-        if (!reservedB2 || stbc || groupId != 1 || nsts != std::array<uint8_t, 4>{1, 1, 0, 0} ||
+        bool invalidUnusedCoding = std::any_of(coding.begin() + userCount, coding.end(),
+                [] (bool value) { return !value; });
+        bool hasLdpcUser = std::any_of(coding.begin(), coding.begin() + userCount,
+                [] (bool value) { return value; });
+        if (!reservedB2 || stbc || groupId != 1 ||
                 !txopPsNotAllowed || !reservedA1 || shortGi || shortGiDisambiguation ||
-                !coding[2] || !coding[3] || !reservedA2B7 || !beamformedReserved ||
+                (ldpcExtraOfdmSymbol && !hasLdpcUser) || invalidUnusedCoding ||
+                !reservedA2B7 || !beamformedReserved ||
                 !reservedA2B9)
             throw cRuntimeError("Unsupported or malformed constrained VHT MU SIG-A");
-        vhtPhyHeader->setUsersArraySize(2);
+        vhtPhyHeader->setUsersArraySize(userCount);
         B totalLength(0);
-        for (size_t i = 0; i < 2; ++i) {
+        for (size_t i = 0; i < userCount; ++i) {
             Ieee80211VhtMuUserInfo user;
             user.userPosition = i;
             user.numberOfSpatialStreams = 1;
@@ -978,10 +996,11 @@ const Ptr<Chunk> Ieee80211VhtPhyHeaderSerializer::deserialize(MemoryInputStream&
         vhtPhyHeader->setBandwidth(bandwidth);
         vhtPhyHeader->setGroupId(groupId);
         vhtPhyHeader->setStbc(false);
-        vhtPhyHeader->setNumberOfSpaceTimeStreams(2);
+        vhtPhyHeader->setNumberOfSpaceTimeStreams(userCount);
+        vhtPhyHeader->setLdpcExtraOfdmSymbol(ldpcExtraOfdmSymbol);
         vhtPhyHeader->setBeamformed(true);
         vhtPhyHeader->setLengthField(totalLength);
-        vhtPhyHeader->setChunkLength(b(100));
+        vhtPhyHeader->setChunkLength(getIeee80211VhtMuPhyHeaderLength(userCount));
         return vhtPhyHeader;
     }
     auto nsts = readUnsignedLogicalField(stream, 3) + 1;

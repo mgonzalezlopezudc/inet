@@ -39,6 +39,7 @@ class INET_API IIeee80211VhtDlMuScheduler
         B psduLength = B(0);
         double beamformingGainDb = 0;
         double leakagePenaltyDb = 0;
+        int soundingNsts = 0;
         bool associated = false;
         bool negotiatedMuMimo = false;
         bool exactlyOneSpatialStream = false;
@@ -62,15 +63,18 @@ class INET_API IIeee80211VhtDlMuScheduler
     static bool isEligible(const Context& context, const Candidate& candidate)
     {
         return context.enabled && context.accessPoint && context.packetLevelRadio &&
-                context.channelWidth == MHz(20) && context.transmitDimensions == 2 &&
+                context.channelWidth == MHz(20) && context.transmitDimensions >= 2 &&
+                context.transmitDimensions <= 4 &&
                 context.groupId == 1 && !candidate.peer.isMulticast() &&
                 !candidate.peer.isUnspecified() && candidate.associationId > 0 &&
-                candidate.associationGeneration > 0 && candidate.userPosition < 2 &&
+                candidate.associationGeneration > 0 &&
+                candidate.userPosition < context.transmitDimensions &&
                 candidate.mcs >= 0 && candidate.mcs <= 9 &&
                 candidate.sourceQueue != nullptr && candidate.packet != nullptr &&
                 candidate.psduLength > B(0) &&
                 std::isfinite(candidate.beamformingGainDb) && candidate.beamformingGainDb >= 0 &&
                 std::isfinite(candidate.leakagePenaltyDb) && candidate.leakagePenaltyDb >= 0 &&
+                candidate.soundingNsts >= context.transmitDimensions && candidate.soundingNsts <= 8 &&
                 candidate.associated && candidate.negotiatedMuMimo &&
                 candidate.exactlyOneSpatialStream && candidate.freshCsi &&
                 candidate.activeGroup && candidate.activeBlockAckAgreement &&

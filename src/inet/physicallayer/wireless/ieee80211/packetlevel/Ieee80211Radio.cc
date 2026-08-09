@@ -1073,15 +1073,18 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
                 if (txVector == nullptr || !txVector->isMu() ||
                         txVector->getChannelWidth() != MHz(20) || channelWidth != MHz(20) ||
                         txVector->getPsduLength() != B(packet->getDataLength()) ||
-                        txVector->getUsers().size() != 2)
+                        txVector->getUsers().size() < 2 || txVector->getUsers().size() > 4 ||
+                        txVector->getNumberOfSpaceTimeStreams() != txVector->getUsers().size())
                     throw cRuntimeError("Invalid canonical VHT MU TXVECTOR handoff");
-                vhtPhyHeader->setChunkLength(b(100));
+                vhtPhyHeader->setChunkLength(getIeee80211VhtMuPhyHeaderLength(
+                        txVector->getUsers().size()));
                 vhtPhyHeader->setSignalingValid(true);
                 vhtPhyHeader->setNdp(false);
                 vhtPhyHeader->setStbc(false);
                 vhtPhyHeader->setBandwidth(0);
                 vhtPhyHeader->setGroupId(txVector->getGroupId());
-                vhtPhyHeader->setNumberOfSpaceTimeStreams(2);
+                vhtPhyHeader->setNumberOfSpaceTimeStreams(
+                        txVector->getNumberOfSpaceTimeStreams());
                 vhtPhyHeader->setPartialAid(0);
                 vhtPhyHeader->setMcs(0);
                 vhtPhyHeader->setCoding(0);

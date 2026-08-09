@@ -1360,11 +1360,21 @@ const IIeee80211Mode *Ieee80211ModeSet::getVhtSuNdpMode(
         throw cRuntimeError("VHT SU NDP mode derivation requires a VHT reference mode from this mode set");
     if (referenceMode->getDataMode()->getBandwidth() != MHz(20))
         throw cRuntimeError("Packet-level VHT SU NDP mode derivation currently supports only 20 MHz");
-    if (numberOfSpaceTimeStreams != 2)
-        throw cRuntimeError("Packet-level VHT SU NDP mode derivation currently requires two space-time streams");
+    if (numberOfSpaceTimeStreams < 2 || numberOfSpaceTimeStreams > 8)
+        throw cRuntimeError("Packet-level VHT SU NDP mode derivation requires 2..8 space-time streams");
     auto vhtMode = check_and_cast<const Ieee80211VhtMode *>(referenceMode);
-    return Ieee80211VhtCompliantModes::getCompliantMode(
-            &Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss2,
+    const Ieee80211Vhtmcs *mcs = nullptr;
+    switch (numberOfSpaceTimeStreams) {
+        case 2: mcs = &Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss2; break;
+        case 3: mcs = &Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss3; break;
+        case 4: mcs = &Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss4; break;
+        case 5: mcs = &Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss5; break;
+        case 6: mcs = &Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss6; break;
+        case 7: mcs = &Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss7; break;
+        case 8: mcs = &Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss8; break;
+        default: throw cRuntimeError("Invalid VHT SU NDP stream count");
+    }
+    return Ieee80211VhtCompliantModes::getCompliantMode(mcs,
             vhtMode->getCenterFrequencyMode(),
             vhtMode->getPreambleMode()->getPreambleFormat(),
             Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG);

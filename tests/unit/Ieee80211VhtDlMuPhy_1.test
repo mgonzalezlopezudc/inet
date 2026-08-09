@@ -83,6 +83,49 @@ REQUIRE(decoded->getUsers(0).psduLength == B(128) && decoded->getUsers(0).mcs ==
 REQUIRE(decoded->getUsers(1).psduLength == B(256) && decoded->getUsers(1).mcs == 5);
 REQUIRE(decoded->getUsers(1).coding == 1);
 
+auto fourUserPreambleDuration = Ieee80211VhtPreambleMode::getMuPreambleDuration(4);
+auto fourUserTx = Ieee80211VhtTxVector::createMu(MHz(20), 1, {
+    user("02:00:00:00:00:01", 1, 0, B(128), 3, false, SimTime(80, SIMTIME_US)),
+    user("02:00:00:00:00:02", 2, 1, B(256), 5, true, SimTime(120, SIMTIME_US)),
+    user("02:00:00:00:00:03", 3, 2, B(384), 4, false, SimTime(100, SIMTIME_US)),
+    user("02:00:00:00:00:04", 4, 3, B(512), 6, true, SimTime(140, SIMTIME_US)),
+}, fourUserPreambleDuration);
+REQUIRE(fourUserTx->getNumberOfSpaceTimeStreams() == 4);
+REQUIRE(fourUserTx->getPreambleDuration() == fourUserPreambleDuration);
+
+auto fourUserHeader = makeShared<Ieee80211VhtPhyHeader>();
+fourUserHeader->setChunkLength(getIeee80211VhtMuPhyHeaderLength(4));
+fourUserHeader->setSignalingValid(true);
+fourUserHeader->setBandwidth(0);
+fourUserHeader->setGroupId(1);
+fourUserHeader->setNumberOfSpaceTimeStreams(4);
+fourUserHeader->setBeamformed(true);
+fourUserHeader->setUsersArraySize(4);
+for (size_t i = 0; i < fourUserTx->getUsers().size(); ++i) {
+    const auto& canonical = fourUserTx->getUsers()[i];
+    Ieee80211VhtMuUserInfo encoded;
+    encoded.associationId = canonical.associationId;
+    encoded.userPosition = canonical.userPosition;
+    encoded.numberOfSpatialStreams = canonical.numberOfSpatialStreams;
+    encoded.mcs = canonical.mcs;
+    encoded.coding = canonical.ldpcCoding;
+    encoded.psduLength = canonical.psduLength;
+    encoded.duration = canonical.duration;
+    fourUserHeader->setUsers(i, encoded);
+}
+Packet fourUserPacket("VHT-MU-4-user", fourUserHeader);
+auto fourUserBits = fourUserPacket.peekDataAsBits();
+REQUIRE(fourUserBits->getChunkLength() == getIeee80211VhtMuPhyHeaderLength(4));
+REQUIRE(fourUserBits->getBits()[10] && fourUserBits->getBits()[13]);
+REQUIRE(fourUserBits->getBits()[16] && fourUserBits->getBits()[19]);
+Packet fourUserDecodedPacket("VHT-MU-4-user-decoded", fourUserBits);
+auto fourUserDecoded = fourUserDecodedPacket.popAtFront<Ieee80211VhtPhyHeader>(
+        getIeee80211VhtMuPhyHeaderLength(4));
+REQUIRE(fourUserDecoded->getUsersArraySize() == 4);
+REQUIRE(fourUserDecoded->getUsers(2).psduLength == B(384));
+REQUIRE(fourUserDecoded->getUsers(3).psduLength == B(512));
+REQUIRE(fourUserDecoded->getUsers(3).coding == 1);
+
 bool rejectedWide = false;
 try { (void)Ieee80211VhtTxVector::createMu(MHz(40), 1, tx->getUsers(), muPreambleDuration); }
 catch (const cRuntimeError&) { rejectedWide = true; }
@@ -91,6 +134,12 @@ bool rejectedCount = false;
 try { (void)Ieee80211VhtTxVector::createMu(MHz(20), 1, {tx->getUsers()[0]}, muPreambleDuration); }
 catch (const cRuntimeError&) { rejectedCount = true; }
 REQUIRE(rejectedCount);
+bool rejectedFiveUsers = false;
+auto fiveUsers = fourUserTx->getUsers();
+fiveUsers.push_back(user("02:00:00:00:00:05", 5, 4, B(128), 3, false, SimTime(80, SIMTIME_US)));
+try { (void)Ieee80211VhtTxVector::createMu(MHz(20), 1, fiveUsers, fourUserPreambleDuration); }
+catch (const cRuntimeError&) { rejectedFiveUsers = true; }
+REQUIRE(rejectedFiveUsers);
 
 EV << "VHT MU canonical TXVECTOR/layout/SIG-A/SIG-B/user selection: PASS\n";
 

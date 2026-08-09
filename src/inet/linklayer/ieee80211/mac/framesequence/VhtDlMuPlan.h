@@ -61,13 +61,15 @@ class INET_API VhtDlMuPlan
     {
         diagnostic = {};
         if (!context.enabled || !context.accessPoint || !context.packetLevelRadio ||
-                context.channelWidth != MHz(20) || context.transmitDimensions != 2 ||
+                context.channelWidth != MHz(20) || context.transmitDimensions < 2 ||
+                context.transmitDimensions > 4 ||
                 context.groupId != 1)
             return fail(diagnostic, VhtDlMuPlanError::INVALID_COMMON_GATES, -1,
-                    MacAddress(), "VHT DL MU common gates require AP packet-level 20 MHz, two dimensions, and GID 1");
-        if (users.size() != 2)
+                    MacAddress(), "VHT DL MU common gates require AP packet-level 20 MHz, 2..4 dimensions, and GID 1");
+        if (users.size() < 2 || users.size() > 4 ||
+                users.size() > static_cast<size_t>(context.transmitDimensions))
             return fail(diagnostic, VhtDlMuPlanError::INVALID_USER_COUNT, -1,
-                    MacAddress(), "constrained VHT DL MU requires exactly two users");
+                    MacAddress(), "constrained VHT DL MU requires 2..4 users within the available dimensions");
         std::set<MacAddress> peers;
         std::set<int> positions;
         const auto commonTid = users.front().tid;
@@ -81,7 +83,7 @@ class INET_API VhtDlMuPlan
                         user.peer, "duplicate VHT DL MU peer");
             if (!positions.insert(user.userPosition).second || user.userPosition != i)
                 return fail(diagnostic, VhtDlMuPlanError::INVALID_POSITION, i,
-                        user.peer, "VHT DL MU positions must be canonical 0,1");
+                        user.peer, "VHT DL MU positions must be canonical 0..N-1");
             if (user.tid != commonTid)
                 return fail(diagnostic, VhtDlMuPlanError::MISMATCHED_TID, i,
                         user.peer, "constrained VHT DL MU users must use the same TID");

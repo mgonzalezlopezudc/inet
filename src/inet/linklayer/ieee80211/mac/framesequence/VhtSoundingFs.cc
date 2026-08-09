@@ -47,7 +47,7 @@ VhtSoundingFs::VhtSoundingFs(Ieee80211Mib *mib, VhtCsiCache *csiCache,
 {
     ASSERT(mib != nullptr && csiCache != nullptr && modeSet != nullptr && ndpMode != nullptr);
     ASSERT(!peer.isMulticast() && associationId > 0 && associationGeneration > 0);
-    ASSERT(soundingNsts >= 2);
+    ASSERT(soundingNsts >= 2 && soundingNsts <= 8);
 }
 
 void VhtSoundingFs::startSequence(FrameSequenceContext *context, int firstStep)
@@ -92,7 +92,7 @@ bool VhtSoundingFs::completeStep(FrameSequenceContext *context)
         // presence of the validator-accepted response is authoritative here.
         if (receive->getReceivedFrame() != nullptr &&
                 isExpectedFeedback(receive->getReceivedFrame()))
-            csiCache->update(peer, MHz(20), associationGeneration, beamformingGainDb);
+            csiCache->update(peer, MHz(20), associationGeneration, beamformingGainDb, soundingNsts);
     }
     step++;
     return true;

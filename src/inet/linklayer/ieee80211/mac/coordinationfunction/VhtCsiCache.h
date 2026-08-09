@@ -37,6 +37,7 @@ class INET_API VhtCsiCache
         simtime_t acquisitionTime = SIMTIME_ZERO;
         simtime_t expiryTime = SIMTIME_ZERO;
         double beamformingGainDb = 0;
+        int soundingNsts = 2;
     };
 
   protected:
@@ -75,15 +76,16 @@ class INET_API VhtCsiCache
     }
 
     void update(const MacAddress& peer, Hz channelWidth,
-            uint64_t associationGeneration, double beamformingGainDb)
+            uint64_t associationGeneration, double beamformingGainDb,
+            int soundingNsts = 2)
     {
         if (peer.isUnspecified() || channelWidth <= Hz(0) ||
                 associationGeneration == 0 || !std::isfinite(beamformingGainDb) ||
-                beamformingGainDb < 0)
+                beamformingGainDb < 0 || soundingNsts < 2 || soundingNsts > 8)
             throw cRuntimeError("Invalid VHT CSI cache entry");
         auto now = timeProvider();
         entries[{peer, channelWidth, associationGeneration}] =
-                {now, now + validityDuration, beamformingGainDb};
+                {now, now + validityDuration, beamformingGainDb, soundingNsts};
     }
 
     const Entry *findFresh(const MacAddress& peer, Hz channelWidth,

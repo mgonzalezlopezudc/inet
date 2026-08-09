@@ -41,6 +41,7 @@ static IIeee80211VhtDlMuScheduler::Candidate candidate(const char *address,
     result.psduLength = B(128);
     result.beamformingGainDb = 3;
     result.leakagePenaltyDb = 1;
+    result.soundingNsts = 4;
     result.associated = true;
     result.negotiatedMuMimo = true;
     result.exactlyOneSpatialStream = true;
@@ -53,7 +54,7 @@ static IIeee80211VhtDlMuScheduler::Candidate candidate(const char *address,
 
 %activity:
 auto scheduler = check_and_cast<VhtDlMuScheduler *>(getParentModule()->getSubmodule("scheduler"));
-Packet p0("p0"), p1("p1"), p2("p2");
+Packet p0("p0"), p1("p1"), p2("p2"), p3("p3"), p4("p4");
 IIeee80211VhtDlMuScheduler::Context context;
 context.enabled = true;
 context.accessPoint = true;
@@ -75,6 +76,19 @@ VhtDlMuPlanDiagnostic diagnostic;
 auto plan = VhtDlMuPlan::create(context, selected, diagnostic);
 REQUIRE(plan.has_value() && !diagnostic);
 
+auto fourUserContext = context;
+fourUserContext.transmitDimensions = 4;
+fourUserContext.candidates.push_back(candidate(
+        "02:00:00:00:00:04", 4, 2, SimTime(3, SIMTIME_MS), &p3));
+fourUserContext.candidates.push_back(candidate(
+        "02:00:00:00:00:05", 5, 3, SimTime(4, SIMTIME_MS), &p4));
+auto fourUserSelected = scheduler->schedule(fourUserContext);
+REQUIRE(fourUserSelected.size() == 4);
+for (size_t i = 0; i < fourUserSelected.size(); ++i)
+    REQUIRE(fourUserSelected[i].userPosition == i);
+auto fourUserPlan = VhtDlMuPlan::create(fourUserContext, fourUserSelected, diagnostic);
+REQUIRE(fourUserPlan.has_value() && !diagnostic);
+
 auto stale = context;
 stale.candidates[2].freshCsi = false;
 REQUIRE(scheduler->schedule(stale).size() == 2); // third candidate still supplies the pair
@@ -87,6 +101,10 @@ REQUIRE(scheduler->schedule(disabled).empty());
 auto badWidth = context;
 badWidth.channelWidth = MHz(40);
 REQUIRE(scheduler->schedule(badWidth).empty());
+auto insufficientSounding = fourUserContext;
+insufficientSounding.candidates[0].soundingNsts = 2;
+insufficientSounding.candidates[2].soundingNsts = 2;
+REQUIRE(scheduler->schedule(insufficientSounding).empty());
 auto badBa = selected;
 badBa[1].activeBlockAckAgreement = false;
 REQUIRE(!VhtDlMuPlan::create(context, badBa, diagnostic).has_value());

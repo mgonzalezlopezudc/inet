@@ -56,7 +56,7 @@ class INET_API VhtDlMuTxOpFs : public IFrameSequence
     virtual void startSequence(FrameSequenceContext *context, int firstStep) override;
     virtual IFrameSequenceStep *prepareStep(FrameSequenceContext *context) override;
     virtual bool completeStep(FrameSequenceContext *context) override;
-    virtual std::string getHistory() const override { return "VHT-DL-MU (PPDU-BAR0-BA0-BAR1-BA1)"; }
+    virtual std::string getHistory() const override;
 
     bool isContainerPacket(Packet *packet) const { return packet == containerPacket; }
     const std::vector<ActiveUser>& getActiveUsers() const { return activeUsers; }

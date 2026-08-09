@@ -72,8 +72,15 @@ inline Hz getIeee80211VhtChannelWidth(uint8_t bandwidthCode)
     }
 }
 
+inline b getIeee80211VhtMuPhyHeaderLength(size_t userCount)
+{
+    if (userCount < 2 || userCount > 4)
+        throw cRuntimeError("VHT MU user count must be in the range 2..4");
+    return b(48 + 26 * userCount);
+}
+
 /**
- * Immutable packet-level authority for the supported VHT SU/NDP subset.
+ * Immutable packet-level authority for the supported VHT SU/NDP/MU subset.
  * IEEE Std 802.11-2024 Tables 21-11, 21-12, 21-14 and Figure 21-28.
  */
 class INET_API Ieee80211VhtTxVector
@@ -104,13 +111,12 @@ class INET_API Ieee80211VhtTxVector
         ppduFormat(VHT_MU), channelWidth(channelWidth),
         psduLength(psduBitRanges.empty() ? B(0) :
                 B(psduBitRanges.back().getEndBitOffset())),
-        groupId(groupId), numberOfSpaceTimeStreams(2), mcs(0),
+        groupId(groupId), numberOfSpaceTimeStreams(users.size()), mcs(0),
         ldpcCoding(false), ldpcExtraOfdmSymbol(false), partialAid(0),
         beamformed(true), beamformingGainDb(0), users(users),
         psduBitRanges(psduBitRanges),
-        // IEEE Std 802.11-2024 21.3.8.3 and Table 21-9: the constrained
-        // two-NSTS MU PPDU carries two VHT-LTFs. VHT signaling is part of the
-        // preamble; the packet-level header interval is therefore empty.
+        // VHT signaling is part of the preamble; the packet-level header
+        // interval is therefore empty.
         preambleDuration(preambleDuration), headerDuration(SIMTIME_ZERO),
         dataDuration(commonDuration), commonDuration(preambleDuration + dataDuration) {}
 
@@ -155,9 +161,10 @@ class INET_API Ieee80211VhtTxVector
             const std::vector<Ieee80211VhtMuUser>& users,
             simtime_t preambleDuration)
     {
-        if (channelWidth != MHz(20) || groupId != 1 || users.size() != 2 ||
+        if (channelWidth != MHz(20) || groupId != 1 ||
+                users.size() < 2 || users.size() > 4 ||
                 preambleDuration <= SIMTIME_ZERO)
-            throw cRuntimeError("Constrained VHT MU requires 20 MHz, GID 1, and exactly two users");
+            throw cRuntimeError("Constrained VHT MU requires 20 MHz, GID 1, and 2..4 users");
         std::set<int> positions;
         std::vector<Ieee80211VhtPsduBitRange> ranges;
         b offset = b(0);

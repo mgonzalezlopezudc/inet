@@ -29,26 +29,20 @@ VhtDlMuScheduler::schedule(const Context& context) const
     });
     if (eligible.size() < 2)
         return {};
-    std::vector<Candidate> selected;
-    for (size_t i = 0; i < eligible.size() && selected.empty(); ++i)
-        for (size_t j = i + 1; j < eligible.size(); ++j)
-            if (eligible[i].tid == eligible[j].tid &&
-                    eligible[i].peer != eligible[j].peer &&
-                    eligible[i].userPosition != eligible[j].userPosition) {
-                selected = {eligible[i], eligible[j]};
+    for (const auto& anchor : eligible) {
+        std::vector<Candidate> selected;
+        for (int position = 0; position < context.transmitDimensions; ++position) {
+            auto it = std::find_if(eligible.begin(), eligible.end(), [&] (const auto& candidate) {
+                return candidate.tid == anchor.tid && candidate.userPosition == position;
+            });
+            if (it == eligible.end())
                 break;
-            }
-    if (selected.empty())
-        return {};
-    // Selection priority is independent of Group ID position, but the
-    // immutable PHY layout must retain the positions previously ACKed in the
-    // Group ID Management exchange.
-    std::sort(selected.begin(), selected.end(), [] (const auto& left, const auto& right) {
-        return left.userPosition < right.userPosition;
-    });
-    if (selected[0].userPosition != 0 || selected[1].userPosition != 1)
-        return {};
-    return selected;
+            selected.push_back(*it);
+        }
+        if (selected.size() >= 2)
+            return selected;
+    }
+    return {};
 }
 
 } // namespace ieee80211

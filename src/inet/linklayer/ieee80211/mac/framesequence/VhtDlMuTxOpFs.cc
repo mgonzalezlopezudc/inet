@@ -35,58 +35,41 @@ void VhtDlMuTxOpFs::startSequence(FrameSequenceContext *context, int firstStep)
 
 IFrameSequenceStep *VhtDlMuTxOpFs::prepareStep(FrameSequenceContext *context)
 {
-    switch (step) {
-        case 0:
-            try {
-                containerPacket = buildMuContainerPacket(context);
-            }
-            catch (const VhtDlMuStalePlan& error) {
-                EV_WARN << "VHT DL MU transaction aborted before commit: "
-                        << error.what() << endl;
-                containerPacket = nullptr;
-                activeUsers.clear();
-            }
-            return containerPacket == nullptr ? nullptr :
-                    new TransmitStep(containerPacket, context->getIfs(), true);
-        case 1:
-            return new TransmitStep(buildBlockAckReq(context, 0),
-                    modeSet->getSifsTime(), true);
-        case 2: {
-            auto transmitted = check_and_cast<ITransmitStep *>(context->getLastStep());
-            auto request = transmitted->getFrameToTransmit()->peekAtFront<Ieee80211BlockAckReq>();
-            auto timeout = context->getQoSContext()->ackPolicy->getBlockAckTimeout(
-                    transmitted->getFrameToTransmit(), request);
-            return new ReceiveStep(timeout, IReceiveStep::TimeoutHandling::COMPLETE_STEP,
-                    [this](Packet *packet, FrameSequenceContext *context) {
-                        return isExpectedBlockAck(packet, context, 0);
-                    }, IReceiveStep::UnexpectedResponseHandling::IGNORE_RESPONSE,
-                    IFrameSequenceStep::Completion::EXPIRED);
+    if (step == 0) {
+        try {
+            containerPacket = buildMuContainerPacket(context);
         }
-        case 3:
-            return new TransmitStep(buildBlockAckReq(context, 1),
-                    modeSet->getSifsTime(), true);
-        case 4: {
-            auto transmitted = check_and_cast<ITransmitStep *>(context->getLastStep());
-            auto request = transmitted->getFrameToTransmit()->peekAtFront<Ieee80211BlockAckReq>();
-            auto timeout = context->getQoSContext()->ackPolicy->getBlockAckTimeout(
-                    transmitted->getFrameToTransmit(), request);
-            return new ReceiveStep(timeout, IReceiveStep::TimeoutHandling::COMPLETE_STEP,
-                    [this](Packet *packet, FrameSequenceContext *context) {
-                        return isExpectedBlockAck(packet, context, 1);
-                    }, IReceiveStep::UnexpectedResponseHandling::IGNORE_RESPONSE,
-                    IFrameSequenceStep::Completion::EXPIRED);
+        catch (const VhtDlMuStalePlan& error) {
+            EV_WARN << "VHT DL MU transaction aborted before commit: "
+                    << error.what() << endl;
+            containerPacket = nullptr;
+            activeUsers.clear();
         }
-        case 5:
-            return nullptr;
-        default:
-            throw cRuntimeError("Invalid VHT DL MU sequence step");
+        return containerPacket == nullptr ? nullptr :
+                new TransmitStep(containerPacket, context->getIfs(), true);
     }
+    auto userCount = plan.getUsers().size();
+    if (step > static_cast<int>(2 * userCount))
+        return nullptr;
+    auto userIndex = (step - 1) / 2;
+    if (step % 2 == 1)
+        return new TransmitStep(buildBlockAckReq(context, userIndex),
+                modeSet->getSifsTime(), true);
+    auto transmitted = check_and_cast<ITransmitStep *>(context->getLastStep());
+    auto request = transmitted->getFrameToTransmit()->peekAtFront<Ieee80211BlockAckReq>();
+    auto timeout = context->getQoSContext()->ackPolicy->getBlockAckTimeout(
+            transmitted->getFrameToTransmit(), request);
+    return new ReceiveStep(timeout, IReceiveStep::TimeoutHandling::COMPLETE_STEP,
+            [this, userIndex](Packet *packet, FrameSequenceContext *context) {
+                return isExpectedBlockAck(packet, context, userIndex);
+            }, IReceiveStep::UnexpectedResponseHandling::IGNORE_RESPONSE,
+            IFrameSequenceStep::Completion::EXPIRED);
 }
 
 bool VhtDlMuTxOpFs::completeStep(FrameSequenceContext *context)
 {
-    if (step == 2 || step == 4) {
-        int userIndex = step == 2 ? 0 : 1;
+    if (step > 0 && step % 2 == 0) {
+        auto userIndex = (step - 1) / 2;
         auto receive = check_and_cast<IReceiveStep *>(context->getLastStep());
         if (receive->getReceivedFrame() == nullptr)
             callback->originatorProcessFailedFrame(activeUsers.at(userIndex).packet);
@@ -98,7 +81,7 @@ bool VhtDlMuTxOpFs::completeStep(FrameSequenceContext *context)
 Packet *VhtDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
 {
     const auto& users = plan.getUsers();
-    ASSERT(users.size() == 2);
+    ASSERT(users.size() >= 2 && users.size() <= 4);
     auto hcf = dynamic_cast<Hcf *>(callback);
     auto dataService = hcf == nullptr ? nullptr :
             dynamic_cast<OriginatorQosMacDataService *>(hcf->getOriginatorMacDataService());
@@ -109,28 +92,34 @@ Packet *VhtDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     auto controlMode = modeSet->getSlowestMandatoryMode(MHz(20));
     auto barDuration = controlMode->getDuration(B(24));
     auto blockAckDuration = controlMode->getDuration(LENGTH_BASIC_BLOCKACK);
-    auto exchangeNav = 4 * modeSet->getSifsTime() + 2 * barDuration + 2 * blockAckDuration;
+    auto exchangeNav = 2 * users.size() * modeSet->getSifsTime() +
+            users.size() * (barDuration + blockAckDuration);
 
     std::unique_ptr<ISequenceNumberAssignment> sequenceState =
             dataService->cloneSequenceNumberState();
     std::vector<std::unique_ptr<Packet>> prepared;
     std::vector<Ieee80211VhtMuUser> phyUsers;
-    prepared.reserve(2);
-    phyUsers.reserve(2);
+    std::vector<bool> inProgressUsers(users.size(), false);
+    prepared.reserve(users.size());
+    phyUsers.reserve(users.size());
     for (size_t i = 0; i < users.size(); ++i) {
         const auto& user = users[i];
-        bool found = false;
+        for (int j = 0; j < context->getInProgressFrames()->getLength(); ++j) {
+            if (context->getInProgressFrames()->getFrames(j) == user.packet)
+                inProgressUsers[i] = true;
+        }
+        bool found = inProgressUsers[i];
         for (int j = 0; j < user.sourceQueue->getNumPackets(); ++j)
             found |= user.sourceQueue->getPacket(j) == user.packet;
         if (!found)
-            throw VhtDlMuStalePlan("VHT DL MU selected packet changed queue membership before preparation");
+            throw VhtDlMuStalePlan("VHT DL MU selected packet changed ownership before preparation");
         auto copy = std::unique_ptr<Packet>(user.packet->dup());
         auto header = copy->removeAtFront<Ieee80211DataHeader>();
         if (header->getType() != ST_DATA_WITH_QOS || header->getReceiverAddress() != user.peer ||
                 header->getTid() != user.tid || header->getFragmentNumber() != 0 ||
                 header->getMoreFragments())
             throw VhtDlMuStalePlan("VHT DL MU packet no longer satisfies the immutable plan");
-        if (!header->getRetry())
+        if (!inProgressUsers[i] && !header->getRetry())
             sequenceState->assignSequenceNumber(header);
         header->setAckPolicy(BLOCK_ACK);
         header->setDurationField(exchangeNav);
@@ -157,7 +146,7 @@ Packet *VhtDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         phyUser.ldpcCoding = user.ldpc;
         phyUser.psduLength = psduBytes;
         // Each user contributes only its VHT Data-field duration. The common
-        // two-LTF preamble is represented once by the canonical TXVECTOR.
+        // preamble is represented once by the canonical TXVECTOR.
         phyUser.duration = mode->getDataMode()->getDuration(psduBytes);
         phyUser.beamformingGainDb = user.beamformingGainDb;
         phyUser.leakagePenaltyDb = user.leakagePenaltyDb;
@@ -166,7 +155,7 @@ Packet *VhtDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     }
 
     auto txVector = Ieee80211VhtTxVector::createMu(MHz(20), 1, phyUsers,
-            Ieee80211VhtPreambleMode::getMuPreambleDuration(2));
+            Ieee80211VhtPreambleMode::getMuPreambleDuration(users.size()));
     auto container = std::make_unique<Packet>("VHT-MU-PPDU");
     for (size_t i = 0; i < prepared.size(); ++i) {
         auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
@@ -182,11 +171,11 @@ Packet *VhtDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     // Revalidate and exercise all fallible hooks before the single ownership
     // boundary; an exception leaves queue, sequence, and BA state untouched.
     for (size_t i = 0; i < users.size(); ++i) {
-        bool found = false;
+        bool found = inProgressUsers[i];
         for (int j = 0; j < users[i].sourceQueue->getNumPackets(); ++j)
             found |= users[i].sourceQueue->getPacket(j) == users[i].packet;
         if (!found)
-            throw VhtDlMuStalePlan("VHT DL MU selected packet changed queue membership before commit");
+            throw VhtDlMuStalePlan("VHT DL MU selected packet changed ownership before commit");
         beforePacketCommit(i);
     }
 
@@ -195,9 +184,11 @@ Packet *VhtDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     try {
         for (size_t i = 0; i < users.size(); ++i) {
             auto header = prepared[i]->peekAtFront<Ieee80211DataOrMgmtHeader>();
-            ackApplied[i] = true;
-            ackHandler->frameGotInProgress(header);
-            afterCommitMutation(CommitMutation::ACK_STATE, i);
+            if (!inProgressUsers[i]) {
+                ackApplied[i] = true;
+                ackHandler->frameGotInProgress(header);
+                afterCommitMutation(CommitMutation::ACK_STATE, i);
+            }
         }
         dataService->commitSequenceNumberState(*sequenceState);
         afterCommitMutation(CommitMutation::SEQUENCE_STATE, -1);
@@ -215,7 +206,8 @@ Packet *VhtDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     // stale/fallible work completed before the first queue/in-progress signal.
     for (size_t i = 0; i < users.size(); ++i) {
         auto original = users[i].packet;
-        users[i].sourceQueue->removePacket(original);
+        if (!inProgressUsers[i])
+            users[i].sourceQueue->removePacket(original);
         original->removeAll();
         original->insertAtBack(prepared[i]->peekAll());
         original->setFrontOffset(prepared[i]->getFrontOffset());
@@ -223,7 +215,8 @@ Packet *VhtDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         original->clearTags();
         original->copyTags(*prepared[i]);
         original->getRegionTags() = prepared[i]->getRegionTags();
-        context->getInProgressFrames()->addInProgressFrame(original);
+        if (!inProgressUsers[i])
+            context->getInProgressFrames()->addInProgressFrame(original);
     }
     activeUsers.clear();
     for (const auto& user : users)
@@ -241,10 +234,10 @@ Packet *VhtDlMuTxOpFs::buildBlockAckReq(FrameSequenceContext *context,
                     header->getSequenceNumber());
     auto controlMode = modeSet->getSlowestMandatoryMode(MHz(20));
     auto blockAckDuration = controlMode->getDuration(LENGTH_BASIC_BLOCKACK);
-    auto remaining = modeSet->getSifsTime() + blockAckDuration;
-    if (userIndex == 0)
-        remaining += modeSet->getSifsTime() + controlMode->getDuration(B(24)) +
-                modeSet->getSifsTime() + blockAckDuration;
+    auto remainingUsers = activeUsers.size() - userIndex;
+    auto remaining = (2 * remainingUsers - 1) * modeSet->getSifsTime() +
+            (remainingUsers - 1) * controlMode->getDuration(B(24)) +
+            remainingUsers * blockAckDuration;
     request->setDurationField(remaining);
     auto packet = new Packet("VHT-MU-BasicBlockAckReq", request);
     packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
@@ -267,6 +260,14 @@ bool VhtDlMuTxOpFs::isExpectedBlockAck(Packet *packet,
     return blockAck != nullptr && context->isForUs(blockAck) &&
             blockAck->getTransmitterAddress() == activeUsers.at(userIndex).candidate.peer &&
             tid == activeUsers.at(userIndex).candidate.tid;
+}
+
+std::string VhtDlMuTxOpFs::getHistory() const
+{
+    std::string history = "VHT-DL-MU (PPDU";
+    for (size_t i = 0; i < plan.getUsers().size(); ++i)
+        history += "-BAR" + std::to_string(i) + "-BA" + std::to_string(i);
+    return history + ")";
 }
 
 } // namespace ieee80211

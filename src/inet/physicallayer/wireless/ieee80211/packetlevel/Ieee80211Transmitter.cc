@@ -310,7 +310,7 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
                         vhtTxVector->getGroupId() != vhtHeader->getGroupId() ||
                         vhtTxVector->getPsduLength() != B(vhtHeader->getLengthField()))
                     throw cRuntimeError("VHT transmission has a mismatched canonical MU TXVECTOR handoff");
-                requiredSpatialStreams = 2;
+                requiredSpatialStreams = vhtTxVector->getNumberOfSpaceTimeStreams();
             }
             else {
                 auto vhtRequest = packet->findTag<Ieee80211VhtTransmissionTag>();

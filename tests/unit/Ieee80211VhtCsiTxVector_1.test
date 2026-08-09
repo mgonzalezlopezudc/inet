@@ -30,6 +30,7 @@ cache.setTimeProvider([&now] { return now; });
 MacAddress peer("00:00:00:00:00:11");
 cache.update(peer, MHz(20), 7, 3.5);
 REQUIRE(cache.findFresh(peer, MHz(20), 7) != nullptr);
+REQUIRE(cache.findFresh(peer, MHz(20), 7)->soundingNsts == 2);
 REQUIRE(cache.findFresh(peer, MHz(40), 7) == nullptr);
 REQUIRE(cache.findFresh(peer, MHz(20), 8) == nullptr);
 now += SimTime(50, SIMTIME_MS);
@@ -40,6 +41,8 @@ cache.update(peer, MHz(20), 8, 4.0);
 cache.invalidatePeer(peer);
 REQUIRE(cache.findFresh(peer, MHz(20), 8) == nullptr);
 cache.update(peer, MHz(20), 9, 4.0);
+cache.update(peer, MHz(20), 9, 4.0, 4);
+REQUIRE(cache.findFresh(peer, MHz(20), 9)->soundingNsts == 4);
 cache.update(peer, MHz(40), 9, 4.0);
 cache.invalidateOtherWidths(MHz(40));
 REQUIRE(cache.findFresh(peer, MHz(20), 9) == nullptr);
@@ -71,6 +74,10 @@ auto vhtNdpMode = acModeSet->getVhtSuNdpMode(vhtReferenceMode, 2);
 REQUIRE(acModeSet->getPhyFamily(vhtNdpMode) == Ieee80211PhyFamily::VHT);
 REQUIRE(vhtNdpMode->getDataMode()->getBandwidth() == MHz(20));
 REQUIRE(vhtNdpMode->getDataMode()->getNumberOfSpatialStreams() == 2);
+for (int nsts : {3, 4}) {
+    auto multiStreamNdpMode = acModeSet->getVhtSuNdpMode(vhtReferenceMode, nsts);
+    REQUIRE(multiStreamNdpMode->getDataMode()->getNumberOfSpatialStreams() == nsts);
+}
 bool rejectedNonVhtReference = false;
 try {
     auto htModeSet = Ieee80211ModeSet::getModeSet("n(mixed-2.4Ghz)");
