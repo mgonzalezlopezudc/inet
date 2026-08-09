@@ -231,6 +231,16 @@ class Ieee80211DataOrMgmtHeader extends Ieee80211TwoAddressHeader
     MacAddress address3;
     short fragmentNumber;
     SequenceNumberCyclic sequenceNumber;
+    // HT variant HT Control fields. They are serialized only when the Order
+    // bit denotes +HTC for a QoS Data or management frame.
+    bool htMcsControlPresent = false;
+    bool htTrainingRequest = false;
+    bool htMcsRequest = false;
+    uint8_t htMcsRequestSequenceIdentifier = 0;
+    uint8_t htMcsFeedbackSequenceIdentifier = 7;
+    uint8_t htMcsFeedback = 127;
+    uint8_t htCsiSteering = 0;
+    bool htNdpAnnouncement = false;
 }
 
 //

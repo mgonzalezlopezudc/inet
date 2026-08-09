@@ -1354,6 +1354,47 @@ const IIeee80211Mode *Ieee80211ModeSet::findVhtMode(int mcs,
     return nullptr;
 }
 
+const IIeee80211Mode *Ieee80211ModeSet::findHtMode(int mcs,
+        int numSpatialStreams, Hz bandwidth, bool ldpc) const
+{
+    for (const auto& entry : entries) {
+        auto htMode = dynamic_cast<const Ieee80211HtMode *>(entry.mode);
+        if (htMode == nullptr)
+            continue;
+        auto dataMode = htMode->getDataMode();
+        if ((int)dataMode->getMcsIndex() == mcs &&
+                dataMode->getNumberOfSpatialStreams() == numSpatialStreams &&
+                dataMode->getBandwidth() == bandwidth &&
+                (dataMode->getCode() != nullptr && dataMode->getCode()->isLdpc()) == ldpc)
+            return htMode;
+    }
+    return nullptr;
+}
+
+const IIeee80211Mode *Ieee80211ModeSet::getHtNdpMode(
+        const IIeee80211Mode *referenceMode, int numberOfSpaceTimeStreams) const
+{
+    if (referenceMode == nullptr || !containsMode(referenceMode) ||
+            getPhyFamily(referenceMode) != Ieee80211PhyFamily::HT)
+        throw cRuntimeError("HT NDP mode derivation requires an HT reference mode from this mode set");
+    if (numberOfSpaceTimeStreams < 2 || numberOfSpaceTimeStreams > 4)
+        throw cRuntimeError("HT NDP mode derivation requires 2..4 space-time streams");
+    auto referenceHtMode = check_and_cast<const Ieee80211HtMode *>(referenceMode);
+    auto bandwidth = referenceMode->getDataMode()->getBandwidth();
+    int mcs = 8 * (numberOfSpaceTimeStreams - 1);
+    auto catalogMode = check_and_cast_nullable<const Ieee80211HtMode *>(
+            findHtMode(mcs, numberOfSpaceTimeStreams, bandwidth, false));
+    if (catalogMode == nullptr)
+        throw cRuntimeError("No HT mode for the requested NDP bandwidth and NSTS");
+    // IEEE Std 802.11-2024, 19.3.13.2: HT NDP MCS indicates at least two
+    // spatial streams; the mode catalog remains authoritative for geometry.
+    return Ieee80211HtCompliantModes::getCompliantMode(
+            catalogMode->getDataMode()->getModulationAndCodingScheme(),
+            referenceHtMode->getCenterFrequencyMode(),
+            referenceHtMode->getPreambleMode()->getPreambleFormat(),
+            Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+}
+
 const IIeee80211Mode *Ieee80211ModeSet::getVhtSuNdpMode(
         const IIeee80211Mode *referenceMode, int numberOfSpaceTimeStreams) const
 {

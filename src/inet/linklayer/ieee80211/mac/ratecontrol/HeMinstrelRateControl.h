@@ -8,125 +8,53 @@
 #define __INET_HEMINSTRELRATECONTROL_H
 
 #include <map>
-#include <ostream>
 #include <string>
 #include <vector>
 
 #include "inet/linklayer/ieee80211/mac/contract/IIeee80211HeRateControl.h"
-#include "inet/linklayer/ieee80211/mac/ratecontrol/RateControlBase.h"
+#include "inet/linklayer/ieee80211/mac/ratecontrol/MinstrelRateControlBase.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 
 namespace inet {
 namespace ieee80211 {
 
-/**
- * Minstrel-style HE rate controller.
- *
- * The implementation keeps an EWMA success probability per peer/MCS/NSS tuple,
- * periodically samples a non-best rate, and scores rates by expected goodput.
- * It also implements the legacy IRateControl interface so existing SU rate
- * selection can opt into the same module.
- */
-class INET_API HeMinstrelRateControl : public RateControlBase, public IIeee80211HeRateControl
+/** Minstrel-style HE rate controller for SU and HE scheduler paths. */
+class INET_API HeMinstrelRateControl : public MinstrelRateControlBase, public IIeee80211HeRateControl
 {
   protected:
-    struct RateKey {
-        int mcs = 0;
-        int numberOfSpatialStreams = 1;
-
-        bool operator<(const RateKey& other) const
-        {
-            return mcs < other.mcs ||
-                    (mcs == other.mcs && numberOfSpatialStreams < other.numberOfSpatialStreams);
-        }
-
-        friend std::ostream& operator<<(std::ostream& os, const RateKey& key)
-        {
-            os << "mcs=" << key.mcs << " nss=" << key.numberOfSpatialStreams;
-            return os;
-        }
-    };
-
-    struct RateStats {
-        double ewmaSuccessProbability = 0.9;
-        int attempts = 0;
-        int successes = 0;
-        simtime_t lastProbe = SIMTIME_ZERO;
-        uint64_t appliedSnirGeneration = 0;
-
-        friend std::ostream& operator<<(std::ostream& os, const RateStats& stats)
-        {
-            os << "ewma=" << stats.ewmaSuccessProbability 
-               << " attempts=" << stats.attempts 
-               << " successes=" << stats.successes 
-               << " snirGeneration=" << stats.appliedSnirGeneration;
-            return os;
-        }
-    };
-
-    struct PeerState {
-        std::map<RateKey, RateStats> rates;
-        int selectionCount = 0;
-        double latestSnirDb = NaN;
-        simtime_t latestSnirUpdate = SIMTIME_ZERO;
-        uint64_t snirGeneration = 0;
-
-        friend std::ostream& operator<<(std::ostream& os, const PeerState& state)
-        {
-            os << "selections=" << state.selectionCount << " rates=" << state.rates.size()
-               << " latestSnir=" << state.latestSnirDb
-               << " latestSnirUpdate=" << state.latestSnirUpdate
-               << " snirGeneration=" << state.snirGeneration;
-            return os;
-        }
-    };
-
-  protected:
-    simtime_t updateInterval = SimTime(100, SIMTIME_MS);
-    double ewmaWeight = 0.75;
-    double lookaroundRatio = 0.1;
-    double initialSuccessProbability = 0.9;
-    bool seedFromSnir = true;
     bool enableExtendedRangeSu = false;
     bool preferDcm = false;
     std::string selectionPolicy;
-    double snirMcs0ThresholdDb = 4;
-    double snirMcsStepDb = 3;
-    int minMcs = 0;
-    int maxMcs = 11;
-    int maxNss = 1;
-    std::map<MacAddress, PeerState> peers;
-
-    simsignal_t selectedMcsSignal;
-    simsignal_t selectedNssSignal;
-    simsignal_t probeSignal;
-    simsignal_t successProbabilitySignal;
-    simsignal_t txSuccessSignal;
-    simsignal_t retryCountSignal;
+    struct HeSelectionContext {
+        const physicallayer::IIeee80211Mode *mode = nullptr;
+        int ruToneSize = 0;
+    };
+    std::map<MacAddress, HeSelectionContext> lastSelections;
 
   protected:
     virtual void initialize(int stage) override;
-    virtual void handleMessage(cMessage *msg) override;
+    virtual bool isRateCandidate(const physicallayer::IIeee80211Mode *mode) const override;
+    virtual int getModeMcs(const physicallayer::IIeee80211Mode *mode) const override;
+    virtual int getModeNss(const physicallayer::IIeee80211Mode *mode) const override;
 
-    const MacAddress getReceiverAddress(Packet *frame) const;
     const physicallayer::Ieee80211HeMode *findHeMode(int mcs, int nss, Hz bandwidth,
             bool extendedRangeSu, bool ldpc) const;
     int clampMcsForConstraints(int mcs, int ruToneSize, uint8_t ppduFormat,
             int maxNss, const Constraints& constraints) const;
-    double scoreRate(const RateStats& stats, const physicallayer::Ieee80211HeMode *mode) const;
-    PeerState& getPeerState(const MacAddress& peer);
 
   public:
     virtual const physicallayer::IIeee80211Mode *getRate() override;
-    virtual void frameTransmitted(Packet *frame, int retryCount, bool isSuccessful, bool isGivenUp) override;
-    virtual void frameReceived(Packet *frame) override;
 
     virtual Selection selectHeMode(const MacAddress& peer, Hz bandwidth, int ruToneSize,
             uint8_t ppduFormat, int maxNss, const Constraints& constraints) override;
     virtual void reportHeTxResult(const MacAddress& peer, int mcs, int numberOfSpatialStreams,
             int ruToneSize, int retryCount, bool success, int64_t ackedBytes) override;
     virtual void reportHeRxSnir(const MacAddress& peer, double snirDb) override;
-    virtual void invalidatePeer(const MacAddress& peer) override;
+    virtual void invalidatePeer(const MacAddress& peer) override
+    {
+        lastSelections.erase(peer);
+        MinstrelRateControlBase::invalidatePeer(peer);
+    }
 };
 
 } // namespace ieee80211

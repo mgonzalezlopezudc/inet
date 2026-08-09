@@ -1,0 +1,168 @@
+{
+  "analysis_script_sha256": "80a8d8f3d69d1179292b9ce451fd0ddde079619230aaec5dd6e683abca86dfa8",
+  "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
+  "capture_source_diff_sha256": "44b63b5eec0c5898d0f468d3bdf5c710bc6718e819c5ec456d34beca7dec06de",
+  "entries": [
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 698910,
+            "duration_seconds": 0.797639,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.998459,
+            "file_size_bytes": 745044,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 65535,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1023,
+            "snapshot_length": null,
+            "start_seconds": 0.20082,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211n/mimo_spatial_streams/results/20260809T153438Z/SingleStreamMcs1/SingleStreamMcs1-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "33bfa10a04bad0db2414df513f2f38a3a1e5b30d225b81ff771334c6eca04a16",
+          "size_bytes": 745044
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "SingleStreamMcs1",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211n/mimo_spatial_streams/omnetpp.ini",
+      "ini_sha256": "60470c7f652dc384a1c162515f1fb0fdb95ae118663c153fd224a84d57779bd2",
+      "run_number": 0,
+      "scalar": {
+        "configname": "SingleStreamMcs1",
+        "path": "examples/ieee80211n/mimo_spatial_streams/results/20260809T153438Z/SingleStreamMcs1/SingleStreamMcs1-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "248514eece7ff097cbf8ee461f8a6556561550b5d2ab974f624e4568fff301ab"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "mimo_spatial_streams"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 999192,
+            "duration_seconds": 0.539185,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.739617,
+            "file_size_bytes": 1066032,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 65535,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1494,
+            "snapshot_length": null,
+            "start_seconds": 0.200432,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211n/mimo_spatial_streams/results/20260809T153438Z/DualStreamMcs9/DualStreamMcs9-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "3c8b73f62542f628bcb2b2cf0af1bee8d31d011b141f82657841736df11ef7a8",
+          "size_bytes": 1066032
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "DualStreamMcs9",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211n/mimo_spatial_streams/omnetpp.ini",
+      "ini_sha256": "60470c7f652dc384a1c162515f1fb0fdb95ae118663c153fd224a84d57779bd2",
+      "run_number": 0,
+      "scalar": {
+        "configname": "DualStreamMcs9",
+        "path": "examples/ieee80211n/mimo_spatial_streams/results/20260809T153438Z/DualStreamMcs9/DualStreamMcs9-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "d0285972a1db98b2ba12bb5a4624ded5c92d0ee30b96a314f4e3b37061c57a04"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "mimo_spatial_streams"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 1523140,
+            "duration_seconds": 0.52137,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.721614,
+            "file_size_bytes": 1624904,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 65535,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 2275,
+            "snapshot_length": null,
+            "start_seconds": 0.200244,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211n/mimo_spatial_streams/results/20260809T153438Z/QuadStreamMcs25/QuadStreamMcs25-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "69c067035dd8643c984b40b0b43e53df09aec4c0ac00965902306c4dcc5fc993",
+          "size_bytes": 1624904
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "QuadStreamMcs25",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211n/mimo_spatial_streams/omnetpp.ini",
+      "ini_sha256": "60470c7f652dc384a1c162515f1fb0fdb95ae118663c153fd224a84d57779bd2",
+      "run_number": 0,
+      "scalar": {
+        "configname": "QuadStreamMcs25",
+        "path": "examples/ieee80211n/mimo_spatial_streams/results/20260809T153438Z/QuadStreamMcs25/QuadStreamMcs25-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "2a3eaf6921b0ee84683c035afe4f481dc12fd35fa29f7e81b63d02152aaf43a0"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "mimo_spatial_streams"
+    }
+  ],
+  "generated_at_utc": "2026-08-09T15:35:03.425068+00:00",
+  "inet_library": "out/clang-release/src/libINET.so",
+  "inet_library_sha256": "587265a878b6fd1c2b5a29b8da8234641ddf2e5807c49adbf2dcfbc9589060d8",
+  "repository_revision": "3da32110ce80b4d7983b523686d7aa48ce3e0cbc",
+  "session_id": "20260809T153438Z",
+  "suite": "n",
+  "suite_descriptor": {
+    "path": "examples/ieee80211/analysis/suites/n.json",
+    "sha256": "56311b90580afd2b2b2250e6223269d23289413bb9d20925c4cb224d4d1c8de6"
+  },
+  "tshark_version": "TShark (Wireshark) 4.6.4."
+}

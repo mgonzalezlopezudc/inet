@@ -21,6 +21,7 @@
 #include "inet/linklayer/ieee80211/mac/contract/IBlockAckAgreementHandlerCallback.h"
 #include "inet/linklayer/ieee80211/mac/contract/ICoordinationFunction.h"
 #include "inet/linklayer/ieee80211/mac/contract/ICtsPolicy.h"
+#include "inet/linklayer/ieee80211/mac/contract/IIeee80211HtRateControl.h"
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementHandler.h"
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementPolicy.h"
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckProcedure.h"
@@ -68,6 +69,28 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
 
     Ieee80211Mac *mac = nullptr;
     IRateControl *dataAndMgmtRateControl = nullptr;
+    IIeee80211HtRateControl *htRateControl = nullptr;
+
+    struct PendingHtSounding {
+        bool valid = false;
+        MacAddress peer;
+        uint64_t associationGeneration = 0;
+        uint8_t requestToken = 0;
+        uint8_t soundingNsts = 1;
+        Ieee80211HtFeedbackKind feedbackKind = Ieee80211HtFeedbackKind::COMPRESSED_BEAMFORMING;
+        Hz channelWidth = Hz(0);
+        int transmitterRadioId = -1;
+        simtime_t announcementReceptionEnd = -1;
+    } pendingHtSounding;
+    bool enableHtSounding = false;
+    int htSoundingNsts = 2;
+    Ieee80211HtFeedbackKind htSoundingFeedbackKind = Ieee80211HtFeedbackKind::COMPRESSED_BEAMFORMING;
+    simtime_t htSoundingRetryInterval = SIMTIME_ZERO;
+    std::map<MacAddress, simtime_t> nextHtSoundingAttemptTimes;
+    std::map<MacAddress, uint8_t> nextHtSoundingTokens;
+    bool htStandaloneMfbTransmission = false;
+    MacAddress pendingHtMfbPeer;
+    Ieee80211HtMcsControl pendingHtMfbControl;
 
     cMessage *startRxTimer = nullptr;
     cMessage *inactivityTimer = nullptr;
@@ -158,6 +181,14 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     virtual bool shouldRestartWideChannelAccess(Edcaf *edcaf);
     virtual bool isLegacyHtMultiTidBlockAckEnabled() const;
     virtual bool processHeaderlessNdpIndication(Packet *packet) { return false; }
+    bool processHtHeaderlessNdpIndication(Packet *packet);
+    bool processHtNdpAnnouncement(Packet *packet,
+            const Ptr<const Ieee80211DataHeader>& header);
+    bool mayStartHtSounding(const MacAddress& peer,
+            const physicallayer::IIeee80211Mode *mode) const;
+    void sendStandaloneHtMfb();
+    void attachPendingHtMcsControl(Packet *packet,
+            const physicallayer::IIeee80211Mode *mode);
 
     // Recipient
     virtual void recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header);

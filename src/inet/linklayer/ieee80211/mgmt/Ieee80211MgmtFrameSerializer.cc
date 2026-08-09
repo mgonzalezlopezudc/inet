@@ -34,6 +34,9 @@ Register_Serializer(Ieee80211HeNdpAnnouncement, Ieee80211HeSoundingMgmtFrameSeri
 Register_Serializer(Ieee80211HeCompressedBeamformingFeedback, Ieee80211HeSoundingMgmtFrameSerializer);
 Register_Serializer(Ieee80211VhtCompressedBeamformingFeedback, Ieee80211VhtActionFrameBodySerializer);
 Register_Serializer(Ieee80211VhtGroupIdManagement, Ieee80211VhtActionFrameBodySerializer);
+Register_Serializer(Ieee80211HtCsiFeedback, Ieee80211HtActionFrameBodySerializer);
+Register_Serializer(Ieee80211HtNoncompressedBeamformingFeedback, Ieee80211HtActionFrameBodySerializer);
+Register_Serializer(Ieee80211HtCompressedBeamformingFeedback, Ieee80211HtActionFrameBodySerializer);
 
 static const uint8_t ELEMENT_ID_EXTENSION = 255;
 static const uint8_t ELEMENT_ID_EXTENSION_HE_CAPABILITIES = 35;
@@ -227,8 +230,24 @@ static void writeHtCapabilitiesElement(MemoryOutputStream& stream, const Ieee802
     setBits(mcs, 97, 1, unequal);
     setBits(mcs, 98, 2, std::max(0, txMaxNss - 1));
     for (auto byte : mcs) stream.writeByte(byte);
-    stream.writeUint16Le(0);
-    stream.writeUint32Le(0);
+    if (capabilities.mcsFeedback == 1 || capabilities.mcsFeedback < 0 || capabilities.mcsFeedback > 3)
+        throw cRuntimeError("Invalid reserved HT MCS Feedback capability value: %d", capabilities.mcsFeedback);
+    // IEEE Std 802.11-2024, Figure 9-459 and Table 9-227.
+    uint16_t extendedCapabilities = (capabilities.mcsFeedback & 3) << 8 |
+            (capabilities.htcSupport ? 1 << 10 : 0);
+    stream.writeUint16Le(extendedCapabilities);
+    if (capabilities.explicitCsiFeedback < 0 || capabilities.explicitCsiFeedback > 3 ||
+            capabilities.explicitNoncompressedFeedback < 0 || capabilities.explicitNoncompressedFeedback > 3 ||
+            capabilities.explicitCompressedFeedback < 0 || capabilities.explicitCompressedFeedback > 3)
+        throw cRuntimeError("Invalid HT explicit-feedback capability value");
+    // IEEE Std 802.11-2024, Figure 9-460 and Table 9-228.
+    uint32_t transmitBeamformingCapabilities =
+            (capabilities.receiveNdp ? 1u << 3 : 0) |
+            (capabilities.transmitNdp ? 1u << 4 : 0) |
+            ((capabilities.explicitCsiFeedback & 3u) << 11) |
+            ((capabilities.explicitNoncompressedFeedback & 3u) << 13) |
+            ((capabilities.explicitCompressedFeedback & 3u) << 15);
+    stream.writeUint32Le(transmitBeamformingCapabilities);
     stream.writeByte(0);
 }
 
@@ -529,7 +548,18 @@ static void readHtCapabilitiesElement(MemoryInputStream& stream, int length, con
         for (int index = 0; index < 8; index++) if (getBits(mcs, nss * 8 + index, 1)) capabilities.rxMaxMcsForNss[nss] = index;
         capabilities.txMaxMcsForNss[nss] = !unequal || nss < txMaxNss ? capabilities.rxMaxMcsForNss[nss] : -1;
     }
-    skipBytes(stream, 7);
+    uint16_t extendedCapabilities = stream.readUint16Le();
+    capabilities.mcsFeedback = (extendedCapabilities >> 8) & 3;
+    if (capabilities.mcsFeedback == 1)
+        throw cRuntimeError("Malformed HT Capabilities element: reserved MCS Feedback value 1");
+    capabilities.htcSupport = extendedCapabilities & (1 << 10);
+    uint32_t transmitBeamformingCapabilities = stream.readUint32Le();
+    capabilities.receiveNdp = transmitBeamformingCapabilities & (1u << 3);
+    capabilities.transmitNdp = transmitBeamformingCapabilities & (1u << 4);
+    capabilities.explicitCsiFeedback = (transmitBeamformingCapabilities >> 11) & 3;
+    capabilities.explicitNoncompressedFeedback = (transmitBeamformingCapabilities >> 13) & 3;
+    capabilities.explicitCompressedFeedback = (transmitBeamformingCapabilities >> 15) & 3;
+    skipBytes(stream, 1);
     frame->setHtCapabilitiesPresent(true);
     frame->setHtCapabilities(capabilities);
 }
@@ -1714,6 +1744,126 @@ const Ptr<Chunk> Ieee80211VhtActionFrameBodySerializer::deserialize(MemoryInputS
         return group;
     }
     throw cRuntimeError("Reserved VHT Action value %u", action);
+}
+
+static uint8_t encodeHtFeedbackGrouping(uint8_t grouping)
+{
+    if (grouping == 1) return 0;
+    if (grouping == 2) return 1;
+    if (grouping == 4) return 2;
+    throw cRuntimeError("HT feedback grouping must be 1, 2, or 4");
+}
+
+static uint8_t decodeHtFeedbackGrouping(uint8_t value)
+{
+    if (value > 2)
+        throw cRuntimeError("Reserved HT feedback grouping value");
+    return 1 << value;
+}
+
+static uint8_t encodeHtCoefficientSize(uint8_t action, uint8_t size)
+{
+    if (action == 4) {
+        if (size == 4) return 0;
+        if (size == 5) return 1;
+        if (size == 6) return 2;
+        if (size == 8) return 3;
+    }
+    else if (action == 5) {
+        if (size == 4) return 0;
+        if (size == 2) return 1;
+        if (size == 6) return 2;
+        if (size == 8) return 3;
+    }
+    else if (action == 6 && size == 0)
+        return 0; // Reserved in a Compressed Beamforming frame.
+    throw cRuntimeError("Invalid coefficient size for HT Action %u", action);
+}
+
+static uint8_t decodeHtCoefficientSize(uint8_t action, uint8_t value)
+{
+    static const uint8_t csiSizes[] = {4, 5, 6, 8};
+    static const uint8_t noncompressedSizes[] = {4, 2, 6, 8};
+    if (action == 4) return csiSizes[value];
+    if (action == 5) return noncompressedSizes[value];
+    if (action == 6 && value == 0) return 0;
+    throw cRuntimeError("Reserved coefficient-size bits in HT Compressed Beamforming frame");
+}
+
+void Ieee80211HtActionFrameBodySerializer::serialize(MemoryOutputStream& stream,
+        const Ptr<const Chunk>& chunk) const
+{
+    auto feedback = dynamicPtrCast<const Ieee80211HtMimoFeedback>(chunk);
+    if (feedback == nullptr)
+        throw cRuntimeError("Unsupported HT action-frame body type");
+    uint8_t action = dynamicPtrCast<const Ieee80211HtCsiFeedback>(chunk) ? 4 :
+            dynamicPtrCast<const Ieee80211HtNoncompressedBeamformingFeedback>(chunk) ? 5 :
+            dynamicPtrCast<const Ieee80211HtCompressedBeamformingFeedback>(chunk) ? 6 : 0;
+    if (action == 0 || feedback->getNc() < 1 || feedback->getNc() > 4 ||
+            feedback->getNr() < 2 || feedback->getNr() > 4 ||
+            feedback->getNc() > feedback->getNr() ||
+            (feedback->getChannelWidth() != 20e6 && feedback->getChannelWidth() != 40e6) ||
+            feedback->getCodebookInformation() > 3 ||
+            feedback->getRemainingMatrixSegments() > 7 ||
+            feedback->getReportArraySize() == 0 || feedback->getReportArraySize() > 64)
+        throw cRuntimeError("Invalid HT CSI/beamforming feedback fields");
+    if ((action == 4 || action == 5) && feedback->getCodebookInformation() != 0)
+        throw cRuntimeError("Codebook Information is reserved for HT CSI/noncompressed feedback");
+    // IEEE Std 802.11-2024, Table 9-517 and Figure 9-163.
+    stream.writeByte(7);
+    stream.writeByte(action);
+    uint64_t mimoControl = (feedback->getNc() - 1) |
+            (uint64_t(feedback->getNr() - 1) << 2) |
+            (uint64_t(feedback->getChannelWidth() == 40e6) << 4) |
+            (uint64_t(encodeHtFeedbackGrouping(feedback->getGrouping())) << 5) |
+            (uint64_t(encodeHtCoefficientSize(action, feedback->getCoefficientSize())) << 7) |
+            (uint64_t(feedback->getCodebookInformation()) << 9) |
+            (uint64_t(feedback->getRemainingMatrixSegments()) << 11) |
+            (uint64_t(feedback->getSoundingTimestamp()) << 16);
+    for (int i = 0; i < 6; i++)
+        stream.writeByte((mimoControl >> (8 * i)) & 0xff);
+    for (size_t i = 0; i < feedback->getReportArraySize(); i++)
+        stream.writeByte(feedback->getReport(i));
+}
+
+const Ptr<Chunk> Ieee80211HtActionFrameBodySerializer::deserialize(MemoryInputStream& stream) const
+{
+    if (stream.getRemainingLength() < B(9))
+        throw cRuntimeError("Truncated HT CSI/beamforming action body");
+    if (stream.readByte() != 7)
+        throw cRuntimeError("Expected HT action category 7");
+    auto action = stream.readByte();
+    if (action < 4 || action > 6)
+        throw cRuntimeError("Reserved or unsupported HT Action value %u", action);
+    uint64_t mimoControl = 0;
+    for (int i = 0; i < 6; i++)
+        mimoControl |= uint64_t(stream.readByte()) << (8 * i);
+    if (mimoControl & (uint64_t(3) << 14))
+        throw cRuntimeError("Reserved bits set in HT MIMO Control field");
+    Ptr<Ieee80211HtMimoFeedback> feedback;
+    if (action == 4) feedback = makeShared<Ieee80211HtCsiFeedback>();
+    else if (action == 5) feedback = makeShared<Ieee80211HtNoncompressedBeamformingFeedback>();
+    else feedback = makeShared<Ieee80211HtCompressedBeamformingFeedback>();
+    feedback->setNc((mimoControl & 3) + 1);
+    feedback->setNr(((mimoControl >> 2) & 3) + 1);
+    if (feedback->getNc() > feedback->getNr())
+        throw cRuntimeError("HT MIMO Control Nc exceeds Nr");
+    feedback->setChannelWidth((mimoControl & (uint64_t(1) << 4)) ? 40e6 : 20e6);
+    feedback->setGrouping(decodeHtFeedbackGrouping((mimoControl >> 5) & 3));
+    feedback->setCoefficientSize(decodeHtCoefficientSize(action, (mimoControl >> 7) & 3));
+    feedback->setCodebookInformation((mimoControl >> 9) & 3);
+    if ((action == 4 || action == 5) && feedback->getCodebookInformation() != 0)
+        throw cRuntimeError("Reserved Codebook Information in HT CSI/noncompressed feedback");
+    feedback->setRemainingMatrixSegments((mimoControl >> 11) & 7);
+    feedback->setSoundingTimestamp(mimoControl >> 16);
+    auto reportLength = stream.getRemainingLength().get<B>();
+    if (reportLength == 0 || reportLength > 64)
+        throw cRuntimeError("HT feedback report must contain 1..64 octets");
+    feedback->setReportArraySize(reportLength);
+    for (size_t i = 0; i < reportLength; i++)
+        feedback->setReport(i, stream.readByte());
+    feedback->setChunkLength(B(8 + reportLength));
+    return feedback;
 }
 
 } // namespace ieee80211

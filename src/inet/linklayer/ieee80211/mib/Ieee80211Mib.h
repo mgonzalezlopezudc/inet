@@ -83,6 +83,7 @@ class INET_API Ieee80211Mib : public SimpleModule
         std::map<MacAddress, uint64_t> vhtAssociationGenerations;
         std::map<MacAddress, Ieee80211HtCapabilities> advertisedHtCapabilities;
         std::map<MacAddress, Ieee80211NegotiatedHtCapabilities> negotiatedHtCapabilities;
+        std::map<MacAddress, uint64_t> htAssociationGenerations;
         std::map<MacAddress, std::vector<Ieee80211LegacyRate>> advertisedLegacyRates;
     };
 
@@ -148,6 +149,7 @@ class INET_API Ieee80211Mib : public SimpleModule
             const Ieee80211ExtendedSupportedRatesElement& extendedSupportedRates);
     void clearCurrentBssBasicLegacyRates() { currentBssBasicRates.clear(); }
     const Ieee80211NegotiatedHeCapabilities *findNegotiatedHeCapabilities(const MacAddress& address) const;
+    bool isHeModeAllowedForPeer(const physicallayer::IIeee80211Mode *mode, const MacAddress& address) const;
     void setPeerEhtCapabilities(const MacAddress& address, const Ieee80211EhtCapabilities& capabilities,
             const Ieee80211EhtOperation& operation);
     void removePeerEhtCapabilities(const MacAddress& address);
@@ -165,6 +167,7 @@ class INET_API Ieee80211Mib : public SimpleModule
             const Ieee80211HtOperation& operation);
     void removePeerHtCapabilities(const MacAddress& address);
     const Ieee80211NegotiatedHtCapabilities *findNegotiatedHtCapabilities(const MacAddress& address) const;
+    uint64_t getHtAssociationGeneration(const MacAddress& address) const;
 };
 
 inline std::ostream& operator<<(std::ostream& os, const Ieee80211Mib::BssAccessPointData::LinkData& link)

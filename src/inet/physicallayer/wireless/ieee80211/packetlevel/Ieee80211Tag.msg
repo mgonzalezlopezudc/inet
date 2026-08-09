@@ -120,8 +120,19 @@ class Ieee80211VhtTransmissionTag extends TagBase
     uint16_t partialAid = 0;
 }
 
+// Model-only HT TXVECTOR request. The selected HT mode remains authoritative
+// for all PHY rates and timing (IEEE Std 802.11-2024, 19.3.13).
+class Ieee80211HtTransmissionReq extends TagBase
+{
+    bool sounding = false;
+    bool ndp = false;
+    uint8_t numberOfSpaceTimeStreams = 1;
+    uint8_t numberOfHtLtfSymbols = 1;
+}
+
 enum Ieee80211NdpPhyFormat
 {
+    IEEE80211_NDP_PHY_HT = 0;
     IEEE80211_NDP_PHY_VHT = 1;
     IEEE80211_NDP_PHY_HE_SU = 2;
 }
@@ -134,6 +145,8 @@ class Ieee80211NdpInd extends TagBase
     Ieee80211NdpPhyFormat phyFormat;
     double channelWidth;
     uint8_t numberOfSpaceTimeStreams;
+    uint8_t numberOfLtfSymbols;
+    bool sounding;
 }
 
 // Immutable PHY provenance for correlating headerless exchanges with their

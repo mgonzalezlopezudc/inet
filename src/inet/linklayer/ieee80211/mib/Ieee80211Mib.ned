@@ -30,6 +30,13 @@ simple Ieee80211Mib extends SimpleModule
         bool htShortGi40 = default(false); // Advertises HT short guard interval support for 40 MHz operation
         int htMaxNss = default(4); // Maximum HT spatial streams advertised by this MIB (1..4)
         int htProtectionMode = default(0); // HT Protection: 0=no protection, 1=nonmember, 2=20 MHz, 3=non-HT mixed
+        int htMcsFeedback = default(0); // HT Extended Capabilities: 0=None, 2=Unsolicited, 3=Both; 1 is reserved
+        bool htHtcSupport = default(false); // Advertises HT Control support; required for HT MRQ/MFB
+        bool htReceiveNdp = default(false); // Advertises reception of HT sounding NDPs
+        bool htTransmitNdp = default(false); // Advertises transmission of HT sounding NDPs
+        int htExplicitCsiFeedback = default(0); // 0=None, 1=Delayed, 2=Immediate, 3=Both
+        int htExplicitNoncompressedFeedback = default(0); // 0=None, 1=Delayed, 2=Immediate, 3=Both
+        int htExplicitCompressedFeedback = default(0); // 0=None, 1=Delayed, 2=Immediate, 3=Both
         // HE features are opt-in so existing configurations retain BCC and
         // the unextended PPDU geometry.
         bool heLdpc = default(true); // Advertises and enables HE LDPC when the peer also supports it

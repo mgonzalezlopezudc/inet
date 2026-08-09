@@ -26,6 +26,20 @@ enum class Ieee80211HtProtectionMode : uint8_t {
     NON_HT_MIXED = 3,
 };
 
+// IEEE Std 802.11-2024, Table 9-227. Value 1 is reserved.
+enum class Ieee80211HtMcsFeedback : uint8_t {
+    NONE = 0,
+    UNSOLICITED = 2,
+    BOTH = 3,
+};
+
+enum class Ieee80211HtExplicitFeedback : uint8_t {
+    NONE = 0,
+    DELAYED = 1,
+    IMMEDIATE = 2,
+    BOTH = 3,
+};
+
 struct Ieee80211HtMcsNssMap
 {
     std::array<int, 4> maxMcsPerNss;
@@ -43,6 +57,13 @@ struct Ieee80211HtCapabilities
     bool shortGi20 = false;
     bool shortGi40 = false;
     int maxAmpduLengthExponent = 3;
+    Ieee80211HtMcsFeedback mcsFeedback = Ieee80211HtMcsFeedback::NONE;
+    bool htcSupport = false;
+    bool receiveNdp = false;
+    bool transmitNdp = false;
+    Ieee80211HtExplicitFeedback explicitCsiFeedback = Ieee80211HtExplicitFeedback::NONE;
+    Ieee80211HtExplicitFeedback explicitNoncompressedFeedback = Ieee80211HtExplicitFeedback::NONE;
+    Ieee80211HtExplicitFeedback explicitCompressedFeedback = Ieee80211HtExplicitFeedback::NONE;
 };
 
 /** Model-backed subset of the HT Operation element (IEEE Std 802.11-2024, 9.4.2.55). */
@@ -64,6 +85,14 @@ struct Ieee80211HtDirectionalCapabilities
     bool shortGi20 = false;
     bool shortGi40 = false;
     int receiverMaxAmpduLengthExponent = 0;
+    bool mcsRequestAllowed = false;
+    bool mcsFeedbackAllowed = false;
+    bool htcSupported = false;
+    bool transmitterCanSendNdp = false;
+    bool receiverCanReceiveNdp = false;
+    Ieee80211HtExplicitFeedback explicitCsiFeedback = Ieee80211HtExplicitFeedback::NONE;
+    Ieee80211HtExplicitFeedback explicitNoncompressedFeedback = Ieee80211HtExplicitFeedback::NONE;
+    Ieee80211HtExplicitFeedback explicitCompressedFeedback = Ieee80211HtExplicitFeedback::NONE;
 };
 
 struct Ieee80211NegotiatedHtCapabilities
@@ -103,6 +132,26 @@ inline Ieee80211NegotiatedHtCapabilities negotiateHtCapabilities(const Ieee80211
     negotiated.localRxPeerTx.shortGi40 = negotiated.localTxPeerRx.shortGi40;
     negotiated.localTxPeerRx.receiverMaxAmpduLengthExponent = peer.maxAmpduLengthExponent;
     negotiated.localRxPeerTx.receiverMaxAmpduLengthExponent = local.maxAmpduLengthExponent;
+    negotiated.localTxPeerRx.mcsRequestAllowed = local.htcSupport && peer.htcSupport &&
+            peer.mcsFeedback == Ieee80211HtMcsFeedback::BOTH;
+    negotiated.localRxPeerTx.mcsRequestAllowed = local.htcSupport && peer.htcSupport &&
+            local.mcsFeedback == Ieee80211HtMcsFeedback::BOTH;
+    negotiated.localTxPeerRx.mcsFeedbackAllowed = local.htcSupport && peer.htcSupport &&
+            local.mcsFeedback != Ieee80211HtMcsFeedback::NONE;
+    negotiated.localRxPeerTx.mcsFeedbackAllowed = local.htcSupport && peer.htcSupport &&
+            peer.mcsFeedback != Ieee80211HtMcsFeedback::NONE;
+    negotiated.localTxPeerRx.htcSupported = local.htcSupport && peer.htcSupport;
+    negotiated.localRxPeerTx.htcSupported = negotiated.localTxPeerRx.htcSupported;
+    negotiated.localTxPeerRx.transmitterCanSendNdp = local.transmitNdp;
+    negotiated.localTxPeerRx.receiverCanReceiveNdp = peer.receiveNdp;
+    negotiated.localTxPeerRx.explicitCsiFeedback = peer.explicitCsiFeedback;
+    negotiated.localTxPeerRx.explicitNoncompressedFeedback = peer.explicitNoncompressedFeedback;
+    negotiated.localTxPeerRx.explicitCompressedFeedback = peer.explicitCompressedFeedback;
+    negotiated.localRxPeerTx.transmitterCanSendNdp = peer.transmitNdp;
+    negotiated.localRxPeerTx.receiverCanReceiveNdp = local.receiveNdp;
+    negotiated.localRxPeerTx.explicitCsiFeedback = local.explicitCsiFeedback;
+    negotiated.localRxPeerTx.explicitNoncompressedFeedback = local.explicitNoncompressedFeedback;
+    negotiated.localRxPeerTx.explicitCompressedFeedback = local.explicitCompressedFeedback;
     negotiated.localTxPeerRx.valid = negotiated.localTxPeerRx.supportedChannelWidths.count(operation.operatingChannelWidth) && negotiated.localTxPeerRx.mcsNss.maxMcsPerNss[0] >= 0;
     negotiated.localRxPeerTx.valid = negotiated.localRxPeerTx.supportedChannelWidths.count(operation.operatingChannelWidth) && negotiated.localRxPeerTx.mcsNss.maxMcsPerNss[0] >= 0;
     return negotiated;

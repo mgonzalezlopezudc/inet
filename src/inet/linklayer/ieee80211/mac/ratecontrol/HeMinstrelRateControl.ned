@@ -8,12 +8,13 @@ package inet.linklayer.ieee80211.mac.ratecontrol;
 
 import inet.common.SimpleModule;
 import inet.linklayer.ieee80211.mac.contract.IIeee80211HeRateControl;
+import inet.linklayer.ieee80211.mac.contract.IIeee80211PeerRateControl;
 import inet.linklayer.ieee80211.mac.contract.IRateControl;
 
 //
 // Minstrel-style HE rate controller with per-peer MCS/NSS EWMA and probing.
 //
-simple HeMinstrelRateControl extends SimpleModule like IRateControl, IIeee80211HeRateControl
+simple HeMinstrelRateControl extends SimpleModule like IRateControl, IIeee80211HeRateControl, IIeee80211PeerRateControl
 {
     parameters:
         @class(HeMinstrelRateControl);

@@ -238,6 +238,23 @@ auto heMode = findFamilyMode(heSet, Ieee80211PhyFamily::HE);
 auto ehtMode = findFamilyMode(ehtSet, Ieee80211PhyFamily::EHT);
 REQUIRE(heMode != nullptr && ehtMode != nullptr);
 
+auto restrictedHePeer = MacAddress("02:00:00:00:00:30");
+mib->bssStationData.stationType = Ieee80211Mib::ACCESS_POINT;
+mib->bssStationData.isAssociated = true;
+mib->bssAccessPointData.stations[restrictedHePeer] = Ieee80211Mib::ASSOCIATED;
+auto restrictedHeCapabilities = mib->localHeCapabilities;
+restrictedHeCapabilities.rxMcsNss.maxMcsPerNss.fill(-1);
+restrictedHeCapabilities.rxMcsNss.maxMcsPerNss[0] = 4;
+Ieee80211HeOperation restrictedHeOperation;
+restrictedHeOperation.operatingChannelWidth = MHz(20);
+mib->setPeerHeCapabilities(restrictedHePeer, restrictedHeCapabilities, restrictedHeOperation);
+auto heMcs4 = heSet->findHeMode(4, 1, MHz(20), false);
+auto heMcs7 = heSet->findHeMode(7, 1, MHz(20), false);
+REQUIRE(heMcs4 != nullptr && heMcs7 != nullptr);
+REQUIRE(mib->isHeModeAllowedForPeer(heMcs4, restrictedHePeer));
+REQUIRE(!mib->isHeModeAllowedForPeer(heMcs7, restrictedHePeer));
+EV << "Negotiated HE MCS/NSS capability filtering rejected an unsupported peer mode.\n";
+
 auto requireCompressedBlockAckDispatch = [&](const Ieee80211ModeSet *set, const IIeee80211Mode *precedingMode) {
     qosRateSelection->configure(set, mib);
     auto request = makeShared<Ieee80211CompressedBlockAckReq>();
@@ -330,6 +347,9 @@ HT UEQM stream-1 and VHT Table 10-10 reference mappings passed.
 
 %contains: stdout
 HE/EHT Block Ack, multicast rate-control, and prior-control dispatch preservation passed.
+
+%contains: stdout
+Negotiated HE MCS/NSS capability filtering rejected an unsupported peer mode.
 
 %contains: stdout
 Current-BSS snapshot lifecycle and strict Basic-rate configuration passed.

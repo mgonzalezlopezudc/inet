@@ -88,6 +88,14 @@ class TestableHeMinstrelRateControl : public HeMinstrelRateControl
         auto it = peers.find(peer);
         return it == peers.end() ? 0 : it->second.rates.size();
     }
+    int getAttempts(const MacAddress& peer, const IIeee80211Mode *mode) const
+    {
+        auto peerIt = peers.find(peer);
+        if (peerIt == peers.end())
+            return 0;
+        auto rateIt = peerIt->second.rates.find(mode);
+        return rateIt == peerIt->second.rates.end() ? 0 : rateIt->second.attempts;
+    }
 };
 
 Define_Module(TestableHeMinstrelRateControl);
@@ -322,6 +330,21 @@ auto staleSelection = fresh->selectHeMode(stalePeer,
 REQUIRE(staleSelection.mcs == unseeded.mcs);
 EV << "SNIR max-age accepted the exact boundary and rejected a one-nanosecond stale sample.\n";
 
+constraints = {};
+constraints.ldpc = true;
+auto exactFeedbackPeer = MacAddress("02:00:00:00:00:29");
+auto competingPeer = MacAddress("02:00:00:00:00:2A");
+auto exactSelection = normal->selectHeMode(exactFeedbackPeer,
+        MHz(20), 242, HE_MU_DOWNLINK, 1, constraints);
+REQUIRE(exactSelection.mode != nullptr);
+normal->selectHeMode(competingPeer, MHz(20), 242, HE_MU_DOWNLINK, 1, constraints);
+auto attemptsBeforeExactFeedback = normal->getAttempts(exactFeedbackPeer, exactSelection.mode);
+normal->reportHeTxResult(exactFeedbackPeer, exactSelection.mcs,
+        exactSelection.numberOfSpatialStreams, 242, 0, false, 0);
+REQUIRE(normal->getAttempts(exactFeedbackPeer, exactSelection.mode) ==
+        attemptsBeforeExactFeedback + 1);
+EV << "HE scheduler feedback remained associated with the peer's exact selected mode.\n";
+
 EV << ".\n";
 
 %contains: stdout
@@ -365,6 +388,9 @@ Peer invalidation discarded SNIR, EWMA, and candidate history.
 
 %contains: stdout
 SNIR max-age accepted the exact boundary and rejected a one-nanosecond stale sample.
+
+%contains: stdout
+HE scheduler feedback remained associated with the peer's exact selected mode.
 
 %contains: stdout
 .

@@ -9,11 +9,18 @@
 
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/Simsignals.h"
+#include "inet/linklayer/ieee80211/mac/contract/IIeee80211PeerRateControl.h"
 #include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
 #include "inet/linklayer/ieee80211/mac/rateselection/Ieee80211RateSelectionPolicy.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211FecCodingReq.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 #include "inet/networklayer/common/NetworkInterface.h"
+
+#include <cmath>
 
 namespace inet {
 namespace ieee80211 {
@@ -40,6 +47,28 @@ static const IIeee80211Mode *selectHeOrEhtResponseMode(const Ieee80211ModeSet *m
     if (auto slowerMode = modeSet->getSlowerMandatoryMode(precedingMode))
         return slowerMode;
     throw cRuntimeError("Mandatory HE/EHT response mode not found");
+}
+
+static bool isCandidateWithinOperatingBandwidth(const Ieee80211ModeSet *modeSet,
+        const IIeee80211Mode *mode, Hz operatingBandwidth)
+{
+    if (std::isnan(operatingBandwidth.get()))
+        return true;
+    auto family = modeSet->getPhyFamily(mode);
+    bool isLegacy = family == Ieee80211PhyFamily::DSSS ||
+            family == Ieee80211PhyFamily::ERP_OFDM || family == Ieee80211PhyFamily::OFDM;
+    return isLegacy || mode->getDataMode()->getBandwidth() == operatingBandwidth;
+}
+
+static bool isLdpcMode(const IIeee80211Mode *mode)
+{
+    if (auto ht = dynamic_cast<const Ieee80211HtMode *>(mode))
+        return ht->getDataMode()->getCode() != nullptr && ht->getDataMode()->getCode()->isLdpc();
+    if (auto vht = dynamic_cast<const Ieee80211VhtMode *>(mode))
+        return vht->getDataMode()->getCode() != nullptr && vht->getDataMode()->getCode()->isLdpc();
+    if (auto he = dynamic_cast<const Ieee80211HeMode *>(mode))
+        return he->getDataMode()->isLdpc();
+    return false;
 }
 
 void QosRateSelection::initialize(int stage)
@@ -204,9 +233,36 @@ const IIeee80211Mode *QosRateSelection::computeDataOrMgmtFrameMode(const Ptr<con
         if (configured != nullptr)
             return Ieee80211RateSelectionPolicy::selectUnicast(context, configured,
                     Ieee80211RateSelectionPolicy::EXPLICIT_CONFIGURATION);
-        if (dataOrMgmtRateControl)
+        if (dataOrMgmtRateControl) {
+            if (auto peerRateControl = dynamic_cast<IIeee80211PeerRateControl *>(dataOrMgmtRateControl)) {
+                std::vector<const IIeee80211Mode *> candidates;
+                auto peer = dataOrMgmtHeader->getReceiverAddress();
+                Hz operatingBandwidth(NaN);
+                auto nic = getContainingNicModule(this);
+                auto radio = nic == nullptr ? nullptr : nic->getSubmodule("radio");
+                auto provider = radio == nullptr ? nullptr : dynamic_cast<IIeee80211ModeSetProvider *>(radio);
+                if (provider != nullptr)
+                    operatingBandwidth = provider->getChannelWidth();
+                for (int i = 0; i < modeSet->getNumModes(); ++i) {
+                    auto candidate = modeSet->getMode(i);
+                    if (isCandidateWithinOperatingBandwidth(modeSet, candidate, operatingBandwidth) &&
+                            mib->isEhtModeAllowedForPeer(candidate, peer) &&
+                            mib->isHeModeAllowedForPeer(candidate, peer) &&
+                            mib->isHtModeAllowedForPeer(candidate, peer) &&
+                            mib->isVhtModeAllowedForPeer(candidate, peer) &&
+                            (!isLdpcMode(candidate) || mib->isLdpcAllowedForPeer(candidate, peer)))
+                        candidates.push_back(candidate);
+                }
+                auto selected = peerRateControl->selectRate(peer, candidates);
+                if (selected != nullptr)
+                    return Ieee80211RateSelectionPolicy::selectUnicast(context, selected,
+                            Ieee80211RateSelectionPolicy::RATE_CONTROL);
+                return Ieee80211RateSelectionPolicy::selectUnicast(context, nullptr,
+                        Ieee80211RateSelectionPolicy::RATE_CONTROL);
+            }
             return Ieee80211RateSelectionPolicy::selectUnicast(context, dataOrMgmtRateControl->getRate(),
                     Ieee80211RateSelectionPolicy::RATE_CONTROL);
+        }
         return Ieee80211RateSelectionPolicy::selectUnicast(context, fastestMandatoryMode,
                 Ieee80211RateSelectionPolicy::DEFAULT_SELECTION);
     }
@@ -300,6 +356,8 @@ const IIeee80211Mode *QosRateSelection::computeMode(Packet *packet, const Ptr<co
         selectedMode = computeControlFrameMode(header, txopProcedure);
     if (!mib->isEhtModeAllowedForPeer(selectedMode, header->getReceiverAddress()))
         throw cRuntimeError("Explicitly selected EHT mode is prohibited by the effective peer capability or operation state");
+    if (!mib->isHeModeAllowedForPeer(selectedMode, header->getReceiverAddress()))
+        throw cRuntimeError("Selected HE mode is prohibited by the effective peer capability or operation state");
     if (!mib->isHtModeAllowedForPeer(selectedMode, header->getReceiverAddress()))
         throw cRuntimeError("Selected HT mode is prohibited by the effective peer capability or operation state");
     if (!mib->isVhtModeAllowedForPeer(selectedMode, header->getReceiverAddress()))

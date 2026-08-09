@@ -23,6 +23,13 @@ inline Ieee80211HtCapabilitiesElement makeHtCapabilitiesElement(const Ieee80211H
     element.shortGi20 = capabilities.shortGi20;
     element.shortGi40 = capabilities.shortGi40;
     element.maxAmpduLengthExponent = capabilities.maxAmpduLengthExponent;
+    element.mcsFeedback = static_cast<int>(capabilities.mcsFeedback);
+    element.htcSupport = capabilities.htcSupport;
+    element.receiveNdp = capabilities.receiveNdp;
+    element.transmitNdp = capabilities.transmitNdp;
+    element.explicitCsiFeedback = static_cast<int>(capabilities.explicitCsiFeedback);
+    element.explicitNoncompressedFeedback = static_cast<int>(capabilities.explicitNoncompressedFeedback);
+    element.explicitCompressedFeedback = static_cast<int>(capabilities.explicitCompressedFeedback);
     for (int i = 0; i < 4; i++) {
         element.rxMaxMcsForNss[i] = capabilities.rxMcsNss.maxMcsPerNss[i];
         element.txMaxMcsForNss[i] = capabilities.txMcsNss.maxMcsPerNss[i];
@@ -40,6 +47,22 @@ inline Ieee80211HtCapabilities makeHtCapabilities(const Ieee80211HtCapabilitiesE
     capabilities.shortGi20 = element.shortGi20;
     capabilities.shortGi40 = element.shortGi40;
     capabilities.maxAmpduLengthExponent = element.maxAmpduLengthExponent;
+    if (element.mcsFeedback == 1 || element.mcsFeedback < 0 || element.mcsFeedback > 3)
+        throw cRuntimeError("Invalid reserved HT MCS Feedback capability value: %d", element.mcsFeedback);
+    capabilities.mcsFeedback = static_cast<Ieee80211HtMcsFeedback>(element.mcsFeedback);
+    capabilities.htcSupport = element.htcSupport;
+    capabilities.receiveNdp = element.receiveNdp;
+    capabilities.transmitNdp = element.transmitNdp;
+    auto validateFeedback = [](int value, const char *name) {
+        if (value < 0 || value > 3)
+            throw cRuntimeError("Invalid HT %s capability value: %d", name, value);
+    };
+    validateFeedback(element.explicitCsiFeedback, "explicit CSI feedback");
+    validateFeedback(element.explicitNoncompressedFeedback, "explicit noncompressed feedback");
+    validateFeedback(element.explicitCompressedFeedback, "explicit compressed feedback");
+    capabilities.explicitCsiFeedback = static_cast<Ieee80211HtExplicitFeedback>(element.explicitCsiFeedback);
+    capabilities.explicitNoncompressedFeedback = static_cast<Ieee80211HtExplicitFeedback>(element.explicitNoncompressedFeedback);
+    capabilities.explicitCompressedFeedback = static_cast<Ieee80211HtExplicitFeedback>(element.explicitCompressedFeedback);
     for (int i = 0; i < 4; i++) {
         capabilities.rxMcsNss.maxMcsPerNss[i] = element.rxMaxMcsForNss[i];
         capabilities.txMcsNss.maxMcsPerNss[i] = element.txMaxMcsForNss[i];

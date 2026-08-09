@@ -8,6 +8,7 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
 
@@ -15,17 +16,19 @@ namespace inet {
 
 namespace physicallayer {
 
-Ieee80211Transmission::Ieee80211Transmission(const IRadio *transmitter, const Packet *packet, const simtime_t startTime, const simtime_t endTime, const simtime_t preambleDuration, const simtime_t headerDuration, const simtime_t dataDuration, const Coord startPosition, const Coord endPosition, const Quaternion startOrientation, const Quaternion endOrientation, const ITransmissionPacketModel *packetModel, const ITransmissionBitModel *bitModel, const ITransmissionSymbolModel *symbolModel, const ITransmissionSampleModel *sampleModel, const ITransmissionAnalogModel *analogModel, const IIeee80211Mode *mode, const Ieee80211Channel *channel, std::shared_ptr<const Ieee80211HeTxVector> heTxVector, std::shared_ptr<const Ieee80211HePpduLayout> hePpduLayout, uint32_t heTriggerCorrelationId, std::shared_ptr<const Ieee80211VhtTxVector> vhtTxVector) :
+Ieee80211Transmission::Ieee80211Transmission(const IRadio *transmitter, const Packet *packet, const simtime_t startTime, const simtime_t endTime, const simtime_t preambleDuration, const simtime_t headerDuration, const simtime_t dataDuration, const Coord startPosition, const Coord endPosition, const Quaternion startOrientation, const Quaternion endOrientation, const ITransmissionPacketModel *packetModel, const ITransmissionBitModel *bitModel, const ITransmissionSymbolModel *symbolModel, const ITransmissionSampleModel *sampleModel, const ITransmissionAnalogModel *analogModel, const IIeee80211Mode *mode, const Ieee80211Channel *channel, std::shared_ptr<const Ieee80211HeTxVector> heTxVector, std::shared_ptr<const Ieee80211HePpduLayout> hePpduLayout, uint32_t heTriggerCorrelationId, std::shared_ptr<const Ieee80211VhtTxVector> vhtTxVector, std::shared_ptr<const Ieee80211HtTxVector> htTxVector) :
     TransmissionBase(transmitter, packet, startTime, endTime, preambleDuration, headerDuration, dataDuration, startPosition, endPosition, startOrientation, endOrientation, packetModel, bitModel, symbolModel, sampleModel, analogModel),
     mode(mode),
     channel(channel),
     heTxVector(std::move(heTxVector)),
     hePpduLayout(std::move(hePpduLayout)),
     heTriggerCorrelationId(heTriggerCorrelationId),
-    vhtTxVector(std::move(vhtTxVector))
+    vhtTxVector(std::move(vhtTxVector)),
+    htTxVector(std::move(htTxVector))
 {
     const bool isHe = dynamic_cast<const Ieee80211HeMode *>(mode) != nullptr;
     const bool isVht = dynamic_cast<const Ieee80211VhtMode *>(mode) != nullptr;
+    const bool isHt = dynamic_cast<const Ieee80211HtMode *>(mode) != nullptr;
     if ((this->heTxVector == nullptr) != (this->hePpduLayout == nullptr))
         throw cRuntimeError("HE TXVECTOR and PPDU layout must be present as a pair");
     if (isHe && this->heTxVector == nullptr)
@@ -38,6 +41,12 @@ Ieee80211Transmission::Ieee80211Transmission(const IRadio *transmitter, const Pa
         throw cRuntimeError("Non-VHT transmission cannot carry a VHT TXVECTOR");
     if (isVht && this->vhtTxVector == nullptr)
         throw cRuntimeError("VHT transmission is missing its canonical TXVECTOR handoff");
+    if (!isHt && this->htTxVector != nullptr)
+        throw cRuntimeError("Non-HT transmission cannot carry an HT TXVECTOR");
+    if (this->htTxVector != nullptr &&
+            (this->htTxVector->getChannelWidth() != mode->getDataMode()->getBandwidth() ||
+             this->htTxVector->getNumberOfSpaceTimeStreams() != mode->getDataMode()->getNumberOfSpatialStreams()))
+        throw cRuntimeError("HT TXVECTOR disagrees with the selected HT mode");
     if (this->vhtTxVector != nullptr &&
             this->vhtTxVector->getChannelWidth() != mode->getDataMode()->getBandwidth())
         throw cRuntimeError("VHT TXVECTOR channel width disagrees with the selected mode");

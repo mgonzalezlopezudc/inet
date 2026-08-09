@@ -36,6 +36,10 @@ module Hcf extends Module like IHcf
         bool useLegacyHtMultiTidBlockAck = default(false);
         // Enables the IEEE 802.11 implicit Block Ack exchange across HT, VHT, HE, and EHT profiles.
         bool useImplicitBlockAck = default(true);
+        bool enableHtSounding = default(false); // Packet-level HT NDP sounding and immediate action feedback
+        int htSoundingNsts = default(2); // Number of HT space-time streams, 2..4
+        int htSoundingFeedbackKind = default(3); // 1=CSI, 2=noncompressed, 3=compressed
+        double htSoundingRetryInterval @unit(s) = default(100ms);
 
         string rxModule;
         string txModule;

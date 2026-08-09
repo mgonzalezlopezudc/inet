@@ -221,7 +221,10 @@ void FrameSequenceHandler::abortFrameSequence()
     }
     ASSERT(failedTxStep != nullptr);
     auto frameToTransmit = failedTxStep->getFrameToTransmit();
-    auto header = frameToTransmit->peekAtFront<Ieee80211MacHeader>();
+    // Headerless training transmissions (for example HT-NDP) can time out too.
+    // They have no MAC header to inspect and must simply terminate the sequence.
+    auto header = frameToTransmit->getDataLength() == b(0) ? Ptr<const Ieee80211MacHeader>() :
+            frameToTransmit->peekAtFront<Ieee80211MacHeader>();
     if (auto dataOrMgmtHeader = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(header))
         callback->originatorProcessFailedFrame(frameToTransmit);
     else if (auto rtsTxStep = dynamic_cast<RtsTransmitStep *>(failedTxStep))

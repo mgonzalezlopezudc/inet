@@ -1,0 +1,218 @@
+{
+  "analysis_script_sha256": "80a8d8f3d69d1179292b9ce451fd0ddde079619230aaec5dd6e683abca86dfa8",
+  "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
+  "capture_source_diff_sha256": "1dc7d58807d8d573e8a2d067508225ad98b939df69b447ac69483908e075b273",
+  "entries": [
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 406903,
+            "duration_seconds": 0.65859,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.85941,
+            "file_size_bytes": 433856,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 65535,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 598,
+            "snapshot_length": null,
+            "start_seconds": 0.20082,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211n/channel_widths/results/20260809T152957Z/Ht20MHz/Ht20MHz-#0ChannelWidthsNetwork.ap.wlan[0].pcap",
+          "sha256": "9f3ad8ab63e16983de3d6457ada1720cacb2138789be2546fc4d30b004ffaf9a",
+          "size_bytes": 433856
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "Ht20MHz",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211n/channel_widths/omnetpp.ini",
+      "ini_sha256": "3cd9591d68fd88683d27c484309dbf20d97466692666256fca8784e4b292bb2e",
+      "run_number": 0,
+      "scalar": {
+        "configname": "Ht20MHz",
+        "path": "examples/ieee80211n/channel_widths/results/20260809T152957Z/Ht20MHz/Ht20MHz-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "6bd8e60bef0ed2736463220dff690cec9a760a3410e1a0b552d98f4aab6e4e27"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "channel_widths"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 508466,
+            "duration_seconds": 0.514674,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.715086,
+            "file_size_bytes": 542272,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 65535,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 752,
+            "snapshot_length": null,
+            "start_seconds": 0.200412,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211n/channel_widths/results/20260809T152957Z/Ht40MHz/Ht40MHz-#0ChannelWidthsNetwork.ap.wlan[0].pcap",
+          "sha256": "86d26ff6c2adbac920c4178c74ccca57b7bc6f4033109a60f645cbc9625fdfe4",
+          "size_bytes": 542272
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "Ht40MHz",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211n/channel_widths/omnetpp.ini",
+      "ini_sha256": "3cd9591d68fd88683d27c484309dbf20d97466692666256fca8784e4b292bb2e",
+      "run_number": 0,
+      "scalar": {
+        "configname": "Ht40MHz",
+        "path": "examples/ieee80211n/channel_widths/results/20260809T152957Z/Ht40MHz/Ht40MHz-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "1ca1d09166a0023821fa6504ea653a811f6a7b9296694c840d6e953dc3fd3d2e"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "channel_widths"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 195873,
+            "duration_seconds": 0.789358,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.98977,
+            "file_size_bytes": 204888,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 65535,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 199,
+            "snapshot_length": null,
+            "start_seconds": 0.200412,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211n/channel_widths/results/20260809T152957Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#0ChannelWidthsNetwork.ap.wlan[0].pcap",
+          "sha256": "547523f13fa40eba2d8a22abaa5ac01172ff55e9d31fa4d1a39c77b4753f3d87",
+          "size_bytes": 204888
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "Ht40MHzSecondaryAboveWithInterferer",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211n/channel_widths/omnetpp.ini",
+      "ini_sha256": "3cd9591d68fd88683d27c484309dbf20d97466692666256fca8784e4b292bb2e",
+      "run_number": 0,
+      "scalar": {
+        "configname": "Ht40MHzSecondaryAboveWithInterferer",
+        "path": "examples/ieee80211n/channel_widths/results/20260809T152957Z/Ht40MHzSecondaryAboveWithInterferer/Ht40MHzSecondaryAboveWithInterferer-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "437df07a80fcf0848aec7ecdc56ee57946a23d819ea9d7cb20602a5686b23d8c"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "channel_widths"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 135871,
+            "duration_seconds": 0.78197,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.982382,
+            "file_size_bytes": 141716,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 65535,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 128,
+            "snapshot_length": null,
+            "start_seconds": 0.200412,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211n/channel_widths/results/20260809T152957Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#0ChannelWidthsNetwork.ap.wlan[0].pcap",
+          "sha256": "e8c8940f39595893f1447bc136342b7659e6bbaacccc5ea69f5e8b9608a32ab5",
+          "size_bytes": 141716
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "Ht40MHzSecondaryBelowWithInterferer",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211n/channel_widths/omnetpp.ini",
+      "ini_sha256": "3cd9591d68fd88683d27c484309dbf20d97466692666256fca8784e4b292bb2e",
+      "run_number": 0,
+      "scalar": {
+        "configname": "Ht40MHzSecondaryBelowWithInterferer",
+        "path": "examples/ieee80211n/channel_widths/results/20260809T152957Z/Ht40MHzSecondaryBelowWithInterferer/Ht40MHzSecondaryBelowWithInterferer-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "396f09c7a2e049d389f8a18681b1bad3b85a39d8d8883c66bf62c1ab098de054"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "channel_widths"
+    }
+  ],
+  "generated_at_utc": "2026-08-09T15:30:25.982953+00:00",
+  "inet_library": "out/clang-release/src/libINET.so",
+  "inet_library_sha256": "6a8ce55f9b9f4dfc395f0db1ce4145fcd1a4a87986718d688644ee50564f02c1",
+  "repository_revision": "3da32110ce80b4d7983b523686d7aa48ce3e0cbc",
+  "session_id": "20260809T152957Z",
+  "suite": "n",
+  "suite_descriptor": {
+    "path": "examples/ieee80211/analysis/suites/n.json",
+    "sha256": "56311b90580afd2b2b2250e6223269d23289413bb9d20925c4cb224d4d1c8de6"
+  },
+  "tshark_version": "TShark (Wireshark) 4.6.4."
+}

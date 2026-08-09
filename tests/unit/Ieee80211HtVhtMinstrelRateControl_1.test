@@ -1,0 +1,165 @@
+%description:
+Test the shared Minstrel policy through the HT and VHT family adapters.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/ratecontrol/HtMinstrelRateControl.h"
+#include "inet/linklayer/ieee80211/mac/ratecontrol/VhtMinstrelRateControl.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
+
+%file: TestNetwork.ned
+import inet.linklayer.ieee80211.mac.ratecontrol.HtMinstrelRateControl;
+import inet.linklayer.ieee80211.mac.ratecontrol.VhtMinstrelRateControl;
+
+simple TestableHtMinstrelRateControl extends HtMinstrelRateControl
+{
+    parameters:
+        @class(TestableHtMinstrelRateControl);
+}
+
+simple TestableVhtMinstrelRateControl extends VhtMinstrelRateControl
+{
+    parameters:
+        @class(TestableVhtMinstrelRateControl);
+}
+
+network TestNetwork
+{
+    submodules:
+        ht: TestableHtMinstrelRateControl {
+            parameters:
+                lookaroundRatio = 0;
+                ewmaWeight = 0.75;
+        }
+        vht: TestableVhtMinstrelRateControl {
+            parameters:
+                lookaroundRatio = 0;
+                ewmaWeight = 0.75;
+        }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+class TestableHtMinstrelRateControl : public HtMinstrelRateControl
+{
+  protected:
+    virtual void initialize(int stage) override
+    {
+        if (stage == INITSTAGE_LOCAL) {
+            updateInterval = par("updateInterval");
+            ewmaWeight = par("ewmaWeight");
+            lookaroundRatio = par("lookaroundRatio");
+            initialSuccessProbability = par("initialSuccessProbability");
+            seedFromSnir = par("seedFromSnir");
+            snirMcs0ThresholdDb = par("snirMcs0Threshold");
+            snirMcsStepDb = par("snirMcsStep");
+            minMcs = par("minMcs");
+            maxMcs = par("maxMcs");
+            maxNss = par("maxNss");
+        }
+    }
+
+  public:
+    void setTestModeSet(Ieee80211ModeSet *testModeSet) { modeSet = testModeSet; }
+    void report(const MacAddress& peer, const IIeee80211Mode *mode, bool success)
+    {
+        reportModeTxResult(peer, mode, 0, success);
+    }
+    void observeSnir(const MacAddress& peer, double snirDb)
+    {
+        reportModeRxSnir(peer, snirDb);
+    }
+};
+
+class TestableVhtMinstrelRateControl : public VhtMinstrelRateControl
+{
+  protected:
+    virtual void initialize(int stage) override
+    {
+        if (stage == INITSTAGE_LOCAL) {
+            updateInterval = par("updateInterval");
+            ewmaWeight = par("ewmaWeight");
+            lookaroundRatio = par("lookaroundRatio");
+            initialSuccessProbability = par("initialSuccessProbability");
+            seedFromSnir = par("seedFromSnir");
+            snirMcs0ThresholdDb = par("snirMcs0Threshold");
+            snirMcsStepDb = par("snirMcsStep");
+            minMcs = par("minMcs");
+            maxMcs = par("maxMcs");
+            maxNss = par("maxNss");
+        }
+    }
+
+  public:
+    void setTestModeSet(Ieee80211ModeSet *testModeSet) { modeSet = testModeSet; }
+    void report(const MacAddress& peer, const IIeee80211Mode *mode, bool success)
+    {
+        reportModeTxResult(peer, mode, 0, success);
+    }
+    void observeSnir(const MacAddress& peer, double snirDb)
+    {
+        reportModeRxSnir(peer, snirDb);
+    }
+};
+
+Define_Module(TestableHtMinstrelRateControl);
+Define_Module(TestableVhtMinstrelRateControl);
+
+static void verifyFamilySelection(TestableHtMinstrelRateControl *controller,
+        const Ieee80211ModeSet *modeSet, const MacAddress& peer,
+        const IIeee80211Mode *slow, const IIeee80211Mode *fast)
+{
+    controller->setTestModeSet(const_cast<Ieee80211ModeSet *>(modeSet));
+    std::vector<const IIeee80211Mode *> candidates = {slow, fast};
+    auto selected = controller->selectRate(peer, candidates);
+    REQUIRE(selected == fast);
+    for (int i = 0; i < 12; ++i)
+        controller->report(peer, fast, false);
+    selected = controller->selectRate(peer, candidates);
+    REQUIRE(selected == slow);
+}
+
+%activity:
+auto ht = check_and_cast<TestableHtMinstrelRateControl *>(getParentModule()->getSubmodule("ht"));
+auto vht = check_and_cast<TestableVhtMinstrelRateControl *>(getParentModule()->getSubmodule("vht"));
+auto htSet = Ieee80211ModeSet::getModeSet("n(mixed-2.4Ghz)");
+auto vhtSet = Ieee80211ModeSet::getModeSet("ac");
+REQUIRE(htSet != nullptr);
+REQUIRE(vhtSet != nullptr);
+
+auto htSlow = htSet->findHtMode(0, 1, MHz(20), false);
+auto htFast = htSet->findHtMode(7, 1, MHz(20), false);
+REQUIRE(htSlow != nullptr);
+REQUIRE(htFast != nullptr);
+REQUIRE(dynamic_cast<const Ieee80211HtMode *>(htFast) != nullptr);
+verifyFamilySelection(ht, htSet, MacAddress("02:00:00:00:00:01"), htSlow, htFast);
+
+auto isolatedPeer = MacAddress("02:00:00:00:00:02");
+REQUIRE(ht->selectRate(isolatedPeer, {htSlow, htFast}) == htFast);
+ht->observeSnir(isolatedPeer, 40);
+REQUIRE(ht->selectRate(isolatedPeer, {htSlow, htFast}) == htFast);
+EV << "HT selection is peer-local and accepts SNIR observations.\n";
+
+auto vhtSlow = vhtSet->findVhtMode(0, 1, MHz(20), false);
+auto vhtFast = vhtSet->findVhtMode(9, 1, MHz(20), false);
+REQUIRE(vhtSlow != nullptr);
+REQUIRE(vhtFast != nullptr);
+REQUIRE(dynamic_cast<const Ieee80211VhtMode *>(vhtFast) != nullptr);
+vht->setTestModeSet(const_cast<Ieee80211ModeSet *>(vhtSet));
+auto vhtPeer = MacAddress("02:00:00:00:00:03");
+REQUIRE(vht->selectRate(vhtPeer, {vhtSlow, vhtFast}) == vhtFast);
+for (int i = 0; i < 12; ++i)
+    vht->report(vhtPeer, vhtFast, false);
+REQUIRE(vht->selectRate(vhtPeer, {vhtSlow, vhtFast}) == vhtSlow);
+EV << "VHT selection uses the same shared EWMA/probing policy through its adapter.\n";

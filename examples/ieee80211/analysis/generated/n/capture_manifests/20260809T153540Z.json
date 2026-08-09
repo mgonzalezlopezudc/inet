@@ -1,0 +1,118 @@
+{
+  "analysis_script_sha256": "80a8d8f3d69d1179292b9ce451fd0ddde079619230aaec5dd6e683abca86dfa8",
+  "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
+  "capture_source_diff_sha256": "44b63b5eec0c5898d0f468d3bdf5c710bc6718e819c5ec456d34beca7dec06de",
+  "entries": [
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 529021,
+            "duration_seconds": 0.327322,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.527526,
+            "file_size_bytes": 613028,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 65535,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1825,
+            "snapshot_length": null,
+            "start_seconds": 0.200204,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211n/preamble_modes/results/20260809T153540Z/HtMixedMode/HtMixedMode-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "c81cbf6c3bd0bbfa81a3078954ec3728bced5db99b1f097675848c6136bf9bba",
+          "size_bytes": 613028
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "HtMixedMode",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211n/preamble_modes/omnetpp.ini",
+      "ini_sha256": "36ee299b8a81e7894e5599b0629ee1ee1e851294540d08597efa80aec11bb26f",
+      "run_number": 0,
+      "scalar": {
+        "configname": "HtMixedMode",
+        "path": "examples/ieee80211n/preamble_modes/results/20260809T153540Z/HtMixedMode/HtMixedMode-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "3050603bb4b9acf88cc5061341a75445d317ec556a4e8ffec1d1e6d3b5e592d5"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "preamble_modes"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 530543,
+            "duration_seconds": 0.327162,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.527354,
+            "file_size_bytes": 614828,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 65535,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1831,
+            "snapshot_length": null,
+            "start_seconds": 0.200192,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211n/preamble_modes/results/20260809T153540Z/HtGreenfield/HtGreenfield-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "c01477b9aaeb7a8bece83dbe9461ef7771f587ffa285446dc4dca4cd2d11b413",
+          "size_bytes": 614828
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "HtGreenfield",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211n/preamble_modes/omnetpp.ini",
+      "ini_sha256": "36ee299b8a81e7894e5599b0629ee1ee1e851294540d08597efa80aec11bb26f",
+      "run_number": 0,
+      "scalar": {
+        "configname": "HtGreenfield",
+        "path": "examples/ieee80211n/preamble_modes/results/20260809T153540Z/HtGreenfield/HtGreenfield-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "d2a360e6f2e03c670541dd8c1b67db25b5af960d0bb9ae42ccae30cc28106ec8"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "preamble_modes"
+    }
+  ],
+  "generated_at_utc": "2026-08-09T15:35:52.101677+00:00",
+  "inet_library": "out/clang-release/src/libINET.so",
+  "inet_library_sha256": "587265a878b6fd1c2b5a29b8da8234641ddf2e5807c49adbf2dcfbc9589060d8",
+  "repository_revision": "3da32110ce80b4d7983b523686d7aa48ce3e0cbc",
+  "session_id": "20260809T153540Z",
+  "suite": "n",
+  "suite_descriptor": {
+    "path": "examples/ieee80211/analysis/suites/n.json",
+    "sha256": "56311b90580afd2b2b2250e6223269d23289413bb9d20925c4cb224d4d1c8de6"
+  },
+  "tshark_version": "TShark (Wireshark) 4.6.4."
+}

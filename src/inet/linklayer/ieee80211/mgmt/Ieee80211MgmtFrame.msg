@@ -141,6 +141,13 @@ struct Ieee80211HtCapabilitiesElement
     short maxAmpduLengthExponent;
     short rxMaxMcsForNss[4];
     short txMaxMcsForNss[4];
+    short mcsFeedback = 0; // HT Extended Capabilities B8-B9: 0=None, 2=Unsolicited, 3=Both
+    bool htcSupport = false; // HT Extended Capabilities B10
+    bool receiveNdp = false;
+    bool transmitNdp = false;
+    short explicitCsiFeedback = 0; // 0=None, 1=Delayed, 2=Immediate, 3=Both
+    short explicitNoncompressedFeedback = 0;
+    short explicitCompressedFeedback = 0;
 }
 
 // IEEE Std 802.11-2024, 9.4.2.55: model-backed fields in the 22-octet HT Operation body.
@@ -535,6 +542,34 @@ class Ieee80211VhtCompressedBeamformingFeedback extends Ieee80211MgmtFrame
     uint8_t compressedBeamformingReportLength = 12;
     uint8_t compressedBeamformingReportExtension[];
     uint8_t muExclusiveBeamformingReport[];
+}
+
+// IEEE Std 802.11-2024, 9.6.11.4..9.6.11.6 and 9.4.1.24. The report is
+// bounded opaque packet-level content because INET has no per-subcarrier MIMO
+// channel tensor; MIMO Control remains fully typed and on-wire.
+class Ieee80211HtMimoFeedback extends Ieee80211MgmtFrame
+{
+    uint8_t nc = 1;
+    uint8_t nr = 2;
+    double channelWidth = 20e6;
+    uint8_t grouping = 1;
+    uint8_t coefficientSize = 4;
+    uint8_t codebookInformation = 0;
+    uint8_t remainingMatrixSegments = 0;
+    uint32_t soundingTimestamp = 0;
+    uint8_t report[];
+}
+
+class Ieee80211HtCsiFeedback extends Ieee80211HtMimoFeedback
+{
+}
+
+class Ieee80211HtNoncompressedBeamformingFeedback extends Ieee80211HtMimoFeedback
+{
+}
+
+class Ieee80211HtCompressedBeamformingFeedback extends Ieee80211HtMimoFeedback
+{
 }
 
 // Typed representation only; Group ID state and the DL MU scheduler are

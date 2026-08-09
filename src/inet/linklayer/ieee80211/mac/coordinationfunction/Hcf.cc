@@ -8,11 +8,15 @@
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
 #include "inet/linklayer/ieee80211/mac/contract/DurationFinalizedReq.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstring>
 
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/packet/chunk/ByteCountChunk.h"
+#include "inet/common/packet/chunk/SequenceChunk.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/HtSoundingFs.h"
 #include "inet/linklayer/ieee80211/mac/common/Ieee80211FcsChecker.h"
 #include "inet/linklayer/ieee80211/twt/ITwtManager.h"
 #include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreementHandler.h"
@@ -31,6 +35,7 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -46,6 +51,27 @@ Define_Module(Hcf);
 static bool isHeMuContainerPacket(Packet *packet)
 {
     return packet != nullptr && packet->findTag<Ieee80211HeMuContainerReq>() != nullptr;
+}
+
+template <typename T>
+static Ptr<const T> findHtActionBody(const Packet *packet)
+{
+    if (packet == nullptr || packet->getDataLength() == b(0))
+        return nullptr;
+    auto data = packet->peekData();
+    if (auto chunk = dynamicPtrCast<const T>(data))
+        return chunk;
+    if (auto sequence = dynamicPtrCast<const SequenceChunk>(data))
+        for (const auto& chunk : sequence->getChunks())
+            if (auto result = dynamicPtrCast<const T>(chunk))
+                return result;
+    return nullptr;
+}
+
+static bool isImmediateHtFeedback(Ieee80211HtExplicitFeedback capability)
+{
+    return capability == Ieee80211HtExplicitFeedback::IMMEDIATE ||
+            capability == Ieee80211HtExplicitFeedback::BOTH;
 }
 
 Packet *Hcf::buildAmpduPacket(const std::vector<Packet *>& frames, FcsMode fcsMode)
@@ -179,6 +205,17 @@ void Hcf::initialize(int stage)
         tx = check_and_cast<ITx *>(getModuleByPath(par("txModule")));
         rx = check_and_cast<IRx *>(getModuleByPath(par("rxModule")));
         dataAndMgmtRateControl = dynamic_cast<IRateControl *>(getSubmodule("rateControl"));
+        htRateControl = dynamic_cast<IIeee80211HtRateControl *>(getSubmodule("rateControl"));
+        enableHtSounding = par("enableHtSounding");
+        htSoundingNsts = par("htSoundingNsts");
+        int feedbackKind = par("htSoundingFeedbackKind");
+        if (htSoundingNsts < 2 || htSoundingNsts > 4 ||
+                feedbackKind < 1 || feedbackKind > 3)
+            throw cRuntimeError("Invalid HT sounding parameters");
+        htSoundingFeedbackKind = static_cast<Ieee80211HtFeedbackKind>(feedbackKind);
+        htSoundingRetryInterval = par("htSoundingRetryInterval");
+        if (htSoundingRetryInterval < SIMTIME_ZERO)
+            throw cRuntimeError("HT sounding retry interval must not be negative");
         originatorBlockAckAgreementPolicy = dynamic_cast<IOriginatorBlockAckAgreementPolicy *>(getSubmodule("originatorBlockAckAgreementPolicy"));
         recipientBlockAckAgreementPolicy = dynamic_cast<IRecipientBlockAckAgreementPolicy *>(getSubmodule("recipientBlockAckAgreementPolicy"));
         rateSelection = check_and_cast<IQosRateSelection *>(getSubmodule("rateSelection"));
@@ -388,7 +425,8 @@ void Hcf::processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>&
     if (header == nullptr) {
         auto ndpIndication = packet->findTag<physicallayer::Ieee80211NdpInd>();
         if (ndpIndication != nullptr && packet->getDataLength() == b(0) &&
-                processHeaderlessNdpIndication(packet)) {
+                (processHtHeaderlessNdpIndication(packet) ||
+                 processHeaderlessNdpIndication(packet))) {
             handleDeferredStartRxTimeout();
             return;
         }
@@ -659,11 +697,291 @@ bool Hcf::isHtImplicitBlockAckEnabled() const
     return false;
 }
 
+bool Hcf::mayStartHtSounding(const MacAddress& peer,
+        const IIeee80211Mode *mode) const
+{
+    if (!enableHtSounding || htRateControl == nullptr || mode == nullptr ||
+            peer.isMulticast() || modeSet->getPhyFamily(mode) != Ieee80211PhyFamily::HT)
+        return false;
+    auto attempt = nextHtSoundingAttemptTimes.find(peer);
+    if (attempt != nextHtSoundingAttemptTimes.end() && simTime() < attempt->second)
+        return false;
+    auto mib = mac->getMib();
+    auto negotiated = mib->findNegotiatedHtCapabilities(peer);
+    if (negotiated == nullptr || !negotiated->localTxPeerRx.valid ||
+            mib->getHtAssociationGeneration(peer) == 0 ||
+            !negotiated->localTxPeerRx.htcSupported ||
+            !negotiated->localTxPeerRx.mcsRequestAllowed ||
+            !negotiated->localTxPeerRx.transmitterCanSendNdp ||
+            !negotiated->localTxPeerRx.receiverCanReceiveNdp ||
+            negotiated->localTxPeerRx.mcsNss.maxMcsPerNss[htSoundingNsts - 1] < 0)
+        return false;
+    auto capability = htSoundingFeedbackKind == Ieee80211HtFeedbackKind::CSI ?
+            negotiated->localTxPeerRx.explicitCsiFeedback :
+            htSoundingFeedbackKind == Ieee80211HtFeedbackKind::NONCOMPRESSED_BEAMFORMING ?
+            negotiated->localTxPeerRx.explicitNoncompressedFeedback :
+            negotiated->localTxPeerRx.explicitCompressedFeedback;
+    return isImmediateHtFeedback(capability);
+}
+
+bool Hcf::processHtNdpAnnouncement(Packet *packet,
+        const Ptr<const Ieee80211DataHeader>& header)
+{
+    if (header->getType() != ST_QOS_NULL || !header->getOrder() ||
+            !header->getHtMcsControlPresent() || !header->getHtNdpAnnouncement())
+        return false;
+    pendingHtSounding = {};
+    auto peer = header->getTransmitterAddress();
+    auto mib = mac->getMib();
+    auto negotiated = mib->findNegotiatedHtCapabilities(peer);
+    auto modeInd = packet->findTag<Ieee80211ModeInd>();
+    auto provenance = packet->findTag<Ieee80211PhyProvenanceInd>();
+    auto kindValue = header->getHtCsiSteering();
+    if (!enableHtSounding || htRateControl == nullptr || negotiated == nullptr ||
+            !negotiated->localRxPeerTx.valid || !negotiated->localRxPeerTx.htcSupported ||
+            !negotiated->localRxPeerTx.mcsRequestAllowed ||
+            !negotiated->localRxPeerTx.transmitterCanSendNdp ||
+            !negotiated->localRxPeerTx.receiverCanReceiveNdp ||
+            !header->getHtMcsRequest() ||
+            header->getHtMcsRequestSequenceIdentifier() > 6 ||
+            kindValue < 1 || kindValue > 3 || modeInd == nullptr ||
+            modeSet->getPhyFamily(modeInd->getMode()) != Ieee80211PhyFamily::HT ||
+            provenance == nullptr || provenance->getTransmitterRadioId() < 0)
+        return true;
+    auto kind = static_cast<Ieee80211HtFeedbackKind>(kindValue);
+    auto capability = kind == Ieee80211HtFeedbackKind::CSI ?
+            negotiated->localRxPeerTx.explicitCsiFeedback :
+            kind == Ieee80211HtFeedbackKind::NONCOMPRESSED_BEAMFORMING ?
+            negotiated->localRxPeerTx.explicitNoncompressedFeedback :
+            negotiated->localRxPeerTx.explicitCompressedFeedback;
+    if (!isImmediateHtFeedback(capability))
+        return true;
+    pendingHtSounding.valid = true;
+    pendingHtSounding.peer = peer;
+    pendingHtSounding.associationGeneration = mib->getHtAssociationGeneration(peer);
+    pendingHtSounding.requestToken = header->getHtMcsRequestSequenceIdentifier();
+    pendingHtSounding.soundingNsts = htSoundingNsts;
+    pendingHtSounding.feedbackKind = kind;
+    pendingHtSounding.channelWidth = modeInd->getMode()->getDataMode()->getBandwidth();
+    pendingHtSounding.transmitterRadioId = provenance->getTransmitterRadioId();
+    pendingHtSounding.announcementReceptionEnd = provenance->getEndTime();
+    return true;
+}
+
+bool Hcf::processHtHeaderlessNdpIndication(Packet *packet)
+{
+    auto indication = packet->findTag<Ieee80211NdpInd>();
+    if (indication == nullptr || indication->getPhyFormat() != IEEE80211_NDP_PHY_HT)
+        return false;
+    auto provenance = packet->findTag<Ieee80211PhyProvenanceInd>();
+    auto snir = packet->findTag<SnirInd>();
+    auto expectedStart = pendingHtSounding.announcementReceptionEnd + modeSet->getSifsTime();
+    bool valid = enableHtSounding && htRateControl != nullptr &&
+            pendingHtSounding.valid && provenance != nullptr && snir != nullptr &&
+            indication->getSounding() &&
+            provenance->getTransmitterRadioId() == pendingHtSounding.transmitterRadioId &&
+            std::abs((provenance->getStartTime() - expectedStart).raw()) <= modeSet->getSlotTime().raw() &&
+            Hz(indication->getChannelWidth()) == pendingHtSounding.channelWidth &&
+            indication->getNumberOfSpaceTimeStreams() == pendingHtSounding.soundingNsts &&
+            indication->getNumberOfLtfSymbols() ==
+                    (pendingHtSounding.soundingNsts == 3 ? 4 : pendingHtSounding.soundingNsts) &&
+            std::isfinite(snir->getMinimumSnir()) && snir->getMinimumSnir() > 0 &&
+            std::isfinite(snir->getAverageSnir()) && snir->getAverageSnir() > 0;
+    auto negotiated = valid ? mac->getMib()->findNegotiatedHtCapabilities(
+            pendingHtSounding.peer) : nullptr;
+    valid &= negotiated != nullptr &&
+            mac->getMib()->getHtAssociationGeneration(pendingHtSounding.peer) ==
+                    pendingHtSounding.associationGeneration;
+    if (valid) {
+        int maxPerStreamMcs = negotiated->localRxPeerTx.mcsNss.maxMcsPerNss[
+                pendingHtSounding.soundingNsts - 1];
+        valid = maxPerStreamMcs >= 0;
+        if (valid) {
+            double snirDb = 10 * std::log10(snir->getMinimumSnir());
+            int perStreamMcs = std::clamp(static_cast<int>((snirDb - 4) / 3),
+                    0, maxPerStreamMcs);
+            uint8_t recommendedMcs = 8 * (pendingHtSounding.soundingNsts - 1) +
+                    perStreamMcs;
+            auto measurement = HtCsiCache::deriveMeasurement(
+                    snir->getMinimumSnir(), snir->getAverageSnir(), recommendedMcs,
+                    pendingHtSounding.soundingNsts,
+                    indication->getNumberOfLtfSymbols(), pendingHtSounding.feedbackKind);
+            // Keep the first two report octets explicitly reversible by the
+            // originator; remaining octets retain deterministic packet-level CSI.
+            measurement.reportBytes[0] = std::clamp<int>(
+                    std::lround((snirDb + 20) * 4), 0, 255);
+            if (measurement.reportBytes.size() > 1)
+                measurement.reportBytes[1] = recommendedMcs;
+            htRateControl->getHtCsiCache().update(pendingHtSounding.peer,
+                    pendingHtSounding.channelWidth,
+                    pendingHtSounding.associationGeneration,
+                    pendingHtSounding.soundingNsts,
+                    pendingHtSounding.requestToken, measurement);
+
+            // The MRQ was received before this NDP populated the cache. Re-run
+            // the request against the completed measurement and send its MFB
+            // explicitly, so an idle beamformee does not have to wait for a
+            // later QoS data packet to carry the feedback.
+            auto requestMode = modeSet->findHtMode(0,
+                    pendingHtSounding.soundingNsts, pendingHtSounding.channelWidth, false);
+            Ieee80211HtMcsControl mfbControl;
+            if (requestMode != nullptr) {
+                htRateControl->processReceivedHtMcsRequest(pendingHtSounding.peer,
+                        pendingHtSounding.requestToken, requestMode);
+                if (htRateControl->getPendingHtMcsControl(pendingHtSounding.peer,
+                        false, true, mfbControl) && mfbControl.mcsFeedbackSequenceIdentifier < 7) {
+                    pendingHtMfbPeer = pendingHtSounding.peer;
+                    pendingHtMfbControl = mfbControl;
+                }
+            }
+            if (pendingHtMfbPeer.isUnspecified()) {
+                pendingHtMfbPeer = pendingHtSounding.peer;
+                pendingHtMfbControl.mcsFeedbackSequenceIdentifier = pendingHtSounding.requestToken;
+                pendingHtMfbControl.mcsFeedback = recommendedMcs;
+            }
+
+            Ptr<Ieee80211HtMimoFeedback> feedback;
+            if (pendingHtSounding.feedbackKind == Ieee80211HtFeedbackKind::CSI)
+                feedback = makeShared<Ieee80211HtCsiFeedback>();
+            else if (pendingHtSounding.feedbackKind == Ieee80211HtFeedbackKind::NONCOMPRESSED_BEAMFORMING)
+                feedback = makeShared<Ieee80211HtNoncompressedBeamformingFeedback>();
+            else
+                feedback = makeShared<Ieee80211HtCompressedBeamformingFeedback>();
+            feedback->setNc(1);
+            feedback->setNr(pendingHtSounding.soundingNsts);
+            feedback->setChannelWidth(pendingHtSounding.channelWidth.get());
+            feedback->setGrouping(1);
+            feedback->setCoefficientSize(
+                    pendingHtSounding.feedbackKind == Ieee80211HtFeedbackKind::COMPRESSED_BEAMFORMING ? 0 : 4);
+            feedback->setCodebookInformation(0);
+            feedback->setRemainingMatrixSegments(0);
+            // Packet-level TSF surrogate: the simulator clock is expressed in
+            // microseconds, matching the lower 32 bits carried by the HT MIMO
+            // Control field. MSI/MFSI remains the independent MRQ/MFB token.
+            feedback->setSoundingTimestamp(static_cast<uint32_t>(
+                    simTime().inUnit(SIMTIME_US)));
+            feedback->setReportArraySize(measurement.reportBytes.size());
+            for (size_t i = 0; i < measurement.reportBytes.size(); i++)
+                feedback->setReport(i, measurement.reportBytes[i]);
+            feedback->setChunkLength(B(8 + measurement.reportBytes.size()));
+            auto header = makeShared<Ieee80211ActionFrame>();
+            header->setType(ST_NOACKACTION);
+            header->setCategory(7);
+            header->setReceiverAddress(pendingHtSounding.peer);
+            header->setTransmitterAddress(mac->getAddress());
+            header->setAddress3(mac->getMib()->bssData.bssid);
+            auto response = new Packet("HT-MIMO-Feedback", header);
+            response->insertAtBack(feedback);
+            response->insertAtBack(makeShared<Ieee80211MacTrailer>());
+            response->addTag<Ieee80211ModeReq>()->setMode(
+                    modeSet->getSlowestMandatoryMode(MHz(20)));
+            // IEEE Std 802.11-2024, 9.6.11 and 10.33: immediate typed HT
+            // CSI/noncompressed/compressed feedback follows the sounding NDP.
+            tx->transmitFrame(response, header, modeSet->getSifsTime(), this);
+            delete response;
+        }
+    }
+    pendingHtSounding = {};
+    delete packet;
+    return true;
+}
+
+void Hcf::sendStandaloneHtMfb()
+{
+    if (pendingHtMfbPeer.isUnspecified() ||
+            pendingHtMfbControl.mcsFeedbackSequenceIdentifier >= 7)
+        return;
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setType(ST_QOS_NULL);
+    header->setReceiverAddress(pendingHtMfbPeer);
+    header->setTransmitterAddress(mac->getAddress());
+    header->setAddress3(mac->getMib()->bssData.bssid);
+    header->setAckPolicy(NO_ACK);
+    header->setOrder(true);
+    header->setHtMcsControlPresent(true);
+    header->setHtMcsFeedbackSequenceIdentifier(
+            pendingHtMfbControl.mcsFeedbackSequenceIdentifier);
+    header->setHtMcsFeedback(pendingHtMfbControl.mcsFeedback);
+    header->setChunkLength(B(30));
+    auto packet = new Packet("HT-MFB", header);
+    packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+    packet->addTag<Ieee80211ModeReq>()->setMode(
+            modeSet->getSlowestMandatoryMode(MHz(20)));
+    htStandaloneMfbTransmission = true;
+    tx->transmitFrame(packet, header, modeSet->getSifsTime(), this);
+    delete packet;
+    pendingHtMfbPeer = MacAddress();
+    pendingHtMfbControl = {};
+}
+
+void Hcf::attachPendingHtMcsControl(Packet *packet, const IIeee80211Mode *mode)
+{
+    if (htRateControl == nullptr || mode == nullptr ||
+            modeSet->getPhyFamily(mode) != Ieee80211PhyFamily::HT)
+        return;
+    auto header = dynamicPtrCast<const Ieee80211DataHeader>(packet->peekAtFront());
+    if (header == nullptr || (header->getType() != ST_DATA_WITH_QOS &&
+            header->getType() != ST_QOS_NULL) || header->getHtMcsControlPresent() ||
+            header->getOperatingModePresent() || header->getBufferStatusPresent())
+        return;
+    auto negotiated = mac->getMib()->findNegotiatedHtCapabilities(
+            header->getReceiverAddress());
+    if (negotiated == nullptr || !negotiated->localTxPeerRx.valid ||
+            !negotiated->localTxPeerRx.htcSupported)
+        return;
+    Ieee80211HtMcsControl control;
+    if (!htRateControl->getPendingHtMcsControl(header->getReceiverAddress(),
+            negotiated->localTxPeerRx.mcsRequestAllowed,
+            negotiated->localTxPeerRx.mcsFeedbackAllowed, control))
+        return;
+    auto mutableHeader = packet->removeAtFront<Ieee80211DataHeader>();
+    mutableHeader->setOrder(true);
+    mutableHeader->setHtMcsControlPresent(true);
+    mutableHeader->setHtTrainingRequest(control.trainingRequest);
+    mutableHeader->setHtMcsRequest(control.mcsRequest);
+    mutableHeader->setHtMcsRequestSequenceIdentifier(control.mcsRequestSequenceIdentifier);
+    mutableHeader->setHtMcsFeedbackSequenceIdentifier(control.mcsFeedbackSequenceIdentifier);
+    mutableHeader->setHtMcsFeedback(control.mcsFeedback);
+    mutableHeader->setHtCsiSteering(control.csiSteering);
+    mutableHeader->setHtNdpAnnouncement(control.ndpAnnouncement);
+    mutableHeader->setChunkLength(mutableHeader->getChunkLength() + B(4));
+    packet->insertAtFront(mutableHeader);
+}
+
 void Hcf::startFrameSequence(AccessCategory ac)
 {
     auto edcaf = edca->getEdcaf(ac);
     auto txop = edcaf->getTxopProcedure();
     auto frameToTransmit = edcaf->getInProgressFrames()->getFrameToTransmit();
+    if (frameToTransmit != nullptr) {
+        auto frameHeader = frameToTransmit->peekAtFront<Ieee80211MacHeader>();
+        auto existingMode = frameToTransmit->findTag<physicallayer::Ieee80211ModeReq>();
+        auto firstMode = existingMode == nullptr ?
+                rateSelection->computeMode(frameToTransmit, frameHeader, txop) :
+                existingMode->getMode();
+        setFrameMode(frameToTransmit, frameHeader, firstMode);
+        auto peer = frameHeader->getReceiverAddress();
+        if (mayStartHtSounding(peer, firstMode)) {
+            // The sounding exchange is a complete frame sequence of its own,
+            // so establish the TXOP protection state before handing control to
+            // it.  Otherwise transmitFrame() would observe the sentinel
+            // UNDEFINED_PROTECTION value on the first NDP announcement.
+            if (!txop->isProtectionConfigured())
+                txop->configureProtection(TxopProcedure::InitialProtection::NONE);
+            auto generation = mac->getMib()->getHtAssociationGeneration(peer);
+            auto token = nextHtSoundingTokens[peer];
+            nextHtSoundingTokens[peer] = (token + 1) % 7;
+            nextHtSoundingAttemptTimes[peer] = simTime() + htSoundingRetryInterval;
+            auto ndpMode = modeSet->getHtNdpMode(firstMode, htSoundingNsts);
+            auto sequence = new HtSoundingFs(mac->getMib(),
+                    &htRateControl->getHtCsiCache(), peer, generation, token,
+                    htSoundingNsts, htSoundingFeedbackKind, modeSet, ndpMode);
+            frameSequenceHandler->startFrameSequence(sequence, buildContext(ac), this);
+            emit(IFrameSequenceHandler::frameSequenceStartedSignal,
+                    frameSequenceHandler->getContext());
+            return;
+        }
+    }
     if (!txop->isProtectionConfigured()) {
         TxopProcedure::InitialProtection initialProtection = TxopProcedure::InitialProtection::NONE;
         if (frameToTransmit != nullptr) {
@@ -783,6 +1101,23 @@ void Hcf::frameSequenceFinished()
 
 void Hcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
 {
+    if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
+        processHtNdpAnnouncement(packet, dataHeader);
+        if (htRateControl != nullptr && dataHeader->getOrder() &&
+                dataHeader->getHtMcsControlPresent()) {
+            auto peer = dataHeader->getTransmitterAddress();
+            auto receivedMode = packet->findTag<physicallayer::Ieee80211ModeInd>();
+            if (dataHeader->getHtMcsRequest())
+                htRateControl->processReceivedHtMcsRequest(peer,
+                        dataHeader->getHtMcsRequestSequenceIdentifier(),
+                        receivedMode == nullptr ? nullptr : receivedMode->getMode());
+            if (dataHeader->getHtMcsFeedbackSequenceIdentifier() < 7 &&
+                    dataHeader->getHtMcsFeedback() <= 127)
+                htRateControl->processReceivedHtMcsFeedback(peer,
+                        dataHeader->getHtMcsFeedbackSequenceIdentifier(),
+                        dataHeader->getHtMcsFeedback());
+        }
+    }
     if (dynamicPtrCast<const Ieee80211MpduSubframeHeader>(packet->peekAtFront()) != nullptr) {
         // IEEE Std 802.11-2024, 9.7.1 and Table 9-659: an A-MPDU is a
         // sequence of MPDU delimiters and MPDUs; each nonfinal subframe is
@@ -964,14 +1299,27 @@ void Hcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee8021
         }
     }
     else {
-        if (auto dataOrMgmtHeader = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(header))
+        if (auto dataOrMgmtHeader = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(header)) {
             // IEEE Std 802.11-2024, 10.3.2.11: the recipient performs the
             // immediate Ack/BlockAck procedure for received frames that require
             // it before higher MAC delivery decisions complete.
-            recipientAckProcedure->processReceivedFrame(packet, dataOrMgmtHeader, check_and_cast<IRecipientAckPolicy *>(recipientAckPolicy), this);
+            auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(dataOrMgmtHeader);
+            bool isHtNdpAnnouncement = dataHeader != nullptr &&
+                    dataHeader->getType() == ST_QOS_NULL && dataHeader->getHtNdpAnnouncement();
+            if (!isHtNdpAnnouncement)
+                recipientAckProcedure->processReceivedFrame(packet, dataOrMgmtHeader,
+                        check_and_cast<IRecipientAckPolicy *>(recipientAckPolicy), this);
+        }
     }
 
     if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
+        if (dataHeader->getType() == ST_QOS_NULL) {
+            // QoS Null frames carry control/state information only; they are
+            // never an MSDU for the LLC service.  HT sounding announcements
+            // use this frame type to carry MRQ + NDP Announcement.
+            delete packet;
+            return;
+        }
         if (dataHeader->getType() == ST_DATA_WITH_QOS && recipientBlockAckAgreementHandler && !wasHeMu)
             // IEEE Std 802.11-2024, 10.25.6: HT-immediate block ack state is
             // updated for QoS Data frames covered by a block ack agreement.
@@ -1082,6 +1430,14 @@ void Hcf::recipientProcessReceivedManagementFrame(const Ptr<const Ieee80211MgmtH
 void Hcf::transmissionComplete(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
 {
     Enter_Method("transmissionComplete");
+    if (findHtActionBody<Ieee80211HtMimoFeedback>(packet) != nullptr) {
+        sendStandaloneHtMfb();
+        return;
+    }
+    if (htStandaloneMfbTransmission) {
+        htStandaloneMfbTransmission = false;
+        return;
+    }
     auto edcaf = edca->getChannelOwner();
     if (edcaf) {
         frameSequenceHandler->transmissionComplete();
@@ -1137,6 +1493,11 @@ void Hcf::originatorProcessTransmittedFrame(Packet *packet)
 {
     Enter_Method("originatorProcessTransmittedFrame");
     EV_INFO << "Processing transmitted frame " << packet->getName() << " as originator in frame sequence.\n";
+    if (packet->findTag<Ieee80211HtTransmissionReq>() != nullptr ||
+            (packet->getDataLength() > b(0) &&
+             dynamicPtrCast<const Ieee80211DataHeader>(packet->peekAtFront()) != nullptr &&
+             dynamicPtrCast<const Ieee80211DataHeader>(packet->peekAtFront())->getHtNdpAnnouncement()))
+        return;
     auto edcaf = edca->getChannelOwner();
     if (edcaf) {
         edcaf->emit(packetSentToPeerSignal, packet);
@@ -1396,6 +1757,11 @@ void Hcf::originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastTra
 {
     if (receivedPacket == nullptr)
         return;
+    // HT sounding feedback is an Action frame completing a headerless NDP
+    // exchange.  The generic originator path expects the last transmission to
+    // have a MAC header, which is not true for the HT-NDP packet.
+    if (findHtActionBody<Ieee80211HtMimoFeedback>(receivedPacket) != nullptr)
+        return;
     auto receivedHeader = receivedPacket->peekAtFront<Ieee80211MacHeader>();
     if (isHeMuContainerPacket(lastTransmittedPacket) && !dynamicPtrCast<const Ieee80211BlockAck>(receivedHeader))
         return;
@@ -1577,6 +1943,16 @@ void Hcf::sendUp(const std::vector<Packet *>& completeFrames)
 void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
 {
     Enter_Method("transmitFrame");
+    if (auto htRequest = packet->findTag<physicallayer::Ieee80211HtTransmissionReq>();
+            htRequest != nullptr && htRequest->getNdp()) {
+        auto header = makeShared<Ieee80211DataHeader>();
+        header->setType(ST_QOS_NULL);
+        header->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
+        header->setTransmitterAddress(mac->getAddress());
+        header->setAddress3(mac->getMib()->bssData.bssid);
+        tx->transmitFrame(packet, header, ifs, this);
+        return;
+    }
     auto channelOwner = edca->getChannelOwner();
     if (channelOwner) {
         Ptr<const Ieee80211MacHeader> header;
@@ -1627,6 +2003,8 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
         bool deletePacketToTransmit = false;
         auto modeReq = packet->findTag<Ieee80211ModeReq>();
         auto mode = modeReq == nullptr ? rateSelection->computeMode(packet, header, txop) : modeReq->getMode();
+        attachPendingHtMcsControl(packet, mode);
+        header = packet->peekAtFront<Ieee80211MacHeader>();
         if (!isHeMuContainerPacket(packet))
           if (auto dataFrame = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
             OriginatorBlockAckAgreement *agreement = nullptr;
@@ -1906,6 +2284,12 @@ StationQueueBank *Hcf::getStationQueueBank(const MacAddress& staAddr) const
 
 void Hcf::invalidatePeerDerivedState(const MacAddress& peer)
 {
+    nextHtSoundingAttemptTimes.erase(peer);
+    nextHtSoundingTokens.erase(peer);
+    if (pendingHtSounding.peer == peer)
+        pendingHtSounding = {};
+    if (htRateControl != nullptr)
+        htRateControl->invalidateHtPeer(peer);
 }
 
 } // namespace ieee80211

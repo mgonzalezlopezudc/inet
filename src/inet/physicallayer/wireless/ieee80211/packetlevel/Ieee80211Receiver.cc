@@ -1159,6 +1159,15 @@ const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListeni
     addReceptionIndications(packet, reception, interference, snir);
     packet->addTagIfAbsent<Ieee80211ModeInd>()->setMode(transmission->getMode());
     packet->addTagIfAbsent<Ieee80211ChannelInd>()->setChannel(transmission->getChannel());
+    if (const auto& htTxVector = transmission->getHtTxVector();
+            htTxVector != nullptr && htTxVector->isNdp() && !packet->hasBitError()) {
+        auto indication = packet->addTagIfAbsent<Ieee80211NdpInd>();
+        indication->setPhyFormat(IEEE80211_NDP_PHY_HT);
+        indication->setChannelWidth(htTxVector->getChannelWidth().get());
+        indication->setNumberOfSpaceTimeStreams(htTxVector->getNumberOfSpaceTimeStreams());
+        indication->setNumberOfLtfSymbols(htTxVector->getNumberOfHtLtfSymbols());
+        indication->setSounding(htTxVector->isSounding());
+    }
     if (transmission->getHeTriggerCorrelationId() != 0)
         packet->addTag<Ieee80211HeTriggerCorrelationTag>()->
                 setTriggerId(transmission->getHeTriggerCorrelationId());

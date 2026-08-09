@@ -9,7 +9,6 @@
 #include <algorithm>
 #include <cmath>
 
-#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
 
 namespace inet {
@@ -21,58 +20,30 @@ Define_Module(HeMinstrelRateControl);
 
 void HeMinstrelRateControl::initialize(int stage)
 {
-    RateControlBase::initialize(stage);
+    MinstrelRateControlBase::initialize(stage);
     if (stage == INITSTAGE_LOCAL) {
-        updateInterval = par("updateInterval");
-        ewmaWeight = par("ewmaWeight");
-        lookaroundRatio = par("lookaroundRatio");
-        initialSuccessProbability = par("initialSuccessProbability");
-        seedFromSnir = par("seedFromSnir");
         enableExtendedRangeSu = par("enableExtendedRangeSu");
         preferDcm = par("preferDcm");
         selectionPolicy = par("selectionPolicy").stdstringValue();
         if (selectionPolicy != "minstrel" && selectionPolicy != "snrThresholds")
             throw cRuntimeError("Unknown HE rate selection policy '%s'", selectionPolicy.c_str());
-        snirMcs0ThresholdDb = par("snirMcs0Threshold");
-        snirMcsStepDb = par("snirMcsStep");
-        minMcs = par("minMcs");
-        maxMcs = par("maxMcs");
-        maxNss = par("maxNss");
-        if (minMcs < 0 || maxMcs > 11 || minMcs > maxMcs)
-            throw cRuntimeError("Invalid HE Minstrel MCS range");
-        if (maxNss < 1 || maxNss > 8)
-            throw cRuntimeError("Invalid HE Minstrel maxNss");
-        if (updateInterval <= SIMTIME_ZERO)
-            throw cRuntimeError("HE Minstrel updateInterval must be positive");
-        if (ewmaWeight < 0 || ewmaWeight > 1 || lookaroundRatio < 0 || lookaroundRatio > 1)
-            throw cRuntimeError("Invalid HE Minstrel EWMA/lookaround parameters");
-        selectedMcsSignal = registerSignal("heRateSelectedMcs");
-        selectedNssSignal = registerSignal("heRateSelectedNss");
-        probeSignal = registerSignal("heRateProbe");
-        successProbabilitySignal = registerSignal("heRateSuccessProbability");
-        txSuccessSignal = registerSignal("heRateTxSuccess");
-        retryCountSignal = registerSignal("heRateRetryCount");
-        WATCH(peers);
+        registerMinstrelSignals("heRate");
     }
 }
 
-void HeMinstrelRateControl::handleMessage(cMessage *msg)
+bool HeMinstrelRateControl::isRateCandidate(const IIeee80211Mode *mode) const
 {
-    throw cRuntimeError("This module doesn't handle self messages");
+    return dynamic_cast<const Ieee80211HeMode *>(mode) != nullptr;
 }
 
-const MacAddress HeMinstrelRateControl::getReceiverAddress(Packet *frame) const
+int HeMinstrelRateControl::getModeMcs(const IIeee80211Mode *mode) const
 {
-    if (frame == nullptr)
-        return MacAddress::UNSPECIFIED_ADDRESS;
-    auto header = dynamicPtrCast<const Ieee80211MacHeader>(frame->peekAtFront<Ieee80211MacHeader>(b(-1),
-            Chunk::PF_ALLOW_INCORRECT | Chunk::PF_ALLOW_INCOMPLETE | Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED));
-    return header == nullptr ? MacAddress::UNSPECIFIED_ADDRESS : header->getReceiverAddress();
+    return check_and_cast<const Ieee80211HeMode *>(mode)->getDataMode()->getMcsIndex();
 }
 
-HeMinstrelRateControl::PeerState& HeMinstrelRateControl::getPeerState(const MacAddress& peer)
+int HeMinstrelRateControl::getModeNss(const IIeee80211Mode *mode) const
 {
-    return peers[peer];
+    return check_and_cast<const Ieee80211HeMode *>(mode)->getDataMode()->getNumberOfSpatialStreams();
 }
 
 const Ieee80211HeMode *HeMinstrelRateControl::findHeMode(int mcs, int nss, Hz bandwidth,
@@ -115,7 +86,7 @@ const Ieee80211HeMode *HeMinstrelRateControl::findHeMode(int mcs, int nss, Hz ba
 }
 
 int HeMinstrelRateControl::clampMcsForConstraints(int mcs, int ruToneSize, uint8_t ppduFormat,
-        int maxNss, const Constraints& constraints) const
+        int, const Constraints& constraints) const
 {
     int result = std::clamp(mcs, std::max(minMcs, constraints.minMcs),
             std::min(maxMcs, constraints.maxMcs));
@@ -126,11 +97,6 @@ int HeMinstrelRateControl::clampMcsForConstraints(int mcs, int ruToneSize, uint8
     if (constraints.dcm && result > 4)
         result = 4;
     return std::clamp(result, 0, 11);
-}
-
-double HeMinstrelRateControl::scoreRate(const RateStats& stats, const Ieee80211HeMode *mode) const
-{
-    return stats.ewmaSuccessProbability * mode->getDataMode()->getNetBitrate().get();
 }
 
 IIeee80211HeRateControl::Selection HeMinstrelRateControl::selectHeMode(const MacAddress& peer,
@@ -150,8 +116,8 @@ IIeee80211HeRateControl::Selection HeMinstrelRateControl::selectHeMode(const Mac
                  directional.supportedChannelWidths.count(bandwidth) == 0) ||
                 (ruToneSize > 0 &&
                  directional.supportedRuToneSizes.count(ruToneSize) == 0) ||
-                ((ppduFormat == HE_MU_DOWNLINK ||
-                  ppduFormat == HE_TRIGGER_BASED_UPLINK) && !directional.ofdma))
+                ((ppduFormat == HE_MU_DOWNLINK || ppduFormat == HE_TRIGGER_BASED_UPLINK) &&
+                 !directional.ofdma))
             return {};
         requestedMaxNss = std::min(requestedMaxNss, getMaxNss(directional.mcsNss));
         if (requestedMaxNss < 1)
@@ -159,11 +125,12 @@ IIeee80211HeRateControl::Selection HeMinstrelRateControl::selectHeMode(const Mac
     }
     if (constraints.extendedRangeSu || ppduFormat == HE_EXTENDED_RANGE_SU)
         requestedMaxNss = 1;
-    auto& state = getPeerState(peer);
-    std::vector<std::pair<RateKey, const Ieee80211HeMode *>> candidates;
+
+    std::vector<const IIeee80211Mode *> candidates;
     for (int nss = 1; nss <= requestedMaxNss; nss++) {
         for (int mcs = minMcs; mcs <= maxMcs; mcs++) {
-            int constrainedMcs = clampMcsForConstraints(mcs, ruToneSize, ppduFormat, requestedMaxNss, constraints);
+            int constrainedMcs = clampMcsForConstraints(mcs, ruToneSize, ppduFormat,
+                    requestedMaxNss, constraints);
             if (constrainedMcs != mcs ||
                     (constraints.directionalCapabilities &&
                      mcs > constraints.directionalCapabilities->mcsNss.maxMcsPerNss[nss - 1]) ||
@@ -173,128 +140,71 @@ IIeee80211HeRateControl::Selection HeMinstrelRateControl::selectHeMode(const Mac
             if (mode == nullptr)
                 mode = findHeMode(mcs, nss, bandwidth, false, constraints.ldpc);
             if (mode != nullptr)
-                candidates.push_back({{mcs, nss}, mode});
+                candidates.push_back(mode);
         }
     }
     if (candidates.empty())
         return {};
 
-    const bool hasFreshSnir = seedFromSnir && state.snirGeneration != 0 &&
-            simTime() >= state.latestSnirUpdate &&
-            simTime() - state.latestSnirUpdate <= updateInterval;
-    for (const auto& candidate : candidates) {
-        auto [rate, inserted] = state.rates.try_emplace(candidate.first);
-        auto& stats = rate->second;
-        if (inserted)
-            stats.ewmaSuccessProbability = initialSuccessProbability;
-        if (hasFreshSnir && stats.appliedSnirGeneration != state.snirGeneration) {
-            double margin = state.latestSnirDb -
-                    (snirMcs0ThresholdDb + snirMcsStepDb * candidate.first.mcs);
-            double seeded = std::clamp(0.5 + margin / 20.0, 0.05, 0.98);
-            stats.ewmaSuccessProbability = ewmaWeight * stats.ewmaSuccessProbability +
-                    (1 - ewmaWeight) * seeded;
-            stats.appliedSnirGeneration = state.snirGeneration;
-        }
-    }
-
-    state.selectionCount++;
-    bool probe = lookaroundRatio > 0 && intuniform(0, 999) < (int)std::round(lookaroundRatio * 1000);
-    auto best = candidates.front();
+    bool probing = false;
+    const IIeee80211Mode *best = nullptr;
     if (selectionPolicy == "snrThresholds") {
-        probe = false;
+        auto& state = getPeerState(peer);
+        state.selectionCount++;
+        bool hasFreshSnir = seedFromSnir && state.snirGeneration != 0 &&
+                simTime() >= state.latestSnirUpdate &&
+                simTime() - state.latestSnirUpdate <= updateInterval;
         int selectedMcs = minMcs;
         if (hasFreshSnir)
-            selectedMcs = std::clamp((int)std::floor((state.latestSnirDb - snirMcs0ThresholdDb) / snirMcsStepDb), minMcs, maxMcs);
-        for (const auto& candidate : candidates)
-            if (candidate.first.numberOfSpatialStreams == requestedMaxNss && candidate.first.mcs <= selectedMcs &&
-                    (candidate.first.mcs > best.first.mcs || best.first.numberOfSpatialStreams != requestedMaxNss))
-                best = candidate;
+            selectedMcs = std::clamp((int)std::floor((state.latestSnirDb - snirMcs0ThresholdDb) /
+                    snirMcsStepDb), minMcs, maxMcs);
+        for (auto mode : candidates)
+            if (getModeNss(mode) == requestedMaxNss && getModeMcs(mode) <= selectedMcs &&
+                    (best == nullptr || getModeMcs(mode) > getModeMcs(best)))
+                best = mode;
+        if (best == nullptr)
+            best = candidates.front();
+        state.rates.try_emplace(best);
+        currentMode = best;
+        emitSelection(peer, best, false);
     }
-    else if (probe) {
-        int index = intuniform(0, candidates.size() - 1);
-        best = candidates[index];
-        state.rates[best.first].lastProbe = simTime();
-    }
-    else {
-        double bestScore = -1;
-        for (const auto& candidate : candidates) {
-            double score = scoreRate(state.rates[candidate.first], candidate.second);
-            if (score > bestScore) {
-                bestScore = score;
-                best = candidate;
-            }
-        }
-    }
+    else
+        best = selectCandidate(peer, candidates, probing);
 
-    currentMode = best.second;
-    emit(selectedMcsSignal, (long)best.first.mcs);
-    emit(selectedNssSignal, (long)best.first.numberOfSpatialStreams);
-    emit(probeSignal, probe ? 1L : 0L);
-    emit(successProbabilitySignal, state.rates[best.first].ewmaSuccessProbability);
-    emitDatarateChangedSignal();
-
+    currentMode = best;
+    lastSelections[peer] = {best, ruToneSize};
     Selection selection;
-    selection.mode = best.second;
-    selection.mcs = best.first.mcs;
-    selection.numberOfSpatialStreams = best.first.numberOfSpatialStreams;
+    selection.mode = best;
+    selection.mcs = getModeMcs(best);
+    selection.numberOfSpatialStreams = getModeNss(best);
     selection.dcm = constraints.dcm;
-    selection.probing = probe;
+    selection.probing = probing;
     return selection;
 }
 
 void HeMinstrelRateControl::reportHeTxResult(const MacAddress& peer, int mcs,
-        int numberOfSpatialStreams, int ruToneSize, int retryCount, bool success, int64_t ackedBytes)
+        int numberOfSpatialStreams, int ruToneSize, int retryCount, bool success, int64_t)
 {
     Enter_Method("reportHeTxResult");
-    auto& state = getPeerState(peer);
-    auto [rate, inserted] = state.rates.try_emplace(RateKey {mcs, numberOfSpatialStreams});
-    auto& stats = rate->second;
-    if (inserted)
-        stats.ewmaSuccessProbability = initialSuccessProbability;
-    stats.attempts++;
-    if (success)
-        stats.successes++;
-    // Export the mode that was actually transmitted as well as selections
-    // made directly through selectHeMode(). Some HE frame paths use the
-    // installed fallback/current mode and therefore bypass scheduler lookup.
-    emit(selectedMcsSignal, (long)mcs);
-    emit(selectedNssSignal, (long)numberOfSpatialStreams);
-    double sample = success ? 1.0 / std::max(1, retryCount + 1) : 0.0;
-    stats.ewmaSuccessProbability = ewmaWeight * stats.ewmaSuccessProbability +
-            (1 - ewmaWeight) * sample;
-    emit(successProbabilitySignal, stats.ewmaSuccessProbability);
-    emit(txSuccessSignal, success ? 1L : 0L);
-    emit(retryCountSignal, (long)retryCount);
+    const IIeee80211Mode *mode = nullptr;
+    auto it = lastSelections.find(peer);
+    if (it != lastSelections.end() && it->second.mode != nullptr &&
+            it->second.ruToneSize == ruToneSize &&
+            getModeMcs(it->second.mode) == mcs &&
+            getModeNss(it->second.mode) == numberOfSpatialStreams)
+        mode = it->second.mode;
+    reportModeTxResult(peer, mode, retryCount, success);
 }
 
 void HeMinstrelRateControl::reportHeRxSnir(const MacAddress& peer, double snirDb)
 {
     Enter_Method("reportHeRxSnir");
-    if (!std::isfinite(snirDb))
-        throw cRuntimeError("HE Minstrel SNIR observation must be finite");
-    auto& state = getPeerState(peer);
-    state.latestSnirDb = snirDb;
-    state.latestSnirUpdate = simTime();
-    state.snirGeneration++;
-    if (state.snirGeneration == 0) {
-        state.snirGeneration = 1;
-        for (auto& rate : state.rates)
-            rate.second.appliedSnirGeneration = 0;
-    }
-}
-
-void HeMinstrelRateControl::invalidatePeer(const MacAddress& peer)
-{
-    Enter_Method("invalidatePeer");
-    peers.erase(peer);
+    reportModeRxSnir(peer, snirDb);
 }
 
 const IIeee80211Mode *HeMinstrelRateControl::getRate()
 {
     Enter_Method("getRate");
-    // RateControlBase installs a mandatory fallback mode during initialization.
-    // Do not let that fallback suppress an explicitly requested HE ER SU mode
-    // for ER Beacons and group-addressed ER-BSS traffic.
     if (enableExtendedRangeSu && modeSet != nullptr) {
         Constraints constraints;
         constraints.extendedRangeSu = true;
@@ -305,27 +215,6 @@ const IIeee80211Mode *HeMinstrelRateControl::getRate()
             currentMode = selection.mode;
     }
     return currentMode;
-}
-
-void HeMinstrelRateControl::frameTransmitted(Packet *frame, int retryCount, bool isSuccessful, bool isGivenUp)
-{
-    if (auto heMode = dynamic_cast<const Ieee80211HeMode *>(currentMode)) {
-        auto peer = getReceiverAddress(frame);
-        auto mcs = heMode->getDataMode()->getModulationAndCodingScheme();
-        reportHeTxResult(peer, mcs->getMcsIndex(), mcs->getNumNss(),
-                0, retryCount, isSuccessful && !isGivenUp, frame == nullptr ? 0 : frame->getByteLength());
-        // The ordinary SU frame path obtains the next mode through getRate(),
-        // rather than through an HE MU scheduler. Install the per-peer choice
-        // here so that feedback affects the next SU transmission as well.
-        Constraints constraints;
-        auto selection = selectHeMode(peer, Hz(NaN), 0, 0, maxNss, constraints);
-        if (selection.mode != nullptr)
-            currentMode = selection.mode;
-    }
-}
-
-void HeMinstrelRateControl::frameReceived(Packet *frame)
-{
 }
 
 } // namespace ieee80211

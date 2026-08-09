@@ -1,0 +1,218 @@
+{
+  "analysis_script_sha256": "80a8d8f3d69d1179292b9ce451fd0ddde079619230aaec5dd6e683abca86dfa8",
+  "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
+  "capture_source_diff_sha256": "44b63b5eec0c5898d0f468d3bdf5c710bc6718e819c5ec456d34beca7dec06de",
+  "entries": [
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 513071,
+            "duration_seconds": 0.458069,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.658765,
+            "file_size_bytes": 553312,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 65535,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 899,
+            "snapshot_length": null,
+            "start_seconds": 0.200696,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211n/guard_interval/results/20260809T153307Z/LongGI800ns/LongGI800ns-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "6d07d31f61c6487651bc48357bd2add9f6c6aafd81f258e16b2e4931abf49139",
+          "size_bytes": 553312
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "LongGI800ns",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211n/guard_interval/omnetpp.ini",
+      "ini_sha256": "00e206a4e3ece3c277c089cef54ad41f12f4c2501147fa5bcc743c496bdd2cdc",
+      "run_number": 0,
+      "scalar": {
+        "configname": "LongGI800ns",
+        "path": "examples/ieee80211n/guard_interval/results/20260809T153307Z/LongGI800ns/LongGI800ns-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "1813cc79011411390ba3903d4944ddf5738f7c98a85ed05e685f23262252c938"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "guard_interval"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 554496,
+            "duration_seconds": 0.443302,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.643934,
+            "file_size_bytes": 598160,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 65535,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 976,
+            "snapshot_length": null,
+            "start_seconds": 0.200632,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211n/guard_interval/results/20260809T153307Z/ShortGI400ns/ShortGI400ns-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "a663747a8de6190eee1527aceb7054db720c56fcd7cb358696fabac82c65505b",
+          "size_bytes": 598160
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "ShortGI400ns",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211n/guard_interval/omnetpp.ini",
+      "ini_sha256": "00e206a4e3ece3c277c089cef54ad41f12f4c2501147fa5bcc743c496bdd2cdc",
+      "run_number": 0,
+      "scalar": {
+        "configname": "ShortGI400ns",
+        "path": "examples/ieee80211n/guard_interval/results/20260809T153307Z/ShortGI400ns/ShortGI400ns-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "12a635e6815f31e16718b91e8377f99de50e52759754e6a06fa00ae2683ccb3f"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "guard_interval"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 1813936,
+            "duration_seconds": 0.330721,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.530837,
+            "file_size_bytes": 1957968,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 65535,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 3232,
+            "snapshot_length": null,
+            "start_seconds": 0.200116,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211n/guard_interval/results/20260809T153307Z/LongGI40MHz108Mbps/LongGI40MHz108Mbps-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "c526f131b182b32937e0636f026605c240a03adb6b3dd16e8835702020521751",
+          "size_bytes": 1957968
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "LongGI40MHz108Mbps",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211n/guard_interval/omnetpp.ini",
+      "ini_sha256": "00e206a4e3ece3c277c089cef54ad41f12f4c2501147fa5bcc743c496bdd2cdc",
+      "run_number": 0,
+      "scalar": {
+        "configname": "LongGI40MHz108Mbps",
+        "path": "examples/ieee80211n/guard_interval/results/20260809T153307Z/LongGI40MHz108Mbps/LongGI40MHz108Mbps-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "cee62e02dba49dcb9d180e66d045b36e9a99af65c5ed7b17d87f01c63c6b3ad2"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "guard_interval"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 1895586,
+            "duration_seconds": 0.328404,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.528512,
+            "file_size_bytes": 2046460,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 65535,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 3388,
+            "snapshot_length": null,
+            "start_seconds": 0.200108,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211n/guard_interval/results/20260809T153307Z/ShortGI40MHz120Mbps/ShortGI40MHz120Mbps-#0SingleBssNetwork.ap.wlan[0].pcap",
+          "sha256": "07442bcf59842174ca3a80f6e4b9ff864268b3844b5f4b1892a53c061008f57d",
+          "size_bytes": 2046460
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "ShortGI40MHz120Mbps",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211n/guard_interval/omnetpp.ini",
+      "ini_sha256": "00e206a4e3ece3c277c089cef54ad41f12f4c2501147fa5bcc743c496bdd2cdc",
+      "run_number": 0,
+      "scalar": {
+        "configname": "ShortGI40MHz120Mbps",
+        "path": "examples/ieee80211n/guard_interval/results/20260809T153307Z/ShortGI40MHz120Mbps/ShortGI40MHz120Mbps-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "314e8800e498879ec5c94272857853d49b6dece92b65622c69e7a1b2c11b9e8b"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "guard_interval"
+    }
+  ],
+  "generated_at_utc": "2026-08-09T15:33:58.957375+00:00",
+  "inet_library": "out/clang-release/src/libINET.so",
+  "inet_library_sha256": "1e86be2841f52650296d9edaf88eb45c4cf3d4c2891a35ad0cc03684c78bee2b",
+  "repository_revision": "3da32110ce80b4d7983b523686d7aa48ce3e0cbc",
+  "session_id": "20260809T153307Z",
+  "suite": "n",
+  "suite_descriptor": {
+    "path": "examples/ieee80211/analysis/suites/n.json",
+    "sha256": "56311b90580afd2b2b2250e6223269d23289413bb9d20925c4cb224d4d1c8de6"
+  },
+  "tshark_version": "TShark (Wireshark) 4.6.4."
+}

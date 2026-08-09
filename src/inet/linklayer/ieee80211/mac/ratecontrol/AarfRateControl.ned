@@ -9,13 +9,14 @@ package inet.linklayer.ieee80211.mac.ratecontrol;
 
 import inet.common.SimpleModule;
 import inet.linklayer.ieee80211.mac.contract.IRateControl;
+import inet.linklayer.ieee80211.mac.contract.IIeee80211HtRateControl;
 
 //
 // Implements the Adaptive ARF (AARF) rate control mechanism, which was
 // initially described in IEEE 802.11 Rate Adaptation: A Practical Approach,
 // by M. Lacage, M.H. Manshaei, and T. Turletti, 2004.
 //
-simple AarfRateControl extends SimpleModule like IRateControl
+simple AarfRateControl extends SimpleModule like IRateControl, IIeee80211HtRateControl
 {
     parameters:
         @class(AarfRateControl);
@@ -27,6 +28,9 @@ simple AarfRateControl extends SimpleModule like IRateControl
                                             // needed to increase the rate
         double increaseThresholdFactor = default(2); // When the transmission of the probing packet fails, increaseThreshold is multiplied by increaseThresholdFactor.
         int maxIncreaseThreshold = default(50); // Upper bound for increaseThreshold.
+        bool enableHtMcsFeedback = default(false);
+        double htMcsRequestInterval @unit(s) = default(100ms);
+        double htCsiValidityDuration @unit(s) = default(100ms);
         displayStringTextFormat = default("{currentMode}");
         @display("i=block/cogwheel");
         @signal[datarateChanged];

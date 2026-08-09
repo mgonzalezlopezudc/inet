@@ -1206,6 +1206,8 @@ void Ieee80211Radio::decapsulate(Packet *packet) const
             indication->setPhyFormat(IEEE80211_NDP_PHY_VHT);
             indication->setChannelWidth(mode->getDataMode()->getBandwidth().get());
             indication->setNumberOfSpaceTimeStreams(vhtHeader->getNumberOfSpaceTimeStreams());
+            indication->setNumberOfLtfSymbols(vhtHeader->getNumberOfSpaceTimeStreams());
+            indication->setSounding(true);
         }
         else if (auto heHeader = dynamicPtrCast<const Ieee80211HePhyHeader>(phyHeader);
                 heHeader != nullptr && heHeader->getNdp()) {
@@ -1213,6 +1215,8 @@ void Ieee80211Radio::decapsulate(Packet *packet) const
             indication->setPhyFormat(IEEE80211_NDP_PHY_HE_SU);
             indication->setChannelWidth(mode->getDataMode()->getBandwidth().get());
             indication->setNumberOfSpaceTimeStreams(1);
+            indication->setNumberOfLtfSymbols(1);
+            indication->setSounding(true);
         }
     }
 

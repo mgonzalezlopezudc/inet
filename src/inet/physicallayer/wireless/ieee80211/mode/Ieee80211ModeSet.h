@@ -120,7 +120,10 @@ class INET_API Ieee80211ModeSet : public IPrintableObject, public cObject
     Ieee80211SupportRequirement getSupportRequirement(const IIeee80211Mode *mode) const { return entries[getModeIndex(mode)].supportRequirement; }
 
     const IIeee80211Mode *findHeMode(int mcs, int numSpatialStreams, Hz bandwidth, bool ldpc) const;
+    const IIeee80211Mode *findHtMode(int mcs, int numSpatialStreams, Hz bandwidth, bool ldpc) const;
     const IIeee80211Mode *findVhtMode(int mcs, int numSpatialStreams, Hz bandwidth, bool ldpc) const;
+    const IIeee80211Mode *getHtNdpMode(const IIeee80211Mode *referenceMode,
+            int numberOfSpaceTimeStreams) const;
     const IIeee80211Mode *getVhtSuNdpMode(const IIeee80211Mode *referenceMode,
             int numberOfSpaceTimeStreams) const;
 

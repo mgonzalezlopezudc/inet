@@ -302,6 +302,13 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     std::shared_ptr<const Ieee80211HeTxVector> heTxVector;
     std::shared_ptr<const Ieee80211HePpduLayout> hePpduLayout;
     std::shared_ptr<const Ieee80211VhtTxVector> vhtTxVector;
+    std::shared_ptr<const Ieee80211HtTxVector> htTxVector;
+    if (auto htRequest = packet->findTag<Ieee80211HtTransmissionReq>()) {
+        htTxVector = std::make_shared<const Ieee80211HtTxVector>(transmissionBandwidth,
+                htRequest->getSounding(), htRequest->getNdp(),
+                htRequest->getNumberOfSpaceTimeStreams(), htRequest->getNumberOfHtLtfSymbols());
+        requiredSpatialStreams = htTxVector->getNumberOfSpaceTimeStreams();
+    }
     if (auto vhtHeader = dynamicPtrCast<const Ieee80211VhtPhyHeader>(phyHeader)) {
         if (vhtHeader->getSignalingValid()) {
             if (auto handoff = packet->findTag<Ieee80211VhtTxVectorReq>()) {
@@ -371,6 +378,14 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     if (vhtTxVector != nullptr && vhtTxVector->isNdp()) {
         // IEEE Std 802.11-2024 Figure 21-28: a VHT NDP contains the complete
         // VHT preamble (including VHT-SIG-B) and no Data field.
+        duration = preambleDuration;
+        headerDuration = SIMTIME_ZERO;
+    }
+    if (htTxVector != nullptr && htTxVector->isNdp()) {
+        // IEEE Std 802.11-2024, 19.3.13: the NDP has no PSDU. The selected
+        // HT mode owns the preamble/HT-LTF duration.
+        if (phyHeader->getLengthField() != B(0))
+            throw cRuntimeError("HT NDP requires a zero-length PSDU");
         duration = preambleDuration;
         headerDuration = SIMTIME_ZERO;
     }
@@ -545,7 +560,7 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     }
     auto triggerCorrelation = packet->findTag<Ieee80211HeTriggerCorrelationTag>();
     auto triggerCorrelationId = triggerCorrelation == nullptr ? 0 : triggerCorrelation->getTriggerId();
-    return new Ieee80211Transmission(transmitter, packet, startTime, endTime, preambleDuration, headerDuration, dataDuration, startPosition, endPosition, startOrientation, endOrientation, nullptr, nullptr, nullptr, nullptr, analogModel, transmissionMode, transmissionChannel, heTxVector, hePpduLayout, triggerCorrelationId, vhtTxVector);
+    return new Ieee80211Transmission(transmitter, packet, startTime, endTime, preambleDuration, headerDuration, dataDuration, startPosition, endPosition, startOrientation, endOrientation, nullptr, nullptr, nullptr, nullptr, analogModel, transmissionMode, transmissionChannel, heTxVector, hePpduLayout, triggerCorrelationId, vhtTxVector, htTxVector);
 }
 
 } // namespace physicallayer

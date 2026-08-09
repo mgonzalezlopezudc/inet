@@ -10,6 +10,7 @@
 #include "inet/common/packet/serializer/ChunkSerializerRegistry.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211HeBsr.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211HeOmi.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211HtControl.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 
@@ -39,6 +40,39 @@ void copyActionFrameFields(const Ptr<ieee80211::Ieee80211ActionFrame> to, const 
     to->setFragmentNumber(from->getFragmentNumber());
     to->setSequenceNumber(from->getSequenceNumber());
     to->setCategory(from->getCategory());
+}
+
+uint32_t packHtMcsControlHeader(const Ptr<const ieee80211::Ieee80211DataOrMgmtHeader>& header)
+{
+    ieee80211::Ieee80211HtMcsControl control;
+    control.trainingRequest = header->getHtTrainingRequest();
+    control.mcsRequest = header->getHtMcsRequest();
+    control.mcsRequestSequenceIdentifier = header->getHtMcsRequestSequenceIdentifier();
+    control.mcsFeedbackSequenceIdentifier = header->getHtMcsFeedbackSequenceIdentifier();
+    control.mcsFeedback = header->getHtMcsFeedback();
+    control.csiSteering = header->getHtCsiSteering();
+    control.ndpAnnouncement = header->getHtNdpAnnouncement();
+    uint32_t value;
+    if (!ieee80211::packHtMcsControl(control, value))
+        throw cRuntimeError("Invalid HT variant HT Control fields");
+    return value;
+}
+
+bool unpackHtMcsControlHeader(uint32_t value,
+        const Ptr<ieee80211::Ieee80211DataOrMgmtHeader>& header)
+{
+    ieee80211::Ieee80211HtMcsControl control;
+    if (!ieee80211::unpackHtMcsControl(value, control))
+        return false;
+    header->setHtMcsControlPresent(true);
+    header->setHtTrainingRequest(control.trainingRequest);
+    header->setHtMcsRequest(control.mcsRequest);
+    header->setHtMcsRequestSequenceIdentifier(control.mcsRequestSequenceIdentifier);
+    header->setHtMcsFeedbackSequenceIdentifier(control.mcsFeedbackSequenceIdentifier);
+    header->setHtMcsFeedback(control.mcsFeedback);
+    header->setHtCsiSteering(control.csiSteering);
+    header->setHtNdpAnnouncement(control.ndpAnnouncement);
+    return true;
 }
 
 void copyBlockAckReqFrameFields(const Ptr<ieee80211::Ieee80211BlockAckReq> to, const Ptr<ieee80211::Ieee80211BlockAckReq> from)
@@ -309,8 +343,11 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
             stream.writeMacAddress(mgmtHeader->getTransmitterAddress());
             stream.writeMacAddress(mgmtHeader->getAddress3());
             writeSequenceControl(stream, mgmtHeader->getFragmentNumber(), mgmtHeader->getSequenceNumber().isValid() ? mgmtHeader->getSequenceNumber().get() : 0);
-            if (mgmtHeader->getOrder())
-                stream.writeUint32Be(0);
+            if (mgmtHeader->getOrder()) {
+                if (!mgmtHeader->getHtMcsControlPresent())
+                    throw cRuntimeError("Management +HTC frame is missing its typed HT Control fields");
+                stream.writeUint32Le(packHtMcsControlHeader(mgmtHeader));
+            }
             if (type == ST_ACTION) {
                 auto actionFrame = dynamicPtrCast<const Ieee80211ActionFrame>(chunk);
                 if (actionFrame == nullptr) {
@@ -834,7 +871,12 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                 stream.writeMacAddress(dataHeader->getAddress4());
             if (type == ST_DATA_WITH_QOS || type == ST_QOS_NULL) {
                 stream.writeUint16Le(packQosControl(dataHeader->getTid(), dataHeader->getAckPolicy(), dataHeader->getAMsduPresent()));
-                if (dataHeader->getOperatingModePresent()) {
+                if (dataHeader->getHtMcsControlPresent()) {
+                    if (dataHeader->getOperatingModePresent() || dataHeader->getBufferStatusPresent())
+                        throw cRuntimeError("HT and HE variants cannot share one HT Control field");
+                    stream.writeUint32Le(packHtMcsControlHeader(dataHeader));
+                }
+                else if (dataHeader->getOperatingModePresent()) {
                     ieee80211::Ieee80211HeOperatingMode mode;
                     mode.channelWidth = dataHeader->getOperatingModeChannelWidth();
                     mode.rxNss = dataHeader->getOperatingModeRxNss();
@@ -919,8 +961,8 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
             readSequenceControl(stream, fragmentNumber, sequenceNumber);
             mgmtHeader->setFragmentNumber(fragmentNumber);
             mgmtHeader->setSequenceNumber(sequenceNumber);
-            if (order)
-                stream.readUint32Be();
+            if (order && !unpackHtMcsControlHeader(stream.readUint32Le(), mgmtHeader))
+                mgmtHeader->markIncorrect();
             return mgmtHeader;
         }
         case ST_ACTION: {
@@ -935,8 +977,8 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
             readSequenceControl(stream, fragmentNumber, sequenceNumber);
             actionFrame->setFragmentNumber(fragmentNumber);
             actionFrame->setSequenceNumber(sequenceNumber);
-            if (order)
-                stream.readUint32Be();
+            if (order && !unpackHtMcsControlHeader(stream.readUint32Le(), actionFrame))
+                actionFrame->markIncorrect();
             auto categoryPosition = stream.getPosition();
             actionFrame->setCategory(stream.readByte());
             switch (actionFrame->getCategory()) {
@@ -1627,7 +1669,8 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                     auto htControl = stream.readUint32Le();
                     ieee80211::Ieee80211HeBufferStatus status;
                     ieee80211::Ieee80211HeOperatingMode mode;
-                    if (ieee80211::unpackHeOperatingModeHtControl(htControl, mode)) {
+                    if (unpackHtMcsControlHeader(htControl, dataHeader)) {}
+                    else if (ieee80211::unpackHeOperatingModeHtControl(htControl, mode)) {
                         dataHeader->setOperatingModePresent(true);
                         dataHeader->setOperatingModeChannelWidth(mode.channelWidth);
                         dataHeader->setOperatingModeRxNss(mode.rxNss);

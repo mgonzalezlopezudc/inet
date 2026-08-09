@@ -156,6 +156,22 @@ void Ieee80211Mib::initialize(int stage)
 
         localHtLdpc = par("htLdpc").boolValue();
         localHtCapabilities.ldpc = localHtLdpc;
+        int htMcsFeedback = par("htMcsFeedback").intValue();
+        if (htMcsFeedback == 1 || htMcsFeedback < 0 || htMcsFeedback > 3)
+            throw cRuntimeError("htMcsFeedback must be 0, 2, or 3 (1 is reserved)");
+        localHtCapabilities.mcsFeedback = static_cast<Ieee80211HtMcsFeedback>(htMcsFeedback);
+        localHtCapabilities.htcSupport = par("htHtcSupport").boolValue();
+        localHtCapabilities.receiveNdp = par("htReceiveNdp").boolValue();
+        localHtCapabilities.transmitNdp = par("htTransmitNdp").boolValue();
+        auto readHtFeedbackCapability = [this](const char *parameter) {
+            int value = par(parameter).intValue();
+            if (value < 0 || value > 3)
+                throw cRuntimeError("%s must be between 0 and 3", parameter);
+            return static_cast<Ieee80211HtExplicitFeedback>(value);
+        };
+        localHtCapabilities.explicitCsiFeedback = readHtFeedbackCapability("htExplicitCsiFeedback");
+        localHtCapabilities.explicitNoncompressedFeedback = readHtFeedbackCapability("htExplicitNoncompressedFeedback");
+        localHtCapabilities.explicitCompressedFeedback = readHtFeedbackCapability("htExplicitCompressedFeedback");
         int htProtectionMode = par("htProtectionMode").intValue();
         if (htProtectionMode < 0 || htProtectionMode > 3)
             throw cRuntimeError("htProtectionMode must be between 0 and 3");
@@ -705,6 +721,36 @@ const Ieee80211NegotiatedHeCapabilities *Ieee80211Mib::findNegotiatedHeCapabilit
     return it == bssAccessPointData.negotiatedHeCapabilities.end() ? nullptr : &it->second;
 }
 
+bool Ieee80211Mib::isHeModeAllowedForPeer(const physicallayer::IIeee80211Mode *mode,
+        const MacAddress& peerAddress) const
+{
+    // IEEE Std 802.11-2024, 10.6.5.8: the selected HE MCS/NSS and channel
+    // width must be within the effective local-TX/peer-RX capability set.
+    auto heMode = dynamic_cast<const physicallayer::Ieee80211HeMode *>(mode);
+    if (heMode == nullptr)
+        return true;
+    auto dataMode = heMode->getDataMode();
+    int nss = dataMode->getNumberOfSpatialStreams();
+    int mcs = dataMode->getMcsIndex();
+    if (nss < 1 || nss > 8 || mcs < 0 || mcs > 11)
+        return false;
+    bool extendedRangeSu = heMode->getPreambleMode()->getPreambleFormat() ==
+            physicallayer::Ieee80211HePreambleMode::HE_PREAMBLE_ER_SU;
+    if (peerAddress.isMulticast())
+        return (!extendedRangeSu || !heOperation.erSuDisable) &&
+                heOperation.basicHeMcsNss >= mcs &&
+                dataMode->getBandwidth() <= heOperation.operatingChannelWidth;
+    auto station = bssAccessPointData.stations.find(peerAddress);
+    if (!bssStationData.isAssociated &&
+            (station == bssAccessPointData.stations.end() || station->second != ASSOCIATED))
+        return false;
+    auto negotiated = findNegotiatedHeCapabilities(peerAddress);
+    return negotiated != nullptr && negotiated->localTxPeerRx.valid &&
+            negotiated->localTxPeerRx.mcsNss.maxMcsPerNss[nss - 1] >= mcs &&
+            negotiated->localTxPeerRx.supportedChannelWidths.count(dataMode->getBandwidth()) != 0 &&
+            (!extendedRangeSu || !negotiated->operation.erSuDisable);
+}
+
 void Ieee80211Mib::setPeerEhtCapabilities(const MacAddress& address,
         const Ieee80211EhtCapabilities& capabilities, const Ieee80211EhtOperation& operation)
 {
@@ -885,12 +931,16 @@ const Ieee80211NegotiatedVhtCapabilities *Ieee80211Mib::findNegotiatedVhtCapabil
 void Ieee80211Mib::setPeerHtCapabilities(const MacAddress& address,
         const Ieee80211HtCapabilities& capabilities, const Ieee80211HtOperation& operation)
 {
+    auto& generation = bssAccessPointData.htAssociationGenerations[address];
+    generation = generation == UINT64_MAX ? 1 : generation + 1;
     bssAccessPointData.advertisedHtCapabilities[address] = capabilities;
     bssAccessPointData.negotiatedHtCapabilities[address] = negotiateHtCapabilities(localHtCapabilities, capabilities, operation);
 }
 
 void Ieee80211Mib::removePeerHtCapabilities(const MacAddress& address)
 {
+    auto& generation = bssAccessPointData.htAssociationGenerations[address];
+    generation = generation == UINT64_MAX ? 1 : generation + 1;
     bssAccessPointData.advertisedHtCapabilities.erase(address);
     bssAccessPointData.negotiatedHtCapabilities.erase(address);
 }
@@ -899,6 +949,12 @@ const Ieee80211NegotiatedHtCapabilities *Ieee80211Mib::findNegotiatedHtCapabilit
 {
     auto it = bssAccessPointData.negotiatedHtCapabilities.find(address);
     return it == bssAccessPointData.negotiatedHtCapabilities.end() ? nullptr : &it->second;
+}
+
+uint64_t Ieee80211Mib::getHtAssociationGeneration(const MacAddress& address) const
+{
+    auto it = bssAccessPointData.htAssociationGenerations.find(address);
+    return it == bssAccessPointData.htAssociationGenerations.end() ? 0 : it->second;
 }
 
 const char *Ieee80211Mib::getModeStr(Ieee80211Mib::Mode mode)
