@@ -28,6 +28,8 @@ bool Ieee80211RateSelectionPolicy::containsRate(const std::vector<Ieee80211Legac
 
 bool Ieee80211RateSelectionPolicy::isLegacyMode(const Context& context, const IIeee80211Mode *mode)
 {
+    if (mode == nullptr)
+        return false;
     auto family = context.modeSet->getPhyFamily(mode);
     return family == Ieee80211PhyFamily::DSSS || family == Ieee80211PhyFamily::ERP_OFDM ||
             family == Ieee80211PhyFamily::OFDM;
@@ -118,6 +120,14 @@ const IIeee80211Mode *Ieee80211RateSelectionPolicy::findFastestBasicAdvanced(con
 const IIeee80211Mode *Ieee80211RateSelectionPolicy::selectUnicast(const Context& context,
         const IIeee80211Mode *candidate, CandidateOrigin origin)
 {
+    if (candidate == nullptr) {
+        auto fallback = findFastestLegacy(context, context.peerRates, bps(INFINITY));
+        if (fallback == nullptr)
+            fallback = findFastestMandatory(context, bps(INFINITY));
+        if (fallback == nullptr)
+            throw cRuntimeError("No mutually supported legacy or mandatory unicast rate is available");
+        return fallback;
+    }
     if (!isLegacyMode(context, candidate))
         return candidate;
     int code = (int)std::ceil(candidate->getDataMode()->getNetBitrate().get<Mbps>() * 2);

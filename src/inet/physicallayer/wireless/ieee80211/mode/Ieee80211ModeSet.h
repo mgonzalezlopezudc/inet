@@ -116,7 +116,7 @@ class INET_API Ieee80211ModeSet : public IPrintableObject, public cObject
 
     bool containsMode(const IIeee80211Mode *mode) const { return findModeIndex(mode) != -1; }
     bool getIsMandatory(const IIeee80211Mode *mode) const;
-    Ieee80211PhyFamily getPhyFamily(const IIeee80211Mode *mode) const { return entries[getModeIndex(mode)].phyFamily; }
+    Ieee80211PhyFamily getPhyFamily(const IIeee80211Mode *mode) const { return mode == nullptr ? Ieee80211PhyFamily::UNSPECIFIED : entries[getModeIndex(mode)].phyFamily; }
     Ieee80211SupportRequirement getSupportRequirement(const IIeee80211Mode *mode) const { return entries[getModeIndex(mode)].supportRequirement; }
 
     const IIeee80211Mode *findHeMode(int mcs, int numSpatialStreams, Hz bandwidth, bool ldpc) const;

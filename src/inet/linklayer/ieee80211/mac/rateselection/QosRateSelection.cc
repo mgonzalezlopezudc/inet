@@ -322,6 +322,20 @@ void QosRateSelection::receiveSignal(cComponent *source, simsignal_t signalID, c
         if (modeSetProvider == nullptr || modeSetProvider->getModeSet() != modeSet)
             throw cRuntimeError("QoS rate selection received an inconsistent 802.11 mode profile");
         fastestMandatoryMode = modeSet->getFastestBasicMode(modeSetProvider->getModeBandwidth());
+        double multicastFrameBitrate = par("multicastFrameBitrate");
+        multicastFrameMode = (multicastFrameBitrate == -1) ? nullptr : modeSet->getMode(bps(multicastFrameBitrate));
+        double dataFrameBitrate = par("dataFrameBitrate");
+        dataFrameMode = (dataFrameBitrate == -1) ? nullptr : modeSet->getMode(bps(dataFrameBitrate), Hz(par("dataFrameBandwidth")), par("dataFrameNumSpatialStreams"));
+        double mgmtFrameBitrate = par("mgmtFrameBitrate");
+        mgmtFrameMode = (mgmtFrameBitrate == -1) ? nullptr : modeSet->getMode(bps(mgmtFrameBitrate));
+        double controlFrameBitrate = par("controlFrameBitrate");
+        controlFrameMode = (controlFrameBitrate == -1) ? nullptr : modeSet->getMode(bps(controlFrameBitrate));
+        double responseAckFrameBitrate = par("responseAckFrameBitrate");
+        responseAckFrameMode = (responseAckFrameBitrate == -1) ? nullptr : modeSet->getMode(bps(responseAckFrameBitrate));
+        double responseBlockAckFrameBitrate = par("responseBlockAckFrameBitrate");
+        responseBlockAckFrameMode = (responseBlockAckFrameBitrate == -1) ? nullptr : modeSet->getMode(bps(responseBlockAckFrameBitrate));
+        double responseCtsFrameBitrate = par("responseCtsFrameBitrate");
+        responseCtsFrameMode = (responseCtsFrameBitrate == -1) ? nullptr : modeSet->getMode(bps(responseCtsFrameBitrate));
     }
 }
 

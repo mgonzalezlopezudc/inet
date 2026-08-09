@@ -75,7 +75,7 @@ Ieee80211Channel::Ieee80211Channel(const IIeee80211Band *band, int channelNumber
         // of the 160 MHz operating channel that contains the primary 40 MHz channel.
         auto derived = getPrimarySubchannelIndex() % 8 < 4 ? Ieee80211Primary80ChannelPosition::LOWER : Ieee80211Primary80ChannelPosition::UPPER;
         if (primary80ChannelPosition == Ieee80211Primary80ChannelPosition::UNSPECIFIED)
-            primary80ChannelPosition = derived;
+            this->primary80ChannelPosition = derived;
         else if (primary80ChannelPosition != derived)
             throw cRuntimeError("The primary80ChannelPosition parameter is inconsistent with the primary channel number");
     }
@@ -84,7 +84,7 @@ Ieee80211Channel::Ieee80211Channel(const IIeee80211Band *band, int channelNumber
         // channel that contains the primary 80 MHz channel.
         auto derived = getPrimarySubchannelIndex() < 8 ? Ieee80211Primary80ChannelPosition::LOWER : Ieee80211Primary80ChannelPosition::UPPER;
         if (primary160ChannelPosition == Ieee80211Primary80ChannelPosition::UNSPECIFIED)
-            primary160ChannelPosition = derived;
+            this->primary160ChannelPosition = derived;
         else if (primary160ChannelPosition != derived)
             throw cRuntimeError("The primary160ChannelPosition parameter is inconsistent with the primary channel number");
     }

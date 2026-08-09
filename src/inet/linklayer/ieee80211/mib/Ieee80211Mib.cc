@@ -129,18 +129,29 @@ void Ieee80211Mib::initialize(int stage)
         localVhtCapabilities.maxNss = par("vhtMaxNss").intValue();
         if (localVhtCapabilities.maxNss < 1 || localVhtCapabilities.maxNss > 8)
             throw cRuntimeError("vhtMaxNss must be between 1 and 8");
+        localVhtCapabilities.maxNstsTotal = par("vhtMaxNstsTotal").intValue();
+        if (localVhtCapabilities.maxNstsTotal < 0 || localVhtCapabilities.maxNstsTotal > 8)
+            throw cRuntimeError("vhtMaxNstsTotal must be 0 or between 1 and 8");
         localVhtCapabilities.maxAmpduLengthExponent = par("vhtMaxAmpduLengthExponent").intValue();
         localVhtCapabilities.shortGi80 = par("vhtShortGi80").boolValue();
         localVhtCapabilities.shortGi160 = par("vhtShortGi160").boolValue();
-        localVhtCapabilities.suBeamformer = par("vhtSuBeamformer").boolValue() || par("vhtBeamforming").boolValue();
-        localVhtCapabilities.suBeamformee = par("vhtSuBeamformee").boolValue();
+        const bool configuredMuBeamformer = par("vhtMuBeamformer").boolValue() || par("vhtMuMimo").boolValue();
+        const bool configuredMuBeamformee = par("vhtMuBeamformee").boolValue();
+        // IEEE Std 802.11-2024, Table 9-313: MU beamformer/beamformee
+        // capability depends on the corresponding SU capability.
+        localVhtCapabilities.suBeamformer = par("vhtSuBeamformer").boolValue() ||
+                par("vhtBeamforming").boolValue() || configuredMuBeamformer;
+        localVhtCapabilities.suBeamformee = par("vhtSuBeamformee").boolValue() || configuredMuBeamformee;
         localVhtCapabilities.beamformeeSts = par("vhtBeamformeeSts");
         localVhtCapabilities.soundingDimensions = par("vhtSoundingDimensions");
         if (localVhtCapabilities.beamformeeSts < 1 || localVhtCapabilities.beamformeeSts > 8 ||
                 localVhtCapabilities.soundingDimensions < 1 || localVhtCapabilities.soundingDimensions > 8)
             throw cRuntimeError("VHT beamformee STS and sounding dimensions must be in the range 1..8");
-        localVhtCapabilities.muBeamformer = par("vhtMuBeamformer").boolValue() || par("vhtMuMimo").boolValue();
-        localVhtCapabilities.muBeamformee = par("vhtMuBeamformee").boolValue();
+        localVhtCapabilities.muBeamformer = configuredMuBeamformer;
+        localVhtCapabilities.muBeamformee = configuredMuBeamformee;
+        if (localVhtCapabilities.maxNstsTotal != 0 &&
+                localVhtCapabilities.maxNstsTotal < localVhtCapabilities.beamformeeSts)
+            throw cRuntimeError("vhtMaxNstsTotal must be at least vhtBeamformeeSts when nonzero");
 
         localHtLdpc = par("htLdpc").boolValue();
         localHtCapabilities.ldpc = localHtLdpc;
@@ -197,6 +208,8 @@ void Ieee80211Mib::initialize(int stage)
             localVhtCapabilities.maxNss = std::min(localVhtCapabilities.maxNss, antennaCount);
             localVhtCapabilities.beamformeeSts = std::min(localVhtCapabilities.beamformeeSts, antennaCount);
             localVhtCapabilities.soundingDimensions = std::min(localVhtCapabilities.soundingDimensions, antennaCount);
+            if (localVhtCapabilities.maxNstsTotal != 0)
+                localVhtCapabilities.maxNstsTotal = std::min(localVhtCapabilities.maxNstsTotal, antennaCount);
         }
         if (radioModule != nullptr) {
                 int numAntennas = -1;
@@ -388,7 +401,7 @@ void Ieee80211Mib::initialize(int stage)
         // 320 MHz operation separately, so do not try to force a 320 MHz
         // channel through the VHT CCFS derivation.
         if (channel->getOperatingChannelWidth() <= MHz(160))
-            vhtOperation = deriveIeee80211VhtOperation(channel->getCenterFrequency(), channel->getOperatingChannelWidth(),
+            vhtOperation = deriveIeee80211VhtOperation(channel->getBondedCenterFrequency(), channel->getOperatingChannelWidth(),
                     channel->getPrimary80ChannelPosition());
         else
             vhtOperation = Ieee80211VhtOperation();
