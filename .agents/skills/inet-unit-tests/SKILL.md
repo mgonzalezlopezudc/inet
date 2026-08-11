@@ -9,24 +9,11 @@ Run unit-test commands from the repository root.
 
 Do not use `./runtest` or infer a test runner path from another project. The repository-supported entry point is `inet_run_unit_tests` from the repository root.
 
-## Disable ccache
-
-Disable ccache before building or running tests in this workspace:
-
-```sh
-export CCACHE_DISABLE=1
-```
-
-Apply this in the same shell that invokes the test command.
-
-Do not omit this setting merely because ccache is not currently producing visible output.
-
 ## Rebuild INET before testing changed code
 
 After changing compiled INET source or an input that generates compiled code, rebuild INET explicitly before running unit tests. Use the same mode for the build and test:
 
 ```sh
-export CCACHE_DISABLE=1
 make MODE=release -j$(nproc)
 inet_run_unit_tests \
   -m release \

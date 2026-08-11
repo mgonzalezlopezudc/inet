@@ -39,7 +39,6 @@ For loaded-library suspicion under LLDB, inspect:
 * Breakpoints bind to a different source copy or remain unresolved because the wrong library was loaded.
 * A previous build artifact masks a source change.
 * A freshly generated unit-test executable links against a stale INET library because INET was not rebuilt first.
-* ccache or incremental build behavior obscures whether a file was rebuilt; follow repository-specific test guidance when present.
 
 ## Do not
 
