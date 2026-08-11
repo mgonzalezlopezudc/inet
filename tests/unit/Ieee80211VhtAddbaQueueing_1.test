@@ -1,0 +1,240 @@
+%description:
+Test deterministic VHT/ADDBA queue behavior at the originator agreement and
+VHT HCF queue-priority seams.
+
+%includes:
+#include <cstring>
+#include "inet/common/packet/Packet.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreement.h"
+#include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreementHandler.h"
+#include "inet/linklayer/ieee80211/mac/channelaccess/Edca.h"
+#include "inet/linklayer/ieee80211/mac/channelaccess/Edcaf.h"
+#include "inet/linklayer/ieee80211/mac/contract/IBlockAckAgreementHandlerCallback.h"
+#include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementPolicy.h"
+#include "inet/linklayer/ieee80211/mac/contract/IProcedureCallback.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/VhtHcf.h"
+#include "inet/queueing/contract/IPacketQueue.h"
+
+%file: TestNetwork.ned
+import inet.queueing.queue.PacketQueue;
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        pendingQueue: PacketQueue;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+class TestOriginatorBlockAckAgreementPolicy : public IOriginatorBlockAckAgreementPolicy
+{
+  public:
+    simtime_t addbaFailureTimeout = SimTime(1, SIMTIME_S);
+
+    virtual bool isAddbaReqNeeded(Packet *, const Ptr<const Ieee80211DataHeader>&) override { return true; }
+    virtual bool isAddbaReqAccepted(const Ptr<const Ieee80211AddbaResponse>&,
+            OriginatorBlockAckAgreement *) override { return true; }
+    virtual bool isDelbaAccepted(const Ptr<const Ieee80211Delba>&) override { return true; }
+    virtual bool isMsduSupported() const override { return true; }
+    virtual simtime_t computeAddbaFailureTimeout() const override { return addbaFailureTimeout; }
+    virtual simtime_t getBlockAckTimeoutValue() const override { return SIMTIME_ZERO; }
+    virtual bool isDelayedAckPolicySupported() const override { return false; }
+    virtual int getMaximumAllowedBufferSize() const override { return 64; }
+};
+
+class TestProcedureCallback : public IProcedureCallback, public IBlockAckAgreementHandlerCallback
+{
+  public:
+    OriginatorBlockAckAgreementHandler *handler = nullptr;
+    Ptr<const Ieee80211AddbaRequest> lastQueuedRequest;
+    int addbaRequestCount = 0;
+    int timerScheduleCount = 0;
+    simtime_t lastTimerDelay = -1;
+
+    explicit TestProcedureCallback(OriginatorBlockAckAgreementHandler *handler) : handler(handler) {}
+
+    virtual void transmitControlResponseFrame(Packet *, const Ptr<const Ieee80211MacHeader>&,
+            Packet *, const Ptr<const Ieee80211MacHeader>&) override {}
+
+    virtual void processMgmtFrame(Packet *packet,
+            const Ptr<const Ieee80211MgmtHeader>& header) override
+    {
+        if (auto addbaRequest = dynamicPtrCast<const Ieee80211AddbaRequest>(header)) {
+            lastQueuedRequest = addbaRequest;
+            addbaRequestCount++;
+        }
+        delete packet;
+    }
+
+    virtual void scheduleInactivityTimer(simtime_t delay) override
+    {
+        timerScheduleCount++;
+        lastTimerDelay = delay;
+    }
+};
+
+class TestEdcaf : public Edcaf
+{
+  protected:
+    queueing::IPacketQueue *pendingQueue = nullptr;
+
+  public:
+    explicit TestEdcaf(queueing::IPacketQueue *pendingQueue) : pendingQueue(pendingQueue) {}
+    virtual queueing::IPacketQueue *getPendingQueue() const override { return pendingQueue; }
+};
+
+class TestEdca : public Edca
+{
+  protected:
+    Edcaf *voiceEdcaf = nullptr;
+
+  public:
+    explicit TestEdca(Edcaf *voiceEdcaf) : voiceEdcaf(voiceEdcaf) {}
+    virtual Edcaf *getEdcaf(AccessCategory ac) const override
+    {
+        return ac == AC_VO ? voiceEdcaf : nullptr;
+    }
+};
+
+class TestVhtHcf : public VhtHcf
+{
+  public:
+    void setEdcaForTest(Edca *value) { edca = value; }
+    void prioritizeQueuedAddbaRequestsForTest() { prioritizeQueuedAddbaRequests(); }
+};
+
+static void requireCondition(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("VHT ADDBA queue test: %s", message);
+}
+
+static Packet *makeDataPacket(const char *name, const MacAddress& receiver, Tid tid)
+{
+    auto packet = new Packet(name);
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setReceiverAddress(receiver);
+    header->setType(ST_DATA_WITH_QOS);
+    header->setTid(tid);
+    header->setAckPolicy(BLOCK_ACK);
+    header->setSequenceNumber(SequenceNumberCyclic(7));
+    packet->insertAtFront(header);
+    return packet;
+}
+
+static Packet *makeAddbaPacket(const char *name, const MacAddress& receiver, Tid tid)
+{
+    auto packet = new Packet(name);
+    auto header = makeShared<Ieee80211AddbaRequest>();
+    header->setReceiverAddress(receiver);
+    header->setTid(tid);
+    header->setStartingSequenceNumber(SequenceNumberCyclic(8));
+    packet->insertAtFront(header);
+    return packet;
+}
+
+static void clearQueue(queueing::IPacketQueue *queue)
+{
+    while (!queue->isEmpty())
+        delete queue->dequeuePacket();
+}
+
+%activity:
+auto pendingQueue = check_and_cast<queueing::IPacketQueue *>(getParentModule()->getSubmodule("pendingQueue"));
+const MacAddress peer("02:00:00:00:00:01");
+const Tid tid = 5;
+
+// Proactive queueing, duplicate suppression while queued, and the externally
+// observable response timeout starting only after the ADDBA request is sent.
+{
+    getSimulation()->setSimTime(SIMTIME_ZERO);
+    OriginatorBlockAckAgreementHandler handler;
+    TestOriginatorBlockAckAgreementPolicy policy;
+    TestProcedureCallback callback(&handler);
+    auto dataPacket = makeDataPacket("proactive-data", peer, tid);
+    auto dataHeader = dataPacket->peekAtFront<Ieee80211DataHeader>();
+
+    requireCondition(handler.processQueuedDataFrame(dataPacket, dataHeader, &policy, &callback),
+            "first queued data frame should proactively queue an ADDBA request");
+    auto agreement = handler.getAgreement(peer, tid);
+    requireCondition(agreement != nullptr && agreement->getIsAddbaRequestInProgress(),
+            "proactive queueing should create a pending agreement");
+    requireCondition(!agreement->getIsAddbaRequestSent(),
+            "a queued ADDBA request must not be marked transmitted");
+    requireCondition(agreement->getExpirationTime() < SIMTIME_ZERO,
+            "a queued ADDBA request must not have an active response deadline");
+    requireCondition(callback.addbaRequestCount == 1 && callback.timerScheduleCount == 0,
+            "queueing should emit one ADDBA request without starting the response timer");
+
+    requireCondition(!handler.processQueuedDataFrame(dataPacket, dataHeader, &policy, &callback),
+            "duplicate queued data must not create another ADDBA request");
+    getSimulation()->setSimTime(SimTime(500, SIMTIME_MS));
+    requireCondition(!handler.processQueuedDataFrame(dataPacket, dataHeader, &policy, &callback),
+            "duplicate queued data must remain suppressed before transmission");
+    requireCondition(callback.addbaRequestCount == 1 && callback.timerScheduleCount == 0,
+            "a queued request must not schedule a timeout before transmission");
+
+    handler.processTransmittedAddbaReq(callback.lastQueuedRequest, &callback);
+    requireCondition(agreement->getIsAddbaRequestSent() && agreement->getIsAddbaRequestInProgress(),
+            "transmission should mark the ADDBA request sent and pending");
+    requireCondition(agreement->getExpirationTime() ==
+            getSimulation()->getSimTime() + policy.addbaFailureTimeout,
+            "the response deadline must be based on transmission time");
+    requireCondition(callback.timerScheduleCount == 1 &&
+            callback.lastTimerDelay == policy.addbaFailureTimeout,
+            "the response timeout should start with the transmitted ADDBA request");
+
+    getSimulation()->setSimTime(SimTime(1500, SIMTIME_MS));
+    handler.blockAckAgreementExpired(&callback, &callback);
+    requireCondition(!agreement->getIsAddbaRequestInProgress(),
+            "a transmitted request timeout should clear its pending state");
+    requireCondition(handler.processQueuedDataFrame(dataPacket, dataHeader, &policy, &callback),
+            "a queued data frame should trigger a retry after transmitted-request timeout");
+    requireCondition(callback.addbaRequestCount == 2,
+            "transmitted-request timeout should permit exactly one retry");
+    delete dataPacket;
+}
+
+// VHT HCF prioritizes queued ADDBA requests in AC_VO while preserving the
+// relative order within the ADDBA and non-ADDBA partitions.
+{
+    clearQueue(pendingQueue);
+    pendingQueue->enqueuePacket(makeDataPacket("data-1", peer, tid));
+    pendingQueue->enqueuePacket(makeAddbaPacket("addba-1", peer, tid));
+    pendingQueue->enqueuePacket(makeDataPacket("data-2", peer, tid));
+    pendingQueue->enqueuePacket(makeAddbaPacket("addba-2", peer, tid));
+
+    TestEdcaf voiceEdcaf(pendingQueue);
+    TestEdca edca(&voiceEdcaf);
+    TestVhtHcf hcf;
+    hcf.setEdcaForTest(&edca);
+    hcf.prioritizeQueuedAddbaRequestsForTest();
+
+    requireCondition(strcmp(pendingQueue->getPacket(0)->getName(), "addba-1") == 0 &&
+            strcmp(pendingQueue->getPacket(1)->getName(), "addba-2") == 0 &&
+            strcmp(pendingQueue->getPacket(2)->getName(), "data-1") == 0 &&
+            strcmp(pendingQueue->getPacket(3)->getName(), "data-2") == 0,
+            "AC_VO queue priority should move ADDBA requests ahead of data deterministically");
+    clearQueue(pendingQueue);
+}
+
+EV << "Proactive ADDBA queueing suppressed queued duplicates and started timeout only after transmission.\n";
+EV << "Transmitted ADDBA timeout permitted one deterministic retry.\n";
+EV << "VHT AC_VO queue priority preserved partition order.\n";
+
+%contains: stdout
+Proactive ADDBA queueing suppressed queued duplicates and started timeout only after transmission.
+
+%contains: stdout
+Transmitted ADDBA timeout permitted one deterministic retry.
+
+%contains: stdout
+VHT AC_VO queue priority preserved partition order.

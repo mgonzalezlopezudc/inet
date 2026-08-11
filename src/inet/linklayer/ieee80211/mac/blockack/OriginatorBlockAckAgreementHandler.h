@@ -35,6 +35,8 @@ class INET_API OriginatorBlockAckAgreementHandler : public IOriginatorBlockAckAg
     virtual ~OriginatorBlockAckAgreementHandler();
     virtual void processTransmittedAddbaReq(const Ptr<const Ieee80211AddbaRequest>& addbaReq,
             IBlockAckAgreementHandlerCallback *callback) override;
+    virtual bool processQueuedDataFrame(Packet *packet, const Ptr<const Ieee80211DataHeader>& dataHeader,
+            IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy, IProcedureCallback *callback) override;
     virtual void processTransmittedDataFrame(Packet *packet, const Ptr<const Ieee80211DataHeader>& dataHeader, IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy, IProcedureCallback *callback) override;
     virtual void processReceivedBlockAck(const Ptr<const Ieee80211BlockAck>& blockAck, IBlockAckAgreementHandlerCallback *callback) override;
     virtual void processReceivedAddbaResp(const Ptr<const Ieee80211AddbaResponse>& addbaResp, IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy, IBlockAckAgreementHandlerCallback *callback) override;

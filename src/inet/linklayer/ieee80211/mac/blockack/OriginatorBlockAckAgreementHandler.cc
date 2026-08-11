@@ -26,7 +26,8 @@ simtime_t OriginatorBlockAckAgreementHandler::computeEarliestExpirationTime()
     for (auto id : blockAckAgreements) {
         auto agreement = id.second;
         if (!agreement->getExpirationHandlingInProgress() &&
-                (agreement->getIsAddbaResponseReceived() || agreement->getIsAddbaRequestInProgress())) {
+                (agreement->getIsAddbaResponseReceived() ||
+                 (agreement->getIsAddbaRequestInProgress() && agreement->getIsAddbaRequestSent()))) {
             ASSERT(earliestTime >= 0);
             ASSERT(agreement->getExpirationTime() >= 0);
             earliestTime = std::min(earliestTime, agreement->getExpirationTime());
@@ -55,7 +56,8 @@ void OriginatorBlockAckAgreementHandler::blockAckAgreementExpired(IProcedureCall
         }
         // IEEE Std 802.11-2024, 10.25.2: dot11ADDBAResponseTimeout bounds how
         // long an originator waits for the ADDBA Response before retrying.
-        else if (agreement->getExpirationTime() <= now && agreement->getIsAddbaRequestInProgress()) {
+        else if (agreement->getExpirationTime() <= now && agreement->getIsAddbaRequestInProgress() &&
+                agreement->getIsAddbaRequestSent()) {
             EV_INFO << "ADDBA response timeout elapsed for receiver=" << id.first.first
                     << " tid=" << id.first.second << "; waking queued retry\n";
             agreement->setIsAddbaRequestInProgress(false);
@@ -165,20 +167,47 @@ void OriginatorBlockAckAgreementHandler::terminateAgreement(MacAddress originato
     }
 }
 
+bool OriginatorBlockAckAgreementHandler::processQueuedDataFrame(Packet *packet, const Ptr<const Ieee80211DataHeader>& dataHeader,
+        IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy, IProcedureCallback *callback)
+{
+    if (!blockAckAgreementPolicy->isAddbaReqNeeded(packet, dataHeader))
+        return false;
+
+    auto agreement = getAgreement(dataHeader->getReceiverAddress(), dataHeader->getTid());
+    if (agreement != nullptr && agreement->getIsAddbaResponseReceived())
+        return false;
+
+    if (agreement != nullptr && agreement->getIsAddbaRequestInProgress()) {
+        // IEEE Std 802.11-2024, 10.25.2 and 11.5.2.2(c)-(e): an ADDBA Response
+        // follows a transmitted ADDBA Request, so an unsent request has no response timeout.
+        if (!agreement->getIsAddbaRequestSent())
+            return false;
+        const simtime_t retryDeadline = agreement->getExpirationTime();
+        if (retryDeadline < SIMTIME_ZERO || simTime() < retryDeadline)
+            return false;
+    }
+
+    const auto startingSequenceNumber = dataHeader->getSequenceNumber().isValid() ?
+            dataHeader->getSequenceNumber() + 1 : SequenceNumberCyclic(0);
+    auto addbaReq = buildAddbaRequest(dataHeader->getReceiverAddress(), dataHeader->getTid(),
+            startingSequenceNumber, blockAckAgreementPolicy);
+    if (agreement == nullptr) {
+        createAgreement(addbaReq);
+        agreement = getAgreement(dataHeader->getReceiverAddress(), dataHeader->getTid());
+    }
+    agreement->setIsAddbaRequestInProgress(true);
+    agreement->setIsAddbaRequestSent(false);
+    agreement->setBlockAckTimeoutValue(blockAckAgreementPolicy->computeAddbaFailureTimeout());
+    callback->processMgmtFrame(new Packet("AddbaReq", addbaReq), addbaReq);
+    return true;
+}
+
 void OriginatorBlockAckAgreementHandler::processTransmittedDataFrame(Packet *packet, const Ptr<const Ieee80211DataHeader>& dataHeader, IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy, IProcedureCallback *callback)
 {
     auto agreement = getAgreement(dataHeader->getReceiverAddress(), dataHeader->getTid());
-    if (blockAckAgreementPolicy->isAddbaReqNeeded(packet, dataHeader) && agreement == nullptr) {
-        auto addbaReq = buildAddbaRequest(dataHeader->getReceiverAddress(), dataHeader->getTid(), dataHeader->getSequenceNumber() + 1, blockAckAgreementPolicy);
-        createAgreement(addbaReq);
-        agreement = getAgreement(dataHeader->getReceiverAddress(), dataHeader->getTid());
-        agreement->setIsAddbaRequestInProgress(true);
-        agreement->setBlockAckTimeoutValue(blockAckAgreementPolicy->computeAddbaFailureTimeout());
-        agreement->calculateExpirationTime();
-        auto addbaPacket = new Packet("AddbaReq", addbaReq);
-        callback->processMgmtFrame(addbaPacket, addbaReq);
-    }
-    else if (blockAckAgreementPolicy->isAddbaReqNeeded(packet, dataHeader) && agreement != nullptr && !agreement->getIsAddbaResponseReceived()) {
+    if (processQueuedDataFrame(packet, dataHeader, blockAckAgreementPolicy, callback))
+        return;
+    if (blockAckAgreementPolicy->isAddbaReqNeeded(packet, dataHeader) && agreement != nullptr && !agreement->getIsAddbaResponseReceived()) {
         const simtime_t retryDeadline = agreement->getExpirationTime();
         const bool hasRetryDeadline = retryDeadline >= SIMTIME_ZERO;
 
@@ -198,8 +227,8 @@ void OriginatorBlockAckAgreementHandler::processTransmittedDataFrame(Packet *pac
 
         auto addbaReq = buildAddbaRequest(dataHeader->getReceiverAddress(), dataHeader->getTid(), dataHeader->getSequenceNumber() + 1, blockAckAgreementPolicy);
         agreement->setIsAddbaRequestInProgress(true);
+        agreement->setIsAddbaRequestSent(false);
         agreement->setBlockAckTimeoutValue(blockAckAgreementPolicy->computeAddbaFailureTimeout());
-        agreement->calculateExpirationTime();
         auto addbaPacket = new Packet("AddbaReq", addbaReq);
         callback->processMgmtFrame(addbaPacket, addbaReq);
     }

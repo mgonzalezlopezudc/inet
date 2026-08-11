@@ -1,0 +1,101 @@
+%description:
+Verify HCF response classification, deferred receive-timeout ownership, and
+synchronous action ordering.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfResponseService.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+static void requireCondition(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("HCF response service test: %s", message);
+}
+
+%activity:
+HcfResponseService service;
+bool sequenceRunning = true;
+bool receptionInProgress = true;
+bool timerScheduled = true;
+int timeoutCount = 0;
+int processedResponseCount = 0;
+int canceledTimerCount = 0;
+auto receiveStep = new ReceiveStep(SimTime(1, SIMTIME_MS));
+const IFrameSequenceStep *currentStep = receiveStep;
+HcfResponseService::Actions actions;
+actions.isSequenceRunning = [&] { return sequenceRunning; };
+actions.isReceptionInProgress = [&] { return receptionInProgress; };
+actions.getCurrentStep = [&] { return currentStep; };
+actions.isStartRxTimerScheduled = [&] { return timerScheduled; };
+actions.handleStartRxTimeout = [&] {
+    requireCondition(!receptionInProgress,
+            "timeout action must run only after reception completes");
+    timeoutCount++;
+};
+actions.processResponse = [&] (Packet *packet) {
+    processedResponseCount++;
+    delete packet;
+};
+actions.cancelStartRxTimer = [&] {
+    requireCondition(processedResponseCount == 1,
+            "response processing must precede timer cancellation");
+    canceledTimerCount++;
+    timerScheduled = false;
+};
+
+requireCondition(service.classifyResponse(true, true, true) ==
+        HcfResponseService::ResponseClassification::PROCESS,
+        "addressed response must be processed");
+requireCondition(service.classifyResponse(true, false, true) ==
+        HcfResponseService::ResponseClassification::IGNORE,
+        "unaddressed response during the response wait must be ignored");
+requireCondition(service.classifyResponse(true, false, false) ==
+        HcfResponseService::ResponseClassification::PROCESS,
+        "unaddressed response after timeout expiry must be processed for classification");
+requireCondition(service.classifyResponse(false, true, false) ==
+        HcfResponseService::ResponseClassification::IGNORE,
+        "response without an active sequence must be ignored");
+
+service.handleStartRxTimeout(actions);
+requireCondition(service.hasDeferredStartRxTimeout(),
+        "timeout during reception must be deferred");
+service.responseTimerScheduled();
+requireCondition(!service.hasDeferredStartRxTimeout(),
+        "scheduling a new response timer must clear stale deferred state");
+service.handleStartRxTimeout(actions);
+receptionInProgress = false;
+service.handleDeferredStartRxTimeout(actions);
+requireCondition(timeoutCount == 1,
+        "deferred timeout must be applied once for the active step");
+service.handleDeferredStartRxTimeout(actions);
+requireCondition(timeoutCount == 1,
+        "deferred timeout must not be applied twice");
+
+timerScheduled = false;
+requireCondition(service.handleCorruptedFrame(actions),
+        "corrupt reception after timer expiry must apply the timeout");
+requireCondition(timeoutCount == 2,
+        "corrupt reception must apply the timeout exactly once");
+timerScheduled = true;
+requireCondition(!service.handleCorruptedFrame(actions),
+        "corrupt reception while the timer is scheduled must be ignored");
+requireCondition(timeoutCount == 2,
+        "ignored corrupt reception must not apply a timeout");
+
+currentStep = nullptr;
+service.processResponseAndCancelStartRxTimerIfCompleted(
+        new Packet("response"), receiveStep, actions);
+requireCondition(processedResponseCount == 1,
+        "response must be forwarded to the frame-sequence handler");
+requireCondition(canceledTimerCount == 1,
+        "completed response must cancel its response timer");
+
+delete receiveStep;
+EV << "HCF response service classification and timeout ownership passed.\n";
+
+%contains: stdout
+HCF response service classification and timeout ownership passed.

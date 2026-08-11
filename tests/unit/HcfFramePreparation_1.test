@@ -1,0 +1,44 @@
+%description:
+Verify the base HCF initial-protection preparation decision.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfFramePreparation.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+static void requireCondition(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("HCF frame preparation test: %s", message);
+}
+
+%activity:
+Ieee80211NegotiatedHtCapabilities negotiated;
+negotiated.localTxPeerRx.valid = true;
+negotiated.operation.protectionMode = Ieee80211HtProtectionMode::NON_HT_MIXED;
+auto unicast = MacAddress("02:00:00:00:00:01");
+
+requireCondition(HcfFramePreparation::selectInitialProtection(
+        unicast, Ieee80211PhyFamily::HT, &negotiated) ==
+        TxopProcedure::InitialProtection::LEGACY_RTS_CTS,
+        "HT non-HT-mixed unicast must use legacy RTS/CTS");
+requireCondition(HcfFramePreparation::selectInitialProtection(
+        MacAddress::BROADCAST_ADDRESS, Ieee80211PhyFamily::HT, &negotiated) ==
+        TxopProcedure::InitialProtection::NONE,
+        "multicast must not use legacy RTS/CTS");
+requireCondition(HcfFramePreparation::selectInitialProtection(
+        unicast, Ieee80211PhyFamily::VHT, &negotiated) ==
+        TxopProcedure::InitialProtection::NONE,
+        "non-HT PHY operation must not use HT protection");
+requireCondition(HcfFramePreparation::selectInitialProtection(
+        unicast, Ieee80211PhyFamily::HT, nullptr) ==
+        TxopProcedure::InitialProtection::NONE,
+        "missing negotiated HT capabilities must disable HT protection");
+
+EV << "HCF frame preparation protection decisions passed.\n";
+
+%contains: stdout
+HCF frame preparation protection decisions passed.

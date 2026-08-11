@@ -30,7 +30,7 @@ disables MU selection while retaining the DL queue shape.
 Run a profile baseline from the repository root:
 
 ```sh
-CCACHE_DISABLE=1 MPLCONFIGDIR=/tmp/inet-matplotlib \
+MPLCONFIGDIR=/tmp/inet-matplotlib \
 python3 tests/speed/ieee80211heplanning/run.py \
   --mode profile --case dl-4sta-20mhz --run 0 --seed 1 \
   --warmups 3 --samples 11 \

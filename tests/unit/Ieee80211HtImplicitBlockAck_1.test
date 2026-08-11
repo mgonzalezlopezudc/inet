@@ -8,6 +8,7 @@ one Compressed BlockAck, and uses its bitmap for sender acknowledgment state.
 #include "inet/linklayer/ieee80211/mac/blockack/RecipientBlockAckProcedure.h"
 #include "inet/linklayer/ieee80211/mac/blockackreordering/BlockAckReordering.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfRetryService.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/PrimitiveFrameSequences.h"
@@ -136,7 +137,6 @@ class TestQosRecoveryProcedure : public QosRecoveryProcedure
 class TestHcf : public Hcf
 {
   public:
-    using Hcf::recoverHtImplicitBlockAckTimeout;
     static bool isImplicitAggregate(unsigned int numAggregateMembers,
             const std::vector<Ptr<const Ieee80211MacHeader>>& headers) {
         return classifyHtAmpduAckContext(numAggregateMembers, headers) ==
@@ -380,7 +380,7 @@ auto timedOutIds = timeoutAckHandler.processFailedHtImplicitBlockAck(
 MockCwCalculator terminalCw;
 TestQosRecoveryProcedure terminalRecovery;
 terminalRecovery.configure(&terminalCw, 1);
-auto retired = TestHcf::recoverHtImplicitBlockAckTimeout(&timeoutFrames,
+auto retired = HcfRetryService::recoverHtImplicitBlockAckTimeout(&timeoutFrames,
         &timeoutAckHandler, &terminalRecovery, nullptr, timedOutIds);
 REQUIRE(retired.size() == 2);
 REQUIRE(timeoutFrames.getLength() == 0);
@@ -405,7 +405,7 @@ auto survivorIds = survivorAckHandler.processFailedHtImplicitBlockAck(
 MockCwCalculator survivorCw;
 TestQosRecoveryProcedure survivorRecovery;
 survivorRecovery.configure(&survivorCw, 2);
-REQUIRE(TestHcf::recoverHtImplicitBlockAckTimeout(&survivorFrames,
+REQUIRE(HcfRetryService::recoverHtImplicitBlockAckTimeout(&survivorFrames,
         &survivorAckHandler, &survivorRecovery, nullptr,
         survivorIds).empty());
 REQUIRE(survivorFrames.getLength() == 2);

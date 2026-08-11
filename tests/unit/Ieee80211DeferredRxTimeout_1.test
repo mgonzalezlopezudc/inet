@@ -36,6 +36,8 @@ network TestNetwork
 network = TestNetwork
 
 %global:
+#include <type_traits>
+
 using namespace inet;
 using namespace inet::ieee80211;
 
@@ -167,8 +169,19 @@ class TestCoordinationFunction : public CoordinationFunction, public DeferredRxT
     virtual int numInitStages() const override { return 1; }
     virtual void initialize(int stage) override
     {
-        this->startRxTimer = new cMessage("startRxTimeout");
+        if constexpr (std::is_same_v<CoordinationFunction, Hcf>)
+            this->exchangeCoordinator.initializeTimers();
+        else
+            this->startRxTimer = new cMessage("startRxTimeout");
         this->frameSequenceHandler = new FrameSequenceHandler();
+    }
+
+    cMessage *getStartRxTimerForTest()
+    {
+        if constexpr (std::is_same_v<CoordinationFunction, Hcf>)
+            return this->exchangeCoordinator.getStartRxTimer();
+        else
+            return this->startRxTimer;
     }
 
     virtual bool isReceptionInProgress() override
@@ -218,7 +231,7 @@ class TestCoordinationFunction : public CoordinationFunction, public DeferredRxT
     virtual void expireDuringReception() override
     {
         receptionInProgress = true;
-        this->handleMessage(this->startRxTimer);
+        this->handleMessage(getStartRxTimerForTest());
         REQUIRE(hasDeferredTimeoutForCurrentStep());
     }
 
@@ -245,7 +258,7 @@ class TestCoordinationFunction : public CoordinationFunction, public DeferredRxT
     {
         REQUIRE(!this->frameSequenceHandler->isSequenceRunning());
         receptionInProgress = true;
-        this->handleMessage(this->startRxTimer);
+        this->handleMessage(getStartRxTimerForTest());
         receptionInProgress = false;
     }
 
@@ -275,12 +288,12 @@ class TestHcf : public TestCoordinationFunction<Hcf>
   protected:
     virtual void clearDeferredTimeoutState() override
     {
-        this->frameSequenceRxTimeoutState.clear();
+        this->responseService.clearTimerState();
     }
 
     virtual bool hasDeferredTimeoutForCurrentStep() override
     {
-        return this->frameSequenceRxTimeoutState.hasDeferredStep();
+        return this->responseService.hasDeferredStartRxTimeout();
     }
 
     IReceiveStep *getCurrentReceiveStep()
@@ -294,9 +307,9 @@ class TestHcf : public TestCoordinationFunction<Hcf>
 
     void scheduleStartRxTimerForTest()
     {
-        REQUIRE(!this->startRxTimer->isScheduled());
-        this->scheduleAfter(SimTime(1, SIMTIME_MS), this->startRxTimer);
-        REQUIRE(this->startRxTimer->isScheduled());
+        REQUIRE(!getStartRxTimerForTest()->isScheduled());
+        this->scheduleAfter(SimTime(1, SIMTIME_MS), getStartRxTimerForTest());
+        REQUIRE(getStartRxTimerForTest()->isScheduled());
     }
 
     void processHeaderlessOutcomeResponse(IReceiveStep *receiveStep)
@@ -315,7 +328,7 @@ class TestHcf : public TestCoordinationFunction<Hcf>
         auto receiveStep = getCurrentReceiveStep();
         scheduleStartRxTimerForTest();
         processHeaderlessOutcomeResponse(receiveStep);
-        REQUIRE(!this->startRxTimer->isScheduled());
+        REQUIRE(!getStartRxTimerForTest()->isScheduled());
         REQUIRE(!this->frameSequenceHandler->isSequenceRunning());
         REQUIRE(outcome.acceptedCompletions == 1);
         REQUIRE(outcome.expiredCompletions == 0);
@@ -332,11 +345,11 @@ class TestHcf : public TestCoordinationFunction<Hcf>
         auto receiveStep = getCurrentReceiveStep();
         scheduleStartRxTimerForTest();
         processHeaderlessOutcomeResponse(receiveStep);
-        REQUIRE(this->startRxTimer->isScheduled());
+        REQUIRE(getStartRxTimerForTest()->isScheduled());
         REQUIRE(this->frameSequenceHandler->isSequenceRunning());
         REQUIRE(this->frameSequenceHandler->getContext()->getLastStep() == receiveStep);
-        this->cancelEvent(this->startRxTimer);
-        this->handleMessage(this->startRxTimer);
+        this->cancelEvent(getStartRxTimerForTest());
+        this->handleMessage(getStartRxTimerForTest());
         this->checkNoDeferredTimeout();
         REQUIRE(outcome.acceptedCompletions == 0);
         REQUIRE(outcome.expiredCompletions == 1);

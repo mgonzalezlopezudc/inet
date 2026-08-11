@@ -1,0 +1,97 @@
+%description:
+Test the explicit HCF exchange lifecycle state model introduced for the
+structurally neutral Stage 4 migration slice.
+
+%includes:
+#include "inet/common/packet/Packet.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfExchangeCoordinator.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+static void requireCondition(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("HCF exchange coordinator test: %s", message);
+}
+
+static void requireInvalidTransition(HcfExchangeCoordinator& coordinator)
+{
+    bool failed = false;
+    try {
+        coordinator.awaitResponse();
+    }
+    catch (const cRuntimeError&) {
+        failed = true;
+    }
+    requireCondition(failed, "an invalid response transition must be rejected");
+}
+
+%activity:
+HcfExchangeCoordinator coordinator;
+requireCondition(coordinator.getState() == HcfExchangeCoordinator::State::IDLE,
+        "coordinator must start idle");
+requireInvalidTransition(coordinator);
+
+coordinator.channelAccessRequested();
+requireCondition(coordinator.getState() == HcfExchangeCoordinator::State::AWAITING_CHANNEL_GRANT,
+        "channel request must enter the grant-wait state");
+coordinator.channelGranted();
+coordinator.beginPreparation();
+coordinator.beginTransmission();
+requireCondition(coordinator.getState() == HcfExchangeCoordinator::State::TRANSMITTING,
+        "preparation must lead to transmission");
+coordinator.awaitResponse();
+requireCondition(coordinator.getState() == HcfExchangeCoordinator::State::AWAITING_RESPONSE,
+        "transmission must lead to response wait");
+coordinator.beginRetryOrRecovery();
+requireCondition(coordinator.getState() == HcfExchangeCoordinator::State::RETRYING_OR_RECOVERING,
+        "response failure must enter retry/recovery");
+coordinator.complete();
+requireCondition(coordinator.getState() == HcfExchangeCoordinator::State::COMPLETING,
+        "successful completion must be observable");
+coordinator.reset();
+requireCondition(coordinator.getState() == HcfExchangeCoordinator::State::IDLE,
+        "reset must return to idle");
+
+coordinator.initializeTimers();
+requireCondition(coordinator.getStartRxTimer() != nullptr &&
+        coordinator.getInactivityTimer() != nullptr &&
+        coordinator.getStartRxTimer() != coordinator.getInactivityTimer(),
+        "coordinator must own distinct exchange timers");
+auto activePacket = new Packet("active");
+auto stalePacket = new Packet("stale");
+coordinator.channelGranted();
+coordinator.beginPreparation();
+coordinator.beginTransmission(activePacket);
+requireCondition(coordinator.getActivePacket() == activePacket,
+        "coordinator must retain the active frame identity");
+bool rejectedStalePacket = false;
+try {
+    coordinator.beginRetryOrRecovery(stalePacket);
+}
+catch (const cRuntimeError&) {
+    rejectedStalePacket = true;
+}
+requireCondition(rejectedStalePacket,
+        "coordinator must reject a failure callback for a stale packet");
+coordinator.awaitResponse();
+coordinator.beginRetryOrRecovery(activePacket);
+coordinator.reset();
+requireCondition(coordinator.getActivePacket() == nullptr,
+        "reset must clear the active frame identity");
+delete activePacket;
+delete stalePacket;
+
+coordinator.channelGranted();
+coordinator.beginPreparation();
+coordinator.beginTransmission();
+coordinator.abort();
+requireCondition(coordinator.getState() == HcfExchangeCoordinator::State::ABORTING,
+        "abort must be observable");
+
+EV << "HCF exchange lifecycle state model transitions passed.\n";
+
+%contains: stdout
+HCF exchange lifecycle state model transitions passed.

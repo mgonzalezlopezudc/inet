@@ -163,6 +163,28 @@ VhtDlMuTxOpFs *VhtHcf::createVhtDlMuTxOpFs(const VhtDlMuPlan& plan,
     return new VhtDlMuTxOpFs(plan, modeSet, ackHandler, this);
 }
 
+void VhtHcf::prioritizeQueuedAddbaRequests()
+{
+    auto edcaf = edca->getEdcaf(AccessCategory::AC_VO);
+    if (edcaf == nullptr)
+        return;
+    auto queue = edcaf->getPendingQueue();
+    std::vector<Packet *> addbaPackets;
+    std::vector<Packet *> otherPackets;
+    while (!queue->isEmpty()) {
+        auto packet = queue->dequeuePacket();
+        auto header = packet->peekAtFront<Ieee80211MacHeader>();
+        if (dynamicPtrCast<const Ieee80211AddbaRequest>(header) != nullptr)
+            addbaPackets.push_back(packet);
+        else
+            otherPackets.push_back(packet);
+    }
+    for (auto packet : addbaPackets)
+        queue->enqueuePacket(packet);
+    for (auto packet : otherPackets)
+        queue->enqueuePacket(packet);
+}
+
 bool VhtHcf::tryStartVhtDlMu(AccessCategory ac)
 {
     if (!enableVhtDlMuMimo || vhtRadio == nullptr ||
@@ -292,6 +314,11 @@ bool VhtHcf::tryStartVhtDlMu(AccessCategory ac)
                 generation, context.channelWidth);
         candidate.activeBlockAckAgreement = hasActiveOriginatorBlockAckAgreement(
                 originatorBlockAckAgreementHandler, peer, header->getTid());
+        if (!candidate.activeBlockAckAgreement && originatorBlockAckAgreementHandler != nullptr &&
+                originatorBlockAckAgreementPolicy != nullptr &&
+                originatorBlockAckAgreementHandler->processQueuedDataFrame(
+                        packet, header, originatorBlockAckAgreementPolicy, this))
+            prioritizeQueuedAddbaRequests();
         candidate.unsegmented = header->getFragmentNumber() == 0 &&
                 !header->getMoreFragments();
         EV_INFO << "tryStartVhtDlMu Candidate for " << peer << ": mcs=" << candidate.mcs
@@ -507,6 +534,7 @@ void VhtHcf::setFrameMode(Packet *packet,
 
 void VhtHcf::transmitFrame(Packet *packet, simtime_t ifs)
 {
+    exchangeCoordinator.beginTransmission(packet);
     auto muTxop = frameSequenceHandler == nullptr ? nullptr :
             dynamic_cast<const VhtDlMuTxOpFs *>(frameSequenceHandler->getFrameSequence());
     if (muTxop != nullptr && muTxop->isContainerPacket(packet)) {

@@ -377,6 +377,7 @@ void HeHcf::originatorProcessFailedFrame(Packet *failedPacket)
 {
     Enter_Method("originatorProcessFailedFrame");
     ASSERT(failedPacket != nullptr);
+    exchangeCoordinator.validateActivePacket(failedPacket);
     EV_WARN << "HE MU: transmission failed for frame " << failedPacket->getName()
             << " type = " << (failedPacket->peekAtFront<Ieee80211MacHeader>() != nullptr ? (int)failedPacket->peekAtFront<Ieee80211MacHeader>()->getType() : -1) << endl;
     if (dynamic_cast<const HeDlMuTxOpFs *>(frameSequenceHandler->getFrameSequence()) != nullptr) {
@@ -447,6 +448,7 @@ void HeHcf::originatorProcessFailedFrame(Packet *failedPacket)
 void HeHcf::transmitFrame(Packet *packet, simtime_t ifs)
 {
     Enter_Method("transmitFrame");
+    exchangeCoordinator.beginTransmission(packet);
     if (isHeNdpPacket(packet)) {
         // Frame-sequence transmission normally derives the Tx header by
         // peeking packet content. A sounding NDP is intentionally empty, so

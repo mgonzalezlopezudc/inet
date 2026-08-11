@@ -34,12 +34,14 @@
 #include "inet/linklayer/ieee80211/mac/contract/IRecipientQosMacDataService.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRtsProcedure.h"
 #include "inet/linklayer/ieee80211/mac/contract/ITx.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/AmpduTransmissionLedger.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfAggregationService.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfExchangeCoordinator.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfRetryService.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfResponseService.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HtMfbTransmissionState.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HtSoundingPendingState.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceHandler.h"
-#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceRxTimeoutState.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HtSoundingRetryState.h"
 #include "inet/linklayer/ieee80211/mac/originator/OriginatorQosMacDataService.h"
 #include "inet/linklayer/ieee80211/mac/originator/QosAckHandler.h"
@@ -89,10 +91,6 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     HtSoundingRetryState htSoundingRetryState;
     HtMfbTransmissionState htMfbTransmissionState;
 
-    cMessage *startRxTimer = nullptr;
-    cMessage *inactivityTimer = nullptr;
-    FrameSequenceRxTimeoutState frameSequenceRxTimeoutState;
-
     // Transmission and Reception
     IRx *rx = nullptr;
     ITx *tx = nullptr;
@@ -132,6 +130,8 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
 
     // Frame sequence handler
     IFrameSequenceHandler *frameSequenceHandler = nullptr;
+    HcfExchangeCoordinator exchangeCoordinator;
+    HcfResponseService responseService;
 
     // Protection mechanisms
     SingleProtectionMechanism *singleProtectionMechanism = nullptr;
@@ -141,7 +141,7 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     double lastSelectedModeNetBitrate = -1;
     double lastSelectedModeBandwidth = -1;
     int lastSelectedModeNumSpatialStreams = -1;
-    AmpduTransmissionLedger ampduTransmissionLedger;
+    HcfAggregationService aggregationService;
     uint64_t nextServiceDataUnitId = 1;
 
   protected:
@@ -150,19 +150,17 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     virtual void forEachChild(cVisitor *v) override;
     virtual void handleMessage(cMessage *msg) override;
     virtual void refreshDisplay() const override;
+    HcfResponseService::Actions makeResponseServiceActions();
     void handleDeferredStartRxTimeout();
     void processResponseAndCancelStartRxTimerIfCompleted(Packet *packet, IReceiveStep *receiveStep);
-    static std::vector<Packet *> recoverHtImplicitBlockAckTimeout(
-            InProgressFrames *inProgressFrames, QosAckHandler *ackHandler,
-            QosRecoveryProcedure *recoveryProcedure,
-            IRateControl *rateControl,
-            const std::set<std::pair<MacAddress,
-                    std::pair<Tid, SequenceControlField>>>& failedFrameIds);
     static HtAmpduAckContext classifyHtAmpduAckContext(
             unsigned int numAggregateMembers,
             const std::vector<Ptr<const Ieee80211MacHeader>>& headers);
-    static Packet *buildAmpduPacket(const std::vector<Packet *>& frames, FcsMode fcsMode);
     bool processTransmittedAmpdu(Packet *packet, Edcaf *edcaf, AccessCategory ac);
+    // Compatibility façade for existing focused tests; construction is owned
+    // by HcfAggregationService.
+    static Packet *buildAmpduPacket(const std::vector<Packet *>& frames,
+            FcsMode fcsMode);
     TxopProcedure::InitialProtection selectInitialProtection(Packet *frame,
             const physicallayer::IIeee80211Mode *firstMode) const;
 
@@ -243,6 +241,7 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     virtual void originatorProcessTransmittedFrame(Packet *packet) override;
     virtual void originatorProcessReceivedFrame(Packet *packet, Packet *lastTransmittedPacket) override;
     virtual void originatorProcessFailedFrame(Packet *packet) override;
+    virtual void frameSequenceAborted() override;
     virtual void frameSequenceFinished() override;
     virtual void transmitFrame(Packet *packet, simtime_t ifs) override;
     virtual void scheduleStartRxTimer(simtime_t timeout) override;

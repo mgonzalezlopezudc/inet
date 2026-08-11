@@ -32,6 +32,7 @@ class INET_API IFrameSequenceHandler
         virtual void originatorProcessTransmittedFrame(Packet *packet) = 0;
         virtual void originatorProcessReceivedFrame(Packet *packet, Packet *lastTransmittedFrame) = 0;
         virtual void originatorProcessFailedFrame(Packet *packet) = 0;
+        virtual void frameSequenceAborted() {}
         virtual void frameSequenceFinished() = 0;
         virtual void scheduleStartRxTimer(simtime_t timeout) = 0;
     };
@@ -52,4 +53,3 @@ class INET_API IFrameSequenceHandler
 } // namespace inet
 
 #endif
-

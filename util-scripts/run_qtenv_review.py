@@ -86,7 +86,6 @@ def main():
             old_file.unlink()
 
     env = os.environ.copy()
-    env["CCACHE_DISABLE"] = "1"
     command = [
         "inet",
         f"--{mode}",

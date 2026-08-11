@@ -47,6 +47,7 @@ class INET_API VhtHcf : public Hcf, public IVhtGroupIdManager::ILocalMembershipL
     virtual std::vector<MacAddress> getConstrainedVhtMuPeers() const;
     virtual VhtDlMuTxOpFs *createVhtDlMuTxOpFs(const VhtDlMuPlan& plan,
             IAckHandler *ackHandler);
+    virtual void prioritizeQueuedAddbaRequests();
     virtual bool tryStartVhtDlMu(AccessCategory ac);
     virtual void startFrameSequence(AccessCategory ac) override;
     virtual bool processHeaderlessNdpIndication(Packet *packet) override;

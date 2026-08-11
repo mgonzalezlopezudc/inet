@@ -231,6 +231,7 @@ void FrameSequenceHandler::abortFrameSequence()
         callback->originatorProcessRtsProtectionFailed(const_cast<Packet *>(rtsTxStep->getProtectedFrame()));
     else if (auto blockAckReq = dynamicPtrCast<const Ieee80211BlockAckReq>(header))
         callback->originatorProcessFailedFrame(frameToTransmit);
+    callback->frameSequenceAborted();
     callback->frameSequenceFinished();
     delete context;
     delete frameSequence;

@@ -1,0 +1,87 @@
+%description:
+Verify that a frame-sequence abort reports recovery before abort and finish.
+
+%includes:
+#include <string>
+#include <vector>
+
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/mac/contract/IFrameSequenceHandler.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceHandler.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::ieee80211;
+
+static void requireCondition(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("Frame-sequence abort callback test: %s", message);
+}
+
+class AbortSequence : public IFrameSequence
+{
+  protected:
+    int step = 0;
+
+  public:
+    virtual void startSequence(FrameSequenceContext *, int) override { step = 0; }
+
+    virtual IFrameSequenceStep *prepareStep(FrameSequenceContext *) override
+    {
+        if (step++ == 0) {
+            auto header = makeShared<Ieee80211DataHeader>();
+            header->setType(ST_DATA);
+            auto packet = new Packet("data");
+            packet->insertAtFront(header);
+            return new TransmitStep(packet, SIMTIME_ZERO, true);
+        }
+        else
+            return new ReceiveStep(SIMTIME_ZERO);
+    }
+
+    virtual bool completeStep(FrameSequenceContext *) override { return true; }
+    virtual std::string getHistory() const override { return "abort-test"; }
+};
+
+class RecordingCallback : public IFrameSequenceHandler::ICallback
+{
+  public:
+    std::vector<std::string> events;
+
+    virtual void transmitFrame(Packet *, simtime_t) override { events.push_back("transmit"); }
+    virtual void originatorProcessRtsProtectionFailed(Packet *) override { events.push_back("rts-failed"); }
+    virtual void originatorProcessTransmittedFrame(Packet *) override { events.push_back("transmitted"); }
+    virtual void originatorProcessReceivedFrame(Packet *, Packet *) override { events.push_back("received"); }
+    virtual void originatorProcessFailedFrame(Packet *) override { events.push_back("failed"); }
+    virtual void frameSequenceAborted() override { events.push_back("aborted"); }
+    virtual void frameSequenceFinished() override { events.push_back("finished"); }
+    virtual void scheduleStartRxTimer(simtime_t) override { events.push_back("await"); }
+};
+
+%activity:
+FrameSequenceHandler handler;
+RecordingCallback callback;
+auto inProgressFrames = new InProgressFrames();
+auto context = new FrameSequenceContext(MacAddress("02:00:00:00:00:01"), nullptr,
+        inProgressFrames, nullptr, nullptr, nullptr, nullptr);
+handler.startFrameSequence(new AbortSequence(), context, &callback);
+handler.transmissionComplete();
+handler.handleStartRxTimeout();
+delete inProgressFrames;
+
+requireCondition(callback.events.size() == 6, "abort callback sequence must have six events");
+requireCondition(callback.events[0] == "transmit", "transmission must be reported first");
+requireCondition(callback.events[1] == "transmitted", "transmission completion must be reported");
+requireCondition(callback.events[2] == "await", "receive wait must follow transmission");
+requireCondition(callback.events[3] == "failed", "recovery must be reported before abort");
+requireCondition(callback.events[4] == "aborted", "abort must follow recovery");
+requireCondition(callback.events[5] == "finished", "finish must follow abort");
+
+EV << "Frame-sequence abort callback ordering passed.\n";
+
+%contains: stdout
+Frame-sequence abort callback ordering passed.
