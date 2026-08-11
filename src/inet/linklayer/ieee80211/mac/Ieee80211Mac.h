@@ -15,6 +15,7 @@
 #include "inet/linklayer/base/MacProtocolBase.h"
 #include "inet/linklayer/ieee80211/mac/contract/IDs.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRateControl.h"
+#include "inet/linklayer/ieee80211/mac/contract/IRadioModePolicy.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRateSelection.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRx.h"
 #include "inet/linklayer/ieee80211/mac/contract/ITx.h"
@@ -53,6 +54,7 @@ class INET_API Ieee80211Mac : public MacProtocolBase
     opp_component_ptr<IRx> rx;
     opp_component_ptr<ITx> tx;
     opp_component_ptr<physicallayer::IRadio> radio;
+    opp_component_ptr<IRadioModePolicy> radioModePolicy;
     const physicallayer::Ieee80211ModeSet *modeSet = nullptr;
     physicallayer::IRadio::TransmissionState transmissionState = physicallayer::IRadio::TransmissionState::TRANSMISSION_STATE_UNDEFINED;
     Ieee80211MldMac *mldMac = nullptr;
@@ -67,22 +69,33 @@ class INET_API Ieee80211Mac : public MacProtocolBase
 
     // The last change channel message received and not yet sent to the physical layer, or nullptr.
     cMessage *pendingRadioConfigMsg = nullptr;
+    int pendingExternalRadioMode = -1;
+    bool pendingRadioConfigMediumReleased = false;
 
     // Announced TWT presence indications bypass the ordinary data queues, but
     // they must still be serialized with radio-mode changes and queued HCF
     // traffic. Multiple agreements may become active at the same instant.
     std::deque<MacAddress> pendingTwtPsPollPeers;
     bool twtPsPollTransmissionActive = false;
+    bool applyingRadioMode = false;
+    bool radioModeApplyPending = false;
+    int lastRequestedRadioMode = -1;
+    bool radioModeIntentDeferred = false;
+    uint64_t deferredRadioModeGeneration = 0;
 
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
     virtual void initialize(int) override;
     virtual void initializeRadioMode();
+    virtual physicallayer::IRadio::RadioMode parseRadioMode(const char *radioMode) const;
 
     virtual void receiveSignal(cComponent *source, simsignal_t signalID, intval_t value, cObject *details) override;
     virtual void receiveSignal(cComponent *source, simsignal_t signalID, cObject *value, cObject *details) override;
     using MacProtocolBase::receiveSignal;
-    virtual void configureRadioMode(physicallayer::IRadio::RadioMode radioMode);
+    virtual void applyDesiredRadioMode();
+    virtual void sendRadioModeCommand(physicallayer::IRadio::RadioMode radioMode);
+    virtual void discardPendingRadioConfigMsg();
+    virtual void releasePendingRadioConfigMsg();
     virtual void sendNextTwtPsPoll();
     virtual void configureNetworkInterface() override;
     virtual const MacAddress& isInterfaceRegistered();

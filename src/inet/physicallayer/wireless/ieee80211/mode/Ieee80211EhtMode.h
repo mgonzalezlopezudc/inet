@@ -16,6 +16,7 @@
 #include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeBase.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211OfdmMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211TimingProfile.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
 
 namespace inet {
@@ -25,13 +26,13 @@ namespace physicallayer {
 class INET_API Ieee80211EhtTimingRelatedParametersBase
 {
   public:
-    const simtime_t getDFTPeriod() const { return 12.8E-6; }
-    const simtime_t getGIDuration() const { return 3.2E-6; }
-    const simtime_t getMediumGIDuration() const { return 1.6E-6; }
-    const simtime_t getShortGIDuration() const { return 0.8E-6; }
-    const simtime_t getSymbolInterval() const { return getDFTPeriod() + getGIDuration(); }
-    const simtime_t getMediumGISymbolInterval() const { return getDFTPeriod() + getMediumGIDuration(); }
-    const simtime_t getShortGISymbolInterval() const { return getDFTPeriod() + getShortGIDuration(); }
+    const simtime_t getDFTPeriod() const { return Ieee80211TimingProfile::getEhtProfile().getDftPeriod(); }
+    const simtime_t getGIDuration() const { return Ieee80211TimingProfile::getEhtProfile().getLongGuardInterval(); }
+    const simtime_t getMediumGIDuration() const { return Ieee80211TimingProfile::getEhtProfile().getMediumGuardInterval(); }
+    const simtime_t getShortGIDuration() const { return Ieee80211TimingProfile::getEhtProfile().getShortGuardInterval(); }
+    const simtime_t getSymbolInterval() const { return Ieee80211TimingProfile::getEhtProfile().getLongGuardIntervalSymbolInterval(); }
+    const simtime_t getMediumGISymbolInterval() const { return Ieee80211TimingProfile::getEhtProfile().getMediumGuardIntervalSymbolInterval(); }
+    const simtime_t getShortGISymbolInterval() const { return Ieee80211TimingProfile::getEhtProfile().getShortGuardIntervalSymbolInterval(); }
 };
 
 /** Common EHT bandwidth, guard-interval, MCS, stream-count, and bitrate state. */

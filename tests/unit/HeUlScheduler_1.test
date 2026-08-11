@@ -64,6 +64,12 @@ using namespace inet::ieee80211;
 using namespace inet::physicallayer;
 using namespace inet::units::values;
 
+static void requireTrue(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("%s", message);
+}
+
 static IIeee80211HeUlScheduler::ScheduleContext makeContext(Hz bandwidth)
 {
     IIeee80211HeUlScheduler::ScheduleContext context;
@@ -371,6 +377,7 @@ auto largeFallbackScheduler = check_and_cast<HeUlSchedulerBacklogBased *>(
 const double bandwidths[] = {20e6, 40e6, 80e6, 160e6};
 for (double value : bandwidths) {
     auto context = makeContext(Hz(value));
+    finalizeCapacityBoundary(context);
     auto equal = equalScheduler->schedule(context);
     assertValidSchedule(equal, context.channelBandwidth);
     auto backlog = backlogScheduler->schedule(context);
@@ -479,6 +486,7 @@ EV << "UL scheduled and UORA layouts passed for 20/40/80/160 MHz.\n";
         for (int nss = 0; nss < supportedNss[i]; ++nss)
             capabilities.mcsNss.maxMcsPerNss[nss] = 11;
     }
+    finalizeCapacityBoundary(context);
     auto schedule = probeScheduler->schedule(context);
     ASSERT(schedule.allocations.size() == 3);
     for (int i = 0; i < 3; ++i) {
@@ -569,6 +577,7 @@ EV << "UL scheduled and UORA layouts passed for 20/40/80/160 MHz.\n";
     context.estimatedRandomAccessContenders = 1;
     for (auto& candidate : context.candidates)
         candidate.backlogBytes[AC_BE] = 50000;
+    finalizeCapacityBoundary(context);
     auto schedule = backlogScheduler->schedule(context);
     int randomAccessRus = 0;
     for (const auto& allocation : schedule.allocations)
@@ -674,6 +683,7 @@ EV << "UL scheduled and UORA layouts passed for 20/40/80/160 MHz.\n";
 {
     auto context = makeContext(Hz(20e6));
     context.estimatedRandomAccessContenders = 1;
+    finalizeCapacityBoundary(context);
     auto schedule = fallbackScheduler->schedule(context);
     ASSERT(!schedule.exactOptimization);
     int scheduled = 0;
@@ -685,6 +695,19 @@ EV << "UL scheduled and UORA layouts passed for 20/40/80/160 MHz.\n";
     ASSERT(scheduled == 4);
     ASSERT(randomAccess >= 1);
     EV << "Bounded deterministic fallback retained the complete fairness prefix and UORA RU.\n";
+}
+
+{
+    auto context = makeContext(MHz(20));
+    context.estimatedRandomAccessContenders = 0;
+    requireTrue(context.finalizedBoundary.ulLength == 0,
+            "missing-boundary fixture unexpectedly has a boundary");
+    auto schedule = probeScheduler->schedule(context);
+    requireTrue(schedule.allocations.empty(),
+            "scheduler derived allocations without a finalized boundary");
+    requireTrue(schedule.totalPlannedBytes == 0,
+            "scheduler planned bytes without a finalized boundary");
+    EV << "Missing finalized boundary rejected every scheduled candidate.\n";
 }
 
 {

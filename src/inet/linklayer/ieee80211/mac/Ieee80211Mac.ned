@@ -12,8 +12,10 @@ import inet.linklayer.ieee80211.IIeee80211Mac;
 import inet.linklayer.ieee80211.mac.contract.IDcf;
 import inet.linklayer.ieee80211.mac.contract.IDs;
 import inet.linklayer.ieee80211.mac.contract.IHcf;
+import inet.linklayer.ieee80211.mac.contract.IRadioModePolicy;
 import inet.linklayer.ieee80211.mac.contract.IRx;
 import inet.linklayer.ieee80211.mac.contract.ITx;
+import inet.linklayer.ieee80211.mac.radiomode.Ieee80211RadioModePolicy;
 
 
 //
@@ -111,6 +113,10 @@ module Ieee80211Mac extends MacProtocolBase like IIeee80211Mac
         input mgmtIn;
         output mgmtOut;
     submodules:
+        radioModePolicy: <default("Ieee80211RadioModePolicy")> like IRadioModePolicy {
+            parameters:
+                @display("p=400,200");
+        }
         dcf: <default("Dcf")> like IDcf {
             parameters:
                 @display("p=100,100");

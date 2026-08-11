@@ -34,8 +34,13 @@
 #include "inet/linklayer/ieee80211/mac/contract/IRecipientQosMacDataService.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRtsProcedure.h"
 #include "inet/linklayer/ieee80211/mac/contract/ITx.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/AmpduTransmissionLedger.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HtMfbTransmissionState.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HtSoundingPendingState.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceHandler.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceRxTimeoutState.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/HtSoundingRetryState.h"
 #include "inet/linklayer/ieee80211/mac/originator/OriginatorQosMacDataService.h"
 #include "inet/linklayer/ieee80211/mac/originator/QosAckHandler.h"
 #include "inet/linklayer/ieee80211/mac/originator/QosRecoveryProcedure.h"
@@ -63,6 +68,9 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     static simsignal_t ampduCreatedSignal;
     static simsignal_t ampduNumMpdusSignal;
 
+  private:
+    void handleBlockAckInactivityTimeout();
+
   protected:
     enum class HtAmpduAckContext {
         ORDINARY,
@@ -73,30 +81,17 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     IRateControl *dataAndMgmtRateControl = nullptr;
     IIeee80211HtRateControl *htRateControl = nullptr;
 
-    struct PendingHtSounding {
-        bool valid = false;
-        MacAddress peer;
-        uint64_t associationGeneration = 0;
-        uint8_t requestToken = 0;
-        uint8_t soundingNsts = 1;
-        Ieee80211HtFeedbackKind feedbackKind = Ieee80211HtFeedbackKind::COMPRESSED_BEAMFORMING;
-        Hz channelWidth = Hz(0);
-        int transmitterRadioId = -1;
-        simtime_t announcementReceptionEnd = -1;
-    } pendingHtSounding;
+    HtSoundingPendingState pendingHtSounding;
     bool enableHtSounding = false;
     int htSoundingNsts = 2;
     Ieee80211HtFeedbackKind htSoundingFeedbackKind = Ieee80211HtFeedbackKind::COMPRESSED_BEAMFORMING;
     simtime_t htSoundingRetryInterval = SIMTIME_ZERO;
-    std::map<MacAddress, simtime_t> nextHtSoundingAttemptTimes;
-    std::map<MacAddress, uint8_t> nextHtSoundingTokens;
-    bool htStandaloneMfbTransmission = false;
-    MacAddress pendingHtMfbPeer;
-    Ieee80211HtMcsControl pendingHtMfbControl;
+    HtSoundingRetryState htSoundingRetryState;
+    HtMfbTransmissionState htMfbTransmissionState;
 
     cMessage *startRxTimer = nullptr;
     cMessage *inactivityTimer = nullptr;
-    const IFrameSequenceStep *deferredStartRxTimeoutStep = nullptr;
+    FrameSequenceRxTimeoutState frameSequenceRxTimeoutState;
 
     // Transmission and Reception
     IRx *rx = nullptr;
@@ -146,8 +141,7 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     double lastSelectedModeNetBitrate = -1;
     double lastSelectedModeBandwidth = -1;
     int lastSelectedModeNumSpatialStreams = -1;
-    std::map<Packet *, std::vector<Packet *>> pendingAmpduSubframes;
-    std::set<Packet *> pendingHtImplicitBlockAckAmpdus;
+    AmpduTransmissionLedger ampduTransmissionLedger;
     uint64_t nextServiceDataUnitId = 1;
 
   protected:
@@ -168,9 +162,13 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
             unsigned int numAggregateMembers,
             const std::vector<Ptr<const Ieee80211MacHeader>>& headers);
     static Packet *buildAmpduPacket(const std::vector<Packet *>& frames, FcsMode fcsMode);
+    bool processTransmittedAmpdu(Packet *packet, Edcaf *edcaf, AccessCategory ac);
+    TxopProcedure::InitialProtection selectInitialProtection(Packet *frame,
+            const physicallayer::IIeee80211Mode *firstMode) const;
 
     virtual void startFrameSequence(AccessCategory ac);
     void resumeContention();
+    void handleEdcafInternalCollision(Edcaf *edcaf);
     virtual void handleInternalCollision(std::vector<Edcaf *> internallyCollidedEdcafs);
 
     void sendUp(const std::vector<Packet *>& completeFrames);
@@ -205,6 +203,15 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     virtual void originatorProcessTransmittedDataFrame(Packet *packet, const Ptr<const Ieee80211DataHeader>& dataHeader, AccessCategory ac);
     virtual void originatorProcessReceivedManagementFrame(const Ptr<const Ieee80211MgmtHeader>& header, const Ptr<const Ieee80211MacHeader>& lastTransmittedHeader, AccessCategory ac);
     virtual void originatorProcessReceivedControlFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, Packet *lastTransmittedPacket, const Ptr<const Ieee80211MacHeader>& lastTransmittedHeader, AccessCategory ac);
+    void processReceivedAck(Edcaf *edcaf,
+            const Ptr<const Ieee80211AckFrame>& ackFrame,
+            Packet *lastTransmittedPacket,
+            const Ptr<const Ieee80211MacHeader>& lastTransmittedHeader);
+    void processReceivedBlockAck(Edcaf *edcaf,
+            const Ptr<const Ieee80211BlockAck>& blockAck, AccessCategory ac);
+    void processFailedBlockAckReq(Edcaf *edcaf,
+            const Ptr<const Ieee80211BlockAckReq>& blockAckReq,
+            bool requireValidSequenceNumber);
     virtual void originatorProcessReceivedDataFrame(const Ptr<const Ieee80211DataHeader>& header, const Ptr<const Ieee80211MacHeader>& lastTransmittedHeader, AccessCategory ac);
     virtual void originatorProcessBlockAckResult(
             const Ptr<const Ieee80211BlockAck>& blockAck,

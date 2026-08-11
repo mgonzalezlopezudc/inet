@@ -72,6 +72,7 @@ void Ieee80211Mac::initialize(int stage)
         radioModule->subscribe(IRadio::receivedSignalPartChangedSignal, this);
         radioModule->subscribe(modesetChangedSignal, this);
         radio = check_and_cast<IRadio *>(radioModule);
+        radioModePolicy = check_and_cast<IRadioModePolicy *>(getSubmodule("radioModePolicy"));
         auto modeSetProvider = dynamic_cast<IIeee80211ModeSetProvider *>(radio.get());
         if (modeSetProvider != nullptr && modeSetProvider->getModeSet() != nullptr)
             modeSet = modeSetProvider->getModeSet();
@@ -84,8 +85,7 @@ void Ieee80211Mac::initialize(int stage)
             rx->ccaStateChanged(ccaProvider->getCcaSnapshot());
         }
         emit(modesetChangedSignal, modeSet);
-        if (isUp())
-            initializeRadioMode();
+        initializeRadioMode();
         rx = check_and_cast<IRx *>(getSubmodule("rx"));
         tx = check_and_cast<ITx *>(getSubmodule("tx"));
         dcf = check_and_cast<Dcf *>(getSubmodule("dcf"));
@@ -114,19 +114,31 @@ void Ieee80211Mac::initialize(int stage)
 
 void Ieee80211Mac::initializeRadioMode()
 {
-    const char *initialRadioMode = par("initialRadioMode");
-    if (!strcmp(initialRadioMode, "off"))
-        radio->setRadioMode(IRadio::RADIO_MODE_OFF);
-    else if (!strcmp(initialRadioMode, "sleep"))
-        radio->setRadioMode(IRadio::RADIO_MODE_SLEEP);
-    else if (!strcmp(initialRadioMode, "receiver"))
-        radio->setRadioMode(IRadio::RADIO_MODE_RECEIVER);
-    else if (!strcmp(initialRadioMode, "transmitter"))
-        radio->setRadioMode(IRadio::RADIO_MODE_TRANSMITTER);
-    else if (!strcmp(initialRadioMode, "transceiver"))
-        radio->setRadioMode(IRadio::RADIO_MODE_TRANSCEIVER);
+    radioModePolicy->initializeState(parseRadioMode(par("initialRadioMode")),
+            radio->getRadioMode(), isUp());
+    lastRequestedRadioMode = -1;
+    auto snapshot = radioModePolicy->getSnapshot();
+    // Bootstrap synchronously so initialization-stage users observe the
+    // configured radio state; runtime arbitration remains command-based.
+    if (snapshot.isLifecycleUp() &&
+            snapshot.getDesiredRadioMode() != snapshot.getObservedRadioMode())
+        radio->setRadioMode(snapshot.getDesiredRadioMode());
+}
+
+IRadio::RadioMode Ieee80211Mac::parseRadioMode(const char *radioMode) const
+{
+    if (!strcmp(radioMode, "off"))
+        return IRadio::RADIO_MODE_OFF;
+    else if (!strcmp(radioMode, "sleep"))
+        return IRadio::RADIO_MODE_SLEEP;
+    else if (!strcmp(radioMode, "receiver"))
+        return IRadio::RADIO_MODE_RECEIVER;
+    else if (!strcmp(radioMode, "transmitter"))
+        return IRadio::RADIO_MODE_TRANSMITTER;
+    else if (!strcmp(radioMode, "transceiver"))
+        return IRadio::RADIO_MODE_TRANSCEIVER;
     else
-        throw cRuntimeError("Unknown initialRadioMode");
+        throw cRuntimeError("Unknown radio mode: %s", radioMode);
 }
 
 const MacAddress& Ieee80211Mac::isInterfaceRegistered()
@@ -311,6 +323,10 @@ void Ieee80211Mac::handleUpperCommand(cMessage *msg)
 {
     if (msg->getKind() == RADIO_C_CONFIGURE) {
         EV_DEBUG << "Passing on command " << msg->getName() << " to physical layer\n";
+        auto configureCommand = check_and_cast<ConfigureRadioCommand *>(msg->getControlInfo());
+        int externalRadioMode = configureCommand->getRadioMode();
+        if (externalRadioMode != -1)
+            configureCommand->setRadioMode(-1);
         if (pendingRadioConfigMsg != nullptr) {
             // merge contents of the old command into the new one, then delete it
             Ieee80211ConfigureRadioCommand *oldConfigureCommand = check_and_cast<Ieee80211ConfigureRadioCommand *>(pendingRadioConfigMsg->getControlInfo());
@@ -322,6 +338,9 @@ void Ieee80211Mac::handleUpperCommand(cMessage *msg)
             delete pendingRadioConfigMsg;
             pendingRadioConfigMsg = nullptr;
         }
+        if (externalRadioMode != -1)
+            pendingExternalRadioMode = externalRadioMode;
+        pendingRadioConfigMsg = msg;
 
         if (rx->isMediumFree()) { // TODO this should be just the physical channel sense!!!!
             EV_DEBUG << "Sending it down immediately\n";
@@ -329,12 +348,12 @@ void Ieee80211Mac::handleUpperCommand(cMessage *msg)
 //            if (phyControlInfo)
 //                phyControlInfo->setAdaptiveSensitivity(true);
             // end dynamic power
-            sendDown(msg);
+            sendDownPendingRadioConfigMsg();
         }
         else {
             // TODO waiting potentially indefinitely?! wtf?!
             EV_DEBUG << "Delaying " << msg->getName() << " until next IDLE or DEFER state\n";
-            pendingRadioConfigMsg = msg;
+            pendingRadioConfigMediumReleased = false;
         }
     }
     else {
@@ -423,6 +442,19 @@ void Ieee80211Mac::receiveSignal(cComponent *source, simsignal_t signalID, intva
     if (signalID == IRadio::receptionStateChangedSignal) {
         rx->receptionStateChanged(static_cast<IRadio::ReceptionState>(value));
     }
+    else if (signalID == IRadio::radioModeChangedSignal) {
+        auto radioMode = static_cast<IRadio::RadioMode>(value);
+        radioModePolicy->setObservedRadioMode(radioMode);
+        if (radioMode == IRadio::RADIO_MODE_SWITCHING)
+            return;
+        lastRequestedRadioMode = -1;
+        bool applyDeferredRadioMode = radioModeIntentDeferred;
+        radioModeIntentDeferred = false;
+        deferredRadioModeGeneration = 0;
+        if (applyDeferredRadioMode)
+            applyDesiredRadioMode();
+        releasePendingRadioConfigMsg();
+    }
     else if (signalID == IRadio::transmissionStateChangedSignal) {
         auto oldTransmissionState = transmissionState;
         transmissionState = static_cast<IRadio::TransmissionState>(value);
@@ -436,9 +468,9 @@ void Ieee80211Mac::receiveSignal(cComponent *source, simsignal_t signalID, intva
 
         bool transmissionFinished = (oldTransmissionState == IRadio::TRANSMISSION_STATE_TRANSMITTING && transmissionState == IRadio::TRANSMISSION_STATE_IDLE);
         if (transmissionFinished) {
+            radioModePolicy->setTransmissionActive(false);
             tx->radioTransmissionFinished();
-            EV_DEBUG << "changing radio to receiver mode\n";
-            configureRadioMode(twtManager != nullptr && !twtManager->isStationAwake() ? IRadio::RADIO_MODE_SLEEP : IRadio::RADIO_MODE_RECEIVER); // FIXME this is in a very wrong place!!! should be done explicitly from coordination function!
+            applyDesiredRadioMode();
         }
         rx->transmissionStateChanged(transmissionState);
 
@@ -476,14 +508,48 @@ void Ieee80211Mac::receiveSignal(cComponent *source, simsignal_t signalID, cObje
         rx->ccaStateChanged(*check_and_cast<Ieee80211CcaSnapshot *>(value));
 }
 
-void Ieee80211Mac::configureRadioMode(IRadio::RadioMode radioMode)
+void Ieee80211Mac::sendRadioModeCommand(IRadio::RadioMode radioMode)
 {
-    if (radio->getRadioMode() != radioMode) {
-        ConfigureRadioCommand *configureCommand = new ConfigureRadioCommand();
-        configureCommand->setRadioMode(radioMode);
-        auto request = new Request("configureRadioMode", RADIO_C_CONFIGURE);
-        request->setControlInfo(configureCommand);
-        sendDown(request);
+    auto configureCommand = new ConfigureRadioCommand();
+    configureCommand->setRadioMode(radioMode);
+    auto request = new Request("configureRadioMode", RADIO_C_CONFIGURE);
+    request->setControlInfo(configureCommand);
+    sendDown(request);
+}
+
+void Ieee80211Mac::applyDesiredRadioMode()
+{
+    if (applyingRadioMode) {
+        radioModeApplyPending = true;
+        return;
+    }
+    applyingRadioMode = true;
+    try {
+        do {
+            radioModeApplyPending = false;
+            auto snapshot = radioModePolicy->getSnapshot();
+            auto desiredRadioMode = snapshot.getDesiredRadioMode();
+            if (snapshot.getObservedRadioMode() == IRadio::RADIO_MODE_SWITCHING) {
+                radioModeIntentDeferred = true;
+                deferredRadioModeGeneration = snapshot.getGeneration();
+            }
+            else if (snapshot.getObservedRadioMode() == desiredRadioMode) {
+                lastRequestedRadioMode = -1;
+                radioModeIntentDeferred = false;
+                deferredRadioModeGeneration = 0;
+            }
+            else if (lastRequestedRadioMode != desiredRadioMode) {
+                lastRequestedRadioMode = desiredRadioMode;
+                radioModeIntentDeferred = false;
+                deferredRadioModeGeneration = 0;
+                sendRadioModeCommand(desiredRadioMode);
+            }
+        } while (radioModeApplyPending);
+        applyingRadioMode = false;
+    }
+    catch (...) {
+        applyingRadioMode = false;
+        throw;
     }
 }
 
@@ -510,7 +576,8 @@ void Ieee80211Mac::sendDownFrame(Packet *frame)
 {
     Enter_Method("sendDownFrame(\"%s\")", frame->getName());
     take(frame);
-    configureRadioMode(IRadio::RADIO_MODE_TRANSMITTER);
+    radioModePolicy->setTransmissionActive(true);
+    applyDesiredRadioMode();
     // MAC-SAP provenance is node-local metadata. Tx passes a duplicate here,
     // so stripping it at the MAC/PHY boundary preserves the HCF-owned queued,
     // in-progress, and completion copies.
@@ -526,8 +593,8 @@ void Ieee80211Mac::sendDownFrame(Packet *frame)
 void Ieee80211Mac::setTwtRadioAwake(bool awake)
 {
     Enter_Method("setTwtRadioAwake");
-    if (radio != nullptr)
-        configureRadioMode(awake ? IRadio::RADIO_MODE_RECEIVER : IRadio::RADIO_MODE_SLEEP);
+    radioModePolicy->setTwtAwake(awake);
+    applyDesiredRadioMode();
 }
 
 void Ieee80211Mac::twtServicePeriodChanged()
@@ -578,10 +645,46 @@ void Ieee80211Mac::sendNextTwtPsPoll()
 
 void Ieee80211Mac::sendDownPendingRadioConfigMsg()
 {
-    if (pendingRadioConfigMsg != nullptr) {
-        sendDown(pendingRadioConfigMsg);
-        pendingRadioConfigMsg = nullptr;
+    pendingRadioConfigMediumReleased = true;
+    releasePendingRadioConfigMsg();
+}
+
+void Ieee80211Mac::discardPendingRadioConfigMsg()
+{
+    delete pendingRadioConfigMsg;
+    pendingRadioConfigMsg = nullptr;
+    pendingExternalRadioMode = -1;
+    pendingRadioConfigMediumReleased = false;
+}
+
+void Ieee80211Mac::releasePendingRadioConfigMsg()
+{
+    if (pendingRadioConfigMsg == nullptr || !pendingRadioConfigMediumReleased)
+        return;
+    if (!radioModePolicy->getSnapshot().isLifecycleUp()) {
+        // Configuration transactions are observations of current upper-layer
+        // intent. Replaying a channel or bitrate command after restart would
+        // apply stale state to a new lifecycle, so discard it on shutdown.
+        discardPendingRadioConfigMsg();
+        return;
     }
+    if (pendingExternalRadioMode != -1) {
+        int externalRadioMode = pendingExternalRadioMode;
+        pendingExternalRadioMode = -1;
+        radioModePolicy->setExternalRadioMode(static_cast<IRadio::RadioMode>(externalRadioMode));
+        applyDesiredRadioMode();
+    }
+    // A synchronous terminal radio-mode signal may have reentered this method
+    // and released the ordinary configuration while applyDesiredRadioMode()
+    // was sending its command.
+    if (pendingRadioConfigMsg == nullptr)
+        return;
+    if (radioModePolicy->getSnapshot().getObservedRadioMode() == IRadio::RADIO_MODE_SWITCHING)
+        return;
+    auto message = pendingRadioConfigMsg;
+    pendingRadioConfigMsg = nullptr;
+    pendingRadioConfigMediumReleased = false;
+    sendDown(message);
 }
 
 void Ieee80211Mac::processUpperFrame(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header)
@@ -613,17 +716,27 @@ void Ieee80211Mac::handleStartOperation(LifecycleOperation *operation)
     if (!operation)
         return; // do nothing when called from initialize()
 
-    initializeRadioMode();
+    radioModePolicy->setLifecycleUp(true);
+    lastRequestedRadioMode = -1;
+    applyDesiredRadioMode();
 }
 
 // FIXME
 void Ieee80211Mac::handleStopOperation(LifecycleOperation *operation)
 {
+    radioModePolicy->setLifecycleUp(false);
+    discardPendingRadioConfigMsg();
+    lastRequestedRadioMode = -1;
+    applyDesiredRadioMode();
 }
 
 // FIXME
 void Ieee80211Mac::handleCrashOperation(LifecycleOperation *operation)
 {
+    radioModePolicy->setLifecycleUp(false);
+    discardPendingRadioConfigMsg();
+    lastRequestedRadioMode = -1;
+    applyDesiredRadioMode();
 }
 
 void Ieee80211Mac::invalidatePeerDerivedState(const MacAddress& peer)

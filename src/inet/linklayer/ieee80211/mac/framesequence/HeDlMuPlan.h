@@ -109,6 +109,8 @@ class INET_API HeDlMuPlan
         std::map<std::pair<int, int>, std::vector<size_t>> allocationsPerRu;
         std::vector<Ieee80211HeRu> physicalRus;
         auto normalizedAllocations = allocations;
+        Ieee80211HeRuCatalog catalog(scheduleContext.channelCenterFrequency,
+                scheduleContext.channelBandwidth);
         for (size_t i = 0; i < allocations.size(); ++i) {
             const auto& allocation = allocations[i];
             auto candidateIt = candidates.find(allocation.staAddress);
@@ -128,14 +130,8 @@ class INET_API HeDlMuPlan
                         allocation.staAddress, "station occurs more than once");
                 return std::nullopt;
             }
-            auto catalog = getHeRuAllocationCatalog(scheduleContext.channelCenterFrequency,
-                    scheduleContext.channelBandwidth);
-            auto canonical = std::find_if(catalog.begin(), catalog.end(), [&] (const auto& ru) {
-                return ru.index == allocation.ru.index &&
-                        ru.toneSize == allocation.ru.toneSize &&
-                        ru.toneOffset == allocation.ru.toneOffset;
-            });
-            if (canonical == catalog.end()) {
+            auto canonical = catalog.findHeRuByKey(getIeee80211HeRuKey(allocation.ru));
+            if (!canonical) {
                 fail(diagnostic, HeMuPlanErrorCode::INVALID_RU, i,
                         allocation.staAddress, "RU is not canonical for the channel");
                 return std::nullopt;

@@ -13,6 +13,7 @@
 #include "inet/common/DelayedInitializer.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtCode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211OfdmMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211TimingProfile.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"
 
 namespace inet {
@@ -24,11 +25,11 @@ class INET_API Ieee80211HtTimingRelatedParametersBase
   public:
     // IEEE Std 802.11-2024 Table 19-6: HT uses a 3.2 us DFT period, 800 ns
     // long GI, 400 ns short GI, and therefore 4 us / 3.6 us symbol intervals.
-    const simtime_t getDFTPeriod() const { return 3.2E-6; } // DFT
-    const simtime_t getGIDuration() const { return getDFTPeriod() / 4; } // GI
-    const simtime_t getShortGIDuration() const { return getDFTPeriod() / 8; } // GIS
-    const simtime_t getSymbolInterval() const { return getDFTPeriod() + getGIDuration(); } // SYM
-    const simtime_t getShortGISymbolInterval() const { return getDFTPeriod() + getShortGIDuration(); } // SYMS
+    const simtime_t getDFTPeriod() const { return Ieee80211TimingProfile::getHtProfile().getDftPeriod(); } // DFT
+    const simtime_t getGIDuration() const { return Ieee80211TimingProfile::getHtProfile().getLongGuardInterval(); } // GI
+    const simtime_t getShortGIDuration() const { return Ieee80211TimingProfile::getHtProfile().getShortGuardInterval(); } // GIS
+    const simtime_t getSymbolInterval() const { return Ieee80211TimingProfile::getHtProfile().getLongGuardIntervalSymbolInterval(); } // SYM
+    const simtime_t getShortGISymbolInterval() const { return Ieee80211TimingProfile::getHtProfile().getShortGuardIntervalSymbolInterval(); } // SYMS
 };
 
 /** Common HT bandwidth, guard-interval, MCS, stream-count, and bitrate state. */

@@ -219,33 +219,9 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerBacklogBased::schedule(
                 return std::make_pair(allocation, INT64_C(-1));
         }
 
-        auto boundary = context.finalizedBoundary;
-        if (boundary.ulLength == 0) {
-            physicallayer::Ieee80211HeUserPhyParameters user;
-            user.ru = ru;
-            user.mcs = allocation.mcs;
-            user.coding = allocation.coding;
-            user.psduLength = B(1);
-            physicallayer::Ieee80211HeTriggerResponseFinalizationRequest request;
-            request.users = {user};
-            request.centerFrequency = context.channelCenterFrequency;
-            request.channelBandwidth = context.channelBandwidth;
-            request.durationBudget = result.commonDuration;
-            auto finalized = physicallayer::finalizeHeTriggerResponse(request);
-            if (finalized) {
-                boundary.channelBandwidth = context.channelBandwidth;
-                boundary.ulLength = finalized.ulLength;
-                boundary.guardInterval = finalized.parameters.common.guardInterval;
-                boundary.ltfType = finalized.parameters.common.ltfType;
-                boundary.preFecPaddingFactor = finalized.parameters.common.preFecPaddingFactor;
-                boundary.ldpcExtraSymbolSegment = finalized.parameters.common.ldpcExtraSymbol;
-                boundary.peDisambiguity = finalized.peDisambiguity;
-                boundary.numberOfHeLtfSymbols = finalized.parameters.common.numberOfHeLtfSymbols;
-                boundary.packetExtensionDurationUs =
-                        finalized.parameters.common.packetExtensionDurationUs;
-            }
-        }
-        auto capacity = physicallayer::getHeTbPsduCapacity(boundary, ru,
+        if (context.finalizedBoundary.ulLength == 0)
+            return std::make_pair(allocation, INT64_C(-1));
+        auto capacity = physicallayer::getHeTbPsduCapacity(context.finalizedBoundary, ru,
                 allocation.mcs, allocation.numberOfSpatialStreams, allocation.coding);
         const int64_t psduCapacity = capacity ?
                 capacity.maximumPsduLength.get<B>() : 0;

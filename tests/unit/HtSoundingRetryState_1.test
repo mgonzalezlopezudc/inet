@@ -1,0 +1,35 @@
+%description:
+Verify deterministic per-peer HT sounding cooldown and modulo-7 request-token state.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/framesequence/HtSoundingRetryState.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+%activity:
+const MacAddress peer("00:00:00:00:00:01");
+const auto start = SimTime(1, SIMTIME_S);
+const auto retryInterval = SimTime(10, SIMTIME_MS);
+HtSoundingRetryState state;
+
+REQUIRE(state.isAttemptAllowed(peer, start));
+REQUIRE(state.recordAttempt(peer, start, retryInterval) == 0);
+REQUIRE(!state.isAttemptAllowed(peer, start + retryInterval - SimTime(1, SIMTIME_US)));
+REQUIRE(state.isAttemptAllowed(peer, start + retryInterval));
+
+for (uint8_t token = 1; token <= 6; token++)
+    REQUIRE(state.recordAttempt(peer, start, retryInterval) == token);
+REQUIRE(state.recordAttempt(peer, start, retryInterval) == 0);
+
+state.invalidate(peer);
+REQUIRE(state.isAttemptAllowed(peer, start));
+REQUIRE(state.recordAttempt(peer, start, retryInterval) == 0);
+
+EV << "HT sounding retry state: default token, modulo-7 wrap, deadline boundary, and invalidation verified.\n";
+
+%contains: stdout
+HT sounding retry state: default token, modulo-7 wrap, deadline boundary, and invalidation verified.

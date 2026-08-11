@@ -7,6 +7,7 @@ same receive step remains active.
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Dcf.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceHandler.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceRxTimeoutState.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
 
 %file: TestNetwork.ned
@@ -160,6 +161,9 @@ class TestCoordinationFunction : public CoordinationFunction, public DeferredRxT
     InProgressFrames inProgressFrames;
     ExchangeOutcome *outcome = nullptr;
 
+    virtual void clearDeferredTimeoutState() = 0;
+    virtual bool hasDeferredTimeoutForCurrentStep() = 0;
+
     virtual int numInitStages() const override { return 1; }
     virtual void initialize(int stage) override
     {
@@ -175,7 +179,7 @@ class TestCoordinationFunction : public CoordinationFunction, public DeferredRxT
     virtual void scheduleStartRxTimer(simtime_t timeout) override
     {
         REQUIRE(timeout >= SIMTIME_ZERO);
-        this->deferredStartRxTimeoutStep = nullptr;
+        clearDeferredTimeoutState();
     }
 
     virtual void transmitFrame(Packet *packet, simtime_t) override
@@ -193,7 +197,7 @@ class TestCoordinationFunction : public CoordinationFunction, public DeferredRxT
 
     virtual void frameSequenceFinished() override
     {
-        this->deferredStartRxTimeoutStep = nullptr;
+        clearDeferredTimeoutState();
         outcome->finishedSequences++;
     }
 
@@ -215,8 +219,7 @@ class TestCoordinationFunction : public CoordinationFunction, public DeferredRxT
     {
         receptionInProgress = true;
         this->handleMessage(this->startRxTimer);
-        REQUIRE(this->deferredStartRxTimeoutStep ==
-                this->frameSequenceHandler->getContext()->getLastStep());
+        REQUIRE(hasDeferredTimeoutForCurrentStep());
     }
 
     virtual void processResponse() override
@@ -253,10 +256,33 @@ class TestCoordinationFunction : public CoordinationFunction, public DeferredRxT
     }
 };
 
-class TestDcf : public TestCoordinationFunction<Dcf> {};
+class TestDcf : public TestCoordinationFunction<Dcf>
+{
+  protected:
+    virtual void clearDeferredTimeoutState() override
+    {
+        this->deferredStartRxTimeoutStep = nullptr;
+    }
+
+    virtual bool hasDeferredTimeoutForCurrentStep() override
+    {
+        return this->deferredStartRxTimeoutStep ==
+                this->frameSequenceHandler->getContext()->getLastStep();
+    }
+};
 class TestHcf : public TestCoordinationFunction<Hcf>
 {
   protected:
+    virtual void clearDeferredTimeoutState() override
+    {
+        this->frameSequenceRxTimeoutState.clear();
+    }
+
+    virtual bool hasDeferredTimeoutForCurrentStep() override
+    {
+        return this->frameSequenceRxTimeoutState.hasDeferredStep();
+    }
+
     IReceiveStep *getCurrentReceiveStep()
     {
         REQUIRE(this->frameSequenceHandler->isSequenceRunning());
@@ -322,6 +348,29 @@ class TestHcf : public TestCoordinationFunction<Hcf>
 
 Define_Module(TestDcf);
 Define_Module(TestHcf);
+
+static void testFrameSequenceRxTimeoutState()
+{
+    ExchangeOutcome outcome;
+    TrackingReceiveStep firstStep(&outcome, true);
+    TrackingReceiveStep secondStep(&outcome, true);
+    FrameSequenceRxTimeoutState state;
+
+    REQUIRE(!state.hasDeferredStep());
+    state.deferCurrentStep(&firstStep);
+    REQUIRE(state.hasDeferredStep());
+    REQUIRE(!state.takeIfCurrentStep(&secondStep));
+    REQUIRE(!state.hasDeferredStep());
+
+    state.deferCurrentStep(&firstStep);
+    REQUIRE(state.takeIfCurrentStep(&firstStep));
+    REQUIRE(!state.hasDeferredStep());
+
+    state.deferCurrentStep(&firstStep);
+    state.clear();
+    REQUIRE(!state.takeIfCurrentStep(&firstStep));
+    EV << "Frame-sequence receive-timeout state: clear, stale, and current tokens verified\n";
+}
 
 static void testExpectedResponse(const char *name, DeferredRxTimeoutHarness *harness)
 {
@@ -422,11 +471,15 @@ static void runTests(const char *name, DeferredRxTimeoutHarness *harness)
 }
 
 %activity:
+testFrameSequenceRxTimeoutState();
 runTests("DCF", check_and_cast<TestDcf *>(getParentModule()->getSubmodule("dcf")));
 auto hcf = check_and_cast<TestHcf *>(getParentModule()->getSubmodule("hcf"));
 runTests("HCF", hcf);
 hcf->testAcceptedHeaderlessOutcomeResponse();
 hcf->testIgnoredHeaderlessOutcomeResponse();
+
+%contains: stdout
+Frame-sequence receive-timeout state: clear, stale, and current tokens verified
 
 %contains: stdout
 DCF expected response: no deferred timeout

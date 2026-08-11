@@ -79,11 +79,13 @@ class INET_API HeUlMuPlan
   private:
     IIeee80211HeUlScheduler::Schedule schedule;
     IIeee80211HeUlTriggerPolicy::TriggerType triggerType;
+    physicallayer::Ieee80211HeTriggerResponseFinalizationResult finalization;
 
   private:
     HeUlMuPlan(const IIeee80211HeUlScheduler::Schedule& schedule,
-            IIeee80211HeUlTriggerPolicy::TriggerType triggerType) :
-        schedule(schedule), triggerType(triggerType) {}
+            IIeee80211HeUlTriggerPolicy::TriggerType triggerType,
+            const physicallayer::Ieee80211HeTriggerResponseFinalizationResult& finalization) :
+        schedule(schedule), triggerType(triggerType), finalization(finalization) {}
 
     static void fail(HeUlMuPlanDiagnostic& diagnostic, HeUlMuPlanErrorCode code,
             int allocationIndex, const MacAddress& station, const char *detail)
@@ -94,10 +96,10 @@ class INET_API HeUlMuPlan
         diagnostic.detail = detail;
     }
 
-  public:
-    static std::optional<HeUlMuPlan> create(const ValidationContext& context,
+    static std::optional<HeUlMuPlan> createImpl(const ValidationContext& context,
             const IIeee80211HeUlScheduler::Schedule& proposedSchedule,
             IIeee80211HeUlTriggerPolicy::TriggerType triggerType,
+            const physicallayer::Ieee80211HeTriggerResponseFinalizationResult *precomputedFinalization,
             HeUlMuPlanDiagnostic& diagnostic)
     {
         using namespace physicallayer;
@@ -205,15 +207,12 @@ class INET_API HeUlMuPlan
         std::set<uint16_t> aids;
         std::map<std::pair<int, int>, std::vector<size_t>> perRu;
         std::vector<Ieee80211HeRu> physicalRus;
-        auto catalog = getHeRuAllocationCatalog(centerFrequency, bandwidth);
+        Ieee80211HeRuCatalog catalog(centerFrequency, bandwidth);
         const int channelTones = getHeChannelToneCount(bandwidth);
         for (size_t i = 0; i < normalized.allocations.size(); ++i) {
             auto& allocation = normalized.allocations[i];
-            auto canonical = std::find_if(catalog.begin(), catalog.end(), [&] (const auto& ru) {
-                return ru.index == allocation.ru.index && ru.toneSize == allocation.ru.toneSize &&
-                        ru.toneOffset == allocation.ru.toneOffset;
-            });
-            if (canonical == catalog.end())
+            auto canonical = catalog.findHeRuByKey(getIeee80211HeRuKey(allocation.ru));
+            if (!canonical)
                 return rejected(HeUlMuPlanErrorCode::INVALID_RU, i,
                         allocation.staAddress, "RU is not canonical for the Trigger channel");
             allocation.ru = *canonical;
@@ -398,16 +397,44 @@ class INET_API HeUlMuPlan
             boundary.packetExtensionDurationUs = normalized.packetExtensionDurationUs;
             request.fixedBoundary = boundary;
         }
+        Ieee80211HeTriggerResponseFinalizationResult canonicalFinalization;
         try {
-            auto finalization = finalizeHeTriggerResponse(request);
-            if (!finalization || finalization.ulLength != normalized.ulLength ||
-                    finalization.commonDuration != normalized.commonDuration ||
-                    finalization.commonDurationExact != normalized.commonDurationExact ||
-                    finalization.parameters.common.numberOfHeLtfSymbols != normalized.numberOfHeLtfSymbols ||
-                    (!nfrp && (finalization.parameters.common.preFecPaddingFactor != normalized.preFecPaddingFactor ||
-                     finalization.parameters.common.ldpcExtraSymbol != normalized.ldpcExtraSymbolSegment ||
-                     finalization.peDisambiguity != normalized.peDisambiguity ||
-                     finalization.parameters.common.packetExtensionDurationUs != normalized.packetExtensionDurationUs)))
+            canonicalFinalization = precomputedFinalization != nullptr ?
+                    *precomputedFinalization : finalizeHeTriggerResponse(request);
+            bool finalizationUsersMatch = canonicalFinalization.parameters.users.size() == users.size();
+            for (size_t i = 0; finalizationUsersMatch && i < users.size(); ++i) {
+                const auto& requested = users[i];
+                const auto& finalized = canonicalFinalization.parameters.users[i];
+                finalizationUsersMatch = finalized.ru == requested.ru &&
+                        finalized.mcs == requested.mcs &&
+                        finalized.numberOfSpatialStreams == requested.numberOfSpatialStreams &&
+                        finalized.streamStartIndex == requested.streamStartIndex &&
+                        finalized.staId == requested.staId &&
+                        finalized.coding == requested.coding &&
+                        finalized.psduLength == requested.psduLength &&
+                        finalized.dcm == requested.dcm &&
+                        finalized.ndpFeedbackReport == requested.ndpFeedbackReport &&
+                        finalized.ndpFeedbackStatus == requested.ndpFeedbackStatus &&
+                        finalized.ndpRuToneSetIndex == requested.ndpRuToneSetIndex &&
+                        finalized.ndpStartingStsNumber == requested.ndpStartingStsNumber;
+            }
+            const auto expectedResolvedTxTime = canonicalFinalization.parameters.duration +
+                    SimTime(getIeee80211HeSignalExtensionNs(centerFrequency,
+                            normalized.noSignalExtension), SIMTIME_NS);
+            if (!canonicalFinalization || canonicalFinalization.ulLength != normalized.ulLength ||
+                    canonicalFinalization.commonDuration != normalized.commonDuration ||
+                    canonicalFinalization.commonDurationExact != normalized.commonDurationExact ||
+                    canonicalFinalization.resolvedTxTime != expectedResolvedTxTime ||
+                    canonicalFinalization.parameters.common.channelBandwidth != normalized.channelBandwidth ||
+                    canonicalFinalization.parameters.common.guardInterval != normalized.guardInterval ||
+                    canonicalFinalization.parameters.common.ltfType != normalized.ltfType ||
+                    canonicalFinalization.parameters.common.noSignalExtension != normalized.noSignalExtension ||
+                    !finalizationUsersMatch ||
+                    canonicalFinalization.parameters.common.numberOfHeLtfSymbols != normalized.numberOfHeLtfSymbols ||
+                    canonicalFinalization.parameters.common.packetExtensionDurationUs != normalized.packetExtensionDurationUs ||
+                    (!nfrp && (canonicalFinalization.parameters.common.preFecPaddingFactor != normalized.preFecPaddingFactor ||
+                     canonicalFinalization.parameters.common.ldpcExtraSymbol != normalized.ldpcExtraSymbolSegment ||
+                     canonicalFinalization.peDisambiguity != normalized.peDisambiguity)))
                 return rejected(HeUlMuPlanErrorCode::INCONSISTENT_TXVECTOR, -1,
                         MacAddress(), "Trigger fields do not match the canonical HE-TB TxVector calculation");
         }
@@ -415,11 +442,30 @@ class INET_API HeUlMuPlan
             return rejected(HeUlMuPlanErrorCode::INCONSISTENT_TXVECTOR, -1,
                     MacAddress(), "canonical HE-TB TxVector validation failed");
         }
-        return HeUlMuPlan(normalized, triggerType);
+        return HeUlMuPlan(normalized, triggerType, canonicalFinalization);
+    }
+
+  public:
+    static std::optional<HeUlMuPlan> create(const ValidationContext& context,
+            const IIeee80211HeUlScheduler::Schedule& proposedSchedule,
+            IIeee80211HeUlTriggerPolicy::TriggerType triggerType,
+            HeUlMuPlanDiagnostic& diagnostic)
+    {
+        return createImpl(context, proposedSchedule, triggerType, nullptr, diagnostic);
+    }
+
+    static std::optional<HeUlMuPlan> create(const ValidationContext& context,
+            const IIeee80211HeUlScheduler::Schedule& proposedSchedule,
+            IIeee80211HeUlTriggerPolicy::TriggerType triggerType,
+            const physicallayer::Ieee80211HeTriggerResponseFinalizationResult& finalization,
+            HeUlMuPlanDiagnostic& diagnostic)
+    {
+        return createImpl(context, proposedSchedule, triggerType, &finalization, diagnostic);
     }
 
     const IIeee80211HeUlScheduler::Schedule& getSchedule() const { return schedule; }
     IIeee80211HeUlTriggerPolicy::TriggerType getTriggerType() const { return triggerType; }
+    const physicallayer::Ieee80211HeTriggerResponseFinalizationResult& getFinalization() const { return finalization; }
 };
 
 } // namespace ieee80211

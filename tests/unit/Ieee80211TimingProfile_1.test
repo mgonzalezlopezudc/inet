@@ -1,0 +1,73 @@
+%description:
+Verify immutable IEEE 802.11 timing profiles centralize existing HT, VHT, HE, and EHT timing values
+
+%includes:
+#include <type_traits>
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211TimingProfile.h"
+
+%global:
+using namespace inet;
+using namespace inet::physicallayer;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+static_assert(std::is_copy_constructible<Ieee80211TimingProfile>::value, "Timing profiles must be values");
+static_assert(!std::is_copy_assignable<Ieee80211TimingProfile>::value, "Timing profiles must be immutable");
+
+%activity:
+const auto& ht = Ieee80211TimingProfile::getHtProfile();
+const auto& vht = Ieee80211TimingProfile::getVhtProfile();
+const auto& he = Ieee80211TimingProfile::getHeProfile();
+const auto& eht = Ieee80211TimingProfile::getEhtProfile();
+
+REQUIRE(ht == vht);
+REQUIRE(&ht == &vht);
+REQUIRE(he == eht);
+REQUIRE(&he == &eht);
+REQUIRE(ht != he);
+
+REQUIRE(ht.getDftPeriod() == 3.2E-6);
+REQUIRE(ht.getLongGuardInterval() == 0.8E-6);
+REQUIRE(ht.getMediumGuardInterval() == SIMTIME_ZERO);
+REQUIRE(ht.getShortGuardInterval() == 0.4E-6);
+REQUIRE(ht.getLongGuardIntervalSymbolInterval() == ht.getDftPeriod() + ht.getLongGuardInterval());
+REQUIRE(ht.getShortGuardIntervalSymbolInterval() == ht.getDftPeriod() + ht.getShortGuardInterval());
+
+REQUIRE(he.getDftPeriod() == 12.8E-6);
+REQUIRE(he.getLongGuardInterval() == 3.2E-6);
+REQUIRE(he.getMediumGuardInterval() == 1.6E-6);
+REQUIRE(he.getShortGuardInterval() == 0.8E-6);
+REQUIRE(he.getLongGuardIntervalSymbolInterval() == he.getDftPeriod() + he.getLongGuardInterval());
+REQUIRE(he.getMediumGuardIntervalSymbolInterval() == he.getDftPeriod() + he.getMediumGuardInterval());
+REQUIRE(he.getShortGuardIntervalSymbolInterval() == he.getDftPeriod() + he.getShortGuardInterval());
+
+Ieee80211HtTimingRelatedParametersBase htAccessors;
+Ieee80211HeTimingRelatedParametersBase heAccessors;
+Ieee80211EhtTimingRelatedParametersBase ehtAccessors;
+
+REQUIRE(htAccessors.getDFTPeriod() == ht.getDftPeriod());
+REQUIRE(htAccessors.getGIDuration() == ht.getLongGuardInterval());
+REQUIRE(htAccessors.getShortGIDuration() == ht.getShortGuardInterval());
+REQUIRE(htAccessors.getSymbolInterval() == ht.getLongGuardIntervalSymbolInterval());
+REQUIRE(htAccessors.getShortGISymbolInterval() == ht.getShortGuardIntervalSymbolInterval());
+
+REQUIRE(heAccessors.getDFTPeriod() == he.getDftPeriod());
+REQUIRE(heAccessors.getGIDuration() == he.getLongGuardInterval());
+REQUIRE(heAccessors.getMediumGIDuration() == he.getMediumGuardInterval());
+REQUIRE(heAccessors.getShortGIDuration() == he.getShortGuardInterval());
+REQUIRE(heAccessors.getSymbolInterval() == he.getLongGuardIntervalSymbolInterval());
+REQUIRE(heAccessors.getMediumGISymbolInterval() == he.getMediumGuardIntervalSymbolInterval());
+REQUIRE(heAccessors.getShortGISymbolInterval() == he.getShortGuardIntervalSymbolInterval());
+
+REQUIRE(ehtAccessors.getDFTPeriod() == eht.getDftPeriod());
+REQUIRE(ehtAccessors.getGIDuration() == eht.getLongGuardInterval());
+REQUIRE(ehtAccessors.getMediumGIDuration() == eht.getMediumGuardInterval());
+REQUIRE(ehtAccessors.getShortGIDuration() == eht.getShortGuardInterval());
+REQUIRE(ehtAccessors.getSymbolInterval() == eht.getLongGuardIntervalSymbolInterval());
+REQUIRE(ehtAccessors.getMediumGISymbolInterval() == eht.getMediumGuardIntervalSymbolInterval());
+REQUIRE(ehtAccessors.getShortGISymbolInterval() == eht.getShortGuardIntervalSymbolInterval());
+
+EV << "Immutable HT/VHT and HE/EHT timing profiles preserve all existing mode accessors.\n";

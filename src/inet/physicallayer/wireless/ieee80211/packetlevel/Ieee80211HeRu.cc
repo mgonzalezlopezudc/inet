@@ -429,14 +429,45 @@ Ieee80211HeRuAllocationTree makeHeRuAllocationTree(Hz centerFrequency,
 
 } // namespace
 
-std::vector<Ieee80211HeRu> getHeRuAllocationCatalog(Hz centerFrequency, Hz channelBandwidth)
+Ieee80211HeRuKey getIeee80211HeRuKey(const Ieee80211HeRu& ru)
+{
+    return {ru.index, ru.toneSize, ru.toneOffset};
+}
+
+size_t Ieee80211HeRuKeyHash::operator()(const Ieee80211HeRuKey& key) const noexcept
+{
+    size_t hash = 1469598103934665603ULL;
+    auto append = [&] (int value) {
+        hash ^= static_cast<unsigned int>(value);
+        hash *= 1099511628211ULL;
+    };
+    append(key.index);
+    append(key.toneSize);
+    append(key.toneOffset);
+    return hash;
+}
+
+Ieee80211HeRuCatalog::Ieee80211HeRuCatalog(Hz centerFrequency, Hz channelBandwidth)
 {
     int channelTones = getHeChannelToneCount(channelBandwidth);
-    std::vector<Ieee80211HeRu> catalog;
     int nextIndex = 0;
-    appendHeRuAllocationTree(catalog, centerFrequency, channelTones,
+    appendHeRuAllocationTree(rus, centerFrequency, channelTones,
             channelTones, 0, nextIndex);
-    return catalog;
+    for (size_t i = 0; i < rus.size(); ++i)
+        if (!indexByKey.emplace(getIeee80211HeRuKey(rus[i]), i).second)
+            throw std::logic_error("Duplicate key in IEEE 802.11ax RU allocation catalog");
+}
+
+std::optional<Ieee80211HeRu> Ieee80211HeRuCatalog::findHeRuByKey(
+        const Ieee80211HeRuKey& key) const
+{
+    auto it = indexByKey.find(key);
+    return it == indexByKey.end() ? std::optional<Ieee80211HeRu>() : rus[it->second];
+}
+
+std::vector<Ieee80211HeRu> getHeRuAllocationCatalog(Hz centerFrequency, Hz channelBandwidth)
+{
+    return Ieee80211HeRuCatalog(centerFrequency, channelBandwidth).getRus();
 }
 
 Ieee80211HeRuAllocationTree getHeRuAllocationTree(Hz centerFrequency, Hz channelBandwidth)

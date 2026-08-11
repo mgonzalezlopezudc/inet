@@ -1164,13 +1164,138 @@ const DelayedInitializer<std::vector<Ieee80211ModeSet>> Ieee80211ModeSet::modeSe
 #undef HT_UEQM_MODE_ENTRIES
 #undef HT_OPTIONAL_MODE_ENTRY
 
+std::vector<Ieee80211ModeSet::Entry> Ieee80211ModeSet::prepareEntries(
+        const char *profileName, const std::vector<Entry>& entries)
+{
+    auto preparedEntries = completeGuardIntervalVariants(profileName, entries);
+    std::stable_sort(preparedEntries.begin(), preparedEntries.end(), EntryNetBitrateComparator());
+    return preparedEntries;
+}
+
+bool Ieee80211ModeSet::makeModeKey(const IIeee80211Mode *mode, ModeKey& key)
+{
+    auto family = classifyPhyFamily(mode);
+    if (family == Ieee80211PhyFamily::UNSPECIFIED || family < Ieee80211PhyFamily::HT)
+        return false;
+
+    auto dataMode = mode->getDataMode();
+    key.phyFamily = family;
+    key.numberOfSpatialStreams = dataMode->getNumberOfSpatialStreams();
+    key.bandwidth = dataMode->getBandwidth().get();
+
+    if (auto htMode = dynamic_cast<const Ieee80211HtMode *>(mode)) {
+        auto htDataMode = htMode->getDataMode();
+        key.mcs = htDataMode->getMcsIndex();
+        key.guardInterval = htDataMode->getGuardIntervalType();
+        key.preamble = htMode->getPreambleMode()->getPreambleFormat();
+        key.band = htMode->getCenterFrequencyMode();
+        // HT and VHT catalog membership has always treated BCC and LDPC objects
+        // as the same legal mode identity; coding still remains part of family lookup.
+        key.ldpc = false;
+    }
+    else if (auto vhtMode = dynamic_cast<const Ieee80211VhtMode *>(mode)) {
+        auto vhtDataMode = vhtMode->getDataMode();
+        key.mcs = vhtDataMode->getMcsIndex();
+        key.guardInterval = vhtDataMode->getGuardIntervalType();
+        key.preamble = vhtMode->getPreambleMode()->getPreambleFormat();
+        key.band = vhtMode->getCenterFrequencyMode();
+        key.ldpc = false;
+    }
+    else if (auto heMode = dynamic_cast<const Ieee80211HeMode *>(mode)) {
+        auto heDataMode = heMode->getDataMode();
+        key.mcs = heDataMode->getMcsIndex();
+        key.guardInterval = heDataMode->getGuardIntervalType();
+        auto preamble = heMode->getPreambleMode()->getPreambleFormat();
+        // SU and ER SU have intentionally shared membership identity. This is
+        // compatibility matching only; the concrete mode retains its preamble.
+        key.preamble = preamble == Ieee80211HePreambleMode::HE_PREAMBLE_ER_SU ?
+                Ieee80211HePreambleMode::HE_PREAMBLE_SU : preamble;
+        key.band = heMode->getCenterFrequencyMode();
+        bool codingCanDiffer = heDataMode->getBandwidth() == MHz(20) &&
+                heDataMode->getMcsIndex() <= 9 && heDataMode->getNumberOfSpatialStreams() <= 4;
+        key.ldpc = codingCanDiffer ? false : heDataMode->isLdpc();
+    }
+    else if (auto ehtMode = dynamic_cast<const Ieee80211EhtMode *>(mode)) {
+        auto ehtDataMode = ehtMode->getDataMode();
+        key.mcs = ehtDataMode->getMcsIndex();
+        key.guardInterval = ehtDataMode->getGuardIntervalType();
+        key.preamble = ehtMode->getPreambleMode()->getPreambleFormat();
+        key.band = ehtMode->getCenterFrequencyMode();
+        // Preserve the previous EHT comparator, which intentionally did not
+        // distinguish coding variants for mode-set membership.
+        key.ldpc = false;
+    }
+    else
+        return false;
+    return true;
+}
+
+bool Ieee80211ModeSet::makeFamilyModeKey(const IIeee80211Mode *mode, FamilyModeKey& key)
+{
+    ModeKey modeKey;
+    if (!makeModeKey(mode, modeKey))
+        return false;
+    bool ldpc;
+    if (auto htMode = dynamic_cast<const Ieee80211HtMode *>(mode)) {
+        auto code = htMode->getDataMode()->getCode();
+        ldpc = code != nullptr && code->isLdpc();
+    }
+    else if (auto vhtMode = dynamic_cast<const Ieee80211VhtMode *>(mode)) {
+        auto code = vhtMode->getDataMode()->getCode();
+        ldpc = code != nullptr && code->isLdpc();
+    }
+    else if (auto heMode = dynamic_cast<const Ieee80211HeMode *>(mode))
+        ldpc = heMode->getDataMode()->isLdpc();
+    else if (auto ehtMode = dynamic_cast<const Ieee80211EhtMode *>(mode))
+        ldpc = ehtMode->getDataMode()->isLdpc();
+    else
+        return false;
+    key = {modeKey.phyFamily, modeKey.mcs, modeKey.numberOfSpatialStreams,
+            modeKey.bandwidth, ldpc};
+    return true;
+}
+
+std::map<const IIeee80211Mode *, int, std::less<const IIeee80211Mode *>>
+Ieee80211ModeSet::buildPointerModeIndex(const std::vector<Entry>& entries)
+{
+    std::map<const IIeee80211Mode *, int, std::less<const IIeee80211Mode *>> index;
+    for (size_t i = 0; i < entries.size(); i++)
+        index.emplace(entries[i].mode, i);
+    return index;
+}
+
+std::map<Ieee80211ModeSet::ModeKey, int> Ieee80211ModeSet::buildCompatibleModeIndex(
+        const std::vector<Entry>& entries)
+{
+    std::map<ModeKey, int> index;
+    for (size_t i = 0; i < entries.size(); i++) {
+        ModeKey key;
+        if (makeModeKey(entries[i].mode, key))
+            index.emplace(key, i);
+    }
+    return index;
+}
+
+std::map<Ieee80211ModeSet::FamilyModeKey, int> Ieee80211ModeSet::buildFamilyModeIndex(
+        const std::vector<Entry>& entries)
+{
+    std::map<FamilyModeKey, int> index;
+    for (size_t i = 0; i < entries.size(); i++) {
+        FamilyModeKey key;
+        if (makeFamilyModeKey(entries[i].mode, key))
+            index.emplace(key, i);
+    }
+    return index;
+}
+
 Ieee80211ModeSet::Ieee80211ModeSet(const char *name, const std::vector<Entry> entries) :
     name(name),
     profileName(name),
-    entries(completeGuardIntervalVariants(name, entries))
+    entries(prepareEntries(name, entries)),
+    pointerModeIndex(buildPointerModeIndex(this->entries)),
+    compatibleModeIndex(buildCompatibleModeIndex(this->entries)),
+    familyModeIndex(buildFamilyModeIndex(this->entries))
 {
-    std::vector<Entry> *nonConstEntries = const_cast<std::vector<Entry> *>(&this->entries);
-    std::stable_sort(nonConstEntries->begin(), nonConstEntries->end(), EntryNetBitrateComparator());
     auto referenceMode = entries[0].mode;
     for (auto entry : entries) {
         auto mode = entry.mode;
@@ -1190,11 +1315,12 @@ Ieee80211ModeSet::Ieee80211ModeSet(const char *profileName, const char *name,
         Ieee80211OperatingBand operatingBand, const std::vector<Entry> entries) :
     name(name),
     profileName(profileName),
-    entries(completeGuardIntervalVariants(profileName, entries)),
+    entries(prepareEntries(profileName, entries)),
+    pointerModeIndex(buildPointerModeIndex(this->entries)),
+    compatibleModeIndex(buildCompatibleModeIndex(this->entries)),
+    familyModeIndex(buildFamilyModeIndex(this->entries)),
     operatingBand(operatingBand)
 {
-    std::vector<Entry> *nonConstEntries = const_cast<std::vector<Entry> *>(&this->entries);
-    std::stable_sort(nonConstEntries->begin(), nonConstEntries->end(), EntryNetBitrateComparator());
     if (entries.empty())
         throw cRuntimeError("Empty 802.11 mode profile '%s'", profileName);
     supportedChannelWidths = IEEE80211_WIDTH_20 | IEEE80211_WIDTH_40;
@@ -1206,104 +1332,17 @@ Ieee80211ModeSet::Ieee80211ModeSet(const char *profileName, const char *name,
     bandAware = true;
 }
 
-namespace {
-
-using namespace inet::physicallayer;
-
-// The LDPC and BCC variants of a given HT/VHT/HE mode are represented by
-// distinct mode objects (they differ in airtime due to the BCC tail bits),
-// but the mode set only stores the BCC variant. Treat the LDPC variant as
-// equivalent so that receivers accept LDPC transmissions.
-
-bool isSameHtModeIgnoringLdpc(const IIeee80211Mode *a, const IIeee80211Mode *b)
-{
-    auto htA = dynamic_cast<const Ieee80211HtMode *>(a);
-    auto htB = dynamic_cast<const Ieee80211HtMode *>(b);
-    if (htA == nullptr || htB == nullptr)
-        return false;
-    auto dataA = htA->getDataMode();
-    auto dataB = htB->getDataMode();
-    return dataA->getMcsIndex() == dataB->getMcsIndex() &&
-           dataA->getNumberOfSpatialStreams() == dataB->getNumberOfSpatialStreams() &&
-           dataA->getBandwidth() == dataB->getBandwidth() &&
-           dataA->getGuardIntervalType() == dataB->getGuardIntervalType() &&
-           htA->getPreambleMode()->getPreambleFormat() == htB->getPreambleMode()->getPreambleFormat() &&
-           htA->getCenterFrequencyMode() == htB->getCenterFrequencyMode();
-}
-
-bool isSameVhtModeIgnoringLdpc(const IIeee80211Mode *a, const IIeee80211Mode *b)
-{
-    auto vhtA = dynamic_cast<const Ieee80211VhtMode *>(a);
-    auto vhtB = dynamic_cast<const Ieee80211VhtMode *>(b);
-    if (vhtA == nullptr || vhtB == nullptr)
-        return false;
-    auto dataA = vhtA->getDataMode();
-    auto dataB = vhtB->getDataMode();
-    return dataA->getMcsIndex() == dataB->getMcsIndex() &&
-           dataA->getNumberOfSpatialStreams() == dataB->getNumberOfSpatialStreams() &&
-           dataA->getBandwidth() == dataB->getBandwidth() &&
-           dataA->getGuardIntervalType() == dataB->getGuardIntervalType() &&
-           vhtA->getPreambleMode()->getPreambleFormat() == vhtB->getPreambleMode()->getPreambleFormat() &&
-           vhtA->getCenterFrequencyMode() == vhtB->getCenterFrequencyMode();
-}
-
-bool isSameHeModeIgnoringLdpc(const IIeee80211Mode *a, const IIeee80211Mode *b)
-{
-    auto heA = dynamic_cast<const Ieee80211HeMode *>(a);
-    auto heB = dynamic_cast<const Ieee80211HeMode *>(b);
-    if (heA == nullptr || heB == nullptr)
-        return false;
-    auto dataA = heA->getDataMode();
-    auto dataB = heB->getDataMode();
-    auto preambleA = heA->getPreambleMode()->getPreambleFormat();
-    auto preambleB = heB->getPreambleMode()->getPreambleFormat();
-    bool compatibleSuPreamble = preambleA == preambleB ||
-            (preambleA == Ieee80211HePreambleMode::HE_PREAMBLE_SU &&
-             preambleB == Ieee80211HePreambleMode::HE_PREAMBLE_ER_SU) ||
-            (preambleA == Ieee80211HePreambleMode::HE_PREAMBLE_ER_SU &&
-             preambleB == Ieee80211HePreambleMode::HE_PREAMBLE_SU);
-    bool codingCanDiffer = dataA->getBandwidth() == MHz(20) &&
-            dataA->getMcsIndex() <= 9 && dataA->getNumberOfSpatialStreams() <= 4;
-    return dataA->getMcsIndex() == dataB->getMcsIndex() &&
-           dataA->getNumberOfSpatialStreams() == dataB->getNumberOfSpatialStreams() &&
-           dataA->getBandwidth() == dataB->getBandwidth() &&
-           dataA->getGuardIntervalType() == dataB->getGuardIntervalType() &&
-           compatibleSuPreamble &&
-           heA->getCenterFrequencyMode() == heB->getCenterFrequencyMode() &&
-           (dataA->isLdpc() == dataB->isLdpc() || codingCanDiffer);
-}
-
-bool isSameEhtMode(const IIeee80211Mode *a, const IIeee80211Mode *b)
-{
-    auto ehtA = dynamic_cast<const Ieee80211EhtMode *>(a);
-    auto ehtB = dynamic_cast<const Ieee80211EhtMode *>(b);
-    if (ehtA == nullptr || ehtB == nullptr)
-        return false;
-    auto dataA = ehtA->getDataMode();
-    auto dataB = ehtB->getDataMode();
-    return dataA->getMcsIndex() == dataB->getMcsIndex() &&
-           dataA->getNumberOfSpatialStreams() == dataB->getNumberOfSpatialStreams() &&
-           dataA->getBandwidth() == dataB->getBandwidth() &&
-           dataA->getGuardIntervalType() == dataB->getGuardIntervalType() &&
-           ehtA->getPreambleMode()->getPreambleFormat() == ehtB->getPreambleMode()->getPreambleFormat() &&
-           ehtA->getCenterFrequencyMode() == ehtB->getCenterFrequencyMode();
-}
-
-} // namespace
-
 int Ieee80211ModeSet::findModeIndex(const IIeee80211Mode *mode) const
 {
-    for (size_t index = 0; index < entries.size(); index++)
-        if (entries[index].mode == mode)
-            return index;
-    // Where both coding schemes are legal, accept the corresponding LDPC/BCC
-    // object as the same supported modulation profile.
-    for (size_t index = 0; index < entries.size(); index++)
-        if (isSameHtModeIgnoringLdpc(entries[index].mode, mode) ||
-            isSameVhtModeIgnoringLdpc(entries[index].mode, mode) ||
-            isSameHeModeIgnoringLdpc(entries[index].mode, mode) ||
-            isSameEhtMode(entries[index].mode, mode))
-            return index;
+    auto pointerIt = pointerModeIndex.find(mode);
+    if (pointerIt != pointerModeIndex.end())
+        return pointerIt->second;
+    ModeKey key;
+    if (makeModeKey(mode, key)) {
+        auto compatibleIt = compatibleModeIndex.find(key);
+        if (compatibleIt != compatibleModeIndex.end())
+            return compatibleIt->second;
+    }
     return -1;
 }
 
@@ -1323,52 +1362,22 @@ bool Ieee80211ModeSet::getIsMandatory(const IIeee80211Mode *mode) const
 
 const IIeee80211Mode *Ieee80211ModeSet::findHeMode(int mcs, int numSpatialStreams, Hz bandwidth, bool ldpc) const
 {
-    for (const auto& entry : entries) {
-        auto heMode = dynamic_cast<const Ieee80211HeMode *>(entry.mode);
-        if (heMode == nullptr)
-            continue;
-        auto dataMode = heMode->getDataMode();
-        if ((int)dataMode->getMcsIndex() == mcs &&
-                dataMode->getNumberOfSpatialStreams() == numSpatialStreams &&
-                dataMode->getBandwidth() == bandwidth &&
-                (dataMode->getCode() != nullptr && dataMode->getCode()->isLdpc()) == ldpc)
-            return heMode;
-    }
-    return nullptr;
+    auto it = familyModeIndex.find({Ieee80211PhyFamily::HE, mcs, numSpatialStreams, bandwidth.get(), ldpc});
+    return it == familyModeIndex.end() ? nullptr : entries[it->second].mode;
 }
 
 const IIeee80211Mode *Ieee80211ModeSet::findVhtMode(int mcs,
         int numSpatialStreams, Hz bandwidth, bool ldpc) const
 {
-    for (const auto& entry : entries) {
-        auto vhtMode = dynamic_cast<const Ieee80211VhtMode *>(entry.mode);
-        if (vhtMode == nullptr)
-            continue;
-        auto dataMode = vhtMode->getDataMode();
-        if ((int)dataMode->getMcsIndex() == mcs &&
-                dataMode->getNumberOfSpatialStreams() == numSpatialStreams &&
-                dataMode->getBandwidth() == bandwidth &&
-                (dataMode->getCode() != nullptr && dataMode->getCode()->isLdpc()) == ldpc)
-            return vhtMode;
-    }
-    return nullptr;
+    auto it = familyModeIndex.find({Ieee80211PhyFamily::VHT, mcs, numSpatialStreams, bandwidth.get(), ldpc});
+    return it == familyModeIndex.end() ? nullptr : entries[it->second].mode;
 }
 
 const IIeee80211Mode *Ieee80211ModeSet::findHtMode(int mcs,
         int numSpatialStreams, Hz bandwidth, bool ldpc) const
 {
-    for (const auto& entry : entries) {
-        auto htMode = dynamic_cast<const Ieee80211HtMode *>(entry.mode);
-        if (htMode == nullptr)
-            continue;
-        auto dataMode = htMode->getDataMode();
-        if ((int)dataMode->getMcsIndex() == mcs &&
-                dataMode->getNumberOfSpatialStreams() == numSpatialStreams &&
-                dataMode->getBandwidth() == bandwidth &&
-                (dataMode->getCode() != nullptr && dataMode->getCode()->isLdpc()) == ldpc)
-            return htMode;
-    }
-    return nullptr;
+    auto it = familyModeIndex.find({Ieee80211PhyFamily::HT, mcs, numSpatialStreams, bandwidth.get(), ldpc});
+    return it == familyModeIndex.end() ? nullptr : entries[it->second].mode;
 }
 
 const IIeee80211Mode *Ieee80211ModeSet::getHtNdpMode(

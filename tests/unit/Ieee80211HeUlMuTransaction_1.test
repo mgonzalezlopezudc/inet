@@ -22,6 +22,7 @@ Validate HE triggered-uplink prepare/commit and terminal packet ownership by exa
 #include "inet/linklayer/ieee80211/mac/fragmentation/Defragmentation.h"
 #include "inet/linklayer/ieee80211/mac/fragmentation/Fragmentation.h"
 #include "inet/linklayer/ieee80211/mac/fragmentation/HeDynamicFragmentationPolicy.h"
+#include "inet/linklayer/ieee80211/mac/radiomode/Ieee80211RadioModePolicy.h"
 
 %file: TestNetwork.ned
 import inet.linklayer.ieee80211.mac.coordinationfunction.HeHcf;
@@ -118,11 +119,17 @@ class TestBoundaryMac : public Ieee80211Mac
 {
   private:
     Packet *transmittedFrame = nullptr;
+    Ieee80211RadioModePolicy testRadioModePolicy;
 
   protected:
     virtual int numInitStages() const override { return 1; }
-    virtual void initialize(int) override {}
-    virtual void configureRadioMode(IRadio::RadioMode) override {}
+    virtual void initialize(int) override
+    {
+        testRadioModePolicy.initializeState(IRadio::RADIO_MODE_RECEIVER,
+                IRadio::RADIO_MODE_RECEIVER, true);
+        radioModePolicy = &testRadioModePolicy;
+    }
+    virtual void applyDesiredRadioMode() override {}
     virtual void sendDown(cMessage *message) override
     {
         REQUIRE(transmittedFrame == nullptr);

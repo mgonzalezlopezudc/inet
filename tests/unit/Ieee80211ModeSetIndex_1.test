@@ -1,0 +1,127 @@
+%description:
+Verify immutable IEEE 802.11 mode-set indexes preserve catalog and compatibility lookup behavior
+
+%includes:
+#include <functional>
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
+
+%global:
+using namespace inet;
+using namespace inet::physicallayer;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+static bool throws(const std::function<void()>& operation)
+{
+    try { operation(); }
+    catch (const cRuntimeError&) { return true; }
+    return false;
+}
+
+static const IIeee80211Mode *findFirstFamilyMode(const Ieee80211ModeSet *modeSet,
+        Ieee80211PhyFamily family, int mcs, int numberOfSpatialStreams, Hz bandwidth, bool ldpc)
+{
+    for (int i = 0; i < modeSet->getNumModes(); i++) {
+        auto mode = modeSet->getMode(i);
+        if (modeSet->getPhyFamily(i) != family)
+            continue;
+        auto dataMode = mode->getDataMode();
+        int modeMcs = -1;
+        bool modeLdpc = false;
+        if (auto htMode = dynamic_cast<const Ieee80211HtMode *>(mode)) {
+            modeMcs = htMode->getDataMode()->getMcsIndex();
+            auto code = htMode->getDataMode()->getCode();
+            modeLdpc = code != nullptr && code->isLdpc();
+        }
+        else if (auto vhtMode = dynamic_cast<const Ieee80211VhtMode *>(mode)) {
+            modeMcs = vhtMode->getDataMode()->getMcsIndex();
+            auto code = vhtMode->getDataMode()->getCode();
+            modeLdpc = code != nullptr && code->isLdpc();
+        }
+        else if (auto heMode = dynamic_cast<const Ieee80211HeMode *>(mode)) {
+            modeMcs = heMode->getDataMode()->getMcsIndex();
+            modeLdpc = heMode->getDataMode()->isLdpc();
+        }
+        if (modeMcs == mcs && dataMode->getNumberOfSpatialStreams() == numberOfSpatialStreams &&
+                dataMode->getBandwidth() == bandwidth && modeLdpc == ldpc)
+            return mode;
+    }
+    return nullptr;
+}
+
+%activity:
+// Exact pointer membership is indexed for every legacy and high-throughput family.
+for (auto profileName : {"a", "b", "g(mixed)", "n(mixed-2.4Ghz)", "ac", "ax", "be"}) {
+    auto modeSet = Ieee80211ModeSet::getModeSet(profileName);
+    bps previousBitrate = bps(0);
+    for (int i = 0; i < modeSet->getNumModes(); i++) {
+        auto mode = modeSet->getMode(i);
+        REQUIRE(modeSet->containsMode(mode));
+        REQUIRE(mode->getDataMode()->getNetBitrate() >= previousBitrate);
+        previousBitrate = mode->getDataMode()->getNetBitrate();
+    }
+}
+
+auto htSet = Ieee80211ModeSet::getModeSet("n(mixed-2.4Ghz)");
+auto vhtSet = Ieee80211ModeSet::getModeSet("ac");
+auto heSet = Ieee80211ModeSet::getModeSet("ax");
+for (auto bandwidth : {MHz(20), MHz(40)})
+    REQUIRE(htSet->findHtMode(0, 1, bandwidth, false) ==
+            findFirstFamilyMode(htSet, Ieee80211PhyFamily::HT, 0, 1, bandwidth, false));
+for (auto bandwidth : {MHz(20), MHz(40), MHz(80), MHz(160)}) {
+    REQUIRE(vhtSet->findVhtMode(0, 1, bandwidth, false) ==
+            findFirstFamilyMode(vhtSet, Ieee80211PhyFamily::VHT, 0, 1, bandwidth, false));
+    REQUIRE(heSet->findHeMode(0, 1, bandwidth, false) ==
+            findFirstFamilyMode(heSet, Ieee80211PhyFamily::HE, 0, 1, bandwidth, false));
+}
+
+// Guard-interval variants remain distinct catalog entries and stable lookup candidates.
+auto htLong = Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs0BW20MHz,
+        Ieee80211HtMode::BAND_2_4GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+auto htShort = Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs0BW20MHz,
+        Ieee80211HtMode::BAND_2_4GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211HtModeBase::HT_GUARD_INTERVAL_SHORT);
+REQUIRE(htLong != htShort && htSet->containsMode(htLong) && htSet->containsMode(htShort));
+REQUIRE(htSet->findHtMode(0, 1, MHz(20), false) == htLong);
+
+// Preserve the modeled coding-equivalence dimensions used for membership.
+auto htLdpc = Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs0BW20MHz,
+        Ieee80211HtMode::BAND_2_4GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG, true);
+auto vhtLdpc = Ieee80211VhtCompliantModes::getCompliantMode(&Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss1,
+        Ieee80211VhtMode::BAND_5GHZ, Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG, true);
+auto heLdpc = Ieee80211HeCompliantModes::getCompliantMode(&Ieee80211HemcsTable::heMcs0BW20MHzNss1,
+        Ieee80211HeMode::BAND_5GHZ, Ieee80211HePreambleMode::HE_PREAMBLE_SU,
+        Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG, true);
+auto ehtLdpc = Ieee80211EhtCompliantModes::getCompliantMode(&Ieee80211EhtmcsTable::ehtMcs0BW20MHzNss1,
+        Ieee80211EhtMode::BAND_6GHZ, Ieee80211EhtPreambleMode::EHT_PREAMBLE_SU,
+        Ieee80211EhtModeBase::EHT_GUARD_INTERVAL_LONG, true);
+REQUIRE(htSet->containsMode(htLdpc));
+REQUIRE(vhtSet->containsMode(vhtLdpc));
+REQUIRE(heSet->containsMode(heLdpc));
+REQUIRE(Ieee80211ModeSet::getModeSet("be")->containsMode(ehtLdpc));
+
+// SU and ER SU deliberately share the existing HE membership identity.
+auto heErSu = Ieee80211HeCompliantModes::getCompliantMode(&Ieee80211HemcsTable::heMcs0BW20MHzNss1,
+        Ieee80211HeMode::BAND_5GHZ, Ieee80211HePreambleMode::HE_PREAMBLE_ER_SU,
+        Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG, false);
+REQUIRE(heSet->containsMode(heErSu));
+
+auto htGreenfield = Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs0BW20MHz,
+        Ieee80211HtMode::BAND_2_4GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_GREENFIELD,
+        Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+REQUIRE(!htSet->containsMode(htGreenfield));
+REQUIRE(!htSet->containsMode(nullptr));
+REQUIRE(htSet->getPhyFamily(nullptr) == Ieee80211PhyFamily::UNSPECIFIED);
+REQUIRE(throws([&] { htSet->getIsMandatory(nullptr); }));
+REQUIRE(htSet->findHtMode(-1, 1, MHz(20), false) == nullptr);
+REQUIRE(vhtSet->findVhtMode(0, 1, MHz(320), false) == nullptr);
+REQUIRE(heSet->findHeMode(99, 1, MHz(20), false) == nullptr);
+
+EV << "Mode pointer, compatibility-key, family lookup, and deterministic ordering indexes passed.\n";

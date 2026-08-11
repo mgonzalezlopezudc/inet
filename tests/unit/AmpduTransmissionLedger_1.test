@@ -1,0 +1,47 @@
+%description:
+Verify non-owning A-MPDU transmission ledger overwrite, lookup, take, and discard behavior.
+
+%includes:
+#include "inet/common/packet/Packet.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/AmpduTransmissionLedger.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+%activity:
+AmpduTransmissionLedger ledger;
+auto original = new Packet("original");
+auto first = new Packet("first");
+auto second = new Packet("second");
+
+REQUIRE(!ledger.hasImplicitBlockAck(original));
+REQUIRE(!ledger.take(original).has_value());
+REQUIRE(!ledger.discard(original));
+
+ledger.record(original, {first}, false);
+REQUIRE(!ledger.hasImplicitBlockAck(original));
+ledger.record(original, {second, first}, true);
+REQUIRE(ledger.hasImplicitBlockAck(original));
+auto entry = ledger.take(original);
+REQUIRE(entry.has_value());
+REQUIRE(entry->implicitBlockAck);
+REQUIRE(entry->subframes.size() == 2);
+REQUIRE(entry->subframes[0] == second);
+REQUIRE(entry->subframes[1] == first);
+REQUIRE(!ledger.take(original).has_value());
+
+ledger.record(original, {first}, false);
+REQUIRE(ledger.discard(original));
+REQUIRE(!ledger.discard(original));
+
+delete original;
+delete first;
+delete second;
+
+EV << "A-MPDU transmission ledger: ordinary/implicit overwrite, atomic take, discard, and caller ownership verified.\n";
+
+%contains: stdout
+A-MPDU transmission ledger: ordinary/implicit overwrite, atomic take, discard, and caller ownership verified.

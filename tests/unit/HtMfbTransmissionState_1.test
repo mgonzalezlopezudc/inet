@@ -1,0 +1,51 @@
+%description:
+Verify deterministic pending HT MFB values, peer invalidation, and standalone completion state.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HtMfbTransmissionState.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+%activity:
+const MacAddress peer("00:00:00:00:00:01");
+const MacAddress otherPeer("00:00:00:00:00:02");
+Ieee80211HtMcsControl control;
+control.mcsFeedbackSequenceIdentifier = 5;
+control.mcsFeedback = 17;
+HtMfbTransmissionState state;
+
+REQUIRE(state.getPending().peer.isUnspecified());
+REQUIRE(!state.completeStandaloneTransmission());
+
+state.setPending(peer, control);
+auto pending = state.getPending();
+REQUIRE(pending.peer == peer);
+REQUIRE(pending.control.mcsFeedbackSequenceIdentifier == 5);
+REQUIRE(pending.control.mcsFeedback == 17);
+
+Ieee80211HtMcsControl newerControl;
+newerControl.mcsFeedbackSequenceIdentifier = 6;
+newerControl.mcsFeedback = 23;
+state.setPending(otherPeer, newerControl);
+pending = state.getPending();
+REQUIRE(pending.peer == otherPeer);
+REQUIRE(pending.control.mcsFeedbackSequenceIdentifier == 6);
+REQUIRE(pending.control.mcsFeedback == 23);
+
+state.invalidate(peer);
+REQUIRE(state.getPending().peer == otherPeer);
+state.invalidate(otherPeer);
+REQUIRE(state.getPending().peer.isUnspecified());
+
+state.startStandaloneTransmission();
+REQUIRE(state.completeStandaloneTransmission());
+REQUIRE(!state.completeStandaloneTransmission());
+
+EV << "HT MFB transmission state: pending snapshot, peer invalidation, and completion token verified.\n";
+
+%contains: stdout
+HT MFB transmission state: pending snapshot, peer invalidation, and completion token verified.

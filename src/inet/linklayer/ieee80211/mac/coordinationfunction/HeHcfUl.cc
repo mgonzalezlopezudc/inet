@@ -380,12 +380,15 @@ bool HeHcf::supportsPreamblePuncturing(const IIeee80211HeUlScheduler::RuAllocati
     return capabilities && capabilities->localRxPeerTx.valid && capabilities->localRxPeerTx.preamblePuncturing;
 }
 
-HeUlScheduleFinalizationResult HeHcf::finalizeUlSchedule(
+static HeUlScheduleFinalizationResult finalizeUlScheduleWithSnapshot(
         const IIeee80211HeUlScheduler::Schedule& proposedSchedule,
         Hz centerFrequency, Hz channelBandwidth,
-        IIeee80211HeUlTriggerPolicy::TriggerType triggerType)
+        IIeee80211HeUlTriggerPolicy::TriggerType triggerType,
+        physicallayer::Ieee80211HeTriggerResponseFinalizationResult *finalizationSnapshot)
 {
     HeUlScheduleFinalizationResult result;
+    if (finalizationSnapshot != nullptr)
+        *finalizationSnapshot = physicallayer::Ieee80211HeTriggerResponseFinalizationResult();
     result.schedule = proposedSchedule;
     result.schedule.channelBandwidth = channelBandwidth;
     result.schedule.ulLength = 0;
@@ -478,8 +481,19 @@ HeUlScheduleFinalizationResult HeHcf::finalizeUlSchedule(
                 finalization.parameters.common.packetExtensionDurationUs;
     }
     result.resolvedTxTime = finalization.resolvedTxTime;
+    if (finalizationSnapshot != nullptr)
+        *finalizationSnapshot = finalization;
     result.valid = true;
     return result;
+}
+
+HeUlScheduleFinalizationResult HeHcf::finalizeUlSchedule(
+        const IIeee80211HeUlScheduler::Schedule& proposedSchedule,
+        Hz centerFrequency, Hz channelBandwidth,
+        IIeee80211HeUlTriggerPolicy::TriggerType triggerType)
+{
+    return finalizeUlScheduleWithSnapshot(proposedSchedule, centerFrequency,
+            channelBandwidth, triggerType, nullptr);
 }
 
 bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
@@ -752,8 +766,9 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
         return false;
     }
 
-    auto finalization = finalizeUlSchedule(ulSchedule, centerFrequency,
-            channelBandwidth, triggerType);
+    physicallayer::Ieee80211HeTriggerResponseFinalizationResult phyFinalization;
+    auto finalization = finalizeUlScheduleWithSnapshot(ulSchedule, centerFrequency,
+            channelBandwidth, triggerType, &phyFinalization);
     if (!finalization) {
         EV_WARN << "HE UL skipping Trigger because schedule timing cannot be finalized: "
                 << finalization.error << "\n";
@@ -781,7 +796,8 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
         validationContext.stations.push_back(contract);
     }
     HeUlMuPlanDiagnostic diagnostic;
-    auto ulPlan = HeUlMuPlan::create(validationContext, ulSchedule, triggerType, diagnostic);
+    auto ulPlan = HeUlMuPlan::create(validationContext, ulSchedule, triggerType,
+            phyFinalization, diagnostic);
     if (!ulPlan) {
         EV_WARN << "HE UL plan rejected: code=" << (int)diagnostic.code
                 << ", allocation=" << diagnostic.allocationIndex
@@ -962,21 +978,7 @@ void HeHcf::processFailedTriggeredUlBlockAckReq(TriggeredUlExchange& exchange)
             TriggeredUlExchange::RecoveryKind::COMPRESSED_BLOCK_ACK_REQUEST);
     ASSERT(exchange.blockAckReq != nullptr);
     auto edcaf = edca->getEdcaf(exchange.recoveryAccessCategory);
-    auto failedFrameIds = edcaf->getAckHandler()->processFailedBlockAckReq(
-            exchange.blockAckReq);
-    for (int i = 0; i < edcaf->getInProgressFrames()->getLength(); ++i) {
-        auto packet = edcaf->getInProgressFrames()->getFrames(i);
-        auto header = dynamicPtrCast<const Ieee80211DataHeader>(
-                packet->peekAtFront<Ieee80211MacHeader>());
-        if (header == nullptr || header->getType() != ST_DATA_WITH_QOS)
-            continue;
-        auto id = std::make_pair(header->getReceiverAddress(),
-                std::make_pair(header->getTid(), SequenceControlField(
-                        header->getSequenceNumber().get(),
-                        header->getFragmentNumber())));
-        if (failedFrameIds.find(id) != failedFrameIds.end())
-            edcaf->getRecoveryProcedure()->dataFrameTransmissionFailed(packet, header);
-    }
+    processFailedBlockAckReq(edcaf, exchange.blockAckReq, false);
 }
 
 void HeHcf::processReceivedTriggeredUlBlockAck(
@@ -986,23 +988,7 @@ void HeHcf::processReceivedTriggeredUlBlockAck(
     ASSERT(exchange.recoveryKind ==
             TriggeredUlExchange::RecoveryKind::COMPRESSED_BLOCK_ACK_REQUEST);
     auto edcaf = edca->getEdcaf(exchange.recoveryAccessCategory);
-    edcaf->getRecoveryProcedure()->blockAckFrameReceived();
-    auto ackedFrames = edcaf->getAckHandler()->processReceivedBlockAck(blockAck);
-    for (int i = 0; i < edcaf->getInProgressFrames()->getLength(); ++i) {
-        auto packet = edcaf->getInProgressFrames()->getFrames(i);
-        auto header = dynamicPtrCast<const Ieee80211DataHeader>(
-                packet->peekAtFront<Ieee80211MacHeader>());
-        if (header != nullptr &&
-                edcaf->getAckHandler()->getQoSDataAckStatus(header) ==
-                        QosAckHandler::Status::BLOCK_ACK_ARRIVED_UNACKED)
-            edcaf->getRecoveryProcedure()->dataFrameTransmissionFailed(packet, header);
-    }
-    originatorProcessBlockAckResult(blockAck, ackedFrames,
-            exchange.recoveryAccessCategory);
-    if (originatorBlockAckAgreementHandler != nullptr)
-        originatorBlockAckAgreementHandler->processReceivedBlockAck(blockAck, this);
-    edcaf->getInProgressFrames()->dropFrames(ackedFrames);
-    edcaf->getAckHandler()->dropFrames(ackedFrames);
+    processReceivedBlockAck(edcaf, blockAck, exchange.recoveryAccessCategory);
 }
 
 const Ptr<Ieee80211CompressedBlockAck> HeHcf::processTriggeredUlBlockAckReq(

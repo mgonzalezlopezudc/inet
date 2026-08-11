@@ -8,6 +8,9 @@
 #ifndef __INET_IEEE80211MODESET_H
 #define __INET_IEEE80211MODESET_H
 
+#include <map>
+#include <tuple>
+
 #include "inet/common/DelayedInitializer.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
@@ -72,10 +75,46 @@ class INET_API Ieee80211ModeSet : public IPrintableObject, public cObject
         bool operator()(const Entry& left, const Entry& right) { return left.mode->getDataMode()->getNetBitrate() < right.mode->getDataMode()->getNetBitrate(); }
     };
 
+    struct ModeKey {
+        Ieee80211PhyFamily phyFamily;
+        int mcs;
+        int numberOfSpatialStreams;
+        double bandwidth;
+        int guardInterval;
+        int preamble;
+        int band;
+        bool ldpc;
+
+      private:
+        auto asTuple() const { return std::tie(phyFamily, mcs, numberOfSpatialStreams, bandwidth, guardInterval, preamble, band, ldpc); }
+
+      public:
+        bool operator==(const ModeKey& other) const { return asTuple() == other.asTuple(); }
+        bool operator<(const ModeKey& other) const { return asTuple() < other.asTuple(); }
+    };
+
+    struct FamilyModeKey {
+        Ieee80211PhyFamily phyFamily;
+        int mcs;
+        int numberOfSpatialStreams;
+        double bandwidth;
+        bool ldpc;
+
+      private:
+        auto asTuple() const { return std::tie(phyFamily, mcs, numberOfSpatialStreams, bandwidth, ldpc); }
+
+      public:
+        bool operator==(const FamilyModeKey& other) const { return asTuple() == other.asTuple(); }
+        bool operator<(const FamilyModeKey& other) const { return asTuple() < other.asTuple(); }
+    };
+
   protected:
     std::string name;
     std::string profileName;
     const std::vector<Entry> entries;
+    const std::map<const IIeee80211Mode *, int, std::less<const IIeee80211Mode *>> pointerModeIndex;
+    const std::map<ModeKey, int> compatibleModeIndex;
+    const std::map<FamilyModeKey, int> familyModeIndex;
     Ieee80211OperatingBand operatingBand = Ieee80211OperatingBand::BAND_5_GHZ;
     uint8_t supportedChannelWidths = 0;
     bool channelWidthScopedBasicRates = true;
@@ -83,8 +122,15 @@ class INET_API Ieee80211ModeSet : public IPrintableObject, public cObject
 
     static Ieee80211ModeSet createHeProfile(const char *profileName, Ieee80211OperatingBand operatingBand,
             const std::vector<Ieee80211ModeSet>& baseModeSets);
-        static std::vector<Entry> completeGuardIntervalVariants(const char *profileName,
-          const std::vector<Entry>& entries);
+    static std::vector<Entry> completeGuardIntervalVariants(const char *profileName,
+            const std::vector<Entry>& entries);
+    static std::vector<Entry> prepareEntries(const char *profileName, const std::vector<Entry>& entries);
+    static bool makeModeKey(const IIeee80211Mode *mode, ModeKey& key);
+    static bool makeFamilyModeKey(const IIeee80211Mode *mode, FamilyModeKey& key);
+    static std::map<const IIeee80211Mode *, int, std::less<const IIeee80211Mode *>> buildPointerModeIndex(
+            const std::vector<Entry>& entries);
+    static std::map<ModeKey, int> buildCompatibleModeIndex(const std::vector<Entry>& entries);
+    static std::map<FamilyModeKey, int> buildFamilyModeIndex(const std::vector<Entry>& entries);
     static const DelayedInitializer<std::vector<Ieee80211ModeSet>> modeSets;
 
   protected:

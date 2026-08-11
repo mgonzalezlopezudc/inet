@@ -1,0 +1,325 @@
+%description:
+Test typed IEEE 802.11 radio-mode arbitration and the MAC command broker
+
+%includes:
+#include <string>
+#include <vector>
+
+#include "inet/common/packet/Message.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
+#include "inet/linklayer/ieee80211/mac/radiomode/Ieee80211RadioModePolicy.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+class TestRx : public cSimpleModule, public IRx
+{
+  public:
+    bool mediumFree = true;
+
+    virtual bool isReceptionInProgress() const override { return false; }
+    virtual bool isMediumFree() const override { return mediumFree; }
+    virtual bool isWideChannelIdleFor(Hz, simtime_t) const override { return true; }
+    virtual void frameTransmitted(simtime_t) override {}
+    virtual void legacySignalReceived(simtime_t) override {}
+    virtual void registerContention(IContention *) override {}
+    virtual void receptionStateChanged(IRadio::ReceptionState) override {}
+    virtual void ccaStateChanged(const Ieee80211CcaSnapshot&) override {}
+    virtual void transmissionStateChanged(IRadio::TransmissionState) override {}
+    virtual void receivedSignalPartChanged(IRadioSignal::SignalPart) override {}
+    virtual bool lowerFrameReceived(Packet *, AggregateReceptionContext) override { return false; }
+};
+
+class TestMac : public Ieee80211Mac
+{
+  public:
+    std::vector<std::string> transportEvents;
+    bool acknowledgeModeSynchronously = true;
+    bool announceSwitchingSynchronously = false;
+
+    void bind(IRadioModePolicy *policy, IRx *rx)
+    {
+        radioModePolicy = policy;
+        this->rx = rx;
+    }
+
+    void releaseTransmission()
+    {
+        radioModePolicy->setTransmissionActive(false);
+        applyDesiredRadioMode();
+    }
+
+    void forwardUpperCommand(cMessage *message)
+    {
+        handleUpperCommand(message);
+    }
+
+    void releasePendingConfiguration()
+    {
+        sendDownPendingRadioConfigMsg();
+    }
+
+    void observeRadioMode(IRadio::RadioMode radioMode)
+    {
+        receiveSignal(nullptr, IRadio::radioModeChangedSignal,
+                static_cast<intval_t>(radioMode), nullptr);
+    }
+
+    void crash()
+    {
+        handleCrashOperation(nullptr);
+    }
+
+    void stop()
+    {
+        handleStopOperation(nullptr);
+    }
+
+  protected:
+    virtual void sendDown(cMessage *message) override
+    {
+        if (message->getKind() == RADIO_C_CONFIGURE) {
+            auto command = check_and_cast<ConfigureRadioCommand *>(message->getControlInfo());
+            if (auto ieeeCommand = dynamic_cast<Ieee80211ConfigureRadioCommand *>(command))
+                transportEvents.push_back("configuration:" + std::to_string(command->getRadioMode()) +
+                        ":" + std::to_string(ieeeCommand->getChannelNumber()));
+            else
+                transportEvents.push_back("mode:" + std::to_string(command->getRadioMode()));
+            if (command->getRadioMode() != -1) {
+                if (announceSwitchingSynchronously)
+                    observeRadioMode(IRadio::RADIO_MODE_SWITCHING);
+                else if (acknowledgeModeSynchronously)
+                    observeRadioMode(static_cast<IRadio::RadioMode>(command->getRadioMode()));
+            }
+        }
+        else if (dynamic_cast<Packet *>(message) != nullptr)
+            transportEvents.push_back("frame");
+        delete message;
+    }
+};
+
+%activity:
+Ieee80211RadioModePolicy policy;
+policy.initializeState(IRadio::RADIO_MODE_RECEIVER,
+        IRadio::RADIO_MODE_RECEIVER, true);
+auto initial = policy.getSnapshot();
+ASSERT(initial.getDesiredRadioMode() == IRadio::RADIO_MODE_RECEIVER);
+ASSERT(initial.getObservedRadioMode() == IRadio::RADIO_MODE_RECEIVER);
+ASSERT(initial.isLifecycleUp());
+
+auto generation = initial.getGeneration();
+policy.setTwtAwake(true);
+ASSERT(policy.getSnapshot().getGeneration() == generation);
+policy.setObservedRadioMode(IRadio::RADIO_MODE_RECEIVER);
+ASSERT(policy.getSnapshot().getGeneration() == generation);
+
+policy.setTwtAwake(false);
+ASSERT(policy.getSnapshot().getDesiredRadioMode() == IRadio::RADIO_MODE_SLEEP);
+policy.setExternalRadioMode(IRadio::RADIO_MODE_TRANSCEIVER);
+ASSERT(policy.getSnapshot().getDesiredRadioMode() == IRadio::RADIO_MODE_TRANSCEIVER);
+ASSERT(policy.getSnapshot().hasExternalRadioMode());
+policy.setTransmissionActive(true);
+ASSERT(policy.getSnapshot().getDesiredRadioMode() == IRadio::RADIO_MODE_TRANSMITTER);
+policy.setLifecycleUp(false);
+ASSERT(policy.getSnapshot().getDesiredRadioMode() == IRadio::RADIO_MODE_OFF);
+ASSERT(!policy.getSnapshot().isTransmissionActive());
+
+bool downTransmissionRejected = false;
+try {
+    policy.setTransmissionActive(true);
+}
+catch (const cRuntimeError&) {
+    downTransmissionRejected = true;
+}
+ASSERT(downTransmissionRejected);
+policy.setLifecycleUp(true);
+ASSERT(policy.getSnapshot().getDesiredRadioMode() == IRadio::RADIO_MODE_TRANSCEIVER);
+
+// A copied snapshot stays immutable when the policy moves on.
+auto copiedSnapshot = policy.getSnapshot();
+policy.setObservedRadioMode(IRadio::RADIO_MODE_SWITCHING);
+ASSERT(copiedSnapshot.getObservedRadioMode() != policy.getSnapshot().getObservedRadioMode());
+
+// Exercise the real MAC broker. A synchronous observed-mode callback reenters
+// applyDesiredRadioMode(), and must neither recurse indefinitely nor duplicate
+// the mode request. The mode command must precede the frame.
+Ieee80211RadioModePolicy macPolicy;
+macPolicy.initializeState(IRadio::RADIO_MODE_RECEIVER,
+        IRadio::RADIO_MODE_RECEIVER, true);
+TestRx rx;
+TestMac mac;
+mac.bind(&macPolicy, &rx);
+mac.sendDownFrame(new Packet("testFrame"));
+ASSERT(mac.transportEvents.size() == 2);
+ASSERT(mac.transportEvents[0] == "mode:3");
+ASSERT(mac.transportEvents[1] == "frame");
+ASSERT(macPolicy.getSnapshot().getObservedRadioMode() == IRadio::RADIO_MODE_TRANSMITTER);
+
+// An unsolicited terminal observation is actual radio state, not a new MAC
+// intent. In particular, an external fault that turns the radio OFF must not
+// cause the broker to restore its configured receiver baseline.
+Ieee80211RadioModePolicy observedPolicy;
+observedPolicy.initializeState(IRadio::RADIO_MODE_RECEIVER,
+        IRadio::RADIO_MODE_RECEIVER, true);
+TestRx observedRx;
+TestMac observedMac;
+observedMac.bind(&observedPolicy, &observedRx);
+observedMac.observeRadioMode(IRadio::RADIO_MODE_OFF);
+observedMac.observeRadioMode(IRadio::RADIO_MODE_OFF);
+ASSERT(observedMac.transportEvents.empty());
+ASSERT(observedPolicy.getSnapshot().getObservedRadioMode() == IRadio::RADIO_MODE_OFF);
+ASSERT(observedPolicy.getSnapshot().getDesiredRadioMode() == IRadio::RADIO_MODE_RECEIVER);
+
+// A TWT sleep transition during transmission remains latent until completion;
+// completion restores sleep rather than the configured receiver baseline.
+mac.setTwtRadioAwake(false);
+ASSERT(mac.transportEvents.size() == 2);
+mac.releaseTransmission();
+ASSERT(mac.transportEvents.size() == 3);
+ASSERT(mac.transportEvents[2] == "mode:1");
+
+// Upper-layer radio mode becomes a persistent policy override. The original
+// IEEE configuration command still reaches the PHY with its channel intact,
+// but its radioMode field is cleared so the broker is the sole mode transport.
+auto request = new Request("configureChannelAndMode", RADIO_C_CONFIGURE);
+auto command = new Ieee80211ConfigureRadioCommand();
+command->setRadioMode(IRadio::RADIO_MODE_TRANSCEIVER);
+command->setChannelNumber(7);
+request->setControlInfo(command);
+mac.forwardUpperCommand(request);
+ASSERT(mac.transportEvents.size() == 5);
+ASSERT(mac.transportEvents[3] == "mode:4");
+ASSERT(mac.transportEvents[4] == "configuration:-1:7");
+ASSERT(macPolicy.getSnapshot().hasExternalRadioMode());
+ASSERT(macPolicy.getSnapshot().getExternalRadioMode() == IRadio::RADIO_MODE_TRANSCEIVER);
+
+// Idempotent TWT and external updates do not emit duplicate mode transport.
+auto eventCount = mac.transportEvents.size();
+auto macGeneration = macPolicy.getSnapshot().getGeneration();
+mac.setTwtRadioAwake(false);
+macPolicy.setExternalRadioMode(IRadio::RADIO_MODE_TRANSCEIVER);
+ASSERT(mac.transportEvents.size() == eventCount);
+ASSERT(macPolicy.getSnapshot().getGeneration() == macGeneration);
+
+// A busy medium defers both the persistent override and its channel command.
+// Releasing the transaction applies the mode first and retains the cleared
+// radioMode field on the ordinary configuration command.
+Ieee80211RadioModePolicy busyPolicy;
+busyPolicy.initializeState(IRadio::RADIO_MODE_RECEIVER,
+        IRadio::RADIO_MODE_RECEIVER, true);
+TestRx busyRx;
+busyRx.mediumFree = false;
+TestMac busyMac;
+busyMac.bind(&busyPolicy, &busyRx);
+auto busyRequest = new Request("deferredChannelAndMode", RADIO_C_CONFIGURE);
+auto busyCommand = new Ieee80211ConfigureRadioCommand();
+busyCommand->setRadioMode(IRadio::RADIO_MODE_TRANSCEIVER);
+busyCommand->setChannelNumber(11);
+busyRequest->setControlInfo(busyCommand);
+busyMac.forwardUpperCommand(busyRequest);
+ASSERT(busyMac.transportEvents.empty());
+ASSERT(!busyPolicy.getSnapshot().hasExternalRadioMode());
+busyRx.mediumFree = true;
+busyMac.releasePendingConfiguration();
+ASSERT(busyMac.transportEvents.size() == 2);
+ASSERT(busyMac.transportEvents[0] == "mode:4");
+ASSERT(busyMac.transportEvents[1] == "configuration:-1:11");
+ASSERT(busyPolicy.getSnapshot().getExternalRadioMode() == IRadio::RADIO_MODE_TRANSCEIVER);
+
+// An asynchronous radio switch is an in-flight transaction. Later desired
+// generations are coalesced and no second mode command (nor the associated
+// channel command) is sent until the terminal radio-mode signal.
+Ieee80211RadioModePolicy switchingPolicy;
+switchingPolicy.initializeState(IRadio::RADIO_MODE_RECEIVER,
+        IRadio::RADIO_MODE_RECEIVER, true);
+TestRx switchingRx;
+TestMac switchingMac;
+switchingMac.bind(&switchingPolicy, &switchingRx);
+switchingMac.announceSwitchingSynchronously = true;
+switchingMac.sendDownFrame(new Packet("switchingFrame"));
+ASSERT(switchingMac.transportEvents.size() == 2);
+ASSERT(switchingMac.transportEvents[0] == "mode:3");
+ASSERT(switchingMac.transportEvents[1] == "frame");
+switchingMac.setTwtRadioAwake(false);
+switchingMac.releaseTransmission();
+ASSERT(switchingMac.transportEvents.size() == 2);
+switchingMac.announceSwitchingSynchronously = false;
+switchingMac.acknowledgeModeSynchronously = false;
+switchingMac.observeRadioMode(IRadio::RADIO_MODE_TRANSMITTER);
+ASSERT(switchingMac.transportEvents.size() == 3);
+ASSERT(switchingMac.transportEvents[2] == "mode:1");
+switchingMac.observeRadioMode(IRadio::RADIO_MODE_SLEEP);
+ASSERT(switchingMac.transportEvents.size() == 3);
+
+// While the lifecycle remains up, an ordinary configuration held behind the
+// broker's asynchronous switch is released by the terminal mode signal.
+Ieee80211RadioModePolicy terminalPolicy;
+terminalPolicy.initializeState(IRadio::RADIO_MODE_RECEIVER,
+        IRadio::RADIO_MODE_RECEIVER, true);
+TestRx terminalRx;
+TestMac terminalMac;
+terminalMac.bind(&terminalPolicy, &terminalRx);
+terminalMac.announceSwitchingSynchronously = true;
+auto terminalRequest = new Request("terminalChannelAndMode", RADIO_C_CONFIGURE);
+auto terminalCommand = new Ieee80211ConfigureRadioCommand();
+terminalCommand->setRadioMode(IRadio::RADIO_MODE_TRANSCEIVER);
+terminalCommand->setChannelNumber(12);
+terminalRequest->setControlInfo(terminalCommand);
+terminalMac.forwardUpperCommand(terminalRequest);
+ASSERT(terminalMac.transportEvents.size() == 1);
+ASSERT(terminalMac.transportEvents[0] == "mode:4");
+terminalMac.announceSwitchingSynchronously = false;
+terminalMac.observeRadioMode(IRadio::RADIO_MODE_TRANSCEIVER);
+ASSERT(terminalMac.transportEvents.size() == 2);
+ASSERT(terminalMac.transportEvents[1] == "configuration:-1:12");
+
+// Crash transitions dispatch exactly one OFF request from either receiver or
+// transmitter observed state.
+for (auto observedMode : {IRadio::RADIO_MODE_RECEIVER, IRadio::RADIO_MODE_TRANSMITTER}) {
+    Ieee80211RadioModePolicy crashPolicy;
+    crashPolicy.initializeState(IRadio::RADIO_MODE_RECEIVER, observedMode, true);
+    TestRx crashRx;
+    TestMac crashMac;
+    crashMac.bind(&crashPolicy, &crashRx);
+    crashMac.crash();
+    ASSERT(crashMac.transportEvents.size() == 1);
+    ASSERT(crashMac.transportEvents[0] == "mode:0");
+    ASSERT(crashPolicy.getSnapshot().getDesiredRadioMode() == IRadio::RADIO_MODE_OFF);
+}
+
+// A configuration held behind an asynchronous mode switch belongs to the
+// current lifecycle. Stop/crash discards it, and terminal completion can only
+// drive the policy to OFF; it must never replay the channel command.
+for (bool useCrash : {false, true}) {
+    Ieee80211RadioModePolicy shutdownPolicy;
+    shutdownPolicy.initializeState(IRadio::RADIO_MODE_RECEIVER,
+            IRadio::RADIO_MODE_RECEIVER, true);
+    TestRx shutdownRx;
+    TestMac shutdownMac;
+    shutdownMac.bind(&shutdownPolicy, &shutdownRx);
+    shutdownMac.announceSwitchingSynchronously = true;
+    auto shutdownRequest = new Request("shutdownChannelAndMode", RADIO_C_CONFIGURE);
+    auto shutdownCommand = new Ieee80211ConfigureRadioCommand();
+    shutdownCommand->setRadioMode(IRadio::RADIO_MODE_TRANSCEIVER);
+    shutdownCommand->setChannelNumber(13);
+    shutdownRequest->setControlInfo(shutdownCommand);
+    shutdownMac.forwardUpperCommand(shutdownRequest);
+    ASSERT(shutdownMac.transportEvents.size() == 1);
+    ASSERT(shutdownMac.transportEvents[0] == "mode:4");
+    if (useCrash)
+        shutdownMac.crash();
+    else
+        shutdownMac.stop();
+    ASSERT(shutdownMac.transportEvents.size() == 1);
+    shutdownMac.announceSwitchingSynchronously = false;
+    shutdownMac.acknowledgeModeSynchronously = false;
+    shutdownMac.observeRadioMode(IRadio::RADIO_MODE_TRANSCEIVER);
+    ASSERT(shutdownMac.transportEvents.size() == 2);
+    ASSERT(shutdownMac.transportEvents[1] == "mode:0");
+    shutdownMac.observeRadioMode(IRadio::RADIO_MODE_OFF);
+    ASSERT(shutdownMac.transportEvents.size() == 2);
+}

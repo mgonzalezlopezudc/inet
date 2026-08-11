@@ -13,6 +13,7 @@
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211OfdmMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeBase.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211TimingProfile.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
 
 namespace inet {
@@ -31,13 +32,13 @@ namespace physicallayer {
 class INET_API Ieee80211HeTimingRelatedParametersBase
 {
   public:
-    const simtime_t getDFTPeriod() const { return 12.8E-6; } // DFT period for HE is 12.8 µs
-    const simtime_t getGIDuration() const { return 3.2E-6; }  // Long GI (1/4 GI = 3.2 µs)
-    const simtime_t getMediumGIDuration() const { return 1.6E-6; } // Medium GI (1/8 GI = 1.6 µs)
-    const simtime_t getShortGIDuration() const { return 0.8E-6; } // Short GI (1/16 GI = 0.8 µs)
-    const simtime_t getSymbolInterval() const { return getDFTPeriod() + getGIDuration(); } // 16.0 µs
-    const simtime_t getMediumGISymbolInterval() const { return getDFTPeriod() + getMediumGIDuration(); } // 14.4 µs
-    const simtime_t getShortGISymbolInterval() const { return getDFTPeriod() + getShortGIDuration(); } // 13.6 µs
+    const simtime_t getDFTPeriod() const { return Ieee80211TimingProfile::getHeProfile().getDftPeriod(); } // DFT period for HE is 12.8 µs
+    const simtime_t getGIDuration() const { return Ieee80211TimingProfile::getHeProfile().getLongGuardInterval(); }  // Long GI (1/4 GI = 3.2 µs)
+    const simtime_t getMediumGIDuration() const { return Ieee80211TimingProfile::getHeProfile().getMediumGuardInterval(); } // Medium GI (1/8 GI = 1.6 µs)
+    const simtime_t getShortGIDuration() const { return Ieee80211TimingProfile::getHeProfile().getShortGuardInterval(); } // Short GI (1/16 GI = 0.8 µs)
+    const simtime_t getSymbolInterval() const { return Ieee80211TimingProfile::getHeProfile().getLongGuardIntervalSymbolInterval(); } // 16.0 µs
+    const simtime_t getMediumGISymbolInterval() const { return Ieee80211TimingProfile::getHeProfile().getMediumGuardIntervalSymbolInterval(); } // 14.4 µs
+    const simtime_t getShortGISymbolInterval() const { return Ieee80211TimingProfile::getHeProfile().getShortGuardIntervalSymbolInterval(); } // 13.6 µs
 };
 
 /** Common HE bandwidth, guard-interval, MCS, stream-count, and bitrate state. */

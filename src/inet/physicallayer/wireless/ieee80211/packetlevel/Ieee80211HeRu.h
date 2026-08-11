@@ -8,6 +8,9 @@
 #define __INET_IEEE80211HERU_H
 
 #include <cmath>
+#include <cstddef>
+#include <map>
+#include <optional>
 #include <ostream>
 #include <vector>
 
@@ -55,6 +58,53 @@ struct Ieee80211HeRu {
                 toneOffset == other.toneOffset && centerFrequency == other.centerFrequency &&
                 bandwidth == other.bandwidth;
     }
+};
+
+/** Stable identity of an RU within a channel-specific canonical allocation catalog. */
+struct Ieee80211HeRuKey {
+    int index = -1;
+    int toneSize = 0;
+    int toneOffset = 0;
+
+    bool operator==(const Ieee80211HeRuKey& other) const
+    {
+        return index == other.index && toneSize == other.toneSize && toneOffset == other.toneOffset;
+    }
+
+    bool operator<(const Ieee80211HeRuKey& other) const
+    {
+        if (index != other.index)
+            return index < other.index;
+        if (toneSize != other.toneSize)
+            return toneSize < other.toneSize;
+        return toneOffset < other.toneOffset;
+    }
+};
+
+/** Deterministic hash for use when callers need a hash-based collection. */
+struct Ieee80211HeRuKeyHash {
+    size_t operator()(const Ieee80211HeRuKey& key) const noexcept;
+};
+
+/** Extracts the layout-local identity fields without copying derived RU geometry. */
+Ieee80211HeRuKey getIeee80211HeRuKey(const Ieee80211HeRu& ru);
+
+/**
+ * Immutable channel-specific HE RU catalog and its canonical lookup index.
+ * Center frequency and bandwidth scope the catalog; keys intentionally contain
+ * only the layout-local identity transmitted between HE MU components.
+ */
+class INET_API Ieee80211HeRuCatalog
+{
+  private:
+    std::vector<Ieee80211HeRu> rus;
+    std::map<Ieee80211HeRuKey, size_t> indexByKey;
+
+  public:
+    Ieee80211HeRuCatalog(Hz centerFrequency, Hz channelBandwidth);
+
+    const std::vector<Ieee80211HeRu>& getRus() const { return rus; }
+    std::optional<Ieee80211HeRu> findHeRuByKey(const Ieee80211HeRuKey& key) const;
 };
 
 /**
