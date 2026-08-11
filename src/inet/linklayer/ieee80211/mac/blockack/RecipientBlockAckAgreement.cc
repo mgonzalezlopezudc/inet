@@ -25,7 +25,10 @@ RecipientBlockAckAgreement::RecipientBlockAckAgreement(MacAddress originatorAddr
 void RecipientBlockAckAgreement::blockAckPolicyFrameReceived(const Ptr<const Ieee80211DataHeader>& header)
 {
     ASSERT(header->getAckPolicy() == BLOCK_ACK);
+    auto previousGeneration = blockAckRecord->getGeneration();
     blockAckRecord->blockAckPolicyFrameReceived(header);
+    if (blockAckRecord->getGeneration() != previousGeneration)
+        ++generation;
 }
 
 std::ostream& operator<<(std::ostream& os, const RecipientBlockAckAgreement& agreement)

@@ -12,6 +12,15 @@
 namespace inet {
 namespace ieee80211 {
 
+bool BlockAckRecordSnapshot::getAckState(SequenceNumberCyclic sequenceNumber,
+        FragmentNumber fragmentNumber) const
+{
+    if (containsKey(acknowledgmentState,
+            SequenceControlField(sequenceNumber.get(), fragmentNumber)))
+        return true;
+    return sequenceNumber < winStartR;
+}
+
 BlockAckRecord::BlockAckRecord(MacAddress originatorAddress, Tid tid,
         SequenceNumberCyclic winStartR, int windowSize) :
     originatorAddress(originatorAddress),
@@ -31,10 +40,13 @@ void BlockAckRecord::blockAckPolicyFrameReceived(const Ptr<const Ieee80211DataHe
     if (sequenceNumber < winStartR)
         return;
     FragmentNumber fragmentNumber = header->getFragmentNumber();
-    acknowledgmentState[SequenceControlField(sequenceNumber.get(), fragmentNumber)] = true;
+    auto inserted = acknowledgmentState.emplace(
+            SequenceControlField(sequenceNumber.get(), fragmentNumber), true);
+    if (inserted.second)
+        ++generation;
 }
 
-bool BlockAckRecord::getAckState(SequenceNumberCyclic sequenceNumber, FragmentNumber fragmentNumber)
+bool BlockAckRecord::getAckState(SequenceNumberCyclic sequenceNumber, FragmentNumber fragmentNumber) const
 {
     // The status of MPDUs that are considered “old” and prior to the sequence number
     // range for which the receiver maintains status shall be reported as successfully
@@ -66,7 +78,20 @@ void BlockAckRecord::advanceWindow(
     if (winStartR < startingSequenceNumber) {
         winStartR = startingSequenceNumber;
         removeAckStates(winStartR);
+        ++generation;
     }
+}
+
+BlockAckRecordSnapshot BlockAckRecord::getSnapshot(uint64_t associationEpoch) const
+{
+    BlockAckRecordSnapshot snapshot;
+    snapshot.key = std::make_pair(originatorAddress, tid);
+    snapshot.winStartR = winStartR;
+    snapshot.windowSize = windowSize;
+    snapshot.acknowledgmentState = acknowledgmentState;
+    snapshot.generation = generation;
+    snapshot.associationEpoch = associationEpoch;
+    return snapshot;
 }
 
 } /* namespace ieee80211 */

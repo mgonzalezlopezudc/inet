@@ -185,10 +185,11 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
                 continue;
             }
             auto agreement = baHandler->getAgreement(dest, dataHeader->getTid());
-            int occupiedSlots = ackHandler->getOccupiedBlockAckSequenceNumbers(
-                    dest, dataHeader->getTid()).size();
+            auto agreementSnapshot = agreement == nullptr ? OriginatorBlockAckAgreementSnapshot{} : agreement->getSnapshot();
+            int occupiedSlots = ackHandler->getBlockAckOutstandingSnapshot(
+                    dest, dataHeader->getTid()).occupiedSequencePositions.size();
             int availableSlots = agreement == nullptr ? 0 :
-                    std::max(0, agreement->getBufferSize() - occupiedSlots);
+                    std::max(0, agreementSnapshot.bufferSize - occupiedSlots);
             // 10.25.6 bounds the outstanding MPDUs by the negotiated BlockAck
             // buffer/window.  The DL MU scheduler cannot select a user whose
             // next MPDU would fall outside that window.
@@ -196,7 +197,7 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
                 EV_INFO << "HE DL schedule context: skipping packet " << i << " to " << dest
                          << " TID " << (int)dataHeader->getTid()
                          << " — Block Ack window full (" << occupiedSlots << "/"
-                         << (agreement == nullptr ? 0 : agreement->getBufferSize()) << ")\n";
+                         << (agreement == nullptr ? 0 : agreementSnapshot.bufferSize) << ")\n";
                 continue;
             }
             seenDestinations.push_back(dest);
@@ -318,10 +319,11 @@ bool HeHcf::stagePerStaFrameForBlockAckBootstrap(AccessCategory ac)
 
         auto agreement = originatorBlockAckAgreementHandler->getAgreement(
                 header->getReceiverAddress(), header->getTid());
-        if (agreement != nullptr && agreement->getIsAddbaResponseReceived())
+        auto agreementSnapshot = agreement == nullptr ? OriginatorBlockAckAgreementSnapshot{} : agreement->getSnapshot();
+        if (agreement != nullptr && agreementSnapshot.isAddbaResponseReceived)
             continue;
-        if (agreement != nullptr && agreement->getIsAddbaRequestInProgress() &&
-                (agreement->getExpirationTime() < SIMTIME_ZERO || simTime() < agreement->getExpirationTime()))
+        if (agreement != nullptr && agreementSnapshot.isAddbaRequestInProgress &&
+                (agreementSnapshot.expirationTime < SIMTIME_ZERO || simTime() < agreementSnapshot.expirationTime))
             continue;
 
         auto enqueueTimeTag = packet->findTag<OrigEnqueueTimeTag>();

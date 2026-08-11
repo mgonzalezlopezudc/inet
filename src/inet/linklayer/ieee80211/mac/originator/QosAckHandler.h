@@ -10,6 +10,7 @@
 
 #include "inet/common/SimpleModule.h"
 #include "inet/common/packet/Packet.h"
+#include "inet/linklayer/ieee80211/mac/blockack/BlockAckOutstandingSnapshot.h"
 #include <map>
 
 #include "inet/linklayer/ieee80211/mac/common/SequenceControlField.h"
@@ -43,6 +44,7 @@ class INET_API QosAckHandler : public SimpleModule, public IAckHandler
     typedef std::pair<MacAddress, SequenceControlField> Key;
     std::map<QoSKey, Status> ackStatuses;
     std::map<Key, Status> mgmtAckStatuses;
+    uint64_t generation = 0;
 
   protected:
     virtual void initialize(int stage) override;
@@ -81,6 +83,8 @@ class INET_API QosAckHandler : public SimpleModule, public IAckHandler
     virtual bool isRetransmission(const Ptr<const Ieee80211DataOrMgmtHeader>& header) override;
     virtual bool setRetryBitIfNeeded(Packet *packet);
     virtual std::set<int> getOccupiedBlockAckSequenceNumbers(
+            const MacAddress& receiverAddress, Tid tid) const override;
+    virtual BlockAckOutstandingSnapshot getBlockAckOutstandingSnapshot(
             const MacAddress& receiverAddress, Tid tid) const override;
 
     static std::string getStatusString(Status status);

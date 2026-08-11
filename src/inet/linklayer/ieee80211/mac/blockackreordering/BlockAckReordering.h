@@ -14,7 +14,8 @@
 namespace inet {
 namespace ieee80211 {
 
-class RecipientBlockAckAgreement;
+class IRecipientBlockAckAgreementOwner;
+struct RecipientBlockAckAgreementSnapshot;
 
 //
 // Figure 5-1—MAC data plane architecture -- Block Ack Reordering
@@ -35,18 +36,18 @@ class INET_API BlockAckReordering
 
     std::vector<Packet *> getEarliestCompleteMsduOrAMsduIfExists(ReceiveBuffer *receiveBuffer);
     bool isComplete(const Fragments& fragments);
-    void passedUp(RecipientBlockAckAgreement *agreement, ReceiveBuffer *receiveBuffer, SequenceNumberCyclic sequenceNumber);
-    void releaseReceiveBuffer(RecipientBlockAckAgreement *agreement, ReceiveBuffer *receiveBuffer, const ReorderBuffer& reorderBuffer);
-    ReceiveBuffer *createReceiveBufferIfNecessary(RecipientBlockAckAgreement *agreement);
+    void passedUp(IRecipientBlockAckAgreementOwner *agreement, ReceiveBuffer *receiveBuffer, SequenceNumberCyclic sequenceNumber);
+    void releaseReceiveBuffer(IRecipientBlockAckAgreementOwner *agreement, ReceiveBuffer *receiveBuffer, const ReorderBuffer& reorderBuffer);
+    ReceiveBuffer *createReceiveBufferIfNecessary(const RecipientBlockAckAgreementSnapshot& agreement);
     bool addMsduIfComplete(ReceiveBuffer *receiveBuffer, ReorderBuffer& reorderBuffer, SequenceNumberCyclic seqNum);
 
   public:
     virtual ~BlockAckReordering();
 
     void processReceivedDelba(const Ptr<const Ieee80211Delba>& delba);
-    ReorderBuffer processReceivedQoSFrame(RecipientBlockAckAgreement *agreement, Packet *dataPacket, const Ptr<const Ieee80211DataHeader>& dataHeader);
-    ReorderBuffer processReceivedBlockAckReq(RecipientBlockAckAgreement *agreement, const Ptr<const Ieee80211BlockAckReq>& blockAckReq);
-    ReorderBuffer processReceivedBlockAckReq(RecipientBlockAckAgreement *agreement, SequenceNumberCyclic startingSequenceNumber);
+    ReorderBuffer processReceivedQoSFrame(IRecipientBlockAckAgreementOwner *agreement, Packet *dataPacket, const Ptr<const Ieee80211DataHeader>& dataHeader);
+    ReorderBuffer processReceivedBlockAckReq(IRecipientBlockAckAgreementOwner *agreement, const Ptr<const Ieee80211BlockAckReq>& blockAckReq);
+    ReorderBuffer processReceivedBlockAckReq(IRecipientBlockAckAgreementOwner *agreement, SequenceNumberCyclic startingSequenceNumber);
 };
 
 } /* namespace ieee80211 */

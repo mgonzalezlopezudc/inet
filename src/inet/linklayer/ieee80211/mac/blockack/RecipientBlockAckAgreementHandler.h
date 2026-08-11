@@ -26,6 +26,7 @@ class INET_API RecipientBlockAckAgreementHandler : public IRecipientBlockAckAgre
 {
   protected:
     std::map<std::pair<MacAddress, Tid>, RecipientBlockAckAgreement *> blockAckAgreements;
+    uint64_t nextAssociationEpoch = 0;
 
   protected:
     virtual void terminateAgreement(MacAddress originatorAddr, Tid tid);

@@ -17,7 +17,7 @@ simtime_t RecipientBlockAckAgreementHandler::computeEarliestExpirationTime()
     simtime_t earliestTime = SIMTIME_MAX;
     for (auto id : blockAckAgreements) {
         auto agreement = id.second;
-        earliestTime = std::min(earliestTime, agreement->getExpirationTime());
+        earliestTime = std::min(earliestTime, agreement->getSnapshot().expirationTime);
     }
     return earliestTime;
 }
@@ -35,6 +35,8 @@ void RecipientBlockAckAgreementHandler::scheduleInactivityTimer(IBlockAckAgreeme
 //
 void RecipientBlockAckAgreementHandler::qosFrameReceived(const Ptr<const Ieee80211DataHeader>& qosHeader, IBlockAckAgreementHandlerCallback *callback)
 {
+    if (qosHeader->getTransmitterAddress().isMulticast() || qosHeader->getTransmitterAddress().isBroadcast())
+        return;
     if (qosHeader->getAckPolicy() == AckPolicy::BLOCK_ACK) { // TODO + Implicit Block Ack
         Tid tid = qosHeader->getTid();
         MacAddress originatorAddr = qosHeader->getTransmitterAddress();
@@ -49,11 +51,13 @@ bool RecipientBlockAckAgreementHandler::implicitBlockAckRequestFrameReceived(
         IBlockAckAgreementHandlerCallback *callback)
 {
     ASSERT(qosHeader->getAckPolicy() == AckPolicy::NORMAL_ACK);
+    if (qosHeader->getTransmitterAddress().isMulticast() || qosHeader->getTransmitterAddress().isBroadcast())
+        return false;
     auto agreement = getAgreement(qosHeader->getTid(),
             qosHeader->getTransmitterAddress());
     if (agreement == nullptr)
         return false;
-    agreement->getBlockAckRecord()->blockAckPolicyFrameReceived(qosHeader);
+    agreement->blockAckPolicyFrameReceived(qosHeader);
     agreement->calculateExpirationTime();
     scheduleInactivityTimer(callback);
     return true;
@@ -68,7 +72,7 @@ void RecipientBlockAckAgreementHandler::blockAckAgreementExpired(IProcedureCallb
     simtime_t now = simTime();
     for (auto id : blockAckAgreements) {
         auto agreement = id.second;
-        if (agreement->getExpirationTime() == now) {
+        if (agreement->getSnapshot().expirationTime == now) {
             MacAddress receiverAddr = id.first.first;
             Tid tid = id.first.second;
             const auto& delba = buildDelba(receiverAddr, tid, 39);
@@ -93,6 +97,7 @@ RecipientBlockAckAgreement *RecipientBlockAckAgreementHandler::addAgreement(cons
     auto it = blockAckAgreements.find(id);
     if (it == blockAckAgreements.end()) {
         RecipientBlockAckAgreement *agreement = new RecipientBlockAckAgreement(originatorAddr, addbaReq->getTid(), addbaReq->getStartingSequenceNumber(), addbaReq->getBufferSize(), addbaReq->getBlockAckTimeoutValue());
+        agreement->setAssociationEpoch(++nextAssociationEpoch);
         blockAckAgreements[id] = agreement;
         EV_DETAIL << "Block Ack Agreement is added with the following parameters: " << *agreement << endl;
         return agreement;
@@ -169,6 +174,8 @@ void RecipientBlockAckAgreementHandler::processTransmittedAddbaResp(const Ptr<co
 
 void RecipientBlockAckAgreementHandler::processReceivedAddbaRequest(const Ptr<const Ieee80211AddbaRequest>& addbaRequest, IRecipientBlockAckAgreementPolicy *blockAckAgreementPolicy, IProcedureCallback *callback)
 {
+    if (addbaRequest->getTransmitterAddress().isMulticast() || addbaRequest->getTransmitterAddress().isBroadcast())
+        return;
     EV_INFO << "Processing Addba Request from " << addbaRequest->getTransmitterAddress() << endl;
     if (blockAckAgreementPolicy->isAddbaReqAccepted(addbaRequest)) {
         EV_DETAIL << "Addba Request has been accepted. Creating a new Block Ack Agreement." << endl;

@@ -130,6 +130,8 @@ ASSERT(fullWrappedWindow.count(4094) == 1);
 ASSERT(fullWrappedWindow.count(4095) == 1);
 ASSERT(fullWrappedWindow.count(0) == 1);
 ASSERT(fullWrappedWindow.count(1) == 1);
+REQUIRE(isSequenceNumberInWindow(SequenceNumberCyclic(1),
+        SequenceNumberCyclic(4095), 64));
 
 for (const auto& header : wrappedHeaders)
     ackHandler->dropFrame(header);
@@ -235,7 +237,11 @@ delete unackedPacket;
     TestOriginatorBlockAckAgreementHandler agreementHandler;
     TestBlockAckAgreementHandlerCallback callback;
     agreementHandler.addAgreement(sta1, tid, 699);
+    auto agreementSnapshot = agreementHandler.getAgreement(sta1, tid)->getSnapshot();
+    REQUIRE(agreementSnapshot.key == std::make_pair(sta1, tid));
+    REQUIRE(agreementSnapshot.startingSequenceNumber == SequenceNumberCyclic(699));
     agreementHandler.processReceivedBlockAck(response, &callback);
+    REQUIRE(!agreementHandler.getAgreement(sta1, tid)->isSnapshotCurrent(agreementSnapshot));
     REQUIRE(agreementHandler.getAgreement(sta1, tid)->
             getStartingSequenceNumber() == SequenceNumberCyclic(700));
 }

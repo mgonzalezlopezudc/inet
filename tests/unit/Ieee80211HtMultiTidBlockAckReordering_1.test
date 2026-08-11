@@ -105,6 +105,12 @@ TestRecipientBlockAckAgreementHandler agreementHandler;
 agreementHandler.addAgreement(firstTid, originatorAddress, 90);
 agreementHandler.addAgreement(secondTid, originatorAddress, 90);
 
+auto firstAgreement = agreementHandler.getAgreement(firstTid, originatorAddress);
+auto firstSnapshot = firstAgreement->getSnapshot();
+REQUIRE(firstSnapshot.record.key == std::make_pair(originatorAddress, firstTid));
+REQUIRE(firstSnapshot.record.winStartR == SequenceNumberCyclic(90));
+REQUIRE(firstAgreement->isSnapshotCurrent(firstSnapshot));
+
 auto firstPacket = makeQosData("tid3-seq100", receiverAddress,
         originatorAddress, firstTid, sharedSequenceNumber);
 auto firstHeader = firstPacket->peekAtFront<Ieee80211DataHeader>();
@@ -148,6 +154,11 @@ std::set<std::pair<Tid, uint16_t>> expectedIdentities({
 std::set<std::string> expectedNames({"tid3-seq100", "tid5-seq100"});
 REQUIRE(deliveredIdentities == expectedIdentities);
 REQUIRE(deliveredNames == expectedNames);
+
+firstAgreement->advanceWindow(SequenceNumberCyclic(sharedSequenceNumber + 1));
+REQUIRE(!firstAgreement->isSnapshotCurrent(firstSnapshot));
+REQUIRE(firstAgreement->getSnapshot().record.winStartR ==
+        SequenceNumberCyclic(sharedSequenceNumber + 1));
 
 REQUIRE(dataService->controlFrameReceived(requestPacket, request,
         &agreementHandler).empty());

@@ -89,7 +89,7 @@ class MockRecipientAgreementHandler : public IRecipientBlockAckAgreementHandler
             const Ptr<const Ieee80211DataHeader>& header,
             IBlockAckAgreementHandlerCallback *) override {
         implicitFrameCount++;
-        agreement.getBlockAckRecord()->blockAckPolicyFrameReceived(header);
+        agreement.blockAckPolicyFrameReceived(header);
         return true;
     }
     virtual void blockAckAgreementExpired(IProcedureCallback *, IBlockAckAgreementHandlerCallback *) override {}
@@ -288,10 +288,10 @@ RecipientBlockAckAgreement wrapAgreement(originator, tid,
         SequenceNumberCyclic(4094), 4, SIMTIME_ZERO);
 auto wrapOne = makeHeader(recipient, originator, tid, 1);
 auto wrapTwo = makeHeader(recipient, originator, tid, 2);
-wrapAgreement.getBlockAckRecord()->blockAckPolicyFrameReceived(wrapOne);
+wrapAgreement.blockAckPolicyFrameReceived(wrapOne);
 REQUIRE(wrapAgreement.getBlockAckRecord()->getWinStartR() ==
         SequenceNumberCyclic(4094));
-wrapAgreement.getBlockAckRecord()->blockAckPolicyFrameReceived(wrapTwo);
+wrapAgreement.blockAckPolicyFrameReceived(wrapTwo);
 REQUIRE(wrapAgreement.getBlockAckRecord()->getWinStartR() ==
         SequenceNumberCyclic(4095));
 REQUIRE(wrapAgreement.getBlockAckRecord()->getAckState(
@@ -305,8 +305,7 @@ BlockAckReordering reordering;
 for (int sequenceNumber = 10; sequenceNumber <= 12; sequenceNumber++) {
     auto reorderedHeader = makeHeader(recipient, originator, tid,
             sequenceNumber);
-    reorderedAgreementHandler.agreement.getBlockAckRecord()->
-            blockAckPolicyFrameReceived(reorderedHeader);
+    reorderedAgreementHandler.agreement.blockAckPolicyFrameReceived(reorderedHeader);
     auto released = reordering.processReceivedQoSFrame(
             &reorderedAgreementHandler.agreement,
             new Packet("reordered", reorderedHeader), reorderedHeader);

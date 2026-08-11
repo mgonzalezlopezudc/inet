@@ -95,7 +95,7 @@ const char *getDlMuIneligibilityReason(IOriginatorBlockAckAgreementHandler *hand
     auto agreement = handler->getAgreement(receiverAddress, tid);
     if (agreement == nullptr)
         return "missing originator Block Ack agreement";
-    if (!agreement->getIsAddbaResponseReceived())
+    if (!agreement->getSnapshot().isAddbaResponseReceived)
         return "ADDBA response not received";
     return nullptr;
 }
@@ -914,9 +914,10 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
 
     auto getAvailableSlots = [&] (const MacAddress& receiverAddress, Tid tid) {
         auto agreement = originatorBAHandler->getAgreement(receiverAddress, tid);
-        int blockAckWindowLimit = agreement == nullptr ? 0 : agreement->getBufferSize();
+        auto agreementSnapshot = agreement == nullptr ? OriginatorBlockAckAgreementSnapshot{} : agreement->getSnapshot();
+        int blockAckWindowLimit = agreement == nullptr ? 0 : agreementSnapshot.bufferSize;
         int occupiedSlots = ackHandler == nullptr ? 0 :
-                ackHandler->getOccupiedBlockAckSequenceNumbers(receiverAddress, tid).size();
+                ackHandler->getBlockAckOutstandingSnapshot(receiverAddress, tid).occupiedSequencePositions.size();
         return std::max(0, blockAckWindowLimit - occupiedSlots);
     };
 

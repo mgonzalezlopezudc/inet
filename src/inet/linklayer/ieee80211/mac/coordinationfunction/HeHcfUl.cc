@@ -877,13 +877,16 @@ Ptr<Ieee80211CompressedBlockAck> buildHeMuBarCompressedBlockAck(
     // (9.3.1.22.4 and 9.3.1.9).  Using the agreement's initial window here
     // makes every later response repeat the first bitmap and eventually
     // exhausts the originator's BA window.
+    auto agreementSnapshot = agreement->getSnapshot();
     auto startingSequenceNumber = SequenceNumberCyclic(user.muBarStartingSequenceNumber);
     std::vector<uint8_t> bytes(8, 0);
     BitVector bitmap(bytes);
     for (int i = 0; i < 64; ++i) {
-        bool ackState = agreement->getBlockAckRecord()->getAckState(startingSequenceNumber + i, 0);
+        bool ackState = agreementSnapshot.record.getAckState(startingSequenceNumber + i, 0);
         bitmap.setBit(i, ackState);
     }
+    if (!agreement->isSnapshotCurrent(agreementSnapshot))
+        throw cRuntimeError("Recipient Block Ack agreement changed while building MU-BAR response");
     auto blockAck = makeShared<Ieee80211CompressedBlockAck>();
     blockAck->setReceiverAddress(receiverAddress);
     blockAck->setTransmitterAddress(transmitterAddress);
@@ -1144,10 +1147,11 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
                 auto agreement = originatorBlockAckAgreementHandler == nullptr ?
                         nullptr : originatorBlockAckAgreementHandler->getAgreement(
                                 receiverAddress, candidateHeader->getTid());
-                if (agreement == nullptr || !agreement->getIsAddbaResponseReceived())
+                auto agreementSnapshot = agreement == nullptr ? OriginatorBlockAckAgreementSnapshot{} : agreement->getSnapshot();
+                if (agreement == nullptr || !agreementSnapshot.isAddbaResponseReceived)
                     continue;
                 const auto startingSequenceNumber =
-                        agreement->getStartingSequenceNumber();
+                        agreementSnapshot.startingSequenceNumber;
                 bool completeWindow = true;
                 for (auto outstanding : outstandingFrames) {
                     auto outstandingHeader =
@@ -1707,12 +1711,13 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
         sourceQueue = edca->getEdcaf(selectedAc)->getPendingQueue();
     auto ulBaAgreement = originatorBlockAckAgreementHandler == nullptr ? nullptr :
             originatorBlockAckAgreementHandler->getAgreement(mac->getMib()->getBssid(), selectedTid);
-    int occupiedSlots = edca->getEdcaf(selectedAc)->getAckHandler()->getOccupiedBlockAckSequenceNumbers(
-            mac->getMib()->getBssid(), selectedTid).size();
+    auto ulBaAgreementSnapshot = ulBaAgreement == nullptr ? OriginatorBlockAckAgreementSnapshot{} : ulBaAgreement->getSnapshot();
+    int occupiedSlots = edca->getEdcaf(selectedAc)->getAckHandler()->getBlockAckOutstandingSnapshot(
+            mac->getMib()->getBssid(), selectedTid).occupiedSequencePositions.size();
     int availableSlots = ulBaAgreement == nullptr ? 0 :
-            std::max(0, ulBaAgreement->getBufferSize() - occupiedSlots);
+            std::max(0, ulBaAgreementSnapshot.bufferSize - occupiedSlots);
     EV_DEBUG << "HE TB Block Ack window: agreement=" << (ulBaAgreement != nullptr)
-             << ", size=" << (ulBaAgreement != nullptr ? ulBaAgreement->getBufferSize() : 0)
+             << ", size=" << (ulBaAgreement != nullptr ? ulBaAgreementSnapshot.bufferSize : 0)
              << ", occupied=" << occupiedSlots
              << ", available=" << availableSlots << "\n";
     // IEEE 802.11-2024 10.3.2.13.3 and 26.4.4.5 allow a tagged QoS Data MPDU

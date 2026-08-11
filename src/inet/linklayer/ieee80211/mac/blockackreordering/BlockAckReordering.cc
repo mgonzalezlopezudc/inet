@@ -15,9 +15,11 @@ namespace ieee80211 {
 //
 // The recipient flushes received MSDUs from its receive buffer as described in this subclause. [...]
 //
-BlockAckReordering::ReorderBuffer BlockAckReordering::processReceivedQoSFrame(RecipientBlockAckAgreement *agreement, Packet *dataPacket, const Ptr<const Ieee80211DataHeader>& dataHeader)
+BlockAckReordering::ReorderBuffer BlockAckReordering::processReceivedQoSFrame(IRecipientBlockAckAgreementOwner *agreement, Packet *dataPacket, const Ptr<const Ieee80211DataHeader>& dataHeader)
 {
-    ReceiveBuffer *receiveBuffer = createReceiveBufferIfNecessary(agreement);
+    ASSERT(agreement != nullptr);
+    auto agreementSnapshot = agreement->getSnapshot();
+    ReceiveBuffer *receiveBuffer = createReceiveBufferIfNecessary(agreementSnapshot);
     // The reception of QoS data frames using Normal Ack policy shall not be used by the
     // recipient to reset the timer to detect Block Ack timeout (see 10.5.4).
     // This allows the recipient to delete the Block Ack if the originator does not switch
@@ -51,7 +53,7 @@ BlockAckReordering::ReorderBuffer BlockAckReordering::processReceivedQoSFrame(Re
 //
 // The recipient flushes received MSDUs from its receive buffer as described in this subclause. [...]
 //
-BlockAckReordering::ReorderBuffer BlockAckReordering::processReceivedBlockAckReq(RecipientBlockAckAgreement *agreement, const Ptr<const Ieee80211BlockAckReq>& blockAckReq)
+BlockAckReordering::ReorderBuffer BlockAckReordering::processReceivedBlockAckReq(IRecipientBlockAckAgreementOwner *agreement, const Ptr<const Ieee80211BlockAckReq>& blockAckReq)
 {
     // The originator shall use the Block Ack starting sequence control to signal the first MPDU in the block for
     // which an acknowledgment is expected.
@@ -68,13 +70,13 @@ BlockAckReordering::ReorderBuffer BlockAckReordering::processReceivedBlockAckReq
 }
 
 BlockAckReordering::ReorderBuffer BlockAckReordering::processReceivedBlockAckReq(
-        RecipientBlockAckAgreement *agreement,
+        IRecipientBlockAckAgreementOwner *agreement,
         SequenceNumberCyclic startingSequenceNumber)
 {
     ASSERT(agreement != nullptr);
-    auto blockAckRecord = agreement->getBlockAckRecord();
-    auto id = std::make_pair(blockAckRecord->getTid(),
-            blockAckRecord->getOriginatorAddress());
+    auto agreementSnapshot = agreement->getSnapshot();
+    auto id = std::make_pair(agreementSnapshot.record.key.second,
+            agreementSnapshot.record.key.first);
     auto it = receiveBuffers.find(id);
     if (it != receiveBuffers.end()) {
         ReceiveBuffer *receiveBuffer = it->second;
@@ -153,7 +155,7 @@ bool BlockAckReordering::addMsduIfComplete(ReceiveBuffer *receiveBuffer, Reorder
     return false;
 }
 
-void BlockAckReordering::releaseReceiveBuffer(RecipientBlockAckAgreement *agreement, ReceiveBuffer *receiveBuffer, const ReorderBuffer& reorderBuffer)
+void BlockAckReordering::releaseReceiveBuffer(IRecipientBlockAckAgreementOwner *agreement, ReceiveBuffer *receiveBuffer, const ReorderBuffer& reorderBuffer)
 {
     for (auto it : reorderBuffer) {
         auto sequenceNumber = it.first;
@@ -174,12 +176,12 @@ bool BlockAckReordering::isComplete(const std::vector<Packet *>& fragments)
     return largestFragmentNumber != -1 && largestFragmentNumber + 1 == (int)fragNums.size();
 }
 
-ReceiveBuffer *BlockAckReordering::createReceiveBufferIfNecessary(RecipientBlockAckAgreement *agreement)
+ReceiveBuffer *BlockAckReordering::createReceiveBufferIfNecessary(const RecipientBlockAckAgreementSnapshot& agreement)
 {
-    SequenceNumberCyclic startingSequenceNumber = agreement->getStartingSequenceNumber();
-    int bufferSize = agreement->getBufferSize();
-    Tid tid = agreement->getBlockAckRecord()->getTid();
-    MacAddress originatorAddr = agreement->getBlockAckRecord()->getOriginatorAddress();
+    SequenceNumberCyclic startingSequenceNumber = agreement.startingSequenceNumber;
+    int bufferSize = agreement.bufferSize;
+    Tid tid = agreement.record.key.second;
+    MacAddress originatorAddr = agreement.record.key.first;
     auto id = std::make_pair(tid, originatorAddr);
     auto it = receiveBuffers.find(id);
     if (it == receiveBuffers.end()) {
@@ -205,7 +207,7 @@ void BlockAckReordering::processReceivedDelba(const Ptr<const Ieee80211Delba>& d
         EV_DETAIL << "Receive buffer is not found" << endl;
 }
 
-void BlockAckReordering::passedUp(RecipientBlockAckAgreement *agreement, ReceiveBuffer *receiveBuffer, SequenceNumberCyclic sequenceNumber)
+void BlockAckReordering::passedUp(IRecipientBlockAckAgreementOwner *agreement, ReceiveBuffer *receiveBuffer, SequenceNumberCyclic sequenceNumber)
 {
     // Each time that the recipient passes an MSDU or A-MSDU for a Block Ack agreement up to the next MAC
     // process, the NextExpectedSequenceNumber for that Block Ack agreement is set to the sequence number of the
@@ -216,7 +218,7 @@ void BlockAckReordering::passedUp(RecipientBlockAckAgreement *agreement, Receive
     // IEEE Std 802.11-2024, 10.25.6.3: once the oldest consecutively
     // received MPDU leaves the receive buffer, advance the independently
     // owned recipient scoreboard window past it as well.
-    agreement->getBlockAckRecord()->advanceWindow(sequenceNumber + 1);
+    agreement->advanceWindow(sequenceNumber + 1);
 }
 
 std::vector<Packet *> BlockAckReordering::getEarliestCompleteMsduOrAMsduIfExists(ReceiveBuffer *receiveBuffer)

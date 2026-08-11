@@ -223,7 +223,7 @@ class MockRecipientBlockAckAgreementHandler : public IRecipientBlockAckAgreement
         agreement->blockAckPolicyFrameReceived(qosHeader);
     }
     virtual bool implicitBlockAckRequestFrameReceived(const Ptr<const Ieee80211DataHeader>& qosHeader, IBlockAckAgreementHandlerCallback *callback) override {
-        agreement->getBlockAckRecord()->blockAckPolicyFrameReceived(qosHeader);
+        agreement->blockAckPolicyFrameReceived(qosHeader);
         return true;
     }
     virtual void blockAckAgreementExpired(IProcedureCallback *procedureCallback, IBlockAckAgreementHandlerCallback *agreementHandlerCallback) override {}

@@ -76,9 +76,10 @@ void RecipientBlockAckProcedure::processReceivedBlockAckReq(Packet *blockAckPack
                 const auto& reqRec = multiTidBlockAckReq->getRecords(i);
                 auto agreement = blockAckAgreementHandler->getAgreement(reqRec.tid, multiTidBlockAckReq->getTransmitterAddress());
                 if (agreement != nullptr) {
+                    auto agreementSnapshot = agreement->getSnapshot();
                     SequenceNumberCyclic startingSequenceNumber(reqRec.startingSequenceNumber);
                     for (int j = 0; j < 64; ++j) {
-                        bool ackState = agreement->getBlockAckRecord()->getAckState(startingSequenceNumber + j, 0);
+                        bool ackState = agreementSnapshot.record.getAckState(startingSequenceNumber + j, 0);
                         if (ackState)
                             bitmaps[i] |= (1ULL << j);
                     }
@@ -179,12 +180,12 @@ bool RecipientBlockAckProcedure::processReceivedHtImplicitBlockAckRequest(
     // IEEE Std 802.11-2024, 10.25.6.3 and 10.25.6.5: anchor the
     // Compressed BlockAck bitmap at the recipient scoreboard's WinStartR,
     // not at the first MPDU that happened to decode successfully.
-    auto startingSequenceNumber =
-            agreement->getBlockAckRecord()->getWinStartR();
+    auto agreementSnapshot = agreement->getSnapshot();
+    auto startingSequenceNumber = agreementSnapshot.record.winStartR;
     std::vector<uint8_t> bytes(8, 0);
     BitVector bitmap(bytes);
     for (int i = 0; i < 64; i++)
-        bitmap.setBit(i, agreement->getBlockAckRecord()->getAckState(
+        bitmap.setBit(i, agreementSnapshot.record.getAckState(
                 startingSequenceNumber + i, 0));
     auto blockAck = makeShared<Ieee80211CompressedBlockAck>();
     blockAck->setReceiverAddress(originatorAddress);
@@ -217,12 +218,12 @@ const Ptr<Ieee80211BlockAck> RecipientBlockAckProcedure::buildBlockAck(const Ptr
         ASSERT(agreement != nullptr);
         auto blockAck = makeShared<Ieee80211BasicBlockAck>();
         auto startingSequenceNumber = basicBlockAckReq->getStartingSequenceNumber();
-        agreement->getBlockAckRecord()->advanceWindow(
-                startingSequenceNumber);
+        agreement->advanceWindow(startingSequenceNumber);
+        auto agreementSnapshot = agreement->getSnapshot();
         for (int i = 0; i < 64; i++) {
             BitVector& bitmap = blockAck->getBlockAckBitmapForUpdate(i);
             for (FragmentNumber fragNum = 0; fragNum < 16; fragNum++) {
-                bool ackState = agreement->getBlockAckRecord()->getAckState(startingSequenceNumber + i, fragNum);
+                bool ackState = agreementSnapshot.record.getAckState(startingSequenceNumber + i, fragNum);
                 bitmap.setBit(fragNum, ackState);
             }
         }
@@ -236,12 +237,12 @@ const Ptr<Ieee80211BlockAck> RecipientBlockAckProcedure::buildBlockAck(const Ptr
         ASSERT(agreement != nullptr);
         auto blockAck = makeShared<Ieee80211CompressedBlockAck>();
         auto startingSequenceNumber = compressedBlockAckReq->getStartingSequenceNumber();
-        agreement->getBlockAckRecord()->advanceWindow(
-                startingSequenceNumber);
+        agreement->advanceWindow(startingSequenceNumber);
+        auto agreementSnapshot = agreement->getSnapshot();
         std::vector<uint8_t> bytes(8, 0);
         BitVector bitmap(bytes);
         for (int i = 0; i < 64; i++) {
-            bool ackState = agreement->getBlockAckRecord()->getAckState(startingSequenceNumber + i, 0);
+            bool ackState = agreementSnapshot.record.getAckState(startingSequenceNumber + i, 0);
             bitmap.setBit(i, ackState);
         }
         blockAck->setReceiverAddress(blockAckReq->getTransmitterAddress());

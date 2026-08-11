@@ -66,6 +66,13 @@ struct SequenceNumberCyclic
     bool operator>=(const SequenceNumberCyclic& other) const { return *this == other || *this > other; }
 };
 
+inline bool isSequenceNumberInWindow(SequenceNumberCyclic sequenceNumber,
+        SequenceNumberCyclic windowStart, int windowSize)
+{
+    ASSERT(windowSize >= 0 && windowSize < 2048);
+    return sequenceNumber >= windowStart && sequenceNumber < windowStart + windowSize;
+}
+
 inline std::ostream& operator<<(std::ostream& os, const SequenceNumberCyclic& sequenceNumber)
 {
     os << sequenceNumber.get();

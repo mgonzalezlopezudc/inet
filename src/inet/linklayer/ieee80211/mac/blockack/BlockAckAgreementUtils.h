@@ -19,16 +19,19 @@ inline bool hasActiveOriginatorBlockAckAgreement(IOriginatorBlockAckAgreementHan
         const MacAddress& receiverAddress, Tid tid)
 {
     auto agreement = handler == nullptr ? nullptr : handler->getAgreement(receiverAddress, tid);
-    return agreement != nullptr && agreement->getIsAddbaResponseReceived();
+    return agreement != nullptr && agreement->getSnapshot().isAddbaResponseReceived;
 }
 
 inline bool isOriginatorBlockAckAgreementPending(IOriginatorBlockAckAgreementHandler *handler,
         const MacAddress& receiverAddress, Tid tid)
 {
     auto agreement = handler == nullptr ? nullptr : handler->getAgreement(receiverAddress, tid);
-    if (agreement == nullptr || !agreement->getIsAddbaRequestInProgress() || agreement->getIsAddbaResponseReceived())
+    if (agreement == nullptr)
         return false;
-    auto retryDeadline = agreement->getExpirationTime();
+    auto snapshot = agreement->getSnapshot();
+    if (!snapshot.isAddbaRequestInProgress || snapshot.isAddbaResponseReceived)
+        return false;
+    auto retryDeadline = snapshot.expirationTime;
     return retryDeadline < SIMTIME_ZERO || simTime() < retryDeadline;
 }
 

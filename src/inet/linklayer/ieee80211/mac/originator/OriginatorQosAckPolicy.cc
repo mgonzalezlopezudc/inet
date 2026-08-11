@@ -99,7 +99,7 @@ AckPolicy OriginatorQosAckPolicy::computeAckPolicy(Packet *packet, const Ptr<con
 {
     if (agreement == nullptr)
         return AckPolicy::NORMAL_ACK;
-    if (agreement->getIsAddbaResponseReceived() && isBlockAckPolicyEligibleFrame(packet, header)) {
+    if (agreement->getSnapshot().isAddbaResponseReceived && isBlockAckPolicyEligibleFrame(packet, header)) {
         if (checkAgreementPolicy(header, agreement))
             return AckPolicy::BLOCK_ACK;
         else
@@ -116,10 +116,11 @@ bool OriginatorQosAckPolicy::isBlockAckPolicyEligibleFrame(Packet *packet, const
 
 bool OriginatorQosAckPolicy::checkAgreementPolicy(const Ptr<const Ieee80211DataHeader>& header, OriginatorBlockAckAgreement *agreement) const
 {
-    bool bufferFull = agreement->getBufferSize() == agreement->getNumSentBaPolicyFrames();
-    bool aMsduOk = agreement->getIsAMsduSupported() || !header->getAMsduPresent();
+    auto snapshot = agreement->getSnapshot();
+    bool bufferFull = snapshot.bufferSize == snapshot.numSentBaPolicyFrames;
+    bool aMsduOk = snapshot.isAMsduSupported || !header->getAMsduPresent();
     // TODO bool baPolicy = agreement->getIsDelayedBlockAckPolicySupported() || !frame->getAckPolicy();
-    bool snOk = header->getSequenceNumber().get() == 0 || header->getSequenceNumber() >= agreement->getStartingSequenceNumber();
+    bool snOk = header->getSequenceNumber().get() == 0 || header->getSequenceNumber() >= snapshot.startingSequenceNumber;
     return !bufferFull && aMsduOk && snOk;
 }
 
