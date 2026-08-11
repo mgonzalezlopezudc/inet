@@ -1712,8 +1712,8 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
     auto ulBaAgreement = originatorBlockAckAgreementHandler == nullptr ? nullptr :
             originatorBlockAckAgreementHandler->getAgreement(mac->getMib()->getBssid(), selectedTid);
     auto ulBaAgreementSnapshot = ulBaAgreement == nullptr ? OriginatorBlockAckAgreementSnapshot{} : ulBaAgreement->getSnapshot();
-    int occupiedSlots = edca->getEdcaf(selectedAc)->getAckHandler()->getBlockAckOutstandingSnapshot(
-            mac->getMib()->getBssid(), selectedTid).occupiedSequencePositions.size();
+    int occupiedSlots = edca->getEdcaf(selectedAc)->getAckHandler()->getNumOccupiedBlockAckSequencePositions(
+            mac->getMib()->getBssid(), selectedTid);
     int availableSlots = ulBaAgreement == nullptr ? 0 :
             std::max(0, ulBaAgreementSnapshot.bufferSize - occupiedSlots);
     EV_DEBUG << "HE TB Block Ack window: agreement=" << (ulBaAgreement != nullptr)

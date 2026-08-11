@@ -186,8 +186,8 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
             }
             auto agreement = baHandler->getAgreement(dest, dataHeader->getTid());
             auto agreementSnapshot = agreement == nullptr ? OriginatorBlockAckAgreementSnapshot{} : agreement->getSnapshot();
-            int occupiedSlots = ackHandler->getBlockAckOutstandingSnapshot(
-                    dest, dataHeader->getTid()).occupiedSequencePositions.size();
+            int occupiedSlots = ackHandler->getNumOccupiedBlockAckSequencePositions(
+                    dest, dataHeader->getTid());
             int availableSlots = agreement == nullptr ? 0 :
                     std::max(0, agreementSnapshot.bufferSize - occupiedSlots);
             // 10.25.6 bounds the outstanding MPDUs by the negotiated BlockAck

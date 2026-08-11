@@ -44,6 +44,7 @@ class INET_API QosAckHandler : public SimpleModule, public IAckHandler
     typedef std::pair<MacAddress, SequenceControlField> Key;
     std::map<QoSKey, Status> ackStatuses;
     std::map<Key, Status> mgmtAckStatuses;
+    mutable std::map<BlockAckAgreementKey, std::pair<uint64_t, size_t>> blockAckOccupancyCache;
     uint64_t generation = 0;
 
   protected:
@@ -85,6 +86,8 @@ class INET_API QosAckHandler : public SimpleModule, public IAckHandler
     virtual std::set<int> getOccupiedBlockAckSequenceNumbers(
             const MacAddress& receiverAddress, Tid tid) const override;
     virtual BlockAckOutstandingSnapshot getBlockAckOutstandingSnapshot(
+            const MacAddress& receiverAddress, Tid tid) const override;
+    virtual size_t getNumOccupiedBlockAckSequencePositions(
             const MacAddress& receiverAddress, Tid tid) const override;
 
     static std::string getStatusString(Status status);

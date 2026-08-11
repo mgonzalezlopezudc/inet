@@ -178,6 +178,11 @@ for (auto channelBandwidth : {MHz(20), MHz(40), MHz(80), MHz(160)}) {
     requireTrue(!indexedCatalog.findHeRuByKey(invalidKey), "invalid RU key was accepted");
 }
 
+const auto& cachedCatalog1 = getHeRuCatalog(centerFrequency, MHz(80));
+const auto& cachedCatalog2 = getHeRuCatalog(centerFrequency, MHz(80));
+requireTrue(&cachedCatalog1 == &cachedCatalog2,
+        "repeated RU catalog requests should reuse the immutable catalog");
+
 auto key20 = getIeee80211HeRuKey(Ieee80211HeRuCatalog(centerFrequency, MHz(20)).getRus().front());
 auto key40 = getIeee80211HeRuKey(Ieee80211HeRuCatalog(centerFrequency, MHz(40)).getRus().front());
 requireTrue(key20.index == key40.index && !(key20 == key40),

@@ -39,6 +39,24 @@ QosAckHandler::Status QosAckHandler::getMgmtOrNonQoSAckStatus(const Key& id)
     return (it != mgmtAckStatuses.end()) ? it->second : Status::FRAME_NOT_YET_TRANSMITTED;
 }
 
+size_t QosAckHandler::getNumOccupiedBlockAckSequencePositions(
+        const MacAddress& receiverAddress, Tid tid) const
+{
+    auto key = std::make_pair(receiverAddress, tid);
+    auto cached = blockAckOccupancyCache.find(key);
+    if (cached != blockAckOccupancyCache.end() && cached->second.first == generation)
+        return cached->second.second;
+
+    size_t occupied = 0;
+    for (const auto& entry : ackStatuses) {
+        if (entry.first.first == receiverAddress && entry.first.second.first == tid &&
+                entry.second != Status::BLOCK_ACK_ARRIVED_ACKED)
+            ++occupied;
+    }
+    blockAckOccupancyCache[key] = {generation, occupied};
+    return occupied;
+}
+
 QosAckHandler::Status QosAckHandler::getMgmtOrNonQoSAckStatus(const Ptr<const Ieee80211DataOrMgmtHeader>& header)
 {
     if (!header->getSequenceNumber().isValid())
@@ -298,6 +316,7 @@ std::set<std::pair<MacAddress, std::pair<Tid, SequenceControlField>>>
 QosAckHandler::processFailedHtImplicitBlockAck(
         const MacAddress& receiverAddress, Tid tid)
 {
+    blockAckOccupancyCache.clear();
     std::set<QoSKey> failedFrames;
     for (auto& entry : ackStatuses) {
         if (entry.first.first == receiverAddress &&

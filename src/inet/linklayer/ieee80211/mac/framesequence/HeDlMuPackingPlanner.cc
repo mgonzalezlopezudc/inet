@@ -77,6 +77,7 @@ HeDlMuPackingPlanner::Plan HeDlMuPackingPlanner::plan(const Parameters& paramete
             plan.failureReason = "selected allocation has no source queue";
             return plan;
         }
+        B packedLength = calculateAmpduPsduLength(selectedAllocation.packets);
         std::map<Tid, int> selectedPacketsByTid;
         for (int i = 0; i < queueForPacking->getNumPackets() &&
                 (int)selectedAllocation.packets.size() < parameters.maxAmpduMpduCount; ++i) {
@@ -92,9 +93,12 @@ HeDlMuPackingPlanner::Plan HeDlMuPackingPlanner::plan(const Parameters& paramete
                     parameters.getAvailableBlockAckSlots(candidateHeader->getReceiverAddress(), candidateHeader->getTid()))
                 continue;
 
-            auto proposedPackets = selectedAllocation.packets;
-            proposedPackets.push_back(candidatePacket);
-            B proposedLength = calculateAmpduPsduLength(proposedPackets);
+            B proposedLength = packedLength;
+            if (!selectedAllocation.packets.empty()) {
+                B previousSubframeLength = B(4) + B(selectedAllocation.packets.back()->getByteLength());
+                proposedLength += B((4 - previousSubframeLength.get<B>() % 4) % 4);
+            }
+            proposedLength += B(4) + B(candidatePacket->getByteLength());
             if (proposedLength.get<B>() > parameters.maxHeMuPsduLength)
                 break;
             if (estimateHeMuUserDuration(proposedLength, selectedAllocation.allocation.ru.toneSize,
@@ -103,8 +107,9 @@ HeDlMuPackingPlanner::Plan HeDlMuPackingPlanner::plan(const Parameters& paramete
                     selectedAllocation.allocation.dcm,
                     parameters.scheduleContext.guardInterval) > parameters.packingDurationLimit)
                 break;
-            selectedAllocation.packets = proposedPackets;
+            selectedAllocation.packets.push_back(candidatePacket);
             selectedPacketsByTid[candidateHeader->getTid()]++;
+            packedLength = proposedLength;
             selectedAllocation.psduLength = proposedLength;
         }
         if (selectedAllocation.packets.empty()) {
@@ -154,8 +159,13 @@ HeDlMuPackingPlanner::Plan HeDlMuPackingPlanner::plan(const Parameters& paramete
                 });
         ASSERT(longest != finalAllocations.end());
         if (longest->packets.size() > 1) {
+            B previousSubframeLength = B(4) +
+                    B(longest->packets[longest->packets.size() - 2]->getByteLength());
+            B previousSubframePadding =
+                    B((4 - previousSubframeLength.get<B>() % 4) % 4);
+            B removedSubframeLength = B(4) + B(longest->packets.back()->getByteLength());
             longest->packets.pop_back();
-            longest->psduLength = calculateAmpduPsduLength(longest->packets);
+            longest->psduLength -= previousSubframePadding + removedSubframeLength;
         }
         else
             finalAllocations.erase(longest);

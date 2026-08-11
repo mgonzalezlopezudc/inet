@@ -535,6 +535,24 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
 
 {
     clearQueue(pendingQueue);
+    pendingQueue->enqueuePacket(makeDataPacket("planner-odd-sta1-0", sta1, tid, 2, 201));
+    pendingQueue->enqueuePacket(makeDataPacket("planner-odd-sta1-1", sta1, tid, 3, 203));
+    pendingQueue->enqueuePacket(makeDataPacket("planner-odd-sta2-0", sta2, tid, 2, 205));
+    pendingQueue->enqueuePacket(makeDataPacket("planner-odd-sta2-1", sta2, tid, 3, 207));
+    HeDlMuPackingPlanner planner;
+    auto parameters = makePlannerParameters({
+            makePlannerSelection(sta1, 0, pendingQueue->getPacket(0), 2),
+            makePlannerSelection(sta2, 1, pendingQueue->getPacket(2), 3)});
+    auto plan = planner.plan(parameters);
+    requireTrue(plan.isValid(), "planner should accept odd-length MPDUs");
+    for (const auto& allocation : plan.getAllocations())
+        requireTrue(allocation.psduLength == HeDlMuPackingPlanner::calculateAmpduPsduLength(allocation.packets),
+                "incremental PSDU length must match the canonical aligned calculation");
+    EV << "Planner preserved aligned PSDU lengths for odd-sized MPDUs.\n";
+}
+
+{
+    clearQueue(pendingQueue);
     pendingQueue->enqueuePacket(makeDataPacket("planner-ba-sta1", sta1, tid, 10, 200));
     pendingQueue->enqueuePacket(makeDataPacket("planner-ba-sta2", sta2, tid, 10, 200));
     HeDlMuPackingPlanner planner;

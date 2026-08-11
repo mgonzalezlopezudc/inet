@@ -107,6 +107,9 @@ class INET_API Ieee80211HeRuCatalog
     std::optional<Ieee80211HeRu> findHeRuByKey(const Ieee80211HeRuKey& key) const;
 };
 
+/** Returns the process-local immutable catalog for a center-frequency/bandwidth pair. */
+const Ieee80211HeRuCatalog& getHeRuCatalog(Hz centerFrequency, Hz channelBandwidth);
+
 /**
  * One node of the canonical HE RU allocation tree.
  *

@@ -100,6 +100,8 @@ ackHandler->frameGotInProgress(seq100frag1);
 ackHandler->frameGotInProgress(seq101);
 auto partial = ackHandler->getOccupiedBlockAckSequenceNumbers(sta1, tid);
 ASSERT(partial.size() == 2);
+ASSERT(ackHandler->getNumOccupiedBlockAckSequencePositions(sta1, tid) ==
+        ackHandler->getBlockAckOutstandingSnapshot(sta1, tid).occupiedSequencePositions.size());
 ASSERT(partial.count(100) == 1);
 ASSERT(partial.count(101) == 1);
 
@@ -114,6 +116,8 @@ ASSERT(ackHandler->getOccupiedBlockAckSequenceNumbers(sta1, tid).size() == 2);
 ackHandler->dropFrame(seq100frag1);
 auto afterFragments = ackHandler->getOccupiedBlockAckSequenceNumbers(sta1, tid);
 ASSERT(afterFragments.size() == 1);
+ASSERT(ackHandler->getNumOccupiedBlockAckSequencePositions(sta1, tid) ==
+        ackHandler->getBlockAckOutstandingSnapshot(sta1, tid).occupiedSequencePositions.size());
 ASSERT(afterFragments.count(101) == 1);
 ackHandler->dropFrame(seq101);
 ASSERT(ackHandler->getOccupiedBlockAckSequenceNumbers(sta1, tid).empty());
@@ -126,6 +130,8 @@ for (int sequenceNumber : {4094, 4095, 0, 1}) {
 }
 auto fullWrappedWindow = ackHandler->getOccupiedBlockAckSequenceNumbers(sta1, tid);
 ASSERT(fullWrappedWindow.size() == 4);
+ASSERT(ackHandler->getNumOccupiedBlockAckSequencePositions(sta1, tid) ==
+        ackHandler->getBlockAckOutstandingSnapshot(sta1, tid).occupiedSequencePositions.size());
 ASSERT(fullWrappedWindow.count(4094) == 1);
 ASSERT(fullWrappedWindow.count(4095) == 1);
 ASSERT(fullWrappedWindow.count(0) == 1);

@@ -8,6 +8,7 @@
 #ifndef __INET_IACKHANDLER_H
 #define __INET_IACKHANDLER_H
 
+#include <cstddef>
 #include <set>
 
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
@@ -31,6 +32,12 @@ class INET_API IAckHandler
             const MacAddress& receiverAddress, Tid tid) const { return {}; }
     virtual BlockAckOutstandingSnapshot getBlockAckOutstandingSnapshot(
             const MacAddress& receiverAddress, Tid tid) const { return {}; }
+    /** Returns the number of occupied originator Block Ack positions. */
+    virtual size_t getNumOccupiedBlockAckSequencePositions(
+            const MacAddress& receiverAddress, Tid tid) const
+    {
+        return getOccupiedBlockAckSequenceNumbers(receiverAddress, tid).size();
+    }
 };
 
 } // namespace ieee80211

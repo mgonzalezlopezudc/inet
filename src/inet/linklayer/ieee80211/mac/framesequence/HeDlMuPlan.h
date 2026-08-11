@@ -109,7 +109,7 @@ class INET_API HeDlMuPlan
         std::map<std::pair<int, int>, std::vector<size_t>> allocationsPerRu;
         std::vector<Ieee80211HeRu> physicalRus;
         auto normalizedAllocations = allocations;
-        Ieee80211HeRuCatalog catalog(scheduleContext.channelCenterFrequency,
+        const auto& catalog = getHeRuCatalog(scheduleContext.channelCenterFrequency,
                 scheduleContext.channelBandwidth);
         for (size_t i = 0; i < allocations.size(); ++i) {
             const auto& allocation = allocations[i];

@@ -458,6 +458,19 @@ Ieee80211HeRuCatalog::Ieee80211HeRuCatalog(Hz centerFrequency, Hz channelBandwid
             throw std::logic_error("Duplicate key in IEEE 802.11ax RU allocation catalog");
 }
 
+const Ieee80211HeRuCatalog& getHeRuCatalog(Hz centerFrequency, Hz channelBandwidth)
+{
+    using CatalogKey = std::pair<double, double>;
+    // Simulation event processing is single-threaded; keep one immutable catalog
+    // per PHY channel configuration for the lifetime of the process.
+    static std::map<CatalogKey, Ieee80211HeRuCatalog> catalogs;
+    auto key = CatalogKey(centerFrequency.get(), channelBandwidth.get());
+    auto it = catalogs.find(key);
+    if (it == catalogs.end())
+        it = catalogs.emplace(key, Ieee80211HeRuCatalog(centerFrequency, channelBandwidth)).first;
+    return it->second;
+}
+
 std::optional<Ieee80211HeRu> Ieee80211HeRuCatalog::findHeRuByKey(
         const Ieee80211HeRuKey& key) const
 {
@@ -467,7 +480,7 @@ std::optional<Ieee80211HeRu> Ieee80211HeRuCatalog::findHeRuByKey(
 
 std::vector<Ieee80211HeRu> getHeRuAllocationCatalog(Hz centerFrequency, Hz channelBandwidth)
 {
-    return Ieee80211HeRuCatalog(centerFrequency, channelBandwidth).getRus();
+    return getHeRuCatalog(centerFrequency, channelBandwidth).getRus();
 }
 
 Ieee80211HeRuAllocationTree getHeRuAllocationTree(Hz centerFrequency, Hz channelBandwidth)
@@ -482,7 +495,7 @@ std::vector<Ieee80211HeRu> getHeEqualRuLayout(Hz centerFrequency, Hz channelBand
 {
     int ruTones = getHeEqualRuToneSize(channelBandwidth, count);
     std::vector<Ieee80211HeRu> result;
-    for (const auto& ru : getHeRuAllocationCatalog(centerFrequency, channelBandwidth))
+    for (const auto& ru : getHeRuCatalog(centerFrequency, channelBandwidth).getRus())
         if (ru.toneSize == ruTones)
             result.push_back(ru);
     std::sort(result.begin(), result.end(),
@@ -497,7 +510,7 @@ std::vector<Ieee80211HeRu> getHeEqualRuLayout(Hz centerFrequency, Hz channelBand
 bool validateHeRuLayout(const std::vector<Ieee80211HeRu>& layout, Hz channelBandwidth)
 {
     int channelTones = getHeChannelToneCount(channelBandwidth);
-    auto catalog = getHeRuAllocationCatalog(Hz(0), channelBandwidth);
+    const auto& catalog = getHeRuCatalog(Hz(0), channelBandwidth).getRus();
     std::vector<bool> occupied(channelTones, false);
     std::set<int> indices;
     for (const auto& ru : layout) {
@@ -526,7 +539,7 @@ bool allocateHeRus(Hz centerFrequency, Hz channelBandwidth,
         const std::vector<int>& requestedToneSizes, std::vector<Ieee80211HeRu>& allocations,
         const std::vector<bool>& puncturedSubchannels)
 {
-    auto catalog = getHeRuAllocationCatalog(centerFrequency, channelBandwidth);
+    const auto& catalog = getHeRuCatalog(centerFrequency, channelBandwidth).getRus();
     int channelTones = getHeChannelToneCount(channelBandwidth);
     std::vector<bool> occupied(channelTones, false);
     if (!puncturedSubchannels.empty()) {

@@ -917,7 +917,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         auto agreementSnapshot = agreement == nullptr ? OriginatorBlockAckAgreementSnapshot{} : agreement->getSnapshot();
         int blockAckWindowLimit = agreement == nullptr ? 0 : agreementSnapshot.bufferSize;
         int occupiedSlots = ackHandler == nullptr ? 0 :
-                ackHandler->getBlockAckOutstandingSnapshot(receiverAddress, tid).occupiedSequencePositions.size();
+                ackHandler->getNumOccupiedBlockAckSequencePositions(receiverAddress, tid);
         return std::max(0, blockAckWindowLimit - occupiedSlots);
     };
 

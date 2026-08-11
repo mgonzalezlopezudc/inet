@@ -207,7 +207,7 @@ class INET_API HeUlMuPlan
         std::set<uint16_t> aids;
         std::map<std::pair<int, int>, std::vector<size_t>> perRu;
         std::vector<Ieee80211HeRu> physicalRus;
-        Ieee80211HeRuCatalog catalog(centerFrequency, bandwidth);
+        const auto& catalog = getHeRuCatalog(centerFrequency, bandwidth);
         const int channelTones = getHeChannelToneCount(bandwidth);
         for (size_t i = 0; i < normalized.allocations.size(); ++i) {
             auto& allocation = normalized.allocations[i];
