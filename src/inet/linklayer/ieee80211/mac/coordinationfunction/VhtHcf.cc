@@ -534,10 +534,10 @@ void VhtHcf::setFrameMode(Packet *packet,
 
 void VhtHcf::transmitFrame(Packet *packet, simtime_t ifs)
 {
-    exchangeCoordinator.beginTransmission(packet);
     auto muTxop = frameSequenceHandler == nullptr ? nullptr :
             dynamic_cast<const VhtDlMuTxOpFs *>(frameSequenceHandler->getFrameSequence());
     if (muTxop != nullptr && muTxop->isContainerPacket(packet)) {
+        exchangeCoordinator.beginTransmission(packet);
         auto header = makeShared<Ieee80211DataHeader>();
         header->setType(ST_DATA_WITH_QOS);
         header->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
@@ -547,6 +547,7 @@ void VhtHcf::transmitFrame(Packet *packet, simtime_t ifs)
         return;
     }
     if (isVhtNdp(packet)) {
+        exchangeCoordinator.beginTransmission(packet);
         auto header = makeShared<Ieee80211DataHeader>();
         header->setType(ST_QOS_NULL);
         header->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
@@ -556,6 +557,7 @@ void VhtHcf::transmitFrame(Packet *packet, simtime_t ifs)
         return;
     }
     if (dynamicPtrCast<const Ieee80211VhtNdpAnnouncementFrame>(packet->peekAtFront()) != nullptr) {
+        exchangeCoordinator.beginTransmission(packet);
         auto header = packet->peekAtFront<Ieee80211VhtNdpAnnouncementFrame>();
         packet->addTagIfAbsent<physicallayer::Ieee80211ModeReq>()->setMode(
                 modeSet->getSlowestMandatoryMode(MHz(20)));

@@ -16,8 +16,26 @@ void HcfResponseService::checkActions(const Actions& actions)
     if (!actions.isSequenceRunning || !actions.isReceptionInProgress ||
             !actions.getCurrentStep || !actions.isStartRxTimerScheduled ||
             !actions.handleStartRxTimeout || !actions.processResponse ||
-            !actions.cancelStartRxTimer)
+            !actions.discardResponse || !actions.cancelStartRxTimer)
         throw cRuntimeError("Incomplete HCF response service actions");
+}
+
+bool HcfResponseService::applyStartRxTimeout(const Actions& actions)
+{
+    if (timeoutHandled)
+        return false;
+    timeoutHandled = true;
+    actions.handleStartRxTimeout();
+    return true;
+}
+
+void HcfResponseService::cancelStartRxTimer(const Actions& actions)
+{
+    if (!actions.isStartRxTimerScheduled())
+        return;
+    timeoutHandled = true;
+    timeoutState.clear();
+    actions.cancelStartRxTimer();
 }
 
 HcfResponseService::ResponseClassification HcfResponseService::classifyResponse(
@@ -31,23 +49,39 @@ HcfResponseService::ResponseClassification HcfResponseService::classifyResponse(
 void HcfResponseService::responseTimerScheduled()
 {
     timeoutState.clear();
+    timeoutHandled = false;
 }
 
 void HcfResponseService::handleStartRxTimeout(const Actions& actions)
 {
     checkActions(actions);
-    if (!actions.isSequenceRunning())
+    if (!actions.isSequenceRunning() || timeoutHandled)
         return;
     if (actions.isReceptionInProgress())
         timeoutState.deferCurrentStep(actions.getCurrentStep());
     else
-        actions.handleStartRxTimeout();
+        applyStartRxTimeout(actions);
 }
 
 void HcfResponseService::processResponse(Packet *packet, const Actions& actions)
 {
     checkActions(actions);
     actions.processResponse(packet);
+}
+
+HcfResponseService::ResponseClassification
+HcfResponseService::processResponseAccordingToPolicy(Packet *packet,
+        bool addressedToUs, IReceiveStep *receiveStep, const Actions& actions)
+{
+    checkActions(actions);
+    auto classification = classifyResponse(actions.isSequenceRunning(),
+            addressedToUs, actions.isStartRxTimerScheduled());
+    if (classification == ResponseClassification::PROCESS)
+        processResponseAndCancelStartRxTimerIfReceiveStepCompletes(
+                packet, receiveStep, actions);
+    else
+        actions.discardResponse(packet);
+    return classification;
 }
 
 void HcfResponseService::processResponseAndCancelStartRxTimerIfCompleted(
@@ -61,7 +95,7 @@ void HcfResponseService::processResponseAndCancelStartRxTimerIfCompleted(
     // expected response completes the exchange, its timeout no longer applies.
     if (completesOnReception &&
             (!actions.isSequenceRunning() || actions.getCurrentStep() != receiveStep))
-        actions.cancelStartRxTimer();
+        cancelStartRxTimer(actions);
 }
 
 void HcfResponseService::processResponseAndCancelStartRxTimerIfReceiveStepCompletes(
@@ -71,7 +105,7 @@ void HcfResponseService::processResponseAndCancelStartRxTimerIfReceiveStepComple
     bool completesOnReception = receiveStep == nullptr || receiveStep->completesOnReception();
     actions.processResponse(packet);
     if (completesOnReception)
-        actions.cancelStartRxTimer();
+        cancelStartRxTimer(actions);
 }
 
 void HcfResponseService::handleDeferredStartRxTimeout(const Actions& actions)
@@ -85,7 +119,7 @@ void HcfResponseService::handleDeferredStartRxTimeout(const Actions& actions)
     // step that the received frame has already completed.
     auto currentStep = actions.isSequenceRunning() ? actions.getCurrentStep() : nullptr;
     if (timeoutState.takeIfCurrentStep(currentStep))
-        actions.handleStartRxTimeout();
+        applyStartRxTimeout(actions);
 }
 
 bool HcfResponseService::handleCorruptedFrame(const Actions& actions)
@@ -94,7 +128,7 @@ bool HcfResponseService::handleCorruptedFrame(const Actions& actions)
     if (timeoutState.hasDeferredStep())
         handleDeferredStartRxTimeout(actions);
     else if (actions.isSequenceRunning() && !actions.isStartRxTimerScheduled()) {
-        actions.handleStartRxTimeout();
+        applyStartRxTimeout(actions);
         return true;
     }
     else
@@ -105,6 +139,7 @@ bool HcfResponseService::handleCorruptedFrame(const Actions& actions)
 void HcfResponseService::clearTimerState()
 {
     timeoutState.clear();
+    timeoutHandled = false;
 }
 
 } // namespace ieee80211

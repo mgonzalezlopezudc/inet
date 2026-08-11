@@ -20,7 +20,9 @@ namespace ieee80211 {
  *
  * This helper consumes already resolved, immutable preparation inputs. It does
  * not inspect or mutate packets, TXOP state, frame-sequence context, timers,
- * or amendment-specific HCF state.
+ * or amendment-specific HCF state. Receiver/capability/mode extraction stays
+ * in Hcf because it crosses packet, MIB, and PHY-authority boundaries; there
+ * is no further side-effect-free preparation decision to extract here.
  */
 class INET_API HcfFramePreparation
 {

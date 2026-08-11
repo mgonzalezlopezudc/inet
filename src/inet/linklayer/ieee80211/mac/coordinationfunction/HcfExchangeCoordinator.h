@@ -63,17 +63,18 @@ class INET_API HcfExchangeCoordinator
 
     Packet *getActivePacket() const { return activePacket; }
     const IFrameSequenceStep *getExpectedResponseStep() const { return expectedResponseStep; }
-    void validateActivePacket(Packet *packet) const;
+    bool isActivePacket(const Packet *packet) const;
+    bool isExpectedResponseStep(const IFrameSequenceStep *responseStep) const;
 
     void channelAccessRequested();
     void channelGranted();
     void beginPreparation();
     void beginTransmission(Packet *packet = nullptr);
     void awaitResponse(const IFrameSequenceStep *responseStep = nullptr);
-    void beginRetryOrRecovery(Packet *packet = nullptr);
-    void complete();
-    void abort();
-    void reset();
+    bool beginRetryOrRecovery(Packet *packet = nullptr);
+    bool complete();
+    bool abort();
+    bool reset();
 };
 
 } // namespace ieee80211

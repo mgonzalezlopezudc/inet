@@ -377,10 +377,12 @@ void HeHcf::originatorProcessFailedFrame(Packet *failedPacket)
 {
     Enter_Method("originatorProcessFailedFrame");
     ASSERT(failedPacket != nullptr);
-    exchangeCoordinator.validateActivePacket(failedPacket);
     EV_WARN << "HE MU: transmission failed for frame " << failedPacket->getName()
             << " type = " << (failedPacket->peekAtFront<Ieee80211MacHeader>() != nullptr ? (int)failedPacket->peekAtFront<Ieee80211MacHeader>()->getType() : -1) << endl;
     if (dynamic_cast<const HeDlMuTxOpFs *>(frameSequenceHandler->getFrameSequence()) != nullptr) {
+        if (!exchangeCoordinator.beginRetryOrRecovery(failedPacket))
+            return;
+        aggregationService.discardTransmission(failedPacket);
         // 26.5.1 extends EDCA success/failure semantics for DL MU, but retry
         // state is still per MPDU/TID.  Requeue a failed subframe to the
         // destination's per-STA queue so the next DL MU scheduler run can choose
@@ -411,7 +413,7 @@ void HeHcf::originatorProcessFailedFrame(Packet *failedPacket)
                 edcaf->getAckHandler()->processFailedFrame(mgmtHeader);
             }
             else if (auto blockAckReq = dynamicPtrCast<const Ieee80211BlockAckReq>(failedHeader)) {
-                Hcf::originatorProcessFailedFrame(failedPacket);
+                processFailedBlockAckReq(edcaf, blockAckReq, true);
                 return;
             }
 
@@ -448,8 +450,8 @@ void HeHcf::originatorProcessFailedFrame(Packet *failedPacket)
 void HeHcf::transmitFrame(Packet *packet, simtime_t ifs)
 {
     Enter_Method("transmitFrame");
-    exchangeCoordinator.beginTransmission(packet);
     if (isHeNdpPacket(packet)) {
+        exchangeCoordinator.beginTransmission(packet);
         // Frame-sequence transmission normally derives the Tx header by
         // peeking packet content. A sounding NDP is intentionally empty, so
         // retain a detached header only for the local Tx callback/address

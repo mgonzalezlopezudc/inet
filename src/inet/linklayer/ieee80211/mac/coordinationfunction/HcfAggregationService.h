@@ -33,14 +33,15 @@ class INET_API HcfAggregationService
 {
   private:
     AmpduTransmissionLedger transmissionLedger;
-
-  public:
     static Packet *buildAmpduPacket(const std::vector<Packet *>& frames,
             FcsMode fcsMode);
+
+  public:
     static B calculateAmpduLength(const std::vector<Packet *>& frames);
 
-    void recordTransmission(Packet *packet,
-            const std::vector<Packet *>& subframes, bool implicitBlockAck);
+    Packet *materializeTransmission(Packet *ledgerKey,
+            const std::vector<Packet *>& subframes, FcsMode fcsMode,
+            bool implicitBlockAck);
     bool hasImplicitBlockAck(Packet *packet) const;
     std::optional<AmpduTransmissionLedger::Entry> takeTransmission(Packet *packet);
     bool discardTransmission(Packet *packet);

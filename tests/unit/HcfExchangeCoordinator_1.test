@@ -30,6 +30,8 @@ static void requireInvalidTransition(HcfExchangeCoordinator& coordinator)
 
 %activity:
 HcfExchangeCoordinator coordinator;
+auto activePacket = new Packet("active");
+auto stalePacket = new Packet("stale");
 requireCondition(coordinator.getState() == HcfExchangeCoordinator::State::IDLE,
         "coordinator must start idle");
 requireInvalidTransition(coordinator);
@@ -38,20 +40,26 @@ coordinator.channelAccessRequested();
 requireCondition(coordinator.getState() == HcfExchangeCoordinator::State::AWAITING_CHANNEL_GRANT,
         "channel request must enter the grant-wait state");
 coordinator.channelGranted();
-coordinator.beginPreparation();
-coordinator.beginTransmission();
+coordinator.beginTransmission(activePacket);
 requireCondition(coordinator.getState() == HcfExchangeCoordinator::State::TRANSMITTING,
         "preparation must lead to transmission");
 coordinator.awaitResponse();
 requireCondition(coordinator.getState() == HcfExchangeCoordinator::State::AWAITING_RESPONSE,
         "transmission must lead to response wait");
-coordinator.beginRetryOrRecovery();
+requireCondition(coordinator.beginRetryOrRecovery(activePacket),
+        "the active response failure must enter retry/recovery");
 requireCondition(coordinator.getState() == HcfExchangeCoordinator::State::RETRYING_OR_RECOVERING,
         "response failure must enter retry/recovery");
-coordinator.complete();
+requireCondition(coordinator.complete(),
+        "the first completion callback must own terminal effects");
 requireCondition(coordinator.getState() == HcfExchangeCoordinator::State::COMPLETING,
         "successful completion must be observable");
-coordinator.reset();
+requireCondition(!coordinator.complete(),
+        "a duplicate completion callback must be harmless");
+requireCondition(coordinator.reset(),
+        "the first reset must release the completed exchange");
+requireCondition(!coordinator.reset(),
+        "a duplicate reset must be harmless");
 requireCondition(coordinator.getState() == HcfExchangeCoordinator::State::IDLE,
         "reset must return to idle");
 
@@ -60,36 +68,66 @@ requireCondition(coordinator.getStartRxTimer() != nullptr &&
         coordinator.getInactivityTimer() != nullptr &&
         coordinator.getStartRxTimer() != coordinator.getInactivityTimer(),
         "coordinator must own distinct exchange timers");
-auto activePacket = new Packet("active");
-auto stalePacket = new Packet("stale");
 coordinator.channelGranted();
-coordinator.beginPreparation();
 coordinator.beginTransmission(activePacket);
 requireCondition(coordinator.getActivePacket() == activePacket,
         "coordinator must retain the active frame identity");
-bool rejectedStalePacket = false;
-try {
-    coordinator.beginRetryOrRecovery(stalePacket);
-}
-catch (const cRuntimeError&) {
-    rejectedStalePacket = true;
-}
-requireCondition(rejectedStalePacket,
-        "coordinator must reject a failure callback for a stale packet");
-coordinator.awaitResponse();
-coordinator.beginRetryOrRecovery(activePacket);
-coordinator.reset();
+requireCondition(!coordinator.beginRetryOrRecovery(stalePacket),
+        "coordinator must harmlessly reject a failure callback for a stale packet");
+auto expectedStep = reinterpret_cast<const IFrameSequenceStep *>(1);
+auto staleStep = reinterpret_cast<const IFrameSequenceStep *>(2);
+coordinator.awaitResponse(expectedStep);
+requireCondition(coordinator.isExpectedResponseStep(expectedStep) &&
+        !coordinator.isExpectedResponseStep(staleStep),
+        "coordinator must be the expected-step identity authority");
+requireCondition(coordinator.beginRetryOrRecovery(activePacket),
+        "the active packet may enter retry/recovery once");
+requireCondition(coordinator.abort(),
+        "the first abort callback must transition the exchange");
+requireCondition(!coordinator.abort(),
+        "a duplicate abort callback must be harmless");
+requireCondition(!coordinator.beginRetryOrRecovery(activePacket),
+        "a stale failure callback after abort must be harmless");
+requireCondition(coordinator.complete(),
+        "finish after abort must own terminal effects exactly once");
+requireCondition(!coordinator.complete(),
+        "duplicate finish after abort must not repeat terminal effects");
+requireCondition(coordinator.reset(),
+        "completed abort must reset once");
 requireCondition(coordinator.getActivePacket() == nullptr,
         "reset must clear the active frame identity");
+coordinator.channelGranted();
+coordinator.beginTransmission(activePacket);
+bool duplicateTransmissionRejected = false;
+try {
+    coordinator.beginTransmission();
+}
+catch (const cRuntimeError&) {
+    duplicateTransmissionRejected = true;
+}
+requireCondition(duplicateTransmissionRejected,
+        "variant fallback must not rely on a permissive duplicate transmission transition");
+requireCondition(coordinator.abort() && coordinator.complete() && coordinator.reset(),
+        "the direct specialized transmission trace must terminate cleanly");
+
+// Source paths represented by this state trace:
+// base Hcf::transmitFrame: PREPARING -> TRANSMITTING;
+// VhtHcf/HeHcf direct branches: PREPARING -> TRANSMITTING;
+// VhtHcf/HeHcf fallback: the override delegates without transitioning and the
+// base performs the sole PREPARING -> TRANSMITTING transition. The active
+// packet is retained, no response is expected yet, and no timer is scheduled.
+coordinator.channelGranted();
+coordinator.beginTransmission(activePacket);
+requireCondition(coordinator.getState() == HcfExchangeCoordinator::State::TRANSMITTING &&
+        coordinator.getActivePacket() == activePacket &&
+        coordinator.getExpectedResponseStep() == nullptr &&
+        !coordinator.getStartRxTimer()->isScheduled(),
+        "base and specialized transmission traces must have one identical transition");
+requireCondition(coordinator.abort() && coordinator.complete() && coordinator.reset(),
+        "the fallback transmission trace must terminate cleanly");
+
 delete activePacket;
 delete stalePacket;
-
-coordinator.channelGranted();
-coordinator.beginPreparation();
-coordinator.beginTransmission();
-coordinator.abort();
-requireCondition(coordinator.getState() == HcfExchangeCoordinator::State::ABORTING,
-        "abort must be observable");
 
 EV << "HCF exchange lifecycle state model transitions passed.\n";
 

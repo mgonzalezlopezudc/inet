@@ -5,6 +5,8 @@ synchronous action ordering.
 %includes:
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfResponseService.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
+#include <string>
+#include <vector>
 
 %global:
 using namespace inet;
@@ -24,6 +26,8 @@ bool timerScheduled = true;
 int timeoutCount = 0;
 int processedResponseCount = 0;
 int canceledTimerCount = 0;
+int discardedResponseCount = 0;
+std::vector<std::string> actionOrder;
 auto receiveStep = new ReceiveStep(SimTime(1, SIMTIME_MS));
 const IFrameSequenceStep *currentStep = receiveStep;
 HcfResponseService::Actions actions;
@@ -35,15 +39,23 @@ actions.handleStartRxTimeout = [&] {
     requireCondition(!receptionInProgress,
             "timeout action must run only after reception completes");
     timeoutCount++;
+    actionOrder.push_back("timeout");
 };
 actions.processResponse = [&] (Packet *packet) {
     processedResponseCount++;
+    actionOrder.push_back("process");
+    delete packet;
+};
+actions.discardResponse = [&] (Packet *packet) {
+    discardedResponseCount++;
+    actionOrder.push_back("discard");
     delete packet;
 };
 actions.cancelStartRxTimer = [&] {
-    requireCondition(processedResponseCount == 1,
+    requireCondition(processedResponseCount > 0,
             "response processing must precede timer cancellation");
     canceledTimerCount++;
+    actionOrder.push_back("cancel");
     timerScheduled = false;
 };
 
@@ -74,25 +86,66 @@ requireCondition(timeoutCount == 1,
 service.handleDeferredStartRxTimeout(actions);
 requireCondition(timeoutCount == 1,
         "deferred timeout must not be applied twice");
+requireCondition(actionOrder.size() == 1 && actionOrder[0] == "timeout",
+        "deferred timeout must produce one timeout action");
 
 timerScheduled = false;
 requireCondition(service.handleCorruptedFrame(actions),
         "corrupt reception after timer expiry must apply the timeout");
+requireCondition(timeoutCount == 1,
+        "a corrupt frame must not repeat an already handled timeout");
+service.responseTimerScheduled();
+timerScheduled = false;
+requireCondition(service.handleCorruptedFrame(actions),
+        "corrupt reception after a new timer expiry must apply the timeout");
 requireCondition(timeoutCount == 2,
-        "corrupt reception must apply the timeout exactly once");
+        "corrupt reception must apply the new timeout exactly once");
+requireCondition(service.handleCorruptedFrame(actions) && timeoutCount == 2,
+        "repeated corrupt callbacks must not repeat timeout effects");
 timerScheduled = true;
 requireCondition(!service.handleCorruptedFrame(actions),
         "corrupt reception while the timer is scheduled must be ignored");
 requireCondition(timeoutCount == 2,
         "ignored corrupt reception must not apply a timeout");
 
+actionOrder.clear();
 currentStep = nullptr;
-service.processResponseAndCancelStartRxTimerIfCompleted(
-        new Packet("response"), receiveStep, actions);
+service.responseTimerScheduled();
+timerScheduled = true;
+service.processResponseAccordingToPolicy(new Packet("response"), true,
+        receiveStep, actions);
 requireCondition(processedResponseCount == 1,
         "response must be forwarded to the frame-sequence handler");
 requireCondition(canceledTimerCount == 1,
         "completed response must cancel its response timer");
+requireCondition(actionOrder.size() == 2 && actionOrder[0] == "process" &&
+        actionOrder[1] == "cancel",
+        "valid response processing must precede cancellation exactly once");
+
+actionOrder.clear();
+currentStep = receiveStep;
+timerScheduled = true;
+service.processResponseAccordingToPolicy(new Packet("foreign"), false,
+        receiveStep, actions);
+requireCondition(discardedResponseCount == 1 && actionOrder.size() == 1 &&
+        actionOrder[0] == "discard" && canceledTimerCount == 1,
+        "foreign response during the wait must only be discarded");
+
+actionOrder.clear();
+timerScheduled = false;
+service.processResponseAccordingToPolicy(new Packet("late"), false,
+        receiveStep, actions);
+requireCondition(processedResponseCount == 2 && actionOrder.size() == 1 &&
+        actionOrder[0] == "process" && canceledTimerCount == 1,
+        "late response after cancellation must still be classified by the sequence");
+
+actionOrder.clear();
+sequenceRunning = false;
+service.processResponseAccordingToPolicy(new Packet("inactive"), true,
+        receiveStep, actions);
+requireCondition(discardedResponseCount == 2 && actionOrder.size() == 1 &&
+        actionOrder[0] == "discard",
+        "inactive response must be discarded without timeout or cancellation");
 
 delete receiveStep;
 EV << "HCF response service classification and timeout ownership passed.\n";

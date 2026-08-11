@@ -5,7 +5,7 @@ Test immutable IEEE 802.11 FEC request propagation when HCF replaces MPDUs with 
 #include "inet/common/packet/Packet.h"
 #include "inet/common/packet/chunk/ByteCountChunk.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfAggregationService.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211FecCodingReq.h"
 
 %global:
@@ -13,13 +13,8 @@ using namespace inet;
 using namespace inet::ieee80211;
 using namespace inet::physicallayer;
 
-class TestHcf : public Hcf
-{
-  public:
-    using Hcf::buildAmpduPacket;
-};
-
 %activity:
+HcfAggregationService aggregationService;
 auto makeMpdu = [] (const char *name, bool ldpcAllowed) {
     auto packet = new Packet(name);
     packet->insertAtBack(makeShared<ByteCountChunk>(B(8)));
@@ -31,17 +26,26 @@ auto makeMpdu = [] (const char *name, bool ldpcAllowed) {
 auto mpdu1 = makeMpdu("mpdu-1", true);
 auto mpdu2 = makeMpdu("mpdu-2", true);
 std::vector<Packet *> members {mpdu1, mpdu2};
-auto ampdu = TestHcf::buildAmpduPacket(members, FCS_DECLARED_CORRECT);
+auto ampdu = aggregationService.materializeTransmission(mpdu1, members,
+        FCS_DECLARED_CORRECT, true);
 ASSERT(ampdu->getTag<Ieee80211FecCodingReq>()->getLdpcAllowed());
 ASSERT(ampdu->getName() == std::string("mpdu-1+mpdu-2"));
+auto recordedMembers = aggregationService.takeTransmission(mpdu1);
+ASSERT(recordedMembers.has_value() && recordedMembers->implicitBlockAck);
+ASSERT(recordedMembers->subframes.size() == 2 &&
+        recordedMembers->subframes[0] == mpdu1 &&
+        recordedMembers->subframes[1] == mpdu2);
 
 auto firstTaggedMpdu = makeMpdu("first-tagged", false);
 auto subsequentUntaggedMpdu = new Packet("subsequent-untagged");
 subsequentUntaggedMpdu->insertAtBack(makeShared<ByteCountChunk>(B(8)));
 subsequentUntaggedMpdu->insertAtBack(makeShared<Ieee80211MacTrailer>());
 std::vector<Packet *> partiallyTaggedMembers {firstTaggedMpdu, subsequentUntaggedMpdu};
-auto partiallyTaggedAmpdu = TestHcf::buildAmpduPacket(partiallyTaggedMembers, FCS_DECLARED_CORRECT);
+auto partiallyTaggedAmpdu = aggregationService.materializeTransmission(
+        firstTaggedMpdu, partiallyTaggedMembers, FCS_DECLARED_CORRECT, false);
 ASSERT(!partiallyTaggedAmpdu->getTag<Ieee80211FecCodingReq>()->getLdpcAllowed());
+ASSERT(aggregationService.discardTransmission(firstTaggedMpdu));
+ASSERT(!aggregationService.discardTransmission(firstTaggedMpdu));
 
 auto untaggedMpdu = new Packet("untagged-mpdu");
 auto untaggedAmpdu = new Packet("untagged-ampdu");
@@ -62,12 +66,14 @@ auto disagreeingBccMpdu = makeMpdu("bcc-mpdu", false);
 bool rejectedConstituentDisagreement = false;
 try {
     std::vector<Packet *> disagreeingMembers {disagreeingLdpcMpdu, disagreeingBccMpdu};
-    delete TestHcf::buildAmpduPacket(disagreeingMembers, FCS_DECLARED_CORRECT);
+    delete aggregationService.materializeTransmission(disagreeingLdpcMpdu,
+            disagreeingMembers, FCS_DECLARED_CORRECT, false);
 }
 catch (const cRuntimeError&) {
     rejectedConstituentDisagreement = true;
 }
 ASSERT(rejectedConstituentDisagreement);
+ASSERT(!aggregationService.takeTransmission(disagreeingLdpcMpdu).has_value());
 
 delete mpdu1;
 delete mpdu2;

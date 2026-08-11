@@ -7,6 +7,7 @@
 
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfFramePreparation.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfRetryService.h"
 #include "inet/linklayer/ieee80211/mac/contract/DurationFinalizedReq.h"
 
 #include <algorithm>
@@ -75,12 +76,6 @@ static bool isImmediateHtFeedback(Ieee80211HtExplicitFeedback capability)
 {
     return capability == Ieee80211HtExplicitFeedback::IMMEDIATE ||
             capability == Ieee80211HtExplicitFeedback::BOTH;
-}
-
-Packet *Hcf::buildAmpduPacket(const std::vector<Packet *>& frames,
-        FcsMode fcsMode)
-{
-    return HcfAggregationService::buildAmpduPacket(frames, fcsMode);
 }
 
 void Hcf::addBufferedTrafficServiceBytes(uint32_t& total, uint64_t amount)
@@ -329,6 +324,13 @@ HcfResponseService::Actions Hcf::makeResponseServiceActions()
     };
     actions.processResponse = [this] (Packet *packet) { frameSequenceHandler->processResponse(packet); };
     actions.handleStartRxTimeout = [this] () { frameSequenceHandler->handleStartRxTimeout(); };
+    actions.discardResponse = [this] (Packet *packet) {
+        EV_INFO << "This frame is not for us" << std::endl;
+        PacketDropDetails details;
+        details.setReason(NOT_ADDRESSED_TO_US);
+        emit(packetDroppedSignal, packet, &details);
+        delete packet;
+    };
     actions.cancelStartRxTimer = [this] () {
         cancelEvent(exchangeCoordinator.getStartRxTimer());
     };
@@ -495,24 +497,9 @@ void Hcf::processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>&
         // EDCA treats the MPDU exchange as failed unless the timeout sees a
         // response from the expected recipient (or a control response without TA).
         // TODO always call processResponse?
-        if (responseService.classifyResponse(true, isForUs(header),
-                exchangeCoordinator.getStartRxTimer()->isScheduled()) ==
-                HcfResponseService::ResponseClassification::PROCESS) {
-            auto receiveStep = dynamic_cast<IReceiveStep *>(frameSequenceHandler->getContext()->getLastStep());
-            // Only cancel RxTimer when the current running sequence has been handled by frameSequenceHandler->processResponse().
-            // If the received frame is not for us, we are still waiting to receive our ACK. In that case, don't cancel the timer.
-            // Otherwise, current frame sequence stucks in RX step and runs longer than intendeed, preventing sequence from
-            // another access category (AC) to start running (RuntimeError("Channel access granted while a frame sequence is running")).
-            responseService.processResponseAndCancelStartRxTimerIfReceiveStepCompletes(
-                    packet, receiveStep, makeResponseServiceActions());
-        }
-        else {
-            EV_INFO << "This frame is not for us" << std::endl;
-            PacketDropDetails details;
-            details.setReason(NOT_ADDRESSED_TO_US);
-            emit(packetDroppedSignal, packet, &details);
-            delete packet;
-        }
+        auto receiveStep = dynamic_cast<IReceiveStep *>(frameSequenceHandler->getContext()->getLastStep());
+        responseService.processResponseAccordingToPolicy(packet, isForUs(header),
+                receiveStep, makeResponseServiceActions());
     }
     else if (hcca->isOwning())
         throw cRuntimeError("Hcca is unimplemented!");
@@ -1110,11 +1097,8 @@ void Hcf::handleInternalCollision(std::vector<Edcaf *> internallyCollidedEdcafs)
 void Hcf::frameSequenceFinished()
 {
     Enter_Method("frameSequenceFinished");
-    if (exchangeCoordinator.getState() == HcfExchangeCoordinator::State::IDLE ||
-            exchangeCoordinator.getState() == HcfExchangeCoordinator::State::COMPLETING)
+    if (!exchangeCoordinator.complete())
         return;
-    if (exchangeCoordinator.getState() != HcfExchangeCoordinator::State::ABORTING)
-        exchangeCoordinator.complete();
     responseService.clearTimerState();
     emit(IFrameSequenceHandler::frameSequenceFinishedSignal, frameSequenceHandler->getContext());
     auto edcaf = edca->getChannelOwner();
@@ -1651,7 +1635,8 @@ void Hcf::processFailedBlockAckReq(Edcaf *edcaf,
 void Hcf::originatorProcessFailedFrame(Packet *failedPacket)
 {
     Enter_Method("originatorProcessFailedFrame");
-    exchangeCoordinator.beginRetryOrRecovery(failedPacket);
+    if (!exchangeCoordinator.beginRetryOrRecovery(failedPacket))
+        return;
     aggregationService.discardTransmission(failedPacket);
     auto failedHeader = failedPacket->peekAtFront<Ieee80211MacHeader>();
     auto edcaf = edca->getChannelOwner();
@@ -2106,12 +2091,12 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
                         }
                         header = packet->peekAtFront<Ieee80211MacHeader>();
                     }
-                    packetToTransmit = aggregationService.buildAmpduPacket(ampduFrames, mac->getFcsMode());
+                    packetToTransmit = aggregationService.materializeTransmission(
+                            packet, ampduFrames, mac->getFcsMode(),
+                            useHtImplicitBlockAck);
                     emit(ampduCreatedSignal, packetToTransmit);
                     emit(ampduNumMpdusSignal, (unsigned long)ampduFrames.size());
                     deletePacketToTransmit = true;
-                    aggregationService.recordTransmission(packet, ampduFrames,
-                            useHtImplicitBlockAck);
                 }
             }
           }

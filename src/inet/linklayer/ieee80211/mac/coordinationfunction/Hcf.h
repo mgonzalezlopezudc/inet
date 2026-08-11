@@ -36,7 +36,6 @@
 #include "inet/linklayer/ieee80211/mac/contract/ITx.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfAggregationService.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfExchangeCoordinator.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfRetryService.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfResponseService.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HtMfbTransmissionState.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HtSoundingPendingState.h"
@@ -157,10 +156,6 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
             unsigned int numAggregateMembers,
             const std::vector<Ptr<const Ieee80211MacHeader>>& headers);
     bool processTransmittedAmpdu(Packet *packet, Edcaf *edcaf, AccessCategory ac);
-    // Compatibility façade for existing focused tests; construction is owned
-    // by HcfAggregationService.
-    static Packet *buildAmpduPacket(const std::vector<Packet *>& frames,
-            FcsMode fcsMode);
     TxopProcedure::InitialProtection selectInitialProtection(Packet *frame,
             const physicallayer::IIeee80211Mode *firstMode) const;
 

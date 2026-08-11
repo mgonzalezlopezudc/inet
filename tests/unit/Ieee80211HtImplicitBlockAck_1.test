@@ -9,6 +9,7 @@ one Compressed BlockAck, and uses its bitmap for sender acknowledgment state.
 #include "inet/linklayer/ieee80211/mac/blockackreordering/BlockAckReordering.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfRetryService.h"
+#include "inet/linklayer/ieee80211/mac/contract/IRateControl.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/PrimitiveFrameSequences.h"
@@ -115,6 +116,7 @@ class TestQosRecoveryProcedure : public QosRecoveryProcedure
   public:
     int failureCount = 0;
     int retryLimitCount = 0;
+    std::vector<std::string> *events = nullptr;
 
     void configure(MockCwCalculator *calculator, int retryLimit) {
         cwCalculator = calculator;
@@ -125,13 +127,35 @@ class TestQosRecoveryProcedure : public QosRecoveryProcedure
     virtual void dataFrameTransmissionFailed(Packet *packet,
             const Ptr<const Ieee80211DataHeader>& header) override {
         failureCount++;
+        if (events != nullptr)
+            events->push_back(std::string("failure:") + packet->getName());
         QosRecoveryProcedure::dataFrameTransmissionFailed(packet, header);
     }
     virtual void retryLimitReached(Packet *packet,
             const Ptr<const Ieee80211DataHeader>& header) override {
         retryLimitCount++;
+        if (events != nullptr)
+            events->push_back(std::string("retire:") + packet->getName());
         QosRecoveryProcedure::retryLimitReached(packet, header);
     }
+};
+
+class RecordingRateControl : public IRateControl
+{
+  public:
+    std::vector<Packet *> frames;
+    std::vector<std::string> *events = nullptr;
+
+    virtual const physicallayer::IIeee80211Mode *getRate() override { return nullptr; }
+    virtual void frameTransmitted(Packet *frame, int, bool isSuccessful,
+            bool isGivenUp) override {
+        REQUIRE(!isSuccessful);
+        REQUIRE(isGivenUp);
+        frames.push_back(frame);
+        if (events != nullptr)
+            events->push_back(std::string("rate:") + frame->getName());
+    }
+    virtual void frameReceived(Packet *) override {}
 };
 
 class TestHcf : public Hcf
@@ -366,7 +390,10 @@ auto timeoutFirst = new Packet("timeout-first",
         makeHeader(recipient, originator, tid, 20));
 auto timeoutSecond = new Packet("timeout-second",
         makeHeader(recipient, originator, tid, 21));
+auto unrelated = new Packet("unrelated",
+        makeHeader(recipient, originator, tid + 1, 22));
 timeoutFrames.addInProgressFrame(timeoutFirst);
+timeoutFrames.addInProgressFrame(unrelated);
 timeoutFrames.addInProgressFrame(timeoutSecond);
 auto timeoutFirstHeader = timeoutFirst->peekAtFront<Ieee80211DataHeader>();
 auto timeoutSecondHeader = timeoutSecond->peekAtFront<Ieee80211DataHeader>();
@@ -379,12 +406,25 @@ auto timedOutIds = timeoutAckHandler.processFailedHtImplicitBlockAck(
 MockCwCalculator terminalCw;
 TestQosRecoveryProcedure terminalRecovery;
 terminalRecovery.configure(&terminalCw, 1);
+std::vector<std::string> terminalEvents;
+terminalRecovery.events = &terminalEvents;
+RecordingRateControl terminalRateControl;
+terminalRateControl.events = &terminalEvents;
 auto retired = HcfRetryService::recoverHtImplicitBlockAckTimeout(&timeoutFrames,
-        &timeoutAckHandler, &terminalRecovery, nullptr, timedOutIds);
+        &timeoutAckHandler, &terminalRecovery, &terminalRateControl, timedOutIds);
 REQUIRE(retired.size() == 2);
-REQUIRE(timeoutFrames.getLength() == 0);
+REQUIRE(retired[0] == timeoutFirst && retired[1] == timeoutSecond);
+REQUIRE(timeoutFrames.getLength() == 1);
+REQUIRE(timeoutFrames.getFrames(0) == unrelated);
+REQUIRE(!unrelated->peekAtFront<Ieee80211DataHeader>()->getRetry());
 REQUIRE(terminalRecovery.failureCount == 2);
 REQUIRE(terminalRecovery.retryLimitCount == 2);
+REQUIRE(terminalRateControl.frames.size() == 2);
+REQUIRE(terminalRateControl.frames[0] == timeoutFirst &&
+        terminalRateControl.frames[1] == timeoutSecond);
+REQUIRE(terminalEvents == std::vector<std::string>({
+        "failure:timeout-first", "rate:timeout-first", "retire:timeout-first",
+        "failure:timeout-second", "rate:timeout-second", "retire:timeout-second"}));
 EV << "A suppressed BlockAck at retry limit 1 retires every aggregate member after one failed attempt.\n";
 
 QosAckHandler survivorAckHandler;

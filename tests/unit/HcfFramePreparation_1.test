@@ -28,6 +28,10 @@ requireCondition(HcfFramePreparation::selectInitialProtection(
 requireCondition(HcfFramePreparation::selectInitialProtection(
         MacAddress::BROADCAST_ADDRESS, Ieee80211PhyFamily::HT, &negotiated) ==
         TxopProcedure::InitialProtection::NONE,
+        "broadcast must not use legacy RTS/CTS");
+requireCondition(HcfFramePreparation::selectInitialProtection(
+        MacAddress("01:00:5e:00:00:01"), Ieee80211PhyFamily::HT, &negotiated) ==
+        TxopProcedure::InitialProtection::NONE,
         "multicast must not use legacy RTS/CTS");
 requireCondition(HcfFramePreparation::selectInitialProtection(
         unicast, Ieee80211PhyFamily::VHT, &negotiated) ==
@@ -37,6 +41,11 @@ requireCondition(HcfFramePreparation::selectInitialProtection(
         unicast, Ieee80211PhyFamily::HT, nullptr) ==
         TxopProcedure::InitialProtection::NONE,
         "missing negotiated HT capabilities must disable HT protection");
+negotiated.operation.protectionMode = Ieee80211HtProtectionMode::NO_PROTECTION;
+requireCondition(HcfFramePreparation::selectInitialProtection(
+        unicast, Ieee80211PhyFamily::HT, &negotiated) ==
+        TxopProcedure::InitialProtection::NONE,
+        "disabled HT protection mode must not use legacy RTS/CTS");
 
 EV << "HCF frame preparation protection decisions passed.\n";
 

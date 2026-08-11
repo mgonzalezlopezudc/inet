@@ -76,10 +76,13 @@ B HcfAggregationService::calculateAmpduLength(
     return aggregateLength;
 }
 
-void HcfAggregationService::recordTransmission(Packet *packet,
-        const std::vector<Packet *>& subframes, bool implicitBlockAck)
+Packet *HcfAggregationService::materializeTransmission(Packet *ledgerKey,
+        const std::vector<Packet *>& subframes, FcsMode fcsMode,
+        bool implicitBlockAck)
 {
-    transmissionLedger.record(packet, subframes, implicitBlockAck);
+    auto aggregate = buildAmpduPacket(subframes, fcsMode);
+    transmissionLedger.record(ledgerKey, subframes, implicitBlockAck);
+    return aggregate;
 }
 
 bool HcfAggregationService::hasImplicitBlockAck(Packet *packet) const

@@ -43,13 +43,17 @@ class INET_API HcfResponseService
         std::function<bool()> isStartRxTimerScheduled;
         std::function<void()> handleStartRxTimeout;
         std::function<void(Packet *)> processResponse;
+        std::function<void(Packet *)> discardResponse;
         std::function<void()> cancelStartRxTimer;
     };
 
   protected:
     FrameSequenceRxTimeoutState timeoutState;
+    bool timeoutHandled = false;
 
     static void checkActions(const Actions& actions);
+    bool applyStartRxTimeout(const Actions& actions);
+    void cancelStartRxTimer(const Actions& actions);
 
   public:
     ResponseClassification classifyResponse(bool sequenceRunning,
@@ -57,6 +61,9 @@ class INET_API HcfResponseService
     void responseTimerScheduled();
     void handleStartRxTimeout(const Actions& actions);
     void processResponse(Packet *packet, const Actions& actions);
+    ResponseClassification processResponseAccordingToPolicy(Packet *packet,
+            bool addressedToUs, IReceiveStep *receiveStep,
+            const Actions& actions);
     void processResponseAndCancelStartRxTimerIfCompleted(Packet *packet,
             IReceiveStep *receiveStep, const Actions& actions);
     void processResponseAndCancelStartRxTimerIfReceiveStepCompletes(Packet *packet,

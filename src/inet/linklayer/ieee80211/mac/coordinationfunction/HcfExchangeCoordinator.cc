@@ -69,8 +69,11 @@ void HcfExchangeCoordinator::beginTransmission(Packet *packet)
     requireState("beginTransmission", {State::IDLE, State::PREPARING,
             State::TRANSMITTING, State::AWAITING_RESPONSE,
             State::RETRYING_OR_RECOVERING});
+    if (state == State::TRANSMITTING && packet == nullptr)
+        throw cRuntimeError("Repeated HCF transmission callback must identify its packet");
     if (packet != nullptr)
         activePacket = packet;
+    expectedResponseStep = nullptr;
     state = State::TRANSMITTING;
 }
 
@@ -82,45 +85,60 @@ void HcfExchangeCoordinator::awaitResponse(const IFrameSequenceStep *responseSte
     state = State::AWAITING_RESPONSE;
 }
 
-void HcfExchangeCoordinator::beginRetryOrRecovery(Packet *packet)
+bool HcfExchangeCoordinator::beginRetryOrRecovery(Packet *packet)
 {
+    if (state == State::IDLE || state == State::COMPLETING ||
+            state == State::ABORTING || state == State::RETRYING_OR_RECOVERING ||
+            !isActivePacket(packet))
+        return false;
     requireState("beginRetryOrRecovery", {State::AWAITING_RESPONSE,
-            State::TRANSMITTING, State::RETRYING_OR_RECOVERING});
-    if (packet != nullptr) {
-        validateActivePacket(packet);
-        activePacket = packet;
-    }
+            State::TRANSMITTING});
     state = State::RETRYING_OR_RECOVERING;
+    return true;
 }
 
-void HcfExchangeCoordinator::validateActivePacket(Packet *packet) const
+bool HcfExchangeCoordinator::isActivePacket(const Packet *packet) const
 {
-    if (packet == nullptr)
-        throw cRuntimeError("HCF exchange callback packet must not be null");
-    if (activePacket != nullptr && activePacket != packet)
-        throw cRuntimeError("HCF exchange callback packet does not match the active packet");
+    return packet != nullptr && activePacket == packet;
 }
 
-void HcfExchangeCoordinator::complete()
+bool HcfExchangeCoordinator::isExpectedResponseStep(
+        const IFrameSequenceStep *responseStep) const
 {
+    return responseStep != nullptr && expectedResponseStep == responseStep;
+}
+
+bool HcfExchangeCoordinator::complete()
+{
+    if (state == State::IDLE || state == State::COMPLETING)
+        return false;
     requireState("complete", {State::PREPARING, State::TRANSMITTING,
-            State::AWAITING_RESPONSE, State::RETRYING_OR_RECOVERING});
-    state = State::COMPLETING;
-}
-
-void HcfExchangeCoordinator::abort()
-{
-    requireState("abort", {State::PREPARING, State::TRANSMITTING,
             State::AWAITING_RESPONSE, State::RETRYING_OR_RECOVERING,
             State::ABORTING});
-    state = State::ABORTING;
+    state = State::COMPLETING;
+    return true;
 }
 
-void HcfExchangeCoordinator::reset()
+bool HcfExchangeCoordinator::abort()
 {
+    if (state == State::IDLE || state == State::COMPLETING ||
+            state == State::ABORTING)
+        return false;
+    requireState("abort", {State::PREPARING, State::TRANSMITTING,
+            State::AWAITING_RESPONSE, State::RETRYING_OR_RECOVERING});
+    state = State::ABORTING;
+    return true;
+}
+
+bool HcfExchangeCoordinator::reset()
+{
+    if (state == State::IDLE)
+        return false;
+    requireState("reset", {State::COMPLETING});
     state = State::IDLE;
     activePacket = nullptr;
     expectedResponseStep = nullptr;
+    return true;
 }
 
 } // namespace ieee80211
