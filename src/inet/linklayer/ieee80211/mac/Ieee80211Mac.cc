@@ -6,6 +6,7 @@
 
 
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211MacSapServiceTag_m.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211MldMac.h"
 
 #include "inet/common/INETUtils.h"
@@ -189,8 +190,8 @@ void Ieee80211Mac::handleMgmtPacket(Packet *packet)
     const auto& header = makeShared<Ieee80211MgmtHeader>();
     header->setType((Ieee80211FrameType)packet->getTag<Ieee80211SubtypeReq>()->getSubtype());
     header->setReceiverAddress(packet->getTag<MacAddressReq>()->getDestAddress());
-    if (mib->mode == Ieee80211Mib::INFRASTRUCTURE && mib->bssStationData.stationType == Ieee80211Mib::ACCESS_POINT)
-        header->setAddress3(mib->bssData.bssid);
+    if (mib->mode == Ieee80211Mib::INFRASTRUCTURE && mib->getStationType() == Ieee80211Mib::ACCESS_POINT)
+        header->setAddress3(mib->getBssid());
     packet->insertAtFront(header);
     packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
     processUpperFrame(packet, header);
@@ -198,7 +199,7 @@ void Ieee80211Mac::handleMgmtPacket(Packet *packet)
 
 void Ieee80211Mac::handleUpperPacket(Packet *packet)
 {
-    if (mib->mode == Ieee80211Mib::INFRASTRUCTURE && mib->bssStationData.stationType == Ieee80211Mib::STATION && !mib->bssStationData.isAssociated) {
+    if (mib->mode == Ieee80211Mib::INFRASTRUCTURE && mib->getStationType() == Ieee80211Mib::STATION && !mib->isAssociated()) {
         EV << "STA is not associated with an access point, discarding packet " << packet << "\n";
         PacketDropDetails details;
         details.setReason(OTHER_PACKET_DROP);
@@ -208,11 +209,10 @@ void Ieee80211Mac::handleUpperPacket(Packet *packet)
     }
     encapsulate(packet);
     const auto& header = packet->peekAtFront<Ieee80211DataOrMgmtHeader>();
-    if (mib->mode == Ieee80211Mib::INFRASTRUCTURE && mib->bssStationData.stationType == Ieee80211Mib::ACCESS_POINT) {
+    if (mib->mode == Ieee80211Mib::INFRASTRUCTURE && mib->getStationType() == Ieee80211Mib::ACCESS_POINT) {
         auto receiverAddress = header->getReceiverAddress();
         if (!receiverAddress.isMulticast()) {
-            auto it = mib->bssAccessPointData.stations.find(receiverAddress);
-            if (it == mib->bssAccessPointData.stations.end() || it->second != Ieee80211Mib::ASSOCIATED) {
+            if (!mib->isPeerAssociated(receiverAddress)) {
                 EV << "STA with MAC address " << receiverAddress << " not associated with this AP, dropping frame\n";
                 PacketDropDetails details;
                 details.setReason(OTHER_PACKET_DROP);
@@ -291,7 +291,7 @@ void Ieee80211Mac::handleLowerPacket(Packet *packet)
             return;
         }
         auto header = packet->peekAtFront<Ieee80211MacHeader>();
-        if (mib->bssStationData.stationType == Ieee80211Mib::ACCESS_POINT) {
+        if (mib->getStationType() == Ieee80211Mib::ACCESS_POINT) {
             if (auto twoAddressHeader = dynamicPtrCast<const Ieee80211TwoAddressHeader>(header)) {
                 if (auto signalPower = packet->findTag<SignalPowerInd>())
                     mib->updateStationReceivedPower(twoAddressHeader->getTransmitterAddress(), signalPower->getPower());
@@ -352,14 +352,14 @@ void Ieee80211Mac::encapsulate(Packet *packet)
     if (mib->mode == Ieee80211Mib::INDEPENDENT)
         header->setReceiverAddress(destAddress);
     else if (mib->mode == Ieee80211Mib::INFRASTRUCTURE) {
-        if (mib->bssStationData.stationType == Ieee80211Mib::ACCESS_POINT) {
+        if (mib->getStationType() == Ieee80211Mib::ACCESS_POINT) {
             header->setFromDS(true);
             header->setAddress3(mib->address);
             header->setReceiverAddress(destAddress);
         }
-        else if (mib->bssStationData.stationType == Ieee80211Mib::STATION) {
+        else if (mib->getStationType() == Ieee80211Mib::STATION) {
             header->setToDS(true);
-            header->setReceiverAddress(mib->bssData.bssid);
+            header->setReceiverAddress(mib->getBssid());
             header->setAddress3(destAddress);
         }
         else
@@ -393,11 +393,11 @@ void Ieee80211Mac::decapsulate(Packet *packet)
         macAddressInd->setDestAddress(header->getReceiverAddress());
     }
     else if (mib->mode == Ieee80211Mib::INFRASTRUCTURE) {
-        if (mib->bssStationData.stationType == Ieee80211Mib::ACCESS_POINT) {
+        if (mib->getStationType() == Ieee80211Mib::ACCESS_POINT) {
             macAddressInd->setSrcAddress(header->getTransmitterAddress());
             macAddressInd->setDestAddress(header->getAddress3());
         }
-        else if (mib->bssStationData.stationType == Ieee80211Mib::STATION) {
+        else if (mib->getStationType() == Ieee80211Mib::STATION) {
             macAddressInd->setSrcAddress(header->getAddress3());
             macAddressInd->setDestAddress(header->getReceiverAddress());
         }
@@ -511,6 +511,14 @@ void Ieee80211Mac::sendDownFrame(Packet *frame)
     Enter_Method("sendDownFrame(\"%s\")", frame->getName());
     take(frame);
     configureRadioMode(IRadio::RADIO_MODE_TRANSMITTER);
+    // MAC-SAP provenance is node-local metadata. Tx passes a duplicate here,
+    // so stripping it at the MAC/PHY boundary preserves the HCF-owned queued,
+    // in-progress, and completion copies.
+    auto serviceTags = frame->getAllRegionTags<Ieee80211MacSapServiceTag>(
+            frame->getFrontOffset(), frame->getDataLength());
+    for (const auto& region : serviceTags)
+        frame->removeRegionTagIfPresent<Ieee80211MacSapServiceTag>(
+                region.getOffset(), region.getLength());
     frame->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211Mac);
     sendDown(frame);
 }
@@ -550,7 +558,7 @@ void Ieee80211Mac::sendNextTwtPsPoll()
     auto peer = pendingTwtPsPollPeers.front();
     pendingTwtPsPollPeers.pop_front();
     auto header = makeShared<Ieee80211PsPollFrame>();
-    header->setAID(mib->bssStationData.associationId);
+    header->setAID(mib->getLocalAssociationId());
     header->setReceiverAddress(peer);
     header->setTransmitterAddress(mib->address);
     auto packet = new Packet("TwtPsPoll", header);
@@ -616,29 +624,6 @@ void Ieee80211Mac::handleStopOperation(LifecycleOperation *operation)
 // FIXME
 void Ieee80211Mac::handleCrashOperation(LifecycleOperation *operation)
 {
-}
-
-StationQueueBank *Ieee80211Mac::createStationQueueBank(const MacAddress &staAddr)
-{
-    if (!hcf) {
-        EV_WARN << "HCF not available for queue bank creation\n";
-        return nullptr;
-    }
-    return hcf->createStationQueueBank(staAddr);
-}
-
-void Ieee80211Mac::destroyStationQueueBank(const MacAddress &staAddr)
-{
-    if (!hcf) {
-        EV_WARN << "HCF not available for queue bank destruction\n";
-        return;
-    }
-    hcf->destroyStationQueueBank(staAddr);
-}
-
-StationQueueBank *Ieee80211Mac::getStationQueueBank(const MacAddress &staAddr) const
-{
-    return hcf == nullptr ? nullptr : hcf->getStationQueueBank(staAddr);
 }
 
 void Ieee80211Mac::invalidatePeerDerivedState(const MacAddress& peer)

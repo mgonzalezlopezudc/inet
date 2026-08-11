@@ -23,6 +23,7 @@
 #include "inet/queueing/contract/IPacketQueue.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeMuMimoCsiManager.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211HeOmi.h"
+#include "inet/linklayer/ieee80211/mib/Ieee80211AssociationState.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 
@@ -143,7 +144,7 @@ struct INET_API HeUlScheduleFinalizationResult
  * When fewer than two unique destination STAs are queued (or the modeSet is
  * not "ax"), HeHcf falls back transparently to the standard Hcf::startFrameSequence().
  */
-class INET_API HeHcf : public Hcf
+class INET_API HeHcf : public Hcf, public IIeee80211PeerAssociationListener
 {
   protected:
     IIeee80211HeDlScheduler *dlScheduler = nullptr;
@@ -151,6 +152,7 @@ class INET_API HeHcf : public Hcf
     HeTxopCoordinatorService txopCoordinator;
     std::unique_ptr<StationQueueBankManager> queueBankManager;
     std::unique_ptr<IIeee80211HeLinkPhyContext> linkPhyContext;
+    bool peerAssociationListenerRegistered = false;
     cMessage *ulTriggerTimer = nullptr;
     cMessage *triggeredUlResponseTimer = nullptr;
     IIeee80211HeUlTriggerPolicy::TriggerType pendingUlTrigger = IIeee80211HeUlTriggerPolicy::NO_TRIGGER;
@@ -202,7 +204,7 @@ class INET_API HeHcf : public Hcf
     // Packet identities captured while a frame sequence is active. A peer may
     // reassociate before that sequence finishes, so deferring by MAC address
     // would incorrectly retire packets from the new association epoch.
-    std::map<Packet *, MacAddress> packetsPendingRetirement;
+    std::map<Packet *, StationQueueBankManager::AssociationKey> packetsPendingRetirement;
 
     HeMuMimoCsiManager csiManager;
     bool enableDlMuMimo = false;
@@ -213,6 +215,8 @@ class INET_API HeHcf : public Hcf
 
   protected:
     virtual void initialize(int stage) override;
+    virtual void peerAssociationChanged(
+            const Ieee80211AssociationState::PeerTransition& transition) override;
     virtual void handleMessage(cMessage *msg) override;
     virtual void finish() override;
     virtual uint32_t getBufferedTrafficServiceBytes(
@@ -238,9 +242,12 @@ class INET_API HeHcf : public Hcf
             const Ptr<const Ieee80211CompressedBlockAck>& blockAck);
     virtual int retireQueuedPacketsForPeer(const MacAddress& peer);
     virtual int retireInProgressPacketsForPeer(const MacAddress& peer);
-    virtual bool retireQueuedPacket(Packet *packet, const MacAddress& peer);
+    virtual bool retireQueuedPacket(Packet *packet,
+            const StationQueueBankManager::AssociationKey& association);
     virtual bool retireInProgressPacket(Packet *packet);
     virtual void retireDeferredPackets();
+    virtual StationQueueBank *ensureAssociatedQueueBank(const MacAddress& peer, uint64_t associationEpoch);
+    virtual void finalizeRetiredQueueBanksIfSafe();
     virtual void scheduleTriggeredUlResponseTimeout();
     virtual void handleTriggeredUlResponseTimeout();
     virtual void beforeTriggeredUlPacketCommit(int packetIndex) {}
@@ -296,9 +303,7 @@ class INET_API HeHcf : public Hcf
 
   public:
     virtual ~HeHcf();
-    virtual StationQueueBank *createStationQueueBank(const MacAddress& staAddr) override;
-    virtual void destroyStationQueueBank(const MacAddress& staAddr) override;
-    virtual StationQueueBank *getStationQueueBank(const MacAddress& staAddr) const override;
+    virtual StationQueueBank *getStationQueueBank(const MacAddress& staAddr) const;
     virtual void invalidatePeerDerivedState(const MacAddress& peer) override;
     virtual void originatorProcessTransmittedFrame(Packet *packet) override;
     virtual void originatorProcessTransmittedControlFrame(const Ptr<const Ieee80211MacHeader>& controlHeader, AccessCategory ac) override;

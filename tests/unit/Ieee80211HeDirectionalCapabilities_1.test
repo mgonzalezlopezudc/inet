@@ -155,31 +155,31 @@ requireTrue(!negotiateHeCapabilities(apLocal, noStaTx, operation, true).
         "AP RX support without STA TX support must not negotiate full-bandwidth UL MU-MIMO");
 
 auto mib = check_and_cast<Ieee80211Mib *>(getParentModule()->getSubmodule("mib"));
-mib->bssStationData.stationType = Ieee80211Mib::ACCESS_POINT;
+mib->setBssStationType(Ieee80211Mib::ACCESS_POINT);
 mib->localHeCapabilities = local;
 MacAddress address("02:00:00:00:00:42");
 mib->setPeerHeCapabilities(address, peer, operation);
 mib->setPeerEhtCapabilities(address, Ieee80211EhtCapabilities(), Ieee80211EhtOperation());
 mib->setPeerVhtCapabilities(address, Ieee80211VhtCapabilities(), Ieee80211VhtOperation());
-requireTrue(mib->findNegotiatedHeCapabilities(address) != nullptr &&
-        mib->findNegotiatedEhtCapabilities(address) != nullptr &&
-        mib->findNegotiatedVhtCapabilities(address) != nullptr,
+requireTrue(mib->getNegotiatedHeCapabilities(address) &&
+        mib->getNegotiatedEhtCapabilities(address) &&
+        mib->getNegotiatedVhtCapabilities(address),
         "all peer capability families must be cached before invalidation");
 mib->removePeerCapabilities(address);
-requireTrue(mib->findNegotiatedHeCapabilities(address) == nullptr &&
-        mib->findNegotiatedEhtCapabilities(address) == nullptr &&
-        mib->findNegotiatedVhtCapabilities(address) == nullptr,
+requireTrue(!mib->getNegotiatedHeCapabilities(address) &&
+        !mib->getNegotiatedEhtCapabilities(address) &&
+        !mib->getNegotiatedVhtCapabilities(address),
         "common invalidation must remove HE, EHT, and VHT caches");
 
-mib->allocateAssociationId(address);
+mib->commitPeerAssociation(address);
 mib->setPeerHeCapabilities(address, peer, operation);
 mib->setPeerEhtCapabilities(address, Ieee80211EhtCapabilities(), Ieee80211EhtOperation());
 mib->setPeerVhtCapabilities(address, Ieee80211VhtCapabilities(), Ieee80211VhtOperation());
-mib->releaseAssociationId(address);
+mib->clearPeerAssociation(address, Ieee80211Mib::AUTHENTICATED);
 requireTrue(mib->getAssociationId(address) == -1 &&
-        mib->findNegotiatedHeCapabilities(address) == nullptr &&
-        mib->findNegotiatedEhtCapabilities(address) == nullptr &&
-        mib->findNegotiatedVhtCapabilities(address) == nullptr,
+        !mib->getNegotiatedHeCapabilities(address) &&
+        !mib->getNegotiatedEhtCapabilities(address) &&
+        !mib->getNegotiatedVhtCapabilities(address),
         "association release must invalidate every peer capability family");
 
 EV << "Directional HE negotiation, role inversion, TWT independence, and cache invalidation passed.\n";

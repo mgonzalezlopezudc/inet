@@ -148,6 +148,7 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     int lastSelectedModeNumSpatialStreams = -1;
     std::map<Packet *, std::vector<Packet *>> pendingAmpduSubframes;
     std::set<Packet *> pendingHtImplicitBlockAckAmpdus;
+    uint64_t nextServiceDataUnitId = 1;
 
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
@@ -218,6 +219,9 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     static constexpr uint32_t MAX_FINITE_BUFFER_STATUS_BYTES =
             std::numeric_limits<uint32_t>::max() - 1;
     static void addBufferedTrafficServiceBytes(uint32_t& total, uint64_t amount);
+    uint64_t allocateServiceDataUnitId();
+    void tagMacSapServiceDataUnit(Packet *packet,
+            const Ptr<const Ieee80211DataHeader>& header);
     uint32_t calculateBufferedTrafficServiceBytes(Edcaf *edcaf, const MacAddress& peer,
             int tid, const std::vector<Packet *>& additionalPackets) const;
     virtual uint32_t getBufferedTrafficServiceBytes(
@@ -263,9 +267,6 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
 
     IOriginatorMacDataService *getOriginatorMacDataService() const { return originatorDataService; }
     IOriginatorBlockAckAgreementHandler *getOriginatorBlockAckAgreementHandler() const { return originatorBlockAckAgreementHandler; }
-    virtual StationQueueBank *createStationQueueBank(const MacAddress& staAddr);
-    virtual void destroyStationQueueBank(const MacAddress& staAddr);
-    virtual StationQueueBank *getStationQueueBank(const MacAddress& staAddr) const;
     virtual void invalidatePeerDerivedState(const MacAddress& peer);
     virtual queueing::IPacketQueue *resolvePerStaQueue(const MacAddress& staAddr, AccessCategory ac) {
       return getPerStaQueue(staAddr, ac);

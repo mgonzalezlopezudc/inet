@@ -155,12 +155,6 @@ class HeDlMuPerStaBlockAckFs : public SequentialFs
         return owner->activeAllocations.at(allocationIndex);
     }
 
-    IQosRateSelection *getRateSelection() const
-    {
-        auto hcfModule = check_and_cast<cModule *>(owner->callback);
-        return check_and_cast<IQosRateSelection *>(hcfModule->getSubmodule("rateSelection"));
-    }
-
     Packet *findTransmittedPacket(FrameSequenceContext *context) const
     {
         // The HE MU PPDU is represented by a container packet in the frame
@@ -201,8 +195,8 @@ class HeDlMuPerStaBlockAckFs : public SequentialFs
         auto hcfModule = dynamic_cast<cModule *>(owner->callback);
         auto macModule = hcfModule != nullptr ? dynamic_cast<Ieee80211Mac *>(hcfModule->getParentModule()) : nullptr;
         auto mib = macModule != nullptr ? macModule->getMib() : nullptr;
-        auto negotiated = mib != nullptr ? mib->findNegotiatedHeCapabilities(receiverAddress) : nullptr;
-        if (negotiated != nullptr && negotiated->localTxPeerRx.multiTidAggregation) {
+        auto negotiated = mib != nullptr ? mib->getNegotiatedHeCapabilities(receiverAddress) : std::optional<Ieee80211NegotiatedHeCapabilities>();
+        if (negotiated && negotiated->localTxPeerRx.multiTidAggregation) {
             // 26.6.3 allows DL HE MU multi-TID A-MPDUs when negotiated.  The
             // matching Multi-TID BAR carries one record per TID included in the
             // per-user A-MPDU.
@@ -235,7 +229,7 @@ class HeDlMuPerStaBlockAckFs : public SequentialFs
         return blockAckReq;
     }
 
-    simtime_t computeRemainingBarDuration(const IIeee80211Mode *responseMode) const
+    simtime_t computeRemainingBarDuration() const
     {
         // 9.2.5 Duration fields reserve the remaining exchange.  For the
         // sequential BAR method, each BAR protects its own BlockAck response
@@ -243,61 +237,58 @@ class HeDlMuPerStaBlockAckFs : public SequentialFs
         auto hcfModule = dynamic_cast<cModule *>(owner->callback);
         auto macModule = hcfModule != nullptr ? dynamic_cast<Ieee80211Mac *>(hcfModule->getParentModule()) : nullptr;
         auto mib = macModule != nullptr ? macModule->getMib() : nullptr;
-        auto negotiated = mib != nullptr ? mib->findNegotiatedHeCapabilities(getActiveAllocation().staAddress) : nullptr;
-        bool multiTid = (negotiated != nullptr && negotiated->localTxPeerRx.multiTidAggregation);
+        auto negotiated = mib != nullptr ? mib->getNegotiatedHeCapabilities(getActiveAllocation().staAddress) : std::optional<Ieee80211NegotiatedHeCapabilities>();
+        bool multiTid = negotiated && negotiated->localTxPeerRx.multiTidAggregation;
 
         auto activeRecordCount = multiTid ? std::max<size_t>(1, collectStartingSequenceNumbersByTid(getActiveAllocation().packets).size()) : 0;
-        auto blockAckDuration = responseMode->getDuration(multiTid ? b(B(18 + 12 * activeRecordCount)) : LENGTH_BASIC_BLOCKACK);
+        auto blockAckDuration = getActiveAllocation().blockAckResponseMode->getDuration(
+                multiTid ? b(B(18 + 12 * activeRecordCount)) : LENGTH_BASIC_BLOCKACK);
         auto remainingDuration = owner->modeSet->getSifsTime() + blockAckDuration;
         for (int nextIndex = allocationIndex + 1; nextIndex < (int)owner->activeAllocations.size(); nextIndex++) {
-            auto nextNegotiated = mib != nullptr ? mib->findNegotiatedHeCapabilities(owner->activeAllocations.at(nextIndex).staAddress) : nullptr;
-            bool nextMultiTid = (nextNegotiated != nullptr && nextNegotiated->localTxPeerRx.multiTidAggregation);
+            auto nextNegotiated = mib != nullptr ? mib->getNegotiatedHeCapabilities(owner->activeAllocations.at(nextIndex).staAddress) : std::optional<Ieee80211NegotiatedHeCapabilities>();
+            bool nextMultiTid = nextNegotiated && nextNegotiated->localTxPeerRx.multiTidAggregation;
             auto nextRecordCount = nextMultiTid ? std::max<size_t>(1, collectStartingSequenceNumbersByTid(owner->activeAllocations.at(nextIndex).packets).size()) : 0;
-            auto nextBlockAckDuration = responseMode->getDuration(nextMultiTid ? b(B(18 + 12 * nextRecordCount)) : LENGTH_BASIC_BLOCKACK);
-            auto nextBarDuration = responseMode->getDuration(nextMultiTid ? B(18 + 4 * nextRecordCount) : B(38));
+            const auto& nextAllocation = owner->activeAllocations.at(nextIndex);
+            auto nextBlockAckDuration = nextAllocation.blockAckResponseMode->getDuration(
+                    nextMultiTid ? b(B(18 + 12 * nextRecordCount)) : LENGTH_BASIC_BLOCKACK);
+            auto nextBarDuration = nextAllocation.barControlMode->getDuration(
+                    nextMultiTid ? B(18 + 4 * nextRecordCount) : B(38));
             remainingDuration += owner->modeSet->getSifsTime() + nextBarDuration + owner->modeSet->getSifsTime() + nextBlockAckDuration;
         }
         return remainingDuration;
     }
 
-    simtime_t computeBlockAckTimeout(Packet *lastTransmittedPacket) const
+    simtime_t computeBlockAckTimeout() const
     {
         auto hcfModule = dynamic_cast<cModule *>(owner->callback);
         auto macModule = hcfModule != nullptr ? dynamic_cast<Ieee80211Mac *>(hcfModule->getParentModule()) : nullptr;
         auto mib = macModule != nullptr ? macModule->getMib() : nullptr;
-        auto negotiated = mib != nullptr ? mib->findNegotiatedHeCapabilities(getActiveAllocation().staAddress) : nullptr;
-        bool multiTid = (negotiated != nullptr && negotiated->localTxPeerRx.multiTidAggregation);
+        auto negotiated = mib != nullptr ? mib->getNegotiatedHeCapabilities(getActiveAllocation().staAddress) : std::optional<Ieee80211NegotiatedHeCapabilities>();
+        bool multiTid = negotiated && negotiated->localTxPeerRx.multiTidAggregation;
 
-        Ptr<Ieee80211BlockAckReq> dummyReq;
-        if (multiTid) {
-            auto multiTidReq = makeShared<Ieee80211MultiTidBlockAckReq>();
-            multiTidReq->setRecordsArraySize(std::max<size_t>(1, collectStartingSequenceNumbersByTid(getActiveAllocation().packets).size()));
-            dummyReq = multiTidReq;
-        } else {
-            dummyReq = makeShared<Ieee80211BasicBlockAckReq>();
-        }
-
-        auto responseMode = getRateSelection()->computeResponseBlockAckFrameMode(lastTransmittedPacket, dummyReq);
         auto recordCount = multiTid ? std::max<size_t>(1, collectStartingSequenceNumbersByTid(getActiveAllocation().packets).size()) : 0;
-        return owner->modeSet->getSifsTime() + responseMode->getDuration(multiTid ? b(B(18 + 12 * recordCount)) : LENGTH_BASIC_BLOCKACK) + owner->modeSet->getSlotTime();
+        return owner->modeSet->getSifsTime() +
+                getActiveAllocation().blockAckResponseMode->getDuration(
+                        multiTid ? b(B(18 + 12 * recordCount)) : LENGTH_BASIC_BLOCKACK) +
+                owner->modeSet->getSlotTime();
     }
 
     IFrameSequenceStep *prepareBarStep(FrameSequenceContext *context)
     {
         auto transmittedPacket = findTransmittedPacket(context);
         auto blockAckReq = buildBlockAckReq(context, transmittedPacket);
-        auto responseMode = getRateSelection()->computeResponseBlockAckFrameMode(
-                transmittedPacket != nullptr ? transmittedPacket : owner->containerPacket, blockAckReq);
-        blockAckReq->setDurationField(computeRemainingBarDuration(responseMode));
-        auto blockAckPacket = new Packet(dynamicPtrCast<const Ieee80211MultiTidBlockAckReq>(blockAckReq) ? "MultiTidBlockAckReq" : "BasicBlockAckReq", blockAckReq);
+        auto blockAckPacket = new Packet(dynamicPtrCast<const Ieee80211MultiTidBlockAckReq>(blockAckReq) ? "MultiTidBlockAckReq" : "BasicBlockAckReq");
+        RateSelection::setFrameMode(blockAckPacket, blockAckReq,
+                getActiveAllocation().barControlMode);
+        blockAckReq->setDurationField(computeRemainingBarDuration());
+        blockAckPacket->insertAtFront(blockAckReq);
         blockAckPacket->insertAtBack(makeShared<Ieee80211MacTrailer>());
         return new TransmitStep(blockAckPacket, context->getIfs(), true);
     }
 
     IFrameSequenceStep *prepareBlockAckStep(FrameSequenceContext *context)
     {
-        auto txStep = check_and_cast<ITransmitStep *>(context->getLastStep());
-        return new ReceiveStep(computeBlockAckTimeout(txStep->getFrameToTransmit()));
+        return new ReceiveStep(computeBlockAckTimeout());
     }
 
     bool completeBlockAckStep(FrameSequenceContext *context)
@@ -438,6 +429,7 @@ class HeDlMuBarBlockAckFs : public OptionalFs
         header->setChunkLength(getMuBarTriggerHeaderLength(owner->activeAllocations.size()));
         auto packet = new Packet("HE-MU-BAR-Trigger", header);
         packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+        RateSelection::setFrameMode(packet, header, owner->muBarControlMode);
         packet->addTag<physicallayer::Ieee80211HeTriggerCorrelationTag>()->
                 setTriggerId(owner->ackTriggerId);
         EV_INFO << "HE DL MU-BAR FS: built MU-BAR trigger for " << owner->activeAllocations.size()
@@ -454,10 +446,11 @@ class HeDlMuBarBlockAckFs : public OptionalFs
         std::set<MacAddress> responded;
         EV_INFO << "HE DL MU-BAR FS: processing MU-BAR responses, triggerId = " << owner->ackTriggerId << "\n";
         for (auto packet : collection->getReceivedFrames()) {
+            auto macHeader = dynamicPtrCast<const Ieee80211MacHeader>(packet->peekAtFront());
             auto blockAck = dynamicPtrCast<const Ieee80211CompressedBlockAck>(
-                    packet->peekAtFront<Ieee80211MacHeader>());
+                    macHeader);
             if (blockAck == nullptr) {
-                EV_WARN << "HE DL MU-BAR FS: received non-compressed BlockAck frame in MU-BAR response window\n";
+                EV_WARN << "HE DL MU-BAR FS: ignoring delimiter-front or non-compressed BlockAck response\n";
                 continue;
             }
             auto expected = std::find_if(owner->activeAllocations.begin(),
@@ -662,9 +655,15 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     auto rateSelection = check_and_cast<IQosRateSelection *>(hcfModule->getSubmodule("rateSelection"));
     ASSERT(rateSelection != nullptr);
 
-    // Set the frame mode on the container packet first so response mode calculations don't fail due to missing mode
-    auto containerMode = rateSelection->computeMode(container, containerHdr, nullptr);
-    RateSelection::setFrameMode(container, containerHdr, containerMode);
+    // The container header is transmitter-local metadata, not an on-air group
+    // data wrapper. The generic ModeReq satisfies the legacy MAC/PHY carrier
+    // interface only; the canonical HE TXVECTOR below remains authoritative
+    // for every common and per-user DL MU PHY parameter.
+    auto carrierMode = modeSet->findHeMode(0, 1, scheduleContext.channelBandwidth,
+            scheduleContext.channelBandwidth > MHz(20));
+    if (carrierMode == nullptr)
+        throw cRuntimeError("No legal HE MCS 0/NSS 1 carrier mode for the canonical DL MU bandwidth");
+    RateSelection::setFrameMode(container, containerHdr, carrierMode);
 
     auto getCandidateAccessCategory = [&] (const MacAddress& staAddress, AccessCategory fallbackAc) {
         for (const auto& candidate : scheduleContext.candidates)
@@ -745,8 +744,8 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         selectedAllocation.packet = staPacket;
         selectedAllocation.dataHeader = dataHeader;
         auto hcfMacForCapabilities = hcf != nullptr ? dynamic_cast<Ieee80211Mac *>(check_and_cast<cModule *>(hcf)->getParentModule()) : nullptr;
-        auto negotiated = hcfMacForCapabilities != nullptr ? hcfMacForCapabilities->getMib()->findNegotiatedHeCapabilities(alloc.staAddress) : nullptr;
-        selectedAllocation.multiTidAggregation = negotiated != nullptr &&
+        auto negotiated = hcfMacForCapabilities != nullptr ? hcfMacForCapabilities->getMib()->getNegotiatedHeCapabilities(alloc.staAddress) : std::optional<Ieee80211NegotiatedHeCapabilities>();
+        selectedAllocation.multiTidAggregation = negotiated &&
                 negotiated->localTxPeerRx.valid && negotiated->localTxPeerRx.multiTidAggregation;
         if (hcf != nullptr) {
             auto hcfMac = check_and_cast<Ieee80211Mac *>(check_and_cast<cModule *>(hcf)->getParentModule());
@@ -790,27 +789,72 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
                 selectedAllocation.allocation.numberOfSpatialStreams;
     }
 
-    Ptr<Ieee80211BlockAckReq> dummyReq;
-    if (ackMethod == AckMethod::MU_BAR_TRIGGER)
-        dummyReq = makeShared<Ieee80211CompressedBlockAckReq>();
+    struct BarModes {
+        const IIeee80211Mode *control = nullptr;
+        const IIeee80211Mode *response = nullptr;
+    };
+    std::map<MacAddress, BarModes> barModes;
+    muBarControlMode = nullptr;
+    auto selectMuBarControlMode = [&] (size_t numberOfUsers) {
+        auto trigger = makeShared<Ieee80211TriggerFrame>();
+        trigger->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
+        trigger->setTransmitterAddress(context->getAddress());
+        trigger->setTriggerType(2);
+        trigger->setChannelBandwidthMhz(std::lround(
+                scheduleContext.channelBandwidth.get() / 1e6));
+        trigger->setGuardInterval(HE_GI_1_6_US);
+        trigger->setLtfType(HE_LTF_2X);
+        trigger->setUsersArraySize(numberOfUsers);
+        trigger->setChunkLength(getMuBarTriggerHeaderLength(numberOfUsers));
+        Packet provisionalTrigger("HE-DL-MU-Provisional-MU-BAR", trigger);
+        provisionalTrigger.insertAtBack(makeShared<Ieee80211MacTrailer>());
+        return rateSelection->computeMode(&provisionalTrigger, trigger,
+                qosContext == nullptr ? nullptr : qosContext->txopProcedure);
+    };
+    if (ackMethod == AckMethod::EXPLICIT_SEQUENTIAL_BAR) {
+        for (const auto& selectedAllocation : selectedAllocations) {
+            Ptr<Ieee80211BlockAckReq> blockAckReq;
+            if (selectedAllocation.multiTidAggregation) {
+                auto multiTidReq = makeShared<Ieee80211MultiTidBlockAckReq>();
+                multiTidReq->setRecordsArraySize(1);
+                multiTidReq->setChunkLength(B(22));
+                blockAckReq = multiTidReq;
+            }
+            else
+                blockAckReq = makeShared<Ieee80211BasicBlockAckReq>();
+            blockAckReq->setReceiverAddress(selectedAllocation.allocation.staAddress);
+            blockAckReq->setTransmitterAddress(context->getAddress());
+            Packet provisionalBar("HE-DL-MU-Provisional-BAR");
+            provisionalBar.insertAtFront(blockAckReq);
+            provisionalBar.insertAtBack(makeShared<Ieee80211MacTrailer>());
+            auto control = rateSelection->computeMode(&provisionalBar, blockAckReq,
+                    qosContext == nullptr ? nullptr : qosContext->txopProcedure);
+            RateSelection::setFrameMode(&provisionalBar, blockAckReq, control);
+            auto response = rateSelection->computeResponseBlockAckFrameMode(
+                    &provisionalBar, blockAckReq);
+            barModes[selectedAllocation.allocation.staAddress] = {control, response};
+        }
+    }
     else
-        dummyReq = makeShared<Ieee80211BasicBlockAckReq>();
-    auto responseMode = rateSelection->computeResponseBlockAckFrameMode(container, dummyReq);
+        muBarControlMode = selectMuBarControlMode(selectedAllocations.size());
     for (size_t idx = 0; idx < selectedAllocations.size(); ++idx) {
-        simtime_t responseDuration = responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
-        simtime_t barDuration = responseMode->getDuration(B(38));
-        if (ackMethod == AckMethod::EXPLICIT_SEQUENTIAL_BAR)
+        if (ackMethod == AckMethod::EXPLICIT_SEQUENTIAL_BAR) {
+            const auto& modes = barModes.at(selectedAllocations[idx].allocation.staAddress);
+            simtime_t responseDuration = modes.response->getDuration(LENGTH_BASIC_BLOCKACK);
+            simtime_t barDuration = modes.control->getDuration(B(38));
             totalDuration += modeSet->getSifsTime() + barDuration +
                     modeSet->getSifsTime() + responseDuration;
+        }
 
         auto dataOrMgmtHdr = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(selectedAllocations[idx].dataHeader);
         ASSERT(dataOrMgmtHdr != nullptr);
-        auto staMode = rateSelection->computeMode(selectedAllocations[idx].packet, dataOrMgmtHdr, nullptr);
+        auto staMode = rateSelection->computeMode(selectedAllocations[idx].packet,
+                dataOrMgmtHdr, qosContext == nullptr ? nullptr : qosContext->txopProcedure);
         ASSERT(staMode != nullptr);
         selectedAllocations[idx].phyMode = staMode;
     }
     if (ackMethod == AckMethod::MU_BAR_TRIGGER) {
-        auto triggerDuration = responseMode->getDuration(getMuBarTriggerFrameLength(selectedAllocations.size()));
+        auto triggerDuration = muBarControlMode->getDuration(getMuBarTriggerFrameLength(selectedAllocations.size()));
         std::vector<Ieee80211HeUserPhyParameters> responseUsers;
         responseUsers.reserve(selectedAllocations.size());
         std::map<int, int> responseStreamStartIndex;
@@ -906,15 +950,26 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     const auto& plannedPpdu = packingPlan.getPpdu();
     ASSERT(plannedPpdu);
     totalDuration = SIMTIME_ZERO;
-    auto finalBarDuration = responseMode->getDuration(B(38));
-    auto finalBlockAckDuration = responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
     if (ackMethod == AckMethod::EXPLICIT_SEQUENTIAL_BAR) {
-        for (size_t i = 0; i < finalAllocations.size(); ++i)
-            totalDuration += modeSet->getSifsTime() + finalBarDuration +
-                    modeSet->getSifsTime() + finalBlockAckDuration;
+        for (const auto& finalAllocation : finalAllocations) {
+            const auto& modes = barModes.at(finalAllocation.allocation.staAddress);
+            auto recordCount = finalAllocation.multiTidAggregation ?
+                    std::max<size_t>(1, collectStartingSequenceNumbersByTid(
+                            finalAllocation.packets).size()) : 0;
+            auto barLength = finalAllocation.multiTidAggregation ?
+                    B(18 + 4 * recordCount) : B(38);
+            auto blockAckLength = finalAllocation.multiTidAggregation ?
+                    b(B(18 + 12 * recordCount)) : LENGTH_BASIC_BLOCKACK;
+            totalDuration += modeSet->getSifsTime() + modes.control->getDuration(barLength) +
+                    modeSet->getSifsTime() + modes.response->getDuration(blockAckLength);
+        }
     }
     else {
-        auto triggerDuration = responseMode->getDuration(getMuBarTriggerFrameLength(finalAllocations.size()));
+        // The packing planner may remove users. Select once more from the
+        // surviving real Trigger shape so its cached control mode and the
+        // final reservation cannot drift.
+        muBarControlMode = selectMuBarControlMode(finalAllocations.size());
+        auto triggerDuration = muBarControlMode->getDuration(getMuBarTriggerFrameLength(finalAllocations.size()));
         std::vector<Ieee80211HeUserPhyParameters> responseUsers;
         responseUsers.reserve(finalAllocations.size());
         std::map<int, int> responseStreamStartIndex;
@@ -1021,6 +1076,11 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         activeAlloc.streamStartIndex = selectedAllocation.streamStartIndex;
         activeAlloc.totalNsts = selectedAllocation.totalNsts;
         activeAlloc.muMimo = selectedAllocation.muMimo;
+        if (ackMethod == AckMethod::EXPLICIT_SEQUENTIAL_BAR) {
+            const auto& modes = barModes.at(alloc.staAddress);
+            activeAlloc.barControlMode = modes.control;
+            activeAlloc.blockAckResponseMode = modes.response;
+        }
         activeAlloc.packet = staPackets.front();
         activeAlloc.packets = staPackets;
         activeAllocations.push_back(activeAlloc);

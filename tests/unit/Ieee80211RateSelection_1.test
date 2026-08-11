@@ -239,9 +239,8 @@ auto ehtMode = findFamilyMode(ehtSet, Ieee80211PhyFamily::EHT);
 REQUIRE(heMode != nullptr && ehtMode != nullptr);
 
 auto restrictedHePeer = MacAddress("02:00:00:00:00:30");
-mib->bssStationData.stationType = Ieee80211Mib::ACCESS_POINT;
-mib->bssStationData.isAssociated = true;
-mib->bssAccessPointData.stations[restrictedHePeer] = Ieee80211Mib::ASSOCIATED;
+mib->setBssStationType(Ieee80211Mib::ACCESS_POINT);
+mib->commitPeerAssociation(restrictedHePeer);
 auto restrictedHeCapabilities = mib->localHeCapabilities;
 restrictedHeCapabilities.rxMcsNss.maxMcsPerNss.fill(-1);
 restrictedHeCapabilities.rxMcsNss.maxMcsPerNss[0] = 4;

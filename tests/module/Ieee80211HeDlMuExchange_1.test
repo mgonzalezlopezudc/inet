@@ -42,11 +42,11 @@ class DlMuFaultController : public cSimpleModule
             for (int i = 0; i < 3; ++i) {
                 auto path = std::string("host[") + std::to_string(i) + "].wlan[0].mib";
                 auto mib = check_and_cast<Ieee80211Mib *>(system->getModuleByPath(path.c_str()));
-                REQUIRE_DL(mib->bssStationData.associationId > 0,
+                REQUIRE_DL(mib->getLocalAssociationId() > 0,
                         "scripted loss started before association completed");
             }
             faultedRadio = check_and_cast<IRadio *>(
-                    system->getModuleByPath("host[2].wlan[0].radio"));
+                    system->getModuleByPath("host[0].wlan[0].radio"));
             faultedRadio->setRadioMode(IRadio::RADIO_MODE_OFF);
             EV_INFO << "HE DL MU fault: one associated recipient disabled for partial BA timeout" << EV_ENDL;
         }

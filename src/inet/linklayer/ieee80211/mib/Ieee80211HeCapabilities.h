@@ -11,6 +11,7 @@
 #include <array>
 #include <ostream>
 #include <set>
+#include <tuple>
 
 #include "inet/common/Units.h"
 
@@ -136,6 +137,74 @@ struct Ieee80211NegotiatedHeCapabilities
     Ieee80211HeMutualCapabilities mutual;
     Ieee80211HeOperation operation;
 };
+
+// Semantic state comparisons deliberately enumerate every modeled field. When
+// adding a field to one of these value types, add it to the corresponding
+// comparison so capability generations remain complete and deterministic.
+inline bool operator==(const Ieee80211HeMcsNssMap& a, const Ieee80211HeMcsNssMap& b)
+{
+    return a.maxMcsPerNss == b.maxMcsPerNss;
+}
+
+inline bool operator==(const Ieee80211HeCapabilities& a, const Ieee80211HeCapabilities& b)
+{
+    return std::tie(a.twtRequester, a.twtResponder, a.broadcastTwt, a.dynamicFragmentationLevel,
+                   a.omControl, a.twoNav, a.erBss, a.ndpFeedbackReport, a.supportedChannelWidths,
+                   a.rxMcsNss, a.txMcsNss, a.dlOfdma, a.ulOfdma, a.dcm, a.maxDcmConstellation,
+                   a.maxDcmNss, a.ldpc, a.preamblePuncturing, a.multiTidAggregationRx,
+                   a.multiTidAggregationTx, a.muBarTriggerRx, a.heTbBlockAckTx,
+                   a.maxAmpduLengthExponent, a.maxMpduLength, a.maxBlockAckBufferSize,
+                   a.supportedRuToneSizes, a.dlMuMimoBeamformer, a.dlMuMimoBeamformee,
+                   a.fullBandwidthUlMuMimo, a.partialBandwidthUlMuMimo, a.soundingDimensions,
+                   a.beamformeeSts20Mhz, a.beamformeeStsAbove20Mhz, a.feedbackMode) ==
+           std::tie(b.twtRequester, b.twtResponder, b.broadcastTwt, b.dynamicFragmentationLevel,
+                   b.omControl, b.twoNav, b.erBss, b.ndpFeedbackReport, b.supportedChannelWidths,
+                   b.rxMcsNss, b.txMcsNss, b.dlOfdma, b.ulOfdma, b.dcm, b.maxDcmConstellation,
+                   b.maxDcmNss, b.ldpc, b.preamblePuncturing, b.multiTidAggregationRx,
+                   b.multiTidAggregationTx, b.muBarTriggerRx, b.heTbBlockAckTx,
+                   b.maxAmpduLengthExponent, b.maxMpduLength, b.maxBlockAckBufferSize,
+                   b.supportedRuToneSizes, b.dlMuMimoBeamformer, b.dlMuMimoBeamformee,
+                   b.fullBandwidthUlMuMimo, b.partialBandwidthUlMuMimo, b.soundingDimensions,
+                   b.beamformeeSts20Mhz, b.beamformeeStsAbove20Mhz, b.feedbackMode);
+}
+
+inline bool operator==(const Ieee80211HeOperation& a, const Ieee80211HeOperation& b)
+{
+    return std::tie(a.bssColor, a.operatingChannelWidth, a.basicHeMcsNss, a.erSuDisable,
+                   a.defaultPeDurationPresent, a.defaultPeDurationUs) ==
+           std::tie(b.bssColor, b.operatingChannelWidth, b.basicHeMcsNss, b.erSuDisable,
+                   b.defaultPeDurationPresent, b.defaultPeDurationUs);
+}
+
+inline bool operator==(const Ieee80211HeDirectionalCapabilities& a, const Ieee80211HeDirectionalCapabilities& b)
+{
+    return std::tie(a.valid, a.supportedChannelWidths, a.mcsNss, a.ofdma, a.preamblePuncturing,
+                   a.multiTidAggregation, a.receiverCanReceiveMuBarTrigger,
+                   a.transmitterCanTransmitHeTbBlockAck, a.transmitterCanTransmitNdpFeedbackReport,
+                   a.fullBandwidthUlMuMimo, a.partialBandwidthUlMuMimo,
+                   a.receiverDynamicFragmentationLevel, a.receiverMaxAmpduLengthExponent,
+                   a.receiverMaxMpduLength, a.receiverMaxBlockAckBufferSize, a.supportedRuToneSizes) ==
+           std::tie(b.valid, b.supportedChannelWidths, b.mcsNss, b.ofdma, b.preamblePuncturing,
+                   b.multiTidAggregation, b.receiverCanReceiveMuBarTrigger,
+                   b.transmitterCanTransmitHeTbBlockAck, b.transmitterCanTransmitNdpFeedbackReport,
+                   b.fullBandwidthUlMuMimo, b.partialBandwidthUlMuMimo,
+                   b.receiverDynamicFragmentationLevel, b.receiverMaxAmpduLengthExponent,
+                   b.receiverMaxMpduLength, b.receiverMaxBlockAckBufferSize, b.supportedRuToneSizes);
+}
+
+inline bool operator==(const Ieee80211HeMutualCapabilities& a, const Ieee80211HeMutualCapabilities& b)
+{
+    return std::tie(a.dcm, a.maxDcmConstellation, a.maxDcmNss, a.ldpc, a.omControl, a.twoNav, a.erBss) ==
+           std::tie(b.dcm, b.maxDcmConstellation, b.maxDcmNss, b.ldpc, b.omControl, b.twoNav, b.erBss);
+}
+
+inline bool operator==(const Ieee80211NegotiatedHeCapabilities& a, const Ieee80211NegotiatedHeCapabilities& b)
+{
+    return std::tie(a.localAdvertisement, a.peerAdvertisement, a.localTxPeerRx,
+                   a.localRxPeerTx, a.mutual, a.operation) ==
+           std::tie(b.localAdvertisement, b.peerAdvertisement, b.localTxPeerRx,
+                   b.localRxPeerTx, b.mutual, b.operation);
+}
 
 /**
  * Computes explicit local-TX/peer-RX and local-RX/peer-TX contracts. The local

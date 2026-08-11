@@ -28,6 +28,7 @@ class INET_API OriginatorBlockAckAgreement : public cObject
     bool isAddbaResponseReceived = false;
     bool isAddbaRequestSent = false;
     bool isAddbaRequestInProgress = false;
+    bool expirationHandlingInProgress = false;
     simtime_t blockAckTimeoutValue = -1;
     simtime_t expirationTime = -1;
 
@@ -50,6 +51,7 @@ class INET_API OriginatorBlockAckAgreement : public cObject
     virtual bool getIsAddbaResponseReceived() const { return isAddbaResponseReceived; }
     virtual bool getIsAddbaRequestSent() const { return isAddbaRequestSent; }
     virtual bool getIsAddbaRequestInProgress() const { return isAddbaRequestInProgress; }
+    virtual bool getExpirationHandlingInProgress() const { return expirationHandlingInProgress; }
     virtual bool getIsAMsduSupported() const { return isAMsduSupported; }
     virtual bool getIsDelayedBlockAckPolicySupported() const { return isDelayedBlockAckPolicySupported; }
     virtual MacAddress getReceiverAddr() const { return receiverAddr; }
@@ -61,6 +63,7 @@ class INET_API OriginatorBlockAckAgreement : public cObject
     virtual void setIsAddbaResponseReceived(bool isAddbaResponseReceived) { this->isAddbaResponseReceived = isAddbaResponseReceived; }
     virtual void setIsAddbaRequestSent(bool isAddbaRequestSent) { this->isAddbaRequestSent = isAddbaRequestSent; }
     virtual void setIsAddbaRequestInProgress(bool isAddbaRequestInProgress) { this->isAddbaRequestInProgress = isAddbaRequestInProgress; }
+    virtual void setExpirationHandlingInProgress(bool expirationHandlingInProgress) { this->expirationHandlingInProgress = expirationHandlingInProgress; }
     virtual void setIsAMsduSupported(bool isAMsduSupported) { this->isAMsduSupported = isAMsduSupported; }
     virtual void setIsDelayedBlockAckPolicySupported(bool isDelayedBlockAckPolicySupported) { this->isDelayedBlockAckPolicySupported = isDelayedBlockAckPolicySupported; }
     virtual void setBlockAckTimeoutValue(const simtime_t blockAckTimeoutValue) { this->blockAckTimeoutValue = blockAckTimeoutValue; }

@@ -308,9 +308,9 @@ void HeSoundingFs::processFeedbacks(FrameSequenceContext *context)
     ASSERT(context != nullptr);
     auto collection = check_and_cast<ReceiveCollectionStep *>(context->getLastStep());
     std::vector<MacAddress> allAssociatedStations;
-    for (const auto& entry : mib->bssAccessPointData.associationIds) {
-        allAssociatedStations.push_back(entry.first);
-    }
+    for (const auto& entry : mib->getPeerAssociationSnapshots())
+        if (entry.hasAssociationId())
+            allAssociatedStations.push_back(entry.getAddress());
     auto getAid = [this](const MacAddress& addr) {
         return mib->getAssociationId(addr);
     };

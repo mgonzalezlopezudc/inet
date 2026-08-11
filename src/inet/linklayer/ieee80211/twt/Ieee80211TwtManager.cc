@@ -61,7 +61,7 @@ void Ieee80211TwtManager::initialize(int stage)
 
         EV_INFO << "TWT Manager Link Layer Stage Initialized. Node MAC Address: " 
                 << mib->address << ", Station Type: " 
-                << (mib->bssStationData.stationType == Ieee80211Mib::ACCESS_POINT ? "AP" : "Non-AP STA") << "\n";
+                << (mib->getStationType() == Ieee80211Mib::ACCESS_POINT ? "AP" : "Non-AP STA") << "\n";
     }
 }
 
@@ -81,7 +81,7 @@ void Ieee80211TwtManager::finish()
 {
     recordScalar("twtAgreementCount", (double)agreements.size());
     recordScalar("twtBroadcastScheduleCount", (double)broadcastSchedules.size());
-    if (enabled && mib != nullptr && mib->bssStationData.stationType == Ieee80211Mib::STATION) {
+    if (enabled && mib != nullptr && mib->getStationType() == Ieee80211Mib::STATION) {
         if (stationAwake)
             awakeTime += simTime() - lastRadioStateChange;
         else
@@ -125,7 +125,7 @@ unsigned int Ieee80211TwtManager::getActiveServicePeriodCount() const
     for (const auto& schedule : broadcastSchedules)
         if (isAgreementActiveNow(schedule, simTime()) &&
                 (mib == nullptr ||
-                 mib->bssStationData.stationType == Ieee80211Mib::ACCESS_POINT ||
+                 mib->getStationType() == Ieee80211Mib::ACCESS_POINT ||
                  schedule.members.count(mib->address) != 0))
             count++;
     return count;
@@ -328,7 +328,7 @@ bool Ieee80211TwtManager::isPeerEligible(const MacAddress& peer) const
     // Assert target peer address is valid
     ASSERT(!peer.isUnspecified());
 
-    if (!enabled || mib->bssStationData.stationType != Ieee80211Mib::ACCESS_POINT)
+    if (!enabled || mib->getStationType() != Ieee80211Mib::ACCESS_POINT)
         return true;
 
     // IEEE 802.11ax-2024 Section 26.8.2: 
@@ -528,7 +528,7 @@ void Ieee80211TwtManager::updateServicePeriodState()
             if (!agreement.announced) {
                 agreement.peerAwakeAnnounced = true;
             }
-            else if (mib->bssStationData.stationType == Ieee80211Mib::STATION && !agreement.peerAwakeAnnounced) {
+            else if (mib->getStationType() == Ieee80211Mib::STATION && !agreement.peerAwakeAnnounced) {
                 // Announced TWT: record the presence indication now, but send
                 // it only after the station radio has transitioned to awake.
                 awakeAnnouncements.push_back(agreement.peerAddress);
@@ -542,7 +542,7 @@ void Ieee80211TwtManager::updateServicePeriodState()
 
     for (auto& schedule : broadcastSchedules) {
         if (isAgreementActiveNow(schedule, simTime()) &&
-                (mib->bssStationData.stationType == Ieee80211Mib::ACCESS_POINT || schedule.members.count(mib->address) != 0)) {
+                (mib->getStationType() == Ieee80211Mib::ACCESS_POINT || schedule.members.count(mib->address) != 0)) {
             awake = true;
         }
         else {
@@ -550,7 +550,7 @@ void Ieee80211TwtManager::updateServicePeriodState()
         }
     }
 
-    if (mib->bssStationData.stationType == Ieee80211Mib::STATION && awake != stationAwake) {
+    if (mib->getStationType() == Ieee80211Mib::STATION && awake != stationAwake) {
         simtime_t duration = simTime() - lastRadioStateChange;
         if (stationAwake) {
             awakeTime += duration;

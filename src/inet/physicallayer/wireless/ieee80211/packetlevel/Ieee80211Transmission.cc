@@ -37,6 +37,10 @@ Ieee80211Transmission::Ieee80211Transmission(const IRadio *transmitter, const Pa
         throw cRuntimeError("Non-HE transmission cannot carry an HE TXVECTOR/PPDU layout");
     if (this->hePpduLayout != nullptr && !this->hePpduLayout->matches(*this->heTxVector))
         throw cRuntimeError("HE transmission received a mismatched TXVECTOR/PPDU-layout pair");
+    if (this->heTxVector != nullptr &&
+            mode->getDataMode()->getBandwidth() !=
+                    this->heTxVector->getCommon().getParameters().channelBandwidth)
+        throw cRuntimeError("HE carrier mode bandwidth disagrees with the canonical TXVECTOR");
     if (!isVht && this->vhtTxVector != nullptr)
         throw cRuntimeError("Non-VHT transmission cannot carry a VHT TXVECTOR");
     if (isVht && this->vhtTxVector == nullptr)
@@ -89,6 +93,14 @@ Ieee80211Transmission::Ieee80211Transmission(const IRadio *transmitter, const Pa
                 (!this->vhtTxVector->isNdp() && dataDuration == SIMTIME_ZERO))
             throw cRuntimeError("VHT TXVECTOR PSDU format disagrees with transmission timing");
     }
+}
+
+Hz Ieee80211Transmission::getPpduBandwidth() const
+{
+    return heTxVector != nullptr && hePpduLayout != nullptr &&
+            hePpduLayout->matches(*heTxVector) ?
+            heTxVector->getCommon().getParameters().channelBandwidth :
+            mode->getDataMode()->getBandwidth();
 }
 
 std::ostream& Ieee80211Transmission::printToStream(std::ostream& stream, int level, int evFlags) const

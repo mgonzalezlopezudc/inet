@@ -111,8 +111,8 @@ double HeUlSchedulerBase::estimateSnrDb(const ScheduleContext& context, const Ca
     double staTxPowerDbm = targetRssiDbm + candidate.pathLossDb;
     cModule *nic = getContainingNicModule(this);
     if (auto mib = dynamic_cast<Ieee80211Mib *>(nic->getSubmodule("mib"))) {
-        if (const auto link = mib->findStationLink(candidate.staAddress))
-            staTxPowerDbm = std::min(link->transmitPowerDbm, targetRssiDbm + candidate.pathLossDb);
+        if (const auto link = mib->getPeerLinkSnapshot(candidate.staAddress))
+            staTxPowerDbm = std::min(link->getTransmitPowerDbm(), targetRssiDbm + candidate.pathLossDb);
     }
     double rxPowerDbm = staTxPowerDbm - candidate.pathLossDb;
     return rxPowerDbm - context.apSensitivityDbm;

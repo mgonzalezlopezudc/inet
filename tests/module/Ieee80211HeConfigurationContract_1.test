@@ -46,15 +46,15 @@ class ContractObserver : public cSimpleModule
                 "station radio does not select ax");
         auto staMib = check_and_cast<Ieee80211Mib *>(
                 system->getModuleByPath("host[0].wlan[0].mib"));
-        REQUIRE_CONTRACT(staMib->bssStationData.stationType == Ieee80211Mib::STATION,
+        REQUIRE_CONTRACT(staMib->getStationType() == Ieee80211Mib::STATION,
                 "station MIB role is not STATION");
-        REQUIRE_CONTRACT(staMib->bssStationData.associationId > 0,
+        REQUIRE_CONTRACT(staMib->getLocalAssociationId() > 0,
                 "station association identifier was not installed");
         auto medium = system->getModuleByPath("radioMedium");
         REQUIRE_CONTRACT(strstr(medium->getNedTypeName(), "Ieee80211ScalarRadioMedium"),
                 "unexpected HE radio medium type");
         EV_INFO << "HE configuration contract: PASS"
-                << " aid=" << staMib->bssStationData.associationId << EV_ENDL;
+                << " aid=" << staMib->getLocalAssociationId() << EV_ENDL;
     }
 };
 

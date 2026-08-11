@@ -40,8 +40,8 @@ MacAddress sta2("02:00:00:00:00:02");
 MacAddress missing("02:00:00:00:00:03");
 
 ASSERT(!tryResolveHeMuStaId(ap, missing).has_value());
-short aid1 = apMib->allocateAssociationId(sta1);
-short aid2 = apMib->allocateAssociationId(sta2);
+short aid1 = apMib->commitPeerAssociation(sta1).getAssociationId();
+short aid2 = apMib->commitPeerAssociation(sta2).getAssociationId();
 ASSERT(aid1 > 0);
 ASSERT(aid2 > 0);
 ASSERT(aid1 != aid2);
@@ -50,16 +50,16 @@ ASSERT(tryResolveHeMuStaId(ap, sta2) == aid2);
 ASSERT(apMib->getStationAddress(aid1) == sta1);
 ASSERT(apMib->getStationAddress(aid2) == sta2);
 
-apMib->releaseAssociationId(sta1);
+apMib->clearPeerAssociation(sta1, Ieee80211Mib::AUTHENTICATED);
 ASSERT(!tryResolveHeMuStaId(ap, sta1).has_value());
-short reusedAid = apMib->allocateAssociationId(missing);
+short reusedAid = apMib->commitPeerAssociation(missing).getAssociationId();
 ASSERT(reusedAid == aid1);
 ASSERT(reusedAid != aid2);
 
 auto station = getParentModule()->getSubmodule("sta");
 auto stationMib = check_and_cast<Ieee80211Mib *>(station->getSubmodule("mib"));
-stationMib->bssStationData.stationType = Ieee80211Mib::STATION;
-stationMib->bssStationData.associationId = 77;
+stationMib->setBssStationType(Ieee80211Mib::STATION);
+stationMib->installLocalAssociation(stationMib->getSsid(), stationMib->getBssid(), 77);
 ASSERT(tryResolveHeMuStaId(station, sta1) == 77);
 
 ASSERT(tryResolveHeMuStaId(ap, MacAddress::BROADCAST_ADDRESS) == HE_STA_ID_BROADCAST);

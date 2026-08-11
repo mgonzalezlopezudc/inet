@@ -23,14 +23,13 @@ void Ieee80211MgmtApBase::initialize(int stage)
     Ieee80211MgmtBase::initialize(stage);
     if (stage == INITSTAGE_LOCAL) {
         mib->mode = Ieee80211Mib::INFRASTRUCTURE;
-        mib->bssStationData.stationType = Ieee80211Mib::ACCESS_POINT;
-        mib->bssData.ssid = par("ssid").stdstringValue();
+        mib->setBssStationType(Ieee80211Mib::ACCESS_POINT);
+        mib->setBssIdentity(par("ssid").stdstringValue(), mib->getBssid());
     }
     else if (stage == INITSTAGE_LINK_LAYER)
-        mib->bssData.bssid = mib->address;
+        mib->setBssIdentity(mib->getSsid(), mib->address);
 }
 
 } // namespace ieee80211
 
 } // namespace inet
-

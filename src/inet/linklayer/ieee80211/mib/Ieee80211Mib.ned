@@ -98,5 +98,6 @@ simple Ieee80211Mib extends SimpleModule
         bool vhtMuBeamformer = default(false);
         bool vhtMuBeamformee = default(false);
         displayStringTextFormat = default("Address: {address}{ssidStr}\n{modeStr}{stationTypeStr}{qosStr}{associatedStr}");
+        @signal[peerAssociationChanged](type=inet::ieee80211::Ieee80211PeerAssociationChangedEvent);
         @display("i=block/table");
 }

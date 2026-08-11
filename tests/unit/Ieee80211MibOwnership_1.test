@@ -1,0 +1,313 @@
+%description:
+Test IEEE 802.11 MIB association, peer capability, and link ownership with stable snapshots
+
+%includes:
+#include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+%activity:
+Ieee80211Mib mib;
+const MacAddress apAddress("02:00:00:00:00:01");
+const MacAddress peer1("02:00:00:00:00:11");
+const MacAddress peer2("02:00:00:00:00:12");
+const MacAddress peer3("02:00:00:00:00:13");
+
+ASSERT(!mib.getPeerCapabilitySnapshot(peer1).isPresent());
+ASSERT(mib.getPeerCapabilitySnapshots().empty());
+ASSERT(!mib.getPeerLinkSnapshot(peer1));
+ASSERT(mib.getPeerLinkSnapshots().empty());
+
+auto initialLocal = mib.getLocalAssociationSnapshot();
+ASSERT(initialLocal.getGeneration() == 0);
+mib.setBssStationType(Ieee80211Mib::STATION);
+auto stationLocal = mib.getLocalAssociationSnapshot();
+ASSERT(stationLocal.getStationType() == Ieee80211Mib::STATION);
+ASSERT(stationLocal.getGeneration() != initialLocal.getGeneration());
+mib.setBssStationType(Ieee80211Mib::STATION);
+ASSERT(mib.getLocalAssociationSnapshot().getGeneration() == stationLocal.getGeneration());
+
+mib.setBssIdentity("test-bss", apAddress);
+auto identityLocal = mib.getLocalAssociationSnapshot();
+ASSERT(identityLocal.getSsid() == "test-bss");
+ASSERT(identityLocal.getBssid() == apAddress);
+ASSERT(identityLocal.getGeneration() != stationLocal.getGeneration());
+mib.setBssIdentity("test-bss", apAddress);
+ASSERT(mib.getLocalAssociationSnapshot().getGeneration() == identityLocal.getGeneration());
+
+// IEEE Std 802.11-2024, 6.5.8.3.2 (80211ax-2024:chunk:00813) limits a
+// successful non-DMG association's AID to 1..2007.
+for (short invalidAid : {-1, 0, 2008}) {
+    bool rejected = false;
+    try {
+        mib.installLocalAssociation("test-bss", apAddress, invalidAid);
+    }
+    catch (const cRuntimeError&) {
+        rejected = true;
+    }
+    ASSERT(rejected);
+    ASSERT(mib.getLocalAssociationSnapshot().getGeneration() == identityLocal.getGeneration());
+    ASSERT(!mib.isAssociated());
+}
+mib.installLocalAssociation("test-bss", apAddress, 1);
+ASSERT(mib.getLocalAssociationId() == 1);
+mib.installLocalAssociation("test-bss", apAddress, 2007);
+ASSERT(mib.getLocalAssociationId() == 2007);
+mib.clearLocalAssociation();
+
+mib.installLocalAssociation("test-bss", apAddress, 17);
+auto associatedLocal = mib.getLocalAssociationSnapshot();
+ASSERT(associatedLocal.isAssociated());
+ASSERT(associatedLocal.getAssociationId() == 17);
+ASSERT(associatedLocal.getGeneration() != identityLocal.getGeneration());
+mib.installLocalAssociation("test-bss", apAddress, 17);
+ASSERT(mib.getLocalAssociationSnapshot().getGeneration() == associatedLocal.getGeneration());
+
+mib.clearLocalAssociation();
+auto clearedLocal = mib.getLocalAssociationSnapshot();
+ASSERT(!clearedLocal.isAssociated());
+ASSERT(clearedLocal.getAssociationId() == -1);
+ASSERT(clearedLocal.getSsid() == "test-bss");
+ASSERT(clearedLocal.getBssid() == apAddress);
+ASSERT(clearedLocal.getGeneration() != associatedLocal.getGeneration());
+ASSERT(associatedLocal.isAssociated());
+ASSERT(associatedLocal.getAssociationId() == 17);
+mib.clearLocalAssociation();
+ASSERT(mib.getLocalAssociationSnapshot().getGeneration() == clearedLocal.getGeneration());
+
+auto absentPeer = mib.getPeerAssociationSnapshot(peer1);
+ASSERT(!absentPeer.isPresent());
+ASSERT(!absentPeer.hasMemberStatus());
+ASSERT(!absentPeer.hasAssociationId());
+ASSERT(absentPeer.getAssociationId() == -1);
+ASSERT(absentPeer.getGeneration() == 0);
+ASSERT(mib.isPeerNotAuthenticated(peer1));
+ASSERT(mib.getPeerAssociationSnapshots().empty());
+mib.setPeerMemberStatus(peer1, Ieee80211Mib::NOT_AUTHENTICATED);
+auto unauthenticatedPeer = mib.getPeerAssociationSnapshot(peer1);
+ASSERT(unauthenticatedPeer.isPresent());
+ASSERT(unauthenticatedPeer.getMemberStatus() == Ieee80211Mib::NOT_AUTHENTICATED);
+ASSERT(unauthenticatedPeer.getGeneration() != absentPeer.getGeneration());
+mib.setPeerMemberStatus(peer1, Ieee80211Mib::NOT_AUTHENTICATED);
+ASSERT(mib.getPeerAssociationSnapshot(peer1).getGeneration() == unauthenticatedPeer.getGeneration());
+mib.setPeerMemberStatus(peer1, Ieee80211Mib::AUTHENTICATED);
+auto authenticatedPeer = mib.getPeerAssociationSnapshot(peer1);
+ASSERT(authenticatedPeer.getMemberStatus() == Ieee80211Mib::AUTHENTICATED);
+ASSERT(authenticatedPeer.getGeneration() != unauthenticatedPeer.getGeneration());
+ASSERT(unauthenticatedPeer.getMemberStatus() == Ieee80211Mib::NOT_AUTHENTICATED);
+bool directAssociationRejected = false;
+try {
+    mib.setPeerMemberStatus(peer1, Ieee80211Mib::ASSOCIATED);
+}
+catch (const cRuntimeError&) {
+    directAssociationRejected = true;
+}
+ASSERT(directAssociationRejected);
+ASSERT(mib.getPeerAssociationSnapshot(peer1).getMemberStatus() == Ieee80211Mib::AUTHENTICATED);
+
+auto allocatedPeer = mib.commitPeerAssociation(peer1);
+short peer1Aid = allocatedPeer.getAssociationId();
+ASSERT(peer1Aid == 1);
+ASSERT(allocatedPeer.getMemberStatus() == Ieee80211Mib::ASSOCIATED);
+ASSERT(allocatedPeer.getAssociationId() == peer1Aid);
+ASSERT(allocatedPeer.getGeneration() != authenticatedPeer.getGeneration());
+bool directDepartureRejected = false;
+try {
+    mib.setPeerMemberStatus(peer1, Ieee80211Mib::AUTHENTICATED);
+}
+catch (const cRuntimeError&) {
+    directDepartureRejected = true;
+}
+ASSERT(directDepartureRejected);
+ASSERT(mib.getPeerAssociationSnapshot(peer1).getAssociationEpoch() == allocatedPeer.getAssociationEpoch());
+auto recommittedPeer1 = mib.commitPeerAssociation(peer1);
+ASSERT(recommittedPeer1.getAssociationId() == peer1Aid);
+ASSERT(recommittedPeer1.getGeneration() == allocatedPeer.getGeneration());
+ASSERT(recommittedPeer1.getAssociationEpoch() > allocatedPeer.getAssociationEpoch());
+auto associatedPeer2 = mib.commitPeerAssociation(peer2);
+ASSERT(associatedPeer2.getAssociationId() == 2);
+auto copiedPeers = mib.getPeerAssociationSnapshots();
+ASSERT(copiedPeers.size() == 2);
+ASSERT(copiedPeers[0].getAddress() == peer1);
+ASSERT(copiedPeers[1].getAddress() == peer2);
+auto peerSummary = mib.getPeerAssociationSummary();
+auto peer1Position = peerSummary.find(peer1.str() + "{status=ASSOCIATED,aid=1,generation=" +
+        std::to_string(allocatedPeer.getGeneration()) + "}");
+auto peer2Position = peerSummary.find(peer2.str() + "{status=ASSOCIATED,aid=2,generation=" +
+        std::to_string(associatedPeer2.getGeneration()) + "}");
+ASSERT(peer1Position != std::string::npos);
+ASSERT(peer2Position != std::string::npos);
+ASSERT(peer1Position < peer2Position);
+ASSERT(peerSummary == mib.getPeerAssociationSummary());
+
+Ieee80211LegacyRate legacyRate;
+legacyRate.rate = 12;
+Ieee80211SupportedRatesElement supportedRates;
+supportedRates.numRates = 1;
+supportedRates.rates[0] = legacyRate;
+Ieee80211ExtendedSupportedRatesElement extendedRates;
+mib.setPeerLegacyRates(peer1, supportedRates, extendedRates);
+auto legacyRatesGeneration = mib.getPeerCapabilitySnapshot(peer1).getLegacyRatesGeneration();
+mib.setPeerLegacyRates(peer1, supportedRates, extendedRates);
+ASSERT(mib.getPeerCapabilitySnapshot(peer1).getLegacyRatesGeneration() == legacyRatesGeneration);
+auto releasedPeer = mib.clearPeerAssociation(peer1, Ieee80211Mib::AUTHENTICATED);
+ASSERT(releasedPeer.getAssociationId() == -1);
+ASSERT(releasedPeer.getGeneration() != allocatedPeer.getGeneration());
+ASSERT(!mib.getPeerLegacyRates(peer1));
+ASSERT(mib.getPeerCapabilitySnapshot(peer1).getLegacyRatesGeneration() != legacyRatesGeneration);
+ASSERT(copiedPeers[0].hasAssociationId());
+ASSERT(copiedPeers[0].getAssociationId() == peer1Aid);
+auto releaseGeneration = releasedPeer.getGeneration();
+auto releasedLegacyRatesGeneration = mib.getPeerCapabilitySnapshot(peer1).getLegacyRatesGeneration();
+mib.clearPeerAssociation(peer1, Ieee80211Mib::AUTHENTICATED);
+ASSERT(mib.getPeerAssociationSnapshot(peer1).getGeneration() == releaseGeneration);
+ASSERT(mib.getPeerCapabilitySnapshot(peer1).getLegacyRatesGeneration() == releasedLegacyRatesGeneration);
+auto committedPeer3 = mib.commitPeerAssociation(peer3);
+auto firstPeer3Epoch = committedPeer3.getAssociationEpoch();
+auto firstPeer3Generation = committedPeer3.getGeneration();
+ASSERT(firstPeer3Epoch != 0);
+ASSERT(committedPeer3.getAssociationId() == 1);
+auto recommittedPeer3 = mib.commitPeerAssociation(peer3);
+ASSERT(recommittedPeer3.getAssociationId() == committedPeer3.getAssociationId());
+ASSERT(recommittedPeer3.getAssociationEpoch() > firstPeer3Epoch);
+ASSERT(recommittedPeer3.getGeneration() == firstPeer3Generation);
+auto clearedPeer3 = mib.clearPeerAssociation(peer3, Ieee80211Mib::AUTHENTICATED);
+ASSERT(clearedPeer3.getAssociationEpoch() == 0);
+ASSERT(!clearedPeer3.hasAssociationId());
+ASSERT(clearedPeer3.getMemberStatus() == Ieee80211Mib::AUTHENTICATED);
+auto peer1Reassociated = mib.commitPeerAssociation(peer1);
+ASSERT(peer1Reassociated.getAssociationEpoch() > recommittedPeer3.getAssociationEpoch());
+ASSERT(peer1Reassociated.getAssociationId() == 1);
+auto sortedPeers = mib.getPeerAssociationSnapshots();
+for (size_t i = 1; i < sortedPeers.size(); ++i)
+    ASSERT(sortedPeers[i - 1].getAddress() < sortedPeers[i].getAddress());
+
+Ieee80211HtCapabilities htCapabilities;
+Ieee80211HtOperation htOperation;
+Ieee80211VhtCapabilities vhtCapabilities;
+Ieee80211VhtOperation vhtOperation;
+Ieee80211HeCapabilities heCapabilities;
+Ieee80211HeOperation heOperation;
+Ieee80211EhtCapabilities ehtCapabilities;
+Ieee80211EhtOperation ehtOperation;
+mib.setPeerHtCapabilities(peer2, htCapabilities, htOperation);
+mib.setPeerVhtCapabilities(peer2, vhtCapabilities, vhtOperation);
+mib.setPeerHeCapabilities(peer2, heCapabilities, heOperation);
+mib.setPeerEhtCapabilities(peer2, ehtCapabilities, ehtOperation);
+auto copiedCapabilities = mib.getPeerCapabilitySnapshot(peer2);
+auto capabilityGeneration = copiedCapabilities.getGeneration();
+auto htGeneration = mib.getHtAssociationGeneration(peer2);
+auto vhtGeneration = mib.getVhtAssociationGeneration(peer2);
+auto heGeneration = copiedCapabilities.getHeGeneration();
+auto ehtGeneration = copiedCapabilities.getEhtGeneration();
+ASSERT(mib.getNegotiatedHtCapabilities(peer2));
+ASSERT(mib.getNegotiatedVhtCapabilities(peer2));
+ASSERT(mib.getNegotiatedHeCapabilities(peer2));
+ASSERT(mib.getNegotiatedEhtCapabilities(peer2));
+mib.setPeerHtCapabilities(peer2, htCapabilities, htOperation);
+mib.setPeerVhtCapabilities(peer2, vhtCapabilities, vhtOperation);
+mib.setPeerHeCapabilities(peer2, heCapabilities, heOperation);
+mib.setPeerEhtCapabilities(peer2, ehtCapabilities, ehtOperation);
+ASSERT(mib.getPeerCapabilitySnapshot(peer2).getGeneration() == capabilityGeneration);
+ASSERT(mib.getHtAssociationGeneration(peer2) == htGeneration);
+ASSERT(mib.getVhtAssociationGeneration(peer2) == vhtGeneration);
+ASSERT(mib.getPeerCapabilitySnapshot(peer2).getHeGeneration() == heGeneration);
+ASSERT(mib.getPeerCapabilitySnapshot(peer2).getEhtGeneration() == ehtGeneration);
+
+heCapabilities.ndpFeedbackReport = true;
+mib.setPeerHeCapabilities(peer2, heCapabilities, heOperation);
+auto changedCapabilities = mib.getPeerCapabilitySnapshot(peer2);
+ASSERT(changedCapabilities.getGeneration() != capabilityGeneration);
+ASSERT(changedCapabilities.getHeGeneration() != heGeneration);
+ASSERT(changedCapabilities.getEhtGeneration() == ehtGeneration);
+ASSERT(copiedCapabilities.getAdvertisedHe());
+ASSERT(!copiedCapabilities.getAdvertisedHe()->ndpFeedbackReport);
+ASSERT(changedCapabilities.getAdvertisedHe()->ndpFeedbackReport);
+
+// The diagnostic HE summary only reports maximum NSS, so changing an exact
+// supported MCS entry must still be recognized as a semantic state change.
+auto beforeExactHeMcsChange = changedCapabilities;
+heCapabilities.rxMcsNss.maxMcsPerNss[1] = 7;
+mib.setPeerHeCapabilities(peer2, heCapabilities, heOperation);
+auto afterExactHeMcsChange = mib.getPeerCapabilitySnapshot(peer2);
+ASSERT(afterExactHeMcsChange.getAdvertisedHe()->rxMcsNss.maxMcsPerNss[1] == 7);
+ASSERT(afterExactHeMcsChange.getNegotiatedHe()->peerAdvertisement.rxMcsNss.maxMcsPerNss[1] == 7);
+ASSERT(afterExactHeMcsChange.getNegotiatedHe()->localTxPeerRx.mcsNss.maxMcsPerNss[1] == 7);
+ASSERT(afterExactHeMcsChange.getGeneration() != beforeExactHeMcsChange.getGeneration());
+ASSERT(afterExactHeMcsChange.getHeGeneration() != beforeExactHeMcsChange.getHeGeneration());
+ASSERT(afterExactHeMcsChange.getEhtGeneration() == beforeExactHeMcsChange.getEhtGeneration());
+auto exactHeMcsGeneration = afterExactHeMcsChange.getGeneration();
+auto exactHeMcsDomainGeneration = afterExactHeMcsChange.getHeGeneration();
+mib.setPeerHeCapabilities(peer2, heCapabilities, heOperation);
+ASSERT(mib.getPeerCapabilitySnapshot(peer2).getGeneration() == exactHeMcsGeneration);
+ASSERT(mib.getPeerCapabilitySnapshot(peer2).getHeGeneration() == exactHeMcsDomainGeneration);
+
+// The diagnostic EHT summary omits exact MCS values and MPDU limits; both are
+// modeled negotiation state and therefore participate in semantic identity.
+auto beforeExactEhtChange = mib.getPeerCapabilitySnapshot(peer2);
+ehtCapabilities.rxMcsNss.maxMcsPerNss[0] = 12;
+ehtCapabilities.maxMpduLength = 4095;
+mib.setPeerEhtCapabilities(peer2, ehtCapabilities, ehtOperation);
+auto afterExactEhtChange = mib.getPeerCapabilitySnapshot(peer2);
+ASSERT(afterExactEhtChange.getAdvertisedEht()->rxMcsNss.maxMcsPerNss[0] == 12);
+ASSERT(afterExactEhtChange.getAdvertisedEht()->maxMpduLength == 4095);
+ASSERT(afterExactEhtChange.getNegotiatedEht()->intersection.txMcsNss.maxMcsPerNss[0] == 12);
+ASSERT(afterExactEhtChange.getNegotiatedEht()->intersection.maxMpduLength == 4095);
+ASSERT(afterExactEhtChange.getGeneration() != beforeExactEhtChange.getGeneration());
+ASSERT(afterExactEhtChange.getEhtGeneration() != beforeExactEhtChange.getEhtGeneration());
+ASSERT(afterExactEhtChange.getHeGeneration() == beforeExactEhtChange.getHeGeneration());
+auto exactEhtGeneration = afterExactEhtChange.getGeneration();
+auto exactEhtDomainGeneration = afterExactEhtChange.getEhtGeneration();
+mib.setPeerEhtCapabilities(peer2, ehtCapabilities, ehtOperation);
+ASSERT(mib.getPeerCapabilitySnapshot(peer2).getGeneration() == exactEhtGeneration);
+ASSERT(mib.getPeerCapabilitySnapshot(peer2).getEhtGeneration() == exactEhtDomainGeneration);
+
+Ieee80211HeCapabilities peer3HeCapabilities;
+peer3HeCapabilities.twtRequester = true;
+mib.setPeerHeCapabilities(peer3, peer3HeCapabilities, heOperation);
+auto peer3CapabilityGeneration = mib.getPeerCapabilitySnapshot(peer3).getGeneration();
+mib.setPeerHeCapabilities(peer2, heCapabilities, heOperation);
+ASSERT(mib.getPeerCapabilitySnapshot(peer3).getGeneration() == peer3CapabilityGeneration);
+auto capabilityPeers = mib.getPeerCapabilitySnapshots();
+for (size_t i = 1; i < capabilityPeers.size(); ++i)
+    ASSERT(capabilityPeers[i - 1].getAddress() < capabilityPeers[i].getAddress());
+
+mib.setStationTransmitPower(peer2, 20);
+mib.updateStationReceivedPower(peer2, units::values::W(1e-6));
+auto copiedLink = mib.getPeerLinkSnapshot(peer2);
+ASSERT(copiedLink && copiedLink->isValid());
+auto linkGeneration = copiedLink->getGeneration();
+mib.setStationTransmitPower(peer2, 20);
+mib.updateStationReceivedPower(peer2, units::values::W(1e-6));
+ASSERT(mib.getPeerLinkSnapshot(peer2)->getGeneration() == linkGeneration);
+mib.setStationTransmitPower(peer3, 17);
+auto peer3LinkGeneration = mib.getPeerLinkSnapshot(peer3)->getGeneration();
+mib.setStationTransmitPower(peer2, 21);
+ASSERT(mib.getPeerLinkSnapshot(peer3)->getGeneration() == peer3LinkGeneration);
+auto linkPeers = mib.getPeerLinkSnapshots();
+for (size_t i = 1; i < linkPeers.size(); ++i)
+    ASSERT(linkPeers[i - 1].getAddress() < linkPeers[i].getAddress());
+linkGeneration = mib.getPeerLinkSnapshot(peer2)->getGeneration();
+
+mib.clearPeerAssociation(peer2, Ieee80211Mib::AUTHENTICATED);
+ASSERT(!mib.getNegotiatedHtCapabilities(peer2));
+ASSERT(!mib.getNegotiatedVhtCapabilities(peer2));
+ASSERT(!mib.getNegotiatedHeCapabilities(peer2));
+ASSERT(!mib.getNegotiatedEhtCapabilities(peer2));
+ASSERT(mib.getPeerLinkSnapshot(peer2));
+ASSERT(mib.getPeerLinkSnapshot(peer2)->getGeneration() == linkGeneration);
+ASSERT(copiedLink->getPathLossDb() != mib.getPeerLinkSnapshot(peer2)->getPathLossDb());
+ASSERT(mib.getHtAssociationGeneration(peer2) != htGeneration);
+ASSERT(mib.getVhtAssociationGeneration(peer2) != vhtGeneration);
+auto releasedHtGeneration = mib.getHtAssociationGeneration(peer2);
+auto releasedVhtGeneration = mib.getVhtAssociationGeneration(peer2);
+mib.clearPeerAssociation(peer2, Ieee80211Mib::AUTHENTICATED);
+ASSERT(mib.getHtAssociationGeneration(peer2) == releasedHtGeneration);
+ASSERT(mib.getVhtAssociationGeneration(peer2) == releasedVhtGeneration);
+
+EV << "IEEE 802.11 MIB association ownership passed.\n";
+
+%contains: stdout
+IEEE 802.11 MIB association ownership passed.

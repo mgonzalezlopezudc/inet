@@ -57,9 +57,10 @@ inline std::optional<uint16_t> tryResolveHeMuStaId(const cModule *networkInterfa
     if (networkInterface != nullptr) {
         auto mib = dynamic_cast<const ieee80211::Ieee80211Mib *>(networkInterface->getSubmodule("mib"));
         if (mib != nullptr) {
-            if (mib->bssStationData.stationType == ieee80211::Ieee80211Mib::STATION &&
-                    mib->bssStationData.associationId > 0)
-                return mib->bssStationData.associationId;
+            auto localAssociation = mib->getLocalAssociationSnapshot();
+            if (localAssociation.getStationType() == ieee80211::Ieee80211Mib::STATION &&
+                    localAssociation.getAssociationId() > 0)
+                return localAssociation.getAssociationId();
             auto aid = mib->getAssociationId(address);
             if (aid > 0)
                 return aid;

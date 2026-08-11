@@ -130,14 +130,13 @@ static IIeee80211HeUlScheduler::Schedule makeUlSchedule(
 }
 
 static HeUlMuPlan makeUlPlan(const IIeee80211HeUlScheduler::Schedule& schedule,
-        IIeee80211HeUlTriggerPolicy::TriggerType triggerType)
+        IIeee80211HeUlTriggerPolicy::TriggerType triggerType,
+        Hz centerFrequency = Hz(5.18e9))
 {
     auto normalized = schedule;
     for (auto& allocation : normalized.allocations)
         if (allocation.estimatedDuration <= SIMTIME_ZERO)
             allocation.estimatedDuration = normalized.commonDuration;
-    const auto centerFrequency = normalized.allocations.empty() ?
-            Hz(5.18e9) : normalized.allocations.front().ru.centerFrequency;
     if (normalized.ulLength == 0 || normalized.ulLength % 3 != 1) {
         auto finalized = TestHeHcfScheduleFinalizer::finalize(normalized,
                 centerFrequency, normalized.channelBandwidth,
@@ -149,19 +148,46 @@ static HeUlMuPlan makeUlPlan(const IIeee80211HeUlScheduler::Schedule& schedule,
     context.centerFrequency = centerFrequency;
     Ieee80211HeCapabilities apCapabilities;
     Ieee80211HeCapabilities staCapabilities;
+    apCapabilities.supportedChannelWidths = {normalized.channelBandwidth};
+    staCapabilities.supportedChannelWidths = {normalized.channelBandwidth};
+    apCapabilities.supportedRuToneSizes.clear();
+    staCapabilities.supportedRuToneSizes.clear();
+    apCapabilities.rxMcsNss.maxMcsPerNss.fill(-1);
+    apCapabilities.txMcsNss.maxMcsPerNss.fill(-1);
+    staCapabilities.rxMcsNss.maxMcsPerNss.fill(-1);
+    staCapabilities.txMcsNss.maxMcsPerNss.fill(-1);
+    // This fixture models the AP-RX/STA-TX UL contract explicitly: MCS 0,
+    // one spatial stream, UL OFDMA, and exactly the scheduled channel/RUs.
+    apCapabilities.rxMcsNss.maxMcsPerNss[0] = 0;
+    staCapabilities.txMcsNss.maxMcsPerNss[0] = 0;
+    apCapabilities.ulOfdma = true;
+    staCapabilities.ulOfdma = true;
     if (triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER)
         staCapabilities.ndpFeedbackReport = true;
     for (const auto& allocation : normalized.allocations) {
-        const int nssIndex = allocation.numberOfSpatialStreams - 1;
-        apCapabilities.rxMcsNss.maxMcsPerNss[nssIndex] = 11;
-        staCapabilities.txMcsNss.maxMcsPerNss[nssIndex] = 11;
-        if (allocation.muMimo)
+        REQUIRE(allocation.mcs == 0);
+        REQUIRE(allocation.numberOfSpatialStreams == 1);
+        apCapabilities.supportedRuToneSizes.insert(allocation.ru.toneSize);
+        staCapabilities.supportedRuToneSizes.insert(allocation.ru.toneSize);
+        if (allocation.muMimo) {
+            apCapabilities.fullBandwidthUlMuMimo = true;
             staCapabilities.fullBandwidthUlMuMimo = true;
+        }
     }
     Ieee80211HeOperation operation;
     operation.operatingChannelWidth = normalized.channelBandwidth;
     auto capabilities = negotiateHeCapabilities(apCapabilities, staCapabilities,
             operation, true);
+    REQUIRE(capabilities.localRxPeerTx.valid);
+    REQUIRE(capabilities.localRxPeerTx.ofdma);
+    REQUIRE(capabilities.localRxPeerTx.supportedChannelWidths ==
+            std::set<Hz>{normalized.channelBandwidth});
+    REQUIRE(capabilities.localRxPeerTx.mcsNss.maxMcsPerNss[0] == 0);
+    for (const auto& allocation : normalized.allocations) {
+        REQUIRE(capabilities.localRxPeerTx.supportedRuToneSizes.count(allocation.ru.toneSize) == 1);
+        if (allocation.muMimo)
+            REQUIRE(capabilities.localRxPeerTx.fullBandwidthUlMuMimo);
+    }
     for (const auto& allocation : normalized.allocations)
         if (!allocation.randomAccess) {
             HeUlMuPlan::StationContract station;
@@ -194,7 +220,8 @@ static Packet *makeHeTbAmpduResponse(
         const MacAddress& transmitter,
         const std::vector<Ieee80211MpduReceiveStatus>& statuses,
         bool insertZeroLengthDelimiter = false, int headerTid = -1,
-        const std::vector<uint8_t>& headerTids = {}, bool qosNullBsr = false)
+        const std::vector<uint8_t>& headerTids = {}, bool qosNullBsr = false,
+        uint32_t triggerId = 1)
 {
     auto packet = new Packet("he-tb-response");
     auto indication = packet->addTag<Ieee80211MpduReceiveInd>();
@@ -294,7 +321,7 @@ static Packet *makeHeTbAmpduResponse(
     REQUIRE(reconstructed);
     packet->addTag<Ieee80211HeRxVectorInd>()->setRxVector(reconstructed.getRxVector());
     auto context = packet->addTag<Ieee80211HeTbRecipientContextInd>();
-    context->setTriggerId(1);
+    context->setTriggerId(triggerId);
     context->setRecipientParameters(std::shared_ptr<const Ieee80211HeUserPhyParameters>(
             canonical.getPpduLayout(), &canonical.getPpduLayout()->getUsers().front()));
     return packet;
@@ -338,12 +365,13 @@ static Packet *makeHeTbCompressedBarResponse(
 
 static Ptr<const Ieee80211TriggerFrame> buildSerializeAndDecodeTrigger(
         const IIeee80211HeUlScheduler::Schedule& schedule,
-        IIeee80211HeUlTriggerPolicy::TriggerType triggerType)
+        IIeee80211HeUlTriggerPolicy::TriggerType triggerType,
+        Hz centerFrequency = Hz(5.18e9))
 {
     auto coordinator = new HeUlCoordinator();
     auto callback = new TestHeHcfScheduleFinalizer();
     auto modeSet = const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"));
-    auto plan = makeUlPlan(schedule, triggerType);
+    auto plan = makeUlPlan(schedule, triggerType, centerFrequency);
     TestHeUlMuTxOpFs sequence(coordinator, callback, plan,
             modeSet, MacAddress("10:00:00:00:00:00"));
     auto packet = sequence.buildTriggerPacketForTest();
@@ -441,6 +469,9 @@ static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
     TestHeUlMuTxOpFs sequence(coordinator, callback, plan,
             const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax")),
             MacAddress("10:00:00:00:00:00"));
+    auto nfrpTrigger = sequence.buildTriggerPacketForTest();
+    auto nfrpTriggerId = nfrpTrigger->getTag<Ieee80211HeTriggerCorrelationTag>()->getTriggerId();
+    delete nfrpTrigger;
     std::unique_ptr<IReceiveStep> nfrpReceiveStep(sequence.buildReceiveCollectionStepForTest());
     auto nfrpNdp = new Packet("valid-headerless-nfrp");
     Ieee80211HeTxVectorRequest ndpRequest;
@@ -468,7 +499,7 @@ static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
     REQUIRE(reconstructed);
     nfrpNdp->addTag<Ieee80211HeRxVectorInd>()->setRxVector(reconstructed.getRxVector());
     auto context = nfrpNdp->addTag<Ieee80211HeTbRecipientContextInd>();
-    context->setTriggerId(1);
+    context->setTriggerId(nfrpTriggerId);
     context->setRecipientParameters(std::shared_ptr<const Ieee80211HeUserPhyParameters>(
             canonical.getPpduLayout(), &canonical.getPpduLayout()->getUsers().front()));
     REQUIRE(nfrpReceiveStep->acceptsHeaderlessFrame(nfrpNdp));
@@ -476,6 +507,73 @@ static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
     delete callback;
     delete coordinator;
     EV << "Only an NFRP receive collection admits a valid headerless feedback NDP.\n";
+}
+
+{
+    auto schedule = makeUlSchedule(MHz(5180), MHz(20),
+            SimTime(120, SIMTIME_US), IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
+    schedule.allocations.front().associationId = 7;
+    auto coordinator = new HeUlCoordinator();
+    auto callback = new TestHeHcfScheduleFinalizer();
+    auto plan = makeUlPlan(schedule, IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
+    TestHeUlMuTxOpFs sequence(coordinator, callback, plan,
+            const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax")),
+            MacAddress("10:00:00:00:00:00"));
+    auto trigger = sequence.buildTriggerPacketForTest();
+    auto triggerId = trigger->getTag<Ieee80211HeTriggerCorrelationTag>()->getTriggerId();
+    delete trigger;
+    std::unique_ptr<IReceiveStep> receiveStep(sequence.buildReceiveCollectionStepForTest());
+    const auto& plannedAllocation = plan.getSchedule().allocations.front();
+
+    auto valid = makeHeTbAmpduResponse(plannedAllocation,
+            MacAddress("20:00:00:00:00:07"), {MPDU_SUCCESS}, false, -1, {}, false, triggerId);
+    REQUIRE(receiveStep->acceptsHeaderlessFrame(valid));
+
+    auto foreignTrigger = makeHeTbAmpduResponse(plannedAllocation,
+            MacAddress("20:00:00:00:00:07"), {MPDU_SUCCESS}, false, -1, {}, false, triggerId + 1);
+    REQUIRE(!receiveStep->acceptsHeaderlessFrame(foreignTrigger));
+
+    auto wrongAllocation = plannedAllocation;
+    wrongAllocation.ru = getHeEqualRuLayout(MHz(5180), MHz(20),
+            getHeMaxRuCount(MHz(20)))[1];
+    auto wrongRu = makeHeTbAmpduResponse(wrongAllocation,
+            MacAddress("20:00:00:00:00:07"), {MPDU_SUCCESS}, false, -1, {}, false, triggerId);
+    REQUIRE(!receiveStep->acceptsHeaderlessFrame(wrongRu));
+
+    auto wrongGeometry = valid->dup();
+    auto wrongGeometryParameters = std::make_shared<Ieee80211HeUserPhyParameters>(
+            *wrongGeometry->getTag<Ieee80211HeTbRecipientContextInd>()->getRecipientParameters());
+    wrongGeometryParameters->ru.toneOffset++;
+    wrongGeometry->removeTag<Ieee80211HeTbRecipientContextInd>();
+    auto wrongGeometryContext = wrongGeometry->addTag<Ieee80211HeTbRecipientContextInd>();
+    wrongGeometryContext->setTriggerId(triggerId);
+    wrongGeometryContext->setRecipientParameters(wrongGeometryParameters);
+    REQUIRE(wrongGeometryParameters->ru.index == plannedAllocation.ru.index);
+    REQUIRE(!receiveStep->acceptsHeaderlessFrame(wrongGeometry));
+
+    auto wrongAid = valid->dup();
+    auto wrongAidParameters = std::make_shared<Ieee80211HeUserPhyParameters>(
+            *wrongAid->getTag<Ieee80211HeTbRecipientContextInd>()->getRecipientParameters());
+    wrongAidParameters->staId++;
+    wrongAid->removeTag<Ieee80211HeTbRecipientContextInd>();
+    auto wrongAidContext = wrongAid->addTag<Ieee80211HeTbRecipientContextInd>();
+    wrongAidContext->setTriggerId(triggerId);
+    wrongAidContext->setRecipientParameters(wrongAidParameters);
+    REQUIRE(!receiveStep->acceptsHeaderlessFrame(wrongAid));
+
+    auto noDelimiter = valid->dup();
+    noDelimiter->removeAll();
+    noDelimiter->insertAtBack(makeShared<ByteCountChunk>(B(32)));
+    REQUIRE(!receiveStep->acceptsHeaderlessFrame(noDelimiter));
+    delete noDelimiter;
+    delete wrongAid;
+    delete wrongGeometry;
+    delete wrongRu;
+    delete foreignTrigger;
+    delete valid;
+    delete callback;
+    delete coordinator;
+    EV << "HE UL collection admits only scheduled delimiter-front HE-TB A-MPDUs for its Trigger and RU.\n";
 }
 
 {
@@ -733,7 +831,7 @@ static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
     REQUIRE(finalized.resolvedTxTime == SimTime(5.482, SIMTIME_MS));
     REQUIRE(finalized.schedule.ulLength % 3 == 1);
     auto decoded = buildSerializeAndDecodeTrigger(finalized.schedule,
-            IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER);
+            IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER, centerFrequency);
 
     Ieee80211HeTxVectorRequest request;
     request.centerFrequency = centerFrequency;
@@ -1303,11 +1401,53 @@ static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
     REQUIRE(structuralPrefix.bitmap == UINT64_C(0x1));
     EV << "Multi-STA Block Ack preserves 101/110/all-failed sequence bases.\n";
 }
+
+{
+    auto schedule = makeUlSchedule(MHz(5180), MHz(20),
+            SimTime(120, SIMTIME_US), IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
+    auto coordinator = new HeUlCoordinator();
+    auto callback = new TestHeHcfScheduleFinalizer();
+    auto plan = makeUlPlan(schedule, IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
+    auto modeSet = const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"));
+    TestHeUlMuTxOpFs sequence(coordinator, callback, plan, modeSet,
+            MacAddress("10:00:00:00:00:00"));
+    auto trigger = sequence.buildTriggerPacketForTest();
+    auto triggerId = trigger->getTag<Ieee80211HeTriggerCorrelationTag>()->getTriggerId();
+    delete trigger;
+    auto firstResponseTime = simTime();
+    std::unique_ptr<IReceiveStep> receiveStep(sequence.buildReceiveCollectionStepForTest());
+    const auto& plannedAllocation = plan.getSchedule().allocations.front();
+    auto lastResponseTime = firstResponseTime + receiveStep->getTimeout() +
+            modeSet->getPhyRxStartDelay();
+    const auto epsilon = SimTime(1, SIMTIME_PS);
+
+    auto before = makeHeTbAmpduResponse(plannedAllocation,
+            plannedAllocation.staAddress, {MPDU_SUCCESS}, false, -1, {}, false, triggerId);
+    getSimulation()->setSimTime(lastResponseTime - epsilon);
+    REQUIRE(receiveStep->acceptsHeaderlessFrame(before));
+    delete before;
+
+    auto at = makeHeTbAmpduResponse(plannedAllocation,
+            plannedAllocation.staAddress, {MPDU_SUCCESS}, false, -1, {}, false, triggerId);
+    getSimulation()->setSimTime(lastResponseTime);
+    REQUIRE(receiveStep->acceptsHeaderlessFrame(at));
+    delete at;
+
+    auto after = makeHeTbAmpduResponse(plannedAllocation,
+            plannedAllocation.staAddress, {MPDU_SUCCESS}, false, -1, {}, false, triggerId);
+    getSimulation()->setSimTime(lastResponseTime + epsilon);
+    REQUIRE(!receiveStep->acceptsHeaderlessFrame(after));
+    delete after;
+    delete callback;
+    delete coordinator;
+    EV << "HE UL response window accepts immediately before/at and rejects immediately after its authoritative deadline.\n";
+}
 EV << ".\n";
 
 %contains: stdout
 Simulation-scoped HE Trigger identifiers are unique across producers.
 Only an NFRP receive collection admits a valid headerless feedback NDP.
+HE UL collection admits only scheduled delimiter-front HE-TB A-MPDUs for its Trigger and RU.
 Trigger-derived path loss controls exact HE-TB power and preserves maximum-power encoding.
 Trigger frame round trip passed.
 HCF-finalized BSRP/NFRP Trigger build and wire round trips passed.
@@ -1331,11 +1471,9 @@ HE UL response processing: received=1, block-ack records=1
 BSRP RA-RU response derives associated identity and delivers its QoS Null report.
 HE UL response processing: received=1, block-ack records=1
 Interspersed zero-length delimiters do not shift HE-TB MPDU outcomes.
-Correlated HE-TB compressed BAR: trigger=21, AID=7, TID=5, SSN=4095, bitmap=0x8000000000000003
+Correlated HE-TB compressed BAR: trigger=22, AID=7, TID=5, SSN=4095, bitmap=0x8000000000000003
 HE UL response processing: received=1, block-ack records=1
 HE-TB compressed BAR preserves historical bitmap and cyclic SSN in the terminal record.
-Ignoring invalid or conflicting HE-TB compressed BAR for Trigger 22
-HE UL response processing: received=0, block-ack records=1
 Ignoring invalid or conflicting HE-TB compressed BAR for Trigger 23
 HE UL response processing: received=0, block-ack records=1
 Ignoring invalid or conflicting HE-TB compressed BAR for Trigger 24
@@ -1344,6 +1482,9 @@ Ignoring invalid or conflicting HE-TB compressed BAR for Trigger 25
 HE UL response processing: received=0, block-ack records=1
 Ignoring invalid or conflicting HE-TB compressed BAR for Trigger 26
 HE UL response processing: received=0, block-ack records=1
+Ignoring invalid or conflicting HE-TB compressed BAR for Trigger 27
+HE UL response processing: received=0, block-ack records=1
 Malformed and non-Basic HE-TB BARs are rejected before recipient state mutation.
 Multi-STA Block Ack preserves 101/110/all-failed sequence bases.
+HE UL response window accepts immediately before/at and rejects immediately after its authoritative deadline.
 .

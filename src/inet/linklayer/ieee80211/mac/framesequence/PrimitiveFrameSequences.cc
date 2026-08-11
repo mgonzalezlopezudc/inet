@@ -529,10 +529,10 @@ IFrameSequenceStep *BlockAckReqBlockAckFs::prepareStep(FrameSequenceContext *con
             auto macModule = check_and_cast<Ieee80211Mac *>(nicModule->getSubmodule("mac"));
             auto mib = macModule->getMib();
 
-            auto negotiated = mib->findNegotiatedHeCapabilities(receiverAddr);
+            auto negotiated = mib->getNegotiatedHeCapabilities(receiverAddr);
             Packet *blockAckPacket = nullptr;
 
-            bool useHeMultiTidBlockAck = negotiated != nullptr &&
+            bool useHeMultiTidBlockAck = negotiated &&
                     negotiated->localTxPeerRx.valid &&
                     negotiated->localTxPeerRx.multiTidAggregation;
             if (useHeMultiTidBlockAck ||
@@ -691,13 +691,13 @@ bool BlockAckReqBlockAckFs::completeStep(FrameSequenceContext *context)
                     getContainingNicModule(inProgress)->getSubmodule("mac"));
             auto mib = macModule->getMib();
             uint16_t expectedAid = 0;
-            if (mib->bssStationData.stationType == Ieee80211Mib::STATION) {
-                auto associationId = mib->bssStationData.associationId;
+            if (mib->getStationType() == Ieee80211Mib::STATION) {
+                auto associationId = mib->getLocalAssociationId();
                 if (associationId <= 0 || associationId > 2007)
                     return false;
                 expectedAid = associationId;
             }
-            else if (mib->bssStationData.stationType !=
+            else if (mib->getStationType() !=
                     Ieee80211Mib::ACCESS_POINT)
                 return false;
 

@@ -103,11 +103,11 @@ ASSERT(!negotiateEhtCapabilities(mib->localEhtCapabilities, noMcs13, mib->ehtOpe
 
 MacAddress sta("02:00:00:00:00:be");
 mib->setPeerEhtCapabilities(sta, peer, mib->ehtOperation);
-auto cached = mib->findNegotiatedEhtCapabilities(sta);
-ASSERT(cached != nullptr);
+auto cached = mib->getNegotiatedEhtCapabilities(sta);
+ASSERT(cached);
 ASSERT(cached->valid);
 ASSERT(cached->intersection.txMcsNss.maxMcsPerNss[1] == 11);
-ASSERT(mib->bssAccessPointData.advertisedEhtCapabilities.count(sta) == 1);
+ASSERT(mib->getPeerCapabilitySnapshot(sta).getAdvertisedEht().has_value());
 
 auto mode14 = Ieee80211EhtCompliantModes::getCompliantMode(
         &Ieee80211EhtmcsTable::ehtMcs14BW80MHzNss1,
@@ -133,13 +133,13 @@ mib->setPeerEhtCapabilities(sta, eligiblePeer, unpuncturedOperation);
 ASSERT(mib->isEhtModeAllowedForPeer(mode15, sta));
 
 mib->removePeerEhtCapabilities(sta);
-ASSERT(mib->findNegotiatedEhtCapabilities(sta) == nullptr);
-ASSERT(mib->bssAccessPointData.advertisedEhtCapabilities.count(sta) == 0);
+ASSERT(!mib->getNegotiatedEhtCapabilities(sta));
+ASSERT(!mib->getPeerCapabilitySnapshot(sta).getAdvertisedEht());
 
-mib->allocateAssociationId(sta);
+mib->commitPeerAssociation(sta);
 mib->setPeerEhtCapabilities(sta, peer, mib->ehtOperation);
-mib->releaseAssociationId(sta);
-ASSERT(mib->findNegotiatedEhtCapabilities(sta) == nullptr);
+mib->clearPeerAssociation(sta, Ieee80211Mib::AUTHENTICATED);
+ASSERT(!mib->getNegotiatedEhtCapabilities(sta));
 
 EV << "EHT capability negotiation and MIB peer cache passed.\n";
 

@@ -24,6 +24,19 @@ void BasicFragmentationPolicy::initialize()
 std::vector<int> BasicFragmentationPolicy::computeFragmentSizes(Packet *frame)
 {
     Enter_Method("computeFragmentSizes");
+    auto header = dynamicPtrCast<const Ieee80211DataHeader>(
+            frame->peekAtFront<Ieee80211MacHeader>());
+    // IEEE Std 802.11-2024, 10.2.7 and 10.4: ordinary fragmentation does not
+    // fragment an A-MSDU. HE dynamic fragmentation is gated separately.
+    if (header != nullptr && header->getAMsduPresent()) {
+        EV_DEBUG << "Ordinary fragmentation suppressed for A-MSDU.\n";
+        return {};
+    }
+    return computeFragmentSizesRegardlessOfAmsdu(frame);
+}
+
+std::vector<int> BasicFragmentationPolicy::computeFragmentSizesRegardlessOfAmsdu(Packet *frame)
+{
     if (fragmentationThreshold < frame->getByteLength()) {
         EV_DEBUG << "Computing fragment sizes: fragmentationThreshold = " << fragmentationThreshold << ", packet = " << *frame << ".\n";
         std::vector<int> sizes;
@@ -61,4 +74,3 @@ std::vector<int> BasicFragmentationPolicy::computeFragmentSizes(Packet *frame)
 
 } // namespace ieee80211
 } // namespace inet
-

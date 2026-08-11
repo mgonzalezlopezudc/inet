@@ -26,46 +26,61 @@ StationQueueBankManager::~StationQueueBankManager()
     banks.clear();
 }
 
-StationQueueBank *StationQueueBankManager::createQueueBank(const MacAddress &staAddr)
+StationQueueBank *StationQueueBankManager::ensureQueueBank(const MacAddress& staAddress, uint64_t associationEpoch)
 {
-    if (banks.find(staAddr) != banks.end()) {
-        throw cRuntimeError("Queue bank already exists for STA %s", staAddr.str().c_str());
+    if (associationEpoch == 0)
+        throw cRuntimeError("Cannot create a queue bank with association epoch 0");
+    auto existing = banks.find(staAddress);
+    if (existing != banks.end()) {
+        if (epochs.at(staAddress) == associationEpoch)
+            return existing->second;
+        retireQueueBank(staAddress, epochs.at(staAddress));
     }
 
-    std::string bankName = "queueBank_" + staAddr.str();
+    std::string bankName = "queueBank_" + staAddress.str() + "_" + std::to_string(associationEpoch);
     StationQueueBank *bank = check_and_cast<StationQueueBank *>(
         queueBankType->create(bankName.c_str(), queueBanksModule));
-    bank->par("staAddress").setStringValue(staAddr.str().c_str());
+    bank->par("staAddress").setStringValue(staAddress.str().c_str());
     bank->finalizeParameters();
     bank->buildInside();
     bank->scheduleStart(simTime());
     bank->callInitialize();
 
-    banks[staAddr] = bank;
+    banks[staAddress] = bank;
+    epochs[staAddress] = associationEpoch;
     
-    EV_INFO << "Created queue bank for STA " << staAddr << "\n";
+    EV_INFO << "Created queue bank for STA " << staAddress << " association epoch " << associationEpoch << "\n";
     
     return bank;
 }
 
-void StationQueueBankManager::destroyQueueBank(const MacAddress &staAddr)
+bool StationQueueBankManager::retireQueueBank(const MacAddress& staAddress, uint64_t associationEpoch)
 {
-    auto it = banks.find(staAddr);
-    if (it == banks.end()) {
-        EV_WARN << "Queue bank not found for STA " << staAddr << "\n";
-        return;
-    }
-
-    StationQueueBank *bank = it->second;
-    bank->clear();  // Drop all queued packets
-    bank->callFinish();
-    
-    cModule *bankModule = check_and_cast<cModule *>(bank);
-    bankModule->deleteModule();
-    
+    auto it = banks.find(staAddress);
+    if (it == banks.end() || epochs.at(staAddress) != associationEpoch)
+        return false;
+    retiredBanks[{staAddress, associationEpoch}] = it->second;
     banks.erase(it);
-    
-    EV_INFO << "Destroyed queue bank for STA " << staAddr << "\n";
+    epochs.erase(staAddress);
+    EV_INFO << "Retired queue bank for STA " << staAddress << " association epoch " << associationEpoch << "\n";
+    return true;
+}
+
+void StationQueueBankManager::finalizeRetiredQueueBanks()
+{
+    for (const auto& entry : retiredBanks) {
+        auto bank = entry.second;
+        bank->clear();
+        bank->callFinish();
+        check_and_cast<cModule *>(bank)->deleteModule();
+    }
+    retiredBanks.clear();
+}
+
+uint64_t StationQueueBankManager::getAssociationEpoch(const MacAddress& staAddress) const
+{
+    auto it = epochs.find(staAddress);
+    return it == epochs.end() ? 0 : it->second;
 }
 
 StationQueueBank *StationQueueBankManager::getQueueBank(const MacAddress &staAddr) const
@@ -101,16 +116,11 @@ int StationQueueBankManager::getTotalQueuedBytes() const
 
 void StationQueueBankManager::clear()
 {
-    for (auto it = banks.begin(); it != banks.end(); ) {
-        StationQueueBank *bank = it->second;
-        bank->clear();
-        bank->callFinish();
-        
-        cModule *bankModule = check_and_cast<cModule *>(bank);
-        bankModule->deleteModule();
-        
-        it = banks.erase(it);
-    }
+    for (const auto& entry : banks)
+        retiredBanks[{entry.first, epochs.at(entry.first)}] = entry.second;
+    banks.clear();
+    epochs.clear();
+    finalizeRetiredQueueBanks();
 }
 
 } /* namespace ieee80211 */

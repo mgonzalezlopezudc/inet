@@ -86,11 +86,11 @@ mib->localHtCapabilities = localHt;
 mib->localVhtCapabilities = localVht;
 mib->setPeerHtCapabilities(peerAddress, peerHt, htOperation);
 mib->setPeerVhtCapabilities(peerAddress, peerVht, vhtOperation);
-ASSERT(mib->findNegotiatedHtCapabilities(peerAddress) != nullptr);
-ASSERT(mib->findNegotiatedVhtCapabilities(peerAddress) != nullptr);
+ASSERT(mib->getNegotiatedHtCapabilities(peerAddress));
+ASSERT(mib->getNegotiatedVhtCapabilities(peerAddress));
 mib->removePeerCapabilities(peerAddress);
-ASSERT(mib->findNegotiatedHtCapabilities(peerAddress) == nullptr);
-ASSERT(mib->findNegotiatedVhtCapabilities(peerAddress) == nullptr);
+ASSERT(!mib->getNegotiatedHtCapabilities(peerAddress));
+ASSERT(!mib->getNegotiatedVhtCapabilities(peerAddress));
 
 auto htMode = Ieee80211HtCompliantModes::getCompliantMode(
         &Ieee80211HtmcsTable::htMcs0BW20MHz, Ieee80211HtMode::BAND_5GHZ,
@@ -101,7 +101,7 @@ auto htShortMode = Ieee80211HtCompliantModes::getCompliantMode(
 auto vhtMode = Ieee80211VhtCompliantModes::getCompliantMode(
         &Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss1, Ieee80211VhtMode::BAND_5GHZ,
         Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG);
-mib->bssStationData.isAssociated = true;
+mib->commitPeerAssociation(peerAddress);
 ASSERT(!mib->isHtModeAllowedForPeer(htMode, peerAddress));
 ASSERT(!mib->isHtModeAllowedForPeer(htShortMode, peerAddress));
 ASSERT(!mib->isVhtModeAllowedForPeer(vhtMode, peerAddress));
@@ -115,7 +115,7 @@ peerWithoutShortGi.shortGi20 = false;
 mib->setPeerHtCapabilities(peerAddress, peerWithoutShortGi, htOperation);
 ASSERT(!mib->isHtModeAllowedForPeer(htShortMode, peerAddress));
 mib->setPeerHtCapabilities(peerAddress, peerHt, htOperation);
-mib->bssStationData.isAssociated = false;
+mib->clearPeerAssociation(peerAddress, Ieee80211Mib::AUTHENTICATED);
 ASSERT(!mib->isHtModeAllowedForPeer(htMode, peerAddress));
 ASSERT(!mib->isVhtModeAllowedForPeer(vhtMode, peerAddress));
 ASSERT(!mib->isHtModeAllowedForPeer(htMode, MacAddress::BROADCAST_ADDRESS));

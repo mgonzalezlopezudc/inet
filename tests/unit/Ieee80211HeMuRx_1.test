@@ -493,8 +493,8 @@ auto aidInterface = check_and_cast<MockNicModule *>(aidNic);
 aidInterface->setMacAddress(MacAddress("02:00:00:00:00:37"));
 aidNic->callInitialize();
 auto aidMib = check_and_cast<Ieee80211Mib *>(aidNic->getSubmodule("mib"));
-aidMib->bssStationData.stationType = Ieee80211Mib::STATION;
-aidMib->bssStationData.associationId = 37;
+aidMib->setBssStationType(Ieee80211Mib::STATION);
+aidMib->installLocalAssociation(aidMib->getSsid(), aidMib->getBssid(), 37);
 auto aidReceiver = check_and_cast<DummyReceiverModule *>(
         aidNic->getSubmodule("radio")->getSubmodule("receiver"));
 aidReceiver->setModeSet(Ieee80211ModeSet::getModeSet("ax"));
@@ -1232,7 +1232,10 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
     delete received;
 
     for (int invalidAid : {39, -1}) {
-        aidMib->bssStationData.associationId = invalidAid;
+        if (invalidAid == -1)
+            aidMib->clearLocalAssociation();
+        else
+            aidMib->installLocalAssociation(aidMib->getSsid(), aidMib->getBssid(), invalidAid);
         auto rejected = receiveHeMuPacket(aidReceiver, aidRadio, packet,
                 mode, channel, modelUsers, makeHeModelPpdu(modelUsers, false));
         REQUIRE(rejected->hasTag<Ieee80211LegacyPreambleInd>());
@@ -1244,7 +1247,7 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
         delete stripped;
         delete rejected;
     }
-    aidMib->bssStationData.associationId = 37;
+    aidMib->installLocalAssociation(aidMib->getSsid(), aidMib->getBssid(), 37);
     std::cout << "MIB AID selects exact sentinel bytes and rejects wrong or unknown AIDs: PASS\n";
     delete packet;
 }

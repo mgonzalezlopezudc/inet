@@ -363,11 +363,11 @@ std::optional<std::string> validateIeee80211HeUlTrigger(
 
 bool HeHcf::allAssociatedStationsSupportPreamblePuncturing() const
 {
-    return std::all_of(mac->getMib()->bssAccessPointData.stations.begin(),
-            mac->getMib()->bssAccessPointData.stations.end(), [&] (const auto& station) {
-                auto capabilities = mac->getMib()->findNegotiatedHeCapabilities(station.first);
-                return station.second != Ieee80211Mib::ASSOCIATED ||
-                        (capabilities != nullptr && capabilities->localRxPeerTx.valid &&
+    const auto stations = mac->getMib()->getPeerAssociationSnapshots();
+    return std::all_of(stations.begin(), stations.end(), [&] (const auto& station) {
+                auto capabilities = mac->getMib()->getNegotiatedHeCapabilities(station.getAddress());
+                return !station.hasMemberStatus() || station.getMemberStatus() != Ieee80211Mib::ASSOCIATED ||
+                        (capabilities && capabilities->localRxPeerTx.valid &&
                          capabilities->localRxPeerTx.preamblePuncturing);
             });
 }
@@ -376,8 +376,8 @@ bool HeHcf::supportsPreamblePuncturing(const IIeee80211HeUlScheduler::RuAllocati
 {
     if (allocation.randomAccess)
         return allAssociatedStationsSupportPreamblePuncturing();
-    auto capabilities = mac->getMib()->findNegotiatedHeCapabilities(allocation.staAddress);
-    return capabilities != nullptr && capabilities->localRxPeerTx.valid && capabilities->localRxPeerTx.preamblePuncturing;
+    auto capabilities = mac->getMib()->getNegotiatedHeCapabilities(allocation.staAddress);
+    return capabilities && capabilities->localRxPeerTx.valid && capabilities->localRxPeerTx.preamblePuncturing;
 }
 
 HeUlScheduleFinalizationResult HeHcf::finalizeUlSchedule(
@@ -532,28 +532,28 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
         auto ulScheduler = getSubmodule("ulScheduler");
         int maxMuStations = ulScheduler ? ulScheduler->par("maxMuStations").intValue() : maxRus;
         std::vector<uint16_t> nfrpEligibleAids;
-        for (const auto& station : mac->getMib()->bssAccessPointData.stations) {
-            if (station.second != Ieee80211Mib::ASSOCIATED)
+        for (const auto& station : mac->getMib()->getPeerAssociationSnapshots()) {
+            if (!station.hasMemberStatus() || station.getMemberStatus() != Ieee80211Mib::ASSOCIATED)
                 continue;
             if (triggerType != IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER &&
                     (index >= maxRus || index >= maxMuStations))
                 break;
-            if (isTwtSleeping(mac, station.first)) {
-                EV_DEBUG << "HE UL BSRP: skipping sleeping TWT STA " << station.first << "\n";
+            if (isTwtSleeping(mac, station.getAddress())) {
+                EV_DEBUG << "HE UL BSRP: skipping sleeping TWT STA " << station.getAddress() << "\n";
                 continue;
             }
-            auto negotiated = mac->getMib()->findNegotiatedHeCapabilities(station.first);
+            auto negotiated = mac->getMib()->getNegotiatedHeCapabilities(station.getAddress());
             if (triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER &&
-                    (negotiated == nullptr || !negotiated->localRxPeerTx.valid ||
+                    (!negotiated || !negotiated->localRxPeerTx.valid ||
                      !negotiated->localRxPeerTx.transmitterCanTransmitNdpFeedbackReport))
                 continue;
             if (triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
-                nfrpEligibleAids.push_back(mac->getMib()->getAssociationId(station.first));
+                nfrpEligibleAids.push_back(mac->getMib()->getAssociationId(station.getAddress()));
                 continue;
             }
             IIeee80211HeUlScheduler::RuAllocation allocation;
-            allocation.staAddress = station.first;
-            allocation.associationId = mac->getMib()->getAssociationId(station.first);
+            allocation.staAddress = station.getAddress();
+            allocation.associationId = mac->getMib()->getAssociationId(station.getAddress());
             allocation.ru = layout[index++];
             allocation.targetRssiDbm = (int)std::round(sensitivityDbm + (double)par("ulTargetRssiMargin"));
             ulSchedule.allocations.push_back(allocation);
@@ -604,10 +604,10 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
         int totalUlMuMimoNss = 0;
         const auto fullBandwidthRu = physicallayer::getHeEqualRuLayout(
                 centerFrequency, channelBandwidth, 1).front();
-        for (const auto& station : mac->getMib()->bssAccessPointData.stations) {
-            if (station.second != Ieee80211Mib::ASSOCIATED)
+        for (const auto& station : mac->getMib()->getPeerAssociationSnapshots()) {
+            if (!station.hasMemberStatus() || station.getMemberStatus() != Ieee80211Mib::ASSOCIATED)
                 continue;
-            auto aid = mac->getMib()->getAssociationId(station.first);
+            auto aid = mac->getMib()->getAssociationId(station.getAddress());
             auto status = ulCoordinator->getBufferStatus().find(aid);
             if (status == ulCoordinator->getBufferStatus().end() ||
                     simTime() - status->second.updateTime > ulCoordinator->getReportMaxAge()) {
@@ -618,18 +618,18 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
             for (const auto& estimate : status->second.backlogEstimates)
                 hasServiceRequest |= estimate.getConservativeBytes() > 0 ||
                         estimate.kind == Ieee80211HeQueueSizeKind::UNKNOWN;
-            auto negotiated = mac->getMib()->findNegotiatedHeCapabilities(station.first);
+            auto negotiated = mac->getMib()->getNegotiatedHeCapabilities(station.getAddress());
             Ieee80211HeOperatingMode mode;
-            const bool disabled = isTwtSleeping(mac, station.first) ||
-                    (getPeerOperatingMode(station.first, mode) && mode.ulMuDisable);
-            if (hasServiceRequest && !disabled && negotiated != nullptr &&
+            const bool disabled = isTwtSleeping(mac, station.getAddress()) ||
+                    (getPeerOperatingMode(station.getAddress(), mode) && mode.ulMuDisable);
+            if (hasServiceRequest && !disabled && negotiated &&
                     negotiated->localRxPeerTx.valid &&
                     negotiated->localRxPeerTx.fullBandwidthUlMuMimo &&
                     negotiated->localRxPeerTx.supportedRuToneSizes.count(
                             fullBandwidthRu.toneSize) != 0 &&
                     negotiated->localRxPeerTx.mcsNss.maxMcsPerNss[0] >= 0)
                 fullBandwidthMuMimoCandidates++;
-            if (hasServiceRequest && !disabled && negotiated != nullptr &&
+            if (hasServiceRequest && !disabled && negotiated &&
                     negotiated->localRxPeerTx.valid &&
                     negotiated->localRxPeerTx.ofdma &&
                     negotiated->localRxPeerTx.supportedChannelWidths.count(channelBandwidth) != 0 &&
@@ -764,20 +764,20 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
     HeUlMuPlan::ValidationContext validationContext;
     validationContext.centerFrequency = centerFrequency;
     validationContext.requireSchedulerCandidate = schedulerPrepared;
-    for (const auto& station : mac->getMib()->bssAccessPointData.stations) {
-        if (station.second != Ieee80211Mib::ASSOCIATED)
+    for (const auto& station : mac->getMib()->getPeerAssociationSnapshots()) {
+        if (!station.hasMemberStatus() || station.getMemberStatus() != Ieee80211Mib::ASSOCIATED)
             continue;
-        auto capabilities = mac->getMib()->findNegotiatedHeCapabilities(station.first);
+        auto capabilities = mac->getMib()->getNegotiatedHeCapabilities(station.getAddress());
         HeUlMuPlan::StationContract contract;
-        contract.station = station.first;
-        contract.associationId = mac->getMib()->getAssociationId(station.first);
-        if (capabilities != nullptr)
+        contract.station = station.getAddress();
+        contract.associationId = mac->getMib()->getAssociationId(station.getAddress());
+        if (capabilities)
             contract.capabilities = *capabilities;
         contract.schedulerCandidate = !schedulerPrepared ||
                 std::any_of(schedulerContext.candidates.begin(), schedulerContext.candidates.end(),
-                        [&] (const auto& candidate) { return candidate.staAddress == station.first; });
+                        [&] (const auto& candidate) { return candidate.staAddress == station.getAddress(); });
         Ieee80211HeOperatingMode operatingMode;
-        contract.ulMuDisabled = getPeerOperatingMode(station.first, operatingMode) && operatingMode.ulMuDisable;
+        contract.ulMuDisabled = getPeerOperatingMode(station.getAddress(), operatingMode) && operatingMode.ulMuDisable;
         validationContext.stations.push_back(contract);
     }
     HeUlMuPlanDiagnostic diagnostic;
@@ -796,6 +796,12 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
                      triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER ? " NFRP" : " Basic")
              << " exchange with " << ulPlan->getSchedule().allocations.size()
              << " RU allocations for " << ulPlan->getSchedule().commonDuration << "\n";
+    // IEEE Std 802.11-2024, 9.2.5.2 permits single protection for Basic,
+    // BSRP, and NFRP Trigger exchanges. NONE selects INET's single-protection
+    // Duration/ID policy without adding an initial RTS/CTS exchange.
+    auto txop = edcaf->getTxopProcedure();
+    if (!txop->isProtectionConfigured())
+        txop->configureProtection(TxopProcedure::InitialProtection::NONE);
     frameSequenceHandler->startFrameSequence(
             new HeUlMuTxOpFs(ulCoordinator, this, *ulPlan, modeSet, mac->getAddress()),
             buildContext(ac), this);
@@ -879,7 +885,7 @@ void HeHcf::sendTriggeredBlockAckResponse(Packet *packet, const Ptr<const Ieee80
     // 9.3.1.22.4 defines MU-BAR Trigger User Info as BAR Control plus BAR
     // Information.  26.4.5 requires a Compressed BlockAck response when the
     // addressed User Info field contains a Compressed BlockAckReq variant.
-    auto myAid = mac->getMib()->bssStationData.associationId;
+    auto myAid = mac->getMib()->getLocalAssociationId();
     const Ieee80211HeTriggerUserInfo *selected = nullptr;
     for (unsigned int i = 0; i < trigger->getUsersArraySize(); ++i)
         if (trigger->getUsers(i).aid == myAid) {
@@ -1123,7 +1129,7 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
                         sourceHeader->getBufferStatusPresent()));
         auto prospective = createHeTbTxVector(*trigger, *selected,
                 phy.getChannelCenterFrequency(),
-                mac->getMib()->bssStationData.associationId, psduLength);
+                mac->getMib()->getLocalAssociationId(), psduLength);
         if (!prospective)
             sourcePacket = nullptr;
     }
@@ -1136,7 +1142,7 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
             trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER &&
             selected->tidAggregationLimit > 0 &&
             originatorBlockAckProcedure != nullptr) {
-        const auto& receiverAddress = mac->getMib()->bssData.bssid;
+        const auto receiverAddress = mac->getMib()->getBssid();
         for (int ac = AC_VO; ac >= AC_BK && preparedBlockAckReq == nullptr; --ac) {
             auto candidateEdcaf = edca->getEdcaf(static_cast<AccessCategory>(ac));
             auto outstandingFrames =
@@ -1202,7 +1208,7 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
                 buildHeTbAmpdu({blockAckReqMpdu.get()}));
         auto prospective = createHeTbTxVector(*trigger, *selected,
                 phy.getChannelCenterFrequency(),
-                mac->getMib()->bssStationData.associationId,
+                mac->getMib()->getLocalAssociationId(),
                 B((prospectiveAmpdu->getDataLength().get<b>() + 7) / 8));
         if (!prospective) {
             blockAckReqMpdu.reset();
@@ -1238,9 +1244,9 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
         // scheduler state is refreshed by the HE TB exchange.
         auto nullHeader = makeShared<Ieee80211DataHeader>();
         nullHeader->setType(ST_QOS_NULL);
-        nullHeader->setReceiverAddress(mac->getMib()->bssData.bssid);
+        nullHeader->setReceiverAddress(mac->getMib()->getBssid());
         nullHeader->setTransmitterAddress(mac->getAddress());
-        nullHeader->setAddress3(mac->getMib()->bssData.bssid);
+        nullHeader->setAddress3(mac->getMib()->getBssid());
         nullHeader->setToDS(true);
         nullHeader->setTid(selectedTid);
         // IEEE Std 802.11-2024 Table 9-13, 10.3.2.13.3, and 26.4.4.5:
@@ -1276,7 +1282,7 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
             auto candidateHeader = dynamicPtrCast<const Ieee80211DataHeader>(candidate->peekAtFront<Ieee80211MacHeader>());
             if (candidateHeader == nullptr || candidateHeader->getType() != ST_DATA_WITH_QOS ||
                     candidateHeader->getTid() != selectedTid ||
-                    candidateHeader->getReceiverAddress() != mac->getMib()->bssData.bssid)
+                    candidateHeader->getReceiverAddress() != mac->getMib()->getBssid())
                 continue;
             B psduLength(0);
             for (auto packet : exchange.packets)
@@ -1284,7 +1290,7 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
             psduLength += B(4 + candidate->getByteLength());
             auto prospective = createHeTbTxVector(*trigger, *selected,
                     phy.getChannelCenterFrequency(),
-                    mac->getMib()->bssStationData.associationId, psduLength);
+                    mac->getMib()->getLocalAssociationId(), psduLength);
             if (!prospective)
                 break;
             auto originalCandidate = candidate;
@@ -1334,7 +1340,7 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
     // queue packets and live sequence counters are still untouched.
     auto txVector = createHeTbTxVector(*trigger, *selected,
             phy.getChannelCenterFrequency(),
-            mac->getMib()->bssStationData.associationId,
+            mac->getMib()->getLocalAssociationId(),
             B((responsePacket->getDataLength().get<b>() + 7) / 8));
     if (!txVector)
         throw cRuntimeError("Prepared HE-TB response is invalid: %s (%s)",
@@ -1353,7 +1359,7 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
     buildResponseAmpdu();
     auto attachedProtection = attachHeTbTxVectorFromTrigger(
             responsePacket.get(), *trigger, *selected,
-            mac->getMib()->bssStationData.associationId,
+            mac->getMib()->getLocalAssociationId(),
             phy.getChannelCenterFrequency(), transmitPower,
             B((responsePacket->getDataLength().get<b>() + 7) / 8),
             mac->getMib()->heOperation.bssColor, triggerId, false, 0, 0, 0,
@@ -1424,7 +1430,7 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
                     HeTbResponseEvent::BUFFER_STATUS_REPORTED :
             hadPendingPayload || queueBytes > 0 ? HeTbResponseEvent::NO_FITTING_PAYLOAD :
                     HeTbResponseEvent::NO_PENDING_DATA;
-    event.associationId = mac->getMib()->bssStationData.associationId;
+    event.associationId = mac->getMib()->getLocalAssociationId();
     event.tid = blockAckReqMpdu != nullptr ?
             preparedBlockAckReq->getTidInfo() : selectedTid;
     event.accessCategory = blockAckReqMpdu != nullptr ?
@@ -1449,7 +1455,7 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
     // IEEE 802.11-2024 9.3.1.22 Table 9-47: Trigger type 2 is MU-BAR.  A
     // MU-BAR Trigger carries BAR control/information in each User Info field
     // and solicits BlockAck responses in HE TB PPDUs.
-    if (trigger->getTransmitterAddress() != mac->getMib()->bssData.bssid) {
+    if (trigger->getTransmitterAddress() != mac->getMib()->getBssid()) {
         EV_WARN << "Ignoring Trigger from non-associated AP "
                 << trigger->getTransmitterAddress() << "\n";
         delete packet;
@@ -1472,7 +1478,7 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
         return;
     }
     if (!ulCoordinator->isEnabled() || mac->isApInAxMode() ||
-            mac->getMib()->bssStationData.associationId <= 0) {
+            mac->getMib()->getLocalAssociationId() <= 0) {
         delete packet;
         return;
     }
@@ -1489,7 +1495,7 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
         delete packet;
         return;
     }
-    if (isTwtSleeping(mac, mac->getMib()->bssData.bssid)) {
+    if (isTwtSleeping(mac, mac->getMib()->getBssid())) {
         delete packet;
         return;
     }
@@ -1507,14 +1513,14 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
         triggerPathLossDb = computeIeee80211HeTriggerPathLossDb(
                 trigger->getApTxPowerDbm(), signalPower->getPower(), receivedBandwidth);
     }
-    auto myAid = mac->getMib()->bssStationData.associationId;
-    auto negotiated = mac->getMib()->findNegotiatedHeCapabilities(
-            mac->getMib()->bssData.bssid);
+    auto myAid = mac->getMib()->getLocalAssociationId();
+    auto negotiated = mac->getMib()->getNegotiatedHeCapabilities(
+            mac->getMib()->getBssid());
     const auto bandwidth = Hz(trigger->getChannelBandwidthMhz() * 1e6);
     const bool ulMuDisabled = par("operatingModeUlMuDisable").boolValue();
     auto supportsUser = [&] (const Ieee80211HeTriggerUserInfo& user) {
         const int nssIndex = user.numberOfSpatialStreams - 1;
-        return negotiated != nullptr && negotiated->localTxPeerRx.valid &&
+        return negotiated && negotiated->localTxPeerRx.valid &&
                 negotiated->localTxPeerRx.ofdma &&
                 negotiated->localTxPeerRx.supportedChannelWidths.count(bandwidth) != 0 &&
                 negotiated->localTxPeerRx.supportedRuToneSizes.count(user.ruToneSize) != 0 &&
@@ -1529,8 +1535,8 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
     uint8_t nfrpToneSetIndex = 0;
     uint8_t nfrpStartingStsNumber = 0;
     if (trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
-        if (trigger->getTransmitterAddress() != mac->getMib()->bssData.bssid ||
-                isTwtSleeping(mac, mac->getMib()->bssData.bssid) ||
+        if (trigger->getTransmitterAddress() != mac->getMib()->getBssid() ||
+                isTwtSleeping(mac, mac->getMib()->getBssid()) ||
                 trigger->getNfrpFeedbackType() != 0) {
             delete packet;
             return;
@@ -1585,7 +1591,7 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
                 auto header = dynamicPtrCast<const Ieee80211DataHeader>(
                         frames->getFrames(i)->peekAtFront());
                 if (header != nullptr && header->getType() == ST_DATA_WITH_QOS &&
-                        header->getReceiverAddress() == mac->getMib()->bssData.bssid) {
+                        header->getReceiverAddress() == mac->getMib()->getBssid()) {
                     selectedAc = static_cast<AccessCategory>(ac);
                     sourceQueue = edcaf->getPendingQueue();
                     reportedTid = header->getTid();
@@ -1714,9 +1720,9 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
     if (sourceQueue == nullptr)
         sourceQueue = edca->getEdcaf(selectedAc)->getPendingQueue();
     auto ulBaAgreement = originatorBlockAckAgreementHandler == nullptr ? nullptr :
-            originatorBlockAckAgreementHandler->getAgreement(mac->getMib()->bssData.bssid, selectedTid);
+            originatorBlockAckAgreementHandler->getAgreement(mac->getMib()->getBssid(), selectedTid);
     int occupiedSlots = edca->getEdcaf(selectedAc)->getAckHandler()->getOccupiedBlockAckSequenceNumbers(
-            mac->getMib()->bssData.bssid, selectedTid).size();
+            mac->getMib()->getBssid(), selectedTid).size();
     int availableSlots = ulBaAgreement == nullptr ? 0 :
             std::max(0, ulBaAgreement->getBufferSize() - occupiedSlots);
     EV_DEBUG << "HE TB Block Ack window: agreement=" << (ulBaAgreement != nullptr)
@@ -1737,11 +1743,11 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
         for (int ac = AC_BK; ac <= AC_VO; ac++)
             addBufferedTrafficServiceBytes(queueBytes, getBufferedTrafficServiceBytes(
                     edca->getEdcaf(static_cast<AccessCategory>(ac)),
-                    mac->getMib()->bssData.bssid));
+                    mac->getMib()->getBssid()));
     }
     else
         queueBytes = getBufferedTrafficServiceBytes(edca->getEdcaf(selectedAc),
-                mac->getMib()->bssData.bssid, selectedTid);
+                mac->getMib()->getBssid(), selectedTid);
     TriggeredUlExchange exchange;
     exchange.tid = selectedTid;
     exchange.sourceQueue = sourceQueue;
@@ -1773,9 +1779,9 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
         // This header is NOT serialised into the PPDU.
         auto ndpHeader = makeShared<Ieee80211DataHeader>();
         ndpHeader->setType(ST_QOS_NULL);
-        ndpHeader->setReceiverAddress(mac->getMib()->bssData.bssid);
+        ndpHeader->setReceiverAddress(mac->getMib()->getBssid());
         ndpHeader->setTransmitterAddress(mac->getAddress());
-        ndpHeader->setAddress3(mac->getMib()->bssData.bssid);
+        ndpHeader->setAddress3(mac->getMib()->getBssid());
         ndpHeader->setToDS(true);
         ndpHeader->setChunkLength(B(30));
         responseHeader = ndpHeader;
@@ -1850,7 +1856,7 @@ void HeHcf::processReceivedMultiStaBlockAck(Packet *packet, const Ptr<const Ieee
     // 26.4.2: a non-AP STA originator processes only the Per AID TID Info
     // record matching its AID and TID, then applies the Block Ack starting
     // sequence number and bitmap to the outstanding triggered MPDUs.
-    if (multiStaBlockAck->getTransmitterAddress() != mac->getMib()->bssData.bssid) {
+    if (multiStaBlockAck->getTransmitterAddress() != mac->getMib()->getBssid()) {
         delete packet;
         return;
     }
@@ -1874,7 +1880,7 @@ void HeHcf::processReceivedMultiStaBlockAck(Packet *packet, const Ptr<const Ieee
         delete packet;
         return;
     }
-    auto myAid = mac->getMib()->bssStationData.associationId;
+    auto myAid = mac->getMib()->getLocalAssociationId();
     auto& exchange = exchangeIt->second;
     if (exchange.recoveryKind ==
             TriggeredUlExchange::RecoveryKind::COMPRESSED_BLOCK_ACK_REQUEST) {
@@ -1896,7 +1902,7 @@ void HeHcf::processReceivedMultiStaBlockAck(Packet *packet, const Ptr<const Ieee
         if (valid) {
             auto blockAck = makeShared<Ieee80211CompressedBlockAck>();
             blockAck->setReceiverAddress(mac->getAddress());
-            blockAck->setTransmitterAddress(mac->getMib()->bssData.bssid);
+            blockAck->setTransmitterAddress(mac->getMib()->getBssid());
             blockAck->setTidInfo(blockAckRecord->tid);
             blockAck->setStartingSequenceNumber(
                     SequenceNumberCyclic(blockAckRecord->startingSequenceNumber));

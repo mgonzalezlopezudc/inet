@@ -173,8 +173,9 @@ const IIeee80211Mode *QosRateSelection::computeResponseBlockAckFrameMode(Packet 
         return precedingMode;
     }
     auto basicRates = mib->getBssBasicLegacyRates();
+    auto peerRates = mib->getPeerLegacyRates(blockAckReq->getTransmitterAddress());
     Ieee80211RateSelectionPolicy::Context context {modeSet, &mib->localOperationalRates, &basicRates,
-            mib->findPeerLegacyRates(blockAckReq->getTransmitterAddress())};
+            peerRates ? &*peerRates : nullptr};
     return responseBlockAckFrameMode != nullptr ?
             Ieee80211RateSelectionPolicy::selectResponse(context, precedingMode, responseBlockAckFrameMode) :
             Ieee80211RateSelectionPolicy::selectResponse(context, precedingMode);
@@ -183,8 +184,9 @@ const IIeee80211Mode *QosRateSelection::computeResponseBlockAckFrameMode(Packet 
 const IIeee80211Mode *QosRateSelection::computeDataOrMgmtFrameMode(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader)
 {
     auto basicRates = mib->getBssBasicLegacyRates();
-    auto peerRates = mib->findPeerLegacyRates(dataOrMgmtHeader->getReceiverAddress());
-    Ieee80211RateSelectionPolicy::Context context {modeSet, &mib->localOperationalRates, &basicRates, peerRates,
+    auto peerRates = mib->getPeerLegacyRates(dataOrMgmtHeader->getReceiverAddress());
+    Ieee80211RateSelectionPolicy::Context context {modeSet, &mib->localOperationalRates, &basicRates,
+            peerRates ? &*peerRates : nullptr,
             &mib->htOperation, &mib->vhtOperation};
     // This subclause describes the rate selection rules for group addressed data and management frames, excluding
     // the following:
@@ -274,8 +276,9 @@ const IIeee80211Mode *QosRateSelection::computeControlFrameMode(const Ptr<const 
         return controlFrameMode ? controlFrameMode : fastestMandatoryMode;
     ASSERT(!isControlResponseFrame(header, txopProcedure));
     auto basicRates = mib->getBssBasicLegacyRates();
+    auto peerRates = mib->getPeerLegacyRates(header->getReceiverAddress());
     Ieee80211RateSelectionPolicy::Context context {modeSet, &mib->localOperationalRates, &basicRates,
-            mib->findPeerLegacyRates(header->getReceiverAddress()), &mib->htOperation, &mib->vhtOperation};
+            peerRates ? &*peerRates : nullptr, &mib->htOperation, &mib->vhtOperation};
     if (txopProcedure->isInitialProtectionPending() && dynamicPtrCast<const Ieee80211RtsFrame>(header)) {
         // IEEE Std 802.11-2024, 10.27.3: non-HT mixed-mode protection
         // starts with an RTS carried in a legacy PPDU. CTS derives its mode

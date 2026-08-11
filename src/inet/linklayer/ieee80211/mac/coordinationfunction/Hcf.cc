@@ -16,6 +16,7 @@
 #include "inet/common/packet/chunk/ByteCountChunk.h"
 #include "inet/common/packet/chunk/SequenceChunk.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211MacSapServiceTag_m.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HtSoundingFs.h"
 #include "inet/linklayer/ieee80211/mac/common/Ieee80211FcsChecker.h"
 #include "inet/linklayer/ieee80211/twt/ITwtManager.h"
@@ -142,11 +143,10 @@ void Hcf::addBufferedTrafficServiceBytes(uint32_t& total, uint64_t amount)
 uint32_t Hcf::calculateBufferedTrafficServiceBytes(Edcaf *edcaf, const MacAddress& peer,
         int tid, const std::vector<Packet *>& additionalPackets) const
 {
-    std::set<const Packet *> accountedPackets;
+    std::set<uint64_t> accountedServiceDataUnits;
+    std::set<const Packet *> accountedLegacyPackets;
     uint32_t serviceBytes = 0;
     auto accountPacket = [&] (const Packet *packet) {
-        if (!accountedPackets.insert(packet).second)
-            return;
         auto header =
                 dynamicPtrCast<const Ieee80211DataHeader>(packet->peekAtFront());
         if (header == nullptr || header->getType() != ST_DATA_WITH_QOS ||
@@ -156,6 +156,31 @@ uint32_t Hcf::calculateBufferedTrafficServiceBytes(Edcaf *edcaf, const MacAddres
         // IEEE Std 802.11-2024 clauses 9.2.4.5.6, 9.2.4.7.4, and 26.5.5:
         // buffer status counts MAC-SAP MSDU/A-MSDU service octets, including
         // queued in-progress traffic, but excludes MPDU/A-MPDU and PHY overhead.
+        bool hasServiceDataUnitTag = false;
+        packet->mapAllRegionTags<Ieee80211MacSapServiceTag>(
+                packet->getFrontOffset(), packet->getDataLength(),
+                [&] (b, b, const Ptr<const Ieee80211MacSapServiceTag>& tag) {
+                    hasServiceDataUnitTag = true;
+                    auto id = tag->getServiceDataUnitId();
+                    if (id == 0)
+                        throw cRuntimeError("MAC-SAP service data unit ID must be nonzero");
+                    if (accountedServiceDataUnits.insert(id).second) {
+                        auto bytes = tag->getServiceDataUnitBytes().get<B>();
+                        if (bytes < 0)
+                            throw cRuntimeError("MAC-SAP service data unit byte count must not be negative");
+                        addBufferedTrafficServiceBytes(serviceBytes, bytes);
+                    }
+                });
+        if (hasServiceDataUnitTag)
+            return;
+
+        // Compatibility for complete legacy/unit-test packets that predate
+        // MAC-SAP provenance. A fragment body is never interpreted as a
+        // complete MSDU or A-MSDU.
+        if (!accountedLegacyPackets.insert(packet).second)
+            return;
+        if (header->getFragmentNumber() != 0 || header->getMoreFragments())
+            return;
         if (header->getAMsduPresent()) {
             b offset = header->getChunkLength();
             b bodyEnd = packet->getDataLength() - B(4);
@@ -163,13 +188,19 @@ uint32_t Hcf::calculateBufferedTrafficServiceBytes(Edcaf *edcaf, const MacAddres
                 auto subframeHeader =
                         packet->peekAt<Ieee80211MsduSubframeHeader>(offset);
                 auto subframeLength = B(subframeHeader->getLength());
+                auto subframeEnd = offset + subframeHeader->getChunkLength() +
+                        subframeLength;
+                if (subframeLength < B(0) || subframeEnd > bodyEnd)
+                    throw cRuntimeError("Invalid complete A-MSDU subframe length");
                 addBufferedTrafficServiceBytes(serviceBytes,
                         subframeLength.get<B>());
-                offset += subframeHeader->getChunkLength() + subframeLength;
+                offset = subframeEnd;
                 if (offset < bodyEnd)
                     offset += B((4 - (subframeHeader->getChunkLength() +
                             subframeLength).get<B>() % 4) % 4);
             }
+            if (offset != bodyEnd)
+                throw cRuntimeError("Invalid complete A-MSDU padding length");
         }
         else {
             auto payloadBytes = (packet->getDataLength() -
@@ -187,6 +218,30 @@ uint32_t Hcf::calculateBufferedTrafficServiceBytes(Edcaf *edcaf, const MacAddres
     for (auto packet : additionalPackets)
         accountPacket(packet);
     return serviceBytes;
+}
+
+uint64_t Hcf::allocateServiceDataUnitId()
+{
+    // Zero is reserved for invalid/unassigned metadata. Exhausting the
+    // nonzero ID space fails deterministically instead of reusing an ID that
+    // may still identify queued or in-progress traffic.
+    if (nextServiceDataUnitId == 0)
+        throw cRuntimeError("MAC-SAP service data unit ID space exhausted");
+    return nextServiceDataUnitId++;
+}
+
+void Hcf::tagMacSapServiceDataUnit(Packet *packet,
+        const Ptr<const Ieee80211DataHeader>& header)
+{
+    auto serviceDataUnitBytes = packet->getDataLength() -
+            header->getChunkLength() - B(4);
+    if (serviceDataUnitBytes <= B(0))
+        return;
+    auto tag = packet->addRegionTag<Ieee80211MacSapServiceTag>(
+            packet->getFrontOffset() + header->getChunkLength(),
+            serviceDataUnitBytes);
+    tag->setServiceDataUnitId(allocateServiceDataUnitId());
+    tag->setServiceDataUnitBytes(serviceDataUnitBytes);
 }
 
 uint32_t Hcf::getBufferedTrafficServiceBytes(
@@ -292,6 +347,7 @@ void Hcf::handleMessage(cMessage *msg)
         if (originatorBlockAckAgreementHandler && recipientBlockAckAgreementHandler) {
             originatorBlockAckAgreementHandler->blockAckAgreementExpired(this, this);
             recipientBlockAckAgreementHandler->blockAckAgreementExpired(this, this);
+            resumeContention();
         }
         else
             throw cRuntimeError("Unknown event");
@@ -365,6 +421,9 @@ void Hcf::processUpperFrame(Packet *packet, const Ptr<const Ieee80211DataOrMgmtH
     else
         throw cRuntimeError("Unknown message type");
     EV_INFO << "The upper frame has been classified as a " << printAccessCategory(ac) << " frame." << endl;
+
+    if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header))
+        tagMacSapServiceDataUnit(packet, dataHeader);
     
     // Determine if this frame should use per-STA queue (HE OFDMA scheduling).
     // Only AP+ax mode uses per-STA queues; all other cases use shared EDCAF queues.
@@ -415,7 +474,9 @@ void Hcf::scheduleStartRxTimer(simtime_t timeout)
 void Hcf::scheduleInactivityTimer(simtime_t timeout)
 {
     Enter_Method("scheduleInactivityTimer");
-    rescheduleAfter(timeout, inactivityTimer);
+    auto deadline = simTime() + timeout;
+    if (!inactivityTimer->isScheduled() || deadline < inactivityTimer->getArrivalTime())
+        rescheduleAfter(timeout, inactivityTimer);
 }
 
 void Hcf::processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
@@ -449,7 +510,7 @@ void Hcf::processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>&
                 recipientContext->getRecipientParameters()->ndpFeedbackReport;
         auto receiveStep = edcaf && frameSequenceHandler->isSequenceRunning() ?
                 dynamic_cast<IReceiveStep *>(frameSequenceHandler->getContext()->getLastStep()) : nullptr;
-        if (intactAmpdu && receiveStep != nullptr) {
+        if (intactAmpdu && receiveStep != nullptr && receiveStep->acceptsHeaderlessFrame(packet)) {
             processResponseAndCancelStartRxTimerIfCompleted(packet, receiveStep);
             handleDeferredStartRxTimeout();
             return;
@@ -655,18 +716,18 @@ int Hcf::getMaxAmpduLengthExponent(const MacAddress& peer,
     auto mib = mac->getMib();
     if (mib != nullptr) {
         if (phyFamily == Ieee80211PhyFamily::HT) {
-            auto negotiated = mib->findNegotiatedHtCapabilities(peer);
-            if (negotiated != nullptr && negotiated->localTxPeerRx.valid)
+            auto negotiated = mib->getNegotiatedHtCapabilities(peer);
+            if (negotiated && negotiated->localTxPeerRx.valid)
                 exponent = negotiated->localTxPeerRx.receiverMaxAmpduLengthExponent;
         }
         else if (phyFamily == Ieee80211PhyFamily::VHT) {
-            auto negotiated = mib->findNegotiatedVhtCapabilities(peer);
-            if (negotiated != nullptr && negotiated->localTxPeerRx.valid)
+            auto negotiated = mib->getNegotiatedVhtCapabilities(peer);
+            if (negotiated && negotiated->localTxPeerRx.valid)
                 exponent = negotiated->localTxPeerRx.receiverMaxAmpduLengthExponent;
         }
         else if (phyFamily == Ieee80211PhyFamily::HE || phyFamily == Ieee80211PhyFamily::EHT) {
-            auto negotiated = mib->findNegotiatedHeCapabilities(peer);
-            if (negotiated != nullptr && negotiated->localTxPeerRx.valid)
+            auto negotiated = mib->getNegotiatedHeCapabilities(peer);
+            if (negotiated && negotiated->localTxPeerRx.valid)
                 exponent = negotiated->localTxPeerRx.receiverMaxAmpduLengthExponent;
         }
     }
@@ -709,8 +770,8 @@ bool Hcf::mayStartHtSounding(const MacAddress& peer,
     if (attempt != nextHtSoundingAttemptTimes.end() && simTime() < attempt->second)
         return false;
     auto mib = mac->getMib();
-    auto negotiated = mib->findNegotiatedHtCapabilities(peer);
-    if (negotiated == nullptr || !negotiated->localTxPeerRx.valid ||
+    auto negotiated = mib->getNegotiatedHtCapabilities(peer);
+    if (!negotiated || !negotiated->localTxPeerRx.valid ||
             mib->getHtAssociationGeneration(peer) == 0 ||
             !negotiated->localTxPeerRx.htcSupported ||
             !negotiated->localTxPeerRx.mcsRequestAllowed ||
@@ -735,11 +796,11 @@ bool Hcf::processHtNdpAnnouncement(Packet *packet,
     pendingHtSounding = {};
     auto peer = header->getTransmitterAddress();
     auto mib = mac->getMib();
-    auto negotiated = mib->findNegotiatedHtCapabilities(peer);
+    auto negotiated = mib->getNegotiatedHtCapabilities(peer);
     auto modeInd = packet->findTag<Ieee80211ModeInd>();
     auto provenance = packet->findTag<Ieee80211PhyProvenanceInd>();
     auto kindValue = header->getHtCsiSteering();
-    if (!enableHtSounding || htRateControl == nullptr || negotiated == nullptr ||
+    if (!enableHtSounding || htRateControl == nullptr || !negotiated ||
             !negotiated->localRxPeerTx.valid || !negotiated->localRxPeerTx.htcSupported ||
             !negotiated->localRxPeerTx.mcsRequestAllowed ||
             !negotiated->localRxPeerTx.transmitterCanSendNdp ||
@@ -789,9 +850,9 @@ bool Hcf::processHtHeaderlessNdpIndication(Packet *packet)
                     (pendingHtSounding.soundingNsts == 3 ? 4 : pendingHtSounding.soundingNsts) &&
             std::isfinite(snir->getMinimumSnir()) && snir->getMinimumSnir() > 0 &&
             std::isfinite(snir->getAverageSnir()) && snir->getAverageSnir() > 0;
-    auto negotiated = valid ? mac->getMib()->findNegotiatedHtCapabilities(
-            pendingHtSounding.peer) : nullptr;
-    valid &= negotiated != nullptr &&
+    auto negotiated = valid ? mac->getMib()->getNegotiatedHtCapabilities(
+            pendingHtSounding.peer) : std::optional<Ieee80211NegotiatedHtCapabilities>();
+    valid &= negotiated.has_value() &&
             mac->getMib()->getHtAssociationGeneration(pendingHtSounding.peer) ==
                     pendingHtSounding.associationGeneration;
     if (valid) {
@@ -871,7 +932,7 @@ bool Hcf::processHtHeaderlessNdpIndication(Packet *packet)
             header->setCategory(7);
             header->setReceiverAddress(pendingHtSounding.peer);
             header->setTransmitterAddress(mac->getAddress());
-            header->setAddress3(mac->getMib()->bssData.bssid);
+            header->setAddress3(mac->getMib()->getBssid());
             auto response = new Packet("HT-MIMO-Feedback", header);
             response->insertAtBack(feedback);
             response->insertAtBack(makeShared<Ieee80211MacTrailer>());
@@ -897,7 +958,7 @@ void Hcf::sendStandaloneHtMfb()
     header->setType(ST_QOS_NULL);
     header->setReceiverAddress(pendingHtMfbPeer);
     header->setTransmitterAddress(mac->getAddress());
-    header->setAddress3(mac->getMib()->bssData.bssid);
+    header->setAddress3(mac->getMib()->getBssid());
     header->setAckPolicy(NO_ACK);
     header->setOrder(true);
     header->setHtMcsControlPresent(true);
@@ -926,9 +987,9 @@ void Hcf::attachPendingHtMcsControl(Packet *packet, const IIeee80211Mode *mode)
             header->getType() != ST_QOS_NULL) || header->getHtMcsControlPresent() ||
             header->getOperatingModePresent() || header->getBufferStatusPresent())
         return;
-    auto negotiated = mac->getMib()->findNegotiatedHtCapabilities(
+    auto negotiated = mac->getMib()->getNegotiatedHtCapabilities(
             header->getReceiverAddress());
-    if (negotiated == nullptr || !negotiated->localTxPeerRx.valid ||
+    if (!negotiated || !negotiated->localTxPeerRx.valid ||
             !negotiated->localTxPeerRx.htcSupported)
         return;
     Ieee80211HtMcsControl control;
@@ -996,10 +1057,10 @@ void Hcf::startFrameSequence(AccessCategory ac)
                     existingMode->getMode();
             setFrameMode(frameToTransmit, frameHeader, firstMode);
             auto mib = mac->getMib();
-            auto negotiatedHt = mib->findNegotiatedHtCapabilities(frameHeader->getReceiverAddress());
+            auto negotiatedHt = mib->getNegotiatedHtCapabilities(frameHeader->getReceiverAddress());
             bool isHtMode = modeSet->getPhyFamily(firstMode) == Ieee80211PhyFamily::HT;
             auto htProtection = HtProtectionPolicy::select(isHtMode, frameHeader->getReceiverAddress(),
-                    negotiatedHt);
+                    negotiatedHt ? &*negotiatedHt : nullptr);
             if (htProtection == HtProtectionPolicy::Protection::LEGACY_RTS_CTS)
                 initialProtection = TxopProcedure::InitialProtection::LEGACY_RTS_CTS;
         }
@@ -1359,11 +1420,11 @@ void Hcf::recipientProcessReceivedControlFrame(Packet *packet, const Ptr<const I
             uint16_t responseAid = 0;
             if (dynamicPtrCast<const Ieee80211MultiTidBlockAckReq>(blockAckRequest)) {
                 auto mib = mac->getMib();
-                auto negotiated = mib->findNegotiatedHeCapabilities(
+                auto negotiated = mib->getNegotiatedHeCapabilities(
                         blockAckRequest->getTransmitterAddress());
                 bool validResponseAid =
-                        mib->bssStationData.stationType == Ieee80211Mib::STATION;
-                if (mib->bssStationData.stationType == Ieee80211Mib::ACCESS_POINT) {
+                        mib->getStationType() == Ieee80211Mib::STATION;
+                if (mib->getStationType() == Ieee80211Mib::ACCESS_POINT) {
                     auto associationId = mib->getAssociationId(
                             blockAckRequest->getTransmitterAddress());
                     validResponseAid = associationId > 0 && associationId <= 2007;
@@ -1374,7 +1435,7 @@ void Hcf::recipientProcessReceivedControlFrame(Packet *packet, const Ptr<const I
                 // negotiated HE Multi-TID BARs receive Multi-STA BAs; AID 0
                 // identifies an AP originator, otherwise use the STA's AID.
                 bool heMultiTidAggregation = validResponseAid &&
-                        negotiated != nullptr &&
+                        negotiated &&
                         negotiated->localRxPeerTx.valid &&
                         negotiated->localRxPeerTx.multiTidAggregation;
                 if (heMultiTidAggregation)
@@ -1568,7 +1629,7 @@ void Hcf::originatorProcessTransmittedManagementFrame(const Ptr<const Ieee80211M
         edcaf->getAckHandler()->processTransmittedDataOrMgmtFrame(mgmtHeader);
     if (auto addbaReq = dynamicPtrCast<const Ieee80211AddbaRequest>(mgmtHeader)) {
         if (originatorBlockAckAgreementHandler)
-            originatorBlockAckAgreementHandler->processTransmittedAddbaReq(addbaReq);
+            originatorBlockAckAgreementHandler->processTransmittedAddbaReq(addbaReq, this);
     }
     else if (auto addbaResp = dynamicPtrCast<const Ieee80211AddbaResponse>(mgmtHeader))
         recipientBlockAckAgreementHandler->processTransmittedAddbaResp(addbaResp, this);
@@ -1951,12 +2012,13 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
         header->setType(ST_QOS_NULL);
         header->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
         header->setTransmitterAddress(mac->getAddress());
-        header->setAddress3(mac->getMib()->bssData.bssid);
+        header->setAddress3(mac->getMib()->getBssid());
         tx->transmitFrame(packet, header, ifs, this);
         return;
     }
     auto channelOwner = edca->getChannelOwner();
     if (channelOwner) {
+        const bool isContainer = isHeMuContainerPacket(packet);
         Ptr<const Ieee80211MacHeader> header;
         if (auto metadata = packet->findTag<Ieee80211HeMuContainerReq>();
                 metadata != nullptr) {
@@ -1975,18 +2037,18 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
         // an A-MPDU carrying QoS Data with Ack Policy 00 and elicits a
         // BlockAck after SIFS. Use the frame-sequence selector's eligibility
         // decision so aggregate construction cannot outlive its response wait.
-        bool useHtImplicitBlockAck = dataHeader != nullptr &&
+        bool useHtImplicitBlockAck = !isContainer && dataHeader != nullptr &&
                 frameSequenceContext != nullptr &&
                 isHtImplicitBlockAckEligible(frameSequenceContext,
                         packet, dataHeader);
-        if (!isHeMuContainerPacket(packet) && dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(header)) {
+        if (!isContainer && dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(header)) {
             // A missing BlockAck or an unacked BlockAck bitmap entry makes the
             // MPDU eligible again in QosAckHandler. Materialize that retry
             // state in the transmitted MAC header before building an A-MPDU.
             channelOwner->getAckHandler()->setRetryBitIfNeeded(packet);
             header = packet->peekAtFront<Ieee80211MacHeader>();
         }
-        if (!isHeMuContainerPacket(packet))
+        if (!isContainer)
           if (auto dataFrame = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
             OriginatorBlockAckAgreement *agreement = nullptr;
             if (originatorBlockAckAgreementHandler)
@@ -2005,9 +2067,11 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
         bool deletePacketToTransmit = false;
         auto modeReq = packet->findTag<Ieee80211ModeReq>();
         auto mode = modeReq == nullptr ? rateSelection->computeMode(packet, header, txop) : modeReq->getMode();
-        attachPendingHtMcsControl(packet, mode);
-        header = packet->peekAtFront<Ieee80211MacHeader>();
-        if (!isHeMuContainerPacket(packet))
+        if (!isContainer) {
+            attachPendingHtMcsControl(packet, mode);
+            header = packet->peekAtFront<Ieee80211MacHeader>();
+        }
+        if (!isContainer)
           if (auto dataFrame = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
             OriginatorBlockAckAgreement *agreement = nullptr;
             if (originatorBlockAckAgreementHandler)
@@ -2097,7 +2161,8 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
             }
           }
 
-        setFrameMode(packetToTransmit, header, mode);
+        if (!isContainer)
+            setFrameMode(packetToTransmit, header, mode);
         if (packetToTransmit != packet &&
                 pendingHtImplicitBlockAckAmpdus.find(packet) !=
                         pendingHtImplicitBlockAckAmpdus.end())
@@ -2106,11 +2171,13 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
             // transmitted. Preserve the selected mode on that descriptor too;
             // this is ordinary rate metadata, not an implicit-BA marker.
             setFrameMode(packet, header, mode);
-        recordSelectedMode(packetToTransmit, mode);
-        emit(IRateSelection::datarateSelectedSignal, mode->getDataMode()->getNetBitrate().get<bps>(), packetToTransmit);
-        EV_DEBUG << "Datarate for " << packetToTransmit->getName() << " is set to " << mode->getDataMode()->getNetBitrate() << ".\n";
+        if (!isContainer) {
+            recordSelectedMode(packetToTransmit, mode);
+            emit(IRateSelection::datarateSelectedSignal, mode->getDataMode()->getNetBitrate().get<bps>(), packetToTransmit);
+            EV_DEBUG << "Datarate for " << packetToTransmit->getName() << " is set to " << mode->getDataMode()->getNetBitrate() << ".\n";
+        }
         if (txop->getProtectionMechanism() == TxopProcedure::ProtectionMechanism::SINGLE_PROTECTION) {
-            if (packetToTransmit == packet && !isHeMuContainerPacket(packet) &&
+            if (packetToTransmit == packet && !isContainer &&
                     packet->findTag<DurationFinalizedReq>() == nullptr &&
                     !dynamicPtrCast<const Ieee80211TriggerFrame>(header) &&
                     !dynamicPtrCast<const Ieee80211MultiStaBlockAck>(header)) {
@@ -2126,7 +2193,7 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
             }
         }
         else if (txop->getProtectionMechanism() == TxopProcedure::ProtectionMechanism::MULTIPLE_PROTECTION) {
-            if (packet->findTag<DurationFinalizedReq>() == nullptr) {
+            if (!isContainer && packet->findTag<DurationFinalizedReq>() == nullptr) {
                 auto duration = singleProtectionMechanism->computeDurationField(packet, header, nullptr, nullptr, txop, recipientAckPolicy, ifs);
                 auto mutableHeader = packet->removeAtFront<Ieee80211MacHeader>();
                 mutableHeader->setDurationField(duration);
@@ -2268,22 +2335,6 @@ Hcf::~Hcf()
 queueing::IPacketQueue *Hcf::getPerStaQueue(const MacAddress& staAddr, AccessCategory ac)
 {
     return edca->getEdcaf(ac)->getPendingQueue();
-}
-
-StationQueueBank *Hcf::createStationQueueBank(const MacAddress& staAddr)
-{
-    EV_WARN << "Per-STA queue banks are not supported by this HCF\n";
-    return nullptr;
-}
-
-void Hcf::destroyStationQueueBank(const MacAddress& staAddr)
-{
-    EV_WARN << "Per-STA queue banks are not supported by this HCF\n";
-}
-
-StationQueueBank *Hcf::getStationQueueBank(const MacAddress& staAddr) const
-{
-    return nullptr;
 }
 
 void Hcf::invalidatePeerDerivedState(const MacAddress& peer)

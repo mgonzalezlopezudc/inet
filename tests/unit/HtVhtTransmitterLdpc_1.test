@@ -180,7 +180,7 @@ MacAddress peerAddress("02:00:00:00:00:02");
 
 Ieee80211HtCapabilities peerHt = mib->localHtCapabilities;
 peerHt.ldpc = true;
-mib->bssStationData.isAssociated = true;
+mib->commitPeerAssociation(peerAddress);
 mib->setPeerHtCapabilities(peerAddress, peerHt, mib->htOperation);
 
 // 2. Negotiated HT receiver capability permits LDPC.

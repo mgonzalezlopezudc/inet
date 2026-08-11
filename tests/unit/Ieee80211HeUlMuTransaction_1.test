@@ -4,18 +4,29 @@ Validate HE triggered-uplink prepare/commit and terminal packet ownership by exa
 %includes:
 #include <algorithm>
 #include <limits>
+#include "inet/common/TimeTag_m.h"
 #include "inet/common/packet/chunk/ByteCountChunk.h"
+#include "inet/applications/base/ApplicationPacket_m.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211HeBsr.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211MacSapServiceTag_m.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 #include "inet/linklayer/ieee80211/mac/channelaccess/Edca.h"
 #include "inet/linklayer/ieee80211/mac/channelaccess/Edcaf.h"
 #include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreement.h"
 #include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreementHandler.h"
 #include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckProcedure.h"
+#include "inet/linklayer/ieee80211/mac/aggregation/MsduAggregation.h"
+#include "inet/linklayer/ieee80211/mac/aggregation/MsduDeaggregation.h"
+#include "inet/linklayer/ieee80211/mac/fragmentation/BasicFragmentationPolicy.h"
+#include "inet/linklayer/ieee80211/mac/fragmentation/Defragmentation.h"
+#include "inet/linklayer/ieee80211/mac/fragmentation/Fragmentation.h"
+#include "inet/linklayer/ieee80211/mac/fragmentation/HeDynamicFragmentationPolicy.h"
 
 %file: TestNetwork.ned
 import inet.linklayer.ieee80211.mac.coordinationfunction.HeHcf;
+import inet.linklayer.ieee80211.mac.fragmentation.BasicFragmentationPolicy;
+import inet.linklayer.ieee80211.mac.fragmentation.HeDynamicFragmentationPolicy;
 import inet.node.wireless.AccessPoint;
 import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadioMedium;
 
@@ -25,10 +36,27 @@ module TestHeHcf extends HeHcf
         @class(TestHeHcf);
 }
 
+simple TestBoundaryMac
+{
+    parameters:
+        @class(TestBoundaryMac);
+}
+
+simple TestHeDynamicFragmentationPolicy extends HeDynamicFragmentationPolicy
+{
+    parameters:
+        @class(TestHeDynamicFragmentationPolicy);
+}
+
 network TestNetwork
 {
     submodules:
         test: Test;
+        fragmentationPolicy: BasicFragmentationPolicy {
+            parameters:
+                fragmentationThreshold = 60B;
+        }
+        boundaryMac: TestBoundaryMac;
         radioMedium: Ieee80211ScalarRadioMedium;
         sta: AccessPoint;
 }
@@ -51,6 +79,8 @@ sim-time-limit = 1ns
 **.wlan[*].bitrate = 61.25Mbps
 **.wlan[*].mac.qosStation = true
 **.wlan[*].mac.hcf.typename = "TestHeHcf"
+**.wlan[*].mac.hcf.originatorMacDataService.fragmentationPolicy.typename = "TestHeDynamicFragmentationPolicy"
+**.wlan[*].mac.hcf.originatorMacDataService.fragmentationPolicy.fragmentationThreshold = 60B
 **.wlan[*].mac.fcsMode = "computed"
 **.wlan[*].mac.hcf.edca.edcaf[1].cwMin = 31
 **.wlan[*].mac.hcf.edca.edcaf[1].cwMax = 31
@@ -84,6 +114,40 @@ class TestOriginatorBlockAckAgreementHandler :
     }
 };
 
+class TestBoundaryMac : public Ieee80211Mac
+{
+  private:
+    Packet *transmittedFrame = nullptr;
+
+  protected:
+    virtual int numInitStages() const override { return 1; }
+    virtual void initialize(int) override {}
+    virtual void configureRadioMode(IRadio::RadioMode) override {}
+    virtual void sendDown(cMessage *message) override
+    {
+        REQUIRE(transmittedFrame == nullptr);
+        transmittedFrame = check_and_cast<Packet *>(message);
+    }
+
+  public:
+    Packet *takeTransmittedFrame()
+    {
+        auto result = transmittedFrame;
+        transmittedFrame = nullptr;
+        return result;
+    }
+};
+
+class TestHeDynamicFragmentationPolicy : public HeDynamicFragmentationPolicy
+{
+  public:
+    std::vector<int> computeAtRequiredLevel(Packet *frame, int level)
+    {
+        requiredLevel = level;
+        return computeFragmentSizes(frame);
+    }
+};
+
 class TestHeHcf : public HeHcf
 {
   public:
@@ -114,8 +178,29 @@ class TestHeHcf : public HeHcf
 
     void configureAssociation(const MacAddress& ap, uint16_t aid)
     {
-        mac->getMib()->bssData.bssid = ap;
-        mac->getMib()->bssStationData.associationId = aid;
+        mac->getMib()->setBssIdentity(mac->getMib()->getSsid(), ap);
+        mac->getMib()->installLocalAssociation(mac->getMib()->getSsid(), ap, aid);
+    }
+
+    void configurePeerDynamicFragmentation(const MacAddress& peer, int level)
+    {
+        Ieee80211HeCapabilities capabilities;
+        capabilities.dynamicFragmentationLevel = level;
+        mac->getMib()->setPeerHeCapabilities(
+                peer, capabilities, Ieee80211HeOperation());
+    }
+
+    TestHeDynamicFragmentationPolicy *getDynamicFragmentationPolicy() const
+    {
+        auto service = getSubmodule("originatorMacDataService");
+        return check_and_cast<TestHeDynamicFragmentationPolicy *>(
+                service->getSubmodule("fragmentationPolicy"));
+    }
+
+    void assignIngressServiceDataUnit(Packet *packet)
+    {
+        tagMacSapServiceDataUnit(packet,
+                packet->peekAtFront<Ieee80211DataHeader>());
     }
 
     Packet *makeQueuedPacket(const char *name, const MacAddress& ap, int payloadByte,
@@ -210,6 +295,40 @@ class TestHeHcf : public HeHcf
         return getBufferedTrafficServiceBytes(edca->getEdcaf(AC_BE), peer, tid);
     }
 
+    uint32_t getBufferedBytesWithAdditional(const MacAddress& peer, int tid,
+            const std::vector<Packet *>& additional) const
+    {
+        return calculateBufferedTrafficServiceBytes(
+                edca->getEdcaf(AC_BE), peer, tid, additional);
+    }
+
+    void addServiceDataUnitTag(Packet *packet, uint64_t id,
+            B serviceBytes, B offset, B length)
+    {
+        auto tag = packet->addRegionTag<Ieee80211MacSapServiceTag>(
+                packet->getFrontOffset() + offset, length);
+        tag->setServiceDataUnitId(id);
+        tag->setServiceDataUnitBytes(serviceBytes);
+    }
+
+    Packet *makeTaggedQueuedPacket(const char *name, const MacAddress& ap,
+            uint64_t id, B serviceBytes, int tid = 0,
+            int fragmentNumber = 0, bool moreFragments = false,
+            bool amsduPresent = false)
+    {
+        auto packet = makeQueuedPacket(name, ap, 0x5a,
+                std::max<int64_t>(1, serviceBytes.get<B>()), tid);
+        auto header = packet->removeAtFront<Ieee80211DataHeader>();
+        header->setFragmentNumber(fragmentNumber);
+        header->setMoreFragments(moreFragments);
+        header->setAMsduPresent(amsduPresent);
+        packet->insertAtFront(header);
+        addServiceDataUnitTag(packet, id, serviceBytes,
+                header->getChunkLength(),
+                packet->getDataLength() - header->getChunkLength() - B(4));
+        return packet;
+    }
+
     void moveToInProgress(Packet *packet, bool retry)
     {
         getSourceQueue()->removePacket(packet);
@@ -253,7 +372,7 @@ class TestHeHcf : public HeHcf
         auto coding = ru.toneSize >= 484 ? HE_CODING_LDPC : HE_CODING_BCC;
         phyUser.coding = coding;
         phyUser.psduLength = B(requestedToneSize == 26 ? 64 : 512);
-        phyUser.staId = mac->getMib()->bssStationData.associationId;
+        phyUser.staId = mac->getMib()->getLocalAssociationId();
         Ieee80211HeTriggerResponseFinalizationRequest request;
         request.users = {phyUser};
         request.centerFrequency = phy.getChannelCenterFrequency();
@@ -287,7 +406,7 @@ class TestHeHcf : public HeHcf
         trigger->setNumberOfHeLtfSymbols(
                 finalized.parameters.common.numberOfHeLtfSymbols);
         trigger->setUsersArraySize(1);
-        user.aid = mac->getMib()->bssStationData.associationId;
+        user.aid = mac->getMib()->getLocalAssociationId();
         user.ruIndex = ru.index;
         user.ruToneSize = ru.toneSize;
         user.ruToneOffset = ru.toneOffset;
@@ -619,6 +738,8 @@ class ResponseEventListener : public cListener
 };
 
 Define_Module(TestHeHcf);
+Define_Module(TestBoundaryMac);
+Define_Module(TestHeDynamicFragmentationPolicy);
 
 %activity:
 auto sta = getParentModule()->getSubmodule("sta");
@@ -636,6 +757,228 @@ auto requireQueueIdentities = [&] (const std::vector<Packet *>& expected) {
     for (size_t i = 0; i < expected.size(); ++i)
         REQUIRE(queue->getPacket(i) == expected[i]);
 };
+
+// MAC-SAP provenance is local to one MAC. Tx sends a duplicate through this
+// boundary, so an identical per-HCF ID can be freshly assigned after wireless
+// forwarding without colliding with the source HCF's metadata.
+{
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setType(ST_DATA_WITH_QOS);
+    header->setReceiverAddress(ap);
+    header->setTransmitterAddress(MacAddress("30:00:00:00:00:00"));
+    header->setTid(0);
+    header->setChunkLength(B(26));
+    auto source = new Packet("mac-boundary-source", header);
+    source->insertAtBack(makeShared<ByteCountChunk>(B(17)));
+    source->insertAtBack(makeShared<Ieee80211MacTrailer>());
+    hcf->addServiceDataUnitTag(source, 1, B(17), B(26), B(17));
+    source->addRegionTag<CreationTimeTag>(
+            source->getFrontOffset(), B(1))->
+            setCreationTime(simTime());
+    auto boundaryMac = check_and_cast<TestBoundaryMac *>(
+            getParentModule()->getSubmodule("boundaryMac"));
+    boundaryMac->sendDownFrame(source->dup());
+    auto transmitted = boundaryMac->takeTransmittedFrame();
+    REQUIRE(transmitted != nullptr);
+    REQUIRE(source->getAllRegionTags<Ieee80211MacSapServiceTag>(
+            source->getFrontOffset(), source->getDataLength()).size() == 1);
+    REQUIRE(transmitted->getAllRegionTags<Ieee80211MacSapServiceTag>(
+            transmitted->getFrontOffset(), transmitted->getDataLength()).empty());
+    REQUIRE(transmitted->getAllRegionTags<CreationTimeTag>(
+            transmitted->getFrontOffset(), transmitted->getDataLength()).size() == 1);
+    hcf->assignIngressServiceDataUnit(transmitted);
+    auto ingressTags = transmitted->getAllRegionTags<Ieee80211MacSapServiceTag>(
+            transmitted->getFrontOffset(), transmitted->getDataLength());
+    REQUIRE(ingressTags.size() == 1);
+    REQUIRE(ingressTags[0].getTag()->getServiceDataUnitId() == 1);
+    REQUIRE(ingressTags[0].getTag()->getServiceDataUnitBytes() == B(17));
+    hcf->getSourceQueue()->enqueuePacket(transmitted);
+    REQUIRE(hcf->getBufferedBytes(ap, 0) == 17);
+    delete source;
+    hcf->clearState();
+}
+
+// The model has HE dynamic-fragmentation levels but not the separate A-MSDU
+// Fragmentation Support and ADDBA HE Fragmentation Operation fields. Treat
+// those absent gates as false at every negotiated level while preserving
+// positive ordinary-MSDU dynamic fragmentation.
+{
+    hcf->configurePeerDynamicFragmentation(ap, 3);
+    auto policy = hcf->getDynamicFragmentationPolicy();
+    auto makeFrame = [&] (const char *name, bool amsduPresent) {
+        auto header = makeShared<Ieee80211DataHeader>();
+        header->setType(ST_DATA_WITH_QOS);
+        header->setReceiverAddress(ap);
+        header->setTransmitterAddress(MacAddress("30:00:00:00:00:00"));
+        header->setTid(0);
+        header->setAMsduPresent(amsduPresent);
+        header->setChunkLength(B(26));
+        auto packet = new Packet(name, header);
+        packet->insertAtBack(makeShared<ByteCountChunk>(B(80)));
+        packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+        return packet;
+    };
+    for (int level = 1; level <= 3; level++) {
+        auto amsdu = makeFrame("unsupported-dynamic-amsdu", true);
+        REQUIRE(policy->computeAtRequiredLevel(amsdu, level).empty());
+        delete amsdu;
+        auto msdu = makeFrame("supported-dynamic-msdu", false);
+        REQUIRE(policy->computeAtRequiredLevel(msdu, level) ==
+                std::vector<int>({30, 30, 20}));
+        delete msdu;
+    }
+}
+
+// IEEE Std 802.11-2024, 10.2.7, 10.4, 26.3.2, and 26.3.3:
+// ordinary fragmentation leaves A-MSDUs intact, ordinary MSDUs retain the
+// legacy sizing behavior, and an HE dynamically fragmented A-MSDU keeps the
+// A-MSDU Present bit and exact MAC-SAP provenance on every fragment.
+{
+    auto policy = check_and_cast<BasicFragmentationPolicy *>(
+            getParentModule()->getSubmodule("fragmentationPolicy"));
+    auto makeFrame = [&] (const char *name, bool amsduPresent) {
+        auto header = makeShared<Ieee80211DataHeader>();
+        header->setType(ST_DATA_WITH_QOS);
+        header->setReceiverAddress(ap);
+        header->setTransmitterAddress(MacAddress("30:00:00:00:00:00"));
+        header->setTid(0);
+        header->setAMsduPresent(amsduPresent);
+        header->setChunkLength(B(26));
+        auto packet = new Packet(name, header);
+        packet->insertAtBack(makeShared<ByteCountChunk>(B(80)));
+        packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+        return packet;
+    };
+    auto ordinary = makeFrame("ordinary-msdu", false);
+    auto ordinarySizes = policy->computeFragmentSizes(ordinary);
+    REQUIRE(ordinarySizes == std::vector<int>({30, 30, 20}));
+    delete ordinary;
+    auto ordinaryAmsdu = makeFrame("ordinary-amsdu", true);
+    REQUIRE(policy->computeFragmentSizes(ordinaryAmsdu).empty());
+    delete ordinaryAmsdu;
+
+    auto dynamicAmsduHeader = makeShared<Ieee80211DataHeader>();
+    dynamicAmsduHeader->setType(ST_DATA_WITH_QOS);
+    dynamicAmsduHeader->setReceiverAddress(ap);
+    dynamicAmsduHeader->setTransmitterAddress(
+            MacAddress("30:00:00:00:00:00"));
+    dynamicAmsduHeader->setTid(0);
+    dynamicAmsduHeader->setAMsduPresent(true);
+    dynamicAmsduHeader->setChunkLength(B(26));
+    auto dynamicAmsdu = new Packet("dynamic-amsdu", dynamicAmsduHeader);
+    auto applicationPacket = makeShared<ApplicationPacket>();
+    applicationPacket->setChunkLength(B(100));
+    dynamicAmsdu->insertAtBack(applicationPacket);
+    dynamicAmsdu->insertAtBack(makeShared<Ieee80211MacTrailer>());
+    hcf->addServiceDataUnitTag(dynamicAmsdu, 100, B(100), B(26), B(100));
+    Fragmentation fragmentation;
+    auto fragments = fragmentation.fragmentFrame(dynamicAmsdu, {20, 30, 50});
+    REQUIRE(fragments->size() == 3);
+    for (size_t i = 0; i < fragments->size(); i++) {
+        auto fragment = fragments->at(i);
+        auto header = fragment->peekAtFront<Ieee80211DataHeader>();
+        REQUIRE(header->getAMsduPresent());
+        REQUIRE(header->getFragmentNumber() == i);
+        REQUIRE(header->getMoreFragments() == (i + 1 != fragments->size()));
+        auto tags = fragment->getAllRegionTags<Ieee80211MacSapServiceTag>(
+                fragment->getFrontOffset(), fragment->getDataLength());
+        REQUIRE(tags.size() == 1);
+        REQUIRE(tags[0].getOffset() == fragment->getFrontOffset() +
+                header->getChunkLength());
+        REQUIRE(tags[0].getLength() == B(i == 0 ? 20 : i == 1 ? 30 : 50));
+        REQUIRE(tags[0].getTag()->getServiceDataUnitId() == 100);
+        REQUIRE(tags[0].getTag()->getServiceDataUnitBytes() == B(100));
+    }
+    // A later fragment alone reports the complete original service unit;
+    // adding all fragments, retry aliases, and an additional alias counts it
+    // exactly once without reparsing the ApplicationPacket body.
+    hcf->getSourceQueue()->enqueuePacket(fragments->at(2));
+    REQUIRE(hcf->getBufferedBytes(ap, 0) == 100);
+    hcf->getSourceQueue()->enqueuePacket(fragments->at(0));
+    hcf->getSourceQueue()->enqueuePacket(fragments->at(1));
+    hcf->moveToInProgress(fragments->at(1), true);
+    auto alias = fragments->at(0)->dup();
+    REQUIRE(hcf->getBufferedBytesWithAdditional(ap, 0, {alias}) == 100);
+    delete alias;
+    delete fragments;
+    hcf->clearState();
+}
+
+// The receive-side order remains defragmentation before A-MSDU
+// deaggregation, including a cut through an A-MSDU subframe header.
+{
+    auto first = hcf->makeQueuedPacket("reassembly-first", ap, 0x51, 3);
+    auto second = hcf->makeQueuedPacket("reassembly-second", ap, 0x52, 5);
+    hcf->getSourceQueue()->removePacket(first);
+    hcf->getSourceQueue()->removePacket(second);
+    hcf->addServiceDataUnitTag(first, 201, B(3), B(26), B(3));
+    hcf->addServiceDataUnitTag(second, 202, B(5), B(26), B(5));
+    std::vector<Packet *> originals = {first, second};
+    MsduAggregation aggregation;
+    auto amsdu = aggregation.aggregateFrames(&originals);
+    auto amsduBodyLength = amsdu->getDataLength() -
+            amsdu->peekAtFront<Ieee80211DataHeader>()->getChunkLength() - B(4);
+    REQUIRE(amsduBodyLength > B(10));
+    Fragmentation fragmentation;
+    auto fragments = fragmentation.fragmentFrame(amsdu,
+            {10, 8, static_cast<int>((amsduBodyLength - B(18)).get<B>())});
+    REQUIRE(fragments->at(0)->peekAtFront<Ieee80211DataHeader>()->
+            getAMsduPresent());
+    REQUIRE(fragments->at(1)->peekAtFront<Ieee80211DataHeader>()->
+            getAMsduPresent());
+    REQUIRE(fragments->at(2)->peekAtFront<Ieee80211DataHeader>()->
+            getAMsduPresent());
+    Defragmentation defragmentation;
+    auto defragmented = defragmentation.defragmentFrames(fragments);
+    REQUIRE(defragmented->peekAtFront<Ieee80211DataHeader>()->
+            getAMsduPresent());
+    for (auto fragment : *fragments)
+        delete fragment;
+    delete fragments;
+    MsduDeaggregation deaggregation;
+    auto restored = deaggregation.deaggregateFrame(defragmented);
+    REQUIRE(restored->size() == 2);
+    for (size_t i = 0; i < restored->size(); i++) {
+        auto packet = restored->at(i);
+        auto tags = packet->getAllRegionTags<Ieee80211MacSapServiceTag>(
+                packet->getFrontOffset(), packet->getDataLength());
+        REQUIRE(tags.size() == 1);
+        REQUIRE(tags[0].getTag()->getServiceDataUnitId() == 201 + i);
+        REQUIRE(tags[0].getTag()->getServiceDataUnitBytes() ==
+                B(i == 0 ? 3 : 5));
+        delete packet;
+    }
+    delete restored;
+}
+
+// Region provenance distinguishes multiple original MSDUs in one A-MSDU,
+// while peer/TID filtering and saturation remain unchanged.
+{
+    auto twoMsdus = hcf->makeQueuedPacket("tagged-two-msdus", ap, 0x41, 8);
+    auto header = twoMsdus->removeAtFront<Ieee80211DataHeader>();
+    header->setAMsduPresent(true);
+    twoMsdus->insertAtFront(header);
+    hcf->addServiceDataUnitTag(twoMsdus, 101, B(3), B(26), B(3));
+    hcf->addServiceDataUnitTag(twoMsdus, 102, B(5), B(29), B(5));
+    auto wrongTid = hcf->makeTaggedQueuedPacket(
+            "tagged-wrong-tid", ap, 103, B(19), 3);
+    auto wrongPeer = hcf->makeTaggedQueuedPacket("tagged-wrong-peer",
+            MacAddress("20:00:00:00:00:00"), 104, B(23));
+    REQUIRE(hcf->getBufferedBytes(ap, 0) == 8);
+    (void)wrongTid;
+    (void)wrongPeer;
+    hcf->clearState();
+
+    auto large0 = hcf->makeQueuedByteCountPacket("tagged-large-p0", ap, 1);
+    auto large1 = hcf->makeQueuedByteCountPacket("tagged-large-p1", ap, 1);
+    hcf->addServiceDataUnitTag(large0, 105, B(UINT64_C(3000000000)),
+            B(26), B(1));
+    hcf->addServiceDataUnitTag(large1, 106, B(UINT64_C(3000000000)),
+            B(26), B(1));
+    REQUIRE(hcf->getBufferedBytes(ap, 0) ==
+            std::numeric_limits<uint32_t>::max() - 1);
+    hcf->clearState();
+}
 
 // Buffer status counts MAC-SAP service bytes in both queue ownership phases,
 // filters the addressed AP/TID, and parses A-MSDU subframe payload lengths.

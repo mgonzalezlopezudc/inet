@@ -20,22 +20,18 @@ void Ieee80211MgmtStaSimplified::initialize(int stage)
     Ieee80211MgmtBase::initialize(stage);
     if (stage == INITSTAGE_LOCAL) {
         mib->mode = Ieee80211Mib::INFRASTRUCTURE;
-        mib->bssStationData.stationType = Ieee80211Mib::STATION;
-        mib->bssStationData.isAssociated = true;
+        mib->setBssStationType(Ieee80211Mib::STATION);
     }
     else if (stage == INITSTAGE_LINK_LAYER + 1) {
         L3AddressResolver addressResolver;
         auto accessPointAddress = addressResolver.resolve(par("accessPointAddress"), L3AddressResolver::ADDR_MAC).toMac();
-        mib->bssData.bssid = accessPointAddress;
-        auto host = addressResolver.findHostWithAddress(mib->bssData.bssid);
+        mib->setBssIdentity(mib->getSsid(), accessPointAddress);
+        auto host = addressResolver.findHostWithAddress(mib->getBssid());
         if (host == nullptr)
-            throw cRuntimeError("Access point with address %s not found", mib->bssData.bssid.str().c_str());
+            throw cRuntimeError("Access point with address %s not found", mib->getBssid().str().c_str());
         auto interfaceTable = addressResolver.findInterfaceTableOf(host);
-        auto networkInterface = interfaceTable->findInterfaceByAddress(mib->bssData.bssid);
+        auto networkInterface = interfaceTable->findInterfaceByAddress(mib->getBssid());
         auto apMib = dynamic_cast<Ieee80211Mib *>(networkInterface->getSubmodule("mib"));
-        apMib->bssAccessPointData.stations[mib->address] = Ieee80211Mib::ASSOCIATED;
-        mib->bssStationData.associationId = apMib->allocateAssociationId(mib->address);
-        mib->bssData.ssid = apMib->bssData.ssid;
         if (!mib->localOperationalRates.empty() && !apMib->localOperationalRates.empty()) {
             apMib->setPeerLegacyRates(mib->address,
                     mib->getSupportedRatesElement(),
@@ -88,6 +84,8 @@ void Ieee80211MgmtStaSimplified::initialize(int stage)
             apMib->removePeerEhtCapabilities(mib->address);
             mib->removePeerEhtCapabilities(apMib->address);
         }
+        auto association = apMib->commitPeerAssociation(mib->address);
+        mib->installLocalAssociation(apMib->getSsid(), accessPointAddress, association.getAssociationId());
     }
 }
 

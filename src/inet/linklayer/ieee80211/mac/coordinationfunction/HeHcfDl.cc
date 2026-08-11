@@ -387,12 +387,20 @@ bool HeHcf::tryStartDlMuFrameSequence(AccessCategory ac)
                     << headDataHeader->getReceiverAddress() << " tid=" << headDataHeader->getTid()
                     << " is MU-ineligible, falling back to Hcf::startFrameSequence(ac)." << endl;
         }
-        Hcf::startFrameSequence(ac);
-        return true;
+        if (inProgress->getFrameToTransmit() != nullptr) {
+            Hcf::startFrameSequence(ac);
+            return true;
+        }
+        EV_INFO << "Single-user data extraction is deferred; no SU frame is eligible in this TXOP\n";
+        return false;
     }
     if (pendingQueue->isEmpty() && stagePerStaFrameForBlockAckBootstrap(ac)) {
-        Hcf::startFrameSequence(ac);
-        return true;
+        if (inProgress->getFrameToTransmit() != nullptr) {
+            Hcf::startFrameSequence(ac);
+            return true;
+        }
+        EV_INFO << "Block Ack bootstrap deferred data extraction; no SU frame is eligible in this TXOP\n";
+        return false;
     }
     auto scheduleContext = collectScheduleContext(ac);
     if (scheduleContext.candidates.size() >= 2) {

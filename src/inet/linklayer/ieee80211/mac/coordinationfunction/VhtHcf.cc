@@ -124,19 +124,19 @@ std::vector<MacAddress> VhtHcf::getConstrainedVhtMuPeers() const
 {
     std::vector<std::pair<MacAddress, int>> capablePeers;
     auto mib = mac->getMib();
-    if (!enableVhtDlMuMimo || mib->bssStationData.stationType != Ieee80211Mib::ACCESS_POINT)
+    if (!enableVhtDlMuMimo || mib->getStationType() != Ieee80211Mib::ACCESS_POINT)
         return {};
     auto channelWidth = vhtRadio == nullptr ? Hz(0) : vhtRadio->getVhtChannelWidth();
-    for (const auto& station : mib->bssAccessPointData.stations) {
-        auto negotiated = mib->findNegotiatedVhtCapabilities(station.first);
-        if (station.second != Ieee80211Mib::ASSOCIATED || negotiated == nullptr ||
+    for (const auto& station : mib->getPeerAssociationSnapshots()) {
+        auto negotiated = mib->getNegotiatedVhtCapabilities(station.getAddress());
+        if (!station.hasMemberStatus() || station.getMemberStatus() != Ieee80211Mib::ASSOCIATED || !negotiated ||
                 !negotiated->localTxPeerRx.valid || !negotiated->localTxPeerRx.muMimo ||
                 !negotiated->localTxPeerRx.supportedChannelWidths.count(channelWidth) ||
                 negotiated->localTxPeerRx.mcsNss.maxMcsPerNss[0] < 0 ||
                 negotiated->localTxPeerRx.maxNstsTotal < 2 ||
                 negotiated->localTxPeerRx.soundingNsts < 2)
             continue;
-        capablePeers.emplace_back(station.first, negotiated->localTxPeerRx.soundingNsts);
+        capablePeers.emplace_back(station.getAddress(), negotiated->localTxPeerRx.soundingNsts);
     }
     std::sort(capablePeers.begin(), capablePeers.end(), [](const auto& left, const auto& right) {
         return left.first < right.first;
@@ -167,7 +167,7 @@ bool VhtHcf::tryStartVhtDlMu(AccessCategory ac)
 {
     if (!enableVhtDlMuMimo || vhtRadio == nullptr ||
             vhtRadio->getVhtAntennaCount() < 2 ||
-            mac->getMib()->bssStationData.stationType != Ieee80211Mib::ACCESS_POINT)
+            mac->getMib()->getStationType() != Ieee80211Mib::ACCESS_POINT)
         return false;
     auto peers = getConstrainedVhtMuPeers();
     if (peers.size() < 2)
@@ -189,8 +189,8 @@ bool VhtHcf::tryStartVhtDlMu(AccessCategory ac)
     context.maxNstsTotal = context.transmitDimensions;
     context.shortGi = mac->getMib()->vhtOperation.shortGi;
     for (const auto& peer : peers) {
-        auto negotiated = mac->getMib()->findNegotiatedVhtCapabilities(peer);
-        bool peerSupportsShortGi = negotiated != nullptr &&
+        auto negotiated = mac->getMib()->getNegotiatedVhtCapabilities(peer);
+        bool peerSupportsShortGi = negotiated &&
                 (context.channelWidth == MHz(80) ? negotiated->localTxPeerRx.shortGi80 :
                  context.channelWidth == MHz(160) ? negotiated->localTxPeerRx.shortGi160 : false);
         if (!peerSupportsShortGi)
@@ -212,13 +212,13 @@ bool VhtHcf::tryStartVhtDlMu(AccessCategory ac)
         addedPeers.insert(peer);
         auto peerIndex = std::distance(peers.begin(), peerIt);
         auto position = (peerIndex + context.groupId) % 4;
-        auto negotiated = mac->getMib()->findNegotiatedVhtCapabilities(peer);
+        auto negotiated = mac->getMib()->getNegotiatedVhtCapabilities(peer);
         auto generation = mac->getMib()->getVhtAssociationGeneration(peer);
         auto csi = csiCache.findFresh(peer, context.channelWidth, generation);
         auto modeRequest = packet->findTag<physicallayer::Ieee80211ModeReq>();
         auto mode = modeRequest == nullptr ? rateSelection->computeMode(packet, header,
                 edcaf->getTxopProcedure()) : modeRequest->getMode();
-        const int soundingNsts = negotiated == nullptr ? 0 :
+        const int soundingNsts = !negotiated ? 0 :
                 negotiated->localTxPeerRx.soundingNsts;
         if (mode != nullptr && modeSet->getPhyFamily(mode) ==
                 physicallayer::Ieee80211PhyFamily::VHT && generation > 0 &&
@@ -246,7 +246,7 @@ bool VhtHcf::tryStartVhtDlMu(AccessCategory ac)
         candidate.numberOfSpatialStreams = 0;
         candidate.mcs = -1;
         candidate.ldpc = false;
-        if (negotiated != nullptr) {
+        if (negotiated) {
             auto perUserNssLimit = std::min({4,
                     context.transmitDimensions / static_cast<int>(peers.size()),
                     negotiated->localTxPeerRx.maxNstsTotal / static_cast<int>(peers.size()),
@@ -277,12 +277,12 @@ bool VhtHcf::tryStartVhtDlMu(AccessCategory ac)
         candidate.psduLength = psduBytes;
         candidate.beamformingGainDb = csi == nullptr ? 0 : csi->beamformingGainDb;
         candidate.leakagePenaltyDb = 0;
-        candidate.soundingNsts = negotiated == nullptr ? 0 : negotiated->localTxPeerRx.soundingNsts;
-        candidate.receiverMaxNstsTotal = negotiated == nullptr ? 0 : negotiated->localTxPeerRx.maxNstsTotal;
+        candidate.soundingNsts = !negotiated ? 0 : negotiated->localTxPeerRx.soundingNsts;
+        candidate.receiverMaxNstsTotal = !negotiated ? 0 : negotiated->localTxPeerRx.maxNstsTotal;
         candidate.associated = isAssociatedPeer(peer);
-        candidate.negotiatedMuMimo = negotiated != nullptr &&
+        candidate.negotiatedMuMimo = negotiated &&
                 negotiated->localTxPeerRx.valid && negotiated->localTxPeerRx.muMimo;
-        candidate.exactlyOneSpatialStream = negotiated != nullptr &&
+        candidate.exactlyOneSpatialStream = negotiated &&
                 negotiated->localTxPeerRx.mcsNss.maxMcsPerNss[0] >= 0 &&
                 negotiated->localTxPeerRx.mcsNss.maxMcsPerNss[1] < 0;
         candidate.freshCsi = csi != nullptr && csi->feedbackTypeMu &&
@@ -324,19 +324,16 @@ bool VhtHcf::tryStartVhtDlMu(AccessCategory ac)
 bool VhtHcf::isAssociatedPeer(const MacAddress& peer) const
 {
     auto mib = mac->getMib();
-    if (mib->bssStationData.stationType == Ieee80211Mib::ACCESS_POINT) {
-        auto it = mib->bssAccessPointData.stations.find(peer);
-        return it != mib->bssAccessPointData.stations.end() &&
-                it->second == Ieee80211Mib::ASSOCIATED;
-    }
-    return mib->bssStationData.isAssociated && mib->bssData.bssid == peer;
+    if (mib->getStationType() == Ieee80211Mib::ACCESS_POINT)
+        return mib->isPeerAssociated(peer);
+    return mib->isAssociated() && mib->getBssid() == peer;
 }
 
 uint16_t VhtHcf::getPeerAssociationId(const MacAddress& peer) const
 {
     auto mib = mac->getMib();
-    return mib->bssStationData.stationType == Ieee80211Mib::ACCESS_POINT ?
-            mib->getAssociationId(peer) : mib->bssStationData.associationId;
+    return mib->getStationType() == Ieee80211Mib::ACCESS_POINT ?
+            mib->getAssociationId(peer) : mib->getLocalAssociationId();
 }
 
 bool VhtHcf::isEligibleVhtSu(const physicallayer::IIeee80211Mode *mode,
@@ -352,8 +349,8 @@ bool VhtHcf::isEligibleVhtSu(const physicallayer::IIeee80211Mode *mode,
     }
     if (peer.isMulticast()) { EV_INFO << "isEligibleVhtSu false: peer is multicast\n"; return false; }
     if (!isAssociatedPeer(peer)) { EV_INFO << "isEligibleVhtSu false: not associated peer " << peer << "\n"; return false; }
-    auto negotiated = mac->getMib()->findNegotiatedVhtCapabilities(peer);
-    if (negotiated == nullptr) { EV_INFO << "isEligibleVhtSu false: negotiated == nullptr\n"; return false; }
+    auto negotiated = mac->getMib()->getNegotiatedVhtCapabilities(peer);
+    if (!negotiated) { EV_INFO << "isEligibleVhtSu false: negotiated absent\n"; return false; }
     if (!negotiated->localTxPeerRx.valid) { EV_INFO << "isEligibleVhtSu false: localTxPeerRx not valid\n"; return false; }
     if (!negotiated->localTxPeerRx.suBeamforming) { EV_INFO << "isEligibleVhtSu false: suBeamforming false\n"; return false; }
     if (negotiated->localTxPeerRx.soundingNsts < 2) {
@@ -457,11 +454,11 @@ void VhtHcf::recipientProcessReceivedFrame(Packet *packet,
         auto mib = mac->getMib();
         auto peer = action->getTransmitterAddress();
         auto generation = mib->getVhtAssociationGeneration(peer);
-        auto negotiated = mib->findNegotiatedVhtCapabilities(peer);
+        auto negotiated = mib->getNegotiatedVhtCapabilities(peer);
         bool permitted = enableVhtDlMuMimo &&
-                mib->bssStationData.stationType == Ieee80211Mib::STATION &&
-                mib->bssStationData.isAssociated && mib->bssData.bssid == peer &&
-                negotiated != nullptr && negotiated->localRxPeerTx.valid &&
+                mib->getStationType() == Ieee80211Mib::STATION &&
+                mib->isAssociated() && mib->getBssid() == peer &&
+                negotiated && negotiated->localRxPeerTx.valid &&
                 negotiated->localRxPeerTx.muMimo &&
                 vhtRadio != nullptr;
         auto channelWidth = vhtRadio == nullptr ? Hz(0) : vhtRadio->getVhtChannelWidth();
@@ -517,7 +514,7 @@ void VhtHcf::transmitFrame(Packet *packet, simtime_t ifs)
         header->setType(ST_DATA_WITH_QOS);
         header->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
         header->setTransmitterAddress(mac->getAddress());
-        header->setAddress3(mac->getMib()->bssData.bssid);
+        header->setAddress3(mac->getMib()->getBssid());
         tx->transmitFrame(packet, header, ifs, this);
         return;
     }
@@ -526,7 +523,7 @@ void VhtHcf::transmitFrame(Packet *packet, simtime_t ifs)
         header->setType(ST_QOS_NULL);
         header->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
         header->setTransmitterAddress(mac->getAddress());
-        header->setAddress3(mac->getMib()->bssData.bssid);
+        header->setAddress3(mac->getMib()->getBssid());
         tx->transmitFrame(packet, header, ifs, this);
         return;
     }

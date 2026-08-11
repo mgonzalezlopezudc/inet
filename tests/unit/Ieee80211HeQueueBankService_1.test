@@ -31,13 +31,15 @@ auto queueBanksModule = getParentModule()->getSubmodule("queueBanks");
 StationQueueBankManager manager(queueBanksModule);
 MacAddress sta1("02:00:00:00:71:01");
 MacAddress sta2("02:00:00:00:71:02");
-auto bank1 = manager.createQueueBank(sta1);
-auto bank2 = manager.createQueueBank(sta2);
+auto bank1 = manager.ensureQueueBank(sta1, 1);
+auto bank2 = manager.ensureQueueBank(sta2, 2);
 std::string bank1Name = bank1->getFullName();
 std::string bank2Name = bank2->getFullName();
 REQUIRE(manager.getQueueBankCount() == 2);
 REQUIRE(manager.getQueueBank(sta1) == bank1);
 REQUIRE(manager.getQueueBank(sta2) == bank2);
+REQUIRE(manager.getAssociationEpoch(sta1) == 1);
+REQUIRE(manager.getAssociationEpoch(sta2) == 2);
 REQUIRE(bank1->getStaAddress() == sta1);
 REQUIRE(bank2->getStaAddress() == sta2);
 
@@ -52,10 +54,18 @@ REQUIRE(bank1->getQueue(StationQueueBank::AC_BE)->getPacket(1) == packet2);
 REQUIRE(manager.getTotalQueuedPackets() == 3);
 REQUIRE(manager.getTotalQueuedBytes() == 600);
 
-manager.destroyQueueBank(sta1);
+REQUIRE(manager.retireQueueBank(sta1, 1));
 REQUIRE(!manager.hasQueueBank(sta1));
 REQUIRE(manager.hasQueueBank(sta2));
+REQUIRE(queueBanksModule->getSubmodule(bank1Name.c_str()) == bank1);
+auto reassociatedBank1 = manager.ensureQueueBank(sta1, 3);
+std::string reassociatedBank1Name = reassociatedBank1->getFullName();
+REQUIRE(reassociatedBank1 != bank1);
+REQUIRE(reassociatedBank1Name != bank1Name);
+REQUIRE(manager.getAssociationEpoch(sta1) == 3);
+manager.finalizeRetiredQueueBanks();
 REQUIRE(queueBanksModule->getSubmodule(bank1Name.c_str()) == nullptr);
+REQUIRE(queueBanksModule->getSubmodule(reassociatedBank1Name.c_str()) == reassociatedBank1);
 REQUIRE(manager.getTotalQueuedPackets() == 1);
 REQUIRE(manager.getTotalQueuedBytes() == 300);
 

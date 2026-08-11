@@ -142,7 +142,7 @@ class MockOriginatorBlockAckAgreementHandler : public IOriginatorBlockAckAgreeme
     }
 
     virtual void processReceivedBlockAck(const Ptr<const Ieee80211BlockAck>& blockAck, IBlockAckAgreementHandlerCallback *callback) override {}
-    virtual void processTransmittedAddbaReq(const Ptr<const Ieee80211AddbaRequest>& addbaReq) override {}
+    virtual void processTransmittedAddbaReq(const Ptr<const Ieee80211AddbaRequest>& addbaReq, IBlockAckAgreementHandlerCallback *callback) override {}
     virtual void processTransmittedDataFrame(Packet *packet, const Ptr<const Ieee80211DataHeader>& dataHeader, IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy, IProcedureCallback *callback) override {}
     virtual void processReceivedAddbaResp(const Ptr<const Ieee80211AddbaResponse>& addbaResp, IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy, IBlockAckAgreementHandlerCallback *callback) override {}
     virtual void processReceivedDelba(const Ptr<const Ieee80211Delba>& delba, IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy) override {}
@@ -178,11 +178,13 @@ class MockOriginatorBlockAckAgreementPolicy : public IOriginatorBlockAckAgreemen
         virtual int getMaximumAllowedBufferSize() const override { return 64; }
 };
 
-class MockProcedureCallback : public IProcedureCallback
+class MockProcedureCallback : public IProcedureCallback, public IBlockAckAgreementHandlerCallback
 {
     public:
         OriginatorBlockAckAgreementHandler *handler = nullptr;
         int addbaReqCount = 0;
+        int timerScheduleCount = 0;
+        simtime_t scheduledDelay = -1;
 
         explicit MockProcedureCallback(OriginatorBlockAckAgreementHandler *handler) : handler(handler) {}
 
@@ -192,9 +194,14 @@ class MockProcedureCallback : public IProcedureCallback
                 if (auto addbaReq = dynamicPtrCast<const Ieee80211AddbaRequest>(mgmtHeader)) {
                         addbaReqCount++;
                         if (handler != nullptr)
-                                handler->processTransmittedAddbaReq(addbaReq);
+                                handler->processTransmittedAddbaReq(addbaReq, this);
                 }
                 delete mgmtPacket;
+        }
+
+        virtual void scheduleInactivityTimer(simtime_t timeout) override {
+                timerScheduleCount++;
+                scheduledDelay = timeout;
         }
 };
 
@@ -594,11 +601,17 @@ Tid tid = 5;
     requireCondition(agreement != nullptr, "expected agreement after first AddbaReq");
     requireCondition(retryCallback.addbaReqCount == 1,
             "pending AddbaReq should suppress duplicate requests before the failure timeout");
+    requireCondition(retryCallback.timerScheduleCount == 1 &&
+            retryCallback.scheduledDelay == retryPolicy.addbaFailureTimeout,
+            "lost Addba response must schedule a wake at the retry deadline");
 
-    getSimulation()->setSimTime(SimTime(2, SIMTIME_S));
+    getSimulation()->setSimTime(SimTime(1, SIMTIME_S));
+    retryHandler.blockAckAgreementExpired(&retryCallback, &retryCallback);
+    requireCondition(!agreement->getIsAddbaRequestInProgress(),
+            "retry-deadline wake must clear the expired pending request");
     retryHandler.processTransmittedDataFrame(retryPacket, retryHeader, &retryPolicy, &retryCallback);
     requireCondition(retryCallback.addbaReqCount == 2,
-            "post-timeout AddbaReq retry should resume without teardown");
+            "lost Addba response wake must allow a deterministic retry without unrelated traffic");
 
     EV << "MAC-02 fallback reference: Hcf::startFrameSequence(ac) remains the SU path while duplicate AddbaReq frames are suppressed until addbaFailureTimeout and processTransmittedDataFrame permits a retry; AC_VO classification remains in Hcf management processing.\n";
     delete retryPacket;

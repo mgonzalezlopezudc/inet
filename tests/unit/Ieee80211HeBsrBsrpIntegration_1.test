@@ -137,10 +137,10 @@ class MockHeLinkPhyContext : public IIeee80211HeLinkPhyContext
     virtual Ieee80211HePeerLinkSnapshot getPeerSnapshot(const MacAddress& address,
             simtime_t maximumLinkEstimateAge) const override
     {
-        auto link = mib->findStationLink(address);
+        auto link = mib->getPeerLinkSnapshot(address);
         return Ieee80211HePeerLinkSnapshot(false, Ieee80211HeCapabilities(), false,
-                Ieee80211NegotiatedHeCapabilities(), link == nullptr ? NaN : link->pathLossDb,
-                link != nullptr && link->valid && simTime() - link->lastUpdate <= maximumLinkEstimateAge);
+                Ieee80211NegotiatedHeCapabilities(), !link ? NaN : link->getPathLossDb(),
+                link && link->isValid() && simTime() - link->getLastUpdate() <= maximumLinkEstimateAge);
     }
 };
 
@@ -148,8 +148,7 @@ Define_Module(RecordingHeUlScheduler);
 
 static void associate(Ieee80211Mib *mib, const MacAddress& sta)
 {
-    mib->bssAccessPointData.stations[sta] = Ieee80211Mib::ASSOCIATED;
-    mib->allocateAssociationId(sta);
+    mib->commitPeerAssociation(sta);
 }
 
 %activity:
@@ -278,8 +277,7 @@ REQUIRE(coordinator->getBufferStatus().count(aid1) == 0);
 EV << "Peer lifecycle invalidation removed the station's cached BSR state.\n";
 
 coordinator->updateBufferStatus(aid1, sta1, AC_BE, 0, 900);
-mib->releaseAssociationId(sta1);
-mib->bssAccessPointData.stations[sta1] = Ieee80211Mib::AUTHENTICATED;
+mib->clearPeerAssociation(sta1, Ieee80211Mib::AUTHENTICATED);
 MacAddress replacement("02:00:00:00:10:04");
 associate(mib, replacement);
 REQUIRE(mib->getAssociationId(replacement) == aid1);

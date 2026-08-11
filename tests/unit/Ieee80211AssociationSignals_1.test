@@ -1,0 +1,219 @@
+%description:
+Test synchronous AP association signals observe committed MIB state
+
+%includes:
+#include "inet/common/Simsignals.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtAp.h"
+
+%file: TestNetwork.ned
+import inet.linklayer.ieee80211.mgmt.Ieee80211MgmtAp;
+import inet.linklayer.ieee80211.mib.Ieee80211Mib;
+
+simple TestMgmtAp extends Ieee80211MgmtAp
+{
+    parameters:
+        @class(TestMgmtAp);
+        interfaceTableModule = "";
+        mibModule = "^.mib";
+        macModule = "";
+        radioModule = "";
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        mib: Ieee80211Mib;
+        mgmt: TestMgmtAp;
+    connections allowunconnected:
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+static void requireSignalState(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("AP association signal state mismatch: %s", message);
+}
+
+class TestMgmtAp : public Ieee80211MgmtAp
+{
+  protected:
+    virtual void initialize(int stage) override
+    {
+        if (stage == INITSTAGE_LOCAL) {
+            mib.reference(this, "mibModule", true);
+            mib->setBssStationType(Ieee80211Mib::ACCESS_POINT);
+            ssid = "signal-test";
+            beaconTimer = nullptr;
+        }
+    }
+
+    virtual bool isHeManagementSupported() override { return false; }
+    virtual bool isHtManagementSupported() override { return false; }
+    virtual bool isVhtManagementSupported() override { return false; }
+    virtual void invalidatePeerState(const MacAddress&) override {}
+    virtual void handleMessageWhenDown(cMessage *message) override { delete message; }
+    virtual void sendManagementFrame(const char *, const Ptr<Ieee80211MgmtFrame>&,
+            int, const MacAddress&) override {}
+
+  public:
+    void addAuthenticatedStation(const MacAddress& address)
+    {
+        auto& station = staList[address];
+        station.address = address;
+        station.authSeqExpected = 1;
+        mib->setPeerMemberStatus(address, Ieee80211Mib::AUTHENTICATED);
+    }
+
+    void associateStation(const MacAddress& address)
+    {
+        Enter_Method("associateStation");
+        auto request = makeShared<Ieee80211AssociationRequestFrame>();
+        Ieee80211SupportedRatesElement rates;
+        rates.numRates = 1;
+        rates.rates[0].rate = 2;
+        rates.rates[0].basic = true;
+        request->setSupportedRates(rates);
+        request->setChunkLength(B(4));
+        auto packet = new Packet("AssocReq", request);
+        auto header = makeShared<Ieee80211MgmtHeader>();
+        header->setTransmitterAddress(address);
+        handleAssociationRequestFrame(packet, header);
+    }
+
+    void disassociateStation(const MacAddress& address)
+    {
+        Enter_Method("disassociateStation");
+        auto packet = new Packet("Disassoc");
+        auto header = makeShared<Ieee80211MgmtHeader>();
+        header->setTransmitterAddress(address);
+        handleDisassociationFrame(packet, header);
+    }
+};
+
+Define_Module(TestMgmtAp);
+
+class AssociationSignalObserver : public cListener, public IIeee80211PeerAssociationListener
+{
+  private:
+    Ieee80211Mib *mib;
+    MacAddress station;
+
+  public:
+    int associationSignals = 0;
+    int disassociationSignals = 0;
+    int mibTransitions = 0;
+    int controlTransitions = 0;
+    uint64_t lastAssociationEpoch = 0;
+
+    AssociationSignalObserver(Ieee80211Mib *mib, const MacAddress& station) : mib(mib), station(station) {}
+
+    virtual void peerAssociationChanged(
+            const Ieee80211AssociationState::PeerTransition& transition) override
+    {
+        controlTransitions++;
+        auto snapshot = mib->getPeerAssociationSnapshot(station);
+        requireSignalState(snapshot.getAssociationEpoch() == transition.getNewSnapshot().getAssociationEpoch(),
+                "typed lifecycle callback must observe committed state");
+    }
+
+    virtual void receiveSignal(cComponent *, simsignal_t signal, cObject *obj, cObject *) override
+    {
+        if (signal == Ieee80211Mib::peerAssociationChangedSignal) {
+            requireSignalState(controlTransitions == mibTransitions + 1,
+                    "typed lifecycle callback must precede the observational signal");
+            mibTransitions++;
+            auto event = check_and_cast<Ieee80211PeerAssociationChangedEvent *>(obj);
+            auto snapshot = mib->getPeerAssociationSnapshot(station);
+            requireSignalState(snapshot.getGeneration() == event->getNewSnapshot().getGeneration(),
+                    "MIB callback must observe the committed semantic generation");
+            requireSignalState(snapshot.getAssociationEpoch() == event->getNewSnapshot().getAssociationEpoch(),
+                    "MIB callback must observe the committed association epoch");
+            requireSignalState(event->getOldSnapshot().getAddress() == station &&
+                    event->getNewSnapshot().getAddress() == station,
+                    "MIB transition must carry copied peer snapshots");
+            if (event->getNewSnapshot().getAssociationEpoch() != 0) {
+                requireSignalState(event->getAssociationEpoch() > lastAssociationEpoch,
+                        "each association commit must advance its epoch");
+                lastAssociationEpoch = event->getAssociationEpoch();
+            }
+            return;
+        }
+        auto snapshot = mib->getPeerAssociationSnapshot(station);
+        if (signal == l2ApAssociatedSignal) {
+            associationSignals++;
+            requireSignalState(snapshot.hasMemberStatus() &&
+                    snapshot.getMemberStatus() == Ieee80211Mib::ASSOCIATED,
+                    "association callback must see ASSOCIATED status");
+            requireSignalState(snapshot.hasAssociationId() &&
+                    snapshot.getAssociationId() >= 1 && snapshot.getAssociationId() <= 2007,
+                    "association callback must see the allocated AID");
+        }
+        else if (signal == l2ApDisassociatedSignal) {
+            disassociationSignals++;
+            requireSignalState(snapshot.hasMemberStatus() &&
+                    snapshot.getMemberStatus() == Ieee80211Mib::AUTHENTICATED,
+                    "disassociation callback must see AUTHENTICATED status");
+            requireSignalState(!snapshot.hasAssociationId(),
+                    "disassociation callback must see the released AID");
+            requireSignalState(!mib->getNegotiatedHtCapabilities(station) &&
+                    !mib->getNegotiatedVhtCapabilities(station) &&
+                    !mib->getNegotiatedHeCapabilities(station) &&
+                    !mib->getNegotiatedEhtCapabilities(station) &&
+                    !mib->getPeerLegacyRates(station),
+                    "disassociation callback must see capability cleanup");
+        }
+    }
+};
+
+%activity:
+auto mib = check_and_cast<Ieee80211Mib *>(getParentModule()->getSubmodule("mib"));
+auto mgmt = check_and_cast<TestMgmtAp *>(getParentModule()->getSubmodule("mgmt"));
+const MacAddress station("02:00:00:00:00:21");
+
+Ieee80211LegacyRate localRate;
+localRate.rate = 2;
+localRate.basic = true;
+mib->localOperationalRates.push_back(localRate);
+mgmt->addAuthenticatedStation(station);
+
+AssociationSignalObserver observer(mib, station);
+mib->addPeerAssociationListener(&observer);
+mib->subscribe(Ieee80211Mib::peerAssociationChangedSignal, &observer);
+mgmt->subscribe(l2ApAssociatedSignal, &observer);
+mgmt->subscribe(l2ApDisassociatedSignal, &observer);
+mgmt->associateStation(station);
+requireSignalState(observer.associationSignals == 1, "exactly one association signal expected");
+requireSignalState(observer.mibTransitions == 1, "exactly one MIB association transition expected");
+
+mib->setPeerHtCapabilities(station, Ieee80211HtCapabilities(), Ieee80211HtOperation());
+mib->setPeerVhtCapabilities(station, Ieee80211VhtCapabilities(), Ieee80211VhtOperation());
+mib->setPeerHeCapabilities(station, Ieee80211HeCapabilities(), Ieee80211HeOperation());
+mib->setPeerEhtCapabilities(station, Ieee80211EhtCapabilities(), Ieee80211EhtOperation());
+mgmt->disassociateStation(station);
+requireSignalState(observer.disassociationSignals == 1, "exactly one disassociation signal expected");
+requireSignalState(observer.mibTransitions == 2, "exactly one MIB disassociation transition expected");
+requireSignalState(observer.controlTransitions == 2, "typed lifecycle consumer must receive both transitions");
+
+mib->unsubscribe(Ieee80211Mib::peerAssociationChangedSignal, &observer);
+auto transitionsWithoutObserver = observer.mibTransitions;
+mib->commitPeerAssociation(station);
+mib->clearPeerAssociation(station, Ieee80211Mib::AUTHENTICATED);
+requireSignalState(observer.mibTransitions == transitionsWithoutObserver,
+        "removing the observational signal listener must not affect control flow");
+requireSignalState(observer.controlTransitions == 4,
+        "typed lifecycle consumer must remain active without an observer");
+mib->removePeerAssociationListener(&observer);
+mgmt->unsubscribe(l2ApAssociatedSignal, &observer);
+mgmt->unsubscribe(l2ApDisassociatedSignal, &observer);
+EV << "Synchronous AP association signals observed committed MIB state.\n";
+
+%contains: stdout
+Synchronous AP association signals observed committed MIB state.

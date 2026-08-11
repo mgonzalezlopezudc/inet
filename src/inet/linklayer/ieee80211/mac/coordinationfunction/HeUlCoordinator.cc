@@ -171,14 +171,14 @@ IIeee80211HeUlTriggerPolicy::TriggerType HeUlCoordinator::selectTrigger(const Ie
     ASSERT(mib != nullptr);
     ASSERT(triggerPolicy != nullptr);
     IIeee80211HeUlTriggerPolicy::Context context;
-    for (const auto& station : mib->bssAccessPointData.stations) {
-        if (station.second != Ieee80211Mib::ASSOCIATED)
+    for (const auto& station : mib->getPeerAssociationSnapshots()) {
+        if (!station.hasMemberStatus() || station.getMemberStatus() != Ieee80211Mib::ASSOCIATED)
             continue;
         context.associatedStations++;
-        auto aid = mib->getAssociationId(station.first);
+        auto aid = mib->getAssociationId(station.getAddress());
         auto status = bufferStatusByAid.find(aid);
         if (status == bufferStatusByAid.end() ||
-                status->second.stationAddress != station.first ||
+                status->second.stationAddress != station.getAddress() ||
                 simTime() - status->second.updateTime > reportMaxAge)
             continue;
         context.freshReports++;
@@ -245,19 +245,19 @@ IIeee80211HeUlScheduler::Schedule HeUlCoordinator::prepareSchedule(const Ieee802
     context.recentRandomAccessIdleRate = idleRate;
     context.useUlMuMimoPolicy = useUlMuMimoPolicy;
     std::vector<uint16_t> staleReportAids;
-    for (const auto& station : mib->bssAccessPointData.stations) {
-        if (station.second != Ieee80211Mib::ASSOCIATED)
+    for (const auto& station : mib->getPeerAssociationSnapshots()) {
+        if (!station.hasMemberStatus() || station.getMemberStatus() != Ieee80211Mib::ASSOCIATED)
             continue;
-        auto aid = mib->getAssociationId(station.first);
+        auto aid = mib->getAssociationId(station.getAddress());
         auto status = bufferStatusByAid.find(aid);
         if (status == bufferStatusByAid.end() ||
-                status->second.stationAddress != station.first ||
+                status->second.stationAddress != station.getAddress() ||
                 simTime() - status->second.updateTime > reportMaxAge) {
             staleReportAids.push_back(aid);
             continue;
         }
         IIeee80211HeUlScheduler::CandidateInfo candidate;
-        candidate.staAddress = station.first;
+        candidate.staAddress = station.getAddress();
         candidate.associationId = aid;
         candidate.backlogBytes = status->second.backlogBytes;
         candidate.backlogEstimates = status->second.backlogEstimates;
@@ -282,17 +282,17 @@ IIeee80211HeUlScheduler::Schedule HeUlCoordinator::prepareSchedule(const Ieee802
                     candidate.selectedTid = status->second.tid[ac];
                     break;
                 }
-        const auto peer = linkPhyContext.getPeerSnapshot(station.first, maximumLinkEstimateAge);
+        const auto peer = linkPhyContext.getPeerSnapshot(station.getAddress(), maximumLinkEstimateAge);
         candidate.pathLossDb = peer.getPathLossDb();
         candidate.hasFreshPathLoss = peer.getHasFreshPathLoss();
-        if (auto negotiated = mib->findNegotiatedHeCapabilities(station.first)) {
+        if (auto negotiated = mib->getNegotiatedHeCapabilities(station.getAddress())) {
             candidate.hasNegotiatedHeCapabilities = true;
             candidate.negotiatedHeCapabilities = *negotiated;
             candidate.coding = mib->localHeCapabilities.ldpc &&
                     negotiated->localRxPeerTx.valid && negotiated->mutual.ldpc ?
                     physicallayer::HE_CODING_LDPC : physicallayer::HE_CODING_BCC;
         }
-        candidate.ulMuDisabled = isUlMuDisabled && isUlMuDisabled(station.first);
+        candidate.ulMuDisabled = isUlMuDisabled && isUlMuDisabled(station.getAddress());
         context.candidates.push_back(candidate);
     }
     if (!context.candidates.empty()) {

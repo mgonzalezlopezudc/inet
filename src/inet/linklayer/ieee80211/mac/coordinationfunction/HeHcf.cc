@@ -145,18 +145,16 @@ class Ieee80211HeLinkPhyContext : public IIeee80211HeLinkPhyContext
         auto mib = mac->getMib();
         if (mib == nullptr)
             throw cRuntimeError("HE peer projection requires an initialized IEEE 802.11 MIB");
-        auto advertisement = mib->bssAccessPointData.advertisedHeCapabilities.find(address);
-        auto negotiated = mib->findNegotiatedHeCapabilities(address);
-        auto link = mib->findStationLink(address);
-        auto pathLossDb = link == nullptr ? NaN : link->pathLossDb;
-        auto hasFreshPathLoss = link != nullptr && link->valid &&
-                simTime() - link->lastUpdate <= maximumLinkEstimateAge;
+        auto capabilities = mib->getPeerCapabilitySnapshot(address);
+        auto advertisement = capabilities.getAdvertisedHe();
+        auto negotiated = capabilities.getNegotiatedHe();
+        auto link = mib->getPeerLinkSnapshot(address);
+        auto pathLossDb = !link ? NaN : link->getPathLossDb();
+        auto hasFreshPathLoss = link && link->isValid() &&
+                simTime() - link->getLastUpdate() <= maximumLinkEstimateAge;
         return Ieee80211HePeerLinkSnapshot(
-                advertisement != mib->bssAccessPointData.advertisedHeCapabilities.end(),
-                advertisement == mib->bssAccessPointData.advertisedHeCapabilities.end() ?
-                        Ieee80211HeCapabilities() : advertisement->second,
-                negotiated != nullptr,
-                negotiated == nullptr ? Ieee80211NegotiatedHeCapabilities() : *negotiated,
+                advertisement.has_value(), advertisement.value_or(Ieee80211HeCapabilities()),
+                negotiated.has_value(), negotiated.value_or(Ieee80211NegotiatedHeCapabilities()),
                 pathLossDb, hasFreshPathLoss);
     }
 };
@@ -168,6 +166,10 @@ Register_Class(HeTbResponseEvent);
 
 HeHcf::~HeHcf()
 {
+    if (peerAssociationListenerRegistered) {
+        mac->getMib()->removePeerAssociationListener(this);
+        peerAssociationListenerRegistered = false;
+    }
     cancelAndDelete(ulTriggerTimer);
     cancelAndDelete(triggeredUlResponseTimer);
     for (auto& entry : triggeredUlExchanges) {
@@ -221,14 +223,35 @@ void HeHcf::initialize(int stage)
     }
     else if (stage == INITSTAGE_LINK_LAYER && mac->isApInAxMode()) {
         queueBankManager = std::make_unique<StationQueueBankManager>(getSubmodule("queueBanks"));
-        for (const auto& station : mac->getMib()->bssAccessPointData.stations) {
-            if (station.second == Ieee80211Mib::ASSOCIATED)
-                queueBankManager->createQueueBank(station.first);
+        mac->getMib()->addPeerAssociationListener(this);
+        peerAssociationListenerRegistered = true;
+        for (const auto& station : mac->getMib()->getPeerAssociationSnapshots()) {
+            if (station.hasMemberStatus() && station.getMemberStatus() == Ieee80211Mib::ASSOCIATED) {
+                if (station.getAssociationEpoch() == 0)
+                    mac->getMib()->commitPeerAssociation(station.getAddress());
+                else
+                    ensureAssociatedQueueBank(station.getAddress(), station.getAssociationEpoch());
+            }
         }
         WATCH_EXPR("csiTableSummary", getCsiTableSummary());
         if (ulCoordinator->isEnabled())
             scheduleAfter(par("ulTriggerCheckInterval"), ulTriggerTimer);
     }
+}
+
+void HeHcf::peerAssociationChanged(
+        const Ieee80211AssociationState::PeerTransition& transition)
+{
+    const auto& oldSnapshot = transition.getOldSnapshot();
+    const auto& newSnapshot = transition.getNewSnapshot();
+    auto peer = newSnapshot.getAddress();
+    if (oldSnapshot.getAssociationEpoch() != 0) {
+        invalidatePeerDerivedState(peer);
+        queueBankManager->retireQueueBank(peer, oldSnapshot.getAssociationEpoch());
+    }
+    if (newSnapshot.hasMemberStatus() && newSnapshot.getMemberStatus() == Ieee80211Mib::ASSOCIATED)
+        ensureAssociatedQueueBank(peer, newSnapshot.getAssociationEpoch());
+    finalizeRetiredQueueBanksIfSafe();
 }
 
 void HeHcf::emitHeTbResponse(HeTbResponseEvent& event)
@@ -339,6 +362,10 @@ std::string HeHcf::getHeHcfSummary() const
 
 void HeHcf::finish()
 {
+    if (peerAssociationListenerRegistered) {
+        mac->getMib()->removePeerAssociationListener(this);
+        peerAssociationListenerRegistered = false;
+    }
     if (queueBankManager != nullptr) {
         for (const auto& pair : queueBankManager->getQueueBanks()) {
             pair.second->clear();
@@ -349,6 +376,7 @@ void HeHcf::finish()
 
 void HeHcf::handleMessage(cMessage *msg)
 {
+    finalizeRetiredQueueBanksIfSafe();
     if (msg == triggeredUlResponseTimer) {
         handleTriggeredUlResponseTimeout();
         return;
@@ -382,8 +410,11 @@ void HeHcf::handleMessage(cMessage *msg)
 
 queueing::IPacketQueue *HeHcf::getPerStaQueue(const MacAddress& staAddr, AccessCategory ac)
 {
+    finalizeRetiredQueueBanksIfSafe();
     if (queueBankManager != nullptr) {
-        auto staBank = queueBankManager->getQueueBank(staAddr);
+        auto snapshot = mac->getMib()->getPeerAssociationSnapshot(staAddr);
+        auto staBank = snapshot.hasMemberStatus() && snapshot.getMemberStatus() == Ieee80211Mib::ASSOCIATED ?
+                ensureAssociatedQueueBank(staAddr, snapshot.getAssociationEpoch()) : nullptr;
         if (staBank != nullptr) {
             auto staQueue = staBank->getQueue((StationQueueBank::AccessCategory)ac);
             if (staQueue != nullptr) {
@@ -400,24 +431,22 @@ queueing::IPacketQueue *HeHcf::getPerStaQueue(const MacAddress& staAddr, AccessC
     return Hcf::getPerStaQueue(staAddr, ac);
 }
 
-StationQueueBank *HeHcf::createStationQueueBank(const MacAddress& staAddr)
+StationQueueBank *HeHcf::ensureAssociatedQueueBank(const MacAddress& peer, uint64_t associationEpoch)
 {
-    invalidatePeerDerivedState(staAddr);
-    if (queueBankManager == nullptr) {
-        EV_WARN << "Queue bank manager not initialized (not an 802.11ax AP?)\n";
+    if (queueBankManager == nullptr)
         return nullptr;
-    }
-    return queueBankManager->createQueueBank(staAddr);
+    auto snapshot = mac->getMib()->getPeerAssociationSnapshot(peer);
+    if (!snapshot.hasMemberStatus() || snapshot.getMemberStatus() != Ieee80211Mib::ASSOCIATED ||
+            snapshot.getAssociationEpoch() != associationEpoch)
+        return nullptr;
+    return queueBankManager->ensureQueueBank(peer, associationEpoch);
 }
 
-void HeHcf::destroyStationQueueBank(const MacAddress& staAddr)
+void HeHcf::finalizeRetiredQueueBanksIfSafe()
 {
-    invalidatePeerDerivedState(staAddr);
-    if (queueBankManager == nullptr) {
-        EV_WARN << "Queue bank manager not initialized (not an 802.11ax AP?)\n";
-        return;
-    }
-    queueBankManager->destroyQueueBank(staAddr);
+    if (queueBankManager != nullptr &&
+            (frameSequenceHandler == nullptr || !frameSequenceHandler->isSequenceRunning()))
+        queueBankManager->finalizeRetiredQueueBanks();
 }
 
 int HeHcf::retireQueuedPacketsForPeer(const MacAddress& peer)
@@ -447,7 +476,7 @@ int HeHcf::retireQueuedPacketsForPeer(const MacAddress& peer)
     }
     int retired = 0;
     for (auto packet : packets)
-        if (retireQueuedPacket(packet, peer))
+        if (retireQueuedPacket(packet, {peer, queueBankManager == nullptr ? 0 : queueBankManager->getAssociationEpoch(peer)}))
             retired++;
     return retired;
 }
@@ -461,10 +490,12 @@ int HeHcf::retireInProgressPacketsForPeer(const MacAddress& peer)
     return retired;
 }
 
-bool HeHcf::retireQueuedPacket(Packet *packet, const MacAddress& peer)
+bool HeHcf::retireQueuedPacket(Packet *packet,
+        const StationQueueBankManager::AssociationKey& association)
 {
     if (queueBankManager != nullptr) {
-        auto bank = queueBankManager->getQueueBank(peer);
+        auto bank = queueBankManager->getAssociationEpoch(association.first) == association.second ?
+                queueBankManager->getQueueBank(association.first) : nullptr;
         if (bank != nullptr) {
             for (int ac = StationQueueBank::AC_BK; ac <= StationQueueBank::AC_VO; ++ac) {
                 auto queue = bank->getQueue(static_cast<StationQueueBank::AccessCategory>(ac));
@@ -478,6 +509,7 @@ bool HeHcf::retireQueuedPacket(Packet *packet, const MacAddress& peer)
                                         getAckHandler()->retireFrame(header);
                         }
                         queue->removePacket(packet);
+                        packetsPendingRetirement.erase(packet);
                         delete packet;
                         return true;
                     }
@@ -496,6 +528,7 @@ bool HeHcf::retireQueuedPacket(Packet *packet, const MacAddress& peer)
                         edca->getEdcaf(static_cast<AccessCategory>(ac))->
                                 getAckHandler()->retireFrame(header);
                     queue->removePacket(packet);
+                    packetsPendingRetirement.erase(packet);
                     delete packet;
                     return true;
                 }
@@ -518,12 +551,13 @@ bool HeHcf::retireInProgressPacket(Packet *packet)
 
 void HeHcf::retireDeferredPackets()
 {
-    for (const auto& entry : packetsPendingRetirement) {
+    while (!packetsPendingRetirement.empty()) {
+        auto entry = *packetsPendingRetirement.begin();
+        packetsPendingRetirement.erase(packetsPendingRetirement.begin());
         auto packet = entry.first;
         if (!retireQueuedPacket(packet, entry.second))
             retireInProgressPacket(packet);
     }
-    packetsPendingRetirement.clear();
 }
 
 void HeHcf::frameSequenceFinished()
@@ -549,7 +583,8 @@ void HeHcf::invalidatePeerDerivedState(const MacAddress& peer)
                 auto header = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(
                         packet->peekAtFront<Ieee80211MacHeader>());
                 if (header != nullptr && header->getReceiverAddress() == peer)
-                    packetsPendingRetirement[packet] = peer;
+                    packetsPendingRetirement[packet] = {peer,
+                            queueBankManager == nullptr ? 0 : queueBankManager->getAssociationEpoch(peer)};
             }
         }
     }
@@ -580,6 +615,7 @@ bool HeHcf::releaseChannelIfNoFallbackFrame(AccessCategory ac)
 
 void HeHcf::startFrameSequence(AccessCategory ac)
 {
+    finalizeRetiredQueueBanksIfSafe();
     const bool forceSingleUser = forceNextSingleUser[ac];
     if (forceSingleUser) {
         EV_INFO << "Start FS: forced single-user TXOP for AC " << ac << "\n";

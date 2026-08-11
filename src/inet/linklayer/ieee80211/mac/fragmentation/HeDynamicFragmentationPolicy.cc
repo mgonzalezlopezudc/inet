@@ -24,8 +24,8 @@ std::vector<int> HeDynamicFragmentationPolicy::computeFragmentSizes(Packet *fram
         receiverAddress = header->getReceiverAddress();
     }
     else if (mib != nullptr) {
-        if (mib->bssStationData.isAssociated && !mib->bssData.bssid.isUnspecified()) {
-            receiverAddress = mib->bssData.bssid;
+        if (mib->isAssociated() && !mib->getBssid().isUnspecified()) {
+            receiverAddress = mib->getBssid();
         }
         else {
             auto req = frame->findTag<MacAddressReq>();
@@ -35,13 +35,23 @@ std::vector<int> HeDynamicFragmentationPolicy::computeFragmentSizes(Packet *fram
         }
     }
 
-    auto negotiated = !receiverAddress.isUnspecified() && mib != nullptr ? mib->findNegotiatedHeCapabilities(receiverAddress) : nullptr;
+    auto negotiated = !receiverAddress.isUnspecified() && mib != nullptr ? mib->getNegotiatedHeCapabilities(receiverAddress) : std::optional<Ieee80211NegotiatedHeCapabilities>();
 
-    if (negotiated == nullptr || !negotiated->localTxPeerRx.valid ||
+    if (!negotiated || !negotiated->localTxPeerRx.valid ||
             negotiated->localTxPeerRx.receiverDynamicFragmentationLevel < requiredLevel) {
         EV_INFO << "HE dynamic fragmentation suppressed: peer did not negotiate level " << requiredLevel << endl;
         return {};
     }
-    return BasicFragmentationPolicy::computeFragmentSizes(frame);
+    if (header != nullptr && header->getAMsduPresent()) {
+        // IEEE Std 802.11-2024, 26.3.2 and 26.3.3 require additional
+        // A-MSDU Fragmentation Support and ADDBA HE Fragmentation Operation
+        // gating. These fields are not modeled, so support is treated as
+        // absent and A-MSDU dynamic fragmentation is suppressed.
+        EV_INFO << "HE dynamic A-MSDU fragmentation suppressed: required support and ADDBA operation are not modeled" << endl;
+        return {};
+    }
+    // IEEE Std 802.11-2024, 26.3.2 and 26.3.3: only the negotiated,
+    // directional HE dynamic-fragmentation path may fragment an MSDU.
+    return computeFragmentSizesRegardlessOfAmsdu(frame);
 }
 } }

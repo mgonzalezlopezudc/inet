@@ -7,12 +7,151 @@ fresh conservative BSR is positive. The exchange completes with one correlated
 Multi-STA Block Ack. Later out-of-window responses prove that a late responder
 does not contaminate another Trigger transaction.
 
+%file: HeUlProtectionObserver.cc
+
+#include <cstring>
+
+#include "inet/common/Simsignals.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
+#include "inet/linklayer/ieee80211/mac/channelaccess/Edca.h"
+#include "inet/linklayer/ieee80211/mac/channelaccess/Edcaf.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/IIeee80211HeUlTriggerPolicy.h"
+#include "inet/linklayer/ieee80211/mac/originator/TxopProcedure.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+namespace Ieee80211HeUlTriggerExchange_1 {
+
+#define REQUIRE_UL_PROTECTION(condition, message) \
+    do { if (!(condition)) throw cRuntimeError("HE UL protection contract: %s", message); } while (false)
+
+class HeUlProtectionObserver : public cSimpleModule, public cListener
+{
+  protected:
+    Ieee80211Mac *apMac = nullptr;
+    cModule *apRadio = nullptr;
+    TxopProcedure *activeTxop = nullptr;
+    bool rtsSeenInTxop = false;
+    bool expectMultiple = false;
+    bool requireBasic = false;
+    bool requireBsrp = false;
+    bool requireNfrp = false;
+    int basicTriggers = 0;
+    int bsrpTriggers = 0;
+    int nfrpTriggers = 0;
+
+    virtual void initialize() override
+    {
+        expectMultiple = par("expectMultiple");
+        requireBasic = par("requireBasic");
+        requireBsrp = par("requireBsrp");
+        requireNfrp = par("requireNfrp");
+        apMac = check_and_cast<Ieee80211Mac *>(findModuleByPath("^.ap.wlan[0].mac"));
+        apRadio = findModuleByPath("^.ap.wlan[0].radio");
+        REQUIRE_UL_PROTECTION(apRadio != nullptr, "AP radio path is missing");
+        apRadio->subscribe(transmissionStartedSignal, this);
+        for (int ac = AC_BK; ac <= AC_VO; ac++) {
+            auto path = "^.ap.wlan[0].mac.hcf.edca.edcaf[" + std::to_string(ac) + "].txopProcedure";
+            auto txop = check_and_cast<TxopProcedure *>(findModuleByPath(path.c_str()));
+            txop->subscribe(TxopProcedure::txopStartedSignal, this);
+        }
+    }
+
+    virtual void receiveSignal(cComponent *, simsignal_t signal, cObject *value, cObject *) override
+    {
+        if (signal == TxopProcedure::txopStartedSignal) {
+            activeTxop = check_and_cast<TxopProcedure *>(value);
+            rtsSeenInTxop = false;
+            if (expectMultiple)
+                activeTxop->configureProtection(TxopProcedure::InitialProtection::LEGACY_RTS_CTS);
+            return;
+        }
+        if (signal != transmissionStartedSignal)
+            return;
+        auto transmission = check_and_cast<const Ieee80211Transmission *>(value);
+        auto packet = transmission->getPacket();
+        if (!std::strcmp(packet->getName(), "RTS")) {
+            rtsSeenInTxop = true;
+            return;
+        }
+        const bool basic = !std::strcmp(packet->getName(), "HE-Basic-Trigger");
+        const bool bsrp = !std::strcmp(packet->getName(), "HE-BSRP-Trigger");
+        const bool nfrp = !std::strcmp(packet->getName(), "HE-NFRP-Trigger");
+        if (!basic && !bsrp && !nfrp)
+            return;
+
+        REQUIRE_UL_PROTECTION(activeTxop != nullptr && activeTxop->isProtectionConfigured(),
+                "Trigger transmission began before TXOP protection was configured");
+        auto expectedMechanism = expectMultiple ? TxopProcedure::MULTIPLE_PROTECTION : TxopProcedure::SINGLE_PROTECTION;
+        REQUIRE_UL_PROTECTION(activeTxop->getProtectionMechanism() == expectedMechanism,
+                "successful HE UL plan changed the configured protection mechanism");
+        if (!expectMultiple)
+            REQUIRE_UL_PROTECTION(!rtsSeenInTxop,
+                    "InitialProtection::NONE inserted an RTS before the Trigger");
+
+        auto phyHeader = Ieee80211Radio::peekIeee80211PhyHeaderAtFront(packet);
+        auto trigger = packet->peekAt<Ieee80211TriggerFrame>(phyHeader->getChunkLength());
+        // IEEE Std 802.11-2024, 9.2.5.2: the Trigger Duration/ID protects the
+        // SIFS-delayed HE TB response and, except for NFRP, the AP response.
+        auto expectedDuration = apMac->getModeSet()->getSifsTime() + trigger->getCommonDuration();
+        if (!nfrp) {
+            auto maxBlockAckLength = B(18 + 12 * trigger->getUsersArraySize() + 4);
+            expectedDuration += apMac->getModeSet()->getSifsTime() +
+                    apMac->getModeSet()->getSlowestMandatoryMode()->getDuration(maxBlockAckLength);
+        }
+        if (!expectMultiple)
+            REQUIRE_UL_PROTECTION(trigger->getDurationField() == expectedDuration,
+                    "Trigger Duration/ID differs from the existing single-protection calculation");
+        basicTriggers += basic;
+        bsrpTriggers += bsrp;
+        nfrpTriggers += nfrp;
+    }
+
+    virtual void finish() override
+    {
+        REQUIRE_UL_PROTECTION(!requireBasic || basicTriggers > 0, "Basic Trigger path was not reached");
+        REQUIRE_UL_PROTECTION(!requireBsrp || bsrpTriggers > 0, "BSRP Trigger path was not reached");
+        REQUIRE_UL_PROTECTION(!requireNfrp || nfrpTriggers > 0, "NFRP Trigger path was not reached");
+        EV << "HE UL protection contract passed: Basic=" << basicTriggers
+           << ", BSRP=" << bsrpTriggers << ", NFRP=" << nfrpTriggers
+           << ", mechanism=" << (expectMultiple ? "MULTIPLE" : "SINGLE") << "\n";
+    }
+};
+
+Define_Module(HeUlProtectionObserver);
+
+} // namespace Ieee80211HeUlTriggerExchange_1
+
+%file: TestNetwork.ned
+
+import inet.examples.ieee80211ax.ul_ofdma.Lan80211AxUlOfdma;
+simple HeUlProtectionObserver
+{
+    parameters:
+        bool expectMultiple = default(false);
+        bool requireBasic = default(false);
+        bool requireBsrp = default(false);
+        bool requireNfrp = default(false);
+}
+
+network TestNetwork extends Lan80211AxUlOfdma
+{
+    submodules:
+        protectionObserver: HeUlProtectionObserver;
+}
+
 %inifile: omnetpp.ini
 
 [General]
+network = TestNetwork
 ned-path = .;../../../../src;../../../../examples
 sim-time-limit = 400ms
 seed-set = 1
+*.numHosts = 3
 record-vector-results = false
 cmdenv-express-mode = false
 cmdenv-event-banners = false
@@ -35,6 +174,13 @@ cmdenv-event-banners = false
 **.host[*].wlan[*].mac.hcf.edca.edcaf[*].cwMax = 1023
 *.visualizer.typename = ""
 **.numLoInterfaces = 0
+*.protectionObserver.requireBasic = ${scenario=0,1,2} != 1
+*.protectionObserver.requireBsrp = ${scenario} != 1
+*.protectionObserver.requireNfrp = ${scenario} == 1
+*.protectionObserver.expectMultiple = ${scenario} == 2
+**.wlan[*].mib.heNdpFeedbackReport = ${scenario} == 1
+**.ap.wlan[*].mac.hcf.enableNdpFeedbackReport = ${scenario} == 1
+**.ap.wlan[*].mac.hcf.ulTriggerCheckInterval = ${scenario} == 1 ? 20ms : 1ms
 
 include ../../../../examples/ieee80211ax/ul_ofdma/omnetpp.ini
 
@@ -44,10 +190,10 @@ include ../../../../examples/ieee80211ax/ul_ofdma/omnetpp.ini
 Starting HE UL BSRP Trigger [1-9][0-9]* with [1-9][0-9]* RU allocations
 
 %contains-regex: stdout
-Starting HE UL Basic Trigger [1-9][0-9]* with 1 RU allocations
+Starting HE UL Basic Trigger [1-9][0-9]* with [1-9][0-9]* RU allocations
 
 %contains-regex: stdout
-Committed HE UL schedule: scheduledUsers=1, randomAccessRUs=0, commonDuration=
+Committed HE UL schedule: scheduledUsers=[1-9][0-9]*, randomAccessRUs=0, commonDuration=
 
 %contains-regex: stdout
 Sending HE-TB response: trigger=[1-9][0-9]*, AID=[1-9][0-9]*, scheduled RU=[1-9][0-9]*, packets=[1-9][0-9]*
@@ -65,7 +211,7 @@ Applied correlated Multi-STA Block Ack: trigger=[1-9][0-9]*, AID=[1-9][0-9]*, TI
 Transmitting, frame = .*HE-Multi-STA-BlockAck
 
 %contains-regex: stdout
-HE UL response processing: received=0, block-ack records=3
+HE UL response processing: received=0, block-ack records=[1-9][0-9]*
 
 %contains-regex: stdout
 Discarding HE-TB response outside active Trigger collection

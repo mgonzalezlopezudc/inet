@@ -22,6 +22,7 @@ class INET_API BasicFragmentationPolicy : public IFragmentationPolicy, public Si
 
   protected:
     virtual void initialize() override;
+    virtual std::vector<int> computeFragmentSizesRegardlessOfAmsdu(Packet *frame);
 
   public:
     virtual std::vector<int> computeFragmentSizes(Packet *frame) override;
@@ -31,4 +32,3 @@ class INET_API BasicFragmentationPolicy : public IFragmentationPolicy, public Si
 } // namespace inet
 
 #endif
-

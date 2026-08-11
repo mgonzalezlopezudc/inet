@@ -135,8 +135,8 @@ Packet *VhtDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         if (mode == nullptr)
             throw cRuntimeError("No legal VHT mode for DL MU user");
         auto vhtMode = check_and_cast<const Ieee80211VhtMode *>(mode);
-        auto negotiated = mac->getMib()->findNegotiatedVhtCapabilities(user.peer);
-        if (negotiated == nullptr || !negotiated->localTxPeerRx.valid)
+        auto negotiated = mac->getMib()->getNegotiatedVhtCapabilities(user.peer);
+        if (!negotiated || !negotiated->localTxPeerRx.valid)
             throw VhtDlMuStalePlan("VHT DL MU peer capabilities changed before preparation");
         int maxAmpduLengthExponent = negotiated->localTxPeerRx.receiverMaxAmpduLengthExponent;
         auto policy = check_and_cast<cModule *>(dataService)->getSubmodule("mpduAggregationPolicy");

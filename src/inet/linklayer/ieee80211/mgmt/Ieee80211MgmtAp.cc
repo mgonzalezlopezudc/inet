@@ -18,7 +18,6 @@
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequenceHandler.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
-#include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211SubtypeTag_m.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211HeMgmtElements.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211HtVhtMgmtElements.h"
@@ -275,7 +274,7 @@ void Ieee80211MgmtAp::sendTwtActionFrame(const char *name, const Ptr<Ieee80211Ac
     auto packet = new Packet(name);
     frame->setReceiverAddress(destAddr);
     frame->setTransmitterAddress(mib->address);
-    frame->setAddress3(mib->bssData.bssid);
+    frame->setAddress3(mib->getBssid());
     packet->insertAtFront(frame);
     sendDown(packet);
 }
@@ -344,7 +343,7 @@ void Ieee80211MgmtAp::handleAuthenticationFrame(Packet *packet, const Ptr<const 
         MacAddress staAddress = header->getTransmitterAddress();
         sta = &staList[staAddress]; // this implicitly creates a new entry
         sta->address = staAddress;
-        mib->bssAccessPointData.stations[staAddress] = Ieee80211Mib::NOT_AUTHENTICATED;
+        mib->setPeerMemberStatus(staAddress, Ieee80211Mib::NOT_AUTHENTICATED);
         sta->authSeqExpected = 1;
     }
 
@@ -357,7 +356,9 @@ void Ieee80211MgmtAp::handleAuthenticationFrame(Packet *packet, const Ptr<const 
     // making the MN STA to start the handover process all over again.
     if (frameAuthSeq == 1) {
         invalidatePeerState(sta->address);
-        if (mib->bssAccessPointData.stations[sta->address] == Ieee80211Mib::ASSOCIATED) {
+        bool wasAssociated = mib->isPeerAssociated(sta->address);
+        if (wasAssociated) {
+            mib->clearPeerAssociation(sta->address, Ieee80211Mib::NOT_AUTHENTICATED);
             sendDisAssocNotification(sta->address);
             mib->releaseAssociationId(sta->address);
 
@@ -374,8 +375,8 @@ void Ieee80211MgmtAp::handleAuthenticationFrame(Packet *packet, const Ptr<const 
                 EV_DEBUG << "Could not get MAC module for queue bank destruction: " << e.what() << "\n";
             }
         }
-        mib->bssAccessPointData.stations[sta->address] = Ieee80211Mib::NOT_AUTHENTICATED;
-        mib->releaseAssociationId(sta->address);
+        else
+            mib->setPeerMemberStatus(sta->address, Ieee80211Mib::NOT_AUTHENTICATED);
         sta->authSeqExpected = 1;
     }
 
@@ -408,8 +409,11 @@ void Ieee80211MgmtAp::handleAuthenticationFrame(Packet *packet, const Ptr<const 
 
     // update status
     if (isLast) {
-        if (mib->bssAccessPointData.stations[sta->address] == Ieee80211Mib::ASSOCIATED) {
+        bool wasAssociated = mib->isPeerAssociated(sta->address);
+        if (wasAssociated)
             invalidatePeerState(sta->address);
+        if (wasAssociated) {
+            mib->clearPeerAssociation(sta->address, Ieee80211Mib::AUTHENTICATED);
             sendDisAssocNotification(sta->address);
             mib->releaseAssociationId(sta->address);
 
@@ -427,7 +431,8 @@ void Ieee80211MgmtAp::handleAuthenticationFrame(Packet *packet, const Ptr<const 
             }
             mib->releaseAssociationId(sta->address);
         }
-        mib->bssAccessPointData.stations[sta->address] = Ieee80211Mib::AUTHENTICATED; // TODO only when ACK of this frame arrives
+        else
+            mib->setPeerMemberStatus(sta->address, Ieee80211Mib::AUTHENTICATED); // TODO only when ACK of this frame arrives
         EV << "STA authenticated\n";
     }
     else {
@@ -446,7 +451,9 @@ void Ieee80211MgmtAp::handleDeauthenticationFrame(Packet *packet, const Ptr<cons
     if (sta) {
         invalidatePeerState(sta->address);
         // mark STA as not authenticated; alternatively, it could also be removed from staList
-        if (mib->bssAccessPointData.stations[sta->address] == Ieee80211Mib::ASSOCIATED) {
+        bool wasAssociated = mib->isPeerAssociated(sta->address);
+        if (wasAssociated) {
+            mib->clearPeerAssociation(sta->address, Ieee80211Mib::NOT_AUTHENTICATED);
             sendDisAssocNotification(sta->address);
             mib->releaseAssociationId(sta->address);
 
@@ -463,8 +470,8 @@ void Ieee80211MgmtAp::handleDeauthenticationFrame(Packet *packet, const Ptr<cons
                 EV_DEBUG << "Could not get MAC module for queue bank destruction: " << e.what() << "\n";
             }
         }
-        mib->bssAccessPointData.stations[sta->address] = Ieee80211Mib::NOT_AUTHENTICATED;
-        mib->releaseAssociationId(sta->address);
+        else
+            mib->setPeerMemberStatus(sta->address, Ieee80211Mib::NOT_AUTHENTICATED);
         sta->authSeqExpected = 1;
     }
 }
@@ -475,7 +482,7 @@ void Ieee80211MgmtAp::handleAssociationRequestFrame(Packet *packet, const Ptr<co
 
     // "11.3.2 AP association procedures"
     StaInfo *sta = lookupSenderSTA(header);
-    if (!sta || mib->bssAccessPointData.stations[sta->address] == Ieee80211Mib::NOT_AUTHENTICATED) {
+    if (!sta || mib->isPeerNotAuthenticated(sta->address)) {
         // STA not authenticated: send error and return
         const auto& body = makeShared<Ieee80211DeauthenticationFrame>();
         body->setReasonCode(RC_NONAUTH_ASS_REQUEST);
@@ -504,6 +511,13 @@ void Ieee80211MgmtAp::handleAssociationRequestFrame(Packet *packet, const Ptr<co
         mib->removePeerVhtCapabilities(sta->address);
     delete packet;
 
+    // Mark STA as associated and allocate its AID before notifying synchronous listeners.
+    bool wasAssociated = mib->isPeerAssociated(sta->address);
+    auto association = mib->commitPeerAssociation(sta->address); // TODO commit when the MAC receives the response ACK
+    short associationId = association.getAssociationId();
+    if (!wasAssociated)
+        sendAssocNotification(sta->address);
+
     // Create per-STA queue bank only for APs operating in ax mode.
     try {
         cModule *macModule = getModuleFromPar<cModule>(par("macModule"), this);
@@ -524,7 +538,7 @@ void Ieee80211MgmtAp::handleAssociationRequestFrame(Packet *packet, const Ptr<co
     // send OK response
     const auto& body = makeShared<Ieee80211AssociationResponseFrame>();
     body->setStatusCode(SC_SUCCESSFUL);
-    body->setAid(mib->allocateAssociationId(sta->address));
+    body->setAid(associationId);
     addLegacyRateElements(body);
     if (isHeManagementSupported())
         addApHeManagementElements(body, mib);
@@ -544,7 +558,7 @@ void Ieee80211MgmtAp::handleReassociationRequestFrame(Packet *packet, const Ptr<
 
     // "11.3.4 AP reassociation procedures" -- almost the same as AssociationRequest processing
     StaInfo *sta = lookupSenderSTA(header);
-    if (!sta || mib->bssAccessPointData.stations[sta->address] == Ieee80211Mib::NOT_AUTHENTICATED) {
+    if (!sta || mib->isPeerNotAuthenticated(sta->address)) {
         // STA not authenticated: send error and return
         const auto& body = makeShared<Ieee80211DeauthenticationFrame>();
         body->setReasonCode(RC_NONAUTH_ASS_REQUEST);
@@ -572,6 +586,10 @@ void Ieee80211MgmtAp::handleReassociationRequestFrame(Packet *packet, const Ptr<
         mib->removePeerVhtCapabilities(sta->address);
     delete packet;
 
+    // Mark STA as associated and allocate its AID before sending the response.
+    auto association = mib->commitPeerAssociation(sta->address); // TODO commit when the MAC receives the response ACK
+    short associationId = association.getAssociationId();
+
     // Create per-STA queue bank only for APs operating in ax mode.
     try {
         cModule *macModule = getModuleFromPar<cModule>(par("macModule"), this);
@@ -592,7 +610,7 @@ void Ieee80211MgmtAp::handleReassociationRequestFrame(Packet *packet, const Ptr<
     // send OK response
     const auto& body = makeShared<Ieee80211ReassociationResponseFrame>();
     body->setStatusCode(SC_SUCCESSFUL);
-    body->setAid(mib->allocateAssociationId(sta->address));
+    body->setAid(associationId);
     addLegacyRateElements(body);
     if (isHeManagementSupported())
         addApHeManagementElements(body, mib);
@@ -613,35 +631,18 @@ void Ieee80211MgmtAp::handleDisassociationFrame(Packet *packet, const Ptr<const 
 
     if (sta) {
         invalidatePeerState(sta->address);
-        if (mib->bssAccessPointData.stations[sta->address] == Ieee80211Mib::ASSOCIATED)
+        bool wasAssociated = mib->isPeerAssociated(sta->address);
+        if (wasAssociated) {
+            mib->clearPeerAssociation(sta->address, Ieee80211Mib::AUTHENTICATED);
             sendDisAssocNotification(sta->address);
-        mib->bssAccessPointData.stations[sta->address] = Ieee80211Mib::AUTHENTICATED;
-        mib->releaseAssociationId(sta->address);
-
-        // Destroy per-STA queue bank only for APs operating in ax mode.
-        try {
-            cModule *macModule = getModuleFromPar<cModule>(par("macModule"), this);
-            if (macModule) {
-                Ieee80211Mac *mac = check_and_cast<Ieee80211Mac *>(macModule);
-                if (mac->isApInAxMode())
-                    mac->destroyStationQueueBank(sta->address);
-            }
         }
-        catch (const cException &e) {
-            EV_DEBUG << "Could not get MAC module for queue bank destruction: " << e.what() << "\n";
-        }
+        else
+            mib->setPeerMemberStatus(sta->address, Ieee80211Mib::AUTHENTICATED);
     }
 }
 
 void Ieee80211MgmtAp::invalidatePeerState(const MacAddress& peer)
 {
-    try {
-        if (auto macModule = getModuleFromPar<cModule>(par("macModule"), this))
-            check_and_cast<Ieee80211Mac *>(macModule)->invalidatePeerDerivedState(peer);
-    }
-    catch (const cException& e) {
-        EV_DEBUG << "Could not invalidate MAC-derived peer state: " << e.what() << "\n";
-    }
     mib->removePeerCapabilities(peer);
 }
 
@@ -695,9 +696,8 @@ void Ieee80211MgmtAp::handleActionFrame(Packet *packet, const Ptr<const Ieee8021
         response->setTwtRequest(false);
         TwtAgreement agreement = makeTwtAgreement(setup, header->getTransmitterAddress());
         bool peerSupportsTwt = false;
-        if (auto it = mib->bssAccessPointData.advertisedHeCapabilities.find(agreement.peerAddress);
-                it != mib->bssAccessPointData.advertisedHeCapabilities.end())
-            peerSupportsTwt = it->second.twtRequester || (agreement.broadcast && it->second.broadcastTwt);
+        if (auto advertised = mib->getPeerCapabilitySnapshot(agreement.peerAddress).getAdvertisedHe())
+            peerSupportsTwt = advertised->twtRequester || (agreement.broadcast && advertised->broadcastTwt);
 
         bool accepted = manager != nullptr && manager->isEnabled() && mib->localHeCapabilities.twtResponder && peerSupportsTwt;
         if (agreement.broadcast) {

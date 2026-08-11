@@ -147,8 +147,8 @@ auto inProgress = check_and_cast<TestInProgressFrames *>(
         nic->getSubmodule("inProgress"));
 MacAddress localAddress = mac->getAddress();
 MacAddress peerAddress("02:00:00:00:00:01");
-mib->bssStationData.stationType = Ieee80211Mib::STATION;
-mib->bssStationData.associationId = 7;
+mib->setBssStationType(Ieee80211Mib::STATION);
+mib->installLocalAssociation(mib->getSsid(), mib->getBssid(), 7);
 
 auto completesExchange = [&] (Packet *response) {
     FrameSequenceContext context(localAddress, nullptr, inProgress,

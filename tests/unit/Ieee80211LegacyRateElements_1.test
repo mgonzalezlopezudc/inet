@@ -242,8 +242,8 @@ for (int i = 0; i < 8; ++i)
     mib->vhtOperation.basicMcsNss.maxMcsPerNss[i] = i;
 MacAddress peer("02:00:00:00:00:44");
 mib->setPeerLegacyRates(peer, supported, extended);
-auto peerRates = mib->findPeerLegacyRates(peer);
-REQUIRE(peerRates != nullptr && peerRates->size() == 11);
+auto peerRates = mib->getPeerLegacyRates(peer);
+REQUIRE(peerRates && peerRates->size() == 11);
 auto preservedFirstRate = (*peerRates)[0];
 Ieee80211ExtendedSupportedRatesElement invalidPeerExtended;
 invalidPeerExtended.numRates = 2;
@@ -257,8 +257,8 @@ catch (const cRuntimeError&) {
     rejectedPeerUpdate = true;
 }
 REQUIRE(rejectedPeerUpdate);
-peerRates = mib->findPeerLegacyRates(peer);
-REQUIRE(peerRates != nullptr && peerRates->size() == 11 &&
+peerRates = mib->getPeerLegacyRates(peer);
+REQUIRE(peerRates && peerRates->size() == 11 &&
         (*peerRates)[0].rate == preservedFirstRate.rate &&
         (*peerRates)[0].basic == preservedFirstRate.basic);
 MacAddress malformedNewPeer("02:00:00:00:00:45");
@@ -269,11 +269,11 @@ try {
 catch (const cRuntimeError&) {
     rejectedNewPeer = true;
 }
-REQUIRE(rejectedNewPeer && mib->findPeerLegacyRates(malformedNewPeer) == nullptr);
+REQUIRE(rejectedNewPeer && !mib->getPeerLegacyRates(malformedNewPeer));
 for (int i = 0; i < 8; ++i)
     REQUIRE(mib->vhtOperation.basicMcsNss.maxMcsPerNss[i] == i);
 mib->removePeerCapabilities(peer);
-REQUIRE(mib->findPeerLegacyRates(peer) == nullptr);
+REQUIRE(!mib->getPeerLegacyRates(peer));
 EV << "MIB owns peer advertisements and removes them without changing the VHT basic MCS/NSS map.\n";
 
 %contains: stdout

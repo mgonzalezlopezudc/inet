@@ -31,6 +31,7 @@ namespace inet {
 namespace ieee80211 {
 
 Define_Module(Ieee80211Mib);
+simsignal_t Ieee80211Mib::peerAssociationChangedSignal = cComponent::registerSignal("peerAssociationChanged");
 
 void Ieee80211Mib::updateLocalOperationalRates(const physicallayer::Ieee80211ModeSet *modeSet)
 {
@@ -106,18 +107,18 @@ void Ieee80211Mib::initialize(int stage)
         WATCH(address);
         WATCH(mode);
         WATCH(qos);
-        WATCH(bssData.bssid);
-        WATCH(bssStationData.stationType);
-        WATCH(bssStationData.isAssociated);
-        WATCH(bssStationData.associationId);
-        WATCH(bssAccessPointData.stations);
-        WATCH(bssAccessPointData.associationIds);
+        WATCH_EXPR("bssid", getBssid());
+        WATCH_EXPR("stationType", getStationType());
+        WATCH_EXPR("isAssociated", isAssociated());
+        WATCH_EXPR("associationId", getLocalAssociationId());
+        WATCH_EXPR("peerAssociationCount", getPeerAssociationSnapshots().size());
+        WATCH_EXPR("peerAssociations", getPeerAssociationSummary());
         WATCH_EXPR("modeStr", getModeStr(mode));
-        WATCH_EXPR("stationTypeStr", getStationTypeStr(bssStationData.stationType));
+        WATCH_EXPR("stationTypeStr", getStationTypeStr(getStationType()));
         WATCH_EXPR("qosStr", qos ? ", QoS" : ", Non-QoS");
         WATCH_EXPR("ssidStr", getSsidStr());
-        WATCH_EXPR("ssid", bssData.ssid.empty() ? std::string("-") : bssData.ssid); // associated SSID ("-" if none), for node display strings
-        WATCH_EXPR("associatedStr", bssStationData.stationType == STATION ? (bssStationData.isAssociated ? "\nAssociated" : "\nNot associated") : "");
+        WATCH_EXPR("ssid", getSsid().empty() ? std::string("-") : getSsid()); // associated SSID ("-" if none), for node display strings
+        WATCH_EXPR("associatedStr", getStationType() == STATION ? (isAssociated() ? "\nAssociated" : "\nNot associated") : "");
 
         // Initialize local VHT capabilities
         localVhtCapabilities.ldpc = par("vhtLdpc").boolValue();
@@ -380,12 +381,10 @@ void Ieee80211Mib::initialize(int stage)
         WATCH(ehtOperation.disabledSubchannelBitmap);
         WATCH(ehtOperation.basicEhtMcsNss);
         WATCH(ehtOperation.mcs15Disabled);
-        WATCH_MAP(bssAccessPointData.links);
-        WATCH_MAP(bssAccessPointData.advertisedHeCapabilities);
-        WATCH_MAP(bssAccessPointData.negotiatedHeCapabilities);
-        WATCH_MAP(bssAccessPointData.advertisedEhtCapabilities);
-        WATCH_MAP(bssAccessPointData.negotiatedEhtCapabilities);
-        WATCH_MAP(bssAccessPointData.advertisedLegacyRates);
+        WATCH_EXPR("peerCapabilityCount", getPeerCapabilitySnapshots().size());
+        WATCH_EXPR("peerCapabilities", getPeerCapabilitySummary());
+        WATCH_EXPR("peerLinkCount", getPeerLinkSnapshots().size());
+        WATCH_EXPR("peerLinks", getPeerLinkSummary());
         WATCH_EXPR("heCapabilitiesSummary", getHeCapabilitiesSummary());
         WATCH_EXPR("heOperationSummary", getHeOperationSummary());
         WATCH_EXPR("ehtCapabilitiesSummary", getEhtCapabilitiesSummary());
@@ -458,8 +457,8 @@ void Ieee80211Mib::initialize(int stage)
 int Ieee80211Mib::getNegotiatedHePeerCount() const
 {
     int count = 0;
-    for (const auto& entry : bssAccessPointData.negotiatedHeCapabilities)
-        if (entry.second.localTxPeerRx.valid || entry.second.localRxPeerTx.valid)
+    for (const auto& peer : getPeerCapabilitySnapshots())
+        if (peer.getNegotiatedHe() && (peer.getNegotiatedHe()->localTxPeerRx.valid || peer.getNegotiatedHe()->localRxPeerTx.valid))
             count++;
     return count;
 }
@@ -467,8 +466,8 @@ int Ieee80211Mib::getNegotiatedHePeerCount() const
 int Ieee80211Mib::getNegotiatedEhtPeerCount() const
 {
     int count = 0;
-    for (const auto& entry : bssAccessPointData.negotiatedEhtCapabilities)
-        if (entry.second.valid)
+    for (const auto& peer : getPeerCapabilitySnapshots())
+        if (peer.getNegotiatedEht() && peer.getNegotiatedEht()->valid)
             count++;
     return count;
 }
@@ -533,102 +532,227 @@ std::string Ieee80211Mib::getEhtOperationSummary() const
     return stream.str();
 }
 
+std::string Ieee80211Mib::getPeerCapabilitySummary() const
+{
+    std::stringstream stream;
+    bool first = true;
+    for (const auto& peer : getPeerCapabilitySnapshots()) {
+        if (!first)
+            stream << "; ";
+        first = false;
+        stream << peer.getAddress() << "{HT=" << (peer.getAdvertisedHt() ? "yes" : "no")
+               << ",VHT=" << (peer.getAdvertisedVht() ? "yes" : "no")
+               << ",HE=" << (peer.getAdvertisedHe() ? "yes" : "no")
+               << ",EHT=" << (peer.getAdvertisedEht() ? "yes" : "no")
+               << ",rates=" << (peer.getLegacyRates() ? peer.getLegacyRates()->size() : 0)
+               << ",generation=" << peer.getGeneration() << "}";
+    }
+    return stream.str();
+}
+
+std::string Ieee80211Mib::getPeerLinkSummary() const
+{
+    std::stringstream stream;
+    bool first = true;
+    for (const auto& link : getPeerLinkSnapshots()) {
+        if (!first)
+            stream << "; ";
+        first = false;
+        stream << link.getAddress() << "{valid=" << (link.isValid() ? "yes" : "no")
+               << ",txPower=" << link.getTransmitPowerDbm()
+               << ",rxPower=" << link.getReceivedPowerDbm()
+               << ",pathLoss=" << link.getPathLossDb()
+               << ",generation=" << link.getGeneration() << "}";
+    }
+    return stream.str();
+}
+
 std::string Ieee80211Mib::getSsidStr() const
 {
     if (mode == INFRASTRUCTURE)
-        return "\nSSID: " + bssData.ssid + ", " + bssData.bssid.str();
+        return "\nSSID: " + getSsid() + ", " + getBssid().str();
     return "";
+}
+
+Ieee80211Mib::LocalAssociationSnapshot Ieee80211Mib::getLocalAssociationSnapshot() const
+{
+    return associationState.getLocalSnapshot();
+}
+
+Ieee80211Mib::PeerAssociationSnapshot Ieee80211Mib::getPeerAssociationSnapshot(const MacAddress& address) const
+{
+    return associationState.getPeerSnapshot(address);
+}
+
+std::vector<Ieee80211Mib::PeerAssociationSnapshot> Ieee80211Mib::getPeerAssociationSnapshots() const
+{
+    return associationState.getPeerSnapshots();
+}
+
+std::string Ieee80211Mib::getPeerAssociationSummary() const
+{
+    std::stringstream stream;
+    bool first = true;
+    for (const auto& peer : getPeerAssociationSnapshots()) {
+        if (!first)
+            stream << "; ";
+        first = false;
+        stream << peer.getAddress() << "{status=";
+        if (!peer.hasMemberStatus())
+            stream << "-";
+        else
+            switch (peer.getMemberStatus()) {
+                case NOT_AUTHENTICATED: stream << "NOT_AUTHENTICATED"; break;
+                case AUTHENTICATED: stream << "AUTHENTICATED"; break;
+                case ASSOCIATED: stream << "ASSOCIATED"; break;
+                default: stream << "INVALID"; break;
+            }
+        stream << ",aid=";
+        if (peer.hasAssociationId())
+            stream << peer.getAssociationId();
+        else
+            stream << "-";
+        stream << ",generation=" << peer.getGeneration() << "}";
+    }
+    return stream.str();
+}
+
+bool Ieee80211Mib::isPeerAssociated(const MacAddress& address) const
+{
+    auto snapshot = getPeerAssociationSnapshot(address);
+    return snapshot.hasMemberStatus() && snapshot.getMemberStatus() == ASSOCIATED;
+}
+
+bool Ieee80211Mib::isPeerNotAuthenticated(const MacAddress& address) const
+{
+    auto snapshot = getPeerAssociationSnapshot(address);
+    return !snapshot.hasMemberStatus() || snapshot.getMemberStatus() == NOT_AUTHENTICATED;
+}
+
+void Ieee80211Mib::setBssStationType(BssStationType stationType)
+{
+    associationState.setStationType(stationType);
+}
+
+void Ieee80211Mib::setBssIdentity(const std::string& ssid, const MacAddress& bssid)
+{
+    associationState.setBssIdentity(ssid, bssid);
+}
+
+void Ieee80211Mib::installLocalAssociation(const std::string& ssid, const MacAddress& bssid, short associationId)
+{
+    associationState.installLocalAssociation(ssid, bssid, associationId);
+}
+
+void Ieee80211Mib::clearLocalAssociation()
+{
+    associationState.clearLocalAssociation();
+}
+
+void Ieee80211Mib::setPeerMemberStatus(const MacAddress& address, BssMemberStatus memberStatus)
+{
+    if (memberStatus == ASSOCIATED)
+        throw cRuntimeError("Use commitPeerAssociation() to associate an IEEE 802.11 peer");
+    associationState.setPeerMemberStatus(address, memberStatus);
+}
+
+Ieee80211Mib::PeerAssociationSnapshot Ieee80211Mib::commitPeerAssociation(const MacAddress& address)
+{
+    auto transition = associationState.commitPeerAssociation(address);
+    auto listeners = peerAssociationListeners;
+    for (auto listener : listeners)
+        listener->peerAssociationChanged(transition);
+    Ieee80211PeerAssociationChangedEvent event(transition);
+    emit(peerAssociationChangedSignal, &event);
+    return transition.getNewSnapshot();
+}
+
+Ieee80211Mib::PeerAssociationSnapshot Ieee80211Mib::clearPeerAssociation(
+        const MacAddress& address, BssMemberStatus memberStatus)
+{
+    removePeerCapabilities(address);
+    auto transition = associationState.clearPeerAssociation(address, memberStatus);
+    if (transition.getAssociationEpoch() != 0) {
+        auto listeners = peerAssociationListeners;
+        for (auto listener : listeners)
+            listener->peerAssociationChanged(transition);
+        Ieee80211PeerAssociationChangedEvent event(transition);
+        emit(peerAssociationChangedSignal, &event);
+    }
+    return transition.getNewSnapshot();
+}
+
+void Ieee80211Mib::addPeerAssociationListener(IIeee80211PeerAssociationListener *listener)
+{
+    if (listener == nullptr)
+        throw cRuntimeError("Cannot register a null IEEE 802.11 peer association listener");
+    if (std::find(peerAssociationListeners.begin(), peerAssociationListeners.end(), listener) == peerAssociationListeners.end())
+        peerAssociationListeners.push_back(listener);
+}
+
+void Ieee80211Mib::removePeerAssociationListener(IIeee80211PeerAssociationListener *listener)
+{
+    peerAssociationListeners.erase(
+            std::remove(peerAssociationListeners.begin(), peerAssociationListeners.end(), listener),
+            peerAssociationListeners.end());
 }
 
 void Ieee80211Mib::setStationTransmitPower(const MacAddress& address, double transmitPowerDbm)
 {
-    auto& link = bssAccessPointData.links[address];
-    link.transmitPowerDbm = transmitPowerDbm;
-    if (!std::isnan(link.receivedPowerDbm)) {
-        link.pathLossDb = link.transmitPowerDbm - link.receivedPowerDbm;
-        link.valid = true;
-    }
+    peerLinkState.setTransmitPower(address, transmitPowerDbm);
 }
 
 void Ieee80211Mib::updateStationReceivedPower(const MacAddress& address, units::values::W receivedPower)
 {
-    if (receivedPower.get() <= 0)
-        return;
-    auto& link = bssAccessPointData.links[address];
-    link.receivedPowerDbm = 10 * std::log10(receivedPower.get() / 1e-3);
-    link.pathLossDb = link.transmitPowerDbm - link.receivedPowerDbm;
-    link.lastUpdate = simTime();
-    link.valid = true;
+    peerLinkState.updateReceivedPower(address, receivedPower, simTime());
 }
 
-const Ieee80211Mib::BssAccessPointData::LinkData *Ieee80211Mib::findStationLink(const MacAddress& address) const
+std::optional<Ieee80211Mib::PeerLinkSnapshot> Ieee80211Mib::getPeerLinkSnapshot(const MacAddress& address) const
 {
-    auto it = bssAccessPointData.links.find(address);
-    return it == bssAccessPointData.links.end() ? nullptr : &it->second;
+    return peerLinkState.getSnapshot(address);
 }
 
-short Ieee80211Mib::allocateAssociationId(const MacAddress& address)
+std::vector<Ieee80211Mib::PeerLinkSnapshot> Ieee80211Mib::getPeerLinkSnapshots() const
 {
-    auto existing = bssAccessPointData.associationIds.find(address);
-    if (existing != bssAccessPointData.associationIds.end())
-        return existing->second;
-    for (short aid = 1; aid <= 2007; aid++) {
-        bool used = false;
-        for (const auto& entry : bssAccessPointData.associationIds)
-            if (entry.second == aid) {
-                used = true;
-                break;
-            }
-        if (!used) {
-            bssAccessPointData.associationIds[address] = aid;
-            return aid;
-        }
-    }
-    throw cRuntimeError("No IEEE 802.11 association ID is available");
+    return peerLinkState.getSnapshots();
 }
 
-void Ieee80211Mib::releaseAssociationId(const MacAddress& address)
+Ieee80211Mib::PeerCapabilitySnapshot Ieee80211Mib::getPeerCapabilitySnapshot(const MacAddress& address) const
 {
-    bssAccessPointData.associationIds.erase(address);
-    removePeerCapabilities(address);
+    return peerCapabilityState.getSnapshot(address);
+}
+
+std::vector<Ieee80211Mib::PeerCapabilitySnapshot> Ieee80211Mib::getPeerCapabilitySnapshots() const
+{
+    return peerCapabilityState.getSnapshots();
 }
 
 short Ieee80211Mib::getAssociationId(const MacAddress& address) const
 {
-    auto it = bssAccessPointData.associationIds.find(address);
-    return it == bssAccessPointData.associationIds.end() ? -1 : it->second;
+    return associationState.getAssociationId(address);
 }
 
 MacAddress Ieee80211Mib::getStationAddress(short associationId) const
 {
-    for (const auto& entry : bssAccessPointData.associationIds)
-        if (entry.second == associationId)
-            return entry.first;
-    return MacAddress::UNSPECIFIED_ADDRESS;
+    return associationState.getStationAddress(associationId);
 }
 
 void Ieee80211Mib::setPeerHeCapabilities(const MacAddress& address,
         const Ieee80211HeCapabilities& capabilities, const Ieee80211HeOperation& operation)
 {
-    bssAccessPointData.advertisedHeCapabilities[address] = capabilities;
-    bssAccessPointData.negotiatedHeCapabilities[address] =
+    peerCapabilityState.setHe(address, capabilities,
             negotiateHeCapabilities(localHeCapabilities, capabilities, operation,
-                    bssStationData.stationType == ACCESS_POINT);
+                    getStationType() == ACCESS_POINT));
 }
 
 void Ieee80211Mib::removePeerHeCapabilities(const MacAddress& address)
 {
-    bssAccessPointData.advertisedHeCapabilities.erase(address);
-    bssAccessPointData.negotiatedHeCapabilities.erase(address);
+    peerCapabilityState.removeHe(address);
 }
 
 void Ieee80211Mib::removePeerCapabilities(const MacAddress& address)
 {
-    removePeerHeCapabilities(address);
-    removePeerEhtCapabilities(address);
-    removePeerVhtCapabilities(address);
-    removePeerHtCapabilities(address);
-    bssAccessPointData.advertisedLegacyRates.erase(address);
+    peerCapabilityState.removeAll(address);
 }
 
 Ieee80211SupportedRatesElement Ieee80211Mib::getSupportedRatesElement() const
@@ -670,19 +794,18 @@ void Ieee80211Mib::setPeerLegacyRates(const MacAddress& address,
             throw cRuntimeError("Malformed peer extended legacy rate code");
         else
             rates.push_back(extendedSupportedRates.rates[i]);
-    bssAccessPointData.advertisedLegacyRates[address] = std::move(rates);
+    peerCapabilityState.setLegacyRates(address, rates);
 }
 
-const std::vector<Ieee80211LegacyRate> *Ieee80211Mib::findPeerLegacyRates(
+std::optional<std::vector<Ieee80211LegacyRate>> Ieee80211Mib::getPeerLegacyRates(
         const MacAddress& address) const
 {
-    auto it = bssAccessPointData.advertisedLegacyRates.find(address);
-    return it == bssAccessPointData.advertisedLegacyRates.end() ? nullptr : &it->second;
+    return peerCapabilityState.getSnapshot(address).getLegacyRates();
 }
 
 std::vector<Ieee80211LegacyRate> Ieee80211Mib::getBssBasicLegacyRates() const
 {
-    if (bssStationData.stationType == STATION)
+    if (getStationType() == STATION)
         return currentBssBasicRates;
     if (!localBssBasicRates.empty())
         return localBssBasicRates;
@@ -714,11 +837,10 @@ void Ieee80211Mib::installCurrentBssBasicLegacyRates(
     currentBssBasicRates = std::move(rates);
 }
 
-const Ieee80211NegotiatedHeCapabilities *Ieee80211Mib::findNegotiatedHeCapabilities(
+std::optional<Ieee80211NegotiatedHeCapabilities> Ieee80211Mib::getNegotiatedHeCapabilities(
         const MacAddress& address) const
 {
-    auto it = bssAccessPointData.negotiatedHeCapabilities.find(address);
-    return it == bssAccessPointData.negotiatedHeCapabilities.end() ? nullptr : &it->second;
+    return peerCapabilityState.getSnapshot(address).getNegotiatedHe();
 }
 
 bool Ieee80211Mib::isHeModeAllowedForPeer(const physicallayer::IIeee80211Mode *mode,
@@ -740,12 +862,10 @@ bool Ieee80211Mib::isHeModeAllowedForPeer(const physicallayer::IIeee80211Mode *m
         return (!extendedRangeSu || !heOperation.erSuDisable) &&
                 heOperation.basicHeMcsNss >= mcs &&
                 dataMode->getBandwidth() <= heOperation.operatingChannelWidth;
-    auto station = bssAccessPointData.stations.find(peerAddress);
-    if (!bssStationData.isAssociated &&
-            (station == bssAccessPointData.stations.end() || station->second != ASSOCIATED))
+    if (!isAssociated() && !isPeerAssociated(peerAddress))
         return false;
-    auto negotiated = findNegotiatedHeCapabilities(peerAddress);
-    return negotiated != nullptr && negotiated->localTxPeerRx.valid &&
+    auto negotiated = getNegotiatedHeCapabilities(peerAddress);
+    return negotiated && negotiated->localTxPeerRx.valid &&
             negotiated->localTxPeerRx.mcsNss.maxMcsPerNss[nss - 1] >= mcs &&
             negotiated->localTxPeerRx.supportedChannelWidths.count(dataMode->getBandwidth()) != 0 &&
             (!extendedRangeSu || !negotiated->operation.erSuDisable);
@@ -754,22 +874,19 @@ bool Ieee80211Mib::isHeModeAllowedForPeer(const physicallayer::IIeee80211Mode *m
 void Ieee80211Mib::setPeerEhtCapabilities(const MacAddress& address,
         const Ieee80211EhtCapabilities& capabilities, const Ieee80211EhtOperation& operation)
 {
-    bssAccessPointData.advertisedEhtCapabilities[address] = capabilities;
-    bssAccessPointData.negotiatedEhtCapabilities[address] =
-            negotiateEhtCapabilities(localEhtCapabilities, capabilities, operation);
+    peerCapabilityState.setEht(address, capabilities,
+            negotiateEhtCapabilities(localEhtCapabilities, capabilities, operation));
 }
 
 void Ieee80211Mib::removePeerEhtCapabilities(const MacAddress& address)
 {
-    bssAccessPointData.advertisedEhtCapabilities.erase(address);
-    bssAccessPointData.negotiatedEhtCapabilities.erase(address);
+    peerCapabilityState.removeEht(address);
 }
 
-const Ieee80211NegotiatedEhtCapabilities *Ieee80211Mib::findNegotiatedEhtCapabilities(
+std::optional<Ieee80211NegotiatedEhtCapabilities> Ieee80211Mib::getNegotiatedEhtCapabilities(
         const MacAddress& address) const
 {
-    auto it = bssAccessPointData.negotiatedEhtCapabilities.find(address);
-    return it == bssAccessPointData.negotiatedEhtCapabilities.end() ? nullptr : &it->second;
+    return peerCapabilityState.getSnapshot(address).getNegotiatedEht();
 }
 
 bool Ieee80211Mib::isEhtModeAllowedForPeer(const physicallayer::IIeee80211Mode *mode,
@@ -781,19 +898,19 @@ bool Ieee80211Mib::isEhtModeAllowedForPeer(const physicallayer::IIeee80211Mode *
     auto dataMode = ehtMode->getDataMode();
     int mcs = dataMode->getMcsIndex();
     if (mcs == 14) {
-        auto negotiated = peerAddress.isMulticast() ? nullptr : findNegotiatedEhtCapabilities(peerAddress);
+        auto negotiated = peerAddress.isMulticast() ? std::optional<Ieee80211NegotiatedEhtCapabilities>() : getNegotiatedEhtCapabilities(peerAddress);
         bool validWidth = dataMode->getBandwidth() == MHz(80) ||
                 dataMode->getBandwidth() == MHz(160) || dataMode->getBandwidth() == MHz(320);
         return ehtMode->getCenterFrequencyMode() == physicallayer::Ieee80211EhtMode::BAND_6GHZ &&
                 validWidth && dataMode->getNumberOfSpatialStreams() == 1 && dataMode->isLdpc() &&
-                negotiated != nullptr && negotiated->valid &&
+                negotiated && negotiated->valid &&
                 negotiated->intersection.ehtDup6GHz && negotiated->intersection.ldpc &&
                 negotiated->operation.disabledSubchannelBitmap == 0;
     }
     if (mcs == 15) {
-        auto negotiated = peerAddress.isMulticast() ? nullptr : findNegotiatedEhtCapabilities(peerAddress);
+        auto negotiated = peerAddress.isMulticast() ? std::optional<Ieee80211NegotiatedEhtCapabilities>() : getNegotiatedEhtCapabilities(peerAddress);
         return dataMode->getNumberOfSpatialStreams() == 1 &&
-                (negotiated == nullptr || !negotiated->operation.mcs15Disabled);
+                (!negotiated || !negotiated->operation.mcs15Disabled);
     }
     return true;
 }
@@ -812,12 +929,10 @@ bool Ieee80211Mib::isHtModeAllowedForPeer(const physicallayer::IIeee80211Mode *m
                 htOperation.basicMcsNss.maxMcsPerNss[nss - 1] >= perStreamMcs &&
                 dataMode->getBandwidth() <= htOperation.operatingChannelWidth;
     }
-    auto station = bssAccessPointData.stations.find(peerAddress);
-    if (!bssStationData.isAssociated &&
-            (station == bssAccessPointData.stations.end() || station->second != ASSOCIATED))
+    if (!isAssociated() && !isPeerAssociated(peerAddress))
         return false;
-    auto negotiated = findNegotiatedHtCapabilities(peerAddress);
-    if (negotiated == nullptr || !negotiated->localTxPeerRx.valid)
+    auto negotiated = getNegotiatedHtCapabilities(peerAddress);
+    if (!negotiated || !negotiated->localTxPeerRx.valid)
         return false;
     auto dataMode = htMode->getDataMode();
     int nss = dataMode->getNumberOfSpatialStreams();
@@ -842,12 +957,10 @@ bool Ieee80211Mib::isVhtModeAllowedForPeer(const physicallayer::IIeee80211Mode *
                 vhtOperation.basicMcsNss.maxMcsPerNss[nss - 1] >= dataMode->getMcsIndex() &&
                 dataMode->getBandwidth() <= vhtOperation.operatingChannelWidth;
     }
-    auto station = bssAccessPointData.stations.find(peerAddress);
-    if (!bssStationData.isAssociated &&
-            (station == bssAccessPointData.stations.end() || station->second != ASSOCIATED))
+    if (!isAssociated() && !isPeerAssociated(peerAddress))
         return false;
-    auto negotiated = findNegotiatedVhtCapabilities(peerAddress);
-    if (negotiated == nullptr || !negotiated->localTxPeerRx.valid)
+    auto negotiated = getNegotiatedVhtCapabilities(peerAddress);
+    if (!negotiated || !negotiated->localTxPeerRx.valid)
         return false;
     auto dataMode = vhtMode->getDataMode();
     int nss = dataMode->getNumberOfSpatialStreams();
@@ -869,29 +982,29 @@ bool Ieee80211Mib::isLdpcAllowedForPeer(const physicallayer::IIeee80211Mode *mod
             return false;
         if (!isHtModeAllowedForPeer(mode, peerAddress))
             return false;
-        auto negotiated = findNegotiatedHtCapabilities(peerAddress);
-        return negotiated != nullptr && negotiated->localTxPeerRx.valid && negotiated->localTxPeerRx.ldpc;
+        auto negotiated = getNegotiatedHtCapabilities(peerAddress);
+        return negotiated && negotiated->localTxPeerRx.valid && negotiated->localTxPeerRx.ldpc;
     }
     if (dynamic_cast<const physicallayer::Ieee80211VhtMode *>(mode) != nullptr) {
         if (peerAddress.isMulticast())
             return false;
         if (!isVhtModeAllowedForPeer(mode, peerAddress))
             return false;
-        auto negotiated = findNegotiatedVhtCapabilities(peerAddress);
-        return negotiated != nullptr && negotiated->localTxPeerRx.valid && negotiated->localTxPeerRx.ldpc;
+        auto negotiated = getNegotiatedVhtCapabilities(peerAddress);
+        return negotiated && negotiated->localTxPeerRx.valid && negotiated->localTxPeerRx.ldpc;
     }
     if (dynamic_cast<const physicallayer::Ieee80211HeMode *>(mode) != nullptr) {
         if (!peerAddress.isMulticast()) {
-            auto negotiated = findNegotiatedHeCapabilities(peerAddress);
-            if (negotiated != nullptr)
+            auto negotiated = getNegotiatedHeCapabilities(peerAddress);
+            if (negotiated)
                 return negotiated->mutual.ldpc;
         }
         return localHeCapabilities.ldpc;
     }
     if (dynamic_cast<const physicallayer::Ieee80211EhtMode *>(mode) != nullptr) {
         if (!peerAddress.isMulticast()) {
-            auto negotiated = findNegotiatedEhtCapabilities(peerAddress);
-            if (negotiated != nullptr)
+            auto negotiated = getNegotiatedEhtCapabilities(peerAddress);
+            if (negotiated)
                 return negotiated->intersection.ldpc;
         }
         return localEhtCapabilities.ldpc;
@@ -902,59 +1015,46 @@ bool Ieee80211Mib::isLdpcAllowedForPeer(const physicallayer::IIeee80211Mode *mod
 void Ieee80211Mib::setPeerVhtCapabilities(const MacAddress& address,
         const Ieee80211VhtCapabilities& capabilities, const Ieee80211VhtOperation& operation)
 {
-    ++bssAccessPointData.vhtAssociationGenerations[address];
-    bssAccessPointData.advertisedVhtCapabilities[address] = capabilities;
-    bssAccessPointData.negotiatedVhtCapabilities[address] =
-            negotiateVhtCapabilities(localVhtCapabilities, capabilities, operation);
+    peerCapabilityState.setVht(address, capabilities,
+            negotiateVhtCapabilities(localVhtCapabilities, capabilities, operation));
 }
 
 void Ieee80211Mib::removePeerVhtCapabilities(const MacAddress& address)
 {
-    ++bssAccessPointData.vhtAssociationGenerations[address];
-    bssAccessPointData.advertisedVhtCapabilities.erase(address);
-    bssAccessPointData.negotiatedVhtCapabilities.erase(address);
+    peerCapabilityState.removeVht(address);
 }
 
 uint64_t Ieee80211Mib::getVhtAssociationGeneration(const MacAddress& address) const
 {
-    auto it = bssAccessPointData.vhtAssociationGenerations.find(address);
-    return it == bssAccessPointData.vhtAssociationGenerations.end() ? 0 : it->second;
+    return peerCapabilityState.getSnapshot(address).getVhtGeneration();
 }
 
-const Ieee80211NegotiatedVhtCapabilities *Ieee80211Mib::findNegotiatedVhtCapabilities(
+std::optional<Ieee80211NegotiatedVhtCapabilities> Ieee80211Mib::getNegotiatedVhtCapabilities(
         const MacAddress& address) const
 {
-    auto it = bssAccessPointData.negotiatedVhtCapabilities.find(address);
-    return it == bssAccessPointData.negotiatedVhtCapabilities.end() ? nullptr : &it->second;
+    return peerCapabilityState.getSnapshot(address).getNegotiatedVht();
 }
 
 void Ieee80211Mib::setPeerHtCapabilities(const MacAddress& address,
         const Ieee80211HtCapabilities& capabilities, const Ieee80211HtOperation& operation)
 {
-    auto& generation = bssAccessPointData.htAssociationGenerations[address];
-    generation = generation == UINT64_MAX ? 1 : generation + 1;
-    bssAccessPointData.advertisedHtCapabilities[address] = capabilities;
-    bssAccessPointData.negotiatedHtCapabilities[address] = negotiateHtCapabilities(localHtCapabilities, capabilities, operation);
+    peerCapabilityState.setHt(address, capabilities,
+            negotiateHtCapabilities(localHtCapabilities, capabilities, operation));
 }
 
 void Ieee80211Mib::removePeerHtCapabilities(const MacAddress& address)
 {
-    auto& generation = bssAccessPointData.htAssociationGenerations[address];
-    generation = generation == UINT64_MAX ? 1 : generation + 1;
-    bssAccessPointData.advertisedHtCapabilities.erase(address);
-    bssAccessPointData.negotiatedHtCapabilities.erase(address);
+    peerCapabilityState.removeHt(address);
 }
 
-const Ieee80211NegotiatedHtCapabilities *Ieee80211Mib::findNegotiatedHtCapabilities(const MacAddress& address) const
+std::optional<Ieee80211NegotiatedHtCapabilities> Ieee80211Mib::getNegotiatedHtCapabilities(const MacAddress& address) const
 {
-    auto it = bssAccessPointData.negotiatedHtCapabilities.find(address);
-    return it == bssAccessPointData.negotiatedHtCapabilities.end() ? nullptr : &it->second;
+    return peerCapabilityState.getSnapshot(address).getNegotiatedHt();
 }
 
 uint64_t Ieee80211Mib::getHtAssociationGeneration(const MacAddress& address) const
 {
-    auto it = bssAccessPointData.htAssociationGenerations.find(address);
-    return it == bssAccessPointData.htAssociationGenerations.end() ? 0 : it->second;
+    return peerCapabilityState.getSnapshot(address).getHtGeneration();
 }
 
 const char *Ieee80211Mib::getModeStr(Ieee80211Mib::Mode mode)

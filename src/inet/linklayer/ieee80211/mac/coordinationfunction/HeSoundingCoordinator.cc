@@ -145,7 +145,7 @@ bool HeSoundingCoordinator::processSoundingFrame(Packet *packet,
             ndpReceived = false;
             soundingDialogToken = ndpa->getDialogToken();
 
-            auto myAid = mac->getMib()->bssStationData.associationId;
+            auto myAid = mac->getMib()->getLocalAssociationId();
             bool targeted = false;
             if (myAid > 0) {
                 for (unsigned int i = 0; i < ndpa->getStationsArraySize(); ++i) {
@@ -169,9 +169,9 @@ bool HeSoundingCoordinator::processSoundingFrame(Packet *packet,
         if (auto feedback = findPacketChunk<Ieee80211HeCompressedBeamformingFeedback>(packet)) {
             if (feedback->getValid()) {
                 std::vector<MacAddress> allAssociatedStations;
-                for (const auto& entry : mac->getMib()->bssAccessPointData.associationIds) {
-                    allAssociatedStations.push_back(entry.first);
-                }
+                for (const auto& entry : mac->getMib()->getPeerAssociationSnapshots())
+                    if (entry.hasAssociationId())
+                        allAssociatedStations.push_back(entry.getAddress());
                 auto getAid = [mac](const MacAddress& addr) {
                     return mac->getMib()->getAssociationId(addr);
                 };
@@ -200,7 +200,7 @@ bool HeSoundingCoordinator::processSoundingFrame(Packet *packet,
                 return true;
             }
             if (ndpAnnouncementReceived && ndpReceived) {
-                auto myAid = mac->getMib()->bssStationData.associationId;
+                auto myAid = mac->getMib()->getLocalAssociationId();
                 const Ieee80211HeTriggerUserInfo *selected = nullptr;
                 for (unsigned int i = 0; i < trigger->getUsersArraySize(); ++i) {
                     if (trigger->getUsers(i).aid == myAid) {
@@ -210,8 +210,8 @@ bool HeSoundingCoordinator::processSoundingFrame(Packet *packet,
                 }
                 if (selected != nullptr) {
                     int maxNss = 1;
-                    auto negotiated = mac->getMib()->findNegotiatedHeCapabilities(trigger->getTransmitterAddress());
-                    if (negotiated != nullptr && negotiated->localRxPeerTx.valid) {
+                    auto negotiated = mac->getMib()->getNegotiatedHeCapabilities(trigger->getTransmitterAddress());
+                    if (negotiated && negotiated->localRxPeerTx.valid) {
                         maxNss = std::min(getMaxNss(negotiated->localRxPeerTx.mcsNss), 4);
                     }
 

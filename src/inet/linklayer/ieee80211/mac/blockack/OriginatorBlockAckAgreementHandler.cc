@@ -25,7 +25,8 @@ simtime_t OriginatorBlockAckAgreementHandler::computeEarliestExpirationTime()
     simtime_t earliestTime = SIMTIME_MAX;
     for (auto id : blockAckAgreements) {
         auto agreement = id.second;
-        if (agreement->getIsAddbaResponseReceived()) {
+        if (!agreement->getExpirationHandlingInProgress() &&
+                (agreement->getIsAddbaResponseReceived() || agreement->getIsAddbaRequestInProgress())) {
             ASSERT(earliestTime >= 0);
             ASSERT(agreement->getExpirationTime() >= 0);
             earliestTime = std::min(earliestTime, agreement->getExpirationTime());
@@ -43,12 +44,21 @@ void OriginatorBlockAckAgreementHandler::blockAckAgreementExpired(IProcedureCall
     simtime_t now = simTime();
     for (auto id : blockAckAgreements) {
         auto agreement = id.second;
-        if (agreement->getExpirationTime() == now) {
+        if (agreement->getExpirationTime() <= now && agreement->getIsAddbaResponseReceived() &&
+                !agreement->getExpirationHandlingInProgress()) {
+            agreement->setExpirationHandlingInProgress(true);
             MacAddress receiverAddr = id.first.first;
             Tid tid = id.first.second;
             const auto& delba = buildDelba(receiverAddr, tid, 39);
             auto delbaPacket = new Packet("Delba", delba);
             procedureCallback->processMgmtFrame(delbaPacket, delba); // 39 - TIMEOUT see: Table 8-36—Reason codes
+        }
+        // IEEE Std 802.11-2024, 10.25.2: dot11ADDBAResponseTimeout bounds how
+        // long an originator waits for the ADDBA Response before retrying.
+        else if (agreement->getExpirationTime() <= now && agreement->getIsAddbaRequestInProgress()) {
+            EV_INFO << "ADDBA response timeout elapsed for receiver=" << id.first.first
+                    << " tid=" << id.first.second << "; waking queued retry\n";
+            agreement->setIsAddbaRequestInProgress(false);
         }
     }
     scheduleInactivityTimer(agreementHandlerCallback);
@@ -122,7 +132,8 @@ void OriginatorBlockAckAgreementHandler::scheduleInactivityTimer(IBlockAckAgreem
 {
     simtime_t earliestExpirationTime = computeEarliestExpirationTime();
     if (earliestExpirationTime != SIMTIME_MAX)
-        callback->scheduleInactivityTimer(earliestExpirationTime);
+        callback->scheduleInactivityTimer(earliestExpirationTime <= simTime() ?
+                SIMTIME_ZERO : earliestExpirationTime - simTime());
 }
 
 OriginatorBlockAckAgreement *OriginatorBlockAckAgreementHandler::getAgreement(MacAddress receiverAddr, Tid tid)
@@ -215,7 +226,9 @@ void OriginatorBlockAckAgreementHandler::updateAgreement(OriginatorBlockAckAgree
     agreement->calculateExpirationTime();
 }
 
-void OriginatorBlockAckAgreementHandler::processTransmittedAddbaReq(const Ptr<const Ieee80211AddbaRequest>& addbaReq)
+void OriginatorBlockAckAgreementHandler::processTransmittedAddbaReq(
+        const Ptr<const Ieee80211AddbaRequest>& addbaReq,
+        IBlockAckAgreementHandlerCallback *callback)
 {
     auto agreement = getAgreement(addbaReq->getReceiverAddress(), addbaReq->getTid());
     if (agreement) {
@@ -224,6 +237,7 @@ void OriginatorBlockAckAgreementHandler::processTransmittedAddbaReq(const Ptr<co
         agreement->baPolicyFrameSent();
         if (!agreement->getIsAddbaResponseReceived())
             agreement->calculateExpirationTime();
+        scheduleInactivityTimer(callback);
     }
     else
         throw cRuntimeError("Block Ack Agreement should have already been added");

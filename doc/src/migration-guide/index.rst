@@ -347,3 +347,56 @@ is independent of the actual representation of the header. In general, protocols
 should have parameters to declare the checksum correct/incorrect or to actually
 compute and verify it. Of course, for emulation, one should enable computing and
 verifying checksums.
+
+IEEE 802.11 association state
+-----------------------------
+
+IEEE 802.11 association state is now privately owned by
+:cpp:`Ieee80211Mib`. Code that previously accessed its mutable public fields
+must use the typed facade:
+
+* Replace ``bssData.ssid`` and ``bssData.bssid`` reads with ``getSsid()`` and
+  ``getBssid()`` (or one copied ``getLocalAssociationSnapshot()``), and writes
+  with ``setBssIdentity()``.
+* Replace ``bssStationData`` reads with ``getStationType()``,
+  ``isAssociated()``, ``getLocalAssociationId()``, or a copied local snapshot.
+  Use ``setBssStationType()``, ``installLocalAssociation()``, and
+  ``clearLocalAssociation()`` for mutations.
+* Replace ``bssAccessPointData.stations`` reads with
+  ``getPeerAssociationSnapshot()`` or the address-sorted
+  ``getPeerAssociationSnapshots()`` vector. Use ``setPeerMemberStatus()`` for
+  member-status transitions.
+* Replace ``bssAccessPointData.associationIds`` reads with peer snapshots,
+  ``getAssociationId()``, or ``getStationAddress()``. Use
+  ``allocateAssociationId()`` and ``releaseAssociationId()`` for mutations.
+
+Direct mutable association-state access is intentionally unsupported; no
+writable compatibility shim is provided. Because the public C++ layout changed,
+downstream binaries using :cpp:`Ieee80211Mib` must be rebuilt against the new
+INET library.
+
+IEEE 802.11 peer capability and link state
+------------------------------------------
+
+Peer capability advertisements, negotiated capability results, legacy rates,
+and link estimates are also privately owned by :cpp:`Ieee80211Mib`:
+
+* Replace reads from the removed ``bssAccessPointData`` capability maps with
+  ``getPeerCapabilitySnapshot()`` or the address-sorted copied
+  ``getPeerCapabilitySnapshots()`` inventory. Use the existing
+  ``setPeer*Capabilities()`` and ``removePeer*Capabilities()`` facade methods
+  for mutations.
+* Replace ``findNegotiated*Capabilities()`` pointer reads with the corresponding
+  ``getNegotiated*Capabilities()`` optional value. The returned value is an
+  immutable copy and remains stable when the MIB is subsequently updated.
+* Replace ``findPeerLegacyRates()`` with ``getPeerLegacyRates()`` and use
+  ``setPeerLegacyRates()`` for updates.
+* Replace reads from ``bssAccessPointData.links`` or ``findStationLink()`` with
+  ``getPeerLinkSnapshot()`` or the address-sorted copied
+  ``getPeerLinkSnapshots()`` inventory. Link estimates intentionally survive
+  association teardown; capability cleanup and link lifetime have independent
+  generations.
+
+Direct mutable peer capability and link-state access is intentionally
+unsupported. This changes the public C++ layout and API, so downstream binaries
+using :cpp:`Ieee80211Mib` must be rebuilt against the new INET library.

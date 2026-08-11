@@ -129,7 +129,7 @@ bool Ieee80211RadioMedium::findHeMuRuForReceiver(const IRadio *receiver, const I
         // UL MU-MIMO retain peer stream geometry and are not transmitters in
         // this packet.
         const auto& user = ieee80211Transmission->getHePpduLayout()->getUsers().front();
-        auto channelBandwidth = ieee80211Transmission->getMode()->getDataMode()->getBandwidth();
+        auto channelBandwidth = ieee80211Transmission->getPpduBandwidth();
         int channelTones = getHeChannelToneCount(channelBandwidth);
         auto relativeRu = makeHeRu(Hz(0), channelTones,
                 user.ru.index, user.ru.toneSize, user.ru.toneOffset);
@@ -144,7 +144,7 @@ bool Ieee80211RadioMedium::findHeMuRuForReceiver(const IRadio *receiver, const I
         if (receiverStaId.has_value() && user.staId == *receiverStaId) {
             // DL HE MU receiver filtering follows the STA-ID and RU location
             // carried in the HE-SIG-B User field (Clause 27.3.11.8.4).
-            auto channelBandwidth = ieee80211Transmission->getMode()->getDataMode()->getBandwidth();
+            auto channelBandwidth = ieee80211Transmission->getPpduBandwidth();
             if (user.ruToneSize == 0) {
                 auto legacyRus = calculateHeRus(narrowbandTransmissionAnalogModel->getCenterFrequency(),
                         channelBandwidth, allocationPhyHeader->getUsersArraySize());
@@ -173,7 +173,7 @@ const IReception *Ieee80211RadioMedium::computeHeMuRuReception(const IRadio *rec
     auto arrival = getArrival(receiver, transmission);
     IReceptionAnalogModel *ruAnalogModel = nullptr;
     if (auto scalarMediumAnalogModel = dynamic_cast<const ScalarMediumAnalogModel *>(analogModel)) {
-        auto totalBandwidth = ieee80211Transmission->getMode()->getDataMode()->getBandwidth();
+        auto totalBandwidth = ieee80211Transmission->getPpduBandwidth();
         auto aggregatePower = scalarMediumAnalogModel->computeReceptionPower(receiver, transmission, arrival);
         auto allocationPhyHeader = peekHeMuOrTbPhyHeader(transmission);
         bool isTriggerBasedUplink = dynamicPtrCast<const Ieee80211HeTbPhyHeader>(allocationPhyHeader) != nullptr;

@@ -111,7 +111,7 @@ static W getHeRuAdjustedPowerThreshold(const IReception *reception,
     auto narrowbandReception = dynamic_cast<const INarrowbandSignalAnalogModel *>(reception->getAnalogModel());
     if (narrowbandReception == nullptr || transmission == nullptr || transmission->getMode() == nullptr)
         return fullChannelThreshold;
-    auto channelBandwidth = transmission->getMode()->getDataMode()->getBandwidth();
+    auto channelBandwidth = transmission->getPpduBandwidth();
     return scaleHeRuPowerThreshold(fullChannelThreshold,
             narrowbandReception->getBandwidth(), channelBandwidth);
 }

@@ -87,12 +87,13 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
     uint32_t triggerId;
     HeHcf *callback;
     std::vector<IIeee80211HeUlScheduler::RuAllocation> allocations;
+    Hz channelBandwidth;
     bool nfrp = false;
     uint16_t nfrpStartingAid = 0;
     int nfrpToneSetsPerSpatialStream = 0;
     int nfrpScheduledStaCount = 0;
     std::set<uint16_t> receivedAids;
-    std::set<int> receivedRandomAccessRus;
+    std::vector<physicallayer::Ieee80211HeRu> receivedRandomAccessRus;
     simtime_t firstResponseTime;
     simtime_t lastResponseTime;
 
@@ -102,6 +103,7 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
             IIeee80211HeUlTriggerPolicy::TriggerType triggerType,
             simtime_t timeout, simtime_t commonDuration, simtime_t phyRxStartDelay) :
         ReceiveCollectionStep(timeout), triggerId(triggerId), callback(callback), allocations(schedule.allocations),
+        channelBandwidth(schedule.channelBandwidth),
         nfrp(triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER),
         nfrpStartingAid(schedule.nfrpStartingAid)
     {
@@ -115,7 +117,9 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
                     schedule.channelBandwidth, schedule.nfrpMultiplexingFlag);
         }
         firstResponseTime = simTime();
-        lastResponseTime = firstResponseTime + commonDuration + timeout + phyRxStartDelay;
+        // timeout already spans SIFS, the complete HE-TB PPDU, and one slot.
+        // PHY-RX start delay is the sole tolerance beyond that response window.
+        lastResponseTime = firstResponseTime + timeout + phyRxStartDelay;
     }
 
     virtual bool acceptsHeaderlessFrame(const Packet *frame) const override
@@ -124,12 +128,24 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
                 frame->findTag<physicallayer::Ieee80211HeRxVectorInd>();
         auto context = frame == nullptr ? nullptr :
                 frame->findTag<physicallayer::Ieee80211HeTbRecipientContextInd>();
-        return nfrp && frame != nullptr && frame->getDataLength() == b(0) &&
-                indication != nullptr && indication->getRxVector() != nullptr &&
-                indication->getRxVector()->getCommon().getPpduFormat() ==
-                        physicallayer::HE_TRIGGER_BASED_UPLINK &&
-                context != nullptr && context->getRecipientParameters() != nullptr &&
-                context->getRecipientParameters()->ndpFeedbackReport;
+        if (frame == nullptr || indication == nullptr || indication->getRxVector() == nullptr ||
+                indication->getRxVector()->getCommon().getPpduFormat() !=
+                        physicallayer::HE_TRIGGER_BASED_UPLINK ||
+                indication->getRxVector()->getCommon().getChannelBandwidth() != channelBandwidth ||
+                context == nullptr || context->getRecipientParameters() == nullptr ||
+                context->getTriggerId() != triggerId ||
+                simTime() < firstResponseTime || simTime() > lastResponseTime)
+            return false;
+        const auto& canonical = *context->getRecipientParameters();
+        if (nfrp)
+            return frame->getDataLength() == b(0) && canonical.ndpFeedbackReport;
+        if (frame->getDataLength() == b(0) || canonical.ndpFeedbackReport ||
+                dynamicPtrCast<const Ieee80211MpduSubframeHeader>(frame->peekAtFront()) == nullptr)
+            return false;
+        return std::any_of(allocations.begin(), allocations.end(), [&] (const auto& allocation) {
+            return physicallayer::areIeee80211HeRuParametersEqual(canonical.ru, allocation.ru) &&
+                    (allocation.randomAccess || canonical.staId == allocation.associationId);
+        });
     }
 
     virtual void setFrameToReceive(Packet *frame) override
@@ -139,6 +155,7 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
         if (indication == nullptr || indication->getRxVector() == nullptr ||
                 indication->getRxVector()->getCommon().getPpduFormat() !=
                         physicallayer::HE_TRIGGER_BASED_UPLINK ||
+                indication->getRxVector()->getCommon().getChannelBandwidth() != channelBandwidth ||
                 context == nullptr || context->getRecipientParameters() == nullptr ||
                 context->getTriggerId() != triggerId ||
                 simTime() < firstResponseTime || simTime() > lastResponseTime) {
@@ -186,7 +203,7 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
                 return;
             }
             for (const auto& allocation : allocations) {
-                if (canonical.ru.index != allocation.ru.index)
+                if (!physicallayer::areIeee80211HeRuParametersEqual(canonical.ru, allocation.ru))
                     continue;
                 if (!allocation.randomAccess &&
                         canonical.staId == allocation.associationId)
@@ -197,9 +214,14 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
                     break;
             }
         }
+        const bool duplicateRandomAccessRu = randomAccess &&
+                std::any_of(receivedRandomAccessRus.begin(), receivedRandomAccessRus.end(),
+                        [&] (const auto& ru) {
+                            return physicallayer::areIeee80211HeRuParametersEqual(ru, canonical.ru);
+                        });
         if ((!nfrp && aid == 0 && !randomAccess) ||
                 (aid != 0 && receivedAids.count(aid) != 0) ||
-                (randomAccess && receivedRandomAccessRus.count(canonical.ru.index) != 0)) {
+                duplicateRandomAccessRu) {
             EV_INFO << "Discarding " << (aid == 0 ? "unallocated" : "duplicate")
                      << " HE UL response for Trigger " << triggerId << "\n";
             delete frame;
@@ -208,7 +230,7 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
         if (aid != 0)
             receivedAids.insert(aid);
         if (randomAccess)
-            receivedRandomAccessRus.insert(canonical.ru.index);
+            receivedRandomAccessRus.push_back(canonical.ru);
         EV_INFO << "Collected HE UL response: trigger=" << triggerId
                  << ", aid=" << (randomAccess ? 0 : aid) << ", RU=" << canonical.ru.index << "\n";
         ReceiveCollectionStep::setFrameToReceive(frame);
@@ -385,13 +407,18 @@ void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
     constexpr int parsingFlags = Chunk::PF_ALLOW_INCORRECT | Chunk::PF_ALLOW_INCOMPLETE |
             Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED;
     for (auto packet : collection->getReceivedFrames()) {
-        auto context = packet->findTag<physicallayer::Ieee80211HeTbRecipientContextInd>();
-        if (context == nullptr || context->getRecipientParameters() == nullptr)
+        auto indication = packet->findTag<physicallayer::Ieee80211HeRxVectorInd>();
+        auto recipientContext = packet->findTag<physicallayer::Ieee80211HeTbRecipientContextInd>();
+        if (indication == nullptr || indication->getRxVector() == nullptr ||
+                indication->getRxVector()->getCommon().getPpduFormat() !=
+                        physicallayer::HE_TRIGGER_BASED_UPLINK ||
+                indication->getRxVector()->getCommon().getChannelBandwidth() != schedule.channelBandwidth ||
+                recipientContext == nullptr || recipientContext->getRecipientParameters() == nullptr)
             continue;
-        const auto& canonical = *context->getRecipientParameters();
+        const auto& canonical = *recipientContext->getRecipientParameters();
         const IIeee80211HeUlScheduler::RuAllocation *matchedAllocation = nullptr;
         for (const auto& allocation : schedule.allocations)
-            if (allocation.ru.index == canonical.ru.index &&
+            if (physicallayer::areIeee80211HeRuParametersEqual(allocation.ru, canonical.ru) &&
                     (allocation.randomAccess || allocation.associationId == canonical.staId)) {
                 matchedAllocation = &allocation;
                 break;

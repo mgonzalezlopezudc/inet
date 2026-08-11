@@ -410,6 +410,12 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
             throw cRuntimeError("HE PHY header disagrees with the canonical TXVECTOR/PPDU layout");
         const auto ppduFormat = hePpduLayout->getPpduFormat();
         const auto& canonicalCommon = heTxVector->getCommon().getParameters();
+        if (dynamic_cast<const Ieee80211HeMode *>(transmissionMode) == nullptr ||
+                transmissionMode->getDataMode()->getBandwidth() !=
+                        canonicalCommon.channelBandwidth)
+            throw cRuntimeError("HE carrier mode must be HE and match the canonical full PPDU bandwidth");
+        transmissionBandwidth = canonicalCommon.channelBandwidth;
+        transmissionCenterFrequency = heTxVector->getCommon().getCenterFrequency();
         const Ieee80211HeSuErSignalingFields *signaling = nullptr;
         if (ppduFormat == HE_SINGLE_USER)
             signaling = &dynamicPtrCast<const Ieee80211HeSuPhyHeader>(heMuHeader)->getSignaling();

@@ -315,14 +315,14 @@ void HeHcf::originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastT
         uint16_t expectedAid = 0;
         auto mib = mac->getMib();
         if (validUlSuResponse &&
-                mib->bssStationData.stationType == Ieee80211Mib::STATION) {
-            auto associationId = mib->bssStationData.associationId;
+                mib->getStationType() == Ieee80211Mib::STATION) {
+            auto associationId = mib->getLocalAssociationId();
             validUlSuResponse = associationId > 0 && associationId <= 2007;
             if (validUlSuResponse)
                 expectedAid = associationId;
         }
         else if (validUlSuResponse &&
-                mib->bssStationData.stationType != Ieee80211Mib::ACCESS_POINT)
+                mib->getStationType() != Ieee80211Mib::ACCESS_POINT)
             validUlSuResponse = false;
         if (validUlSuResponse) {
             validUlSuResponse =
@@ -456,13 +456,13 @@ void HeHcf::transmitFrame(Packet *packet, simtime_t ifs)
         ndpHeader->setType(ST_QOS_NULL);
         ndpHeader->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
         ndpHeader->setTransmitterAddress(mac->getAddress());
-        ndpHeader->setAddress3(mac->getMib()->bssData.bssid);
+        ndpHeader->setAddress3(mac->getMib()->getBssid());
         ndpHeader->setDurationField(SIMTIME_ZERO);
         ndpHeader->setChunkLength(B(30));
         tx->transmitFrame(packet, ndpHeader, ifs, this);
         return;
     }
-    if (mac->getMib()->bssStationData.associationId > 0) {
+    if (mac->getMib()->getLocalAssociationId() > 0) {
         auto header = packet->peekAtFront<Ieee80211MacHeader>();
         if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
             if (dataHeader->getType() == ST_DATA_WITH_QOS) {

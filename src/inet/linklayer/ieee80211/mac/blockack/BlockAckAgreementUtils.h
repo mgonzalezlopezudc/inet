@@ -26,7 +26,10 @@ inline bool isOriginatorBlockAckAgreementPending(IOriginatorBlockAckAgreementHan
         const MacAddress& receiverAddress, Tid tid)
 {
     auto agreement = handler == nullptr ? nullptr : handler->getAgreement(receiverAddress, tid);
-    return agreement != nullptr && agreement->getIsAddbaRequestInProgress() && !agreement->getIsAddbaResponseReceived();
+    if (agreement == nullptr || !agreement->getIsAddbaRequestInProgress() || agreement->getIsAddbaResponseReceived())
+        return false;
+    auto retryDeadline = agreement->getExpirationTime();
+    return retryDeadline < SIMTIME_ZERO || simTime() < retryDeadline;
 }
 
 } // namespace ieee80211

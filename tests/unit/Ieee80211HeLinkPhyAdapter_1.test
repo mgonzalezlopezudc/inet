@@ -104,10 +104,21 @@ class TestHeHcf : public HeHcf
         packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
         return packet;
     }
+    uint64_t associatePeerForTest(const MacAddress& peer)
+    {
+        mac->getMib()->setPeerHeCapabilities(peer,
+                mac->getMib()->localHeCapabilities, mac->getMib()->heOperation);
+        auto association = mac->getMib()->commitPeerAssociation(peer);
+        return association.getAssociationEpoch();
+    }
+    void clearPeerAssociationForTest(const MacAddress& peer)
+    {
+        mac->getMib()->clearPeerAssociation(peer, Ieee80211Mib::AUTHENTICATED);
+    }
     std::vector<Packet *> seedPeerPacketState(const MacAddress& peer)
     {
         if (getStationQueueBank(peer) == nullptr)
-            createStationQueueBank(peer);
+            associatePeerForTest(peer);
         std::vector<Packet *> packets = {
             makePeerPacket("bank-queued", peer, 101),
             makePeerPacket("shared-pending", peer, 102),
@@ -135,14 +146,14 @@ class TestHeHcf : public HeHcf
     Packet *seedBankPacket(const MacAddress& peer, const char *name, int sequenceNumber)
     {
         if (getStationQueueBank(peer) == nullptr)
-            createStationQueueBank(peer);
+            associatePeerForTest(peer);
         auto packet = makePeerPacket(name, peer, sequenceNumber);
         getPerStaQueue(peer, AC_BE)->enqueuePacket(packet);
         return packet;
     }
-    void deferPacketRetirementForTest(Packet *packet, const MacAddress& peer)
+    void deferPacketRetirementForTest(Packet *packet, const MacAddress& peer, uint64_t associationEpoch)
     {
-        packetsPendingRetirement[packet] = peer;
+        packetsPendingRetirement[packet] = {peer, associationEpoch};
     }
     void retireDeferredPacketsForTest()
     {
@@ -152,6 +163,7 @@ class TestHeHcf : public HeHcf
     {
         if (!stagePerStaFrameForSingleUserTransmission(ac))
             throw cRuntimeError("test could not stage a per-STA SU fallback packet");
+        edca->getEdcaf(ac)->getTxopProcedure()->startTxop(ac);
         forceNextSingleUser[ac] = true;
         startFrameSequence(ac);
     }
@@ -251,12 +263,17 @@ for (const auto& header : packetHeaders)
         throw cRuntimeError("peer lifecycle left stale ACK/BA state");
 
 auto dimensionalHcf = getHcf("dimensionalAp");
+auto oldEpoch = dimensionalHcf->associatePeerForTest(peer);
 auto oldEpochPacket = dimensionalHcf->seedBankPacket(peer, "old-epoch-retry", 104);
-dimensionalHcf->deferPacketRetirementForTest(oldEpochPacket, peer);
+dimensionalHcf->deferPacketRetirementForTest(oldEpochPacket, peer, oldEpoch);
+dimensionalHcf->clearPeerAssociationForTest(peer);
+auto newEpoch = dimensionalHcf->associatePeerForTest(peer);
+if (newEpoch == oldEpoch)
+    throw cRuntimeError("reassociation did not advance the association epoch");
 auto newEpochPacket = dimensionalHcf->seedBankPacket(peer, "new-epoch-packet", 105);
 dimensionalHcf->retireDeferredPacketsForTest();
-if (dimensionalHcf->containsPacketIdentity(oldEpochPacket) ||
-        !dimensionalHcf->containsPacketIdentity(newEpochPacket))
+if (!dimensionalHcf->containsPacketIdentity(newEpochPacket) ||
+        dimensionalHcf->countPeerPackets(peer) != 1)
     throw cRuntimeError("deferred teardown crossed association epochs");
 
 MacAddress suPeer("02:00:00:00:80:02");

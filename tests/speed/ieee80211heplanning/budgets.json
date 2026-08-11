@@ -1,0 +1,12 @@
+{
+  "regression_limits": {
+    "cpu_time_median_ratio": 1.05,
+    "cpu_time_p95_ratio": 1.10,
+    "peak_rss_ratio": 1.10
+  },
+  "improvement_policy": {
+    "cpu_time_median_ratio": 0.90,
+    "minimum_baseline_noise_multiple": 2.0
+  }
+}
+

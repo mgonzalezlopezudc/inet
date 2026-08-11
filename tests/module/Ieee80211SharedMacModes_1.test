@@ -251,9 +251,9 @@ class SharedModesObserver : public cSimpleModule, public cListener
         auto coordinator = check_and_cast<VhtSoundingCoordinator *>(
                 findModuleByPath("^.host[0].wlan[0].mac.hcf.soundingCoordinator"));
         auto staMib = staMac->getMib();
-        REQUIRE_SHARED(staMib->bssStationData.isAssociated,
+        REQUIRE_SHARED(staMib->isAssociated(),
                 "VHT negative probes ran before association");
-        auto ap = staMib->bssData.bssid;
+        auto ap = staMib->getBssid();
         REQUIRE_SHARED(coordinator->mayAttempt(ap), "fresh sounding cooldown was unexpectedly active");
         coordinator->recordAttempt(ap);
         REQUIRE_SHARED(!coordinator->mayAttempt(ap), "sounding retry cooldown was not enforced");
@@ -291,13 +291,13 @@ class SharedModesObserver : public cSimpleModule, public cListener
                     nullptr, nullptr, true), "typed VHT NDP was not consumed");
         };
         rejectAnnouncement(MacAddress("00:00:00:00:00:09"),
-                staMib->bssStationData.associationId); // wrong sender
-        rejectAnnouncement(ap, staMib->bssStationData.associationId + 1); // wrong AID/order
+                staMib->getLocalAssociationId()); // wrong sender
+        rejectAnnouncement(ap, staMib->getLocalAssociationId() + 1); // wrong AID/order
         auto modeSet = const_cast<Ieee80211ModeSet *>(staMac->getModeSet());
         auto rejectCorrelatedNdp = [&](int ndpaRadioId, int ndpRadioId,
                 simtime_t ndpStartOffset) {
             auto ndpaEnd = simTime();
-            rejectAnnouncement(ap, staMib->bssStationData.associationId,
+            rejectAnnouncement(ap, staMib->getLocalAssociationId(),
                     ndpaRadioId, ndpaEnd, false);
             auto ndp = new Packet("correlation-negative-VHT-NDP");
             auto indication = ndp->addTag<Ieee80211NdpInd>();
@@ -496,14 +496,14 @@ class SharedModesObserver : public cSimpleModule, public cListener
         for (int i = 0; i < numHosts; ++i) {
             auto staMib = check_and_cast<Ieee80211Mib *>(findModuleByPath(
                     ("^.host[" + std::to_string(i) + "].wlan[0].mib").c_str()));
-            auto apRatesForSta = staMib->findPeerLegacyRates(apMib->address);
-            auto staRatesForAp = apMib->findPeerLegacyRates(staMib->address);
+            auto apRatesForSta = staMib->getPeerLegacyRates(apMib->address);
+            auto staRatesForAp = apMib->getPeerLegacyRates(staMib->address);
             if (expectedModeFamily != "eht")
-                REQUIRE_SHARED(apRatesForSta != nullptr && !apRatesForSta->empty() &&
-                        staRatesForAp != nullptr && !staRatesForAp->empty(),
+                REQUIRE_SHARED(apRatesForSta && !apRatesForSta->empty() &&
+                        staRatesForAp && !staRatesForAp->empty(),
                         "simplified association did not populate bidirectional legacy-rate state");
             else
-                REQUIRE_SHARED(apRatesForSta == nullptr && staRatesForAp == nullptr,
+                REQUIRE_SHARED(!apRatesForSta && !staRatesForAp,
                         "pure EHT association unexpectedly populated legacy-rate state");
         }
         if (expectAsymmetricBasicAck) {
@@ -521,15 +521,15 @@ class SharedModesObserver : public cSimpleModule, public cListener
         }
         if (expectedModeFamily == "ht" || expectedModeFamily == "vht") {
             auto staMib = check_and_cast<Ieee80211Mib *>(findModuleByPath("^.host[0].wlan[0].mib"));
-            REQUIRE_SHARED(apMib->findNegotiatedHtCapabilities(staMib->address) != nullptr &&
-                    staMib->findNegotiatedHtCapabilities(apMib->address) != nullptr,
+            REQUIRE_SHARED(apMib->getNegotiatedHtCapabilities(staMib->address) &&
+                    staMib->getNegotiatedHtCapabilities(apMib->address),
                     "simplified n/ac association did not populate bidirectional HT peer state");
             bool expectVht = expectedModeFamily == "vht";
-            REQUIRE_SHARED((apMib->findNegotiatedVhtCapabilities(staMib->address) != nullptr) == expectVht &&
-                    (staMib->findNegotiatedVhtCapabilities(apMib->address) != nullptr) == expectVht,
+            REQUIRE_SHARED(apMib->getNegotiatedVhtCapabilities(staMib->address).has_value() == expectVht &&
+                    staMib->getNegotiatedVhtCapabilities(apMib->address).has_value() == expectVht,
                     "simplified n/ac association populated the wrong VHT peer state");
-            REQUIRE_SHARED(apMib->findNegotiatedHeCapabilities(staMib->address) == nullptr &&
-                    staMib->findNegotiatedHeCapabilities(apMib->address) == nullptr,
+            REQUIRE_SHARED(!apMib->getNegotiatedHeCapabilities(staMib->address) &&
+                    !staMib->getNegotiatedHeCapabilities(apMib->address),
                     "simplified n/ac association unexpectedly populated HE peer state");
         }
         if (expectHeMuFallback)

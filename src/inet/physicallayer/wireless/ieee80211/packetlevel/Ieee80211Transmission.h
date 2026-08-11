@@ -38,6 +38,8 @@ class INET_API Ieee80211Transmission : public TransmissionBase
 
     virtual const IIeee80211Mode *getMode() const { return mode; }
     virtual const Ieee80211Channel *getChannel() const { return channel; }
+    /** Returns the full PPDU bandwidth, independent of any per-user HE RU. */
+    virtual Hz getPpduBandwidth() const;
     virtual const std::shared_ptr<const Ieee80211HeTxVector>& getHeTxVector() const { return heTxVector; }
     virtual const std::shared_ptr<const Ieee80211HePpduLayout>& getHePpduLayout() const { return hePpduLayout; }
     virtual uint32_t getHeTriggerCorrelationId() const { return heTriggerCorrelationId; }

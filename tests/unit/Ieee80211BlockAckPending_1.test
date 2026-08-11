@@ -1,0 +1,86 @@
+%description:
+Test IEEE Std 802.11-2024 Clause 10.25.2 dot11ADDBAResponseTimeout handling:
+originator ADDBA pending state expires at its retry deadline.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/blockack/BlockAckAgreementUtils.h"
+#include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreementHandler.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+class TestOriginatorBlockAckAgreementHandler : public OriginatorBlockAckAgreementHandler
+{
+  public:
+    OriginatorBlockAckAgreement *install(const MacAddress& receiver, Tid tid,
+            simtime_t retryTimeout)
+    {
+        auto agreement = new OriginatorBlockAckAgreement(receiver, tid,
+                SequenceNumberCyclic(0), 64, false, false);
+        agreement->setIsAddbaRequestInProgress(true);
+        agreement->setBlockAckTimeoutValue(retryTimeout);
+        agreement->calculateExpirationTime();
+        blockAckAgreements[std::make_pair(receiver, tid)] = agreement;
+        return agreement;
+    }
+
+    OriginatorBlockAckAgreement *installActive(const MacAddress& receiver, Tid tid,
+            simtime_t inactivityTimeout)
+    {
+        auto agreement = new OriginatorBlockAckAgreement(receiver, tid,
+                SequenceNumberCyclic(0), 64, false, false);
+        agreement->setIsAddbaResponseReceived(true);
+        agreement->setBlockAckTimeoutValue(inactivityTimeout);
+        agreement->calculateExpirationTime();
+        blockAckAgreements[std::make_pair(receiver, tid)] = agreement;
+        return agreement;
+    }
+};
+
+class ExpiryCallback : public IProcedureCallback, public IBlockAckAgreementHandlerCallback
+{
+  public:
+    int delbaCount = 0;
+    int timerScheduleCount = 0;
+
+    virtual void transmitControlResponseFrame(Packet *, const Ptr<const Ieee80211MacHeader>&,
+            Packet *, const Ptr<const Ieee80211MacHeader>&) override {}
+
+    virtual void processMgmtFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>& header) override
+    {
+        if (dynamicPtrCast<const Ieee80211Delba>(header) != nullptr)
+            delbaCount++;
+        delete packet;
+    }
+
+    virtual void scheduleInactivityTimer(simtime_t) override { timerScheduleCount++; }
+};
+
+%activity:
+const MacAddress peer("02:00:00:00:00:01");
+const Tid tid = 3;
+TestOriginatorBlockAckAgreementHandler handler;
+auto agreement = handler.install(peer, tid, SimTime(1, SIMTIME_MS));
+
+ASSERT(isOriginatorBlockAckAgreementPending(&handler, peer, tid));
+wait(SimTime(1, SIMTIME_MS));
+ASSERT(!isOriginatorBlockAckAgreementPending(&handler, peer, tid));
+
+ASSERT(!isOriginatorBlockAckAgreementPending(&handler, peer, tid));
+ASSERT(!isOriginatorBlockAckAgreementPending(nullptr, peer, tid));
+
+const Tid activeTid = 4;
+TestOriginatorBlockAckAgreementHandler activeHandler;
+auto activeAgreement = activeHandler.installActive(peer, activeTid, SimTime(1, SIMTIME_MS));
+ExpiryCallback expiryCallback;
+wait(SimTime(1, SIMTIME_MS));
+activeHandler.blockAckAgreementExpired(&expiryCallback, &expiryCallback);
+ASSERT(expiryCallback.delbaCount == 1);
+ASSERT(expiryCallback.timerScheduleCount == 0);
+ASSERT(activeAgreement->getExpirationHandlingInProgress());
+ASSERT(activeHandler.getAgreement(peer, activeTid) == activeAgreement);
+
+activeHandler.blockAckAgreementExpired(&expiryCallback, &expiryCallback);
+ASSERT(expiryCallback.delbaCount == 1);
+ASSERT(expiryCallback.timerScheduleCount == 0);

@@ -89,7 +89,7 @@ auto soundingCoordinator = check_and_cast<HeSoundingCoordinator *>(nic->getSubmo
 auto macMib = check_and_cast<Ieee80211Mib *>(nic->getSubmodule("mac")->getSubmodule("mib"));
 
 // Set association ID for our STA to 5
-macMib->bssStationData.associationId = 5;
+macMib->installLocalAssociation(macMib->getSsid(), macMib->getBssid(), 5);
 
 MockMacReal mockMac;
 mockMac.mibRef = macMib;

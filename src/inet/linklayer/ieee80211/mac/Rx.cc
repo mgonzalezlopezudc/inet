@@ -278,14 +278,14 @@ bool Rx::isIntraBssFrame(const Ptr<const Ieee80211MacHeader>& header) const
     if (twoAddress == nullptr)
         return false;
     auto transmitter = twoAddress->getTransmitterAddress();
-    if (transmitter == mib->bssData.bssid)
+    if (transmitter == mib->getBssid())
         return true;
     // An uplink frame addressed to our associated AP is also intra-BSS even
     // though a non-AP STA does not maintain the AP's complete station table.
-    if (!mib->bssData.bssid.isUnspecified() && header->getReceiverAddress() == mib->bssData.bssid)
+    if (!mib->getBssid().isUnspecified() && header->getReceiverAddress() == mib->getBssid())
         return true;
-    if (mib->bssStationData.stationType == Ieee80211Mib::ACCESS_POINT)
-        return mib->bssAccessPointData.stations.count(transmitter) != 0;
+    if (mib->getStationType() == Ieee80211Mib::ACCESS_POINT)
+        return mib->hasPeerMemberStatus(transmitter);
     return false;
 }
 

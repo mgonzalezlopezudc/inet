@@ -83,7 +83,7 @@ Packet *VhtGroupIdManagementFs::buildActionFrame() const
     header->setCategory(21);
     header->setReceiverAddress(peer);
     header->setTransmitterAddress(mib->address);
-    header->setAddress3(mib->bssData.bssid);
+    header->setAddress3(mib->getBssid());
     header->setSequenceNumber(SequenceNumberCyclic(0));
     header->setChunkLength(B(24));
 

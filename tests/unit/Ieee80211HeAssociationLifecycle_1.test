@@ -58,8 +58,8 @@ class TestMgmtSta : public Ieee80211MgmtSta
     {
         if (stage == INITSTAGE_LOCAL) {
             mib.reference(this, "mibModule", true);
-            mib->bssStationData.stationType = Ieee80211Mib::STATION;
-            mib->bssStationData.isAssociated = false;
+            mib->setBssStationType(Ieee80211Mib::STATION);
+            mib->clearLocalAssociation();
             assocTimeoutMsg = nullptr;
             pendingReassociation = false;
             numChannels = 1;
@@ -105,8 +105,7 @@ class TestMgmtSta : public Ieee80211MgmtSta
     {
         auto ap = lookupAP(address);
         requireLifecycle(ap != nullptr, "test AP must exist");
-        mib->bssStationData.isAssociated = true;
-        mib->bssStationData.associationId = 7;
+        mib->installLocalAssociation(mib->getSsid(), mib->getBssid(), 7);
         (ApInfo&)assocAP = *ap;
         assocAP.beaconTimeoutMsg = nullptr;
         Ieee80211SupportedRatesElement supportedRates;
@@ -130,8 +129,7 @@ class TestMgmtSta : public Ieee80211MgmtSta
             assocTimeoutMsg = nullptr;
         }
         pendingReassociation = false;
-        mib->bssStationData.isAssociated = false;
-        mib->bssStationData.associationId = -1;
+        mib->clearLocalAssociation();
         mib->clearCurrentBssBasicLegacyRates();
         assocAP = AssociatedApInfo();
     }
@@ -154,12 +152,12 @@ class TestMgmtSta : public Ieee80211MgmtSta
         handleReassociationResponseFrame(packet, header);
     }
 
-    void acceptReassociation(const MacAddress& address)
+    void acceptReassociationWithAid(const MacAddress& address, short aid)
     {
-        Enter_Method("acceptReassociation");
+        Enter_Method("acceptReassociationWithAid");
         auto response = makeShared<Ieee80211ReassociationResponseFrame>();
         response->setStatusCode(SC_SUCCESSFUL);
-        response->setAid(9);
+        response->setAid(aid);
         Ieee80211SupportedRatesElement supportedRates;
         supportedRates.numRates = 2;
         supportedRates.rates[0].rate = 12;
@@ -172,6 +170,11 @@ class TestMgmtSta : public Ieee80211MgmtSta
         auto header = makeShared<Ieee80211MgmtHeader>();
         header->setTransmitterAddress(address);
         handleReassociationResponseFrame(packet, header);
+    }
+
+    void acceptReassociation(const MacAddress& address)
+    {
+        acceptReassociationWithAid(address, 9);
     }
 
     void locallyDeauthenticate(const MacAddress& address)
@@ -238,13 +241,13 @@ static void cacheAllCapabilities(Ieee80211Mib *mib, const MacAddress& address)
 
 static void requireAllCapabilities(Ieee80211Mib *mib, const MacAddress& address, bool present)
 {
-    requireLifecycle((mib->findNegotiatedHeCapabilities(address) != nullptr) == present,
+    requireLifecycle(mib->getNegotiatedHeCapabilities(address).has_value() == present,
             "HE cache presence mismatch");
-    requireLifecycle((mib->findNegotiatedEhtCapabilities(address) != nullptr) == present,
+    requireLifecycle(mib->getNegotiatedEhtCapabilities(address).has_value() == present,
             "EHT cache presence mismatch");
-    requireLifecycle((mib->findNegotiatedVhtCapabilities(address) != nullptr) == present,
+    requireLifecycle(mib->getNegotiatedVhtCapabilities(address).has_value() == present,
             "VHT cache presence mismatch");
-    requireLifecycle((mib->findPeerLegacyRates(address) != nullptr) == present,
+    requireLifecycle(mib->getPeerLegacyRates(address).has_value() == present,
             "legacy-rate cache presence mismatch");
 }
 
@@ -290,7 +293,7 @@ requireLifecycle(mgmt->getLastChannel() == 6, "reassociation must tune to the ta
 
 mgmt->refuseReassociation(wrongAp);
 requireLifecycle(mgmt->hasPendingAssociationTransition() &&
-        mib->bssStationData.isAssociated && mgmt->getAssociatedApForTest().address == oldAp,
+        mib->isAssociated() && mgmt->getAssociatedApForTest().address == oldAp,
         "response from the wrong AP must not cancel the pending reassociation");
 requireAllCapabilities(mib, targetAp, true);
 requireLifecycle(!mgmt->wasPeerInvalidated(oldAp) &&
@@ -299,7 +302,7 @@ requireLifecycle(!mgmt->wasPeerInvalidated(oldAp) &&
         "an unrelated reassociation response must not invalidate peer state");
 
 mgmt->refuseReassociation(targetAp);
-requireLifecycle(mib->bssStationData.isAssociated &&
+requireLifecycle(mib->isAssociated() &&
         mgmt->getAssociatedApForTest().address == oldAp,
         "refused reassociation must preserve the old association");
 requireLifecycle(mib->currentBssBasicRates.size() == 1 &&
@@ -320,9 +323,16 @@ requireLifecycle(mgmt->wasPeerInvalidated(targetAp) &&
 cacheAllCapabilities(mib, targetAp);
 mgmt->clearInvalidatedPeers();
 mgmt->beginReassociation(targetAp);
+mgmt->acceptReassociationWithAid(targetAp, 0);
+requireLifecycle(mgmt->hasPendingAssociationTransition() && mib->isAssociated() &&
+        mib->getLocalAssociationId() == 7 && mgmt->getAssociatedApForTest().address == oldAp,
+        "malformed successful response must not publish an invalid AID or cancel reassociation");
+requireAllCapabilities(mib, targetAp, true);
+requireLifecycle(!mgmt->wasPeerInvalidated(oldAp) && !mgmt->wasPeerInvalidated(targetAp),
+        "malformed successful response must not invalidate live or pending peer state");
 mgmt->locallyDisassociate(targetAp);
 requireLifecycle(!mgmt->hasPendingAssociationTransition() &&
-        mib->bssStationData.isAssociated && mgmt->getAssociatedApForTest().address == oldAp &&
+        mib->isAssociated() && mgmt->getAssociatedApForTest().address == oldAp &&
         mgmt->getLastChannel() == 1,
         "canceling the target reassociation must preserve and retune to the old AP");
 requireLifecycle(mib->currentBssBasicRates.size() == 1 &&
@@ -355,14 +365,14 @@ cacheAllCapabilities(mib, targetAp);
 mgmt->clearInvalidatedPeers();
 mgmt->beginReassociation(targetAp);
 mgmt->acceptReassociation(targetAp);
-requireLifecycle(mib->bssStationData.isAssociated &&
+requireLifecycle(mib->isAssociated() &&
         mgmt->getAssociatedApForTest().address == targetAp,
         "successful reassociation must install the target association");
 requireLifecycle(mgmt->wasPeerInvalidated(oldAp) &&
         mgmt->wasPeerInvalidated(targetAp),
         "successful reassociation must invalidate old and replacement peer epochs");
-auto targetRates = mib->findPeerLegacyRates(targetAp);
-requireLifecycle(targetRates != nullptr && targetRates->size() == 2 &&
+auto targetRates = mib->getPeerLegacyRates(targetAp);
+requireLifecycle(targetRates && targetRates->size() == 2 &&
         (*targetRates)[0].rate == 12 && (*targetRates)[0].basic &&
         (*targetRates)[1].rate == 24 && !(*targetRates)[1].basic,
         "successful reassociation must replace stale rates with the peer advertisement");

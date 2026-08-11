@@ -51,6 +51,8 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
         int streamStartIndex = 0;
         int totalNsts = 1;
         bool muMimo = false;
+        const physicallayer::IIeee80211Mode *barControlMode = nullptr;
+        const physicallayer::IIeee80211Mode *blockAckResponseMode = nullptr;
         Packet *packet = nullptr;
         std::vector<Packet *> packets;
     };
@@ -70,6 +72,7 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
     AckMethod ackMethod = AckMethod::EXPLICIT_SEQUENTIAL_BAR;
     std::unique_ptr<IFrameSequence> sequence;
     uint32_t ackTriggerId = 0;
+    const physicallayer::IIeee80211Mode *muBarControlMode = nullptr;
 
     std::vector<ActiveAllocation> activeAllocations;
 

@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <ostream>
 #include <set>
+#include <tuple>
 
 #include "inet/common/Units.h"
 
@@ -83,6 +84,40 @@ struct Ieee80211NegotiatedEhtCapabilities
     Ieee80211EhtOperation operation;
     bool valid = false;
 };
+
+// Semantic state comparisons deliberately enumerate every modeled field. When
+// adding a field to one of these value types, add it to the corresponding
+// comparison so capability generations remain complete and deterministic.
+inline bool operator==(const Ieee80211EhtMcsNssMap& a, const Ieee80211EhtMcsNssMap& b)
+{
+    return a.maxMcsPerNss == b.maxMcsPerNss;
+}
+
+inline bool operator==(const Ieee80211EhtCapabilities& a, const Ieee80211EhtCapabilities& b)
+{
+    return std::tie(a.supportedChannelWidths, a.rxMcsNss, a.txMcsNss, a.dlOfdma, a.ulOfdma,
+                   a.dlMuMimo, a.ulMuMimo, a.ldpc, a.support4096Qam, a.ehtDup6GHz,
+                   a.preamblePuncturing, a.mlo, a.str, a.nstr, a.emlsr, a.emlmr,
+                   a.maxAmpduLengthExponent, a.maxMpduLength, a.maxBlockAckBufferSize) ==
+           std::tie(b.supportedChannelWidths, b.rxMcsNss, b.txMcsNss, b.dlOfdma, b.ulOfdma,
+                   b.dlMuMimo, b.ulMuMimo, b.ldpc, b.support4096Qam, b.ehtDup6GHz,
+                   b.preamblePuncturing, b.mlo, b.str, b.nstr, b.emlsr, b.emlmr,
+                   b.maxAmpduLengthExponent, b.maxMpduLength, b.maxBlockAckBufferSize);
+}
+
+inline bool operator==(const Ieee80211EhtOperation& a, const Ieee80211EhtOperation& b)
+{
+    return std::tie(a.operatingChannelWidth, a.disabledSubchannelBitmap,
+                   a.basicEhtMcsNss, a.mcs15Disabled) ==
+           std::tie(b.operatingChannelWidth, b.disabledSubchannelBitmap,
+                   b.basicEhtMcsNss, b.mcs15Disabled);
+}
+
+inline bool operator==(const Ieee80211NegotiatedEhtCapabilities& a, const Ieee80211NegotiatedEhtCapabilities& b)
+{
+    return std::tie(a.intersection, a.operation, a.valid) ==
+           std::tie(b.intersection, b.operation, b.valid);
+}
 
 inline int getMaxNss(const Ieee80211EhtMcsNssMap& map)
 {

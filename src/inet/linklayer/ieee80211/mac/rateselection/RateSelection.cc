@@ -148,8 +148,9 @@ const IIeee80211Mode *RateSelection::computeResponseCtsFrameMode(Packet *packet,
 const IIeee80211Mode *RateSelection::computeDataOrMgmtFrameMode(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader)
 {
     auto basicRates = mib->getBssBasicLegacyRates();
-    auto peerRates = mib->findPeerLegacyRates(dataOrMgmtHeader->getReceiverAddress());
-    Ieee80211RateSelectionPolicy::Context context {modeSet, &mib->localOperationalRates, &basicRates, peerRates,
+    auto peerRates = mib->getPeerLegacyRates(dataOrMgmtHeader->getReceiverAddress());
+    Ieee80211RateSelectionPolicy::Context context {modeSet, &mib->localOperationalRates, &basicRates,
+            peerRates ? &*peerRates : nullptr,
             &mib->htOperation, &mib->vhtOperation};
     if (dataOrMgmtHeader->getReceiverAddress().isMulticast())
         return Ieee80211RateSelectionPolicy::selectGroupOrControl(context, multicastFrameMode,
@@ -200,8 +201,9 @@ const IIeee80211Mode *RateSelection::computeDataOrMgmtFrameMode(const Ptr<const 
 const IIeee80211Mode *RateSelection::computeControlFrameMode(const Ptr<const Ieee80211MacHeader>& header)
 {
     auto basicRates = mib->getBssBasicLegacyRates();
+    auto peerRates = mib->getPeerLegacyRates(header->getReceiverAddress());
     Ieee80211RateSelectionPolicy::Context context {modeSet, &mib->localOperationalRates, &basicRates,
-            mib->findPeerLegacyRates(header->getReceiverAddress()), &mib->htOperation, &mib->vhtOperation};
+            peerRates ? &*peerRates : nullptr, &mib->htOperation, &mib->vhtOperation};
     return Ieee80211RateSelectionPolicy::selectGroupOrControl(context, controlFrameMode,
             controlFrameMode == nullptr ? Ieee80211RateSelectionPolicy::DEFAULT_SELECTION :
             Ieee80211RateSelectionPolicy::EXPLICIT_CONFIGURATION);

@@ -98,9 +98,9 @@ bool VhtSoundingCoordinator::processNdpAnnouncement(Packet *packet,
         return false;
     reset();
     auto mib = mac->getMib();
-    const bool associatedAp = enabled && mib->bssStationData.isAssociated &&
-            !mib->bssData.bssid.isUnspecified() &&
-            ndpa->getTransmitterAddress() == mib->bssData.bssid &&
+    const bool associatedAp = enabled && mib->isAssociated() &&
+            !mib->getBssid().isUnspecified() &&
+            ndpa->getTransmitterAddress() == mib->getBssid() &&
             ndpa->getReceiverAddress() == mac->getAddress() &&
             (operatingWidth == MHz(20) || operatingWidth == MHz(40) ||
              operatingWidth == MHz(80) || operatingWidth == MHz(160));
@@ -109,16 +109,16 @@ bool VhtSoundingCoordinator::processNdpAnnouncement(Packet *packet,
     uint8_t ndpaNc = 1;
     for (size_t i = 0; associatedAp && i < ndpa->getStationsArraySize(); i++) {
         const auto& station = ndpa->getStations(i);
-        if (station.aid == mib->bssStationData.associationId) {
+        if (station.aid == mib->getLocalAssociationId()) {
             matchingAid = true;
             requestedMu = station.muFeedback;
             ndpaNc = station.ncIndex + 1;
             break;
         }
     }
-    auto negotiated = mib->findNegotiatedVhtCapabilities(ndpa->getTransmitterAddress());
+    auto negotiated = mib->getNegotiatedVhtCapabilities(ndpa->getTransmitterAddress());
     auto provenance = packet->findTag<physicallayer::Ieee80211PhyProvenanceInd>();
-    const bool capable = negotiated != nullptr && negotiated->localRxPeerTx.valid &&
+    const bool capable = negotiated && negotiated->localRxPeerTx.valid &&
             (requestedMu ? negotiated->localRxPeerTx.muMimo :
                            negotiated->localRxPeerTx.suBeamforming) &&
             negotiated->localRxPeerTx.soundingNsts >= 2 &&
@@ -128,7 +128,7 @@ bool VhtSoundingCoordinator::processNdpAnnouncement(Packet *packet,
         ndpAnnouncementAccepted = true;
         soundingAccessPoint = ndpa->getTransmitterAddress();
         dialogToken = ndpa->getSoundingDialogTokenNumber();
-        associationId = mib->bssStationData.associationId;
+        associationId = mib->getLocalAssociationId();
         feedbackTypeMu = requestedMu;
         requestedNc = ndpaNc;
         channelWidth = operatingWidth;
@@ -158,9 +158,9 @@ bool VhtSoundingCoordinator::processHeaderlessNdp(Packet *packet,
             indication->getNumberOfSpaceTimeStreams() >= 2 &&
             requestedNc <= indication->getNumberOfSpaceTimeStreams();
     auto mib = mac->getMib();
-    valid &= mib->bssStationData.isAssociated &&
-            mib->bssData.bssid == soundingAccessPoint &&
-            mib->bssStationData.associationId == associationId;
+    valid &= mib->isAssociated() &&
+            mib->getBssid() == soundingAccessPoint &&
+            mib->getLocalAssociationId() == associationId;
     if (!valid)
         EV_INFO << "Rejecting VHT NDP: enabled=" << enabled
                 << ", ndpaAccepted=" << ndpAnnouncementAccepted

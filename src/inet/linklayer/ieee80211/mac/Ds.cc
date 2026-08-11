@@ -31,7 +31,7 @@ void Ds::processDataFrame(Packet *frame, const Ptr<const Ieee80211DataHeader>& h
     if (mib->mode == Ieee80211Mib::INDEPENDENT)
         mac->sendUp(frame);
     else if (mib->mode == Ieee80211Mib::INFRASTRUCTURE) {
-        if (mib->bssStationData.stationType == Ieee80211Mib::ACCESS_POINT) {
+        if (mib->getStationType() == Ieee80211Mib::ACCESS_POINT) {
             // check toDS bit
             if (!header->getToDS()) {
                 // looks like this is not for us - discard
@@ -50,14 +50,14 @@ void Ds::processDataFrame(Packet *frame, const Ptr<const Ieee80211DataHeader>& h
                 return;
             }
             // look up destination address in our STA list
-            auto it = mib->bssAccessPointData.stations.find(header->getAddress3());
-            if (it == mib->bssAccessPointData.stations.end()) {
+            auto peer = mib->getPeerAssociationSnapshot(header->getAddress3());
+            if (!peer.hasMemberStatus()) {
                 EV_WARN << "Frame's destination address is not in our STA list -- passing up\n";
                 mac->sendUp(frame);
             }
             else {
                 // dest address is our STA, but is it already associated?
-                if (it->second == Ieee80211Mib::ASSOCIATED) {
+                if (peer.getMemberStatus() == Ieee80211Mib::ASSOCIATED) {
                     distributeDataFrame(frame, header); // send it out to the destination STA
                     delete frame;
                 }
@@ -70,15 +70,15 @@ void Ds::processDataFrame(Packet *frame, const Ptr<const Ieee80211DataHeader>& h
                 }
             }
         }
-        else if (mib->bssStationData.stationType == Ieee80211Mib::STATION) {
-            if (!mib->bssStationData.isAssociated) {
+        else if (mib->getStationType() == Ieee80211Mib::STATION) {
+            if (!mib->isAssociated()) {
                 EV_WARN << "Rejecting data frame as STA is not associated with an AP" << endl;
                 PacketDropDetails details;
                 details.setReason(OTHER_PACKET_DROP);
                 emit(packetDroppedSignal, frame, &details);
                 delete frame;
             }
-            else if (mib->bssData.bssid != header->getTransmitterAddress()) {
+            else if (mib->getBssid() != header->getTransmitterAddress()) {
                 EV_WARN << "Rejecting data frame received from another AP" << endl;
                 PacketDropDetails details;
                 details.setReason(OTHER_PACKET_DROP);
@@ -122,4 +122,3 @@ void Ds::distributeDataFrame(Packet *incomingFrame, const Ptr<const Ieee80211Dat
 
 } // namespace ieee80211
 } // namespace inet
-

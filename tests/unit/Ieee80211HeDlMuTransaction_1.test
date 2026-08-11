@@ -21,12 +21,15 @@ conservation, TXVECTOR handoff, response timing, and fallback paths.
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuPackingPlanner.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuTxOpFs.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/Ieee80211HeMuContainerTag_m.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 #include "inet/linklayer/ieee80211/mac/queue/InProgressFrames.h"
 #include "inet/networklayer/common/NetworkInterface.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/INarrowbandSignalAnalogModel.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 #include "inet/queueing/contract/IPacketQueue.h"
@@ -137,11 +140,33 @@ class MockDlMuRateSelection : public cSimpleModule, public IQosRateSelection
         return modeSet->findHeMode(0, 1, MHz(20), false);
     }
 
+    const IIeee80211Mode *getCustomControlMode() const
+    {
+        auto modeSet = const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"));
+        return modeSet->findHeMode(1, 1, MHz(20), false);
+    }
+
   public:
     bool compressedBlockAckReqSeen = false;
     int blockAckReqCount = 0;
+    int computeModeCount = 0;
+    int dataComputeModeCount = 0;
+    int controlComputeModeCount = 0;
+    bool groupDataComputeModeSeen = false;
+    bool invalidBlockAckReferenceSeen = false;
+    std::vector<MacAddress> computeModeReceivers;
 
-    void resetObservedRequests() { compressedBlockAckReqSeen = false; blockAckReqCount = 0; }
+    void resetObservedRequests()
+    {
+        compressedBlockAckReqSeen = false;
+        blockAckReqCount = 0;
+        computeModeCount = 0;
+        dataComputeModeCount = 0;
+        controlComputeModeCount = 0;
+        groupDataComputeModeSeen = false;
+        invalidBlockAckReferenceSeen = false;
+        computeModeReceivers.clear();
+    }
 
     virtual const IIeee80211Mode *computeResponseCtsFrameMode(Packet *packet, const Ptr<const Ieee80211RtsFrame>& rtsFrame) override { return nullptr; }
     virtual const IIeee80211Mode *computeResponseAckFrameMode(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) override { return getSlowHeMode(); }
@@ -149,9 +174,28 @@ class MockDlMuRateSelection : public cSimpleModule, public IQosRateSelection
     {
         blockAckReqCount++;
         compressedBlockAckReqSeen |= blockAckReq != nullptr && blockAckReq->getCompressedBitmap();
+        auto modeReq = packet == nullptr ? nullptr : packet->findTag<Ieee80211ModeReq>();
+        invalidBlockAckReferenceSeen |= modeReq == nullptr ||
+                modeReq->getMode() != getCustomControlMode();
         return getSlowHeMode();
     }
-    virtual const IIeee80211Mode *computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, TxopProcedure *txopProcedure) override { return getSlowHeMode(); }
+    virtual const IIeee80211Mode *computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, TxopProcedure *txopProcedure) override
+    {
+        computeModeCount++;
+        if (dynamicPtrCast<const Ieee80211DataHeader>(header) != nullptr) {
+            dataComputeModeCount++;
+            computeModeReceivers.push_back(header->getReceiverAddress());
+        }
+        else
+            controlComputeModeCount++;
+        if (dynamicPtrCast<const Ieee80211DataHeader>(header) != nullptr &&
+                header->getReceiverAddress().isMulticast()) {
+            groupDataComputeModeSeen = true;
+            throw cRuntimeError("synthetic group data header reached computeMode");
+        }
+        return dynamicPtrCast<const Ieee80211DataHeader>(header) != nullptr ?
+                getSlowHeMode() : getCustomControlMode();
+    }
 };
 
 Define_Module(MockDlMuRateSelection);
@@ -159,10 +203,12 @@ Define_Module(MockDlMuRateSelection);
 class MockDlMuCallback : public cSimpleModule, public IFrameSequenceHandler::ICallback
 {
   public:
+    int receivedFrames = 0;
+
     virtual void transmitFrame(Packet *packet, simtime_t ifs) override {}
     virtual void scheduleStartRxTimer(simtime_t timeout) override {}
     virtual void originatorProcessTransmittedFrame(Packet *packet) override {}
-    virtual void originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastTransmittedPacket) override {}
+    virtual void originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastTransmittedPacket) override { receivedFrames++; }
     virtual void originatorProcessFailedFrame(Packet *failedPacket) override {}
     virtual void originatorProcessRtsProtectionFailed(Packet *packet) override {}
     virtual void frameSequenceFinished() override {}
@@ -218,6 +264,7 @@ class TestHeDlMuTxOpFs : public HeDlMuTxOpFs
     using HeDlMuTxOpFs::HeDlMuTxOpFs;
     void setFailBeforePacket(int packetIndex) { failBeforePacket = packetIndex; }
     const HeDlMuPlan& getDlPlanForTest() const { return dlPlan; }
+    uint32_t getAckTriggerIdForTest() const { return ackTriggerId; }
 };
 
 class MockDlMuInProgressFrames : public InProgressFrames
@@ -243,7 +290,7 @@ class MockDlMuOriginatorBlockAckAgreementHandler : public IOriginatorBlockAckAgr
     }
 
     virtual void processReceivedBlockAck(const Ptr<const Ieee80211BlockAck>& blockAck, IBlockAckAgreementHandlerCallback *callback) override {}
-    virtual void processTransmittedAddbaReq(const Ptr<const Ieee80211AddbaRequest>& addbaReq) override {}
+    virtual void processTransmittedAddbaReq(const Ptr<const Ieee80211AddbaRequest>& addbaReq, IBlockAckAgreementHandlerCallback *callback) override {}
     virtual void processTransmittedDataFrame(Packet *packet, const Ptr<const Ieee80211DataHeader>& dataHeader, IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy, IProcedureCallback *callback) override {}
     virtual void processReceivedAddbaResp(const Ptr<const Ieee80211AddbaResponse>& addbaResp, IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy, IBlockAckAgreementHandlerCallback *callback) override {}
     virtual void processReceivedDelba(const Ptr<const Ieee80211Delba>& delba, IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy) override {}
@@ -659,6 +706,8 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     dlScheduleContext.ltfType = HE_LTF_2X;
     dlScheduleContext.packetExtensionDurationUs = 4;
     auto dlPlan = makeDlPlan(scheduler, dlScheduleContext, pendingQueue);
+    auto rateSelection = check_and_cast<MockDlMuRateSelection *>(callback->getSubmodule("rateSelection"));
+    rateSelection->resetObservedRequests();
     TestHeDlMuTxOpFs fs(dlPlan,
             modeSet, pendingQueue, &ackHandler, callback, 8);
     fs.startSequence(fsContext, 0);
@@ -669,11 +718,22 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     requireTrue(fs.getActiveAllocations()[0].packets.size() == 3, "STA1 should pack three MPDUs");
     requireTrue(fs.getActiveAllocations()[1].packets.size() == 2, "STA2 should pack two MPDUs");
     requireTrue(ackHandler.inProgressCount == 5, "all packed MPDUs should enter Block Ack tracking");
+    requireTrue(rateSelection->dataComputeModeCount == 2 &&
+            !rateSelection->groupDataComputeModeSeen &&
+            std::all_of(rateSelection->computeModeReceivers.begin(),
+                    rateSelection->computeModeReceivers.end(),
+                    [] (const auto& receiver) { return !receiver.isMulticast(); }),
+            "only one real unicast MPDU per selected user should reach data computeMode");
+    requireTrue(!rateSelection->invalidBlockAckReferenceSeen,
+            "Block Ack response selection should use the explicit control-reference mode");
     requireTrue(metadataPacket->getFrontOffset() == B(2) &&
             metadataPacket->getBackOffset() == metadataPacket->getTotalLength() - B(3) &&
             metadataPacket->findRegionTag<CreationTimeTag>(b(0), metadataPacket->getTotalLength()) != nullptr,
             "commit should preserve data-region offsets and region tags");
     auto container = check_and_cast<ITransmitStep *>(step)->getFrameToTransmit();
+    requireTrue(container->getTag<Ieee80211ModeReq>()->getMode() ==
+            modeSet->findHeMode(0, 1, MHz(20), false),
+            "MU container carrier mode should be generic HE MCS0/NSS1 at full PPDU width");
     auto canonicalRequest = container->getTag<Ieee80211HeTxVectorReq>();
     requireTrue(canonicalRequest->getTxVector()->getUsers().size() == fs.getActiveAllocations().size(),
             "DL frame-sequence TXVECTOR and active plan must have the same allocation count");
@@ -684,12 +744,33 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     auto handoff = container->getTag<Ieee80211HeTxVectorReq>();
     auto transmission = check_and_cast<const Ieee80211Transmission *>(
             transmitter->createTransmission(radio, container, SimTime(1, SIMTIME_S)));
+    auto analog = check_and_cast<const INarrowbandSignalAnalogModel *>(
+            transmission->getAnalogModel());
     requireTrue(transmission->getHeTxVector() == handoff->getTxVector() &&
             transmission->getHePpduLayout() == handoff->getPpduLayout(),
             "DL frame-sequence container must retain the canonical radio/transmitter handoff");
     requireTrue(transmission->getHeTxVector()->getUsers().size() ==
             fs.getActiveAllocations().size(),
             "DL frame-sequence plan and canonical TXVECTOR must have the same user count");
+    requireTrue(transmission->getPpduBandwidth() == dlScheduleContext.channelBandwidth &&
+            transmission->getMode()->getDataMode()->getBandwidth() ==
+                    dlScheduleContext.channelBandwidth &&
+            analog->getBandwidth() == dlScheduleContext.channelBandwidth &&
+            analog->getCenterFrequency() == dlScheduleContext.channelCenterFrequency,
+            "carrier mode and analog signal must use canonical full PPDU width and center, not the first RU");
+    auto mismatchedContainer = std::unique_ptr<Packet>(container->dup());
+    mismatchedContainer->getTagForUpdate<Ieee80211ModeReq>()->setMode(
+            modeSet->findHeMode(0, 1, MHz(40), true));
+    bool rejectedMismatchedCarrier = false;
+    try {
+        delete transmitter->createTransmission(radio, mismatchedContainer.get(),
+                SimTime(2, SIMTIME_S));
+    }
+    catch (const cRuntimeError&) {
+        rejectedMismatchedCarrier = true;
+    }
+    requireTrue(rejectedMismatchedCarrier,
+            "transmitter must reject an HE carrier mode whose bandwidth disagrees with canonical TXVECTOR");
     const auto& actualCommon = transmission->getHeTxVector()->getCommon();
     const auto& actualCommonParameters = actualCommon.getParameters();
     requireTrue(actualCommon.getCenterFrequency() == dlScheduleContext.channelCenterFrequency &&
@@ -741,6 +822,55 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     EV << "Per-user packet packing admitted multiple MPDUs per scheduled STA.\n";
     EV << "Validated DL frame-sequence allocations matched the canonical PHY handoff.\n";
     delete step;
+    delete fsContext;
+}
+
+{
+    clearQueue(pendingQueue);
+    pendingQueue->enqueuePacket(makeDataPacket("bar-mode-sta1", sta1, tid, 0, 200));
+    pendingQueue->enqueuePacket(makeDataPacket("bar-mode-sta2", sta2, tid, 0, 200));
+    MockDlMuScheduler scheduler({makeAllocation(sta1, 0, 106), makeAllocation(sta2, 1, 106)});
+    MockDlMuAckHandler ackHandler;
+    MockDlMuInProgressFrames inProgress;
+    MockDlMuOriginatorBlockAckAgreementHandler baHandler;
+    baHandler.addAgreement(sta1, tid);
+    baHandler.addAgreement(sta2, tid);
+    auto qosContext = new QoSContext(nullptr, nullptr, &baHandler, nullptr);
+    auto fsContext = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), modeSet, &inProgress, nullptr, nullptr, nullptr, qosContext);
+    auto rateSelection = check_and_cast<MockDlMuRateSelection *>(callback->getSubmodule("rateSelection"));
+    rateSelection->resetObservedRequests();
+    HeDlMuTxOpFs fs(makeDlPlan(scheduler, makeScheduleContext({sta1, sta2}), pendingQueue),
+            modeSet, pendingQueue, &ackHandler, callback);
+    fs.startSequence(fsContext, 0);
+    auto containerStep = check_and_cast<ITransmitStep *>(fs.prepareStep(fsContext));
+    auto containerPacket = containerStep->getFrameToTransmit();
+    auto controlMode = modeSet->findHeMode(1, 1, MHz(20), false);
+    auto responseMode = modeSet->findHeMode(0, 1, MHz(20), false);
+    requireTrue(controlMode != responseMode,
+            "test requires distinct control-reference and Block Ack response modes");
+    auto containerDuration = containerPacket->getTag<Ieee80211HeMuContainerReq>()->getDurationField();
+    auto expectedContainerDuration = 2 * (modeSet->getSifsTime() + controlMode->getDuration(B(38)) +
+            modeSet->getSifsTime() + responseMode->getDuration(LENGTH_BASIC_BLOCKACK));
+    requireTrue(containerDuration == expectedContainerDuration,
+            "sequential exchange planning should use control mode for BAR airtime and response mode only for Block Ack airtime");
+    fsContext->addStep(containerStep);
+    containerStep->setCompletion(IFrameSequenceStep::Completion::ACCEPTED);
+    requireTrue(fs.completeStep(fsContext), "HE MU container step should complete before sequential BAR");
+    auto barStep = check_and_cast<ITransmitStep *>(fs.prepareStep(fsContext));
+    auto barPacket = barStep->getFrameToTransmit();
+    auto barHeader = barPacket->peekAtFront<Ieee80211BlockAckReq>();
+    requireTrue(barPacket->getTag<Ieee80211ModeReq>()->getMode() == controlMode,
+            "generated sequential BAR should carry the same control-reference mode used for planning");
+    auto expectedBarDuration = 3 * modeSet->getSifsTime() +
+            controlMode->getDuration(B(38)) +
+            2 * responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
+    requireTrue(barHeader->getDurationField() == expectedBarDuration,
+            "sequential BAR Duration should distinguish later BAR airtime from Block Ack response airtime");
+    requireTrue(!rateSelection->groupDataComputeModeSeen &&
+            !rateSelection->invalidBlockAckReferenceSeen,
+            "sequential BAR exchange should avoid synthetic group selection and use control references for responses");
+    EV << "Sequential BAR planning and packet tags kept control and response modes distinct.\n";
+    delete barStep;
     delete fsContext;
 }
 
@@ -849,6 +979,7 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     auto step = fs.prepareStep(fsContext);
     requireTrue(step != nullptr, "106-tone MU-BAR responses should leave payload time in an AC_VO TXOP");
     requireTrue(fs.getActiveAllocations().size() == 2, "voice TXOP should preserve both 106-tone users");
+    auto containerPacket = check_and_cast<ITransmitStep *>(step)->getFrameToTransmit();
     fsContext->addStep(step);
     step->setCompletion(IFrameSequenceStep::Completion::ACCEPTED);
     requireTrue(fs.completeStep(fsContext), "HE MU container step should complete");
@@ -857,6 +988,15 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     fsContext->addStep(triggerStep);
     auto triggerPacket = triggerStep->getFrameToTransmit();
     auto directTrigger = triggerPacket->peekAtFront<Ieee80211TriggerFrame>();
+    auto controlMode = modeSet->findHeMode(1, 1, MHz(20), false);
+    requireTrue(triggerPacket->getTag<Ieee80211ModeReq>()->getMode() == controlMode,
+            "generated MU-BAR Trigger should carry the same control-reference mode used for planning");
+    auto expectedMuBarDuration = modeSet->getSifsTime() +
+            controlMode->getDuration(B(24 + 9 * directTrigger->getUsersArraySize() + 4)) +
+            modeSet->getSifsTime() + directTrigger->getCommonDuration();
+    requireTrue(containerPacket->getTag<Ieee80211HeMuContainerReq>()->getDurationField() ==
+            expectedMuBarDuration,
+            "MU-BAR planning should use control mode for Trigger airtime and finalized HE-TB response airtime separately");
     requireTrue(directTrigger->getGuardInterval() == HE_GI_1_6_US,
             "MU-BAR producer should use the mandatory ordinary HE-TB GI");
     requireTrue(directTrigger->getLtfType() == HE_LTF_2X,
@@ -918,6 +1058,39 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     auto responseTxVector = Ieee80211HeTxVectorFactory::create(responseRequest);
     requireTrue(static_cast<bool>(responseTxVector),
             "serialized MU-BAR Trigger should construct a coherent HE-TB response TXVECTOR");
+    triggerStep->setCompletion(IFrameSequenceStep::Completion::ACCEPTED);
+    requireTrue(fs.completeStep(fsContext), "MU-BAR Trigger step should complete");
+    auto responseStep = check_and_cast<ReceiveCollectionStep *>(fs.prepareStep(fsContext));
+    requireTrue(responseStep != nullptr, "MU-BAR sequence should open its BlockAck collection");
+    fsContext->addStep(responseStep);
+
+    auto unrelatedAmpdu = new Packet("unrelated-ht-ampdu");
+    auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
+    delimiter->setLength(32);
+    unrelatedAmpdu->insertAtBack(delimiter);
+    unrelatedAmpdu->insertAtBack(makeShared<ByteCountChunk>(B(32)));
+    requireTrue(!responseStep->acceptsHeaderlessFrame(unrelatedAmpdu),
+            "generic MU-BAR collection must not opt into delimiter-front A-MPDUs");
+    responseStep->setFrameToReceive(unrelatedAmpdu);
+
+    const auto& active = fs.getActiveAllocations().front();
+    auto blockAck = makeShared<Ieee80211CompressedBlockAck>();
+    blockAck->setReceiverAddress(MacAddress("AA:BB:CC:DD:EE:FF"));
+    blockAck->setTransmitterAddress(active.staAddress);
+    blockAck->setTidInfo(active.tid);
+    auto validResponse = new Packet("valid-he-tb-compressed-ba", blockAck);
+    auto recipient = validResponse->addTag<Ieee80211HeTbRecipientContextInd>();
+    recipient->setTriggerId(fs.getAckTriggerIdForTest());
+    auto parameters = std::make_shared<Ieee80211HeUserPhyParameters>();
+    parameters->ru = active.ru;
+    parameters->staId = active.associationId;
+    recipient->setRecipientParameters(parameters);
+    responseStep->setFrameToReceive(validResponse);
+    auto receivedBefore = callback->receivedFrames;
+    responseStep->setCompletion(IFrameSequenceStep::Completion::ACCEPTED);
+    requireTrue(fs.completeStep(fsContext), "MU-BAR response collection should complete");
+    requireTrue(callback->receivedFrames == receivedBefore + 1,
+            "valid compressed BlockAck should be accepted while delimiter-front traffic is ignored");
     EV << "MU-BAR response timing used scheduled RU widths within the voice TXOP.\n";
     delete fsContext;
 }
@@ -943,8 +1116,8 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     auto step = fs.prepareStep(fsContext);
     requireTrue(step != nullptr, "compressed 52-tone MU-BAR response should leave payload time in an AC_VO TXOP");
     requireTrue(fs.getActiveAllocations().size() == 2, "compressed response timing should preserve both mixed-RU users");
-    requireTrue(rateSelection->blockAckReqCount > 0, "MU-BAR timing should query the Block Ack response mode");
-    requireTrue(rateSelection->compressedBlockAckReqSeen, "MU-BAR timing should select a compressed BlockAckReq response mode");
+    requireTrue(rateSelection->blockAckReqCount == 0,
+            "MU-BAR timing should come only from Trigger-derived HE-TB finalization");
     EV << "Compressed MU-BAR timing preserved mixed 106/52-tone users in the voice TXOP.\n";
     delete step;
     delete fsContext;
