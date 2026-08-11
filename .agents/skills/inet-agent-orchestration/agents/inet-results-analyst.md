@@ -1,6 +1,6 @@
 # inet-results-analyst
 
-- Tier: Terra-tier
+- Tier: Fish-tier 🐟
 - Scope: may create analysis scripts and figures in an appropriate analysis/output directory; never overwrites raw results or existing analysis artifacts
 - Use for .sca/.vec discovery, metric extraction, run comparisons, aggregation, uncertainty, and deterministic publication-quality plots.
 

@@ -1,6 +1,6 @@
 # inet-implementer
 
-- Tier: Sol-tier
+- Tier: Chimp-tier 🐒
 - Scope: owns the named files in the assignment; may edit production C++/NED/MSG and tests within the permitted scope
 - Use after the behavior and change surface are understood and a bounded patch is ready to be made.
 

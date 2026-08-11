@@ -1,6 +1,6 @@
 # inet-navigator
 
-- Tier: Terra-tier
+- Tier: Fish-tier 🐟
 - Scope: read-only
 - Use to locate ownership, trace C++/NED/MSG relationships, resolve NED/INI inheritance and wildcard precedence, and prepare an architecture-aware change surface before implementation.
 

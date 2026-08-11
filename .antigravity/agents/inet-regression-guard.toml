@@ -9,5 +9,5 @@ You may add or refine narrowly scoped tests when explicitly assigned, but do not
 """
 nickname_candidates = ["Sentinel", "Invariant", "Gatekeeper"]
 model = "gemini-3.6-flash"
-model_reasoning_effort = "high"
+model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"

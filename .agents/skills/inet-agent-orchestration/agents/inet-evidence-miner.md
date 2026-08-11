@@ -1,6 +1,6 @@
 # inet-evidence-miner
 
-- Tier: Luna-tier
+- Tier: Ant-tier 🐜
 - Scope: read-only
 - Use for mechanical evidence extraction: bounded searches, artifact inventories, and exact filtering of existing logs, captures, event logs, scalars, or vectors, only when the question and output schema are explicit.
 

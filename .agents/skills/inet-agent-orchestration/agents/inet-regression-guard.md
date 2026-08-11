@@ -1,6 +1,6 @@
 # inet-regression-guard
 
-- Tier: Terra-tier
+- Tier: Fish-tier 🐟
 - Scope: may add or refine narrowly scoped tests when explicitly assigned; never changes production source
 - Use to reproduce failures, design deterministic checks, compare before/after behavior, and assess test sufficiency.
 

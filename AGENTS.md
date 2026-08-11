@@ -8,10 +8,11 @@ Use the `inet-agent-orchestration` skill for nontrivial INET work that benefits 
 
 Optimize routing for correctness first and token/credit consumption second:
 
-* Use Sol-tier for correctness-critical judgment: ambiguous Wi-Fi MAC/PHY behavior, standards-to-model comparison, difficult runtime causality, production implementation, and final review.
-* Use Terra-tier for bounded engineering work: repository/configuration tracing, deterministic regression work, and result analysis with established methods.
-* Use Luna-tier only for clear, repeatable work with an explicit output contract: artifact inventory, targeted extraction, filtering, and structured summarization. Do not ask Luna-tier agents to establish causality, interpret ambiguous standards language, design a fix, or approve a change.
-* Use the runtime-specific model and effort equivalence table in `inet-agent-orchestration`. If a configured model is unavailable, preserve or increase capability and disclose any substitution; never silently downgrade Sol-tier work.
+* Use Chimp-tier 🐒 for difficult runtime causality and production implementation.
+* Use Dog-tier 🐕 for ambiguous Wi-Fi MAC/PHY or standards reasoning and final review.
+* Use Fish-tier 🐟 for repository/configuration tracing, deterministic regression work, and result analysis with established methods.
+* Use Ant-tier 🐜 only for clear, repeatable work with an explicit output contract: artifact inventory, targeted extraction, filtering, and structured summarization. Do not ask Ant-tier 🐜 agents to establish causality, interpret ambiguous standards language, design a fix, or approve a change.
+* Use the runtime-specific model and effort equivalence table in `inet-agent-orchestration`. If a configured model is unavailable, preserve or increase capability and disclose any substitution; never silently downgrade Chimp-tier 🐒 work.
 
 Keep orchestration shallow and evidence-driven:
 
@@ -88,7 +89,7 @@ Store project-wide agent behavior in `AGENTS.md`. Store task-specific reusable w
 ### Available skills
 
 * `inet-architectural-requirements`: Apply INET architectural requirements, naming conventions, exception ledgers, enforcement checks, and sealing policy before changing or reviewing `src/inet/`.
-* `inet-agent-orchestration`: Route nontrivial INET and IEEE 802.11 work across project-scoped Sol-, Terra-, and Luna-tier specialists on Codex, Antigravity, or Kimi.
+* `inet-agent-orchestration`: Route nontrivial INET and IEEE 802.11 work across project-scoped Chimp-tier 🐒, Dog-tier 🐕, Fish-tier 🐟, and Ant-tier 🐜 specialists on Codex, Antigravity, or Kimi.
 * `inet-simulation-run`: Run INET simulations with Cmdenv or Qtenv and diagnose startup or runtime failures.
 * `inet-cmdenv-log-analysis`: Find text and investigate module behavior in Cmdenv output.
 * `inet-pcap-tshark-analysis`: Record and analyze INET packet exchanges with PcapRecorder and TShark.
