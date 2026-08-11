@@ -260,8 +260,7 @@ reproducible rather than merely attractive.
 [Source](../.agents/skills/inet-unit-tests/SKILL.md)
 
 **Purpose:** This skill defines the repository-supported unit-test entry point, the required
-build-before-test sequence for compiled changes, release/debug matching,
-ccache handling, regex filtering, and failure classification.
+build-before-test sequence for compiled changes, release/debug matching, regex filtering, and failure classification.
 
 **Benefit: fast, local protection.** The explicit
 rebuild rule is especially important: a freshly generated test executable does

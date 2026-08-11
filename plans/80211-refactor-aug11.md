@@ -542,7 +542,6 @@ This is an independent schema/API patch, not part of the management migration.
 From the repository root, after compiled-source changes:
 
 ```sh
-export CCACHE_DISABLE=1
 make MODE=release -j$(nproc)
 
 inet_run_unit_tests \
@@ -553,7 +552,6 @@ inet_run_unit_tests \
 Use one narrower filter during development. Run module tests serially for deterministic diagnosis:
 
 ```sh
-export CCACHE_DISABLE=1
 inet_run_module_tests \
   -m release \
   --no-build \
