@@ -66,6 +66,7 @@ class INET_API Ieee80211Mac : public MacProtocolBase
     opp_component_ptr<Hcf> hcf;
     opp_component_ptr<Mcf> mcf;
     ITwtManager *twtManager = nullptr;
+    IIeee80211MgmtExchangeResultHandler *mgmtExchangeResultHandler = nullptr;
 
     // The last change channel message received and not yet sent to the physical layer, or nullptr.
     cMessage *pendingRadioConfigMsg = nullptr;
@@ -147,16 +148,26 @@ class INET_API Ieee80211Mac : public MacProtocolBase
     virtual bool isTwtPeerEligible(const MacAddress& peer) const;
     virtual void sendTwtPsPoll(const MacAddress& peer);
     virtual ITwtManager *getTwtManager() const { return twtManager; }
+    virtual void setMgmtExchangeResultHandler(IIeee80211MgmtExchangeResultHandler *handler);
 
     virtual void processUpperFrame(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header);
     virtual void processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header);
-    virtual bool isApInAxMode() const {
-      return modeSet != nullptr && !strcmp(modeSet->getName(), "ax") &&
+    virtual bool isApInHeFamily() const {
+      return modeSet != nullptr && modeSet->hasPhyFamily(physicallayer::Ieee80211PhyFamily::HE) &&
           mib != nullptr && mib->mode == Ieee80211Mib::INFRASTRUCTURE &&
           mib->getStationType() == Ieee80211Mib::ACCESS_POINT;
     }
-    virtual bool isAxMode() const { return modeSet != nullptr && !strcmp(modeSet->getName(), "ax"); }
-    virtual bool isBeMode() const { return modeSet != nullptr && !strcmp(modeSet->getName(), "be"); }
+    virtual bool isHeFamilyAvailable() const {
+        return modeSet != nullptr && modeSet->hasPhyFamily(physicallayer::Ieee80211PhyFamily::HE);
+    }
+    virtual bool isEhtFamilyAvailable() const {
+        return modeSet != nullptr && modeSet->hasPhyFamily(physicallayer::Ieee80211PhyFamily::EHT);
+    }
+    // Compatibility names retained for external users; operational code uses
+    // the family-based queries above.
+    virtual bool isApInAxMode() const { return isApInHeFamily(); }
+    virtual bool isAxMode() const { return isHeFamilyAvailable(); }
+    virtual bool isBeMode() const { return isEhtFamilyAvailable(); }
 
     virtual void invalidatePeerDerivedState(const MacAddress& peer);
 };

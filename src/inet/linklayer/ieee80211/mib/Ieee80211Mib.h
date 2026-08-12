@@ -134,7 +134,10 @@ class INET_API Ieee80211Mib : public SimpleModule
     void installLocalAssociation(const std::string& ssid, const MacAddress& bssid, short associationId);
     void clearLocalAssociation();
     void setPeerMemberStatus(const MacAddress& address, BssMemberStatus memberStatus);
+    short reservePeerAssociation(const MacAddress& address);
+    void releasePeerAssociationReservation(const MacAddress& address, short associationId);
     PeerAssociationSnapshot commitPeerAssociation(const MacAddress& address);
+    PeerAssociationSnapshot commitPeerAssociation(const MacAddress& address, short associationId);
     PeerAssociationSnapshot clearPeerAssociation(const MacAddress& address, BssMemberStatus memberStatus);
     void addPeerAssociationListener(IIeee80211PeerAssociationListener *listener);
     void removePeerAssociationListener(IIeee80211PeerAssociationListener *listener);

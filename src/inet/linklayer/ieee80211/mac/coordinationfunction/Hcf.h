@@ -8,6 +8,7 @@
 #ifndef __INET_HCF_H
 #define __INET_HCF_H
 
+#include <memory>
 #include <limits>
 #include <map>
 #include <set>
@@ -18,6 +19,7 @@
 #include "inet/linklayer/ieee80211/mac/channelaccess/Hcca.h"
 #include "inet/linklayer/ieee80211/mac/common/ModeSetListener.h"
 #include "inet/linklayer/ieee80211/mac/contract/IAckHandler.h"
+#include "inet/linklayer/ieee80211/mac/contract/Ieee80211MgmtExchangeResult.h"
 #include "inet/linklayer/ieee80211/mac/contract/IBlockAckAgreementHandlerCallback.h"
 #include "inet/linklayer/ieee80211/mac/contract/ICoordinationFunction.h"
 #include "inet/linklayer/ieee80211/mac/contract/ICtsPolicy.h"
@@ -105,20 +107,20 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     IRecipientQosMacDataService *recipientDataService = nullptr;
 
     // MAC Procedures
-    IRecipientAckProcedure *recipientAckProcedure = nullptr;
+    std::unique_ptr<IRecipientAckProcedure> recipientAckProcedure;
     IOriginatorQoSAckPolicy *originatorAckPolicy = nullptr;
     IRecipientQosAckPolicy *recipientAckPolicy = nullptr;
-    IRtsProcedure *rtsProcedure = nullptr;
+    std::unique_ptr<IRtsProcedure> rtsProcedure;
     IRtsPolicy *rtsPolicy = nullptr;
-    ICtsProcedure *ctsProcedure = nullptr;
+    std::unique_ptr<ICtsProcedure> ctsProcedure;
     ICtsPolicy *ctsPolicy = nullptr;
-    IOriginatorBlockAckProcedure *originatorBlockAckProcedure = nullptr;
-    IRecipientBlockAckProcedure *recipientBlockAckProcedure = nullptr;
+    std::unique_ptr<IOriginatorBlockAckProcedure> originatorBlockAckProcedure;
+    std::unique_ptr<IRecipientBlockAckProcedure> recipientBlockAckProcedure;
 
     // Block Ack Agreement Handlers
-    IOriginatorBlockAckAgreementHandler *originatorBlockAckAgreementHandler = nullptr;
+    std::unique_ptr<IOriginatorBlockAckAgreementHandler> originatorBlockAckAgreementHandler;
     IOriginatorBlockAckAgreementPolicy *originatorBlockAckAgreementPolicy = nullptr;
-    IRecipientBlockAckAgreementHandler *recipientBlockAckAgreementHandler = nullptr;
+    std::unique_ptr<IRecipientBlockAckAgreementHandler> recipientBlockAckAgreementHandler;
     IRecipientBlockAckAgreementPolicy *recipientBlockAckAgreementPolicy = nullptr;
 
     // Tx Opportunity
@@ -128,7 +130,7 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     InProgressFrames *hccaInProgressFrame = nullptr;
 
     // Frame sequence handler
-    IFrameSequenceHandler *frameSequenceHandler = nullptr;
+    std::unique_ptr<IFrameSequenceHandler> frameSequenceHandler;
     HcfExchangeCoordinator exchangeCoordinator;
     HcfResponseService responseService;
 
@@ -142,6 +144,10 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     int lastSelectedModeNumSpatialStreams = -1;
     HcfAggregationService aggregationService;
     uint64_t nextServiceDataUnitId = 1;
+    IIeee80211MgmtExchangeResultHandler *mgmtExchangeResultHandler = nullptr;
+
+    void notifyMgmtExchangeResult(Packet *packet,
+            Ieee80211MgmtExchangeResultKind kind);
 
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
@@ -259,6 +265,8 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
   public:
     virtual ~Hcf();
 
+    void setMgmtExchangeResultHandler(IIeee80211MgmtExchangeResultHandler *handler) { mgmtExchangeResultHandler = handler; }
+
     /**
      * Returns true when the local, non-negotiated HT implicit Block Ack
      * feature is enabled. Ieee80211Mac uses this at the deaggregation boundary
@@ -267,7 +275,7 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     virtual bool isHtImplicitBlockAckEnabled() const;
 
     IOriginatorMacDataService *getOriginatorMacDataService() const { return originatorDataService; }
-    IOriginatorBlockAckAgreementHandler *getOriginatorBlockAckAgreementHandler() const { return originatorBlockAckAgreementHandler; }
+    IOriginatorBlockAckAgreementHandler *getOriginatorBlockAckAgreementHandler() const { return originatorBlockAckAgreementHandler.get(); }
     virtual void invalidatePeerDerivedState(const MacAddress& peer);
     virtual queueing::IPacketQueue *resolvePerStaQueue(const MacAddress& staAddr, AccessCategory ac) {
       return getPerStaQueue(staAddr, ac);

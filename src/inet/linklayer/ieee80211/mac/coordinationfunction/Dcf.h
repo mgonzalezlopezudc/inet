@@ -8,6 +8,8 @@
 #ifndef __INET_DCF_H
 #define __INET_DCF_H
 
+#include <memory>
+
 #include "inet/linklayer/ieee80211/mac/channelaccess/Dcaf.h"
 #include "inet/linklayer/ieee80211/mac/common/ModeSetListener.h"
 #include "inet/linklayer/ieee80211/mac/contract/ICoordinationFunction.h"
@@ -20,6 +22,7 @@
 #include "inet/linklayer/ieee80211/mac/contract/IRecipientAckProcedure.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRecipientMacDataService.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRtsProcedure.h"
+#include "inet/linklayer/ieee80211/mac/contract/Ieee80211MgmtExchangeResult.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRx.h"
 #include "inet/linklayer/ieee80211/mac/contract/ITx.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
@@ -62,11 +65,11 @@ class INET_API Dcf : public ICoordinationFunction, public IFrameSequenceHandler:
     // MAC Procedures
     AckHandler *ackHandler = nullptr;
     IOriginatorAckPolicy *originatorAckPolicy = nullptr;
-    IRecipientAckProcedure *recipientAckProcedure = nullptr;
+    std::unique_ptr<IRecipientAckProcedure> recipientAckProcedure;
     IRecipientAckPolicy *recipientAckPolicy = nullptr;
-    IRtsProcedure *rtsProcedure = nullptr;
+    std::unique_ptr<IRtsProcedure> rtsProcedure;
     IRtsPolicy *rtsPolicy = nullptr;
-    ICtsProcedure *ctsProcedure = nullptr;
+    std::unique_ptr<ICtsProcedure> ctsProcedure;
     ICtsPolicy *ctsPolicy = nullptr;
     NonQosRecoveryProcedure *recoveryProcedure = nullptr;
 
@@ -78,10 +81,14 @@ class INET_API Dcf : public ICoordinationFunction, public IFrameSequenceHandler:
     OriginatorProtectionMechanism *originatorProtectionMechanism = nullptr;
 
     // Frame sequence handler
-    IFrameSequenceHandler *frameSequenceHandler = nullptr;
+    std::unique_ptr<IFrameSequenceHandler> frameSequenceHandler;
 
     // Station counters
-    StationRetryCounters *stationRetryCounters = nullptr;
+    std::unique_ptr<StationRetryCounters> stationRetryCounters;
+    IIeee80211MgmtExchangeResultHandler *mgmtExchangeResultHandler = nullptr;
+
+    void notifyMgmtExchangeResult(Packet *packet,
+            Ieee80211MgmtExchangeResultKind kind);
 
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
@@ -124,6 +131,8 @@ class INET_API Dcf : public ICoordinationFunction, public IFrameSequenceHandler:
 
   public:
     virtual ~Dcf();
+
+    void setMgmtExchangeResultHandler(IIeee80211MgmtExchangeResultHandler *handler) { mgmtExchangeResultHandler = handler; }
 
     // ICoordinationFunction
     virtual void processUpperFrame(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header) override;

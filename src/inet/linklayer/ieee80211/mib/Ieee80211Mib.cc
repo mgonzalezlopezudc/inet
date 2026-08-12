@@ -656,9 +656,31 @@ void Ieee80211Mib::setPeerMemberStatus(const MacAddress& address, BssMemberStatu
     associationState.setPeerMemberStatus(address, memberStatus);
 }
 
+short Ieee80211Mib::reservePeerAssociation(const MacAddress& address)
+{
+    return associationState.reservePeerAssociation(address);
+}
+
+void Ieee80211Mib::releasePeerAssociationReservation(const MacAddress& address, short associationId)
+{
+    associationState.releasePeerAssociationReservation(address, associationId);
+}
+
 Ieee80211Mib::PeerAssociationSnapshot Ieee80211Mib::commitPeerAssociation(const MacAddress& address)
 {
     auto transition = associationState.commitPeerAssociation(address);
+    auto listeners = peerAssociationListeners;
+    for (auto listener : listeners)
+        listener->peerAssociationChanged(transition);
+    Ieee80211PeerAssociationChangedEvent event(transition);
+    emit(peerAssociationChangedSignal, &event);
+    return transition.getNewSnapshot();
+}
+
+Ieee80211Mib::PeerAssociationSnapshot Ieee80211Mib::commitPeerAssociation(
+        const MacAddress& address, short associationId)
+{
+    auto transition = associationState.commitPeerAssociation(address, associationId);
     auto listeners = peerAssociationListeners;
     for (auto listener : listeners)
         listener->peerAssociationChanged(transition);

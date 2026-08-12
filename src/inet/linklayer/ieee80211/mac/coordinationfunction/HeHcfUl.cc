@@ -502,7 +502,7 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
     // HE TB PPDUs from one or more non-AP HE STAs by transmitting a Trigger
     // frame.  EDCA/TXOP ownership is still inherited from HCF/EDCA (10.23).
     if (pendingUlTrigger == IIeee80211HeUlTriggerPolicy::NO_TRIGGER ||
-            !mac->isApInAxMode() || !ulCoordinator->isEnabled())
+            !mac->isApInHeFamily() || !ulCoordinator->isEnabled())
         return false;
 
     ulTriggerAccessRequested = false;
@@ -1010,9 +1010,9 @@ const Ptr<Ieee80211CompressedBlockAck> HeHcf::processTriggeredUlBlockAckReq(
         return nullptr;
     }
     sendUp(recipientDataService->controlFrameReceived(packet, blockAckReq,
-            recipientBlockAckAgreementHandler));
+            recipientBlockAckAgreementHandler.get()));
     auto blockAck = recipientBlockAckProcedure->buildBlockAck(
-            blockAckReq, recipientBlockAckAgreementHandler);
+            blockAckReq, recipientBlockAckAgreementHandler.get());
     delete packet;
     auto compressedBlockAck = dynamicPtrCast<Ieee80211CompressedBlockAck>(blockAck);
     if (compressedBlockAck == nullptr)
@@ -1467,7 +1467,7 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
         delete packet;
         return;
     }
-    if (!ulCoordinator->isEnabled() || mac->isApInAxMode() ||
+    if (!ulCoordinator->isEnabled() || mac->isApInHeFamily() ||
             mac->getMib()->getLocalAssociationId() <= 0) {
         delete packet;
         return;

@@ -357,7 +357,7 @@ bool HeHcf::stagePerStaFrameForSingleUserTransmission(AccessCategory ac)
 bool HeHcf::tryStartDlMuFrameSequence(AccessCategory ac)
 {
     auto edcaf = edca->getEdcaf(ac);
-    if (mac->isApInAxMode() && enableDlMuMimo && mac->getMib()->localHeCapabilities.dlMuMimoBeamformer) {
+    if (mac->isApInHeFamily() && enableDlMuMimo && mac->getMib()->localHeCapabilities.dlMuMimoBeamformer) {
         // 26.5.1 allows DL MU-MIMO only when the AP has the required HE
         // beamformer capability and per-STA feedback; 26.7.3 defines the HE
         // TB sounding exchange used here to refresh CSI before scheduling.
@@ -366,7 +366,7 @@ bool HeHcf::tryStartDlMuFrameSequence(AccessCategory ac)
         auto txop = edcaf->getTxopProcedure();
         if (!txop->isProtectionConfigured())
             txop->configureProtection(TxopProcedure::InitialProtection::NONE);
-        if (soundingCoordinator->tryStartSoundingSequence(ac, scheduleContext, frameSequenceHandler, mac, modeSet, csiManager, buildContext(ac), this))
+        if (soundingCoordinator->tryStartSoundingSequence(ac, scheduleContext, frameSequenceHandler.get(), mac, modeSet, csiManager, buildContext(ac), this))
             return true;
     }
 

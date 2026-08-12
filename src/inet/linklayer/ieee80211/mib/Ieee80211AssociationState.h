@@ -107,6 +107,7 @@ class INET_API Ieee80211AssociationState final
     uint64_t localGeneration = 0;
     std::map<MacAddress, BssMemberStatus> peerMemberStatuses;
     std::map<MacAddress, short> peerAssociationIds;
+    std::map<MacAddress, short> peerAssociationReservations;
     std::map<MacAddress, uint64_t> peerGenerations;
     std::map<MacAddress, uint64_t> peerAssociationEpochs;
     uint64_t nextAssociationEpoch = 0;
@@ -124,7 +125,10 @@ class INET_API Ieee80211AssociationState final
     void installLocalAssociation(const std::string& ssid, const MacAddress& bssid, short associationId);
     void clearLocalAssociation();
     void setPeerMemberStatus(const MacAddress& address, BssMemberStatus memberStatus);
+    short reservePeerAssociation(const MacAddress& address);
+    void releasePeerAssociationReservation(const MacAddress& address, short associationId);
     PeerTransition commitPeerAssociation(const MacAddress& address);
+    PeerTransition commitPeerAssociation(const MacAddress& address, short associationId);
     PeerTransition clearPeerAssociation(const MacAddress& address, BssMemberStatus memberStatus);
     short getAssociationId(const MacAddress& address) const;
     MacAddress getStationAddress(short associationId) const;

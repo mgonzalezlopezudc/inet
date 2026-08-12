@@ -45,12 +45,17 @@ static void requireSignalState(bool condition, const char *message)
 class TestMgmtAp : public Ieee80211MgmtAp
 {
   protected:
+    Ieee80211MgmtExchangeResultKind nextResult = Ieee80211MgmtExchangeResultKind::ACKNOWLEDGED;
+    uint64_t lastTransactionId = 0;
+    bool suppressNextResult = false;
+
     virtual void initialize(int stage) override
     {
         if (stage == INITSTAGE_LOCAL) {
             mib.reference(this, "mibModule", true);
             mib->setBssStationType(Ieee80211Mib::ACCESS_POINT);
             ssid = "signal-test";
+            numAuthSteps = 2;
             beaconTimer = nullptr;
         }
     }
@@ -62,6 +67,17 @@ class TestMgmtAp : public Ieee80211MgmtAp
     virtual void handleMessageWhenDown(cMessage *message) override { delete message; }
     virtual void sendManagementFrame(const char *, const Ptr<Ieee80211MgmtFrame>&,
             int, const MacAddress&) override {}
+
+    virtual void sendManagementFrameWithTransaction(const char *, const Ptr<Ieee80211MgmtFrame>&,
+            int, const MacAddress&, uint64_t transactionId) override
+    {
+        lastTransactionId = transactionId;
+        if (!suppressNextResult)
+            handleAssociationExchangeResult(Ieee80211MgmtExchangeResult(
+                    transactionId, nextResult));
+        suppressNextResult = false;
+        nextResult = Ieee80211MgmtExchangeResultKind::ACKNOWLEDGED;
+    }
 
   public:
     void addAuthenticatedStation(const MacAddress& address)
@@ -88,6 +104,40 @@ class TestMgmtAp : public Ieee80211MgmtAp
         handleAssociationRequestFrame(packet, header);
     }
 
+    void reassociateStation(const MacAddress& address)
+    {
+        Enter_Method("reassociateStation");
+        auto request = makeShared<Ieee80211ReassociationRequestFrame>();
+        request->setCurrentAP(MacAddress("02:00:00:00:00:01"));
+        Ieee80211SupportedRatesElement rates;
+        rates.numRates = 1;
+        rates.rates[0].rate = 2;
+        rates.rates[0].basic = true;
+        request->setSupportedRates(rates);
+        request->setChunkLength(B(4));
+        auto packet = new Packet("ReassocReq", request);
+        auto header = makeShared<Ieee80211MgmtHeader>();
+        header->setTransmitterAddress(address);
+        handleReassociationRequestFrame(packet, header);
+    }
+
+    void retryNextExchange()
+    {
+        nextResult = Ieee80211MgmtExchangeResultKind::RETRY_LIMIT_REACHED;
+    }
+
+    void deliverStaleAcknowledgement()
+    {
+        Enter_Method("deliverStaleAcknowledgement");
+        handleAssociationExchangeResult(Ieee80211MgmtExchangeResult(
+                lastTransactionId, Ieee80211MgmtExchangeResultKind::ACKNOWLEDGED));
+    }
+
+    void suppressNextExchangeResult()
+    {
+        suppressNextResult = true;
+    }
+
     void disassociateStation(const MacAddress& address)
     {
         Enter_Method("disassociateStation");
@@ -95,6 +145,27 @@ class TestMgmtAp : public Ieee80211MgmtAp
         auto header = makeShared<Ieee80211MgmtHeader>();
         header->setTransmitterAddress(address);
         handleDisassociationFrame(packet, header);
+    }
+
+    void authenticateStation(const MacAddress& address)
+    {
+        Enter_Method("authenticateStation");
+        auto request = makeShared<Ieee80211AuthenticationFrame>();
+        request->setSequenceNumber(1);
+        request->setChunkLength(B(6));
+        auto packet = new Packet("Auth", request);
+        auto header = makeShared<Ieee80211MgmtHeader>();
+        header->setTransmitterAddress(address);
+        handleAuthenticationFrame(packet, header);
+    }
+
+    void deauthenticateStation(const MacAddress& address)
+    {
+        Enter_Method("deauthenticateStation");
+        auto packet = new Packet("Deauth");
+        auto header = makeShared<Ieee80211MgmtHeader>();
+        header->setTransmitterAddress(address);
+        handleDeauthenticationFrame(packet, header);
     }
 };
 
@@ -193,14 +264,38 @@ mgmt->associateStation(station);
 requireSignalState(observer.associationSignals == 1, "exactly one association signal expected");
 requireSignalState(observer.mibTransitions == 1, "exactly one MIB association transition expected");
 
+mgmt->retryNextExchange();
+mgmt->associateStation(station);
+requireSignalState(observer.associationSignals == 1,
+        "retry-limit association response must not emit a second association signal");
+requireSignalState(mib->isPeerAssociated(station),
+        "a failed replacement association must preserve the prior association");
+mgmt->deliverStaleAcknowledgement();
+requireSignalState(observer.associationSignals == 1,
+        "a stale association result must be ignored");
+
+mgmt->retryNextExchange();
+mgmt->reassociateStation(station);
+requireSignalState(observer.associationSignals == 1,
+        "retry-limit reassociation response must not emit an association signal");
+requireSignalState(mib->isPeerAssociated(station),
+        "a failed reassociation response must preserve the prior association");
+
 mib->setPeerHtCapabilities(station, Ieee80211HtCapabilities(), Ieee80211HtOperation());
 mib->setPeerVhtCapabilities(station, Ieee80211VhtCapabilities(), Ieee80211VhtOperation());
 mib->setPeerHeCapabilities(station, Ieee80211HeCapabilities(), Ieee80211HeOperation());
 mib->setPeerEhtCapabilities(station, Ieee80211EhtCapabilities(), Ieee80211EhtOperation());
+mgmt->suppressNextExchangeResult();
+mgmt->associateStation(station);
+requireSignalState(observer.associationSignals == 1 && mib->isPeerAssociated(station),
+        "a pending replacement must preserve the prior association before cancellation");
 mgmt->disassociateStation(station);
 requireSignalState(observer.disassociationSignals == 1, "exactly one disassociation signal expected");
 requireSignalState(observer.mibTransitions == 2, "exactly one MIB disassociation transition expected");
 requireSignalState(observer.controlTransitions == 2, "typed lifecycle consumer must receive both transitions");
+mgmt->deliverStaleAcknowledgement();
+requireSignalState(observer.associationSignals == 1 && !mib->isPeerAssociated(station),
+        "a stale result after cancellation must not restore the association");
 
 mib->unsubscribe(Ieee80211Mib::peerAssociationChangedSignal, &observer);
 auto transitionsWithoutObserver = observer.mibTransitions;
@@ -213,6 +308,28 @@ requireSignalState(observer.controlTransitions == 4,
 mib->removePeerAssociationListener(&observer);
 mgmt->unsubscribe(l2ApAssociatedSignal, &observer);
 mgmt->unsubscribe(l2ApDisassociatedSignal, &observer);
+
+const MacAddress canceledStation("02:00:00:00:00:22");
+mgmt->addAuthenticatedStation(canceledStation);
+mgmt->associateStation(canceledStation);
+requireSignalState(mib->isPeerAssociated(canceledStation),
+        "second peer must start associated for cancellation coverage");
+mgmt->suppressNextExchangeResult();
+mgmt->associateStation(canceledStation);
+mgmt->authenticateStation(canceledStation);
+mgmt->deliverStaleAcknowledgement();
+requireSignalState(!mib->isPeerAssociated(canceledStation),
+        "authentication restart must cancel a pending association result");
+
+mgmt->addAuthenticatedStation(canceledStation);
+mgmt->associateStation(canceledStation);
+mgmt->suppressNextExchangeResult();
+mgmt->associateStation(canceledStation);
+mgmt->deauthenticateStation(canceledStation);
+mgmt->deliverStaleAcknowledgement();
+requireSignalState(!mib->isPeerAssociated(canceledStation) &&
+        mib->isPeerNotAuthenticated(canceledStation),
+        "deauthentication must cancel a pending association result");
 EV << "Synchronous AP association signals observed committed MIB state.\n";
 
 %contains: stdout

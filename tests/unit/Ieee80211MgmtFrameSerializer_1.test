@@ -1,0 +1,89 @@
+%description:
+Test symmetric serialization of represented IEEE 802.11 management fixed fields
+
+%includes:
+#include "inet/common/packet/Packet.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrame_m.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+static Ieee80211SupportedRatesElement oneRate()
+{
+    Ieee80211SupportedRatesElement rates;
+    rates.numRates = 1;
+    rates.rates[0].rate = 12;
+    rates.rates[0].basic = true;
+    return rates;
+}
+
+static Ieee80211CapabilityInformation capability()
+{
+    Ieee80211CapabilityInformation value;
+    value.ESS = true;
+    value.IBSS = false;
+    value.CFPollable = true;
+    value.CFPollRequest = false;
+    value.privacy = true;
+    value.DelayedBlockAck = true;
+    value.InmediateBlockAck = false;
+    return value;
+}
+
+%activity:
+{
+    auto frame = makeShared<Ieee80211AuthenticationFrame>();
+    frame->setAuthenticationAlgorithmNumber(7);
+    frame->setSequenceNumber(3);
+    frame->setStatusCode(SC_SUCCESSFUL);
+    Packet packet("authentication", frame);
+    auto bytes = packet.peekDataAsBytes();
+    Packet received("authentication-rx", bytes);
+    auto decoded = received.popAtFront<Ieee80211AuthenticationFrame>();
+    ASSERT(decoded->getAuthenticationAlgorithmNumber() == 7);
+    ASSERT(decoded->getSequenceNumber() == 3);
+    ASSERT(decoded->getStatusCode() == SC_SUCCESSFUL);
+}
+
+{
+    auto frame = makeShared<Ieee80211AssociationRequestFrame>();
+    frame->setCapabilityInformation(capability());
+    frame->setListenInterval(0x1234);
+    frame->setSSID("r");
+    frame->setSupportedRates(oneRate());
+    frame->setChunkLength(B(10));
+    Packet packet("association-request", frame);
+    auto bytes = packet.peekDataAsBytes();
+    ASSERT(bytes->getChunkLength() == B(10));
+    Packet received("association-request-rx", bytes);
+    auto decoded = received.popAtFront<Ieee80211AssociationRequestFrame>();
+    ASSERT(decoded->getCapabilityInformation().ESS);
+    ASSERT(decoded->getCapabilityInformation().CFPollable);
+    ASSERT(decoded->getCapabilityInformation().privacy);
+    ASSERT(decoded->getCapabilityInformation().DelayedBlockAck);
+    ASSERT(decoded->getListenInterval() == 0x1234);
+}
+
+{
+    auto frame = makeShared<Ieee80211BeaconFrame>();
+    frame->setTimestamp(0x0102030405060708ULL);
+    frame->setCapabilityInformation(capability());
+    frame->setSSID("b");
+    frame->setSupportedRates(oneRate());
+    frame->setBeaconInterval(SimTime(102400, SIMTIME_US));
+    frame->setChunkLength(B(18));
+    Packet packet("beacon", frame);
+    auto bytes = packet.peekDataAsBytes();
+    ASSERT(bytes->getChunkLength() == B(18));
+    Packet received("beacon-rx", bytes);
+    auto decoded = received.popAtFront<Ieee80211BeaconFrame>();
+    ASSERT(decoded->getTimestamp() == 0x0102030405060708ULL);
+    ASSERT(decoded->getCapabilityInformation().ESS);
+    ASSERT(decoded->getCapabilityInformation().DelayedBlockAck);
+}
+
+EV << "IEEE 802.11 management fixed-field serialization passed.\n";
+
+%contains: stdout
+IEEE 802.11 management fixed-field serialization passed.

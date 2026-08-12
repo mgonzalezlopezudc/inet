@@ -6,6 +6,7 @@
 
 
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
+#include "inet/linklayer/ieee80211/mac/common/Ieee80211Addressing.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -41,18 +42,14 @@ simtime_t FrameSequenceContext::getCtsTimeout(Packet *packet, const Ptr<const Ie
 
 bool FrameSequenceContext::isForUs(const Ptr<const Ieee80211MacHeader>& header) const
 {
-    return header->getReceiverAddress() == address || (header->getReceiverAddress().isMulticast() && !isSentByUs(header));
+    auto roles = interpretIeee80211AddressRoles(header);
+    return roles.receiverAddress == address || (roles.receiverAddress.isMulticast() && !isSentByUs(header));
 }
 
 bool FrameSequenceContext::isSentByUs(const Ptr<const Ieee80211MacHeader>& header) const
 {
-    // FIXME
-    // Check the roles of the Addr3 field when aggregation is applied
-    // Table 8-19—Address field contents
-    if (auto dataOrMgmtHeader = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(header))
-        return dataOrMgmtHeader->getAddress3() == address;
-    else
-        return false;
+    auto roles = interpretIeee80211AddressRoles(header);
+    return roles.hasTransmitterAddress && roles.transmitterAddress == address;
 }
 
 FrameSequenceContext::~FrameSequenceContext()

@@ -107,6 +107,18 @@ catch (const cRuntimeError&) {
 ASSERT(directAssociationRejected);
 ASSERT(mib.getPeerAssociationSnapshot(peer1).getMemberStatus() == Ieee80211Mib::AUTHENTICATED);
 
+short reservedPeer1Aid = mib.reservePeerAssociation(peer1);
+short reservedPeer2Aid = mib.reservePeerAssociation(peer2);
+ASSERT(reservedPeer1Aid != reservedPeer2Aid);
+ASSERT(!mib.isPeerAssociated(peer1));
+ASSERT(!mib.isPeerAssociated(peer2));
+ASSERT(mib.getAssociationId(peer1) == -1);
+mib.releasePeerAssociationReservation(peer2, reservedPeer2Aid);
+short reusedReservationAid = mib.reservePeerAssociation(peer3);
+ASSERT(reusedReservationAid == reservedPeer2Aid);
+mib.releasePeerAssociationReservation(peer3, reusedReservationAid);
+mib.releasePeerAssociationReservation(peer1, reservedPeer1Aid);
+
 auto allocatedPeer = mib.commitPeerAssociation(peer1);
 short peer1Aid = allocatedPeer.getAssociationId();
 ASSERT(peer1Aid == 1);

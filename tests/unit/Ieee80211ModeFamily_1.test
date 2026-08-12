@@ -1,0 +1,28 @@
+%description:
+Test configured IEEE 802.11 PHY-family capability queries
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+
+%global:
+using namespace inet::physicallayer;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+%activity:
+const auto *legacy = Ieee80211ModeSet::getModeSet("g(mixed)");
+const auto *he = Ieee80211ModeSet::getModeSet("ax");
+const auto *eht = Ieee80211ModeSet::getModeSet("be");
+REQUIRE(legacy != nullptr);
+REQUIRE(he != nullptr);
+REQUIRE(eht != nullptr);
+REQUIRE(!legacy->hasPhyFamily(Ieee80211PhyFamily::HE));
+REQUIRE(!legacy->hasPhyFamily(Ieee80211PhyFamily::EHT));
+REQUIRE(he->hasPhyFamily(Ieee80211PhyFamily::HE));
+REQUIRE(!he->hasPhyFamily(Ieee80211PhyFamily::EHT));
+REQUIRE(eht->hasPhyFamily(Ieee80211PhyFamily::EHT));
+REQUIRE(!eht->hasPhyFamily(Ieee80211PhyFamily::HE));
+EV << "IEEE 802.11 PHY-family capability queries passed.\n";
+
+%contains: stdout
+IEEE 802.11 PHY-family capability queries passed.

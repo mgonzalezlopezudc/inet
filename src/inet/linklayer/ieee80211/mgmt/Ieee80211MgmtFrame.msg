@@ -405,6 +405,7 @@ class Ieee80211MgmtFrame extends FieldsChunk
 class Ieee80211AuthenticationFrame extends Ieee80211MgmtFrame
 {
     chunkLength = B(6); // add 2+len bytes for challenge text if present
+    uint16_t authenticationAlgorithmNumber = 0;
     unsigned short sequenceNumber;
     Ieee80211StatusCode statusCode;
     bool isLast; // not part of the standard; see above
@@ -443,6 +444,8 @@ class Ieee80211ProbeRequestFrame extends Ieee80211MgmtFrame
 //
 class Ieee80211AssociationRequestFrame extends Ieee80211MgmtFrame
 {
+    Ieee80211CapabilityInformation capabilityInformation;
+    uint16_t listenInterval = 0;
     string SSID;
     Ieee80211SupportedRatesElement supportedRates;
     Ieee80211ExtendedSupportedRatesElement extendedSupportedRates;
@@ -462,6 +465,7 @@ class Ieee80211ReassociationRequestFrame extends Ieee80211AssociationRequestFram
 //
 class Ieee80211AssociationResponseFrame extends Ieee80211MgmtFrame
 {
+    Ieee80211CapabilityInformation capabilityInformation;
     Ieee80211StatusCode statusCode;
     short aid;
     Ieee80211SupportedRatesElement supportedRates;
@@ -480,6 +484,8 @@ class Ieee80211ReassociationResponseFrame extends Ieee80211AssociationResponseFr
 //
 class Ieee80211BeaconFrame extends Ieee80211MgmtFrame
 {
+    uint64_t timestamp = 0; // TSF timer value in microseconds; zero means not supplied by the model
+    Ieee80211CapabilityInformation capabilityInformation;
     string SSID;
     Ieee80211SupportedRatesElement supportedRates;
     Ieee80211ExtendedSupportedRatesElement extendedSupportedRates;

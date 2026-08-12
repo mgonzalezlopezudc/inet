@@ -56,7 +56,7 @@ void Ieee80211TwtManager::initialize(int stage)
 
         // IEEE 802.11ax-2024, Section 26.8.1: Target Wake Time (TWT) requires 
         // support for HE (High Efficiency) / 802.11ax capabilities and QoS STAs.
-        if (enabled && (!mib->qos || !mac->isAxMode()))
+        if (enabled && (!mib->qos || !mac->isHeFamilyAvailable()))
             throw cRuntimeError("TWT requires an IEEE 802.11ax QoS station");
 
         EV_INFO << "TWT Manager Link Layer Stage Initialized. Node MAC Address: " 

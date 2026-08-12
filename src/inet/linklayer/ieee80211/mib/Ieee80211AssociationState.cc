@@ -111,9 +111,11 @@ void Ieee80211AssociationState::setPeerMemberStatus(const MacAddress& address, B
     }
 }
 
-Ieee80211AssociationState::PeerTransition Ieee80211AssociationState::commitPeerAssociation(const MacAddress& address)
+short Ieee80211AssociationState::reservePeerAssociation(const MacAddress& address)
 {
-    auto oldSnapshot = getPeerSnapshot(address);
+    auto existingReservation = peerAssociationReservations.find(address);
+    if (existingReservation != peerAssociationReservations.end())
+        return existingReservation->second;
     short associationId = getAssociationId(address);
     if (associationId == -1) {
         for (short candidate = 1; candidate <= 2007; candidate++) {
@@ -123,14 +125,52 @@ Ieee80211AssociationState::PeerTransition Ieee80211AssociationState::commitPeerA
                     used = true;
                     break;
                 }
+            if (!used)
+                for (const auto& entry : peerAssociationReservations)
+                    if (entry.second == candidate) {
+                        used = true;
+                        break;
+                    }
             if (!used) {
                 associationId = candidate;
                 break;
             }
         }
-        if (associationId == -1)
-            throw cRuntimeError("No IEEE 802.11 association ID is available");
     }
+    if (associationId == -1)
+        throw cRuntimeError("No IEEE 802.11 association ID is available");
+    peerAssociationReservations[address] = associationId;
+    return associationId;
+}
+
+void Ieee80211AssociationState::releasePeerAssociationReservation(const MacAddress& address, short associationId)
+{
+    auto it = peerAssociationReservations.find(address);
+    if (it == peerAssociationReservations.end())
+        return;
+    if (it->second != associationId)
+        throw cRuntimeError("IEEE 802.11 association reservation mismatch for %s", address.str().c_str());
+    peerAssociationReservations.erase(it);
+}
+
+Ieee80211AssociationState::PeerTransition Ieee80211AssociationState::commitPeerAssociation(const MacAddress& address)
+{
+    return commitPeerAssociation(address, reservePeerAssociation(address));
+}
+
+Ieee80211AssociationState::PeerTransition Ieee80211AssociationState::commitPeerAssociation(
+        const MacAddress& address, short associationId)
+{
+    auto oldSnapshot = getPeerSnapshot(address);
+    if (associationId < 1 || associationId > 2007)
+        throw cRuntimeError("Invalid IEEE 802.11 association ID %d; expected 1..2007", associationId);
+    auto reservation = peerAssociationReservations.find(address);
+    if (reservation != peerAssociationReservations.end() && reservation->second != associationId)
+        throw cRuntimeError("IEEE 802.11 association reservation mismatch for %s", address.str().c_str());
+    for (const auto& entry : peerAssociationIds)
+        if (entry.first != address && entry.second == associationId)
+            throw cRuntimeError("IEEE 802.11 association ID %d is already assigned", associationId);
+    peerAssociationReservations.erase(address);
 
     if (nextAssociationEpoch == std::numeric_limits<uint64_t>::max())
         throw cRuntimeError("IEEE 802.11 association epoch space exhausted");

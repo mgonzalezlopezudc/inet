@@ -18,8 +18,11 @@
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequenceHandler.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211MgmtExchangeTag_m.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211SubtypeTag_m.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211HeMgmtElements.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211EhtMgmtElements.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211HtVhtMgmtElements.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtAp.h"
 #include "inet/networklayer/common/NetworkInterface.h"
@@ -48,6 +51,13 @@ static void addApHeManagementElements(const Ptr<Ieee80211MgmtFrame>& body, Ieee8
     body->setHeCapabilities(makeHeCapabilitiesElement(mib->localHeCapabilities));
     body->setHeOperationPresent(true);
     body->setHeOperation(makeHeOperationElement(mib->heOperation));
+}
+
+static Ieee80211CapabilityInformation makeApCapabilityInformation()
+{
+    Ieee80211CapabilityInformation capabilityInformation;
+    capabilityInformation.ESS = true;
+    return capabilityInformation;
 }
 
 static void addApHtVhtManagementElements(const Ptr<Ieee80211MgmtFrame>& body, Ieee80211Mib *mib,
@@ -121,8 +131,11 @@ void Ieee80211MgmtAp::initialize(int stage)
         // start beacon timer (randomize startup time)
         beaconTimer = new cMessage("beaconTimer");
     }
-    else if (stage == INITSTAGE_LINK_LAYER)
+    else if (stage == INITSTAGE_LINK_LAYER) {
+        mac = check_and_cast<Ieee80211Mac *>(getModuleFromPar<cModule>(par("macModule"), this));
+        mac->setMgmtExchangeResultHandler(this);
         requireDetailedLegacyRateSupport();
+    }
 }
 
 void Ieee80211MgmtAp::handleTimer(cMessage *msg)
@@ -262,9 +275,16 @@ Ieee80211MgmtAp::StaInfo *Ieee80211MgmtAp::lookupSenderSTA(const Ptr<const Ieee8
 
 void Ieee80211MgmtAp::sendManagementFrame(const char *name, const Ptr<Ieee80211MgmtFrame>& body, int subtype, const MacAddress& destAddr)
 {
+    sendManagementFrameWithTransaction(name, body, subtype, destAddr, 0);
+}
+
+void Ieee80211MgmtAp::sendManagementFrameWithTransaction(const char *name, const Ptr<Ieee80211MgmtFrame>& body, int subtype, const MacAddress& destAddr, uint64_t transactionId)
+{
     auto packet = new Packet(name);
     packet->addTag<MacAddressReq>()->setDestAddress(destAddr);
     packet->addTag<Ieee80211SubtypeReq>()->setSubtype(subtype);
+    if (transactionId != 0)
+        packet->addTag<Ieee80211MgmtExchangeTag>()->setTransactionId(transactionId);
     packet->insertAtBack(body);
     sendDown(packet);
 }
@@ -302,6 +322,8 @@ void Ieee80211MgmtAp::sendBeacon()
     EV << "Sending beacon\n";
     const auto& body = makeShared<Ieee80211BeaconFrame>();
     body->setSSID(ssid.c_str());
+    body->setTimestamp(0); // TSF source is not modeled; zero is the documented unsupported value
+    body->setCapabilityInformation(makeApCapabilityInformation());
     addLegacyRateElements(body);
     body->setBeaconInterval(beaconInterval);
     body->setChannelNumber(channelNumber);
@@ -355,6 +377,7 @@ void Ieee80211MgmtAp::handleAuthenticationFrame(Packet *packet, const Ptr<const 
     // receives authentication frame number 1 from STA, which will cause the AP to return an Auth-Error
     // making the MN STA to start the handover process all over again.
     if (frameAuthSeq == 1) {
+        abortPendingAssociation(sta->address);
         invalidatePeerState(sta->address);
         bool wasAssociated = mib->isPeerAssociated(sta->address);
         if (wasAssociated) {
@@ -429,10 +452,12 @@ void Ieee80211MgmtAp::handleAuthenticationFrame(Packet *packet, const Ptr<const 
             catch (const cException &e) {
                 EV_DEBUG << "Could not get MAC module for queue bank destruction: " << e.what() << "\n";
             }
-            mib->releaseAssociationId(sta->address);
         }
         else
-            mib->setPeerMemberStatus(sta->address, Ieee80211Mib::AUTHENTICATED); // TODO only when ACK of this frame arrives
+            // IEEE Std 802.11-2024, 11.3.4.3(h): successful authentication
+            // advances the AP peer state when the response is transmitted;
+            // this transition is intentionally not ACK-gated.
+            mib->setPeerMemberStatus(sta->address, Ieee80211Mib::AUTHENTICATED);
         EV << "STA authenticated\n";
     }
     else {
@@ -449,6 +474,7 @@ void Ieee80211MgmtAp::handleDeauthenticationFrame(Packet *packet, const Ptr<cons
     delete packet;
 
     if (sta) {
+        abortPendingAssociation(sta->address);
         invalidatePeerState(sta->address);
         // mark STA as not authenticated; alternatively, it could also be removed from staList
         bool wasAssociated = mib->isPeerAssociated(sta->address);
@@ -492,31 +518,29 @@ void Ieee80211MgmtAp::handleAssociationRequestFrame(Packet *packet, const Ptr<co
     }
 
     auto associationRequest = packet->peekData<Ieee80211AssociationRequestFrame>();
-    invalidatePeerState(sta->address);
-    mib->setPeerLegacyRates(sta->address,
-            associationRequest->getSupportedRates(),
-            associationRequest->getExtendedSupportedRates());
-    mib->setStationTransmitPower(sta->address, associationRequest->getTransmitPowerDbm());
+    abortPendingAssociation(sta->address);
+    PendingAssociation pending;
+    pending.transactionId = nextAssociationTransactionId++;
+    if (nextAssociationTransactionId == 0)
+        nextAssociationTransactionId = 1;
+    pending.peer = sta->address;
+    pending.associationId = mib->reservePeerAssociation(sta->address);
+    pending.reassociation = false;
+    pending.supportedRates = associationRequest->getSupportedRates();
+    pending.extendedSupportedRates = associationRequest->getExtendedSupportedRates();
+    pending.transmitPowerDbm = associationRequest->getTransmitPowerDbm();
     if (isHeManagementSupported() && associationRequest->getHeCapabilitiesPresent())
-        mib->setPeerHeCapabilities(sta->address, makeHeCapabilities(associationRequest->getHeCapabilities()), mib->heOperation);
-    else
-        mib->removePeerHeCapabilities(sta->address);
+        pending.heCapabilities = makeHeCapabilities(associationRequest->getHeCapabilities());
     if (isHtManagementSupported() && associationRequest->getHtCapabilitiesPresent())
-        mib->setPeerHtCapabilities(sta->address, makeHtCapabilities(associationRequest->getHtCapabilities()), mib->htOperation);
-    else
-        mib->removePeerHtCapabilities(sta->address);
+        pending.htCapabilities = makeHtCapabilities(associationRequest->getHtCapabilities());
     if (isVhtManagementSupported() && associationRequest->getVhtCapabilitiesPresent())
-        mib->setPeerVhtCapabilities(sta->address, makeVhtCapabilities(associationRequest->getVhtCapabilities()), mib->vhtOperation);
-    else
-        mib->removePeerVhtCapabilities(sta->address);
+        pending.vhtCapabilities = makeVhtCapabilities(associationRequest->getVhtCapabilities());
+    if (isEhtManagementSupported() && associationRequest->getEhtCapabilitiesPresent())
+        pending.ehtCapabilities = makeEhtCapabilities(associationRequest->getEhtCapabilities());
+    pendingAssociations[sta->address] = pending;
     delete packet;
 
-    // Mark STA as associated and allocate its AID before notifying synchronous listeners.
-    bool wasAssociated = mib->isPeerAssociated(sta->address);
-    auto association = mib->commitPeerAssociation(sta->address); // TODO commit when the MAC receives the response ACK
-    short associationId = association.getAssociationId();
-    if (!wasAssociated)
-        sendAssocNotification(sta->address);
+    short associationId = pending.associationId;
 
     // Create per-STA queue bank only for APs operating in ax mode.
     try {
@@ -539,12 +563,13 @@ void Ieee80211MgmtAp::handleAssociationRequestFrame(Packet *packet, const Ptr<co
     const auto& body = makeShared<Ieee80211AssociationResponseFrame>();
     body->setStatusCode(SC_SUCCESSFUL);
     body->setAid(associationId);
+    body->setCapabilityInformation(makeApCapabilityInformation());
     addLegacyRateElements(body);
     if (isHeManagementSupported())
         addApHeManagementElements(body, mib);
     addApHtVhtManagementElements(body, mib, isHtManagementSupported(), isVhtManagementSupported());
     body->setChunkLength(B(2 + 2 + 2) + getLegacyRateElementsLength(body) + getHeMgmtElementsLength(body) + getHtVhtMgmtElementsLength(body));
-    sendManagementFrame("AssocResp-OK", body, ST_ASSOCIATIONRESPONSE, sta->address);
+    sendManagementFrameWithTransaction("AssocResp-OK", body, ST_ASSOCIATIONRESPONSE, sta->address, pending.transactionId);
 }
 
 void Ieee80211MgmtAp::handleAssociationResponseFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>& header)
@@ -568,27 +593,29 @@ void Ieee80211MgmtAp::handleReassociationRequestFrame(Packet *packet, const Ptr<
     }
 
     auto reassociationRequest = packet->peekData<Ieee80211ReassociationRequestFrame>();
-    invalidatePeerState(sta->address);
-    mib->setPeerLegacyRates(sta->address,
-            reassociationRequest->getSupportedRates(),
-            reassociationRequest->getExtendedSupportedRates());
+    abortPendingAssociation(sta->address);
+    PendingAssociation pending;
+    pending.transactionId = nextAssociationTransactionId++;
+    if (nextAssociationTransactionId == 0)
+        nextAssociationTransactionId = 1;
+    pending.peer = sta->address;
+    pending.associationId = mib->reservePeerAssociation(sta->address);
+    pending.reassociation = true;
+    pending.supportedRates = reassociationRequest->getSupportedRates();
+    pending.extendedSupportedRates = reassociationRequest->getExtendedSupportedRates();
+    pending.transmitPowerDbm = reassociationRequest->getTransmitPowerDbm();
     if (isHeManagementSupported() && reassociationRequest->getHeCapabilitiesPresent())
-        mib->setPeerHeCapabilities(sta->address, makeHeCapabilities(reassociationRequest->getHeCapabilities()), mib->heOperation);
-    else
-        mib->removePeerHeCapabilities(sta->address);
+        pending.heCapabilities = makeHeCapabilities(reassociationRequest->getHeCapabilities());
     if (isHtManagementSupported() && reassociationRequest->getHtCapabilitiesPresent())
-        mib->setPeerHtCapabilities(sta->address, makeHtCapabilities(reassociationRequest->getHtCapabilities()), mib->htOperation);
-    else
-        mib->removePeerHtCapabilities(sta->address);
+        pending.htCapabilities = makeHtCapabilities(reassociationRequest->getHtCapabilities());
     if (isVhtManagementSupported() && reassociationRequest->getVhtCapabilitiesPresent())
-        mib->setPeerVhtCapabilities(sta->address, makeVhtCapabilities(reassociationRequest->getVhtCapabilities()), mib->vhtOperation);
-    else
-        mib->removePeerVhtCapabilities(sta->address);
+        pending.vhtCapabilities = makeVhtCapabilities(reassociationRequest->getVhtCapabilities());
+    if (isEhtManagementSupported() && reassociationRequest->getEhtCapabilitiesPresent())
+        pending.ehtCapabilities = makeEhtCapabilities(reassociationRequest->getEhtCapabilities());
+    pendingAssociations[sta->address] = pending;
     delete packet;
 
-    // Mark STA as associated and allocate its AID before sending the response.
-    auto association = mib->commitPeerAssociation(sta->address); // TODO commit when the MAC receives the response ACK
-    short associationId = association.getAssociationId();
+    short associationId = pending.associationId;
 
     // Create per-STA queue bank only for APs operating in ax mode.
     try {
@@ -611,12 +638,13 @@ void Ieee80211MgmtAp::handleReassociationRequestFrame(Packet *packet, const Ptr<
     const auto& body = makeShared<Ieee80211ReassociationResponseFrame>();
     body->setStatusCode(SC_SUCCESSFUL);
     body->setAid(associationId);
+    body->setCapabilityInformation(makeApCapabilityInformation());
     addLegacyRateElements(body);
     if (isHeManagementSupported())
         addApHeManagementElements(body, mib);
     addApHtVhtManagementElements(body, mib, isHtManagementSupported(), isVhtManagementSupported());
     body->setChunkLength(B(2 + 2 + 2) + getLegacyRateElementsLength(body) + getHeMgmtElementsLength(body) + getHtVhtMgmtElementsLength(body));
-    sendManagementFrame("ReassocResp-OK", body, ST_REASSOCIATIONRESPONSE, sta->address);
+    sendManagementFrameWithTransaction("ReassocResp-OK", body, ST_REASSOCIATIONRESPONSE, sta->address, pending.transactionId);
 }
 
 void Ieee80211MgmtAp::handleReassociationResponseFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>& header)
@@ -630,6 +658,7 @@ void Ieee80211MgmtAp::handleDisassociationFrame(Packet *packet, const Ptr<const 
     delete packet;
 
     if (sta) {
+        abortPendingAssociation(sta->address);
         invalidatePeerState(sta->address);
         bool wasAssociated = mib->isPeerAssociated(sta->address);
         if (wasAssociated) {
@@ -644,6 +673,59 @@ void Ieee80211MgmtAp::handleDisassociationFrame(Packet *packet, const Ptr<const 
 void Ieee80211MgmtAp::invalidatePeerState(const MacAddress& peer)
 {
     mib->removePeerCapabilities(peer);
+}
+
+void Ieee80211MgmtAp::abortPendingAssociation(const MacAddress& peer)
+{
+    auto it = pendingAssociations.find(peer);
+    if (it == pendingAssociations.end())
+        return;
+    mib->releasePeerAssociationReservation(peer, it->second.associationId);
+    pendingAssociations.erase(it);
+}
+
+void Ieee80211MgmtAp::applyPendingAssociation(const PendingAssociation& pending)
+{
+    bool wasAssociated = mib->isPeerAssociated(pending.peer);
+    mib->setPeerLegacyRates(pending.peer, pending.supportedRates, pending.extendedSupportedRates);
+    mib->setStationTransmitPower(pending.peer, pending.transmitPowerDbm);
+    if (pending.heCapabilities)
+        mib->setPeerHeCapabilities(pending.peer, *pending.heCapabilities, mib->heOperation);
+    else
+        mib->removePeerHeCapabilities(pending.peer);
+    if (pending.htCapabilities)
+        mib->setPeerHtCapabilities(pending.peer, *pending.htCapabilities, mib->htOperation);
+    else
+        mib->removePeerHtCapabilities(pending.peer);
+    if (pending.vhtCapabilities)
+        mib->setPeerVhtCapabilities(pending.peer, *pending.vhtCapabilities, mib->vhtOperation);
+    else
+        mib->removePeerVhtCapabilities(pending.peer);
+    if (pending.ehtCapabilities)
+        mib->setPeerEhtCapabilities(pending.peer, *pending.ehtCapabilities, mib->ehtOperation);
+    else
+        mib->removePeerEhtCapabilities(pending.peer);
+    mib->commitPeerAssociation(pending.peer, pending.associationId);
+    if (!wasAssociated)
+        sendAssocNotification(pending.peer);
+}
+
+void Ieee80211MgmtAp::handleAssociationExchangeResult(
+        const Ieee80211MgmtExchangeResult& result)
+{
+    for (auto it = pendingAssociations.begin(); it != pendingAssociations.end(); ++it) {
+        if (it->second.transactionId != result.transactionId)
+            continue;
+        auto pending = it->second;
+        pendingAssociations.erase(it);
+        if (result.kind == Ieee80211MgmtExchangeResultKind::ACKNOWLEDGED)
+            applyPendingAssociation(pending);
+        else
+            mib->releasePeerAssociationReservation(pending.peer, pending.associationId);
+        return;
+    }
+    EV_DEBUG << "Ignoring stale IEEE 802.11 management exchange result for transaction "
+             << result.transactionId << "\n";
 }
 
 void Ieee80211MgmtAp::handleBeaconFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>& header)
@@ -668,6 +750,8 @@ void Ieee80211MgmtAp::handleProbeRequestFrame(Packet *packet, const Ptr<const Ie
     EV << "Sending ProbeResponse frame\n";
     const auto& body = makeShared<Ieee80211ProbeResponseFrame>();
     body->setSSID(ssid.c_str());
+    body->setTimestamp(0); // TSF source is not modeled; zero is the documented unsupported value
+    body->setCapabilityInformation(makeApCapabilityInformation());
     addLegacyRateElements(body);
     body->setBeaconInterval(beaconInterval);
     body->setChannelNumber(channelNumber);
@@ -774,6 +858,11 @@ void Ieee80211MgmtAp::start()
 void Ieee80211MgmtAp::stop()
 {
     cancelEvent(beaconTimer);
+    for (const auto& entry : pendingAssociations)
+        mib->releasePeerAssociationReservation(entry.first, entry.second.associationId);
+    pendingAssociations.clear();
+    if (mac != nullptr)
+        mac->setMgmtExchangeResultHandler(nullptr);
     staList.clear();
     mib->bssAccessPointData.associationIds.clear();
     Ieee80211MgmtApBase::stop();

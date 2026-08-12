@@ -6,9 +6,11 @@
 
 
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Dcf.h"
+#include "inet/linklayer/ieee80211/mac/common/Ieee80211Addressing.h"
 
 #include "inet/common/ModuleAccess.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211MgmtExchangeTag_m.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/DcfFs.h"
 #include "inet/linklayer/ieee80211/mac/rateselection/RateSelection.h"
 #include "inet/linklayer/ieee80211/mac/recipient/RecipientAckProcedure.h"
@@ -20,6 +22,18 @@ namespace ieee80211 {
 using namespace inet::physicallayer;
 
 Define_Module(Dcf);
+
+void Dcf::notifyMgmtExchangeResult(Packet *packet,
+        Ieee80211MgmtExchangeResultKind kind)
+{
+    if (mgmtExchangeResultHandler == nullptr || packet == nullptr)
+        return;
+    auto header = dynamicPtrCast<const Ieee80211MgmtHeader>(packet->peekAtFront<Ieee80211MacHeader>());
+    auto tag = packet->findTag<Ieee80211MgmtExchangeTag>();
+    if (header != nullptr && tag != nullptr)
+        mgmtExchangeResultHandler->handleIeee80211MgmtExchangeResult(
+                Ieee80211MgmtExchangeResult(tag->getTransactionId(), kind));
+}
 
 void Dcf::initialize(int stage)
 {
@@ -35,16 +49,16 @@ void Dcf::initialize(int stage)
         recipientDataService = check_and_cast<IRecipientMacDataService *>(getSubmodule("recipientMacDataService"));
         recoveryProcedure = check_and_cast<NonQosRecoveryProcedure *>(getSubmodule("recoveryProcedure"));
         rateSelection = check_and_cast<IRateSelection *>(getSubmodule("rateSelection"));
-        rtsProcedure = new RtsProcedure();
+        rtsProcedure = std::make_unique<RtsProcedure>();
         rtsPolicy = check_and_cast<IRtsPolicy *>(getSubmodule("rtsPolicy"));
-        recipientAckProcedure = new RecipientAckProcedure();
+        recipientAckProcedure = std::make_unique<RecipientAckProcedure>();
         recipientAckPolicy = check_and_cast<IRecipientAckPolicy *>(getSubmodule("recipientAckPolicy"));
         originatorAckPolicy = check_and_cast<IOriginatorAckPolicy *>(getSubmodule("originatorAckPolicy"));
-        frameSequenceHandler = new FrameSequenceHandler();
+        frameSequenceHandler = std::make_unique<FrameSequenceHandler>();
         ackHandler = check_and_cast<AckHandler *>(getSubmodule("ackHandler"));
-        ctsProcedure = new CtsProcedure();
+        ctsProcedure = std::make_unique<CtsProcedure>();
         ctsPolicy = check_and_cast<ICtsPolicy *>(getSubmodule("ctsPolicy"));
-        stationRetryCounters = new StationRetryCounters();
+        stationRetryCounters = std::make_unique<StationRetryCounters>();
         originatorProtectionMechanism = check_and_cast<OriginatorProtectionMechanism *>(getSubmodule("originatorProtectionMechanism"));
         WATCH_EXPR("frameSequenceInfo", frameSequenceHandler->isSequenceRunning() ? "Fs: " + frameSequenceHandler->getFrameSequence()->getHistory() : "");
     }
@@ -279,7 +293,7 @@ void Dcf::recipientProcessReceivedControlFrame(Packet *packet, const Ptr<const I
 FrameSequenceContext *Dcf::buildContext()
 {
     auto nonQoSContext = new NonQoSContext(originatorAckPolicy);
-    return new FrameSequenceContext(mac->getAddress(), modeSet, channelAccess->getInProgressFrames(), rtsProcedure, rtsPolicy, nonQoSContext, nullptr);
+    return new FrameSequenceContext(mac->getAddress(), modeSet, channelAccess->getInProgressFrames(), rtsProcedure.get(), rtsPolicy, nonQoSContext, nullptr);
 }
 
 void Dcf::transmissionComplete(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
@@ -305,7 +319,7 @@ void Dcf::originatorProcessRtsProtectionFailed(Packet *packet)
     // IEEE Std 802.11-2024, 10.3.2.9 and 10.3.4.4: missing or invalid CTS
     // after CTSTimeout fails the RTS exchange, increments SRC/SSRC and may hit
     // dot11ShortRetryLimit for the protected MSDU/MMPDU.
-    recoveryProcedure->rtsFrameTransmissionFailed(protectedHeader, stationRetryCounters);
+    recoveryProcedure->rtsFrameTransmissionFailed(protectedHeader, stationRetryCounters.get());
     EV_INFO << "For the current frame exchange, we have CW = " << channelAccess->getCw() << " SRC = " << recoveryProcedure->getShortRetryCount(packet, protectedHeader) << " LRC = " << recoveryProcedure->getLongRetryCount(packet, protectedHeader) << " SSRC = " << stationRetryCounters->getStationShortRetryCount() << " and SLRC = " << stationRetryCounters->getStationLongRetryCount() << std::endl;
     if (recoveryProcedure->isRtsFrameRetryLimitReached(packet, protectedHeader)) {
         recoveryProcedure->retryLimitReached(packet, protectedHeader);
@@ -316,6 +330,8 @@ void Dcf::originatorProcessRtsProtectionFailed(Packet *packet)
         details.setReason(RETRY_LIMIT_REACHED);
         details.setLimit(recoveryProcedure->getShortRetryLimit());
         emit(packetDroppedSignal, packet, &details);
+        notifyMgmtExchangeResult(packet,
+                Ieee80211MgmtExchangeResultKind::RETRY_LIMIT_REACHED);
         emit(linkBrokenSignal, packet);
     }
 }
@@ -336,7 +352,7 @@ void Dcf::originatorProcessTransmittedFrame(Packet *packet)
         else if (dataOrMgmtHeader->getReceiverAddress().isMulticast()) {
             // IEEE Std 802.11-2024, 10.3.2.11: group addressed frames do not
             // solicit Ack and are implicitly considered acknowledged.
-            recoveryProcedure->multicastFrameTransmitted(stationRetryCounters);
+        recoveryProcedure->multicastFrameTransmitted(stationRetryCounters.get());
             channelAccess->getInProgressFrames()->dropFrame(packet);
         }
     }
@@ -364,15 +380,17 @@ void Dcf::originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastTra
         // IEEE Std 802.11-2024, 10.3.2.11 and 10.3.4.4: a valid Ack addressed
         // to the originator completes the MPDU exchange and resets the relevant
         // retry counters/CW in the recovery procedure.
-        recoveryProcedure->ackFrameReceived(lastTransmittedPacket, lastTransmittedDataOrMgmtHeader, stationRetryCounters);
+    recoveryProcedure->ackFrameReceived(lastTransmittedPacket, lastTransmittedDataOrMgmtHeader, stationRetryCounters.get());
         ackHandler->processReceivedAck(dynamicPtrCast<const Ieee80211AckFrame>(receivedHeader), lastTransmittedDataOrMgmtHeader);
+        notifyMgmtExchangeResult(lastTransmittedPacket,
+                Ieee80211MgmtExchangeResultKind::ACKNOWLEDGED);
         channelAccess->getInProgressFrames()->dropFrame(lastTransmittedPacket);
         ackHandler->dropFrame(lastTransmittedDataOrMgmtHeader);
     }
     else if (receivedHeader->getType() == ST_RTS)
         ; // void
     else if (receivedHeader->getType() == ST_CTS)
-        recoveryProcedure->ctsFrameReceived(stationRetryCounters);
+    recoveryProcedure->ctsFrameReceived(stationRetryCounters.get());
     else
         throw cRuntimeError("Unknown frame type");
 }
@@ -388,7 +406,7 @@ void Dcf::originatorProcessFailedFrame(Packet *failedPacket)
     // procedure increments SRC/LRC according to the MPDU length vs.
     // dot11RTSThreshold; retransmissions carry Retry=1 until a retry limit or
     // transmit lifetime causes discard.
-    recoveryProcedure->dataOrMgmtFrameTransmissionFailed(failedPacket, failedHeader, stationRetryCounters);
+    recoveryProcedure->dataOrMgmtFrameTransmissionFailed(failedPacket, failedHeader, stationRetryCounters.get());
     bool retryLimitReached = recoveryProcedure->isRetryLimitReached(failedPacket, failedHeader);
     if (dataAndMgmtRateControl) {
         int retryCount = recoveryProcedure->getRetryCount(failedPacket, failedHeader);
@@ -404,6 +422,8 @@ void Dcf::originatorProcessFailedFrame(Packet *failedPacket)
         details.setReason(RETRY_LIMIT_REACHED);
         details.setLimit(-1); // TODO
         emit(packetDroppedSignal, failedPacket, &details);
+        notifyMgmtExchangeResult(failedPacket,
+                Ieee80211MgmtExchangeResultKind::RETRY_LIMIT_REACHED);
         emit(linkBrokenSignal, failedPacket);
     }
     else {
@@ -416,22 +436,14 @@ void Dcf::originatorProcessFailedFrame(Packet *failedPacket)
 
 bool Dcf::isForUs(const Ptr<const Ieee80211MacHeader>& header) const
 {
-    // IEEE Std 802.11-2024, 9.2.4.3.1 and Table 9-60: Address 1 is RA/DA for
-    // nonmesh data/control reception; multicast frames sent by this STA must
-    // not be looped back as received peer traffic.
-    return header->getReceiverAddress() == mac->getAddress() || (header->getReceiverAddress().isMulticast() && !isSentByUs(header));
+    auto roles = interpretIeee80211AddressRoles(header);
+    return roles.receiverAddress == mac->getAddress() || (roles.receiverAddress.isMulticast() && !isSentByUs(header));
 }
 
 bool Dcf::isSentByUs(const Ptr<const Ieee80211MacHeader>& header) const
 {
-    // FIXME
-    // Check the roles of the Addr3 field when aggregation is applied
-    // IEEE Std 802.11-2024, Table 9-60: Address 3 can carry SA/BSSID/DA
-    // depending on To DS/From DS, so this shortcut is incomplete.
-    if (auto dataOrMgmtHeader = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(header))
-        return dataOrMgmtHeader->getAddress3() == mac->getAddress();
-    else
-        return false;
+    auto roles = interpretIeee80211AddressRoles(header);
+    return roles.hasTransmitterAddress && roles.transmitterAddress == mac->getAddress();
 }
 
 void Dcf::corruptedFrameReceived()
@@ -449,11 +461,6 @@ void Dcf::corruptedFrameReceived()
 Dcf::~Dcf()
 {
     cancelAndDelete(startRxTimer);
-    delete rtsProcedure;
-    delete recipientAckProcedure;
-    delete stationRetryCounters;
-    delete ctsProcedure;
-    delete frameSequenceHandler;
 }
 
 } // namespace ieee80211

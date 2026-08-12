@@ -200,8 +200,7 @@ void HeHcf::initialize(int stage)
         peerOperatingModeChannelWidthSignal = registerSignal("peerOperatingModeChannelWidth");
         peerOperatingModeUlMuDisableSignal = registerSignal("peerOperatingModeUlMuDisable");
         linkPhyContext = std::make_unique<Ieee80211HeLinkPhyContext>(this, mac);
-        delete frameSequenceHandler;
-        frameSequenceHandler = new HeFrameSequenceHandler();
+        frameSequenceHandler = std::make_unique<HeFrameSequenceHandler>();
 
         enableDlMuMimo = par("enableDlMuMimo").boolValue();
         csiValidityDuration = par("csiValidityDuration");
@@ -221,7 +220,7 @@ void HeHcf::initialize(int stage)
         WATCH_EXPR("triggeredUlExchangeCount", triggeredUlExchanges.size());
         WATCH_EXPR("heHcfSummary", getHeHcfSummary());
     }
-    else if (stage == INITSTAGE_LINK_LAYER && mac->isApInAxMode()) {
+    else if (stage == INITSTAGE_LINK_LAYER && mac->isApInHeFamily()) {
         queueBankManager = std::make_unique<StationQueueBankManager>(getSubmodule("queueBanks"));
         mac->getMib()->addPeerAssociationListener(this);
         peerAssociationListenerRegistered = true;
@@ -389,7 +388,7 @@ void HeHcf::handleMessage(cMessage *msg)
     // 26.5.2.2 permits only an HE AP to solicit UL MU HE TB PPDUs.  The AP
     // still has to obtain the medium through EDCA/HCF (10.23), so this timer
     // only requests channel access; the Trigger is transmitted after EDCAF wins.
-    if (!mac->isApInAxMode() || !ulCoordinator->isEnabled() ||
+    if (!mac->isApInHeFamily() || !ulCoordinator->isEnabled() ||
             frameSequenceHandler->isSequenceRunning() || edca->getChannelOwner() != nullptr ||
             tx->isBusy() || ulTriggerAccessRequested)
         return;
@@ -623,7 +622,7 @@ void HeHcf::startFrameSequence(AccessCategory ac)
     }
 
     ASSERT(modeSet != nullptr);
-    bool isHeMode = strcmp(modeSet->getName(), "ax") == 0;
+    bool isHeMode = modeSet->hasPhyFamily(physicallayer::Ieee80211PhyFamily::HE);
     if (!isHeMode)
         EV_INFO << "Non-HE mode, falling back to SU\n";
     HeTxopCoordinatorService::Actions actions;

@@ -28,11 +28,10 @@ using namespace inet::physicallayer;
 
 static bool isHtCapableModeSet(const Ieee80211ModeSet *modeSet)
 {
-    if (modeSet == nullptr)
-        return false;
-    const char *name = modeSet->getName();
-    return (name[0] == 'n' && (name[1] == '\0' || name[1] == '(')) || !strcmp(name, "ac") ||
-            !strcmp(name, "ax") || !strcmp(name, "be");
+    return modeSet != nullptr && (modeSet->hasPhyFamily(Ieee80211PhyFamily::HT) ||
+            modeSet->hasPhyFamily(Ieee80211PhyFamily::VHT) ||
+            modeSet->hasPhyFamily(Ieee80211PhyFamily::HE) ||
+            modeSet->hasPhyFamily(Ieee80211PhyFamily::EHT));
 }
 
 void Ieee80211MgmtBase::initialize(int stage)
@@ -190,10 +189,11 @@ void Ieee80211MgmtBase::dropManagementFrame(Packet *frame)
 bool Ieee80211MgmtBase::isHeManagementSupported()
 {
     if (modeSet != nullptr)
-        return !strcmp(modeSet->getName(), "ax") || !strcmp(modeSet->getName(), "be");
+        return modeSet->hasPhyFamily(Ieee80211PhyFamily::HE) ||
+                modeSet->hasPhyFamily(Ieee80211PhyFamily::EHT);
     try {
         auto mac = check_and_cast<Ieee80211Mac *>(getModuleFromPar<cModule>(par("macModule"), this));
-        return mac->isAxMode() || mac->isBeMode();
+        return mac->isHeFamilyAvailable() || mac->isEhtFamilyAvailable();
     }
     catch (const cException& e) {
         EV_DEBUG << "Could not resolve MAC mode set for HE management support: " << e.what() << "\n";
@@ -219,12 +219,15 @@ bool Ieee80211MgmtBase::isHtManagementSupported()
 bool Ieee80211MgmtBase::isVhtManagementSupported()
 {
     if (modeSet != nullptr)
-        return !strcmp(modeSet->getName(), "ac") || !strcmp(modeSet->getName(), "ax") || !strcmp(modeSet->getName(), "be");
+        return modeSet->hasPhyFamily(Ieee80211PhyFamily::VHT) ||
+                modeSet->hasPhyFamily(Ieee80211PhyFamily::HE) ||
+                modeSet->hasPhyFamily(Ieee80211PhyFamily::EHT);
     try {
         auto mac = check_and_cast<Ieee80211Mac *>(getModuleFromPar<cModule>(par("macModule"), this));
         auto macModeSet = mac->getModeSet();
-        return macModeSet != nullptr && (!strcmp(macModeSet->getName(), "ac") || !strcmp(macModeSet->getName(), "ax") ||
-                !strcmp(macModeSet->getName(), "be"));
+        return macModeSet != nullptr && (macModeSet->hasPhyFamily(Ieee80211PhyFamily::VHT) ||
+                macModeSet->hasPhyFamily(Ieee80211PhyFamily::HE) ||
+                macModeSet->hasPhyFamily(Ieee80211PhyFamily::EHT));
     }
     catch (const cException& e) {
         EV_DEBUG << "Could not resolve MAC mode set for VHT management support: " << e.what() << "\n";
@@ -235,10 +238,10 @@ bool Ieee80211MgmtBase::isVhtManagementSupported()
 bool Ieee80211MgmtBase::isEhtManagementSupported()
 {
     if (modeSet != nullptr)
-        return !strcmp(modeSet->getName(), "be");
+        return modeSet->hasPhyFamily(Ieee80211PhyFamily::EHT);
     try {
         auto mac = check_and_cast<Ieee80211Mac *>(getModuleFromPar<cModule>(par("macModule"), this));
-        return mac->isBeMode();
+        return mac->isEhtFamilyAvailable();
     }
     catch (const cException& e) {
         EV_DEBUG << "Could not resolve MAC mode set for EHT management support: " << e.what() << "\n";

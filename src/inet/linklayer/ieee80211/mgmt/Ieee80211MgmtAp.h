@@ -8,20 +8,25 @@
 #ifndef __INET_IEEE80211MGMTAP_H
 #define __INET_IEEE80211MGMTAP_H
 
+#include <cstdint>
 #include <map>
+#include <optional>
 
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtApBase.h"
+#include "inet/linklayer/ieee80211/mac/contract/Ieee80211MgmtExchangeResult.h"
 #include "inet/linklayer/ieee80211/twt/TwtAgreement.h"
 
 namespace inet {
 
 namespace ieee80211 {
 
+class Ieee80211Mac;
+
 /**
  * Used in 802.11 infrastructure mode: handles management frames for
  * an access point (AP). See corresponding NED file for a detailed description.
  */
-class INET_API Ieee80211MgmtAp : public Ieee80211MgmtApBase
+class INET_API Ieee80211MgmtAp : public Ieee80211MgmtApBase, public IIeee80211MgmtExchangeResultHandler
 {
   public:
     /** Describes a STA */
@@ -30,6 +35,20 @@ class INET_API Ieee80211MgmtAp : public Ieee80211MgmtApBase
         int authSeqExpected; // when NOT_AUTHENTICATED: transaction sequence number of next expected auth frame
 //        int consecFailedTrans; // TODO
 //        double expiry; // TODO association should expire after a while if STA is silent?
+    };
+
+    struct PendingAssociation {
+        uint64_t transactionId;
+        MacAddress peer;
+        short associationId;
+        bool reassociation;
+        Ieee80211SupportedRatesElement supportedRates;
+        Ieee80211ExtendedSupportedRatesElement extendedSupportedRates;
+        double transmitPowerDbm;
+        std::optional<Ieee80211HtCapabilities> htCapabilities;
+        std::optional<Ieee80211VhtCapabilities> vhtCapabilities;
+        std::optional<Ieee80211HeCapabilities> heCapabilities;
+        std::optional<Ieee80211EhtCapabilities> ehtCapabilities;
     };
 
     class INET_API NotificationInfoSta : public cObject {
@@ -58,7 +77,10 @@ class INET_API Ieee80211MgmtAp : public Ieee80211MgmtApBase
 
     // state
     StaList staList; ///< list of STAs
+    std::map<MacAddress, PendingAssociation, MacCompare> pendingAssociations;
+    uint64_t nextAssociationTransactionId = 1;
     cMessage *beaconTimer = nullptr;
+    Ieee80211Mac *mac = nullptr;
 
   public:
     Ieee80211MgmtAp() {}
@@ -83,11 +105,15 @@ class INET_API Ieee80211MgmtAp : public Ieee80211MgmtApBase
 
     /** Utility function: set fields in the given frame and send it out to the address */
     virtual void sendManagementFrame(const char *name, const Ptr<Ieee80211MgmtFrame>& body, int subtype, const MacAddress& destAddr);
+    virtual void sendManagementFrameWithTransaction(const char *name, const Ptr<Ieee80211MgmtFrame>& body, int subtype, const MacAddress& destAddr, uint64_t transactionId);
     virtual void sendTwtActionFrame(const char *name, const Ptr<Ieee80211ActionFrame>& frame, const MacAddress& destAddr);
     virtual TwtAgreement makeTwtAgreement(const Ptr<const Ieee80211TwtSetupFrame>& frame, const MacAddress& peer) const;
 
     /** Invalidates MAC-derived state before replacing or removing peer capabilities. */
     virtual void invalidatePeerState(const MacAddress& peer);
+    void abortPendingAssociation(const MacAddress& peer);
+    void applyPendingAssociation(const PendingAssociation& pending);
+    void handleAssociationExchangeResult(const Ieee80211MgmtExchangeResult& result);
 
     /** Utility function: creates and sends a beacon frame */
     virtual void sendBeacon();
@@ -117,6 +143,8 @@ class INET_API Ieee80211MgmtAp : public Ieee80211MgmtApBase
   protected:
     virtual void start() override;
     virtual void stop() override;
+    virtual void handleIeee80211MgmtExchangeResult(
+            const Ieee80211MgmtExchangeResult& result) override { handleAssociationExchangeResult(result); }
     //@}
 };
 

@@ -313,7 +313,7 @@ bool VhtHcf::tryStartVhtDlMu(AccessCategory ac)
         candidate.activeGroup = groupIdManager->isActive(peer, context.groupId, position,
                 generation, context.channelWidth);
         candidate.activeBlockAckAgreement = hasActiveOriginatorBlockAckAgreement(
-                originatorBlockAckAgreementHandler, peer, header->getTid());
+                originatorBlockAckAgreementHandler.get(), peer, header->getTid());
         if (!candidate.activeBlockAckAgreement && originatorBlockAckAgreementHandler != nullptr &&
                 originatorBlockAckAgreementPolicy != nullptr &&
                 originatorBlockAckAgreementHandler->processQueuedDataFrame(

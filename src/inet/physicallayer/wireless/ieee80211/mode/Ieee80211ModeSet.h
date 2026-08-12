@@ -159,6 +159,12 @@ class INET_API Ieee80211ModeSet : public IPrintableObject, public cObject
     bool isMandatory(int index) const { return entries[index].isMandatory; }
     Ieee80211PhyFamily getPhyFamily(int index) const { return entries[index].phyFamily; }
     Ieee80211SupportRequirement getSupportRequirement(int index) const { return entries[index].supportRequirement; }
+    bool hasPhyFamily(Ieee80211PhyFamily family) const {
+        for (const auto& entry : entries)
+            if (entry.phyFamily == family)
+                return true;
+        return false;
+    }
 
     bool containsMode(const IIeee80211Mode *mode) const { return findModeIndex(mode) != -1; }
     bool getIsMandatory(const IIeee80211Mode *mode) const;

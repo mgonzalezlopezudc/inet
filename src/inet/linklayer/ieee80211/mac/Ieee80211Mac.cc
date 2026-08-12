@@ -90,6 +90,9 @@ void Ieee80211Mac::initialize(int stage)
         tx = check_and_cast<ITx *>(getSubmodule("tx"));
         dcf = check_and_cast<Dcf *>(getSubmodule("dcf"));
         hcf = check_and_cast_nullable<Hcf *>(getSubmodule("hcf"));
+        dcf->setMgmtExchangeResultHandler(mgmtExchangeResultHandler);
+        if (hcf != nullptr)
+            hcf->setMgmtExchangeResultHandler(mgmtExchangeResultHandler);
         if (hasPar("twtModule")) {
             const char *twtModulePath = par("twtModule");
             if (*twtModulePath) {
@@ -110,6 +113,16 @@ void Ieee80211Mac::initialize(int stage)
             }
         }
     }
+}
+
+void Ieee80211Mac::setMgmtExchangeResultHandler(
+        IIeee80211MgmtExchangeResultHandler *handler)
+{
+    mgmtExchangeResultHandler = handler;
+    if (dcf != nullptr)
+        dcf->setMgmtExchangeResultHandler(handler);
+    if (hcf != nullptr)
+        hcf->setMgmtExchangeResultHandler(handler);
 }
 
 void Ieee80211Mac::initializeRadioMode()
