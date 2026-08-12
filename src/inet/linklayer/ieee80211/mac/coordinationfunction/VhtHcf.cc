@@ -11,6 +11,7 @@
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/channelaccess/Edca.h"
 #include "inet/linklayer/ieee80211/mac/channelaccess/Edcaf.h"
+#include "inet/linklayer/ieee80211/mac/queue/OrigEnqueueTimeTag_m.h"
 #include "inet/linklayer/ieee80211/mac/blockack/BlockAckAgreementUtils.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/VhtSoundingCoordinator.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/VhtGroupIdManager.h"

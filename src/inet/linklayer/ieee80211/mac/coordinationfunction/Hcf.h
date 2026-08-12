@@ -15,14 +15,19 @@
 #include <string>
 #include <vector>
 
-#include "inet/linklayer/ieee80211/mac/channelaccess/Edca.h"
-#include "inet/linklayer/ieee80211/mac/channelaccess/Hcca.h"
 #include "inet/linklayer/ieee80211/mac/common/ModeSetListener.h"
-#include "inet/linklayer/ieee80211/mac/contract/IAckHandler.h"
+#include "inet/linklayer/ieee80211/mac/contract/IChannelAccess.h"
 #include "inet/linklayer/ieee80211/mac/contract/Ieee80211MgmtExchangeResult.h"
 #include "inet/linklayer/ieee80211/mac/contract/IBlockAckAgreementHandlerCallback.h"
 #include "inet/linklayer/ieee80211/mac/contract/ICoordinationFunction.h"
 #include "inet/linklayer/ieee80211/mac/contract/ICtsPolicy.h"
+#include "inet/linklayer/ieee80211/mac/contract/ICtsProcedure.h"
+#include "inet/linklayer/ieee80211/mac/contract/IRateControl.h"
+#include "inet/linklayer/ieee80211/mac/contract/IRx.h"
+#include "inet/linklayer/ieee80211/mac/contract/IQosRateSelection.h"
+#include "inet/linklayer/ieee80211/mac/contract/IOriginatorMacDataService.h"
+#include "inet/linklayer/ieee80211/mac/contract/IOriginatorQoSAckPolicy.h"
+#include "inet/linklayer/ieee80211/mac/contract/IRtsPolicy.h"
 #include "inet/linklayer/ieee80211/mac/contract/IIeee80211HtRateControl.h"
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementHandler.h"
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementPolicy.h"
@@ -41,22 +46,21 @@
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfResponseService.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HtMfbTransmissionState.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HtSoundingPendingState.h"
-#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceHandler.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HtSoundingRetryState.h"
-#include "inet/linklayer/ieee80211/mac/originator/QosAckHandler.h"
-#include "inet/linklayer/ieee80211/mac/originator/QosRecoveryProcedure.h"
 #include "inet/linklayer/ieee80211/mac/originator/TxopProcedure.h"
-#include "inet/linklayer/ieee80211/mac/protectionmechanism/SingleProtectionMechanism.h"
-#include "inet/linklayer/ieee80211/mac/queue/InProgressFrames.h"
-#include "inet/linklayer/ieee80211/mac/queue/OrigEnqueueTimeTag_m.h"
-#include "inet/linklayer/ieee80211/mac/recipient/CtsProcedure.h"
 
 namespace inet {
 namespace ieee80211 {
 
 class Ieee80211Mac;
 class StationQueueBank;
+class Edca;
+class Edcaf;
+class Hcca;
+class FrameSequenceContext;
+class InProgressFrames;
+class SingleProtectionMechanism;
 
 /**
  * Implements IEEE 802.11 Hybrid Coordination Function.

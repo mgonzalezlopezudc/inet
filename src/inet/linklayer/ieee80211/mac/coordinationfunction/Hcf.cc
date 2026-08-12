@@ -11,6 +11,8 @@
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfFramePreparation.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfRetryService.h"
 #include "inet/linklayer/ieee80211/mac/contract/DurationFinalizedReq.h"
+#include "inet/linklayer/ieee80211/mac/channelaccess/Edca.h"
+#include "inet/linklayer/ieee80211/mac/channelaccess/Hcca.h"
 
 #include <algorithm>
 #include <cmath>
@@ -31,6 +33,12 @@
 #include "inet/linklayer/ieee80211/mac/framesequence/HcfFs.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/Ieee80211HeMuContainerTag_m.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/TxOpFs.h"
+#include "inet/linklayer/ieee80211/mac/originator/QosAckHandler.h"
+#include "inet/linklayer/ieee80211/mac/originator/QosRecoveryProcedure.h"
+#include "inet/linklayer/ieee80211/mac/protectionmechanism/SingleProtectionMechanism.h"
+#include "inet/linklayer/ieee80211/mac/recipient/CtsProcedure.h"
+#include "inet/linklayer/ieee80211/mac/queue/InProgressFrames.h"
+#include "inet/linklayer/ieee80211/mac/queue/OrigEnqueueTimeTag_m.h"
 #include "inet/linklayer/ieee80211/mac/recipient/RecipientAckProcedure.h"
 #include "inet/linklayer/ethernet/common/Ethernet.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"

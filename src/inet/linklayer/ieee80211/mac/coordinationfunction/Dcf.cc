@@ -6,6 +6,7 @@
 
 
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Dcf.h"
+#include "inet/linklayer/ieee80211/mac/recipient/CtsProcedure.h"
 #include "inet/linklayer/ieee80211/mac/common/Ieee80211Addressing.h"
 
 #include "inet/common/ModuleAccess.h"

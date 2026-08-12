@@ -108,6 +108,14 @@ requireCondition(!service.handleCorruptedFrame(actions),
 requireCondition(timeoutCount == 2,
         "ignored corrupt reception must not apply a timeout");
 
+sequenceRunning = false;
+service.responseTimerScheduled();
+timerScheduled = true;
+service.handleStartRxTimeout(actions);
+requireCondition(timeoutCount == 2 && !service.hasDeferredStartRxTimeout(),
+        "a timeout without an active sequence must have no effect");
+sequenceRunning = true;
+
 actionOrder.clear();
 currentStep = nullptr;
 service.responseTimerScheduled();

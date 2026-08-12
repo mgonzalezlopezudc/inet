@@ -22,25 +22,32 @@ This document is self-contained: it defines scope, current ownership, target
 ownership, patch order, evidence gates, tests, commands, architecture checks,
 and completion criteria.
 
-## Working-tree checkpoint
+## Committed baseline checkpoint
 
-The plan is written against the current checkout, which is not clean. Before
-starting the first production patch, preserve and validate the existing diff:
+The current checkout is clean at commit `868d484848`:
 
-- `Hcf.cc` and `Hcf.h` currently contain a small typed data-service boundary
-  change that replaces concrete `OriginatorQosMacDataService` access with
-  `IOriginatorMacDataService` operations;
-- the corresponding uncommitted edits are in
-  `IOriginatorMacDataService.h`, `OriginatorMacDataService.h`,
-  `OriginatorQosMacDataService.h`, and
-  `OriginatorQosMacDataService.cc`;
-- these edits are a useful prerequisite for reducing HCF coupling, but they are
-  not the HCF god-object split itself and must remain separately attributable.
+> `fix(802.11): OriginatorQosMacDataService coupling was replaced with typed
+> IOriginatorMacDataService operations across HCF and MU paths.`
 
-The implementation owner must first record the exact patch/base, build it, and
-run the affected focused tests. The HCF split then starts from that verified
-state; it must not silently reset, overwrite, or absorb unrelated working-tree
-changes.
+That commit is a verified prerequisite, not the HCF god-object split itself. It
+replaces concrete `OriginatorQosMacDataService` access with typed operations in
+`Hcf`, HE/VHT MU frame-sequence paths, and the originator data-service contract
+and implementations. The HCF split must start from this commit and must not
+reintroduce concrete service downcasts or absorb unrelated changes.
+
+Recorded baseline validation from the commit:
+
+- `make -j$(nproc)` — passed;
+- four focused HCF/MU tests — passed;
+- `git diff --check` and the targeted coupling scan — passed;
+- the broad architecture checker still reports pre-existing
+  coordination-function include violations; no new target-specific violation
+  was reported for this migration.
+
+Before the first HCF-split patch, rerun the narrow affected tests from this
+clean baseline and record their exact command and artifact paths. Do not treat
+the committed data-service migration as an uncommitted prerequisite or redo it
+as part of H0–H7.
 
 ## Required outcome
 
