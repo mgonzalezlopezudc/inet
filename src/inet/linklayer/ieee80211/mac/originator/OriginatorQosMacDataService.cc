@@ -28,6 +28,9 @@ void OriginatorQosMacDataService::initialize()
     aMpduAggregationPolicy = dynamic_cast<IMpduAggregationPolicy *>(getSubmodule("mpduAggregationPolicy"));
     if (aMpduAggregationPolicy)
         aMpduAggregation = new MpduAggregation();
+    auto mpduAggregationPolicy = getSubmodule("mpduAggregationPolicy");
+    if (mpduAggregationPolicy != nullptr && mpduAggregationPolicy->hasPar("maxAmpduLengthExponent"))
+        maxAmpduLengthExponent = mpduAggregationPolicy->par("maxAmpduLengthExponent").intValue();
         
     std::string mldMacModuleStr = par("mldMacModule").stringValue();
     if (!mldMacModuleStr.empty()) {

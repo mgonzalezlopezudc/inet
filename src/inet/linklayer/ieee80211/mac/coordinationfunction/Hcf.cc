@@ -7,6 +7,7 @@
 
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
 #include "inet/linklayer/ieee80211/mac/common/Ieee80211Addressing.h"
+#include "inet/linklayer/ieee80211/mac/blockack/BlockAckAgreementUtils.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfFramePreparation.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfRetryService.h"
 #include "inet/linklayer/ieee80211/mac/contract/DurationFinalizedReq.h"
@@ -255,9 +256,8 @@ void Hcf::initialize(int stage)
             originatorBlockAckAgreementHandler = std::make_unique<OriginatorBlockAckAgreementHandler>();
             originatorBlockAckProcedure = std::make_unique<OriginatorBlockAckProcedure>();
             recipientBlockAckProcedure = std::make_unique<RecipientBlockAckProcedure>();
-            auto qosDataService = dynamic_cast<OriginatorQosMacDataService *>(originatorDataService);
-            if (qosDataService)
-                qosDataService->setBlockAckAgreementHandler(originatorBlockAckAgreementHandler.get());
+            originatorDataService->setBlockAckAgreementHandler(
+                    originatorBlockAckAgreementHandler.get());
         }
     }
 }
@@ -689,11 +689,10 @@ int Hcf::getMaxAmpduLengthExponent(const MacAddress& peer,
                 exponent = negotiated->localTxPeerRx.receiverMaxAmpduLengthExponent;
         }
     }
-    auto originatorModule = dynamic_cast<cModule *>(originatorDataService);
-    auto mpduAggregationPolicy = originatorModule ? originatorModule->getSubmodule("mpduAggregationPolicy") : nullptr;
-    if (mpduAggregationPolicy != nullptr && mpduAggregationPolicy->hasPar("maxAmpduLengthExponent"))
+    auto configuredExponent = originatorDataService->getMaxAmpduLengthExponent();
+    if (configuredExponent.has_value())
         exponent = std::min(exponent,
-                (int)mpduAggregationPolicy->par("maxAmpduLengthExponent").intValue());
+                *configuredExponent);
     return exponent;
 }
 

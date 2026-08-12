@@ -27,6 +27,20 @@ void OriginatorMacDataService::assignSequenceNumber(const Ptr<Ieee80211DataOrMgm
     sequenceNumberAssignment->assignSequenceNumber(header);
 }
 
+std::unique_ptr<ISequenceNumberAssignment> OriginatorMacDataService::cloneSequenceNumberState() const
+{
+    if (sequenceNumberAssignment == nullptr)
+        throw cRuntimeError("Non-QoS sequence-number assignment is not initialized");
+    return sequenceNumberAssignment->clone();
+}
+
+void OriginatorMacDataService::commitSequenceNumberState(const ISequenceNumberAssignment& state)
+{
+    if (sequenceNumberAssignment == nullptr)
+        throw cRuntimeError("Non-QoS sequence-number assignment is not initialized");
+    sequenceNumberAssignment->copyStateFrom(state);
+}
+
 std::vector<Packet *> *OriginatorMacDataService::fragmentIfNeeded(Packet *frame)
 {
     auto fragmentSizes = fragmentationPolicy->computeFragmentSizes(frame);
@@ -76,4 +90,3 @@ OriginatorMacDataService::~OriginatorMacDataService()
 
 } /* namespace ieee80211 */
 } /* namespace inet */
-

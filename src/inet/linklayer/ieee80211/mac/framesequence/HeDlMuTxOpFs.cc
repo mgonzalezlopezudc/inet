@@ -49,9 +49,9 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
-#include "inet/linklayer/ieee80211/mac/originator/OriginatorQosMacDataService.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementHandler.h"
+#include "inet/linklayer/ieee80211/mac/contract/ISequenceNumberAssignment.h"
 #include "inet/linklayer/ieee80211/mac/rateselection/RateSelection.h"
 #include "inet/common/packet/chunk/ByteCountChunk.h"
 #include "inet/linklayer/ethernet/common/Ethernet.h"
@@ -997,12 +997,13 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     // assigned against a cloned counter state, so every remaining fallible
     // operation precedes the queue/BA ownership commit.
     auto heHcf = dynamic_cast<HeHcf *>(callback);
-    OriginatorQosMacDataService *originatorQosDataService = nullptr;
+    IOriginatorMacDataService *originatorDataService = nullptr;
     std::unique_ptr<ISequenceNumberAssignment> preparedSequenceNumberState;
     if (heHcf != nullptr) {
-        originatorQosDataService = check_and_cast<OriginatorQosMacDataService *>(
-                heHcf->getOriginatorMacDataService());
-        preparedSequenceNumberState = originatorQosDataService->cloneSequenceNumberState();
+        originatorDataService = heHcf->getOriginatorMacDataService();
+        if (originatorDataService == nullptr)
+            throw cRuntimeError("HE DL MU requires an originator MAC data service");
+        preparedSequenceNumberState = originatorDataService->cloneSequenceNumberState();
     }
     std::map<Packet *, std::unique_ptr<Packet>> preparedPackets;
     for (const auto& selectedAllocation : finalAllocations) {
@@ -1176,7 +1177,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     // Gate 3 policy, an internal failure after this point is loud; attempting
     // observer-visible queue reconstruction would not be a valid rollback.
     if (preparedSequenceNumberState != nullptr)
-        originatorQosDataService->commitSequenceNumberState(*preparedSequenceNumberState);
+        originatorDataService->commitSequenceNumberState(*preparedSequenceNumberState);
     for (const auto& selectedAllocation : finalAllocations) {
         auto sourceQueue = selectedAllocation.sourceQueue == nullptr ? pendingQueue : selectedAllocation.sourceQueue;
         for (auto originalPacket : selectedAllocation.packets) {

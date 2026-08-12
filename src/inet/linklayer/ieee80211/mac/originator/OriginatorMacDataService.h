@@ -8,6 +8,8 @@
 #ifndef __INET_ORIGINATORMACDATASERVICE_H
 #define __INET_ORIGINATORMACDATASERVICE_H
 
+#include <optional>
+
 #include "inet/common/SimpleModule.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/contract/IFragmentation.h"
@@ -43,10 +45,13 @@ class INET_API OriginatorMacDataService : public IOriginatorMacDataService, publ
     virtual ~OriginatorMacDataService();
 
     virtual std::vector<Packet *> *extractFramesToTransmit(queueing::IPacketQueue *pendingQueue) override;
+    virtual void setBlockAckAgreementHandler(IOriginatorBlockAckAgreementHandler *handler) override {}
+    virtual std::optional<int> getMaxAmpduLengthExponent() const override { return std::nullopt; }
+    virtual std::unique_ptr<ISequenceNumberAssignment> cloneSequenceNumberState() const override;
+    virtual void commitSequenceNumberState(const ISequenceNumberAssignment& state) override;
 };
 
 } /* namespace ieee80211 */
 } /* namespace inet */
 
 #endif
-

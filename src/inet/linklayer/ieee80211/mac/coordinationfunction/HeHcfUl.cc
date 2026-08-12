@@ -31,7 +31,7 @@
 #include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreement.h"
 #include "inet/linklayer/ieee80211/mac/blockack/RecipientBlockAckAgreement.h"
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementHandler.h"
-#include "inet/linklayer/ieee80211/mac/originator/OriginatorQosMacDataService.h"
+#include "inet/linklayer/ieee80211/mac/contract/ISequenceNumberAssignment.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
@@ -1098,8 +1098,7 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
     if (sourceQueue == nullptr || selected == nullptr || trigger == nullptr)
         throw cRuntimeError("Cannot prepare an HE-TB response without queue and Trigger context");
     const auto phy = getLinkPhyContext().getSnapshot();
-    auto qosDataService = check_and_cast<OriginatorQosMacDataService *>(originatorDataService);
-    auto preparedSequenceNumberState = qosDataService->cloneSequenceNumberState();
+    auto preparedSequenceNumberState = originatorDataService->cloneSequenceNumberState();
     std::vector<Packet *> originalPackets;
     std::vector<std::unique_ptr<Packet>> preparedPacketOwners;
     std::unique_ptr<Packet> nullMpdu;
@@ -1376,7 +1375,7 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
     // faking rollback after observer-visible state changes.
     committed = true;
     if (blockAckReqMpdu == nullptr)
-        qosDataService->commitSequenceNumberState(*preparedSequenceNumberState);
+        originatorDataService->commitSequenceNumberState(*preparedSequenceNumberState);
     else {
         exchange.tid = preparedBlockAckReq->getTidInfo();
         exchange.recoveryKind =

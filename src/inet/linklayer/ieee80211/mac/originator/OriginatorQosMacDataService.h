@@ -8,6 +8,8 @@
 #ifndef __INET_ORIGINATORQOSMACDATASERVICE_H
 #define __INET_ORIGINATORQOSMACDATASERVICE_H
 
+#include <optional>
+
 #include "inet/common/SimpleModule.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/contract/IFragmentation.h"
@@ -41,6 +43,7 @@ class INET_API OriginatorQosMacDataService : public IOriginatorMacDataService, p
     IMpduAggregationPolicy *aMpduAggregationPolicy = nullptr;
     IMpduAggregation *aMpduAggregation = nullptr;
     IOriginatorBlockAckAgreementHandler *blockAckAgreementHandler = nullptr;
+    std::optional<int> maxAmpduLengthExponent;
 
   protected:
     virtual void initialize() override;
@@ -52,10 +55,11 @@ class INET_API OriginatorQosMacDataService : public IOriginatorMacDataService, p
   public:
     virtual ~OriginatorQosMacDataService();
 
-    virtual void setBlockAckAgreementHandler(IOriginatorBlockAckAgreementHandler *handler) { blockAckAgreementHandler = handler; }
+    virtual void setBlockAckAgreementHandler(IOriginatorBlockAckAgreementHandler *handler) override { blockAckAgreementHandler = handler; }
+    virtual std::optional<int> getMaxAmpduLengthExponent() const override { return maxAmpduLengthExponent; }
     virtual void assignSequenceNumber(const Ptr<Ieee80211DataOrMgmtHeader>& header);
-    virtual std::unique_ptr<ISequenceNumberAssignment> cloneSequenceNumberState() const;
-    virtual void commitSequenceNumberState(const ISequenceNumberAssignment& state);
+    virtual std::unique_ptr<ISequenceNumberAssignment> cloneSequenceNumberState() const override;
+    virtual void commitSequenceNumberState(const ISequenceNumberAssignment& state) override;
     virtual std::vector<Packet *> *extractFramesToTransmit(queueing::IPacketQueue *pendingQueue) override;
 };
 

@@ -12,8 +12,9 @@
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
 #include "inet/linklayer/ieee80211/mac/contract/DurationFinalizedReq.h"
+#include "inet/linklayer/ieee80211/mac/contract/IOriginatorMacDataService.h"
+#include "inet/linklayer/ieee80211/mac/contract/ISequenceNumberAssignment.h"
 #include "inet/linklayer/ieee80211/mac/originator/QosAckHandler.h"
-#include "inet/linklayer/ieee80211/mac/originator/OriginatorQosMacDataService.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211VhtTxVector.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
 
@@ -92,10 +93,9 @@ Packet *VhtDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     const auto& users = plan.getUsers();
     ASSERT(users.size() >= 2 && users.size() <= 4);
     auto hcf = dynamic_cast<Hcf *>(callback);
-    auto dataService = hcf == nullptr ? nullptr :
-            dynamic_cast<OriginatorQosMacDataService *>(hcf->getOriginatorMacDataService());
+    auto dataService = hcf == nullptr ? nullptr : hcf->getOriginatorMacDataService();
     if (dataService == nullptr)
-        throw cRuntimeError("VHT DL MU requires OriginatorQosMacDataService");
+        throw cRuntimeError("VHT DL MU requires an originator MAC data service");
     auto hcfModule = check_and_cast<cModule *>(callback);
     auto mac = check_and_cast<Ieee80211Mac *>(hcfModule->getParentModule());
     auto controlMode = modeSet->getSlowestMandatoryMode(MHz(20));

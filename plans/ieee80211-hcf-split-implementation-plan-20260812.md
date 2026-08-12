@@ -22,6 +22,26 @@ This document is self-contained: it defines scope, current ownership, target
 ownership, patch order, evidence gates, tests, commands, architecture checks,
 and completion criteria.
 
+## Working-tree checkpoint
+
+The plan is written against the current checkout, which is not clean. Before
+starting the first production patch, preserve and validate the existing diff:
+
+- `Hcf.cc` and `Hcf.h` currently contain a small typed data-service boundary
+  change that replaces concrete `OriginatorQosMacDataService` access with
+  `IOriginatorMacDataService` operations;
+- the corresponding uncommitted edits are in
+  `IOriginatorMacDataService.h`, `OriginatorMacDataService.h`,
+  `OriginatorQosMacDataService.h`, and
+  `OriginatorQosMacDataService.cc`;
+- these edits are a useful prerequisite for reducing HCF coupling, but they are
+  not the HCF god-object split itself and must remain separately attributable.
+
+The implementation owner must first record the exact patch/base, build it, and
+run the affected focused tests. The HCF split then starts from that verified
+state; it must not silently reset, overwrite, or absorb unrelated working-tree
+changes.
+
 ## Required outcome
 
 At completion:
@@ -69,6 +89,9 @@ necessary.
 - checked classification needed by at least three HCF dispatch sites;
 - focused unit-test additions and narrow HCF fingerprint verification;
 - direct-include cleanup after behavior and ownership stabilize.
+- the ordinary single-user branch of `Hcf::transmitFrame` only where a typed,
+  side-effect-preserving preparation boundary is demonstrated; HE/MU and
+  amendment-specific branches remain with their specialized owners.
 
 ### Excluded
 
