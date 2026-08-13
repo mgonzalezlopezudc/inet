@@ -15,6 +15,7 @@ digraph ieee80211_ownership {
                 <TR><TD ALIGN="LEFT">queued packets and order</TD><TD ALIGN="LEFT">queue / StationQueueBank</TD><TD ALIGN="LEFT">queue snapshots and reservations</TD></TR>
                 <TR><TD ALIGN="LEFT">backoff, retry, TXOP</TD><TD ALIGN="LEFT">EDCA / EDCAF</TD><TD ALIGN="LEFT">channel grants and results</TD></TR>
                 <TR><TD ALIGN="LEFT">active exchange and timers</TD><TD ALIGN="LEFT">HcfExchangeEngine</TD><TD ALIGN="LEFT">typed terminal result</TD></TR>
+                <TR><TD ALIGN="LEFT">ingress, dispatch, aggregation, preparation</TD><TD ALIGN="LEFT">Hcf-owned services and action adapters</TD><TD ALIGN="LEFT">packets and typed service calls</TD></TR>
                 <TR><TD ALIGN="LEFT">Block Ack agreements/windows</TD><TD ALIGN="LEFT">originator / recipient handlers</TD><TD ALIGN="LEFT">typed actions and snapshots</TD></TR>
                 <TR><TD ALIGN="LEFT">association and capabilities</TD><TD ALIGN="LEFT">MIB / management</TD><TD ALIGN="LEFT">peer snapshots</TD></TR>
                 <TR><TD ALIGN="LEFT">legal mode and PPDU timing</TD><TD ALIGN="LEFT">PHY mode / radio</TD><TD ALIGN="LEFT">mode identity and PHY indications</TD></TR>

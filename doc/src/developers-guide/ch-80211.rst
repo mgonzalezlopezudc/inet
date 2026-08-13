@@ -50,6 +50,29 @@ or typed callbacks.
 .. graphviz:: figures/ieee80211_ownership.dot
    :align: center
 
+HCF specializations and MAC schedulers
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The HCF amendment types are a composition boundary, not one large inheritance
+tree.  ``VhtHcf`` and ``HeHcf`` preserve the NED-facing drop-in types, while
+the common ``Hcf`` creates the amendment runtime and feature-set components
+selected by configuration.  HT behavior is concentrated in the HCF-owned
+:cpp:`HtHcfFeature`; VHT uses the private ``HcfVhtRuntime`` adapter and
+:cpp:`VhtHcfFeature`; HE uses :cpp:`HeHcfRuntime` and its services.
+
+The scheduler path starts only after EDCA has selected an access category and
+won a TXOP.  EDCA/EDCAF and :cpp:`Contention` own channel access, backoff,
+retry, and TXOP state.  VHT and HE schedulers consume immutable candidate and
+PHY snapshots inside that TXOP.  VHT selects a compatible group of DL MU-MIMO
+users.  HE downlink schedulers return per-STA RU, MCS, spatial-stream, and
+duration allocations; HE uplink schedulers return scheduled or random-access
+RUs plus common HE-TB timing.  The amendment exchange service validates and
+commits those results before packets, sequence state, or scheduler-observation
+state are advanced.
+
+.. graphviz:: figures/ieee80211_hcf_schedulers.dot
+   :align: center
+
 State and packet ownership
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -60,8 +83,9 @@ Each mutable state has one owner:
 * The HCF exchange engine owns the active frame sequence and response timers.
 * Originator and recipient Block Ack handlers own their respective agreements
   and windows.
-* Common ingress, originator, recipient, retry, aggregation, and transmission
-  services operate through typed action contracts.
+* HCF owns ingress tracking, originator/recipient dispatch, aggregation, and
+  transmission preparation; these remain factored into services and are
+  invoked through HCF-owned action adapters.
 * HE peer, queue, sounding, downlink-MU, and triggered-uplink services own their
   amendment-specific lifecycle and transaction state.
 * The PHY mode objects own legal mode combinations, duration calculations, and
@@ -76,11 +100,11 @@ sequence numbers, retry state, and Block Ack state; late callbacks are rejected
 using the transaction identity.  Semantic signals are emitted once by the
 component that owns the corresponding action.
 
-Rollback follows the reverse ownership order of commit.  A provider first
-restores any amendment-local reservation state, then returns packets to their
-recorded source queues in original order, and finally discards cloned sequence
-or retry state.  Rollback never emits successful-transmission observations and
-never re-runs provider selection.
+When a selected feature has staged state, its provider or amendment runtime
+rolls that state back before packets are returned to their recorded source
+queues in original order and cloned sequence or retry state is discarded.
+Rollback never emits successful-transmission observations and never re-runs
+provider selection.
 
 Adding an amendment exchange
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
