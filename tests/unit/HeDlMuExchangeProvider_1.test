@@ -470,6 +470,33 @@ startupParameters.maxHeMuPpduDuration = SimTime(1, SIMTIME_MS);
 auto stateSnapshot = makePreparationSnapshot(sta1, sta2);
 stateSnapshot.packets[0].packetIdentity = HcfPacketIdentity(packet1->getId());
 stateSnapshot.packets[1].packetIdentity = HcfPacketIdentity(packet2->getId());
+auto tiedFallbackSnapshot = stateSnapshot;
+tiedFallbackSnapshot.packets[0].enqueueTime = SimTime(1, SIMTIME_MS);
+tiedFallbackSnapshot.packets[1].enqueueTime = SimTime(1, SIMTIME_MS);
+tiedFallbackSnapshot.packets[0].packetIdentity = HcfPacketIdentity(902);
+tiedFallbackSnapshot.packets[1].packetIdentity = HcfPacketIdentity(901);
+auto tiedSingleUserStart = provider.prepareSingleUserStart(AC_BE,
+        tiedFallbackSnapshot);
+requireTrue(tiedSingleUserStart.has_value() &&
+        tiedSingleUserStart->stageQueueToken == tiedFallbackSnapshot.packets[1].queueToken &&
+        tiedSingleUserStart->stagePacketIdentity == tiedFallbackSnapshot.packets[1].packetIdentity,
+        "single-user preparation must break equal enqueue-time ties by lower packet identity");
+echoScheduler.invalid = true;
+auto invalidPlanPreparation = HeDlMuExchangeProvider::preparePlan(
+        HeDlMuExchangeProvider::buildScheduleContext(tiedFallbackSnapshot),
+        echoScheduler);
+requireTrue(!invalidPlanPreparation.plan.has_value() &&
+        invalidPlanPreparation.diagnostic &&
+        !invalidPlanPreparation.diagnostic.detail.empty(),
+        "invalid scheduler output must return an empty plan and useful diagnostic");
+auto tiedPreparedStart = provider.prepareStart(AC_BE, tiedFallbackSnapshot,
+        echoScheduler, startupParameters);
+requireTrue(tiedPreparedStart.has_value() &&
+        tiedPreparedStart->kind == HeDlMuExchangeProvider::StartKind::SINGLE_USER_FALLBACK &&
+        tiedPreparedStart->stageQueueToken == tiedFallbackSnapshot.packets[1].queueToken &&
+        tiedPreparedStart->stagePacketIdentity == tiedFallbackSnapshot.packets[1].packetIdentity,
+        "MU preparation fallback must break equal enqueue-time ties by lower packet identity");
+echoScheduler.invalid = false;
 auto pendingAddbaSnapshot = stateSnapshot;
 for (auto& packet : pendingAddbaSnapshot.packets)
     packet.addbaRequestInProgress = true;

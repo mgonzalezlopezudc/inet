@@ -37,18 +37,7 @@ class INET_API HeDlMuExchangeProvider
         void release() { provider = nullptr; }
     };
 
-    enum class PreparationState {
-        NO_CANDIDATE,
-        ADDBA_REQUIRED,
-        SOUNDING_REQUIRED,
-        SCHEDULER_SELECTED,
-        PLAN_VALIDATED,
-        COMMITTED,
-        SINGLE_USER_FALLBACK,
-    };
-
     struct PreparationResult {
-        PreparationState state = PreparationState::NO_CANDIDATE;
         std::optional<HeDlMuPlan> plan;
         HeMuPlanDiagnostic diagnostic;
     };
@@ -120,6 +109,11 @@ class INET_API HeDlMuExchangeProvider
     };
 
   private:
+    struct FallbackCandidate {
+        HcfQueueToken queueToken;
+        HcfPacketIdentity packetIdentity;
+    };
+
     enum class StartPhase {
         IDLE,
         COMMITTING,
@@ -147,6 +141,8 @@ class INET_API HeDlMuExchangeProvider
     HcfPacketIdentity fallbackPacketIdentity;
     AccessCategory fallbackAccessCategory = AC_BE;
 
+    static FallbackCandidate selectFallbackCandidate(
+            const HeDlMuPreparationSnapshot& snapshot);
     void restorePendingProtection();
 
   public:

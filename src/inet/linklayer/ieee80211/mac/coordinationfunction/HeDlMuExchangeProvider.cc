@@ -176,16 +176,27 @@ HeDlMuExchangeProvider::PreparationResult HeDlMuExchangeProvider::preparePlan(
 {
     PreparationResult result;
     auto context = buildCandidateContext(snapshotContext);
-    if (context.candidates.size() < 2) {
-        result.state = PreparationState::SINGLE_USER_FALLBACK;
+    if (context.candidates.size() < 2)
         return result;
-    }
     auto allocations = scheduler.schedule(context);
-    result.state = PreparationState::SCHEDULER_SELECTED;
     result.plan = HeDlMuPlan::create(context, allocations, result.diagnostic);
-    result.state = result.plan ? PreparationState::PLAN_VALIDATED :
-            PreparationState::SINGLE_USER_FALLBACK;
     return result;
+}
+
+HeDlMuExchangeProvider::FallbackCandidate
+HeDlMuExchangeProvider::selectFallbackCandidate(
+        const HeDlMuPreparationSnapshot& snapshot)
+{
+    const HeDlMuCandidateSnapshot *oldest = nullptr;
+    for (const auto& packet : snapshot.packets)
+        if (!packet.queuePeer.isUnspecified() && packet.queueIndex == 0 &&
+                packet.twtEligible && !packet.addbaRequestInProgress &&
+                (oldest == nullptr || packet.enqueueTime < oldest->enqueueTime ||
+                 (packet.enqueueTime == oldest->enqueueTime &&
+                  packet.packetIdentity.getValue() < oldest->packetIdentity.getValue())))
+            oldest = &packet;
+    return oldest == nullptr ? FallbackCandidate() :
+            FallbackCandidate {oldest->queueToken, oldest->packetIdentity};
 }
 
 std::optional<HeDlMuExchangeProvider::PreparedStart>
@@ -196,19 +207,12 @@ HeDlMuExchangeProvider::prepareSingleUserStart(AccessCategory ac,
         throw cRuntimeError("HE DL MU single-user snapshot access category mismatch");
     if (snapshot.hasSingleUserFrameToTransmit)
         return PreparedStart {StartKind::SINGLE_USER_FALLBACK, ac};
-    const HeDlMuCandidateSnapshot *oldest = nullptr;
-    for (const auto& packet : snapshot.packets)
-        if (!packet.queuePeer.isUnspecified() && packet.queueIndex == 0 &&
-                packet.twtEligible && !packet.addbaRequestInProgress &&
-                (oldest == nullptr || packet.enqueueTime < oldest->enqueueTime ||
-                 (packet.enqueueTime == oldest->enqueueTime &&
-                  packet.packetIdentity.getValue() < oldest->packetIdentity.getValue())))
-            oldest = &packet;
-    if (oldest == nullptr)
+    const auto fallbackCandidate = selectFallbackCandidate(snapshot);
+    if (!fallbackCandidate.queueToken.isValid())
         return std::nullopt;
     PreparedStart prepared {StartKind::SINGLE_USER_FALLBACK, ac};
-    prepared.stageQueueToken = oldest->queueToken;
-    prepared.stagePacketIdentity = oldest->packetIdentity;
+    prepared.stageQueueToken = fallbackCandidate.queueToken;
+    prepared.stagePacketIdentity = fallbackCandidate.packetIdentity;
     return prepared;
 }
 
@@ -223,16 +227,7 @@ std::optional<HeDlMuExchangeProvider::PreparedStart> HeDlMuExchangeProvider::pre
         throw cRuntimeError("HE DL MU snapshot access category mismatch");
 
     auto context = buildScheduleContext(snapshot);
-    const HeDlMuCandidateSnapshot *oldest = nullptr;
-    for (const auto& packet : snapshot.packets)
-        if (!packet.queuePeer.isUnspecified() && packet.queueIndex == 0 &&
-                packet.twtEligible && !packet.addbaRequestInProgress &&
-                (oldest == nullptr || packet.enqueueTime < oldest->enqueueTime ||
-                 (packet.enqueueTime == oldest->enqueueTime &&
-                  packet.packetIdentity.getValue() < oldest->packetIdentity.getValue())))
-            oldest = &packet;
-    const auto fallbackQueueToken = oldest == nullptr ? HcfQueueToken() : oldest->queueToken;
-    const auto fallbackPacketIdentity = oldest == nullptr ? HcfPacketIdentity() : oldest->packetIdentity;
+    const auto fallbackCandidate = selectFallbackCandidate(snapshot);
 
     if (snapshot.heAccessPoint && snapshot.common.enableDlMuMimo &&
             snapshot.localDlMuMimoBeamformer) {
@@ -289,13 +284,13 @@ std::optional<HeDlMuExchangeProvider::PreparedStart> HeDlMuExchangeProvider::pre
     auto preparation = preparePlan(context, scheduler);
     if (!preparation.plan) {
         if (context.candidates.size() < 2 &&
-                !(snapshot.pendingQueueEmpty && fallbackQueueToken.isValid() &&
-                  fallbackPacketIdentity.isValid()))
+                !(snapshot.pendingQueueEmpty && fallbackCandidate.queueToken.isValid() &&
+                  fallbackCandidate.packetIdentity.isValid()))
             return std::nullopt;
         PreparedStart prepared {StartKind::SINGLE_USER_FALLBACK, ac};
         if (snapshot.pendingQueueEmpty) {
-            prepared.stageQueueToken = fallbackQueueToken;
-            prepared.stagePacketIdentity = fallbackPacketIdentity;
+            prepared.stageQueueToken = fallbackCandidate.queueToken;
+            prepared.stagePacketIdentity = fallbackCandidate.packetIdentity;
         }
         prepared.startSingleUser = context.candidates.size() >= 2;
         return prepared;
@@ -335,8 +330,8 @@ std::optional<HeDlMuExchangeProvider::PreparedStart> HeDlMuExchangeProvider::pre
     prepared.parameters = parameters;
     prepared.scheduler = &scheduler;
     if (snapshot.pendingQueueEmpty) {
-        prepared.stageQueueToken = fallbackQueueToken;
-        prepared.stagePacketIdentity = fallbackPacketIdentity;
+        prepared.stageQueueToken = fallbackCandidate.queueToken;
+        prepared.stagePacketIdentity = fallbackCandidate.packetIdentity;
     }
     return prepared;
 }
