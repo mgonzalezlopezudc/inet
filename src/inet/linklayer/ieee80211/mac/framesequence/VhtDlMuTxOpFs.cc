@@ -26,9 +26,9 @@ using namespace inet::physicallayer;
 VhtDlMuTxOpFs::VhtDlMuTxOpFs(const VhtDlMuPlan& plan,
         Ieee80211ModeSet *modeSet, IAckHandler *ackHandler,
         IFrameSequenceHandler::ICallback *callback,
-        IVhtDlMuExchangeCallback *vhtCallback, uint64_t transactionToken) :
+        IVhtDlMuExchangeCallback *vhtCallback, uint64_t exchangeId) :
     plan(plan), modeSet(modeSet), ackHandler(ackHandler), callback(callback),
-    vhtCallback(vhtCallback), transactionToken(transactionToken)
+    vhtCallback(vhtCallback), exchangeId(exchangeId)
 {
     ASSERT(modeSet != nullptr && ackHandler != nullptr && callback != nullptr &&
             vhtCallback != nullptr);
@@ -46,10 +46,12 @@ IFrameSequenceStep *VhtDlMuTxOpFs::prepareStep(FrameSequenceContext *context)
             containerPacket = buildMuContainerPacket(context);
         }
         catch (const VhtDlMuStalePlan& error) {
-            EV_WARN << "VHT DL MU transaction aborted before commit: "
+            EV_WARN << "VHT DL MU exchange aborted before commit: "
                     << error.what() << endl;
             containerPacket = nullptr;
             activeUsers.clear();
+            vhtCallback->vhtDlMuPlanningFailed(exchangeId,
+                    VhtDlMuPlanningFailure::STALE_PLAN);
         }
         return containerPacket == nullptr ? nullptr :
                 new TransmitStep(containerPacket, context->getIfs(), true);
@@ -80,11 +82,11 @@ bool VhtDlMuTxOpFs::completeStep(FrameSequenceContext *context)
         if (receive->getReceivedFrame() == nullptr) {
             for (auto packet : activeUsers.at(userIndex).packets)
                 vhtCallback->processVhtDlMuFailedFrame(packet);
-            vhtCallback->processVhtDlMuUserResult(transactionToken, userIndex,
+            vhtCallback->processVhtDlMuUserResult(exchangeId, userIndex,
                     IVhtDlMuExchangeCallback::UserResult::BLOCK_ACK_TIMED_OUT);
         }
         else
-            vhtCallback->processVhtDlMuUserResult(transactionToken, userIndex,
+            vhtCallback->processVhtDlMuUserResult(exchangeId, userIndex,
                     IVhtDlMuExchangeCallback::UserResult::BLOCK_ACK_RECEIVED);
     }
     step++;
@@ -373,7 +375,7 @@ Packet *VhtDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     std::vector<std::vector<Packet *>> userPackets;
     for (const auto& user : activeUsers)
         userPackets.push_back(user.packets);
-    vhtCallback->vhtDlMuPlanCommitted(transactionToken, containerPacket,
+    vhtCallback->vhtDlMuPlanCommitted(exchangeId, containerPacket,
             userPackets);
     return containerPacket;
 }

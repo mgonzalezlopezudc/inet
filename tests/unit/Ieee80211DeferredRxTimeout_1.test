@@ -201,8 +201,6 @@ class TestCoordinationFunction : public CoordinationFunction, public DeferredRxT
                 outcome->finishedSequences++;
             };
             this->installTestActionPort(std::move(port));
-            this->installExchangeTerminalSinkForTesting(
-                    [] (HcfTransactionIdentity, HcfExchangeAbortReason) {});
         }
         else {
             this->startRxTimer = new cMessage("startRxTimeout");

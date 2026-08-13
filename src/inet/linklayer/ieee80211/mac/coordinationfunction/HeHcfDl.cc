@@ -104,16 +104,6 @@ bool HeHcfRuntime::stagePerStaFrameForSingleUserTransmission(AccessCategory ac)
             oldest->packetIdentity, ac);
 }
 
-bool HeHcfRuntime::tryStartDlMuFrameSequence(AccessCategory ac)
-{
-    HeDlMuExchangeProvider::StartupParameters parameters;
-    parameters.maxAmpduMpduCount = par("maxAmpduMpduCount");
-    parameters.maxHeMuPsduLength = par("maxHeMuPsduLength");
-    parameters.maxHeMuPpduDuration = par("maxHeMuPpduDuration");
-    return getHeDlMuExchangeProvider().tryStart(ac,
-            captureHeDlMuPreparationSnapshot(ac), *dlScheduler, parameters);
-}
-
 bool HeHcfRuntime::stageHeDlMuPacket(HcfQueueToken queueToken,
         HcfPacketIdentity packetIdentity, AccessCategory ac)
 {
@@ -127,6 +117,31 @@ bool HeHcfRuntime::startHeDlMuSingleUserIfEligible(AccessCategory ac)
         return false;
     hcf->startSingleUserExchange(ac);
     return true;
+}
+
+HeDlMuExchangeProvider::HeDlMuProtectionSnapshot
+HeHcfRuntime::captureHeDlMuProtection(AccessCategory ac) const
+{
+    auto txop = edca->getEdcaf(ac)->getTxopProcedure();
+    auto state = txop->getProtectionStateSnapshot();
+    HeDlMuExchangeProvider::HeDlMuProtectionSnapshot snapshot;
+    switch (state.mechanism) {
+        case TxopProcedure::SINGLE_PROTECTION:
+            snapshot.mechanism = HeDlMuExchangeProvider::HeDlMuProtectionSnapshot::Mechanism::SINGLE_PROTECTION;
+            break;
+        case TxopProcedure::MULTIPLE_PROTECTION:
+            snapshot.mechanism = HeDlMuExchangeProvider::HeDlMuProtectionSnapshot::Mechanism::MULTIPLE_PROTECTION;
+            break;
+        case TxopProcedure::UNDEFINED_PROTECTION:
+            snapshot.mechanism = HeDlMuExchangeProvider::HeDlMuProtectionSnapshot::Mechanism::UNDEFINED_PROTECTION;
+            break;
+    }
+    snapshot.protection = state.protection == TxopProcedure::InitialProtection::LEGACY_RTS_CTS ?
+            HeDlMuExchangeProvider::HeDlMuProtectionSnapshot::InitialProtection::LEGACY_RTS_CTS :
+            HeDlMuExchangeProvider::HeDlMuProtectionSnapshot::InitialProtection::NONE;
+    snapshot.configured = state.configured;
+    snapshot.completed = state.completed;
+    return snapshot;
 }
 
 void HeHcfRuntime::startHeSoundingExchange(
@@ -146,6 +161,31 @@ void HeHcfRuntime::configureHeDlMuProtection(AccessCategory ac)
     auto txop = edca->getEdcaf(ac)->getTxopProcedure();
     if (!txop->isProtectionConfigured())
         txop->configureProtection(TxopProcedure::InitialProtection::NONE);
+}
+
+void HeHcfRuntime::restoreHeDlMuProtection(AccessCategory ac,
+        const HeDlMuExchangeProvider::HeDlMuProtectionSnapshot& snapshot)
+{
+    auto txop = edca->getEdcaf(ac)->getTxopProcedure();
+    TxopProcedure::ProtectionState::Snapshot state;
+    switch (snapshot.mechanism) {
+        case HeDlMuExchangeProvider::HeDlMuProtectionSnapshot::Mechanism::SINGLE_PROTECTION:
+            state.mechanism = TxopProcedure::SINGLE_PROTECTION;
+            break;
+        case HeDlMuExchangeProvider::HeDlMuProtectionSnapshot::Mechanism::MULTIPLE_PROTECTION:
+            state.mechanism = TxopProcedure::MULTIPLE_PROTECTION;
+            break;
+        case HeDlMuExchangeProvider::HeDlMuProtectionSnapshot::Mechanism::UNDEFINED_PROTECTION:
+            state.mechanism = TxopProcedure::UNDEFINED_PROTECTION;
+            break;
+    }
+    state.protection = snapshot.protection ==
+            HeDlMuExchangeProvider::HeDlMuProtectionSnapshot::InitialProtection::LEGACY_RTS_CTS ?
+            TxopProcedure::InitialProtection::LEGACY_RTS_CTS :
+            TxopProcedure::InitialProtection::NONE;
+    state.configured = snapshot.configured;
+    state.completed = snapshot.completed;
+    txop->restoreProtectionStateSnapshot(state);
 }
 
 void HeHcfRuntime::startHeDlMuExchange(AccessCategory ac, const HeDlMuPlan& plan,

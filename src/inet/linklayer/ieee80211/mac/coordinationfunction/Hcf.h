@@ -51,7 +51,6 @@
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfOriginatorService.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfRecipientService.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfRetryService.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfRuntime.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfTransmissionPreparationService.h"
 #include "inet/linklayer/ieee80211/mac/originator/TxopProcedure.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/VhtHcfFeature.h"
@@ -216,15 +215,12 @@ class INET_API Hcf : public IQosCoordinationFunction, public IChannelAccess::ICa
     HcfRecipientService recipientService;
     HcfFrameDispatchService frameDispatchService;
     HcfTransmissionPreparationService transmissionPreparationService;
-    std::unique_ptr<HcfRuntime> runtime;
     std::unique_ptr<HcfVhtRuntime> vhtRuntime;
     std::unique_ptr<HeHcfRuntime> heRuntime;
     IIeee80211MgmtExchangeResultHandler *mgmtExchangeResultHandler = nullptr;
     IHcfTxRxInterceptor *txRxInterceptor = nullptr;
     std::function<void(Packet *)> frameDecorator;
     TestActionPort testActionPort;
-    std::function<void(HcfTransactionIdentity, HcfExchangeAbortReason)>
-            exchangeTerminalSinkForTesting;
 
     void notifyMgmtExchangeResult(Packet *packet,
             Ieee80211MgmtExchangeResultKind kind);
@@ -294,10 +290,6 @@ class INET_API Hcf : public IQosCoordinationFunction, public IChannelAccess::ICa
             uint16_t responseAid);
     void installTestActionPort(TestActionPort port)
         { testActionPort = std::move(port); }
-    void installExchangeTerminalSinkForTesting(
-            std::function<void(HcfTransactionIdentity,
-                    HcfExchangeAbortReason)> sink)
-        { exchangeTerminalSinkForTesting = std::move(sink); }
 
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
@@ -330,8 +322,6 @@ class INET_API Hcf : public IQosCoordinationFunction, public IChannelAccess::ICa
     const physicallayer::IIeee80211Mode *selectHtSoundingMode(AccessCategory ac) const;
     bool tryStartHtSounding(AccessCategory ac);
     void startSingleUserExchange(AccessCategory ac);
-    void commitTransactionalExchange(HcfExchangeClass exchangeClass,
-            const HcfContext& context);
 
     void startFrameSequence(AccessCategory ac);
     void resumeContention();
@@ -441,8 +431,6 @@ class INET_API Hcf : public IQosCoordinationFunction, public IChannelAccess::ICa
     Hcf();
     virtual ~Hcf();
 
-    HcfExchangeSelector& getExchangeSelectorForTesting()
-        { return runtime->getExchangeSelector(); }
     HeHcfRuntime& getHeRuntime() const;
     void setVhtDlMuTxOpFactoryForTesting(VhtHcfFeature::ITxOpFactory *factory);
 

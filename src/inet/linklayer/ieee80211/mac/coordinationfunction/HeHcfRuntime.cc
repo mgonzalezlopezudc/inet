@@ -130,6 +130,47 @@ const IIeee80211HeLinkPhyContext& HeHcfRuntime::getLinkPhyContext() const
     return *linkPhyContext;
 }
 
+HeTxopCoordinatorService::GrantSnapshot HeHcfRuntime::buildGrantSelectionContext(
+        AccessCategory ac, bool heMode, bool hasEligibleFrame,
+        const HeDlMuExchangeProvider::StartupParameters& parameters,
+        const std::function<std::optional<HeUlTriggerService::PreparedStart>()>& prepareUl,
+        const std::function<HeDlMuPreparationSnapshot()>& captureDl,
+        const std::function<bool()>& hasCommonFrame)
+{
+    std::optional<HeDlMuPreparationSnapshot> dlSnapshot;
+    auto getDlSnapshot = [&] () -> const HeDlMuPreparationSnapshot& {
+        if (!dlSnapshot)
+            dlSnapshot.emplace(captureDl());
+        return *dlSnapshot;
+    };
+    const bool commonFrameAvailable = hasCommonFrame();
+    HeTxopCoordinatorService::PreparationActions actions;
+    actions.prepareUlTrigger = prepareUl;
+    actions.prepareDlStart = [&] {
+        return getDlMuExchangeProvider().prepareStart(ac, getDlSnapshot(),
+                *bindings.dlScheduler, parameters);
+    };
+    actions.prepareSingleUser = [&] {
+        if (commonFrameAvailable)
+            return std::optional<HeDlMuExchangeProvider::PreparedStart>();
+        return getDlMuExchangeProvider().prepareSingleUserStart(ac,
+                getDlSnapshot());
+    };
+    bool hasExecutableFrame = commonFrameAvailable;
+    if (heMode) {
+        const auto& grantSnapshot = getDlSnapshot();
+        hasExecutableFrame = hasExecutableFrame ||
+                std::any_of(grantSnapshot.packets.begin(), grantSnapshot.packets.end(),
+                        [] (const HeDlMuCandidateSnapshot& packet) {
+                            return packet.queueIndex == 0 && packet.twtEligible &&
+                                    !packet.addbaRequestInProgress;
+                        });
+    }
+    return txopCoordinator.prepareGrant(ac, heMode,
+            getDlMuExchangeProvider().hasForcedSingleUser(ac),
+            hasExecutableFrame, actions);
+}
+
 HeDlMuPreparationSnapshot HeHcfRuntime::captureDlPreparationSnapshot(
         AccessCategory ac) const
 {
@@ -245,98 +286,6 @@ HeDlMuPreparationSnapshot HeHcfRuntime::captureDlPreparationSnapshot(
                         getPeerStateService().getCsiManager().getLeakage(
                                 station, other, context.channelBandwidth);
     return snapshot;
-}
-
-HcfContext HeHcfRuntime::buildGrantSelectionContext(AccessCategory ac,
-        bool heMode, bool hasEligibleFrame,
-        const HeDlMuExchangeProvider::StartupParameters& parameters,
-        const std::function<std::optional<HeUlTriggerService::PreparedStart>()>& prepareUl,
-        const std::function<HeDlMuPreparationSnapshot()>& captureDl,
-        const std::function<bool()>& hasCommonFrame)
-{
-    std::optional<HeDlMuPreparationSnapshot> dlSnapshot;
-    auto getDlSnapshot = [&] () -> const HeDlMuPreparationSnapshot& {
-        if (!dlSnapshot)
-            dlSnapshot.emplace(captureDl());
-        return *dlSnapshot;
-    };
-    const bool commonFrameAvailable = hasCommonFrame();
-    HeTxopCoordinatorService::PreparationActions actions;
-    actions.prepareUlTrigger = prepareUl;
-    actions.prepareDlStart = [&] {
-        return getDlMuExchangeProvider().prepareStart(ac, getDlSnapshot(),
-                *bindings.dlScheduler, parameters);
-    };
-    actions.prepareSingleUser = [&] {
-        if (commonFrameAvailable)
-            return std::optional<HeDlMuExchangeProvider::PreparedStart>();
-        return getDlMuExchangeProvider().prepareSingleUserStart(ac,
-                getDlSnapshot());
-    };
-    bool hasExecutableFrame = commonFrameAvailable;
-    if (heMode) {
-        const auto& grantSnapshot = getDlSnapshot();
-        hasExecutableFrame = hasExecutableFrame ||
-                std::any_of(grantSnapshot.packets.begin(), grantSnapshot.packets.end(),
-                        [] (const HeDlMuCandidateSnapshot& packet) {
-                            return packet.queueIndex == 0 && packet.twtEligible &&
-                                    !packet.addbaRequestInProgress;
-                        });
-    }
-    auto snapshot = txopCoordinator.prepareGrant(ac, heMode,
-            getDlMuExchangeProvider().hasForcedSingleUser(ac),
-            hasExecutableFrame, actions);
-    HcfContext context(ac, {snapshot.exchangeClass});
-    context.setProviderSnapshot(snapshot);
-    return context;
-}
-
-bool HeHcfRuntime::commitSelectedExchange(HcfExchangeClass exchangeClass,
-        const HcfContext& context,
-        const std::function<void(AccessCategory)>& startCommon,
-        const std::function<bool(const HeUlTriggerService::PreparedStart&)>& commitUl,
-        const std::function<bool(AccessCategory)>& startSingleUserFallback)
-{
-    auto snapshot = context.findProviderSnapshot<HeTxopCoordinatorService::GrantSnapshot>();
-    if (snapshot == nullptr || snapshot->exchangeClass != exchangeClass)
-        return false;
-    const auto ac = snapshot->accessCategory;
-    try {
-        switch (exchangeClass) {
-            case HcfExchangeClass::FORCED_SINGLE_USER:
-                if (!getDlMuExchangeProvider().consumeForcedSingleUser(ac))
-                    throw cRuntimeError("Forced HE single-user grant became stale before commit");
-                startCommon(ac);
-                return true;
-            case HcfExchangeClass::HE_UL_TRIGGER:
-                if (!snapshot->ulTrigger || !commitUl(*snapshot->ulTrigger))
-                    throw cRuntimeError("Prepared HE UL Trigger grant became stale before commit");
-                return true;
-            case HcfExchangeClass::HE_SOUNDING:
-            case HcfExchangeClass::RECOVERY_SINGLE_USER:
-            case HcfExchangeClass::HE_DL_MULTIUSER:
-                if (!snapshot->dlStart ||
-                        !getDlMuExchangeProvider().commitStart(*snapshot->dlStart))
-                    throw cRuntimeError("Prepared HE grant did not start its exact exchange class");
-                return true;
-            case HcfExchangeClass::SINGLE_USER:
-                if (snapshot->dlStart) {
-                    if (!getDlMuExchangeProvider().commitStart(*snapshot->dlStart) &&
-                            !startSingleUserFallback(ac))
-                        throw cRuntimeError("Prepared HE single-user fallback became stale before commit");
-                }
-                else
-                    startCommon(ac);
-                return true;
-            default:
-                return false;
-        }
-    }
-    catch (...) {
-        if (snapshot->dlStart)
-            getDlMuExchangeProvider().rollbackStart(*snapshot->dlStart);
-        throw;
-    }
 }
 
 } // namespace ieee80211

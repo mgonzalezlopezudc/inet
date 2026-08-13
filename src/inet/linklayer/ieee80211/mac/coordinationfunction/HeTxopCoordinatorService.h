@@ -11,7 +11,6 @@
 #include <optional>
 
 #include "inet/common/INETDefs.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfContext.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeDlMuExchangeProvider.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeUlTriggerService.h"
 
@@ -30,7 +29,17 @@ class INET_API HeTxopCoordinatorService
   public:
     /** Immutable, exact outcome captured once at the EDCAF grant boundary. */
     struct GrantSnapshot {
-        HcfExchangeClass exchangeClass = HcfExchangeClass::CHANNEL_RELEASE;
+        enum class StartKind {
+            CHANNEL_RELEASE,
+            FORCED_SINGLE_USER,
+            UL_TRIGGER,
+            SOUNDING,
+            RECOVERY_SINGLE_USER,
+            DL_MULTIUSER,
+            PREPARED_SINGLE_USER,
+            COMMON_SINGLE_USER,
+        };
+        StartKind startKind = StartKind::CHANNEL_RELEASE;
         AccessCategory accessCategory = AC_BE;
         std::optional<HeUlTriggerService::PreparedStart> ulTrigger;
         std::optional<HeDlMuExchangeProvider::PreparedStart> dlStart;

@@ -221,7 +221,8 @@ class TestHeHcf : public HeHcf,
                     return HeDlMuPreparationSnapshot();
                 },
                 [] { return true; });
-        return context.getExchangeEligibility(HcfExchangeClass::SINGLE_USER) == true;
+        return context.startKind ==
+                HeTxopCoordinatorService::GrantSnapshot::StartKind::COMMON_SINGLE_USER;
     }
 
     virtual void preparedResponse(Packet *packet) override

@@ -36,7 +36,7 @@ namespace ieee80211 {
  * Retry state is materialized before retry-sensitive policy and rate selection,
  * and production aggregation planning may move candidates from pending to
  * in-progress state. A later failure does not roll those baseline owner
- * mutations back. Temporary aggregate ownership remains transactional.
+ * mutations back. Temporary aggregate ownership is exception-safe.
  * The source packet is never transferred. A temporary transmitted packet is
  * deleted exactly once after handoff or after a failed handoff. If
  * materializeAggregate() throws, it must clean up any allocation that it did

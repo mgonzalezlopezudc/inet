@@ -18,7 +18,7 @@ HeTxopCoordinatorService::GrantSnapshot HeTxopCoordinatorService::prepareGrant(
     GrantSnapshot snapshot;
     snapshot.accessCategory = accessCategory;
     if (forcedSingleUser) {
-        snapshot.exchangeClass = HcfExchangeClass::FORCED_SINGLE_USER;
+        snapshot.startKind = GrantSnapshot::StartKind::FORCED_SINGLE_USER;
         return snapshot;
     }
     if (heMode) {
@@ -26,32 +26,33 @@ HeTxopCoordinatorService::GrantSnapshot HeTxopCoordinatorService::prepareGrant(
             throw cRuntimeError("Incomplete HE TXOP preparation actions");
         snapshot.ulTrigger = actions.prepareUlTrigger();
         if (snapshot.ulTrigger) {
-            snapshot.exchangeClass = HcfExchangeClass::HE_UL_TRIGGER;
+            snapshot.startKind = GrantSnapshot::StartKind::UL_TRIGGER;
             return snapshot;
         }
         snapshot.dlStart = actions.prepareDlStart();
         if (snapshot.dlStart) {
             switch (snapshot.dlStart->kind) {
                 case HeDlMuExchangeProvider::StartKind::HE_SOUNDING:
-                    snapshot.exchangeClass = HcfExchangeClass::HE_SOUNDING;
+                    snapshot.startKind = GrantSnapshot::StartKind::SOUNDING;
                     return snapshot;
                 case HeDlMuExchangeProvider::StartKind::RECOVERY_SINGLE_USER:
                 case HeDlMuExchangeProvider::StartKind::ADDBA_SINGLE_USER:
-                    snapshot.exchangeClass = HcfExchangeClass::RECOVERY_SINGLE_USER;
+                    snapshot.startKind = GrantSnapshot::StartKind::RECOVERY_SINGLE_USER;
                     return snapshot;
                 case HeDlMuExchangeProvider::StartKind::HE_DL_MULTIUSER:
-                    snapshot.exchangeClass = HcfExchangeClass::HE_DL_MULTIUSER;
+                    snapshot.startKind = GrantSnapshot::StartKind::DL_MULTIUSER;
                     return snapshot;
                 case HeDlMuExchangeProvider::StartKind::SINGLE_USER_FALLBACK:
-                    snapshot.exchangeClass = HcfExchangeClass::SINGLE_USER;
+                    snapshot.startKind = GrantSnapshot::StartKind::PREPARED_SINGLE_USER;
                     return snapshot;
             }
         }
     }
     if (actions.prepareSingleUser)
         snapshot.dlStart = actions.prepareSingleUser();
-    snapshot.exchangeClass = hasEligibleFrame || snapshot.dlStart ?
-            HcfExchangeClass::SINGLE_USER : HcfExchangeClass::CHANNEL_RELEASE;
+    snapshot.startKind = hasEligibleFrame || snapshot.dlStart ?
+            GrantSnapshot::StartKind::COMMON_SINGLE_USER :
+            GrantSnapshot::StartKind::CHANNEL_RELEASE;
     return snapshot;
 }
 

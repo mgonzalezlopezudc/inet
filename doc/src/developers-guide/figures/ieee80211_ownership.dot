@@ -23,11 +23,11 @@ digraph ieee80211_ownership {
     }
 
     subgraph cluster_packets {
-        label="Packet ownership and transaction lifecycle"
+        label="Packet ownership and exchange lifecycle"
         color="#fca5a5"; style="rounded"; penwidth=1.2
 
         queued [label="Queue-owned Packet\nMSDU / MAC data", fillcolor="#fff1f2"]
-        identity [label="Reservation identity\npacket + queue + association + transaction", fillcolor="#fff1f2"]
+        identity [label="Reservation identity\npacket + queue + association + exchange ID", fillcolor="#fff1f2"]
         prepared [label="Prepared exchange\ncloned state; no dequeue", fillcolor="#fff1f2"]
         frame [label="MAC Packet\ntyped header / trailer chunks", fillcolor="#fff1f2"]
         phyframe [label="PHY-facing Packet\nMAC chunks + mode / TX tags", fillcolor="#fff1f2"]
@@ -48,7 +48,7 @@ digraph ieee80211_ownership {
         <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="2">
             <TR><TD ALIGN="LEFT"><B>Preparation:</B> inspect immutable snapshots, clone state, and create a plan.</TD></TR>
             <TR><TD ALIGN="LEFT"><B>Commit:</B> transfer each reserved packet exactly once and start the active exchange.</TD></TR>
-            <TR><TD ALIGN="LEFT"><B>Failure:</B> restore queue order and discard cloned sequence/retry state; stale callbacks are rejected by transaction identity.</TD></TR>
+            <TR><TD ALIGN="LEFT"><B>Failure:</B> restore queue order and discard cloned sequence/retry state; stale callbacks are rejected by the owning exchange ID.</TD></TR>
             <TR><TD ALIGN="LEFT"><B>Representation:</B> on-air fields are typed chunks; local simulation information is carried by tags, requests, or indications.</TD></TR>
         </TABLE>>]
 }

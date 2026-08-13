@@ -8,7 +8,6 @@
 #include <optional>
 #include <vector>
 
-#include "inet/linklayer/ieee80211/mac/contract/IHcfExchangeProvider.h"
 #include "inet/linklayer/ieee80211/mac/contract/IIeee80211HeLinkPhyContext.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeSoundingFs.h"
 #include "inet/linklayer/ieee80211/mac/scheduler/IIeee80211HeDlScheduler.h"
@@ -20,7 +19,7 @@ namespace ieee80211 {
 class HeSoundingCoordinator;
 
 /** Owns HE NDPA/NDP/BFRP dialog correlation independently of HCF and PHY objects. */
-class INET_API HeSoundingService final : public IHcfExchangeProvider
+class INET_API HeSoundingService final
 {
   public:
     struct StartAction;
@@ -106,11 +105,6 @@ class INET_API HeSoundingService final : public IHcfExchangeProvider
     StaSnapshot getStaSnapshot() const
         { return {ndpAnnouncementReceived, ndpReceived, soundingDialogToken}; }
 
-    virtual HcfExchangeClass getExchangeClass() const override;
-    virtual std::unique_ptr<PreparedHcfExchange> prepareExchange(
-            const HcfContext& context,
-            HcfTransactionIdentity transactionIdentity,
-            HcfExchangeRejection& rejection) override;
 };
 
 } // namespace ieee80211

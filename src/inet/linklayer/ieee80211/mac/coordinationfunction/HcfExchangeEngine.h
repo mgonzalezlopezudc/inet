@@ -13,7 +13,6 @@
 #include "inet/common/INETDefs.h"
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequenceHandler.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfExchangeCoordinator.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfExchangePlan.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfResponseService.h"
 
 namespace inet {
@@ -42,8 +41,6 @@ class INET_API HcfExchangeEngine : private IFrameSequenceHandler::ICallback
         std::function<void(Packet *)> originatorProcessFailedFrame;
         std::function<void(const FrameSequenceContext *)> frameSequenceStarted;
         std::function<void(const FrameSequenceContext *)> frameSequenceFinished;
-        std::function<bool()> hasTransactionalOwner;
-        std::function<void(HcfTransactionIdentity, HcfExchangeAbortReason)> exchangeTerminated;
         std::function<void()> resumeContention;
         std::function<void(Packet *)> discardResponse;
         std::function<void()> inactivityTimeout;
@@ -67,19 +64,16 @@ class INET_API HcfExchangeEngine : private IFrameSequenceHandler::ICallback
     HcfExchangeCoordinator exchangeCoordinator;
     HcfResponseService responseService;
     const Actions *activeActions = nullptr;
-    uint64_t nextTransactionToken = 1;
-    uint64_t nextTransactionGeneration = 1;
-    HcfTransactionIdentity activeTransactionIdentity;
+    uint64_t nextExchangeGeneration = 1;
+    uint64_t activeExchangeGeneration = 0;
     uint64_t startRxTimerGeneration = 0;
     uint64_t deferredTimeoutGeneration = 0;
-    HcfExchangeAbortReason terminalAbortReason = HcfExchangeAbortReason::NONE;
 
     const Actions& getActiveActions() const;
     static void checkActions(const Actions& actions);
     HcfResponseService::Actions makeResponseActions(const Actions& actions);
-    void beginTransactionIfNeeded();
-    void clearTransaction();
-    void notifyTransactionTerminated(const Actions& actions, HcfExchangeAbortReason reason);
+    void beginExchangeIfNeeded();
+    void clearExchange();
     const IFrameSequence *getFrameSequenceForLegacyAdapter() const;
     IFrameSequenceHandler::ICallback *getFrameSequenceCallbackForLegacyAdapter() { return this; }
 
@@ -125,8 +119,6 @@ class INET_API HcfExchangeEngine : private IFrameSequenceHandler::ICallback
     const FrameSequenceContext *getContext() const;
     const IFrameSequenceStep *getCurrentStep() const;
     Packet *getActivePacket() const { return exchangeCoordinator.getActivePacket(); }
-    HcfTransactionIdentity getActiveTransactionIdentity() const { return activeTransactionIdentity; }
-    bool isActiveTransaction(HcfTransactionIdentity identity) const;
     bool hasDeferredStartRxTimeout() const { return responseService.hasDeferredStartRxTimeout(); }
     void clearTimerStateForTest() { responseService.clearTimerState(); deferredTimeoutGeneration = 0; }
     bool isStartRxTimerScheduled() const;

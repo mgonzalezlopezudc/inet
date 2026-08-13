@@ -7,23 +7,17 @@
 #ifndef __INET_IHCFFEATURESET_H
 #define __INET_IHCFFEATURESET_H
 
-#include <functional>
-#include <vector>
-
 #include "inet/common/INETDefs.h"
 #include "inet/linklayer/ieee80211/mac/common/AccessCategory.h"
 
 namespace inet {
 namespace ieee80211 {
 
-class IHcfExchangeProvider;
-class HcfContext;
 class HePeerStateService;
 class HeQueueService;
 class HeDlMuExchangeProvider;
 class HeTriggeredUlExchangeService;
 class HeSoundingService;
-enum class HcfExchangeClass;
 
 enum class HcfAmendmentRuntimeKind {
     COMMON,
@@ -57,51 +51,12 @@ struct INET_API HcfFeatureConfiguration
     bool enableHeDlMuMimo = false;
 };
 
-/**
- * Non-owning reference to a genuine prepared-exchange provider whose lifetime
- * is owned by the feature-set module. Direct ordinary SU, channel release,
- * HT sounding, and VHT sounding are not provider descriptors.
- */
-class INET_API HcfExchangeProviderDescriptor
-{
-  private:
-    HcfExchangeClass exchangeClass;
-    IHcfExchangeProvider *provider = nullptr;
-
-  public:
-    HcfExchangeProviderDescriptor(HcfExchangeClass exchangeClass,
-            IHcfExchangeProvider *provider = nullptr) :
-        exchangeClass(exchangeClass), provider(provider) {}
-
-    HcfExchangeClass getExchangeClass() const { return exchangeClass; }
-    bool isExecutable() const { return provider != nullptr; }
-    /**
-     * Returns the executable provider. Invalid compositions are rejected
-     * instead of exposing a null pointer.
-     */
-    IHcfExchangeProvider& getExecutableProvider() const
-    {
-        if (provider == nullptr)
-            throw cRuntimeError("HCF exchange descriptor is inert and has no executable provider");
-        return *provider;
-    }
-};
-
-/** NED-paired composition contract for genuine HCF transaction providers. */
+/** NED-paired composition contract for HCF amendment services. */
 class INET_API IHcfFeatureSet
 {
   public:
-    using ExchangeCommitter = std::function<void(HcfExchangeClass, const HcfContext&)>;
-
     virtual ~IHcfFeatureSet() {}
-
-    /**
-     * Returns descriptors by value. Provider pointers are non-owning and stay
-     * valid only while this OMNeT++ feature-set module and its children live.
-     */
-    virtual std::vector<HcfExchangeProviderDescriptor> getExchangeProviderDescriptors() = 0;
     virtual void configureFeatures(const HcfFeatureConfiguration&) {}
-    virtual void configureExchangeCommitter(const ExchangeCommitter& committer) = 0;
     virtual HcfAmendmentRuntimeKind getAmendmentRuntimeKind() const
         { return HcfAmendmentRuntimeKind::COMMON; }
     virtual HcfHeRuntimeServices getHeRuntimeServices() { return {}; }

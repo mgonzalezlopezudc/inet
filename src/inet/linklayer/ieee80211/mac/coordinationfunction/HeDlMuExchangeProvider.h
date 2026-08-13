@@ -59,6 +59,22 @@ class INET_API HeDlMuExchangeProvider
         simtime_t maxHeMuPpduDuration = SIMTIME_ZERO;
     };
 
+    struct HeDlMuProtectionSnapshot {
+        enum class Mechanism {
+            SINGLE_PROTECTION,
+            MULTIPLE_PROTECTION,
+            UNDEFINED_PROTECTION,
+        };
+        enum class InitialProtection {
+            NONE,
+            LEGACY_RTS_CTS,
+        };
+        Mechanism mechanism = Mechanism::UNDEFINED_PROTECTION;
+        InitialProtection protection = InitialProtection::NONE;
+        bool configured = false;
+        bool completed = false;
+    };
+
     enum class StartKind {
         HE_SOUNDING,
         RECOVERY_SINGLE_USER,
@@ -92,7 +108,11 @@ class INET_API HeDlMuExchangeProvider
         virtual bool stageHeDlMuPacket(HcfQueueToken queueToken,
                 HcfPacketIdentity packetIdentity, AccessCategory accessCategory) = 0;
         virtual bool startHeDlMuSingleUserIfEligible(AccessCategory accessCategory) = 0;
+        virtual HeDlMuProtectionSnapshot captureHeDlMuProtection(
+                AccessCategory accessCategory) const = 0;
         virtual void configureHeDlMuProtection(AccessCategory accessCategory) = 0;
+        virtual void restoreHeDlMuProtection(AccessCategory accessCategory,
+                const HeDlMuProtectionSnapshot& snapshot) = 0;
         virtual void startHeDlMuExchange(AccessCategory accessCategory,
                 const HeDlMuPlan& plan, uint64_t transactionToken,
                 HeDlMuTxOpFs::AckMethod ackMethod,
@@ -100,8 +120,18 @@ class INET_API HeDlMuExchangeProvider
     };
 
   private:
+    enum class StartPhase {
+        IDLE,
+        COMMITTING,
+        ACTIVE,
+    };
+
     IActions *actions = nullptr;
     HeSoundingService *soundingProvider = nullptr;
+    StartPhase startPhase = StartPhase::IDLE;
+    std::optional<AccessCategory> pendingPlanningFailure;
+    std::optional<AccessCategory> pendingProtectionAccessCategory;
+    std::optional<HeDlMuProtectionSnapshot> pendingProtectionSnapshot;
     uint64_t activeTransactionToken = 0;
     Packet *containerPacket = nullptr;
     std::vector<HeDlMuMember> members;
@@ -116,6 +146,8 @@ class INET_API HeDlMuExchangeProvider
     HcfQueueToken fallbackQueueToken;
     HcfPacketIdentity fallbackPacketIdentity;
     AccessCategory fallbackAccessCategory = AC_BE;
+
+    void restorePendingProtection();
 
   public:
     void configure(IActions *actions, HeSoundingService *soundingProvider);
@@ -136,7 +168,6 @@ class INET_API HeDlMuExchangeProvider
             AccessCategory accessCategory,
             const HeDlMuPreparationSnapshot& snapshot) const;
     bool commitStart(const PreparedStart& preparedStart);
-    void rollbackStart(const PreparedStart& preparedStart) noexcept;
     bool tryStart(AccessCategory accessCategory,
             const HeDlMuPreparationSnapshot& snapshot,
             IIeee80211HeDlScheduler& scheduler,

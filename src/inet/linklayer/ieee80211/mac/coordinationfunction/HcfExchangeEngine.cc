@@ -42,7 +42,6 @@ void HcfExchangeEngine::checkActions(const Actions& actions)
             !actions.originatorProcessReceivedFrame ||
             !actions.originatorProcessFailedFrame ||
             !actions.frameSequenceStarted || !actions.frameSequenceFinished ||
-            !actions.hasTransactionalOwner || !actions.exchangeTerminated ||
             !actions.resumeContention || !actions.discardResponse ||
             !actions.inactivityTimeout || !actions.cancelTimer ||
             !actions.scheduleTimer || !actions.rescheduleTimer)
@@ -71,28 +70,22 @@ void HcfExchangeEngine::replaceFrameSequenceHandler(
     this->frameSequenceHandler = std::move(frameSequenceHandler);
 }
 
-void HcfExchangeEngine::beginTransactionIfNeeded()
+void HcfExchangeEngine::beginExchangeIfNeeded()
 {
-    if (activeTransactionIdentity.isValid())
+    if (activeExchangeGeneration != 0)
         return;
-    activeTransactionIdentity = HcfTransactionIdentity(
-            HcfTransactionToken(nextTransactionToken++),
-            HcfTransactionGeneration(nextTransactionGeneration++));
+    if (nextExchangeGeneration == 0)
+        throw cRuntimeError("HCF exchange generation exhausted");
+    activeExchangeGeneration = nextExchangeGeneration++;
+    if (nextExchangeGeneration == 0)
+        throw cRuntimeError("HCF exchange generation wrapped");
 }
 
-void HcfExchangeEngine::clearTransaction()
+void HcfExchangeEngine::clearExchange()
 {
-    activeTransactionIdentity = HcfTransactionIdentity();
+    activeExchangeGeneration = 0;
     startRxTimerGeneration = 0;
     deferredTimeoutGeneration = 0;
-    terminalAbortReason = HcfExchangeAbortReason::NONE;
-}
-
-void HcfExchangeEngine::notifyTransactionTerminated(const Actions& actions,
-        HcfExchangeAbortReason reason)
-{
-    if (actions.hasTransactionalOwner())
-        actions.exchangeTerminated(activeTransactionIdentity, reason);
 }
 
 void HcfExchangeEngine::channelAccessRequested()
@@ -103,13 +96,13 @@ void HcfExchangeEngine::channelAccessRequested()
 void HcfExchangeEngine::channelGranted()
 {
     exchangeCoordinator.channelGranted();
-    beginTransactionIfNeeded();
+    beginExchangeIfNeeded();
 }
 
 void HcfExchangeEngine::beginPreparation()
 {
     exchangeCoordinator.beginPreparation();
-    beginTransactionIfNeeded();
+    beginExchangeIfNeeded();
 }
 
 void HcfExchangeEngine::preparationCompletedWithoutSequence(const Actions& actions)
@@ -119,15 +112,14 @@ void HcfExchangeEngine::preparationCompletedWithoutSequence(const Actions& actio
     responseService.clearTimerState();
     actions.cancelTimer(exchangeCoordinator.getStartRxTimer());
     actions.cancelTimer(exchangeCoordinator.getInactivityTimer());
-    notifyTransactionTerminated(actions, HcfExchangeAbortReason::NONE);
-    clearTransaction();
+    clearExchange();
 }
 
 void HcfExchangeEngine::startFrameSequence(IFrameSequence *frameSequence,
         FrameSequenceContext *context, const Actions& actions)
 {
     ActionScope actionScope(*this, actions);
-    beginTransactionIfNeeded();
+    beginExchangeIfNeeded();
     frameSequenceHandler->startFrameSequence(frameSequence, context, this);
     actions.frameSequenceStarted(frameSequenceHandler->getContext());
 }
@@ -182,8 +174,8 @@ void HcfExchangeEngine::handleDeferredStartRxTimeout(const Actions& actions)
 {
     ActionScope actionScope(*this, actions);
     if (responseService.hasDeferredStartRxTimeout() &&
-            (!activeTransactionIdentity.isValid() ||
-             deferredTimeoutGeneration != activeTransactionIdentity.getGeneration().getValue())) {
+            (activeExchangeGeneration == 0 ||
+             deferredTimeoutGeneration != activeExchangeGeneration)) {
         responseService.clearTimerState();
         deferredTimeoutGeneration = 0;
         return;
@@ -197,8 +189,8 @@ bool HcfExchangeEngine::handleCorruptedFrame(const Actions& actions)
 {
     ActionScope actionScope(*this, actions);
     if (responseService.hasDeferredStartRxTimeout() &&
-            (!activeTransactionIdentity.isValid() ||
-             deferredTimeoutGeneration != activeTransactionIdentity.getGeneration().getValue())) {
+            (activeExchangeGeneration == 0 ||
+             deferredTimeoutGeneration != activeExchangeGeneration)) {
         responseService.clearTimerState();
         deferredTimeoutGeneration = 0;
         return false;
@@ -213,8 +205,8 @@ bool HcfExchangeEngine::handleMessage(cMessage *message, const Actions& actions)
 {
     ActionScope actionScope(*this, actions);
     if (message == exchangeCoordinator.getStartRxTimer()) {
-        if (activeTransactionIdentity.isValid() && isSequenceRunning() &&
-                startRxTimerGeneration == activeTransactionIdentity.getGeneration().getValue()) {
+        if (activeExchangeGeneration != 0 && isSequenceRunning() &&
+                startRxTimerGeneration == activeExchangeGeneration) {
             responseService.handleStartRxTimeout(makeResponseActions(actions));
             if (responseService.hasDeferredStartRxTimeout())
                 deferredTimeoutGeneration = startRxTimerGeneration;
@@ -271,12 +263,6 @@ const IFrameSequence *HcfExchangeEngine::getFrameSequenceForLegacyAdapter() cons
     return frameSequenceHandler == nullptr ? nullptr : frameSequenceHandler->getFrameSequence();
 }
 
-bool HcfExchangeEngine::isActiveTransaction(HcfTransactionIdentity identity) const
-{
-    return identity.isValid() && activeTransactionIdentity.isValid() &&
-            identity == activeTransactionIdentity;
-}
-
 bool HcfExchangeEngine::isStartRxTimerScheduled() const
 {
     auto timer = exchangeCoordinator.getStartRxTimer();
@@ -313,8 +299,7 @@ void HcfExchangeEngine::originatorProcessFailedFrame(Packet *packet)
 
 void HcfExchangeEngine::frameSequenceAborted()
 {
-    if (exchangeCoordinator.abort())
-        terminalAbortReason = HcfExchangeAbortReason::RESPONSE_TIMEOUT;
+    exchangeCoordinator.abort();
 }
 
 void HcfExchangeEngine::frameSequenceFinished()
@@ -325,11 +310,10 @@ void HcfExchangeEngine::frameSequenceFinished()
     deferredTimeoutGeneration = 0;
     auto context = frameSequenceHandler->getContext();
     auto& actions = getActiveActions();
-    notifyTransactionTerminated(actions, terminalAbortReason);
     actions.frameSequenceFinished(context);
     exchangeCoordinator.reset();
-    clearTransaction();
-    getActiveActions().resumeContention();
+    clearExchange();
+    actions.resumeContention();
 }
 
 void HcfExchangeEngine::scheduleStartRxTimer(simtime_t timeout)
@@ -342,7 +326,7 @@ void HcfExchangeEngine::scheduleStartRxTimer(simtime_t timeout)
     auto& actions = getActiveActions();
     auto timer = exchangeCoordinator.getStartRxTimer();
     actions.cancelTimer(timer);
-    startRxTimerGeneration = activeTransactionIdentity.getGeneration().getValue();
+    startRxTimerGeneration = activeExchangeGeneration;
     actions.scheduleTimer(timeout, timer);
 }
 

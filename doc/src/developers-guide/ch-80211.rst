@@ -19,38 +19,32 @@ Architecture of the 802.11 MAC Model
 
 The NED-facing ``Hcf``, ``VhtHcf``, and ``HeHcf`` module types preserve the
 configuration interface used by existing networks.  Their ``featureSet``
-submodule implements :cpp:`IHcfFeatureSet` and advertises genuine prepared
-exchange providers through :cpp:`IHcfExchangeProvider`.  Provider descriptors
-are sorted by the fixed semantic exchange-class order, independently of NED
-declaration or construction order.  Direct ordinary SU, channel release, HT
-sounding, and VHT sounding are not provider descriptors.  Duplicate classes,
-non-transactional descriptors, and non-executable descriptors are rejected
-during initialization.
+submodule implements :cpp:`IHcfFeatureSet` and owns the common, VHT, and HE
+feature components.  The feature set is a composition boundary: it exposes
+only the amendment services needed by the HCF-owned runtimes and does not
+select or commit exchanges.  Ordinary SU, channel release, HT sounding, VHT
+sounding, VHT DL MU, and HE grant variants are dispatched through typed
+runtime calls.
 
-Exchange selection separates probing from execution.  A provider receives an
-immutable :cpp:`HcfContext`, validates eligibility without changing queues or
-consuming random numbers, and either reports a typed rejection or returns a
-prepared transaction.  The transaction is committed only after capability,
-PHY, duration, and ownership validation.  Typed VHT and HE callbacks report
-member transmission, per-user response, timeout, completion, and rollback;
+Preparation and execution are separate.  At the EDCA grant boundary, the
+active runtime captures immutable local, peer, queue, and PHY snapshots and
+asks the relevant amendment service to prepare its own typed start.  The
+service validates capability, PHY, duration, and packet ownership before
+committing local state.  Typed VHT and HE callbacks then report member
+transmission, per-user response, timeout, completion, and planning failure;
 frame sequences do not discover collaborators by walking the module tree.
 
-Baseline SU and HT/VHT sounding use direct explicit frame sequences.  VHT and
-HE operations that reserve or coordinate multiple owners use prepared HCF
-transactions.  VHT sounding protects its dialog token with a local rollback
-guard; it is not an HCF transaction.  HE per-STA SU fallback remains
-transactional when it carries a prepared provider start.
+The common path is ``channel grant -> typed grant preparation -> explicit
+frame sequence -> exchange engine``.  A prepared amendment start may reserve
+packets or scheduler state, but that lifecycle is owned by the amendment
+service.  VHT sounding protects its dialog token with a local rollback guard;
+HE per-STA SU fallback remains an explicit typed fallback when a prepared
+provider start declines to commit.
 
-The direct path is ``channel grant -> validation -> explicit frame sequence ->
-exchange engine``.  A prepared path adds immutable snapshot selection and
-transaction validation before the exchange engine takes ownership.  Only a
-selected genuine provider crosses the transaction commit boundary, and the
-engine subsequently delivers exactly one terminal result to the selector for
-transactional exchanges.
-
-IHcfFeatureSet providers no longer replace ordinary SU, channel release, HT
-sounding, or VHT sounding.  They remain extension points for genuine prepared
-VHT/HE exchanges.  No compatibility mode is provided.
+The exchange engine owns only the active frame sequence, response timers,
+monotonic exchange generations, and completion/abort handling.  It receives
+typed action callbacks from HCF and does not own amendment selection or a
+generic outer transaction protocol.
 
 The following diagrams connect the NED-facing model, the HCF control path, the
 replaceable amendment policies, and the ownership boundaries.  Solid arrows
@@ -116,25 +110,26 @@ Each mutable state has one owner:
   transmission preparation; these remain factored into services and are
   invoked through HCF-owned action adapters.
 * HE peer, queue, sounding, downlink-MU, and triggered-uplink services own their
-  amendment-specific lifecycle and transaction state.
+  amendment-specific lifecycle and exchange state.
 * The PHY mode objects own legal mode combinations, duration calculations, and
   PPDU timing; HCF stores the selected mode reference needed by the active
   direct or transactional sequence.
 
 A packet reservation records packet identity, source queue, association epoch,
-and transaction generation when a prepared exchange needs them.  Direct
-transmission preparation uses one borrowed handoff and keeps the source packet
-identity in the existing queue and retry owners.  Prepared exchanges commit
-every reserved packet exactly once; their failures roll back queue order,
-packet identity, sequence numbers, retry state, and Block Ack state.  Late
-callbacks are rejected using the transaction identity.  Semantic signals are
-emitted once by the component that owns the corresponding action.
+and an amendment-local exchange ID when a prepared exchange needs them. Direct
+transmission preparation uses one borrowed handoff and keeps the source
+packet identity in the existing queue and retry owners. Prepared exchanges
+commit every reserved packet exactly once; their failures roll back queue
+order, packet identity, sequence numbers, retry state, and Block Ack state.
+Late callbacks are rejected using the owning service's exchange identity.
+Semantic signals are emitted once by the component that owns the corresponding
+action.
 
-When a selected feature has staged state, its provider or amendment runtime
+When a selected feature has staged state, its amendment service or runtime
 rolls that state back before packets are returned to their recorded source
 queues in original order and cloned sequence or retry state is discarded.
 Rollback never emits successful-transmission observations and never re-runs
-provider selection.
+amendment preparation.
 
 Adding an amendment exchange
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -142,15 +137,15 @@ Adding an amendment exchange
 Add a new exchange without extending the HCF facade with amendment-specific
 fields or virtual methods:
 
-#. Define immutable snapshot, plan, rejection, and result types for the
+#. Define immutable snapshot, plan, and typed start/result types for the
    amendment decision.
-#. Implement a provider behind :cpp:`IHcfExchangeProvider`; keep scheduling
-   separate from PHY finalization and packet commit.
+#. Implement the amendment service behind an explicit HCF-owned runtime;
+   keep scheduling separate from PHY finalization and packet commit.
 #. Add typed callback and action contracts for effects owned by common MAC
    services.  Inject rate selection and other collaborators explicitly.
-#. Register the provider in an interface-typed feature-set implementation and
-   add its semantic class to the fixed selection order.
-#. Preserve the common single-user fallback and gate the provider on operation
+#. Register the service in an interface-typed feature-set implementation and
+   dispatch it from the runtime's typed grant path.
+#. Preserve the common single-user fallback and gate the service on operation
    mode, local role, and negotiated peer capabilities.
 #. Add focused tests for eligibility, failure and rollback, stale callbacks,
    AP and non-AP roles, feature-off behavior, legacy fallback, and deterministic

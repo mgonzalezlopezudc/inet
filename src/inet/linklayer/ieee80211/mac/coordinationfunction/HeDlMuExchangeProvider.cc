@@ -7,9 +7,9 @@
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeDlMuExchangeProvider.h"
 
 #include <algorithm>
+#include <limits>
 
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfExchangePlan.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/queueing/contract/IPacketQueue.h"
 
@@ -35,6 +35,16 @@ void HeDlMuExchangeProvider::configure(IActions *actions,
         throw cRuntimeError("HE DL MU provider requires typed actions and sounding provider");
     this->actions = actions;
     this->soundingProvider = soundingProvider;
+}
+
+void HeDlMuExchangeProvider::restorePendingProtection()
+{
+    if (!pendingProtectionAccessCategory || !pendingProtectionSnapshot)
+        return;
+    actions->restoreHeDlMuProtection(*pendingProtectionAccessCategory,
+            *pendingProtectionSnapshot);
+    pendingProtectionAccessCategory.reset();
+    pendingProtectionSnapshot.reset();
 }
 
 IIeee80211HeDlScheduler::ScheduleContext HeDlMuExchangeProvider::buildScheduleContext(
@@ -354,9 +364,11 @@ bool HeDlMuExchangeProvider::commitStart(const PreparedStart& preparedStart)
     fallbackQueueToken = preparedStart.stageQueueToken;
     fallbackPacketIdentity = preparedStart.stagePacketIdentity;
     fallbackAccessCategory = ac;
+    if (nextTransactionToken == 0 ||
+            nextTransactionToken == std::numeric_limits<uint64_t>::max())
+        throw cRuntimeError("HE DL MU exchange ID exhausted");
     auto token = nextTransactionToken++;
     if (!reservePlan(*preparedStart.plan, token)) {
-        --nextTransactionToken;
         return false;
     }
     ReservationRollbackGuard rollbackGuard(*this, token);
@@ -365,16 +377,34 @@ bool HeDlMuExchangeProvider::commitStart(const PreparedStart& preparedStart)
     pendingScheduler = preparedStart.scheduler;
     pendingScheduleContext = preparedStart.plan->getScheduleContext();
     pendingAllocations = preparedStart.plan->getAllocations();
-    actions->configureHeDlMuProtection(ac);
-    actions->startHeDlMuExchange(ac, *preparedStart.plan, token,
-            preparedStart.ackMethod, preparedStart.parameters);
+    startPhase = StartPhase::COMMITTING;
+    pendingProtectionAccessCategory = ac;
+    pendingProtectionSnapshot = actions->captureHeDlMuProtection(ac);
+    try {
+        actions->configureHeDlMuProtection(ac);
+        actions->startHeDlMuExchange(ac, *preparedStart.plan, token,
+                preparedStart.ackMethod, preparedStart.parameters);
+    }
+    catch (...) {
+        restorePendingProtection();
+        throw;
+    }
+    if (pendingPlanningFailure) {
+        const auto failedAccessCategory = *pendingPlanningFailure;
+        pendingPlanningFailure.reset();
+        rollbackReservation(token);
+        const bool staged = preparedStart.stageQueueToken.isValid() &&
+                preparedStart.stagePacketIdentity.isValid() &&
+                actions->stageHeDlMuPacket(preparedStart.stageQueueToken,
+                        preparedStart.stagePacketIdentity, ac);
+        if (!staged)
+            return false;
+        return actions->startHeDlMuSingleUserIfEligible(failedAccessCategory);
+    }
+    if (startPhase == StartPhase::COMMITTING)
+        startPhase = StartPhase::ACTIVE;
     rollbackGuard.release();
     return true;
-}
-
-void HeDlMuExchangeProvider::rollbackStart(
-        const PreparedStart&) noexcept
-{
 }
 
 bool HeDlMuExchangeProvider::tryStart(AccessCategory ac,
@@ -401,18 +431,21 @@ bool HeDlMuExchangeProvider::consumeForcedSingleUser(AccessCategory ac)
 
 bool HeDlMuExchangeProvider::reservePlan(const HeDlMuPlan& plan, uint64_t token)
 {
-    if (token == 0 || activeTransactionToken != 0 || !reservedPackets.empty())
+    if (token == 0 || activeTransactionToken != 0 || !reservedPackets.empty()) {
         return false;
+    }
     std::map<MacAddress, std::vector<Packet *>> prepared;
     const auto& context = plan.getScheduleContext();
     for (const auto& allocation : plan.getAllocations()) {
         auto candidate = std::find_if(context.candidates.begin(), context.candidates.end(),
                 [&] (const auto& entry) { return entry.staAddress == allocation.staAddress; });
-        if (candidate == context.candidates.end())
+        if (candidate == context.candidates.end()) {
             return false;
+        }
         auto queue = resolveHeDlMuQueue(candidate->sourceQueueToken);
-        if (queue == nullptr || candidate->eligiblePacketIdentities.empty())
+        if (queue == nullptr || candidate->eligiblePacketIdentities.empty()) {
             return false;
+        }
         for (const auto& identity : candidate->eligiblePacketIdentities) {
             Packet *matched = nullptr;
             for (int i = 0; i < queue->getNumPackets(); ++i) {
@@ -423,28 +456,37 @@ bool HeDlMuExchangeProvider::reservePlan(const HeDlMuPlan& plan, uint64_t token)
                         current->peekAtFront<Ieee80211MacHeader>());
                 if (header == nullptr || header->getType() != ST_DATA_WITH_QOS ||
                         header->getReceiverAddress() != allocation.staAddress ||
-                        header->getTid() != candidate->tid)
+                        header->getTid() != candidate->tid) {
                     return false;
+                }
                 matched = current;
                 break;
             }
-            if (matched == nullptr)
+            if (matched == nullptr) {
                 return false;
+            }
             prepared[allocation.staAddress].push_back(matched);
         }
-        if (prepared[allocation.staAddress].empty())
+        if (prepared[allocation.staAddress].empty()) {
             return false;
+        }
+    }
+    if (prepared.size() < 2) {
+        return false;
     }
     activeTransactionToken = token;
     reservedPackets = std::move(prepared);
-    return reservedPackets.size() >= 2;
+    return true;
 }
 
 void HeDlMuExchangeProvider::rollbackReservation(uint64_t token)
 {
     if (token != activeTransactionToken)
         return;
+    restorePendingProtection();
     activeTransactionToken = 0;
+    startPhase = StartPhase::IDLE;
+    pendingPlanningFailure.reset();
     reservedPackets.clear();
     pendingScheduler = nullptr;
     pendingScheduleContext = {};
@@ -547,7 +589,10 @@ void HeDlMuExchangeProvider::heDlMuPlanCommitted(uint64_t token,
     }
     if (committedPeers.size() != reservedPackets.size())
         throw cRuntimeError("HE DL MU commit does not match the reserved user set");
+    pendingProtectionAccessCategory.reset();
+    pendingProtectionSnapshot.reset();
     activeTransactionToken = token;
+    startPhase = StartPhase::ACTIVE;
     containerPacket = container;
     members = committedMembers;
     transmittedMembers.clear();
@@ -586,6 +631,7 @@ bool HeDlMuExchangeProvider::heDlMuUserOutcome(uint64_t token,
         committedUsers.insert(member.peer);
     if (completedUsers == committedUsers) {
         activeTransactionToken = 0;
+        startPhase = StartPhase::IDLE;
         containerPacket = nullptr;
         members.clear();
         transmittedMembers.clear();
@@ -603,6 +649,14 @@ bool HeDlMuExchangeProvider::heDlMuPlanningFailed(uint64_t token,
     if (token == 0 || token != activeTransactionToken ||
             !members.empty() || reservedPackets.empty())
         return false;
+    if (ac != fallbackAccessCategory)
+        throw cRuntimeError("HE DL MU planning failure access category does not match the reserved start");
+    if (startPhase == StartPhase::COMMITTING) {
+        if (pendingPlanningFailure)
+            throw cRuntimeError("Duplicate synchronous HE DL MU planning failure callback");
+        pendingPlanningFailure = ac;
+        return true;
+    }
     rollbackReservation(token);
     const bool staged = ac == fallbackAccessCategory &&
             fallbackQueueToken.isValid() && fallbackPacketIdentity.isValid() &&

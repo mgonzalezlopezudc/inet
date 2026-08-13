@@ -39,7 +39,7 @@ class INET_API VhtDlMuTxOpFs : public IFrameSequence
     IAckHandler *ackHandler = nullptr;
     IFrameSequenceHandler::ICallback *callback = nullptr;
     IVhtDlMuExchangeCallback *vhtCallback = nullptr;
-    uint64_t transactionToken = 0;
+    uint64_t exchangeId = 0;
     Packet *containerPacket = nullptr;
     std::vector<ActiveUser> activeUsers;
 
@@ -54,7 +54,7 @@ class INET_API VhtDlMuTxOpFs : public IFrameSequence
     VhtDlMuTxOpFs(const VhtDlMuPlan& plan,
             physicallayer::Ieee80211ModeSet *modeSet, IAckHandler *ackHandler,
             IFrameSequenceHandler::ICallback *callback,
-            IVhtDlMuExchangeCallback *vhtCallback, uint64_t transactionToken = 0);
+            IVhtDlMuExchangeCallback *vhtCallback, uint64_t exchangeId = 0);
     virtual ~VhtDlMuTxOpFs() = default;
 
     virtual void startSequence(FrameSequenceContext *context, int firstStep) override;

@@ -312,25 +312,40 @@ bool HeHcfRuntime::releaseChannelIfNoFallbackFrame(AccessCategory ac)
 
 void HeHcfRuntime::startFrameSequence(AccessCategory ac)
 {
-    auto context = buildGrantSelectionContext(ac, hasFrameToTransmit(ac));
-    auto snapshot = context.findProviderSnapshot<
-            HeTxopCoordinatorService::GrantSnapshot>();
-    if (snapshot == nullptr)
-        throw cRuntimeError("HE legacy grant wrapper did not capture an exact snapshot");
-    if (snapshot->exchangeClass == HcfExchangeClass::CHANNEL_RELEASE) {
-        hcf->releaseChannel(ac);
-        return;
+    auto grant = buildGrantSelectionContext(ac, hasFrameToTransmit(ac));
+    switch (grant.startKind) {
+        case HeTxopCoordinatorService::GrantSnapshot::StartKind::CHANNEL_RELEASE:
+            hcf->releaseChannel(ac);
+            return;
+        case HeTxopCoordinatorService::GrantSnapshot::StartKind::COMMON_SINGLE_USER:
+            hcf->startSingleUserExchange(ac);
+            return;
+        case HeTxopCoordinatorService::GrantSnapshot::StartKind::FORCED_SINGLE_USER:
+            if (!getDlMuExchangeProvider().consumeForcedSingleUser(ac))
+                throw cRuntimeError("Forced HE single-user grant became stale");
+            hcf->startSingleUserExchange(ac);
+            return;
+        case HeTxopCoordinatorService::GrantSnapshot::StartKind::UL_TRIGGER:
+            if (!grant.ulTrigger || !ulTriggerService.commitStart(*grant.ulTrigger))
+                throw cRuntimeError("Prepared HE UL grant became stale");
+            return;
+        case HeTxopCoordinatorService::GrantSnapshot::StartKind::SOUNDING:
+        case HeTxopCoordinatorService::GrantSnapshot::StartKind::RECOVERY_SINGLE_USER:
+        case HeTxopCoordinatorService::GrantSnapshot::StartKind::DL_MULTIUSER:
+            if (!grant.dlStart || !getDlMuExchangeProvider().commitStart(*grant.dlStart))
+                throw cRuntimeError("Prepared HE DL grant became stale");
+            return;
+        case HeTxopCoordinatorService::GrantSnapshot::StartKind::PREPARED_SINGLE_USER:
+            if (!grant.dlStart)
+                throw cRuntimeError("Prepared HE single-user grant lacks its provider start");
+            if (!getDlMuExchangeProvider().commitStart(*grant.dlStart) &&
+                    !startHeDlMuSingleUserIfEligible(ac))
+                throw cRuntimeError("Prepared HE single-user fallback became stale");
+            return;
     }
-    if (snapshot->exchangeClass == HcfExchangeClass::SINGLE_USER &&
-            !snapshot->dlStart.has_value()) {
-        hcf->startSingleUserExchange(ac);
-        return;
-    }
-    hcf->runtime->getExchangeSelector().selectAndCommit(context,
-            exchangeEngine->getActiveTransactionIdentity());
 }
 
-HcfContext HeHcfRuntime::buildGrantSelectionContext(AccessCategory ac,
+HeTxopCoordinatorService::GrantSnapshot HeHcfRuntime::buildGrantSelectionContext(AccessCategory ac,
         bool hasEligibleFrame)
 {
     finalizeRetiredQueueBanksIfSafe();
@@ -353,19 +368,6 @@ HcfContext HeHcfRuntime::buildGrantSelectionContext(AccessCategory ac,
             },
             [this, ac] { return captureHeDlMuPreparationSnapshot(ac); },
             [this, ac] { return hcf->hasCommonFrameToTransmit(ac); });
-}
-
-void HeHcfRuntime::commitSelectedExchange(HcfExchangeClass exchangeClass,
-        const HcfContext& context)
-{
-    if (!this->commitSelectedExchange(exchangeClass, context,
-            [this] (AccessCategory ac) { hcf->startSingleUserExchange(ac); },
-            [this] (const auto& start) { return ulTriggerService.commitStart(start); },
-            [this] (AccessCategory ac) { return startHeDlMuSingleUserIfEligible(ac); }))
-    {
-        throw cRuntimeError("HE runtime cannot commit exchange class %d",
-                static_cast<int>(exchangeClass));
-    }
 }
 
 void HeHcfRuntime::handleInternalCollision(std::vector<Edcaf *> internallyCollidedEdcafs)

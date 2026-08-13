@@ -102,29 +102,29 @@ preparations.prepareSingleUser = [&] () {
 };
 
 auto forcedExact = coordinator.prepareGrant(AC_BE, true, true, true, preparations);
-REQUIRE(forcedExact.exchangeClass == HcfExchangeClass::FORCED_SINGLE_USER);
+REQUIRE(forcedExact.startKind == HeTxopCoordinatorService::GrantSnapshot::StartKind::FORCED_SINGLE_USER);
 REQUIRE(ulPreparations == 0 && dlPreparations == 0 && suPreparations == 0);
 
 dlKind = HeDlMuExchangeProvider::StartKind::HE_SOUNDING;
 auto soundingExact = coordinator.prepareGrant(AC_BE, true, false, true, preparations);
-REQUIRE(soundingExact.exchangeClass == HcfExchangeClass::HE_SOUNDING);
+REQUIRE(soundingExact.startKind == HeTxopCoordinatorService::GrantSnapshot::StartKind::SOUNDING);
 REQUIRE(ulPreparations == 1 && dlPreparations == 1 && suPreparations == 0);
 
 dlKind = HeDlMuExchangeProvider::StartKind::ADDBA_SINGLE_USER;
 auto addbaExact = coordinator.prepareGrant(AC_BE, true, false, true, preparations);
-REQUIRE(addbaExact.exchangeClass == HcfExchangeClass::RECOVERY_SINGLE_USER);
+REQUIRE(addbaExact.startKind == HeTxopCoordinatorService::GrantSnapshot::StartKind::RECOVERY_SINGLE_USER);
 
 dlKind = HeDlMuExchangeProvider::StartKind::HE_DL_MULTIUSER;
 auto dlMuExact = coordinator.prepareGrant(AC_BE, true, false, true, preparations);
-REQUIRE(dlMuExact.exchangeClass == HcfExchangeClass::HE_DL_MULTIUSER);
+REQUIRE(dlMuExact.startKind == HeTxopCoordinatorService::GrantSnapshot::StartKind::DL_MULTIUSER);
 
 dlKind = HeDlMuExchangeProvider::StartKind::SINGLE_USER_FALLBACK;
 auto fallbackExact = coordinator.prepareGrant(AC_BE, true, false, true, preparations);
-REQUIRE(fallbackExact.exchangeClass == HcfExchangeClass::SINGLE_USER);
+REQUIRE(fallbackExact.startKind == HeTxopCoordinatorService::GrantSnapshot::StartKind::PREPARED_SINGLE_USER);
 
 dlKind.reset();
 auto releaseExact = coordinator.prepareGrant(AC_BE, true, false, false, preparations);
-REQUIRE(releaseExact.exchangeClass == HcfExchangeClass::CHANNEL_RELEASE);
+REQUIRE(releaseExact.startKind == HeTxopCoordinatorService::GrantSnapshot::StartKind::CHANNEL_RELEASE);
 REQUIRE(suPreparations == 1);
 
 EV << "HE TXOP coordinator preserved UL, DL, SU, and release ordering.\n";

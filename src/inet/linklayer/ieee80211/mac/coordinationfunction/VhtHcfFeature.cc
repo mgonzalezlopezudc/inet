@@ -49,10 +49,10 @@ class DefaultVhtDlMuTxOpFactory : public VhtHcfFeature::ITxOpFactory
             physicallayer::Ieee80211ModeSet *modeSet, IAckHandler *ackHandler,
             IFrameSequenceHandler::ICallback *callback,
             IVhtDlMuExchangeCallback *vhtCallback,
-            uint64_t transactionToken) override
+            uint64_t exchangeId) override
     {
         return new VhtDlMuTxOpFs(plan, modeSet, ackHandler, callback,
-                vhtCallback, transactionToken);
+                vhtCallback, exchangeId);
     }
 };
 
@@ -294,7 +294,6 @@ std::optional<VhtGrantSnapshot> VhtHcfFeature::prepareBlockAckPrerequisite(
             continue;
         VhtGrantSnapshot snapshot;
         snapshot.startKind = VhtGrantSnapshot::StartKind::BLOCK_ACK_PREREQUISITE;
-        snapshot.exchangeClass = HcfExchangeClass::VHT_DL_MULTIUSER;
         snapshot.accessCategory = ac;
         snapshot.blockAckProbe = probe;
         snapshot.sourceQueueToken = HcfQueueToken(static_cast<uint64_t>(ac) + 1);
@@ -451,7 +450,6 @@ std::optional<VhtGrantSnapshot> VhtHcfFeature::prepareDlMu(AccessCategory ac) co
         return std::nullopt;
     VhtGrantSnapshot snapshot;
     snapshot.startKind = VhtGrantSnapshot::StartKind::DL_MULTIUSER;
-    snapshot.exchangeClass = HcfExchangeClass::VHT_DL_MULTIUSER;
     snapshot.accessCategory = ac;
     snapshot.dlMuPlan = *plan;
     return snapshot;
@@ -507,7 +505,6 @@ VhtGrantSnapshot VhtHcfFeature::prepareGrantSnapshot(AccessCategory ac) const
             if (state == IVhtGroupIdManager::State::ABSENT) {
                 VhtGrantSnapshot snapshot;
                 snapshot.startKind = VhtGrantSnapshot::StartKind::GROUP_MANAGEMENT;
-                snapshot.exchangeClass = HcfExchangeClass::VHT_GROUP_MANAGEMENT;
                 snapshot.accessCategory = ac;
                 snapshot.peer = peers[i];
                 snapshot.associationGeneration = generation;
@@ -585,57 +582,101 @@ void VhtHcfFeature::commitBlockAckPrerequisite(const VhtGrantSnapshot& snapshot)
             });
 }
 
-void VhtHcfFeature::commitDlMu(const VhtGrantSnapshot& snapshot)
+VhtHcfFeature::GrantDisposition VhtHcfFeature::commitDlMu(
+        const VhtGrantSnapshot& snapshot)
 {
     if (!snapshot.dlMuPlan)
         throw cRuntimeError("Prepared VHT DL MU exchange has no validated plan");
+    if (dlMu.phase != DlMuPhase::IDLE)
+        throw cRuntimeError("Another VHT DL MU exchange is active");
     auto edcaf = actions->getEdca()->getEdcaf(snapshot.accessCategory);
     auto txop = edcaf->getTxopProcedure();
+    auto protectionSnapshot = txop->getProtectionStateSnapshot();
+    RollbackGuard protectionRollback([txop, protectionSnapshot] {
+        txop->restoreProtectionStateSnapshot(protectionSnapshot);
+    });
     if (!txop->isProtectionConfigured())
         txop->configureProtection(TxopProcedure::InitialProtection::NONE);
-    auto token = nextTransactionToken++;
-    activeTransactionToken = token;
+    const auto exchangeId = allocateDlMuExchangeId();
+    dlMu = {DlMuPhase::PREPARED, exchangeId, false, std::nullopt};
     completedUsers.assign(snapshot.dlMuPlan->getUsers().size(), false);
-    activePlanCommitted = false;
     activeContainerPacket = nullptr;
     activeUserPackets.clear();
-    RollbackGuard rollback([this] {
-        activeTransactionToken = 0;
+    RollbackGuard rollback([this, exchangeId] {
+        clearActiveDlMuExchange(exchangeId);
         completedUsers.clear();
-        activePlanCommitted = false;
         activeContainerPacket = nullptr;
         activeUserPackets.clear();
-        --nextTransactionToken;
     });
+    dlMu.phase = DlMuPhase::COMMITTING;
     auto sequence = txOpFactory->create(*snapshot.dlMuPlan, actions->getModeSet(),
-            edcaf->getAckHandler(), actions->getFrameSequenceCallback(), this, token);
+            edcaf->getAckHandler(), actions->getFrameSequenceCallback(), this, exchangeId);
     actions->startFeatureFrameSequence(sequence, snapshot.accessCategory);
+    if (dlMu.pendingFailure) {
+        clearActiveDlMuExchange(exchangeId);
+        rollback.release();
+        return GrantDisposition::FINISHED_SYNCHRONOUSLY;
+    }
+    protectionRollback.release();
+    if (dlMu.phase == DlMuPhase::COMMITTING)
+        dlMu.phase = DlMuPhase::ACTIVE;
     rollback.release();
+    return GrantDisposition::STARTED;
 }
 
-void VhtHcfFeature::commitTransactionalGrant(const VhtGrantSnapshot& snapshot)
+VhtHcfFeature::GrantDisposition VhtHcfFeature::commitPreparedGrant(
+        const VhtGrantSnapshot& snapshot)
 {
     switch (snapshot.startKind) {
         case VhtGrantSnapshot::StartKind::GROUP_MANAGEMENT: {
             auto txop = actions->getEdca()->getEdcaf(snapshot.accessCategory)->getTxopProcedure();
-            if (!txop->isProtectionConfigured())
-                txop->configureProtection(TxopProcedure::InitialProtection::NONE);
-            actions->startFeatureFrameSequence(new VhtGroupIdManagementFs(
-                    actions->getMac()->getMib(), groupIdManager, snapshot.peer,
-                    snapshot.groupId, snapshot.userPosition,
-                    snapshot.associationGeneration, snapshot.channelWidth),
-                    snapshot.accessCategory);
-            break;
+            configureProtectionAndStart(txop, [this, &snapshot] {
+                actions->startFeatureFrameSequence(new VhtGroupIdManagementFs(
+                        actions->getMac()->getMib(), groupIdManager, snapshot.peer,
+                        snapshot.groupId, snapshot.userPosition,
+                        snapshot.associationGeneration, snapshot.channelWidth),
+                        snapshot.accessCategory);
+            });
+            return GrantDisposition::STARTED;
         }
         case VhtGrantSnapshot::StartKind::BLOCK_ACK_PREREQUISITE:
             commitBlockAckPrerequisite(snapshot);
-            return;
+            return GrantDisposition::STARTED;
         case VhtGrantSnapshot::StartKind::DL_MULTIUSER:
-            commitDlMu(snapshot);
-            return;
+            return commitDlMu(snapshot);
         default:
-            throw cRuntimeError("Direct VHT grant entered transactional commit");
+            actions->continueBaseFrameSequence(snapshot.accessCategory);
+            return GrantDisposition::STARTED;
     }
+}
+
+uint64_t VhtHcfFeature::allocateDlMuExchangeId()
+{
+    if (nextDlMuExchangeId == 0)
+        throw cRuntimeError("VHT DL MU exchange ID space exhausted");
+    const auto exchangeId = nextDlMuExchangeId++;
+    if (nextDlMuExchangeId == 0)
+        throw cRuntimeError("VHT DL MU exchange ID wrapped");
+    return exchangeId;
+}
+
+void VhtHcfFeature::clearActiveDlMuExchange(uint64_t exchangeId)
+{
+    if (dlMu.phase == DlMuPhase::IDLE) {
+        if (exchangeId == lastRetiredDlMuExchangeId)
+            throw cRuntimeError("Duplicate VHT DL MU terminal callback");
+        return;
+    }
+    if (exchangeId != dlMu.exchangeId)
+        return;
+    if (dlMu.phase == DlMuPhase::TERMINAL)
+        throw cRuntimeError("Duplicate VHT DL MU terminal callback");
+    dlMu.phase = DlMuPhase::TERMINAL;
+    lastRetiredDlMuExchangeId = exchangeId;
+    activeContainerPacket = nullptr;
+    activeUserPackets.clear();
+    completedUsers.clear();
+    dlMu = {};
 }
 
 bool VhtHcfFeature::processHeaderlessNdpIndication(Packet *packet)
@@ -811,15 +852,35 @@ queueing::IPacketQueue *VhtHcfFeature::resolveVhtDlMuQueue(
     return edcaf == nullptr ? nullptr : edcaf->getPendingQueue();
 }
 
-void VhtHcfFeature::vhtDlMuPlanCommitted(uint64_t transactionToken,
+void VhtHcfFeature::vhtDlMuPlanningFailed(uint64_t exchangeId,
+        VhtDlMuPlanningFailure reason)
+{
+    if (exchangeId != dlMu.exchangeId || dlMu.phase == DlMuPhase::IDLE ||
+            dlMu.phase == DlMuPhase::TERMINAL)
+        return;
+    if (dlMu.pendingFailure)
+        throw cRuntimeError("Duplicate VHT DL MU planning failure");
+    if (dlMu.ownershipCommitted)
+        throw cRuntimeError("VHT DL MU planning failed after ownership commit");
+    if (dlMu.phase == DlMuPhase::COMMITTING) {
+        dlMu.pendingFailure = reason;
+        return;
+    }
+    clearActiveDlMuExchange(exchangeId);
+}
+
+void VhtHcfFeature::vhtDlMuPlanCommitted(uint64_t exchangeId,
         Packet *containerPacket,
         const std::vector<std::vector<Packet *>>& userPackets)
 {
-    if (transactionToken != activeTransactionToken)
-        throw cRuntimeError("VHT DL MU plan committed for a stale transaction");
+    if (exchangeId != dlMu.exchangeId || dlMu.phase == DlMuPhase::IDLE)
+        throw cRuntimeError("VHT DL MU plan committed for a stale exchange");
+    if (dlMu.ownershipCommitted)
+        throw cRuntimeError("VHT DL MU plan committed twice");
     activeContainerPacket = containerPacket;
     activeUserPackets = userPackets;
-    activePlanCommitted = true;
+    dlMu.ownershipCommitted = true;
+    dlMu.phase = DlMuPhase::ACTIVE;
 }
 
 void VhtHcfFeature::processVhtDlMuFailedFrame(Packet *packet)
@@ -827,22 +888,19 @@ void VhtHcfFeature::processVhtDlMuFailedFrame(Packet *packet)
     actions->processFailedFrame(packet);
 }
 
-void VhtHcfFeature::processVhtDlMuUserResult(uint64_t transactionToken,
+void VhtHcfFeature::processVhtDlMuUserResult(uint64_t exchangeId,
         unsigned int userIndex, UserResult result)
 {
-    if (transactionToken != activeTransactionToken ||
+    if (exchangeId != dlMu.exchangeId ||
             userIndex >= completedUsers.size() || completedUsers[userIndex])
         return;
     if (result == UserResult::BLOCK_ACK_RECEIVED ||
             result == UserResult::BLOCK_ACK_TIMED_OUT)
         completedUsers[userIndex] = true;
-    if (activePlanCommitted && !completedUsers.empty() &&
+    if (dlMu.ownershipCommitted && !completedUsers.empty() &&
             std::all_of(completedUsers.begin(), completedUsers.end(),
                     [] (bool completed) { return completed; })) {
-        activeContainerPacket = nullptr;
-        activeUserPackets.clear();
-        activeTransactionToken = 0;
-        activePlanCommitted = false;
+        clearActiveDlMuExchange(exchangeId);
     }
 }
 

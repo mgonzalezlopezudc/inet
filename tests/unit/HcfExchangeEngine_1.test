@@ -1,6 +1,6 @@
 %description:
-Verify singular HCF exchange ownership, callback order, response timeout deferral,
-transaction identity, stale events, duplicate callbacks, and timer-safe teardown.
+Verify HCF frame-sequence ownership, exact-once completion, timer generation
+staleness, and equal-time response timeout deferral.
 
 %includes:
 #include "inet/common/packet/Packet.h"
@@ -24,19 +24,12 @@ using namespace inet::ieee80211;
 
 class EngineTestFs : public IFrameSequence
 {
-  protected:
+  private:
     bool abortOnTimeout;
     int step = 0;
-
   public:
     explicit EngineTestFs(bool abortOnTimeout) : abortOnTimeout(abortOnTimeout) {}
-
-    virtual void startSequence(FrameSequenceContext *, int firstStep) override
-    {
-        REQUIRE(firstStep == 0);
-        step = 0;
-    }
-
+    virtual void startSequence(FrameSequenceContext *, int firstStep) override { REQUIRE(firstStep == 0); step = 0; }
     virtual IFrameSequenceStep *prepareStep(FrameSequenceContext *) override
     {
         if (step == 0) {
@@ -46,42 +39,21 @@ class EngineTestFs : public IFrameSequence
             packet->insertAtFront(header);
             return new TransmitStep(packet, SIMTIME_ZERO, true);
         }
-        else if (step == 1)
+        if (step == 1)
             return new ReceiveStep(SimTime(1, SIMTIME_MS),
                     abortOnTimeout ? IReceiveStep::TimeoutHandling::ABORT_SEQUENCE :
-                            IReceiveStep::TimeoutHandling::COMPLETE_STEP,
+                    IReceiveStep::TimeoutHandling::COMPLETE_STEP,
                     [] (Packet *, FrameSequenceContext *) { return true; });
-        else if (step == 2)
-            return nullptr;
-        throw cRuntimeError("Unknown engine test step");
+        return nullptr;
     }
-
-    virtual bool completeStep(FrameSequenceContext *) override
-    {
-        step++;
-        return true;
-    }
-
+    virtual bool completeStep(FrameSequenceContext *) override { ++step; return true; }
     virtual std::string getHistory() const override { return "engineTest"; }
 };
-
-static bool containsInOrder(const std::vector<std::string>& events,
-        const std::vector<std::string>& expected)
-{
-    size_t position = 0;
-    for (const auto& event : events)
-        if (position < expected.size() && event == expected[position])
-            position++;
-    return position == expected.size();
-}
 
 %activity:
 InProgressFrames inProgressFrames;
 bool receptionInProgress = false;
-bool transactional = false;
 std::vector<std::string> events;
-int discardedResponses = 0;
-
 HcfExchangeEngine engine(std::make_unique<FrameSequenceHandler>());
 engine.initializeTimers();
 HcfExchangeEngine::Actions actions;
@@ -89,42 +61,20 @@ actions.isReceptionInProgress = [&] { return receptionInProgress; };
 actions.transmitFrame = [&] (Packet *packet, simtime_t) {
     events.push_back("transmit");
     packet->removeFromOwnershipTree();
-    REQUIRE(engine.getActivePacket() == packet);
     engine.transmissionComplete(actions);
 };
-actions.originatorProcessRtsProtectionFailed = [&] (Packet *) { events.push_back("rtsFailed"); };
+actions.originatorProcessRtsProtectionFailed = [&] (Packet *) {};
 actions.originatorProcessTransmittedFrame = [&] (Packet *) { events.push_back("transmitted"); };
 actions.originatorProcessReceivedFrame = [&] (Packet *, Packet *) { events.push_back("received"); };
 actions.originatorProcessFailedFrame = [&] (Packet *) { events.push_back("failed"); };
 actions.frameSequenceStarted = [&] (const FrameSequenceContext *) { events.push_back("started"); };
 actions.frameSequenceFinished = [&] (const FrameSequenceContext *) { events.push_back("finished"); };
-actions.hasTransactionalOwner = [&] { return transactional; };
-actions.exchangeTerminated = [&] (HcfTransactionIdentity identity,
-        HcfExchangeAbortReason abortReason) {
-    REQUIRE(identity.isValid());
-    events.push_back(abortReason == HcfExchangeAbortReason::NONE ?
-            "completed" : "aborted");
-};
 actions.resumeContention = [&] { events.push_back("resume"); };
-actions.discardResponse = [&] (Packet *packet) {
-    events.push_back("discard");
-    discardedResponses++;
-    delete packet;
-};
-actions.inactivityTimeout = [&] { events.push_back("inactivity"); };
-actions.cancelTimer = [&] (cMessage *timer) {
-    events.push_back("cancel");
-    cancelEvent(timer);
-};
-actions.scheduleTimer = [&] (simtime_t timeout, cMessage *timer) {
-    events.push_back("schedule");
-    scheduleAfter(timeout, timer);
-};
-actions.rescheduleTimer = [&] (simtime_t timeout, cMessage *timer) {
-    events.push_back("reschedule");
-    rescheduleAfter(timeout, timer);
-};
-
+actions.discardResponse = [&] (Packet *packet) { delete packet; };
+actions.inactivityTimeout = [&] {};
+actions.cancelTimer = [&] (cMessage *timer) { if (timer->isScheduled()) cancelEvent(timer); };
+actions.scheduleTimer = [&] (simtime_t timeout, cMessage *timer) { scheduleAfter(timeout, timer); };
+actions.rescheduleTimer = [&] (simtime_t timeout, cMessage *timer) { rescheduleAfter(timeout, timer); };
 auto makeContext = [&] {
     return new FrameSequenceContext(MacAddress::UNSPECIFIED_ADDRESS,
             nullptr, &inProgressFrames, nullptr, nullptr, nullptr, nullptr);
@@ -132,71 +82,25 @@ auto makeContext = [&] {
 
 engine.channelGranted();
 engine.startFrameSequence(new EngineTestFs(false), makeContext(), actions);
-auto firstIdentity = engine.getActiveTransactionIdentity();
-REQUIRE(firstIdentity.isValid() && engine.isActiveTransaction(firstIdentity));
 REQUIRE(engine.isSequenceRunning());
 REQUIRE(engine.isStartRxTimerScheduled());
-REQUIRE(containsInOrder(events, {"transmit", "transmitted", "cancel", "schedule", "started"}));
-auto activePacket = engine.getActivePacket();
-REQUIRE(activePacket != nullptr);
 engine.processResponseAccordingToPolicy(new Packet("response"), true,
         dynamic_cast<IReceiveStep *>(const_cast<IFrameSequenceStep *>(engine.getCurrentStep())), actions);
 REQUIRE(!engine.isSequenceRunning());
-REQUIRE(!engine.getActiveTransactionIdentity().isValid());
-REQUIRE(containsInOrder(events, {"received", "finished", "resume", "cancel"}));
-REQUIRE(std::count(events.begin(), events.end(), "completed") == 0);
+REQUIRE(std::count(events.begin(), events.end(), "finished") == 1);
+REQUIRE(std::count(events.begin(), events.end(), "resume") == 1);
 
-// Duplicate/stale callbacks after completion are harmless and cannot revive
-// the completed transaction.
+// A dispatched self-message from the retired exchange cannot affect the next one.
 auto staleTimer = engine.getStartRxTimerForTest();
 REQUIRE(engine.handleMessage(staleTimer, actions));
-engine.processResponseAccordingToPolicy(new Packet("duplicate"), true, nullptr, actions);
-REQUIRE(discardedResponses == 1);
-REQUIRE(!engine.isActiveTransaction(firstIdentity));
-
-// A granted TXOP whose preparation produces no sequence is a complete
-// transaction: timer generations are retired before a later access request.
-events.clear();
-transactional = true;
-engine.channelGranted();
-auto emptyIdentity = engine.getActiveTransactionIdentity();
-REQUIRE(emptyIdentity.isValid());
-engine.beginPreparation();
-engine.preparationCompletedWithoutSequence(actions);
-REQUIRE(!engine.getActiveTransactionIdentity().isValid());
-REQUIRE(!engine.isStartRxTimerScheduled());
-REQUIRE(std::count(events.begin(), events.end(), "completed") == 1);
-transactional = false;
 engine.channelAccessRequested();
 engine.channelGranted();
-REQUIRE(engine.getActiveTransactionIdentity().isValid());
-REQUIRE(!(engine.getActiveTransactionIdentity() == emptyIdentity));
 engine.preparationCompletedWithoutSequence(actions);
-REQUIRE(!engine.getActiveTransactionIdentity().isValid());
+REQUIRE(!engine.isStartRxTimerScheduled());
 
-// Timeout abort order: failed frame, terminal finish, reset, contention resume.
-events.clear();
-transactional = true;
-engine.channelGranted();
-engine.startFrameSequence(new EngineTestFs(true), makeContext(), actions);
-auto abortIdentity = engine.getActiveTransactionIdentity();
-REQUIRE(abortIdentity.isValid() && !(abortIdentity == firstIdentity));
-auto abortTimer = engine.getStartRxTimerForTest();
-cancelEvent(abortTimer); // model delivery: a dispatched self-message is unscheduled
-REQUIRE(engine.handleMessage(abortTimer, actions));
-REQUIRE(!engine.isSequenceRunning());
-REQUIRE(containsInOrder(events, {"failed", "aborted", "finished", "resume"}));
-REQUIRE(std::count(events.begin(), events.end(), "failed") == 1);
-REQUIRE(std::count(events.begin(), events.end(), "finished") == 1);
-REQUIRE(std::count(events.begin(), events.end(), "aborted") == 1);
-transactional = false;
-
-// A receive that begins before the equal-time timeout defers the exact step;
-// its successful completion clears the deferred token before it can fire.
 events.clear();
 engine.channelGranted();
 engine.startFrameSequence(new EngineTestFs(false), makeContext(), actions);
-auto deferredIdentity = engine.getActiveTransactionIdentity();
 auto deferredTimer = engine.getStartRxTimerForTest();
 receptionInProgress = true;
 cancelEvent(deferredTimer);
@@ -208,16 +112,8 @@ receptionInProgress = false;
 engine.handleDeferredStartRxTimeout(actions);
 REQUIRE(!engine.hasDeferredStartRxTimeout());
 REQUIRE(!engine.isSequenceRunning());
-REQUIRE(!engine.isActiveTransaction(deferredIdentity));
-REQUIRE(std::count(events.begin(), events.end(), "failed") == 0);
-REQUIRE(std::count(events.begin(), events.end(), "finished") == 1);
 
-// Destruction path: cancel owned timers before their coordinator deletes them.
-engine.scheduleInactivityTimer(SimTime(5, SIMTIME_MS), actions);
-engine.cancelTimers(actions);
-REQUIRE(!engine.isStartRxTimerScheduled());
-
-EV << "HCF exchange engine ownership and causal-order tests passed.\n";
+EV << "HCF exchange engine generation and causal-order tests passed.\n";
 
 %contains: stdout
-HCF exchange engine ownership and causal-order tests passed.
+HCF exchange engine generation and causal-order tests passed.

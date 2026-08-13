@@ -8,14 +8,12 @@ digraph ieee80211_hcf_specializations {
 
     grant [label="EDCA grant\nwinning access category", fillcolor="#f5f3ff"]
     hcf [label="Hcf\ncommon QoS coordination", fillcolor="#ede9fe", penwidth=1.4]
-    runtime [label="HcfRuntime\ncomposition root + selector", fillcolor="#f5f3ff"]
-    selector [label="HcfExchangeSelector\nimmutable context -> ordered probe\n-> one committed exchange", fillcolor="#f5f3ff"]
+    runtime [label="Hcf + amendment runtimes\ntyped grant dispatch", fillcolor="#f5f3ff"]
     engine [label="HcfExchangeEngine\nactive frame sequence + response timers\ncompletion / abort / rollback", fillcolor="#f5f3ff"]
 
     grant -> hcf [label="callback"]
     hcf -> runtime [style=dashed, label="owns"]
-    runtime -> selector [style=dashed, label="owns"]
-    grant -> selector [label="snapshot boundary"]
+    grant -> runtime [label="typed snapshot boundary"]
 
     subgraph cluster_amendments {
         label="Amendment-specific composition (not one inheritance tree)"
@@ -65,8 +63,8 @@ digraph ieee80211_hcf_specializations {
     }
 
     hcf -> htRoot [style=dashed, label="HT hook"]
-    selector -> vhtRoot [style=dashed, label="VHT provider"]
-    selector -> heRoot [style=dashed, label="HE provider"]
+    runtime -> vhtRoot [style=dashed, label="VHT runtime"]
+    runtime -> heRoot [style=dashed, label="HE runtime"]
     htSequence -> engine [label="runs in"]
     vhtSequence -> engine [label="runs in"]
     heDl -> engine [label="runs in"]

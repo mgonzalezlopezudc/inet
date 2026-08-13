@@ -59,9 +59,15 @@ class MockProviderActions : public HeDlMuExchangeProvider::IActions,
     int startSingleUserCount = 0;
     int soundingCount = 0;
     int protectionCount = 0;
+    int protectionRestoreCount = 0;
     int startExchangeCount = 0;
     bool singleUserEligible = true;
     bool throwOnStart = false;
+    bool failStartSynchronously = false;
+    bool failStartSynchronouslyTwice = false;
+    bool failStartWithWrongAccessCategory = false;
+    HeDlMuExchangeProvider *provider = nullptr;
+    HeDlMuExchangeProvider::HeDlMuProtectionSnapshot protectionState;
     HcfQueueToken lastStagedQueueToken;
     HcfPacketIdentity lastStagedPacketIdentity;
     HeDlMuTxOpFs::AckMethod lastAckMethod = HeDlMuTxOpFs::AckMethod::MU_BAR_TRIGGER;
@@ -110,12 +116,29 @@ class MockProviderActions : public HeDlMuExchangeProvider::IActions,
             const HeSoundingService::StartAction&, AccessCategory) override {
         soundingCount++;
     }
-    virtual void configureHeDlMuProtection(AccessCategory) override { protectionCount++; }
-    virtual void startHeDlMuExchange(AccessCategory, const HeDlMuPlan&,
-            uint64_t, HeDlMuTxOpFs::AckMethod ackMethod,
+    virtual HeDlMuExchangeProvider::HeDlMuProtectionSnapshot captureHeDlMuProtection(
+            AccessCategory) const override { return protectionState; }
+    virtual void configureHeDlMuProtection(AccessCategory) override {
+        protectionCount++;
+        protectionState.configured = true;
+    }
+    virtual void restoreHeDlMuProtection(AccessCategory,
+            const HeDlMuExchangeProvider::HeDlMuProtectionSnapshot& snapshot) override {
+        protectionState = snapshot;
+        protectionRestoreCount++;
+    }
+    virtual void startHeDlMuExchange(AccessCategory ac, const HeDlMuPlan&,
+            uint64_t token, HeDlMuTxOpFs::AckMethod ackMethod,
             const HeDlMuExchangeProvider::StartupParameters&) override {
         startExchangeCount++;
         lastAckMethod = ackMethod;
+        if (failStartSynchronously && provider != nullptr) {
+            const auto failureAccessCategory = failStartWithWrongAccessCategory ?
+                    AC_BK : ac;
+            provider->heDlMuPlanningFailed(token, failureAccessCategory);
+            if (failStartSynchronouslyTwice)
+                provider->heDlMuPlanningFailed(token, failureAccessCategory);
+        }
         if (throwOnStart)
             throw cRuntimeError("injected startup failure");
     }
@@ -437,6 +460,7 @@ HeDlMuExchangeProvider provider;
 HeSoundingService soundingProvider;
 soundingProvider.configure(&actions);
 provider.configure(&actions, &soundingProvider);
+actions.provider = &provider;
 
 EchoScheduler echoScheduler;
 HeDlMuExchangeProvider::StartupParameters startupParameters;
@@ -507,10 +531,39 @@ actions.throwOnStart = true;
 bool startupThrew = false;
 try { provider.tryStart(AC_BE, stateSnapshot, echoScheduler, startupParameters); }
 catch (cRuntimeError&) { startupThrew = true; }
-requireTrue(startupThrew && provider.getActiveTransactionToken() == 0,
+    requireTrue(startupThrew && provider.getActiveTransactionToken() == 0 &&
+            !actions.protectionState.configured && actions.protectionRestoreCount == 1,
         "typed startup failure must roll back the exact provider reservation");
 actions.throwOnStart = false;
-auto invalidStartupParameters = startupParameters;
+actions.failStartSynchronously = true;
+int stagedBeforeSynchronousFailure = actions.stagedPacketCount;
+int singleUserBeforeSynchronousFailure = actions.startSingleUserCount;
+    requireTrue(provider.tryStart(AC_BE, stateSnapshot, echoScheduler, startupParameters) &&
+            provider.getActiveTransactionToken() == 0 &&
+            actions.stagedPacketCount == stagedBeforeSynchronousFailure + 1 &&
+            actions.startSingleUserCount == singleUserBeforeSynchronousFailure + 1 &&
+            !actions.protectionState.configured && actions.protectionRestoreCount == 2,
+        "synchronous HE planning failure must drain locally and start the exact SU fallback");
+    actions.failStartSynchronously = false;
+    actions.failStartSynchronously = true;
+    actions.failStartSynchronouslyTwice = true;
+    bool duplicateFailureThrew = false;
+    try { provider.tryStart(AC_BE, stateSnapshot, echoScheduler, startupParameters); }
+    catch (cRuntimeError&) { duplicateFailureThrew = true; }
+    requireTrue(duplicateFailureThrew && provider.getActiveTransactionToken() == 0 &&
+            !actions.protectionState.configured && actions.protectionRestoreCount == 3,
+        "duplicate synchronous HE planning failure must reject and restore protection");
+    actions.failStartSynchronouslyTwice = false;
+    actions.failStartWithWrongAccessCategory = true;
+    bool wrongAccessCategoryThrew = false;
+    try { provider.tryStart(AC_BE, stateSnapshot, echoScheduler, startupParameters); }
+    catch (cRuntimeError&) { wrongAccessCategoryThrew = true; }
+    requireTrue(wrongAccessCategoryThrew && provider.getActiveTransactionToken() == 0 &&
+            !actions.protectionState.configured && actions.protectionRestoreCount == 4,
+        "cross-AC synchronous HE planning failure must reject and restore protection");
+    actions.failStartSynchronously = false;
+    actions.failStartWithWrongAccessCategory = false;
+    auto invalidStartupParameters = startupParameters;
 invalidStartupParameters.maxAmpduMpduCount = 0;
 int stagedBeforeInvalidConfiguration = actions.stagedPacketCount;
 bool invalidConfigurationThrew = false;

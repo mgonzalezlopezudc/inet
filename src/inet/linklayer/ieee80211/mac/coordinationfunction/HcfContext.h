@@ -7,15 +7,10 @@
 #ifndef __INET_HCFCONTEXT_H
 #define __INET_HCFCONTEXT_H
 
-#include <array>
 #include <cmath>
 #include <cstdint>
 #include <optional>
-#include <memory>
-#include <set>
 #include <string>
-#include <typeindex>
-#include <unordered_map>
 #include <vector>
 
 #include "inet/common/INETDefs.h"
@@ -31,21 +26,6 @@ namespace inet {
 namespace ieee80211 {
 
 using namespace units::values;
-
-/** Fixed semantic exchange classes, ordered by getHcfExchangeClassOrder(). */
-enum class HcfExchangeClass {
-    FORCED_SINGLE_USER,
-    HE_UL_TRIGGER,
-    HE_SOUNDING,
-    RECOVERY_SINGLE_USER,
-    HE_DL_MULTIUSER,
-    VHT_GROUP_MANAGEMENT,
-    VHT_DL_MULTIUSER,
-    SINGLE_USER,
-    CHANNEL_RELEASE,
-};
-
-constexpr size_t NUM_HCF_EXCHANGE_CLASSES = 9;
 
 /** Opaque identity of a packet; this value never conveys Packet ownership. */
 class INET_API HcfPacketIdentity
@@ -325,95 +305,6 @@ struct INET_API HcfHeSoundingSnapshot
                 std::isfinite(channelCenterFrequency.get()) &&
                 channelCenterFrequency > Hz(0) &&
                 std::isfinite(channelBandwidth.get()) && channelBandwidth > Hz(0);
-    }
-};
-
-enum class HcfContextRejectionCode {
-    NONE,
-    INCOMPLETE_LOCAL_CONTEXT,
-    INCOMPLETE_PEER_SNAPSHOT,
-    INCOMPLETE_QUEUE_SNAPSHOT,
-    INCOMPLETE_PHY_SNAPSHOT,
-    DUPLICATE_PEER,
-    DUPLICATE_PACKET,
-    FUTURE_ENQUEUE_TIME,
-};
-
-class INET_API HcfContext
-{
-  private:
-    HcfLocalContext localContext;
-    std::vector<HcfPeerSnapshot> peerSnapshots;
-    std::vector<HcfQueueSnapshot> queueSnapshots;
-    HcfPhySnapshot phySnapshot;
-    std::optional<AccessCategory> selectionAccessCategory;
-    std::array<std::optional<bool>, NUM_HCF_EXCHANGE_CLASSES> exchangeEligibility;
-    std::unordered_map<std::type_index, std::shared_ptr<const void>> providerSnapshots;
-
-  public:
-    HcfContext() = default;
-    HcfContext(const HcfLocalContext& localContext,
-            const std::vector<HcfPeerSnapshot>& peerSnapshots,
-            const std::vector<HcfQueueSnapshot>& queueSnapshots,
-            const HcfPhySnapshot& phySnapshot) :
-        localContext(localContext), peerSnapshots(peerSnapshots),
-        queueSnapshots(queueSnapshots), phySnapshot(phySnapshot) {}
-    explicit HcfContext(const HcfHeSoundingSnapshot& heSoundingSnapshot)
-        { setProviderSnapshot(heSoundingSnapshot); }
-    HcfContext(AccessCategory accessCategory,
-            std::initializer_list<HcfExchangeClass> eligibleExchangeClasses) :
-        selectionAccessCategory(accessCategory)
-    {
-        for (auto exchangeClass : eligibleExchangeClasses)
-            exchangeEligibility[static_cast<size_t>(exchangeClass)] = true;
-    }
-
-    const HcfLocalContext& getLocalContext() const { return localContext; }
-    const std::vector<HcfPeerSnapshot>& getPeerSnapshots() const { return peerSnapshots; }
-    const std::vector<HcfQueueSnapshot>& getQueueSnapshots() const { return queueSnapshots; }
-    const HcfPhySnapshot& getPhySnapshot() const { return phySnapshot; }
-    std::optional<AccessCategory> getSelectionAccessCategory() const
-        { return selectionAccessCategory; }
-    std::optional<bool> getExchangeEligibility(HcfExchangeClass exchangeClass) const
-        { return exchangeEligibility[static_cast<size_t>(exchangeClass)]; }
-    void setExchangeEligibility(HcfExchangeClass exchangeClass, bool eligible = true)
-        { exchangeEligibility[static_cast<size_t>(exchangeClass)] = eligible; }
-    template<typename T>
-    void setProviderSnapshot(T snapshot)
-    {
-        providerSnapshots[typeid(T)] = std::make_shared<const T>(std::move(snapshot));
-    }
-    template<typename T>
-    const T *findProviderSnapshot() const
-    {
-        auto it = providerSnapshots.find(typeid(T));
-        return it == providerSnapshots.end() ? nullptr :
-                static_cast<const T *>(it->second.get());
-    }
-
-    HcfContextRejectionCode validate() const
-    {
-        if (!localContext.isComplete())
-            return HcfContextRejectionCode::INCOMPLETE_LOCAL_CONTEXT;
-        if (!phySnapshot.isComplete())
-            return HcfContextRejectionCode::INCOMPLETE_PHY_SNAPSHOT;
-        std::set<MacAddress> peers;
-        for (const auto& peer : peerSnapshots) {
-            if (!peer.isComplete())
-                return HcfContextRejectionCode::INCOMPLETE_PEER_SNAPSHOT;
-            if (!peers.insert(peer.getAddress()).second)
-                return HcfContextRejectionCode::DUPLICATE_PEER;
-        }
-        std::set<HcfPacketIdentity> packets;
-        for (const auto& queue : queueSnapshots) {
-            if (!queue.isComplete())
-                return HcfContextRejectionCode::INCOMPLETE_QUEUE_SNAPSHOT;
-            if (queue.getEnqueueTime() > localContext.getCurrentTime())
-                return HcfContextRejectionCode::FUTURE_ENQUEUE_TIME;
-            if (!packets.insert(queue.getPacketIdentity()).second)
-                return HcfContextRejectionCode::DUPLICATE_PACKET;
-        }
-        return HcfContextRejectionCode::NONE;
     }
 };
 

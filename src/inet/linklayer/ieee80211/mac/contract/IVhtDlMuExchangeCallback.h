@@ -19,6 +19,10 @@ namespace ieee80211 {
 class Ieee80211Mac;
 class IOriginatorMacDataService;
 
+enum class VhtDlMuPlanningFailure {
+    STALE_PLAN,
+};
+
 /** Typed VHT DL MU operations required by the frame sequence. */
 class INET_API IVhtDlMuExchangeCallback
 {
@@ -31,11 +35,13 @@ class INET_API IVhtDlMuExchangeCallback
     virtual IOriginatorMacDataService *getVhtDlMuOriginatorDataService() const = 0;
     virtual queueing::IPacketQueue *resolveVhtDlMuQueue(
             HcfQueueToken sourceQueueToken) const = 0;
-    virtual void vhtDlMuPlanCommitted(uint64_t transactionToken,
+    virtual void vhtDlMuPlanningFailed(uint64_t exchangeId,
+            VhtDlMuPlanningFailure reason) = 0;
+    virtual void vhtDlMuPlanCommitted(uint64_t exchangeId,
             Packet *containerPacket,
             const std::vector<std::vector<Packet *>>& userPackets) = 0;
     virtual void processVhtDlMuFailedFrame(Packet *packet) = 0;
-    virtual void processVhtDlMuUserResult(uint64_t transactionToken,
+    virtual void processVhtDlMuUserResult(uint64_t exchangeId,
             unsigned int userIndex, UserResult result) = 0;
 };
 

@@ -1,125 +1,20 @@
 %description:
-Test NED-visible HCF feature composition and deterministic HcfRuntime provider
-validation without migrating exchange execution.
+Test the narrowed NED-paired HCF feature-set composition contract.
 
 %includes:
-#include <algorithm>
-#include <optional>
-#include <string>
-#include <vector>
-
-#include "inet/common/InitStages.h"
-#include "inet/linklayer/ieee80211/mac/contract/IHcfExchangeProvider.h"
 #include "inet/linklayer/ieee80211/mac/contract/IHcfFeatureSet.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfExchangePlan.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfRuntime.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeTxopCoordinatorService.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/VhtHcfFeature.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfFeatureSet.h"
 
 %file: HcfFeatureSetObserver.cc
 
-#include <algorithm>
-#include <optional>
-#include <string>
-#include <vector>
-
 #include "inet/common/InitStages.h"
-#include "inet/linklayer/ieee80211/mac/contract/IHcfExchangeProvider.h"
 #include "inet/linklayer/ieee80211/mac/contract/IHcfFeatureSet.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfExchangePlan.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfRuntime.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeTxopCoordinatorService.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/VhtHcfFeature.h"
+#include <string>
 
 using namespace inet;
 using namespace inet::ieee80211;
 
 namespace HcfFeatureSet_1 {
-
-static void requireHcfFeatureSet(bool condition, const char *message)
-{
-    if (!condition)
-        throw cRuntimeError("HCF feature-set test: %s", message);
-}
-
-template<typename F>
-static void requireHcfFeatureSetFailure(F operation, const char *message)
-{
-    bool failed = false;
-    try {
-        operation();
-    }
-    catch (const cRuntimeError&) {
-        failed = true;
-    }
-    requireHcfFeatureSet(failed, message);
-}
-
-class TestHcfProvider : public IHcfExchangeProvider
-{
-  private:
-    HcfExchangeClass exchangeClass;
-
-  public:
-    explicit TestHcfProvider(HcfExchangeClass exchangeClass) : exchangeClass(exchangeClass) {}
-    virtual HcfExchangeClass getExchangeClass() const override { return exchangeClass; }
-    virtual std::unique_ptr<PreparedHcfExchange> prepareExchange(
-            const HcfContext&, HcfTransactionIdentity transactionIdentity,
-            HcfExchangeRejection& rejection) override
-    {
-        rejection = HcfExchangeRejection(HcfExchangeRejectionCode::NO_ELIGIBLE_PACKET,
-                exchangeClass, transactionIdentity, "inert test provider");
-        return nullptr;
-    }
-};
-
-class TestHcfFeatureSet : public IHcfFeatureSet
-{
-  private:
-    std::vector<HcfExchangeProviderDescriptor> descriptors;
-
-  public:
-    explicit TestHcfFeatureSet(const std::vector<HcfExchangeProviderDescriptor>& descriptors) :
-        descriptors(descriptors) {}
-    virtual std::vector<HcfExchangeProviderDescriptor> getExchangeProviderDescriptors() override
-    {
-        return descriptors;
-    }
-    virtual void configureExchangeCommitter(const ExchangeCommitter&) override {}
-};
-
-static std::vector<HcfExchangeClass> getClasses(const HcfRuntime& runtime)
-{
-    std::vector<HcfExchangeClass> result;
-    for (const auto& descriptor : runtime.getExchangeProviderDescriptors())
-        result.push_back(descriptor.getExchangeClass());
-    return result;
-}
-
-static bool areAllDescriptorsExecutable(const HcfRuntime& runtime)
-{
-    return std::all_of(runtime.getExchangeProviderDescriptors().begin(),
-            runtime.getExchangeProviderDescriptors().end(),
-            [] (const auto& descriptor) { return descriptor.isExecutable(); });
-}
-
-static std::string probeHcfFeatureSetType(cModule *owner,
-        const char *hcfTypeName, const char *probeName)
-{
-    auto moduleType = cModuleType::get(hcfTypeName);
-    requireHcfFeatureSet(moduleType != nullptr, "HCF NED type was not found");
-    auto module = moduleType->create(probeName, owner);
-    module->par("rxModule").setStringValue("");
-    module->par("txModule").setStringValue("");
-    module->finalizeParameters();
-    module->buildInside();
-    auto featureSet = module->getSubmodule("featureSet");
-    requireHcfFeatureSet(featureSet != nullptr,
-            "HCF NED type did not instantiate its featureSet slot");
-    std::string result = featureSet->getNedTypeName();
-    module->deleteModule();
-    return result;
-}
 
 class HcfFeatureSetObserver : public cSimpleModule
 {
@@ -129,208 +24,24 @@ class HcfFeatureSetObserver : public cSimpleModule
     {
         if (stage != INITSTAGE_LAST)
             return;
-        auto featureSet = [this] (const char *path) {
-            auto module = getParentModule()->getModuleByPath(path);
-            auto result = dynamic_cast<IHcfFeatureSet *>(module);
-            requireHcfFeatureSet(result != nullptr,
-                    "NED feature-set type lacks the paired C++ contract");
-            return result;
+        auto check = [this] (const char *path, HcfAmendmentRuntimeKind kind) {
+            auto featureSetPath = std::string(path) + ".featureSet";
+            auto featureSet = dynamic_cast<IHcfFeatureSet *>(
+                    getParentModule()->getModuleByPath(featureSetPath.c_str()));
+            if (featureSet == nullptr || featureSet->getAmendmentRuntimeKind() != kind)
+                throw cRuntimeError("invalid HCF feature-set replacement contract at %s", path);
+            HcfFeatureConfiguration configuration;
+            configuration.enableVhtDlMuMimo = true;
+            featureSet->configureFeatures(configuration);
         };
-        auto nedTypeName = [this] (const char *path) {
-            return std::string(getParentModule()->getModuleByPath(path)->getNedTypeName());
-        };
-
-        requireHcfFeatureSet(nedTypeName("common.featureSet") ==
-                "inet.linklayer.ieee80211.mac.coordinationfunction.CommonHcfFeatureSet",
-                "common effective feature-set typename changed");
-        requireHcfFeatureSet(nedTypeName("vht.featureSet") ==
-                "inet.linklayer.ieee80211.mac.coordinationfunction.VhtHcfFeatureSet",
-                "VHT effective feature-set typename changed");
-        requireHcfFeatureSet(nedTypeName("he.featureSet") ==
-                "inet.linklayer.ieee80211.mac.coordinationfunction.HeHcfFeatureSet",
-                "HE effective feature-set typename changed");
-        requireHcfFeatureSet(nedTypeName("derived.featureSet").find(
-                "DerivedTestHcfFeatureSet") != std::string::npos,
-                "derived effective feature-set typename was not selected");
-        requireHcfFeatureSet(probeHcfFeatureSetType(getParentModule(),
-                "inet.linklayer.ieee80211.mac.coordinationfunction.Hcf", "hcfProbe") ==
-                "inet.linklayer.ieee80211.mac.coordinationfunction.CommonHcfFeatureSet",
-                "Hcf did not select the common feature-set default");
-        requireHcfFeatureSet(probeHcfFeatureSetType(getParentModule(),
-                "inet.linklayer.ieee80211.mac.coordinationfunction.VhtHcf", "vhtHcfProbe") ==
-                "inet.linklayer.ieee80211.mac.coordinationfunction.VhtHcfFeatureSet",
-                "VhtHcf did not declaratively override the feature-set default");
-        requireHcfFeatureSet(probeHcfFeatureSetType(getParentModule(),
-                "inet.linklayer.ieee80211.mac.coordinationfunction.HeHcf", "heHcfProbe") ==
-                "inet.linklayer.ieee80211.mac.coordinationfunction.HeHcfFeatureSet",
-                "HeHcf did not declaratively override the feature-set default");
-
-        auto commonFeatureSet = featureSet("common.featureSet");
-        HcfRuntime common(commonFeatureSet);
-        requireHcfFeatureSet(getClasses(common).empty(),
-                "common feature set must not register direct exchange descriptors");
-        requireHcfFeatureSet(areAllDescriptorsExecutable(common),
-                "common feature set must have no non-executable descriptors");
-        common.validateExecutableProviders();
-
-        auto vhtFeatureSet = featureSet("vht.featureSet");
-        HcfFeatureConfiguration vhtConfiguration;
-        vhtConfiguration.enableVhtSuBeamforming = true;
-        vhtConfiguration.enableVhtDlMuMimo = true;
-        HcfRuntime vht(vhtFeatureSet, vhtConfiguration);
-        requireHcfFeatureSet(getClasses(vht) == std::vector<HcfExchangeClass>{
-                HcfExchangeClass::VHT_GROUP_MANAGEMENT,
-                HcfExchangeClass::VHT_DL_MULTIUSER},
-                "VHT composition must expose enabled semantic classes in fixed order");
-        requireHcfFeatureSet(areAllDescriptorsExecutable(vht),
-                "default VHT descriptors must expose typed executable providers");
-        vht.validateExecutableProviders();
-        int vhtCommits = 0;
-        HcfExchangeClass committedVhtClass = HcfExchangeClass::SINGLE_USER;
-        vht.configureExchangeCommitter(
-                [&] (HcfExchangeClass exchangeClass, const HcfContext&) {
-                    committedVhtClass = exchangeClass;
-                    vhtCommits++;
-                });
-        VhtGrantSnapshot groupSnapshot;
-        groupSnapshot.startKind = VhtGrantSnapshot::StartKind::GROUP_MANAGEMENT;
-        groupSnapshot.exchangeClass = HcfExchangeClass::VHT_GROUP_MANAGEMENT;
-        groupSnapshot.accessCategory = AC_VI;
-        HcfContext groupContext(AC_VI, {
-                HcfExchangeClass::VHT_GROUP_MANAGEMENT,
-                HcfExchangeClass::VHT_DL_MULTIUSER});
-        groupContext.setProviderSnapshot(groupSnapshot);
-        auto vhtIdentity = HcfTransactionIdentity(HcfTransactionToken(3),
-                HcfTransactionGeneration(1));
-        HcfExchangeRejection vhtRejection;
-        auto rejectedDlMu = vht.findExchangeProviderDescriptor(
-                HcfExchangeClass::VHT_DL_MULTIUSER)->getExecutableProvider().
-                prepareExchange(groupContext, vhtIdentity, vhtRejection);
-        requireHcfFeatureSet(rejectedDlMu == nullptr && vhtCommits == 0,
-                "a VHT provider must reject another class's immutable outcome without mutation");
-        auto abandonedGroup = vht.findExchangeProviderDescriptor(
-                HcfExchangeClass::VHT_GROUP_MANAGEMENT)->getExecutableProvider().
-                prepareExchange(groupContext, vhtIdentity, vhtRejection);
-        requireHcfFeatureSet(abandonedGroup != nullptr,
-                "the exact VHT group provider must prepare its matching outcome");
-        abandonedGroup.reset();
-        requireHcfFeatureSet(vhtCommits == 0,
-                "abandoned VHT probes must not commit feature state");
-        requireHcfFeatureSet(vht.getExchangeSelector().selectAndCommit(
-                groupContext, vhtIdentity) == HcfExchangeClass::VHT_GROUP_MANAGEMENT &&
-                vhtCommits == 1 &&
-                committedVhtClass == HcfExchangeClass::VHT_GROUP_MANAGEMENT,
-                "fixed VHT priority and selected class must equal the actual started outcome");
-        vht.getExchangeSelector().exchangeTerminated(vhtIdentity,
-                HcfExchangeAbortReason::NONE);
-
-        HcfRuntime vhtOff(featureSet("vhtOff.featureSet"));
-        requireHcfFeatureSet(getClasses(vhtOff) == getClasses(common),
-                "VHT feature-off composition must omit all VHT descriptors");
-
-        auto heFeatureSet = featureSet("he.featureSet");
-        HcfFeatureConfiguration heConfiguration;
-        heConfiguration.enableHeUlMuOfdma = true;
-        heConfiguration.enableHeDlMuMimo = true;
-        HcfRuntime he(heFeatureSet, heConfiguration);
-        requireHcfFeatureSet(getClasses(he) == std::vector<HcfExchangeClass>{
-                HcfExchangeClass::FORCED_SINGLE_USER,
-                HcfExchangeClass::HE_UL_TRIGGER,
-                HcfExchangeClass::HE_SOUNDING,
-                HcfExchangeClass::RECOVERY_SINGLE_USER,
-                HcfExchangeClass::HE_DL_MULTIUSER,
-                HcfExchangeClass::SINGLE_USER},
-                "HE composition must expose enabled semantic classes in fixed order");
-        requireHcfFeatureSet(areAllDescriptorsExecutable(he),
-                "HE composition must expose typed executable providers");
-        he.validateExecutableProviders();
-        int heCommits = 0;
-        HcfExchangeClass committedHeClass = HcfExchangeClass::CHANNEL_RELEASE;
-        he.configureExchangeCommitter(
-                [&] (HcfExchangeClass exchangeClass, const HcfContext&) {
-                    committedHeClass = exchangeClass;
-                    heCommits++;
-                });
-        HeTxopCoordinatorService::GrantSnapshot heUlSnapshot;
-        heUlSnapshot.exchangeClass = HcfExchangeClass::HE_UL_TRIGGER;
-        heUlSnapshot.accessCategory = AC_BE;
-        HcfContext heUlContext(AC_BE, {
-                HcfExchangeClass::FORCED_SINGLE_USER,
-                HcfExchangeClass::HE_UL_TRIGGER,
-                HcfExchangeClass::HE_SOUNDING,
-                HcfExchangeClass::RECOVERY_SINGLE_USER,
-                HcfExchangeClass::HE_DL_MULTIUSER,
-                HcfExchangeClass::SINGLE_USER});
-        heUlContext.setProviderSnapshot(heUlSnapshot);
-        auto heIdentity = HcfTransactionIdentity(HcfTransactionToken(4),
-                HcfTransactionGeneration(1));
-        HcfExchangeRejection heRejection;
-        auto rejectedForced = he.findExchangeProviderDescriptor(
-                HcfExchangeClass::FORCED_SINGLE_USER)->getExecutableProvider().
-                prepareExchange(heUlContext, heIdentity, heRejection);
-        requireHcfFeatureSet(rejectedForced == nullptr && heCommits == 0,
-                "a higher-priority HE provider must reject a different exact outcome without mutation");
-        auto abandonedUl = he.findExchangeProviderDescriptor(
-                HcfExchangeClass::HE_UL_TRIGGER)->getExecutableProvider().
-                prepareExchange(heUlContext, heIdentity, heRejection);
-        requireHcfFeatureSet(abandonedUl != nullptr,
-                "the exact HE UL provider must prepare its matching outcome");
-        abandonedUl.reset();
-        requireHcfFeatureSet(heCommits == 0,
-                "abandoned HE probes must not commit access, scheduler, queue, or token state");
-        requireHcfFeatureSet(he.getExchangeSelector().selectAndCommit(
-                heUlContext, heIdentity) == HcfExchangeClass::HE_UL_TRIGGER &&
-                heCommits == 1 && committedHeClass == HcfExchangeClass::HE_UL_TRIGGER,
-                "selected HE class must equal the exact committed grant outcome once");
-        he.getExchangeSelector().exchangeTerminated(heIdentity,
-                HcfExchangeAbortReason::NONE);
-
-        HcfRuntime heOff(featureSet("heOff.featureSet"));
-        requireHcfFeatureSet(getClasses(heOff) == std::vector<HcfExchangeClass>{
-                HcfExchangeClass::FORCED_SINGLE_USER,
-                HcfExchangeClass::RECOVERY_SINGLE_USER,
-                HcfExchangeClass::HE_DL_MULTIUSER,
-                HcfExchangeClass::SINGLE_USER},
-                "HE feature-off composition must omit UL and MU-sounding descriptors while retaining ordinary HE DL precedence");
-        requireHcfFeatureSet(areAllDescriptorsExecutable(heOff),
-                "HE feature-off composition must retain executable fallback providers");
-        heOff.validateExecutableProviders();
-
-        auto derivedFeatureSet = featureSet("derived.featureSet");
-        HcfFeatureConfiguration derivedConfiguration;
-        derivedConfiguration.enableHtSounding = true;
-        HcfRuntime derived(derivedFeatureSet, derivedConfiguration);
-        requireHcfFeatureSet(getClasses(derived) == getClasses(common),
-                "a derived configured typename must retain the feature-set contract");
-
-        TestHcfProvider dlMu(HcfExchangeClass::HE_DL_MULTIUSER);
-        TestHcfProvider vhtGroup(HcfExchangeClass::VHT_GROUP_MANAGEMENT);
-        TestHcfFeatureSet reverseOrder({
-                {HcfExchangeClass::HE_DL_MULTIUSER, &dlMu},
-                {HcfExchangeClass::VHT_GROUP_MANAGEMENT, &vhtGroup}});
-        HcfRuntime ordered(&reverseOrder);
-        requireHcfFeatureSet(getClasses(ordered) == std::vector<HcfExchangeClass>{
-                HcfExchangeClass::HE_DL_MULTIUSER,
-                HcfExchangeClass::VHT_GROUP_MANAGEMENT},
-                "runtime ordering must not depend on descriptor construction order");
-        ordered.validateExecutableProviders();
-
-        TestHcfFeatureSet duplicate({
-                {HcfExchangeClass::HE_DL_MULTIUSER, &dlMu},
-                {HcfExchangeClass::HE_DL_MULTIUSER, &dlMu}});
-        requireHcfFeatureSetFailure([&] () { HcfRuntime invalid(&duplicate); },
-                "duplicate exchange classes must be rejected");
-        TestHcfProvider channelRelease(HcfExchangeClass::CHANNEL_RELEASE);
-        TestHcfFeatureSet mismatchedProvider({
-                {HcfExchangeClass::HE_DL_MULTIUSER, &channelRelease}});
-        requireHcfFeatureSetFailure([&] () { HcfRuntime invalid(&mismatchedProvider); },
-                "a provider class that disagrees with its descriptor must be rejected");
-
-        EV << "Effective HCF feature sets: " << nedTypeName("common.featureSet")
-           << ", " << nedTypeName("vht.featureSet")
-           << ", " << nedTypeName("he.featureSet")
-           << ", " << nedTypeName("derived.featureSet") << "\n";
-        EV << "HCF feature-set composition and runtime registry passed.\n";
+        check("common", HcfAmendmentRuntimeKind::COMMON);
+        check("vht", HcfAmendmentRuntimeKind::VHT);
+        check("he", HcfAmendmentRuntimeKind::HE);
+        auto he = dynamic_cast<IHcfFeatureSet *>(
+                getParentModule()->getModuleByPath("he.featureSet"));
+        if (!he->getHeRuntimeServices().isComplete())
+            throw cRuntimeError("HE feature set returned an incomplete typed service bundle");
+        EV << "HCF feature-set composition and typed service contract passed.\n";
     }
 };
 
@@ -342,81 +53,37 @@ Define_Module(HcfFeatureSetObserver);
 
 import inet.linklayer.ieee80211.mac.contract.IHcfFeatureSet;
 import inet.linklayer.ieee80211.mac.coordinationfunction.CommonHcfFeatureSet;
+import inet.linklayer.ieee80211.mac.coordinationfunction.VhtHcfFeatureSet;
+import inet.linklayer.ieee80211.mac.coordinationfunction.HeHcfFeatureSet;
 
-simple DerivedTestHcfFeatureSet extends CommonHcfFeatureSet
+module FeatureSetSlotHarness
 {
-    parameters:
-        @class(::inet::ieee80211::CommonHcfFeatureSet);
-}
-
-module CommonHarness
-{
-    parameters:
-        bool enableHtSounding = default(false);
     submodules:
         featureSet: <default("CommonHcfFeatureSet")> like IHcfFeatureSet;
 }
 
-module VhtHarness
+module FeatureSetHarness
 {
-    parameters:
-        bool enableHtSounding = default(false);
-        bool enableVhtSuBeamforming = default(false);
-        bool enableVhtDlMuMimo = default(false);
     submodules:
-        featureSet: <default("VhtHcfFeatureSet")> like IHcfFeatureSet;
-}
-
-module HeHarness
-{
-    parameters:
-        bool enableHtSounding = default(false);
-        bool enableUlMuOfdma = default(false);
-        bool enableDlMuMimo = default(false);
-    submodules:
-        featureSet: <default("HeHcfFeatureSet")> like IHcfFeatureSet;
+        common: FeatureSetSlotHarness {
+            parameters:
+                featureSet.typename = "CommonHcfFeatureSet";
+        }
+        vht: FeatureSetSlotHarness {
+            parameters:
+                featureSet.typename = "VhtHcfFeatureSet";
+        }
+        he: FeatureSetSlotHarness {
+            parameters:
+                featureSet.typename = "HeHcfFeatureSet";
+        }
+        observer: HcfFeatureSetObserver;
 }
 
 simple HcfFeatureSetObserver
 {
 }
 
-network TestNetwork
+network Test extends FeatureSetHarness
 {
-    submodules:
-        common: CommonHarness;
-        commonHt: CommonHarness {
-            parameters:
-                enableHtSounding = true;
-        }
-        vht: VhtHarness {
-            parameters:
-                enableVhtSuBeamforming = true;
-                enableVhtDlMuMimo = true;
-        }
-        vhtOff: VhtHarness;
-        he: HeHarness {
-            parameters:
-                enableUlMuOfdma = true;
-                enableDlMuMimo = true;
-        }
-        heOff: HeHarness;
-        derived: CommonHarness {
-            parameters:
-                enableHtSounding = true;
-                featureSet.typename = "DerivedTestHcfFeatureSet";
-        }
-        observer: HcfFeatureSetObserver;
 }
-
-%inifile: omnetpp.ini
-
-[General]
-network = TestNetwork
-sim-time-limit = 1us
-record-vector-results = false
-cmdenv-express-mode = false
-cmdenv-event-banners = false
-
-%contains: stdout
-HCF feature-set composition and runtime registry passed.

@@ -10,7 +10,6 @@
 #include "inet/linklayer/ethernet/common/Ethernet.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/common/Ieee80211Defs.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfExchangePlan.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeTriggeredUlExchangeService.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrame_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
@@ -21,42 +20,6 @@ namespace inet {
 namespace ieee80211 {
 
 namespace {
-
-class HeSoundingTransaction final : public IHcfExchangeTransaction
-{
-  private:
-    HeSoundingService *service;
-    HeSoundingService::StartAction action;
-    AccessCategory accessCategory;
-    bool committed = false;
-
-  public:
-    HeSoundingTransaction(HeSoundingService *service,
-            const HeSoundingService::StartAction& action,
-            AccessCategory accessCategory) : service(service), action(action),
-        accessCategory(accessCategory) {}
-
-    virtual HcfExchangeRejection validate(const HcfExchangePlan& plan) override
-    {
-        if (service == nullptr || plan.getExchangeClass() != HcfExchangeClass::HE_SOUNDING ||
-                !plan.getReservations().empty())
-            return {HcfExchangeRejectionCode::VALIDATION_FAILED,
-                    HcfExchangeClass::HE_SOUNDING, plan.getTransactionIdentity(),
-                    "invalid HE sounding prepared exchange"};
-        return {};
-    }
-
-    virtual void commit(const HcfExchangePlan&) override
-    {
-        if (committed)
-            throw cRuntimeError("HE sounding exchange committed twice");
-        service->commitPreparedSounding(action, accessCategory);
-        committed = true;
-    }
-
-    virtual void rollback(const HcfExchangePlan&) noexcept override {}
-    virtual void complete(const HcfExchangePlan&, const HcfExchangeResult&) override {}
-};
 
 template <typename T>
 Ptr<const T> findPacketChunk(const Packet *packet)
@@ -288,37 +251,6 @@ void HeSoundingService::resetStaState()
 {
     ndpAnnouncementReceived = false;
     ndpReceived = false;
-}
-
-HcfExchangeClass HeSoundingService::getExchangeClass() const
-{
-    return HcfExchangeClass::HE_SOUNDING;
-}
-
-std::unique_ptr<PreparedHcfExchange> HeSoundingService::prepareExchange(
-        const HcfContext& context, HcfTransactionIdentity transactionIdentity,
-        HcfExchangeRejection& rejection)
-{
-    auto snapshot = context.findProviderSnapshot<HcfHeSoundingSnapshot>();
-    if (snapshot == nullptr || actions == nullptr) {
-        rejection = {HcfExchangeRejectionCode::INCOMPLETE_CONTEXT,
-                HcfExchangeClass::HE_SOUNDING, transactionIdentity,
-                "HE sounding requires an immutable snapshot and typed actions"};
-        return nullptr;
-    }
-    auto action = prepareSounding(*snapshot);
-    if (!action) {
-        rejection = {HcfExchangeRejectionCode::NO_ELIGIBLE_PACKET,
-                HcfExchangeClass::HE_SOUNDING, transactionIdentity,
-                "no stale eligible HE sounding target"};
-        return nullptr;
-    }
-    HcfExchangePlan plan(HcfExchangeClass::HE_SOUNDING,
-            transactionIdentity, {});
-    rejection = {};
-    return std::make_unique<PreparedHcfExchange>(plan,
-            std::make_unique<HeSoundingTransaction>(this, *action,
-                    snapshot->accessCategory));
 }
 
 } // namespace ieee80211

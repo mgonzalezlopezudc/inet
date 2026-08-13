@@ -141,18 +141,6 @@ class INET_API HeHcfRuntime : public HeDlMuExchangeProvider::IActions,
     const IIeee80211HeLinkPhyContext& getLinkPhyContext() const;
     HeDlMuPreparationSnapshot captureDlPreparationSnapshot(
             AccessCategory accessCategory) const;
-    HcfContext buildGrantSelectionContext(AccessCategory accessCategory,
-            bool heMode, bool hasEligibleFrame,
-            const HeDlMuExchangeProvider::StartupParameters& parameters,
-            const std::function<std::optional<HeUlTriggerService::PreparedStart>()>& prepareUl,
-            const std::function<HeDlMuPreparationSnapshot()>& captureDl,
-            const std::function<bool()>& hasCommonFrame);
-    bool commitSelectedExchange(HcfExchangeClass exchangeClass,
-            const HcfContext& context,
-            const std::function<void(AccessCategory)>& startCommon,
-            const std::function<bool(const HeUlTriggerService::PreparedStart&)>& commitUl,
-            const std::function<bool(AccessCategory)>& startSingleUserFallback);
-
     uint32_t getBufferedTrafficServiceBytes(Edcaf *edcaf,
             const MacAddress& peer, int tid = -1) const;
     queueing::IPacketQueue *getPerStaQueue(const MacAddress& staAddr, AccessCategory ac);
@@ -178,11 +166,15 @@ class INET_API HeHcfRuntime : public HeDlMuExchangeProvider::IActions,
     HeDlMuPreparationSnapshot captureHeDlMuPreparationSnapshot(AccessCategory) const override;
     bool stagePerStaFrameForSingleUserTransmission(AccessCategory);
     HeUlPreparationSnapshot captureHeUlPreparationSnapshot(AccessCategory) const override;
-    bool tryStartDlMuFrameSequence(AccessCategory);
     bool releaseChannelIfNoFallbackFrame(AccessCategory);
     void startFrameSequence(AccessCategory);
-    HcfContext buildGrantSelectionContext(AccessCategory, bool);
-    void commitSelectedExchange(HcfExchangeClass, const HcfContext&);
+    HeTxopCoordinatorService::GrantSnapshot buildGrantSelectionContext(AccessCategory, bool);
+    HeTxopCoordinatorService::GrantSnapshot buildGrantSelectionContext(AccessCategory,
+            bool heMode, bool hasEligibleFrame,
+            const HeDlMuExchangeProvider::StartupParameters& parameters,
+            const std::function<std::optional<HeUlTriggerService::PreparedStart>()>& prepareUl,
+            const std::function<HeDlMuPreparationSnapshot()>& captureDl,
+            const std::function<bool()>& hasCommonFrame);
     void handleInternalCollision(std::vector<Edcaf *>);
     bool hasFrameToTransmit();
     bool hasFrameToTransmit(AccessCategory);
@@ -221,7 +213,10 @@ class INET_API HeHcfRuntime : public HeDlMuExchangeProvider::IActions,
     bool stageHeDlMuPacket(HcfQueueToken, HcfPacketIdentity, AccessCategory) override;
     bool startHeDlMuSingleUserIfEligible(AccessCategory) override;
     void startHeSoundingExchange(const HeSoundingService::StartAction&, AccessCategory) override;
+    HeDlMuExchangeProvider::HeDlMuProtectionSnapshot captureHeDlMuProtection(AccessCategory) const override;
     void configureHeDlMuProtection(AccessCategory) override;
+    void restoreHeDlMuProtection(AccessCategory,
+            const HeDlMuExchangeProvider::HeDlMuProtectionSnapshot&) override;
     void startHeDlMuExchange(AccessCategory, const HeDlMuPlan&, uint64_t,
             HeDlMuTxOpFs::AckMethod, const HeDlMuExchangeProvider::StartupParameters&) override;
     queueing::IPacketQueue *resolveHeDlMuQueue(HcfQueueToken) const override;

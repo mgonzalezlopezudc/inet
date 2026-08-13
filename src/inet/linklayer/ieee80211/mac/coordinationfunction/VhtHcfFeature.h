@@ -53,7 +53,6 @@ struct INET_API VhtGrantSnapshot
     };
 
     StartKind startKind = StartKind::COMMON_SINGLE_USER;
-    std::optional<HcfExchangeClass> exchangeClass;
     AccessCategory accessCategory = AC_BE;
     MacAddress peer;
     uint16_t associationId = 0;
@@ -76,6 +75,11 @@ class INET_API VhtHcfFeature : public IVhtDlMuExchangeCallback,
         public IVhtGroupIdManager::ILocalMembershipListener
 {
   public:
+    enum class GrantDisposition {
+        STARTED,
+        FINISHED_SYNCHRONOUSLY,
+    };
+
     class INET_API IActions
     {
       public:
@@ -119,7 +123,7 @@ class INET_API VhtHcfFeature : public IVhtDlMuExchangeCallback,
                 physicallayer::Ieee80211ModeSet *modeSet, IAckHandler *ackHandler,
                 IFrameSequenceHandler::ICallback *callback,
                 IVhtDlMuExchangeCallback *vhtCallback,
-                uint64_t transactionToken) = 0;
+                uint64_t exchangeId) = 0;
     };
 
   private:
@@ -134,10 +138,24 @@ class INET_API VhtHcfFeature : public IVhtDlMuExchangeCallback,
     physicallayer::IIeee80211VhtPacketRadio *radio = nullptr;
     std::unique_ptr<ITxOpFactory> defaultTxOpFactory;
     ITxOpFactory *txOpFactory = nullptr;
-    uint64_t nextTransactionToken = 1;
-    uint64_t activeTransactionToken = 0;
+    enum class DlMuPhase {
+        IDLE,
+        PREPARED,
+        COMMITTING,
+        ACTIVE,
+        TERMINAL,
+    };
+    struct DlMuLifecycle {
+        DlMuPhase phase = DlMuPhase::IDLE;
+        uint64_t exchangeId = 0;
+        bool ownershipCommitted = false;
+        std::optional<VhtDlMuPlanningFailure> pendingFailure;
+    };
+
+    uint64_t nextDlMuExchangeId = 1;
+    uint64_t lastRetiredDlMuExchangeId = 0;
+    DlMuLifecycle dlMu;
     std::vector<bool> completedUsers;
-    bool activePlanCommitted = false;
     Packet *activeContainerPacket = nullptr;
     std::vector<std::vector<Packet *>> activeUserPackets;
 
@@ -152,7 +170,9 @@ class INET_API VhtHcfFeature : public IVhtDlMuExchangeCallback,
     virtual void localVhtGroupMembershipChanged(
             const std::optional<IVhtGroupIdManager::Membership>& membership) override;
     void commitBlockAckPrerequisite(const VhtGrantSnapshot& snapshot);
-    void commitDlMu(const VhtGrantSnapshot& snapshot);
+    GrantDisposition commitDlMu(const VhtGrantSnapshot& snapshot);
+    uint64_t allocateDlMuExchangeId();
+    void clearActiveDlMuExchange(uint64_t exchangeId);
 
   public:
     void configure(IActions *actions, bool enableSuBeamforming,
@@ -167,7 +187,7 @@ class INET_API VhtHcfFeature : public IVhtDlMuExchangeCallback,
     void modeSetChanged();
     VhtGrantSnapshot prepareGrantSnapshot(AccessCategory ac) const;
     void startSounding(const VhtGrantSnapshot& snapshot);
-    void commitTransactionalGrant(const VhtGrantSnapshot& snapshot);
+    GrantDisposition commitPreparedGrant(const VhtGrantSnapshot& snapshot);
     bool processHeaderlessNdpIndication(Packet *packet);
     void recipientProcessReceivedFrame(Packet *packet,
             const Ptr<const Ieee80211MacHeader>& header);
@@ -196,11 +216,13 @@ class INET_API VhtHcfFeature : public IVhtDlMuExchangeCallback,
     virtual IOriginatorMacDataService *getVhtDlMuOriginatorDataService() const override;
     virtual queueing::IPacketQueue *resolveVhtDlMuQueue(
             HcfQueueToken sourceQueueToken) const override;
-    virtual void vhtDlMuPlanCommitted(uint64_t transactionToken,
+    virtual void vhtDlMuPlanningFailed(uint64_t exchangeId,
+            VhtDlMuPlanningFailure reason) override;
+    virtual void vhtDlMuPlanCommitted(uint64_t exchangeId,
             Packet *containerPacket,
             const std::vector<std::vector<Packet *>>& userPackets) override;
     virtual void processVhtDlMuFailedFrame(Packet *packet) override;
-    virtual void processVhtDlMuUserResult(uint64_t transactionToken,
+    virtual void processVhtDlMuUserResult(uint64_t exchangeId,
             unsigned int userIndex, UserResult result) override;
 
     VhtSoundingService& getSoundingServiceForTesting() { return soundingService; }

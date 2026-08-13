@@ -110,19 +110,6 @@ class HcfVhtRuntime final : public VhtHcfFeature::IActions
     bool isContinuingReceivedFrame() const { return continuingReceivedFrame; }
     bool isContinuingTransmissionComplete() const { return continuingTransmissionComplete; }
     void modeSetChanged() { feature.modeSetChanged(); }
-    bool commitSelectedExchange(HcfExchangeClass exchangeClass,
-            const HcfContext& context)
-    {
-        if (exchangeClass != HcfExchangeClass::VHT_GROUP_MANAGEMENT &&
-                exchangeClass != HcfExchangeClass::VHT_DL_MULTIUSER)
-            return false;
-        auto snapshot = context.findProviderSnapshot<VhtGrantSnapshot>();
-        if (snapshot == nullptr || !snapshot->exchangeClass.has_value() ||
-                *snapshot->exchangeClass != exchangeClass)
-            throw cRuntimeError("Selected VHT exchange does not match its immutable grant snapshot");
-        feature.commitTransactionalGrant(*snapshot);
-        return true;
-    }
     void setTxOpFactoryForTesting(VhtHcfFeature::ITxOpFactory *factory)
         { feature.setTxOpFactoryForTesting(factory); }
     void invalidatePeer(const MacAddress& peer) { feature.invalidatePeer(peer); }
@@ -143,15 +130,9 @@ class HcfVhtRuntime final : public VhtHcfFeature::IActions
                 return;
             case VhtGrantSnapshot::StartKind::GROUP_MANAGEMENT:
             case VhtGrantSnapshot::StartKind::BLOCK_ACK_PREREQUISITE:
-            case VhtGrantSnapshot::StartKind::DL_MULTIUSER: {
-                if (!snapshot.exchangeClass.has_value())
-                    throw cRuntimeError("Transactional VHT grant has no exchange class");
-                HcfContext context(ac, {*snapshot.exchangeClass});
-                context.setProviderSnapshot(snapshot);
-                hcf->runtime->getExchangeSelector().selectAndCommit(context,
-                        hcf->exchangeEngine->getActiveTransactionIdentity());
+            case VhtGrantSnapshot::StartKind::DL_MULTIUSER:
+                feature.commitPreparedGrant(snapshot);
                 return;
-            }
         }
         throw cRuntimeError("Unknown VHT grant start kind");
     }
@@ -1419,18 +1400,13 @@ void Hcf::initialize(int stage)
                 par("enableUlMuOfdma").boolValue();
         featureConfiguration.enableHeDlMuMimo = hasPar("enableDlMuMimo") &&
                 par("enableDlMuMimo").boolValue();
-        runtime = std::make_unique<HcfRuntime>(featureSet, featureConfiguration);
-        runtime->validateExecutableProviders();
+        featureSet->configureFeatures(featureConfiguration);
         mac = check_and_cast<Ieee80211Mac *>(getContainingNicModule(this)->getSubmodule("mac"));
         exchangeEngine = std::make_unique<HcfExchangeEngine>(
                 std::make_unique<FrameSequenceHandler>());
         exchangeEngine->initializeTimers();
         edca = check_and_cast<Edca *>(getSubmodule("edca"));
         hcca = check_and_cast<Hcca *>(getSubmodule("hcca"));
-        runtime->configureExchangeCommitter(
-                [this] (HcfExchangeClass exchangeClass, const HcfContext& context) {
-                    commitTransactionalExchange(exchangeClass, context);
-                });
         tx = check_and_cast<ITx *>(getModuleByPath(par("txModule")));
         rx = check_and_cast<IRx *>(getModuleByPath(par("rxModule")));
         dataAndMgmtRateControl = dynamic_cast<IRateControl *>(getSubmodule("rateControl"));
@@ -1602,16 +1578,6 @@ HcfExchangeEngine::Actions Hcf::makeExchangeActions()
         emit(cComponent::registerSignal("frameSequenceStarted"), context);
     };
     actions.frameSequenceFinished = [this] (const FrameSequenceContext *) { frameSequenceFinished(); };
-    actions.hasTransactionalOwner = [this] {
-        return runtime->getExchangeSelector().hasActiveExchange();
-    };
-    actions.exchangeTerminated = [this] (HcfTransactionIdentity identity,
-            HcfExchangeAbortReason abortReason) {
-        if (exchangeTerminalSinkForTesting)
-            exchangeTerminalSinkForTesting(identity, abortReason);
-        else
-            runtime->getExchangeSelector().exchangeTerminated(identity, abortReason);
-    };
     actions.resumeContention = [this] { resumeContention(); };
     actions.discardResponse = [this] (Packet *packet) {
         EV_INFO << "This frame is not for us" << std::endl;
@@ -1972,18 +1938,6 @@ void Hcf::releaseChannel(AccessCategory ac)
     edcaf->getTxopProcedure()->endTxop();
 }
 
-void Hcf::commitTransactionalExchange(HcfExchangeClass exchangeClass,
-        const HcfContext& context)
-{
-    if (heRuntime != nullptr) {
-        heRuntime->commitSelectedExchange(exchangeClass, context);
-        return;
-    }
-    if (vhtRuntime != nullptr && vhtRuntime->commitSelectedExchange(exchangeClass, context))
-        return;
-    throw cRuntimeError("No runtime can commit HCF transaction class %d",
-            static_cast<int>(exchangeClass));
-}
 
 bool Hcf::shouldRestartWideChannelAccess(Edcaf *edcaf)
 {
@@ -2877,7 +2831,6 @@ Hcf::~Hcf()
     vhtRuntime.reset();
     // Drop all non-owning feature/provider references while the NED-owned
     // feature-set submodule hierarchy is still alive.
-    runtime.reset();
     if (exchangeEngine != nullptr)
         exchangeEngine->cancelTimers(makeExchangeActions());
 }
