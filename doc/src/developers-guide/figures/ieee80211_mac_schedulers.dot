@@ -1,0 +1,67 @@
+digraph ieee80211_mac_schedulers {
+    graph [rankdir=TB, newrank=true, compound=true, bgcolor="transparent",
+        pad="0.12", nodesep="0.34", ranksep="0.52", fontname="Helvetica",
+        fontsize=12, label="INET IEEE 802.11 MAC scheduler layers", labelloc=t]
+    node [shape=box, style="rounded,filled", fillcolor="white", color="#4b5563",
+        fontname="Helvetica", fontsize=10, margin="0.10,0.06"]
+    edge [fontname="Helvetica", fontsize=8, color="#374151", arrowsize=0.7]
+
+    edca [label="Edca\nclassify QoS traffic\nselect channel owner", fillcolor="#f0fdf4"]
+    edcafs [label="Edcaf instances\nAC_BK / AC_BE / AC_VI / AC_VO\nper-AC queue, retry, ACK, TXOP", fillcolor="#f0fdf4"]
+    contention [label="Contention\nIFS + backoff + medium state", fillcolor="#f0fdf4"]
+    txop [label="TxopProcedure\nTXOP limit + protection\nremaining duration", fillcolor="#f0fdf4"]
+    grant [label="HCF grant boundary\namendment scheduler may run now", fillcolor="#f5f3ff"]
+    mode [label="QosRateSelection + PHY mode set\nlegal MCS / duration authority", fillcolor="#fefce8"]
+
+    edca -> edcafs [label="classify"]
+    edcafs -> contention [label="request access"]
+    contention -> txop [label="channel grant"]
+    txop -> grant [label="EDCA win"]
+
+    subgraph cluster_vht {
+        label="VHT DL MU-MIMO"
+        color="#bfdbfe"; style="rounded,dashed"
+        vhtScheduler [label="VhtDlMuScheduler\nfilter eligible AP candidates\nrequire same TID and valid identities", fillcolor="#eff6ff"]
+        vhtRules [label="Bounded selection\n2..4 users\nper-user NSTS and receiver limits\nfresh CSI / active group / Block Ack", fillcolor="#eff6ff"]
+        vhtResult [label="Selected candidate indices\nVHT MU-MIMO plan\nconsumed by VhtHcfFeature", fillcolor="#eff6ff"]
+        vhtScheduler -> vhtRules [label="eligibility"]
+        vhtRules -> vhtResult [label="deterministic selection"]
+    }
+
+    subgraph cluster_he_dl {
+        label="HE DL OFDMA"
+        color="#bbf7d0"; style="rounded,dashed"
+        heDlInterface [label="IIeee80211HeDlScheduler\nHeDlSchedulerBase", fillcolor="#f0fdf4"]
+        heDlPolicies [label="Policy implementations\nEqualSizedRUs: equal partitions\nBacklogBased: backlog + path-loss bound\nHoLMinDelay: head-of-line delay", fillcolor="#f0fdf4"]
+        heDlFit [label="Shared base machinery\nrequested RU size -> valid layout\nSNR / MCS / NSS / duration\nduration alignment + puncturing", fillcolor="#f0fdf4"]
+        heDlResult [label="Per-STA RuAllocation\nRU + MCS + NSS + DCM\nestimated SNR and duration\nconsumed by HeDlMuExchangeProvider", fillcolor="#f0fdf4"]
+        heDlInterface -> heDlPolicies [label="schedule(context)"]
+        heDlPolicies -> heDlFit [label="ranking / partition policy"]
+        heDlFit -> heDlResult [label="fit and return"]
+    }
+
+    subgraph cluster_he_ul {
+        label="HE trigger-based UL OFDMA"
+        color="#bbf7d0"; style="rounded,dashed"
+        heUlInterface [label="IIeee80211HeUlScheduler\nHeUlSchedulerBase", fillcolor="#f0fdf4"]
+        heUlPolicies [label="Policy implementations\nBacklogBased: capacity + fairness\nEqualSizedRUs: equal partitions", fillcolor="#f0fdf4"]
+        heUlFit [label="Shared base machinery\nUORA random-access RU count\ntarget RSSI + MCS\ncommon HE-TB duration", fillcolor="#f0fdf4"]
+        heUlResult [label="Schedule\nscheduled + random-access RUs\nMCS / NSS / target RSSI\ncommon duration + Trigger fields\nconsumed by HeUlTriggerService", fillcolor="#f0fdf4"]
+        heUlInterface -> heUlPolicies [label="schedule(context)"]
+        heUlPolicies -> heUlFit [label="user / RU policy"]
+        heUlFit -> heUlResult [label="fit and return"]
+    }
+
+    {rank=same; mode; grant}
+    grant -> vhtScheduler [label="VHT feature snapshot"]
+    grant -> heDlInterface [label="HE DL provider snapshot"]
+    grant -> heUlInterface [label="HE UL service snapshot"]
+    mode -> vhtScheduler [style=dashed, label="PHY constraints"]
+    mode -> heDlInterface [style=dashed, label="channel / PHY context"]
+    mode -> heUlInterface [style=dashed, label="channel / PHY context"]
+
+    note [shape=note, fillcolor="#fffbeb", color="#d97706",
+        label="The scheduler selects users, RUs, and policy outcomes.\nEDCA still owns contention and TXOP state; PHY mode objects\nremain authoritative for legal modes and PPDU timing.\nScheduler observations are committed only after exchange validation."]
+    note -> heDlFit [style=dashed, arrowhead=none]
+    note -> heUlFit [style=dashed, arrowhead=none]
+}

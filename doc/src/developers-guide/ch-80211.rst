@@ -70,7 +70,14 @@ RUs plus common HE-TB timing.  The amendment exchange service validates and
 commits those results before packets, sequence state, or scheduler-observation
 state are advanced.
 
-.. graphviz:: figures/ieee80211_hcf_schedulers.dot
+The current HE NED defaults select :cpp:`HeDlSchedulerEqualSizedRUs` for
+downlink and :cpp:`HeUlSchedulerBacklogBased` for uplink; the scheduler modules
+remain replaceable through the HE coordinator configuration.
+
+.. graphviz:: figures/ieee80211_hcf_specializations.dot
+   :align: center
+
+.. graphviz:: figures/ieee80211_mac_schedulers.dot
    :align: center
 
 State and packet ownership

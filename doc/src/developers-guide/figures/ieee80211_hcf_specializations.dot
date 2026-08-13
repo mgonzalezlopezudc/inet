@@ -1,0 +1,78 @@
+digraph ieee80211_hcf_specializations {
+    graph [rankdir=TB, newrank=true, compound=true, bgcolor="transparent",
+        pad="0.12", nodesep="0.38", ranksep="0.52", fontname="Helvetica",
+        fontsize=12, label="HCF specializations and amendment runtimes", labelloc=t]
+    node [shape=box, style="rounded,filled", fillcolor="white", color="#4b5563",
+        fontname="Helvetica", fontsize=10, margin="0.10,0.06"]
+    edge [fontname="Helvetica", fontsize=8, color="#374151", arrowsize=0.7]
+
+    grant [label="EDCA grant\nwinning access category", fillcolor="#f5f3ff"]
+    hcf [label="Hcf\ncommon QoS coordination", fillcolor="#ede9fe", penwidth=1.4]
+    runtime [label="HcfRuntime\ncomposition root + selector", fillcolor="#f5f3ff"]
+    selector [label="HcfExchangeSelector\nimmutable context -> ordered probe\n-> one committed exchange", fillcolor="#f5f3ff"]
+    engine [label="HcfExchangeEngine\nactive frame sequence + response timers\ncompletion / abort / rollback", fillcolor="#f5f3ff"]
+
+    grant -> hcf [label="callback"]
+    hcf -> runtime [style=dashed, label="owns"]
+    runtime -> selector [style=dashed, label="owns"]
+    grant -> selector [label="snapshot boundary"]
+
+    subgraph cluster_amendments {
+        label="Amendment-specific composition (not one inheritance tree)"
+        color="#93c5fd"; style="rounded"; penwidth=1.2
+
+        subgraph cluster_ht {
+            label="HT"
+            color="#bfdbfe"; style="rounded,dashed"
+            htRoot [label="HtHcfFeature\nHCF-owned feature", fillcolor="#eff6ff"]
+            htPolicy [label="Implicit A-MPDU Block Ack\nNDP sounding + CSI/MCS feedback\nHT retry / peer invalidation", fillcolor="#eff6ff"]
+            htSequence [label="HtSoundingFs\nuses common HCF exchange engine", fillcolor="#eff6ff"]
+            htRoot -> htPolicy [label="decides"]
+            htPolicy -> htSequence [label="creates sequence"]
+        }
+
+        subgraph cluster_vht {
+            label="VHT"
+            color="#bfdbfe"; style="rounded,dashed"
+            vhtRoot [label="VhtHcf NED type\nVhtHcfFeatureSet", fillcolor="#eff6ff"]
+            vhtRuntime [label="HcfVhtRuntime\nprivate Hcf action adapter", fillcolor="#eff6ff"]
+            vhtFeature [label="VhtHcfFeature\nprepare / commit grant snapshot", fillcolor="#eff6ff"]
+            vhtServices [label="VhtSoundingService\nVhtGroupIdManager\nBlock Ack prerequisites", fillcolor="#eff6ff"]
+            vhtSequence [label="VhtDlMuTxOpFs\nVHT DL MU exchange", fillcolor="#eff6ff"]
+            vhtRoot -> vhtRuntime [style=dashed, label="configures"]
+            vhtRuntime -> vhtFeature [label="delegates"]
+            vhtFeature -> vhtServices [style=dashed, label="queries / updates"]
+            vhtFeature -> vhtSequence [label="committed plan"]
+        }
+
+        subgraph cluster_he {
+            label="HE"
+            color="#bfdbfe"; style="rounded,dashed"
+            heRoot [label="HeHcf NED type\nHeHcfFeatureSet", fillcolor="#eff6ff"]
+            heRuntime [label="HeHcfRuntime\nHCF-owned HE lifecycle", fillcolor="#eff6ff"]
+            heCoordinator [label="HeTxopCoordinatorService\nforced SU -> UL -> DL MU\n-> inherited SU -> release", fillcolor="#eff6ff"]
+            heDl [label="HeDlMuExchangeProvider\nplan / reserve / commit / rollback", fillcolor="#eff6ff"]
+            heUl [label="HeUlTriggerService\nTrigger lifecycle + schedule finalization", fillcolor="#eff6ff"]
+            heServices [label="HeSoundingService\nHeTriggeredUlExchangeService\nframe decoration / TxRx interception", fillcolor="#eff6ff"]
+            heRoot -> heRuntime [style=dashed, label="configures"]
+            heRuntime -> heCoordinator [label="coordinates"]
+            heCoordinator -> heDl [label="DL candidate"]
+            heCoordinator -> heUl [label="pending UL"]
+            heRuntime -> heServices [style=dashed, label="owns services"]
+        }
+
+        {rank=same; htRoot; vhtRoot; heRoot}
+    }
+
+    hcf -> htRoot [style=dashed, label="HT hook"]
+    selector -> vhtRoot [style=dashed, label="VHT provider"]
+    selector -> heRoot [style=dashed, label="HE provider"]
+    htSequence -> engine [label="runs in"]
+    vhtSequence -> engine [label="runs in"]
+    heDl -> engine [label="runs in"]
+    heUl -> engine [label="runs in"]
+
+    note [shape=note, fillcolor="#fffbeb", color="#d97706",
+        label="HT is an HCF-owned feature hook.\nVHT and HE add NED-facing drop-in types\nand feature-set/runtime composition.\nAll use the common HCF exchange engine."]
+    note -> engine [style=dashed, arrowhead=none]
+}
