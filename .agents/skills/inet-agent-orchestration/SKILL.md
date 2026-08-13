@@ -31,10 +31,10 @@ Bind each tier to the current runtime:
 
 | Tier | Codex | Antigravity | Kimi Code CLI |
 | --- | --- | --- | --- |
-| Chimp-tier 🐒 | GPT-5.6 Sol, `medium`; raise to `high` for correctness-critical work | Gemini 3.6 Flash (`gemini-3.6-flash`), `high` | K3 (`kimi-code/k3`), `max` |
-| Dog-tier 🐕 | GPT-5.6 Terra, `medium` | Gemini 3.6 Flash (`gemini-3.6-flash`), `medium` | K3 (`kimi-code/k3`), `high` |
-| Fish-tier 🐟 | GPT-5.6 Luna, `high` | Gemini 3.6 Flash (`gemini-3.6-flash`), `medium` | K2.7 (`kimi-code/kimi-for-coding`), `high` |
-| Ant-tier 🐜 | GPT-5.6 Luna, `low` or `medium` | Gemini 3.6 Flash (`gemini-3.6-flash`), `low` | K2.7 (`kimi-code/kimi-for-coding`), thinking on |
+| Chimp-tier 🐒 | GPT-5.6 Sol, `medium`; raise to `high` for correctness-critical work | Gemini 3.7 Flash (`gemini-3.7-flash`), `high` | K3 (`kimi-code/k3`), `max` |
+| Dog-tier 🐕 | GPT-5.6 Terra, `medium` | Gemini 3.7 Flash (`gemini-3.7-flash`), `medium` | K3 (`kimi-code/k3`), `high` |
+| Fish-tier 🐟 | GPT-5.6 Luna, `high` | Gemini 3.7 Flash (`gemini-3.7-flash`), `medium` | K2.7 (`kimi-code/kimi-for-coding`), `high` |
+| Ant-tier 🐜 | GPT-5.6 Luna, `low` or `medium` | Gemini 3.7 Flash (`gemini-3.7-flash`), `low` | K2.7 (`kimi-code/kimi-for-coding`), thinking on |
 
 If a binding is unavailable, move upward in capability: Ant-tier 🐜 to Fish-tier 🐟, then Fish-tier 🐟 to Dog-tier 🐕, then Dog-tier 🐕 to Chimp-tier 🐒. Do not silently move Chimp-tier 🐒 work downward. If the Chimp-tier 🐒 binding is unavailable, keep the work in a capable root thread or use the strongest available Dog-tier 🐕 binding plus an independent verification lane and disclose the substitution.
 
