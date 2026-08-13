@@ -4,7 +4,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //
 
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfRuntime.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfObservationSink.h"
 
 #include <algorithm>
 #include <optional>
@@ -46,94 +47,17 @@
 namespace inet {
 namespace ieee80211 {
 
-uint32_t HeHcf::getBufferedTrafficServiceBytes(
+uint32_t HeHcfRuntime::getBufferedTrafficServiceBytes(
         Edcaf *edcaf, const MacAddress& peer, int tid) const
 {
     std::vector<Packet *> triggeredPackets;
     auto pendingQueue = edcaf->getPendingQueue();
-    for (const auto& entry : triggeredUlExchanges)
-        if (entry.second.sourceQueue == pendingQueue)
+    for (const auto& entry : getHeTriggeredUlExchangeService().getExchanges())
+        if (resolveHeQueue(entry.second.sourceQueueToken) == pendingQueue)
             triggeredPackets.insert(triggeredPackets.end(),
                     entry.second.packets.begin(), entry.second.packets.end());
     return calculateBufferedTrafficServiceBytes(
             edcaf, peer, tid, triggeredPackets);
-}
-
-static physicallayer::Ieee80211HeTxVectorValidationResult createHeTbTxVector(
-        const Ieee80211TriggerFrame& trigger, const Ieee80211HeTriggerUserInfo& selected,
-        Hz centerFrequency, uint16_t staId, B psduLength,
-        uint8_t bssColor = 0,
-        bool ndpFeedbackReport = false, uint8_t ndpFeedbackStatus = 0,
-        uint8_t ndpRuToneSetIndex = 0, uint8_t ndpStartingStsNumber = 0,
-        physicallayer::Ieee80211HeTxopDuration txopDuration = {})
-{
-    physicallayer::Ieee80211HeTxVectorRequest request;
-    request.centerFrequency = centerFrequency;
-    request.channelBandwidth = Hz(trigger.getChannelBandwidthMhz() * 1e6);
-    request.ppduFormat = physicallayer::HE_TRIGGER_BASED_UPLINK;
-    // Puncturing is not carried by the 802.11ax Trigger Common Info field.
-    // The supported HE-TB response therefore uses the unpunctured bandwidth
-    // described by UL BW and the selected wire RU allocation.
-    request.puncturedSubchannelMask = 0;
-    request.lSigLength = trigger.getUlLength();
-    request.noSignalExtension = false;
-    request.requestedTxTime = trigger.getCommonDuration();
-    // UL Length reconstructs a 4 us response-time envelope, not the original
-    // transmitter-local exact TXTIME.
-    request.requestedTxTimeExact = false;
-    request.triggerMethod = physicallayer::Ieee80211HeTriggerMethod::TRIGGER_FRAME;
-    request.bssColor = bssColor;
-    request.txopDuration = txopDuration;
-    request.preFecPaddingFactor = trigger.getPreFecPaddingFactor();
-    request.ldpcExtraSymbolSegment = trigger.getLdpcExtraSymbolSegment();
-    request.peDisambiguity = trigger.getPeDisambiguity();
-    for (size_t i = 0; i < request.spatialReuse.size(); ++i)
-        request.spatialReuse[i] = (trigger.getUlSpatialReuse() >> (4 * i)) & 0xF;
-    request.doppler = trigger.getDoppler();
-    request.numberOfHeLtfSymbols = trigger.getNumberOfHeLtfSymbols();
-    request.guardInterval =
-            static_cast<physicallayer::Ieee80211HeGuardInterval>(trigger.getGuardInterval());
-    request.ltfType =
-            static_cast<physicallayer::Ieee80211HeLtfType>(trigger.getLtfType());
-    // The nominal PE is reconstructed from the wire pre-FEC padding factor
-    // and PE disambiguity fields by the HE-TB calculator.
-    request.packetExtensionDurationUs = 0;
-    request.ndp = ndpFeedbackReport;
-
-    auto appendUser = [&] (const Ieee80211HeTriggerUserInfo& triggerUser,
-            uint16_t userStaId, B userPsduLength) {
-        physicallayer::Ieee80211HeUserTxVectorRequest user;
-        user.ru.index = triggerUser.ruIndex;
-        user.ru.toneSize = triggerUser.ruToneSize;
-        user.ru.toneOffset = triggerUser.ruToneOffset;
-        user.staId = userStaId;
-        user.mcs = triggerUser.mcs;
-        user.numberOfSpatialStreams = triggerUser.numberOfSpatialStreams;
-        user.streamStartIndex = triggerUser.streamStartIndex;
-        user.coding =
-                static_cast<physicallayer::Ieee80211HeCoding>(triggerUser.coding);
-        user.psduLength = userPsduLength;
-        if (&triggerUser == &selected) {
-            user.ndpFeedbackReport = ndpFeedbackReport;
-            user.ndpFeedbackStatus = ndpFeedbackStatus;
-            user.ndpRuToneSetIndex = ndpRuToneSetIndex;
-            user.ndpStartingStsNumber = ndpStartingStsNumber;
-        }
-        request.users.push_back(user);
-    };
-
-    appendUser(selected, staId, psduLength);
-    if (selected.muMimo) {
-        for (unsigned int i = 0; i < trigger.getUsersArraySize(); ++i) {
-            const auto& peer = trigger.getUsers(i);
-            if (&peer == &selected || !peer.muMimo ||
-                    peer.ruToneSize != selected.ruToneSize ||
-                    peer.ruToneOffset != selected.ruToneOffset)
-                continue;
-            appendUser(peer, peer.aid, B(0));
-        }
-    }
-    return physicallayer::Ieee80211HeTxVectorFactory::create(request);
 }
 
 std::optional<physicallayer::Ieee80211HeTxopDuration>
@@ -144,66 +68,6 @@ getIeee80211HeSolicitingTxopDuration(const Packet *packet)
     if (indication == nullptr || indication->getRxVector() == nullptr)
         return std::nullopt;
     return indication->getRxVector()->getCommon().getTxopDuration();
-}
-
-HeTbResponseProtection deriveIeee80211HeTbResponseProtection(
-        const std::optional<physicallayer::Ieee80211HeTxopDuration>& solicitingTxopDuration,
-        simtime_t triggerDuration, simtime_t sifsTime, simtime_t responseTxTime)
-{
-    if (triggerDuration < SIMTIME_ZERO || sifsTime < SIMTIME_ZERO ||
-            responseTxTime < SIMTIME_ZERO)
-        throw cRuntimeError("Cannot derive HE-TB response protection from negative timing");
-    auto remaining = std::max(SIMTIME_ZERO,
-            triggerDuration - sifsTime - responseTxTime);
-    int64_t remainingUs = remaining.inUnit(SIMTIME_US);
-    if (SimTime(remainingUs, SIMTIME_US) < remaining)
-        remainingUs++;
-    HeTbResponseProtection result;
-    result.macDurationField = SimTime(remainingUs, SIMTIME_US);
-    if (solicitingTxopDuration.has_value() && solicitingTxopDuration->unspecified)
-        result.txopDuration = {};
-    else
-        result.txopDuration = {false, static_cast<uint16_t>(
-                std::min<int64_t>(8448, remainingUs))};
-    return result;
-}
-
-HeTbResponseProtection attachHeTbTxVectorFromTrigger(Packet *packet,
-        const Ieee80211TriggerFrame& trigger, const Ieee80211HeTriggerUserInfo& user,
-        uint16_t staId, Hz centerFrequency, W transmitPower, B psduLength,
-        uint8_t bssColor, uint32_t triggerId,
-        bool ndpFeedbackReport, uint8_t ndpFeedbackStatus,
-        uint8_t ndpRuToneSetIndex, uint8_t ndpStartingStsNumber,
-        const std::optional<physicallayer::Ieee80211HeTxopDuration>& solicitingTxopDuration,
-        simtime_t sifsTime)
-{
-    if (packet == nullptr)
-        throw cRuntimeError("Cannot attach an HE-TB TXVECTOR to an empty packet");
-    auto preliminary = createHeTbTxVector(trigger, user, centerFrequency, staId, psduLength,
-            bssColor,
-            ndpFeedbackReport, ndpFeedbackStatus, ndpRuToneSetIndex,
-            ndpStartingStsNumber);
-    if (!preliminary)
-        throw cRuntimeError("Cannot construct preliminary Trigger-derived HE-TB TXVECTOR: %s (%s)",
-                preliminary.getContext().fieldName.c_str(),
-                preliminary.getContext().detail.c_str());
-    auto protection = deriveIeee80211HeTbResponseProtection(
-            solicitingTxopDuration, trigger.getDurationField(), sifsTime,
-            preliminary.getPpduLayout()->getDuration());
-    auto result = createHeTbTxVector(trigger, user, centerFrequency, staId, psduLength,
-            bssColor,
-            ndpFeedbackReport, ndpFeedbackStatus, ndpRuToneSetIndex,
-            ndpStartingStsNumber, protection.txopDuration);
-    if (!result)
-        throw cRuntimeError("Cannot construct Trigger-derived HE-TB TXVECTOR: %s (%s)",
-                result.getContext().fieldName.c_str(), result.getContext().detail.c_str());
-    packet->addTag<physicallayer::Ieee80211HeTxVectorReq>()->setCanonicalPair(
-            result.getTxVector(), result.getPpduLayout());
-    packet->addTagIfAbsent<physicallayer::Ieee80211HeTriggerCorrelationTag>()->
-            setTriggerId(triggerId);
-    if (!std::isnan(transmitPower.get()))
-        packet->addTagIfAbsent<SignalPowerReq>()->setPower(transmitPower);
-    return protection;
 }
 
 double computeIeee80211HeTriggerPathLossDb(int apTxPowerDbm20Mhz,
@@ -361,7 +225,7 @@ std::optional<std::string> validateIeee80211HeUlTrigger(
     return std::nullopt;
 }
 
-bool HeHcf::allAssociatedStationsSupportPreamblePuncturing() const
+bool HeHcfRuntime::allAssociatedStationsSupportPreamblePuncturing() const
 {
     const auto stations = mac->getMib()->getPeerAssociationSnapshots();
     return std::all_of(stations.begin(), stations.end(), [&] (const auto& station) {
@@ -372,7 +236,7 @@ bool HeHcf::allAssociatedStationsSupportPreamblePuncturing() const
             });
 }
 
-bool HeHcf::supportsPreamblePuncturing(const IIeee80211HeUlScheduler::RuAllocation& allocation) const
+bool HeHcfRuntime::supportsPreamblePuncturing(const IIeee80211HeUlScheduler::RuAllocation& allocation) const
 {
     if (allocation.randomAccess)
         return allAssociatedStationsSupportPreamblePuncturing();
@@ -380,455 +244,97 @@ bool HeHcf::supportsPreamblePuncturing(const IIeee80211HeUlScheduler::RuAllocati
     return capabilities && capabilities->localRxPeerTx.valid && capabilities->localRxPeerTx.preamblePuncturing;
 }
 
-static HeUlScheduleFinalizationResult finalizeUlScheduleWithSnapshot(
-        const IIeee80211HeUlScheduler::Schedule& proposedSchedule,
-        Hz centerFrequency, Hz channelBandwidth,
-        IIeee80211HeUlTriggerPolicy::TriggerType triggerType,
-        physicallayer::Ieee80211HeTriggerResponseFinalizationResult *finalizationSnapshot)
-{
-    HeUlScheduleFinalizationResult result;
-    if (finalizationSnapshot != nullptr)
-        *finalizationSnapshot = physicallayer::Ieee80211HeTriggerResponseFinalizationResult();
-    result.schedule = proposedSchedule;
-    result.schedule.channelBandwidth = channelBandwidth;
-    result.schedule.ulLength = 0;
-    result.schedule.commonDuration = SIMTIME_ZERO;
-    result.schedule.commonDurationExact = false;
-
-    const bool feedbackNdp = triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER;
-    if (proposedSchedule.allocations.empty() && !feedbackNdp) {
-        result.error = "HE UL schedule has no RU allocations";
-        return result;
-    }
-    if (proposedSchedule.commonDuration <= SIMTIME_ZERO) {
-        result.error = "HE UL schedule has no positive duration budget";
-        return result;
-    }
-    if (triggerType != IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER &&
-            triggerType != IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER &&
-            triggerType != IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
-        result.error = "HE UL schedule has an invalid Trigger type";
-        return result;
-    }
-
-    std::vector<physicallayer::Ieee80211HeUserPhyParameters> users;
-    users.reserve(feedbackNdp ? 1 : proposedSchedule.allocations.size());
-    if (feedbackNdp) {
-        physicallayer::Ieee80211HeUserPhyParameters user;
-        user.ru = physicallayer::getHeEqualRuLayout(centerFrequency, channelBandwidth, 1).front();
-        user.mcs = 0;
-        user.numberOfSpatialStreams = 1;
-        user.coding = physicallayer::HE_CODING_BCC;
-        user.psduLength = B(0);
-        user.ndpFeedbackReport = true;
-        user.ndpRuToneSetIndex = 1;
-        users.push_back(user);
-    }
-    for (const auto& allocation : proposedSchedule.allocations) {
-        physicallayer::Ieee80211HeUserPhyParameters user;
-        user.ru = allocation.ru;
-        user.mcs = allocation.mcs;
-        user.numberOfSpatialStreams = allocation.numberOfSpatialStreams;
-        user.streamStartIndex = allocation.streamStartIndex;
-        user.staId = allocation.associationId;
-        user.coding = allocation.coding;
-        // A feedback NDP has no Data field. Other Trigger types need at least
-        // one data symbol; the actual PSDU is padded to the selected duration.
-        user.psduLength = B(1);
-        users.push_back(user);
-    }
-
-    physicallayer::Ieee80211HeTriggerResponseFinalizationRequest request;
-    request.users = users;
-    request.centerFrequency = centerFrequency;
-    request.channelBandwidth = channelBandwidth;
-    request.guardInterval = proposedSchedule.guardInterval;
-    request.ltfType = proposedSchedule.ltfType;
-    request.packetExtensionDurationUs = proposedSchedule.packetExtensionDurationUs;
-    request.noSignalExtension = proposedSchedule.noSignalExtension;
-    request.durationBudget = proposedSchedule.commonDuration;
-    if (!feedbackNdp && proposedSchedule.ulLength != 0) {
-        physicallayer::Ieee80211HeTbCapacityBoundary boundary;
-        boundary.channelBandwidth = channelBandwidth;
-        boundary.ulLength = proposedSchedule.ulLength;
-        boundary.guardInterval = proposedSchedule.guardInterval;
-        boundary.ltfType = proposedSchedule.ltfType;
-        boundary.preFecPaddingFactor = proposedSchedule.preFecPaddingFactor;
-        boundary.ldpcExtraSymbolSegment = proposedSchedule.ldpcExtraSymbolSegment;
-        boundary.peDisambiguity = proposedSchedule.peDisambiguity;
-        boundary.numberOfHeLtfSymbols = proposedSchedule.numberOfHeLtfSymbols;
-        boundary.packetExtensionDurationUs = proposedSchedule.packetExtensionDurationUs;
-        request.fixedBoundary = boundary;
-    }
-    auto finalization = physicallayer::finalizeHeTriggerResponse(request);
-    if (!finalization) {
-        result.error = finalization.error;
-        return result;
-    }
-
-    result.schedule.ulLength = finalization.ulLength;
-    result.schedule.commonDuration = finalization.commonDuration;
-    result.schedule.commonDurationExact = finalization.commonDurationExact;
-    result.schedule.numberOfHeLtfSymbols =
-            finalization.parameters.common.numberOfHeLtfSymbols;
-    if (!feedbackNdp) {
-        result.schedule.preFecPaddingFactor =
-                finalization.parameters.common.preFecPaddingFactor;
-        result.schedule.ldpcExtraSymbolSegment =
-                finalization.parameters.common.ldpcExtraSymbol;
-        result.schedule.peDisambiguity = finalization.peDisambiguity;
-        result.schedule.packetExtensionDurationUs =
-                finalization.parameters.common.packetExtensionDurationUs;
-    }
-    result.resolvedTxTime = finalization.resolvedTxTime;
-    if (finalizationSnapshot != nullptr)
-        *finalizationSnapshot = finalization;
-    result.valid = true;
-    return result;
-}
-
-HeUlScheduleFinalizationResult HeHcf::finalizeUlSchedule(
+HeUlScheduleFinalizationResult HeHcfRuntime::finalizeUlSchedule(
         const IIeee80211HeUlScheduler::Schedule& proposedSchedule,
         Hz centerFrequency, Hz channelBandwidth,
         IIeee80211HeUlTriggerPolicy::TriggerType triggerType)
 {
-    return finalizeUlScheduleWithSnapshot(proposedSchedule, centerFrequency,
-            channelBandwidth, triggerType, nullptr);
+    return HeUlTriggerService::finalizeSchedule(proposedSchedule, centerFrequency,
+            channelBandwidth, triggerType);
 }
 
-bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
+HeUlPreparationSnapshot HeHcfRuntime::captureHeUlPreparationSnapshot(
+        AccessCategory accessCategory) const
 {
-    // IEEE 802.11-2024 26.5.2.2: an AP that wins channel access may solicit
-    // HE TB PPDUs from one or more non-AP HE STAs by transmitting a Trigger
-    // frame.  EDCA/TXOP ownership is still inherited from HCF/EDCA (10.23).
-    if (pendingUlTrigger == IIeee80211HeUlTriggerPolicy::NO_TRIGGER ||
-            !mac->isApInHeFamily() || !ulCoordinator->isEnabled())
-        return false;
+    HeUlPreparationSnapshot snapshot;
+    snapshot.accessCategory = accessCategory;
+    snapshot.now = simTime();
+    snapshot.phy.emplace(getLinkPhyContext().getSnapshot());
+    snapshot.maxHeTbPpduDuration = SimTime(par("maxHeTbPpduDuration"));
+    snapshot.reportMaxAge = ulCoordinator->getReportMaxAge();
+    snapshot.targetRssiMarginDb = par("ulTargetRssiMargin").doubleValue();
+    snapshot.enableUlMuMimo = par("enableUlMuMimo").boolValue();
+    auto schedulerModule = getSubmodule("ulScheduler");
+    snapshot.maxMuStations = schedulerModule == nullptr ?
+            physicallayer::getHeMaxRuCount(snapshot.phy->getChannelBandwidth()) :
+            schedulerModule->par("maxMuStations").intValue();
+    auto edcaf = edca->getEdcaf(accessCategory);
+    auto txop = edcaf == nullptr ? nullptr : edcaf->getTxopProcedure();
+    if (txop != nullptr && txop->getLimit() > SIMTIME_ZERO)
+        snapshot.txopLimit = std::max(SIMTIME_ZERO,
+                txop->getLimit() - txop->getDuration());
 
-    ulTriggerAccessRequested = false;
-    const auto triggerType = pendingUlTrigger;
-    const auto phy = getLinkPhyContext().getSnapshot();
-    auto centerFrequency = phy.getChannelCenterFrequency();
-    auto channelBandwidth = phy.getChannelBandwidth();
-    auto edcaf = edca->getEdcaf(ac);
-    simtime_t txopLimit = SIMTIME_ZERO;
-    if (edcaf->getTxopProcedure()->getLimit() > SIMTIME_ZERO)
-        txopLimit = std::max(SIMTIME_ZERO,
-                edcaf->getTxopProcedure()->getLimit() - edcaf->getTxopProcedure()->getDuration());
-    auto sensitivityDbm = math::mW2dBmW(phy.getReceiveSensitivity().get<mW>());
-    const auto puncturedSubchannels = triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER ?
-            std::vector<bool>() : phy.getPuncturedSubchannels();
-    if (std::any_of(puncturedSubchannels.begin(), puncturedSubchannels.end(),
-            [] (bool punctured) { return punctured; })) {
-        EV_WARN << "HE UL skipping Trigger because the modeled HE-TB Trigger fields "
-                << "do not carry a punctured response bandwidth\n";
-        return false;
-    }
-    IIeee80211HeUlScheduler::Schedule ulSchedule;
-    IIeee80211HeUlScheduler::ScheduleContext schedulerContext;
-    bool schedulerPrepared = false;
-    bool useUlMuMimoPolicy = false;
-    // 9.3.1.22 encodes the triggering AP's combined transmit power normalized
-    // to 20 MHz in one-dB steps. Keep the projected value in the schedule so
-    // the frame sequence and serializer cannot silently substitute a default.
-    auto apTxPowerDbm20Mhz = math::mW2dBmW(phy.getMaximumTransmitPower().get<mW>()) -
-            10 * std::log10(channelBandwidth.get() / 20e6);
-    if (triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ||
-            triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
-        // IEEE 802.11-2024 9.3.1.22 Table 9-47 defines BSRP as Trigger type 4.
-        // 26.5.2 permits the AP to solicit HE TB responses via addressed User
-        // Info fields and RA-RUs.  The standard leaves scheduling policy open;
-        // this model gives each polled STA one RU and exposes the remainder as
-        // associated-STA RA-RUs, an implementation policy rather than a rule.
-        auto maxRus = physicallayer::getHeMaxRuCount(channelBandwidth);
-        auto layout = physicallayer::getHeEqualRuLayout(centerFrequency, channelBandwidth, maxRus);
-        int index = 0;
-        auto ulScheduler = getSubmodule("ulScheduler");
-        int maxMuStations = ulScheduler ? ulScheduler->par("maxMuStations").intValue() : maxRus;
-        std::vector<uint16_t> nfrpEligibleAids;
-        for (const auto& station : mac->getMib()->getPeerAssociationSnapshots()) {
-            if (!station.hasMemberStatus() || station.getMemberStatus() != Ieee80211Mib::ASSOCIATED)
-                continue;
-            if (triggerType != IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER &&
-                    (index >= maxRus || index >= maxMuStations))
-                break;
-            if (isTwtSleeping(mac, station.getAddress())) {
-                EV_DEBUG << "HE UL BSRP: skipping sleeping TWT STA " << station.getAddress() << "\n";
-                continue;
-            }
-            auto negotiated = mac->getMib()->getNegotiatedHeCapabilities(station.getAddress());
-            if (triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER &&
-                    (!negotiated || !negotiated->localRxPeerTx.valid ||
-                     !negotiated->localRxPeerTx.transmitterCanTransmitNdpFeedbackReport))
-                continue;
-            if (triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
-                nfrpEligibleAids.push_back(mac->getMib()->getAssociationId(station.getAddress()));
-                continue;
-            }
-            IIeee80211HeUlScheduler::RuAllocation allocation;
-            allocation.staAddress = station.getAddress();
-            allocation.associationId = mac->getMib()->getAssociationId(station.getAddress());
-            allocation.ru = layout[index++];
-            allocation.targetRssiDbm = (int)std::round(sensitivityDbm + (double)par("ulTargetRssiMargin"));
-            ulSchedule.allocations.push_back(allocation);
-        }
-        if (triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
-            if (nfrpEligibleAids.empty()) {
-                EV_WARN << "HE UL skipping NFRP Trigger because no awake associated STA negotiated NDP feedback\n";
-                return false;
-            }
-            std::sort(nfrpEligibleAids.begin(), nfrpEligibleAids.end());
-            const int scheduledStaCount = IIeee80211HeUlScheduler::getNfrpScheduledStaCount(
-                    channelBandwidth, false); // deterministic one-spatial-stream policy
-            uint16_t selectedStart = nfrpEligibleAids.front();
-            int selectedCount = -1;
-            for (auto aid : nfrpEligibleAids) {
-                auto candidateStart = std::min<int>(aid, 4096 - scheduledStaCount);
-                auto end = std::lower_bound(nfrpEligibleAids.begin(), nfrpEligibleAids.end(),
-                        candidateStart + scheduledStaCount);
-                auto begin = std::lower_bound(nfrpEligibleAids.begin(), nfrpEligibleAids.end(), candidateStart);
-                int count = end - begin;
-                if (count > selectedCount || (count == selectedCount && candidateStart < selectedStart)) {
-                    selectedStart = candidateStart;
-                    selectedCount = count;
-                }
-            }
-            ulSchedule.nfrpStartingAid = selectedStart;
-            ulSchedule.nfrpFeedbackType = 0; // 26.5.7.4 resource request
-            ulSchedule.nfrpMultiplexingFlag = false;
-            ulSchedule.nfrpTargetRssiDbm = (int)std::round(sensitivityDbm + (double)par("ulTargetRssiMargin"));
-        }
-        while (index < maxRus && triggerType != IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
-            IIeee80211HeUlScheduler::RuAllocation allocation;
-            allocation.randomAccess = true;
-            allocation.associationId = 0;
-            allocation.ru = layout[index++];
-            allocation.targetRssiDbm = (int)std::round(sensitivityDbm + (double)par("ulTargetRssiMargin"));
-            ulSchedule.allocations.push_back(allocation);
-        }
-        ulSchedule.commonDuration = std::min(SimTime(par("maxHeTbPpduDuration")), txopLimit > SIMTIME_ZERO ?
-                txopLimit : SimTime(par("maxHeTbPpduDuration")));
-        for (auto& allocation : ulSchedule.allocations)
-            allocation.estimatedDuration = ulSchedule.commonDuration;
-    }
-    else {
-        int staleOrUnknown = 0;
-        int fullBandwidthMuMimoCandidates = 0;
-        int maximumOFDMAUserNss = 1;
-        int totalUlMuMimoNss = 0;
-        const auto fullBandwidthRu = physicallayer::getHeEqualRuLayout(
-                centerFrequency, channelBandwidth, 1).front();
-        for (const auto& station : mac->getMib()->getPeerAssociationSnapshots()) {
-            if (!station.hasMemberStatus() || station.getMemberStatus() != Ieee80211Mib::ASSOCIATED)
-                continue;
-            auto aid = mac->getMib()->getAssociationId(station.getAddress());
-            auto status = ulCoordinator->getBufferStatus().find(aid);
-            if (status == ulCoordinator->getBufferStatus().end() ||
-                    simTime() - status->second.updateTime > ulCoordinator->getReportMaxAge()) {
-                staleOrUnknown++;
-                continue;
-            }
-            bool hasServiceRequest = false;
-            for (const auto& estimate : status->second.backlogEstimates)
-                hasServiceRequest |= estimate.getConservativeBytes() > 0 ||
-                        estimate.kind == Ieee80211HeQueueSizeKind::UNKNOWN;
-            auto negotiated = mac->getMib()->getNegotiatedHeCapabilities(station.getAddress());
-            Ieee80211HeOperatingMode mode;
-            const bool disabled = isTwtSleeping(mac, station.getAddress()) ||
-                    (getPeerOperatingMode(station.getAddress(), mode) && mode.ulMuDisable);
-            if (hasServiceRequest && !disabled && negotiated &&
-                    negotiated->localRxPeerTx.valid &&
-                    negotiated->localRxPeerTx.fullBandwidthUlMuMimo &&
-                    negotiated->localRxPeerTx.supportedRuToneSizes.count(
-                            fullBandwidthRu.toneSize) != 0 &&
-                    negotiated->localRxPeerTx.mcsNss.maxMcsPerNss[0] >= 0)
-                fullBandwidthMuMimoCandidates++;
-            if (hasServiceRequest && !disabled && negotiated &&
-                    negotiated->localRxPeerTx.valid &&
-                    negotiated->localRxPeerTx.ofdma &&
-                    negotiated->localRxPeerTx.supportedChannelWidths.count(channelBandwidth) != 0 &&
-                    !negotiated->localRxPeerTx.supportedRuToneSizes.empty()) {
-                int maximumNss = getMaxNss(negotiated->localRxPeerTx.mcsNss);
-                if (!(mac->getMib()->localHeCapabilities.ldpc && negotiated->mutual.ldpc))
-                    maximumNss = std::min(maximumNss, 4);
-                maximumOFDMAUserNss = std::max(maximumOFDMAUserNss, maximumNss);
-                if (negotiated->localRxPeerTx.fullBandwidthUlMuMimo)
-                    totalUlMuMimoNss += std::min(maximumNss, 4);
-            }
-        }
-        useUlMuMimoPolicy = par("enableUlMuMimo").boolValue() &&
-                fullBandwidthMuMimoCandidates >= 2;
-        int boundaryNss = useUlMuMimoPolicy ? std::min(totalUlMuMimoNss, 8) :
-                maximumOFDMAUserNss;
-        physicallayer::Ieee80211HeTbCapacityBoundary capacityBoundary;
-        const auto boundaryLayout = physicallayer::getHeEqualRuLayout(centerFrequency,
-                channelBandwidth, physicallayer::getHeMaxRuCount(channelBandwidth));
-        physicallayer::Ieee80211HeUserPhyParameters boundaryUser;
-        boundaryUser.ru = boundaryLayout.front();
-        boundaryUser.mcs = 0;
-        boundaryUser.coding = physicallayer::HE_CODING_BCC;
-        boundaryUser.numberOfSpatialStreams = std::min(boundaryNss, 4);
-        boundaryUser.psduLength = B(1);
-        auto boundaryLdpcUser = boundaryUser;
-        boundaryLdpcUser.ru = boundaryLayout[1];
-        boundaryLdpcUser.coding = physicallayer::HE_CODING_LDPC;
-        boundaryLdpcUser.numberOfSpatialStreams = boundaryNss;
-        physicallayer::Ieee80211HeTriggerResponseFinalizationRequest boundaryRequest;
-        // Seed both coding families so the immutable common boundary is not
-        // derived from a one-user BCC-only approximation.
-        boundaryRequest.users = {boundaryUser, boundaryLdpcUser};
-        boundaryRequest.centerFrequency = centerFrequency;
-        boundaryRequest.channelBandwidth = channelBandwidth;
-        boundaryRequest.guardInterval = phy.getGuardInterval() == physicallayer::HE_GI_3_2_US ?
-                physicallayer::HE_GI_3_2_US : physicallayer::HE_GI_1_6_US;
-        boundaryRequest.ltfType = boundaryRequest.guardInterval == physicallayer::HE_GI_3_2_US ?
-                physicallayer::HE_LTF_4X : useUlMuMimoPolicy ?
-                physicallayer::HE_LTF_1X : physicallayer::HE_LTF_2X;
-        boundaryRequest.packetExtensionDurationUs = phy.getPacketExtensionDurationUs();
-        boundaryRequest.durationBudget = std::min(SimTime(par("maxHeTbPpduDuration")),
-                txopLimit > SIMTIME_ZERO ? txopLimit : SimTime(par("maxHeTbPpduDuration")));
-        auto boundaryFinalization = physicallayer::finalizeHeTriggerResponse(boundaryRequest);
-        if (!boundaryFinalization) {
-            EV_WARN << "HE UL skipping OFDMA optimization because the common timing boundary "
-                    << "cannot be finalized: " << boundaryFinalization.error << "\n";
-            return false;
-        }
-        capacityBoundary.channelBandwidth = channelBandwidth;
-        capacityBoundary.ulLength = boundaryFinalization.ulLength;
-        capacityBoundary.guardInterval = boundaryRequest.guardInterval;
-        capacityBoundary.ltfType = boundaryRequest.ltfType;
-        capacityBoundary.preFecPaddingFactor =
-                boundaryFinalization.parameters.common.preFecPaddingFactor;
-        capacityBoundary.ldpcExtraSymbolSegment =
-                boundaryFinalization.parameters.common.ldpcExtraSymbol;
-        capacityBoundary.peDisambiguity = boundaryFinalization.peDisambiguity;
-        capacityBoundary.numberOfHeLtfSymbols =
-                boundaryFinalization.parameters.common.numberOfHeLtfSymbols;
-        capacityBoundary.packetExtensionDurationUs =
-                boundaryFinalization.parameters.common.packetExtensionDurationUs;
-        ulSchedule = ulCoordinator->prepareSchedule(mac->getMib(), getLinkPhyContext(),
-                SimTime(par("linkEstimateMaxAge")), centerFrequency, channelBandwidth,
-                txopLimit, par("maxHeTbPpduDuration"), sensitivityDbm,
-                par("ulTargetRssiMargin"), staleOrUnknown, 0, 0,
-                [this] (const MacAddress& address) {
-                    Ieee80211HeOperatingMode mode;
-                    return isTwtSleeping(mac, address) ||
-                            (getPeerOperatingMode(address, mode) && mode.ulMuDisable);
-                }, &schedulerContext, &capacityBoundary,
-                useUlMuMimoPolicy);
-        ulSchedule.ulLength = capacityBoundary.ulLength;
-        ulSchedule.guardInterval = capacityBoundary.guardInterval;
-        ulSchedule.ltfType = capacityBoundary.ltfType;
-        ulSchedule.preFecPaddingFactor = capacityBoundary.preFecPaddingFactor;
-        ulSchedule.ldpcExtraSymbolSegment = capacityBoundary.ldpcExtraSymbolSegment;
-        ulSchedule.peDisambiguity = capacityBoundary.peDisambiguity;
-        ulSchedule.numberOfHeLtfSymbols = capacityBoundary.numberOfHeLtfSymbols;
-        ulSchedule.packetExtensionDurationUs = capacityBoundary.packetExtensionDurationUs;
-        schedulerPrepared = true;
-    }
-    if (!schedulerPrepared)
-        ulSchedule.packetExtensionDurationUs = phy.getPacketExtensionDurationUs();
-    // Select one complete Table 9-49 GI/HE-LTF pair. Full-bandwidth UL
-    // MU-MIMO may use the raw-0 1x/1.6 us pair; other medium-GI schedules use
-    // raw 1 (2x/1.6 us), and long GI uses raw 2 (4x/3.2 us).
-    switch (phy.getGuardInterval()) {
-        case physicallayer::HE_GI_0_8_US:
-        case physicallayer::HE_GI_1_6_US:
-            ulSchedule.guardInterval = physicallayer::HE_GI_1_6_US;
-            ulSchedule.ltfType = std::any_of(ulSchedule.allocations.begin(), ulSchedule.allocations.end(),
-                    [] (const auto& allocation) { return allocation.muMimo; }) ?
-                    physicallayer::HE_LTF_1X : physicallayer::HE_LTF_2X;
-            break;
-        case physicallayer::HE_GI_3_2_US:
-            ulSchedule.guardInterval = physicallayer::HE_GI_3_2_US;
-            ulSchedule.ltfType = physicallayer::HE_LTF_4X;
-            break;
-    }
-    // Table 27-32 permits only 4x HE-LTF with 3.2 us GI for feedback NDP.
-    if (triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
-        ulSchedule.guardInterval = physicallayer::HE_GI_3_2_US;
-        ulSchedule.ltfType = physicallayer::HE_LTF_4X;
-    }
-    // UL FEC Coding Type is a per-User Info field. Scheduled users retain the
-    // scheduler's capability-aware choice; UORA uses the universally legal
-    // 26-tone/MCS-0 BCC combination because the responder is not yet known.
-    for (auto& allocation : ulSchedule.allocations)
-        if (allocation.randomAccess)
-            allocation.coding = physicallayer::HE_CODING_BCC;
-    if (triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
-        ulSchedule.coding = physicallayer::HE_CODING_BCC;
-        ulSchedule.packetExtensionDurationUs = 0;
-    }
-    ulSchedule.apTxPowerDbm = std::clamp((int)std::lround(apTxPowerDbm20Mhz), -20, 40);
-    if (ulSchedule.allocations.empty() && triggerType != IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
-        EV_WARN << "HE UL skipping Trigger because no usable RU allocations remain"
-                << " after scheduling and puncturing checks\n";
-        return false;
-    }
-
-    physicallayer::Ieee80211HeTriggerResponseFinalizationResult phyFinalization;
-    auto finalization = finalizeUlScheduleWithSnapshot(ulSchedule, centerFrequency,
-            channelBandwidth, triggerType, &phyFinalization);
-    if (!finalization) {
-        EV_WARN << "HE UL skipping Trigger because schedule timing cannot be finalized: "
-                << finalization.error << "\n";
-        return false;
-    }
-    ulSchedule = std::move(finalization.schedule);
-
-    HeUlMuPlan::ValidationContext validationContext;
-    validationContext.centerFrequency = centerFrequency;
-    validationContext.requireSchedulerCandidate = schedulerPrepared;
     for (const auto& station : mac->getMib()->getPeerAssociationSnapshots()) {
-        if (!station.hasMemberStatus() || station.getMemberStatus() != Ieee80211Mib::ASSOCIATED)
+        if (!station.hasMemberStatus() ||
+                station.getMemberStatus() != Ieee80211Mib::ASSOCIATED)
             continue;
-        auto capabilities = mac->getMib()->getNegotiatedHeCapabilities(station.getAddress());
-        HeUlMuPlan::StationContract contract;
-        contract.station = station.getAddress();
-        contract.associationId = mac->getMib()->getAssociationId(station.getAddress());
-        if (capabilities)
-            contract.capabilities = *capabilities;
-        contract.schedulerCandidate = !schedulerPrepared ||
-                std::any_of(schedulerContext.candidates.begin(), schedulerContext.candidates.end(),
-                        [&] (const auto& candidate) { return candidate.staAddress == station.getAddress(); });
+        HeUlPeerPreparationSnapshot peer;
+        peer.stationAddress = station.getAddress();
+        peer.associationId = mac->getMib()->getAssociationId(peer.stationAddress);
+        peer.twtEligible = !isTwtSleeping(mac, peer.stationAddress);
         Ieee80211HeOperatingMode operatingMode;
-        contract.ulMuDisabled = getPeerOperatingMode(station.getAddress(), operatingMode) && operatingMode.ulMuDisable;
-        validationContext.stations.push_back(contract);
+        peer.ulMuDisabled = getPeerOperatingMode(peer.stationAddress, operatingMode) &&
+                operatingMode.ulMuDisable;
+        peer.negotiatedCapabilities =
+                mac->getMib()->getNegotiatedHeCapabilities(peer.stationAddress);
+        const auto link = getLinkPhyContext().getPeerSnapshot(peer.stationAddress,
+                SimTime(par("linkEstimateMaxAge")));
+        peer.pathLossDb = link.getPathLossDb();
+        peer.hasFreshPathLoss = link.getHasFreshPathLoss();
+        auto report = ulCoordinator->getBufferStatusSnapshot(
+                peer.associationId, peer.stationAddress);
+        if (report) {
+            HeUlBufferStatusSnapshot copied;
+            copied.stationAddress = report->stationAddress;
+            copied.backlogBytes = report->backlogBytes;
+            copied.backlogEstimates = report->backlogEstimates;
+            copied.tid = report->tid;
+            copied.updateTime = report->updateTime;
+            copied.lastService = report->lastService;
+            peer.bufferStatus = copied;
+        }
+        snapshot.peers.push_back(std::move(peer));
     }
-    HeUlMuPlanDiagnostic diagnostic;
-    auto ulPlan = HeUlMuPlan::create(validationContext, ulSchedule, triggerType,
-            phyFinalization, diagnostic);
-    if (!ulPlan) {
-        EV_WARN << "HE UL plan rejected: code=" << (int)diagnostic.code
-                << ", allocation=" << diagnostic.allocationIndex
-                << ", station=" << diagnostic.station
-                << ", detail=" << diagnostic.detail
-                << "; no Trigger transmitted and coordinator state preserved\n";
-        return false;
-    }
+    return snapshot;
+}
 
-    EV_INFO << "HE UL starting"
-             << (triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ? " BSRP" :
-                     triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER ? " NFRP" : " Basic")
-             << " exchange with " << ulPlan->getSchedule().allocations.size()
-             << " RU allocations for " << ulPlan->getSchedule().commonDuration << "\n";
-    // IEEE Std 802.11-2024, 9.2.5.2 permits single protection for Basic,
-    // BSRP, and NFRP Trigger exchanges. NONE selects INET's single-protection
-    // Duration/ID policy without adding an initial RTS/CTS exchange.
-    auto txop = edcaf->getTxopProcedure();
+bool HeHcfRuntime::tryStartUlMuFrameSequence(AccessCategory accessCategory)
+{
+    if (!mac->isApInHeFamily())
+        return false;
+    return ulTriggerService.tryStart(accessCategory,
+            captureHeUlPreparationSnapshot(accessCategory));
+}
+
+void HeHcfRuntime::configureHeUlMuProtection(AccessCategory accessCategory)
+{
+    auto txop = edca->getEdcaf(accessCategory)->getTxopProcedure();
     if (!txop->isProtectionConfigured())
         txop->configureProtection(TxopProcedure::InitialProtection::NONE);
-    frameSequenceHandler->startFrameSequence(
-            new HeUlMuTxOpFs(ulCoordinator, this, *ulPlan, modeSet, mac->getAddress()),
-            buildContext(ac), this);
-    pendingUlTrigger = IIeee80211HeUlTriggerPolicy::NO_TRIGGER;
-    emit(IFrameSequenceHandler::frameSequenceStartedSignal, frameSequenceHandler->getContext());
-    return true;
 }
 
-void HeHcf::processTriggeredUlFrame(Packet *packet, const Ptr<const Ieee80211DataHeader>& header, uint16_t aid)
+void HeHcfRuntime::startHeUlMuExchange(AccessCategory accessCategory,
+        const HeUlMuPlan& plan, IHeUlMuExchangeCallback *callback)
 {
-    emit(packetReceivedFromPeerSignal, packet);
+    startExchangeFrameSequence(
+            new HeUlMuTxOpFs(callback, plan, modeSet, mac->getAddress()),
+            buildContext(accessCategory));
+    heUlMuExchangeActive = true;
+}
+
+void HeHcfRuntime::processTriggeredUlFrame(Packet *packet, const Ptr<const Ieee80211DataHeader>& header, uint16_t aid)
+{
+    HcfObservationSink::packetReceivedFromPeer(hcf, packet);
     if (header->getBufferStatusPresent())
     {
         Ieee80211HeQueueSizeEstimate estimate;
@@ -854,7 +360,7 @@ void HeHcf::processTriggeredUlFrame(Packet *packet, const Ptr<const Ieee80211Dat
     if (recipientBlockAckAgreementHandler != nullptr) {
         auto agreement = recipientBlockAckAgreementHandler->getAgreement(header->getTid(), header->getTransmitterAddress());
         if (agreement != nullptr)
-            recipientBlockAckAgreementHandler->qosFrameReceived(header, this);
+            recipientBlockAckAgreementHandler->qosFrameReceived(header, hcf);
     }
     // The Trigger exchange acknowledges all collected responses with one Multi-STA
     // Block Ack. Deliver the data through the normal QoS receive service without
@@ -898,103 +404,7 @@ Ptr<Ieee80211CompressedBlockAck> buildHeMuBarCompressedBlockAck(
     return blockAck;
 }
 
-void HeHcf::sendTriggeredBlockAckResponse(Packet *packet, const Ptr<const Ieee80211TriggerFrame>& trigger,
-        uint32_t triggerId)
-{
-    // 9.3.1.22.4 defines MU-BAR Trigger User Info as BAR Control plus BAR
-    // Information.  26.4.5 requires a Compressed BlockAck response when the
-    // addressed User Info field contains a Compressed BlockAckReq variant.
-    auto myAid = mac->getMib()->getLocalAssociationId();
-    const Ieee80211HeTriggerUserInfo *selected = nullptr;
-    for (unsigned int i = 0; i < trigger->getUsersArraySize(); ++i)
-        if (trigger->getUsers(i).aid == myAid) {
-            selected = &trigger->getUsers(i);
-            break;
-        }
-    auto agreement = selected == nullptr || recipientBlockAckAgreementHandler == nullptr ?
-            nullptr : recipientBlockAckAgreementHandler->getAgreement(
-                    selected->muBarTidInfo, trigger->getTransmitterAddress());
-    if (selected == nullptr)
-        EV_WARN << "Ignoring MU-BAR Trigger because it has no User Info for local AID " << myAid << endl;
-    else if (recipientBlockAckAgreementHandler == nullptr)
-        EV_WARN << "Ignoring MU-BAR Trigger for AID " << myAid << " because no recipient Block Ack handler is installed" << endl;
-    else if (agreement == nullptr)
-        EV_WARN << "Ignoring MU-BAR Trigger for AID " << myAid << " because no recipient Block Ack agreement exists for TID "
-                << (int)selected->muBarTidInfo << " and originator " << trigger->getTransmitterAddress() << endl;
-    if (agreement != nullptr) {
-        if (!selected->muBarCompressedBitmap || selected->muBarMultiTid)
-            throw cRuntimeError("Unsupported MU-BAR BlockAckReq variant");
-        auto blockAck = buildHeMuBarCompressedBlockAck(*selected, agreement,
-                trigger->getTransmitterAddress(), mac->getAddress());
-        auto response = new Packet("HE-TB-BlockAck", blockAck);
-        response->insertAtBack(makeShared<Ieee80211MacTrailer>());
-        const auto phy = getLinkPhyContext().getSnapshot();
-        auto protection = attachHeTbTxVectorFromTrigger(response, *trigger, *selected, myAid,
-                phy.getChannelCenterFrequency(), phy.getMaximumTransmitPower(),
-                B((response->getDataLength().get<b>() + 7) / 8),
-                mac->getMib()->heOperation.bssColor, triggerId, false, 0, 0, 0,
-                getIeee80211HeSolicitingTxopDuration(packet),
-                modeSet->getSifsTime());
-        auto writableBlockAck = response->removeAtFront<Ieee80211CompressedBlockAck>();
-        writableBlockAck->setDurationField(protection.macDurationField);
-        response->insertAtFront(writableBlockAck);
-        auto trailer = response->removeAtBack<Ieee80211MacTrailer>(B(4));
-        auto fcsMode = mac->getFcsMode();
-        trailer->setFcsMode(fcsMode);
-        if (fcsMode == FCS_COMPUTED)
-            trailer->setFcs(computeEthernetFcs(response, fcsMode));
-        response->insertAtBack(trailer);
-        tx->transmitFrame(response,
-                response->peekAtFront<Ieee80211CompressedBlockAck>(),
-                modeSet->getSifsTime(), this);
-        delete response;
-    }
-    delete packet;
-    return;
-}
-
-void HeHcf::retryPendingTriggeredUlExchanges()
-{
-    for (auto& entry : triggeredUlExchanges) {
-        if (entry.second.randomAccess)
-            ulCoordinator->reportRandomAccessResult(false);
-        if (entry.second.recoveryKind ==
-                TriggeredUlExchange::RecoveryKind::COMPRESSED_BLOCK_ACK_REQUEST)
-            processFailedTriggeredUlBlockAckReq(entry.second);
-        for (auto pkt : entry.second.packets) {
-            auto header = pkt->peekAtFront<Ieee80211DataHeader>();
-            edca->getEdcaf(edca->mapTidToAc(header->getTid()))->
-                    getRecoveryProcedure()->dataFrameTransmissionFailed(pkt, header);
-            auto writableHeader = pkt->removeAtFront<Ieee80211DataHeader>();
-            writableHeader->setRetry(true);
-            pkt->insertAtFront(writableHeader);
-            entry.second.sourceQueue->pushPacket(pkt, nullptr);
-        }
-    }
-    triggeredUlExchanges.clear();
-    cancelEvent(triggeredUlResponseTimer);
-}
-
-void HeHcf::processFailedTriggeredUlBlockAckReq(TriggeredUlExchange& exchange)
-{
-    ASSERT(exchange.recoveryKind ==
-            TriggeredUlExchange::RecoveryKind::COMPRESSED_BLOCK_ACK_REQUEST);
-    ASSERT(exchange.blockAckReq != nullptr);
-    auto edcaf = edca->getEdcaf(exchange.recoveryAccessCategory);
-    processFailedBlockAckReq(edcaf, exchange.blockAckReq, false);
-}
-
-void HeHcf::processReceivedTriggeredUlBlockAck(
-        TriggeredUlExchange& exchange,
-        const Ptr<const Ieee80211CompressedBlockAck>& blockAck)
-{
-    ASSERT(exchange.recoveryKind ==
-            TriggeredUlExchange::RecoveryKind::COMPRESSED_BLOCK_ACK_REQUEST);
-    auto edcaf = edca->getEdcaf(exchange.recoveryAccessCategory);
-    processReceivedBlockAck(edcaf, blockAck, exchange.recoveryAccessCategory);
-}
-
-const Ptr<Ieee80211CompressedBlockAck> HeHcf::processTriggeredUlBlockAckReq(
+const Ptr<Ieee80211CompressedBlockAck> HeHcfRuntime::processTriggeredUlBlockAckReq(
         Packet *packet,
         const Ptr<const Ieee80211CompressedBlockAckReq>& blockAckReq,
         uint16_t aid)
@@ -1024,969 +434,354 @@ const Ptr<Ieee80211CompressedBlockAck> HeHcf::processTriggeredUlBlockAckReq(
     return compressedBlockAck;
 }
 
-void HeHcf::scheduleTriggeredUlResponseTimeout()
+void HeHcfRuntime::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee80211TriggerFrame>& trigger)
 {
-    cancelEvent(triggeredUlResponseTimer);
-    if (triggeredUlExchanges.empty())
-        return;
-    auto deadline = std::min_element(triggeredUlExchanges.begin(), triggeredUlExchanges.end(),
-            [] (const auto& left, const auto& right) {
-                return left.second.expectedResponseTime < right.second.expectedResponseTime;
-            })->second.expectedResponseTime;
-    scheduleAt(std::max(simTime(), deadline), triggeredUlResponseTimer);
-}
-
-void HeHcf::handleTriggeredUlResponseTimeout()
-{
-    for (auto it = triggeredUlExchanges.begin(); it != triggeredUlExchanges.end(); ) {
-        if (it->second.expectedResponseTime > simTime()) {
-            ++it;
-            continue;
-        }
-        auto& exchange = it->second;
-        EV_WARN << "HE-TB response timeout: trigger=" << it->first
-                << ", packets=" << exchange.packets.size() << "\n";
-        if (exchange.randomAccess)
-            ulCoordinator->reportRandomAccessResult(false);
-        if (exchange.recoveryKind ==
-                TriggeredUlExchange::RecoveryKind::COMPRESSED_BLOCK_ACK_REQUEST)
-            processFailedTriggeredUlBlockAckReq(exchange);
-        for (auto packet : exchange.packets) {
-            auto header = packet->peekAtFront<Ieee80211DataHeader>();
-            edca->getEdcaf(edca->mapTidToAc(header->getTid()))->
-                    getRecoveryProcedure()->dataFrameTransmissionFailed(packet, header);
-            auto writableHeader = packet->removeAtFront<Ieee80211DataHeader>();
-            writableHeader->setRetry(true);
-            packet->insertAtFront(writableHeader);
-            exchange.sourceQueue->pushPacket(packet, nullptr);
-        }
-        it = triggeredUlExchanges.erase(it);
-    }
-    scheduleTriggeredUlResponseTimeout();
-}
-
-Packet *HeHcf::buildHeTbAmpdu(const std::vector<Packet *>& mpdus)
-{
-    ASSERT(!mpdus.empty());
-    auto ampdu = new Packet("HE-TB-A-MPDU");
-    // 9.7.1 A-MPDU subframes are carried behind MPDU delimiters and padded
-    // to 4-octet boundaries. 26.5.2.4 applies this to both QoS Data and QoS
-    // Null MPDUs carried in HE TB responses, including a single subframe.
-    for (size_t i = 0; i < mpdus.size(); ++i) {
-        auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
-        delimiter->setLength(mpdus[i]->getByteLength());
-        delimiter->setEof(i + 1 == mpdus.size());
-        ampdu->insertAtBack(delimiter);
-        ampdu->insertAtBack(mpdus[i]->peekData());
-        int padding = (4 - (B(4) + B(mpdus[i]->getByteLength())).get<B>() % 4) % 4;
-        if (i + 1 != mpdus.size() && padding != 0)
-            ampdu->insertAtBack(makeShared<ByteCountChunk>(B(padding)));
-    }
-    return ampdu;
-}
-
-Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IPacketQueue *sourceQueue,
-        AccessCategory selectedAc, uint8_t selectedTid, uint32_t queueBytes, int availableSlots,
-        const Ieee80211HeTriggerUserInfo *selected, const Ptr<const Ieee80211TriggerFrame>& trigger,
-        uint32_t triggerId, W transmitPower,
-        const std::optional<physicallayer::Ieee80211HeTxopDuration>& solicitingTxopDuration,
-        TriggeredUlExchange& exchange, Ptr<const Ieee80211MacHeader>& responseHeader,
-        bool& committed)
-{
-    committed = false;
-    responseHeader = nullptr;
-    if (sourceQueue == nullptr || selected == nullptr || trigger == nullptr)
-        throw cRuntimeError("Cannot prepare an HE-TB response without queue and Trigger context");
     const auto phy = getLinkPhyContext().getSnapshot();
-    auto preparedSequenceNumberState = originatorDataService->cloneSequenceNumberState();
-    std::vector<Packet *> originalPackets;
-    std::vector<std::unique_ptr<Packet>> preparedPacketOwners;
-    std::unique_ptr<Packet> nullMpdu;
-    std::unique_ptr<Packet> blockAckReqMpdu;
-    Ptr<Ieee80211CompressedBlockAckReq> preparedBlockAckReq;
-    AccessCategory blockAckReqAc = AC_BE;
-    std::unique_ptr<Packet> responsePacket;
-    const bool hadPendingPayload = sourcePacket != nullptr;
-    if (sourcePacket != nullptr) {
-        // 26.5.2.4 requires a QoS Null response when the allocation cannot
-        // contain pending data. Check the first MPDU too; the aggregation loop
-        // below performs the same check for every additional MPDU.
-        auto sourceHeader = sourcePacket->peekAtFront<Ieee80211DataHeader>();
-        B psduLength = B(sourcePacket->getByteLength() +
-                IIeee80211HeUlScheduler::getHeTbQueuedPacketOverheadBytes(
-                        sourceHeader->getBufferStatusPresent()));
-        auto prospective = createHeTbTxVector(*trigger, *selected,
-                phy.getChannelCenterFrequency(),
-                mac->getMib()->getLocalAssociationId(), psduLength);
-        if (!prospective)
-            sourcePacket = nullptr;
+    HeTriggeredUlExchangeService::TriggerProcessingSnapshot snapshot;
+    snapshot.packet = packet;
+    snapshot.trigger = trigger;
+    snapshot.reception.bssid = mac->getMib()->getBssid();
+    snapshot.reception.associationId = mac->getMib()->getLocalAssociationId();
+    snapshot.reception.associationEpoch = getHePeerStateService().getPeerSnapshot(
+            snapshot.reception.bssid).getAssociationEpoch();
+    snapshot.reception.ulEnabled = ulCoordinator->isEnabled();
+    snapshot.reception.accessPoint = mac->isApInHeFamily();
+    snapshot.reception.twtSleeping = isTwtSleeping(mac, snapshot.reception.bssid);
+    snapshot.reception.ndpFeedbackEnabled =
+            mac->getMib()->localHeCapabilities.ndpFeedbackReport;
+    snapshot.reception.centerFrequency = phy.getChannelCenterFrequency();
+    snapshot.reception.channelBandwidth = phy.getChannelBandwidth();
+    snapshot.solicitingTxopDuration = getIeee80211HeSolicitingTxopDuration(packet);
+    if (auto signalPower = packet->findTag<SignalPowerInd>()) {
+        auto modeInd = packet->findTag<physicallayer::Ieee80211ModeInd>();
+        if (modeInd != nullptr && modeInd->getMode() != nullptr)
+            snapshot.triggerPathLossDb = computeIeee80211HeTriggerPathLossDb(
+                    trigger->getApTxPowerDbm(), signalPower->getPower(),
+                    modeInd->getMode()->getDataMode()->getBandwidth());
     }
-    // IEEE Std 802.11-2024, 26.5.2.4 and 26.4.1: when the selected
-    // single-TID BA window is full, a Basic Trigger with nonzero TAL may carry
-    // a BAR S-MPDU for any AC whose TID has an active agreement. The agreement
-    // SSN is used unchanged; candidates outside its 64-position compressed
-    // bitmap are not skipped.
-    if (sourcePacket == nullptr && availableSlots == 0 &&
-            trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER &&
-            selected->tidAggregationLimit > 0 &&
-            originatorBlockAckProcedure != nullptr) {
-        const auto receiverAddress = mac->getMib()->getBssid();
-        for (int ac = AC_VO; ac >= AC_BK && preparedBlockAckReq == nullptr; --ac) {
-            auto candidateEdcaf = edca->getEdcaf(static_cast<AccessCategory>(ac));
-            auto outstandingFrames =
-                    candidateEdcaf->getInProgressFrames()->getOutstandingFrames();
-            for (auto candidate : outstandingFrames) {
-                auto candidateHeader = dynamicPtrCast<const Ieee80211DataHeader>(
-                        candidate->peekAtFront<Ieee80211MacHeader>());
-                if (candidateHeader == nullptr ||
-                        candidateHeader->getType() != ST_DATA_WITH_QOS ||
-                        candidateHeader->getReceiverAddress() != receiverAddress ||
-                        candidateHeader->getFragmentNumber() != 0)
-                    continue;
+    snapshot.negotiatedCapabilities =
+            mac->getMib()->getNegotiatedHeCapabilities(snapshot.reception.bssid);
+    snapshot.localAddress = mac->getAddress();
+    snapshot.maximumTransmitPower = phy.getMaximumTransmitPower();
+    snapshot.bssColor = mac->getMib()->heOperation.bssColor;
+    snapshot.fcsMode = mac->getFcsMode();
+    snapshot.ulMuDisabled = par("operatingModeUlMuDisable").boolValue();
+    snapshot.currentTime = simTime();
+    snapshot.sifsTime = modeSet->getSifsTime();
+    snapshot.slotTime = modeSet->getSlotTime();
+    snapshot.maximumBlockAckTxTime =
+            modeSet->getSlowestMandatoryMode()->getDuration(
+                    B(18 + 12 * trigger->getUsersArraySize() + 4));
+    snapshot.responseSelection.triggerType =
+            static_cast<IIeee80211HeUlTriggerPolicy::TriggerType>(
+                    trigger->getTriggerType());
+
+    for (int ac = AC_BK; ac <= AC_VO; ++ac) {
+        auto accessCategory = static_cast<AccessCategory>(ac);
+        auto edcaf = edca->getEdcaf(accessCategory);
+        auto queue = edcaf->getPendingQueue();
+        HeTriggeredUlExchangeService::AccessQueueSnapshot queueSnapshot;
+        queueSnapshot.accessCategory = accessCategory;
+        queueSnapshot.queueToken = getHeQueueService().getQueueToken(queue,
+                snapshot.reception.bssid, snapshot.reception.associationEpoch,
+                accessCategory);
+        for (int i = 0; i < queue->getNumPackets(); ++i)
+            queueSnapshot.packets.push_back(queue->getPacket(i));
+        auto frames = edcaf->getInProgressFrames();
+        for (int i = 0; i < frames->getLength() &&
+                queueSnapshot.inProgressTid < 0; ++i) {
+            auto header = dynamicPtrCast<const Ieee80211DataHeader>(
+                    frames->getFrames(i)->peekAtFront());
+            if (header != nullptr && header->getType() == ST_DATA_WITH_QOS &&
+                    header->getReceiverAddress() == snapshot.reception.bssid)
+                queueSnapshot.inProgressTid = header->getTid();
+        }
+        snapshot.responseSelection.queues.push_back(std::move(queueSnapshot));
+        addBufferedTrafficServiceBytes(snapshot.totalBufferedBytes,
+                getBufferedTrafficServiceBytes(edcaf, snapshot.reception.bssid));
+        for (int tid = 0; tid != 8; ++tid) {
+            HeTriggeredUlExchangeService::TidTrafficSnapshot traffic;
+            traffic.accessCategory = accessCategory;
+            traffic.tid = tid;
+            traffic.bufferedBytes = getBufferedTrafficServiceBytes(
+                    edcaf, snapshot.reception.bssid, tid);
+            auto agreement = originatorBlockAckAgreementHandler == nullptr ?
+                    nullptr : originatorBlockAckAgreementHandler->getAgreement(
+                            snapshot.reception.bssid, tid);
+            traffic.hasBlockAckAgreement = agreement != nullptr;
+            if (agreement != nullptr) {
+                auto agreementSnapshot = agreement->getSnapshot();
+                int occupiedSlots = edcaf->getAckHandler()->
+                        getNumOccupiedBlockAckSequencePositions(
+                                snapshot.reception.bssid, tid);
+                traffic.availableBlockAckSlots = std::max(0,
+                        agreementSnapshot.bufferSize - occupiedSlots);
+            }
+            snapshot.traffic.push_back(traffic);
+        }
+    }
+    snapshot.blockAckCandidates = captureTriggeredUlBlockAckCandidates();
+    getHeTriggeredUlExchangeService().processTrigger(std::move(snapshot));
+}
+void HeHcfRuntime::processReceivedMultiStaBlockAck(Packet *packet, const Ptr<const Ieee80211MultiStaBlockAck>& multiStaBlockAck)
+{
+    getHeTriggeredUlExchangeService().processMultiStaBlockAck(packet,
+            multiStaBlockAck);
+}
+
+simtime_t HeHcfRuntime::getTriggeredUlCurrentTime() const
+{
+    return simTime();
+}
+
+void HeHcfRuntime::scheduleTriggeredUlTimer(simtime_t time, cMessage *timer)
+{
+    omnetpp::cMethodCallContextSwitcher context(hcf);
+    context.methodCallSilent();
+    scheduleAt(time, timer);
+}
+
+void HeHcfRuntime::cancelTriggeredUlTimer(cMessage *timer)
+{
+    omnetpp::cMethodCallContextSwitcher context(hcf);
+    context.methodCallSilent();
+    cancelEvent(timer);
+}
+
+void HeHcfRuntime::cancelAndDeleteTriggeredUlTimer(cMessage *timer)
+{
+    omnetpp::cMethodCallContextSwitcher context(hcf);
+    context.methodCallSilent();
+    cancelAndDelete(timer);
+}
+
+MacAddress HeHcfRuntime::getTriggeredUlBssid() const
+{
+    return mac->getMib()->getBssid();
+}
+
+MacAddress HeHcfRuntime::getTriggeredUlLocalAddress() const
+{
+    return mac->getAddress();
+}
+
+uint16_t HeHcfRuntime::getTriggeredUlAssociationId() const
+{
+    return mac->getMib()->getLocalAssociationId();
+}
+
+uint64_t HeHcfRuntime::getTriggeredUlAssociationEpoch() const
+{
+    return getHePeerStateService().getPeerSnapshot(
+            mac->getMib()->getBssid()).getAssociationEpoch();
+}
+
+std::unique_ptr<ISequenceNumberAssignment>
+HeHcfRuntime::cloneTriggeredUlSequenceState() const
+{
+    return originatorDataService->cloneSequenceNumberState();
+}
+
+void HeHcfRuntime::commitTriggeredUlSequenceState(
+        const ISequenceNumberAssignment& state)
+{
+    originatorDataService->commitSequenceNumberState(state);
+}
+
+Ptr<Ieee80211CompressedBlockAckReq>
+HeHcfRuntime::materializeTriggeredUlBlockAckRequest(
+        const HeTriggeredUlExchangeService::BlockAckRequestSelection& selection)
+{
+    if (originatorBlockAckProcedure == nullptr)
+        return nullptr;
+    return dynamicPtrCast<Ieee80211CompressedBlockAckReq>(
+            originatorBlockAckProcedure->buildCompressedBlockAckReqFrame(
+                    selection.receiverAddress, selection.tid,
+                    selection.startingSequenceNumber));
+}
+
+std::vector<HeTriggeredUlExchangeService::BlockAckCandidateSnapshot>
+HeHcfRuntime::captureTriggeredUlBlockAckCandidates() const
+{
+    std::vector<HeTriggeredUlExchangeService::BlockAckCandidateSnapshot> result;
+    const auto receiverAddress = mac->getMib()->getBssid();
+    for (int ac = AC_BK; ac <= AC_VO; ++ac) {
+        const auto accessCategory = static_cast<AccessCategory>(ac);
+        auto outstandingFrames = edca->getEdcaf(accessCategory)->
+                getInProgressFrames()->getOutstandingFrames();
+        for (auto packet : outstandingFrames) {
+            HeTriggeredUlExchangeService::BlockAckCandidateSnapshot candidate;
+            candidate.accessCategory = accessCategory;
+            auto header = dynamicPtrCast<const Ieee80211DataHeader>(
+                    packet->peekAtFront<Ieee80211MacHeader>());
+            candidate.hasDataHeader = header != nullptr;
+            if (header != nullptr) {
+                candidate.qosData = header->getType() == ST_DATA_WITH_QOS;
+                candidate.receiverAddress = header->getReceiverAddress();
+                candidate.tid = header->getTid();
+                candidate.fragmentNumber = header->getFragmentNumber();
+                candidate.sequenceNumber = header->getSequenceNumber();
                 auto agreement = originatorBlockAckAgreementHandler == nullptr ?
                         nullptr : originatorBlockAckAgreementHandler->getAgreement(
-                                receiverAddress, candidateHeader->getTid());
-                auto agreementSnapshot = agreement == nullptr ? OriginatorBlockAckAgreementSnapshot{} : agreement->getSnapshot();
-                if (agreement == nullptr || !agreementSnapshot.isAddbaResponseReceived)
-                    continue;
-                const auto startingSequenceNumber =
-                        agreementSnapshot.startingSequenceNumber;
-                bool completeWindow = true;
-                for (auto outstanding : outstandingFrames) {
-                    auto outstandingHeader =
-                            dynamicPtrCast<const Ieee80211DataHeader>(
-                                    outstanding->peekAtFront<Ieee80211MacHeader>());
-                    if (outstandingHeader == nullptr ||
-                            outstandingHeader->getTid() != candidateHeader->getTid())
-                        continue;
-                    int offset = (outstandingHeader->getSequenceNumber().get() -
-                            startingSequenceNumber.get() + 4096) % 4096;
-                    if (outstandingHeader->getReceiverAddress() != receiverAddress ||
-                            outstandingHeader->getFragmentNumber() != 0 ||
-                            offset >= 64) {
-                        completeWindow = false;
-                        break;
-                    }
+                                receiverAddress, header->getTid());
+                candidate.hasAgreement = agreement != nullptr;
+                if (agreement != nullptr) {
+                    auto agreementSnapshot = agreement->getSnapshot();
+                    candidate.addbaResponseReceived =
+                            agreementSnapshot.isAddbaResponseReceived;
+                    candidate.agreementStartingSequenceNumber =
+                            agreementSnapshot.startingSequenceNumber;
                 }
-                if (!completeWindow)
-                    continue;
-                preparedBlockAckReq =
-                        dynamicPtrCast<Ieee80211CompressedBlockAckReq>(
-                                originatorBlockAckProcedure->
-                                        buildCompressedBlockAckReqFrame(
-                                                receiverAddress,
-                                                candidateHeader->getTid(),
-                                                startingSequenceNumber));
-                ASSERT(preparedBlockAckReq != nullptr);
-                preparedBlockAckReq->setTransmitterAddress(mac->getAddress());
-                preparedBlockAckReq->setBarAckPolicy(false);
-                preparedBlockAckReq->setReserved(0);
-                preparedBlockAckReq->setFragmentNumber(0);
-                preparedBlockAckReq->setDurationField(SIMTIME_ZERO);
-                blockAckReqMpdu = std::make_unique<Packet>(
-                        "HE-TB-Compressed-BAR", preparedBlockAckReq);
-                blockAckReqMpdu->insertAtBack(
-                        makeShared<Ieee80211MacTrailer>());
-                blockAckReqAc = static_cast<AccessCategory>(ac);
-                break;
             }
+            result.push_back(candidate);
         }
     }
-    if (blockAckReqMpdu != nullptr) {
-        std::unique_ptr<Packet> prospectiveAmpdu(
-                buildHeTbAmpdu({blockAckReqMpdu.get()}));
-        auto prospective = createHeTbTxVector(*trigger, *selected,
-                phy.getChannelCenterFrequency(),
-                mac->getMib()->getLocalAssociationId(),
-                B((prospectiveAmpdu->getDataLength().get<b>() + 7) / 8));
-        if (!prospective) {
-            blockAckReqMpdu.reset();
-            preparedBlockAckReq = nullptr;
-        }
-    }
-    if (sourcePacket != nullptr) {
-        auto originalSourcePacket = sourcePacket;
-        preparedPacketOwners.emplace_back(sourcePacket->dup());
-        sourcePacket = preparedPacketOwners.back().get();
-        originalPackets.push_back(originalSourcePacket);
-        // IEEE Std 802.11-2024 Table 9-13, 10.3.2.13.3, and 26.4.4.5:
-        // Ack Policy wire bits 00 are context-dependent in an A-MPDU. They
-        // denote Implicit BAR on preceding untagged MPDUs and Normal Ack on
-        // the tagged final MPDU that solicits the immediate Multi-STA Block Ack.
-        auto writableHeader = sourcePacket->removeAtFront<Ieee80211DataHeader>();
-        if (!writableHeader->getRetry())
-            preparedSequenceNumberState->assignSequenceNumber(writableHeader);
-        if (!writableHeader->getBufferStatusPresent())
-            writableHeader->setChunkLength(writableHeader->getChunkLength() + B(4));
-        writableHeader->setOrder(true);
-        writableHeader->setAckPolicy(NORMAL_ACK);
-        writableHeader->setBufferStatusPresent(true);
-        writableHeader->setBufferStatusTid(selectedTid);
-        writableHeader->setBufferStatusAc(selectedAc);
-        writableHeader->setBufferStatusQueueSize(queueBytes);
-        sourcePacket->insertAtFront(writableHeader);
-        responsePacket.reset(sourcePacket->dup());
-    }
-    else if (blockAckReqMpdu == nullptr) {
-        // 26.5.2.4 allows a triggered STA with no data fitting the allocation
-        // to carry a QoS Null-style response; we still include BSR so the AP's
-        // scheduler state is refreshed by the HE TB exchange.
-        auto nullHeader = makeShared<Ieee80211DataHeader>();
-        nullHeader->setType(ST_QOS_NULL);
-        nullHeader->setReceiverAddress(mac->getMib()->getBssid());
-        nullHeader->setTransmitterAddress(mac->getAddress());
-        nullHeader->setAddress3(mac->getMib()->getBssid());
-        nullHeader->setToDS(true);
-        nullHeader->setTid(selectedTid);
-        // IEEE Std 802.11-2024 Table 9-13, 10.3.2.13.3, and 26.4.4.5:
-        // this single, tagged final QoS Null MPDU uses wire bits 00 as Normal
-        // Ack to solicit the immediate Multi-STA Block Ack.
-        nullHeader->setAckPolicy(NORMAL_ACK);
-        nullHeader->setOrder(true);
-        nullHeader->setBufferStatusPresent(true);
-        nullHeader->setBufferStatusTid(selectedTid);
-        nullHeader->setBufferStatusAc(selectedAc);
-        nullHeader->setBufferStatusQueueSize(queueBytes);
-        nullHeader->setChunkLength(B(30));
-        preparedSequenceNumberState->assignSequenceNumber(nullHeader);
-        nullMpdu = std::make_unique<Packet>("HE-TB-QoS-Null", nullHeader);
-        nullMpdu->insertAtBack(makeShared<Ieee80211MacTrailer>());
-    }
-
-    if (sourcePacket != nullptr) {
-        exchange.packets.push_back(sourcePacket);
-        exchange.sequenceNumbers.push_back(sourcePacket->peekAtFront<Ieee80211DataHeader>()->getSequenceNumber().get());
-
-        // 26.6.3 permits multi-TID HE TB A-MPDUs only within the negotiated
-        // Trigger TID Aggregation Limit.  This model deliberately restricts
-        // Basic Trigger UL aggregation to one TID; retained packets are removed
-        // from the EDCA queue only after the HE TB PSDU is built and are retried
-        // individually from the returned Multi-STA BA bitmap.
-        int maximumMpduCount = std::min(64, availableSlots);
-        for (int i = 0; availableSlots > 0 && (int)exchange.packets.size() < maximumMpduCount &&
-                i < sourceQueue->getNumPackets(); ++i) {
-            auto candidate = sourceQueue->getPacket(i);
-            if (candidate == originalPackets.front())
-                continue;
-            auto candidateHeader = dynamicPtrCast<const Ieee80211DataHeader>(candidate->peekAtFront<Ieee80211MacHeader>());
-            if (candidateHeader == nullptr || candidateHeader->getType() != ST_DATA_WITH_QOS ||
-                    candidateHeader->getTid() != selectedTid ||
-                    candidateHeader->getReceiverAddress() != mac->getMib()->getBssid())
-                continue;
-            B psduLength(0);
-            for (auto packet : exchange.packets)
-                psduLength += B(4 + packet->getByteLength());
-            psduLength += B(4 + candidate->getByteLength());
-            auto prospective = createHeTbTxVector(*trigger, *selected,
-                    phy.getChannelCenterFrequency(),
-                    mac->getMib()->getLocalAssociationId(), psduLength);
-            if (!prospective)
-                break;
-            auto originalCandidate = candidate;
-            preparedPacketOwners.emplace_back(candidate->dup());
-            candidate = preparedPacketOwners.back().get();
-            auto writableCandidateHeader = candidate->removeAtFront<Ieee80211DataHeader>();
-            if (!writableCandidateHeader->getRetry())
-                preparedSequenceNumberState->assignSequenceNumber(writableCandidateHeader);
-            writableCandidateHeader->setOrder(true);
-            writableCandidateHeader->setAckPolicy(NORMAL_ACK);
-            candidate->insertAtFront(writableCandidateHeader);
-            originalPackets.push_back(originalCandidate);
-            exchange.packets.push_back(candidate);
-            exchange.sequenceNumbers.push_back(writableCandidateHeader->getSequenceNumber().get());
-        }
-    }
-
-    auto finalizeMpdu = [&] (Packet *mpdu, simtime_t durationField) {
-        auto header = mpdu->removeAtFront<Ieee80211MacHeader>();
-        header->setDurationField(durationField);
-        mpdu->insertAtFront(header);
-        auto trailer = mpdu->removeAtBack<Ieee80211MacTrailer>(B(4));
-        auto fcsMode = mac->getFcsMode();
-        trailer->setFcsMode(fcsMode);
-        if (fcsMode == FCS_COMPUTED)
-            trailer->setFcs(computeEthernetFcs(mpdu, fcsMode));
-        mpdu->insertAtBack(trailer);
-    };
-    auto buildResponseAmpdu = [&] {
-        if (sourcePacket != nullptr)
-            responsePacket.reset(buildHeTbAmpdu(exchange.packets));
-        else if (blockAckReqMpdu != nullptr)
-            responsePacket.reset(buildHeTbAmpdu({blockAckReqMpdu.get()}));
-        else
-            responsePacket.reset(buildHeTbAmpdu({nullMpdu.get()}));
-    };
-    if (sourcePacket != nullptr)
-        for (auto mpdu : exchange.packets)
-            finalizeMpdu(mpdu, SIMTIME_ZERO);
-    else if (blockAckReqMpdu != nullptr)
-        finalizeMpdu(blockAckReqMpdu.get(), SIMTIME_ZERO);
-    else
-        finalizeMpdu(nullMpdu.get(), SIMTIME_ZERO);
-    buildResponseAmpdu();
-
-    // Complete and validate the Trigger-derived request while all selected
-    // queue packets and live sequence counters are still untouched.
-    auto txVector = createHeTbTxVector(*trigger, *selected,
-            phy.getChannelCenterFrequency(),
-            mac->getMib()->getLocalAssociationId(),
-            B((responsePacket->getDataLength().get<b>() + 7) / 8));
-    if (!txVector)
-        throw cRuntimeError("Prepared HE-TB response is invalid: %s (%s)",
-                txVector.getContext().fieldName.c_str(),
-                txVector.getContext().detail.c_str());
-    auto protection = deriveIeee80211HeTbResponseProtection(
-            solicitingTxopDuration, trigger->getDurationField(),
-            modeSet->getSifsTime(), txVector.getPpduLayout()->getDuration());
-    if (sourcePacket != nullptr)
-        for (auto mpdu : exchange.packets)
-            finalizeMpdu(mpdu, protection.macDurationField);
-    else if (blockAckReqMpdu != nullptr)
-        finalizeMpdu(blockAckReqMpdu.get(), protection.macDurationField);
-    else
-        finalizeMpdu(nullMpdu.get(), protection.macDurationField);
-    buildResponseAmpdu();
-    auto attachedProtection = attachHeTbTxVectorFromTrigger(
-            responsePacket.get(), *trigger, *selected,
-            mac->getMib()->getLocalAssociationId(),
-            phy.getChannelCenterFrequency(), transmitPower,
-            B((responsePacket->getDataLength().get<b>() + 7) / 8),
-            mac->getMib()->heOperation.bssColor, triggerId, false, 0, 0, 0,
-            solicitingTxopDuration, modeSet->getSifsTime());
-    if (attachedProtection.macDurationField != protection.macDurationField ||
-            !(attachedProtection.txopDuration == protection.txopDuration))
-        throw cRuntimeError("HE-TB response protection changed while rebuilding the unchanged-length PSDU");
-
-    if (!originalPackets.empty()) {
-        for (auto original : originalPackets) {
-            bool found = false;
-            for (int i = 0; i < sourceQueue->getNumPackets(); ++i)
-                found |= sourceQueue->getPacket(i) == original;
-            if (!found)
-                throw cRuntimeError("HE-TB selected packet changed queue membership before commit");
-        }
-        for (size_t i = 0; i < originalPackets.size(); ++i)
-            beforeTriggeredUlPacketCommit(i);
-    }
-
-    // Explicit commit boundary. QoS Null responses also consume a sequence
-    // number even though they retain no queued MPDU. Post-boundary failures
-    // are invariant violations and deliberately fail loudly instead of
-    // faking rollback after observer-visible state changes.
-    committed = true;
-    if (blockAckReqMpdu == nullptr)
-        originatorDataService->commitSequenceNumberState(*preparedSequenceNumberState);
-    else {
-        exchange.tid = preparedBlockAckReq->getTidInfo();
-        exchange.recoveryKind =
-                TriggeredUlExchange::RecoveryKind::COMPRESSED_BLOCK_ACK_REQUEST;
-        exchange.recoveryAccessCategory = blockAckReqAc;
-        exchange.blockAckReq = preparedBlockAckReq;
-        edca->getEdcaf(blockAckReqAc)->getAckHandler()->
-                processTransmittedBlockAckReq(preparedBlockAckReq);
-    }
-    if (!originalPackets.empty()) {
-        for (size_t i = 0; i < originalPackets.size(); ++i) {
-            auto original = originalPackets[i];
-            auto prepared = preparedPacketOwners[i].get();
-            sourceQueue->removePacket(original);
-            original->removeAll();
-            original->insertAtBack(prepared->peekAll());
-            original->setFrontOffset(prepared->getFrontOffset());
-            original->setBackOffset(prepared->getBackOffset());
-            original->clearTags();
-            original->copyTags(*prepared);
-            original->getRegionTags() = prepared->getRegionTags();
-            take(original);
-            exchange.packets[i] = original;
-        }
-    }
-    // The PSDU starts with an A-MPDU delimiter, so its first MAC header is
-    // deliberately retained from the inner MPDU instead of being re-peeked
-    // through the aggregate representation by the Tx handoff.
-    responseHeader = sourcePacket != nullptr ?
-            exchange.packets.front()->peekAtFront<Ieee80211MacHeader>() :
-            blockAckReqMpdu != nullptr ?
-                    blockAckReqMpdu->peekAtFront<Ieee80211MacHeader>() :
-            nullMpdu->peekAtFront<Ieee80211MacHeader>();
-    HeTbResponseEvent event;
-    event.triggerId = triggerId;
-    event.triggerType = static_cast<IIeee80211HeUlTriggerPolicy::TriggerType>(
-            trigger->getTriggerType());
-    event.reason = sourcePacket != nullptr ? HeTbResponseEvent::DATA_SELECTED :
-            blockAckReqMpdu != nullptr ? HeTbResponseEvent::BLOCK_ACK_REQUESTED :
-            trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ?
-                    HeTbResponseEvent::BUFFER_STATUS_REPORTED :
-            hadPendingPayload || queueBytes > 0 ? HeTbResponseEvent::NO_FITTING_PAYLOAD :
-                    HeTbResponseEvent::NO_PENDING_DATA;
-    event.associationId = mac->getMib()->getLocalAssociationId();
-    event.tid = blockAckReqMpdu != nullptr ?
-            preparedBlockAckReq->getTidInfo() : selectedTid;
-    event.accessCategory = blockAckReqMpdu != nullptr ?
-            blockAckReqAc : selectedAc;
-    event.ruIndex = selected->ruIndex;
-    event.ruToneSize = selected->ruToneSize;
-    event.ruToneOffset = selected->ruToneOffset;
-    event.hadPendingPayload = hadPendingPayload;
-    event.pendingBytes = queueBytes;
-    for (auto selectedPacket : exchange.packets)
-        event.selectedBytes += selectedPacket->getByteLength();
-    event.reportedBytes = blockAckReqMpdu != nullptr ?
-            0 : queueBytes;
-    auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(responseHeader);
-    event.ackPolicy = dataHeader == nullptr ? -1 : dataHeader->getAckPolicy();
-    emitHeTbResponse(event);
-    return responsePacket.release();
+    return result;
 }
 
-void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee80211TriggerFrame>& trigger)
+void HeHcfRuntime::commitTriggeredUlBlockAckRequest(
+        const Ptr<Ieee80211CompressedBlockAckReq>& blockAckReq,
+        AccessCategory accessCategory)
 {
-    // IEEE 802.11-2024 9.3.1.22 Table 9-47: Trigger type 2 is MU-BAR.  A
-    // MU-BAR Trigger carries BAR control/information in each User Info field
-    // and solicits BlockAck responses in HE TB PPDUs.
-    if (trigger->getTransmitterAddress() != mac->getMib()->getBssid()) {
-        EV_WARN << "Ignoring Trigger from non-associated AP "
-                << trigger->getTransmitterAddress() << "\n";
-        delete packet;
-        return;
-    }
-    auto correlation = packet->findTag<physicallayer::Ieee80211HeTriggerCorrelationTag>();
-    if (correlation == nullptr || correlation->getTriggerId() == 0) {
-        EV_WARN << "Ignoring Trigger without model-only correlation context\n";
-        delete packet;
-        return;
-    }
-    const uint32_t triggerId = correlation->getTriggerId();
-    if (trigger->getTriggerType() == 2) {
-        sendTriggeredBlockAckResponse(packet, trigger, triggerId);
-        return;
-    }
-    if (trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER &&
-            !mac->getMib()->localHeCapabilities.ndpFeedbackReport) {
-        delete packet;
-        return;
-    }
-    if (!ulCoordinator->isEnabled() || mac->isApInHeFamily() ||
-            mac->getMib()->getLocalAssociationId() <= 0) {
-        delete packet;
-        return;
-    }
-    const auto phy = getLinkPhyContext().getSnapshot();
-    if (Hz(trigger->getChannelBandwidthMhz() * 1e6) != phy.getChannelBandwidth()) {
-        EV_WARN << "Ignoring HE UL Trigger whose bandwidth differs from the active link\n";
-        delete packet;
-        return;
-    }
-    auto triggerError = validateIeee80211HeUlTrigger(*trigger,
-            phy.getChannelCenterFrequency());
-    if (triggerError) {
-        EV_WARN << "Ignoring malformed HE UL Trigger: " << *triggerError << "\n";
-        delete packet;
-        return;
-    }
-    if (isTwtSleeping(mac, mac->getMib()->getBssid())) {
-        delete packet;
-        return;
-    }
-    if (!triggeredUlExchanges.empty()) {
-        EV_WARN << "Ignoring HE UL Trigger while an earlier HE-TB exchange awaits Multi-STA BA\n";
-        delete packet;
-        return;
-    }
-    auto solicitingTxopDuration = getIeee80211HeSolicitingTxopDuration(packet);
-    std::optional<double> triggerPathLossDb;
-    auto signalPower = packet->findTag<SignalPowerInd>();
-    auto modeInd = packet->findTag<physicallayer::Ieee80211ModeInd>();
-    if (signalPower != nullptr && modeInd != nullptr && modeInd->getMode() != nullptr) {
-        const auto receivedBandwidth = modeInd->getMode()->getDataMode()->getBandwidth();
-        triggerPathLossDb = computeIeee80211HeTriggerPathLossDb(
-                trigger->getApTxPowerDbm(), signalPower->getPower(), receivedBandwidth);
-    }
-    auto myAid = mac->getMib()->getLocalAssociationId();
-    auto negotiated = mac->getMib()->getNegotiatedHeCapabilities(
-            mac->getMib()->getBssid());
-    const auto bandwidth = Hz(trigger->getChannelBandwidthMhz() * 1e6);
-    const bool ulMuDisabled = par("operatingModeUlMuDisable").boolValue();
-    auto supportsUser = [&] (const Ieee80211HeTriggerUserInfo& user) {
-        const int nssIndex = user.numberOfSpatialStreams - 1;
-        return negotiated && negotiated->localTxPeerRx.valid &&
-                negotiated->localTxPeerRx.ofdma &&
-                negotiated->localTxPeerRx.supportedChannelWidths.count(bandwidth) != 0 &&
-                negotiated->localTxPeerRx.supportedRuToneSizes.count(user.ruToneSize) != 0 &&
-                negotiated->localTxPeerRx.mcsNss.maxMcsPerNss[nssIndex] >= user.mcs &&
-                (user.coding != physicallayer::HE_CODING_LDPC || negotiated->mutual.ldpc) &&
-                (!user.muMimo ||
-                 negotiated->localTxPeerRx.fullBandwidthUlMuMimo) &&
-                !ulMuDisabled;
-    };
-    const Ieee80211HeTriggerUserInfo *selected = nullptr;
-    Ieee80211HeTriggerUserInfo nfrpUser;
-    uint8_t nfrpToneSetIndex = 0;
-    uint8_t nfrpStartingStsNumber = 0;
-    if (trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
-        if (trigger->getTransmitterAddress() != mac->getMib()->getBssid() ||
-                isTwtSleeping(mac, mac->getMib()->getBssid()) ||
-                trigger->getNfrpFeedbackType() != 0) {
-            delete packet;
-            return;
-        }
-        auto resource = IIeee80211HeUlScheduler::getNfrpResponseResource(
-                trigger->getNfrpStartingAid(), myAid,
-                Hz(trigger->getChannelBandwidthMhz() * 1e6),
-                trigger->getNfrpMultiplexingFlag());
-        if (!resource.scheduled) {
-            EV_INFO << "Ignoring NFRP Trigger " << triggerId
-                    << ": AID " << myAid << " is outside the scheduled range\n";
-            delete packet;
-            return;
-        }
-        auto maximumRu = physicallayer::getHeEqualRuLayout(Hz(0),
-                Hz(trigger->getChannelBandwidthMhz() * 1e6), 1).front();
-        nfrpUser.aid = myAid;
-        nfrpUser.ruIndex = maximumRu.index;
-        nfrpUser.ruToneSize = maximumRu.toneSize;
-        nfrpUser.ruToneOffset = maximumRu.toneOffset;
-        nfrpUser.mcs = 0;
-        nfrpUser.coding = physicallayer::HE_CODING_BCC;
-        nfrpUser.numberOfSpatialStreams = 1;
-        nfrpUser.streamStartIndex = 0;
-        nfrpUser.targetRssiDbm = trigger->getNfrpTargetRssiDbm();
-        nfrpUser.useMaximumTransmitPower = trigger->getNfrpUseMaximumTransmitPower();
-        nfrpToneSetIndex = resource.toneSetIndex;
-        nfrpStartingStsNumber = resource.startingStsNumber;
-        selected = &nfrpUser;
-    }
-    std::vector<const Ieee80211HeTriggerUserInfo *> randomAccessUsers;
-    for (unsigned int i = 0; selected == nullptr && i < trigger->getUsersArraySize(); i++) {
-        const auto& user = trigger->getUsers(i);
-        if (user.randomAccess && supportsUser(user))
-            randomAccessUsers.push_back(&user);
-        else if (user.aid == myAid)
-            selected = &user;
-    }
-
-    AccessCategory selectedAc = AC_BE;
-    queueing::IPacketQueue *sourceQueue = nullptr;
-    Packet *sourcePacket = nullptr;
-    bool randomAccess = false;
-    bool randomAccessCommitted = false;
-    std::optional<HeUlCoordinator::PreparedRandomAccessSelection> randomAccessSelection;
-    int reportedTid = -1;
-    auto selectInProgressTrafficToReport = [&] (AccessCategory lowestAc) {
-        for (int ac = AC_VO; ac >= lowestAc; ac--) {
-            auto edcaf = edca->getEdcaf(static_cast<AccessCategory>(ac));
-            auto frames = edcaf->getInProgressFrames();
-            for (int i = 0; i < frames->getLength(); i++) {
-                auto header = dynamicPtrCast<const Ieee80211DataHeader>(
-                        frames->getFrames(i)->peekAtFront());
-                if (header != nullptr && header->getType() == ST_DATA_WITH_QOS &&
-                        header->getReceiverAddress() == mac->getMib()->getBssid()) {
-                    selectedAc = static_cast<AccessCategory>(ac);
-                    sourceQueue = edcaf->getPendingQueue();
-                    reportedTid = header->getTid();
-                    return;
-                }
-            }
-        }
-    };
-    if (selected != nullptr && trigger->getTriggerType() != IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER &&
-            trigger->getTriggerType() != IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
-        // 26.5.2.4: an associated non-AP STA responding to a Basic Trigger
-        // addressed to its AID constructs an HE TB A-MPDU using the Trigger's
-        // TID aggregation limit and the addressed User Info field.  INET keeps
-        // this path single-TID. Preferred AC is a lower-bound recommendation,
-        // not a selected TID (9.3.1.22.2), so choose pending data from that AC
-        // or a higher-priority AC and derive the actual TID from the MPDU.
-        auto preferredAc = aciToAccessCategory(selected->preferredAc);
-        for (int ac = AC_VO; ac >= preferredAc && sourcePacket == nullptr; ac--) {
-            auto queue = edca->getEdcaf(static_cast<AccessCategory>(ac))->getPendingQueue();
-            for (int i = 0; i < queue->getNumPackets(); i++) {
-                auto candidate = queue->getPacket(i);
-                auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(
-                        candidate->peekAtFront<Ieee80211MacHeader>());
-                if (dataHeader != nullptr && dataHeader->getType() == ST_DATA_WITH_QOS) {
-                    sourceQueue = queue;
-                    selectedAc = static_cast<AccessCategory>(ac);
-                    sourcePacket = candidate;
-                    break;
-                }
-            }
-        }
-        if (sourcePacket == nullptr)
-            selectInProgressTrafficToReport(preferredAc);
-        if (sourceQueue == nullptr) {
-            selectedAc = preferredAc;
-            sourceQueue = edca->getEdcaf(selectedAc)->getPendingQueue();
-        }
-        EV_DEBUG << "HE TB Basic Trigger queue selection: preferredAc=" << preferredAc
-                 << ", AC=" << selectedAc
-                 << ", queued=" << sourceQueue->getNumPackets()
-                 << ", data=" << (sourcePacket != nullptr) << "\n";
-    }
-    else if (selected != nullptr && trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER) {
-        // 9.3.1.22.6: BSRP Trigger has no trigger-dependent User Info; the
-        // HE TB response is used to report buffer status.  We choose the
-        // highest-priority queued TID to report when a directed BSRP RU exists.
-        for (int ac = AC_VO; ac >= AC_BK && sourceQueue == nullptr; ac--) {
-            auto queue = edca->getEdcaf(static_cast<AccessCategory>(ac))->getPendingQueue();
-            for (int i = 0; i < queue->getNumPackets(); i++) {
-                auto candidate = queue->getPacket(i);
-                auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(
-                        candidate->peekAtFront<Ieee80211MacHeader>());
-                if (dataHeader != nullptr && dataHeader->getType() == ST_DATA_WITH_QOS) {
-                    sourceQueue = queue;
-                    selectedAc = static_cast<AccessCategory>(ac);
-                    reportedTid = dataHeader->getTid();
-                    break;
-                }
-            }
-        }
-        if (sourceQueue == nullptr)
-            selectInProgressTrafficToReport(AC_BK);
-    }
-    else if (selected == nullptr && !randomAccessUsers.empty()) {
-        // 9.3.1.22 Table 9-52 encodes AID12=0 as RA-RUs for associated STAs.
-        // 26.5.4 supplies the UORA access procedure; the coordinator chooses
-        // whether this STA wins one of the advertised RA-RUs.
-        queueing::IPacketQueue *pendingQueue = nullptr;
-        Packet *pendingPacket = nullptr;
-        AccessCategory pendingAc = AC_BE;
-        int pendingTid = -1;
-        for (int ac = AC_VO; ac >= AC_BK && pendingPacket == nullptr; ac--) {
-            auto queue = edca->getEdcaf(static_cast<AccessCategory>(ac))->getPendingQueue();
-            for (int i = 0; i < queue->getNumPackets(); i++) {
-                auto candidate = queue->getPacket(i);
-                auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(
-                        candidate->peekAtFront<Ieee80211MacHeader>());
-                if (dataHeader != nullptr && dataHeader->getType() == ST_DATA_WITH_QOS) {
-                    pendingPacket = candidate;
-                    pendingQueue = queue;
-                    pendingAc = static_cast<AccessCategory>(ac);
-                    pendingTid = dataHeader->getTid();
-                    break;
-                }
-            }
-        }
-        if (pendingQueue != nullptr) {
-            randomAccessSelection = ulCoordinator->prepareRandomAccessRu(
-                    pendingAc, randomAccessUsers.size());
-            int raIndex = ulCoordinator->commitRandomAccessRu(*randomAccessSelection);
-            if (raIndex >= 0) {
-                selected = randomAccessUsers[raIndex];
-                randomAccess = true;
-                randomAccessCommitted = true;
-                selectedAc = pendingAc;
-                sourceQueue = pendingQueue;
-                if (trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER) {
-                    reportedTid = pendingTid;
-                    sourcePacket = nullptr;
-                }
-                else {
-                    sourcePacket = pendingPacket;
-                }
-            }
-        }
-    }
-    if (selected == nullptr) {
-        EV_INFO << "Ignoring HE UL Trigger " << triggerId
-                 << ": this STA has no scheduled or selected random-access RU\n";
-        delete packet;
-        return;
-    }
-
-    if (!supportsUser(*selected)) {
-        EV_WARN << "Ignoring HE UL Trigger allocation that exceeds negotiated local-TX/peer-RX capabilities\n";
-        delete packet;
-        return;
-    }
-
-    uint8_t selectedTid = reportedTid >= 0 ? reportedTid : 0;
-    if (sourcePacket != nullptr) {
-        auto sourceHeader = dynamicPtrCast<const Ieee80211DataHeader>(
-                sourcePacket->peekAtFront<Ieee80211MacHeader>());
-        selectedTid = sourceHeader->getTid();
-    }
-    if (sourceQueue == nullptr)
-        sourceQueue = edca->getEdcaf(selectedAc)->getPendingQueue();
-    auto ulBaAgreement = originatorBlockAckAgreementHandler == nullptr ? nullptr :
-            originatorBlockAckAgreementHandler->getAgreement(mac->getMib()->getBssid(), selectedTid);
-    auto ulBaAgreementSnapshot = ulBaAgreement == nullptr ? OriginatorBlockAckAgreementSnapshot{} : ulBaAgreement->getSnapshot();
-    int occupiedSlots = edca->getEdcaf(selectedAc)->getAckHandler()->getNumOccupiedBlockAckSequencePositions(
-            mac->getMib()->getBssid(), selectedTid);
-    int availableSlots = ulBaAgreement == nullptr ? 0 :
-            std::max(0, ulBaAgreementSnapshot.bufferSize - occupiedSlots);
-    EV_DEBUG << "HE TB Block Ack window: agreement=" << (ulBaAgreement != nullptr)
-             << ", size=" << (ulBaAgreement != nullptr ? ulBaAgreementSnapshot.bufferSize : 0)
-             << ", occupied=" << occupiedSlots
-             << ", available=" << availableSlots << "\n";
-    // IEEE 802.11-2024 10.3.2.13.3 and 26.4.4.5 allow a tagged QoS Data MPDU
-    // in an HE TB response to be acknowledged immediately by a Multi-STA BA;
-    // an existing block ack agreement is required only for the untagged
-    // multi-MPDU aggregation case. Reserve one slot so both scheduled and UORA
-    // users can send their first non-aggregated MPDU before an agreement exists.
-    if (sourcePacket != nullptr && ulBaAgreement == nullptr)
-        availableSlots = 1;
-    if (sourcePacket != nullptr && availableSlots == 0)
-        sourcePacket = nullptr;
-    uint32_t queueBytes = 0;
-    if (trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
-        for (int ac = AC_BK; ac <= AC_VO; ac++)
-            addBufferedTrafficServiceBytes(queueBytes, getBufferedTrafficServiceBytes(
-                    edca->getEdcaf(static_cast<AccessCategory>(ac)),
-                    mac->getMib()->getBssid()));
-    }
-    else
-        queueBytes = getBufferedTrafficServiceBytes(edca->getEdcaf(selectedAc),
-                mac->getMib()->getBssid(), selectedTid);
-    TriggeredUlExchange exchange;
-    exchange.tid = selectedTid;
-    exchange.sourceQueue = sourceQueue;
-    exchange.randomAccess = randomAccess;
-    exchange.ru.index = selected->ruIndex;
-    exchange.ru.toneSize = selected->ruToneSize;
-    exchange.ru.toneOffset = selected->ruToneOffset;
-    auto maximumBlockAckLength = B(18 + 12 * trigger->getUsersArraySize() + 4);
-    // 10.3.2.11 and 10.23.2.2 permit RXSTART within SIFS plus one slot; the
-    // maximum Block Ack airtime below carries that start deadline through to
-    // the packet's RXEND delivery point.
-    exchange.expectedResponseTime = simTime() + modeSet->getSifsTime() +
-            trigger->getCommonDuration() + modeSet->getSifsTime() +
-            modeSet->getSlowestMandatoryMode()->getDuration(maximumBlockAckLength) +
-            modeSet->getSlotTime();
-    W transmitPower = phy.getMaximumTransmitPower();
-    if (triggerPathLossDb.has_value())
-        transmitPower = computeIeee80211HeTbTransmitPower(phy.getMaximumTransmitPower(),
-                selected->targetRssiDbm, *triggerPathLossDb, selected->useMaximumTransmitPower);
-    Packet *responsePacket;
-    Ptr<const Ieee80211MacHeader> responseHeader;
-    size_t responsePacketCount = 0;
-    if (trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
-        // IEEE 802.11ax 27.3.11.11: the NFRP response is a preamble-only NDP with no PSDU.
-        // Create a truly empty packet so the PCAP recorder writes only a Radiotap header
-        // followed by a zero-byte 802.11 body — matching real hardware monitor-mode captures.
-        responsePacket = new Packet("HE-TB-NDP-Feedback-Report");
-        // Synthesise a detached header solely for address-stamping in Tx::transmitFrame().
-        // This header is NOT serialised into the PPDU.
-        auto ndpHeader = makeShared<Ieee80211DataHeader>();
-        ndpHeader->setType(ST_QOS_NULL);
-        ndpHeader->setReceiverAddress(mac->getMib()->getBssid());
-        ndpHeader->setTransmitterAddress(mac->getAddress());
-        ndpHeader->setAddress3(mac->getMib()->getBssid());
-        ndpHeader->setToDS(true);
-        ndpHeader->setChunkLength(B(30));
-        responseHeader = ndpHeader;
-        // NDP carries no MPDU; no triggered exchange state to track.
-    }
-    else {
-        bool responseCommitted = false;
-        try {
-            responsePacket = buildTriggeredUlResponsePacket(sourcePacket, sourceQueue, selectedAc,
-                    selectedTid, queueBytes, availableSlots, selected, trigger,
-                    triggerId, transmitPower, solicitingTxopDuration, exchange,
-                    responseHeader, responseCommitted);
-        }
-        catch (const std::exception& error) {
-            if (responseCommitted || randomAccessCommitted)
-                throw;
-            EV_WARN << "HE-TB response preparation aborted before commit: "
-                    << error.what() << "\n";
-            delete packet;
-            return;
-        }
-        responsePacketCount = exchange.packets.empty() ? 1 : exchange.packets.size();
-        // Every solicited HE-TB response owns a terminal Multi-STA BA window,
-        // including scheduled QoS Null/BSR responses with no retained MPDU.
-        auto inserted = triggeredUlExchanges.emplace(triggerId, std::move(exchange));
-        if (!inserted.second)
-            throw cRuntimeError("Duplicate HE-TB Trigger ID reached the post-commit exchange ledger");
-        EV_INFO << "Committed HE-TB exchange ledger: trigger="
-                << triggerId << ", packets="
-                << inserted.first->second.packets.size() << ", deadline="
-                << inserted.first->second.expectedResponseTime << "\n";
-        scheduleTriggeredUlResponseTimeout();
-    }
-
-    // 26.5.2.2.4, 27.3.12.5.5, and 27.4.3: the HE-TB TXVECTOR is derived from the
-    // selected Trigger User Info and Common Info fields before the packet
-    // crosses the MAC/PHY boundary.
-    if (trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
-        attachHeTbTxVectorFromTrigger(responsePacket, *trigger, *selected, myAid,
-                phy.getChannelCenterFrequency(), transmitPower, B(0),
-                mac->getMib()->heOperation.bssColor, triggerId, true,
-                queueBytes > 256 ? 1 : 0, nfrpToneSetIndex,
-                nfrpStartingStsNumber, solicitingTxopDuration,
-                modeSet->getSifsTime());
-        HeTbResponseEvent event;
-        event.triggerId = triggerId;
-        event.triggerType = IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER;
-        event.reason = HeTbResponseEvent::NDP_FEEDBACK_REPORTED;
-        event.associationId = myAid;
-        event.tid = selectedTid;
-        event.accessCategory = selectedAc;
-        event.ruIndex = selected->ruIndex;
-        event.ruToneSize = selected->ruToneSize;
-        event.ruToneOffset = selected->ruToneOffset;
-        event.reportedBytes = queueBytes;
-        emitHeTbResponse(event);
-    }
-    EV_INFO << "Sending HE-TB response: trigger=" << triggerId
-             << ", AID=" << myAid
-             << ", " << (randomAccess ? "random-access" : "scheduled")
-             << " RU=" << selected->ruIndex
-             << ", packets=" << responsePacketCount << "\n";
-    tx->transmitFrame(responsePacket, responseHeader,
-            modeSet->getSifsTime(), this);
-    delete responsePacket;
-    delete packet;
-    return;
+    edca->getEdcaf(accessCategory)->getAckHandler()->
+            processTransmittedBlockAckReq(blockAckReq);
 }
 
-void HeHcf::processReceivedMultiStaBlockAck(Packet *packet, const Ptr<const Ieee80211MultiStaBlockAck>& multiStaBlockAck)
+void HeHcfRuntime::validateTriggeredUlPackets(HcfQueueToken queueToken,
+        const std::vector<Packet *>& packets) const
 {
-    // 26.4.2: a non-AP STA originator processes only the Per AID TID Info
-    // record matching its AID and TID, then applies the Block Ack starting
-    // sequence number and bitmap to the outstanding triggered MPDUs.
-    if (multiStaBlockAck->getTransmitterAddress() != mac->getMib()->getBssid()) {
-        delete packet;
-        return;
-    }
-    auto correlation = packet->findTag<physicallayer::Ieee80211HeTriggerCorrelationTag>();
-    if (correlation == nullptr) {
-        EV_WARN << "Discarding Multi-STA Block Ack without Trigger correlation\n";
-        delete packet;
-        return;
-    }
-    auto exchangeIt = triggeredUlExchanges.find(correlation->getTriggerId());
-    if (exchangeIt == triggeredUlExchanges.end()) {
-        EV_WARN << "Discarding foreign Multi-STA Block Ack for Trigger "
-                << correlation->getTriggerId() << "\n";
-        delete packet;
-        return;
-    }
-    if (simTime() > exchangeIt->second.expectedResponseTime) {
-        EV_WARN << "Discarding late Multi-STA Block Ack for Trigger "
-                << correlation->getTriggerId() << ", deadline="
-                << exchangeIt->second.expectedResponseTime << "\n";
-        delete packet;
-        return;
-    }
-    auto myAid = mac->getMib()->getLocalAssociationId();
-    auto& exchange = exchangeIt->second;
-    if (exchange.recoveryKind ==
-            TriggeredUlExchange::RecoveryKind::COMPRESSED_BLOCK_ACK_REQUEST) {
-        const Ieee80211MultiStaBlockAckRecord *blockAckRecord = nullptr;
-        int aidRecordCount = 0;
-        for (unsigned int i = 0;
-                i < multiStaBlockAck->getRecordsArraySize(); ++i) {
-            const auto& candidate = multiStaBlockAck->getRecords(i);
-            if (candidate.aid == myAid) {
-                blockAckRecord = &candidate;
-                aidRecordCount++;
-            }
-        }
-        bool valid = aidRecordCount == 1 &&
-                blockAckRecord->responseReceived &&
-                blockAckRecord->tid == exchange.blockAckReq->getTidInfo() &&
-                blockAckRecord->startingSequenceNumber ==
-                        exchange.blockAckReq->getStartingSequenceNumber().get();
-        if (valid) {
-            auto blockAck = makeShared<Ieee80211CompressedBlockAck>();
-            blockAck->setReceiverAddress(mac->getAddress());
-            blockAck->setTransmitterAddress(mac->getMib()->getBssid());
-            blockAck->setTidInfo(blockAckRecord->tid);
-            blockAck->setStartingSequenceNumber(
-                    SequenceNumberCyclic(blockAckRecord->startingSequenceNumber));
-            std::vector<uint8_t> bytes(8, 0);
-            BitVector bitmap(bytes);
-            for (int i = 0; i < 64; ++i)
-                bitmap.setBit(i,
-                        (blockAckRecord->bitmap & (UINT64_C(1) << i)) != 0);
-            blockAck->setBlockAckBitmap(bitmap);
-            processReceivedTriggeredUlBlockAck(exchange, blockAck);
-        }
-        else {
-            EV_WARN << "Treating missing or corrupt HE-TB BAR terminal record "
-                    << "as failed: trigger=" << correlation->getTriggerId()
-                    << ", AID=" << myAid << "\n";
-            processFailedTriggeredUlBlockAckReq(exchange);
-        }
-        if (exchange.randomAccess)
-            ulCoordinator->reportRandomAccessResult(valid);
-        triggeredUlExchanges.erase(exchangeIt);
-        scheduleTriggeredUlResponseTimeout();
-        delete packet;
-        return;
-    }
-    const Ieee80211MultiStaBlockAckRecord *record = nullptr;
-    int matchingRecordCount = 0;
-    for (unsigned int i = 0; i < multiStaBlockAck->getRecordsArraySize(); ++i)
-        if (multiStaBlockAck->getRecords(i).aid == myAid &&
-                multiStaBlockAck->getRecords(i).tid == exchange.tid) {
-            record = &multiStaBlockAck->getRecords(i);
-            matchingRecordCount++;
-        }
-    if (matchingRecordCount > 1) {
-        EV_WARN << "Discarding ambiguous Multi-STA Block Ack for Trigger "
-                << correlation->getTriggerId() << "\n";
-        delete packet;
-        return;
-    }
-    // A UORA response to a BSRP Trigger is a QoS Null carrying buffer
-    // status, so there is no queued data MPDU or bitmap bit to retire. A
-    // positive per-AID response record is nevertheless a successful UORA
-    // attempt and must reset OCW and be counted.
-    bool exchangeSuccess = exchange.packets.empty() &&
-            record != nullptr && record->responseReceived;
-    bool acknowledgedQosData = false;
-    for (size_t i = 0; i < exchange.packets.size(); ++i) {
-        bool acknowledged = false;
-        if (record != nullptr && record->responseReceived) {
-            int offset = (exchange.sequenceNumbers[i] -
-                    record->startingSequenceNumber + 4096) % 4096;
-            acknowledged = offset < 64 &&
-                    (record->bitmap & (UINT64_C(1) << offset));
-        }
-        if (acknowledged) {
-            auto header = exchange.packets[i]->
-                    peekAtFront<Ieee80211DataHeader>();
-            edca->getEdcaf(edca->mapTidToAc(header->getTid()))->
-                    getAckHandler()->retireFrame(header);
-            delete exchange.packets[i];
-            exchangeSuccess = true;
-            acknowledgedQosData = true;
-        }
-        else {
-            auto header = exchange.packets[i]->
-                    peekAtFront<Ieee80211DataHeader>();
-            edca->getEdcaf(edca->mapTidToAc(header->getTid()))->
-                    getRecoveryProcedure()->dataFrameTransmissionFailed(
-                            exchange.packets[i], header);
-            auto writableHeader = exchange.packets[i]->
-                    removeAtFront<Ieee80211DataHeader>();
-            writableHeader->setRetry(true);
-            exchange.packets[i]->insertAtFront(writableHeader);
-            exchange.sourceQueue->pushPacket(exchange.packets[i], nullptr);
-        }
-    }
-    // IEEE Std 802.11-2024, 26.2.7: for QoS Data requiring immediate
-    // acknowledgment, MUEDCATimer[AC] starts at the end of the immediate
-    // response only when at least one QoS Data frame for that AC succeeded.
-    if (acknowledgedQosData) {
-        AccessCategory ac = edca->mapTidToAc(exchange.tid);
-        if (ac >= 0 && ac < 4)
-            edca->getEdcaf(ac)->startMuEdcaTimer();
-    }
-    if (exchange.randomAccess)
-        ulCoordinator->reportRandomAccessResult(exchangeSuccess);
-    EV_INFO << "Applied correlated Multi-STA Block Ack: trigger="
-            << correlation->getTriggerId() << ", AID=" << myAid
-            << ", TID=" << (int)exchange.tid
-            << ", packets=" << exchange.packets.size()
-            << ", success=" << exchangeSuccess << "\n";
-    triggeredUlExchanges.erase(exchangeIt);
-    scheduleTriggeredUlResponseTimeout();
+    auto reservation = getHeQueueService().preparePacketReservation(
+            queueToken, packets);
+    getHeQueueService().rollbackPacketReservation(reservation);
+}
+
+std::vector<Packet *> HeHcfRuntime::commitTriggeredUlPackets(
+        HcfQueueToken queueToken, const std::vector<Packet *>& originals,
+        const std::vector<Packet *>& prepared)
+{
+    auto reservation = getHeQueueService().preparePacketReservation(
+            queueToken, originals);
+    return getHeQueueService().commitPacketReservation(reservation, prepared);
+}
+
+void HeHcfRuntime::rollbackTriggeredUlPackets(HcfQueueToken queueToken,
+        const std::vector<Packet *>& originals,
+        const std::vector<Packet *>& backups,
+        const std::vector<Packet *>& queueOrder)
+{
+    getHeQueueService().restoreCommittedPackets(queueToken, originals,
+            backups, queueOrder);
+}
+
+void HeHcfRuntime::takeTriggeredUlPacket(Packet *packet) { take(packet); }
+std::unique_ptr<ITx::PreparedTransmission> HeHcfRuntime::prepareTriggeredUlHandoff(Packet *packet,
+        const Ptr<const Ieee80211MacHeader>& header)
+{
+    return tx->prepareTransmission(packet, header, modeSet->getSifsTime(), hcf);
+}
+void HeHcfRuntime::commitTriggeredUlHandoff(
+        std::unique_ptr<ITx::PreparedTransmission> prepared) noexcept
+{
+    tx->commitTransmission(std::move(prepared));
+}
+
+Ptr<Ieee80211CompressedBlockAck> HeHcfRuntime::prepareTriggeredUlMuBarBlockAck(
+        const Ieee80211HeTriggerUserInfo& user,
+        const MacAddress& originator)
+{
+    auto agreement = recipientBlockAckAgreementHandler == nullptr ? nullptr :
+            recipientBlockAckAgreementHandler->getAgreement(
+                    user.muBarTidInfo, originator);
+    return agreement == nullptr ? nullptr : buildHeMuBarCompressedBlockAck(
+            user, agreement, originator, mac->getAddress());
+}
+Hz HeHcfRuntime::getTriggeredUlCenterFrequency() const { return getLinkPhyContext().getSnapshot().getChannelCenterFrequency(); }
+uint8_t HeHcfRuntime::getTriggeredUlBssColor() const { return mac->getMib()->heOperation.bssColor; }
+FcsMode HeHcfRuntime::getTriggeredUlFcsMode() const { return mac->getFcsMode(); }
+simtime_t HeHcfRuntime::getTriggeredUlSifsTime() const { return modeSet->getSifsTime(); }
+AccessCategory HeHcfRuntime::mapTriggeredUlTidToAccessCategory(Tid tid) const { return edca->mapTidToAc(tid); }
+HeTriggeredUlExchangeService::RandomAccessPreparation
+HeHcfRuntime::prepareTriggeredUlRandomAccess(AccessCategory accessCategory,
+        int randomAccessRuCount)
+{
+    auto prepared = ulCoordinator->prepareRandomAccessRu(accessCategory,
+            randomAccessRuCount);
+    return {prepared.accessCategory, prepared.randomAccessRuCount,
+            prepared.originalBackoff, prepared.resultingBackoff,
+            prepared.attempt};
+}
+
+int HeHcfRuntime::commitTriggeredUlRandomAccess(
+        const HeTriggeredUlExchangeService::RandomAccessPreparation& preparation)
+{
+    HeUlCoordinator::PreparedRandomAccessSelection prepared;
+    prepared.accessCategory = preparation.accessCategory;
+    prepared.randomAccessRuCount = preparation.randomAccessRuCount;
+    prepared.originalBackoff = preparation.originalBackoff;
+    prepared.resultingBackoff = preparation.resultingBackoff;
+    prepared.attempt = preparation.attempt;
+    return ulCoordinator->commitRandomAccessRu(prepared);
+}
+void HeHcfRuntime::emitTriggeredUlResponse(HeTbResponseEvent& event) { emitHeTbResponse(event); }
+
+void HeHcfRuntime::reportTriggeredUlRandomAccessResult(bool successful)
+{
+    ulCoordinator->reportRandomAccessResult(successful);
+}
+
+void HeHcfRuntime::processTriggeredUlBlockAckRequestFailure(
+        const Ptr<const Ieee80211CompressedBlockAckReq>& blockAckReq,
+        AccessCategory accessCategory)
+{
+    processFailedBlockAckReq(edca->getEdcaf(accessCategory), blockAckReq, false);
+}
+
+void HeHcfRuntime::processTriggeredUlBlockAckRequestSuccess(
+        const Ptr<const Ieee80211CompressedBlockAck>& blockAck,
+        AccessCategory accessCategory)
+{
+    processReceivedBlockAck(edca->getEdcaf(accessCategory), blockAck,
+            accessCategory);
+}
+
+void HeHcfRuntime::retireTriggeredUlPacket(Packet *packet,
+        HcfPacketIdentity identity)
+{
+    if (packet == nullptr || HcfPacketIdentity(packet->getId()) != identity)
+        throw cRuntimeError("Stale HE-TB packet identity on Block Ack retirement");
+    auto header = packet->peekAtFront<Ieee80211DataHeader>();
+    edca->getEdcaf(edca->mapTidToAc(header->getTid()))->getAckHandler()->
+            retireFrame(header);
     delete packet;
-    return;
+}
+
+void HeHcfRuntime::retryTriggeredUlPacket(Packet *packet,
+        HcfPacketIdentity identity, HcfQueueToken sourceQueueToken,
+        const MacAddress& bssid, uint16_t associationId,
+        uint64_t associationEpoch)
+{
+    if (packet == nullptr || HcfPacketIdentity(packet->getId()) != identity)
+        throw cRuntimeError("Stale HE-TB packet identity on retry");
+    auto header = packet->peekAtFront<Ieee80211DataHeader>();
+    auto edcaf = edca->getEdcaf(edca->mapTidToAc(header->getTid()));
+    if (bssid != getTriggeredUlBssid() ||
+            associationId != getTriggeredUlAssociationId() ||
+            associationEpoch != getTriggeredUlAssociationEpoch()) {
+        edcaf->getAckHandler()->retireFrame(
+                packet->peekAtFront<Ieee80211DataHeader>());
+        delete packet;
+        return;
+    }
+    HcfRetryService::prepareTriggeredUlRetry(packet,
+            edcaf->getRecoveryProcedure());
+    if (!getHeQueueService().reinsertPacket(sourceQueueToken, identity, packet))
+        throw cRuntimeError("Committed HE-TB queue token became invalid within the same association epoch");
+}
+
+void HeHcfRuntime::startTriggeredUlMuEdcaTimer(AccessCategory accessCategory)
+{
+    if (accessCategory >= AC_BK && accessCategory < AC_NUMCATEGORIES)
+        edca->getEdcaf(accessCategory)->startMuEdcaTimer();
 }
 } // namespace ieee80211
 } // namespace inet

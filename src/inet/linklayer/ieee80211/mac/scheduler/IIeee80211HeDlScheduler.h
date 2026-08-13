@@ -8,20 +8,19 @@
 #define __INET_IIEE80211HEDLSCHEDULER_H
 
 #include <ostream>
+#include <map>
 #include <vector>
 
 #include "inet/common/Units.h"
 #include "inet/linklayer/common/MacAddress.h"
 #include "inet/linklayer/ieee80211/mac/common/AccessCategory.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfContext.h"
 #include "inet/linklayer/ieee80211/mib/Ieee80211HeCapabilities.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
-#include "inet/queueing/contract/IPacketQueue.h"
 
 namespace inet {
 namespace ieee80211 {
-
-class HeMuMimoCsiManager;
 
 using namespace inet::units::values;
 
@@ -37,6 +36,7 @@ class INET_API IIeee80211HeDlScheduler
     struct CandidateInfo {
         MacAddress staAddress;
         AccessCategory accessCategory = AC_BE;
+        Tid tid = 0;
         bool anchor = false;
         int64_t backlogBytes = 0;
         int64_t holPacketBytes = 0;
@@ -44,7 +44,9 @@ class INET_API IIeee80211HeDlScheduler
         simtime_t holDelay = SIMTIME_ZERO;
         double pathLossDb = NaN;
         bool hasFreshPathLoss = false;
-        queueing::IPacketQueue *sourceQueue = nullptr;
+        HcfQueueToken sourceQueueToken;
+        /** Ordered, snapshot-qualified MPDUs eligible for this candidate/TID. */
+        std::vector<HcfPacketIdentity> eligiblePacketIdentities;
         bool hasAdvertisedHeCapabilities = false;
         Ieee80211HeCapabilities advertisedHeCapabilities;
         bool hasNegotiatedHeCapabilities = false;
@@ -71,10 +73,17 @@ class INET_API IIeee80211HeDlScheduler
         int packetExtensionDurationUs = 0;
         uint8_t puncturedSubchannelMask = 0;
         std::vector<bool> puncturedSubchannels;
-        const HeMuMimoCsiManager *csiManager = nullptr;
+        std::map<std::pair<MacAddress, MacAddress>, double> csiLeakages;
         int numApAntennas = 1;
         bool enableDlMuMimo = false;
         Ieee80211HeCapabilities localHeCapabilities;
+
+        double getCsiLeakage(const MacAddress& station,
+                const MacAddress& coScheduledStation) const
+        {
+            auto it = csiLeakages.find({station, coScheduledStation});
+            return it == csiLeakages.end() ? NaN : it->second;
+        }
     };
 
     /** One scheduled STA's RU and selected PHY parameters. */
@@ -110,6 +119,8 @@ class INET_API IIeee80211HeDlScheduler
             candidates.push_back(candidate.staAddress);
         return schedule(candidates, context.channelCenterFrequency, context.channelBandwidth);
     }
+    virtual void commitSchedule(const ScheduleContext& context,
+            const std::vector<RuAllocation>& allocations) {}
 
     /**
      * Discards scheduler-owned state derived from a peer association epoch.

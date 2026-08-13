@@ -1,0 +1,546 @@
+%description:
+Verify the production HCF transmission-preparation adapter order, temporary
+aggregate cleanup, implicit-BlockAck source-mode propagation, and validation
+before packet mutation.
+
+%includes:
+#include <string>
+#include <map>
+#include <vector>
+
+#include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
+#include "inet/linklayer/ieee80211/mac/channelaccess/Edca.h"
+#include "inet/linklayer/ieee80211/mac/contract/DurationFinalizedReq.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/VhtHcf.h"
+#include "inet/linklayer/ieee80211/mac/contract/ISequenceNumberAssignment.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/Ieee80211HeMuContainerTag_m.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/TxOpFs.h"
+#include "inet/linklayer/ieee80211/mac/originator/QosAckHandler.h"
+#include "inet/linklayer/ieee80211/mac/protectionmechanism/SingleProtectionMechanism.h"
+#include "inet/linklayer/ieee80211/mac/queue/InProgressFrames.h"
+#include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+
+%file: TestNetwork.ned
+module TestTransmissionMac
+{
+    parameters:
+        @class(TestTransmissionMac);
+}
+
+module TestTransmissionHcf
+{
+    parameters:
+        @class(TestTransmissionHcf);
+}
+
+module TestTransmissionVhtHcf
+{
+    parameters:
+        @class(TestTransmissionVhtHcf);
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        mac: TestTransmissionMac;
+        mib: inet.linklayer.ieee80211.mib.Ieee80211Mib;
+        hcf: TestTransmissionHcf;
+        vhtHcf: TestTransmissionVhtHcf;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+class TestTransmissionMac : public Ieee80211Mac
+{
+  private:
+    MacAddress address = MacAddress("02:00:00:00:00:01");
+    Ieee80211Mib *testMib = nullptr;
+
+  protected:
+    virtual int numInitStages() const override { return 1; }
+    virtual void initialize(int) override {}
+
+  public:
+    virtual const MacAddress& getAddress() const override { return address; }
+    virtual FcsMode getFcsMode() const override { return FCS_DECLARED_CORRECT; }
+    virtual Ieee80211Mib *getMib() const override { return testMib; }
+    void setTestMib(Ieee80211Mib *value) { testMib = value; }
+};
+
+class TestAckPolicy : public IOriginatorQoSAckPolicy
+{
+  public:
+    std::vector<std::string> *events = nullptr;
+    mutable std::map<std::string, int> calls;
+    virtual bool isAckNeeded(const Ptr<const Ieee80211MgmtHeader>&) const override { return false; }
+    virtual AckPolicy computeAckPolicy(Packet *packet, const Ptr<const Ieee80211DataHeader>& header,
+            OriginatorBlockAckAgreement *) const override {
+        events->push_back(std::string(header->getRetry() ? "policyRetry:" :
+                "policyPreRetry:") + packet->getName());
+        calls[packet->getName()]++;
+        return !strcmp(packet->getName(), "rejected") ? NORMAL_ACK : BLOCK_ACK;
+    }
+    virtual bool isBlockAckReqNeeded(InProgressFrames *, TxopProcedure *) const override { return false; }
+    virtual bool isBlockAckPolicyEligibleFrame(Packet *, const Ptr<const Ieee80211DataHeader>&) const override { return true; }
+    virtual std::tuple<MacAddress, SequenceNumberCyclic, Tid>
+            computeBlockAckReqParameters(InProgressFrames *, TxopProcedure *) const override { return {}; }
+    virtual simtime_t getAckTimeout(Packet *, const Ptr<const Ieee80211DataOrMgmtHeader>&) const override { return SimTime(1, SIMTIME_MS); }
+    virtual simtime_t getBlockAckTimeout(Packet *, const Ptr<const Ieee80211BlockAckReq>&) const override { return SimTime(1, SIMTIME_MS); }
+};
+
+class TestRtsPolicy : public IRtsPolicy
+{
+  public:
+    virtual bool isRtsNeeded(Packet *, const Ptr<const Ieee80211MacHeader>&) const override { return false; }
+    virtual simtime_t getCtsTimeout(Packet *, const Ptr<const Ieee80211RtsFrame>&) const override { return SIMTIME_ZERO; }
+    virtual int getRtsThreshold() const override { return -1; }
+};
+
+class TestTxop : public TxopProcedure
+{
+  public:
+    ProtectionMechanism mechanism = SINGLE_PROTECTION;
+    virtual ProtectionMechanism getProtectionMechanism() const override { return mechanism; }
+    virtual bool allowsMpduAggregation() const override { return true; }
+};
+
+class TestAckHandler : public QosAckHandler
+{
+  public:
+    std::vector<std::string> *events = nullptr;
+    virtual bool setRetryBitIfNeeded(Packet *packet) override {
+        events->push_back(std::string("retry:") + packet->getName());
+        auto header = packet->removeAtFront<Ieee80211DataHeader>();
+        header->setRetry(true);
+        packet->insertAtFront(header);
+        return false;
+    }
+};
+
+class TestInProgressFrames : public InProgressFrames
+{
+  public:
+    std::vector<Packet *> eligibleFrames;
+    virtual std::vector<Packet *> getEligibleFramesLike(Packet *, int, int) override { return eligibleFrames; }
+    virtual Packet *getPendingFrameFor(Packet *) override { return nullptr; }
+};
+
+class TestEdcaf : public Edcaf
+{
+  public:
+    TestTxop *testTxop = nullptr;
+    TestAckHandler *testAckHandler = nullptr;
+    TestInProgressFrames *testFrames = nullptr;
+    virtual TxopProcedure *getTxopProcedure() const override { return testTxop; }
+    virtual QosAckHandler *getAckHandler() const override { return testAckHandler; }
+    virtual InProgressFrames *getInProgressFrames() const override { return testFrames; }
+};
+
+class TestEdca : public Edca
+{
+  public:
+    TestEdcaf *owner = nullptr;
+    virtual Edcaf *getChannelOwner() override { return owner; }
+};
+
+class TestRateSelection : public IQosRateSelection
+{
+  public:
+    const IIeee80211Mode *mode = nullptr;
+    std::vector<std::string> *events = nullptr;
+    virtual const IIeee80211Mode *computeResponseCtsFrameMode(Packet *, const Ptr<const Ieee80211RtsFrame>&) override { return mode; }
+    virtual const IIeee80211Mode *computeResponseAckFrameMode(Packet *, const Ptr<const Ieee80211DataOrMgmtHeader>&) override { return mode; }
+    virtual const IIeee80211Mode *computeResponseBlockAckFrameMode(Packet *, const Ptr<const Ieee80211BlockAckReq>&) override { return mode; }
+    virtual const IIeee80211Mode *computeMode(Packet *, const Ptr<const Ieee80211MacHeader>& header, TxopProcedure *) override {
+        if (dynamicPtrCast<const Ieee80211DataHeader>(header) &&
+                !events->empty())
+            REQUIRE(events->back().find("policyRetry:") == 0);
+        events->push_back("selectMode");
+        return mode;
+    }
+};
+
+class TestTx : public ITx
+{
+  public:
+    std::vector<std::string> *events = nullptr;
+    Packet *sourcePacket = nullptr;
+    const IIeee80211Mode *selectedMode = nullptr;
+    int transmitCount = 0;
+    bool requireTemporary = true;
+    bool inspectModes = true;
+    bool requireSourceMode = true;
+    Ptr<const Ieee80211MacHeader> transmittedHeader;
+
+    virtual bool isBusy() const override { return false; }
+    virtual void transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header,
+            ICallback *callback) override { transmitFrame(packet, header, SIMTIME_ZERO, callback); }
+    virtual void transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header,
+            simtime_t, ICallback *) override {
+        transmitCount++;
+        REQUIRE((packet != sourcePacket) == requireTemporary);
+        transmittedHeader = header;
+        if (inspectModes) {
+            REQUIRE(packet->findTag<Ieee80211ModeReq>()->getMode() == selectedMode);
+            if (requireSourceMode)
+                REQUIRE(sourcePacket->findTag<Ieee80211ModeReq>()->getMode() == selectedMode);
+        }
+        events->push_back(requireTemporary ? "txTemporary" : "txSource");
+    }
+    virtual void radioTransmissionFinished() override {}
+};
+
+class TestSingleProtection : public SingleProtectionMechanism
+{
+  public:
+    int calls = 0;
+    virtual simtime_t computeDurationField(Packet *, const Ptr<const Ieee80211MacHeader>&,
+            Packet *, const Ptr<const Ieee80211DataOrMgmtHeader>&, TxopProcedure *,
+            IRecipientQosAckPolicy *, simtime_t) override {
+        calls++;
+        return SimTime(77, SIMTIME_US);
+    }
+};
+
+class TestOriginatorDataService : public IOriginatorMacDataService
+{
+  public:
+    virtual std::vector<Packet *> *extractFramesToTransmit(queueing::IPacketQueue *) override { return nullptr; }
+    virtual std::vector<Packet *> *extractExactFrameToTransmit(queueing::IPacketQueue *, Packet *) override { return nullptr; }
+    virtual void setBlockAckAgreementHandler(IOriginatorBlockAckAgreementHandler *) override {}
+    virtual std::optional<int> getMaxAmpduLengthExponent() const override { return std::nullopt; }
+    virtual std::unique_ptr<ISequenceNumberAssignment> cloneSequenceNumberState() const override { return nullptr; }
+    virtual void commitSequenceNumberState(const ISequenceNumberAssignment&) override {}
+};
+
+class TestContext : public FrameSequenceContext
+{
+  public:
+    using FrameSequenceContext::FrameSequenceContext;
+    void setImplicitFrames(const std::vector<Packet *>& frames) { setHtImplicitBlockAckFrames(frames); }
+};
+
+class TestTransmissionHcf : public Hcf
+{
+  private:
+    const FrameSequenceContext *testContext = nullptr;
+    TestOriginatorDataService testDataService;
+
+  protected:
+    virtual int numInitStages() const override { return 1; }
+    virtual void initialize(int) override {}
+
+  public:
+    std::vector<std::string> *events = nullptr;
+    Packet *sourcePacket = nullptr;
+    void setup(Ieee80211Mac *newMac, Edca *newEdca, ITx *newTx,
+            IQosRateSelection *newRateSelection, IOriginatorQoSAckPolicy *newAckPolicy,
+            IRtsPolicy *newRtsPolicy, Ieee80211ModeSet *newModeSet,
+            const FrameSequenceContext *newContext,
+            SingleProtectionMechanism *newProtection = nullptr) {
+        RuntimeBindings bindings;
+        bindings.mac = newMac;
+        bindings.edca = newEdca;
+        bindings.tx = newTx;
+        bindings.rateSelection = newRateSelection;
+        bindings.originatorAckPolicy = newAckPolicy;
+        bindings.rtsPolicy = newRtsPolicy;
+        bindings.singleProtectionMechanism = newProtection;
+        bindings.originatorDataService = &testDataService;
+        installRuntimeBindingsForTesting(bindings);
+        configureHtFeatureForTesting(newModeSet);
+        testContext = newContext;
+        TestActionPort port;
+        port.getFrameSequenceContext = [this] () { return testContext; };
+        port.observeSetFrameMode = [this] (Packet *packet,
+                const Ptr<const Ieee80211MacHeader>&,
+                const IIeee80211Mode *) {
+            events->push_back(packet == sourcePacket ? "modeSource" : "modeTemporary");
+        };
+        port.recordSelectedMode = [this] (Packet *packet, const IIeee80211Mode *) {
+            events->push_back(packet == sourcePacket ? "recordSource" : "recordTemporary");
+        };
+        installTestActionPort(std::move(port));
+    }
+    void transmitForTest(Packet *packet) { sourcePacket = packet; transmitFrame(packet, SIMTIME_ZERO); }
+};
+
+class TestTransmissionVhtHcf : public VhtHcf
+{
+  private:
+    const FrameSequenceContext *testContext = nullptr;
+    TestOriginatorDataService testDataService;
+
+  protected:
+    virtual int numInitStages() const override { return 1; }
+    virtual void initialize(int) override {}
+
+  public:
+    mutable bool setFrameModeCalled = false;
+    void setup(Ieee80211Mac *newMac, Edca *newEdca, ITx *newTx,
+            IQosRateSelection *newRateSelection, IOriginatorQoSAckPolicy *newAckPolicy,
+            IRtsPolicy *newRtsPolicy, Ieee80211ModeSet *newModeSet,
+            const FrameSequenceContext *newContext,
+            SingleProtectionMechanism *newProtection) {
+        RuntimeBindings bindings;
+        bindings.mac = newMac;
+        bindings.edca = newEdca;
+        bindings.tx = newTx;
+        bindings.rateSelection = newRateSelection;
+        bindings.originatorAckPolicy = newAckPolicy;
+        bindings.rtsPolicy = newRtsPolicy;
+        bindings.singleProtectionMechanism = newProtection;
+        bindings.originatorDataService = &testDataService;
+        installRuntimeBindingsForTesting(bindings);
+        configureHtFeatureForTesting(newModeSet);
+        testContext = newContext;
+        TestActionPort port;
+        port.getFrameSequenceContext = [this] () { return testContext; };
+        port.observeSetFrameMode = [this] (Packet *,
+                const Ptr<const Ieee80211MacHeader>&,
+                const IIeee80211Mode *) { setFrameModeCalled = true; };
+        installTestActionPort(std::move(port));
+    }
+    void transmitForTest(Packet *packet) { Hcf::transmitFrame(packet, SIMTIME_ZERO); }
+};
+
+Define_Module(TestTransmissionMac);
+Define_Module(TestTransmissionHcf);
+Define_Module(TestTransmissionVhtHcf);
+
+static Packet *makeData(const char *name, const MacAddress& receiver,
+        int sequenceNumber, B payloadLength = B(100))
+{
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setType(ST_DATA_WITH_QOS);
+    header->setReceiverAddress(receiver);
+    header->setTransmitterAddress(MacAddress("02:00:00:00:00:01"));
+    header->setTid(5);
+    header->setSequenceNumber(SequenceNumberCyclic(sequenceNumber));
+    header->setAckPolicy(BLOCK_ACK);
+    header->setChunkLength(B(26));
+    auto packet = new Packet(name, header);
+    packet->insertAtBack(makeShared<ByteCountChunk>(payloadLength));
+    packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+    packet->addTag<DurationFinalizedReq>();
+    return packet;
+}
+
+%activity:
+auto mac = check_and_cast<TestTransmissionMac *>(getParentModule()->getSubmodule("mac"));
+mac->setTestMib(check_and_cast<Ieee80211Mib *>(getParentModule()->getSubmodule("mib")));
+auto hcf = check_and_cast<TestTransmissionHcf *>(getParentModule()->getSubmodule("hcf"));
+auto vhtHcf = check_and_cast<TestTransmissionVhtHcf *>(getParentModule()->getSubmodule("vhtHcf"));
+auto modeSet = const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("n(mixed-2.4Ghz)"));
+auto htMode = modeSet->findHtMode(0, 1, MHz(20), false);
+REQUIRE(htMode != nullptr);
+std::vector<std::string> events;
+TestAckPolicy ackPolicy;
+TestRtsPolicy rtsPolicy;
+TestTxop txop;
+TestAckHandler ackHandler;
+TestInProgressFrames frames;
+TestEdcaf edcaf;
+TestEdca edca;
+TestRateSelection rateSelection;
+TestTx tx;
+TestSingleProtection protection;
+ackPolicy.events = ackHandler.events = rateSelection.events = tx.events = hcf->events = &events;
+rateSelection.mode = htMode;
+tx.selectedMode = htMode;
+edcaf.testTxop = &txop;
+edcaf.testAckHandler = &ackHandler;
+edcaf.testFrames = &frames;
+edca.owner = &edcaf;
+auto qosContext = new QoSContext(&ackPolicy, nullptr, nullptr, &txop, &rateSelection);
+TestContext context(mac->getAddress(), modeSet, &frames, nullptr, &rtsPolicy,
+        nullptr, qosContext);
+hcf->setup(mac, &edca, &tx, &rateSelection, &ackPolicy, &rtsPolicy, modeSet,
+        &context, &protection);
+vhtHcf->setup(mac, &edca, &tx, &rateSelection, &ackPolicy, &rtsPolicy, modeSet,
+        &context, &protection);
+
+auto first = makeData("first", MacAddress("02:00:00:00:00:02"), 10);
+auto second = makeData("second", MacAddress("02:00:00:00:00:02"), 11);
+frames.addInProgressFrame(first);
+frames.addInProgressFrame(second);
+frames.eligibleFrames = {first, second};
+context.setImplicitFrames({first, second});
+REQUIRE(isHtImplicitBlockAckEligible(&context, first,
+        first->peekAtFront<Ieee80211DataHeader>()));
+tx.sourcePacket = first;
+hcf->transmitForTest(first);
+REQUIRE(tx.transmitCount == 1);
+REQUIRE(first->findTag<Ieee80211ModeReq>()->getMode() == htMode);
+REQUIRE(events == std::vector<std::string>({"policyPreRetry:first", "policyPreRetry:first",
+        "retry:first",
+        "policyRetry:first", "selectMode", "retry:first", "policyRetry:first",
+        "retry:second", "policyRetry:second", "modeTemporary", "modeSource",
+        "recordTemporary", "txTemporary"}));
+
+// A candidate that terminates aggregation still receives baseline retry
+// materialization before its policy is consulted.
+auto candidateSource = makeData("candidateSource", MacAddress("02:00:00:00:00:02"), 20);
+auto rejected = makeData("rejected", MacAddress("02:00:00:00:00:02"), 21);
+frames.addInProgressFrame(candidateSource);
+frames.addInProgressFrame(rejected);
+frames.eligibleFrames = {candidateSource, rejected};
+context.setImplicitFrames({});
+events.clear();
+tx.sourcePacket = candidateSource;
+// Direct transmission is expected because the second candidate breaks before
+// a two-member aggregate can be materialized.
+tx.sourcePacket = candidateSource;
+tx.requireTemporary = false;
+hcf->transmitForTest(candidateSource);
+REQUIRE(rejected->peekAtFront<Ieee80211DataHeader>()->getRetry());
+REQUIRE(std::find(events.begin(), events.end(), "retry:rejected") <
+        std::find(events.begin(), events.end(), "policyRetry:rejected"));
+
+// PPDU trimming happens after each accepted candidate's one per-member policy
+// decision and header mutation. The trimmed member retains Block Ack and zero
+// Duration exactly as in the baseline loop.
+auto trimSource = makeData("trimSource", MacAddress("02:00:00:00:00:02"),
+        30, B(4000));
+auto trimRetained = makeData("trimRetained", MacAddress("02:00:00:00:00:02"),
+        31, B(4000));
+auto trimmed = makeData("trimmed", MacAddress("02:00:00:00:00:02"),
+        32, B(4000));
+frames.addInProgressFrame(trimSource);
+frames.addInProgressFrame(trimRetained);
+frames.addInProgressFrame(trimmed);
+frames.eligibleFrames = {trimSource, trimRetained, trimmed};
+context.setImplicitFrames({});
+events.clear();
+ackPolicy.calls.clear();
+tx.sourcePacket = trimSource;
+tx.requireTemporary = true;
+tx.inspectModes = true;
+tx.requireSourceMode = false;
+hcf->transmitForTest(trimSource);
+REQUIRE(ackPolicy.calls["trimSource"] == 2); // source selection + member
+REQUIRE(ackPolicy.calls["trimRetained"] == 1);
+REQUIRE(ackPolicy.calls["trimmed"] == 1);
+REQUIRE(trimSource->peekAtFront<Ieee80211DataHeader>()->getAckPolicy() == BLOCK_ACK);
+REQUIRE(trimRetained->peekAtFront<Ieee80211DataHeader>()->getAckPolicy() == BLOCK_ACK);
+REQUIRE(trimmed->peekAtFront<Ieee80211DataHeader>()->getAckPolicy() == BLOCK_ACK);
+REQUIRE(trimSource->peekAtFront<Ieee80211DataHeader>()->getDurationField() == SIMTIME_ZERO);
+REQUIRE(trimRetained->peekAtFront<Ieee80211DataHeader>()->getDurationField() == SIMTIME_ZERO);
+REQUIRE(trimmed->peekAtFront<Ieee80211DataHeader>()->getDurationField() == SIMTIME_ZERO);
+frames.removeInProgressFrame(trimSource);
+frames.removeInProgressFrame(trimRetained);
+frames.removeInProgressFrame(trimmed);
+delete trimSource;
+delete trimRetained;
+delete trimmed;
+tx.requireSourceMode = true;
+
+// HT NDP and synthesized HE MU containers retain their established early
+// exits and never enter common retry/policy preparation.
+events.clear();
+auto ndp = new Packet("htNdp");
+ndp->addTag<Ieee80211HtTransmissionReq>()->setNdp(true);
+tx.sourcePacket = ndp;
+tx.requireTemporary = false;
+tx.inspectModes = false;
+hcf->transmitForTest(ndp);
+REQUIRE(events == std::vector<std::string>({"txSource"}));
+REQUIRE(tx.transmittedHeader->getType() == ST_QOS_NULL);
+delete ndp;
+
+events.clear();
+auto container = new Packet("heContainer");
+container->addTag<Ieee80211HeMuContainerReq>()->setDurationField(
+        SimTime(91, SIMTIME_US));
+tx.sourcePacket = container;
+hcf->transmitForTest(container);
+REQUIRE(events == std::vector<std::string>({"selectMode", "txSource"}));
+REQUIRE(tx.transmittedHeader->getDurationField() == SimTime(91, SIMTIME_US));
+delete container;
+
+// Trigger and Multi-STA BlockAck are exempt from SINGLE protection only;
+// MULTIPLE protection preserves the baseline Duration update.
+for (bool triggerFrame : {true, false})
+    for (auto mechanism : {TxopProcedure::SINGLE_PROTECTION,
+            TxopProcedure::MULTIPLE_PROTECTION}) {
+        Ptr<Ieee80211MacHeader> header = triggerFrame ?
+                staticPtrCast<Ieee80211MacHeader>(makeShared<Ieee80211TriggerFrame>()) :
+                staticPtrCast<Ieee80211MacHeader>(makeShared<Ieee80211MultiStaBlockAck>());
+        header->setChunkLength(triggerFrame ? B(24) : B(32));
+        header->setDurationField(SimTime(13, SIMTIME_US));
+        auto control = new Packet(triggerFrame ? "trigger" : "multiSta", header);
+        control->insertAtBack(makeShared<Ieee80211MacTrailer>());
+        events.clear();
+        protection.calls = 0;
+        txop.mechanism = mechanism;
+        tx.sourcePacket = control;
+        tx.inspectModes = true;
+        hcf->transmitForTest(control);
+        REQUIRE(protection.calls == (mechanism == TxopProcedure::MULTIPLE_PROTECTION));
+        REQUIRE(control->peekAtFront<Ieee80211MacHeader>()->getDurationField() ==
+                (mechanism == TxopProcedure::MULTIPLE_PROTECTION ?
+                 SimTime(77, SIMTIME_US) : SimTime(13, SIMTIME_US)));
+        delete control;
+    }
+txop.mechanism = TxopProcedure::SINGLE_PROTECTION;
+
+// The common adapter dispatches mode attachment through the virtual HCF seam,
+// so a VHT-derived coordination function retains its specialization point.
+auto vhtSeam = makeData("vhtSeam", MacAddress("02:00:00:00:00:02"), 22);
+frames.eligibleFrames = {vhtSeam};
+context.setImplicitFrames({});
+events.clear();
+tx.sourcePacket = vhtSeam;
+tx.requireTemporary = false;
+vhtHcf->transmitForTest(vhtSeam);
+REQUIRE(vhtHcf->setFrameModeCalled);
+REQUIRE(vhtSeam->findTag<Ieee80211ModeReq>()->getMode() == htMode);
+frames.removeInProgressFrame(vhtSeam);
+delete vhtSeam;
+
+// A missing selected mode retains the baseline retry mutation but performs no
+// mode tagging, aggregate materialization, or TX handoff.
+auto invalid = makeData("invalid", MacAddress("02:00:00:00:00:02"), 12);
+invalid->removeTag<DurationFinalizedReq>();
+events.clear();
+rateSelection.mode = nullptr;
+tx.requireTemporary = true;
+tx.inspectModes = true;
+context.setImplicitFrames({});
+bool failed = false;
+auto transmitCountBeforeFailure = tx.transmitCount;
+try {
+    hcf->transmitForTest(invalid);
+}
+catch (const cRuntimeError&) {
+    failed = true;
+}
+REQUIRE(failed);
+REQUIRE(events == std::vector<std::string>({"retry:invalid", "policyRetry:invalid", "selectMode"}));
+REQUIRE(invalid->peekAtFront<Ieee80211DataHeader>()->getRetry());
+REQUIRE(invalid->findTag<Ieee80211ModeReq>() == nullptr);
+REQUIRE(invalid->peekAtFront<Ieee80211DataHeader>()->getAckPolicy() == BLOCK_ACK);
+REQUIRE(tx.transmitCount == transmitCountBeforeFailure);
+delete invalid;
+frames.removeInProgressFrame(candidateSource);
+frames.removeInProgressFrame(rejected);
+delete candidateSource;
+delete rejected;
+
+EV << "HCF transmission preparation production adapter checks passed.\n";
+
+%contains: stdout
+HCF transmission preparation production adapter checks passed.

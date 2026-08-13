@@ -165,8 +165,8 @@ class TestHcf : public Hcf
   public:
     static bool isImplicitAggregate(unsigned int numAggregateMembers,
             const std::vector<Ptr<const Ieee80211MacHeader>>& headers) {
-        return classifyHtAmpduAckContext(numAggregateMembers, headers) ==
-                HtAmpduAckContext::IMPLICIT_BLOCK_ACK;
+        return isHtImplicitBlockAckAggregateForTesting(numAggregateMembers,
+                headers);
     }
 };
 
@@ -230,10 +230,14 @@ REQUIRE(txOpSequence.selectTxOpSequence(nullptr, &context) == 4);
 EV << "TXOP selection chooses the implicit-BlockAck response state machine for an eligible two-MPDU aggregate.\n";
 context.setHtImplicitBlockAckFramesForTest({});
 REQUIRE(txOpSequence.selectTxOpSequence(nullptr, &context) == 0);
-secondHeader->setMoreFragments(true);
+auto mutableSecondHeader = secondPacket->removeAtFront<Ieee80211DataHeader>();
+mutableSecondHeader->setMoreFragments(true);
+secondPacket->insertAtFront(mutableSecondHeader);
 context.setHtImplicitBlockAckFramesForTest(implicitBlockAckFrames);
 REQUIRE(txOpSequence.selectTxOpSequence(nullptr, &context) == 0);
-secondHeader->setMoreFragments(false);
+mutableSecondHeader = secondPacket->removeAtFront<Ieee80211DataHeader>();
+mutableSecondHeader->setMoreFragments(false);
+secondPacket->insertAtFront(mutableSecondHeader);
 context.setHtImplicitBlockAckFramesForTest({});
 ackPolicy.ackPolicy = NORMAL_ACK;
 REQUIRE(txOpSequence.selectTxOpSequence(nullptr, &context) == 1);

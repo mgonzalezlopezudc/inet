@@ -120,9 +120,9 @@ class INET_API HeDlMuPlan
                 return std::nullopt;
             }
             const auto& candidate = *candidateIt->second;
-            if (candidate.sourceQueue == nullptr) {
+            if (!candidate.sourceQueueToken.isValid()) {
                 fail(diagnostic, HeMuPlanErrorCode::NULL_QUEUE, i,
-                        allocation.staAddress, "candidate has no source queue");
+                        allocation.staAddress, "candidate has no source queue token");
                 return std::nullopt;
             }
             if (!scheduledStations.insert(allocation.staAddress).second) {
@@ -230,7 +230,7 @@ class INET_API HeDlMuPlan
                                 "an HE MU-MIMO user cannot have more than four spatial streams");
                         return std::nullopt;
                     }
-                    if (scheduleContext.csiManager == nullptr || !candidate.hasFreshCsi ||
+                    if (scheduleContext.csiLeakages.empty() || !candidate.hasFreshCsi ||
                             !candidate.hasAdvertisedHeCapabilities ||
                             !isDlMuMimoEligible(scheduleContext.localHeCapabilities,
                                     candidate.advertisedHeCapabilities,

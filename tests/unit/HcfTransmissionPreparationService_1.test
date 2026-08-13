@@ -1,0 +1,527 @@
+%description:
+Verify the standalone common HCF transmission-preparation order, authoritative
+validation boundaries, and temporary aggregate lifetime.
+
+%includes:
+#include <algorithm>
+#include <functional>
+#include <string>
+#include <vector>
+
+#include "inet/common/packet/Packet.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfTransmissionPreparationService.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+static bool throwsRuntimeError(const std::function<void()>& operation)
+{
+    try {
+        operation();
+        return false;
+    }
+    catch (const cRuntimeError&) {
+        return true;
+    }
+}
+
+static Packet *makeData(const char *name, const MacAddress& receiver,
+        AckPolicy ackPolicy = NORMAL_ACK)
+{
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setType(ST_DATA_WITH_QOS);
+    header->setReceiverAddress(receiver);
+    header->setTransmitterAddress(MacAddress("02:00:00:00:00:01"));
+    header->setTid(5);
+    header->setAckPolicy(ackPolicy);
+    header->setChunkLength(B(26));
+    return new Packet(name, header);
+}
+
+struct PreparationHarness : public HcfTransmissionPreparationService::IActions {
+    using Request = HcfTransmissionPreparationService::Request;
+    using AggregatePlan = HcfTransmissionPreparationService::AggregatePlan;
+    using ProtectionPlan = HcfTransmissionPreparationService::ProtectionPlan;
+
+    std::vector<std::string> events;
+    std::vector<Packet *> aggregateMembers;
+    AckPolicy selectedAckPolicy = NORMAL_ACK;
+    bool implicitBlockAck = false;
+    bool materialize = false;
+    bool updateDuration = true;
+    bool failModeValidation = false;
+    bool failProtection = false;
+    bool failSetMode = false;
+    bool failHandoff = false;
+    bool returnProvidedHeader = false;
+    bool mutateQueueDuringPlanning = false;
+    bool sourceRetryMaterialized = false;
+    mutable bool ackPolicySawRetry = false;
+    mutable bool modeSelectionSawRetry = false;
+    simtime_t protectionDuration = SimTime(37, SIMTIME_US);
+    int packetMutationCount = 0;
+    int queueMutationCount = 0;
+    int temporaryDeleteCount = 0;
+    int handoffCount = 0;
+    const IIeee80211Mode *selectedMode = nullptr;
+    const IIeee80211Mode *transmittedMode = nullptr;
+    const IIeee80211Mode *sourceMode = nullptr;
+    Packet *modePacket = nullptr;
+    Packet *sourceModePacket = nullptr;
+    simtime_t validatedDuration;
+    simtime_t validatedPpduMaxDuration;
+
+    const IIeee80211Mode *getMode() const
+    {
+        return selectedMode;
+    }
+
+    virtual bool isHtImplicitBlockAckEligible(const Request&) const override
+    {
+        const_cast<PreparationHarness *>(this)->events.push_back("implicitEligibility");
+        return implicitBlockAck;
+    }
+
+    virtual AckPolicy selectAckPolicy(const Request&, bool) const override
+    {
+        auto mutableThis = const_cast<PreparationHarness *>(this);
+        mutableThis->events.push_back("ackPolicy");
+        mutableThis->ackPolicySawRetry = sourceRetryMaterialized;
+        return selectedAckPolicy;
+    }
+
+    virtual const IIeee80211Mode *selectMode(const Request&) const override
+    {
+        auto mutableThis = const_cast<PreparationHarness *>(this);
+        mutableThis->events.push_back("selectMode");
+        mutableThis->modeSelectionSawRetry = sourceRetryMaterialized;
+        return getMode();
+    }
+
+    virtual void validateMode(const Request&, const IIeee80211Mode *) const override
+    {
+        auto mutableThis = const_cast<PreparationHarness *>(this);
+        mutableThis->events.push_back("validateMode");
+        if (failModeValidation)
+            throw cRuntimeError("injected invalid PHY mode");
+        mutableThis->validatedDuration = selectedMode->getDuration(B(100));
+        mutableThis->validatedPpduMaxDuration = selectedMode->getPpduMaxDuration();
+    }
+
+    virtual AggregatePlan planAggregation(const Request& request,
+            const IIeee80211Mode *, AckPolicy, bool implicit) const override
+    {
+        auto mutableThis = const_cast<PreparationHarness *>(this);
+        mutableThis->events.push_back("planAggregation");
+        if (mutateQueueDuringPlanning)
+            mutableThis->queueMutationCount++;
+        AggregatePlan plan;
+        plan.materialize = materialize;
+        plan.implicitBlockAck = implicit;
+        if (materialize) {
+            plan.members = aggregateMembers;
+            if (plan.members.empty())
+                plan.members.push_back(request.packet);
+        }
+        return plan;
+    }
+
+    virtual void validateAggregation(const Request&, const IIeee80211Mode *,
+            const AggregatePlan&) const override
+    {
+        const_cast<PreparationHarness *>(this)->events.push_back("validateAggregation");
+    }
+
+    virtual ProtectionPlan computeProtection(const Request&,
+            const IIeee80211Mode *, const AggregatePlan&) const override
+    {
+        const_cast<PreparationHarness *>(this)->events.push_back("computeProtection");
+        ProtectionPlan result;
+        result.updateDuration = updateDuration;
+        result.duration = protectionDuration;
+        return result;
+    }
+
+    virtual void validateProtection(const Request& request,
+            const IIeee80211Mode *, const AggregatePlan&) const override
+    {
+        const_cast<PreparationHarness *>(this)->events.push_back("validateProtection");
+        if (failProtection || (updateDuration && protectionDuration < SIMTIME_ZERO) ||
+                ((request.durationFinalized ||
+                  (request.protectionMechanism ==
+                   HcfTransmissionPreparationService::ProtectionMechanism::SINGLE &&
+                   request.durationExemptForSingleProtection)) && updateDuration))
+            throw cRuntimeError("injected invalid protection plan");
+    }
+
+    virtual void applySourceRetryState(Packet *) override
+    {
+        events.push_back("applySourceRetry");
+        packetMutationCount++;
+        sourceRetryMaterialized = true;
+    }
+
+    virtual void applyAggregateMemberState(Packet *, const AggregatePlan&) override
+    {
+        events.push_back("applyAggregateMembers");
+        packetMutationCount++;
+    }
+
+    virtual Ptr<const Ieee80211MacHeader> applyAckPolicy(Packet *sourcePacket,
+            const Ptr<const Ieee80211MacHeader>& providedHeader, AckPolicy ackPolicy,
+            const AggregatePlan&) override
+    {
+        events.push_back("applyAckPolicy");
+        packetMutationCount++;
+        if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(
+                sourcePacket->peekAtFront<Ieee80211MacHeader>())) {
+            auto mutableHeader = sourcePacket->removeAtFront<Ieee80211DataHeader>();
+            mutableHeader->setAckPolicy(ackPolicy);
+            sourcePacket->insertAtFront(mutableHeader);
+        }
+        return returnProvidedHeader ? providedHeader :
+                sourcePacket->peekAtFront<Ieee80211MacHeader>();
+    }
+
+    virtual Ptr<const Ieee80211MacHeader> applyModePreparation(Packet *,
+            const Ptr<const Ieee80211MacHeader>& header,
+            const IIeee80211Mode *) override
+    {
+        events.push_back("applyModePreparation");
+        packetMutationCount++;
+        return header;
+    }
+
+    virtual void applyDuration(Packet *sourcePacket,
+            const Ptr<const Ieee80211MacHeader>&, simtime_t duration) override
+    {
+        events.push_back("applyDuration");
+        packetMutationCount++;
+        auto header = sourcePacket->removeAtFront<Ieee80211MacHeader>();
+        header->setDurationField(duration);
+        sourcePacket->insertAtFront(header);
+    }
+
+    virtual Packet *materializeAggregate(Packet *sourcePacket,
+            const AggregatePlan&) override
+    {
+        events.push_back("materialize");
+        auto aggregate = sourcePacket->dup();
+        aggregate->setName("temporaryAggregate");
+        return aggregate;
+    }
+
+    virtual void setMode(Packet *packet, const Ptr<const Ieee80211MacHeader>&,
+            const IIeee80211Mode *mode) override
+    {
+        events.push_back("setMode");
+        if (failSetMode)
+            throw cRuntimeError("injected mode-tag failure");
+        modePacket = packet;
+        transmittedMode = mode;
+    }
+
+    virtual void setSourceMode(Packet *packet,
+            const Ptr<const Ieee80211MacHeader>&,
+            const IIeee80211Mode *mode) override
+    {
+        events.push_back("setSourceMode");
+        sourceModePacket = packet;
+        sourceMode = mode;
+    }
+
+    virtual void recordSelectedMode(Packet *, const IIeee80211Mode *) override
+    {
+        events.push_back("recordMode");
+    }
+
+    virtual void observeSelectedRate(Packet *, const IIeee80211Mode *) override
+    {
+        events.push_back("observeRate");
+    }
+
+    virtual void transmitBorrowed(Packet *, const Ptr<const Ieee80211MacHeader>&,
+            simtime_t) override
+    {
+        events.push_back("handoff");
+        handoffCount++;
+        if (failHandoff)
+            throw cRuntimeError("injected handoff failure");
+    }
+
+    virtual void deleteTemporaryPacket(Packet *packet) noexcept override
+    {
+        events.push_back("deleteTemporary");
+        temporaryDeleteCount++;
+        delete packet;
+    }
+};
+
+static const IIeee80211Mode *findFirstFamilyMode(const Ieee80211ModeSet *modeSet,
+        Ieee80211PhyFamily family)
+{
+    for (int i = 0; i < modeSet->getNumModes(); i++)
+        if (modeSet->getPhyFamily(i) == family)
+            return modeSet->getMode(i);
+    throw cRuntimeError("No requested PHY family in test mode set");
+}
+
+%activity:
+using Service = HcfTransmissionPreparationService;
+Service service;
+const MacAddress unicast("02:00:00:00:00:02");
+
+// Real legacy, HT, VHT, and HE modes traverse the same ordered pipeline. The
+// action authority invokes each selected mode's actual duration and PPDU-limit
+// implementation; this service does not duplicate either formula.
+struct FamilyFixture {
+    const char *name;
+    const IIeee80211Mode *mode;
+};
+const FamilyFixture familyFixtures[] = {
+    {"legacy", findFirstFamilyMode(Ieee80211ModeSet::getModeSet("a"),
+            Ieee80211PhyFamily::OFDM)},
+    {"HT", findFirstFamilyMode(Ieee80211ModeSet::getModeSet("n(mixed-2.4Ghz)"),
+            Ieee80211PhyFamily::HT)},
+    {"VHT", findFirstFamilyMode(Ieee80211ModeSet::getModeSet("ac"),
+            Ieee80211PhyFamily::VHT)},
+    {"HE", findFirstFamilyMode(Ieee80211ModeSet::getModeSet("ax"),
+            Ieee80211PhyFamily::HE)},
+};
+for (const auto& fixture : familyFixtures) {
+    auto packet = makeData(fixture.name, unicast);
+    PreparationHarness harness;
+    harness.selectedMode = fixture.mode;
+    Service::Request request;
+    request.packet = packet;
+    request.header = packet->peekAtFront<Ieee80211MacHeader>();
+    request.ifs = SimTime(16, SIMTIME_US);
+    auto prepared = service.prepare(request, harness);
+    REQUIRE(prepared.sourcePacket == packet);
+    REQUIRE(prepared.transmittedPacket == packet);
+    REQUIRE(!prepared.temporaryPacketOwned);
+    REQUIRE(!prepared.sourceModePropagated);
+    REQUIRE(prepared.mode == harness.getMode());
+    REQUIRE(harness.validatedDuration == fixture.mode->getDuration(B(100)));
+    REQUIRE(harness.validatedPpduMaxDuration == fixture.mode->getPpduMaxDuration());
+    REQUIRE(harness.ackPolicySawRetry);
+    REQUIRE(harness.modeSelectionSawRetry);
+    REQUIRE(harness.events == std::vector<std::string>({
+            "implicitEligibility", "applySourceRetry", "ackPolicy", "selectMode", "validateMode",
+            "planAggregation", "validateAggregation", "validateProtection",
+            "applyAckPolicy", "applyModePreparation",
+            "applyAggregateMembers", "setMode", "computeProtection", "recordMode",
+            "observeRate", "applyDuration"}));
+    service.commit(prepared, harness);
+    REQUIRE(prepared.terminalState == Service::TerminalState::COMMITTED);
+    REQUIRE(harness.handoffCount == 1);
+    REQUIRE(harness.temporaryDeleteCount == 0);
+    REQUIRE(throwsRuntimeError([&] { service.commit(prepared, harness); }));
+    delete packet;
+}
+
+// A non-container header must be the exact front-header object of its packet.
+// Container metadata headers are the documented exception to this identity rule.
+{
+    auto packet = makeData("headerOwner", unicast);
+    auto foreignPacket = makeData("foreignHeaderOwner", unicast);
+    PreparationHarness harness;
+    harness.selectedMode = familyFixtures[0].mode;
+    Service::Request request;
+    request.packet = packet;
+    request.header = foreignPacket->peekAtFront<Ieee80211MacHeader>();
+    REQUIRE(throwsRuntimeError([&] { service.prepare(request, harness); }));
+    REQUIRE(harness.events.empty());
+
+    request.container = true;
+    harness.updateDuration = false;
+    harness.returnProvidedHeader = true;
+    auto prepared = service.prepare(request, harness);
+    REQUIRE(prepared.header == request.header);
+    service.discard(prepared, harness);
+    delete foreignPacket;
+    delete packet;
+}
+
+// Group-addressed QoS data preserves the policy authority's No Ack decision.
+{
+    auto packet = makeData("groupNoAck", MacAddress::BROADCAST_ADDRESS);
+    PreparationHarness harness;
+    harness.selectedMode = familyFixtures[0].mode;
+    harness.selectedAckPolicy = NO_ACK;
+    Service::Request request;
+    request.packet = packet;
+    request.header = packet->peekAtFront<Ieee80211MacHeader>();
+    auto prepared = service.prepare(request, harness);
+    REQUIRE(packet->peekAtFront<Ieee80211DataHeader>()->getAckPolicy() == NO_ACK);
+    service.commit(prepared, harness);
+    delete packet;
+}
+
+// Aggregate identity validation precedes protection, packet mutation, and
+// materialization. The source occurs exactly once and every pointer is unique.
+auto requireInvalidAggregate = [&] (const char *name,
+        const std::function<void(Packet *, Packet *, PreparationHarness&)>& configure) {
+    auto packet = makeData(name, unicast, BLOCK_ACK);
+    auto other = makeData("otherMember", unicast, BLOCK_ACK);
+    PreparationHarness harness;
+    harness.selectedMode = familyFixtures[1].mode;
+    harness.materialize = true;
+    configure(packet, other, harness);
+    Service::Request request;
+    request.packet = packet;
+    request.header = packet->peekAtFront<Ieee80211MacHeader>();
+    REQUIRE(throwsRuntimeError([&] { service.prepare(request, harness); }));
+    REQUIRE(harness.packetMutationCount == 1);
+    REQUIRE(std::find(harness.events.begin(), harness.events.end(), "computeProtection") == harness.events.end());
+    REQUIRE(std::find(harness.events.begin(), harness.events.end(), "materialize") == harness.events.end());
+    delete other;
+    delete packet;
+};
+requireInvalidAggregate("sourceOmitted", [] (Packet *, Packet *other,
+        PreparationHarness& harness) { harness.aggregateMembers = {other}; });
+requireInvalidAggregate("sourceRepeated", [] (Packet *source, Packet *,
+        PreparationHarness& harness) { harness.aggregateMembers = {source, source}; });
+requireInvalidAggregate("memberRepeated", [] (Packet *source, Packet *other,
+        PreparationHarness& harness) { harness.aggregateMembers = {source, other, other}; });
+requireInvalidAggregate("nullMember", [] (Packet *source, Packet *,
+        PreparationHarness& harness) { harness.aggregateMembers = {source, nullptr}; });
+
+// Negative duration and attempts to overwrite finalized Duration fields fail
+// after source retry staging but before aggregate allocation.
+for (int protectionCase = 0; protectionCase < 2; protectionCase++) {
+    auto packet = makeData("invalidDurationPlan", unicast);
+    PreparationHarness harness;
+    harness.selectedMode = familyFixtures[0].mode;
+    Service::Request request;
+    request.packet = packet;
+    request.header = packet->peekAtFront<Ieee80211MacHeader>();
+    if (protectionCase == 0)
+        harness.protectionDuration = SimTime(-1, SIMTIME_US);
+    else
+        request.durationFinalized = true;
+    REQUIRE(throwsRuntimeError([&] { service.prepare(request, harness); }));
+    REQUIRE(harness.packetMutationCount == 1);
+    REQUIRE(std::find(harness.events.begin(), harness.events.end(), "materialize") == harness.events.end());
+    delete packet;
+}
+
+// Trigger/Multi-STA exemption is specific to SINGLE protection. The same
+// request remains eligible for the baseline MULTIPLE-protection Duration update.
+for (auto mechanism : {Service::ProtectionMechanism::SINGLE,
+        Service::ProtectionMechanism::MULTIPLE}) {
+    auto packet = makeData("singleProtectionExemption", unicast);
+    PreparationHarness harness;
+    harness.selectedMode = familyFixtures[0].mode;
+    harness.updateDuration = mechanism == Service::ProtectionMechanism::MULTIPLE;
+    Service::Request request;
+    request.packet = packet;
+    request.header = packet->peekAtFront<Ieee80211MacHeader>();
+    request.protectionMechanism = mechanism;
+    request.durationExemptForSingleProtection = true;
+    auto prepared = service.prepare(request, harness);
+    REQUIRE((std::find(harness.events.begin(), harness.events.end(),
+            "applyDuration") != harness.events.end()) ==
+            (mechanism == Service::ProtectionMechanism::MULTIPLE));
+    service.discard(prepared, harness);
+    delete packet;
+}
+
+// A valid HT implicit-BlockAck aggregate has one temporary owner. Successful
+// handoff and failing handoff both delete it exactly once while retaining the source.
+for (bool failHandoff : {false, true}) {
+    auto packet = makeData("htAggregateSource", unicast, BLOCK_ACK);
+    PreparationHarness harness;
+    harness.selectedMode = familyFixtures[1].mode;
+    harness.implicitBlockAck = true;
+    harness.materialize = true;
+    harness.failHandoff = failHandoff;
+    Service::Request request;
+    request.packet = packet;
+    request.header = packet->peekAtFront<Ieee80211MacHeader>();
+    auto prepared = service.prepare(request, harness);
+    REQUIRE(prepared.transmittedPacket != packet);
+    REQUIRE(prepared.temporaryPacketOwned);
+    REQUIRE(prepared.sourceModePropagated);
+    REQUIRE(harness.transmittedMode == harness.selectedMode);
+    REQUIRE(harness.sourceMode == harness.selectedMode);
+    REQUIRE(harness.modePacket == prepared.transmittedPacket);
+    REQUIRE(harness.sourceModePacket == packet);
+    REQUIRE(std::find(harness.events.begin(), harness.events.end(), "setSourceMode") != harness.events.end());
+    if (failHandoff) {
+        REQUIRE(throwsRuntimeError([&] { service.commit(prepared, harness); }));
+        REQUIRE(prepared.terminalState == Service::TerminalState::HANDOFF_FAILED);
+    }
+    else {
+        service.commit(prepared, harness);
+        REQUIRE(prepared.terminalState == Service::TerminalState::COMMITTED);
+    }
+    REQUIRE(!prepared.temporaryPacketOwned);
+    REQUIRE(harness.temporaryDeleteCount == 1);
+    delete packet;
+}
+
+// Explicit discard is the other terminal path for a temporary aggregate.
+{
+    auto packet = makeData("discardSource", unicast, BLOCK_ACK);
+    PreparationHarness harness;
+    harness.selectedMode = familyFixtures[1].mode;
+    harness.materialize = true;
+    Service::Request request;
+    request.packet = packet;
+    request.header = packet->peekAtFront<Ieee80211MacHeader>();
+    auto prepared = service.prepare(request, harness);
+    service.discard(prepared, harness);
+    REQUIRE(prepared.terminalState == Service::TerminalState::DISCARDED);
+    REQUIRE(harness.handoffCount == 0);
+    REQUIRE(harness.temporaryDeleteCount == 1);
+    delete packet;
+}
+
+// Invalid mode/protection after the staged retry/planning prefix retain owner
+// mutations exactly as the baseline does. Temporary allocation and TX remain absent.
+for (bool invalidMode : {true, false}) {
+    auto packet = makeData(invalidMode ? "invalidMode" : "invalidProtection", unicast);
+    PreparationHarness harness;
+    harness.selectedMode = familyFixtures[0].mode;
+    harness.materialize = true;
+    harness.failModeValidation = invalidMode;
+    harness.failProtection = !invalidMode;
+    harness.mutateQueueDuringPlanning = !invalidMode;
+    Service::Request request;
+    request.packet = packet;
+    request.header = packet->peekAtFront<Ieee80211MacHeader>();
+    REQUIRE(throwsRuntimeError([&] { service.prepare(request, harness); }));
+    REQUIRE(harness.packetMutationCount == 1);
+    REQUIRE(harness.queueMutationCount == (invalidMode ? 0 : 1));
+    REQUIRE(harness.handoffCount == 0);
+    REQUIRE(harness.temporaryDeleteCount == 0);
+    REQUIRE(std::find(harness.events.begin(), harness.events.end(), "materialize") == harness.events.end());
+    delete packet;
+}
+
+// A failure after temporary materialization performs exact cleanup and never hands off.
+{
+    auto packet = makeData("tagFailure", unicast);
+    PreparationHarness harness;
+    harness.selectedMode = familyFixtures[0].mode;
+    harness.materialize = true;
+    harness.failSetMode = true;
+    Service::Request request;
+    request.packet = packet;
+    request.header = packet->peekAtFront<Ieee80211MacHeader>();
+    REQUIRE(throwsRuntimeError([&] { service.prepare(request, harness); }));
+    REQUIRE(harness.temporaryDeleteCount == 1);
+    REQUIRE(harness.handoffCount == 0);
+    delete packet;
+}
+
+EV << "HCF transmission preparation service checks passed.\n";
+
+%contains: stdout
+HCF transmission preparation service checks passed.

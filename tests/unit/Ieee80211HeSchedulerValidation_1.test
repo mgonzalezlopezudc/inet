@@ -48,7 +48,7 @@ static IIeee80211HeDlScheduler::ScheduleContext makeContext(
     for (size_t i = 0; i < stations.size(); ++i) {
         IIeee80211HeDlScheduler::CandidateInfo candidate;
         candidate.staAddress = stations[i];
-        candidate.sourceQueue = queue;
+        candidate.sourceQueueToken = HcfQueueToken(i + 1);
         candidate.anchor = i == 0;
         candidate.hasAdvertisedHeCapabilities = true;
         candidate.advertisedHeCapabilities = peerCapabilities;
@@ -204,7 +204,7 @@ requireRejected(context, allocations, HeMuPlanErrorCode::UNKNOWN_STATION,
         "unknown station should be rejected");
 
 auto nullQueueContext = context;
-nullQueueContext.candidates[1].sourceQueue = nullptr;
+nullQueueContext.candidates[1].sourceQueueToken = HcfQueueToken();
 requireRejected(nullQueueContext, validPlan->getAllocations(), HeMuPlanErrorCode::NULL_QUEUE,
         "null source queue should be rejected");
 
@@ -266,7 +266,12 @@ requireRejected(invalidMuMimoContext, allocations, HeMuPlanErrorCode::UNSUPPORTE
 HeMuMimoCsiManager csiManager;
 auto eligibleMuMimoContext = context;
 eligibleMuMimoContext.enableDlMuMimo = true;
-eligibleMuMimoContext.csiManager = &csiManager;
+for (const auto& station : eligibleMuMimoContext.candidates)
+    for (const auto& other : eligibleMuMimoContext.candidates)
+        if (station.staAddress != other.staAddress)
+            eligibleMuMimoContext.csiLeakages[{station.staAddress, other.staAddress}] =
+                    csiManager.getLeakage(station.staAddress, other.staAddress,
+                            eligibleMuMimoContext.channelBandwidth);
 eligibleMuMimoContext.numApAntennas = 8;
 eligibleMuMimoContext.localHeCapabilities.dlMuMimoBeamformer = true;
 eligibleMuMimoContext.localHeCapabilities.soundingDimensions = 8;

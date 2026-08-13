@@ -108,6 +108,22 @@ class INET_API OriginatorBlockAckAgreement : public cObject
                 blockAckTimeoutValue, expirationTime, numSentBaPolicyFrames,
                 generation, associationEpoch};
     }
+    void restoreSnapshot(const OriginatorBlockAckAgreementSnapshot& snapshot)
+    {
+        startingSequenceNumber = snapshot.startingSequenceNumber;
+        bufferSize = snapshot.bufferSize;
+        isAMsduSupported = snapshot.isAMsduSupported;
+        isDelayedBlockAckPolicySupported = snapshot.isDelayedBlockAckPolicySupported;
+        isAddbaResponseReceived = snapshot.isAddbaResponseReceived;
+        isAddbaRequestSent = snapshot.isAddbaRequestSent;
+        isAddbaRequestInProgress = snapshot.isAddbaRequestInProgress;
+        expirationHandlingInProgress = snapshot.expirationHandlingInProgress;
+        blockAckTimeoutValue = snapshot.blockAckTimeoutValue;
+        expirationTime = snapshot.expirationTime;
+        numSentBaPolicyFrames = snapshot.numSentBaPolicyFrames;
+        generation = snapshot.generation;
+        associationEpoch = snapshot.associationEpoch;
+    }
 };
 
 } /* namespace ieee80211 */

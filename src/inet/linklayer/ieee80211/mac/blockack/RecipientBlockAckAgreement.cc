@@ -24,7 +24,11 @@ RecipientBlockAckAgreement::RecipientBlockAckAgreement(MacAddress originatorAddr
 
 void RecipientBlockAckAgreement::blockAckPolicyFrameReceived(const Ptr<const Ieee80211DataHeader>& header)
 {
-    ASSERT(header->getAckPolicy() == BLOCK_ACK);
+    // IEEE Std 802.11-2024, 10.25.6.3 and 10.25.6.5: the recipient
+    // scoreboard consumes both explicit Block Ack policy MPDUs and Normal
+    // Ack policy MPDUs that form an implicit-BlockAck A-MPDU.
+    ASSERT(header->getAckPolicy() == BLOCK_ACK ||
+            header->getAckPolicy() == NORMAL_ACK);
     auto previousGeneration = blockAckRecord->getGeneration();
     blockAckRecord->blockAckPolicyFrameReceived(header);
     if (blockAckRecord->getGeneration() != previousGeneration)

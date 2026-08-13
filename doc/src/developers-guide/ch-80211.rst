@@ -1,5 +1,3 @@
-:orphan:
-
 .. _dg:cha:80211:
 
 The 802.11 Model
@@ -8,9 +6,99 @@ The 802.11 Model
 Sending and Receiving 802.11 Frames
 -----------------------------------
 
-TODO tags, etc.
+The MAC exchanges :cpp:`Packet` objects containing typed IEEE 802.11 header and
+trailer chunks.  Local transmission requests and reception indications are
+carried by tags; the selected PHY mode and HE user allocation remain PHY
+authorities and are not reconstructed from MAC configuration.  A frame
+sequence describes the ordered transmit and receive steps, while the HCF
+exchange engine owns the active sequence, response timers, completion, and
+abort processing.
 
 Architecture of the 802.11 MAC Model
 ------------------------------------
 
-TODO
+The NED-facing ``Hcf``, ``VhtHcf``, and ``HeHcf`` module types preserve the
+configuration interface used by existing networks.  Their ``featureSet``
+submodule implements :cpp:`IHcfFeatureSet` and advertises exchange providers
+through :cpp:`IHcfExchangeProvider`.  Provider descriptors are sorted by the
+fixed semantic exchange-class order, independently of NED declaration or
+construction order.  Duplicate classes, missing single-user support, and
+non-executable descriptors are rejected during initialization.
+
+Exchange selection separates probing from execution.  A provider receives an
+immutable :cpp:`HcfContext`, validates eligibility without changing queues or
+consuming random numbers, and either reports a typed rejection or returns a
+prepared transaction.  The transaction is committed only after capability,
+PHY, duration, and ownership validation.  Typed VHT and HE callbacks report
+member transmission, per-user response, timeout, completion, and rollback;
+frame sequences do not discover collaborators by walking the module tree.
+
+The selection path is ``channel grant -> immutable HcfContext -> ordered
+provider probing -> prepared transaction validation -> one commit -> exchange
+engine``.  Only the selected provider crosses the commit boundary.  The
+exchange engine subsequently delivers exactly one terminal result to the
+selector, including abort and teardown paths.
+
+The following diagrams connect the NED-facing model, the HCF control path, the
+replaceable amendment policies, and the ownership boundaries.  Solid arrows
+show packet or control flow; dashed arrows show snapshots, queries, identities,
+or typed callbacks.
+
+.. graphviz:: figures/ieee80211_model.dot
+   :align: center
+
+.. graphviz:: figures/ieee80211_ownership.dot
+   :align: center
+
+State and packet ownership
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Each mutable state has one owner:
+
+* EDCA and its EDCAFs own contention, the winning access category, retry
+  counters, and TXOP state.
+* The HCF exchange engine owns the active frame sequence and response timers.
+* Originator and recipient Block Ack handlers own their respective agreements
+  and windows.
+* Common ingress, originator, recipient, retry, aggregation, and transmission
+  services operate through typed action contracts.
+* HE peer, queue, sounding, downlink-MU, and triggered-uplink services own their
+  amendment-specific lifecycle and transaction state.
+* The PHY mode objects own legal mode combinations, duration calculations, and
+  PPDU timing; HCF stores only the chosen immutable mode identity needed by an
+  active transaction.
+
+A packet reservation records packet identity, source queue, association epoch,
+and transaction generation.  Preparation may clone packet and sequence state,
+but it must not dequeue or advance protocol state.  Commit transfers every
+reserved packet exactly once.  Failure rolls back queue order, packet identity,
+sequence numbers, retry state, and Block Ack state; late callbacks are rejected
+using the transaction identity.  Semantic signals are emitted once by the
+component that owns the corresponding action.
+
+Rollback follows the reverse ownership order of commit.  A provider first
+restores any amendment-local reservation state, then returns packets to their
+recorded source queues in original order, and finally discards cloned sequence
+or retry state.  Rollback never emits successful-transmission observations and
+never re-runs provider selection.
+
+Adding an amendment exchange
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Add a new exchange without extending the HCF facade with amendment-specific
+fields or virtual methods:
+
+#. Define immutable snapshot, plan, rejection, and result types for the
+   amendment decision.
+#. Implement a provider behind :cpp:`IHcfExchangeProvider`; keep scheduling
+   separate from PHY finalization and packet commit.
+#. Add typed callback and action contracts for effects owned by common MAC
+   services.  Inject rate selection and other collaborators explicitly.
+#. Register the provider in an interface-typed feature-set implementation and
+   add its semantic class to the fixed selection order.
+#. Preserve the common single-user fallback and gate the provider on operation
+   mode, local role, and negotiated peer capabilities.
+#. Add focused tests for eligibility, failure and rollback, stale callbacks,
+   AP and non-AP roles, feature-off behavior, legacy fallback, and deterministic
+   tie-breaking.  Keep a compatibility test for any retained public NED
+   typename.

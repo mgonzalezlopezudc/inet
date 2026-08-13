@@ -69,6 +69,7 @@ class INET_API HcfExchangeCoordinator
     void channelAccessRequested();
     void channelGranted();
     void beginPreparation();
+    void preparationCompletedWithoutSequence();
     void beginTransmission(Packet *packet = nullptr);
     void awaitResponse(const IFrameSequenceStep *responseStep = nullptr);
     bool beginRetryOrRecovery(Packet *packet = nullptr);

@@ -47,7 +47,7 @@ static IIeee80211HeDlScheduler::ScheduleContext makeDlContext(
     for (size_t i = 0; i < stations.size(); ++i) {
         IIeee80211HeDlScheduler::CandidateInfo candidate;
         candidate.staAddress = stations[i];
-        candidate.sourceQueue = queue;
+        candidate.sourceQueueToken = HcfQueueToken(i + 1);
         candidate.anchor = i == 0;
         candidate.hasAdvertisedHeCapabilities = true;
         candidate.advertisedHeCapabilities = peerCapabilities;

@@ -78,7 +78,57 @@ REQUIRE(calls == std::vector<std::string>({"su"}));
 REQUIRE(inProgressSuPacket == suPacket);
 REQUIRE(suStarts == 3);
 
+// Exact grant preparation must classify the already-prepared outcome without
+// changing service state, and must not evaluate lower-priority preparations.
+HeTxopCoordinatorService::PreparationActions preparations;
+int ulPreparations = 0;
+int dlPreparations = 0;
+int suPreparations = 0;
+std::optional<HeDlMuExchangeProvider::StartKind> dlKind;
+preparations.prepareUlTrigger = [&] () {
+    ulPreparations++;
+    return std::optional<HeUlTriggerService::PreparedStart>();
+};
+preparations.prepareDlStart = [&] () {
+    dlPreparations++;
+    if (!dlKind)
+        return std::optional<HeDlMuExchangeProvider::PreparedStart>();
+    return std::optional<HeDlMuExchangeProvider::PreparedStart>(
+            HeDlMuExchangeProvider::PreparedStart {*dlKind, AC_BE});
+};
+preparations.prepareSingleUser = [&] () {
+    suPreparations++;
+    return std::optional<HeDlMuExchangeProvider::PreparedStart>();
+};
+
+auto forcedExact = coordinator.prepareGrant(AC_BE, true, true, true, preparations);
+REQUIRE(forcedExact.exchangeClass == HcfExchangeClass::FORCED_SINGLE_USER);
+REQUIRE(ulPreparations == 0 && dlPreparations == 0 && suPreparations == 0);
+
+dlKind = HeDlMuExchangeProvider::StartKind::HE_SOUNDING;
+auto soundingExact = coordinator.prepareGrant(AC_BE, true, false, true, preparations);
+REQUIRE(soundingExact.exchangeClass == HcfExchangeClass::HE_SOUNDING);
+REQUIRE(ulPreparations == 1 && dlPreparations == 1 && suPreparations == 0);
+
+dlKind = HeDlMuExchangeProvider::StartKind::ADDBA_SINGLE_USER;
+auto addbaExact = coordinator.prepareGrant(AC_BE, true, false, true, preparations);
+REQUIRE(addbaExact.exchangeClass == HcfExchangeClass::RECOVERY_SINGLE_USER);
+
+dlKind = HeDlMuExchangeProvider::StartKind::HE_DL_MULTIUSER;
+auto dlMuExact = coordinator.prepareGrant(AC_BE, true, false, true, preparations);
+REQUIRE(dlMuExact.exchangeClass == HcfExchangeClass::HE_DL_MULTIUSER);
+
+dlKind = HeDlMuExchangeProvider::StartKind::SINGLE_USER_FALLBACK;
+auto fallbackExact = coordinator.prepareGrant(AC_BE, true, false, true, preparations);
+REQUIRE(fallbackExact.exchangeClass == HcfExchangeClass::SINGLE_USER);
+
+dlKind.reset();
+auto releaseExact = coordinator.prepareGrant(AC_BE, true, false, false, preparations);
+REQUIRE(releaseExact.exchangeClass == HcfExchangeClass::CHANNEL_RELEASE);
+REQUIRE(suPreparations == 1);
+
 EV << "HE TXOP coordinator preserved UL, DL, SU, and release ordering.\n";
+EV << "HE exact grant snapshots preserved fixed provider priority and actual outcome classes.\n";
 EV << "SU fallback transferred the exact packet identity once per admitted TXOP.\n";
 delete inProgressSuPacket;
 
@@ -87,3 +137,6 @@ HE TXOP coordinator preserved UL, DL, SU, and release ordering.
 
 %contains: stdout
 SU fallback transferred the exact packet identity once per admitted TXOP.
+
+%contains: stdout
+HE exact grant snapshots preserved fixed provider priority and actual outcome classes.

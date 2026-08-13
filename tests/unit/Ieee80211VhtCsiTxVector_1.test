@@ -5,7 +5,8 @@ Validate VHT CSI lifecycle and immutable packet-level VHT SU/NDP PHY authority.
 #include "inet/common/packet/Packet.h"
 #include "inet/common/packet/chunk/BitsChunk.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/VhtCsiCache.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/VhtHcf.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/VhtHcfFeature.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/VhtSoundingService.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211VhtTxVector.h"
 
@@ -15,12 +16,6 @@ using namespace inet::ieee80211;
 using namespace inet::physicallayer;
 
 #define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
-
-class TestableVhtHcf : public VhtHcf
-{
-  public:
-    using VhtHcf::updateEffectiveChannelWidth;
-};
 
 %activity:
 simtime_t now = SimTime(1);
@@ -52,18 +47,18 @@ REQUIRE(cache.findFresh(peer, MHz(40), 9) == nullptr);
 
 Hz activeWidth = MHz(20);
 cache.update(peer, MHz(20), 10, 4.0);
-TestableVhtHcf::updateEffectiveChannelWidth(cache, activeWidth, MHz(20));
+VhtSoundingService::updateEffectiveChannelWidth(cache, activeWidth, MHz(20));
 REQUIRE(cache.findFresh(peer, MHz(20), 10) != nullptr);
-TestableVhtHcf::updateEffectiveChannelWidth(cache, activeWidth, MHz(40));
+VhtSoundingService::updateEffectiveChannelWidth(cache, activeWidth, MHz(40));
 REQUIRE(activeWidth == MHz(40) && cache.findFresh(peer, MHz(20), 10) == nullptr);
 cache.update(peer, MHz(40), 10, 4.0);
-TestableVhtHcf::updateEffectiveChannelWidth(cache, activeWidth, MHz(20));
+VhtSoundingService::updateEffectiveChannelWidth(cache, activeWidth, MHz(20));
 REQUIRE(activeWidth == MHz(20) && cache.findFresh(peer, MHz(40), 10) == nullptr);
 
 bool rejectedLayeredRadio = false;
 try {
     cModule nonPacketLevelRadio;
-    VhtHcf::validatePacketLevelRadio(&nonPacketLevelRadio);
+    VhtHcfFeature::validatePacketLevelRadio(&nonPacketLevelRadio);
 }
 catch (const cRuntimeError&) { rejectedLayeredRadio = true; }
 REQUIRE(rejectedLayeredRadio);

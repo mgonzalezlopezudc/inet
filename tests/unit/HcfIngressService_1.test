@@ -1,0 +1,464 @@
+%description:
+Verify checked standalone HCF upper ingress classification, queue provenance,
+ownership sequencing, and channel-access suppression.
+
+%includes:
+#include <array>
+#include <functional>
+#include <string>
+#include <vector>
+
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/ByteCountChunk.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/mac/channelaccess/Edca.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfIngressService.h"
+#include "inet/linklayer/ieee80211/mac/queue/OrigEnqueueTimeTag_m.h"
+#include "inet/queueing/contract/IPacketQueue.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+static bool throwsRuntimeError(const std::function<void()>& operation)
+{
+    try {
+        operation();
+        return false;
+    }
+    catch (const cRuntimeError&) {
+        return true;
+    }
+}
+
+static Packet *makeDataPacket(const char *name, const MacAddress& receiver,
+        int tid, bool qos = true)
+{
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setType(qos ? ST_DATA_WITH_QOS : ST_DATA);
+    header->setReceiverAddress(receiver);
+    header->setTid(tid);
+    header->setChunkLength(B(qos ? 26 : 24));
+    auto packet = new Packet(name, header);
+    packet->insertAtBack(makeShared<ByteCountChunk>(B(1)));
+    packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+    return packet;
+}
+
+static Packet *makeManagementPacket(const char *name, const MacAddress& receiver)
+{
+    auto header = makeShared<Ieee80211ActionFrame>();
+    header->setReceiverAddress(receiver);
+    header->setChunkLength(B(24));
+    auto packet = new Packet(name, header);
+    packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+    return packet;
+}
+
+struct IngressHarness : public HcfIngressService::IOwnershipActions {
+    enum class FailureStage {
+        NONE,
+        CLASSIFY,
+        TAG,
+        RESOLVE,
+        ENQUEUE,
+        ELIGIBILITY,
+    };
+
+    HcfIngressService service;
+    Edca authoritativeClassifier;
+    queueing::IPacketQueue *perStaQueue =
+            reinterpret_cast<queueing::IPacketQueue *>(uintptr_t(1));
+    queueing::IPacketQueue *sharedQueues[AC_NUMCATEGORIES] = {
+        reinterpret_cast<queueing::IPacketQueue *>(uintptr_t(10)),
+        reinterpret_cast<queueing::IPacketQueue *>(uintptr_t(11)),
+        reinterpret_cast<queueing::IPacketQueue *>(uintptr_t(12)),
+        reinterpret_cast<queueing::IPacketQueue *>(uintptr_t(13)),
+    };
+    bool frameAvailable = true;
+    bool channelOwned = false;
+    bool sequenceRunning = false;
+    FailureStage failureStage = FailureStage::NONE;
+    int claimCount = 0;
+    int classifyCount = 0;
+    int macSapTagCount = 0;
+    int resolverCount = 0;
+    int sharedQueueCount = 0;
+    int enqueueTimeCount = 0;
+    int enqueueCount = 0;
+    int returnCount = 0;
+    int eligibilityCount = 0;
+    int channelOwnerCount = 0;
+    int sequenceCount = 0;
+    int channelMarkedCount = 0;
+    int channelRequestCount = 0;
+    Packet *enqueuedPacket = nullptr;
+    Packet *returnedPacket = nullptr;
+    queueing::IPacketQueue *enqueuedQueue = nullptr;
+    AccessCategory requestedAccessCategory = AccessCategory(-1);
+    std::vector<std::string> events;
+
+    virtual void claimPacket(Packet *) override
+    {
+        claimCount++;
+        events.push_back("claim");
+    }
+
+    virtual void enqueuePacket(queueing::IPacketQueue *queue, Packet *packet) override
+    {
+        enqueueCount++;
+        events.push_back("enqueue");
+        if (failureStage == FailureStage::ENQUEUE)
+            throw cRuntimeError("injected enqueue failure");
+        enqueuedQueue = queue;
+        enqueuedPacket = packet;
+    }
+
+    virtual void returnClaimedPacketToCaller(Packet *packet) noexcept override
+    {
+        returnCount++;
+        returnedPacket = packet;
+    }
+
+    Packet *releaseQueuedPacket()
+    {
+        auto packet = enqueuedPacket;
+        enqueuedPacket = nullptr;
+        return packet;
+    }
+
+    Packet *takeReturnedPacket()
+    {
+        auto packet = returnedPacket;
+        returnedPacket = nullptr;
+        return packet;
+    }
+
+    HcfIngressService::Actions makeActions()
+    {
+        HcfIngressService::Actions actions;
+        actions.ownership = this;
+        actions.packetClaimed = [] {};
+        actions.classifyDataFrame = [&] (const Ptr<const Ieee80211DataHeader>& header) {
+            classifyCount++;
+            events.push_back("classify");
+            if (failureStage == FailureStage::CLASSIFY)
+                throw cRuntimeError("injected classification failure");
+            return authoritativeClassifier.classifyFrame(header);
+        };
+        actions.frameClassified = [] (AccessCategory) {};
+        actions.tagMacSapServiceDataUnit = [&] (Packet *, const Ptr<const Ieee80211DataHeader>&) {
+            macSapTagCount++;
+            events.push_back("macSap");
+            if (failureStage == FailureStage::TAG)
+                throw cRuntimeError("injected tagging failure");
+        };
+        actions.resolvePerStaQueue = [&] (const MacAddress&, AccessCategory) {
+            resolverCount++;
+            events.push_back("resolve");
+            if (failureStage == FailureStage::RESOLVE)
+                throw cRuntimeError("injected resolution failure");
+            return perStaQueue;
+        };
+        actions.getSharedQueue = [&] (AccessCategory accessCategory) {
+            sharedQueueCount++;
+            events.push_back("shared");
+            return sharedQueues[accessCategory];
+        };
+        actions.ensureOriginalEnqueueTime = [&] (Packet *packet) {
+            enqueueTimeCount++;
+            events.push_back("enqueueTime");
+            packet->addTagIfAbsent<OrigEnqueueTimeTag>()->setEnqueueTime(SimTime(1, SIMTIME_S));
+        };
+        actions.hasFrameToTransmit = [&] (AccessCategory) {
+            eligibilityCount++;
+            events.push_back("eligible");
+            if (failureStage == FailureStage::ELIGIBILITY)
+                throw cRuntimeError("injected eligibility failure");
+            return frameAvailable;
+        };
+        actions.hasChannelOwner = [&] {
+            channelOwnerCount++;
+            events.push_back("owner");
+            return channelOwned;
+        };
+        actions.isSequenceRunning = [&] {
+            sequenceCount++;
+            events.push_back("sequence");
+            return sequenceRunning;
+        };
+        actions.channelAccessRequested = [&] {
+            channelMarkedCount++;
+            events.push_back("mark");
+        };
+        actions.requestChannelAccess = [&] (AccessCategory accessCategory) {
+            channelRequestCount++;
+            requestedAccessCategory = accessCategory;
+            events.push_back("request");
+        };
+        return actions;
+    }
+};
+
+%activity:
+const MacAddress unicast("10:00:00:00:00:01");
+const MacAddress multicast("01:00:5e:00:00:01");
+const MacAddress broadcast("ff:ff:ff:ff:ff:ff");
+
+// Every QoS TID is classified by the existing EDCA implementation; the
+// ingress service contains no second UP/TID mapping table.
+{
+    const std::array<AccessCategory, 8> expected = {
+        AC_BE, AC_BK, AC_BK, AC_BE, AC_VI, AC_VI, AC_VO, AC_VO,
+    };
+    for (int tid = 0; tid < 8; tid++) {
+        IngressHarness harness;
+        auto packet = makeDataPacket("tid", unicast, tid);
+        auto result = harness.service.processUpperFrame(packet,
+                packet->peekAtFront<Ieee80211DataOrMgmtHeader>(), harness.makeActions());
+        REQUIRE(result.accessCategory == expected[tid]);
+        REQUIRE(result.queueSelection == HcfIngressService::QueueSelection::PER_STA);
+        REQUIRE(result.queue == harness.perStaQueue);
+        REQUIRE(result.channelAccessRequested);
+        REQUIRE(harness.claimCount == 1 && harness.classifyCount == 1 &&
+                harness.macSapTagCount == 1 && harness.resolverCount == 1 &&
+                harness.sharedQueueCount == 0 && harness.enqueueTimeCount == 1 &&
+                harness.enqueueCount == 1 && harness.enqueuedPacket == packet &&
+                harness.enqueuedQueue == harness.perStaQueue &&
+                harness.channelMarkedCount == 1 && harness.channelRequestCount == 1 &&
+                harness.requestedAccessCategory == expected[tid]);
+        REQUIRE(packet->findTag<OrigEnqueueTimeTag>() != nullptr);
+        REQUIRE(harness.events == std::vector<std::string>({
+                "claim", "classify", "macSap", "resolve", "enqueueTime",
+                "enqueue", "eligible", "owner", "sequence", "mark", "request"}));
+        REQUIRE(harness.returnCount == 0);
+        delete harness.releaseQueuedPacket();
+    }
+}
+
+// A non-AP resolver returns no per-STA queue and falls back to the shared
+// queue of the same authoritative AC. Multicast/broadcast skip per-STA
+// resolution and enqueue-time provenance exactly as the current HCF path.
+{
+    IngressHarness nonAp;
+    nonAp.perStaQueue = nullptr;
+    auto unicastPacket = makeDataPacket("nonAp", unicast, 5);
+    auto unicastResult = nonAp.service.processUpperFrame(unicastPacket,
+            unicastPacket->peekAtFront<Ieee80211DataOrMgmtHeader>(), nonAp.makeActions());
+    REQUIRE(unicastResult.accessCategory == AC_VI);
+    REQUIRE(unicastResult.queueSelection == HcfIngressService::QueueSelection::SHARED);
+    REQUIRE(unicastResult.queue == nonAp.sharedQueues[AC_VI]);
+    REQUIRE(nonAp.resolverCount == 1 && nonAp.sharedQueueCount == 1 &&
+            nonAp.enqueueTimeCount == 1 && nonAp.enqueueCount == 1);
+    REQUIRE(nonAp.returnCount == 0);
+    delete nonAp.releaseQueuedPacket();
+
+    for (const auto& address : {multicast, broadcast}) {
+        IngressHarness group;
+        auto packet = makeDataPacket("group", address, 5);
+        auto result = group.service.processUpperFrame(packet,
+                packet->peekAtFront<Ieee80211DataOrMgmtHeader>(), group.makeActions());
+        REQUIRE(result.accessCategory == AC_VI);
+        REQUIRE(result.queueSelection == HcfIngressService::QueueSelection::SHARED);
+        REQUIRE(result.queue == group.sharedQueues[AC_VI]);
+        REQUIRE(group.resolverCount == 0 && group.enqueueTimeCount == 0 &&
+                group.sharedQueueCount == 1 && group.enqueueCount == 1);
+        REQUIRE(group.returnCount == 0);
+        delete group.releaseQueuedPacket();
+    }
+}
+
+// Management uses AC_VO and the shared queue without invoking QoS data,
+// MAC-SAP, per-STA, or original-enqueue-time actions.
+{
+    IngressHarness harness;
+    auto packet = makeManagementPacket("management", unicast);
+    auto result = harness.service.processUpperFrame(packet,
+            packet->peekAtFront<Ieee80211DataOrMgmtHeader>(), harness.makeActions());
+    REQUIRE(result.accessCategory == AC_VO);
+    REQUIRE(result.queueSelection == HcfIngressService::QueueSelection::SHARED);
+    REQUIRE(result.queue == harness.sharedQueues[AC_VO]);
+    REQUIRE(harness.classifyCount == 0 && harness.macSapTagCount == 0 &&
+            harness.resolverCount == 0 && harness.enqueueTimeCount == 0 &&
+            harness.enqueueCount == 1);
+    REQUIRE(harness.returnCount == 0);
+    delete harness.releaseQueuedPacket();
+}
+
+// Invalid TID fails through the authoritative classifier and returns claimed
+// ownership. Non-QoS Data retains current HCF parity: TID 0 classifies to
+// AC_BE and follows ordinary tagging and unicast per-STA queue selection. A
+// header from another packet is rejected before ownership claim.
+{
+    IngressHarness harness;
+    auto invalidTid = makeDataPacket("invalidTid", unicast, 8);
+    REQUIRE(throwsRuntimeError([&] {
+        harness.service.processUpperFrame(invalidTid,
+                invalidTid->peekAtFront<Ieee80211DataOrMgmtHeader>(), harness.makeActions());
+    }));
+    REQUIRE(harness.claimCount == 1 && harness.classifyCount == 1 &&
+            harness.macSapTagCount == 0 && harness.enqueueCount == 0 &&
+            harness.returnCount == 1 && harness.returnedPacket == invalidTid);
+    delete harness.takeReturnedPacket();
+
+    IngressHarness nonQosHarness;
+    auto nonQos = makeDataPacket("nonQos", unicast, 0, false);
+    auto nonQosResult = nonQosHarness.service.processUpperFrame(nonQos,
+            nonQos->peekAtFront<Ieee80211DataOrMgmtHeader>(), nonQosHarness.makeActions());
+    REQUIRE(nonQosResult.accessCategory == AC_BE);
+    REQUIRE(nonQosResult.queueSelection == HcfIngressService::QueueSelection::PER_STA);
+    REQUIRE(nonQosHarness.claimCount == 1 && nonQosHarness.classifyCount == 1 &&
+            nonQosHarness.macSapTagCount == 1 && nonQosHarness.resolverCount == 1 &&
+            nonQosHarness.enqueueTimeCount == 1 && nonQosHarness.enqueueCount == 1 &&
+            nonQosHarness.returnCount == 0);
+    delete nonQosHarness.releaseQueuedPacket();
+
+    IngressHarness unsupportedHarness;
+    auto unsupportedHeader = makeShared<Ieee80211DataOrMgmtHeader>();
+    unsupportedHeader->setReceiverAddress(unicast);
+    unsupportedHeader->setChunkLength(B(24));
+    auto unsupported = new Packet("unsupported", unsupportedHeader);
+    unsupported->insertAtBack(makeShared<Ieee80211MacTrailer>());
+    REQUIRE(throwsRuntimeError([&] {
+        unsupportedHarness.service.processUpperFrame(unsupported,
+                unsupported->peekAtFront<Ieee80211DataOrMgmtHeader>(),
+                unsupportedHarness.makeActions());
+    }));
+    REQUIRE(unsupportedHarness.claimCount == 1 &&
+            unsupportedHarness.enqueueCount == 0 &&
+            unsupportedHarness.returnCount == 1 &&
+            unsupportedHarness.returnedPacket == unsupported);
+    delete unsupportedHarness.takeReturnedPacket();
+
+    IngressHarness foreignHeaderHarness;
+    auto first = makeDataPacket("first", unicast, 0);
+    auto foreign = makeDataPacket("foreign", unicast, 0);
+    REQUIRE(throwsRuntimeError([&] {
+        foreignHeaderHarness.service.processUpperFrame(first,
+                foreign->peekAtFront<Ieee80211DataOrMgmtHeader>(),
+                foreignHeaderHarness.makeActions());
+    }));
+    REQUIRE(foreignHeaderHarness.claimCount == 0 &&
+            foreignHeaderHarness.enqueueCount == 0);
+    delete first;
+    delete foreign;
+}
+
+// Reentrant actions cannot submit either the same or a foreign packet while
+// the current ownership transaction is active.
+{
+    for (bool samePointer : {true, false}) {
+        IngressHarness harness;
+        auto outer = makeDataPacket("outer", unicast, 0);
+        auto foreign = makeDataPacket("foreign", unicast, 0);
+        auto actions = harness.makeActions();
+        auto ordinaryTagAction = actions.tagMacSapServiceDataUnit;
+        actions.tagMacSapServiceDataUnit = [&] (Packet *packet,
+                const Ptr<const Ieee80211DataHeader>& header) {
+            ordinaryTagAction(packet, header);
+            auto nested = samePointer ? outer : foreign;
+            REQUIRE(throwsRuntimeError([&] {
+                harness.service.processUpperFrame(nested,
+                        nested->peekAtFront<Ieee80211DataOrMgmtHeader>(),
+                        harness.makeActions());
+            }));
+        };
+        harness.service.processUpperFrame(outer,
+                outer->peekAtFront<Ieee80211DataOrMgmtHeader>(), actions);
+        REQUIRE(harness.claimCount == 1 && harness.enqueueCount == 1 &&
+                harness.returnCount == 0);
+        delete harness.releaseQueuedPacket();
+        delete foreign;
+    }
+}
+
+// Every failing action between claim and enqueue commit returns the exact
+// claimed pointer once and preserves the original exception.
+{
+    const std::vector<std::pair<IngressHarness::FailureStage, std::string>> failures = {
+        {IngressHarness::FailureStage::CLASSIFY, "injected classification failure"},
+        {IngressHarness::FailureStage::TAG, "injected tagging failure"},
+        {IngressHarness::FailureStage::RESOLVE, "injected resolution failure"},
+        {IngressHarness::FailureStage::ENQUEUE, "injected enqueue failure"},
+    };
+    for (const auto& failure : failures) {
+        IngressHarness harness;
+        harness.failureStage = failure.first;
+        auto packet = makeDataPacket("actionFailure", unicast, 0);
+        std::string message;
+        try {
+            harness.service.processUpperFrame(packet,
+                    packet->peekAtFront<Ieee80211DataOrMgmtHeader>(), harness.makeActions());
+        }
+        catch (const cRuntimeError& error) {
+            message = error.what();
+        }
+        REQUIRE(message.find(failure.second) != std::string::npos);
+        REQUIRE(harness.claimCount == 1 && harness.returnCount == 1 &&
+                harness.returnedPacket == packet && harness.enqueuedPacket == nullptr);
+        delete harness.takeReturnedPacket();
+    }
+}
+
+// Once enqueue returns, queue ownership is committed. A later exception keeps
+// that ownership and must never invoke the pre-commit rollback action.
+{
+    IngressHarness harness;
+    harness.failureStage = IngressHarness::FailureStage::ELIGIBILITY;
+    auto packet = makeDataPacket("postCommitFailure", unicast, 0);
+    std::string message;
+    try {
+        harness.service.processUpperFrame(packet,
+                packet->peekAtFront<Ieee80211DataOrMgmtHeader>(), harness.makeActions());
+    }
+    catch (const cRuntimeError& error) {
+        message = error.what();
+    }
+    REQUIRE(message.find("injected eligibility failure") != std::string::npos);
+    REQUIRE(harness.enqueueCount == 1 && harness.enqueuedPacket == packet &&
+            harness.returnCount == 0 && harness.returnedPacket == nullptr);
+    delete harness.releaseQueuedPacket();
+}
+
+// Enqueue is invoked exactly once. A failed ownership commit prevents every
+// eligibility, channel-owner, sequence, and channel-request action.
+{
+    IngressHarness harness;
+    harness.failureStage = IngressHarness::FailureStage::ENQUEUE;
+    auto packet = makeDataPacket("enqueueFailure", unicast, 0);
+    REQUIRE(throwsRuntimeError([&] {
+        harness.service.processUpperFrame(packet,
+                packet->peekAtFront<Ieee80211DataOrMgmtHeader>(), harness.makeActions());
+    }));
+    REQUIRE(harness.enqueueCount == 1 && harness.eligibilityCount == 0 &&
+            harness.channelOwnerCount == 0 && harness.sequenceCount == 0 &&
+            harness.channelMarkedCount == 0 && harness.channelRequestCount == 0 &&
+            harness.returnCount == 1 && harness.returnedPacket == packet);
+    delete harness.takeReturnedPacket();
+}
+
+// Current suppression conditions are independent: no frame, an owning EDCAF,
+// or an active sequence each prevents both channel-access actions.
+{
+    for (int condition = 0; condition < 3; condition++) {
+        IngressHarness harness;
+        harness.frameAvailable = condition != 0;
+        harness.channelOwned = condition == 1;
+        harness.sequenceRunning = condition == 2;
+        auto packet = makeDataPacket("suppressed", unicast, 0);
+        auto result = harness.service.processUpperFrame(packet,
+                packet->peekAtFront<Ieee80211DataOrMgmtHeader>(), harness.makeActions());
+        REQUIRE(!result.channelAccessRequested);
+        REQUIRE(harness.enqueueCount == 1 && harness.channelMarkedCount == 0 &&
+                harness.channelRequestCount == 0);
+        REQUIRE(harness.returnCount == 0);
+        delete harness.releaseQueuedPacket();
+    }
+}
+
+EV << "HCF ingress classification, ownership, and queue submission tests passed.\n";
+
+%contains: stdout
+HCF ingress classification, ownership, and queue submission tests passed.

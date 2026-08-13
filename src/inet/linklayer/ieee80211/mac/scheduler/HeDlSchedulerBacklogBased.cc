@@ -32,7 +32,6 @@ HeDlSchedulerBacklogBased::schedule(const ScheduleContext& context)
         anchorIt = context.candidates.begin();
     if (anchorIt == context.candidates.end()) {
         EV_DEBUG << "HeDlSchedulerBacklogBased::schedule: no candidates available\n";
-        recordSchedule(context, {}, {}, false, "no DL backlog candidates");
         return {};
     }
     CandidateInfo anchor = *anchorIt;
@@ -82,7 +81,6 @@ HeDlSchedulerBacklogBased::schedule(const ScheduleContext& context)
     for (const auto& candidate : selected)
         payloadBytes.push_back(candidate.backlogBytes);
     auto result = fitRequestedRus(context, selected, requests, payloadBytes);
-    recordSchedule(context, selected, result, false, "backlog-based OFDMA");
     return result;
 }
 

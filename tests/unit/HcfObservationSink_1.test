@@ -1,0 +1,148 @@
+%description:
+Verify that the stateless HCF observation sink preserves emitter identity and
+emits each common and grouped HE semantic signal exactly once in legacy order.
+
+%includes:
+#include <string>
+#include <vector>
+
+#include "inet/common/Simsignals_m.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreement.h"
+#include "inet/linklayer/ieee80211/mac/blockack/RecipientBlockAckAgreement.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfObservationSink.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
+
+%file: TestNetwork.ned
+simple TestObservationEmitter
+{
+    parameters:
+        @class(TestObservationEmitter);
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        hcf: TestObservationEmitter;
+        edcaf: TestObservationEmitter;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+class TestObservationEmitter : public cSimpleModule
+{
+};
+
+Define_Module(TestObservationEmitter);
+
+class EventListener : public cListener
+{
+  public:
+    std::vector<std::string> events;
+
+    void record(cComponent *source, simsignal_t signal)
+    {
+        events.push_back(std::string(source->getName()) + ":" +
+                source->getSignalName(signal));
+    }
+
+    virtual void receiveSignal(cComponent *source, simsignal_t signal,
+            bool, cObject *) override {
+        record(source, signal);
+        events.back() += ":unexpectedBool";
+    }
+    virtual void receiveSignal(cComponent *source, simsignal_t signal,
+            long, cObject *) override { record(source, signal); }
+    virtual void receiveSignal(cComponent *source, simsignal_t signal,
+            unsigned long, cObject *) override { record(source, signal); }
+    virtual void receiveSignal(cComponent *source, simsignal_t signal,
+            double, cObject *) override { record(source, signal); }
+    virtual void receiveSignal(cComponent *source, simsignal_t signal,
+            cObject *, cObject *) override { record(source, signal); }
+};
+
+%activity:
+auto hcf = check_and_cast<cComponent *>(getParentModule()->getSubmodule("hcf"));
+auto edcaf = check_and_cast<cComponent *>(getParentModule()->getSubmodule("edcaf"));
+EventListener listener;
+const char *signals[] = {
+    "packetSentToPeer", "packetReceivedFromPeer", "packetDropped", "linkBroken",
+    "frameSequenceStarted", "frameSequenceFinished", "edcaCollisionDetected",
+    "blockAckAgreementAdded", "blockAckAgreementDeleted", "ampduCreated",
+    "ampduNumMpdus", "datarateSelected", "heTbResponseCommitted",
+    "heTbResponseTriggerId", "heTbResponseReason", "heTbResponseHadPendingPayload",
+    "heTbResponsePendingBytes", "heTbResponseSelectedBytes",
+    "heTbResponseReportedBytes", "peerOperatingModeChanged",
+    "peerOperatingModeAssociationId", "peerOperatingModeRxNss",
+    "peerOperatingModeChannelWidth", "peerOperatingModeUlMuDisable"
+};
+for (auto signal : signals)
+    hcf->subscribe(signal, &listener);
+edcaf->subscribe("packetSentToPeer", &listener);
+
+Packet packet("packet");
+Packet aggregate("aggregate");
+PacketDropDetails dropDetails;
+FrameSequenceContext context(MacAddress::UNSPECIFIED_ADDRESS, nullptr, nullptr,
+        nullptr, nullptr, nullptr, nullptr);
+OriginatorBlockAckAgreement originatorAgreement(MacAddress("02:00:00:00:00:01"),
+        0, SequenceNumberCyclic(1), 8, false, false);
+RecipientBlockAckAgreement recipientAgreement(MacAddress("02:00:00:00:00:02"),
+        0, SequenceNumberCyclic(2), 8, SIMTIME_ZERO);
+
+HcfObservationSink::packetSentToPeer(edcaf, &packet);
+HcfObservationSink::packetReceivedFromPeer(hcf, &packet);
+HcfObservationSink::packetDropped(hcf, &packet, &dropDetails);
+HcfObservationSink::linkBroken(hcf, &packet);
+HcfObservationSink::frameSequenceStarted(hcf, &context);
+HcfObservationSink::frameSequenceFinished(hcf, &context);
+HcfObservationSink::edcaCollisionDetected(hcf, 2);
+HcfObservationSink::recipientBlockAckAgreementAdded(hcf, &recipientAgreement);
+HcfObservationSink::originatorBlockAckAgreementAdded(hcf, &originatorAgreement);
+HcfObservationSink::recipientBlockAckAgreementDeleted(hcf, &recipientAgreement);
+HcfObservationSink::originatorBlockAckAgreementDeleted(hcf, &originatorAgreement);
+HcfObservationSink::ampduCreated(hcf, &aggregate, 3);
+HcfObservationSink::datarateSelected(hcf, 42.0, &packet);
+
+HeTbResponseEvent response;
+response.triggerId = 17;
+response.reason = HeTbResponseEvent::DATA_SELECTED;
+response.hadPendingPayload = true;
+response.pendingBytes = 100;
+response.selectedBytes = 80;
+response.reportedBytes = 60;
+HcfObservationSink::heTbResponseCommitted(hcf, &response);
+
+HePeerOperatingModeChangedEvent operatingMode;
+operatingMode.associationId = 23;
+operatingMode.newMode.rxNss = 2;
+operatingMode.newMode.channelWidth = 1;
+operatingMode.newMode.ulMuDisable = true;
+HcfObservationSink::peerOperatingModeChanged(hcf, &operatingMode);
+
+REQUIRE(listener.events == std::vector<std::string>({
+    "edcaf:packetSentToPeer", "hcf:packetReceivedFromPeer",
+    "hcf:packetDropped", "hcf:linkBroken", "hcf:frameSequenceStarted",
+    "hcf:frameSequenceFinished", "hcf:edcaCollisionDetected",
+    "hcf:blockAckAgreementAdded", "hcf:blockAckAgreementAdded",
+    "hcf:blockAckAgreementDeleted", "hcf:blockAckAgreementDeleted",
+    "hcf:ampduCreated", "hcf:ampduNumMpdus", "hcf:datarateSelected",
+    "hcf:heTbResponseCommitted", "hcf:heTbResponseTriggerId",
+    "hcf:heTbResponseReason", "hcf:heTbResponseHadPendingPayload",
+    "hcf:heTbResponsePendingBytes", "hcf:heTbResponseSelectedBytes",
+    "hcf:heTbResponseReportedBytes", "hcf:peerOperatingModeChanged",
+    "hcf:peerOperatingModeAssociationId", "hcf:peerOperatingModeRxNss",
+    "hcf:peerOperatingModeChannelWidth", "hcf:peerOperatingModeUlMuDisable"
+}));
+
+%exitcode: 0

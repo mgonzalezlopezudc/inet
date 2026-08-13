@@ -374,6 +374,25 @@ auto anchorScheduler = check_and_cast<HeUlSchedulerBacklogBased *>(
 auto largeFallbackScheduler = check_and_cast<HeUlSchedulerBacklogBased *>(
         getParentModule()->getSubmodule("largeFallbackScheduler"));
 
+{
+    auto context = makeContext(MHz(20));
+    finalizeCapacityBoundary(context);
+    ASSERT(equalScheduler->getCommittedSchedulingReason() == "not scheduled yet");
+    auto rejectedPreparation = equalScheduler->schedule(context);
+    ASSERT(!rejectedPreparation.allocations.empty());
+    ASSERT(equalScheduler->getCommittedSchedulingReason() == "not scheduled yet");
+    ASSERT(equalScheduler->getCommittedCandidateCount() == 0);
+    equalScheduler->commitSchedule(context, rejectedPreparation);
+    ASSERT(equalScheduler->getCommittedSchedulingReason() == "equal-sized trigger");
+    ASSERT(equalScheduler->getCommittedCandidateCount() ==
+            static_cast<int>(context.candidates.size()));
+    const auto committedUsers = equalScheduler->getCommittedScheduledUserCount();
+    auto secondPreparation = equalScheduler->schedule(context);
+    ASSERT(equalScheduler->getCommittedScheduledUserCount() == committedUsers);
+    ASSERT(secondPreparation.allocations.size() == rejectedPreparation.allocations.size());
+}
+EV << "UL scheduler selection remained pure until explicit commit.\n";
+
 const double bandwidths[] = {20e6, 40e6, 80e6, 160e6};
 for (double value : bandwidths) {
     auto context = makeContext(Hz(value));

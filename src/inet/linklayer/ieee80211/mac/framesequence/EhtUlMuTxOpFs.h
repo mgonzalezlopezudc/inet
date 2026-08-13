@@ -20,7 +20,7 @@ namespace ieee80211 {
 class INET_API EhtUlMuTxOpFs : public HeUlMuTxOpFs
 {
   public:
-    EhtUlMuTxOpFs(HeUlCoordinator *coordinator, HeHcf *callback, const HeUlMuPlan& plan,
+    EhtUlMuTxOpFs(IHeUlMuExchangeCallback *callback, const HeUlMuPlan& plan,
                   physicallayer::Ieee80211ModeSet *modeSet,
                   MacAddress apAddress, bool ehtEnabled = true);
     

@@ -31,7 +31,9 @@ class DlMuFaultController : public cSimpleModule
     {
         faultTimer = new cMessage("inject-dl-mu-partial-response");
         restoreTimer = new cMessage("restore-dl-mu-recipient");
-        scheduleAt(SimTime(330, SIMTIME_MS), faultTimer);
+        // With the fixed seed, subsequent MU grants include this associated
+        // recipient, deterministically exercising the partial-response timeout.
+        scheduleAt(SimTime(329, SIMTIME_MS), faultTimer);
         scheduleAt(SimTime(339, SIMTIME_MS), restoreTimer);
     }
 

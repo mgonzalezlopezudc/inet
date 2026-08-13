@@ -1,0 +1,107 @@
+%description:
+Verify deterministic HCF provider selection, side-effect-free rejection,
+single commit, strict no-provider failure, terminal identity, and teardown abort.
+
+%includes:
+#include <memory>
+#include <vector>
+
+#include "inet/linklayer/ieee80211/mac/contract/IHcfExchangeProvider.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfExchangeSelector.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+class SelectorTestTransaction : public IHcfExchangeTransaction
+{
+  public:
+    int *commits;
+    int *completions;
+    HcfExchangeAbortReason *terminalReason;
+
+    SelectorTestTransaction(int *commits, int *completions,
+            HcfExchangeAbortReason *terminalReason) : commits(commits),
+        completions(completions), terminalReason(terminalReason) {}
+    virtual HcfExchangeRejection validate(const HcfExchangePlan&) override { return {}; }
+    virtual void commit(const HcfExchangePlan&) override { (*commits)++; }
+    virtual void rollback(const HcfExchangePlan&) noexcept override {}
+    virtual void complete(const HcfExchangePlan&,
+            const HcfExchangeResult& result) override
+    {
+        (*completions)++;
+        *terminalReason = result.getAbortReason();
+    }
+};
+
+class SelectorTestProvider : public IHcfExchangeProvider
+{
+  public:
+    HcfExchangeClass exchangeClass;
+    HcfTransactionIdentity identity;
+    bool eligible;
+    int probes = 0;
+    int commits = 0;
+    int completions = 0;
+    HcfExchangeAbortReason terminalReason = HcfExchangeAbortReason::NONE;
+
+    SelectorTestProvider(HcfExchangeClass exchangeClass,
+            HcfTransactionIdentity identity, bool eligible) :
+        exchangeClass(exchangeClass), identity(identity), eligible(eligible) {}
+    virtual HcfExchangeClass getExchangeClass() const override { return exchangeClass; }
+    virtual std::unique_ptr<PreparedHcfExchange> prepareExchange(
+            const HcfContext&, HcfTransactionIdentity transactionIdentity,
+            HcfExchangeRejection& rejection) override
+    {
+        probes++;
+        if (!eligible) {
+            rejection = {HcfExchangeRejectionCode::NO_ELIGIBLE_PACKET,
+                    exchangeClass, transactionIdentity, "not eligible"};
+            return nullptr;
+        }
+        return std::make_unique<PreparedHcfExchange>(
+                HcfExchangePlan(exchangeClass, transactionIdentity, {}),
+                std::make_unique<SelectorTestTransaction>(&commits,
+                        &completions, &terminalReason));
+    }
+};
+
+%activity:
+HcfTransactionIdentity identity(HcfTransactionToken(41), HcfTransactionGeneration(7));
+SelectorTestProvider first(HcfExchangeClass::HE_UL_TRIGGER, identity, false);
+SelectorTestProvider second(HcfExchangeClass::SINGLE_USER, identity, true);
+HcfExchangeSelector selector({
+        {HcfExchangeClass::SINGLE_USER, &second},
+        {HcfExchangeClass::HE_UL_TRIGGER, &first}});
+REQUIRE(selector.selectAndCommit(HcfContext(), identity) ==
+        HcfExchangeClass::SINGLE_USER);
+REQUIRE(first.probes == 1 && first.commits == 0);
+REQUIRE(second.probes == 1 && second.commits == 1);
+REQUIRE(selector.hasActiveExchange());
+REQUIRE(selector.getActiveExchangeClass() == HcfExchangeClass::SINGLE_USER);
+selector.exchangeTerminated(identity, HcfExchangeAbortReason::NONE);
+REQUIRE(second.completions == 1 && !selector.hasActiveExchange());
+REQUIRE(!selector.getActiveExchangeClass().has_value());
+
+HcfTransactionIdentity rejectingIdentity(HcfTransactionToken(42),
+        HcfTransactionGeneration(8));
+SelectorTestProvider rejecting(HcfExchangeClass::SINGLE_USER,
+        rejectingIdentity, false);
+HcfExchangeSelector rejectingSelector({
+        {HcfExchangeClass::SINGLE_USER, &rejecting}});
+bool noProviderRejected = false;
+try {
+    rejectingSelector.selectAndCommit(HcfContext(), rejectingIdentity);
+}
+catch (const cRuntimeError&) {
+    noProviderRejected = true;
+}
+REQUIRE(noProviderRejected && rejecting.probes == 1);
+REQUIRE(!rejectingSelector.hasActiveExchange());
+
+EV << "HCF exchange selector lifecycle tests passed.\n";
+
+%contains: stdout
+HCF exchange selector lifecycle tests passed.

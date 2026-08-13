@@ -4,7 +4,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //
 
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfRuntime.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfRuntime.h"
 
 #include <algorithm>
 #include <sstream>
@@ -77,430 +78,175 @@ bool hasEligibleExistingFrame(InProgressFrames *inProgress, IAckHandler *ackHand
     return false;
 }
 
-IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCategory ac) const
+HeDlMuPreparationSnapshot HeHcfRuntime::captureHeDlMuPreparationSnapshot(
+        AccessCategory ac) const
 {
-    IIeee80211HeDlScheduler::ScheduleContext context;
-    const auto phy = getLinkPhyContext().getSnapshot();
-    context.channelNumber = phy.getChannelNumber();
-    context.channelCenterFrequency = phy.getChannelCenterFrequency();
-    context.channelBandwidth = phy.getChannelBandwidth();
-    EV_INFO << "HE DL schedule context: AC " << ac
-             << ", channel " << context.channelNumber
-             << ", centerFreq " << context.channelCenterFrequency
-             << ", bandwidth " << context.channelBandwidth << "\n";
-    context.totalTransmitPower = phy.getEffectiveTransmitPower();
-    context.receiverSensitivity = phy.getReceiveSensitivity();
-    context.noiseFigureDb = phy.getNoiseFigureDb();
-    context.maxAmpduMpduCount = par("maxAmpduMpduCount");
-    context.packetExtensionDurationUs = phy.getPacketExtensionDurationUs();
-    context.puncturedSubchannels = phy.getPuncturedSubchannels();
-    context.puncturedSubchannelMask = phy.getPuncturedSubchannelMask();
-    context.guardInterval = phy.getGuardInterval();
-    context.ltfType = phy.getLtfType();
-    context.localHeCapabilities = phy.getLocalHeCapabilities();
-    context.enableDlMuMimo = enableDlMuMimo;
-    auto edcaf = edca->getEdcaf(ac);
-    auto txopProcedure = edcaf == nullptr ? nullptr : edcaf->getTxopProcedure();
-    if (txopProcedure != nullptr && txopProcedure->getLimit() > SIMTIME_ZERO)
-        context.txopLimit = std::max(SIMTIME_ZERO, txopProcedure->getLimit() - txopProcedure->getDuration());
-    auto mib = mac->getMib();
-    ASSERT(mib != nullptr);
-    std::vector<MacAddress> seenDestinations;
-    auto baHandler = getOriginatorBlockAckAgreementHandler();
-    if (baHandler == nullptr) {
-        // A station may use HeHcf without the optional QoS Block Ack service.
-        // Such a configuration can still transmit HE SU frames, but it cannot
-        // supply the active agreements required by INET's DL MU packing path.
-        EV_DEBUG << "HE DL schedule context has no originator Block Ack handler; "
-                    "returning without MU candidates\n";
-        return context;
-    }
-    auto ackHandler = edcaf->getAckHandler();
-    ASSERT(ackHandler != nullptr);
-    std::vector<queueing::IPacketQueue *> queues = {edcaf->getPendingQueue()};
-    if (queueBankManager != nullptr) {
-        for (const auto& entry : queueBankManager->getQueueBanks())
-            queues.push_back(entry.second->getQueue((StationQueueBank::AccessCategory)ac));
-    }
-
-    for (auto queue : queues) {
-        int n = queue->getNumPackets();
-        for (int i = 0; i < n; ++i) {
-            Packet *pkt = queue->getPacket(i);
-            const auto& header = pkt->peekAtFront<Ieee80211MacHeader>();
-            MacAddress dest = header->getReceiverAddress();
-            if (dest.isMulticast() || dest.isBroadcast()) {
-                EV_INFO << "HE DL schedule context: skipping " << dest << " — broadcast/multicast\n";
-                continue;
-            }
-            if (std::find(seenDestinations.begin(), seenDestinations.end(), dest) != seenDestinations.end())
-                continue;
-            if (isTwtSleeping(mac, dest)) {
-                EV_DEBUG << "HE DL schedule context: skipping sleeping TWT STA " << dest << "\n";
-                continue;
-            }
-
-            auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header);
-            // Fresh queue entries have not been assigned a sequence number yet.
-            // They are eligible to start a transmission without a BlockAck
-            // scoreboard lookup; retried/in-progress entries retain a sequence
-            // number and must remain inside the 10.25.6 BlockAck window.
-            if (!isMuEligibleDataHeader(dataHeader, baHandler)) {
-                // See isMuEligibleDataHeader() above: this is an implementation
-                // precondition, not a normative requirement of Clause 26.5.
-                EV_INFO << "HE DL schedule context: skipping packet " << i << " to " << dest
-                         << " — not a QoS data frame or no active originator Block Ack agreement\n";
-                continue;
-            }
-            if (dataHeader->getSequenceNumber().isValid() && !ackHandler->isEligibleToTransmit(dataHeader)) {
-                EV_INFO << "HE DL schedule context: skipping packet " << i << " to " << dest
-                         << " TID " << (int)dataHeader->getTid()
-                         << " — sequence number not eligible for retransmission\n";
-                continue;
-            }
-            const auto peer = getLinkPhyContext().getPeerSnapshot(dest, SimTime(par("linkEstimateMaxAge")));
-            const auto negotiated = peer.getHasNegotiatedCapabilities() ? &peer.getNegotiatedCapabilities() : nullptr;
-            if (negotiated != nullptr &&
-                    (!negotiated->localTxPeerRx.valid ||
-                     !negotiated->localTxPeerRx.ofdma ||
-                     negotiated->localTxPeerRx.supportedChannelWidths.count(context.channelBandwidth) == 0 ||
-                     (par("dlMuAckMethod").stdstringValue() != "sequentialBar" &&
-                      (!negotiated->localTxPeerRx.receiverCanReceiveMuBarTrigger ||
-                       !negotiated->localRxPeerTx.transmitterCanTransmitHeTbBlockAck)))) {
-                const char *reason = !negotiated->localTxPeerRx.valid ? "invalid local-TX/peer-RX capabilities" :
-                        !negotiated->localTxPeerRx.ofdma ? "DL OFDMA not supported" :
-                        negotiated->localTxPeerRx.supportedChannelWidths.count(context.channelBandwidth) == 0 ?
-                                "channel bandwidth not supported" :
-                        par("dlMuAckMethod").stdstringValue() != "sequentialBar" ?
-                                "MU-BAR/HE-TB BlockAck not supported" : "unknown";
-                EV_INFO << "HE DL schedule context: skipping packet " << i << " to " << dest
-                         << " — negotiated HE capability mismatch: " << reason << "\n";
-                continue;
-            }
-            if (!context.puncturedSubchannels.empty() && (negotiated == nullptr ||
-                    !negotiated->localTxPeerRx.preamblePuncturing)) {
-                EV_INFO << "HE DL schedule context: skipping packet " << i << " to " << dest
-                         << " — preamble puncturing not supported\n";
-                continue;
-            }
-            auto agreement = baHandler->getAgreement(dest, dataHeader->getTid());
-            auto agreementSnapshot = agreement == nullptr ? OriginatorBlockAckAgreementSnapshot{} : agreement->getSnapshot();
-            int occupiedSlots = ackHandler->getNumOccupiedBlockAckSequencePositions(
-                    dest, dataHeader->getTid());
-            int availableSlots = agreement == nullptr ? 0 :
-                    std::max(0, agreementSnapshot.bufferSize - occupiedSlots);
-            // 10.25.6 bounds the outstanding MPDUs by the negotiated BlockAck
-            // buffer/window.  The DL MU scheduler cannot select a user whose
-            // next MPDU would fall outside that window.
-            if (availableSlots == 0) {
-                EV_INFO << "HE DL schedule context: skipping packet " << i << " to " << dest
-                         << " TID " << (int)dataHeader->getTid()
-                         << " — Block Ack window full (" << occupiedSlots << "/"
-                         << (agreement == nullptr ? 0 : agreementSnapshot.bufferSize) << ")\n";
-                continue;
-            }
-            seenDestinations.push_back(dest);
-
-            IIeee80211HeDlScheduler::CandidateInfo candidate;
-            candidate.staAddress = dest;
-            candidate.accessCategory = ac;
-            // DL MU payloads are carried as A-MPDU subframes. Include the
-            // delimiter in the HoL size so scheduler airtime estimates match
-            // the packing planner's single-MPDU PSDU length.
-            candidate.holPacketBytes = B(4).get<B>() + pkt->getByteLength();
-            auto enqueueTimeTag = pkt->findTag<OrigEnqueueTimeTag>();
-            candidate.holEnqueueTime = enqueueTimeTag == nullptr ? pkt->getArrivalTime() : enqueueTimeTag->getEnqueueTime();
-            candidate.holDelay = simTime() - candidate.holEnqueueTime;
-            candidate.sourceQueue = queue;
-            candidate.hasAdvertisedHeCapabilities = peer.getHasAdvertisement();
-            if (candidate.hasAdvertisedHeCapabilities)
-                candidate.advertisedHeCapabilities = peer.getAdvertisement();
-            candidate.hasNegotiatedHeCapabilities = peer.getHasNegotiatedCapabilities();
-            if (candidate.hasNegotiatedHeCapabilities)
-                candidate.negotiatedHeCapabilities = peer.getNegotiatedCapabilities();
-            candidate.hasFreshCsi = csiManager.hasFreshCsi(dest, context.channelBandwidth);
-            Ieee80211HeOperatingMode peerOperatingMode;
-            if (getPeerOperatingMode(dest, peerOperatingMode))
-                candidate.operatingModeRxNss = peerOperatingMode.rxNss;
-            int eligiblePackets = 0;
-            for (auto backlogQueue : queues) {
-                for (int j = 0; j < backlogQueue->getNumPackets(); ++j) {
-                    Packet *queuedPacket = backlogQueue->getPacket(j);
-                    auto queuedHeader = dynamicPtrCast<const Ieee80211DataHeader>(
-                            queuedPacket->peekAtFront<Ieee80211MacHeader>());
-                    if (queuedHeader != nullptr &&
-                            queuedHeader->getType() == ST_DATA_WITH_QOS &&
-                            queuedHeader->getReceiverAddress() == dest &&
-                            queuedHeader->getTid() == dataHeader->getTid() &&
-                            (!queuedHeader->getSequenceNumber().isValid() ||
-                             ackHandler->isEligibleToTransmit(queuedHeader)) &&
-                            hasActiveOriginatorBlockAckAgreement(baHandler, dest, queuedHeader->getTid()) &&
-                            eligiblePackets < std::min(availableSlots, context.maxAmpduMpduCount)) {
-                        B subframeLength = B(4) + B(queuedPacket->getByteLength());
-                        candidate.backlogBytes += subframeLength.get<B>();
-                        if (eligiblePackets > 0)
-                            candidate.backlogBytes += (4 - subframeLength.get<B>() % 4) % 4;
-                        eligiblePackets++;
-                    }
-                }
-            }
-            candidate.pathLossDb = peer.getPathLossDb();
-            candidate.hasFreshPathLoss = peer.getHasFreshPathLoss();
-            context.candidates.push_back(candidate);
-        }
-    }
-
-    std::stable_sort(context.candidates.begin(), context.candidates.end(),
-            [] (const auto& left, const auto& right) {
-                return left.holEnqueueTime < right.holEnqueueTime;
-            });
-    if (!context.candidates.empty()) {
-        context.candidates.front().anchor = true;
-        context.anchorSta = context.candidates.front().staAddress;
-    }
-    EV_INFO << "HE DL schedule context: collected " << context.candidates.size()
-            << " DL MU candidates for AC " << ac
-            << (context.candidates.empty() ? "" : ", anchor = " + context.anchorSta.str()) << "\n";
-    context.coding = mac->getMib()->localHeCapabilities.ldpc &&
-            std::all_of(context.candidates.begin(), context.candidates.end(), [] (const auto& candidate) {
-                return candidate.hasNegotiatedHeCapabilities &&
-                        candidate.negotiatedHeCapabilities.localTxPeerRx.valid && candidate.negotiatedHeCapabilities.mutual.ldpc;
-            }) ? physicallayer::HE_CODING_LDPC : physicallayer::HE_CODING_BCC;
-    context.csiManager = &csiManager;
-    context.numApAntennas = phy.getAntennaCount();
-    return context;
+    return this->captureDlPreparationSnapshot(ac);
 }
 
-queueing::IPacketQueue *HeHcf::findOldestPerStaQueue(AccessCategory ac) const
+IIeee80211HeDlScheduler::ScheduleContext HeHcfRuntime::collectScheduleContext(
+        AccessCategory ac) const
 {
-    if (queueBankManager == nullptr)
-        return nullptr;
-
-    queueing::IPacketQueue *oldestQueue = nullptr;
-    simtime_t oldestEnqueueTime = SIMTIME_MAX;
-    for (const auto& entry : queueBankManager->getQueueBanks()) {
-        auto queue = entry.second->getQueue((StationQueueBank::AccessCategory)ac);
-        if (queue->isEmpty())
-            continue;
-        auto packet = queue->getPacket(0);
-        auto header = packet->peekAtFront<Ieee80211MacHeader>();
-        if (isTwtSleeping(mac, header->getReceiverAddress()))
-            continue;
-        auto enqueueTimeTag = packet->findTag<OrigEnqueueTimeTag>();
-        auto enqueueTime = enqueueTimeTag == nullptr ? packet->getArrivalTime() : enqueueTimeTag->getEnqueueTime();
-        if (oldestQueue == nullptr || enqueueTime < oldestEnqueueTime) {
-            oldestQueue = queue;
-            oldestEnqueueTime = enqueueTime;
-        }
-    }
-    return oldestQueue;
+    return HeDlMuExchangeProvider::buildScheduleContext(
+            captureHeDlMuPreparationSnapshot(ac));
 }
 
-bool HeHcf::stagePerStaFrameForBlockAckBootstrap(AccessCategory ac)
+bool HeHcfRuntime::stagePerStaFrameForSingleUserTransmission(AccessCategory ac)
 {
-    if (queueBankManager == nullptr || originatorBlockAckAgreementHandler == nullptr ||
-            originatorBlockAckAgreementPolicy == nullptr)
+    auto snapshot = captureHeDlMuPreparationSnapshot(ac);
+    const HeDlMuCandidateSnapshot *oldest = nullptr;
+    for (const auto& packet : snapshot.packets)
+        if (!packet.queuePeer.isUnspecified() && packet.queueIndex == 0 &&
+                packet.twtEligible && !packet.addbaRequestInProgress &&
+                (oldest == nullptr || packet.enqueueTime < oldest->enqueueTime))
+            oldest = &packet;
+    return oldest != nullptr && stageHeDlMuPacket(oldest->queueToken,
+            oldest->packetIdentity, ac);
+}
+
+bool HeHcfRuntime::tryStartDlMuFrameSequence(AccessCategory ac)
+{
+    HeDlMuExchangeProvider::StartupParameters parameters;
+    parameters.maxAmpduMpduCount = par("maxAmpduMpduCount");
+    parameters.maxHeMuPsduLength = par("maxHeMuPsduLength");
+    parameters.maxHeMuPpduDuration = par("maxHeMuPpduDuration");
+    return getHeDlMuExchangeProvider().tryStart(ac,
+            captureHeDlMuPreparationSnapshot(ac), *dlScheduler, parameters);
+}
+
+bool HeHcfRuntime::stageHeDlMuPacket(HcfQueueToken queueToken,
+        HcfPacketIdentity packetIdentity, AccessCategory ac)
+{
+    return getHeQueueService().stagePacket(queueToken, packetIdentity,
+            edca->getEdcaf(ac)->getPendingQueue());
+}
+
+bool HeHcfRuntime::startHeDlMuSingleUserIfEligible(AccessCategory ac)
+{
+    if (edca->getEdcaf(ac)->getInProgressFrames()->getFrameToTransmit() == nullptr)
         return false;
-
-    queueing::IPacketQueue *bootstrapQueue = nullptr;
-    simtime_t oldestEnqueueTime = SIMTIME_MAX;
-    for (const auto& entry : queueBankManager->getQueueBanks()) {
-        auto queue = entry.second->getQueue((StationQueueBank::AccessCategory)ac);
-        if (queue->isEmpty())
-            continue;
-        auto packet = queue->getPacket(0);
-        auto header = dynamicPtrCast<const Ieee80211DataHeader>(packet->peekAtFront<Ieee80211MacHeader>());
-        if (header == nullptr || header->getType() != ST_DATA_WITH_QOS ||
-                header->getReceiverAddress().isMulticast() || header->getReceiverAddress().isBroadcast() ||
-                isTwtSleeping(mac, header->getReceiverAddress()) ||
-                !originatorBlockAckAgreementPolicy->isAddbaReqNeeded(packet, header))
-            continue;
-
-        auto agreement = originatorBlockAckAgreementHandler->getAgreement(
-                header->getReceiverAddress(), header->getTid());
-        auto agreementSnapshot = agreement == nullptr ? OriginatorBlockAckAgreementSnapshot{} : agreement->getSnapshot();
-        if (agreement != nullptr && agreementSnapshot.isAddbaResponseReceived)
-            continue;
-        if (agreement != nullptr && agreementSnapshot.isAddbaRequestInProgress &&
-                (agreementSnapshot.expirationTime < SIMTIME_ZERO || simTime() < agreementSnapshot.expirationTime))
-            continue;
-
-        auto enqueueTimeTag = packet->findTag<OrigEnqueueTimeTag>();
-        auto enqueueTime = enqueueTimeTag == nullptr ? packet->getArrivalTime() : enqueueTimeTag->getEnqueueTime();
-        if (bootstrapQueue == nullptr || enqueueTime < oldestEnqueueTime) {
-            bootstrapQueue = queue;
-            oldestEnqueueTime = enqueueTime;
-        }
-    }
-
-    if (bootstrapQueue == nullptr)
-        return false;
-
-    auto packet = bootstrapQueue->dequeuePacket();
-    auto header = packet->peekAtFront<Ieee80211DataHeader>();
-    edca->getEdcaf(ac)->getPendingQueue()->enqueuePacket(packet);
-    EV_INFO << "Staging single-user Block Ack bootstrap frame for "
-            << header->getReceiverAddress() << " tid=" << (int)header->getTid() << "\n";
+    hcf->startSingleUserExchange(ac);
     return true;
 }
 
-bool HeHcf::stagePerStaFrameForSingleUserTransmission(AccessCategory ac)
+void HeHcfRuntime::startHeSoundingExchange(
+        const HeSoundingService::StartAction& action, AccessCategory ac)
 {
-    auto sourceQueue = findOldestPerStaQueue(ac);
-    if (sourceQueue == nullptr)
-        return false;
-    edca->getEdcaf(ac)->getPendingQueue()->enqueuePacket(sourceQueue->dequeuePacket());
-    return true;
+    configureHeDlMuProtection(ac);
+    auto& csiManager = getHePeerStateService().getCsiManager();
+    EV_INFO << "At least one MU-capable backlogged STA lacks fresh CSI. Initiating sounding sequence.\n";
+    auto sequence = new HeSoundingFs(mac->getMib(), action.targets, modeSet,
+            &csiManager, action.channelCenterFrequency, action.channelBandwidth,
+            action.dialogToken, action.triggerId);
+    startExchangeFrameSequence(sequence, buildContext(ac));
 }
 
-bool HeHcf::tryStartDlMuFrameSequence(AccessCategory ac)
+void HeHcfRuntime::configureHeDlMuProtection(AccessCategory ac)
+{
+    auto txop = edca->getEdcaf(ac)->getTxopProcedure();
+    if (!txop->isProtectionConfigured())
+        txop->configureProtection(TxopProcedure::InitialProtection::NONE);
+}
+
+void HeHcfRuntime::startHeDlMuExchange(AccessCategory ac, const HeDlMuPlan& plan,
+        uint64_t transactionToken, HeDlMuTxOpFs::AckMethod ackMethod,
+        const HeDlMuExchangeProvider::StartupParameters& parameters)
 {
     auto edcaf = edca->getEdcaf(ac);
-    if (mac->isApInHeFamily() && enableDlMuMimo && mac->getMib()->localHeCapabilities.dlMuMimoBeamformer) {
-        // 26.5.1 allows DL MU-MIMO only when the AP has the required HE
-        // beamformer capability and per-STA feedback; 26.7.3 defines the HE
-        // TB sounding exchange used here to refresh CSI before scheduling.
-        auto scheduleContext = collectScheduleContext(ac);
-        auto soundingCoordinator = check_and_cast<HeSoundingCoordinator *>(getSubmodule("soundingCoordinator"));
-        auto txop = edcaf->getTxopProcedure();
-        if (!txop->isProtectionConfigured())
-            txop->configureProtection(TxopProcedure::InitialProtection::NONE);
-        if (soundingCoordinator->tryStartSoundingSequence(ac, scheduleContext, frameSequenceHandler.get(), mac, modeSet, csiManager, buildContext(ac), this))
-            return true;
-    }
-
-    auto pendingQueue = edcaf->getPendingQueue();
-    auto inProgress = edcaf->getInProgressFrames();
-    if (hasEligibleExistingFrame(inProgress, edcaf->getAckHandler())) {
-        // 10.23.2.8 allows multiple frame exchange sequences in an EDCA TXOP,
-        // but already outstanding frames keep their legacy recovery context.
-        // Complete those before starting a new HE MU PPDU.
-        EV_INFO << "Completing " << inProgress->getLength()
-                << " recovery/outstanding frames before opening a new MU transmission." << endl;
-        Hcf::startFrameSequence(ac);
-        return true;
-    }
-    auto headDataHeader = getEligibleHoLDataHeader(pendingQueue);
-    auto baHandler = getOriginatorBlockAckAgreementHandler();
-    if (!pendingQueue->isEmpty() && !isMuEligibleDataHeader(headDataHeader, baHandler)) {
-        if (headDataHeader != nullptr) {
-            EV_INFO << "Earliest SU-transmittable packet "
-                    << headDataHeader->getReceiverAddress() << " tid=" << headDataHeader->getTid()
-                    << " is MU-ineligible, falling back to Hcf::startFrameSequence(ac)." << endl;
-        }
-        if (inProgress->getFrameToTransmit() != nullptr) {
-            Hcf::startFrameSequence(ac);
-            return true;
-        }
-        EV_INFO << "Single-user data extraction is deferred; no SU frame is eligible in this TXOP\n";
-        return false;
-    }
-    if (pendingQueue->isEmpty() && stagePerStaFrameForBlockAckBootstrap(ac)) {
-        if (inProgress->getFrameToTransmit() != nullptr) {
-            Hcf::startFrameSequence(ac);
-            return true;
-        }
-        EV_INFO << "Block Ack bootstrap deferred data extraction; no SU frame is eligible in this TXOP\n";
-        return false;
-    }
-    auto scheduleContext = collectScheduleContext(ac);
-    if (scheduleContext.candidates.size() >= 2) {
-        auto schedulerAllocations = dlScheduler->schedule(scheduleContext);
-        HeMuPlanDiagnostic diagnostic;
-        auto dlPlan = HeDlMuPlan::create(scheduleContext, schedulerAllocations, diagnostic);
-        if (!dlPlan) {
-            EV_WARN << "HE DL scheduler plan rejected: code=" << (int)diagnostic.code
-                    << ", allocation=" << diagnostic.allocationIndex
-                    << ", station=" << diagnostic.station
-                    << ", detail=" << diagnostic.detail << "; falling back to SU." << endl;
-            if (pendingQueue->isEmpty())
-                stagePerStaFrameForSingleUserTransmission(ac);
-            Hcf::startFrameSequence(ac);
-            return true;
-        }
-        EV_INFO << "HE DL MU opportunity detected for " << scheduleContext.candidates.size()
-                << " STAs - starting HE DL MU TxOp FS." << endl;
-        auto ackMethod = par("dlMuAckMethod").stdstringValue() == "sequentialBar" ?
-                HeDlMuTxOpFs::AckMethod::EXPLICIT_SEQUENTIAL_BAR :
-                HeDlMuTxOpFs::AckMethod::MU_BAR_TRIGGER;
-        if (ackMethod == HeDlMuTxOpFs::AckMethod::MU_BAR_TRIGGER) {
-            const auto fullBandwidthRu = physicallayer::getHeEqualRuLayout(
-                    scheduleContext.channelCenterFrequency, scheduleContext.channelBandwidth, 1).front();
-            const auto fullBandwidthUlMuMimo = std::count_if(dlPlan->getAllocations().begin(),
-                    dlPlan->getAllocations().end(), [&] (const auto& allocation) {
-                        return allocation.ru.toneSize == fullBandwidthRu.toneSize &&
-                                allocation.ru.toneOffset == fullBandwidthRu.toneOffset;
-                    }) >= 2;
-            bool fullBandwidthUlMuMimoSupported = true;
-            for (const auto& allocation : dlPlan->getAllocations()) {
-                if (!fullBandwidthUlMuMimo)
-                    continue;
-                auto candidate = std::find_if(scheduleContext.candidates.begin(),
-                        scheduleContext.candidates.end(), [&] (const auto& entry) {
-                            return entry.staAddress == allocation.staAddress;
-                        });
-                if (candidate == scheduleContext.candidates.end() ||
-                        !candidate->hasNegotiatedHeCapabilities ||
-                        !candidate->negotiatedHeCapabilities.localRxPeerTx.valid ||
-                        !candidate->negotiatedHeCapabilities.localRxPeerTx.
-                                fullBandwidthUlMuMimo) {
-                    EV_INFO << "HE DL MU: full-bandwidth UL MU-MIMO unavailable for "
-                            << allocation.staAddress
-                            << ", candidate=" << (candidate != scheduleContext.candidates.end())
-                            << ", negotiated=" << (candidate != scheduleContext.candidates.end() &&
-                                    candidate->hasNegotiatedHeCapabilities)
-                            << ", valid=" << (candidate != scheduleContext.candidates.end() &&
-                                    candidate->negotiatedHeCapabilities.localRxPeerTx.valid)
-                            << ", usable=" << (candidate != scheduleContext.candidates.end() &&
-                                    candidate->negotiatedHeCapabilities.localRxPeerTx.
-                                            fullBandwidthUlMuMimo) << "\n";
-                    fullBandwidthUlMuMimoSupported = false;
-                    break;
-                }
-            }
-            if (!fullBandwidthUlMuMimoSupported) {
-                // IEEE Std 802.11-2024, 26.5.2.2.1 prohibits a Trigger that
-                // solicits full-bandwidth UL MU-MIMO from a non-AP STA that
-                // has not advertised the capability.  A DL MU PPDU remains
-                // valid; use its per-STA BAR/BA response sequence instead.
-                EV_INFO << "HE DL MU: falling back from MU-BAR trigger to sequential BAR "
-                        << "because full-bandwidth UL MU-MIMO is not negotiated for every recipient\n";
-                ackMethod = HeDlMuTxOpFs::AckMethod::EXPLICIT_SEQUENTIAL_BAR;
-            }
-        }
-        // 26.4.4.3 permits SU BlockAck responses to an HE MU PPDU; 9.3.1.22.4
-        // plus 26.4.4.4/26.5.2 model the MU-BAR-triggered HE TB BlockAck path.
-        EV_INFO << "Start HE DL MU TxOp FS: using "
-                 << (ackMethod == HeDlMuTxOpFs::AckMethod::MU_BAR_TRIGGER ? "MU-BAR trigger" : "sequential BAR")
-                 << " acknowledgment method\n";
-        auto txop = edcaf->getTxopProcedure();
-        if (!txop->isProtectionConfigured())
-            txop->configureProtection(TxopProcedure::InitialProtection::NONE);
-        frameSequenceHandler->startFrameSequence(
-                new HeDlMuTxOpFs(*dlPlan, modeSet,
-                                 pendingQueue, edcaf->getAckHandler(), this,
-                                 par("maxAmpduMpduCount"),
-                                 par("maxHeMuPsduLength"),
-                                 par("maxHeMuPpduDuration"),
-                                 ackMethod),
-                buildContext(ac), this);
-        emit(IFrameSequenceHandler::frameSequenceStartedSignal, frameSequenceHandler->getContext());
-        return true;
-    }
-    if (pendingQueue->isEmpty())
-        stagePerStaFrameForSingleUserTransmission(ac);
-    else
-        EV_INFO << "Only " << scheduleContext.candidates.size()
-                 << " MU candidate(s), falling back to single-user\n";
-    return false;
+    auto frameSequence = new HeDlMuTxOpFs(plan, modeSet,
+            edcaf->getPendingQueue(), edcaf->getAckHandler(),
+            getFrameSequenceCallbackForLegacyAdapter(),
+            this, transactionToken,
+            parameters.maxAmpduMpduCount, parameters.maxHeMuPsduLength,
+            parameters.maxHeMuPpduDuration, ackMethod);
+    startExchangeFrameSequence(frameSequence,
+            buildContext(ac));
 }
 
-void HeHcf::handleDlMuPlanningFailure(AccessCategory ac)
+queueing::IPacketQueue *HeHcfRuntime::resolveHeDlMuQueue(HcfQueueToken token) const
 {
-    bool staged = stagePerStaFrameForSingleUserTransmission(ac);
-    forceNextSingleUser[ac] = staged;
+    return resolveHeQueue(token);
+}
+
+Packet *HeHcfRuntime::getReservedHeDlMuPacket(uint64_t transactionToken,
+        const MacAddress& peer) const
+{
+    return getHeDlMuExchangeProvider().getReservedHeDlMuPacket(
+            transactionToken, peer);
+}
+bool HeHcfRuntime::isReservedHeDlMuPacket(uint64_t transactionToken,
+        const MacAddress& peer, const Packet *packet) const
+{
+    return getHeDlMuExchangeProvider().isReservedHeDlMuPacket(
+            transactionToken, peer, packet);
+}
+
+IOriginatorBlockAckAgreementHandler *HeHcfRuntime::getHeDlMuBlockAckHandler() const
+{
+    return getOriginatorBlockAckAgreementHandler();
+}
+
+IOriginatorMacDataService *HeHcfRuntime::getHeDlMuOriginatorDataService() const
+{
+    return getOriginatorMacDataService();
+}
+
+IQosRateSelection *HeHcfRuntime::getHeDlMuRateSelection() const
+{
+    return check_and_cast<IQosRateSelection *>(getSubmodule("rateSelection"));
+}
+
+MacAddress HeHcfRuntime::getHeDlMuTransmitterAddress() const { return mac->getAddress(); }
+int HeHcfRuntime::getHeDlMuFcsMode() const { return mac->getFcsMode(); }
+uint8_t HeHcfRuntime::getHeDlMuBssColor() const { return mac->getMib()->heOperation.bssColor; }
+uint16_t HeHcfRuntime::getHeDlMuAssociationId(const MacAddress& peer) const { return getAssociationId(peer); }
+
+std::optional<Ieee80211NegotiatedHeCapabilities>
+HeHcfRuntime::getHeDlMuNegotiatedCapabilities(const MacAddress& peer) const
+{
+    return mac->getMib()->getNegotiatedHeCapabilities(peer);
+}
+
+void HeHcfRuntime::heDlMuPlanFinalized(uint64_t token,
+        const std::vector<HeDlMuMember>& members)
+{
+    getHeDlMuExchangeProvider().finalizeReservation(token, members);
+}
+
+void HeHcfRuntime::heDlMuPlanCommitted(uint64_t token, Packet *container,
+        const std::vector<HeDlMuMember>& members)
+{
+    getHeDlMuExchangeProvider().heDlMuPlanCommitted(token, container, members);
+}
+void HeHcfRuntime::heDlMuMemberTransmitted(uint64_t token, const HeDlMuMember& member)
+{
+    if (!getHeDlMuExchangeProvider().heDlMuMemberTransmitted(token, member, false))
+        return;
+    if (member.packet == nullptr || member.accessCategory < AC_BK ||
+            member.accessCategory >= AC_NUMCATEGORIES)
+        return;
+    auto header = member.packet->peekAtFront<Ieee80211MacHeader>();
+    auto edcaf = edca->getEdcaf(member.accessCategory);
+    if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
+        originatorProcessTransmittedDataFrame(member.packet, dataHeader,
+                member.accessCategory);
+        edcaf->getAckHandler()->transitionToWaitingForBlockAck(dataHeader);
+    }
+    else if (auto managementHeader = dynamicPtrCast<const Ieee80211MgmtHeader>(header))
+        originatorProcessTransmittedManagementFrame(managementHeader,
+                member.accessCategory);
+}
+void HeHcfRuntime::heDlMuUserOutcome(uint64_t token, const MacAddress& peer,
+        HeDlMuUserOutcome outcome)
+{
+    getHeDlMuExchangeProvider().heDlMuUserOutcome(token, peer, outcome, false);
+}
+void HeHcfRuntime::heDlMuPlanningFailed(uint64_t token, AccessCategory ac)
+{
+    if (!getHeDlMuExchangeProvider().heDlMuPlanningFailed(token, ac, false))
+        return;
     EV_WARN << "DL MU planning failed for AC " << ac
-            << ", forcing next TXOP single-user (staged = " << (staged ? "true" : "false") << ")\n";
+            << "; provider scheduled an exact next-TXOP single-user fallback\n";
 }
 } // namespace ieee80211
 } // namespace inet

@@ -1,0 +1,205 @@
+%description:
+Verify stateless HCF aggregate planning gates, mutation order, rejection, PPDU
+trimming, and HT implicit Block Ack MPDU/aggregate limits.
+
+%includes:
+#include <map>
+#include <string>
+#include <vector>
+
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/ByteCountChunk.h"
+#include "inet/common/TimeTag_m.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfAggregationService.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+static Packet *makeData(const char *name, int sequence, B payload = B(100))
+{
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setType(ST_DATA_WITH_QOS);
+    header->setReceiverAddress(MacAddress("02:00:00:00:00:02"));
+    header->setTid(5);
+    header->setSequenceNumber(SequenceNumberCyclic(sequence));
+    header->setAckPolicy(BLOCK_ACK);
+    header->setDurationField(SimTime(9, SIMTIME_US));
+    header->setChunkLength(B(26));
+    auto packet = new Packet(name, header);
+    packet->insertAtBack(makeShared<ByteCountChunk>(payload));
+    packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+    return packet;
+}
+
+struct PlanningActions : HcfAggregationService::ITransmissionPlanningActions {
+    std::vector<Packet *> candidates;
+    mutable std::vector<std::string> events;
+    mutable int maxLengthCalls = 0;
+    std::string rejectedName;
+    virtual std::vector<Packet *> getCandidates(Packet *, bool, long long) const override { return candidates; }
+    virtual long long getMaxAggregateLength(const Ptr<const Ieee80211DataHeader>&,
+            Ieee80211PhyFamily) const override { maxLengthCalls++; return (1LL << 20) - 1; }
+    virtual void applyRetryState(Packet *packet) const override { events.push_back(std::string("retry:") + packet->getName()); }
+    virtual AckPolicy selectAckPolicy(Packet *packet, const Ptr<const Ieee80211DataHeader>&) const override {
+        events.push_back(std::string("policy:") + packet->getName());
+        return packet->getName() == rejectedName ? NORMAL_ACK : BLOCK_ACK;
+    }
+    virtual void applySelectedPolicy(Packet *packet, AckPolicy policy) const override {
+        events.push_back(std::string("mutate:") + packet->getName());
+        auto header = packet->removeAtFront<Ieee80211DataHeader>();
+        header->setAckPolicy(policy);
+        header->setDurationField(SIMTIME_ZERO);
+        packet->insertAtFront(header);
+    }
+    virtual void aggregationTrimmed(size_t original, size_t retained, simtime_t) const override {
+        events.push_back("trim:" + std::to_string(original) + ":" + std::to_string(retained));
+    }
+};
+
+struct ImplicitActions : HcfAggregationService::IHtImplicitSelectionActions {
+    std::vector<Packet *> candidates;
+    mutable std::map<std::string, int> policyCalls;
+    long long maxAggregateLength = (1LL << 16) - 1;
+    mutable int candidateCalls = 0;
+    mutable int maxLengthCalls = 0;
+    virtual std::vector<Packet *> getCandidates(Packet *) const override { candidateCalls++; return candidates; }
+    virtual long long getMaxAggregateLength(const Ptr<const Ieee80211DataHeader>&,
+            Ieee80211PhyFamily) const override { maxLengthCalls++; return maxAggregateLength; }
+    virtual AckPolicy selectAckPolicy(Packet *packet, const Ptr<const Ieee80211DataHeader>&) const override {
+        policyCalls[packet->getName()]++;
+        return BLOCK_ACK;
+    }
+};
+
+%activity:
+HcfAggregationService service;
+auto modeSet = Ieee80211ModeSet::getModeSet("n(mixed-2.4Ghz)");
+auto mode = modeSet->findHtMode(0, 1, MHz(20), false);
+REQUIRE(mode != nullptr);
+
+auto first = makeData("first", 1, B(4000));
+auto retained = makeData("retained", 2, B(4000));
+auto trimmed = makeData("trimmed", 3, B(4000));
+PlanningActions planning;
+planning.candidates = {first, retained, trimmed};
+HcfAggregationService::TransmissionPlanningRequest request;
+request.sourcePacket = first;
+request.mode = mode;
+request.phyFamily = Ieee80211PhyFamily::HT;
+request.aggregationAllowed = true;
+auto plan = service.planTransmission(request, planning);
+REQUIRE(plan.materialize);
+REQUIRE(plan.members.size() == 2);
+REQUIRE(plan.members[0] == first && plan.members[1] == retained);
+REQUIRE(trimmed->peekAtFront<Ieee80211DataHeader>()->getDurationField() == SIMTIME_ZERO);
+REQUIRE(planning.events == std::vector<std::string>({"retry:first", "policy:first", "mutate:first",
+        "retry:retained", "policy:retained", "mutate:retained",
+        "retry:trimmed", "policy:trimmed", "mutate:trimmed", "trim:3:2"}));
+
+auto rejected = makeData("rejected", 4);
+planning.events.clear();
+planning.rejectedName = "rejected";
+planning.candidates = {first, rejected, retained};
+plan = service.planTransmission(request, planning);
+REQUIRE(!plan.materialize);
+REQUIRE(planning.events == std::vector<std::string>({"retry:first", "policy:first", "mutate:first",
+        "retry:rejected", "policy:rejected"}));
+REQUIRE(rejected->peekAtFront<Ieee80211DataHeader>()->getDurationField() == SimTime(9, SIMTIME_US));
+
+planning.events.clear();
+planning.maxLengthCalls = 0;
+planning.rejectedName.clear();
+planning.candidates = {first};
+request.implicitBlockAck = true;
+plan = service.planTransmission(request, planning);
+REQUIRE(plan.materialize && plan.implicitBlockAck);
+REQUIRE(plan.members.size() == 1 && plan.members[0] == first);
+REQUIRE(planning.maxLengthCalls == 0);
+request.implicitBlockAck = false;
+
+ImplicitActions implicit;
+implicit.candidates = {first, retained};
+HcfAggregationService::HtImplicitSelectionRequest implicitRequest;
+implicitRequest.sourcePacket = first;
+implicitRequest.mode = mode;
+implicitRequest.phyFamily = Ieee80211PhyFamily::HT;
+implicitRequest.enabled = true;
+auto selected = service.selectHtImplicitBlockAckFrames(implicitRequest, implicit);
+REQUIRE(selected.size() == 2);
+REQUIRE(selected[0] == first && selected[1] == retained);
+REQUIRE(implicit.policyCalls["first"] == 1 && implicit.policyCalls["retained"] == 1);
+
+implicit.maxAggregateLength = 5000;
+selected = service.selectHtImplicitBlockAckFrames(implicitRequest, implicit);
+REQUIRE(selected.size() == 1 && selected[0] == first);
+implicit.maxAggregateLength = (1LL << 16) - 1;
+
+auto oversized = makeData("oversized", 5, B(4096));
+implicit.candidates = {first, oversized, retained};
+selected = service.selectHtImplicitBlockAckFrames(implicitRequest, implicit);
+REQUIRE(selected.size() == 1 && selected[0] == first);
+REQUIRE(implicit.policyCalls["oversized"] == 0);
+
+auto fragmented = makeData("fragmented", 6);
+auto fragmentedHeader = fragmented->removeAtFront<Ieee80211DataHeader>();
+fragmentedHeader->setFragmentNumber(1);
+fragmented->insertAtFront(fragmentedHeader);
+implicit.candidates = {first, fragmented, retained};
+selected = service.selectHtImplicitBlockAckFrames(implicitRequest, implicit);
+REQUIRE(selected.size() == 1 && selected[0] == first);
+REQUIRE(implicit.policyCalls["fragmented"] == 0);
+
+implicit.candidateCalls = implicit.maxLengthCalls = 0;
+implicitRequest.phyFamily = Ieee80211PhyFamily::OFDM;
+REQUIRE(service.selectHtImplicitBlockAckFrames(implicitRequest, implicit).empty());
+REQUIRE(implicit.candidateCalls == 0 && implicit.maxLengthCalls == 0);
+implicitRequest.phyFamily = Ieee80211PhyFamily::HT;
+implicitRequest.enabled = false;
+REQUIRE(service.selectHtImplicitBlockAckFrames(implicitRequest, implicit).empty());
+
+auto tooLong = makeData("tooLong", 7, B(10000));
+planning.events.clear();
+planning.rejectedName.clear();
+planning.candidates = {tooLong};
+bool durationFailure = false;
+try {
+    service.planTransmission(request, planning);
+}
+catch (const cRuntimeError&) {
+    durationFailure = true;
+}
+REQUIRE(durationFailure);
+REQUIRE(planning.events == std::vector<std::string>({"retry:tooLong", "policy:tooLong", "mutate:tooLong"}));
+REQUIRE(tooLong->peekAtFront<Ieee80211DataHeader>()->getDurationField() == SIMTIME_ZERO);
+
+auto tagged = makeData("tagged", 8);
+auto sourceTagOffset = tagged->getFrontOffset() + B(26);
+tagged->addRegionTag<CreationTimeTag>(sourceTagOffset, B(8))->
+        setCreationTime(SimTime(1, SIMTIME_MS));
+auto aggregate = service.materializeTransmission(tagged, {tagged},
+        FCS_DECLARED_CORRECT, true);
+auto copiedTags = aggregate->getAllRegionTags<CreationTimeTag>(
+        aggregate->getFrontOffset(), aggregate->getDataLength());
+REQUIRE(copiedTags.size() == 1);
+REQUIRE(copiedTags.front().getOffset() == B(4) + sourceTagOffset);
+REQUIRE(copiedTags.front().getLength() == B(8));
+REQUIRE(service.discardTransmission(tagged));
+delete aggregate;
+delete tagged;
+
+delete tooLong;
+delete fragmented;
+delete oversized;
+delete rejected;
+delete trimmed;
+delete retained;
+delete first;
+EV << "HCF aggregation planning and region-tag materialization checks passed.\n";
+
+%contains: stdout
+HCF aggregation planning and region-tag materialization checks passed.

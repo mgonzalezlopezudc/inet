@@ -8,13 +8,13 @@
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 #include "inet/linklayer/ieee80211/mac/aggregation/MpduAggregation.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
 #include "inet/linklayer/ieee80211/mac/contract/DurationFinalizedReq.h"
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorMacDataService.h"
 #include "inet/linklayer/ieee80211/mac/contract/ISequenceNumberAssignment.h"
 #include "inet/linklayer/ieee80211/mac/originator/QosAckHandler.h"
+#include "inet/queueing/contract/IPacketQueue.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211VhtTxVector.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
 
@@ -25,10 +25,13 @@ using namespace inet::physicallayer;
 
 VhtDlMuTxOpFs::VhtDlMuTxOpFs(const VhtDlMuPlan& plan,
         Ieee80211ModeSet *modeSet, IAckHandler *ackHandler,
-        IFrameSequenceHandler::ICallback *callback) :
-    plan(plan), modeSet(modeSet), ackHandler(ackHandler), callback(callback)
+        IFrameSequenceHandler::ICallback *callback,
+        IVhtDlMuExchangeCallback *vhtCallback, uint64_t transactionToken) :
+    plan(plan), modeSet(modeSet), ackHandler(ackHandler), callback(callback),
+    vhtCallback(vhtCallback), transactionToken(transactionToken)
 {
-    ASSERT(modeSet != nullptr && ackHandler != nullptr && callback != nullptr);
+    ASSERT(modeSet != nullptr && ackHandler != nullptr && callback != nullptr &&
+            vhtCallback != nullptr);
 }
 
 void VhtDlMuTxOpFs::startSequence(FrameSequenceContext *context, int firstStep)
@@ -74,9 +77,15 @@ bool VhtDlMuTxOpFs::completeStep(FrameSequenceContext *context)
     if (step > 0 && step % 2 == 0) {
         auto userIndex = (step - 1) / 2;
         auto receive = check_and_cast<IReceiveStep *>(context->getLastStep());
-        if (receive->getReceivedFrame() == nullptr)
+        if (receive->getReceivedFrame() == nullptr) {
             for (auto packet : activeUsers.at(userIndex).packets)
-                callback->originatorProcessFailedFrame(packet);
+                vhtCallback->processVhtDlMuFailedFrame(packet);
+            vhtCallback->processVhtDlMuUserResult(transactionToken, userIndex,
+                    IVhtDlMuExchangeCallback::UserResult::BLOCK_ACK_TIMED_OUT);
+        }
+        else
+            vhtCallback->processVhtDlMuUserResult(transactionToken, userIndex,
+                    IVhtDlMuExchangeCallback::UserResult::BLOCK_ACK_RECEIVED);
     }
     step++;
     return true;
@@ -92,12 +101,12 @@ Packet *VhtDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
 
     const auto& users = plan.getUsers();
     ASSERT(users.size() >= 2 && users.size() <= 4);
-    auto hcf = dynamic_cast<Hcf *>(callback);
-    auto dataService = hcf == nullptr ? nullptr : hcf->getOriginatorMacDataService();
+    auto dataService = vhtCallback->getVhtDlMuOriginatorDataService();
     if (dataService == nullptr)
         throw cRuntimeError("VHT DL MU requires an originator MAC data service");
-    auto hcfModule = check_and_cast<cModule *>(callback);
-    auto mac = check_and_cast<Ieee80211Mac *>(hcfModule->getParentModule());
+    auto mac = vhtCallback->getVhtDlMuMac();
+    if (mac == nullptr)
+        throw cRuntimeError("VHT DL MU requires a MAC callback context");
     auto controlMode = modeSet->getSlowestMandatoryMode(MHz(20));
     auto barDuration = controlMode->getDuration(B(24));
     auto blockAckDuration = controlMode->getDuration(LENGTH_BASIC_BLOCKACK);
@@ -107,6 +116,7 @@ Packet *VhtDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     std::unique_ptr<ISequenceNumberAssignment> sequenceState =
             dataService->cloneSequenceNumberState();
     std::vector<std::vector<PreparedMember>> preparedUsers(users.size());
+    std::vector<queueing::IPacketQueue *> sourceQueues(users.size());
     std::vector<std::unique_ptr<Packet>> userPsdus;
     std::vector<Ieee80211VhtMuUser> phyUsers;
     bool ldpcExtraOfdmSymbol = false;
@@ -115,19 +125,41 @@ Packet *VhtDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     phyUsers.reserve(users.size());
     for (size_t i = 0; i < users.size(); ++i) {
         const auto& user = users[i];
+        auto sourceQueue = vhtCallback->resolveVhtDlMuQueue(
+                user.sourceQueueToken);
+        if (sourceQueue == nullptr)
+            throw VhtDlMuStalePlan("VHT DL MU source queue token is stale");
+        sourceQueues[i] = sourceQueue;
         auto isInProgress = [context](Packet *packet) {
             for (int j = 0; j < context->getInProgressFrames()->getLength(); ++j)
                 if (context->getInProgressFrames()->getFrames(j) == packet)
                     return true;
             return false;
         };
-        auto isQueued = [&user](Packet *packet) {
-            for (int j = 0; j < user.sourceQueue->getNumPackets(); ++j)
-                if (user.sourceQueue->getPacket(j) == packet)
+        auto isQueued = [sourceQueue](Packet *packet) {
+            for (int j = 0; j < sourceQueue->getNumPackets(); ++j)
+                if (sourceQueue->getPacket(j) == packet)
                     return true;
             return false;
         };
-        if (!isInProgress(user.packet) && !isQueued(user.packet))
+        Packet *selectedPacket = nullptr;
+        for (int j = 0; j < context->getInProgressFrames()->getLength(); ++j) {
+            auto packet = context->getInProgressFrames()->getFrames(j);
+            if (HcfPacketIdentity(packet->getId()) == user.packetIdentity) {
+                selectedPacket = packet;
+                break;
+            }
+        }
+        if (selectedPacket == nullptr)
+            for (int j = 0; j < sourceQueue->getNumPackets(); ++j) {
+                auto packet = sourceQueue->getPacket(j);
+                if (HcfPacketIdentity(packet->getId()) == user.packetIdentity) {
+                    selectedPacket = packet;
+                    break;
+                }
+            }
+        if (selectedPacket == nullptr ||
+                (!isInProgress(selectedPacket) && !isQueued(selectedPacket)))
             throw VhtDlMuStalePlan("VHT DL MU selected packet changed ownership before preparation");
 
         auto mode = modeSet->findVhtMode(user.mcs, user.numberOfSpatialStreams,
@@ -148,15 +180,15 @@ Packet *VhtDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
                     maxAmpduLengthExponent);
         auto maxAmpduLength = (1LL << (13 + maxAmpduLengthExponent)) - 1;
 
-        std::vector<Packet *> candidates = {user.packet};
+        std::vector<Packet *> candidates = {selectedPacket};
         for (int j = 0; j < context->getInProgressFrames()->getLength(); ++j) {
             auto packet = context->getInProgressFrames()->getFrames(j);
-            if (packet != user.packet && ackHandler->isEligibleToTransmit(
+            if (packet != selectedPacket && ackHandler->isEligibleToTransmit(
                     packet->peekAtFront<Ieee80211DataOrMgmtHeader>()))
                 candidates.push_back(packet);
         }
-        for (int j = 0; j < user.sourceQueue->getNumPackets(); ++j) {
-            auto packet = user.sourceQueue->getPacket(j);
+        for (int j = 0; j < sourceQueue->getNumPackets(); ++j) {
+            auto packet = sourceQueue->getPacket(j);
             if (std::find(candidates.begin(), candidates.end(), packet) == candidates.end())
                 candidates.push_back(packet);
         }
@@ -174,12 +206,12 @@ Packet *VhtDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
                     originalHeader->getTid() != user.tid ||
                     originalHeader->getFragmentNumber() != 0 ||
                     originalHeader->getMoreFragments()) {
-                if (original == user.packet)
+                if (original == selectedPacket)
                     throw VhtDlMuStalePlan("VHT DL MU packet no longer satisfies the immutable plan");
                 continue;
             }
             if (inProgress && !ackHandler->isEligibleToTransmit(originalHeader)) {
-                if (original == user.packet)
+                if (original == selectedPacket)
                     throw VhtDlMuStalePlan("Selected VHT DL MU retry frame is no longer eligible");
                 continue;
             }
@@ -189,7 +221,7 @@ Packet *VhtDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
                     qosAckHandler->setRetryBitIfNeeded(copy.get());
             }
             if (copy->getTotalLength() > B(4095)) {
-                if (original == user.packet)
+                if (original == selectedPacket)
                     throw cRuntimeError("Selected VHT A-MPDU member exceeds 4095 bytes");
                 continue;
             }
@@ -205,7 +237,7 @@ Packet *VhtDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
                     (4 - candidateLength.get<B>() % 4) % 4);
             if (paddedCandidateLength.get<B>() > maxAmpduLength ||
                     mode->getDuration(paddedCandidateLength) > mode->getPpduMaxDuration()) {
-                if (original == user.packet)
+                if (original == selectedPacket)
                     throw cRuntimeError("Selected VHT MU PSDU exceeds the PHY mode limits");
                 break;
             }
@@ -276,8 +308,8 @@ Packet *VhtDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     for (size_t i = 0; i < users.size(); ++i) {
         for (const auto& member : preparedUsers[i]) {
             bool found = member.inProgress;
-            for (int j = 0; j < users[i].sourceQueue->getNumPackets(); ++j)
-                found |= users[i].sourceQueue->getPacket(j) == member.original;
+            for (int j = 0; j < sourceQueues[i]->getNumPackets(); ++j)
+                found |= sourceQueues[i]->getPacket(j) == member.original;
             if (!found)
                 throw VhtDlMuStalePlan("VHT DL MU packet changed ownership before commit");
             beforePacketCommit(packetIndex++);
@@ -318,7 +350,7 @@ Packet *VhtDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     for (size_t i = 0; i < users.size(); ++i) {
         for (auto& member : preparedUsers[i]) {
             if (!member.inProgress)
-                users[i].sourceQueue->removePacket(member.original);
+                sourceQueues[i]->removePacket(member.original);
             member.original->removeAll();
             member.original->insertAtBack(member.packet->peekAll());
             member.original->setFrontOffset(member.packet->getFrontOffset());
@@ -337,7 +369,13 @@ Packet *VhtDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             packets.push_back(member.original);
         activeUsers.push_back({users[i], packets});
     }
-    return container.release();
+    containerPacket = container.release();
+    std::vector<std::vector<Packet *>> userPackets;
+    for (const auto& user : activeUsers)
+        userPackets.push_back(user.packets);
+    vhtCallback->vhtDlMuPlanCommitted(transactionToken, containerPacket,
+            userPackets);
+    return containerPacket;
 }
 
 Packet *VhtDlMuTxOpFs::buildBlockAckReq(FrameSequenceContext *context,

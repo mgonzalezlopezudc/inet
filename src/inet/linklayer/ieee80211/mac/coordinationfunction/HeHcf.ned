@@ -30,6 +30,7 @@ module HeHcf extends Hcf
 {
     parameters:
         @class(HeHcf);
+        featureSet.typename = default("HeHcfFeatureSet");
         double receiverNoiseFigure @unit(dB) = default(10dB); // Noise figure used by the DL scheduler's SNR estimate
         double linkEstimateMaxAge @unit(s) = default(1s); // Maximum age of a path-loss estimate considered by the scheduler
         int maxAmpduMpduCount = default(16); // Maximum MPDUs contributed by one STA to a DL MU A-MPDU
@@ -99,6 +100,8 @@ module HeHcf extends Hcf
         ulCoordinator: HeUlCoordinator {
             parameters:
                 enabled = parent.enableUlMuOfdma;
+                schedulerModule = "^.ulScheduler";
+                triggerPolicyModule = "^.ulTriggerPolicy";
                 @display("p=900,260");
         }
         queueBanks: Module {

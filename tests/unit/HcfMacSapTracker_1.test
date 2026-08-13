@@ -1,0 +1,271 @@
+%description:
+Verify standalone HCF MAC-SAP service-data-unit identity, region provenance,
+legacy compatibility accounting, alias deduplication, filtering, and saturation.
+
+%includes:
+#include <functional>
+#include <limits>
+#include <vector>
+
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/ByteCountChunk.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211MacSapServiceTag_m.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfMacSapTracker.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+class BoundaryHcfMacSapTracker : public HcfMacSapTracker
+{
+  public:
+    explicit BoundaryHcfMacSapTracker(uint64_t nextServiceDataUnitId) :
+        HcfMacSapTracker(nextServiceDataUnitId)
+    {
+    }
+};
+
+static bool throwsRuntimeError(const std::function<void()>& operation)
+{
+    try {
+        operation();
+        return false;
+    }
+    catch (const cRuntimeError&) {
+        return true;
+    }
+}
+
+static Packet *makeQosPacket(const char *name, const MacAddress& peer,
+        int tid, int payloadBytes)
+{
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setType(ST_DATA_WITH_QOS);
+    header->setReceiverAddress(peer);
+    header->setTid(tid);
+    header->setChunkLength(B(26));
+    auto packet = new Packet(name, header);
+    if (payloadBytes > 0)
+        packet->insertAtBack(makeShared<BytesChunk>(
+                std::vector<uint8_t>(payloadBytes, 0x5a)));
+    packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+    return packet;
+}
+
+static Packet *makeLegacyAmsdu(const char *name, const MacAddress& peer,
+        int firstPayloadBytes, int secondPayloadBytes)
+{
+    auto packet = makeQosPacket(name, peer, 0, 0);
+    packet->removeAtBack<Ieee80211MacTrailer>(B(4));
+    auto header = packet->removeAtFront<Ieee80211DataHeader>();
+    header->setAMsduPresent(true);
+    packet->insertAtFront(header);
+    for (int i = 0; i < 2; i++) {
+        int payloadBytes = i == 0 ? firstPayloadBytes : secondPayloadBytes;
+        auto subframeHeader = makeShared<Ieee80211MsduSubframeHeader>();
+        subframeHeader->setLength(payloadBytes);
+        packet->insertAtBack(subframeHeader);
+        packet->insertAtBack(makeShared<BytesChunk>(
+                std::vector<uint8_t>(payloadBytes, 0x61 + i)));
+        int padding = (4 - (14 + payloadBytes) % 4) % 4;
+        if (i == 0 && padding != 0)
+            packet->insertAtBack(makeShared<ByteCountChunk>(B(padding)));
+    }
+    packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+    return packet;
+}
+
+static Packet *makeAmpduContainer(const char *name, const MacAddress& peer)
+{
+    auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
+    delimiter->setLength(31);
+    delimiter->setEof(true);
+    auto packet = new Packet(name, delimiter);
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setType(ST_DATA_WITH_QOS);
+    header->setReceiverAddress(peer);
+    header->setTid(0);
+    header->setChunkLength(B(26));
+    packet->insertAtBack(header);
+    packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>(1, 0x71)));
+    packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+    return packet;
+}
+
+static void addServiceTag(Packet *packet, uint64_t id, B serviceBytes,
+        B offset, B length)
+{
+    auto tag = packet->addRegionTag<Ieee80211MacSapServiceTag>(
+            packet->getFrontOffset() + offset, length);
+    tag->setServiceDataUnitId(id);
+    tag->setServiceDataUnitBytes(serviceBytes);
+}
+
+%activity:
+const MacAddress peer("10:00:00:00:00:01");
+const MacAddress otherPeer("10:00:00:00:00:02");
+
+// Empty service data does not consume an identity; positive ingress data gets
+// one packet-owned region tag spanning exactly the service bytes.
+{
+    HcfMacSapTracker tracker;
+    auto empty = makeQosPacket("empty", peer, 0, 0);
+    tracker.tagMacSapServiceDataUnit(empty,
+            empty->peekAtFront<Ieee80211DataHeader>());
+    REQUIRE(empty->getAllRegionTags<Ieee80211MacSapServiceTag>(
+            empty->getFrontOffset(), empty->getDataLength()).empty());
+
+    auto ordinary = makeQosPacket("ordinary", peer, 0, 17);
+    tracker.tagMacSapServiceDataUnit(ordinary,
+            ordinary->peekAtFront<Ieee80211DataHeader>());
+    auto tags = ordinary->getAllRegionTags<Ieee80211MacSapServiceTag>(
+            ordinary->getFrontOffset(), ordinary->getDataLength());
+    REQUIRE(tags.size() == 1);
+    REQUIRE(tags[0].getOffset() == ordinary->getFrontOffset() + B(26));
+    REQUIRE(tags[0].getLength() == B(17));
+    REQUIRE(tags[0].getTag()->getServiceDataUnitId() == 1);
+    REQUIRE(tags[0].getTag()->getServiceDataUnitBytes() == B(17));
+    delete empty;
+    delete ordinary;
+}
+
+// Legacy complete packets use payload length, pointer aliases across queue
+// phases are counted once, and a distinct untagged duplicate remains a
+// distinct legacy packet just as in the existing HCF compatibility path.
+{
+    HcfMacSapTracker tracker;
+    auto ordinary = makeQosPacket("legacy", peer, 0, 17);
+    auto wrongTid = makeQosPacket("wrongTid", peer, 3, 19);
+    auto wrongPeer = makeQosPacket("wrongPeer", otherPeer, 0, 23);
+    HcfMacSapTracker::PacketVector pending = {ordinary, wrongTid, wrongPeer};
+    REQUIRE(tracker.calculateBufferedTrafficServiceBytes(
+            peer, 0, pending, {ordinary}, {ordinary}) == 17);
+    REQUIRE(tracker.calculateBufferedTrafficServiceBytes(
+            peer, -1, pending) == 36);
+    auto distinctDuplicate = ordinary->dup();
+    REQUIRE(tracker.calculateBufferedTrafficServiceBytes(
+            peer, 0, {ordinary}, {}, {distinctDuplicate}) == 34);
+    delete distinctDuplicate;
+    delete ordinary;
+    delete wrongTid;
+    delete wrongPeer;
+}
+
+// Missing provenance is supported only for complete legacy MSDUs/A-MSDUs.
+// Fragment bodies, including fragment zero with More Fragments set, non-QoS
+// Data, and an A-MPDU container are not reinterpreted as service data, while
+// complete A-MSDU subframe payloads are summed without overhead.
+{
+    HcfMacSapTracker tracker;
+    auto fragment = makeQosPacket("legacyFragment", peer, 0, 11);
+    auto fragmentHeader = fragment->removeAtFront<Ieee80211DataHeader>();
+    fragmentHeader->setFragmentNumber(1);
+    fragment->insertAtFront(fragmentHeader);
+    auto firstFragment = makeQosPacket("legacyFirstFragment", peer, 0, 13);
+    auto firstFragmentHeader = firstFragment->removeAtFront<Ieee80211DataHeader>();
+    firstFragmentHeader->setMoreFragments(true);
+    firstFragment->insertAtFront(firstFragmentHeader);
+    auto nonQosData = makeQosPacket("legacyNonQosData", peer, 0, 17);
+    auto nonQosHeader = nonQosData->removeAtFront<Ieee80211DataHeader>();
+    nonQosHeader->setType(ST_DATA);
+    nonQosData->insertAtFront(nonQosHeader);
+    auto amsdu = makeLegacyAmsdu("legacyAmsdu", peer, 3, 5);
+    auto ampdu = makeAmpduContainer("ampduContainer", peer);
+    REQUIRE(tracker.calculateBufferedTrafficServiceBytes(
+            peer, 0, {fragment, firstFragment, nonQosData, amsdu, ampdu}) == 8);
+    delete fragment;
+    delete firstFragment;
+    delete nonQosData;
+    delete amsdu;
+    delete ampdu;
+}
+
+// Fragment, retry, and additional aliases carrying the same provenance ID
+// account the original service unit exactly once. Multiple IDs in one packet
+// represent multiple original MSDUs and are summed.
+{
+    HcfMacSapTracker tracker;
+    auto first = makeQosPacket("taggedFragment0", peer, 0, 20);
+    auto second = makeQosPacket("taggedFragment1", peer, 0, 30);
+    auto secondHeader = second->removeAtFront<Ieee80211DataHeader>();
+    secondHeader->setFragmentNumber(1);
+    second->insertAtFront(secondHeader);
+    addServiceTag(first, 100, B(50), B(26), B(20));
+    addServiceTag(second, 100, B(50), B(26), B(30));
+    auto alias = first->dup();
+    REQUIRE(tracker.calculateBufferedTrafficServiceBytes(
+            peer, 0, {first}, {second}, {alias, first}) == 50);
+
+    auto provenanceAmsdu = makeQosPacket("provenanceAmsdu", peer, 0, 8);
+    auto amsduHeader = provenanceAmsdu->removeAtFront<Ieee80211DataHeader>();
+    amsduHeader->setAMsduPresent(true);
+    provenanceAmsdu->insertAtFront(amsduHeader);
+    addServiceTag(provenanceAmsdu, 101, B(3), B(26), B(3));
+    addServiceTag(provenanceAmsdu, 102, B(5), B(29), B(5));
+    REQUIRE(tracker.calculateBufferedTrafficServiceBytes(
+            peer, 0, {provenanceAmsdu}) == 8);
+    delete alias;
+    delete first;
+    delete second;
+    delete provenanceAmsdu;
+}
+
+// Existing HCF semantics for conflicting metadata are order-sensitive: the
+// first occurrence of an ID supplies its byte count and later aliases of that
+// ID are ignored. Invalid first occurrences fail explicitly.
+{
+    HcfMacSapTracker tracker;
+    auto seven = makeQosPacket("conflictSeven", peer, 0, 1);
+    auto nine = makeQosPacket("conflictNine", peer, 0, 1);
+    addServiceTag(seven, 200, B(7), B(26), B(1));
+    addServiceTag(nine, 200, B(9), B(26), B(1));
+    REQUIRE(tracker.calculateBufferedTrafficServiceBytes(
+            peer, 0, {seven, nine}) == 7);
+    REQUIRE(tracker.calculateBufferedTrafficServiceBytes(
+            peer, 0, {nine, seven}) == 9);
+
+    auto zeroId = makeQosPacket("zeroId", peer, 0, 1);
+    addServiceTag(zeroId, 0, B(1), B(26), B(1));
+    REQUIRE(throwsRuntimeError([&] {
+        tracker.calculateBufferedTrafficServiceBytes(peer, 0, {zeroId});
+    }));
+    auto negativeBytes = makeQosPacket("negativeBytes", peer, 0, 1);
+    addServiceTag(negativeBytes, 201, B(-1), B(26), B(1));
+    REQUIRE(throwsRuntimeError([&] {
+        tracker.calculateBufferedTrafficServiceBytes(peer, 0, {negativeBytes});
+    }));
+    delete seven;
+    delete nine;
+    delete zeroId;
+    delete negativeBytes;
+}
+
+// Finite buffer status saturates at UINT32_MAX-1. Identity zero is invalid;
+// UINT64_MAX is issued once and the wrapped next allocation fails.
+{
+    HcfMacSapTracker tracker;
+    auto first = makeQosPacket("large0", peer, 0, 1);
+    auto second = makeQosPacket("large1", peer, 0, 1);
+    addServiceTag(first, 300, B(UINT64_C(3000000000)), B(26), B(1));
+    addServiceTag(second, 301, B(UINT64_C(3000000000)), B(26), B(1));
+    REQUIRE(tracker.calculateBufferedTrafficServiceBytes(peer, 0,
+            {first, second}) == HcfMacSapTracker::MAX_FINITE_BUFFER_STATUS_BYTES);
+    delete first;
+    delete second;
+
+    BoundaryHcfMacSapTracker zero(0);
+    REQUIRE(throwsRuntimeError([&] { zero.allocateServiceDataUnitId(); }));
+    BoundaryHcfMacSapTracker wrap(std::numeric_limits<uint64_t>::max());
+    REQUIRE(wrap.allocateServiceDataUnitId() ==
+            std::numeric_limits<uint64_t>::max());
+    REQUIRE(throwsRuntimeError([&] { wrap.allocateServiceDataUnitId(); }));
+}
+
+EV << "HCF MAC-SAP tracker identity and accounting tests passed.\n";
+
+%contains: stdout
+HCF MAC-SAP tracker identity and accounting tests passed.

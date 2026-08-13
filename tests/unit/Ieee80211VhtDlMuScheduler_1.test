@@ -2,6 +2,7 @@
 Test deterministic standard-envelope VHT DL MU scheduling and immutable plan gates.
 
 %includes:
+#include "inet/common/packet/Packet.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/VhtDlMuPlan.h"
 #include "inet/linklayer/ieee80211/mac/scheduler/VhtDlMuScheduler.h"
 
@@ -38,8 +39,8 @@ static IIeee80211VhtDlMuScheduler::Candidate candidate(const char *address,
     result.numberOfSpatialStreams = nss;
     result.mcs = 4;
     result.enqueueTime = enqueueTime;
-    result.sourceQueue = reinterpret_cast<queueing::IPacketQueue *>(uintptr_t(1));
-    result.packet = packet;
+    result.sourceQueueToken = HcfQueueToken(1);
+    result.packetIdentity = HcfPacketIdentity(packet->getId());
     result.psduLength = B(128);
     result.beamformingGainDb = 3;
     result.leakagePenaltyDb = 1;

@@ -38,6 +38,16 @@ class INET_API OriginatorBlockAckAgreementHandler : public IOriginatorBlockAckAg
             IBlockAckAgreementHandlerCallback *callback) override;
     virtual bool processQueuedDataFrame(Packet *packet, const Ptr<const Ieee80211DataHeader>& dataHeader,
             IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy, IProcedureCallback *callback) override;
+    virtual PrerequisiteProbe probeQueuedDataFramePrerequisite(Packet *packet,
+            const Ptr<const Ieee80211DataHeader>& dataHeader,
+            IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy) override;
+    virtual PrerequisiteReservation reserveQueuedDataFramePrerequisite(Packet *packet,
+            const Ptr<const Ieee80211DataHeader>& dataHeader,
+            IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy) override;
+    virtual PrerequisiteReservation reserveQueuedDataFramePrerequisite(
+            const PrerequisiteProbe& probe, Packet *packet,
+            const Ptr<const Ieee80211DataHeader>& dataHeader,
+            IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy) override;
     virtual void processTransmittedDataFrame(Packet *packet, const Ptr<const Ieee80211DataHeader>& dataHeader, IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy, IProcedureCallback *callback) override;
     virtual void processReceivedBlockAck(const Ptr<const Ieee80211BlockAck>& blockAck, IBlockAckAgreementHandlerCallback *callback) override;
     virtual void processReceivedAddbaResp(const Ptr<const Ieee80211AddbaResponse>& addbaResp, IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy, IBlockAckAgreementHandlerCallback *callback) override;

@@ -1,0 +1,246 @@
+%description:
+Validates HE TX/RX interceptor ownership results, exactly-once frame decoration,
+OMI precedence, feature-off behavior, and orphan headerless-NDP exclusion.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/contract/IHcfTxRxInterceptor.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeFrameDecorationPolicy.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfTxRxInterceptor.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeSoundingService.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+
+%file: TestNetwork.ned
+network TestNetwork
+{
+    submodules:
+        test: Test;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+static bool rejectsInterceptorResult(const IHcfTxRxInterceptor::Result& result)
+{
+    try {
+        IHcfTxRxInterceptor::validateResult(result);
+        return false;
+    }
+    catch (const cRuntimeError&) {
+        return true;
+    }
+}
+
+static Packet *makeQosPacket(Tid tid = 0)
+{
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setType(ST_DATA_WITH_QOS);
+    header->setTid(tid);
+    header->setReceiverAddress(MacAddress("02:00:00:00:10:01"));
+    return new Packet("qos", header);
+}
+
+class MockInterceptorActions : public HeHcfTxRxInterceptor::IActions
+{
+  public:
+    bool dlContainer = false;
+    bool dlMembers = false;
+    int routed = 0;
+    int failed = 0;
+    int multiStaCopies = 0;
+    int rejectedHeaderlessResponses = 0;
+    Packet *originalResponse = nullptr;
+    virtual bool processHeSoundingFrame(Packet *, const Ptr<const Ieee80211MacHeader>&) override { return false; }
+    virtual void rejectUnexpectedHeTb(Packet *packet) override {
+        rejectedHeaderlessResponses++;
+        delete packet;
+    }
+    virtual void processHeTrigger(Packet *, const Ptr<const Ieee80211TriggerFrame>&) override {}
+    virtual void processHeMultiStaBlockAck(Packet *packet, const Ptr<const Ieee80211MultiStaBlockAck>&) override {
+        ASSERT(packet != originalResponse);
+        multiStaCopies++;
+        delete packet;
+    }
+    virtual void observeBufferStatus(const Ptr<const Ieee80211DataHeader>&) override {}
+    virtual bool isOperatingModeControlSupported() const override { return false; }
+    virtual void applyOperatingMode(const MacAddress&, const Ieee80211HeOperatingMode&) override {}
+    virtual AccessCategory mapTidToAccessCategory(Tid) const override { return AC_BE; }
+    virtual void startMuEdcaTimer(AccessCategory) override {}
+    virtual bool isHeUlMuExchangeActive() const override { return false; }
+    virtual void notifyHeUlMuPacketTransmitted(Packet *) override {}
+    virtual bool isHeDlMuContainer(const Packet *) const override { return dlContainer; }
+    virtual void routeHeDlMuContainer(Packet *) override { routed++; }
+    virtual HeHcfTxRxInterceptor::LocalRole getLocalRole() const override { return HeHcfTxRxInterceptor::LocalRole::STATION; }
+    virtual uint16_t getLocalAssociationId() const override { return 1; }
+    virtual bool hasActiveHeDlMuMembers() const override { return dlMembers; }
+    virtual void processHeDlMuFailedFrame(Packet *packet) override { failed++; delete packet; }
+    virtual MacAddress getLocalAddress() const override { return MacAddress("02:00:00:00:10:01"); }
+    virtual MacAddress getBssid() const override { return MacAddress("02:00:00:00:10:ff"); }
+    virtual void transmitHeNdp(Packet *, const Ptr<const Ieee80211MacHeader>&, simtime_t) override {}
+};
+
+%activity:
+IHcfTxRxInterceptor::validateResult(IHcfTxRxInterceptor::Result::continueCommon());
+IHcfTxRxInterceptor::validateResult(IHcfTxRxInterceptor::Result::consumed());
+IHcfTxRxInterceptor::validateResult(IHcfTxRxInterceptor::Result::consumedRetained());
+IHcfTxRxInterceptor::validateResult(IHcfTxRxInterceptor::Result::rejected());
+IHcfTxRxInterceptor::validateResult(IHcfTxRxInterceptor::Result::rejectedRetained());
+ASSERT(rejectsInterceptorResult({IHcfTxRxInterceptor::Disposition::CONTINUE_COMMON,
+        IHcfTxRxInterceptor::PacketOwnership::TRANSFERRED}));
+
+MockInterceptorActions interceptorActions;
+HeHcfTxRxInterceptor interceptor(&interceptorActions);
+auto ordinaryHeaderless = new Packet("ordinary-headerless");
+auto ordinaryHeaderlessResult = interceptor.processRejectedHeaderlessResponse(
+        ordinaryHeaderless, IReceiveStep::HeaderlessResponseFamily::NONE);
+ASSERT(ordinaryHeaderlessResult.disposition ==
+        IHcfTxRxInterceptor::Disposition::CONTINUE_COMMON &&
+        ordinaryHeaderlessResult.ownership ==
+                IHcfTxRxInterceptor::PacketOwnership::RETAINED_BY_CALLER);
+delete ordinaryHeaderless;
+auto rejectedHeTb = new Packet("foreign-he-tb",
+        makeShared<Ieee80211MpduSubframeHeader>());
+rejectedHeTb->addTag<physicallayer::Ieee80211HeTriggerCorrelationTag>()->
+        setTriggerId(77);
+auto rejectedHeTbResult = interceptor.processRejectedHeaderlessResponse(
+        rejectedHeTb, IReceiveStep::HeaderlessResponseFamily::HE_TRIGGER_BASED);
+ASSERT(rejectedHeTbResult.disposition ==
+        IHcfTxRxInterceptor::Disposition::REJECTED &&
+        rejectedHeTbResult.ownership ==
+                IHcfTxRxInterceptor::PacketOwnership::TRANSFERRED &&
+        interceptorActions.rejectedHeaderlessResponses == 1);
+auto ordinary = makeQosPacket();
+ASSERT(interceptor.processTransmittedFrame(ordinary).disposition ==
+        IHcfTxRxInterceptor::Disposition::CONTINUE_COMMON);
+interceptorActions.dlContainer = true;
+ASSERT(interceptor.processTransmittedFrame(ordinary).disposition ==
+        IHcfTxRxInterceptor::Disposition::CONSUMED && interceptorActions.routed == 1);
+ASSERT(interceptor.processTransmittedFrame(ordinary).ownership ==
+        IHcfTxRxInterceptor::PacketOwnership::RETAINED_BY_CALLER);
+interceptorActions.dlMembers = true;
+delete ordinary;
+auto failedPacket = makeQosPacket();
+auto failedResult = interceptor.processFailedFrame(failedPacket);
+ASSERT(failedResult.disposition == IHcfTxRxInterceptor::Disposition::CONSUMED &&
+        failedResult.ownership == IHcfTxRxInterceptor::PacketOwnership::TRANSFERRED &&
+        interceptorActions.failed == 1);
+
+auto tbPacket = new Packet("retained-he-tb");
+tbPacket->addTag<physicallayer::Ieee80211HeTriggerCorrelationTag>()->setTriggerId(10);
+auto tbHeader = makeShared<Ieee80211DataHeader>();
+tbHeader->setType(ST_DATA_WITH_QOS);
+tbHeader->setTid(0);
+tbHeader->setAckPolicy(NO_ACK);
+auto tbComplete = interceptor.processTransmissionComplete(tbPacket, tbHeader);
+ASSERT(tbComplete.disposition == IHcfTxRxInterceptor::Disposition::CONSUMED &&
+        tbComplete.ownership == IHcfTxRxInterceptor::PacketOwnership::RETAINED_BY_CALLER);
+ASSERT(!strcmp(tbPacket->getName(), "retained-he-tb"));
+auto tbTransmitted = interceptor.processTransmittedFrame(tbPacket);
+ASSERT(tbTransmitted.ownership == IHcfTxRxInterceptor::PacketOwnership::RETAINED_BY_CALLER);
+delete tbPacket;
+
+auto ndpPacket = new Packet("retained-he-ndp");
+physicallayer::Ieee80211HeTxVectorRequest ndpRequest;
+ndpRequest.centerFrequency = Hz(5.18e9);
+ndpRequest.channelBandwidth = MHz(20);
+ndpRequest.ppduFormat = physicallayer::HE_SINGLE_USER;
+ndpRequest.ndp = true;
+ndpRequest.packetExtensionDurationUs = 4;
+physicallayer::Ieee80211HeUserTxVectorRequest ndpUser;
+ndpUser.ru = physicallayer::getHeEqualRuLayout(ndpRequest.centerFrequency,
+        ndpRequest.channelBandwidth, 1).front();
+ndpUser.staId = 1;
+ndpUser.psduLength = B(0);
+ndpRequest.users = {ndpUser};
+auto ndpVector = physicallayer::Ieee80211HeTxVectorFactory::create(ndpRequest);
+ASSERT(ndpVector);
+ndpPacket->addTag<physicallayer::Ieee80211HeTxVectorReq>()->setCanonicalPair(
+        ndpVector.getTxVector(), ndpVector.getPpduLayout());
+auto ndpTransmitted = interceptor.processTransmittedFrame(ndpPacket);
+ASSERT(ndpTransmitted.disposition == IHcfTxRxInterceptor::Disposition::CONSUMED &&
+        ndpTransmitted.ownership == IHcfTxRxInterceptor::PacketOwnership::RETAINED_BY_CALLER);
+ASSERT(!strcmp(ndpPacket->getName(), "retained-he-ndp"));
+delete ndpPacket;
+
+auto foreignHeader = makeShared<Ieee80211MultiStaBlockAck>();
+foreignHeader->setType(ST_BLOCKACK);
+foreignHeader->setReceiverAddress(MacAddress("02:00:00:00:10:01"));
+foreignHeader->setTransmitterAddress(MacAddress("02:00:00:00:10:ff"));
+auto foreignResponse = new Packet("retained-foreign-response", foreignHeader);
+interceptorActions.originalResponse = foreignResponse;
+auto foreignResult = interceptor.processReceivedResponse(foreignResponse, nullptr);
+ASSERT(foreignResult.disposition == IHcfTxRxInterceptor::Disposition::REJECTED &&
+        foreignResult.ownership == IHcfTxRxInterceptor::PacketOwnership::RETAINED_BY_CALLER &&
+        interceptorActions.multiStaCopies == 1);
+ASSERT(!strcmp(foreignResponse->getName(), "retained-foreign-response"));
+delete foreignResponse;
+
+HeFrameDecorationPolicy policy;
+HeFrameDecorationPolicy::Request request;
+request.associated = true;
+int providerCalls = 0;
+auto packet = makeQosPacket();
+auto authoritativeMapping = [] (Tid tid) {
+    static const AccessCategory mapping[] = {AC_BE, AC_BK, AC_BK, AC_BE,
+            AC_VI, AC_VI, AC_VO, AC_VO};
+    return mapping[tid];
+};
+ASSERT(policy.decorate(packet, request, authoritativeMapping,
+        [&] (const MacAddress&, Tid, AccessCategory) {
+    providerCalls++;
+    return 123;
+}));
+const auto decoratedLength = packet->getDataLength();
+ASSERT(!policy.decorate(packet, request, authoritativeMapping,
+        [&] (const MacAddress&, Tid, AccessCategory) {
+    providerCalls++;
+    return 456;
+}));
+ASSERT(providerCalls == 1);
+ASSERT(packet->getDataLength() == decoratedLength);
+
+request.sendOperatingModeIndication = true;
+request.operatingModeControlSupported = true;
+request.operatingModeRxNss = 2;
+ASSERT(policy.decorate(packet, request, authoritativeMapping, {}));
+auto omiHeader = packet->peekAtFront<Ieee80211DataHeader>();
+ASSERT(omiHeader->getOperatingModePresent());
+ASSERT(!omiHeader->getBufferStatusPresent());
+delete packet;
+
+request.sendOperatingModeIndication = false;
+request.operatingModeControlSupported = false;
+for (Tid tid = 0; tid < 8; ++tid) {
+    auto mappedPacket = makeQosPacket(tid);
+    AccessCategory observed = AC_NUMCATEGORIES;
+    ASSERT(policy.decorate(mappedPacket, request, authoritativeMapping,
+            [&] (const MacAddress&, Tid, AccessCategory accessCategory) {
+        observed = accessCategory;
+        return 0;
+    }));
+    ASSERT(observed == authoritativeMapping(tid));
+    ASSERT(mappedPacket->peekAtFront<Ieee80211DataHeader>()->getBufferStatusAc() == observed);
+    delete mappedPacket;
+}
+
+auto featureOffPacket = makeQosPacket();
+ASSERT(!featureOffPacket->peekAtFront<Ieee80211DataHeader>()->getBufferStatusPresent());
+ASSERT(!featureOffPacket->peekAtFront<Ieee80211DataHeader>()->getOperatingModePresent());
+delete featureOffPacket;
+
+HeSoundingService sounding;
+auto before = sounding.getStaSnapshot();
+ASSERT(!before.ndpAnnouncementReceived && !before.ndpReceived);
+ASSERT(sounding.processNdpIndication(true));
+auto after = sounding.getStaSnapshot();
+ASSERT(!after.ndpAnnouncementReceived && !after.ndpReceived);
+ASSERT(!sounding.processNdpIndication(false));
+
+EV << "HE interceptor/decorator/NDP matrix passed\n";
+
+%contains: stdout
+HE interceptor/decorator/NDP matrix passed

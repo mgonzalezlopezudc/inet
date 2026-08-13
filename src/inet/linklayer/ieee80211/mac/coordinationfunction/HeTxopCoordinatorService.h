@@ -8,8 +8,12 @@
 #define __INET_HETXOPCOORDINATORSERVICE_H
 
 #include <functional>
+#include <optional>
 
 #include "inet/common/INETDefs.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfContext.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeDlMuExchangeProvider.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeUlTriggerService.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -24,6 +28,21 @@ namespace ieee80211 {
 class INET_API HeTxopCoordinatorService
 {
   public:
+    /** Immutable, exact outcome captured once at the EDCAF grant boundary. */
+    struct GrantSnapshot {
+        HcfExchangeClass exchangeClass = HcfExchangeClass::CHANNEL_RELEASE;
+        AccessCategory accessCategory = AC_BE;
+        std::optional<HeUlTriggerService::PreparedStart> ulTrigger;
+        std::optional<HeDlMuExchangeProvider::PreparedStart> dlStart;
+    };
+
+    /** Side-effect-free preparation seams, evaluated in semantic priority order. */
+    struct PreparationActions {
+        std::function<std::optional<HeUlTriggerService::PreparedStart>()> prepareUlTrigger;
+        std::function<std::optional<HeDlMuExchangeProvider::PreparedStart>()> prepareDlStart;
+        std::function<std::optional<HeDlMuExchangeProvider::PreparedStart>()> prepareSingleUser;
+    };
+
     enum Outcome {
         UL_MU_STARTED,
         DL_MU_STARTED,
@@ -38,6 +57,10 @@ class INET_API HeTxopCoordinatorService
         std::function<bool()> releaseChannelIfNoSu;
         std::function<void()> startSu;
     };
+
+    GrantSnapshot prepareGrant(AccessCategory accessCategory, bool heMode,
+            bool forcedSingleUser, bool hasEligibleFrame,
+            const PreparationActions& actions) const;
 
     Outcome start(bool heMode, bool forceSingleUser, const Actions& actions) const;
 };

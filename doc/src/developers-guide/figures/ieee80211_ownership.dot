@@ -1,0 +1,53 @@
+digraph ieee80211_ownership {
+    graph [rankdir=TB, bgcolor="transparent", pad="0.12", nodesep="0.25",
+        ranksep="0.48", fontname="Helvetica", fontsize=12,
+        label="INET IEEE 802.11 state and packet ownership", labelloc=t]
+    node [shape=box, style="rounded,filled", fillcolor="white", color="#4b5563",
+        fontname="Helvetica", fontsize=10, margin="0.10,0.06"]
+    edge [fontname="Helvetica", fontsize=8, color="#374151", arrowsize=0.7]
+
+    subgraph cluster_state {
+        label="Every mutable protocol state has one authoritative owner"
+        color="#86efac"; style="rounded"; penwidth=1.2
+        ownership [shape=plain, label=<
+            <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="6">
+                <TR><TD BGCOLOR="#dcfce7"><B>State</B></TD><TD BGCOLOR="#dcfce7"><B>Owner</B></TD><TD BGCOLOR="#dcfce7"><B>Shared as</B></TD></TR>
+                <TR><TD ALIGN="LEFT">queued packets and order</TD><TD ALIGN="LEFT">queue / StationQueueBank</TD><TD ALIGN="LEFT">queue snapshots and reservations</TD></TR>
+                <TR><TD ALIGN="LEFT">backoff, retry, TXOP</TD><TD ALIGN="LEFT">EDCA / EDCAF</TD><TD ALIGN="LEFT">channel grants and results</TD></TR>
+                <TR><TD ALIGN="LEFT">active exchange and timers</TD><TD ALIGN="LEFT">HcfExchangeEngine</TD><TD ALIGN="LEFT">typed terminal result</TD></TR>
+                <TR><TD ALIGN="LEFT">Block Ack agreements/windows</TD><TD ALIGN="LEFT">originator / recipient handlers</TD><TD ALIGN="LEFT">typed actions and snapshots</TD></TR>
+                <TR><TD ALIGN="LEFT">association and capabilities</TD><TD ALIGN="LEFT">MIB / management</TD><TD ALIGN="LEFT">peer snapshots</TD></TR>
+                <TR><TD ALIGN="LEFT">legal mode and PPDU timing</TD><TD ALIGN="LEFT">PHY mode / radio</TD><TD ALIGN="LEFT">mode identity and PHY indications</TD></TR>
+            </TABLE>>]
+    }
+
+    subgraph cluster_packets {
+        label="Packet ownership and transaction lifecycle"
+        color="#fca5a5"; style="rounded"; penwidth=1.2
+
+        queued [label="Queue-owned Packet\nMSDU / MAC data", fillcolor="#fff1f2"]
+        identity [label="Reservation identity\npacket + queue + association + transaction", fillcolor="#fff1f2"]
+        prepared [label="Prepared exchange\ncloned state; no dequeue", fillcolor="#fff1f2"]
+        frame [label="MAC Packet\ntyped header / trailer chunks", fillcolor="#fff1f2"]
+        phyframe [label="PHY-facing Packet\nMAC chunks + mode / TX tags", fillcolor="#fff1f2"]
+        transmitted [label="Ieee80211Transmission\nmode + channel + PPDU timing", fillcolor="#fff1f2"]
+        received [label="Received Packet\nPHY indications + MAC chunks", fillcolor="#fff1f2"]
+
+        queued -> identity [style=dashed, label="record identity"]
+        identity -> prepared [label="probe / prepare"]
+        prepared -> frame [label="commit transfers packet"]
+        frame -> phyframe [label="decorate"]
+        phyframe -> transmitted [label="radio builds"]
+        transmitted -> received [label="medium delivers"]
+        received -> frame [label="Rx parses / dispatches"]
+        identity -> queued [style=dashed, label="rollback restores order"]
+    }
+
+    notes [shape=plain, label=<
+        <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="2">
+            <TR><TD ALIGN="LEFT"><B>Preparation:</B> inspect immutable snapshots, clone state, and create a plan.</TD></TR>
+            <TR><TD ALIGN="LEFT"><B>Commit:</B> transfer each reserved packet exactly once and start the active exchange.</TD></TR>
+            <TR><TD ALIGN="LEFT"><B>Failure:</B> restore queue order and discard cloned sequence/retry state; stale callbacks are rejected by transaction identity.</TD></TR>
+            <TR><TD ALIGN="LEFT"><B>Representation:</B> on-air fields are typed chunks; local simulation information is carried by tags, requests, or indications.</TD></TR>
+        </TABLE>>]
+}

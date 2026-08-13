@@ -82,6 +82,10 @@ HeDlMuPackingPlanner::Plan HeDlMuPackingPlanner::plan(const Parameters& paramete
         for (int i = 0; i < queueForPacking->getNumPackets() &&
                 (int)selectedAllocation.packets.size() < parameters.maxAmpduMpduCount; ++i) {
             Packet *candidatePacket = queueForPacking->getPacket(i);
+            if (parameters.isReservedPacket &&
+                    !parameters.isReservedPacket(selectedAllocation.allocation.staAddress,
+                            candidatePacket))
+                continue;
             auto candidateHeader = dynamicPtrCast<const Ieee80211DataHeader>(
                     candidatePacket->peekAtFront<Ieee80211MacHeader>());
             if (candidateHeader == nullptr || candidateHeader->getType() != ST_DATA_WITH_QOS ||

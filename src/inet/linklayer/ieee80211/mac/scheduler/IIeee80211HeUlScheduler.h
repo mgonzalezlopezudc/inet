@@ -188,6 +188,10 @@ class INET_API IIeee80211HeUlScheduler
     virtual ~IIeee80211HeUlScheduler() {}
     virtual Schedule schedule(const ScheduleContext& context) = 0;
 
+    /** Records a schedule only after its validated Trigger plan commits. */
+    virtual void commitSchedule(const ScheduleContext& context,
+            const Schedule& schedule) {}
+
     /**
      * Discards scheduler-owned state derived from a peer association epoch.
      * Stateless extension schedulers may retain the default no-op.

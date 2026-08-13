@@ -9,6 +9,7 @@
 #include "inet/linklayer/ieee80211/mac/contract/IAckHandler.h"
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequence.h"
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequenceHandler.h"
+#include "inet/linklayer/ieee80211/mac/contract/IVhtDlMuExchangeCallback.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/VhtDlMuPlan.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 
@@ -37,6 +38,8 @@ class INET_API VhtDlMuTxOpFs : public IFrameSequence
     physicallayer::Ieee80211ModeSet *modeSet = nullptr;
     IAckHandler *ackHandler = nullptr;
     IFrameSequenceHandler::ICallback *callback = nullptr;
+    IVhtDlMuExchangeCallback *vhtCallback = nullptr;
+    uint64_t transactionToken = 0;
     Packet *containerPacket = nullptr;
     std::vector<ActiveUser> activeUsers;
 
@@ -50,7 +53,8 @@ class INET_API VhtDlMuTxOpFs : public IFrameSequence
   public:
     VhtDlMuTxOpFs(const VhtDlMuPlan& plan,
             physicallayer::Ieee80211ModeSet *modeSet, IAckHandler *ackHandler,
-            IFrameSequenceHandler::ICallback *callback);
+            IFrameSequenceHandler::ICallback *callback,
+            IVhtDlMuExchangeCallback *vhtCallback, uint64_t transactionToken = 0);
     virtual ~VhtDlMuTxOpFs() = default;
 
     virtual void startSequence(FrameSequenceContext *context, int firstStep) override;

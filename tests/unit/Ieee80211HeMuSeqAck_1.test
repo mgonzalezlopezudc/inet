@@ -245,7 +245,7 @@ for (size_t i = 0; i < candidates.size(); ++i) {
     IIeee80211HeDlScheduler::CandidateInfo candidate;
     candidate.staAddress = candidates[i];
     candidate.anchor = i == 0;
-    candidate.sourceQueue = pendingQueue;
+    candidate.sourceQueueToken = HcfQueueToken(i + 1);
     candidate.hasAdvertisedHeCapabilities = true;
     candidate.advertisedHeCapabilities = peerCapabilities;
     candidate.hasNegotiatedHeCapabilities = true;
@@ -259,7 +259,10 @@ HeMuPlanDiagnostic planDiagnostic;
 auto dlPlan = HeDlMuPlan::create(scheduleContext,
         scheduler->schedule(candidates, scheduleContext.channelCenterFrequency, scheduleContext.channelBandwidth), planDiagnostic);
 ASSERT(dlPlan.has_value());
-HeDlMuTxOpFs *fs = new HeDlMuTxOpFs(*dlPlan, const_cast<physicallayer::Ieee80211ModeSet*>(modeSet), pendingQueue, ackHandler, mockHcf);
+auto rateSelection = check_and_cast<IQosRateSelection *>(mockHcf->getSubmodule("rateSelection"));
+HeDlMuTxOpFs *fs = new HeDlMuTxOpFs(*dlPlan,
+        const_cast<physicallayer::Ieee80211ModeSet*>(modeSet), pendingQueue,
+        ackHandler, mockHcf, mockHcf, rateSelection);
 
 MockInProgressFrames *inProgress = new MockInProgressFrames();
 MockOriginatorBlockAckAgreementHandler baHandler;
@@ -289,7 +292,6 @@ EV << "Container MAC duration field: " << containerDuration << "\n";
 
 // Calculate expected duration per phase 2 sequential formula:
 // Every response is explicitly solicited: SIFS + BAR + SIFS + Block Ack.
-auto rateSelection = check_and_cast<IQosRateSelection *>(mockHcf->getSubmodule("rateSelection"));
 auto dummyReq = makeShared<Ieee80211BasicBlockAckReq>();
 auto responseMode = rateSelection->computeResponseBlockAckFrameMode(containerPacket, dummyReq);
 simtime_t blockAckDuration = responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
@@ -451,7 +453,9 @@ auto handlerQosContext = new QoSContext(nullptr, nullptr, &handlerBaHandler, nul
 auto handlerContext = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), const_cast<physicallayer::Ieee80211ModeSet*>(modeSet), handlerInProgress, nullptr, nullptr, nullptr, handlerQosContext);
 HeFrameSequenceHandler handler;
 handler.startFrameSequence(
-        new HeDlMuTxOpFs(*handlerPlan, const_cast<physicallayer::Ieee80211ModeSet*>(modeSet), pendingQueue, handlerAckHandler, mockHcf),
+        new HeDlMuTxOpFs(*handlerPlan,
+                const_cast<physicallayer::Ieee80211ModeSet*>(modeSet), pendingQueue,
+                handlerAckHandler, mockHcf, mockHcf, rateSelection),
         handlerContext, mockHcf);
 
 handler.transmissionComplete();
@@ -479,20 +483,20 @@ pendingQueue->removeAllPackets();
 
 %contains: stdout
 Step 0 prepared: Transmit container frame.
-Container MAC duration field: 0.000984
-Expected duration: 0.000984
+Container MAC duration field: 0.00108
+Expected duration: 0.00108
 SIFS=, BlockAck=, BAR=
-  SIFS=0.000016, BlockAck=0.000212, BAR=0.000084
+  SIFS=0.000016, BlockAck=0.000228, BAR=0.0001
 All three admitted packets moved to in-progress with Block Ack policy.
 Step 1 prepared: Transmit explicit BAR to STA1.
-Expected timeout for step 1: 0.000237
+Expected timeout for step 1: 0.000253
 
 %contains: stdout
 Step 2 prepared: Transmit BAR frame.
-BAR packet duration field: 0.000556
-Expected BAR packet duration field: 0.000556
+BAR packet duration field: 0.000604
+Expected BAR packet duration field: 0.000604
 Step 3 prepared: Expect Block Ack with timeout.
-Expected timeout for step 3: 0.000237
+Expected timeout for step 3: 0.000253
 Step 3: Simulating timeout from STA2 to verify recovery path.
 Failures before timeout handling: 0
 HE DL MU TxOp FS: sequential BlockAck timeout for STA 66-77-88-99-AA-BB, triggering failure recovery.

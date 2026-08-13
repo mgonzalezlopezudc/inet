@@ -32,8 +32,6 @@
 //     checking defined in Clause 27.3.13.
 
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeUlCoordinator.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/GenericFrameSequences.h"
@@ -85,7 +83,7 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
 {
   protected:
     uint32_t triggerId;
-    HeHcf *callback;
+    IHeUlMuExchangeCallback *callback;
     std::vector<IIeee80211HeUlScheduler::RuAllocation> allocations;
     Hz channelBandwidth;
     bool nfrp = false;
@@ -98,7 +96,7 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
     simtime_t lastResponseTime;
 
   public:
-    HeUlReceiveCollectionStep(uint32_t triggerId, HeHcf *callback,
+    HeUlReceiveCollectionStep(uint32_t triggerId, IHeUlMuExchangeCallback *callback,
             const IIeee80211HeUlScheduler::Schedule& schedule,
             IIeee80211HeUlTriggerPolicy::TriggerType triggerType,
             simtime_t timeout, simtime_t commonDuration, simtime_t phyRxStartDelay) :
@@ -147,6 +145,9 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
                     (allocation.randomAccess || canonical.staId == allocation.associationId);
         });
     }
+
+    virtual HeaderlessResponseFamily getHeaderlessResponseFamily() const override
+        { return HeaderlessResponseFamily::HE_TRIGGER_BASED; }
 
     virtual void setFrameToReceive(Packet *frame) override
     {
@@ -239,11 +240,10 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
 
 } // namespace
 
-HeUlMuTxOpFs::HeUlMuTxOpFs(HeUlCoordinator *coordinator, HeHcf *callback,
+HeUlMuTxOpFs::HeUlMuTxOpFs(IHeUlMuExchangeCallback *callback,
         const HeUlMuPlan& plan,
         physicallayer::Ieee80211ModeSet *modeSet,
         const MacAddress& apAddress) :
-    coordinator(coordinator),
     callback(callback),
     plan(plan),
     schedule(this->plan.getSchedule()),
@@ -279,10 +279,9 @@ HeUlMuTxOpFs::HeUlMuTxOpFs(HeUlCoordinator *coordinator, HeHcf *callback,
                                               return this->triggerType != IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER;
                                           })}))
 {
-    ASSERT(coordinator != nullptr);
     ASSERT(callback != nullptr);
     ASSERT(modeSet != nullptr);
-    triggerId = coordinator->allocateTriggerId();
+    triggerId = callback->allocateHeUlTriggerId();
 }
 
 IReceiveStep *HeUlMuTxOpFs::buildReceiveCollectionStep() const
@@ -487,7 +486,7 @@ void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
                                 peekAtFront<Ieee80211MacHeader>()) :
                 nullptr;
         if (compressedBlockAckReq != nullptr) {
-            auto decodedAid = callback->getAssociationId(
+            auto decodedAid = callback->getHeUlAssociationId(
                     compressedBlockAckReq->getTransmitterAddress());
             bool valid = triggerType ==
                             IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER &&
@@ -501,7 +500,7 @@ void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
                     responders.count(decodedAid) == 0;
             if (valid) {
                 aid = decodedAid;
-                auto blockAck = callback->processTriggeredUlBlockAckReq(
+                auto blockAck = callback->processHeUlTriggeredBlockAckReq(
                         decodedMpdus.front().first->dup(),
                         compressedBlockAckReq, aid);
                 valid = blockAck != nullptr &&
@@ -550,7 +549,7 @@ void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
                     decoded.first->peekAtFront<Ieee80211MacHeader>());
             if (decoded.second.status != physicallayer::MPDU_SUCCESS || header == nullptr)
                 continue;
-            auto decodedAid = callback->getAssociationId(header->getTransmitterAddress());
+            auto decodedAid = callback->getHeUlAssociationId(header->getTransmitterAddress());
             if (decodedAid == 0) {
                 identityConflict = true;
                 break;
@@ -588,8 +587,8 @@ void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
                 if (outcome.tid == tid)
                     receivedOutcomes[aid].push_back(outcome);
                 if (outcome.status == physicallayer::MPDU_SUCCESS && header != nullptr &&
-                        callback->getAssociationId(header->getTransmitterAddress()) == aid)
-                    callback->processTriggeredUlFrame(decoded.first->dup(), header, aid);
+                        callback->getHeUlAssociationId(header->getTransmitterAddress()) == aid)
+                    callback->processHeUlTriggeredFrame(decoded.first->dup(), header, aid);
             }
         }
         for (auto& decoded : decodedMpdus)
@@ -651,9 +650,7 @@ void HeUlMuTxOpFs::startSequence(FrameSequenceContext *context, int firstStep)
     sequence->startSequence(context, firstStep);
     EV_INFO << "Starting HE UL " << (triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ? "BSRP" : "Basic")
              << " Trigger " << triggerId << " with " << schedule.allocations.size() << " RU allocations\n";
-    if (triggerType == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER)
-        coordinator->commitSchedule(schedule);
-    coordinator->noteTriggerSent(triggerType, triggerId);
+    callback->heUlMuPlanCommitted(plan, triggerId);
 }
 
 IFrameSequenceStep *HeUlMuTxOpFs::prepareStep(FrameSequenceContext *context)

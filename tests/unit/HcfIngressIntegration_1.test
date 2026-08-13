@@ -1,0 +1,269 @@
+%description:
+Verify composed HCF ingress ownership rollback and HE per-STA queue dispatch
+using the production Hcf::processUpperFrame adapter and real PacketQueue ownership.
+
+%includes:
+#include <string>
+
+#include "inet/common/packet/Packet.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
+#include "inet/linklayer/ieee80211/mac/channelaccess/Edca.h"
+#include "inet/linklayer/ieee80211/mac/channelaccess/Edcaf.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
+#include "inet/queueing/contract/IPacketQueue.h"
+
+%file: TestNetwork.ned
+import inet.queueing.queue.PacketQueue;
+
+module TestIngressMac
+{
+    parameters:
+        @class(TestIngressMac);
+}
+
+module TestIngressHcf
+{
+    parameters:
+        @class(TestIngressHcf);
+}
+
+module TestIngressHeHcf
+{
+    parameters:
+        @class(TestIngressHeHcf);
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        macOwner: TestIngressMac;
+        hcf: TestIngressHcf;
+        heHcf: TestIngressHeHcf;
+        sharedQueue: PacketQueue;
+        perStaQueue: PacketQueue;
+        failingQueue: PacketQueue {
+            parameters:
+                packetCapacity = 0;
+        }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+class TestIngressEdcaf : public Edcaf
+{
+  private:
+    queueing::IPacketQueue *pendingQueue = nullptr;
+
+  public:
+    explicit TestIngressEdcaf(queueing::IPacketQueue *pendingQueue) :
+        pendingQueue(pendingQueue)
+    {
+    }
+
+    virtual queueing::IPacketQueue *getPendingQueue() const override
+    {
+        return pendingQueue;
+    }
+};
+
+class TestIngressEdca : public Edca
+{
+  private:
+    Edcaf *edcaf = nullptr;
+
+  public:
+    explicit TestIngressEdca(Edcaf *edcaf) : edcaf(edcaf) {}
+
+    virtual Edcaf *getEdcaf(AccessCategory) const override { return edcaf; }
+    virtual Edcaf *getChannelOwner() override { return nullptr; }
+    virtual void requestChannelAccess(AccessCategory, IChannelAccess::ICallback *) override
+    {
+        throw cRuntimeError("Unexpected channel access request");
+    }
+};
+
+class TestIngressHcf : public Hcf
+{
+  protected:
+    virtual int numInitStages() const override { return 1; }
+    virtual void initialize(int) override {}
+
+  public:
+    void setBindingsForTest(Ieee80211Mac *mac, Edca *value) {
+        RuntimeBindings bindings;
+        bindings.mac = mac;
+        bindings.edca = value;
+        installRuntimeBindingsForTesting(bindings);
+        TestActionPort port;
+        port.hasCommonFrameToTransmit = [] (AccessCategory) { return false; };
+        installTestActionPort(std::move(port));
+    }
+    void takePacketForTest(Packet *packet) { take(packet); }
+    void deleteOwnedPacketForTest(Packet *packet)
+    {
+        Enter_Method_Silent();
+        delete packet;
+    }
+};
+
+class TestIngressHeHcf : public HeHcf
+{
+  private:
+    queueing::IPacketQueue *perStaQueue = nullptr;
+    int resolutionCount = 0;
+
+  protected:
+    virtual int numInitStages() const override { return 1; }
+    virtual void initialize(int) override {}
+
+  public:
+    void setBindingsForTest(Ieee80211Mac *mac, Edca *value) {
+        RuntimeBindings bindings;
+        bindings.mac = mac;
+        bindings.edca = value;
+        installRuntimeBindingsForTesting(bindings);
+    }
+    void setPerStaQueueForTest(queueing::IPacketQueue *value) {
+        perStaQueue = value;
+        TestActionPort port;
+        port.resolvePerStaQueue = [this] (const MacAddress&, AccessCategory) {
+            resolutionCount++;
+            return perStaQueue;
+        };
+        port.hasCommonFrameToTransmit = [] (AccessCategory) { return false; };
+        installTestActionPort(std::move(port));
+    }
+    int getResolutionCount() const { return resolutionCount; }
+};
+
+class TestIngressMac : public Ieee80211Mac
+{
+  protected:
+    virtual int numInitStages() const override { return 1; }
+    virtual void initialize(int) override {}
+
+  public:
+    void submit(Hcf *hcf, Packet *packet)
+    {
+        take(packet);
+        hcf->processUpperFrame(packet,
+                packet->peekAtFront<Ieee80211DataOrMgmtHeader>());
+    }
+
+    void deleteOwnedPacket(Packet *packet)
+    {
+        Enter_Method_Silent();
+        delete packet;
+    }
+};
+
+Define_Module(TestIngressMac);
+Define_Module(TestIngressHcf);
+Define_Module(TestIngressHeHcf);
+
+static Packet *makeDataPacket(const char *name, const MacAddress& receiver)
+{
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setType(ST_DATA_WITH_QOS);
+    header->setReceiverAddress(receiver);
+    header->setTid(0);
+    header->setChunkLength(B(26));
+    auto packet = new Packet(name, header);
+    packet->insertAtBack(makeShared<ByteCountChunk>(B(5)));
+    packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+    return packet;
+}
+
+static Packet *makeManagementPacket(const char *name, const MacAddress& receiver)
+{
+    auto header = makeShared<Ieee80211ActionFrame>();
+    header->setReceiverAddress(receiver);
+    return new Packet(name, header);
+}
+
+static bool hasMessage(const cRuntimeError& error, const char *text)
+{
+    return std::string(error.what()).find(text) != std::string::npos;
+}
+
+%activity:
+auto macOwner = check_and_cast<TestIngressMac *>(
+        getParentModule()->getSubmodule("macOwner"));
+auto hcf = check_and_cast<TestIngressHcf *>(
+        getParentModule()->getSubmodule("hcf"));
+auto heHcf = check_and_cast<TestIngressHeHcf *>(
+        getParentModule()->getSubmodule("heHcf"));
+auto sharedQueue = check_and_cast<queueing::IPacketQueue *>(
+        getParentModule()->getSubmodule("sharedQueue"));
+auto perStaQueue = check_and_cast<queueing::IPacketQueue *>(
+        getParentModule()->getSubmodule("perStaQueue"));
+auto failingQueue = check_and_cast<queueing::IPacketQueue *>(
+        getParentModule()->getSubmodule("failingQueue"));
+const MacAddress peer("02:00:00:00:00:41");
+
+// A real PacketQueue with capacity zero takes and inserts before throwing.
+// The HCF adapter must remove it, retake OMNeT++ ownership, and return the
+// exact packet to the original Ieee80211Mac caller without hiding the error.
+TestIngressEdcaf failingEdcaf(failingQueue);
+TestIngressEdca failingEdca(&failingEdcaf);
+hcf->setBindingsForTest(macOwner, &failingEdca);
+auto failedData = makeDataPacket("mac-owned-overflow", peer);
+bool overflowThrown = false;
+try {
+    macOwner->submit(hcf, failedData);
+}
+catch (const cRuntimeError& error) {
+    overflowThrown = hasMessage(error, "Queue is overloaded");
+}
+REQUIRE(overflowThrown);
+REQUIRE(failingQueue->getNumPackets() == 0);
+REQUIRE(failedData->getOwner() == macOwner);
+macOwner->deleteOwnedPacket(failedData);
+
+// An internally generated management packet already owned by HCF remains
+// HCF-owned on the same pre-commit queue failure path.
+auto failedManagement = makeManagementPacket("hcf-owned-overflow", peer);
+hcf->takePacketForTest(failedManagement);
+bool managementOverflowThrown = false;
+try {
+    hcf->processUpperFrame(failedManagement,
+            failedManagement->peekAtFront<Ieee80211DataOrMgmtHeader>());
+}
+catch (const cRuntimeError& error) {
+    managementOverflowThrown = hasMessage(error, "Queue is overloaded");
+}
+REQUIRE(managementOverflowThrown);
+REQUIRE(failingQueue->getNumPackets() == 0);
+REQUIRE(failedManagement->getOwner() == hcf);
+hcf->deleteOwnedPacketForTest(failedManagement);
+
+// The production Hcf::processUpperFrame call must retain virtual dispatch to
+// the HE per-STA resolver and commit the exact packet to that queue rather
+// than the shared EDCAF queue.
+TestIngressEdcaf sharedEdcaf(sharedQueue);
+TestIngressEdca sharedEdca(&sharedEdcaf);
+heHcf->setBindingsForTest(macOwner, &sharedEdca);
+heHcf->setPerStaQueueForTest(perStaQueue);
+auto heData = makeDataPacket("he-per-sta", peer);
+macOwner->submit(heHcf, heData);
+REQUIRE(heHcf->getResolutionCount() == 1);
+REQUIRE(perStaQueue->getNumPackets() == 1);
+REQUIRE(perStaQueue->getPacket(0) == heData);
+REQUIRE(sharedQueue->getNumPackets() == 0);
+REQUIRE(heData->getOwner() != macOwner && heData->getOwner() != heHcf);
+delete perStaQueue->dequeuePacket();
+
+EV << "Composed HCF ingress restored real queue failures and preserved HE per-STA dispatch.\n";
+
+%contains: stdout
+Composed HCF ingress restored real queue failures and preserved HE per-STA dispatch.

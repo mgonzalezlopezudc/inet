@@ -1,0 +1,83 @@
+digraph ieee80211_model {
+    graph [rankdir=TB, bgcolor="transparent", pad="0.12", nodesep="0.28",
+        ranksep="0.52", fontname="Helvetica", fontsize=12,
+        label="INET IEEE 802.11 model and MAC architecture", labelloc=t]
+    node [shape=box, style="rounded,filled", fillcolor="white", color="#4b5563",
+        fontname="Helvetica", fontsize=10, margin="0.10,0.06"]
+    edge [fontname="Helvetica", fontsize=8, color="#374151", arrowsize=0.7]
+
+    subgraph cluster_interface {
+        label="Configurable Ieee80211Interface"
+        color="#93c5fd"; style="rounded"; penwidth=1.2
+
+        upper [label="Upper protocols\nMSDU Packet", fillcolor="#eff6ff"]
+        classifier [label="802.1d QoS classifier\nuser priority"]
+        llc [label="Ieee80211Llc\nLLC encapsulation"]
+        mac [label="Ieee80211Mac\nactive MAC facade", fillcolor="#dbeafe", penwidth=1.5]
+        radio [label="Ieee80211Radio\nPHY boundary\n(Transmitter / Receiver below)", fillcolor="#dcfce7"]
+        medium [label="Ieee80211RadioMedium\nshared wireless medium", fillcolor="#dcfce7"]
+        mgmt [label="Ieee80211Mgmt*\nAP / STA / ad hoc", fillcolor="#fef3c7"]
+        agent [label="Ieee80211Agent\nmanagement commands", fillcolor="#fef3c7"]
+        mib [label="Ieee80211Mib\nassociation + capabilities", fillcolor="#fef3c7"]
+
+        upper -> classifier [label="data"]
+        classifier -> llc [label="UP + packet"]
+        llc -> mac [label="MSDU / LLC"]
+        mac -> radio [label="Packet + PHY tags"]
+        radio -> medium [label="Ieee80211Transmission"]
+        medium -> radio [label="reception + interference"]
+        agent -> mgmt [label="commands"]
+        mgmt -> mac [label="management exchange"]
+        mac -> mib [style=dashed, label="queries"]
+    }
+
+    subgraph cluster_mac {
+        label="MAC responsibilities delegated through contracts"
+        color="#60a5fa"; style="rounded,dashed"; penwidth=1.0
+
+        components [shape=plain, label=<
+            <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="6">
+                <TR><TD BGCOLOR="#dbeafe"><B>Inside Ieee80211Mac</B></TD></TR>
+                <TR><TD ALIGN="LEFT">Dcf / Edca — contention, access category, TXOP</TD></TR>
+                <TR><TD ALIGN="LEFT">Hcf / VhtHcf / HeHcf — QoS coordination</TD></TR>
+                <TR><TD ALIGN="LEFT">Rx — validation and frame dispatch</TD></TR>
+                <TR><TD ALIGN="LEFT">Tx — immediate / prepared transmission</TD></TR>
+                <TR><TD ALIGN="LEFT">Ds — AP distribution</TD></TR>
+            </TABLE>>]
+        mac -> components [style=dashed, label="replaceable subcomponents"]
+    }
+
+    subgraph cluster_hcf {
+        label="HCF selection and exchange execution"
+        color="#c4b5fd"; style="rounded"; penwidth=1.2
+
+        grant [label="EDCA grant\nwinning access category", fillcolor="#f5f3ff"]
+        context [label="Immutable HcfContext\nlocal / peer / queue / PHY snapshots", fillcolor="#f5f3ff"]
+        selector [label="HcfExchangeSelector\nfixed semantic order", fillcolor="#f5f3ff"]
+        provider [label="IHcfExchangeProvider\ncommon SU, VHT, HE candidates", fillcolor="#f5f3ff"]
+        plan [label="PreparedHcfExchange\nvalidated plan + reservations", fillcolor="#f5f3ff"]
+        engine [label="HcfExchangeEngine\nactive sequence + response timers", fillcolor="#f5f3ff"]
+        sequence [label="IFrameSequence / handler\nTX and RX steps", fillcolor="#f5f3ff"]
+        actions [label="Typed action services + callbacks\noriginator, recipient, retry, aggregation", fillcolor="#f5f3ff"]
+        variants [label="Replaceable amendment policies\nVhtHcfFeatureSet / HeHcfFeatureSet\nschedulers, sounding, MU services", fillcolor="#f5f3ff"]
+
+        hcfAnchor [label="Hcf\nQoS exchange owner", fillcolor="#ede9fe"]
+        components -> hcfAnchor [style=dashed, label="Hcf"]
+        hcfAnchor -> grant [style=dashed, label="channel grant"]
+        grant -> context [label="snapshot at grant boundary"]
+        context -> selector [label="probe"]
+        selector -> provider [label="ordered probing"]
+        provider -> plan [label="prepare or reject"]
+        plan -> engine [label="validate, then one commit"]
+        engine -> sequence [label="run"]
+        engine -> actions [label="call-scoped effects"]
+        actions -> engine [style=dashed, label="completion / timeout / rollback"]
+        variants -> provider [style=dashed, label="registered candidates"]
+        variants -> context [style=dashed, label="immutable snapshots"]
+    }
+
+    legend [shape=plain, label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#374151">solid arrow</FONT></TD><TD ALIGN="LEFT">packet or control flow</TD></TR>
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#374151">dashed arrow</FONT></TD><TD ALIGN="LEFT">query, snapshot, or typed callback</TD></TR>
+    </TABLE>>]
+}

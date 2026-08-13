@@ -12,74 +12,42 @@
 #include "omnetpp.h"
 #include "inet/common/INETDefs.h"
 #include "inet/linklayer/common/MacAddress.h"
-#include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
-#include "inet/linklayer/ieee80211/mac/contract/IFrameSequenceHandler.h"
-#include "inet/linklayer/ieee80211/mac/framesequence/HeSoundingFs.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeMuMimoCsiManager.h"
-#include "inet/linklayer/ieee80211/mac/contract/ITx.h"
-#include "inet/linklayer/ieee80211/mac/contract/IIeee80211HeLinkPhyContext.h"
-#include "inet/linklayer/ieee80211/mac/scheduler/IIeee80211HeDlScheduler.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeSoundingService.h"
 
 namespace inet {
 namespace ieee80211 {
 
-class HeHcf;
-class FrameSequenceContext;
-
 class INET_API HeSoundingCoordinator : public omnetpp::cSimpleModule
 {
   public:
-    struct SoundingTarget {
-        MacAddress address;
-        uint16_t aid = 0;
-        int maxNss = 1;
-    };
+    using SoundingTarget = HeSoundingService::SoundingTarget;
 
   protected:
     virtual void initialize(int stage) override;
 
-    // State machine for the STA-side sounding protocol.
-    bool ndpAnnouncementReceived = false;
-    bool ndpReceived = false;
-    uint8_t soundingDialogToken = 0;
-    std::vector<SoundingTarget> soundingTargets;
-
-    uint8_t nextSoundingDialogToken = 1;
+    HeSoundingService standaloneService;
+    HeSoundingService *service = &standaloneService;
 
   public:
     HeSoundingCoordinator() {}
     virtual ~HeSoundingCoordinator() {}
+    void configure(HeSoundingService *value) { service = value == nullptr ? &standaloneService : value; }
+    HeSoundingService& getService() const { return *service; }
 
-    // AP: check if we need sounding and initiate it
-    bool tryStartSoundingSequence(AccessCategory ac,
-                                  const IIeee80211HeDlScheduler::ScheduleContext& scheduleContext,
-                                  IFrameSequenceHandler *frameSequenceHandler,
-                                  Ieee80211Mac *mac,
-                                  physicallayer::Ieee80211ModeSet *modeSet,
-                                  HeMuMimoCsiManager& csiManager,
-                                  FrameSequenceContext *context,
-                                  HeHcf *hcf);
-
-    // AP/STA: process received action/trigger sounding frames
+    // NED-compatible adapter over the typed sounding service.
     bool processSoundingFrame(Packet *packet,
                               const Ptr<const Ieee80211MacHeader>& header,
-                              Ieee80211Mac *mac,
-                              physicallayer::Ieee80211ModeSet *modeSet,
-                              HeMuMimoCsiManager& csiManager,
-                              const IIeee80211HeLinkPhyContext& linkPhyContext,
-                              ITx *tx,
-                              ITx::ICallback *callback);
+                              const HeSoundingService::ReceiveSnapshot& snapshot,
+                              const HeSoundingService::ReceiveActions& actions)
+        { return service->processReceivedFrame(packet, header, snapshot, actions); }
 
     // STA: process legacy preamble (NDP)
-    void processLegacyPreamble(Packet *packet) {
-        if (ndpAnnouncementReceived) {
-            ndpReceived = true;
-        }
+    void processLegacyPreamble(const Packet *packet) {
+        service->processNdpIndication(true);
     }
 
     void resetStaSoundingState() {
-        ndpAnnouncementReceived = false;
-        ndpReceived = false;
+        service->resetStaState();
     }
 };
 

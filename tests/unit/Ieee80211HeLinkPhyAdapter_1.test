@@ -2,8 +2,11 @@
 Test real scalar and dimensional IEEE 802.11 radio projection through the HeHcf link/PHY adapter.
 
 %includes:
+#include "inet/linklayer/common/MacAddress.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfRuntime.h"
+#include "inet/linklayer/ieee80211/mac/channelaccess/Edca.h"
 #include "inet/linklayer/ieee80211/mac/originator/QosAckHandler.h"
 
 %file: TestNetwork.ned
@@ -61,42 +64,62 @@ sim-time-limit = 0s
 using namespace inet;
 using namespace inet::ieee80211;
 
+class PeerInvalidationListener : public cListener
+{
+  public:
+    std::vector<HePeerInvalidatedEvent> events;
+
+    virtual void receiveSignal(cComponent *, simsignal_t, cObject *value, cObject *) override
+    {
+        auto event = dynamic_cast<HePeerInvalidatedEvent *>(value);
+        if (event != nullptr)
+            events.push_back(*event);
+    }
+};
+
 class TestHeHcf : public HeHcf
 {
   public:
     Packet *lastTransmittedPacket = nullptr;
     int transmitCount = 0;
 
-    Ieee80211HeLinkPhySnapshot projectLinkPhySnapshot() const { return getLinkPhyContext().getSnapshot(); }
+    TestHeHcf()
+    {
+        TestActionPort port;
+        port.transmitFrame = [this] (Packet *packet, simtime_t) {
+            lastTransmittedPacket = packet;
+            transmitCount++;
+        };
+        installTestActionPort(std::move(port));
+    }
+
+
+    Ieee80211HeLinkPhySnapshot projectLinkPhySnapshot() const { return getHeRuntime().getLinkPhyContext().getSnapshot(); }
+    HePeerStateService& getHePeerStateService() const { return getHeRuntime().getHePeerStateService(); }
     void seedPeerDerivedState(const MacAddress& peer, Hz bandwidth)
     {
         Ieee80211HeOperatingMode mode;
         mode.rxNss = 1;
-        peerOperatingModes[peer] = mode;
-        csiManager.updateCsi(peer, bandwidth, {peer},
+        getHePeerStateService().updateOperatingMode(peer, mode);
+        getHePeerStateService().getCsiManager().updateCsi(peer, bandwidth, {peer},
                 [] (const MacAddress&) { return 1; });
     }
     bool hasPeerDerivedState(const MacAddress& peer, Hz bandwidth) const
     {
         Ieee80211HeOperatingMode mode;
-        return getPeerOperatingMode(peer, mode) ||
-                csiManager.hasFreshCsi(peer, bandwidth);
+        return getHeRuntime().getPeerOperatingMode(peer, mode) ||
+                getHePeerStateService().getCsiManager().hasFreshCsi(peer, bandwidth);
     }
     void invalidatePeerForTest(const MacAddress& peer)
     {
-        invalidatePeerDerivedState(peer);
-    }
-    virtual void transmitFrame(Packet *packet, simtime_t) override
-    {
-        lastTransmittedPacket = packet;
-        transmitCount++;
+        getHeRuntime().invalidatePeerDerivedState(peer);
     }
     Packet *makePeerPacket(const char *name, const MacAddress& peer, int sequenceNumber)
     {
         auto header = makeShared<Ieee80211DataHeader>();
         header->setType(ST_DATA_WITH_QOS);
         header->setReceiverAddress(peer);
-        header->setTransmitterAddress(mac->getAddress());
+        header->setTransmitterAddress(getMacForTesting()->getAddress());
         header->setTid(0);
         header->setSequenceNumber(SequenceNumberCyclic(sequenceNumber));
         header->setAckPolicy(BLOCK_ACK);
@@ -106,26 +129,27 @@ class TestHeHcf : public HeHcf
     }
     uint64_t associatePeerForTest(const MacAddress& peer)
     {
-        mac->getMib()->setPeerHeCapabilities(peer,
-                mac->getMib()->localHeCapabilities, mac->getMib()->heOperation);
-        auto association = mac->getMib()->commitPeerAssociation(peer);
+        getMacForTesting()->getMib()->setPeerHeCapabilities(peer,
+                getMacForTesting()->getMib()->localHeCapabilities,
+                getMacForTesting()->getMib()->heOperation);
+        auto association = getMacForTesting()->getMib()->commitPeerAssociation(peer);
         return association.getAssociationEpoch();
     }
     void clearPeerAssociationForTest(const MacAddress& peer)
     {
-        mac->getMib()->clearPeerAssociation(peer, Ieee80211Mib::AUTHENTICATED);
+        getMacForTesting()->getMib()->clearPeerAssociation(peer, Ieee80211Mib::AUTHENTICATED);
     }
     std::vector<Packet *> seedPeerPacketState(const MacAddress& peer)
     {
-        if (getStationQueueBank(peer) == nullptr)
+        if (getHeRuntime().getStationQueueBank(peer) == nullptr)
             associatePeerForTest(peer);
         std::vector<Packet *> packets = {
             makePeerPacket("bank-queued", peer, 101),
             makePeerPacket("shared-pending", peer, 102),
             makePeerPacket("in-progress", peer, 103)
         };
-        getPerStaQueue(peer, AC_BE)->enqueuePacket(packets[0]);
-        auto edcaf = edca->getEdcaf(AC_BE);
+        getHeRuntime().getPerStaQueue(peer, AC_BE)->enqueuePacket(packets[0]);
+        auto edcaf = getEdcaForTesting()->getEdcaf(AC_BE);
         edcaf->getPendingQueue()->enqueuePacket(packets[1]);
         for (auto packet : packets)
             edcaf->getAckHandler()->frameGotInProgress(
@@ -140,46 +164,45 @@ class TestHeHcf : public HeHcf
     }
     QosAckHandler::Status getAckStatus(const Ptr<const Ieee80211DataHeader>& header) const
     {
-        return check_and_cast<QosAckHandler *>(edca->getEdcaf(AC_BE)->getAckHandler())->
+        return check_and_cast<QosAckHandler *>(getEdcaForTesting()->getEdcaf(AC_BE)->getAckHandler())->
                 getQoSDataAckStatus(header);
     }
     Packet *seedBankPacket(const MacAddress& peer, const char *name, int sequenceNumber)
     {
-        if (getStationQueueBank(peer) == nullptr)
+        if (getHeRuntime().getStationQueueBank(peer) == nullptr)
             associatePeerForTest(peer);
         auto packet = makePeerPacket(name, peer, sequenceNumber);
-        getPerStaQueue(peer, AC_BE)->enqueuePacket(packet);
+        getHeRuntime().getPerStaQueue(peer, AC_BE)->enqueuePacket(packet);
         return packet;
     }
     void deferPacketRetirementForTest(Packet *packet, const MacAddress& peer, uint64_t associationEpoch)
     {
-        packetsPendingRetirement[packet] = {peer, associationEpoch};
+        getHeRuntime().getHeQueueService().deferRetirement(packet, peer, associationEpoch);
     }
     void retireDeferredPacketsForTest()
     {
-        retireDeferredPackets();
+        getHeRuntime().retireDeferredPackets();
     }
     void startForcedSuFallbackForTest(AccessCategory ac)
     {
-        if (!stagePerStaFrameForSingleUserTransmission(ac))
+        if (!getHeRuntime().stagePerStaFrameForSingleUserTransmission(ac))
             throw cRuntimeError("test could not stage a per-STA SU fallback packet");
-        edca->getEdcaf(ac)->getTxopProcedure()->startTxop(ac);
-        forceNextSingleUser[ac] = true;
-        startFrameSequence(ac);
+        getEdcaForTesting()->getEdcaf(ac)->getTxopProcedure()->startTxop(ac);
+        // The fixture already staged the exact SU packet. Bypass HE provider
+        // selection instead of reaching into its private fallback ledger.
+        Hcf::startFrameSequence(ac);
     }
+    void crossTwtBoundaryForTest() { getHeRuntime().twtServicePeriodChanged(); }
     bool containsPacketIdentity(Packet *packet) const
     {
-        if (queueBankManager != nullptr) {
-            for (const auto& entry : queueBankManager->getQueueBanks())
-                for (int ac = StationQueueBank::AC_BK; ac <= StationQueueBank::AC_VO; ++ac) {
-                    auto queue = entry.second->getQueue(static_cast<StationQueueBank::AccessCategory>(ac));
-                    for (int index = 0; index < queue->getNumPackets(); ++index)
-                        if (queue->getPacket(index) == packet)
-                            return true;
-                }
-        }
+        for (int ac = AC_BK; ac <= AC_VO; ++ac)
+            for (const auto& queue : getHeRuntime().getHeQueueService().getQueueSnapshots(
+                    static_cast<AccessCategory>(ac)))
+                for (auto queuedPacket : queue.packets)
+                    if (queuedPacket == packet)
+                        return true;
         for (int ac = AC_BK; ac <= AC_VO; ++ac) {
-            auto edcaf = edca->getEdcaf(static_cast<AccessCategory>(ac));
+            auto edcaf = getEdcaForTesting()->getEdcaf(static_cast<AccessCategory>(ac));
             for (int index = 0; index < edcaf->getPendingQueue()->getNumPackets(); ++index)
                 if (edcaf->getPendingQueue()->getPacket(index) == packet)
                     return true;
@@ -192,7 +215,7 @@ class TestHeHcf : public HeHcf
     int countPeerPackets(const MacAddress& peer) const
     {
         int count = 0;
-        auto bank = getStationQueueBank(peer);
+        auto bank = getHeRuntime().getStationQueueBank(peer);
         if (bank != nullptr)
             for (int ac = StationQueueBank::AC_BK; ac <= StationQueueBank::AC_VO; ++ac)
                 for (int i = 0; i < bank->getQueue(static_cast<StationQueueBank::AccessCategory>(ac))->getNumPackets(); ++i)
@@ -200,7 +223,7 @@ class TestHeHcf : public HeHcf
                             peekAtFront<Ieee80211MacHeader>()->getReceiverAddress() == peer)
                         count++;
         for (int ac = AC_BK; ac <= AC_VO; ++ac) {
-            auto edcaf = edca->getEdcaf(static_cast<AccessCategory>(ac));
+            auto edcaf = getEdcaForTesting()->getEdcaf(static_cast<AccessCategory>(ac));
             for (int i = 0; i < edcaf->getPendingQueue()->getNumPackets(); ++i)
                 if (edcaf->getPendingQueue()->getPacket(i)->peekAtFront<Ieee80211MacHeader>()->
                         getReceiverAddress() == peer)
@@ -238,11 +261,34 @@ if (scalar.getChannelNumber() != dimensional.getChannelNumber() ||
     throw cRuntimeError("scalar and dimensional HeHcf link/PHY projections differ");
 
 auto scalarHcf = getHcf("scalarAp");
+auto dimensionalHcf = getHcf("dimensionalAp");
+PeerInvalidationListener invalidationListener;
+auto invalidatedSignal = cComponent::registerSignal("hePeerInvalidated");
+scalarHcf->subscribe(invalidatedSignal, &invalidationListener);
+dimensionalHcf->subscribe(invalidatedSignal, &invalidationListener);
+auto requireLastCascade = [&] (const MacAddress& expectedPeer,
+        HePeerInvalidationReason expectedReason, uint64_t expectedEpoch,
+        const std::vector<HePeerInvalidationStep>& expectedSteps) {
+    if (invalidationListener.events.empty())
+        throw cRuntimeError("peer owner did not emit an invalidation cascade event");
+    const auto& event = invalidationListener.events.back();
+    if (event.peerAddress != expectedPeer || event.reason != expectedReason ||
+            event.retiredAssociationEpoch != expectedEpoch || event.steps != expectedSteps)
+        throw cRuntimeError("peer owner emitted an invalidation cascade with wrong port order or epoch");
+};
 MacAddress peer("02:00:00:00:80:01");
 scalarHcf->seedPeerDerivedState(peer, MHz(80));
 if (!scalarHcf->hasPeerDerivedState(peer, MHz(80)))
     throw cRuntimeError("test failed to seed HeHcf peer-derived state");
+auto cascadeCount = invalidationListener.events.size();
 scalarHcf->invalidatePeerForTest(peer);
+if (invalidationListener.events.size() != cascadeCount + 1)
+    throw cRuntimeError("explicit invalidation did not execute exactly one peer-owner cascade");
+requireLastCascade(peer, HePeerInvalidationReason::ASSOCIATION_CHANGED, 0,
+        {HePeerInvalidationStep::CLEAR_DERIVED_STATE,
+         HePeerInvalidationStep::INVALIDATE_BASE_HCF,
+         HePeerInvalidationStep::INVALIDATE_DL_SCHEDULER,
+         HePeerInvalidationStep::INVALIDATE_UL_COORDINATOR});
 if (scalarHcf->hasPeerDerivedState(peer, MHz(80)))
     throw cRuntimeError("HeHcf peer lifecycle did not clear operating-mode and CSI state");
 
@@ -255,23 +301,46 @@ for (auto packet : packetIdentities)
 if (scalarHcf->getAckStatus(packetHeaders[0]) != QosAckHandler::Status::BLOCK_ACK_NOT_YET_REQUESTED ||
         scalarHcf->getAckStatus(packetHeaders[1]) != QosAckHandler::Status::BLOCK_ACK_NOT_YET_REQUESTED)
     throw cRuntimeError("test failed to seed retry-queued ACK state");
+cascadeCount = invalidationListener.events.size();
 scalarHcf->invalidatePeerForTest(peer);
+if (invalidationListener.events.size() != cascadeCount + 1)
+    throw cRuntimeError("associated explicit invalidation did not execute exactly one cascade");
+auto scalarEpoch = scalarHcf->getHePeerStateService().getPeerSnapshot(peer).getAssociationEpoch();
+requireLastCascade(peer, HePeerInvalidationReason::ASSOCIATION_CHANGED, scalarEpoch,
+        {HePeerInvalidationStep::CLEAR_DERIVED_STATE,
+         HePeerInvalidationStep::RETIRE_ASSOCIATION,
+         HePeerInvalidationStep::INVALIDATE_BASE_HCF,
+         HePeerInvalidationStep::INVALIDATE_DL_SCHEDULER,
+         HePeerInvalidationStep::INVALIDATE_UL_COORDINATOR});
 if (scalarHcf->countPeerPackets(peer) != 0)
     throw cRuntimeError("peer lifecycle left an old-epoch packet queued or in progress");
 for (const auto& header : packetHeaders)
     if (scalarHcf->getAckStatus(header) != QosAckHandler::Status::FRAME_NOT_YET_TRANSMITTED)
         throw cRuntimeError("peer lifecycle left stale ACK/BA state");
 
-auto dimensionalHcf = getHcf("dimensionalAp");
 auto oldEpoch = dimensionalHcf->associatePeerForTest(peer);
 auto oldEpochPacket = dimensionalHcf->seedBankPacket(peer, "old-epoch-retry", 104);
 dimensionalHcf->deferPacketRetirementForTest(oldEpochPacket, peer, oldEpoch);
+cascadeCount = invalidationListener.events.size();
 dimensionalHcf->clearPeerAssociationForTest(peer);
+if (invalidationListener.events.size() != cascadeCount + 1)
+    throw cRuntimeError("disassociation did not execute exactly one peer-owner cascade");
+requireLastCascade(peer, HePeerInvalidationReason::ASSOCIATION_CHANGED, oldEpoch,
+        {HePeerInvalidationStep::CLEAR_DERIVED_STATE,
+         HePeerInvalidationStep::RETIRE_ASSOCIATION,
+         HePeerInvalidationStep::INVALIDATE_BASE_HCF,
+         HePeerInvalidationStep::INVALIDATE_DL_SCHEDULER,
+         HePeerInvalidationStep::INVALIDATE_UL_COORDINATOR});
 auto newEpoch = dimensionalHcf->associatePeerForTest(peer);
+if (invalidationListener.events.size() != cascadeCount + 1)
+    throw cRuntimeError("new association duplicated the old-epoch invalidation cascade");
 if (newEpoch == oldEpoch)
     throw cRuntimeError("reassociation did not advance the association epoch");
 auto newEpochPacket = dimensionalHcf->seedBankPacket(peer, "new-epoch-packet", 105);
+cascadeCount = invalidationListener.events.size();
 dimensionalHcf->retireDeferredPacketsForTest();
+if (invalidationListener.events.size() != cascadeCount)
+    throw cRuntimeError("stale-epoch deferred release emitted a duplicate invalidation cascade");
 if (!dimensionalHcf->containsPacketIdentity(newEpochPacket) ||
         dimensionalHcf->countPeerPackets(peer) != 1)
     throw cRuntimeError("deferred teardown crossed association epochs");
@@ -283,6 +352,25 @@ if (scalarHcf->lastTransmittedPacket != exactSuPacket ||
         scalarHcf->transmitCount != 1 ||
         !scalarHcf->containsPacketIdentity(exactSuPacket))
     throw cRuntimeError("inherited HCF SU fallback did not retain the exact packet identity");
+auto twtPeerCount = scalarHcf->getHePeerStateService().getAssociatedPeerSnapshots().size();
+cascadeCount = invalidationListener.events.size();
+scalarHcf->crossTwtBoundaryForTest();
+if (invalidationListener.events.size() != cascadeCount + twtPeerCount)
+    throw cRuntimeError("TWT boundary did not execute exactly one cascade per associated peer");
+requireLastCascade(suPeer, HePeerInvalidationReason::TWT_BOUNDARY, 0,
+        {HePeerInvalidationStep::INVALIDATE_BASE_HCF,
+         HePeerInvalidationStep::INVALIDATE_DL_SCHEDULER,
+         HePeerInvalidationStep::INVALIDATE_UL_COORDINATOR});
+
+auto dimensionalMac = check_and_cast<Ieee80211Mac *>(dimensionalHcf->getParentModule());
+auto dimensionalMib = check_and_cast<cModule *>(dimensionalMac->getMib());
+if (!dimensionalHcf->getHePeerStateService().isAssociationListenerRegisteredForTest())
+    throw cRuntimeError("HE peer-state listener was not registered before abnormal teardown");
+dimensionalMib->deleteModule();
+if (dimensionalHcf->getHePeerStateService().isAssociationListenerRegisteredForTest())
+    throw cRuntimeError("HE peer-state listener retained an already deleted MIB");
+dimensionalHcf->deleteModule();
+scalarHcf->unsubscribe(invalidatedSignal, &invalidationListener);
 
 EV << "Real scalar and dimensional HeHcf link/PHY projections matched.\n";
 EV << "HeHcf peer lifecycle cleared operating-mode and CSI state.\n";
@@ -290,6 +378,8 @@ EV << "HeHcf peer lifecycle retired bank, pending, and in-progress packet identi
 EV << "HeHcf peer lifecycle retired retry-queued ACK/BA state.\n";
 EV << "Deferred peer teardown preserved a new association epoch.\n";
 EV << "Inherited HCF SU fallback transmitted the exact staged packet identity.\n";
+EV << "Abnormal HE teardown tolerated MIB deletion with finish skipped.\n";
+EV << "TWT boundary invalidated HE scheduling state through the peer owner.\n";
 
 %contains: stdout
 Real scalar and dimensional HeHcf link/PHY projections matched.
@@ -308,3 +398,9 @@ Deferred peer teardown preserved a new association epoch.
 
 %contains: stdout
 Inherited HCF SU fallback transmitted the exact staged packet identity.
+
+%contains: stdout
+Abnormal HE teardown tolerated MIB deletion with finish skipped.
+
+%contains: stdout
+TWT boundary invalidated HE scheduling state through the peer owner.

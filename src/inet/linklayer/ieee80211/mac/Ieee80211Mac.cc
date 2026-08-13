@@ -33,7 +33,6 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 #include "inet/linklayer/ieee80211/twt/ITwtManager.h"
 
 namespace inet {
@@ -89,7 +88,10 @@ void Ieee80211Mac::initialize(int stage)
         rx = check_and_cast<IRx *>(getSubmodule("rx"));
         tx = check_and_cast<ITx *>(getSubmodule("tx"));
         dcf = check_and_cast<Dcf *>(getSubmodule("dcf"));
-        hcf = check_and_cast_nullable<Hcf *>(getSubmodule("hcf"));
+        auto hcfModule = getSubmodule("hcf");
+        hcf = dynamic_cast<IQosCoordinationFunction *>(hcfModule);
+        if (hcfModule != nullptr && hcf == nullptr)
+            throw cRuntimeError("hcf module '%s' does not implement IQosCoordinationFunction", hcfModule->getFullPath().c_str());
         dcf->setMgmtExchangeResultHandler(mgmtExchangeResultHandler);
         if (hcf != nullptr)
             hcf->setMgmtExchangeResultHandler(mgmtExchangeResultHandler);
@@ -256,12 +258,27 @@ void Ieee80211Mac::handleLowerPacket(Packet *packet)
             packet->getDataLength() > b(0) &&
             dynamicPtrCast<const Ieee80211MpduSubframeHeader>(
                     packet->peekAtFront()) != nullptr &&
-            hcf != nullptr && hcf->isHtImplicitBlockAckEnabled();
+            hcf != nullptr && hcf->isAllowedToProcessIntactHtAmpdu();
+    auto heRxVector = packet->findTag<Ieee80211HeRxVectorInd>();
+    auto heRecipientContext =
+            packet->findTag<Ieee80211HeTbRecipientContextInd>();
+    const bool keepHeTbAmpduIntact =
+            packet->getDataLength() > b(0) &&
+            dynamicPtrCast<const Ieee80211MpduSubframeHeader>(
+                    packet->peekAtFront()) != nullptr &&
+            ((heRxVector != nullptr && heRxVector->getRxVector() != nullptr &&
+              heRxVector->getRxVector()->getCommon().getPpduFormat() ==
+                      HE_TRIGGER_BASED_UPLINK &&
+              heRecipientContext != nullptr &&
+              heRecipientContext->getRecipientParameters() != nullptr) ||
+             packet->findTag<Ieee80211HeTriggerCorrelationTag>() != nullptr ||
+             (hcf != nullptr && hcf->isExpectingIntactAmpduResponse()));
+    const bool keepAmpduIntact = keepHtAmpduIntact || keepHeTbAmpduIntact;
     if (packet->getDataLength() > b(0)) {
         const auto& frontChunk = packet->peekAtFront();
         if (dynamicPtrCast<const Ieee80211MpduSubframeHeader>(frontChunk) != nullptr &&
                 packet->findTag<Ieee80211MpduReceiveInd>() == nullptr &&
-                !keepHtAmpduIntact) {
+                !keepAmpduIntact) {
             MpduDeaggregation deaggregation;
             auto frames = deaggregation.deaggregateFrame(packet);
             for (auto frame : *frames)
@@ -272,20 +289,19 @@ void Ieee80211Mac::handleLowerPacket(Packet *packet)
     }
     if (auto legacyPreambleInd = packet->findTag<Ieee80211LegacyPreambleInd>()) {
         rx->legacySignalReceived(legacyPreambleInd->getDurationField());
-        if (auto heHcf = dynamic_cast<HeHcf *>(hcf.get())) {
-            heHcf->legacyPreambleReceived(packet);
-        }
+        if (hcf != nullptr)
+            hcf->legacyPreambleReceived(packet);
         delete packet;
         return;
     }
-    auto aggregateContext = keepHtAmpduIntact ?
+    auto aggregateContext = keepAmpduIntact ?
             AggregateReceptionContext::INTACT_AMPDU :
             AggregateReceptionContext::ORDINARY_FRAME;
     if (rx->lowerFrameReceived(packet, aggregateContext)) {
         if (packet->getDataLength() > b(0) &&
                 dynamicPtrCast<const Ieee80211MpduSubframeHeader>(packet->peekAtFront()) != nullptr &&
                 (packet->findTag<Ieee80211MpduReceiveInd>() != nullptr ||
-                        keepHtAmpduIntact)) {
+                        keepAmpduIntact)) {
             // Packet-level reception may have produced ordered delimiter/MPDU
             // outcomes. The explicitly enabled HT implicit-BlockAck path also
             // needs the intact A-MPDU so Ack Policy 00 is interpreted once for

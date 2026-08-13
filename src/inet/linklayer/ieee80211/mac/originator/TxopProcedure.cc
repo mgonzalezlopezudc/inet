@@ -53,6 +53,14 @@ void TxopProcedure::ProtectionState::reset()
     completed = false;
 }
 
+void TxopProcedure::ProtectionState::restoreSnapshot(const Snapshot& snapshot)
+{
+    mechanism = snapshot.mechanism;
+    protection = snapshot.protection;
+    configured = snapshot.configured;
+    completed = snapshot.completed;
+}
+
 static bool isErpOrLaterMode(const IIeee80211Mode *mode)
 {
     return dynamic_cast<const Ieee80211OfdmMode *>(mode) ||

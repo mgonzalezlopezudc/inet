@@ -7,6 +7,8 @@
 
 #include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreementHandler.h"
 
+#include <optional>
+
 #include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreement.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 
@@ -173,24 +175,89 @@ void OriginatorBlockAckAgreementHandler::terminateAgreement(MacAddress originato
 bool OriginatorBlockAckAgreementHandler::processQueuedDataFrame(Packet *packet, const Ptr<const Ieee80211DataHeader>& dataHeader,
         IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy, IProcedureCallback *callback)
 {
-    if (dataHeader->getReceiverAddress().isMulticast() || dataHeader->getReceiverAddress().isBroadcast())
+    auto reservation = reserveQueuedDataFramePrerequisite(packet, dataHeader,
+            blockAckAgreementPolicy);
+    if (!reservation)
         return false;
-    if (!blockAckAgreementPolicy->isAddbaReqNeeded(packet, dataHeader))
-        return false;
+    auto addbaReq = reservation.getPacket()->peekAtFront<Ieee80211AddbaRequest>();
+    callback->processMgmtFrame(reservation.releasePacket(), addbaReq);
+    reservation.commit();
+    return true;
+}
+
+IOriginatorBlockAckAgreementHandler::PrerequisiteProbe
+OriginatorBlockAckAgreementHandler::probeQueuedDataFramePrerequisite(Packet *packet,
+        const Ptr<const Ieee80211DataHeader>& dataHeader,
+        IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy)
+{
+    PrerequisiteProbe probe;
+    probe.packetId = packet == nullptr ? -1 : packet->getId();
+    probe.receiverAddress = dataHeader->getReceiverAddress();
+    probe.tid = dataHeader->getTid();
+    if (probe.receiverAddress.isMulticast() || probe.receiverAddress.isBroadcast() ||
+            !blockAckAgreementPolicy->isAddbaReqNeeded(packet, dataHeader))
+        return probe;
+
+    auto agreement = getAgreement(probe.receiverAddress, probe.tid);
+    probe.agreementPresent = agreement != nullptr;
+    if (agreement == nullptr) {
+        probe.required = true;
+        return probe;
+    }
+    auto snapshot = agreement->getSnapshot();
+    probe.agreementGeneration = snapshot.generation;
+    if (snapshot.isAddbaResponseReceived)
+        return probe;
+    if (snapshot.isAddbaRequestInProgress) {
+        if (!snapshot.isAddbaRequestSent)
+            return probe;
+        const simtime_t retryDeadline = snapshot.expirationTime;
+        if (retryDeadline < SIMTIME_ZERO || simTime() < retryDeadline)
+            return probe;
+    }
+    probe.required = true;
+    return probe;
+}
+
+IOriginatorBlockAckAgreementHandler::PrerequisiteReservation
+OriginatorBlockAckAgreementHandler::reserveQueuedDataFramePrerequisite(Packet *packet,
+        const Ptr<const Ieee80211DataHeader>& dataHeader,
+        IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy)
+{
+    return reserveQueuedDataFramePrerequisite(
+            probeQueuedDataFramePrerequisite(packet, dataHeader, blockAckAgreementPolicy),
+            packet, dataHeader, blockAckAgreementPolicy);
+}
+
+IOriginatorBlockAckAgreementHandler::PrerequisiteReservation
+OriginatorBlockAckAgreementHandler::reserveQueuedDataFramePrerequisite(
+        const PrerequisiteProbe& probe, Packet *packet,
+        const Ptr<const Ieee80211DataHeader>& dataHeader,
+        IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy)
+{
+    auto currentProbe = probeQueuedDataFramePrerequisite(packet, dataHeader, blockAckAgreementPolicy);
+    if (!probe.required || !currentProbe.required || probe.packetId != currentProbe.packetId ||
+            probe.receiverAddress != currentProbe.receiverAddress || probe.tid != currentProbe.tid ||
+            probe.agreementPresent != currentProbe.agreementPresent ||
+            probe.agreementGeneration != currentProbe.agreementGeneration)
+        return {};
 
     auto agreement = getAgreement(dataHeader->getReceiverAddress(), dataHeader->getTid());
-    auto agreementSnapshot = agreement == nullptr ? OriginatorBlockAckAgreementSnapshot{} : agreement->getSnapshot();
-    if (agreement != nullptr && agreementSnapshot.isAddbaResponseReceived)
-        return false;
+    const bool agreementCreated = agreement == nullptr;
+    std::optional<OriginatorBlockAckAgreementSnapshot> agreementSnapshot;
+    if (agreement != nullptr)
+        agreementSnapshot.emplace(agreement->getSnapshot());
+    if (agreementSnapshot && agreementSnapshot->isAddbaResponseReceived)
+        return {};
 
-    if (agreement != nullptr && agreementSnapshot.isAddbaRequestInProgress) {
+    if (agreementSnapshot && agreementSnapshot->isAddbaRequestInProgress) {
         // IEEE Std 802.11-2024, 10.25.2 and 11.5.2.2(c)-(e): an ADDBA Response
         // follows a transmitted ADDBA Request, so an unsent request has no response timeout.
-        if (!agreementSnapshot.isAddbaRequestSent)
-            return false;
-        const simtime_t retryDeadline = agreementSnapshot.expirationTime;
+        if (!agreementSnapshot->isAddbaRequestSent)
+            return {};
+        const simtime_t retryDeadline = agreementSnapshot->expirationTime;
         if (retryDeadline < SIMTIME_ZERO || simTime() < retryDeadline)
-            return false;
+            return {};
     }
 
     const auto startingSequenceNumber = dataHeader->getSequenceNumber().isValid() ?
@@ -204,8 +271,16 @@ bool OriginatorBlockAckAgreementHandler::processQueuedDataFrame(Packet *packet, 
     agreement->setIsAddbaRequestInProgress(true);
     agreement->setIsAddbaRequestSent(false);
     agreement->setBlockAckTimeoutValue(blockAckAgreementPolicy->computeAddbaFailureTimeout());
-    callback->processMgmtFrame(new Packet("AddbaReq", addbaReq), addbaReq);
-    return true;
+    auto addbaPacket = new Packet("AddbaReq", addbaReq);
+    addbaPacket->insertAtBack(makeShared<Ieee80211MacTrailer>());
+    auto key = std::make_pair(dataHeader->getReceiverAddress(), dataHeader->getTid());
+    return {addbaPacket, [this, key, agreementCreated, agreementSnapshot] {
+        auto agreement = getAgreement(key.first, key.second);
+        if (agreementCreated)
+            terminateAgreement(key.first, key.second);
+        else if (agreement != nullptr && agreementSnapshot)
+            agreement->restoreSnapshot(*agreementSnapshot);
+    }};
 }
 
 void OriginatorBlockAckAgreementHandler::processTransmittedDataFrame(Packet *packet, const Ptr<const Ieee80211DataHeader>& dataHeader, IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy, IProcedureCallback *callback)
@@ -215,8 +290,10 @@ void OriginatorBlockAckAgreementHandler::processTransmittedDataFrame(Packet *pac
     auto agreement = getAgreement(dataHeader->getReceiverAddress(), dataHeader->getTid());
     if (processQueuedDataFrame(packet, dataHeader, blockAckAgreementPolicy, callback))
         return;
-    auto agreementSnapshot = agreement == nullptr ? OriginatorBlockAckAgreementSnapshot{} : agreement->getSnapshot();
-    if (blockAckAgreementPolicy->isAddbaReqNeeded(packet, dataHeader) && agreement != nullptr && !agreementSnapshot.isAddbaResponseReceived) {
+    if (blockAckAgreementPolicy->isAddbaReqNeeded(packet, dataHeader) && agreement != nullptr) {
+        auto agreementSnapshot = agreement->getSnapshot();
+        if (agreementSnapshot.isAddbaResponseReceived)
+            return;
         const simtime_t retryDeadline = agreementSnapshot.expirationTime;
         const bool hasRetryDeadline = retryDeadline >= SIMTIME_ZERO;
 

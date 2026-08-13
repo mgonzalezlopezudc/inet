@@ -46,7 +46,6 @@ HeDlSchedulerHoLMinDelay::schedule(const ScheduleContext& context)
     for (const auto& candidate : selected)
         payloadBytes.push_back(candidate.holPacketBytes);
     auto result = fitRequestedRus(context, selected, requests, payloadBytes);
-    recordSchedule(context, selected, result, false, "head-of-line-delay OFDMA");
     return result;
 }
 

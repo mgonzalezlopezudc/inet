@@ -1,6 +1,5 @@
 %description:
-Test deterministic VHT/ADDBA queue behavior at the originator agreement and
-VHT HCF queue-priority seams.
+Test typed VHT/ADDBA prerequisite reservation, rollback, identity, and order.
 
 %includes:
 #include <cstring>
@@ -8,12 +7,12 @@ VHT HCF queue-priority seams.
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreement.h"
 #include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreementHandler.h"
-#include "inet/linklayer/ieee80211/mac/channelaccess/Edca.h"
-#include "inet/linklayer/ieee80211/mac/channelaccess/Edcaf.h"
 #include "inet/linklayer/ieee80211/mac/contract/IBlockAckAgreementHandlerCallback.h"
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementPolicy.h"
 #include "inet/linklayer/ieee80211/mac/contract/IProcedureCallback.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/VhtHcf.h"
+#include "inet/linklayer/ieee80211/mac/originator/TxopProcedure.h"
+#include "inet/linklayer/ieee80211/mac/queue/InProgressFrames.h"
 #include "inet/queueing/contract/IPacketQueue.h"
 
 %file: TestNetwork.ned
@@ -24,6 +23,10 @@ network TestNetwork
     submodules:
         test: Test;
         pendingQueue: PacketQueue;
+        overloadedQueue: PacketQueue {
+            parameters:
+                packetCapacity = 0;
+        }
 }
 
 %inifile: omnetpp.ini
@@ -33,6 +36,66 @@ network = TestNetwork
 %global:
 using namespace inet;
 using namespace inet::ieee80211;
+
+class RejectingInProgressFrames : public InProgressFrames
+{
+  public:
+    virtual bool reserveExactPendingFrame(Packet *) override { return false; }
+};
+
+class AcceptingInProgressFrames : public InProgressFrames
+{
+  private:
+    queueing::IPacketQueue *queue;
+
+  public:
+    explicit AcceptingInProgressFrames(queueing::IPacketQueue *queue) : queue(queue) {}
+
+    virtual bool reserveExactPendingFrame(Packet *packet) override
+    {
+        queue->removePacket(packet);
+        addInProgressFrame(packet);
+        return true;
+    }
+};
+
+class TestTxopProcedure : public TxopProcedure
+{
+  public:
+    void startForTesting()
+    {
+        start = simTime();
+        limit = SIMTIME_ZERO;
+    }
+};
+
+class TestVhtPrerequisiteAdapter : public VhtHcf
+{
+  public:
+    static void install(IOriginatorBlockAckAgreementHandler::PrerequisiteReservation& reservation,
+            queueing::IPacketQueue *queue, InProgressFrames *inProgressFrames,
+            const std::function<void(Packet *)>& reclaimOwnership)
+    {
+        VhtHcfFeature::installBlockAckPrerequisite(reservation, queue, inProgressFrames,
+                reclaimOwnership);
+    }
+
+    static void installAndStart(
+            IOriginatorBlockAckAgreementHandler::PrerequisiteReservation& reservation,
+            queueing::IPacketQueue *queue, InProgressFrames *inProgressFrames,
+            const std::function<void(Packet *)>& reclaimOwnership,
+            const std::function<void()>& startSequence)
+    {
+        VhtHcfFeature::installAndStartBlockAckPrerequisite(reservation, queue,
+                inProgressFrames, reclaimOwnership, startSequence);
+    }
+
+    static void configureProtectionAndStart(TxopProcedure *txop,
+            const std::function<void()>& startSequence)
+    {
+        VhtHcfFeature::configureProtectionAndStart(txop, startSequence);
+    }
+};
 
 class TestOriginatorBlockAckAgreementPolicy : public IOriginatorBlockAckAgreementPolicy
 {
@@ -81,36 +144,6 @@ class TestProcedureCallback : public IProcedureCallback, public IBlockAckAgreeme
     }
 };
 
-class TestEdcaf : public Edcaf
-{
-  protected:
-    queueing::IPacketQueue *pendingQueue = nullptr;
-
-  public:
-    explicit TestEdcaf(queueing::IPacketQueue *pendingQueue) : pendingQueue(pendingQueue) {}
-    virtual queueing::IPacketQueue *getPendingQueue() const override { return pendingQueue; }
-};
-
-class TestEdca : public Edca
-{
-  protected:
-    Edcaf *voiceEdcaf = nullptr;
-
-  public:
-    explicit TestEdca(Edcaf *voiceEdcaf) : voiceEdcaf(voiceEdcaf) {}
-    virtual Edcaf *getEdcaf(AccessCategory ac) const override
-    {
-        return ac == AC_VO ? voiceEdcaf : nullptr;
-    }
-};
-
-class TestVhtHcf : public VhtHcf
-{
-  public:
-    void setEdcaForTest(Edca *value) { edca = value; }
-    void prioritizeQueuedAddbaRequestsForTest() { prioritizeQueuedAddbaRequests(); }
-};
-
 static void requireCondition(bool condition, const char *message)
 {
     if (!condition)
@@ -126,17 +159,6 @@ static Packet *makeDataPacket(const char *name, const MacAddress& receiver, Tid 
     header->setTid(tid);
     header->setAckPolicy(BLOCK_ACK);
     header->setSequenceNumber(SequenceNumberCyclic(7));
-    packet->insertAtFront(header);
-    return packet;
-}
-
-static Packet *makeAddbaPacket(const char *name, const MacAddress& receiver, Tid tid)
-{
-    auto packet = new Packet(name);
-    auto header = makeShared<Ieee80211AddbaRequest>();
-    header->setReceiverAddress(receiver);
-    header->setTid(tid);
-    header->setStartingSequenceNumber(SequenceNumberCyclic(8));
     packet->insertAtFront(header);
     return packet;
 }
@@ -203,32 +225,215 @@ const Tid tid = 5;
     delete dataPacket;
 }
 
-// VHT HCF prioritizes queued ADDBA requests in AC_VO while preserving the
-// relative order within the ADDBA and non-ADDBA partitions.
+// Typed reservation keeps exact packet identity and preserves the composed
+// order: existing IPF, reserved ADDBA, then unchanged pending ordinary data.
 {
     clearQueue(pendingQueue);
-    pendingQueue->enqueuePacket(makeDataPacket("data-1", peer, tid));
-    pendingQueue->enqueuePacket(makeAddbaPacket("addba-1", peer, tid));
-    pendingQueue->enqueuePacket(makeDataPacket("data-2", peer, tid));
-    pendingQueue->enqueuePacket(makeAddbaPacket("addba-2", peer, tid));
-
-    TestEdcaf voiceEdcaf(pendingQueue);
-    TestEdca edca(&voiceEdcaf);
-    TestVhtHcf hcf;
-    hcf.setEdcaForTest(&edca);
-    hcf.prioritizeQueuedAddbaRequestsForTest();
-
-    requireCondition(strcmp(pendingQueue->getPacket(0)->getName(), "addba-1") == 0 &&
-            strcmp(pendingQueue->getPacket(1)->getName(), "addba-2") == 0 &&
-            strcmp(pendingQueue->getPacket(2)->getName(), "data-1") == 0 &&
-            strcmp(pendingQueue->getPacket(3)->getName(), "data-2") == 0,
-            "AC_VO queue priority should move ADDBA requests ahead of data deterministically");
+    OriginatorBlockAckAgreementHandler handler;
+    TestOriginatorBlockAckAgreementPolicy policy;
+    auto trigger = makeDataPacket("trigger", peer, tid);
+    auto ordinary1 = makeDataPacket("ordinary-1", peer, tid);
+    auto ordinary2 = makeDataPacket("ordinary-2", peer, tid);
+    pendingQueue->enqueuePacket(ordinary1);
+    pendingQueue->enqueuePacket(ordinary2);
+    auto triggerHeader = trigger->peekAtFront<Ieee80211DataHeader>();
+    auto probe = handler.probeQueuedDataFramePrerequisite(trigger, triggerHeader, &policy);
+    requireCondition(probe.required && handler.getAgreement(peer, tid) == nullptr,
+            "prerequisite probe must be eligible without creating agreement state");
+    auto reservation = handler.reserveQueuedDataFramePrerequisite(probe, trigger,
+            triggerHeader, &policy);
+    requireCondition((bool)reservation, "eligible data should produce a typed prerequisite reservation");
+    auto staleReservation = handler.reserveQueuedDataFramePrerequisite(probe, trigger,
+            triggerHeader, &policy);
+    requireCondition(!staleReservation,
+            "reservation must reject a probe after its agreement generation changed");
+    auto exactAddba = reservation.getPacket();
+    pendingQueue->enqueuePacket(reservation.releasePacket());
+    requireCondition(pendingQueue->getNumPackets() == 3 &&
+            pendingQueue->getPacket(0) == ordinary1 && pendingQueue->getPacket(1) == ordinary2 &&
+            pendingQueue->getPacket(2) == exactAddba,
+            "reservation enqueue must not drain, reorder, or replace pending packet identities");
+    pendingQueue->removePacket(exactAddba);
+    std::vector<Packet *> inProgress = {makeDataPacket("existing-ipf", peer, tid), exactAddba};
+    requireCondition(!strcmp(inProgress[0]->getName(), "existing-ipf") &&
+            inProgress[1] == exactAddba && pendingQueue->getPacket(0) == ordinary1,
+            "exact reservation must append after existing IPF and before future pending pulls");
+    reservation.commit();
+    delete inProgress[0];
+    delete inProgress[1];
+    delete trigger;
     clearQueue(pendingQueue);
+}
+
+// The composed VHT adapter reclaims insert-then-throw ownership, restores the
+// agreement, and makes a later retry eligible.
+{
+    OriginatorBlockAckAgreementHandler handler;
+    TestOriginatorBlockAckAgreementPolicy policy;
+    auto trigger = makeDataPacket("rollback-trigger", peer, tid);
+    auto header = trigger->peekAtFront<Ieee80211DataHeader>();
+    auto overloadedQueue = check_and_cast<queueing::IPacketQueue *>(
+            getParentModule()->getSubmodule("overloadedQueue"));
+    RejectingInProgressFrames unusedExtraction;
+    int ownershipReclaimCount = 0;
+    auto recordOwnershipReclaim = [&ownershipReclaimCount](Packet *) {
+        ownershipReclaimCount++;
+    };
+    auto liveBeforeEnqueueFailure = cOwnedObject::getLiveObjectCount();
+    try {
+        auto reservation = handler.reserveQueuedDataFramePrerequisite(trigger, header, &policy);
+        requireCondition((bool)reservation && handler.getAgreement(peer, tid) != nullptr,
+                "reservation should create pending agreement state");
+        TestVhtPrerequisiteAdapter::install(reservation, overloadedQueue,
+                &unusedExtraction, recordOwnershipReclaim);
+        requireCondition(false, "capacity queue did not reject prerequisite enqueue");
+    }
+    catch (const cRuntimeError&) {}
+    requireCondition(overloadedQueue->isEmpty(),
+            "insert-then-throw rollback must remove exact queue membership");
+    requireCondition(ownershipReclaimCount == 1,
+            "insert-then-throw rollback must invoke component ownership reclamation");
+    requireCondition(cOwnedObject::getLiveObjectCount() == liveBeforeEnqueueFailure,
+            "insert-then-throw rollback must terminally delete generated ownership");
+    requireCondition(handler.getAgreement(peer, tid) == nullptr,
+            "enqueue failure cancellation should remove newly-created agreement state");
+
+    // The same adapter removes and terminally deletes the enqueued identity when
+    // the concrete extraction boundary reports that it cannot reserve it.
+    auto liveBeforeExtractionFailure = cOwnedObject::getLiveObjectCount();
+    auto retry = handler.reserveQueuedDataFramePrerequisite(trigger, header, &policy);
+    requireCondition((bool)retry, "cancelled enqueue failure must leave a later retry eligible");
+    auto exactPacket = retry.getPacket();
+    try {
+        TestVhtPrerequisiteAdapter::install(retry, pendingQueue,
+                &unusedExtraction, recordOwnershipReclaim);
+        requireCondition(false, "false exact extraction did not reject prerequisite");
+    }
+    catch (const cRuntimeError&) {}
+    bool exactPacketStillQueued = false;
+    for (int i = 0; i < pendingQueue->getNumPackets(); ++i)
+        exactPacketStillQueued |= pendingQueue->getPacket(i) == exactPacket;
+    requireCondition(!exactPacketStillQueued,
+            "false extraction rollback must clear exact queue membership");
+    requireCondition(ownershipReclaimCount == 2,
+            "false extraction rollback must invoke component ownership reclamation");
+    requireCondition(cOwnedObject::getLiveObjectCount() == liveBeforeExtractionFailure,
+            "false extraction rollback must terminally delete generated ownership");
+    requireCondition(handler.getAgreement(peer, tid) == nullptr,
+            "exact-extraction failure cancellation should restore agreement state");
+    auto secondRetry = handler.reserveQueuedDataFramePrerequisite(trigger, header, &policy);
+    requireCondition((bool)secondRetry, "cancelled extraction failure must leave another retry eligible");
+    delete secondRetry.releasePacket();
+    secondRetry.cancel();
+    delete trigger;
+}
+
+// A sequence-start exception occurs after exact queue extraction. The composed
+// operation must undo IPF ownership and restore the existing agreement before
+// the selector can try the same prerequisite again.
+{
+    clearQueue(pendingQueue);
+    auto startThrowSetupTime = getSimulation()->getSimTime();
+    OriginatorBlockAckAgreementHandler handler;
+    TestOriginatorBlockAckAgreementPolicy policy;
+    TestProcedureCallback callback(&handler);
+    auto trigger = makeDataPacket("start-throw-trigger", peer, tid);
+    auto header = trigger->peekAtFront<Ieee80211DataHeader>();
+    auto initial = handler.reserveQueuedDataFramePrerequisite(trigger, header, &policy);
+    auto initialRequest = initial.getPacket()->peekAtFront<Ieee80211AddbaRequest>();
+    delete initial.releasePacket();
+    initial.commit();
+    handler.processTransmittedAddbaReq(initialRequest, &callback);
+    auto agreement = handler.getAgreement(peer, tid);
+    requireCondition(agreement != nullptr, "start-throw setup lost its agreement");
+
+    getSimulation()->setSimTime(startThrowSetupTime + policy.addbaFailureTimeout);
+    auto beforeRetry = agreement->getSnapshot();
+    auto retry = handler.reserveQueuedDataFramePrerequisite(trigger, header, &policy);
+    requireCondition((bool)retry, "start-throw setup should reserve a retry prerequisite");
+    AcceptingInProgressFrames inProgressFrames(pendingQueue);
+    TestTxopProcedure txop;
+    txop.startForTesting();
+    auto beforeProtection = txop.getProtectionStateSnapshot();
+    int ownershipReclaimCount = 0;
+    bool sequenceStartAttempted = false;
+    try {
+        TestVhtPrerequisiteAdapter::installAndStart(retry, pendingQueue,
+                &inProgressFrames,
+                [&ownershipReclaimCount](Packet *) { ownershipReclaimCount++; },
+                [&txop, &sequenceStartAttempted] {
+                    TestVhtPrerequisiteAdapter::configureProtectionAndStart(&txop,
+                            [&sequenceStartAttempted] {
+                                sequenceStartAttempted = true;
+                                throw cRuntimeError("injected VHT prerequisite sequence-start failure");
+                            });
+                });
+        requireCondition(false, "injected sequence-start failure did not propagate");
+    }
+    catch (const cRuntimeError&) {}
+    auto afterFailure = agreement->getSnapshot();
+    auto afterProtection = txop.getProtectionStateSnapshot();
+    requireCondition(pendingQueue->isEmpty() && inProgressFrames.getLength() == 0,
+            "sequence-start rollback must clear queue and IPF membership");
+    requireCondition(ownershipReclaimCount == 1,
+            "sequence-start rollback must reclaim and delete exact prerequisite ownership");
+    requireCondition(sequenceStartAttempted,
+            "test must reach sequence start after configuring TXOP protection");
+    requireCondition(afterFailure.generation == beforeRetry.generation &&
+            afterFailure.isAddbaRequestSent == beforeRetry.isAddbaRequestSent &&
+            afterFailure.isAddbaRequestInProgress == beforeRetry.isAddbaRequestInProgress &&
+            afterFailure.expirationTime == beforeRetry.expirationTime,
+            "sequence-start rollback must restore the existing agreement snapshot");
+    requireCondition(afterProtection.mechanism == beforeProtection.mechanism &&
+            afterProtection.protection == beforeProtection.protection &&
+            afterProtection.configured == beforeProtection.configured &&
+            afterProtection.completed == beforeProtection.completed,
+            "sequence-start rollback must restore the exact protection state");
+    auto nextRetry = handler.reserveQueuedDataFramePrerequisite(trigger, header, &policy);
+    requireCondition((bool)nextRetry,
+            "sequence-start rollback must leave the exact prerequisite retry eligible");
+    delete nextRetry.releasePacket();
+    nextRetry.cancel();
+    delete trigger;
+}
+
+// Cancellation of a retry reservation restores an existing agreement's exact
+// state instead of treating it like the newly-created-agreement branch.
+{
+    getSimulation()->setSimTime(SIMTIME_ZERO);
+    OriginatorBlockAckAgreementHandler handler;
+    TestOriginatorBlockAckAgreementPolicy policy;
+    TestProcedureCallback callback(&handler);
+    auto trigger = makeDataPacket("existing-rollback-trigger", peer, tid);
+    auto header = trigger->peekAtFront<Ieee80211DataHeader>();
+    auto initial = handler.reserveQueuedDataFramePrerequisite(trigger, header, &policy);
+    requireCondition((bool)initial, "initial reservation should create an agreement");
+    auto initialRequest = initial.getPacket()->peekAtFront<Ieee80211AddbaRequest>();
+    delete initial.releasePacket();
+    initial.commit();
+    handler.processTransmittedAddbaReq(initialRequest, &callback);
+    auto agreement = handler.getAgreement(peer, tid);
+    requireCondition(agreement != nullptr, "committed initial reservation lost its agreement");
+    getSimulation()->setSimTime(policy.addbaFailureTimeout);
+    auto beforeRetry = agreement->getSnapshot();
+    auto retry = handler.reserveQueuedDataFramePrerequisite(trigger, header, &policy);
+    requireCondition((bool)retry, "expired existing agreement should permit a retry reservation");
+    delete retry.releasePacket();
+    retry.cancel();
+    auto afterCancel = agreement->getSnapshot();
+    requireCondition(afterCancel.generation == beforeRetry.generation &&
+            afterCancel.isAddbaRequestSent == beforeRetry.isAddbaRequestSent &&
+            afterCancel.isAddbaRequestInProgress == beforeRetry.isAddbaRequestInProgress &&
+            afterCancel.expirationTime == beforeRetry.expirationTime,
+            "retry cancellation must restore the existing agreement snapshot");
+    delete trigger;
 }
 
 EV << "Proactive ADDBA queueing suppressed queued duplicates and started timeout only after transmission.\n";
 EV << "Transmitted ADDBA timeout permitted one deterministic retry.\n";
-EV << "VHT AC_VO queue priority preserved partition order.\n";
+EV << "Typed VHT ADDBA reservation preserved identity/order and rollback eligibility.\n";
+EV << "ADDBA rollback distinguished new-agreement deletion from existing snapshot restore.\n";
+EV << "VHT prerequisite sequence-start failure restored queue, IPF, agreement, and retry eligibility.\n";
 
 %contains: stdout
 Proactive ADDBA queueing suppressed queued duplicates and started timeout only after transmission.
@@ -237,4 +442,10 @@ Proactive ADDBA queueing suppressed queued duplicates and started timeout only a
 Transmitted ADDBA timeout permitted one deterministic retry.
 
 %contains: stdout
-VHT AC_VO queue priority preserved partition order.
+Typed VHT ADDBA reservation preserved identity/order and rollback eligibility.
+
+%contains: stdout
+ADDBA rollback distinguished new-agreement deletion from existing snapshot restore.
+
+%contains: stdout
+VHT prerequisite sequence-start failure restored queue, IPF, agreement, and retry eligibility.

@@ -282,7 +282,6 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerBacklogBased::schedule(
             EV_INFO << "HE UL schedule bypassed OFDMA optimization for "
                     << result.allocations.size() << " full-bandwidth MU-MIMO users"
                     << ", plannedBytes=" << result.totalPlannedBytes << "\n";
-            recordSchedule(context, result, result.decisionReason.c_str());
             return result;
         }
     }
@@ -500,7 +499,6 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerBacklogBased::schedule(
                 << ", coding=" << (allocation.coding ==
                         physicallayer::HE_CODING_LDPC ? "LDPC" : "BCC")
                 << ", plannedBytes=" << allocation.plannedBytes << "\n";
-    recordSchedule(context, result, result.decisionReason.c_str());
     return result;
 }
 

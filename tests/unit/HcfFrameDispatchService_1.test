@@ -1,0 +1,196 @@
+%description:
+Test stateless HCF frame-subtype dispatch and callback order.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfFrameDispatchService.h"
+#include "inet/common/packet/Packet.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+#define REQUIRE(x) do { if (!(x)) throw cRuntimeError("REQUIRE failed: %s", #x); } while (false)
+
+struct State
+{
+    std::vector<std::string> events;
+    HcfFrameDispatchService::MultiTidResponseContext multiTidContext;
+    MultiTidBlockAckResponseFormat responseFormat = MultiTidBlockAckResponseFormat::NONE;
+    uint16_t responseAid = 0;
+    bool managementAckNeeded = true;
+    bool throwOnRts = false;
+    Packet *observedPacket = nullptr;
+    const Ieee80211MacHeader *observedHeader = nullptr;
+    void add(const char *event) { events.push_back(event); }
+};
+
+class RecipientActions : public HcfFrameDispatchService::IRecipientActions
+{
+  public:
+    State& state;
+    RecipientActions(State& state) : state(state) {}
+    virtual void recipientPsPoll(const Ptr<const Ieee80211PsPollFrame>&) override { state.add("recipientPsPoll"); }
+    virtual void recipientRts(Packet *packet, const Ptr<const Ieee80211RtsFrame>& frame) override { state.observedPacket = packet; state.observedHeader = frame.get(); state.add("recipientRts"); if (state.throwOnRts) throw cRuntimeError("action failure"); }
+    virtual HcfFrameDispatchService::MultiTidResponseContext getMultiTidResponseContext(const Ptr<const Ieee80211MultiTidBlockAckReq>&) override { state.add("multiTidContext"); return state.multiTidContext; }
+    virtual void recipientBlockAckRequest(Packet *, const Ptr<const Ieee80211BlockAckReq>&, MultiTidBlockAckResponseFormat format, uint16_t aid) override { state.add("recipientBar"); state.responseFormat = format; state.responseAid = aid; }
+    virtual void recipientStaleAck(const Ptr<const Ieee80211AckFrame>&) override { state.add("recipientStaleAck"); }
+    virtual void recipientAddbaRequest(const Ptr<const Ieee80211AddbaRequest>&) override { state.add("recipientAddbaRequest"); }
+    virtual void recipientAddbaResponse(const Ptr<const Ieee80211AddbaResponse>&) override { state.add("recipientAddbaResponse"); }
+    virtual void recipientDelba(const Ptr<const Ieee80211Delba>&) override { state.add("recipientDelba"); }
+};
+
+class ResponseActions : public HcfFrameDispatchService::IResponseActions
+{
+  public:
+    State& state;
+    ResponseActions(State& state) : state(state) {}
+    virtual const physicallayer::IIeee80211Mode *selectCtsResponseMode(Packet *, const Ptr<const Ieee80211RtsFrame>&) override { state.add("selectCts"); return nullptr; }
+    virtual const physicallayer::IIeee80211Mode *selectBlockAckResponseMode(Packet *, const Ptr<const Ieee80211BlockAckReq>&) override { state.add("selectBlockAck"); return nullptr; }
+    virtual const physicallayer::IIeee80211Mode *selectImplicitBlockAckResponseMode(Packet *, Packet *, const Ptr<const Ieee80211BlockAck>&, const Ptr<const Ieee80211DataHeader>&) override { state.add("selectImplicitBlockAck"); return nullptr; }
+    virtual const physicallayer::IIeee80211Mode *selectAckResponseMode(Packet *, const Ptr<const Ieee80211DataOrMgmtHeader>&) override { state.add("selectAck"); return nullptr; }
+    virtual void transmittedCtsResponse(const Ptr<const Ieee80211CtsFrame>&) override { state.add("transmittedCtsResponse"); }
+    virtual void transmittedBlockAckResponse(const Ptr<const Ieee80211BlockAck>&) override { state.add("transmittedBlockAckResponse"); }
+    virtual void transmittedAckResponse(const Ptr<const Ieee80211AckFrame>&) override { state.add("transmittedAckResponse"); }
+};
+
+class TransmitActions : public HcfFrameDispatchService::IOriginatorTransmitActions
+{
+  public:
+    State& state;
+    TransmitActions(State& state) : state(state) {}
+    virtual void transmittedGroup(Packet *, const Ptr<const Ieee80211MacHeader>&) override { state.add("transmittedGroup"); }
+    virtual void transmittedData(Packet *packet, const Ptr<const Ieee80211DataHeader>& frame, HcfFrameDispatchService::ExpectedResponse response) override { state.observedPacket = packet; state.observedHeader = frame.get(); state.add(response == HcfFrameDispatchService::ExpectedResponse::NONE ? "dataNone" : response == HcfFrameDispatchService::ExpectedResponse::ACK ? "dataAck" : "dataBlockAck"); }
+    virtual bool isManagementAckNeeded(const Ptr<const Ieee80211MgmtHeader>&) override { state.add("ackQuery"); return state.managementAckNeeded; }
+    virtual void transmittedManagementAck(const Ptr<const Ieee80211MgmtHeader>&) override { state.add("managementAck"); }
+    virtual void transmittedAddbaRequest(const Ptr<const Ieee80211AddbaRequest>&) override { state.add("transmittedAddbaRequest"); }
+    virtual void transmittedAddbaResponse(const Ptr<const Ieee80211AddbaResponse>&) override { state.add("transmittedAddbaResponse"); }
+    virtual void transmittedDelba(const Ptr<const Ieee80211Delba>&) override { state.add("transmittedDelba"); }
+    virtual void transmittedBlockAckRequest(const Ptr<const Ieee80211BlockAckReq>&) override { state.add("transmittedBar"); }
+    virtual void transmittedRts(const Ptr<const Ieee80211RtsFrame>&) override { state.add("transmittedRts"); }
+    virtual void failedDataOrManagement(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& frame, HcfFrameDispatchService::FailureKind kind) override { state.observedPacket = packet; state.observedHeader = frame.get(); state.add(kind == HcfFrameDispatchService::FailureKind::BLOCK_ACK_MISSING ? "failedBlockAckData" : "failedAckDataOrMgmt"); }
+    virtual void failedBlockAckRequest(Packet *packet, const Ptr<const Ieee80211BlockAckReq>& frame) override { state.observedPacket = packet; state.observedHeader = frame.get(); state.add("failedBar"); }
+};
+
+class ReceiveActions : public HcfFrameDispatchService::IOriginatorReceiveActions
+{
+  public:
+    State& state;
+    ReceiveActions(State& state) : state(state) {}
+    virtual void originatorAddbaResponse(const Ptr<const Ieee80211AddbaResponse>&) override { state.add("originatorAddbaResponse"); }
+    virtual void originatorAck(Packet *, const Ptr<const Ieee80211AckFrame>&, Packet *, const Ptr<const Ieee80211MacHeader>&) override { state.add("originatorAck"); }
+    virtual void originatorBlockAck(const Ptr<const Ieee80211BlockAck>&) override { state.add("originatorBlockAck"); }
+    virtual void originatorCts(const Ptr<const Ieee80211CtsFrame>&) override { state.add("originatorCts"); }
+    virtual void originatorIgnoredControl(const Ptr<const Ieee80211MacHeader>&) override { state.add("originatorIgnored"); }
+    virtual void originatorData(const Ptr<const Ieee80211DataHeader>&, const Ptr<const Ieee80211MacHeader>&) override { state.add("originatorData"); }
+};
+
+template<typename T> Ptr<T> frame() { return makeShared<T>(); }
+
+%activity:
+HcfFrameDispatchService service;
+State actions;
+RecipientActions recipientActions(actions);
+ResponseActions responseActions(actions);
+TransmitActions transmitActions(actions);
+ReceiveActions receiveActions(actions);
+Packet packet("borrowed");
+Packet lastPacket("last");
+auto lastHeader = frame<Ieee80211DataHeader>();
+
+service.dispatchRecipientControl(&packet, frame<Ieee80211PsPollFrame>(), recipientActions);
+auto rts = frame<Ieee80211RtsFrame>();
+service.dispatchRecipientControl(&packet, rts, recipientActions);
+REQUIRE(actions.observedPacket == &packet);
+REQUIRE(actions.observedHeader == rts.get());
+service.dispatchRecipientControl(&packet, frame<Ieee80211AckFrame>(), recipientActions);
+auto basicBar = frame<Ieee80211BasicBlockAckReq>();
+service.dispatchRecipientControl(&packet, basicBar, recipientActions);
+REQUIRE(actions.responseFormat == MultiTidBlockAckResponseFormat::NONE);
+auto multiTidBar = frame<Ieee80211MultiTidBlockAckReq>();
+actions.multiTidContext = {true, 17, true, true};
+service.dispatchRecipientControl(&packet, multiTidBar, recipientActions);
+REQUIRE(actions.responseFormat == MultiTidBlockAckResponseFormat::HE_MULTI_STA);
+REQUIRE(actions.responseAid == 17);
+actions.multiTidContext = {false, 23, true, true};
+service.dispatchRecipientControl(&packet, multiTidBar, recipientActions);
+REQUIRE(actions.responseFormat == MultiTidBlockAckResponseFormat::LEGACY_MULTI_TID);
+REQUIRE(actions.responseAid == 0);
+
+service.dispatchRecipientManagement(frame<Ieee80211AddbaRequest>(), recipientActions);
+service.dispatchRecipientManagement(frame<Ieee80211AddbaResponse>(), recipientActions);
+service.dispatchRecipientManagement(frame<Ieee80211Delba>(), recipientActions);
+auto beacon = frame<Ieee80211MgmtHeader>();
+service.dispatchRecipientManagement(beacon, recipientActions);
+
+auto data = frame<Ieee80211DataHeader>();
+data->setReceiverAddress(MacAddress("00:00:00:00:00:01"));
+service.selectImmediateResponseMode(&packet, frame<Ieee80211CtsFrame>(), &packet, frame<Ieee80211RtsFrame>(), responseActions);
+service.selectImmediateResponseMode(&packet, frame<Ieee80211BasicBlockAck>(), &packet, basicBar, responseActions);
+service.selectImmediateResponseMode(&packet, frame<Ieee80211BasicBlockAck>(), &packet, data, responseActions);
+service.selectImmediateResponseMode(&packet, frame<Ieee80211AckFrame>(), &packet, frame<Ieee80211MgmtHeader>(), responseActions);
+service.dispatchTransmittedControlResponse(frame<Ieee80211CtsFrame>(), responseActions);
+service.dispatchTransmittedControlResponse(frame<Ieee80211BasicBlockAck>(), responseActions);
+service.dispatchTransmittedControlResponse(frame<Ieee80211AckFrame>(), responseActions);
+
+data->setAckPolicy(NO_ACK);
+service.dispatchTransmitted(&packet, data, transmitActions);
+REQUIRE(actions.observedPacket == &packet);
+REQUIRE(actions.observedHeader == data.get());
+data->setAckPolicy(NORMAL_ACK);
+service.dispatchTransmitted(&packet, data, transmitActions);
+data->setAckPolicy(BLOCK_ACK);
+service.dispatchTransmitted(&packet, data, transmitActions);
+data->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
+service.dispatchTransmitted(&packet, data, transmitActions);
+
+service.dispatchTransmittedManagement(frame<Ieee80211AddbaRequest>(), transmitActions);
+REQUIRE(actions.events[actions.events.size() - 2] == "managementAck");
+REQUIRE(actions.events.back() == "transmittedAddbaRequest");
+actions.managementAckNeeded = false;
+service.dispatchTransmittedManagement(frame<Ieee80211AddbaResponse>(), transmitActions);
+service.dispatchTransmittedManagement(frame<Ieee80211Delba>(), transmitActions);
+service.dispatchTransmittedControl(basicBar, transmitActions);
+service.dispatchTransmittedControl(frame<Ieee80211RtsFrame>(), transmitActions);
+data->setAckPolicy(NORMAL_ACK);
+service.dispatchOriginatorFailure(&packet, data, transmitActions);
+REQUIRE(actions.events.back() == "failedAckDataOrMgmt");
+data->setAckPolicy(BLOCK_ACK);
+service.dispatchOriginatorFailure(&packet, data, transmitActions);
+REQUIRE(actions.events.back() == "failedBlockAckData");
+service.dispatchOriginatorFailure(&packet, frame<Ieee80211MgmtHeader>(), transmitActions);
+REQUIRE(actions.events.back() == "failedAckDataOrMgmt");
+service.dispatchOriginatorFailure(&packet, basicBar, transmitActions);
+REQUIRE(actions.events.back() == "failedBar");
+
+service.dispatchOriginatorReceived(&packet, data, &lastPacket, lastHeader, receiveActions);
+service.dispatchOriginatorReceivedManagement(frame<Ieee80211AddbaResponse>(), receiveActions);
+service.dispatchOriginatorReceivedControl(&packet, frame<Ieee80211AckFrame>(), &lastPacket, lastHeader, receiveActions);
+service.dispatchOriginatorReceivedControl(&packet, frame<Ieee80211BasicBlockAck>(), &lastPacket, lastHeader, receiveActions);
+service.dispatchOriginatorReceivedControl(&packet, frame<Ieee80211CtsFrame>(), &lastPacket, lastHeader, receiveActions);
+service.dispatchOriginatorReceivedControl(&packet, frame<Ieee80211RtsFrame>(), &lastPacket, lastHeader, receiveActions);
+service.dispatchOriginatorReceivedControl(&packet, basicBar, &lastPacket, lastHeader, receiveActions);
+
+bool recipientUnsupported = false;
+try { service.dispatchRecipientControl(&packet, frame<Ieee80211CtsFrame>(), recipientActions); }
+catch (cRuntimeError&) { recipientUnsupported = true; }
+REQUIRE(recipientUnsupported);
+bool transmittedUnsupported = false;
+try { service.dispatchTransmittedControl(frame<Ieee80211AckFrame>(), transmitActions); }
+catch (cRuntimeError&) { transmittedUnsupported = true; }
+REQUIRE(transmittedUnsupported);
+bool originatorUnsupported = false;
+try { service.dispatchOriginatorReceivedManagement(beacon, receiveActions); }
+catch (cRuntimeError&) { originatorUnsupported = true; }
+REQUIRE(originatorUnsupported);
+actions.throwOnRts = true;
+bool actionException = false;
+try { service.dispatchRecipientControl(&packet, rts, recipientActions); }
+catch (cRuntimeError&) { actionException = true; }
+REQUIRE(actionException);
+
+REQUIRE(packet.getOwner() == getSimulation()->getContextModule());
+REQUIRE(lastPacket.getOwner() == getSimulation()->getContextModule());
+EV << "HCF frame dispatch decision table passed with " << actions.events.size() << " actions.\n";
+
+%contains: stdout
+HCF frame dispatch decision table passed

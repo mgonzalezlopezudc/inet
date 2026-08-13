@@ -16,6 +16,8 @@ simple HeUlCoordinator
 {
     parameters:
         @class(HeUlCoordinator);
+        string schedulerModule = default("^.ulScheduler");
+        string triggerPolicyModule = default("^.ulTriggerPolicy");
         bool enabled = default(false); // Enables trigger scheduling and buffer-status processing
         double reportMaxAge @unit(s) = default(100ms); // Buffer-status reports older than this are not considered fresh
         int ocwMin = default(7); // Minimum OFDMA random-access contention window

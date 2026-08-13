@@ -12,6 +12,7 @@
 #include <string>
 #include <sstream>
 #include <functional>
+#include <limits>
 #include <ostream>
 #include "inet/common/Units.h"
 #include "inet/linklayer/common/MacAddress.h"
@@ -21,12 +22,9 @@ namespace ieee80211 {
 
 using namespace inet::units::values;
 
-class HeHcf;
-
 class INET_API HeMuMimoCsiManager
 {
   public:
-    friend class HeHcf;
     struct CsiEntry {
         simtime_t acquisitionTime = SIMTIME_ZERO;
         simtime_t expiryTime = SIMTIME_ZERO;
@@ -39,6 +37,7 @@ class INET_API HeMuMimoCsiManager
     double defaultLeakage = 0.1;
     std::map<std::pair<int, int>, double> overridesMap;
     std::map<std::pair<MacAddress, Hz>, CsiEntry> csiTable;
+    std::map<MacAddress, uint64_t> peerGenerations;
     std::function<simtime_t()> timeProvider = []() { return simTime(); };
 
   public:
@@ -87,11 +86,13 @@ class INET_API HeMuMimoCsiManager
             entry.leakages[other] = leakage;
         }
         csiTable[{address, bandwidth}] = entry;
+        advanceGeneration(peerGenerations[address]);
     }
 
     void invalidateCsi(const MacAddress& address, Hz bandwidth)
     {
         csiTable.erase({address, bandwidth});
+        advanceGeneration(peerGenerations[address]);
     }
 
     void invalidatePeer(const MacAddress& address)
@@ -104,6 +105,7 @@ class INET_API HeMuMimoCsiManager
                 ++it;
             }
         }
+        advanceGeneration(peerGenerations[address]);
     }
 
     bool hasFreshCsi(const MacAddress& address, Hz bandwidth) const
@@ -128,6 +130,34 @@ class INET_API HeMuMimoCsiManager
     void clear()
     {
         csiTable.clear();
+        peerGenerations.clear();
+    }
+
+    uint64_t getPeerGeneration(const MacAddress& address) const
+    {
+        auto it = peerGenerations.find(address);
+        return it == peerGenerations.end() ? 0 : it->second;
+    }
+
+    int getEntryCount() const { return csiTable.size(); }
+
+    int getFreshEntryCount() const
+    {
+        int result = 0;
+        for (const auto& entry : csiTable)
+            if (entry.second.valid && timeProvider() <= entry.second.expiryTime)
+                result++;
+        return result;
+    }
+
+  private:
+    static void advanceGeneration(uint64_t& generation)
+    {
+        if (generation == std::numeric_limits<uint64_t>::max())
+            throw cRuntimeError("HE CSI generation exhausted");
+        generation++;
+        if (generation == 0)
+            generation++;
     }
 };
 

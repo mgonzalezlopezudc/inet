@@ -178,6 +178,7 @@ cmdenv-event-banners = false
 *.protectionObserver.requireBsrp = ${scenario} != 1
 *.protectionObserver.requireNfrp = ${scenario} == 1
 *.protectionObserver.expectMultiple = ${scenario} == 2
+**.ap.wlan[*].mac.hcf.edca.edcaf[1].txopProcedure.txopLimit = ${scenario} == 2 ? 3ms : 0ms
 **.wlan[*].mib.heNdpFeedbackReport = ${scenario} == 1
 **.ap.wlan[*].mac.hcf.enableNdpFeedbackReport = ${scenario} == 1
 **.ap.wlan[*].mac.hcf.ulTriggerCheckInterval = ${scenario} == 1 ? 20ms : 1ms
@@ -211,7 +212,7 @@ Applied correlated Multi-STA Block Ack: trigger=[1-9][0-9]*, AID=[1-9][0-9]*, TI
 Transmitting, frame = .*HE-Multi-STA-BlockAck
 
 %contains-regex: stdout
-HE UL response processing: received=0, block-ack records=[1-9][0-9]*
+Starting HE UL Basic Trigger [1-9][0-9]* with 0 RU allocations
 
 %contains-regex: stdout
 Discarding HE-TB response outside active Trigger collection

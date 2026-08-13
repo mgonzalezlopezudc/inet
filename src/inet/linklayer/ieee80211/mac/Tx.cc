@@ -51,6 +51,17 @@ bool Tx::isBusy() const
     return txCallback != nullptr || transmitting || (endIfsTimer != nullptr && endIfsTimer->isScheduled());
 }
 
+class Tx::PreparedTransmissionImpl : public ITx::PreparedTransmission
+{
+  public:
+    std::unique_ptr<Packet> frame;
+    std::unique_ptr<Packet> immediateFrame;
+    Ptr<const Ieee80211MacHeader> header;
+    simtime_t ifs = SIMTIME_ZERO;
+    ITx::ICallback *callback = nullptr;
+    bool ampdu = false;
+};
+
 void Tx::transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, ITx::ICallback *txCallback)
 {
     transmitFrame(packet, header, SIMTIME_ZERO, txCallback);
@@ -59,9 +70,25 @@ void Tx::transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& head
 void Tx::transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, simtime_t ifs, ITx::ICallback *txCallback)
 {
     Enter_Method("transmitFrame(\"%s\")", packet->getName());
-    ASSERT(this->txCallback == nullptr);
-    this->txCallback = txCallback;
-    auto macAddressInd = packet->addTagIfAbsent<MacAddressInd>();
+    auto prepared = prepareTransmission(packet, header, ifs, txCallback);
+    commitTransmission(std::move(prepared));
+}
+
+std::unique_ptr<ITx::PreparedTransmission> Tx::prepareTransmission(
+        Packet *packet, const Ptr<const Ieee80211MacHeader>& header,
+        simtime_t ifs, ITx::ICallback *txCallback)
+{
+    Enter_Method("prepareTransmission(\"%s\")", packet->getName());
+    if (packet == nullptr || header == nullptr || txCallback == nullptr ||
+            ifs < SIMTIME_ZERO || mac == nullptr || rx == nullptr ||
+            endIfsTimer == nullptr || endIfsTimer->isScheduled() || isBusy())
+        throw cRuntimeError("Cannot prepare an invalid or overlapping IEEE 802.11 transmission");
+    auto prepared = std::make_unique<PreparedTransmissionImpl>();
+    prepared->ifs = ifs;
+    prepared->callback = txCallback;
+    prepared->frame.reset(packet->dup());
+    auto workingPacket = prepared->frame.get();
+    auto macAddressInd = workingPacket->addTagIfAbsent<MacAddressInd>();
     if (auto oneAddressHeader = dynamicPtrCast<const Ieee80211OneAddressHeader>(header)) {
         macAddressInd->setDestAddress(oneAddressHeader->getReceiverAddress());
     }
@@ -70,19 +97,19 @@ void Tx::transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& head
     }
     // An HE TB NDP (preamble-only) carries no PSDU: the packet is empty.
     // Skip A-MPDU detection and MAC header/trailer stamping for such frames.
-    bool isNdp = (packet->getDataLength() == B(0));
-    frameIsAmpdu = !isNdp && dynamicPtrCast<const Ieee80211MpduSubframeHeader>(packet->peekAtFront()) != nullptr;
-    if (!frameIsAmpdu && !isNdp) {
-        const auto& updatedHeader = packet->removeAtFront<Ieee80211MacHeader>();
+    bool isNdp = (workingPacket->getDataLength() == B(0));
+    prepared->ampdu = !isNdp && dynamicPtrCast<const Ieee80211MpduSubframeHeader>(workingPacket->peekAtFront()) != nullptr;
+    if (!prepared->ampdu && !isNdp) {
+        const auto& updatedHeader = workingPacket->removeAtFront<Ieee80211MacHeader>();
         if (auto twoAddressHeader = dynamicPtrCast<Ieee80211TwoAddressHeader>(updatedHeader)) {
             twoAddressHeader->setTransmitterAddress(mac->getAddress());
             macAddressInd->setSrcAddress(twoAddressHeader->getTransmitterAddress());
         }
-        packet->insertAtFront(updatedHeader);
-        const auto& updatedTrailer = packet->removeAtBack<Ieee80211MacTrailer>(B(4));
+        workingPacket->insertAtFront(updatedHeader);
+        const auto& updatedTrailer = workingPacket->removeAtBack<Ieee80211MacTrailer>(B(4));
         updatedTrailer->setFcsMode(mac->getFcsMode());
         if (mac->getFcsMode() == FCS_COMPUTED) {
-            const auto& fcsBytes = packet->peekAllAsBytes();
+            const auto& fcsBytes = workingPacket->peekAllAsBytes();
             auto bufferLength = fcsBytes->getChunkLength().get<B>();
             auto buffer = new uint8_t[bufferLength];
             fcsBytes->copyToBuffer(buffer, bufferLength);
@@ -90,19 +117,38 @@ void Tx::transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& head
             updatedTrailer->setFcs(fcs);
             delete[] buffer;
         }
-        packet->insertAtBack(updatedTrailer);
+        workingPacket->insertAtBack(updatedTrailer);
     }
-    this->frame = packet->dup();
     // Store the passed-in header for A-MPDU and NDP frames (both have no peekable MAC header).
-    frameHeader = (frameIsAmpdu || isNdp) ? header : nullptr;
-    ASSERT(!endIfsTimer->isScheduled() && !transmitting); // we are idle
-    if (ifs == 0) {
+    prepared->header = (prepared->ampdu || isNdp) ? header : nullptr;
+    if (ifs == SIMTIME_ZERO)
+        prepared->immediateFrame.reset(prepared->frame->dup());
+    return prepared;
+}
+
+void Tx::commitTransmission(
+        std::unique_ptr<ITx::PreparedTransmission> basePrepared) noexcept
+{
+    // All recoverable validation, packet allocation/copying and stamping was
+    // completed by prepareTransmission(). This final boundary only moves the
+    // prepared state and publishes one scheduler event (or one immediate
+    // send). An OMNeT++ invariant or allocator failure here is process-fatal;
+    // it is not reported as a recoverable protocol-transaction failure.
+    auto prepared = static_cast<PreparedTransmissionImpl *>(basePrepared.get());
+    ASSERT(prepared != nullptr && !isBusy() && !endIfsTimer->isScheduled() &&
+            !transmitting && prepared->frame != nullptr &&
+            prepared->callback != nullptr);
+    txCallback = prepared->callback;
+    frame = prepared->frame.release();
+    frameHeader = prepared->header;
+    frameIsAmpdu = prepared->ampdu;
+    if (prepared->ifs == SIMTIME_ZERO) {
         // do directly what handleMessage() would do
         transmitting = true;
-        mac->sendDownFrame(frame->dup());
+        mac->sendDownFrame(prepared->immediateFrame.release());
     }
     else
-        scheduleAfter(ifs, endIfsTimer);
+        scheduleAfter(prepared->ifs, endIfsTimer);
 }
 
 void Tx::radioTransmissionFinished()

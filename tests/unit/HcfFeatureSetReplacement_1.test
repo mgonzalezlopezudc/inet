@@ -1,0 +1,162 @@
+%description:
+Verify that an initialized Hcf consumes a non-default IHcfFeatureSet solely
+through its contract and executes the selected replacement provider once.
+
+%includes:
+#include "inet/common/InitStages.h"
+#include "inet/linklayer/ieee80211/mac/contract/IHcfExchangeProvider.h"
+#include "inet/linklayer/ieee80211/mac/contract/IHcfFeatureSet.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfExchangePlan.h"
+
+%file: ReplacementHcfFeatureSet.cc
+
+#include "inet/common/InitStages.h"
+#include "inet/linklayer/ieee80211/mac/contract/IHcfExchangeProvider.h"
+#include "inet/linklayer/ieee80211/mac/contract/IHcfFeatureSet.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfExchangePlan.h"
+
+using namespace inet;
+using namespace inet::ieee80211;
+
+namespace HcfFeatureSetReplacement_1 {
+
+class ReplacementTransaction : public IHcfExchangeTransaction
+{
+  private:
+    int *commitCount;
+
+  public:
+    explicit ReplacementTransaction(int *commitCount) : commitCount(commitCount) {}
+    virtual HcfExchangeRejection validate(const HcfExchangePlan&) override { return {}; }
+    virtual void commit(const HcfExchangePlan&) override { (*commitCount)++; }
+    virtual void rollback(const HcfExchangePlan&) noexcept override {}
+    virtual void complete(const HcfExchangePlan&, const HcfExchangeResult&) override {}
+};
+
+class ReplacementProvider : public IHcfExchangeProvider
+{
+  private:
+    HcfExchangeClass exchangeClass;
+    bool eligible;
+
+  public:
+    int prepareCount = 0;
+    int commitCount = 0;
+
+    ReplacementProvider(HcfExchangeClass exchangeClass, bool eligible) :
+        exchangeClass(exchangeClass), eligible(eligible) {}
+    virtual HcfExchangeClass getExchangeClass() const override { return exchangeClass; }
+    virtual std::unique_ptr<PreparedHcfExchange> prepareExchange(
+            const HcfContext&, HcfTransactionIdentity transactionIdentity,
+            HcfExchangeRejection& rejection) override
+    {
+        prepareCount++;
+        if (!eligible) {
+            rejection = {HcfExchangeRejectionCode::NO_ELIGIBLE_PACKET,
+                    exchangeClass, transactionIdentity, "replacement provider disabled"};
+            return nullptr;
+        }
+        return std::make_unique<PreparedHcfExchange>(
+                HcfExchangePlan(exchangeClass, transactionIdentity, {}),
+                std::make_unique<ReplacementTransaction>(&commitCount));
+    }
+};
+
+class ReplacementHcfFeatureSet : public cSimpleModule, public IHcfFeatureSet
+{
+  public:
+    ReplacementProvider singleUser{HcfExchangeClass::SINGLE_USER, true};
+    ReplacementProvider channelRelease{HcfExchangeClass::CHANNEL_RELEASE, false};
+
+    virtual std::vector<HcfExchangeProviderDescriptor> getExchangeProviderDescriptors() override
+    {
+        return {{HcfExchangeClass::SINGLE_USER, &singleUser},
+                {HcfExchangeClass::CHANNEL_RELEASE, &channelRelease}};
+    }
+    virtual void configureExchangeCommitter(const ExchangeCommitter&) override {}
+};
+
+Define_Module(ReplacementHcfFeatureSet);
+
+class ReplacementObserver : public cSimpleModule
+{
+  protected:
+    virtual int numInitStages() const override { return NUM_INIT_STAGES; }
+    virtual void initialize(int stage) override
+    {
+        if (stage != INITSTAGE_LAST)
+            return;
+        auto hcf = check_and_cast<Hcf *>(getParentModule()->getModuleByPath(
+                "ap.wlan[0].mac.hcf"));
+        auto featureSet = check_and_cast<ReplacementHcfFeatureSet *>(
+                hcf->getSubmodule("featureSet"));
+        auto identity = HcfTransactionIdentity(HcfTransactionToken(91),
+                HcfTransactionGeneration(1));
+        auto selected = hcf->getHcfRuntimeForTesting().getExchangeSelector().selectAndCommit(
+                HcfContext(AC_BE, {HcfExchangeClass::SINGLE_USER}), identity);
+        if (selected != HcfExchangeClass::SINGLE_USER ||
+                featureSet->singleUser.prepareCount != 1 ||
+                featureSet->singleUser.commitCount != 1 ||
+                featureSet->channelRelease.prepareCount != 0)
+            throw cRuntimeError("replacement IHcfFeatureSet provider was not selected exactly once");
+        hcf->getHcfRuntimeForTesting().getExchangeSelector().exchangeTerminated(identity,
+                HcfExchangeAbortReason::NONE);
+        EV << "Initialized Hcf replacement provider executed exactly once.\n";
+    }
+};
+
+Define_Module(ReplacementObserver);
+
+} // namespace HcfFeatureSetReplacement_1
+
+%file: TestNetwork.ned
+
+import inet.linklayer.ieee80211.mac.contract.IHcfFeatureSet;
+import inet.node.wireless.AccessPoint;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadioMedium;
+
+simple ReplacementHcfFeatureSet like IHcfFeatureSet
+{
+    parameters:
+        @class(::HcfFeatureSetReplacement_1::ReplacementHcfFeatureSet);
+}
+
+simple ReplacementObserver
+{
+}
+
+network TestNetwork
+{
+    submodules:
+        medium: Ieee80211ScalarRadioMedium;
+        ap: AccessPoint;
+        observer: ReplacementObserver;
+}
+
+%inifile: omnetpp.ini
+
+[General]
+network = TestNetwork
+sim-time-limit = 0s
+record-vector-results = false
+cmdenv-express-mode = false
+cmdenv-event-banners = false
+**.constraintAreaMinX = 0m
+**.constraintAreaMinY = 0m
+**.constraintAreaMinZ = 0m
+**.constraintAreaMaxX = 100m
+**.constraintAreaMaxY = 100m
+**.constraintAreaMaxZ = 0m
+**.mobility.initFromDisplayString = false
+**.opMode = "g(erp)"
+**.wlan[*].mac.qosStation = true
+**.wlan[*].mac.hcf.featureSet.typename = "ReplacementHcfFeatureSet"
+**.wlan[*].mgmt.typename = "Ieee80211MgmtApSimplified"
+**.wlan[*].agent.typename = ""
+**.wlan[*].radio.typename = "Ieee80211ScalarRadio"
+**.wlan[*].radio.radioMediumModule = "medium"
+
+%contains: stdout
+Initialized Hcf replacement provider executed exactly once.

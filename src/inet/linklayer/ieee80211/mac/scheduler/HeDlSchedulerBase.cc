@@ -88,6 +88,29 @@ void HeDlSchedulerBase::invalidatePeer(const MacAddress& peer)
         heRateControl->invalidatePeer(peer);
 }
 
+void HeDlSchedulerBase::commitSchedule(const ScheduleContext& context,
+        const std::vector<RuAllocation>& allocations)
+{
+    if (heRateControl != nullptr)
+        for (const auto& allocation : allocations)
+            if (std::isfinite(allocation.estimatedSnrDb))
+                heRateControl->reportHeRxSnir(allocation.staAddress,
+                        allocation.estimatedSnrDb);
+    std::vector<CandidateInfo> selected;
+    for (const auto& allocation : allocations) {
+        auto candidate = std::find_if(context.candidates.begin(), context.candidates.end(),
+                [&] (const CandidateInfo& value) { return value.staAddress == allocation.staAddress; });
+        if (candidate != context.candidates.end())
+            selected.push_back(*candidate);
+    }
+    bool usedMuMimo = false;
+    for (size_t i = 0; i < allocations.size(); ++i)
+        for (size_t j = i + 1; j < allocations.size(); ++j)
+            usedMuMimo |= allocations[i].ru.toneSize == allocations[j].ru.toneSize &&
+                    allocations[i].ru.toneOffset == allocations[j].ru.toneOffset;
+    recordSchedule(context, selected, allocations, usedMuMimo, "committed DL MU schedule");
+}
+
 int HeDlSchedulerBase::requestRuForBytes(int64_t bytes, Hz channelBandwidth) const
 {
     // Map queue backlog size to standard RU tone sizes (Clause 27.3.2.2).
@@ -178,9 +201,6 @@ int HeDlSchedulerBase::selectMcs(const ScheduleContext& context, const Candidate
         constraints.directionalCapabilities =
                 candidate.negotiatedHeCapabilities.localTxPeerRx;
     }
-    // The caller's estimate may include allocation-specific effects such as MU-MIMO leakage.
-    if (std::isfinite(estimatedSnrDb))
-        heRateControl->reportHeRxSnir(candidate.staAddress, estimatedSnrDb);
     auto selection = heRateControl->selectHeMode(candidate.staAddress, context.channelBandwidth,
             ru.toneSize, HE_MU_DOWNLINK, maxNss, constraints);
     return selection.mode == nullptr ? fallbackMcs : selection.mcs;

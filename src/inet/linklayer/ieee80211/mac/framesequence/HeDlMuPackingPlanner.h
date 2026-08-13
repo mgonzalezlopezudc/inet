@@ -51,6 +51,7 @@ class INET_API HeDlMuPackingPlanner
         simtime_t ppduDurationLimit = SimTime(5.484, SIMTIME_MS);
         std::function<bool(const MacAddress&, Tid)> hasActiveBlockAckAgreement;
         std::function<int(const MacAddress&, Tid)> getAvailableBlockAckSlots;
+        std::function<bool(const MacAddress&, const Packet *)> isReservedPacket;
         std::function<void(Packet *, const MacAddress&, Tid, int, const char *)> warnIneligible;
     };
 

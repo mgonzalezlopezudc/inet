@@ -23,6 +23,9 @@ class IRx;
 class INET_API Tx : public SimpleModule, public ITx
 {
   protected:
+    class PreparedTransmissionImpl;
+
+  protected:
     ITx::ICallback *txCallback = nullptr;
     Ieee80211Mac *mac = nullptr;
     IRx *rx = nullptr;
@@ -42,6 +45,11 @@ class INET_API Tx : public SimpleModule, public ITx
     ~Tx();
 
     virtual bool isBusy() const override;
+    virtual std::unique_ptr<ITx::PreparedTransmission> prepareTransmission(
+            Packet *packet, const Ptr<const Ieee80211MacHeader>& header,
+            simtime_t ifs, ITx::ICallback *txCallback) override;
+    virtual void commitTransmission(
+            std::unique_ptr<ITx::PreparedTransmission> prepared) noexcept override;
     virtual void transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, ITx::ICallback *txCallback) override;
     virtual void transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, simtime_t ifs, ITx::ICallback *txCallback) override;
     virtual void radioTransmissionFinished() override;

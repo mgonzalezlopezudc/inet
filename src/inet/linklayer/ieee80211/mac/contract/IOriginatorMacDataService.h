@@ -29,6 +29,8 @@ class INET_API IOriginatorMacDataService
     virtual ~IOriginatorMacDataService() {}
 
     virtual std::vector<Packet *> *extractFramesToTransmit(queueing::IPacketQueue *pendingQueue) = 0;
+    virtual std::vector<Packet *> *extractExactFrameToTransmit(
+            queueing::IPacketQueue *pendingQueue, Packet *packet) = 0;
     virtual void setBlockAckAgreementHandler(IOriginatorBlockAckAgreementHandler *handler) = 0;
     virtual std::optional<int> getMaxAmpduLengthExponent() const = 0;
     virtual std::unique_ptr<ISequenceNumberAssignment> cloneSequenceNumberState() const = 0;

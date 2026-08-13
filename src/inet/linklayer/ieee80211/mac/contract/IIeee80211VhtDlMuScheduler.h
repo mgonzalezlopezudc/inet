@@ -12,10 +12,9 @@
 
 #include "inet/common/INETDefs.h"
 #include "inet/common/Units.h"
-#include "inet/common/packet/Packet.h"
 #include "inet/linklayer/common/MacAddress.h"
 #include "inet/linklayer/ieee80211/mac/common/Ieee80211Defs.h"
-#include "inet/queueing/contract/IPacketQueue.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfContext.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -35,8 +34,8 @@ class INET_API IIeee80211VhtDlMuScheduler
         int mcs = 0;
         bool ldpc = false;
         simtime_t enqueueTime = SIMTIME_ZERO;
-        queueing::IPacketQueue *sourceQueue = nullptr;
-        Packet *packet = nullptr;
+        HcfQueueToken sourceQueueToken;
+        HcfPacketIdentity packetIdentity;
         B psduLength = B(0);
         double beamformingGainDb = 0;
         double leakagePenaltyDb = 0;
@@ -63,8 +62,32 @@ class INET_API IIeee80211VhtDlMuScheduler
         std::vector<Candidate> candidates;
     };
 
+    /** Candidate indices refer to the immutable provider snapshot. */
+    struct CandidateSnapshot {
+        unsigned int candidateIndex = 0;
+        Candidate candidate;
+
+        explicit CandidateSnapshot(unsigned int candidateIndex, const Candidate& source) :
+            candidateIndex(candidateIndex), candidate(source)
+        {}
+    };
+
+    struct SchedulingContext {
+        Context common;
+        std::vector<CandidateSnapshot> candidates;
+
+        explicit SchedulingContext(const Context& source) : common(source)
+        {
+            common.candidates.clear();
+            for (size_t i = 0; i < source.candidates.size(); ++i)
+                candidates.emplace_back(i, source.candidates[i]);
+        }
+    };
+
     virtual ~IIeee80211VhtDlMuScheduler() {}
-    static bool isEligible(const Context& context, const Candidate& candidate)
+  private:
+    static bool isEligible(const Context& context, const Candidate& candidate,
+            bool requireOwnershipIdentities)
     {
         return context.enabled && context.accessPoint && context.packetLevelRadio &&
                 (context.channelWidth == MHz(20) || context.channelWidth == MHz(40) ||
@@ -77,7 +100,9 @@ class INET_API IIeee80211VhtDlMuScheduler
                 candidate.userPosition < 4 && candidate.numberOfSpatialStreams >= 1 &&
                 candidate.numberOfSpatialStreams <= 4 &&
                 candidate.mcs >= 0 && candidate.mcs <= 9 &&
-                candidate.sourceQueue != nullptr && candidate.packet != nullptr &&
+                (!requireOwnershipIdentities ||
+                 (candidate.sourceQueueToken.isValid() &&
+                  candidate.packetIdentity.isValid())) &&
                 candidate.psduLength > B(0) &&
                 std::isfinite(candidate.beamformingGainDb) && candidate.beamformingGainDb >= 0 &&
                 std::isfinite(candidate.leakagePenaltyDb) && candidate.leakagePenaltyDb >= 0 &&
@@ -89,7 +114,17 @@ class INET_API IIeee80211VhtDlMuScheduler
                 candidate.activeGroup && candidate.activeBlockAckAgreement &&
                 candidate.unsegmented;
     }
-    virtual std::vector<Candidate> schedule(const Context& context) const = 0;
+  public:
+    static bool isEligible(const Context& context, const Candidate& candidate)
+    {
+        return isEligible(context, candidate, true);
+    }
+    static bool isEligible(const SchedulingContext& context,
+            const CandidateSnapshot& candidate)
+    {
+        return isEligible(context.common, candidate.candidate, false);
+    }
+    virtual std::vector<unsigned int> schedule(const SchedulingContext& context) const = 0;
 };
 
 } // namespace ieee80211

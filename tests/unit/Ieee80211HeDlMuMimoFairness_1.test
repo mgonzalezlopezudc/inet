@@ -52,7 +52,6 @@ static IIeee80211HeDlScheduler::ScheduleContext makeMuMimoContext(
     context.numApAntennas = 4;
     context.enableDlMuMimo = true;
     context.localHeCapabilities = ap;
-    context.csiManager = csi;
     for (const auto& address : addresses) {
         IIeee80211HeDlScheduler::CandidateInfo candidate;
         candidate.staAddress = address;
@@ -67,6 +66,12 @@ static IIeee80211HeDlScheduler::ScheduleContext makeMuMimoContext(
         candidate.hasFreshCsi = csi != nullptr && csi->hasFreshCsi(address, context.channelBandwidth);
         context.candidates.push_back(candidate);
     }
+    if (csi != nullptr)
+        for (const auto& station : addresses)
+            for (const auto& other : addresses)
+                if (station != other)
+                    context.csiLeakages[{station, other}] =
+                            csi->getLeakage(station, other, context.channelBandwidth);
     return context;
 }
 
@@ -106,12 +111,14 @@ const std::vector<std::vector<MacAddress>> expectedSelectedSets = {
     {a, d, e, f},
 };
 for (size_t i = 0; i < candidateSets.size(); ++i) {
-    auto allocations = scheduler->schedule(makeMuMimoContext(candidateSets[i], &csi));
+    auto context = makeMuMimoContext(candidateSets[i], &csi);
+    auto allocations = scheduler->schedule(context);
     std::vector<MacAddress> emittedAddresses;
     for (const auto& allocation : allocations)
         emittedAddresses.push_back(allocation.staAddress);
     if (emittedAddresses != expectedSelectedSets[i])
         throw cRuntimeError("MU-MIMO fairness regression emitted the wrong canonical user order at step %zu", i);
+    scheduler->commitSchedule(context, allocations);
 }
 
 EV << "DL MU-MIMO MAC-key round-robin remained stable across changing candidate sets.\n";

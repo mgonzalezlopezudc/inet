@@ -11,6 +11,7 @@ import inet.linklayer.ieee80211.mac.channelaccess.Edca;
 import inet.linklayer.ieee80211.mac.channelaccess.Hcca;
 import inet.linklayer.ieee80211.mac.contract.ICtsPolicy;
 import inet.linklayer.ieee80211.mac.contract.IHcf;
+import inet.linklayer.ieee80211.mac.contract.IHcfFeatureSet;
 import inet.linklayer.ieee80211.mac.contract.IOriginatorBlockAckAgreementPolicy;
 import inet.linklayer.ieee80211.mac.contract.IOriginatorQosAckPolicy;
 import inet.linklayer.ieee80211.mac.contract.IRateControl;
@@ -96,6 +97,10 @@ module Hcf extends Module like IHcf
         @statistic[ampduNumMpdus](title="A-MPDU number of MPDUs"; record=vector; interpolationmode=none);
 
     submodules:
+        featureSet: <default("CommonHcfFeatureSet")> like IHcfFeatureSet {
+            parameters:
+                @display("p=50,100");
+        }
         edca: Edca {
             parameters:
                 mldMacModule = parent.mldMacModule;

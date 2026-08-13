@@ -1,0 +1,403 @@
+%description:
+Verify the common HCF originator service adapter against the real in-progress
+frame and QoS ACK-state owners, including callback, signal, and retirement order.
+
+%includes:
+#include <string>
+#include <vector>
+
+#include "inet/common/Simsignals.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211MgmtExchangeTag_m.h"
+#include "inet/linklayer/ieee80211/mac/channelaccess/Edca.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
+
+%file: TestNetwork.ned
+module TestHcfOriginator
+{
+    parameters:
+        @class(TestHcfOriginator);
+        bool useImplicitBlockAck = default(false);
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        hcf: TestHcfOriginator;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+static Packet *makeData(const char *name, const MacAddress& receiver, int sequenceNumber)
+{
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setType(ST_DATA_WITH_QOS);
+    header->setReceiverAddress(receiver);
+    header->setTransmitterAddress(MacAddress("02:00:00:00:00:01"));
+    header->setTid(5);
+    header->setSequenceNumber(SequenceNumberCyclic(sequenceNumber));
+    header->setAckPolicy(NORMAL_ACK);
+    header->setChunkLength(B(26));
+    return new Packet(name, header);
+}
+
+static Packet *makeManagement(const char *name, const MacAddress& receiver,
+        int sequenceNumber, uint64_t transactionId)
+{
+    auto header = makeShared<Ieee80211ActionFrame>();
+    header->setReceiverAddress(receiver);
+    header->setTransmitterAddress(MacAddress("02:00:00:00:00:01"));
+    header->setSequenceNumber(SequenceNumberCyclic(sequenceNumber));
+    header->setChunkLength(B(24));
+    auto packet = new Packet(name, header);
+    packet->addTag<Ieee80211MgmtExchangeTag>()->setTransactionId(transactionId);
+    return packet;
+}
+
+class RecordingInProgressFrames : public InProgressFrames
+{
+  public:
+    std::vector<std::string> *events = nullptr;
+    void setAckHandler(IAckHandler *newAckHandler) { ackHandler = newAckHandler; }
+
+    virtual void dropFrame(Packet *packet) override {
+        if (events != nullptr)
+            events->push_back(std::string("ipfRetire:") + packet->getName());
+        InProgressFrames::dropFrame(packet);
+    }
+};
+
+class RecordingQosAckHandler : public QosAckHandler
+{
+  public:
+    std::vector<std::string> *events = nullptr;
+
+    virtual void processReceivedAck(const Ptr<const Ieee80211AckFrame>& ack,
+            const Ptr<const Ieee80211DataOrMgmtHeader>& header) override {
+        events->push_back(std::string("ackReceived:") +
+                (header->getRetry() ? "retry" : "fresh"));
+        QosAckHandler::processReceivedAck(ack, header);
+    }
+    virtual std::set<std::pair<MacAddress, std::pair<Tid, SequenceControlField>>>
+            processReceivedBlockAck(const Ptr<const Ieee80211BlockAck>& blockAck) override {
+        events->push_back("blockAckMap");
+        return QosAckHandler::processReceivedBlockAck(blockAck);
+    }
+    virtual void processFailedFrame(const Ptr<const Ieee80211DataOrMgmtHeader>& header) override {
+        events->push_back(std::string("ackFailed:") +
+                (header->getRetry() ? "retry" : "fresh"));
+        QosAckHandler::processFailedFrame(header);
+    }
+    virtual void dropFrame(const Ptr<const Ieee80211DataOrMgmtHeader>& header) override {
+        events->push_back("ackRetire");
+        QosAckHandler::dropFrame(header);
+    }
+    virtual void dropFrames(std::set<std::pair<MacAddress,
+            std::pair<Tid, SequenceControlField>>> frames) override {
+        events->push_back("ackBulkRetire:" + std::to_string(frames.size()));
+        QosAckHandler::dropFrames(frames);
+    }
+};
+
+class RecordingQosRecovery : public QosRecoveryProcedure
+{
+  public:
+    std::vector<std::string> *events = nullptr;
+    int retryCount = 1;
+    bool limitReached = false;
+
+    virtual void ackFrameReceived(Packet *, const Ptr<const Ieee80211DataHeader>&) override { events->push_back("dataRecoveryAck"); }
+    virtual void blockAckFrameReceived() override { events->push_back("blockAckRecovery"); }
+    virtual void dataFrameTransmissionFailed(Packet *packet, const Ptr<const Ieee80211DataHeader>&) override { events->push_back(std::string("dataFailure:") + packet->getName()); }
+    virtual bool isRetryLimitReached(Packet *, const Ptr<const Ieee80211DataHeader>&) override { events->push_back("dataLimitQuery"); return limitReached; }
+    virtual int getRetryCount(Packet *, const Ptr<const Ieee80211DataHeader>&) override { events->push_back("dataRetryCount"); return retryCount; }
+    virtual void retryLimitReached(Packet *, const Ptr<const Ieee80211DataHeader>&) override { events->push_back("dataRetryLimit"); }
+    virtual void rtsFrameTransmissionFailed(const Ptr<const Ieee80211DataHeader>&) override { events->push_back("rtsFailure"); }
+    virtual bool isRtsFrameRetryLimitReached(Packet *, const Ptr<const Ieee80211DataHeader>&) override { events->push_back("rtsLimitQuery"); return limitReached; }
+};
+
+class RecordingNonQosRecovery : public NonQosRecoveryProcedure
+{
+  public:
+    std::vector<std::string> *events = nullptr;
+    int retryCount = 3;
+    bool limitReached = false;
+
+    virtual void ackFrameReceived(Packet *, const Ptr<const Ieee80211DataOrMgmtHeader>& header,
+            StationRetryCounters *) override { events->push_back(std::string("mgmtRecoveryAck:") + (header->getRetry() ? "retry" : "fresh")); }
+    virtual void dataOrMgmtFrameTransmissionFailed(Packet *, const Ptr<const Ieee80211DataOrMgmtHeader>& header,
+            StationRetryCounters *) override { events->push_back(std::string("mgmtFailure:") + (header->getRetry() ? "retry" : "fresh")); }
+    virtual bool isRetryLimitReached(Packet *, const Ptr<const Ieee80211DataOrMgmtHeader>&) override { events->push_back("mgmtLimitQuery"); return limitReached; }
+    virtual int getRetryCount(Packet *, const Ptr<const Ieee80211DataOrMgmtHeader>&) override { events->push_back("mgmtRetryCount"); return retryCount; }
+    virtual void retryLimitReached(Packet *, const Ptr<const Ieee80211DataOrMgmtHeader>&) override { events->push_back("mgmtRetryLimit"); }
+};
+
+class RecordingRateControl : public IRateControl
+{
+  public:
+    std::vector<std::string> *events = nullptr;
+    virtual const physicallayer::IIeee80211Mode *getRate() override { return nullptr; }
+    virtual void frameTransmitted(Packet *packet, int retryCount, bool success, bool giveUp) override {
+        auto header = packet->peekAtFront<Ieee80211DataOrMgmtHeader>();
+        events->push_back(std::string("rate:") + std::to_string(retryCount) +
+                (success ? ":success:" : giveUp ? ":giveup:" : ":failure:") +
+                (header->getRetry() ? "retry" : "fresh"));
+    }
+    virtual void frameReceived(Packet *) override {}
+};
+
+class RecordingMgmtResults : public IIeee80211MgmtExchangeResultHandler
+{
+  public:
+    std::vector<std::string> *events = nullptr;
+    virtual void handleIeee80211MgmtExchangeResult(const Ieee80211MgmtExchangeResult& result) override {
+        events->push_back(std::string("mgmtResult:") +
+                (result.kind == Ieee80211MgmtExchangeResultKind::ACKNOWLEDGED ? "ack" : "limit") +
+                ":" + std::to_string(result.transactionId));
+    }
+};
+
+class TestEdcaf : public Edcaf
+{
+  public:
+    void setup(RecordingInProgressFrames *frames, RecordingQosAckHandler *ack,
+            RecordingQosRecovery *recovery) {
+        inProgressFrames = frames;
+        ackHandler = ack;
+        recoveryProcedure = recovery;
+        stationRetryCounters = new StationRetryCounters();
+        ac = AC_VI;
+    }
+    virtual bool isOwning() override { return true; }
+    virtual void requestChannel(IChannelAccess::ICallback *) override {
+        if (static_cast<RecordingInProgressFrames *>(inProgressFrames)->events != nullptr)
+            static_cast<RecordingInProgressFrames *>(inProgressFrames)->events->push_back("requestChannel");
+    }
+};
+
+class TestEdca : public Edca
+{
+  public:
+    TestEdcaf *edcaf = nullptr;
+    RecordingNonQosRecovery *nonQosRecovery = nullptr;
+    virtual Edcaf *getEdcaf(AccessCategory) const override { return edcaf; }
+    virtual Edcaf *getChannelOwner() override { return edcaf; }
+    virtual NonQosRecoveryProcedure *getMgmtAndNonQoSRecoveryProcedure() const override { return nonQosRecovery; }
+};
+
+class EventSignalListener : public cListener
+{
+  public:
+    std::vector<std::string> *events = nullptr;
+    virtual void receiveSignal(cComponent *, simsignal_t signal, cObject *, cObject *) override {
+        events->push_back(signal == packetDroppedSignal ? "packetDropped" : "linkBroken");
+    }
+};
+
+class TestHcfOriginator : public Hcf
+{
+  protected:
+    virtual void initialize(int) override {}
+
+  public:
+    std::vector<std::string> *events = nullptr;
+    void setup(TestEdca *newEdca, IRateControl *rate,
+            IIeee80211MgmtExchangeResultHandler *mgmtResults) {
+        RuntimeBindings bindings;
+        bindings.edca = newEdca;
+        bindings.dataAndMgmtRateControl = rate;
+        bindings.mgmtExchangeResultHandler = mgmtResults;
+        installRuntimeBindingsForTesting(bindings);
+    }
+    void receiveAck(Edcaf *edcaf, const Ptr<const Ieee80211AckFrame>& ack,
+            Packet *packet, const Ptr<const Ieee80211MacHeader>& header) {
+        processReceivedAck(edcaf, ack, packet, header);
+    }
+    void fail(Packet *packet) { originatorProcessFailedFrame(packet); }
+    void collide(Edcaf *edcaf) { handleEdcafInternalCollision(edcaf); }
+    void failRts(Packet *packet) { originatorProcessRtsProtectionFailed(packet); }
+    void receiveBlockAck(Edcaf *edcaf, const Ptr<const Ieee80211BlockAck>& blockAck) {
+        processReceivedBlockAck(edcaf, blockAck, AC_VI);
+    }
+};
+
+Define_Module(TestHcfOriginator);
+
+%activity:
+auto hcf = check_and_cast<TestHcfOriginator *>(getParentModule()->getSubmodule("hcf"));
+std::vector<std::string> events;
+RecordingInProgressFrames frames;
+RecordingQosAckHandler ackHandler;
+RecordingQosRecovery qosRecovery;
+RecordingNonQosRecovery nonQosRecovery;
+RecordingRateControl rateControl;
+RecordingMgmtResults mgmtResults;
+TestEdcaf edcaf;
+TestEdca edca;
+frames.events = ackHandler.events = qosRecovery.events = nonQosRecovery.events =
+        rateControl.events = mgmtResults.events = hcf->events = &events;
+edcaf.setup(&frames, &ackHandler, &qosRecovery);
+edca.edcaf = &edcaf;
+edca.nonQosRecovery = &nonQosRecovery;
+hcf->setup(&edca, &rateControl, &mgmtResults);
+Hcf::TestActionPort actionPort;
+actionPort.observeOriginatorBlockAckResult = [&] (const Ptr<const Ieee80211BlockAck>&,
+        const std::set<std::pair<MacAddress, std::pair<Tid, SequenceControlField>>>& acked,
+        AccessCategory) {
+    events.push_back("blockAckHook:" + std::to_string(acked.size()));
+};
+hcf->installTestActionPort(std::move(actionPort));
+EventSignalListener signalListener;
+signalListener.events = &events;
+hcf->subscribe(packetDroppedSignal, &signalListener);
+hcf->subscribe(linkBrokenSignal, &signalListener);
+const MacAddress peer("02:00:00:00:00:02");
+
+// The adapter requires the exact in-progress packet pointer, not merely a
+// header with the same sequence identity.
+auto current = makeData("current", peer, 10);
+auto currentHeader = current->peekAtFront<Ieee80211DataHeader>();
+frames.addInProgressFrame(current);
+ackHandler.frameGotInProgress(currentHeader);
+ackHandler.processTransmittedDataOrMgmtFrame(currentHeader);
+auto impostor = makeData("impostor", peer, 10);
+hcf->receiveAck(&edcaf, makeShared<Ieee80211AckFrame>(), impostor,
+        impostor->peekAtFront<Ieee80211MacHeader>());
+REQUIRE(events.empty());
+REQUIRE(frames.getLength() == 1 && frames.getFrames(0) == current);
+REQUIRE(ackHandler.getQoSDataAckStatus(currentHeader) == QosAckHandler::Status::WAITING_FOR_NORMAL_ACK);
+delete impostor;
+
+// Management ACK uses the recovery count even when Retry is clear, then
+// preserves rate, recovery, ACK-state, management-result, and retire order.
+auto managementAck = makeManagement("managementAck", peer, 11, 101);
+auto managementAckHeader = managementAck->peekAtFront<Ieee80211DataOrMgmtHeader>();
+frames.addInProgressFrame(managementAck);
+ackHandler.frameGotInProgress(managementAckHeader);
+ackHandler.processTransmittedDataOrMgmtFrame(managementAckHeader);
+events.clear();
+hcf->receiveAck(&edcaf, makeShared<Ieee80211AckFrame>(), managementAck, managementAckHeader);
+REQUIRE(events == std::vector<std::string>({"mgmtRetryCount", "rate:3:success:fresh",
+        "mgmtRecoveryAck:fresh", "ackReceived:fresh", "mgmtResult:ack:101",
+        "ipfRetire:managementAck", "ackRetire"}));
+
+// Below-limit failure leaves the real in-progress identity retained. Every
+// observable owner sees Retry clear; HCF applies the deferred Retry mutation
+// only after its retry log boundary.
+auto retained = makeManagement("retained", peer, 12, 102);
+auto retainedHeader = retained->peekAtFront<Ieee80211DataOrMgmtHeader>();
+frames.addInProgressFrame(retained);
+ackHandler.frameGotInProgress(retainedHeader);
+ackHandler.processTransmittedDataOrMgmtFrame(retainedHeader);
+nonQosRecovery.limitReached = false;
+events.clear();
+hcf->fail(retained);
+REQUIRE(events == std::vector<std::string>({"mgmtFailure:fresh", "mgmtLimitQuery",
+        "mgmtRetryCount", "rate:3:failure:fresh", "ackFailed:fresh"}));
+REQUIRE(frames.getFrames(frames.getLength() - 1) == retained);
+REQUIRE(retained->peekAtFront<Ieee80211DataOrMgmtHeader>()->getRetry());
+
+// At the retry limit, owner retirement precedes packetDropped, the management
+// result remains between packetDropped and linkBroken, and no Retry mutation occurs.
+auto givenUp = makeManagement("givenUp", peer, 13, 103);
+auto givenUpHeader = givenUp->peekAtFront<Ieee80211DataOrMgmtHeader>();
+frames.addInProgressFrame(givenUp);
+ackHandler.frameGotInProgress(givenUpHeader);
+ackHandler.processTransmittedDataOrMgmtFrame(givenUpHeader);
+nonQosRecovery.limitReached = true;
+events.clear();
+hcf->fail(givenUp);
+REQUIRE(events == std::vector<std::string>({"mgmtFailure:fresh", "mgmtLimitQuery",
+        "mgmtRetryCount", "rate:3:giveup:fresh", "ackFailed:fresh",
+        "mgmtRetryLimit", "ipfRetire:givenUp", "ackRetire", "packetDropped",
+        "mgmtResult:limit:103", "linkBroken"}));
+REQUIRE(!givenUp->peekAtFront<Ieee80211DataOrMgmtHeader>()->getRetry());
+
+// Real QosAckHandler maps one compressed-BA member ACKED and the other
+// covered-UNACKED. HCF retires only the ACKed packet and bulk-erases only its
+// ACK state; the unacknowledged member stays in progress and in retry state.
+auto baAcked = makeData("baAcked", peer, 20);
+auto baUnacked = makeData("baUnacked", peer, 21);
+for (auto packet : {baAcked, baUnacked}) {
+    auto header = packet->removeAtFront<Ieee80211DataHeader>();
+    header->setAckPolicy(BLOCK_ACK);
+    packet->insertAtFront(header);
+}
+auto baAckedHeader = baAcked->peekAtFront<Ieee80211DataHeader>();
+auto baUnackedHeader = baUnacked->peekAtFront<Ieee80211DataHeader>();
+frames.addInProgressFrame(baAcked);
+frames.addInProgressFrame(baUnacked);
+ackHandler.frameGotInProgress(baAckedHeader);
+ackHandler.frameGotInProgress(baUnackedHeader);
+ackHandler.processTransmittedDataOrMgmtFrame(baAckedHeader);
+ackHandler.processTransmittedDataOrMgmtFrame(baUnackedHeader);
+ackHandler.transitionToWaitingForBlockAck(baAckedHeader);
+ackHandler.transitionToWaitingForBlockAck(baUnackedHeader);
+auto blockAck = makeShared<Ieee80211CompressedBlockAck>();
+blockAck->setTransmitterAddress(peer);
+blockAck->setTidInfo(5);
+blockAck->setStartingSequenceNumber(SequenceNumberCyclic(20));
+BitVector bitmap(0, 64);
+bitmap.setBit(0, true);
+blockAck->setBlockAckBitmap(bitmap);
+events.clear();
+hcf->receiveBlockAck(&edcaf, blockAck);
+REQUIRE(events == std::vector<std::string>({"blockAckRecovery", "blockAckMap",
+        "dataFailure:baUnacked", "blockAckHook:1", "ipfRetire:baAcked",
+        "ackBulkRetire:1"}));
+REQUIRE(ackHandler.getQoSDataAckStatus(baAckedHeader) == QosAckHandler::Status::FRAME_NOT_YET_TRANSMITTED);
+REQUIRE(ackHandler.getQoSDataAckStatus(baUnackedHeader) == QosAckHandler::Status::BLOCK_ACK_ARRIVED_UNACKED);
+bool foundUnacked = false;
+for (int i = 0; i < frames.getLength(); i++)
+    foundUnacked |= frames.getFrames(i) == baUnacked;
+REQUIRE(foundUnacked);
+
+// A fresh composed owner set exercises the two non-originator retry policies.
+// Internal collision requests channel again below the limit without rate,
+// ACK-state, or Retry mutation; RTS give-up performs terminal owner and signal
+// actions without introducing ordinary-frame feedback.
+RecordingInProgressFrames retryFrames;
+RecordingQosAckHandler retryAckHandler;
+RecordingQosRecovery retryRecovery;
+TestEdcaf retryEdcaf;
+TestEdca retryEdca;
+retryFrames.events = retryAckHandler.events = retryRecovery.events = &events;
+retryFrames.setAckHandler(&retryAckHandler);
+retryEdcaf.setup(&retryFrames, &retryAckHandler, &retryRecovery);
+retryEdca.edcaf = &retryEdcaf;
+retryEdca.nonQosRecovery = &nonQosRecovery;
+hcf->setup(&retryEdca, &rateControl, &mgmtResults);
+
+auto collision = makeData("collision", peer, 30);
+auto collisionHeader = collision->peekAtFront<Ieee80211DataHeader>();
+retryFrames.addInProgressFrame(collision);
+retryAckHandler.frameGotInProgress(collisionHeader);
+retryRecovery.limitReached = false;
+events.clear();
+hcf->collide(&retryEdcaf);
+REQUIRE(events == std::vector<std::string>({"dataFailure:collision",
+        "dataLimitQuery", "requestChannel"}));
+REQUIRE(retryFrames.getLength() == 1 && retryFrames.getFrames(0) == collision);
+REQUIRE(!collision->peekAtFront<Ieee80211DataHeader>()->getRetry());
+
+retryFrames.removeInProgressFrame(collision);
+delete collision;
+auto rts = makeData("rts", peer, 31);
+auto rtsHeader = rts->peekAtFront<Ieee80211DataHeader>();
+retryFrames.addInProgressFrame(rts);
+retryAckHandler.frameGotInProgress(rtsHeader);
+retryRecovery.limitReached = true;
+events.clear();
+hcf->failRts(rts);
+REQUIRE(events == std::vector<std::string>({"rtsFailure", "rtsLimitQuery",
+        "dataRetryLimit", "ipfRetire:rts", "ackRetire", "packetDropped",
+        "linkBroken"}));
+REQUIRE(retryFrames.getLength() == 0);

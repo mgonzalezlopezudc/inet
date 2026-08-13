@@ -5,6 +5,8 @@
 //
 
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfRuntime.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfObservationSink.h"
 
 #include <algorithm>
 #include <sstream>
@@ -37,6 +39,8 @@
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HePreamblePuncturing.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeTwtGating.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeSoundingCoordinator.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/Ieee80211HeLinkPhyContextAdapter.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfTxRxInterceptor.h"
 
 // HE HCF coordination function.
 //
@@ -71,158 +75,46 @@
 namespace inet {
 namespace ieee80211 {
 
-namespace {
-
-/** The sole projection point from concrete IEEE 802.11 radio/MIB state. */
-class Ieee80211HeLinkPhyContext : public IIeee80211HeLinkPhyContext
-{
-  private:
-    HeHcf *owner;
-    Ieee80211Mac *mac;
-
-  public:
-    Ieee80211HeLinkPhyContext(HeHcf *owner, Ieee80211Mac *mac) :
-        owner(owner),
-        mac(mac)
-    {
-    }
-
-    virtual Ieee80211HeLinkPhySnapshot getSnapshot() const override
-    {
-        auto nic = getContainingNicModule(owner);
-        auto radio = check_and_cast<const physicallayer::IRadio *>(nic->getSubmodule("radio"));
-        auto transmitter = check_and_cast<const physicallayer::Ieee80211Transmitter *>(radio->getTransmitter());
-        auto receiver = check_and_cast<const physicallayer::FlatReceiverBase *>(radio->getReceiver());
-        auto channel = transmitter->getChannel();
-        auto activeMode = transmitter->getMode();
-        if (channel == nullptr || activeMode == nullptr)
-            throw cRuntimeError("HE planning requires an active IEEE 802.11 channel and mode");
-        auto bandwidth = activeMode->getDataMode()->getBandwidth();
-        auto heMode = dynamic_cast<const physicallayer::Ieee80211HeMode *>(activeMode);
-        if (heMode == nullptr) {
-            auto modeSet = transmitter->getModeSet();
-            auto matchingMode = modeSet == nullptr ? nullptr :
-                    modeSet->findHeMode(0, 1, bandwidth, bandwidth > MHz(20));
-            heMode = dynamic_cast<const physicallayer::Ieee80211HeMode *>(matchingMode);
-        }
-        if (heMode == nullptr)
-            throw cRuntimeError("HE planning requires an HE mode matching the active channel bandwidth");
-
-        physicallayer::Ieee80211HeGuardInterval guardInterval;
-        switch (heMode->getDataMode()->getGuardIntervalType()) {
-            case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_SHORT:
-                guardInterval = physicallayer::HE_GI_0_8_US;
-                break;
-            case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_MEDIUM:
-                guardInterval = physicallayer::HE_GI_1_6_US;
-                break;
-            case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG:
-                guardInterval = physicallayer::HE_GI_3_2_US;
-                break;
-            default:
-                throw cRuntimeError("Unsupported active HE guard interval");
-        }
-        auto puncturedSubchannels = resolveHePreamblePuncturing(owner, bandwidth);
-        uint8_t puncturedSubchannelMask = 0;
-        for (size_t i = 0; i < puncturedSubchannels.size(); ++i)
-            if (puncturedSubchannels[i])
-                puncturedSubchannelMask |= 1U << i;
-        auto mib = mac->getMib();
-        if (mib == nullptr)
-            throw cRuntimeError("HE planning requires an initialized IEEE 802.11 MIB");
-        return Ieee80211HeLinkPhySnapshot(channel->getChannelNumber(), channel->getCenterFrequency(),
-                bandwidth, transmitter->getPower(), transmitter->getMaxPower(), receiver->getSensitivity(),
-                owner->par("receiverNoiseFigure").doubleValue(), radio->getAntenna()->getNumAntennas(),
-                guardInterval, physicallayer::getHeDefaultLtfType(guardInterval),
-                mib->heOperation.defaultPeDurationUs, puncturedSubchannels,
-                puncturedSubchannelMask, mib->localHeCapabilities);
-    }
-
-    virtual Ieee80211HePeerLinkSnapshot getPeerSnapshot(const MacAddress& address,
-            simtime_t maximumLinkEstimateAge) const override
-    {
-        auto mib = mac->getMib();
-        if (mib == nullptr)
-            throw cRuntimeError("HE peer projection requires an initialized IEEE 802.11 MIB");
-        auto capabilities = mib->getPeerCapabilitySnapshot(address);
-        auto advertisement = capabilities.getAdvertisedHe();
-        auto negotiated = capabilities.getNegotiatedHe();
-        auto link = mib->getPeerLinkSnapshot(address);
-        auto pathLossDb = !link ? NaN : link->getPathLossDb();
-        auto hasFreshPathLoss = link && link->isValid() &&
-                simTime() - link->getLastUpdate() <= maximumLinkEstimateAge;
-        return Ieee80211HePeerLinkSnapshot(
-                advertisement.has_value(), advertisement.value_or(Ieee80211HeCapabilities()),
-                negotiated.has_value(), negotiated.value_or(Ieee80211NegotiatedHeCapabilities()),
-                pathLossDb, hasFreshPathLoss);
-    }
-};
-
-} // namespace
-
 Define_Module(HeHcf);
 Register_Class(HeTbResponseEvent);
 
-HeHcf::~HeHcf()
+void HeHcfRuntime::initialize()
 {
-    if (peerAssociationListenerRegistered) {
-        mac->getMib()->removePeerAssociationListener(this);
-        peerAssociationListenerRegistered = false;
-    }
-    cancelAndDelete(ulTriggerTimer);
-    cancelAndDelete(triggeredUlResponseTimer);
-    for (auto& entry : triggeredUlExchanges) {
-        for (auto pkt : entry.second.packets) {
-            delete pkt;
-        }
-    }
-}
-
-void HeHcf::initialize(int stage)
-{
-    Hcf::initialize(stage);
-    if (stage == INITSTAGE_LOCAL) {
+        check_and_cast<HeSoundingCoordinator *>(getSubmodule("soundingCoordinator"))->
+                configure(&getSoundingService());
+        getSoundingService().configure(this);
+        getHeDlMuExchangeProvider().configure(this,
+                &getSoundingService());
+        getHeTriggeredUlExchangeService().configure(this);
         dlScheduler = check_and_cast<IIeee80211HeDlScheduler *>(getSubmodule("dlScheduler"));
         ulCoordinator = check_and_cast<HeUlCoordinator *>(getSubmodule("ulCoordinator"));
-        ulTriggerTimer = new cMessage("heUlTriggerTimer");
-        triggeredUlResponseTimer = new cMessage("heTriggeredUlResponseTimer");
-        heTbResponseCommittedSignal = registerSignal("heTbResponseCommitted");
-        heTbResponseTriggerIdSignal = registerSignal("heTbResponseTriggerId");
-        heTbResponseReasonSignal = registerSignal("heTbResponseReason");
-        heTbResponseHadPendingPayloadSignal = registerSignal("heTbResponseHadPendingPayload");
-        heTbResponsePendingBytesSignal = registerSignal("heTbResponsePendingBytes");
-        heTbResponseSelectedBytesSignal = registerSignal("heTbResponseSelectedBytes");
-        heTbResponseReportedBytesSignal = registerSignal("heTbResponseReportedBytes");
-        peerOperatingModeChangedSignal = registerSignal("peerOperatingModeChanged");
-        peerOperatingModeAssociationIdSignal = registerSignal("peerOperatingModeAssociationId");
-        peerOperatingModeRxNssSignal = registerSignal("peerOperatingModeRxNss");
-        peerOperatingModeChannelWidthSignal = registerSignal("peerOperatingModeChannelWidth");
-        peerOperatingModeUlMuDisableSignal = registerSignal("peerOperatingModeUlMuDisable");
-        linkPhyContext = std::make_unique<Ieee80211HeLinkPhyContext>(this, mac);
-        frameSequenceHandler = std::make_unique<HeFrameSequenceHandler>();
+        ulTriggerService.configure(this, this, ulCoordinator, par("ulTriggerCheckInterval"));
+        txRxInterceptor = std::make_unique<HeHcfTxRxInterceptor>(this);
+        hcf->registerTxRxInterceptor(txRxInterceptor.get());
+        hcf->registerFrameDecorator([this] (Packet *packet) {
+            HeFrameDecorationPolicy::Request decoration;
+            decoration.associated = mac->getMib()->getLocalAssociationId() > 0;
+            decoration.sendOperatingModeIndication = par("sendOperatingModeIndication");
+            decoration.operatingModeControlSupported = mac->getMib()->localHeCapabilities.omControl;
+            decoration.operatingModeChannelWidth = par("operatingModeChannelWidth");
+            decoration.operatingModeRxNss = par("operatingModeRxNss");
+            decoration.operatingModeUlMuDisable = par("operatingModeUlMuDisable");
+            frameDecorationPolicy.decorate(packet, decoration,
+                    [this] (Tid tid) { return edca->mapTidToAc(tid); },
+                    [this] (const MacAddress& peer, Tid tid, AccessCategory accessCategory) {
+                        return getBufferedTrafficServiceBytes(edca->getEdcaf(accessCategory), peer, tid);
+                    });
+        });
+        hcf->replaceFrameSequenceHandler(std::make_unique<HeFrameSequenceHandler>());
 
         enableDlMuMimo = par("enableDlMuMimo").boolValue();
-        csiValidityDuration = par("csiValidityDuration");
-        defaultCsiLeakage = par("defaultCsiLeakage");
-        csiLeakageOverrides = par("csiLeakageOverrides").stdstringValue();
-        csiManager.configure(csiValidityDuration, defaultCsiLeakage, csiLeakageOverrides);
+}
 
-        WATCH(pendingUlTrigger);
-        WATCH(ulTriggerAccessRequested);
-        WATCH(forceNextSingleUser[0]);
-        WATCH(forceNextSingleUser[1]);
-        WATCH(forceNextSingleUser[2]);
-        WATCH(forceNextSingleUser[3]);
-        WATCH_MAP(triggeredUlExchanges);
-        WATCH_EXPR("pendingUlTriggerName", getPendingUlTriggerName());
-        WATCH_EXPR("stationQueueBanks", getStationQueueBankCount());
-        WATCH_EXPR("triggeredUlExchangeCount", triggeredUlExchanges.size());
-        WATCH_EXPR("heHcfSummary", getHeHcfSummary());
-    }
-    else if (stage == INITSTAGE_LINK_LAYER && mac->isApInHeFamily()) {
-        queueBankManager = std::make_unique<StationQueueBankManager>(getSubmodule("queueBanks"));
-        mac->getMib()->addPeerAssociationListener(this);
-        peerAssociationListenerRegistered = true;
+void HeHcfRuntime::initializeLinkLayer()
+{
+    modeSet = hcf->modeSet;
+    if (mac->isApInHeFamily()) {
+        start(getSubmodule("queueBanks"));
         for (const auto& station : mac->getMib()->getPeerAssociationSnapshots()) {
             if (station.hasMemberStatus() && station.getMemberStatus() == Ieee80211Mib::ASSOCIATED) {
                 if (station.getAssociationEpoch() == 0)
@@ -231,77 +123,23 @@ void HeHcf::initialize(int stage)
                     ensureAssociatedQueueBank(station.getAddress(), station.getAssociationEpoch());
             }
         }
-        WATCH_EXPR("csiTableSummary", getCsiTableSummary());
-        if (ulCoordinator->isEnabled())
-            scheduleAfter(par("ulTriggerCheckInterval"), ulTriggerTimer);
+        ulTriggerService.start(hcf);
     }
 }
 
-void HeHcf::peerAssociationChanged(
-        const Ieee80211AssociationState::PeerTransition& transition)
-{
-    const auto& oldSnapshot = transition.getOldSnapshot();
-    const auto& newSnapshot = transition.getNewSnapshot();
-    auto peer = newSnapshot.getAddress();
-    if (oldSnapshot.getAssociationEpoch() != 0) {
-        invalidatePeerDerivedState(peer);
-        queueBankManager->retireQueueBank(peer, oldSnapshot.getAssociationEpoch());
-    }
-    if (newSnapshot.hasMemberStatus() && newSnapshot.getMemberStatus() == Ieee80211Mib::ASSOCIATED)
-        ensureAssociatedQueueBank(peer, newSnapshot.getAssociationEpoch());
-    finalizeRetiredQueueBanksIfSafe();
-}
-
-void HeHcf::emitHeTbResponse(HeTbResponseEvent& event)
+void HeHcfRuntime::emitHeTbResponse(HeTbResponseEvent& event)
 {
     ASSERT(event.triggerId != 0);
-    emit(heTbResponseCommittedSignal, &event);
-    emit(heTbResponseTriggerIdSignal, static_cast<unsigned long>(event.triggerId));
-    emit(heTbResponseReasonSignal, static_cast<long>(event.reason));
-    emit(heTbResponseHadPendingPayloadSignal, event.hadPendingPayload ? 1L : 0L);
-    emit(heTbResponsePendingBytesSignal, event.pendingBytes);
-    emit(heTbResponseSelectedBytesSignal, event.selectedBytes);
-    emit(heTbResponseReportedBytesSignal, event.reportedBytes);
+    HcfObservationSink::heTbResponseCommitted(hcf, &event);
 }
 
-void HeHcf::updatePeerOperatingMode(const MacAddress& peer,
+void HeHcfRuntime::updatePeerOperatingMode(const MacAddress& peer,
         const Ieee80211HeOperatingMode& mode)
 {
-    auto existing = peerOperatingModes.find(peer);
-    if (existing != peerOperatingModes.end() &&
-            existing->second.channelWidth == mode.channelWidth &&
-            existing->second.rxNss == mode.rxNss &&
-            existing->second.ulMuDisable == mode.ulMuDisable)
-        return;
-
-    HePeerOperatingModeChangedEvent event;
-    event.peerAddress = peer;
-    event.associationId = getAssociationId(peer);
-    event.hadOldMode = existing != peerOperatingModes.end();
-    if (event.hadOldMode)
-        event.oldMode = existing->second;
-    event.newMode = mode;
-    peerOperatingModes[peer] = mode;
-    emit(peerOperatingModeChangedSignal, &event);
-    emit(peerOperatingModeAssociationIdSignal,
-            static_cast<unsigned long>(event.associationId));
-    emit(peerOperatingModeRxNssSignal,
-            static_cast<unsigned long>(event.newMode.rxNss));
-    emit(peerOperatingModeChannelWidthSignal,
-            static_cast<unsigned long>(event.newMode.channelWidth));
-    emit(peerOperatingModeUlMuDisableSignal,
-            event.newMode.ulMuDisable ? 1L : 0L);
+    getHePeerStateService().updateOperatingMode(peer, mode);
 }
 
-const IIeee80211HeLinkPhyContext& HeHcf::getLinkPhyContext() const
-{
-    if (linkPhyContext == nullptr)
-        throw cRuntimeError("HE link/PHY context is not initialized");
-    return *linkPhyContext;
-}
-
-
-AccessCategory HeHcf::mapTidToAccessCategory(Tid tid) const
+AccessCategory HeHcfRuntime::mapTidToAccessCategory(Tid tid) const
 {
     switch (tid) {
         case 1:
@@ -317,286 +155,156 @@ AccessCategory HeHcf::mapTidToAccessCategory(Tid tid) const
 }
 
 
-const char *HeHcf::getPendingUlTriggerName() const
+const char *HeHcfRuntime::getPendingUlTriggerName() const
 {
-    switch (pendingUlTrigger) {
-        case IIeee80211HeUlTriggerPolicy::NO_TRIGGER: return "NO_TRIGGER";
-        case IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER: return "BASIC_TRIGGER";
-        case IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER: return "BSRP_TRIGGER";
-        case IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER: return "NFRP_TRIGGER";
-        default: return "UNKNOWN";
-    }
+    return ulTriggerService.getPendingTriggerName();
 }
 
-int HeHcf::getStationQueueBankCount() const
+int HeHcfRuntime::getStationQueueBankCount() const
 {
-    return queueBankManager == nullptr ? 0 : queueBankManager->getQueueBanks().size();
+    return getHeQueueService().getStationQueueBankCount();
 }
 
-std::string HeHcf::getCsiTableSummary() const
+std::string HeHcfRuntime::getCsiTableSummary() const
 {
-    int validEntries = 0;
-    for (const auto& entry : csiManager.csiTable)
-        if (entry.second.valid && simTime() <= entry.second.expiryTime)
-            validEntries++;
-    std::stringstream stream;
-    stream << "entries=" << csiManager.csiTable.size()
-           << ", valid=" << validEntries;
-    return stream.str();
+    return getHePeerStateService().getCsiTableSummary();
 }
 
-std::string HeHcf::getHeHcfSummary() const
+std::string HeHcfRuntime::getHeHcfSummary() const
 {
     std::stringstream stream;
     stream << "DL scheduler=" << (dlScheduler == nullptr ? "none" : "configured")
            << ", UL coordinator=" << (ulCoordinator != nullptr && ulCoordinator->isEnabled() ? "enabled" : "disabled")
            << ", pendingTrigger=" << getPendingUlTriggerName()
            << ", queueBanks=" << getStationQueueBankCount()
-           << ", triggeredUL=" << triggeredUlExchanges.size()
+           << ", triggeredUL=" << getHeTriggeredUlExchangeService().getExchangeCount()
            << ", dlMuMimo=" << (enableDlMuMimo ? "enabled" : "disabled")
-           << ", csiEntries=" << csiManager.csiTable.size();
+           << ", csiEntries=" << getHePeerStateService().getCsiManager().getEntryCount();
     return stream.str();
 }
 
-void HeHcf::finish()
+void HeHcfRuntime::finish()
 {
-    if (peerAssociationListenerRegistered) {
-        mac->getMib()->removePeerAssociationListener(this);
-        peerAssociationListenerRegistered = false;
-    }
-    if (queueBankManager != nullptr) {
-        for (const auto& pair : queueBankManager->getQueueBanks()) {
-            pair.second->clear();
-        }
-    }
-    cSimpleModule::finish();
+    shutdown();
 }
 
-void HeHcf::handleMessage(cMessage *msg)
+bool HeHcfRuntime::handleMessage(cMessage *msg)
 {
     finalizeRetiredQueueBanksIfSafe();
-    if (msg == triggeredUlResponseTimer) {
-        handleTriggeredUlResponseTimeout();
-        return;
+    if (msg == getHeTriggeredUlExchangeService().getResponseTimer()) {
+        getHeTriggeredUlExchangeService().handleTimeout();
+        return true;
     }
-    if (msg != ulTriggerTimer) {
-        Hcf::handleMessage(msg);
-        return;
-    }
-    scheduleAfter(par("ulTriggerCheckInterval"), ulTriggerTimer);
-    // 26.5.2.2 permits only an HE AP to solicit UL MU HE TB PPDUs.  The AP
-    // still has to obtain the medium through EDCA/HCF (10.23), so this timer
-    // only requests channel access; the Trigger is transmitted after EDCAF wins.
-    if (!mac->isApInHeFamily() || !ulCoordinator->isEnabled() ||
-            frameSequenceHandler->isSequenceRunning() || edca->getChannelOwner() != nullptr ||
-            tx->isBusy() || ulTriggerAccessRequested)
-        return;
-    auto triggerType = par("enableNdpFeedbackReport").boolValue() ?
-            IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER : ulCoordinator->selectTrigger(mac->getMib());
-    if (triggerType == IIeee80211HeUlTriggerPolicy::NO_TRIGGER)
-        return;
+    return ulTriggerService.handleTimer(msg, hcf);
+}
+
+bool HeHcfRuntime::canRequestHeUlTrigger() const
+{
+    return mac->isApInHeFamily() && exchangeEngine->canRequestChannelAccess() &&
+            !isFrameSequenceRunning() &&
+            edca->getChannelOwner() == nullptr && !tx->isBusy();
+}
+
+bool HeHcfRuntime::isNdpFeedbackReportEnabled() const
+{
+    return par("enableNdpFeedbackReport").boolValue();
+}
+
+const Ieee80211Mib *HeHcfRuntime::getHeUlMib() const
+{
+    return mac->getMib();
+}
+
+void HeHcfRuntime::requestHeUlChannelAccess(AccessCategory accessCategory)
+{
     EV_INFO << "Requesting channel access for HE UL "
-             << (triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ? "BSRP" :
-                     triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER ? "NFRP" : "Basic")
-             << " Trigger\n";
-    pendingUlTrigger = triggerType;
-    ulTriggerAccessRequested = true;
-    auto ac = triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER || triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER ?
-            AC_BE : ulCoordinator->getPreferredAccessCategory();
-    edca->requestChannelAccess(ac, this);
+            << getPendingUlTriggerName() << " Trigger\n";
+    exchangeEngine->channelAccessRequested();
+    edca->requestChannelAccess(accessCategory, hcf);
 }
 
-queueing::IPacketQueue *HeHcf::getPerStaQueue(const MacAddress& staAddr, AccessCategory ac)
+uint16_t HeHcfRuntime::getHeUlAssociationId(const MacAddress& address) const
+{
+    return getAssociationId(address);
+}
+
+uint32_t HeHcfRuntime::allocateHeUlTriggerId()
+{
+    return ulTriggerService.allocateTriggerId();
+}
+
+void HeHcfRuntime::heUlMuPlanCommitted(const HeUlMuPlan& plan, uint32_t triggerId)
+{
+    ulTriggerService.planCommitted(plan, triggerId);
+}
+
+const Ptr<Ieee80211CompressedBlockAck> HeHcfRuntime::processHeUlTriggeredBlockAckReq(
+        Packet *packet, const Ptr<const Ieee80211CompressedBlockAckReq>& blockAckReq,
+        uint16_t associationId)
+{
+    return processTriggeredUlBlockAckReq(packet, blockAckReq, associationId);
+}
+
+void HeHcfRuntime::processHeUlTriggeredFrame(Packet *packet,
+        const Ptr<const Ieee80211DataHeader>& header, uint16_t associationId)
+{
+    processTriggeredUlFrame(packet, header, associationId);
+}
+
+queueing::IPacketQueue *HeHcfRuntime::getPerStaQueue(const MacAddress& staAddr, AccessCategory ac)
 {
     finalizeRetiredQueueBanksIfSafe();
-    if (queueBankManager != nullptr) {
-        auto snapshot = mac->getMib()->getPeerAssociationSnapshot(staAddr);
-        auto staBank = snapshot.hasMemberStatus() && snapshot.getMemberStatus() == Ieee80211Mib::ASSOCIATED ?
-                ensureAssociatedQueueBank(staAddr, snapshot.getAssociationEpoch()) : nullptr;
-        if (staBank != nullptr) {
-            auto staQueue = staBank->getQueue((StationQueueBank::AccessCategory)ac);
-            if (staQueue != nullptr) {
-                EV_DEBUG << "Using per-STA queue for STA " << staAddr << " AC " << ac << "\n";
-                return staQueue;
-            }
-            EV_WARN << "Could not get per-STA queue for STA " << staAddr << " AC " << ac << ", using shared queue\n";
-        }
-        else
-            EV_DEBUG << "Queue bank not found for STA " << staAddr << ", using shared queue\n";
+    auto peer = getHePeerStateService().getPeerSnapshot(staAddr);
+    if (peer.getAssociationEpoch() != 0) {
+        auto queue = getHeQueueService().getPerStaQueue(staAddr,
+                peer.getAssociationEpoch(), ac);
+        if (queue != nullptr)
+            return queue;
     }
-    else
-        EV_DEBUG << "Queue bank manager not available, using shared queue\n";
-    return Hcf::getPerStaQueue(staAddr, ac);
+    return edca->getEdcaf(ac)->getPendingQueue();
 }
 
-StationQueueBank *HeHcf::ensureAssociatedQueueBank(const MacAddress& peer, uint64_t associationEpoch)
+StationQueueBank *HeHcfRuntime::ensureAssociatedQueueBank(const MacAddress& peer, uint64_t associationEpoch)
 {
-    if (queueBankManager == nullptr)
+    auto snapshot = getHePeerStateService().getPeerSnapshot(peer);
+    if (snapshot.getAssociationEpoch() != associationEpoch)
         return nullptr;
-    auto snapshot = mac->getMib()->getPeerAssociationSnapshot(peer);
-    if (!snapshot.hasMemberStatus() || snapshot.getMemberStatus() != Ieee80211Mib::ASSOCIATED ||
-            snapshot.getAssociationEpoch() != associationEpoch)
-        return nullptr;
-    return queueBankManager->ensureQueueBank(peer, associationEpoch);
+    return getHeQueueService().ensureAssociatedQueueBank(peer, associationEpoch);
 }
 
-void HeHcf::finalizeRetiredQueueBanksIfSafe()
+void HeHcfRuntime::finalizeRetiredQueueBanksIfSafe()
 {
-    if (queueBankManager != nullptr &&
-            (frameSequenceHandler == nullptr || !frameSequenceHandler->isSequenceRunning()))
-        queueBankManager->finalizeRetiredQueueBanks();
+    getHeQueueService().finalizeRetiredQueueBanksIfSafe(isFrameSequenceRunning());
 }
 
-int HeHcf::retireQueuedPacketsForPeer(const MacAddress& peer)
+void HeHcfRuntime::retireDeferredPackets()
 {
-    std::vector<Packet *> packets;
-    if (queueBankManager != nullptr) {
-        auto bank = queueBankManager->getQueueBank(peer);
-        if (bank != nullptr) {
-            for (int ac = StationQueueBank::AC_BK; ac <= StationQueueBank::AC_VO; ++ac) {
-                auto queue = bank->getQueue(static_cast<StationQueueBank::AccessCategory>(ac));
-                for (int index = 0; index < queue->getNumPackets(); ++index)
-                    packets.push_back(queue->getPacket(index));
-            }
-        }
-    }
-    if (edca != nullptr) {
-        for (int ac = AC_BK; ac <= AC_VO; ++ac) {
-            auto queue = edca->getEdcaf(static_cast<AccessCategory>(ac))->getPendingQueue();
-            for (int index = 0; index < queue->getNumPackets(); ++index) {
-                auto packet = queue->getPacket(index);
-                auto header = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(
-                        packet->peekAtFront<Ieee80211MacHeader>());
-                if (header != nullptr && header->getReceiverAddress() == peer)
-                    packets.push_back(packet);
-            }
-        }
-    }
-    int retired = 0;
-    for (auto packet : packets)
-        if (retireQueuedPacket(packet, {peer, queueBankManager == nullptr ? 0 : queueBankManager->getAssociationEpoch(peer)}))
-            retired++;
-    return retired;
+    getHePeerStateService().releaseDeferredRetirements();
 }
 
-int HeHcf::retireInProgressPacketsForPeer(const MacAddress& peer)
+void HeHcfRuntime::frameSequenceFinished()
 {
-    int retired = 0;
-    for (int ac = AC_BK; ac <= AC_VO; ++ac)
-        retired += edca->getEdcaf(static_cast<AccessCategory>(ac))->
-                getInProgressFrames()->retireFramesForPeer(peer);
-    return retired;
+    frameSequenceCompleted();
 }
 
-bool HeHcf::retireQueuedPacket(Packet *packet,
-        const StationQueueBankManager::AssociationKey& association)
+void HeHcfRuntime::frameSequenceCompleted()
 {
-    if (queueBankManager != nullptr) {
-        auto bank = queueBankManager->getAssociationEpoch(association.first) == association.second ?
-                queueBankManager->getQueueBank(association.first) : nullptr;
-        if (bank != nullptr) {
-            for (int ac = StationQueueBank::AC_BK; ac <= StationQueueBank::AC_VO; ++ac) {
-                auto queue = bank->getQueue(static_cast<StationQueueBank::AccessCategory>(ac));
-                for (int index = 0; index < queue->getNumPackets(); ++index) {
-                    if (queue->getPacket(index) == packet) {
-                        if (edca != nullptr) {
-                            auto header = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(
-                                    packet->peekAtFront<Ieee80211MacHeader>());
-                            if (header != nullptr)
-                                edca->getEdcaf(static_cast<AccessCategory>(ac))->
-                                        getAckHandler()->retireFrame(header);
-                        }
-                        queue->removePacket(packet);
-                        packetsPendingRetirement.erase(packet);
-                        delete packet;
-                        return true;
-                    }
-                }
-            }
-        }
-    }
-    if (edca != nullptr) {
-        for (int ac = AC_BK; ac <= AC_VO; ++ac) {
-            auto queue = edca->getEdcaf(static_cast<AccessCategory>(ac))->getPendingQueue();
-            for (int index = 0; index < queue->getNumPackets(); ++index) {
-                if (queue->getPacket(index) == packet) {
-                    auto header = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(
-                            packet->peekAtFront<Ieee80211MacHeader>());
-                    if (header != nullptr)
-                        edca->getEdcaf(static_cast<AccessCategory>(ac))->
-                                getAckHandler()->retireFrame(header);
-                    queue->removePacket(packet);
-                    packetsPendingRetirement.erase(packet);
-                    delete packet;
-                    return true;
-                }
-            }
-        }
-    }
-    return false;
-}
-
-bool HeHcf::retireInProgressPacket(Packet *packet)
-{
-    if (edca == nullptr)
-        return false;
-    for (int ac = AC_BK; ac <= AC_VO; ++ac)
-        if (edca->getEdcaf(static_cast<AccessCategory>(ac))->
-                getInProgressFrames()->retireFrame(packet))
-            return true;
-    return false;
-}
-
-void HeHcf::retireDeferredPackets()
-{
-    while (!packetsPendingRetirement.empty()) {
-        auto entry = *packetsPendingRetirement.begin();
-        packetsPendingRetirement.erase(packetsPendingRetirement.begin());
-        auto packet = entry.first;
-        if (!retireQueuedPacket(packet, entry.second))
-            retireInProgressPacket(packet);
-    }
-}
-
-void HeHcf::frameSequenceFinished()
-{
+    heUlMuExchangeActive = false;
     retireDeferredPackets();
-    Hcf::frameSequenceFinished();
 }
 
-StationQueueBank *HeHcf::getStationQueueBank(const MacAddress& staAddr) const
+StationQueueBank *HeHcfRuntime::getStationQueueBank(const MacAddress& staAddr) const
 {
-    return queueBankManager == nullptr ? nullptr : queueBankManager->getQueueBank(staAddr);
+    return getHeQueueService().getStationQueueBank(staAddr);
 }
 
-void HeHcf::invalidatePeerDerivedState(const MacAddress& peer)
+void HeHcfRuntime::invalidatePeerDerivedState(const MacAddress& peer)
 {
-    Hcf::invalidatePeerDerivedState(peer);
-    retireQueuedPacketsForPeer(peer);
-    if (frameSequenceHandler != nullptr && frameSequenceHandler->isSequenceRunning()) {
-        for (int ac = AC_BK; ac <= AC_VO; ++ac) {
-            auto inProgress = edca->getEdcaf(static_cast<AccessCategory>(ac))->getInProgressFrames();
-            for (int index = 0; index < inProgress->getLength(); ++index) {
-                auto packet = inProgress->getFrames(index);
-                auto header = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(
-                        packet->peekAtFront<Ieee80211MacHeader>());
-                if (header != nullptr && header->getReceiverAddress() == peer)
-                    packetsPendingRetirement[packet] = {peer,
-                            queueBankManager == nullptr ? 0 : queueBankManager->getAssociationEpoch(peer)};
-            }
-        }
-    }
-    else if (edca != nullptr)
-        retireInProgressPacketsForPeer(peer);
-    if (dlScheduler != nullptr)
-        dlScheduler->invalidatePeer(peer);
-    if (ulCoordinator != nullptr)
-        ulCoordinator->invalidatePeer(peer);
-    peerOperatingModes.erase(peer);
-    csiManager.invalidatePeer(peer);
+    getHePeerStateService().invalidatePeer(peer,
+            HePeerStateService::InvalidationReason::ASSOCIATION_CHANGED);
 }
 
-bool HeHcf::releaseChannelIfNoFallbackFrame(AccessCategory ac)
+bool HeHcfRuntime::releaseChannelIfNoFallbackFrame(AccessCategory ac)
 {
     auto fallbackEdcaf = edca->getEdcaf(ac);
     if (fallbackEdcaf->getPendingQueue()->isEmpty() &&
@@ -606,33 +314,70 @@ bool HeHcf::releaseChannelIfNoFallbackFrame(AccessCategory ac)
         return false;
 
     EV_WARN << "Channel granted without an eligible SU, DL-MU, or UL trigger frame; releasing channel.\n";
-    fallbackEdcaf->releaseChannel(this);
+    exchangeEngine->preparationCompletedWithoutSequence(makeExchangeActions());
+    fallbackEdcaf->releaseChannel(hcf);
     fallbackEdcaf->getTxopProcedure()->endTxop();
     return true;
 }
 
-void HeHcf::startFrameSequence(AccessCategory ac)
+void HeHcfRuntime::startFrameSequence(AccessCategory ac)
 {
-    finalizeRetiredQueueBanksIfSafe();
-    const bool forceSingleUser = forceNextSingleUser[ac];
-    if (forceSingleUser) {
-        EV_INFO << "Start FS: forced single-user TXOP for AC " << ac << "\n";
-        forceNextSingleUser[ac] = false;
-    }
-
-    ASSERT(modeSet != nullptr);
-    bool isHeMode = modeSet->hasPhyFamily(physicallayer::Ieee80211PhyFamily::HE);
-    if (!isHeMode)
-        EV_INFO << "Non-HE mode, falling back to SU\n";
-    HeTxopCoordinatorService::Actions actions;
-    actions.tryStartUlMu = [this, ac] () { return tryStartUlMuFrameSequence(ac); };
-    actions.tryStartDlMu = [this, ac] () { return tryStartDlMuFrameSequence(ac); };
-    actions.releaseChannelIfNoSu = [this, ac] () { return releaseChannelIfNoFallbackFrame(ac); };
-    actions.startSu = [this, ac] () { Hcf::startFrameSequence(ac); };
-    txopCoordinator.start(isHeMode, forceSingleUser, actions);
+    auto context = buildGrantSelectionContext(ac, hasFrameToTransmit(ac));
+    auto snapshot = context.findProviderSnapshot<
+            HeTxopCoordinatorService::GrantSnapshot>();
+    if (snapshot == nullptr)
+        throw cRuntimeError("HE legacy grant wrapper did not capture an exact snapshot");
+    commitSelectedExchange(snapshot->exchangeClass, context);
 }
 
-void HeHcf::handleInternalCollision(std::vector<Edcaf *> internallyCollidedEdcafs)
+HcfContext HeHcfRuntime::buildGrantSelectionContext(AccessCategory ac,
+        bool hasEligibleFrame)
+{
+    finalizeRetiredQueueBanksIfSafe();
+    ASSERT(modeSet != nullptr);
+    const bool heMode = modeSet->hasPhyFamily(
+            physicallayer::Ieee80211PhyFamily::HE);
+    std::optional<HeUlPreparationSnapshot> ulSnapshot;
+    HeDlMuExchangeProvider::StartupParameters parameters;
+    parameters.maxAmpduMpduCount = par("maxAmpduMpduCount");
+    parameters.maxHeMuPsduLength = par("maxHeMuPsduLength");
+    parameters.maxHeMuPpduDuration = par("maxHeMuPpduDuration");
+    return this->buildGrantSelectionContext(ac, heMode,
+            hasEligibleFrame, parameters,
+            [this, ac, &ulSnapshot] {
+                if (!mac->isApInHeFamily())
+                    return std::optional<HeUlTriggerService::PreparedStart>();
+                if (!ulSnapshot)
+                    ulSnapshot.emplace(captureHeUlPreparationSnapshot(ac));
+                return ulTriggerService.prepareStart(ac, *ulSnapshot);
+            },
+            [this, ac] { return captureHeDlMuPreparationSnapshot(ac); },
+            [this, ac] { return hcf->hasCommonFrameToTransmit(ac); });
+}
+
+void HeHcfRuntime::commitSelectedExchange(HcfExchangeClass exchangeClass,
+        const HcfContext& context)
+{
+    if (!this->commitSelectedExchange(exchangeClass, context,
+            [this] (AccessCategory ac) { hcf->startSingleUserExchange(ac); },
+            [this] (const auto& start) { return ulTriggerService.commitStart(start); },
+            [this] (const auto& start) { ulTriggerService.rollbackStart(start); },
+            [this] (AccessCategory ac) { return startHeDlMuSingleUserIfEligible(ac); }))
+    {
+        auto selectedAccessCategory = context.getSelectionAccessCategory();
+        if (!selectedAccessCategory.has_value())
+            throw cRuntimeError("HCF provider commit lacks an access category projection");
+        if (exchangeClass != HcfExchangeClass::CHANNEL_RELEASE)
+            throw cRuntimeError("HE runtime cannot commit exchange class %d",
+                    static_cast<int>(exchangeClass));
+        auto edcaf = edca->getEdcaf(*selectedAccessCategory);
+        exchangeEngine->preparationCompletedWithoutSequence(makeExchangeActions());
+        edcaf->releaseChannel(hcf);
+        edcaf->getTxopProcedure()->endTxop();
+    }
+}
+
+void HeHcfRuntime::handleInternalCollision(std::vector<Edcaf *> internallyCollidedEdcafs)
 {
     std::vector<Edcaf *> collidedEdcafsWithFrame;
     for (auto edcaf : internallyCollidedEdcafs) {
@@ -644,43 +389,61 @@ void HeHcf::handleInternalCollision(std::vector<Edcaf *> internallyCollidedEdcaf
         if (edcaf->getInProgressFrames()->getFrameToTransmit() != nullptr)
             collidedEdcafsWithFrame.push_back(edcaf);
     }
-    if (!collidedEdcafsWithFrame.empty())
-        Hcf::handleInternalCollision(collidedEdcafsWithFrame);
+    for (auto edcaf : collidedEdcafsWithFrame)
+        hcf->handleEdcafInternalCollision(edcaf);
 }
 
-bool HeHcf::hasFrameToTransmit(AccessCategory ac)
+bool HeHcfRuntime::hasFrameToTransmit(AccessCategory ac)
 {
-    if (Hcf::hasFrameToTransmit(ac))
+    if (hcf->hasCommonFrameToTransmit(ac))
         return true;
-    if (queueBankManager == nullptr)
-        return false;
-    for (const auto& entry : queueBankManager->getQueueBanks()) {
-        if (!entry.second->getQueue((StationQueueBank::AccessCategory)ac)->isEmpty())
-            return true;
-    }
-    return false;
+    return getHeQueueService().hasFrameToTransmit(ac);
 }
 
-bool HeHcf::hasFrameToTransmit()
+bool HeHcfRuntime::hasFrameToTransmit()
 {
     auto edcaf = edca->getChannelOwner();
     return edcaf != nullptr && hasFrameToTransmit(edcaf->getAccessCategory());
 }
 
-uint16_t HeHcf::getAssociationId(const MacAddress& address) const
+uint16_t HeHcfRuntime::getAssociationId(const MacAddress& address) const
 {
-    auto aid = mac->getMib()->getAssociationId(address);
-    return aid > 0 ? aid : 0;
+    return getHePeerStateService().getAssociationId(address);
 }
 
-bool HeHcf::getPeerOperatingMode(const MacAddress& address, Ieee80211HeOperatingMode& mode) const
+bool HeHcfRuntime::getPeerOperatingMode(const MacAddress& address, Ieee80211HeOperatingMode& mode) const
 {
-    auto it = peerOperatingModes.find(address);
-    if (it != peerOperatingModes.end()) {
-        mode = it->second;
-        return true;
-    }
-    return false;
+    return getHePeerStateService().getOperatingMode(address, mode);
+}
+
+HePeerStateService& HeHcfRuntime::getHePeerStateService() const
+{
+    return this->getPeerStateService();
+}
+
+HeQueueService& HeHcfRuntime::getHeQueueService() const
+{
+    return this->getQueueService();
+}
+
+HeDlMuExchangeProvider& HeHcfRuntime::getHeDlMuExchangeProvider() const
+{
+    return this->getDlMuExchangeProvider();
+}
+
+HeTriggeredUlExchangeService& HeHcfRuntime::getHeTriggeredUlExchangeService() const
+{
+    return this->getTriggeredUlExchangeService();
+}
+
+queueing::IPacketQueue *HeHcfRuntime::resolveHeQueue(HcfQueueToken token) const
+{
+    return getHeQueueService().resolveQueue(token);
+}
+
+void HeHcfRuntime::twtServicePeriodChanged()
+{
+    getHePeerStateService().handleTwtBoundary();
 }
 
 } // namespace ieee80211

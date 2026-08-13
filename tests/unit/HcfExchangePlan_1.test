@@ -1,0 +1,385 @@
+%description:
+Test immutable HCF snapshots, fixed exchange-class ordering, and the prepared
+transaction validate/commit/rollback/complete contract.
+
+%includes:
+#include <algorithm>
+#include <array>
+#include <memory>
+#include <stdexcept>
+#include <vector>
+
+#include "inet/linklayer/ieee80211/mac/contract/IHcfExchangeCallback.h"
+#include "inet/linklayer/ieee80211/mac/contract/IHcfExchangeProvider.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfContext.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfExchangePlan.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::units::values;
+
+static void requireHcfContract(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("HCF exchange plan test: %s", message);
+}
+
+template<typename F>
+static void requireHcfContractFailure(F operation, const char *message)
+{
+    bool failed = false;
+    try {
+        operation();
+    }
+    catch (const cRuntimeError&) {
+        failed = true;
+    }
+    requireHcfContract(failed, message);
+}
+
+struct HcfTransactionCounts
+{
+    int validations = 0;
+    int commits = 0;
+    int rollbacks = 0;
+    int completions = 0;
+    bool rejectValidation = false;
+    bool throwFromCommit = false;
+    bool throwFromComplete = false;
+    HcfQueueToken expectedQueueToken;
+    uint64_t expectedAssociationEpoch = 0;
+    std::vector<HcfPacketIdentity> observedPacketOrder;
+};
+
+class TestHcfExchangeTransaction : public IHcfExchangeTransaction
+{
+  private:
+    HcfTransactionCounts *counts;
+
+  public:
+    explicit TestHcfExchangeTransaction(HcfTransactionCounts *counts) : counts(counts) {}
+
+    virtual HcfExchangeRejection validate(const HcfExchangePlan& plan) override
+    {
+        counts->validations++;
+        for (const auto& reservation : plan.getReservations()) {
+            counts->observedPacketOrder.push_back(reservation.getPacketIdentity());
+            if (counts->expectedQueueToken.isValid() &&
+                    !(reservation.getSourceQueueToken() == counts->expectedQueueToken))
+                return HcfExchangeRejection(HcfExchangeRejectionCode::STALE_QUEUE_TOKEN,
+                        plan.getExchangeClass(), plan.getTransactionIdentity(),
+                        "test stale queue token");
+            if (counts->expectedAssociationEpoch != 0 &&
+                    reservation.getAssociationEpoch() != counts->expectedAssociationEpoch)
+                return HcfExchangeRejection(HcfExchangeRejectionCode::STALE_ASSOCIATION_EPOCH,
+                        plan.getExchangeClass(), plan.getTransactionIdentity(),
+                        "test stale association epoch");
+        }
+        return counts->rejectValidation ? HcfExchangeRejection(
+                        HcfExchangeRejectionCode::VALIDATION_FAILED,
+                        plan.getExchangeClass(), plan.getTransactionIdentity(),
+                        "test validation rejection") : HcfExchangeRejection();
+    }
+
+    virtual void commit(const HcfExchangePlan&) override
+    {
+        counts->commits++;
+        if (counts->throwFromCommit)
+            throw cRuntimeError("test commit failure");
+    }
+
+    virtual void rollback(const HcfExchangePlan&) noexcept override
+    {
+        counts->rollbacks++;
+    }
+
+    virtual void complete(const HcfExchangePlan&,
+            const HcfExchangeResult&) override
+    {
+        counts->completions++;
+        if (counts->throwFromComplete)
+            throw cRuntimeError("test complete failure");
+    }
+};
+
+static std::vector<HcfExchangeClass> selectHcfExchangeSubsequence(
+        const std::vector<HcfExchangeClass>& available)
+{
+    std::vector<HcfExchangeClass> selected;
+    for (auto exchangeClass : getHcfExchangeClassOrder())
+        if (std::find(available.begin(), available.end(), exchangeClass) != available.end())
+            selected.push_back(exchangeClass);
+    return selected;
+}
+
+static HcfContext makeValidHcfContext()
+{
+    HcfLocalContext local(MacAddress("02:00:00:00:00:01"),
+            HcfStationRole::ACCESS_POINT, MacAddress("02:00:00:00:00:01"),
+            "Ieee80211HeModeSet", SimTime(10, SIMTIME_MS), AC_BE,
+            SimTime(9, SIMTIME_MS), SimTime(3, SIMTIME_MS));
+    HcfPeerSnapshot peer(MacAddress("02:00:00:00:00:02"), 7, 1,
+            std::nullopt, std::nullopt, std::nullopt, true, std::nullopt,
+            3, 0, 0);
+    HcfQueueSnapshot first(HcfPacketIdentity(101), HcfQueueToken(41), AC_BE,
+            0, SimTime(1, SIMTIME_MS), false, true, B(1200), 7);
+    HcfQueueSnapshot second(HcfPacketIdentity(102), HcfQueueToken(41), AC_BE,
+            0, SimTime(2, SIMTIME_MS), true, true, B(900), 7);
+    HcfPhySnapshot phy(GHz(5.18), MHz(80), 4, 4, mW(100), mW(0.00001),
+            SimTime(800, SIMTIME_NS), 2, {false, false, false, false}, {});
+    return HcfContext(local, {peer}, {first, second}, phy);
+}
+
+%activity:
+requireHcfContract(HcfContext().validate() ==
+        HcfContextRejectionCode::INCOMPLETE_LOCAL_CONTEXT,
+        "a default context must be rejected as incomplete");
+auto validContext = makeValidHcfContext();
+requireHcfContract(validContext.validate() == HcfContextRejectionCode::NONE,
+        "the complete immutable context must validate");
+HcfContext incompletePeer(validContext.getLocalContext(), {HcfPeerSnapshot()},
+        validContext.getQueueSnapshots(), validContext.getPhySnapshot());
+requireHcfContract(incompletePeer.validate() ==
+        HcfContextRejectionCode::INCOMPLETE_PEER_SNAPSHOT,
+        "an incomplete peer snapshot must be rejected");
+
+const auto& order = getHcfExchangeClassOrder();
+requireHcfContract(order == std::array<HcfExchangeClass, 11>{
+        HcfExchangeClass::FORCED_SINGLE_USER,
+        HcfExchangeClass::HE_UL_TRIGGER,
+        HcfExchangeClass::HE_SOUNDING,
+        HcfExchangeClass::RECOVERY_SINGLE_USER,
+        HcfExchangeClass::HE_DL_MULTIUSER,
+        HcfExchangeClass::VHT_GROUP_MANAGEMENT,
+        HcfExchangeClass::VHT_DL_MULTIUSER,
+        HcfExchangeClass::VHT_SU_SOUNDING,
+        HcfExchangeClass::HT_SOUNDING,
+        HcfExchangeClass::SINGLE_USER,
+        HcfExchangeClass::CHANNEL_RELEASE},
+        "exchange classes must retain the fixed Phase-0 order");
+requireHcfContract(selectHcfExchangeSubsequence({
+        HcfExchangeClass::HT_SOUNDING,
+        HcfExchangeClass::SINGLE_USER,
+        HcfExchangeClass::CHANNEL_RELEASE}) == std::vector<HcfExchangeClass>{
+        HcfExchangeClass::HT_SOUNDING,
+        HcfExchangeClass::SINGLE_USER,
+        HcfExchangeClass::CHANNEL_RELEASE},
+        "base HCF provider omission must preserve characterized precedence");
+requireHcfContract(selectHcfExchangeSubsequence({
+        HcfExchangeClass::VHT_GROUP_MANAGEMENT,
+        HcfExchangeClass::VHT_DL_MULTIUSER,
+        HcfExchangeClass::VHT_SU_SOUNDING,
+        HcfExchangeClass::HT_SOUNDING,
+        HcfExchangeClass::SINGLE_USER,
+        HcfExchangeClass::CHANNEL_RELEASE}) == std::vector<HcfExchangeClass>{
+        HcfExchangeClass::VHT_GROUP_MANAGEMENT,
+        HcfExchangeClass::VHT_DL_MULTIUSER,
+        HcfExchangeClass::VHT_SU_SOUNDING,
+        HcfExchangeClass::HT_SOUNDING,
+        HcfExchangeClass::SINGLE_USER,
+        HcfExchangeClass::CHANNEL_RELEASE},
+        "VHT provider omission must preserve group, MU, sounding, and SU precedence");
+requireHcfContract(selectHcfExchangeSubsequence({
+        HcfExchangeClass::FORCED_SINGLE_USER,
+        HcfExchangeClass::HE_UL_TRIGGER,
+        HcfExchangeClass::HE_SOUNDING,
+        HcfExchangeClass::RECOVERY_SINGLE_USER,
+        HcfExchangeClass::HE_DL_MULTIUSER,
+        HcfExchangeClass::HT_SOUNDING,
+        HcfExchangeClass::SINGLE_USER,
+        HcfExchangeClass::CHANNEL_RELEASE}) == std::vector<HcfExchangeClass>{
+        HcfExchangeClass::FORCED_SINGLE_USER,
+        HcfExchangeClass::HE_UL_TRIGGER,
+        HcfExchangeClass::HE_SOUNDING,
+        HcfExchangeClass::RECOVERY_SINGLE_USER,
+        HcfExchangeClass::HE_DL_MULTIUSER,
+        HcfExchangeClass::HT_SOUNDING,
+        HcfExchangeClass::SINGLE_USER,
+        HcfExchangeClass::CHANNEL_RELEASE},
+        "HE provider omission must preserve force, UL, sounding, recovery, DL, and SU precedence");
+
+HcfTransactionIdentity identity(HcfTransactionToken(11),
+        HcfTransactionGeneration(5));
+HcfTransactionIdentity staleToken(HcfTransactionToken(12),
+        HcfTransactionGeneration(5));
+HcfTransactionIdentity staleGeneration(HcfTransactionToken(11),
+        HcfTransactionGeneration(4));
+std::vector<HcfPacketIdentity> packetOrder = {
+        HcfPacketIdentity(101), HcfPacketIdentity(102), HcfPacketIdentity(103)};
+std::vector<HcfReservationIdentity> reservations = {
+        {HcfPacketIdentity(101), HcfQueueToken(41), 7},
+        {HcfPacketIdentity(102), HcfQueueToken(41), 7},
+        {HcfPacketIdentity(103), HcfQueueToken(41), 7}};
+HcfExchangePlan plan(HcfExchangeClass::HE_DL_MULTIUSER, identity, reservations);
+requireHcfContract(plan.isComplete(), "the transaction plan must be complete");
+HcfExchangePlan incompletePlan(HcfExchangeClass::SINGLE_USER,
+        HcfTransactionIdentity(), reservations);
+requireHcfContract(!incompletePlan.isComplete(),
+        "a plan without token and generation must be incomplete");
+HcfTransactionCounts invalidPlanCounts;
+requireHcfContractFailure([&] () {
+    PreparedHcfExchange invalid(incompletePlan,
+            std::make_unique<TestHcfExchangeTransaction>(&invalidPlanCounts));
+}, "an incomplete plan must not become a prepared transaction");
+
+HcfTransactionCounts completedCounts;
+completedCounts.expectedQueueToken = HcfQueueToken(41);
+completedCounts.expectedAssociationEpoch = 7;
+{
+    PreparedHcfExchange prepared(plan,
+            std::make_unique<TestHcfExchangeTransaction>(&completedCounts));
+    HcfExchangeRejection rejection;
+    requireHcfContract(!prepared.validate(staleToken, rejection) &&
+            rejection.getCode() == HcfExchangeRejectionCode::STALE_TRANSACTION &&
+            prepared.getState() == PreparedHcfExchange::State::PREPARED,
+            "a stale token must be rejected without touching transaction state");
+    requireHcfContract(!prepared.validate(staleGeneration, rejection) &&
+            rejection.getCode() == HcfExchangeRejectionCode::STALE_TRANSACTION,
+            "a stale generation must be rejected deterministically");
+    requireHcfContract(prepared.validate(identity, rejection),
+            "the matching transaction identity must validate");
+    requireHcfContract(completedCounts.observedPacketOrder == packetOrder,
+            "validation must preserve reservation packet order");
+    requireHcfContractFailure([&] () { prepared.commit(staleGeneration); },
+            "commit must reject a stale generation");
+    prepared.commit(identity);
+    requireHcfContractFailure([&] () { prepared.commit(identity); },
+            "a duplicate commit call must be rejected");
+    HcfExchangeResult result(HcfExchangeClass::HE_DL_MULTIUSER, identity,
+            packetOrder, std::nullopt, {}, HcfExchangeAbortReason::NONE,
+            HcfTerminalOwnershipAction::TRANSFERRED_TO_IN_PROGRESS);
+    prepared.complete(identity, result);
+    requireHcfContractFailure([&] () { prepared.complete(identity, result); },
+            "a duplicate complete call must be rejected");
+}
+requireHcfContract(completedCounts.validations == 1 &&
+        completedCounts.commits == 1 && completedCounts.rollbacks == 0 &&
+        completedCounts.completions == 1,
+        "commit and complete must each execute exactly once without rollback");
+
+HcfTransactionCounts staleQueueCounts;
+staleQueueCounts.expectedQueueToken = HcfQueueToken(41);
+{
+    HcfExchangePlan staleQueuePlan(HcfExchangeClass::SINGLE_USER, identity,
+            {{HcfPacketIdentity(101), HcfQueueToken(42), 7}});
+    PreparedHcfExchange prepared(staleQueuePlan,
+            std::make_unique<TestHcfExchangeTransaction>(&staleQueueCounts));
+    HcfExchangeRejection rejection;
+    requireHcfContract(!prepared.validate(identity, rejection) &&
+            rejection.getCode() == HcfExchangeRejectionCode::STALE_QUEUE_TOKEN,
+            "reservation validation must reject a stale source queue token");
+}
+requireHcfContract(staleQueueCounts.rollbacks == 1,
+        "stale queue reservation must roll back exactly once");
+
+HcfTransactionCounts staleEpochCounts;
+staleEpochCounts.expectedAssociationEpoch = 7;
+{
+    HcfExchangePlan staleEpochPlan(HcfExchangeClass::SINGLE_USER, identity,
+            {{HcfPacketIdentity(101), HcfQueueToken(41), 8}});
+    PreparedHcfExchange prepared(staleEpochPlan,
+            std::make_unique<TestHcfExchangeTransaction>(&staleEpochCounts));
+    HcfExchangeRejection rejection;
+    requireHcfContract(!prepared.validate(identity, rejection) &&
+            rejection.getCode() == HcfExchangeRejectionCode::STALE_ASSOCIATION_EPOCH,
+            "reservation validation must reject a stale association epoch");
+}
+requireHcfContract(staleEpochCounts.rollbacks == 1,
+        "stale association reservation must roll back exactly once");
+
+HcfExchangePlan invalidReservationPlan(HcfExchangeClass::SINGLE_USER, identity,
+        {{HcfPacketIdentity(101), HcfQueueToken(), 7}});
+requireHcfContract(!invalidReservationPlan.isComplete(),
+        "a reservation with an invalid queue token must be incomplete");
+HcfExchangePlan invalidEpochPlan(HcfExchangeClass::SINGLE_USER, identity,
+        {{HcfPacketIdentity(101), HcfQueueToken(41), 0}});
+requireHcfContract(!invalidEpochPlan.isComplete(),
+        "a reservation with no association epoch must be incomplete");
+
+HcfTransactionCounts rollbackCounts;
+{
+    PreparedHcfExchange prepared(plan,
+            std::make_unique<TestHcfExchangeTransaction>(&rollbackCounts));
+    HcfExchangeRejection rejection;
+    requireHcfContract(prepared.validate(identity, rejection),
+            "rollback branch must validate first");
+    prepared.rollback(identity);
+    requireHcfContractFailure([&] () { prepared.rollback(identity); },
+            "a duplicate rollback call must be rejected");
+    requireHcfContractFailure([&] () { prepared.commit(identity); },
+            "a rolled-back transaction must not commit");
+}
+requireHcfContract(rollbackCounts.commits == 0 && rollbackCounts.rollbacks == 1 &&
+        rollbackCounts.completions == 0,
+        "explicit rollback must execute exactly once and exclude commit/complete");
+
+HcfTransactionCounts rejectedCounts;
+rejectedCounts.rejectValidation = true;
+{
+    PreparedHcfExchange prepared(plan,
+            std::make_unique<TestHcfExchangeTransaction>(&rejectedCounts));
+    HcfExchangeRejection rejection;
+    requireHcfContract(!prepared.validate(identity, rejection) &&
+            rejection.getCode() == HcfExchangeRejectionCode::VALIDATION_FAILED,
+            "provider validation rejection must remain typed");
+}
+requireHcfContract(rejectedCounts.validations == 1 && rejectedCounts.rollbacks == 1,
+        "a rejected prepared plan must roll back exactly once");
+
+HcfTransactionCounts abandonedCounts;
+{
+    PreparedHcfExchange abandoned(plan,
+            std::make_unique<TestHcfExchangeTransaction>(&abandonedCounts));
+}
+requireHcfContract(abandonedCounts.rollbacks == 1,
+        "destruction must roll back an abandoned preparation");
+
+HcfTransactionCounts exceptionCounts;
+exceptionCounts.throwFromCommit = true;
+{
+    PreparedHcfExchange prepared(plan,
+            std::make_unique<TestHcfExchangeTransaction>(&exceptionCounts));
+    HcfExchangeRejection rejection;
+    requireHcfContract(prepared.validate(identity, rejection),
+            "exception branch must validate first");
+    requireHcfContractFailure([&] () { prepared.commit(identity); },
+            "the injected commit exception must propagate");
+    requireHcfContract(prepared.getState() == PreparedHcfExchange::State::ROLLED_BACK,
+            "a commit exception must leave the transaction rolled back");
+}
+requireHcfContract(exceptionCounts.commits == 1 && exceptionCounts.rollbacks == 1 &&
+        exceptionCounts.completions == 0,
+        "commit failure must perform one exception-safe rollback");
+
+HcfTransactionCounts completionExceptionCounts;
+completionExceptionCounts.throwFromComplete = true;
+{
+    PreparedHcfExchange prepared(plan,
+            std::make_unique<TestHcfExchangeTransaction>(&completionExceptionCounts));
+    HcfExchangeRejection rejection;
+    requireHcfContract(prepared.validate(identity, rejection),
+            "completion exception branch must validate first");
+    prepared.commit(identity);
+    HcfExchangeResult result(HcfExchangeClass::HE_DL_MULTIUSER, identity,
+            packetOrder, std::nullopt, {}, HcfExchangeAbortReason::NONE,
+            HcfTerminalOwnershipAction::TRANSFERRED_TO_IN_PROGRESS);
+    requireHcfContractFailure([&] () { prepared.complete(identity, result); },
+            "the injected completion exception must propagate");
+    requireHcfContract(prepared.getState() ==
+            PreparedHcfExchange::State::COMPLETION_FAILED,
+            "failed completion must enter the explicit terminal failure state");
+    requireHcfContractFailure([&] () { prepared.complete(identity, result); },
+            "an ambiguous failed completion must never be retried");
+    requireHcfContractFailure([&] () { prepared.rollback(identity); },
+            "committed ownership must not roll back after completion failure");
+}
+requireHcfContract(completionExceptionCounts.commits == 1 &&
+        completionExceptionCounts.completions == 1 &&
+        completionExceptionCounts.rollbacks == 0,
+        "throwing complete must be invoked once without unsafe retry or rollback");
+
+EV << "Immutable HCF context and prepared exchange contracts passed.\n";
+
+%contains: stdout
+Immutable HCF context and prepared exchange contracts passed.

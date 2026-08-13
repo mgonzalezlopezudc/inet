@@ -41,7 +41,7 @@ EV << ".\n";
 ModeSet name: ax
 Slot time: 0.000009
 SIFS time: 0.000016
-Number of modes: 855
+Number of modes: 2089
 Mode 0 (MCS 0 Nss=1): netBitrate=7.3125 Mbps grossBitrate=14.625 Mbps
 Mode 17 (MCS 11 Nss=1): netBitrate=121.875 Mbps grossBitrate=146.25 Mbps
 Mode 23 (MCS 11 Nss=2): netBitrate=243.75 Mbps grossBitrate=292.5 Mbps

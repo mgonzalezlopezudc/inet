@@ -103,6 +103,17 @@ Ieee80211HeLinkPhySnapshot linkPhySnapshot(36, Hz(5.18e9), MHz(20),
         physicallayer::HE_GI_0_8_US, physicallayer::HE_LTF_4X,
         0, {}, 0, localCapabilities);
 MockHeLinkPhyContext linkPhyContext(linkPhySnapshot);
+HeSoundingService::ReceiveSnapshot soundingSnapshot {
+        5, mockMac.getAddress(), macMib->heOperation.bssColor,
+        macMib->localHeCapabilities.soundingDimensions,
+        static_cast<int>(mockMac.getFcsMode()), modeSet->getSifsTime(),
+        std::nullopt,
+        linkPhyContext.getSnapshot(), {}};
+HeSoundingService::ReceiveActions soundingActions;
+soundingActions.transmitResponse = [&mockTx] (Packet *packet,
+        const Ptr<const Ieee80211MacHeader>& header, simtime_t ifs) {
+    mockTx.transmitFrame(packet, header, ifs, nullptr);
+};
 
 // 1. Send NDP Announcement targeting AID 5
 {
@@ -123,8 +134,8 @@ MockHeLinkPhyContext linkPhyContext(linkPhySnapshot);
     auto pkt = new Packet("NDPA", header);
     pkt->insertAtBack(ndpa);
 
-    bool res = soundingCoordinator->processSoundingFrame(pkt, header, &mockMac, modeSet,
-            csiManager, linkPhyContext, &mockTx, nullptr);
+    bool res = soundingCoordinator->processSoundingFrame(pkt, header,
+            soundingSnapshot, soundingActions);
     EV << "NDPA processed: " << (res ? "yes" : "no") << "\n";
 }
 
@@ -136,6 +147,16 @@ MockHeLinkPhyContext linkPhyContext(linkPhySnapshot);
 
 // 3. Receive Beamforming Report Poll (BFRP Trigger, IEEE 802.11-2024 Table 9-47 type 1)
 {
+    auto uncorrelatedTrigger = makeShared<Ieee80211TriggerFrame>();
+    uncorrelatedTrigger->setTriggerType(1);
+    auto uncorrelatedPacket = new Packet("Uncorrelated-BFRP", uncorrelatedTrigger);
+    bool rejected = soundingCoordinator->processSoundingFrame(uncorrelatedPacket,
+            uncorrelatedTrigger, soundingSnapshot, soundingActions);
+    auto retainedState = soundingCoordinator->getService().getStaSnapshot();
+    if (!rejected || !retainedState.ndpAnnouncementReceived || !retainedState.ndpReceived)
+        throw cRuntimeError("Uncorrelated BFRP did not preserve the pending sounding dialog");
+    EV << "Uncorrelated BFRP rejected without advancing state\n";
+
     auto trigger = makeShared<Ieee80211TriggerFrame>();
     trigger->setTriggerType(1); // Beamforming Report Poll
     trigger->setUsersArraySize(1);
@@ -179,8 +200,8 @@ MockHeLinkPhyContext linkPhyContext(linkPhySnapshot);
     auto pkt = new Packet("BRP", trigger);
     pkt->addTag<physicallayer::Ieee80211HeTriggerCorrelationTag>()->
             setTriggerId(1);
-    bool res = soundingCoordinator->processSoundingFrame(pkt, trigger, &mockMac, modeSet,
-            csiManager, linkPhyContext, &mockTx, nullptr);
+    bool res = soundingCoordinator->processSoundingFrame(pkt, trigger,
+            soundingSnapshot, soundingActions);
     EV << "BRP processed: " << (res ? "yes" : "no") << "\n";
 
     if (mockTx.lastSent != nullptr) {
@@ -207,6 +228,8 @@ EV << ".\n";
 %contains: stdout
 NDPA processed: yes
 NDP processed
+Ignoring BFRP Trigger without model-only correlation context
+Uncorrelated BFRP rejected without advancing state
 Mock Transmitter: sent frame 'HE-Feedback'
 BRP processed: yes
 Transmitted action frame: HE-Feedback

@@ -1,0 +1,57 @@
+%description:
+
+Verifies that Ieee80211Mac rejects an IHcf NED implementation that does not
+implement the paired C++ IQosCoordinationFunction contract.
+
+%file: IncompleteQosCoordinationFunction.cc
+
+#include "inet/common/INETDefs.h"
+
+using namespace inet;
+
+namespace Ieee80211QosCoordinationFunctionContract_2 {
+
+class IncompleteQosCoordinationFunction : public cSimpleModule
+{
+};
+
+Define_Module(IncompleteQosCoordinationFunction);
+
+} // namespace Ieee80211QosCoordinationFunctionContract_2
+
+%file: TestNetwork.ned
+
+import inet.examples.ieee80211ax.dl_ofdma_sched.Lan80211AxDlOfdma;
+import inet.linklayer.ieee80211.mac.contract.IHcf;
+
+simple IncompleteQosCoordinationFunction like IHcf
+{
+    parameters:
+        string mldMacModule = default("");
+}
+
+network TestNetwork extends Lan80211AxDlOfdma
+{
+}
+
+%inifile: omnetpp.ini
+
+[General]
+ned-path = .;../../../../src;../../../../examples
+network = TestNetwork
+sim-time-limit = 1us
+record-vector-results = false
+cmdenv-express-mode = false
+cmdenv-event-banners = false
+*.visualizer.typename = ""
+**.numLoInterfaces = 0
+**.hcf.typename = "IncompleteQosCoordinationFunction"
+
+include ../../../../examples/ieee80211ax/dl_ofdma_sched/omnetpp.ini
+
+%exitcode: 1
+
+%postrun-command: grep "<!>" test.* > test_err.out || true
+
+%contains: test_err.out
+does not implement IQosCoordinationFunction

@@ -41,6 +41,7 @@ class INET_API HeUlSchedulerBase : public IIeee80211HeUlScheduler, public Simple
     std::string lastSchedulingReason = "not scheduled yet";
     std::vector<CandidateInfo> lastCandidates;
     std::vector<RuAllocation> lastRuAllocations;
+    uint64_t committedScheduleCount = 0;
 
   protected:
     virtual void initialize(int stage) override;
@@ -53,10 +54,16 @@ class INET_API HeUlSchedulerBase : public IIeee80211HeUlScheduler, public Simple
             const physicallayer::Ieee80211HeRu& ru, int nss = 1) const;
     virtual simtime_t computeCommonDuration(const ScheduleContext& context,
             const std::vector<RuAllocation>& allocations) const;
-    void recordSchedule(const ScheduleContext& context, const Schedule& schedule, const char *reason);
     std::string getLastScheduleSummary() const;
 
   public:
+    virtual void commitSchedule(const ScheduleContext& context,
+            const Schedule& schedule) override;
+    int getCommittedCandidateCount() const { return lastCandidateCount; }
+    int getCommittedScheduledUserCount() const { return lastScheduledUserCount; }
+    int getCommittedRandomAccessRuCount() const { return lastRandomAccessRuCount; }
+    const std::string& getCommittedSchedulingReason() const { return lastSchedulingReason; }
+    uint64_t getCommittedScheduleCount() const { return committedScheduleCount; }
     virtual void invalidatePeer(const MacAddress& peer) override;
 };
 

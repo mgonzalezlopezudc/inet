@@ -14,13 +14,13 @@
 #include "inet/common/ModuleRefByPar.h"
 #include "inet/linklayer/base/MacProtocolBase.h"
 #include "inet/linklayer/ieee80211/mac/contract/IDs.h"
+#include "inet/linklayer/ieee80211/mac/contract/IQosCoordinationFunction.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRateControl.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRadioModePolicy.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRateSelection.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRx.h"
 #include "inet/linklayer/ieee80211/mac/contract/ITx.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Dcf.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Mcf.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Pcf.h"
 #include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
@@ -63,7 +63,7 @@ class INET_API Ieee80211Mac : public MacProtocolBase
 
     opp_component_ptr<Dcf> dcf;
     opp_component_ptr<Pcf> pcf;
-    opp_component_ptr<Hcf> hcf;
+    opp_component_ptr<IQosCoordinationFunction> hcf;
     opp_component_ptr<Mcf> mcf;
     ITwtManager *twtManager = nullptr;
     IIeee80211MgmtExchangeResultHandler *mgmtExchangeResultHandler = nullptr;

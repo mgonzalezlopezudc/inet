@@ -1,0 +1,515 @@
+%description:
+Verify standalone HCF recipient routing, A-MPDU admission, response handoff,
+and exactly-once terminal packet ownership.
+
+%includes:
+#include <functional>
+#include <vector>
+
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/ByteCountChunk.h"
+#include "inet/linklayer/ieee80211/mac/common/Ieee80211Addressing.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfRecipientService.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+static bool throwsRuntimeError(const std::function<void()>& operation)
+{
+    try {
+        operation();
+        return false;
+    }
+    catch (const cRuntimeError&) {
+        return true;
+    }
+}
+
+static Packet *makeData(const char *name, const MacAddress& receiver,
+        const MacAddress& transmitter, int sequenceNumber = 1)
+{
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setType(ST_DATA_WITH_QOS);
+    header->setReceiverAddress(receiver);
+    header->setTransmitterAddress(transmitter);
+    header->setTid(5);
+    header->setSequenceNumber(SequenceNumberCyclic(sequenceNumber));
+    header->setChunkLength(B(26));
+    return new Packet(name, header);
+}
+
+static Packet *makeManagement(const char *name, const MacAddress& receiver,
+        const MacAddress& transmitter)
+{
+    auto header = makeShared<Ieee80211ActionFrame>();
+    header->setReceiverAddress(receiver);
+    header->setTransmitterAddress(transmitter);
+    header->setChunkLength(B(24));
+    return new Packet(name, header);
+}
+
+static Packet *makeControl(const char *name, const MacAddress& receiver,
+        const MacAddress& transmitter)
+{
+    auto header = makeShared<Ieee80211RtsFrame>();
+    header->setReceiverAddress(receiver);
+    header->setTransmitterAddress(transmitter);
+    header->setChunkLength(B(20));
+    return new Packet(name, header);
+}
+
+struct MemberSpec {
+    Packet *packet = nullptr;
+    physicallayer::Ieee80211MpduReceiveStatus status = physicallayer::MPDU_SUCCESS;
+    int declaredExtraLength = 0;
+    bool incorrectDelimiter = false;
+    bool omitFollowingPadding = false;
+};
+
+static Packet *makeAmpdu(const char *name, std::vector<MemberSpec> specs,
+        int resultCount = -1)
+{
+    auto aggregate = new Packet(name);
+    auto indication = aggregate->addTag<physicallayer::Ieee80211MpduReceiveInd>();
+    for (unsigned int i = 0; i < specs.size(); i++) {
+        auto packet = specs[i].packet;
+        auto packetData = packet->peekData();
+        auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
+        delimiter->setChunkLength(B(4));
+        delimiter->setLength(packetData->getChunkLength().get<B>() +
+                specs[i].declaredExtraLength);
+        if (specs[i].incorrectDelimiter)
+            delimiter->markIncorrect();
+        aggregate->insertAtBack(delimiter);
+        aggregate->insertAtBack(packetData);
+        int padding = (4 - (B(4) + packetData->getChunkLength()).get<B>() % 4) % 4;
+        if (i + 1 != specs.size() && padding != 0 &&
+                !specs[i].omitFollowingPadding)
+            aggregate->insertAtBack(makeShared<ByteCountChunk>(B(padding)));
+        if (resultCount < 0 || int(i) < resultCount) {
+            physicallayer::Ieee80211MpduReceiveResult result;
+            result.status = specs[i].status;
+            result.length = packetData->getChunkLength();
+            indication->appendResults(result);
+        }
+        delete packet;
+    }
+    return aggregate;
+}
+
+struct RecipientHarness : public HcfRecipientService::IActions {
+    MacAddress localAddress;
+    bool throwImmediateResponse = false;
+    bool throwImplicitResponse = false;
+    bool implicitResponseResult = true;
+    int receivedCount = 0;
+    int droppedCount = 0;
+    int foreignDropCount = 0;
+    int incorrectDropCount = 0;
+    int invalidImplicitDropCount = 0;
+    int immediateResponseCount = 0;
+    int implicitResponseCount = 0;
+    int dataDeliveryCount = 0;
+    int implicitDataDeliveryCount = 0;
+    int managementDeliveryCount = 0;
+    int controlCount = 0;
+    int deleteCount = 0;
+    std::vector<int> deliveredSequenceNumbers;
+    std::vector<int> implicitResponseSequenceNumbers;
+
+    explicit RecipientHarness(const MacAddress& localAddress) : localAddress(localAddress) {}
+
+    virtual HcfRecipientService::AddressDisposition classifyAddress(const Packet *,
+            const Ptr<const Ieee80211MacHeader>& header) override
+    {
+        auto roles = interpretIeee80211AddressRoles(header);
+        if (roles.receiverAddress == localAddress)
+            return HcfRecipientService::AddressDisposition::LOCAL_UNICAST;
+        if (roles.receiverAddress.isMulticast() &&
+                (!roles.hasTransmitterAddress || roles.transmitterAddress != localAddress))
+            return HcfRecipientService::AddressDisposition::LOCAL_GROUP;
+        return HcfRecipientService::AddressDisposition::FOREIGN;
+    }
+
+    virtual void packetReceived(const Packet *,
+            const Ptr<const Ieee80211MacHeader>&) noexcept override
+    {
+        receivedCount++;
+    }
+
+    virtual void packetDropped(const Packet *,
+            HcfRecipientService::DropReason reason) noexcept override
+    {
+        droppedCount++;
+        if (reason == HcfRecipientService::DropReason::NOT_ADDRESSED_TO_US)
+            foreignDropCount++;
+        else if (reason == HcfRecipientService::DropReason::INCORRECTLY_RECEIVED)
+            incorrectDropCount++;
+        else
+            invalidImplicitDropCount++;
+    }
+
+    virtual void processImmediateResponse(Packet *,
+            const Ptr<const Ieee80211DataOrMgmtHeader>&) override
+    {
+        immediateResponseCount++;
+        if (throwImmediateResponse)
+            throw cRuntimeError("injected immediate response failure");
+    }
+
+    virtual bool processHtImplicitBlockAckResponse(Packet *,
+            const std::vector<Ptr<const Ieee80211DataHeader>>& headers) override
+    {
+        implicitResponseCount++;
+        for (const auto& header : headers)
+            implicitResponseSequenceNumbers.push_back(
+                    header->getSequenceNumber().get());
+        if (throwImplicitResponse)
+            throw cRuntimeError("injected implicit response failure");
+        return implicitResponseResult;
+    }
+
+    virtual void processOrdinaryAggregateMember(Packet *packet,
+            const Ptr<const Ieee80211MacHeader>& header) override
+    {
+        HcfRecipientService service;
+        service.processFrame(packet, header, *this);
+    }
+
+    virtual void deliverData(Packet *packet,
+            const Ptr<const Ieee80211DataHeader>& header,
+            bool implicitBlockAckMember) noexcept override
+    {
+        dataDeliveryCount++;
+        implicitDataDeliveryCount += implicitBlockAckMember;
+        deliveredSequenceNumbers.push_back(header->getSequenceNumber().get());
+        delete packet;
+    }
+
+    virtual void deliverManagement(Packet *packet,
+            const Ptr<const Ieee80211MgmtHeader>&) noexcept override
+    {
+        managementDeliveryCount++;
+        delete packet;
+    }
+
+    virtual void processControl(Packet *,
+            const Ptr<const Ieee80211MacHeader>&) override
+    {
+        controlCount++;
+    }
+
+    virtual void deletePacket(Packet *packet) noexcept override
+    {
+        deleteCount++;
+        delete packet;
+    }
+};
+
+%activity:
+const MacAddress local("02:00:00:00:00:01");
+const MacAddress peer("02:00:00:00:00:02");
+const MacAddress foreign("02:00:00:00:00:03");
+const MacAddress multicast("01:00:5e:00:00:01");
+const MacAddress broadcast("ff:ff:ff:ff:ff:ff");
+HcfRecipientService service;
+
+// Local unicast and received group traffic are admitted; a locally sourced
+// group frame and foreign unicast are terminal drops without response/state work.
+{
+    RecipientHarness harness(local);
+    for (const auto& receiver : {local, multicast, broadcast}) {
+        auto packet = makeData("admitted", receiver, peer);
+        service.processFrame(packet,
+                packet->peekAtFront<Ieee80211MacHeader>(), harness);
+    }
+    auto localGroup = makeData("local-group", multicast, local);
+    service.processFrame(localGroup,
+            localGroup->peekAtFront<Ieee80211MacHeader>(), harness);
+    auto foreignPacket = makeData("foreign", foreign, peer);
+    service.processFrame(foreignPacket,
+            foreignPacket->peekAtFront<Ieee80211MacHeader>(), harness);
+    REQUIRE(harness.receivedCount == 3);
+    REQUIRE(harness.immediateResponseCount == 3);
+    REQUIRE(harness.dataDeliveryCount == 3);
+    REQUIRE(harness.foreignDropCount == 2);
+    REQUIRE(harness.deleteCount == 2);
+}
+
+// QoS Null participates in immediate control/state processing but is never an
+// MSDU for recipient data delivery.
+{
+    RecipientHarness harness(local);
+    auto packet = makeData("qos-null", local, peer);
+    auto header = packet->removeAtFront<Ieee80211DataHeader>();
+    header->setType(ST_QOS_NULL);
+    packet->insertAtFront(header);
+    service.processFrame(packet, header, harness);
+    REQUIRE(harness.receivedCount == 1);
+    REQUIRE(harness.immediateResponseCount == 1);
+    REQUIRE(harness.dataDeliveryCount == 0);
+    REQUIRE(harness.deleteCount == 1);
+}
+
+// Management is transferred to its existing service. Control processing
+// borrows its packet and is followed by exactly one terminal delete.
+{
+    RecipientHarness harness(local);
+    auto management = makeManagement("management", local, peer);
+    service.processFrame(management,
+            management->peekAtFront<Ieee80211MacHeader>(), harness);
+    auto control = makeControl("control", local, peer);
+    service.processFrame(control,
+            control->peekAtFront<Ieee80211MacHeader>(), harness);
+    REQUIRE(harness.managementDeliveryCount == 1);
+    REQUIRE(harness.controlCount == 1);
+    REQUIRE(harness.immediateResponseCount == 1);
+    REQUIRE(harness.deleteCount == 1);
+}
+
+// A response-action exception happens before ownership transfer; the service
+// performs one terminal delete and preserves the original exception.
+{
+    RecipientHarness harness(local);
+    harness.throwImmediateResponse = true;
+    auto packet = makeData("response-failure", local, peer);
+    REQUIRE(throwsRuntimeError([&] {
+        service.processFrame(packet,
+                packet->peekAtFront<Ieee80211MacHeader>(), harness);
+    }));
+    REQUIRE(harness.receivedCount == 1);
+    REQUIRE(harness.dataDeliveryCount == 0);
+    REQUIRE(harness.deleteCount == 1);
+}
+
+// Ordinary A-MPDU admission preserves the ordered PHY outcome ledger: valid
+// local and group members are delivered, a foreign member is dropped without
+// recipient work, and a failed member cannot update response/BA state.
+{
+    RecipientHarness harness(local);
+    auto aggregate = makeAmpdu("ordinary", {
+        {makeData("local", local, peer, 10), physicallayer::MPDU_SUCCESS},
+        {makeData("foreign", foreign, peer, 11), physicallayer::MPDU_SUCCESS},
+        {makeData("failed", local, peer, 12), physicallayer::MPDU_FCS_ERROR},
+        {makeData("group", multicast, peer, 13), physicallayer::MPDU_SUCCESS},
+        {makeManagement("management", local, peer), physicallayer::MPDU_SUCCESS},
+        {makeControl("control", local, peer), physicallayer::MPDU_SUCCESS},
+    });
+    auto result = service.processAmpdu(aggregate,
+            HcfRecipientService::AggregateResponsePolicy::ORDINARY, harness);
+    REQUIRE(result.decodedMemberCount == 6);
+    REQUIRE(result.acceptedMemberCount == 4);
+    REQUIRE(result.droppedMemberCount == 2);
+    REQUIRE(harness.deliveredSequenceNumbers == std::vector<int>({10, 13}));
+    REQUIRE(harness.immediateResponseCount == 3);
+    REQUIRE(harness.managementDeliveryCount == 1);
+    REQUIRE(harness.controlCount == 1);
+    REQUIRE(harness.foreignDropCount == 1);
+    REQUIRE(harness.incorrectDropCount == 1);
+    REQUIRE(harness.deleteCount == 4); // failed + foreign + control + envelope
+}
+
+// An explicitly incorrect delimiter reaches the checked delimiter-error path;
+// the member and aggregate envelope each have one terminal delete.
+{
+    RecipientHarness harness(local);
+    auto aggregate = makeAmpdu("incorrect-delimiter", {
+        {makeData("incorrect", local, peer, 14),
+                physicallayer::MPDU_SUCCESS, 0, true},
+    });
+    auto result = service.processAmpdu(aggregate,
+            HcfRecipientService::AggregateResponsePolicy::ORDINARY, harness);
+    REQUIRE(result.decodedMemberCount == 1);
+    REQUIRE(result.acceptedMemberCount == 0);
+    REQUIRE(result.droppedMemberCount == 1);
+    REQUIRE(harness.incorrectDropCount == 1);
+    REQUIRE(harness.immediateResponseCount == 0);
+    REQUIRE(harness.deleteCount == 2); // rejected member + envelope
+}
+
+// Current HCF parsing does not validate nonfinal padding bytes separately. If
+// padding is absent, it consumes the corresponding prefix of the next
+// delimiter, admits the first member, and leaves the undecodable remainder to
+// the aggregate envelope without inventing a second member-drop event.
+{
+    RecipientHarness harness(local);
+    auto aggregate = makeAmpdu("missing-padding", {
+        {makeData("first", local, peer, 15),
+                physicallayer::MPDU_SUCCESS, 0, false, true},
+        {makeData("second", local, peer, 16), physicallayer::MPDU_SUCCESS},
+    });
+    auto result = service.processAmpdu(aggregate,
+            HcfRecipientService::AggregateResponsePolicy::ORDINARY, harness);
+    REQUIRE(result.decodedMemberCount == 1);
+    REQUIRE(result.acceptedMemberCount == 1);
+    REQUIRE(result.droppedMemberCount == 0);
+    REQUIRE(harness.deliveredSequenceNumbers == std::vector<int>({15}));
+    REQUIRE(harness.incorrectDropCount == 0);
+    REQUIRE(harness.deleteCount == 1); // aggregate envelope owns the remainder
+}
+
+// A truncated receive-result ledger never admits its unrepresented member.
+// A delimiter whose claimed MPDU exceeds the remaining bytes is observed as
+// malformed and the aggregate envelope still has one terminal owner.
+{
+    RecipientHarness harness(local);
+    auto truncatedLedger = makeAmpdu("truncated-ledger", {
+        {makeData("represented", local, peer, 20), physicallayer::MPDU_SUCCESS},
+        {makeData("missing", local, peer, 21), physicallayer::MPDU_SUCCESS},
+    }, 1);
+    auto ledgerResult = service.processAmpdu(truncatedLedger,
+            HcfRecipientService::AggregateResponsePolicy::ORDINARY, harness);
+    REQUIRE(ledgerResult.acceptedMemberCount == 1);
+    REQUIRE(ledgerResult.droppedMemberCount == 1);
+    REQUIRE(harness.deliveredSequenceNumbers == std::vector<int>({20}));
+
+    auto malformed = makeAmpdu("malformed", {
+        {makeData("truncated", local, peer, 22), physicallayer::MPDU_SUCCESS, 8},
+    });
+    auto malformedResult = service.processAmpdu(malformed,
+            HcfRecipientService::AggregateResponsePolicy::ORDINARY, harness);
+    REQUIRE(malformedResult.acceptedMemberCount == 0);
+    REQUIRE(malformedResult.droppedMemberCount == 1);
+    REQUIRE(harness.incorrectDropCount == 2);
+    REQUIRE(harness.deleteCount == 3); // rejected ledger member + two envelopes
+}
+
+// Empty A-MPDU input has no response or member action and exactly one terminal owner.
+{
+    RecipientHarness harness(local);
+    auto result = service.processAmpdu(new Packet("empty"),
+            HcfRecipientService::AggregateResponsePolicy::ORDINARY, harness);
+    REQUIRE(result.decodedMemberCount == 0);
+    REQUIRE(harness.receivedCount == 0 && harness.droppedCount == 0);
+    REQUIRE(harness.deleteCount == 1);
+}
+
+// HT implicit Block Ack is one borrowed handoff over admitted local data
+// headers. A foreign member is excluded from the handoff and never reaches the
+// existing BA/data state owner.
+{
+    RecipientHarness harness(local);
+    auto aggregate = makeAmpdu("implicit", {
+        {makeData("first", local, peer, 30), physicallayer::MPDU_SUCCESS},
+        {makeData("foreign", foreign, peer, 31), physicallayer::MPDU_SUCCESS},
+        {makeData("second", local, peer, 32), physicallayer::MPDU_SUCCESS},
+    });
+    auto result = service.processAmpdu(aggregate,
+            HcfRecipientService::AggregateResponsePolicy::HT_IMPLICIT_BLOCK_ACK,
+            harness);
+    REQUIRE(result.aggregateResponseSent);
+    REQUIRE(harness.implicitResponseCount == 1);
+    REQUIRE(harness.implicitResponseSequenceNumbers ==
+            std::vector<int>({30, 32}));
+    REQUIRE(harness.dataDeliveryCount == 2);
+    REQUIRE(harness.implicitDataDeliveryCount == 2);
+    REQUIRE(harness.foreignDropCount == 1);
+    REQUIRE(harness.deleteCount == 3); // foreign + eliciting copy + envelope
+}
+
+{
+    RecipientHarness harness(local);
+    auto aggregate = makeAmpdu("implicit-valid", {
+        {makeData("first", local, peer, 40), physicallayer::MPDU_SUCCESS},
+        {makeData("second", local, peer, 41), physicallayer::MPDU_SUCCESS},
+    });
+    auto result = service.processAmpdu(aggregate,
+            HcfRecipientService::AggregateResponsePolicy::HT_IMPLICIT_BLOCK_ACK,
+            harness);
+    REQUIRE(result.aggregateResponseSent);
+    REQUIRE(harness.implicitResponseCount == 1);
+    REQUIRE(harness.immediateResponseCount == 0);
+    REQUIRE(harness.implicitDataDeliveryCount == 2);
+    REQUIRE(harness.deleteCount == 2); // eliciting copy + envelope
+}
+
+// An FCS-failed implicit member is dropped before BA state handoff. Current
+// HCF behavior still sends one partial Block Ack for the admitted member.
+{
+    RecipientHarness harness(local);
+    auto aggregate = makeAmpdu("implicit-fcs-failure", {
+        {makeData("valid", local, peer, 42), physicallayer::MPDU_SUCCESS},
+        {makeData("fcs-failed", local, peer, 43), physicallayer::MPDU_FCS_ERROR},
+    });
+    auto result = service.processAmpdu(aggregate,
+            HcfRecipientService::AggregateResponsePolicy::HT_IMPLICIT_BLOCK_ACK,
+            harness);
+    REQUIRE(result.decodedMemberCount == 2);
+    REQUIRE(result.acceptedMemberCount == 1);
+    REQUIRE(result.droppedMemberCount == 1);
+    REQUIRE(result.aggregateResponseSent);
+    REQUIRE(harness.implicitResponseCount == 1);
+    REQUIRE(harness.implicitResponseSequenceNumbers == std::vector<int>({42}));
+    REQUIRE(harness.incorrectDropCount == 1);
+    REQUIRE(harness.deleteCount == 3); // failed member + eliciting copy + envelope
+}
+
+// A structurally truncated implicit aggregate with no decoded member performs
+// no response/BA action; the malformed outcome is observed once and the
+// eliciting copy plus aggregate envelope are each deleted once.
+{
+    RecipientHarness harness(local);
+    auto aggregate = makeAmpdu("implicit-truncated", {
+        {makeData("truncated", local, peer, 44),
+                physicallayer::MPDU_SUCCESS, 8},
+    });
+    auto result = service.processAmpdu(aggregate,
+            HcfRecipientService::AggregateResponsePolicy::HT_IMPLICIT_BLOCK_ACK,
+            harness);
+    REQUIRE(result.decodedMemberCount == 1);
+    REQUIRE(result.acceptedMemberCount == 0);
+    REQUIRE(result.droppedMemberCount == 1);
+    REQUIRE(!result.aggregateResponseSent);
+    REQUIRE(harness.implicitResponseCount == 0);
+    REQUIRE(harness.dataDeliveryCount == 0);
+    REQUIRE(harness.incorrectDropCount == 1);
+    REQUIRE(harness.deleteCount == 2); // eliciting copy + envelope
+}
+
+// A non-data member makes the implicit request structurally invalid: no BA
+// response is handed off, the valid local data member is still delivered, and
+// the non-data member has one explicit terminal drop.
+{
+    RecipientHarness harness(local);
+    auto aggregate = makeAmpdu("implicit-nondata", {
+        {makeData("data", local, peer, 45), physicallayer::MPDU_SUCCESS},
+        {makeManagement("management", local, peer), physicallayer::MPDU_SUCCESS},
+    });
+    auto result = service.processAmpdu(aggregate,
+            HcfRecipientService::AggregateResponsePolicy::HT_IMPLICIT_BLOCK_ACK,
+            harness);
+    REQUIRE(!result.aggregateResponseSent);
+    REQUIRE(harness.implicitResponseCount == 0);
+    REQUIRE(result.acceptedMemberCount == 1);
+    REQUIRE(result.droppedMemberCount == 1);
+    REQUIRE(harness.invalidImplicitDropCount == 1);
+    REQUIRE(harness.deleteCount == 3); // invalid member + eliciting copy + envelope
+}
+
+// If the borrowed implicit-response action throws, no member is transferred;
+// all members, the eliciting copy, and the envelope are cleaned exactly once.
+{
+    RecipientHarness harness(local);
+    harness.throwImplicitResponse = true;
+    auto aggregate = makeAmpdu("implicit-failure", {
+        {makeData("first", local, peer, 50), physicallayer::MPDU_SUCCESS},
+        {makeData("second", local, peer, 51), physicallayer::MPDU_SUCCESS},
+    });
+    REQUIRE(throwsRuntimeError([&] {
+        service.processAmpdu(aggregate,
+                HcfRecipientService::AggregateResponsePolicy::HT_IMPLICIT_BLOCK_ACK,
+                harness);
+    }));
+    REQUIRE(harness.implicitResponseCount == 1);
+    REQUIRE(harness.dataDeliveryCount == 0);
+    REQUIRE(harness.deleteCount == 4);
+}
+
+EV << "HCF recipient service preserves admission, response, and ownership contracts.\n";
+
+%contains: stdout
+HCF recipient service preserves admission, response, and ownership contracts.

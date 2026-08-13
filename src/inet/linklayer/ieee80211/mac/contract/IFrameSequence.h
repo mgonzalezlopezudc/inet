@@ -50,6 +50,10 @@ class INET_API ITransmitStep : public IFrameSequenceStep
 class INET_API IReceiveStep : public IFrameSequenceStep
 {
   public:
+    enum class HeaderlessResponseFamily {
+        NONE,
+        HE_TRIGGER_BASED,
+    };
     enum class TimeoutHandling {
         ABORT_SEQUENCE,
         COMPLETE_STEP,
@@ -71,6 +75,8 @@ class INET_API IReceiveStep : public IFrameSequenceStep
     virtual Completion getTimeoutCompletion() const { return Completion::EXPIRED; }
     virtual bool isExpectedResponse(Packet *frame, FrameSequenceContext *context) const { return true; }
     virtual bool acceptsHeaderlessFrame(const Packet *frame) const { return false; }
+    virtual HeaderlessResponseFamily getHeaderlessResponseFamily() const
+        { return HeaderlessResponseFamily::NONE; }
     virtual UnexpectedResponseHandling getUnexpectedResponseHandling() const { return UnexpectedResponseHandling::REJECT_STEP; }
 };
 

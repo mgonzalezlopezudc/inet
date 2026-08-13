@@ -84,20 +84,41 @@ class FaultInjectingVhtDlMuTxOpFs : public VhtDlMuTxOpFs
   public:
     FaultInjectingVhtDlMuTxOpFs(const VhtDlMuPlan& plan, Ieee80211ModeSet *modeSet,
             IAckHandler *ackHandler, IFrameSequenceHandler::ICallback *callback,
+            IVhtDlMuExchangeCallback *vhtCallback, uint64_t transactionToken,
             bool *injected, cComponent *owner) :
-        VhtDlMuTxOpFs(plan, modeSet, ackHandler, callback), injected(injected), owner(owner) {}
+        VhtDlMuTxOpFs(plan, modeSet, ackHandler, callback, vhtCallback, transactionToken),
+        injected(injected), owner(owner) {}
+};
+
+class FaultInjectingVhtTxOpFactory : public VhtHcfFeature::ITxOpFactory
+{
+  public:
+    bool injected = false;
+    cComponent *owner = nullptr;
+
+    virtual VhtDlMuTxOpFs *create(const VhtDlMuPlan& plan,
+            Ieee80211ModeSet *modeSet, IAckHandler *ackHandler,
+            IFrameSequenceHandler::ICallback *callback,
+            IVhtDlMuExchangeCallback *vhtCallback,
+            uint64_t transactionToken) override
+    {
+        return new FaultInjectingVhtDlMuTxOpFs(plan, modeSet, ackHandler,
+                callback, vhtCallback, transactionToken, &injected, owner);
+    }
 };
 
 class FaultInjectingVhtHcf : public VhtHcf
 {
   protected:
-    bool injected = false;
+    FaultInjectingVhtTxOpFactory factory;
 
-    virtual VhtDlMuTxOpFs *createVhtDlMuTxOpFs(const VhtDlMuPlan& plan,
-            IAckHandler *ackHandler) override
+    virtual void initialize(int stage) override
     {
-        return new FaultInjectingVhtDlMuTxOpFs(plan, modeSet, ackHandler, this,
-                &injected, this);
+        VhtHcf::initialize(stage);
+        if (stage == INITSTAGE_LOCAL) {
+            factory.owner = this;
+            setVhtDlMuTxOpFactoryForTesting(&factory);
+        }
     }
 };
 
@@ -365,7 +386,12 @@ class VhtDlMuNegativeObserver : public cSimpleModule, public cListener
                 Ieee80211Radio::popIeee80211PhyHeaderAtFront(copy.get());
                 auto bar = copy->peekAtFront<Ieee80211BlockAckReq>();
                 auto barEndpoint = transmission->getEndTime() + bar->getDurationField();
-                if (barEndpoint.inUnit(SIMTIME_US) != navEndpoint.inUnit(SIMTIME_US))
+                // Duration fields are integer microseconds while the two observed
+                // endpoints also include the modeled 5 m propagation legs. Accept
+                // that physical round-trip plus one Duration-field quantization.
+                auto endpointError = fabs((barEndpoint - navEndpoint).dbl());
+                auto physicalTolerance = 2 * 5.0 / 299792458.0 + 1e-6;
+                if (endpointError > physicalTolerance)
                     throw cRuntimeError("VHT NAV endpoint mismatch: MU=%s BAR=%s duration=%s",
                             navEndpoint.str().c_str(), barEndpoint.str().c_str(),
                             bar->getDurationField().str().c_str());

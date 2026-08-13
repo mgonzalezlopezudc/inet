@@ -12,6 +12,7 @@
 
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequence.h"
+#include "inet/linklayer/ieee80211/mac/contract/IHeUlMuExchangeCallback.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/IIeee80211HeUlTriggerPolicy.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeUlMuPlan.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
@@ -20,12 +21,11 @@
 namespace inet {
 namespace ieee80211 {
 
+class HeUlCoordinator;
+
 INET_API Ieee80211MultiStaBlockAckRecord buildHeUlMultiStaBlockAckRecord(
         uint16_t aid, uint8_t tid,
         const std::vector<physicallayer::Ieee80211MpduReceiveResult>& outcomes);
-
-class HeHcf;
-class HeUlCoordinator;
 
 /**
  * AP-side frame sequence for a trigger-based HE uplink OFDMA TXOP.
@@ -37,8 +37,7 @@ class INET_API HeUlMuTxOpFs : public IFrameSequence
 {
   protected:
     static constexpr uint8_t modeledTidAggregationLimit = 1;
-    HeUlCoordinator *coordinator = nullptr;
-    HeHcf *callback = nullptr;
+    IHeUlMuExchangeCallback *callback = nullptr;
     const HeUlMuPlan plan;
     const IIeee80211HeUlScheduler::Schedule& schedule;
     const IIeee80211HeUlTriggerPolicy::TriggerType triggerType;
@@ -56,10 +55,15 @@ class INET_API HeUlMuTxOpFs : public IFrameSequence
     void processResponses(FrameSequenceContext *context);
 
   public:
-    HeUlMuTxOpFs(HeUlCoordinator *coordinator, HeHcf *callback,
+    HeUlMuTxOpFs(IHeUlMuExchangeCallback *callback,
             const HeUlMuPlan& plan,
             physicallayer::Ieee80211ModeSet *modeSet,
             const MacAddress& apAddress);
+    HeUlMuTxOpFs(HeUlCoordinator *, IHeUlMuExchangeCallback *callback,
+            const HeUlMuPlan& plan,
+            physicallayer::Ieee80211ModeSet *modeSet,
+            const MacAddress& apAddress) :
+        HeUlMuTxOpFs(callback, plan, modeSet, apAddress) {}
 
     virtual void startSequence(FrameSequenceContext *context, int firstStep) override;
     virtual IFrameSequenceStep *prepareStep(FrameSequenceContext *context) override;

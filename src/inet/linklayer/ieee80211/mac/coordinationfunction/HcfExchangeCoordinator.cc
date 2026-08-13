@@ -64,6 +64,13 @@ void HcfExchangeCoordinator::beginPreparation()
     state = State::PREPARING;
 }
 
+void HcfExchangeCoordinator::preparationCompletedWithoutSequence()
+{
+    requireState("preparationCompletedWithoutSequence", {State::PREPARING});
+    state = State::COMPLETING;
+    reset();
+}
+
 void HcfExchangeCoordinator::beginTransmission(Packet *packet)
 {
     requireState("beginTransmission", {State::IDLE, State::PREPARING,

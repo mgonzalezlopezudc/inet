@@ -82,6 +82,26 @@ std::vector<Packet *> *OriginatorMacDataService::extractFramesToTransmit(queuein
     }
 }
 
+std::vector<Packet *> *OriginatorMacDataService::extractExactFrameToTransmit(
+        queueing::IPacketQueue *pendingQueue, Packet *packet)
+{
+    Enter_Method("extractExactFrameToTransmit");
+    bool found = false;
+    for (int i = 0; i < pendingQueue->getNumPackets(); ++i)
+        found |= pendingQueue->getPacket(i) == packet;
+    if (!found)
+        return nullptr;
+    pendingQueue->removePacket(packet);
+    take(packet);
+    if (sequenceNumberAssignment) {
+        auto frame = packet->removeAtFront<Ieee80211DataOrMgmtHeader>();
+        assignSequenceNumber(frame);
+        packet->insertAtFront(frame);
+    }
+    auto fragments = fragmentationPolicy ? fragmentIfNeeded(packet) : nullptr;
+    return fragments == nullptr ? new std::vector<Packet *>({packet}) : fragments;
+}
+
 OriginatorMacDataService::~OriginatorMacDataService()
 {
     delete sequenceNumberAssignment;

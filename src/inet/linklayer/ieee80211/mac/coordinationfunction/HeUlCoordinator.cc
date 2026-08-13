@@ -42,8 +42,10 @@ void HeUlCoordinator::initialize(int stage)
         ASSERT(ocwMin <= ocwMax);
         ofdmaContentionWindow = ocwMin;
         ofdmaBackoff = intuniform(0, ocwMin);
-        scheduler = check_and_cast<IIeee80211HeUlScheduler *>(getParentModule()->getSubmodule("ulScheduler"));
-        triggerPolicy = check_and_cast<IIeee80211HeUlTriggerPolicy *>(getParentModule()->getSubmodule("ulTriggerPolicy"));
+        scheduler = check_and_cast<IIeee80211HeUlScheduler *>(
+                getModuleByPath(par("schedulerModule")));
+        triggerPolicy = check_and_cast<IIeee80211HeUlTriggerPolicy *>(
+                getModuleByPath(par("triggerPolicyModule")));
         basicTriggerSentSignal = registerSignal("heUlBasicTriggerSent");
         bsrpTriggerSentSignal = registerSignal("heUlBsrpTriggerSent");
         bufferStatusUpdatedSignal = registerSignal("heUlBufferStatusUpdated");
@@ -164,6 +166,15 @@ void HeUlCoordinator::invalidatePeer(const MacAddress& stationAddress)
     clearStation(stationAddress);
     if (scheduler != nullptr)
         scheduler->invalidatePeer(stationAddress);
+}
+
+std::optional<HeUlCoordinator::BufferStatus> HeUlCoordinator::getBufferStatusSnapshot(
+        uint16_t associationId, const MacAddress& stationAddress) const
+{
+    auto it = bufferStatusByAid.find(associationId);
+    if (it == bufferStatusByAid.end() || it->second.stationAddress != stationAddress)
+        return std::nullopt;
+    return it->second;
 }
 
 IIeee80211HeUlTriggerPolicy::TriggerType HeUlCoordinator::selectTrigger(const Ieee80211Mib *mib) const
@@ -311,8 +322,24 @@ IIeee80211HeUlScheduler::Schedule HeUlCoordinator::prepareSchedule(const Ieee802
     return schedule;
 }
 
-void HeUlCoordinator::commitSchedule(const IIeee80211HeUlScheduler::Schedule& schedule)
+IIeee80211HeUlScheduler::Schedule HeUlCoordinator::prepareSchedule(
+        const IIeee80211HeUlScheduler::ScheduleContext& context,
+        const std::vector<uint16_t>& staleReportAids)
 {
+    ASSERT(scheduler != nullptr);
+    auto schedule = scheduler->schedule(context);
+    schedule.staleReportAids = staleReportAids;
+    EV_DEBUG << "Prepared HE UL schedule from immutable candidates without committing coordinator state: candidates="
+             << context.candidates.size() << ", allocations=" << schedule.allocations.size()
+             << ", commonDuration=" << schedule.commonDuration << "\n";
+    return schedule;
+}
+
+void HeUlCoordinator::commitSchedule(
+        const IIeee80211HeUlScheduler::ScheduleContext& context,
+        const IIeee80211HeUlScheduler::Schedule& schedule)
+{
+    scheduler->commitSchedule(context, schedule);
     committedBasicTriggerUsers.clear();
     for (auto aid : schedule.staleReportAids)
         emit(staleReportSignal, (long)aid);

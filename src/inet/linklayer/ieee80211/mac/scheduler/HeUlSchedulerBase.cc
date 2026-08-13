@@ -186,8 +186,10 @@ simtime_t HeUlSchedulerBase::computeCommonDuration(const ScheduleContext& contex
     return duration;
 }
 
-void HeUlSchedulerBase::recordSchedule(const ScheduleContext& context, const Schedule& schedule, const char *reason)
+void HeUlSchedulerBase::commitSchedule(const ScheduleContext& context,
+        const Schedule& schedule)
 {
+    committedScheduleCount++;
     lastCandidateCount = context.candidates.size();
     lastScheduledUserCount = 0;
     lastRandomAccessRuCount = 0;
@@ -200,7 +202,7 @@ void HeUlSchedulerBase::recordSchedule(const ScheduleContext& context, const Sch
     }
     lastCommonDuration = schedule.commonDuration;
     lastChannelBandwidth = context.channelBandwidth;
-    lastSchedulingReason = reason == nullptr ? "" : reason;
+    lastSchedulingReason = schedule.decisionReason;
     lastCandidates = context.candidates;
     lastRuAllocations = schedule.allocations;
 }

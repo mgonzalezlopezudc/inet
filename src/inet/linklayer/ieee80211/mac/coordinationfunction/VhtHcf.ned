@@ -14,6 +14,7 @@ module VhtHcf extends Hcf
     parameters:
         @class(VhtHcf);
         @display("i=block/control");
+        featureSet.typename = default("VhtHcfFeatureSet");
         bool enableVhtSuBeamforming = default(false);
         bool enableVhtDlMuMimo = default(false);
         int vhtDlMuGroupId = default(1); // Selected VHT MU group ID, 1..62

@@ -36,6 +36,7 @@ network TestNetwork
 network = TestNetwork
 
 %global:
+#include <memory>
 #include <type_traits>
 
 using namespace inet;
@@ -49,6 +50,8 @@ struct ExchangeOutcome
     int expiredCompletions = 0;
     int finishedSequences = 0;
     int receivedResponses = 0;
+    int failedFrames = 0;
+    int abortedSequences = 0;
 };
 
 class TrackingReceiveStep : public ReceiveStep
@@ -153,6 +156,8 @@ class DeferredRxTimeoutHarness
     virtual void finishCorruptReception() = 0;
     virtual void expireAfterSequenceCompletionDuringReception() = 0;
     virtual void checkNoDeferredTimeout() = 0;
+    virtual void startEqualTimeExpectedResponse(ExchangeOutcome& outcome) = 0;
+    virtual void checkEqualTimeExpectedResponse(const char *name) = 0;
 };
 
 template<typename CoordinationFunction>
@@ -162,6 +167,9 @@ class TestCoordinationFunction : public CoordinationFunction, public DeferredRxT
     bool receptionInProgress = false;
     InProgressFrames inProgressFrames;
     ExchangeOutcome *outcome = nullptr;
+    ExchangeOutcome *equalTimeOutcome = nullptr;
+    cMessage *receiveStartEvent = nullptr;
+    cMessage *responseCompleteEvent = nullptr;
 
     virtual void clearDeferredTimeoutState() = 0;
     virtual bool hasDeferredTimeoutForCurrentStep() = 0;
@@ -169,109 +177,222 @@ class TestCoordinationFunction : public CoordinationFunction, public DeferredRxT
     virtual int numInitStages() const override { return 1; }
     virtual void initialize(int stage) override
     {
-        if constexpr (std::is_same_v<CoordinationFunction, Hcf>)
-            this->exchangeCoordinator.initializeTimers();
-        else
+        if constexpr (std::is_same_v<CoordinationFunction, Hcf>) {
+            auto engine = std::make_unique<HcfExchangeEngine>(
+                    std::make_unique<FrameSequenceHandler>());
+            engine->initializeTimers();
+            this->installExchangeEngineForTesting(std::move(engine));
+            Hcf::TestActionPort port;
+            port.isReceptionInProgress = [this] () { return receptionInProgress; };
+            port.resumeContention = [] () {};
+            port.transmitFrame = [this] (Packet *packet, simtime_t) {
+                packet->removeFromOwnershipTree();
+                this->completeExchangeTransmissionForTesting();
+            };
+            port.originatorProcessTransmittedFrame = [] (Packet *) {};
+            port.originatorProcessReceivedFrame = [this] (Packet *, Packet *) {
+                outcome->receivedResponses++;
+            };
+            port.originatorProcessFailedFrame = [this] (Packet *) {
+                outcome->failedFrames++;
+            };
+            port.frameSequenceFinished = [this] () {
+                clearDeferredTimeoutState();
+                outcome->finishedSequences++;
+            };
+            this->installTestActionPort(std::move(port));
+            this->installExchangeTerminalSinkForTesting(
+                    [] (HcfTransactionIdentity, HcfExchangeAbortReason) {});
+        }
+        else {
             this->startRxTimer = new cMessage("startRxTimeout");
-        this->frameSequenceHandler = new FrameSequenceHandler();
+            this->frameSequenceHandler = std::make_unique<FrameSequenceHandler>();
+        }
+        getTimerForTest()->setSchedulingPriority(0);
+        receiveStartEvent = new cMessage("receiveStartEvent");
+        receiveStartEvent->setSchedulingPriority(-1);
+        responseCompleteEvent = new cMessage("responseCompleteEvent");
+        responseCompleteEvent->setSchedulingPriority(1);
     }
 
-    cMessage *getStartRxTimerForTest()
+    virtual ~TestCoordinationFunction()
+    {
+        this->cancelAndDelete(receiveStartEvent);
+        this->cancelAndDelete(responseCompleteEvent);
+    }
+
+    cMessage *getTimerForTest()
     {
         if constexpr (std::is_same_v<CoordinationFunction, Hcf>)
-            return this->exchangeCoordinator.getStartRxTimer();
+            return this->getStartRxTimerForTest();
         else
             return this->startRxTimer;
     }
 
-    virtual bool isReceptionInProgress() override
-    {
-        return receptionInProgress;
-    }
-
-    virtual void scheduleStartRxTimer(simtime_t timeout) override
-    {
-        REQUIRE(timeout >= SIMTIME_ZERO);
-        clearDeferredTimeoutState();
-    }
-
-    virtual void transmitFrame(Packet *packet, simtime_t) override
+    virtual bool isReceptionInProgress() { return receptionInProgress; }
+    virtual void transmitFrame(Packet *packet, simtime_t)
     {
         packet->removeFromOwnershipTree();
-        this->frameSequenceHandler->transmissionComplete();
+        if constexpr (!std::is_same_v<CoordinationFunction, Hcf>)
+            this->frameSequenceHandler->transmissionComplete();
     }
-
-    virtual void originatorProcessTransmittedFrame(Packet *) override {}
-
-    virtual void originatorProcessReceivedFrame(Packet *, Packet *) override
-    {
-        outcome->receivedResponses++;
-    }
-
-    virtual void frameSequenceFinished() override
-    {
-        clearDeferredTimeoutState();
-        outcome->finishedSequences++;
-    }
+    virtual void originatorProcessTransmittedFrame(Packet *) {}
+    virtual void originatorProcessReceivedFrame(Packet *, Packet *)
+        { outcome->receivedResponses++; }
+    virtual void originatorProcessFailedFrame(Packet *)
+        { outcome->failedFrames++; }
+    virtual void frameSequenceFinished()
+        { clearDeferredTimeoutState(); outcome->finishedSequences++; }
 
   public:
     virtual void startExchange(ExchangeOutcome& outcome, bool expected, bool collection) override
     {
-        REQUIRE(!this->frameSequenceHandler->isSequenceRunning());
+        Enter_Method_Silent();
+        if constexpr (std::is_same_v<CoordinationFunction, Hcf>)
+            REQUIRE(!this->isFrameSequenceRunning());
+        else
+            REQUIRE(!this->frameSequenceHandler->isSequenceRunning());
         this->outcome = &outcome;
         auto context = new FrameSequenceContext(MacAddress::UNSPECIFIED_ADDRESS,
                 nullptr, &inProgressFrames, nullptr, nullptr, nullptr, nullptr);
-        this->frameSequenceHandler->startFrameSequence(
-                new TestExchangeFs(&outcome, expected, collection), context, this);
-        REQUIRE(this->frameSequenceHandler->isSequenceRunning());
-        REQUIRE(dynamic_cast<IReceiveStep *>(
-                this->frameSequenceHandler->getContext()->getLastStep()) != nullptr);
+        if constexpr (std::is_same_v<CoordinationFunction, Hcf>)
+            this->startExchangeFrameSequence(
+                    new TestExchangeFs(&outcome, expected, collection), context);
+        else
+            this->frameSequenceHandler->startFrameSequence(
+                    new TestExchangeFs(&outcome, expected, collection), context, this);
+        if constexpr (std::is_same_v<CoordinationFunction, Hcf>)
+            REQUIRE(this->isFrameSequenceRunning());
+        else
+            REQUIRE(this->frameSequenceHandler->isSequenceRunning());
+        if constexpr (std::is_same_v<CoordinationFunction, Hcf>)
+            REQUIRE(dynamic_cast<IReceiveStep *>(const_cast<IFrameSequenceStep *>(
+                    this->getFrameSequenceContext()->getLastStep())) != nullptr);
+        else
+            REQUIRE(dynamic_cast<IReceiveStep *>(
+                    this->frameSequenceHandler->getContext()->getLastStep()) != nullptr);
     }
 
     virtual void expireDuringReception() override
     {
+        Enter_Method_Silent();
         receptionInProgress = true;
-        this->handleMessage(getStartRxTimerForTest());
+        if (getTimerForTest()->isScheduled())
+            this->cancelEvent(getTimerForTest());
+        this->handleMessage(getTimerForTest());
         REQUIRE(hasDeferredTimeoutForCurrentStep());
     }
 
     virtual void processResponse() override
     {
+        Enter_Method_Silent();
         auto response = new Packet("response");
         response->removeFromOwnershipTree();
-        this->frameSequenceHandler->processResponse(response);
+        if constexpr (std::is_same_v<CoordinationFunction, Hcf>)
+            this->processExchangeResponseForTesting(response);
+        else
+            this->frameSequenceHandler->processResponse(response);
     }
 
     virtual void finishReception() override
     {
+        Enter_Method_Silent();
         receptionInProgress = false;
         this->handleDeferredStartRxTimeout();
     }
 
     virtual void finishCorruptReception() override
     {
+        Enter_Method_Silent();
         receptionInProgress = false;
         this->corruptedFrameReceived();
     }
 
     virtual void expireAfterSequenceCompletionDuringReception() override
     {
-        REQUIRE(!this->frameSequenceHandler->isSequenceRunning());
+        Enter_Method_Silent();
+        if constexpr (std::is_same_v<CoordinationFunction, Hcf>)
+            REQUIRE(!this->isFrameSequenceRunning());
+        else
+            REQUIRE(!this->frameSequenceHandler->isSequenceRunning());
         receptionInProgress = true;
-        this->handleMessage(getStartRxTimerForTest());
+        if (getTimerForTest()->isScheduled())
+            this->cancelEvent(getTimerForTest());
+        this->handleMessage(getTimerForTest());
         receptionInProgress = false;
     }
 
     virtual void checkNoDeferredTimeout() override
     {
+        Enter_Method_Silent();
         this->handleDeferredStartRxTimeout();
         this->corruptedFrameReceived();
+    }
+
+    virtual void startEqualTimeExpectedResponse(ExchangeOutcome& outcome) override
+    {
+        Enter_Method_Silent();
+        REQUIRE(!receiveStartEvent->isScheduled());
+        REQUIRE(!responseCompleteEvent->isScheduled());
+        equalTimeOutcome = &outcome;
+        startExchange(outcome, true, false);
+        REQUIRE(getTimerForTest()->isScheduled());
+        auto deadline = getTimerForTest()->getArrivalTime();
+        this->scheduleAt(deadline, receiveStartEvent);
+        this->scheduleAt(deadline, responseCompleteEvent);
+    }
+
+    virtual void checkEqualTimeExpectedResponse(const char *name) override
+    {
+        Enter_Method_Silent();
+        REQUIRE(equalTimeOutcome != nullptr);
+        REQUIRE(!hasDeferredTimeoutForCurrentStep());
+        REQUIRE(equalTimeOutcome->acceptedCompletions == 1);
+        REQUIRE(equalTimeOutcome->expiredCompletions == 0);
+        REQUIRE(equalTimeOutcome->receivedResponses == 1);
+        REQUIRE(equalTimeOutcome->failedFrames == 0);
+        REQUIRE(equalTimeOutcome->abortedSequences == 0);
+        REQUIRE(equalTimeOutcome->finishedSequences == 1);
+        EV << name << " equal-time scheduled RX-start precedence: success once, timeout cleared\n";
+        equalTimeOutcome = nullptr;
+    }
+
+    virtual void handleMessage(cMessage *message) override
+    {
+        if (message == receiveStartEvent) {
+            receptionInProgress = true;
+            EV << "Scheduled RX-start event at " << simTime()
+               << " with priority " << message->getSchedulingPriority() << "\n";
+        }
+        else if (message == responseCompleteEvent) {
+            REQUIRE(hasDeferredTimeoutForCurrentStep());
+            processResponse();
+            finishReception();
+            EV << "Scheduled response completion at " << simTime()
+               << " with priority " << message->getSchedulingPriority() << "\n";
+        }
+        else
+            CoordinationFunction::handleMessage(message);
     }
 };
 
 class TestDcf : public TestCoordinationFunction<Dcf>
 {
   protected:
+    virtual void frameSequenceAborted() override
+    {
+        outcome->abortedSequences++;
+    }
+
+    virtual void scheduleStartRxTimer(simtime_t timeout) override
+    {
+        REQUIRE(timeout >= SIMTIME_ZERO);
+        clearDeferredTimeoutState();
+        if (this->startRxTimer->isScheduled())
+            this->cancelEvent(this->startRxTimer);
+        this->scheduleAfter(timeout, this->startRxTimer);
+    }
+
     virtual void clearDeferredTimeoutState() override
     {
         this->deferredStartRxTimeoutStep = nullptr;
@@ -279,7 +400,9 @@ class TestDcf : public TestCoordinationFunction<Dcf>
 
     virtual bool hasDeferredTimeoutForCurrentStep() override
     {
-        return this->deferredStartRxTimeoutStep ==
+        return this->deferredStartRxTimeoutStep != nullptr &&
+                this->frameSequenceHandler->isSequenceRunning() &&
+                this->deferredStartRxTimeoutStep ==
                 this->frameSequenceHandler->getContext()->getLastStep();
     }
 };
@@ -288,28 +411,30 @@ class TestHcf : public TestCoordinationFunction<Hcf>
   protected:
     virtual void clearDeferredTimeoutState() override
     {
-        this->responseService.clearTimerState();
+        this->clearExchangeTimerStateForTest();
     }
 
     virtual bool hasDeferredTimeoutForCurrentStep() override
     {
-        return this->responseService.hasDeferredStartRxTimeout();
+        return this->hasDeferredStartRxTimeoutForTest();
     }
 
     IReceiveStep *getCurrentReceiveStep()
     {
-        REQUIRE(this->frameSequenceHandler->isSequenceRunning());
+        REQUIRE(this->isFrameSequenceRunning());
         auto receiveStep = dynamic_cast<IReceiveStep *>(
-                this->frameSequenceHandler->getContext()->getLastStep());
+                const_cast<IFrameSequenceStep *>(
+                        this->getFrameSequenceContext()->getLastStep()));
         REQUIRE(receiveStep != nullptr);
         return receiveStep;
     }
 
     void scheduleStartRxTimerForTest()
     {
-        REQUIRE(!getStartRxTimerForTest()->isScheduled());
-        this->scheduleAfter(SimTime(1, SIMTIME_MS), getStartRxTimerForTest());
-        REQUIRE(getStartRxTimerForTest()->isScheduled());
+        if (getTimerForTest()->isScheduled())
+            this->cancelEvent(getTimerForTest());
+        this->scheduleAfter(SimTime(1, SIMTIME_MS), getTimerForTest());
+        REQUIRE(getTimerForTest()->isScheduled());
     }
 
     void processHeaderlessOutcomeResponse(IReceiveStep *receiveStep)
@@ -328,8 +453,8 @@ class TestHcf : public TestCoordinationFunction<Hcf>
         auto receiveStep = getCurrentReceiveStep();
         scheduleStartRxTimerForTest();
         processHeaderlessOutcomeResponse(receiveStep);
-        REQUIRE(!getStartRxTimerForTest()->isScheduled());
-        REQUIRE(!this->frameSequenceHandler->isSequenceRunning());
+        REQUIRE(!getTimerForTest()->isScheduled());
+        REQUIRE(!this->isFrameSequenceRunning());
         REQUIRE(outcome.acceptedCompletions == 1);
         REQUIRE(outcome.expiredCompletions == 0);
         REQUIRE(outcome.receivedResponses == 1);
@@ -345,11 +470,11 @@ class TestHcf : public TestCoordinationFunction<Hcf>
         auto receiveStep = getCurrentReceiveStep();
         scheduleStartRxTimerForTest();
         processHeaderlessOutcomeResponse(receiveStep);
-        REQUIRE(getStartRxTimerForTest()->isScheduled());
-        REQUIRE(this->frameSequenceHandler->isSequenceRunning());
-        REQUIRE(this->frameSequenceHandler->getContext()->getLastStep() == receiveStep);
-        this->cancelEvent(getStartRxTimerForTest());
-        this->handleMessage(getStartRxTimerForTest());
+        REQUIRE(getTimerForTest()->isScheduled());
+        REQUIRE(this->isFrameSequenceRunning());
+        REQUIRE(this->getFrameSequenceContext()->getLastStep() == receiveStep);
+        this->cancelEvent(getTimerForTest());
+        this->handleMessage(getTimerForTest());
         this->checkNoDeferredTimeout();
         REQUIRE(outcome.acceptedCompletions == 0);
         REQUIRE(outcome.expiredCompletions == 1);
@@ -491,6 +616,15 @@ runTests("HCF", hcf);
 hcf->testAcceptedHeaderlessOutcomeResponse();
 hcf->testIgnoredHeaderlessOutcomeResponse();
 
+ExchangeOutcome dcfEqualTimeOutcome;
+ExchangeOutcome hcfEqualTimeOutcome;
+auto dcf = check_and_cast<TestDcf *>(getParentModule()->getSubmodule("dcf"));
+dcf->startEqualTimeExpectedResponse(dcfEqualTimeOutcome);
+hcf->startEqualTimeExpectedResponse(hcfEqualTimeOutcome);
+wait(SimTime(2, SIMTIME_MS));
+dcf->checkEqualTimeExpectedResponse("DCF");
+hcf->checkEqualTimeExpectedResponse("HCF");
+
 %contains: stdout
 Frame-sequence receive-timeout state: clear, stale, and current tokens verified
 
@@ -535,3 +669,9 @@ HCF accepted headerless outcome: timer canceled
 
 %contains: stdout
 HCF ignored headerless outcome: timer expired once
+
+%contains: stdout
+DCF equal-time scheduled RX-start precedence: success once, timeout cleared
+
+%contains: stdout
+HCF equal-time scheduled RX-start precedence: success once, timeout cleared

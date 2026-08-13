@@ -8,6 +8,9 @@ allocation index; all Block Ack responses require an explicit BAR or MU-BAR.
 #include "inet/linklayer/ieee80211/mac/contract/IQosRateSelection.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
+#include "inet/linklayer/ieee80211/mac/recipient/RecipientAckProcedure.h"
+#include <memory>
+#include "inet/linklayer/common/MacAddress.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 #include "inet/linklayer/ieee80211/mac/Rx.h"
 #include "inet/linklayer/ethernet/common/Ethernet.h"
@@ -37,12 +40,19 @@ module TestHcf
         bool useImplicitBlockAck = default(false);
 }
 
+module TestAmendmentHcf
+{
+    parameters:
+        @class(TestAmendmentHcf);
+}
+
 network TestNetwork
 {
     submodules:
         test: Test;
         mac: MockMac;
         hcf: TestHcf;
+        amendmentHcf: TestAmendmentHcf;
 }
 
 %inifile: omnetpp.ini
@@ -142,7 +152,7 @@ class MockRateSelection : public IQosRateSelection
     }
 };
 
-class MockRecipientAckPolicy : public IRecipientQosAckPolicy
+class MockRecipientAckPolicy : public IRecipientQosAckPolicy, public IRecipientAckPolicy
 {
   public:
     virtual bool isAckNeeded(const Ptr<const Ieee80211DataOrMgmtHeader>& header) const override {
@@ -242,13 +252,15 @@ class TestHcf : public Hcf
 
     void setup(MockMac *mockMac, MockTx *mockTx, MockRateSelection *mockRateSelection, MockRecipientAckPolicy *mockAckPolicy,
             MockRecipientDataService *mockDataService, MockRecipientBlockAckAgreementHandler *mockAgreementHandler) {
-        mac = mockMac;
-        tx = mockTx;
-        rateSelection = mockRateSelection;
-        recipientAckPolicy = mockAckPolicy;
-        recipientDataService = mockDataService;
-        recipientBlockAckAgreementHandler = mockAgreementHandler;
-        recipientBlockAckProcedure = new RecipientBlockAckProcedure();
+        RuntimeBindings bindings;
+        bindings.mac = mockMac;
+        bindings.tx = mockTx;
+        bindings.rateSelection = mockRateSelection;
+        bindings.recipientAckPolicy = mockAckPolicy;
+        bindings.recipientDataService = mockDataService;
+        installRuntimeBindingsForTesting(bindings);
+        installRecipientBlockAckHandlerForTesting(
+                std::unique_ptr<IRecipientBlockAckAgreementHandler>(mockAgreementHandler));
         modeSet = const_cast<physicallayer::Ieee80211ModeSet *>(physicallayer::Ieee80211ModeSet::getModeSet("ax"));
     }
 
@@ -273,13 +285,42 @@ class TestHcf : public Hcf
     void receiveMultiTidControl(Packet *packet,
             MultiTidBlockAckResponseFormat responseFormat, uint16_t responseAid) {
         auto header = packet->peekAtFront<Ieee80211MultiTidBlockAckReq>();
-        recipientBlockAckProcedure->processReceivedBlockAckReq(packet, header,
-                recipientAckPolicy, recipientBlockAckAgreementHandler, this,
+        processRecipientBlockAckRequestForTesting(packet, header,
                 responseFormat, responseAid);
     }
 };
 
 Define_Module(TestHcf);
+
+// This mirrors the VHT/HE override seam: amendment-specific preprocessing is
+// entered virtually for each decoded member, then the common HCF route owns it.
+class TestAmendmentHcf : public TestHcf
+{
+  public:
+    int preprocessingCount = 0;
+    std::vector<uint16_t> preprocessedSequenceNumbers;
+
+    TestAmendmentHcf()
+    {
+        TestActionPort port;
+        port.observeRecipientFrame = [this] (Packet *,
+                const Ptr<const Ieee80211MacHeader>& header) {
+            if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
+                preprocessingCount++;
+                preprocessedSequenceNumbers.push_back(
+                        dataHeader->getSequenceNumber().get());
+            }
+        };
+        installTestActionPort(std::move(port));
+    }
+
+    void receiveAmpduThroughCommonRoute(Packet *packet) {
+        Hcf::recipientProcessReceivedFrame(packet, Ptr<const Ieee80211MacHeader>());
+    }
+
+};
+
+Define_Module(TestAmendmentHcf);
 
 static void attachHeMuRxVector(Packet *packet, const MacAddress& receiver)
 {
@@ -351,7 +392,8 @@ static Packet *makeMultiTidBarPacket(const MacAddress& receiver,
     return new Packet("MultiTidBlockAckReq", blockAckReq);
 }
 
-static Packet *makePartialAmpdu(const MacAddress& receiver, const MacAddress& transmitter, Tid tid)
+static Packet *makePartialAmpdu(const MacAddress& receiver, const MacAddress& transmitter, Tid tid,
+        bool attachHeMuMetadata = true)
 {
     auto ampdu = new Packet("partial-he-mu-ampdu");
     auto indication = ampdu->addTag<physicallayer::Ieee80211MpduReceiveInd>();
@@ -380,7 +422,8 @@ static Packet *makePartialAmpdu(const MacAddress& receiver, const MacAddress& tr
         indication->appendResults(result);
         delete mpdu;
     }
-    attachHeMuRxVector(ampdu, receiver);
+    if (attachHeMuMetadata)
+        attachHeMuRxVector(ampdu, receiver);
     return ampdu;
 }
 
@@ -460,6 +503,7 @@ static Packet *makeTruncatedLedgerAmpdu(const MacAddress& receiver,
 
 %activity:
 auto hcf = check_and_cast<TestHcf *>(getParentModule()->getSubmodule("hcf"));
+auto amendmentHcf = check_and_cast<TestAmendmentHcf *>(getParentModule()->getSubmodule("amendmentHcf"));
 auto mac = check_and_cast<MockMac *>(getParentModule()->getSubmodule("mac"));
 
 MacAddress ap("10:20:30:40:50:60");
@@ -475,6 +519,27 @@ auto agreementHandler = new MockRecipientBlockAckAgreementHandler(ap, tid);
 hcf->setup(mac, &tx, &rateSelection, &ackPolicy, &dataService, agreementHandler);
 PacketDropListener packetDropListener;
 hcf->subscribe(packetDroppedSignal, &packetDropListener);
+
+MockTx amendmentTx;
+MockRateSelection amendmentRateSelection;
+MockRecipientAckPolicy amendmentAckPolicy;
+MockRecipientDataService amendmentDataService;
+auto amendmentAgreementHandler = new MockRecipientBlockAckAgreementHandler(ap, tid);
+amendmentHcf->setup(mac, &amendmentTx, &amendmentRateSelection,
+        &amendmentAckPolicy, &amendmentDataService, amendmentAgreementHandler);
+PacketDropListener amendmentDropListener;
+amendmentHcf->subscribe(packetDroppedSignal, &amendmentDropListener);
+
+amendmentHcf->receiveAmpduThroughCommonRoute(makePartialAmpdu(sta, ap, tid, false));
+REQUIRE(amendmentHcf->preprocessingCount == 2);
+REQUIRE(amendmentHcf->preprocessedSequenceNumbers == std::vector<uint16_t>({2, 4}));
+REQUIRE(amendmentDataService.receivedDataCount == 2);
+REQUIRE(amendmentDataService.receivedSequenceNumbers == std::vector<uint16_t>({2, 4}));
+REQUIRE(amendmentAgreementHandler->qosFrameReceivedCount == 2);
+REQUIRE(amendmentDropListener.incorrectlyReceivedCount == 1);
+REQUIRE(amendmentDropListener.notAddressedToUsCount == 0);
+REQUIRE(amendmentTx.transmitCount == 0);
+EV << "Amendment override re-enters once per admitted ordinary A-MPDU member.\n";
 
 hcf->receiveData(makeHeMuDataPacket("he-mu-data-sta0", sta, ap, tid, 0));
 ASSERT(tx.transmitCount == 0);
@@ -612,6 +677,9 @@ delete unsupportedMultiTidBarPacket;
 
 %contains: stdout
 STA0 immediate BlockAck count: 0
+
+%contains: stdout
+Amendment override re-enters once per admitted ordinary A-MPDU member.
 
 %contains: stdout
 STA1 immediate BlockAck count after data: 0

@@ -1,0 +1,79 @@
+%description:
+Verify HT HCF feature PHY-family configuration gates and aggregate marker classification.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HtHcfFeature.h"
+#include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreement.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+static Ptr<Ieee80211DataHeader> makeDataHeader(AckPolicy ackPolicy)
+{
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setType(ST_DATA_WITH_QOS);
+    header->setAckPolicy(ackPolicy);
+    return header;
+}
+
+%activity:
+HtHcfFeature feature;
+auto activeModeSet = const_cast<Ieee80211ModeSet *>(
+        Ieee80211ModeSet::getModeSet("g(erp)"));
+feature.configure(nullptr, [&] { return activeModeSet; }, nullptr, nullptr,
+        nullptr, [] (const MacAddress&, int value, Ieee80211PhyFamily) { return value; },
+        nullptr, nullptr, false, 2,
+        Ieee80211HtFeedbackKind::COMPRESSED_BEAMFORMING, SIMTIME_ZERO);
+
+REQUIRE(!feature.isImplicitBlockAckEnabled(false));
+REQUIRE(!feature.isImplicitBlockAckEnabled(true));
+activeModeSet = const_cast<Ieee80211ModeSet *>(
+        Ieee80211ModeSet::getModeSet("n(mixed-2.4Ghz)"));
+REQUIRE(feature.isImplicitBlockAckEnabled(true));
+activeModeSet = const_cast<Ieee80211ModeSet *>(
+        Ieee80211ModeSet::getModeSet("ac"));
+REQUIRE(feature.isImplicitBlockAckEnabled(true));
+
+auto implicit = makeDataHeader(NORMAL_ACK);
+auto ordinary = makeDataHeader(BLOCK_ACK);
+auto control = makeShared<Ieee80211AckFrame>();
+REQUIRE(HtHcfFeature::classifyAmpduAckContext(0, {implicit}) ==
+        HtHcfFeature::AmpduAckContext::ORDINARY);
+REQUIRE(HtHcfFeature::classifyAmpduAckContext(2, {control, implicit}) ==
+        HtHcfFeature::AmpduAckContext::IMPLICIT_BLOCK_ACK);
+REQUIRE(HtHcfFeature::classifyAmpduAckContext(2, {implicit, control}) ==
+        HtHcfFeature::AmpduAckContext::IMPLICIT_BLOCK_ACK);
+REQUIRE(HtHcfFeature::classifyAmpduAckContext(2, {ordinary, control}) ==
+        HtHcfFeature::AmpduAckContext::ORDINARY);
+
+const MacAddress peer("02:00:00:00:00:01");
+OriginatorBlockAckAgreement agreement(peer, 3, SequenceNumberCyclic(0), 64,
+        false, false);
+REQUIRE(!HtHcfFeature::isImmediateBlockAckAgreement(nullptr));
+REQUIRE(!HtHcfFeature::isImmediateBlockAckAgreement(&agreement));
+agreement.setIsAddbaResponseReceived(true);
+REQUIRE(HtHcfFeature::isImmediateBlockAckAgreement(&agreement));
+agreement.setIsDelayedBlockAckPolicySupported(true);
+REQUIRE(!HtHcfFeature::isImmediateBlockAckAgreement(&agreement));
+
+bool rejected = false;
+try {
+    HtHcfFeature invalid;
+    invalid.configure(nullptr, [&] { return activeModeSet; }, nullptr, nullptr,
+            nullptr, [] (const MacAddress&, int value, Ieee80211PhyFamily) { return value; },
+            nullptr, nullptr, true, 1,
+            Ieee80211HtFeedbackKind::COMPRESSED_BEAMFORMING, SIMTIME_ZERO);
+}
+catch (const cRuntimeError&) {
+    rejected = true;
+}
+REQUIRE(rejected);
+
+EV << "HT HCF feature: dynamic PHY-family gate, disabled gate, aggregate marker order, and NSTS bound verified.\n";
+
+%contains: stdout
+HT HCF feature: dynamic PHY-family gate, disabled gate, aggregate marker order, and NSTS bound verified.

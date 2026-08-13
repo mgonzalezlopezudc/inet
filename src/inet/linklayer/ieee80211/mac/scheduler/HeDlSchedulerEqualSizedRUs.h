@@ -29,6 +29,8 @@ class INET_API HeDlSchedulerEqualSizedRUs : public HeDlSchedulerBase
   public:
     using HeDlSchedulerBase::schedule;
     virtual std::vector<RuAllocation> schedule(const ScheduleContext& context) override;
+    virtual void commitSchedule(const ScheduleContext& context,
+            const std::vector<RuAllocation>& allocations) override;
 };
 
 } // namespace ieee80211

@@ -244,27 +244,20 @@ class MockDlMuScheduler : public IIeee80211HeDlScheduler
     virtual std::vector<RuAllocation> schedule(const ScheduleContext& context) override { return allocations; }
 };
 
-class TestHeDlMuTxOpFs : public HeDlMuTxOpFs
+class FailingDlMuTransactionObserver : public HeDlMuTxOpFs::ITransactionObserver
 {
-  protected:
+  private:
     int failBeforePacket = -1;
 
-    virtual MacAddress getTransmitterAddress() const override
-    {
-        return MacAddress("AA:BB:CC:DD:EE:FF");
-    }
+  public:
+    explicit FailingDlMuTransactionObserver(int packetIndex) :
+        failBeforePacket(packetIndex) {}
 
     virtual void beforePacketCommit(int packetIndex) override
     {
         if (packetIndex == failBeforePacket)
             throw cRuntimeError("injected pre-transmission commit failure");
     }
-
-  public:
-    using HeDlMuTxOpFs::HeDlMuTxOpFs;
-    void setFailBeforePacket(int packetIndex) { failBeforePacket = packetIndex; }
-    const HeDlMuPlan& getDlPlanForTest() const { return dlPlan; }
-    uint32_t getAckTriggerIdForTest() const { return ackTriggerId; }
 };
 
 class MockDlMuInProgressFrames : public InProgressFrames
@@ -374,7 +367,7 @@ static HeDlMuPlan makeDlPlan(MockDlMuScheduler& scheduler,
         IIeee80211HeDlScheduler::ScheduleContext context, queueing::IPacketQueue *sourceQueue)
 {
     for (auto& candidate : context.candidates)
-        candidate.sourceQueue = sourceQueue;
+        candidate.sourceQueueToken = HcfQueueToken(1);
     HeMuPlanDiagnostic diagnostic;
     auto plan = HeDlMuPlan::create(context, scheduler.schedule(context), diagnostic);
     if (!plan)
@@ -443,6 +436,7 @@ auto radio = check_and_cast<InspectableDlRadio *>(nic->getSubmodule("radio"));
 auto transmitter = check_and_cast<const Ieee80211Transmitter *>(radio->getTransmitter());
 
 auto callback = check_and_cast<MockDlMuCallback *>(getParentModule()->getSubmodule("mockHcf"));
+auto legacyRateSelection = check_and_cast<IQosRateSelection *>(callback->getSubmodule("rateSelection"));
 auto pendingQueue = check_and_cast<queueing::IPacketQueue *>(getParentModule()->getSubmodule("pendingQueue"));
 auto modeSet = const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"));
 ASSERT(modeSet != nullptr);
@@ -458,7 +452,7 @@ Tid tid = 3;
     scheduler.allocations[0].estimatedDuration = SimTime(8, SIMTIME_MS);
     scheduler.allocations[1].estimatedDuration = SimTime(7, SIMTIME_MS);
     for (auto& candidate : context.candidates)
-        candidate.sourceQueue = pendingQueue;
+        candidate.sourceQueueToken = HcfQueueToken(1);
     HeMuPlanDiagnostic diagnostic;
     auto plan = HeDlMuPlan::create(context, scheduler.schedule(context), diagnostic);
     requireTrue(plan.has_value(),
@@ -470,7 +464,7 @@ Tid tid = 3;
     auto context = makeScheduleContext({sta1, sta2});
     MockDlMuScheduler scheduler({makeAllocation(sta1, 0, 106), makeAllocation(sta2, 1, 106)});
     for (auto& candidate : context.candidates)
-        candidate.sourceQueue = pendingQueue;
+        candidate.sourceQueueToken = HcfQueueToken(1);
     for (double invalidLeakage : {-0.001, std::numeric_limits<double>::quiet_NaN(),
             std::numeric_limits<double>::infinity()}) {
         scheduler.allocations[0].leakageSum = invalidLeakage;
@@ -662,9 +656,10 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     auto qosContext = new QoSContext(nullptr, nullptr, &baHandler, nullptr);
     auto fsContext = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), modeSet,
             &inProgress, nullptr, nullptr, nullptr, qosContext);
-    TestHeDlMuTxOpFs fs(makeDlPlan(scheduler, makeScheduleContext({sta1, sta2}), pendingQueue),
-            modeSet, pendingQueue, &ackHandler, callback);
-    fs.setFailBeforePacket(1);
+    HeDlMuTxOpFs fs(makeDlPlan(scheduler, makeScheduleContext({sta1, sta2}), pendingQueue),
+            modeSet, pendingQueue, &ackHandler, callback, callback, legacyRateSelection);
+    FailingDlMuTransactionObserver failureObserver(1);
+    fs.setTransactionObserver(&failureObserver);
     fs.startSequence(fsContext, 0);
     auto step = fs.prepareStep(fsContext);
     requireTrue(step == nullptr, "injected pre-transmission failure should abort the MU sequence");
@@ -727,8 +722,8 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     auto dlPlan = makeDlPlan(scheduler, dlScheduleContext, pendingQueue);
     auto rateSelection = check_and_cast<MockDlMuRateSelection *>(callback->getSubmodule("rateSelection"));
     rateSelection->resetObservedRequests();
-    TestHeDlMuTxOpFs fs(dlPlan,
-            modeSet, pendingQueue, &ackHandler, callback, 8);
+    HeDlMuTxOpFs fs(dlPlan,
+            modeSet, pendingQueue, &ackHandler, callback, callback, legacyRateSelection, 8);
     fs.startSequence(fsContext, 0);
     auto step = fs.prepareStep(fsContext);
     requireTrue(step != nullptr, "per-user packing should build a transmit step");
@@ -808,7 +803,7 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
             fs.getActiveAllocations().size(),
             "DL canonical layout must retain one PSDU range per planned user");
     for (size_t index = 0; index < fs.getActiveAllocations().size(); ++index) {
-        const auto& planned = fs.getDlPlanForTest().getAllocations()[index];
+        const auto& planned = fs.getPlan().getAllocations()[index];
         const auto& actual = transmission->getHeTxVector()->getUsers()[index].getParameters();
         const auto& active = fs.getActiveAllocations()[index];
         const auto& layoutUser = transmission->getHePpduLayout()->getUsers()[index];
@@ -859,7 +854,7 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     auto rateSelection = check_and_cast<MockDlMuRateSelection *>(callback->getSubmodule("rateSelection"));
     rateSelection->resetObservedRequests();
     HeDlMuTxOpFs fs(makeDlPlan(scheduler, makeScheduleContext({sta1, sta2}), pendingQueue),
-            modeSet, pendingQueue, &ackHandler, callback);
+            modeSet, pendingQueue, &ackHandler, callback, callback, legacyRateSelection);
     fs.startSequence(fsContext, 0);
     auto containerStep = check_and_cast<ITransmitStep *>(fs.prepareStep(fsContext));
     auto containerPacket = containerStep->getFrameToTransmit();
@@ -908,7 +903,7 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     auto qosContext = new QoSContext(nullptr, nullptr, &baHandler, nullptr);
     auto fsContext = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), modeSet, &inProgress, nullptr, nullptr, nullptr, qosContext);
     HeDlMuTxOpFs fs(makeDlPlan(scheduler, makeScheduleContext({sta1, sta2}), pendingQueue),
-            modeSet, pendingQueue, &ackHandler, callback);
+            modeSet, pendingQueue, &ackHandler, callback, callback, legacyRateSelection);
     fs.startSequence(fsContext, 0);
     auto step = fs.prepareStep(fsContext);
     requireTrue(step == nullptr, "BA-window exhaustion should abort MU container build");
@@ -930,7 +925,7 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     auto qosContext = new QoSContext(nullptr, nullptr, &baHandler, nullptr);
     auto fsContext = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), modeSet, &inProgress, nullptr, nullptr, nullptr, qosContext);
     HeDlMuTxOpFs fs(makeDlPlan(scheduler, makeScheduleContext({sta1, sta2}), pendingQueue),
-            modeSet, pendingQueue, &ackHandler, callback);
+            modeSet, pendingQueue, &ackHandler, callback, callback, legacyRateSelection);
     fs.startSequence(fsContext, 0);
     auto step = fs.prepareStep(fsContext);
     requireTrue(step == nullptr, "single surviving user should abort MU container build");
@@ -958,7 +953,8 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     // Three sequential BAR/BA exchanges reserve 1080 us, leaving 1420 us for
     // a PPDU: enough for one MPDU per user, but not the complete backlog.
     HeDlMuTxOpFs fs(makeDlPlan(scheduler, makeScheduleContext({sta1, sta2, sta3}, SimTime(2500, SIMTIME_US)), pendingQueue),
-            modeSet, pendingQueue, &ackHandler, callback, 8, 6500631, SimTime(1500, SIMTIME_US));
+            modeSet, pendingQueue, &ackHandler, callback, callback, legacyRateSelection,
+            8, 6500631, SimTime(1500, SIMTIME_US));
     fs.startSequence(fsContext, 0);
     auto step = fs.prepareStep(fsContext);
     requireTrue(step != nullptr, "TXOP trimming should still build a transmit step");
@@ -987,12 +983,13 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     auto fsContext = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), modeSet, &inProgress, nullptr, nullptr, nullptr, qosContext);
     auto txopScheduleContext = makeScheduleContext({sta1, sta2}, SimTime(1504, SIMTIME_US));
     for (auto& candidate : txopScheduleContext.candidates)
-        candidate.sourceQueue = pendingQueue;
+        candidate.sourceQueueToken = HcfQueueToken(1);
     HeMuPlanDiagnostic txopPlanDiagnostic;
     auto txopPlan = HeDlMuPlan::create(txopScheduleContext,
             scheduler.schedule(txopScheduleContext), txopPlanDiagnostic);
     ASSERT(txopPlan.has_value());
-    TestHeDlMuTxOpFs fs(*txopPlan, modeSet, pendingQueue, &ackHandler, callback, 16, 6500631,
+    HeDlMuTxOpFs fs(*txopPlan, modeSet, pendingQueue, &ackHandler, callback,
+            callback, legacyRateSelection, 16, 6500631,
             SimTime(5.484, SIMTIME_MS), HeDlMuTxOpFs::AckMethod::MU_BAR_TRIGGER);
     fs.startSequence(fsContext, 0);
     auto step = fs.prepareStep(fsContext);
@@ -1099,7 +1096,7 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     blockAck->setTidInfo(active.tid);
     auto validResponse = new Packet("valid-he-tb-compressed-ba", blockAck);
     auto recipient = validResponse->addTag<Ieee80211HeTbRecipientContextInd>();
-    recipient->setTriggerId(fs.getAckTriggerIdForTest());
+    recipient->setTriggerId(fs.getAckTriggerId());
     auto parameters = std::make_shared<Ieee80211HeUserPhyParameters>();
     parameters->ru = active.ru;
     parameters->staId = active.associationId;
@@ -1129,7 +1126,8 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     auto rateSelection = check_and_cast<MockDlMuRateSelection *>(callback->getSubmodule("rateSelection"));
     rateSelection->resetObservedRequests();
     HeDlMuTxOpFs fs(makeDlPlan(scheduler, makeScheduleContext({sta1, sta2}, SimTime(1504, SIMTIME_US)), pendingQueue),
-            modeSet, pendingQueue, &ackHandler, callback, 16, 6500631,
+            modeSet, pendingQueue, &ackHandler, callback, callback,
+            legacyRateSelection, 16, 6500631,
             SimTime(5.484, SIMTIME_MS), HeDlMuTxOpFs::AckMethod::MU_BAR_TRIGGER);
     fs.startSequence(fsContext, 0);
     auto step = fs.prepareStep(fsContext);
@@ -1155,7 +1153,8 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     auto qosContext = new QoSContext(nullptr, nullptr, &baHandler, nullptr);
     auto fsContext = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), modeSet, &inProgress, nullptr, nullptr, nullptr, qosContext);
     HeDlMuTxOpFs fs(makeDlPlan(scheduler, makeScheduleContext({sta1, sta2}, SimTime(1504, SIMTIME_US)), pendingQueue),
-            modeSet, pendingQueue, &ackHandler, callback, 16, 6500631,
+            modeSet, pendingQueue, &ackHandler, callback, callback,
+            legacyRateSelection, 16, 6500631,
             SimTime(5.484, SIMTIME_MS), HeDlMuTxOpFs::AckMethod::MU_BAR_TRIGGER);
     fs.startSequence(fsContext, 0);
     auto step = fs.prepareStep(fsContext);

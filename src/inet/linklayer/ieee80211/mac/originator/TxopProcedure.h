@@ -37,6 +37,14 @@ class INET_API TxopProcedure : public ModeSetListener
 
     class ProtectionState
     {
+      public:
+        struct Snapshot {
+            ProtectionMechanism mechanism = ProtectionMechanism::UNDEFINED_PROTECTION;
+            InitialProtection protection = InitialProtection::NONE;
+            bool configured = false;
+            bool completed = false;
+        };
+
       protected:
         ProtectionMechanism mechanism = ProtectionMechanism::UNDEFINED_PROTECTION;
         InitialProtection protection = InitialProtection::NONE;
@@ -47,6 +55,8 @@ class INET_API TxopProcedure : public ModeSetListener
         void configure(ProtectionMechanism mechanism, InitialProtection protection);
         void complete();
         void reset();
+        Snapshot getSnapshot() const { return {mechanism, protection, configured, completed}; }
+        void restoreSnapshot(const Snapshot& snapshot);
         bool isPending() const { return protection == InitialProtection::LEGACY_RTS_CTS && !completed; }
         bool isConfigured() const { return configured; }
         bool isCompleted() const { return completed; }
@@ -68,6 +78,10 @@ class INET_API TxopProcedure : public ModeSetListener
     virtual void startTxop(AccessCategory ac);
     virtual void configureProtection(InitialProtection protection);
     virtual void completeInitialProtection();
+    virtual ProtectionState::Snapshot getProtectionStateSnapshot() const
+        { return protectionState.getSnapshot(); }
+    virtual void restoreProtectionStateSnapshot(const ProtectionState::Snapshot& snapshot)
+        { protectionState.restoreSnapshot(snapshot); }
     virtual void endTxop();
 
     virtual simtime_t getStart() const;

@@ -1,0 +1,531 @@
+%description:
+Test NED-visible HCF feature composition and deterministic HcfRuntime provider
+validation without migrating exchange execution.
+
+%includes:
+#include <algorithm>
+#include <optional>
+#include <string>
+#include <vector>
+
+#include "inet/common/InitStages.h"
+#include "inet/linklayer/ieee80211/mac/contract/IHcfExchangeProvider.h"
+#include "inet/linklayer/ieee80211/mac/contract/IHcfFeatureSet.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfExchangePlan.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfRuntime.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeTxopCoordinatorService.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/VhtHcfFeature.h"
+
+%file: HcfFeatureSetObserver.cc
+
+#include <algorithm>
+#include <optional>
+#include <string>
+#include <vector>
+
+#include "inet/common/InitStages.h"
+#include "inet/linklayer/ieee80211/mac/contract/IHcfExchangeProvider.h"
+#include "inet/linklayer/ieee80211/mac/contract/IHcfFeatureSet.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfExchangePlan.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfRuntime.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeTxopCoordinatorService.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/VhtHcfFeature.h"
+
+using namespace inet;
+using namespace inet::ieee80211;
+
+namespace HcfFeatureSet_1 {
+
+static void requireHcfFeatureSet(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("HCF feature-set test: %s", message);
+}
+
+template<typename F>
+static void requireHcfFeatureSetFailure(F operation, const char *message)
+{
+    bool failed = false;
+    try {
+        operation();
+    }
+    catch (const cRuntimeError&) {
+        failed = true;
+    }
+    requireHcfFeatureSet(failed, message);
+}
+
+class TestHcfProvider : public IHcfExchangeProvider
+{
+  private:
+    HcfExchangeClass exchangeClass;
+
+  public:
+    explicit TestHcfProvider(HcfExchangeClass exchangeClass) : exchangeClass(exchangeClass) {}
+    virtual HcfExchangeClass getExchangeClass() const override { return exchangeClass; }
+    virtual std::unique_ptr<PreparedHcfExchange> prepareExchange(
+            const HcfContext&, HcfTransactionIdentity transactionIdentity,
+            HcfExchangeRejection& rejection) override
+    {
+        rejection = HcfExchangeRejection(HcfExchangeRejectionCode::NO_ELIGIBLE_PACKET,
+                exchangeClass, transactionIdentity, "inert test provider");
+        return nullptr;
+    }
+};
+
+class TestHcfFeatureSet : public IHcfFeatureSet
+{
+  private:
+    std::vector<HcfExchangeProviderDescriptor> descriptors;
+
+  public:
+    explicit TestHcfFeatureSet(const std::vector<HcfExchangeProviderDescriptor>& descriptors) :
+        descriptors(descriptors) {}
+    virtual std::vector<HcfExchangeProviderDescriptor> getExchangeProviderDescriptors() override
+    {
+        return descriptors;
+    }
+    virtual void configureExchangeCommitter(const ExchangeCommitter&) override {}
+};
+
+static std::vector<HcfExchangeClass> getClasses(const HcfRuntime& runtime)
+{
+    std::vector<HcfExchangeClass> result;
+    for (const auto& descriptor : runtime.getExchangeProviderDescriptors())
+        result.push_back(descriptor.getExchangeClass());
+    return result;
+}
+
+static bool areAllDescriptorsExecutable(const HcfRuntime& runtime)
+{
+    return std::all_of(runtime.getExchangeProviderDescriptors().begin(),
+            runtime.getExchangeProviderDescriptors().end(),
+            [] (const auto& descriptor) { return descriptor.isExecutable(); });
+}
+
+static std::string probeHcfFeatureSetType(cModule *owner,
+        const char *hcfTypeName, const char *probeName)
+{
+    auto moduleType = cModuleType::get(hcfTypeName);
+    requireHcfFeatureSet(moduleType != nullptr, "HCF NED type was not found");
+    auto module = moduleType->create(probeName, owner);
+    module->par("rxModule").setStringValue("");
+    module->par("txModule").setStringValue("");
+    module->finalizeParameters();
+    module->buildInside();
+    auto featureSet = module->getSubmodule("featureSet");
+    requireHcfFeatureSet(featureSet != nullptr,
+            "HCF NED type did not instantiate its featureSet slot");
+    std::string result = featureSet->getNedTypeName();
+    module->deleteModule();
+    return result;
+}
+
+class HcfFeatureSetObserver : public cSimpleModule
+{
+  protected:
+    virtual int numInitStages() const override { return NUM_INIT_STAGES; }
+    virtual void initialize(int stage) override
+    {
+        if (stage != INITSTAGE_LAST)
+            return;
+        auto featureSet = [this] (const char *path) {
+            auto module = getParentModule()->getModuleByPath(path);
+            auto result = dynamic_cast<IHcfFeatureSet *>(module);
+            requireHcfFeatureSet(result != nullptr,
+                    "NED feature-set type lacks the paired C++ contract");
+            return result;
+        };
+        auto nedTypeName = [this] (const char *path) {
+            return std::string(getParentModule()->getModuleByPath(path)->getNedTypeName());
+        };
+
+        requireHcfFeatureSet(nedTypeName("common.featureSet") ==
+                "inet.linklayer.ieee80211.mac.coordinationfunction.CommonHcfFeatureSet",
+                "common effective feature-set typename changed");
+        requireHcfFeatureSet(nedTypeName("vht.featureSet") ==
+                "inet.linklayer.ieee80211.mac.coordinationfunction.VhtHcfFeatureSet",
+                "VHT effective feature-set typename changed");
+        requireHcfFeatureSet(nedTypeName("he.featureSet") ==
+                "inet.linklayer.ieee80211.mac.coordinationfunction.HeHcfFeatureSet",
+                "HE effective feature-set typename changed");
+        requireHcfFeatureSet(nedTypeName("derived.featureSet").find(
+                "DerivedTestHcfFeatureSet") != std::string::npos,
+                "derived effective feature-set typename was not selected");
+        requireHcfFeatureSet(probeHcfFeatureSetType(getParentModule(),
+                "inet.linklayer.ieee80211.mac.coordinationfunction.Hcf", "hcfProbe") ==
+                "inet.linklayer.ieee80211.mac.coordinationfunction.CommonHcfFeatureSet",
+                "Hcf did not select the common feature-set default");
+        requireHcfFeatureSet(probeHcfFeatureSetType(getParentModule(),
+                "inet.linklayer.ieee80211.mac.coordinationfunction.VhtHcf", "vhtHcfProbe") ==
+                "inet.linklayer.ieee80211.mac.coordinationfunction.VhtHcfFeatureSet",
+                "VhtHcf did not declaratively override the feature-set default");
+        requireHcfFeatureSet(probeHcfFeatureSetType(getParentModule(),
+                "inet.linklayer.ieee80211.mac.coordinationfunction.HeHcf", "heHcfProbe") ==
+                "inet.linklayer.ieee80211.mac.coordinationfunction.HeHcfFeatureSet",
+                "HeHcf did not declaratively override the feature-set default");
+
+        auto commonFeatureSet = featureSet("common.featureSet");
+        int commonCommits = 0;
+        HcfRuntime common(commonFeatureSet);
+        common.configureExchangeCommitter(
+                [&] (HcfExchangeClass exchangeClass, const HcfContext& context) {
+                    requireHcfFeatureSet(exchangeClass == HcfExchangeClass::SINGLE_USER,
+                            "common projection committed the wrong exchange class");
+                    requireHcfFeatureSet(context.getSelectionAccessCategory() == AC_BE,
+                            "common projection committed the wrong access category");
+                    commonCommits++;
+                });
+        requireHcfFeatureSet(getClasses(common) == std::vector<HcfExchangeClass>{
+                HcfExchangeClass::SINGLE_USER,
+                HcfExchangeClass::CHANNEL_RELEASE},
+                "common feature-off composition must omit HT sounding");
+        requireHcfFeatureSet(areAllDescriptorsExecutable(common),
+                "default common descriptors must expose typed executable providers");
+        common.validateExecutableProviders();
+        HcfExchangeRejection actionRejection;
+        auto rejectedExchange = common.getSingleUserDescriptor().
+                getExecutableProvider().prepareExchange(
+                        HcfContext(AC_BE, {HcfExchangeClass::CHANNEL_RELEASE}),
+                        HcfTransactionIdentity(HcfTransactionToken(1),
+                                HcfTransactionGeneration(1)),
+                        actionRejection);
+        requireHcfFeatureSet(rejectedExchange == nullptr &&
+                actionRejection.getCode() ==
+                        HcfExchangeRejectionCode::NO_ELIGIBLE_PACKET &&
+                commonCommits == 0,
+                "rejected common probe must have no commit side effect");
+        HcfContext actionContext(AC_BE, {HcfExchangeClass::SINGLE_USER});
+        auto abandonedExchange = common.getSingleUserDescriptor().
+                getExecutableProvider().prepareExchange(
+                        actionContext,
+                        HcfTransactionIdentity(HcfTransactionToken(1),
+                                HcfTransactionGeneration(1)),
+                        actionRejection);
+        requireHcfFeatureSet(abandonedExchange != nullptr,
+                "eligible common provider must support rollback by abandonment");
+        abandonedExchange.reset();
+        requireHcfFeatureSet(commonCommits == 0,
+                "abandoned common transaction must not commit its action");
+        auto actionExchange = common.getSingleUserDescriptor().
+                getExecutableProvider().prepareExchange(
+                        actionContext,
+                        HcfTransactionIdentity(HcfTransactionToken(1),
+                                HcfTransactionGeneration(1)),
+                        actionRejection);
+        requireHcfFeatureSet(actionExchange != nullptr &&
+                !actionRejection.isRejected(),
+                "eligible common provider must prepare a typed transaction");
+        requireHcfFeatureSet(actionExchange->validate(
+                HcfTransactionIdentity(HcfTransactionToken(1),
+                        HcfTransactionGeneration(1)), actionRejection),
+                "common provider transaction must validate");
+        actionExchange->commit(HcfTransactionIdentity(HcfTransactionToken(1),
+                HcfTransactionGeneration(1)));
+        requireHcfFeatureSet(commonCommits == 1,
+                "common provider transaction must commit exactly once");
+
+        auto commonHtFeatureSet = featureSet("commonHt.featureSet");
+        HcfFeatureConfiguration commonHtConfiguration;
+        commonHtConfiguration.enableHtSounding = true;
+        int htSoundingCommits = 0;
+        HcfRuntime commonHt(commonHtFeatureSet, commonHtConfiguration);
+        commonHt.configureExchangeCommitter(
+                [&] (HcfExchangeClass exchangeClass, const HcfContext& context) {
+                    requireHcfFeatureSet(exchangeClass == HcfExchangeClass::HT_SOUNDING,
+                            "HT projection committed the wrong exchange class");
+                    requireHcfFeatureSet(context.getHtSoundingModeIdentity() ==
+                            std::optional<std::string>("testHtMode"),
+                            "HT projection lost its immutable mode identity");
+                    htSoundingCommits++;
+                });
+        requireHcfFeatureSet(getClasses(commonHt) == std::vector<HcfExchangeClass>{
+                HcfExchangeClass::HT_SOUNDING,
+                HcfExchangeClass::SINGLE_USER,
+                HcfExchangeClass::CHANNEL_RELEASE},
+                "common composition must include enabled HT sounding");
+        auto htDescriptor = commonHt.findExchangeProviderDescriptor(
+                HcfExchangeClass::HT_SOUNDING);
+        requireHcfFeatureSet(htDescriptor != nullptr,
+                "enabled HT sounding descriptor was not found");
+        HcfExchangeRejection htRejection;
+        auto htExchange = htDescriptor->getExecutableProvider().prepareExchange(
+                HcfContext(AC_VI, {HcfExchangeClass::HT_SOUNDING},
+                        std::string("testHtMode")),
+                HcfTransactionIdentity(HcfTransactionToken(2),
+                        HcfTransactionGeneration(1)), htRejection);
+        requireHcfFeatureSet(htExchange != nullptr && htExchange->validate(
+                HcfTransactionIdentity(HcfTransactionToken(2),
+                        HcfTransactionGeneration(1)), htRejection),
+                "HT sounding provider transaction must prepare and validate");
+        htExchange->commit(HcfTransactionIdentity(HcfTransactionToken(2),
+                HcfTransactionGeneration(1)));
+        requireHcfFeatureSet(htSoundingCommits == 1,
+                "HT sounding provider transaction must commit exactly once");
+
+        auto vhtFeatureSet = featureSet("vht.featureSet");
+        HcfFeatureConfiguration vhtConfiguration;
+        vhtConfiguration.enableVhtSuBeamforming = true;
+        vhtConfiguration.enableVhtDlMuMimo = true;
+        HcfRuntime vht(vhtFeatureSet, vhtConfiguration);
+        requireHcfFeatureSet(getClasses(vht) == std::vector<HcfExchangeClass>{
+                HcfExchangeClass::VHT_GROUP_MANAGEMENT,
+                HcfExchangeClass::VHT_DL_MULTIUSER,
+                HcfExchangeClass::VHT_SU_SOUNDING,
+                HcfExchangeClass::SINGLE_USER,
+                HcfExchangeClass::CHANNEL_RELEASE},
+                "VHT composition must expose enabled semantic classes in fixed order");
+        requireHcfFeatureSet(areAllDescriptorsExecutable(vht),
+                "default VHT descriptors must expose typed executable providers");
+        vht.validateExecutableProviders();
+        int vhtCommits = 0;
+        HcfExchangeClass committedVhtClass = HcfExchangeClass::SINGLE_USER;
+        vht.configureExchangeCommitter(
+                [&] (HcfExchangeClass exchangeClass, const HcfContext&) {
+                    committedVhtClass = exchangeClass;
+                    vhtCommits++;
+                });
+        VhtGrantSnapshot groupSnapshot;
+        groupSnapshot.startKind = VhtGrantSnapshot::StartKind::GROUP_MANAGEMENT;
+        groupSnapshot.exchangeClass = HcfExchangeClass::VHT_GROUP_MANAGEMENT;
+        groupSnapshot.accessCategory = AC_VI;
+        HcfContext groupContext(AC_VI, {
+                HcfExchangeClass::VHT_GROUP_MANAGEMENT,
+                HcfExchangeClass::VHT_DL_MULTIUSER,
+                HcfExchangeClass::VHT_SU_SOUNDING,
+                HcfExchangeClass::SINGLE_USER});
+        groupContext.setProviderSnapshot(groupSnapshot);
+        auto vhtIdentity = HcfTransactionIdentity(HcfTransactionToken(3),
+                HcfTransactionGeneration(1));
+        HcfExchangeRejection vhtRejection;
+        auto rejectedDlMu = vht.findExchangeProviderDescriptor(
+                HcfExchangeClass::VHT_DL_MULTIUSER)->getExecutableProvider().
+                prepareExchange(groupContext, vhtIdentity, vhtRejection);
+        requireHcfFeatureSet(rejectedDlMu == nullptr && vhtCommits == 0,
+                "a VHT provider must reject another class's immutable outcome without mutation");
+        auto abandonedGroup = vht.findExchangeProviderDescriptor(
+                HcfExchangeClass::VHT_GROUP_MANAGEMENT)->getExecutableProvider().
+                prepareExchange(groupContext, vhtIdentity, vhtRejection);
+        requireHcfFeatureSet(abandonedGroup != nullptr,
+                "the exact VHT group provider must prepare its matching outcome");
+        abandonedGroup.reset();
+        requireHcfFeatureSet(vhtCommits == 0,
+                "abandoned VHT probes must not commit feature state");
+        requireHcfFeatureSet(vht.getExchangeSelector().selectAndCommit(
+                groupContext, vhtIdentity) == HcfExchangeClass::VHT_GROUP_MANAGEMENT &&
+                vhtCommits == 1 &&
+                committedVhtClass == HcfExchangeClass::VHT_GROUP_MANAGEMENT,
+                "fixed VHT priority and selected class must equal the actual started outcome");
+        vht.getExchangeSelector().exchangeTerminated(vhtIdentity,
+                HcfExchangeAbortReason::NONE);
+
+        HcfRuntime vhtOff(featureSet("vhtOff.featureSet"));
+        requireHcfFeatureSet(getClasses(vhtOff) == getClasses(common),
+                "VHT feature-off composition must omit all VHT descriptors");
+
+        auto heFeatureSet = featureSet("he.featureSet");
+        HcfFeatureConfiguration heConfiguration;
+        heConfiguration.enableHeUlMuOfdma = true;
+        heConfiguration.enableHeDlMuMimo = true;
+        HcfRuntime he(heFeatureSet, heConfiguration);
+        requireHcfFeatureSet(getClasses(he) == std::vector<HcfExchangeClass>{
+                HcfExchangeClass::FORCED_SINGLE_USER,
+                HcfExchangeClass::HE_UL_TRIGGER,
+                HcfExchangeClass::HE_SOUNDING,
+                HcfExchangeClass::RECOVERY_SINGLE_USER,
+                HcfExchangeClass::HE_DL_MULTIUSER,
+                HcfExchangeClass::SINGLE_USER,
+                HcfExchangeClass::CHANNEL_RELEASE},
+                "HE composition must expose enabled semantic classes in fixed order");
+        requireHcfFeatureSet(areAllDescriptorsExecutable(he),
+                "HE composition must expose typed executable providers");
+        he.validateExecutableProviders();
+        int heCommits = 0;
+        HcfExchangeClass committedHeClass = HcfExchangeClass::CHANNEL_RELEASE;
+        he.configureExchangeCommitter(
+                [&] (HcfExchangeClass exchangeClass, const HcfContext&) {
+                    committedHeClass = exchangeClass;
+                    heCommits++;
+                });
+        HeTxopCoordinatorService::GrantSnapshot heUlSnapshot;
+        heUlSnapshot.exchangeClass = HcfExchangeClass::HE_UL_TRIGGER;
+        heUlSnapshot.accessCategory = AC_BE;
+        HcfContext heUlContext(AC_BE, {
+                HcfExchangeClass::FORCED_SINGLE_USER,
+                HcfExchangeClass::HE_UL_TRIGGER,
+                HcfExchangeClass::HE_SOUNDING,
+                HcfExchangeClass::RECOVERY_SINGLE_USER,
+                HcfExchangeClass::HE_DL_MULTIUSER,
+                HcfExchangeClass::SINGLE_USER});
+        heUlContext.setProviderSnapshot(heUlSnapshot);
+        auto heIdentity = HcfTransactionIdentity(HcfTransactionToken(4),
+                HcfTransactionGeneration(1));
+        HcfExchangeRejection heRejection;
+        auto rejectedForced = he.findExchangeProviderDescriptor(
+                HcfExchangeClass::FORCED_SINGLE_USER)->getExecutableProvider().
+                prepareExchange(heUlContext, heIdentity, heRejection);
+        requireHcfFeatureSet(rejectedForced == nullptr && heCommits == 0,
+                "a higher-priority HE provider must reject a different exact outcome without mutation");
+        auto abandonedUl = he.findExchangeProviderDescriptor(
+                HcfExchangeClass::HE_UL_TRIGGER)->getExecutableProvider().
+                prepareExchange(heUlContext, heIdentity, heRejection);
+        requireHcfFeatureSet(abandonedUl != nullptr,
+                "the exact HE UL provider must prepare its matching outcome");
+        abandonedUl.reset();
+        requireHcfFeatureSet(heCommits == 0,
+                "abandoned HE probes must not commit access, scheduler, queue, or token state");
+        requireHcfFeatureSet(he.getExchangeSelector().selectAndCommit(
+                heUlContext, heIdentity) == HcfExchangeClass::HE_UL_TRIGGER &&
+                heCommits == 1 && committedHeClass == HcfExchangeClass::HE_UL_TRIGGER,
+                "selected HE class must equal the exact committed grant outcome once");
+        he.getExchangeSelector().exchangeTerminated(heIdentity,
+                HcfExchangeAbortReason::NONE);
+
+        HcfRuntime heOff(featureSet("heOff.featureSet"));
+        requireHcfFeatureSet(getClasses(heOff) == std::vector<HcfExchangeClass>{
+                HcfExchangeClass::FORCED_SINGLE_USER,
+                HcfExchangeClass::RECOVERY_SINGLE_USER,
+                HcfExchangeClass::HE_DL_MULTIUSER,
+                HcfExchangeClass::SINGLE_USER,
+                HcfExchangeClass::CHANNEL_RELEASE},
+                "HE feature-off composition must omit UL and MU-sounding descriptors while retaining ordinary HE DL precedence");
+        requireHcfFeatureSet(areAllDescriptorsExecutable(heOff),
+                "HE feature-off composition must retain executable fallback providers");
+        heOff.validateExecutableProviders();
+
+        auto derivedFeatureSet = featureSet("derived.featureSet");
+        HcfFeatureConfiguration derivedConfiguration;
+        derivedConfiguration.enableHtSounding = true;
+        HcfRuntime derived(derivedFeatureSet, derivedConfiguration);
+        requireHcfFeatureSet(getClasses(derived) == getClasses(commonHt),
+                "a derived configured typename must retain the feature-set contract");
+
+        TestHcfProvider singleUser(HcfExchangeClass::SINGLE_USER);
+        TestHcfProvider htSounding(HcfExchangeClass::HT_SOUNDING);
+        TestHcfProvider channelRelease(HcfExchangeClass::CHANNEL_RELEASE);
+        TestHcfFeatureSet reverseOrder({
+                {HcfExchangeClass::CHANNEL_RELEASE, &channelRelease},
+                {HcfExchangeClass::SINGLE_USER, &singleUser},
+                {HcfExchangeClass::HT_SOUNDING, &htSounding}});
+        HcfRuntime ordered(&reverseOrder);
+        requireHcfFeatureSet(getClasses(ordered) == std::vector<HcfExchangeClass>{
+                HcfExchangeClass::HT_SOUNDING,
+                HcfExchangeClass::SINGLE_USER,
+                HcfExchangeClass::CHANNEL_RELEASE},
+                "runtime ordering must not depend on descriptor construction order");
+        ordered.validateExecutableProviders();
+        requireHcfFeatureSet(&ordered.getSingleUserDescriptor().getExecutableProvider() ==
+                &singleUser, "checked SINGLE_USER access must preserve the executable provider reference");
+
+        TestHcfFeatureSet duplicate({
+                {HcfExchangeClass::SINGLE_USER, &singleUser},
+                {HcfExchangeClass::SINGLE_USER, &singleUser}});
+        requireHcfFeatureSetFailure([&] () { HcfRuntime invalid(&duplicate); },
+                "duplicate exchange classes must be rejected");
+        TestHcfFeatureSet missingSingleUser({
+                {HcfExchangeClass::CHANNEL_RELEASE, &channelRelease}});
+        requireHcfFeatureSetFailure([&] () { HcfRuntime invalid(&missingSingleUser); },
+                "missing SINGLE_USER support must be rejected");
+        TestHcfFeatureSet missingChannelRelease({
+                {HcfExchangeClass::SINGLE_USER, &singleUser}});
+        requireHcfFeatureSetFailure([&] () { HcfRuntime invalid(&missingChannelRelease); },
+                "missing CHANNEL_RELEASE support must be rejected");
+        TestHcfFeatureSet mismatchedProvider({
+                {HcfExchangeClass::SINGLE_USER, &channelRelease}});
+        requireHcfFeatureSetFailure([&] () { HcfRuntime invalid(&mismatchedProvider); },
+                "a provider class that disagrees with its descriptor must be rejected");
+
+        EV << "Effective HCF feature sets: " << nedTypeName("common.featureSet")
+           << ", " << nedTypeName("vht.featureSet")
+           << ", " << nedTypeName("he.featureSet")
+           << ", " << nedTypeName("derived.featureSet") << "\n";
+        EV << "HCF feature-set composition and runtime registry passed.\n";
+    }
+};
+
+Define_Module(HcfFeatureSetObserver);
+
+} // namespace HcfFeatureSet_1
+
+%file: TestNetwork.ned
+
+import inet.linklayer.ieee80211.mac.contract.IHcfFeatureSet;
+import inet.linklayer.ieee80211.mac.coordinationfunction.CommonHcfFeatureSet;
+
+simple DerivedTestHcfFeatureSet extends CommonHcfFeatureSet
+{
+    parameters:
+        @class(::inet::ieee80211::CommonHcfFeatureSet);
+}
+
+module CommonHarness
+{
+    parameters:
+        bool enableHtSounding = default(false);
+    submodules:
+        featureSet: <default("CommonHcfFeatureSet")> like IHcfFeatureSet;
+}
+
+module VhtHarness
+{
+    parameters:
+        bool enableHtSounding = default(false);
+        bool enableVhtSuBeamforming = default(false);
+        bool enableVhtDlMuMimo = default(false);
+    submodules:
+        featureSet: <default("VhtHcfFeatureSet")> like IHcfFeatureSet;
+}
+
+module HeHarness
+{
+    parameters:
+        bool enableHtSounding = default(false);
+        bool enableUlMuOfdma = default(false);
+        bool enableDlMuMimo = default(false);
+    submodules:
+        featureSet: <default("HeHcfFeatureSet")> like IHcfFeatureSet;
+}
+
+simple HcfFeatureSetObserver
+{
+}
+
+network TestNetwork
+{
+    submodules:
+        common: CommonHarness;
+        commonHt: CommonHarness {
+            parameters:
+                enableHtSounding = true;
+        }
+        vht: VhtHarness {
+            parameters:
+                enableVhtSuBeamforming = true;
+                enableVhtDlMuMimo = true;
+        }
+        vhtOff: VhtHarness;
+        he: HeHarness {
+            parameters:
+                enableUlMuOfdma = true;
+                enableDlMuMimo = true;
+        }
+        heOff: HeHarness;
+        derived: CommonHarness {
+            parameters:
+                enableHtSounding = true;
+                featureSet.typename = "DerivedTestHcfFeatureSet";
+        }
+        observer: HcfFeatureSetObserver;
+}
+
+%inifile: omnetpp.ini
+
+[General]
+network = TestNetwork
+sim-time-limit = 1us
+record-vector-results = false
+cmdenv-express-mode = false
+cmdenv-event-banners = false
+
+%contains: stdout
+HCF feature-set composition and runtime registry passed.

@@ -75,12 +75,12 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerEqualSizedRUs::schedule(const Sch
         result.allocations.push_back(allocation);
     }
     result.commonDuration = computeCommonDuration(context, result.allocations);
+    result.decisionReason = "equal-sized trigger";
     for (auto& allocation : result.allocations)
         allocation.estimatedDuration = result.commonDuration;
     EV_INFO << "HE UL equal-RU schedule: scheduled=" << scheduledCount
              << ", randomAccess=" << raCount
              << ", total=" << result.allocations.size() << "\n";
-    recordSchedule(context, result, "equal-sized trigger");
     return result;
 }
 

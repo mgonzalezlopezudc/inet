@@ -5,7 +5,7 @@ Test HE queue-bank lifecycle, per-AC routing, FIFO identity, accounting, and dyn
 #include <string>
 
 #include "inet/common/packet/chunk/ByteCountChunk.h"
-#include "inet/linklayer/ieee80211/mac/queue/StationQueueBankManager.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeQueueService.h"
 
 %file: TestNetwork.ned
 import inet.common.Module;
@@ -28,18 +28,17 @@ using namespace inet::ieee80211;
 #define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
 
 auto queueBanksModule = getParentModule()->getSubmodule("queueBanks");
-StationQueueBankManager manager(queueBanksModule);
+HeQueueService service;
+service.configure(queueBanksModule);
 MacAddress sta1("02:00:00:00:71:01");
 MacAddress sta2("02:00:00:00:71:02");
-auto bank1 = manager.ensureQueueBank(sta1, 1);
-auto bank2 = manager.ensureQueueBank(sta2, 2);
+auto bank1 = service.ensureAssociatedQueueBank(sta1, 1);
+auto bank2 = service.ensureAssociatedQueueBank(sta2, 2);
 std::string bank1Name = bank1->getFullName();
 std::string bank2Name = bank2->getFullName();
-REQUIRE(manager.getQueueBankCount() == 2);
-REQUIRE(manager.getQueueBank(sta1) == bank1);
-REQUIRE(manager.getQueueBank(sta2) == bank2);
-REQUIRE(manager.getAssociationEpoch(sta1) == 1);
-REQUIRE(manager.getAssociationEpoch(sta2) == 2);
+REQUIRE(service.getStationQueueBankCount() == 2);
+REQUIRE(service.getStationQueueBank(sta1) == bank1);
+REQUIRE(service.getStationQueueBank(sta2) == bank2);
 REQUIRE(bank1->getStaAddress() == sta1);
 REQUIRE(bank2->getStaAddress() == sta2);
 
@@ -51,26 +50,38 @@ bank1->getQueue(StationQueueBank::AC_BE)->enqueuePacket(packet2);
 bank2->getQueueByTid(5)->enqueuePacket(packet3);
 REQUIRE(bank1->getQueue(StationQueueBank::AC_BE)->getPacket(0) == packet1);
 REQUIRE(bank1->getQueue(StationQueueBank::AC_BE)->getPacket(1) == packet2);
-REQUIRE(manager.getTotalQueuedPackets() == 3);
-REQUIRE(manager.getTotalQueuedBytes() == 600);
+REQUIRE(service.getTotalQueuedPackets() == 3);
+REQUIRE(service.getTotalQueuedBytes() == 600);
+auto beSnapshots = service.getQueueSnapshots(AC_BE);
+REQUIRE(beSnapshots.size() == 2);
+REQUIRE(beSnapshots[0].token.isValid());
+REQUIRE(service.resolveQueue(beSnapshots[0].token) != nullptr);
+HcfQueueToken oldSta1Token;
+for (const auto& snapshot : beSnapshots)
+    if (snapshot.peer == sta1)
+        oldSta1Token = snapshot.token;
+REQUIRE(oldSta1Token.isValid());
 
-REQUIRE(manager.retireQueueBank(sta1, 1));
-REQUIRE(!manager.hasQueueBank(sta1));
-REQUIRE(manager.hasQueueBank(sta2));
+service.retireAssociation(sta1, 1, nullptr, true);
+REQUIRE(service.resolveQueue(oldSta1Token) == nullptr);
+REQUIRE(service.getStationQueueBank(sta1) == nullptr);
+REQUIRE(service.getStationQueueBank(sta2) == bank2);
 REQUIRE(queueBanksModule->getSubmodule(bank1Name.c_str()) == bank1);
-auto reassociatedBank1 = manager.ensureQueueBank(sta1, 3);
+auto reassociatedBank1 = service.ensureAssociatedQueueBank(sta1, 3);
+auto reassociatedToken = service.getQueueSnapshots(AC_BE).back().token;
+REQUIRE(reassociatedToken.isValid());
+REQUIRE(reassociatedToken.getValue() != oldSta1Token.getValue());
 std::string reassociatedBank1Name = reassociatedBank1->getFullName();
 REQUIRE(reassociatedBank1 != bank1);
 REQUIRE(reassociatedBank1Name != bank1Name);
-REQUIRE(manager.getAssociationEpoch(sta1) == 3);
-manager.finalizeRetiredQueueBanks();
+service.finalizeRetiredQueueBanksIfSafe(false);
 REQUIRE(queueBanksModule->getSubmodule(bank1Name.c_str()) == nullptr);
 REQUIRE(queueBanksModule->getSubmodule(reassociatedBank1Name.c_str()) == reassociatedBank1);
-REQUIRE(manager.getTotalQueuedPackets() == 1);
-REQUIRE(manager.getTotalQueuedBytes() == 300);
+REQUIRE(service.getTotalQueuedPackets() == 1);
+REQUIRE(service.getTotalQueuedBytes() == 300);
 
-manager.clear();
-REQUIRE(manager.getQueueBankCount() == 0);
+service.clear();
+REQUIRE(service.getStationQueueBankCount() == 0);
 REQUIRE(queueBanksModule->getSubmodule(bank2Name.c_str()) == nullptr);
 EV << "HE queue-bank service preserved identity and cleaned all dynamic modules.\n";
 

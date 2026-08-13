@@ -5,7 +5,10 @@ Test Trigger, BSR, and Multi-STA Block Ack serialization.
 #include <algorithm>
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/common/AccessCategory.h"
+#include "inet/linklayer/ieee80211/mac/contract/IHeUlMuExchangeCallback.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeTriggeredUlExchangeService.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeUlTriggerService.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeUlMuTxOpFs.h"
@@ -29,7 +32,7 @@ static bool throwsRuntimeError(F function)
     return false;
 }
 
-class TestHeHcfScheduleFinalizer : public HeHcf
+class TestHeHcfScheduleFinalizer : public IHeUlMuExchangeCallback
 {
   public:
     std::map<MacAddress, uint16_t> associationIds;
@@ -43,21 +46,24 @@ class TestHeHcfScheduleFinalizer : public HeHcf
             Hz centerFrequency, Hz channelBandwidth,
             IIeee80211HeUlTriggerPolicy::TriggerType triggerType)
     {
-        return finalizeUlSchedule(schedule, centerFrequency, channelBandwidth, triggerType);
+        return HeUlTriggerService::finalizeSchedule(schedule, centerFrequency, channelBandwidth, triggerType);
     }
 
     static Packet *aggregateHeTbMpdus(const std::vector<Packet *>& mpdus)
     {
-        return buildHeTbAmpdu(mpdus);
+        return HeTriggeredUlExchangeService::buildHeTbAmpdu(mpdus);
     }
 
-    virtual uint16_t getAssociationId(const MacAddress& address) const override
+    virtual uint32_t allocateHeUlTriggerId() override { return allocateIeee80211HeTriggerId(); }
+    virtual void heUlMuPlanCommitted(const HeUlMuPlan&, uint32_t) override {}
+
+    virtual uint16_t getHeUlAssociationId(const MacAddress& address) const override
     {
         auto it = associationIds.find(address);
         return it == associationIds.end() ? 0 : it->second;
     }
 
-    virtual void processTriggeredUlFrame(Packet *packet,
+    virtual void processHeUlTriggeredFrame(Packet *packet,
             const Ptr<const Ieee80211DataHeader>& header, uint16_t) override
     {
         deliveredTriggeredFrames++;
@@ -65,7 +71,7 @@ class TestHeHcfScheduleFinalizer : public HeHcf
         delete packet;
     }
 
-    virtual const Ptr<Ieee80211CompressedBlockAck> processTriggeredUlBlockAckReq(
+    virtual const Ptr<Ieee80211CompressedBlockAck> processHeUlTriggeredBlockAckReq(
             Packet *packet,
             const Ptr<const Ieee80211CompressedBlockAckReq>& blockAckReq,
             uint16_t) override

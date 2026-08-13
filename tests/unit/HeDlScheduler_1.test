@@ -69,6 +69,8 @@ class TestableHeDlScheduler : public HeDlSchedulerEqualSizedRUs
     {
         return estimateSnrDb(context, candidate, ru);
     }
+    bool hasCommittedMuMimoAnchor() const { return hasLastMuMimoAnchor; }
+    int getCommittedSelectedCount() const { return lastSelectedCount; }
 };
 
 Define_Module(TestableHeDlScheduler);
@@ -346,7 +348,11 @@ auto schedulerExternal = check_and_cast<TestableHeDlScheduler *>(
     };
     for (const auto& address : addresses)
         csi.updateCsi(address, context.channelBandwidth, addresses, getAid);
-    context.csiManager = &csi;
+    for (const auto& station : addresses)
+        for (const auto& other : addresses)
+            if (station != other)
+                context.csiLeakages[{station, other}] =
+                        csi.getLeakage(station, other, context.channelBandwidth);
     for (auto& candidate : context.candidates) {
         candidate.pathLossDb = 75;
         candidate.hasFreshPathLoss = true;
@@ -360,7 +366,17 @@ auto schedulerExternal = check_and_cast<TestableHeDlScheduler *>(
 
     auto allocations = schedulerExternal->schedule(context);
     ASSERT(allocations.size() == 2);
+    ASSERT(externalRateControl.reportedSnirDb.empty());
+    ASSERT(!schedulerExternal->hasCommittedMuMimoAnchor());
+    ASSERT(schedulerExternal->getCommittedSelectedCount() == 0);
+    auto abandonedAllocations = schedulerExternal->schedule(context);
+    ASSERT(abandonedAllocations.size() == allocations.size());
+    ASSERT(externalRateControl.reportedSnirDb.empty());
+    ASSERT(!schedulerExternal->hasCommittedMuMimoAnchor());
+    schedulerExternal->commitSchedule(context, allocations);
     ASSERT(externalRateControl.reportedSnirDb.size() == allocations.size());
+    ASSERT(schedulerExternal->hasCommittedMuMimoAnchor());
+    ASSERT(schedulerExternal->getCommittedSelectedCount() == 2);
     for (const auto& allocation : allocations) {
         auto observation = std::find_if(externalRateControl.reportedSnirDb.begin(),
                 externalRateControl.reportedSnirDb.end(), [&] (const auto& item) {

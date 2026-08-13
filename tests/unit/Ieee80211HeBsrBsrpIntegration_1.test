@@ -180,8 +180,9 @@ ASSERT(coordinator->selectTrigger(mib) == IIeee80211HeUlTriggerPolicy::BASIC_TRI
 ASSERT(coordinator->getPreferredAccessCategory() == AC_BE);
 EV << "Fresh backlog selected a Basic Trigger.\n";
 
+IIeee80211HeUlScheduler::ScheduleContext freshContext;
 auto freshSchedule = coordinator->prepareSchedule(mib, linkPhyContext, SimTime(1, SIMTIME_S), Hz(5.18e9), Hz(20e6),
-        SimTime(2, SIMTIME_MS), SimTime(1500, SIMTIME_US), -85, 10, 0, 0, 0);
+        SimTime(2, SIMTIME_MS), SimTime(1500, SIMTIME_US), -85, 10, 0, 0, 0, {}, &freshContext);
 ASSERT(freshSchedule.allocations.size() == 2);
 ASSERT(scheduler->lastContext.candidates.size() == 2);
 ASSERT(scheduler->lastContext.candidates[0].hasFreshReport);
@@ -192,7 +193,7 @@ ASSERT(!scheduler->lastContext.candidates[1].retryPending);
 ASSERT(scheduler->lastContext.requestedDuration == SimTime(1500, SIMTIME_US));
 ASSERT(freshSchedule.commonDuration == SimTime(1500, SIMTIME_US));
 ASSERT(coordinator->getBufferStatus().at(aid1).scheduledBytes[AC_BE] == 0);
-coordinator->commitSchedule(freshSchedule);
+coordinator->commitSchedule(freshContext, freshSchedule);
 ASSERT(coordinator->getBufferStatus().at(aid1).scheduledBytes[AC_BE] == 1200);
 const uint32_t triggerId = coordinator->allocateTriggerId();
 coordinator->noteTriggerSent(IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER, triggerId);
@@ -248,26 +249,28 @@ EV << "UNKNOWN queue semantics preserved their AC and TID through coordinator sc
 wait(0.011);
 ASSERT(coordinator->selectTrigger(mib) == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER);
 int staleReportsBeforePreparation = staleReportCounter.count;
+IIeee80211HeUlScheduler::ScheduleContext staleContext;
 auto staleSchedule = coordinator->prepareSchedule(mib, linkPhyContext, SimTime(1, SIMTIME_S), Hz(5.18e9), Hz(20e6),
-        SimTime(2, SIMTIME_MS), SimTime(1500, SIMTIME_US), -85, 10, 0, 0, 0);
+        SimTime(2, SIMTIME_MS), SimTime(1500, SIMTIME_US), -85, 10, 0, 0, 0, {}, &staleContext);
 ASSERT(staleSchedule.allocations.empty());
 ASSERT(scheduler->lastContext.candidates.empty());
 REQUIRE(staleReportCounter.count == staleReportsBeforePreparation);
-coordinator->commitSchedule(staleSchedule);
+coordinator->commitSchedule(staleContext, staleSchedule);
 REQUIRE(staleReportCounter.count == staleReportsBeforePreparation + 3);
 EV << "Stale reports were excluded and selected BSRP polling.\n";
 
 coordinator->updateBufferStatus(aid3, sta3, AC_VO, 6, 800);
 ASSERT(coordinator->selectTrigger(mib) == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
+IIeee80211HeUlScheduler::ScheduleContext implicitContext;
 auto implicitSchedule = coordinator->prepareSchedule(mib, linkPhyContext, SimTime(1, SIMTIME_S), Hz(5.18e9), Hz(20e6),
-        SimTime(2, SIMTIME_MS), SimTime(1500, SIMTIME_US), -85, 10, 0, 0, 0);
+        SimTime(2, SIMTIME_MS), SimTime(1500, SIMTIME_US), -85, 10, 0, 0, 0, {}, &implicitContext);
 ASSERT(implicitSchedule.allocations.size() == 1);
 ASSERT(scheduler->lastContext.candidates.size() == 1);
 ASSERT(scheduler->lastContext.candidates[0].associationId == aid3);
 ASSERT(scheduler->lastContext.candidates[0].selectedAccessCategory == AC_VO);
 ASSERT(scheduler->lastContext.candidates[0].selectedTid == 6);
 ASSERT(coordinator->getBufferStatus().at(aid3).scheduledBytes[AC_VO] == 0);
-coordinator->commitSchedule(implicitSchedule);
+coordinator->commitSchedule(implicitContext, implicitSchedule);
 ASSERT(coordinator->getBufferStatus().at(aid3).scheduledBytes[AC_VO] == 800);
 EV << "Implicit BSR refresh drove Basic Trigger scheduling for the reporting STA.\n";
 

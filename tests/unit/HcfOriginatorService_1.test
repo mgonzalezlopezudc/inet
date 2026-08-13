@@ -1,0 +1,458 @@
+%description:
+Verify standalone common HCF originator outcome mapping, exact MPDU identity,
+retry/retirement order, and late or duplicate callback rejection.
+
+%includes:
+#include <functional>
+#include <map>
+#include <set>
+#include <string>
+#include <vector>
+
+#include "inet/common/packet/Packet.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfOriginatorService.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+static bool throwsRuntimeError(const std::function<void()>& operation)
+{
+    try {
+        operation();
+        return false;
+    }
+    catch (const cRuntimeError&) {
+        return true;
+    }
+}
+
+static Packet *makeData(const char *name, const MacAddress& receiver,
+        int sequenceNumber, int fragmentNumber = 0, bool retry = false)
+{
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setType(ST_DATA_WITH_QOS);
+    header->setReceiverAddress(receiver);
+    header->setTransmitterAddress(MacAddress("02:00:00:00:00:01"));
+    header->setTid(5);
+    header->setSequenceNumber(SequenceNumberCyclic(sequenceNumber));
+    header->setFragmentNumber(fragmentNumber);
+    header->setRetry(retry);
+    header->setChunkLength(B(26));
+    return new Packet(name, header);
+}
+
+static Packet *makeManagement(const char *name, const MacAddress& receiver,
+        int sequenceNumber, bool retry = false)
+{
+    auto header = makeShared<Ieee80211ActionFrame>();
+    header->setReceiverAddress(receiver);
+    header->setTransmitterAddress(MacAddress("02:00:00:00:00:01"));
+    header->setSequenceNumber(SequenceNumberCyclic(sequenceNumber));
+    header->setRetry(retry);
+    header->setChunkLength(B(24));
+    return new Packet(name, header);
+}
+
+struct OriginatorHarness : public HcfOriginatorService::IActions {
+    using FrameIdentity = HcfOriginatorService::FrameIdentity;
+    using Frame = HcfOriginatorService::Frame;
+    using BlockAckMemberStatus = HcfOriginatorService::BlockAckMemberStatus;
+
+    std::set<const Packet *> currentPackets;
+    std::map<const Packet *, BlockAckMemberStatus> blockAckStatus;
+    std::vector<std::string> events;
+    int retryCount = 0;
+    bool retryLimitReached = false;
+    bool throwRateResult = false;
+    int reportedRetryCount = -1;
+    int managementAcknowledgedCount = 0;
+    int managementRetryLimitCount = 0;
+
+    void addCurrent(const Frame& frame) { currentPackets.insert(frame.packet); }
+
+    virtual bool isCurrent(const FrameIdentity& identity) const noexcept override
+    {
+        return currentPackets.count(identity.packet) != 0;
+    }
+
+    virtual void processTransmitted(const Frame&,
+            HcfOriginatorService::ExpectedResponse) override
+    {
+        events.push_back("transmitted");
+    }
+
+    virtual void processNoResponseSuccess(const Frame&) override
+    {
+        events.push_back("noResponseSuccess");
+    }
+
+    virtual void processTransmissionFailed(const Frame&,
+            HcfOriginatorService::FailureKind) override
+    {
+        events.push_back("failed");
+    }
+
+    virtual bool isRetryLimitReached(const Frame&) override
+    {
+        events.push_back("retryLimitQuery");
+        return retryLimitReached;
+    }
+
+    virtual int getRetryCount(const Frame&) override
+    {
+        events.push_back("retryCount");
+        return retryCount;
+    }
+
+    virtual void reportRateResult(const Frame&, int retryCount, bool successful,
+            bool retryLimitReached) override
+    {
+        reportedRetryCount = retryCount;
+        events.push_back(successful ? "rateSuccess" :
+                (retryLimitReached ? "rateGiveUp" : "rateFailure"));
+        if (throwRateResult)
+            throw cRuntimeError("injected rate-result failure");
+    }
+
+    virtual void processAckStateFailed(const Frame&) override
+    {
+        events.push_back("ackFailed");
+    }
+
+    virtual void processRetryLimitReached(const Frame&) override
+    {
+        events.push_back("retryLimitReached");
+    }
+
+    virtual void markRetry(const Frame& frame) override
+    {
+        events.push_back("markRetry");
+        auto header = frame.packet->removeAtFront<Ieee80211DataOrMgmtHeader>();
+        header->setRetry(true);
+        frame.packet->insertAtFront(header);
+    }
+
+    virtual void processAckRecoverySuccess(const Frame&) override
+    {
+        events.push_back("recoverySuccess");
+    }
+
+    virtual void processAckStateReceived(const Frame&,
+            const Ptr<const Ieee80211AckFrame>&) override
+    {
+        events.push_back("ackReceived");
+    }
+
+    virtual void processBlockAckReceived(
+            const Ptr<const Ieee80211BlockAck>&) override
+    {
+        events.push_back("blockAckReceived");
+    }
+
+    virtual BlockAckMemberStatus getBlockAckMemberStatus(
+            const Frame& frame) override
+    {
+        events.push_back("blockAckStatus:" + std::string(frame.packet->getName()));
+        return blockAckStatus.at(frame.packet);
+    }
+
+    virtual void processBlockAckMemberResult(const Frame& frame,
+            BlockAckMemberStatus status) override
+    {
+        const char *suffix = status == BlockAckMemberStatus::ACKNOWLEDGED ? "acked" :
+                status == BlockAckMemberStatus::UNACKNOWLEDGED ? "unacked" : "notCovered";
+        events.push_back("blockAckMember:" + std::string(frame.packet->getName()) + ":" + suffix);
+    }
+
+    virtual void processBlockAckAgreement(
+            const Ptr<const Ieee80211BlockAck>&) override
+    {
+        events.push_back("blockAckAgreement");
+    }
+
+    virtual void retireInProgress(const Frame& frame) override
+    {
+        events.push_back("retireInProgress:" + std::string(frame.packet->getName()));
+        currentPackets.erase(frame.packet);
+    }
+
+    virtual void retireAckState(const Frame& frame) override
+    {
+        events.push_back("retireAckState:" + std::string(frame.packet->getName()));
+    }
+
+    virtual void reportManagementResult(const Frame&,
+            HcfOriginatorService::ManagementResultKind resultKind) override
+    {
+        if (resultKind == HcfOriginatorService::ManagementResultKind::ACKNOWLEDGED) {
+            events.push_back("managementAcknowledged");
+            managementAcknowledgedCount++;
+        }
+        else {
+            events.push_back("managementRetryLimit");
+            managementRetryLimitCount++;
+        }
+    }
+};
+
+%activity:
+using Service = HcfOriginatorService;
+const MacAddress peer("02:00:00:00:00:02");
+HcfOriginatorService service;
+
+// Exact identity keeps packet, receiver, TID, fragment, and the full cyclic
+// sequence value. Wrap-around values 4095 and 0 remain distinct.
+auto wrapLastPacket = makeData("wrapLast", peer, 4095, 3);
+auto wrapZeroPacket = makeData("wrapZero", peer, 0, 3);
+auto wrapLast = Service::makeFrame(wrapLastPacket,
+        wrapLastPacket->peekAtFront<Ieee80211DataOrMgmtHeader>());
+auto wrapZero = Service::makeFrame(wrapZeroPacket,
+        wrapZeroPacket->peekAtFront<Ieee80211DataOrMgmtHeader>());
+REQUIRE(wrapLast.identity.sequenceNumber == 4095);
+REQUIRE(wrapZero.identity.sequenceNumber == 0);
+REQUIRE(wrapLast.identity != wrapZero.identity);
+auto samePacketNextSequence = wrapLast.identity;
+samePacketNextSequence.sequenceNumber = 0;
+REQUIRE(wrapLast.identity != samePacketNextSequence);
+REQUIRE(wrapLast.identity.fragmentNumber == 3);
+
+// Data without a response enters its existing no-response success owner and
+// retires once. Management without an ACK requirement currently has no common
+// retirement side effect, so the service does not invent one.
+{
+    OriginatorHarness harness;
+    harness.addCurrent(wrapLast);
+    auto result = service.processTransmitted(wrapLast,
+            Service::ExpectedResponse::NONE, harness);
+    REQUIRE(result.terminalAction == Service::TerminalAction::ACK_RETIRE);
+    REQUIRE(harness.events == std::vector<std::string>({"transmitted",
+            "noResponseSuccess", "retireInProgress:wrapLast"}));
+
+    auto managementPacket = makeManagement("managementNoAck", peer, 7);
+    auto management = Service::makeFrame(managementPacket,
+            managementPacket->peekAtFront<Ieee80211DataOrMgmtHeader>());
+    harness.events.clear();
+    harness.addCurrent(management);
+    result = service.processTransmitted(management,
+            Service::ExpectedResponse::NONE, harness);
+    REQUIRE(result.terminalAction == Service::TerminalAction::NONE);
+    REQUIRE(harness.events == std::vector<std::string>({"transmitted"}));
+    delete managementPacket;
+}
+
+// ACK success reports rate feedback before recovery/ACK mutation, reports one
+// management result before terminal retirement, and rejects the duplicate.
+{
+    OriginatorHarness harness;
+    auto packet = makeManagement("managementAck", peer, 8, false);
+    auto frame = Service::makeFrame(packet,
+            packet->peekAtFront<Ieee80211DataOrMgmtHeader>());
+    harness.retryCount = 2;
+    harness.addCurrent(frame);
+    auto ack = makeShared<Ieee80211AckFrame>();
+    auto result = service.processAckReceived(frame, ack, harness);
+    REQUIRE(result.retryCount == 2);
+    REQUIRE(harness.reportedRetryCount == 2);
+    REQUIRE(result.terminalAction == Service::TerminalAction::ACK_RETIRE);
+    REQUIRE(harness.events == std::vector<std::string>({"retryCount",
+            "rateSuccess", "recoverySuccess", "ackReceived",
+            "managementAcknowledged", "retireInProgress:managementAck",
+            "retireAckState:managementAck"}));
+    REQUIRE(harness.managementAcknowledgedCount == 1);
+    auto eventCount = harness.events.size();
+    result = service.processAckReceived(frame, ack, harness);
+    REQUIRE(result.disposition == Service::Disposition::STALE_OR_DUPLICATE);
+    REQUIRE(harness.events.size() == eventCount);
+    REQUIRE(harness.managementAcknowledgedCount == 1);
+    delete packet;
+}
+
+// Timeout below the retry limit preserves the same packet/sequence identity,
+// updates recovery and rate state first, then sets Retry without retirement.
+{
+    OriginatorHarness harness;
+    harness.retryCount = 1;
+    harness.addCurrent(wrapZero);
+    auto result = service.processAckTimeout(wrapZero, harness);
+    REQUIRE(result.terminalAction == Service::TerminalAction::RETAIN_RETRY);
+    REQUIRE(result.retryCount == 1);
+    REQUIRE(wrapZero.identity.sequenceNumber == 0);
+    REQUIRE(wrapZero.packet->peekAtFront<Ieee80211DataOrMgmtHeader>()->getRetry());
+    REQUIRE(harness.events == std::vector<std::string>({"failed",
+            "retryLimitQuery", "retryCount", "rateFailure", "ackFailed",
+            "markRetry"}));
+}
+
+// At the retry limit, management failure gives rate control its give-up result,
+// retires both authoritative owners, and reports the management result once.
+{
+    OriginatorHarness harness;
+    auto packet = makeManagement("managementGiveUp", peer, 9);
+    auto frame = Service::makeFrame(packet,
+            packet->peekAtFront<Ieee80211DataOrMgmtHeader>());
+    harness.retryCount = 4;
+    harness.retryLimitReached = true;
+    harness.addCurrent(frame);
+    auto result = service.processAckTimeout(frame, harness);
+    REQUIRE(result.terminalAction == Service::TerminalAction::DROP_RETIRE);
+    REQUIRE(harness.events == std::vector<std::string>({"failed",
+            "retryLimitQuery", "retryCount", "rateGiveUp", "ackFailed",
+            "retryLimitReached", "retireInProgress:managementGiveUp",
+            "retireAckState:managementGiveUp", "managementRetryLimit"}));
+    REQUIRE(harness.managementRetryLimitCount == 1);
+    auto eventCount = harness.events.size();
+    result = service.processAckTimeout(frame, harness);
+    REQUIRE(result.disposition == Service::Disposition::STALE_OR_DUPLICATE);
+    REQUIRE(harness.events.size() == eventCount);
+    REQUIRE(harness.managementRetryLimitCount == 1);
+    delete packet;
+}
+
+// A partial BlockAck fails only covered-unacknowledged current MPDUs. It does
+// not run the independent retry-limit/rate path, and it retires acknowledged
+// identities only; not-covered and stale candidates remain untouched.
+{
+    auto acknowledgedPacket = makeData("acknowledged", peer, 10);
+    auto unacknowledgedPacket = makeData("unacknowledged", peer, 11);
+    auto notCoveredPacket = makeData("notCovered", peer, 12);
+    auto stalePacket = makeData("stale", peer, 13);
+    auto acknowledged = Service::makeFrame(acknowledgedPacket,
+            acknowledgedPacket->peekAtFront<Ieee80211DataOrMgmtHeader>());
+    auto unacknowledged = Service::makeFrame(unacknowledgedPacket,
+            unacknowledgedPacket->peekAtFront<Ieee80211DataOrMgmtHeader>());
+    auto notCovered = Service::makeFrame(notCoveredPacket,
+            notCoveredPacket->peekAtFront<Ieee80211DataOrMgmtHeader>());
+    auto stale = Service::makeFrame(stalePacket,
+            stalePacket->peekAtFront<Ieee80211DataOrMgmtHeader>());
+    OriginatorHarness harness;
+    for (auto frame : {acknowledged, unacknowledged, notCovered})
+        harness.addCurrent(frame);
+    harness.blockAckStatus[acknowledgedPacket] = Service::BlockAckMemberStatus::ACKNOWLEDGED;
+    harness.blockAckStatus[unacknowledgedPacket] = Service::BlockAckMemberStatus::UNACKNOWLEDGED;
+    harness.blockAckStatus[notCoveredPacket] = Service::BlockAckMemberStatus::NOT_COVERED;
+    auto blockAck = makeShared<Ieee80211CompressedBlockAck>();
+    auto result = service.processBlockAckReceived(blockAck,
+            {acknowledged, unacknowledged, notCovered, stale}, harness);
+    REQUIRE(result.kind == Service::BlockAckResultKind::PARTIAL);
+    REQUIRE(result.acknowledgedCount == 1);
+    REQUIRE(result.unacknowledgedCount == 1);
+    REQUIRE(result.notCoveredCount == 1);
+    REQUIRE(result.staleCount == 1);
+    REQUIRE(harness.events == std::vector<std::string>({
+            "blockAckReceived",
+            "blockAckStatus:acknowledged", "blockAckMember:acknowledged:acked",
+            "blockAckStatus:unacknowledged", "failed", "blockAckMember:unacknowledged:unacked",
+            "blockAckStatus:notCovered", "blockAckMember:notCovered:notCovered",
+            "blockAckAgreement", "retireInProgress:acknowledged",
+            "retireAckState:acknowledged"}));
+    REQUIRE(harness.currentPackets.count(unacknowledgedPacket) == 1);
+    REQUIRE(harness.currentPackets.count(notCoveredPacket) == 1);
+    delete acknowledgedPacket;
+    delete unacknowledgedPacket;
+    delete notCoveredPacket;
+    delete stalePacket;
+}
+
+// A BlockAck with current candidates but no acknowledged member is an
+// explicit NONE_ACKNOWLEDGED outcome, not a stale/no-current response.
+// Covered-unacknowledged members receive only the current BA recovery failure;
+// not-covered members receive no failure, and neither member is retired or
+// enters the independent retry-limit/rate/Retry-bit path.
+{
+    auto unacknowledgedPacket = makeData("noneAckedUnacknowledged", peer, 17);
+    auto notCoveredPacket = makeData("noneAckedNotCovered", peer, 18);
+    auto unacknowledged = Service::makeFrame(unacknowledgedPacket,
+            unacknowledgedPacket->peekAtFront<Ieee80211DataOrMgmtHeader>());
+    auto notCovered = Service::makeFrame(notCoveredPacket,
+            notCoveredPacket->peekAtFront<Ieee80211DataOrMgmtHeader>());
+    OriginatorHarness harness;
+    harness.addCurrent(unacknowledged);
+    harness.addCurrent(notCovered);
+    harness.blockAckStatus[unacknowledgedPacket] =
+            Service::BlockAckMemberStatus::UNACKNOWLEDGED;
+    harness.blockAckStatus[notCoveredPacket] =
+            Service::BlockAckMemberStatus::NOT_COVERED;
+    auto blockAck = makeShared<Ieee80211CompressedBlockAck>();
+    auto result = service.processBlockAckReceived(blockAck,
+            {unacknowledged, notCovered}, harness);
+    REQUIRE(result.disposition == Service::Disposition::PROCESSED);
+    REQUIRE(result.kind == Service::BlockAckResultKind::NONE_ACKNOWLEDGED);
+    REQUIRE(result.acknowledgedCount == 0);
+    REQUIRE(result.unacknowledgedCount == 1);
+    REQUIRE(result.notCoveredCount == 1);
+    REQUIRE(result.staleCount == 0);
+    REQUIRE(harness.events == std::vector<std::string>({
+            "blockAckReceived",
+            "blockAckStatus:noneAckedUnacknowledged", "failed",
+            "blockAckMember:noneAckedUnacknowledged:unacked",
+            "blockAckStatus:noneAckedNotCovered",
+            "blockAckMember:noneAckedNotCovered:notCovered",
+            "blockAckAgreement"}));
+    REQUIRE(harness.currentPackets.count(unacknowledgedPacket) == 1);
+    REQUIRE(harness.currentPackets.count(notCoveredPacket) == 1);
+    REQUIRE(!unacknowledgedPacket->peekAtFront<Ieee80211DataOrMgmtHeader>()->getRetry());
+    REQUIRE(!notCoveredPacket->peekAtFront<Ieee80211DataOrMgmtHeader>()->getRetry());
+    delete unacknowledgedPacket;
+    delete notCoveredPacket;
+}
+
+// Full and wholly missing/stale BlockAck outcomes are explicit. A missing BA
+// uses the ordinary failure mapper, while a late BA performs no mutation.
+{
+    OriginatorHarness harness;
+    auto packet = makeData("full", peer, 14);
+    auto frame = Service::makeFrame(packet,
+            packet->peekAtFront<Ieee80211DataOrMgmtHeader>());
+    harness.addCurrent(frame);
+    harness.blockAckStatus[packet] = Service::BlockAckMemberStatus::ACKNOWLEDGED;
+    auto blockAck = makeShared<Ieee80211CompressedBlockAck>();
+    auto result = service.processBlockAckReceived(blockAck, {frame}, harness);
+    REQUIRE(result.kind == Service::BlockAckResultKind::FULL);
+    harness.events.clear();
+    result = service.processBlockAckReceived(blockAck, {frame}, harness);
+    REQUIRE(result.disposition == Service::Disposition::STALE_OR_DUPLICATE);
+    REQUIRE(result.kind == Service::BlockAckResultKind::NO_CURRENT_MEMBERS);
+    REQUIRE(harness.events.empty());
+
+    auto missingPacket = makeData("missing", peer, 15);
+    auto missing = Service::makeFrame(missingPacket,
+            missingPacket->peekAtFront<Ieee80211DataOrMgmtHeader>());
+    harness.addCurrent(missing);
+    harness.retryCount = 2;
+    auto missingResult = service.processBlockAckMissing(missing, harness);
+    REQUIRE(missingResult.terminalAction == Service::TerminalAction::RETAIN_RETRY);
+    REQUIRE(missingPacket->peekAtFront<Ieee80211DataOrMgmtHeader>()->getRetry());
+    delete packet;
+    delete missingPacket;
+}
+
+// Candidate duplication is rejected before any owner mutation. If an action
+// throws, the service preserves current non-transactional callback semantics:
+// earlier ordered mutations remain committed and later actions do not run.
+{
+    OriginatorHarness harness;
+    auto packet = makeData("throwing", peer, 16);
+    auto frame = Service::makeFrame(packet,
+            packet->peekAtFront<Ieee80211DataOrMgmtHeader>());
+    harness.addCurrent(frame);
+    auto blockAck = makeShared<Ieee80211CompressedBlockAck>();
+    REQUIRE(throwsRuntimeError([&] {
+        service.processBlockAckReceived(blockAck, {frame, frame}, harness);
+    }));
+    REQUIRE(harness.events.empty());
+
+    harness.retryCount = 1;
+    harness.throwRateResult = true;
+    REQUIRE(throwsRuntimeError([&] { service.processAckTimeout(frame, harness); }));
+    REQUIRE(harness.events == std::vector<std::string>({"failed",
+            "retryLimitQuery", "retryCount", "rateFailure"}));
+    REQUIRE(!packet->peekAtFront<Ieee80211DataOrMgmtHeader>()->getRetry());
+    REQUIRE(harness.currentPackets.count(packet) == 1);
+    delete packet;
+}
+
+delete wrapLastPacket;
+delete wrapZeroPacket;

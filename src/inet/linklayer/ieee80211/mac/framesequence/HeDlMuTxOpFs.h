@@ -15,6 +15,7 @@
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequence.h"
 #include "inet/linklayer/ieee80211/mac/contract/IAckHandler.h"
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequenceHandler.h"
+#include "inet/linklayer/ieee80211/mac/contract/IHeDlMuExchangeCallback.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuPlan.h"
 #include "inet/linklayer/ieee80211/mac/scheduler/IIeee80211HeDlScheduler.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
@@ -35,6 +36,13 @@ using namespace inet::units::values;
 class INET_API HeDlMuTxOpFs : public IFrameSequence
 {
   public:
+    class INET_API ITransactionObserver
+    {
+      public:
+        virtual ~ITransactionObserver() {}
+        virtual void beforePacketCommit(int packetIndex) = 0;
+    };
+
     enum class AckMethod {
         MU_BAR_TRIGGER,
         EXPLICIT_SEQUENTIAL_BAR
@@ -66,6 +74,10 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
     queueing::IPacketQueue *pendingQueue = nullptr;
     IAckHandler *ackHandler = nullptr;
     IFrameSequenceHandler::ICallback *callback = nullptr;
+    IHeDlMuExchangeCallback *heDlMuCallback = nullptr;
+    std::unique_ptr<IHeDlMuExchangeCallback> ownedCompatibilityCallback;
+    ITransactionObserver *transactionObserver = nullptr;
+    uint64_t transactionToken = 0;
     int maxAmpduMpduCount = 16;
     int maxHeMuPsduLength = 6500631;
     simtime_t maxHeMuPpduDuration = SimTime(5.484, SIMTIME_MS);
@@ -83,18 +95,30 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
     /** Build the MU container Packet from the scheduler allocation and pending queue. */
     Packet *buildMuContainerPacket(FrameSequenceContext *context);
     virtual MacAddress getTransmitterAddress() const;
-    /** Deterministic fault-injection seam invoked immediately before each packet commit. */
-    virtual void beforePacketCommit(int packetIndex) {}
-
     friend class HeDlMuPerStaBlockAckFs;
     friend class HeDlMuBarBlockAckFs;
 
   public:
+    static void validateConfiguration(int maxAmpduMpduCount,
+            int maxHeMuPsduLength, simtime_t maxHeMuPpduDuration);
     HeDlMuTxOpFs(const HeDlMuPlan& dlPlan,
                  physicallayer::Ieee80211ModeSet *modeSet,
                  queueing::IPacketQueue *pendingQueue,
                  IAckHandler *ackHandler,
                  IFrameSequenceHandler::ICallback *callback,
+                 IHeDlMuExchangeCallback *heDlMuCallback,
+                 uint64_t transactionToken,
+                 int maxAmpduMpduCount = 16,
+                 int maxHeMuPsduLength = 6500631,
+                 simtime_t maxHeMuPpduDuration = SimTime(5.484, SIMTIME_MS),
+                 AckMethod ackMethod = AckMethod::EXPLICIT_SEQUENTIAL_BAR);
+    HeDlMuTxOpFs(const HeDlMuPlan& dlPlan,
+                 physicallayer::Ieee80211ModeSet *modeSet,
+                 queueing::IPacketQueue *pendingQueue,
+                 IAckHandler *ackHandler,
+                 IFrameSequenceHandler::ICallback *callback,
+                 IFrameSequenceHandler::ICallback *legacyCallback,
+                 IQosRateSelection *legacyRateSelection,
                  int maxAmpduMpduCount = 16,
                  int maxHeMuPsduLength = 6500631,
                  simtime_t maxHeMuPpduDuration = SimTime(5.484, SIMTIME_MS),
@@ -107,6 +131,9 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
 
     virtual bool isContainerPacket(Packet *packet) const { return packet == containerPacket; }
     virtual const std::vector<ActiveAllocation>& getActiveAllocations() const { return activeAllocations; }
+    const HeDlMuPlan& getPlan() const { return dlPlan; }
+    uint32_t getAckTriggerId() const { return ackTriggerId; }
+    void setTransactionObserver(ITransactionObserver *observer) { transactionObserver = observer; }
 
     virtual std::string getHistory() const override;
 };

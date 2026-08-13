@@ -1,0 +1,327 @@
+%description:
+Verify dormant EHT DL MU construction and first-step preparation with the HCF
+exchange-engine callback and a separate explicit legacy owner module.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
+#include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreement.h"
+#include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementHandler.h"
+#include "inet/linklayer/ieee80211/mac/contract/IQosRateSelection.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/EhtDlMuTxOpFs.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceHandler.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuPlan.h"
+#include "inet/linklayer/ieee80211/mac/queue/InProgressFrames.h"
+#include "inet/networklayer/common/NetworkInterface.h"
+#include "inet/queueing/contract/IPacketQueue.h"
+
+%file: TestNetwork.ned
+import inet.queueing.queue.PacketQueue;
+
+simple TestMac
+{
+    parameters:
+        @class(TestMac);
+}
+
+simple TestRateSelection
+{
+    parameters:
+        @class(TestRateSelection);
+}
+
+module TestLegacyHcfOwner
+{
+    parameters:
+        @class(TestLegacyHcfOwner);
+    submodules:
+        rateSelection: TestRateSelection;
+}
+
+module TestNic
+{
+    parameters:
+        @class(TestNetworkInterface);
+    submodules:
+        mac: TestMac;
+        legacyHcfOwner: TestLegacyHcfOwner;
+}
+
+simple TestHcfCallback
+{
+    parameters:
+        @class(TestHcfCallback);
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        nic: TestNic;
+        callback: TestHcfCallback;
+        pendingQueue: PacketQueue;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+allow-object-stealing-on-deletion = true
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+class TestNetworkInterface : public NetworkInterface
+{
+  protected:
+    virtual int numInitStages() const override { return 1; }
+    virtual void initialize(int) override {}
+};
+
+Define_Module(TestNetworkInterface);
+
+class TestMac : public Ieee80211Mac
+{
+  protected:
+    MacAddress testAddress = MacAddress("AA:BB:CC:DD:EE:FF");
+    virtual int numInitStages() const override { return 1; }
+    virtual void initialize(int) override {}
+
+  public:
+    virtual const MacAddress& getAddress() const override { return testAddress; }
+};
+
+Define_Module(TestMac);
+
+class TestRateSelection : public cSimpleModule, public IQosRateSelection
+{
+  protected:
+    const physicallayer::IIeee80211Mode *getControlMode() const
+    {
+        return physicallayer::Ieee80211ModeSet::getModeSet("ax")->findHeMode(0, 1, MHz(20), false);
+    }
+
+  public:
+    virtual const physicallayer::IIeee80211Mode *computeResponseCtsFrameMode(Packet *, const Ptr<const Ieee80211RtsFrame>&) override { return getControlMode(); }
+    virtual const physicallayer::IIeee80211Mode *computeResponseAckFrameMode(Packet *, const Ptr<const Ieee80211DataOrMgmtHeader>&) override { return getControlMode(); }
+    virtual const physicallayer::IIeee80211Mode *computeResponseBlockAckFrameMode(Packet *, const Ptr<const Ieee80211BlockAckReq>&) override { return getControlMode(); }
+    virtual const physicallayer::IIeee80211Mode *computeMode(Packet *, const Ptr<const Ieee80211MacHeader>&, TxopProcedure *) override { return getControlMode(); }
+};
+
+Define_Module(TestRateSelection);
+
+class TestLegacyHcfOwner : public cModule, public IFrameSequenceHandler::ICallback
+{
+  public:
+    virtual void transmitFrame(Packet *, simtime_t) override {}
+    virtual void scheduleStartRxTimer(simtime_t) override {}
+    virtual void originatorProcessTransmittedFrame(Packet *) override {}
+    virtual void originatorProcessReceivedFrame(Packet *, Packet *) override {}
+    virtual void originatorProcessFailedFrame(Packet *) override {}
+    virtual void originatorProcessRtsProtectionFailed(Packet *) override {}
+    virtual void frameSequenceFinished() override {}
+};
+
+Define_Module(TestLegacyHcfOwner);
+
+class TestHcfCallback : public Hcf
+{
+  protected:
+    virtual int numInitStages() const override { return 1; }
+    virtual void initialize(int) override
+    {
+        auto engine = std::make_unique<HcfExchangeEngine>(
+                std::make_unique<FrameSequenceHandler>());
+        engine->initializeTimers();
+        installExchangeEngineForTesting(std::move(engine));
+        TestActionPort port;
+        port.resumeContention = [] () {};
+        installTestActionPort(std::move(port));
+    }
+
+
+  public:
+    IFrameSequenceHandler::ICallback *getEngineCallback()
+    {
+        return getFrameSequenceCallbackForLegacyAdapter();
+    }
+};
+
+Define_Module(TestHcfCallback);
+
+class TestAckHandler : public IAckHandler
+{
+  public:
+    virtual bool isEligibleToTransmit(const Ptr<const Ieee80211DataOrMgmtHeader>&) override { return true; }
+    virtual bool isOutstandingFrame(const Ptr<const Ieee80211DataOrMgmtHeader>&) override { return false; }
+    virtual bool isRetransmission(const Ptr<const Ieee80211DataOrMgmtHeader>&) override { return false; }
+    virtual void frameGotInProgress(const Ptr<const Ieee80211DataOrMgmtHeader>&) override {}
+};
+
+class TestBlockAckAgreementHandler : public IOriginatorBlockAckAgreementHandler
+{
+  protected:
+    std::vector<std::unique_ptr<OriginatorBlockAckAgreement>> agreements;
+
+  public:
+    void addAgreement(const MacAddress& receiver, Tid tid)
+    {
+        auto agreement = std::make_unique<OriginatorBlockAckAgreement>(
+                receiver, tid, SequenceNumberCyclic(0), 64, false, false);
+        agreement->setIsAddbaResponseReceived(true);
+        agreements.push_back(std::move(agreement));
+    }
+
+    virtual OriginatorBlockAckAgreement *getAgreement(MacAddress receiver, Tid tid) override
+    {
+        for (const auto& agreement : agreements)
+            if (agreement->getReceiverAddr() == receiver && agreement->getTid() == tid)
+                return agreement.get();
+        return nullptr;
+    }
+
+    virtual void processReceivedBlockAck(const Ptr<const Ieee80211BlockAck>&, IBlockAckAgreementHandlerCallback *) override {}
+    virtual void processTransmittedAddbaReq(const Ptr<const Ieee80211AddbaRequest>&, IBlockAckAgreementHandlerCallback *) override {}
+    virtual bool processQueuedDataFrame(Packet *, const Ptr<const Ieee80211DataHeader>&, IOriginatorBlockAckAgreementPolicy *, IProcedureCallback *) override { return false; }
+    virtual void processTransmittedDataFrame(Packet *, const Ptr<const Ieee80211DataHeader>&, IOriginatorBlockAckAgreementPolicy *, IProcedureCallback *) override {}
+    virtual void processReceivedAddbaResp(const Ptr<const Ieee80211AddbaResponse>&, IOriginatorBlockAckAgreementPolicy *, IBlockAckAgreementHandlerCallback *) override {}
+    virtual void processTransmittedDelba(const Ptr<const Ieee80211Delba>&) override {}
+    virtual void processReceivedDelba(const Ptr<const Ieee80211Delba>&, IOriginatorBlockAckAgreementPolicy *) override {}
+    virtual void blockAckAgreementExpired(IProcedureCallback *, IBlockAckAgreementHandlerCallback *) override {}
+};
+
+class TestScheduler : public IIeee80211HeDlScheduler
+{
+  protected:
+    std::vector<MacAddress> stations;
+
+  public:
+    explicit TestScheduler(const std::vector<MacAddress>& stations) : stations(stations) {}
+
+    virtual std::vector<RuAllocation> schedule(const std::vector<MacAddress>&,
+            Hz centerFrequency, Hz bandwidth) override
+    {
+        auto rus = physicallayer::getHeEqualRuLayout(centerFrequency, bandwidth,
+                physicallayer::getHeMaxRuCount(bandwidth));
+        std::vector<RuAllocation> allocations;
+        for (size_t i = 0; i < stations.size(); ++i) {
+            RuAllocation allocation;
+            allocation.staAddress = stations[i];
+            allocation.ru = rus[i];
+            allocation.estimatedDuration = SimTime(1, SIMTIME_MS);
+            allocations.push_back(allocation);
+        }
+        return allocations;
+    }
+};
+
+class TestEhtDlMuTxOpFs : public EhtDlMuTxOpFs
+{
+  public:
+    using EhtDlMuTxOpFs::EhtDlMuTxOpFs;
+    MacAddress readTransmitterAddress() const { return getTransmitterAddress(); }
+};
+
+static Packet *makeDataPacket(const char *name, const MacAddress& receiver, Tid tid,
+        int sequenceNumber)
+{
+    auto packet = new Packet(name);
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setType(ST_DATA_WITH_QOS);
+    header->setReceiverAddress(receiver);
+    header->setTid(tid);
+    header->setAckPolicy(BLOCK_ACK);
+    header->setSequenceNumber(SequenceNumberCyclic(sequenceNumber));
+    packet->insertAtFront(header);
+    return packet;
+}
+
+%activity:
+auto callbackModule = check_and_cast<TestHcfCallback *>(
+        getParentModule()->getSubmodule("callback"));
+auto callback = callbackModule->getEngineCallback();
+auto nic = check_and_cast<TestNetworkInterface *>(getParentModule()->getSubmodule("nic"));
+auto legacyOwner = check_and_cast<TestLegacyHcfOwner *>(
+        nic->getSubmodule("legacyHcfOwner"));
+auto legacyRateSelection = check_and_cast<IQosRateSelection *>(
+        legacyOwner->getSubmodule("rateSelection"));
+auto pendingQueue = check_and_cast<queueing::IPacketQueue *>(
+        getParentModule()->getSubmodule("pendingQueue"));
+auto modeSet = const_cast<physicallayer::Ieee80211ModeSet *>(
+        physicallayer::Ieee80211ModeSet::getModeSet("ax"));
+
+MacAddress sta1("00:00:00:00:00:01");
+MacAddress sta2("00:00:00:00:00:02");
+Tid tid = 3;
+pendingQueue->enqueuePacket(makeDataPacket("eht-sta1", sta1, tid, 0));
+pendingQueue->enqueuePacket(makeDataPacket("eht-sta2", sta2, tid, 1));
+
+IIeee80211HeDlScheduler::ScheduleContext scheduleContext;
+scheduleContext.channelCenterFrequency = Hz(5.18e9);
+scheduleContext.channelBandwidth = MHz(20);
+Ieee80211HeCapabilities localCapabilities;
+Ieee80211HeCapabilities peerCapabilities;
+Ieee80211HeOperation operation;
+operation.operatingChannelWidth = scheduleContext.channelBandwidth;
+auto negotiated = negotiateHeCapabilities(localCapabilities, peerCapabilities, operation, true);
+scheduleContext.localHeCapabilities = localCapabilities;
+for (auto station : {sta1, sta2}) {
+    IIeee80211HeDlScheduler::CandidateInfo candidate;
+    candidate.staAddress = station;
+    candidate.anchor = scheduleContext.candidates.empty();
+    candidate.sourceQueueToken = HcfQueueToken(scheduleContext.candidates.size() + 1);
+    candidate.hasAdvertisedHeCapabilities = true;
+    candidate.advertisedHeCapabilities = peerCapabilities;
+    candidate.hasNegotiatedHeCapabilities = true;
+    candidate.negotiatedHeCapabilities = negotiated;
+    scheduleContext.candidates.push_back(candidate);
+}
+scheduleContext.anchorSta = sta1;
+
+TestScheduler scheduler({sta1, sta2});
+HeMuPlanDiagnostic diagnostic;
+auto plan = HeDlMuPlan::create(scheduleContext,
+        scheduler.schedule({sta1, sta2}, scheduleContext.channelCenterFrequency,
+                scheduleContext.channelBandwidth), diagnostic);
+REQUIRE(plan.has_value());
+
+TestAckHandler ackHandler;
+TestBlockAckAgreementHandler agreementHandler;
+agreementHandler.addAgreement(sta1, tid);
+agreementHandler.addAgreement(sta2, tid);
+InProgressFrames inProgressFrames;
+auto qosContext = new QoSContext(nullptr, nullptr, &agreementHandler, nullptr);
+auto context = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"),
+        modeSet, &inProgressFrames, nullptr, nullptr, nullptr, qosContext);
+
+bool missingOwnerRejected = false;
+try {
+    TestEhtDlMuTxOpFs invalid(*plan, modeSet, pendingQueue, &ackHandler,
+            callback, nullptr, legacyRateSelection);
+}
+catch (const cRuntimeError&) {
+    missingOwnerRejected = true;
+}
+REQUIRE(missingOwnerRejected);
+
+TestEhtDlMuTxOpFs sequence(*plan, modeSet, pendingQueue, &ackHandler,
+        callback, legacyOwner, legacyRateSelection);
+REQUIRE(sequence.readTransmitterAddress() == MacAddress("02:00:00:00:00:01"));
+sequence.startSequence(context, 0);
+auto firstStep = sequence.prepareStep(context);
+REQUIRE(firstStep != nullptr);
+REQUIRE(firstStep->getType() == IFrameSequenceStep::Type::TRANSMIT);
+auto container = check_and_cast<ITransmitStep *>(firstStep)->getFrameToTransmit();
+REQUIRE(sequence.isContainerPacket(container));
+REQUIRE(sequence.getActiveAllocations().size() == 2);
+EV << "EHT DL MU accepted engine callback plus explicit owner and prepared container.\n";
+
+delete firstStep;
+delete context;
+
+%contains: stdout
+EHT DL MU accepted engine callback plus explicit owner and prepared container.

@@ -1,0 +1,203 @@
+%description:
+Validates immutable HE UL candidate construction and no-allocation rejection.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeUlTriggerService.h"
+#include "inet/linklayer/ieee80211/mac/scheduler/HeUlSchedulerEqualSizedRUs.h"
+
+%file: TestNetwork.ned
+import inet.linklayer.ieee80211.mac.scheduler.HeUlSchedulerEqualSizedRUs;
+import inet.linklayer.ieee80211.mac.coordinationfunction.HeUlCoordinator;
+import inet.linklayer.ieee80211.mac.coordinationfunction.HeUlDefaultTriggerPolicy;
+import inet.linklayer.ieee80211.mib.Ieee80211Mib;
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        ulScheduler: HeUlSchedulerEqualSizedRUs {
+            parameters:
+                minRandomAccessRus = 0;
+                maxRandomAccessRus = 0;
+        }
+        ulTriggerPolicy: HeUlDefaultTriggerPolicy {
+            parameters:
+                minimumTriggerInterval = 0s;
+        }
+        ulCoordinator: HeUlCoordinator {
+            parameters:
+                enabled = true;
+        }
+        mib: Ieee80211Mib;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+class TriggerActions : public HeUlTriggerService::IActions, public IHeUlMuExchangeCallback
+{
+  public:
+    Ieee80211Mib *mib = nullptr;
+    HeUlCoordinator *coordinator = nullptr;
+    HeUlTriggerService *service = nullptr;
+    int accessRequests = 0;
+    int starts = 0;
+    int commits = 0;
+
+    virtual bool canRequestHeUlTrigger() const override { return true; }
+    virtual bool isNdpFeedbackReportEnabled() const override { return false; }
+    virtual const Ieee80211Mib *getHeUlMib() const override { return mib; }
+    virtual void requestHeUlChannelAccess(AccessCategory) override { accessRequests++; }
+    virtual void configureHeUlMuProtection(AccessCategory) override {}
+    virtual void startHeUlMuExchange(AccessCategory, const HeUlMuPlan& plan,
+            IHeUlMuExchangeCallback *callback) override {
+        starts++;
+        auto triggerId = callback->allocateHeUlTriggerId();
+        callback->heUlMuPlanCommitted(plan, triggerId);
+        commits++;
+    }
+    virtual uint16_t getHeUlAssociationId(const MacAddress& address) const override
+        { return mib->getAssociationId(address); }
+    virtual const Ptr<Ieee80211CompressedBlockAck> processHeUlTriggeredBlockAckReq(
+            Packet *, const Ptr<const Ieee80211CompressedBlockAckReq>&, uint16_t) override
+        { return nullptr; }
+    virtual void processHeUlTriggeredFrame(Packet *,
+            const Ptr<const Ieee80211DataHeader>&, uint16_t) override {}
+    virtual uint32_t allocateHeUlTriggerId() override { return coordinator->allocateTriggerId(); }
+    virtual void heUlMuPlanCommitted(const HeUlMuPlan& plan, uint32_t triggerId) override
+        { service->planCommitted(plan, triggerId); }
+};
+
+%activity:
+auto scheduler = check_and_cast<HeUlSchedulerEqualSizedRUs *>(
+        getParentModule()->getSubmodule("ulScheduler"));
+IIeee80211HeUlScheduler::ScheduleContext rejectedContext;
+rejectedContext.channelCenterFrequency = GHz(5.18);
+rejectedContext.channelBandwidth = MHz(20);
+rejectedContext.requestedDuration = SimTime(1, SIMTIME_MS);
+auto rejectedSelection = scheduler->schedule(rejectedContext);
+ASSERT(rejectedSelection.allocations.empty());
+ASSERT(scheduler->getCommittedSchedulingReason() == "not scheduled yet");
+auto rejectedProductionPlan = HeUlTriggerService::finalizeSchedule(
+        rejectedSelection, GHz(5.18), MHz(20),
+        IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
+ASSERT(!rejectedProductionPlan);
+ASSERT(scheduler->getCommittedSchedulingReason() == "not scheduled yet");
+ASSERT(scheduler->getCommittedCandidateCount() == 0);
+
+auto coordinator = check_and_cast<HeUlCoordinator *>(
+        getParentModule()->getSubmodule("ulCoordinator"));
+auto mib = check_and_cast<Ieee80211Mib *>(getParentModule()->getSubmodule("mib"));
+const MacAddress station("02:00:00:00:60:11");
+mib->setPeerHeCapabilities(station, mib->localHeCapabilities, mib->heOperation);
+mib->commitPeerAssociation(station);
+const auto aid = mib->getAssociationId(station);
+coordinator->updateBufferStatus(aid, station, AC_BE, 0, 900);
+TriggerActions actions;
+actions.mib = mib;
+HeUlTriggerService service;
+actions.coordinator = coordinator;
+actions.service = &service;
+service.configure(&actions, &actions, coordinator, SimTime(1, SIMTIME_US));
+service.start(this);
+auto timer = receive();
+ASSERT(service.handleTimer(timer, this));
+ASSERT(actions.accessRequests == 1);
+
+HeUlPreparationSnapshot rejectedSnapshot;
+rejectedSnapshot.accessCategory = AC_BE;
+rejectedSnapshot.now = simTime();
+rejectedSnapshot.reportMaxAge = coordinator->getReportMaxAge();
+rejectedSnapshot.maxHeTbPpduDuration = SimTime(1, SIMTIME_MS);
+rejectedSnapshot.maxMuStations = 8;
+rejectedSnapshot.phy.emplace(1, GHz(5.18), MHz(20), mW(10), mW(20), mW(1e-8),
+        7, 2, HE_GI_1_6_US, HE_LTF_2X, 0, std::vector<bool>{}, 0,
+        mib->localHeCapabilities);
+ASSERT(!service.tryStart(AC_BE, rejectedSnapshot));
+ASSERT(actions.starts == 0 && actions.commits == 0);
+ASSERT(scheduler->getCommittedScheduleCount() == 0);
+
+auto acceptedSnapshot = rejectedSnapshot;
+HeUlPeerPreparationSnapshot acceptedPeer;
+acceptedPeer.stationAddress = station;
+acceptedPeer.associationId = aid;
+acceptedPeer.negotiatedCapabilities = mib->getNegotiatedHeCapabilities(station);
+HeUlBufferStatusSnapshot acceptedReport;
+acceptedReport.stationAddress = station;
+acceptedReport.backlogBytes[AC_BE] = 900;
+acceptedReport.backlogEstimates[AC_BE].lowerBoundBytes = 900;
+acceptedReport.updateTime = simTime();
+acceptedPeer.bufferStatus = acceptedReport;
+acceptedSnapshot.peers.push_back(acceptedPeer);
+auto preparedStart = service.prepareStart(AC_BE, acceptedSnapshot);
+ASSERT(preparedStart.has_value());
+ASSERT(actions.starts == 0 && actions.commits == 0);
+ASSERT(scheduler->getCommittedScheduleCount() == 0);
+ASSERT(service.commitStart(*preparedStart));
+ASSERT(actions.starts == 1 && actions.commits == 1);
+ASSERT(scheduler->getCommittedScheduleCount() == 1);
+ASSERT(scheduler->getCommittedCandidateCount() == 1);
+
+HeUlPreparationSnapshot snapshot;
+snapshot.now = SimTime(10, SIMTIME_S);
+snapshot.reportMaxAge = SimTime(100, SIMTIME_MS);
+snapshot.maxHeTbPpduDuration = SimTime(1, SIMTIME_MS);
+snapshot.phy.emplace(1, GHz(5.18), MHz(20), mW(10), mW(20), mW(1e-8),
+        7, 2, HE_GI_1_6_US, HE_LTF_2X, 0, std::vector<bool>{}, 0,
+        Ieee80211HeCapabilities{});
+
+HeUlPeerPreparationSnapshot fresh;
+fresh.stationAddress = MacAddress("02:00:00:00:60:01");
+fresh.associationId = 1;
+HeUlBufferStatusSnapshot freshReport;
+freshReport.stationAddress = fresh.stationAddress;
+freshReport.backlogBytes[AC_VI] = 900;
+freshReport.backlogEstimates[AC_VI].lowerBoundBytes = 900;
+freshReport.tid[AC_VI] = 5;
+freshReport.updateTime = snapshot.now - SimTime(20, SIMTIME_MS);
+freshReport.lastService = SimTime(1, SIMTIME_S);
+fresh.bufferStatus = freshReport;
+snapshot.peers.push_back(fresh);
+
+HeUlPeerPreparationSnapshot stale;
+stale.stationAddress = MacAddress("02:00:00:00:60:02");
+stale.associationId = 2;
+HeUlBufferStatusSnapshot staleReport;
+staleReport.stationAddress = stale.stationAddress;
+staleReport.updateTime = snapshot.now - SimTime(200, SIMTIME_MS);
+stale.bufferStatus = staleReport;
+snapshot.peers.push_back(stale);
+
+auto candidates = HeUlTriggerService::buildCandidates(snapshot);
+ASSERT(candidates.context.candidates.size() == 1);
+ASSERT(candidates.context.candidates.front().staAddress == fresh.stationAddress);
+ASSERT(candidates.context.candidates.front().selectedAccessCategory == AC_VI);
+ASSERT(candidates.context.candidates.front().selectedTid == 5);
+ASSERT(candidates.context.candidates.front().anchor);
+ASSERT(candidates.staleReportAids == std::vector<uint16_t>{2});
+ASSERT(candidates.context.estimatedRandomAccessContenders == 1);
+ASSERT(snapshot.peers.front().bufferStatus->backlogBytes[AC_VI] == 900);
+
+IIeee80211HeUlScheduler::Schedule empty;
+empty.commonDuration = SimTime(1, SIMTIME_MS);
+auto rejected = HeUlTriggerService::finalizeSchedule(empty, GHz(5.18), MHz(20),
+        IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
+ASSERT(!rejected);
+ASSERT(empty.allocations.empty());
+ASSERT(empty.commonDuration == SimTime(1, SIMTIME_MS));
+
+EV << "HE UL immutable candidates and no-allocation rejection verified.\n";
+EV << "Production UL scheduler rejection left committed observation state unchanged.\n";
+EV << "Validated UL service startup committed scheduler observation exactly once.\n";
+
+%contains: stdout
+HE UL immutable candidates and no-allocation rejection verified.
+Production UL scheduler rejection left committed observation state unchanged.
+Validated UL service startup committed scheduler observation exactly once.

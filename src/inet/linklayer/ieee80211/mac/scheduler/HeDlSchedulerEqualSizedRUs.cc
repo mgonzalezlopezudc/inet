@@ -5,8 +5,6 @@
 //
 
 #include "inet/linklayer/ieee80211/mac/scheduler/HeDlSchedulerEqualSizedRUs.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeMuMimoCsiManager.h"
-
 #include <algorithm>
 #include <cmath>
 #include <utility>
@@ -58,7 +56,6 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
     ASSERT(!std::isnan(context.channelCenterFrequency.get()) && context.channelCenterFrequency > Hz(0));
     ASSERT(!std::isnan(context.channelBandwidth.get()) && context.channelBandwidth > Hz(0));
     if (context.candidates.empty()) {
-        recordSchedule(context, {}, {}, false, "no DL MU candidates");
         return {};
     }
 
@@ -69,7 +66,7 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
              << " candidates, schedulingFunction = " << schedulingFunction
              << ", enableDlMuMimo = " << (enableDlMuMimo ? "true" : "false") << "\n";
 
-    if (enableDlMuMimo && isApBeamformer && context.csiManager != nullptr) {
+    if (enableDlMuMimo && isApBeamformer && !context.csiLeakages.empty()) {
         EV_DEBUG << "HeDlSchedulerEqualSizedRUs::schedule: attempting DL MU-MIMO group selection\n";
         // Collect MU-MIMO eligible candidates who have fresh CSI
         std::vector<CandidateInfo> eligibleCandidates;
@@ -83,8 +80,7 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
             if (staCapabilities == nullptr)
                 continue;
             if (isDlMuMimoEligible(context.localHeCapabilities, *staCapabilities, *negotiated, context.channelBandwidth, context.numApAntennas) &&
-                candidate.hasFreshCsi &&
-                context.csiManager->hasFreshCsi(candidate.staAddress, context.channelBandwidth)) {
+                candidate.hasFreshCsi) {
                 eligibleCandidates.push_back(candidate);
             }
         }
@@ -106,8 +102,6 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
                     anchor = eligibleCandidates.begin();
             }
             const MacAddress anchorAddress = anchor->staAddress;
-            lastMuMimoAnchor = anchorAddress;
-            hasLastMuMimoAnchor = true;
             EV_DEBUG << "HeDlSchedulerEqualSizedRUs::schedule: selected anchor " << anchorAddress << "\n";
 
             // Rotate the instantaneous eligible set after the persistent MAC-key cursor.
@@ -121,7 +115,6 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
             if (context.coding == HE_CODING_BCC && fullChannelRu.toneSize >= 484) {
                 EV_DEBUG << "DL EqualSizedRUs scheduler: skipping MU-MIMO full-channel RU because BCC is not legal for "
                          << fullChannelRu.toneSize << "-tone RUs\n";
-                recordSchedule(context, eligibleCandidates, {}, true, "MU-MIMO full-channel RU rejected by BCC coding");
                 return {};
             }
             int maxGroupNsts = std::min(8, context.numApAntennas);
@@ -178,7 +171,8 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
                     for (size_t j = 0; j < tempGroup.size(); ++j) {
                         if (i == j)
                             continue;
-                        leakageSum += context.csiManager->getLeakage(tempGroup[i].staAddress, tempGroup[j].staAddress, context.channelBandwidth);
+                        leakageSum += context.getCsiLeakage(tempGroup[i].staAddress,
+                                tempGroup[j].staAddress);
                     }
                     double snir = (snr * tempNss[i] / totalAllocated) / (1.0 + snr * leakageSum / totalAllocated);
                     if (snir <= 0) {
@@ -214,9 +208,8 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
                     // the interference sum of users that were accepted earlier.
                     for (size_t j = 0; j < groupCandidates.size(); ++j)
                         if (i != j)
-                            alloc.leakageSum += context.csiManager->getLeakage(
-                                    groupCandidates[i].staAddress, groupCandidates[j].staAddress,
-                                    context.channelBandwidth);
+                            alloc.leakageSum += context.getCsiLeakage(
+                                    groupCandidates[i].staAddress, groupCandidates[j].staAddress);
                     alloc.mcs = selectMcs(context, groupCandidates[i], alloc.ru, alloc.estimatedSnrDb,
                             selectMcs(alloc.estimatedSnrDb, groupCandidates[i].hasFreshPathLoss),
                             finalNss[i]);
@@ -242,7 +235,6 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
                 });
                 EV_INFO << "DL EqualSizedRUs scheduler: selected DL MU-MIMO group of "
                         << result.size() << " STAs on full-channel RU\n";
-                recordSchedule(context, groupCandidates, result, true, "DL MU-MIMO group");
                 return result;
             }
             EV_DEBUG << "DL EqualSizedRUs scheduler: no compatible MU-MIMO group found\n";
@@ -271,7 +263,6 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
     int candidateLimit = maxMuStations < 0 ? getHeMaxRuCount(context.channelBandwidth) : maxMuStations;
     int candidates = std::min((int)selectedCandidates.size(), candidateLimit);
     if (candidates <= 0) {
-        recordSchedule(context, selectedCandidates, {}, false, "no candidates within DL MU station limit");
         return {};
     }
     int ruCount = validCounts.front();
@@ -312,8 +303,6 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
         }
     }
     if (rus.empty()) {
-        recordSchedule(context, selectedCandidates, {}, false,
-                "no equal-sized RU layout satisfies negotiated HE capabilities");
         return {};
     }
     ASSERT(numSelected > 0);
@@ -365,8 +354,22 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
                 alloc.ru.toneSize, alloc.mcs, context.guardInterval);
         result.push_back(alloc);
     }
-    recordSchedule(context, selectedCandidates, result, false, schedulingFunction.c_str());
     return result;
+}
+
+void HeDlSchedulerEqualSizedRUs::commitSchedule(const ScheduleContext& context,
+        const std::vector<RuAllocation>& allocations)
+{
+    HeDlSchedulerBase::commitSchedule(context, allocations);
+    bool usedMuMimo = false;
+    for (size_t i = 0; i < allocations.size(); ++i)
+        for (size_t j = i + 1; j < allocations.size(); ++j)
+            usedMuMimo |= allocations[i].ru.toneSize == allocations[j].ru.toneSize &&
+                    allocations[i].ru.toneOffset == allocations[j].ru.toneOffset;
+    if (usedMuMimo && !allocations.empty()) {
+        lastMuMimoAnchor = allocations.front().staAddress;
+        hasLastMuMimoAnchor = true;
+    }
 }
 
 } // namespace ieee80211

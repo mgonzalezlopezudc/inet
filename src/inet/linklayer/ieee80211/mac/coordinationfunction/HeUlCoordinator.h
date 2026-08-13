@@ -10,6 +10,7 @@
 #include <array>
 #include <functional>
 #include <map>
+#include <optional>
 #include <ostream>
 #include <string>
 #include <vector>
@@ -145,7 +146,11 @@ class INET_API HeUlCoordinator : public SimpleModule
             IIeee80211HeUlScheduler::ScheduleContext *preparedContext = nullptr,
             const physicallayer::Ieee80211HeTbCapacityBoundary *finalizedBoundary = nullptr,
             bool useUlMuMimoPolicy = false);
-    void commitSchedule(const IIeee80211HeUlScheduler::Schedule& schedule);
+    IIeee80211HeUlScheduler::Schedule prepareSchedule(
+            const IIeee80211HeUlScheduler::ScheduleContext& context,
+            const std::vector<uint16_t>& staleReportAids);
+    void commitSchedule(const IIeee80211HeUlScheduler::ScheduleContext& context,
+            const IIeee80211HeUlScheduler::Schedule& schedule);
     uint32_t allocateTriggerId();
     void noteTriggerSent(IIeee80211HeUlTriggerPolicy::TriggerType triggerType,
             uint32_t triggerId);
@@ -154,9 +159,12 @@ class INET_API HeUlCoordinator : public SimpleModule
     int commitRandomAccessRu(const PreparedRandomAccessSelection& selection);
     int selectRandomAccessRu(AccessCategory ac, int randomAccessRuCount);
     int selectRandomAccessRu(int randomAccessRuCount) { return selectRandomAccessRu(AC_BE, randomAccessRuCount); }
+    int getRandomAccessBackoff() const { return ofdmaBackoff; }
     void reportRandomAccessResult(AccessCategory ac, bool success);
     void reportRandomAccessResult(bool success) { reportRandomAccessResult(AC_BE, success); }
     const std::map<uint16_t, BufferStatus>& getBufferStatus() const { return bufferStatusByAid; }
+    std::optional<BufferStatus> getBufferStatusSnapshot(uint16_t associationId,
+            const MacAddress& stationAddress) const;
 };
 
 inline std::ostream& operator<<(std::ostream& os, const HeUlCoordinator::BufferStatus& status)

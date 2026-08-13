@@ -16,7 +16,19 @@ namespace ieee80211 {
 class INET_API VhtDlMuScheduler : public SimpleModule, public IIeee80211VhtDlMuScheduler
 {
   public:
-    virtual std::vector<Candidate> schedule(const Context& context) const override;
+    virtual std::vector<unsigned int> schedule(const SchedulingContext& context) const override;
+
+    /** Source-compatible test/helper wrapper; delegates through immutable snapshots. */
+    std::vector<Candidate> schedule(const Context& context) const
+    {
+        std::vector<Candidate> selected;
+        for (auto index : schedule(SchedulingContext(context))) {
+            if (index >= context.candidates.size())
+                throw cRuntimeError("VHT DL MU scheduler returned an invalid candidate index");
+            selected.push_back(context.candidates[index]);
+        }
+        return selected;
+    }
 };
 
 } // namespace ieee80211

@@ -159,6 +159,26 @@ std::vector<Packet *> *OriginatorQosMacDataService::extractFramesToTransmit(queu
     }
 }
 
+std::vector<Packet *> *OriginatorQosMacDataService::extractExactFrameToTransmit(
+        queueing::IPacketQueue *pendingQueue, Packet *packet)
+{
+    Enter_Method("extractExactFrameToTransmit");
+    bool found = false;
+    for (int i = 0; i < pendingQueue->getNumPackets(); ++i)
+        found |= pendingQueue->getPacket(i) == packet;
+    if (!found)
+        return nullptr;
+    pendingQueue->removePacket(packet);
+    take(packet);
+    if (sequenceNumberAssignment) {
+        auto header = packet->removeAtFront<Ieee80211DataOrMgmtHeader>();
+        assignSequenceNumber(header);
+        packet->insertAtFront(header);
+    }
+    auto fragments = fragmentationPolicy ? fragmentIfNeeded(packet) : nullptr;
+    return fragments == nullptr ? new std::vector<Packet *>({packet}) : fragments;
+}
+
 OriginatorQosMacDataService::~OriginatorQosMacDataService()
 {
     delete aMsduAggregation;

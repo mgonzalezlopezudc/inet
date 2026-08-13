@@ -15,6 +15,11 @@ record-vector-results = false
 *.visualizer.typename = ""
 **.numLoInterfaces = 0
 
+# BacklogBased5ms uses four stations; keep its fourth fixed position inside
+# the inherited mobility constraint area for this standalone fixture.
+*.host[*].mobility.constraintAreaMaxX = 150m
+*.host[*].mobility.constraintAreaMaxY = 150m
+
 include ../../../../examples/ieee80211ax/ul_ofdma/omnetpp.ini
 
 %extraargs: -c BacklogBased5ms -r 1

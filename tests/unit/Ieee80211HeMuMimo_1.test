@@ -277,7 +277,6 @@ class TestHeSoundingFs : public HeSoundingFs
     scheduleContext.numApAntennas = 6;
     scheduleContext.enableDlMuMimo = true;
     scheduleContext.localHeCapabilities = apCapabilities;
-    scheduleContext.csiManager = &csi;
     auto sourceQueue = check_and_cast<queueing::IPacketQueue *>(
             getParentModule()->getSubmodule("queue"));
     for (size_t i = 0; i < addresses.size(); ++i) {
@@ -291,7 +290,7 @@ class TestHeSoundingFs : public HeSoundingFs
 
         IIeee80211HeDlScheduler::CandidateInfo candidate;
         candidate.staAddress = addresses[i];
-        candidate.sourceQueue = sourceQueue;
+        candidate.sourceQueueToken = HcfQueueToken(i + 1);
         candidate.backlogBytes = 1000;
         candidate.holPacketBytes = 200;
         candidate.pathLossDb = 45;
@@ -305,6 +304,11 @@ class TestHeSoundingFs : public HeSoundingFs
         candidate.hasFreshCsi = true;
         scheduleContext.candidates.push_back(candidate);
     }
+    for (const auto& station : addresses)
+        for (const auto& other : addresses)
+            if (station != other)
+                scheduleContext.csiLeakages[{station, other}] =
+                        csi.getLeakage(station, other, scheduleContext.channelBandwidth);
 
     for (int schedulingRound = 0; schedulingRound < 2; ++schedulingRound) {
         auto allocations = scheduler->schedule(scheduleContext);

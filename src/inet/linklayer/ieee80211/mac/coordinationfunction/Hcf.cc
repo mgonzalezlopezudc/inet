@@ -9,28 +9,30 @@
 #include "inet/linklayer/ieee80211/mac/common/Ieee80211Addressing.h"
 #include "inet/linklayer/ieee80211/mac/blockack/BlockAckAgreementUtils.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfFramePreparation.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfObservationSink.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfRetryService.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfFeatureSet.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfRuntime.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeUlCoordinator.h"
 #include "inet/linklayer/ieee80211/mac/contract/DurationFinalizedReq.h"
+#include "inet/linklayer/ieee80211/mac/contract/IIeee80211HtRateControl.h"
 #include "inet/linklayer/ieee80211/mac/channelaccess/Edca.h"
 #include "inet/linklayer/ieee80211/mac/channelaccess/Hcca.h"
 
 #include <algorithm>
-#include <cmath>
 #include <cstring>
 
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/packet/chunk/ByteCountChunk.h"
-#include "inet/common/packet/chunk/SequenceChunk.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
-#include "inet/linklayer/ieee80211/mac/Ieee80211MacSapServiceTag_m.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211MgmtExchangeTag_m.h"
-#include "inet/linklayer/ieee80211/mac/framesequence/HtSoundingFs.h"
 #include "inet/linklayer/ieee80211/mac/common/Ieee80211FcsChecker.h"
 #include "inet/linklayer/ieee80211/twt/ITwtManager.h"
 #include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreementHandler.h"
 #include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckProcedure.h"
 #include "inet/linklayer/ieee80211/mac/blockack/RecipientBlockAckAgreementHandler.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HcfFs.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceHandler.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/Ieee80211HeMuContainerTag_m.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/TxOpFs.h"
 #include "inet/linklayer/ieee80211/mac/originator/QosAckHandler.h"
@@ -54,6 +56,1256 @@ namespace inet {
 namespace ieee80211 {
 
 using namespace inet::physicallayer;
+
+class HcfVhtRuntime final : public VhtHcfFeature::IActions
+{
+  private:
+    Hcf *hcf;
+    VhtHcfFeature feature;
+    mutable bool continuingFrameSequence = false;
+    mutable bool continuingRecipientFrame = false;
+    mutable bool continuingSetFrameMode = false;
+    mutable bool continuingTransmitFrame = false;
+    mutable bool continuingTransmittedFrame = false;
+    mutable bool continuingReceivedFrame = false;
+    mutable bool continuingTransmissionComplete = false;
+
+    class ContinuationGuard
+    {
+      private:
+        bool& flag;
+      public:
+        explicit ContinuationGuard(bool& flag) : flag(flag) { flag = true; }
+        ~ContinuationGuard() { flag = false; }
+    };
+
+  public:
+    explicit HcfVhtRuntime(Hcf *hcf) : hcf(hcf) {}
+
+    void initialize()
+    {
+        bool enableSu = hcf->par("enableVhtSuBeamforming");
+        bool enableMu = hcf->par("enableVhtDlMuMimo");
+        auto groupId = hcf->par("vhtDlMuGroupId").intValue();
+        if (groupId < 1 || groupId > 62)
+            throw cRuntimeError("vhtDlMuGroupId must be in the range 1..62");
+        IIeee80211VhtPacketRadio *radio = nullptr;
+        if (enableSu || enableMu) {
+            auto radioModule = getContainingNicModule(hcf)->getSubmodule("radio");
+            VhtHcfFeature::validatePacketLevelRadio(radioModule);
+            radio = check_and_cast<IIeee80211VhtPacketRadio *>(radioModule);
+        }
+        feature.configure(this, enableSu, enableMu, groupId,
+                hcf->par("beamformingGain"), hcf->par("vhtCsiValidityDuration"),
+                check_and_cast<IVhtSoundingCoordinator *>(hcf->getSubmodule("soundingCoordinator")),
+                check_and_cast<IVhtGroupIdManager *>(hcf->getSubmodule("groupIdManager")),
+                check_and_cast<IIeee80211VhtDlMuScheduler *>(hcf->getSubmodule("dlMuScheduler")),
+                radio);
+    }
+
+    bool isContinuingFrameSequence() const { return continuingFrameSequence; }
+    bool isContinuingRecipientFrame() const { return continuingRecipientFrame; }
+    bool isContinuingSetFrameMode() const { return continuingSetFrameMode; }
+    bool isContinuingTransmitFrame() const { return continuingTransmitFrame; }
+    bool isContinuingTransmittedFrame() const { return continuingTransmittedFrame; }
+    bool isContinuingReceivedFrame() const { return continuingReceivedFrame; }
+    bool isContinuingTransmissionComplete() const { return continuingTransmissionComplete; }
+    void modeSetChanged() { feature.modeSetChanged(); }
+    HcfContext buildGrantSelectionContext(AccessCategory accessCategory,
+            bool hasEligibleFrame)
+    {
+        if (!hasEligibleFrame)
+            return HcfContext(accessCategory, {HcfExchangeClass::CHANNEL_RELEASE});
+        auto snapshot = feature.prepareGrantSnapshot(accessCategory);
+        HcfContext context(accessCategory, {snapshot.exchangeClass});
+        context.setProviderSnapshot(snapshot);
+        return context;
+    }
+    bool commitSelectedExchange(HcfExchangeClass exchangeClass,
+            const HcfContext& context)
+    {
+        if (exchangeClass != HcfExchangeClass::VHT_GROUP_MANAGEMENT &&
+                exchangeClass != HcfExchangeClass::VHT_DL_MULTIUSER &&
+                exchangeClass != HcfExchangeClass::VHT_SU_SOUNDING)
+            return false;
+        auto snapshot = context.findProviderSnapshot<VhtGrantSnapshot>();
+        if (snapshot == nullptr || snapshot->exchangeClass != exchangeClass)
+            throw cRuntimeError("Selected VHT exchange does not match its immutable grant snapshot");
+        feature.commitGrantSnapshot(*snapshot);
+        return true;
+    }
+    void setTxOpFactoryForTesting(VhtHcfFeature::ITxOpFactory *factory)
+        { feature.setTxOpFactoryForTesting(factory); }
+    void invalidatePeer(const MacAddress& peer) { feature.invalidatePeer(peer); }
+    void startFrameSequence(AccessCategory ac) { feature.startFrameSequence(ac); }
+
+    virtual Ieee80211Mac *getMac() const override { return hcf->mac; }
+    virtual Ieee80211ModeSet *getModeSet() const override { return hcf->modeSet; }
+    virtual Edca *getEdca() const override { return hcf->edca; }
+    virtual IQosRateSelection *getRateSelection() const override { return hcf->rateSelection; }
+    virtual IOriginatorBlockAckAgreementHandler *getBlockAckHandler() const override
+        { return hcf->originatorBlockAckAgreementHandler.get(); }
+    virtual IOriginatorBlockAckAgreementPolicy *getBlockAckPolicy() const override
+        { return hcf->originatorBlockAckAgreementPolicy; }
+    virtual ITx *getTx() const override { return hcf->tx; }
+    virtual ITx::ICallback *getTxCallback() override { return hcf; }
+    virtual IOriginatorMacDataService *getOriginatorDataService() const override
+        { return hcf->originatorDataService; }
+    virtual const IFrameSequence *getActiveFrameSequence() const override
+        { return hcf->getFrameSequenceForLegacyAdapter(); }
+    virtual IFrameSequenceHandler::ICallback *getFrameSequenceCallback() const override
+        { return hcf->getFrameSequenceCallbackForLegacyAdapter(); }
+    virtual FrameSequenceContext *buildFrameSequenceContext(AccessCategory ac) override
+        { return hcf->buildContext(ac); }
+    virtual void startFeatureFrameSequence(IFrameSequence *sequence,
+            AccessCategory ac) override
+        { hcf->startExchangeFrameSequence(sequence, hcf->buildContext(ac)); }
+    virtual void continueBaseFrameSequence(AccessCategory ac) override
+    {
+        ContinuationGuard guard(continuingFrameSequence);
+        hcf->startFrameSequence(ac);
+    }
+    virtual void continueBaseRecipientFrame(Packet *packet,
+            const Ptr<const Ieee80211MacHeader>& header) override
+    {
+        ContinuationGuard guard(continuingRecipientFrame);
+        hcf->recipientProcessReceivedFrame(packet, header);
+    }
+    virtual void continueBaseSetFrameMode(Packet *packet,
+            const Ptr<const Ieee80211MacHeader>& header,
+            const IIeee80211Mode *mode) const override
+    {
+        ContinuationGuard guard(continuingSetFrameMode);
+        hcf->setFrameMode(packet, header, mode);
+    }
+    virtual void continueBaseTransmitFrame(Packet *packet, simtime_t ifs) override
+    {
+        ContinuationGuard guard(continuingTransmitFrame);
+        hcf->transmitFrame(packet, ifs);
+    }
+    virtual void continueBaseTransmittedFrame(Packet *packet) override
+    {
+        ContinuationGuard guard(continuingTransmittedFrame);
+        hcf->originatorProcessTransmittedFrame(packet);
+    }
+    virtual void continueBaseReceivedFrame(Packet *packet,
+            Packet *lastTransmittedPacket) override
+    {
+        ContinuationGuard guard(continuingReceivedFrame);
+        hcf->originatorProcessReceivedFrame(packet, lastTransmittedPacket);
+    }
+    virtual void continueBaseTransmissionComplete(Packet *packet,
+            const Ptr<const Ieee80211MacHeader>& header) override
+    {
+        ContinuationGuard guard(continuingTransmissionComplete);
+        hcf->transmissionComplete(packet, header);
+    }
+    virtual void processTransmittedDataFrame(Packet *packet,
+            const Ptr<const Ieee80211DataHeader>& header, AccessCategory ac) override
+        { hcf->originatorProcessTransmittedDataFrame(packet, header, ac); }
+    virtual void processFailedFrame(Packet *packet) override
+        { hcf->originatorProcessFailedFrame(packet); }
+    virtual void reclaimPacketOwnership(Packet *packet) override { hcf->take(packet); }
+
+    bool processHeaderlessNdpIndication(Packet *packet)
+        { return feature.processHeaderlessNdpIndication(packet); }
+    void recipientProcessReceivedFrame(Packet *packet,
+            const Ptr<const Ieee80211MacHeader>& header)
+        { feature.recipientProcessReceivedFrame(packet, header); }
+    void setFrameMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header,
+            const IIeee80211Mode *mode) const
+        { feature.setFrameMode(packet, header, mode); }
+    void transmitFrame(Packet *packet, simtime_t ifs) { feature.transmitFrame(packet, ifs); }
+    void originatorProcessTransmittedFrame(Packet *packet)
+        { feature.originatorProcessTransmittedFrame(packet); }
+    void originatorProcessReceivedFrame(Packet *packet, Packet *lastTransmittedPacket)
+        { feature.originatorProcessReceivedFrame(packet, lastTransmittedPacket); }
+    void transmissionComplete(Packet *packet,
+            const Ptr<const Ieee80211MacHeader>& header)
+        { feature.transmissionComplete(packet, header); }
+};
+
+class HcfIngressOwnershipActions final : public HcfIngressService::IOwnershipActions
+{
+  private:
+    Hcf *hcf;
+    cComponent *caller = nullptr;
+
+  public:
+    explicit HcfIngressOwnershipActions(Hcf *hcf) : hcf(hcf)
+    {
+    }
+
+    virtual void claimPacket(Packet *packet) override
+    {
+        caller = dynamic_cast<cComponent *>(packet->getOwner());
+        if (caller == nullptr)
+            throw cRuntimeError("HCF ingress caller does not support packet ownership transfer");
+        if (caller != hcf)
+            hcf->claimIngressPacket(packet);
+    }
+
+    virtual void enqueuePacket(queueing::IPacketQueue *queue, Packet *packet) override
+    {
+        try {
+            queue->enqueuePacket(packet);
+            caller = nullptr;
+        }
+        catch (...) {
+            // Some concrete queues take and insert before reporting overload.
+            // Restore the service contract that a throwing enqueue is not committed.
+            for (int i = 0; i < queue->getNumPackets(); i++) {
+                if (queue->getPacket(i) == packet) {
+                    queue->removePacket(packet);
+                    // IPacketQueue::removePacket() removes collection
+                    // membership but does not transfer OMNeT++ ownership.
+                    // Restore the pre-enqueue HCF owner before the service
+                    // returns the claimed packet to its original caller.
+                    hcf->take(packet);
+                    break;
+                }
+            }
+            throw;
+        }
+    }
+
+    virtual void returnClaimedPacketToCaller(Packet *packet) noexcept override
+    {
+        if (caller != hcf)
+            hcf->returnIngressPacketToCaller(packet, caller);
+        caller = nullptr;
+    }
+};
+
+class HcfRecipientActions final : public HcfRecipientService::IActions
+{
+  private:
+    Hcf *hcf;
+    bool wasHeMu = false;
+
+  public:
+    explicit HcfRecipientActions(Hcf *hcf) : hcf(hcf) {}
+
+    virtual HcfRecipientService::AddressDisposition classifyAddress(const Packet *,
+            const Ptr<const Ieee80211MacHeader>& header) override
+    {
+        if (!hcf->isForUs(header))
+            return HcfRecipientService::AddressDisposition::FOREIGN;
+        auto roles = interpretIeee80211AddressRoles(header);
+        return roles.receiverAddress.isMulticast() ?
+                HcfRecipientService::AddressDisposition::LOCAL_GROUP :
+                HcfRecipientService::AddressDisposition::LOCAL_UNICAST;
+    }
+
+    virtual void packetReceived(const Packet *packet,
+            const Ptr<const Ieee80211MacHeader>&) noexcept override
+    {
+        EV_INFO << "Processing received frame " << packet->getName()
+                << " as recipient.\n";
+        HcfObservationSink::packetReceivedFromPeer(hcf, packet);
+    }
+
+    virtual void packetDropped(const Packet *packet,
+            HcfRecipientService::DropReason reason) noexcept override
+    {
+        PacketDropDetails details;
+        details.setReason(reason == HcfRecipientService::DropReason::NOT_ADDRESSED_TO_US ?
+                NOT_ADDRESSED_TO_US :
+                reason == HcfRecipientService::DropReason::INCORRECTLY_RECEIVED ?
+                INCORRECTLY_RECEIVED : OTHER_PACKET_DROP);
+        HcfObservationSink::packetDropped(hcf, packet, &details);
+    }
+
+    virtual void processImmediateResponse(Packet *packet,
+            const Ptr<const Ieee80211DataOrMgmtHeader>& header) override
+    {
+        wasHeMu = false;
+        int allocationIndex = -1;
+        if (auto indication = packet->findTag<Ieee80211HeRxVectorInd>();
+                indication != nullptr && indication->getRxVector() != nullptr &&
+                indication->getRxVector()->getCommon().getPpduFormat() == HE_MU_DOWNLINK) {
+            wasHeMu = true;
+            allocationIndex = indication->getRxVector()->getUser().getStaId().has_value() ? 0 : -1;
+        }
+
+        if (wasHeMu && allocationIndex != -1) {
+            bool isBlockAckPolicyData = false;
+            if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
+                isBlockAckPolicyData = dataHeader->getType() == ST_DATA_WITH_QOS &&
+                        dataHeader->getAckPolicy() == BLOCK_ACK;
+                if (isBlockAckPolicyData && hcf->recipientBlockAckAgreementHandler) {
+                    auto agreement = hcf->recipientBlockAckAgreementHandler->getAgreement(
+                            dataHeader->getTid(), dataHeader->getTransmitterAddress());
+                    if (agreement)
+                        hcf->recipientBlockAckAgreementHandler->qosFrameReceived(dataHeader, hcf);
+                    if (agreement)
+                        EV_INFO << "HeHcf: STA waits for an explicit BAR or MU-BAR Trigger before BlockAck: index = "
+                                << allocationIndex << endl;
+                }
+            }
+
+            if (!isBlockAckPolicyData && hcf->recipientAckPolicy->isAckNeeded(header)) {
+                auto ack = makeShared<Ieee80211AckFrame>();
+                ack->setReceiverAddress(header->getTransmitterAddress());
+                auto dummyRequest = makeShared<Ieee80211BasicBlockAckReq>();
+                auto responseMode = hcf->rateSelection->computeResponseBlockAckFrameMode(
+                        packet, dummyRequest);
+                simtime_t blockAckDuration = responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
+                simtime_t ifs = (allocationIndex + 1) * hcf->modeSet->getSifsTime() +
+                        allocationIndex * blockAckDuration;
+                auto ackMode = hcf->rateSelection->computeResponseAckFrameMode(packet, header);
+                simtime_t ackDuration = ackMode->getDuration(LENGTH_ACK);
+                simtime_t duration = header->getDurationField() - ifs - ackDuration;
+                if (duration < 0)
+                    duration = 0;
+                ack->setDurationField(duration);
+                auto ackPacket = new Packet("WlanAck", ack);
+                ackPacket->insertAtBack(makeShared<Ieee80211MacTrailer>());
+                hcf->setFrameMode(ackPacket, ack, ackMode);
+                EV_INFO << "HeHcf: STA sequential Ack scheduled: index = "
+                        << allocationIndex << ", delay = " << ifs
+                        << ", duration = " << ackDuration << endl;
+                hcf->tx->transmitFrame(ackPacket, ack, ifs, hcf);
+                delete ackPacket;
+            }
+        }
+        else {
+            if (!HtHcfFeature::suppressRecipientAck(header))
+                hcf->recipientAckProcedure->processReceivedFrame(
+                        packet, header,
+                        check_and_cast<IRecipientAckPolicy *>(hcf->recipientAckPolicy), hcf);
+        }
+    }
+
+    virtual bool processHtImplicitBlockAckResponse(Packet *aggregate,
+            const std::vector<Ptr<const Ieee80211DataHeader>>& headers) override
+    {
+        bool sent = hcf->recipientBlockAckProcedure != nullptr &&
+                hcf->recipientBlockAckAgreementHandler != nullptr &&
+                hcf->recipientBlockAckProcedure->processReceivedHtImplicitBlockAckRequest(
+                        aggregate, headers, hcf->recipientBlockAckAgreementHandler.get(),
+                        hcf, hcf);
+        if (!sent)
+            EV_WARN << "Not sending a response for an invalid HT implicit-BlockAck A-MPDU.\n";
+        return sent;
+    }
+
+    virtual void processOrdinaryAggregateMember(Packet *packet,
+            const Ptr<const Ieee80211MacHeader>& header) override
+    {
+        hcf->recipientProcessReceivedFrame(packet, header);
+    }
+
+    virtual void deliverData(Packet *packet,
+            const Ptr<const Ieee80211DataHeader>& header,
+            bool implicitBlockAckMember) noexcept override
+    {
+        if (!implicitBlockAckMember && header->getType() == ST_DATA_WITH_QOS &&
+                hcf->recipientBlockAckAgreementHandler && !wasHeMu)
+            hcf->recipientBlockAckAgreementHandler->qosFrameReceived(header, hcf);
+        hcf->sendUp(hcf->recipientDataService->dataFrameReceived(packet, header,
+                hcf->recipientBlockAckAgreementHandler.get()));
+    }
+
+    virtual void deliverManagement(Packet *packet,
+            const Ptr<const Ieee80211MgmtHeader>& header) noexcept override
+    {
+        hcf->sendUp(hcf->recipientDataService->managementFrameReceived(packet, header));
+        hcf->recipientProcessReceivedManagementFrame(header);
+    }
+
+    virtual void processControl(Packet *packet,
+            const Ptr<const Ieee80211MacHeader>& header) override
+    {
+        hcf->sendUp(hcf->recipientDataService->controlFrameReceived(packet, header,
+                hcf->recipientBlockAckAgreementHandler.get()));
+        hcf->recipientProcessReceivedControlFrame(packet, header);
+    }
+
+    virtual void deletePacket(Packet *packet) noexcept override
+    {
+        delete packet;
+    }
+};
+
+class HcfRecipientFrameDispatchActions final :
+        public HcfFrameDispatchService::IRecipientActions,
+        public HcfFrameDispatchService::IResponseActions
+{
+  private:
+    Hcf *hcf;
+
+  public:
+    explicit HcfRecipientFrameDispatchActions(Hcf *hcf) : hcf(hcf) {}
+
+    virtual void recipientPsPoll(const Ptr<const Ieee80211PsPollFrame>& frame) override
+    {
+        if (auto twtManager = hcf->mac->getTwtManager())
+            twtManager->notifyPeerAwake(frame->getTransmitterAddress());
+    }
+
+    virtual void recipientRts(Packet *packet,
+            const Ptr<const Ieee80211RtsFrame>& frame) override
+    {
+        hcf->ctsProcedure->processReceivedRts(packet, frame, hcf->ctsPolicy, hcf);
+    }
+
+    virtual HcfFrameDispatchService::MultiTidResponseContext getMultiTidResponseContext(
+            const Ptr<const Ieee80211MultiTidBlockAckReq>& frame) override
+    {
+        HcfFrameDispatchService::MultiTidResponseContext context;
+        auto mib = hcf->mac->getMib();
+        auto negotiated = mib->getNegotiatedHeCapabilities(frame->getTransmitterAddress());
+        context.validResponseAid = mib->getStationType() == Ieee80211Mib::STATION;
+        if (mib->getStationType() == Ieee80211Mib::ACCESS_POINT) {
+            auto associationId = mib->getAssociationId(frame->getTransmitterAddress());
+            context.validResponseAid = associationId > 0 && associationId <= 2007;
+            if (context.validResponseAid)
+                context.responseAid = associationId;
+        }
+        context.heMultiTidAggregation = negotiated &&
+                negotiated->localRxPeerTx.valid &&
+                negotiated->localRxPeerTx.multiTidAggregation;
+        context.legacyMultiTidBlockAck = hcf->isLegacyHtMultiTidBlockAckEnabled();
+        return context;
+    }
+
+    virtual void recipientBlockAckRequest(Packet *packet,
+            const Ptr<const Ieee80211BlockAckReq>& frame,
+            MultiTidBlockAckResponseFormat responseFormat,
+            uint16_t responseAid) override
+    {
+        if (hcf->recipientBlockAckProcedure)
+            hcf->recipientBlockAckProcedure->processReceivedBlockAckReq(packet,
+                    frame, hcf->recipientAckPolicy,
+                    hcf->recipientBlockAckAgreementHandler.get(), hcf,
+                    responseFormat, responseAid);
+    }
+
+    virtual void recipientStaleAck(const Ptr<const Ieee80211AckFrame>&) override
+    {
+        EV_WARN << "ACK frame received after timeout, ignoring it.\n";
+    }
+
+    virtual const IIeee80211Mode *selectCtsResponseMode(Packet *packet,
+            const Ptr<const Ieee80211RtsFrame>& frame) override
+    {
+        return hcf->rateSelection->computeResponseCtsFrameMode(packet, frame);
+    }
+
+    virtual const IIeee80211Mode *selectBlockAckResponseMode(Packet *packet,
+            const Ptr<const Ieee80211BlockAckReq>& frame) override
+    {
+        return hcf->rateSelection->computeResponseBlockAckFrameMode(packet, frame);
+    }
+
+    virtual const IIeee80211Mode *selectImplicitBlockAckResponseMode(
+            Packet *responsePacket, Packet *receivedPacket,
+            const Ptr<const Ieee80211BlockAck>&,
+            const Ptr<const Ieee80211DataHeader>& receivedFrame) override
+    {
+        auto request = makeShared<Ieee80211CompressedBlockAckReq>();
+        request->setReceiverAddress(receivedFrame->getTransmitterAddress());
+        request->setTidInfo(receivedFrame->getTid());
+        request->setStartingSequenceNumber(receivedFrame->getSequenceNumber());
+        auto mode = hcf->rateSelection->computeResponseBlockAckFrameMode(
+                receivedPacket, request);
+        auto mutableBlockAck = responsePacket->removeAtFront<Ieee80211BlockAck>();
+        auto duration = receivedFrame->getDurationField() -
+                hcf->modeSet->getSifsTime() -
+                mode->getDuration(mutableBlockAck->getChunkLength());
+        mutableBlockAck->setDurationField(
+                duration < SIMTIME_ZERO ? SIMTIME_ZERO : duration);
+        responsePacket->insertAtFront(mutableBlockAck);
+        return mode;
+    }
+
+    virtual const IIeee80211Mode *selectAckResponseMode(Packet *packet,
+            const Ptr<const Ieee80211DataOrMgmtHeader>& frame) override
+    {
+        return hcf->rateSelection->computeResponseAckFrameMode(packet, frame);
+    }
+
+    virtual void transmittedCtsResponse(
+            const Ptr<const Ieee80211CtsFrame>& frame) override
+    {
+        hcf->ctsProcedure->processTransmittedCts(frame);
+    }
+
+    virtual void transmittedBlockAckResponse(
+            const Ptr<const Ieee80211BlockAck>& frame) override
+    {
+        if (hcf->recipientBlockAckProcedure)
+            hcf->recipientBlockAckProcedure->processTransmittedBlockAck(frame);
+    }
+
+    virtual void transmittedAckResponse(
+            const Ptr<const Ieee80211AckFrame>& frame) override
+    {
+        hcf->recipientAckProcedure->processTransmittedAck(frame);
+    }
+
+    virtual void recipientAddbaRequest(
+            const Ptr<const Ieee80211AddbaRequest>& frame) override
+    {
+        if (!hcf->recipientBlockAckAgreementHandler ||
+                !hcf->originatorBlockAckAgreementHandler)
+            return;
+        hcf->recipientBlockAckAgreementHandler->processReceivedAddbaRequest(frame,
+                hcf->recipientBlockAckAgreementPolicy, hcf);
+        auto agreement = hcf->recipientBlockAckAgreementHandler->getAgreement(
+                frame->getTid(), frame->getTransmitterAddress());
+        HcfObservationSink::recipientBlockAckAgreementAdded(hcf, agreement);
+    }
+
+    virtual void recipientAddbaResponse(
+            const Ptr<const Ieee80211AddbaResponse>& frame) override
+    {
+        if (!hcf->recipientBlockAckAgreementHandler ||
+                !hcf->originatorBlockAckAgreementHandler)
+            return;
+        hcf->originatorBlockAckAgreementHandler->processReceivedAddbaResp(frame,
+                hcf->originatorBlockAckAgreementPolicy, hcf);
+        auto agreement = hcf->originatorBlockAckAgreementHandler->getAgreement(
+                frame->getTransmitterAddress(), frame->getTid());
+        HcfObservationSink::originatorBlockAckAgreementAdded(hcf, agreement);
+        hcf->resumeContention();
+    }
+
+    virtual void recipientDelba(const Ptr<const Ieee80211Delba>& frame) override
+    {
+        if (!hcf->recipientBlockAckAgreementHandler ||
+                !hcf->originatorBlockAckAgreementHandler)
+            return;
+        if (frame->getInitiator()) {
+            auto agreement = hcf->recipientBlockAckAgreementHandler->getAgreement(
+                    frame->getTid(), frame->getReceiverAddress());
+            HcfObservationSink::recipientBlockAckAgreementDeleted(hcf, agreement);
+            hcf->recipientBlockAckAgreementHandler->processReceivedDelba(frame,
+                    hcf->recipientBlockAckAgreementPolicy);
+        }
+        else {
+            auto agreement = hcf->originatorBlockAckAgreementHandler->getAgreement(
+                    frame->getReceiverAddress(), frame->getTid());
+            HcfObservationSink::originatorBlockAckAgreementDeleted(hcf, agreement);
+            hcf->originatorBlockAckAgreementHandler->processReceivedDelba(frame,
+                    hcf->originatorBlockAckAgreementPolicy);
+        }
+    }
+};
+
+class HcfOriginatorFrameDispatchActions final :
+        public HcfFrameDispatchService::IOriginatorTransmitActions,
+        public HcfFrameDispatchService::IOriginatorReceiveActions
+{
+  private:
+    Hcf *hcf;
+    Edcaf *edcaf;
+    AccessCategory accessCategory;
+
+  public:
+    HcfOriginatorFrameDispatchActions(Hcf *hcf, Edcaf *edcaf,
+            AccessCategory accessCategory) :
+        hcf(hcf), edcaf(edcaf), accessCategory(accessCategory)
+    {
+        if (edcaf == nullptr)
+            throw cRuntimeError("HCF originator frame dispatch requires an EDCAF");
+    }
+
+    virtual void transmittedGroup(Packet *packet,
+            const Ptr<const Ieee80211MacHeader>& header) override
+    {
+        edcaf->getRecoveryProcedure()->multicastFrameTransmitted();
+        if (dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(header))
+            edcaf->getInProgressFrames()->dropFrame(packet);
+    }
+
+    virtual void transmittedData(Packet *packet,
+            const Ptr<const Ieee80211DataHeader>& header,
+            HcfFrameDispatchService::ExpectedResponse expectedResponse) override
+    {
+        auto response = expectedResponse == HcfFrameDispatchService::ExpectedResponse::ACK ?
+                HcfOriginatorService::ExpectedResponse::ACK :
+                expectedResponse == HcfFrameDispatchService::ExpectedResponse::BLOCK_ACK ?
+                HcfOriginatorService::ExpectedResponse::BLOCK_ACK :
+                HcfOriginatorService::ExpectedResponse::NONE;
+        hcf->processDispatchedTransmittedData(packet, header, response, edcaf,
+                accessCategory);
+    }
+
+    virtual bool isManagementAckNeeded(
+            const Ptr<const Ieee80211MgmtHeader>& frame) override
+    {
+        return hcf->originatorAckPolicy->isAckNeeded(frame);
+    }
+
+    virtual void transmittedManagementAck(
+            const Ptr<const Ieee80211MgmtHeader>& frame) override
+    {
+        edcaf->getAckHandler()->processTransmittedDataOrMgmtFrame(frame);
+    }
+
+    virtual void transmittedAddbaRequest(
+            const Ptr<const Ieee80211AddbaRequest>& frame) override
+    {
+        if (hcf->originatorBlockAckAgreementHandler)
+            hcf->originatorBlockAckAgreementHandler->processTransmittedAddbaReq(frame, hcf);
+    }
+
+    virtual void transmittedAddbaResponse(
+            const Ptr<const Ieee80211AddbaResponse>& frame) override
+    {
+        hcf->recipientBlockAckAgreementHandler->processTransmittedAddbaResp(frame, hcf);
+    }
+
+    virtual void transmittedDelba(const Ptr<const Ieee80211Delba>& frame) override
+    {
+        if (frame->getInitiator())
+            hcf->originatorBlockAckAgreementHandler->processTransmittedDelba(frame);
+        else
+            hcf->recipientBlockAckAgreementHandler->processTransmittedDelba(frame);
+    }
+
+    virtual void transmittedBlockAckRequest(
+            const Ptr<const Ieee80211BlockAckReq>& frame) override
+    {
+        edcaf->getAckHandler()->processTransmittedBlockAckReq(frame);
+    }
+
+    virtual void transmittedRts(const Ptr<const Ieee80211RtsFrame>& frame) override
+    {
+        hcf->rtsProcedure->processTransmittedRts(frame);
+    }
+
+    virtual void failedDataOrManagement(Packet *packet,
+            const Ptr<const Ieee80211DataOrMgmtHeader>& frame,
+            HcfFrameDispatchService::FailureKind failureKind) override
+    {
+        EV_INFO << (dynamicPtrCast<const Ieee80211DataHeader>(frame) ?
+                "Data frame transmission failed\n" :
+                "Management frame transmission failed\n");
+        auto kind = failureKind == HcfFrameDispatchService::FailureKind::BLOCK_ACK_MISSING ?
+                HcfOriginatorService::FailureKind::BLOCK_ACK_MISSING :
+                HcfOriginatorService::FailureKind::ACK_TIMEOUT;
+        hcf->processDispatchedFailure(packet, frame, kind, edcaf, accessCategory);
+    }
+
+    virtual void failedBlockAckRequest(Packet *,
+            const Ptr<const Ieee80211BlockAckReq>& frame) override
+    {
+        hcf->processFailedBlockAckReq(edcaf, frame, true);
+    }
+
+    virtual void originatorAddbaResponse(
+            const Ptr<const Ieee80211AddbaResponse>& frame) override
+    {
+        if (!hcf->originatorBlockAckAgreementHandler)
+            return;
+        hcf->originatorBlockAckAgreementHandler->processReceivedAddbaResp(frame,
+                hcf->originatorBlockAckAgreementPolicy, hcf);
+        auto agreement = hcf->originatorBlockAckAgreementHandler->getAgreement(
+                frame->getTransmitterAddress(), frame->getTid());
+        HcfObservationSink::originatorBlockAckAgreementAdded(hcf, agreement);
+        hcf->resumeContention();
+    }
+
+    virtual void originatorAck(Packet *, const Ptr<const Ieee80211AckFrame>& frame,
+            Packet *lastTransmittedPacket,
+            const Ptr<const Ieee80211MacHeader>& lastTransmittedHeader) override
+    {
+        hcf->processReceivedAck(edcaf, frame, lastTransmittedPacket,
+                lastTransmittedHeader);
+    }
+
+    virtual void originatorBlockAck(
+            const Ptr<const Ieee80211BlockAck>& frame) override
+    {
+        hcf->processReceivedBlockAck(edcaf, frame, accessCategory);
+    }
+
+    virtual void originatorCts(const Ptr<const Ieee80211CtsFrame>&) override
+    {
+        edcaf->getRecoveryProcedure()->ctsFrameReceived();
+    }
+
+    virtual void originatorIgnoredControl(
+            const Ptr<const Ieee80211MacHeader>&) override {}
+
+    virtual void originatorData(const Ptr<const Ieee80211DataHeader>& frame,
+            const Ptr<const Ieee80211MacHeader>& lastTransmittedHeader) override
+    {
+        hcf->originatorProcessReceivedDataFrame(frame, lastTransmittedHeader,
+                accessCategory);
+    }
+};
+
+class Hcf::TransmissionPreparationActions final :
+        public HcfTransmissionPreparationService::IActions,
+        public HcfAggregationService::ITransmissionPlanningActions
+{
+  private:
+    Hcf *hcf;
+    Edcaf *channelOwner;
+    TxopProcedure *txop;
+    const FrameSequenceContext *frameSequenceContext;
+    HcfTransmissionPreparationService::ProtectionMechanism protectionMechanism;
+
+  public:
+    TransmissionPreparationActions(Hcf *hcf, Edcaf *channelOwner,
+            TxopProcedure *txop, const FrameSequenceContext *frameSequenceContext,
+            HcfTransmissionPreparationService::ProtectionMechanism protectionMechanism) :
+        hcf(hcf), channelOwner(channelOwner), txop(txop),
+        frameSequenceContext(frameSequenceContext),
+        protectionMechanism(protectionMechanism)
+    {
+    }
+
+    virtual bool isHtImplicitBlockAckEligible(
+            const HcfTransmissionPreparationService::Request& request) const override
+    {
+        auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(request.header);
+        return frameSequenceContext != nullptr &&
+                ieee80211::isHtImplicitBlockAckEligible(frameSequenceContext,
+                        request.packet, dataHeader);
+    }
+
+    virtual AckPolicy selectAckPolicy(
+            const HcfTransmissionPreparationService::Request& request,
+            bool) const override
+    {
+        auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(request.header);
+        if (dataHeader == nullptr)
+            return NORMAL_ACK;
+        OriginatorBlockAckAgreement *agreement = nullptr;
+        if (hcf->originatorBlockAckAgreementHandler)
+            agreement = hcf->originatorBlockAckAgreementHandler->getAgreement(
+                    dataHeader->getReceiverAddress(), dataHeader->getTid());
+        return hcf->originatorAckPolicy->computeAckPolicy(request.packet,
+                dataHeader, agreement);
+    }
+
+    virtual const IIeee80211Mode *selectMode(
+            const HcfTransmissionPreparationService::Request& request) const override
+    {
+        auto modeReq = request.packet->findTag<Ieee80211ModeReq>();
+        return modeReq == nullptr ? hcf->rateSelection->computeMode(
+                request.packet, request.header, txop) : modeReq->getMode();
+    }
+
+    virtual void validateMode(
+            const HcfTransmissionPreparationService::Request&,
+            const IIeee80211Mode *mode) const override
+    {
+        hcf->modeSet->getPhyFamily(mode);
+    }
+
+    virtual HcfTransmissionPreparationService::AggregatePlan planAggregation(
+            const HcfTransmissionPreparationService::Request& request,
+            const IIeee80211Mode *mode, AckPolicy ackPolicy,
+            bool implicitBlockAck) const override
+    {
+        auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(request.header);
+        auto phyFamily = hcf->modeSet->getPhyFamily(mode);
+        bool aggregationAllowed = dataHeader != nullptr &&
+                (dataHeader->getAckPolicy() == BLOCK_ACK || ackPolicy == BLOCK_ACK) &&
+                txop->allowsMpduAggregation() &&
+                !hcf->rtsPolicy->isRtsNeeded(request.packet, request.header) &&
+                phyFamily != Ieee80211PhyFamily::DSSS &&
+                phyFamily != Ieee80211PhyFamily::ERP_OFDM &&
+                phyFamily != Ieee80211PhyFamily::OFDM;
+        HcfAggregationService::TransmissionPlanningRequest planningRequest;
+        planningRequest.sourcePacket = request.packet;
+        planningRequest.mode = mode;
+        planningRequest.phyFamily = phyFamily;
+        planningRequest.aggregationAllowed = aggregationAllowed;
+        planningRequest.implicitBlockAck = implicitBlockAck;
+        auto plan = hcf->aggregationService.planTransmission(planningRequest, *this);
+        HcfTransmissionPreparationService::AggregatePlan result;
+        result.members = std::move(plan.members);
+        result.materialize = plan.materialize;
+        result.implicitBlockAck = plan.implicitBlockAck;
+        return result;
+    }
+
+    virtual std::vector<Packet *> getCandidates(Packet *sourcePacket,
+            bool implicitBlockAck, long long maxAggregateLength) const override
+    {
+        return implicitBlockAck ? frameSequenceContext->getHtImplicitBlockAckFrames() :
+                channelOwner->getInProgressFrames()->getEligibleFramesLike(
+                        sourcePacket, 64, maxAggregateLength);
+    }
+
+    virtual long long getMaxAggregateLength(
+            const Ptr<const Ieee80211DataHeader>& sourceHeader,
+            Ieee80211PhyFamily phyFamily) const override
+    {
+        int exponent = hcf->getMaxAmpduLengthExponent(
+                sourceHeader->getReceiverAddress(), 7, phyFamily);
+        return (1LL << (13 + exponent)) - 1;
+    }
+
+    virtual void applyRetryState(Packet *candidate) const override
+    {
+        channelOwner->getAckHandler()->setRetryBitIfNeeded(candidate);
+    }
+
+    virtual AckPolicy selectAckPolicy(Packet *candidate,
+            const Ptr<const Ieee80211DataHeader>& header) const override
+    {
+        OriginatorBlockAckAgreement *agreement = nullptr;
+        if (hcf->originatorBlockAckAgreementHandler)
+            agreement = hcf->originatorBlockAckAgreementHandler->getAgreement(
+                    header->getReceiverAddress(), header->getTid());
+        return hcf->originatorAckPolicy->computeAckPolicy(candidate, header,
+                agreement);
+    }
+
+    virtual void applySelectedPolicy(Packet *candidate,
+            AckPolicy ackPolicy) const override
+    {
+        auto header = candidate->removeAtFront<Ieee80211DataHeader>();
+        header->setAckPolicy(ackPolicy);
+        header->setDurationField(SIMTIME_ZERO);
+        candidate->insertAtFront(header);
+    }
+
+    virtual void aggregationTrimmed(size_t originalCount, size_t retainedCount,
+            simtime_t durationLimit) const override
+    {
+        OPP_LOGPROXY(hcf, omnetpp::LOGLEVEL_DEBUG, nullptr).getStream()
+                << "Trimmed A-MPDU from " << originalCount << " to "
+                << retainedCount << " MPDUs for PPDU/TXOP duration "
+                << durationLimit << ".\n";
+    }
+
+    virtual void validateAggregation(
+            const HcfTransmissionPreparationService::Request&,
+            const IIeee80211Mode *,
+            const HcfTransmissionPreparationService::AggregatePlan&) const override
+    {
+    }
+
+    virtual void validateProtection(
+            const HcfTransmissionPreparationService::Request&,
+            const IIeee80211Mode *,
+            const HcfTransmissionPreparationService::AggregatePlan&) const override
+    {
+    }
+
+    virtual HcfTransmissionPreparationService::ProtectionPlan computeProtection(
+            const HcfTransmissionPreparationService::Request& request,
+            const IIeee80211Mode *,
+            const HcfTransmissionPreparationService::AggregatePlan& aggregatePlan) const override
+    {
+        HcfTransmissionPreparationService::ProtectionPlan result;
+        if (protectionMechanism ==
+                HcfTransmissionPreparationService::ProtectionMechanism::SINGLE) {
+            if (aggregatePlan.materialize || request.durationFinalized ||
+                    request.durationExemptForSingleProtection)
+                return result;
+            auto pendingPacket = channelOwner->getInProgressFrames()->
+                    getPendingFrameFor(request.packet);
+            const auto& pendingHeader = pendingPacket == nullptr ? nullptr :
+                    pendingPacket->peekAtFront<Ieee80211DataOrMgmtHeader>();
+            result.updateDuration = true;
+            result.duration = hcf->singleProtectionMechanism->computeDurationField(
+                    request.packet, request.header, pendingPacket, pendingHeader,
+                    txop, hcf->recipientAckPolicy, request.ifs);
+        }
+        else if (!request.durationFinalized) {
+            result.updateDuration = true;
+            result.duration = hcf->singleProtectionMechanism->computeDurationField(
+                    request.packet, request.header, nullptr, nullptr, txop,
+                    hcf->recipientAckPolicy, request.ifs);
+        }
+        return result;
+    }
+
+    virtual void applySourceRetryState(Packet *sourcePacket) override
+    {
+        if (dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(
+                sourcePacket->peekAtFront<Ieee80211MacHeader>()))
+            channelOwner->getAckHandler()->setRetryBitIfNeeded(sourcePacket);
+    }
+
+    virtual Ptr<const Ieee80211MacHeader> applyAckPolicy(Packet *sourcePacket,
+            const Ptr<const Ieee80211MacHeader>& header, AckPolicy ackPolicy,
+            const HcfTransmissionPreparationService::AggregatePlan&) override
+    {
+        if (dynamicPtrCast<const Ieee80211DataHeader>(header)) {
+            auto mutableHeader = sourcePacket->removeAtFront<Ieee80211DataHeader>();
+            mutableHeader->setAckPolicy(ackPolicy);
+            sourcePacket->insertAtFront(mutableHeader);
+            return sourcePacket->peekAtFront<Ieee80211MacHeader>();
+        }
+        return header;
+    }
+
+    virtual Ptr<const Ieee80211MacHeader> applyModePreparation(Packet *sourcePacket,
+            const Ptr<const Ieee80211MacHeader>&,
+            const IIeee80211Mode *mode) override
+    {
+        hcf->attachPendingHtMcsControl(sourcePacket, mode);
+        return sourcePacket->peekAtFront<Ieee80211MacHeader>();
+    }
+
+    virtual void applyAggregateMemberState(Packet *,
+            const HcfTransmissionPreparationService::AggregatePlan& aggregatePlan) override
+    {
+        for (auto frame : aggregatePlan.members) {
+            if (!aggregatePlan.implicitBlockAck)
+                continue;
+            auto mutableHeader = frame->removeAtFront<Ieee80211DataHeader>();
+            mutableHeader->setAckPolicy(NORMAL_ACK);
+            mutableHeader->setTransmitterAddress(hcf->mac->getAddress());
+            frame->insertAtFront(mutableHeader);
+        }
+    }
+
+    virtual void applyDuration(Packet *sourcePacket,
+            const Ptr<const Ieee80211MacHeader>&, simtime_t duration) override
+    {
+        auto mutableHeader = sourcePacket->removeAtFront<Ieee80211MacHeader>();
+        mutableHeader->setDurationField(duration);
+        sourcePacket->insertAtFront(mutableHeader);
+        if (protectionMechanism ==
+                HcfTransmissionPreparationService::ProtectionMechanism::SINGLE)
+            OPP_LOGPROXY(hcf, omnetpp::LOGLEVEL_DEBUG, nullptr).getStream()
+                     << "Duration for " << sourcePacket->getName()
+                     << " is set to " << duration << " s.\n";
+    }
+
+    virtual Packet *materializeAggregate(Packet *sourcePacket,
+            const HcfTransmissionPreparationService::AggregatePlan& aggregatePlan) override
+    {
+        auto aggregate = hcf->aggregationService.materializeTransmission(
+                sourcePacket, aggregatePlan.members, hcf->mac->getFcsMode(),
+                aggregatePlan.implicitBlockAck);
+        HcfObservationSink::ampduCreated(hcf, aggregate,
+                (unsigned long)aggregatePlan.members.size());
+        return aggregate;
+    }
+
+    virtual void setMode(Packet *transmittedPacket,
+            const Ptr<const Ieee80211MacHeader>& header,
+            const IIeee80211Mode *mode) override
+    {
+        hcf->setFrameMode(transmittedPacket, header, mode);
+    }
+
+    virtual void setSourceMode(Packet *sourcePacket,
+            const Ptr<const Ieee80211MacHeader>& header,
+            const IIeee80211Mode *mode) override
+    {
+        hcf->setFrameMode(sourcePacket, header, mode);
+    }
+
+    virtual void recordSelectedMode(Packet *transmittedPacket,
+            const IIeee80211Mode *mode) override
+    {
+        hcf->recordSelectedMode(transmittedPacket, mode);
+    }
+
+    virtual void observeSelectedRate(Packet *transmittedPacket,
+            const IIeee80211Mode *mode) override
+    {
+        HcfObservationSink::datarateSelected(hcf,
+                mode->getDataMode()->getNetBitrate().get<bps>(), transmittedPacket);
+        OPP_LOGPROXY(hcf, omnetpp::LOGLEVEL_DEBUG, nullptr).getStream()
+                 << "Datarate for " << transmittedPacket->getName()
+                 << " is set to " << mode->getDataMode()->getNetBitrate() << ".\n";
+    }
+
+    virtual void transmitBorrowed(Packet *transmittedPacket,
+            const Ptr<const Ieee80211MacHeader>& header, simtime_t ifs) override
+    {
+        hcf->tx->transmitFrame(transmittedPacket, header, ifs, hcf);
+    }
+
+    virtual void deleteTemporaryPacket(Packet *packet) noexcept override
+    {
+        delete packet;
+    }
+};
+
+class HcfOriginatorActions final : public HcfOriginatorService::IActions,
+        public HcfRetryService::IActions
+{
+  private:
+    using Frame = HcfOriginatorService::Frame;
+    using FrameIdentity = HcfOriginatorService::FrameIdentity;
+    using FailureKind = HcfOriginatorService::FailureKind;
+    using BlockAckMemberStatus = HcfOriginatorService::BlockAckMemberStatus;
+
+    Hcf *hcf;
+    Edcaf *edcaf;
+    AccessCategory accessCategory;
+    bool processingBlockAck = false;
+    unsigned int retiredBlockAckStateCount = 0;
+    std::set<std::pair<MacAddress, std::pair<Tid, SequenceControlField>>> acknowledgedFrames;
+
+    Ptr<const Ieee80211DataHeader> getDataHeader(const Frame& frame) const
+    {
+        return dynamicPtrCast<const Ieee80211DataHeader>(frame.header);
+    }
+
+    Ptr<const Ieee80211MgmtHeader> getManagementHeader(const Frame& frame) const
+    {
+        return dynamicPtrCast<const Ieee80211MgmtHeader>(frame.header);
+    }
+
+  public:
+    HcfOriginatorActions(Hcf *hcf, Edcaf *edcaf, AccessCategory accessCategory) :
+        hcf(hcf), edcaf(edcaf), accessCategory(accessCategory)
+    {
+    }
+
+    virtual bool isCurrent(const FrameIdentity& identity) const noexcept override
+    {
+        auto inProgressFrames = edcaf->getInProgressFrames();
+        for (int i = 0; i < inProgressFrames->getLength(); i++)
+            if (inProgressFrames->getFrames(i) == identity.packet)
+                return true;
+        return false;
+    }
+
+    virtual void processTransmitted(const Frame& frame,
+            HcfOriginatorService::ExpectedResponse) override
+    {
+        edcaf->getAckHandler()->processTransmittedDataOrMgmtFrame(frame.header);
+        if (auto dataHeader = getDataHeader(frame);
+                dataHeader != nullptr && hcf->originatorBlockAckAgreementHandler)
+            hcf->originatorBlockAckAgreementHandler->processTransmittedDataFrame(
+                    frame.packet, dataHeader,
+                    hcf->originatorBlockAckAgreementPolicy, hcf);
+    }
+
+    virtual void processNoResponseSuccess(const Frame&) override
+    {
+    }
+
+    virtual void processTransmissionFailed(const Frame& frame,
+            FailureKind) override
+    {
+        if (auto dataHeader = getDataHeader(frame))
+            edcaf->getRecoveryProcedure()->dataFrameTransmissionFailed(
+                    frame.packet, dataHeader);
+        else if (auto managementHeader = getManagementHeader(frame))
+            hcf->edca->getMgmtAndNonQoSRecoveryProcedure()->
+                    dataOrMgmtFrameTransmissionFailed(frame.packet,
+                            managementHeader, edcaf->getStationRetryCounters());
+        else
+            throw cRuntimeError("Unknown HCF originator frame kind");
+    }
+
+    virtual void processRtsFailure(const Frame& frame) override
+    {
+        if (auto dataHeader = getDataHeader(frame))
+            edcaf->getRecoveryProcedure()->rtsFrameTransmissionFailed(dataHeader);
+        else if (auto managementHeader = getManagementHeader(frame))
+            hcf->edca->getMgmtAndNonQoSRecoveryProcedure()->
+                    rtsFrameTransmissionFailed(managementHeader,
+                            edcaf->getStationRetryCounters());
+        else
+            throw cRuntimeError("Unknown HCF RTS-protected frame kind");
+    }
+
+    virtual bool isRtsRetryLimitReached(const Frame& frame) override
+    {
+        if (auto dataHeader = getDataHeader(frame))
+            return edcaf->getRecoveryProcedure()->isRtsFrameRetryLimitReached(
+                    frame.packet, dataHeader);
+        if (auto managementHeader = getManagementHeader(frame))
+            return hcf->edca->getMgmtAndNonQoSRecoveryProcedure()->
+                    isRtsFrameRetryLimitReached(frame.packet, managementHeader);
+        throw cRuntimeError("Unknown HCF RTS-protected frame kind");
+    }
+
+    virtual bool isRetryLimitReached(const Frame& frame) override
+    {
+        if (auto dataHeader = getDataHeader(frame))
+            return edcaf->getRecoveryProcedure()->isRetryLimitReached(
+                    frame.packet, dataHeader);
+        if (auto managementHeader = getManagementHeader(frame))
+            return hcf->edca->getMgmtAndNonQoSRecoveryProcedure()->
+                    isRetryLimitReached(frame.packet, managementHeader);
+        throw cRuntimeError("Unknown HCF originator frame kind");
+    }
+
+    virtual int getRetryCount(const Frame& frame) override
+    {
+        if (auto dataHeader = getDataHeader(frame))
+            return edcaf->getRecoveryProcedure()->getRetryCount(
+                    frame.packet, dataHeader);
+        if (auto managementHeader = getManagementHeader(frame))
+            return hcf->edca->getMgmtAndNonQoSRecoveryProcedure()->getRetryCount(
+                    frame.packet, managementHeader);
+        throw cRuntimeError("Unknown HCF originator frame kind");
+    }
+
+    virtual void reportRateResult(const Frame& frame, int retryCount,
+            bool successful, bool retryLimitReached) override
+    {
+        if (hcf->dataAndMgmtRateControl)
+            hcf->dataAndMgmtRateControl->frameTransmitted(frame.packet,
+                    retryCount, successful, retryLimitReached);
+    }
+
+    virtual void processAckStateFailed(const Frame& frame) override
+    {
+        edcaf->getAckHandler()->processFailedFrame(frame.header);
+    }
+
+    virtual void processRetryLimitReached(const Frame& frame) override
+    {
+        if (auto dataHeader = getDataHeader(frame))
+            edcaf->getRecoveryProcedure()->retryLimitReached(frame.packet,
+                    dataHeader);
+        else if (auto managementHeader = getManagementHeader(frame))
+            hcf->edca->getMgmtAndNonQoSRecoveryProcedure()->retryLimitReached(
+                    frame.packet, managementHeader);
+        else
+            throw cRuntimeError("Unknown HCF originator frame kind");
+    }
+
+    virtual void markRetry(const Frame& frame) override
+    {
+        auto header = frame.packet->removeAtFront<Ieee80211DataOrMgmtHeader>();
+        header->setRetry(true);
+        frame.packet->insertAtFront(header);
+    }
+
+    virtual void processAckRecoverySuccess(const Frame& frame) override
+    {
+        if (auto dataHeader = getDataHeader(frame))
+            edcaf->getRecoveryProcedure()->ackFrameReceived(frame.packet,
+                    dataHeader);
+        else if (auto managementHeader = getManagementHeader(frame))
+            hcf->edca->getMgmtAndNonQoSRecoveryProcedure()->ackFrameReceived(
+                    frame.packet, managementHeader,
+                    edcaf->getStationRetryCounters());
+        else
+            throw cRuntimeError("Unknown HCF originator frame kind");
+    }
+
+    virtual void processAckStateReceived(const Frame& frame,
+            const Ptr<const Ieee80211AckFrame>& ackFrame) override
+    {
+        edcaf->getAckHandler()->processReceivedAck(ackFrame, frame.header);
+    }
+
+    virtual void processBlockAckReceived(
+            const Ptr<const Ieee80211BlockAck>& blockAck) override
+    {
+        processingBlockAck = true;
+        edcaf->getRecoveryProcedure()->blockAckFrameReceived();
+        acknowledgedFrames = edcaf->getAckHandler()->processReceivedBlockAck(
+                blockAck);
+    }
+
+    virtual BlockAckMemberStatus getBlockAckMemberStatus(
+            const Frame& frame) override
+    {
+        auto dataHeader = getDataHeader(frame);
+        if (dataHeader == nullptr)
+            return BlockAckMemberStatus::NOT_COVERED;
+        auto status = edcaf->getAckHandler()->getQoSDataAckStatus(dataHeader);
+        if (status == QosAckHandler::Status::BLOCK_ACK_ARRIVED_ACKED)
+            return BlockAckMemberStatus::ACKNOWLEDGED;
+        if (status == QosAckHandler::Status::BLOCK_ACK_ARRIVED_UNACKED)
+            return BlockAckMemberStatus::UNACKNOWLEDGED;
+        return BlockAckMemberStatus::NOT_COVERED;
+    }
+
+    virtual void processBlockAckMemberResult(const Frame&,
+            BlockAckMemberStatus) override
+    {
+    }
+
+    virtual void processBlockAckAgreement(
+            const Ptr<const Ieee80211BlockAck>& blockAck) override
+    {
+        hcf->originatorProcessBlockAckResult(blockAck, acknowledgedFrames,
+                accessCategory);
+        if (hcf->originatorBlockAckAgreementHandler)
+            hcf->originatorBlockAckAgreementHandler->processReceivedBlockAck(
+                    blockAck, hcf);
+        EV_TRACE << "It has acknowledged the following frames:" << std::endl;
+        for (auto it : acknowledgedFrames)
+            EV_TRACE << "   sequenceNumber = "
+                    << it.second.second.getSequenceNumber()
+                    << ", fragmentNumber = "
+                    << (int)it.second.second.getFragmentNumber() << std::endl;
+    }
+
+    virtual void retireInProgress(const Frame& frame) override
+    {
+        edcaf->getInProgressFrames()->dropFrame(frame.packet);
+    }
+
+    virtual void retireAckState(const Frame& frame) override
+    {
+        if (!processingBlockAck)
+            edcaf->getAckHandler()->dropFrame(frame.header);
+        else if (++retiredBlockAckStateCount == acknowledgedFrames.size())
+            edcaf->getAckHandler()->dropFrames(acknowledgedFrames);
+    }
+
+    virtual void reportManagementResult(const Frame& frame,
+            HcfOriginatorService::ManagementResultKind resultKind) override
+    {
+        if (resultKind == HcfOriginatorService::ManagementResultKind::ACKNOWLEDGED)
+            hcf->notifyMgmtExchangeResult(frame.packet,
+                    Ieee80211MgmtExchangeResultKind::ACKNOWLEDGED);
+        else
+            hcf->notifyMgmtExchangeResult(frame.packet,
+                    Ieee80211MgmtExchangeResultKind::RETRY_LIMIT_REACHED);
+    }
+
+    virtual void reportRetainingRetry(const Frame& frame,
+            HcfRetryService::FailurePath path) override
+    {
+        if (path == HcfRetryService::FailurePath::ORIGINATOR)
+            EV_INFO << "Retrying frame " << frame.packet->getName() << ".\n";
+    }
+
+    virtual void reportDropping(const Frame& frame,
+            HcfRetryService::FailurePath path) override
+    {
+        if (path == HcfRetryService::FailurePath::INTERNAL_COLLISION)
+            EV_DETAIL << "The frame has reached its retry limit. Dropping it" << std::endl;
+        else if (path == HcfRetryService::FailurePath::RTS_PROTECTION)
+            EV_INFO << "Dropping RTS/CTS protected frame " << frame.packet->getName()
+                    << ", because retry limit is reached.\n";
+        else
+            EV_INFO << "Dropping frame " << frame.packet->getName()
+                    << ", because retry limit is reached.\n";
+    }
+
+    virtual void observePacketDropped(const Frame& frame) override
+    {
+        PacketDropDetails details;
+        details.setReason(RETRY_LIMIT_REACHED);
+        details.setLimit(-1);
+        HcfObservationSink::packetDropped(hcf, frame.packet, &details);
+    }
+
+    virtual void observeLinkBroken(const Frame& frame) override
+    {
+        HcfObservationSink::linkBroken(hcf, frame.packet);
+    }
+};
+
+void Hcf::claimIngressPacket(Packet *packet)
+{
+    take(packet);
+}
+
+void Hcf::returnIngressPacketToCaller(Packet *packet, cComponent *caller) noexcept
+{
+    cContextSwitcher contextSwitcher(caller);
+    drop(packet);
+}
 
 simsignal_t Hcf::edcaCollisionDetectedSignal = cComponent::registerSignal("edcaCollisionDetected");
 simsignal_t Hcf::blockAckAgreementAddedSignal = cComponent::registerSignal("blockAckAgreementAdded");
@@ -80,140 +1332,45 @@ static bool isHeMuContainerPacket(Packet *packet)
     return packet != nullptr && packet->findTag<Ieee80211HeMuContainerReq>() != nullptr;
 }
 
-template <typename T>
-static Ptr<const T> findHtActionBody(const Packet *packet)
-{
-    if (packet == nullptr || packet->getDataLength() == b(0))
-        return nullptr;
-    auto data = packet->peekData();
-    if (auto chunk = dynamicPtrCast<const T>(data))
-        return chunk;
-    if (auto sequence = dynamicPtrCast<const SequenceChunk>(data))
-        for (const auto& chunk : sequence->getChunks())
-            if (auto result = dynamicPtrCast<const T>(chunk))
-                return result;
-    return nullptr;
-}
-
-static bool isImmediateHtFeedback(Ieee80211HtExplicitFeedback capability)
-{
-    return capability == Ieee80211HtExplicitFeedback::IMMEDIATE ||
-            capability == Ieee80211HtExplicitFeedback::BOTH;
-}
-
 void Hcf::addBufferedTrafficServiceBytes(uint32_t& total, uint64_t amount)
 {
-    total += static_cast<uint32_t>(std::min<uint64_t>(
-            amount, MAX_FINITE_BUFFER_STATUS_BYTES - total));
+    HcfMacSapTracker::addBufferedTrafficServiceBytes(total, amount);
 }
 
 uint32_t Hcf::calculateBufferedTrafficServiceBytes(Edcaf *edcaf, const MacAddress& peer,
         int tid, const std::vector<Packet *>& additionalPackets) const
 {
-    std::set<uint64_t> accountedServiceDataUnits;
-    std::set<const Packet *> accountedLegacyPackets;
-    uint32_t serviceBytes = 0;
-    auto accountPacket = [&] (const Packet *packet) {
-        auto header =
-                dynamicPtrCast<const Ieee80211DataHeader>(packet->peekAtFront());
-        if (header == nullptr || header->getType() != ST_DATA_WITH_QOS ||
-                header->getReceiverAddress() != peer ||
-                (tid >= 0 && header->getTid() != tid))
-            return;
-        // IEEE Std 802.11-2024 clauses 9.2.4.5.6, 9.2.4.7.4, and 26.5.5:
-        // buffer status counts MAC-SAP MSDU/A-MSDU service octets, including
-        // queued in-progress traffic, but excludes MPDU/A-MPDU and PHY overhead.
-        bool hasServiceDataUnitTag = false;
-        packet->mapAllRegionTags<Ieee80211MacSapServiceTag>(
-                packet->getFrontOffset(), packet->getDataLength(),
-                [&] (b, b, const Ptr<const Ieee80211MacSapServiceTag>& tag) {
-                    hasServiceDataUnitTag = true;
-                    auto id = tag->getServiceDataUnitId();
-                    if (id == 0)
-                        throw cRuntimeError("MAC-SAP service data unit ID must be nonzero");
-                    if (accountedServiceDataUnits.insert(id).second) {
-                        auto bytes = tag->getServiceDataUnitBytes().get<B>();
-                        if (bytes < 0)
-                            throw cRuntimeError("MAC-SAP service data unit byte count must not be negative");
-                        addBufferedTrafficServiceBytes(serviceBytes, bytes);
-                    }
-                });
-        if (hasServiceDataUnitTag)
-            return;
-
-        // Compatibility for complete legacy/unit-test packets that predate
-        // MAC-SAP provenance. A fragment body is never interpreted as a
-        // complete MSDU or A-MSDU.
-        if (!accountedLegacyPackets.insert(packet).second)
-            return;
-        if (header->getFragmentNumber() != 0 || header->getMoreFragments())
-            return;
-        if (header->getAMsduPresent()) {
-            b offset = header->getChunkLength();
-            b bodyEnd = packet->getDataLength() - B(4);
-            while (offset < bodyEnd) {
-                auto subframeHeader =
-                        packet->peekAt<Ieee80211MsduSubframeHeader>(offset);
-                auto subframeLength = B(subframeHeader->getLength());
-                auto subframeEnd = offset + subframeHeader->getChunkLength() +
-                        subframeLength;
-                if (subframeLength < B(0) || subframeEnd > bodyEnd)
-                    throw cRuntimeError("Invalid complete A-MSDU subframe length");
-                addBufferedTrafficServiceBytes(serviceBytes,
-                        subframeLength.get<B>());
-                offset = subframeEnd;
-                if (offset < bodyEnd)
-                    offset += B((4 - (subframeHeader->getChunkLength() +
-                            subframeLength).get<B>() % 4) % 4);
-            }
-            if (offset != bodyEnd)
-                throw cRuntimeError("Invalid complete A-MSDU padding length");
-        }
-        else {
-            auto payloadBytes = (packet->getDataLength() -
-                    header->getChunkLength() - B(4)).get<B>();
-            if (payloadBytes > 0)
-                addBufferedTrafficServiceBytes(serviceBytes, payloadBytes);
-        }
-    };
+    HcfMacSapTracker::PacketVector pendingPackets;
     auto pendingQueue = edcaf->getPendingQueue();
     for (int i = 0; i < pendingQueue->getNumPackets(); i++)
-        accountPacket(pendingQueue->getPacket(i));
+        pendingPackets.push_back(pendingQueue->getPacket(i));
+    HcfMacSapTracker::PacketVector inProgressPackets;
     auto inProgressFrames = edcaf->getInProgressFrames();
     for (int i = 0; i < inProgressFrames->getLength(); i++)
-        accountPacket(inProgressFrames->getFrames(i));
+        inProgressPackets.push_back(inProgressFrames->getFrames(i));
+    HcfMacSapTracker::PacketVector additionalPacketView;
     for (auto packet : additionalPackets)
-        accountPacket(packet);
-    return serviceBytes;
+        additionalPacketView.push_back(packet);
+    return macSapTracker.calculateBufferedTrafficServiceBytes(peer, tid,
+            pendingPackets, inProgressPackets, additionalPacketView);
 }
 
 uint64_t Hcf::allocateServiceDataUnitId()
 {
-    // Zero is reserved for invalid/unassigned metadata. Exhausting the
-    // nonzero ID space fails deterministically instead of reusing an ID that
-    // may still identify queued or in-progress traffic.
-    if (nextServiceDataUnitId == 0)
-        throw cRuntimeError("MAC-SAP service data unit ID space exhausted");
-    return nextServiceDataUnitId++;
+    return macSapTracker.allocateServiceDataUnitId();
 }
 
 void Hcf::tagMacSapServiceDataUnit(Packet *packet,
         const Ptr<const Ieee80211DataHeader>& header)
 {
-    auto serviceDataUnitBytes = packet->getDataLength() -
-            header->getChunkLength() - B(4);
-    if (serviceDataUnitBytes <= B(0))
-        return;
-    auto tag = packet->addRegionTag<Ieee80211MacSapServiceTag>(
-            packet->getFrontOffset() + header->getChunkLength(),
-            serviceDataUnitBytes);
-    tag->setServiceDataUnitId(allocateServiceDataUnitId());
-    tag->setServiceDataUnitBytes(serviceDataUnitBytes);
+    macSapTracker.tagMacSapServiceDataUnit(packet, header);
 }
 
 uint32_t Hcf::getBufferedTrafficServiceBytes(
         Edcaf *edcaf, const MacAddress& peer, int tid) const
 {
+    if (heRuntime != nullptr)
+        return heRuntime->getBufferedTrafficServiceBytes(edcaf, peer, tid);
     return calculateBufferedTrafficServiceBytes(edcaf, peer, tid, {});
 }
 
@@ -221,28 +1378,40 @@ void Hcf::initialize(int stage)
 {
     ModeSetListener::initialize(stage);
     if (stage == INITSTAGE_LOCAL) {
+        auto featureSetModule = getSubmodule("featureSet");
+        auto featureSet = dynamic_cast<IHcfFeatureSet *>(featureSetModule);
+        if (featureSet == nullptr)
+            throw cRuntimeError("HCF featureSet submodule '%s' does not implement IHcfFeatureSet",
+                    featureSetModule == nullptr ? "<missing>" : featureSetModule->getFullPath().c_str());
+        HcfFeatureConfiguration featureConfiguration;
+        featureConfiguration.enableHtSounding = hasPar("enableHtSounding") &&
+                par("enableHtSounding").boolValue();
+        featureConfiguration.enableVhtSuBeamforming = hasPar("enableVhtSuBeamforming") &&
+                par("enableVhtSuBeamforming").boolValue();
+        featureConfiguration.enableVhtDlMuMimo = hasPar("enableVhtDlMuMimo") &&
+                par("enableVhtDlMuMimo").boolValue();
+        featureConfiguration.enableHeUlMuOfdma = hasPar("enableUlMuOfdma") &&
+                par("enableUlMuOfdma").boolValue();
+        featureConfiguration.enableHeDlMuMimo = hasPar("enableDlMuMimo") &&
+                par("enableDlMuMimo").boolValue();
+        runtime = std::make_unique<HcfRuntime>(featureSet, featureConfiguration);
+        runtime->validateExecutableProviders();
         mac = check_and_cast<Ieee80211Mac *>(getContainingNicModule(this)->getSubmodule("mac"));
-        exchangeCoordinator.initializeTimers();
+        exchangeEngine = std::make_unique<HcfExchangeEngine>(
+                std::make_unique<FrameSequenceHandler>());
+        exchangeEngine->initializeTimers();
         edca = check_and_cast<Edca *>(getSubmodule("edca"));
         hcca = check_and_cast<Hcca *>(getSubmodule("hcca"));
+        runtime->configureExchangeCommitter(
+                [this] (HcfExchangeClass exchangeClass, const HcfContext& context) {
+                    commitSelectedExchange(exchangeClass, context);
+                });
         tx = check_and_cast<ITx *>(getModuleByPath(par("txModule")));
         rx = check_and_cast<IRx *>(getModuleByPath(par("rxModule")));
         dataAndMgmtRateControl = dynamic_cast<IRateControl *>(getSubmodule("rateControl"));
-        htRateControl = dynamic_cast<IIeee80211HtRateControl *>(getSubmodule("rateControl"));
-        enableHtSounding = par("enableHtSounding");
-        htSoundingNsts = par("htSoundingNsts");
-        int feedbackKind = par("htSoundingFeedbackKind");
-        if (htSoundingNsts < 2 || htSoundingNsts > 4 ||
-                feedbackKind < 1 || feedbackKind > 3)
-            throw cRuntimeError("Invalid HT sounding parameters");
-        htSoundingFeedbackKind = static_cast<Ieee80211HtFeedbackKind>(feedbackKind);
-        htSoundingRetryInterval = par("htSoundingRetryInterval");
-        if (htSoundingRetryInterval < SIMTIME_ZERO)
-            throw cRuntimeError("HT sounding retry interval must not be negative");
         originatorBlockAckAgreementPolicy = dynamic_cast<IOriginatorBlockAckAgreementPolicy *>(getSubmodule("originatorBlockAckAgreementPolicy"));
         recipientBlockAckAgreementPolicy = dynamic_cast<IRecipientBlockAckAgreementPolicy *>(getSubmodule("recipientBlockAckAgreementPolicy"));
         rateSelection = check_and_cast<IQosRateSelection *>(getSubmodule("rateSelection"));
-        frameSequenceHandler = std::make_unique<FrameSequenceHandler>();
         WATCH_EXPR("frameSequenceInfo", getFrameSequenceInfo());
         WATCH(lastSelectedModePacketName);
         WATCH(lastSelectedModeName);
@@ -267,14 +1436,69 @@ void Hcf::initialize(int stage)
             originatorDataService->setBlockAckAgreementHandler(
                     originatorBlockAckAgreementHandler.get());
         }
+        if (featureSet->getAmendmentRuntimeKind() == HcfAmendmentRuntimeKind::VHT) {
+            vhtRuntime = std::make_unique<HcfVhtRuntime>(this);
+            vhtRuntime->initialize();
+        }
+        if (featureSet->getAmendmentRuntimeKind() == HcfAmendmentRuntimeKind::HE) {
+            auto heServices = featureSet->getHeRuntimeServices();
+            if (!heServices.isComplete())
+                throw cRuntimeError("HE HCF feature set returned incomplete runtime services");
+            HeHcfRuntime::Bindings bindings;
+            bindings.owner = this;
+            bindings.mac = mac;
+            bindings.edca = edca;
+            bindings.dlScheduler = check_and_cast<IIeee80211HeDlScheduler *>(
+                    getSubmodule("dlScheduler"));
+            bindings.ulCoordinator = check_and_cast<HeUlCoordinator *>(
+                    getSubmodule("ulCoordinator"));
+            bindings.blockAckHandler = originatorBlockAckAgreementHandler.get();
+            bindings.blockAckPolicy = originatorBlockAckAgreementPolicy;
+            bindings.isFrameSequenceRunning = [this] { return isFrameSequenceRunning(); };
+            bindings.invalidateBasePeer = [this] (const MacAddress& peer) {
+                htFeature->invalidatePeer(peer);
+                if (vhtRuntime != nullptr)
+                    vhtRuntime->invalidatePeer(peer);
+            };
+            heRuntime = std::make_unique<HeHcfRuntime>(heServices, bindings,
+                    par("csiValidityDuration"), par("defaultCsiLeakage"),
+                    par("csiLeakageOverrides").stdstringValue());
+            heRuntime->initialize();
+        }
     }
+    else if (stage == INITSTAGE_LINK_LAYER) {
+        if (modeSet == nullptr)
+            throw cRuntimeError("HCF HT feature cannot initialize without an IEEE 802.11 mode set");
+        htFeature->configure(mac, [this] { return modeSet; },
+                dynamic_cast<IIeee80211HtRateControl *>(getSubmodule("rateControl")), tx,
+                rateSelection,
+                [this] (const MacAddress& peer, int defaultExponent,
+                        Ieee80211PhyFamily phyFamily) {
+                    return getMaxAmpduLengthExponent(peer, defaultExponent, phyFamily);
+                },
+                originatorBlockAckAgreementHandler.get(), originatorAckPolicy,
+                par("enableHtSounding"), par("htSoundingNsts"),
+                static_cast<Ieee80211HtFeedbackKind>(
+                        par("htSoundingFeedbackKind").intValue()),
+                par("htSoundingRetryInterval"));
+        if (heRuntime != nullptr)
+            heRuntime->initializeLinkLayer();
+    }
+}
+
+void Hcf::receiveSignal(cComponent *source, simsignal_t signalID,
+        cObject *obj, cObject *details)
+{
+    ModeSetListener::receiveSignal(source, signalID, obj, details);
+    if (signalID == modesetChangedSignal && vhtRuntime != nullptr)
+        vhtRuntime->modeSetChanged();
 }
 
 std::string Hcf::getFrameSequenceInfo() const
 {
-    if (!frameSequenceHandler->isSequenceRunning())
+    if (!isFrameSequenceRunning())
         return "";
-    auto history = frameSequenceHandler->getFrameSequence()->getHistory();
+    auto history = getFrameSequenceForLegacyAdapter()->getHistory();
     if (history.length() > 32) {
         history.erase(history.begin(), history.end() - 32);
         history = "..." + history;
@@ -284,6 +1508,9 @@ std::string Hcf::getFrameSequenceInfo() const
 
 void Hcf::recordSelectedMode(Packet *packet, const IIeee80211Mode *mode)
 {
+    if (testActionPort.recordSelectedMode) {
+        testActionPort.recordSelectedMode(packet, mode);
+    }
     lastSelectedModePacketName = packet ? packet->getName() : "";
     lastSelectedModeName = mode ? mode->getName() : "";
     lastSelectedModeNetBitrate = mode ? mode->getDataMode()->getNetBitrate().get() : -1;
@@ -294,18 +1521,23 @@ void Hcf::recordSelectedMode(Packet *packet, const IIeee80211Mode *mode)
 void Hcf::forEachChild(cVisitor *v)
 {
     SimpleModule::forEachChild(v);
-    if (frameSequenceHandler != nullptr && frameSequenceHandler->getContext() != nullptr)
-        v->visit(const_cast<FrameSequenceContext *>(frameSequenceHandler->getContext()));
+    if (getFrameSequenceContext() != nullptr)
+        v->visit(const_cast<FrameSequenceContext *>(getFrameSequenceContext()));
 }
 
 void Hcf::handleMessage(cMessage *msg)
 {
-    if (msg == exchangeCoordinator.getStartRxTimer())
-        responseService.handleStartRxTimeout(makeResponseServiceActions());
-    else if (msg == exchangeCoordinator.getInactivityTimer())
-        handleBlockAckInactivityTimeout();
-    else
+    if (heRuntime != nullptr && heRuntime->handleMessage(msg))
+        return;
+    if (!exchangeEngine->handleMessage(msg, makeExchangeActions()))
         throw cRuntimeError("Unknown msg type");
+}
+
+void Hcf::finish()
+{
+    if (heRuntime != nullptr)
+        heRuntime->finish();
+    cSimpleModule::finish();
 }
 
 void Hcf::handleBlockAckInactivityTimeout()
@@ -321,49 +1553,132 @@ void Hcf::handleBlockAckInactivityTimeout()
 
 void Hcf::handleDeferredStartRxTimeout()
 {
-    responseService.handleDeferredStartRxTimeout(makeResponseServiceActions());
+    exchangeEngine->handleDeferredStartRxTimeout(makeExchangeActions());
 }
 
 void Hcf::processResponseAndCancelStartRxTimerIfCompleted(Packet *packet, IReceiveStep *receiveStep)
 {
-    responseService.processResponseAndCancelStartRxTimerIfCompleted(
-            packet, receiveStep, makeResponseServiceActions());
+    exchangeEngine->processResponseAndCancelStartRxTimerIfCompleted(
+            packet, receiveStep, makeExchangeActions());
 }
 
-HcfResponseService::Actions Hcf::makeResponseServiceActions()
+HcfExchangeEngine::Actions Hcf::makeExchangeActions()
 {
-    HcfResponseService::Actions actions;
-    actions.isSequenceRunning = [this] () { return frameSequenceHandler->isSequenceRunning(); };
-    actions.getCurrentStep = [this] () -> const IFrameSequenceStep * {
-        if (exchangeCoordinator.getExpectedResponseStep() != nullptr)
-            return exchangeCoordinator.getExpectedResponseStep();
-        return frameSequenceHandler->isSequenceRunning() ?
-                frameSequenceHandler->getContext()->getLastStep() : nullptr;
-    };
+    HcfExchangeEngine::Actions actions;
     actions.isReceptionInProgress = [this] () { return isReceptionInProgress(); };
-    actions.isStartRxTimerScheduled = [this] () {
-        return exchangeCoordinator.getStartRxTimer()->isScheduled();
+    actions.transmitFrame = [this] (Packet *packet, simtime_t ifs) { transmitFrame(packet, ifs); };
+    actions.originatorProcessRtsProtectionFailed = [this] (Packet *packet) { originatorProcessRtsProtectionFailed(packet); };
+    actions.originatorProcessTransmittedFrame = [this] (Packet *packet) { originatorProcessTransmittedFrame(packet); };
+    actions.originatorProcessReceivedFrame = [this] (Packet *packet, Packet *lastTransmittedPacket) {
+        originatorProcessReceivedFrame(packet, lastTransmittedPacket);
     };
-    actions.processResponse = [this] (Packet *packet) { frameSequenceHandler->processResponse(packet); };
-    actions.handleStartRxTimeout = [this] () { frameSequenceHandler->handleStartRxTimeout(); };
+    actions.originatorProcessFailedFrame = [this] (Packet *packet) { originatorProcessFailedFrame(packet); };
+    actions.frameSequenceStarted = [this] (const FrameSequenceContext *context) {
+        HcfObservationSink::frameSequenceStarted(this, context);
+    };
+    actions.frameSequenceFinished = [this] (const FrameSequenceContext *) { frameSequenceFinished(); };
+    actions.exchangeTerminated = [this] (HcfTransactionIdentity identity,
+            HcfExchangeAbortReason abortReason) {
+        if (exchangeTerminalSinkForTesting)
+            exchangeTerminalSinkForTesting(identity, abortReason);
+        else
+            runtime->getExchangeSelector().exchangeTerminated(identity, abortReason);
+    };
+    actions.resumeContention = [this] { resumeContention(); };
     actions.discardResponse = [this] (Packet *packet) {
         EV_INFO << "This frame is not for us" << std::endl;
         PacketDropDetails details;
         details.setReason(NOT_ADDRESSED_TO_US);
-        emit(packetDroppedSignal, packet, &details);
+        HcfObservationSink::packetDropped(this, packet, &details);
         delete packet;
     };
-    actions.cancelStartRxTimer = [this] () {
-        cancelEvent(exchangeCoordinator.getStartRxTimer());
-    };
+    actions.inactivityTimeout = [this] { handleBlockAckInactivityTimeout(); };
+    actions.cancelTimer = [this] (cMessage *timer) { cancelEvent(timer); };
+    actions.scheduleTimer = [this] (simtime_t timeout, cMessage *timer) { scheduleAfter(timeout, timer); };
+    actions.rescheduleTimer = [this] (simtime_t timeout, cMessage *timer) { rescheduleAfter(timeout, timer); };
     return actions;
+}
+
+void Hcf::replaceFrameSequenceHandler(
+        std::unique_ptr<IFrameSequenceHandler> frameSequenceHandler)
+{
+    exchangeEngine->replaceFrameSequenceHandler(std::move(frameSequenceHandler));
+}
+
+void Hcf::installRecipientBlockAckHandlerForTesting(
+        std::unique_ptr<IRecipientBlockAckAgreementHandler> handler)
+{
+    recipientBlockAckAgreementHandler = std::move(handler);
+    recipientAckProcedure = std::make_unique<RecipientAckProcedure>();
+    recipientBlockAckProcedure = std::make_unique<RecipientBlockAckProcedure>();
+}
+
+void Hcf::installOriginatorBlockAckHandlerForTesting(
+        std::unique_ptr<IOriginatorBlockAckAgreementHandler> handler)
+{
+    originatorBlockAckAgreementHandler = std::move(handler);
+    if (originatorBlockAckProcedure == nullptr)
+        originatorBlockAckProcedure = std::make_unique<OriginatorBlockAckProcedure>();
+}
+
+void Hcf::processRecipientBlockAckRequestForTesting(Packet *packet,
+        const Ptr<const Ieee80211MultiTidBlockAckReq>& header,
+        MultiTidBlockAckResponseFormat responseFormat, uint16_t responseAid)
+{
+    recipientBlockAckProcedure->processReceivedBlockAckReq(packet, header,
+            recipientAckPolicy, recipientBlockAckAgreementHandler.get(), this,
+            responseFormat, responseAid);
+}
+
+void Hcf::startExchangeFrameSequence(IFrameSequence *frameSequence,
+        FrameSequenceContext *context)
+{
+    exchangeEngine->startFrameSequence(frameSequence, context, makeExchangeActions());
+}
+
+bool Hcf::isFrameSequenceRunning() const
+{
+    return exchangeEngine != nullptr && exchangeEngine->isSequenceRunning();
+}
+
+const FrameSequenceContext *Hcf::getFrameSequenceContext() const
+{
+    if (testActionPort.getFrameSequenceContext)
+        return testActionPort.getFrameSequenceContext();
+    return exchangeEngine == nullptr ? nullptr : exchangeEngine->getContext();
+}
+
+const IFrameSequence *Hcf::getFrameSequenceForLegacyAdapter() const
+{
+    return exchangeEngine == nullptr ? nullptr :
+            exchangeEngine->getFrameSequenceForLegacyAdapter();
+}
+
+IFrameSequenceHandler::ICallback *Hcf::getFrameSequenceCallbackForLegacyAdapter() const
+{
+    return exchangeEngine->getFrameSequenceCallbackForLegacyAdapter();
+}
+
+cMessage *Hcf::getStartRxTimerForTest() const
+{
+    return exchangeEngine->getStartRxTimerForTest();
+}
+
+bool Hcf::hasDeferredStartRxTimeoutForTest() const
+{
+    return exchangeEngine->hasDeferredStartRxTimeout();
+}
+
+void Hcf::clearExchangeTimerStateForTest()
+{
+    exchangeEngine->clearTimerStateForTest();
 }
 
 void Hcf::refreshDisplay() const
 {
     ModeSetListener::refreshDisplay();
-    if (frameSequenceHandler->isSequenceRunning()) {
-        auto history = frameSequenceHandler->getFrameSequence()->getHistory();
+    if (isFrameSequenceRunning()) {
+        auto history = getFrameSequenceForLegacyAdapter()->getHistory();
         getDisplayString().setTagArg("tt", 0, ("Fs: " + history).c_str());
     }
     else {
@@ -374,89 +1689,70 @@ void Hcf::refreshDisplay() const
 void Hcf::processUpperFrame(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header)
 {
     Enter_Method("processUpperFrame(%s)", packet->getName());
-    take(packet);
-    EV_INFO << "Processing upper frame: " << packet->getName() << endl;
-    // TODO
-    // A QoS STA should send individually addressed Management frames that are addressed to a non-QoS STA
-    // using the access category AC_BE and shall send all other management frames using the access category
-    // AC_VO. A QoS STA that does not send individually addressed Management frames that are addressed to a
-    // non-QoS STA using the access category AC_BE shall send them using the access category AC_VO.
-    // Management frames are exempted from any and all restrictions on transmissions arising from admission
-    // control procedures.
-    AccessCategory ac = AccessCategory(-1);
-    if (dynamicPtrCast<const Ieee80211MgmtHeader>(header)) // TODO + non-QoS frames
-        // IEEE Std 802.11-2024, 10.2.3.2: QoS STAs send most Management
-        // frames using AC_VO; individually addressed Management frames to a
-        // non-QoS STA may use AC_BE.
-        ac = AccessCategory::AC_VO;
-    else if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header))
+    HcfIngressOwnershipActions ownershipActions(this);
+    HcfIngressService::Actions actions;
+    AccessCategory classifiedAccessCategory = AccessCategory(-1);
+    actions.ownership = &ownershipActions;
+    actions.packetClaimed = [this, packet] {
+        EV_INFO << "Processing upper frame: " << packet->getName() << endl;
+    };
+    actions.classifyDataFrame = [this] (const Ptr<const Ieee80211DataHeader>& dataHeader) {
         // IEEE Std 802.11-2024, 10.23.2.1: EDCA maps UP/TID to one of the
         // four AC transmit queues and runs one EDCAF per AC.
-        ac = edca->classifyFrame(dataHeader);
-    else
-        throw cRuntimeError("Unknown message type");
-    EV_INFO << "The upper frame has been classified as a " << printAccessCategory(ac) << " frame." << endl;
-
-    if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header))
+        return edca->classifyFrame(dataHeader);
+    };
+    actions.frameClassified = [this, &classifiedAccessCategory] (AccessCategory ac) {
+        classifiedAccessCategory = ac;
+        EV_INFO << "The upper frame has been classified as a " << printAccessCategory(ac) << " frame." << endl;
+    };
+    actions.tagMacSapServiceDataUnit = [this] (Packet *packet,
+            const Ptr<const Ieee80211DataHeader>& dataHeader) {
         tagMacSapServiceDataUnit(packet, dataHeader);
-    
-    // Determine if this frame should use per-STA queue (HE OFDMA scheduling).
-    // Only AP+ax mode uses per-STA queues; all other cases use shared EDCAF queues.
-    queueing::IPacketQueue *pendingQueue = nullptr;
-    MacAddress destMac = header->getReceiverAddress();
-    
-    if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
-        // Check if unicast (not multicast or broadcast)
-        if (!destMac.isMulticast() && !destMac.isBroadcast()) {
-            pendingQueue = resolvePerStaQueue(destMac, ac);
-            
-            // Add original enqueue timestamp if not already present
-            if (!packet->findTag<OrigEnqueueTimeTag>()) {
-                auto timeTag = packet->addTagIfAbsent<OrigEnqueueTimeTag>();
-                timeTag->setEnqueueTime(simTime());
-            }
-        }
-    }
-    
-    // Fallback to shared queue if per-STA queue not available
-    if (!pendingQueue) {
-        pendingQueue = edca->getEdcaf(ac)->getPendingQueue();
-    }
-    
-    // IEEE Std 802.11-2024, 10.23.2.2: queuing a frame for an empty AC can
-    // invoke the EDCAF backoff procedure; Edcaf owns AIFS/CW/backoff timing.
-    pendingQueue->enqueuePacket(packet);
-    if (hasFrameToTransmit(ac)) {
-        auto edcaf = edca->getChannelOwner();
-        // A different AC must not contend while a local EDCAF owns an active
-        // frame sequence. Queue it now; frameSequenceFinished() resumes all
-        // eligible ACs after releasing the current TXOP.
-        if (edcaf == nullptr && !frameSequenceHandler->isSequenceRunning()) {
-            EV_DETAIL << "Requesting channel for access category " << printAccessCategory(ac) << endl;
-            exchangeCoordinator.channelAccessRequested();
-            edca->requestChannelAccess(ac, this);
-        }
-    }
-}
-
-void Hcf::scheduleStartRxTimer(simtime_t timeout)
-{
-    Enter_Method("scheduleStartRxTimer");
-    auto responseStep = frameSequenceHandler->isSequenceRunning() ?
-            frameSequenceHandler->getContext()->getLastStep() : nullptr;
-    exchangeCoordinator.awaitResponse(responseStep);
-    responseService.responseTimerScheduled();
-    cancelEvent(exchangeCoordinator.getStartRxTimer());
-    scheduleAfter(timeout, exchangeCoordinator.getStartRxTimer());
+    };
+    actions.resolvePerStaQueue = [this] (const MacAddress& address, AccessCategory ac) {
+        return resolvePerStaQueue(address, ac);
+    };
+    actions.getSharedQueue = [this] (AccessCategory ac) {
+        return edca->getEdcaf(ac)->getPendingQueue();
+    };
+    actions.ensureOriginalEnqueueTime = [] (Packet *packet) {
+        if (!packet->findTag<OrigEnqueueTimeTag>())
+            packet->addTagIfAbsent<OrigEnqueueTimeTag>()->setEnqueueTime(simTime());
+    };
+    actions.hasFrameToTransmit = [this] (AccessCategory ac) { return hasFrameToTransmit(ac); };
+    actions.hasChannelOwner = [this] { return edca->getChannelOwner() != nullptr; };
+    actions.isSequenceRunning = [this] { return isFrameSequenceRunning(); };
+    actions.channelAccessRequested = [this, &classifiedAccessCategory] {
+        EV_DETAIL << "Requesting channel for access category "
+                  << printAccessCategory(classifiedAccessCategory) << endl;
+        exchangeEngine->channelAccessRequested();
+    };
+    actions.requestChannelAccess = [this] (AccessCategory ac) {
+        edca->requestChannelAccess(ac, this);
+    };
+    ingressService.processUpperFrame(packet, header, actions);
 }
 
 void Hcf::scheduleInactivityTimer(simtime_t timeout)
 {
     Enter_Method("scheduleInactivityTimer");
-    auto deadline = simTime() + timeout;
-    if (!exchangeCoordinator.getInactivityTimer()->isScheduled() ||
-            deadline < exchangeCoordinator.getInactivityTimer()->getArrivalTime())
-        rescheduleAfter(timeout, exchangeCoordinator.getInactivityTimer());
+    exchangeEngine->scheduleInactivityTimer(timeout, makeExchangeActions());
+}
+
+bool Hcf::processFeaturePhyIndication(Packet *packet)
+{
+    if (txRxInterceptor == nullptr)
+        return false;
+    auto result = txRxInterceptor->processPhyIndication(packet);
+    IHcfTxRxInterceptor::validateResult(result);
+    return result.disposition != IHcfTxRxInterceptor::Disposition::CONTINUE_COMMON;
+}
+
+bool Hcf::isExpectingIntactAmpduResponse() const
+{
+    return isFrameSequenceRunning() &&
+            dynamic_cast<const ReceiveCollectionStep *>(
+                    exchangeEngine->getCurrentStep()) != nullptr;
 }
 
 void Hcf::processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
@@ -469,6 +1765,7 @@ void Hcf::processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>&
         auto ndpIndication = packet->findTag<physicallayer::Ieee80211NdpInd>();
         if (ndpIndication != nullptr && packet->getDataLength() == b(0) &&
                 (processHtHeaderlessNdpIndication(packet) ||
+                 processFeaturePhyIndication(packet) ||
                  processHeaderlessNdpIndication(packet))) {
             handleDeferredStartRxTimeout();
             return;
@@ -488,12 +1785,22 @@ void Hcf::processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>&
                 recipientContext != nullptr &&
                 recipientContext->getRecipientParameters() != nullptr &&
                 recipientContext->getRecipientParameters()->ndpFeedbackReport;
-        auto receiveStep = edcaf && frameSequenceHandler->isSequenceRunning() ?
-                dynamic_cast<IReceiveStep *>(frameSequenceHandler->getContext()->getLastStep()) : nullptr;
+        auto receiveStep = isFrameSequenceRunning() ?
+                dynamic_cast<IReceiveStep *>(const_cast<IFrameSequenceStep *>(
+                        exchangeEngine->getCurrentStep())) : nullptr;
         if (intactAmpdu && receiveStep != nullptr && receiveStep->acceptsHeaderlessFrame(packet)) {
             processResponseAndCancelStartRxTimerIfCompleted(packet, receiveStep);
             handleDeferredStartRxTimeout();
             return;
+        }
+        if (intactAmpdu && receiveStep != nullptr && txRxInterceptor != nullptr) {
+            auto result = txRxInterceptor->processRejectedHeaderlessResponse(packet,
+                    receiveStep->getHeaderlessResponseFamily());
+            IHcfTxRxInterceptor::validateResult(result);
+            if (result.disposition != IHcfTxRxInterceptor::Disposition::CONTINUE_COMMON) {
+                handleDeferredStartRxTimeout();
+                return;
+            }
         }
         if (intactAmpdu) {
             recipientProcessReceivedFrame(packet, header);
@@ -505,7 +1812,7 @@ void Hcf::processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>&
             // ordinary receiver-address test. Only the active NFRP collection
             // may opt into this path; it validates Trigger ID, timing,
             // tone-set, STS, and duplicate AID.
-            responseService.processResponse(packet, makeResponseServiceActions());
+            exchangeEngine->processResponse(packet, makeExchangeActions());
             handleDeferredStartRxTimeout();
             return;
         }
@@ -514,14 +1821,15 @@ void Hcf::processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>&
         handleDeferredStartRxTimeout();
         return;
     }
-    if (edcaf && frameSequenceHandler->isSequenceRunning()) {
+    if (edcaf && isFrameSequenceRunning()) {
         // IEEE Std 802.11-2024, 10.23.2.2 plus 10.3.2.9/10.3.2.11:
         // EDCA treats the MPDU exchange as failed unless the timeout sees a
         // response from the expected recipient (or a control response without TA).
         // TODO always call processResponse?
-        auto receiveStep = dynamic_cast<IReceiveStep *>(frameSequenceHandler->getContext()->getLastStep());
-        responseService.processResponseAccordingToPolicy(packet, isForUs(header),
-                receiveStep, makeResponseServiceActions());
+        auto receiveStep = dynamic_cast<IReceiveStep *>(const_cast<IFrameSequenceStep *>(
+                exchangeEngine->getCurrentStep()));
+        exchangeEngine->processResponseAccordingToPolicy(packet, isForUs(header),
+                receiveStep, makeExchangeActions());
     }
     else if (hcca->isOwning())
         throw cRuntimeError("Hcca is unimplemented!");
@@ -531,7 +1839,7 @@ void Hcf::processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>&
         EV_INFO << "This frame is not for us" << std::endl;
         PacketDropDetails details;
         details.setReason(NOT_ADDRESSED_TO_US);
-        emit(packetDroppedSignal, packet, &details);
+        HcfObservationSink::packetDropped(this, packet, &details);
         delete packet;
     }
     handleDeferredStartRxTimeout();
@@ -542,7 +1850,7 @@ void Hcf::channelGranted(IChannelAccess *channelAccess)
     Enter_Method("channelGranted");
     auto edcaf = check_and_cast<Edcaf *>(channelAccess);
     if (edcaf) {
-        if (frameSequenceHandler->isSequenceRunning()) {
+        if (isFrameSequenceRunning()) {
             EV_WARN << "Channel access granted while another EDCAF frame sequence is running. "
                     << "Releasing channel; queued traffic will resume after the current TXOP.\n";
             edcaf->releaseChannel(this);
@@ -556,29 +1864,79 @@ void Hcf::channelGranted(IChannelAccess *channelAccess)
         }
         AccessCategory ac = edcaf->getAccessCategory();
         EV_DETAIL << "Channel access granted to the " << printAccessCategory(ac) << " queue" << std::endl;
-        if (!hasFrameToTransmit(ac)) {
-            EV_DETAIL << "Channel access granted to the " << printAccessCategory(ac) << " queue, but no eligible frame to transmit. Releasing channel.\n";
-            edcaf->releaseChannel(this);
-            return;
-        }
-        auto internallyCollidedEdcafs = edca->getInternallyCollidedEdcafs();
+        const bool hasEligibleFrame = hasFrameToTransmit(ac);
+        auto internallyCollidedEdcafs = hasEligibleFrame ?
+                edca->getInternallyCollidedEdcafs() : std::vector<Edcaf *>();
         if (internallyCollidedEdcafs.size() > 0) {
             EV_INFO << "Internal collision happened with the following queues:" << std::endl;
             handleInternalCollision(internallyCollidedEdcafs);
-            emit(edcaCollisionDetectedSignal, (unsigned long)internallyCollidedEdcafs.size());
+            HcfObservationSink::edcaCollisionDetected(this,
+                    (unsigned long)internallyCollidedEdcafs.size());
         }
-        if (shouldRestartWideChannelAccess(edcaf)) {
+        if (hasEligibleFrame && shouldRestartWideChannelAccess(edcaf)) {
             edcaf->restartChannelAccess(this);
             return;
         }
-        exchangeCoordinator.channelGranted();
+        exchangeEngine->channelGranted();
         // IEEE Std 802.11-2024, 10.23.2.3 and 10.23.2.4: an EDCAF whose
         // backoff reaches zero obtains an EDCA TXOP for its primary AC.
         edcaf->getTxopProcedure()->startTxop(ac);
-        startFrameSequence(ac);
+        auto transactionIdentity = exchangeEngine->getActiveTransactionIdentity();
+        auto selectionContext = buildGrantSelectionContext(ac, hasEligibleFrame);
+        runtime->getExchangeSelector().selectAndCommit(selectionContext,
+                transactionIdentity);
     }
     else
         throw cRuntimeError("Channel access granted but channel owner not found!");
+}
+
+HcfContext Hcf::buildGrantSelectionContext(AccessCategory accessCategory,
+        bool hasEligibleFrame)
+{
+    if (heRuntime != nullptr)
+        return heRuntime->buildGrantSelectionContext(accessCategory, hasEligibleFrame);
+    if (vhtRuntime != nullptr)
+        return vhtRuntime->buildGrantSelectionContext(accessCategory, hasEligibleFrame);
+    auto htSoundingModeIdentity = hasEligibleFrame ?
+            prepareHtSoundingModeIdentity(accessCategory) :
+            std::optional<std::string>();
+    if (htSoundingModeIdentity.has_value())
+        return HcfContext(accessCategory, {HcfExchangeClass::HT_SOUNDING},
+                htSoundingModeIdentity);
+    return HcfContext(accessCategory, {hasEligibleFrame ?
+            HcfExchangeClass::SINGLE_USER : HcfExchangeClass::CHANNEL_RELEASE});
+}
+
+void Hcf::commitSelectedExchange(HcfExchangeClass exchangeClass,
+        const HcfContext& context)
+{
+    if (heRuntime != nullptr) {
+        heRuntime->commitSelectedExchange(exchangeClass, context);
+        return;
+    }
+    if (vhtRuntime != nullptr && vhtRuntime->commitSelectedExchange(exchangeClass, context))
+        return;
+    auto selectedAccessCategory = context.getSelectionAccessCategory();
+    if (!selectedAccessCategory.has_value())
+        throw cRuntimeError("HCF provider commit lacks an access category projection");
+    auto accessCategory = *selectedAccessCategory;
+    if (exchangeClass == HcfExchangeClass::CHANNEL_RELEASE) {
+        auto edcaf = edca->getEdcaf(accessCategory);
+        exchangeEngine->preparationCompletedWithoutSequence(makeExchangeActions());
+        edcaf->releaseChannel(this);
+        edcaf->getTxopProcedure()->endTxop();
+    }
+    else if (exchangeClass == HcfExchangeClass::HT_SOUNDING) {
+        if (!context.getHtSoundingModeIdentity().has_value())
+            throw cRuntimeError("HT sounding commit lacks its immutable mode projection");
+        startHtSoundingExchange(accessCategory,
+                *context.getHtSoundingModeIdentity());
+    }
+    else if (exchangeClass == HcfExchangeClass::SINGLE_USER)
+        startSingleUserExchange(accessCategory);
+    else
+        throw cRuntimeError("Common HCF cannot commit amendment exchange class %d",
+                static_cast<int>(exchangeClass));
 }
 
 bool Hcf::shouldRestartWideChannelAccess(Edcaf *edcaf)
@@ -620,59 +1978,8 @@ FrameSequenceContext *Hcf::buildContext(AccessCategory ac)
 
 std::vector<Packet *> Hcf::getHtImplicitBlockAckFrames(Edcaf *edcaf) const
 {
-    if (!isHtImplicitBlockAckEnabled())
-        return {};
-    auto frameToTransmit = edcaf->getInProgressFrames()->getFrameToTransmit();
-    if (frameToTransmit == nullptr)
-        return {};
-    auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(
-            frameToTransmit->peekAtFront<Ieee80211MacHeader>());
-    if (dataHeader == nullptr || dataHeader->getFragmentNumber() != 0 ||
-            dataHeader->getMoreFragments())
-        return {};
-
-    auto modeReq = frameToTransmit->findTag<Ieee80211ModeReq>();
-    auto mode = modeReq == nullptr ? rateSelection->computeMode(
-            frameToTransmit, frameToTransmit->peekAtFront<Ieee80211MacHeader>(),
-            edcaf->getTxopProcedure()) : modeReq->getMode();
-    auto phyFamily = modeSet->getPhyFamily(mode);
-    if (phyFamily != Ieee80211PhyFamily::HT && phyFamily != Ieee80211PhyFamily::VHT &&
-        phyFamily != Ieee80211PhyFamily::HE && phyFamily != Ieee80211PhyFamily::EHT)
-        return {};
-    int maxAmpduLengthExponent = getMaxAmpduLengthExponent(
-            dataHeader->getReceiverAddress(), 3, phyFamily);
-    long long maxAggregateLength = (1LL << (13 + maxAmpduLengthExponent)) - 1;
-    auto frames = edcaf->getInProgressFrames()->getEligibleFramesLike(
-            frameToTransmit, 64, std::numeric_limits<int>::max());
-    std::vector<Packet *> ampduFrames;
-    for (auto frame : frames) {
-        auto frameHeader = frame->peekAtFront<Ieee80211DataHeader>();
-        OriginatorBlockAckAgreement *agreement = nullptr;
-        if (originatorBlockAckAgreementHandler)
-            agreement = originatorBlockAckAgreementHandler->getAgreement(
-                    frameHeader->getReceiverAddress(), frameHeader->getTid());
-        // IEEE Std 802.11-2024, 10.12.2: an HT A-MPDU member is limited to
-        // 4095 octets, and the aggregate limit is enforced below using the
-        // exact delimiter/padding representation used for transmission.
-        if (frame->getTotalLength() > B(4095) ||
-                frameHeader->getFragmentNumber() != 0 || frameHeader->getMoreFragments() ||
-                originatorAckPolicy->computeAckPolicy(frame, frameHeader, agreement) != AckPolicy::BLOCK_ACK)
-            break;
-        ampduFrames.push_back(frame);
-    }
-    if (ampduFrames.empty())
-        return {};
-
-    auto aggregateLength = HcfAggregationService::calculateAmpduLength(ampduFrames);
-    while (ampduFrames.size() > 1 &&
-            (aggregateLength.get<B>() > maxAggregateLength ||
-             mode->getDuration(aggregateLength) > mode->getPpduMaxDuration())) {
-        auto previousSubframeLength = B(4) + ampduFrames[ampduFrames.size() - 2]->getTotalLength();
-        auto previousSubframePadding = B((4 - previousSubframeLength.get<B>() % 4) % 4);
-        aggregateLength -= B(4) + ampduFrames.back()->getTotalLength() + previousSubframePadding;
-        ampduFrames.pop_back();
-    }
-    return ampduFrames;
+    return htFeature->selectImplicitBlockAckFrames(edcaf, aggregationService,
+            par("useImplicitBlockAck").boolValue());
 }
 
 int Hcf::getMaxAmpduLengthExponent(const MacAddress& peer,
@@ -691,17 +1998,16 @@ int Hcf::getMaxAmpduLengthExponent(const MacAddress& peer,
             if (negotiated && negotiated->localTxPeerRx.valid)
                 exponent = negotiated->localTxPeerRx.receiverMaxAmpduLengthExponent;
         }
-        else if (phyFamily == Ieee80211PhyFamily::HE || phyFamily == Ieee80211PhyFamily::EHT) {
+        else if (phyFamily == Ieee80211PhyFamily::HE ||
+                phyFamily == Ieee80211PhyFamily::EHT) {
             auto negotiated = mib->getNegotiatedHeCapabilities(peer);
             if (negotiated && negotiated->localTxPeerRx.valid)
                 exponent = negotiated->localTxPeerRx.receiverMaxAmpduLengthExponent;
         }
     }
     auto configuredExponent = originatorDataService->getMaxAmpduLengthExponent();
-    if (configuredExponent.has_value())
-        exponent = std::min(exponent,
-                *configuredExponent);
-    return exponent;
+    return configuredExponent.has_value() ?
+            std::min(exponent, *configuredExponent) : exponent;
 }
 
 bool Hcf::isLegacyHtMultiTidBlockAckEnabled() const
@@ -716,266 +2022,8 @@ bool Hcf::isLegacyHtMultiTidBlockAckEnabled() const
 
 bool Hcf::isHtImplicitBlockAckEnabled() const
 {
-    if (!par("useImplicitBlockAck").boolValue() || modeSet == nullptr)
-        return false;
-    for (int i = 0; i < modeSet->getNumModes(); i++) {
-        if (physicallayer::Ieee80211ModeSet::isHighThroughputMode(modeSet->getMode(i)))
-            return true;
-    }
-    return false;
-}
-
-bool Hcf::mayStartHtSounding(const MacAddress& peer,
-        const IIeee80211Mode *mode) const
-{
-    if (!enableHtSounding || htRateControl == nullptr || mode == nullptr ||
-            peer.isMulticast() || modeSet->getPhyFamily(mode) != Ieee80211PhyFamily::HT)
-        return false;
-    if (!htSoundingRetryState.isAttemptAllowed(peer, simTime()))
-        return false;
-    auto mib = mac->getMib();
-    auto negotiated = mib->getNegotiatedHtCapabilities(peer);
-    if (!negotiated || !negotiated->localTxPeerRx.valid ||
-            mib->getHtAssociationGeneration(peer) == 0 ||
-            !negotiated->localTxPeerRx.htcSupported ||
-            !negotiated->localTxPeerRx.mcsRequestAllowed ||
-            !negotiated->localTxPeerRx.transmitterCanSendNdp ||
-            !negotiated->localTxPeerRx.receiverCanReceiveNdp ||
-            negotiated->localTxPeerRx.mcsNss.maxMcsPerNss[htSoundingNsts - 1] < 0)
-        return false;
-    auto capability = htSoundingFeedbackKind == Ieee80211HtFeedbackKind::CSI ?
-            negotiated->localTxPeerRx.explicitCsiFeedback :
-            htSoundingFeedbackKind == Ieee80211HtFeedbackKind::NONCOMPRESSED_BEAMFORMING ?
-            negotiated->localTxPeerRx.explicitNoncompressedFeedback :
-            negotiated->localTxPeerRx.explicitCompressedFeedback;
-    return isImmediateHtFeedback(capability);
-}
-
-bool Hcf::processHtNdpAnnouncement(Packet *packet,
-        const Ptr<const Ieee80211DataHeader>& header)
-{
-    if (header->getType() != ST_QOS_NULL || !header->getOrder() ||
-            !header->getHtMcsControlPresent() || !header->getHtNdpAnnouncement())
-        return false;
-    pendingHtSounding.clear();
-    auto peer = header->getTransmitterAddress();
-    auto mib = mac->getMib();
-    auto negotiated = mib->getNegotiatedHtCapabilities(peer);
-    auto modeInd = packet->findTag<Ieee80211ModeInd>();
-    auto provenance = packet->findTag<Ieee80211PhyProvenanceInd>();
-    auto kindValue = header->getHtCsiSteering();
-    if (!enableHtSounding || htRateControl == nullptr || !negotiated ||
-            !negotiated->localRxPeerTx.valid || !negotiated->localRxPeerTx.htcSupported ||
-            !negotiated->localRxPeerTx.mcsRequestAllowed ||
-            !negotiated->localRxPeerTx.transmitterCanSendNdp ||
-            !negotiated->localRxPeerTx.receiverCanReceiveNdp ||
-            !header->getHtMcsRequest() ||
-            header->getHtMcsRequestSequenceIdentifier() > 6 ||
-            kindValue < 1 || kindValue > 3 || modeInd == nullptr ||
-            modeSet->getPhyFamily(modeInd->getMode()) != Ieee80211PhyFamily::HT ||
-            provenance == nullptr || provenance->getTransmitterRadioId() < 0)
-        return true;
-    auto kind = static_cast<Ieee80211HtFeedbackKind>(kindValue);
-    auto capability = kind == Ieee80211HtFeedbackKind::CSI ?
-            negotiated->localRxPeerTx.explicitCsiFeedback :
-            kind == Ieee80211HtFeedbackKind::NONCOMPRESSED_BEAMFORMING ?
-            negotiated->localRxPeerTx.explicitNoncompressedFeedback :
-            negotiated->localRxPeerTx.explicitCompressedFeedback;
-    if (!isImmediateHtFeedback(capability))
-        return true;
-    HtSoundingPendingState::Snapshot pending;
-    pending.valid = true;
-    pending.peer = peer;
-    pending.associationGeneration = mib->getHtAssociationGeneration(peer);
-    pending.requestToken = header->getHtMcsRequestSequenceIdentifier();
-    pending.soundingNsts = htSoundingNsts;
-    pending.feedbackKind = kind;
-    pending.channelWidth = modeInd->getMode()->getDataMode()->getBandwidth();
-    pending.transmitterRadioId = provenance->getTransmitterRadioId();
-    pending.announcementReceptionEnd = provenance->getEndTime();
-    pendingHtSounding.setSnapshot(pending);
-    return true;
-}
-
-bool Hcf::processHtHeaderlessNdpIndication(Packet *packet)
-{
-    auto indication = packet->findTag<Ieee80211NdpInd>();
-    if (indication == nullptr || indication->getPhyFormat() != IEEE80211_NDP_PHY_HT)
-        return false;
-    const auto pending = pendingHtSounding.getSnapshot();
-    const auto feedbackKind = pending.feedbackKind;
-    auto provenance = packet->findTag<Ieee80211PhyProvenanceInd>();
-    auto snir = packet->findTag<SnirInd>();
-    auto expectedStart = pending.announcementReceptionEnd + modeSet->getSifsTime();
-    bool valid = enableHtSounding && htRateControl != nullptr &&
-            pending.valid && provenance != nullptr && snir != nullptr &&
-            indication->getSounding() &&
-            provenance->getTransmitterRadioId() == pending.transmitterRadioId &&
-            std::abs((provenance->getStartTime() - expectedStart).raw()) <= modeSet->getSlotTime().raw() &&
-            Hz(indication->getChannelWidth()) == pending.channelWidth &&
-            indication->getNumberOfSpaceTimeStreams() == pending.soundingNsts &&
-            indication->getNumberOfLtfSymbols() ==
-                    (pending.soundingNsts == 3 ? 4 : pending.soundingNsts) &&
-            std::isfinite(snir->getMinimumSnir()) && snir->getMinimumSnir() > 0 &&
-            std::isfinite(snir->getAverageSnir()) && snir->getAverageSnir() > 0;
-    auto negotiated = valid ? mac->getMib()->getNegotiatedHtCapabilities(
-            pending.peer) : std::optional<Ieee80211NegotiatedHtCapabilities>();
-    valid &= negotiated.has_value() &&
-            mac->getMib()->getHtAssociationGeneration(pending.peer) ==
-                    pending.associationGeneration;
-    if (valid) {
-        int maxPerStreamMcs = negotiated->localRxPeerTx.mcsNss.maxMcsPerNss[
-                pending.soundingNsts - 1];
-        valid = maxPerStreamMcs >= 0;
-        if (valid) {
-            double snirDb = 10 * std::log10(snir->getMinimumSnir());
-            int perStreamMcs = std::clamp(static_cast<int>((snirDb - 4) / 3),
-                    0, maxPerStreamMcs);
-            uint8_t recommendedMcs = 8 * (pending.soundingNsts - 1) +
-                    perStreamMcs;
-            auto measurement = HtCsiCache::deriveMeasurement(
-                    snir->getMinimumSnir(), snir->getAverageSnir(), recommendedMcs,
-                    pending.soundingNsts,
-                    indication->getNumberOfLtfSymbols(), feedbackKind);
-            // Keep the first two report octets explicitly reversible by the
-            // originator; remaining octets retain deterministic packet-level CSI.
-            measurement.reportBytes[0] = std::clamp<int>(
-                    std::lround((snirDb + 20) * 4), 0, 255);
-            if (measurement.reportBytes.size() > 1)
-                measurement.reportBytes[1] = recommendedMcs;
-            htRateControl->getHtCsiCache().update(pending.peer,
-                    pending.channelWidth,
-                    pending.associationGeneration,
-                    pending.soundingNsts,
-                    pending.requestToken, measurement);
-
-            // The MRQ was received before this NDP populated the cache. Re-run
-            // the request against the completed measurement and send its MFB
-            // explicitly, so an idle beamformee does not have to wait for a
-            // later QoS data packet to carry the feedback.
-            auto requestMode = modeSet->findHtMode(0,
-                    pending.soundingNsts, pending.channelWidth, false);
-            Ieee80211HtMcsControl mfbControl;
-            if (requestMode != nullptr) {
-                htRateControl->processReceivedHtMcsRequest(pending.peer,
-                        pending.requestToken, requestMode);
-                if (htRateControl->getPendingHtMcsControl(pending.peer,
-                        false, true, mfbControl) && mfbControl.mcsFeedbackSequenceIdentifier < 7) {
-                    htMfbTransmissionState.setPending(pending.peer, mfbControl);
-                }
-            }
-            if (htMfbTransmissionState.getPending().peer.isUnspecified()) {
-                mfbControl.mcsFeedbackSequenceIdentifier = pending.requestToken;
-                mfbControl.mcsFeedback = recommendedMcs;
-                htMfbTransmissionState.setPending(pending.peer, mfbControl);
-            }
-
-            Ptr<Ieee80211HtMimoFeedback> feedback;
-            if (feedbackKind == Ieee80211HtFeedbackKind::CSI)
-                feedback = makeShared<Ieee80211HtCsiFeedback>();
-            else if (feedbackKind == Ieee80211HtFeedbackKind::NONCOMPRESSED_BEAMFORMING)
-                feedback = makeShared<Ieee80211HtNoncompressedBeamformingFeedback>();
-            else
-                feedback = makeShared<Ieee80211HtCompressedBeamformingFeedback>();
-            feedback->setNc(1);
-            feedback->setNr(pending.soundingNsts);
-            feedback->setChannelWidth(pending.channelWidth.get());
-            feedback->setGrouping(1);
-            feedback->setCoefficientSize(
-                    feedbackKind == Ieee80211HtFeedbackKind::COMPRESSED_BEAMFORMING ? 0 : 4);
-            feedback->setCodebookInformation(0);
-            feedback->setRemainingMatrixSegments(0);
-            // Packet-level TSF surrogate: the simulator clock is expressed in
-            // microseconds, matching the lower 32 bits carried by the HT MIMO
-            // Control field. MSI/MFSI remains the independent MRQ/MFB token.
-            feedback->setSoundingTimestamp(static_cast<uint32_t>(
-                    simTime().inUnit(SIMTIME_US)));
-            feedback->setReportArraySize(measurement.reportBytes.size());
-            for (size_t i = 0; i < measurement.reportBytes.size(); i++)
-                feedback->setReport(i, measurement.reportBytes[i]);
-            feedback->setChunkLength(B(8 + measurement.reportBytes.size()));
-            auto header = makeShared<Ieee80211ActionFrame>();
-            header->setType(ST_NOACKACTION);
-            header->setCategory(7);
-            header->setReceiverAddress(pending.peer);
-            header->setTransmitterAddress(mac->getAddress());
-            header->setAddress3(mac->getMib()->getBssid());
-            auto response = new Packet("HT-MIMO-Feedback", header);
-            response->insertAtBack(feedback);
-            response->insertAtBack(makeShared<Ieee80211MacTrailer>());
-            response->addTag<Ieee80211ModeReq>()->setMode(
-                    modeSet->getSlowestMandatoryMode(MHz(20)));
-            // IEEE Std 802.11-2024, 9.6.11 and 10.33: immediate typed HT
-            // CSI/noncompressed/compressed feedback follows the sounding NDP.
-            tx->transmitFrame(response, header, modeSet->getSifsTime(), this);
-            delete response;
-        }
-    }
-    pendingHtSounding.clear();
-    delete packet;
-    return true;
-}
-
-void Hcf::sendStandaloneHtMfb()
-{
-    const auto pending = htMfbTransmissionState.getPending();
-    if (pending.peer.isUnspecified() ||
-            pending.control.mcsFeedbackSequenceIdentifier >= 7)
-        return;
-    auto header = makeShared<Ieee80211DataHeader>();
-    header->setType(ST_QOS_NULL);
-    header->setReceiverAddress(pending.peer);
-    header->setTransmitterAddress(mac->getAddress());
-    header->setAddress3(mac->getMib()->getBssid());
-    header->setAckPolicy(NO_ACK);
-    header->setOrder(true);
-    header->setHtMcsControlPresent(true);
-    header->setHtMcsFeedbackSequenceIdentifier(
-            pending.control.mcsFeedbackSequenceIdentifier);
-    header->setHtMcsFeedback(pending.control.mcsFeedback);
-    header->setChunkLength(B(30));
-    auto packet = new Packet("HT-MFB", header);
-    packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
-    packet->addTag<Ieee80211ModeReq>()->setMode(
-            modeSet->getSlowestMandatoryMode(MHz(20)));
-    htMfbTransmissionState.startStandaloneTransmission();
-    tx->transmitFrame(packet, header, modeSet->getSifsTime(), this);
-    delete packet;
-    htMfbTransmissionState.clearPending();
-}
-
-void Hcf::attachPendingHtMcsControl(Packet *packet, const IIeee80211Mode *mode)
-{
-    if (htRateControl == nullptr || mode == nullptr ||
-            modeSet->getPhyFamily(mode) != Ieee80211PhyFamily::HT)
-        return;
-    auto header = dynamicPtrCast<const Ieee80211DataHeader>(packet->peekAtFront());
-    if (header == nullptr || (header->getType() != ST_DATA_WITH_QOS &&
-            header->getType() != ST_QOS_NULL) || header->getHtMcsControlPresent() ||
-            header->getOperatingModePresent() || header->getBufferStatusPresent())
-        return;
-    auto negotiated = mac->getMib()->getNegotiatedHtCapabilities(
-            header->getReceiverAddress());
-    if (!negotiated || !negotiated->localTxPeerRx.valid ||
-            !negotiated->localTxPeerRx.htcSupported)
-        return;
-    Ieee80211HtMcsControl control;
-    if (!htRateControl->getPendingHtMcsControl(header->getReceiverAddress(),
-            negotiated->localTxPeerRx.mcsRequestAllowed,
-            negotiated->localTxPeerRx.mcsFeedbackAllowed, control))
-        return;
-    auto mutableHeader = packet->removeAtFront<Ieee80211DataHeader>();
-    mutableHeader->setOrder(true);
-    mutableHeader->setHtMcsControlPresent(true);
-    mutableHeader->setHtTrainingRequest(control.trainingRequest);
-    mutableHeader->setHtMcsRequest(control.mcsRequest);
-    mutableHeader->setHtMcsRequestSequenceIdentifier(control.mcsRequestSequenceIdentifier);
-    mutableHeader->setHtMcsFeedbackSequenceIdentifier(control.mcsFeedbackSequenceIdentifier);
-    mutableHeader->setHtMcsFeedback(control.mcsFeedback);
-    mutableHeader->setHtCsiSteering(control.csiSteering);
-    mutableHeader->setHtNdpAnnouncement(control.ndpAnnouncement);
-    mutableHeader->setChunkLength(mutableHeader->getChunkLength() + B(4));
-    packet->insertAtFront(mutableHeader);
+    return htFeature->isImplicitBlockAckEnabled(
+            par("useImplicitBlockAck").boolValue());
 }
 
 TxopProcedure::InitialProtection Hcf::selectInitialProtection(Packet *frame,
@@ -991,39 +2039,59 @@ TxopProcedure::InitialProtection Hcf::selectInitialProtection(Packet *frame,
             negotiatedHt ? &*negotiatedHt : nullptr);
 }
 
-void Hcf::startFrameSequence(AccessCategory ac)
+std::optional<std::string> Hcf::prepareHtSoundingModeIdentity(
+        AccessCategory ac) const
 {
-    exchangeCoordinator.beginPreparation();
     auto edcaf = edca->getEdcaf(ac);
     auto txop = edcaf->getTxopProcedure();
     auto frameToTransmit = edcaf->getInProgressFrames()->getFrameToTransmit();
-    if (frameToTransmit != nullptr) {
-        auto frameHeader = frameToTransmit->peekAtFront<Ieee80211MacHeader>();
-        auto existingMode = frameToTransmit->findTag<physicallayer::Ieee80211ModeReq>();
-        auto firstMode = existingMode == nullptr ?
-                rateSelection->computeMode(frameToTransmit, frameHeader, txop) :
-                existingMode->getMode();
-        setFrameMode(frameToTransmit, frameHeader, firstMode);
-        auto peer = frameHeader->getReceiverAddress();
-        if (mayStartHtSounding(peer, firstMode)) {
-            // The sounding exchange is a complete frame sequence of its own,
-            // so establish the TXOP protection state before handing control to
-            // it.  Otherwise transmitFrame() would observe the sentinel
-            // UNDEFINED_PROTECTION value on the first NDP announcement.
-            if (!txop->isProtectionConfigured())
-                txop->configureProtection(TxopProcedure::InitialProtection::NONE);
-            auto generation = mac->getMib()->getHtAssociationGeneration(peer);
-            auto token = htSoundingRetryState.recordAttempt(peer, simTime(), htSoundingRetryInterval);
-            auto ndpMode = modeSet->getHtNdpMode(firstMode, htSoundingNsts);
-            auto sequence = new HtSoundingFs(mac->getMib(),
-                    &htRateControl->getHtCsiCache(), peer, generation, token,
-                    htSoundingNsts, htSoundingFeedbackKind, modeSet, ndpMode);
-            frameSequenceHandler->startFrameSequence(sequence, buildContext(ac), this);
-            emit(IFrameSequenceHandler::frameSequenceStartedSignal,
-                    frameSequenceHandler->getContext());
-            return;
+    if (frameToTransmit == nullptr)
+        return std::nullopt;
+    auto frameHeader = frameToTransmit->peekAtFront<Ieee80211MacHeader>();
+    auto existingMode = frameToTransmit->findTag<physicallayer::Ieee80211ModeReq>();
+    auto firstMode = existingMode == nullptr ?
+            rateSelection->computeMode(frameToTransmit, frameHeader, txop) :
+            existingMode->getMode();
+    return htFeature->isSoundingEligible(
+            frameHeader->getReceiverAddress(), firstMode) ?
+            std::optional<std::string>(firstMode->getName()) : std::nullopt;
+}
+
+void Hcf::startHtSoundingExchange(AccessCategory ac,
+        const std::string& modeIdentity)
+{
+    exchangeEngine->beginPreparation();
+    auto edcaf = edca->getEdcaf(ac);
+    auto txop = edcaf->getTxopProcedure();
+    auto frameToTransmit = edcaf->getInProgressFrames()->getFrameToTransmit();
+    if (frameToTransmit == nullptr)
+        throw cRuntimeError("Prepared HT sounding exchange lost its source frame");
+    auto frameHeader = frameToTransmit->peekAtFront<Ieee80211MacHeader>();
+    const physicallayer::IIeee80211Mode *firstMode = nullptr;
+    for (int i = 0; i < modeSet->getNumModes(); i++)
+        if (modeIdentity == modeSet->getMode(i)->getName()) {
+            firstMode = modeSet->getMode(i);
+            break;
         }
-    }
+    if (firstMode == nullptr)
+        throw cRuntimeError("Prepared HT sounding mode '%s' is no longer available",
+                modeIdentity.c_str());
+    setFrameMode(frameToTransmit, frameHeader, firstMode);
+    auto sequence = htFeature->createSoundingSequence(
+            frameHeader->getReceiverAddress(), firstMode);
+    if (sequence == nullptr)
+        throw cRuntimeError("Prepared HT sounding exchange became ineligible before commit");
+    if (!txop->isProtectionConfigured())
+        txop->configureProtection(TxopProcedure::InitialProtection::NONE);
+    startExchangeFrameSequence(sequence, buildContext(ac));
+}
+
+void Hcf::startSingleUserExchange(AccessCategory ac)
+{
+    exchangeEngine->beginPreparation();
+    auto edcaf = edca->getEdcaf(ac);
+    auto txop = edcaf->getTxopProcedure();
+    auto frameToTransmit = edcaf->getInProgressFrames()->getFrameToTransmit();
     if (!txop->isProtectionConfigured()) {
         auto initialProtection = TxopProcedure::InitialProtection::NONE;
         if (frameToTransmit != nullptr) {
@@ -1042,12 +2110,38 @@ void Hcf::startFrameSequence(AccessCategory ac)
         // subset performs one initial legacy RTS/CTS exchange.
         txop->configureProtection(initialProtection);
     }
-    frameSequenceHandler->startFrameSequence(new HcfFs(), buildContext(ac), this);
-    emit(IFrameSequenceHandler::frameSequenceStartedSignal, frameSequenceHandler->getContext());
+    startExchangeFrameSequence(new HcfFs(), buildContext(ac));
+}
+
+void Hcf::startFrameSequence(AccessCategory ac)
+{
+    if (heRuntime != nullptr) {
+        heRuntime->startFrameSequence(ac);
+        return;
+    }
+    if (vhtRuntime != nullptr && !vhtRuntime->isContinuingFrameSequence()) {
+        vhtRuntime->startFrameSequence(ac);
+        return;
+    }
+    auto htSoundingModeIdentity = prepareHtSoundingModeIdentity(ac);
+    if (htSoundingModeIdentity.has_value())
+        startHtSoundingExchange(ac, *htSoundingModeIdentity);
+    else
+        startSingleUserExchange(ac);
+}
+
+bool Hcf::processHeaderlessNdpIndication(Packet *packet)
+{
+    return vhtRuntime != nullptr &&
+            vhtRuntime->processHeaderlessNdpIndication(packet);
 }
 
 void Hcf::resumeContention()
 {
+    if (testActionPort.resumeContention) {
+        testActionPort.resumeContention();
+        return;
+    }
     for (int i = 0; i < 4; ++i) {
         AccessCategory ac = (AccessCategory)i;
         if (hasFrameToTransmit(ac)) {
@@ -1063,50 +2157,34 @@ void Hcf::resumeContention()
 void Hcf::handleEdcafInternalCollision(Edcaf *edcaf)
 {
     AccessCategory ac = edcaf->getAccessCategory();
-    auto dataRecoveryProcedure = edcaf->getRecoveryProcedure();
     Packet *internallyCollidedFrame = edcaf->getInProgressFrames()->getFrameToTransmit();
     auto internallyCollidedHeader = internallyCollidedFrame->peekAtFront<Ieee80211DataOrMgmtHeader>();
     EV_INFO << printAccessCategory(ac) << " (" << internallyCollidedFrame->getName() << ")" << endl;
-    bool retryLimitReached = false;
     // IEEE Std 802.11-2024, 10.23.2.4: if two EDCAFs can initiate at the
     // same slot boundary, lower-priority ACs report internal collision and
     // invoke the backoff/retry update path from 10.23.2.2 item d).
-    if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(internallyCollidedHeader)) { // TODO QoSDataFrame
-        dataRecoveryProcedure->dataFrameTransmissionFailed(internallyCollidedFrame, dataHeader);
-        retryLimitReached = dataRecoveryProcedure->isRetryLimitReached(internallyCollidedFrame, dataHeader);
-    }
-    else if (auto mgmtHeader = dynamicPtrCast<const Ieee80211MgmtHeader>(internallyCollidedHeader)) {
+    if (dynamicPtrCast<const Ieee80211MgmtHeader>(internallyCollidedHeader))
         ASSERT(ac == AccessCategory::AC_BE);
-        edca->getMgmtAndNonQoSRecoveryProcedure()->dataOrMgmtFrameTransmissionFailed(internallyCollidedFrame, mgmtHeader, edca->getEdcaf(AccessCategory::AC_BE)->getStationRetryCounters());
-        retryLimitReached = edca->getMgmtAndNonQoSRecoveryProcedure()->isRetryLimitReached(internallyCollidedFrame, mgmtHeader);
-    }
-    else // TODO + NonQoSDataFrame
+    else if (!dynamicPtrCast<const Ieee80211DataHeader>(internallyCollidedHeader))
         throw cRuntimeError("Unknown frame");
-    if (retryLimitReached) {
-        EV_DETAIL << "The frame has reached its retry limit. Dropping it" << std::endl;
-        if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(internallyCollidedHeader))
-            dataRecoveryProcedure->retryLimitReached(internallyCollidedFrame, dataHeader);
-        else if (auto mgmtHeader = dynamicPtrCast<const Ieee80211MgmtHeader>(internallyCollidedHeader))
-            edca->getMgmtAndNonQoSRecoveryProcedure()->retryLimitReached(internallyCollidedFrame, mgmtHeader);
-        else ; // TODO + NonQoSDataFrame
-        edcaf->getInProgressFrames()->dropFrame(internallyCollidedFrame);
-        edcaf->getAckHandler()->dropFrame(internallyCollidedHeader);
-        PacketDropDetails details;
-        details.setReason(RETRY_LIMIT_REACHED);
-        details.setLimit(-1); // TODO
-        emit(packetDroppedSignal, internallyCollidedFrame, &details);
-        notifyMgmtExchangeResult(internallyCollidedFrame,
-                Ieee80211MgmtExchangeResultKind::RETRY_LIMIT_REACHED);
-        emit(linkBrokenSignal, internallyCollidedFrame);
-        if (hasFrameToTransmit(ac))
-            edcaf->requestChannel(this);
-    }
-    else
+    auto frame = HcfOriginatorService::makeFrame(internallyCollidedFrame,
+            internallyCollidedHeader);
+    HcfOriginatorActions actions(this, edcaf, ac);
+    auto result = retryService.processFailure(frame,
+            HcfOriginatorService::FailureKind::ACK_TIMEOUT,
+            HcfRetryService::FailurePath::INTERNAL_COLLISION, actions);
+    if (result.disposition != HcfOriginatorService::Disposition::STALE_OR_DUPLICATE &&
+            (result.terminalAction != HcfOriginatorService::TerminalAction::DROP_RETIRE ||
+                    hasFrameToTransmit(ac)))
         edcaf->requestChannel(this);
 }
 
 void Hcf::handleInternalCollision(std::vector<Edcaf *> internallyCollidedEdcafs)
 {
+    if (heRuntime != nullptr) {
+        heRuntime->handleInternalCollision(std::move(internallyCollidedEdcafs));
+        return;
+    }
     for (auto edcaf : internallyCollidedEdcafs)
         handleEdcafInternalCollision(edcaf);
 }
@@ -1119,11 +2197,12 @@ void Hcf::handleInternalCollision(std::vector<Edcaf *> internallyCollidedEdcafs)
 
 void Hcf::frameSequenceFinished()
 {
-    Enter_Method("frameSequenceFinished");
-    if (!exchangeCoordinator.complete())
+    if (testActionPort.frameSequenceFinished) {
+        testActionPort.frameSequenceFinished();
         return;
-    responseService.clearTimerState();
-    emit(IFrameSequenceHandler::frameSequenceFinishedSignal, frameSequenceHandler->getContext());
+    }
+    Enter_Method("frameSequenceFinished");
+    HcfObservationSink::frameSequenceFinished(this, getFrameSequenceContext());
     auto edcaf = edca->getChannelOwner();
     if (edcaf) {
         // IEEE Std 802.11-2024, 10.23.2.8 and 10.23.2.9: when the TXOP ends,
@@ -1132,8 +2211,6 @@ void Hcf::frameSequenceFinished()
         edcaf->releaseChannel(this);
         mac->sendDownPendingRadioConfigMsg(); // TODO review
         edcaf->getTxopProcedure()->endTxop();
-        exchangeCoordinator.reset();
-        resumeContention();
     }
     else if (hcca->isOwning()) {
         hcca->releaseChannel(this);
@@ -1142,349 +2219,76 @@ void Hcf::frameSequenceFinished()
     }
     else
         throw cRuntimeError("Frame sequence finished but channel owner not found!");
+    if (heRuntime != nullptr)
+        heRuntime->frameSequenceCompleted();
 }
 
 void Hcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
 {
-    if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
-        processHtNdpAnnouncement(packet, dataHeader);
-        if (htRateControl != nullptr && dataHeader->getOrder() &&
-                dataHeader->getHtMcsControlPresent()) {
-            auto peer = dataHeader->getTransmitterAddress();
-            auto receivedMode = packet->findTag<physicallayer::Ieee80211ModeInd>();
-            if (dataHeader->getHtMcsRequest())
-                htRateControl->processReceivedHtMcsRequest(peer,
-                        dataHeader->getHtMcsRequestSequenceIdentifier(),
-                        receivedMode == nullptr ? nullptr : receivedMode->getMode());
-            if (dataHeader->getHtMcsFeedbackSequenceIdentifier() < 7 &&
-                    dataHeader->getHtMcsFeedback() <= 127)
-                htRateControl->processReceivedHtMcsFeedback(peer,
-                        dataHeader->getHtMcsFeedbackSequenceIdentifier(),
-                        dataHeader->getHtMcsFeedback());
-        }
-    }
-    if (dynamicPtrCast<const Ieee80211MpduSubframeHeader>(packet->peekAtFront()) != nullptr) {
-        // IEEE Std 802.11-2024, 9.7.1 and Table 9-659: an A-MPDU is a
-        // sequence of MPDU delimiters and MPDUs; each nonfinal subframe is
-        // padded to a 4-octet boundary.
-        constexpr int parsingFlags = Chunk::PF_ALLOW_INCORRECT |
-                Chunk::PF_ALLOW_INCOMPLETE | Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED;
-        auto elicitingAmpdu = isHtImplicitBlockAckEnabled() ?
-                packet->dup() : nullptr;
-        auto receiveInd = packet->findTag<Ieee80211MpduReceiveInd>();
-        unsigned int resultIndex = 0;
-        std::vector<std::pair<Packet *, Ptr<const Ieee80211MacHeader>>>
-                receivedMpdus;
-        while (packet->getDataLength() > b(0) &&
-                dynamicPtrCast<const Ieee80211MpduSubframeHeader>(packet->peekAtFront()) != nullptr) {
-            auto delimiter = packet->popAtFront<Ieee80211MpduSubframeHeader>(
-                    b(-1), parsingFlags);
-            auto mpduLength = B(delimiter->getLength());
-            if (mpduLength == B(0))
-                // EOF/null delimiters carry no MPDU outcome and therefore do
-                // not advance the ordered receive-result index.
-                continue;
-            auto status = delimiter->isIncorrect() ? MPDU_DELIMITER_ERROR : MPDU_NOT_EVALUATED;
-            if (!delimiter->isIncorrect() && receiveInd != nullptr &&
-                    resultIndex < receiveInd->getResultsArraySize())
-                status = receiveInd->getResults(resultIndex).status;
-            if (mpduLength > packet->getDataLength()) {
-                status = MPDU_PAYLOAD_ERROR;
-                PacketDropDetails details;
-                details.setReason(INCORRECTLY_RECEIVED);
-                emit(packetDroppedSignal, packet, &details);
-            }
-            else {
-                auto mpdu = new Packet(packet->getName());
-                mpdu->copyTags(*packet);
-                mpdu->removeTagIfPresent<Ieee80211MpduReceiveInd>();
-                mpdu->insertAtBack(packet->popAtFront(mpduLength, parsingFlags));
-                auto mpduHeader = dynamicPtrCast<const Ieee80211MacHeader>(
-                        mpdu->peekAtFront(b(-1), parsingFlags));
-                if (!delimiter->isIncorrect() && receiveInd == nullptr)
-                    status = Ieee80211FcsChecker::isFcsOk(mpdu,
-                            AggregateReceptionContext::ORDINARY_FRAME) ?
-                            MPDU_SUCCESS : MPDU_FCS_ERROR;
-                if (status == MPDU_SUCCESS && mpduHeader != nullptr)
-                    receivedMpdus.emplace_back(mpdu, mpduHeader);
-                else {
-                    PacketDropDetails details;
-                    details.setReason(INCORRECTLY_RECEIVED);
-                    emit(packetDroppedSignal, mpdu, &details);
-                    delete mpdu;
-                }
-            }
-            resultIndex++;
-            int padding = (4 - (B(4) + mpduLength).get<B>() % 4) % 4;
-            if (padding > 0 && packet->getDataLength() >= B(padding))
-                packet->popAtFront(B(padding), parsingFlags);
-        }
-        std::vector<Ptr<const Ieee80211MacHeader>> decodedHeaders;
-        std::vector<Ptr<const Ieee80211DataHeader>> dataHeaders;
-        for (const auto& entry : receivedMpdus) {
-            decodedHeaders.push_back(entry.second);
-            auto dataHeader =
-                    dynamicPtrCast<const Ieee80211DataHeader>(entry.second);
-            if (dataHeader != nullptr)
-                dataHeaders.push_back(dataHeader);
-        }
-        const bool implicitBlockAckAggregate =
-                isHtImplicitBlockAckEnabled() &&
-                classifyHtAmpduAckContext(resultIndex, decodedHeaders) ==
-                        HtAmpduAckContext::IMPLICIT_BLOCK_ACK;
-        std::vector<Ptr<const Ieee80211DataHeader>> admittedDataHeaders;
-        for (const auto& dataHeader : dataHeaders)
-            if (isForUs(dataHeader))
-                admittedDataHeaders.push_back(dataHeader);
-        bool implicitBlockAckSent = implicitBlockAckAggregate &&
-                !admittedDataHeaders.empty() &&
-                dataHeaders.size() == receivedMpdus.size() &&
-                recipientBlockAckProcedure != nullptr &&
-                recipientBlockAckAgreementHandler != nullptr &&
-                recipientBlockAckProcedure->
-                        processReceivedHtImplicitBlockAckRequest(
-                                elicitingAmpdu, admittedDataHeaders,
-                                recipientBlockAckAgreementHandler.get(), this, this);
-        if (implicitBlockAckAggregate) {
-            if (!implicitBlockAckSent)
-                EV_WARN << "Not sending a response for an invalid HT implicit-BlockAck A-MPDU.\n";
-            for (const auto& entry : receivedMpdus) {
-                auto dataHeader =
-                        dynamicPtrCast<const Ieee80211DataHeader>(entry.second);
-                if (dataHeader != nullptr && isForUs(dataHeader)) {
-                    EV_INFO << "Processing HT implicit-BlockAck A-MPDU subframe "
-                            << entry.first->getName() << " as recipient.\n";
-                    emit(packetReceivedFromPeerSignal, entry.first);
-                    sendUp(recipientDataService->dataFrameReceived(entry.first,
-                            dataHeader, recipientBlockAckAgreementHandler.get()));
-                }
-                else {
-                    EV_WARN << "Dropping invalid or foreign member from an HT implicit-BlockAck A-MPDU.\n";
-                    PacketDropDetails details;
-                    details.setReason(dataHeader != nullptr && !isForUs(dataHeader) ?
-                            NOT_ADDRESSED_TO_US : OTHER_PACKET_DROP);
-                    emit(packetDroppedSignal, entry.first, &details);
-                    delete entry.first;
-                }
-            }
-        }
-        else {
-            for (const auto& entry : receivedMpdus) {
-                if (isForUs(entry.second))
-                    recipientProcessReceivedFrame(entry.first, entry.second);
-                else {
-                    EV_INFO << "Dropping foreign member from an intact A-MPDU.\n";
-                    PacketDropDetails details;
-                    details.setReason(NOT_ADDRESSED_TO_US);
-                    emit(packetDroppedSignal, entry.first, &details);
-                    delete entry.first;
-                }
-            }
-        }
-        delete elicitingAmpdu;
-        delete packet;
+    if (testActionPort.observeRecipientFrame)
+        testActionPort.observeRecipientFrame(packet, header);
+    if (vhtRuntime != nullptr && !vhtRuntime->isContinuingRecipientFrame()) {
+        vhtRuntime->recipientProcessReceivedFrame(packet, header);
         return;
     }
-
-    EV_INFO << "Processing received frame " << packet->getName() << " as recipient.\n";
-    emit(packetReceivedFromPeerSignal, packet);
-
-    bool wasHeMu = false;
-    int myAllocationIndex = -1;
-    if (auto indication = packet->findTag<Ieee80211HeRxVectorInd>();
-            indication != nullptr && indication->getRxVector() != nullptr &&
-            indication->getRxVector()->getCommon().getPpduFormat() == HE_MU_DOWNLINK) {
-        wasHeMu = true;
-        myAllocationIndex = indication->getRxVector()->getUser().getStaId().has_value() ? 0 : -1;
-    }
-
-    if (wasHeMu && myAllocationIndex != -1) {
-        bool responseSent = false;
-        bool isBlockAckPolicyData = false;
-        auto dataOrMgmtHeader = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(header);
-        if (dataOrMgmtHeader != nullptr) {
-            if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(dataOrMgmtHeader)) {
-                isBlockAckPolicyData = dataHeader->getType() == ST_DATA_WITH_QOS && dataHeader->getAckPolicy() == BLOCK_ACK;
-                if (isBlockAckPolicyData && recipientBlockAckAgreementHandler) {
-                    auto agreement = recipientBlockAckAgreementHandler->getAgreement(dataHeader->getTid(), dataHeader->getTransmitterAddress());
-                    if (agreement)
-                        recipientBlockAckAgreementHandler->qosFrameReceived(dataHeader, this);
-                    if (agreement)
-                        EV_INFO << "HeHcf: STA waits for an explicit BAR or MU-BAR Trigger before BlockAck: index = "
-                                << myAllocationIndex << endl;
-                }
-            }
-
-            if (!responseSent && !isBlockAckPolicyData && recipientAckPolicy->isAckNeeded(dataOrMgmtHeader)) {
-                auto ack = makeShared<Ieee80211AckFrame>();
-                ack->setReceiverAddress(dataOrMgmtHeader->getTransmitterAddress());
-
-                auto dummyReq = makeShared<Ieee80211BasicBlockAckReq>();
-                auto responseMode = rateSelection->computeResponseBlockAckFrameMode(packet, dummyReq);
-                simtime_t blockAckDuration = responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
-                simtime_t ifs = (myAllocationIndex + 1) * modeSet->getSifsTime() + myAllocationIndex * blockAckDuration;
-
-                auto ackMode = rateSelection->computeResponseAckFrameMode(packet, dataOrMgmtHeader);
-                simtime_t ackDuration = ackMode->getDuration(LENGTH_ACK);
-
-                simtime_t duration = dataOrMgmtHeader->getDurationField() - ifs - ackDuration;
-                if (duration < 0) duration = 0;
-                ack->setDurationField(duration);
-
-                auto ackPacket = new Packet("WlanAck", ack);
-                ackPacket->insertAtBack(makeShared<Ieee80211MacTrailer>());
-                setFrameMode(ackPacket, ack, ackMode);
-
-                EV_INFO << "HeHcf: STA sequential Ack scheduled: index = " << myAllocationIndex
-                        << ", delay = " << ifs << ", duration = " << ackDuration << endl;
-
-                tx->transmitFrame(ackPacket, ack, ifs, this);
-                delete ackPacket;
-            }
-        }
-    }
-    else {
-        if (auto dataOrMgmtHeader = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(header)) {
-            // IEEE Std 802.11-2024, 10.3.2.11: the recipient performs the
-            // immediate Ack/BlockAck procedure for received frames that require
-            // it before higher MAC delivery decisions complete.
-            auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(dataOrMgmtHeader);
-            bool isHtNdpAnnouncement = dataHeader != nullptr &&
-                    dataHeader->getType() == ST_QOS_NULL && dataHeader->getHtNdpAnnouncement();
-            if (!isHtNdpAnnouncement)
-                recipientAckProcedure->processReceivedFrame(packet, dataOrMgmtHeader,
-                        check_and_cast<IRecipientAckPolicy *>(recipientAckPolicy), this);
-        }
-    }
-
-    if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
-        if (dataHeader->getType() == ST_QOS_NULL) {
-            // QoS Null frames carry control/state information only; they are
-            // never an MSDU for the LLC service.  HT sounding announcements
-            // use this frame type to carry MRQ + NDP Announcement.
-            delete packet;
+    if (txRxInterceptor != nullptr) {
+        auto result = txRxInterceptor->processRecipientFrame(packet, header);
+        IHcfTxRxInterceptor::validateResult(result);
+        if (result.disposition != IHcfTxRxInterceptor::Disposition::CONTINUE_COMMON)
             return;
-        }
-        if (dataHeader->getType() == ST_DATA_WITH_QOS && recipientBlockAckAgreementHandler && !wasHeMu)
-            // IEEE Std 802.11-2024, 10.25.6: HT-immediate block ack state is
-            // updated for QoS Data frames covered by a block ack agreement.
-            recipientBlockAckAgreementHandler->qosFrameReceived(dataHeader, this);
-        sendUp(recipientDataService->dataFrameReceived(packet, dataHeader, recipientBlockAckAgreementHandler.get()));
     }
-    else if (auto mgmtHeader = dynamicPtrCast<const Ieee80211MgmtHeader>(header)) {
-        sendUp(recipientDataService->managementFrameReceived(packet, mgmtHeader));
-        recipientProcessReceivedManagementFrame(mgmtHeader);
+    // Amendment-specific VHT/HE preprocessing remains in the virtual overrides.
+    // Common HT preprocessing precedes recipient routing as it did before extraction.
+    if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
+        htFeature->processReceivedMcsControl(packet, dataHeader);
     }
-    else { // TODO else if (auto ctrlFrame = dynamic_cast<Ieee80211ControlFrame*>(frame))
-        sendUp(recipientDataService->controlFrameReceived(packet, header, recipientBlockAckAgreementHandler.get()));
-        recipientProcessReceivedControlFrame(packet, header);
-        delete packet;
-    }
-}
 
+    HcfRecipientActions actions(this);
+    constexpr int parsingFlags = Chunk::PF_ALLOW_INCORRECT |
+            Chunk::PF_ALLOW_INCOMPLETE | Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED;
+    bool isAmpdu = packet->getDataLength() > b(0) &&
+            dynamicPtrCast<const Ieee80211MpduSubframeHeader>(
+                    packet->peekAtFront(b(-1), parsingFlags)) != nullptr;
+    if (isAmpdu)
+        recipientService.processAmpdu(packet, isHtImplicitBlockAckEnabled() ?
+                HcfRecipientService::AggregateResponsePolicy::HT_IMPLICIT_BLOCK_ACK :
+                HcfRecipientService::AggregateResponsePolicy::ORDINARY, actions);
+    else
+        recipientService.processFrame(packet, header, actions);
+}
 void Hcf::recipientProcessReceivedControlFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
 {
-    if (auto psPoll = dynamicPtrCast<const Ieee80211PsPollFrame>(header)) {
-        if (auto twtManager = mac->getTwtManager())
-            twtManager->notifyPeerAwake(psPoll->getTransmitterAddress());
-        return;
-    }
-    if (auto rtsFrame = dynamicPtrCast<const Ieee80211RtsFrame>(header))
-        // IEEE Std 802.11-2024, 10.3.2.9: an RTS addressed to this STA can
-        // solicit a CTS after SIFS when NAV/CTS policy allows the response.
-        ctsProcedure->processReceivedRts(packet, rtsFrame, ctsPolicy, this);
-    else if (auto blockAckRequest = dynamicPtrCast<const Ieee80211BlockAckReq>(header)) {
-        // IEEE Std 802.11-2024, 10.25.3 and 10.25.6: a BlockAckReq solicits
-        // an immediate BlockAck for frames in the negotiated block ack window.
-        if (recipientBlockAckProcedure) {
-            MultiTidBlockAckResponseFormat multiTidResponseFormat =
-                    MultiTidBlockAckResponseFormat::NONE;
-            uint16_t responseAid = 0;
-            if (dynamicPtrCast<const Ieee80211MultiTidBlockAckReq>(blockAckRequest)) {
-                auto mib = mac->getMib();
-                auto negotiated = mib->getNegotiatedHeCapabilities(
-                        blockAckRequest->getTransmitterAddress());
-                bool validResponseAid =
-                        mib->getStationType() == Ieee80211Mib::STATION;
-                if (mib->getStationType() == Ieee80211Mib::ACCESS_POINT) {
-                    auto associationId = mib->getAssociationId(
-                            blockAckRequest->getTransmitterAddress());
-                    validResponseAid = associationId > 0 && associationId <= 2007;
-                    if (validResponseAid)
-                        responseAid = associationId;
-                }
-                // IEEE Std 802.11-2024, 10.25.5, 26.4.2 and 26.4.5:
-                // negotiated HE Multi-TID BARs receive Multi-STA BAs; AID 0
-                // identifies an AP originator, otherwise use the STA's AID.
-                bool heMultiTidAggregation = validResponseAid &&
-                        negotiated &&
-                        negotiated->localRxPeerTx.valid &&
-                        negotiated->localRxPeerTx.multiTidAggregation;
-                if (heMultiTidAggregation)
-                    multiTidResponseFormat = MultiTidBlockAckResponseFormat::HE_MULTI_STA;
-                else if (isLegacyHtMultiTidBlockAckEnabled())
-                    multiTidResponseFormat = MultiTidBlockAckResponseFormat::LEGACY_MULTI_TID;
-            }
-            recipientBlockAckProcedure->processReceivedBlockAckReq(packet,
-                    blockAckRequest, recipientAckPolicy,
-                    recipientBlockAckAgreementHandler.get(), this,
-                    multiTidResponseFormat, responseAid);
-        }
-    }
-    else if (dynamicPtrCast<const Ieee80211AckFrame>(header))
-        EV_WARN << "ACK frame received after timeout, ignoring it.\n"; // drop it, it is an ACK frame that is received after the ACKTimeout
-    else
-        throw cRuntimeError("Unknown control frame");
+    // IEEE Std 802.11-2024, 10.3.2.9, 10.25.3, 10.25.5 and 10.25.6.
+    HcfRecipientFrameDispatchActions actions(this);
+    frameDispatchService.dispatchRecipientControl(packet, header, actions);
 }
 
 void Hcf::recipientProcessReceivedManagementFrame(const Ptr<const Ieee80211MgmtHeader>& header)
 {
-    if (recipientBlockAckAgreementHandler && originatorBlockAckAgreementHandler) {
-        if (auto addbaRequest = dynamicPtrCast<const Ieee80211AddbaRequest>(header)) {
-            // IEEE Std 802.11-2024, 10.25.2: ADDBA Request/Response establish
-            // or modify the block ack agreement parameters for a TID.
-            recipientBlockAckAgreementHandler->processReceivedAddbaRequest(addbaRequest, recipientBlockAckAgreementPolicy, this);
-            auto agreement = recipientBlockAckAgreementHandler->getAgreement(addbaRequest->getTid(), addbaRequest->getTransmitterAddress());
-            emit(blockAckAgreementAddedSignal, agreement);
-        }
-        else if (auto addbaResp = dynamicPtrCast<const Ieee80211AddbaResponse>(header)) {
-            originatorBlockAckAgreementHandler->processReceivedAddbaResp(addbaResp, originatorBlockAckAgreementPolicy, this);
-            auto agreement = originatorBlockAckAgreementHandler->getAgreement(addbaResp->getTransmitterAddress(), addbaResp->getTid());
-            emit(blockAckAgreementAddedSignal, agreement);
-            resumeContention();
-        }
-        else if (auto delba = dynamicPtrCast<const Ieee80211Delba>(header)) {
-            if (delba->getInitiator()) {
-                auto agreement = recipientBlockAckAgreementHandler->getAgreement(delba->getTid(), delba->getReceiverAddress());
-                emit(blockAckAgreementDeletedSignal, agreement);
-                recipientBlockAckAgreementHandler->processReceivedDelba(delba, recipientBlockAckAgreementPolicy);
-            }
-            else {
-                auto agreement = originatorBlockAckAgreementHandler->getAgreement(delba->getReceiverAddress(), delba->getTid());
-                emit(blockAckAgreementDeletedSignal, agreement);
-                originatorBlockAckAgreementHandler->processReceivedDelba(delba, originatorBlockAckAgreementPolicy);
-            }
-        }
-        else
-            ; // Beacon, etc
-    }
-    else
-        ; // Optional modules
+    // IEEE Std 802.11-2024, 10.25.2.
+    HcfRecipientFrameDispatchActions actions(this);
+    frameDispatchService.dispatchRecipientManagement(header, actions);
 }
 
 void Hcf::transmissionComplete(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
 {
-    Enter_Method("transmissionComplete");
-    if (findHtActionBody<Ieee80211HtMimoFeedback>(packet) != nullptr) {
-        sendStandaloneHtMfb();
+    if (vhtRuntime != nullptr && !vhtRuntime->isContinuingTransmissionComplete()) {
+        vhtRuntime->transmissionComplete(packet, header);
         return;
     }
-    if (htMfbTransmissionState.completeStandaloneTransmission()) {
+    Enter_Method("transmissionComplete");
+    if (txRxInterceptor != nullptr) {
+        auto result = txRxInterceptor->processTransmissionComplete(packet, header);
+        IHcfTxRxInterceptor::validateResult(result);
+        if (result.disposition != IHcfTxRxInterceptor::Disposition::CONTINUE_COMMON)
+            return;
+    }
+    if (htFeature->processTransmissionComplete(packet, this)) {
         return;
     }
     auto edcaf = edca->getChannelOwner();
     if (edcaf) {
-        frameSequenceHandler->transmissionComplete();
+        exchangeEngine->transmissionComplete(makeExchangeActions());
     }
     else if (hcca->isOwning())
         throw cRuntimeError("Hcca is unimplemented!");
@@ -1494,42 +2298,26 @@ void Hcf::transmissionComplete(Packet *packet, const Ptr<const Ieee80211MacHeade
 
 void Hcf::originatorProcessRtsProtectionFailed(Packet *packet)
 {
+    if (testActionPort.originatorProcessRtsProtectionFailed) {
+        testActionPort.originatorProcessRtsProtectionFailed(packet);
+        return;
+    }
     Enter_Method("originatorProcessRtsProtectionFailed");
     auto protectedHeader = packet->peekAtFront<Ieee80211DataOrMgmtHeader>();
     auto edcaf = edca->getChannelOwner();
     if (edcaf) {
         EV_INFO << "RTS frame transmission failed\n";
-        bool retryLimitReached = false;
         // IEEE Std 802.11-2024, 10.3.2.9 and 10.23.2.2: a failed RTS/CTS
         // exchange invokes the EDCAF retry/backoff update for the protected
         // frame exchange.
-        if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(protectedHeader)) {
-            edcaf->getRecoveryProcedure()->rtsFrameTransmissionFailed(dataHeader);
-            retryLimitReached = edcaf->getRecoveryProcedure()->isRtsFrameRetryLimitReached(packet, dataHeader);
-        }
-        else if (auto mgmtHeader = dynamicPtrCast<const Ieee80211MgmtHeader>(protectedHeader)) {
-            edca->getMgmtAndNonQoSRecoveryProcedure()->rtsFrameTransmissionFailed(mgmtHeader, edcaf->getStationRetryCounters());
-            retryLimitReached = edca->getMgmtAndNonQoSRecoveryProcedure()->isRtsFrameRetryLimitReached(packet, mgmtHeader);
-        }
-        else
+        if (!dynamicPtrCast<const Ieee80211DataHeader>(protectedHeader) &&
+                !dynamicPtrCast<const Ieee80211MgmtHeader>(protectedHeader))
             throw cRuntimeError("Unknown frame"); // TODO QoSDataFrame, NonQoSDataFrame
-        if (retryLimitReached) {
-            if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(protectedHeader))
-                edcaf->getRecoveryProcedure()->retryLimitReached(packet, dataHeader);
-            else if (auto mgmtHeader = dynamicPtrCast<const Ieee80211MgmtHeader>(protectedHeader))
-                edca->getMgmtAndNonQoSRecoveryProcedure()->retryLimitReached(packet, mgmtHeader);
-            else ; // TODO nonqos data
-            edcaf->getInProgressFrames()->dropFrame(packet);
-            edcaf->getAckHandler()->dropFrame(protectedHeader);
-            EV_INFO << "Dropping RTS/CTS protected frame " << packet->getName() << ", because retry limit is reached.\n";
-            PacketDropDetails details;
-            details.setReason(RETRY_LIMIT_REACHED);
-            details.setLimit(-1); // TODO
-            emit(packetDroppedSignal, packet, &details);
-            notifyMgmtExchangeResult(packet,
-                    Ieee80211MgmtExchangeResultKind::RETRY_LIMIT_REACHED);
-            emit(linkBrokenSignal, packet);
-        }
+        auto frame = HcfOriginatorService::makeFrame(packet, protectedHeader);
+        HcfOriginatorActions actions(this, edcaf, edcaf->getAccessCategory());
+        retryService.processFailure(frame,
+                HcfOriginatorService::FailureKind::ACK_TIMEOUT,
+                HcfRetryService::FailurePath::RTS_PROTECTION, actions);
     }
     else
         throw cRuntimeError("Hcca is unimplemented!");
@@ -1556,37 +2344,59 @@ bool Hcf::processTransmittedAmpdu(Packet *packet, Edcaf *edcaf, AccessCategory a
     return true;
 }
 
+void Hcf::processDispatchedTransmittedData(Packet *packet,
+        const Ptr<const Ieee80211DataHeader>& header,
+        HcfOriginatorService::ExpectedResponse expectedResponse,
+        Edcaf *edcaf, AccessCategory accessCategory)
+{
+    auto frame = HcfOriginatorService::makeFrame(packet, header);
+    HcfOriginatorActions actions(this, edcaf, accessCategory);
+    originatorService.processTransmitted(frame, expectedResponse, actions);
+}
+
+void Hcf::processDispatchedFailure(Packet *packet,
+        const Ptr<const Ieee80211DataOrMgmtHeader>& header,
+        HcfOriginatorService::FailureKind failureKind,
+        Edcaf *edcaf, AccessCategory accessCategory)
+{
+    auto frame = HcfOriginatorService::makeFrame(packet, header);
+    HcfOriginatorActions actions(this, edcaf, accessCategory);
+    retryService.processFailure(frame, failureKind,
+            HcfRetryService::FailurePath::ORIGINATOR, actions);
+}
+
 void Hcf::originatorProcessTransmittedFrame(Packet *packet)
 {
+    if (testActionPort.originatorProcessTransmittedFrame) {
+        testActionPort.originatorProcessTransmittedFrame(packet);
+        return;
+    }
+    if (vhtRuntime != nullptr && !vhtRuntime->isContinuingTransmittedFrame()) {
+        vhtRuntime->originatorProcessTransmittedFrame(packet);
+        return;
+    }
     Enter_Method("originatorProcessTransmittedFrame");
+    if (txRxInterceptor != nullptr) {
+        auto result = txRxInterceptor->processTransmittedFrame(packet);
+        IHcfTxRxInterceptor::validateResult(result);
+        if (result.disposition != IHcfTxRxInterceptor::Disposition::CONTINUE_COMMON)
+            return;
+    }
     EV_INFO << "Processing transmitted frame " << packet->getName() << " as originator in frame sequence.\n";
-    if (packet->findTag<Ieee80211HtTransmissionReq>() != nullptr ||
-            (packet->getDataLength() > b(0) &&
-             dynamicPtrCast<const Ieee80211DataHeader>(packet->peekAtFront()) != nullptr &&
-             dynamicPtrCast<const Ieee80211DataHeader>(packet->peekAtFront())->getHtNdpAnnouncement()))
+    if (HtHcfFeature::isSoundingTransmission(packet))
         return;
     auto edcaf = edca->getChannelOwner();
     if (edcaf) {
-        edcaf->emit(packetSentToPeerSignal, packet);
+        HcfObservationSink::packetSentToPeer(edcaf, packet);
         AccessCategory ac = edcaf->getAccessCategory();
         if (isHeMuContainerPacket(packet))
             return;
         if (processTransmittedAmpdu(packet, edcaf, ac))
             return;
         auto transmittedHeader = packet->peekAtFront<Ieee80211MacHeader>();
-        if (transmittedHeader->getReceiverAddress().isMulticast()) {
-            // IEEE Std 802.11-2024, 10.3.2.11: group addressed frames do not
-            // solicit Ack/BlockAck and are considered acknowledged immediately.
-            edcaf->getRecoveryProcedure()->multicastFrameTransmitted();
-            if (auto transmittedDataOrMgmtHeader = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(transmittedHeader))
-                edcaf->getInProgressFrames()->dropFrame(packet);
-        }
-        else if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(transmittedHeader))
-            originatorProcessTransmittedDataFrame(packet, dataHeader, ac);
-        else if (auto mgmtHeader = dynamicPtrCast<const Ieee80211MgmtHeader>(transmittedHeader))
-            originatorProcessTransmittedManagementFrame(mgmtHeader, ac);
-        else // TODO Ieee80211ControlFrame
-            originatorProcessTransmittedControlFrame(transmittedHeader, ac);
+        // IEEE Std 802.11-2024, 10.3.2.11 and 10.25.3.
+        HcfOriginatorFrameDispatchActions actions(this, edcaf, ac);
+        frameDispatchService.dispatchTransmitted(packet, transmittedHeader, actions);
     }
     else if (hcca->isOwning())
         throw cRuntimeError("Hcca is unimplemented");
@@ -1597,44 +2407,28 @@ void Hcf::originatorProcessTransmittedFrame(Packet *packet)
 void Hcf::originatorProcessTransmittedDataFrame(Packet *packet, const Ptr<const Ieee80211DataHeader>& dataHeader, AccessCategory ac)
 {
     auto edcaf = edca->getEdcaf(ac);
-    edcaf->getAckHandler()->processTransmittedDataOrMgmtFrame(dataHeader);
-    if (originatorBlockAckAgreementHandler)
-        originatorBlockAckAgreementHandler->processTransmittedDataFrame(packet, dataHeader, originatorBlockAckAgreementPolicy, this);
-    if (dataHeader->getAckPolicy() == NO_ACK)
-        edcaf->getInProgressFrames()->dropFrame(packet);
+    HcfOriginatorFrameDispatchActions actions(this, edcaf, ac);
+    frameDispatchService.dispatchTransmittedData(packet, dataHeader, actions);
 }
 
 void Hcf::originatorProcessTransmittedManagementFrame(const Ptr<const Ieee80211MgmtHeader>& mgmtHeader, AccessCategory ac)
 {
     auto edcaf = edca->getEdcaf(ac);
-    if (originatorAckPolicy->isAckNeeded(mgmtHeader))
-        edcaf->getAckHandler()->processTransmittedDataOrMgmtFrame(mgmtHeader);
-    if (auto addbaReq = dynamicPtrCast<const Ieee80211AddbaRequest>(mgmtHeader)) {
-        if (originatorBlockAckAgreementHandler)
-            originatorBlockAckAgreementHandler->processTransmittedAddbaReq(addbaReq, this);
-    }
-    else if (auto addbaResp = dynamicPtrCast<const Ieee80211AddbaResponse>(mgmtHeader))
-        recipientBlockAckAgreementHandler->processTransmittedAddbaResp(addbaResp, this);
-    else if (auto delba = dynamicPtrCast<const Ieee80211Delba>(mgmtHeader)) {
-        if (delba->getInitiator())
-            originatorBlockAckAgreementHandler->processTransmittedDelba(delba);
-        else
-            recipientBlockAckAgreementHandler->processTransmittedDelba(delba);
-    }
-    else ; // TODO other mgmt frames if needed
+    HcfOriginatorFrameDispatchActions actions(this, edcaf, ac);
+    frameDispatchService.dispatchTransmittedManagement(mgmtHeader, actions);
 }
 
 void Hcf::originatorProcessTransmittedControlFrame(const Ptr<const Ieee80211MacHeader>& controlHeader, AccessCategory ac)
 {
+    if (txRxInterceptor != nullptr) {
+        auto result = txRxInterceptor->processTransmittedControl(controlHeader, ac);
+        IHcfTxRxInterceptor::validateResult(result);
+        if (result.disposition != IHcfTxRxInterceptor::Disposition::CONTINUE_COMMON)
+            return;
+    }
     auto edcaf = edca->getEdcaf(ac);
-    if (auto blockAckReq = dynamicPtrCast<const Ieee80211BlockAckReq>(controlHeader))
-        // IEEE Std 802.11-2024, 10.3.2.11 and 10.25.3: BlockAckReq frames
-        // require immediate acknowledgment by a BlockAck response.
-        edcaf->getAckHandler()->processTransmittedBlockAckReq(blockAckReq);
-    else if (auto rtsFrame = dynamicPtrCast<const Ieee80211RtsFrame>(controlHeader))
-        rtsProcedure->processTransmittedRts(rtsFrame);
-    else
-        throw cRuntimeError("Unknown control frame");
+    HcfOriginatorFrameDispatchActions actions(this, edcaf, ac);
+    frameDispatchService.dispatchTransmittedControl(controlHeader, actions);
 }
 
 void Hcf::processFailedBlockAckReq(Edcaf *edcaf,
@@ -1644,29 +2438,28 @@ void Hcf::processFailedBlockAckReq(Edcaf *edcaf,
     auto failedFrameIds = edcaf->getAckHandler()->processFailedBlockAckReq(blockAckReq);
     // IEEE Std 802.11-2024, 10.23.2.2 and 10.23.2.12.1: account each
     // exact MPDU whose expected BlockAck did not arrive before retrying it.
-    for (int i = 0; i < edcaf->getInProgressFrames()->getLength(); i++) {
-        auto packet = edcaf->getInProgressFrames()->getFrames(i);
-        auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(packet->peekAtFront<Ieee80211MacHeader>());
-        if (dataHeader == nullptr || dataHeader->getType() != ST_DATA_WITH_QOS ||
-                (requireValidSequenceNumber && !dataHeader->getSequenceNumber().isValid()))
-            continue;
-        auto id = std::make_pair(dataHeader->getReceiverAddress(), std::make_pair(dataHeader->getTid(),
-                SequenceControlField(dataHeader->getSequenceNumber().get(), dataHeader->getFragmentNumber())));
-        if (failedFrameIds.find(id) != failedFrameIds.end())
-            edcaf->getRecoveryProcedure()->dataFrameTransmissionFailed(packet, dataHeader);
-    }
+    HcfRetryService::recoverBlockAckRequestFailure(
+            edcaf->getInProgressFrames(), edcaf->getRecoveryProcedure(),
+            failedFrameIds, requireValidSequenceNumber);
 }
 
 void Hcf::originatorProcessFailedFrame(Packet *failedPacket)
 {
-    Enter_Method("originatorProcessFailedFrame");
-    if (!exchangeCoordinator.beginRetryOrRecovery(failedPacket))
+    if (testActionPort.originatorProcessFailedFrame) {
+        testActionPort.originatorProcessFailedFrame(failedPacket);
         return;
+    }
+    Enter_Method("originatorProcessFailedFrame");
+    if (txRxInterceptor != nullptr) {
+        auto result = txRxInterceptor->processFailedFrame(failedPacket);
+        IHcfTxRxInterceptor::validateResult(result);
+        if (result.disposition != IHcfTxRxInterceptor::Disposition::CONTINUE_COMMON)
+            return;
+    }
     aggregationService.discardTransmission(failedPacket);
     auto failedHeader = failedPacket->peekAtFront<Ieee80211MacHeader>();
     auto edcaf = edca->getChannelOwner();
     if (edcaf) {
-        bool retryLimitReached = false;
         if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(failedHeader)) {
             ASSERT(dataHeader->getAckPolicy() == NORMAL_ACK || dataHeader->getAckPolicy() == BLOCK_ACK);
             if (isHtImplicitBlockAckEnabled() &&
@@ -1686,105 +2479,60 @@ void Hcf::originatorProcessFailedFrame(Packet *failedPacket)
                     PacketDropDetails details;
                     details.setReason(RETRY_LIMIT_REACHED);
                     details.setLimit(-1);
-                    emit(packetDroppedSignal, frame, &details);
-                    emit(linkBrokenSignal, frame);
+                    HcfObservationSink::packetDropped(this, frame, &details);
+                    HcfObservationSink::linkBroken(this, frame);
                 }
                 return;
             }
-            EV_INFO << "Data frame transmission failed\n";
-            // IEEE Std 802.11-2024, 10.23.2.2 and 10.23.2.12: EDCA updates
-            // retry/CW state for failed initial MPDU exchanges; QoS retry
-            // counters are tracked per TID and sequence number.
-            edcaf->getRecoveryProcedure()->dataFrameTransmissionFailed(failedPacket, dataHeader);
-            retryLimitReached = edcaf->getRecoveryProcedure()->isRetryLimitReached(failedPacket, dataHeader);
-            if (dataAndMgmtRateControl) {
-                int retryCount = edcaf->getRecoveryProcedure()->getRetryCount(failedPacket, dataHeader);
-                dataAndMgmtRateControl->frameTransmitted(failedPacket, retryCount, false, retryLimitReached);
-            }
-            edcaf->getAckHandler()->processFailedFrame(dataHeader);
         }
-        else if (auto mgmtHeader = dynamicPtrCast<const Ieee80211MgmtHeader>(failedHeader)) { // TODO + NonQoS frames
-            EV_INFO << "Management frame transmission failed\n";
-            // IEEE Std 802.11-2024, 10.3.4.4: Management frames use the
-            // non-QoS SRC/LRC retry-limit rules even when carried by EDCA.
-            edca->getMgmtAndNonQoSRecoveryProcedure()->dataOrMgmtFrameTransmissionFailed(failedPacket, mgmtHeader, edcaf->getStationRetryCounters());
-            retryLimitReached = edca->getMgmtAndNonQoSRecoveryProcedure()->isRetryLimitReached(failedPacket, mgmtHeader);
-            if (dataAndMgmtRateControl) {
-                int retryCount = edca->getMgmtAndNonQoSRecoveryProcedure()->getRetryCount(failedPacket, mgmtHeader);
-                dataAndMgmtRateControl->frameTransmitted(failedPacket, retryCount, false, retryLimitReached);
-            }
-            edcaf->getAckHandler()->processFailedFrame(mgmtHeader);
-        }
-        else if (auto blockAckReq = dynamicPtrCast<const Ieee80211BlockAckReq>(failedHeader)) {
-            processFailedBlockAckReq(edcaf, blockAckReq, true);
-            return;
-        }
-        else
-            throw cRuntimeError("Unknown frame"); // TODO qos, nonqos
-        if (retryLimitReached) {
-            if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(failedHeader))
-                edcaf->getRecoveryProcedure()->retryLimitReached(failedPacket, dataHeader);
-            else if (auto mgmtHeader = dynamicPtrCast<const Ieee80211MgmtHeader>(failedHeader))
-                edca->getMgmtAndNonQoSRecoveryProcedure()->retryLimitReached(failedPacket, mgmtHeader);
-            edcaf->getInProgressFrames()->dropFrame(failedPacket);
-            edcaf->getAckHandler()->dropFrame(dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(failedHeader));
-            EV_INFO << "Dropping frame " << failedPacket->getName() << ", because retry limit is reached.\n";
-            PacketDropDetails details;
-            details.setReason(RETRY_LIMIT_REACHED);
-            details.setLimit(-1); // TODO
-            emit(packetDroppedSignal, failedPacket, &details);
-            notifyMgmtExchangeResult(failedPacket,
-                    Ieee80211MgmtExchangeResultKind::RETRY_LIMIT_REACHED);
-            emit(linkBrokenSignal, failedPacket);
-        }
-        else {
-            EV_INFO << "Retrying frame " << failedPacket->getName() << ".\n";
-            auto h = failedPacket->removeAtFront<Ieee80211DataOrMgmtHeader>();
-            h->setRetry(true);
-            failedPacket->insertAtFront(h);
-        }
+        HcfOriginatorFrameDispatchActions actions(this, edcaf,
+                edcaf->getAccessCategory());
+        frameDispatchService.dispatchOriginatorFailure(failedPacket,
+                failedHeader, actions);
     }
     else
         throw cRuntimeError("Hcca is unimplemented!");
-}
-
-void Hcf::frameSequenceAborted()
-{
-    Enter_Method("frameSequenceAborted");
-    exchangeCoordinator.abort();
 }
 
 Hcf::HtAmpduAckContext Hcf::classifyHtAmpduAckContext(
         unsigned int numAggregateMembers,
         const std::vector<Ptr<const Ieee80211MacHeader>>& headers)
 {
-    if (numAggregateMembers == 0)
-        return HtAmpduAckContext::ORDINARY;
-    for (const auto& header : headers) {
-        auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header);
-        if (dataHeader != nullptr &&
-                dataHeader->getType() == ST_DATA_WITH_QOS &&
-                dataHeader->getAckPolicy() == NORMAL_ACK)
-            return HtAmpduAckContext::IMPLICIT_BLOCK_ACK;
-    }
-    return HtAmpduAckContext::ORDINARY;
+    return HtHcfFeature::classifyAmpduAckContext(numAggregateMembers, headers) ==
+            HtHcfFeature::AmpduAckContext::IMPLICIT_BLOCK_ACK ?
+            HtAmpduAckContext::IMPLICIT_BLOCK_ACK : HtAmpduAckContext::ORDINARY;
 }
 
 void Hcf::originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastTransmittedPacket)
 {
+    if (testActionPort.originatorProcessReceivedFrame) {
+        testActionPort.originatorProcessReceivedFrame(receivedPacket,
+                lastTransmittedPacket);
+        return;
+    }
+    if (vhtRuntime != nullptr && !vhtRuntime->isContinuingReceivedFrame()) {
+        vhtRuntime->originatorProcessReceivedFrame(receivedPacket, lastTransmittedPacket);
+        return;
+    }
     if (receivedPacket == nullptr)
         return;
+    if (txRxInterceptor != nullptr) {
+        auto result = txRxInterceptor->processReceivedResponse(receivedPacket, lastTransmittedPacket);
+        IHcfTxRxInterceptor::validateResult(result);
+        if (result.disposition != IHcfTxRxInterceptor::Disposition::CONTINUE_COMMON)
+            return;
+    }
     // HT sounding feedback is an Action frame completing a headerless NDP
     // exchange.  The generic originator path expects the last transmission to
     // have a MAC header, which is not true for the HT-NDP packet.
-    if (findHtActionBody<Ieee80211HtMimoFeedback>(receivedPacket) != nullptr)
+    if (HtHcfFeature::isSoundingFeedback(receivedPacket))
         return;
     auto receivedHeader = receivedPacket->peekAtFront<Ieee80211MacHeader>();
     if (isHeMuContainerPacket(lastTransmittedPacket) && !dynamicPtrCast<const Ieee80211BlockAck>(receivedHeader))
         return;
     Enter_Method("originatorProcessReceivedFrame");
     EV_INFO << "Processing received frame " << receivedPacket->getName() << " as originator in frame sequence.\n";
-    emit(packetReceivedFromPeerSignal, receivedPacket);
+    HcfObservationSink::packetReceivedFromPeer(this, receivedPacket);
     Ptr<const Ieee80211MacHeader> lastTransmittedHeader;
     if (auto metadata = lastTransmittedPacket->findTag<Ieee80211HeMuContainerReq>();
             metadata != nullptr) {
@@ -1798,12 +2546,10 @@ void Hcf::originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastTra
     auto edcaf = edca->getChannelOwner();
     if (edcaf) {
         AccessCategory ac = edcaf->getAccessCategory();
-        if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(receivedHeader))
-            originatorProcessReceivedDataFrame(dataHeader, lastTransmittedHeader, ac);
-        else if (auto mgmtHeader = dynamicPtrCast<const Ieee80211MgmtHeader>(receivedHeader))
-            originatorProcessReceivedManagementFrame(mgmtHeader, lastTransmittedHeader, ac);
-        else
-            originatorProcessReceivedControlFrame(receivedPacket, receivedHeader, lastTransmittedPacket, lastTransmittedHeader, ac);
+        HcfOriginatorFrameDispatchActions actions(this, edcaf, ac);
+        frameDispatchService.dispatchOriginatorReceived(receivedPacket,
+                receivedHeader, lastTransmittedPacket, lastTransmittedHeader,
+                actions);
     }
     else
         throw cRuntimeError("Hcca is unimplemented!");
@@ -1811,44 +2557,25 @@ void Hcf::originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastTra
 
 void Hcf::originatorProcessReceivedManagementFrame(const Ptr<const Ieee80211MgmtHeader>& header, const Ptr<const Ieee80211MacHeader>& lastTransmittedHeader, AccessCategory ac)
 {
-    if (auto addbaResp = dynamicPtrCast<const Ieee80211AddbaResponse>(header)) {
-        if (originatorBlockAckAgreementHandler) {
-            originatorBlockAckAgreementHandler->processReceivedAddbaResp(addbaResp, originatorBlockAckAgreementPolicy, this);
-            auto agreement = originatorBlockAckAgreementHandler->getAgreement(addbaResp->getTransmitterAddress(), addbaResp->getTid());
-            emit(blockAckAgreementAddedSignal, agreement);
-            resumeContention();
-        }
-    }
-    else {
-        throw cRuntimeError("Unknown management frame");
-    }
+    auto edcaf = edca->getEdcaf(ac);
+    HcfOriginatorFrameDispatchActions actions(this, edcaf, ac);
+    frameDispatchService.dispatchOriginatorReceivedManagement(header, actions);
 }
 
 void Hcf::processReceivedBlockAck(Edcaf *edcaf,
         const Ptr<const Ieee80211BlockAck>& blockAck, AccessCategory ac)
 {
     EV_INFO << blockAck->getClassName() << " has arrived" << std::endl;
-    // IEEE Std 802.11-2024, 10.25.3 and 10.25.6.8: a received BlockAck
-    // advances originator state and drops acknowledged MPDUs from the
-    // retransmission window.
-    edcaf->getRecoveryProcedure()->blockAckFrameReceived();
-    auto ackedSeqAndFragNums = edcaf->getAckHandler()->processReceivedBlockAck(blockAck);
+    std::vector<HcfOriginatorService::Frame> candidateFrames;
     for (int i = 0; i < edcaf->getInProgressFrames()->getLength(); i++) {
         auto packet = edcaf->getInProgressFrames()->getFrames(i);
         auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(packet->peekAtFront<Ieee80211MacHeader>());
-        if (dataHeader == nullptr)
-            continue;
-        if (edcaf->getAckHandler()->getQoSDataAckStatus(dataHeader) == QosAckHandler::Status::BLOCK_ACK_ARRIVED_UNACKED)
-            edcaf->getRecoveryProcedure()->dataFrameTransmissionFailed(packet, dataHeader);
+        if (dataHeader != nullptr)
+            candidateFrames.push_back(HcfOriginatorService::makeFrame(packet,
+                    dataHeader));
     }
-    originatorProcessBlockAckResult(blockAck, ackedSeqAndFragNums, ac);
-    if (originatorBlockAckAgreementHandler)
-        originatorBlockAckAgreementHandler->processReceivedBlockAck(blockAck, this);
-    EV_TRACE << "It has acknowledged the following frames:" << std::endl;
-    for (auto it : ackedSeqAndFragNums)
-        EV_TRACE << "   sequenceNumber = " << it.second.second.getSequenceNumber() << ", fragmentNumber = " << (int)it.second.second.getFragmentNumber() << std::endl;
-    edcaf->getInProgressFrames()->dropFrames(ackedSeqAndFragNums);
-    edcaf->getAckHandler()->dropFrames(ackedSeqAndFragNums);
+    HcfOriginatorActions actions(this, edcaf, ac);
+    originatorService.processBlockAckReceived(blockAck, candidateFrames, actions);
 }
 
 void Hcf::processReceivedAck(Edcaf *edcaf,
@@ -1856,56 +2583,22 @@ void Hcf::processReceivedAck(Edcaf *edcaf,
         Packet *lastTransmittedPacket,
         const Ptr<const Ieee80211MacHeader>& lastTransmittedHeader)
 {
-    if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(lastTransmittedHeader)) {
-        if (dataAndMgmtRateControl) {
-            int retryCount;
-            if (dataHeader->getRetry())
-                retryCount = edcaf->getRecoveryProcedure()->getRetryCount(lastTransmittedPacket, dataHeader);
-            else
-                retryCount = 0;
-            dataAndMgmtRateControl->frameTransmitted(lastTransmittedPacket, retryCount, true, false);
-        }
-        // IEEE Std 802.11-2024, 10.3.2.11 and 10.23.2.2: a valid Ack
-        // addressed to the originator completes the MPDU exchange and
-        // resets the EDCAF retry/CW state for this AC.
-        edcaf->getRecoveryProcedure()->ackFrameReceived(lastTransmittedPacket, dataHeader);
-    }
-    else if (auto mgmtHeader = dynamicPtrCast<const Ieee80211MgmtHeader>(lastTransmittedHeader)) {
-        if (dataAndMgmtRateControl) {
-            int retryCount = edca->getMgmtAndNonQoSRecoveryProcedure()->getRetryCount(lastTransmittedPacket, mgmtHeader);
-            dataAndMgmtRateControl->frameTransmitted(lastTransmittedPacket, retryCount, true, false);
-        }
-        // IEEE Std 802.11-2024, 10.3.4.4: successful Management frame
-        // acknowledgment resets the applicable non-QoS retry counters.
-        edca->getMgmtAndNonQoSRecoveryProcedure()->ackFrameReceived(lastTransmittedPacket, mgmtHeader, edcaf->getStationRetryCounters());
-    }
-    else
+    auto dataOrMgmtHeader = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(
+            lastTransmittedHeader);
+    if (dataOrMgmtHeader == nullptr)
         throw cRuntimeError("Unknown frame"); // TODO qos, nonqos frame
-    auto lastTransmittedDataOrMgmtHeader = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(lastTransmittedHeader);
-    edcaf->getAckHandler()->processReceivedAck(ackFrame, lastTransmittedDataOrMgmtHeader);
-    notifyMgmtExchangeResult(lastTransmittedPacket,
-            Ieee80211MgmtExchangeResultKind::ACKNOWLEDGED);
-    edcaf->getInProgressFrames()->dropFrame(lastTransmittedPacket);
-    edcaf->getAckHandler()->dropFrame(lastTransmittedDataOrMgmtHeader);
+    auto frame = HcfOriginatorService::makeFrame(lastTransmittedPacket,
+            dataOrMgmtHeader);
+    HcfOriginatorActions actions(this, edcaf, edcaf->getAccessCategory());
+    originatorService.processAckReceived(frame, ackFrame, actions);
 }
 
 void Hcf::originatorProcessReceivedControlFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, Packet *lastTransmittedPacket, const Ptr<const Ieee80211MacHeader>& lastTransmittedHeader, AccessCategory ac)
 {
     auto edcaf = edca->getEdcaf(ac);
-    if (auto ackFrame = dynamicPtrCast<const Ieee80211AckFrame>(header))
-        processReceivedAck(edcaf, ackFrame, lastTransmittedPacket, lastTransmittedHeader);
-    else if (auto blockAck = dynamicPtrCast<const Ieee80211BlockAck>(header))
-        processReceivedBlockAck(edcaf, blockAck, ac);
-    else if (dynamicPtrCast<const Ieee80211RtsFrame>(header))
-        ; // void
-    else if (dynamicPtrCast<const Ieee80211CtsFrame>(header))
-        edcaf->getRecoveryProcedure()->ctsFrameReceived();
-    else if (header->getType() == ST_DATA_WITH_QOS)
-        ; // void
-    else if (dynamicPtrCast<const Ieee80211BlockAckReq>(header))
-        ; // void
-    else
-        throw cRuntimeError("Unknown control frame");
+    HcfOriginatorFrameDispatchActions actions(this, edcaf, ac);
+    frameDispatchService.dispatchOriginatorReceivedControl(packet, header,
+            lastTransmittedPacket, lastTransmittedHeader, actions);
 }
 
 void Hcf::originatorProcessReceivedDataFrame(const Ptr<const Ieee80211DataHeader>& header, const Ptr<const Ieee80211MacHeader>& lastTransmittedHeader, AccessCategory ac)
@@ -1928,8 +2621,10 @@ static bool isPendingQueueEligible(queueing::IPacketQueue *pendingQueue, IOrigin
     return false;
 }
 
-bool Hcf::hasFrameToTransmit(AccessCategory ac)
+bool Hcf::hasCommonFrameToTransmit(AccessCategory ac) const
 {
+    if (testActionPort.hasCommonFrameToTransmit)
+        return testActionPort.hasCommonFrameToTransmit(ac);
     if (auto twtManager = mac->getTwtManager(); twtManager != nullptr && !twtManager->isStationAwake())
         return false;
     auto edcaf = edca->getEdcaf(ac);
@@ -1939,8 +2634,16 @@ bool Hcf::hasFrameToTransmit(AccessCategory ac)
         throw cRuntimeError("Hcca is unimplemented");
 }
 
+bool Hcf::hasFrameToTransmit(AccessCategory ac)
+{
+    return heRuntime != nullptr ? heRuntime->hasFrameToTransmit(ac) :
+            hasCommonFrameToTransmit(ac);
+}
+
 bool Hcf::hasFrameToTransmit()
 {
+    if (heRuntime != nullptr)
+        return heRuntime->hasFrameToTransmit();
     if (auto twtManager = mac->getTwtManager(); twtManager != nullptr && !twtManager->isStationAwake())
         return false;
     auto edcaf = edca->getChannelOwner();
@@ -1950,12 +2653,31 @@ bool Hcf::hasFrameToTransmit()
         throw cRuntimeError("Hcca is unimplemented");
 }
 
+void Hcf::legacyPreambleReceived(const Packet *packet)
+{
+    if (heRuntime != nullptr)
+        heRuntime->legacyPreambleReceived(packet);
+}
+
+void Hcf::originatorProcessBlockAckResult(
+        const Ptr<const Ieee80211BlockAck>& blockAck,
+        const std::set<std::pair<MacAddress, std::pair<Tid, SequenceControlField>>>& ackedFrames,
+        AccessCategory ac)
+{
+    if (testActionPort.observeOriginatorBlockAckResult)
+        testActionPort.observeOriginatorBlockAckResult(blockAck, ackedFrames, ac);
+    if (heRuntime != nullptr)
+        heRuntime->originatorProcessBlockAckResult(blockAck, ackedFrames, ac);
+}
+
 void Hcf::twtServicePeriodChanged()
 {
     Enter_Method("twtServicePeriodChanged");
+    if (heRuntime != nullptr)
+        heRuntime->getHePeerStateService().handleTwtBoundary();
     // Service-period changes can coincide with a TXOP or a response wait.
     // Queue eligibility changes are picked up when that frame sequence ends.
-    if (frameSequenceHandler->isSequenceRunning() || edca->getChannelOwner() != nullptr)
+    if (isFrameSequenceRunning() || edca->getChannelOwner() != nullptr)
         return;
     for (int ac = AC_BK; ac <= AC_VO; ac++) {
         auto accessCategory = static_cast<AccessCategory>(ac);
@@ -1973,249 +2695,81 @@ void Hcf::sendUp(const std::vector<Packet *>& completeFrames)
 
 void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
 {
+    if (testActionPort.transmitFrame) {
+        testActionPort.transmitFrame(packet, ifs);
+        return;
+    }
+    if (vhtRuntime != nullptr && !vhtRuntime->isContinuingTransmitFrame()) {
+        vhtRuntime->transmitFrame(packet, ifs);
+        return;
+    }
     Enter_Method("transmitFrame");
-    exchangeCoordinator.beginTransmission(packet);
-    if (auto htRequest = packet->findTag<physicallayer::Ieee80211HtTransmissionReq>();
-            htRequest != nullptr && htRequest->getNdp()) {
+    if (htFeature->transmitNdpIfRequested(packet, ifs, this))
+        return;
+    if (txRxInterceptor != nullptr) {
+        auto result = txRxInterceptor->processTransmitRequest(packet, ifs);
+        IHcfTxRxInterceptor::validateResult(result);
+        if (result.disposition != IHcfTxRxInterceptor::Disposition::CONTINUE_COMMON)
+            return;
+    }
+    if (frameDecorator)
+        frameDecorator(packet);
+    auto channelOwner = edca->getChannelOwner();
+    if (channelOwner == nullptr)
+        throw cRuntimeError("Hcca is unimplemented");
+
+    auto txop = channelOwner->getTxopProcedure();
+    auto protection = txop->getProtectionMechanism();
+    if (protection != TxopProcedure::ProtectionMechanism::SINGLE_PROTECTION &&
+            protection != TxopProcedure::ProtectionMechanism::MULTIPLE_PROTECTION)
+        throw cRuntimeError("Undefined protection mechanism");
+
+    if (auto metadata = packet->findTag<Ieee80211HeMuContainerReq>();
+            metadata != nullptr) {
         auto header = makeShared<Ieee80211DataHeader>();
-        header->setType(ST_QOS_NULL);
         header->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
-        header->setTransmitterAddress(mac->getAddress());
-        header->setAddress3(mac->getMib()->getBssid());
+        header->setType(ST_DATA_WITH_QOS);
+        header->setDurationField(metadata->getDurationField());
+        auto modeReq = packet->findTag<Ieee80211ModeReq>();
+        if (modeReq == nullptr)
+            rateSelection->computeMode(packet, header, txop);
         tx->transmitFrame(packet, header, ifs, this);
         return;
     }
-    auto channelOwner = edca->getChannelOwner();
-    if (channelOwner) {
-        const bool isContainer = isHeMuContainerPacket(packet);
-        Ptr<const Ieee80211MacHeader> header;
-        if (auto metadata = packet->findTag<Ieee80211HeMuContainerReq>();
-                metadata != nullptr) {
-            auto metadataHeader = makeShared<Ieee80211DataHeader>();
-            metadataHeader->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
-            metadataHeader->setType(ST_DATA_WITH_QOS);
-            metadataHeader->setDurationField(metadata->getDurationField());
-            header = metadataHeader;
-        }
-        else
-            header = packet->peekAtFront<Ieee80211MacHeader>();
-        auto txop = channelOwner->getTxopProcedure();
-        auto frameSequenceContext = frameSequenceHandler->getContext();
-        auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header);
-        // IEEE Std 802.11-2024, 10.25.6.5: an HT implicit BlockAck request is
-        // an A-MPDU carrying QoS Data with Ack Policy 00 and elicits a
-        // BlockAck after SIFS. Use the frame-sequence selector's eligibility
-        // decision so aggregate construction cannot outlive its response wait.
-        bool useHtImplicitBlockAck = !isContainer && dataHeader != nullptr &&
-                frameSequenceContext != nullptr &&
-                isHtImplicitBlockAckEligible(frameSequenceContext,
-                        packet, dataHeader);
-        if (!isContainer && dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(header)) {
-            // A missing BlockAck or an unacked BlockAck bitmap entry makes the
-            // MPDU eligible again in QosAckHandler. Materialize that retry
-            // state in the transmitted MAC header before building an A-MPDU.
-            channelOwner->getAckHandler()->setRetryBitIfNeeded(packet);
-            header = packet->peekAtFront<Ieee80211MacHeader>();
-        }
-        if (!isContainer)
-          if (auto dataFrame = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
-            OriginatorBlockAckAgreement *agreement = nullptr;
-            if (originatorBlockAckAgreementHandler)
-                agreement = originatorBlockAckAgreementHandler->getAgreement(dataFrame->getReceiverAddress(), dataFrame->getTid());
-            auto ackPolicy = originatorAckPolicy->computeAckPolicy(packet, dataFrame, agreement);
-            auto dataHeader = packet->removeAtFront<Ieee80211DataHeader>();
-            // IEEE Std 802.11-2024, 10.3.2.11 and 10.25: QoS Data frames
-            // select Normal Ack, No Ack or Block Ack policy based on the frame
-            // and any active block ack agreement.
-            dataHeader->setAckPolicy(ackPolicy);
-            packet->insertAtFront(dataHeader);
-            header = packet->peekAtFront<Ieee80211MacHeader>();
-          }
 
-        Packet *packetToTransmit = packet;
-        bool deletePacketToTransmit = false;
-        auto modeReq = packet->findTag<Ieee80211ModeReq>();
-        auto mode = modeReq == nullptr ? rateSelection->computeMode(packet, header, txop) : modeReq->getMode();
-        if (!isContainer) {
-            attachPendingHtMcsControl(packet, mode);
-            header = packet->peekAtFront<Ieee80211MacHeader>();
-        }
-        if (!isContainer)
-          if (auto dataFrame = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
-            OriginatorBlockAckAgreement *agreement = nullptr;
-            if (originatorBlockAckAgreementHandler)
-                agreement = originatorBlockAckAgreementHandler->getAgreement(dataFrame->getReceiverAddress(), dataFrame->getTid());
-            auto computedAckPolicy = originatorAckPolicy != nullptr ? originatorAckPolicy->computeAckPolicy(packet, dataFrame, agreement) : dataFrame->getAckPolicy();
-            if ((dataFrame->getAckPolicy() == AckPolicy::BLOCK_ACK || computedAckPolicy == AckPolicy::BLOCK_ACK) &&
-                    txop->allowsMpduAggregation() &&
-                    !rtsPolicy->isRtsNeeded(packet, header) &&
-                    modeSet->getPhyFamily(mode) != Ieee80211PhyFamily::DSSS &&
-                    modeSet->getPhyFamily(mode) != Ieee80211PhyFamily::ERP_OFDM &&
-                    modeSet->getPhyFamily(mode) != Ieee80211PhyFamily::OFDM) {
-                std::vector<Packet *> frames;
-                if (useHtImplicitBlockAck)
-                    frames = frameSequenceContext->getHtImplicitBlockAckFrames();
-                else {
-                    int maxAmpduLengthExponent = getMaxAmpduLengthExponent(
-                            dataFrame->getReceiverAddress(), 7, modeSet->getPhyFamily(mode));
-                    long long maxAggregateLength = (1LL << (13 + maxAmpduLengthExponent)) - 1;
-                    frames = channelOwner->getInProgressFrames()->getEligibleFramesLike(
-                            packet, 64, maxAggregateLength);
-                }
-                std::vector<Packet *> ampduFrames;
-                for (auto frame : frames) {
-                    channelOwner->getAckHandler()->setRetryBitIfNeeded(frame);
-                    auto frameHeader = frame->peekAtFront<Ieee80211DataHeader>();
-                    OriginatorBlockAckAgreement *agreement = nullptr;
-                    if (originatorBlockAckAgreementHandler)
-                        agreement = originatorBlockAckAgreementHandler->getAgreement(frameHeader->getReceiverAddress(), frameHeader->getTid());
-                    auto ackPolicy = originatorAckPolicy->computeAckPolicy(frame, frameHeader, agreement);
-                    if (!useHtImplicitBlockAck && ackPolicy != AckPolicy::BLOCK_ACK)
-                        break;
-                    auto mutableHeader = frame->removeAtFront<Ieee80211DataHeader>();
-                    mutableHeader->setAckPolicy(ackPolicy);
-                    mutableHeader->setDurationField(SIMTIME_ZERO);
-                    frame->insertAtFront(mutableHeader);
-                    ampduFrames.push_back(frame);
-                }
-                auto phyFamily = modeSet->getPhyFamily(mode);
-                if (!useHtImplicitBlockAck &&
-                        (phyFamily == Ieee80211PhyFamily::HT || phyFamily == Ieee80211PhyFamily::HE)) {
-                    // IEEE Std 802.11-2024 Clause 10.13 and Tables 19-25 and
-                    // 27-61 bound HT and HE PPDUs to aPPDUMaxTime. Trim only
-                    // optional trailing MPDUs using the selected PHY mode's
-                    // authoritative duration calculation and limit.
-                    auto durationLimit = mode->getPpduMaxDuration();
-                    auto originalFrameCount = ampduFrames.size();
-                    auto aggregateLength = HcfAggregationService::calculateAmpduLength(ampduFrames);
-                    while (ampduFrames.size() > 1 &&
-                            mode->getDuration(aggregateLength) > durationLimit) {
-                        auto previousSubframeLength =
-                                B(4) + ampduFrames[ampduFrames.size() - 2]->getTotalLength();
-                        auto previousSubframePadding =
-                                B((4 - previousSubframeLength.get<B>() % 4) % 4);
-                        aggregateLength -= B(4) + ampduFrames.back()->getTotalLength() +
-                                previousSubframePadding;
-                        ampduFrames.pop_back();
-                    }
-                    if (!ampduFrames.empty() && mode->getDuration(aggregateLength) > durationLimit)
-                        throw cRuntimeError("Selected PPDU exceeds the maximum duration for the PHY mode");
-                    if (ampduFrames.size() != originalFrameCount)
-                        EV_DEBUG << "Trimmed A-MPDU from " << originalFrameCount
-                                 << " to " << ampduFrames.size()
-                                 << " MPDUs for PPDU/TXOP duration " << durationLimit << ".\n";
-                }
-                if (useHtImplicitBlockAck ? !ampduFrames.empty() : ampduFrames.size() > 1) {
-                    if (useHtImplicitBlockAck) {
-                        for (auto frame : ampduFrames) {
-                            auto mutableHeader =
-                                    frame->removeAtFront<Ieee80211DataHeader>();
-                            mutableHeader->setAckPolicy(NORMAL_ACK);
-                            // Tx cannot stamp a transmitter address after the
-                            // MPDUs have been wrapped in delimiters. Materialize
-                            // the local TA on every HT aggregate member first.
-                            mutableHeader->setTransmitterAddress(
-                                    mac->getAddress());
-                            frame->insertAtFront(mutableHeader);
-                        }
-                        header = packet->peekAtFront<Ieee80211MacHeader>();
-                    }
-                    packetToTransmit = aggregationService.materializeTransmission(
-                            packet, ampduFrames, mac->getFcsMode(),
-                            useHtImplicitBlockAck);
-                    emit(ampduCreatedSignal, packetToTransmit);
-                    emit(ampduNumMpdusSignal, (unsigned long)ampduFrames.size());
-                    deletePacketToTransmit = true;
-                }
-            }
-          }
-
-        if (!isContainer)
-            setFrameMode(packetToTransmit, header, mode);
-        if (packetToTransmit != packet &&
-                aggregationService.hasImplicitBlockAck(packet))
-            // HtAmpduBlockAckFs computes the response timeout from the
-            // in-progress first MPDU after the temporary aggregate has been
-            // transmitted. Preserve the selected mode on that descriptor too;
-            // this is ordinary rate metadata, not an implicit-BA marker.
-            setFrameMode(packet, header, mode);
-        if (!isContainer) {
-            recordSelectedMode(packetToTransmit, mode);
-            emit(IRateSelection::datarateSelectedSignal, mode->getDataMode()->getNetBitrate().get<bps>(), packetToTransmit);
-            EV_DEBUG << "Datarate for " << packetToTransmit->getName() << " is set to " << mode->getDataMode()->getNetBitrate() << ".\n";
-        }
-        if (txop->getProtectionMechanism() == TxopProcedure::ProtectionMechanism::SINGLE_PROTECTION) {
-            if (packetToTransmit == packet && !isContainer &&
-                    packet->findTag<DurationFinalizedReq>() == nullptr &&
-                    !dynamicPtrCast<const Ieee80211TriggerFrame>(header) &&
-                    !dynamicPtrCast<const Ieee80211MultiStaBlockAck>(header)) {
-                auto pendingPacket = channelOwner->getInProgressFrames()->getPendingFrameFor(packet);
-                const auto& pendingHeader = pendingPacket == nullptr ? nullptr : pendingPacket->peekAtFront<Ieee80211DataOrMgmtHeader>();
-                auto duration = singleProtectionMechanism->computeDurationField(packet, header, pendingPacket, pendingHeader, txop, recipientAckPolicy, ifs);
-                auto header = packet->removeAtFront<Ieee80211MacHeader>();
-                // IEEE Std 802.11-2024, 10.3.1, 10.3.2.6 and 10.23.2.8:
-                // Duration protects the remaining exchange or TXOP portion.
-                header->setDurationField(duration);
-                EV_DEBUG << "Duration for " << packet->getName() << " is set to " << duration << " s.\n";
-                packet->insertAtFront(header);
-            }
-        }
-        else if (txop->getProtectionMechanism() == TxopProcedure::ProtectionMechanism::MULTIPLE_PROTECTION) {
-            if (!isContainer && packet->findTag<DurationFinalizedReq>() == nullptr) {
-                auto duration = singleProtectionMechanism->computeDurationField(packet, header, nullptr, nullptr, txop, recipientAckPolicy, ifs);
-                auto mutableHeader = packet->removeAtFront<Ieee80211MacHeader>();
-                mutableHeader->setDurationField(duration);
-                packet->insertAtFront(mutableHeader);
-            }
-        }
-        else
-            throw cRuntimeError("Undefined protection mechanism");
-        tx->transmitFrame(packetToTransmit, header, ifs, this);
-        if (deletePacketToTransmit)
-            delete packetToTransmit;
-    }
-    else
-        throw cRuntimeError("Hcca is unimplemented");
+    auto header = packet->peekAtFront<Ieee80211MacHeader>();
+    HcfTransmissionPreparationService::Request request;
+    request.packet = packet;
+    request.header = header;
+    request.ifs = ifs;
+    request.protectionMechanism = protection ==
+            TxopProcedure::ProtectionMechanism::SINGLE_PROTECTION ?
+            HcfTransmissionPreparationService::ProtectionMechanism::SINGLE :
+            HcfTransmissionPreparationService::ProtectionMechanism::MULTIPLE;
+    request.durationFinalized = packet->findTag<DurationFinalizedReq>() != nullptr;
+    request.durationExemptForSingleProtection =
+            dynamicPtrCast<const Ieee80211TriggerFrame>(header) != nullptr ||
+            dynamicPtrCast<const Ieee80211MultiStaBlockAck>(header) != nullptr;
+    TransmissionPreparationActions actions(this, channelOwner, txop,
+            getFrameSequenceContext(), request.protectionMechanism);
+    auto prepared = transmissionPreparationService.prepare(request, actions);
+    transmissionPreparationService.commit(prepared, actions);
 }
 
 void Hcf::transmitControlResponseFrame(Packet *responsePacket, const Ptr<const Ieee80211MacHeader>& responseHeader, Packet *receivedPacket, const Ptr<const Ieee80211MacHeader>& receivedHeader)
 {
     Enter_Method("transmitControlResponseFrame");
     responsePacket->insertAtBack(makeShared<Ieee80211MacTrailer>());
-    const IIeee80211Mode *responseMode = nullptr;
-    if (auto rtsFrame = dynamicPtrCast<const Ieee80211RtsFrame>(receivedHeader))
-        responseMode = rateSelection->computeResponseCtsFrameMode(receivedPacket, rtsFrame);
-    else if (auto blockAckReq = dynamicPtrCast<const Ieee80211BlockAckReq>(receivedHeader))
-        responseMode = rateSelection->computeResponseBlockAckFrameMode(receivedPacket, blockAckReq);
-    else if (dynamicPtrCast<const Ieee80211BlockAck>(responseHeader) &&
-            dynamicPtrCast<const Ieee80211DataHeader>(receivedHeader)) {
-        auto dataHeader =
-                dynamicPtrCast<const Ieee80211DataHeader>(receivedHeader);
-        auto blockAckReq = makeShared<Ieee80211CompressedBlockAckReq>();
-        blockAckReq->setReceiverAddress(dataHeader->getTransmitterAddress());
-        blockAckReq->setTidInfo(dataHeader->getTid());
-        blockAckReq->setStartingSequenceNumber(
-                dataHeader->getSequenceNumber());
-        responseMode = rateSelection->computeResponseBlockAckFrameMode(
-                receivedPacket, blockAckReq);
-        auto mutableBlockAck =
-                responsePacket->removeAtFront<Ieee80211BlockAck>();
-        auto duration = receivedHeader->getDurationField() -
-                modeSet->getSifsTime() -
-                responseMode->getDuration(mutableBlockAck->getChunkLength());
-        mutableBlockAck->setDurationField(
-                duration < SIMTIME_ZERO ? SIMTIME_ZERO : duration);
-        responsePacket->insertAtFront(mutableBlockAck);
-    }
-    else if (auto dataOrMgmtHeader = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(receivedHeader))
-        responseMode = rateSelection->computeResponseAckFrameMode(receivedPacket, dataOrMgmtHeader);
-    else
-        throw cRuntimeError("Unknown received frame type");
+    HcfRecipientFrameDispatchActions actions(this);
+    auto responseMode = frameDispatchService.selectImmediateResponseMode(
+            responsePacket, responseHeader, receivedPacket, receivedHeader,
+            actions);
     // IEEE Std 802.11-2024, 10.3.2.9, 10.3.2.11 and 10.25.3: CTS, Ack and
     // BlockAck immediate responses are transmitted after SIFS.
     setFrameMode(responsePacket, responseHeader, responseMode);
     recordSelectedMode(responsePacket, responseMode);
-    emit(IRateSelection::datarateSelectedSignal, responseMode->getDataMode()->getNetBitrate().get<bps>(), responsePacket);
+    HcfObservationSink::datarateSelected(this,
+            responseMode->getDataMode()->getNetBitrate().get<bps>(), responsePacket);
     EV_DEBUG << "Datarate for " << responsePacket->getName() << " is set to " << responseMode->getDataMode()->getNetBitrate() << ".\n";
     tx->transmitFrame(responsePacket, responseHeader, modeSet->getSifsTime(), this);
     delete responsePacket;
@@ -2223,17 +2777,9 @@ void Hcf::transmitControlResponseFrame(Packet *responsePacket, const Ptr<const I
 
 void Hcf::recipientProcessTransmittedControlResponseFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
 {
-    emit(packetSentToPeerSignal, packet);
-    if (auto ctsFrame = dynamicPtrCast<const Ieee80211CtsFrame>(header))
-        ctsProcedure->processTransmittedCts(ctsFrame);
-    else if (auto blockAck = dynamicPtrCast<const Ieee80211BlockAck>(header)) {
-        if (recipientBlockAckProcedure)
-            recipientBlockAckProcedure->processTransmittedBlockAck(blockAck);
-    }
-    else if (auto ackFrame = dynamicPtrCast<const Ieee80211AckFrame>(header))
-        recipientAckProcedure->processTransmittedAck(ackFrame);
-    else
-        throw cRuntimeError("Unknown control response frame");
+    HcfObservationSink::packetSentToPeer(this, packet);
+    HcfRecipientFrameDispatchActions actions(this);
+    frameDispatchService.dispatchTransmittedControlResponse(header, actions);
     resumeContention();
 }
 
@@ -2246,12 +2792,20 @@ void Hcf::processMgmtFrame(Packet *mgmtPacket, const Ptr<const Ieee80211MgmtHead
 
 void Hcf::setFrameMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, const IIeee80211Mode *mode) const
 {
+    if (testActionPort.observeSetFrameMode)
+        testActionPort.observeSetFrameMode(packet, header, mode);
+    if (vhtRuntime != nullptr && !vhtRuntime->isContinuingSetFrameMode()) {
+        vhtRuntime->setFrameMode(packet, header, mode);
+        return;
+    }
     ASSERT(mode != nullptr);
     packet->addTagIfAbsent<Ieee80211ModeReq>()->setMode(mode);
 }
 
 bool Hcf::isReceptionInProgress()
 {
+    if (testActionPort.isReceptionInProgress)
+        return testActionPort.isReceptionInProgress();
     return rx->isReceptionInProgress();
 }
 
@@ -2270,30 +2824,52 @@ bool Hcf::isSentByUs(const Ptr<const Ieee80211MacHeader>& header) const
 void Hcf::corruptedFrameReceived()
 {
     Enter_Method("corruptedFrameReceived");
-    if (!responseService.handleCorruptedFrame(makeResponseServiceActions()))
+    if (!exchangeEngine->handleCorruptedFrame(makeExchangeActions()))
         EV_DEBUG << "Ignoring received corrupt frame.\n";
 }
 
+Hcf::Hcf() = default;
+
 Hcf::~Hcf()
 {
-    exchangeCoordinator.cancelTimers([this] (cMessage *timer) {
-        if (timer->isScheduled())
-            cancelEvent(timer);
-    });
+    heRuntime.reset();
+    vhtRuntime.reset();
+    // Drop all non-owning feature/provider references while the NED-owned
+    // feature-set submodule hierarchy is still alive.
+    runtime.reset();
+    if (exchangeEngine != nullptr)
+        exchangeEngine->cancelTimers(makeExchangeActions());
+}
+
+HeHcfRuntime& Hcf::getHeRuntime() const
+{
+    if (heRuntime == nullptr)
+        throw cRuntimeError("HE runtime is not configured");
+    return *heRuntime;
+}
+
+void Hcf::setVhtDlMuTxOpFactoryForTesting(
+        VhtHcfFeature::ITxOpFactory *factory)
+{
+    if (vhtRuntime == nullptr)
+        throw cRuntimeError("VHT runtime is not configured");
+    vhtRuntime->setTxOpFactoryForTesting(factory);
 }
 
 queueing::IPacketQueue *Hcf::getPerStaQueue(const MacAddress& staAddr, AccessCategory ac)
 {
+    if (heRuntime != nullptr)
+        return heRuntime->getPerStaQueue(staAddr, ac);
     return edca->getEdcaf(ac)->getPendingQueue();
 }
 
 void Hcf::invalidatePeerDerivedState(const MacAddress& peer)
 {
-    htSoundingRetryState.invalidate(peer);
-    pendingHtSounding.invalidate(peer);
-    htMfbTransmissionState.invalidate(peer);
-    if (htRateControl != nullptr)
-        htRateControl->invalidateHtPeer(peer);
+    htFeature->invalidatePeer(peer);
+    if (vhtRuntime != nullptr)
+        vhtRuntime->invalidatePeer(peer);
+    if (heRuntime != nullptr)
+        heRuntime->invalidatePeerDerivedState(peer);
 }
 
 } // namespace ieee80211

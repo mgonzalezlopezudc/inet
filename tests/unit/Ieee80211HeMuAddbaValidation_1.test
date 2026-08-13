@@ -281,6 +281,8 @@ static FirstTransmitStepResult runFirstTransmitStep(queueing::IPacketQueue *pend
     auto inProgress = new MockInProgressFrames();
     auto qosContext = new QoSContext(nullptr, nullptr, baHandler, nullptr);
     auto context = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), const_cast<physicallayer::Ieee80211ModeSet *>(modeSet), inProgress, nullptr, nullptr, nullptr, qosContext);
+    auto rateSelection = check_and_cast<IQosRateSelection *>(
+            callback->getSubmodule("rateSelection"));
     IIeee80211HeDlScheduler::ScheduleContext scheduleContext;
     scheduleContext.channelCenterFrequency = Hz(5.18e9);
     scheduleContext.channelBandwidth = MHz(20);
@@ -294,7 +296,7 @@ static FirstTransmitStepResult runFirstTransmitStep(queueing::IPacketQueue *pend
         IIeee80211HeDlScheduler::CandidateInfo candidate;
         candidate.staAddress = scheduledStations[i];
         candidate.anchor = i == 0;
-        candidate.sourceQueue = pendingQueue;
+        candidate.sourceQueueToken = HcfQueueToken(i + 1);
         candidate.hasAdvertisedHeCapabilities = true;
         candidate.advertisedHeCapabilities = peerCapabilities;
         candidate.hasNegotiatedHeCapabilities = true;
@@ -303,7 +305,6 @@ static FirstTransmitStepResult runFirstTransmitStep(queueing::IPacketQueue *pend
     }
     scheduleContext.anchorSta = scheduledStations.front();
     if (txopPayloadBudget > SIMTIME_ZERO) {
-        auto rateSelection = check_and_cast<IQosRateSelection *>(callback->getSubmodule("rateSelection"));
         auto dummyReq = makeShared<Ieee80211BasicBlockAckReq>();
         auto responseMode = rateSelection->computeResponseBlockAckFrameMode(nullptr, dummyReq);
         simtime_t ackSequenceDuration = SIMTIME_ZERO;
@@ -319,6 +320,7 @@ static FirstTransmitStepResult runFirstTransmitStep(queueing::IPacketQueue *pend
     ASSERT(dlPlan.has_value());
     HeDlMuTxOpFs *fs = new HeDlMuTxOpFs(*dlPlan,
             const_cast<physicallayer::Ieee80211ModeSet *>(modeSet), pendingQueue, ackHandler, callback,
+            callback, rateSelection,
             maxAmpduMpduCount, maxHeMuPsduLength, maxHeMuPpduDuration);
 
     fs->startSequence(context, 0);
@@ -618,6 +620,49 @@ Tid tid = 5;
     delete retryPacket;
 }
 
+// Test 6: HE prerequisite cancellation deletes an agreement created by the
+// reservation, while retry cancellation restores a pre-existing agreement.
+{
+    OriginatorBlockAckAgreementHandler handler;
+    MockOriginatorBlockAckAgreementPolicy policy;
+    MockProcedureCallback callback(&handler);
+    auto packet = makeDataPacket("he-addba-rollback", sta1, tid, true);
+    auto header = packet->peekAtFront<Ieee80211DataHeader>();
+
+    getSimulation()->setSimTime(SIMTIME_ZERO);
+    auto created = handler.reserveQueuedDataFramePrerequisite(packet, header, &policy);
+    requireCondition((bool)created && handler.getAgreement(sta1, tid) != nullptr,
+            "HE reservation should create pending agreement state");
+    delete created.releasePacket();
+    created.cancel();
+    requireCondition(handler.getAgreement(sta1, tid) == nullptr,
+            "HE cancellation must delete newly-created agreement state");
+
+    auto initial = handler.reserveQueuedDataFramePrerequisite(packet, header, &policy);
+    requireCondition((bool)initial, "HE retry setup should reserve an initial ADDBA request");
+    auto initialRequest = initial.getPacket()->peekAtFront<Ieee80211AddbaRequest>();
+    delete initial.releasePacket();
+    initial.commit();
+    handler.processTransmittedAddbaReq(initialRequest, &callback);
+    auto agreement = handler.getAgreement(sta1, tid);
+    requireCondition(agreement != nullptr, "HE committed reservation lost its agreement");
+
+    getSimulation()->setSimTime(policy.addbaFailureTimeout);
+    auto beforeRetry = agreement->getSnapshot();
+    auto retry = handler.reserveQueuedDataFramePrerequisite(packet, header, &policy);
+    requireCondition((bool)retry, "expired HE agreement should permit retry reservation");
+    delete retry.releasePacket();
+    retry.cancel();
+    auto afterCancel = agreement->getSnapshot();
+    requireCondition(afterCancel.generation == beforeRetry.generation &&
+            afterCancel.isAddbaRequestSent == beforeRetry.isAddbaRequestSent &&
+            afterCancel.isAddbaRequestInProgress == beforeRetry.isAddbaRequestInProgress &&
+            afterCancel.expirationTime == beforeRetry.expirationTime,
+            "HE retry cancellation must restore the existing agreement snapshot");
+    delete packet;
+    EV << "HE ADDBA rollback deleted new state and restored an existing agreement snapshot.\n";
+}
+
 clearPendingQueue(pendingQueue);
 
 %contains: stdout
@@ -655,3 +700,6 @@ Mixed destination/TID/QoS queues packed only eligible traffic.
 
 %contains: stdout
 MAC-02 fallback reference: Hcf::startFrameSequence(ac) remains the SU path while duplicate AddbaReq frames are suppressed until addbaFailureTimeout and processTransmittedDataFrame permits a retry; AC_VO classification remains in Hcf management processing.
+
+%contains: stdout
+HE ADDBA rollback deleted new state and restored an existing agreement snapshot.

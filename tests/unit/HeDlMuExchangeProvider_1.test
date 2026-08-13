@@ -1,0 +1,855 @@
+%description:
+Validates HE DL MU provider reservation, rollback, identity correlation, and typed late/duplicate outcome suppression.
+
+%includes:
+#include <map>
+
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreement.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeDlMuExchangeProvider.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuTxOpFs.h"
+#include "inet/linklayer/ieee80211/mac/queue/InProgressFrames.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
+#include "inet/queueing/contract/IPacketQueue.h"
+
+%file: TestNetwork.ned
+import inet.queueing.queue.PacketQueue;
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        queue1: PacketQueue;
+        queue2: PacketQueue;
+        queue3: PacketQueue;
+        queue4: PacketQueue;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+allow-object-stealing-on-deletion = true
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+static void requireTrue(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("%s", message);
+}
+
+class MockProviderActions : public HeDlMuExchangeProvider::IActions,
+        public HeSoundingService::IActions
+{
+  public:
+    std::map<uint64_t, queueing::IPacketQueue *> queues;
+    std::map<MacAddress, uint16_t> associationIds;
+    IOriginatorBlockAckAgreementHandler *blockAckHandler = nullptr;
+    IQosRateSelection *rateSelection = nullptr;
+    int memberTransmittedCount = 0;
+    int userOutcomeCount = 0;
+    int planningFailureCount = 0;
+    int stagedPacketCount = 0;
+    int startSingleUserCount = 0;
+    int soundingCount = 0;
+    int protectionCount = 0;
+    int startExchangeCount = 0;
+    bool singleUserEligible = true;
+    bool throwOnStart = false;
+    HcfQueueToken lastStagedQueueToken;
+    HcfPacketIdentity lastStagedPacketIdentity;
+    HeDlMuTxOpFs::AckMethod lastAckMethod = HeDlMuTxOpFs::AckMethod::MU_BAR_TRIGGER;
+    HeDlMuMember lastTransmittedMember;
+
+    virtual queueing::IPacketQueue *resolveHeDlMuQueue(HcfQueueToken token) const override
+    {
+        auto it = queues.find(token.getValue());
+        return it == queues.end() ? nullptr : it->second;
+    }
+    virtual Packet *getReservedHeDlMuPacket(uint64_t, const MacAddress&) const override { return nullptr; }
+    virtual bool isReservedHeDlMuPacket(uint64_t, const MacAddress&, const Packet *) const override { return false; }
+    virtual IOriginatorBlockAckAgreementHandler *getHeDlMuBlockAckHandler() const override { return blockAckHandler; }
+    virtual IOriginatorMacDataService *getHeDlMuOriginatorDataService() const override { return nullptr; }
+    virtual IQosRateSelection *getHeDlMuRateSelection() const override { return rateSelection; }
+    virtual MacAddress getHeDlMuTransmitterAddress() const override { return MacAddress("02:00:00:00:50:ff"); }
+    virtual int getHeDlMuFcsMode() const override { return FCS_DECLARED_CORRECT; }
+    virtual uint8_t getHeDlMuBssColor() const override { return 7; }
+    virtual uint16_t getHeDlMuAssociationId(const MacAddress& peer) const override {
+        auto it = associationIds.find(peer);
+        return it == associationIds.end() ? 0 : it->second;
+    }
+    virtual std::optional<Ieee80211NegotiatedHeCapabilities>
+            getHeDlMuNegotiatedCapabilities(const MacAddress&) const override { return std::nullopt; }
+    virtual void heDlMuPlanFinalized(uint64_t, const std::vector<HeDlMuMember>&) override {}
+    virtual void heDlMuPlanCommitted(uint64_t, Packet *, const std::vector<HeDlMuMember>&) override {}
+    virtual void heDlMuMemberTransmitted(uint64_t, const HeDlMuMember& member) override {
+        memberTransmittedCount++;
+        lastTransmittedMember = member;
+    }
+    virtual void heDlMuUserOutcome(uint64_t, const MacAddress&, HeDlMuUserOutcome) override { userOutcomeCount++; }
+    virtual void heDlMuPlanningFailed(uint64_t, AccessCategory) override { planningFailureCount++; }
+    virtual bool stageHeDlMuPacket(HcfQueueToken queueToken,
+            HcfPacketIdentity packetIdentity, AccessCategory) override {
+        stagedPacketCount++;
+        lastStagedQueueToken = queueToken;
+        lastStagedPacketIdentity = packetIdentity;
+        return true;
+    }
+    virtual bool startHeDlMuSingleUserIfEligible(AccessCategory) override {
+        if (singleUserEligible)
+            startSingleUserCount++;
+        return singleUserEligible;
+    }
+    virtual void startHeSoundingExchange(
+            const HeSoundingService::StartAction&, AccessCategory) override {
+        soundingCount++;
+    }
+    virtual void configureHeDlMuProtection(AccessCategory) override { protectionCount++; }
+    virtual void startHeDlMuExchange(AccessCategory, const HeDlMuPlan&,
+            uint64_t, HeDlMuTxOpFs::AckMethod ackMethod,
+            const HeDlMuExchangeProvider::StartupParameters&) override {
+        startExchangeCount++;
+        lastAckMethod = ackMethod;
+        if (throwOnStart)
+            throw cRuntimeError("injected startup failure");
+    }
+};
+
+class RuntimeOwnedDlCallback : public IHeDlMuExchangeCallback
+{
+  public:
+    HeDlMuExchangeProvider *provider;
+    MockProviderActions *actions;
+
+    RuntimeOwnedDlCallback(HeDlMuExchangeProvider *provider, MockProviderActions *actions) :
+        provider(provider), actions(actions) {}
+    virtual queueing::IPacketQueue *resolveHeDlMuQueue(HcfQueueToken token) const override
+        { return actions->resolveHeDlMuQueue(token); }
+    virtual Packet *getReservedHeDlMuPacket(uint64_t token, const MacAddress& peer) const override
+        { return provider->getReservedHeDlMuPacket(token, peer); }
+    virtual bool isReservedHeDlMuPacket(uint64_t token, const MacAddress& peer, const Packet *packet) const override
+        { return provider->isReservedHeDlMuPacket(token, peer, packet); }
+    virtual IOriginatorBlockAckAgreementHandler *getHeDlMuBlockAckHandler() const override
+        { return actions->getHeDlMuBlockAckHandler(); }
+    virtual IOriginatorMacDataService *getHeDlMuOriginatorDataService() const override
+        { return actions->getHeDlMuOriginatorDataService(); }
+    virtual IQosRateSelection *getHeDlMuRateSelection() const override
+        { return actions->getHeDlMuRateSelection(); }
+    virtual MacAddress getHeDlMuTransmitterAddress() const override
+        { return actions->getHeDlMuTransmitterAddress(); }
+    virtual int getHeDlMuFcsMode() const override { return actions->getHeDlMuFcsMode(); }
+    virtual uint8_t getHeDlMuBssColor() const override { return actions->getHeDlMuBssColor(); }
+    virtual uint16_t getHeDlMuAssociationId(const MacAddress& peer) const override
+        { return actions->getHeDlMuAssociationId(peer); }
+    virtual std::optional<Ieee80211NegotiatedHeCapabilities> getHeDlMuNegotiatedCapabilities(const MacAddress& peer) const override
+        { return actions->getHeDlMuNegotiatedCapabilities(peer); }
+    virtual void heDlMuPlanFinalized(uint64_t token, const std::vector<HeDlMuMember>& members) override
+        { provider->finalizeReservation(token, members); }
+    virtual void heDlMuPlanCommitted(uint64_t token, Packet *container, const std::vector<HeDlMuMember>& members) override
+        { provider->heDlMuPlanCommitted(token, container, members); }
+    virtual void heDlMuMemberTransmitted(uint64_t token, const HeDlMuMember& member) override
+        { if (provider->heDlMuMemberTransmitted(token, member, false)) actions->heDlMuMemberTransmitted(token, member); }
+    virtual void heDlMuUserOutcome(uint64_t token, const MacAddress& peer, HeDlMuUserOutcome outcome) override
+        { if (provider->heDlMuUserOutcome(token, peer, outcome, false)) actions->heDlMuUserOutcome(token, peer, outcome); }
+    virtual void heDlMuPlanningFailed(uint64_t token, AccessCategory ac) override
+        { if (provider->heDlMuPlanningFailed(token, ac, false)) actions->heDlMuPlanningFailed(token, ac); }
+};
+
+class EchoScheduler : public IIeee80211HeDlScheduler
+{
+  public:
+    bool invalid = false;
+    int commitCount = 0;
+    std::vector<RuAllocation> committedAllocations;
+    virtual std::vector<RuAllocation> schedule(const std::vector<MacAddress>&,
+            Hz, Hz) override { return {}; }
+    virtual std::vector<RuAllocation> schedule(const ScheduleContext& context) override {
+        if (invalid)
+            return {};
+        auto rus = getHeEqualRuLayout(context.channelCenterFrequency,
+                context.channelBandwidth, 9);
+        std::vector<RuAllocation> result;
+        for (size_t i = 0; i < context.candidates.size(); ++i) {
+            RuAllocation allocation;
+            allocation.staAddress = context.candidates[i].staAddress;
+            allocation.ru = rus[i];
+            allocation.estimatedDuration = SimTime(1, SIMTIME_MS);
+            result.push_back(allocation);
+        }
+        return result;
+    }
+    virtual void commitSchedule(const ScheduleContext&,
+            const std::vector<RuAllocation>& allocations) override {
+        commitCount++;
+        committedAllocations = allocations;
+    }
+};
+
+class MockFrameSequenceCallback : public IFrameSequenceHandler::ICallback
+{
+  public:
+    virtual void transmitFrame(Packet *, simtime_t) override {}
+    virtual void scheduleStartRxTimer(simtime_t) override {}
+    virtual void originatorProcessTransmittedFrame(Packet *) override {}
+    virtual void originatorProcessReceivedFrame(Packet *, Packet *) override {}
+    virtual void originatorProcessFailedFrame(Packet *) override {}
+    virtual void originatorProcessRtsProtectionFailed(Packet *) override {}
+    virtual void frameSequenceFinished() override {}
+};
+
+class MockAckHandler : public IAckHandler
+{
+  public:
+    virtual bool isEligibleToTransmit(const Ptr<const Ieee80211DataOrMgmtHeader>&) override { return true; }
+    virtual bool isOutstandingFrame(const Ptr<const Ieee80211DataOrMgmtHeader>&) override { return false; }
+    virtual bool isRetransmission(const Ptr<const Ieee80211DataOrMgmtHeader>&) override { return false; }
+    virtual void frameGotInProgress(const Ptr<const Ieee80211DataOrMgmtHeader>&) override {}
+};
+
+class MockRateSelection : public IQosRateSelection
+{
+  private:
+    const IIeee80211Mode *getMode() const {
+        return Ieee80211ModeSet::getModeSet("ax")->findHeMode(0, 1, MHz(20), false);
+    }
+
+  public:
+    virtual const IIeee80211Mode *computeResponseCtsFrameMode(Packet *, const Ptr<const Ieee80211RtsFrame>&) override { return getMode(); }
+    virtual const IIeee80211Mode *computeResponseAckFrameMode(Packet *, const Ptr<const Ieee80211DataOrMgmtHeader>&) override { return getMode(); }
+    virtual const IIeee80211Mode *computeResponseBlockAckFrameMode(Packet *, const Ptr<const Ieee80211BlockAckReq>&) override { return getMode(); }
+    virtual const IIeee80211Mode *computeMode(Packet *, const Ptr<const Ieee80211MacHeader>&, TxopProcedure *) override { return getMode(); }
+};
+
+class MockInProgressFrames : public InProgressFrames {};
+
+class MockBlockAckAgreementHandler : public IOriginatorBlockAckAgreementHandler
+{
+  public:
+    std::vector<OriginatorBlockAckAgreement *> agreements;
+    virtual ~MockBlockAckAgreementHandler() {
+        for (auto agreement : agreements)
+            delete agreement;
+    }
+    void addAgreement(const MacAddress& receiver, Tid tid) {
+        auto agreement = new OriginatorBlockAckAgreement(receiver, tid,
+                SequenceNumberCyclic(0), 64, false, false);
+        agreement->setIsAddbaResponseReceived(true);
+        agreements.push_back(agreement);
+    }
+    virtual OriginatorBlockAckAgreement *getAgreement(MacAddress receiver, Tid tid) override {
+        for (auto agreement : agreements)
+            if (agreement->getReceiverAddr() == receiver && agreement->getTid() == tid)
+                return agreement;
+        return nullptr;
+    }
+    virtual void processReceivedBlockAck(const Ptr<const Ieee80211BlockAck>&, IBlockAckAgreementHandlerCallback *) override {}
+    virtual void processTransmittedAddbaReq(const Ptr<const Ieee80211AddbaRequest>&, IBlockAckAgreementHandlerCallback *) override {}
+    virtual bool processQueuedDataFrame(Packet *, const Ptr<const Ieee80211DataHeader>&, IOriginatorBlockAckAgreementPolicy *, IProcedureCallback *) override { return false; }
+    virtual void processTransmittedDataFrame(Packet *, const Ptr<const Ieee80211DataHeader>&, IOriginatorBlockAckAgreementPolicy *, IProcedureCallback *) override {}
+    virtual void processReceivedAddbaResp(const Ptr<const Ieee80211AddbaResponse>&, IOriginatorBlockAckAgreementPolicy *, IBlockAckAgreementHandlerCallback *) override {}
+    virtual void processReceivedDelba(const Ptr<const Ieee80211Delba>&, IOriginatorBlockAckAgreementPolicy *) override {}
+    virtual void processTransmittedDelba(const Ptr<const Ieee80211Delba>&) override {}
+    virtual void blockAckAgreementExpired(IProcedureCallback *, IBlockAckAgreementHandlerCallback *) override {}
+};
+
+static Packet *makePacket(const char *name, const MacAddress& receiver)
+{
+    auto packet = new Packet(name);
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setType(ST_DATA_WITH_QOS);
+    header->setReceiverAddress(receiver);
+    header->setTid(3);
+    header->setAckPolicy(BLOCK_ACK);
+    header->setSequenceNumber(SequenceNumberCyclic(0));
+    packet->insertAtFront(header);
+    return packet;
+}
+
+static HeDlMuPlan makePlan(const std::vector<MacAddress>& stations,
+        const std::vector<int64_t>& packetIds)
+{
+    requireTrue(stations.size() >= 2 && stations.size() == packetIds.size(),
+            "provider fixture stations and packet identities must match");
+    IIeee80211HeDlScheduler::ScheduleContext context;
+    context.channelCenterFrequency = Hz(5.18e9);
+    context.channelBandwidth = MHz(20);
+    Ieee80211HeCapabilities localCapabilities;
+    Ieee80211HeCapabilities peerCapabilities;
+    localCapabilities.dlMuMimoBeamformer = true;
+    localCapabilities.soundingDimensions = 4;
+    peerCapabilities.dlMuMimoBeamformee = true;
+    context.numApAntennas = 4;
+    Ieee80211HeOperation operation;
+    operation.operatingChannelWidth = context.channelBandwidth;
+    auto negotiated = negotiateHeCapabilities(localCapabilities, peerCapabilities, operation, true);
+    context.localHeCapabilities = localCapabilities;
+    for (size_t i = 0; i < stations.size(); ++i) {
+        IIeee80211HeDlScheduler::CandidateInfo candidate;
+        candidate.staAddress = stations[i];
+        candidate.sourceQueueToken = HcfQueueToken(i + 1);
+        candidate.tid = 3;
+        auto packetId = packetIds[i];
+        if (packetId >= 0)
+            candidate.eligiblePacketIdentities.push_back(HcfPacketIdentity(packetId));
+        candidate.anchor = i == 0;
+        candidate.hasAdvertisedHeCapabilities = true;
+        candidate.advertisedHeCapabilities = peerCapabilities;
+        candidate.hasNegotiatedHeCapabilities = true;
+        candidate.negotiatedHeCapabilities = negotiated;
+        context.candidates.push_back(candidate);
+    }
+    context.anchorSta = stations.front();
+    auto rus = getHeEqualRuLayout(context.channelCenterFrequency, context.channelBandwidth, 9);
+    std::vector<IIeee80211HeDlScheduler::RuAllocation> allocations;
+    for (size_t i = 0; i < stations.size(); ++i) {
+        IIeee80211HeDlScheduler::RuAllocation allocation;
+        allocation.staAddress = stations[i];
+        allocation.ru = rus[i];
+        allocation.mcs = 0;
+        allocation.numberOfSpatialStreams = 1;
+        allocation.estimatedDuration = SimTime(1, SIMTIME_MS);
+        allocations.push_back(allocation);
+    }
+    HeMuPlanDiagnostic diagnostic;
+    auto plan = HeDlMuPlan::create(context, allocations, diagnostic);
+    requireTrue(plan.has_value(), "provider fixture plan must validate");
+    return *plan;
+}
+
+static HeDlMuPlan makePlan(const MacAddress& sta1, const MacAddress& sta2,
+        int64_t packetId1 = -1, int64_t packetId2 = -1)
+{
+    return makePlan({sta1, sta2}, {packetId1, packetId2});
+}
+
+static HeDlMuPreparationSnapshot makePreparationSnapshot(
+        const MacAddress& sta1, const MacAddress& sta2)
+{
+    auto plan = makePlan(sta1, sta2);
+    HeDlMuPreparationSnapshot snapshot;
+    snapshot.now = SimTime(10, SIMTIME_MS);
+    snapshot.common = plan.getScheduleContext();
+    snapshot.common.candidates.clear();
+    snapshot.common.maxAmpduMpduCount = 16;
+    snapshot.sequentialBar = true;
+    snapshot.localLdpc = true;
+    for (int i = 0; i < 2; ++i) {
+        HeDlMuCandidateSnapshot packet;
+        packet.packetIdentity = HcfPacketIdentity(500 + i);
+        packet.queueToken = HcfQueueToken(i + 1);
+        packet.queuePeer = i == 0 ? sta1 : sta2;
+        packet.queueIndex = 0;
+        packet.peer = packet.queuePeer;
+        packet.tid = 3;
+        packet.packetBytes = 100 + i;
+        packet.enqueueTime = SimTime(i + 1, SIMTIME_MS);
+        packet.qosData = true;
+        packet.unicast = true;
+        packet.retryEligible = true;
+        packet.activeBlockAck = true;
+        packet.blockAckBufferSize = 64;
+        packet.twtEligible = true;
+        packet.hasNegotiatedCapabilities = true;
+        packet.negotiatedCapabilities = plan.getScheduleContext().candidates[i].negotiatedHeCapabilities;
+        packet.hasAdvertisement = true;
+        packet.advertisement = plan.getScheduleContext().candidates[i].advertisedHeCapabilities;
+        packet.hasFreshCsi = true;
+        snapshot.packets.push_back(packet);
+    }
+    return snapshot;
+}
+
+%activity:
+auto queue1 = check_and_cast<queueing::IPacketQueue *>(getParentModule()->getSubmodule("queue1"));
+auto queue2 = check_and_cast<queueing::IPacketQueue *>(getParentModule()->getSubmodule("queue2"));
+auto queue3 = check_and_cast<queueing::IPacketQueue *>(getParentModule()->getSubmodule("queue3"));
+auto queue4 = check_and_cast<queueing::IPacketQueue *>(getParentModule()->getSubmodule("queue4"));
+MacAddress sta1("02:00:00:00:50:01");
+MacAddress sta2("02:00:00:00:50:02");
+auto packet1 = makePacket("provider-sta1", sta1);
+auto packet2 = makePacket("provider-sta2", sta2);
+queue1->enqueuePacket(packet1);
+queue2->enqueuePacket(packet2);
+auto plan = makePlan(sta1, sta2, packet1->getId(), packet2->getId());
+auto differentTidPacket = makePacket("different-tid", sta1);
+auto differentTidHeader = differentTidPacket->removeAtFront<Ieee80211DataHeader>();
+differentTidHeader->setTid(4);
+differentTidPacket->insertAtFront(differentTidHeader);
+queue1->enqueuePacket(differentTidPacket);
+auto postSnapshotPacket = makePacket("post-snapshot", sta1);
+queue1->enqueuePacket(postSnapshotPacket);
+
+auto pureSnapshot = makePreparationSnapshot(sta1, sta2);
+auto pureContext = HeDlMuExchangeProvider::buildScheduleContext(pureSnapshot);
+requireTrue(pureContext.candidates.size() == 2 && pureContext.anchorSta == sta1,
+        "pure candidate builder must preserve eligible candidates and oldest anchor");
+std::reverse(pureSnapshot.packets.begin(), pureSnapshot.packets.end());
+auto permutedContext = HeDlMuExchangeProvider::buildScheduleContext(pureSnapshot);
+requireTrue(permutedContext.candidates.size() == 2 && permutedContext.anchorSta == sta1,
+        "candidate permutation must not change a strictly ordered oldest anchor");
+pureSnapshot.packets[0].enqueueTime = pureSnapshot.packets[1].enqueueTime;
+auto tiedContext = HeDlMuExchangeProvider::buildScheduleContext(pureSnapshot);
+requireTrue(tiedContext.anchorSta == pureSnapshot.packets[0].peer,
+        "enqueue-time ties must retain snapshot order deterministically");
+auto gatedSnapshot = makePreparationSnapshot(sta1, sta2);
+gatedSnapshot.packets[0].twtEligible = false;
+requireTrue(HeDlMuExchangeProvider::buildScheduleContext(gatedSnapshot).candidates.size() == 1,
+        "sleeping TWT peers must be excluded");
+gatedSnapshot = makePreparationSnapshot(sta1, sta2);
+gatedSnapshot.packets[0].activeBlockAck = false;
+requireTrue(HeDlMuExchangeProvider::buildScheduleContext(gatedSnapshot).candidates.size() == 1,
+        "missing Block Ack state must be excluded");
+gatedSnapshot = makePreparationSnapshot(sta1, sta2);
+gatedSnapshot.packets[0].sequenceNumberValid = true;
+gatedSnapshot.packets[0].retryEligible = false;
+auto staleContext = HeDlMuExchangeProvider::buildScheduleContext(gatedSnapshot);
+requireTrue(staleContext.candidates.size() == 1 &&
+        staleContext.candidates[0].eligiblePacketIdentities.size() == 1,
+        "stale retry-window entries must be excluded");
+gatedSnapshot = makePreparationSnapshot(sta1, sta2);
+gatedSnapshot.packets[0].hasNegotiatedCapabilities = false;
+gatedSnapshot.common.puncturedSubchannels = {false, true};
+requireTrue(HeDlMuExchangeProvider::buildScheduleContext(gatedSnapshot).candidates.size() == 1,
+        "missing puncturing capability must be excluded");
+gatedSnapshot = makePreparationSnapshot(sta1, sta2);
+gatedSnapshot.packets[0].hasFreshCsi = false;
+auto csiContext = HeDlMuExchangeProvider::buildScheduleContext(gatedSnapshot);
+requireTrue(csiContext.candidates.size() == 2 && !csiContext.candidates[0].hasFreshCsi,
+        "CSI freshness must be copied without inventing freshness");
+requireTrue(HeDlMuExchangeProvider::selectOldestEligibleQueue(
+        makePreparationSnapshot(sta1, sta2)) == HcfQueueToken(1),
+        "oldest eligible queue selection must return the immutable queue token");
+
+MockProviderActions actions;
+actions.queues[1] = queue1;
+actions.queues[2] = queue2;
+actions.queues[3] = queue3;
+actions.queues[4] = queue4;
+actions.associationIds[sta1] = 1;
+actions.associationIds[sta2] = 2;
+HeDlMuExchangeProvider provider;
+HeSoundingService soundingProvider;
+soundingProvider.configure(&actions);
+provider.configure(&actions, &soundingProvider);
+
+EchoScheduler echoScheduler;
+HeDlMuExchangeProvider::StartupParameters startupParameters;
+startupParameters.maxAmpduMpduCount = 16;
+startupParameters.maxHeMuPsduLength = 4096;
+startupParameters.maxHeMuPpduDuration = SimTime(1, SIMTIME_MS);
+auto stateSnapshot = makePreparationSnapshot(sta1, sta2);
+stateSnapshot.packets[0].packetIdentity = HcfPacketIdentity(packet1->getId());
+stateSnapshot.packets[1].packetIdentity = HcfPacketIdentity(packet2->getId());
+auto pendingAddbaSnapshot = stateSnapshot;
+for (auto& packet : pendingAddbaSnapshot.packets)
+    packet.addbaRequestInProgress = true;
+requireTrue(!provider.prepareSingleUserStart(AC_BE,
+        pendingAddbaSnapshot).has_value() &&
+        !HeDlMuExchangeProvider::selectOldestEligibleQueue(
+                pendingAddbaSnapshot).isValid(),
+        "pending ADDBA heads must not prepare a non-executable single-user transaction");
+stateSnapshot.heAccessPoint = true;
+stateSnapshot.localDlMuMimoBeamformer = true;
+stateSnapshot.common.enableDlMuMimo = true;
+stateSnapshot.packets[0].hasFreshCsi = false;
+auto preparedSounding = provider.prepareStart(AC_BE, stateSnapshot,
+        echoScheduler, startupParameters);
+requireTrue(preparedSounding.has_value() &&
+        preparedSounding->kind == HeDlMuExchangeProvider::StartKind::HE_SOUNDING &&
+        actions.soundingCount == 0 && actions.startExchangeCount == 0,
+        "HE sounding probe must return a value action without starting an exchange");
+requireTrue(provider.commitStart(*preparedSounding) &&
+        actions.soundingCount == 1 && actions.startExchangeCount == 0,
+        "sounding prerequisite must precede scheduler reservation and startup");
+stateSnapshot.common.enableDlMuMimo = false;
+stateSnapshot.hasRecoveryFrame = true;
+requireTrue(provider.tryStart(AC_BE, stateSnapshot, echoScheduler, startupParameters) &&
+        actions.startSingleUserCount == 1 && actions.startExchangeCount == 0,
+        "existing recovery state must be completed through the SU path first");
+stateSnapshot.hasRecoveryFrame = false;
+stateSnapshot.packets[0].activeBlockAck = false;
+stateSnapshot.packets[0].addbaRequired = false;
+stateSnapshot.packets[1].activeBlockAck = false;
+stateSnapshot.packets[1].addbaRequired = false;
+int stagedBeforeNoBaFallback = actions.stagedPacketCount;
+auto expectedNoBaPacket = HeDlMuExchangeProvider::selectOldestEligibleQueue(stateSnapshot);
+requireTrue(!provider.tryStart(AC_BE, stateSnapshot, echoScheduler, startupParameters) &&
+        actions.blockAckHandler == nullptr &&
+        actions.stagedPacketCount == stagedBeforeNoBaFallback + 1 &&
+        actions.lastStagedQueueToken == expectedNoBaPacket,
+        "no-BA HE fallback must stage the exact transport-neutral snapshot packet");
+stateSnapshot.packets[1].activeBlockAck = true;
+stateSnapshot.packets[0].activeBlockAck = false;
+stateSnapshot.packets[0].addbaRequired = true;
+int stagedBeforeBootstrap = actions.stagedPacketCount;
+requireTrue(provider.tryStart(AC_BE, stateSnapshot, echoScheduler, startupParameters) &&
+        actions.stagedPacketCount == stagedBeforeBootstrap + 1 &&
+        actions.lastStagedQueueToken == stateSnapshot.packets[0].queueToken &&
+        actions.lastStagedPacketIdentity == stateSnapshot.packets[0].packetIdentity &&
+        actions.startExchangeCount == 0,
+        "ADDBA bootstrap must stage exactly the selected snapshot identity before SU startup");
+stateSnapshot.packets[0].activeBlockAck = true;
+stateSnapshot.packets[0].addbaRequired = false;
+echoScheduler.invalid = true;
+int stagedBeforeInvalid = actions.stagedPacketCount;
+requireTrue(provider.tryStart(AC_BE, stateSnapshot, echoScheduler, startupParameters) &&
+        actions.stagedPacketCount == stagedBeforeInvalid + 1 &&
+        provider.getActiveTransactionToken() == 0,
+        "invalid scheduler output must fall back without reserving a transaction");
+echoScheduler.invalid = false;
+actions.throwOnStart = true;
+bool startupThrew = false;
+try { provider.tryStart(AC_BE, stateSnapshot, echoScheduler, startupParameters); }
+catch (cRuntimeError&) { startupThrew = true; }
+requireTrue(startupThrew && provider.getActiveTransactionToken() == 0,
+        "typed startup failure must roll back the exact provider reservation");
+actions.throwOnStart = false;
+auto invalidStartupParameters = startupParameters;
+invalidStartupParameters.maxAmpduMpduCount = 0;
+int stagedBeforeInvalidConfiguration = actions.stagedPacketCount;
+bool invalidConfigurationThrew = false;
+try { provider.tryStart(AC_BE, stateSnapshot, echoScheduler, invalidStartupParameters); }
+catch (cRuntimeError&) { invalidConfigurationThrew = true; }
+requireTrue(invalidConfigurationThrew && provider.getActiveTransactionToken() == 0 &&
+        actions.stagedPacketCount == stagedBeforeInvalidConfiguration,
+        "invalid startup configuration must not reserve or mutate a queue");
+stateSnapshot.sequentialBar = true;
+requireTrue(provider.tryStart(AC_BE, stateSnapshot, echoScheduler, startupParameters) &&
+        actions.lastAckMethod == HeDlMuTxOpFs::AckMethod::EXPLICIT_SEQUENTIAL_BAR,
+        "validated snapshot ACK policy must reach typed startup unchanged");
+auto stateToken = provider.getActiveTransactionToken();
+provider.heDlMuPlanningFailed(stateToken, AC_BE);
+requireTrue(actions.lastStagedQueueToken == stateSnapshot.packets[0].queueToken &&
+        actions.lastStagedPacketIdentity == stateSnapshot.packets[0].packetIdentity &&
+        provider.consumeForcedSingleUser(AC_BE) &&
+        !provider.consumeForcedSingleUser(AC_BE),
+        "planning failure must exact-stage and expose one next-TXOP SU fallback only");
+actions.planningFailureCount = 0;
+
+queue1->removePacket(packet1);
+auto replacementPacket = makePacket("replacement", sta1);
+queue1->enqueuePacket(replacementPacket);
+requireTrue(!provider.reservePlan(plan, 9),
+        "a post-snapshot replacement packet must not satisfy the exact identity reservation");
+queue1->removePacket(replacementPacket);
+delete replacementPacket;
+queue1->enqueuePacket(packet1);
+
+requireTrue(provider.reservePlan(plan, 10), "initial plan reservation must succeed");
+requireTrue(provider.getReservedHeDlMuPacket(10, sta1) == packet1 &&
+        provider.getReservedHeDlMuPacket(10, sta2) == packet2,
+        "reservation must retain the exact queue packet pointers");
+requireTrue(!provider.isReservedHeDlMuPacket(10, sta1, differentTidPacket) &&
+        !provider.isReservedHeDlMuPacket(10, sta1, postSnapshotPacket),
+        "different-TID and post-snapshot packets must not enter the reservation set");
+std::vector<HeDlMuMember> adversarialMembers(2);
+adversarialMembers[0].packetIdentity = HcfPacketIdentity(differentTidPacket->getId());
+adversarialMembers[0].packet = differentTidPacket;
+adversarialMembers[0].peer = sta1;
+adversarialMembers[1].packetIdentity = HcfPacketIdentity(packet2->getId());
+adversarialMembers[1].packet = packet2;
+adversarialMembers[1].peer = sta2;
+Packet adversarialContainer("adversarial-container");
+bool differentTidRejected = false;
+try { provider.heDlMuPlanCommitted(10, &adversarialContainer, adversarialMembers); }
+catch (cRuntimeError&) { differentTidRejected = true; }
+requireTrue(differentTidRejected,
+        "same-peer different-TID and post-snapshot packets must not enter commit");
+provider.rollbackReservation(9);
+requireTrue(provider.getReservedHeDlMuPacket(10, sta1) == packet1,
+        "wrong-token rollback must not alter the active reservation");
+provider.rollbackReservation(10);
+requireTrue(provider.getActiveTransactionToken() == 0 && provider.reservePlan(plan, 11),
+        "exact rollback must permit the next reservation");
+provider.rollbackReservation(11);
+
+requireTrue(provider.reservePlan(plan, 12), "identity validation reservation must succeed");
+Packet foreignPacket("foreign-packet");
+Packet foreignContainer("foreign-container");
+std::vector<HeDlMuMember> invalidMembers(2);
+invalidMembers[0].packetIdentity = HcfPacketIdentity(foreignPacket.getId());
+invalidMembers[0].packet = &foreignPacket;
+invalidMembers[0].peer = sta1;
+invalidMembers[1].packetIdentity = HcfPacketIdentity(902);
+invalidMembers[1].packet = packet2;
+invalidMembers[1].peer = sta2;
+bool invalidCommitRejected = false;
+try { provider.heDlMuPlanCommitted(12, &foreignContainer, invalidMembers); }
+catch (cRuntimeError&) { invalidCommitRejected = true; }
+requireTrue(invalidCommitRejected && provider.getReservedHeDlMuPacket(12, sta1) == packet1,
+        "commit must reject a non-reserved pointer without altering the reservation ledger");
+provider.rollbackReservation(12);
+
+requireTrue(provider.reservePlan(plan, 13), "identity mismatch reservation must succeed");
+std::vector<HeDlMuMember> mismatchedIdentityMembers(2);
+mismatchedIdentityMembers[0].packetIdentity = HcfPacketIdentity(packet1->getId() + 1000);
+mismatchedIdentityMembers[0].packet = packet1;
+mismatchedIdentityMembers[0].peer = sta1;
+mismatchedIdentityMembers[1].packetIdentity = HcfPacketIdentity(packet2->getId());
+mismatchedIdentityMembers[1].packet = packet2;
+mismatchedIdentityMembers[1].peer = sta2;
+bool mismatchedIdentityRejected = false;
+try { provider.heDlMuPlanCommitted(13, &foreignContainer, mismatchedIdentityMembers); }
+catch (cRuntimeError&) { mismatchedIdentityRejected = true; }
+requireTrue(mismatchedIdentityRejected,
+        "commit must reject a valid but fabricated packet identity");
+provider.rollbackReservation(13);
+
+for (int invalidParameter = 0; invalidParameter < 3; ++invalidParameter) {
+    uint64_t token = 20 + invalidParameter;
+    requireTrue(provider.reservePlan(plan, token), "pre-constructor reservation must succeed");
+    bool threw = false;
+    try {
+        HeDlMuExchangeProvider::ReservationRollbackGuard guard(provider, token);
+        HeDlMuTxOpFs::validateConfiguration(invalidParameter == 0 ? 0 : 16,
+                invalidParameter == 1 ? 0 : 4096,
+                invalidParameter == 2 ? SIMTIME_ZERO : SimTime(1, SIMTIME_MS));
+        guard.release();
+    }
+    catch (cRuntimeError&) { threw = true; }
+    requireTrue(threw && provider.getActiveTransactionToken() == 0,
+            "invalid frame-sequence configuration must roll back its reservation");
+    requireTrue(provider.reservePlan(plan, token + 100),
+            "reservation after invalid construction must succeed");
+    provider.rollbackReservation(token + 100);
+}
+
+requireTrue(provider.reservePlan(plan, 30), "commit reservation must succeed");
+Packet container("provider-container");
+std::vector<HeDlMuMember> members(2);
+members[0].packetIdentity = HcfPacketIdentity(packet1->getId());
+members[0].packet = packet1;
+members[0].peer = sta1;
+members[1].packetIdentity = HcfPacketIdentity(packet2->getId());
+members[1].packet = packet2;
+members[1].peer = sta2;
+MockFrameSequenceCallback frameSequenceCallback;
+MockAckHandler ackHandler;
+provider.heDlMuPlanCommitted(30, &container, members);
+requireTrue(provider.isActiveContainer(&container) && !provider.isActiveContainer(packet1),
+        "only the committed container must route as the active MU container");
+auto forgedMetadataMember = members[0];
+forgedMetadataMember.accessCategory = AC_VO;
+forgedMetadataMember.mcs = 11;
+forgedMetadataMember.ruToneSize = 996;
+provider.heDlMuMemberTransmitted(30, forgedMetadataMember);
+requireTrue(actions.memberTransmittedCount == 1 &&
+        actions.lastTransmittedMember.accessCategory == members[0].accessCategory &&
+        actions.lastTransmittedMember.mcs == members[0].mcs &&
+        actions.lastTransmittedMember.ruToneSize == members[0].ruToneSize,
+        "matching callback keys must forward stored committed metadata only");
+requireTrue(!provider.routeTransmittedContainer(packet1) &&
+        provider.routeTransmittedContainer(&container),
+        "typed container routing must execute the committed provider ledger branch");
+requireTrue(actions.memberTransmittedCount == 2,
+        "container transmission must dispatch every committed member exactly once");
+requireTrue(provider.routeTransmittedContainer(&container) &&
+        actions.memberTransmittedCount == 2,
+        "duplicate container transmission must not redispatch committed members");
+provider.heDlMuMemberTransmitted(29, members[1]);
+auto foreignMember = members[1];
+foreignMember.accessCategory = AC_VO;
+foreignMember.mcs = 11;
+foreignMember.ruToneSize = 996;
+provider.heDlMuMemberTransmitted(30, foreignMember);
+requireTrue(actions.memberTransmittedCount == 2,
+        "late and duplicate member callbacks must remain suppressed");
+provider.heDlMuUserOutcome(30, sta1, HeDlMuUserOutcome::BLOCK_ACK_RECEIVED);
+provider.heDlMuUserOutcome(30, sta1, HeDlMuUserOutcome::BLOCK_ACK_TIMED_OUT);
+provider.heDlMuUserOutcome(29, sta2, HeDlMuUserOutcome::BLOCK_ACK_RECEIVED);
+provider.heDlMuUserOutcome(30, MacAddress("02:00:00:00:50:ee"),
+        HeDlMuUserOutcome::BLOCK_ACK_RECEIVED);
+requireTrue(actions.userOutcomeCount == 1,
+        "duplicate and late per-user outcomes must be suppressed");
+provider.heDlMuPlanningFailed(30, AC_BE);
+requireTrue(actions.planningFailureCount == 0,
+        "planning failure after commit must be ignored");
+provider.heDlMuUserOutcome(30, sta2, HeDlMuUserOutcome::BLOCK_ACK_TIMED_OUT);
+requireTrue(provider.getActiveTransactionToken() == 0 &&
+        provider.getActiveMembers().empty(),
+        "final per-user outcome must terminally clear the active MU ledger");
+requireTrue(provider.reservePlan(plan, 31),
+        "terminal outcomes must allow the next transaction to start with an empty ledger");
+provider.rollbackReservation(31);
+
+requireTrue(provider.reservePlan(plan, 40), "planning-failure reservation must succeed");
+provider.heDlMuPlanningFailed(0, AC_BE);
+provider.heDlMuPlanningFailed(39, AC_BE);
+requireTrue(actions.planningFailureCount == 0 && provider.getActiveTransactionToken() == 40,
+        "zero and late planning failures must not mutate the active transaction");
+provider.heDlMuPlanningFailed(40, AC_BE);
+provider.heDlMuPlanningFailed(40, AC_BE);
+requireTrue(actions.planningFailureCount == 1 && provider.getActiveTransactionToken() == 0,
+        "the exact planning failure must roll back once and suppress duplicates");
+requireTrue(provider.reservePlan(plan, 41),
+        "planning-failure rollback must permit the next reservation");
+provider.rollbackReservation(41);
+
+// Composed typed path: the frame sequence itself must perform the commit and
+// produce the exact container consumed by the production transmit router.
+actions.memberTransmittedCount = 0;
+MockRateSelection rateSelection;
+MockBlockAckAgreementHandler blockAckHandler;
+blockAckHandler.addAgreement(sta1, 3);
+blockAckHandler.addAgreement(sta2, 3);
+actions.rateSelection = &rateSelection;
+actions.blockAckHandler = &blockAckHandler;
+auto secondSta1Packet = makePacket("provider-sta1-second", sta1);
+queue1->enqueuePacket(secondSta1Packet);
+auto multiContext = plan.getScheduleContext();
+multiContext.candidates[0].eligiblePacketIdentities.push_back(
+        HcfPacketIdentity(secondSta1Packet->getId()));
+HeMuPlanDiagnostic multiDiagnostic;
+auto multiPlan = HeDlMuPlan::create(multiContext, plan.getAllocations(),
+        multiDiagnostic);
+requireTrue(multiPlan.has_value(), "multi-MPDU snapshot plan must validate");
+requireTrue(provider.reservePlan(*multiPlan, 50),
+        "typed multi-MPDU frame-sequence reservation must succeed");
+requireTrue(provider.isReservedHeDlMuPacket(50, sta1, packet1) &&
+        provider.isReservedHeDlMuPacket(50, sta1, secondSta1Packet) &&
+        !provider.isReservedHeDlMuPacket(50, sta1, postSnapshotPacket),
+        "reservation must contain both ordered snapshot MPDUs but not a later same-TID packet");
+MockInProgressFrames inProgressFrames;
+auto qosContext = new QoSContext(nullptr, nullptr, &blockAckHandler, nullptr, &rateSelection);
+FrameSequenceContext frameSequenceContext(actions.getHeDlMuTransmitterAddress(),
+        const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax")),
+        &inProgressFrames, nullptr, nullptr, nullptr, qosContext);
+RuntimeOwnedDlCallback runtimeCallback(&provider, &actions);
+HeDlMuTxOpFs typedFrameSequence(*multiPlan,
+        const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax")),
+        queue1, &ackHandler, &frameSequenceCallback, &runtimeCallback, 50);
+typedFrameSequence.startSequence(&frameSequenceContext, 0);
+auto firstStep = typedFrameSequence.prepareStep(&frameSequenceContext);
+requireTrue(firstStep != nullptr && firstStep->getType() == IFrameSequenceStep::Type::TRANSMIT,
+        "typed frame sequence must prepare its HE DL MU transmit step");
+auto emittedContainer = check_and_cast<ITransmitStep *>(firstStep)->getFrameToTransmit();
+requireTrue(provider.isActiveContainer(emittedContainer) &&
+        provider.getActiveMembers().size() == 3,
+        "frame-sequence preparation must commit two ordered MPDUs for one peer and one for the other");
+requireTrue(typedFrameSequence.getActiveAllocations()[0].packets.size() == 2 &&
+        typedFrameSequence.getActiveAllocations()[0].packets[0] == packet1 &&
+        typedFrameSequence.getActiveAllocations()[0].packets[1] == secondSta1Packet,
+        "typed packing must retain the exact snapshot identity order");
+requireTrue(std::none_of(provider.getActiveMembers().begin(),
+        provider.getActiveMembers().end(), [&] (const auto& member) {
+            return member.packet == postSnapshotPacket;
+        }), "post-snapshot same-peer/same-TID MPDU must not be packed or committed");
+for (const auto& committed : provider.getActiveMembers())
+    requireTrue(committed.packetIdentity == HcfPacketIdentity(committed.packet->getId()),
+            "frame-sequence commit must use each original MPDU identity");
+requireTrue(provider.routeTransmittedContainer(emittedContainer) &&
+        actions.memberTransmittedCount == 3,
+        "emitted container must dispatch every canonical committed member once");
+requireTrue(provider.routeTransmittedContainer(emittedContainer) &&
+        actions.memberTransmittedCount == 3,
+        "duplicate emitted-container routing must suppress every member");
+auto extraMembers = provider.getActiveMembers();
+HeDlMuMember extraMember = extraMembers.front();
+extraMember.packet = postSnapshotPacket;
+extraMember.packetIdentity = HcfPacketIdentity(postSnapshotPacket->getId());
+extraMembers.push_back(extraMember);
+bool extraCommitRejected = false;
+try { provider.heDlMuPlanCommitted(50, emittedContainer, extraMembers); }
+catch (cRuntimeError&) { extraCommitRejected = true; }
+requireTrue(extraCommitRejected,
+        "commit must reject an unreserved same-peer/same-TID post-snapshot pointer");
+auto duplicateMembers = provider.getActiveMembers();
+duplicateMembers.push_back(duplicateMembers.front());
+bool duplicateCommitRejected = false;
+try { provider.heDlMuPlanCommitted(50, emittedContainer, duplicateMembers); }
+catch (cRuntimeError&) { duplicateCommitRejected = true; }
+requireTrue(duplicateCommitRejected,
+        "commit must reject a duplicate snapshot packet identity");
+delete firstStep;
+provider.heDlMuUserOutcome(50, sta1, HeDlMuUserOutcome::BLOCK_ACK_RECEIVED);
+provider.heDlMuUserOutcome(50, sta2, HeDlMuUserOutcome::BLOCK_ACK_RECEIVED);
+
+// A scheduler reservation may legitimately shrink during exact packing. The
+// provider ledger, emitted container membership, and committed scheduler view
+// must all use the same final subset, while the excluded exact identity stays
+// in its source queue and never enters the in-progress owner.
+MacAddress sta3("02:00:00:00:50:03");
+MacAddress sta4("02:00:00:00:50:04");
+actions.associationIds[sta3] = 3;
+actions.associationIds[sta4] = 4;
+blockAckHandler.addAgreement(sta3, 3);
+blockAckHandler.addAgreement(sta4, 3);
+std::vector<MacAddress> packingStations = {sta1, sta2, sta3, sta4};
+std::vector<queueing::IPacketQueue *> packingQueues = {queue1, queue2, queue3, queue4};
+std::vector<Packet *> packingPackets;
+for (size_t i = 0; i < packingStations.size(); ++i) {
+    auto packet = makePacket(("packing-sta" + std::to_string(i + 1)).c_str(),
+            packingStations[i]);
+    if (i == 3)
+        packet->insertAtBack(makeShared<ByteCountChunk>(B(4096)));
+    packingQueues[i]->enqueuePacket(packet);
+    packingPackets.push_back(packet);
+}
+std::vector<int64_t> packingPacketIds;
+for (auto packet : packingPackets)
+    packingPacketIds.push_back(packet->getId());
+auto packingPlan = makePlan(packingStations, packingPacketIds);
+HeDlMuExchangeProvider::PreparedStart packingStart;
+packingStart.kind = HeDlMuExchangeProvider::StartKind::HE_DL_MULTIUSER;
+packingStart.accessCategory = AC_BE;
+packingStart.plan = packingPlan;
+packingStart.ackMethod = HeDlMuTxOpFs::AckMethod::EXPLICIT_SEQUENTIAL_BAR;
+packingStart.parameters.maxAmpduMpduCount = 16;
+packingStart.parameters.maxHeMuPsduLength = 8192;
+packingStart.parameters.maxHeMuPpduDuration = SimTime(5.484, SIMTIME_MS);
+packingStart.scheduler = &echoScheduler;
+echoScheduler.commitCount = 0;
+echoScheduler.committedAllocations.clear();
+requireTrue(provider.commitStart(packingStart),
+        "four-user typed reservation must start before exact packing");
+auto packingToken = provider.getActiveTransactionToken();
+HeDlMuTxOpFs packingFrameSequence(packingPlan,
+        const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax")),
+        queue1, &ackHandler, &frameSequenceCallback, &runtimeCallback, packingToken,
+        16, 8192, SimTime(5.484, SIMTIME_MS),
+        HeDlMuTxOpFs::AckMethod::EXPLICIT_SEQUENTIAL_BAR);
+packingFrameSequence.startSequence(&frameSequenceContext, 0);
+auto packingStep = packingFrameSequence.prepareStep(&frameSequenceContext);
+requireTrue(packingStep != nullptr &&
+        packingStep->getType() == IFrameSequenceStep::Type::TRANSMIT,
+        "three surviving users must still produce an HE DL MU container");
+auto packingContainer = check_and_cast<ITransmitStep *>(packingStep)->getFrameToTransmit();
+requireTrue(provider.isActiveContainer(packingContainer) &&
+        provider.getActiveMembers().size() == 3 &&
+        packingFrameSequence.getActiveAllocations().size() == 3 &&
+        echoScheduler.commitCount == 1 &&
+        echoScheduler.committedAllocations.size() == 3,
+        "provider, container, and scheduler must commit the same three-user subset");
+for (size_t i = 0; i < 3; ++i) {
+    requireTrue(provider.getActiveMembers()[i].peer == packingStations[i] &&
+            provider.getActiveMembers()[i].packet == packingPackets[i] &&
+            packingFrameSequence.getActiveAllocations()[i].staAddress == packingStations[i] &&
+            packingFrameSequence.getActiveAllocations()[i].packets.size() == 1 &&
+            packingFrameSequence.getActiveAllocations()[i].packets[0] == packingPackets[i] &&
+            echoScheduler.committedAllocations[i].staAddress == packingStations[i],
+            "finalized provider, container, and scheduler ordering must remain identical");
+}
+requireTrue(queue4->getNumPackets() == 1 && queue4->getPacket(0) == packingPackets[3],
+        "packing-excluded exact packet identity must remain queued");
+for (int i = 0; i < inProgressFrames.getLength(); ++i)
+    requireTrue(inProgressFrames.getFrames(i) != packingPackets[3],
+            "packing-excluded exact packet identity must not become in progress");
+requireTrue(std::none_of(provider.getActiveMembers().begin(),
+        provider.getActiveMembers().end(), [&] (const auto& member) {
+            return member.peer == sta4 || member.packet == packingPackets[3];
+        }), "packing-excluded user must be absent from the finalized provider ledger");
+delete packingStep;
+for (size_t i = 0; i < 3; ++i)
+    provider.heDlMuUserOutcome(packingToken, packingStations[i],
+            HeDlMuUserOutcome::BLOCK_ACK_RECEIVED);
+
+EV << "HE DL MU provider lifecycle checks passed.\n";
+
+%contains: stdout
+HE DL MU provider lifecycle checks passed.

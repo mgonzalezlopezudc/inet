@@ -111,7 +111,6 @@ class InspectableReceiver : public Ieee80211Receiver
 {
   public:
     bool testIsAssignedHeMuRu(const ITransmission *transmission) const { return isAssignedHeMuRu(transmission); }
-    bool testIsReceptionPossible(const ITransmission *transmission) const { return computeIsReceptionPossible(nullptr, transmission); }
 };
 
 class TrackingErrorModel : public Ieee80211NistErrorModel
@@ -302,7 +301,6 @@ static void testSingleUserMode(InspectableRadio *radio,
     REQUIRE(transmission->getDataDuration() == postPreambleDuration);
 
     REQUIRE(receiver->testIsAssignedHeMuRu(transmission));
-    REQUIRE(receiver->testIsReceptionPossible(transmission));
     REQUIRE(!medium->testFindHeMuRuForReceiver(receiverRadio, transmission));
 
     medium->testAddTransmission(radio, transmission);

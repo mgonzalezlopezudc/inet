@@ -21,6 +21,11 @@ namespace ieee80211 {
 class INET_API ITx
 {
   public:
+    class INET_API PreparedTransmission {
+      public:
+        virtual ~PreparedTransmission() = default;
+    };
+
     class INET_API ICallback {
       public:
         virtual ~ICallback() {}
@@ -33,6 +38,16 @@ class INET_API ITx
 
     virtual bool isBusy() const = 0;
 
+    virtual std::unique_ptr<PreparedTransmission> prepareTransmission(
+            Packet *, const Ptr<const Ieee80211MacHeader>&, simtime_t, ICallback *)
+        { throw cRuntimeError("This ITx implementation does not support prepared transmission"); }
+    /** Final process-fatal publication boundary. Implementations perform all
+     * recoverable checks and allocations in prepareTransmission(); kernel
+     * invariant or allocator failure while publishing terminates the run. */
+    virtual void commitTransmission(
+            std::unique_ptr<PreparedTransmission>) noexcept
+        { std::terminate(); }
+
     virtual void transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, ICallback *callback) = 0;
     virtual void transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, simtime_t ifs, ICallback *callback) = 0;
     virtual void radioTransmissionFinished() = 0;
@@ -42,4 +57,3 @@ class INET_API ITx
 } // namespace inet
 
 #endif
-

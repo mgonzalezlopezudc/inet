@@ -188,6 +188,23 @@ void InProgressFrames::addInProgressFrame(Packet *packet)
     }
 }
 
+bool InProgressFrames::reserveExactPendingFrame(Packet *packet)
+{
+    auto frames = dataService->extractExactFrameToTransmit(pendingQueue, packet);
+    if (frames == nullptr)
+        return false;
+    for (auto frame : *frames) {
+        take(frame);
+        ackHandler->frameGotInProgress(
+                frame->peekAtFront<Ieee80211DataOrMgmtHeader>());
+        inProgressFrames.push_back(frame);
+        frame->setArrivalTime(simTime());
+        emit(packetEnqueuedSignal, frame);
+    }
+    delete frames;
+    return true;
+}
+
 void InProgressFrames::removeInProgressFrame(Packet *packet)
 {
     inProgressFrames.erase(std::remove(inProgressFrames.begin(), inProgressFrames.end(), packet), inProgressFrames.end());
