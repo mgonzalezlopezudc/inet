@@ -7,7 +7,6 @@
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfRuntime.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfTxRxInterceptor.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfObservationSink.h"
 
 #include <algorithm>
 #include <set>
@@ -127,7 +126,7 @@ void HeHcfRuntime::rejectUnexpectedHeTb(Packet *packet)
 {
     PacketDropDetails details;
     details.setReason(NOT_ADDRESSED_TO_US);
-    HcfObservationSink::packetDropped(hcf, packet, &details);
+    hcf->emit(cComponent::registerSignal("packetDropped"), packet, &details);
     delete packet;
 }
 
@@ -174,7 +173,7 @@ void HeHcfRuntime::notifyHeUlMuPacketTransmitted(Packet *packet)
 {
     auto channelOwner = edca->getChannelOwner();
     if (channelOwner != nullptr)
-        HcfObservationSink::packetSentToPeer(channelOwner, packet);
+        channelOwner->emit(cComponent::registerSignal("packetSentToPeer"), packet);
 }
 
 bool HeHcfRuntime::isHeDlMuContainer(const Packet *packet) const

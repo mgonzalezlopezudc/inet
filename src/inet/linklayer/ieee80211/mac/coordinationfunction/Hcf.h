@@ -46,7 +46,6 @@
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfAggregationService.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfExchangeEngine.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfFrameDispatchService.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfIngressService.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HtHcfFeature.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfMacSapTracker.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfOriginatorService.h"
@@ -65,7 +64,6 @@ class StationQueueBank;
 class Edca;
 class Edcaf;
 class Hcca;
-class HcfIngressOwnershipActions;
 class HcfOriginatorActions;
 class HcfVhtRuntime;
 class HeHcfRuntime;
@@ -132,7 +130,6 @@ class INET_API Hcf : public IQosCoordinationFunction, public IChannelAccess::ICa
   private:
     class TransmissionPreparationActions;
 
-    friend class HcfIngressOwnershipActions;
     friend class HcfOriginatorActions;
     friend class HcfRecipientActions;
     friend class HcfRecipientFrameDispatchActions;
@@ -213,12 +210,11 @@ class INET_API Hcf : public IQosCoordinationFunction, public IChannelAccess::ICa
     double lastSelectedModeBandwidth = -1;
     int lastSelectedModeNumSpatialStreams = -1;
     HcfAggregationService aggregationService;
-    HcfIngressService ingressService;
+    Packet *activeIngressPacket = nullptr;
     HcfMacSapTracker macSapTracker;
     HcfOriginatorService originatorService;
     HcfRecipientService recipientService;
     HcfFrameDispatchService frameDispatchService;
-    HcfRetryService retryService;
     HcfTransmissionPreparationService transmissionPreparationService;
     std::unique_ptr<HcfRuntime> runtime;
     std::unique_ptr<HcfVhtRuntime> vhtRuntime;
@@ -447,8 +443,8 @@ class INET_API Hcf : public IQosCoordinationFunction, public IChannelAccess::ICa
     Hcf();
     virtual ~Hcf();
 
-    const HcfRuntime& getHcfRuntime() const { return *runtime; }
-    HcfRuntime& getHcfRuntimeForTesting() { return *runtime; }
+    HcfExchangeSelector& getExchangeSelectorForTesting()
+        { return runtime->getExchangeSelector(); }
     HeHcfRuntime& getHeRuntime() const;
     void setVhtDlMuTxOpFactoryForTesting(VhtHcfFeature::ITxOpFactory *factory);
 

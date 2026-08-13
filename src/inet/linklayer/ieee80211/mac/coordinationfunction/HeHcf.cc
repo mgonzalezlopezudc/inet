@@ -6,7 +6,6 @@
 
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfRuntime.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfObservationSink.h"
 
 #include <algorithm>
 #include <sstream>
@@ -130,7 +129,16 @@ void HeHcfRuntime::initializeLinkLayer()
 void HeHcfRuntime::emitHeTbResponse(HeTbResponseEvent& event)
 {
     ASSERT(event.triggerId != 0);
-    HcfObservationSink::heTbResponseCommitted(hcf, &event);
+    hcf->emit(cComponent::registerSignal("heTbResponseCommitted"), &event);
+    hcf->emit(cComponent::registerSignal("heTbResponseTriggerId"),
+            static_cast<unsigned long>(event.triggerId));
+    hcf->emit(cComponent::registerSignal("heTbResponseReason"),
+            static_cast<long>(event.reason));
+    hcf->emit(cComponent::registerSignal("heTbResponseHadPendingPayload"),
+            event.hadPendingPayload ? 1L : 0L);
+    hcf->emit(cComponent::registerSignal("heTbResponsePendingBytes"), event.pendingBytes);
+    hcf->emit(cComponent::registerSignal("heTbResponseSelectedBytes"), event.selectedBytes);
+    hcf->emit(cComponent::registerSignal("heTbResponseReportedBytes"), event.reportedBytes);
 }
 
 void HeHcfRuntime::updatePeerOperatingMode(const MacAddress& peer,
@@ -158,29 +166,6 @@ AccessCategory HeHcfRuntime::mapTidToAccessCategory(Tid tid) const
 const char *HeHcfRuntime::getPendingUlTriggerName() const
 {
     return ulTriggerService.getPendingTriggerName();
-}
-
-int HeHcfRuntime::getStationQueueBankCount() const
-{
-    return getHeQueueService().getStationQueueBankCount();
-}
-
-std::string HeHcfRuntime::getCsiTableSummary() const
-{
-    return getHePeerStateService().getCsiTableSummary();
-}
-
-std::string HeHcfRuntime::getHeHcfSummary() const
-{
-    std::stringstream stream;
-    stream << "DL scheduler=" << (dlScheduler == nullptr ? "none" : "configured")
-           << ", UL coordinator=" << (ulCoordinator != nullptr && ulCoordinator->isEnabled() ? "enabled" : "disabled")
-           << ", pendingTrigger=" << getPendingUlTriggerName()
-           << ", queueBanks=" << getStationQueueBankCount()
-           << ", triggeredUL=" << getHeTriggeredUlExchangeService().getExchangeCount()
-           << ", dlMuMimo=" << (enableDlMuMimo ? "enabled" : "disabled")
-           << ", csiEntries=" << getHePeerStateService().getCsiManager().getEntryCount();
-    return stream.str();
 }
 
 void HeHcfRuntime::finish()
@@ -282,11 +267,6 @@ void HeHcfRuntime::retireDeferredPackets()
     getHePeerStateService().releaseDeferredRetirements();
 }
 
-void HeHcfRuntime::frameSequenceFinished()
-{
-    frameSequenceCompleted();
-}
-
 void HeHcfRuntime::frameSequenceCompleted()
 {
     heUlMuExchangeActive = false;
@@ -361,7 +341,6 @@ void HeHcfRuntime::commitSelectedExchange(HcfExchangeClass exchangeClass,
     if (!this->commitSelectedExchange(exchangeClass, context,
             [this] (AccessCategory ac) { hcf->startSingleUserExchange(ac); },
             [this] (const auto& start) { return ulTriggerService.commitStart(start); },
-            [this] (const auto& start) { ulTriggerService.rollbackStart(start); },
             [this] (AccessCategory ac) { return startHeDlMuSingleUserIfEligible(ac); }))
     {
         auto selectedAccessCategory = context.getSelectionAccessCategory();

@@ -348,7 +348,6 @@ class INET_API HcfContext
     std::vector<HcfPeerSnapshot> peerSnapshots;
     std::vector<HcfQueueSnapshot> queueSnapshots;
     HcfPhySnapshot phySnapshot;
-    std::optional<HcfHeSoundingSnapshot> heSoundingSnapshot;
     std::optional<AccessCategory> selectionAccessCategory;
     std::array<std::optional<bool>, NUM_HCF_EXCHANGE_CLASSES> exchangeEligibility;
     std::optional<std::string> htSoundingModeIdentity;
@@ -362,8 +361,8 @@ class INET_API HcfContext
             const HcfPhySnapshot& phySnapshot) :
         localContext(localContext), peerSnapshots(peerSnapshots),
         queueSnapshots(queueSnapshots), phySnapshot(phySnapshot) {}
-    explicit HcfContext(const HcfHeSoundingSnapshot& heSoundingSnapshot) :
-        heSoundingSnapshot(heSoundingSnapshot) {}
+    explicit HcfContext(const HcfHeSoundingSnapshot& heSoundingSnapshot)
+        { setProviderSnapshot(heSoundingSnapshot); }
     HcfContext(AccessCategory accessCategory,
             std::initializer_list<HcfExchangeClass> eligibleExchangeClasses,
             const std::optional<std::string>& htSoundingModeIdentity = std::nullopt) :
@@ -378,8 +377,6 @@ class INET_API HcfContext
     const std::vector<HcfPeerSnapshot>& getPeerSnapshots() const { return peerSnapshots; }
     const std::vector<HcfQueueSnapshot>& getQueueSnapshots() const { return queueSnapshots; }
     const HcfPhySnapshot& getPhySnapshot() const { return phySnapshot; }
-    const std::optional<HcfHeSoundingSnapshot>& getHeSoundingSnapshot() const
-        { return heSoundingSnapshot; }
     std::optional<AccessCategory> getSelectionAccessCategory() const
         { return selectionAccessCategory; }
     std::optional<bool> getExchangeEligibility(HcfExchangeClass exchangeClass) const

@@ -295,7 +295,6 @@ bool HeHcfRuntime::commitSelectedExchange(HcfExchangeClass exchangeClass,
         const HcfContext& context,
         const std::function<void(AccessCategory)>& startCommon,
         const std::function<bool(const HeUlTriggerService::PreparedStart&)>& commitUl,
-        const std::function<void(const HeUlTriggerService::PreparedStart&)>& rollbackUl,
         const std::function<bool(AccessCategory)>& startSingleUserFallback)
 {
     auto snapshot = context.findProviderSnapshot<HeTxopCoordinatorService::GrantSnapshot>();
@@ -334,8 +333,6 @@ bool HeHcfRuntime::commitSelectedExchange(HcfExchangeClass exchangeClass,
         }
     }
     catch (...) {
-        if (snapshot->ulTrigger)
-            rollbackUl(*snapshot->ulTrigger);
         if (snapshot->dlStart)
             getDlMuExchangeProvider().rollbackStart(*snapshot->dlStart);
         throw;

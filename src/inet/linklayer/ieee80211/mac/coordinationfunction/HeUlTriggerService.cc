@@ -447,20 +447,8 @@ bool HeUlTriggerService::commitStart(const PreparedStart& preparedStart)
         committedScheduleContext.reset();
         throw;
     }
-    planStarted();
-    return true;
-}
-
-bool HeUlTriggerService::tryStart(AccessCategory accessCategory,
-        const HeUlPreparationSnapshot& snapshot)
-{
-    auto preparedStart = prepareStart(accessCategory, snapshot);
-    return preparedStart.has_value() && commitStart(*preparedStart);
-}
-
-void HeUlTriggerService::planStarted()
-{
     pendingTrigger = IIeee80211HeUlTriggerPolicy::NO_TRIGGER;
+    return true;
 }
 
 const char *HeUlTriggerService::getPendingTriggerName() const

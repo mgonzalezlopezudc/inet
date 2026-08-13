@@ -151,16 +151,12 @@ class INET_API HeHcfRuntime : public HeDlMuExchangeProvider::IActions,
             const HcfContext& context,
             const std::function<void(AccessCategory)>& startCommon,
             const std::function<bool(const HeUlTriggerService::PreparedStart&)>& commitUl,
-            const std::function<void(const HeUlTriggerService::PreparedStart&)>& rollbackUl,
             const std::function<bool(AccessCategory)>& startSingleUserFallback);
 
     uint32_t getBufferedTrafficServiceBytes(Edcaf *edcaf,
             const MacAddress& peer, int tid = -1) const;
     queueing::IPacketQueue *getPerStaQueue(const MacAddress& staAddr, AccessCategory ac);
     const char *getPendingUlTriggerName() const;
-    int getStationQueueBankCount() const;
-    std::string getCsiTableSummary() const;
-    std::string getHeHcfSummary() const;
     bool allAssociatedStationsSupportPreamblePuncturing() const;
     bool supportsPreamblePuncturing(const IIeee80211HeUlScheduler::RuAllocation& allocation) const;
     static HeUlScheduleFinalizationResult finalizeUlSchedule(
@@ -181,7 +177,6 @@ class INET_API HeHcfRuntime : public HeDlMuExchangeProvider::IActions,
     IIeee80211HeDlScheduler::ScheduleContext collectScheduleContext(AccessCategory) const;
     HeDlMuPreparationSnapshot captureHeDlMuPreparationSnapshot(AccessCategory) const override;
     bool stagePerStaFrameForSingleUserTransmission(AccessCategory);
-    bool tryStartUlMuFrameSequence(AccessCategory);
     HeUlPreparationSnapshot captureHeUlPreparationSnapshot(AccessCategory) const override;
     bool tryStartDlMuFrameSequence(AccessCategory);
     bool releaseChannelIfNoFallbackFrame(AccessCategory);
@@ -191,7 +186,6 @@ class INET_API HeHcfRuntime : public HeDlMuExchangeProvider::IActions,
     void handleInternalCollision(std::vector<Edcaf *>);
     bool hasFrameToTransmit();
     bool hasFrameToTransmit(AccessCategory);
-    void frameSequenceFinished();
     void twtServicePeriodChanged();
     StationQueueBank *getStationQueueBank(const MacAddress&) const;
     HePeerStateService& getHePeerStateService() const;

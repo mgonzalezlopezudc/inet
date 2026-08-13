@@ -69,6 +69,7 @@ module HeHcf extends Hcf
         @signal[peerOperatingModeRxNss](type=unsigned long);
         @signal[peerOperatingModeChannelWidth](type=unsigned long);
         @signal[peerOperatingModeUlMuDisable](type=long);
+        @signal[hePeerInvalidated](type=inet::ieee80211::HePeerInvalidatedEvent);
         @statistic[heTbResponseTriggerId](title="HE-TB response Trigger identifier"; source=heTbResponseTriggerId; record=vector; interpolationmode=none);
         @statistic[heTbResponseReason](title="HE-TB response reason"; source=heTbResponseReason; record=vector; interpolationmode=none);
         @statistic[heTbResponseHadPendingPayload](title="HE-TB candidate payload existed"; source=heTbResponseHadPendingPayload; record=vector; interpolationmode=none);

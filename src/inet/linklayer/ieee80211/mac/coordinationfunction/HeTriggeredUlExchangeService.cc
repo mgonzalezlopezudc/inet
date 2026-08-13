@@ -13,7 +13,6 @@
 #include "inet/common/packet/chunk/ByteCountChunk.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
 #include "inet/linklayer/ethernet/common/Ethernet.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfObservationSink.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/IIeee80211HeUlTriggerPolicy.h"
 #include "inet/linklayer/ieee80211/mac/scheduler/IIeee80211HeUlScheduler.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"

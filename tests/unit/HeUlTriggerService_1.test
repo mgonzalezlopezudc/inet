@@ -120,7 +120,7 @@ rejectedSnapshot.maxMuStations = 8;
 rejectedSnapshot.phy.emplace(1, GHz(5.18), MHz(20), mW(10), mW(20), mW(1e-8),
         7, 2, HE_GI_1_6_US, HE_LTF_2X, 0, std::vector<bool>{}, 0,
         mib->localHeCapabilities);
-ASSERT(!service.tryStart(AC_BE, rejectedSnapshot));
+ASSERT(!service.prepareStart(AC_BE, rejectedSnapshot).has_value());
 ASSERT(actions.starts == 0 && actions.commits == 0);
 ASSERT(scheduler->getCommittedScheduleCount() == 0);
 

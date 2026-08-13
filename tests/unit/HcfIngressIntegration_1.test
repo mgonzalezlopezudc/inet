@@ -59,6 +59,8 @@ using namespace inet::ieee80211;
 
 #define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
 
+static bool hasMessage(const cRuntimeError& error, const char *text);
+
 class TestIngressEdcaf : public Edcaf
 {
   private:
@@ -80,16 +82,21 @@ class TestIngressEdca : public Edca
 {
   private:
     Edcaf *edcaf = nullptr;
+    mutable AccessCategory lastAccessCategory = AccessCategory(-1);
 
   public:
     explicit TestIngressEdca(Edcaf *edcaf) : edcaf(edcaf) {}
 
-    virtual Edcaf *getEdcaf(AccessCategory) const override { return edcaf; }
+    virtual Edcaf *getEdcaf(AccessCategory accessCategory) const override {
+        lastAccessCategory = accessCategory;
+        return edcaf;
+    }
     virtual Edcaf *getChannelOwner() override { return nullptr; }
     virtual void requestChannelAccess(AccessCategory, IChannelAccess::ICallback *) override
     {
         throw cRuntimeError("Unexpected channel access request");
     }
+    AccessCategory getLastAccessCategory() const { return lastAccessCategory; }
 };
 
 class TestIngressHcf : public Hcf
@@ -121,6 +128,9 @@ class TestIngressHeHcf : public HeHcf
   private:
     queueing::IPacketQueue *perStaQueue = nullptr;
     int resolutionCount = 0;
+    AccessCategory lastResolvedAccessCategory = AccessCategory(-1);
+    Packet *reentrantPacket = nullptr;
+    int rejectedReentrantCount = 0;
 
   protected:
     virtual int numInitStages() const override { return 1; }
@@ -136,14 +146,29 @@ class TestIngressHeHcf : public HeHcf
     void setPerStaQueueForTest(queueing::IPacketQueue *value) {
         perStaQueue = value;
         TestActionPort port;
-        port.resolvePerStaQueue = [this] (const MacAddress&, AccessCategory) {
+        port.resolvePerStaQueue = [this] (const MacAddress&, AccessCategory accessCategory) {
             resolutionCount++;
+            lastResolvedAccessCategory = accessCategory;
+            if (reentrantPacket != nullptr) {
+                try {
+                    processUpperFrame(reentrantPacket,
+                            reentrantPacket->peekAtFront<Ieee80211DataOrMgmtHeader>());
+                }
+                catch (const cRuntimeError& error) {
+                    if (hasMessage(error, "while another packet is active") ||
+                            hasMessage(error, "already processing this packet"))
+                        rejectedReentrantCount++;
+                }
+            }
             return perStaQueue;
         };
         port.hasCommonFrameToTransmit = [] (AccessCategory) { return false; };
         installTestActionPort(std::move(port));
     }
     int getResolutionCount() const { return resolutionCount; }
+    AccessCategory getLastResolvedAccessCategory() const { return lastResolvedAccessCategory; }
+    void setReentrantPacket(Packet *packet) { reentrantPacket = packet; }
+    int getRejectedReentrantCount() const { return rejectedReentrantCount; }
 };
 
 class TestIngressMac : public Ieee80211Mac
@@ -158,6 +183,13 @@ class TestIngressMac : public Ieee80211Mac
         take(packet);
         hcf->processUpperFrame(packet,
                 packet->peekAtFront<Ieee80211DataOrMgmtHeader>());
+    }
+
+    void submit(Hcf *hcf, Packet *packet,
+            const Ptr<const Ieee80211DataOrMgmtHeader>& header)
+    {
+        take(packet);
+        hcf->processUpperFrame(packet, header);
     }
 
     void deleteOwnedPacket(Packet *packet)
@@ -210,6 +242,7 @@ auto perStaQueue = check_and_cast<queueing::IPacketQueue *>(
 auto failingQueue = check_and_cast<queueing::IPacketQueue *>(
         getParentModule()->getSubmodule("failingQueue"));
 const MacAddress peer("02:00:00:00:00:41");
+const MacAddress multicast("01:00:5e:00:00:01");
 
 // A real PacketQueue with capacity zero takes and inserts before throwing.
 // The HCF adapter must remove it, retake OMNeT++ ownership, and return the
@@ -262,6 +295,84 @@ REQUIRE(perStaQueue->getPacket(0) == heData);
 REQUIRE(sharedQueue->getNumPackets() == 0);
 REQUIRE(heData->getOwner() != macOwner && heData->getOwner() != heHcf);
 delete perStaQueue->dequeuePacket();
+
+// The production EDCA classifier remains the single TID-to-AC authority.
+const AccessCategory expectedAccessCategories[] = {
+    AC_BE, AC_BK, AC_BK, AC_BE, AC_VI, AC_VI, AC_VO, AC_VO,
+};
+for (int tid = 0; tid < 8; tid++) {
+    auto packet = makeDataPacket("tid", peer);
+    auto header = packet->removeAtFront<Ieee80211DataHeader>();
+    header->setTid(tid);
+    packet->insertAtFront(header);
+    macOwner->submit(heHcf, packet);
+    REQUIRE(heHcf->getLastResolvedAccessCategory() == expectedAccessCategories[tid]);
+    REQUIRE(perStaQueue->getPacket(0) == packet);
+    delete perStaQueue->dequeuePacket();
+}
+
+// Group traffic and management frames retain shared-queue routing; management
+// keeps AC_VO and neither path consults the HE per-STA resolver.
+int resolutionCount = heHcf->getResolutionCount();
+for (const auto& address : {multicast, MacAddress::BROADCAST_ADDRESS}) {
+    auto packet = makeDataPacket("group", address);
+    macOwner->submit(heHcf, packet);
+    REQUIRE(heHcf->getResolutionCount() == resolutionCount);
+    REQUIRE(sharedQueue->getPacket(0) == packet);
+    delete sharedQueue->dequeuePacket();
+}
+auto management = makeManagementPacket("management", peer);
+macOwner->submit(heHcf, management);
+REQUIRE(heHcf->getResolutionCount() == resolutionCount);
+REQUIRE(sharedEdca.getLastAccessCategory() == AC_VO);
+REQUIRE(sharedQueue->getPacket(0) == management);
+delete sharedQueue->dequeuePacket();
+
+// Invalid classification and a header borrowed from another packet fail
+// before enqueue and return the exact caller-owned packet.
+auto invalidTid = makeDataPacket("invalidTid", peer);
+auto invalidHeader = invalidTid->removeAtFront<Ieee80211DataHeader>();
+invalidHeader->setTid(8);
+invalidTid->insertAtFront(invalidHeader);
+bool invalidTidThrown = false;
+try {
+    macOwner->submit(heHcf, invalidTid);
+}
+catch (const cRuntimeError&) {
+    invalidTidThrown = true;
+}
+REQUIRE(invalidTidThrown && invalidTid->getOwner() == macOwner);
+macOwner->deleteOwnedPacket(invalidTid);
+
+auto first = makeDataPacket("first", peer);
+auto foreign = makeDataPacket("foreign", peer);
+bool foreignHeaderThrown = false;
+try {
+    macOwner->submit(heHcf, first,
+            foreign->peekAtFront<Ieee80211DataOrMgmtHeader>());
+}
+catch (const cRuntimeError&) {
+    foreignHeaderThrown = true;
+}
+REQUIRE(foreignHeaderThrown && first->getOwner() == macOwner);
+macOwner->deleteOwnedPacket(first);
+delete foreign;
+
+// Same-packet and foreign-packet nested submissions are both rejected while
+// the outer ownership transaction is active, without disturbing its enqueue.
+for (bool samePacket : {true, false}) {
+    auto outer = makeDataPacket("outer", peer);
+    auto nested = samePacket ? outer : makeDataPacket("nested", peer);
+    heHcf->setReentrantPacket(nested);
+    int rejectedCount = heHcf->getRejectedReentrantCount();
+    macOwner->submit(heHcf, outer);
+    REQUIRE(heHcf->getRejectedReentrantCount() == rejectedCount + 1);
+    REQUIRE(perStaQueue->getPacket(0) == outer);
+    delete perStaQueue->dequeuePacket();
+    heHcf->setReentrantPacket(nullptr);
+    if (!samePacket)
+        delete nested;
+}
 
 EV << "Composed HCF ingress restored real queue failures and preserved HE per-STA dispatch.\n";
 

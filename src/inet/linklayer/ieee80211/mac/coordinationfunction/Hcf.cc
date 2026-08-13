@@ -8,8 +8,6 @@
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
 #include "inet/linklayer/ieee80211/mac/common/Ieee80211Addressing.h"
 #include "inet/linklayer/ieee80211/mac/blockack/BlockAckAgreementUtils.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfFramePreparation.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfObservationSink.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfRetryService.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfFeatureSet.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfRuntime.h"
@@ -38,6 +36,7 @@
 #include "inet/linklayer/ieee80211/mac/originator/QosAckHandler.h"
 #include "inet/linklayer/ieee80211/mac/originator/QosRecoveryProcedure.h"
 #include "inet/linklayer/ieee80211/mac/protectionmechanism/SingleProtectionMechanism.h"
+#include "inet/linklayer/ieee80211/mac/protectionmechanism/HtProtectionPolicy.h"
 #include "inet/linklayer/ieee80211/mac/recipient/CtsProcedure.h"
 #include "inet/linklayer/ieee80211/mac/queue/InProgressFrames.h"
 #include "inet/linklayer/ieee80211/mac/queue/OrigEnqueueTimeTag_m.h"
@@ -225,58 +224,6 @@ class HcfVhtRuntime final : public VhtHcfFeature::IActions
         { feature.transmissionComplete(packet, header); }
 };
 
-class HcfIngressOwnershipActions final : public HcfIngressService::IOwnershipActions
-{
-  private:
-    Hcf *hcf;
-    cComponent *caller = nullptr;
-
-  public:
-    explicit HcfIngressOwnershipActions(Hcf *hcf) : hcf(hcf)
-    {
-    }
-
-    virtual void claimPacket(Packet *packet) override
-    {
-        caller = dynamic_cast<cComponent *>(packet->getOwner());
-        if (caller == nullptr)
-            throw cRuntimeError("HCF ingress caller does not support packet ownership transfer");
-        if (caller != hcf)
-            hcf->claimIngressPacket(packet);
-    }
-
-    virtual void enqueuePacket(queueing::IPacketQueue *queue, Packet *packet) override
-    {
-        try {
-            queue->enqueuePacket(packet);
-            caller = nullptr;
-        }
-        catch (...) {
-            // Some concrete queues take and insert before reporting overload.
-            // Restore the service contract that a throwing enqueue is not committed.
-            for (int i = 0; i < queue->getNumPackets(); i++) {
-                if (queue->getPacket(i) == packet) {
-                    queue->removePacket(packet);
-                    // IPacketQueue::removePacket() removes collection
-                    // membership but does not transfer OMNeT++ ownership.
-                    // Restore the pre-enqueue HCF owner before the service
-                    // returns the claimed packet to its original caller.
-                    hcf->take(packet);
-                    break;
-                }
-            }
-            throw;
-        }
-    }
-
-    virtual void returnClaimedPacketToCaller(Packet *packet) noexcept override
-    {
-        if (caller != hcf)
-            hcf->returnIngressPacketToCaller(packet, caller);
-        caller = nullptr;
-    }
-};
-
 class HcfRecipientActions final : public HcfRecipientService::IActions
 {
   private:
@@ -302,7 +249,7 @@ class HcfRecipientActions final : public HcfRecipientService::IActions
     {
         EV_INFO << "Processing received frame " << packet->getName()
                 << " as recipient.\n";
-        HcfObservationSink::packetReceivedFromPeer(hcf, packet);
+        hcf->emit(cComponent::registerSignal("packetReceivedFromPeer"), packet);
     }
 
     virtual void packetDropped(const Packet *packet,
@@ -313,7 +260,7 @@ class HcfRecipientActions final : public HcfRecipientService::IActions
                 NOT_ADDRESSED_TO_US :
                 reason == HcfRecipientService::DropReason::INCORRECTLY_RECEIVED ?
                 INCORRECTLY_RECEIVED : OTHER_PACKET_DROP);
-        HcfObservationSink::packetDropped(hcf, packet, &details);
+        hcf->emit(cComponent::registerSignal("packetDropped"), packet, &details);
     }
 
     virtual void processImmediateResponse(Packet *packet,
@@ -555,7 +502,7 @@ class HcfRecipientFrameDispatchActions final :
                 hcf->recipientBlockAckAgreementPolicy, hcf);
         auto agreement = hcf->recipientBlockAckAgreementHandler->getAgreement(
                 frame->getTid(), frame->getTransmitterAddress());
-        HcfObservationSink::recipientBlockAckAgreementAdded(hcf, agreement);
+        hcf->emit(cComponent::registerSignal("blockAckAgreementAdded"), agreement);
     }
 
     virtual void recipientAddbaResponse(
@@ -568,7 +515,7 @@ class HcfRecipientFrameDispatchActions final :
                 hcf->originatorBlockAckAgreementPolicy, hcf);
         auto agreement = hcf->originatorBlockAckAgreementHandler->getAgreement(
                 frame->getTransmitterAddress(), frame->getTid());
-        HcfObservationSink::originatorBlockAckAgreementAdded(hcf, agreement);
+        hcf->emit(cComponent::registerSignal("blockAckAgreementAdded"), agreement);
         hcf->resumeContention();
     }
 
@@ -580,14 +527,14 @@ class HcfRecipientFrameDispatchActions final :
         if (frame->getInitiator()) {
             auto agreement = hcf->recipientBlockAckAgreementHandler->getAgreement(
                     frame->getTid(), frame->getReceiverAddress());
-            HcfObservationSink::recipientBlockAckAgreementDeleted(hcf, agreement);
+            hcf->emit(cComponent::registerSignal("blockAckAgreementDeleted"), agreement);
             hcf->recipientBlockAckAgreementHandler->processReceivedDelba(frame,
                     hcf->recipientBlockAckAgreementPolicy);
         }
         else {
             auto agreement = hcf->originatorBlockAckAgreementHandler->getAgreement(
                     frame->getReceiverAddress(), frame->getTid());
-            HcfObservationSink::originatorBlockAckAgreementDeleted(hcf, agreement);
+            hcf->emit(cComponent::registerSignal("blockAckAgreementDeleted"), agreement);
             hcf->originatorBlockAckAgreementHandler->processReceivedDelba(frame,
                     hcf->originatorBlockAckAgreementPolicy);
         }
@@ -705,7 +652,7 @@ class HcfOriginatorFrameDispatchActions final :
                 hcf->originatorBlockAckAgreementPolicy, hcf);
         auto agreement = hcf->originatorBlockAckAgreementHandler->getAgreement(
                 frame->getTransmitterAddress(), frame->getTid());
-        HcfObservationSink::originatorBlockAckAgreementAdded(hcf, agreement);
+        hcf->emit(cComponent::registerSignal("blockAckAgreementAdded"), agreement);
         hcf->resumeContention();
     }
 
@@ -981,7 +928,8 @@ class Hcf::TransmissionPreparationActions final :
         auto aggregate = hcf->aggregationService.materializeTransmission(
                 sourcePacket, aggregatePlan.members, hcf->mac->getFcsMode(),
                 aggregatePlan.implicitBlockAck);
-        HcfObservationSink::ampduCreated(hcf, aggregate,
+        hcf->emit(cComponent::registerSignal("ampduCreated"), aggregate);
+        hcf->emit(cComponent::registerSignal("ampduNumMpdus"),
                 (unsigned long)aggregatePlan.members.size());
         return aggregate;
     }
@@ -1009,7 +957,7 @@ class Hcf::TransmissionPreparationActions final :
     virtual void observeSelectedRate(Packet *transmittedPacket,
             const IIeee80211Mode *mode) override
     {
-        HcfObservationSink::datarateSelected(hcf,
+        hcf->emit(cComponent::registerSignal("datarateSelected"),
                 mode->getDataMode()->getNetBitrate().get<bps>(), transmittedPacket);
         OPP_LOGPROXY(hcf, omnetpp::LOGLEVEL_DEBUG, nullptr).getStream()
                  << "Datarate for " << transmittedPacket->getName()
@@ -1028,8 +976,18 @@ class Hcf::TransmissionPreparationActions final :
     }
 };
 
-class HcfOriginatorActions final : public HcfOriginatorService::IActions,
-        public HcfRetryService::IActions
+enum class HcfFailurePath {
+    ORIGINATOR,
+    INTERNAL_COLLISION,
+    RTS_PROTECTION,
+};
+
+struct HcfFailureResult {
+    HcfOriginatorService::Disposition disposition = HcfOriginatorService::Disposition::PROCESSED;
+    HcfOriginatorService::TerminalAction terminalAction = HcfOriginatorService::TerminalAction::NONE;
+};
+
+class HcfOriginatorActions final : public HcfOriginatorService::IActions
 {
   private:
     using Frame = HcfOriginatorService::Frame;
@@ -1098,7 +1056,7 @@ class HcfOriginatorActions final : public HcfOriginatorService::IActions,
             throw cRuntimeError("Unknown HCF originator frame kind");
     }
 
-    virtual void processRtsFailure(const Frame& frame) override
+    void processRtsFailure(const Frame& frame)
     {
         if (auto dataHeader = getDataHeader(frame))
             edcaf->getRecoveryProcedure()->rtsFrameTransmissionFailed(dataHeader);
@@ -1110,7 +1068,7 @@ class HcfOriginatorActions final : public HcfOriginatorService::IActions,
             throw cRuntimeError("Unknown HCF RTS-protected frame kind");
     }
 
-    virtual bool isRtsRetryLimitReached(const Frame& frame) override
+    bool isRtsRetryLimitReached(const Frame& frame)
     {
         if (auto dataHeader = getDataHeader(frame))
             return edcaf->getRecoveryProcedure()->isRtsFrameRetryLimitReached(
@@ -1262,19 +1220,17 @@ class HcfOriginatorActions final : public HcfOriginatorService::IActions,
                     Ieee80211MgmtExchangeResultKind::RETRY_LIMIT_REACHED);
     }
 
-    virtual void reportRetainingRetry(const Frame& frame,
-            HcfRetryService::FailurePath path) override
+    void reportRetainingRetry(const Frame& frame, HcfFailurePath path)
     {
-        if (path == HcfRetryService::FailurePath::ORIGINATOR)
+        if (path == HcfFailurePath::ORIGINATOR)
             EV_INFO << "Retrying frame " << frame.packet->getName() << ".\n";
     }
 
-    virtual void reportDropping(const Frame& frame,
-            HcfRetryService::FailurePath path) override
+    void reportDropping(const Frame& frame, HcfFailurePath path)
     {
-        if (path == HcfRetryService::FailurePath::INTERNAL_COLLISION)
+        if (path == HcfFailurePath::INTERNAL_COLLISION)
             EV_DETAIL << "The frame has reached its retry limit. Dropping it" << std::endl;
-        else if (path == HcfRetryService::FailurePath::RTS_PROTECTION)
+        else if (path == HcfFailurePath::RTS_PROTECTION)
             EV_INFO << "Dropping RTS/CTS protected frame " << frame.packet->getName()
                     << ", because retry limit is reached.\n";
         else
@@ -1282,19 +1238,70 @@ class HcfOriginatorActions final : public HcfOriginatorService::IActions,
                     << ", because retry limit is reached.\n";
     }
 
-    virtual void observePacketDropped(const Frame& frame) override
+    void observePacketDropped(const Frame& frame)
     {
         PacketDropDetails details;
         details.setReason(RETRY_LIMIT_REACHED);
         details.setLimit(-1);
-        HcfObservationSink::packetDropped(hcf, frame.packet, &details);
+        hcf->emit(cComponent::registerSignal("packetDropped"), frame.packet, &details);
     }
 
-    virtual void observeLinkBroken(const Frame& frame) override
+    void observeLinkBroken(const Frame& frame)
     {
-        HcfObservationSink::linkBroken(hcf, frame.packet);
+        hcf->emit(cComponent::registerSignal("linkBroken"), frame.packet);
     }
 };
+
+static HcfFailureResult processHcfFailure(
+        const HcfOriginatorService::Frame& frame,
+        HcfOriginatorService::FailureKind failureKind, HcfFailurePath path,
+        HcfOriginatorActions& actions)
+{
+    HcfFailureResult result;
+    if (!actions.isCurrent(frame.identity)) {
+        result.disposition = HcfOriginatorService::Disposition::STALE_OR_DUPLICATE;
+        return result;
+    }
+
+    // IEEE Std 802.11-2024, 10.23.2.2, 10.23.2.4 and 10.3.2.9:
+    // the authoritative recovery owners update counters before evaluation.
+    bool retryLimitReached;
+    if (path == HcfFailurePath::RTS_PROTECTION) {
+        actions.processRtsFailure(frame);
+        retryLimitReached = actions.isRtsRetryLimitReached(frame);
+    }
+    else {
+        actions.processTransmissionFailed(frame, failureKind);
+        retryLimitReached = actions.isRetryLimitReached(frame);
+    }
+    if (path == HcfFailurePath::ORIGINATOR) {
+        auto retryCount = actions.getRetryCount(frame);
+        actions.reportRateResult(frame, retryCount, false, retryLimitReached);
+        actions.processAckStateFailed(frame);
+    }
+    if (retryLimitReached) {
+        if (path == HcfFailurePath::INTERNAL_COLLISION)
+            actions.reportDropping(frame, path);
+        actions.processRetryLimitReached(frame);
+        actions.retireInProgress(frame);
+        actions.retireAckState(frame);
+        if (path != HcfFailurePath::INTERNAL_COLLISION)
+            actions.reportDropping(frame, path);
+        actions.observePacketDropped(frame);
+        if (frame.kind == HcfOriginatorService::FrameKind::MANAGEMENT)
+            actions.reportManagementResult(frame,
+                    HcfOriginatorService::ManagementResultKind::RETRY_LIMIT_REACHED);
+        actions.observeLinkBroken(frame);
+        result.terminalAction = HcfOriginatorService::TerminalAction::DROP_RETIRE;
+    }
+    else {
+        actions.reportRetainingRetry(frame, path);
+        if (path == HcfFailurePath::ORIGINATOR)
+            actions.markRetry(frame);
+        result.terminalAction = HcfOriginatorService::TerminalAction::RETAIN_RETRY;
+    }
+    return result;
+}
 
 void Hcf::claimIngressPacket(Packet *packet)
 {
@@ -1574,7 +1581,7 @@ HcfExchangeEngine::Actions Hcf::makeExchangeActions()
     };
     actions.originatorProcessFailedFrame = [this] (Packet *packet) { originatorProcessFailedFrame(packet); };
     actions.frameSequenceStarted = [this] (const FrameSequenceContext *context) {
-        HcfObservationSink::frameSequenceStarted(this, context);
+        emit(cComponent::registerSignal("frameSequenceStarted"), context);
     };
     actions.frameSequenceFinished = [this] (const FrameSequenceContext *) { frameSequenceFinished(); };
     actions.exchangeTerminated = [this] (HcfTransactionIdentity identity,
@@ -1589,7 +1596,7 @@ HcfExchangeEngine::Actions Hcf::makeExchangeActions()
         EV_INFO << "This frame is not for us" << std::endl;
         PacketDropDetails details;
         details.setReason(NOT_ADDRESSED_TO_US);
-        HcfObservationSink::packetDropped(this, packet, &details);
+        emit(cComponent::registerSignal("packetDropped"), packet, &details);
         delete packet;
     };
     actions.inactivityTimeout = [this] { handleBlockAckInactivityTimeout(); };
@@ -1688,49 +1695,86 @@ void Hcf::refreshDisplay() const
 
 void Hcf::processUpperFrame(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header)
 {
+    if (packet == nullptr || header == nullptr)
+        throw cRuntimeError("HCF ingress requires a packet and an IEEE 802.11 data or management header");
     Enter_Method("processUpperFrame(%s)", packet->getName());
-    HcfIngressOwnershipActions ownershipActions(this);
-    HcfIngressService::Actions actions;
-    AccessCategory classifiedAccessCategory = AccessCategory(-1);
-    actions.ownership = &ownershipActions;
-    actions.packetClaimed = [this, packet] {
+    if (activeIngressPacket != nullptr)
+        throw cRuntimeError(activeIngressPacket == packet ?
+                "HCF ingress is already processing this packet" :
+                "HCF ingress cannot process a foreign packet while another packet is active");
+    if (packet->peekAtFront<Ieee80211DataOrMgmtHeader>().get() != header.get())
+        throw cRuntimeError("HCF ingress header does not belong to the submitted packet");
+
+    auto caller = dynamic_cast<cComponent *>(packet->getOwner());
+    if (caller == nullptr)
+        throw cRuntimeError("HCF ingress caller does not support packet ownership transfer");
+    activeIngressPacket = packet;
+    bool claimed = false;
+    bool enqueueCommitted = false;
+    try {
+        if (caller != this)
+            claimIngressPacket(packet);
+        claimed = true;
         EV_INFO << "Processing upper frame: " << packet->getName() << endl;
-    };
-    actions.classifyDataFrame = [this] (const Ptr<const Ieee80211DataHeader>& dataHeader) {
-        // IEEE Std 802.11-2024, 10.23.2.1: EDCA maps UP/TID to one of the
-        // four AC transmit queues and runs one EDCAF per AC.
-        return edca->classifyFrame(dataHeader);
-    };
-    actions.frameClassified = [this, &classifiedAccessCategory] (AccessCategory ac) {
-        classifiedAccessCategory = ac;
-        EV_INFO << "The upper frame has been classified as a " << printAccessCategory(ac) << " frame." << endl;
-    };
-    actions.tagMacSapServiceDataUnit = [this] (Packet *packet,
-            const Ptr<const Ieee80211DataHeader>& dataHeader) {
-        tagMacSapServiceDataUnit(packet, dataHeader);
-    };
-    actions.resolvePerStaQueue = [this] (const MacAddress& address, AccessCategory ac) {
-        return resolvePerStaQueue(address, ac);
-    };
-    actions.getSharedQueue = [this] (AccessCategory ac) {
-        return edca->getEdcaf(ac)->getPendingQueue();
-    };
-    actions.ensureOriginalEnqueueTime = [] (Packet *packet) {
-        if (!packet->findTag<OrigEnqueueTimeTag>())
-            packet->addTagIfAbsent<OrigEnqueueTimeTag>()->setEnqueueTime(simTime());
-    };
-    actions.hasFrameToTransmit = [this] (AccessCategory ac) { return hasFrameToTransmit(ac); };
-    actions.hasChannelOwner = [this] { return edca->getChannelOwner() != nullptr; };
-    actions.isSequenceRunning = [this] { return isFrameSequenceRunning(); };
-    actions.channelAccessRequested = [this, &classifiedAccessCategory] {
-        EV_DETAIL << "Requesting channel for access category "
-                  << printAccessCategory(classifiedAccessCategory) << endl;
-        exchangeEngine->channelAccessRequested();
-    };
-    actions.requestChannelAccess = [this] (AccessCategory ac) {
-        edca->requestChannelAccess(ac, this);
-    };
-    ingressService.processUpperFrame(packet, header, actions);
+
+        AccessCategory accessCategory;
+        auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header);
+        if (dynamicPtrCast<const Ieee80211MgmtHeader>(header))
+            accessCategory = AC_VO;
+        else if (dataHeader != nullptr) {
+            // IEEE Std 802.11-2024, 10.23.2.1: EDCA maps UP/TID to one of the
+            // four AC transmit queues and runs one EDCAF per AC.
+            accessCategory = edca->classifyFrame(dataHeader);
+        }
+        else
+            throw cRuntimeError("Unsupported HCF upper frame type");
+        if (accessCategory < AC_BK || accessCategory >= AC_NUMCATEGORIES)
+            throw cRuntimeError("Invalid HCF ingress access category %d", accessCategory);
+        EV_INFO << "The upper frame has been classified as a "
+                << printAccessCategory(accessCategory) << " frame." << endl;
+
+        if (dataHeader != nullptr)
+            tagMacSapServiceDataUnit(packet, dataHeader);
+        queueing::IPacketQueue *queue = nullptr;
+        if (dataHeader != nullptr && !header->getReceiverAddress().isMulticast() &&
+                !header->getReceiverAddress().isBroadcast()) {
+            queue = resolvePerStaQueue(header->getReceiverAddress(), accessCategory);
+            if (!packet->findTag<OrigEnqueueTimeTag>())
+                packet->addTagIfAbsent<OrigEnqueueTimeTag>()->setEnqueueTime(simTime());
+        }
+        if (queue == nullptr)
+            queue = edca->getEdcaf(accessCategory)->getPendingQueue();
+        if (queue == nullptr)
+            throw cRuntimeError("HCF ingress queue resolution returned no queue");
+        try {
+            queue->enqueuePacket(packet);
+        }
+        catch (...) {
+            for (int i = 0; i < queue->getNumPackets(); i++) {
+                if (queue->getPacket(i) == packet) {
+                    queue->removePacket(packet);
+                    take(packet);
+                    break;
+                }
+            }
+            throw;
+        }
+        enqueueCommitted = true;
+        if (hasFrameToTransmit(accessCategory) && edca->getChannelOwner() == nullptr &&
+                !isFrameSequenceRunning()) {
+            EV_DETAIL << "Requesting channel for access category "
+                      << printAccessCategory(accessCategory) << endl;
+            exchangeEngine->channelAccessRequested();
+            edca->requestChannelAccess(accessCategory, this);
+        }
+        activeIngressPacket = nullptr;
+    }
+    catch (...) {
+        if (claimed && !enqueueCommitted && caller != this)
+            returnIngressPacketToCaller(packet, caller);
+        activeIngressPacket = nullptr;
+        throw;
+    }
 }
 
 void Hcf::scheduleInactivityTimer(simtime_t timeout)
@@ -1839,7 +1883,7 @@ void Hcf::processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>&
         EV_INFO << "This frame is not for us" << std::endl;
         PacketDropDetails details;
         details.setReason(NOT_ADDRESSED_TO_US);
-        HcfObservationSink::packetDropped(this, packet, &details);
+        emit(cComponent::registerSignal("packetDropped"), packet, &details);
         delete packet;
     }
     handleDeferredStartRxTimeout();
@@ -1870,7 +1914,7 @@ void Hcf::channelGranted(IChannelAccess *channelAccess)
         if (internallyCollidedEdcafs.size() > 0) {
             EV_INFO << "Internal collision happened with the following queues:" << std::endl;
             handleInternalCollision(internallyCollidedEdcafs);
-            HcfObservationSink::edcaCollisionDetected(this,
+            emit(cComponent::registerSignal("edcaCollisionDetected"),
                     (unsigned long)internallyCollidedEdcafs.size());
         }
         if (hasEligibleFrame && shouldRestartWideChannelAccess(edcaf)) {
@@ -2034,9 +2078,12 @@ TxopProcedure::InitialProtection Hcf::selectInitialProtection(Packet *frame,
     auto header = frame->peekAtFront<Ieee80211MacHeader>();
     auto negotiatedHt = mac->getMib()->getNegotiatedHtCapabilities(
             header->getReceiverAddress());
-    return HcfFramePreparation::selectInitialProtection(
-            header->getReceiverAddress(), modeSet->getPhyFamily(firstMode),
-            negotiatedHt ? &*negotiatedHt : nullptr);
+    bool isHtMode = modeSet->getPhyFamily(firstMode) == Ieee80211PhyFamily::HT;
+    auto protection = HtProtectionPolicy::select(isHtMode,
+            header->getReceiverAddress(), negotiatedHt ? &*negotiatedHt : nullptr);
+    return protection == HtProtectionPolicy::Protection::LEGACY_RTS_CTS ?
+            TxopProcedure::InitialProtection::LEGACY_RTS_CTS :
+            TxopProcedure::InitialProtection::NONE;
 }
 
 std::optional<std::string> Hcf::prepareHtSoundingModeIdentity(
@@ -2170,9 +2217,9 @@ void Hcf::handleEdcafInternalCollision(Edcaf *edcaf)
     auto frame = HcfOriginatorService::makeFrame(internallyCollidedFrame,
             internallyCollidedHeader);
     HcfOriginatorActions actions(this, edcaf, ac);
-    auto result = retryService.processFailure(frame,
+    auto result = processHcfFailure(frame,
             HcfOriginatorService::FailureKind::ACK_TIMEOUT,
-            HcfRetryService::FailurePath::INTERNAL_COLLISION, actions);
+            HcfFailurePath::INTERNAL_COLLISION, actions);
     if (result.disposition != HcfOriginatorService::Disposition::STALE_OR_DUPLICATE &&
             (result.terminalAction != HcfOriginatorService::TerminalAction::DROP_RETIRE ||
                     hasFrameToTransmit(ac)))
@@ -2202,7 +2249,7 @@ void Hcf::frameSequenceFinished()
         return;
     }
     Enter_Method("frameSequenceFinished");
-    HcfObservationSink::frameSequenceFinished(this, getFrameSequenceContext());
+    emit(cComponent::registerSignal("frameSequenceFinished"), getFrameSequenceContext());
     auto edcaf = edca->getChannelOwner();
     if (edcaf) {
         // IEEE Std 802.11-2024, 10.23.2.8 and 10.23.2.9: when the TXOP ends,
@@ -2315,9 +2362,9 @@ void Hcf::originatorProcessRtsProtectionFailed(Packet *packet)
             throw cRuntimeError("Unknown frame"); // TODO QoSDataFrame, NonQoSDataFrame
         auto frame = HcfOriginatorService::makeFrame(packet, protectedHeader);
         HcfOriginatorActions actions(this, edcaf, edcaf->getAccessCategory());
-        retryService.processFailure(frame,
+        processHcfFailure(frame,
                 HcfOriginatorService::FailureKind::ACK_TIMEOUT,
-                HcfRetryService::FailurePath::RTS_PROTECTION, actions);
+                HcfFailurePath::RTS_PROTECTION, actions);
     }
     else
         throw cRuntimeError("Hcca is unimplemented!");
@@ -2361,8 +2408,7 @@ void Hcf::processDispatchedFailure(Packet *packet,
 {
     auto frame = HcfOriginatorService::makeFrame(packet, header);
     HcfOriginatorActions actions(this, edcaf, accessCategory);
-    retryService.processFailure(frame, failureKind,
-            HcfRetryService::FailurePath::ORIGINATOR, actions);
+    processHcfFailure(frame, failureKind, HcfFailurePath::ORIGINATOR, actions);
 }
 
 void Hcf::originatorProcessTransmittedFrame(Packet *packet)
@@ -2387,7 +2433,7 @@ void Hcf::originatorProcessTransmittedFrame(Packet *packet)
         return;
     auto edcaf = edca->getChannelOwner();
     if (edcaf) {
-        HcfObservationSink::packetSentToPeer(edcaf, packet);
+        edcaf->emit(cComponent::registerSignal("packetSentToPeer"), packet);
         AccessCategory ac = edcaf->getAccessCategory();
         if (isHeMuContainerPacket(packet))
             return;
@@ -2479,8 +2525,8 @@ void Hcf::originatorProcessFailedFrame(Packet *failedPacket)
                     PacketDropDetails details;
                     details.setReason(RETRY_LIMIT_REACHED);
                     details.setLimit(-1);
-                    HcfObservationSink::packetDropped(this, frame, &details);
-                    HcfObservationSink::linkBroken(this, frame);
+                    emit(cComponent::registerSignal("packetDropped"), frame, &details);
+                    emit(cComponent::registerSignal("linkBroken"), frame);
                 }
                 return;
             }
@@ -2532,7 +2578,7 @@ void Hcf::originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastTra
         return;
     Enter_Method("originatorProcessReceivedFrame");
     EV_INFO << "Processing received frame " << receivedPacket->getName() << " as originator in frame sequence.\n";
-    HcfObservationSink::packetReceivedFromPeer(this, receivedPacket);
+    emit(cComponent::registerSignal("packetReceivedFromPeer"), receivedPacket);
     Ptr<const Ieee80211MacHeader> lastTransmittedHeader;
     if (auto metadata = lastTransmittedPacket->findTag<Ieee80211HeMuContainerReq>();
             metadata != nullptr) {
@@ -2768,7 +2814,7 @@ void Hcf::transmitControlResponseFrame(Packet *responsePacket, const Ptr<const I
     // BlockAck immediate responses are transmitted after SIFS.
     setFrameMode(responsePacket, responseHeader, responseMode);
     recordSelectedMode(responsePacket, responseMode);
-    HcfObservationSink::datarateSelected(this,
+    emit(cComponent::registerSignal("datarateSelected"),
             responseMode->getDataMode()->getNetBitrate().get<bps>(), responsePacket);
     EV_DEBUG << "Datarate for " << responsePacket->getName() << " is set to " << responseMode->getDataMode()->getNetBitrate() << ".\n";
     tx->transmitFrame(responsePacket, responseHeader, modeSet->getSifsTime(), this);
@@ -2777,7 +2823,7 @@ void Hcf::transmitControlResponseFrame(Packet *responsePacket, const Ptr<const I
 
 void Hcf::recipientProcessTransmittedControlResponseFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
 {
-    HcfObservationSink::packetSentToPeer(this, packet);
+    emit(cComponent::registerSignal("packetSentToPeer"), packet);
     HcfRecipientFrameDispatchActions actions(this);
     frameDispatchService.dispatchTransmittedControlResponse(header, actions);
     resumeContention();

@@ -9,7 +9,6 @@ transaction validate/commit/rollback/complete contract.
 #include <stdexcept>
 #include <vector>
 
-#include "inet/linklayer/ieee80211/mac/contract/IHcfExchangeCallback.h"
 #include "inet/linklayer/ieee80211/mac/contract/IHcfExchangeProvider.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfContext.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfExchangePlan.h"

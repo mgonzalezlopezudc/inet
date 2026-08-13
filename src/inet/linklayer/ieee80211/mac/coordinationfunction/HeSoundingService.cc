@@ -299,13 +299,14 @@ std::unique_ptr<PreparedHcfExchange> HeSoundingService::prepareExchange(
         const HcfContext& context, HcfTransactionIdentity transactionIdentity,
         HcfExchangeRejection& rejection)
 {
-    if (!context.getHeSoundingSnapshot() || actions == nullptr) {
+    auto snapshot = context.findProviderSnapshot<HcfHeSoundingSnapshot>();
+    if (snapshot == nullptr || actions == nullptr) {
         rejection = {HcfExchangeRejectionCode::INCOMPLETE_CONTEXT,
                 HcfExchangeClass::HE_SOUNDING, transactionIdentity,
                 "HE sounding requires an immutable snapshot and typed actions"};
         return nullptr;
     }
-    auto action = prepareSounding(*context.getHeSoundingSnapshot());
+    auto action = prepareSounding(*snapshot);
     if (!action) {
         rejection = {HcfExchangeRejectionCode::NO_ELIGIBLE_PACKET,
                 HcfExchangeClass::HE_SOUNDING, transactionIdentity,
@@ -317,7 +318,7 @@ std::unique_ptr<PreparedHcfExchange> HeSoundingService::prepareExchange(
     rejection = {};
     return std::make_unique<PreparedHcfExchange>(plan,
             std::make_unique<HeSoundingTransaction>(this, *action,
-                    context.getHeSoundingSnapshot()->accessCategory));
+                    snapshot->accessCategory));
 }
 
 } // namespace ieee80211

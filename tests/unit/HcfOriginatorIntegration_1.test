@@ -276,6 +276,16 @@ REQUIRE(frames.getLength() == 1 && frames.getFrames(0) == current);
 REQUIRE(ackHandler.getQoSDataAckStatus(currentHeader) == QosAckHandler::Status::WAITING_FOR_NORMAL_ACK);
 delete impostor;
 
+// A late failure callback with the same sequence identity but a different
+// packet pointer is stale and must not mutate recovery, ACK, or frame owners.
+auto staleFailure = makeData("staleFailure", peer, 10);
+events.clear();
+hcf->fail(staleFailure);
+REQUIRE(events.empty());
+REQUIRE(frames.getLength() == 1 && frames.getFrames(0) == current);
+REQUIRE(ackHandler.getQoSDataAckStatus(currentHeader) == QosAckHandler::Status::WAITING_FOR_NORMAL_ACK);
+delete staleFailure;
+
 // Management ACK uses the recovery count even when Retry is clear, then
 // preserves rate, recovery, ACK-state, management-result, and retire order.
 auto managementAck = makeManagement("managementAck", peer, 11, 101);

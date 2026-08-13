@@ -15,61 +15,6 @@
 namespace inet {
 namespace ieee80211 {
 
-HcfRetryService::Result HcfRetryService::processFailure(
-        const HcfOriginatorService::Frame& frame,
-        HcfOriginatorService::FailureKind failureKind, FailurePath path,
-        IActions& actions) const
-{
-    Result result;
-    if (!actions.isCurrent(frame.identity)) {
-        result.disposition = HcfOriginatorService::Disposition::STALE_OR_DUPLICATE;
-        return result;
-    }
-
-    // IEEE Std 802.11-2024, 10.23.2.2, 10.23.2.4 and 10.3.2.9:
-    // the existing recovery owners update their counters before retry-limit
-    // evaluation; this stateless facade only sequences those owner actions.
-    bool retryLimitReached;
-    if (path == FailurePath::RTS_PROTECTION) {
-        actions.processRtsFailure(frame);
-        retryLimitReached = actions.isRtsRetryLimitReached(frame);
-    }
-    else {
-        actions.processTransmissionFailed(frame, failureKind);
-        retryLimitReached = actions.isRetryLimitReached(frame);
-    }
-
-    if (path == FailurePath::ORIGINATOR) {
-        result.retryCount = actions.getRetryCount(frame);
-        actions.reportRateResult(frame, result.retryCount, false,
-                retryLimitReached);
-        actions.processAckStateFailed(frame);
-    }
-
-    if (retryLimitReached) {
-        if (path == FailurePath::INTERNAL_COLLISION)
-            actions.reportDropping(frame, path);
-        actions.processRetryLimitReached(frame);
-        actions.retireInProgress(frame);
-        actions.retireAckState(frame);
-        if (path != FailurePath::INTERNAL_COLLISION)
-            actions.reportDropping(frame, path);
-        actions.observePacketDropped(frame);
-        if (frame.kind == HcfOriginatorService::FrameKind::MANAGEMENT)
-            actions.reportManagementResult(frame,
-                    HcfOriginatorService::ManagementResultKind::RETRY_LIMIT_REACHED);
-        actions.observeLinkBroken(frame);
-        result.terminalAction = HcfOriginatorService::TerminalAction::DROP_RETIRE;
-    }
-    else {
-        actions.reportRetainingRetry(frame, path);
-        if (path == FailurePath::ORIGINATOR)
-            actions.markRetry(frame);
-        result.terminalAction = HcfOriginatorService::TerminalAction::RETAIN_RETRY;
-    }
-    return result;
-}
-
 void HcfRetryService::recoverBlockAckRequestFailure(
         InProgressFrames *inProgressFrames,
         QosRecoveryProcedure *recoveryProcedure,

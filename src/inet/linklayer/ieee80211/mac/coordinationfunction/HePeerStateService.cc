@@ -10,7 +10,6 @@
 #include <sstream>
 
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfObservationSink.h"
 #include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
 
 namespace inet {
@@ -139,7 +138,7 @@ void HePeerStateService::runInvalidationCascade(const MacAddress& peer,
     event.steps.push_back(HePeerInvalidationStep::INVALIDATE_DL_SCHEDULER);
     ports.invalidateUlCoordinator(peer);
     event.steps.push_back(HePeerInvalidationStep::INVALIDATE_UL_COORDINATOR);
-    HcfObservationSink::peerInvalidated(eventEmitter, &event);
+    eventEmitter->emit(cComponent::registerSignal("hePeerInvalidated"), &event);
 }
 
 HcfPeerSnapshot HePeerStateService::getPeerSnapshot(const MacAddress& peer) const
@@ -208,7 +207,15 @@ void HePeerStateService::updateOperatingMode(const MacAddress& peer,
     event.newMode = mode;
     operatingModes[peer] = mode;
     advanceGeneration(operatingModeGenerations[peer]);
-    HcfObservationSink::peerOperatingModeChanged(eventEmitter, &event);
+    eventEmitter->emit(cComponent::registerSignal("peerOperatingModeChanged"), &event);
+    eventEmitter->emit(cComponent::registerSignal("peerOperatingModeAssociationId"),
+            static_cast<unsigned long>(event.associationId));
+    eventEmitter->emit(cComponent::registerSignal("peerOperatingModeRxNss"),
+            static_cast<unsigned long>(event.newMode.rxNss));
+    eventEmitter->emit(cComponent::registerSignal("peerOperatingModeChannelWidth"),
+            static_cast<unsigned long>(event.newMode.channelWidth));
+    eventEmitter->emit(cComponent::registerSignal("peerOperatingModeUlMuDisable"),
+            event.newMode.ulMuDisable ? 1L : 0L);
 }
 
 bool HePeerStateService::getOperatingMode(const MacAddress& peer,

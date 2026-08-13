@@ -94,14 +94,14 @@ class ReplacementObserver : public cSimpleModule
                 hcf->getSubmodule("featureSet"));
         auto identity = HcfTransactionIdentity(HcfTransactionToken(91),
                 HcfTransactionGeneration(1));
-        auto selected = hcf->getHcfRuntimeForTesting().getExchangeSelector().selectAndCommit(
+        auto selected = hcf->getExchangeSelectorForTesting().selectAndCommit(
                 HcfContext(AC_BE, {HcfExchangeClass::SINGLE_USER}), identity);
         if (selected != HcfExchangeClass::SINGLE_USER ||
                 featureSet->singleUser.prepareCount != 1 ||
                 featureSet->singleUser.commitCount != 1 ||
                 featureSet->channelRelease.prepareCount != 0)
             throw cRuntimeError("replacement IHcfFeatureSet provider was not selected exactly once");
-        hcf->getHcfRuntimeForTesting().getExchangeSelector().exchangeTerminated(identity,
+        hcf->getExchangeSelectorForTesting().exchangeTerminated(identity,
                 HcfExchangeAbortReason::NONE);
         EV << "Initialized Hcf replacement provider executed exactly once.\n";
     }

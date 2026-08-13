@@ -15,8 +15,8 @@
 #include "inet/linklayer/ieee80211/mac/contract/IVhtDlMuExchangeCallback.h"
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequenceHandler.h"
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementHandler.h"
+#include "inet/linklayer/ieee80211/mac/contract/IVhtGroupIdManager.h"
 #include "inet/linklayer/ieee80211/mac/common/AccessCategory.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/VhtGroupMembershipAdapter.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/VhtSoundingService.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/VhtDlMuPlan.h"
 #include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211VhtPacketRadio.h"
@@ -74,7 +74,8 @@ struct INET_API VhtGrantSnapshot
 };
 
 /** Executable VHT HCF feature. VhtHcf only supplies the common-HCF actions. */
-class INET_API VhtHcfFeature : public IVhtDlMuExchangeCallback
+class INET_API VhtHcfFeature : public IVhtDlMuExchangeCallback,
+        public IVhtGroupIdManager::ILocalMembershipListener
 {
   public:
     class INET_API IActions
@@ -130,7 +131,6 @@ class INET_API VhtHcfFeature : public IVhtDlMuExchangeCallback
     uint8_t dlMuGroupId = 1;
     double beamformingGainDb = 3;
     VhtSoundingService soundingService;
-    VhtGroupMembershipAdapter membershipAdapter;
     IVhtGroupIdManager *groupIdManager = nullptr;
     IIeee80211VhtDlMuScheduler *dlMuScheduler = nullptr;
     physicallayer::IIeee80211VhtPacketRadio *radio = nullptr;
@@ -152,6 +152,8 @@ class INET_API VhtHcfFeature : public IVhtDlMuExchangeCallback
     std::optional<VhtGrantSnapshot> prepareDlMu(AccessCategory ac) const;
     std::optional<VhtGrantSnapshot> prepareSuSounding(AccessCategory ac) const;
     void commitSounding(const VhtGrantSnapshot& snapshot);
+    virtual void localVhtGroupMembershipChanged(
+            const std::optional<IVhtGroupIdManager::Membership>& membership) override;
     void commitBlockAckPrerequisite(const VhtGrantSnapshot& snapshot);
     void commitDlMu(const VhtGrantSnapshot& snapshot);
 

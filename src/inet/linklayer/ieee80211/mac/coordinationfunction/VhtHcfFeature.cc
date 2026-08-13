@@ -117,11 +117,22 @@ void VhtHcfFeature::configure(IActions *actions, bool enableSuBeamforming,
     soundingService.configure(csiValidityDuration, coordinator);
     if (radio != nullptr) {
         soundingService.updateChannelWidth(radio->getVhtChannelWidth());
-        membershipAdapter.setRadio(radio);
     }
-    groupIdManager->setLocalMembershipListener(&membershipAdapter);
+    groupIdManager->setLocalMembershipListener(this);
     defaultTxOpFactory = std::make_unique<DefaultVhtDlMuTxOpFactory>();
     txOpFactory = defaultTxOpFactory.get();
+}
+
+void VhtHcfFeature::localVhtGroupMembershipChanged(
+        const std::optional<IVhtGroupIdManager::Membership>& membership)
+{
+    if (radio == nullptr)
+        return;
+    if (!membership.has_value())
+        radio->setVhtMuRxSelection({});
+    else
+        radio->setVhtMuRxSelection({true, membership->groupId,
+                membership->userPosition, membership->channelWidth});
 }
 
 void VhtHcfFeature::modeSetChanged()

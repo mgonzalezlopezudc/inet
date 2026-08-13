@@ -5,7 +5,6 @@
 //
 
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfRuntime.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfObservationSink.h"
 
 #include <algorithm>
 #include <optional>
@@ -308,14 +307,6 @@ HeUlPreparationSnapshot HeHcfRuntime::captureHeUlPreparationSnapshot(
     return snapshot;
 }
 
-bool HeHcfRuntime::tryStartUlMuFrameSequence(AccessCategory accessCategory)
-{
-    if (!mac->isApInHeFamily())
-        return false;
-    return ulTriggerService.tryStart(accessCategory,
-            captureHeUlPreparationSnapshot(accessCategory));
-}
-
 void HeHcfRuntime::configureHeUlMuProtection(AccessCategory accessCategory)
 {
     auto txop = edca->getEdcaf(accessCategory)->getTxopProcedure();
@@ -334,7 +325,7 @@ void HeHcfRuntime::startHeUlMuExchange(AccessCategory accessCategory,
 
 void HeHcfRuntime::processTriggeredUlFrame(Packet *packet, const Ptr<const Ieee80211DataHeader>& header, uint16_t aid)
 {
-    HcfObservationSink::packetReceivedFromPeer(hcf, packet);
+    hcf->emit(cComponent::registerSignal("packetReceivedFromPeer"), packet);
     if (header->getBufferStatusPresent())
     {
         Ieee80211HeQueueSizeEstimate estimate;

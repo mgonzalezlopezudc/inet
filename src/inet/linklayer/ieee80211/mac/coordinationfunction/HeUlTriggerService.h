@@ -94,9 +94,6 @@ class INET_API HeUlTriggerService
     std::optional<PreparedStart> prepareStart(AccessCategory accessCategory,
             const HeUlPreparationSnapshot& snapshot);
     bool commitStart(const PreparedStart& preparedStart);
-    void rollbackStart(const PreparedStart&) noexcept {}
-    bool tryStart(AccessCategory accessCategory,
-            const HeUlPreparationSnapshot& snapshot);
     static HeUlScheduleFinalizationResult finalizeSchedule(
             const IIeee80211HeUlScheduler::Schedule& proposedSchedule,
             Hz centerFrequency, Hz channelBandwidth,
@@ -104,9 +101,7 @@ class INET_API HeUlTriggerService
             physicallayer::Ieee80211HeTriggerResponseFinalizationResult *finalizationSnapshot = nullptr);
     static HeUlCandidatePreparation buildCandidates(
             const HeUlPreparationSnapshot& snapshot);
-    void planStarted();
     const char *getPendingTriggerName() const;
-    cMessage *getTimer() const { return triggerTimer; }
 
     uint32_t allocateTriggerId();
     void planCommitted(const HeUlMuPlan& plan, uint32_t triggerId);
