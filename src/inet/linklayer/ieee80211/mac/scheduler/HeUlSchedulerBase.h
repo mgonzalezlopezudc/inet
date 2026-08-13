@@ -28,6 +28,8 @@ class INET_API HeUlSchedulerBase : public IIeee80211HeUlScheduler, public Simple
     int maxMuStations = 8;
     int minRandomAccessRus = 1;
     int maxRandomAccessRus = 4;
+    IIeee80211HeUlScheduler::RandomAccessTarget randomAccessTarget =
+            IIeee80211HeUlScheduler::RandomAccessTarget::ASSOCIATED_STAS;
     int defaultMcs = 0;
     std::string mcsSelectionPolicy;
     std::vector<double> mcsSnrThresholds;
@@ -65,6 +67,8 @@ class INET_API HeUlSchedulerBase : public IIeee80211HeUlScheduler, public Simple
     const std::string& getCommittedSchedulingReason() const { return lastSchedulingReason; }
     uint64_t getCommittedScheduleCount() const { return committedScheduleCount; }
     virtual void invalidatePeer(const MacAddress& peer) override;
+    IIeee80211HeUlScheduler::RandomAccessTarget getRandomAccessTarget() const
+        { return randomAccessTarget; }
 };
 
 } // namespace ieee80211

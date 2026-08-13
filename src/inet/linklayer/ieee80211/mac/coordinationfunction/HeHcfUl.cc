@@ -8,7 +8,6 @@
 
 #include <algorithm>
 #include <optional>
-#include <sstream>
 
 #include "inet/common/INETMath.h"
 #include "inet/common/ModuleAccess.h"
@@ -100,128 +99,6 @@ static AccessCategory aciToAccessCategory(uint8_t aci)
         case 3: return AC_VO;
         default: throw cRuntimeError("Invalid Preferred AC in Basic Trigger");
     }
-}
-
-std::optional<std::string> validateIeee80211HeUlTrigger(
-        const Ieee80211TriggerFrame& trigger, Hz centerFrequency)
-{
-    using namespace physicallayer;
-    const auto triggerType = trigger.getTriggerType();
-    if (triggerType != IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER &&
-            triggerType != IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER &&
-            triggerType != IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER)
-        return "unsupported Trigger type";
-    const auto bandwidth = Hz(trigger.getChannelBandwidthMhz() * 1e6);
-    if (bandwidth != MHz(20) && bandwidth != MHz(40) &&
-            bandwidth != MHz(80) && bandwidth != MHz(160))
-        return "unsupported Trigger bandwidth";
-    if (trigger.getUlLength() > 4095 || trigger.getUlLength() % 3 != 1 ||
-            trigger.getCommonDuration() <= SIMTIME_ZERO ||
-            trigger.getCommonDuration() > SimTime(5.484, SIMTIME_MS))
-        return "invalid UL Length or common duration";
-    const bool validGiLtf =
-            (trigger.getGuardInterval() == HE_GI_1_6_US &&
-             (trigger.getLtfType() == HE_LTF_1X || trigger.getLtfType() == HE_LTF_2X)) ||
-            (trigger.getGuardInterval() == HE_GI_3_2_US &&
-             trigger.getLtfType() == HE_LTF_4X);
-    if (!validGiLtf || (trigger.getNumberOfHeLtfSymbols() != 1 &&
-            trigger.getNumberOfHeLtfSymbols() != 2 &&
-            trigger.getNumberOfHeLtfSymbols() != 4 &&
-            trigger.getNumberOfHeLtfSymbols() != 6 &&
-            trigger.getNumberOfHeLtfSymbols() != 8) ||
-            trigger.getPreFecPaddingFactor() < 1 ||
-            trigger.getPreFecPaddingFactor() > 4 ||
-            trigger.getApTxPowerDbm() < -20 || trigger.getApTxPowerDbm() > 40)
-        return "invalid Trigger common signaling";
-    if (triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
-        if (trigger.getUsersArraySize() != 0 || trigger.getNfrpFeedbackType() != 0 ||
-                trigger.getNfrpStartingAid() > 4095 ||
-                trigger.getGuardInterval() != HE_GI_3_2_US ||
-                trigger.getLtfType() != HE_LTF_4X ||
-                trigger.getNumberOfHeLtfSymbols() != 2)
-            return "invalid NFRP Trigger fields";
-        try {
-            if (trigger.getNfrpStartingAid() +
-                    IIeee80211HeUlScheduler::getNfrpScheduledStaCount(
-                            bandwidth, trigger.getNfrpMultiplexingFlag()) > 4096)
-                return "NFRP AID range exceeds 12 bits";
-        }
-        catch (const std::exception&) {
-            return "invalid NFRP bandwidth";
-        }
-        return std::nullopt;
-    }
-    if (trigger.getUsersArraySize() == 0)
-        return "Basic/BSRP Trigger contains no User Info records";
-
-    auto catalog = getHeRuAllocationCatalog(centerFrequency, bandwidth);
-    std::set<uint16_t> scheduledAids;
-    std::map<std::pair<int, int>, std::vector<const Ieee80211HeTriggerUserInfo *>> usersPerRu;
-    std::vector<Ieee80211HeRu> physicalRus;
-    for (unsigned int i = 0; i < trigger.getUsersArraySize(); ++i) {
-        const auto& user = trigger.getUsers(i);
-        auto canonical = std::find_if(catalog.begin(), catalog.end(), [&] (const auto& ru) {
-            return ru.index == user.ruIndex && ru.toneSize == user.ruToneSize &&
-                    ru.toneOffset == user.ruToneOffset;
-        });
-        if (canonical == catalog.end())
-            return "User Info RU is not canonical";
-        if (user.mcs > 11 || user.numberOfSpatialStreams < 1 ||
-                user.numberOfSpatialStreams > 8 || user.streamStartIndex > 7 ||
-                user.streamStartIndex + user.numberOfSpatialStreams > 8)
-            return "invalid User Info MCS or spatial streams";
-        if (!user.useMaximumTransmitPower &&
-                (user.targetRssiDbm < -110 || user.targetRssiDbm > -20))
-            return "invalid User Info target RSSI";
-        if (user.randomAccess) {
-            if (user.aid != 0 || user.muMimo ||
-                    user.numberOfSpatialStreams != 1 || user.streamStartIndex != 0)
-                return "invalid associated-STA random-access User Info";
-        }
-        else if (user.aid == 0 || user.aid > 2007 ||
-                !scheduledAids.insert(user.aid).second)
-            return "invalid or duplicate scheduled AID";
-        if (user.coding == HE_CODING_BCC &&
-                (user.mcs > 9 || user.numberOfSpatialStreams > 4 ||
-                 user.ruToneSize >= 484))
-            return "invalid BCC User Info";
-        auto geometry = std::make_pair(user.ruToneSize, user.ruToneOffset);
-        if (usersPerRu[geometry].empty())
-            physicalRus.push_back(*canonical);
-        usersPerRu[geometry].push_back(&user);
-    }
-    if (!validateHeRuLayout(physicalRus, bandwidth))
-        return "overlapping or out-of-band Trigger RU layout";
-    const auto fullRu = getHeEqualRuLayout(centerFrequency, bandwidth, 1).front();
-    bool fullBandwidthUlMuMimo = physicalRus.size() == 1;
-    for (const auto& entry : usersPerRu) {
-        const auto& users = entry.second;
-        if (users.size() == 1) {
-            if (users.front()->muMimo || users.front()->streamStartIndex != 0)
-                return "single-user RU cannot use MU-MIMO or a nonzero starting stream";
-            fullBandwidthUlMuMimo = false;
-            continue;
-        }
-        if (users.size() > 8 || entry.first.first != fullRu.toneSize ||
-                entry.first.second != fullRu.toneOffset)
-            return "UL MU-MIMO requires at most eight users on the full-bandwidth RU";
-        std::set<int> streams;
-        for (const auto user : users) {
-            if (!user->muMimo || user->randomAccess ||
-                    user->numberOfSpatialStreams > 4)
-                return "shared RU is not scheduled UL MU-MIMO";
-            for (int stream = user->streamStartIndex;
-                    stream < user->streamStartIndex + user->numberOfSpatialStreams; ++stream)
-                if (!streams.insert(stream).second)
-                    return "UL MU-MIMO spatial streams overlap";
-        }
-        if (streams.empty() || streams.size() > 8 || *streams.begin() != 0 ||
-                *streams.rbegin() + 1 != static_cast<int>(streams.size()))
-            return "UL MU-MIMO spatial streams are gapped or exceed eight streams";
-    }
-    if (trigger.getLtfType() == HE_LTF_1X && !fullBandwidthUlMuMimo)
-        return "1x HE-LTF requires full-bandwidth UL MU-MIMO";
-    return std::nullopt;
 }
 
 bool HeHcfRuntime::allAssociatedStationsSupportPreamblePuncturing() const
@@ -432,12 +309,20 @@ void HeHcfRuntime::processReceivedTriggerFrame(Packet *packet, const Ptr<const I
     snapshot.packet = packet;
     snapshot.trigger = trigger;
     snapshot.reception.bssid = mac->getMib()->getBssid();
-    snapshot.reception.associationId = mac->getMib()->getLocalAssociationId();
-    snapshot.reception.associationEpoch = getHePeerStateService().getPeerSnapshot(
-            snapshot.reception.bssid).getAssociationEpoch();
+    snapshot.reception.triggerTransmitter = trigger->getTransmitterAddress();
+    const short localAssociationId = mac->getMib()->getLocalAssociationId();
+    snapshot.reception.associated = localAssociationId > 0;
+    snapshot.reception.associationId = snapshot.reception.associated ?
+            static_cast<uint16_t>(localAssociationId) : 0;
+    snapshot.reception.associationEpoch = snapshot.reception.associated ?
+            getHePeerStateService().getPeerSnapshot(snapshot.reception.bssid).
+                    getAssociationEpoch() : 0;
+    snapshot.reception.receivedInHePpdu =
+            getIeee80211HeSolicitingTxopDuration(packet).has_value();
     snapshot.reception.ulEnabled = ulCoordinator->isEnabled();
     snapshot.reception.accessPoint = mac->isApInHeFamily();
-    snapshot.reception.twtSleeping = isTwtSleeping(mac, snapshot.reception.bssid);
+    snapshot.reception.twtSleeping = snapshot.reception.associated &&
+            isTwtSleeping(mac, snapshot.reception.bssid);
     snapshot.reception.ndpFeedbackEnabled =
             mac->getMib()->localHeCapabilities.ndpFeedbackReport;
     snapshot.reception.centerFrequency = phy.getChannelCenterFrequency();
@@ -450,11 +335,20 @@ void HeHcfRuntime::processReceivedTriggerFrame(Packet *packet, const Ptr<const I
                     trigger->getApTxPowerDbm(), signalPower->getPower(),
                     modeInd->getMode()->getDataMode()->getBandwidth());
     }
-    snapshot.negotiatedCapabilities =
-            mac->getMib()->getNegotiatedHeCapabilities(snapshot.reception.bssid);
+    if (snapshot.reception.associated)
+        snapshot.negotiatedCapabilities = mac->getMib()->getNegotiatedHeCapabilities(
+                snapshot.reception.bssid);
+    auto localOperation = mac->getMib()->heOperation;
+    localOperation.operatingChannelWidth = snapshot.reception.channelBandwidth;
+    snapshot.localCapabilities = negotiateHeCapabilities(
+            mac->getMib()->localHeCapabilities, mac->getMib()->localHeCapabilities,
+            localOperation, false);
     snapshot.localAddress = mac->getAddress();
     snapshot.maximumTransmitPower = phy.getMaximumTransmitPower();
     snapshot.bssColor = mac->getMib()->heOperation.bssColor;
+    if (auto indication = packet->findTag<physicallayer::Ieee80211HeRxVectorInd>();
+            indication != nullptr && indication->getRxVector() != nullptr)
+        snapshot.bssColor = indication->getRxVector()->getCommon().getBssColor();
     snapshot.fcsMode = mac->getFcsMode();
     snapshot.ulMuDisabled = par("operatingModeUlMuDisable").boolValue();
     snapshot.currentTime = simTime();
@@ -466,6 +360,8 @@ void HeHcfRuntime::processReceivedTriggerFrame(Packet *packet, const Ptr<const I
     snapshot.responseSelection.triggerType =
             static_cast<IIeee80211HeUlTriggerPolicy::TriggerType>(
                     trigger->getTriggerType());
+    snapshot.responseSelection.unassociated = !snapshot.reception.associated;
+    snapshot.responseSelection.responsePeer = snapshot.reception.triggerTransmitter;
 
     for (int ac = AC_BK; ac <= AC_VO; ++ac) {
         auto accessCategory = static_cast<AccessCategory>(ac);
@@ -473,11 +369,21 @@ void HeHcfRuntime::processReceivedTriggerFrame(Packet *packet, const Ptr<const I
         auto queue = edcaf->getPendingQueue();
         HeTriggeredUlExchangeService::AccessQueueSnapshot queueSnapshot;
         queueSnapshot.accessCategory = accessCategory;
+        const auto queuePeer = snapshot.reception.associated ?
+                snapshot.reception.bssid : snapshot.reception.triggerTransmitter;
         queueSnapshot.queueToken = getHeQueueService().getQueueToken(queue,
-                snapshot.reception.bssid, snapshot.reception.associationEpoch,
+                queuePeer, snapshot.reception.associationEpoch,
                 accessCategory);
-        for (int i = 0; i < queue->getNumPackets(); ++i)
-            queueSnapshot.packets.push_back(queue->getPacket(i));
+        for (int i = 0; i < queue->getNumPackets(); ++i) {
+            auto queuedPacket = queue->getPacket(i);
+            queueSnapshot.packets.push_back(queuedPacket);
+            auto managementHeader = dynamicPtrCast<const Ieee80211MgmtHeader>(
+                    queuedPacket->peekAtFront<Ieee80211MacHeader>());
+            if (!snapshot.reception.associated && managementHeader != nullptr &&
+                    managementHeader->getReceiverAddress() ==
+                            snapshot.reception.triggerTransmitter)
+                snapshot.reception.hasPendingManagement = true;
+        }
         auto frames = edcaf->getInProgressFrames();
         for (int i = 0; i < frames->getLength() &&
                 queueSnapshot.inProgressTid < 0; ++i) {
@@ -702,6 +608,11 @@ HeHcfRuntime::prepareTriggeredUlRandomAccess(AccessCategory accessCategory,
             prepared.attempt};
 }
 
+void HeHcfRuntime::setTriggeredUlRandomAccessPeer(const MacAddress& peer)
+{
+    ulCoordinator->setRandomAccessPeer(peer);
+}
+
 int HeHcfRuntime::commitTriggeredUlRandomAccess(
         const HeTriggeredUlExchangeService::RandomAccessPreparation& preparation)
 {
@@ -740,9 +651,11 @@ void HeHcfRuntime::retireTriggeredUlPacket(Packet *packet,
 {
     if (packet == nullptr || HcfPacketIdentity(packet->getId()) != identity)
         throw cRuntimeError("Stale HE-TB packet identity on Block Ack retirement");
-    auto header = packet->peekAtFront<Ieee80211DataHeader>();
-    edca->getEdcaf(edca->mapTidToAc(header->getTid()))->getAckHandler()->
-            retireFrame(header);
+    auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(
+            packet->peekAtFront<Ieee80211MacHeader>());
+    if (dataHeader != nullptr)
+        edca->getEdcaf(edca->mapTidToAc(dataHeader->getTid()))->getAckHandler()->
+                retireFrame(dataHeader);
     delete packet;
 }
 
@@ -753,7 +666,15 @@ void HeHcfRuntime::retryTriggeredUlPacket(Packet *packet,
 {
     if (packet == nullptr || HcfPacketIdentity(packet->getId()) != identity)
         throw cRuntimeError("Stale HE-TB packet identity on retry");
-    auto header = packet->peekAtFront<Ieee80211DataHeader>();
+    auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(
+            packet->peekAtFront<Ieee80211MacHeader>());
+    if (dataHeader == nullptr) {
+        if (associationId != 2045 || associationEpoch != 0 ||
+                !getHeQueueService().reinsertPacket(sourceQueueToken, identity, packet))
+            delete packet;
+        return;
+    }
+    auto header = dataHeader;
     auto edcaf = edca->getEdcaf(edca->mapTidToAc(header->getTid()));
     if (bssid != getTriggeredUlBssid() ||
             associationId != getTriggeredUlAssociationId() ||

@@ -236,6 +236,16 @@ void HeHcfRuntime::processHeUlTriggeredFrame(Packet *packet,
     processTriggeredUlFrame(packet, header, associationId);
 }
 
+void HeHcfRuntime::processHeUlTriggeredManagementFrame(Packet *packet,
+        const Ptr<const Ieee80211MgmtHeader>& header, uint16_t)
+{
+    // The HE-TB exchange owns the response acknowledgment. Deliver the
+    // management frame upward and update management state through the normal
+    // dispatcher; that dispatcher does not schedule a legacy ACK.
+    sendUp(recipientDataService->managementFrameReceived(packet, header));
+    hcf->recipientProcessReceivedManagementFrame(header);
+}
+
 queueing::IPacketQueue *HeHcfRuntime::getPerStaQueue(const MacAddress& staAddr, AccessCategory ac)
 {
     finalizeRetiredQueueBanksIfSafe();

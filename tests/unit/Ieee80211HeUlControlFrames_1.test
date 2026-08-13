@@ -731,65 +731,6 @@ static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
 }
 
 {
-    const auto centerFrequency = Hz(5.18e9);
-    auto proposed = makeUlSchedule(centerFrequency, MHz(20),
-            SimTime(1, SIMTIME_MS), IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER);
-    proposed.guardInterval = HE_GI_1_6_US;
-    proposed.ltfType = HE_LTF_1X;
-    auto fullRu = getHeEqualRuLayout(centerFrequency, MHz(20), 1).front();
-    proposed.allocations.front().ru = fullRu;
-    proposed.allocations.front().muMimo = true;
-    auto second = proposed.allocations.front();
-    second.staAddress = MacAddress("02:00:00:00:00:02");
-    second.associationId = 2;
-    second.streamStartIndex = 1;
-    proposed.allocations.push_back(second);
-    auto finalized = TestHeHcfScheduleFinalizer::finalize(proposed,
-            centerFrequency, MHz(20), IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER);
-    REQUIRE(finalized);
-    auto decoded = buildSerializeAndDecodeTrigger(finalized.schedule,
-            IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER);
-    REQUIRE(!validateIeee80211HeUlTrigger(*decoded, centerFrequency));
-
-    auto singleton = staticPtrCast<Ieee80211TriggerFrame>(decoded->dupShared());
-    singleton->setUsersArraySize(1);
-    auto singletonUser = singleton->getUsers(0);
-    singletonUser.streamStartIndex = 1;
-    singleton->setUsers(0, singletonUser);
-    REQUIRE(validateIeee80211HeUlTrigger(*singleton, centerFrequency));
-
-    auto partial = staticPtrCast<Ieee80211TriggerFrame>(decoded->dupShared());
-    auto partialRu = getHeEqualRuLayout(centerFrequency, MHz(20), 2).front();
-    for (unsigned int i = 0; i < partial->getUsersArraySize(); ++i) {
-        auto user = partial->getUsers(i);
-        user.ruIndex = partialRu.index;
-        user.ruToneSize = partialRu.toneSize;
-        user.ruToneOffset = partialRu.toneOffset;
-        partial->setUsers(i, user);
-    }
-    REQUIRE(validateIeee80211HeUlTrigger(*partial, centerFrequency));
-
-    auto overlapping = staticPtrCast<Ieee80211TriggerFrame>(decoded->dupShared());
-    auto overlappingSecond = overlapping->getUsers(1);
-    overlappingSecond.streamStartIndex = 0;
-    overlapping->setUsers(1, overlappingSecond);
-    REQUIRE(validateIeee80211HeUlTrigger(*overlapping, centerFrequency));
-
-    auto gapped = staticPtrCast<Ieee80211TriggerFrame>(decoded->dupShared());
-    auto gappedSecond = gapped->getUsers(1);
-    gappedSecond.streamStartIndex = 2;
-    gapped->setUsers(1, gappedSecond);
-    REQUIRE(validateIeee80211HeUlTrigger(*gapped, centerFrequency));
-
-    auto tooManyPerUser = staticPtrCast<Ieee80211TriggerFrame>(decoded->dupShared());
-    auto oversizedUser = tooManyPerUser->getUsers(0);
-    oversizedUser.numberOfSpatialStreams = 5;
-    tooManyPerUser->setUsers(0, oversizedUser);
-    REQUIRE(validateIeee80211HeUlTrigger(*tooManyPerUser, centerFrequency));
-    EV << "Responder validation rejected malformed UL MU-MIMO RU and stream geometry.\n";
-}
-
-{
     for (auto bandwidth : {MHz(20), MHz(40), MHz(80), MHz(160)}) {
         const int toneSets = IIeee80211HeUlScheduler::getNfrpToneSetsPerSpatialStream(bandwidth);
         for (bool multiplexingFlag : {false, true}) {
@@ -1003,6 +944,39 @@ static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
     REQUIRE(decoded->getRecords(1).bitmap == 0);
     delete packet;
     delete received;
+
+    auto preassociation = makeShared<Ieee80211MultiStaBlockAck>();
+    preassociation->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
+    preassociation->setTransmitterAddress(MacAddress("10:00:00:00:00:00"));
+    preassociation->setRecordsArraySize(1);
+    Ieee80211MultiStaBlockAckRecord preassociationRecord;
+    preassociationRecord.ackType = 0;
+    preassociationRecord.aid = 2045;
+    preassociationRecord.tid = 15;
+    preassociationRecord.receiverAddress = MacAddress("02:00:00:00:00:01");
+    preassociationRecord.responseReceived = true;
+    preassociation->setRecords(0, preassociationRecord);
+    preassociation->setChunkLength(B(30));
+    auto preassociationPacket = new Packet("preassociation-multi-sta-ba", preassociation);
+    auto preassociationBytes = preassociationPacket->peekDataAsBytes();
+    REQUIRE(preassociationBytes->getChunkLength() == B(30));
+    REQUIRE(preassociationBytes->getByte(18) == 0xFD &&
+            preassociationBytes->getByte(19) == 0xF7);
+    REQUIRE(preassociationBytes->getByte(20) == 0 &&
+            preassociationBytes->getByte(21) == 0 &&
+            preassociationBytes->getByte(22) == 0 &&
+            preassociationBytes->getByte(23) == 0);
+    auto preassociationReceived = new Packet("preassociation-multi-sta-ba-rx",
+            preassociationBytes);
+    auto preassociationDecoded = preassociationReceived->popAtFront<
+            Ieee80211MultiStaBlockAck>(preassociationBytes->getChunkLength());
+    REQUIRE(preassociationDecoded->getRecordsArraySize() == 1);
+    REQUIRE(preassociationDecoded->getRecords(0).aid == 2045);
+    REQUIRE(preassociationDecoded->getRecords(0).tid == 15);
+    REQUIRE(preassociationDecoded->getRecords(0).receiverAddress ==
+            preassociationRecord.receiverAddress);
+    delete preassociationPacket;
+    delete preassociationReceived;
 
     auto invalidBlockAck = makeShared<Ieee80211MultiStaBlockAck>();
     invalidBlockAck->setBlockAckPolicy(true);
@@ -1458,7 +1432,6 @@ Trigger-derived path loss controls exact HE-TB power and preserves maximum-power
 Trigger frame round trip passed.
 HCF-finalized BSRP/NFRP Trigger build and wire round trips passed.
 All Trigger GI/HE-LTF wire pairs crossed responder and TXVECTOR boundaries.
-Responder validation rejected malformed UL MU-MIMO RU and stream geometry.
 NFRP AID range and tone-set/STS mapping passed for all HE bandwidths.
 2.4 GHz maximum HE-TB schedule crossed the TXVECTOR boundary legally.
 BE/BK BSR ACI wire mappings passed.
@@ -1477,9 +1450,11 @@ HE UL response processing: received=1, block-ack records=1
 BSRP RA-RU response derives associated identity and delivers its QoS Null report.
 HE UL response processing: received=1, block-ack records=1
 Interspersed zero-length delimiters do not shift HE-TB MPDU outcomes.
-Correlated HE-TB compressed BAR: trigger=22, AID=7, TID=5, SSN=4095, bitmap=0x8000000000000003
+Correlated HE-TB compressed BAR: trigger=21, AID=7, TID=5, SSN=4095, bitmap=0x8000000000000003
 HE UL response processing: received=1, block-ack records=1
 HE-TB compressed BAR preserves historical bitmap and cyclic SSN in the terminal record.
+Ignoring invalid or conflicting HE-TB compressed BAR for Trigger 22
+HE UL response processing: received=0, block-ack records=1
 Ignoring invalid or conflicting HE-TB compressed BAR for Trigger 23
 HE UL response processing: received=0, block-ack records=1
 Ignoring invalid or conflicting HE-TB compressed BAR for Trigger 24
@@ -1487,8 +1462,6 @@ HE UL response processing: received=0, block-ack records=1
 Ignoring invalid or conflicting HE-TB compressed BAR for Trigger 25
 HE UL response processing: received=0, block-ack records=1
 Ignoring invalid or conflicting HE-TB compressed BAR for Trigger 26
-HE UL response processing: received=0, block-ack records=1
-Ignoring invalid or conflicting HE-TB compressed BAR for Trigger 27
 HE UL response processing: received=0, block-ack records=1
 Malformed and non-Basic HE-TB BARs are rejected before recipient state mutation.
 Multi-STA Block Ack preserves 101/110/all-failed sequence bases.

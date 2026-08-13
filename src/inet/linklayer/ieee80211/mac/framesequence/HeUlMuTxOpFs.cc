@@ -46,6 +46,7 @@ Ieee80211MultiStaBlockAckRecord buildHeUlMultiStaBlockAckRecord(
         const std::vector<physicallayer::Ieee80211MpduReceiveResult>& outcomes)
 {
     Ieee80211MultiStaBlockAckRecord record;
+    record.ackType = 0;
     record.aid = aid;
     record.tid = tid;
     record.responseReceived = true;
@@ -141,8 +142,13 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
                 dynamicPtrCast<const Ieee80211MpduSubframeHeader>(frame->peekAtFront()) == nullptr)
             return false;
         return std::any_of(allocations.begin(), allocations.end(), [&] (const auto& allocation) {
+            const auto expectedStaId = allocation.randomAccess &&
+                    allocation.randomAccessTarget ==
+                            IIeee80211HeUlScheduler::RandomAccessTarget::UNASSOCIATED_STAS ?
+                    2045 : allocation.associationId;
             return physicallayer::areIeee80211HeRuParametersEqual(canonical.ru, allocation.ru) &&
-                    (allocation.randomAccess || canonical.staId == allocation.associationId);
+                    (allocation.randomAccess ? canonical.staId == expectedStaId :
+                            canonical.staId == allocation.associationId);
         });
     }
 
@@ -332,7 +338,10 @@ Packet *HeUlMuTxOpFs::buildTriggerPacket() const
     for (size_t i = 0; i < schedule.allocations.size(); i++) {
         const auto& allocation = schedule.allocations[i];
         Ieee80211HeTriggerUserInfo user;
-        user.aid = allocation.associationId;
+        user.aid = allocation.randomAccess &&
+                allocation.randomAccessTarget ==
+                        IIeee80211HeUlScheduler::RandomAccessTarget::UNASSOCIATED_STAS ?
+                2045 : allocation.associationId;
         user.ruIndex = allocation.ru.index;
         user.ruToneSize = allocation.ru.toneSize;
         user.ruToneOffset = allocation.ru.toneOffset;
@@ -402,6 +411,7 @@ void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
     std::map<uint16_t, std::vector<physicallayer::Ieee80211MpduReceiveResult>> receivedOutcomes;
     std::map<uint16_t, uint8_t> receivedTids;
     std::map<uint16_t, Ieee80211MultiStaBlockAckRecord> blockAckReqRecords;
+    std::map<uint16_t, Ieee80211MultiStaBlockAckRecord> preassociationRecords;
     std::set<uint16_t> responders;
     constexpr int parsingFlags = Chunk::PF_ALLOW_INCORRECT | Chunk::PF_ALLOW_INCOMPLETE |
             Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED;
@@ -418,14 +428,21 @@ void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
         const IIeee80211HeUlScheduler::RuAllocation *matchedAllocation = nullptr;
         for (const auto& allocation : schedule.allocations)
             if (physicallayer::areIeee80211HeRuParametersEqual(allocation.ru, canonical.ru) &&
-                    (allocation.randomAccess || allocation.associationId == canonical.staId)) {
+                    (allocation.randomAccess ? canonical.staId ==
+                            (allocation.randomAccessTarget ==
+                                    IIeee80211HeUlScheduler::RandomAccessTarget::UNASSOCIATED_STAS ?
+                                    2045 : 0) : allocation.associationId == canonical.staId)) {
                 matchedAllocation = &allocation;
                 break;
             }
         if (matchedAllocation == nullptr)
             continue;
 
-        uint16_t aid = matchedAllocation->randomAccess ? 0 : matchedAllocation->associationId;
+        const bool unassociatedRandomAccess = matchedAllocation->randomAccess &&
+                matchedAllocation->randomAccessTarget ==
+                        IIeee80211HeUlScheduler::RandomAccessTarget::UNASSOCIATED_STAS;
+        uint16_t aid = unassociatedRandomAccess ? 2045 :
+                matchedAllocation->randomAccess ? 0 : matchedAllocation->associationId;
         uint8_t tid = matchedAllocation->tid;
         bool responseIdentityKnown = aid != 0;
         bool responseTidKnown = triggerType != IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER;
@@ -459,6 +476,7 @@ void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
                 auto header = mpdu->peekAtFront<Ieee80211MacHeader>();
                 bool supportedHeader =
                         dynamicPtrCast<const Ieee80211DataHeader>(header) != nullptr ||
+                        dynamicPtrCast<const Ieee80211MgmtHeader>(header) != nullptr ||
                         dynamicPtrCast<const Ieee80211CompressedBlockAckReq>(
                                 header) != nullptr;
                 if (!supportedHeader && (outcome.status == physicallayer::MPDU_SUCCESS ||
@@ -472,6 +490,39 @@ void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
             resultIndex++;
         }
         delete parser;
+
+        if (unassociatedRandomAccess) {
+            // IEEE Std 802.11-2024 26.5.4.5 permits at most one management
+            // MPDU in an unassociated UORA response. Its receiver address must
+            // identify this AP; the terminal Multi-STA BlockAck carries the
+            // STA address in the preassociation record context.
+            bool validManagementResponse = decodedMpdus.size() == 1 &&
+                    decodedMpdus.front().second.status == physicallayer::MPDU_SUCCESS;
+            auto managementHeader = validManagementResponse ?
+                    dynamicPtrCast<const Ieee80211MgmtHeader>(
+                            decodedMpdus.front().first->peekAtFront<Ieee80211MacHeader>()) : nullptr;
+            validManagementResponse = managementHeader != nullptr &&
+                    managementHeader->getReceiverAddress() == apAddress;
+            if (validManagementResponse) {
+                Ieee80211MultiStaBlockAckRecord record;
+                record.ackType = 0;
+                record.aid = 2045;
+                record.tid = 15;
+                record.receiverAddress = managementHeader->getTransmitterAddress();
+                record.responseReceived = true;
+                preassociationRecords[2045] = record;
+                responders.insert(2045);
+                receivedTids[2045] = 15;
+                callback->processHeUlTriggeredManagementFrame(
+                        decodedMpdus.front().first->dup(), managementHeader, 2045);
+            }
+            else
+                EV_INFO << "Ignoring invalid unassociated HE-TB management response for Trigger "
+                        << triggerId << "\n";
+            for (auto& decoded : decodedMpdus)
+                delete decoded.first;
+            continue;
+        }
 
         // IEEE Std 802.11-2024, 26.5.2.4: a Basic Trigger allocation with
         // nonzero TAL may contain a compressed BAR S-MPDU instead of QoS
@@ -604,7 +655,13 @@ void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
     for (auto aid : responders) {
         auto record = std::find_if(ackRecords.begin(), ackRecords.end(),
                 [aid] (const auto& value) { return value.aid == aid; });
-        if (blockAckReqRecords.count(aid) != 0) {
+        if (preassociationRecords.count(aid) != 0) {
+            if (record == ackRecords.end())
+                ackRecords.push_back(preassociationRecords.at(aid));
+            else
+                *record = preassociationRecords.at(aid);
+        }
+        else if (blockAckReqRecords.count(aid) != 0) {
             if (record == ackRecords.end())
                 ackRecords.push_back(blockAckReqRecords.at(aid));
             else

@@ -96,6 +96,7 @@ class INET_API HeUlCoordinator : public SimpleModule
     int ocwMax = 31;
     int ofdmaContentionWindow = 0;
     int ofdmaBackoff = 0;
+    MacAddress randomAccessPeer;
     simtime_t lastTriggerTime = SIMTIME_ZERO;
     bool hasSentTrigger = false;
     std::map<uint16_t, BufferStatus> bufferStatusByAid;
@@ -157,6 +158,7 @@ class INET_API HeUlCoordinator : public SimpleModule
     PreparedRandomAccessSelection prepareRandomAccessRu(
             AccessCategory ac, int randomAccessRuCount);
     int commitRandomAccessRu(const PreparedRandomAccessSelection& selection);
+    void setRandomAccessPeer(const MacAddress& peer);
     int selectRandomAccessRu(AccessCategory ac, int randomAccessRuCount);
     int selectRandomAccessRu(int randomAccessRuCount) { return selectRandomAccessRu(AC_BE, randomAccessRuCount); }
     int getRandomAccessBackoff() const { return ofdmaBackoff; }

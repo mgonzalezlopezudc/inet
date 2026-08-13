@@ -20,8 +20,6 @@
 namespace inet {
 namespace ieee80211 {
 
-std::optional<std::string> validateIeee80211HeUlTrigger(
-        const Ieee80211TriggerFrame& trigger, Hz centerFrequency);
 W computeIeee80211HeTbTransmitPower(W maximumPower, int targetReceivePowerDbm,
         double pathLossDb, bool useMaximumTransmitPower);
 
@@ -212,6 +210,22 @@ HeTriggeredUlExchangeService::selectResponse(
     };
 
     if (snapshot.randomAccess) {
+        if (snapshot.unassociated) {
+            for (const auto& queue : snapshot.queues) {
+                for (auto packet : queue.packets) {
+                    auto header = dynamicPtrCast<const Ieee80211MgmtHeader>(
+                            packet->peekAtFront<Ieee80211MacHeader>());
+                    if (header == nullptr || header->getReceiverAddress() !=
+                            snapshot.responsePeer)
+                        continue;
+                    selectQueue(queue);
+                    result.sourcePacket = packet;
+                    result.tid = 15;
+                    result.hasReportedTid = true;
+                    return result;
+                }
+            }
+        }
         for (int ac = AC_VO; ac >= AC_BK; --ac) {
             auto queue = findQueue(static_cast<AccessCategory>(ac));
             if (queue == nullptr)
@@ -490,10 +504,9 @@ void HeTriggeredUlExchangeService::handleTimeout()
 void HeTriggeredUlExchangeService::processMultiStaBlockAck(Packet *packet,
         const Ptr<const Ieee80211MultiStaBlockAck>& blockAck)
 {
-    if (blockAck->getTransmitterAddress() != actions->getTriggeredUlBssid()) {
-        delete packet;
-        return;
-    }
+    // This model currently supports only the fixed 64-bit compressed Block Ack
+    // bitmap. Negotiated variable bitmap lengths are a separate feature.
+    constexpr int MODELED_BLOCK_ACK_BITMAP_BITS = 64;
     auto correlation = packet->findTag<physicallayer::Ieee80211HeTriggerCorrelationTag>();
     if (correlation == nullptr) {
         delete packet;
@@ -502,37 +515,50 @@ void HeTriggeredUlExchangeService::processMultiStaBlockAck(Packet *packet,
     auto it = exchanges.find(correlation->getTriggerId());
     if (it == exchanges.end() ||
             actions->getTriggeredUlCurrentTime() > it->second.expectedResponseTime ||
-            it->second.bssid != actions->getTriggeredUlBssid() ||
-            it->second.associationId != actions->getTriggeredUlAssociationId() ||
-            it->second.associationEpoch != actions->getTriggeredUlAssociationEpoch()) {
+            (it->second.associationId != 2045 &&
+             (it->second.bssid != actions->getTriggeredUlBssid() ||
+              it->second.associationId != actions->getTriggeredUlAssociationId() ||
+              it->second.associationEpoch != actions->getTriggeredUlAssociationEpoch()))) {
         delete packet;
         return;
     }
     auto& exchange = it->second;
+    if (blockAck->getTransmitterAddress() != exchange.bssid ||
+            (exchange.associationId != 2045 &&
+             blockAck->getTransmitterAddress() != actions->getTriggeredUlBssid())) {
+        delete packet;
+        return;
+    }
     const auto aid = exchange.associationId;
     if (exchange.recoveryKind == RecoveryKind::COMPRESSED_BLOCK_ACK_REQUEST) {
-        const Ieee80211MultiStaBlockAckRecord *record = nullptr;
-        int matchingRecords = 0;
-        for (unsigned int i = 0; i < blockAck->getRecordsArraySize(); ++i)
-            if (blockAck->getRecords(i).aid == aid) {
-                record = &blockAck->getRecords(i);
-                matchingRecords++;
+        const auto requestedTid = exchange.blockAckReq->getTidInfo();
+        const auto requestedStartingSequenceNumber =
+                exchange.blockAckReq->getStartingSequenceNumber().get();
+        uint64_t combinedBitmap = 0;
+        bool valid = false;
+        // IEEE Std 802.11-2024 26.4.2 requires the originator to examine each
+        // Per-AID/TID field; multiple fields for one block-ack session are valid.
+        for (unsigned int i = 0; i < blockAck->getRecordsArraySize(); ++i) {
+            const auto& record = blockAck->getRecords(i);
+            if (record.aid == aid && record.tid == requestedTid &&
+                    record.startingSequenceNumber == requestedStartingSequenceNumber &&
+                    record.responseReceived) {
+                combinedBitmap |= record.bitmap;
+                valid = true;
             }
-        const bool valid = matchingRecords == 1 && record->responseReceived &&
-                record->tid == exchange.blockAckReq->getTidInfo() &&
-                record->startingSequenceNumber ==
-                        exchange.blockAckReq->getStartingSequenceNumber().get();
+        }
         if (valid) {
             auto compressed = makeShared<Ieee80211CompressedBlockAck>();
             compressed->setReceiverAddress(actions->getTriggeredUlLocalAddress());
             compressed->setTransmitterAddress(exchange.bssid);
-            compressed->setTidInfo(record->tid);
+            compressed->setTidInfo(requestedTid);
             compressed->setStartingSequenceNumber(
-                    SequenceNumberCyclic(record->startingSequenceNumber));
+                    SequenceNumberCyclic(requestedStartingSequenceNumber));
             std::vector<uint8_t> bytes(8, 0);
             BitVector bitmap(bytes);
-            for (int bit = 0; bit < 64; ++bit)
-                bitmap.setBit(bit, (record->bitmap & (UINT64_C(1) << bit)) != 0);
+            for (int bit = 0; bit < MODELED_BLOCK_ACK_BITMAP_BITS; ++bit)
+                bitmap.setBit(bit,
+                        (combinedBitmap & (UINT64_C(1) << bit)) != 0);
             compressed->setBlockAckBitmap(bitmap);
             actions->processTriggeredUlBlockAckRequestSuccess(
                     compressed, exchange.recoveryAccessCategory);
@@ -546,28 +572,29 @@ void HeTriggeredUlExchangeService::processMultiStaBlockAck(Packet *packet,
         return;
     }
 
-    const Ieee80211MultiStaBlockAckRecord *record = nullptr;
-    int matchingRecords = 0;
+    std::vector<const Ieee80211MultiStaBlockAckRecord *> matchingRecords;
     for (unsigned int i = 0; i < blockAck->getRecordsArraySize(); ++i)
         if (blockAck->getRecords(i).aid == aid &&
-                blockAck->getRecords(i).tid == exchange.tid) {
-            record = &blockAck->getRecords(i);
-            matchingRecords++;
-        }
-    if (matchingRecords > 1) {
-        delete packet;
-        return;
-    }
-    bool successful = exchange.packets.empty() && record != nullptr &&
-            record->responseReceived;
+                blockAck->getRecords(i).tid == exchange.tid)
+            matchingRecords.push_back(&blockAck->getRecords(i));
+    bool successful = exchange.packets.empty() &&
+            std::any_of(matchingRecords.begin(), matchingRecords.end(),
+                    [] (const auto record) { return record->responseReceived; });
     bool acknowledgedData = false;
     for (size_t i = 0; i < exchange.packets.size(); ++i) {
         bool acknowledged = false;
-        if (record != nullptr && record->responseReceived) {
+        for (const auto record : matchingRecords) {
+            if (!record->responseReceived)
+                continue;
             const int offset = (exchange.sequenceNumbers[i] -
                     record->startingSequenceNumber + 4096) % 4096;
-            acknowledged = offset < 64 &&
+            acknowledged = offset < MODELED_BLOCK_ACK_BITMAP_BITS &&
                     (record->bitmap & (UINT64_C(1) << offset)) != 0;
+            if (exchange.preassociationManagement && record->responseReceived &&
+                    record->receiverAddress == actions->getTriggeredUlLocalAddress())
+                acknowledged = true;
+            if (acknowledged)
+                break;
         }
         if (acknowledged) {
             actions->retireTriggeredUlPacket(exchange.packets[i],
@@ -928,17 +955,27 @@ Packet *HeTriggeredUlExchangeService::prepareAndCommitResponse(Packet *sourcePac
     AccessCategory blockAckReqAc = AC_BE;
     std::unique_ptr<Packet> responsePacket;
     const bool hadPendingPayload = sourcePacket != nullptr;
+    const bool preassociationManagement = sourcePacket != nullptr &&
+            dynamicPtrCast<const Ieee80211MgmtHeader>(
+                    sourcePacket->peekAtFront<Ieee80211MacHeader>()) != nullptr;
     if (sourcePacket != nullptr) {
         // 26.5.2.4 requires a QoS Null response when the allocation cannot
         // contain pending data. Check the first MPDU too; the aggregation loop
         // below performs the same check for every additional MPDU.
-        auto sourceHeader = sourcePacket->peekAtFront<Ieee80211DataHeader>();
+        auto sourceHeader = sourcePacket->peekAtFront<Ieee80211MacHeader>();
+        auto dataSourceHeader = dynamicPtrCast<const Ieee80211DataHeader>(sourceHeader);
+        if (!preassociationManagement && dataSourceHeader == nullptr)
+            throw cRuntimeError("HE-TB data response source is not a data frame");
         B psduLength = B(sourcePacket->getByteLength() +
-                IIeee80211HeUlScheduler::getHeTbQueuedPacketOverheadBytes(
-                        sourceHeader->getBufferStatusPresent()));
+                (preassociationManagement ? 0 :
+                 IIeee80211HeUlScheduler::getHeTbQueuedPacketOverheadBytes(
+                         dataSourceHeader->getBufferStatusPresent())));
         auto prospective = createHeTbTxVector(*trigger, *selected,
                 centerFrequency,
-                actions->getTriggeredUlAssociationId(), psduLength);
+                preassociationManagement ? 2045 :
+                        actions->getTriggeredUlAssociationId(), psduLength);
+        if (!prospective && preassociationManagement)
+            throw cRuntimeError("Preassociation management MPDU does not fit the HE-TB allocation");
         if (!prospective)
             sourcePacket = nullptr;
     }
@@ -947,7 +984,7 @@ Packet *HeTriggeredUlExchangeService::prepareAndCommitResponse(Packet *sourcePac
     // a BAR S-MPDU for any AC whose TID has an active agreement. The agreement
     // SSN is used unchanged; an outstanding candidate outside its 64-position
     // compressed bitmap invalidates that BAR choice instead of being skipped.
-    if (sourcePacket == nullptr && availableSlots == 0 &&
+    if (!preassociationManagement && sourcePacket == nullptr && availableSlots == 0 &&
             trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER &&
             selected->tidAggregationLimit > 0) {
         auto selection = selectBlockAckRequest(blockAckCandidates,
@@ -982,16 +1019,23 @@ Packet *HeTriggeredUlExchangeService::prepareAndCommitResponse(Packet *sourcePac
         // Ack Policy wire bits 00 are context-dependent in an A-MPDU. They
         // denote Implicit BAR on preceding untagged MPDUs and Normal Ack on
         // the tagged final MPDU that solicits the immediate Multi-STA Block Ack.
-        auto writableHeader = sourcePacket->removeAtFront<Ieee80211DataHeader>();
+        auto writableHeader = preassociationManagement ?
+                Ptr<Ieee80211DataOrMgmtHeader>(
+                        sourcePacket->removeAtFront<Ieee80211MgmtHeader>()) :
+                Ptr<Ieee80211DataOrMgmtHeader>(
+                        sourcePacket->removeAtFront<Ieee80211DataHeader>());
         if (!writableHeader->getRetry())
             assignSequenceNumber(
                     preparedSequenceNumberState, writableHeader);
         sourcePacket->insertAtFront(writableHeader);
-        preparePrimaryDataMpdu(sourcePacket,
-                selectedTid, selectedAc, queueBytes);
+        if (!preassociationManagement)
+            preparePrimaryDataMpdu(sourcePacket,
+                    selectedTid, selectedAc, queueBytes);
         responsePacket.reset(sourcePacket->dup());
     }
     else if (blockAckReqMpdu == nullptr) {
+        if (preassociationManagement)
+            throw cRuntimeError("Preassociation management response lost its source MPDU");
         // 26.5.2.4 allows a triggered STA with no data fitting the allocation
         // to carry a QoS Null-style response; we still include BSR so the AP's
         // scheduler state is refreshed by the HE TB exchange.
@@ -1009,20 +1053,24 @@ Packet *HeTriggeredUlExchangeService::prepareAndCommitResponse(Packet *sourcePac
 
     if (sourcePacket != nullptr) {
         exchange.packets.push_back(sourcePacket);
-        exchange.sequenceNumbers.push_back(sourcePacket->peekAtFront<Ieee80211DataHeader>()->getSequenceNumber().get());
+        exchange.sequenceNumbers.push_back(sourcePacket->peekAtFront<
+                Ieee80211DataOrMgmtHeader>()->getSequenceNumber().get());
 
         // 26.6.3 permits multi-TID HE TB A-MPDUs only within the negotiated
         // Trigger TID Aggregation Limit.  This model deliberately restricts
         // Basic Trigger UL aggregation to one TID; retained packets are removed
         // from the EDCA queue only after the HE TB PSDU is built and are retried
         // individually from the returned Multi-STA BA bitmap.
-        int maximumMpduCount = std::min(64, availableSlots);
+        int maximumMpduCount = preassociationManagement ? 1 :
+                std::min(64, availableSlots);
         for (int i = 0; availableSlots > 0 && (int)exchange.packets.size() < maximumMpduCount &&
                 i < (int)sourcePackets.size(); ++i) {
             auto candidate = sourcePackets[i];
             if (candidate == originalPackets.front())
                 continue;
             auto candidateHeader = dynamicPtrCast<const Ieee80211DataHeader>(candidate->peekAtFront<Ieee80211MacHeader>());
+            if (preassociationManagement)
+                break;
             if (candidateHeader == nullptr || candidateHeader->getType() != ST_DATA_WITH_QOS ||
                     candidateHeader->getTid() != selectedTid ||
                     candidateHeader->getReceiverAddress() != actions->getTriggeredUlBssid())
@@ -1057,7 +1105,8 @@ Packet *HeTriggeredUlExchangeService::prepareAndCommitResponse(Packet *sourcePac
             std::vector<Packet *>{nullMpdu.get()};
     responseSnapshot.trigger = trigger;
     responseSnapshot.selectedUser = *selected;
-    responseSnapshot.associationId = actions->getTriggeredUlAssociationId();
+    responseSnapshot.associationId = preassociationManagement ? 2045 :
+            actions->getTriggeredUlAssociationId();
     responseSnapshot.centerFrequency = centerFrequency;
     responseSnapshot.transmitPower = transmitPower;
     responseSnapshot.bssColor = actions->getTriggeredUlBssColor();
@@ -1204,7 +1253,19 @@ HeTriggeredUlExchangeService::parseTrigger(Packet *packet,
         result.diagnostic = "missing Trigger packet or header";
         return result;
     }
-    if (trigger->getTransmitterAddress() != snapshot.bssid) {
+    const bool sameAssociatedBss = snapshot.associated &&
+            trigger->getTransmitterAddress() == snapshot.bssid;
+    bool hasUnassociatedRa = false;
+    for (unsigned int i = 0; i < trigger->getUsersArraySize(); ++i) {
+        const auto& user = trigger->getUsers(i);
+        if (user.randomAccess && user.aid == 2045) {
+            hasUnassociatedRa = true;
+            break;
+        }
+    }
+    const bool foreignUnassociated = !snapshot.associated &&
+            trigger->getTransmitterAddress() != snapshot.bssid && hasUnassociatedRa;
+    if (!sameAssociatedBss && !foreignUnassociated) {
         result.disposition = TriggerDisposition::FOREIGN_BSS;
         return result;
     }
@@ -1214,30 +1275,60 @@ HeTriggeredUlExchangeService::parseTrigger(Packet *packet,
         return result;
     }
     result.triggerId = correlation->getTriggerId();
-    // IEEE 802.11-2024 Table 9-47 type 2 is a recipient-side MU-BAR
-    // response path. It is not gated by the STA's UL scheduling service.
-    if (trigger->getTriggerType() == 2) {
-        result.disposition = TriggerDisposition::ACCEPT;
-        return result;
-    }
-    if (!snapshot.ulEnabled || snapshot.accessPoint || snapshot.associationId == 0) {
-        result.disposition = TriggerDisposition::INELIGIBLE_STATION;
-        return result;
-    }
-    if (trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER &&
-            !snapshot.ndpFeedbackEnabled) {
-        result.disposition = TriggerDisposition::UNSUPPORTED_NDP_FEEDBACK;
+    const auto triggerType = trigger->getTriggerType();
+    if (triggerType != IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER &&
+            triggerType != 2 &&
+            triggerType != IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER &&
+            triggerType != IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
+        result.diagnostic = "unsupported Trigger type";
         return result;
     }
     if (Hz(trigger->getChannelBandwidthMhz() * 1e6) != snapshot.channelBandwidth) {
         result.disposition = TriggerDisposition::LINK_BANDWIDTH_MISMATCH;
         return result;
     }
-    auto error = validateIeee80211HeUlTrigger(*trigger, snapshot.centerFrequency);
-    if (error) {
-        result.disposition = TriggerDisposition::MALFORMED;
-        result.diagnostic = *error;
+    const auto durationEnvelope =
+            physicallayer::getIeee80211HeTriggerTxTimeUpperBound(trigger->getUlLength());
+    if (!durationEnvelope || durationEnvelope.txTime <= SIMTIME_ZERO ||
+            trigger->getCommonDuration() != durationEnvelope.txTime) {
+        result.diagnostic = "unrepresentable HE-TB response duration";
         return result;
+    }
+    // IEEE 802.11-2024 Table 9-47 type 2 is a recipient-side MU-BAR
+    // response path. It is not gated by the STA's UL scheduling service.
+    if (triggerType == 2 && snapshot.associated) {
+        result.disposition = TriggerDisposition::ACCEPT;
+        return result;
+    }
+    if (!snapshot.ulEnabled || snapshot.accessPoint ||
+            (!snapshot.associated && !foreignUnassociated) ||
+            (snapshot.associated && snapshot.associationId == 0)) {
+        result.disposition = TriggerDisposition::INELIGIBLE_STATION;
+        return result;
+    }
+    if (foreignUnassociated &&
+            (!snapshot.receivedInHePpdu ||
+             (triggerType != IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER &&
+              triggerType != IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER) ||
+             !snapshot.hasPendingManagement)) {
+        result.disposition = TriggerDisposition::INELIGIBLE_STATION;
+        return result;
+    }
+    if (triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER &&
+            !snapshot.ndpFeedbackEnabled) {
+        result.disposition = TriggerDisposition::UNSUPPORTED_NDP_FEEDBACK;
+        return result;
+    }
+    if (triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
+        const int scheduledStaCount =
+                IIeee80211HeUlScheduler::getNfrpScheduledStaCount(
+                        snapshot.channelBandwidth,
+                        trigger->getNfrpMultiplexingFlag());
+        if (trigger->getNfrpFeedbackType() != 0 ||
+                trigger->getNfrpStartingAid() + scheduledStaCount > 4096) {
+            result.diagnostic = "invalid NFRP response resource range";
+            return result;
+        }
     }
     if (snapshot.twtSleeping) {
         result.disposition = TriggerDisposition::TWT_SLEEPING;
@@ -1266,11 +1357,13 @@ void HeTriggeredUlExchangeService::processTrigger(
     }
     const auto triggerId = parsed.triggerId;
     const auto associationId = snapshot.reception.associationId;
+    const bool unassociated = !snapshot.reception.associated;
 
     auto supportsUser = [&] (const Ieee80211HeTriggerUserInfo& user) {
         const auto bandwidth = Hz(trigger->getChannelBandwidthMhz() * 1e6);
         const int nssIndex = user.numberOfSpatialStreams - 1;
-        const auto& negotiated = snapshot.negotiatedCapabilities;
+        const auto& negotiated = unassociated ? snapshot.localCapabilities :
+                snapshot.negotiatedCapabilities;
         return nssIndex >= 0 && nssIndex < 8 && negotiated &&
                 negotiated->localTxPeerRx.valid &&
                 negotiated->localTxPeerRx.ofdma &&
@@ -1366,13 +1459,18 @@ void HeTriggeredUlExchangeService::processTrigger(
     std::vector<const Ieee80211HeTriggerUserInfo *> randomAccessUsers;
     for (unsigned int i = 0; selected == nullptr && i < trigger->getUsersArraySize(); ++i) {
         const auto& user = trigger->getUsers(i);
-        if (user.randomAccess && supportsUser(user))
+        const bool eligibleRandomAccess = user.randomAccess &&
+                ((unassociated && user.aid == 2045) ||
+                 (!unassociated && user.aid == 0));
+        if (eligibleRandomAccess && supportsUser(user))
             randomAccessUsers.push_back(&user);
-        else if (user.aid == associationId)
+        else if (!unassociated && user.aid == associationId)
             selected = &user;
     }
 
     auto selectionSnapshot = snapshot.responseSelection;
+    selectionSnapshot.unassociated = unassociated;
+    selectionSnapshot.responsePeer = snapshot.reception.triggerTransmitter;
     bool randomAccess = false;
     bool randomAccessCommitted = false;
     std::optional<PreparedTriggeredUlResponse> preparedResponse;
@@ -1393,6 +1491,11 @@ void HeTriggeredUlExchangeService::processTrigger(
         exchange.tid = tid;
         exchange.sourceQueueToken = selection.queueToken;
         exchange.randomAccess = isRandomAccess;
+        exchange.preassociationManagement = unassociated && user.aid == 2045;
+        exchange.bssid = snapshot.reception.triggerTransmitter;
+        exchange.associationId = exchange.preassociationManagement ? 2045 : associationId;
+        exchange.associationEpoch = exchange.preassociationManagement ? 0 :
+                snapshot.reception.associationEpoch;
         exchange.ru.index = user.ruIndex;
         exchange.ru.toneSize = user.ruToneSize;
         exchange.ru.toneOffset = user.ruToneOffset;
@@ -1414,6 +1517,8 @@ void HeTriggeredUlExchangeService::processTrigger(
     if (selected == nullptr && !randomAccessUsers.empty()) {
         // IEEE 802.11-2024 Table 9-52 and 26.5.4: construct every exact
         // candidate before the single UORA draw, then move the selected one.
+        actions->setTriggeredUlRandomAccessPeer(unassociated ?
+                snapshot.reception.triggerTransmitter : snapshot.reception.bssid);
         selectionSnapshot.selectedUser = *randomAccessUsers.front();
         selectionSnapshot.hasSelectedUser = true;
         selectionSnapshot.randomAccess = true;
@@ -1482,15 +1587,16 @@ void HeTriggeredUlExchangeService::processTrigger(
     responseSelection = selectResponse(selectionSnapshot);
     Tid selectedTid = responseSelection.hasReportedTid ? responseSelection.tid : 0;
     if (responseSelection.sourcePacket != nullptr)
-        selectedTid = responseSelection.sourcePacket->
-                peekAtFront<Ieee80211DataHeader>()->getTid();
+        if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(
+                    responseSelection.sourcePacket->peekAtFront<Ieee80211MacHeader>()))
+            selectedTid = dataHeader->getTid();
     auto traffic = trafficFor(responseSelection.accessCategory, selectedTid);
     int availableSlots = traffic.hasBlockAckAgreement ?
             traffic.availableBlockAckSlots : 0;
     if (responseSelection.sourcePacket != nullptr && !traffic.hasBlockAckAgreement)
         availableSlots = 1;
-    Packet *sourcePacket = availableSlots == 0 ? nullptr :
-            responseSelection.sourcePacket;
+    Packet *sourcePacket = (unassociated || availableSlots != 0) ?
+            responseSelection.sourcePacket : nullptr;
     uint32_t queueBytes = trigger->getTriggerType() ==
             IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER ?
             snapshot.totalBufferedBytes : traffic.bufferedBytes;

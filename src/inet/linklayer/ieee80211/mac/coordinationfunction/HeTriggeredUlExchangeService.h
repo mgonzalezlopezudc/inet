@@ -91,8 +91,12 @@ class INET_API HeTriggeredUlExchangeService
 
     struct TriggerReceptionSnapshot {
         MacAddress bssid;
+        MacAddress triggerTransmitter;
         uint16_t associationId = 0;
         uint64_t associationEpoch = 0;
+        bool associated = false;
+        bool receivedInHePpdu = false;
+        bool hasPendingManagement = false;
         bool ulEnabled = false;
         bool accessPoint = false;
         bool twtSleeping = false;
@@ -157,6 +161,8 @@ class INET_API HeTriggeredUlExchangeService
         Ieee80211HeTriggerUserInfo selectedUser;
         bool hasSelectedUser = false;
         bool randomAccess = false;
+        bool unassociated = false;
+        MacAddress responsePeer;
         std::vector<AccessQueueSnapshot> queues;
     };
 
@@ -198,6 +204,7 @@ class INET_API HeTriggeredUlExchangeService
         std::vector<TidTrafficSnapshot> traffic;
         std::vector<BlockAckCandidateSnapshot> blockAckCandidates;
         std::optional<Ieee80211NegotiatedHeCapabilities> negotiatedCapabilities;
+        std::optional<Ieee80211NegotiatedHeCapabilities> localCapabilities;
         std::optional<physicallayer::Ieee80211HeTxopDuration> solicitingTxopDuration;
         std::optional<double> triggerPathLossDb;
         MacAddress localAddress;
@@ -250,6 +257,7 @@ class INET_API HeTriggeredUlExchangeService
         Ptr<const Ieee80211CompressedBlockAckReq> blockAckReq;
         physicallayer::Ieee80211HeRu ru;
         bool randomAccess = false;
+        bool preassociationManagement = false;
         MacAddress bssid;
         uint16_t associationId = 0;
         uint64_t associationEpoch = 0;
@@ -343,6 +351,7 @@ class INET_API HeTriggeredUlExchangeService
         virtual AccessCategory mapTriggeredUlTidToAccessCategory(Tid tid) const = 0;
         virtual RandomAccessPreparation prepareTriggeredUlRandomAccess(
                 AccessCategory accessCategory, int randomAccessRuCount) = 0;
+        virtual void setTriggeredUlRandomAccessPeer(const MacAddress&) {}
         virtual int commitTriggeredUlRandomAccess(
                 const RandomAccessPreparation& preparation) = 0;
         virtual void emitTriggeredUlResponse(HeTbResponseEvent& event) = 0;

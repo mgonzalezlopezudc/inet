@@ -335,6 +335,7 @@ std::optional<HeUlTriggerService::PreparedStart> HeUlTriggerService::prepareStar
         while (index < maxRus && triggerType != IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
             IIeee80211HeUlScheduler::RuAllocation allocation;
             allocation.randomAccess = true;
+            allocation.randomAccessTarget = IIeee80211HeUlScheduler::RandomAccessTarget::ASSOCIATED_STAS;
             allocation.ru = layout[index++];
             allocation.targetRssiDbm = std::lround(sensitivityDbm + snapshot.targetRssiMarginDb);
             schedule.allocations.push_back(allocation);

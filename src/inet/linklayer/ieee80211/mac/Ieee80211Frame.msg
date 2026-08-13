@@ -658,10 +658,16 @@ class Ieee80211MultiTidBlockAck extends Ieee80211BlockAck
 
 struct Ieee80211MultiStaBlockAckRecord
 {
+    // Ack Type 0 is the only modeled response form. Ack Type 1 and other
+    // reserved variants are rejected by the serializer.
+    uint8_t ackType = 0;
     uint16_t aid;
     uint8_t tid;
     uint16_t startingSequenceNumber;
     uint64_t bitmap;
+    // Only used for the preassociation AID12=2045/TID=15 form. Ordinary
+    // Per-AID/TID Block Ack records leave this unspecified.
+    MacAddress receiverAddress;
     bool responseReceived;
 }
 

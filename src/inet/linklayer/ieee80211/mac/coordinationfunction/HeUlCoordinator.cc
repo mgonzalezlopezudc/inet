@@ -448,7 +448,8 @@ HeUlCoordinator::PreparedRandomAccessSelection HeUlCoordinator::prepareRandomAcc
         AccessCategory ac, int randomAccessRuCount)
 {
     // IEEE 802.11-2024 Clause 26.5.4 ("Uplink OFDMA random access").
-    // HE STAs contend for Random Access RUs (AID=0) using the UORA procedure.
+    // HE STAs contend for Random Access RUs (AID=0 for associated and
+    // AID=2045 for unassociated targets) using the UORA procedure.
     // The OFDMA Backoff (OBO) counter is decremented by the number of RA-RUs (randomAccessRuCount)
     // present in the Trigger frame.
     PreparedRandomAccessSelection selection;
@@ -469,6 +470,20 @@ HeUlCoordinator::PreparedRandomAccessSelection HeUlCoordinator::prepareRandomAcc
     selection.resultingBackoff = 0;
     selection.attempt = true;
     return selection;
+}
+
+void HeUlCoordinator::setRandomAccessPeer(const MacAddress& peer)
+{
+    if (peer.isUnspecified())
+        return;
+    if (!randomAccessPeer.isUnspecified() && randomAccessPeer != peer) {
+        // IEEE 802.11-2024 26.5.4.5 starts a separate unassociated UORA
+        // contention context with the default OCW/OBO values when the AP
+        // target changes.
+        ofdmaContentionWindow = ocwMin;
+        ofdmaBackoff = intuniform(0, ocwMin);
+    }
+    randomAccessPeer = peer;
 }
 
 int HeUlCoordinator::commitRandomAccessRu(

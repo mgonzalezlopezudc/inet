@@ -838,17 +838,29 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                 stream.writeUint16Le(packMultiStaBlockAckControl());
                 for (unsigned int i = 0; i < multiStaBlockAck->getRecordsArraySize(); i++) {
                     const auto& record = multiStaBlockAck->getRecords(i);
-                    if (record.aid > 2047 || record.tid > 7)
+                    if (record.ackType != 0)
+                        throw cRuntimeError("Unsupported Multi-STA Block Ack Ack Type");
+                    const bool preassociation = record.aid == 2045 && record.tid == 15 &&
+                            record.receiverAddress != MacAddress::UNSPECIFIED_ADDRESS;
+                    if (!preassociation && (record.aid > 2047 || record.tid > 7 ||
+                            record.receiverAddress != MacAddress::UNSPECIFIED_ADDRESS))
                         throw cRuntimeError("Unsupported Multi-STA Block Ack AID/TID tuple");
                     // IEEE Std 802.11-2024 Figures 9-58..9-60: the BA
                     // Information field is a list of Per AID TID Info
-                    // subfields.  For block-ack context (Ack Type = 0), each
-                    // tuple carries AID11, TID, Starting Sequence Control, and
-                    // the bitmap.  responseReceived is local simulation state;
-                    // it is intentionally not an on-wire bit.
+                    // subfields. Ack Type 0 either carries the ordinary
+                    // Starting Sequence Control and bitmap, or the
+                    // preassociation four-octet reserved field and receiver
+                    // address for AID12=2045/TID=15. responseReceived is local
+                    // simulation state and is not an on-wire bit.
                     stream.writeUint16Le((record.aid & 0x7FF) | ((record.tid & 0xF) << 12));
-                    writeSequenceControl(stream, 0, record.startingSequenceNumber);
-                    stream.writeUint64Le(record.bitmap);
+                    if (preassociation) {
+                        stream.writeUint32Le(0);
+                        stream.writeMacAddress(record.receiverAddress);
+                    }
+                    else {
+                        writeSequenceControl(stream, 0, record.startingSequenceNumber);
+                        stream.writeUint64Le(record.bitmap);
+                    }
                 }
                 ASSERT(stream.getLength() - startPos == multiStaBlockAck->getChunkLength());
             }
@@ -1561,10 +1573,14 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                     auto aidTidInfo = stream.readUint16Le();
                     Ieee80211MultiStaBlockAckRecord record;
                     record.aid = aidTidInfo & 0x7FF;
-                    bool ackType = (aidTidInfo & 0x0800) != 0;
+                    record.ackType = (aidTidInfo & 0x0800) != 0;
                     record.tid = (aidTidInfo >> 12) & 0xF;
                     record.responseReceived = true;
-                    if (!ackType && record.tid <= 7) {
+                    if (record.ackType == 0 && record.aid == 2045 && record.tid == 15) {
+                        stream.readUint32Le();
+                        record.receiverAddress = stream.readMacAddress();
+                    }
+                    else if (record.ackType == 0 && record.tid <= 7) {
                         int fragmentNumber;
                         SequenceNumberCyclic sequenceNumber;
                         readSequenceControl(stream, fragmentNumber, sequenceNumber);

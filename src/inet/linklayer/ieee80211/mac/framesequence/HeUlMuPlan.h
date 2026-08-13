@@ -247,7 +247,12 @@ class INET_API HeUlMuPlan
                 if (allocation.associationId != 0 ||
                         allocation.staAddress != MacAddress::UNSPECIFIED_ADDRESS)
                     return rejected(HeUlMuPlanErrorCode::INVALID_AID, i,
-                            allocation.staAddress, "random-access RU must use AID 0 and no station address");
+                            allocation.staAddress, "random-access RU must not carry an association ID or station address");
+                if (allocation.randomAccessTarget ==
+                        IIeee80211HeUlScheduler::RandomAccessTarget::UNASSOCIATED_STAS &&
+                        triggerType != IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER)
+                    return rejected(HeUlMuPlanErrorCode::INVALID_AID, i,
+                            allocation.staAddress, "unassociated random-access RUs are supported only in Basic Triggers");
                 if (allocation.numberOfSpatialStreams != 1 || allocation.streamStartIndex != 0 ||
                         allocation.muMimo)
                     return rejected(HeUlMuPlanErrorCode::INVALID_NSS, i,

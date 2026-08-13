@@ -36,6 +36,11 @@ using namespace inet::units::values;
 class INET_API IIeee80211HeUlScheduler
 {
   public:
+    enum class RandomAccessTarget {
+        ASSOCIATED_STAS,
+        UNASSOCIATED_STAS,
+    };
+
     struct NfrpResponseResource {
         bool scheduled = false;
         uint8_t toneSetIndex = 0;
@@ -128,6 +133,9 @@ class INET_API IIeee80211HeUlScheduler
         AccessCategory accessCategory = AC_BE;
         physicallayer::Ieee80211HeRu ru;
         bool randomAccess = false;
+        // The wire AID12 for a random-access RU is derived from this typed
+        // policy. It is deliberately not encoded as an association ID.
+        RandomAccessTarget randomAccessTarget = RandomAccessTarget::ASSOCIATED_STAS;
         int mcs = 0;
         int numberOfSpatialStreams = 1;
         int streamStartIndex = 0;

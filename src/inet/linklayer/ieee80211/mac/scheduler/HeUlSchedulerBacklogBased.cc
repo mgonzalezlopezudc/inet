@@ -314,6 +314,7 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerBacklogBased::schedule(
                 ra.delivered.resize(selectedPrefix);
                 RuAllocation allocation;
                 allocation.randomAccess = true;
+                allocation.randomAccessTarget = getRandomAccessTarget();
                 allocation.ru = node.ru;
                 allocation.mcs = defaultMcs;
                 allocation.coding = physicallayer::HE_CODING_BCC;
@@ -398,8 +399,9 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerBacklogBased::schedule(
                 fallback.unusedCapacity += edge.second - edge.first.plannedBytes;
             }
             for (int i = 0; i < randomAccessRus; ++i) {
-                RuAllocation allocation;
-                allocation.randomAccess = true;
+                        RuAllocation allocation;
+                        allocation.randomAccess = true;
+                        allocation.randomAccessTarget = getRandomAccessTarget();
                 allocation.ru = leaves[selectedPrefix + i];
                 allocation.mcs = defaultMcs;
                 allocation.coding = physicallayer::HE_CODING_BCC;

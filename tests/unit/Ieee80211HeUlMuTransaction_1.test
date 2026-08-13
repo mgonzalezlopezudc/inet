@@ -262,6 +262,13 @@ class TestHeHcf : public HeHcf,
         processReceivedTriggerFrame(packet, trigger);
     }
 
+    HeTriggeredUlExchangeService::TriggerSelection parseTriggerSnapshotForTest(
+            Packet *packet, const Ptr<const Ieee80211TriggerFrame>& trigger,
+            const HeTriggeredUlExchangeService::TriggerReceptionSnapshot& snapshot)
+    {
+        return getHeTriggeredUlExchangeService().parseTrigger(packet, trigger, snapshot);
+    }
+
     queueing::IPacketQueue *getSourceQueue() const
     {
         return getEdcaForTesting()->getEdcaf(AC_BE)->getPendingQueue();
@@ -538,7 +545,10 @@ class TestHeHcf : public HeHcf,
         const auto phy = getLinkPhyContext().getSnapshot();
         HeTriggeredUlExchangeService::TriggerReceptionSnapshot snapshot;
         snapshot.bssid = getMacForTesting()->getMib()->getBssid();
-        snapshot.associationId = getMacForTesting()->getMib()->getLocalAssociationId();
+        snapshot.triggerTransmitter = snapshot.bssid;
+        snapshot.associated = true;
+        snapshot.associationId = static_cast<uint16_t>(
+                getMacForTesting()->getMib()->getLocalAssociationId());
         snapshot.associationEpoch = getHePeerStateService().getPeerSnapshot(
                 snapshot.bssid).getAssociationEpoch();
         snapshot.ulEnabled = true;
@@ -925,7 +935,8 @@ auto requireQueueIdentities = [&] (const std::vector<Packet *>& expected) {
 }
 
 // Trigger parsing is value-only: local valid input is accepted while foreign,
-// uncorrelated, and malformed inputs are rejected without queue mutation.
+// uncorrelated, and an unsafe decoded duration are rejected without queue
+// mutation. The Duration field used by NAV is not a response-eligibility gate.
 {
     Ieee80211HeTriggerUserInfo user;
     auto trigger = hcf->makeTrigger(ap, user);
@@ -942,9 +953,41 @@ auto requireQueueIdentities = [&] (const std::vector<Packet *>& expected) {
     REQUIRE(hcf->parseTriggerForTest(uncorrelated, trigger).disposition ==
             HeTriggeredUlExchangeService::TriggerDisposition::MISSING_CORRELATION);
     auto malformed = staticPtrCast<Ieee80211TriggerFrame>(trigger->dupShared());
-    malformed->setUlLength(2);
+    malformed->setCommonDuration(SIMTIME_ZERO);
     REQUIRE(hcf->parseTriggerForTest(packet, malformed).disposition ==
             HeTriggeredUlExchangeService::TriggerDisposition::MALFORMED);
+    auto differentNav = staticPtrCast<Ieee80211TriggerFrame>(trigger->dupShared());
+    differentNav->setDurationField(SimTime(777, SIMTIME_US));
+    REQUIRE(hcf->parseTriggerForTest(packet, differentNav));
+    auto irrelevantUnsupported = staticPtrCast<Ieee80211TriggerFrame>(trigger->dupShared());
+    irrelevantUnsupported->setUsersArraySize(2);
+    auto irrelevantUser = irrelevantUnsupported->getUsers(0);
+    irrelevantUser.aid = 77;
+    irrelevantUser.mcs = 15;
+    irrelevantUnsupported->setUsers(1, irrelevantUser);
+    REQUIRE(hcf->parseTriggerForTest(packet, irrelevantUnsupported));
+
+    auto unassociatedTrigger = staticPtrCast<Ieee80211TriggerFrame>(
+            trigger->dupShared());
+    MacAddress foreignAp("20:00:00:00:00:00");
+    unassociatedTrigger->setTransmitterAddress(foreignAp);
+    auto unassociatedUser = unassociatedTrigger->getUsers(0);
+    unassociatedUser.aid = 2045;
+    unassociatedUser.randomAccess = true;
+    unassociatedTrigger->setUsers(0, unassociatedUser);
+    auto unassociatedPacket = new Packet("parser-unassociated", unassociatedTrigger);
+    unassociatedPacket->addTag<Ieee80211HeTriggerCorrelationTag>()->setTriggerId(59);
+    HeTriggeredUlExchangeService::TriggerReceptionSnapshot unassociatedSnapshot;
+    unassociatedSnapshot.bssid = ap;
+    unassociatedSnapshot.triggerTransmitter = foreignAp;
+    unassociatedSnapshot.receivedInHePpdu = true;
+    unassociatedSnapshot.hasPendingManagement = true;
+    unassociatedSnapshot.ulEnabled = true;
+    unassociatedSnapshot.channelBandwidth =
+            Hz(trigger->getChannelBandwidthMhz() * 1e6);
+    REQUIRE(hcf->parseTriggerSnapshotForTest(
+            unassociatedPacket, unassociatedTrigger, unassociatedSnapshot));
+    delete unassociatedPacket;
     delete uncorrelated;
     delete packet;
 }
@@ -992,6 +1035,26 @@ auto requireQueueIdentities = [&] (const std::vector<Packet *>& expected) {
     liveHcf->expireExchange(60);
     REQUIRE(liveHcf->getSourceQueue()->getNumPackets() == 1);
     REQUIRE(liveHcf->getSourceQueue()->getPacket(0) == p0);
+    liveHcf->clearState();
+}
+
+// Receiver processing preserves selected-user capability gating before
+// constructing a response.
+{
+    auto unsupported = liveHcf->makeQueuedPacket("unsupported-selected-p0", ap, 0x0b);
+    Ieee80211HeTriggerUserInfo unsupportedUser;
+    auto unsupportedTrigger = liveHcf->makeTrigger(ap, unsupportedUser);
+    unsupportedUser.mcs = 15;
+    unsupportedTrigger->setUsers(0, unsupportedUser);
+    unsupportedTrigger->setDurationField(SimTime(777, SIMTIME_US));
+    const int rejectedEventCount = liveResponseEventListener.count;
+    auto unsupportedPacket = new Packet("unsupported-selected-trigger", unsupportedTrigger);
+    unsupportedPacket->addTag<Ieee80211HeTriggerCorrelationTag>()->setTriggerId(64);
+    liveHcf->processTriggerForTest(unsupportedPacket, unsupportedTrigger);
+    REQUIRE(liveHcf->getExchangeCount() == 0);
+    REQUIRE(liveResponseEventListener.count == rejectedEventCount);
+    REQUIRE(liveHcf->getSourceQueue()->getPacket(0) == unsupported);
+    REQUIRE(unsupportedTrigger->getDurationField() == SimTime(777, SIMTIME_US));
     liveHcf->clearState();
 }
 
@@ -1420,6 +1483,7 @@ REQUIRE(hcf->mapTidForTest(6) == AC_VO);
     hcf->installOriginatorBlockAckAgreement(ap, 4095);
     auto p4095 = hcf->stageLegacyBlockAckFrame(ap, 4095);
     auto p0 = hcf->stageLegacyBlockAckFrame(ap, 0);
+    auto p1 = hcf->stageLegacyBlockAckFrame(ap, 1);
     auto request = hcf->prepareBlockAckReq(50, ap);
     REQUIRE(request->getTidInfo() == 0);
     REQUIRE(request->getStartingSequenceNumber().get() == 4095);
@@ -1431,15 +1495,23 @@ REQUIRE(hcf->mapTidForTest(6) == AC_VO);
             QosAckHandler::Status::WAITING_FOR_BLOCK_ACK);
     REQUIRE(hcf->getBestEffortAckStatus(p0) ==
             QosAckHandler::Status::WAITING_FOR_BLOCK_ACK);
-    Ieee80211MultiStaBlockAckRecord partial;
-    partial.aid = 21;
-    partial.tid = 0;
-    partial.responseReceived = true;
-    partial.startingSequenceNumber = 4095;
-    partial.bitmap = 1;
-    hcf->receiveBlockAck(50, ap, {partial});
+    REQUIRE(hcf->getBestEffortAckStatus(p1) ==
+            QosAckHandler::Status::WAITING_FOR_BLOCK_ACK);
+    Ieee80211MultiStaBlockAckRecord firstWindow;
+    firstWindow.aid = 21;
+    firstWindow.tid = 0;
+    firstWindow.responseReceived = true;
+    firstWindow.startingSequenceNumber = 4095;
+    firstWindow.bitmap = 1;
+    auto secondWindow = firstWindow;
+    secondWindow.bitmap = 2;
+    auto wrongStartingSequenceNumber = firstWindow;
+    wrongStartingSequenceNumber.startingSequenceNumber = 0;
+    wrongStartingSequenceNumber.bitmap = 2;
+    hcf->receiveBlockAck(50, ap,
+            {firstWindow, wrongStartingSequenceNumber, secondWindow});
     REQUIRE(hcf->getBestEffortInProgressCount() == 1);
-    REQUIRE(hcf->getBestEffortAckStatus(p0) ==
+    REQUIRE(hcf->getBestEffortAckStatus(p1) ==
             QosAckHandler::Status::BLOCK_ACK_ARRIVED_UNACKED);
     hcf->clearState();
 
@@ -1643,27 +1715,38 @@ REQUIRE(hcf->mapTidForTest(6) == AC_VO);
     hcf->clearState();
 }
 
-// Foreign Trigger correlation and duplicate matching records are both
-// non-terminal and leave the active exact-identity ledger untouched.
+// Foreign Trigger correlation is non-terminal. Multiple matching records for
+// the correlated exchange are all examined, their disjoint windows are
+// combined, and each packet reaches exactly one terminal action.
 {
     auto p0 = hcf->makeQueuedPacket("foreign-p0", ap, 0x50);
     auto p1 = hcf->makeQueuedPacket("foreign-p1", ap, 0x51);
+    auto unrelated = hcf->makeQueuedPacket("foreign-unrelated", ap, 0x52, 1, 1);
     TestHeHcf::CommittedExchange committed;
     hcf->prepareAndCommit(44, ap, -1, committed);
-    Ieee80211MultiStaBlockAckRecord record;
-    record.aid = 21;
-    record.tid = 0;
-    record.responseReceived = true;
-    record.startingSequenceNumber = committed.sequenceNumbers[0];
-    record.bitmap = 3;
-    hcf->receiveBlockAck(45, ap, {record});
+    REQUIRE(committed.packets == (std::vector<Packet *>{p0, p1}));
+    requireQueueIdentities({unrelated});
+    Ieee80211MultiStaBlockAckRecord firstRecord;
+    firstRecord.aid = 21;
+    firstRecord.tid = 0;
+    firstRecord.responseReceived = true;
+    firstRecord.startingSequenceNumber = committed.sequenceNumbers[0];
+    firstRecord.bitmap = 1;
+    auto secondRecord = firstRecord;
+    secondRecord.startingSequenceNumber = committed.sequenceNumbers[1];
+    Ieee80211MultiStaBlockAckRecord unrelatedRecord = firstRecord;
+    unrelatedRecord.aid = 99;
+    unrelatedRecord.bitmap = UINT64_MAX;
+    hcf->receiveBlockAck(45, ap, {firstRecord});
     REQUIRE(hcf->getExchangeCount() == 1);
-    requireQueueIdentities({});
-    hcf->receiveBlockAck(44, ap, {record, record});
-    REQUIRE(hcf->getExchangeCount() == 1);
-    requireQueueIdentities({});
-    hcf->expireExchange(44);
-    requireQueueIdentities({p0, p1});
+    requireQueueIdentities({unrelated});
+    hcf->receiveBlockAck(44, ap,
+            {firstRecord, unrelatedRecord, secondRecord});
+    REQUIRE(hcf->getExchangeCount() == 0);
+    requireQueueIdentities({unrelated});
+    REQUIRE(!unrelated->peekAtFront<Ieee80211DataHeader>()->getRetry());
+    hcf->receiveBlockAck(44, ap, {firstRecord, secondRecord});
+    requireQueueIdentities({unrelated});
     hcf->clearState();
 }
 

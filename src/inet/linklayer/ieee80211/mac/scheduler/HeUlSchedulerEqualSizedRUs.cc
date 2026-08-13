@@ -67,6 +67,7 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerEqualSizedRUs::schedule(const Sch
     for (int i = 0; i < raCount; i++) {
         RuAllocation allocation;
         allocation.randomAccess = true;
+        allocation.randomAccessTarget = getRandomAccessTarget();
         allocation.associationId = 0;
         allocation.ru = layout[scheduledCount + i];
         allocation.mcs = defaultMcs;

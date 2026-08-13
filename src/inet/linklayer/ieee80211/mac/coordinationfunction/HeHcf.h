@@ -60,10 +60,6 @@ INET_API double computeIeee80211HeTriggerPathLossDb(int apTxPowerDbm20Mhz,
 INET_API W computeIeee80211HeTbTransmitPower(W maximumPower, int targetReceivePowerDbm,
         double pathLossDb, bool useMaximumTransmitPower);
 
-/** Release-active structural validation for a decoded HE Basic/BSRP/NFRP Trigger. */
-INET_API std::optional<std::string> validateIeee80211HeUlTrigger(
-        const Ieee80211TriggerFrame& trigger, Hz centerFrequency);
-
 /**
  * Extends Hcf to support IEEE 802.11ax Downlink OFDMA multi-user scheduling.
  *

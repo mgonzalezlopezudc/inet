@@ -241,6 +241,7 @@ class INET_API HeHcfRuntime : public HeDlMuExchangeProvider::IActions,
     void heDlMuUserOutcome(uint64_t, const MacAddress&, HeDlMuUserOutcome) override;
     void heDlMuPlanningFailed(uint64_t, AccessCategory) override;
     void processTriggeredUlFrame(Packet *, const Ptr<const Ieee80211DataHeader>&, uint16_t);
+    void processTriggeredUlManagementFrame(Packet *, const Ptr<const Ieee80211MgmtHeader>&, uint16_t);
     bool canRequestHeUlTrigger() const override;
     bool isNdpFeedbackReportEnabled() const override;
     const Ieee80211Mib *getHeUlMib() const override;
@@ -252,6 +253,7 @@ class INET_API HeHcfRuntime : public HeDlMuExchangeProvider::IActions,
     void heUlMuPlanCommitted(const HeUlMuPlan&, uint32_t) override;
     const Ptr<Ieee80211CompressedBlockAck> processHeUlTriggeredBlockAckReq(Packet *, const Ptr<const Ieee80211CompressedBlockAckReq>&, uint16_t) override;
     void processHeUlTriggeredFrame(Packet *, const Ptr<const Ieee80211DataHeader>&, uint16_t) override;
+    void processHeUlTriggeredManagementFrame(Packet *, const Ptr<const Ieee80211MgmtHeader>&, uint16_t) override;
     simtime_t getTriggeredUlCurrentTime() const override;
     void scheduleTriggeredUlTimer(simtime_t, cMessage *) override;
     void cancelTriggeredUlTimer(cMessage *) override;
@@ -278,6 +280,7 @@ class INET_API HeHcfRuntime : public HeDlMuExchangeProvider::IActions,
     simtime_t getTriggeredUlSifsTime() const override;
     AccessCategory mapTriggeredUlTidToAccessCategory(Tid) const override;
     HeTriggeredUlExchangeService::RandomAccessPreparation prepareTriggeredUlRandomAccess(AccessCategory, int) override;
+    void setTriggeredUlRandomAccessPeer(const MacAddress& peer) override;
     int commitTriggeredUlRandomAccess(const HeTriggeredUlExchangeService::RandomAccessPreparation&) override;
     void emitTriggeredUlResponse(HeTbResponseEvent&) override;
     void reportTriggeredUlRandomAccessResult(bool) override;

@@ -38,6 +38,13 @@ void HeUlSchedulerBase::initialize(int stage)
         maxMuStations = par("maxMuStations");
         minRandomAccessRus = par("minRandomAccessRus");
         maxRandomAccessRus = par("maxRandomAccessRus");
+        auto target = par("randomAccessTarget").stdstringValue();
+        if (target == "associated")
+            randomAccessTarget = IIeee80211HeUlScheduler::RandomAccessTarget::ASSOCIATED_STAS;
+        else if (target == "unassociated")
+            randomAccessTarget = IIeee80211HeUlScheduler::RandomAccessTarget::UNASSOCIATED_STAS;
+        else
+            throw cRuntimeError("randomAccessTarget must be \"associated\" or \"unassociated\"");
         defaultMcs = par("defaultMcs");
         mcsSelectionPolicy = par("mcsSelectionPolicy").stdstringValue();
         if (mcsSelectionPolicy != "rateControl" && mcsSelectionPolicy != "snrThresholds")
