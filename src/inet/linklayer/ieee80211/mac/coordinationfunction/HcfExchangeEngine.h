@@ -42,6 +42,7 @@ class INET_API HcfExchangeEngine : private IFrameSequenceHandler::ICallback
         std::function<void(Packet *)> originatorProcessFailedFrame;
         std::function<void(const FrameSequenceContext *)> frameSequenceStarted;
         std::function<void(const FrameSequenceContext *)> frameSequenceFinished;
+        std::function<bool()> hasTransactionalOwner;
         std::function<void(HcfTransactionIdentity, HcfExchangeAbortReason)> exchangeTerminated;
         std::function<void()> resumeContention;
         std::function<void(Packet *)> discardResponse;
@@ -78,6 +79,7 @@ class INET_API HcfExchangeEngine : private IFrameSequenceHandler::ICallback
     HcfResponseService::Actions makeResponseActions(const Actions& actions);
     void beginTransactionIfNeeded();
     void clearTransaction();
+    void notifyTransactionTerminated(const Actions& actions, HcfExchangeAbortReason reason);
     const IFrameSequence *getFrameSequenceForLegacyAdapter() const;
     IFrameSequenceHandler::ICallback *getFrameSequenceCallbackForLegacyAdapter() { return this; }
 

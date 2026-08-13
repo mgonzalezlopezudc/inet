@@ -11,9 +11,9 @@
 namespace inet {
 namespace ieee80211 {
 
-const std::array<HcfExchangeClass, 11>& getHcfExchangeClassOrder()
+const std::array<HcfExchangeClass, 9>& getHcfExchangeClassOrder()
 {
-    static const std::array<HcfExchangeClass, 11> order = {
+    static const std::array<HcfExchangeClass, 9> order = {
         HcfExchangeClass::FORCED_SINGLE_USER,
         HcfExchangeClass::HE_UL_TRIGGER,
         HcfExchangeClass::HE_SOUNDING,
@@ -21,18 +21,14 @@ const std::array<HcfExchangeClass, 11>& getHcfExchangeClassOrder()
         HcfExchangeClass::HE_DL_MULTIUSER,
         HcfExchangeClass::VHT_GROUP_MANAGEMENT,
         HcfExchangeClass::VHT_DL_MULTIUSER,
-        HcfExchangeClass::VHT_SU_SOUNDING,
-        HcfExchangeClass::HT_SOUNDING,
         HcfExchangeClass::SINGLE_USER,
         HcfExchangeClass::CHANNEL_RELEASE,
     };
     return order;
 }
 
-bool HcfExchangePlan::isComplete() const
+bool isTransactionalExchangeClass(HcfExchangeClass exchangeClass)
 {
-    if (!transactionIdentity.isValid())
-        return false;
     switch (exchangeClass) {
         case HcfExchangeClass::FORCED_SINGLE_USER:
         case HcfExchangeClass::HE_UL_TRIGGER:
@@ -41,14 +37,19 @@ bool HcfExchangePlan::isComplete() const
         case HcfExchangeClass::HE_DL_MULTIUSER:
         case HcfExchangeClass::VHT_GROUP_MANAGEMENT:
         case HcfExchangeClass::VHT_DL_MULTIUSER:
-        case HcfExchangeClass::VHT_SU_SOUNDING:
-        case HcfExchangeClass::HT_SOUNDING:
         case HcfExchangeClass::SINGLE_USER:
+            return true;
         case HcfExchangeClass::CHANNEL_RELEASE:
-            break;
-        default:
             return false;
     }
+    return false;
+}
+
+bool HcfExchangePlan::isComplete() const
+{
+    if (!transactionIdentity.isValid() ||
+            !isTransactionalExchangeClass(exchangeClass))
+        return false;
     std::set<HcfPacketIdentity> identities;
     for (const auto& reservation : reservations)
         if (!reservation.isValid() ||

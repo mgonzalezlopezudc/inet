@@ -144,7 +144,7 @@ requireHcfContract(incompletePeer.validate() ==
         "an incomplete peer snapshot must be rejected");
 
 const auto& order = getHcfExchangeClassOrder();
-requireHcfContract(order == std::array<HcfExchangeClass, 11>{
+requireHcfContract(order == std::array<HcfExchangeClass, 9>{
         HcfExchangeClass::FORCED_SINGLE_USER,
         HcfExchangeClass::HE_UL_TRIGGER,
         HcfExchangeClass::HE_SOUNDING,
@@ -152,30 +152,22 @@ requireHcfContract(order == std::array<HcfExchangeClass, 11>{
         HcfExchangeClass::HE_DL_MULTIUSER,
         HcfExchangeClass::VHT_GROUP_MANAGEMENT,
         HcfExchangeClass::VHT_DL_MULTIUSER,
-        HcfExchangeClass::VHT_SU_SOUNDING,
-        HcfExchangeClass::HT_SOUNDING,
         HcfExchangeClass::SINGLE_USER,
         HcfExchangeClass::CHANNEL_RELEASE},
         "exchange classes must retain the fixed Phase-0 order");
 requireHcfContract(selectHcfExchangeSubsequence({
-        HcfExchangeClass::HT_SOUNDING,
         HcfExchangeClass::SINGLE_USER,
         HcfExchangeClass::CHANNEL_RELEASE}) == std::vector<HcfExchangeClass>{
-        HcfExchangeClass::HT_SOUNDING,
         HcfExchangeClass::SINGLE_USER,
         HcfExchangeClass::CHANNEL_RELEASE},
         "base HCF provider omission must preserve characterized precedence");
 requireHcfContract(selectHcfExchangeSubsequence({
         HcfExchangeClass::VHT_GROUP_MANAGEMENT,
         HcfExchangeClass::VHT_DL_MULTIUSER,
-        HcfExchangeClass::VHT_SU_SOUNDING,
-        HcfExchangeClass::HT_SOUNDING,
         HcfExchangeClass::SINGLE_USER,
         HcfExchangeClass::CHANNEL_RELEASE}) == std::vector<HcfExchangeClass>{
         HcfExchangeClass::VHT_GROUP_MANAGEMENT,
         HcfExchangeClass::VHT_DL_MULTIUSER,
-        HcfExchangeClass::VHT_SU_SOUNDING,
-        HcfExchangeClass::HT_SOUNDING,
         HcfExchangeClass::SINGLE_USER,
         HcfExchangeClass::CHANNEL_RELEASE},
         "VHT provider omission must preserve group, MU, sounding, and SU precedence");
@@ -185,7 +177,6 @@ requireHcfContract(selectHcfExchangeSubsequence({
         HcfExchangeClass::HE_SOUNDING,
         HcfExchangeClass::RECOVERY_SINGLE_USER,
         HcfExchangeClass::HE_DL_MULTIUSER,
-        HcfExchangeClass::HT_SOUNDING,
         HcfExchangeClass::SINGLE_USER,
         HcfExchangeClass::CHANNEL_RELEASE}) == std::vector<HcfExchangeClass>{
         HcfExchangeClass::FORCED_SINGLE_USER,
@@ -193,7 +184,6 @@ requireHcfContract(selectHcfExchangeSubsequence({
         HcfExchangeClass::HE_SOUNDING,
         HcfExchangeClass::RECOVERY_SINGLE_USER,
         HcfExchangeClass::HE_DL_MULTIUSER,
-        HcfExchangeClass::HT_SOUNDING,
         HcfExchangeClass::SINGLE_USER,
         HcfExchangeClass::CHANNEL_RELEASE},
         "HE provider omission must preserve force, UL, sounding, recovery, DL, and SU precedence");
@@ -216,6 +206,9 @@ HcfExchangePlan incompletePlan(HcfExchangeClass::SINGLE_USER,
         HcfTransactionIdentity(), reservations);
 requireHcfContract(!incompletePlan.isComplete(),
         "a plan without token and generation must be incomplete");
+HcfExchangePlan releasePlan(HcfExchangeClass::CHANNEL_RELEASE, identity, {});
+requireHcfContract(!releasePlan.isComplete(),
+        "a channel release outcome must not form a transaction plan");
 HcfTransactionCounts invalidPlanCounts;
 requireHcfContractFailure([&] () {
     PreparedHcfExchange invalid(incompletePlan,

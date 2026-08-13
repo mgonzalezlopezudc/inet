@@ -335,6 +335,11 @@ Notable backward compatible changes are the following:
    IPv6 Neighbor Discovery packets are now created with descriptive names,
    making logs and packet traces easier to read.
 
+   Simplified IEEE 802.11 HCF exchange ownership: ordinary single-user
+   exchanges, channel release, and HT/VHT sounding now use direct frame-sequence
+   paths, while transactional coordination remains for exchanges that reserve
+   or coordinate independently owned state.
+
    Removed several low-value or redundant IPv6 example simulations (demonetworketh,
    ipv6bulk, and ipv6nclients).
 

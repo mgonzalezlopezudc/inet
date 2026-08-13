@@ -110,33 +110,51 @@ class HcfVhtRuntime final : public VhtHcfFeature::IActions
     bool isContinuingReceivedFrame() const { return continuingReceivedFrame; }
     bool isContinuingTransmissionComplete() const { return continuingTransmissionComplete; }
     void modeSetChanged() { feature.modeSetChanged(); }
-    HcfContext buildGrantSelectionContext(AccessCategory accessCategory,
-            bool hasEligibleFrame)
-    {
-        if (!hasEligibleFrame)
-            return HcfContext(accessCategory, {HcfExchangeClass::CHANNEL_RELEASE});
-        auto snapshot = feature.prepareGrantSnapshot(accessCategory);
-        HcfContext context(accessCategory, {snapshot.exchangeClass});
-        context.setProviderSnapshot(snapshot);
-        return context;
-    }
     bool commitSelectedExchange(HcfExchangeClass exchangeClass,
             const HcfContext& context)
     {
         if (exchangeClass != HcfExchangeClass::VHT_GROUP_MANAGEMENT &&
-                exchangeClass != HcfExchangeClass::VHT_DL_MULTIUSER &&
-                exchangeClass != HcfExchangeClass::VHT_SU_SOUNDING)
+                exchangeClass != HcfExchangeClass::VHT_DL_MULTIUSER)
             return false;
         auto snapshot = context.findProviderSnapshot<VhtGrantSnapshot>();
-        if (snapshot == nullptr || snapshot->exchangeClass != exchangeClass)
+        if (snapshot == nullptr || !snapshot->exchangeClass.has_value() ||
+                *snapshot->exchangeClass != exchangeClass)
             throw cRuntimeError("Selected VHT exchange does not match its immutable grant snapshot");
-        feature.commitGrantSnapshot(*snapshot);
+        feature.commitTransactionalGrant(*snapshot);
         return true;
     }
     void setTxOpFactoryForTesting(VhtHcfFeature::ITxOpFactory *factory)
         { feature.setTxOpFactoryForTesting(factory); }
     void invalidatePeer(const MacAddress& peer) { feature.invalidatePeer(peer); }
-    void startFrameSequence(AccessCategory ac) { feature.startFrameSequence(ac); }
+    void startFrameSequence(AccessCategory ac)
+    {
+        if (!hcf->hasFrameToTransmit(ac)) {
+            hcf->releaseChannel(ac);
+            return;
+        }
+        auto snapshot = feature.prepareGrantSnapshot(ac);
+        switch (snapshot.startKind) {
+            case VhtGrantSnapshot::StartKind::COMMON_SINGLE_USER:
+                hcf->startSingleUserExchange(ac);
+                return;
+            case VhtGrantSnapshot::StartKind::SU_SOUNDING:
+            case VhtGrantSnapshot::StartKind::MU_SOUNDING:
+                feature.startSounding(snapshot);
+                return;
+            case VhtGrantSnapshot::StartKind::GROUP_MANAGEMENT:
+            case VhtGrantSnapshot::StartKind::BLOCK_ACK_PREREQUISITE:
+            case VhtGrantSnapshot::StartKind::DL_MULTIUSER: {
+                if (!snapshot.exchangeClass.has_value())
+                    throw cRuntimeError("Transactional VHT grant has no exchange class");
+                HcfContext context(ac, {*snapshot.exchangeClass});
+                context.setProviderSnapshot(snapshot);
+                hcf->runtime->getExchangeSelector().selectAndCommit(context,
+                        hcf->exchangeEngine->getActiveTransactionIdentity());
+                return;
+            }
+        }
+        throw cRuntimeError("Unknown VHT grant start kind");
+    }
 
     virtual Ieee80211Mac *getMac() const override { return hcf->mac; }
     virtual Ieee80211ModeSet *getModeSet() const override { return hcf->modeSet; }
@@ -1411,7 +1429,7 @@ void Hcf::initialize(int stage)
         hcca = check_and_cast<Hcca *>(getSubmodule("hcca"));
         runtime->configureExchangeCommitter(
                 [this] (HcfExchangeClass exchangeClass, const HcfContext& context) {
-                    commitSelectedExchange(exchangeClass, context);
+                    commitTransactionalExchange(exchangeClass, context);
                 });
         tx = check_and_cast<ITx *>(getModuleByPath(par("txModule")));
         rx = check_and_cast<IRx *>(getModuleByPath(par("rxModule")));
@@ -1584,6 +1602,9 @@ HcfExchangeEngine::Actions Hcf::makeExchangeActions()
         emit(cComponent::registerSignal("frameSequenceStarted"), context);
     };
     actions.frameSequenceFinished = [this] (const FrameSequenceContext *) { frameSequenceFinished(); };
+    actions.hasTransactionalOwner = [this] {
+        return runtime->getExchangeSelector().hasActiveExchange();
+    };
     actions.exchangeTerminated = [this] (HcfTransactionIdentity identity,
             HcfExchangeAbortReason abortReason) {
         if (exchangeTerminalSinkForTesting)
@@ -1925,33 +1946,33 @@ void Hcf::channelGranted(IChannelAccess *channelAccess)
         // IEEE Std 802.11-2024, 10.23.2.3 and 10.23.2.4: an EDCAF whose
         // backoff reaches zero obtains an EDCA TXOP for its primary AC.
         edcaf->getTxopProcedure()->startTxop(ac);
-        auto transactionIdentity = exchangeEngine->getActiveTransactionIdentity();
-        auto selectionContext = buildGrantSelectionContext(ac, hasEligibleFrame);
-        runtime->getExchangeSelector().selectAndCommit(selectionContext,
-                transactionIdentity);
+        if (heRuntime != nullptr) {
+            heRuntime->startFrameSequence(ac);
+            return;
+        }
+        if (vhtRuntime != nullptr) {
+            vhtRuntime->startFrameSequence(ac);
+            return;
+        }
+        if (!hasEligibleFrame) {
+            releaseChannel(ac);
+            return;
+        }
+        startFrameSequence(ac);
     }
     else
         throw cRuntimeError("Channel access granted but channel owner not found!");
 }
 
-HcfContext Hcf::buildGrantSelectionContext(AccessCategory accessCategory,
-        bool hasEligibleFrame)
+void Hcf::releaseChannel(AccessCategory ac)
 {
-    if (heRuntime != nullptr)
-        return heRuntime->buildGrantSelectionContext(accessCategory, hasEligibleFrame);
-    if (vhtRuntime != nullptr)
-        return vhtRuntime->buildGrantSelectionContext(accessCategory, hasEligibleFrame);
-    auto htSoundingModeIdentity = hasEligibleFrame ?
-            prepareHtSoundingModeIdentity(accessCategory) :
-            std::optional<std::string>();
-    if (htSoundingModeIdentity.has_value())
-        return HcfContext(accessCategory, {HcfExchangeClass::HT_SOUNDING},
-                htSoundingModeIdentity);
-    return HcfContext(accessCategory, {hasEligibleFrame ?
-            HcfExchangeClass::SINGLE_USER : HcfExchangeClass::CHANNEL_RELEASE});
+    auto edcaf = edca->getEdcaf(ac);
+    exchangeEngine->preparationCompletedWithoutSequence(makeExchangeActions());
+    edcaf->releaseChannel(this);
+    edcaf->getTxopProcedure()->endTxop();
 }
 
-void Hcf::commitSelectedExchange(HcfExchangeClass exchangeClass,
+void Hcf::commitTransactionalExchange(HcfExchangeClass exchangeClass,
         const HcfContext& context)
 {
     if (heRuntime != nullptr) {
@@ -1960,27 +1981,8 @@ void Hcf::commitSelectedExchange(HcfExchangeClass exchangeClass,
     }
     if (vhtRuntime != nullptr && vhtRuntime->commitSelectedExchange(exchangeClass, context))
         return;
-    auto selectedAccessCategory = context.getSelectionAccessCategory();
-    if (!selectedAccessCategory.has_value())
-        throw cRuntimeError("HCF provider commit lacks an access category projection");
-    auto accessCategory = *selectedAccessCategory;
-    if (exchangeClass == HcfExchangeClass::CHANNEL_RELEASE) {
-        auto edcaf = edca->getEdcaf(accessCategory);
-        exchangeEngine->preparationCompletedWithoutSequence(makeExchangeActions());
-        edcaf->releaseChannel(this);
-        edcaf->getTxopProcedure()->endTxop();
-    }
-    else if (exchangeClass == HcfExchangeClass::HT_SOUNDING) {
-        if (!context.getHtSoundingModeIdentity().has_value())
-            throw cRuntimeError("HT sounding commit lacks its immutable mode projection");
-        startHtSoundingExchange(accessCategory,
-                *context.getHtSoundingModeIdentity());
-    }
-    else if (exchangeClass == HcfExchangeClass::SINGLE_USER)
-        startSingleUserExchange(accessCategory);
-    else
-        throw cRuntimeError("Common HCF cannot commit amendment exchange class %d",
-                static_cast<int>(exchangeClass));
+    throw cRuntimeError("No runtime can commit HCF transaction class %d",
+            static_cast<int>(exchangeClass));
 }
 
 bool Hcf::shouldRestartWideChannelAccess(Edcaf *edcaf)
@@ -2086,51 +2088,44 @@ TxopProcedure::InitialProtection Hcf::selectInitialProtection(Packet *frame,
             TxopProcedure::InitialProtection::NONE;
 }
 
-std::optional<std::string> Hcf::prepareHtSoundingModeIdentity(
+const physicallayer::IIeee80211Mode *Hcf::selectHtSoundingMode(
         AccessCategory ac) const
 {
     auto edcaf = edca->getEdcaf(ac);
     auto txop = edcaf->getTxopProcedure();
     auto frameToTransmit = edcaf->getInProgressFrames()->getFrameToTransmit();
     if (frameToTransmit == nullptr)
-        return std::nullopt;
+        return nullptr;
     auto frameHeader = frameToTransmit->peekAtFront<Ieee80211MacHeader>();
     auto existingMode = frameToTransmit->findTag<physicallayer::Ieee80211ModeReq>();
     auto firstMode = existingMode == nullptr ?
             rateSelection->computeMode(frameToTransmit, frameHeader, txop) :
             existingMode->getMode();
-    return htFeature->isSoundingEligible(
-            frameHeader->getReceiverAddress(), firstMode) ?
-            std::optional<std::string>(firstMode->getName()) : std::nullopt;
+    return htFeature->isSoundingEligible(frameHeader->getReceiverAddress(), firstMode) ?
+            firstMode : nullptr;
 }
 
-void Hcf::startHtSoundingExchange(AccessCategory ac,
-        const std::string& modeIdentity)
+bool Hcf::tryStartHtSounding(AccessCategory ac)
 {
-    exchangeEngine->beginPreparation();
+    auto firstMode = selectHtSoundingMode(ac);
+    if (firstMode == nullptr)
+        return false;
     auto edcaf = edca->getEdcaf(ac);
     auto txop = edcaf->getTxopProcedure();
     auto frameToTransmit = edcaf->getInProgressFrames()->getFrameToTransmit();
     if (frameToTransmit == nullptr)
-        throw cRuntimeError("Prepared HT sounding exchange lost its source frame");
+        return false;
     auto frameHeader = frameToTransmit->peekAtFront<Ieee80211MacHeader>();
-    const physicallayer::IIeee80211Mode *firstMode = nullptr;
-    for (int i = 0; i < modeSet->getNumModes(); i++)
-        if (modeIdentity == modeSet->getMode(i)->getName()) {
-            firstMode = modeSet->getMode(i);
-            break;
-        }
-    if (firstMode == nullptr)
-        throw cRuntimeError("Prepared HT sounding mode '%s' is no longer available",
-                modeIdentity.c_str());
-    setFrameMode(frameToTransmit, frameHeader, firstMode);
     auto sequence = htFeature->createSoundingSequence(
             frameHeader->getReceiverAddress(), firstMode);
     if (sequence == nullptr)
-        throw cRuntimeError("Prepared HT sounding exchange became ineligible before commit");
+        return false;
+    setFrameMode(frameToTransmit, frameHeader, firstMode);
     if (!txop->isProtectionConfigured())
         txop->configureProtection(TxopProcedure::InitialProtection::NONE);
+    exchangeEngine->beginPreparation();
     startExchangeFrameSequence(sequence, buildContext(ac));
+    return true;
 }
 
 void Hcf::startSingleUserExchange(AccessCategory ac)
@@ -2170,10 +2165,11 @@ void Hcf::startFrameSequence(AccessCategory ac)
         vhtRuntime->startFrameSequence(ac);
         return;
     }
-    auto htSoundingModeIdentity = prepareHtSoundingModeIdentity(ac);
-    if (htSoundingModeIdentity.has_value())
-        startHtSoundingExchange(ac, *htSoundingModeIdentity);
-    else
+    if (!hasFrameToTransmit(ac)) {
+        releaseChannel(ac);
+        return;
+    }
+    if (!tryStartHtSounding(ac))
         startSingleUserExchange(ac);
 }
 
@@ -2798,8 +2794,7 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
             dynamicPtrCast<const Ieee80211MultiStaBlockAck>(header) != nullptr;
     TransmissionPreparationActions actions(this, channelOwner, txop,
             getFrameSequenceContext(), request.protectionMechanism);
-    auto prepared = transmissionPreparationService.prepare(request, actions);
-    transmissionPreparationService.commit(prepared, actions);
+    transmissionPreparationService.prepareAndTransmit(request, actions);
 }
 
 void Hcf::transmitControlResponseFrame(Packet *responsePacket, const Ptr<const Ieee80211MacHeader>& responseHeader, Packet *receivedPacket, const Ptr<const Ieee80211MacHeader>& receivedHeader)

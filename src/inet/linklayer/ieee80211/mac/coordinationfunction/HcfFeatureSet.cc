@@ -72,11 +72,11 @@ class HcfActionExchangeProvider final : public IHcfExchangeProvider
             HcfExchangeRejection& rejection) override
     {
         const bool vhtClass = exchangeClass == HcfExchangeClass::VHT_GROUP_MANAGEMENT ||
-                exchangeClass == HcfExchangeClass::VHT_DL_MULTIUSER ||
-                exchangeClass == HcfExchangeClass::VHT_SU_SOUNDING;
+                exchangeClass == HcfExchangeClass::VHT_DL_MULTIUSER;
         if (vhtClass) {
             auto snapshot = context.findProviderSnapshot<VhtGrantSnapshot>();
-            if (snapshot == nullptr || snapshot->exchangeClass != exchangeClass) {
+            if (snapshot == nullptr || !snapshot->exchangeClass.has_value() ||
+                    *snapshot->exchangeClass != exchangeClass) {
                 rejection = HcfExchangeRejection(
                         HcfExchangeRejectionCode::NO_ELIGIBLE_PACKET,
                         exchangeClass, transactionIdentity,
@@ -97,6 +97,18 @@ class HcfActionExchangeProvider final : public IHcfExchangeProvider
                         HcfExchangeRejectionCode::NO_ELIGIBLE_PACKET,
                         exchangeClass, transactionIdentity,
                         "HE provider does not match the immutable grant outcome");
+                return nullptr;
+            }
+        }
+        if (exchangeClass == HcfExchangeClass::SINGLE_USER) {
+            auto snapshot = context.findProviderSnapshot<
+                    HeTxopCoordinatorService::GrantSnapshot>();
+            if (snapshot == nullptr || snapshot->exchangeClass != exchangeClass ||
+                    !snapshot->dlStart.has_value()) {
+                rejection = HcfExchangeRejection(
+                        HcfExchangeRejectionCode::NO_ELIGIBLE_PACKET,
+                        exchangeClass, transactionIdentity,
+                        "HE prepared single-user provider requires a DL start");
                 return nullptr;
             }
         }
@@ -153,12 +165,7 @@ void CommonHcfFeatureSet::configureExchangeCommitter(
 std::vector<HcfExchangeProviderDescriptor>
 CommonHcfFeatureSet::getExchangeProviderDescriptors()
 {
-    std::vector<HcfExchangeProviderDescriptor> descriptors;
-    if (getConfiguration().enableHtSounding)
-        descriptors.push_back(makeActionDescriptor(HcfExchangeClass::HT_SOUNDING));
-    descriptors.push_back(makeActionDescriptor(HcfExchangeClass::SINGLE_USER));
-    descriptors.push_back(makeActionDescriptor(HcfExchangeClass::CHANNEL_RELEASE));
-    return descriptors;
+    return {};
 }
 
 std::vector<HcfExchangeProviderDescriptor>
@@ -170,8 +177,6 @@ VhtHcfFeatureSet::getExchangeProviderDescriptors()
         // This class includes the current VHT MU-sounding prerequisite.
         descriptors.push_back(makeActionDescriptor(HcfExchangeClass::VHT_DL_MULTIUSER));
     }
-    if (getConfiguration().enableVhtSuBeamforming)
-        descriptors.push_back(makeActionDescriptor(HcfExchangeClass::VHT_SU_SOUNDING));
     return descriptors;
 }
 
@@ -186,6 +191,7 @@ HeHcfFeatureSet::getExchangeProviderDescriptors()
         descriptors.push_back(makeActionDescriptor(HcfExchangeClass::HE_SOUNDING));
     descriptors.push_back(makeActionDescriptor(HcfExchangeClass::RECOVERY_SINGLE_USER));
     descriptors.push_back(makeActionDescriptor(HcfExchangeClass::HE_DL_MULTIUSER));
+    descriptors.push_back(makeActionDescriptor(HcfExchangeClass::SINGLE_USER));
     return descriptors;
 }
 

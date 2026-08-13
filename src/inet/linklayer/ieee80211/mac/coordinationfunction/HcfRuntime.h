@@ -32,7 +32,6 @@ class INET_API HcfRuntime
             const HcfFeatureConfiguration& configuration = {});
 
     const std::vector<HcfExchangeProviderDescriptor>& getExchangeProviderDescriptors() const { return exchangeProviderDescriptors; }
-    const HcfExchangeProviderDescriptor& getSingleUserDescriptor() const;
     const HcfExchangeProviderDescriptor *findExchangeProviderDescriptor(HcfExchangeClass exchangeClass) const;
     HcfExchangeSelector& getExchangeSelector() { return *exchangeSelector; }
     const HcfExchangeSelector& getExchangeSelector() const { return *exchangeSelector; }

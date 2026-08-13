@@ -317,7 +317,17 @@ void HeHcfRuntime::startFrameSequence(AccessCategory ac)
             HeTxopCoordinatorService::GrantSnapshot>();
     if (snapshot == nullptr)
         throw cRuntimeError("HE legacy grant wrapper did not capture an exact snapshot");
-    commitSelectedExchange(snapshot->exchangeClass, context);
+    if (snapshot->exchangeClass == HcfExchangeClass::CHANNEL_RELEASE) {
+        hcf->releaseChannel(ac);
+        return;
+    }
+    if (snapshot->exchangeClass == HcfExchangeClass::SINGLE_USER &&
+            !snapshot->dlStart.has_value()) {
+        hcf->startSingleUserExchange(ac);
+        return;
+    }
+    hcf->runtime->getExchangeSelector().selectAndCommit(context,
+            exchangeEngine->getActiveTransactionIdentity());
 }
 
 HcfContext HeHcfRuntime::buildGrantSelectionContext(AccessCategory ac,
@@ -353,16 +363,8 @@ void HeHcfRuntime::commitSelectedExchange(HcfExchangeClass exchangeClass,
             [this] (const auto& start) { return ulTriggerService.commitStart(start); },
             [this] (AccessCategory ac) { return startHeDlMuSingleUserIfEligible(ac); }))
     {
-        auto selectedAccessCategory = context.getSelectionAccessCategory();
-        if (!selectedAccessCategory.has_value())
-            throw cRuntimeError("HCF provider commit lacks an access category projection");
-        if (exchangeClass != HcfExchangeClass::CHANNEL_RELEASE)
-            throw cRuntimeError("HE runtime cannot commit exchange class %d",
-                    static_cast<int>(exchangeClass));
-        auto edcaf = edca->getEdcaf(*selectedAccessCategory);
-        exchangeEngine->preparationCompletedWithoutSequence(makeExchangeActions());
-        edcaf->releaseChannel(hcf);
-        edcaf->getTxopProcedure()->endTxop();
+        throw cRuntimeError("HE runtime cannot commit exchange class %d",
+                static_cast<int>(exchangeClass));
     }
 }
 

@@ -301,12 +301,7 @@ for (const auto& fixture : familyFixtures) {
     request.packet = packet;
     request.header = packet->peekAtFront<Ieee80211MacHeader>();
     request.ifs = SimTime(16, SIMTIME_US);
-    auto prepared = service.prepare(request, harness);
-    REQUIRE(prepared.sourcePacket == packet);
-    REQUIRE(prepared.transmittedPacket == packet);
-    REQUIRE(!prepared.temporaryPacketOwned);
-    REQUIRE(!prepared.sourceModePropagated);
-    REQUIRE(prepared.mode == harness.getMode());
+    service.prepareAndTransmit(request, harness);
     REQUIRE(harness.validatedDuration == fixture.mode->getDuration(B(100)));
     REQUIRE(harness.validatedPpduMaxDuration == fixture.mode->getPpduMaxDuration());
     REQUIRE(harness.ackPolicySawRetry);
@@ -316,12 +311,9 @@ for (const auto& fixture : familyFixtures) {
             "planAggregation", "validateAggregation", "validateProtection",
             "applyAckPolicy", "applyModePreparation",
             "applyAggregateMembers", "setMode", "computeProtection", "recordMode",
-            "observeRate", "applyDuration"}));
-    service.commit(prepared, harness);
-    REQUIRE(prepared.terminalState == Service::TerminalState::COMMITTED);
+            "observeRate", "applyDuration", "handoff"}));
     REQUIRE(harness.handoffCount == 1);
     REQUIRE(harness.temporaryDeleteCount == 0);
-    REQUIRE(throwsRuntimeError([&] { service.commit(prepared, harness); }));
     delete packet;
 }
 
@@ -335,15 +327,14 @@ for (const auto& fixture : familyFixtures) {
     Service::Request request;
     request.packet = packet;
     request.header = foreignPacket->peekAtFront<Ieee80211MacHeader>();
-    REQUIRE(throwsRuntimeError([&] { service.prepare(request, harness); }));
+    REQUIRE(throwsRuntimeError([&] { service.prepareAndTransmit(request, harness); }));
     REQUIRE(harness.events.empty());
 
     request.container = true;
     harness.updateDuration = false;
     harness.returnProvidedHeader = true;
-    auto prepared = service.prepare(request, harness);
-    REQUIRE(prepared.header == request.header);
-    service.discard(prepared, harness);
+    service.prepareAndTransmit(request, harness);
+    REQUIRE(harness.handoffCount == 1);
     delete foreignPacket;
     delete packet;
 }
@@ -357,9 +348,8 @@ for (const auto& fixture : familyFixtures) {
     Service::Request request;
     request.packet = packet;
     request.header = packet->peekAtFront<Ieee80211MacHeader>();
-    auto prepared = service.prepare(request, harness);
+    service.prepareAndTransmit(request, harness);
     REQUIRE(packet->peekAtFront<Ieee80211DataHeader>()->getAckPolicy() == NO_ACK);
-    service.commit(prepared, harness);
     delete packet;
 }
 
@@ -376,7 +366,7 @@ auto requireInvalidAggregate = [&] (const char *name,
     Service::Request request;
     request.packet = packet;
     request.header = packet->peekAtFront<Ieee80211MacHeader>();
-    REQUIRE(throwsRuntimeError([&] { service.prepare(request, harness); }));
+    REQUIRE(throwsRuntimeError([&] { service.prepareAndTransmit(request, harness); }));
     REQUIRE(harness.packetMutationCount == 1);
     REQUIRE(std::find(harness.events.begin(), harness.events.end(), "computeProtection") == harness.events.end());
     REQUIRE(std::find(harness.events.begin(), harness.events.end(), "materialize") == harness.events.end());
@@ -405,7 +395,7 @@ for (int protectionCase = 0; protectionCase < 2; protectionCase++) {
         harness.protectionDuration = SimTime(-1, SIMTIME_US);
     else
         request.durationFinalized = true;
-    REQUIRE(throwsRuntimeError([&] { service.prepare(request, harness); }));
+    REQUIRE(throwsRuntimeError([&] { service.prepareAndTransmit(request, harness); }));
     REQUIRE(harness.packetMutationCount == 1);
     REQUIRE(std::find(harness.events.begin(), harness.events.end(), "materialize") == harness.events.end());
     delete packet;
@@ -424,11 +414,11 @@ for (auto mechanism : {Service::ProtectionMechanism::SINGLE,
     request.header = packet->peekAtFront<Ieee80211MacHeader>();
     request.protectionMechanism = mechanism;
     request.durationExemptForSingleProtection = true;
-    auto prepared = service.prepare(request, harness);
+    service.prepareAndTransmit(request, harness);
     REQUIRE((std::find(harness.events.begin(), harness.events.end(),
             "applyDuration") != harness.events.end()) ==
             (mechanism == Service::ProtectionMechanism::MULTIPLE));
-    service.discard(prepared, harness);
+    REQUIRE(harness.handoffCount == 1);
     delete packet;
 }
 
@@ -444,29 +434,23 @@ for (bool failHandoff : {false, true}) {
     Service::Request request;
     request.packet = packet;
     request.header = packet->peekAtFront<Ieee80211MacHeader>();
-    auto prepared = service.prepare(request, harness);
-    REQUIRE(prepared.transmittedPacket != packet);
-    REQUIRE(prepared.temporaryPacketOwned);
-    REQUIRE(prepared.sourceModePropagated);
-    REQUIRE(harness.transmittedMode == harness.selectedMode);
-    REQUIRE(harness.sourceMode == harness.selectedMode);
-    REQUIRE(harness.modePacket == prepared.transmittedPacket);
-    REQUIRE(harness.sourceModePacket == packet);
-    REQUIRE(std::find(harness.events.begin(), harness.events.end(), "setSourceMode") != harness.events.end());
+    auto operation = [&] { service.prepareAndTransmit(request, harness); };
     if (failHandoff) {
-        REQUIRE(throwsRuntimeError([&] { service.commit(prepared, harness); }));
-        REQUIRE(prepared.terminalState == Service::TerminalState::HANDOFF_FAILED);
+        REQUIRE(throwsRuntimeError(operation));
     }
     else {
-        service.commit(prepared, harness);
-        REQUIRE(prepared.terminalState == Service::TerminalState::COMMITTED);
+        operation();
     }
-    REQUIRE(!prepared.temporaryPacketOwned);
+    REQUIRE(harness.transmittedMode == harness.selectedMode);
+    REQUIRE(harness.sourceMode == harness.selectedMode);
+    REQUIRE(harness.modePacket != packet);
+    REQUIRE(harness.sourceModePacket == packet);
+    REQUIRE(std::find(harness.events.begin(), harness.events.end(), "setSourceMode") != harness.events.end());
     REQUIRE(harness.temporaryDeleteCount == 1);
     delete packet;
 }
 
-// Explicit discard is the other terminal path for a temporary aggregate.
+// A successful temporary aggregate is cleaned up after the borrowed handoff.
 {
     auto packet = makeData("discardSource", unicast, BLOCK_ACK);
     PreparationHarness harness;
@@ -475,10 +459,8 @@ for (bool failHandoff : {false, true}) {
     Service::Request request;
     request.packet = packet;
     request.header = packet->peekAtFront<Ieee80211MacHeader>();
-    auto prepared = service.prepare(request, harness);
-    service.discard(prepared, harness);
-    REQUIRE(prepared.terminalState == Service::TerminalState::DISCARDED);
-    REQUIRE(harness.handoffCount == 0);
+    service.prepareAndTransmit(request, harness);
+    REQUIRE(harness.handoffCount == 1);
     REQUIRE(harness.temporaryDeleteCount == 1);
     delete packet;
 }
@@ -496,7 +478,7 @@ for (bool invalidMode : {true, false}) {
     Service::Request request;
     request.packet = packet;
     request.header = packet->peekAtFront<Ieee80211MacHeader>();
-    REQUIRE(throwsRuntimeError([&] { service.prepare(request, harness); }));
+    REQUIRE(throwsRuntimeError([&] { service.prepareAndTransmit(request, harness); }));
     REQUIRE(harness.packetMutationCount == 1);
     REQUIRE(harness.queueMutationCount == (invalidMode ? 0 : 1));
     REQUIRE(harness.handoffCount == 0);
@@ -515,7 +497,7 @@ for (bool invalidMode : {true, false}) {
     Service::Request request;
     request.packet = packet;
     request.header = packet->peekAtFront<Ieee80211MacHeader>();
-    REQUIRE(throwsRuntimeError([&] { service.prepare(request, harness); }));
+    REQUIRE(throwsRuntimeError([&] { service.prepareAndTransmit(request, harness); }));
     REQUIRE(harness.temporaryDeleteCount == 1);
     REQUIRE(harness.handoffCount == 0);
     delete packet;

@@ -368,14 +368,12 @@ std::optional<VhtGrantSnapshot> VhtHcfFeature::prepareDlMu(AccessCategory ac) co
             auto ndpMode = modeSet->getVhtSuNdpMode(mode, soundingNsts);
             VhtGrantSnapshot snapshot;
             snapshot.startKind = VhtGrantSnapshot::StartKind::MU_SOUNDING;
-            snapshot.exchangeClass = HcfExchangeClass::VHT_DL_MULTIUSER;
             snapshot.accessCategory = ac;
             snapshot.peer = peer;
             snapshot.associationId = getPeerAssociationId(peer);
             snapshot.associationGeneration = generation;
             snapshot.soundingNsts = soundingNsts;
             snapshot.dialogToken = soundingService.getNextDialogToken() & 0x3f;
-            snapshot.soundingModeIdentity = ndpMode->getName();
             snapshot.soundingMode = ndpMode;
             snapshot.muFeedback = true;
             return snapshot;
@@ -484,14 +482,12 @@ std::optional<VhtGrantSnapshot> VhtHcfFeature::prepareSuSounding(
             auto ndpMode = modeSet->getVhtSuNdpMode(mode, soundingNsts);
             VhtGrantSnapshot snapshot;
             snapshot.startKind = VhtGrantSnapshot::StartKind::SU_SOUNDING;
-            snapshot.exchangeClass = HcfExchangeClass::VHT_SU_SOUNDING;
             snapshot.accessCategory = ac;
             snapshot.peer = peer;
             snapshot.associationId = getPeerAssociationId(peer);
             snapshot.associationGeneration = generation;
             snapshot.soundingNsts = soundingNsts;
             snapshot.dialogToken = soundingService.getNextDialogToken() & 0x3f;
-            snapshot.soundingModeIdentity = ndpMode->getName();
             snapshot.soundingMode = ndpMode;
             return snapshot;
         }
@@ -535,8 +531,11 @@ VhtGrantSnapshot VhtHcfFeature::prepareGrantSnapshot(AccessCategory ac) const
     return snapshot;
 }
 
-void VhtHcfFeature::commitSounding(const VhtGrantSnapshot& snapshot)
+void VhtHcfFeature::startSounding(const VhtGrantSnapshot& snapshot)
 {
+    if (snapshot.startKind != VhtGrantSnapshot::StartKind::SU_SOUNDING &&
+            snapshot.startKind != VhtGrantSnapshot::StartKind::MU_SOUNDING)
+        throw cRuntimeError("VHT direct sounding received a non-sounding snapshot");
     auto ndpMode = snapshot.soundingMode;
     if (ndpMode == nullptr || !soundingService.getCoordinator().mayAttempt(snapshot.peer))
         throw cRuntimeError("Prepared VHT sounding exchange became stale before commit");
@@ -614,12 +613,9 @@ void VhtHcfFeature::commitDlMu(const VhtGrantSnapshot& snapshot)
     rollback.release();
 }
 
-void VhtHcfFeature::commitGrantSnapshot(const VhtGrantSnapshot& snapshot)
+void VhtHcfFeature::commitTransactionalGrant(const VhtGrantSnapshot& snapshot)
 {
     switch (snapshot.startKind) {
-        case VhtGrantSnapshot::StartKind::COMMON_SINGLE_USER:
-            actions->continueBaseFrameSequence(snapshot.accessCategory);
-            break;
         case VhtGrantSnapshot::StartKind::GROUP_MANAGEMENT: {
             auto txop = actions->getEdca()->getEdcaf(snapshot.accessCategory)->getTxopProcedure();
             if (!txop->isProtectionConfigured())
@@ -633,20 +629,13 @@ void VhtHcfFeature::commitGrantSnapshot(const VhtGrantSnapshot& snapshot)
         }
         case VhtGrantSnapshot::StartKind::BLOCK_ACK_PREREQUISITE:
             commitBlockAckPrerequisite(snapshot);
-            break;
-        case VhtGrantSnapshot::StartKind::MU_SOUNDING:
-        case VhtGrantSnapshot::StartKind::SU_SOUNDING:
-            commitSounding(snapshot);
-            break;
+            return;
         case VhtGrantSnapshot::StartKind::DL_MULTIUSER:
             commitDlMu(snapshot);
-            break;
+            return;
+        default:
+            throw cRuntimeError("Direct VHT grant entered transactional commit");
     }
-}
-
-void VhtHcfFeature::startFrameSequence(AccessCategory ac)
-{
-    commitGrantSnapshot(prepareGrantSnapshot(ac));
 }
 
 bool VhtHcfFeature::processHeaderlessNdpIndication(Packet *packet)

@@ -23,6 +23,9 @@ HcfRuntime::HcfRuntime(IHcfFeatureSet *featureSet,
 
     std::map<HcfExchangeClass, HcfExchangeProviderDescriptor> descriptorsByClass;
     for (const auto& descriptor : featureSet->getExchangeProviderDescriptors()) {
+        if (!isTransactionalExchangeClass(descriptor.getExchangeClass()))
+            throw cRuntimeError("HCF feature set cannot register non-transactional exchange class %d",
+                    static_cast<int>(descriptor.getExchangeClass()));
         if (descriptor.isExecutable() &&
                 descriptor.getExecutableProvider().getExchangeClass() != descriptor.getExchangeClass())
             throw cRuntimeError("HCF provider class does not match its descriptor class");
@@ -31,11 +34,6 @@ HcfRuntime::HcfRuntime(IHcfFeatureSet *featureSet,
             throw cRuntimeError("Duplicate HCF exchange descriptor for class %d",
                     static_cast<int>(descriptor.getExchangeClass()));
     }
-    if (descriptorsByClass.find(HcfExchangeClass::SINGLE_USER) == descriptorsByClass.end())
-        throw cRuntimeError("HCF feature set is missing the required SINGLE_USER composition descriptor");
-    if (descriptorsByClass.find(HcfExchangeClass::CHANNEL_RELEASE) == descriptorsByClass.end())
-        throw cRuntimeError("HCF feature set is missing the required CHANNEL_RELEASE composition descriptor");
-
     for (auto exchangeClass : getHcfExchangeClassOrder()) {
         auto it = descriptorsByClass.find(exchangeClass);
         if (it != descriptorsByClass.end()) {
@@ -46,13 +44,6 @@ HcfRuntime::HcfRuntime(IHcfFeatureSet *featureSet,
     if (!descriptorsByClass.empty())
         throw cRuntimeError("HCF feature set returned an unknown exchange class");
     exchangeSelector = std::make_unique<HcfExchangeSelector>(exchangeProviderDescriptors);
-}
-
-const HcfExchangeProviderDescriptor& HcfRuntime::getSingleUserDescriptor() const
-{
-    auto descriptor = findExchangeProviderDescriptor(HcfExchangeClass::SINGLE_USER);
-    ASSERT(descriptor != nullptr);
-    return *descriptor;
 }
 
 const HcfExchangeProviderDescriptor *HcfRuntime::findExchangeProviderDescriptor(

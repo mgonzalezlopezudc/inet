@@ -41,13 +41,11 @@ enum class HcfExchangeClass {
     HE_DL_MULTIUSER,
     VHT_GROUP_MANAGEMENT,
     VHT_DL_MULTIUSER,
-    VHT_SU_SOUNDING,
-    HT_SOUNDING,
     SINGLE_USER,
     CHANNEL_RELEASE,
 };
 
-constexpr size_t NUM_HCF_EXCHANGE_CLASSES = 11;
+constexpr size_t NUM_HCF_EXCHANGE_CLASSES = 9;
 
 /** Opaque identity of a packet; this value never conveys Packet ownership. */
 class INET_API HcfPacketIdentity
@@ -350,7 +348,6 @@ class INET_API HcfContext
     HcfPhySnapshot phySnapshot;
     std::optional<AccessCategory> selectionAccessCategory;
     std::array<std::optional<bool>, NUM_HCF_EXCHANGE_CLASSES> exchangeEligibility;
-    std::optional<std::string> htSoundingModeIdentity;
     std::unordered_map<std::type_index, std::shared_ptr<const void>> providerSnapshots;
 
   public:
@@ -364,10 +361,8 @@ class INET_API HcfContext
     explicit HcfContext(const HcfHeSoundingSnapshot& heSoundingSnapshot)
         { setProviderSnapshot(heSoundingSnapshot); }
     HcfContext(AccessCategory accessCategory,
-            std::initializer_list<HcfExchangeClass> eligibleExchangeClasses,
-            const std::optional<std::string>& htSoundingModeIdentity = std::nullopt) :
-        selectionAccessCategory(accessCategory),
-        htSoundingModeIdentity(htSoundingModeIdentity)
+            std::initializer_list<HcfExchangeClass> eligibleExchangeClasses) :
+        selectionAccessCategory(accessCategory)
     {
         for (auto exchangeClass : eligibleExchangeClasses)
             exchangeEligibility[static_cast<size_t>(exchangeClass)] = true;
@@ -383,8 +378,6 @@ class INET_API HcfContext
         { return exchangeEligibility[static_cast<size_t>(exchangeClass)]; }
     void setExchangeEligibility(HcfExchangeClass exchangeClass, bool eligible = true)
         { exchangeEligibility[static_cast<size_t>(exchangeClass)] = eligible; }
-    const std::optional<std::string>& getHtSoundingModeIdentity() const
-        { return htSoundingModeIdentity; }
     template<typename T>
     void setProviderSnapshot(T snapshot)
     {

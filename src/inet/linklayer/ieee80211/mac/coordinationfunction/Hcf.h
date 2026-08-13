@@ -326,13 +326,11 @@ class INET_API Hcf : public IQosCoordinationFunction, public IChannelAccess::ICa
     bool processTransmittedAmpdu(Packet *packet, Edcaf *edcaf, AccessCategory ac);
     TxopProcedure::InitialProtection selectInitialProtection(Packet *frame,
             const physicallayer::IIeee80211Mode *firstMode) const;
-    std::optional<std::string> prepareHtSoundingModeIdentity(AccessCategory ac) const;
-    void startHtSoundingExchange(AccessCategory ac,
-            const std::string& modeIdentity);
+    void releaseChannel(AccessCategory ac);
+    const physicallayer::IIeee80211Mode *selectHtSoundingMode(AccessCategory ac) const;
+    bool tryStartHtSounding(AccessCategory ac);
     void startSingleUserExchange(AccessCategory ac);
-    HcfContext buildGrantSelectionContext(AccessCategory accessCategory,
-            bool hasEligibleFrame);
-    void commitSelectedExchange(HcfExchangeClass exchangeClass,
+    void commitTransactionalExchange(HcfExchangeClass exchangeClass,
             const HcfContext& context);
 
     void startFrameSequence(AccessCategory ac);

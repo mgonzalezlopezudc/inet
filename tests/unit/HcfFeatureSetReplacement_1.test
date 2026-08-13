@@ -67,13 +67,11 @@ class ReplacementProvider : public IHcfExchangeProvider
 class ReplacementHcfFeatureSet : public cSimpleModule, public IHcfFeatureSet
 {
   public:
-    ReplacementProvider singleUser{HcfExchangeClass::SINGLE_USER, true};
-    ReplacementProvider channelRelease{HcfExchangeClass::CHANNEL_RELEASE, false};
+    ReplacementProvider dlMu{HcfExchangeClass::HE_DL_MULTIUSER, true};
 
     virtual std::vector<HcfExchangeProviderDescriptor> getExchangeProviderDescriptors() override
     {
-        return {{HcfExchangeClass::SINGLE_USER, &singleUser},
-                {HcfExchangeClass::CHANNEL_RELEASE, &channelRelease}};
+        return {{HcfExchangeClass::HE_DL_MULTIUSER, &dlMu}};
     }
     virtual void configureExchangeCommitter(const ExchangeCommitter&) override {}
 };
@@ -95,11 +93,10 @@ class ReplacementObserver : public cSimpleModule
         auto identity = HcfTransactionIdentity(HcfTransactionToken(91),
                 HcfTransactionGeneration(1));
         auto selected = hcf->getExchangeSelectorForTesting().selectAndCommit(
-                HcfContext(AC_BE, {HcfExchangeClass::SINGLE_USER}), identity);
-        if (selected != HcfExchangeClass::SINGLE_USER ||
-                featureSet->singleUser.prepareCount != 1 ||
-                featureSet->singleUser.commitCount != 1 ||
-                featureSet->channelRelease.prepareCount != 0)
+                HcfContext(AC_BE, {HcfExchangeClass::HE_DL_MULTIUSER}), identity);
+        if (selected != HcfExchangeClass::HE_DL_MULTIUSER ||
+                featureSet->dlMu.prepareCount != 1 ||
+                featureSet->dlMu.commitCount != 1)
             throw cRuntimeError("replacement IHcfFeatureSet provider was not selected exactly once");
         hcf->getExchangeSelectorForTesting().exchangeTerminated(identity,
                 HcfExchangeAbortReason::NONE);

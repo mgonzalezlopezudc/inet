@@ -42,7 +42,7 @@ void HcfExchangeEngine::checkActions(const Actions& actions)
             !actions.originatorProcessReceivedFrame ||
             !actions.originatorProcessFailedFrame ||
             !actions.frameSequenceStarted || !actions.frameSequenceFinished ||
-            !actions.exchangeTerminated ||
+            !actions.hasTransactionalOwner || !actions.exchangeTerminated ||
             !actions.resumeContention || !actions.discardResponse ||
             !actions.inactivityTimeout || !actions.cancelTimer ||
             !actions.scheduleTimer || !actions.rescheduleTimer)
@@ -88,6 +88,13 @@ void HcfExchangeEngine::clearTransaction()
     terminalAbortReason = HcfExchangeAbortReason::NONE;
 }
 
+void HcfExchangeEngine::notifyTransactionTerminated(const Actions& actions,
+        HcfExchangeAbortReason reason)
+{
+    if (actions.hasTransactionalOwner())
+        actions.exchangeTerminated(activeTransactionIdentity, reason);
+}
+
 void HcfExchangeEngine::channelAccessRequested()
 {
     exchangeCoordinator.channelAccessRequested();
@@ -112,8 +119,7 @@ void HcfExchangeEngine::preparationCompletedWithoutSequence(const Actions& actio
     responseService.clearTimerState();
     actions.cancelTimer(exchangeCoordinator.getStartRxTimer());
     actions.cancelTimer(exchangeCoordinator.getInactivityTimer());
-    actions.exchangeTerminated(activeTransactionIdentity,
-            HcfExchangeAbortReason::NONE);
+    notifyTransactionTerminated(actions, HcfExchangeAbortReason::NONE);
     clearTransaction();
 }
 
@@ -318,9 +324,9 @@ void HcfExchangeEngine::frameSequenceFinished()
     responseService.clearTimerState();
     deferredTimeoutGeneration = 0;
     auto context = frameSequenceHandler->getContext();
-    getActiveActions().exchangeTerminated(activeTransactionIdentity,
-            terminalAbortReason);
-    getActiveActions().frameSequenceFinished(context);
+    auto& actions = getActiveActions();
+    notifyTransactionTerminated(actions, terminalAbortReason);
+    actions.frameSequenceFinished(context);
     exchangeCoordinator.reset();
     clearTransaction();
     getActiveActions().resumeContention();

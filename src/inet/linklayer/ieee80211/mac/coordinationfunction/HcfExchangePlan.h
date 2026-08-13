@@ -21,7 +21,8 @@
 namespace inet {
 namespace ieee80211 {
 
-INET_API const std::array<HcfExchangeClass, 11>& getHcfExchangeClassOrder();
+INET_API const std::array<HcfExchangeClass, 9>& getHcfExchangeClassOrder();
+INET_API bool isTransactionalExchangeClass(HcfExchangeClass exchangeClass);
 
 class INET_API HcfTransactionToken
 {

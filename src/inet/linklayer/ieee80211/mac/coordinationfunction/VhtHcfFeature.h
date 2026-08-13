@@ -10,7 +10,6 @@
 #include <functional>
 #include <memory>
 #include <optional>
-#include <string>
 
 #include "inet/linklayer/ieee80211/mac/contract/IVhtDlMuExchangeCallback.h"
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequenceHandler.h"
@@ -54,7 +53,7 @@ struct INET_API VhtGrantSnapshot
     };
 
     StartKind startKind = StartKind::COMMON_SINGLE_USER;
-    HcfExchangeClass exchangeClass = HcfExchangeClass::SINGLE_USER;
+    std::optional<HcfExchangeClass> exchangeClass;
     AccessCategory accessCategory = AC_BE;
     MacAddress peer;
     uint16_t associationId = 0;
@@ -64,7 +63,6 @@ struct INET_API VhtGrantSnapshot
     Hz channelWidth = Hz(0);
     int soundingNsts = 0;
     uint8_t dialogToken = 0;
-    std::string soundingModeIdentity;
     const physicallayer::IIeee80211Mode *soundingMode = nullptr;
     bool muFeedback = false;
     IOriginatorBlockAckAgreementHandler::PrerequisiteProbe blockAckProbe;
@@ -151,7 +149,6 @@ class INET_API VhtHcfFeature : public IVhtDlMuExchangeCallback,
     std::optional<VhtGrantSnapshot> prepareBlockAckPrerequisite(AccessCategory ac) const;
     std::optional<VhtGrantSnapshot> prepareDlMu(AccessCategory ac) const;
     std::optional<VhtGrantSnapshot> prepareSuSounding(AccessCategory ac) const;
-    void commitSounding(const VhtGrantSnapshot& snapshot);
     virtual void localVhtGroupMembershipChanged(
             const std::optional<IVhtGroupIdManager::Membership>& membership) override;
     void commitBlockAckPrerequisite(const VhtGrantSnapshot& snapshot);
@@ -169,8 +166,8 @@ class INET_API VhtHcfFeature : public IVhtDlMuExchangeCallback,
         { txOpFactory = factory == nullptr ? defaultTxOpFactory.get() : factory; }
     void modeSetChanged();
     VhtGrantSnapshot prepareGrantSnapshot(AccessCategory ac) const;
-    void commitGrantSnapshot(const VhtGrantSnapshot& snapshot);
-    void startFrameSequence(AccessCategory ac);
+    void startSounding(const VhtGrantSnapshot& snapshot);
+    void commitTransactionalGrant(const VhtGrantSnapshot& snapshot);
     bool processHeaderlessNdpIndication(Packet *packet);
     void recipientProcessReceivedFrame(Packet *packet,
             const Ptr<const Ieee80211MacHeader>& header);

@@ -78,6 +78,7 @@ static bool containsInOrder(const std::vector<std::string>& events,
 %activity:
 InProgressFrames inProgressFrames;
 bool receptionInProgress = false;
+bool transactional = false;
 std::vector<std::string> events;
 int discardedResponses = 0;
 
@@ -97,6 +98,7 @@ actions.originatorProcessReceivedFrame = [&] (Packet *, Packet *) { events.push_
 actions.originatorProcessFailedFrame = [&] (Packet *) { events.push_back("failed"); };
 actions.frameSequenceStarted = [&] (const FrameSequenceContext *) { events.push_back("started"); };
 actions.frameSequenceFinished = [&] (const FrameSequenceContext *) { events.push_back("finished"); };
+actions.hasTransactionalOwner = [&] { return transactional; };
 actions.exchangeTerminated = [&] (HcfTransactionIdentity identity,
         HcfExchangeAbortReason abortReason) {
     REQUIRE(identity.isValid());
@@ -141,7 +143,8 @@ engine.processResponseAccordingToPolicy(new Packet("response"), true,
         dynamic_cast<IReceiveStep *>(const_cast<IFrameSequenceStep *>(engine.getCurrentStep())), actions);
 REQUIRE(!engine.isSequenceRunning());
 REQUIRE(!engine.getActiveTransactionIdentity().isValid());
-REQUIRE(containsInOrder(events, {"received", "completed", "finished", "resume", "cancel"}));
+REQUIRE(containsInOrder(events, {"received", "finished", "resume", "cancel"}));
+REQUIRE(std::count(events.begin(), events.end(), "completed") == 0);
 
 // Duplicate/stale callbacks after completion are harmless and cannot revive
 // the completed transaction.
@@ -154,6 +157,7 @@ REQUIRE(!engine.isActiveTransaction(firstIdentity));
 // A granted TXOP whose preparation produces no sequence is a complete
 // transaction: timer generations are retired before a later access request.
 events.clear();
+transactional = true;
 engine.channelGranted();
 auto emptyIdentity = engine.getActiveTransactionIdentity();
 REQUIRE(emptyIdentity.isValid());
@@ -161,6 +165,8 @@ engine.beginPreparation();
 engine.preparationCompletedWithoutSequence(actions);
 REQUIRE(!engine.getActiveTransactionIdentity().isValid());
 REQUIRE(!engine.isStartRxTimerScheduled());
+REQUIRE(std::count(events.begin(), events.end(), "completed") == 1);
+transactional = false;
 engine.channelAccessRequested();
 engine.channelGranted();
 REQUIRE(engine.getActiveTransactionIdentity().isValid());
@@ -170,6 +176,7 @@ REQUIRE(!engine.getActiveTransactionIdentity().isValid());
 
 // Timeout abort order: failed frame, terminal finish, reset, contention resume.
 events.clear();
+transactional = true;
 engine.channelGranted();
 engine.startFrameSequence(new EngineTestFs(true), makeContext(), actions);
 auto abortIdentity = engine.getActiveTransactionIdentity();
@@ -181,6 +188,8 @@ REQUIRE(!engine.isSequenceRunning());
 REQUIRE(containsInOrder(events, {"failed", "aborted", "finished", "resume"}));
 REQUIRE(std::count(events.begin(), events.end(), "failed") == 1);
 REQUIRE(std::count(events.begin(), events.end(), "finished") == 1);
+REQUIRE(std::count(events.begin(), events.end(), "aborted") == 1);
+transactional = false;
 
 // A receive that begins before the equal-time timeout defers the exact step;
 // its successful completion clears the deferred token before it can fire.

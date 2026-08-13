@@ -58,8 +58,9 @@ struct INET_API HcfFeatureConfiguration
 };
 
 /**
- * Non-owning provider reference whose lifetime is owned by the feature set
- * module. Every descriptor is executable and participates in selection.
+ * Non-owning reference to a genuine prepared-exchange provider whose lifetime
+ * is owned by the feature-set module. Direct ordinary SU, channel release,
+ * HT sounding, and VHT sounding are not provider descriptors.
  */
 class INET_API HcfExchangeProviderDescriptor
 {
@@ -86,7 +87,7 @@ class INET_API HcfExchangeProviderDescriptor
     }
 };
 
-/** NED-paired composition contract for the HCF exchange provider set. */
+/** NED-paired composition contract for genuine HCF transaction providers. */
 class INET_API IHcfFeatureSet
 {
   public:

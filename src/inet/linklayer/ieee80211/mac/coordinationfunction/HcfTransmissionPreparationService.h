@@ -37,11 +37,10 @@ namespace ieee80211 {
  * and production aggregation planning may move candidates from pending to
  * in-progress state. A later failure does not roll those baseline owner
  * mutations back. Temporary aggregate ownership remains transactional.
- * A successful prepare() must be followed
- * by exactly one commit() or discard(). The source packet is never transferred.
- * A temporary transmitted packet is deleted exactly once after handoff, after a
- * failed handoff, or on discard. If materializeAggregate() throws, it must clean
- * up any allocation that it did not return.
+ * The source packet is never transferred. A temporary transmitted packet is
+ * deleted exactly once after handoff or after a failed handoff. If
+ * materializeAggregate() throws, it must clean up any allocation that it did
+ * not return.
  */
 class INET_API HcfTransmissionPreparationService
 {
@@ -49,13 +48,6 @@ class INET_API HcfTransmissionPreparationService
     enum class ProtectionMechanism {
         SINGLE,
         MULTIPLE,
-    };
-
-    enum class TerminalState {
-        READY,
-        COMMITTED,
-        DISCARDED,
-        HANDOFF_FAILED,
     };
 
     struct Request {
@@ -82,17 +74,6 @@ class INET_API HcfTransmissionPreparationService
     struct ProtectionPlan {
         bool updateDuration = false;
         simtime_t duration;
-    };
-
-    struct PreparedTransmission {
-        Packet *sourcePacket = nullptr;
-        Packet *transmittedPacket = nullptr;
-        Ptr<const Ieee80211MacHeader> header;
-        const physicallayer::IIeee80211Mode *mode = nullptr;
-        simtime_t ifs;
-        bool temporaryPacketOwned = false;
-        bool sourceModePropagated = false;
-        TerminalState terminalState = TerminalState::READY;
     };
 
     class IActions
@@ -173,9 +154,7 @@ class INET_API HcfTransmissionPreparationService
             const ProtectionPlan& protectionPlan);
 
   public:
-    PreparedTransmission prepare(const Request& request, IActions& actions) const;
-    void commit(PreparedTransmission& transmission, IActions& actions) const;
-    void discard(PreparedTransmission& transmission, IActions& actions) const;
+    void prepareAndTransmit(const Request& request, IActions& actions) const;
 };
 
 } // namespace ieee80211

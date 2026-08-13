@@ -63,8 +63,7 @@ void HcfTransmissionPreparationService::validateProtectionPlan(const Request& re
         throw cRuntimeError("HCF protection attempted to overwrite a finalized or exempt Duration field");
 }
 
-HcfTransmissionPreparationService::PreparedTransmission
-HcfTransmissionPreparationService::prepare(const Request& request,
+void HcfTransmissionPreparationService::prepareAndTransmit(const Request& request,
         IActions& actions) const
 {
     validateRequest(request);
@@ -109,7 +108,6 @@ HcfTransmissionPreparationService::prepare(const Request& request,
 
     Packet *transmittedPacket = request.packet;
     bool temporaryPacketOwned = false;
-    bool sourceModePropagated = false;
     if (aggregatePlan.materialize) {
         transmittedPacket = actions.materializeAggregate(request.packet,
                 aggregatePlan);
@@ -123,7 +121,6 @@ HcfTransmissionPreparationService::prepare(const Request& request,
             actions.setMode(transmittedPacket, preparedHeader, mode);
             if (aggregatePlan.implicitBlockAck) {
                 actions.setSourceMode(request.packet, preparedHeader, mode);
-                sourceModePropagated = true;
             }
             auto protectionPlan = actions.computeProtection(stagedRequest, mode,
                     aggregatePlan);
@@ -141,54 +138,16 @@ HcfTransmissionPreparationService::prepare(const Request& request,
         throw;
     }
 
-    PreparedTransmission result;
-    result.sourcePacket = request.packet;
-    result.transmittedPacket = transmittedPacket;
-    result.header = preparedHeader;
-    result.mode = mode;
-    result.ifs = request.ifs;
-    result.temporaryPacketOwned = temporaryPacketOwned;
-    result.sourceModePropagated = sourceModePropagated;
-    return result;
-}
-
-void HcfTransmissionPreparationService::commit(PreparedTransmission& transmission,
-        IActions& actions) const
-{
-    if (transmission.terminalState != TerminalState::READY)
-        throw cRuntimeError("HCF prepared transmission already reached a terminal state");
-    if (transmission.sourcePacket == nullptr || transmission.transmittedPacket == nullptr ||
-            transmission.header == nullptr || transmission.mode == nullptr)
-        throw cRuntimeError("Incomplete HCF prepared transmission");
     try {
-        actions.transmitBorrowed(transmission.transmittedPacket,
-                transmission.header, transmission.ifs);
+        actions.transmitBorrowed(transmittedPacket, preparedHeader, request.ifs);
     }
     catch (...) {
-        if (transmission.temporaryPacketOwned) {
-            actions.deleteTemporaryPacket(transmission.transmittedPacket);
-            transmission.temporaryPacketOwned = false;
-        }
-        transmission.terminalState = TerminalState::HANDOFF_FAILED;
+        if (temporaryPacketOwned)
+            actions.deleteTemporaryPacket(transmittedPacket);
         throw;
     }
-    if (transmission.temporaryPacketOwned) {
-        actions.deleteTemporaryPacket(transmission.transmittedPacket);
-        transmission.temporaryPacketOwned = false;
-    }
-    transmission.terminalState = TerminalState::COMMITTED;
-}
-
-void HcfTransmissionPreparationService::discard(PreparedTransmission& transmission,
-        IActions& actions) const
-{
-    if (transmission.terminalState != TerminalState::READY)
-        throw cRuntimeError("HCF prepared transmission already reached a terminal state");
-    if (transmission.temporaryPacketOwned) {
-        actions.deleteTemporaryPacket(transmission.transmittedPacket);
-        transmission.temporaryPacketOwned = false;
-    }
-    transmission.terminalState = TerminalState::DISCARDED;
+    if (temporaryPacketOwned)
+        actions.deleteTemporaryPacket(transmittedPacket);
 }
 
 } // namespace ieee80211
