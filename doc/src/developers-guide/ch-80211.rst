@@ -74,6 +74,15 @@ The current HE NED defaults select :cpp:`HeDlSchedulerEqualSizedRUs` for
 downlink and :cpp:`HeUlSchedulerBacklogBased` for uplink; the scheduler modules
 remain replaceable through the HE coordinator configuration.
 
+HE uplink random-access allocations carry an explicit target policy.  The
+default ``associated`` target continues to use AID12=0.  An ``unassociated``
+target uses AID12=2045 and is restricted to one pending management S-MPDU
+addressed to the triggering AP; its terminal Multi-STA Block Ack uses the
+preassociation record form with the station address.  Association identity,
+Trigger transmitter, received HE BSS color, and queue ownership are kept as
+separate transaction inputs so that a foreign AP cannot reuse an associated
+station's epoch or data queue.
+
 .. graphviz:: figures/ieee80211_hcf_specializations.dot
    :align: center
 
