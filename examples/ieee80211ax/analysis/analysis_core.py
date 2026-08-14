@@ -963,7 +963,13 @@ def per_run_delay_percentile(
 def per_run_node_delay_percentile(
     condition: Condition, percentile: float
 ) -> pd.DataFrame:
-    """Return one pooled delay percentile per node and run."""
+    """Return one pooled delay percentile per node and run.
+
+    A node/run may have delivered packets, but none during the measurement
+    window.  Omit that node/run observation instead of treating it as a
+    malformed result; this is expected for sparse or heavily interfered
+    delivery traces.
+    """
     frame = condition.vectors(
         "endToEndDelay:vector", module="**.app[*]", expected_unit="s"
     )
@@ -985,7 +991,7 @@ def per_run_node_delay_percentile(
             samples.append(values)
         values = np.concatenate(samples) if samples else np.array([])
         if not len(values):
-            raise RuntimeError(f"{condition.config}/{run_id}/{node}: no delay samples")
+            continue
         records.append({
             "runID": run_id,
             "runnumber": int(rows.runnumber.iloc[0]),

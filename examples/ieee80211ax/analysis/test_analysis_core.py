@@ -22,6 +22,7 @@ from analysis_core import (
     crop_vector,
     jain,
     per_run_delay_percentile,
+    per_run_node_delay_percentile,
     resolve_session_id,
     resolve_manifest_sessions,
     summarize_ci95,
@@ -244,6 +245,33 @@ class AnalysisCoreTest(unittest.TestCase):
 
         self.assertEqual(result.runID.tolist(), ["run-0"])
         self.assertAlmostEqual(result.delay_s.iloc[0], 0.0029)
+
+    def test_node_delay_omits_node_run_without_samples_in_window(self):
+        condition = unittest.mock.Mock()
+        condition.config = "Interfered"
+        condition.condition_metadata = {}
+        condition.measurement = MeasurementWindow(0.3, 0.5)
+        condition.vectors.return_value = pd.DataFrame([
+            {
+                "runID": "run-0",
+                "runnumber": 0,
+                "module": "Network.host[0].app[0]",
+                "vectime": [0.2, 0.4],
+                "vecvalue": [0.1, 0.2],
+            },
+            {
+                "runID": "run-0",
+                "runnumber": 0,
+                "module": "Network.host[1].app[0]",
+                "vectime": [0.2, 0.6],
+                "vecvalue": [0.1, 0.3],
+            },
+        ])
+
+        result = per_run_node_delay_percentile(condition, 95)
+
+        self.assertEqual(result.node.tolist(), ["host[0]"])
+        self.assertAlmostEqual(result.delay_s.iloc[0], 0.2)
 
     def test_stream_overlap_is_rejected(self):
         validate_disjoint_streams([1, 2], [0, 2], [2, 2])

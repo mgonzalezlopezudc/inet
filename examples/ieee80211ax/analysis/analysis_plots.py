@@ -1039,7 +1039,7 @@ def plot_delivery(conditions: list[Condition], output: Path) -> None:
         ],
         aggregation={
             "goodput": "AP row sums delivered application bytes across sink nodes; host row groups application vectors by host over each manifest measurement window, convert to bit/s; one value per run",
-            "delay": "AP row pools delivered-packet delays across sink nodes; host row groups delays by host over each manifest measurement window, then takes the 95th percentile; one value per run",
+            "delay": "AP row pools delivered-packet delays across sink nodes; host row groups delays by host over each manifest measurement window, then takes the 95th percentile; node/run pairs without in-window samples are omitted",
             "uncertainty": "95% Student-t CI across independent runs",
         },
     )
