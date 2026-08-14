@@ -272,7 +272,6 @@ OriginatorBlockAckAgreementHandler::reserveQueuedDataFramePrerequisite(
     agreement->setIsAddbaRequestSent(false);
     agreement->setBlockAckTimeoutValue(blockAckAgreementPolicy->computeAddbaFailureTimeout());
     auto addbaPacket = new Packet("AddbaReq", addbaReq);
-    addbaPacket->insertAtBack(makeShared<Ieee80211MacTrailer>());
     auto key = std::make_pair(dataHeader->getReceiverAddress(), dataHeader->getTid());
     return {addbaPacket, [this, key, agreementCreated, agreementSnapshot] {
         auto agreement = getAgreement(key.first, key.second);
