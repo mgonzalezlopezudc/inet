@@ -1,0 +1,68 @@
+%description:
+Validates the committed VHT DL MU exchange packet and per-user outcome ledger.
+
+%includes:
+#include "inet/common/packet/Packet.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/VhtDlMuExchange.h"
+
+%file: TestNetwork.ned
+network TestNetwork
+{
+    submodules:
+        test: Test;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+static void requireTrue(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("%s", message);
+}
+
+%activity:
+Packet container("container");
+Packet packet1("packet1");
+Packet packet2("packet2");
+Packet packet3("packet3");
+Packet foreign("foreign");
+VhtDlMuExchange exchange(9, &container, {{&packet1, &packet2}, {&packet3}});
+
+requireTrue(exchange.getId() == 9 && exchange.getContainerPacket() == &container &&
+        exchange.getUserPackets().size() == 2 &&
+        exchange.getUserPackets()[0][0] == &packet1 &&
+        exchange.containsPacket(&container) && exchange.containsPacket(&packet3) &&
+        !exchange.containsPacket(&foreign),
+        "construction must preserve exact read-only packet identities");
+requireTrue(exchange.recordFailedPacket(&packet2) &&
+        !exchange.recordFailedPacket(&packet2) &&
+        !exchange.recordFailedPacket(&foreign),
+        "failed packet reports must accept each committed identity exactly once");
+requireTrue(!exchange.recordUserResult(2,
+        VhtDlMuUserResult::BLOCK_ACK_RECEIVED),
+        "out-of-range user results must be rejected");
+requireTrue(exchange.recordUserResult(0,
+        VhtDlMuUserResult::TRANSMITTED) &&
+        !exchange.isComplete(),
+        "a transmitted result must remain nonterminal");
+requireTrue(exchange.recordUserResult(0,
+        VhtDlMuUserResult::BLOCK_ACK_RECEIVED) &&
+        !exchange.recordUserResult(0,
+        VhtDlMuUserResult::BLOCK_ACK_TIMED_OUT) &&
+        !exchange.isComplete(),
+        "a terminal user result must be accepted exactly once");
+requireTrue(exchange.recordUserResult(1,
+        VhtDlMuUserResult::BLOCK_ACK_TIMED_OUT) &&
+        exchange.isComplete(),
+        "all committed users must terminate before completion");
+
+EV << "VHT DL MU exchange checks passed.\n";
+
+%contains: stdout
+VHT DL MU exchange checks passed.

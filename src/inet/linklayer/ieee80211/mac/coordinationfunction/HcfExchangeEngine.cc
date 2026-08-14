@@ -41,11 +41,18 @@ void HcfExchangeEngine::checkActions(const Actions& actions)
             !actions.originatorProcessTransmittedFrame ||
             !actions.originatorProcessReceivedFrame ||
             !actions.originatorProcessFailedFrame ||
-            !actions.frameSequenceStarted || !actions.frameSequenceFinished ||
+            !actions.frameSequenceStarted || !actions.frameSequenceAborted ||
+            !actions.frameSequenceFinished ||
             !actions.resumeContention || !actions.discardResponse ||
             !actions.inactivityTimeout || !actions.cancelTimer ||
             !actions.scheduleTimer || !actions.rescheduleTimer)
         throw cRuntimeError("Incomplete HCF exchange engine actions");
+}
+
+void HcfExchangeEngine::requireOperational() const
+{
+    if (shutDown)
+        throw cRuntimeError("HCF exchange engine is shut down");
 }
 
 const HcfExchangeEngine::Actions& HcfExchangeEngine::getActiveActions() const
@@ -57,12 +64,31 @@ const HcfExchangeEngine::Actions& HcfExchangeEngine::getActiveActions() const
 
 void HcfExchangeEngine::initializeTimers()
 {
+    requireOperational();
     exchangeCoordinator.initializeTimers();
+}
+
+void HcfExchangeEngine::shutdown(const Actions& actions)
+{
+    requireOperational();
+    checkActions(actions);
+    exchangeCoordinator.cancelTimers([&actions] (cMessage *timer) {
+        if (timer->isScheduled())
+            actions.cancelTimer(timer);
+    });
+    frameSequenceHandler.reset();
+    responseService.clearTimerState();
+    activeActions = nullptr;
+    activeExchangeGeneration = 0;
+    startRxTimerGeneration = 0;
+    deferredTimeoutGeneration = 0;
+    shutDown = true;
 }
 
 void HcfExchangeEngine::replaceFrameSequenceHandler(
         std::unique_ptr<IFrameSequenceHandler> frameSequenceHandler)
 {
+    requireOperational();
     if (frameSequenceHandler == nullptr)
         throw cRuntimeError("HCF exchange engine requires a frame-sequence handler");
     if (isSequenceRunning())
@@ -90,23 +116,27 @@ void HcfExchangeEngine::clearExchange()
 
 void HcfExchangeEngine::channelAccessRequested()
 {
+    requireOperational();
     exchangeCoordinator.channelAccessRequested();
 }
 
 void HcfExchangeEngine::channelGranted()
 {
+    requireOperational();
     exchangeCoordinator.channelGranted();
     beginExchangeIfNeeded();
 }
 
 void HcfExchangeEngine::beginPreparation()
 {
+    requireOperational();
     exchangeCoordinator.beginPreparation();
     beginExchangeIfNeeded();
 }
 
 void HcfExchangeEngine::preparationCompletedWithoutSequence(const Actions& actions)
 {
+    requireOperational();
     ActionScope actionScope(*this, actions);
     exchangeCoordinator.preparationCompletedWithoutSequence();
     responseService.clearTimerState();
@@ -118,6 +148,7 @@ void HcfExchangeEngine::preparationCompletedWithoutSequence(const Actions& actio
 void HcfExchangeEngine::startFrameSequence(IFrameSequence *frameSequence,
         FrameSequenceContext *context, const Actions& actions)
 {
+    requireOperational();
     ActionScope actionScope(*this, actions);
     beginExchangeIfNeeded();
     frameSequenceHandler->startFrameSequence(frameSequence, context, this);
@@ -126,6 +157,7 @@ void HcfExchangeEngine::startFrameSequence(IFrameSequence *frameSequence,
 
 void HcfExchangeEngine::transmissionComplete(const Actions& actions)
 {
+    requireOperational();
     ActionScope actionScope(*this, actions);
     frameSequenceHandler->transmissionComplete();
 }
@@ -149,6 +181,7 @@ HcfResponseService::Actions HcfExchangeEngine::makeResponseActions(
 
 void HcfExchangeEngine::processResponse(Packet *packet, const Actions& actions)
 {
+    requireOperational();
     ActionScope actionScope(*this, actions);
     responseService.processResponse(packet, makeResponseActions(actions));
 }
@@ -157,6 +190,7 @@ HcfResponseService::ResponseClassification
 HcfExchangeEngine::processResponseAccordingToPolicy(Packet *packet,
         bool addressedToUs, IReceiveStep *receiveStep, const Actions& actions)
 {
+    requireOperational();
     ActionScope actionScope(*this, actions);
     return responseService.processResponseAccordingToPolicy(packet, addressedToUs,
             receiveStep, makeResponseActions(actions));
@@ -165,6 +199,7 @@ HcfExchangeEngine::processResponseAccordingToPolicy(Packet *packet,
 void HcfExchangeEngine::processResponseAndCancelStartRxTimerIfCompleted(
         Packet *packet, IReceiveStep *receiveStep, const Actions& actions)
 {
+    requireOperational();
     ActionScope actionScope(*this, actions);
     responseService.processResponseAndCancelStartRxTimerIfCompleted(packet,
             receiveStep, makeResponseActions(actions));
@@ -172,6 +207,7 @@ void HcfExchangeEngine::processResponseAndCancelStartRxTimerIfCompleted(
 
 void HcfExchangeEngine::handleDeferredStartRxTimeout(const Actions& actions)
 {
+    requireOperational();
     ActionScope actionScope(*this, actions);
     if (responseService.hasDeferredStartRxTimeout() &&
             (activeExchangeGeneration == 0 ||
@@ -187,6 +223,7 @@ void HcfExchangeEngine::handleDeferredStartRxTimeout(const Actions& actions)
 
 bool HcfExchangeEngine::handleCorruptedFrame(const Actions& actions)
 {
+    requireOperational();
     ActionScope actionScope(*this, actions);
     if (responseService.hasDeferredStartRxTimeout() &&
             (activeExchangeGeneration == 0 ||
@@ -203,6 +240,7 @@ bool HcfExchangeEngine::handleCorruptedFrame(const Actions& actions)
 
 bool HcfExchangeEngine::handleMessage(cMessage *message, const Actions& actions)
 {
+    requireOperational();
     ActionScope actionScope(*this, actions);
     if (message == exchangeCoordinator.getStartRxTimer()) {
         if (activeExchangeGeneration != 0 && isSequenceRunning() &&
@@ -223,6 +261,7 @@ bool HcfExchangeEngine::handleMessage(cMessage *message, const Actions& actions)
 void HcfExchangeEngine::scheduleInactivityTimer(simtime_t timeout,
         const Actions& actions)
 {
+    requireOperational();
     ActionScope actionScope(*this, actions);
     auto timer = exchangeCoordinator.getInactivityTimer();
     auto deadline = simTime() + timeout;
@@ -232,6 +271,7 @@ void HcfExchangeEngine::scheduleInactivityTimer(simtime_t timeout,
 
 void HcfExchangeEngine::cancelTimers(const Actions& actions)
 {
+    requireOperational();
     ActionScope actionScope(*this, actions);
     exchangeCoordinator.cancelTimers([&actions] (cMessage *timer) {
         if (timer->isScheduled())
@@ -300,6 +340,7 @@ void HcfExchangeEngine::originatorProcessFailedFrame(Packet *packet)
 void HcfExchangeEngine::frameSequenceAborted()
 {
     exchangeCoordinator.abort();
+    getActiveActions().frameSequenceAborted();
 }
 
 void HcfExchangeEngine::frameSequenceFinished()

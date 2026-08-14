@@ -60,19 +60,19 @@ namespace ieee80211 {
 
 namespace {
 
-class LegacyHeDlMuExchangeCallback : public IHeDlMuExchangeCallback
+class DirectHeDlMuExchangeContracts : public IHeDlMuExecutionServices,
+        public IHeDlMuExchangeEvents
 {
   private:
-    IFrameSequenceHandler::ICallback *callback = nullptr;
     IQosRateSelection *rateSelection = nullptr;
     std::map<MacAddress, Ieee80211NegotiatedHeCapabilities> negotiatedCapabilities;
 
   public:
-    LegacyHeDlMuExchangeCallback(IFrameSequenceHandler::ICallback *callback,
+    DirectHeDlMuExchangeContracts(IFrameSequenceHandler::ICallback *callback,
             IQosRateSelection *rateSelection, const HeDlMuPlan& plan) :
-        callback(callback), rateSelection(rateSelection) {
+        rateSelection(rateSelection) {
         if (callback == nullptr || rateSelection == nullptr)
-            throw cRuntimeError("Legacy HE DL MU construction requires explicit callback and rate-selection contracts");
+            throw cRuntimeError("Direct HE DL MU construction requires explicit callback and rate-selection contracts");
         for (const auto& candidate : plan.getScheduleContext().candidates)
             if (candidate.hasNegotiatedHeCapabilities)
                 negotiatedCapabilities[candidate.staAddress] = candidate.negotiatedHeCapabilities;
@@ -83,8 +83,8 @@ class LegacyHeDlMuExchangeCallback : public IHeDlMuExchangeCallback
     virtual IOriginatorBlockAckAgreementHandler *getHeDlMuBlockAckHandler() const override { return nullptr; }
     virtual IOriginatorMacDataService *getHeDlMuOriginatorDataService() const override { return nullptr; }
     virtual IQosRateSelection *getHeDlMuRateSelection() const override { return rateSelection; }
-    // Legacy unit callers do not expose a MAC authority.  Preserve their
-    // historical unicast control-rate selection without reintroducing HCF/MAC
+    // Direct unit callers do not expose a MAC authority. Preserve their
+    // unicast control-rate selection without reintroducing HCF/MAC
     // module inspection into the production frame-sequence path.
     virtual MacAddress getHeDlMuTransmitterAddress() const override { return MacAddress("02-00-00-00-00-01"); }
     virtual int getHeDlMuFcsMode() const override { return FCS_DECLARED_CORRECT; }
@@ -253,7 +253,7 @@ class HeDlMuPerStaBlockAckFs : public SequentialFs
             }
         }
 
-        auto negotiated = owner->heDlMuCallback->getHeDlMuNegotiatedCapabilities(receiverAddress);
+        auto negotiated = owner->heServices->getHeDlMuNegotiatedCapabilities(receiverAddress);
         if (negotiated && negotiated->localTxPeerRx.multiTidAggregation) {
             // 26.6.3 allows DL HE MU multi-TID A-MPDUs when negotiated.  The
             // matching Multi-TID BAR carries one record per TID included in the
@@ -292,7 +292,7 @@ class HeDlMuPerStaBlockAckFs : public SequentialFs
         // 9.2.5 Duration fields reserve the remaining exchange.  For the
         // sequential BAR method, each BAR protects its own BlockAck response
         // plus any later BAR/BlockAck pairs in this TXOP.
-        auto negotiated = owner->heDlMuCallback->getHeDlMuNegotiatedCapabilities(getActiveAllocation().staAddress);
+        auto negotiated = owner->heServices->getHeDlMuNegotiatedCapabilities(getActiveAllocation().staAddress);
         bool multiTid = negotiated && negotiated->localTxPeerRx.multiTidAggregation;
 
         auto activeRecordCount = multiTid ? std::max<size_t>(1, collectStartingSequenceNumbersByTid(getActiveAllocation().packets).size()) : 0;
@@ -300,7 +300,7 @@ class HeDlMuPerStaBlockAckFs : public SequentialFs
                 multiTid ? b(B(18 + 12 * activeRecordCount)) : LENGTH_BASIC_BLOCKACK);
         auto remainingDuration = owner->modeSet->getSifsTime() + blockAckDuration;
         for (int nextIndex = allocationIndex + 1; nextIndex < (int)owner->activeAllocations.size(); nextIndex++) {
-            auto nextNegotiated = owner->heDlMuCallback->getHeDlMuNegotiatedCapabilities(
+            auto nextNegotiated = owner->heServices->getHeDlMuNegotiatedCapabilities(
                     owner->activeAllocations.at(nextIndex).staAddress);
             bool nextMultiTid = nextNegotiated && nextNegotiated->localTxPeerRx.multiTidAggregation;
             auto nextRecordCount = nextMultiTid ? std::max<size_t>(1, collectStartingSequenceNumbersByTid(owner->activeAllocations.at(nextIndex).packets).size()) : 0;
@@ -316,7 +316,7 @@ class HeDlMuPerStaBlockAckFs : public SequentialFs
 
     simtime_t computeBlockAckTimeout() const
     {
-        auto negotiated = owner->heDlMuCallback->getHeDlMuNegotiatedCapabilities(getActiveAllocation().staAddress);
+        auto negotiated = owner->heServices->getHeDlMuNegotiatedCapabilities(getActiveAllocation().staAddress);
         bool multiTid = negotiated && negotiated->localTxPeerRx.multiTidAggregation;
 
         auto recordCount = multiTid ? std::max<size_t>(1, collectStartingSequenceNumbersByTid(getActiveAllocation().packets).size()) : 0;
@@ -352,12 +352,12 @@ class HeDlMuPerStaBlockAckFs : public SequentialFs
         if (receivedPacket != nullptr) {
             receiveStep->setCompletion(IFrameSequenceStep::Completion::ACCEPTED);
             EV_DEBUG << "HE DL MU TxOp FS: received BlockAck from STA " << getActiveAllocation().staAddress << "\n";
-            owner->heDlMuCallback->heDlMuUserOutcome(owner->transactionToken,
+            owner->heEvents->heDlMuUserOutcome(owner->transactionToken,
                     getActiveAllocation().staAddress, HeDlMuUserOutcome::BLOCK_ACK_RECEIVED);
         }
         else {
             receiveStep->setCompletion(IFrameSequenceStep::Completion::REJECTED);
-            owner->heDlMuCallback->heDlMuUserOutcome(owner->transactionToken,
+            owner->heEvents->heDlMuUserOutcome(owner->transactionToken,
                     getActiveAllocation().staAddress, HeDlMuUserOutcome::BLOCK_ACK_TIMED_OUT);
             if (transmittedPacket != nullptr) {
                 EV_WARN << "HE DL MU TxOp FS: sequential BlockAck timeout for STA " << getActiveAllocation().staAddress
@@ -535,7 +535,7 @@ class HeDlMuBarBlockAckFs : public OptionalFs
             EV_INFO << "HE DL MU-BAR FS: accepted BlockAck from " << expected->staAddress << "\n";
             auto blockAckPacket = packet->dup();
             owner->callback->originatorProcessReceivedFrame(blockAckPacket, owner->containerPacket);
-            owner->heDlMuCallback->heDlMuUserOutcome(owner->transactionToken,
+            owner->heEvents->heDlMuUserOutcome(owner->transactionToken,
                     expected->staAddress, HeDlMuUserOutcome::BLOCK_ACK_RECEIVED);
             delete blockAckPacket;
         }
@@ -544,7 +544,7 @@ class HeDlMuBarBlockAckFs : public OptionalFs
                 continue;
             EV_WARN << "HE DL MU-BAR FS: MU-BAR response timeout for STA "
                     << allocation.staAddress << endl;
-            owner->heDlMuCallback->heDlMuUserOutcome(owner->transactionToken,
+            owner->heEvents->heDlMuUserOutcome(owner->transactionToken,
                     allocation.staAddress, HeDlMuUserOutcome::BLOCK_ACK_TIMED_OUT);
             for (auto packet : allocation.packets)
                 owner->callback->originatorProcessFailedFrame(packet);
@@ -593,8 +593,9 @@ HeDlMuTxOpFs::HeDlMuTxOpFs(const HeDlMuPlan& dlPlan,
                              queueing::IPacketQueue *pendingQueue,
                              IAckHandler *ackHandler,
                              IFrameSequenceHandler::ICallback *callback,
-                             IHeDlMuExchangeCallback *heDlMuCallback,
-                             uint64_t transactionToken,
+                             IHeDlMuExecutionServices *heServices,
+                             IHeDlMuExchangeEvents *heEvents,
+                             HeDlMuExchangeId transactionToken,
                              int maxAmpduMpduCount,
                              int maxHeMuPsduLength,
                              simtime_t maxHeMuPpduDuration,
@@ -604,7 +605,8 @@ HeDlMuTxOpFs::HeDlMuTxOpFs(const HeDlMuPlan& dlPlan,
       pendingQueue(pendingQueue),
       ackHandler(ackHandler),
       callback(callback),
-      heDlMuCallback(heDlMuCallback),
+      heServices(heServices),
+      heEvents(heEvents),
       transactionToken(transactionToken),
       maxAmpduMpduCount(maxAmpduMpduCount),
       maxHeMuPsduLength(maxHeMuPsduLength),
@@ -652,8 +654,8 @@ HeDlMuTxOpFs::HeDlMuTxOpFs(const HeDlMuPlan& dlPlan,
     ASSERT(pendingQueue != nullptr);
     ASSERT(ackHandler != nullptr);
     ASSERT(callback != nullptr);
-    if (heDlMuCallback == nullptr || transactionToken == 0)
-        throw cRuntimeError("HE DL MU frame sequence requires an explicit provider transaction");
+    if (heServices == nullptr || heEvents == nullptr || transactionToken == 0)
+        throw cRuntimeError("HE DL MU frame sequence requires explicit execution and event contracts");
     ackTriggerId = allocateIeee80211HeTriggerId();
     validateConfiguration(maxAmpduMpduCount, maxHeMuPsduLength,
             maxHeMuPpduDuration);
@@ -667,11 +669,25 @@ HeDlMuTxOpFs::HeDlMuTxOpFs(const HeDlMuPlan& dlPlan,
         int maxAmpduMpduCount, int maxHeMuPsduLength,
         simtime_t maxHeMuPpduDuration, AckMethod ackMethod) :
     HeDlMuTxOpFs(dlPlan, modeSet, pendingQueue, ackHandler, callback,
-            new LegacyHeDlMuExchangeCallback(legacyCallback,
-                    legacyRateSelection, dlPlan), 1,
+            std::make_unique<DirectHeDlMuExchangeContracts>(legacyCallback,
+                    legacyRateSelection, dlPlan),
             maxAmpduMpduCount, maxHeMuPsduLength, maxHeMuPpduDuration, ackMethod)
 {
-    ownedCompatibilityCallback.reset(heDlMuCallback);
+}
+
+HeDlMuTxOpFs::HeDlMuTxOpFs(const HeDlMuPlan& dlPlan,
+        Ieee80211ModeSet *modeSet, queueing::IPacketQueue *pendingQueue,
+        IAckHandler *ackHandler, IFrameSequenceHandler::ICallback *callback,
+        std::unique_ptr<IHeDlMuExecutionServices> compatibilityServices,
+        int maxAmpduMpduCount, int maxHeMuPsduLength,
+        simtime_t maxHeMuPpduDuration, AckMethod ackMethod) :
+    HeDlMuTxOpFs(dlPlan, modeSet, pendingQueue, ackHandler, callback,
+            compatibilityServices.get(),
+            dynamic_cast<IHeDlMuExchangeEvents *>(compatibilityServices.get()), 1,
+            maxAmpduMpduCount, maxHeMuPsduLength, maxHeMuPpduDuration, ackMethod)
+{
+    ownedCompatibilityEvents = heEvents;
+    ownedCompatibilityServices = std::move(compatibilityServices);
 }
 
 bool HeDlMuTxOpFs::prepare(FrameSequenceContext *context)
@@ -699,7 +715,7 @@ void HeDlMuTxOpFs::commit(FrameSequenceContext *context)
     commitAttempted = true;
 
     auto& prepared = *preparedCommit;
-    heDlMuCallback->heDlMuPlanFinalized(transactionToken, prepared.finalizedMembers);
+    heEvents->heDlMuPlanFinalized(transactionToken, prepared.finalizedMembers);
     if (prepared.sequenceNumberState != nullptr)
         prepared.originatorDataService->commitSequenceNumberState(*prepared.sequenceNumberState);
     for (const auto& selectedAllocation : prepared.selectedAllocations) {
@@ -723,7 +739,7 @@ void HeDlMuTxOpFs::commit(FrameSequenceContext *context)
     containerPacket = prepared.container.release();
     activeAllocations = std::move(prepared.activeAllocations);
     muBarControlMode = prepared.muBarControlMode;
-    heDlMuCallback->heDlMuPlanCommitted(transactionToken, containerPacket,
+    heEvents->heDlMuPlanCommitted(transactionToken, containerPacket,
             prepared.finalizedMembers);
     committed = true;
     EV_INFO << "Assembled HE MU PPDU with "
@@ -755,7 +771,7 @@ HeDlMuTxOpFs::~HeDlMuTxOpFs()
 
 MacAddress HeDlMuTxOpFs::getTransmitterAddress() const
 {
-    return heDlMuCallback->getHeDlMuTransmitterAddress();
+    return heServices->getHeDlMuTransmitterAddress();
 }
 
 std::unique_ptr<HeDlMuTxOpFs::PreparedCommit> HeDlMuTxOpFs::buildPreparedCommit(FrameSequenceContext *context)
@@ -793,8 +809,8 @@ std::unique_ptr<HeDlMuTxOpFs::PreparedCommit> HeDlMuTxOpFs::buildPreparedCommit(
     auto qosContext = context->getQoSContext();
     auto originatorBAHandler = qosContext != nullptr ? qosContext->blockAckAgreementHandler : nullptr;
     if (originatorBAHandler == nullptr)
-        originatorBAHandler = heDlMuCallback->getHeDlMuBlockAckHandler();
-    auto rateSelection = heDlMuCallback->getHeDlMuRateSelection();
+        originatorBAHandler = heServices->getHeDlMuBlockAckHandler();
+    auto rateSelection = heServices->getHeDlMuRateSelection();
     ASSERT(rateSelection != nullptr);
 
     // The container header is transmitter-local metadata, not an on-air group
@@ -817,7 +833,7 @@ std::unique_ptr<HeDlMuTxOpFs::PreparedCommit> HeDlMuTxOpFs::buildPreparedCommit(
     auto resolveStaQueue = [&] (const MacAddress& staAddress) {
         for (const auto& candidate : scheduleContext.candidates)
             if (candidate.staAddress == staAddress && candidate.sourceQueueToken.isValid())
-                return heDlMuCallback->resolveHeDlMuQueue(candidate.sourceQueueToken);
+                return heServices->resolveHeDlMuQueue(candidate.sourceQueueToken);
         return pendingQueue;
     };
 
@@ -835,7 +851,7 @@ std::unique_ptr<HeDlMuTxOpFs::PreparedCommit> HeDlMuTxOpFs::buildPreparedCommit(
             sourceQueue = pendingQueue;
         ASSERT(sourceQueue != nullptr);
         Packet *staPacket = nullptr;
-        staPacket = heDlMuCallback->getReservedHeDlMuPacket(transactionToken,
+        staPacket = heServices->getReservedHeDlMuPacket(transactionToken,
                 alloc.staAddress);
         int n = sourceQueue->getNumPackets();
         for (int i = 0; staPacket == nullptr && i < n; ++i) {
@@ -884,10 +900,10 @@ std::unique_ptr<HeDlMuTxOpFs::PreparedCommit> HeDlMuTxOpFs::buildPreparedCommit(
         selectedAllocation.sourceQueue = sourceQueue;
         selectedAllocation.packet = staPacket;
         selectedAllocation.dataHeader = dataHeader;
-        auto negotiated = heDlMuCallback->getHeDlMuNegotiatedCapabilities(alloc.staAddress);
+        auto negotiated = heServices->getHeDlMuNegotiatedCapabilities(alloc.staAddress);
         selectedAllocation.multiTidAggregation = negotiated &&
                 negotiated->localTxPeerRx.valid && negotiated->localTxPeerRx.multiTidAggregation;
-        selectedAllocation.associationId = heDlMuCallback->getHeDlMuAssociationId(alloc.staAddress);
+        selectedAllocation.associationId = heServices->getHeDlMuAssociationId(alloc.staAddress);
         if (selectedAllocation.associationId == 0) {
             warnDlMuIneligible(staPacket, dataHeader->getReceiverAddress(), dataHeader->getTid(),
                     alloc.ru.index, "scheduled receiver has no association ID");
@@ -1061,7 +1077,7 @@ std::unique_ptr<HeDlMuTxOpFs::PreparedCommit> HeDlMuTxOpFs::buildPreparedCommit(
     packingParameters.getAvailableBlockAckSlots = getAvailableSlots;
     packingParameters.isReservedPacket = [&] (const MacAddress& peer,
             const Packet *packet) {
-        return heDlMuCallback->isReservedHeDlMuPacket(
+        return heServices->isReservedHeDlMuPacket(
                 transactionToken, peer, packet);
     };
     packingParameters.warnIneligible = warnDlMuIneligible;
@@ -1123,7 +1139,7 @@ std::unique_ptr<HeDlMuTxOpFs::PreparedCommit> HeDlMuTxOpFs::buildPreparedCommit(
     // Prepare the complete PPDU on private packet copies. Sequence numbers are
     // assigned against a cloned counter state, so every remaining fallible
     // operation precedes the queue/BA ownership commit.
-    prepared->originatorDataService = heDlMuCallback->getHeDlMuOriginatorDataService();
+    prepared->originatorDataService = heServices->getHeDlMuOriginatorDataService();
     if (prepared->originatorDataService != nullptr)
         prepared->sequenceNumberState = prepared->originatorDataService->cloneSequenceNumberState();
     for (const auto& selectedAllocation : finalAllocations) {
@@ -1141,7 +1157,7 @@ std::unique_ptr<HeDlMuTxOpFs::PreparedCommit> HeDlMuTxOpFs::buildPreparedCommit(
             if (preparedPacket->getDataLength() >= B(4) &&
                     dynamicPtrCast<const Ieee80211MacTrailer>(preparedPacket->peekAtBack(B(4))) != nullptr) {
                 auto trailer = preparedPacket->removeAtBack<Ieee80211MacTrailer>(B(4));
-                auto fcsMode = static_cast<FcsMode>(heDlMuCallback->getHeDlMuFcsMode());
+                auto fcsMode = static_cast<FcsMode>(heServices->getHeDlMuFcsMode());
                 trailer->setFcsMode(fcsMode);
                 if (fcsMode == FCS_COMPUTED)
                     trailer->setFcs(computeEthernetFcs(preparedPacket.get(), fcsMode));
@@ -1222,7 +1238,7 @@ std::unique_ptr<HeDlMuTxOpFs::PreparedCommit> HeDlMuTxOpFs::buildPreparedCommit(
     canonicalRequest.channelBandwidth = scheduleContext.channelBandwidth;
     canonicalRequest.ppduFormat = HE_MU_DOWNLINK;
     canonicalRequest.puncturedSubchannelMask = scheduleContext.puncturedSubchannelMask;
-    canonicalRequest.bssColor = heDlMuCallback->getHeDlMuBssColor();
+    canonicalRequest.bssColor = heServices->getHeDlMuBssColor();
     if (scheduleContext.txopLimit > SIMTIME_ZERO)
         canonicalRequest.txopDuration = {false, static_cast<uint16_t>(std::min<int64_t>(
                 8448, scheduleContext.txopLimit.inUnit(SIMTIME_US)))};

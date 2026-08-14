@@ -15,28 +15,26 @@ namespace ieee80211 {
 
 class HePeerStateService;
 class HeQueueService;
-class HeDlMuExchangeProvider;
 class HeTriggeredUlExchangeService;
 class HeSoundingService;
 
-enum class HcfAmendmentRuntimeKind {
+enum class HcfFeatureKind {
     COMMON,
     VHT,
     HE,
 };
 
-struct INET_API HcfHeRuntimeServices
+struct INET_API HcfHeFeatureServices
 {
     HePeerStateService *peerStateService = nullptr;
     HeQueueService *queueService = nullptr;
-    HeDlMuExchangeProvider *dlMuExchangeProvider = nullptr;
     HeTriggeredUlExchangeService *triggeredUlExchangeService = nullptr;
     HeSoundingService *soundingService = nullptr;
 
     bool isComplete() const
     {
         return peerStateService != nullptr && queueService != nullptr &&
-                dlMuExchangeProvider != nullptr && triggeredUlExchangeService != nullptr &&
+                triggeredUlExchangeService != nullptr &&
                 soundingService != nullptr;
     }
 };
@@ -57,9 +55,9 @@ class INET_API IHcfFeatureSet
   public:
     virtual ~IHcfFeatureSet() {}
     virtual void configureFeatures(const HcfFeatureConfiguration&) {}
-    virtual HcfAmendmentRuntimeKind getAmendmentRuntimeKind() const
-        { return HcfAmendmentRuntimeKind::COMMON; }
-    virtual HcfHeRuntimeServices getHeRuntimeServices() { return {}; }
+    virtual HcfFeatureKind getFeatureKind() const
+        { return HcfFeatureKind::COMMON; }
+    virtual HcfHeFeatureServices getHeFeatureServices() { return {}; }
 };
 
 } // namespace ieee80211

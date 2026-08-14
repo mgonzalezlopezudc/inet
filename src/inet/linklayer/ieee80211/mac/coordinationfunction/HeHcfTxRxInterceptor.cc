@@ -4,7 +4,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //
 
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfRuntime.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfFeature.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfFeatureSet.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfTxRxInterceptor.h"
 
@@ -81,7 +83,7 @@ static bool isHeTbPacket(const Packet *packet)
                      packet->peekAtFront()) != nullptr);
 }
 
-bool HeHcfRuntime::processHeSoundingFrame(Packet *packet,
+bool HeHcfFeature::processHeSoundingFrame(Packet *packet,
         const Ptr<const Ieee80211MacHeader>& header)
 {
     HeSoundingService::ReceiveSnapshot snapshot {
@@ -122,7 +124,7 @@ bool HeHcfRuntime::processHeSoundingFrame(Packet *packet,
             processSoundingFrame(packet, header, snapshot, actions);
 }
 
-void HeHcfRuntime::rejectUnexpectedHeTb(Packet *packet)
+void HeHcfFeature::rejectUnexpectedHeTb(Packet *packet)
 {
     PacketDropDetails details;
     details.setReason(NOT_ADDRESSED_TO_US);
@@ -130,19 +132,19 @@ void HeHcfRuntime::rejectUnexpectedHeTb(Packet *packet)
     delete packet;
 }
 
-void HeHcfRuntime::processHeTrigger(Packet *packet,
+void HeHcfFeature::processHeTrigger(Packet *packet,
         const Ptr<const Ieee80211TriggerFrame>& trigger)
 {
     processReceivedTriggerFrame(packet, trigger);
 }
 
-void HeHcfRuntime::processHeMultiStaBlockAck(Packet *packet,
+void HeHcfFeature::processHeMultiStaBlockAck(Packet *packet,
         const Ptr<const Ieee80211MultiStaBlockAck>& blockAck)
 {
     processReceivedMultiStaBlockAck(packet, blockAck);
 }
 
-void HeHcfRuntime::observeBufferStatus(const Ptr<const Ieee80211DataHeader>& header)
+void HeHcfFeature::observeBufferStatus(const Ptr<const Ieee80211DataHeader>& header)
 {
     if (!ulCoordinator->isEnabled() || !header->getBufferStatusPresent())
         return;
@@ -153,49 +155,45 @@ void HeHcfRuntime::observeBufferStatus(const Ptr<const Ieee80211DataHeader>& hea
                 header->getBufferStatusTid(), header->getBufferStatusQueueSize());
 }
 
-bool HeHcfRuntime::isOperatingModeControlSupported() const
+bool HeHcfFeature::isOperatingModeControlSupported() const
 {
     return mac->getMib()->localHeCapabilities.omControl;
 }
 
-void HeHcfRuntime::applyOperatingMode(const MacAddress& peer,
+void HeHcfFeature::applyOperatingMode(const MacAddress& peer,
         const Ieee80211HeOperatingMode& mode)
 {
     updatePeerOperatingMode(peer, mode);
 }
 
-void HeHcfRuntime::startMuEdcaTimer(AccessCategory accessCategory)
+void HeHcfFeature::startMuEdcaTimer(AccessCategory accessCategory)
 {
     edca->getEdcaf(accessCategory)->startMuEdcaTimer();
 }
 
-void HeHcfRuntime::notifyHeUlMuPacketTransmitted(Packet *packet)
+void HeHcfFeature::notifyHeUlMuPacketTransmitted(Packet *packet)
 {
     auto channelOwner = edca->getChannelOwner();
     if (channelOwner != nullptr)
         channelOwner->emit(cComponent::registerSignal("packetSentToPeer"), packet);
 }
 
-bool HeHcfRuntime::isHeDlMuContainer(const Packet *packet) const
+bool HeHcfFeature::isHeDlMuContainer(const Packet *packet) const
 {
-    return getHeDlMuExchangeProvider().isActiveContainer(packet);
+    return getHeDlMuExchangeCoordinator().isActiveContainer(packet);
 }
 
-void HeHcfRuntime::routeHeDlMuContainer(Packet *packet)
+void HeHcfFeature::routeHeDlMuContainer(Packet *packet)
 {
     auto channelOwner = edca->getChannelOwner();
     if (channelOwner == nullptr)
         return;
-    auto& provider = getHeDlMuExchangeProvider();
-    ASSERT(!provider.getActiveMembers().empty());
-    const auto transactionToken = provider.getActiveTransactionToken();
-    const auto members = provider.getActiveMembers();
-    if (provider.routeTransmittedContainer(packet, false))
-        for (const auto& member : members)
-            heDlMuMemberTransmitted(transactionToken, member);
+    auto& coordinator = getDlMuExchangeCoordinator();
+    ASSERT(!coordinator.getActiveMembers().empty());
+    coordinator.routeTransmittedContainer(packet);
 }
 
-HeHcfTxRxInterceptor::LocalRole HeHcfRuntime::getLocalRole() const
+HeHcfTxRxInterceptor::LocalRole HeHcfFeature::getLocalRole() const
 {
     switch (mac->getMib()->getStationType()) {
         case Ieee80211Mib::STATION: return HeHcfTxRxInterceptor::LocalRole::STATION;
@@ -204,27 +202,27 @@ HeHcfTxRxInterceptor::LocalRole HeHcfRuntime::getLocalRole() const
     }
 }
 
-uint16_t HeHcfRuntime::getLocalAssociationId() const
+uint16_t HeHcfFeature::getLocalAssociationId() const
 {
     return static_cast<uint16_t>(mac->getMib()->getLocalAssociationId());
 }
 
-bool HeHcfRuntime::hasActiveHeDlMuMembers() const
+bool HeHcfFeature::hasActiveHeDlMuMembers() const
 {
-    return !getHeDlMuExchangeProvider().getActiveMembers().empty();
+    return !getHeDlMuExchangeCoordinator().getActiveMembers().empty();
 }
 
-MacAddress HeHcfRuntime::getLocalAddress() const
+MacAddress HeHcfFeature::getLocalAddress() const
 {
     return mac->getAddress();
 }
 
-MacAddress HeHcfRuntime::getBssid() const
+MacAddress HeHcfFeature::getBssid() const
 {
     return mac->getMib()->getBssid();
 }
 
-void HeHcfRuntime::transmitHeNdp(Packet *packet,
+void HeHcfFeature::transmitHeNdp(Packet *packet,
         const Ptr<const Ieee80211MacHeader>& header, simtime_t ifs)
 {
     tx->transmitFrame(packet, header, ifs, hcf);
@@ -361,10 +359,10 @@ IHcfTxRxInterceptor::Result HeHcfTxRxInterceptor::processTransmittedControl(cons
     return IHcfTxRxInterceptor::Result::continueCommon();
 }
 
-bool HeHcfRuntime::reportHeDlMuTxResult(Packet *packet, AccessCategory ac, bool success)
+bool HeHcfFeature::reportHeDlMuTxResult(Packet *packet, AccessCategory ac, bool success)
 {
     auto heRateControl = dynamic_cast<IIeee80211HeRateControl *>(dataAndMgmtRateControl);
-    const auto& members = getHeDlMuExchangeProvider().getActiveMembers();
+    const auto& members = getHeDlMuExchangeCoordinator().getActiveMembers();
     if (packet == nullptr || members.empty() || heRateControl == nullptr)
         return false;
 
@@ -388,12 +386,12 @@ bool HeHcfRuntime::reportHeDlMuTxResult(Packet *packet, AccessCategory ac, bool 
     return false;
 }
 
-void HeHcfRuntime::originatorProcessBlockAckResult(
+void HeHcfFeature::originatorProcessBlockAckResult(
         const Ptr<const Ieee80211BlockAck>& blockAck,
         const std::set<std::pair<MacAddress, std::pair<Tid, SequenceControlField>>>& ackedFrames,
         AccessCategory ac)
 {
-    const auto& members = getHeDlMuExchangeProvider().getActiveMembers();
+    const auto& members = getHeDlMuExchangeCoordinator().getActiveMembers();
     if (members.empty())
         return;
 
@@ -514,7 +512,7 @@ IHcfTxRxInterceptor::Result HeHcfTxRxInterceptor::processFailedFrame(Packet *fai
         return IHcfTxRxInterceptor::Result::continueCommon();
 }
 
-void HeHcfRuntime::processHeDlMuFailedFrame(Packet *failedPacket)
+void HeHcfFeature::processHeDlMuFailedFrame(Packet *failedPacket)
 {
         hcf->aggregationService.discardTransmission(failedPacket);
         // 26.5.1 extends EDCA success/failure semantics for DL MU, but retry
@@ -597,7 +595,7 @@ IHcfTxRxInterceptor::Result HeHcfTxRxInterceptor::processTransmitRequest(Packet 
     return IHcfTxRxInterceptor::Result::continueCommon();
 }
 
-void HeHcfRuntime::legacyPreambleReceived(const Packet *packet)
+void HeHcfFeature::legacyPreambleReceived(const Packet *packet)
 {
     auto soundingCoordinator = check_and_cast<HeSoundingCoordinator *>(getSubmodule("soundingCoordinator"));
     soundingCoordinator->processLegacyPreamble(packet);

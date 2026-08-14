@@ -4,33 +4,37 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //
 
-#ifndef __INET_HEDLMUEXCHANGEPROVIDER_H
-#define __INET_HEDLMUEXCHANGEPROVIDER_H
+#ifndef __INET_HEDLMUEXCHANGECOORDINATOR_H
+#define __INET_HEDLMUEXCHANGECOORDINATOR_H
 
 #include <map>
-#include <set>
+#include <memory>
 
-#include "inet/linklayer/ieee80211/mac/contract/IHeDlMuExchangeCallback.h"
+#include "inet/linklayer/ieee80211/mac/contract/IHeDlMuExecutionServices.h"
+#include "inet/linklayer/ieee80211/mac/contract/IHeDlMuExchangeEvents.h"
 #include "inet/linklayer/ieee80211/mac/contract/IHeDlMuSnapshotSource.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuPlan.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuTxOpFs.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeDlMuExchange.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeSoundingService.h"
 
 namespace inet {
 namespace ieee80211 {
 
 /** Owns HE DL MU transaction correlation and rejects late/duplicate outcomes. */
-class INET_API HeDlMuExchangeProvider
+class INET_API HeDlMuExchangeCoordinator :
+        public IHeDlMuExecutionServices,
+        public IHeDlMuExchangeEvents
 {
   public:
     class INET_API ReservationRollbackGuard
     {
       private:
-        HeDlMuExchangeProvider *provider = nullptr;
+        HeDlMuExchangeCoordinator *provider = nullptr;
         uint64_t transactionToken = 0;
 
       public:
-        ReservationRollbackGuard(HeDlMuExchangeProvider& provider, uint64_t transactionToken);
+        ReservationRollbackGuard(HeDlMuExchangeCoordinator& provider, uint64_t transactionToken);
         ReservationRollbackGuard(const ReservationRollbackGuard&) = delete;
         ReservationRollbackGuard& operator=(const ReservationRollbackGuard&) = delete;
         ~ReservationRollbackGuard();
@@ -85,13 +89,14 @@ class INET_API HeDlMuExchangeProvider
         IIeee80211HeDlScheduler *scheduler = nullptr;
     };
 
-    class INET_API IActions : public IHeDlMuExchangeCallback
+    class INET_API IActions : public IHeDlMuExecutionServices
     {
       public:
-        virtual void heDlMuMemberTransmitted(uint64_t transactionToken,
-                const HeDlMuMember& member) override = 0;
-        virtual void heDlMuUserOutcome(uint64_t transactionToken,
-                const MacAddress& peer, HeDlMuUserOutcome outcome) override = 0;
+        virtual ~IActions() = default;
+        virtual void notifyHeDlMuMemberTransmitted(HeDlMuExchangeId id,
+                const HeDlMuMember& member) = 0;
+        virtual void notifyHeDlMuUserOutcome(HeDlMuExchangeId id,
+                const MacAddress& peer, HeDlMuUserOutcome outcome) = 0;
         virtual bool stageHeDlMuPacket(HcfQueueToken queueToken,
                 HcfPacketIdentity packetIdentity, AccessCategory accessCategory) = 0;
         virtual bool startHeDlMuSingleUserIfEligible(AccessCategory accessCategory) = 0;
@@ -101,9 +106,11 @@ class INET_API HeDlMuExchangeProvider
         virtual void restoreHeDlMuProtection(AccessCategory accessCategory,
                 const HeDlMuProtectionSnapshot& snapshot) = 0;
         virtual bool startHeDlMuExchange(AccessCategory accessCategory,
-                const HeDlMuPlan& plan, uint64_t transactionToken,
+                const HeDlMuPlan& plan, HeDlMuExchangeId id,
                 HeDlMuTxOpFs::AckMethod ackMethod,
-                const StartupParameters& parameters) = 0;
+                const StartupParameters& parameters,
+                IHeDlMuExecutionServices *services,
+                IHeDlMuExchangeEvents *events) = 0;
     };
 
   private:
@@ -122,11 +129,8 @@ class INET_API HeDlMuExchangeProvider
     StartPhase startPhase = StartPhase::IDLE;
     std::optional<AccessCategory> pendingProtectionAccessCategory;
     std::optional<HeDlMuProtectionSnapshot> pendingProtectionSnapshot;
-    uint64_t activeTransactionToken = 0;
-    Packet *containerPacket = nullptr;
-    std::vector<HeDlMuMember> members;
-    std::set<const Packet *> transmittedMembers;
-    std::set<MacAddress> completedUsers;
+    uint64_t pendingExchangeId = 0;
+    std::unique_ptr<HeDlMuExchange> activeExchange;
     std::map<MacAddress, std::vector<Packet *>> reservedPackets;
     IIeee80211HeDlScheduler *pendingScheduler = nullptr;
     IIeee80211HeDlScheduler::ScheduleContext pendingScheduleContext;
@@ -165,34 +169,50 @@ class INET_API HeDlMuExchangeProvider
     bool consumeForcedSingleUser(AccessCategory accessCategory);
     bool reservePlan(const HeDlMuPlan& plan, uint64_t transactionToken);
     void rollbackReservation(uint64_t transactionToken);
+    void abortActiveExchange();
+    void shutdown();
     void finalizeReservation(uint64_t transactionToken,
             const std::vector<HeDlMuMember>& members);
     bool isActiveContainer(const Packet *packet) const;
     /** Dispatches the committed members for an active transmitted container. */
     bool routeTransmittedContainer(Packet *packet, bool notifyActions = true);
-    uint64_t getActiveTransactionToken() const { return activeTransactionToken; }
-    const std::vector<HeDlMuMember>& getActiveMembers() const { return members; }
+    uint64_t getActiveTransactionToken() const
+        { return activeExchange == nullptr ? pendingExchangeId : activeExchange->getId(); }
+    uint64_t getPendingExchangeId() const { return pendingExchangeId; }
+    const HeDlMuExchange *getActiveExchange() const { return activeExchange.get(); }
+    const std::vector<HeDlMuMember>& getActiveMembers() const
+    {
+        static const std::vector<HeDlMuMember> empty;
+        return activeExchange == nullptr ? empty : activeExchange->getMembers();
+    }
 
-    queueing::IPacketQueue *resolveHeDlMuQueue(HcfQueueToken token) const;
+    virtual queueing::IPacketQueue *resolveHeDlMuQueue(HcfQueueToken token) const override;
     virtual Packet *getReservedHeDlMuPacket(uint64_t transactionToken,
-            const MacAddress& peer) const;
+            const MacAddress& peer) const override;
     virtual bool isReservedHeDlMuPacket(uint64_t transactionToken,
-            const MacAddress& peer, const Packet *packet) const;
-    IOriginatorBlockAckAgreementHandler *getHeDlMuBlockAckHandler() const;
-    IOriginatorMacDataService *getHeDlMuOriginatorDataService() const;
-    IQosRateSelection *getHeDlMuRateSelection() const;
-    MacAddress getHeDlMuTransmitterAddress() const;
-    int getHeDlMuFcsMode() const;
-    uint8_t getHeDlMuBssColor() const;
-    uint16_t getHeDlMuAssociationId(const MacAddress& peer) const;
-    std::optional<Ieee80211NegotiatedHeCapabilities>
-            getHeDlMuNegotiatedCapabilities(const MacAddress& peer) const;
-    void heDlMuPlanCommitted(uint64_t transactionToken,
-            Packet *containerPacket, const std::vector<HeDlMuMember>& members);
+            const MacAddress& peer, const Packet *packet) const override;
+    virtual IOriginatorBlockAckAgreementHandler *getHeDlMuBlockAckHandler() const override;
+    virtual IOriginatorMacDataService *getHeDlMuOriginatorDataService() const override;
+    virtual IQosRateSelection *getHeDlMuRateSelection() const override;
+    virtual MacAddress getHeDlMuTransmitterAddress() const override;
+    virtual int getHeDlMuFcsMode() const override;
+    virtual uint8_t getHeDlMuBssColor() const override;
+    virtual uint16_t getHeDlMuAssociationId(const MacAddress& peer) const override;
+    virtual std::optional<Ieee80211NegotiatedHeCapabilities>
+            getHeDlMuNegotiatedCapabilities(const MacAddress& peer) const override;
+    virtual void heDlMuPlanFinalized(HeDlMuExchangeId id,
+            const std::vector<HeDlMuMember>& members) override;
+    virtual void heDlMuPlanCommitted(HeDlMuExchangeId id,
+            Packet *containerPacket,
+            const std::vector<HeDlMuMember>& members) override;
+    virtual void heDlMuMemberTransmitted(HeDlMuExchangeId id,
+            const HeDlMuMember& member) override;
+    virtual void heDlMuUserOutcome(HeDlMuExchangeId id,
+            const MacAddress& peer, HeDlMuUserOutcome outcome) override;
     bool heDlMuMemberTransmitted(uint64_t transactionToken,
-            const HeDlMuMember& member, bool notifyActions = true);
+            const HeDlMuMember& member, bool notifyActions);
     bool heDlMuUserOutcome(uint64_t transactionToken,
-            const MacAddress& peer, HeDlMuUserOutcome outcome, bool notifyActions = true);
+            const MacAddress& peer, HeDlMuUserOutcome outcome, bool notifyActions);
 };
 
 } // namespace ieee80211

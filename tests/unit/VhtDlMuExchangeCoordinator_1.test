@@ -1,0 +1,121 @@
+%description:
+Validates VHT DL MU pending/active lifecycle and stale, duplicate, and foreign report guards.
+
+%includes:
+#include "inet/common/packet/Packet.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/VhtDlMuExchangeCoordinator.h"
+
+%file: TestNetwork.ned
+network TestNetwork
+{
+    submodules:
+        test: Test;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+static void requireTrue(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("%s", message);
+}
+
+class MockActions : public VhtDlMuExchangeCoordinator::IActions
+{
+  public:
+    int failedCount = 0;
+    Packet *lastFailedPacket = nullptr;
+    virtual void processVhtDlMuFailedFrame(Packet *packet) override
+    {
+        failedCount++;
+        lastFailedPacket = packet;
+    }
+};
+
+%activity:
+MockActions actions;
+VhtDlMuExchangeCoordinator coordinator(&actions);
+Packet container1("container1");
+Packet container2("container2");
+Packet packet1("packet1");
+Packet packet2("packet2");
+Packet packet3("packet3");
+Packet foreign("foreign");
+
+auto id1 = coordinator.beginPendingExchange();
+requireTrue(id1 != NO_VHT_DL_MU_EXCHANGE &&
+        coordinator.getPendingExchangeId() == id1 &&
+        coordinator.getActiveExchange() == nullptr,
+        "allocation must publish pending state without an active exchange");
+bool overlappingPendingRejected = false;
+try { coordinator.beginPendingExchange(); }
+catch (cRuntimeError&) { overlappingPendingRejected = true; }
+requireTrue(overlappingPendingRejected,
+        "only one pending VHT DL MU exchange is permitted");
+coordinator.abandonPendingExchange(id1 + 10);
+requireTrue(coordinator.getPendingExchangeId() == id1,
+        "a foreign abandonment must not alter pending state");
+coordinator.abandonPendingExchange(id1);
+requireTrue(coordinator.getPendingExchangeId() == NO_VHT_DL_MU_EXCHANGE,
+        "exact pending abandonment must clear pending state");
+
+id1 = coordinator.beginPendingExchange();
+coordinator.vhtDlMuPlanCommitted(id1, &container1, {{&packet1}, {&packet2}});
+requireTrue(coordinator.getPendingExchangeId() == NO_VHT_DL_MU_EXCHANGE &&
+        coordinator.getActiveExchange() != nullptr &&
+        coordinator.getActiveExchange()->getId() == id1,
+        "commit must create exactly one active exchange and clear pending state");
+coordinator.vhtDlMuFrameFailed(id1, &foreign);
+coordinator.vhtDlMuFrameFailed(id1 - 1, &packet1);
+requireTrue(actions.failedCount == 0,
+        "foreign packets with the current ID and valid packets with stale IDs must be ignored");
+coordinator.vhtDlMuFrameFailed(id1, &packet1);
+coordinator.vhtDlMuFrameFailed(id1, &packet1);
+requireTrue(actions.failedCount == 1 && actions.lastFailedPacket == &packet1,
+        "a committed failed packet must be forwarded exactly once");
+coordinator.vhtDlMuUserResult(id1, 2, VhtDlMuUserResult::BLOCK_ACK_RECEIVED);
+coordinator.vhtDlMuUserResult(id1, 0, VhtDlMuUserResult::TRANSMITTED);
+requireTrue(coordinator.getActiveExchange() != nullptr,
+        "out-of-range and transmitted results must remain nonterminal");
+coordinator.vhtDlMuUserResult(id1, 0, VhtDlMuUserResult::BLOCK_ACK_RECEIVED);
+coordinator.vhtDlMuUserResult(id1, 0, VhtDlMuUserResult::BLOCK_ACK_TIMED_OUT);
+requireTrue(coordinator.getActiveExchange() != nullptr,
+        "a duplicate terminal result must not retire early");
+coordinator.vhtDlMuUserResult(id1, 1, VhtDlMuUserResult::BLOCK_ACK_TIMED_OUT);
+requireTrue(coordinator.getActiveExchange() == nullptr &&
+        coordinator.getLastRetiredExchangeId() == id1,
+        "the final distinct user result must retire exactly once");
+coordinator.vhtDlMuUserResult(id1, 1, VhtDlMuUserResult::BLOCK_ACK_TIMED_OUT);
+coordinator.retireExchange(id1);
+requireTrue(coordinator.getLastRetiredExchangeId() == id1,
+        "last-retired duplicate events must be harmless");
+
+auto id2 = coordinator.beginPendingExchange();
+requireTrue(id2 > id1, "exchange IDs must be nonzero and monotonic");
+coordinator.vhtDlMuPlanCommitted(id2, &container2, {{&packet2}, {&packet3}});
+coordinator.vhtDlMuFrameFailed(id1, &packet2);
+coordinator.vhtDlMuUserResult(id1, 0, VhtDlMuUserResult::BLOCK_ACK_RECEIVED);
+requireTrue(actions.failedCount == 1 && coordinator.getActiveExchange() != nullptr &&
+        coordinator.getActiveExchange()->getId() == id2,
+        "exchange-1 reports must not mutate active exchange 2");
+coordinator.abortActiveExchange();
+requireTrue(coordinator.getActiveExchange() == nullptr &&
+        coordinator.getLastRetiredExchangeId() == id2,
+        "aborting VHT DL MU must retire the active exchange ID");
+auto id3 = coordinator.beginPendingExchange();
+coordinator.shutdown();
+requireTrue(id3 > id2 &&
+        coordinator.getPendingExchangeId() == NO_VHT_DL_MU_EXCHANGE &&
+        coordinator.getActiveExchange() == nullptr,
+        "VHT DL MU shutdown must clear pending and active exchange state");
+
+EV << "VHT DL MU coordinator checks passed.\n";
+
+%contains: stdout
+VHT DL MU coordinator checks passed.

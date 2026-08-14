@@ -40,6 +40,7 @@ class INET_API HcfExchangeEngine : private IFrameSequenceHandler::ICallback
         std::function<void(Packet *, Packet *)> originatorProcessReceivedFrame;
         std::function<void(Packet *)> originatorProcessFailedFrame;
         std::function<void(const FrameSequenceContext *)> frameSequenceStarted;
+        std::function<void()> frameSequenceAborted;
         std::function<void(const FrameSequenceContext *)> frameSequenceFinished;
         std::function<void()> resumeContention;
         std::function<void(Packet *)> discardResponse;
@@ -68,12 +69,14 @@ class INET_API HcfExchangeEngine : private IFrameSequenceHandler::ICallback
     uint64_t activeExchangeGeneration = 0;
     uint64_t startRxTimerGeneration = 0;
     uint64_t deferredTimeoutGeneration = 0;
+    bool shutDown = false;
 
     const Actions& getActiveActions() const;
     static void checkActions(const Actions& actions);
     HcfResponseService::Actions makeResponseActions(const Actions& actions);
     void beginExchangeIfNeeded();
     void clearExchange();
+    void requireOperational() const;
     const IFrameSequence *getFrameSequenceForLegacyAdapter() const;
     IFrameSequenceHandler::ICallback *getFrameSequenceCallbackForLegacyAdapter() { return this; }
 
@@ -91,6 +94,7 @@ class INET_API HcfExchangeEngine : private IFrameSequenceHandler::ICallback
     explicit HcfExchangeEngine(std::unique_ptr<IFrameSequenceHandler> frameSequenceHandler);
 
     void initializeTimers();
+    void shutdown(const Actions& actions);
     void replaceFrameSequenceHandler(std::unique_ptr<IFrameSequenceHandler> frameSequenceHandler);
     void cancelTimers(const Actions& actions);
     bool handleMessage(cMessage *message, const Actions& actions);

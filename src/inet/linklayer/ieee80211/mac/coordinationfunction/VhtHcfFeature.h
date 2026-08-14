@@ -11,12 +11,13 @@
 #include <memory>
 #include <optional>
 
-#include "inet/linklayer/ieee80211/mac/contract/IVhtDlMuExchangeCallback.h"
+#include "inet/linklayer/ieee80211/mac/contract/IVhtDlMuExecutionServices.h"
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequenceHandler.h"
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementHandler.h"
 #include "inet/linklayer/ieee80211/mac/contract/IVhtGroupIdManager.h"
 #include "inet/linklayer/ieee80211/mac/common/AccessCategory.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/VhtSoundingService.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/VhtDlMuExchangeCoordinator.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/VhtDlMuPlan.h"
 #include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211VhtPacketRadio.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
@@ -71,7 +72,8 @@ struct INET_API VhtGrantSnapshot
 };
 
 /** Executable VHT HCF feature. VhtHcf only supplies the common-HCF actions. */
-class INET_API VhtHcfFeature : public IVhtDlMuExchangeCallback,
+class INET_API VhtHcfFeature : public IVhtDlMuExecutionServices,
+        public VhtDlMuExchangeCoordinator::IActions,
         public IVhtGroupIdManager::ILocalMembershipListener
 {
   public:
@@ -115,6 +117,9 @@ class INET_API VhtHcfFeature : public IVhtDlMuExchangeCallback,
                 const Ptr<const Ieee80211DataHeader>& header, AccessCategory ac) = 0;
         virtual void processFailedFrame(Packet *packet) = 0;
         virtual void reclaimPacketOwnership(Packet *packet) = 0;
+        virtual bool hasFrameToTransmit(AccessCategory ac) const = 0;
+        virtual void releaseChannel(AccessCategory ac) = 0;
+        virtual void startSingleUserExchange(AccessCategory ac) = 0;
     };
 
     class INET_API ITxOpFactory
@@ -124,8 +129,9 @@ class INET_API VhtHcfFeature : public IVhtDlMuExchangeCallback,
         virtual VhtDlMuTxOpFs *create(const VhtDlMuPlan& plan,
                 physicallayer::Ieee80211ModeSet *modeSet, IAckHandler *ackHandler,
                 IFrameSequenceHandler::ICallback *callback,
-                IVhtDlMuExchangeCallback *vhtCallback,
-                uint64_t exchangeId) = 0;
+                IVhtDlMuExecutionServices *vhtServices,
+                IVhtDlMuExchangeEvents *vhtEvents,
+                VhtDlMuExchangeId exchangeId) = 0;
     };
 
   private:
@@ -140,22 +146,7 @@ class INET_API VhtHcfFeature : public IVhtDlMuExchangeCallback,
     physicallayer::IIeee80211VhtPacketRadio *radio = nullptr;
     std::unique_ptr<ITxOpFactory> defaultTxOpFactory;
     ITxOpFactory *txOpFactory = nullptr;
-    enum class DlMuPhase {
-        IDLE,
-        ACTIVE,
-        TERMINAL,
-    };
-    struct DlMuLifecycle {
-        DlMuPhase phase = DlMuPhase::IDLE;
-        uint64_t exchangeId = 0;
-    };
-
-    uint64_t nextDlMuExchangeId = 1;
-    uint64_t lastRetiredDlMuExchangeId = 0;
-    DlMuLifecycle dlMu;
-    std::vector<bool> completedUsers;
-    Packet *activeContainerPacket = nullptr;
-    std::vector<std::vector<Packet *>> activeUserPackets;
+    VhtDlMuExchangeCoordinator dlMuCoordinator;
 
     bool isAssociatedPeer(const MacAddress& peer) const;
     uint16_t getPeerAssociationId(const MacAddress& peer) const;
@@ -169,8 +160,6 @@ class INET_API VhtHcfFeature : public IVhtDlMuExchangeCallback,
             const std::optional<IVhtGroupIdManager::Membership>& membership) override;
     void commitBlockAckPrerequisite(const VhtGrantSnapshot& snapshot);
     GrantDisposition commitDlMu(const VhtGrantSnapshot& snapshot);
-    uint64_t allocateDlMuExchangeId();
-    void clearActiveDlMuExchange(uint64_t exchangeId);
 
   public:
     void configure(IActions *actions, bool enableSuBeamforming,
@@ -183,6 +172,7 @@ class INET_API VhtHcfFeature : public IVhtDlMuExchangeCallback,
     void setTxOpFactoryForTesting(ITxOpFactory *factory)
         { txOpFactory = factory == nullptr ? defaultTxOpFactory.get() : factory; }
     void modeSetChanged();
+    void startFrameSequence(AccessCategory ac);
     VhtGrantSnapshot prepareGrantSnapshot(AccessCategory ac) const;
     void startSounding(const VhtGrantSnapshot& snapshot);
     GrantDisposition commitPreparedGrant(const VhtGrantSnapshot& snapshot);
@@ -197,6 +187,8 @@ class INET_API VhtHcfFeature : public IVhtDlMuExchangeCallback,
     void transmissionComplete(Packet *packet,
             const Ptr<const Ieee80211MacHeader>& header);
     void invalidatePeer(const MacAddress& peer);
+    void frameSequenceAborted() { dlMuCoordinator.abortActiveExchange(); }
+    void shutdown();
 
     static void installBlockAckPrerequisite(
             IOriginatorBlockAckAgreementHandler::PrerequisiteReservation& reservation,
@@ -214,14 +206,11 @@ class INET_API VhtHcfFeature : public IVhtDlMuExchangeCallback,
     virtual IOriginatorMacDataService *getVhtDlMuOriginatorDataService() const override;
     virtual queueing::IPacketQueue *resolveVhtDlMuQueue(
             HcfQueueToken sourceQueueToken) const override;
-    virtual void vhtDlMuPlanCommitted(uint64_t exchangeId,
-            Packet *containerPacket,
-            const std::vector<std::vector<Packet *>>& userPackets) override;
     virtual void processVhtDlMuFailedFrame(Packet *packet) override;
-    virtual void processVhtDlMuUserResult(uint64_t exchangeId,
-            unsigned int userIndex, UserResult result) override;
 
     VhtSoundingService& getSoundingServiceForTesting() { return soundingService; }
+    VhtDlMuExchangeCoordinator& getDlMuCoordinatorForTesting()
+        { return dlMuCoordinator; }
 };
 
 } // namespace ieee80211

@@ -275,7 +275,7 @@ class MockDlMuOriginatorDataService : public IOriginatorMacDataService
     }
 };
 
-class MockDlMuRuntimeCallback : public IHeDlMuExchangeCallback
+class MockDlMuFeatureCallback : public IHeDlMuExecutionServices, public IHeDlMuExchangeEvents
 {
   public:
     IQosRateSelection *rateSelection = nullptr;
@@ -283,7 +283,7 @@ class MockDlMuRuntimeCallback : public IHeDlMuExchangeCallback
     int planFinalizedCount = 0;
     int planCommittedCount = 0;
 
-    MockDlMuRuntimeCallback(IQosRateSelection *rateSelection,
+    MockDlMuFeatureCallback(IQosRateSelection *rateSelection,
             MockDlMuOriginatorDataService *dataService) :
         rateSelection(rateSelection), dataService(dataService) {}
 
@@ -793,9 +793,10 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     auto rateSelection = check_and_cast<MockDlMuRateSelection *>(callback->getSubmodule("rateSelection"));
     rateSelection->resetObservedRequests();
     MockDlMuOriginatorDataService dataService;
-    MockDlMuRuntimeCallback runtimeCallback(rateSelection, &dataService);
+    MockDlMuFeatureCallback featureCallback(rateSelection, &dataService);
     HeDlMuTxOpFs fs(dlPlan,
-            modeSet, pendingQueue, &ackHandler, callback, &runtimeCallback, 41, 8);
+            modeSet, pendingQueue, &ackHandler, callback,
+            &featureCallback, &featureCallback, 41, 8);
     std::vector<SequenceNumberCyclic> originalSequenceNumbers;
     for (int i = 0; i < pendingQueue->getNumPackets(); ++i)
         originalSequenceNumbers.push_back(pendingQueue->getPacket(i)->
@@ -806,8 +807,8 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
             ackHandler.inProgressCount == 0 && fs.getActiveAllocations().empty(),
             "successful preparation should leave queue, ACK, and committed allocation ownership unchanged");
     requireTrue(dataService.sequenceNumberState.nextSequenceNumber == 100 &&
-            dataService.commitCount == 0 && runtimeCallback.planFinalizedCount == 0 &&
-            runtimeCallback.planCommittedCount == 0,
+            dataService.commitCount == 0 && featureCallback.planFinalizedCount == 0 &&
+            featureCallback.planCommittedCount == 0,
             "successful preparation should leave live sequence state and scheduler callbacks unchanged");
     for (int i = 0; i < pendingQueue->getNumPackets(); ++i)
         requireTrue(pendingQueue->getPacket(i)->peekAtFront<Ieee80211DataHeader>()->
@@ -818,8 +819,8 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
             ackHandler.inProgressCount == 5 && fs.getActiveAllocations().size() == 2,
             "explicit commit should adopt packed packets, ACK state, and finalized allocations");
     requireTrue(dataService.sequenceNumberState.nextSequenceNumber == 105 &&
-            dataService.commitCount == 1 && runtimeCallback.planFinalizedCount == 1 &&
-            runtimeCallback.planCommittedCount == 1,
+            dataService.commitCount == 1 && featureCallback.planFinalizedCount == 1 &&
+            featureCallback.planCommittedCount == 1,
             "explicit commit should adopt prepared sequence state and notify each scheduler phase exactly once");
     fs.startSequence(fsContext, 0);
     auto step = fs.prepareStep(fsContext);

@@ -24,22 +24,22 @@ class HcfFeatureSetObserver : public cSimpleModule
     {
         if (stage != INITSTAGE_LAST)
             return;
-        auto check = [this] (const char *path, HcfAmendmentRuntimeKind kind) {
+        auto check = [this] (const char *path, HcfFeatureKind kind) {
             auto featureSetPath = std::string(path) + ".featureSet";
             auto featureSet = dynamic_cast<IHcfFeatureSet *>(
                     getParentModule()->getModuleByPath(featureSetPath.c_str()));
-            if (featureSet == nullptr || featureSet->getAmendmentRuntimeKind() != kind)
+            if (featureSet == nullptr || featureSet->getFeatureKind() != kind)
                 throw cRuntimeError("invalid HCF feature-set replacement contract at %s", path);
             HcfFeatureConfiguration configuration;
             configuration.enableVhtDlMuMimo = true;
             featureSet->configureFeatures(configuration);
         };
-        check("common", HcfAmendmentRuntimeKind::COMMON);
-        check("vht", HcfAmendmentRuntimeKind::VHT);
-        check("he", HcfAmendmentRuntimeKind::HE);
+        check("common", HcfFeatureKind::COMMON);
+        check("vht", HcfFeatureKind::VHT);
+        check("he", HcfFeatureKind::HE);
         auto he = dynamic_cast<IHcfFeatureSet *>(
                 getParentModule()->getModuleByPath("he.featureSet"));
-        if (!he->getHeRuntimeServices().isComplete())
+        if (!he->getHeFeatureServices().isComplete())
             throw cRuntimeError("HE feature set returned an incomplete typed service bundle");
         EV << "HCF feature-set composition and typed service contract passed.\n";
     }

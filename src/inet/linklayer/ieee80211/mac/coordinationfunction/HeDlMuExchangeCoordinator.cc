@@ -4,10 +4,11 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //
 
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeDlMuExchangeProvider.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeDlMuExchangeCoordinator.h"
 
 #include <algorithm>
 #include <limits>
+#include <set>
 
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
@@ -16,28 +17,28 @@
 namespace inet {
 namespace ieee80211 {
 
-HeDlMuExchangeProvider::ReservationRollbackGuard::ReservationRollbackGuard(
-        HeDlMuExchangeProvider& provider, uint64_t transactionToken) :
+HeDlMuExchangeCoordinator::ReservationRollbackGuard::ReservationRollbackGuard(
+        HeDlMuExchangeCoordinator& provider, uint64_t transactionToken) :
     provider(&provider), transactionToken(transactionToken)
 {
 }
 
-HeDlMuExchangeProvider::ReservationRollbackGuard::~ReservationRollbackGuard()
+HeDlMuExchangeCoordinator::ReservationRollbackGuard::~ReservationRollbackGuard()
 {
     if (provider != nullptr)
         provider->rollbackReservation(transactionToken);
 }
 
-void HeDlMuExchangeProvider::configure(IActions *actions,
+void HeDlMuExchangeCoordinator::configure(IActions *actions,
         HeSoundingService *soundingProvider)
 {
     if (actions == nullptr || soundingProvider == nullptr)
-        throw cRuntimeError("HE DL MU provider requires typed actions and sounding provider");
+        throw cRuntimeError("HE DL MU coordinator requires typed actions and a sounding service");
     this->actions = actions;
     this->soundingProvider = soundingProvider;
 }
 
-void HeDlMuExchangeProvider::restorePendingProtection()
+void HeDlMuExchangeCoordinator::restorePendingProtection()
 {
     if (!pendingProtectionAccessCategory || !pendingProtectionSnapshot)
         return;
@@ -47,7 +48,7 @@ void HeDlMuExchangeProvider::restorePendingProtection()
     pendingProtectionSnapshot.reset();
 }
 
-IIeee80211HeDlScheduler::ScheduleContext HeDlMuExchangeProvider::buildScheduleContext(
+IIeee80211HeDlScheduler::ScheduleContext HeDlMuExchangeCoordinator::buildScheduleContext(
         const HeDlMuPreparationSnapshot& snapshot)
 {
     auto context = snapshot.common;
@@ -131,7 +132,7 @@ IIeee80211HeDlScheduler::ScheduleContext HeDlMuExchangeProvider::buildScheduleCo
     return context;
 }
 
-HcfQueueToken HeDlMuExchangeProvider::selectOldestEligibleQueue(
+HcfQueueToken HeDlMuExchangeCoordinator::selectOldestEligibleQueue(
         const HeDlMuPreparationSnapshot& snapshot)
 {
     const HeDlMuCandidateSnapshot *oldest = nullptr;
@@ -143,7 +144,7 @@ HcfQueueToken HeDlMuExchangeProvider::selectOldestEligibleQueue(
     return oldest == nullptr ? HcfQueueToken() : oldest->queueToken;
 }
 
-IIeee80211HeDlScheduler::ScheduleContext HeDlMuExchangeProvider::buildCandidateContext(
+IIeee80211HeDlScheduler::ScheduleContext HeDlMuExchangeCoordinator::buildCandidateContext(
         const IIeee80211HeDlScheduler::ScheduleContext& snapshotContext)
 {
     auto result = snapshotContext;
@@ -170,7 +171,7 @@ IIeee80211HeDlScheduler::ScheduleContext HeDlMuExchangeProvider::buildCandidateC
     return result;
 }
 
-HeDlMuExchangeProvider::PreparationResult HeDlMuExchangeProvider::preparePlan(
+HeDlMuExchangeCoordinator::PreparationResult HeDlMuExchangeCoordinator::preparePlan(
         const IIeee80211HeDlScheduler::ScheduleContext& snapshotContext,
         IIeee80211HeDlScheduler& scheduler)
 {
@@ -183,8 +184,8 @@ HeDlMuExchangeProvider::PreparationResult HeDlMuExchangeProvider::preparePlan(
     return result;
 }
 
-HeDlMuExchangeProvider::FallbackCandidate
-HeDlMuExchangeProvider::selectFallbackCandidate(
+HeDlMuExchangeCoordinator::FallbackCandidate
+HeDlMuExchangeCoordinator::selectFallbackCandidate(
         const HeDlMuPreparationSnapshot& snapshot)
 {
     const HeDlMuCandidateSnapshot *oldest = nullptr;
@@ -199,8 +200,8 @@ HeDlMuExchangeProvider::selectFallbackCandidate(
             FallbackCandidate {oldest->queueToken, oldest->packetIdentity};
 }
 
-std::optional<HeDlMuExchangeProvider::PreparedStart>
-HeDlMuExchangeProvider::prepareSingleUserStart(AccessCategory ac,
+std::optional<HeDlMuExchangeCoordinator::PreparedStart>
+HeDlMuExchangeCoordinator::prepareSingleUserStart(AccessCategory ac,
         const HeDlMuPreparationSnapshot& snapshot) const
 {
     if (snapshot.accessCategory != ac)
@@ -216,13 +217,13 @@ HeDlMuExchangeProvider::prepareSingleUserStart(AccessCategory ac,
     return prepared;
 }
 
-std::optional<HeDlMuExchangeProvider::PreparedStart> HeDlMuExchangeProvider::prepareStart(AccessCategory ac,
+std::optional<HeDlMuExchangeCoordinator::PreparedStart> HeDlMuExchangeCoordinator::prepareStart(AccessCategory ac,
         const HeDlMuPreparationSnapshot& snapshot,
         IIeee80211HeDlScheduler& scheduler,
         const StartupParameters& parameters)
 {
     if (actions == nullptr)
-        throw cRuntimeError("HE DL MU provider is not configured");
+        throw cRuntimeError("HE DL MU coordinator is not configured");
     if (snapshot.accessCategory != ac)
         throw cRuntimeError("HE DL MU snapshot access category mismatch");
 
@@ -336,7 +337,7 @@ std::optional<HeDlMuExchangeProvider::PreparedStart> HeDlMuExchangeProvider::pre
     return prepared;
 }
 
-bool HeDlMuExchangeProvider::commitStart(const PreparedStart& preparedStart)
+bool HeDlMuExchangeCoordinator::commitStart(const PreparedStart& preparedStart)
 {
     const auto ac = preparedStart.accessCategory;
     if (preparedStart.kind == StartKind::HE_SOUNDING) {
@@ -374,7 +375,7 @@ bool HeDlMuExchangeProvider::commitStart(const PreparedStart& preparedStart)
     bool started = false;
     try {
         started = actions->startHeDlMuExchange(ac, *preparedStart.plan, token,
-                preparedStart.ackMethod, preparedStart.parameters);
+                preparedStart.ackMethod, preparedStart.parameters, this, this);
     }
     catch (...) {
         restorePendingProtection();
@@ -396,7 +397,7 @@ bool HeDlMuExchangeProvider::commitStart(const PreparedStart& preparedStart)
     return true;
 }
 
-bool HeDlMuExchangeProvider::tryStart(AccessCategory ac,
+bool HeDlMuExchangeCoordinator::tryStart(AccessCategory ac,
         const HeDlMuPreparationSnapshot& snapshot,
         IIeee80211HeDlScheduler& scheduler,
         const StartupParameters& parameters)
@@ -405,12 +406,12 @@ bool HeDlMuExchangeProvider::tryStart(AccessCategory ac,
     return preparedStart.has_value() && commitStart(*preparedStart);
 }
 
-bool HeDlMuExchangeProvider::hasForcedSingleUser(AccessCategory ac) const
+bool HeDlMuExchangeCoordinator::hasForcedSingleUser(AccessCategory ac) const
 {
     return ac >= AC_BK && ac < AC_NUMCATEGORIES && forceNextSingleUser[ac];
 }
 
-bool HeDlMuExchangeProvider::consumeForcedSingleUser(AccessCategory ac)
+bool HeDlMuExchangeCoordinator::consumeForcedSingleUser(AccessCategory ac)
 {
     if (!hasForcedSingleUser(ac))
         return false;
@@ -418,9 +419,10 @@ bool HeDlMuExchangeProvider::consumeForcedSingleUser(AccessCategory ac)
     return true;
 }
 
-bool HeDlMuExchangeProvider::reservePlan(const HeDlMuPlan& plan, uint64_t token)
+bool HeDlMuExchangeCoordinator::reservePlan(const HeDlMuPlan& plan, uint64_t token)
 {
-    if (token == 0 || activeTransactionToken != 0 || !reservedPackets.empty()) {
+    if (token == 0 || pendingExchangeId != 0 || activeExchange != nullptr ||
+            !reservedPackets.empty()) {
         return false;
     }
     std::map<MacAddress, std::vector<Packet *>> prepared;
@@ -463,17 +465,17 @@ bool HeDlMuExchangeProvider::reservePlan(const HeDlMuPlan& plan, uint64_t token)
     if (prepared.size() < 2) {
         return false;
     }
-    activeTransactionToken = token;
+    pendingExchangeId = token;
     reservedPackets = std::move(prepared);
     return true;
 }
 
-void HeDlMuExchangeProvider::rollbackReservation(uint64_t token)
+void HeDlMuExchangeCoordinator::rollbackReservation(uint64_t token)
 {
-    if (token != activeTransactionToken)
+    if (token != pendingExchangeId)
         return;
     restorePendingProtection();
-    activeTransactionToken = 0;
+    pendingExchangeId = 0;
     startPhase = StartPhase::IDLE;
     reservedPackets.clear();
     pendingScheduler = nullptr;
@@ -481,10 +483,32 @@ void HeDlMuExchangeProvider::rollbackReservation(uint64_t token)
     pendingAllocations.clear();
 }
 
-void HeDlMuExchangeProvider::finalizeReservation(uint64_t token,
+void HeDlMuExchangeCoordinator::abortActiveExchange()
+{
+    activeExchange.reset();
+}
+
+void HeDlMuExchangeCoordinator::shutdown()
+{
+    if (pendingExchangeId != 0)
+        rollbackReservation(pendingExchangeId);
+    reservedPackets.clear();
+    pendingScheduler = nullptr;
+    pendingScheduleContext = {};
+    pendingAllocations.clear();
+    pendingProtectionAccessCategory.reset();
+    pendingProtectionSnapshot.reset();
+    pendingExchangeId = 0;
+    startPhase = StartPhase::IDLE;
+    activeExchange.reset();
+    actions = nullptr;
+    soundingProvider = nullptr;
+}
+
+void HeDlMuExchangeCoordinator::finalizeReservation(uint64_t token,
         const std::vector<HeDlMuMember>& finalizedMembers)
 {
-    if (token == 0 || token != activeTransactionToken || finalizedMembers.empty())
+    if (token == 0 || token != pendingExchangeId || finalizedMembers.empty())
         throw cRuntimeError("Invalid HE DL MU reservation finalization");
     std::map<MacAddress, std::vector<Packet *>> finalizedPackets;
     std::set<HcfPacketIdentity> identities;
@@ -515,52 +539,58 @@ void HeDlMuExchangeProvider::finalizeReservation(uint64_t token,
     pendingAllocations.clear();
 }
 
-bool HeDlMuExchangeProvider::isActiveContainer(const Packet *packet) const
+bool HeDlMuExchangeCoordinator::isActiveContainer(const Packet *packet) const
 {
-    return packet != nullptr && packet == containerPacket && activeTransactionToken != 0;
+    return activeExchange != nullptr && activeExchange->isContainer(packet);
 }
 
-bool HeDlMuExchangeProvider::routeTransmittedContainer(Packet *packet,
+bool HeDlMuExchangeCoordinator::routeTransmittedContainer(Packet *packet,
         bool notifyActions)
 {
     if (!isActiveContainer(packet))
         return false;
     if (notifyActions)
-        for (const auto& member : members)
-            heDlMuMemberTransmitted(activeTransactionToken, member);
+        for (const auto& member : activeExchange->getMembers())
+            heDlMuMemberTransmitted(activeExchange->getId(), member);
     return true;
 }
 
-queueing::IPacketQueue *HeDlMuExchangeProvider::resolveHeDlMuQueue(HcfQueueToken token) const { return actions->resolveHeDlMuQueue(token); }
-Packet *HeDlMuExchangeProvider::getReservedHeDlMuPacket(uint64_t token, const MacAddress& peer) const
+queueing::IPacketQueue *HeDlMuExchangeCoordinator::resolveHeDlMuQueue(HcfQueueToken token) const { return actions->resolveHeDlMuQueue(token); }
+Packet *HeDlMuExchangeCoordinator::getReservedHeDlMuPacket(uint64_t token, const MacAddress& peer) const
 {
-    if (token != activeTransactionToken)
+    if (token != pendingExchangeId)
         return nullptr;
     auto it = reservedPackets.find(peer);
     return it == reservedPackets.end() || it->second.empty() ? nullptr : it->second.front();
 }
-bool HeDlMuExchangeProvider::isReservedHeDlMuPacket(uint64_t token,
+bool HeDlMuExchangeCoordinator::isReservedHeDlMuPacket(uint64_t token,
         const MacAddress& peer, const Packet *packet) const
 {
-    if (token != activeTransactionToken || packet == nullptr)
+    if (token != pendingExchangeId || packet == nullptr)
         return false;
     auto it = reservedPackets.find(peer);
     return it != reservedPackets.end() &&
             std::find(it->second.begin(), it->second.end(), packet) != it->second.end();
 }
-IOriginatorBlockAckAgreementHandler *HeDlMuExchangeProvider::getHeDlMuBlockAckHandler() const { return actions->getHeDlMuBlockAckHandler(); }
-IOriginatorMacDataService *HeDlMuExchangeProvider::getHeDlMuOriginatorDataService() const { return actions->getHeDlMuOriginatorDataService(); }
-IQosRateSelection *HeDlMuExchangeProvider::getHeDlMuRateSelection() const { return actions->getHeDlMuRateSelection(); }
-MacAddress HeDlMuExchangeProvider::getHeDlMuTransmitterAddress() const { return actions->getHeDlMuTransmitterAddress(); }
-int HeDlMuExchangeProvider::getHeDlMuFcsMode() const { return actions->getHeDlMuFcsMode(); }
-uint8_t HeDlMuExchangeProvider::getHeDlMuBssColor() const { return actions->getHeDlMuBssColor(); }
-uint16_t HeDlMuExchangeProvider::getHeDlMuAssociationId(const MacAddress& peer) const { return actions->getHeDlMuAssociationId(peer); }
-std::optional<Ieee80211NegotiatedHeCapabilities> HeDlMuExchangeProvider::getHeDlMuNegotiatedCapabilities(const MacAddress& peer) const { return actions->getHeDlMuNegotiatedCapabilities(peer); }
+IOriginatorBlockAckAgreementHandler *HeDlMuExchangeCoordinator::getHeDlMuBlockAckHandler() const { return actions->getHeDlMuBlockAckHandler(); }
+IOriginatorMacDataService *HeDlMuExchangeCoordinator::getHeDlMuOriginatorDataService() const { return actions->getHeDlMuOriginatorDataService(); }
+IQosRateSelection *HeDlMuExchangeCoordinator::getHeDlMuRateSelection() const { return actions->getHeDlMuRateSelection(); }
+MacAddress HeDlMuExchangeCoordinator::getHeDlMuTransmitterAddress() const { return actions->getHeDlMuTransmitterAddress(); }
+int HeDlMuExchangeCoordinator::getHeDlMuFcsMode() const { return actions->getHeDlMuFcsMode(); }
+uint8_t HeDlMuExchangeCoordinator::getHeDlMuBssColor() const { return actions->getHeDlMuBssColor(); }
+uint16_t HeDlMuExchangeCoordinator::getHeDlMuAssociationId(const MacAddress& peer) const { return actions->getHeDlMuAssociationId(peer); }
+std::optional<Ieee80211NegotiatedHeCapabilities> HeDlMuExchangeCoordinator::getHeDlMuNegotiatedCapabilities(const MacAddress& peer) const { return actions->getHeDlMuNegotiatedCapabilities(peer); }
 
-void HeDlMuExchangeProvider::heDlMuPlanCommitted(uint64_t token,
+void HeDlMuExchangeCoordinator::heDlMuPlanFinalized(HeDlMuExchangeId id,
+        const std::vector<HeDlMuMember>& members)
+{
+    finalizeReservation(id, members);
+}
+
+void HeDlMuExchangeCoordinator::heDlMuPlanCommitted(uint64_t token,
         Packet *container, const std::vector<HeDlMuMember>& committedMembers)
 {
-    if (token == 0 || container == nullptr || committedMembers.empty() || activeTransactionToken != token)
+    if (token == 0 || token != pendingExchangeId || activeExchange != nullptr)
         throw cRuntimeError("Invalid or overlapping HE DL MU commit");
     std::set<HcfPacketIdentity> identities;
     std::set<MacAddress> committedPeers;
@@ -579,53 +609,49 @@ void HeDlMuExchangeProvider::heDlMuPlanCommitted(uint64_t token,
         throw cRuntimeError("HE DL MU commit does not match the reserved user set");
     pendingProtectionAccessCategory.reset();
     pendingProtectionSnapshot.reset();
-    activeTransactionToken = token;
     startPhase = StartPhase::ACTIVE;
-    containerPacket = container;
-    members = committedMembers;
-    transmittedMembers.clear();
-    completedUsers.clear();
+    activeExchange = std::make_unique<HeDlMuExchange>(token, container,
+            std::vector<HeDlMuMember>(committedMembers));
+    pendingExchangeId = 0;
     reservedPackets.clear();
 }
 
-bool HeDlMuExchangeProvider::heDlMuMemberTransmitted(uint64_t token,
+bool HeDlMuExchangeCoordinator::heDlMuMemberTransmitted(uint64_t token,
         const HeDlMuMember& member, bool notifyActions)
 {
-    auto committed = std::find_if(members.begin(), members.end(),
-            [&] (const auto& entry) {
-                return entry.packet == member.packet && entry.peer == member.peer &&
-                        entry.packetIdentity == member.packetIdentity;
-            });
-    if (token != activeTransactionToken || committed == members.end() ||
-            !transmittedMembers.insert(member.packet).second)
+    if (activeExchange == nullptr || activeExchange->getId() != token ||
+            !activeExchange->recordMemberTransmitted(member))
         return false;
     if (notifyActions)
-        actions->heDlMuMemberTransmitted(token, *committed);
+        actions->notifyHeDlMuMemberTransmitted(token, member);
     return true;
 }
 
-bool HeDlMuExchangeProvider::heDlMuUserOutcome(uint64_t token,
+bool HeDlMuExchangeCoordinator::heDlMuUserOutcome(uint64_t token,
         const MacAddress& peer, HeDlMuUserOutcome outcome, bool notifyActions)
 {
-    auto committed = std::find_if(members.begin(), members.end(),
-            [&] (const auto& entry) { return entry.peer == peer; });
-    if (token != activeTransactionToken || committed == members.end() ||
-            !completedUsers.insert(peer).second)
+    if (activeExchange == nullptr || activeExchange->getId() != token ||
+            !activeExchange->recordUserOutcome(peer))
         return false;
     if (notifyActions)
-        actions->heDlMuUserOutcome(token, peer, outcome);
-    std::set<MacAddress> committedUsers;
-    for (const auto& member : members)
-        committedUsers.insert(member.peer);
-    if (completedUsers == committedUsers) {
-        activeTransactionToken = 0;
+        actions->notifyHeDlMuUserOutcome(token, peer, outcome);
+    if (activeExchange->isComplete()) {
         startPhase = StartPhase::IDLE;
-        containerPacket = nullptr;
-        members.clear();
-        transmittedMembers.clear();
-        completedUsers.clear();
+        activeExchange.reset();
     }
     return true;
+}
+
+void HeDlMuExchangeCoordinator::heDlMuMemberTransmitted(
+        HeDlMuExchangeId id, const HeDlMuMember& member)
+{
+    heDlMuMemberTransmitted(id, member, true);
+}
+
+void HeDlMuExchangeCoordinator::heDlMuUserOutcome(HeDlMuExchangeId id,
+        const MacAddress& peer, HeDlMuUserOutcome outcome)
+{
+    heDlMuUserOutcome(id, peer, outcome, true);
 }
 
 } // namespace ieee80211

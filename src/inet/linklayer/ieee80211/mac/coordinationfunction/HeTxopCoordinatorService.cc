@@ -32,17 +32,17 @@ HeTxopCoordinatorService::GrantSnapshot HeTxopCoordinatorService::prepareGrant(
         snapshot.dlStart = actions.prepareDlStart();
         if (snapshot.dlStart) {
             switch (snapshot.dlStart->kind) {
-                case HeDlMuExchangeProvider::StartKind::HE_SOUNDING:
+                case HeDlMuExchangeCoordinator::StartKind::HE_SOUNDING:
                     snapshot.startKind = GrantSnapshot::StartKind::SOUNDING;
                     return snapshot;
-                case HeDlMuExchangeProvider::StartKind::RECOVERY_SINGLE_USER:
-                case HeDlMuExchangeProvider::StartKind::ADDBA_SINGLE_USER:
+                case HeDlMuExchangeCoordinator::StartKind::RECOVERY_SINGLE_USER:
+                case HeDlMuExchangeCoordinator::StartKind::ADDBA_SINGLE_USER:
                     snapshot.startKind = GrantSnapshot::StartKind::RECOVERY_SINGLE_USER;
                     return snapshot;
-                case HeDlMuExchangeProvider::StartKind::HE_DL_MULTIUSER:
+                case HeDlMuExchangeCoordinator::StartKind::HE_DL_MULTIUSER:
                     snapshot.startKind = GrantSnapshot::StartKind::DL_MULTIUSER;
                     return snapshot;
-                case HeDlMuExchangeProvider::StartKind::SINGLE_USER_FALLBACK:
+                case HeDlMuExchangeCoordinator::StartKind::SINGLE_USER_FALLBACK:
                     snapshot.startKind = GrantSnapshot::StartKind::PREPARED_SINGLE_USER;
                     return snapshot;
             }

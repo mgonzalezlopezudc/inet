@@ -26,16 +26,17 @@ EhtDlMuTxOpFs::EhtDlMuTxOpFs(const HeDlMuPlan& dlPlan,
                              queueing::IPacketQueue *pendingQueue,
                              IAckHandler *ackHandler,
                              IFrameSequenceHandler::ICallback *callback,
-                             IHeDlMuExchangeCallback *heDlMuCallback,
-                             uint64_t transactionToken,
+                             IHeDlMuExecutionServices *heServices,
+                             IHeDlMuExchangeEvents *heEvents,
+                             HeDlMuExchangeId transactionToken,
                              int maxAmpduMpduCount,
                              int maxHeMuPsduLength,
                              simtime_t maxHeMuPpduDuration,
                              AckMethod ackMethod,
                              bool ehtEnabled)
     : HeDlMuTxOpFs(dlPlan, modeSet, pendingQueue, ackHandler, callback,
-            heDlMuCallback, transactionToken, maxAmpduMpduCount, maxHeMuPsduLength,
-            maxHeMuPpduDuration, ackMethod)
+            heServices, heEvents, transactionToken, maxAmpduMpduCount,
+            maxHeMuPsduLength, maxHeMuPpduDuration, ackMethod)
 {
     this->ehtEnabled = ehtEnabled;
 }

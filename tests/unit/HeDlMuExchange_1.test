@@ -1,0 +1,90 @@
+%description:
+Validates the committed HE DL MU exchange identity and completion ledger.
+
+%includes:
+#include "inet/common/packet/Packet.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeDlMuExchange.h"
+
+%file: TestNetwork.ned
+network TestNetwork
+{
+    submodules:
+        test: Test;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+static void requireTrue(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("%s", message);
+}
+
+static HeDlMuMember makeMember(Packet *packet, const MacAddress& peer,
+        Tid tid, AccessCategory accessCategory)
+{
+    HeDlMuMember member;
+    member.packetIdentity = HcfPacketIdentity(packet->getId());
+    member.packet = packet;
+    member.peer = peer;
+    member.tid = tid;
+    member.accessCategory = accessCategory;
+    return member;
+}
+
+%activity:
+Packet container("container");
+Packet packet1("packet1");
+Packet packet2("packet2");
+Packet packet3("packet3");
+MacAddress peer1("02:00:00:00:01:01");
+MacAddress peer2("02:00:00:00:01:02");
+auto member1 = makeMember(&packet1, peer1, 3, AC_BE);
+auto member2 = makeMember(&packet2, peer1, 4, AC_VI);
+auto member3 = makeMember(&packet3, peer2, 3, AC_BE);
+
+bool zeroIdRejected = false;
+try { HeDlMuExchange invalid(0, &container, {member1}); }
+catch (cRuntimeError&) { zeroIdRejected = true; }
+bool nullContainerRejected = false;
+try { HeDlMuExchange invalid(1, nullptr, {member1}); }
+catch (cRuntimeError&) { nullContainerRejected = true; }
+bool emptyMembersRejected = false;
+try { HeDlMuExchange invalid(1, &container, {}); }
+catch (cRuntimeError&) { emptyMembersRejected = true; }
+requireTrue(zeroIdRejected && nullContainerRejected && emptyMembersRejected,
+        "invalid committed exchanges must be rejected");
+
+HeDlMuExchange exchange(7, &container, {member1, member2, member3});
+requireTrue(exchange.getId() == 7 && exchange.isContainer(&container) &&
+        !exchange.isContainer(&packet1) && exchange.getMembers().size() == 3,
+        "construction must preserve committed container and member identities");
+auto unknown = member1;
+unknown.packet = &packet3;
+requireTrue(!exchange.recordMemberTransmitted(unknown),
+        "an unknown full member identity must be rejected");
+auto wrongTid = member1;
+wrongTid.tid = 5;
+requireTrue(!exchange.recordMemberTransmitted(wrongTid),
+        "member matching must include the committed TID");
+requireTrue(exchange.recordMemberTransmitted(member1) &&
+        !exchange.recordMemberTransmitted(member1),
+        "a committed member transmission must be accepted exactly once");
+requireTrue(exchange.recordUserOutcome(peer1) &&
+        !exchange.recordUserOutcome(peer1) && !exchange.isComplete(),
+        "several members for one user must produce one terminal user outcome");
+requireTrue(!exchange.recordUserOutcome(MacAddress("02:00:00:00:01:ff")),
+        "an unknown user outcome must be rejected");
+requireTrue(exchange.recordUserOutcome(peer2) && exchange.isComplete(),
+        "completion must require every unique committed user");
+
+EV << "HE DL MU exchange checks passed.\n";
+
+%contains: stdout
+HE DL MU exchange checks passed.

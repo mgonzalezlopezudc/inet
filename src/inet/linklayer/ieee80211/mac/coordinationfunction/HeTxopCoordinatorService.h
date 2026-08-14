@@ -11,7 +11,7 @@
 #include <optional>
 
 #include "inet/common/INETDefs.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeDlMuExchangeProvider.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeDlMuExchangeCoordinator.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeUlTriggerService.h"
 
 namespace inet {
@@ -42,14 +42,14 @@ class INET_API HeTxopCoordinatorService
         StartKind startKind = StartKind::CHANNEL_RELEASE;
         AccessCategory accessCategory = AC_BE;
         std::optional<HeUlTriggerService::PreparedStart> ulTrigger;
-        std::optional<HeDlMuExchangeProvider::PreparedStart> dlStart;
+        std::optional<HeDlMuExchangeCoordinator::PreparedStart> dlStart;
     };
 
     /** Side-effect-free preparation seams, evaluated in semantic priority order. */
     struct PreparationActions {
         std::function<std::optional<HeUlTriggerService::PreparedStart>()> prepareUlTrigger;
-        std::function<std::optional<HeDlMuExchangeProvider::PreparedStart>()> prepareDlStart;
-        std::function<std::optional<HeDlMuExchangeProvider::PreparedStart>()> prepareSingleUser;
+        std::function<std::optional<HeDlMuExchangeCoordinator::PreparedStart>()> prepareDlStart;
+        std::function<std::optional<HeDlMuExchangeCoordinator::PreparedStart>()> prepareSingleUser;
     };
 
     enum Outcome {

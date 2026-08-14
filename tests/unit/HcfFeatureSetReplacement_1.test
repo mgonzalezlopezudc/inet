@@ -32,8 +32,8 @@ class ReplacementFeatureSet : public IHcfFeatureSet
         configuration = value;
         configureCalls++;
     }
-    virtual HcfAmendmentRuntimeKind getAmendmentRuntimeKind() const override
-        { return HcfAmendmentRuntimeKind::HE; }
+    virtual HcfFeatureKind getFeatureKind() const override
+        { return HcfFeatureKind::HE; }
 };
 
 ReplacementFeatureSet replacement;
@@ -41,9 +41,9 @@ HcfFeatureConfiguration configuration;
 configuration.enableHeUlMuOfdma = true;
 replacement.configureFeatures(configuration);
 if (replacement.configureCalls != 1 || !replacement.configuration.enableHeUlMuOfdma ||
-        replacement.getAmendmentRuntimeKind() != HcfAmendmentRuntimeKind::HE)
+        replacement.getFeatureKind() != HcfFeatureKind::HE)
     throw cRuntimeError("typed HCF feature-set replacement contract failed");
-if (replacement.getHeRuntimeServices().isComplete())
+if (replacement.getHeFeatureServices().isComplete())
     throw cRuntimeError("incomplete replacement HE services were accepted");
 EV << "HCF feature-set replacement contract passed.\n";
 

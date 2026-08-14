@@ -4,7 +4,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //
 
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfRuntime.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfFeature.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfFeatureSet.h"
 
 #include <algorithm>
 #include <memory>
@@ -46,7 +48,7 @@
 namespace inet {
 namespace ieee80211 {
 
-uint32_t HeHcfRuntime::getBufferedTrafficServiceBytes(
+uint32_t HeHcfFeature::getBufferedTrafficServiceBytes(
         Edcaf *edcaf, const MacAddress& peer, int tid) const
 {
     std::vector<Packet *> triggeredPackets;
@@ -102,7 +104,7 @@ static AccessCategory aciToAccessCategory(uint8_t aci)
     }
 }
 
-bool HeHcfRuntime::allAssociatedStationsSupportPreamblePuncturing() const
+bool HeHcfFeature::allAssociatedStationsSupportPreamblePuncturing() const
 {
     const auto stations = mac->getMib()->getPeerAssociationSnapshots();
     return std::all_of(stations.begin(), stations.end(), [&] (const auto& station) {
@@ -113,7 +115,7 @@ bool HeHcfRuntime::allAssociatedStationsSupportPreamblePuncturing() const
             });
 }
 
-bool HeHcfRuntime::supportsPreamblePuncturing(const IIeee80211HeUlScheduler::RuAllocation& allocation) const
+bool HeHcfFeature::supportsPreamblePuncturing(const IIeee80211HeUlScheduler::RuAllocation& allocation) const
 {
     if (allocation.randomAccess)
         return allAssociatedStationsSupportPreamblePuncturing();
@@ -121,7 +123,7 @@ bool HeHcfRuntime::supportsPreamblePuncturing(const IIeee80211HeUlScheduler::RuA
     return capabilities && capabilities->localRxPeerTx.valid && capabilities->localRxPeerTx.preamblePuncturing;
 }
 
-HeUlScheduleFinalizationResult HeHcfRuntime::finalizeUlSchedule(
+HeUlScheduleFinalizationResult HeHcfFeature::finalizeUlSchedule(
         const IIeee80211HeUlScheduler::Schedule& proposedSchedule,
         Hz centerFrequency, Hz channelBandwidth,
         IIeee80211HeUlTriggerPolicy::TriggerType triggerType)
@@ -130,7 +132,7 @@ HeUlScheduleFinalizationResult HeHcfRuntime::finalizeUlSchedule(
             channelBandwidth, triggerType);
 }
 
-HeUlPreparationSnapshot HeHcfRuntime::captureHeUlPreparationSnapshot(
+HeUlPreparationSnapshot HeHcfFeature::captureHeUlPreparationSnapshot(
         AccessCategory accessCategory) const
 {
     HeUlPreparationSnapshot snapshot;
@@ -185,14 +187,14 @@ HeUlPreparationSnapshot HeHcfRuntime::captureHeUlPreparationSnapshot(
     return snapshot;
 }
 
-void HeHcfRuntime::configureHeUlMuProtection(AccessCategory accessCategory)
+void HeHcfFeature::configureHeUlMuProtection(AccessCategory accessCategory)
 {
     auto txop = edca->getEdcaf(accessCategory)->getTxopProcedure();
     if (!txop->isProtectionConfigured())
         txop->configureProtection(TxopProcedure::InitialProtection::NONE);
 }
 
-void HeHcfRuntime::startHeUlMuExchange(AccessCategory accessCategory,
+void HeHcfFeature::startHeUlMuExchange(AccessCategory accessCategory,
         const HeUlMuPlan& plan, IHeUlMuExchangeCallback *callback)
 {
     auto frameSequence = std::make_unique<HeUlMuTxOpFs>(
@@ -207,7 +209,7 @@ void HeHcfRuntime::startHeUlMuExchange(AccessCategory accessCategory,
     heUlMuExchangeActive = true;
 }
 
-void HeHcfRuntime::processTriggeredUlFrame(Packet *packet, const Ptr<const Ieee80211DataHeader>& header, uint16_t aid)
+void HeHcfFeature::processTriggeredUlFrame(Packet *packet, const Ptr<const Ieee80211DataHeader>& header, uint16_t aid)
 {
     hcf->emit(cComponent::registerSignal("packetReceivedFromPeer"), packet);
     if (header->getBufferStatusPresent())
@@ -279,7 +281,7 @@ Ptr<Ieee80211CompressedBlockAck> buildHeMuBarCompressedBlockAck(
     return blockAck;
 }
 
-const Ptr<Ieee80211CompressedBlockAck> HeHcfRuntime::processTriggeredUlBlockAckReq(
+const Ptr<Ieee80211CompressedBlockAck> HeHcfFeature::processTriggeredUlBlockAckReq(
         Packet *packet,
         const Ptr<const Ieee80211CompressedBlockAckReq>& blockAckReq,
         uint16_t aid)
@@ -309,7 +311,7 @@ const Ptr<Ieee80211CompressedBlockAck> HeHcfRuntime::processTriggeredUlBlockAckR
     return compressedBlockAck;
 }
 
-void HeHcfRuntime::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee80211TriggerFrame>& trigger)
+void HeHcfFeature::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee80211TriggerFrame>& trigger)
 {
     const auto phy = getLinkPhyContext().getSnapshot();
     HeTriggeredUlExchangeService::TriggerProcessingSnapshot snapshot;
@@ -427,73 +429,73 @@ void HeHcfRuntime::processReceivedTriggerFrame(Packet *packet, const Ptr<const I
     snapshot.blockAckCandidates = captureTriggeredUlBlockAckCandidates();
     getHeTriggeredUlExchangeService().processTrigger(std::move(snapshot));
 }
-void HeHcfRuntime::processReceivedMultiStaBlockAck(Packet *packet, const Ptr<const Ieee80211MultiStaBlockAck>& multiStaBlockAck)
+void HeHcfFeature::processReceivedMultiStaBlockAck(Packet *packet, const Ptr<const Ieee80211MultiStaBlockAck>& multiStaBlockAck)
 {
     getHeTriggeredUlExchangeService().processMultiStaBlockAck(packet,
             multiStaBlockAck);
 }
 
-simtime_t HeHcfRuntime::getTriggeredUlCurrentTime() const
+simtime_t HeHcfFeature::getTriggeredUlCurrentTime() const
 {
     return simTime();
 }
 
-void HeHcfRuntime::scheduleTriggeredUlTimer(simtime_t time, cMessage *timer)
+void HeHcfFeature::scheduleTriggeredUlTimer(simtime_t time, cMessage *timer)
 {
     omnetpp::cMethodCallContextSwitcher context(hcf);
     context.methodCallSilent();
     scheduleAt(time, timer);
 }
 
-void HeHcfRuntime::cancelTriggeredUlTimer(cMessage *timer)
+void HeHcfFeature::cancelTriggeredUlTimer(cMessage *timer)
 {
     omnetpp::cMethodCallContextSwitcher context(hcf);
     context.methodCallSilent();
     cancelEvent(timer);
 }
 
-void HeHcfRuntime::cancelAndDeleteTriggeredUlTimer(cMessage *timer)
+void HeHcfFeature::cancelAndDeleteTriggeredUlTimer(cMessage *timer)
 {
     omnetpp::cMethodCallContextSwitcher context(hcf);
     context.methodCallSilent();
     cancelAndDelete(timer);
 }
 
-MacAddress HeHcfRuntime::getTriggeredUlBssid() const
+MacAddress HeHcfFeature::getTriggeredUlBssid() const
 {
     return mac->getMib()->getBssid();
 }
 
-MacAddress HeHcfRuntime::getTriggeredUlLocalAddress() const
+MacAddress HeHcfFeature::getTriggeredUlLocalAddress() const
 {
     return mac->getAddress();
 }
 
-uint16_t HeHcfRuntime::getTriggeredUlAssociationId() const
+uint16_t HeHcfFeature::getTriggeredUlAssociationId() const
 {
     return mac->getMib()->getLocalAssociationId();
 }
 
-uint64_t HeHcfRuntime::getTriggeredUlAssociationEpoch() const
+uint64_t HeHcfFeature::getTriggeredUlAssociationEpoch() const
 {
     return getHePeerStateService().getPeerSnapshot(
             mac->getMib()->getBssid()).getAssociationEpoch();
 }
 
 std::unique_ptr<ISequenceNumberAssignment>
-HeHcfRuntime::cloneTriggeredUlSequenceState() const
+HeHcfFeature::cloneTriggeredUlSequenceState() const
 {
     return originatorDataService->cloneSequenceNumberState();
 }
 
-void HeHcfRuntime::commitTriggeredUlSequenceState(
+void HeHcfFeature::commitTriggeredUlSequenceState(
         const ISequenceNumberAssignment& state)
 {
     originatorDataService->commitSequenceNumberState(state);
 }
 
 Ptr<Ieee80211CompressedBlockAckReq>
-HeHcfRuntime::materializeTriggeredUlBlockAckRequest(
+HeHcfFeature::materializeTriggeredUlBlockAckRequest(
         const HeTriggeredUlExchangeService::BlockAckRequestSelection& selection)
 {
     if (originatorBlockAckProcedure == nullptr)
@@ -505,7 +507,7 @@ HeHcfRuntime::materializeTriggeredUlBlockAckRequest(
 }
 
 std::vector<HeTriggeredUlExchangeService::BlockAckCandidateSnapshot>
-HeHcfRuntime::captureTriggeredUlBlockAckCandidates() const
+HeHcfFeature::captureTriggeredUlBlockAckCandidates() const
 {
     std::vector<HeTriggeredUlExchangeService::BlockAckCandidateSnapshot> result;
     const auto receiverAddress = mac->getMib()->getBssid();
@@ -543,7 +545,7 @@ HeHcfRuntime::captureTriggeredUlBlockAckCandidates() const
     return result;
 }
 
-void HeHcfRuntime::commitTriggeredUlBlockAckRequest(
+void HeHcfFeature::commitTriggeredUlBlockAckRequest(
         const Ptr<Ieee80211CompressedBlockAckReq>& blockAckReq,
         AccessCategory accessCategory)
 {
@@ -551,7 +553,7 @@ void HeHcfRuntime::commitTriggeredUlBlockAckRequest(
             processTransmittedBlockAckReq(blockAckReq);
 }
 
-void HeHcfRuntime::validateTriggeredUlPackets(HcfQueueToken queueToken,
+void HeHcfFeature::validateTriggeredUlPackets(HcfQueueToken queueToken,
         const std::vector<Packet *>& packets) const
 {
     auto reservation = getHeQueueService().preparePacketReservation(
@@ -559,7 +561,7 @@ void HeHcfRuntime::validateTriggeredUlPackets(HcfQueueToken queueToken,
     getHeQueueService().rollbackPacketReservation(reservation);
 }
 
-std::vector<Packet *> HeHcfRuntime::commitTriggeredUlPackets(
+std::vector<Packet *> HeHcfFeature::commitTriggeredUlPackets(
         HcfQueueToken queueToken, const std::vector<Packet *>& originals,
         const std::vector<Packet *>& prepared)
 {
@@ -568,7 +570,7 @@ std::vector<Packet *> HeHcfRuntime::commitTriggeredUlPackets(
     return getHeQueueService().commitPacketReservation(reservation, prepared);
 }
 
-void HeHcfRuntime::rollbackTriggeredUlPackets(HcfQueueToken queueToken,
+void HeHcfFeature::rollbackTriggeredUlPackets(HcfQueueToken queueToken,
         const std::vector<Packet *>& originals,
         const std::vector<Packet *>& backups,
         const std::vector<Packet *>& queueOrder)
@@ -577,19 +579,19 @@ void HeHcfRuntime::rollbackTriggeredUlPackets(HcfQueueToken queueToken,
             backups, queueOrder);
 }
 
-void HeHcfRuntime::takeTriggeredUlPacket(Packet *packet) { take(packet); }
-std::unique_ptr<ITx::PreparedTransmission> HeHcfRuntime::prepareTriggeredUlHandoff(Packet *packet,
+void HeHcfFeature::takeTriggeredUlPacket(Packet *packet) { take(packet); }
+std::unique_ptr<ITx::PreparedTransmission> HeHcfFeature::prepareTriggeredUlHandoff(Packet *packet,
         const Ptr<const Ieee80211MacHeader>& header)
 {
     return tx->prepareTransmission(packet, header, modeSet->getSifsTime(), hcf);
 }
-void HeHcfRuntime::commitTriggeredUlHandoff(
+void HeHcfFeature::commitTriggeredUlHandoff(
         std::unique_ptr<ITx::PreparedTransmission> prepared) noexcept
 {
     tx->commitTransmission(std::move(prepared));
 }
 
-Ptr<Ieee80211CompressedBlockAck> HeHcfRuntime::prepareTriggeredUlMuBarBlockAck(
+Ptr<Ieee80211CompressedBlockAck> HeHcfFeature::prepareTriggeredUlMuBarBlockAck(
         const Ieee80211HeTriggerUserInfo& user,
         const MacAddress& originator)
 {
@@ -599,13 +601,13 @@ Ptr<Ieee80211CompressedBlockAck> HeHcfRuntime::prepareTriggeredUlMuBarBlockAck(
     return agreement == nullptr ? nullptr : buildHeMuBarCompressedBlockAck(
             user, agreement, originator, mac->getAddress());
 }
-Hz HeHcfRuntime::getTriggeredUlCenterFrequency() const { return getLinkPhyContext().getSnapshot().getChannelCenterFrequency(); }
-uint8_t HeHcfRuntime::getTriggeredUlBssColor() const { return mac->getMib()->heOperation.bssColor; }
-FcsMode HeHcfRuntime::getTriggeredUlFcsMode() const { return mac->getFcsMode(); }
-simtime_t HeHcfRuntime::getTriggeredUlSifsTime() const { return modeSet->getSifsTime(); }
-AccessCategory HeHcfRuntime::mapTriggeredUlTidToAccessCategory(Tid tid) const { return edca->mapTidToAc(tid); }
+Hz HeHcfFeature::getTriggeredUlCenterFrequency() const { return getLinkPhyContext().getSnapshot().getChannelCenterFrequency(); }
+uint8_t HeHcfFeature::getTriggeredUlBssColor() const { return mac->getMib()->heOperation.bssColor; }
+FcsMode HeHcfFeature::getTriggeredUlFcsMode() const { return mac->getFcsMode(); }
+simtime_t HeHcfFeature::getTriggeredUlSifsTime() const { return modeSet->getSifsTime(); }
+AccessCategory HeHcfFeature::mapTriggeredUlTidToAccessCategory(Tid tid) const { return edca->mapTidToAc(tid); }
 HeTriggeredUlExchangeService::RandomAccessPreparation
-HeHcfRuntime::prepareTriggeredUlRandomAccess(AccessCategory accessCategory,
+HeHcfFeature::prepareTriggeredUlRandomAccess(AccessCategory accessCategory,
         int randomAccessRuCount)
 {
     auto prepared = ulCoordinator->prepareRandomAccessRu(accessCategory,
@@ -615,12 +617,12 @@ HeHcfRuntime::prepareTriggeredUlRandomAccess(AccessCategory accessCategory,
             prepared.attempt};
 }
 
-void HeHcfRuntime::setTriggeredUlRandomAccessPeer(const MacAddress& peer)
+void HeHcfFeature::setTriggeredUlRandomAccessPeer(const MacAddress& peer)
 {
     ulCoordinator->setRandomAccessPeer(peer);
 }
 
-int HeHcfRuntime::commitTriggeredUlRandomAccess(
+int HeHcfFeature::commitTriggeredUlRandomAccess(
         const HeTriggeredUlExchangeService::RandomAccessPreparation& preparation)
 {
     HeUlCoordinator::PreparedRandomAccessSelection prepared;
@@ -631,21 +633,21 @@ int HeHcfRuntime::commitTriggeredUlRandomAccess(
     prepared.attempt = preparation.attempt;
     return ulCoordinator->commitRandomAccessRu(prepared);
 }
-void HeHcfRuntime::emitTriggeredUlResponse(HeTbResponseEvent& event) { emitHeTbResponse(event); }
+void HeHcfFeature::emitTriggeredUlResponse(HeTbResponseEvent& event) { emitHeTbResponse(event); }
 
-void HeHcfRuntime::reportTriggeredUlRandomAccessResult(bool successful)
+void HeHcfFeature::reportTriggeredUlRandomAccessResult(bool successful)
 {
     ulCoordinator->reportRandomAccessResult(successful);
 }
 
-void HeHcfRuntime::processTriggeredUlBlockAckRequestFailure(
+void HeHcfFeature::processTriggeredUlBlockAckRequestFailure(
         const Ptr<const Ieee80211CompressedBlockAckReq>& blockAckReq,
         AccessCategory accessCategory)
 {
     processFailedBlockAckReq(edca->getEdcaf(accessCategory), blockAckReq, false);
 }
 
-void HeHcfRuntime::processTriggeredUlBlockAckRequestSuccess(
+void HeHcfFeature::processTriggeredUlBlockAckRequestSuccess(
         const Ptr<const Ieee80211CompressedBlockAck>& blockAck,
         AccessCategory accessCategory)
 {
@@ -653,7 +655,7 @@ void HeHcfRuntime::processTriggeredUlBlockAckRequestSuccess(
             accessCategory);
 }
 
-void HeHcfRuntime::retireTriggeredUlPacket(Packet *packet,
+void HeHcfFeature::retireTriggeredUlPacket(Packet *packet,
         HcfPacketIdentity identity)
 {
     if (packet == nullptr || HcfPacketIdentity(packet->getId()) != identity)
@@ -666,7 +668,7 @@ void HeHcfRuntime::retireTriggeredUlPacket(Packet *packet,
     delete packet;
 }
 
-void HeHcfRuntime::retryTriggeredUlPacket(Packet *packet,
+void HeHcfFeature::retryTriggeredUlPacket(Packet *packet,
         HcfPacketIdentity identity, HcfQueueToken sourceQueueToken,
         const MacAddress& bssid, uint16_t associationId,
         uint64_t associationEpoch)
@@ -697,7 +699,7 @@ void HeHcfRuntime::retryTriggeredUlPacket(Packet *packet,
         throw cRuntimeError("Committed HE-TB queue token became invalid within the same association epoch");
 }
 
-void HeHcfRuntime::startTriggeredUlMuEdcaTimer(AccessCategory accessCategory)
+void HeHcfFeature::startTriggeredUlMuEdcaTimer(AccessCategory accessCategory)
 {
     if (accessCategory >= AC_BK && accessCategory < AC_NUMCATEGORIES)
         edca->getEdcaf(accessCategory)->startMuEdcaTimer();

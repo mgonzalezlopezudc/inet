@@ -65,9 +65,12 @@ class FaultInjectingVhtDlMuTxOpFs : public VhtDlMuTxOpFs
   public:
     FaultInjectingVhtDlMuTxOpFs(const VhtDlMuPlan& plan, Ieee80211ModeSet *modeSet,
             IAckHandler *ackHandler, IFrameSequenceHandler::ICallback *callback,
-            IVhtDlMuExchangeCallback *vhtCallback, uint64_t transactionToken,
+            IVhtDlMuExecutionServices *vhtServices,
+            IVhtDlMuExchangeEvents *vhtEvents,
+            VhtDlMuExchangeId transactionToken,
             bool *injected, cComponent *owner) :
-        VhtDlMuTxOpFs(plan, modeSet, ackHandler, callback, vhtCallback, transactionToken),
+        VhtDlMuTxOpFs(plan, modeSet, ackHandler, callback,
+                vhtServices, vhtEvents, transactionToken),
         injected(injected), owner(owner) {}
 };
 
@@ -80,11 +83,13 @@ class FaultInjectingVhtTxOpFactory : public VhtHcfFeature::ITxOpFactory
     virtual VhtDlMuTxOpFs *create(const VhtDlMuPlan& plan,
             Ieee80211ModeSet *modeSet, IAckHandler *ackHandler,
             IFrameSequenceHandler::ICallback *callback,
-            IVhtDlMuExchangeCallback *vhtCallback,
-            uint64_t transactionToken) override
+            IVhtDlMuExecutionServices *vhtServices,
+            IVhtDlMuExchangeEvents *vhtEvents,
+            VhtDlMuExchangeId transactionToken) override
     {
         return new FaultInjectingVhtDlMuTxOpFs(plan, modeSet, ackHandler,
-                callback, vhtCallback, transactionToken, &injected, owner);
+                callback, vhtServices, vhtEvents, transactionToken,
+                &injected, owner);
     }
 };
 

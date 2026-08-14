@@ -22,7 +22,6 @@
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeUlTriggerService.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeTxopCoordinatorService.h"
 #include "inet/linklayer/ieee80211/mac/contract/IIeee80211HeLinkPhyContext.h"
-#include "inet/linklayer/ieee80211/mac/contract/IHeDlMuExchangeCallback.h"
 #include "inet/linklayer/ieee80211/mac/contract/IHeDlMuSnapshotSource.h"
 #include "inet/linklayer/ieee80211/mac/scheduler/IIeee80211HeDlScheduler.h"
 #include "inet/queueing/contract/IPacketQueue.h"

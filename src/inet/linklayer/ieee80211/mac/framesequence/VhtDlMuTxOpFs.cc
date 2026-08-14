@@ -48,12 +48,13 @@ struct VhtDlMuTxOpFs::PreparedCommit
 VhtDlMuTxOpFs::VhtDlMuTxOpFs(const VhtDlMuPlan& plan,
         Ieee80211ModeSet *modeSet, IAckHandler *ackHandler,
         IFrameSequenceHandler::ICallback *callback,
-        IVhtDlMuExchangeCallback *vhtCallback, uint64_t exchangeId) :
+        IVhtDlMuExecutionServices *vhtServices,
+        IVhtDlMuExchangeEvents *vhtEvents, VhtDlMuExchangeId exchangeId) :
     plan(plan), modeSet(modeSet), ackHandler(ackHandler), callback(callback),
-    vhtCallback(vhtCallback), exchangeId(exchangeId)
+    vhtServices(vhtServices), vhtEvents(vhtEvents), exchangeId(exchangeId)
 {
     ASSERT(modeSet != nullptr && ackHandler != nullptr && callback != nullptr &&
-            vhtCallback != nullptr);
+            vhtServices != nullptr && vhtEvents != nullptr);
 }
 
 void VhtDlMuTxOpFs::startSequence(FrameSequenceContext *context, int firstStep)
@@ -125,7 +126,7 @@ bool VhtDlMuTxOpFs::commit(FrameSequenceContext *context)
     std::vector<std::vector<Packet *>> userPackets;
     for (const auto& user : activeUsers)
         userPackets.push_back(user.packets);
-    vhtCallback->vhtDlMuPlanCommitted(exchangeId, containerPacket, userPackets);
+    vhtEvents->vhtDlMuPlanCommitted(exchangeId, containerPacket, userPackets);
     committed = true;
     preparedCommit.reset();
     return true;
@@ -173,13 +174,13 @@ bool VhtDlMuTxOpFs::completeStep(FrameSequenceContext *context)
         auto receive = check_and_cast<IReceiveStep *>(context->getLastStep());
         if (receive->getReceivedFrame() == nullptr) {
             for (auto packet : activeUsers.at(userIndex).packets)
-                vhtCallback->processVhtDlMuFailedFrame(packet);
-            vhtCallback->processVhtDlMuUserResult(exchangeId, userIndex,
-                    IVhtDlMuExchangeCallback::UserResult::BLOCK_ACK_TIMED_OUT);
+                vhtEvents->vhtDlMuFrameFailed(exchangeId, packet);
+            vhtEvents->vhtDlMuUserResult(exchangeId, userIndex,
+                    VhtDlMuUserResult::BLOCK_ACK_TIMED_OUT);
         }
         else
-            vhtCallback->processVhtDlMuUserResult(exchangeId, userIndex,
-                    IVhtDlMuExchangeCallback::UserResult::BLOCK_ACK_RECEIVED);
+            vhtEvents->vhtDlMuUserResult(exchangeId, userIndex,
+                    VhtDlMuUserResult::BLOCK_ACK_RECEIVED);
     }
     step++;
     return true;
@@ -190,10 +191,10 @@ std::unique_ptr<VhtDlMuTxOpFs::PreparedCommit> VhtDlMuTxOpFs::buildPreparedCommi
 {
     const auto& users = plan.getUsers();
     ASSERT(users.size() >= 2 && users.size() <= 4);
-    auto dataService = vhtCallback->getVhtDlMuOriginatorDataService();
+    auto dataService = vhtServices->getVhtDlMuOriginatorDataService();
     if (dataService == nullptr)
         throw cRuntimeError("VHT DL MU requires an originator MAC data service");
-    auto mac = vhtCallback->getVhtDlMuMac();
+    auto mac = vhtServices->getVhtDlMuMac();
     if (mac == nullptr)
         throw cRuntimeError("VHT DL MU requires a MAC callback context");
     auto controlMode = modeSet->getSlowestMandatoryMode(MHz(20));
@@ -215,7 +216,7 @@ std::unique_ptr<VhtDlMuTxOpFs::PreparedCommit> VhtDlMuTxOpFs::buildPreparedCommi
     phyUsers.reserve(users.size());
     for (size_t i = 0; i < users.size(); ++i) {
         const auto& user = users[i];
-        auto sourceQueue = vhtCallback->resolveVhtDlMuQueue(
+        auto sourceQueue = vhtServices->resolveVhtDlMuQueue(
                 user.sourceQueueToken);
         if (sourceQueue == nullptr)
             throw VhtDlMuStalePlan("VHT DL MU source queue token is stale");

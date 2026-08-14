@@ -4,8 +4,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //
 
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfRuntime.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfRuntime.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfFeature.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfFeatureSet.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfFeature.h"
 
 #include <algorithm>
 #include <sstream>
@@ -78,20 +80,20 @@ bool hasEligibleExistingFrame(InProgressFrames *inProgress, IAckHandler *ackHand
     return false;
 }
 
-HeDlMuPreparationSnapshot HeHcfRuntime::captureHeDlMuPreparationSnapshot(
+HeDlMuPreparationSnapshot HeHcfFeature::captureHeDlMuPreparationSnapshot(
         AccessCategory ac) const
 {
     return this->captureDlPreparationSnapshot(ac);
 }
 
-IIeee80211HeDlScheduler::ScheduleContext HeHcfRuntime::collectScheduleContext(
+IIeee80211HeDlScheduler::ScheduleContext HeHcfFeature::collectScheduleContext(
         AccessCategory ac) const
 {
-    return HeDlMuExchangeProvider::buildScheduleContext(
+    return HeDlMuExchangeCoordinator::buildScheduleContext(
             captureHeDlMuPreparationSnapshot(ac));
 }
 
-bool HeHcfRuntime::stagePerStaFrameForSingleUserTransmission(AccessCategory ac)
+bool HeHcfFeature::stagePerStaFrameForSingleUserTransmission(AccessCategory ac)
 {
     auto snapshot = captureHeDlMuPreparationSnapshot(ac);
     const HeDlMuCandidateSnapshot *oldest = nullptr;
@@ -104,14 +106,14 @@ bool HeHcfRuntime::stagePerStaFrameForSingleUserTransmission(AccessCategory ac)
             oldest->packetIdentity, ac);
 }
 
-bool HeHcfRuntime::stageHeDlMuPacket(HcfQueueToken queueToken,
+bool HeHcfFeature::stageHeDlMuPacket(HcfQueueToken queueToken,
         HcfPacketIdentity packetIdentity, AccessCategory ac)
 {
     return getHeQueueService().stagePacket(queueToken, packetIdentity,
             edca->getEdcaf(ac)->getPendingQueue());
 }
 
-bool HeHcfRuntime::startHeDlMuSingleUserIfEligible(AccessCategory ac)
+bool HeHcfFeature::startHeDlMuSingleUserIfEligible(AccessCategory ac)
 {
     if (edca->getEdcaf(ac)->getInProgressFrames()->getFrameToTransmit() == nullptr)
         return false;
@@ -119,32 +121,32 @@ bool HeHcfRuntime::startHeDlMuSingleUserIfEligible(AccessCategory ac)
     return true;
 }
 
-HeDlMuExchangeProvider::HeDlMuProtectionSnapshot
-HeHcfRuntime::captureHeDlMuProtection(AccessCategory ac) const
+HeDlMuExchangeCoordinator::HeDlMuProtectionSnapshot
+HeHcfFeature::captureHeDlMuProtection(AccessCategory ac) const
 {
     auto txop = edca->getEdcaf(ac)->getTxopProcedure();
     auto state = txop->getProtectionStateSnapshot();
-    HeDlMuExchangeProvider::HeDlMuProtectionSnapshot snapshot;
+    HeDlMuExchangeCoordinator::HeDlMuProtectionSnapshot snapshot;
     switch (state.mechanism) {
         case TxopProcedure::SINGLE_PROTECTION:
-            snapshot.mechanism = HeDlMuExchangeProvider::HeDlMuProtectionSnapshot::Mechanism::SINGLE_PROTECTION;
+            snapshot.mechanism = HeDlMuExchangeCoordinator::HeDlMuProtectionSnapshot::Mechanism::SINGLE_PROTECTION;
             break;
         case TxopProcedure::MULTIPLE_PROTECTION:
-            snapshot.mechanism = HeDlMuExchangeProvider::HeDlMuProtectionSnapshot::Mechanism::MULTIPLE_PROTECTION;
+            snapshot.mechanism = HeDlMuExchangeCoordinator::HeDlMuProtectionSnapshot::Mechanism::MULTIPLE_PROTECTION;
             break;
         case TxopProcedure::UNDEFINED_PROTECTION:
-            snapshot.mechanism = HeDlMuExchangeProvider::HeDlMuProtectionSnapshot::Mechanism::UNDEFINED_PROTECTION;
+            snapshot.mechanism = HeDlMuExchangeCoordinator::HeDlMuProtectionSnapshot::Mechanism::UNDEFINED_PROTECTION;
             break;
     }
     snapshot.protection = state.protection == TxopProcedure::InitialProtection::LEGACY_RTS_CTS ?
-            HeDlMuExchangeProvider::HeDlMuProtectionSnapshot::InitialProtection::LEGACY_RTS_CTS :
-            HeDlMuExchangeProvider::HeDlMuProtectionSnapshot::InitialProtection::NONE;
+            HeDlMuExchangeCoordinator::HeDlMuProtectionSnapshot::InitialProtection::LEGACY_RTS_CTS :
+            HeDlMuExchangeCoordinator::HeDlMuProtectionSnapshot::InitialProtection::NONE;
     snapshot.configured = state.configured;
     snapshot.completed = state.completed;
     return snapshot;
 }
 
-void HeHcfRuntime::startHeSoundingExchange(
+void HeHcfFeature::startHeSoundingExchange(
         const HeSoundingService::StartAction& action, AccessCategory ac)
 {
     configureHeDlMuProtection(ac);
@@ -156,31 +158,31 @@ void HeHcfRuntime::startHeSoundingExchange(
     startExchangeFrameSequence(sequence, buildContext(ac));
 }
 
-void HeHcfRuntime::configureHeDlMuProtection(AccessCategory ac)
+void HeHcfFeature::configureHeDlMuProtection(AccessCategory ac)
 {
     auto txop = edca->getEdcaf(ac)->getTxopProcedure();
     if (!txop->isProtectionConfigured())
         txop->configureProtection(TxopProcedure::InitialProtection::NONE);
 }
 
-void HeHcfRuntime::restoreHeDlMuProtection(AccessCategory ac,
-        const HeDlMuExchangeProvider::HeDlMuProtectionSnapshot& snapshot)
+void HeHcfFeature::restoreHeDlMuProtection(AccessCategory ac,
+        const HeDlMuExchangeCoordinator::HeDlMuProtectionSnapshot& snapshot)
 {
     auto txop = edca->getEdcaf(ac)->getTxopProcedure();
     TxopProcedure::ProtectionState::Snapshot state;
     switch (snapshot.mechanism) {
-        case HeDlMuExchangeProvider::HeDlMuProtectionSnapshot::Mechanism::SINGLE_PROTECTION:
+        case HeDlMuExchangeCoordinator::HeDlMuProtectionSnapshot::Mechanism::SINGLE_PROTECTION:
             state.mechanism = TxopProcedure::SINGLE_PROTECTION;
             break;
-        case HeDlMuExchangeProvider::HeDlMuProtectionSnapshot::Mechanism::MULTIPLE_PROTECTION:
+        case HeDlMuExchangeCoordinator::HeDlMuProtectionSnapshot::Mechanism::MULTIPLE_PROTECTION:
             state.mechanism = TxopProcedure::MULTIPLE_PROTECTION;
             break;
-        case HeDlMuExchangeProvider::HeDlMuProtectionSnapshot::Mechanism::UNDEFINED_PROTECTION:
+        case HeDlMuExchangeCoordinator::HeDlMuProtectionSnapshot::Mechanism::UNDEFINED_PROTECTION:
             state.mechanism = TxopProcedure::UNDEFINED_PROTECTION;
             break;
     }
     state.protection = snapshot.protection ==
-            HeDlMuExchangeProvider::HeDlMuProtectionSnapshot::InitialProtection::LEGACY_RTS_CTS ?
+            HeDlMuExchangeCoordinator::HeDlMuProtectionSnapshot::InitialProtection::LEGACY_RTS_CTS ?
             TxopProcedure::InitialProtection::LEGACY_RTS_CTS :
             TxopProcedure::InitialProtection::NONE;
     state.configured = snapshot.configured;
@@ -188,15 +190,16 @@ void HeHcfRuntime::restoreHeDlMuProtection(AccessCategory ac,
     txop->restoreProtectionStateSnapshot(state);
 }
 
-bool HeHcfRuntime::startHeDlMuExchange(AccessCategory ac, const HeDlMuPlan& plan,
+bool HeHcfFeature::startHeDlMuExchange(AccessCategory ac, const HeDlMuPlan& plan,
         uint64_t transactionToken, HeDlMuTxOpFs::AckMethod ackMethod,
-        const HeDlMuExchangeProvider::StartupParameters& parameters)
+        const HeDlMuExchangeCoordinator::StartupParameters& parameters,
+        IHeDlMuExecutionServices *services, IHeDlMuExchangeEvents *events)
 {
     auto edcaf = edca->getEdcaf(ac);
     auto frameSequence = std::make_unique<HeDlMuTxOpFs>(plan, modeSet,
             edcaf->getPendingQueue(), edcaf->getAckHandler(),
             getFrameSequenceCallbackForLegacyAdapter(),
-            this, transactionToken,
+            services, events, transactionToken,
             parameters.maxAmpduMpduCount, parameters.maxHeMuPsduLength,
             parameters.maxHeMuPpduDuration, ackMethod);
     auto context = std::unique_ptr<FrameSequenceContext>(buildContext(ac));
@@ -208,65 +211,54 @@ bool HeHcfRuntime::startHeDlMuExchange(AccessCategory ac, const HeDlMuPlan& plan
     return true;
 }
 
-queueing::IPacketQueue *HeHcfRuntime::resolveHeDlMuQueue(HcfQueueToken token) const
+queueing::IPacketQueue *HeHcfFeature::resolveHeDlMuQueue(HcfQueueToken token) const
 {
     return resolveHeQueue(token);
 }
 
-Packet *HeHcfRuntime::getReservedHeDlMuPacket(uint64_t transactionToken,
+Packet *HeHcfFeature::getReservedHeDlMuPacket(uint64_t transactionToken,
         const MacAddress& peer) const
 {
-    return getHeDlMuExchangeProvider().getReservedHeDlMuPacket(
+    return getHeDlMuExchangeCoordinator().getReservedHeDlMuPacket(
             transactionToken, peer);
 }
-bool HeHcfRuntime::isReservedHeDlMuPacket(uint64_t transactionToken,
+bool HeHcfFeature::isReservedHeDlMuPacket(uint64_t transactionToken,
         const MacAddress& peer, const Packet *packet) const
 {
-    return getHeDlMuExchangeProvider().isReservedHeDlMuPacket(
+    return getHeDlMuExchangeCoordinator().isReservedHeDlMuPacket(
             transactionToken, peer, packet);
 }
 
-IOriginatorBlockAckAgreementHandler *HeHcfRuntime::getHeDlMuBlockAckHandler() const
+IOriginatorBlockAckAgreementHandler *HeHcfFeature::getHeDlMuBlockAckHandler() const
 {
     return getOriginatorBlockAckAgreementHandler();
 }
 
-IOriginatorMacDataService *HeHcfRuntime::getHeDlMuOriginatorDataService() const
+IOriginatorMacDataService *HeHcfFeature::getHeDlMuOriginatorDataService() const
 {
     return getOriginatorMacDataService();
 }
 
-IQosRateSelection *HeHcfRuntime::getHeDlMuRateSelection() const
+IQosRateSelection *HeHcfFeature::getHeDlMuRateSelection() const
 {
     return check_and_cast<IQosRateSelection *>(getSubmodule("rateSelection"));
 }
 
-MacAddress HeHcfRuntime::getHeDlMuTransmitterAddress() const { return mac->getAddress(); }
-int HeHcfRuntime::getHeDlMuFcsMode() const { return mac->getFcsMode(); }
-uint8_t HeHcfRuntime::getHeDlMuBssColor() const { return mac->getMib()->heOperation.bssColor; }
-uint16_t HeHcfRuntime::getHeDlMuAssociationId(const MacAddress& peer) const { return getAssociationId(peer); }
+MacAddress HeHcfFeature::getHeDlMuTransmitterAddress() const { return mac->getAddress(); }
+int HeHcfFeature::getHeDlMuFcsMode() const { return mac->getFcsMode(); }
+uint8_t HeHcfFeature::getHeDlMuBssColor() const { return mac->getMib()->heOperation.bssColor; }
+uint16_t HeHcfFeature::getHeDlMuAssociationId(const MacAddress& peer) const { return getAssociationId(peer); }
 
 std::optional<Ieee80211NegotiatedHeCapabilities>
-HeHcfRuntime::getHeDlMuNegotiatedCapabilities(const MacAddress& peer) const
+HeHcfFeature::getHeDlMuNegotiatedCapabilities(const MacAddress& peer) const
 {
     return mac->getMib()->getNegotiatedHeCapabilities(peer);
 }
 
-void HeHcfRuntime::heDlMuPlanFinalized(uint64_t token,
-        const std::vector<HeDlMuMember>& members)
+void HeHcfFeature::notifyHeDlMuMemberTransmitted(
+        HeDlMuExchangeId token, const HeDlMuMember& member)
 {
-    getHeDlMuExchangeProvider().finalizeReservation(token, members);
-}
-
-void HeHcfRuntime::heDlMuPlanCommitted(uint64_t token, Packet *container,
-        const std::vector<HeDlMuMember>& members)
-{
-    getHeDlMuExchangeProvider().heDlMuPlanCommitted(token, container, members);
-}
-void HeHcfRuntime::heDlMuMemberTransmitted(uint64_t token, const HeDlMuMember& member)
-{
-    if (!getHeDlMuExchangeProvider().heDlMuMemberTransmitted(token, member, false))
-        return;
+    (void)token;
     if (member.packet == nullptr || member.accessCategory < AC_BK ||
             member.accessCategory >= AC_NUMCATEGORIES)
         return;
@@ -281,10 +273,13 @@ void HeHcfRuntime::heDlMuMemberTransmitted(uint64_t token, const HeDlMuMember& m
         originatorProcessTransmittedManagementFrame(managementHeader,
                 member.accessCategory);
 }
-void HeHcfRuntime::heDlMuUserOutcome(uint64_t token, const MacAddress& peer,
+void HeHcfFeature::notifyHeDlMuUserOutcome(HeDlMuExchangeId token,
+        const MacAddress& peer,
         HeDlMuUserOutcome outcome)
 {
-    getHeDlMuExchangeProvider().heDlMuUserOutcome(token, peer, outcome, false);
+    (void)token;
+    (void)peer;
+    (void)outcome;
 }
 } // namespace ieee80211
 } // namespace inet

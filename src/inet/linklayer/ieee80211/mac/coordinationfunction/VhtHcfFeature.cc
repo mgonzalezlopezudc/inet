@@ -48,11 +48,12 @@ class DefaultVhtDlMuTxOpFactory : public VhtHcfFeature::ITxOpFactory
     virtual VhtDlMuTxOpFs *create(const VhtDlMuPlan& plan,
             physicallayer::Ieee80211ModeSet *modeSet, IAckHandler *ackHandler,
             IFrameSequenceHandler::ICallback *callback,
-            IVhtDlMuExchangeCallback *vhtCallback,
-            uint64_t exchangeId) override
+            IVhtDlMuExecutionServices *vhtServices,
+            IVhtDlMuExchangeEvents *vhtEvents,
+            VhtDlMuExchangeId exchangeId) override
     {
         return new VhtDlMuTxOpFs(plan, modeSet, ackHandler, callback,
-                vhtCallback, exchangeId);
+                vhtServices, vhtEvents, exchangeId);
     }
 };
 
@@ -114,6 +115,7 @@ void VhtHcfFeature::configure(IActions *actions, bool enableSuBeamforming,
     this->groupIdManager = groupIdManager;
     this->dlMuScheduler = dlMuScheduler;
     this->radio = radio;
+    dlMuCoordinator.configure(this);
     soundingService.configure(csiValidityDuration, coordinator);
     if (radio != nullptr) {
         soundingService.updateChannelWidth(radio->getVhtChannelWidth());
@@ -143,6 +145,44 @@ void VhtHcfFeature::modeSetChanged()
     auto selection = radio->getVhtMuRxSelection();
     if (selection.active && selection.channelWidth != radio->getVhtChannelWidth())
         radio->setVhtMuRxSelection({});
+}
+
+void VhtHcfFeature::shutdown()
+{
+    dlMuCoordinator.shutdown();
+    if (groupIdManager != nullptr)
+        groupIdManager->setLocalMembershipListener(nullptr);
+    actions = nullptr;
+    groupIdManager = nullptr;
+    dlMuScheduler = nullptr;
+    radio = nullptr;
+    txOpFactory = nullptr;
+    defaultTxOpFactory.reset();
+}
+
+void VhtHcfFeature::startFrameSequence(AccessCategory ac)
+{
+    if (!actions->hasFrameToTransmit(ac)) {
+        actions->releaseChannel(ac);
+        return;
+    }
+    auto snapshot = prepareGrantSnapshot(ac);
+    switch (snapshot.startKind) {
+        case VhtGrantSnapshot::StartKind::COMMON_SINGLE_USER:
+            actions->startSingleUserExchange(ac);
+            return;
+        case VhtGrantSnapshot::StartKind::SU_SOUNDING:
+        case VhtGrantSnapshot::StartKind::MU_SOUNDING:
+            startSounding(snapshot);
+            return;
+        case VhtGrantSnapshot::StartKind::GROUP_MANAGEMENT:
+        case VhtGrantSnapshot::StartKind::BLOCK_ACK_PREREQUISITE:
+        case VhtGrantSnapshot::StartKind::DL_MULTIUSER:
+            if (commitPreparedGrant(snapshot) == GrantDisposition::FINISHED_SYNCHRONOUSLY)
+                actions->releaseChannel(ac);
+            return;
+    }
+    throw cRuntimeError("Unknown VHT grant start kind");
 }
 
 bool VhtHcfFeature::isAssociatedPeer(const MacAddress& peer) const
@@ -587,24 +627,17 @@ VhtHcfFeature::GrantDisposition VhtHcfFeature::commitDlMu(
 {
     if (!snapshot.dlMuPlan)
         throw cRuntimeError("Prepared VHT DL MU exchange has no validated plan");
-    if (dlMu.phase != DlMuPhase::IDLE)
-        throw cRuntimeError("Another VHT DL MU exchange is active");
     auto edcaf = actions->getEdca()->getEdcaf(snapshot.accessCategory);
     auto txop = edcaf->getTxopProcedure();
-    const auto exchangeId = allocateDlMuExchangeId();
-    dlMu = {DlMuPhase::IDLE, exchangeId};
-    completedUsers.assign(snapshot.dlMuPlan->getUsers().size(), false);
-    activeContainerPacket = nullptr;
-    activeUserPackets.clear();
-    RollbackGuard rollback([this] {
-        dlMu = {};
-        completedUsers.clear();
-        activeContainerPacket = nullptr;
-        activeUserPackets.clear();
+    const auto exchangeId = dlMuCoordinator.beginPendingExchange();
+    RollbackGuard rollback([this, exchangeId] {
+        dlMuCoordinator.abandonPendingExchange(exchangeId);
+        dlMuCoordinator.retireExchange(exchangeId);
     });
     auto sequence = std::unique_ptr<VhtDlMuTxOpFs>(txOpFactory->create(
             *snapshot.dlMuPlan, actions->getModeSet(),
-            edcaf->getAckHandler(), actions->getFrameSequenceCallback(), this, exchangeId));
+            edcaf->getAckHandler(), actions->getFrameSequenceCallback(),
+            this, &dlMuCoordinator, exchangeId));
     auto context = std::unique_ptr<FrameSequenceContext>(
             actions->buildFrameSequenceContext(snapshot.accessCategory));
     if (!sequence->prepare(context.get())) {
@@ -621,7 +654,8 @@ VhtHcfFeature::GrantDisposition VhtHcfFeature::commitDlMu(
     }
     actions->startFeatureFrameSequence(sequence.release(), context.release());
     protectionRollback.release();
-    ASSERT(dlMu.phase == DlMuPhase::ACTIVE);
+    ASSERT(dlMuCoordinator.getActiveExchange() != nullptr &&
+            dlMuCoordinator.getActiveExchange()->getId() == exchangeId);
     rollback.release();
     return GrantDisposition::STARTED;
 }
@@ -650,35 +684,6 @@ VhtHcfFeature::GrantDisposition VhtHcfFeature::commitPreparedGrant(
             actions->continueBaseFrameSequence(snapshot.accessCategory);
             return GrantDisposition::STARTED;
     }
-}
-
-uint64_t VhtHcfFeature::allocateDlMuExchangeId()
-{
-    if (nextDlMuExchangeId == 0)
-        throw cRuntimeError("VHT DL MU exchange ID space exhausted");
-    const auto exchangeId = nextDlMuExchangeId++;
-    if (nextDlMuExchangeId == 0)
-        throw cRuntimeError("VHT DL MU exchange ID wrapped");
-    return exchangeId;
-}
-
-void VhtHcfFeature::clearActiveDlMuExchange(uint64_t exchangeId)
-{
-    if (dlMu.phase == DlMuPhase::IDLE) {
-        if (exchangeId == lastRetiredDlMuExchangeId)
-            throw cRuntimeError("Duplicate VHT DL MU terminal callback");
-        return;
-    }
-    if (exchangeId != dlMu.exchangeId)
-        return;
-    if (dlMu.phase == DlMuPhase::TERMINAL)
-        throw cRuntimeError("Duplicate VHT DL MU terminal callback");
-    dlMu.phase = DlMuPhase::TERMINAL;
-    lastRetiredDlMuExchangeId = exchangeId;
-    activeContainerPacket = nullptr;
-    activeUserPackets.clear();
-    completedUsers.clear();
-    dlMu = {};
 }
 
 bool VhtHcfFeature::processHeaderlessNdpIndication(Packet *packet)
@@ -752,7 +757,9 @@ void VhtHcfFeature::setFrameMode(Packet *packet,
 
 void VhtHcfFeature::transmitFrame(Packet *packet, simtime_t ifs)
 {
-    if (packet == activeContainerPacket) {
+    auto activeExchange = dlMuCoordinator.getActiveExchange();
+    if (activeExchange != nullptr &&
+            packet == activeExchange->getContainerPacket()) {
         auto header = makeShared<Ieee80211DataHeader>();
         header->setType(ST_DATA_WITH_QOS);
         header->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
@@ -792,10 +799,12 @@ void VhtHcfFeature::transmitFrame(Packet *packet, simtime_t ifs)
 
 void VhtHcfFeature::originatorProcessTransmittedFrame(Packet *packet)
 {
-    if (packet == activeContainerPacket) {
+    auto activeExchange = dlMuCoordinator.getActiveExchange();
+    if (activeExchange != nullptr &&
+            packet == activeExchange->getContainerPacket()) {
         auto edcaf = actions->getEdca()->getChannelOwner();
         ASSERT(edcaf != nullptr);
-        for (const auto& userPackets : activeUserPackets)
+        for (const auto& userPackets : activeExchange->getUserPackets())
             for (auto packet : userPackets) {
                 auto header = packet->peekAtFront<Ieee80211DataHeader>();
                 actions->processTransmittedDataFrame(packet, header,
@@ -854,37 +863,9 @@ queueing::IPacketQueue *VhtHcfFeature::resolveVhtDlMuQueue(
     return edcaf == nullptr ? nullptr : edcaf->getPendingQueue();
 }
 
-void VhtHcfFeature::vhtDlMuPlanCommitted(uint64_t exchangeId,
-        Packet *containerPacket,
-        const std::vector<std::vector<Packet *>>& userPackets)
-{
-    if (exchangeId != dlMu.exchangeId || exchangeId == 0 ||
-            dlMu.phase != DlMuPhase::IDLE)
-        throw cRuntimeError("VHT DL MU plan committed for a stale exchange");
-    activeContainerPacket = containerPacket;
-    activeUserPackets = userPackets;
-    dlMu.phase = DlMuPhase::ACTIVE;
-}
-
 void VhtHcfFeature::processVhtDlMuFailedFrame(Packet *packet)
 {
     actions->processFailedFrame(packet);
-}
-
-void VhtHcfFeature::processVhtDlMuUserResult(uint64_t exchangeId,
-        unsigned int userIndex, UserResult result)
-{
-    if (exchangeId != dlMu.exchangeId ||
-            userIndex >= completedUsers.size() || completedUsers[userIndex])
-        return;
-    if (result == UserResult::BLOCK_ACK_RECEIVED ||
-            result == UserResult::BLOCK_ACK_TIMED_OUT)
-        completedUsers[userIndex] = true;
-    if (dlMu.phase == DlMuPhase::ACTIVE && !completedUsers.empty() &&
-            std::all_of(completedUsers.begin(), completedUsers.end(),
-                    [] (bool completed) { return completed; })) {
-        clearActiveDlMuExchange(exchangeId);
-    }
 }
 
 } // namespace ieee80211

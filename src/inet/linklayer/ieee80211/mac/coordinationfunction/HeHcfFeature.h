@@ -4,35 +4,48 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //
 
-#ifndef __INET_HEHCFRUNTIME_H
-#define __INET_HEHCFRUNTIME_H
+#ifndef __INET_HEHCFFEATURE_H
+#define __INET_HEHCFFEATURE_H
 
 #include <functional>
 #include <memory>
 
 #include "inet/common/INETDefs.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfFeatureSet.h"
+#include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckProcedure.h"
+#include "inet/linklayer/ieee80211/mac/contract/IRateControl.h"
+#include "inet/linklayer/ieee80211/mac/contract/IRecipientBlockAckAgreementHandler.h"
+#include "inet/linklayer/ieee80211/mac/contract/IRecipientBlockAckProcedure.h"
+#include "inet/linklayer/ieee80211/mac/contract/IRecipientQosMacDataService.h"
+#include "inet/linklayer/ieee80211/mac/contract/ITx.h"
+#include "inet/linklayer/ieee80211/mac/contract/IHcfFeatureSet.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfExchangeEngine.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeDlMuExchangeCoordinator.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeFrameDecorationPolicy.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfTxRxInterceptor.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeTxopCoordinatorService.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeTriggeredUlExchangeService.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeUlTriggerService.h"
+#include "inet/linklayer/ieee80211/mac/contract/IFrameSequenceHandler.h"
+#include "inet/linklayer/ieee80211/mac/queue/StationQueueBank.h"
 #include "inet/linklayer/ieee80211/mac/contract/IIeee80211HeLinkPhyContext.h"
-#include "inet/linklayer/ieee80211/mac/contract/IHeDlMuExchangeCallback.h"
 #include "inet/linklayer/ieee80211/mac/contract/IHeDlMuSnapshotSource.h"
 
 namespace inet {
 namespace ieee80211 {
 
 class Edca;
+class Edcaf;
+class FrameSequenceContext;
+class Hcf;
 class HeUlCoordinator;
+class IFrameSequence;
 class Ieee80211Mac;
 class IIeee80211HeDlScheduler;
 class IOriginatorBlockAckAgreementHandler;
 class IOriginatorBlockAckAgreementPolicy;
 
 /** HCF-owned HE service lifecycle and immutable link/PHY projection. */
-class INET_API HeHcfRuntime : public HeDlMuExchangeProvider::IActions,
+class INET_API HeHcfFeature : public HeDlMuExchangeCoordinator::IActions,
         public IHeDlMuSnapshotSource, public HeUlTriggerService::IActions,
         public IHeUlMuExchangeCallback, public IHeUlMuSnapshotSource,
         public HeTriggeredUlExchangeService::IActions,
@@ -53,12 +66,13 @@ class INET_API HeHcfRuntime : public HeDlMuExchangeProvider::IActions,
     };
 
   private:
-    HcfHeRuntimeServices services;
+    HcfHeFeatureServices services;
     Hcf *hcf;
     Bindings bindings;
     std::unique_ptr<IIeee80211HeLinkPhyContext> linkPhyContext;
     bool started = false;
     HeTxopCoordinatorService txopCoordinator;
+    HeDlMuExchangeCoordinator dlMuExchangeCoordinator;
     IIeee80211HeDlScheduler *dlScheduler = nullptr;
     HeUlCoordinator *ulCoordinator = nullptr;
     HeUlTriggerService ulTriggerService;
@@ -82,49 +96,41 @@ class INET_API HeHcfRuntime : public HeDlMuExchangeProvider::IActions,
     HcfExchangeEngine *exchangeEngine = nullptr;
     IRateControl *dataAndMgmtRateControl = nullptr;
 
-    cPar& par(const char *name) const { return hcf->par(name); }
-    cModule *getSubmodule(const char *name) const { return hcf->getSubmodule(name); }
-    simtime_t simTime() const { return omnetpp::simTime(); }
-    void take(cOwnedObject *object) { hcf->take(object); }
-    void scheduleAt(simtime_t time, cMessage *timer) { hcf->scheduleAt(time, timer); }
-    void cancelEvent(cMessage *timer) { hcf->cancelEvent(timer); }
-    void cancelAndDelete(cMessage *timer) { hcf->cancelAndDelete(timer); }
-    void sendUp(const std::vector<Packet *>& packets) { hcf->sendUp(packets); }
-    bool isFrameSequenceRunning() const { return hcf->isFrameSequenceRunning(); }
-    auto makeExchangeActions() { return hcf->makeExchangeActions(); }
-    FrameSequenceContext *buildContext(AccessCategory ac) { return hcf->buildContext(ac); }
-    void startExchangeFrameSequence(IFrameSequence *sequence, FrameSequenceContext *context)
-        { hcf->startExchangeFrameSequence(sequence, context); }
-    IFrameSequenceHandler::ICallback *getFrameSequenceCallbackForLegacyAdapter() const
-        { return hcf->getFrameSequenceCallbackForLegacyAdapter(); }
+    cPar& par(const char *name) const;
+    cModule *getSubmodule(const char *name) const;
+    simtime_t simTime() const;
+    void take(cOwnedObject *object);
+    void scheduleAt(simtime_t time, cMessage *timer);
+    void cancelEvent(cMessage *timer);
+    void cancelAndDelete(cMessage *timer);
+    void sendUp(const std::vector<Packet *>& packets);
+    bool isFrameSequenceRunning() const;
+    HcfExchangeEngine::Actions makeExchangeActions();
+    FrameSequenceContext *buildContext(AccessCategory ac);
+    void startExchangeFrameSequence(IFrameSequence *sequence, FrameSequenceContext *context);
+    IFrameSequenceHandler::ICallback *getFrameSequenceCallbackForLegacyAdapter() const;
     uint32_t calculateBufferedTrafficServiceBytes(Edcaf *edcaf,
             const MacAddress& peer, int tid,
-            const std::vector<Packet *>& packets) const
-        { return hcf->calculateBufferedTrafficServiceBytes(edcaf, peer, tid, packets); }
-    static void addBufferedTrafficServiceBytes(uint32_t& total, uint64_t amount)
-        { HcfMacSapTracker::addBufferedTrafficServiceBytes(total, amount); }
+            const std::vector<Packet *>& packets) const;
+    static void addBufferedTrafficServiceBytes(uint32_t& total, uint64_t amount);
     void originatorProcessTransmittedDataFrame(Packet *packet,
-            const Ptr<const Ieee80211DataHeader>& header, AccessCategory ac)
-        { hcf->originatorProcessTransmittedDataFrame(packet, header, ac); }
+            const Ptr<const Ieee80211DataHeader>& header, AccessCategory ac);
     void originatorProcessTransmittedManagementFrame(
-            const Ptr<const Ieee80211MgmtHeader>& header, AccessCategory ac)
-        { hcf->originatorProcessTransmittedManagementFrame(header, ac); }
+            const Ptr<const Ieee80211MgmtHeader>& header, AccessCategory ac);
     void processFailedBlockAckReq(Edcaf *edcaf,
-            const Ptr<const Ieee80211BlockAckReq>& header, bool retry)
-        { hcf->processFailedBlockAckReq(edcaf, header, retry); }
+            const Ptr<const Ieee80211BlockAckReq>& header, bool retry);
     void processReceivedBlockAck(Edcaf *edcaf,
-            const Ptr<const Ieee80211BlockAck>& header, AccessCategory ac)
-        { hcf->processReceivedBlockAck(edcaf, header, ac); }
+            const Ptr<const Ieee80211BlockAck>& header, AccessCategory ac);
     IOriginatorBlockAckAgreementHandler *getOriginatorBlockAckAgreementHandler() const
         { return originatorBlockAckAgreementHandler.get(); }
     IOriginatorMacDataService *getOriginatorMacDataService() const
         { return originatorDataService; }
 
   public:
-    HeHcfRuntime(const HcfHeRuntimeServices& services, const Bindings& bindings,
+    HeHcfFeature(const HcfHeFeatureServices& services, const Bindings& bindings,
             simtime_t csiValidityDuration, double defaultCsiLeakage,
             const std::string& csiLeakageOverrides);
-    ~HeHcfRuntime();
+    ~HeHcfFeature();
 
     void initialize();
     void initializeLinkLayer();
@@ -134,7 +140,8 @@ class INET_API HeHcfRuntime : public HeDlMuExchangeProvider::IActions,
     void shutdown();
     HePeerStateService& getPeerStateService() const;
     HeQueueService& getQueueService() const;
-    HeDlMuExchangeProvider& getDlMuExchangeProvider() const;
+    HeDlMuExchangeCoordinator& getDlMuExchangeCoordinator();
+    const HeDlMuExchangeCoordinator& getDlMuExchangeCoordinator() const;
     HeTriggeredUlExchangeService& getTriggeredUlExchangeService() const;
     HeSoundingService& getSoundingService() const;
     HeUlCoordinator& getUlCoordinator() const { return *ulCoordinator; }
@@ -171,7 +178,7 @@ class INET_API HeHcfRuntime : public HeDlMuExchangeProvider::IActions,
     HeTxopCoordinatorService::GrantSnapshot buildGrantSelectionContext(AccessCategory, bool);
     HeTxopCoordinatorService::GrantSnapshot buildGrantSelectionContext(AccessCategory,
             bool heMode, bool hasEligibleFrame,
-            const HeDlMuExchangeProvider::StartupParameters& parameters,
+            const HeDlMuExchangeCoordinator::StartupParameters& parameters,
             const std::function<std::optional<HeUlTriggerService::PreparedStart>()>& prepareUl,
             const std::function<HeDlMuPreparationSnapshot()>& captureDl,
             const std::function<bool()>& hasCommonFrame);
@@ -182,7 +189,7 @@ class INET_API HeHcfRuntime : public HeDlMuExchangeProvider::IActions,
     StationQueueBank *getStationQueueBank(const MacAddress&) const;
     HePeerStateService& getHePeerStateService() const;
     HeQueueService& getHeQueueService() const;
-    HeDlMuExchangeProvider& getHeDlMuExchangeProvider() const;
+    const HeDlMuExchangeCoordinator& getHeDlMuExchangeCoordinator() const;
     HeTriggeredUlExchangeService& getHeTriggeredUlExchangeService() const;
     queueing::IPacketQueue *resolveHeQueue(HcfQueueToken) const;
     void invalidatePeerDerivedState(const MacAddress&);
@@ -213,12 +220,14 @@ class INET_API HeHcfRuntime : public HeDlMuExchangeProvider::IActions,
     bool stageHeDlMuPacket(HcfQueueToken, HcfPacketIdentity, AccessCategory) override;
     bool startHeDlMuSingleUserIfEligible(AccessCategory) override;
     void startHeSoundingExchange(const HeSoundingService::StartAction&, AccessCategory) override;
-    HeDlMuExchangeProvider::HeDlMuProtectionSnapshot captureHeDlMuProtection(AccessCategory) const override;
+    HeDlMuExchangeCoordinator::HeDlMuProtectionSnapshot captureHeDlMuProtection(AccessCategory) const override;
     void configureHeDlMuProtection(AccessCategory) override;
     void restoreHeDlMuProtection(AccessCategory,
-            const HeDlMuExchangeProvider::HeDlMuProtectionSnapshot&) override;
+            const HeDlMuExchangeCoordinator::HeDlMuProtectionSnapshot&) override;
     bool startHeDlMuExchange(AccessCategory, const HeDlMuPlan&, uint64_t,
-            HeDlMuTxOpFs::AckMethod, const HeDlMuExchangeProvider::StartupParameters&) override;
+            HeDlMuTxOpFs::AckMethod,
+            const HeDlMuExchangeCoordinator::StartupParameters&,
+            IHeDlMuExecutionServices *, IHeDlMuExchangeEvents *) override;
     queueing::IPacketQueue *resolveHeDlMuQueue(HcfQueueToken) const override;
     Packet *getReservedHeDlMuPacket(uint64_t, const MacAddress&) const override;
     bool isReservedHeDlMuPacket(uint64_t, const MacAddress&, const Packet *) const override;
@@ -230,10 +239,10 @@ class INET_API HeHcfRuntime : public HeDlMuExchangeProvider::IActions,
     uint8_t getHeDlMuBssColor() const override;
     uint16_t getHeDlMuAssociationId(const MacAddress&) const override;
     std::optional<Ieee80211NegotiatedHeCapabilities> getHeDlMuNegotiatedCapabilities(const MacAddress&) const override;
-    void heDlMuPlanFinalized(uint64_t, const std::vector<HeDlMuMember>&) override;
-    void heDlMuPlanCommitted(uint64_t, Packet *, const std::vector<HeDlMuMember>&) override;
-    void heDlMuMemberTransmitted(uint64_t, const HeDlMuMember&) override;
-    void heDlMuUserOutcome(uint64_t, const MacAddress&, HeDlMuUserOutcome) override;
+    void notifyHeDlMuMemberTransmitted(HeDlMuExchangeId,
+            const HeDlMuMember&) override;
+    void notifyHeDlMuUserOutcome(HeDlMuExchangeId,
+            const MacAddress&, HeDlMuUserOutcome) override;
     void processTriggeredUlFrame(Packet *, const Ptr<const Ieee80211DataHeader>&, uint16_t);
     void processTriggeredUlManagementFrame(Packet *, const Ptr<const Ieee80211MgmtHeader>&, uint16_t);
     bool canRequestHeUlTrigger() const override;
@@ -285,6 +294,7 @@ class INET_API HeHcfRuntime : public HeDlMuExchangeProvider::IActions,
             const MacAddress&, uint16_t, uint64_t) override;
     void startTriggeredUlMuEdcaTimer(AccessCategory) override;
     void frameSequenceCompleted();
+    void frameSequenceAborted();
 };
 
 } // namespace ieee80211

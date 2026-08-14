@@ -10,7 +10,7 @@
 #include "inet/linklayer/ieee80211/mac/blockack/BlockAckAgreementUtils.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfRetryService.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HcfFeatureSet.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfRuntime.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfFeature.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeUlCoordinator.h"
 #include "inet/linklayer/ieee80211/mac/contract/DurationFinalizedReq.h"
 #include "inet/linklayer/ieee80211/mac/contract/IIeee80211HtRateControl.h"
@@ -56,11 +56,10 @@ namespace ieee80211 {
 
 using namespace inet::physicallayer;
 
-class HcfVhtRuntime final : public VhtHcfFeature::IActions
+class HcfVhtActions final : public VhtHcfFeature::IActions
 {
   private:
     Hcf *hcf;
-    VhtHcfFeature feature;
     mutable bool continuingFrameSequence = false;
     mutable bool continuingRecipientFrame = false;
     mutable bool continuingSetFrameMode = false;
@@ -79,28 +78,7 @@ class HcfVhtRuntime final : public VhtHcfFeature::IActions
     };
 
   public:
-    explicit HcfVhtRuntime(Hcf *hcf) : hcf(hcf) {}
-
-    void initialize()
-    {
-        bool enableSu = hcf->par("enableVhtSuBeamforming");
-        bool enableMu = hcf->par("enableVhtDlMuMimo");
-        auto groupId = hcf->par("vhtDlMuGroupId").intValue();
-        if (groupId < 1 || groupId > 62)
-            throw cRuntimeError("vhtDlMuGroupId must be in the range 1..62");
-        IIeee80211VhtPacketRadio *radio = nullptr;
-        if (enableSu || enableMu) {
-            auto radioModule = getContainingNicModule(hcf)->getSubmodule("radio");
-            VhtHcfFeature::validatePacketLevelRadio(radioModule);
-            radio = check_and_cast<IIeee80211VhtPacketRadio *>(radioModule);
-        }
-        feature.configure(this, enableSu, enableMu, groupId,
-                hcf->par("beamformingGain"), hcf->par("vhtCsiValidityDuration"),
-                check_and_cast<IVhtSoundingCoordinator *>(hcf->getSubmodule("soundingCoordinator")),
-                check_and_cast<IVhtGroupIdManager *>(hcf->getSubmodule("groupIdManager")),
-                check_and_cast<IIeee80211VhtDlMuScheduler *>(hcf->getSubmodule("dlMuScheduler")),
-                radio);
-    }
+    explicit HcfVhtActions(Hcf *hcf) : hcf(hcf) {}
 
     bool isContinuingFrameSequence() const { return continuingFrameSequence; }
     bool isContinuingRecipientFrame() const { return continuingRecipientFrame; }
@@ -109,36 +87,6 @@ class HcfVhtRuntime final : public VhtHcfFeature::IActions
     bool isContinuingTransmittedFrame() const { return continuingTransmittedFrame; }
     bool isContinuingReceivedFrame() const { return continuingReceivedFrame; }
     bool isContinuingTransmissionComplete() const { return continuingTransmissionComplete; }
-    void modeSetChanged() { feature.modeSetChanged(); }
-    void setTxOpFactoryForTesting(VhtHcfFeature::ITxOpFactory *factory)
-        { feature.setTxOpFactoryForTesting(factory); }
-    void invalidatePeer(const MacAddress& peer) { feature.invalidatePeer(peer); }
-    void startFrameSequence(AccessCategory ac)
-    {
-        if (!hcf->hasFrameToTransmit(ac)) {
-            hcf->releaseChannel(ac);
-            return;
-        }
-        auto snapshot = feature.prepareGrantSnapshot(ac);
-        switch (snapshot.startKind) {
-            case VhtGrantSnapshot::StartKind::COMMON_SINGLE_USER:
-                hcf->startSingleUserExchange(ac);
-                return;
-            case VhtGrantSnapshot::StartKind::SU_SOUNDING:
-            case VhtGrantSnapshot::StartKind::MU_SOUNDING:
-                feature.startSounding(snapshot);
-                return;
-            case VhtGrantSnapshot::StartKind::GROUP_MANAGEMENT:
-            case VhtGrantSnapshot::StartKind::BLOCK_ACK_PREREQUISITE:
-            case VhtGrantSnapshot::StartKind::DL_MULTIUSER:
-                if (feature.commitPreparedGrant(snapshot) ==
-                        VhtHcfFeature::GrantDisposition::FINISHED_SYNCHRONOUSLY)
-                    hcf->releaseChannel(ac);
-                return;
-        }
-        throw cRuntimeError("Unknown VHT grant start kind");
-    }
-
     virtual Ieee80211Mac *getMac() const override { return hcf->mac; }
     virtual Ieee80211ModeSet *getModeSet() const override { return hcf->modeSet; }
     virtual Edca *getEdca() const override { return hcf->edca; }
@@ -209,23 +157,11 @@ class HcfVhtRuntime final : public VhtHcfFeature::IActions
     virtual void processFailedFrame(Packet *packet) override
         { hcf->originatorProcessFailedFrame(packet); }
     virtual void reclaimPacketOwnership(Packet *packet) override { hcf->take(packet); }
-
-    bool processHeaderlessNdpIndication(Packet *packet)
-        { return feature.processHeaderlessNdpIndication(packet); }
-    void recipientProcessReceivedFrame(Packet *packet,
-            const Ptr<const Ieee80211MacHeader>& header)
-        { feature.recipientProcessReceivedFrame(packet, header); }
-    void setFrameMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header,
-            const IIeee80211Mode *mode) const
-        { feature.setFrameMode(packet, header, mode); }
-    void transmitFrame(Packet *packet, simtime_t ifs) { feature.transmitFrame(packet, ifs); }
-    void originatorProcessTransmittedFrame(Packet *packet)
-        { feature.originatorProcessTransmittedFrame(packet); }
-    void originatorProcessReceivedFrame(Packet *packet, Packet *lastTransmittedPacket)
-        { feature.originatorProcessReceivedFrame(packet, lastTransmittedPacket); }
-    void transmissionComplete(Packet *packet,
-            const Ptr<const Ieee80211MacHeader>& header)
-        { feature.transmissionComplete(packet, header); }
+    virtual bool hasFrameToTransmit(AccessCategory ac) const override
+        { return hcf->hasFrameToTransmit(ac); }
+    virtual void releaseChannel(AccessCategory ac) override { hcf->releaseChannel(ac); }
+    virtual void startSingleUserExchange(AccessCategory ac) override
+        { hcf->startSingleUserExchange(ac); }
 };
 
 class HcfRecipientActions final : public HcfRecipientService::IActions
@@ -1380,8 +1316,8 @@ void Hcf::tagMacSapServiceDataUnit(Packet *packet,
 uint32_t Hcf::getBufferedTrafficServiceBytes(
         Edcaf *edcaf, const MacAddress& peer, int tid) const
 {
-    if (heRuntime != nullptr)
-        return heRuntime->getBufferedTrafficServiceBytes(edcaf, peer, tid);
+    if (heFeature != nullptr)
+        return heFeature->getBufferedTrafficServiceBytes(edcaf, peer, tid);
     return calculateBufferedTrafficServiceBytes(edcaf, peer, tid, {});
 }
 
@@ -1442,15 +1378,32 @@ void Hcf::initialize(int stage)
             originatorDataService->setBlockAckAgreementHandler(
                     originatorBlockAckAgreementHandler.get());
         }
-        if (featureSet->getAmendmentRuntimeKind() == HcfAmendmentRuntimeKind::VHT) {
-            vhtRuntime = std::make_unique<HcfVhtRuntime>(this);
-            vhtRuntime->initialize();
+        if (featureSet->getFeatureKind() == HcfFeatureKind::VHT) {
+            vhtActions = std::make_unique<HcfVhtActions>(this);
+            vhtFeature = std::make_unique<VhtHcfFeature>();
+            bool enableSu = par("enableVhtSuBeamforming");
+            bool enableMu = par("enableVhtDlMuMimo");
+            auto groupId = par("vhtDlMuGroupId").intValue();
+            if (groupId < 1 || groupId > 62)
+                throw cRuntimeError("vhtDlMuGroupId must be in the range 1..62");
+            IIeee80211VhtPacketRadio *radio = nullptr;
+            if (enableSu || enableMu) {
+                auto radioModule = getContainingNicModule(this)->getSubmodule("radio");
+                VhtHcfFeature::validatePacketLevelRadio(radioModule);
+                radio = check_and_cast<IIeee80211VhtPacketRadio *>(radioModule);
+            }
+            vhtFeature->configure(vhtActions.get(), enableSu, enableMu, groupId,
+                    par("beamformingGain"), par("vhtCsiValidityDuration"),
+                    check_and_cast<IVhtSoundingCoordinator *>(getSubmodule("soundingCoordinator")),
+                    check_and_cast<IVhtGroupIdManager *>(getSubmodule("groupIdManager")),
+                    check_and_cast<IIeee80211VhtDlMuScheduler *>(getSubmodule("dlMuScheduler")),
+                    radio);
         }
-        if (featureSet->getAmendmentRuntimeKind() == HcfAmendmentRuntimeKind::HE) {
-            auto heServices = featureSet->getHeRuntimeServices();
+        if (featureSet->getFeatureKind() == HcfFeatureKind::HE) {
+            auto heServices = featureSet->getHeFeatureServices();
             if (!heServices.isComplete())
-                throw cRuntimeError("HE HCF feature set returned incomplete runtime services");
-            HeHcfRuntime::Bindings bindings;
+                throw cRuntimeError("HE HCF feature set returned incomplete feature services");
+            HeHcfFeature::Bindings bindings;
             bindings.owner = this;
             bindings.mac = mac;
             bindings.edca = edca;
@@ -1463,13 +1416,13 @@ void Hcf::initialize(int stage)
             bindings.isFrameSequenceRunning = [this] { return isFrameSequenceRunning(); };
             bindings.invalidateBasePeer = [this] (const MacAddress& peer) {
                 htFeature->invalidatePeer(peer);
-                if (vhtRuntime != nullptr)
-                    vhtRuntime->invalidatePeer(peer);
+                if (vhtFeature != nullptr)
+                    vhtFeature->invalidatePeer(peer);
             };
-            heRuntime = std::make_unique<HeHcfRuntime>(heServices, bindings,
+            heFeature = std::make_unique<HeHcfFeature>(heServices, bindings,
                     par("csiValidityDuration"), par("defaultCsiLeakage"),
                     par("csiLeakageOverrides").stdstringValue());
-            heRuntime->initialize();
+            heFeature->initialize();
         }
     }
     else if (stage == INITSTAGE_LINK_LAYER) {
@@ -1487,8 +1440,8 @@ void Hcf::initialize(int stage)
                 static_cast<Ieee80211HtFeedbackKind>(
                         par("htSoundingFeedbackKind").intValue()),
                 par("htSoundingRetryInterval"));
-        if (heRuntime != nullptr)
-            heRuntime->initializeLinkLayer();
+        if (heFeature != nullptr)
+            heFeature->initializeLinkLayer();
     }
 }
 
@@ -1496,8 +1449,8 @@ void Hcf::receiveSignal(cComponent *source, simsignal_t signalID,
         cObject *obj, cObject *details)
 {
     ModeSetListener::receiveSignal(source, signalID, obj, details);
-    if (signalID == modesetChangedSignal && vhtRuntime != nullptr)
-        vhtRuntime->modeSetChanged();
+    if (signalID == modesetChangedSignal && vhtFeature != nullptr)
+        vhtFeature->modeSetChanged();
 }
 
 std::string Hcf::getFrameSequenceInfo() const
@@ -1533,7 +1486,7 @@ void Hcf::forEachChild(cVisitor *v)
 
 void Hcf::handleMessage(cMessage *msg)
 {
-    if (heRuntime != nullptr && heRuntime->handleMessage(msg))
+    if (heFeature != nullptr && heFeature->handleMessage(msg))
         return;
     if (!exchangeEngine->handleMessage(msg, makeExchangeActions()))
         throw cRuntimeError("Unknown msg type");
@@ -1541,8 +1494,8 @@ void Hcf::handleMessage(cMessage *msg)
 
 void Hcf::finish()
 {
-    if (heRuntime != nullptr)
-        heRuntime->finish();
+    if (heFeature != nullptr)
+        heFeature->finish();
     cSimpleModule::finish();
 }
 
@@ -1581,6 +1534,12 @@ HcfExchangeEngine::Actions Hcf::makeExchangeActions()
     actions.originatorProcessFailedFrame = [this] (Packet *packet) { originatorProcessFailedFrame(packet); };
     actions.frameSequenceStarted = [this] (const FrameSequenceContext *context) {
         emit(cComponent::registerSignal("frameSequenceStarted"), context);
+    };
+    actions.frameSequenceAborted = [this] {
+        if (heFeature != nullptr)
+            heFeature->frameSequenceAborted();
+        else if (vhtFeature != nullptr)
+            vhtFeature->frameSequenceAborted();
     };
     actions.frameSequenceFinished = [this] (const FrameSequenceContext *) { frameSequenceFinished(); };
     actions.resumeContention = [this] { resumeContention(); };
@@ -1917,12 +1876,12 @@ void Hcf::channelGranted(IChannelAccess *channelAccess)
         // IEEE Std 802.11-2024, 10.23.2.3 and 10.23.2.4: an EDCAF whose
         // backoff reaches zero obtains an EDCA TXOP for its primary AC.
         edcaf->getTxopProcedure()->startTxop(ac);
-        if (heRuntime != nullptr) {
-            heRuntime->startFrameSequence(ac);
+        if (heFeature != nullptr) {
+            heFeature->startFrameSequence(ac);
             return;
         }
-        if (vhtRuntime != nullptr) {
-            vhtRuntime->startFrameSequence(ac);
+        if (vhtFeature != nullptr) {
+            vhtFeature->startFrameSequence(ac);
             return;
         }
         if (!hasEligibleFrame) {
@@ -2116,12 +2075,12 @@ void Hcf::startSingleUserExchange(AccessCategory ac)
 
 void Hcf::startFrameSequence(AccessCategory ac)
 {
-    if (heRuntime != nullptr) {
-        heRuntime->startFrameSequence(ac);
+    if (heFeature != nullptr) {
+        heFeature->startFrameSequence(ac);
         return;
     }
-    if (vhtRuntime != nullptr && !vhtRuntime->isContinuingFrameSequence()) {
-        vhtRuntime->startFrameSequence(ac);
+    if (vhtFeature != nullptr && !vhtActions->isContinuingFrameSequence()) {
+        vhtFeature->startFrameSequence(ac);
         return;
     }
     if (!hasFrameToTransmit(ac)) {
@@ -2134,8 +2093,8 @@ void Hcf::startFrameSequence(AccessCategory ac)
 
 bool Hcf::processHeaderlessNdpIndication(Packet *packet)
 {
-    return vhtRuntime != nullptr &&
-            vhtRuntime->processHeaderlessNdpIndication(packet);
+    return vhtFeature != nullptr &&
+            vhtFeature->processHeaderlessNdpIndication(packet);
 }
 
 void Hcf::resumeContention()
@@ -2183,8 +2142,8 @@ void Hcf::handleEdcafInternalCollision(Edcaf *edcaf)
 
 void Hcf::handleInternalCollision(std::vector<Edcaf *> internallyCollidedEdcafs)
 {
-    if (heRuntime != nullptr) {
-        heRuntime->handleInternalCollision(std::move(internallyCollidedEdcafs));
+    if (heFeature != nullptr) {
+        heFeature->handleInternalCollision(std::move(internallyCollidedEdcafs));
         return;
     }
     for (auto edcaf : internallyCollidedEdcafs)
@@ -2221,16 +2180,16 @@ void Hcf::frameSequenceFinished()
     }
     else
         throw cRuntimeError("Frame sequence finished but channel owner not found!");
-    if (heRuntime != nullptr)
-        heRuntime->frameSequenceCompleted();
+    if (heFeature != nullptr)
+        heFeature->frameSequenceCompleted();
 }
 
 void Hcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
 {
     if (testActionPort.observeRecipientFrame)
         testActionPort.observeRecipientFrame(packet, header);
-    if (vhtRuntime != nullptr && !vhtRuntime->isContinuingRecipientFrame()) {
-        vhtRuntime->recipientProcessReceivedFrame(packet, header);
+    if (vhtFeature != nullptr && !vhtActions->isContinuingRecipientFrame()) {
+        vhtFeature->recipientProcessReceivedFrame(packet, header);
         return;
     }
     if (txRxInterceptor != nullptr) {
@@ -2274,8 +2233,8 @@ void Hcf::recipientProcessReceivedManagementFrame(const Ptr<const Ieee80211MgmtH
 
 void Hcf::transmissionComplete(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
 {
-    if (vhtRuntime != nullptr && !vhtRuntime->isContinuingTransmissionComplete()) {
-        vhtRuntime->transmissionComplete(packet, header);
+    if (vhtFeature != nullptr && !vhtActions->isContinuingTransmissionComplete()) {
+        vhtFeature->transmissionComplete(packet, header);
         return;
     }
     Enter_Method("transmissionComplete");
@@ -2372,8 +2331,8 @@ void Hcf::originatorProcessTransmittedFrame(Packet *packet)
         testActionPort.originatorProcessTransmittedFrame(packet);
         return;
     }
-    if (vhtRuntime != nullptr && !vhtRuntime->isContinuingTransmittedFrame()) {
-        vhtRuntime->originatorProcessTransmittedFrame(packet);
+    if (vhtFeature != nullptr && !vhtActions->isContinuingTransmittedFrame()) {
+        vhtFeature->originatorProcessTransmittedFrame(packet);
         return;
     }
     Enter_Method("originatorProcessTransmittedFrame");
@@ -2511,8 +2470,8 @@ void Hcf::originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastTra
                 lastTransmittedPacket);
         return;
     }
-    if (vhtRuntime != nullptr && !vhtRuntime->isContinuingReceivedFrame()) {
-        vhtRuntime->originatorProcessReceivedFrame(receivedPacket, lastTransmittedPacket);
+    if (vhtFeature != nullptr && !vhtActions->isContinuingReceivedFrame()) {
+        vhtFeature->originatorProcessReceivedFrame(receivedPacket, lastTransmittedPacket);
         return;
     }
     if (receivedPacket == nullptr)
@@ -2637,14 +2596,14 @@ bool Hcf::hasCommonFrameToTransmit(AccessCategory ac) const
 
 bool Hcf::hasFrameToTransmit(AccessCategory ac)
 {
-    return heRuntime != nullptr ? heRuntime->hasFrameToTransmit(ac) :
+    return heFeature != nullptr ? heFeature->hasFrameToTransmit(ac) :
             hasCommonFrameToTransmit(ac);
 }
 
 bool Hcf::hasFrameToTransmit()
 {
-    if (heRuntime != nullptr)
-        return heRuntime->hasFrameToTransmit();
+    if (heFeature != nullptr)
+        return heFeature->hasFrameToTransmit();
     if (auto twtManager = mac->getTwtManager(); twtManager != nullptr && !twtManager->isStationAwake())
         return false;
     auto edcaf = edca->getChannelOwner();
@@ -2656,8 +2615,8 @@ bool Hcf::hasFrameToTransmit()
 
 void Hcf::legacyPreambleReceived(const Packet *packet)
 {
-    if (heRuntime != nullptr)
-        heRuntime->legacyPreambleReceived(packet);
+    if (heFeature != nullptr)
+        heFeature->legacyPreambleReceived(packet);
 }
 
 void Hcf::originatorProcessBlockAckResult(
@@ -2667,15 +2626,15 @@ void Hcf::originatorProcessBlockAckResult(
 {
     if (testActionPort.observeOriginatorBlockAckResult)
         testActionPort.observeOriginatorBlockAckResult(blockAck, ackedFrames, ac);
-    if (heRuntime != nullptr)
-        heRuntime->originatorProcessBlockAckResult(blockAck, ackedFrames, ac);
+    if (heFeature != nullptr)
+        heFeature->originatorProcessBlockAckResult(blockAck, ackedFrames, ac);
 }
 
 void Hcf::twtServicePeriodChanged()
 {
     Enter_Method("twtServicePeriodChanged");
-    if (heRuntime != nullptr)
-        heRuntime->getHePeerStateService().handleTwtBoundary();
+    if (heFeature != nullptr)
+        heFeature->getHePeerStateService().handleTwtBoundary();
     // Service-period changes can coincide with a TXOP or a response wait.
     // Queue eligibility changes are picked up when that frame sequence ends.
     if (isFrameSequenceRunning() || edca->getChannelOwner() != nullptr)
@@ -2700,8 +2659,8 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
         testActionPort.transmitFrame(packet, ifs);
         return;
     }
-    if (vhtRuntime != nullptr && !vhtRuntime->isContinuingTransmitFrame()) {
-        vhtRuntime->transmitFrame(packet, ifs);
+    if (vhtFeature != nullptr && !vhtActions->isContinuingTransmitFrame()) {
+        vhtFeature->transmitFrame(packet, ifs);
         return;
     }
     Enter_Method("transmitFrame");
@@ -2794,8 +2753,8 @@ void Hcf::setFrameMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& head
 {
     if (testActionPort.observeSetFrameMode)
         testActionPort.observeSetFrameMode(packet, header, mode);
-    if (vhtRuntime != nullptr && !vhtRuntime->isContinuingSetFrameMode()) {
-        vhtRuntime->setFrameMode(packet, header, mode);
+    if (vhtFeature != nullptr && !vhtActions->isContinuingSetFrameMode()) {
+        vhtFeature->setFrameMode(packet, header, mode);
         return;
     }
     ASSERT(mode != nullptr);
@@ -2832,43 +2791,50 @@ Hcf::Hcf() = default;
 
 Hcf::~Hcf()
 {
-    heRuntime.reset();
-    vhtRuntime.reset();
-    // Drop all non-owning feature/provider references while the NED-owned
-    // feature-set submodule hierarchy is still alive.
     if (exchangeEngine != nullptr)
-        exchangeEngine->cancelTimers(makeExchangeActions());
+        exchangeEngine->shutdown(makeExchangeActions());
+    // OMNeT++ may delete NED-owned feature-set submodules before invoking the
+    // parent module destructor. Normal lifecycle teardown already stopped the
+    // external HE services from finish(); only call through while that service
+    // owner is still present during abnormal direct module deletion.
+    if (heFeature != nullptr && getSubmodule("featureSet") != nullptr)
+        heFeature->shutdown();
+    if (vhtFeature != nullptr)
+        vhtFeature->shutdown();
+    heFeature.reset();
+    vhtFeature.reset();
+    vhtActions.reset();
 }
 
-HeHcfRuntime& Hcf::getHeRuntime() const
+HeHcfFeature& Hcf::getHeFeature() const
 {
-    if (heRuntime == nullptr)
-        throw cRuntimeError("HE runtime is not configured");
-    return *heRuntime;
+    if (heFeature == nullptr)
+        throw cRuntimeError("HE feature is not configured");
+    return *heFeature;
 }
 
 void Hcf::setVhtDlMuTxOpFactoryForTesting(
         VhtHcfFeature::ITxOpFactory *factory)
 {
-    if (vhtRuntime == nullptr)
-        throw cRuntimeError("VHT runtime is not configured");
-    vhtRuntime->setTxOpFactoryForTesting(factory);
+    if (vhtFeature == nullptr)
+        throw cRuntimeError("VHT feature is not configured");
+    vhtFeature->setTxOpFactoryForTesting(factory);
 }
 
 queueing::IPacketQueue *Hcf::getPerStaQueue(const MacAddress& staAddr, AccessCategory ac)
 {
-    if (heRuntime != nullptr)
-        return heRuntime->getPerStaQueue(staAddr, ac);
+    if (heFeature != nullptr)
+        return heFeature->getPerStaQueue(staAddr, ac);
     return edca->getEdcaf(ac)->getPendingQueue();
 }
 
 void Hcf::invalidatePeerDerivedState(const MacAddress& peer)
 {
     htFeature->invalidatePeer(peer);
-    if (vhtRuntime != nullptr)
-        vhtRuntime->invalidatePeer(peer);
-    if (heRuntime != nullptr)
-        heRuntime->invalidatePeerDerivedState(peer);
+    if (vhtFeature != nullptr)
+        vhtFeature->invalidatePeer(peer);
+    if (heFeature != nullptr)
+        heFeature->invalidatePeerDerivedState(peer);
 }
 
 } // namespace ieee80211

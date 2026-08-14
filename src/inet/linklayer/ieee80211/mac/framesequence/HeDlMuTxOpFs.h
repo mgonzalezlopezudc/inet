@@ -15,7 +15,8 @@
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequence.h"
 #include "inet/linklayer/ieee80211/mac/contract/IAckHandler.h"
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequenceHandler.h"
-#include "inet/linklayer/ieee80211/mac/contract/IHeDlMuExchangeCallback.h"
+#include "inet/linklayer/ieee80211/mac/contract/IHeDlMuExecutionServices.h"
+#include "inet/linklayer/ieee80211/mac/contract/IHeDlMuExchangeEvents.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuPlan.h"
 #include "inet/linklayer/ieee80211/mac/scheduler/IIeee80211HeDlScheduler.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
@@ -77,8 +78,10 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
     queueing::IPacketQueue *pendingQueue = nullptr;
     IAckHandler *ackHandler = nullptr;
     IFrameSequenceHandler::ICallback *callback = nullptr;
-    IHeDlMuExchangeCallback *heDlMuCallback = nullptr;
-    std::unique_ptr<IHeDlMuExchangeCallback> ownedCompatibilityCallback;
+    IHeDlMuExecutionServices *heServices = nullptr;
+    IHeDlMuExchangeEvents *heEvents = nullptr;
+    std::unique_ptr<IHeDlMuExecutionServices> ownedCompatibilityServices;
+    IHeDlMuExchangeEvents *ownedCompatibilityEvents = nullptr;
     ITransactionObserver *transactionObserver = nullptr;
     uint64_t transactionToken = 0;
     int maxAmpduMpduCount = 16;
@@ -104,6 +107,16 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
     /** Build a mutation-free commit image from the scheduler allocation and pending queue. */
     std::unique_ptr<PreparedCommit> buildPreparedCommit(FrameSequenceContext *context);
     virtual MacAddress getTransmitterAddress() const;
+    HeDlMuTxOpFs(const HeDlMuPlan& dlPlan,
+                 physicallayer::Ieee80211ModeSet *modeSet,
+                 queueing::IPacketQueue *pendingQueue,
+                 IAckHandler *ackHandler,
+                 IFrameSequenceHandler::ICallback *callback,
+                 std::unique_ptr<IHeDlMuExecutionServices> compatibilityServices,
+                 int maxAmpduMpduCount,
+                 int maxHeMuPsduLength,
+                 simtime_t maxHeMuPpduDuration,
+                 AckMethod ackMethod);
     friend class HeDlMuPerStaBlockAckFs;
     friend class HeDlMuBarBlockAckFs;
 
@@ -115,8 +128,9 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
                  queueing::IPacketQueue *pendingQueue,
                  IAckHandler *ackHandler,
                  IFrameSequenceHandler::ICallback *callback,
-                 IHeDlMuExchangeCallback *heDlMuCallback,
-                 uint64_t transactionToken,
+                 IHeDlMuExecutionServices *heServices,
+                 IHeDlMuExchangeEvents *heEvents,
+                 HeDlMuExchangeId transactionToken,
                  int maxAmpduMpduCount = 16,
                  int maxHeMuPsduLength = 6500631,
                  simtime_t maxHeMuPpduDuration = SimTime(5.484, SIMTIME_MS),

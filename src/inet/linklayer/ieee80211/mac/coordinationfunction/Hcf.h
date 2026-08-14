@@ -64,8 +64,8 @@ class Edca;
 class Edcaf;
 class Hcca;
 class HcfOriginatorActions;
-class HcfVhtRuntime;
-class HeHcfRuntime;
+class HcfVhtActions;
+class HeHcfFeature;
 class HcfRecipientActions;
 class HcfRecipientFrameDispatchActions;
 class HcfOriginatorFrameDispatchActions;
@@ -133,8 +133,8 @@ class INET_API Hcf : public IQosCoordinationFunction, public IChannelAccess::ICa
     friend class HcfRecipientActions;
     friend class HcfRecipientFrameDispatchActions;
     friend class HcfOriginatorFrameDispatchActions;
-    friend class HcfVhtRuntime;
-    friend class HeHcfRuntime;
+    friend class HcfVhtActions;
+    friend class HeHcfFeature;
     friend class HeHcf;
 
     void handleBlockAckInactivityTimeout();
@@ -215,8 +215,9 @@ class INET_API Hcf : public IQosCoordinationFunction, public IChannelAccess::ICa
     HcfRecipientService recipientService;
     HcfFrameDispatchService frameDispatchService;
     HcfTransmissionPreparationService transmissionPreparationService;
-    std::unique_ptr<HcfVhtRuntime> vhtRuntime;
-    std::unique_ptr<HeHcfRuntime> heRuntime;
+    std::unique_ptr<HcfVhtActions> vhtActions;
+    std::unique_ptr<VhtHcfFeature> vhtFeature;
+    std::unique_ptr<HeHcfFeature> heFeature;
     IIeee80211MgmtExchangeResultHandler *mgmtExchangeResultHandler = nullptr;
     IHcfTxRxInterceptor *txRxInterceptor = nullptr;
     std::function<void(Packet *)> frameDecorator;
@@ -431,7 +432,7 @@ class INET_API Hcf : public IQosCoordinationFunction, public IChannelAccess::ICa
     Hcf();
     virtual ~Hcf();
 
-    HeHcfRuntime& getHeRuntime() const;
+    HeHcfFeature& getHeFeature() const;
     void setVhtDlMuTxOpFactoryForTesting(VhtHcfFeature::ITxOpFactory *factory);
 
     virtual void setMgmtExchangeResultHandler(IIeee80211MgmtExchangeResultHandler *handler) override { mgmtExchangeResultHandler = handler; }

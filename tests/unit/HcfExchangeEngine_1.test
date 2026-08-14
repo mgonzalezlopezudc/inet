@@ -26,9 +26,19 @@ class EngineTestFs : public IFrameSequence
 {
   private:
     bool abortOnTimeout;
+    bool *eventTargetAlive = nullptr;
+    bool *destroyedWhileTargetAlive = nullptr;
     int step = 0;
   public:
-    explicit EngineTestFs(bool abortOnTimeout) : abortOnTimeout(abortOnTimeout) {}
+    explicit EngineTestFs(bool abortOnTimeout, bool *eventTargetAlive = nullptr,
+            bool *destroyedWhileTargetAlive = nullptr) :
+        abortOnTimeout(abortOnTimeout), eventTargetAlive(eventTargetAlive),
+        destroyedWhileTargetAlive(destroyedWhileTargetAlive) {}
+    virtual ~EngineTestFs()
+    {
+        if (destroyedWhileTargetAlive != nullptr)
+            *destroyedWhileTargetAlive = eventTargetAlive != nullptr && *eventTargetAlive;
+    }
     virtual void startSequence(FrameSequenceContext *, int firstStep) override { REQUIRE(firstStep == 0); step = 0; }
     virtual IFrameSequenceStep *prepareStep(FrameSequenceContext *) override
     {
@@ -68,6 +78,7 @@ actions.originatorProcessTransmittedFrame = [&] (Packet *) { events.push_back("t
 actions.originatorProcessReceivedFrame = [&] (Packet *, Packet *) { events.push_back("received"); };
 actions.originatorProcessFailedFrame = [&] (Packet *) { events.push_back("failed"); };
 actions.frameSequenceStarted = [&] (const FrameSequenceContext *) { events.push_back("started"); };
+actions.frameSequenceAborted = [&] { events.push_back("aborted"); };
 actions.frameSequenceFinished = [&] (const FrameSequenceContext *) { events.push_back("finished"); };
 actions.resumeContention = [&] { events.push_back("resume"); };
 actions.discardResponse = [&] (Packet *packet) { delete packet; };
@@ -113,7 +124,57 @@ engine.handleDeferredStartRxTimeout(actions);
 REQUIRE(!engine.hasDeferredStartRxTimeout());
 REQUIRE(!engine.isSequenceRunning());
 
-EV << "HCF exchange engine generation and causal-order tests passed.\n";
+events.clear();
+engine.channelGranted();
+engine.startFrameSequence(new EngineTestFs(true), makeContext(), actions);
+auto abortTimer = engine.getStartRxTimerForTest();
+cancelEvent(abortTimer);
+REQUIRE(engine.handleMessage(abortTimer, actions));
+REQUIRE(std::count(events.begin(), events.end(), "aborted") == 1);
+
+bool eventTargetAlive = true;
+bool destroyedWhileTargetAlive = false;
+engine.channelGranted();
+engine.startFrameSequence(new EngineTestFs(false, &eventTargetAlive,
+        &destroyedWhileTargetAlive), makeContext(), actions);
+engine.shutdown(actions);
+REQUIRE(destroyedWhileTargetAlive);
+eventTargetAlive = false;
+
+auto requireShutDownRejection = [&] (const std::function<void()>& operation) {
+    try {
+        operation();
+    }
+    catch (const cRuntimeError& error) {
+        REQUIRE(std::string(error.what()).find("HCF exchange engine is shut down") != std::string::npos);
+        return;
+    }
+    throw cRuntimeError("shut-down HCF exchange engine accepted an operational call");
+};
+requireShutDownRejection([&] { engine.channelAccessRequested(); });
+requireShutDownRejection([&] { engine.channelGranted(); });
+requireShutDownRejection([&] { engine.beginPreparation(); });
+requireShutDownRejection([&] { engine.preparationCompletedWithoutSequence(actions); });
+requireShutDownRejection([&] {
+    auto sequence = std::make_unique<EngineTestFs>(false);
+    auto context = std::unique_ptr<FrameSequenceContext>(makeContext());
+    engine.startFrameSequence(sequence.get(), context.get(), actions);
+});
+requireShutDownRejection([&] { engine.transmissionComplete(actions); });
+requireShutDownRejection([&] {
+    auto packet = std::make_unique<Packet>("postShutdownResponse");
+    engine.processResponse(packet.get(), actions);
+});
+requireShutDownRejection([&] { engine.handleDeferredStartRxTimeout(actions); });
+requireShutDownRejection([&] {
+    cMessage message("postShutdownTimer");
+    engine.handleMessage(&message, actions);
+});
+requireShutDownRejection([&] {
+    engine.replaceFrameSequenceHandler(std::make_unique<FrameSequenceHandler>());
+});
+
+EV << "HCF exchange engine generation, lifetime, and terminal shutdown tests passed.\n";
 
 %contains: stdout
-HCF exchange engine generation and causal-order tests passed.
+HCF exchange engine generation, lifetime, and terminal shutdown tests passed.

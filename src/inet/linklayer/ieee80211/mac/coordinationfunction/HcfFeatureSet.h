@@ -12,7 +12,6 @@
 #include "inet/linklayer/ieee80211/mac/contract/IHcfFeatureSet.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HePeerStateService.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeQueueService.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeDlMuExchangeProvider.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeTriggeredUlExchangeService.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeSoundingService.h"
 
@@ -36,8 +35,8 @@ class INET_API CommonHcfFeatureSet : public cSimpleModule, public IHcfFeatureSet
 class INET_API VhtHcfFeatureSet : public CommonHcfFeatureSet
 {
   public:
-    virtual HcfAmendmentRuntimeKind getAmendmentRuntimeKind() const override
-        { return HcfAmendmentRuntimeKind::VHT; }
+    virtual HcfFeatureKind getFeatureKind() const override
+        { return HcfFeatureKind::VHT; }
 };
 
 /** Composition-only HE HCF feature set. */
@@ -46,22 +45,20 @@ class INET_API HeHcfFeatureSet : public CommonHcfFeatureSet
   private:
     HePeerStateService peerStateService;
     HeQueueService queueService;
-    HeDlMuExchangeProvider dlMuExchangeProvider;
     HeTriggeredUlExchangeService triggeredUlExchangeService;
     HeSoundingService soundingService;
 
   public:
     virtual ~HeHcfFeatureSet();
-    virtual HcfAmendmentRuntimeKind getAmendmentRuntimeKind() const override
-        { return HcfAmendmentRuntimeKind::HE; }
-    virtual HcfHeRuntimeServices getHeRuntimeServices() override
-        { return {&peerStateService, &queueService, &dlMuExchangeProvider,
+    virtual HcfFeatureKind getFeatureKind() const override
+        { return HcfFeatureKind::HE; }
+    virtual HcfHeFeatureServices getHeFeatureServices() override
+        { return {&peerStateService, &queueService,
                 &triggeredUlExchangeService, &soundingService}; }
     HePeerStateService& getPeerStateService() { return peerStateService; }
     const HePeerStateService& getPeerStateService() const { return peerStateService; }
     HeQueueService& getQueueService() { return queueService; }
     const HeQueueService& getQueueService() const { return queueService; }
-    HeDlMuExchangeProvider& getDlMuExchangeProvider() { return dlMuExchangeProvider; }
     HeTriggeredUlExchangeService& getTriggeredUlExchangeService() { return triggeredUlExchangeService; }
     HeSoundingService& getSoundingService() { return soundingService; }
 };

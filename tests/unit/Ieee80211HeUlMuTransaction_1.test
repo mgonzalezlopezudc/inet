@@ -14,7 +14,7 @@ Validate HE triggered-uplink prepare/commit and terminal packet ownership by exa
 #include "inet/linklayer/ieee80211/mac/Ieee80211MacSapServiceTag_m.h"
 #include "inet/linklayer/ieee80211/mac/Tx.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfRuntime.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfFeature.h"
 #include "inet/linklayer/ieee80211/mac/channelaccess/Edca.h"
 #include "inet/linklayer/ieee80211/mac/channelaccess/Edcaf.h"
 #include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreement.h"
@@ -194,25 +194,25 @@ class TestHeHcf : public HeHcf,
 {
   private:
     using TriggeredUlExchange = HeTriggeredUlExchangeService::Exchange;
-    HeHcfRuntime& heRuntime() const { return getHeRuntime(); }
+    HeHcfFeature& heFeature() const { return getHeFeature(); }
     HeTriggeredUlExchangeService& getHeTriggeredUlExchangeService() const
-        { return heRuntime().getHeTriggeredUlExchangeService(); }
+        { return heFeature().getHeTriggeredUlExchangeService(); }
     HePeerStateService& getHePeerStateService() const
-        { return heRuntime().getHePeerStateService(); }
+        { return heFeature().getHePeerStateService(); }
     HeQueueService& getHeQueueService() const
-        { return heRuntime().getHeQueueService(); }
+        { return heFeature().getHeQueueService(); }
     const IIeee80211HeLinkPhyContext& getLinkPhyContext() const
-        { return heRuntime().getLinkPhyContext(); }
+        { return heFeature().getLinkPhyContext(); }
     void processReceivedTriggerFrame(Packet *packet,
             const Ptr<const Ieee80211TriggerFrame>& trigger)
-        { heRuntime().processReceivedTriggerFrame(packet, trigger); }
+        { heFeature().processReceivedTriggerFrame(packet, trigger); }
     auto captureTriggeredUlBlockAckCandidates() const
-        { return heRuntime().captureTriggeredUlBlockAckCandidates(); }
+        { return heFeature().captureTriggeredUlBlockAckCandidates(); }
     void processReceivedMultiStaBlockAck(Packet *packet,
             const Ptr<const Ieee80211MultiStaBlockAck>& blockAck)
-        { heRuntime().processReceivedMultiStaBlockAck(packet, blockAck); }
+        { heFeature().processReceivedMultiStaBlockAck(packet, blockAck); }
     AccessCategory mapTriggeredUlTidToAccessCategory(Tid tid) const
-        { return heRuntime().mapTriggeredUlTidToAccessCategory(tid); }
+        { return heFeature().mapTriggeredUlTidToAccessCategory(tid); }
 
   public:
     struct CommittedExchange {
@@ -237,8 +237,8 @@ class TestHeHcf : public HeHcf,
 
     bool prepareNonHeCommonSelectionForTest(int& dlCaptureCount)
     {
-        HeDlMuExchangeProvider::StartupParameters parameters;
-        auto context = heRuntime().buildGrantSelectionContext(AC_BE, false,
+        HeDlMuExchangeCoordinator::StartupParameters parameters;
+        auto context = heFeature().buildGrantSelectionContext(AC_BE, false,
                 false, parameters,
                 [] { return std::optional<HeUlTriggerService::PreparedStart>(); },
                 [&] {
@@ -704,7 +704,7 @@ class TestHeHcf : public HeHcf,
     int getExchangeCount() const { return getHeTriggeredUlExchangeService().getExchangeCount(); }
 
     uint64_t getRandomNumbersDrawn() const { return getRNG(0)->getNumbersDrawn(); }
-    int getRandomAccessBackoff() const { return heRuntime().getUlCoordinator().getRandomAccessBackoff(); }
+    int getRandomAccessBackoff() const { return heFeature().getUlCoordinator().getRandomAccessBackoff(); }
 
     AccessCategory mapTidForTest(Tid tid) const
     {

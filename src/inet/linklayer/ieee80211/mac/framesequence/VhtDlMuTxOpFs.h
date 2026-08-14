@@ -9,7 +9,8 @@
 #include "inet/linklayer/ieee80211/mac/contract/IAckHandler.h"
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequence.h"
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequenceHandler.h"
-#include "inet/linklayer/ieee80211/mac/contract/IVhtDlMuExchangeCallback.h"
+#include "inet/linklayer/ieee80211/mac/contract/IVhtDlMuExecutionServices.h"
+#include "inet/linklayer/ieee80211/mac/contract/IVhtDlMuExchangeEvents.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/VhtDlMuPlan.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 
@@ -40,8 +41,9 @@ class INET_API VhtDlMuTxOpFs : public IFrameSequence
     physicallayer::Ieee80211ModeSet *modeSet = nullptr;
     IAckHandler *ackHandler = nullptr;
     IFrameSequenceHandler::ICallback *callback = nullptr;
-    IVhtDlMuExchangeCallback *vhtCallback = nullptr;
-    uint64_t exchangeId = 0;
+    IVhtDlMuExecutionServices *vhtServices = nullptr;
+    IVhtDlMuExchangeEvents *vhtEvents = nullptr;
+    VhtDlMuExchangeId exchangeId = NO_VHT_DL_MU_EXCHANGE;
     Packet *containerPacket = nullptr;
     std::unique_ptr<PreparedCommit> preparedCommit;
     bool preparationAttempted = false;
@@ -61,7 +63,9 @@ class INET_API VhtDlMuTxOpFs : public IFrameSequence
     VhtDlMuTxOpFs(const VhtDlMuPlan& plan,
             physicallayer::Ieee80211ModeSet *modeSet, IAckHandler *ackHandler,
             IFrameSequenceHandler::ICallback *callback,
-            IVhtDlMuExchangeCallback *vhtCallback, uint64_t exchangeId = 0);
+            IVhtDlMuExecutionServices *vhtServices,
+            IVhtDlMuExchangeEvents *vhtEvents,
+            VhtDlMuExchangeId exchangeId);
     virtual ~VhtDlMuTxOpFs();
 
     /** Completes all fallible DL MU preparation without mutating live protocol ownership. */

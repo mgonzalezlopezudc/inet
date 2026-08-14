@@ -5,7 +5,7 @@ Test real scalar and dimensional IEEE 802.11 radio projection through the HeHcf 
 #include "inet/linklayer/common/MacAddress.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfRuntime.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfFeature.h"
 #include "inet/linklayer/ieee80211/mac/channelaccess/Edca.h"
 #include "inet/linklayer/ieee80211/mac/originator/QosAckHandler.h"
 
@@ -94,8 +94,10 @@ class TestHeHcf : public HeHcf
     }
 
 
-    Ieee80211HeLinkPhySnapshot projectLinkPhySnapshot() const { return getHeRuntime().getLinkPhyContext().getSnapshot(); }
-    HePeerStateService& getHePeerStateService() const { return getHeRuntime().getHePeerStateService(); }
+    Ieee80211HeLinkPhySnapshot projectLinkPhySnapshot() const { return getHeFeature().getLinkPhyContext().getSnapshot(); }
+    const HeDlMuExchangeCoordinator *getOwnedDlMuCoordinator() const
+        { return &getHeFeature().getHeDlMuExchangeCoordinator(); }
+    HePeerStateService& getHePeerStateService() const { return getHeFeature().getHePeerStateService(); }
     void seedPeerDerivedState(const MacAddress& peer, Hz bandwidth)
     {
         Ieee80211HeOperatingMode mode;
@@ -107,12 +109,12 @@ class TestHeHcf : public HeHcf
     bool hasPeerDerivedState(const MacAddress& peer, Hz bandwidth) const
     {
         Ieee80211HeOperatingMode mode;
-        return getHeRuntime().getPeerOperatingMode(peer, mode) ||
+        return getHeFeature().getPeerOperatingMode(peer, mode) ||
                 getHePeerStateService().getCsiManager().hasFreshCsi(peer, bandwidth);
     }
     void invalidatePeerForTest(const MacAddress& peer)
     {
-        getHeRuntime().invalidatePeerDerivedState(peer);
+        getHeFeature().invalidatePeerDerivedState(peer);
     }
     Packet *makePeerPacket(const char *name, const MacAddress& peer, int sequenceNumber)
     {
@@ -141,14 +143,14 @@ class TestHeHcf : public HeHcf
     }
     std::vector<Packet *> seedPeerPacketState(const MacAddress& peer)
     {
-        if (getHeRuntime().getStationQueueBank(peer) == nullptr)
+        if (getHeFeature().getStationQueueBank(peer) == nullptr)
             associatePeerForTest(peer);
         std::vector<Packet *> packets = {
             makePeerPacket("bank-queued", peer, 101),
             makePeerPacket("shared-pending", peer, 102),
             makePeerPacket("in-progress", peer, 103)
         };
-        getHeRuntime().getPerStaQueue(peer, AC_BE)->enqueuePacket(packets[0]);
+        getHeFeature().getPerStaQueue(peer, AC_BE)->enqueuePacket(packets[0]);
         auto edcaf = getEdcaForTesting()->getEdcaf(AC_BE);
         edcaf->getPendingQueue()->enqueuePacket(packets[1]);
         for (auto packet : packets)
@@ -169,34 +171,34 @@ class TestHeHcf : public HeHcf
     }
     Packet *seedBankPacket(const MacAddress& peer, const char *name, int sequenceNumber)
     {
-        if (getHeRuntime().getStationQueueBank(peer) == nullptr)
+        if (getHeFeature().getStationQueueBank(peer) == nullptr)
             associatePeerForTest(peer);
         auto packet = makePeerPacket(name, peer, sequenceNumber);
-        getHeRuntime().getPerStaQueue(peer, AC_BE)->enqueuePacket(packet);
+        getHeFeature().getPerStaQueue(peer, AC_BE)->enqueuePacket(packet);
         return packet;
     }
     void deferPacketRetirementForTest(Packet *packet, const MacAddress& peer, uint64_t associationEpoch)
     {
-        getHeRuntime().getHeQueueService().deferRetirement(packet, peer, associationEpoch);
+        getHeFeature().getHeQueueService().deferRetirement(packet, peer, associationEpoch);
     }
     void retireDeferredPacketsForTest()
     {
-        getHeRuntime().retireDeferredPackets();
+        getHeFeature().retireDeferredPackets();
     }
     void startForcedSuFallbackForTest(AccessCategory ac)
     {
-        if (!getHeRuntime().stagePerStaFrameForSingleUserTransmission(ac))
+        if (!getHeFeature().stagePerStaFrameForSingleUserTransmission(ac))
             throw cRuntimeError("test could not stage a per-STA SU fallback packet");
         getEdcaForTesting()->getEdcaf(ac)->getTxopProcedure()->startTxop(ac);
         // The fixture already staged the exact SU packet. Bypass HE provider
         // selection instead of reaching into its private fallback ledger.
         Hcf::startFrameSequence(ac);
     }
-    void crossTwtBoundaryForTest() { getHeRuntime().twtServicePeriodChanged(); }
+    void crossTwtBoundaryForTest() { getHeFeature().twtServicePeriodChanged(); }
     bool containsPacketIdentity(Packet *packet) const
     {
         for (int ac = AC_BK; ac <= AC_VO; ++ac)
-            for (const auto& queue : getHeRuntime().getHeQueueService().getQueueSnapshots(
+            for (const auto& queue : getHeFeature().getHeQueueService().getQueueSnapshots(
                     static_cast<AccessCategory>(ac)))
                 for (auto queuedPacket : queue.packets)
                     if (queuedPacket == packet)
@@ -215,7 +217,7 @@ class TestHeHcf : public HeHcf
     int countPeerPackets(const MacAddress& peer) const
     {
         int count = 0;
-        auto bank = getHeRuntime().getStationQueueBank(peer);
+        auto bank = getHeFeature().getStationQueueBank(peer);
         if (bank != nullptr)
             for (int ac = StationQueueBank::AC_BK; ac <= StationQueueBank::AC_VO; ++ac)
                 for (int i = 0; i < bank->getQueue(static_cast<StationQueueBank::AccessCategory>(ac))->getNumPackets(); ++i)
@@ -262,6 +264,10 @@ if (scalar.getChannelNumber() != dimensional.getChannelNumber() ||
 
 auto scalarHcf = getHcf("scalarAp");
 auto dimensionalHcf = getHcf("dimensionalAp");
+if (scalarHcf->getOwnedDlMuCoordinator() == nullptr ||
+        dimensionalHcf->getOwnedDlMuCoordinator() == nullptr ||
+        scalarHcf->getOwnedDlMuCoordinator() == dimensionalHcf->getOwnedDlMuCoordinator())
+    throw cRuntimeError("each HE feature must own exactly one distinct DL MU coordinator");
 PeerInvalidationListener invalidationListener;
 auto invalidatedSignal = cComponent::registerSignal("hePeerInvalidated");
 scalarHcf->subscribe(invalidatedSignal, &invalidationListener);
