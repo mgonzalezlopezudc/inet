@@ -2,7 +2,7 @@
 
 ## Scope and basis
 
-This report compares INET commit `9e61cec7239b57297d8c4df9cd508f4702a8948c` with clean ns-3 at `5e35cfbc28bd`. The INET revision removes the generic HCF outer transaction shell while retaining typed amendment-local preparation, rollback, and exchange correlation. The ns-3-dev checkout and comparison baseline are unchanged.
+This report compares INET commit `182700069baaae1f5bdcd8192f3e33501745cc3d` with clean ns-3 at `5e35cfbc28bd`. Since the earlier HCF simplification, INET has also made feature ownership symmetric, introduced explicit HE/VHT DL-MU exchange objects and coordinators, and split execution-service contracts from exchange-event contracts. The ns-3-dev checkout and comparison baseline are unchanged.
 
 The comparison represented here is a static source, documentation and test audit; no simulations were run for it. LOC depends heavily on whether generated code and comments are counted:
 
@@ -16,10 +16,10 @@ INET is architecturally more explicit and extensible; ns-3 is locally easier to 
 
 | Dimension | INET | ns-3 | Assessment |
 |---|---|---|---|
-| Code organization | Strong contracts, NED composition, typed packets, separated policies and services; direct SU paths now stay with frame-sequence owners | Clear amendment directories and HT→VHT→HE class hierarchy | Slight INET advantage |
+| Code organization | Strong contracts, NED composition, typed packets, separated policies and services; direct SU paths stay with frame-sequence owners and MU lifetimes with typed exchange coordinators | Clear amendment directories and HT→VHT→HE class hierarchy | Slight INET advantage |
 | Readability | Excellent system-level documentation, but many abstractions and cross-file hops | More familiar C++ flow and consistent Doxygen; large methods remain difficult | ns-3 advantage |
-| Complexity | Distributed across numerous services, contracts, NED types and generated code | Concentrated in large inheritance-based coordinators with broad mutable state | Equally high, but with different shapes |
-| Maintainability | Better amendment and policy substitution, with clearer ownership boundaries | Easier onboarding, but inheritance and shared cross-amendment classes increase coupling | Slight INET advantage for long-term extension |
+| Complexity | Distributed across numerous services, feature objects, exchange coordinators, contracts, NED types and generated code | Concentrated in large inheritance-based coordinators with broad mutable state | Equally high, but with different shapes |
+| Maintainability | Better amendment and policy substitution, with clearer ownership boundaries and explicit exchange lifetimes | Easier onboarding, but inheritance and shared cross-amendment classes increase coupling | Slight INET advantage for long-term extension |
 | Testing | Strong standards traceability, focused tests and fingerprints; uneven test style | Very broad typed test matrices and boundary tests; large test files | ns-3 broader; INET more traceable |
 | Standard coverage | Broader modeled surface in several n/ac/ax areas | Strong core HT/VHT/HE and OFDMA, but more explicit omissions | INET advantage |
 | Full compliance | No | No | Neither should claim conformance |
@@ -28,9 +28,9 @@ The detailed evidence and the resulting design recommendation follow below.
 
 ## Code quality and architecture
 
-INET’s strongest design choice is explicit composition. The HCF is assembled from replaceable EDCA, rate-selection, acknowledgment, protection and Block Ack policies in [Hcf.ned](src/inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.ned:99). Amendment behavior is exposed through typed runtimes, immutable snapshots, amendment-owned plans, validation, and local commit/rollback boundaries, as described in [ch-80211.rst](doc/src/developers-guide/ch-80211.rst:20). The latest HCF change removes the generic selector and outer transaction protocol: ordinary SU, release, and sounding remain with their frame-sequence owners, while VHT and HE runtimes commit only the typed starts that need preparation or reservation. This makes the ownership boundary more explicit and easier to follow locally.
+INET’s strongest design choice is explicit composition. The HCF is assembled from replaceable EDCA, rate-selection, acknowledgment, protection and Block Ack policies in [Hcf.ned](src/inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.ned:99). Amendment behavior is exposed through typed feature objects, immutable snapshots, amendment-owned plans, dedicated exchange records, validation, and local commit/rollback boundaries, as described in [ch-80211.rst](doc/src/developers-guide/ch-80211.rst:20). The generic selector and outer transaction protocol are gone: ordinary SU, release, and sounding remain with their frame-sequence owners, while VHT and HE features commit only the typed starts that need preparation or reservation. HE and VHT DL-MU lifetimes are now represented by [HeDlMuExchangeCoordinator](src/inet/linklayer/ieee80211/mac/coordinationfunction/HeDlMuExchangeCoordinator.h) and [VhtDlMuExchangeCoordinator](src/inet/linklayer/ieee80211/mac/coordinationfunction/VhtDlMuExchangeCoordinator.h), with separate execution-service and exchange-event contracts. This makes both ownership and callback direction more explicit.
 
-The cost is a large conceptual surface: C++, NED, MSG-generated classes, contracts, callbacks, services and configuration all participate. [Hcf.cc](src/inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.cc) is now 2,870 physical lines, while `HeTriggeredUlExchangeService.cc` and `Ieee80211HePhyCalculator.cc` remain around 1,570. Dynamic casts and module-path resolution also weaken some nominal interfaces. INET is architecturally clean at the large scale, but it is not always easy to follow locally; removing the generic outer shell eliminates one particularly indirect path for ordinary SU traffic.
+The cost is a large conceptual surface: C++, NED, MSG-generated classes, contracts, callbacks, services and configuration all participate. [Hcf.cc](src/inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.cc) is now 2,841 physical lines; the new [HeHcfFeature.cc](src/inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfFeature.cc) and [HeDlMuExchangeCoordinator.cc](src/inet/linklayer/ieee80211/mac/coordinationfunction/HeDlMuExchangeCoordinator.cc) are 702 and 658 lines respectively, while `HeTriggeredUlExchangeService.cc` and `Ieee80211HePhyCalculator.cc` remain around 1,570. Dynamic casts and module-path resolution also weaken some nominal interfaces. INET is architecturally clean at the large scale, but it is not always easy to follow locally; the new exchange seams remove broad callback and lifecycle ownership from the central HCF.
 
 ns-3 uses a more conventional progression:
 
@@ -79,28 +79,38 @@ Excluding generated code, ns-3 is about **12% larger in source LOC overall**: ap
 
 ### Current HCF files
 
-These counts describe INET commit `9e61cec7239b57297d8c4df9cd508f4702a8948c`:
+These counts describe INET commit `182700069baaae1f5bdcd8192f3e33501745cc3d`:
 
 | File | Physical | Source |
 |---|---:|---:|
-| [Hcf.cc](src/inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.cc) | 2,870 | 2,573 |
-| [Hcf.h](src/inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h) | 472 | 389 |
-| [HcfContext.h](src/inet/linklayer/ieee80211/mac/coordinationfunction/HcfContext.h) | 314 | 264 |
-| [HcfExchangeEngine.cc](src/inet/linklayer/ieee80211/mac/coordinationfunction/HcfExchangeEngine.cc) | 334 | 288 |
-| [HcfExchangeEngine.h](src/inet/linklayer/ieee80211/mac/coordinationfunction/HcfExchangeEngine.h) | 131 | 103 |
+| [Hcf.cc](src/inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.cc) | 2,841 | 2,545 |
+| [Hcf.h](src/inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h) | 473 | 390 |
+| [HcfContext.h](src/inet/linklayer/ieee80211/mac/coordinationfunction/HcfContext.h) | 314 | 265 |
+| [HcfExchangeEngine.cc](src/inet/linklayer/ieee80211/mac/coordinationfunction/HcfExchangeEngine.cc) | 375 | 327 |
+| [HcfExchangeEngine.h](src/inet/linklayer/ieee80211/mac/coordinationfunction/HcfExchangeEngine.h) | 135 | 107 |
 | [HcfFeatureSet.cc](src/inet/linklayer/ieee80211/mac/coordinationfunction/HcfFeatureSet.cc) | 22 | 12 |
-| [HcfFeatureSet.h](src/inet/linklayer/ieee80211/mac/coordinationfunction/HcfFeatureSet.h) | 72 | 53 |
+| [HcfFeatureSet.h](src/inet/linklayer/ieee80211/mac/coordinationfunction/HcfFeatureSet.h) | 69 | 50 |
 | [HcfRetryService.cc](src/inet/linklayer/ieee80211/mac/coordinationfunction/HcfRetryService.cc) | 102 | 89 |
 | [HcfRetryService.h](src/inet/linklayer/ieee80211/mac/coordinationfunction/HcfRetryService.h) | 57 | 37 |
-| **Combined** | **4,374** | **3,808** |
+| [HeHcfFeature.cc](src/inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfFeature.cc) | 702 | 631 |
+| [HeHcfFeature.h](src/inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfFeature.h) | 303 | 284 |
+| [HeDlMuExchangeCoordinator.cc](src/inet/linklayer/ieee80211/mac/coordinationfunction/HeDlMuExchangeCoordinator.cc) | 658 | 612 |
+| [HeDlMuExchangeCoordinator.h](src/inet/linklayer/ieee80211/mac/coordinationfunction/HeDlMuExchangeCoordinator.h) | 221 | 194 |
+| [VhtDlMuExchangeCoordinator.cc](src/inet/linklayer/ieee80211/mac/coordinationfunction/VhtDlMuExchangeCoordinator.cc) | 94 | 76 |
+| [VhtDlMuExchangeCoordinator.h](src/inet/linklayer/ieee80211/mac/coordinationfunction/VhtDlMuExchangeCoordinator.h) | 62 | 45 |
+| [HeDlMuExchange.cc](src/inet/linklayer/ieee80211/mac/coordinationfunction/HeDlMuExchange.cc) | 74 | 58 |
+| [HeDlMuExchange.h](src/inet/linklayer/ieee80211/mac/coordinationfunction/HeDlMuExchange.h) | 55 | 37 |
+| [VhtDlMuExchange.cc](src/inet/linklayer/ieee80211/mac/coordinationfunction/VhtDlMuExchange.cc) | 76 | 62 |
+| [VhtDlMuExchange.h](src/inet/linklayer/ieee80211/mac/coordinationfunction/VhtDlMuExchange.h) | 55 | 36 |
+| **Selected HCF and exchange files** | **6,688** | **5,857** |
 
-`Hcf.cc` alone contains about **6% of the handwritten INET MAC-core source LOC**.
+`Hcf.cc` alone contains about **6% of the handwritten INET MAC-core source LOC**. The selected-file total is intentionally not a complete coordination-function total; it highlights the central HCF, feature, coordinator, and exchange objects.
 
 ### Significant MAC subsystems
 
 | Concern | INET physical/source | ns-3 physical/source |
 |---|---:|---:|
-| Coordination/frame exchange | `coordinationfunction/`: 20,547 / 17,489 | FEM hierarchy through HE: 9,725 / 6,555 |
+| Coordination/frame exchange | `coordinationfunction/`: 20,784 / 17,681 | FEM hierarchy through HE: 9,725 / 6,555 |
 | Channel access and contention/TXOP | 1,667 / 1,251 | 4,862 / 2,982 |
 | Aggregation | 753 / 481 | Included below |
 | Aggregation + Block Ack | 3,128 / 2,227 | 4,625 / 2,692 |
@@ -110,7 +120,7 @@ These counts describe INET commit `9e61cec7239b57297d8c4df9cd508f4702a8948c`:
 
 The coordination row captures the architectural difference:
 
-- INET spreads frame-exchange behavior among HCF services, typed amendment runtimes, local preparation/rollback helpers, and frame-sequence classes; common SU/release/sounding paths are dispatched directly and no longer bypass a provider selector because no generic selector remains.
+- INET spreads frame-exchange behavior among HCF services, typed amendment features, explicit exchange objects/coordinators, local preparation/rollback helpers, and frame-sequence classes; common SU/release/sounding paths are dispatched directly and no longer bypass a provider selector because no generic selector remains.
 - ns-3 concentrates more of it in the Frame Exchange Manager inheritance chain.
 - ns-3 has substantially more rate-control code, largely due to its larger set of algorithms.
 
@@ -139,11 +149,12 @@ Representative cross-project groupings are:
 
 | File | Physical | Source |
 |---|---:|---:|
-| `Hcf.cc` | 2,870 | 2,573 |
+| `Hcf.cc` | 2,841 | 2,545 |
 | `Ieee80211MacHeaderSerializer.cc` | 1,746 | 1,637 |
 | `Ieee80211MgmtFrameSerializer.cc` | 1,894 | 1,617 |
 | `Ieee80211ModeSet.cc` | 1,696 | 1,601 |
 | `HeTriggeredUlExchangeService.cc` | 1,570 | 1,447 |
+| `HeDlMuExchangeCoordinator.cc` | 658 | 612 |
 | `Ieee80211HeSigCodec.cc` | 1,522 | 1,436 |
 | `Ieee80211HePhyCalculator.cc` | 1,579 | 1,432 |
 | `Ieee80211PhyHeaderSerializer.cc` | 1,410 | 1,261 |
@@ -211,32 +222,32 @@ The defensible standards conclusion is therefore:
 
 ### Is ns-3 transactional?
 
-No. The ns-3 Wi-Fi implementation has some transactional-like operations, but it is not transactional in the same architectural sense as INET’s amendment-local preparation and reservation paths. The current INET code no longer has a generic HCF selector, outer transaction plan, or transaction-owned exchange engine.
+No. The ns-3 Wi-Fi implementation has some transactional-like operations, but it is not transactional in the same architectural sense as INET’s amendment-local preparation and reservation paths. The current INET code no longer has a generic HCF selector or outer transaction plan. Its shared HCF engine owns frame-sequence execution, while typed HE/VHT coordinators own only the multi-user preparation and exchange state they actually stage.
 
 | Property | INET HCF | ns-3 Wi-Fi |
 |---|---|---|
-| Selection and preparation | Typed VHT/HE grant snapshots and amendment-owned prepared starts; common SU/release paths dispatch directly | Scheduler stores mutable selection state |
+| Selection and preparation | Typed VHT/HE grant snapshots and coordinator-owned prepared starts; common SU/release paths dispatch directly | Scheduler stores mutable selection state |
 | Prepared plan | `VhtGrantSnapshot`, `HeDlMuPlan`, and typed UL/DL prepared starts, only where the amendment owns staged state | `DlMuInfo`/`UlMuInfo` and `WifiTxParameters`, but no generic plan contract |
-| Explicit validation | Local provider, PHY, duration, queue, and frame-sequence checks; the engine validates its callback bundle | Distributed assertions and validity checks |
+| Explicit validation | Local coordinator, PHY, duration, queue, identity, and frame-sequence checks; the engine validates its call-scoped action bundle | Distributed assertions and validity checks |
 | Explicit commit | Typed `commitPreparedGrant()` and `commitStart()` calls; direct paths start their sequence directly | Effectively begins when the FEM accepts or moves scheduler output |
-| Generic rollback | None; VHT dialog-token, HE reservation/protection/queue, and aggregate handoff use narrower local guards | No; only local undo and recovery mechanisms |
-| Exchange identity | Monotonic HCF engine generations for timer/sequence state plus VHT/HE amendment-local IDs or tokens for staged state | No equivalent generic exchange identity |
-| Terminal result | Typed amendment callbacks plus frame-sequence completion/abort; no generic selector terminal callback | Distributed success and timeout callbacks |
-| Stale callback rejection | Owner-level VHT/HE identities/tokens and HCF engine generation checks | Timer and current-state checks, but no transaction identity |
+| Generic rollback | None; HE reservation and VHT protection/aggregate handoff use narrower local guards | No; only local undo and recovery mechanisms |
+| Exchange identity | Monotonic HCF engine generations plus typed VHT/HE IDs/tokens and immutable exchange records for staged state | No equivalent generic exchange identity |
+| Terminal result | Typed exchange-event callbacks plus frame-sequence completion/abort; no generic selector terminal callback | Distributed success and timeout callbacks |
+| Stale callback rejection | Coordinator-owned VHT/HE identities, exact packet/member ledgers, and HCF engine generation checks | Timer and current-state checks, but no transaction identity |
 
 INET now separates common exchange execution from amendment-owned preparation. The common path is:
 
 ```text
-channel grant → typed grant preparation → typed commit/direct start → frame sequence → exchange engine
+channel grant → feature selection/preparation → typed coordinator commit/direct start → exchange record/frame sequence → HCF engine
 ```
 
-The composition-only [HcfFeatureSet](src/inet/linklayer/ieee80211/mac/coordinationfunction/HcfFeatureSet.h:17) exposes amendment services but does not select or commit exchanges. `Hcf` dispatches ordinary single-user, release, and HT sounding directly to their frame-sequence owners. The private VHT runtime captures a [VhtGrantSnapshot](src/inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.cc:122) and either starts sounding, starts common SU, or calls `VhtHcfFeature::commitPreparedGrant()` for group management, Block Ack prerequisites, and DL MU. The HE runtime performs the analogous typed dispatch in [HeHcf.cc](src/inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.cc:313).
+The composition-only [HcfFeatureSet](src/inet/linklayer/ieee80211/mac/coordinationfunction/HcfFeatureSet.h) exposes amendment services but does not select or commit exchanges. `Hcf` now owns symmetric `VhtHcfFeature` and [HeHcfFeature](src/inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfFeature.h) objects. It dispatches ordinary single-user, release, and HT sounding directly to their frame-sequence owners. The VHT feature captures a `VhtGrantSnapshot` and either starts sounding, starts common SU, or commits group management, Block Ack prerequisites, and DL MU. The HE feature performs the analogous typed dispatch through [HeDlMuExchangeCoordinator](src/inet/linklayer/ieee80211/mac/coordinationfunction/HeDlMuExchangeCoordinator.h) and the HE UL service.
 
-The retained safeguards are local to the owner that actually stages state. VHT uses a grant snapshot and a narrow rollback guard for speculative dialog-token/protection changes; its DL-MU path carries an amendment-local exchange ID through typed callbacks. HE’s [HeDlMuExchangeProvider](src/inet/linklayer/ieee80211/mac/coordinationfunction/HeDlMuExchangeProvider.h:22) owns packet reservations, protection snapshots, a transaction token, and rollback/finalization. HE UL trigger preparation is committed by its own service. These are state-consistency and stale-callback safeguards in a single-threaded event loop, not locks or memory-safety machinery for concurrent execution.
+The retained safeguards are local to the owner that actually stages state. VHT uses a grant snapshot, a narrow protection rollback guard, and [VhtDlMuExchangeCoordinator](src/inet/linklayer/ieee80211/mac/coordinationfunction/VhtDlMuExchangeCoordinator.h) for pending/active lifecycle and stale reports. HE’s [HeDlMuExchangeCoordinator](src/inet/linklayer/ieee80211/mac/coordinationfunction/HeDlMuExchangeCoordinator.h) owns packet reservations, protection snapshots, a transaction token, rollback/finalization, and exact member/outcome correlation. HE UL trigger preparation is committed by its own service. These are state-consistency and stale-callback safeguards in a single-threaded event loop, not locks or memory-safety machinery for concurrent execution.
 
-The removed generic completeness, duplicate-candidate, future-enqueue, provider-selection, and terminal-ownership checks belonged to the discarded outer protocol. They were not needed to serialize execution in INET’s single-threaded event loop. Protocol legality, ownership, stale-callback, and exception-safety checks remain at the HCF engine and amendment-service boundaries where they protect an actual invariant.
+The removed generic completeness, duplicate-candidate, future-enqueue, provider-selection, and terminal-ownership checks belonged to the discarded outer protocol. They were not needed to serialize execution in INET’s single-threaded event loop. The restructuring also removes broad amendment callback interfaces: execution services now provide capabilities, while exchange-event interfaces report lifecycle events to the coordinator that owns the exchange record. Protocol legality, ownership, stale-callback, and exception-safety checks remain at the HCF engine and amendment-service boundaries where they protect an actual invariant.
 
-The HCF engine itself is now deliberately small. [HcfExchangeEngine](src/inet/linklayer/ieee80211/mac/coordinationfunction/HcfExchangeEngine.h:18) owns the active frame sequence, response timers, monotonic exchange generations, and completion/abort handling. Its action validation checks that the call-scoped HCF callbacks are complete; it no longer requires transaction-owner or terminal-sink callbacks. Direct completion therefore stays within the frame-sequence/engine path.
+The HCF engine remains deliberately focused. [HcfExchangeEngine](src/inet/linklayer/ieee80211/mac/coordinationfunction/HcfExchangeEngine.h) owns the active frame sequence, response service, timer state, monotonic exchange generations, and completion/abort handling. Its action validation checks a call-scoped HCF callback bundle; it does not require transaction-owner or terminal-sink callbacks. Direct completion therefore stays within the frame-sequence/engine path, while HE/VHT exchange events terminate in their own coordinators.
 
 In ns-3, `MultiUserScheduler::NotifyAccessGranted()` immediately updates scheduler members and saves computed MU information in `m_lastTxInfo` in [multi-user-scheduler.cc](../../ns-3-dev/src/wifi/model/he/multi-user-scheduler.cc:235). `HeFrameExchangeManager` then obtains mutable scheduler output and directly invokes `SendPsduMapWithProtection()` in [he-frame-exchange-manager.cc](../../ns-3-dev/src/wifi/model/he/he-frame-exchange-manager.cc:127). That method moves the PSDU map and transmission parameters into live FEM state immediately at lines 191–197. There is no intervening generic transaction object, reservation identity, or commit guard.
 
@@ -247,7 +258,7 @@ ns-3 does have local transactional-like behavior:
 - Timeout paths reset in-flight state, set retry flags, and update Block Ack state in [he-frame-exchange-manager.cc](../../ns-3-dev/src/wifi/model/he/he-frame-exchange-manager.cc:1433).
 - Success and failure callbacks provide protocol-level recovery.
 
-Those mechanisms protect individual operations, but they do not form one atomic transaction spanning scheduling, queue reservation, PHY validation, ownership transfer, and terminal completion. Current INET makes the same distinction without a generic outer protocol: each amendment service owns only the preparation, reservation, rollback, and callback correlation needed by its own exchange.
+Those mechanisms protect individual operations, but they do not form one atomic transaction spanning scheduling, queue reservation, PHY validation, ownership transfer, and terminal completion. Current INET makes the same distinction without a generic outer protocol: each amendment coordinator owns only the preparation, reservation, rollback, exchange record, and event correlation needed by its own exchange.
 
 One nuance is important: neither implementation can roll back an already transmitted on-air exchange. INET’s local rollback applies before ownership transfer or when a typed commit fails; after a frame sequence starts, the owning service and exchange engine apply normal completion, timeout, retry, and recovery logic.
 
@@ -261,7 +272,7 @@ This is an architectural choice, not an IEEE compliance requirement.
 
 ## Complexity trade-off and recommended boundary
 
-The generic HCF transaction shell was overextended for a single-threaded event-driven simulator. The latest commit removes that shell and leaves each amendment service responsible for the state it actually stages: direct frame-sequence ownership for ordinary exchanges and typed preparation for prepared multi-owner exchanges.
+The generic HCF transaction shell was overextended for a single-threaded event-driven simulator. The latest commit keeps that simplification and makes the remaining ownership explicit: direct frame-sequence ownership for ordinary exchanges, feature-owned preparation, and coordinator-owned records for prepared multi-owner exchanges.
 
 ### Why the remaining preparation safeguards have value
 
@@ -273,7 +284,7 @@ When the owner has staged state, failure is handled locally before sequence owne
 
 `typed prepare → local rollback/fallback`
 
-This is enforced by the VHT and HE runtime/service contracts, including [HeDlMuExchangeProvider::ReservationRollbackGuard](src/inet/linklayer/ieee80211/mac/coordinationfunction/HeDlMuExchangeProvider.h:26), typed grant commits in [HeHcf.cc](src/inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.cc:329), and the HCF engine’s generation checks in [HcfExchangeEngine.cc](src/inet/linklayer/ieee80211/mac/coordinationfunction/HcfExchangeEngine.cc:70). Direct paths use the same engine without constructing a generic plan or activating a selector.
+This is enforced by the VHT and HE feature/coordinator contracts, including [HeDlMuExchangeCoordinator::ReservationRollbackGuard](src/inet/linklayer/ieee80211/mac/coordinationfunction/HeDlMuExchangeCoordinator.h), typed grant commits in [HeHcfFeature.cc](src/inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfFeature.cc), and the HCF engine’s generation checks in [HcfExchangeEngine.cc](src/inet/linklayer/ieee80211/mac/coordinationfunction/HcfExchangeEngine.cc). Direct paths use the same engine without constructing a generic plan or activating a selector.
 
 These guarantees are particularly valuable when a transmission decision spans:
 
@@ -284,7 +295,7 @@ These guarantees are particularly valuable when a transmission decision spans:
 - scheduler accounting;
 - callbacks that can arrive after state has changed.
 
-The generic plan and selector tests were removed with the generic shell. Focused coverage remains in [HcfExchangeEngine_1.test](tests/unit/HcfExchangeEngine_1.test:1), [HcfFeatureSet_1.test](tests/unit/HcfFeatureSet_1.test:1), [HeDlMuExchangeProvider_1.test](tests/unit/HeDlMuExchangeProvider_1.test:1), and [Ieee80211HeUlMuTransaction_1.test](tests/unit/Ieee80211HeUlMuTransaction_1.test:1), covering the retained engine, composition, reservation, and HE transaction behavior.
+The generic plan and selector tests were removed with the generic shell. Focused coverage now includes [HcfExchangeEngine_1.test](tests/unit/HcfExchangeEngine_1.test), [HcfFeatureSet_1.test](tests/unit/HcfFeatureSet_1.test), [HeDlMuExchangeCoordinator_1.test](tests/unit/HeDlMuExchangeCoordinator_1.test), [HeDlMuExchange_1.test](tests/unit/HeDlMuExchange_1.test), [VhtDlMuExchangeCoordinator_1.test](tests/unit/VhtDlMuExchangeCoordinator_1.test), and [VhtDlMuExchange_1.test](tests/unit/VhtDlMuExchange_1.test), in addition to the existing [Ieee80211HeDlMuTransaction_1.test](tests/unit/Ieee80211HeDlMuTransaction_1.test) and [Ieee80211HeUlMuTransaction_1.test](tests/unit/Ieee80211HeUlMuTransaction_1.test). Together they cover engine generation/lifetime, composition, reservation rollback, exact packet/member identity, stale and duplicate event suppression, and HE transaction behavior.
 
 ### Why ns-3 remains attractive
 
@@ -304,7 +315,7 @@ That is easier to trace for a normal single-user exchange. The downside is that 
 The remaining warning signs concern the size of the coordination area and the complexity of amendment-local state ownership, not a generic transaction shell that no longer exists:
 
 - INET’s coordination-function area is roughly 17.5K handwritten source LOC, versus about 6.6K for the comparable ns-3 FEM hierarchy through HE. These scopes are not perfectly identical, but the difference is meaningful.
-- The retained amendment-local machinery still crosses snapshots, reservations, providers, runtimes, frame sequences, and typed callbacks.
+- The retained amendment-local machinery still crosses snapshots, reservations, feature objects, coordinators, exchange records, frame sequences, and typed event/execution contracts.
 - [Hcf.cc](src/inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.cc) remains approximately 2.6K non-comment source LOC despite the removed generic shell and extracted services.
 - The common path pays for the shared exchange engine, but no longer pays for provider probing, generic plan construction, or selector terminal completion.
 
@@ -317,7 +328,7 @@ The post-refactor design is therefore best characterized as:
 Keep amendment-local preparation and rollback when an exchange crosses independently owned mutable state:
 
 - HE UL trigger, sounding/recovery, and DL-MU preparation;
-- HE prepared single-user starts with per-STA staging or a provider-owned fallback;
+- HE prepared single-user starts with per-STA staging or a coordinator-owned fallback;
 - VHT group management, ADDBA prerequisites, and DL-MU preparation;
 - multiple queue reservations or per-STA sequence/Block Ack state;
 - association-sensitive reservations, scheduler observations, or credits;
@@ -325,15 +336,15 @@ Keep amendment-local preparation and rollback when an exchange crosses independe
 
 For ordinary SU ACK/RTS/CTS, channel release, HT sounding, VHT SU sounding, and the VHT MU sounding prerequisite, use the direct owner paths now present in the code:
 
-- `HcfFs`, `HtSoundingFs`, or `VhtSoundingFs` started by the owning runtime;
+- `HcfFs`, `HtSoundingFs`, or `VhtSoundingFs` started by the owning feature/owner;
 - the shared `HcfExchangeEngine` for timers, retry/recovery, and contention resumption;
 - the existing narrow local guard where speculative VHT dialog-token state must be restored;
 - ordinary retry and completion handling afterward.
 
 One-queue SU A-MPDU preparation also uses the straight-line `prepareAndTransmit()` handoff in [HcfTransmissionPreparationService.cc](src/inet/linklayer/ieee80211/mac/coordinationfunction/HcfTransmissionPreparationService.cc:66). It provides exception-safe cleanup for a temporary aggregate, but it does not pretend that all baseline queue/retry mutations form a generic rollback transaction.
 
-After a typed prepared start commits, neither design can roll back an over-the-air transmission. INET then uses amendment callbacks and the common engine’s completion, timeout, retry, and recovery paths; direct sequences complete through the same engine without generic transaction notification.
+After a typed prepared start commits, neither design can roll back an over-the-air transmission. INET then uses coordinator-owned exchange events plus the common engine’s completion, timeout, retry, and recovery paths; direct sequences complete through the same engine without generic transaction notification.
 
 IEEE 802.11 specifies externally observable exchanges and timing, not an internal transaction architecture. Transactions therefore do not make INET more standards-compliant by themselves.
 
-The resulting recommendation is now reflected in the implementation: keep ordinary SU paths with their frame-sequence owners, and retain only the typed preparation, reservation, rollback, and correlation needed by VHT/HE exchanges. The ns-3-dev side was not changed; its comparison remains the same imperative, non-generic-transaction model described above.
+The resulting recommendation is now reflected in the implementation: keep ordinary SU paths with their frame-sequence owners, retain only the typed preparation/reservation/rollback needed by VHT/HE exchanges, and represent each committed multi-user lifetime with a small typed exchange record and coordinator. The ns-3-dev side was not changed; its comparison remains the same imperative, non-generic-transaction model described above.
