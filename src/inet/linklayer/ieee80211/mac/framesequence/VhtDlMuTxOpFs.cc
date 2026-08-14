@@ -23,6 +23,28 @@ namespace ieee80211 {
 
 using namespace inet::physicallayer;
 
+struct VhtDlMuTxOpFs::PreparedCommit
+{
+    struct Member {
+        Packet *original = nullptr;
+        bool inProgress = false;
+        queueing::IPacketQueue *sourceQueue = nullptr;
+        std::unique_ptr<Packet> packetImage;
+    };
+
+    std::vector<std::vector<Member>> members;
+    std::unique_ptr<ISequenceNumberAssignment> sequenceNumberState;
+    IOriginatorMacDataService *originatorDataService = nullptr;
+    std::vector<ActiveUser> activeUsers;
+    std::unique_ptr<Packet> container;
+
+    PreparedCommit() = default;
+    PreparedCommit(const PreparedCommit&) = delete;
+    PreparedCommit& operator=(const PreparedCommit&) = delete;
+    PreparedCommit(PreparedCommit&&) = default;
+    PreparedCommit& operator=(PreparedCommit&&) = default;
+};
+
 VhtDlMuTxOpFs::VhtDlMuTxOpFs(const VhtDlMuPlan& plan,
         Ieee80211ModeSet *modeSet, IAckHandler *ackHandler,
         IFrameSequenceHandler::ICallback *callback,
@@ -36,25 +58,95 @@ VhtDlMuTxOpFs::VhtDlMuTxOpFs(const VhtDlMuPlan& plan,
 
 void VhtDlMuTxOpFs::startSequence(FrameSequenceContext *context, int firstStep)
 {
+    ASSERT(context != nullptr);
+    // Compatibility adapter for legacy and direct unit-test construction.
+    if (!preparationAttempted)
+        prepare(context);
+    if (preparationSucceeded && !committed)
+        commit(context);
     step = 0;
+}
+
+bool VhtDlMuTxOpFs::prepare(FrameSequenceContext *context)
+{
+    ASSERT(context != nullptr);
+    if (preparationAttempted)
+        throw cRuntimeError("VHT DL MU frame sequence may only be prepared once");
+    if (step != -1)
+        throw cRuntimeError("VHT DL MU frame sequence must be prepared before it is started");
+    preparationAttempted = true;
+    try {
+        preparedCommit = buildPreparedCommit(context);
+    }
+    catch (const VhtDlMuStalePlan& error) {
+        EV_WARN << "VHT DL MU exchange aborted before commit: "
+                << error.what() << endl;
+    }
+    preparationSucceeded = preparedCommit != nullptr;
+    return preparationSucceeded;
+}
+
+bool VhtDlMuTxOpFs::commit(FrameSequenceContext *context)
+{
+    ASSERT(context != nullptr);
+    if (!preparationAttempted || !preparationSucceeded || preparedCommit == nullptr)
+        throw cRuntimeError("VHT DL MU frame sequence requires successful preparation before commit");
+    if (commitAttempted)
+        throw cRuntimeError("VHT DL MU frame sequence preparation may only be committed once");
+    commitAttempted = true;
+
+    auto& prepared = *preparedCommit;
+    for (auto& userMembers : prepared.members) {
+        for (auto& member : userMembers) {
+            if (!member.inProgress)
+                ackHandler->frameGotInProgress(member.packetImage->peekAtFront<Ieee80211DataOrMgmtHeader>());
+        }
+    }
+    prepared.originatorDataService->commitSequenceNumberState(
+            *prepared.sequenceNumberState);
+
+    for (auto& userMembers : prepared.members) {
+        for (auto& member : userMembers) {
+            if (!member.inProgress)
+                member.sourceQueue->removePacket(member.original);
+            member.original->removeAll();
+            member.original->insertAtBack(member.packetImage->peekAll());
+            member.original->setFrontOffset(member.packetImage->getFrontOffset());
+            member.original->setBackOffset(member.packetImage->getBackOffset());
+            member.original->clearTags();
+            member.original->copyTags(*member.packetImage);
+            member.original->getRegionTags() = member.packetImage->getRegionTags();
+            if (!member.inProgress)
+                context->getInProgressFrames()->addInProgressFrame(member.original);
+        }
+    }
+    containerPacket = prepared.container.release();
+    activeUsers = std::move(prepared.activeUsers);
+    std::vector<std::vector<Packet *>> userPackets;
+    for (const auto& user : activeUsers)
+        userPackets.push_back(user.packets);
+    vhtCallback->vhtDlMuPlanCommitted(exchangeId, containerPacket, userPackets);
+    committed = true;
+    preparedCommit.reset();
+    return true;
+}
+
+VhtDlMuTxOpFs::~VhtDlMuTxOpFs()
+{
+    if (!containerOwnershipTransferred)
+        delete containerPacket;
 }
 
 IFrameSequenceStep *VhtDlMuTxOpFs::prepareStep(FrameSequenceContext *context)
 {
     if (step == 0) {
-        try {
-            containerPacket = buildMuContainerPacket(context);
-        }
-        catch (const VhtDlMuStalePlan& error) {
-            EV_WARN << "VHT DL MU exchange aborted before commit: "
-                    << error.what() << endl;
-            containerPacket = nullptr;
-            activeUsers.clear();
-            vhtCallback->vhtDlMuPlanningFailed(exchangeId,
-                    VhtDlMuPlanningFailure::STALE_PLAN);
-        }
-        return containerPacket == nullptr ? nullptr :
-                new TransmitStep(containerPacket, context->getIfs(), true);
+        if (!preparationSucceeded)
+            return nullptr;
+        ASSERT(containerPacket != nullptr);
+        auto transmitStep = new TransmitStep(containerPacket,
+                context->getIfs(), true);
+        containerOwnershipTransferred = true;
+        return transmitStep;
     }
     auto userCount = plan.getUsers().size();
     if (step > static_cast<int>(2 * userCount))
@@ -93,14 +185,9 @@ bool VhtDlMuTxOpFs::completeStep(FrameSequenceContext *context)
     return true;
 }
 
-Packet *VhtDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
+std::unique_ptr<VhtDlMuTxOpFs::PreparedCommit> VhtDlMuTxOpFs::buildPreparedCommit(
+        FrameSequenceContext *context)
 {
-    struct PreparedMember {
-        Packet *original = nullptr;
-        bool inProgress = false;
-        std::unique_ptr<Packet> packet;
-    };
-
     const auto& users = plan.getUsers();
     ASSERT(users.size() >= 2 && users.size() <= 4);
     auto dataService = vhtCallback->getVhtDlMuOriginatorDataService();
@@ -117,8 +204,9 @@ Packet *VhtDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
 
     std::unique_ptr<ISequenceNumberAssignment> sequenceState =
             dataService->cloneSequenceNumberState();
-    std::vector<std::vector<PreparedMember>> preparedUsers(users.size());
-    std::vector<queueing::IPacketQueue *> sourceQueues(users.size());
+    auto prepared = std::make_unique<PreparedCommit>();
+    prepared->members.resize(users.size());
+    auto& preparedUsers = prepared->members;
     std::vector<std::unique_ptr<Packet>> userPsdus;
     std::vector<Ieee80211VhtMuUser> phyUsers;
     bool ldpcExtraOfdmSymbol = false;
@@ -131,7 +219,6 @@ Packet *VhtDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
                 user.sourceQueueToken);
         if (sourceQueue == nullptr)
             throw VhtDlMuStalePlan("VHT DL MU source queue token is stale");
-        sourceQueues[i] = sourceQueue;
         auto isInProgress = [context](Packet *packet) {
             for (int j = 0; j < context->getInProgressFrames()->getLength(); ++j)
                 if (context->getInProgressFrames()->getFrames(j) == packet)
@@ -261,12 +348,13 @@ Packet *VhtDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             }
             aggregateLength = candidateLength;
             previousSubframeLength = subframeLength;
-            preparedUsers[i].push_back({original, inProgress, std::move(copy)});
+            preparedUsers[i].push_back({original, inProgress, sourceQueue,
+                    std::move(copy)});
         }
 
         std::vector<Packet *> aggregateCopies;
         for (const auto& member : preparedUsers[i])
-            aggregateCopies.push_back(member.packet->dup());
+            aggregateCopies.push_back(member.packetImage->dup());
         MpduAggregation aggregation;
         auto psdu = std::unique_ptr<Packet>(aggregation.aggregateFrames(&aggregateCopies));
         auto psduPadding = (4 - psdu->getDataLength().get<B>() % 4) % 4;
@@ -304,80 +392,36 @@ Packet *VhtDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     }
     container->addTag<Ieee80211VhtTxVectorReq>()->setTxVector(txVector);
 
-    // Revalidate and exercise all fallible hooks before the single ownership
-    // boundary; an exception leaves queue, sequence, and BA state untouched.
-    int packetIndex = 0;
+    // Revalidate and exercise all fallible hooks before returning the
+    // mutation-free commit image.
     for (size_t i = 0; i < users.size(); ++i) {
         for (const auto& member : preparedUsers[i]) {
-            bool found = member.inProgress;
-            for (int j = 0; j < sourceQueues[i]->getNumPackets(); ++j)
-                found |= sourceQueues[i]->getPacket(j) == member.original;
+            bool found = false;
+            if (member.inProgress) {
+                for (int j = 0; j < context->getInProgressFrames()->getLength(); ++j)
+                    found |= context->getInProgressFrames()->getFrames(j) == member.original;
+            }
+            else {
+                for (int j = 0; j < member.sourceQueue->getNumPackets(); ++j)
+                    found |= member.sourceQueue->getPacket(j) == member.original;
+            }
             if (!found)
                 throw VhtDlMuStalePlan("VHT DL MU packet changed ownership before commit");
-            beforePacketCommit(packetIndex++);
         }
     }
+    beforePreparedCommit();
 
-    auto originalSequenceState = dataService->cloneSequenceNumberState();
-    std::vector<std::vector<bool>> ackApplied(users.size());
-    for (size_t i = 0; i < users.size(); ++i)
-        ackApplied[i].resize(preparedUsers[i].size(), false);
-    try {
-        packetIndex = 0;
-        for (size_t i = 0; i < users.size(); ++i) {
-            for (size_t j = 0; j < preparedUsers[i].size(); ++j, ++packetIndex) {
-                auto& member = preparedUsers[i][j];
-                if (!member.inProgress) {
-                    ackApplied[i][j] = true;
-                    ackHandler->frameGotInProgress(member.packet->peekAtFront<Ieee80211DataOrMgmtHeader>());
-                    afterCommitMutation(CommitMutation::ACK_STATE, packetIndex);
-                }
-            }
-        }
-        dataService->commitSequenceNumberState(*sequenceState);
-        afterCommitMutation(CommitMutation::SEQUENCE_STATE, -1);
-    }
-    catch (...) {
-        for (size_t i = 0; i < users.size(); ++i) {
-            for (size_t j = 0; j < preparedUsers[i].size(); ++j)
-                if (ackApplied[i][j])
-                    ackHandler->retireFrame(preparedUsers[i][j].packet->peekAtFront<Ieee80211DataOrMgmtHeader>());
-        }
-        dataService->commitSequenceNumberState(*originalSequenceState);
-        activeUsers.clear();
-        throw;
-    }
-    // From here to publication there are no policy calls or fault hooks: all
-    // stale/fallible work completed before the first queue/in-progress signal.
-    for (size_t i = 0; i < users.size(); ++i) {
-        for (auto& member : preparedUsers[i]) {
-            if (!member.inProgress)
-                sourceQueues[i]->removePacket(member.original);
-            member.original->removeAll();
-            member.original->insertAtBack(member.packet->peekAll());
-            member.original->setFrontOffset(member.packet->getFrontOffset());
-            member.original->setBackOffset(member.packet->getBackOffset());
-            member.original->clearTags();
-            member.original->copyTags(*member.packet);
-            member.original->getRegionTags() = member.packet->getRegionTags();
-            if (!member.inProgress)
-                context->getInProgressFrames()->addInProgressFrame(member.original);
-        }
-    }
-    activeUsers.clear();
+    prepared->activeUsers.clear();
     for (size_t i = 0; i < users.size(); ++i) {
         std::vector<Packet *> packets;
         for (const auto& member : preparedUsers[i])
             packets.push_back(member.original);
-        activeUsers.push_back({users[i], packets});
+        prepared->activeUsers.push_back({users[i], packets});
     }
-    containerPacket = container.release();
-    std::vector<std::vector<Packet *>> userPackets;
-    for (const auto& user : activeUsers)
-        userPackets.push_back(user.packets);
-    vhtCallback->vhtDlMuPlanCommitted(exchangeId, containerPacket,
-            userPackets);
-    return containerPacket;
+    prepared->sequenceNumberState = std::move(sequenceState);
+    prepared->originatorDataService = dataService;
+    prepared->container = std::move(container);
+    return prepared;
 }
 
 Packet *VhtDlMuTxOpFs::buildBlockAckReq(FrameSequenceContext *context,

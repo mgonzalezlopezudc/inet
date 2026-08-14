@@ -267,8 +267,13 @@ HeUlMuTxOpFs::HeUlMuTxOpFs(IHeUlMuExchangeCallback *callback,
     // The Trigger and HE TB PPDU exchange follows the G.5 UL MU sequence.  The
     // following Multi-STA BlockAck is the AP response defined by 26.4.4.5.
     sequence(new SequentialFs({new StepFs("HE-TRIGGER",
-                                          [this](StepFs *, FrameSequenceContext *context) {
-                                              return new TransmitStep(buildTriggerPacket(), context->getIfs(), true);
+                                          [this](StepFs *, FrameSequenceContext *context) -> IFrameSequenceStep * {
+                                              if (!preparationSucceeded)
+                                                  return static_cast<IFrameSequenceStep *>(nullptr);
+                                              ASSERT(triggerPacket != nullptr);
+                                              auto transmitStep = new TransmitStep(triggerPacket, context->getIfs(), true);
+                                              triggerOwnershipTransferred = true;
+                                              return transmitStep;
                                           }),
                                new StepFs("HE-TB-PPDU",
                                           [this](StepFs *, FrameSequenceContext *context) {
@@ -288,6 +293,35 @@ HeUlMuTxOpFs::HeUlMuTxOpFs(IHeUlMuExchangeCallback *callback,
     ASSERT(callback != nullptr);
     ASSERT(modeSet != nullptr);
     triggerId = callback->allocateHeUlTriggerId();
+}
+
+HeUlMuTxOpFs::~HeUlMuTxOpFs()
+{
+    if (!triggerOwnershipTransferred)
+        delete triggerPacket;
+}
+
+bool HeUlMuTxOpFs::prepare()
+{
+    if (preparationAttempted)
+        throw cRuntimeError("HE UL MU frame sequence may only be prepared once");
+    if (step != -1)
+        throw cRuntimeError("HE UL MU frame sequence must be prepared before it is started");
+    preparationAttempted = true;
+    triggerPacket = buildTriggerPacket();
+    preparationSucceeded = triggerPacket != nullptr;
+    return preparationSucceeded;
+}
+
+void HeUlMuTxOpFs::commit()
+{
+    if (!preparationAttempted || !preparationSucceeded || triggerPacket == nullptr)
+        throw cRuntimeError("HE UL MU frame sequence requires successful preparation before commit");
+    if (commitAttempted)
+        throw cRuntimeError("HE UL MU frame sequence preparation may only be committed once");
+    commitAttempted = true;
+    callback->heUlMuPlanCommitted(plan, triggerId);
+    committed = true;
 }
 
 IReceiveStep *HeUlMuTxOpFs::buildReceiveCollectionStep() const
@@ -703,11 +737,15 @@ void HeUlMuTxOpFs::startSequence(FrameSequenceContext *context, int firstStep)
 {
     ASSERT(context != nullptr);
     ASSERT(sequence != nullptr);
+    // Compatibility adapter for legacy and direct unit-test construction.
+    if (!preparationAttempted)
+        prepare();
+    if (preparationSucceeded && !committed)
+        commit();
     step = 0;
     sequence->startSequence(context, firstStep);
     EV_INFO << "Starting HE UL " << (triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ? "BSRP" : "Basic")
              << " Trigger " << triggerId << " with " << schedule.allocations.size() << " RU allocations\n";
-    callback->heUlMuPlanCommitted(plan, triggerId);
 }
 
 IFrameSequenceStep *HeUlMuTxOpFs::prepareStep(FrameSequenceContext *context)

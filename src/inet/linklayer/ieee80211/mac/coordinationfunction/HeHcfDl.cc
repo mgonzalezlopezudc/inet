@@ -188,19 +188,24 @@ void HeHcfRuntime::restoreHeDlMuProtection(AccessCategory ac,
     txop->restoreProtectionStateSnapshot(state);
 }
 
-void HeHcfRuntime::startHeDlMuExchange(AccessCategory ac, const HeDlMuPlan& plan,
+bool HeHcfRuntime::startHeDlMuExchange(AccessCategory ac, const HeDlMuPlan& plan,
         uint64_t transactionToken, HeDlMuTxOpFs::AckMethod ackMethod,
         const HeDlMuExchangeProvider::StartupParameters& parameters)
 {
     auto edcaf = edca->getEdcaf(ac);
-    auto frameSequence = new HeDlMuTxOpFs(plan, modeSet,
+    auto frameSequence = std::make_unique<HeDlMuTxOpFs>(plan, modeSet,
             edcaf->getPendingQueue(), edcaf->getAckHandler(),
             getFrameSequenceCallbackForLegacyAdapter(),
             this, transactionToken,
             parameters.maxAmpduMpduCount, parameters.maxHeMuPsduLength,
             parameters.maxHeMuPpduDuration, ackMethod);
-    startExchangeFrameSequence(frameSequence,
-            buildContext(ac));
+    auto context = std::unique_ptr<FrameSequenceContext>(buildContext(ac));
+    if (!frameSequence->prepare(context.get()))
+        return false;
+    configureHeDlMuProtection(ac);
+    frameSequence->commit(context.get());
+    startExchangeFrameSequence(frameSequence.release(), context.release());
+    return true;
 }
 
 queueing::IPacketQueue *HeHcfRuntime::resolveHeDlMuQueue(HcfQueueToken token) const
@@ -280,13 +285,6 @@ void HeHcfRuntime::heDlMuUserOutcome(uint64_t token, const MacAddress& peer,
         HeDlMuUserOutcome outcome)
 {
     getHeDlMuExchangeProvider().heDlMuUserOutcome(token, peer, outcome, false);
-}
-void HeHcfRuntime::heDlMuPlanningFailed(uint64_t token, AccessCategory ac)
-{
-    if (!getHeDlMuExchangeProvider().heDlMuPlanningFailed(token, ac, false))
-        return;
-    EV_WARN << "DL MU planning failed for AC " << ac
-            << "; provider scheduled an exact next-TXOP single-user fallback\n";
 }
 } // namespace ieee80211
 } // namespace inet

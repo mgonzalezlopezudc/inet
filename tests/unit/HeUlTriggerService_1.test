@@ -55,7 +55,6 @@ class TriggerActions : public HeUlTriggerService::IActions, public IHeUlMuExchan
     virtual bool isNdpFeedbackReportEnabled() const override { return false; }
     virtual const Ieee80211Mib *getHeUlMib() const override { return mib; }
     virtual void requestHeUlChannelAccess(AccessCategory) override { accessRequests++; }
-    virtual void configureHeUlMuProtection(AccessCategory) override {}
     virtual void startHeUlMuExchange(AccessCategory, const HeUlMuPlan& plan,
             IHeUlMuExchangeCallback *callback) override {
         starts++;

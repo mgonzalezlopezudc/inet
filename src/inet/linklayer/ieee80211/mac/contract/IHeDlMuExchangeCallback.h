@@ -82,8 +82,6 @@ class INET_API IHeDlMuExchangeCallback
             const HeDlMuMember& member) = 0;
     virtual void heDlMuUserOutcome(uint64_t transactionToken,
             const MacAddress& peer, HeDlMuUserOutcome outcome) = 0;
-    virtual void heDlMuPlanningFailed(uint64_t transactionToken,
-            AccessCategory accessCategory) = 0;
 };
 
 } // namespace ieee80211

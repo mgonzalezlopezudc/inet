@@ -92,8 +92,6 @@ class INET_API HeDlMuExchangeProvider
                 const HeDlMuMember& member) override = 0;
         virtual void heDlMuUserOutcome(uint64_t transactionToken,
                 const MacAddress& peer, HeDlMuUserOutcome outcome) override = 0;
-        virtual void heDlMuPlanningFailed(uint64_t transactionToken,
-                AccessCategory accessCategory) override = 0;
         virtual bool stageHeDlMuPacket(HcfQueueToken queueToken,
                 HcfPacketIdentity packetIdentity, AccessCategory accessCategory) = 0;
         virtual bool startHeDlMuSingleUserIfEligible(AccessCategory accessCategory) = 0;
@@ -102,7 +100,7 @@ class INET_API HeDlMuExchangeProvider
         virtual void configureHeDlMuProtection(AccessCategory accessCategory) = 0;
         virtual void restoreHeDlMuProtection(AccessCategory accessCategory,
                 const HeDlMuProtectionSnapshot& snapshot) = 0;
-        virtual void startHeDlMuExchange(AccessCategory accessCategory,
+        virtual bool startHeDlMuExchange(AccessCategory accessCategory,
                 const HeDlMuPlan& plan, uint64_t transactionToken,
                 HeDlMuTxOpFs::AckMethod ackMethod,
                 const StartupParameters& parameters) = 0;
@@ -116,14 +114,12 @@ class INET_API HeDlMuExchangeProvider
 
     enum class StartPhase {
         IDLE,
-        COMMITTING,
         ACTIVE,
     };
 
     IActions *actions = nullptr;
     HeSoundingService *soundingProvider = nullptr;
     StartPhase startPhase = StartPhase::IDLE;
-    std::optional<AccessCategory> pendingPlanningFailure;
     std::optional<AccessCategory> pendingProtectionAccessCategory;
     std::optional<HeDlMuProtectionSnapshot> pendingProtectionSnapshot;
     uint64_t activeTransactionToken = 0;
@@ -137,9 +133,6 @@ class INET_API HeDlMuExchangeProvider
     std::vector<IIeee80211HeDlScheduler::RuAllocation> pendingAllocations;
     bool forceNextSingleUser[4] = {};
     uint64_t nextTransactionToken = 1;
-    HcfQueueToken fallbackQueueToken;
-    HcfPacketIdentity fallbackPacketIdentity;
-    AccessCategory fallbackAccessCategory = AC_BE;
 
     static FallbackCandidate selectFallbackCandidate(
             const HeDlMuPreparationSnapshot& snapshot);
@@ -200,8 +193,6 @@ class INET_API HeDlMuExchangeProvider
             const HeDlMuMember& member, bool notifyActions = true);
     bool heDlMuUserOutcome(uint64_t transactionToken,
             const MacAddress& peer, HeDlMuUserOutcome outcome, bool notifyActions = true);
-    bool heDlMuPlanningFailed(uint64_t transactionToken,
-            AccessCategory accessCategory, bool notifyActions = true);
 };
 
 } // namespace ieee80211

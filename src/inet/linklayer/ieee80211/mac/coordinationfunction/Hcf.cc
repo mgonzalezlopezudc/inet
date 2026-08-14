@@ -131,7 +131,9 @@ class HcfVhtRuntime final : public VhtHcfFeature::IActions
             case VhtGrantSnapshot::StartKind::GROUP_MANAGEMENT:
             case VhtGrantSnapshot::StartKind::BLOCK_ACK_PREREQUISITE:
             case VhtGrantSnapshot::StartKind::DL_MULTIUSER:
-                feature.commitPreparedGrant(snapshot);
+                if (feature.commitPreparedGrant(snapshot) ==
+                        VhtHcfFeature::GrantDisposition::FINISHED_SYNCHRONOUSLY)
+                    hcf->releaseChannel(ac);
                 return;
         }
         throw cRuntimeError("Unknown VHT grant start kind");
@@ -158,6 +160,9 @@ class HcfVhtRuntime final : public VhtHcfFeature::IActions
     virtual void startFeatureFrameSequence(IFrameSequence *sequence,
             AccessCategory ac) override
         { hcf->startExchangeFrameSequence(sequence, hcf->buildContext(ac)); }
+    virtual void startFeatureFrameSequence(IFrameSequence *sequence,
+            FrameSequenceContext *context) override
+        { hcf->startExchangeFrameSequence(sequence, context); }
     virtual void continueBaseFrameSequence(AccessCategory ac) override
     {
         ContinuationGuard guard(continuingFrameSequence);

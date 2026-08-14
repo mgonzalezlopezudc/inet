@@ -217,7 +217,7 @@ class INET_API HeHcfRuntime : public HeDlMuExchangeProvider::IActions,
     void configureHeDlMuProtection(AccessCategory) override;
     void restoreHeDlMuProtection(AccessCategory,
             const HeDlMuExchangeProvider::HeDlMuProtectionSnapshot&) override;
-    void startHeDlMuExchange(AccessCategory, const HeDlMuPlan&, uint64_t,
+    bool startHeDlMuExchange(AccessCategory, const HeDlMuPlan&, uint64_t,
             HeDlMuTxOpFs::AckMethod, const HeDlMuExchangeProvider::StartupParameters&) override;
     queueing::IPacketQueue *resolveHeDlMuQueue(HcfQueueToken) const override;
     Packet *getReservedHeDlMuPacket(uint64_t, const MacAddress&) const override;
@@ -234,14 +234,13 @@ class INET_API HeHcfRuntime : public HeDlMuExchangeProvider::IActions,
     void heDlMuPlanCommitted(uint64_t, Packet *, const std::vector<HeDlMuMember>&) override;
     void heDlMuMemberTransmitted(uint64_t, const HeDlMuMember&) override;
     void heDlMuUserOutcome(uint64_t, const MacAddress&, HeDlMuUserOutcome) override;
-    void heDlMuPlanningFailed(uint64_t, AccessCategory) override;
     void processTriggeredUlFrame(Packet *, const Ptr<const Ieee80211DataHeader>&, uint16_t);
     void processTriggeredUlManagementFrame(Packet *, const Ptr<const Ieee80211MgmtHeader>&, uint16_t);
     bool canRequestHeUlTrigger() const override;
     bool isNdpFeedbackReportEnabled() const override;
     const Ieee80211Mib *getHeUlMib() const override;
     void requestHeUlChannelAccess(AccessCategory) override;
-    void configureHeUlMuProtection(AccessCategory) override;
+    void configureHeUlMuProtection(AccessCategory);
     void startHeUlMuExchange(AccessCategory, const HeUlMuPlan&, IHeUlMuExchangeCallback *) override;
     uint16_t getHeUlAssociationId(const MacAddress&) const override;
     uint32_t allocateHeUlTriggerId() override;

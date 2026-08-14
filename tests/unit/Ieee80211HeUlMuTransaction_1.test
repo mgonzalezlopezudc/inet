@@ -12,6 +12,7 @@ Validate HE triggered-uplink prepare/commit and terminal packet ownership by exa
 #include "inet/linklayer/ieee80211/mac/Ieee80211HeBsr.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211MacSapServiceTag_m.h"
+#include "inet/linklayer/ieee80211/mac/Tx.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfRuntime.h"
 #include "inet/linklayer/ieee80211/mac/channelaccess/Edca.h"
@@ -31,6 +32,7 @@ Validate HE triggered-uplink prepare/commit and terminal packet ownership by exa
 import inet.linklayer.ieee80211.mac.coordinationfunction.HeHcf;
 import inet.linklayer.ieee80211.mac.fragmentation.BasicFragmentationPolicy;
 import inet.linklayer.ieee80211.mac.fragmentation.HeDynamicFragmentationPolicy;
+import inet.linklayer.ieee80211.mac.Tx;
 import inet.node.inet.WirelessHost;
 import inet.node.wireless.AccessPoint;
 import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadioMedium;
@@ -51,6 +53,12 @@ simple TestHeDynamicFragmentationPolicy extends HeDynamicFragmentationPolicy
 {
     parameters:
         @class(TestHeDynamicFragmentationPolicy);
+}
+
+simple TestTx extends Tx
+{
+    parameters:
+        @class(TestTx);
 }
 
 network TestNetwork
@@ -86,6 +94,7 @@ sim-time-limit = 1ns
 **.wlan[*].bitrate = 61.25Mbps
 **.wlan[*].mac.qosStation = true
 **.wlan[*].mac.hcf.typename = "TestHeHcf"
+*.sta.wlan[*].mac.tx.typename = "TestTx"
 **.wlan[*].mac.hcf.enableUlMuOfdma = true
 **.wlan[*].mac.hcf.ulCoordinator.ocwMin = 0
 **.wlan[*].mac.hcf.ulCoordinator.ocwMax = 0
@@ -162,6 +171,22 @@ class TestHeDynamicFragmentationPolicy : public HeDynamicFragmentationPolicy
         requiredLevel = level;
         return computeFragmentSizes(frame);
     }
+};
+
+class TestTx : public Tx
+{
+  public:
+    virtual bool isBusy() const override { return false; }
+
+    virtual std::unique_ptr<ITx::PreparedTransmission> prepareTransmission(
+            Packet *, const Ptr<const Ieee80211MacHeader>&, simtime_t,
+            ITx::ICallback *) override
+    {
+        return std::make_unique<ITx::PreparedTransmission>();
+    }
+
+    virtual void commitTransmission(
+            std::unique_ptr<ITx::PreparedTransmission>) noexcept override {}
 };
 
 class TestHeHcf : public HeHcf,
@@ -579,28 +604,30 @@ class TestHeHcf : public HeHcf,
         exchange.expectedResponseTime = SimTime(1, SIMTIME_S);
         uint32_t queueBytes = getBufferedTrafficServiceBytes(
                 getEdcaForTesting()->getEdcaf(AC_BE), ap, 0);
-        bool committed = false;
-        Ptr<const Ieee80211MacHeader> responseHeader;
         failingCommitIndex = failAt;
-        Packet *response = nullptr;
         std::vector<Packet *> queuePackets;
         for (int i = 0; i < queue->getNumPackets(); ++i)
             queuePackets.push_back(queue->getPacket(i));
+        HeTriggeredUlExchangeService::PreparedTriggeredUlResponse prepared;
         try {
-            response = getHeTriggeredUlExchangeService().prepareAndCommitResponse(queue->getPacket(0),
+            prepared = getHeTriggeredUlExchangeService().prepareResponse(queue->getPacket(0),
                     exchange.sourceQueueToken, queuePackets,
                     AC_BE, 0, queueBytes, 64, &user, trigger,
                     triggerId,
                     getLinkPhyContext().getSnapshot().getMaximumTransmitPower(),
-                    std::nullopt, exchange, responseHeader, committed);
+                    std::nullopt, std::move(exchange));
+            getHeTriggeredUlExchangeService().precommit(prepared);
         }
         catch (...) {
+            getHeTriggeredUlExchangeService().rollback(prepared);
             failingCommitIndex = -1;
-            REQUIRE(!committed);
+            REQUIRE(getHeTriggeredUlExchangeService().getExchanges().count(triggerId) == 0);
             throw;
         }
         failingCommitIndex = -1;
-        REQUIRE(committed);
+        auto response = prepared.responsePacket.get();
+        auto responseHeader = prepared.responseHeader;
+        auto& preparedExchange = prepared.stagedExchange.mapped();
         auto handoff = response->getTag<Ieee80211HeTxVectorReq>();
         auto protection = deriveIeee80211HeTbResponseProtection(std::nullopt,
                 trigger->getDurationField(), SimTime(16, SIMTIME_US),
@@ -620,7 +647,7 @@ class TestHeHcf : public HeHcf,
 
         // Force the complete A-MPDU through wire serialization, then parse
         // every delimiter and MPDU rather than trusting the source chunks.
-        if (!exchange.packets.empty()) {
+        if (!preparedExchange.packets.empty()) {
             auto serializedAggregate = response->peekDataAsBytes();
             const auto& aggregateBytes = serializedAggregate->getBytes();
             bool allSameTid = true;
@@ -636,12 +663,12 @@ class TestHeHcf : public HeHcf,
                         ((delimiterControl & 0x3F) << 8) | aggregateBytes[offset + 1];
                 uint8_t delimiterSignature = aggregateBytes[offset + 3];
                 offset += 4;
-                REQUIRE(subframeIndex < (int)exchange.packets.size());
+                REQUIRE(subframeIndex < (int)preparedExchange.packets.size());
                 REQUIRE(delimiterSignature == 0x4E);
                 REQUIRE(delimiterReserved == 0);
                 REQUIRE(delimiterLength ==
-                        exchange.packets[subframeIndex]->getByteLength());
-                bool terminal = subframeIndex + 1 == (int)exchange.packets.size();
+                        preparedExchange.packets[subframeIndex]->getByteLength());
+                bool terminal = subframeIndex + 1 == (int)preparedExchange.packets.size();
                 REQUIRE(delimiterEof == terminal);
                 if (delimiterEof)
                     result.terminalDelimiterCount++;
@@ -650,7 +677,7 @@ class TestHeHcf : public HeHcf,
                 int ackPolicyBits = (aggregateBytes[offset + 24] >> 5) & 0x3;
                 int serializedTid = aggregateBytes[offset + 24] & 0xF;
                 allAckPolicyBitsZero &= ackPolicyBits == 0;
-                allSameTid &= serializedTid == exchange.tid;
+                allSameTid &= serializedTid == preparedExchange.tid;
                 offset += delimiterLength;
                 if (!terminal)
                     offset += (4 - (B(4) + B(delimiterLength)).get<B>() % 4) % 4;
@@ -659,19 +686,19 @@ class TestHeHcf : public HeHcf,
             result.serializedSubframeCount = subframeIndex;
             result.allSubframesSameTid = allSameTid;
             result.allSubframesAckPolicyBitsZero = allAckPolicyBitsZero;
-            REQUIRE(result.serializedSubframeCount == (int)exchange.packets.size());
+            REQUIRE(result.serializedSubframeCount == (int)preparedExchange.packets.size());
             REQUIRE(result.terminalDelimiterCount == 1);
             REQUIRE(result.allSubframesSameTid);
             REQUIRE(result.allSubframesAckPolicyBitsZero);
         }
         REQUIRE(responseDataHeader->getAckPolicy() == NORMAL_ACK);
-        REQUIRE(responseDataHeader->getTid() == exchange.tid);
+        REQUIRE(responseDataHeader->getTid() == preparedExchange.tid);
+        result.packets = preparedExchange.packets;
+        result.sequenceNumbers = preparedExchange.sequenceNumbers;
+        getHeTriggeredUlExchangeService().commit(std::move(prepared));
+        REQUIRE(getHeTriggeredUlExchangeService().getExchanges().count(triggerId) == 1);
         transmissionComplete(response, responseHeader);
-        delete response;
-        result.packets = exchange.packets;
-        result.sequenceNumbers = exchange.sequenceNumbers;
-        getHeTriggeredUlExchangeService().commit(triggerId, std::move(exchange));
-        return committed;
+        return true;
     }
 
     int getExchangeCount() const { return getHeTriggeredUlExchangeService().getExchangeCount(); }
@@ -738,29 +765,30 @@ class TestHeHcf : public HeHcf,
         exchange.sourceQueueToken = getHeQueueService().getQueueToken(getSourceQueue(),
                 ap, getHePeerStateService().getPeerSnapshot(ap).getAssociationEpoch(), AC_BE);
         exchange.expectedResponseTime = SimTime(1, SIMTIME_S);
-        bool committed = false;
-        Ptr<const Ieee80211MacHeader> responseHeader;
         std::vector<Packet *> queuePackets;
         auto sourceQueue = getSourceQueue();
         for (int i = 0; i < sourceQueue->getNumPackets(); ++i)
             queuePackets.push_back(sourceQueue->getPacket(i));
-        auto response = getHeTriggeredUlExchangeService().prepareAndCommitResponse(nullptr,
+        auto prepared = getHeTriggeredUlExchangeService().prepareResponse(nullptr,
                 exchange.sourceQueueToken, queuePackets, AC_BE, 0, 0, 0, &user, trigger,
                 triggerId,
                 getLinkPhyContext().getSnapshot().getMaximumTransmitPower(),
-                std::nullopt, exchange, responseHeader, committed, true, nullptr,
+                std::nullopt, std::move(exchange),
                 captureTriggeredUlBlockAckCandidates());
-        REQUIRE(committed);
+        auto response = prepared.responsePacket.get();
+        auto responseHeader = prepared.responseHeader;
         auto blockAckReq =
                 dynamicPtrCast<const Ieee80211CompressedBlockAckReq>(
                         responseHeader);
         REQUIRE(blockAckReq != nullptr);
-        REQUIRE(exchange.recoveryKind ==
+        getHeTriggeredUlExchangeService().precommit(prepared);
+        getHeTriggeredUlExchangeService().commit(std::move(prepared));
+        const auto& committedExchange =
+                getHeTriggeredUlExchangeService().getExchanges().at(triggerId);
+        REQUIRE(committedExchange.recoveryKind ==
                 HeTriggeredUlExchangeService::RecoveryKind::
                         COMPRESSED_BLOCK_ACK_REQUEST);
         transmissionComplete(response, responseHeader);
-        delete response;
-        getHeTriggeredUlExchangeService().commit(triggerId, std::move(exchange));
         return blockAckReq;
     }
 
@@ -895,6 +923,7 @@ class ResponseEventListener : public cListener
 Define_Module(TestHeHcf);
 Define_Module(TestBoundaryMac);
 Define_Module(TestHeDynamicFragmentationPolicy);
+Define_Module(TestTx);
 
 %activity:
 auto sta = getParentModule()->getSubmodule("sta");
@@ -1033,9 +1062,43 @@ auto requireQueueIdentities = [&] (const std::vector<Packet *>& expected) {
     REQUIRE(liveResponseEventListener.count == eventCount + 1);
     REQUIRE(!liveHcf->preparedResponseIds.empty());
     REQUIRE(liveHcf->handedOffResponseId == liveHcf->preparedResponseIds.back());
-    liveHcf->expireExchange(60);
-    REQUIRE(liveHcf->getSourceQueue()->getNumPackets() == 1);
-    REQUIRE(liveHcf->getSourceQueue()->getPacket(0) == p0);
+    const auto preparedResponseCount = liveHcf->preparedResponseIds.size();
+    const auto handedOffResponseId = liveHcf->handedOffResponseId;
+    const auto committedHeader = p0->peekAtFront<Ieee80211DataHeader>();
+    REQUIRE(committedHeader->getSequenceNumber().isValid());
+    const int committedSequenceNumber = committedHeader->getSequenceNumber().get();
+
+    // A duplicate scheduled Trigger ID is ignored while its exchange is
+    // active: it must not dequeue, duplicate ownership, allocate a sequence,
+    // or publish a second semantic response event.
+    auto duplicateTriggerPacket = new Packet("live-scheduled-duplicate", trigger);
+    duplicateTriggerPacket->addTag<Ieee80211HeTriggerCorrelationTag>()
+            ->setTriggerId(60);
+    liveHcf->processTriggerForTest(duplicateTriggerPacket, trigger);
+    REQUIRE(liveHcf->getSourceQueue()->getNumPackets() == 0);
+    REQUIRE(liveHcf->getExchangeCount() == 1);
+    REQUIRE(liveResponseEventListener.count == eventCount + 1);
+    REQUIRE(liveHcf->preparedResponseIds.size() == preparedResponseCount);
+    REQUIRE(liveHcf->handedOffResponseId == handedOffResponseId);
+    REQUIRE(p0->peekAtFront<Ieee80211DataHeader>()->getSequenceNumber().get() ==
+            committedSequenceNumber);
+
+    // The terminal BA retires the one owned MPDU once; a late duplicate BA
+    // cannot mutate the already-finished exchange or reinsert the packet.
+    Ieee80211MultiStaBlockAckRecord terminalRecord;
+    terminalRecord.aid = 21;
+    terminalRecord.tid = 0;
+    terminalRecord.responseReceived = true;
+    terminalRecord.startingSequenceNumber = committedSequenceNumber;
+    terminalRecord.bitmap = 1;
+    liveHcf->receiveBlockAck(60, ap, {terminalRecord});
+    REQUIRE(liveHcf->getExchangeCount() == 0);
+    REQUIRE(!liveHcf->isTriggeredUlResponseTimerScheduled());
+    REQUIRE(liveHcf->getSourceQueue()->getNumPackets() == 0);
+    liveHcf->receiveBlockAck(60, ap, {terminalRecord});
+    REQUIRE(liveHcf->getExchangeCount() == 0);
+    REQUIRE(liveHcf->getSourceQueue()->getNumPackets() == 0);
+    REQUIRE(liveResponseEventListener.count == eventCount + 1);
     liveHcf->clearState();
 }
 

@@ -7,6 +7,7 @@
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfRuntime.h"
 
 #include <algorithm>
+#include <memory>
 #include <optional>
 
 #include "inet/common/INETMath.h"
@@ -194,9 +195,15 @@ void HeHcfRuntime::configureHeUlMuProtection(AccessCategory accessCategory)
 void HeHcfRuntime::startHeUlMuExchange(AccessCategory accessCategory,
         const HeUlMuPlan& plan, IHeUlMuExchangeCallback *callback)
 {
-    startExchangeFrameSequence(
-            new HeUlMuTxOpFs(callback, plan, modeSet, mac->getAddress()),
+    auto frameSequence = std::make_unique<HeUlMuTxOpFs>(
+            callback, plan, modeSet, mac->getAddress());
+    auto context = std::unique_ptr<FrameSequenceContext>(
             buildContext(accessCategory));
+    if (!frameSequence->prepare())
+        return;
+    configureHeUlMuProtection(accessCategory);
+    frameSequence->commit();
+    startExchangeFrameSequence(frameSequence.release(), context.release());
     heUlMuExchangeActive = true;
 }
 

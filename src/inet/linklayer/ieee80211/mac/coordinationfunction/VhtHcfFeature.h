@@ -97,6 +97,8 @@ class INET_API VhtHcfFeature : public IVhtDlMuExchangeCallback,
         virtual IFrameSequenceHandler::ICallback *getFrameSequenceCallback() const = 0;
         virtual FrameSequenceContext *buildFrameSequenceContext(AccessCategory ac) = 0;
         virtual void startFeatureFrameSequence(IFrameSequence *sequence, AccessCategory ac) = 0;
+        virtual void startFeatureFrameSequence(IFrameSequence *sequence,
+                FrameSequenceContext *context) = 0;
         virtual void continueBaseFrameSequence(AccessCategory ac) = 0;
         virtual void continueBaseRecipientFrame(Packet *packet,
                 const Ptr<const Ieee80211MacHeader>& header) = 0;
@@ -140,16 +142,12 @@ class INET_API VhtHcfFeature : public IVhtDlMuExchangeCallback,
     ITxOpFactory *txOpFactory = nullptr;
     enum class DlMuPhase {
         IDLE,
-        PREPARED,
-        COMMITTING,
         ACTIVE,
         TERMINAL,
     };
     struct DlMuLifecycle {
         DlMuPhase phase = DlMuPhase::IDLE;
         uint64_t exchangeId = 0;
-        bool ownershipCommitted = false;
-        std::optional<VhtDlMuPlanningFailure> pendingFailure;
     };
 
     uint64_t nextDlMuExchangeId = 1;
@@ -216,8 +214,6 @@ class INET_API VhtHcfFeature : public IVhtDlMuExchangeCallback,
     virtual IOriginatorMacDataService *getVhtDlMuOriginatorDataService() const override;
     virtual queueing::IPacketQueue *resolveVhtDlMuQueue(
             HcfQueueToken sourceQueueToken) const override;
-    virtual void vhtDlMuPlanningFailed(uint64_t exchangeId,
-            VhtDlMuPlanningFailure reason) override;
     virtual void vhtDlMuPlanCommitted(uint64_t exchangeId,
             Packet *containerPacket,
             const std::vector<std::vector<Packet *>>& userPackets) override;

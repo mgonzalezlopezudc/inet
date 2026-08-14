@@ -60,7 +60,6 @@ class INET_API HeUlTriggerService
         virtual bool isNdpFeedbackReportEnabled() const = 0;
         virtual const Ieee80211Mib *getHeUlMib() const = 0;
         virtual void requestHeUlChannelAccess(AccessCategory accessCategory) = 0;
-        virtual void configureHeUlMuProtection(AccessCategory accessCategory) = 0;
         virtual void startHeUlMuExchange(AccessCategory accessCategory,
                 const HeUlMuPlan& plan, IHeUlMuExchangeCallback *callback) = 0;
         virtual uint16_t getHeUlAssociationId(const MacAddress& address) const = 0;

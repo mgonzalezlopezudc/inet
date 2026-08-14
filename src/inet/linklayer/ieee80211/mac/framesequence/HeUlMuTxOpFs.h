@@ -46,6 +46,12 @@ class INET_API HeUlMuTxOpFs : public IFrameSequence
     uint32_t triggerId = 0;
     int step = -1;
     std::unique_ptr<IFrameSequence> sequence;
+    Packet *triggerPacket = nullptr;
+    bool preparationAttempted = false;
+    bool preparationSucceeded = false;
+    bool commitAttempted = false;
+    bool committed = false;
+    bool triggerOwnershipTransferred = false;
     std::vector<Ieee80211MultiStaBlockAckRecord> ackRecords;
 
   protected:
@@ -64,7 +70,12 @@ class INET_API HeUlMuTxOpFs : public IFrameSequence
             physicallayer::Ieee80211ModeSet *modeSet,
             const MacAddress& apAddress) :
         HeUlMuTxOpFs(callback, plan, modeSet, apAddress) {}
+    virtual ~HeUlMuTxOpFs();
 
+    /** Completes Trigger construction before frame-sequence startup. */
+    bool prepare();
+    /** Publishes the successfully prepared Trigger plan to its protocol owner. */
+    void commit();
     virtual void startSequence(FrameSequenceContext *context, int firstStep) override;
     virtual IFrameSequenceStep *prepareStep(FrameSequenceContext *context) override;
     virtual bool completeStep(FrameSequenceContext *context) override;

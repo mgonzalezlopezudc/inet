@@ -52,32 +52,13 @@ class FaultInjectingVhtDlMuTxOpFs : public VhtDlMuTxOpFs
   protected:
     bool *injected = nullptr;
     cComponent *owner = nullptr;
-    bool announced = false;
-    bool rollbackAnnounced = false;
 
-    virtual IFrameSequenceStep *prepareStep(FrameSequenceContext *context) override
+    virtual void beforePreparedCommit() override
     {
-        auto result = VhtDlMuTxOpFs::prepareStep(context);
-        if (announced && *injected && !rollbackAnnounced && result == nullptr) {
-            rollbackAnnounced = true;
-            owner->emit(cComponent::registerSignal("vhtDlMuPostRollback"), static_cast<cObject *>(nullptr));
-        }
-        return result;
-    }
-
-    virtual void beforePacketCommit(int packetIndex) override
-    {
-        if (!announced && !*injected) {
-            announced = true;
+        if (!*injected) {
             owner->emit(cComponent::registerSignal("vhtDlMuPreCommitFault"), static_cast<cObject *>(nullptr));
-        }
-    }
-
-    virtual void afterCommitMutation(CommitMutation mutation, int) override
-    {
-        if (mutation == CommitMutation::SEQUENCE_STATE && !*injected) {
             *injected = true;
-            throw VhtDlMuStalePlan("deterministic VHT DL MU transactional stale-plan fault");
+            throw VhtDlMuStalePlan("deterministic VHT DL MU pre-commit stale-plan fault");
         }
     }
 
@@ -147,6 +128,7 @@ class VhtDlMuNegativeObserver : public cSimpleModule, public cListener
     std::vector<MuDeliveryWindow> postMembershipMuWindows;
     int postMembershipMuDeliveries = 0;
     cMessage *membershipChangeTimer = nullptr;
+    cMessage *rollbackCheckTimer = nullptr;
     bool membershipChanged = false;
     bool exercisePerUserFailure = false;
     bool exercisePreCommitRollback = false;
@@ -245,7 +227,6 @@ class VhtDlMuNegativeObserver : public cSimpleModule, public cListener
             REQUIRE_VHT_MU_NEGATIVE(dynamic_cast<FaultInjectingVhtHcf *>(hcf) != nullptr,
                     "rollback scenario did not instantiate its fault-injecting VHT HCF");
             hcf->subscribe(cComponent::registerSignal("vhtDlMuPreCommitFault"), this);
-            hcf->subscribe(cComponent::registerSignal("vhtDlMuPostRollback"), this);
             auto edcafPath = "^.ap.wlan[0].mac.hcf.edca.edcaf[3]";
             for (const auto& suffix : {".pendingQueue", ".inProgressFrames"}) {
                 auto component = findModuleByPath((std::string(edcafPath) + suffix).c_str());
@@ -268,17 +249,21 @@ class VhtDlMuNegativeObserver : public cSimpleModule, public cListener
             receiver->subscribe(packetDroppedSignal, this);
         }
         membershipChangeTimer = new cMessage("change-vht-mu-membership");
+        rollbackCheckTimer = new cMessage("check-vht-mu-pre-commit-state");
     }
 
     virtual ~VhtDlMuNegativeObserver() override
     {
         cancelAndDelete(membershipChangeTimer);
+        cancelAndDelete(rollbackCheckTimer);
     }
 
     virtual void handleMessage(cMessage *message) override
     {
         if (message == membershipChangeTimer)
             changeMembership();
+        else if (message == rollbackCheckTimer)
+            checkRollbackAfterAbort();
         else
             REQUIRE_VHT_MU_NEGATIVE(false, "unexpected observer self-message");
     }
@@ -329,9 +314,8 @@ class VhtDlMuNegativeObserver : public cSimpleModule, public cListener
                         ackHandler->getQoSDataAckStatus(header)});
             }
             observeRollbackSignals = true;
+            scheduleAt(simTime(), rollbackCheckTimer);
         }
-        else if (exercisePreCommitRollback && signal == cComponent::registerSignal("vhtDlMuPostRollback"))
-            checkRollbackAfterAbort();
         else if (exercisePreCommitRollback && observeRollbackSignals &&
                 (signal == cComponent::registerSignal("packetEnqueued") ||
                  signal == cComponent::registerSignal("packetDequeued")))

@@ -16,7 +16,9 @@ conservation, TXVECTOR handoff, response timing, and fallback paths.
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequence.h"
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequenceHandler.h"
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementHandler.h"
+#include "inet/linklayer/ieee80211/mac/contract/IOriginatorMacDataService.h"
 #include "inet/linklayer/ieee80211/mac/contract/IQosRateSelection.h"
+#include "inet/linklayer/ieee80211/mac/contract/ISequenceNumberAssignment.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuPackingPlanner.h"
@@ -231,6 +233,75 @@ class MockDlMuAckHandler : public IAckHandler
         auto it = occupied.find({receiverAddress, tid});
         return it == occupied.end() ? std::set<int>() : it->second;
     }
+};
+
+class MockDlMuSequenceNumberAssignment : public ISequenceNumberAssignment
+{
+  public:
+    int nextSequenceNumber = 100;
+
+    virtual void assignSequenceNumber(const Ptr<Ieee80211DataOrMgmtHeader>& header) override
+    {
+        header->setSequenceNumber(SequenceNumberCyclic(nextSequenceNumber++));
+    }
+    virtual std::unique_ptr<ISequenceNumberAssignment> clone() const override
+    {
+        return std::make_unique<MockDlMuSequenceNumberAssignment>(*this);
+    }
+    virtual void copyStateFrom(const ISequenceNumberAssignment& other) override
+    {
+        nextSequenceNumber = check_and_cast<const MockDlMuSequenceNumberAssignment *>(&other)->nextSequenceNumber;
+    }
+};
+
+class MockDlMuOriginatorDataService : public IOriginatorMacDataService
+{
+  public:
+    MockDlMuSequenceNumberAssignment sequenceNumberState;
+    int commitCount = 0;
+
+    virtual std::vector<Packet *> *extractFramesToTransmit(queueing::IPacketQueue *) override { return nullptr; }
+    virtual std::vector<Packet *> *extractExactFrameToTransmit(queueing::IPacketQueue *, Packet *) override { return nullptr; }
+    virtual void setBlockAckAgreementHandler(IOriginatorBlockAckAgreementHandler *) override {}
+    virtual std::optional<int> getMaxAmpduLengthExponent() const override { return std::nullopt; }
+    virtual std::unique_ptr<ISequenceNumberAssignment> cloneSequenceNumberState() const override
+    {
+        return sequenceNumberState.clone();
+    }
+    virtual void commitSequenceNumberState(const ISequenceNumberAssignment& state) override
+    {
+        sequenceNumberState.copyStateFrom(state);
+        commitCount++;
+    }
+};
+
+class MockDlMuRuntimeCallback : public IHeDlMuExchangeCallback
+{
+  public:
+    IQosRateSelection *rateSelection = nullptr;
+    MockDlMuOriginatorDataService *dataService = nullptr;
+    int planFinalizedCount = 0;
+    int planCommittedCount = 0;
+
+    MockDlMuRuntimeCallback(IQosRateSelection *rateSelection,
+            MockDlMuOriginatorDataService *dataService) :
+        rateSelection(rateSelection), dataService(dataService) {}
+
+    virtual queueing::IPacketQueue *resolveHeDlMuQueue(HcfQueueToken) const override { return nullptr; }
+    virtual Packet *getReservedHeDlMuPacket(uint64_t, const MacAddress&) const override { return nullptr; }
+    virtual bool isReservedHeDlMuPacket(uint64_t, const MacAddress&, const Packet *) const override { return true; }
+    virtual IOriginatorBlockAckAgreementHandler *getHeDlMuBlockAckHandler() const override { return nullptr; }
+    virtual IOriginatorMacDataService *getHeDlMuOriginatorDataService() const override { return dataService; }
+    virtual IQosRateSelection *getHeDlMuRateSelection() const override { return rateSelection; }
+    virtual MacAddress getHeDlMuTransmitterAddress() const override { return MacAddress("02:00:00:00:00:01"); }
+    virtual int getHeDlMuFcsMode() const override { return FCS_DECLARED_CORRECT; }
+    virtual uint8_t getHeDlMuBssColor() const override { return 0; }
+    virtual uint16_t getHeDlMuAssociationId(const MacAddress& peer) const override { return computeHeMuStaId(peer); }
+    virtual std::optional<Ieee80211NegotiatedHeCapabilities> getHeDlMuNegotiatedCapabilities(const MacAddress&) const override { return std::nullopt; }
+    virtual void heDlMuPlanFinalized(uint64_t, const std::vector<HeDlMuMember>&) override { planFinalizedCount++; }
+    virtual void heDlMuPlanCommitted(uint64_t, Packet *, const std::vector<HeDlMuMember>&) override { planCommittedCount++; }
+    virtual void heDlMuMemberTransmitted(uint64_t, const HeDlMuMember&) override {}
+    virtual void heDlMuUserOutcome(uint64_t, const MacAddress&, HeDlMuUserOutcome) override {}
 };
 
 class MockDlMuScheduler : public IIeee80211HeDlScheduler
@@ -660,9 +731,8 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
             modeSet, pendingQueue, &ackHandler, callback, callback, legacyRateSelection);
     FailingDlMuTransactionObserver failureObserver(1);
     fs.setTransactionObserver(&failureObserver);
-    fs.startSequence(fsContext, 0);
-    auto step = fs.prepareStep(fsContext);
-    requireTrue(step == nullptr, "injected pre-transmission failure should abort the MU sequence");
+    requireTrue(!fs.prepare(fsContext),
+            "injected pre-transmission failure should abort before frame-sequence startup");
     requireTrue(pendingQueue->getNumPackets() == 2 && pendingQueue->getPacket(0) == packet1 &&
             pendingQueue->getPacket(1) == packet2, "abort should preserve exact packet identity and queue order");
     requireTrue(packet1->getArrivalTime() == originalArrival1 &&
@@ -722,8 +792,35 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     auto dlPlan = makeDlPlan(scheduler, dlScheduleContext, pendingQueue);
     auto rateSelection = check_and_cast<MockDlMuRateSelection *>(callback->getSubmodule("rateSelection"));
     rateSelection->resetObservedRequests();
+    MockDlMuOriginatorDataService dataService;
+    MockDlMuRuntimeCallback runtimeCallback(rateSelection, &dataService);
     HeDlMuTxOpFs fs(dlPlan,
-            modeSet, pendingQueue, &ackHandler, callback, callback, legacyRateSelection, 8);
+            modeSet, pendingQueue, &ackHandler, callback, &runtimeCallback, 41, 8);
+    std::vector<SequenceNumberCyclic> originalSequenceNumbers;
+    for (int i = 0; i < pendingQueue->getNumPackets(); ++i)
+        originalSequenceNumbers.push_back(pendingQueue->getPacket(i)->
+                peekAtFront<Ieee80211DataHeader>()->getSequenceNumber());
+    requireTrue(fs.prepare(fsContext),
+            "complete DL MU preparation should succeed before frame-sequence startup");
+    requireTrue(pendingQueue->getNumPackets() == 5 && inProgress.getLength() == 0 &&
+            ackHandler.inProgressCount == 0 && fs.getActiveAllocations().empty(),
+            "successful preparation should leave queue, ACK, and committed allocation ownership unchanged");
+    requireTrue(dataService.sequenceNumberState.nextSequenceNumber == 100 &&
+            dataService.commitCount == 0 && runtimeCallback.planFinalizedCount == 0 &&
+            runtimeCallback.planCommittedCount == 0,
+            "successful preparation should leave live sequence state and scheduler callbacks unchanged");
+    for (int i = 0; i < pendingQueue->getNumPackets(); ++i)
+        requireTrue(pendingQueue->getPacket(i)->peekAtFront<Ieee80211DataHeader>()->
+                getSequenceNumber() == originalSequenceNumbers[i],
+                "successful preparation should leave live packet sequence state unchanged");
+    fs.commit(fsContext);
+    requireTrue(pendingQueue->getNumPackets() == 0 && inProgress.getLength() == 5 &&
+            ackHandler.inProgressCount == 5 && fs.getActiveAllocations().size() == 2,
+            "explicit commit should adopt packed packets, ACK state, and finalized allocations");
+    requireTrue(dataService.sequenceNumberState.nextSequenceNumber == 105 &&
+            dataService.commitCount == 1 && runtimeCallback.planFinalizedCount == 1 &&
+            runtimeCallback.planCommittedCount == 1,
+            "explicit commit should adopt prepared sequence state and notify each scheduler phase exactly once");
     fs.startSequence(fsContext, 0);
     auto step = fs.prepareStep(fsContext);
     requireTrue(step != nullptr, "per-user packing should build a transmit step");

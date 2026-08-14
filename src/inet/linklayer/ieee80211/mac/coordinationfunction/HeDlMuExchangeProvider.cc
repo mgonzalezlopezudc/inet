@@ -356,9 +356,6 @@ bool HeDlMuExchangeProvider::commitStart(const PreparedStart& preparedStart)
     }
     if (!preparedStart.plan)
         throw cRuntimeError("Prepared HE DL MU start lacks a plan");
-    fallbackQueueToken = preparedStart.stageQueueToken;
-    fallbackPacketIdentity = preparedStart.stagePacketIdentity;
-    fallbackAccessCategory = ac;
     if (nextTransactionToken == 0 ||
             nextTransactionToken == std::numeric_limits<uint64_t>::max())
         throw cRuntimeError("HE DL MU exchange ID exhausted");
@@ -372,21 +369,18 @@ bool HeDlMuExchangeProvider::commitStart(const PreparedStart& preparedStart)
     pendingScheduler = preparedStart.scheduler;
     pendingScheduleContext = preparedStart.plan->getScheduleContext();
     pendingAllocations = preparedStart.plan->getAllocations();
-    startPhase = StartPhase::COMMITTING;
     pendingProtectionAccessCategory = ac;
     pendingProtectionSnapshot = actions->captureHeDlMuProtection(ac);
+    bool started = false;
     try {
-        actions->configureHeDlMuProtection(ac);
-        actions->startHeDlMuExchange(ac, *preparedStart.plan, token,
+        started = actions->startHeDlMuExchange(ac, *preparedStart.plan, token,
                 preparedStart.ackMethod, preparedStart.parameters);
     }
     catch (...) {
         restorePendingProtection();
         throw;
     }
-    if (pendingPlanningFailure) {
-        const auto failedAccessCategory = *pendingPlanningFailure;
-        pendingPlanningFailure.reset();
+    if (!started) {
         rollbackReservation(token);
         const bool staged = preparedStart.stageQueueToken.isValid() &&
                 preparedStart.stagePacketIdentity.isValid() &&
@@ -394,9 +388,9 @@ bool HeDlMuExchangeProvider::commitStart(const PreparedStart& preparedStart)
                         preparedStart.stagePacketIdentity, ac);
         if (!staged)
             return false;
-        return actions->startHeDlMuSingleUserIfEligible(failedAccessCategory);
+        return actions->startHeDlMuSingleUserIfEligible(ac);
     }
-    if (startPhase == StartPhase::COMMITTING)
+    if (startPhase == StartPhase::IDLE)
         startPhase = StartPhase::ACTIVE;
     rollbackGuard.release();
     return true;
@@ -481,7 +475,6 @@ void HeDlMuExchangeProvider::rollbackReservation(uint64_t token)
     restorePendingProtection();
     activeTransactionToken = 0;
     startPhase = StartPhase::IDLE;
-    pendingPlanningFailure.reset();
     reservedPackets.clear();
     pendingScheduler = nullptr;
     pendingScheduleContext = {};
@@ -632,35 +625,6 @@ bool HeDlMuExchangeProvider::heDlMuUserOutcome(uint64_t token,
         transmittedMembers.clear();
         completedUsers.clear();
     }
-    return true;
-}
-
-bool HeDlMuExchangeProvider::heDlMuPlanningFailed(uint64_t token,
-        AccessCategory ac, bool notifyActions)
-{
-    // Planning failure belongs only to the reserved, not-yet-committed
-    // transaction.  A zero, late, duplicate, or post-commit callback must not
-    // schedule a fallback for an unrelated TXOP.
-    if (token == 0 || token != activeTransactionToken ||
-            !members.empty() || reservedPackets.empty())
-        return false;
-    if (ac != fallbackAccessCategory)
-        throw cRuntimeError("HE DL MU planning failure access category does not match the reserved start");
-    if (startPhase == StartPhase::COMMITTING) {
-        if (pendingPlanningFailure)
-            throw cRuntimeError("Duplicate synchronous HE DL MU planning failure callback");
-        pendingPlanningFailure = ac;
-        return true;
-    }
-    rollbackReservation(token);
-    const bool staged = ac == fallbackAccessCategory &&
-            fallbackQueueToken.isValid() && fallbackPacketIdentity.isValid() &&
-            actions->stageHeDlMuPacket(fallbackQueueToken,
-                    fallbackPacketIdentity, ac);
-    if (ac >= AC_BK && ac < AC_NUMCATEGORIES)
-        forceNextSingleUser[ac] = staged;
-    if (notifyActions)
-        actions->heDlMuPlanningFailed(token, ac);
     return true;
 }
 

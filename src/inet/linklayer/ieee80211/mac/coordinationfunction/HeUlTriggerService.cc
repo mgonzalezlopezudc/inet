@@ -440,7 +440,6 @@ bool HeUlTriggerService::commitStart(const PreparedStart& preparedStart)
     accessRequested = false;
     committedScheduleContext = preparedStart.scheduleContext;
     try {
-        actions->configureHeUlMuProtection(preparedStart.accessCategory);
         actions->startHeUlMuExchange(preparedStart.accessCategory,
                 preparedStart.plan, exchangeCallback);
     }

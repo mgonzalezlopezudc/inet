@@ -761,70 +761,12 @@ HeTbResponseProtection attachHeTbTxVectorFromTrigger(Packet *packet,
     return protection;
 }
 
-HeTriggeredUlExchangeService::PreparedTriggeredUlResponse
-HeTriggeredUlExchangeService::prepareResponse(Packet *sourcePacket,
-        HcfQueueToken sourceQueueToken, const std::vector<Packet *>& sourcePackets,
-        AccessCategory selectedAc, uint8_t selectedTid, uint32_t queueBytes,
-        int availableSlots, const Ieee80211HeTriggerUserInfo *selected,
-        const Ptr<const Ieee80211TriggerFrame>& trigger, uint32_t triggerId,
-        W transmitPower,
-        const std::optional<physicallayer::Ieee80211HeTxopDuration>& solicitingTxopDuration,
-        Exchange exchange,
-        const std::vector<BlockAckCandidateSnapshot>& blockAckCandidates)
-{
-    PreparedTriggeredUlResponse prepared;
-    Ptr<const Ieee80211MacHeader> ignoredHeader;
-    bool committed = false;
-    prepareAndCommitResponse(sourcePacket, sourceQueueToken, sourcePackets,
-            selectedAc, selectedTid, queueBytes, availableSlots, selected,
-            trigger, triggerId, transmitPower, solicitingTxopDuration,
-            exchange, ignoredHeader, committed, false, &prepared,
-            blockAckCandidates);
-    ASSERT(!committed);
-    prepared.event.triggerId = triggerId;
-    prepared.event.triggerType = static_cast<IIeee80211HeUlTriggerPolicy::TriggerType>(
-            trigger->getTriggerType());
-    prepared.event.reason = !prepared.exchange.packets.empty() ?
-            HeTbResponseEvent::DATA_SELECTED :
-            prepared.hasBlockAckRequest ? HeTbResponseEvent::BLOCK_ACK_REQUESTED :
-            trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ?
-                    HeTbResponseEvent::BUFFER_STATUS_REPORTED :
-            sourcePacket != nullptr || queueBytes > 0 ?
-                    HeTbResponseEvent::NO_FITTING_PAYLOAD :
-                    HeTbResponseEvent::NO_PENDING_DATA;
-    prepared.event.associationId = actions->getTriggeredUlAssociationId();
-    prepared.event.tid = prepared.hasBlockAckRequest ?
-            prepared.preparedBlockAckReq->getTidInfo() : selectedTid;
-    prepared.event.accessCategory = prepared.hasBlockAckRequest ?
-            prepared.blockAckReqAccessCategory : selectedAc;
-    prepared.event.ruIndex = selected->ruIndex;
-    prepared.event.ruToneSize = selected->ruToneSize;
-    prepared.event.ruToneOffset = selected->ruToneOffset;
-    prepared.event.hadPendingPayload = sourcePacket != nullptr;
-    prepared.event.pendingBytes = queueBytes;
-    for (auto packet : prepared.exchange.packets)
-        prepared.event.selectedBytes += packet->getByteLength();
-    prepared.event.reportedBytes = prepared.hasBlockAckRequest ? 0 : queueBytes;
-    auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(prepared.responseHeader);
-    prepared.event.ackPolicy = dataHeader == nullptr ? -1 : dataHeader->getAckPolicy();
-    if (observer != nullptr) {
-        observer->preparedResponse(prepared.responsePacket.get());
-        observer->beforeHandoff(prepared.responsePacket.get());
-    }
-    prepared.txReservation = actions->prepareTriggeredUlHandoff(
-            prepared.responsePacket.get(), prepared.responseHeader);
-    if (prepared.txReservation == nullptr)
-        throw cRuntimeError("HE-TB Tx preparation returned no reservation");
-    return prepared;
-}
-
 void HeTriggeredUlExchangeService::commit(PreparedTriggeredUlResponse&& prepared)
 {
-    if (prepared.committed || prepared.responsePacket == nullptr ||
-            prepared.triggerId == 0)
+    if (prepared.responsePacket == nullptr || prepared.triggerId == 0)
         throw cRuntimeError("Cannot commit an incomplete prepared HE-TB response");
 
-    if (!prepared.queueCommitted)
+    if (prepared.stagedExchange.empty())
         precommit(prepared);
     auto& exchange = prepared.stagedExchange.empty() ?
             prepared.exchange : prepared.stagedExchange.mapped();
@@ -849,7 +791,6 @@ void HeTriggeredUlExchangeService::commit(PreparedTriggeredUlResponse&& prepared
         std::terminate();
     scheduleNextTimeout();
     actions->emitTriggeredUlResponse(prepared.event);
-    prepared.committed = true;
 }
 
 void HeTriggeredUlExchangeService::precommit(
@@ -930,18 +871,16 @@ void HeTriggeredUlExchangeService::rollback(
     prepared.queueCommitted = false;
 }
 
-Packet *HeTriggeredUlExchangeService::prepareAndCommitResponse(Packet *sourcePacket,
+HeTriggeredUlExchangeService::PreparedTriggeredUlResponse
+HeTriggeredUlExchangeService::prepareResponse(Packet *sourcePacket,
         HcfQueueToken sourceQueueToken, const std::vector<Packet *>& sourcePackets,
         AccessCategory selectedAc, uint8_t selectedTid, uint32_t queueBytes, int availableSlots,
         const Ieee80211HeTriggerUserInfo *selected, const Ptr<const Ieee80211TriggerFrame>& trigger,
         uint32_t triggerId, W transmitPower,
         const std::optional<physicallayer::Ieee80211HeTxopDuration>& solicitingTxopDuration,
-        Exchange& exchange, Ptr<const Ieee80211MacHeader>& responseHeader,
-        bool& committed, bool publish, PreparedTriggeredUlResponse *preparedResult,
+        Exchange exchange,
         const std::vector<BlockAckCandidateSnapshot>& blockAckCandidates)
 {
-    committed = false;
-    responseHeader = nullptr;
     if (!sourceQueueToken.isValid() || selected == nullptr || trigger == nullptr)
         throw cRuntimeError("Cannot prepare an HE-TB response without queue-token and Trigger context");
     const auto centerFrequency = actions->getTriggeredUlCenterFrequency();
@@ -1118,17 +1057,11 @@ Packet *HeTriggeredUlExchangeService::prepareAndCommitResponse(Packet *sourcePac
             responseSnapshot);
     responsePacket.reset(preparedResponse.packet);
 
-    std::vector<Packet *> preparedPackets;
     std::vector<std::unique_ptr<Packet>> rollbackPacketOwners;
-    std::vector<Packet *> rollbackPackets;
     if (!originalPackets.empty()) {
         actions->validateTriggeredUlPackets(sourceQueueToken, originalPackets);
-        for (const auto& owner : preparedPacketOwners)
-            preparedPackets.push_back(owner.get());
-        for (auto original : originalPackets) {
+        for (auto original : originalPackets)
             rollbackPacketOwners.emplace_back(original->dup());
-            rollbackPackets.push_back(rollbackPacketOwners.back().get());
-        }
         try {
             for (size_t i = 0; i < originalPackets.size(); ++i)
                 if (observer != nullptr)
@@ -1140,107 +1073,62 @@ Packet *HeTriggeredUlExchangeService::prepareAndCommitResponse(Packet *sourcePac
         }
     }
 
-    // The RA-RU preflight must cross the same last fallible gate as the
-    // selected response. It deliberately stops immediately before any live
-    // queue, sequence, BAR, ledger, ownership, or observation publication.
-    if (!publish) {
-        if (preparedResult != nullptr) {
-            responseHeader = sourcePacket != nullptr ?
-                    exchange.packets.front()->peekAtFront<Ieee80211MacHeader>() :
-                    blockAckReqMpdu != nullptr ?
-                            blockAckReqMpdu->peekAtFront<Ieee80211MacHeader>() :
-                            nullMpdu->peekAtFront<Ieee80211MacHeader>();
-            preparedResult->responsePacket = std::move(responsePacket);
-            preparedResult->responseHeader = responseHeader;
-            preparedResult->exchange = std::move(exchange);
-            preparedResult->originalSequenceState = std::move(originalSequenceNumberState);
-            preparedResult->preparedSequenceState = std::move(preparedSequenceNumberState);
-            preparedResult->originalPackets = std::move(originalPackets);
-            preparedResult->preparedPacketOwners = std::move(preparedPacketOwners);
-            preparedResult->rollbackPacketOwners = std::move(rollbackPacketOwners);
-            preparedResult->queueOrder = sourcePackets;
-            preparedResult->preparedBlockAckReq = preparedBlockAckReq;
-            preparedResult->blockAckReqAccessCategory = blockAckReqAc;
-            preparedResult->hasBlockAckRequest = blockAckReqMpdu != nullptr;
-            preparedResult->triggerId = triggerId;
-            return nullptr;
-        }
-        rollbackSequenceState(preparedSequenceNumberState);
-        rollbackSequenceState(originalSequenceNumberState);
-        return responsePacket.release();
-    }
-
-    // Replace all selected queue packets first. The queue service provides a
-    // strong rollback guarantee, and the original sequence state and packet
-    // snapshots below keep later publication reversible until this method
-    // returns a complete transaction.
-    if (!originalPackets.empty()) {
-        if (observer != nullptr)
-            observer->beforeQueueCommit();
-        auto committedPackets = actions->commitTriggeredUlPackets(
-                sourceQueueToken, originalPackets, preparedPackets);
-        for (size_t i = 0; i < committedPackets.size(); ++i) {
-            actions->takeTriggeredUlPacket(committedPackets[i]);
-            exchange.packets[i] = committedPackets[i];
-        }
-    }
-    try {
-        if (blockAckReqMpdu == nullptr)
-            commitSequenceState(preparedSequenceNumberState);
-        else {
-            exchange.tid = preparedBlockAckReq->getTidInfo();
-            exchange.recoveryKind = RecoveryKind::COMPRESSED_BLOCK_ACK_REQUEST;
-            exchange.recoveryAccessCategory = blockAckReqAc;
-            exchange.blockAckReq = preparedBlockAckReq;
-            actions->commitTriggeredUlBlockAckRequest(preparedBlockAckReq,
-                    blockAckReqAc);
-        }
-    }
-    catch (...) {
-        if (!originalPackets.empty())
-            actions->rollbackTriggeredUlPackets(sourceQueueToken,
-                    originalPackets, rollbackPackets, sourcePackets);
-        if (blockAckReqMpdu == nullptr)
-            commitSequenceState(originalSequenceNumberState);
-        throw;
-    }
-    committed = true;
     // The PSDU starts with an A-MPDU delimiter, so its first MAC header is
     // deliberately retained from the inner MPDU instead of being re-peeked
     // through the aggregate representation by the Tx handoff.
-    responseHeader = sourcePacket != nullptr ?
+    auto responseHeader = sourcePacket != nullptr ?
             exchange.packets.front()->peekAtFront<Ieee80211MacHeader>() :
             blockAckReqMpdu != nullptr ?
                     blockAckReqMpdu->peekAtFront<Ieee80211MacHeader>() :
-            nullMpdu->peekAtFront<Ieee80211MacHeader>();
-    HeTbResponseEvent event;
-    event.triggerId = triggerId;
-    event.triggerType = static_cast<IIeee80211HeUlTriggerPolicy::TriggerType>(
+                    nullMpdu->peekAtFront<Ieee80211MacHeader>();
+    PreparedTriggeredUlResponse prepared;
+    prepared.responsePacket = std::move(responsePacket);
+    prepared.responseHeader = responseHeader;
+    prepared.exchange = std::move(exchange);
+    prepared.originalSequenceState = std::move(originalSequenceNumberState);
+    prepared.preparedSequenceState = std::move(preparedSequenceNumberState);
+    prepared.originalPackets = std::move(originalPackets);
+    prepared.preparedPacketOwners = std::move(preparedPacketOwners);
+    prepared.rollbackPacketOwners = std::move(rollbackPacketOwners);
+    prepared.queueOrder = sourcePackets;
+    prepared.preparedBlockAckReq = preparedBlockAckReq;
+    prepared.blockAckReqAccessCategory = blockAckReqAc;
+    prepared.hasBlockAckRequest = blockAckReqMpdu != nullptr;
+    prepared.triggerId = triggerId;
+    prepared.event.triggerId = triggerId;
+    prepared.event.triggerType = static_cast<IIeee80211HeUlTriggerPolicy::TriggerType>(
             trigger->getTriggerType());
-    event.reason = sourcePacket != nullptr ? HeTbResponseEvent::DATA_SELECTED :
+    prepared.event.reason = sourcePacket != nullptr ? HeTbResponseEvent::DATA_SELECTED :
             blockAckReqMpdu != nullptr ? HeTbResponseEvent::BLOCK_ACK_REQUESTED :
             trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ?
                     HeTbResponseEvent::BUFFER_STATUS_REPORTED :
             hadPendingPayload || queueBytes > 0 ? HeTbResponseEvent::NO_FITTING_PAYLOAD :
                     HeTbResponseEvent::NO_PENDING_DATA;
-    event.associationId = actions->getTriggeredUlAssociationId();
-    event.tid = blockAckReqMpdu != nullptr ?
+    prepared.event.associationId = actions->getTriggeredUlAssociationId();
+    prepared.event.tid = blockAckReqMpdu != nullptr ?
             preparedBlockAckReq->getTidInfo() : selectedTid;
-    event.accessCategory = blockAckReqMpdu != nullptr ?
+    prepared.event.accessCategory = blockAckReqMpdu != nullptr ?
             blockAckReqAc : selectedAc;
-    event.ruIndex = selected->ruIndex;
-    event.ruToneSize = selected->ruToneSize;
-    event.ruToneOffset = selected->ruToneOffset;
-    event.hadPendingPayload = hadPendingPayload;
-    event.pendingBytes = queueBytes;
-    for (auto selectedPacket : exchange.packets)
-        event.selectedBytes += selectedPacket->getByteLength();
-    event.reportedBytes = blockAckReqMpdu != nullptr ?
+    prepared.event.ruIndex = selected->ruIndex;
+    prepared.event.ruToneSize = selected->ruToneSize;
+    prepared.event.ruToneOffset = selected->ruToneOffset;
+    prepared.event.hadPendingPayload = hadPendingPayload;
+    prepared.event.pendingBytes = queueBytes;
+    for (auto selectedPacket : prepared.exchange.packets)
+        prepared.event.selectedBytes += selectedPacket->getByteLength();
+    prepared.event.reportedBytes = blockAckReqMpdu != nullptr ?
             0 : queueBytes;
     auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(responseHeader);
-    event.ackPolicy = dataHeader == nullptr ? -1 : dataHeader->getAckPolicy();
-    actions->emitTriggeredUlResponse(event);
-    return responsePacket.release();
+    prepared.event.ackPolicy = dataHeader == nullptr ? -1 : dataHeader->getAckPolicy();
+    if (observer != nullptr) {
+        observer->preparedResponse(prepared.responsePacket.get());
+        observer->beforeHandoff(prepared.responsePacket.get());
+    }
+    prepared.txReservation = actions->prepareTriggeredUlHandoff(
+            prepared.responsePacket.get(), prepared.responseHeader);
+    if (prepared.txReservation == nullptr)
+        throw cRuntimeError("HE-TB Tx preparation returned no reservation");
+    return prepared;
 }
 
 HeTriggeredUlExchangeService::TriggerSelection

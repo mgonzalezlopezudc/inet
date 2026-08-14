@@ -290,7 +290,6 @@ class INET_API HeTriggeredUlExchangeService
         HeTbResponseEvent event;
         uint32_t triggerId = 0;
         bool hasBlockAckRequest = false;
-        bool committed = false;
         bool queueCommitted = false;
         std::unique_ptr<ITx::PreparedTransmission> txReservation;
 
@@ -435,17 +434,6 @@ class INET_API HeTriggeredUlExchangeService
             const Ptr<Ieee80211DataOrMgmtHeader>& header) const;
     void commitSequenceState(SequencePreparation& preparation) const;
     void rollbackSequenceState(SequencePreparation& preparation) const;
-    Packet *prepareAndCommitResponse(Packet *sourcePacket,
-            HcfQueueToken sourceQueueToken, const std::vector<Packet *>& sourcePackets,
-            AccessCategory selectedAc, uint8_t selectedTid, uint32_t queueBytes,
-            int availableSlots, const Ieee80211HeTriggerUserInfo *selected,
-            const Ptr<const Ieee80211TriggerFrame>& trigger, uint32_t triggerId,
-            W transmitPower,
-            const std::optional<physicallayer::Ieee80211HeTxopDuration>& solicitingTxopDuration,
-            Exchange& exchange, Ptr<const Ieee80211MacHeader>& responseHeader,
-            bool& committed, bool publish = true,
-            PreparedTriggeredUlResponse *preparedResult = nullptr,
-            const std::vector<BlockAckCandidateSnapshot>& blockAckCandidates = {});
     RandomAccessPreparation prepareRandomAccess(AccessCategory accessCategory,
             int randomAccessRuCount);
     int commitRandomAccess(const RandomAccessPreparation& preparation);

@@ -591,35 +591,37 @@ VhtHcfFeature::GrantDisposition VhtHcfFeature::commitDlMu(
         throw cRuntimeError("Another VHT DL MU exchange is active");
     auto edcaf = actions->getEdca()->getEdcaf(snapshot.accessCategory);
     auto txop = edcaf->getTxopProcedure();
+    const auto exchangeId = allocateDlMuExchangeId();
+    dlMu = {DlMuPhase::IDLE, exchangeId};
+    completedUsers.assign(snapshot.dlMuPlan->getUsers().size(), false);
+    activeContainerPacket = nullptr;
+    activeUserPackets.clear();
+    RollbackGuard rollback([this] {
+        dlMu = {};
+        completedUsers.clear();
+        activeContainerPacket = nullptr;
+        activeUserPackets.clear();
+    });
+    auto sequence = std::unique_ptr<VhtDlMuTxOpFs>(txOpFactory->create(
+            *snapshot.dlMuPlan, actions->getModeSet(),
+            edcaf->getAckHandler(), actions->getFrameSequenceCallback(), this, exchangeId));
+    auto context = std::unique_ptr<FrameSequenceContext>(
+            actions->buildFrameSequenceContext(snapshot.accessCategory));
+    if (!sequence->prepare(context.get())) {
+        return GrantDisposition::FINISHED_SYNCHRONOUSLY;
+    }
     auto protectionSnapshot = txop->getProtectionStateSnapshot();
     RollbackGuard protectionRollback([txop, protectionSnapshot] {
         txop->restoreProtectionStateSnapshot(protectionSnapshot);
     });
     if (!txop->isProtectionConfigured())
         txop->configureProtection(TxopProcedure::InitialProtection::NONE);
-    const auto exchangeId = allocateDlMuExchangeId();
-    dlMu = {DlMuPhase::PREPARED, exchangeId, false, std::nullopt};
-    completedUsers.assign(snapshot.dlMuPlan->getUsers().size(), false);
-    activeContainerPacket = nullptr;
-    activeUserPackets.clear();
-    RollbackGuard rollback([this, exchangeId] {
-        clearActiveDlMuExchange(exchangeId);
-        completedUsers.clear();
-        activeContainerPacket = nullptr;
-        activeUserPackets.clear();
-    });
-    dlMu.phase = DlMuPhase::COMMITTING;
-    auto sequence = txOpFactory->create(*snapshot.dlMuPlan, actions->getModeSet(),
-            edcaf->getAckHandler(), actions->getFrameSequenceCallback(), this, exchangeId);
-    actions->startFeatureFrameSequence(sequence, snapshot.accessCategory);
-    if (dlMu.pendingFailure) {
-        clearActiveDlMuExchange(exchangeId);
-        rollback.release();
+    if (!sequence->commit(context.get())) {
         return GrantDisposition::FINISHED_SYNCHRONOUSLY;
     }
+    actions->startFeatureFrameSequence(sequence.release(), context.release());
     protectionRollback.release();
-    if (dlMu.phase == DlMuPhase::COMMITTING)
-        dlMu.phase = DlMuPhase::ACTIVE;
+    ASSERT(dlMu.phase == DlMuPhase::ACTIVE);
     rollback.release();
     return GrantDisposition::STARTED;
 }
@@ -852,34 +854,15 @@ queueing::IPacketQueue *VhtHcfFeature::resolveVhtDlMuQueue(
     return edcaf == nullptr ? nullptr : edcaf->getPendingQueue();
 }
 
-void VhtHcfFeature::vhtDlMuPlanningFailed(uint64_t exchangeId,
-        VhtDlMuPlanningFailure reason)
-{
-    if (exchangeId != dlMu.exchangeId || dlMu.phase == DlMuPhase::IDLE ||
-            dlMu.phase == DlMuPhase::TERMINAL)
-        return;
-    if (dlMu.pendingFailure)
-        throw cRuntimeError("Duplicate VHT DL MU planning failure");
-    if (dlMu.ownershipCommitted)
-        throw cRuntimeError("VHT DL MU planning failed after ownership commit");
-    if (dlMu.phase == DlMuPhase::COMMITTING) {
-        dlMu.pendingFailure = reason;
-        return;
-    }
-    clearActiveDlMuExchange(exchangeId);
-}
-
 void VhtHcfFeature::vhtDlMuPlanCommitted(uint64_t exchangeId,
         Packet *containerPacket,
         const std::vector<std::vector<Packet *>>& userPackets)
 {
-    if (exchangeId != dlMu.exchangeId || dlMu.phase == DlMuPhase::IDLE)
+    if (exchangeId != dlMu.exchangeId || exchangeId == 0 ||
+            dlMu.phase != DlMuPhase::IDLE)
         throw cRuntimeError("VHT DL MU plan committed for a stale exchange");
-    if (dlMu.ownershipCommitted)
-        throw cRuntimeError("VHT DL MU plan committed twice");
     activeContainerPacket = containerPacket;
     activeUserPackets = userPackets;
-    dlMu.ownershipCommitted = true;
     dlMu.phase = DlMuPhase::ACTIVE;
 }
 
@@ -897,7 +880,7 @@ void VhtHcfFeature::processVhtDlMuUserResult(uint64_t exchangeId,
     if (result == UserResult::BLOCK_ACK_RECEIVED ||
             result == UserResult::BLOCK_ACK_TIMED_OUT)
         completedUsers[userIndex] = true;
-    if (dlMu.ownershipCommitted && !completedUsers.empty() &&
+    if (dlMu.phase == DlMuPhase::ACTIVE && !completedUsers.empty() &&
             std::all_of(completedUsers.begin(), completedUsers.end(),
                     [] (bool completed) { return completed; })) {
         clearActiveDlMuExchange(exchangeId);

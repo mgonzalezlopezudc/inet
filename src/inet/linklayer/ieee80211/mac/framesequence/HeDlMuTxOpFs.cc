@@ -98,12 +98,30 @@ class LegacyHeDlMuExchangeCallback : public IHeDlMuExchangeCallback
     virtual void heDlMuPlanCommitted(uint64_t, Packet *, const std::vector<HeDlMuMember>&) override {}
     virtual void heDlMuMemberTransmitted(uint64_t, const HeDlMuMember&) override {}
     virtual void heDlMuUserOutcome(uint64_t, const MacAddress&, HeDlMuUserOutcome) override {}
-    virtual void heDlMuPlanningFailed(uint64_t, AccessCategory) override {}
 };
 
 } // namespace
 
 using namespace inet::physicallayer;
+
+struct HeDlMuTxOpFs::PreparedCommit
+{
+    std::vector<HeDlMuPackingPlanner::SelectedAllocation> selectedAllocations;
+    std::map<Packet *, std::unique_ptr<Packet>> packetImages;
+    std::unique_ptr<ISequenceNumberAssignment> sequenceNumberState;
+    IOriginatorMacDataService *originatorDataService = nullptr;
+    std::vector<ActiveAllocation> activeAllocations;
+    std::vector<HeDlMuMember> finalizedMembers;
+    std::unique_ptr<Packet> container;
+    const IIeee80211Mode *muBarControlMode = nullptr;
+    simtime_t totalDuration = SIMTIME_ZERO;
+
+    PreparedCommit() = default;
+    PreparedCommit(const PreparedCommit&) = delete;
+    PreparedCommit& operator=(const PreparedCommit&) = delete;
+    PreparedCommit(PreparedCommit&&) = default;
+    PreparedCommit& operator=(PreparedCommit&&) = default;
+};
 
 namespace {
 
@@ -605,18 +623,18 @@ HeDlMuTxOpFs::HeDlMuTxOpFs(const HeDlMuPlan& dlPlan,
       //   MU-BAR Trigger BlockAck;
       // Implemented subset:
       //   HE-MU-PPDU ( MU-BAR Trigger BlockAck | 1{BlockAckReq BlockAck} );
-      // The HE MU PPDU itself is built by the first StepFs; the acknowledgement
-      // tail is either the standard MU-BAR trigger exchange or a sequential
-      // BlockAckReq/BlockAck fallback for each selected STA.
+      // The HE MU PPDU is fully prepared before the frame sequence is started;
+      // the acknowledgement tail is either the standard MU-BAR trigger exchange
+      // or a sequential BlockAckReq/BlockAck fallback for each selected STA.
       sequence(new SequentialFs({new StepFs("HE-MU-PPDU",
                                             [this](StepFs *, FrameSequenceContext *context) -> IFrameSequenceStep * {
-                                                containerPacket = buildMuContainerPacket(context);
-                                                if (containerPacket == nullptr) {
-                                                    EV_WARN << "HeDlMuTxOpFs: container packet build failed, aborting HE DL MU sequence\n";
+                                                if (!preparationSucceeded)
                                                     return static_cast<IFrameSequenceStep *>(nullptr);
-                                                }
+                                                ASSERT(containerPacket != nullptr);
                                                 EV_DEBUG << "HeDlMuTxOpFs: transmitting HE DL MU container packet\n";
-                                                return new TransmitStep(containerPacket, context->getIfs(), true);
+                                                auto transmitStep = new TransmitStep(containerPacket, context->getIfs(), true);
+                                                containerOwnershipTransferred = true;
+                                                return transmitStep;
                                             }),
                                  new AlternativesFs({new HeDlMuBarBlockAckFs(this),
                                                      new IndexedRepeatingFs(
@@ -656,24 +674,91 @@ HeDlMuTxOpFs::HeDlMuTxOpFs(const HeDlMuPlan& dlPlan,
     ownedCompatibilityCallback.reset(heDlMuCallback);
 }
 
+bool HeDlMuTxOpFs::prepare(FrameSequenceContext *context)
+{
+    ASSERT(context != nullptr);
+    if (preparationAttempted)
+        throw cRuntimeError("HE DL MU frame sequence may only be prepared once");
+    if (step != -1)
+        throw cRuntimeError("HE DL MU frame sequence must be prepared before it is started");
+    preparationAttempted = true;
+    preparedCommit = buildPreparedCommit(context);
+    preparationSucceeded = preparedCommit != nullptr;
+    if (!preparationSucceeded)
+        EV_WARN << "HeDlMuTxOpFs: container packet build failed, aborting HE DL MU sequence\n";
+    return preparationSucceeded;
+}
+
+void HeDlMuTxOpFs::commit(FrameSequenceContext *context)
+{
+    ASSERT(context != nullptr);
+    if (!preparationAttempted || !preparationSucceeded || preparedCommit == nullptr)
+        throw cRuntimeError("HE DL MU frame sequence requires successful preparation before commit");
+    if (commitAttempted)
+        throw cRuntimeError("HE DL MU frame sequence preparation may only be committed once");
+    commitAttempted = true;
+
+    auto& prepared = *preparedCommit;
+    heDlMuCallback->heDlMuPlanFinalized(transactionToken, prepared.finalizedMembers);
+    if (prepared.sequenceNumberState != nullptr)
+        prepared.originatorDataService->commitSequenceNumberState(*prepared.sequenceNumberState);
+    for (const auto& selectedAllocation : prepared.selectedAllocations) {
+        auto sourceQueue = selectedAllocation.sourceQueue == nullptr ? pendingQueue : selectedAllocation.sourceQueue;
+        for (auto originalPacket : selectedAllocation.packets) {
+            auto packetImage = prepared.packetImages.at(originalPacket).get();
+            sourceQueue->removePacket(originalPacket);
+            originalPacket->removeAll();
+            originalPacket->insertAtBack(packetImage->peekAll());
+            originalPacket->setFrontOffset(packetImage->getFrontOffset());
+            originalPacket->setBackOffset(packetImage->getBackOffset());
+            originalPacket->clearTags();
+            originalPacket->copyTags(*packetImage);
+            originalPacket->getRegionTags() = packetImage->getRegionTags();
+            auto committedHeader = originalPacket->peekAtFront<Ieee80211DataOrMgmtHeader>();
+            ackHandler->frameGotInProgress(committedHeader);
+            context->getInProgressFrames()->addInProgressFrame(originalPacket);
+        }
+    }
+
+    containerPacket = prepared.container.release();
+    activeAllocations = std::move(prepared.activeAllocations);
+    muBarControlMode = prepared.muBarControlMode;
+    heDlMuCallback->heDlMuPlanCommitted(transactionToken, containerPacket,
+            prepared.finalizedMembers);
+    committed = true;
+    EV_INFO << "Assembled HE MU PPDU with "
+            << activeAllocations.size() << " RU allocations. Total sequential duration = "
+            << prepared.totalDuration << endl;
+    preparedCommit.reset();
+}
+
 void HeDlMuTxOpFs::startSequence(FrameSequenceContext *context, int firstStep)
 {
     ASSERT(context != nullptr);
     ASSERT(sequence != nullptr);
+    // Compatibility adapter for legacy and direct unit-test construction.
+    if (!preparationAttempted)
+        prepare(context);
+    if (preparationSucceeded && !committed)
+        commit(context);
     this->firstStep = firstStep;
     step = 0;
     sequence->startSequence(context, firstStep);
     EV_INFO << "Starting HE DL MU FS at step " << firstStep << "\n";
 }
 
-HeDlMuTxOpFs::~HeDlMuTxOpFs() = default;
+HeDlMuTxOpFs::~HeDlMuTxOpFs()
+{
+    if (!containerOwnershipTransferred)
+        delete containerPacket;
+}
 
 MacAddress HeDlMuTxOpFs::getTransmitterAddress() const
 {
     return heDlMuCallback->getHeDlMuTransmitterAddress();
 }
 
-Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
+std::unique_ptr<HeDlMuTxOpFs::PreparedCommit> HeDlMuTxOpFs::buildPreparedCommit(FrameSequenceContext *context)
 {
     // IEEE 802.11-2024 26.5.1 / 27.3.11.13: an AP schedules one or more
     // per-user PSDUs in an HE MU PPDU using OFDMA RUs and, optionally,
@@ -682,12 +767,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     // parameters.
     ASSERT(context != nullptr);
     const auto& scheduleContext = dlPlan.getScheduleContext();
-    activeAllocations.clear();
-    auto notifyPlanningFailure = [&] {
-        auto ac = scheduleContext.candidates.empty() ? AccessCategory::AC_BE :
-                scheduleContext.candidates.front().accessCategory;
-        heDlMuCallback->heDlMuPlanningFailed(transactionToken, ac);
-    };
+    auto prepared = std::make_unique<PreparedCommit>();
     // Obtain per-STA RU assignments from the scheduler.
     EV_INFO << "HE DL MU scheduling " << scheduleContext.candidates.size()
              << " candidates, ackMethod = "
@@ -696,7 +776,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     EV_INFO << "Validated scheduler plan contains " << allocations.size() << " allocations\n";
 
     // Assemble the HE MU PPDU container packet.
-    auto container = new Packet("HE-MU-PPDU");
+    auto container = std::make_unique<Packet>("HE-MU-PPDU");
 
     // Header metadata is passed to the MAC transmit interface but is not
     // inserted into the packet: an HE MU PPDU has independent per-user PSDUs,
@@ -725,7 +805,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             scheduleContext.channelBandwidth > MHz(20));
     if (carrierMode == nullptr)
         throw cRuntimeError("No legal HE MCS 0/NSS 1 carrier mode for the canonical DL MU bandwidth");
-    RateSelection::setFrameMode(container, containerHdr, carrierMode);
+    RateSelection::setFrameMode(container.get(), containerHdr, carrierMode);
 
     auto getCandidateAccessCategory = [&] (const MacAddress& staAddress, AccessCategory fallbackAc) {
         for (const auto& candidate : scheduleContext.candidates)
@@ -824,8 +904,6 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     if (selectedAllocations.size() < 2) {
         EV_WARN << "Aborting HE MU PPDU assembly because only "
                 << selectedAllocations.size() << " active Block Ack allocations remain before queue mutation." << endl;
-        delete container;
-        notifyPlanningFailure();
         return nullptr;
     }
     ASSERT(selectedAllocations.size() >= 2);
@@ -847,7 +925,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         const IIeee80211Mode *response = nullptr;
     };
     std::map<MacAddress, BarModes> barModes;
-    muBarControlMode = nullptr;
+    const IIeee80211Mode *finalizedMuBarControlMode = nullptr;
     auto selectMuBarControlMode = [&] (size_t numberOfUsers) {
         auto trigger = makeShared<Ieee80211TriggerFrame>();
         trigger->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
@@ -889,7 +967,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         }
     }
     else
-        muBarControlMode = selectMuBarControlMode(selectedAllocations.size());
+        finalizedMuBarControlMode = selectMuBarControlMode(selectedAllocations.size());
     for (size_t idx = 0; idx < selectedAllocations.size(); ++idx) {
         if (ackMethod == AckMethod::EXPLICIT_SEQUENTIAL_BAR) {
             const auto& modes = barModes.at(selectedAllocations[idx].allocation.staAddress);
@@ -907,7 +985,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         selectedAllocations[idx].phyMode = staMode;
     }
     if (ackMethod == AckMethod::MU_BAR_TRIGGER) {
-        auto triggerDuration = muBarControlMode->getDuration(getMuBarTriggerFrameLength(selectedAllocations.size()));
+        auto triggerDuration = finalizedMuBarControlMode->getDuration(getMuBarTriggerFrameLength(selectedAllocations.size()));
         std::vector<Ieee80211HeUserPhyParameters> responseUsers;
         responseUsers.reserve(selectedAllocations.size());
         std::map<int, int> responseStreamStartIndex;
@@ -922,8 +1000,6 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
                 scheduleContext.channelCenterFrequency, scheduleContext.channelBandwidth);
         if (!response) {
             EV_WARN << "Cannot reserve MU-BAR response phase: " << response.error << endl;
-            delete container;
-            notifyPlanningFailure();
             return nullptr;
         }
         totalDuration = modeSet->getSifsTime() + triggerDuration +
@@ -956,8 +1032,6 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             EV_WARN << "Building MU container packet: reserved MU acknowledgment phase ("
                     << totalDuration << ") leaves no payload time in the remaining TXOP ("
                     << remainingTxop << ")" << endl;
-            delete container;
-            notifyPlanningFailure();
             return nullptr;
         }
         auto txopPpduLimit = std::max(SIMTIME_ZERO, remainingTxop - totalDuration);
@@ -1001,8 +1075,6 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
              << " iteration(s), final allocations = " << finalAllocations.size() << "\n";
     if (!packingPlan) {
         EV_WARN << "Building MU container packet: " << packingPlan.getFailureReason() << endl;
-        delete container;
-        notifyPlanningFailure();
         return nullptr;
     }
     const auto& plannedPpdu = packingPlan.getPpdu();
@@ -1026,8 +1098,8 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         // The packing planner may remove users. Select once more from the
         // surviving real Trigger shape so its cached control mode and the
         // final reservation cannot drift.
-        muBarControlMode = selectMuBarControlMode(finalAllocations.size());
-        auto triggerDuration = muBarControlMode->getDuration(getMuBarTriggerFrameLength(finalAllocations.size()));
+        finalizedMuBarControlMode = selectMuBarControlMode(finalAllocations.size());
+        auto triggerDuration = finalizedMuBarControlMode->getDuration(getMuBarTriggerFrameLength(finalAllocations.size()));
         std::vector<Ieee80211HeUserPhyParameters> responseUsers;
         responseUsers.reserve(finalAllocations.size());
         std::map<int, int> responseStreamStartIndex;
@@ -1042,8 +1114,6 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
                 scheduleContext.channelCenterFrequency, scheduleContext.channelBandwidth);
         if (!response) {
             EV_WARN << "Cannot finalize MU-BAR response phase: " << response.error << endl;
-            delete container;
-            notifyPlanningFailure();
             return nullptr;
         }
         totalDuration = modeSet->getSifsTime() + triggerDuration +
@@ -1053,18 +1123,15 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     // Prepare the complete PPDU on private packet copies. Sequence numbers are
     // assigned against a cloned counter state, so every remaining fallible
     // operation precedes the queue/BA ownership commit.
-    IOriginatorMacDataService *originatorDataService = nullptr;
-    std::unique_ptr<ISequenceNumberAssignment> preparedSequenceNumberState;
-    originatorDataService = heDlMuCallback->getHeDlMuOriginatorDataService();
-    if (originatorDataService != nullptr)
-        preparedSequenceNumberState = originatorDataService->cloneSequenceNumberState();
-    std::map<Packet *, std::unique_ptr<Packet>> preparedPackets;
+    prepared->originatorDataService = heDlMuCallback->getHeDlMuOriginatorDataService();
+    if (prepared->originatorDataService != nullptr)
+        prepared->sequenceNumberState = prepared->originatorDataService->cloneSequenceNumberState();
     for (const auto& selectedAllocation : finalAllocations) {
         for (auto originalPacket : selectedAllocation.packets) {
             auto preparedPacket = std::unique_ptr<Packet>(originalPacket->dup());
             auto writableHeader = preparedPacket->removeAtFront<Ieee80211DataOrMgmtHeader>();
-            if (preparedSequenceNumberState != nullptr && !writableHeader->getRetry())
-                preparedSequenceNumberState->assignSequenceNumber(writableHeader);
+            if (prepared->sequenceNumberState != nullptr && !writableHeader->getRetry())
+                prepared->sequenceNumberState->assignSequenceNumber(writableHeader);
             if (auto dataHeader = dynamicPtrCast<Ieee80211DataHeader>(writableHeader))
                 dataHeader->setAckPolicy(BLOCK_ACK);
             writableHeader->setDurationField(totalDuration);
@@ -1084,7 +1151,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             // covering the changed chunks. Their regions remain valid because
             // DL preparation never changes the MPDU length.
             preparedPacket->getRegionTags() = originalPacket->getRegionTags();
-            preparedPackets.emplace(originalPacket, std::move(preparedPacket));
+            prepared->packetImages.emplace(originalPacket, std::move(preparedPacket));
         }
     }
 
@@ -1095,7 +1162,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         const auto& alloc = selectedAllocation.allocation;
         Packet *firstPacket = selectedAllocation.packet;
         auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(
-                preparedPackets.at(firstPacket)->peekAtFront<Ieee80211MacHeader>());
+                prepared->packetImages.at(firstPacket)->peekAtFront<Ieee80211MacHeader>());
         ASSERT(dataHeader != nullptr && dataHeader->getType() == ST_DATA_WITH_QOS);
         ASSERT(hasActiveOriginatorBlockAckAgreement(originatorBAHandler,
                 dataHeader->getReceiverAddress(), dataHeader->getTid()));
@@ -1104,7 +1171,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
 
         auto psduStartOffset = container->getDataLength();
         for (size_t i = 0; i < staPackets.size(); ++i) {
-            auto preparedPacket = preparedPackets.at(staPackets[i]).get();
+            auto preparedPacket = prepared->packetImages.at(staPackets[i]).get();
             // 9.7.1 A-MPDU subframes use MPDU delimiters and 4-octet padding;
             // 26.6.2 applies that HE padding model to HE MU PPDUs.
             auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
@@ -1138,7 +1205,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         }
         activeAlloc.packet = staPackets.front();
         activeAlloc.packets = staPackets;
-        activeAllocations.push_back(activeAlloc);
+        prepared->activeAllocations.push_back(activeAlloc);
         EV_DEBUG << "HeDlMuTxOpFs::buildMuContainerPacket: added RU payload for " << alloc.staAddress
                  << " AID=" << selectedAllocation.associationId
                  << " RU=" << alloc.ru.index
@@ -1179,20 +1246,14 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     if (!canonicalResult ||
             canonicalResult.getPpduLayout()->getDuration() != plannedPpdu.parameters.duration) {
         EV_WARN << "Canonical HE DL MU TXVECTOR disagrees with the validated packing plan\n";
-        activeAllocations.clear();
-        delete container;
-        notifyPlanningFailure();
         return nullptr;
     }
     auto handoff = container->addTag<Ieee80211HeTxVectorReq>();
     handoff->setCanonicalPair(canonicalResult.getTxVector(), canonicalResult.getPpduLayout());
     container->addTag<Ieee80211HeMuContainerReq>()->setDurationField(totalDuration);
 
-    if (activeAllocations.size() < 2) {
+    if (prepared->activeAllocations.size() < 2) {
         EV_WARN << "Validated HE DL MU plan lost multi-user eligibility before commit\n";
-        activeAllocations.clear();
-        delete container;
-        notifyPlanningFailure();
         return nullptr;
     }
 
@@ -1226,14 +1287,10 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     }
     catch (const std::exception& error) {
         EV_WARN << "HE DL MU transaction aborted before commit: " << error.what() << endl;
-        activeAllocations.clear();
-        delete container;
-        notifyPlanningFailure();
         return nullptr;
     }
 
-    std::vector<HeDlMuMember> finalizedMembers;
-    for (const auto& allocation : activeAllocations)
+    for (const auto& allocation : prepared->activeAllocations)
         for (auto packet : allocation.packets) {
             HeDlMuMember member;
             member.packetIdentity = HcfPacketIdentity(packet->getId());
@@ -1245,39 +1302,13 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             member.mcs = allocation.mcs;
             member.numberOfSpatialStreams = allocation.numberOfSpatialStreams;
             member.ruToneSize = allocation.ru.toneSize;
-            finalizedMembers.push_back(member);
+            prepared->finalizedMembers.push_back(member);
         }
-    heDlMuCallback->heDlMuPlanFinalized(transactionToken, finalizedMembers);
-
-    // Explicit commit boundary. The state transitions below are invariant
-    // operations over revalidated handles and prepared immutable values. Per
-    // Gate 3 policy, an internal failure after this point is loud; attempting
-    // observer-visible queue reconstruction would not be a valid rollback.
-    if (preparedSequenceNumberState != nullptr)
-        originatorDataService->commitSequenceNumberState(*preparedSequenceNumberState);
-    for (const auto& selectedAllocation : finalAllocations) {
-        auto sourceQueue = selectedAllocation.sourceQueue == nullptr ? pendingQueue : selectedAllocation.sourceQueue;
-        for (auto originalPacket : selectedAllocation.packets) {
-            auto preparedPacket = preparedPackets.at(originalPacket).get();
-            sourceQueue->removePacket(originalPacket);
-            originalPacket->removeAll();
-            originalPacket->insertAtBack(preparedPacket->peekAll());
-            originalPacket->setFrontOffset(preparedPacket->getFrontOffset());
-            originalPacket->setBackOffset(preparedPacket->getBackOffset());
-            originalPacket->clearTags();
-            originalPacket->copyTags(*preparedPacket);
-            originalPacket->getRegionTags() = preparedPacket->getRegionTags();
-            auto committedHeader = originalPacket->peekAtFront<Ieee80211DataOrMgmtHeader>();
-            ackHandler->frameGotInProgress(committedHeader);
-            context->getInProgressFrames()->addInProgressFrame(originalPacket);
-        }
-    }
-
-    heDlMuCallback->heDlMuPlanCommitted(transactionToken, container, finalizedMembers);
-
-    EV_INFO << "Assembled HE MU PPDU with "
-            << activeAllocations.size() << " RU allocations. Total sequential duration = " << totalDuration << endl;
-    return container;
+    prepared->selectedAllocations = finalAllocations;
+    prepared->container = std::move(container);
+    prepared->muBarControlMode = finalizedMuBarControlMode;
+    prepared->totalDuration = totalDuration;
+    return prepared;
 }
 
 IFrameSequenceStep *HeDlMuTxOpFs::prepareStep(FrameSequenceContext *context)

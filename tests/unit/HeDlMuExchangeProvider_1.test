@@ -54,7 +54,6 @@ class MockProviderActions : public HeDlMuExchangeProvider::IActions,
     IQosRateSelection *rateSelection = nullptr;
     int memberTransmittedCount = 0;
     int userOutcomeCount = 0;
-    int planningFailureCount = 0;
     int stagedPacketCount = 0;
     int startSingleUserCount = 0;
     int soundingCount = 0;
@@ -64,9 +63,6 @@ class MockProviderActions : public HeDlMuExchangeProvider::IActions,
     bool singleUserEligible = true;
     bool throwOnStart = false;
     bool failStartSynchronously = false;
-    bool failStartSynchronouslyTwice = false;
-    bool failStartWithWrongAccessCategory = false;
-    HeDlMuExchangeProvider *provider = nullptr;
     HeDlMuExchangeProvider::HeDlMuProtectionSnapshot protectionState;
     HcfQueueToken lastStagedQueueToken;
     HcfPacketIdentity lastStagedPacketIdentity;
@@ -99,7 +95,6 @@ class MockProviderActions : public HeDlMuExchangeProvider::IActions,
         lastTransmittedMember = member;
     }
     virtual void heDlMuUserOutcome(uint64_t, const MacAddress&, HeDlMuUserOutcome) override { userOutcomeCount++; }
-    virtual void heDlMuPlanningFailed(uint64_t, AccessCategory) override { planningFailureCount++; }
     virtual bool stageHeDlMuPacket(HcfQueueToken queueToken,
             HcfPacketIdentity packetIdentity, AccessCategory) override {
         stagedPacketCount++;
@@ -127,20 +122,17 @@ class MockProviderActions : public HeDlMuExchangeProvider::IActions,
         protectionState = snapshot;
         protectionRestoreCount++;
     }
-    virtual void startHeDlMuExchange(AccessCategory ac, const HeDlMuPlan&,
-            uint64_t token, HeDlMuTxOpFs::AckMethod ackMethod,
+    virtual bool startHeDlMuExchange(AccessCategory ac, const HeDlMuPlan&,
+            uint64_t, HeDlMuTxOpFs::AckMethod ackMethod,
             const HeDlMuExchangeProvider::StartupParameters&) override {
         startExchangeCount++;
         lastAckMethod = ackMethod;
-        if (failStartSynchronously && provider != nullptr) {
-            const auto failureAccessCategory = failStartWithWrongAccessCategory ?
-                    AC_BK : ac;
-            provider->heDlMuPlanningFailed(token, failureAccessCategory);
-            if (failStartSynchronouslyTwice)
-                provider->heDlMuPlanningFailed(token, failureAccessCategory);
-        }
+        if (failStartSynchronously)
+            return false;
+        configureHeDlMuProtection(ac);
         if (throwOnStart)
             throw cRuntimeError("injected startup failure");
+        return true;
     }
 };
 
@@ -180,8 +172,6 @@ class RuntimeOwnedDlCallback : public IHeDlMuExchangeCallback
         { if (provider->heDlMuMemberTransmitted(token, member, false)) actions->heDlMuMemberTransmitted(token, member); }
     virtual void heDlMuUserOutcome(uint64_t token, const MacAddress& peer, HeDlMuUserOutcome outcome) override
         { if (provider->heDlMuUserOutcome(token, peer, outcome, false)) actions->heDlMuUserOutcome(token, peer, outcome); }
-    virtual void heDlMuPlanningFailed(uint64_t token, AccessCategory ac) override
-        { if (provider->heDlMuPlanningFailed(token, ac, false)) actions->heDlMuPlanningFailed(token, ac); }
 };
 
 class EchoScheduler : public IIeee80211HeDlScheduler
@@ -460,7 +450,6 @@ HeDlMuExchangeProvider provider;
 HeSoundingService soundingProvider;
 soundingProvider.configure(&actions);
 provider.configure(&actions, &soundingProvider);
-actions.provider = &provider;
 
 EchoScheduler echoScheduler;
 HeDlMuExchangeProvider::StartupParameters startupParameters;
@@ -562,6 +551,18 @@ catch (cRuntimeError&) { startupThrew = true; }
             !actions.protectionState.configured && actions.protectionRestoreCount == 1,
         "typed startup failure must roll back the exact provider reservation");
 actions.throwOnStart = false;
+actions.protectionState.mechanism = HeDlMuExchangeProvider::HeDlMuProtectionSnapshot::Mechanism::MULTIPLE_PROTECTION;
+actions.protectionState.protection = HeDlMuExchangeProvider::HeDlMuProtectionSnapshot::InitialProtection::LEGACY_RTS_CTS;
+actions.protectionState.configured = true;
+actions.protectionState.completed = true;
+auto preconfiguredProtection = actions.protectionState;
+auto hasExactPreconfiguredProtection = [&] {
+    return actions.protectionState.mechanism == preconfiguredProtection.mechanism &&
+            actions.protectionState.protection == preconfiguredProtection.protection &&
+            actions.protectionState.configured == preconfiguredProtection.configured &&
+            actions.protectionState.completed == preconfiguredProtection.completed;
+};
+int protectionCountBeforePreparationFailure = actions.protectionCount;
 actions.failStartSynchronously = true;
 int stagedBeforeSynchronousFailure = actions.stagedPacketCount;
 int singleUserBeforeSynchronousFailure = actions.startSingleUserCount;
@@ -569,27 +570,11 @@ int singleUserBeforeSynchronousFailure = actions.startSingleUserCount;
             provider.getActiveTransactionToken() == 0 &&
             actions.stagedPacketCount == stagedBeforeSynchronousFailure + 1 &&
             actions.startSingleUserCount == singleUserBeforeSynchronousFailure + 1 &&
-            !actions.protectionState.configured && actions.protectionRestoreCount == 2,
-        "synchronous HE planning failure must drain locally and start the exact SU fallback");
+            actions.protectionCount == protectionCountBeforePreparationFailure &&
+            hasExactPreconfiguredProtection() &&
+            actions.protectionRestoreCount == 2,
+        "synchronous HE preparation failure must preserve preconfigured protection exactly and start the exact SU fallback");
     actions.failStartSynchronously = false;
-    actions.failStartSynchronously = true;
-    actions.failStartSynchronouslyTwice = true;
-    bool duplicateFailureThrew = false;
-    try { provider.tryStart(AC_BE, stateSnapshot, echoScheduler, startupParameters); }
-    catch (cRuntimeError&) { duplicateFailureThrew = true; }
-    requireTrue(duplicateFailureThrew && provider.getActiveTransactionToken() == 0 &&
-            !actions.protectionState.configured && actions.protectionRestoreCount == 3,
-        "duplicate synchronous HE planning failure must reject and restore protection");
-    actions.failStartSynchronouslyTwice = false;
-    actions.failStartWithWrongAccessCategory = true;
-    bool wrongAccessCategoryThrew = false;
-    try { provider.tryStart(AC_BE, stateSnapshot, echoScheduler, startupParameters); }
-    catch (cRuntimeError&) { wrongAccessCategoryThrew = true; }
-    requireTrue(wrongAccessCategoryThrew && provider.getActiveTransactionToken() == 0 &&
-            !actions.protectionState.configured && actions.protectionRestoreCount == 4,
-        "cross-AC synchronous HE planning failure must reject and restore protection");
-    actions.failStartSynchronously = false;
-    actions.failStartWithWrongAccessCategory = false;
     auto invalidStartupParameters = startupParameters;
 invalidStartupParameters.maxAmpduMpduCount = 0;
 int stagedBeforeInvalidConfiguration = actions.stagedPacketCount;
@@ -604,13 +589,7 @@ requireTrue(provider.tryStart(AC_BE, stateSnapshot, echoScheduler, startupParame
         actions.lastAckMethod == HeDlMuTxOpFs::AckMethod::EXPLICIT_SEQUENTIAL_BAR,
         "validated snapshot ACK policy must reach typed startup unchanged");
 auto stateToken = provider.getActiveTransactionToken();
-provider.heDlMuPlanningFailed(stateToken, AC_BE);
-requireTrue(actions.lastStagedQueueToken == stateSnapshot.packets[0].queueToken &&
-        actions.lastStagedPacketIdentity == stateSnapshot.packets[0].packetIdentity &&
-        provider.consumeForcedSingleUser(AC_BE) &&
-        !provider.consumeForcedSingleUser(AC_BE),
-        "planning failure must exact-stage and expose one next-TXOP SU fallback only");
-actions.planningFailureCount = 0;
+provider.rollbackReservation(stateToken);
 
 queue1->removePacket(packet1);
 auto replacementPacket = makePacket("replacement", sta1);
@@ -747,9 +726,6 @@ provider.heDlMuUserOutcome(30, MacAddress("02:00:00:00:50:ee"),
         HeDlMuUserOutcome::BLOCK_ACK_RECEIVED);
 requireTrue(actions.userOutcomeCount == 1,
         "duplicate and late per-user outcomes must be suppressed");
-provider.heDlMuPlanningFailed(30, AC_BE);
-requireTrue(actions.planningFailureCount == 0,
-        "planning failure after commit must be ignored");
 provider.heDlMuUserOutcome(30, sta2, HeDlMuUserOutcome::BLOCK_ACK_TIMED_OUT);
 requireTrue(provider.getActiveTransactionToken() == 0 &&
         provider.getActiveMembers().empty(),
@@ -757,19 +733,6 @@ requireTrue(provider.getActiveTransactionToken() == 0 &&
 requireTrue(provider.reservePlan(plan, 31),
         "terminal outcomes must allow the next transaction to start with an empty ledger");
 provider.rollbackReservation(31);
-
-requireTrue(provider.reservePlan(plan, 40), "planning-failure reservation must succeed");
-provider.heDlMuPlanningFailed(0, AC_BE);
-provider.heDlMuPlanningFailed(39, AC_BE);
-requireTrue(actions.planningFailureCount == 0 && provider.getActiveTransactionToken() == 40,
-        "zero and late planning failures must not mutate the active transaction");
-provider.heDlMuPlanningFailed(40, AC_BE);
-provider.heDlMuPlanningFailed(40, AC_BE);
-requireTrue(actions.planningFailureCount == 1 && provider.getActiveTransactionToken() == 0,
-        "the exact planning failure must roll back once and suppress duplicates");
-requireTrue(provider.reservePlan(plan, 41),
-        "planning-failure rollback must permit the next reservation");
-provider.rollbackReservation(41);
 
 // Composed typed path: the frame sequence itself must perform the commit and
 // produce the exact container consumed by the production transmit router.

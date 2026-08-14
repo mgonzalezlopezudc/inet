@@ -25,15 +25,17 @@ class INET_API VhtDlMuStalePlan : public cRuntimeError
 /** Constrained VHT DL MU exchange: MU PPDU, then SIFS BAR/BA per user. */
 class INET_API VhtDlMuTxOpFs : public IFrameSequence
 {
+  private:
+    struct PreparedCommit;
+
   public:
-    enum class CommitMutation { ACK_STATE, SEQUENCE_STATE };
     struct ActiveUser {
         IIeee80211VhtDlMuScheduler::Candidate candidate;
         std::vector<Packet *> packets;
     };
 
   protected:
-    int step = 0;
+    int step = -1;
     const VhtDlMuPlan plan;
     physicallayer::Ieee80211ModeSet *modeSet = nullptr;
     IAckHandler *ackHandler = nullptr;
@@ -41,22 +43,31 @@ class INET_API VhtDlMuTxOpFs : public IFrameSequence
     IVhtDlMuExchangeCallback *vhtCallback = nullptr;
     uint64_t exchangeId = 0;
     Packet *containerPacket = nullptr;
+    std::unique_ptr<PreparedCommit> preparedCommit;
+    bool preparationAttempted = false;
+    bool preparationSucceeded = false;
+    bool commitAttempted = false;
+    bool committed = false;
+    bool containerOwnershipTransferred = false;
     std::vector<ActiveUser> activeUsers;
 
-    Packet *buildMuContainerPacket(FrameSequenceContext *context);
+    std::unique_ptr<PreparedCommit> buildPreparedCommit(FrameSequenceContext *context);
     Packet *buildBlockAckReq(FrameSequenceContext *context, int userIndex) const;
     bool isExpectedBlockAck(Packet *packet, FrameSequenceContext *context,
             int userIndex) const;
-    virtual void beforePacketCommit(int packetIndex) {}
-    virtual void afterCommitMutation(CommitMutation mutation, int packetIndex) {}
+    virtual void beforePreparedCommit() {}
 
   public:
     VhtDlMuTxOpFs(const VhtDlMuPlan& plan,
             physicallayer::Ieee80211ModeSet *modeSet, IAckHandler *ackHandler,
             IFrameSequenceHandler::ICallback *callback,
             IVhtDlMuExchangeCallback *vhtCallback, uint64_t exchangeId = 0);
-    virtual ~VhtDlMuTxOpFs() = default;
+    virtual ~VhtDlMuTxOpFs();
 
+    /** Completes all fallible DL MU preparation without mutating live protocol ownership. */
+    bool prepare(FrameSequenceContext *context);
+    /** Adopts a successful preparation into live protocol ownership. */
+    virtual bool commit(FrameSequenceContext *context);
     virtual void startSequence(FrameSequenceContext *context, int firstStep) override;
     virtual IFrameSequenceStep *prepareStep(FrameSequenceContext *context) override;
     virtual bool completeStep(FrameSequenceContext *context) override;

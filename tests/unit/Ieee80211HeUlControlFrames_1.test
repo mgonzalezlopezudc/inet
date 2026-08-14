@@ -40,6 +40,7 @@ class TestHeHcfScheduleFinalizer : public IHeUlMuExchangeCallback
     std::vector<uint8_t> deliveredTriggeredTids;
     int processedTriggeredBlockAckReqs = 0;
     uint64_t triggeredBlockAckBitmap = 0;
+    int planCommittedCount = 0;
 
     static HeUlScheduleFinalizationResult finalize(
             const IIeee80211HeUlScheduler::Schedule& schedule,
@@ -55,7 +56,7 @@ class TestHeHcfScheduleFinalizer : public IHeUlMuExchangeCallback
     }
 
     virtual uint32_t allocateHeUlTriggerId() override { return allocateIeee80211HeTriggerId(); }
-    virtual void heUlMuPlanCommitted(const HeUlMuPlan&, uint32_t) override {}
+    virtual void heUlMuPlanCommitted(const HeUlMuPlan&, uint32_t) override { planCommittedCount++; }
 
     virtual uint16_t getHeUlAssociationId(const MacAddress& address) const override
     {
@@ -1423,6 +1424,38 @@ static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
     EV << "HE UL response window accepts immediately before/at and rejects immediately after its authoritative deadline.\n";
 }
 EV << ".\n";
+{
+    auto schedule = makeUlSchedule(MHz(5180), MHz(20),
+            SimTime(120, SIMTIME_US), IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
+    auto coordinator = new HeUlCoordinator();
+    auto callback = new TestHeHcfScheduleFinalizer();
+    auto plan = makeUlPlan(schedule, IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
+    auto modeSet = const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"));
+    TestHeUlMuTxOpFs sequence(coordinator, callback, plan, modeSet,
+            MacAddress("10:00:00:00:00:00"));
+    FrameSequenceContext context(MacAddress("10:00:00:00:00:00"),
+            modeSet, nullptr, nullptr, nullptr, nullptr, nullptr);
+    REQUIRE(callback->planCommittedCount == 0);
+    REQUIRE(throwsRuntimeError([&] { sequence.commit(); }));
+    REQUIRE(callback->planCommittedCount == 0);
+    REQUIRE(sequence.prepare());
+    REQUIRE(callback->planCommittedCount == 0);
+    REQUIRE(throwsRuntimeError([&] { sequence.prepare(); }));
+    sequence.commit();
+    REQUIRE(callback->planCommittedCount == 1);
+    REQUIRE(throwsRuntimeError([&] { sequence.commit(); }));
+    sequence.startSequence(&context, 0);
+    REQUIRE(callback->planCommittedCount == 1);
+    auto step = sequence.prepareStep(&context);
+    REQUIRE(step != nullptr);
+    auto transmitStep = check_and_cast<TransmitStep *>(step);
+    REQUIRE(transmitStep->getFrameToTransmit()->
+            getTag<Ieee80211HeTriggerCorrelationTag>()->getTriggerId() ==
+            sequence.getTriggerId());
+    delete step;
+    delete callback;
+    delete coordinator;
+}
 
 %contains: stdout
 Simulation-scoped HE Trigger identifiers are unique across producers.

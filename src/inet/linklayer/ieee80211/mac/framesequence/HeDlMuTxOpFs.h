@@ -35,6 +35,9 @@ using namespace inet::units::values;
  */
 class INET_API HeDlMuTxOpFs : public IFrameSequence
 {
+  private:
+    struct PreparedCommit;
+
   public:
     class INET_API ITransactionObserver
     {
@@ -88,12 +91,18 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
 
     std::vector<ActiveAllocation> activeAllocations;
 
-    // Assembled container packet (owned until handed to TransmitStep).
+    // Committed container packet (owned until handed to TransmitStep).
     Packet *containerPacket = nullptr;
+    std::unique_ptr<PreparedCommit> preparedCommit;
+    bool preparationAttempted = false;
+    bool preparationSucceeded = false;
+    bool commitAttempted = false;
+    bool committed = false;
+    bool containerOwnershipTransferred = false;
 
   protected:
-    /** Build the MU container Packet from the scheduler allocation and pending queue. */
-    Packet *buildMuContainerPacket(FrameSequenceContext *context);
+    /** Build a mutation-free commit image from the scheduler allocation and pending queue. */
+    std::unique_ptr<PreparedCommit> buildPreparedCommit(FrameSequenceContext *context);
     virtual MacAddress getTransmitterAddress() const;
     friend class HeDlMuPerStaBlockAckFs;
     friend class HeDlMuBarBlockAckFs;
@@ -125,6 +134,10 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
                  AckMethod ackMethod = AckMethod::EXPLICIT_SEQUENTIAL_BAR);
     virtual ~HeDlMuTxOpFs();
 
+    /** Completes all fallible DL MU preparation without mutating live protocol ownership. */
+    bool prepare(FrameSequenceContext *context);
+    /** Atomically adopts a successful preparation into live protocol ownership. */
+    void commit(FrameSequenceContext *context);
     virtual void startSequence(FrameSequenceContext *context, int firstStep) override;
     virtual IFrameSequenceStep *prepareStep(FrameSequenceContext *context) override;
     virtual bool completeStep(FrameSequenceContext *context) override;
