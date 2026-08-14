@@ -115,8 +115,6 @@ class INET_API Ieee80211Mib : public SimpleModule
     static const char *getModeStr(Ieee80211Mib::Mode mode);
     static const char *getStationTypeStr(Ieee80211Mib::BssStationType stationType);
     std::string getSsidStr() const;
-    short allocateAssociationId(const MacAddress& address);
-    void releaseAssociationId(const MacAddress& address);
     std::string getSsid() const { return getLocalAssociationSnapshot().getSsid(); }
     MacAddress getBssid() const { return getLocalAssociationSnapshot().getBssid(); }
     BssStationType getStationType() const { return getLocalAssociationSnapshot().getStationType(); }

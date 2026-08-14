@@ -244,24 +244,8 @@ void Ieee80211MgmtAp::receiveSignal(cComponent *source, simsignal_t signalID, cO
     Enter_Method("%s", cComponent::getSignalName(signalID));
 
     if (signalID == IFrameSequenceHandler::frameSequenceFinishedSignal) {
-        auto context = check_and_cast<FrameSequenceContext *>(obj);
-        if (context->getNumSteps() >= 2) {
-            auto transmitStep = dynamic_cast<ITransmitStep *>(context->getStepBeforeLast());
-            auto receiveStep = dynamic_cast<IReceiveStep *>(context->getLastStep());
-            if (transmitStep && receiveStep &&
-                transmitStep->getCompletion() == IFrameSequenceStep::Completion::ACCEPTED &&
-                receiveStep->getCompletion() == IFrameSequenceStep::Completion::ACCEPTED) {
-                auto responseHeader = dynamicPtrCast<const Ieee80211MgmtHeader>(transmitStep->getFrameToTransmit()->peekAtFront<Ieee80211MacHeader>());
-                if (responseHeader != nullptr && (responseHeader->getType() == ST_ASSOCIATIONRESPONSE || responseHeader->getType() == ST_REASSOCIATIONRESPONSE)) {
-                    auto ackHeader = receiveStep->getReceivedFrame()->peekAtFront<Ieee80211MacHeader>();
-                    if (ackHeader->getType() == ST_ACK) {
-                        if (responseHeader->getType() == ST_ASSOCIATIONRESPONSE && mib->bssAccessPointData.stations[responseHeader->getReceiverAddress()] != Ieee80211Mib::ASSOCIATED)
-                            sendAssocNotification(responseHeader->getReceiverAddress());
-                        mib->bssAccessPointData.stations[responseHeader->getReceiverAddress()] = Ieee80211Mib::ASSOCIATED;
-                    }
-                }
-            }
-        }
+        // Association responses are finalized through the management exchange
+        // result handler, which also applies or releases pending association state.
     }
     else
         Ieee80211MgmtApBase::receiveSignal(source, signalID, obj, details);
@@ -383,20 +367,6 @@ void Ieee80211MgmtAp::handleAuthenticationFrame(Packet *packet, const Ptr<const 
         if (wasAssociated) {
             mib->clearPeerAssociation(sta->address, Ieee80211Mib::NOT_AUTHENTICATED);
             sendDisAssocNotification(sta->address);
-            mib->releaseAssociationId(sta->address);
-
-            // Destroy per-STA queue bank only for APs operating in ax mode.
-            try {
-                cModule *macModule = getModuleFromPar<cModule>(par("macModule"), this);
-                if (macModule) {
-                    Ieee80211Mac *mac = check_and_cast<Ieee80211Mac *>(macModule);
-                    if (mac->isApInAxMode())
-                        mac->destroyStationQueueBank(sta->address);
-                }
-            }
-            catch (const cException &e) {
-                EV_DEBUG << "Could not get MAC module for queue bank destruction: " << e.what() << "\n";
-            }
         }
         else
             mib->setPeerMemberStatus(sta->address, Ieee80211Mib::NOT_AUTHENTICATED);
@@ -438,20 +408,6 @@ void Ieee80211MgmtAp::handleAuthenticationFrame(Packet *packet, const Ptr<const 
         if (wasAssociated) {
             mib->clearPeerAssociation(sta->address, Ieee80211Mib::AUTHENTICATED);
             sendDisAssocNotification(sta->address);
-            mib->releaseAssociationId(sta->address);
-
-            // Destroy per-STA queue bank only for APs operating in ax mode.
-            try {
-                cModule *macModule = getModuleFromPar<cModule>(par("macModule"), this);
-                if (macModule) {
-                    Ieee80211Mac *mac = check_and_cast<Ieee80211Mac *>(macModule);
-                    if (mac->isApInAxMode())
-                        mac->destroyStationQueueBank(sta->address);
-                }
-            }
-            catch (const cException &e) {
-                EV_DEBUG << "Could not get MAC module for queue bank destruction: " << e.what() << "\n";
-            }
         }
         else
             // IEEE Std 802.11-2024, 11.3.4.3(h): successful authentication
@@ -481,20 +437,6 @@ void Ieee80211MgmtAp::handleDeauthenticationFrame(Packet *packet, const Ptr<cons
         if (wasAssociated) {
             mib->clearPeerAssociation(sta->address, Ieee80211Mib::NOT_AUTHENTICATED);
             sendDisAssocNotification(sta->address);
-            mib->releaseAssociationId(sta->address);
-
-            // Destroy per-STA queue bank only for APs operating in ax mode.
-            try {
-                cModule *macModule = getModuleFromPar<cModule>(par("macModule"), this);
-                if (macModule) {
-                    Ieee80211Mac *mac = check_and_cast<Ieee80211Mac *>(macModule);
-                    if (mac->isApInAxMode())
-                        mac->destroyStationQueueBank(sta->address);
-                }
-            }
-            catch (const cException &e) {
-                EV_DEBUG << "Could not get MAC module for queue bank destruction: " << e.what() << "\n";
-            }
         }
         else
             mib->setPeerMemberStatus(sta->address, Ieee80211Mib::NOT_AUTHENTICATED);
@@ -541,23 +483,6 @@ void Ieee80211MgmtAp::handleAssociationRequestFrame(Packet *packet, const Ptr<co
     delete packet;
 
     short associationId = pending.associationId;
-
-    // Create per-STA queue bank only for APs operating in ax mode.
-    try {
-        cModule *macModule = getModuleFromPar<cModule>(par("macModule"), this);
-        if (macModule) {
-            Ieee80211Mac *mac = check_and_cast<Ieee80211Mac *>(macModule);
-            if (mac->isApInAxMode()) {
-                if (mac->getStationQueueBank(sta->address) == nullptr)
-                    mac->createStationQueueBank(sta->address);
-                else
-                    mac->invalidatePeerDerivedState(sta->address);
-            }
-        }
-    }
-    catch (const cException &e) {
-        EV_DEBUG << "Could not get MAC module for queue bank creation: " << e.what() << "\n";
-    }
 
     // send OK response
     const auto& body = makeShared<Ieee80211AssociationResponseFrame>();
@@ -616,23 +541,6 @@ void Ieee80211MgmtAp::handleReassociationRequestFrame(Packet *packet, const Ptr<
     delete packet;
 
     short associationId = pending.associationId;
-
-    // Create per-STA queue bank only for APs operating in ax mode.
-    try {
-        cModule *macModule = getModuleFromPar<cModule>(par("macModule"), this);
-        if (macModule) {
-            Ieee80211Mac *mac = check_and_cast<Ieee80211Mac *>(macModule);
-            if (mac->isApInAxMode()) {
-                if (mac->getStationQueueBank(sta->address) == nullptr)
-                    mac->createStationQueueBank(sta->address);
-                else
-                    mac->invalidatePeerDerivedState(sta->address);
-            }
-        }
-    }
-    catch (const cException &e) {
-        EV_DEBUG << "Could not get MAC module for queue bank creation: " << e.what() << "\n";
-    }
 
     // send OK response
     const auto& body = makeShared<Ieee80211ReassociationResponseFrame>();
@@ -864,7 +772,6 @@ void Ieee80211MgmtAp::stop()
     if (mac != nullptr)
         mac->setMgmtExchangeResultHandler(nullptr);
     staList.clear();
-    mib->bssAccessPointData.associationIds.clear();
     Ieee80211MgmtApBase::stop();
 }
 
