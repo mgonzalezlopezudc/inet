@@ -22,6 +22,16 @@ inet_run_unit_tests \
 
 Use `MODE=debug` with `-m debug` for debug tests. Do not run the test command if the matching INET build fails.
 
+The test runners default to `debug` when `-m` is omitted. After changing compiled INET source, always specify `-m` explicitly; never rely on the runner default. The same build/library rule applies to module tests, which use the same test-task machinery:
+
+```sh
+make MODE=debug -j$(nproc)
+inet_run_unit_tests -m debug -f '<filter>'
+inet_run_module_tests -m debug -f '<filter>'
+```
+
+For release validation, use `make MODE=release -j$(nproc)` together with `-m release` on the selected test runner.
+
 `inet_run_unit_tests` generates and builds the selected test executables, but it does not rebuild `src/libINET.so` or `src/libINET_dbg.so`. Its test-local build is not evidence that the INET library contains the current source changes.
 
 Editing only a `.test` file does not require rebuilding INET when no compiled INET source, generated-code input, or test support library changed. The test runner still rebuilds that test's generated executable.
