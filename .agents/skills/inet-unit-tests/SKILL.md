@@ -26,16 +26,6 @@ Use `MODE=debug` with `-m debug` for debug tests. Do not run the test command if
 
 Editing only a `.test` file does not require rebuilding INET when no compiled INET source, generated-code input, or test support library changed. The test runner still rebuilds that test's generated executable.
 
-## Known-good command
-
-A known-good test command for the relevant IEEE 802.11 HE unit tests, after the matching INET build succeeds, is:
-
-```sh
-inet_run_unit_tests \
-  -m release \
-  -f '(Ieee80211He|HeDlScheduler).*\.test'
-```
-
 ## Filter rules
 
 `inet_run_unit_tests -f` accepts one regular-expression filter.
