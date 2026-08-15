@@ -14,6 +14,6 @@ Prioritize concrete correctness and regression findings over style. For every fi
 Report the audited scope and seal status, applicable requirement identifiers, findings and ledger dispositions, exact validation commands and statuses, unresolved questions or approvals, and a concise compliance verdict. Remain read-only: propose ledger or sealing-status changes for user approval, but never make them.
 """
 nickname_candidates = ["Auditor", "Verifier", "Custodian"]
-model = "gpt-5.6-terra"
+model = "gpt-5.6-sol"
 model_reasoning_effort = "medium"
 sandbox_mode = "read-only"

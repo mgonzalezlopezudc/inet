@@ -8,8 +8,8 @@ Use the `inet-agent-orchestration` skill for nontrivial INET work that benefits 
 
 Optimize routing for correctness first and token/credit consumption second:
 
-* Use Chimp-tier 🐒 for difficult runtime causality and production implementation.
-* Use Dog-tier 🐕 for ambiguous Wi-Fi MAC/PHY or standards reasoning and final review.
+* Use Chimp-tier 🐒 for difficult runtime causality, production implementation, and final review.
+* Use Dog-tier 🐕 for ambiguous Wi-Fi MAC/PHY or standards reasoning.
 * Use Fish-tier 🐟 for repository/configuration tracing, deterministic regression work, and result analysis with established methods.
 * Use Ant-tier 🐜 only for clear, repeatable work with an explicit output contract: artifact inventory, targeted extraction, filtering, and structured summarization. Do not ask Ant-tier 🐜 agents to establish causality, interpret ambiguous standards language, design a fix, or approve a change.
 * Use the runtime-specific model and effort equivalence table in `inet-agent-orchestration`. If a configured model is unavailable, preserve or increase capability and disclose any substitution; never silently downgrade Chimp-tier 🐒 work.

@@ -22,8 +22,8 @@ Select models for the judgment required, not the amount of text or number of fil
 
 | Tier | Use | Do not use |
 | --- | --- | --- |
-| Chimp-tier 🐒 | Difficult event causality and risky production implementation | Mechanical inventory or bulk extraction |
-| Dog-tier 🐕 | Ambiguous 802.11 MAC/PHY or standards reasoning and final correctness review | Resolving genuinely ambiguous normative or correctness questions without Chimp-tier 🐒 escalation when implementation or runtime causality is also material |
+| Chimp-tier 🐒 | Difficult event causality, risky production implementation, and final correctness review | Mechanical inventory or bulk extraction |
+| Dog-tier 🐕 | Ambiguous 802.11 MAC/PHY or standards reasoning | Resolving genuinely ambiguous normative or correctness questions without Chimp-tier 🐒 escalation when implementation or runtime causality is also material |
 | Fish-tier 🐟 | Architecture and NED/INI tracing; established build/test workflows; deterministic regression work; result analysis with known semantics | Ambiguous normative questions, difficult event causality, or risky production implementation |
 | Ant-tier 🐜 | Exact searches, artifact inventory, fixed-filter log/PCAP/result extraction, structured summaries, mechanical checks | Causality, standards interpretation, fix design, statistical judgment, or approval decisions |
 
@@ -56,7 +56,7 @@ If a binding is unavailable, move upward in capability: Ant-tier 🐜 to Fish-ti
 | `inet-implementer` | Chimp-tier 🐒 | Focused production C++/NED/MSG patch after mechanism and change surface are established |
 | `inet-regression-guard` | Fish-tier 🐟 | Deterministic unit/simulation/fingerprint/Wi-Fi regression evidence and narrowly assigned test changes |
 | `inet-results-analyst` | Fish-tier 🐟 | Semantically correct `.sca`/`.vec` querying, aggregation, uncertainty, and plots |
-| `inet-reviewer` | Dog-tier 🐕 | Independent post-implementation correctness review and formal architecture, naming, and sealing audits |
+| `inet-reviewer` | Chimp-tier 🐒 | Independent post-implementation correctness review and formal architecture, naming, and sealing audits |
 
 Use the relevant repository workflow skills inside each lane. An agent role does not replace `inet-simulation-run`, `inet-80211-packet-debugging`, `ieee80211-standards`, testing, build, or result-analysis skills.
 

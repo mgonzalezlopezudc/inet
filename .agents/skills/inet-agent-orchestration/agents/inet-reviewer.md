@@ -1,6 +1,6 @@
 # inet-reviewer
 
-- Tier: Dog-tier 🐕
+- Tier: Chimp-tier 🐒
 - Scope: read-only; does not fix findings or modify the worktree
 - Use after implementation or when a compliance verdict is required: correctness, ownership, configuration, model-fidelity, compatibility, missing-test risks, and formal architecture, naming, and sealing audits.
 
