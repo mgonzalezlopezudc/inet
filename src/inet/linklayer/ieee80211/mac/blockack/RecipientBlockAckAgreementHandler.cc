@@ -123,6 +123,7 @@ void RecipientBlockAckAgreementHandler::updateAgreement(const Ptr<const Ieee8021
     if (it != blockAckAgreements.end()) {
         RecipientBlockAckAgreement *agreement = it->second;
         agreement->addbaResposneSent();
+        agreement->setIsDelayedBlockAckPolicySupported(addbaResponse->getBlockAckPolicy() == 0);
     }
     else
         throw cRuntimeError("Agreement is not found");
@@ -185,4 +186,3 @@ RecipientBlockAckAgreementHandler::~RecipientBlockAckAgreementHandler()
 
 } // namespace ieee80211
 } // namespace inet
-
