@@ -23,6 +23,14 @@ void CompoundPacketQueueBase::initialize(int stage)
         consumer.reference(inputGate, true, 1);
         provider.reference(outputGate, true, -1);
         collection = check_and_cast<IPacketCollection *>(provider.get());
+        packetExtractor = check_and_cast<IPacketExtractor *>(provider.get());
+        for (cModule::SubmoduleIterator it(this); !it.end(); it++) {
+            auto childQueue = dynamic_cast<IPacketQueue *>(*it);
+            if (childQueue != nullptr) {
+                childQueues.push_back(childQueue);
+                childQueue->addPacketDropCallback(this);
+            }
+        }
         packetDropperFunction = createDropperFunction(par("dropperClass"));
         subscribe(packetDroppedSignal, this);
         subscribe(packetCreatedSignal, this);
@@ -72,16 +80,6 @@ void CompoundPacketQueueBase::pushPacket(Packet *packet, const cGate *gate)
     emit(packetPushEndedSignal, nullptr, &packetPushEndedDetails);
 }
 
-void CompoundPacketQueueBase::setPacketDropCallback(IPacketQueue::ICallback *callback)
-{
-    PacketQueueBase::setPacketDropCallback(callback);
-    for (cModule::SubmoduleIterator it(this); !it.end(); ++it) {
-        auto queue = dynamic_cast<IPacketQueue *>(*it);
-        if (queue != nullptr)
-            queue->setPacketDropCallback(callback);
-    }
-}
-
 Packet *CompoundPacketQueueBase::pullPacket(const cGate *gate)
 {
     Enter_Method("pullPacket");
@@ -96,6 +94,18 @@ void CompoundPacketQueueBase::removePacket(Packet *packet)
     Enter_Method("removePacket");
     collection->removePacket(packet);
     emit(packetRemovedSignal, packet);
+}
+
+Packet *CompoundPacketQueueBase::dequeuePacket(Packet *packet)
+{
+    Enter_Method("dequeuePacket");
+    packet = packetExtractor->dequeuePacket(packet);
+    take(packet);
+    // The owning leaf/provider has already recorded queue residence. The
+    // compound boundary mirrors pullPacket() and emits only its pull event.
+    emit(packetPulledSignal, packet);
+    drop(packet);
+    return packet;
 }
 
 void CompoundPacketQueueBase::removeAllPackets()
@@ -135,6 +145,12 @@ void CompoundPacketQueueBase::receiveSignal(cComponent *source, simsignal_t sign
         numCreatedPackets++;
     else
         throw cRuntimeError("Unknown signal");
+}
+
+void CompoundPacketQueueBase::handlePacketDropped(Packet *packet)
+{
+    Enter_Method("handlePacketDropped");
+    notifyPacketDropped(packet);
 }
 
 } // namespace queueing

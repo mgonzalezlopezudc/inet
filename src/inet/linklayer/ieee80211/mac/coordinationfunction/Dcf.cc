@@ -51,7 +51,7 @@ void Dcf::initialize(int stage)
     else if (stage == INITSTAGE_LAST)
         // Dcaf resolves its pending queue at the link-layer stage. Install
         // this callback after all child initialization has completed.
-        channelAccess->getPendingQueue()->setPacketDropCallback(this);
+        channelAccess->getPendingQueue()->addPacketDropCallback(this);
 }
 
 void Dcf::forEachChild(cVisitor *v)
@@ -77,6 +77,11 @@ void Dcf::channelGranted(IChannelAccess *channelAccess)
     Enter_Method("channelGranted");
     ASSERT(this->channelAccess == channelAccess);
     if (!frameSequenceHandler->isSequenceRunning()) {
+        if (this->channelAccess->getInProgressFrames()->getFrameToTransmit() == nullptr) {
+            EV_DETAIL << "Releasing channel because no frame is available.\n";
+            channelAccess->releaseChannel(this);
+            return;
+        }
         frameSequenceHandler->startFrameSequence(new DcfFs(), buildContext(), this);
         emit(IFrameSequenceHandler::frameSequenceStartedSignal, frameSequenceHandler->getContext());
     }

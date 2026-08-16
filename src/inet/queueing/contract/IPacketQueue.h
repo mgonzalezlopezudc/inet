@@ -9,6 +9,7 @@
 #define __INET_IPACKETQUEUE_H
 
 #include "inet/queueing/contract/IPacketCollection.h"
+#include "inet/queueing/contract/IPacketExtractor.h"
 #include "inet/queueing/contract/IPassivePacketSink.h"
 #include "inet/queueing/contract/IPassivePacketSource.h"
 
@@ -18,7 +19,7 @@ namespace queueing {
 /**
  * This class defines the interface for packet queues.
  */
-class INET_API IPacketQueue : public virtual IPacketCollection, public virtual IPassivePacketSink, public virtual IPassivePacketSource
+class INET_API IPacketQueue : public virtual IPacketCollection, public virtual IPacketExtractor, public virtual IPassivePacketSink, public virtual IPassivePacketSource
 {
   public:
     /**
@@ -41,18 +42,21 @@ class INET_API IPacketQueue : public virtual IPacketCollection, public virtual I
     virtual void enqueuePacket(Packet *packet) = 0;
 
     /**
-     * Installs the owner that is synchronously notified before a queued
-     * packet is deleted because of an overflow/dropper decision.
-     */
-    virtual void setPacketDropCallback(ICallback *callback) = 0;
-
-    /**
      * Dequeues the packet from the packet queue. The onwership of the packet
      * is transferred from the queue to the caller.
      *
      * The queue must not be empty. The returned packet must not be nullptr.
      */
     virtual Packet *dequeuePacket() = 0;
+
+    /**
+     * Dequeues the specified packet with the same accounting as dequeuePacket().
+     * The queue must contain the packet. Ownership is transferred to the caller.
+     */
+    virtual Packet *dequeuePacket(Packet *packet) = 0;
+
+    virtual void addPacketDropCallback(ICallback *callback) = 0;
+    virtual void removePacketDropCallback(ICallback *callback) = 0;
 };
 
 } // namespace queueing

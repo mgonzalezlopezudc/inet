@@ -51,6 +51,7 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     static simsignal_t edcaCollisionDetectedSignal;
     static simsignal_t blockAckAgreementAddedSignal;
     static simsignal_t blockAckAgreementDeletedSignal;
+    static simsignal_t blockAckAgreementChangedSignal;
 
   protected:
     Ieee80211Mac *mac = nullptr;
@@ -119,6 +120,8 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     virtual bool hasFrameToTransmit(AccessCategory ac);
     virtual void requestEligibleChannelAccess();
     virtual void resumeEligibleChannelAccess();
+    virtual void processDroppedBlockAckSetupFrame(Packet *packet);
+    virtual void handlePacketDropped(Packet *packet) override;
     virtual bool isReceptionInProgress();
 
     // Recipient
@@ -159,12 +162,10 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     virtual void transmitControlResponseFrame(Packet *responsePacket, const Ptr<const Ieee80211MacHeader>& responseHeader, Packet *receivedPacket, const Ptr<const Ieee80211MacHeader>& receivedHeader) override;
     virtual void processMgmtFrame(Packet *mgmtPacket, const Ptr<const Ieee80211MgmtHeader>& mgmtHeader) override;
 
-    // queueing::IPacketQueue::ICallback
-    virtual void handlePacketDropped(Packet *packet) override;
-
     // IProcedureCallback
     virtual void scheduleInactivityTimer(simtime_t timeout) override;
     virtual void scheduleAddbaResponseTimer(simtime_t deadline) override;
+    virtual void cancelAddbaTransaction(uint64_t transactionId, Packet *excludedPacket) override;
 
     std::string getFrameSequenceInfo() const;
 
