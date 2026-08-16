@@ -29,7 +29,6 @@
 #include "inet/linklayer/ieee80211/mac/contract/ITx.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceHandler.h"
-#include "inet/linklayer/ieee80211/mac/originator/OriginatorQosMacDataService.h"
 #include "inet/linklayer/ieee80211/mac/originator/QosAckHandler.h"
 #include "inet/linklayer/ieee80211/mac/originator/QosRecoveryProcedure.h"
 #include "inet/linklayer/ieee80211/mac/originator/TxopProcedure.h"
@@ -59,6 +58,7 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
 
     cMessage *startRxTimer = nullptr;
     cMessage *inactivityTimer = nullptr;
+    cMessage *addbaResponseTimer = nullptr;
 
     // Transmission and Reception
     IRx *rx = nullptr;
@@ -117,6 +117,8 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     FrameSequenceContext *buildContext(AccessCategory ac);
     virtual bool hasFrameToTransmit();
     virtual bool hasFrameToTransmit(AccessCategory ac);
+    virtual void requestEligibleChannelAccess();
+    virtual void resumeEligibleChannelAccess();
     virtual bool isReceptionInProgress();
 
     // Recipient
@@ -126,7 +128,7 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     virtual void recipientProcessTransmittedControlResponseFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header);
 
     // Originator
-    virtual void originatorProcessTransmittedManagementFrame(const Ptr<const Ieee80211MgmtHeader>& mgmtHeader, AccessCategory ac);
+    virtual void originatorProcessTransmittedManagementFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>& mgmtHeader, AccessCategory ac);
     virtual void originatorProcessTransmittedControlFrame(const Ptr<const Ieee80211MacHeader>& controlHeader, AccessCategory ac);
     virtual void originatorProcessTransmittedDataFrame(Packet *packet, const Ptr<const Ieee80211DataHeader>& dataHeader, AccessCategory ac);
     virtual void originatorProcessReceivedManagementFrame(const Ptr<const Ieee80211MgmtHeader>& header, const Ptr<const Ieee80211MacHeader>& lastTransmittedHeader, AccessCategory ac);
@@ -162,6 +164,7 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
 
     // IProcedureCallback
     virtual void scheduleInactivityTimer(simtime_t timeout) override;
+    virtual void scheduleAddbaResponseTimer(simtime_t deadline) override;
 
     std::string getFrameSequenceInfo() const;
 
