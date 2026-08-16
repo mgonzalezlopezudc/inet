@@ -29,6 +29,7 @@ class INET_API IOriginatorBlockAckAgreementPolicy
     virtual simtime_t computeAddbaFailureTimeout() const = 0;
     virtual simtime_t getBlockAckTimeoutValue() const = 0;
     virtual bool isDelayedAckPolicySupported() const = 0;
+    virtual bool isPeerCompressedBlockAckSupported(const MacAddress& peerAddress) const = 0;
     virtual int getMaximumAllowedBufferSize() const = 0;
 };
 
@@ -36,4 +37,3 @@ class INET_API IOriginatorBlockAckAgreementPolicy
 } // namespace inet
 
 #endif
-

@@ -25,19 +25,21 @@ class INET_API OriginatorBlockAckAgreement : public cObject
     int bufferSize = -1;
     bool isAMsduSupported = false;
     bool isDelayedBlockAckPolicySupported = false;
+    bool isCompressedBlockAckSupported = false;
     bool isAddbaResponseReceived = false;
     bool isAddbaRequestSent = false;
     simtime_t blockAckTimeoutValue = -1;
     simtime_t expirationTime = -1;
 
   public:
-    OriginatorBlockAckAgreement(MacAddress receiverAddr, Tid tid, SequenceNumberCyclic startingSequenceNumber, int bufferSize, bool isAMsduSupported, bool isDelayedBlockAckPolicySupported) :
+    OriginatorBlockAckAgreement(MacAddress receiverAddr, Tid tid, SequenceNumberCyclic startingSequenceNumber, int bufferSize, bool isAMsduSupported, bool isDelayedBlockAckPolicySupported, bool isCompressedBlockAckSupported = false) :
         receiverAddr(receiverAddr),
         tid(tid),
         startingSequenceNumber(startingSequenceNumber),
         bufferSize(bufferSize),
         isAMsduSupported(isAMsduSupported),
-        isDelayedBlockAckPolicySupported(isDelayedBlockAckPolicySupported)
+        isDelayedBlockAckPolicySupported(isDelayedBlockAckPolicySupported),
+        isCompressedBlockAckSupported(isCompressedBlockAckSupported)
     {
     }
 
@@ -50,6 +52,7 @@ class INET_API OriginatorBlockAckAgreement : public cObject
     virtual bool getIsAddbaRequestSent() const { return isAddbaRequestSent; }
     virtual bool getIsAMsduSupported() const { return isAMsduSupported; }
     virtual bool getIsDelayedBlockAckPolicySupported() const { return isDelayedBlockAckPolicySupported; }
+    virtual bool getIsCompressedBlockAckSupported() const { return isCompressedBlockAckSupported; }
     virtual MacAddress getReceiverAddr() const { return receiverAddr; }
     virtual Tid getTid() const { return tid; }
     virtual const simtime_t getBlockAckTimeoutValue() const { return blockAckTimeoutValue; }
@@ -60,6 +63,7 @@ class INET_API OriginatorBlockAckAgreement : public cObject
     virtual void setIsAddbaRequestSent(bool isAddbaRequestSent) { this->isAddbaRequestSent = isAddbaRequestSent; }
     virtual void setIsAMsduSupported(bool isAMsduSupported) { this->isAMsduSupported = isAMsduSupported; }
     virtual void setIsDelayedBlockAckPolicySupported(bool isDelayedBlockAckPolicySupported) { this->isDelayedBlockAckPolicySupported = isDelayedBlockAckPolicySupported; }
+    virtual void setIsCompressedBlockAckSupported(bool isCompressedBlockAckSupported) { this->isCompressedBlockAckSupported = isCompressedBlockAckSupported; }
     virtual void setBlockAckTimeoutValue(const simtime_t blockAckTimeoutValue) { this->blockAckTimeoutValue = blockAckTimeoutValue; }
 
     virtual void baPolicyFrameSent() { numSentBaPolicyFrames++; }
@@ -71,4 +75,3 @@ class INET_API OriginatorBlockAckAgreement : public cObject
 } /* namespace inet */
 
 #endif
-

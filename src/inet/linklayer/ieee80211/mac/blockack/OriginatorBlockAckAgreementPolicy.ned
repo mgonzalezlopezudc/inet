@@ -23,6 +23,9 @@ simple OriginatorBlockAckAgreementPolicy extends SimpleModule like IOriginatorBl
         bool aMsduSupported = default(true);
         int maximumAllowedBufferSize = default(64);
         double blockAckTimeoutValue @unit(s) = default(0s); // 0 means that it depends on the originator
+        // Interim local HT Compressed Block Ack capability assumption until HT Capabilities IE state is modeled.
+        bool localCompressedBlockAckSupported = default(false);
+        // Explicit peers whose capability state permits HT Compressed Block Ack; empty keeps legacy Basic Block Ack behavior.
+        string compressedBlockAckPeerAddresses = default("");
         @display("i=block/control");
 }
-

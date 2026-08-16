@@ -12,9 +12,10 @@
 namespace inet {
 namespace ieee80211 {
 
-void OriginatorBlockAckAgreementHandler::createAgreement(const Ptr<const Ieee80211AddbaRequest>& addbaRequest)
+void OriginatorBlockAckAgreementHandler::createAgreement(const Ptr<const Ieee80211AddbaRequest>& addbaRequest, IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy)
 {
-    OriginatorBlockAckAgreement *blockAckAgreement = new OriginatorBlockAckAgreement(addbaRequest->getReceiverAddress(), addbaRequest->getTid(), addbaRequest->getStartingSequenceNumber(), addbaRequest->getBufferSize(), addbaRequest->getAMsduSupported(), addbaRequest->getBlockAckPolicy() == 0);
+    bool isCompressedBlockAckSupported = blockAckAgreementPolicy->isPeerCompressedBlockAckSupported(addbaRequest->getReceiverAddress());
+    OriginatorBlockAckAgreement *blockAckAgreement = new OriginatorBlockAckAgreement(addbaRequest->getReceiverAddress(), addbaRequest->getTid(), addbaRequest->getStartingSequenceNumber(), addbaRequest->getBufferSize(), addbaRequest->getAMsduSupported(), addbaRequest->getBlockAckPolicy() == 0, isCompressedBlockAckSupported);
     auto agreementId = std::make_pair(addbaRequest->getReceiverAddress(), addbaRequest->getTid());
     blockAckAgreements[agreementId] = blockAckAgreement;
 }
@@ -134,7 +135,7 @@ void OriginatorBlockAckAgreementHandler::processTransmittedDataFrame(Packet *pac
     auto agreement = getAgreement(dataHeader->getReceiverAddress(), dataHeader->getTid());
     if (blockAckAgreementPolicy->isAddbaReqNeeded(packet, dataHeader) && agreement == nullptr) {
         auto addbaReq = buildAddbaRequest(dataHeader->getReceiverAddress(), dataHeader->getTid(), dataHeader->getSequenceNumber() + 1, blockAckAgreementPolicy);
-        createAgreement(addbaReq);
+        createAgreement(addbaReq, blockAckAgreementPolicy);
         auto addbaPacket = new Packet("AddbaReq", addbaReq);
         callback->processMgmtFrame(addbaPacket, addbaReq);
     }
@@ -144,7 +145,7 @@ void OriginatorBlockAckAgreementHandler::processReceivedAddbaResp(const Ptr<cons
 {
     auto agreement = getAgreement(addbaResp->getTransmitterAddress(), addbaResp->getTid());
     if (blockAckAgreementPolicy->isAddbaReqAccepted(addbaResp, agreement)) {
-        updateAgreement(agreement, addbaResp);
+        updateAgreement(agreement, addbaResp, blockAckAgreementPolicy);
         scheduleInactivityTimer(callback);
     }
     else {
@@ -152,12 +153,13 @@ void OriginatorBlockAckAgreementHandler::processReceivedAddbaResp(const Ptr<cons
     }
 }
 
-void OriginatorBlockAckAgreementHandler::updateAgreement(OriginatorBlockAckAgreement *agreement, const Ptr<const Ieee80211AddbaResponse>& addbaResp)
+void OriginatorBlockAckAgreementHandler::updateAgreement(OriginatorBlockAckAgreement *agreement, const Ptr<const Ieee80211AddbaResponse>& addbaResp, IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy)
 {
     agreement->setIsAddbaResponseReceived(true);
     agreement->setIsDelayedBlockAckPolicySupported(addbaResp->getBlockAckPolicy() == 0);
     agreement->setBufferSize(addbaResp->getBufferSize());
     agreement->setBlockAckTimeoutValue(addbaResp->getBlockAckTimeoutValue());
+    agreement->setIsCompressedBlockAckSupported(blockAckAgreementPolicy->isPeerCompressedBlockAckSupported(addbaResp->getTransmitterAddress()));
     agreement->calculateExpirationTime();
 }
 

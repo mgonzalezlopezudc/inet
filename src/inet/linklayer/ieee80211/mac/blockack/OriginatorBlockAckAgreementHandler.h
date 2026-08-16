@@ -24,8 +24,8 @@ class INET_API OriginatorBlockAckAgreementHandler : public IOriginatorBlockAckAg
 
   protected:
     virtual const Ptr<Ieee80211AddbaRequest> buildAddbaRequest(MacAddress receiverAddr, Tid tid, SequenceNumberCyclic startingSequenceNumber, IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy);
-    virtual void createAgreement(const Ptr<const Ieee80211AddbaRequest>& addbaRequest);
-    virtual void updateAgreement(OriginatorBlockAckAgreement *agreement, const Ptr<const Ieee80211AddbaResponse>& addbaResp);
+    virtual void createAgreement(const Ptr<const Ieee80211AddbaRequest>& addbaRequest, IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy);
+    virtual void updateAgreement(OriginatorBlockAckAgreement *agreement, const Ptr<const Ieee80211AddbaResponse>& addbaResp, IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy);
     virtual void terminateAgreement(MacAddress originatorAddr, Tid tid);
     virtual const Ptr<Ieee80211Delba> buildDelba(MacAddress receiverAddr, Tid tid, int reasonCode);
     virtual simtime_t computeEarliestExpirationTime();
@@ -48,4 +48,3 @@ class INET_API OriginatorBlockAckAgreementHandler : public IOriginatorBlockAckAg
 } // namespace inet
 
 #endif
-

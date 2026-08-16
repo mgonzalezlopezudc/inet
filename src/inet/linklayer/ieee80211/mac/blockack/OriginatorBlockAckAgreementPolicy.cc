@@ -24,6 +24,9 @@ void OriginatorBlockAckAgreementPolicy::initialize(int stage)
         aMsduSupported = par("aMsduSupported");
         maximumAllowedBufferSize = par("maximumAllowedBufferSize");
         blockAckTimeoutValue = par("blockAckTimeoutValue");
+        localCompressedBlockAckSupported = par("localCompressedBlockAckSupported");
+        for (const auto& address : cStringTokenizer(par("compressedBlockAckPeerAddresses")).asVector())
+            compressedBlockAckPeerAddresses.insert(MacAddress(address.c_str()));
         // TODO addbaFailureTimeout = par("addbaFailureTimeout");
         WATCH(blockAckReqThreshold);
     }
@@ -53,4 +56,3 @@ bool OriginatorBlockAckAgreementPolicy::isDelbaAccepted(const Ptr<const Ieee8021
 
 } /* namespace ieee80211 */
 } /* namespace inet */
-

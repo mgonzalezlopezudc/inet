@@ -26,6 +26,8 @@ class INET_API OriginatorBlockAckAgreementPolicy : public ModeSetListener, publi
     int maximumAllowedBufferSize = -1;
     simtime_t blockAckTimeoutValue = -1;
     simtime_t addbaFailureTimeout = -1;
+    bool localCompressedBlockAckSupported = false;
+    std::set<MacAddress> compressedBlockAckPeerAddresses;
 
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
@@ -41,6 +43,7 @@ class INET_API OriginatorBlockAckAgreementPolicy : public ModeSetListener, publi
     virtual bool isMsduSupported() const override { return aMsduSupported; }
     virtual simtime_t getBlockAckTimeoutValue() const override { return blockAckTimeoutValue; }
     virtual bool isDelayedAckPolicySupported() const override { return delayedAckPolicySupported; }
+    virtual bool isPeerCompressedBlockAckSupported(const MacAddress& peerAddress) const override { return localCompressedBlockAckSupported && compressedBlockAckPeerAddresses.find(peerAddress) != compressedBlockAckPeerAddresses.end(); }
     virtual int getMaximumAllowedBufferSize() const override { return maximumAllowedBufferSize; }
 };
 
@@ -48,4 +51,3 @@ class INET_API OriginatorBlockAckAgreementPolicy : public ModeSetListener, publi
 } /* namespace inet */
 
 #endif
-
