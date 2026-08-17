@@ -74,8 +74,10 @@ void Hcf::initialize(int stage)
     else if (stage == INITSTAGE_LAST) {
         // Edca resolves its Edcaf array at the link-layer stage. Install the
         // queue callbacks after all child initialization has completed.
-        for (int ac = 0; ac < AC_NUMCATEGORIES; ac++)
-            edca->getEdcaf(static_cast<AccessCategory>(ac))->getPendingQueue()->addPacketDropCallback(this);
+        for (int ac = 0; ac < edca->getNumEdcafs(); ac++) {
+            edca->getEdcaf(AccessCategory(ac))->getPendingQueue()->addPacketDropCallback(this);
+            numPacketDropCallbacksRegistered++;
+        }
     }
 }
 
@@ -94,6 +96,7 @@ void Hcf::handlePacketDropped(Packet *packet)
     if (packet->findTag<Ieee80211MgmtTransactionTag>() != nullptr)
         mac->notifyFrameTransmission(packet, IFrameTransmissionCallback::Status::DROPPED_BEFORE_TRANSMISSION);
     processDroppedBlockAckSetupFrame(packet);
+    resumeEligibleChannelAccess();
 }
 
 std::string Hcf::getFrameSequenceInfo() const
@@ -215,7 +218,7 @@ void Hcf::cancelAddbaTransaction(uint64_t transactionId, Packet *excludedPacket)
         auto transactionTag = packet->findTag<Ieee80211AddbaTransactionTag>();
         return packet != excludedPacket && transactionTag != nullptr && transactionTag->getTransactionId() == transactionId;
     };
-    for (int ac = 0; ac < AC_NUMCATEGORIES; ac++) {
+    for (int ac = 0; ac < edca->getNumEdcafs(); ac++) {
         auto edcaf = edca->getEdcaf(AccessCategory(ac));
         auto pendingQueue = edcaf->getPendingQueue();
         for (int i = pendingQueue->getNumPackets() - 1; i >= 0; i--) {
@@ -325,6 +328,10 @@ void Hcf::handleInternalCollision(std::vector<Edcaf *> internallyCollidedEdcafs)
         AccessCategory ac = edcaf->getAccessCategory();
         auto dataRecoveryProcedure = edcaf->getRecoveryProcedure();
         Packet *internallyCollidedFrame = edcaf->getInProgressFrames()->getFrameToTransmit();
+        if (internallyCollidedFrame == nullptr) {
+            EV_DETAIL << "Ignoring internal collision because no eligible frame is available for " << printAccessCategory(ac) << ".\n";
+            continue;
+        }
         auto internallyCollidedHeader = internallyCollidedFrame->peekAtFront<Ieee80211DataOrMgmtHeader>();
         EV_INFO << printAccessCategory(ac) << " (" << internallyCollidedFrame->getName() << ")" << endl;
         bool retryLimitReached = false;
@@ -460,7 +467,8 @@ void Hcf::recipientProcessReceivedManagementFrame(const Ptr<const Ieee80211MgmtH
                 auto agreement = originatorBlockAckAgreementHandler->getAgreement(delba->getReceiverAddress(), delba->getTid());
                 if (agreement != nullptr)
                     emit(blockAckAgreementDeletedSignal, agreement);
-                originatorBlockAckAgreementHandler->processReceivedDelba(delba, originatorBlockAckAgreementPolicy);
+                originatorBlockAckAgreementHandler->processReceivedDelba(delba, originatorBlockAckAgreementPolicy, this);
+                resumeEligibleChannelAccess();
             }
         }
         else
@@ -555,8 +563,6 @@ void Hcf::originatorProcessTransmittedDataFrame(Packet *packet, const Ptr<const 
 {
     auto edcaf = edca->getEdcaf(ac);
     edcaf->getAckHandler()->processTransmittedDataOrMgmtFrame(dataHeader);
-    if (originatorBlockAckAgreementHandler)
-        originatorBlockAckAgreementHandler->processTransmittedDataFrame(packet, dataHeader, originatorBlockAckAgreementPolicy, this, this);
     if (dataHeader->getAckPolicy() == NO_ACK)
         edcaf->getInProgressFrames()->dropFrame(packet);
 }
@@ -574,7 +580,7 @@ void Hcf::originatorProcessTransmittedManagementFrame(Packet *packet, const Ptr<
         ; // Recipient agreement was established when the successful response was formed.
     else if (auto delba = dynamicPtrCast<const Ieee80211Delba>(mgmtHeader)) {
         if (delba->getInitiator())
-            originatorBlockAckAgreementHandler->processTransmittedDelba(delba);
+            originatorBlockAckAgreementHandler->processTransmittedDelba(delba, this);
         else
             recipientBlockAckAgreementHandler->processTransmittedDelba(delba);
     }
@@ -710,6 +716,10 @@ void Hcf::originatorProcessReceivedControlFrame(Packet *packet, const Ptr<const 
         edcaf->getAckHandler()->dropFrame(lastTransmittedDataOrMgmtHeader);
         if (dynamicPtrCast<const Ieee80211MgmtHeader>(lastTransmittedHeader))
             mac->notifyFrameTransmission(lastTransmittedPacket, IFrameTransmissionCallback::Status::ACKNOWLEDGED);
+        if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(lastTransmittedHeader)) {
+            if (originatorBlockAckAgreementHandler)
+                originatorBlockAckAgreementHandler->processAcknowledgedDataFrame(lastTransmittedPacket, dataHeader, originatorBlockAckAgreementPolicy, this);
+        }
     }
     else if (auto blockAck = dynamicPtrCast<const Ieee80211BasicBlockAck>(header)) {
         EV_INFO << "BasicBlockAck has arrived" << std::endl;
@@ -760,7 +770,7 @@ bool Hcf::hasFrameToTransmit()
 
 void Hcf::requestEligibleChannelAccess()
 {
-    for (int ac = 0; ac < AC_NUMCATEGORIES; ac++) {
+    for (int ac = 0; ac < edca->getNumEdcafs(); ac++) {
         auto accessCategory = AccessCategory(ac);
         if (hasFrameToTransmit(accessCategory))
             edca->requestChannelAccess(accessCategory, this);
@@ -899,6 +909,10 @@ void Hcf::corruptedFrameReceived()
 
 Hcf::~Hcf()
 {
+    if (edca != nullptr) {
+        for (int ac = 0; ac < numPacketDropCallbacksRegistered; ac++)
+            edca->getEdcaf(AccessCategory(ac))->getPendingQueue()->removePacketDropCallback(this);
+    }
     cancelAndDelete(startRxTimer);
     cancelAndDelete(inactivityTimer);
     cancelAndDelete(addbaResponseTimer);
