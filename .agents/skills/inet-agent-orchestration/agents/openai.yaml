@@ -1,4 +1,0 @@
-interface:
-  display_name: "INET Agent Orchestration"
-  short_description: "Route INET work across specialist agents."
-  default_prompt: "Use $inet-agent-orchestration to coordinate this OMNeT++/INET task with the appropriate model tiers and specialist roles."
