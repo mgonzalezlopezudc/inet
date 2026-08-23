@@ -33,6 +33,9 @@ class INET_API Ieee80211Receiver : public FlatReceiverBase
   protected:
     virtual void initialize(int stage) override;
 
+    virtual const IListening *createListening(const IRadio *radio, const simtime_t startTime, const simtime_t endTime,
+            const Coord& startPosition, const Coord& endPosition) const override;
+
     virtual bool computeIsReceptionPossible(const IListening *listening, const ITransmission *transmission) const override;
     virtual bool computeIsReceptionPossible(const IListening *listening, const IReception *reception, IRadioSignal::SignalPart part) const override;
 
@@ -46,6 +49,12 @@ class INET_API Ieee80211Receiver : public FlatReceiverBase
     virtual ~Ieee80211Receiver();
 
     virtual const Ieee80211Channel *getChannel() const { return channel; }
+
+    // Shared by the packet-level receive path and focused channel harnesses:
+    // every IEEE 802.11 reception must overlap the configured primary 20 MHz
+    // band before it can reach RXSTART/delivery.
+    static bool isPrimary20Overlapping(const Ieee80211Channel *channel, const FrequencyBand& signalBand);
+    static bool isPrimary20Overlapping(const Ieee80211Channel *channel, const std::vector<FrequencyBand>& signalBands);
 
     virtual std::ostream& printToStream(std::ostream& stream, int level, int evFlags = 0) const override;
 
@@ -65,4 +74,3 @@ class INET_API Ieee80211Receiver : public FlatReceiverBase
 } // namespace inet
 
 #endif
-

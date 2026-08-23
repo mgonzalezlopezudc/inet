@@ -1,0 +1,63 @@
+%description:
+Validate the IEEE packet-level primary-20 reception gate and primary
+hierarchy containment for narrower VHT PPDUs.
+
+%includes:
+#include "inet/physicallayer/wireless/common/radio/packetlevel/BandListening.h"
+#include "inet/physicallayer/wireless/common/radio/packetlevel/MultibandListening.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
+
+%global:
+using namespace inet;
+using namespace inet::physicallayer;
+
+%activity:
+{
+    const IIeee80211Band *band5 = Ieee80211CompliantBands::getBand("5 GHz");
+    ASSERT(band5 != nullptr);
+    Ieee80211Channel channel(band5, 36, IEEE80211_CHANNEL_WIDTH_80MHZ, 42);
+
+    const auto primary20 = channel.getPrimary20Band();
+    const auto primary40 = channel.getPrimary40Band();
+    const auto secondary20 = channel.getSecondary20Band();
+    const auto secondary40 = channel.getSecondary40Band();
+    const auto primary80 = channel.getPrimary80Band();
+
+    ASSERT(Ieee80211Receiver::isPrimary20Overlapping(&channel, primary20));
+    ASSERT(Ieee80211Receiver::isPrimary20Overlapping(&channel, primary40));
+    ASSERT(Ieee80211Receiver::isPrimary20Overlapping(&channel, primary80));
+    ASSERT(!Ieee80211Receiver::isPrimary20Overlapping(&channel, secondary20));
+    ASSERT(!Ieee80211Receiver::isPrimary20Overlapping(&channel, secondary40));
+    ASSERT(Ieee80211Receiver::isPrimary20Overlapping(&channel, std::vector<FrequencyBand>{secondary20, primary20}));
+    ASSERT(!Ieee80211Receiver::isPrimary20Overlapping(&channel, std::vector<FrequencyBand>{secondary20}));
+
+    // The same production placement helper ensures that a narrower signal is
+    // centered on the primary hierarchy, not the outer operating envelope.
+    ASSERT(Ieee80211Transmitter::getTransmissionCenterFrequency(&channel, MHz(20)) == primary20.centerFrequency);
+    ASSERT(Ieee80211Transmitter::getTransmissionCenterFrequency(&channel, MHz(40)) == primary40.centerFrequency);
+    ASSERT(Ieee80211Transmitter::getTransmissionCenterFrequency(&channel, MHz(80)) == primary80.centerFrequency);
+
+    MultibandListening listening(nullptr, 0, 1, Coord::ZERO, Coord::ZERO,
+            std::vector<FrequencyBand>{primary80});
+    ASSERT(listening.contains(primary20));
+    ASSERT(listening.contains(primary40));
+    ASSERT(listening.contains(secondary20));
+    ASSERT(listening.contains(secondary40));
+    MultibandListening primaryListening(nullptr, 0, 1, Coord::ZERO, Coord::ZERO,
+            std::vector<FrequencyBand>{primary20});
+    ASSERT(!primaryListening.contains(secondary20));
+    ASSERT(!primaryListening.contains(secondary40));
+
+    EV << "VHT primary-20 reception gate and hierarchy verified.\n";
+    EV << "Secondary-only VHT subchannels are not reception-eligible.\n";
+}
+
+EV << ".\n";
+
+%contains: stdout
+VHT primary-20 reception gate and hierarchy verified.
+Secondary-only VHT subchannels are not reception-eligible.
+.

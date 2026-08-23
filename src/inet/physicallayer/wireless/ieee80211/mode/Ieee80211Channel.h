@@ -57,6 +57,8 @@ class INET_API Ieee80211Channel : public IPrintableObject
     static const char *getSecondaryChannelOffsetName(Ieee80211SecondaryChannelOffset offset);
     static Ieee80211ChannelWidth parseChannelWidth(const char *text);
     static const char *getChannelWidthName(Ieee80211ChannelWidth width);
+    static bool isFiveGhzBand(const IIeee80211Band *band);
+    static bool isVhtCapableBand(const IIeee80211Band *band);
 
     virtual std::ostream& printToStream(std::ostream& stream, int level, int evFlags = 0) const override;
 

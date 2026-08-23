@@ -32,7 +32,7 @@ std::vector<Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>> DimensionalSignalAna
     if (components.empty()) {
         if (normalizedBands.size() == 1)
             return {combinedPower};
-        return {};
+        throw cRuntimeError("A dimensional multiband signal requires one component per occupied band");
     }
     if (components.size() != bands.size())
         throw cRuntimeError("A dimensional multiband signal requires one component per occupied band");

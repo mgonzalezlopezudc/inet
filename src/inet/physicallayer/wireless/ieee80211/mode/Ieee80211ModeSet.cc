@@ -1100,6 +1100,16 @@ const IIeee80211Mode *Ieee80211ModeSet::getFastestMode() const
     return entries.back().mode;
 }
 
+const IIeee80211Mode *Ieee80211ModeSet::getFastestMode(Hz bandwidth) const
+{
+    for (int index = (int)entries.size() - 1; index >= 0; --index) {
+        const auto *mode = entries[index].mode;
+        if (mode->getDataMode()->getBandwidth() == bandwidth)
+            return mode;
+    }
+    throw cRuntimeError("Operation mode '%s' has no mode with bandwidth %s", getName(), bandwidth.str().c_str());
+}
+
 const IIeee80211Mode *Ieee80211ModeSet::getSlowerMode(const IIeee80211Mode *mode) const
 {
     int index = findModeIndex(mode);

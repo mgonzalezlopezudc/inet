@@ -462,6 +462,8 @@ const IListeningDecision *Ieee80211LayeredOfdmReceiver::computeListeningDecision
 bool Ieee80211LayeredOfdmReceiver::computeIsReceptionPossible(const IListening *listening, const ITransmission *transmission) const
 {
     auto ieee80211Transmission = dynamic_cast<const Ieee80211Transmission *>(transmission);
+    if (ieee80211Transmission != nullptr && ieee80211Transmission->getChannel() != nullptr && ieee80211Transmission->getChannel()->is80Plus80())
+        throw cRuntimeError("Layered OFDM does not support IEEE 802.11 VHT 80+80 MHz channel geometry");
     return ieee80211Transmission && SnirReceiverBase::computeIsReceptionPossible(listening, transmission);
 }
 
@@ -472,6 +474,8 @@ bool Ieee80211LayeredOfdmReceiver::computeIsReceptionPossible(const IListening *
     auto ieee80211Transmission = dynamic_cast<const Ieee80211Transmission *>(reception->getTransmission());
     if (ieee80211Transmission == nullptr)
         return false;
+    if (ieee80211Transmission->getChannel() != nullptr && ieee80211Transmission->getChannel()->is80Plus80())
+        throw cRuntimeError("Layered OFDM does not support IEEE 802.11 VHT 80+80 MHz channel geometry");
     else {
         const BandListening *bandListening = check_and_cast<const BandListening *>(listening);
         const DimensionalReceptionAnalogModel *analogModel = check_and_cast<const DimensionalReceptionAnalogModel *>(reception->getAnalogModel());

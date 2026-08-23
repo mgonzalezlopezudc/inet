@@ -50,6 +50,8 @@ const INoise *DimensionalBackgroundNoise::computeNoise(const IListening *listeni
         return new DimensionalNoise(startTime, endTime, centerFrequency, bandwidth, powerFunction);
     }
     const auto& occupiedBands = multibandListening->getOccupiedBands();
+    if (!frequencyGains.empty() && strcmp(frequencyGainsNormalization, "integral") != 0)
+        throw cRuntimeError("Dimensional multiband background noise requires integral-normalized frequency gains");
     Hz totalBandwidth = getFrequencyBandTotalBandwidth(occupiedBands);
     std::vector<Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>> components;
     components.reserve(occupiedBands.size());

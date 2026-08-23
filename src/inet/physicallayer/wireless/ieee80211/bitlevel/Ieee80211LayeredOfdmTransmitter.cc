@@ -286,6 +286,9 @@ const Ieee80211OfdmMode *Ieee80211LayeredOfdmTransmitter::getMode(const Packet *
 
 const ITransmission *Ieee80211LayeredOfdmTransmitter::createTransmission(const IRadio *transmitter, const Packet *packet, const simtime_t startTime) const
 {
+    const auto& channelReq = const_cast<Packet *>(packet)->findTag<Ieee80211ChannelReq>();
+    if (channelReq != nullptr && channelReq->getChannel() != nullptr && channelReq->getChannel()->is80Plus80())
+        throw cRuntimeError("Layered OFDM does not support IEEE 802.11 VHT 80+80 MHz channel geometry");
     mode = getMode(packet);
     const ITransmissionBitModel *bitModel = nullptr;
     const ITransmissionBitModel *signalFieldBitModel = nullptr;

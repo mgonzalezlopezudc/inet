@@ -1,0 +1,50 @@
+%description:
+Validate two-segment listening containment, primary-overlap gating, and
+rejection of foreign or partial secondary 80 MHz signals.
+
+%includes:
+#include "inet/physicallayer/wireless/common/radio/packetlevel/MultibandListening.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
+
+%global:
+using namespace inet;
+using namespace inet::physicallayer;
+
+%activity:
+{
+    const IIeee80211Band *band5 = Ieee80211CompliantBands::getBand("5 GHz");
+    ASSERT(band5 != nullptr);
+    Ieee80211Channel channel(band5, 36, IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ, 42, 155);
+    auto occupied = channel.getOccupiedBands();
+    ASSERT(occupied.size() == 2);
+
+    MultibandListening listening(nullptr, 0, 1, Coord::ZERO, Coord::ZERO, occupied);
+    ASSERT(listening.getOccupiedBands().size() == 2);
+    ASSERT(listening.contains(occupied));
+    ASSERT(listening.contains(channel.getPrimary80Band()));
+    ASSERT(listening.contains(channel.getSecondary80Band()));
+
+    const auto primary20 = channel.getPrimary20Band();
+    const auto secondary80 = channel.getSecondary80Band();
+    const FrequencyBand foreign(GHz(5.95), MHz(80));
+    const FrequencyBand partialSecondary(secondary80.centerFrequency, MHz(40));
+    ASSERT(Ieee80211Receiver::isPrimary20Overlapping(&channel, occupied));
+    ASSERT(!Ieee80211Receiver::isPrimary20Overlapping(&channel, std::vector<FrequencyBand>{secondary80}));
+    ASSERT(!Ieee80211Receiver::isPrimary20Overlapping(&channel, std::vector<FrequencyBand>{partialSecondary}));
+    ASSERT(!Ieee80211Receiver::isPrimary20Overlapping(&channel, std::vector<FrequencyBand>{foreign}));
+    ASSERT(!listening.contains(foreign));
+    ASSERT(!listening.contains(std::vector<FrequencyBand>{occupied[0], foreign}));
+    ASSERT(Ieee80211Receiver::isPrimary20Overlapping(&channel, primary20));
+
+    EV << "VHT 80+80 multiband listening and primary gate verified.\n";
+    EV << "Foreign and secondary-only segments are rejected.\n";
+}
+
+EV << ".\n";
+
+%contains: stdout
+VHT 80+80 multiband listening and primary gate verified.
+Foreign and secondary-only segments are rejected.
+.

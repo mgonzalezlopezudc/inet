@@ -60,8 +60,10 @@ std::vector<Ptr<const DimensionalPowerFunction>> DimensionalMediumAnalogModel::c
     auto analogModel = check_and_cast<const DimensionalSignalAnalogModel *>(transmission->getAnalogModel());
     const auto& occupiedBands = analogModel->getOccupiedBands();
     const auto& componentPowers = analogModel->getComponentPowers();
-    if (occupiedBands.size() <= 1 || componentPowers.size() != occupiedBands.size())
+    if (occupiedBands.size() <= 1)
         return {};
+    if (componentPowers.size() != occupiedBands.size())
+        throw cRuntimeError("Dimensional multiband transmission has no matching component PSD for every occupied band");
 
     const Coord& transmissionStartPosition = transmission->getStartPosition();
     const Coord& receptionStartPosition = arrival->getStartPosition();

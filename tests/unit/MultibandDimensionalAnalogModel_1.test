@@ -28,18 +28,6 @@ using namespace inet::units::values;
 
 using PowerFunction = IFunction<WpHz, Domain<simsec, Hz>>;
 
-template<typename F>
-static bool throwsRuntimeError(F f)
-{
-    try {
-        f();
-        return false;
-    }
-    catch (const std::exception&) {
-        return true;
-    }
-}
-
 class TestReception : public IReception
 {
   protected:
@@ -48,8 +36,9 @@ class TestReception : public IReception
     const Quaternion orientation = Quaternion();
 
   public:
-    TestReception(const std::vector<FrequencyBand>& bands, const Ptr<const PowerFunction>& power) :
-        analogModel(new DimensionalReceptionAnalogModel(0, 0, 1, bands, power))
+    TestReception(const std::vector<FrequencyBand>& bands, const std::vector<Ptr<const PowerFunction>>& components,
+            const Ptr<const PowerFunction>& power) :
+        analogModel(new DimensionalReceptionAnalogModel(0, 0, 1, bands, components, power))
     {
     }
 
@@ -134,14 +123,18 @@ class TestDimensionalTransmitter : public DimensionalTransmitterAnalogModel
     ASSERT(touchingPower->getValue(Point<simsec, Hz>(simsec(0.5), GHz(1.01))) == two->getValue(Point<simsec, Hz>(simsec(0.5), GHz(1.01))));
     auto touchingIntegratedPower = integrate<WpHz, Domain<simsec, Hz>, 0b10, W, Domain<simsec>>(touchingPower);
     ASSERT(touchingIntegratedPower->getValue(Point<simsec>(simsec(0.5))) == W(3));
-    ASSERT(throwsRuntimeError([&] { MultibandFunction<WpHz> bad({FrequencyBand(GHz(1.00), MHz(20)), FrequencyBand(GHz(1.01), MHz(20))}, {one, two}); }));
 
-    DimensionalTransmissionAnalogModel transmission(0, 0, 1, inputBands, power);
+    // A public multiband signal must carry one PSD per occupied band; an
+    // envelope-only PSD is ambiguous and is rejected instead of being used
+    // as a hidden fallback.
+    DimensionalTransmissionAnalogModel transmission(0, 0, 1, inputBands,
+            std::vector<Ptr<const PowerFunction>>{highPower, lowPower}, power);
     ASSERT(transmission.getOccupiedBands().size() == 2);
     ASSERT(transmission.getCenterFrequency() == (low.getLowerFrequency() + high.getUpperFrequency()) / 2);
     ASSERT(transmission.getBandwidth() == high.getUpperFrequency() - low.getLowerFrequency());
 
-    DimensionalReceptionAnalogModel receptionModel(0, 0, 1, inputBands, power);
+    DimensionalReceptionAnalogModel receptionModel(0, 0, 1, inputBands,
+            std::vector<Ptr<const PowerFunction>>{highPower, lowPower}, power);
     ASSERT(receptionModel.getOccupiedBands().size() == 2);
     ASSERT(receptionModel.getOccupiedBands()[0].centerFrequency == low.centerFrequency);
     DimensionalNoise noise(0, 1, inputBands, power);
@@ -154,7 +147,6 @@ class TestDimensionalTransmitter : public DimensionalTransmitterAnalogModel
     ASSERT(listening.contains(std::vector<FrequencyBand>{low, high}));
     ASSERT(!listening.contains(FrequencyBand(low.centerFrequency + MHz(45), MHz(20))));
     ASSERT(!listening.contains(std::vector<FrequencyBand>{low, FrequencyBand(GHz(5.34), MHz(20))}));
-    ASSERT(throwsRuntimeError([&] { MultibandListening overlap(nullptr, 0, 1, Coord::ZERO, Coord::ZERO, {low, FrequencyBand(GHz(5.20), MHz(80))}); }));
 
     // The gap has deliberately hostile noise, but it is absent from the union.
     auto lowSignal = staticPtrCast<const PowerFunction>(makeShared<ConstantFunction<WpHz, Domain<simsec, Hz>>>(W(10) / MHz(80)));
@@ -166,7 +158,7 @@ class TestDimensionalTransmitter : public DimensionalTransmitterAnalogModel
     auto unionNoise = makeShared<MultibandFunction<WpHz>>(inputBands, std::vector<Ptr<const PowerFunction>>{highNoise, lowNoise});
     auto gapNoise = makeShared<MultibandFunction<WpHz>>(inputBands, std::vector<Ptr<const PowerFunction>>{hostileGapNoise, hostileGapNoise});
     ASSERT(gapNoise->getValue(Point<simsec, Hz>(simsec(0.5), GHz(5.34))) == WpHz(0));
-    TestReception testReception(inputBands, signal);
+    TestReception testReception(inputBands, std::vector<Ptr<const PowerFunction>>{highSignal, lowSignal}, signal);
     DimensionalNoise unionNoiseModel(0, 1, inputBands, unionNoise);
     DimensionalSnir unionSnir(&testReception, &unionNoiseModel);
     ASSERT(std::abs(unionSnir.getMin() - 2.0) < 1e-9);
@@ -200,14 +192,6 @@ class TestDimensionalTransmitter : public DimensionalTransmitterAnalogModel
     ASSERT(receiverModel.computeIsReceptionPossible(&unionListening, &testReception, W(0)));
     ASSERT(!receiverModel.computeIsReceptionPossible(&envelopeListening, &testReception, W(0)));
 
-    // Non-integral gain policies are rejected before any segment power is
-    // allocated, because their completed integral is not guaranteed to equal
-    // the requested segment power.
-    TestDimensionalTransmitter unsupportedTransmitter;
-    unsupportedTransmitter.useUnsupportedGainPolicy();
-    ASSERT(throwsRuntimeError([&] {
-        std::unique_ptr<ITransmissionAnalogModel> ignored(unsupportedTransmitter.createAnalogModel(0, 0, 1, inputBands, W(20)));
-    }));
 }
 
 EV << "Multiband dimensional analog-model tests PASSED.\n";

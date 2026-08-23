@@ -118,6 +118,7 @@ class INET_API Ieee80211ModeSet : public IPrintableObject, public cObject
     const IIeee80211Mode *getMode(bps minBitrate, bps maxBitrate, Hz bandwidth = Hz(NaN), int numSpatialStreams = -1, simtime_t guardInterval = -1, bool requireUnique = false) const;
     const IIeee80211Mode *getSlowestMode() const;
     const IIeee80211Mode *getFastestMode() const;
+    const IIeee80211Mode *getFastestMode(Hz bandwidth) const;
     const IIeee80211Mode *getSlowerMode(const IIeee80211Mode *mode) const;
     const IIeee80211Mode *getFasterMode(const IIeee80211Mode *mode) const;
     const IIeee80211Mode *getSlowestMandatoryMode() const;

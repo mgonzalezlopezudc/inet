@@ -1,0 +1,81 @@
+%description:
+Validate the packet-level VHT transmission placement helpers for the primary
+20/40/80 hierarchy, contiguous 160 MHz operation, and legacy 22 MHz signals.
+
+%includes:
+#include <exception>
+
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
+
+%global:
+using namespace inet;
+using namespace inet::physicallayer;
+
+template<typename F>
+static bool throwsPlacementError(F f)
+{
+    try {
+        f();
+        return false;
+    }
+    catch (const std::exception&) {
+        return true;
+    }
+}
+
+%activity:
+{
+    const IIeee80211Band *band5 = Ieee80211CompliantBands::getBand("5 GHz");
+    const IIeee80211Band *band24 = Ieee80211CompliantBands::getBand("2.4 GHz");
+    ASSERT(band5 != nullptr);
+    ASSERT(band24 != nullptr);
+
+    Ieee80211Channel channel20(band5, 36, IEEE80211_CHANNEL_WIDTH_20MHZ, 36);
+    Ieee80211Channel channel40(band5, 36, IEEE80211_CHANNEL_WIDTH_40MHZ, 38);
+    Ieee80211Channel channel80(band5, 36, IEEE80211_CHANNEL_WIDTH_80MHZ, 42);
+    Ieee80211Channel channel160(band5, 36, IEEE80211_CHANNEL_WIDTH_160MHZ, 50);
+
+    // These calls are the same production placement function used by
+    // Ieee80211Transmitter::createTransmission().
+    ASSERT(Ieee80211Transmitter::getTransmissionCenterFrequency(&channel20, MHz(20)) == GHz(5.18));
+    ASSERT(Ieee80211Transmitter::getTransmissionCenterFrequency(&channel40, MHz(20)) == GHz(5.18));
+    ASSERT(Ieee80211Transmitter::getTransmissionCenterFrequency(&channel40, MHz(40)) == GHz(5.19));
+    ASSERT(Ieee80211Transmitter::getTransmissionCenterFrequency(&channel80, MHz(20)) == GHz(5.18));
+    ASSERT(Ieee80211Transmitter::getTransmissionCenterFrequency(&channel80, MHz(40)) == GHz(5.19));
+    ASSERT(Ieee80211Transmitter::getTransmissionCenterFrequency(&channel80, MHz(80)) == GHz(5.21));
+    ASSERT(Ieee80211Transmitter::getTransmissionCenterFrequency(&channel160, MHz(20)) == GHz(5.18));
+    ASSERT(Ieee80211Transmitter::getTransmissionCenterFrequency(&channel160, MHz(40)) == GHz(5.19));
+    ASSERT(Ieee80211Transmitter::getTransmissionCenterFrequency(&channel160, MHz(80)) == GHz(5.21));
+    ASSERT(Ieee80211Transmitter::getTransmissionCenterFrequency(&channel160, MHz(160)) == GHz(5.25));
+
+    // Preserve the pre-existing DSSS/CCK 22 MHz signal placement on a
+    // 20 MHz operating channel; it must not be mistaken for VHT width.
+    Ieee80211Channel legacy20(band24, 0);
+    ASSERT(Ieee80211Transmitter::getTransmissionCenterFrequency(&legacy20, MHz(22)) == GHz(2.412));
+    Ieee80211Channel legacy40(band24, 0, IEEE80211_SECONDARY_CHANNEL_ABOVE);
+    ASSERT(throwsPlacementError([&] { Ieee80211Transmitter::getTransmissionCenterFrequency(&legacy40, MHz(22)); }));
+
+    // A complete 80+80 PPDU is represented by two occupied components. A
+    // narrower PPDU still uses the primary hierarchy and remains contiguous.
+    Ieee80211Channel channel80Plus80(band5, 36, IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ, 42, 155);
+    auto primaryOnly = Ieee80211Transmitter::getTransmissionOccupiedBands(&channel80Plus80, MHz(80));
+    ASSERT(primaryOnly.size() == 1);
+    ASSERT(primaryOnly[0].centerFrequency == GHz(5.21));
+    auto full = Ieee80211Transmitter::getTransmissionOccupiedBands(&channel80Plus80, MHz(160));
+    ASSERT(full.size() == 2);
+    ASSERT(full[0].centerFrequency == GHz(5.21));
+    ASSERT(full[1].centerFrequency == GHz(5.775));
+    ASSERT(throwsPlacementError([&] { Ieee80211Transmitter::getTransmissionCenterFrequency(&channel80Plus80, MHz(160)); }));
+
+    EV << "VHT transmission centers and legacy placement verified.\n";
+    EV << "80+80 primary hierarchy and occupied-set placement verified.\n";
+}
+
+EV << ".\n";
+
+%contains: stdout
+VHT transmission centers and legacy placement verified.
+80+80 primary hierarchy and occupied-set placement verified.
+.

@@ -25,8 +25,14 @@ static bool throwsChannelError(F f)
 {
     const IIeee80211Band *band24 = Ieee80211CompliantBands::getBand("2.4 GHz");
     const IIeee80211Band *band5 = Ieee80211CompliantBands::getBand("5 GHz");
+    const IIeee80211Band *band5Declared80 = Ieee80211CompliantBands::getBand("5 GHz (80 MHz)");
+    const IIeee80211Band *band59 = Ieee80211CompliantBands::getBand("5.9 GHz");
     ASSERT(band24 != nullptr);
     ASSERT(band5 != nullptr);
+    ASSERT(band5Declared80 != nullptr);
+    ASSERT(band59 != nullptr);
+    ASSERT(Ieee80211Channel::isFiveGhzBand(band5Declared80));
+    ASSERT(!Ieee80211Channel::isVhtCapableBand(band59));
 
     ASSERT(Ieee80211Channel::parseChannelWidth("20MHz") == IEEE80211_CHANNEL_WIDTH_20MHZ);
     ASSERT(Ieee80211Channel::parseChannelWidth("40MHz") == IEEE80211_CHANNEL_WIDTH_40MHZ);
@@ -96,6 +102,10 @@ static bool throwsChannelError(F f)
     ASSERT(throwsChannelError([&] { channel20.getPrimary40Band(); }));
     ASSERT(throwsChannelError([&] { channel20.getPrimary80Band(); }));
     ASSERT(throwsChannelError([&] { channel20.getFrequencyBand(50, IEEE80211_CHANNEL_WIDTH_160MHZ); }));
+    ASSERT(throwsChannelError([&] { Ieee80211Channel invalid(band5, 36, IEEE80211_CHANNEL_WIDTH_80MHZ, 42, 1); }));
+    Ieee80211Channel declaredFiveGhz(band5Declared80, 36, IEEE80211_CHANNEL_WIDTH_80MHZ, 42);
+    ASSERT(declaredFiveGhz.getPrimary80CenterFrequency() == GHz(5.21));
+    ASSERT(throwsChannelError([&] { Ieee80211Channel invalid(band59, 36, IEEE80211_CHANNEL_WIDTH_80MHZ, 42); }));
     ASSERT(throwsChannelError([&] { channel20.validatePpduWidth(MHz(40)); }));
     channel80Lower.validatePpduWidth(MHz(20));
     channel80Lower.validatePpduWidth(MHz(40));

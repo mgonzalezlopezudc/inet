@@ -16,6 +16,27 @@ namespace physicallayer {
 
 namespace {
 
+enum class BandFamily {
+    OTHER,
+    BAND_2_4_GHZ,
+    BAND_5_GHZ,
+    BAND_5_9_GHZ,
+};
+
+BandFamily getBandFamily(const IIeee80211Band *band)
+{
+    if (band == nullptr)
+        return BandFamily::OTHER;
+    const char *name = band->getName();
+    if (!strncmp(name, "5 GHz", 5))
+        return BandFamily::BAND_5_GHZ;
+    if (!strncmp(name, "2.4 GHz", 7))
+        return BandFamily::BAND_2_4_GHZ;
+    if (!strncmp(name, "5.9 GHz", 7))
+        return BandFamily::BAND_5_9_GHZ;
+    return BandFamily::OTHER;
+}
+
 bool isCanonical5GHzVht80CenterIndex(int index)
 {
     // IEEE Std 802.11-2024, Table 21-22: 5 GHz VHT 80 MHz center
@@ -30,9 +51,30 @@ bool isCanonical5GHzVht160CenterIndex(int index)
     return index == 50 || index == 114;
 }
 
+bool isCanonical5GHzVht20CenterIndex(int index)
+{
+    // IEEE Std 802.11-2024, Table 21-22, 5 GHz VHT 20 MHz channel indices
+    // represented by the INET 5 MHz center-frequency index space.
+    static const int indices[] = {
+        36, 40, 44, 48, 52, 56, 60, 64,
+        100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144,
+        149, 153, 157, 161, 165,
+    };
+    return std::find(std::begin(indices), std::end(indices), index) != std::end(indices);
+}
+
 bool isCanonical5GHzBand(const IIeee80211Band *band)
 {
-    return band != nullptr && !strcmp(band->getName(), "5 GHz");
+    return getBandFamily(band) == BandFamily::BAND_5_GHZ;
+}
+
+void validateCanonicalVht20Subchannels(int centerFrequencyIndex, const std::initializer_list<int>& offsets)
+{
+    for (int offset : offsets) {
+        int index = centerFrequencyIndex + offset;
+        if (!isCanonical5GHzVht20CenterIndex(index))
+            throw cRuntimeError("Invalid 5 GHz VHT 20 MHz subchannel center frequency index %d", index);
+    }
 }
 
 } // namespace
@@ -143,20 +185,36 @@ Hz Ieee80211Channel::getCenterFrequencyForIndex(int index) const
     if (!explicitGeometry)
         return band->getCenterFrequency(index);
 
-    const char *bandName = band->getName();
     // The explicit VHT indices are IEEE center-frequency indices (5 MHz
     // spacing), while the legacy band API uses zero-based array indices.
-    if (strstr(bandName, "5 GHz") != nullptr)
-        return GHz(5) + MHz(5 * index);
-    if (strstr(bandName, "5.9 GHz") != nullptr)
-        return GHz(5.855) + MHz(10 * index);
-    if (strstr(bandName, "2.4 GHz") != nullptr) {
-        if (index == 14)
-            return GHz(2.484);
-        if (index >= 1 && index <= 13)
-            return GHz(2.407) + MHz(5 * index);
+    switch (getBandFamily(band)) {
+        case BandFamily::BAND_5_GHZ:
+            return GHz(5) + MHz(5 * index);
+        case BandFamily::BAND_5_9_GHZ:
+            return GHz(5.855) + MHz(10 * index);
+        case BandFamily::BAND_2_4_GHZ:
+            if (index == 14)
+                return GHz(2.484);
+            if (index >= 1 && index <= 13)
+                return GHz(2.407) + MHz(5 * index);
+            break;
+        default:
+            break;
     }
     return band->getCenterFrequency(index);
+}
+
+bool Ieee80211Channel::isFiveGhzBand(const IIeee80211Band *band)
+{
+    return getBandFamily(band) == BandFamily::BAND_5_GHZ;
+}
+
+bool Ieee80211Channel::isVhtCapableBand(const IIeee80211Band *band)
+{
+    // VHT channelization in this model follows the 5 GHz index family.  The
+    // 2.4 GHz and 5.9 GHz families have distinct index/spacing rules and are
+    // intentionally not accepted for 80/160 MHz VHT geometry.
+    return isFiveGhzBand(band);
 }
 
 int Ieee80211Channel::getSecondaryChannelNumber() const
@@ -368,6 +426,19 @@ void Ieee80211Channel::validateGeometry() const
 {
     if (!explicitGeometry)
         return;
+    if (channelWidth != IEEE80211_CHANNEL_WIDTH_20MHZ &&
+            channelWidth != IEEE80211_CHANNEL_WIDTH_40MHZ &&
+            channelWidth != IEEE80211_CHANNEL_WIDTH_80MHZ &&
+            channelWidth != IEEE80211_CHANNEL_WIDTH_160MHZ &&
+            channelWidth != IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ)
+        throw cRuntimeError("Invalid IEEE 802.11 channel width: %d", (int)channelWidth);
+    if (channelWidth != IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ && centerFrequencyIndex1 != 0)
+        throw cRuntimeError("IEEE 802.11 center frequency index 1 is reserved except for VHT 80+80 MHz");
+    if ((channelWidth == IEEE80211_CHANNEL_WIDTH_80MHZ ||
+            channelWidth == IEEE80211_CHANNEL_WIDTH_160MHZ ||
+            channelWidth == IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ) &&
+            !Ieee80211Channel::isVhtCapableBand(band))
+        throw cRuntimeError("IEEE 802.11 VHT 80/160 MHz geometry requires a declared 5 GHz band");
     int indexDifference = std::abs(channelNumber - centerFrequencyIndex0);
     if (channelWidth == IEEE80211_CHANNEL_WIDTH_20MHZ && indexDifference != 0)
         throw cRuntimeError("The primary 20 MHz channel must equal center frequency index 0");
@@ -390,9 +461,17 @@ void Ieee80211Channel::validateGeometry() const
             indexDifference != 2 && indexDifference != 6 &&
             indexDifference != 10 && indexDifference != 14)
         throw cRuntimeError("The primary 20 MHz channel is not in the configured contiguous 160 MHz channel");
+    if (isCanonical5GHzBand(band)) {
+        if (channelWidth == IEEE80211_CHANNEL_WIDTH_80MHZ || channelWidth == IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ)
+            validateCanonicalVht20Subchannels(centerFrequencyIndex0, {-6, -2, 2, 6});
+        else if (channelWidth == IEEE80211_CHANNEL_WIDTH_160MHZ)
+            validateCanonicalVht20Subchannels(centerFrequencyIndex0, {-14, -10, -6, -2, 2, 6, 10, 14});
+    }
     if (channelWidth == IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ) {
         if (isCanonical5GHzBand(band) && !isCanonical5GHzVht80CenterIndex(centerFrequencyIndex1))
             throw cRuntimeError("Invalid 5 GHz VHT 80 MHz secondary center frequency index %d", centerFrequencyIndex1);
+        if (isCanonical5GHzBand(band))
+            validateCanonicalVht20Subchannels(centerFrequencyIndex1, {-6, -2, 2, 6});
         if (std::abs(centerFrequencyIndex1 - centerFrequencyIndex0) <= 16)
             throw cRuntimeError("VHT 80+80 MHz center frequency segments must be separated by more than 80 MHz");
     }

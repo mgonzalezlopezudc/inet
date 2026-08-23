@@ -10,15 +10,21 @@
 #include "inet/common/math/Functions.h"
 #include "inet/physicallayer/wireless/common/analogmodel/scalar/ScalarMediumAnalogModel.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/INarrowbandSignalAnalogModel.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IMultibandReceiverAnalogModel.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IMultibandSignalAnalogModel.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadioMedium.h"
 #include "inet/physicallayer/wireless/common/radio/packetlevel/BandListening.h"
+#include "inet/physicallayer/wireless/common/radio/packetlevel/MultibandListening.h"
 #include "inet/physicallayer/wireless/common/radio/packetlevel/ListeningDecision.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ErpOfdmMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211OfdmMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+
+#include <memory>
 
 namespace inet {
 
@@ -26,9 +32,69 @@ namespace physicallayer {
 
 Define_Module(Ieee80211Receiver);
 
+namespace {
+
+const Ieee80211Channel *cloneChannelForBand(const Ieee80211Channel *channel, const IIeee80211Band *band)
+{
+    if (channel == nullptr)
+        return nullptr;
+    if (band == nullptr)
+        throw cRuntimeError("Cannot retain an IEEE 802.11 channel without a band");
+    if (channel->isExplicitGeometry())
+        return new Ieee80211Channel(band, channel->getChannelNumber(), channel->getChannelWidth(),
+                channel->getCenterFrequencyIndex0(), channel->getCenterFrequencyIndex1());
+    return new Ieee80211Channel(band, channel->getChannelNumber(), channel->getSecondaryChannelOffset());
+}
+
+bool overlaps(const FrequencyBand& first, const FrequencyBand& second)
+{
+    return first.getLowerFrequency() < second.getUpperFrequency() && second.getLowerFrequency() < first.getUpperFrequency();
+}
+
+bool isSignalOnPrimary20(const Ieee80211Channel *channel, const ITransmission *transmission)
+{
+    if (channel == nullptr)
+        return true;
+    const auto *multibandSignal = dynamic_cast<const IMultibandSignalAnalogModel *>(transmission->getAnalogModel());
+    if (multibandSignal != nullptr) {
+        for (const auto& band : multibandSignal->getOccupiedBands())
+            if (Ieee80211Receiver::isPrimary20Overlapping(channel, band))
+                return true;
+        return false;
+    }
+    const auto *narrowbandSignal = dynamic_cast<const INarrowbandSignalAnalogModel *>(transmission->getAnalogModel());
+    return narrowbandSignal != nullptr && Ieee80211Receiver::isPrimary20Overlapping(channel,
+            FrequencyBand(narrowbandSignal->getCenterFrequency(), narrowbandSignal->getBandwidth()));
+}
+
+bool isModeAccepted(const Ieee80211ModeSet *modeSet, const IIeee80211Mode *mode)
+{
+    if (modeSet == nullptr || mode == nullptr || !modeSet->containsMode(mode))
+        return false;
+    return mode->getDataMode()->getBandwidth() < MHz(80) || dynamic_cast<const Ieee80211VhtMode *>(mode) != nullptr;
+}
+
+}
+
 Ieee80211Receiver::~Ieee80211Receiver()
 {
     delete channel;
+}
+
+bool Ieee80211Receiver::isPrimary20Overlapping(const Ieee80211Channel *channel, const FrequencyBand& signalBand)
+{
+    if (channel == nullptr)
+        return true;
+    const auto primary20 = channel->getPrimary20Band();
+    return overlaps(primary20, signalBand);
+}
+
+bool Ieee80211Receiver::isPrimary20Overlapping(const Ieee80211Channel *channel, const std::vector<FrequencyBand>& signalBands)
+{
+    for (const auto& signalBand : signalBands)
+        if (isPrimary20Overlapping(channel, signalBand))
+            return true;
+    return false;
 }
 
 void Ieee80211Receiver::initialize(int stage)
@@ -59,16 +125,47 @@ std::ostream& Ieee80211Receiver::printToStream(std::ostream& stream, int level, 
     return FlatReceiverBase::printToStream(stream, level);
 }
 
+const IListening *Ieee80211Receiver::createListening(const IRadio *radio, const simtime_t startTime, const simtime_t endTime,
+        const Coord& startPosition, const Coord& endPosition) const
+{
+    if (channel == nullptr)
+        return NarrowbandReceiverBase::createListening(radio, startTime, endTime, startPosition, endPosition);
+    if (channel->is80Plus80()) {
+        auto *multibandFactory = dynamic_cast<const IMultibandReceiverAnalogModel *>(getAnalogModel());
+        if (multibandFactory == nullptr)
+            throw cRuntimeError("IEEE 802.11 VHT 80+80 MHz requires a multiband receiver analog model");
+        return multibandFactory->createListening(radio, startTime, endTime, startPosition, endPosition, channel->getOccupiedBands());
+    }
+    return getAnalogModel()->createListening(radio, startTime, endTime, startPosition, endPosition,
+            channel->getOperatingCenterFrequency(), channel->getOperatingBandwidth());
+}
+
 bool Ieee80211Receiver::computeIsReceptionPossible(const IListening *listening, const ITransmission *transmission) const
 {
     auto ieee80211Transmission = dynamic_cast<const Ieee80211Transmission *>(transmission);
-    return ieee80211Transmission && modeSet->supportsMode(ieee80211Transmission->getMode()) && NarrowbandReceiverBase::computeIsReceptionPossible(listening, transmission);
+    if (ieee80211Transmission == nullptr || !modeSet->supportsMode(ieee80211Transmission->getMode()) || !isSignalOnPrimary20(channel, transmission))
+        return false;
+    auto *multibandListening = dynamic_cast<const MultibandListening *>(listening);
+    auto *multibandSignal = dynamic_cast<const IMultibandSignalAnalogModel *>(transmission->getAnalogModel());
+    if (multibandListening != nullptr) {
+        if (multibandSignal != nullptr)
+            return multibandListening->contains(multibandSignal->getOccupiedBands());
+        auto *narrowbandSignal = dynamic_cast<const INarrowbandSignalAnalogModel *>(transmission->getAnalogModel());
+        return narrowbandSignal != nullptr && multibandListening->contains(FrequencyBand(narrowbandSignal->getCenterFrequency(), narrowbandSignal->getBandwidth()));
+    }
+    // A multiband signal must be paired with the explicit multiband listening
+    // mask.  Its outer envelope is metadata only and must not hide a missing
+    // receiver factory or make the spectral gap part of the decode domain.
+    if (multibandSignal != nullptr)
+        return false;
+    return NarrowbandReceiverBase::computeIsReceptionPossible(listening, transmission);
 }
 
 bool Ieee80211Receiver::computeIsReceptionPossible(const IListening *listening, const IReception *reception, IRadioSignal::SignalPart part) const
 {
     auto ieee80211Transmission = dynamic_cast<const Ieee80211Transmission *>(reception->getTransmission());
-    return ieee80211Transmission && modeSet->supportsMode(ieee80211Transmission->getMode()) && getAnalogModel()->computeIsReceptionPossible(listening, reception, sensitivity);
+    return ieee80211Transmission && modeSet->supportsMode(ieee80211Transmission->getMode()) &&
+            isSignalOnPrimary20(channel, reception->getTransmission()) && getAnalogModel()->computeIsReceptionPossible(listening, reception, sensitivity);
 }
 
 const IListeningDecision *Ieee80211Receiver::computeListeningDecision(const IListening *listening, const IInterference *interference) const
@@ -220,20 +317,20 @@ std::function<void()> Ieee80211Receiver::saveChannelState()
 void Ieee80211Receiver::setBand(const IIeee80211Band *band)
 {
     if (this->band != band) {
-        if (channel != nullptr)
-            setChannel(new Ieee80211Channel(band, channel->getChannelNumber(), channel->getSecondaryChannelOffset()));
-        else
-            this->band = band;
+        std::unique_ptr<const Ieee80211Channel> replacement(cloneChannelForBand(channel, band));
+        this->band = band;
+        if (replacement != nullptr)
+            setChannel(replacement.release());
     }
 }
 
 void Ieee80211Receiver::setChannel(const Ieee80211Channel *channel)
 {
     if (this->channel != channel) {
-        // IEEE Std 802.11-2024, 19.3.15.4 and 19.3.19.6.5: HT40 listening
-        // spans both 20 MHz channels around their bonded center.
-        auto centerFrequency = channel->getSecondaryChannelOffset() == IEEE80211_SECONDARY_CHANNEL_NONE ?
-                channel->getCenterFrequency() : channel->getBondedCenterFrequency();
+        // IEEE Std 802.11-2024, 19.3.15.4 and 19.3.19.6.5: the receiver
+        // listens on the configured operating geometry; HT40 therefore uses
+        // the bonded center and VHT widths use their primary hierarchy.
+        auto centerFrequency = channel->getOperatingCenterFrequency();
         delete this->channel;
         this->channel = channel;
         this->band = channel->getBand();
@@ -244,8 +341,9 @@ void Ieee80211Receiver::setChannel(const Ieee80211Channel *channel)
 void Ieee80211Receiver::setChannelNumber(int channelNumber)
 {
     if (channel == nullptr || channelNumber != channel->getChannelNumber())
-        setChannel(new Ieee80211Channel(band, channelNumber, channel == nullptr ?
-                IEEE80211_SECONDARY_CHANNEL_NONE : channel->getSecondaryChannelOffset()));
+        setChannel(channel != nullptr && channel->isExplicitGeometry() ?
+                new Ieee80211Channel(band, channelNumber, channel->getChannelWidth(), channel->getCenterFrequencyIndex0(), channel->getCenterFrequencyIndex1()) :
+                new Ieee80211Channel(band, channelNumber, channel == nullptr ? IEEE80211_SECONDARY_CHANNEL_NONE : channel->getSecondaryChannelOffset()));
 }
 
 bool Ieee80211Receiver::isHtChannelWidthSupported(Hz channelWidth) const
@@ -260,4 +358,3 @@ bool Ieee80211Receiver::isHtChannelWidthSupported(Hz channelWidth) const
 } // namespace physicallayer
 
 } // namespace inet
-

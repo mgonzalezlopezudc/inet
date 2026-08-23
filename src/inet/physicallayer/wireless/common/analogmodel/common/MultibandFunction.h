@@ -182,8 +182,6 @@ class INET_API MultibandFunction : public FunctionBase<R, Domain<simsec, Hz>>
     }
 
     virtual R getMin(const typename Domain<simsec, Hz>::I& interval) const override {
-        if (hasGap(interval))
-            return R(0);
         R result = getUpperBound<R>();
         bool hasIntersection = false;
         for (size_t i = 0; i < components.size(); ++i) {
@@ -193,7 +191,11 @@ class INET_API MultibandFunction : public FunctionBase<R, Domain<simsec, Hz>>
                 result = minnan(result, components[i]->getMin(intersection));
             }
         }
-        return hasIntersection ? result : R(0);
+        // A gap is an explicitly masked zero.  It participates in the
+        // minimum, but must not discard a negative component value.
+        if (hasGap(interval))
+            result = minnan(result, R(0));
+        return hasIntersection || hasGap(interval) ? result : R(0);
     }
 
     virtual R getMax(const typename Domain<simsec, Hz>::I& interval) const override {
@@ -224,13 +226,10 @@ class INET_API MultibandFunction : public FunctionBase<R, Domain<simsec, Hz>>
     }
 
     virtual R getMean(const typename Domain<simsec, Hz>::I& interval) const override {
-        double occupiedVolume = 0;
-        for (size_t i = 0; i < occupiedBands.size(); ++i) {
-            auto intersection = getBandIntersection(interval, occupiedBands[i]);
-            if (!intersection.isEmpty())
-                occupiedVolume += intersection.getVolume();
-        }
-        return occupiedVolume == 0 ? R(0) : getIntegral(interval) / occupiedVolume;
+        // MultibandFunction is a normal function on the queried domain: the
+        // spectral gap is an explicit zero and therefore contributes to the
+        // denominator just like any other point in the interval.
+        return interval.getVolume() == 0 ? R(0) : getIntegral(interval) / interval.getVolume();
     }
 
     virtual void printStructure(std::ostream& os, int level = 0) const override {

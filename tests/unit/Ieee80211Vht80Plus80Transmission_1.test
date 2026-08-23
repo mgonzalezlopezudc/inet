@@ -1,0 +1,83 @@
+%description:
+Validate one dimensional analog transmission with two 80 MHz components for
+VHT 80+80, aggregate power conservation, and the narrow primary hierarchy.
+
+%includes:
+#include <cmath>
+#include <memory>
+
+#include "inet/common/math/Functions.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalTransmitterAnalogModel.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalTransmissionAnalogModel.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IMultibandTransmitterAnalogModel.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmitterAnalogModel.h"
+#include "inet/physicallayer/wireless/common/analogmodel/scalar/ScalarTransmitterAnalogModel.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
+
+%global:
+using namespace inet;
+using namespace inet::math;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+using PowerFunction = IFunction<WpHz, Domain<simsec, Hz>>;
+
+class TestDimensionalTransmitter : public DimensionalTransmitterAnalogModel
+{
+  public:
+    TestDimensionalTransmitter()
+    {
+        gainFunctionCacheLimit = 0;
+        timeGainsNormalization = "";
+        frequencyGainsNormalization = "integral";
+    }
+};
+
+%activity:
+{
+    const IIeee80211Band *band5 = Ieee80211CompliantBands::getBand("5 GHz");
+    ASSERT(band5 != nullptr);
+    Ieee80211Channel channel(band5, 36, IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ, 42, 155);
+
+    auto occupiedBands = Ieee80211Transmitter::getTransmissionOccupiedBands(&channel, MHz(160));
+    ASSERT(occupiedBands.size() == 2);
+    ASSERT(occupiedBands[0].centerFrequency == GHz(5.21));
+    ASSERT(occupiedBands[1].centerFrequency == GHz(5.775));
+    auto narrowerBands = Ieee80211Transmitter::getTransmissionOccupiedBands(&channel, MHz(80));
+    ASSERT(narrowerBands.size() == 1);
+    ASSERT(narrowerBands[0].centerFrequency == GHz(5.21));
+    ASSERT(narrowerBands[0].bandwidth == MHz(80));
+
+    // This is the same optional factory contract selected by the production
+    // transmitter for a complete 80+80 PPDU.
+    TestDimensionalTransmitter dimensionalFactory;
+    std::unique_ptr<ITransmissionAnalogModel> analog(dimensionalFactory.createAnalogModel(0, 0, 1, occupiedBands, W(40)));
+    auto *dimensional = dynamic_cast<const DimensionalTransmissionAnalogModel *>(analog.get());
+    ASSERT(dimensional != nullptr);
+    ASSERT(dimensional->getOccupiedBands().size() == 2);
+    ASSERT(dimensional->getComponentPowers().size() == 2);
+    auto firstPower = integrate<WpHz, Domain<simsec, Hz>, 0b10, W, Domain<simsec>>(dimensional->getComponentPowers()[0])->getValue(Point<simsec>(simsec(0.5)));
+    auto secondPower = integrate<WpHz, Domain<simsec, Hz>, 0b10, W, Domain<simsec>>(dimensional->getComponentPowers()[1])->getValue(Point<simsec>(simsec(0.5)));
+    ASSERT(std::abs(firstPower.get() - 20.0) < 1e-9);
+    ASSERT(std::abs(secondPower.get() - 20.0) < 1e-9);
+    ASSERT(std::abs((firstPower + secondPower).get() - 40.0) < 1e-9);
+    ASSERT(dimensional->getPower()->getValue(Point<simsec, Hz>(simsec(0.5), GHz(5.34))) == WpHz(0));
+
+    // Scalar analog models do not advertise the multiband contract; the
+    // packet-level transmitter therefore has a deterministic unsupported-path
+    // condition instead of fabricating a single envelope signal.
+    ScalarTransmitterAnalogModel scalar;
+    ASSERT(dynamic_cast<const IMultibandTransmitterAnalogModel *>(&scalar) == nullptr);
+
+    EV << "VHT 80+80 one-model/two-component transmission verified.\n";
+    EV << "VHT 80+80 aggregate power and gap masking verified.\n";
+}
+
+EV << ".\n";
+
+%contains: stdout
+VHT 80+80 one-model/two-component transmission verified.
+VHT 80+80 aggregate power and gap masking verified.
+.

@@ -57,6 +57,11 @@ class INET_API Ieee80211Transmitter : public FlatTransmitterBase
 
     virtual const Ieee80211Channel *getChannel() const { return channel; }
     virtual bool isHtChannelWidthSupported(Hz channelWidth) const;
+    // The placement rules are kept here, next to the production transmission
+    // path, so callers that build a channel-level harness can verify exactly
+    // the same primary hierarchy used by createTransmission().
+    static Hz getTransmissionCenterFrequency(const Ieee80211Channel *channel, Hz bandwidth);
+    static std::vector<Ieee80211ChannelBand> getTransmissionOccupiedBands(const Ieee80211Channel *channel, Hz bandwidth);
 
     virtual const ITransmission *createTransmission(const IRadio *radio, const Packet *packet, simtime_t startTime) const override;
 };
