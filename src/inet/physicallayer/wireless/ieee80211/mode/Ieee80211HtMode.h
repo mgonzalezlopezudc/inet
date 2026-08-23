@@ -8,6 +8,9 @@
 #ifndef __INET_IEEE80211HTMODE_H
 #define __INET_IEEE80211HTMODE_H
 
+#include <map>
+#include <tuple>
+
 #define DI    DelayedInitializer
 
 #include "inet/common/DelayedInitializer.h"
@@ -55,6 +58,9 @@ class INET_API Ieee80211HtModeBase
     virtual int getNumberOfDataSubcarriers() const;
     virtual int getNumberOfPilotSubcarriers() const;
     virtual int getNumberOfTotalSubcarriers() const { return getNumberOfDataSubcarriers() + getNumberOfPilotSubcarriers(); }
+    /** Returns the standard N_SS for MCS 0..76, or -1 for a reserved index. */
+    static int getNumberOfSpatialStreamsForMcs(unsigned int mcsIndex);
+    static bool isValidMcsIndex(unsigned int mcsIndex) { return getNumberOfSpatialStreamsForMcs(mcsIndex) > 0; }
     virtual GuardIntervalType getGuardIntervalType() const { return guardIntervalType; }
     virtual int getNumberOfSpatialStreams() const { return numberOfSpatialStreams; }
     virtual unsigned int getMcsIndex() const { return mcsIndex; }
@@ -68,14 +74,15 @@ class INET_API Ieee80211HtSignalMode : public IIeee80211HeaderMode, public Ieee8
   protected:
     const Ieee80211OfdmModulation *modulation;
     const Ieee80211HtCode *code;
+    const unsigned int stbc;
 
   protected:
     virtual bps computeGrossBitrate() const override;
     virtual bps computeNetBitrate() const override;
 
   public:
-    Ieee80211HtSignalMode(unsigned int modulationAndCodingScheme, const Ieee80211OfdmModulation *modulation, const Ieee80211HtCode *code, const Hz bandwidth, GuardIntervalType guardIntervalType);
-    Ieee80211HtSignalMode(unsigned int modulationAndCodingScheme, const Ieee80211OfdmModulation *modulation, const Ieee80211ConvolutionalCode *convolutionalCode, const Hz bandwidth, GuardIntervalType guardIntervalType);
+    Ieee80211HtSignalMode(unsigned int modulationAndCodingScheme, const Ieee80211OfdmModulation *modulation, const Ieee80211HtCode *code, const Hz bandwidth, GuardIntervalType guardIntervalType, unsigned int stbc = 0);
+    Ieee80211HtSignalMode(unsigned int modulationAndCodingScheme, const Ieee80211OfdmModulation *modulation, const Ieee80211ConvolutionalCode *convolutionalCode, const Hz bandwidth, GuardIntervalType guardIntervalType, unsigned int stbc = 0);
     virtual ~Ieee80211HtSignalMode();
 
     /* Table 20-11—HT-SIG fields, 1699p */
@@ -96,7 +103,7 @@ class INET_API Ieee80211HtSignalMode : public IIeee80211HeaderMode, public Ieee8
     b getNumOfExtensionSpatialStreamsLength() const { return b(2); }
     b getFCSLength() const { return b(8); }
     b getTailBitsLength() const { return b(6); }
-    virtual unsigned int getSTBC() const { return 0; } // Limitation: We assume that STBC is not used
+    virtual unsigned int getSTBC() const { return stbc; }
 
     virtual const simtime_t getHTSIGDuration() const { return 2 * getSymbolInterval(); } // HT-SIG
 
@@ -199,7 +206,6 @@ class INET_API Ieee80211HtDataMode : public IIeee80211DataMode, public Ieee80211
   protected:
     bps computeGrossBitrate() const override;
     bps computeNetBitrate() const override;
-    unsigned int computeNumberOfSpatialStreams(const Ieee80211OfdmModulation *stream1Modulation, const Ieee80211OfdmModulation *stream2Modulation, const Ieee80211OfdmModulation *stream3Modulation, const Ieee80211OfdmModulation *stream4Modulation) const;
     unsigned int computeNumberOfCodedBitsPerSubcarrierSum() const;
     unsigned int computeNumberOfBccEncoders() const;
 
@@ -214,6 +220,7 @@ class INET_API Ieee80211HtDataMode : public IIeee80211DataMode, public Ieee80211
     virtual b getPaddingLength(b dataLength) const override { return b(0); }
     virtual b getCompleteLength(b dataLength) const override;
     virtual const simtime_t getDuration(b dataLength) const override;
+    const simtime_t getDuration(b dataLength, unsigned int stbc) const;
     virtual bps getNetBitrate() const override { return Ieee80211HtModeBase::getNetBitrate(); }
     virtual bps getGrossBitrate() const override { return Ieee80211HtModeBase::getGrossBitrate(); }
     virtual const Ieee80211Htmcs *getModulationAndCodingScheme() const { return modulationAndCodingScheme; }
@@ -261,7 +268,7 @@ class INET_API Ieee80211HtMode : public Ieee80211ModeBase
     virtual int getMpduMaxLength() const override { return 65535; } // in octets
     virtual BandMode getCenterFrequencyMode() const { return centerFrequencyMode; }
 
-    virtual const simtime_t getDuration(b dataLength) const override { return preambleMode->getDuration() + dataMode->getDuration(dataLength); }
+    virtual const simtime_t getDuration(b dataLength) const override { return preambleMode->getDuration() + dataMode->getDuration(dataLength, getHeaderMode()->getSTBC()); }
 };
 
 // A specification of the high-throughput (HT) physical layer (PHY)
@@ -460,17 +467,17 @@ class INET_API Ieee80211HtCompliantModes
   protected:
     static OPP_THREAD_LOCAL const Ieee80211HtCompliantModes singleton;
 
-    mutable std::map<std::tuple<Hz, unsigned int, Ieee80211HtModeBase::GuardIntervalType>, const Ieee80211HtMode *> modeCache;
+    using ModeCacheKey = std::tuple<Ieee80211HtMode::BandMode, Ieee80211HtPreambleMode::HighTroughputPreambleFormat, Hz, unsigned int, Ieee80211HtModeBase::GuardIntervalType, bool, unsigned int>;
+    mutable std::map<ModeCacheKey, const Ieee80211HtMode *> modeCache;
 
   public:
     Ieee80211HtCompliantModes();
     virtual ~Ieee80211HtCompliantModes();
 
-    static const Ieee80211HtMode *getCompliantMode(const Ieee80211Htmcs *mcsMode, Ieee80211HtMode::BandMode centerFrequencyMode, Ieee80211HtPreambleMode::HighTroughputPreambleFormat preambleFormat, Ieee80211HtModeBase::GuardIntervalType guardIntervalType);
+    static const Ieee80211HtMode *getCompliantMode(const Ieee80211Htmcs *mcsMode, Ieee80211HtMode::BandMode centerFrequencyMode, Ieee80211HtPreambleMode::HighTroughputPreambleFormat preambleFormat, Ieee80211HtModeBase::GuardIntervalType guardIntervalType, bool fecCoding = false, unsigned int stbc = 0);
 };
 
 } /* namespace physicallayer */
 } /* namespace inet */
 
 #endif
-

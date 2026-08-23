@@ -8,6 +8,7 @@
 #include "inet/physicallayer/wireless/common/base/packetlevel/ReceiverBase.h"
 
 #include "inet/common/ProtocolTag_m.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/ChannelMatrixReceptionAnalogModel.h"
 #include "inet/physicallayer/wireless/common/base/packetlevel/NarrowbandNoiseBase.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadioMedium.h"
@@ -46,7 +47,14 @@ bool ReceiverBase::computeIsReceptionAttempted(const IListening *listening, cons
 {
     if (!computeIsReceptionPossible(listening, reception, part))
         return false;
-    else if (simTime() == reception->getStartTime(part)) {
+    return computeIsReceptionAttemptedAfterPossibility(listening, reception, part, interference);
+}
+
+bool ReceiverBase::computeIsReceptionAttemptedAfterPossibility(const IListening *listening,
+    const IReception *reception, IRadioSignal::SignalPart part,
+    const IInterference *interference) const
+{
+    if (simTime() == reception->getStartTime(part)) {
         // TODO isn't there a better way for this optimization? see also in RadioMedium::isReceptionAttempted
         auto transmission = reception->getReceiverRadio()->getReceptionInProgress();
         return transmission == nullptr || transmission == reception->getTransmission();
@@ -117,7 +125,11 @@ const IReceptionResult *ReceiverBase::computeReceptionResult(const IListening *l
 
 W ReceiverBase::computeSignalPower(const IListening *listening, const ISnir *snir, const IInterference *interference) const
 {
-    if (!dynamic_cast<const NarrowbandNoiseBase *>(snir->getNoise()))
+    const auto matrixReception = dynamic_cast<const ChannelMatrixReceptionAnalogModel *>(
+        snir->getReception()->getAnalogModel());
+    if (matrixReception != nullptr)
+        return matrixReception->computeMinPower(listening->getStartTime(), listening->getEndTime());
+    else if (!dynamic_cast<const NarrowbandNoiseBase *>(snir->getNoise()))
         return W(0);
     else {
         auto analogModel = snir->getReception()->getTransmission()->getMedium()->getAnalogModel();
@@ -141,4 +153,3 @@ Packet *ReceiverBase::computeReceivedPacket(const ISnir *snir, bool isReceptionS
 
 } // namespace physicallayer
 } // namespace inet
-

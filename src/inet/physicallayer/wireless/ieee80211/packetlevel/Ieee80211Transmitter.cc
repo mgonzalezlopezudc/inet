@@ -8,18 +8,56 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
 
 #include "inet/mobility/contract/IMobility.h"
+#include "inet/physicallayer/wireless/common/analogmodel/common/SpatialTransmissionPlan.h"
 #include "inet/physicallayer/wireless/common/analogmodel/scalar/ScalarTransmitterAnalogModel.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/RadioControlInfo_m.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HtPpduLayout.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyModeResolver.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211SpatialTransmissionPlanBuilder.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+
+#include <limits>
+#include <sstream>
+#include <string>
 
 namespace inet {
 
 namespace physicallayer {
+
+namespace {
+
+std::vector<int> parseSpatialTransmitAntennaIndices(const std::string& value)
+{
+    std::string normalized = value;
+    for (char& character : normalized)
+        if (character == ',' || character == ';')
+            character = ' ';
+    std::stringstream stream(normalized);
+    std::vector<int> indices;
+    std::string token;
+    while (stream >> token) {
+        size_t parsedCharacters = 0;
+        long long parsedValue;
+        try {
+            parsedValue = std::stoll(token, &parsedCharacters);
+        }
+        catch (const std::exception&) {
+            throw cRuntimeError("Invalid spatialTransmitAntennaIndices entry '%s'", token.c_str());
+        }
+        if (parsedCharacters != token.size() || parsedValue < std::numeric_limits<int>::min() ||
+            parsedValue > std::numeric_limits<int>::max())
+            throw cRuntimeError("Invalid spatialTransmitAntennaIndices entry '%s'", token.c_str());
+        indices.push_back((int)parsedValue);
+    }
+    return indices;
+}
+
+} // namespace
 
 Define_Module(Ieee80211Transmitter);
 
@@ -133,6 +171,44 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     const Ieee80211Channel *transmissionChannel = computeTransmissionChannel(packet);
     W transmissionPower = computeTransmissionPower(packet);
     Hz transmissionBandwidth = transmissionMode->getDataMode()->getBandwidth();
+    std::shared_ptr<const Ieee80211HtPpduDescription> htPpduDescription;
+    if (const auto htMode = dynamic_cast<const Ieee80211HtMode *>(transmissionMode)) {
+        const auto htHeader = dynamicPtrCast<const Ieee80211HtPhyHeader>(phyHeader);
+        if (htHeader == nullptr)
+            throw cRuntimeError("HT mode requires an HT PHY header");
+
+        Ieee80211HtPpduContext context;
+        context.bandMode = htMode->getCenterFrequencyMode();
+        context.preambleFormat = htMode->getPreambleMode()->getPreambleFormat();
+        context.channelNumber = transmissionChannel->getChannelNumber();
+        context.centerFrequency = transmissionChannel->getCenterFrequency();
+        context.bandwidth = transmissionBandwidth;
+        const auto resolution = Ieee80211PhyModeResolver::resolve(*htHeader, context);
+        if (!resolution.isSuccess()) {
+            const char *status = resolution.status == Ieee80211PhyModeResolver::Status::FORMAT_VIOLATION ? "format violation" : "reserved HT-SIG";
+            throw cRuntimeError("Cannot publish HT transmission: %s", status);
+        }
+
+        const auto& signalField = resolution.description->getSignalField();
+        const unsigned int modeMcs = htMode->getDataMode()->getModulationAndCodingScheme()->getMcsIndex();
+        const bool modeCbw = transmissionBandwidth == MHz(40);
+        const bool modeShortGi = htMode->getDataMode()->getGuardIntervalType() == Ieee80211HtModeBase::HT_GUARD_INTERVAL_SHORT;
+        const unsigned int modeStbc = htMode->getHeaderMode()->getSTBC();
+        if (htCapabilities == nullptr)
+            throw cRuntimeError("HT transmission requires immutable radio-owned local capabilities");
+        const int modeNss = htMode->getDataMode()->getNumberOfSpatialStreams();
+        htCapabilities->validateTransmission(modeMcs, modeNss,
+            transmissionBandwidth, modeStbc != 0);
+        if (modeStbc != 0)
+            throw cRuntimeError("HT STBC transmission requires negotiated peer Rx-STBC/MCS/width capabilities; peer capability exchange is not enabled");
+        if (transmissionBandwidth != MHz(20) && transmissionBandwidth != MHz(40))
+            throw cRuntimeError("HT mode has unsupported channel bandwidth %s", transmissionBandwidth.str().c_str());
+        if (signalField.mcs != modeMcs || signalField.cbw != modeCbw || signalField.shortGi != modeShortGi ||
+            signalField.stbc != modeStbc || signalField.fecCoding) {
+            throw cRuntimeError("HT-SIG contradicts the selected sender mode");
+        }
+        htPpduDescription = resolution.description;
+    }
     if (transmissionMode->getDataMode()->getNumberOfSpatialStreams() > transmitter->getAntenna()->getNumAntennas())
         throw cRuntimeError("Number of spatial streams is higher than the number of antennas");
     const simtime_t duration = transmissionMode->getDuration(B(phyHeader->getLengthField()));
@@ -145,11 +221,35 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     const simtime_t preambleDuration = transmissionMode->getPreambleMode()->getDuration();
     const simtime_t headerDuration = transmissionMode->getHeaderMode()->getDuration();
     const simtime_t dataDuration = duration - headerDuration - preambleDuration;
+    std::shared_ptr<const SpatialTransmissionPlan> spatialTransmissionPlan;
+    const std::string antennaIndexText = par("spatialTransmitAntennaIndices").stdstringValue();
+    const auto antennaIndices = parseSpatialTransmitAntennaIndices(antennaIndexText);
+    if (htPpduDescription != nullptr) {
+        const Ieee80211HtPpduLayout layout(*htPpduDescription, duration);
+        if (preambleDuration != layout.getDataStart())
+            throw cRuntimeError("HT sender mode preamble duration %s contradicts canonical HT-LTF boundary %s",
+                preambleDuration.str().c_str(), layout.getDataStart().str().c_str());
+        spatialTransmissionPlan = Ieee80211SpatialTransmissionPlanBuilder::build(*htPpduDescription,
+            duration, transmitter->getAntenna()->getNumAntennas(), antennaIndices);
+    }
+    else {
+        const int numberOfTransmitAntennas = transmitter->getAntenna()->getNumAntennas();
+        const int antennaIndex = antennaIndices.empty() ? 0 : antennaIndices.front();
+        if (antennaIndex < 0 || antennaIndex >= numberOfTransmitAntennas)
+            throw cRuntimeError("Legacy transmit antenna index %d is outside [0,%d)",
+                antennaIndex, numberOfTransmitAntennas);
+        ComplexMatrix mapping(numberOfTransmitAntennas, 1);
+        mapping.get(antennaIndex, 0) = 1;
+        SpatialTransmissionPlan::Segment segment(SIMTIME_ZERO, duration, 1, 1,
+            mapping, {1.0});
+        spatialTransmissionPlan = std::make_shared<const SpatialTransmissionPlan>(
+            numberOfTransmitAntennas, std::vector<SpatialTransmissionPlan::Segment>{segment});
+        spatialTransmissionPlan->validateCompleteCoverage(duration);
+    }
     auto analogModel = getAnalogModel()->createAnalogModel(preambleDuration, headerDuration, dataDuration, centerFrequency, transmissionBandwidth, transmissionPower);
-    return new Ieee80211Transmission(transmitter, packet, startTime, endTime, preambleDuration, headerDuration, dataDuration, startPosition, endPosition, startOrientation, endOrientation, nullptr, nullptr, nullptr, nullptr, analogModel, transmissionMode, transmissionChannel);
+    return new Ieee80211Transmission(transmitter, packet, startTime, endTime, preambleDuration, headerDuration, dataDuration, startPosition, endPosition, startOrientation, endOrientation, nullptr, nullptr, nullptr, nullptr, analogModel, transmissionMode, transmissionChannel, spatialTransmissionPlan, htPpduDescription);
 }
 
 } // namespace physicallayer
 
 } // namespace inet
-

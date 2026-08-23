@@ -1,0 +1,164 @@
+%description:
+
+Checks the monotonic interference revision transaction used when a later
+overlapping transmission changes an already-derived matrix reception. The
+transaction must atomically retire interference, noise, SNIR, all part
+decisions, and the final result while preserving their lifetime.
+
+%includes:
+#include <cstdint>
+#include <functional>
+#include <vector>
+#include "inet/physicallayer/wireless/common/base/packetlevel/CommunicationCacheBase.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+static void require(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("Communication cache revision test failed: %s", message);
+}
+
+class DummyInterference final : public IInterference
+{
+  private:
+    std::vector<const IReception *> receptions;
+  public:
+    virtual const INoise *getBackgroundNoise() const override { return nullptr; }
+    virtual const std::vector<const IReception *> *getInterferingReceptions() const override {
+        return &receptions;
+    }
+};
+
+class DummyNoise final : public INoise
+{
+  public:
+    virtual const simtime_t getStartTime() const override { return SIMTIME_ZERO; }
+    virtual const simtime_t getEndTime() const override { return SimTime(1, SIMTIME_S); }
+    virtual W computeMinPower(simtime_t, simtime_t) const override { return W(1); }
+    virtual W computeMaxPower(simtime_t, simtime_t) const override { return W(1); }
+};
+
+class DummySnir final : public ISnir
+{
+  public:
+    virtual const IReception *getReception() const override { return nullptr; }
+    virtual const INoise *getNoise() const override { return nullptr; }
+    virtual double getMin() const override { return 1; }
+    virtual double getMax() const override { return 1; }
+    virtual double getMean() const override { return 1; }
+};
+
+class DummyDecision final : public IReceptionDecision
+{
+  private:
+    IRadioSignal::SignalPart part;
+  public:
+    explicit DummyDecision(IRadioSignal::SignalPart part) : part(part) {}
+    virtual const IReception *getReception() const override { return nullptr; }
+    virtual IRadioSignal::SignalPart getSignalPart() const override { return part; }
+    virtual bool isReceptionPossible() const override { return true; }
+    virtual bool isReceptionAttempted() const override { return true; }
+    virtual bool isReceptionSuccessful() const override { return true; }
+};
+
+class DummyResult final : public IReceptionResult
+{
+  private:
+    std::vector<const IReceptionDecision *> decisions;
+  public:
+    virtual const IReception *getReception() const override { return nullptr; }
+    virtual const std::vector<const IReceptionDecision *> *getDecisions() const override {
+        return &decisions;
+    }
+    virtual const Packet *getPacket() const override { return nullptr; }
+};
+
+class TestCommunicationCache final : public CommunicationCacheBase
+{
+  private:
+    RadioCacheEntry radioEntry;
+    TransmissionCacheEntry transmissionEntry;
+    ReceptionCacheEntry receptionEntry;
+
+  protected:
+    virtual RadioCacheEntry *getRadioCacheEntry(const IRadio *) override { return &radioEntry; }
+    virtual TransmissionCacheEntry *getTransmissionCacheEntry(const ITransmission *) override {
+        return &transmissionEntry;
+    }
+    virtual ReceptionCacheEntry *getReceptionCacheEntry(const IRadio *, const ITransmission *) override {
+        return &receptionEntry;
+    }
+
+  public:
+    void seedDerivedSet()
+    {
+        receptionEntry.interference = new DummyInterference();
+        receptionEntry.noise = new DummyNoise();
+        receptionEntry.snir = new DummySnir();
+        receptionEntry.receptionDecisions[IRadioSignal::SIGNAL_PART_PREAMBLE] =
+            new DummyDecision(IRadioSignal::SIGNAL_PART_PREAMBLE);
+        receptionEntry.receptionDecisions[IRadioSignal::SIGNAL_PART_DATA] =
+            new DummyDecision(IRadioSignal::SIGNAL_PART_DATA);
+        receptionEntry.receptionResult = new DummyResult();
+    }
+
+    bool currentDerivedSetIsEmpty() const
+    {
+        if (receptionEntry.interference != nullptr || receptionEntry.noise != nullptr ||
+            receptionEntry.snir != nullptr || receptionEntry.receptionResult != nullptr)
+            return false;
+        for (const auto decision : receptionEntry.receptionDecisions)
+            if (decision != nullptr)
+                return false;
+        return true;
+    }
+
+    bool retiredCompleteSet() const
+    {
+        return receptionEntry.retiredInterferences.size() == 1 &&
+            receptionEntry.retiredNoises.size() == 1 &&
+            receptionEntry.retiredSnirs.size() == 1 &&
+            receptionEntry.retiredReceptionDecisions.size() == 2 &&
+            receptionEntry.retiredReceptionResults.size() == 1;
+    }
+
+    virtual void addRadio(const IRadio *) override {}
+    virtual void removeRadio(const IRadio *) override {}
+    virtual const IRadio *getRadio(int) const override { return nullptr; }
+    virtual void mapRadios(std::function<void(const IRadio *)>) const override {}
+    virtual void addTransmission(const ITransmission *) override {}
+    virtual void removeTransmission(const ITransmission *) override {}
+    virtual const ITransmission *getTransmission(int) const override { return nullptr; }
+    virtual void mapTransmissions(std::function<void(const ITransmission *)>) const override {}
+    virtual void removeNonInterferingTransmissions(
+        std::function<void(const ITransmission *)>) override {}
+};
+
+%activity:
+TestCommunicationCache cache;
+const auto receiver = reinterpret_cast<const IRadio *>(uintptr_t(1));
+const auto transmission = reinterpret_cast<const ITransmission *>(uintptr_t(2));
+require(cache.getInterferenceRevision(receiver, transmission) == 0,
+    "new reception cache entry starts at revision zero");
+cache.seedDerivedSet();
+cache.advanceInterferenceRevision(receiver, transmission);
+require(cache.getInterferenceRevision(receiver, transmission) == 1,
+    "late interference advances the monotonic revision");
+require(cache.currentDerivedSetIsEmpty(),
+    "late interference clears the complete current derived set atomically");
+require(cache.retiredCompleteSet(),
+    "invalidated immutable objects remain owned in the retired generation");
+cache.advanceInterferenceRevision(receiver, transmission);
+require(cache.getInterferenceRevision(receiver, transmission) == 2,
+    "a second interference change advances revision without re-retiring null entries");
+require(cache.retiredCompleteSet(),
+    "empty-generation advancement preserves the prior retired generation exactly");
+
+std::cout << "PASS\n";
+
+%contains: stdout
+PASS

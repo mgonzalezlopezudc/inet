@@ -1,0 +1,159 @@
+%description:
+
+Checks eager matrix-power materialization, plan-boundary selection, trace
+conservation, immutable post-construction queries, and owned interferer data.
+
+%includes:
+#include <cmath>
+#include <algorithm>
+#include <complex>
+#include <functional>
+#include <limits>
+#include <memory>
+#include <vector>
+#include "inet/common/math/AlgebraicOperations.h"
+#include "inet/common/math/PrimitiveFunctions.h"
+#include "inet/physicallayer/wireless/common/analogmodel/common/ChannelMatrixResponse.h"
+#include "inet/physicallayer/wireless/common/analogmodel/common/ChannelMatrixSnapshot.h"
+#include "inet/physicallayer/wireless/common/analogmodel/common/SpatialTransmissionPlan.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/ChannelMatrixNoise.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/receiver/ChannelMatrixPhysicalPowerMaterializer.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::math;
+using namespace inet::physicallayer;
+
+static void require(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("Channel-matrix materializer test failed: %s", message);
+}
+
+static void requireNear(double actual, double expected, const char *message, double tolerance = 1e-10)
+{
+    if (std::abs(actual - expected) > tolerance * std::max(1.0, std::abs(expected)))
+        throw cRuntimeError("Channel-matrix materializer test failed: %s (actual %.17g expected %.17g)",
+            message, actual, expected);
+}
+
+static bool throws(const std::function<void()>& function)
+{
+    try {
+        function();
+        return false;
+    }
+    catch (const cRuntimeError&) {
+        return true;
+    }
+}
+
+static std::shared_ptr<const IChannelMatrixSnapshot> makeSnapshot(int rows, int columns,
+    const ChannelMatrixResponse::Evaluator& evaluator, double maximumTemporalFrequency = 0,
+    simtime_t maximumExcessDelay = SIMTIME_ZERO, simtime_t endTime = SimTime(2, SIMTIME_US))
+{
+    auto response = std::make_shared<const ChannelMatrixResponse>(rows, columns, evaluator);
+    return std::make_shared<const ChannelMatrixSnapshot>(rows, columns, Hz(5e9), SIMTIME_ZERO,
+        endTime, 1, Hz(maximumTemporalFrequency), maximumExcessDelay, response);
+}
+
+static std::shared_ptr<const SpatialTransmissionPlan> makePlan(int antennas,
+    const std::vector<SpatialTransmissionPlan::Segment>& segments)
+{
+    return std::make_shared<const SpatialTransmissionPlan>(antennas, segments);
+}
+
+static Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> constantPower(double value)
+{
+    return makeShared<ConstantFunction<WpHz, Domain<simsec, Hz>>>(WpHz(value));
+}
+
+%activity:
+const auto counter = std::make_shared<int>(0);
+const auto snapshot = makeSnapshot(2, 1,
+    [counter] (simtime_t, Hz) {
+        ++*counter;
+        return ComplexMatrix(2, 1, {{3, 4}, {0, 12}});
+    }, 0, SIMTIME_ZERO, SimTime(1, SIMTIME_US));
+const auto oneStreamPlan = makePlan(1, {SpatialTransmissionPlan::Segment(
+    SIMTIME_ZERO, SimTime(1, SIMTIME_US), 1, 1,
+    ComplexMatrix(1, 1, {{1, 0}}), {1})});
+const auto physicalPower = ChannelMatrixPhysicalPowerMaterializer::materialize(snapshot, oneStreamPlan,
+    SIMTIME_ZERO, SimTime(1, SIMTIME_US), Hz(5e9), Hz(20e6), constantPower(1));
+const int callsAfterConstruction = *counter;
+require(callsAfterConstruction > 0, "materialization evaluates the snapshot eagerly");
+requireNear(physicalPower->getValue(Point<simsec, Hz>(simsec(SimTime(0.5, SIMTIME_US)), Hz(5e9))).get<WpHz>(),
+    169, "single-stream physical trace gain");
+requireNear(physicalPower->getValue(Point<simsec, Hz>(simsec(SimTime(-1, SIMTIME_US)), Hz(5e9))).get<WpHz>(),
+    0, "out-of-domain time is zero");
+requireNear(physicalPower->getValue(Point<simsec, Hz>(simsec(SimTime(0.5, SIMTIME_US)), Hz(5e9 + 20e6))).get<WpHz>(),
+    0, "out-of-domain frequency is zero");
+require(*counter == callsAfterConstruction, "queries never call the snapshot after construction");
+
+const auto twoStreamSnapshot = makeSnapshot(2, 2,
+    [] (simtime_t, Hz) { return ComplexMatrix(2, 2, {{1, 0}, {0, 0}, {0, 0}, {1, 0}}); },
+    0, SIMTIME_ZERO, SimTime(1, SIMTIME_US));
+const auto twoStreamSegment = SpatialTransmissionPlan::Segment(SIMTIME_ZERO, SimTime(1, SIMTIME_US),
+    2, 2, ComplexMatrix(2, 2, {{1, 0}, {0, 0}, {0, 0}, {1, 0}}), {0.25, 0.75});
+requireNear(ChannelMatrixPhysicalPowerMaterializer::computePhysicalGain(*twoStreamSnapshot,
+    twoStreamSegment, SIMTIME_ZERO, Hz(0)), 1, "multi-stream trace/power conservation");
+
+const auto boundarySnapshot = makeSnapshot(1, 2,
+    [] (simtime_t, Hz) { return ComplexMatrix(1, 2, {{2, 0}, {3, 0}}); },
+    0, SIMTIME_ZERO, SimTime(2, SIMTIME_US));
+const auto boundaryPlan = makePlan(2, {
+    SpatialTransmissionPlan::Segment(SIMTIME_ZERO, SimTime(1, SIMTIME_US), 1, 1,
+        ComplexMatrix(2, 1, {{1, 0}, {0, 0}}), {1}),
+    SpatialTransmissionPlan::Segment(SimTime(1, SIMTIME_US), SimTime(2, SIMTIME_US), 1, 1,
+        ComplexMatrix(2, 1, {{0, 0}, {1, 0}}), {1})});
+const auto boundaryPower = ChannelMatrixPhysicalPowerMaterializer::materialize(boundarySnapshot, boundaryPlan,
+    SIMTIME_ZERO, SimTime(2, SIMTIME_US), Hz(5e9), Hz(20e6), constantPower(1));
+requireNear(boundaryPower->getValue(Point<simsec, Hz>(simsec(SimTime(0.5, SIMTIME_US)), Hz(5e9))).get<WpHz>(),
+    4, "first plan segment gain");
+requireNear(boundaryPower->getValue(Point<simsec, Hz>(simsec(SimTime(1.5, SIMTIME_US)), Hz(5e9))).get<WpHz>(),
+    9, "second plan segment gain");
+
+require(throws([&] {
+    const auto invalid = makeSnapshot(2, 1, [] (simtime_t, Hz) { return ComplexMatrix(1, 1, {{1, 0}}); },
+        0, SIMTIME_ZERO, SimTime(1, SIMTIME_US));
+    ChannelMatrixPhysicalPowerMaterializer::materialize(invalid, oneStreamPlan, SIMTIME_ZERO,
+        SimTime(1, SIMTIME_US), Hz(5e9), Hz(20e6), constantPower(1));
+}), "response dimension mismatch is rejected");
+require(throws([&] {
+    const auto invalid = makeSnapshot(2, 1, [] (simtime_t, Hz) {
+        return ComplexMatrix(2, 1, {{std::numeric_limits<double>::quiet_NaN(), 0}, {0, 0}});
+    }, 0, SIMTIME_ZERO, SimTime(1, SIMTIME_US));
+    ChannelMatrixPhysicalPowerMaterializer::materialize(invalid, oneStreamPlan, SIMTIME_ZERO,
+        SimTime(1, SIMTIME_US), Hz(5e9), Hz(20e6), constantPower(1));
+}), "non-finite response is rejected");
+require(throws([&] {
+    const auto oversized = makeSnapshot(1, 1, [] (simtime_t, Hz) { return ComplexMatrix(1, 1, {{1, 0}}); },
+        1e20, SIMTIME_ZERO, SimTime(1, SIMTIME_US));
+    const auto plan = makePlan(1, {SpatialTransmissionPlan::Segment(SIMTIME_ZERO, SimTime(1, SIMTIME_US),
+        1, 1, ComplexMatrix(1, 1, {{1, 0}}), {1})});
+    ChannelMatrixPhysicalPowerMaterializer::materialize(oversized, plan, SIMTIME_ZERO,
+        SimTime(1, SIMTIME_US), Hz(5e9), Hz(20e6), constantPower(1));
+}), "oversized eager sample grid is rejected");
+
+const auto descriptorPlan = makePlan(1, {SpatialTransmissionPlan::Segment(SIMTIME_ZERO, SimTime(1, SIMTIME_US),
+    1, 1, ComplexMatrix(1, 1, {{1, 0}}), {1})});
+const auto descriptorSnapshot = makeSnapshot(1, 1,
+    [] (simtime_t, Hz) { return ComplexMatrix(1, 1, {{1, 0}}); }, 0, SIMTIME_ZERO, SimTime(1, SIMTIME_US));
+std::vector<ChannelMatrixNoise::Interferer> descriptors;
+descriptors.emplace_back(20, SIMTIME_ZERO, SimTime(1, SIMTIME_US), Hz(5e9), Hz(20e6),
+    descriptorSnapshot, descriptorPlan, constantPower(1), constantPower(20));
+descriptors.emplace_back(10, SIMTIME_ZERO, SimTime(1, SIMTIME_US), Hz(5e9), Hz(20e6),
+    descriptorSnapshot, descriptorPlan, constantPower(1), constantPower(10));
+const auto noise = std::make_unique<ChannelMatrixNoise>(SIMTIME_ZERO, SimTime(1, SIMTIME_US), Hz(5e9), Hz(20e6),
+    constantPower(30), constantPower(1), constantPower(1), descriptors);
+require(noise->getInterferers().size() == 2 && noise->getInterferers()[0].transmissionId == 10 &&
+    noise->getInterferers()[1].transmissionId == 20, "interferer descriptors are copied and sorted by transmission id");
+requireNear(noise->getInterferers()[0].physicalAggregatePower->getValue(
+    Point<simsec, Hz>(simsec(SimTime(0.5, SIMTIME_US)), Hz(5e9))).get<WpHz>(),
+    10, "owned descriptor physical PSD remains usable");
+
+std::cout << "PASS\n";
+
+%contains: stdout
+PASS

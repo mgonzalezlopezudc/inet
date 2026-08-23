@@ -8,11 +8,14 @@
 #ifndef __INET_IEEE80211RADIO_H
 #define __INET_IEEE80211RADIO_H
 
+#include <memory>
+
 #include "inet/physicallayer/wireless/common/base/packetlevel/FlatRadioBase.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtCapabilities.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
 
 namespace inet {
@@ -31,6 +34,7 @@ class INET_API Ieee80211Radio : public FlatRadioBase
 
   protected:
     FcsMode fcsMode = FCS_MODE_UNDEFINED;
+    std::unique_ptr<const Ieee80211HtCapabilities> htCapabilities;
 
   protected:
     virtual void initialize(int stage) override;
@@ -51,10 +55,10 @@ class INET_API Ieee80211Radio : public FlatRadioBase
     virtual void setBand(const IIeee80211Band *band);
     virtual void setChannel(const Ieee80211Channel *channel);
     virtual void setChannelNumber(int newChannelNumber);
+    const Ieee80211HtCapabilities& getHtCapabilities() const { return *htCapabilities; }
 };
 
 } // namespace physicallayer
 } // namespace inet
 
 #endif
-

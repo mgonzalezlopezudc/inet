@@ -9,19 +9,19 @@ namespace physicallayer {
 
 ChannelMatrixReceptionAnalogModel::ChannelMatrixReceptionAnalogModel(simtime_t preambleDuration,
     simtime_t headerDuration, simtime_t dataDuration, Hz centerFrequency, Hz bandwidth,
-    const std::shared_ptr<const IChannelMatrixSnapshot>& snapshot, int selectedTransmitAntenna,
+    const std::shared_ptr<const IChannelMatrixSnapshot>& snapshot,
+    const std::shared_ptr<const SpatialTransmissionPlan>& spatialTransmissionPlan,
     const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& deterministicLargeScalePower,
-    const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& decodedPower,
-    const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& ccaPower) :
-    DimensionalReceptionAnalogModel(preambleDuration, headerDuration, dataDuration, centerFrequency, bandwidth, decodedPower),
-    snapshot(snapshot), selectedTransmitAntenna(selectedTransmitAntenna),
-    deterministicLargeScalePower(deterministicLargeScalePower), ccaPower(ccaPower)
+    const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& physicalPower) :
+    DimensionalReceptionAnalogModel(preambleDuration, headerDuration, dataDuration, centerFrequency, bandwidth, physicalPower),
+    snapshot(snapshot), spatialTransmissionPlan(spatialTransmissionPlan),
+    deterministicLargeScalePower(deterministicLargeScalePower)
 {
-    if (!snapshot || !deterministicLargeScalePower || !decodedPower || !ccaPower)
-        throw cRuntimeError("Channel-matrix reception requires non-null snapshot and power functions");
-    if (selectedTransmitAntenna < 0 || selectedTransmitAntenna >= snapshot->getNumTransmitAntennas())
-        throw cRuntimeError("Selected transmit antenna %d is outside a %d-column channel snapshot",
-            selectedTransmitAntenna, snapshot->getNumTransmitAntennas());
+    if (!snapshot || !spatialTransmissionPlan || !deterministicLargeScalePower || !physicalPower)
+        throw cRuntimeError("Channel-matrix reception requires non-null snapshot, spatial plan, and power functions");
+    if (spatialTransmissionPlan->getNumberOfTransmitAntennas() != snapshot->getNumTransmitAntennas())
+        throw cRuntimeError("Channel-matrix reception spatial plan has %d antennas instead of snapshot dimension %d",
+            spatialTransmissionPlan->getNumberOfTransmitAntennas(), snapshot->getNumTransmitAntennas());
 }
 
 } // namespace physicallayer

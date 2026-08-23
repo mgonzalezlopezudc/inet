@@ -12,20 +12,24 @@
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtCapabilities.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/IIeee80211HtCapabilitiesConsumer.h"
 
 namespace inet {
 
 namespace physicallayer {
 
-class INET_API Ieee80211Transmitter : public FlatTransmitterBase
+class INET_API Ieee80211Transmitter : public FlatTransmitterBase,
+    public virtual IIeee80211HtCapabilitiesConsumer
 {
   protected:
     const Ieee80211ModeSet *modeSet = nullptr;
     const IIeee80211Mode *mode = nullptr;
     const IIeee80211Band *band = nullptr;
     const Ieee80211Channel *channel = nullptr;
+    const Ieee80211HtCapabilities *htCapabilities = nullptr;
 
   protected:
     virtual void initialize(int stage) override;
@@ -43,6 +47,7 @@ class INET_API Ieee80211Transmitter : public FlatTransmitterBase
     virtual void setBand(const IIeee80211Band *band);
     virtual void setChannel(const Ieee80211Channel *channel);
     virtual void setChannelNumber(int channelNumber);
+    virtual void setHtCapabilities(const Ieee80211HtCapabilities *capabilities) override { htCapabilities = capabilities; }
 
     virtual const ITransmission *createTransmission(const IRadio *radio, const Packet *packet, simtime_t startTime) const override;
 };
@@ -52,4 +57,3 @@ class INET_API Ieee80211Transmitter : public FlatTransmitterBase
 } // namespace inet
 
 #endif
-

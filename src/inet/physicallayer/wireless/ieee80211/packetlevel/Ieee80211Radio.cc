@@ -19,6 +19,8 @@
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211OfdmMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/IIeee80211HtCapabilitiesConsumer.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HtSignalField.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
@@ -44,6 +46,17 @@ void Ieee80211Radio::initialize(int stage)
     if (stage == INITSTAGE_LOCAL) {
         const char *fcsModeString = par("fcsMode");
         fcsMode = parseFcsMode(fcsModeString, true);
+        htCapabilities = std::make_unique<const Ieee80211HtCapabilities>(
+            par("htTxStbc"), par("htRxStbc"), par("maximumSupportedHtMcs"),
+            par("maximumSupportedHtSpatialStreams"), par("ht20Supported"), par("ht40Supported"));
+        auto transmitterConsumer = dynamic_cast<const IIeee80211HtCapabilitiesConsumer *>(transmitter);
+        auto receiverConsumer = dynamic_cast<const IIeee80211HtCapabilitiesConsumer *>(receiver);
+        if (transmitterConsumer == nullptr || receiverConsumer == nullptr)
+            throw cRuntimeError("IEEE 802.11 radio transmitter and receiver must implement the HT capabilities consumer contract");
+        const_cast<IIeee80211HtCapabilitiesConsumer *>(transmitterConsumer)->
+            setHtCapabilities(htCapabilities.get());
+        const_cast<IIeee80211HtCapabilitiesConsumer *>(receiverConsumer)->
+            setHtCapabilities(htCapabilities.get());
     }
     if (stage == INITSTAGE_PHYSICAL_LAYER) {
         int channelNumber = par("channelNumber");
@@ -236,6 +249,36 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
     auto phyHeader = mode->getHeaderMode()->createHeader();
     phyHeader->setChunkLength(b(mode->getHeaderMode()->getLength()));
     phyHeader->setLengthField(B(packet->getDataLength()));
+    if (auto htHeader = dynamic_cast<Ieee80211HtPhyHeader *>(phyHeader.get())) {
+        const auto htMode = check_and_cast<const Ieee80211HtMode *>(mode);
+        Ieee80211HtSignalField field;
+        field.mcs = static_cast<uint8_t>(htMode->getDataMode()->getModulationAndCodingScheme()->getMcsIndex());
+        field.cbw = htMode->getDataMode()->getBandwidth() == MHz(40);
+        field.length = static_cast<uint16_t>(packet->getDataLength().get<B>());
+        field.smoothing = true;
+        field.notSounding = true;
+        field.reserved = true;
+        field.aggregation = false;
+        field.stbc = static_cast<uint8_t>(htMode->getHeaderMode()->getSTBC());
+        field.fecCoding = false;
+        field.shortGi = htMode->getDataMode()->getGuardIntervalType() == Ieee80211HtModeBase::HT_GUARD_INTERVAL_SHORT;
+        field.numberOfExtensionSpatialStreams = 0;
+        field.tail = 0;
+        field.crc = computeIeee80211HtSignalFieldCrc(field);
+
+        htHeader->setMcs(field.mcs);
+        htHeader->setCbw(field.cbw);
+        htHeader->setSmoothing(field.smoothing);
+        htHeader->setNotSounding(field.notSounding);
+        htHeader->setReserved(field.reserved);
+        htHeader->setAggregation(field.aggregation);
+        htHeader->setStbc(field.stbc);
+        htHeader->setFecCoding(field.fecCoding);
+        htHeader->setShortGi(field.shortGi);
+        htHeader->setNumberOfExtensionSpatialStreams(field.numberOfExtensionSpatialStreams);
+        htHeader->setCrc(field.crc);
+        htHeader->setTail(field.tail);
+    }
     insertFcs(phyHeader);
     packet->insertAtFront(phyHeader);
 
@@ -329,4 +372,3 @@ const Ptr<const Ieee80211PhyHeader> Ieee80211Radio::peekIeee80211PhyHeaderAtFron
 } // namespace physicallayer
 
 } // namespace inet
-

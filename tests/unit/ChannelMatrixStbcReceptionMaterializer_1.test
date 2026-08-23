@@ -1,0 +1,202 @@
+%description:
+
+Exercises receive-only STBC through the eager channel-matrix reception
+materializer. It verifies that two technology resource slots are grouped into
+one Alamouti block and dispatched through the runtime block-processing contract.
+
+%includes:
+#include <limits>
+#include <memory>
+#include <vector>
+#include "inet/common/math/AlgebraicOperations.h"
+#include "inet/common/math/PrimitiveFunctions.h"
+#include "inet/physicallayer/wireless/common/analogmodel/common/ChannelMatrixResponse.h"
+#include "inet/physicallayer/wireless/common/analogmodel/common/ChannelMatrixSnapshot.h"
+#include "inet/physicallayer/wireless/common/analogmodel/common/SpatialTransmissionPlan.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/ChannelMatrixNoise.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/ChannelMatrixReceptionAnalogModel.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/receiver/ChannelMatrixReceptionMaterializer.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/receiver/ChannelMatrixReceptionProcessor.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/receiver/MaterializedSpatialReception.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IChannelMatrixReceiver.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtSpaceTimeCodeBuilder.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::math;
+using namespace inet::physicallayer;
+
+static void require(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("STBC reception materializer test failed: %s", message);
+}
+
+static Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> constantPower(double value)
+{
+    return makeShared<ConstantFunction<WpHz, Domain<simsec, Hz>>>(WpHz(value));
+}
+
+class RecordingProcessor final : public IChannelMatrixReceptionProcessor
+{
+  public:
+    mutable int ordinaryCalls = 0;
+    mutable int blockCalls = 0;
+    mutable std::vector<ChannelMatrixReceptionContext> capturedContexts;
+
+    virtual ChannelMatrixDetectionResult compute(
+        const ChannelMatrixReceptionContext& context) const override
+    {
+        ordinaryCalls++;
+        ChannelMatrixReceptionProcessor::Configuration configuration;
+        return ChannelMatrixReceptionProcessor::compute(context, configuration);
+    }
+
+    virtual ChannelMatrixDetectionResult computeSpaceTimeBlock(
+        const std::vector<ChannelMatrixReceptionContext>& slotContexts) const override
+    {
+        blockCalls++;
+        capturedContexts = slotContexts;
+        ChannelMatrixReceptionProcessor::Configuration configuration;
+        return ChannelMatrixReceptionProcessor::computeSpaceTimeBlock(slotContexts, configuration);
+    }
+};
+
+class TestMatrixReceiver final : public IChannelMatrixReceiver
+{
+  private:
+    const RecordingProcessor *processor;
+    std::vector<ChannelMatrixResourceCell> resources;
+
+  public:
+    TestMatrixReceiver(const RecordingProcessor *processor,
+        const std::vector<ChannelMatrixResourceCell>& resources) :
+        processor(processor), resources(resources) {}
+
+    virtual W getMinInterferencePower() const override { return W(std::numeric_limits<double>::quiet_NaN()); }
+    virtual W getMinReceptionPower() const override { return W(std::numeric_limits<double>::quiet_NaN()); }
+    virtual const IListening *createListening(const IRadio *, simtime_t, simtime_t,
+        const Coord&, const Coord&) const override { return nullptr; }
+    virtual const IListeningDecision *computeListeningDecision(
+        const IListening *, const IInterference *) const override { return nullptr; }
+    virtual bool computeIsReceptionPossible(const IListening *, const ITransmission *) const override { return false; }
+    virtual bool computeIsReceptionPossible(const IListening *, const IReception *,
+        IRadioSignal::SignalPart) const override { return false; }
+    virtual bool computeIsReceptionAttempted(const IListening *, const IReception *,
+        IRadioSignal::SignalPart, const IInterference *) const override { return false; }
+    virtual bool computeIsReceptionSuccessful(const IListening *, const IReception *,
+        IRadioSignal::SignalPart, const IInterference *, const ISnir *) const override { return false; }
+    virtual const IReceptionDecision *computeReceptionDecision(const IListening *,
+        const IReception *, IRadioSignal::SignalPart, const IInterference *,
+        const ISnir *) const override { return nullptr; }
+    virtual const IReceptionResult *computeReceptionResult(const IListening *,
+        const IReception *, const IInterference *, const ISnir *,
+        const std::vector<const IReceptionDecision *> *) const override { return nullptr; }
+
+    virtual const IChannelMatrixReceptionProcessor *getChannelMatrixReceptionProcessor() const override {
+        return processor;
+    }
+    virtual size_t getMaximumMaterializedResourceCells() const override { return 8; }
+    virtual std::vector<ChannelMatrixResourceCell> getChannelMatrixResourceCells(
+        const IReception&) const override { return resources; }
+};
+
+class TestReception final : public IReception
+{
+  private:
+    const IReceptionAnalogModel *analogModel;
+    Coord position;
+    Quaternion orientation;
+
+  public:
+    explicit TestReception(const IReceptionAnalogModel *analogModel) : analogModel(analogModel) {}
+
+    virtual const IRadio *getReceiverRadio() const override { return nullptr; }
+    virtual const ITransmission *getTransmission() const override { return nullptr; }
+    virtual const simtime_t getStartTime() const override { return SIMTIME_ZERO; }
+    virtual const simtime_t getEndTime() const override { return SimTime(8, SIMTIME_US); }
+    virtual const simtime_t getStartTime(IRadioSignal::SignalPart) const override { return SIMTIME_ZERO; }
+    virtual const simtime_t getEndTime(IRadioSignal::SignalPart part) const override {
+        return part == IRadioSignal::SIGNAL_PART_PREAMBLE ||
+            part == IRadioSignal::SIGNAL_PART_HEADER ? SIMTIME_ZERO : getEndTime();
+    }
+    virtual const simtime_t getPreambleStartTime() const override { return SIMTIME_ZERO; }
+    virtual const simtime_t getPreambleEndTime() const override { return SIMTIME_ZERO; }
+    virtual const simtime_t getHeaderStartTime() const override { return SIMTIME_ZERO; }
+    virtual const simtime_t getHeaderEndTime() const override { return SIMTIME_ZERO; }
+    virtual const simtime_t getDataStartTime() const override { return SIMTIME_ZERO; }
+    virtual const simtime_t getDataEndTime() const override { return getEndTime(); }
+    virtual const simtime_t getDuration() const override { return getEndTime(); }
+    virtual const simtime_t getDuration(IRadioSignal::SignalPart part) const override {
+        return part == IRadioSignal::SIGNAL_PART_PREAMBLE ||
+            part == IRadioSignal::SIGNAL_PART_HEADER ? SIMTIME_ZERO : getDuration();
+    }
+    virtual const simtime_t getPreambleDuration() const override { return SIMTIME_ZERO; }
+    virtual const simtime_t getHeaderDuration() const override { return SIMTIME_ZERO; }
+    virtual const simtime_t getDataDuration() const override { return getDuration(); }
+    virtual const Coord& getStartPosition() const override { return position; }
+    virtual const Coord& getEndPosition() const override { return position; }
+    virtual const Quaternion& getStartOrientation() const override { return orientation; }
+    virtual const Quaternion& getEndOrientation() const override { return orientation; }
+    virtual const IReceptionAnalogModel *getAnalogModel() const override { return analogModel; }
+};
+
+%activity:
+const auto descriptor = std::make_shared<const SpaceTimeCodeDescriptor>(
+    Ieee80211HtSpaceTimeCodeBuilder::build(1, 2, 1));
+const ComplexMatrix identityMapping(2, 2, {
+    {1, 0}, {0, 0},
+    {0, 0}, {1, 0}});
+const SpatialTransmissionPlan::Segment segment(SIMTIME_ZERO, SimTime(8, SIMTIME_US),
+    1, 2, identityMapping, {1}, {}, descriptor, SimTime(4, SIMTIME_US));
+const auto plan = std::make_shared<const SpatialTransmissionPlan>(2,
+    std::vector<SpatialTransmissionPlan::Segment>{segment});
+plan->validateCompleteCoverage(SimTime(8, SIMTIME_US));
+
+const auto response = std::make_shared<const ChannelMatrixResponse>(1, 2,
+    [] (simtime_t, Hz) { return ComplexMatrix(1, 2, {{1, 0}, {0, 1}}); });
+const auto snapshot = std::make_shared<const ChannelMatrixSnapshot>(1, 2, Hz(5e9),
+    SIMTIME_ZERO, SimTime(8, SIMTIME_US), 1, Hz(0), SIMTIME_ZERO, response);
+const auto desiredPower = constantPower(1);
+const auto aggregatePower = constantPower(2);
+const auto analogModel = std::make_unique<ChannelMatrixReceptionAnalogModel>(
+    SIMTIME_ZERO, SIMTIME_ZERO, SimTime(8, SIMTIME_US), Hz(5e9), MHz(20),
+    snapshot, plan, desiredPower, aggregatePower);
+TestReception reception(analogModel.get());
+
+const auto backgroundPower = constantPower(0.5);
+ChannelMatrixNoise noise(SIMTIME_ZERO, SimTime(8, SIMTIME_US), Hz(5e9), MHz(20),
+    backgroundPower, backgroundPower, backgroundPower, {});
+RecordingProcessor processor;
+TestMatrixReceiver receiver(&processor, {
+    ChannelMatrixResourceCell(SIMTIME_ZERO, SimTime(4, SIMTIME_US), MHz(-5), MHz(5),
+        IRadioSignal::SIGNAL_PART_DATA),
+    ChannelMatrixResourceCell(SimTime(4, SIMTIME_US), SimTime(8, SIMTIME_US), MHz(-5), MHz(5),
+        IRadioSignal::SIGNAL_PART_DATA)});
+
+const auto materialized = ChannelMatrixReceptionMaterializer::materialize(reception, noise, receiver);
+require(processor.ordinaryCalls == 0, "STBC cells bypass ordinary per-slot detection");
+require(processor.blockCalls == 1, "one complete Alamouti block is dispatched exactly once");
+require(processor.capturedContexts.size() == 2, "both code slots reach the block processor");
+require(processor.capturedContexts[0].getTime() == SimTime(2, SIMTIME_US) &&
+    processor.capturedContexts[1].getTime() == SimTime(6, SIMTIME_US),
+    "runtime contexts preserve slot-center times");
+require(processor.capturedContexts[0].getDesiredSignal().getSpatialTransmissionSegment().
+        getSpaceTimeCodeDescriptor() == descriptor,
+    "runtime context preserves the receive-side code descriptor");
+require(materialized->getCells().size() == 2,
+    "materialized reception publishes one immutable result per code slot");
+require(materialized->getCells()[0].getDetectionResult().getStatus() ==
+        ChannelMatrixDetectionStatus::SUCCESS &&
+    materialized->getCells()[1].getDetectionResult().getStatus() ==
+        ChannelMatrixDetectionStatus::SUCCESS,
+    "receive-only Alamouti materialization succeeds for both slots");
+require(materialized->getCells()[0].getDetectionResult().getObservationCoordinates().size() == 2 &&
+    materialized->getCells()[0].getDetectionResult().getObservationCoordinates()[1].isConjugated(),
+    "published block result carries the canonical conjugated observation");
+
+std::cout << "PASS\n";
+
+%contains: stdout
+PASS

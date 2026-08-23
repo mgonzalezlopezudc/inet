@@ -60,7 +60,9 @@ double Ieee80211BerTableErrorModel::computePacketErrorRate(const ISnir *snir, IR
     auto bitModel = transmission->getBitModel();
     bps bitrate = transmission->getMode()->getDataMode()->getNetBitrate();
     b dataLength = bitModel->getDataLength();
-    return berTableFile->getPer(bitrate.get<bps>(), getScalarSnir(snir), dataLength.get<B>());
+    const auto effectivePart = part == IRadioSignal::SIGNAL_PART_WHOLE ?
+        IRadioSignal::SIGNAL_PART_DATA : part;
+    return berTableFile->getPer(bitrate.get<bps>(), getScalarSnir(snir, effectivePart), dataLength.get<B>());
 }
 
 double Ieee80211BerTableErrorModel::computeBitErrorRate(const ISnir *snir, IRadioSignal::SignalPart part) const
@@ -78,4 +80,3 @@ double Ieee80211BerTableErrorModel::computeSymbolErrorRate(const ISnir *snir, IR
 } // namespace physicallayer
 
 } // namespace inet
-

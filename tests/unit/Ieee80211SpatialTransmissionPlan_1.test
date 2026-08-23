@@ -1,0 +1,337 @@
+%description:
+
+Checks exact mixed-format HT spatial-plan timing, ordered transmit-antenna
+selection, bounded capability gating, equal stream power, and Table 19-10 CSD
+phase resolution at an HT20 subcarrier frequency.
+
+%includes:
+#include <cmath>
+#include <complex>
+#include <functional>
+#include <memory>
+#include <utility>
+#include <vector>
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HtSignalField.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HtPpduLayout.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211OfdmMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyModeResolver.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211SpatialTransmissionPlanBuilder.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%global:
+
+static void require(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("HT spatial transmission plan test failed: %s", message);
+}
+
+static bool throws(const std::function<void()>& function)
+{
+    try {
+        function();
+        return false;
+    }
+    catch (const cRuntimeError&) {
+        return true;
+    }
+}
+
+static Ieee80211HtPpduContext makeContext(bool cbw = false,
+    Ieee80211HtPreambleMode::HighTroughputPreambleFormat preambleFormat = Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED)
+{
+    Ieee80211HtPpduContext context;
+    context.bandMode = Ieee80211HtMode::BAND_2_4GHZ;
+    context.preambleFormat = preambleFormat;
+    context.channelNumber = cbw ? 7 : 6;
+    context.centerFrequency = cbw ? MHz(2442) : MHz(2437);
+    context.bandwidth = cbw ? MHz(40) : MHz(20);
+    return context;
+}
+
+static Ieee80211HtPhyHeader makeHeader(unsigned int mcs, bool cbw = false,
+    unsigned int stbc = 0, unsigned int ness = 0, bool fecCoding = false,
+    bool shortGi = false)
+{
+    Ieee80211HtPhyHeader header;
+    header.setChunkLength(B(6));
+    header.setMcs(mcs);
+    header.setCbw(cbw);
+    header.setLengthField(B(100));
+    header.setSmoothing(true);
+    header.setNotSounding(true);
+    header.setReserved(true);
+    header.setAggregation(false);
+    header.setStbc(stbc);
+    header.setFecCoding(fecCoding);
+    header.setShortGi(shortGi);
+    header.setNumberOfExtensionSpatialStreams(ness);
+    header.setTail(0);
+
+    Ieee80211HtSignalField field;
+    field.mcs = header.getMcs();
+    field.cbw = header.getCbw();
+    field.length = 100;
+    field.smoothing = header.getSmoothing();
+    field.notSounding = header.getNotSounding();
+    field.reserved = header.getReserved();
+    field.aggregation = header.getAggregation();
+    field.stbc = header.getStbc();
+    field.fecCoding = header.getFecCoding();
+    field.shortGi = header.getShortGi();
+    field.numberOfExtensionSpatialStreams = header.getNumberOfExtensionSpatialStreams();
+    field.tail = header.getTail();
+    field.crc = computeIeee80211HtSignalFieldCrc(field);
+    header.setCrc(field.crc);
+    return header;
+}
+
+static std::shared_ptr<const Ieee80211HtPpduDescription> makeDescription(unsigned int mcs,
+    bool cbw = false, unsigned int stbc = 0, unsigned int ness = 0, bool fecCoding = false,
+    Ieee80211HtPreambleMode::HighTroughputPreambleFormat preambleFormat = Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+    bool shortGi = false)
+{
+    const auto header = makeHeader(mcs, cbw, stbc, ness, fecCoding, shortGi);
+    const auto result = Ieee80211PhyModeResolver::resolve(header, makeContext(cbw, preambleFormat));
+    require(result.status == Ieee80211PhyModeResolver::Status::SUCCESS && result.description != nullptr,
+        "test fixture must be a valid canonical HT description");
+    return result.description;
+}
+
+static void requireNear(const std::complex<double>& actual, const std::complex<double>& expected, const char *message)
+{
+    if (std::abs(actual - expected) > 1e-12)
+        throw cRuntimeError("HT spatial transmission plan test failed: %s", message);
+}
+
+%activity:
+const simtime_t totalDuration = SimTime(100, SIMTIME_US);
+for (const auto& fixture : {std::pair<unsigned int, int>(0, 1),
+                            std::pair<unsigned int, int>(8, 2),
+                            std::pair<unsigned int, int>(16, 3),
+                            std::pair<unsigned int, int>(24, 4)}) {
+    const auto description = makeDescription(fixture.first);
+    const Ieee80211HtPpduLayout layout(*description, totalDuration);
+    const auto plan = Ieee80211SpatialTransmissionPlanBuilder::build(*description, totalDuration, 4);
+    require(plan->getNumberOfTransmitAntennas() == 4, "physical antenna dimension");
+    plan->validateCompleteCoverage(totalDuration);
+    const auto& segments = plan->getSegments();
+    const int expectedSegmentCount = 3 + description->getNumberOfDataLongTrainingFields();
+    require((int)segments.size() == expectedSegmentCount, "robust/HT-STF/LTF/data segment count");
+    require(segments[0].getStartOffset() == SimTime(0, SIMTIME_US) &&
+        segments[0].getEndOffset() == SimTime(28, SIMTIME_US), "robust mixed segment boundary");
+    require(segments[1].getStartOffset() == SimTime(28, SIMTIME_US) &&
+        segments[1].getEndOffset() == SimTime(32, SIMTIME_US), "HT-STF segment boundary");
+    require(segments.back().getEndOffset() == totalDuration, "data reaches exact PPDU end");
+    require(std::abs(segments[0].getTransmitMapping().get(0, 0) - std::complex<double>(1, 0)) < 1e-12,
+        "default single-stream robust antenna is antenna zero");
+    for (int index = 1; index < (int)segments.size(); index++) {
+        require(segments[index].getNumberOfSpatialStreams() == fixture.second, "NSS follows standard MCS metadata");
+        require(segments[index].getNumberOfSpaceTimeStreams() == fixture.second, "non-STBC NSTS follows NSS");
+        require(segments[index].getSymbolPowerFractions().size() == (size_t)fixture.second,
+            "equal stream fraction count");
+        for (double fraction : segments[index].getSymbolPowerFractions())
+            require(std::abs(fraction - 1.0 / fixture.second) < 1e-12, "equal stream power fractions");
+    }
+    const simtime_t expectedPreambleEnd = layout.getDataStart();
+    require(segments[segments.size() - 2].getEndOffset() == expectedPreambleEnd,
+        "data starts at canonical HT preamble boundary");
+    require(layout.getNumberOfDataSymbols() * layout.getDataSymbolDuration() ==
+        layout.getDataEnd() - layout.getDataStart(),
+        "canonical layout exactly partitions the data field into OFDM symbols");
+}
+
+const auto orderedDescription = makeDescription(8);
+const auto orderedPlan = Ieee80211SpatialTransmissionPlanBuilder::build(*orderedDescription,
+    totalDuration, 4, {3, 1});
+require(std::abs(orderedPlan->getSegment(0).getTransmitMapping().get(3, 0) - std::complex<double>(1, 0)) < 1e-12,
+    "explicit ordering selects robust antenna");
+require(std::abs(orderedPlan->getSegment(1).getTransmitMapping().get(3, 0) - std::complex<double>(1, 0)) < 1e-12 &&
+    std::abs(orderedPlan->getSegment(1).getTransmitMapping().get(1, 1) - std::complex<double>(1, 0)) < 1e-12,
+    "explicit ordering maps streams one-to-one");
+require(throws([&] { Ieee80211SpatialTransmissionPlanBuilder::build(*orderedDescription, totalDuration, 4, {3, 3}); }),
+    "duplicate transmit antenna indices rejected");
+require(throws([&] { Ieee80211SpatialTransmissionPlanBuilder::build(*orderedDescription, totalDuration, 4, {3, 4}); }),
+    "out-of-range transmit antenna index rejected");
+require(throws([&] { Ieee80211SpatialTransmissionPlanBuilder::build(*orderedDescription, totalDuration, 4, {3}); }),
+    "short transmit antenna index list rejected");
+require(throws([&] { Ieee80211SpatialTransmissionPlanBuilder::build(*orderedDescription, totalDuration, 1); }),
+    "insufficient physical antennas rejected");
+
+// Valid canonical descriptions outside the bounded production support are
+// rejected by the builder as local capability gaps, not as malformed HT-SIG.
+require(throws([&] { Ieee80211SpatialTransmissionPlanBuilder::build(*makeDescription(0, false, 0, 0, false,
+    Ieee80211HtPreambleMode::HT_PREAMBLE_GREENFIELD), totalDuration, 4); }), "greenfield locally unsupported");
+require(throws([&] { Ieee80211SpatialTransmissionPlanBuilder::build(*makeDescription(0, false, 0, 0, true), totalDuration, 4); }),
+    "LDPC locally unsupported");
+require(throws([&] { Ieee80211SpatialTransmissionPlanBuilder::build(*makeDescription(0, false, 0, 1), totalDuration, 4); }),
+    "NESS locally unsupported");
+require(throws([&] { Ieee80211SpatialTransmissionPlanBuilder::build(*makeDescription(32, true), totalDuration, 4); }),
+    "MCS32 locally unsupported");
+require(throws([&] { Ieee80211SpatialTransmissionPlanBuilder::build(*makeDescription(33), totalDuration, 4); }),
+    "UEQM locally unsupported");
+const simtime_t stbcTotalDuration = SimTime(104, SIMTIME_US); // 16 long-GI data symbols after two HT-LTFs
+const auto stbcPlan = Ieee80211SpatialTransmissionPlanBuilder::build(
+    *makeDescription(0, false, 1), stbcTotalDuration, 2);
+require(stbcPlan->getSegment(1).getNumberOfSpatialStreams() == 2 &&
+    stbcPlan->getSegment(1).getNumberOfSpaceTimeStreams() == 2,
+    "Alamouti training plan directly exercises both space-time streams");
+require(!stbcPlan->getSegment(1).hasSpaceTimeCode(),
+    "Alamouti descriptor is not applied to HT training fields");
+const auto& stbcData = stbcPlan->getSegments().back();
+require(stbcData.getNumberOfSpatialStreams() == 1 &&
+    stbcData.getNumberOfSpaceTimeStreams() == 2 && stbcData.hasSpaceTimeCode(),
+    "Alamouti data preserves NSS=1/NSTS=2 and carries the shared descriptor");
+require(std::abs(stbcData.getSpaceTimeStreamCovariance().get(0, 0).real() - 0.5) < 1e-12 &&
+    std::abs(stbcData.getSpaceTimeStreamCovariance().get(1, 1).real() - 0.5) < 1e-12,
+    "Alamouti per-slot STS covariance conserves unit transmit power");
+
+const auto ht20Resources = Ieee80211Receiver::buildHtResourceCells(
+    *makeDescription(0), totalDuration);
+auto countResources = [] (const std::vector<ChannelMatrixResourceCell>& cells,
+    simtime_t start, simtime_t end, IRadioSignal::SignalPart part) {
+    return std::count_if(cells.begin(), cells.end(), [&] (const auto& cell) {
+        return cell.getStartOffset() == start && cell.getEndOffset() == end &&
+            cell.getSignalPart() == part;
+    });
+};
+require(countResources(ht20Resources, SimTime(20, SIMTIME_US), SimTime(24, SIMTIME_US),
+    IRadioSignal::SIGNAL_PART_HEADER) == 48, "HT20 HT-SIG uses 48 legacy data tones");
+const simtime_t ht20DataStart = SimTime(36, SIMTIME_US);
+require(countResources(ht20Resources, ht20DataStart, ht20DataStart + SimTime(4, SIMTIME_US),
+    IRadioSignal::SIGNAL_PART_DATA) == 52, "HT20 data uses exactly 52 data tones");
+long double ht20NormalizedDataBandwidth = 0;
+for (const auto& resource : ht20Resources)
+    if (resource.getStartOffset() == ht20DataStart &&
+        resource.getEndOffset() == ht20DataStart + SimTime(4, SIMTIME_US) &&
+        resource.getSignalPart() == IRadioSignal::SIGNAL_PART_DATA)
+        ht20NormalizedDataBandwidth +=
+            (resource.getUpperBasebandFrequency() - resource.getLowerBasebandFrequency()).get() *
+            resource.getPowerSpectralDensityScale();
+const Hz ht20Bandwidth = MHz(20);
+require(std::abs((double)ht20NormalizedDataBandwidth - ht20Bandwidth.get()) <
+    1e-12 * ht20Bandwidth.get(),
+    "HT20 active-tone PSD normalization preserves full-band aggregate power");
+require(std::none_of(ht20Resources.begin(), ht20Resources.end(), [] (const auto& cell) {
+    return cell.getSignalPart() == IRadioSignal::SIGNAL_PART_DATA &&
+        cell.getLowerBasebandFrequency() <= Hz(0) && cell.getUpperBasebandFrequency() > Hz(0);
+}), "HT20 data excludes the DC/null resource");
+
+const auto ht40Resources = Ieee80211Receiver::buildHtResourceCells(
+    *makeDescription(0, true), totalDuration);
+require(countResources(ht40Resources, SimTime(20, SIMTIME_US), SimTime(24, SIMTIME_US),
+    IRadioSignal::SIGNAL_PART_HEADER) == 96, "HT40 duplicated HT-SIG uses 96 data tones");
+long double ht40NormalizedHeaderBandwidth = 0;
+for (const auto& resource : ht40Resources)
+    if (resource.getStartOffset() == SimTime(20, SIMTIME_US) &&
+        resource.getEndOffset() == SimTime(24, SIMTIME_US) &&
+        resource.getSignalPart() == IRadioSignal::SIGNAL_PART_HEADER)
+        ht40NormalizedHeaderBandwidth +=
+            (resource.getUpperBasebandFrequency() - resource.getLowerBasebandFrequency()).get() *
+            resource.getPowerSpectralDensityScale();
+const Hz ht40Bandwidth = MHz(40);
+require(std::abs((double)ht40NormalizedHeaderBandwidth - ht40Bandwidth.get()) <
+    1e-12 * ht40Bandwidth.get(),
+    "HT40 duplicated active-tone PSD normalization preserves full-band aggregate power");
+for (const int dcIndex : {-32, 32})
+    require(std::none_of(ht40Resources.begin(), ht40Resources.end(), [=] (const auto& cell) {
+        const Hz dc = kHz(312.5) * dcIndex;
+        return cell.getSignalPart() == IRadioSignal::SIGNAL_PART_HEADER &&
+            cell.getLowerBasebandFrequency() <= dc && cell.getUpperBasebandFrequency() > dc;
+    }), "HT40 duplicate resources exclude both 20 MHz DC tones");
+
+const auto shortStbcDescription = makeDescription(0, false, 1, 0, false,
+    Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED, true);
+const simtime_t shortStbcDataStart = SimTime(40, SIMTIME_US);
+const simtime_t shortStbcDuration = shortStbcDataStart + SimTime(7200, SIMTIME_NS);
+const auto shortStbcPlan = Ieee80211SpatialTransmissionPlanBuilder::build(
+    *shortStbcDescription, shortStbcDuration, 2);
+require(shortStbcPlan->getSegments().back().getSpaceTimeCodeSlotDuration() ==
+    SimTime(3600, SIMTIME_NS), "short-GI STBC plan uses 3.6 us slots");
+const auto shortStbcResources = Ieee80211Receiver::buildHtResourceCells(
+    *shortStbcDescription, shortStbcDuration);
+require(countResources(shortStbcResources, shortStbcDataStart,
+    shortStbcDataStart + SimTime(3600, SIMTIME_NS), IRadioSignal::SIGNAL_PART_DATA) == 52 &&
+    countResources(shortStbcResources, shortStbcDataStart + SimTime(3600, SIMTIME_NS),
+        shortStbcDuration, IRadioSignal::SIGNAL_PART_DATA) == 52,
+    "short-GI STBC resource grid preserves two complete 3.6 us code slots");
+
+const auto& legacyOfdmMode = Ieee80211OfdmCompliantModes::ofdmMode6MbpsCS20MHz;
+const auto legacyOfdmResources = Ieee80211Receiver::buildLegacyOfdmResourceCells(
+    legacyOfdmMode, B(100));
+const simtime_t legacyPreambleEnd = legacyOfdmMode.getPreambleMode()->getDuration();
+const simtime_t legacyHeaderEnd = legacyPreambleEnd + legacyOfdmMode.getHeaderMode()->getDuration();
+require(countResources(legacyOfdmResources, legacyPreambleEnd, legacyHeaderEnd,
+    IRadioSignal::SIGNAL_PART_HEADER) == 48,
+    "legacy OFDM SIGNAL uses exactly 48 data tones");
+require(countResources(legacyOfdmResources, legacyHeaderEnd,
+    legacyHeaderEnd + legacyOfdmMode.getDataMode()->getSymbolInterval(),
+    IRadioSignal::SIGNAL_PART_DATA) == 48,
+    "legacy OFDM data uses exactly 48 data tones per symbol");
+for (const int pilotIndex : {-21, -7, 7, 21})
+    require(std::none_of(legacyOfdmResources.begin(), legacyOfdmResources.end(), [=] (const auto& cell) {
+        const Hz pilot = legacyOfdmMode.getDataMode()->getSubcarrierFrequencySpacing() * pilotIndex;
+        return cell.getSignalPart() == IRadioSignal::SIGNAL_PART_DATA &&
+            cell.getLowerBasebandFrequency() <= pilot && cell.getUpperBasebandFrequency() > pilot;
+    }), "legacy OFDM decoded data resources exclude pilot tones");
+
+Ieee80211Channel validationChannel(&Ieee80211CompliantBands::band2_4GHz, 5);
+auto validationContext = makeContext();
+validationContext.channelNumber = validationChannel.getChannelNumber();
+validationContext.centerFrequency = validationChannel.getCenterFrequency();
+const auto validationResolution = Ieee80211PhyModeResolver::resolve(
+    makeHeader(8), validationContext);
+require(validationResolution.isSuccess(), "transmission validation fixture canonicalizes");
+const auto validationPlan = Ieee80211SpatialTransmissionPlanBuilder::build(
+    *validationResolution.description, totalDuration, 4);
+const auto validationMode = Ieee80211HtCompliantModes::getCompliantMode(
+    &Ieee80211HtmcsTable::htMcs8BW20MHz, Ieee80211HtMode::BAND_2_4GHZ,
+    Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+    Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+Ieee80211Transmission::validateSpatialMetadata(validationMode, &validationChannel,
+    totalDuration, validationPlan, validationResolution.description);
+const auto mismatchedMode = Ieee80211HtCompliantModes::getCompliantMode(
+    &Ieee80211HtmcsTable::htMcs0BW20MHz, Ieee80211HtMode::BAND_2_4GHZ,
+    Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+    Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+require(throws([&] { Ieee80211Transmission::validateSpatialMetadata(mismatchedMode,
+    &validationChannel, totalDuration, validationPlan, validationResolution.description); }),
+    "transmission attachment rejects canonical header/mode contradictions");
+auto splitSegments = validationPlan->getSegments();
+const auto originalData = splitSegments.back();
+splitSegments.pop_back();
+const simtime_t splitBoundary = originalData.getStartOffset() + SimTime(4, SIMTIME_US);
+ComplexMatrix wrongDataMapping(4, 1);
+wrongDataMapping.get(0, 0) = 1;
+splitSegments.emplace_back(originalData.getStartOffset(), splitBoundary,
+    1, 1, wrongDataMapping, std::vector<double>{1});
+splitSegments.emplace_back(splitBoundary, originalData.getEndOffset(),
+    originalData.getNumberOfSpatialStreams(), originalData.getNumberOfSpaceTimeStreams(),
+    originalData.getTransmitMapping(), originalData.getSymbolPowerFractions(),
+    originalData.getCyclicShiftDelays());
+const auto splitDataPlan = std::make_shared<const SpatialTransmissionPlan>(4, splitSegments);
+require(throws([&] { Ieee80211Transmission::validateSpatialMetadata(validationMode,
+    &validationChannel, totalDuration, splitDataPlan, validationResolution.description); }),
+    "transmission attachment validates every data segment, not one midpoint");
+
+// IEEE Std 802.11-2024 Table 19-10: for HT20, deltaF=312.5 kHz and the
+// second NSTS has T_CS=-400 ns, giving exp(+j*pi/4) at k=1.
+const auto oracleDescription = makeDescription(8);
+const auto oraclePlan = Ieee80211SpatialTransmissionPlanBuilder::build(*oracleDescription, totalDuration, 2);
+const std::complex<double> expectedPhase(std::sqrt(0.5), std::sqrt(0.5));
+for (size_t segment = 1; segment < oraclePlan->getSegments().size(); segment++) {
+    const auto resolved = oraclePlan->getSegment(segment).getTransmitMapping(Hz(312500));
+    requireNear(resolved.get(0, 0), std::complex<double>(1, 0), "HT20 CSD first stream phase");
+    requireNear(resolved.get(1, 1), expectedPhase, "HT20 CSD second stream phase");
+}
+
+std::cout << "PASS\n";
+
+%contains: stdout
+PASS

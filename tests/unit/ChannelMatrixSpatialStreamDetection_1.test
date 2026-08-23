@@ -1,0 +1,412 @@
+%description:
+
+Checks covariance-whitened ZF, factorized MMSE, and perfect-cancellation
+MMSE-SIC spatial-stream detection with immutable typed results.
+
+%includes:
+#include <algorithm>
+#include <cmath>
+#include <complex>
+#include <functional>
+#include <vector>
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/receiver/ChannelMatrixDetectionResult.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/receiver/MinimumMeanSquareErrorSpatialStreamDetector.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/receiver/PerfectCancellationSuccessiveInterferenceCancellationSpatialStreamDetector.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/receiver/ZeroForcingSpatialStreamDetector.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+static void require(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("spatial-stream detection test failed: %s", message);
+}
+
+static void requireNear(double actual, double expected, const char *message, double tolerance = 1e-12)
+{
+    if (std::abs(actual - expected) > tolerance * std::max(1.0, std::abs(expected)))
+        throw cRuntimeError("spatial-stream detection test failed: %s (actual %.17g expected %.17g)",
+            message, actual, expected);
+}
+
+static void requireComplexNear(const std::complex<double>& actual, const std::complex<double>& expected, const char *message)
+{
+    if (std::abs(actual - expected) > 1e-12 * std::max(1.0, std::abs(expected)))
+        throw cRuntimeError("spatial-stream detection test failed: %s", message);
+}
+
+static bool throws(const std::function<void()>& function)
+{
+    try {
+        function();
+        return false;
+    }
+    catch (const cRuntimeError&) {
+        return true;
+    }
+}
+
+static void requireFinite(const ChannelMatrixDetectionResult& result, const char *message)
+{
+    for (const auto& value : result.getDesiredSignalPowerSpectralDensities())
+        require(std::isfinite(value.get<WpHz>()) && value.get<WpHz>() >= 0, message);
+    for (const auto& value : result.getCrossStreamResidualPowerSpectralDensities())
+        require(std::isfinite(value.get<WpHz>()) && value.get<WpHz>() >= 0, message);
+    for (const auto& value : result.getProjectedNoiseAndInterferencePowerSpectralDensities())
+        require(std::isfinite(value.get<WpHz>()) && value.get<WpHz>() >= 0, message);
+    for (double value : result.getSinrs())
+        require(std::isfinite(value) && value >= 0, message);
+}
+
+%activity:
+ComplexMatrix identityNoise = ChannelMatrixAlgebra::identity(2);
+ComplexMatrix canonicalChannel(2, 2, {{1, 0}, {1, 0}, {0, 0}, {1, 0}});
+const auto zf = ZeroForcingSpatialStreamDetector::compute(canonicalChannel, identityNoise);
+require(zf.getStatus() == ChannelMatrixDetectionStatus::SUCCESS, "canonical ZF succeeds");
+requireComplexNear(zf.getWeights().get(0, 0), {1 / std::sqrt(2.0), 0}, "ZF normalized first row first weight");
+requireComplexNear(zf.getWeights().get(0, 1), {-1 / std::sqrt(2.0), 0}, "ZF normalized first row second weight");
+requireComplexNear(zf.getWeights().get(1, 0), {0, 0}, "ZF second row first weight");
+requireComplexNear(zf.getWeights().get(1, 1), {1, 0}, "ZF second row second weight");
+requireNear(zf.getDesiredSignalPowerSpectralDensities()[0].get<WpHz>(), 0.5, "ZF first desired PSD");
+requireNear(zf.getDesiredSignalPowerSpectralDensities()[1].get<WpHz>(), 1, "ZF second desired PSD");
+requireNear(zf.getCrossStreamResidualPowerSpectralDensities()[0].get<WpHz>(), 0, "ZF first residual PSD");
+requireNear(zf.getCrossStreamResidualPowerSpectralDensities()[1].get<WpHz>(), 0, "ZF second residual PSD");
+requireNear(zf.getProjectedNoiseAndInterferencePowerSpectralDensities()[0].get<WpHz>(), 1, "ZF first projected PSD");
+requireNear(zf.getProjectedNoiseAndInterferencePowerSpectralDensities()[1].get<WpHz>(), 1, "ZF second projected PSD");
+requireNear(zf.getSinrs()[0], 0.5, "ZF first SINR");
+requireNear(zf.getSinrs()[1], 1, "ZF second SINR");
+for (int row = 0; row < zf.getWeights().getNumRows(); row++) {
+    double norm = 0;
+    for (int column = 0; column < zf.getWeights().getNumColumns(); column++)
+        norm += std::norm(zf.getWeights().get(row, column));
+    requireNear(norm, 1, "ZF row normalization");
+}
+const double physicalScale = 7.0;
+const auto scaledZf = ZeroForcingSpatialStreamDetector::compute(
+    ChannelMatrixAlgebra::scale(canonicalChannel, std::complex<double>(std::sqrt(physicalScale), 0)),
+    ChannelMatrixAlgebra::scale(identityNoise, std::complex<double>(physicalScale, 0)));
+for (int stream = 0; stream < 2; stream++) {
+    requireNear(scaledZf.getSinrs()[stream], zf.getSinrs()[stream], "ZF physical scaling preserves SINR");
+    requireNear(scaledZf.getDesiredSignalPowerSpectralDensities()[stream].get<WpHz>(),
+        physicalScale * zf.getDesiredSignalPowerSpectralDensities()[stream].get<WpHz>(),
+        "ZF physical scaling scales desired PSD");
+    requireNear(scaledZf.getProjectedNoiseAndInterferencePowerSpectralDensities()[stream].get<WpHz>(),
+        physicalScale * zf.getProjectedNoiseAndInterferencePowerSpectralDensities()[stream].get<WpHz>(),
+        "ZF physical scaling scales projected PSD");
+    for (int row = 0; row < 2; row++)
+        requireComplexNear(scaledZf.getWeights().get(stream, row), zf.getWeights().get(stream, row),
+            "ZF physical scaling preserves weights");
+}
+
+ComplexMatrix complexOrientationChannel(2, 2, {{1, 0}, {0, 1}, {0, 0}, {1, 0}});
+const auto complexOrientationZf = ZeroForcingSpatialStreamDetector::compute(complexOrientationChannel, identityNoise);
+require(complexOrientationZf.getStatus() == ChannelMatrixDetectionStatus::SUCCESS,
+    "complex-orientation ZF succeeds");
+requireComplexNear(complexOrientationZf.getWeights().get(0, 0), {1 / std::sqrt(2.0), 0},
+    "complex-orientation ZF first weight");
+requireComplexNear(complexOrientationZf.getWeights().get(0, 1), {0, -1 / std::sqrt(2.0)},
+    "complex-orientation ZF conjugated second weight");
+requireComplexNear(complexOrientationZf.getWeights().get(1, 0), {0, 0},
+    "complex-orientation ZF second row first weight");
+requireComplexNear(complexOrientationZf.getWeights().get(1, 1), {1, 0},
+    "complex-orientation ZF second row second weight");
+
+const double tinyPhysicalScale = 1e-20;
+const auto tinyScaledZf = ZeroForcingSpatialStreamDetector::compute(
+    ChannelMatrixAlgebra::scale(canonicalChannel, std::complex<double>(std::sqrt(tinyPhysicalScale), 0)),
+    ChannelMatrixAlgebra::scale(identityNoise, std::complex<double>(tinyPhysicalScale, 0)));
+require(tinyScaledZf.getStatus() == zf.getStatus(), "tiny physical scaling preserves ZF status");
+for (int stream = 0; stream < 2; stream++) {
+    requireNear(tinyScaledZf.getSinrs()[stream], zf.getSinrs()[stream], "tiny physical scaling preserves ZF SINR");
+    require(std::abs(tinyScaledZf.getDesiredSignalPowerSpectralDensities()[stream].get<WpHz>() -
+        tinyPhysicalScale * zf.getDesiredSignalPowerSpectralDensities()[stream].get<WpHz>()) <=
+        1e-8 * tinyPhysicalScale, "tiny physical scaling scales ZF desired PSD");
+    require(std::abs(tinyScaledZf.getProjectedNoiseAndInterferencePowerSpectralDensities()[stream].get<WpHz>() -
+        tinyPhysicalScale * zf.getProjectedNoiseAndInterferencePowerSpectralDensities()[stream].get<WpHz>()) <=
+        1e-8 * tinyPhysicalScale, "tiny physical scaling scales ZF projected PSD");
+    for (int row = 0; row < 2; row++)
+        requireComplexNear(tinyScaledZf.getWeights().get(stream, row), zf.getWeights().get(stream, row),
+            "tiny physical scaling preserves ZF weights");
+}
+
+ComplexMatrix coloredChannel(3, 2, {{1, 0}, {0, 0}, {0, 0}, {1, 0}, {1, 0}, {1, 0}});
+ComplexMatrix coloredCovariance(3, 3, {{1, 0}, {0, 0}, {0, 0}, {0, 0}, {2, 0}, {0, 0}, {0, 0}, {0, 0}, {4, 0}});
+const auto coloredZf = ZeroForcingSpatialStreamDetector::compute(coloredChannel, coloredCovariance);
+require(coloredZf.getStatus() == ChannelMatrixDetectionStatus::SUCCESS, "colored 3x2 ZF succeeds");
+const double coloredFirstNorm = std::sqrt(38.0);
+const double coloredSecondNorm = std::sqrt(33.0);
+const double coloredFirstWeights[] = {6 / coloredFirstNorm, -1 / coloredFirstNorm, 1 / coloredFirstNorm};
+const double coloredSecondWeights[] = {-2 / coloredSecondNorm, 5 / coloredSecondNorm, 2 / coloredSecondNorm};
+for (int row = 0; row < 3; row++) {
+    requireComplexNear(coloredZf.getWeights().get(0, row), {coloredFirstWeights[row], 0},
+        "colored ZF first normalized direction");
+    requireComplexNear(coloredZf.getWeights().get(1, row), {coloredSecondWeights[row], 0},
+        "colored ZF second normalized direction");
+}
+requireNear(coloredZf.getDesiredSignalPowerSpectralDensities()[0].get<WpHz>(), 49.0 / 38,
+    "colored ZF first desired PSD");
+requireNear(coloredZf.getDesiredSignalPowerSpectralDensities()[1].get<WpHz>(), 49.0 / 33,
+    "colored ZF second desired PSD");
+requireNear(coloredZf.getProjectedNoiseAndInterferencePowerSpectralDensities()[0].get<WpHz>(), 21.0 / 19,
+    "colored ZF first projected PSD");
+requireNear(coloredZf.getProjectedNoiseAndInterferencePowerSpectralDensities()[1].get<WpHz>(), 70.0 / 33,
+    "colored ZF second projected PSD");
+requireNear(coloredZf.getSinrs()[0], 7.0 / 6, "colored ZF first SINR");
+requireNear(coloredZf.getSinrs()[1], 7.0 / 10, "colored ZF second SINR");
+
+ComplexMatrix underdeterminedChannel(1, 2, {{1, 0}, {0.5, 0}});
+ComplexMatrix oneNoise(1, 1, {{1, 0}});
+const auto underdetermined = ZeroForcingSpatialStreamDetector::compute(underdeterminedChannel, oneNoise);
+require(underdetermined.getStatus() == ChannelMatrixDetectionStatus::UNDERDETERMINED,
+    "ZF underdetermined input has typed status");
+requireFinite(underdetermined, "underdetermined ZF outputs are finite zero values");
+ComplexMatrix rankDeficientChannel(2, 2, {{1, 0}, {1, 0}, {2, 0}, {2, 0}});
+const auto rankDeficient = ZeroForcingSpatialStreamDetector::compute(rankDeficientChannel, identityNoise);
+require(rankDeficient.getStatus() == ChannelMatrixDetectionStatus::RANK_DEFICIENT,
+    "ZF rank-deficient input has typed status");
+requireFinite(rankDeficient, "rank-deficient ZF outputs are finite zero values");
+ComplexMatrix illConditionedChannel(2, 2, {{1, 0}, {1, 0}, {0, 0}, {1e-8, 0}});
+const auto illConditioned = ZeroForcingSpatialStreamDetector::compute(illConditionedChannel, identityNoise);
+require(illConditioned.getStatus() == ChannelMatrixDetectionStatus::ILL_CONDITIONED,
+    "ZF condition failure has typed status");
+requireFinite(illConditioned, "ill-conditioned ZF outputs are finite zero values");
+ComplexMatrix belowConditionThreshold(2, 2, {{1, 0}, {1, 0}, {0, 0}, {3e-4, 0}});
+const auto belowCondition = ZeroForcingSpatialStreamDetector::compute(belowConditionThreshold, identityNoise);
+require(belowCondition.getStatus() == ChannelMatrixDetectionStatus::SUCCESS,
+    "ZF condition just below the detector threshold succeeds");
+ComplexMatrix aboveConditionThreshold(2, 2, {{1, 0}, {1, 0}, {0, 0}, {1e-4, 0}});
+const auto aboveCondition = ZeroForcingSpatialStreamDetector::compute(aboveConditionThreshold, identityNoise);
+require(aboveCondition.getStatus() == ChannelMatrixDetectionStatus::ILL_CONDITIONED,
+    "ZF condition just above the detector threshold is typed undecodable");
+require(throws([&] { ZeroForcingSpatialStreamDetector::compute(canonicalChannel, ComplexMatrix(1, 1)); }),
+    "invalid covariance dimensions throw rather than becoming undecodable");
+
+const auto mmse = MinimumMeanSquareErrorSpatialStreamDetector::compute(canonicalChannel, identityNoise);
+require(mmse.getStatus() == ChannelMatrixDetectionStatus::SUCCESS, "canonical MMSE succeeds");
+const double mmseNorm = std::sqrt(0.2);
+requireComplexNear(mmse.getWeights().get(0, 0), {0.4 / mmseNorm, 0}, "MMSE first normalized weight");
+requireComplexNear(mmse.getWeights().get(0, 1), {-0.2 / mmseNorm, 0}, "MMSE second normalized weight");
+requireComplexNear(mmse.getWeights().get(1, 0), {0.2 / mmseNorm, 0}, "MMSE third normalized weight");
+requireComplexNear(mmse.getWeights().get(1, 1), {0.4 / mmseNorm, 0}, "MMSE fourth normalized weight");
+requireNear(mmse.getDesiredSignalPowerSpectralDensities()[0].get<WpHz>(), 4.0 / 5,
+    "MMSE first desired PSD");
+requireNear(mmse.getDesiredSignalPowerSpectralDensities()[1].get<WpHz>(), 9.0 / 5,
+    "MMSE second desired PSD");
+requireNear(mmse.getCrossStreamResidualPowerSpectralDensities()[0].get<WpHz>(), 0.2, "MMSE first residual PSD");
+requireNear(mmse.getCrossStreamResidualPowerSpectralDensities()[1].get<WpHz>(), 0.2, "MMSE second residual PSD");
+requireNear(mmse.getProjectedNoiseAndInterferencePowerSpectralDensities()[0].get<WpHz>(), 1,
+    "MMSE first projected PSD");
+requireNear(mmse.getProjectedNoiseAndInterferencePowerSpectralDensities()[1].get<WpHz>(), 1,
+    "MMSE second projected PSD");
+requireNear(mmse.getSinrs()[0], 2.0 / 3, "MMSE first SINR");
+requireNear(mmse.getSinrs()[1], 3.0 / 2, "MMSE second SINR");
+requireFinite(mmse, "MMSE canonical outputs are finite");
+ComplexMatrix zeroStreamChannel(2, 2);
+const auto zeroMmse = MinimumMeanSquareErrorSpatialStreamDetector::compute(zeroStreamChannel, identityNoise);
+require(zeroMmse.getStatus() == ChannelMatrixDetectionStatus::SUCCESS, "zero-channel MMSE remains successful");
+for (int stream = 0; stream < 2; stream++) {
+    requireNear(zeroMmse.getDesiredSignalPowerSpectralDensities()[stream].get<WpHz>(), 0,
+        "zero-channel MMSE desired PSD");
+    requireNear(zeroMmse.getCrossStreamResidualPowerSpectralDensities()[stream].get<WpHz>(), 0,
+        "zero-channel MMSE residual PSD");
+    requireNear(zeroMmse.getProjectedNoiseAndInterferencePowerSpectralDensities()[stream].get<WpHz>(), 1,
+        "zero-channel MMSE projected PSD");
+    requireNear(zeroMmse.getSinrs()[stream], 0, "zero-channel MMSE SINR");
+    double norm = 0;
+    for (int row = 0; row < 2; row++)
+        norm += std::norm(zeroMmse.getWeights().get(stream, row));
+    requireNear(norm, 1, "zero-channel MMSE unit row");
+}
+const auto scaledMmse = MinimumMeanSquareErrorSpatialStreamDetector::compute(
+    ChannelMatrixAlgebra::scale(canonicalChannel, std::complex<double>(std::sqrt(physicalScale), 0)),
+    ChannelMatrixAlgebra::scale(identityNoise, std::complex<double>(physicalScale, 0)));
+for (int stream = 0; stream < 2; stream++) {
+    requireNear(scaledMmse.getSinrs()[stream], mmse.getSinrs()[stream], "MMSE physical scaling preserves SINR");
+    requireNear(scaledMmse.getDesiredSignalPowerSpectralDensities()[stream].get<WpHz>(),
+        physicalScale * mmse.getDesiredSignalPowerSpectralDensities()[stream].get<WpHz>(),
+        "MMSE physical scaling scales desired PSD");
+    requireNear(scaledMmse.getProjectedNoiseAndInterferencePowerSpectralDensities()[stream].get<WpHz>(),
+        physicalScale * mmse.getProjectedNoiseAndInterferencePowerSpectralDensities()[stream].get<WpHz>(),
+        "MMSE physical scaling scales projected PSD");
+    requireNear(scaledMmse.getCrossStreamResidualPowerSpectralDensities()[stream].get<WpHz>(),
+        physicalScale * mmse.getCrossStreamResidualPowerSpectralDensities()[stream].get<WpHz>(),
+        "MMSE physical scaling scales residual PSD");
+    for (int row = 0; row < 2; row++)
+        requireComplexNear(scaledMmse.getWeights().get(stream, row), mmse.getWeights().get(stream, row),
+            "MMSE physical scaling preserves weights");
+}
+ComplexMatrix rankDeficientMmseChannel(2, 2, {{1, 0}, {1, 0}, {1, 0}, {1, 0}});
+const auto rankDeficientMmse = MinimumMeanSquareErrorSpatialStreamDetector::compute(rankDeficientMmseChannel, identityNoise);
+require(rankDeficientMmse.getStatus() == ChannelMatrixDetectionStatus::SUCCESS, "rank-deficient MMSE remains decodable");
+requireFinite(rankDeficientMmse, "rank-deficient MMSE outputs are finite");
+ComplexMatrix lowNoise(2, 2, {{1e-9, 0}, {0, 0}, {0, 0}, {1e-9, 0}});
+const auto lowNoiseMmse = MinimumMeanSquareErrorSpatialStreamDetector::compute(canonicalChannel, lowNoise);
+require(lowNoiseMmse.getStatus() == ChannelMatrixDetectionStatus::SUCCESS, "low-noise MMSE succeeds");
+requireNear(lowNoiseMmse.getSinrs()[0], 0.5 / 1e-9, "low-noise MMSE approaches ZF SINR", 1e-8);
+requireNear(lowNoiseMmse.getSinrs()[1], 1 / 1e-9, "low-noise MMSE second ZF limit", 1e-8);
+
+ComplexMatrix sicChannel = canonicalChannel;
+const auto sic = PerfectCancellationSuccessiveInterferenceCancellationSpatialStreamDetector::compute(sicChannel, identityNoise);
+require(sic.getStatus() == ChannelMatrixDetectionStatus::SUCCESS, "MMSE-SIC succeeds");
+require(sic.getDetectionOrder() && *sic.getDetectionOrder() == std::vector<int>({1, 0}),
+    "MMSE-SIC chooses strongest predicted post-SINR first");
+require(sic.getWeights().getNumRows() == 2 && sic.getWeights().getNumColumns() == 2,
+    "MMSE-SIC restores original stream dimensions");
+requireComplexNear(sic.getWeights().get(1, 0), {1 / std::sqrt(5.0), 0},
+    "MMSE-SIC first detected stream first weight");
+requireComplexNear(sic.getWeights().get(1, 1), {2 / std::sqrt(5.0), 0},
+    "MMSE-SIC first detected stream second weight");
+requireNear(sic.getDesiredSignalPowerSpectralDensities()[1].get<WpHz>(), 9.0 / 5,
+    "MMSE-SIC first detected stream desired PSD");
+requireNear(sic.getCrossStreamResidualPowerSpectralDensities()[1].get<WpHz>(), 1.0 / 5,
+    "MMSE-SIC first detected stream residual PSD");
+requireNear(sic.getProjectedNoiseAndInterferencePowerSpectralDensities()[1].get<WpHz>(), 1,
+    "MMSE-SIC first detected stream projected PSD");
+requireNear(sic.getSinrs()[1], 3.0 / 2, "MMSE-SIC first detected stream SINR");
+requireComplexNear(sic.getWeights().get(0, 0), {1, 0}, "MMSE-SIC cancelled stream first weight");
+requireComplexNear(sic.getWeights().get(0, 1), {0, 0}, "MMSE-SIC cancelled stream second weight");
+requireNear(sic.getSinrs()[0], 1, "MMSE-SIC recomputes the remaining stream after cancellation");
+requireNear(sic.getDesiredSignalPowerSpectralDensities()[0].get<WpHz>(), 1,
+    "MMSE-SIC cancelled stream desired PSD");
+requireNear(sic.getCrossStreamResidualPowerSpectralDensities()[0].get<WpHz>(), 0,
+    "MMSE-SIC cancelled stream residual PSD");
+requireNear(sic.getProjectedNoiseAndInterferencePowerSpectralDensities()[0].get<WpHz>(), 1,
+    "MMSE-SIC cancelled stream projected PSD");
+ComplexMatrix identityChannel = ChannelMatrixAlgebra::identity(2);
+const auto identitySic = PerfectCancellationSuccessiveInterferenceCancellationSpatialStreamDetector::compute(identityChannel, identityNoise);
+require(identitySic.getDetectionOrder() && *identitySic.getDetectionOrder() == std::vector<int>({0, 1}),
+    "MMSE-SIC ties use lowest original stream index");
+const auto repeatedSic = PerfectCancellationSuccessiveInterferenceCancellationSpatialStreamDetector::compute(identityChannel, identityNoise);
+require(repeatedSic.getDetectionOrder() == identitySic.getDetectionOrder(), "MMSE-SIC is repeatable");
+requireFinite(sic, "MMSE-SIC outputs are finite");
+requireFinite(identitySic, "MMSE-SIC tie outputs are finite");
+const auto zeroSic = PerfectCancellationSuccessiveInterferenceCancellationSpatialStreamDetector::compute(
+    zeroStreamChannel, identityNoise);
+require(zeroSic.getStatus() == ChannelMatrixDetectionStatus::SUCCESS && zeroSic.getDetectionOrder() &&
+    *zeroSic.getDetectionOrder() == std::vector<int>({0, 1}),
+    "zero-channel SIC succeeds with deterministic tie order");
+for (int stream = 0; stream < 2; stream++) {
+    requireNear(zeroSic.getDesiredSignalPowerSpectralDensities()[stream].get<WpHz>(), 0,
+        "zero-channel SIC desired PSD");
+    requireNear(zeroSic.getCrossStreamResidualPowerSpectralDensities()[stream].get<WpHz>(), 0,
+        "zero-channel SIC residual PSD");
+    requireNear(zeroSic.getProjectedNoiseAndInterferencePowerSpectralDensities()[stream].get<WpHz>(), 1,
+        "zero-channel SIC projected PSD");
+    requireNear(zeroSic.getSinrs()[stream], 0, "zero-channel SIC SINR");
+    double norm = 0;
+    for (int row = 0; row < 2; row++)
+        norm += std::norm(zeroSic.getWeights().get(stream, row));
+    requireNear(norm, 1, "zero-channel SIC unit row");
+}
+const auto scaledSic = PerfectCancellationSuccessiveInterferenceCancellationSpatialStreamDetector::compute(
+    ChannelMatrixAlgebra::scale(sicChannel, std::complex<double>(std::sqrt(physicalScale), 0)),
+    ChannelMatrixAlgebra::scale(identityNoise, std::complex<double>(physicalScale, 0)));
+require(scaledSic.getDetectionOrder() == sic.getDetectionOrder(), "SIC physical scaling preserves order");
+for (int stream = 0; stream < 2; stream++) {
+    requireNear(scaledSic.getSinrs()[stream], sic.getSinrs()[stream], "SIC physical scaling preserves SINR");
+    requireNear(scaledSic.getDesiredSignalPowerSpectralDensities()[stream].get<WpHz>(),
+        physicalScale * sic.getDesiredSignalPowerSpectralDensities()[stream].get<WpHz>(),
+        "SIC physical scaling scales desired PSD");
+    requireNear(scaledSic.getCrossStreamResidualPowerSpectralDensities()[stream].get<WpHz>(),
+        physicalScale * sic.getCrossStreamResidualPowerSpectralDensities()[stream].get<WpHz>(),
+        "SIC physical scaling scales residual PSD");
+    requireNear(scaledSic.getProjectedNoiseAndInterferencePowerSpectralDensities()[stream].get<WpHz>(),
+        physicalScale * sic.getProjectedNoiseAndInterferencePowerSpectralDensities()[stream].get<WpHz>(),
+        "SIC physical scaling scales projected PSD");
+    for (int row = 0; row < 2; row++)
+        requireComplexNear(scaledSic.getWeights().get(stream, row), sic.getWeights().get(stream, row),
+            "SIC physical scaling preserves weights");
+}
+
+ComplexMatrix nonUnitWeights(2, 2, {{2, 0}, {0, 0}, {0, 0}, {1, 0}});
+const std::vector<WpHz> directPowers = {WpHz(1), WpHz(1)};
+const std::vector<double> directSinrs = {1, 1};
+require(throws([&] {
+    ChannelMatrixDetectionResult::fromPhysicalOutputs(ChannelMatrixDetectionStatus::SUCCESS,
+        {0, 1}, nonUnitWeights, directPowers, directPowers, directPowers, directSinrs);
+}), "non-unit physical result weights are rejected");
+ComplexMatrix unitWeights = ChannelMatrixAlgebra::identity(2);
+const auto acceptedPhysical = ChannelMatrixDetectionResult::fromPhysicalOutputs(
+    ChannelMatrixDetectionStatus::SUCCESS, {0, 1}, unitWeights,
+    {WpHz(3), WpHz(4)}, {WpHz(5), WpHz(6)}, {WpHz(7), WpHz(8)}, {9, 10});
+require(acceptedPhysical.getWeights().getCoefficients() == unitWeights.getCoefficients() &&
+    acceptedPhysical.getDesiredSignalPowerSpectralDensities()[0].get<WpHz>() == 3 &&
+    acceptedPhysical.getProjectedNoiseAndInterferencePowerSpectralDensities()[1].get<WpHz>() == 8,
+    "unit physical result weights and PSDs are preserved");
+
+const auto legacyMetadata = ChannelMatrixDetectionResult::fromCanonicalWeights(
+    ChannelMatrixDetectionStatus::SUCCESS, {2, 3}, identityChannel, identityNoise, unitWeights);
+require(legacyMetadata.getObservationCoordinates().size() == 2 &&
+    legacyMetadata.getObservationCoordinates()[0] == ChannelMatrixObservationCoordinate(0, 2, false) &&
+    legacyMetadata.getObservationCoordinates()[1] == ChannelMatrixObservationCoordinate(0, 3, false),
+    "legacy selected rows synthesize slot-zero observation coordinates");
+require(legacyMetadata.getSelectedReceiveRows() == std::vector<int>({2, 3}),
+    "legacy selected rows remain physical indices");
+
+ComplexMatrix augmentedChannel(4, 2, {{1, 0}, {0, 0}, {0, 0}, {1, 0},
+    {1, 0}, {0, 0}, {0, 0}, {1, 0}});
+ComplexMatrix augmentedCovariance = ChannelMatrixAlgebra::identity(4);
+ComplexMatrix augmentedWeights(2, 4, {{1 / std::sqrt(2.0), 0}, {0, 0}, {1 / std::sqrt(2.0), 0}, {0, 0},
+    {0, 0}, {1 / std::sqrt(2.0), 0}, {0, 0}, {1 / std::sqrt(2.0), 0}});
+const std::vector<ChannelMatrixObservationCoordinate> augmentedCoordinates = {
+    {0, 0, false}, {0, 1, false}, {1, 0, true}, {1, 1, true}};
+const auto augmentedMetadata = ChannelMatrixDetectionResult::fromCanonicalWeights(
+    ChannelMatrixDetectionStatus::SUCCESS, augmentedCoordinates, augmentedChannel,
+    augmentedCovariance, augmentedWeights);
+require(augmentedMetadata.getObservationCoordinates() == augmentedCoordinates,
+    "augmented observation coordinate order is preserved");
+require(augmentedMetadata.getSelectedReceiveRows() == std::vector<int>({0, 1}),
+    "augmented coordinates project to sorted unique physical rows");
+const auto augmentedMmse = MinimumMeanSquareErrorSpatialStreamDetector::compute(
+    augmentedChannel, augmentedCovariance, augmentedCoordinates);
+require(augmentedMmse.getObservationCoordinates() == augmentedCoordinates,
+    "MMSE preserves ordered augmented observation coordinates");
+const auto selectedMmse = MinimumMeanSquareErrorSpatialStreamDetector::compute(
+    augmentedChannel, augmentedCovariance, std::vector<int>({2, 3}));
+require(selectedMmse.getSelectedReceiveRows() == std::vector<int>({2, 3}) &&
+    selectedMmse.getObservationCoordinates()[0] == ChannelMatrixObservationCoordinate(0, 2, false),
+    "MMSE selected-row overload preserves original physical indices");
+const auto augmentedPhysical = ChannelMatrixDetectionResult::fromPhysicalOutputs(
+    ChannelMatrixDetectionStatus::SUCCESS, augmentedCoordinates, augmentedWeights,
+    {WpHz(1), WpHz(1)}, {WpHz(0), WpHz(0)}, {WpHz(1), WpHz(1)}, {1, 1});
+require(augmentedPhysical.getObservationCoordinates() == augmentedCoordinates,
+    "physical-output factory preserves augmented coordinates");
+
+ComplexMatrix fourByFour = ChannelMatrixAlgebra::identity(4);
+const std::vector<ChannelMatrixObservationCoordinate> repeatedPhysicalCoordinates = {
+    {0, 2, false}, {0, 3, false}, {1, 2, true}, {1, 3, true}};
+const auto repeatedPhysical = ChannelMatrixDetectionResult::fromCanonicalWeights(
+    ChannelMatrixDetectionStatus::SUCCESS, repeatedPhysicalCoordinates, fourByFour,
+    fourByFour, fourByFour);
+require(repeatedPhysical.getSelectedReceiveRows() == std::vector<int>({2, 3}),
+    "repeated physical rows across slots are accepted and projected");
+require(throws([&] {
+    ChannelMatrixDetectionResult::fromCanonicalWeights(ChannelMatrixDetectionStatus::SUCCESS,
+        std::vector<ChannelMatrixObservationCoordinate>({{0, 0, false}, {0, 0, false}}),
+        identityChannel, identityNoise, unitWeights);
+}), "duplicate observation coordinates are rejected");
+require(throws([&] {
+    ChannelMatrixDetectionResult::fromCanonicalWeights(ChannelMatrixDetectionStatus::SUCCESS,
+        std::vector<ChannelMatrixObservationCoordinate>(), identityChannel, identityNoise, unitWeights);
+}), "empty observation coordinates are rejected");
+require(throws([&] { ChannelMatrixObservationCoordinate(-1, 0, false); }),
+    "negative observation slot is rejected");
+require(throws([&] {
+    ChannelMatrixDetectionResult::fromCanonicalWeights(ChannelMatrixDetectionStatus::SUCCESS,
+        std::vector<ChannelMatrixObservationCoordinate>({{0, 0, false}}),
+        identityChannel, identityNoise, unitWeights);
+}), "observation-coordinate dimension mismatch is rejected");
+const auto repeatedAgain = ChannelMatrixDetectionResult::fromCanonicalWeights(
+    ChannelMatrixDetectionStatus::SUCCESS, repeatedPhysicalCoordinates, fourByFour,
+    fourByFour, fourByFour);
+require(repeatedAgain.getObservationCoordinates() == repeatedPhysical.getObservationCoordinates() &&
+    repeatedAgain.getWeights().getCoefficients() == repeatedPhysical.getWeights().getCoefficients(),
+    "augmented result construction is repeatable");
+
+std::cout << "PASS\n";
+
+%contains: stdout
+PASS

@@ -1,0 +1,176 @@
+%description:
+
+Checks technology-neutral complex matrix products, Hermitian positive-definite
+solves, rank/condition classification, and validation without materializing a
+matrix inverse.
+
+%includes:
+#include <cmath>
+#include <complex>
+#include <functional>
+#include <limits>
+#include "inet/physicallayer/wireless/common/analogmodel/common/ChannelMatrixAlgebra.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+static void require(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("Channel matrix algebra test failed: %s", message);
+}
+
+static void requireClose(std::complex<double> actual, std::complex<double> expected, double tolerance, const char *message)
+{
+    require(std::abs(actual - expected) <= tolerance, message);
+}
+
+static void requireClose(double actual, double expected, double tolerance, const char *message)
+{
+    require(std::abs(actual - expected) <= tolerance, message);
+}
+
+static bool throws(const std::function<void()>& function)
+{
+    try {
+        function();
+        return false;
+    }
+    catch (const cRuntimeError&) {
+        return true;
+    }
+}
+
+%activity:
+ComplexMatrix matrix(2, 2, {{1, 1}, {2, 0}, {0, 0}, {1, -1}});
+auto conjugateTranspose = ChannelMatrixAlgebra::conjugateTranspose(matrix);
+requireClose(conjugateTranspose.get(0, 0), {1, -1}, 1e-12, "conjugate transpose diagonal");
+requireClose(conjugateTranspose.get(0, 1), {0, 0}, 1e-12, "conjugate transpose off-diagonal");
+requireClose(conjugateTranspose.get(1, 0), {2, 0}, 1e-12, "conjugate transpose second row");
+requireClose(conjugateTranspose.get(1, 1), {1, 1}, 1e-12, "conjugate transpose second diagonal");
+
+auto product = ChannelMatrixAlgebra::hermitianProduct(matrix);
+requireClose(product.get(0, 0), {2, 0}, 1e-12, "Hermitian product (0,0)");
+requireClose(product.get(0, 1), {2, -2}, 1e-12, "Hermitian product (0,1)");
+requireClose(product.get(1, 0), {2, 2}, 1e-12, "Hermitian product (1,0)");
+requireClose(product.get(1, 1), {6, 0}, 1e-12, "Hermitian product (1,1)");
+require(ChannelMatrixAlgebra::isHermitian(product), "Hermitian product validation");
+require(!ChannelMatrixAlgebra::isHermitian(matrix), "non-Hermitian validation");
+
+ComplexMatrix rectangular(2, 3, {{1, 0}, {2, 0}, {0, 0}, {0, 0}, {1, 0}, {1, 0}});
+auto rectangularConjugateTranspose = ChannelMatrixAlgebra::conjugateTranspose(rectangular);
+auto ordinaryProduct = ChannelMatrixAlgebra::multiply(rectangular, rectangularConjugateTranspose);
+require(ordinaryProduct.getNumRows() == 2 && ordinaryProduct.getNumColumns() == 2, "rectangular product dimensions");
+requireClose(ordinaryProduct.get(0, 0), {5, 0}, 1e-12, "AA^H (0,0)");
+requireClose(ordinaryProduct.get(0, 1), {2, 0}, 1e-12, "AA^H (0,1)");
+requireClose(ordinaryProduct.get(1, 0), {2, 0}, 1e-12, "AA^H (1,0)");
+requireClose(ordinaryProduct.get(1, 1), {2, 0}, 1e-12, "AA^H (1,1)");
+auto rectangularHermitianProduct = ChannelMatrixAlgebra::hermitianProduct(rectangular);
+requireClose(rectangularHermitianProduct.get(0, 0), {1, 0}, 1e-12, "A^H A (0,0)");
+requireClose(rectangularHermitianProduct.get(0, 1), {2, 0}, 1e-12, "A^H A (0,1)");
+requireClose(rectangularHermitianProduct.get(1, 1), {5, 0}, 1e-12, "A^H A (1,1)");
+requireClose(rectangularHermitianProduct.get(1, 2), {1, 0}, 1e-12, "A^H A (1,2)");
+requireClose(rectangularHermitianProduct.get(2, 2), {1, 0}, 1e-12, "A^H A (2,2)");
+const auto identity = ChannelMatrixAlgebra::identity(2);
+requireClose(identity.get(0, 0), {1, 0}, 1e-12, "identity first diagonal");
+requireClose(identity.get(1, 1), {1, 0}, 1e-12, "identity second diagonal");
+const auto added = ChannelMatrixAlgebra::add(identity, identity);
+requireClose(added.get(0, 0), {2, 0}, 1e-12, "matrix addition diagonal");
+const auto scaled = ChannelMatrixAlgebra::scale(matrix, {2, -1});
+requireClose(scaled.get(0, 0), {3, 1}, 1e-12, "complex matrix scale");
+const auto selectedRows = ChannelMatrixAlgebra::selectRows(rectangular, {1});
+require(selectedRows.getNumRows() == 1 && selectedRows.getNumColumns() == 3, "row selection dimensions");
+requireClose(selectedRows.get(0, 2), {1, 0}, 1e-12, "row selection value");
+const auto selectedColumns = ChannelMatrixAlgebra::selectColumns(rectangular, {0, 2});
+require(selectedColumns.getNumRows() == 2 && selectedColumns.getNumColumns() == 2, "column selection dimensions");
+requireClose(selectedColumns.get(0, 1), {0, 0}, 1e-12, "column selection value");
+const auto selectedSquare = ChannelMatrixAlgebra::selectRowsAndColumns(ordinaryProduct, {0, 1});
+requireClose(selectedSquare.get(0, 1), {2, 0}, 1e-12, "square row-and-column selection value");
+require(throws([&] { ChannelMatrixAlgebra::identity(0); }), "zero identity rejection");
+require(throws([&] { ChannelMatrixAlgebra::add(identity, ComplexMatrix(1, 1, {{1, 0}})); }), "addition dimension rejection");
+require(throws([&] { ChannelMatrixAlgebra::scale(identity, {std::numeric_limits<double>::quiet_NaN(), 0}); }), "nonfinite scale rejection");
+require(throws([&] { ChannelMatrixAlgebra::selectRows(rectangular, {}); }), "empty row selection rejection");
+require(throws([&] { ChannelMatrixAlgebra::selectRows(rectangular, {1, 0}); }), "unsorted row selection rejection");
+require(throws([&] { ChannelMatrixAlgebra::selectColumns(rectangular, {0, 0}); }), "duplicate column selection rejection");
+require(throws([&] { ChannelMatrixAlgebra::selectRowsAndColumns(ordinaryProduct, {0, 2}); }), "out-of-range square selection rejection");
+require(throws([&] { ChannelMatrixAlgebra::selectRowsAndColumns(rectangular, {0}); }), "nonsquare selection rejection");
+const auto matrixCoefficientsBeforeSelection = matrix.getCoefficients();
+const auto rectangularCoefficientsBeforeSelection = rectangular.getCoefficients();
+require(ChannelMatrixAlgebra::selectRows(rectangular, {0, 1}).getCoefficients() == rectangular.getCoefficients(),
+    "row selection result does not mutate input");
+require(matrix.getCoefficients() == matrixCoefficientsBeforeSelection &&
+    rectangular.getCoefficients() == rectangularCoefficientsBeforeSelection,
+    "selection and scale input immutability");
+require(throws([&] {
+    ChannelMatrixAlgebra::multiply(matrix, ComplexMatrix(3, 1, {{1, 0}, {0, 0}, {0, 0}}));
+}), "ordinary product dimension rejection");
+require(throws([&] { ChannelMatrixAlgebra::validateDimensions(matrix, 3, 2); }), "matrix dimension validation rejection");
+const auto matrixCoefficientsBeforeProducts = matrix.getCoefficients();
+const auto rectangularCoefficientsBeforeProducts = rectangular.getCoefficients();
+require(ChannelMatrixAlgebra::multiply(matrix, matrix).getNumRows() == 2, "square ordinary product");
+require(matrix.getCoefficients() == matrixCoefficientsBeforeProducts, "matrix product input immutability");
+require(rectangular.getCoefficients() == rectangularCoefficientsBeforeProducts, "rectangular product input immutability");
+
+ComplexMatrix covariance(2, 2, {{2, 0}, {1, 0}, {1, 0}, {2, 0}});
+ComplexMatrix rightHandSide(2, 1, {{1, 0}, {2, 0}});
+require(ChannelMatrixAlgebra::isPositiveDefinite(covariance), "positive-definite validation");
+auto covarianceSolution = ChannelMatrixAlgebra::solveHermitianPositiveDefinite(covariance, rightHandSide);
+requireClose(covarianceSolution.get(0, 0), {0, 0}, 1e-12, "Hermitian solve first value");
+requireClose(covarianceSolution.get(1, 0), {1, 0}, 1e-12, "Hermitian solve second value");
+auto generalSolution = ChannelMatrixAlgebra::solve(
+    ComplexMatrix(2, 2, {{1, 0}, {1, 0}, {0, 0}, {1, 0}}),
+    ComplexMatrix(2, 1, {{3, 0}, {2, 0}}));
+requireClose(generalSolution.get(0, 0), {1, 0}, 1e-12, "general solve first value");
+requireClose(generalSolution.get(1, 0), {2, 0}, 1e-12, "general solve second value");
+
+ComplexMatrix scaledCovariance(2, 2, {{2e-20, 0}, {1e-20, 0}, {1e-20, 0}, {2e-20, 0}});
+ComplexMatrix scaledRightHandSide(2, 1, {{1e-20, 0}, {2e-20, 0}});
+const auto scaledCovarianceBeforeSolve = scaledCovariance.getCoefficients();
+const auto scaledRightHandSideBeforeSolve = scaledRightHandSide.getCoefficients();
+require(ChannelMatrixAlgebra::isPositiveDefinite(scaledCovariance), "scaled positive-definite validation");
+require(ChannelMatrixAlgebra::computeRank(scaledCovariance) == 2, "scaled full rank");
+auto scaledSolution = ChannelMatrixAlgebra::solveHermitianPositiveDefinite(scaledCovariance, scaledRightHandSide);
+requireClose(scaledSolution.get(0, 0), {0, 0}, 1e-12, "scaled Hermitian solve first value");
+requireClose(scaledSolution.get(1, 0), {1, 0}, 1e-12, "scaled Hermitian solve second value");
+require(scaledCovariance.getCoefficients() == scaledCovarianceBeforeSolve, "scaled covariance input immutability");
+require(scaledRightHandSide.getCoefficients() == scaledRightHandSideBeforeSolve, "scaled right-hand-side input immutability");
+ComplexMatrix scaledNonHermitian(2, 2, {{2e-20, 0}, {1e-20, 0}, {0, 0}, {2e-20, 0}});
+require(!ChannelMatrixAlgebra::isHermitian(scaledNonHermitian), "scaled non-Hermitian validation");
+require(throws([&] { ChannelMatrixAlgebra::validateHermitian(scaledNonHermitian); }), "scaled non-Hermitian rejection");
+
+require(ChannelMatrixAlgebra::computeRank(matrix) == 2, "full rank");
+ComplexMatrix rankDeficient(2, 2, {{1, 0}, {2, 0}, {2, 0}, {4, 0}});
+require(ChannelMatrixAlgebra::computeRank(rankDeficient) == 1, "rank-deficient matrix");
+ComplexMatrix thresholdMatrix(2, 2, {{1, 0}, {0, 0}, {0, 0}, {1e-8, 0}});
+require(ChannelMatrixAlgebra::computeRank(thresholdMatrix, 1e-7) == 1, "rank above threshold");
+require(ChannelMatrixAlgebra::computeRank(thresholdMatrix, 1e-9) == 2, "rank below threshold");
+requireClose(ChannelMatrixAlgebra::computeConditionNumber(ComplexMatrix(2, 2, {{1, 0}, {0, 0}, {0, 0}, {1, 0}})),
+    1, 1e-12, "identity condition number");
+require(std::isinf(ChannelMatrixAlgebra::computeConditionNumber(rankDeficient)), "singular condition number");
+
+ComplexMatrix nonfinite(1, 1);
+nonfinite.get(0, 0) = {std::numeric_limits<double>::quiet_NaN(), 0};
+require(throws([&] { ChannelMatrixAlgebra::validateFinite(nonfinite); }), "nonfinite rejection");
+require(throws([&] { ChannelMatrixAlgebra::validateHermitian(matrix); }), "non-Hermitian rejection");
+require(throws([&] { ChannelMatrixAlgebra::validatePositiveDefinite(rankDeficient); }), "non-positive-definite rejection");
+require(throws([&] { ChannelMatrixAlgebra::solve(covariance, ComplexMatrix(1, 1, {{1, 0}})); }), "solve dimension rejection");
+require(throws([&] { ChannelMatrixAlgebra::solve(rankDeficient, rightHandSide); }), "singular solve rejection");
+ComplexMatrix empty;
+require(!ChannelMatrixAlgebra::isHermitian(empty), "empty Hermitian result");
+require(!ChannelMatrixAlgebra::isPositiveDefinite(empty), "empty positive-definite result");
+require(throws([&] { ChannelMatrixAlgebra::validateFinite(empty); }), "empty finite validation rejection");
+require(throws([&] { ChannelMatrixAlgebra::validateSquare(empty); }), "empty square validation rejection");
+require(throws([&] { ChannelMatrixAlgebra::computeRank(empty); }), "empty rank rejection");
+require(throws([&] { ChannelMatrixAlgebra::solve(empty, rightHandSide); }), "empty solve rejection");
+require(throws([&] { ChannelMatrixAlgebra::computeConditionNumber(empty); }), "empty condition-number rejection");
+ComplexMatrix zero(2, 2);
+require(ChannelMatrixAlgebra::computeRank(zero) == 0, "exact-zero rank");
+require(!ChannelMatrixAlgebra::isPositiveDefinite(zero), "exact-zero positive-definite result");
+require(throws([&] { ChannelMatrixAlgebra::solveHermitianPositiveDefinite(zero, rightHandSide); }), "exact-zero solve rejection");
+
+std::cout << "PASS\n";
+
+%contains: stdout
+PASS

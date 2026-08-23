@@ -1,0 +1,181 @@
+%description:
+
+Checks immutable non-STBC spatial transmission segments, ordered boundaries,
+normalized source fractions, semi-unitary mapping, and resolved unit-trace
+space-time-stream covariance.
+
+%includes:
+#include <cmath>
+#include <complex>
+#include <functional>
+#include <limits>
+#include <memory>
+#include <type_traits>
+#include <vector>
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ISpatialTransmission.h"
+#include "inet/physicallayer/wireless/common/analogmodel/common/SpatialTransmissionPlan.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+class FakeSpatialTransmission : public ISpatialTransmission
+{
+  protected:
+    std::shared_ptr<const SpatialTransmissionPlan> plan;
+
+  public:
+    explicit FakeSpatialTransmission(const std::shared_ptr<const SpatialTransmissionPlan>& plan) : plan(plan) {}
+    virtual const std::shared_ptr<const SpatialTransmissionPlan>& getSpatialTransmissionPlan() const override { return plan; }
+};
+
+static void require(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("Spatial transmission plan test failed: %s", message);
+}
+
+static bool throws(const std::function<void()>& function)
+{
+    try {
+        function();
+        return false;
+    }
+    catch (const cRuntimeError&) {
+        return true;
+    }
+}
+
+%activity:
+ComplexMatrix firstMapping(3, 1, {{1, 0}, {0, 0}, {0, 0}});
+ComplexMatrix secondMapping(3, 2, {{1, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {1, 0}});
+std::vector<double> firstFractions = {1};
+std::vector<double> secondFractions = {0.5, 0.5};
+SpatialTransmissionPlan::Segment firstSegment(SimTime(0, SIMTIME_US), SimTime(1, SIMTIME_US),
+    1, 1, firstMapping, firstFractions);
+SpatialTransmissionPlan::Segment secondSegment(SimTime(1, SIMTIME_US), SimTime(4, SIMTIME_US),
+    2, 2, secondMapping, secondFractions);
+SpatialTransmissionPlan plan(3, {firstSegment, secondSegment});
+
+require(plan.getNumberOfTransmitAntennas() == 3, "transmit antenna count");
+require(plan.getSegments().size() == 2, "segment count");
+require(plan.getSegment(0).getNumberOfSpatialStreams() == 1, "first NSS");
+require(plan.getSegment(0).getStartOffset() == SimTime(0, SIMTIME_US), "first start offset");
+require(plan.getSegment(0).getEndOffset() == SimTime(1, SIMTIME_US), "first end offset");
+require(plan.getSegmentAt(SimTime(0, SIMTIME_US)).getNumberOfSpatialStreams() == 1, "first boundary");
+require(plan.getSegmentAt(SimTime(1, SIMTIME_US)).getNumberOfSpatialStreams() == 2, "half-open boundary");
+require(plan.getSegmentAt(SimTime(3999, SIMTIME_NS)).getNumberOfSpatialStreams() == 2, "last segment");
+require(throws([&] { plan.getSegmentAt(SimTime(4, SIMTIME_US)); }), "end boundary rejection");
+plan.validateCompleteCoverage(SimTime(4, SIMTIME_US));
+require(plan.getSegmentAt(SimTime(1, SIMTIME_US), SpatialTransmissionPlan::BoundarySide::RIGHT_LIMIT).getNumberOfSpatialStreams() == 2,
+    "right-limit internal boundary");
+require(plan.getSegmentAt(SimTime(1, SIMTIME_US), SpatialTransmissionPlan::BoundarySide::LEFT_LIMIT).getNumberOfSpatialStreams() == 1,
+    "left-limit internal boundary");
+require(plan.getSegmentAt(SimTime(4, SIMTIME_US), SpatialTransmissionPlan::BoundarySide::LEFT_LIMIT).getNumberOfSpatialStreams() == 2,
+    "left-limit final endpoint");
+require(throws([&] { plan.getSegmentAt(SimTime(0, SIMTIME_US), SpatialTransmissionPlan::BoundarySide::LEFT_LIMIT); }),
+    "left-limit initial endpoint rejection");
+require(throws([&] { plan.getSegmentAt(SimTime(4, SIMTIME_US), SpatialTransmissionPlan::BoundarySide::RIGHT_LIMIT); }),
+    "right-limit final endpoint rejection");
+
+SpatialTransmissionPlan leadingGapPlan(3, {
+    SpatialTransmissionPlan::Segment(SimTime(1, SIMTIME_US), SimTime(2, SIMTIME_US), 1, 1, firstMapping, firstFractions),
+    SpatialTransmissionPlan::Segment(SimTime(2, SIMTIME_US), SimTime(4, SIMTIME_US), 1, 1, firstMapping, firstFractions)});
+require(throws([&] { leadingGapPlan.validateCompleteCoverage(SimTime(4, SIMTIME_US)); }),
+    "leading gap rejection at attachment validation");
+SpatialTransmissionPlan internalGapPlan(3, {
+    SpatialTransmissionPlan::Segment(SimTime(0, SIMTIME_US), SimTime(1, SIMTIME_US), 1, 1, firstMapping, firstFractions),
+    SpatialTransmissionPlan::Segment(SimTime(2, SIMTIME_US), SimTime(4, SIMTIME_US), 1, 1, firstMapping, firstFractions)});
+require(throws([&] { internalGapPlan.validateCompleteCoverage(SimTime(4, SIMTIME_US)); }),
+    "internal gap rejection at attachment validation");
+SpatialTransmissionPlan trailingGapPlan(3, {
+    SpatialTransmissionPlan::Segment(SimTime(0, SIMTIME_US), SimTime(1, SIMTIME_US), 1, 1, firstMapping, firstFractions),
+    SpatialTransmissionPlan::Segment(SimTime(1, SIMTIME_US), SimTime(3, SIMTIME_US), 1, 1, firstMapping, firstFractions)});
+require(throws([&] { trailingGapPlan.validateCompleteCoverage(SimTime(4, SIMTIME_US)); }),
+    "trailing gap rejection at attachment validation");
+
+const auto& covariance = plan.getSegment(1).getSpaceTimeStreamCovariance();
+require(covariance.getNumRows() == 2 && covariance.getNumColumns() == 2, "covariance dimensions");
+require(std::abs(covariance.get(0, 0) - std::complex<double>(0.5, 0)) < 1e-12, "first covariance fraction");
+require(std::abs(covariance.get(1, 1) - std::complex<double>(0.5, 0)) < 1e-12, "second covariance fraction");
+require(std::abs(covariance.get(0, 1)) < 1e-12 && std::abs(covariance.get(1, 0)) < 1e-12, "covariance off-diagonal");
+auto transmitCovariance = plan.getSegment(1).getTransmitCovariance();
+require(std::abs(transmitCovariance.get(0, 0) - std::complex<double>(0.5, 0)) < 1e-12, "transmit covariance first antenna");
+require(std::abs(transmitCovariance.get(1, 1)) < 1e-12, "transmit covariance unused antenna");
+require(std::abs(transmitCovariance.get(2, 2) - std::complex<double>(0.5, 0)) < 1e-12, "transmit covariance third antenna");
+
+const std::vector<simtime_t> cyclicShiftDelays = {SimTime(0, SIMTIME_NS), SimTime(-400, SIMTIME_NS)};
+SpatialTransmissionPlan::Segment phasedSegment(SimTime(0, SIMTIME_US), SimTime(1, SIMTIME_US),
+    2, 2, secondMapping, secondFractions, cyclicShiftDelays);
+const auto resolvedMapping = phasedSegment.getTransmitMapping(Hz(312500));
+require(std::abs(resolvedMapping.get(0, 0) - std::complex<double>(1, 0)) < 1e-12,
+    "zero-delay stream retains phase");
+require(std::abs(resolvedMapping.get(2, 1) - std::complex<double>(std::sqrt(0.5), std::sqrt(0.5))) < 1e-12,
+    "cyclic shift resolves frequency-dependent phase");
+const auto resolvedCovariance = phasedSegment.getTransmitCovariance(Hz(312500));
+require(std::abs(resolvedCovariance.get(0, 0) - std::complex<double>(0.5, 0)) < 1e-12 &&
+    std::abs(resolvedCovariance.get(2, 2) - std::complex<double>(0.5, 0)) < 1e-12,
+    "frequency-resolved covariance preserves stream powers");
+require(phasedSegment.getCyclicShiftDelays() == cyclicShiftDelays, "cyclic shifts are immutable copies");
+require(throws([&] {
+    SpatialTransmissionPlan::Segment invalid(SimTime(0, SIMTIME_US), SimTime(1, SIMTIME_US),
+        2, 2, secondMapping, secondFractions, {SimTime(0, SIMTIME_NS)});
+}), "cyclic-shift count validation");
+require(throws([&] { phasedSegment.getTransmitMapping(Hz(std::numeric_limits<double>::quiet_NaN())); }),
+    "non-finite frequency validation");
+
+// Constructor inputs and returned values are copies; callers cannot mutate the plan.
+secondMapping.get(0, 0) = {0, 0};
+secondFractions[0] = 0.25;
+require(std::abs(plan.getSegment(1).getTransmitMapping().get(0, 0) - std::complex<double>(1, 0)) < 1e-12,
+    "mapping input immutability");
+require(std::abs(plan.getSegment(1).getSymbolPowerFractions()[0] - 0.5) < 1e-12,
+    "fraction input immutability");
+transmitCovariance.get(0, 0) = {9, 0};
+require(std::abs(plan.getSegment(1).getTransmitCovariance().get(0, 0) - std::complex<double>(0.5, 0)) < 1e-12,
+    "covariance output immutability");
+
+require(throws([&] {
+    SpatialTransmissionPlan::Segment invalid(SimTime(0, SIMTIME_US), SimTime(1, SIMTIME_US),
+        2, 2, secondMapping, {0.25, 0.25});
+}), "source fraction normalization rejection");
+require(throws([&] {
+    SpatialTransmissionPlan::Segment invalid(SimTime(0, SIMTIME_US), SimTime(1, SIMTIME_US),
+        1, 1, ComplexMatrix(3, 1, {{2, 0}, {0, 0}, {0, 0}}), firstFractions);
+}), "non-unitary mapping rejection");
+require(throws([&] {
+    SpatialTransmissionPlan::Segment invalid(SimTime(1, SIMTIME_US), SimTime(1, SIMTIME_US),
+        1, 1, firstMapping, firstFractions);
+}), "zero-duration rejection");
+require(throws([&] {
+    SpatialTransmissionPlan::Segment invalid(SimTime(-1, SIMTIME_US), SimTime(1, SIMTIME_US),
+        1, 1, firstMapping, firstFractions);
+}), "negative-offset rejection");
+require(throws([&] {
+    SpatialTransmissionPlan::Segment invalid(SimTime(0, SIMTIME_US), SimTime(1, SIMTIME_US),
+        1, 2, secondMapping, firstFractions);
+}), "non-STBC stream-count rejection");
+require(throws([&] {
+    SpatialTransmissionPlan invalid(2, {firstSegment, secondSegment});
+}), "plan antenna-dimension rejection");
+require(throws([&] {
+    SpatialTransmissionPlan invalid(3, {secondSegment, firstSegment});
+}), "segment ordering rejection");
+require(throws([&] {
+    SpatialTransmissionPlan invalid(3, {});
+}), "empty plan rejection");
+
+static_assert(std::is_same<decltype(std::declval<const FakeSpatialTransmission&>().getSpatialTransmissionPlan()),
+    const std::shared_ptr<const SpatialTransmissionPlan>&>::value, "spatial plan capability must expose a const shared pointer reference");
+FakeSpatialTransmission absent(nullptr);
+require(!absent.getSpatialTransmissionPlan(), "null plan denotes legacy scalar transmission");
+auto sharedPlan = std::make_shared<const SpatialTransmissionPlan>(plan);
+FakeSpatialTransmission present(sharedPlan);
+require(present.getSpatialTransmissionPlan() == sharedPlan, "attached plan identity");
+require(present.getSpatialTransmissionPlan()->getNumberOfTransmitAntennas() == 3, "attached plan pointee");
+
+std::cout << "PASS\n";
+
+%contains: stdout
+PASS

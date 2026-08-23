@@ -1,6 +1,6 @@
 %description:
 
-Runs a time-varying TGn Model D 2x1 selected-column MRC link end to end. The
+Runs a time-varying TGn Model D 2x1 transmitter-plan/default-MRC link end to end. The
 HT data frame and its ordinary legacy ACK must both complete through the
 dimensional channel/noise/SNIR integration.
 
@@ -43,7 +43,7 @@ record-vector-results = false
 *.destinationHost.wlan[0].agent.typename = ""
 **.wlan[0].opMode = "n(mixed-2.4Ghz)"
 **.wlan[0].bitrate = 6.5Mbps
-**.wlan[0].radio.typename = "Ieee80211DimensionalRadio"
+**.wlan[0].radio.typename = "Ieee80211TgnRadio"
 
 *.sourceHost.numApps = 1
 *.sourceHost.app[0].typename = "UdpBasicApp"
@@ -60,7 +60,6 @@ record-vector-results = false
 *.radioMedium.condition = "nlos"
 *.radioMedium.timeVariation = true
 *.radioMedium.reciprocal = true
-*.radioMedium.selectedTransmitAntenna = 0
 *.radioMedium.backgroundNoise.power = -110dBm
 *.sourceHost.wlan[0].radio.antenna.numAntennas = 1
 *.destinationHost.wlan[0].radio.antenna.numAntennas = 2

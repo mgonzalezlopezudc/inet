@@ -15,11 +15,29 @@
 #include "inet/linklayer/common/MacAddressTag_m.h"
 #include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/networklayer/contract/IInterfaceTable.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IChannelMatrixReceiver.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/INarrowbandSignalAnalogModel.h"
 #include "inet/physicallayer/wireless/common/radio/packetlevel/Radio.h"
 #include "inet/physicallayer/wireless/common/signal/Interference.h"
 
 namespace inet {
 namespace physicallayer {
+
+namespace {
+
+bool haveOverlappingBands(const IReception *left, const IReception *right)
+{
+    const auto leftNarrowband = dynamic_cast<const INarrowbandSignalAnalogModel *>(left->getAnalogModel());
+    const auto rightNarrowband = dynamic_cast<const INarrowbandSignalAnalogModel *>(right->getAnalogModel());
+    if (leftNarrowband == nullptr || rightNarrowband == nullptr)
+        return true;
+    return leftNarrowband->getCenterFrequency() + leftNarrowband->getBandwidth() / 2 >
+            rightNarrowband->getCenterFrequency() - rightNarrowband->getBandwidth() / 2 &&
+        leftNarrowband->getCenterFrequency() - leftNarrowband->getBandwidth() / 2 <
+            rightNarrowband->getCenterFrequency() + rightNarrowband->getBandwidth() / 2;
+}
+
+} // namespace
 
 Define_Module(RadioMedium);
 
@@ -520,6 +538,30 @@ void RadioMedium::addTransmission(const IRadio *transmitterRadio, const ITransmi
             communicationCache->setCachedArrival(receiverRadio, transmission, arrival);
             communicationCache->setCachedInterval(receiverRadio, transmission, interval);
             communicationCache->setCachedListening(receiverRadio, transmission, listening);
+
+            // A derived reception may already have been published before this
+            // later overlapping transmission arrived. Retire its complete
+            // immutable derived set; physical arrival/reception data remains
+            // valid and cached under the original key.
+            const auto matrixReceiver = dynamic_cast<const IChannelMatrixReceiver *>(receiverRadio->getReceiver());
+            if (matrixReceiver != nullptr && matrixReceiver->getChannelMatrixReceptionProcessor() != nullptr) {
+                std::unique_ptr<std::vector<const ITransmission *>> overlapping(
+                    communicationCache->computeInterferingTransmissions(receiverRadio,
+                        arrival->getStartTime(), arrival->getEndTime()));
+                std::sort(overlapping->begin(), overlapping->end(),
+                    [] (const ITransmission *left, const ITransmission *right) {
+                        return left->getId() < right->getId();
+                    });
+                for (const auto desired : *overlapping) {
+                    if (desired == transmission)
+                        continue;
+                    const auto desiredReception = getReception(receiverRadio, desired);
+                    const auto addedReception = getReception(receiverRadio, transmission);
+                    if (isInterferingTransmission(transmission, desiredReception) &&
+                        haveOverlappingBands(addedReception, desiredReception))
+                        communicationCache->advanceInterferenceRevision(receiverRadio, desired);
+                }
+            }
         }
     });
     communicationCache->setCachedInterferenceEndTime(transmission, maxArrivalEndTime + mediumLimitCache->getMaxTransmissionDuration());
@@ -531,6 +573,36 @@ void RadioMedium::addTransmission(const IRadio *transmitterRadio, const ITransmi
 void RadioMedium::removeTransmission(const ITransmission *transmission)
 {
     Enter_Method("removeTranmsission");
+    communicationCache->mapRadios([&] (const IRadio *receiverRadio) {
+        if (receiverRadio == nullptr || receiverRadio->getReceiver() == nullptr)
+            return;
+        const auto matrixReceiver = dynamic_cast<const IChannelMatrixReceiver *>(receiverRadio->getReceiver());
+        if (matrixReceiver == nullptr || matrixReceiver->getChannelMatrixReceptionProcessor() == nullptr)
+            return;
+        const IArrival *arrival = communicationCache->getCachedArrival(receiverRadio, transmission);
+        // Ordinary expiry only discards cache storage. It must not invalidate
+        // immutable results for receptions whose physical history is complete.
+        // Only an early removal can change an unfinished reception.
+        if (arrival == nullptr || arrival->getEndTime() <= simTime())
+            return;
+        std::unique_ptr<std::vector<const ITransmission *>> overlapping(
+            communicationCache->computeInterferingTransmissions(receiverRadio,
+                arrival->getStartTime(), arrival->getEndTime()));
+        std::sort(overlapping->begin(), overlapping->end(),
+            [] (const ITransmission *left, const ITransmission *right) {
+                return left->getId() < right->getId();
+            });
+        for (const auto desired : *overlapping) {
+            if (desired == transmission)
+                continue;
+            const auto desiredReception = getReception(receiverRadio, desired);
+            const auto removedReception = getReception(receiverRadio, transmission);
+            if (desiredReception->getEndTime() > simTime() &&
+                isInterferingTransmission(transmission, desiredReception) &&
+                haveOverlappingBands(removedReception, desiredReception))
+                communicationCache->advanceInterferenceRevision(receiverRadio, desired);
+        }
+    });
     emit(signalRemovedSignal, check_and_cast<const cObject *>(transmission));
     communicationCache->removeTransmission(transmission);
 }

@@ -7,6 +7,8 @@
 
 #include "inet/physicallayer/wireless/common/base/packetlevel/CommunicationCacheBase.h"
 
+#include <limits>
+
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
 
 namespace inet {
@@ -73,7 +75,13 @@ CommunicationCacheBase::ReceptionCacheEntry::ReceptionCacheEntry(const Reception
     noise(other.noise),
     snir(other.snir),
     receptionDecisions(other.receptionDecisions),
-    receptionResult(other.receptionResult)
+    receptionResult(other.receptionResult),
+    interferenceRevision(other.interferenceRevision),
+    retiredInterferences(other.retiredInterferences),
+    retiredNoises(other.retiredNoises),
+    retiredSnirs(other.retiredSnirs),
+    retiredReceptionDecisions(other.retiredReceptionDecisions),
+    retiredReceptionResults(other.retiredReceptionResults)
 {
     // NOTE: only allow copying empty mostly ones for now
     ASSERT(other.signal == nullptr);
@@ -86,6 +94,11 @@ CommunicationCacheBase::ReceptionCacheEntry::ReceptionCacheEntry(const Reception
     ASSERT(other.snir == nullptr);
     ASSERT(other.receptionDecisions.size() == 0);
     ASSERT(other.receptionResult == nullptr);
+    ASSERT(other.retiredInterferences.empty());
+    ASSERT(other.retiredNoises.empty());
+    ASSERT(other.retiredSnirs.empty());
+    ASSERT(other.retiredReceptionDecisions.empty());
+    ASSERT(other.retiredReceptionResults.empty());
 }
 
 CommunicationCacheBase::ReceptionCacheEntry::ReceptionCacheEntry(ReceptionCacheEntry&& other) noexcept :
@@ -100,7 +113,13 @@ CommunicationCacheBase::ReceptionCacheEntry::ReceptionCacheEntry(ReceptionCacheE
     noise(other.noise),
     snir(other.snir),
     receptionDecisions(other.receptionDecisions),
-    receptionResult(other.receptionResult)
+    receptionResult(other.receptionResult),
+    interferenceRevision(other.interferenceRevision),
+    retiredInterferences(std::move(other.retiredInterferences)),
+    retiredNoises(std::move(other.retiredNoises)),
+    retiredSnirs(std::move(other.retiredSnirs)),
+    retiredReceptionDecisions(std::move(other.retiredReceptionDecisions)),
+    retiredReceptionResults(std::move(other.retiredReceptionResults))
 {
     other.transmission = nullptr;
     other.receiver = nullptr;
@@ -114,6 +133,11 @@ CommunicationCacheBase::ReceptionCacheEntry::ReceptionCacheEntry(ReceptionCacheE
     other.snir = nullptr;
     other.receptionDecisions.clear();
     other.receptionResult = nullptr;
+    other.retiredInterferences.clear();
+    other.retiredNoises.clear();
+    other.retiredSnirs.clear();
+    other.retiredReceptionDecisions.clear();
+    other.retiredReceptionResults.clear();
 }
 
 CommunicationCacheBase::ReceptionCacheEntry& CommunicationCacheBase::ReceptionCacheEntry::operator=(const ReceptionCacheEntry& other)
@@ -130,6 +154,11 @@ CommunicationCacheBase::ReceptionCacheEntry& CommunicationCacheBase::ReceptionCa
         ASSERT(other.snir == nullptr);
         ASSERT(other.receptionDecisions.size() == 0);
         ASSERT(other.receptionResult == nullptr);
+        ASSERT(other.retiredInterferences.empty());
+        ASSERT(other.retiredNoises.empty());
+        ASSERT(other.retiredSnirs.empty());
+        ASSERT(other.retiredReceptionDecisions.empty());
+        ASSERT(other.retiredReceptionResults.empty());
         transmission = other.transmission;
         receiver = other.receiver;
         signal = other.signal;
@@ -144,6 +173,12 @@ CommunicationCacheBase::ReceptionCacheEntry& CommunicationCacheBase::ReceptionCa
             delete receptionDecision;
         receptionDecisions = other.receptionDecisions;
         receptionResult = other.receptionResult;
+        interferenceRevision = other.interferenceRevision;
+        retiredInterferences = other.retiredInterferences;
+        retiredNoises = other.retiredNoises;
+        retiredSnirs = other.retiredSnirs;
+        retiredReceptionDecisions = other.retiredReceptionDecisions;
+        retiredReceptionResults = other.retiredReceptionResults;
     }
     return *this;
 }
@@ -160,6 +195,16 @@ CommunicationCacheBase::ReceptionCacheEntry& CommunicationCacheBase::ReceptionCa
         for (auto receptionDecision : receptionDecisions)
             delete receptionDecision;
         delete receptionResult;
+        for (auto value : retiredInterferences)
+            delete value;
+        for (auto value : retiredNoises)
+            delete value;
+        for (auto value : retiredSnirs)
+            delete value;
+        for (auto value : retiredReceptionDecisions)
+            delete value;
+        for (auto value : retiredReceptionResults)
+            delete value;
         transmission = other.transmission;
         receiver = other.receiver;
         signal = other.signal;
@@ -172,6 +217,12 @@ CommunicationCacheBase::ReceptionCacheEntry& CommunicationCacheBase::ReceptionCa
         snir = other.snir;
         receptionDecisions = other.receptionDecisions;
         receptionResult = other.receptionResult;
+        interferenceRevision = other.interferenceRevision;
+        retiredInterferences = std::move(other.retiredInterferences);
+        retiredNoises = std::move(other.retiredNoises);
+        retiredSnirs = std::move(other.retiredSnirs);
+        retiredReceptionDecisions = std::move(other.retiredReceptionDecisions);
+        retiredReceptionResults = std::move(other.retiredReceptionResults);
         other.transmission = nullptr;
         other.receiver = nullptr;
         other.signal = nullptr;
@@ -184,6 +235,11 @@ CommunicationCacheBase::ReceptionCacheEntry& CommunicationCacheBase::ReceptionCa
         other.snir = nullptr;
         other.receptionDecisions.clear();
         other.receptionResult = nullptr;
+        other.retiredInterferences.clear();
+        other.retiredNoises.clear();
+        other.retiredSnirs.clear();
+        other.retiredReceptionDecisions.clear();
+        other.retiredReceptionResults.clear();
     }
     return *this;
 }
@@ -199,6 +255,16 @@ CommunicationCacheBase::ReceptionCacheEntry::~ReceptionCacheEntry()
     for (auto receptionDecision : receptionDecisions)
         delete receptionDecision;
     delete receptionResult;
+    for (auto value : retiredInterferences)
+        delete value;
+    for (auto value : retiredNoises)
+        delete value;
+    for (auto value : retiredSnirs)
+        delete value;
+    for (auto value : retiredReceptionDecisions)
+        delete value;
+    for (auto value : retiredReceptionResults)
+        delete value;
 }
 
 CommunicationCacheBase::TransmissionCacheEntry::TransmissionCacheEntry(const TransmissionCacheEntry& other) :
@@ -479,6 +545,49 @@ void CommunicationCacheBase::removeCachedSNIR(const IRadio *receiver, const ITra
         cacheEntry->snir = nullptr;
 }
 
+uint64_t CommunicationCacheBase::getInterferenceRevision(const IRadio *receiver,
+    const ITransmission *transmission)
+{
+    ReceptionCacheEntry *cacheEntry = getReceptionCacheEntry(receiver, transmission);
+    if (cacheEntry == nullptr)
+        throw cRuntimeError("Cache entry not found");
+    return cacheEntry->interferenceRevision;
+}
+
+void CommunicationCacheBase::advanceInterferenceRevision(const IRadio *receiver,
+    const ITransmission *transmission)
+{
+    ReceptionCacheEntry *cacheEntry = getReceptionCacheEntry(receiver, transmission);
+    if (cacheEntry == nullptr)
+        throw cRuntimeError("Cache entry not found");
+    if (cacheEntry->interferenceRevision == std::numeric_limits<uint64_t>::max())
+        throw cRuntimeError("Interference revision overflow for receiver %d transmission %d",
+            receiver->getId(), transmission->getId());
+    cacheEntry->interferenceRevision++;
+    if (cacheEntry->interference != nullptr) {
+        cacheEntry->retiredInterferences.push_back(cacheEntry->interference);
+        cacheEntry->interference = nullptr;
+    }
+    if (cacheEntry->noise != nullptr) {
+        cacheEntry->retiredNoises.push_back(cacheEntry->noise);
+        cacheEntry->noise = nullptr;
+    }
+    if (cacheEntry->snir != nullptr) {
+        cacheEntry->retiredSnirs.push_back(cacheEntry->snir);
+        cacheEntry->snir = nullptr;
+    }
+    for (auto& decision : cacheEntry->receptionDecisions) {
+        if (decision != nullptr) {
+            cacheEntry->retiredReceptionDecisions.push_back(decision);
+            decision = nullptr;
+        }
+    }
+    if (cacheEntry->receptionResult != nullptr) {
+        cacheEntry->retiredReceptionResults.push_back(cacheEntry->receptionResult);
+        cacheEntry->receptionResult = nullptr;
+    }
+}
+
 const IReceptionDecision *CommunicationCacheBase::getCachedReceptionDecision(const IRadio *receiver, const ITransmission *transmission, IRadioSignal::SignalPart part)
 {
     ASSERT(part != IRadioSignal::SIGNAL_PART_NONE);
@@ -555,4 +664,3 @@ void CommunicationCacheBase::removeCachedSignal(const IRadio *receiver, const IT
 } // namespace physicallayer
 
 } // namespace inet
-

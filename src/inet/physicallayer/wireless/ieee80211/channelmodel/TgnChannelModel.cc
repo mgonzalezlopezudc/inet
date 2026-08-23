@@ -221,22 +221,21 @@ void TgnChannelModel::validateMode(const ITransmission *transmission) const
         throw cRuntimeError("TgnChannelModel requires a dimensional narrowband transmission analog representation");
     const IIeee80211Mode *mode = ieeeTransmission->getMode();
     const int numberOfSpatialStreams = mode->getDataMode()->getNumberOfSpatialStreams();
-    if (numberOfSpatialStreams != 1)
-        throw cRuntimeError("TgnChannelModel supports exactly one spatial stream, mode %s has %d", mode->getName(), numberOfSpatialStreams);
     if (const auto htMode = dynamic_cast<const Ieee80211HtMode *>(mode)) {
         const Hz bandwidth = htMode->getDataMode()->getBandwidth();
         if (bandwidth != MHz(20) && bandwidth != MHz(40))
             throw cRuntimeError("TgnChannelModel supports only HT20/HT40, mode %s uses %s", mode->getName(), bandwidth.str().c_str());
-        const unsigned int stbc = htMode->getHeaderMode()->getSTBC();
-        if (stbc != 0)
-            throw cRuntimeError("TgnChannelModel does not support HT STBC, mode %s has STBC=%u", mode->getName(), stbc);
-        if (numberOfSpatialStreams + (int)stbc != 1)
-            throw cRuntimeError("TgnChannelModel supports exactly one space-time stream, mode %s has %d", mode->getName(), numberOfSpatialStreams + (int)stbc);
+        const auto& plan = ieeeTransmission->getSpatialTransmissionPlan();
+        if (!plan)
+            throw cRuntimeError("TGn HT transmission requires an immutable spatial plan");
     }
     else if (dynamic_cast<const Ieee80211DsssMode *>(mode) == nullptr &&
              dynamic_cast<const Ieee80211HrDsssMode *>(mode) == nullptr &&
              dynamic_cast<const Ieee80211OfdmMode *>(mode) == nullptr)
         throw cRuntimeError("TgnChannelModel does not support IEEE 802.11 PPDU mode %s", mode->getName());
+    else if (numberOfSpatialStreams != 1)
+        throw cRuntimeError("TGn legacy PPDU support requires exactly one spatial stream, mode %s has %d",
+            mode->getName(), numberOfSpatialStreams);
 }
 
 std::shared_ptr<const TgnChannelRealization> TgnChannelModel::createLinkState(const LinkKey& key,

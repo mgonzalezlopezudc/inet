@@ -9,8 +9,8 @@ import inet.physicallayer.wireless.ieee80211.pathloss.TgnIndoorPathLoss;
 
 //
 // Opt-in dimensional IEEE 802.11 medium with a time-varying TGn A-F MIMO
-// channel. The current receiver consumes one selected transmit column with
-// ideal MRC while snapshots retain the complete Rx-by-Tx matrix.
+// channel. Transmitters attach their spatial plans and receivers select a
+// configured combining or spatial-stream-detection strategy.
 //
 module Ieee80211TgnRadioMedium extends Ieee80211DimensionalRadioMedium
 {
@@ -25,7 +25,6 @@ module Ieee80211TgnRadioMedium extends Ieee80211DimensionalRadioMedium
         double environmentalSpeed @unit(mps) = default(0.333333333333mps);
         double vehicleSpeed @unit(mps) = default(11.111111111111mps);
         double antennaSpacing = default(0.5);
-        int selectedTransmitAntenna = default(0);
         int oscillatorCount = default(256);
         double referenceDistance @unit(m) = default(1m);
         int linkSeedRng = default(0);
@@ -53,7 +52,6 @@ module Ieee80211TgnRadioMedium extends Ieee80211DimensionalRadioMedium
         channelModel.diffuseRng = this.diffuseRng;
         channelModel.fluorescentRng = this.fluorescentRng;
 
-        analogModel.selectedTransmitAntenna = this.selectedTransmitAntenna;
         pathLoss.profile = this.profile;
         pathLoss.referenceDistance = this.referenceDistance;
 }

@@ -29,6 +29,11 @@ class INET_API ReceiverBase : public Module, public virtual IReceiver
 
     virtual W computeSignalPower(const IListening *listening, const ISnir *snir, const IInterference *interference) const;
 
+    /** Performs only receiver arbitration after the caller has established feasibility. */
+    virtual bool computeIsReceptionAttemptedAfterPossibility(const IListening *listening,
+        const IReception *reception, IRadioSignal::SignalPart part,
+        const IInterference *interference) const;
+
     virtual Packet *computeReceivedPacket(const ISnir *snir, bool isReceptionSuccessful) const;
 
   public:
@@ -55,4 +60,3 @@ class INET_API ReceiverBase : public Module, public virtual IReceiver
 } // namespace inet
 
 #endif
-

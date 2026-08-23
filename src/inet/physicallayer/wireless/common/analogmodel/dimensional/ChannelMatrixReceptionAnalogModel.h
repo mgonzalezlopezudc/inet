@@ -6,6 +6,7 @@
 #define __INET_CHANNELMATRIXRECEPTIONANALOGMODEL_H
 
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalReceptionAnalogModel.h"
+#include "inet/physicallayer/wireless/common/analogmodel/common/SpatialTransmissionPlan.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IChannelMatrixSnapshot.h"
 
 namespace inet {
@@ -15,22 +16,21 @@ class INET_API ChannelMatrixReceptionAnalogModel : public DimensionalReceptionAn
 {
   protected:
     std::shared_ptr<const IChannelMatrixSnapshot> snapshot;
-    int selectedTransmitAntenna;
+    std::shared_ptr<const SpatialTransmissionPlan> spatialTransmissionPlan;
     Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> deterministicLargeScalePower;
-    Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> ccaPower;
 
   public:
     ChannelMatrixReceptionAnalogModel(simtime_t preambleDuration, simtime_t headerDuration, simtime_t dataDuration,
         Hz centerFrequency, Hz bandwidth, const std::shared_ptr<const IChannelMatrixSnapshot>& snapshot,
-        int selectedTransmitAntenna,
+        const std::shared_ptr<const SpatialTransmissionPlan>& spatialTransmissionPlan,
         const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& deterministicLargeScalePower,
-        const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& decodedPower,
-        const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& ccaPower);
+        const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& physicalPower);
 
     const std::shared_ptr<const IChannelMatrixSnapshot>& getSnapshot() const { return snapshot; }
-    int getSelectedTransmitAntenna() const { return selectedTransmitAntenna; }
+    const std::shared_ptr<const SpatialTransmissionPlan>& getSpatialTransmissionPlan() const { return spatialTransmissionPlan; }
     const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& getDeterministicLargeScalePower() const { return deterministicLargeScalePower; }
-    const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& getCcaPower() const { return ccaPower; }
+    /** CCA uses the same aggregate physical power until spatial SNIR exists. */
+    const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& getCcaPower() const { return getPower(); }
 };
 
 } // namespace physicallayer

@@ -8,6 +8,7 @@
 #include "inet/physicallayer/wireless/common/base/packetlevel/ErrorModelBase.h"
 
 #include "inet/common/ProtocolTag_m.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ISpatialSnir.h"
 
 namespace inet {
 
@@ -45,6 +46,21 @@ double ErrorModelBase::getScalarSnir(const ISnir *snir) const
         scalarSnir = snir->getMin();
     else if (snirMode == SnirMode::SM_MEAN)
         scalarSnir = snir->getMean();
+    else
+        throw cRuntimeError("Unknown SNIR mode");
+    return scalarSnir * snirOffset;
+}
+
+double ErrorModelBase::getScalarSnir(const ISnir *snir, IRadioSignal::SignalPart part) const
+{
+    const auto spatialSnir = dynamic_cast<const ISpatialSnir *>(snir);
+    if (spatialSnir == nullptr)
+        return getScalarSnir(snir);
+    double scalarSnir;
+    if (snirMode == SnirMode::SM_MIN)
+        scalarSnir = spatialSnir->getMinimum(part);
+    else if (snirMode == SnirMode::SM_MEAN)
+        scalarSnir = spatialSnir->getMean(part);
     else
         throw cRuntimeError("Unknown SNIR mode");
     return scalarSnir * snirOffset;
@@ -151,4 +167,3 @@ Packet *ErrorModelBase::computeCorruptedPacket(const ISnir *snir) const
 } // namespace physicallayer
 
 } // namespace inet
-

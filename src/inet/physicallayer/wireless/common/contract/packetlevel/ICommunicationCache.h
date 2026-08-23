@@ -92,6 +92,11 @@ class INET_API ICommunicationCache : public virtual IPrintableObject
     virtual void setCachedSNIR(const IRadio *receiver, const ITransmission *transmission, const ISnir *snir) = 0;
     virtual void removeCachedSNIR(const IRadio *receiver, const ITransmission *transmission) = 0;
 
+    /** Monotonic version of the derived interference/noise/SNIR result set. */
+    virtual uint64_t getInterferenceRevision(const IRadio *receiver, const ITransmission *transmission) = 0;
+    /** Retires the current immutable derived result set and advances its version. */
+    virtual void advanceInterferenceRevision(const IRadio *receiver, const ITransmission *transmission) = 0;
+
     virtual const IReceptionDecision *getCachedReceptionDecision(const IRadio *receiver, const ITransmission *transmission, IRadioSignal::SignalPart part) = 0;
     virtual void setCachedReceptionDecision(const IRadio *receiver, const ITransmission *transmission, IRadioSignal::SignalPart part, const IReceptionDecision *receptionDecision) = 0;
     virtual void removeCachedReceptionDecision(const IRadio *receiver, const ITransmission *transmission, IRadioSignal::SignalPart part) = 0;
@@ -110,4 +115,3 @@ class INET_API ICommunicationCache : public virtual IPrintableObject
 } // namespace inet
 
 #endif
-

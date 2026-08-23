@@ -1,0 +1,169 @@
+%description:
+
+Checks immutable resource-cell results, minimum-stream scalar mapping, weighted
+summaries, half-open boundary lookup, and typed unsupported layouts.
+
+%includes:
+#include <cmath>
+#include <algorithm>
+#include <complex>
+#include <functional>
+#include <vector>
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/receiver/ChannelMatrixDetectionResult.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/receiver/ChannelMatrixResourceGrid.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/receiver/MaterializedSpatialReception.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+static void require(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("Materialized spatial reception test failed: %s", message);
+}
+
+static void requireNear(double actual, double expected, const char *message)
+{
+    if (std::abs(actual - expected) > 1e-12 * std::max(1.0, std::abs(expected)))
+        throw cRuntimeError("Materialized spatial reception test failed: %s (actual %.17g expected %.17g)",
+            message, actual, expected);
+}
+
+static bool throws(const std::function<void()>& function)
+{
+    try {
+        function();
+        return false;
+    }
+    catch (const cRuntimeError&) {
+        return true;
+    }
+}
+
+static ChannelMatrixDetectionResult result(ChannelMatrixDetectionStatus status,
+    const std::vector<double>& sinrs, const std::vector<double>& desiredPsds = {})
+{
+    const int streams = sinrs.size();
+    ComplexMatrix weights(streams, 2);
+    for (int stream = 0; stream < streams; stream++)
+        weights.get(stream, stream % 2) = 1;
+    std::vector<WpHz> desired(streams, WpHz(1));
+    if (!desiredPsds.empty()) {
+        require((int)desiredPsds.size() == streams, "desired PSD fixture stream count");
+        for (int stream = 0; stream < streams; stream++)
+            desired[stream] = WpHz(desiredPsds[stream]);
+    }
+    std::vector<WpHz> residual(streams, WpHz(0));
+    std::vector<WpHz> projected(streams, WpHz(1));
+    return ChannelMatrixDetectionResult::fromPhysicalOutputs(status, {0, 1}, weights,
+        desired, residual, projected, sinrs);
+}
+
+%activity:
+ChannelMatrixResourceGrid::Cell first(SIMTIME_ZERO, SimTime(1, SIMTIME_US),
+    Hz(5e9), Hz(5.01e9), IRadioSignal::SIGNAL_PART_DATA);
+ChannelMatrixResourceGrid::Cell second(SimTime(1, SIMTIME_US), SimTime(3, SIMTIME_US),
+    Hz(5e9), Hz(5.01e9), IRadioSignal::SIGNAL_PART_DATA);
+ChannelMatrixResourceGrid grid({first, second}, 2);
+require(grid.getCells().size() == 2, "resource grid retains ordered cells");
+require(grid.findCell(SimTime(0.5, SIMTIME_US), Hz(5.005e9)) == &grid.getCells()[0],
+    "first half-open cell lookup");
+require(grid.findCell(SimTime(1, SIMTIME_US), Hz(5.005e9)) == &grid.getCells()[1],
+    "exact time boundary selects the right cell");
+require(grid.findCell(SimTime(3, SIMTIME_US), Hz(5.005e9)) == nullptr,
+    "upper time boundary is outside");
+require(grid.findCell(SimTime(1, SIMTIME_US), Hz(5.01e9)) == nullptr,
+    "upper frequency boundary is outside");
+
+MaterializedSpatialReception materialized({
+    MaterializedSpatialReception::Cell(first, result(ChannelMatrixDetectionStatus::SUCCESS, {2, 5})),
+    MaterializedSpatialReception::Cell(second, result(ChannelMatrixDetectionStatus::SUCCESS, {4, 1}))});
+require(materialized.getCells()[0].getDetectionResult().getSinrs() == std::vector<double>({2, 5}),
+    "per-stream SINRs are preserved");
+requireNear(materialized.getCells()[0].getScalarSinr(), 2, "first cell minimum-stream mapping");
+requireNear(materialized.getCells()[1].getScalarSinr(), 1, "second cell minimum-stream mapping");
+requireNear(materialized.getMinimumSinr(), 1, "global scalar minimum");
+requireNear(materialized.getMaximumSinr(), 2, "global scalar maximum");
+requireNear(materialized.getMeanSinr(), 4.0 / 3, "time-frequency weighted scalar mean");
+require(materialized.findCell(SimTime(1, SIMTIME_US), Hz(5.005e9)) == &materialized.getCells()[1],
+    "materialized boundary lookup is half-open");
+
+const auto unsupported = result(ChannelMatrixDetectionStatus::UNSUPPORTED_LAYOUT, {0, 0});
+MaterializedSpatialReception unsupportedMaterialized({
+    MaterializedSpatialReception::Cell(first, unsupported)});
+require(unsupportedMaterialized.getCells()[0].getDetectionResult().getStatus() ==
+    ChannelMatrixDetectionStatus::UNSUPPORTED_LAYOUT, "unsupported layout status is retained");
+requireNear(unsupportedMaterialized.getMinimumSinr(), 0, "unsupported layout maps to finite zero");
+require(!unsupportedMaterialized.allRequiredOutputPowersMeet(IRadioSignal::SIGNAL_PART_DATA, W(0)),
+    "typed detector failure never passes decoded sensitivity");
+
+ChannelMatrixResourceGrid::Cell preamble(SIMTIME_ZERO, SimTime(1, SIMTIME_US),
+    Hz(5e9), Hz(5.01e9), IRadioSignal::SIGNAL_PART_PREAMBLE);
+ChannelMatrixResourceGrid::Cell dataLower(SimTime(1, SIMTIME_US), SimTime(2, SIMTIME_US),
+    Hz(5e9), Hz(5.005e9), IRadioSignal::SIGNAL_PART_DATA);
+ChannelMatrixResourceGrid::Cell dataUpper(SimTime(1, SIMTIME_US), SimTime(2, SIMTIME_US),
+    Hz(5.005e9), Hz(5.01e9), IRadioSignal::SIGNAL_PART_DATA);
+MaterializedSpatialReception sensitivityMaterialized({
+    MaterializedSpatialReception::Cell(preamble,
+        result(ChannelMatrixDetectionStatus::SUCCESS, {7}, {1e-8})),
+    MaterializedSpatialReception::Cell(dataLower,
+        result(ChannelMatrixDetectionStatus::SUCCESS, {2, 4}, {2e-8, 1e-8})),
+    MaterializedSpatialReception::Cell(dataUpper,
+        result(ChannelMatrixDetectionStatus::SUCCESS, {1, 3}, {2e-8, 1e-8}))});
+requireNear(sensitivityMaterialized.getMinimumSinr(IRadioSignal::SIGNAL_PART_PREAMBLE), 7,
+    "part-specific preamble minimum");
+requireNear(sensitivityMaterialized.getMinimumSinr(IRadioSignal::SIGNAL_PART_DATA), 1,
+    "part-specific data minimum");
+requireNear(sensitivityMaterialized.getMeanSinr(IRadioSignal::SIGNAL_PART_DATA), 1.5,
+    "part-specific data weighted mean");
+require(sensitivityMaterialized.allRequiredOutputPowersMeet(
+    IRadioSignal::SIGNAL_PART_PREAMBLE, W(0.09)),
+    "aggregate preamble output passes decoded sensitivity");
+require(sensitivityMaterialized.allRequiredOutputPowersMeet(
+    IRadioSignal::SIGNAL_PART_DATA, W(0.09)),
+    "every data stream passes decoded sensitivity after frequency integration");
+require(!sensitivityMaterialized.allRequiredOutputPowersMeet(
+    IRadioSignal::SIGNAL_PART_DATA, W(0.15)),
+    "weakest data stream controls decoded sensitivity");
+require(!sensitivityMaterialized.allRequiredOutputPowersMeet(
+    IRadioSignal::SIGNAL_PART_WHOLE, W(0.15)),
+    "whole-reception sensitivity checks every part and stream");
+
+// The dimensional IEEE 802.11 transmitter exposes a flat PSD normalized over
+// the full 20 MHz channel. The technology grid scales that PSD onto the 52
+// occupied HT20 data tones, so a unity SISO channel must still integrate to the
+// original 1 W aggregate power at final decoded sensitivity.
+std::vector<MaterializedSpatialReception::Cell> normalizedHt20Cells;
+std::vector<MaterializedSpatialReception::Cell> unnormalizedHt20Cells;
+const Hz ht20Bandwidth = MHz(20);
+const Hz ht20ToneBandwidth = kHz(312.5);
+const double fullBandPsd = 1.0 / ht20Bandwidth.get();
+const double activeToneScale = ht20Bandwidth.get() /
+    (52 * ht20ToneBandwidth.get());
+for (int tone = 0; tone < 52; tone++) {
+    ChannelMatrixResourceGrid::Cell resource(SIMTIME_ZERO, SimTime(4, SIMTIME_US),
+        kHz(312.5) * tone, kHz(312.5) * (tone + 1), IRadioSignal::SIGNAL_PART_DATA,
+        activeToneScale);
+    normalizedHt20Cells.emplace_back(resource,
+        result(ChannelMatrixDetectionStatus::SUCCESS, {100}, {fullBandPsd * activeToneScale}));
+    unnormalizedHt20Cells.emplace_back(resource,
+        result(ChannelMatrixDetectionStatus::SUCCESS, {100}, {fullBandPsd}));
+}
+MaterializedSpatialReception normalizedHt20(normalizedHt20Cells);
+MaterializedSpatialReception unnormalizedHt20(unnormalizedHt20Cells);
+require(normalizedHt20.allRequiredOutputPowersMeet(IRadioSignal::SIGNAL_PART_DATA, W(0.9)),
+    "active-tone normalization keeps unity SISO decoded power above a 0.9 W sensitivity");
+require(!unnormalizedHt20.allRequiredOutputPowersMeet(IRadioSignal::SIGNAL_PART_DATA, W(0.9)),
+    "the forbidden unnormalized active-tone integration undercounts aggregate power");
+
+require(throws([&] { ChannelMatrixResourceGrid({first, second}, 1); }),
+    "resource cell limit is enforced before publication");
+require(throws([&] { ChannelMatrixResourceGrid({second, first}, 2); }),
+    "out-of-order resource cells are rejected");
+
+std::cout << "PASS\n";
+
+%contains: stdout
+PASS

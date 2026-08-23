@@ -8,6 +8,7 @@
 #include "inet/physicallayer/wireless/common/base/packetlevel/SnirReceiverBase.h"
 
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadioMedium.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ISpatialSnir.h"
 #include "inet/physicallayer/wireless/common/radio/packetlevel/ReceptionDecision.h"
 
 namespace inet {
@@ -38,13 +39,14 @@ std::ostream& SnirReceiverBase::printToStream(std::ostream& stream, int level, i
 
 bool SnirReceiverBase::computeIsReceptionSuccessful(const IListening *listening, const IReception *reception, IRadioSignal::SignalPart part, const IInterference *interference, const ISnir *snir) const
 {
+    const auto spatialSnir = dynamic_cast<const ISpatialSnir *>(snir);
     if (snirThresholdMode == SnirThresholdMode::STM_MIN) {
-        double minSnir = snir->getMin();
+        double minSnir = spatialSnir == nullptr ? snir->getMin() : spatialSnir->getMinimum(part);
         ASSERT(0.0 <= minSnir);
         return minSnir > snirThreshold;
     }
     else if (snirThresholdMode == SnirThresholdMode::STM_MEAN) {
-        double meanSnir = snir->getMean();
+        double meanSnir = spatialSnir == nullptr ? snir->getMean() : spatialSnir->getMean(part);
         ASSERT(0.0 <= meanSnir);
         return meanSnir > snirThreshold;
     }
@@ -55,4 +57,3 @@ bool SnirReceiverBase::computeIsReceptionSuccessful(const IListening *listening,
 } // namespace physicallayer
 
 } // namespace inet
-

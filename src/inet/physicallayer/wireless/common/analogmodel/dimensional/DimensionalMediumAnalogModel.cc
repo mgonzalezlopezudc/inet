@@ -10,14 +10,17 @@
 #include <algorithm>
 #include <cmath>
 
-#include "inet/physicallayer/wireless/common/analogmodel/dimensional/ChannelMatrixCombiner.h"
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/ChannelMatrixNoise.h"
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/ChannelMatrixReceptionAnalogModel.h"
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/ChannelMatrixSnir.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/receiver/ChannelMatrixPhysicalPowerMaterializer.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/receiver/ChannelMatrixReceptionMaterializer.h"
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalNoise.h"
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalReceptionAnalogModel.h"
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalSnir.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadioMedium.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IChannelMatrixReceiver.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ISpatialTransmission.h"
 #include "inet/physicallayer/wireless/common/radio/packetlevel/BandListening.h"
 #include "inet/physicallayer/wireless/common/radio/packetlevel/Reception.h"
 #include "inet/physicallayer/wireless/common/signal/PowerFunctions.h"
@@ -30,32 +33,35 @@ Define_Module(DimensionalMediumAnalogModel);
 
 namespace {
 
-class SelectedColumnGainFunction : public FunctionBase<double, Domain<simsec, Hz>>
-{
-  protected:
-    std::shared_ptr<const IChannelMatrixSnapshot> snapshot;
-    int selectedTransmitAntenna;
-
-  public:
-    SelectedColumnGainFunction(const std::shared_ptr<const IChannelMatrixSnapshot>& snapshot, int selectedTransmitAntenna) :
-        snapshot(snapshot), selectedTransmitAntenna(selectedTransmitAntenna) {}
-
-    virtual double getValue(const Point<simsec, Hz>& point) const override
-    {
-        return ChannelMatrixCombiner::computeSelectedColumnGain(*snapshot, selectedTransmitAntenna,
-            std::get<0>(point).get(), std::get<1>(point));
-    }
-
-    virtual bool isFinite(const Interval<simsec, Hz>& interval) const override { return true; }
-    virtual void printStructure(std::ostream& stream, int level = 0) const override
-    {
-        stream << "(SelectedColumnMrcGain" << EV_FIELD(selectedTransmitAntenna) << ")";
-    }
-};
-
 Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> createZeroPowerFunction()
 {
     return makeShared<ConstantFunction<WpHz, Domain<simsec, Hz>>>(WpHz(0));
+}
+
+std::shared_ptr<const SpatialTransmissionPlan> getSpatialTransmissionPlan(
+    const ITransmission *transmission, const std::shared_ptr<const IChannelMatrixSnapshot>& snapshot,
+    int selectedTransmitAntenna, simtime_t duration)
+{
+    if (const auto spatialTransmission = dynamic_cast<const ISpatialTransmission *>(transmission)) {
+        const auto& plan = spatialTransmission->getSpatialTransmissionPlan();
+        if (plan) {
+            if (plan->getNumberOfTransmitAntennas() != snapshot->getNumTransmitAntennas())
+                throw cRuntimeError("Attached spatial plan has %d transmit antennas instead of channel snapshot dimension %d",
+                    plan->getNumberOfTransmitAntennas(), snapshot->getNumTransmitAntennas());
+            plan->validateCompleteCoverage(duration);
+            return plan;
+        }
+    }
+    if (selectedTransmitAntenna < 0 || selectedTransmitAntenna >= snapshot->getNumTransmitAntennas())
+        throw cRuntimeError("Selected transmit antenna %d is outside a %d-column channel snapshot",
+            selectedTransmitAntenna, snapshot->getNumTransmitAntennas());
+    ComplexMatrix mapping(snapshot->getNumTransmitAntennas(), 1);
+    mapping.get(selectedTransmitAntenna, 0) = 1;
+    SpatialTransmissionPlan::Segment segment(0, duration, 1, 1, mapping, {1.0});
+    auto plan = std::make_shared<const SpatialTransmissionPlan>(snapshot->getNumTransmitAntennas(),
+        std::vector<SpatialTransmissionPlan::Segment>{segment});
+    plan->validateCompleteCoverage(duration);
+    return plan;
 }
 
 } // namespace
@@ -113,60 +119,24 @@ const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> DimensionalMediumAnalogMode
     return receptionPower;
 }
 
-const Ptr<const IFunction<double, Domain<simsec, Hz>>> DimensionalMediumAnalogModel::materializeSelectedColumnGain(
-    const ITransmission *transmission, const IArrival *arrival,
-    const std::shared_ptr<const IChannelMatrixSnapshot>& snapshot) const
-{
-    const auto analogModel = check_and_cast<const DimensionalSignalAnalogModel *>(transmission->getAnalogModel());
-    if (selectedTransmitAntenna >= snapshot->getNumTransmitAntennas())
-        throw cRuntimeError("Selected transmit antenna %d is outside transmitter channel dimension %d",
-            selectedTransmitAntenna, snapshot->getNumTransmitAntennas());
-    const double durationSeconds = (arrival->getEndTime() - arrival->getStartTime()).dbl();
-    const double bandwidthHz = analogModel->getBandwidth().get();
-    if (!(durationSeconds > 0) || !(bandwidthHz > 0))
-        throw cRuntimeError("Cannot materialize channel-matrix power over a nonpositive reception duration or bandwidth");
-
-    const double maximumTemporalFrequencyHz = snapshot->getActualMaximumTemporalFrequency().get();
-    const int timeIntervals = std::max(1, (int)std::ceil(durationSeconds * 20 * maximumTemporalFrequencyHz));
-    // Model A takes two frequency intervals so band edges and center are exact nodes.
-    const double maximumDelaySeconds = snapshot->getMaximumExcessDelay().dbl();
-    const int frequencyIntervals = maximumDelaySeconds == 0 ? 2 :
-        std::max(2, (int)std::ceil(bandwidthHz * 20 * maximumDelaySeconds));
-    const simsec lowerTime(arrival->getStartTime());
-    const simsec upperTime(arrival->getEndTime());
-    const simsec timeStep((arrival->getEndTime() - arrival->getStartTime()) / timeIntervals);
-    const Hz lowerFrequency = analogModel->getCenterFrequency() - analogModel->getBandwidth() / 2;
-    const Hz upperFrequency = analogModel->getCenterFrequency() + analogModel->getBandwidth() / 2;
-    const Hz frequencyStep = analogModel->getBandwidth() / frequencyIntervals;
-
-    Ptr<const IFunction<double, Domain<simsec, Hz>>> exact =
-        makeShared<SelectedColumnGainFunction>(snapshot, selectedTransmitAntenna);
-    Ptr<const IFunction<double, Domain<simsec, Hz>>> timeApproximated =
-        makeShared<ApproximatedFunction<double, Domain<simsec, Hz>, 0, simsec>>(
-            lowerTime, upperTime, timeStep, &LinearInterpolator<simsec, double>::singleton, exact);
-    return makeShared<ApproximatedFunction<double, Domain<simsec, Hz>, 1, Hz>>(
-        lowerFrequency, upperFrequency, frequencyStep, &LinearInterpolator<Hz, double>::singleton, timeApproximated);
-}
-
-const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> DimensionalMediumAnalogModel::computePostCombinerNoisePower(
+const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> DimensionalMediumAnalogModel::computeCompatibilityNoisePower(
     const IReception *reception, const ChannelMatrixNoise *noise) const
 {
     const auto desired = check_and_cast<const ChannelMatrixReceptionAnalogModel *>(reception->getAnalogModel());
     std::vector<Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>> powers;
-    powers.push_back(noise->getPostCombinerBackgroundPower());
-    for (const IReception *interferingReception : noise->getInterferingMatrixReceptions()) {
-        const auto interfering = check_and_cast<const ChannelMatrixReceptionAnalogModel *>(interferingReception->getAnalogModel());
-        const bool overlapsTime = interferingReception->getEndTime() > reception->getStartTime() &&
-            interferingReception->getStartTime() < reception->getEndTime();
-        const bool overlapsFrequency = interfering->getCenterFrequency() + interfering->getBandwidth() / 2 >
+    powers.push_back(noise->getCompatibilityBackgroundPower());
+    for (const auto& interfering : noise->getInterferers()) {
+        const bool overlapsTime = interfering.endTime > reception->getStartTime() &&
+            interfering.startTime < reception->getEndTime();
+        const bool overlapsFrequency = interfering.centerFrequency + interfering.bandwidth / 2 >
                 desired->getCenterFrequency() - desired->getBandwidth() / 2 &&
-            interfering->getCenterFrequency() - interfering->getBandwidth() / 2 <
+            interfering.centerFrequency - interfering.bandwidth / 2 <
                 desired->getCenterFrequency() + desired->getBandwidth() / 2;
         if (!overlapsTime || !overlapsFrequency)
             continue;
         if (desired->getSnapshot()->getNumReceiveAntennas() > 1)
-            throw cRuntimeError("Selected-column MRC with overlapping matrix interference is unsupported; covariance-aware projection is required");
-        powers.push_back(interfering->getPower());
+            throw cRuntimeError("Overlapping matrix interference remains unsupported until a covariance-aware receiver strategy is attached");
+        powers.push_back(interfering.physicalAggregatePower);
     }
     return makeShared<SummedFunction<WpHz, Domain<simsec, Hz>>>(powers);
 }
@@ -186,15 +156,24 @@ const INoise *DimensionalMediumAnalogModel::computeNoise(const IListening *liste
             background = dimensionalBackgroundNoise->getPower();
         background = background->multiply(bandpassFilter);
         std::vector<Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>> ccaPowers = {background};
-        std::vector<const IReception *> matrixReceptions;
+        std::vector<ChannelMatrixNoise::Interferer> interferers;
+        const auto matrixReceiver = dynamic_cast<const IChannelMatrixReceiver *>(
+            listening->getReceiverRadio()->getReceiver());
         for (const IReception *interferingReception : *interference->getInterferingReceptions()) {
             const auto matrixSignal = check_and_cast<const ChannelMatrixReceptionAnalogModel *>(interferingReception->getAnalogModel());
             ccaPowers.push_back(matrixSignal->getCcaPower()->multiply(bandpassFilter));
-            matrixReceptions.push_back(interferingReception);
+            const auto resourceCells = matrixReceiver == nullptr ?
+                std::vector<ChannelMatrixResourceCell>{} :
+                matrixReceiver->getChannelMatrixResourceCells(*interferingReception);
+            interferers.emplace_back(interferingReception->getTransmission()->getId(),
+                interferingReception->getStartTime(), interferingReception->getEndTime(),
+                matrixSignal->getCenterFrequency(), matrixSignal->getBandwidth(),
+                matrixSignal->getSnapshot(), matrixSignal->getSpatialTransmissionPlan(),
+                matrixSignal->getDeterministicLargeScalePower(), matrixSignal->getPower(), resourceCells);
         }
         const auto ccaAggregate = makeShared<SummedFunction<WpHz, Domain<simsec, Hz>>>(ccaPowers);
         return new ChannelMatrixNoise(listening->getStartTime(), listening->getEndTime(), centerFrequency, bandwidth,
-            ccaAggregate, background, background, matrixReceptions);
+            ccaAggregate, background, background, interferers);
     }
     const BandListening *bandListening = check_and_cast<const BandListening *>(listening);
     Hz centerFrequency = bandListening->getCenterFrequency();
@@ -227,8 +206,12 @@ const INoise *DimensionalMediumAnalogModel::computeNoise(const IReception *recep
     if (reception->getReceiverRadio()->getMedium()->getChannelModel() != nullptr) {
         const auto desired = check_and_cast<const ChannelMatrixReceptionAnalogModel *>(reception->getAnalogModel());
         const auto matrixNoise = check_and_cast<const ChannelMatrixNoise *>(noise);
-        const auto postCombinerNoise = computePostCombinerNoisePower(reception, matrixNoise);
-        const auto signalPlusNoise = makeShared<AddedFunction<WpHz, Domain<simsec, Hz>>>(desired->getPower(), postCombinerNoise);
+        const auto matrixReceiver = dynamic_cast<const IChannelMatrixReceiver *>(
+            reception->getReceiverRadio()->getReceiver());
+        const auto compatibilityNoise = matrixReceiver != nullptr &&
+            matrixReceiver->getChannelMatrixReceptionProcessor() != nullptr ?
+            matrixNoise->getPower() : computeCompatibilityNoisePower(reception, matrixNoise);
+        const auto signalPlusNoise = makeShared<AddedFunction<WpHz, Domain<simsec, Hz>>>(desired->getPower(), compatibilityNoise);
         return new DimensionalNoise(reception->getStartTime(), reception->getEndTime(),
             desired->getCenterFrequency(), desired->getBandwidth(), signalPlusNoise);
     }
@@ -242,7 +225,14 @@ const ISnir *DimensionalMediumAnalogModel::computeSNIR(const IReception *recepti
 {
     if (reception->getReceiverRadio()->getMedium()->getChannelModel() != nullptr) {
         const auto matrixNoise = check_and_cast<const ChannelMatrixNoise *>(noise);
-        return new ChannelMatrixSnir(reception, matrixNoise, computePostCombinerNoisePower(reception, matrixNoise));
+        const auto matrixReceiver = dynamic_cast<const IChannelMatrixReceiver *>(
+            reception->getReceiverRadio()->getReceiver());
+        if (matrixReceiver != nullptr && matrixReceiver->getChannelMatrixReceptionProcessor() != nullptr) {
+            const auto materialized = ChannelMatrixReceptionMaterializer::materialize(*reception,
+                *matrixNoise, *matrixReceiver);
+            return new ChannelMatrixSnir(reception, matrixNoise, materialized);
+        }
+        return new ChannelMatrixSnir(reception, matrixNoise, computeCompatibilityNoisePower(reception, matrixNoise));
     }
     return new DimensionalSnir(reception, noise);
 }
@@ -258,14 +248,16 @@ const IReception *DimensionalMediumAnalogModel::computeReception(const IRadio *r
                 snapshot->getNumReceiveAntennas(), snapshot->getNumTransmitAntennas(),
                 receiverRadio->getAntenna()->getNumAntennas(), transmission->getTransmitterRadio()->getAntenna()->getNumAntennas());
         const auto deterministicPower = computeReceptionPower(receiverRadio, transmission, arrival);
-        const auto channelGain = materializeSelectedColumnGain(transmission, arrival, snapshot);
-        const auto decodedPower = deterministicPower->multiply(channelGain);
-        const auto ccaPower = decodedPower;
+        const auto spatialTransmissionPlan = getSpatialTransmissionPlan(transmission, snapshot,
+            selectedTransmitAntenna, arrival->getEndTime() - arrival->getStartTime());
+        const auto physicalPower = ChannelMatrixPhysicalPowerMaterializer::materialize(snapshot,
+            spatialTransmissionPlan, arrival->getStartTime(), arrival->getEndTime(),
+            transmissionAnalogModel->getCenterFrequency(), transmissionAnalogModel->getBandwidth(), deterministicPower);
         auto receptionAnalogModel = new ChannelMatrixReceptionAnalogModel(
             transmissionAnalogModel->getPreambleDuration(), transmissionAnalogModel->getHeaderDuration(),
             transmissionAnalogModel->getDataDuration(), transmissionAnalogModel->getCenterFrequency(),
-            transmissionAnalogModel->getBandwidth(), snapshot, selectedTransmitAntenna,
-            deterministicPower, decodedPower, ccaPower);
+            transmissionAnalogModel->getBandwidth(), snapshot, spatialTransmissionPlan,
+            deterministicPower, physicalPower);
         return new Reception(receiverRadio, transmission, arrival->getStartTime(), arrival->getEndTime(),
             arrival->getStartPosition(), arrival->getEndPosition(), arrival->getStartOrientation(),
             arrival->getEndOrientation(), receptionAnalogModel);

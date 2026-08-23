@@ -29,6 +29,12 @@ module Ieee80211Radio extends FlatRadioBase
         string bandName @enum("2.4 GHz", "5 GHz", "5 GHz (20 MHz)", "5 GHz (40 MHz)", "5 GHz (80 MHz)", "5 GHz (160 MHz)", "5.9 GHz") = default("2.4 GHz"); // Band name
         int channelNumber = default(0);                                 // Initial channel number within the band (TODO this is offset by 1)
         string fcsMode @enum("declared","computed") = default("declared");
+        bool htTxStbc = default(false); // local HT Transmit STBC capability; peer gating is separate
+        int htRxStbc = default(0) @range(0..3); // Table 9-224 Rx STBC capability encoding
+        int maximumSupportedHtMcs = default(31) @range(0..76);
+        int maximumSupportedHtSpatialStreams = default(4) @range(1..4);
+        bool ht20Supported = default(true);
+        bool ht40Supported = default(true);
         transmitter.typename = default("Ieee80211Transmitter");
         receiver.typename = default("Ieee80211Receiver");
         receiver.errorModel.typename = default(signalAnalogRepresentation != "unitDisk" ? "Ieee80211NistErrorModel" : "");
@@ -49,4 +55,3 @@ module Ieee80211Radio extends FlatRadioBase
         @signal[radioChannelChanged](type=long);
         @statistic[radioChannel](title="Radio channel"; source=radioChannelChanged; record=histogram,vector; interpolationmode=sample-hold);
 }
-

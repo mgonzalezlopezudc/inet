@@ -9,6 +9,7 @@
 
 #include "inet/common/packet/serializer/ChunkSerializerRegistry.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211OfdmSignalField.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HtSignalField.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 
 namespace inet {
@@ -195,11 +196,45 @@ const Ptr<Chunk> Ieee80211ErpOfdmPhyHeaderSerializer::deserialize(MemoryInputStr
 void Ieee80211HtPhyHeaderSerializer::serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const
 {
     auto htPhyHeader = dynamicPtrCast<const Ieee80211HtPhyHeader>(chunk);
+    Ieee80211HtSignalField field;
+    field.mcs = htPhyHeader->getMcs();
+    field.cbw = htPhyHeader->getCbw();
+    field.length = static_cast<uint16_t>(htPhyHeader->getLengthField().get<B>());
+    field.smoothing = htPhyHeader->getSmoothing();
+    field.notSounding = htPhyHeader->getNotSounding();
+    field.reserved = htPhyHeader->getReserved();
+    field.aggregation = htPhyHeader->getAggregation();
+    field.stbc = htPhyHeader->getStbc();
+    field.fecCoding = htPhyHeader->getFecCoding();
+    field.shortGi = htPhyHeader->getShortGi();
+    field.numberOfExtensionSpatialStreams = htPhyHeader->getNumberOfExtensionSpatialStreams();
+    field.crc = htPhyHeader->getCrc();
+    field.tail = htPhyHeader->getTail();
+    const uint64_t signal = packIeee80211HtSignalField(field);
+    for (int byte = 0; byte < 6; byte++)
+        stream.writeByte(static_cast<uint8_t>((signal >> (8 * byte)) & 0xFF));
 }
 
 const Ptr<Chunk> Ieee80211HtPhyHeaderSerializer::deserialize(MemoryInputStream& stream) const
 {
     auto htPhyHeader = makeShared<Ieee80211HtPhyHeader>();
+    uint64_t signal = 0;
+    for (int byte = 0; byte < 6; byte++)
+        signal |= uint64_t(stream.readByte()) << (8 * byte);
+    const auto field = unpackIeee80211HtSignalField(signal);
+    htPhyHeader->setMcs(field.mcs);
+    htPhyHeader->setCbw(field.cbw);
+    htPhyHeader->setLengthField(B(field.length));
+    htPhyHeader->setSmoothing(field.smoothing);
+    htPhyHeader->setNotSounding(field.notSounding);
+    htPhyHeader->setReserved(field.reserved);
+    htPhyHeader->setAggregation(field.aggregation);
+    htPhyHeader->setStbc(field.stbc);
+    htPhyHeader->setFecCoding(field.fecCoding);
+    htPhyHeader->setShortGi(field.shortGi);
+    htPhyHeader->setNumberOfExtensionSpatialStreams(field.numberOfExtensionSpatialStreams);
+    htPhyHeader->setCrc(field.crc);
+    htPhyHeader->setTail(field.tail);
     return htPhyHeader;
 }
 

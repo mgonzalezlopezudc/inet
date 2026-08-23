@@ -1,0 +1,123 @@
+%description:
+Byte-exact HT-SIG serialization and CRC checks based on IEEE Std 802.11-2024
+Table 19-11, Figure 19-6, Clause 19.3.9.4.4, and Figure 19-8.
+
+%includes:
+#include <functional>
+#include <vector>
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HtSignalField.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%global:
+
+static void require(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("HT-SIG serializer test failed: %s", message);
+}
+
+static Ptr<Ieee80211HtPhyHeader> makeHeader()
+{
+    auto header = makeShared<Ieee80211HtPhyHeader>();
+    header->setChunkLength(B(6));
+    header->setMcs(15);
+    header->setCbw(true);
+    header->setLengthField(B(100));
+    header->setSmoothing(true);
+    header->setNotSounding(true);
+    header->setReserved(true);
+    header->setAggregation(false);
+    header->setStbc(0);
+    header->setFecCoding(false);
+    header->setShortGi(false);
+    header->setNumberOfExtensionSpatialStreams(0);
+    Ieee80211HtSignalField field;
+    field.mcs = header->getMcs();
+    field.cbw = header->getCbw();
+    field.length = 100;
+    field.smoothing = header->getSmoothing();
+    field.notSounding = header->getNotSounding();
+    field.reserved = header->getReserved();
+    field.aggregation = header->getAggregation();
+    field.stbc = header->getStbc();
+    field.fecCoding = header->getFecCoding();
+    field.shortGi = header->getShortGi();
+    field.numberOfExtensionSpatialStreams = header->getNumberOfExtensionSpatialStreams();
+    field.tail = 0;
+    field.crc = computeIeee80211HtSignalFieldCrc(field);
+    header->setCrc(field.crc);
+    header->setTail(field.tail);
+    return header;
+}
+
+static Ptr<const Ieee80211HtPhyHeader> roundTrip(const Ptr<const Ieee80211HtPhyHeader>& header)
+{
+    Packet packet("htSig");
+    packet.insertAtFront(header);
+    auto bytes = packet.peekAllAsBytes();
+    Packet decodedPacket("htSigDecoded");
+    decodedPacket.insertAtFront(bytes);
+    return decodedPacket.popAtFront<Ieee80211HtPhyHeader>(B(6));
+}
+
+%activity:
+auto header = makeHeader();
+Packet packet("htSig");
+packet.insertAtFront(header);
+auto bytes = packet.peekAllAsBytes();
+const std::vector<uint8_t> expected = {0x8F, 0x64, 0x00, 0x07, 0x54, 0x00};
+require(bytes->getBytes() == expected, "independent 8f 64 00 07 54 00 oracle");
+
+Ieee80211HtSignalField field = unpackIeee80211HtSignalField(
+    uint64_t(expected[0]) | (uint64_t(expected[1]) << 8) | (uint64_t(expected[2]) << 16) |
+    (uint64_t(expected[3]) << 24) | (uint64_t(expected[4]) << 32) | (uint64_t(expected[5]) << 40));
+require(field.mcs == 15 && field.cbw && field.length == 100, "protected field unpack");
+require(field.smoothing && field.notSounding && field.reserved && !field.aggregation, "HT-SIG1 flags");
+require(field.stbc == 0 && !field.fecCoding && !field.shortGi && field.numberOfExtensionSpatialStreams == 0,
+    "HT-SIG2 flags");
+require(field.crc == 0xA8 && field.tail == 0, "CRC and tail unpack");
+require(verifyIeee80211HtSignalFieldCrc(field), "CRC oracle verification");
+
+auto decoded = roundTrip(staticPtrCast<const Ieee80211HtPhyHeader>(header));
+require(decoded->getMcs() == header->getMcs() && decoded->getCbw() == header->getCbw(), "MCS/CBW roundtrip");
+require(decoded->getLengthField() == header->getLengthField() && decoded->getSmoothing() == header->getSmoothing(),
+    "length/smoothing roundtrip");
+require(decoded->getNotSounding() == header->getNotSounding() && decoded->getReserved() == header->getReserved(),
+    "sounding/reserved roundtrip");
+require(decoded->getAggregation() == header->getAggregation() && decoded->getStbc() == header->getStbc(),
+    "aggregation/STBC roundtrip");
+require(decoded->getFecCoding() == header->getFecCoding() && decoded->getShortGi() == header->getShortGi(),
+    "FEC/GI roundtrip");
+require(decoded->getNumberOfExtensionSpatialStreams() == header->getNumberOfExtensionSpatialStreams() &&
+    decoded->getCrc() == header->getCrc() && decoded->getTail() == header->getTail(), "NESS/CRC/tail roundtrip");
+
+auto corruptedBytes = bytes->getBytes();
+corruptedBytes[0] ^= 0x01;
+Packet corruptedPacket("corruptedHtSig");
+corruptedPacket.insertAtFront(makeShared<BytesChunk>(corruptedBytes));
+auto corruptedHeader = corruptedPacket.popAtFront<Ieee80211HtPhyHeader>(B(6));
+Ieee80211HtSignalField corruptedField;
+corruptedField.mcs = corruptedHeader->getMcs();
+corruptedField.cbw = corruptedHeader->getCbw();
+corruptedField.length = static_cast<uint16_t>(corruptedHeader->getLengthField().get<B>());
+corruptedField.smoothing = corruptedHeader->getSmoothing();
+corruptedField.notSounding = corruptedHeader->getNotSounding();
+corruptedField.reserved = corruptedHeader->getReserved();
+corruptedField.aggregation = corruptedHeader->getAggregation();
+corruptedField.stbc = corruptedHeader->getStbc();
+corruptedField.fecCoding = corruptedHeader->getFecCoding();
+corruptedField.shortGi = corruptedHeader->getShortGi();
+corruptedField.numberOfExtensionSpatialStreams = corruptedHeader->getNumberOfExtensionSpatialStreams();
+corruptedField.crc = corruptedHeader->getCrc();
+corruptedField.tail = corruptedHeader->getTail();
+require(!verifyIeee80211HtSignalFieldCrc(corruptedField), "CRC corruption detection");
+
+std::cout << "PASS\n";
+
+%contains: stdout
+PASS

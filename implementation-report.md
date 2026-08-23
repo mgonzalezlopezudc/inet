@@ -198,3 +198,182 @@ results:
   convention is separately traced to IEEE Std 802.11-2024.
 
 No persistent architecture exception or fingerprint expectation was added.
+
+# Receiver-strategy follow-on implementation
+
+Implemented on 2026-08-24 as the runtime receiver extension to the TGn channel
+work above.
+
+## Delivered behavior
+
+The dimensional channel-matrix path now supports receiver-local, immutable
+configuration of:
+
+- all, fixed, and deterministic optimal receive-antenna selection;
+- selection combining, maximum-ratio combining, and maximum-SINR/MMSE
+  combining for one spatial stream;
+- zero-forcing, MMSE, and perfect-cancellation MMSE-SIC spatial-stream
+  detection;
+- bounded HT Alamouti decoding for `NSS=1`, `NSTS=2`, and `STBC=1`, including
+  per-slot channel sampling and the full augmented covariance of correlated
+  STBC interferers.
+
+`ChannelMatrixReceptionProcessor` is stateless after initialization. It
+dispatches the configured strategy over immutable time/frequency resource-cell
+contexts, uses minimum per-stream SINR as the scalar compatibility mapping,
+and resolves optimal-subset ties lexicographically.
+
+## Runtime integration
+
+- Every IEEE 802.11 transmission now carries an immutable spatial transmission
+  plan. Legacy PPDUs use a one-stream/one-antenna plan; canonical HT PPDUs use
+  exact robust, HT-STF, HT-LTF, and data boundaries.
+- `Ieee80211HtPpduLayout` is the single timing authority used by the
+  transmitter, transmission, receiver, and spatial-plan builder. It validates
+  mixed-format HT layout, positive data duration, integral data-symbol count,
+  and the selected long/short guard interval before any plan is published.
+- The HT-SIG serializer and canonical resolver cover the complete 48-bit field,
+  CRC, MCS-to-NSS metadata, Table 19-12 STBC legality, LTF counts, CBW/context
+  consistency, and the 40-MHz-only MCS 32 rule.
+- HT transmission construction revalidates the authoritative packet HT-SIG,
+  selected mode/channel, canonical description, and exact spatial-plan layout
+  before publication.
+- HT20, HT40, and legacy OFDM reception use technology-owned OFDM resource
+  cells. DC, pilot, and guard resources are excluded from decoding; short-GI
+  data uses 3.6 us symbols; STBC slots remain atomic.
+- Occupied-tone PSD normalization preserves the aggregate W-valued signal
+  power exposed by the existing flat 20/40 MHz dimensional model. Desired and
+  interfering covariance use normalized active-tone PSD, while CCA continues
+  to use eager aggregate physical power. Interferer null and pilot resources do
+  not enter decoded covariance.
+- Matrix SNIR construction is eager. Published SNIR, decision, and result
+  objects depend only on immutable materialized values, not on later channel
+  evaluations or mutable module state.
+- Interference revisions retire complete derived cache generations only for an
+  active matrix receiver and an actually time/range/band-overlapping newly
+  added transmission. Ordinary cache expiry does not revise historical
+  receptions; explicit removal can revise only unfinished receptions.
+- Matrix reception is opt-in through `Ieee80211TgnRadio`. The generic
+  `Ieee80211Receiver` default remains processor-free, preserving scalar and
+  legacy configurations. An enabled matrix processor rejects
+  `separateReceptionParts=true` because a revision-safe per-part decision
+  transaction is not implemented.
+- Local immutable HT capabilities gate transmit and receive MCS, spatial-stream
+  count, channel width, and STBC support. Unsupported receive forms fail closed
+  without hiding physical energy from CCA.
+- The radio supplies capabilities through the
+  `IIeee80211HtCapabilitiesConsumer` contract, so replaceable transmitter and
+  receiver submodules must explicitly implement the same capability-delivery
+  behavior instead of depending on concrete built-in class casts.
+
+The configurable processor parameters are:
+
+| Parameter | Values |
+|---|---|
+| `antennaSelection` | `all`, `fixed`, `optimal` |
+| `activeReceiveAntennaCount` | `-1` for all, or a positive count |
+| `fixedReceiveAntennaIndices` | ordered, unique zero-based indices |
+| `oneStreamCombiner` | `mrc`, `selection`, `maximumSinr`, `mmse` |
+| `spatialStreamDetector` | `zf`, `mmse`, `mmseSic` |
+
+For one stream, `mmse` is the maximum-SINR linear combiner and is intentionally
+an alias of `maximumSinr`.
+
+## Focused verification
+
+All commands below ran from
+`/home/user/omnetpp_ws/inet-tgn-channels` in debug mode.
+
+1. Debug build:
+
+   ```sh
+   make MODE=debug -j$(nproc)
+   ```
+
+   Result: PASS.
+
+2. Receiver-strategy and runtime-value unit tests:
+
+   ```sh
+   MPLCONFIGDIR=/tmp inet_run_unit_tests -m debug -f \
+     '(ChannelMatrixAlgebra_1|SpatialTransmissionPlan_1|Ieee80211PhyHeaderSerializer_1|Ieee80211PhyModeResolver_1|Ieee80211SpatialTransmissionPlan_1|MimoReceiverStrategy_1|ChannelMatrixSpatialStreamDetection_1|ChannelMatrixPhysicalPowerMaterializer_1|MaterializedSpatialReception_1|Ieee80211HtAlamoutiDecoder_1|ChannelMatrixStbcReceptionMaterializer_1|CommunicationCacheInterferenceRevision_1).*'
+   ```
+
+   Result: 12 PASS. This includes analytical ZF/MMSE/SIC and combining
+   fixtures, antenna-subset selection, HT-SIG and capability rejection,
+   MCS32/CBW consistency, exact HT/OFDM resources, short-GI/STBC timing,
+   correlated two-slot STBC interference, eager materialization, immutable
+   queries, and unity-SISO active-tone power at a 0.9 W decoded-sensitivity
+   threshold. Direct runtime fixtures additionally prove that the reception
+   materializer groups two Alamouti slots into one decoded block and that an
+   interference revision atomically retires every derived cache object from
+   the previous immutable generation.
+
+3. TGn and receiver-strategy runtime module tests:
+
+   ```sh
+   MPLCONFIGDIR=/tmp inet_run_module_tests -m debug -f \
+     '(Tgn(DimensionalRadioMedium|InvalidConfiguration)_1|Ieee80211Mimo(SelectionZf|MaximumSinrMmse|OptimalSic)Receiver_1).*'
+   ```
+
+   Result: 5 PASS. The existing positive run uses the opt-in TGn radio with the
+   matrix processor and completes HT data plus its legacy ACK; the negative
+   run keeps focused fail-closed configuration coverage. Three seed-37,
+   static-profile-D/NLOS scenarios deliver both a one-stream frame and an
+   unambiguous two-stream HT MCS 8 frame through selection+ZF,
+   fixed-selection+maximum-SINR/MMSE, and optimal-selection+MRC/MMSE-SIC. The
+   mode-resolver unit test independently asserts that the configured
+   `14.444444 Mbps` rate selects two spatial streams. Refreshed runtime output
+   confirms the effective INI selection: the 1SS frame has a 36 us preamble
+   and 324 us data duration, while the 2SS frame has a 40 us preamble (two
+   HT-LTFs) and 143.2 us data duration.
+
+4. Patch whitespace validation:
+
+   ```sh
+   git diff --check
+   ```
+
+   Result: PASS.
+
+The test runner again emitted only the optional missing-`py4j` message and
+Windows DLL peer-target warnings.
+
+## Independent review
+
+An independent frozen-tree review concluded `PASS — READY FOR MERGE`, with no
+correctness, architecture, naming, sealing, or regression blocker. It also
+verified the effective 1SS/2SS PPDU timings after applying OMNeT++ first-match
+INI precedence correctly. The bounded non-blocking coverage gaps are that the
+STBC materializer fixture uses equal slot channels, the cache transaction test
+does not exercise every `RadioMedium` invalidation trigger, and runtime
+detector dispatch is established structurally by the effective 2SS PPDU rather
+than by production invocation counters.
+
+## Architecture disposition
+
+All changed source paths were checked against the sealing ledger before edit;
+none is sealed. Added common code has no IEEE 802.11 or TGn dependency, and no
+changed nonvisual code adds a visualizer dependency. The architecture fitness
+script reports `AR-ORG-VIS-SPLIT` clean. Its `AR-ORG-DOMAINS` check exits 1 for
+a physical-layer subtree because the grep-level rule treats every
+`inet/physicallayer/...` include—including a file's own header—as an upward
+protocol dependency; this is the same known scope defect documented above,
+not a new dependency finding. No exception-ledger or fingerprint update was
+made.
+
+## Deliberate bounds
+
+- Runtime HT STBC transmission remains fail-closed until peer HT capability
+  exchange is represented. The receive decoder and canonical inbound metadata
+  path are implemented and analytically tested; the simulator will not invent
+  peer Rx-STBC authority.
+- Production STBC support is the requested two-slot HT Alamouti form
+  (`NSS=1`, `NSTS=2`, `STBC=1`). Other legal HT STBC dimensions are recognized
+  canonically but rejected by the local bounded implementation.
+- The technology grid currently covers mixed-format HT and legacy OFDM. Other
+  technologies retain the generic continuum materializer.
+- Matrix processing requires whole-reception caching
+  (`separateReceptionParts=false`).
+- Existing PER/error models consume the minimum materialized stream SINR; no
+  new MIMO-specific PER calibration or EESM table was introduced.

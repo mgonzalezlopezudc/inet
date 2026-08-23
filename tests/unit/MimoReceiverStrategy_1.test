@@ -1,0 +1,245 @@
+%description:
+
+Checks deterministic receive-row subset selection, one-stream combiners, and
+the immutable reception context used by matrix receivers.
+
+%includes:
+#include <cmath>
+#include <algorithm>
+#include <complex>
+#include <functional>
+#include <memory>
+#include <vector>
+#include "inet/physicallayer/wireless/common/analogmodel/common/SpatialTransmissionPlan.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/receiver/ChannelMatrixReceptionContext.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/receiver/ChannelMatrixReceptionProcessor.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/receiver/MaximumSinrCombiner.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/receiver/MaximumRatioCombiner.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/receiver/ReceiveAntennaSelection.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/receiver/SelectionCombiner.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+static void require(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("MIMO receiver strategy test failed: %s", message);
+}
+
+static void requireNear(double actual, double expected, const char *message, double tolerance = 1e-12)
+{
+    if (std::abs(actual - expected) > tolerance * std::max(1.0, std::abs(expected)))
+        throw cRuntimeError("MIMO receiver strategy test failed: %s (actual %.17g expected %.17g)",
+            message, actual, expected);
+}
+
+static void requireComplexNear(const std::complex<double>& actual, const std::complex<double>& expected, const char *message)
+{
+    if (std::abs(actual - expected) > 1e-12 * std::max(1.0, std::abs(expected)))
+        throw cRuntimeError("MIMO receiver strategy test failed: %s", message);
+}
+
+static bool throws(const std::function<void()>& function)
+{
+    try {
+        function();
+        return false;
+    }
+    catch (const cRuntimeError&) {
+        return true;
+    }
+}
+
+%activity:
+const auto subsets = ReceiveAntennaSelection::enumerateSubsets(4, 2);
+require(subsets.size() == 6, "all six two-of-four subsets are enumerated");
+const std::vector<std::vector<int>> expectedSubsets = {{0, 1}, {0, 2}, {0, 3}, {1, 2}, {1, 3}, {2, 3}};
+require(subsets == expectedSubsets, "subsets are lexicographic");
+const auto bestSubset = ReceiveAntennaSelection::selectBestSubset(4, 2,
+    [](const std::vector<int>& rows) {
+        const double score[] = {1, 4, 3, 2};
+        return std::max(score[rows[0]], score[rows[1]]);
+    });
+require(bestSubset == std::vector<int>({0, 1}), "exact score ties retain the lexicographically first subset");
+require(throws([] { ReceiveAntennaSelection::validateRowSet({1, 1}, 4); }), "duplicate rows rejected");
+require(throws([] { ReceiveAntennaSelection::validateRowSet({0, 4}, 4); }), "out-of-range rows rejected");
+
+ComplexMatrix h(2, 1, {{3, 4}, {0, 12}});
+ComplexMatrix diagonalCovariance(2, 2, {{1, 0}, {0, 0}, {0, 0}, {4, 0}});
+const auto selection = SelectionCombiner::compute(h, diagonalCovariance);
+require(selection.getStatus() == ChannelMatrixDetectionStatus::SUCCESS, "selection combining succeeds");
+require(selection.getSelectedReceiveRows() == std::vector<int>({0, 1}), "selection keeps active rows");
+require(std::abs(selection.getWeights().get(0, 0)) < 1e-12 &&
+    std::abs(selection.getWeights().get(0, 1) - std::complex<double>(1, 0)) < 1e-12,
+    "selection chooses the larger branch SINR");
+requireNear(selection.getSinrs()[0], 36, "selection branch SINR");
+requireNear(selection.getDesiredSignalPowerSpectralDensities()[0].get<WpHz>(), 144, "selection desired PSD");
+requireNear(selection.getProjectedNoiseAndInterferencePowerSpectralDensities()[0].get<WpHz>(), 4,
+    "selection projected PSD");
+ComplexMatrix reducedSelectionChannel(4, 1, {{0, 0}, {0, 0}, {1, 0}, {2, 0}});
+ComplexMatrix reducedSelectionCovariance = ChannelMatrixAlgebra::identity(4);
+const auto reducedSelection = SelectionCombiner::compute(reducedSelectionChannel,
+    reducedSelectionCovariance, {2, 3});
+require(reducedSelection.getSelectedReceiveRows() == std::vector<int>({2, 3}) &&
+    reducedSelection.getWeights().getNumColumns() == 2, "reduced selection retains original receive indices");
+
+ComplexMatrix branchPowerChannel(2, 1, {{3, 0}, {2, 0}});
+ComplexMatrix branchPowerCovariance(2, 2, {{9, 0}, {0, 0}, {0, 0}, {1, 0}});
+const auto branchPowerSelection = SelectionCombiner::compute(branchPowerChannel, branchPowerCovariance);
+require(std::abs(branchPowerSelection.getWeights().get(0, 0)) < 1e-12 &&
+    std::abs(branchPowerSelection.getWeights().get(0, 1) - std::complex<double>(1, 0)) < 1e-12,
+    "selection uses branch SINR instead of branch power");
+requireNear(branchPowerSelection.getSinrs()[0], 4, "branch-power discriminator SINR");
+
+const auto maximumSinr = MaximumSinrCombiner::compute(h, diagonalCovariance);
+require(maximumSinr.getStatus() == ChannelMatrixDetectionStatus::SUCCESS, "maximum-SINR combining succeeds");
+requireNear(maximumSinr.getSinrs()[0], 61, "maximum-SINR white/colored fixture");
+const auto maximumRatio = MaximumRatioCombiner::compute(h, diagonalCovariance);
+requireNear(maximumRatio.getSinrs()[0], 169.0 * 169.0 / (25.0 * 1.0 + 144.0 * 4.0),
+    "maximum-ratio compatibility fixture");
+double weightNorm = 0;
+for (int row = 0; row < 2; row++)
+    weightNorm += std::norm(maximumSinr.getWeights().get(0, row));
+requireNear(weightNorm, 1, "maximum-SINR row normalization");
+
+ComplexMatrix correlatedCovariance(2, 2, {{2, 0}, {1, 0}, {1, 0}, {2, 0}});
+ComplexMatrix correlatedChannel(2, 1, {{1, 0}, {2, 0}});
+const auto correlated = MaximumSinrCombiner::compute(correlatedChannel, correlatedCovariance);
+requireNear(correlated.getSinrs()[0], 2, "correlated maximum-SINR fixture");
+requireComplexNear(correlated.getWeights().get(0, 0), {0, 0}, "correlated maximum-SINR first weight");
+requireComplexNear(correlated.getWeights().get(0, 1), {1, 0}, "correlated maximum-SINR second weight");
+
+ComplexMatrix zeroChannel(2, 1);
+const auto zeroSelection = SelectionCombiner::compute(zeroChannel, diagonalCovariance);
+const auto zeroMaximumSinr = MaximumSinrCombiner::compute(zeroChannel, diagonalCovariance);
+require(zeroSelection.getStatus() == ChannelMatrixDetectionStatus::SUCCESS &&
+    zeroMaximumSinr.getStatus() == ChannelMatrixDetectionStatus::SUCCESS, "zero channel results are typed finite successes");
+requireNear(zeroSelection.getSinrs()[0], 0, "zero selection SINR");
+requireNear(zeroMaximumSinr.getSinrs()[0], 0, "zero maximum-SINR SINR");
+require(std::abs(zeroMaximumSinr.getWeights().get(0, 0) - std::complex<double>(1, 0)) < 1e-12 &&
+    std::abs(zeroMaximumSinr.getWeights().get(0, 1)) < 1e-12, "zero maximum-SINR basis tie");
+require(throws([&] { SelectionCombiner::compute(ComplexMatrix(2, 2), diagonalCovariance); }),
+    "selection rejects multiple streams");
+require(throws([&] { MaximumSinrCombiner::compute(h, ComplexMatrix(2, 2, {{1, 0}, {0, 0}, {0, 0}, {0, 0}})); }),
+    "combiner rejects non-positive covariance");
+
+const double scaling = 7.0;
+ComplexMatrix scaledH = ChannelMatrixAlgebra::scale(h, std::complex<double>(std::sqrt(scaling), 0));
+ComplexMatrix scaledCovariance = ChannelMatrixAlgebra::scale(diagonalCovariance, std::complex<double>(scaling, 0));
+const auto scaledMaximumSinr = MaximumSinrCombiner::compute(scaledH, scaledCovariance);
+requireNear(scaledMaximumSinr.getSinrs()[0], maximumSinr.getSinrs()[0], "physical scaling preserves maximum-SINR");
+for (int row = 0; row < 2; row++)
+    requireComplexNear(scaledMaximumSinr.getWeights().get(0, row), maximumSinr.getWeights().get(0, row),
+        "physical scaling preserves maximum-SINR weights");
+for (int stream = 0; stream < 1; stream++) {
+    requireNear(scaledMaximumSinr.getDesiredSignalPowerSpectralDensities()[stream].get<WpHz>(),
+        scaling * maximumSinr.getDesiredSignalPowerSpectralDensities()[stream].get<WpHz>(),
+        "physical scaling scales desired PSD");
+    requireNear(scaledMaximumSinr.getProjectedNoiseAndInterferencePowerSpectralDensities()[stream].get<WpHz>(),
+        scaling * maximumSinr.getProjectedNoiseAndInterferencePowerSpectralDensities()[stream].get<WpHz>(),
+        "physical scaling scales projected PSD");
+}
+
+const auto scaledSelection = SelectionCombiner::compute(scaledH, scaledCovariance);
+require(scaledSelection.getWeights().get(0, 1) == selection.getWeights().get(0, 1),
+    "physical scaling preserves selection branch");
+requireNear(scaledSelection.getSinrs()[0], selection.getSinrs()[0], "physical scaling preserves selection SINR");
+requireNear(scaledSelection.getDesiredSignalPowerSpectralDensities()[0].get<WpHz>(),
+    scaling * selection.getDesiredSignalPowerSpectralDensities()[0].get<WpHz>(),
+    "physical scaling scales selection desired PSD");
+requireNear(scaledSelection.getProjectedNoiseAndInterferencePowerSpectralDensities()[0].get<WpHz>(),
+    scaling * selection.getProjectedNoiseAndInterferencePowerSpectralDensities()[0].get<WpHz>(),
+    "physical scaling scales selection projected PSD");
+
+ComplexMatrix mapping(2, 1, {{1, 0}, {0, 0}});
+SpatialTransmissionPlan::Segment segment(SimTime(0, SIMTIME_US), SimTime(1, SIMTIME_US),
+    1, 1, mapping, {1});
+ComplexMatrix response(2, 2, {{1, 0}, {0, 0}, {0, 0}, {1, 0}});
+ChannelMatrixReceptionContext::Signal desiredSignal(response, segment, WpHz(2));
+ChannelMatrixReceptionContext::Signal interfererSignal(response, segment, WpHz(0.5));
+ComplexMatrix responseCopy = response;
+ChannelMatrixReceptionContext context(desiredSignal, {interfererSignal},
+    ChannelMatrixAlgebra::identity(2), SimTime(3, SIMTIME_US), Hz(5e9), IRadioSignal::SIGNAL_PART_DATA);
+response.get(0, 0) = {9, 0};
+requireComplexNear(context.getDesiredSignal().getResponse().get(0, 0), responseCopy.get(0, 0),
+    "reception context copies response input");
+requireNear(context.getEffectiveDesiredChannel().get(0, 0).real(), std::sqrt(2),
+    "context computes mapped desired channel");
+const auto aggregate = context.getInterferencePlusNoiseCovariance();
+requireNear(aggregate.get(0, 0).real(), 1.5, "context aggregate covariance");
+const auto selectedAggregate = context.getSelectedInterferencePlusNoiseCovariance({1});
+require(selectedAggregate.getNumRows() == 1 && selectedAggregate.getNumColumns() == 1,
+    "context reduces covariance rows and columns");
+requireNear(selectedAggregate.get(0, 0).real(), 1, "context selected covariance");
+require(context.getTime() == SimTime(3, SIMTIME_US) && context.getFrequency().get<Hz>() == 5e9 &&
+    context.getSignalPart() == IRadioSignal::SIGNAL_PART_DATA, "context preserves exact metadata");
+
+ChannelMatrixReceptionProcessor::Configuration processorConfiguration;
+const auto processedMaximumSinr = ChannelMatrixReceptionProcessor::compute(context, processorConfiguration);
+require(processedMaximumSinr.getStatus() == ChannelMatrixDetectionStatus::SUCCESS,
+    "processor dispatches the default maximum-ratio strategy");
+requireNear(processedMaximumSinr.getSinrs()[0], 4.0 / 3,
+    "processor consumes the exact desired channel and aggregate covariance");
+auto inconsistentAllConfiguration = processorConfiguration;
+inconsistentAllConfiguration.activeReceiveAntennaCount = 1;
+require(throws([&] { ChannelMatrixReceptionProcessor::compute(context, inconsistentAllConfiguration); }),
+    "all-antenna policy rejects an inconsistent active-chain count");
+processorConfiguration.oneStreamCombiner = ChannelMatrixReceptionProcessor::OneStreamCombiner::SELECTION;
+const auto processedSelection = ChannelMatrixReceptionProcessor::compute(context, processorConfiguration);
+require(processedSelection.getStatus() == ChannelMatrixDetectionStatus::SUCCESS,
+    "processor dispatches selection combining");
+processorConfiguration.oneStreamCombiner = ChannelMatrixReceptionProcessor::OneStreamCombiner::MAXIMUM_SINR;
+requireNear(ChannelMatrixReceptionProcessor::compute(context, processorConfiguration).getSinrs()[0], 4.0 / 3,
+    "processor dispatches maximum-SINR combining");
+processorConfiguration.antennaSelection = ChannelMatrixReceptionProcessor::AntennaSelection::FIXED;
+processorConfiguration.fixedReceiveRows = {1};
+const auto processedFixed = ChannelMatrixReceptionProcessor::compute(context, processorConfiguration);
+require(processedFixed.getSelectedReceiveRows() == std::vector<int>({1}),
+    "processor applies fixed receive-row selection");
+requireNear(processedFixed.getSinrs()[0], 0, "fixed zero-gain row remains a finite result");
+processorConfiguration.antennaSelection = ChannelMatrixReceptionProcessor::AntennaSelection::OPTIMAL;
+processorConfiguration.activeReceiveAntennaCount = 1;
+processorConfiguration.fixedReceiveRows.clear();
+const auto processedOptimal = ChannelMatrixReceptionProcessor::compute(context, processorConfiguration);
+require(processedOptimal.getSelectedReceiveRows() == std::vector<int>({0}),
+    "processor optimizes a bounded receive-row subset by decoded SINR");
+
+SpatialTransmissionPlan::Segment twoStreamProcessorSegment(SIMTIME_ZERO, SimTime(1, SIMTIME_US),
+    2, 2, ComplexMatrix(2, 2, {{1, 0}, {0, 0}, {0, 0}, {1, 0}}), {0.5, 0.5});
+ChannelMatrixReceptionContext::Signal twoStreamProcessorSignal(responseCopy,
+    twoStreamProcessorSegment, WpHz(2));
+ChannelMatrixReceptionContext twoStreamProcessorContext(twoStreamProcessorSignal, {},
+    ChannelMatrixAlgebra::identity(2), SIMTIME_ZERO, Hz(5e9), IRadioSignal::SIGNAL_PART_DATA);
+processorConfiguration.spatialStreamDetector = ChannelMatrixReceptionProcessor::SpatialStreamDetector::ZERO_FORCING;
+const auto processedUnderdetermined = ChannelMatrixReceptionProcessor::compute(
+    twoStreamProcessorContext, processorConfiguration);
+require(processedUnderdetermined.getStatus() == ChannelMatrixDetectionStatus::UNDERDETERMINED,
+    "processor preserves the configured one-row subset when ZF needs two rows");
+processorConfiguration.antennaSelection = ChannelMatrixReceptionProcessor::AntennaSelection::ALL;
+processorConfiguration.activeReceiveAntennaCount = -1;
+const auto processedZf = ChannelMatrixReceptionProcessor::compute(twoStreamProcessorContext, processorConfiguration);
+require(processedZf.getStatus() == ChannelMatrixDetectionStatus::SUCCESS && processedZf.getSinrs().size() == 2,
+    "processor dispatches multi-stream ZF");
+processorConfiguration.spatialStreamDetector = ChannelMatrixReceptionProcessor::SpatialStreamDetector::MMSE;
+require(ChannelMatrixReceptionProcessor::compute(twoStreamProcessorContext, processorConfiguration).getStatus() ==
+    ChannelMatrixDetectionStatus::SUCCESS, "processor dispatches multi-stream MMSE");
+processorConfiguration.spatialStreamDetector = ChannelMatrixReceptionProcessor::SpatialStreamDetector::MMSE_SIC;
+require(ChannelMatrixReceptionProcessor::compute(twoStreamProcessorContext, processorConfiguration).hasDetectionOrder(),
+    "processor dispatches deterministic MMSE-SIC");
+
+ComplexMatrix frequencyMapping(2, 2, {{1, 0}, {0, 0}, {0, 0}, {1, 0}});
+SpatialTransmissionPlan::Segment frequencySegment(SimTime(0, SIMTIME_US), SimTime(1, SIMTIME_US),
+    2, 2, frequencyMapping, {0.5, 0.5}, {SimTime(0, SIMTIME_NS), SimTime(-400, SIMTIME_NS)});
+ChannelMatrixReceptionContext::Signal frequencySignal(response, frequencySegment, WpHz(1), Hz(312500));
+const auto frequencyChannel = frequencySignal.getEffectiveChannel();
+requireComplexNear(frequencyChannel.get(1, 1), {0.5, 0.5},
+    "reception context resolves baseband cyclic-shift phase");
+require(frequencySignal.getBasebandFrequency().get<Hz>() == 312500, "signal preserves baseband frequency");
+
+std::cout << "PASS\n";
+
+%contains: stdout
+PASS

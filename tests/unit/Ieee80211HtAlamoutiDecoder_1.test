@@ -1,0 +1,390 @@
+%description:
+
+Checks the pure HT Alamouti descriptor, Table 19-18 builder, canonical
+augmented observations, and covariance-aware decoding.
+
+%includes:
+#include <algorithm>
+#include <cmath>
+#include <complex>
+#include <functional>
+#include <limits>
+#include <memory>
+#include <vector>
+#include "inet/physicallayer/wireless/common/analogmodel/common/ChannelMatrixAlgebra.h"
+#include "inet/physicallayer/wireless/common/analogmodel/common/SpaceTimeCodeDescriptor.h"
+#include "inet/physicallayer/wireless/common/analogmodel/common/SpatialTransmissionPlan.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/receiver/ChannelMatrixReceptionContext.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/receiver/ChannelMatrixReceptionProcessor.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/receiver/MinimumMeanSquareErrorSpatialStreamDetector.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtSpaceTimeCodeBuilder.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/receiver/Ieee80211HtAlamoutiDecoder.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+static void require(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("HT Alamouti test failed: %s", message);
+}
+
+static void requireNear(double actual, double expected, const char *message, double tolerance = 1e-11)
+{
+    if (std::abs(actual - expected) > tolerance * std::max(1.0, std::abs(expected)))
+        throw cRuntimeError("HT Alamouti test failed: %s (actual %.17g expected %.17g)",
+            message, actual, expected);
+}
+
+static void requireRelative(double actual, double expected, const char *message, double tolerance = 1e-9)
+{
+    const double scale = std::max(std::abs(actual), std::abs(expected));
+    if (std::abs(actual - expected) > tolerance * scale)
+        throw cRuntimeError("HT Alamouti test failed: %s (actual %.17g expected %.17g)",
+            message, actual, expected);
+}
+
+static void requireComplexNear(const std::complex<double>& actual,
+    const std::complex<double>& expected, const char *message, double tolerance = 1e-11)
+{
+    if (std::abs(actual - expected) > tolerance * std::max(1.0, std::abs(expected)))
+        throw cRuntimeError("HT Alamouti test failed: %s", message);
+}
+
+static bool throws(const std::function<void()>& function)
+{
+    try {
+        function();
+        return false;
+    }
+    catch (const cRuntimeError&) {
+        return true;
+    }
+}
+
+%activity:
+const auto descriptor = Ieee80211HtSpaceTimeCodeBuilder::build(1, 2, 1);
+const double alpha = 1 / std::sqrt(2.0);
+require(descriptor.getNumberOfSpatialStreams() == 1 && descriptor.getNumberOfSourceSymbols() == 2 &&
+    descriptor.getNumberOfSpaceTimeStreams() == 2 && descriptor.getNumberOfSlots() == 2,
+    "builder dimensions");
+requireNear(descriptor.getAmplitudeScale(), alpha, "builder amplitude scale");
+const auto& slot0 = descriptor.getSlot(0);
+const auto& slot1 = descriptor.getSlot(1);
+require(!slot0.isConjugateObservation() && slot1.isConjugateObservation(), "canonical observation flags");
+requireComplexNear(slot0.getDirectCoefficients().get(0, 0), {1, 0}, "Table 19-18 A0");
+requireComplexNear(slot0.getConjugateCoefficients().get(1, 1), {-1, 0}, "Table 19-18 B0");
+requireComplexNear(slot1.getDirectCoefficients().get(0, 1), {1, 0}, "Table 19-18 A1");
+requireComplexNear(slot1.getConjugateCoefficients().get(1, 0), {1, 0}, "Table 19-18 B1");
+require(throws([&] { Ieee80211HtSpaceTimeCodeBuilder::build(2, 2, 1); }), "invalid NSS rejected");
+require(throws([&] { Ieee80211HtSpaceTimeCodeBuilder::build(1, 1, 1); }), "invalid NSTS rejected");
+require(throws([&] { Ieee80211HtSpaceTimeCodeBuilder::build(1, 2, 0); }), "disabled STBC rejected");
+
+const std::vector<SpaceTimeCodeDescriptor::Slot> validSlots = {slot0, slot1};
+require(throws([&] {
+    SpaceTimeCodeDescriptor(0, 2, 2, alpha, validSlots, {false, true});
+}), "descriptor rejects nonpositive NSS");
+require(throws([&] {
+    SpaceTimeCodeDescriptor(1, 0, 2, alpha, validSlots, {});
+}), "descriptor rejects nonpositive K");
+require(throws([&] {
+    SpaceTimeCodeDescriptor(1, 2, 0, alpha, validSlots, {false, true});
+}), "descriptor rejects nonpositive NSTS");
+require(throws([&] {
+    SpaceTimeCodeDescriptor(1, 2, 2, 0, validSlots, {false, true});
+}), "descriptor rejects nonpositive amplitude");
+require(throws([&] {
+    SpaceTimeCodeDescriptor(1, 2, 2, -alpha, validSlots, {false, true});
+}), "descriptor rejects negative amplitude");
+require(throws([&] {
+    SpaceTimeCodeDescriptor(1, 2, 2, std::numeric_limits<double>::quiet_NaN(), validSlots, {false, true});
+}), "descriptor rejects nonfinite amplitude");
+require(throws([&] {
+    SpaceTimeCodeDescriptor(1, 2, 2, std::numeric_limits<double>::infinity(), validSlots, {false, true});
+}), "descriptor rejects infinite amplitude");
+require(throws([&] {
+    SpaceTimeCodeDescriptor(1, 2, 2, alpha, validSlots, {false});
+}), "descriptor rejects decoded-transform count mismatch");
+require(throws([&] {
+    SpaceTimeCodeDescriptor(1, 2, 1, alpha, validSlots, {false, true});
+}), "descriptor rejects slot coefficient dimension mismatch");
+require(throws([&] {
+    SpaceTimeCodeDescriptor::Slot(ComplexMatrix(2, 2, {{1, 0}, {0, 0}, {0, 0}, {0, 0}}),
+        ComplexMatrix(2, 1, {{0, 0}, {0, 0}}), false);
+}), "descriptor rejects A/B matrix dimension mismatch");
+const double nan = std::numeric_limits<double>::quiet_NaN();
+require(throws([&] {
+    SpaceTimeCodeDescriptor::Slot(ComplexMatrix(2, 2, {{nan, 0}, {0, 0}, {0, 0}, {0, 0}}),
+        ComplexMatrix(2, 2), false);
+}), "descriptor rejects nonfinite coefficient");
+
+const ComplexMatrix noncanonicalDirect0(2, 2, {{1 / std::sqrt(2.0), 0}, {1 / std::sqrt(2.0), 0}, {0, 0}, {0, 0}});
+const ComplexMatrix noncanonicalConjugate0(2, 2, {{0, 0}, {0, 0}, {0, 0}, {-1, 0}});
+const std::vector<SpaceTimeCodeDescriptor::Slot> noncanonicalSlots = {
+    SpaceTimeCodeDescriptor::Slot(noncanonicalDirect0, noncanonicalConjugate0, false), slot1};
+require(throws([&] {
+    SpaceTimeCodeDescriptor(1, 2, 2, alpha, noncanonicalSlots, {false, true});
+}), "descriptor rejects noncanonical conjugation layout");
+
+require(throws([&] {
+    SpaceTimeCodeDescriptor(1, 2, 2, 1, validSlots, {false, true});
+}), "descriptor rejects non-unit slot energy");
+
+const ComplexMatrix rankDeficientDirect(2, 2, {{std::sqrt(2.0), 0}, {0, 0}, {0, 0}, {0, 0}});
+const ComplexMatrix zeroConjugate(2, 2);
+const std::vector<SpaceTimeCodeDescriptor::Slot> rankDeficientSlots = {
+    SpaceTimeCodeDescriptor::Slot(rankDeficientDirect, zeroConjugate, false),
+    SpaceTimeCodeDescriptor::Slot(rankDeficientDirect, zeroConjugate, false)};
+require(throws([&] {
+    SpaceTimeCodeDescriptor(1, 2, 2, alpha, rankDeficientSlots, {false, true});
+}), "descriptor rejects canonical rank deficiency");
+
+const std::complex<double> s0(1, 2);
+const std::complex<double> s1(-1, 0.5);
+const auto encoded = descriptor.encodeSourceBlock({s0, s1});
+require(encoded.size() == 2, "encoded slot count");
+requireComplexNear(encoded[0].get(0, 0), alpha * s0, "Alamouti slot 0 direct symbol");
+requireComplexNear(encoded[0].get(1, 0), -alpha * std::conj(s1), "Alamouti slot 0 conjugate symbol");
+requireComplexNear(encoded[1].get(0, 0), alpha * s1, "Alamouti slot 1 direct symbol");
+requireComplexNear(encoded[1].get(1, 0), alpha * std::conj(s0), "Alamouti slot 1 conjugate symbol");
+require(throws([&] { descriptor.encodeSourceBlock({s0}); }), "source-symbol dimension rejection");
+
+const auto slotCovariance0 = descriptor.computeSlotSpaceTimeStreamCovariance(0);
+const auto slotCovariance1 = descriptor.computeSlotSpaceTimeStreamCovariance(1);
+requireNear(slotCovariance0.get(0, 0).real(), 0.5, "slot covariance first diagonal");
+requireNear(slotCovariance0.get(1, 1).real(), 0.5, "slot covariance second diagonal");
+requireNear(slotCovariance1.get(0, 0).real(), 0.5, "second slot covariance first diagonal");
+requireNear(slotCovariance1.get(1, 1).real(), 0.5, "second slot covariance second diagonal");
+requireNear(slotCovariance0.get(0, 0).real() + slotCovariance0.get(1, 1).real(), 1,
+    "per-slot covariance trace");
+const auto jointCovariance = descriptor.computeJointAugmentedSpaceTimeStreamCovariance();
+requireNear(jointCovariance.get(0, 0).real(), 0.5, "joint covariance diagonal 0");
+requireNear(jointCovariance.get(1, 1).real(), 0.5, "joint covariance diagonal 1");
+requireNear(jointCovariance.get(2, 2).real(), 0.5, "joint covariance diagonal 2");
+requireNear(jointCovariance.get(3, 3).real(), 0.5, "joint covariance diagonal 3");
+requireComplexNear(jointCovariance.get(0, 3), {0.5, 0}, "joint covariance expected cross block");
+requireComplexNear(jointCovariance.get(1, 2), {-0.5, 0}, "joint covariance expected signed cross block");
+requireNear(jointCovariance.get(0, 0).real() + jointCovariance.get(1, 1).real() +
+    jointCovariance.get(2, 2).real() + jointCovariance.get(3, 3).real(), 2,
+    "joint covariance trace");
+
+ComplexMatrix oneRxChannel(1, 2, {{1, 1}, {2, -1}});
+const auto canonicalOneRx = descriptor.buildCanonicalAugmentedChannel(oneRxChannel);
+requireComplexNear(canonicalOneRx.get(0, 0), alpha * std::complex<double>(1, 1), "canonical channel row 0 col 0");
+requireComplexNear(canonicalOneRx.get(0, 1), -alpha * std::complex<double>(2, -1), "canonical channel row 0 col 1");
+requireComplexNear(canonicalOneRx.get(1, 0), alpha * std::complex<double>(2, 1), "canonical channel row 1 col 0");
+requireComplexNear(canonicalOneRx.get(1, 1), alpha * std::complex<double>(1, -1), "canonical channel row 1 col 1");
+ComplexMatrix oneRxCovariance(1, 1, {{2, 0}});
+const auto canonicalOneRxCovariance = descriptor.buildCanonicalAugmentedCovariance(oneRxCovariance);
+for (int index = 0; index < 2; index++)
+    requireNear(canonicalOneRxCovariance.get(index, index).real(), 2, "canonical covariance block diagonal");
+
+ComplexMatrix complexColoredCovariance(2, 2, {{2, 0}, {0, 1}, {0, -1}, {2, 0}});
+const auto complexAugmentedCovariance = descriptor.buildCanonicalAugmentedCovariance(complexColoredCovariance);
+requireComplexNear(complexAugmentedCovariance.get(0, 0), {2, 0}, "complex covariance first block (0,0)");
+requireComplexNear(complexAugmentedCovariance.get(0, 1), {0, 1}, "complex covariance first block (0,1)");
+requireComplexNear(complexAugmentedCovariance.get(1, 0), {0, -1}, "complex covariance first block (1,0)");
+requireComplexNear(complexAugmentedCovariance.get(1, 1), {2, 0}, "complex covariance first block (1,1)");
+requireComplexNear(complexAugmentedCovariance.get(2, 2), {2, 0}, "complex covariance conjugate block (0,0)");
+requireComplexNear(complexAugmentedCovariance.get(2, 3), {0, -1}, "complex covariance conjugate block (0,1)");
+requireComplexNear(complexAugmentedCovariance.get(3, 2), {0, 1}, "complex covariance conjugate block (1,0)");
+requireComplexNear(complexAugmentedCovariance.get(3, 3), {2, 0}, "complex covariance conjugate block (1,1)");
+
+const std::complex<double> q0 = oneRxChannel.get(0, 0) * s0 + oneRxChannel.get(0, 1) * (-std::conj(s1));
+const std::complex<double> q1 = oneRxChannel.get(0, 0) * s1 + oneRxChannel.get(0, 1) * std::conj(s0);
+requireComplexNear(q0, {1.5, 3}, "independent one-Rx q0 oracle");
+requireComplexNear(q1, {-1.5, -5.5}, "independent one-Rx q1 oracle");
+ComplexMatrix oneRxObservationMatrix(2, 1, {{(alpha * q0).real(), (alpha * q0).imag()},
+    {(alpha * q1).real(), (alpha * q1).imag()}});
+const auto oneRxDecoded = Ieee80211HtAlamoutiDecoder::decode(
+    descriptor, oneRxChannel, oneRxCovariance, oneRxObservationMatrix);
+require(oneRxDecoded.getDetectionResult().getStatus() == ChannelMatrixDetectionStatus::SUCCESS,
+    "one-Rx decoder succeeds");
+require(oneRxDecoded.hasRecoveredSourceSymbols(), "one-Rx symbols recovered");
+requireComplexNear(oneRxDecoded.getSourceSymbols()[0], s0, "one-Rx recovered s0");
+requireComplexNear(oneRxDecoded.getSourceSymbols()[1], s1, "one-Rx recovered s1");
+requireNear(oneRxDecoded.getEffectiveSinr(), alpha * alpha * 7 / 2, "one-Rx independent SINR oracle");
+
+const auto sharedDescriptor = std::make_shared<const SpaceTimeCodeDescriptor>(descriptor);
+SpatialTransmissionPlan::Segment runtimeSegment(SIMTIME_ZERO, SimTime(4, SIMTIME_US),
+    1, 2, ComplexMatrix(2, 2, {{1, 0}, {0, 0}, {0, 0}, {1, 0}}), {1}, {}, sharedDescriptor);
+ChannelMatrixReceptionContext::Signal runtimeSignal(oneRxChannel, runtimeSegment, WpHz(1));
+ChannelMatrixReceptionContext runtimeContext(runtimeSignal, {}, oneRxCovariance,
+    SimTime(2, SIMTIME_US), Hz(5e9), IRadioSignal::SIGNAL_PART_DATA);
+ChannelMatrixReceptionProcessor::Configuration runtimeConfiguration;
+const auto runtimeDetection = ChannelMatrixReceptionProcessor::compute(runtimeContext, runtimeConfiguration);
+require(runtimeDetection.getStatus() == ChannelMatrixDetectionStatus::SUCCESS,
+    "receiver processor routes descriptor-owned Alamouti layout");
+requireNear(runtimeDetection.getSinrs()[0], oneRxDecoded.getDetectionResult().getSinrs()[0],
+    "receiver processor uses the same augmented channel and covariance");
+require(runtimeDetection.getObservationCoordinates().size() == 2 &&
+    runtimeDetection.getObservationCoordinates()[1].isConjugated(),
+    "receiver processor preserves augmented observation coordinates");
+
+// Runtime block processing must retain the nonzero cross-slot covariance of
+// an aligned STBC interferer. A block-diagonal approximation produces a
+// measurably different MMSE result for this fixture.
+SpatialTransmissionPlan::Segment timedRuntimeSegment(SIMTIME_ZERO, SimTime(4, SIMTIME_US),
+    1, 2, ComplexMatrix(2, 2, {{1, 0}, {0, 0}, {0, 0}, {1, 0}}), {1}, {},
+    sharedDescriptor, SimTime(2, SIMTIME_US));
+ComplexMatrix desiredBlockChannel(2, 2, {{1, 0}, {0.4, 0}, {0.2, 0.1}, {0.9, -0.2}});
+ComplexMatrix interfererBlockChannel(2, 2, {{0.7, 0}, {1.1, 0}, {0.2, 0}, {0, 0.9}});
+ComplexMatrix blockBackground(2, 2, {{0.5, 0}, {0, 0}, {0, 0}, {0.5, 0}});
+std::vector<ChannelMatrixReceptionContext> correlatedContexts;
+for (int slot = 0; slot < 2; slot++) {
+    ChannelMatrixReceptionContext::Signal desiredBlockSignal(
+        desiredBlockChannel, timedRuntimeSegment, WpHz(1));
+    ChannelMatrixReceptionContext::Signal interfererBlockSignal(
+        interfererBlockChannel, timedRuntimeSegment, WpHz(1), Hz(0), 17, 0, slot);
+    correlatedContexts.emplace_back(desiredBlockSignal,
+        std::vector<ChannelMatrixReceptionContext::Signal>{interfererBlockSignal},
+        blockBackground, SimTime(1 + 2 * slot, SIMTIME_US), Hz(5e9),
+        IRadioSignal::SIGNAL_PART_DATA);
+}
+const auto correlatedDetection = ChannelMatrixReceptionProcessor::computeSpaceTimeBlock(
+    correlatedContexts, runtimeConfiguration);
+const auto desiredAugmented = descriptor.buildCanonicalAugmentedChannel(desiredBlockChannel);
+const auto interfererAugmented = descriptor.buildCanonicalAugmentedChannel(interfererBlockChannel);
+auto expectedCorrelatedCovariance = ChannelMatrixAlgebra::multiply(interfererAugmented,
+    ChannelMatrixAlgebra::conjugateTranspose(interfererAugmented));
+expectedCorrelatedCovariance = ChannelMatrixAlgebra::add(expectedCorrelatedCovariance,
+    ChannelMatrixAlgebra::scale(ChannelMatrixAlgebra::identity(4), {0.5, 0}));
+const auto expectedCorrelatedDetection = MinimumMeanSquareErrorSpatialStreamDetector::compute(
+    desiredAugmented, expectedCorrelatedCovariance,
+    {{0, 0, false}, {0, 1, false}, {1, 0, true}, {1, 1, true}});
+for (int stream = 0; stream < 2; stream++)
+    requireNear(correlatedDetection.getSinrs()[stream],
+        expectedCorrelatedDetection.getSinrs()[stream],
+        "runtime correlated STBC interferer uses full augmented covariance");
+ComplexMatrix perSlotInterference = correlatedContexts[0].getInterferencePlusNoiseCovariance();
+const auto blockDiagonalApproximation = descriptor.buildCanonicalAugmentedCovariance(
+    perSlotInterference);
+const auto blockDiagonalDetection = MinimumMeanSquareErrorSpatialStreamDetector::compute(
+    desiredAugmented, blockDiagonalApproximation,
+    {{0, 0, false}, {0, 1, false}, {1, 0, true}, {1, 1, true}});
+require(std::abs(correlatedDetection.getSinrs()[0] - blockDiagonalDetection.getSinrs()[0]) > 1e-6,
+    "full STBC interferer covariance differs from the forbidden block-diagonal approximation");
+
+ComplexMatrix twoRxChannel(2, 2, {{1, 0}, {2, 0}, {0, 1}, {1, -1}});
+ComplexMatrix twoRxCovariance(2, 2, {{2, 0}, {0, 0}, {0, 0}, {2, 0}});
+const auto twoRxDetection = Ieee80211HtAlamoutiDecoder::detect(
+    descriptor, twoRxChannel, twoRxCovariance);
+require(twoRxDetection.getStatus() == ChannelMatrixDetectionStatus::SUCCESS, "two-Rx white detection succeeds");
+requireNear(twoRxDetection.getSinrs()[0], 2, "two-Rx white SINR stream 0");
+requireNear(twoRxDetection.getSinrs()[1], 2, "two-Rx white SINR stream 1");
+
+ComplexMatrix coloredChannel(2, 2, {{1, 0}, {0, 0}, {0, 0}, {1, 0}});
+ComplexMatrix coloredCovariance(2, 2, {{2, 0}, {1, 0}, {1, 0}, {2, 0}});
+const auto coloredDetection = Ieee80211HtAlamoutiDecoder::detect(
+    descriptor, coloredChannel, coloredCovariance);
+require(coloredDetection.getStatus() == ChannelMatrixDetectionStatus::SUCCESS, "colored detection succeeds");
+const double coloredUnnormalizedD = 2.0 / 3 + 2.0 / 3;
+requireNear(coloredUnnormalizedD, 4.0 / 3, "colored independent D oracle");
+requireNear(coloredDetection.getSinrs()[0], 2.0 / 3, "colored independent SINR stream 0");
+requireNear(coloredDetection.getSinrs()[1], 2.0 / 3, "colored independent SINR stream 1");
+const auto coloredEncoded = descriptor.encodeSourceBlock({s0, s1});
+const auto coloredObservation0 = ChannelMatrixAlgebra::multiply(coloredChannel, coloredEncoded[0]);
+const auto coloredObservation1 = ChannelMatrixAlgebra::multiply(coloredChannel, coloredEncoded[1]);
+ComplexMatrix coloredObservationMatrix(2, 2, {
+    {coloredObservation0.get(0, 0).real(), coloredObservation0.get(0, 0).imag()},
+    {coloredObservation0.get(1, 0).real(), coloredObservation0.get(1, 0).imag()},
+    {coloredObservation1.get(0, 0).real(), coloredObservation1.get(0, 0).imag()},
+    {coloredObservation1.get(1, 0).real(), coloredObservation1.get(1, 0).imag()}});
+const auto coloredDecoded = Ieee80211HtAlamoutiDecoder::decode(
+    descriptor, coloredChannel, coloredCovariance, coloredObservationMatrix);
+require(coloredDecoded.hasRecoveredSourceSymbols(), "colored noiseless symbols recovered");
+requireComplexNear(coloredDecoded.getSourceSymbols()[0], s0, "colored recovered s0");
+requireComplexNear(coloredDecoded.getSourceSymbols()[1], s1, "colored recovered s1");
+
+const auto complexColoredDetection = Ieee80211HtAlamoutiDecoder::detect(
+    descriptor, coloredChannel, complexColoredCovariance);
+require(complexColoredDetection.getStatus() == ChannelMatrixDetectionStatus::SUCCESS,
+    "complex colored detection succeeds");
+const double complexColoredD = 2.0 / 3 + 2.0 / 3;
+requireNear(complexColoredD, 4.0 / 3, "complex colored independent D oracle");
+requireNear(complexColoredDetection.getSinrs()[0], 2.0 / 3, "complex colored SINR stream 0");
+requireNear(complexColoredDetection.getSinrs()[1], 2.0 / 3, "complex colored SINR stream 1");
+const auto complexColoredDecoded = Ieee80211HtAlamoutiDecoder::decode(
+    descriptor, coloredChannel, complexColoredCovariance, coloredObservationMatrix);
+require(complexColoredDecoded.hasRecoveredSourceSymbols(), "complex colored noiseless symbols recovered");
+requireComplexNear(complexColoredDecoded.getSourceSymbols()[0], s0, "complex colored recovered s0");
+requireComplexNear(complexColoredDecoded.getSourceSymbols()[1], s1, "complex colored recovered s1");
+
+ComplexMatrix zeroChannel(2, 2);
+const auto zeroDetection = Ieee80211HtAlamoutiDecoder::detect(
+    descriptor, zeroChannel, twoRxCovariance);
+require(zeroDetection.getStatus() == ChannelMatrixDetectionStatus::RANK_DEFICIENT,
+    "zero channel has typed rank-deficient status");
+require(zeroDetection.getWeights().getNumRows() == 2 && zeroDetection.getWeights().getNumColumns() == 4,
+    "zero channel preserves augmented dimensions");
+for (double sinr : zeroDetection.getSinrs())
+    requireNear(sinr, 0, "zero channel finite SINR");
+require(throws([&] {
+    Ieee80211HtAlamoutiDecoder::decode(descriptor, zeroChannel, twoRxCovariance,
+        ComplexMatrix(2, 1, {{1, 0}, {1, 0}}));
+}), "zero-channel wrong-dimension observations are rejected");
+const double nonfiniteObservationValue = std::numeric_limits<double>::quiet_NaN();
+require(throws([&] {
+    Ieee80211HtAlamoutiDecoder::decode(descriptor, zeroChannel, twoRxCovariance,
+        ComplexMatrix(2, 2, {{nonfiniteObservationValue, 0}, {0, 0}, {0, 0}, {0, 0}}));
+}), "zero-channel nonfinite observations are rejected");
+
+require(throws([&] {
+    Ieee80211HtAlamoutiDecoder::Result(oneRxDecoded.getDetectionResult(), {}, true);
+}), "result rejects recovered flag with empty symbols");
+require(throws([&] {
+    Ieee80211HtAlamoutiDecoder::Result(zeroDetection, {s0, s1}, true);
+}), "result rejects recovered symbols for failed detection");
+require(throws([&] {
+    Ieee80211HtAlamoutiDecoder::Result(oneRxDecoded.getDetectionResult(), {s0}, true);
+}), "result rejects wrong recovered symbol count");
+require(throws([&] {
+    Ieee80211HtAlamoutiDecoder::Result(oneRxDecoded.getDetectionResult(),
+        {std::complex<double>(std::numeric_limits<double>::quiet_NaN(), 0), s1}, true);
+}), "result rejects nonfinite recovered symbols");
+require(throws([&] {
+    Ieee80211HtAlamoutiDecoder::Result(oneRxDecoded.getDetectionResult(), {}, false);
+}), "result rejects unrecovered successful detection");
+require(throws([&] {
+    Ieee80211HtAlamoutiDecoder::Result(zeroDetection, {s0, s1}, false);
+}), "result rejects symbols on unrecovered result");
+
+const auto repeatDetection = Ieee80211HtAlamoutiDecoder::detect(
+    descriptor, twoRxChannel, twoRxCovariance);
+require(repeatDetection.getWeights().getCoefficients() == twoRxDetection.getWeights().getCoefficients() &&
+    repeatDetection.getSinrs() == twoRxDetection.getSinrs(), "decoder detection is repeatable");
+const double scale = 1e-20;
+const auto tinyDetection = Ieee80211HtAlamoutiDecoder::detect(
+    descriptor, ChannelMatrixAlgebra::scale(twoRxChannel, std::complex<double>(std::sqrt(scale), 0)),
+    ChannelMatrixAlgebra::scale(twoRxCovariance, std::complex<double>(scale, 0)));
+require(tinyDetection.getStatus() == twoRxDetection.getStatus(), "tiny decoder status preserved");
+for (int stream = 0; stream < 2; stream++) {
+    requireNear(tinyDetection.getSinrs()[stream], twoRxDetection.getSinrs()[stream], "tiny decoder SINR preserved");
+    requireRelative(tinyDetection.getDesiredSignalPowerSpectralDensities()[stream].get<WpHz>(),
+        scale * twoRxDetection.getDesiredSignalPowerSpectralDensities()[stream].get<WpHz>(),
+        "tiny decoder desired PSD scales");
+    requireRelative(tinyDetection.getProjectedNoiseAndInterferencePowerSpectralDensities()[stream].get<WpHz>(),
+        scale * twoRxDetection.getProjectedNoiseAndInterferencePowerSpectralDensities()[stream].get<WpHz>(),
+        "tiny decoder projected PSD scales");
+    for (int row = 0; row < 4; row++)
+        requireComplexNear(tinyDetection.getWeights().get(stream, row), twoRxDetection.getWeights().get(stream, row),
+            "tiny decoder weights preserved");
+}
+
+require(throws([&] {
+    Ieee80211HtAlamoutiDecoder::detect(descriptor, oneRxChannel, ComplexMatrix(1, 1, {{0, 0}}));
+}), "non-positive covariance rejected");
+require(throws([&] {
+    Ieee80211HtAlamoutiDecoder::detect(descriptor, ComplexMatrix(1, 1, {{1, 0}}), oneRxCovariance);
+}), "invalid channel layout rejected");
+require(throws([&] {
+    Ieee80211HtAlamoutiDecoder::decode(descriptor, oneRxChannel, oneRxCovariance,
+        ComplexMatrix(1, 1, {{1, 0}}));
+}), "observation layout rejected");
+
+std::cout << "PASS\n";
+
+%contains: stdout
+PASS

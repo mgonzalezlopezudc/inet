@@ -8,6 +8,9 @@
 package inet.physicallayer.wireless.ieee80211.packetlevel;
 
 import inet.physicallayer.wireless.common.base.packetlevel.NarrowbandReceiverBase;
+import inet.physicallayer.wireless.common.analogmodel.dimensional.receiver.ChannelMatrixReceptionProcessor;
+import inet.physicallayer.wireless.common.contract.packetlevel.IChannelMatrixReceiver;
+import inet.physicallayer.wireless.common.contract.packetlevel.IChannelMatrixReceptionProcessor;
 
 
 //
@@ -20,16 +23,21 @@ import inet.physicallayer.wireless.common.base.packetlevel.NarrowbandReceiverBas
 // @see ~Ieee80211Transmitter, ~Ieee80211ScalarRadio,
 // ~Ieee80211ScalarRadioMedium.
 //
-module Ieee80211Receiver extends NarrowbandReceiverBase
+module Ieee80211Receiver extends NarrowbandReceiverBase like IChannelMatrixReceiver
 {
     parameters:
         string opMode @enum("a","b","g(erp)","g(mixed)","n(mixed-2.4Ghz)","p","ac");
         string bandName @enum("2.4 GHz","5 GHz","5 GHz (20 MHz)","5 GHz (40 MHz)","5 GHz (80 MHz)","5 GHz (160 MHz)","5.9 GHz");
         int channelNumber;
+        int maximumMaterializedResourceCells = default(200000);
         modulation = default("BPSK"); // TODO this is simply wrong
         errorModel.typename = default("Ieee80211NistErrorModel");
         // TODO remove when opMode is removed from the error model
         *.opMode = this.opMode;
         @class(Ieee80211Receiver);
-}
 
+    submodules:
+        channelMatrixReceptionProcessor: <default("")> like IChannelMatrixReceptionProcessor if typename != "" {
+            @display("p=250,180");
+        }
+}

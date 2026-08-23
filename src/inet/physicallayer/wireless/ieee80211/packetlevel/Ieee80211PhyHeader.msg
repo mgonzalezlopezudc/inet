@@ -137,6 +137,21 @@ class Ieee80211HtPhyPreamble extends Ieee80211PhyPreamble
 
 class Ieee80211HtPhyHeader extends Ieee80211PhyHeader
 {
+    // IEEE Std 802.11-2024 Table 19-11 and Figure 19-6: HT-SIG is 48 bits,
+    // transmitted LSB first as HT-SIG1 followed by HT-SIG2.
+    chunkLength = B(6);
+    uint8_t mcs = 0;
+    bool cbw = false;
+    bool smoothing = false;
+    bool notSounding = true;
+    bool reserved = true;
+    bool aggregation = false;
+    uint8_t stbc = 0;
+    bool fecCoding = false;
+    bool shortGi = false;
+    uint8_t numberOfExtensionSpatialStreams = 0;
+    uint8_t crc = 0;
+    uint8_t tail = 0;
 }
 
 // IEEE 802.11 21. High Throughput (VHT)

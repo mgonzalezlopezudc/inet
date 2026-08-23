@@ -1,0 +1,310 @@
+%description:
+Receiver-independent HT-SIG canonicalization, standard MCS/NSS metadata,
+Table 19-12 legality, HT-LTF limits, status precedence, and mode-cache identity.
+
+%includes:
+#include <functional>
+#include <memory>
+#include <type_traits>
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtCapabilities.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HtSignalField.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyModeResolver.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/IIeee80211HtCapabilitiesConsumer.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%global:
+
+static void require(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("HT PHY mode resolver test failed: %s", message);
+}
+
+static bool throws(const std::function<void()>& function)
+{
+    try {
+        function();
+        return false;
+    }
+    catch (const cRuntimeError&) {
+        return true;
+    }
+}
+
+static Ieee80211HtPpduContext makeContext()
+{
+    Ieee80211HtPpduContext context;
+    context.bandMode = Ieee80211HtMode::BAND_2_4GHZ;
+    context.preambleFormat = Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED;
+    context.channelNumber = 6;
+    context.centerFrequency = MHz(2437);
+    context.bandwidth = MHz(20);
+    return context;
+}
+
+static Ieee80211HtPhyHeader makeHeader(unsigned int mcs, unsigned int stbc = 0, unsigned int ness = 0,
+    bool reserved = true, uint8_t tail = 0, bool fecCoding = false, bool cbw = false)
+{
+    Ieee80211HtPhyHeader header;
+    header.setChunkLength(B(6));
+    header.setMcs(mcs);
+    header.setCbw(cbw);
+    header.setLengthField(B(100));
+    header.setSmoothing(true);
+    header.setNotSounding(true);
+    header.setReserved(reserved);
+    header.setAggregation(false);
+    header.setStbc(stbc);
+    header.setFecCoding(fecCoding);
+    header.setShortGi(false);
+    header.setNumberOfExtensionSpatialStreams(ness);
+    header.setTail(tail);
+
+    Ieee80211HtSignalField field;
+    field.mcs = header.getMcs();
+    field.cbw = header.getCbw();
+    field.length = 100;
+    field.smoothing = header.getSmoothing();
+    field.notSounding = header.getNotSounding();
+    field.reserved = header.getReserved();
+    field.aggregation = header.getAggregation();
+    field.stbc = header.getStbc();
+    field.fecCoding = header.getFecCoding();
+    field.shortGi = header.getShortGi();
+    field.numberOfExtensionSpatialStreams = header.getNumberOfExtensionSpatialStreams();
+    field.tail = header.getTail();
+    field.crc = computeIeee80211HtSignalFieldCrc(field);
+    header.setCrc(field.crc);
+    return header;
+}
+
+static Ieee80211PhyModeResolver::Status statusOf(const Ieee80211HtPhyHeader& header)
+{
+    return Ieee80211PhyModeResolver::resolve(header, makeContext()).status;
+}
+
+static void requireStatus(const Ieee80211HtPhyHeader& header, Ieee80211PhyModeResolver::Status expected, const char *message)
+{
+    require(statusOf(header) == expected, message);
+}
+
+class TestHtCapabilitiesConsumer final : public IIeee80211HtCapabilitiesConsumer
+{
+  public:
+    const Ieee80211HtCapabilities *receivedCapabilities = nullptr;
+
+    virtual void setHtCapabilities(const Ieee80211HtCapabilities *capabilities) override
+    {
+        receivedCapabilities = capabilities;
+    }
+};
+
+%activity:
+const auto context = makeContext();
+
+// IEEE Std 802.11-2024 Clause 19.3.5, including the MCS 32 special case.
+const int expectedNss[77] = {
+    1, 1, 1, 1, 1, 1, 1, 1,
+    2, 2, 2, 2, 2, 2, 2, 2,
+    3, 3, 3, 3, 3, 3, 3, 3,
+    4, 4, 4, 4, 4, 4, 4, 4,
+    1,
+    2, 2, 2, 2, 2, 2,
+    3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+    4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4
+};
+for (unsigned int mcs = 0; mcs <= 76; mcs++) {
+    require(Ieee80211HtModeBase::getNumberOfSpatialStreamsForMcs(mcs) == expectedNss[mcs], "MCS NSS metadata");
+    auto header = makeHeader(mcs);
+    auto result = Ieee80211PhyModeResolver::resolve(header, context);
+    if (mcs == 32)
+        require(result.status == Ieee80211PhyModeResolver::Status::RESERVED_HT_SIG && result.description == nullptr,
+            "MCS 32 is illegal with CBW=0");
+    else {
+        require(result.status == Ieee80211PhyModeResolver::Status::SUCCESS && result.description != nullptr, "valid MCS canonicalization");
+        require(result.description->getNumberOfSpatialStreams() == expectedNss[mcs], "canonical NSS");
+    }
+}
+auto context40 = context;
+context40.bandwidth = MHz(40);
+context40.channelNumber = 7;
+context40.centerFrequency = MHz(2442);
+const auto mcs32Result = Ieee80211PhyModeResolver::resolve(makeHeader(32, 0, 0, true, 0, false, true), context40);
+require(mcs32Result.status == Ieee80211PhyModeResolver::Status::SUCCESS &&
+    mcs32Result.description != nullptr && mcs32Result.description->getCbw(),
+    "MCS 32 canonicalizes only with CBW=1 and 40 MHz context");
+require(Ieee80211PhyModeResolver::resolve(makeHeader(0), context40).status ==
+    Ieee80211PhyModeResolver::Status::FORMAT_VIOLATION,
+    "CBW=0 contradicting a 40 MHz context is rejected");
+require(Ieee80211PhyModeResolver::resolve(makeHeader(0, 0, 0, true, 0, false, true), context).status ==
+    Ieee80211PhyModeResolver::Status::FORMAT_VIOLATION,
+    "CBW=1 contradicting a 20 MHz context is rejected");
+require(Ieee80211HtModeBase::getNumberOfSpatialStreamsForMcs(77) < 0, "reserved MCS metadata distinction");
+require(!Ieee80211HtModeBase::isValidMcsIndex(77), "reserved MCS validity distinction");
+requireStatus(makeHeader(77), Ieee80211PhyModeResolver::Status::RESERVED_HT_SIG, "MCS 77 is reserved");
+
+// Every legal Table 19-12 (N_SS, STBC) row.
+requireStatus(makeHeader(0, 0), Ieee80211PhyModeResolver::Status::SUCCESS, "Table 19-12 row NSS1/STBC0");
+requireStatus(makeHeader(0, 1), Ieee80211PhyModeResolver::Status::SUCCESS, "Table 19-12 row NSS1/STBC1");
+requireStatus(makeHeader(8, 0), Ieee80211PhyModeResolver::Status::SUCCESS, "Table 19-12 row NSS2/STBC0");
+requireStatus(makeHeader(8, 1), Ieee80211PhyModeResolver::Status::SUCCESS, "Table 19-12 row NSS2/STBC1");
+requireStatus(makeHeader(8, 2), Ieee80211PhyModeResolver::Status::SUCCESS, "Table 19-12 row NSS2/STBC2");
+requireStatus(makeHeader(16, 0), Ieee80211PhyModeResolver::Status::SUCCESS, "Table 19-12 row NSS3/STBC0");
+requireStatus(makeHeader(16, 1), Ieee80211PhyModeResolver::Status::SUCCESS, "Table 19-12 row NSS3/STBC1");
+requireStatus(makeHeader(24, 0), Ieee80211PhyModeResolver::Status::SUCCESS, "Table 19-12 row NSS4/STBC0");
+
+// Illegal Table 19-12 rows and reserved STBC.
+requireStatus(makeHeader(0, 2), Ieee80211PhyModeResolver::Status::RESERVED_HT_SIG, "illegal NSS1/STBC2");
+requireStatus(makeHeader(16, 2), Ieee80211PhyModeResolver::Status::RESERVED_HT_SIG, "illegal NSS3/STBC2");
+requireStatus(makeHeader(24, 1), Ieee80211PhyModeResolver::Status::RESERVED_HT_SIG, "illegal NSS4/STBC1");
+requireStatus(makeHeader(24, 2), Ieee80211PhyModeResolver::Status::RESERVED_HT_SIG, "illegal NSS4/STBC2");
+requireStatus(makeHeader(0, 3), Ieee80211PhyModeResolver::Status::RESERVED_HT_SIG, "reserved STBC3");
+
+// IEEE Std 802.11-2024 Tables 19-13 and 19-14, plus N_STS+N_ESS <= 4.
+auto nsts1Ness3 = makeHeader(0, 0, 3);
+auto nsts2Ness2 = makeHeader(8, 0, 2);
+auto nsts3Ness1 = makeHeader(16, 0, 1);
+auto nsts4Ness0 = makeHeader(24, 0, 0);
+for (const auto& header : {nsts1Ness3, nsts2Ness2, nsts3Ness1, nsts4Ness0}) {
+    const auto result = Ieee80211PhyModeResolver::resolve(header, context);
+    require(result.status == Ieee80211PhyModeResolver::Status::SUCCESS, "legal NESS/LTF boundary");
+}
+auto nsts3Ness2 = makeHeader(8, 1, 2);
+auto nsts4Ness1 = makeHeader(24, 0, 1);
+requireStatus(nsts3Ness2, Ieee80211PhyModeResolver::Status::RESERVED_HT_SIG, "NSS/STBC plus NESS limit");
+requireStatus(nsts4Ness1, Ieee80211PhyModeResolver::Status::RESERVED_HT_SIG, "N_STS four NESS limit");
+
+auto valid = makeHeader(0);
+auto validResult = Ieee80211PhyModeResolver::resolve(valid, context);
+require(validResult.description->getNumberOfDataLongTrainingFields() == 1 &&
+    validResult.description->getNumberOfExtensionLongTrainingFields() == 0 &&
+    validResult.description->getNumberOfLongTrainingFields() == 1, "derived LTF counts");
+auto unsupportedButRepresented = makeHeader(32, 0, 1, true, 0, true);
+unsupportedButRepresented.setCbw(true);
+Ieee80211HtSignalField unsupportedField;
+unsupportedField.mcs = unsupportedButRepresented.getMcs();
+unsupportedField.cbw = unsupportedButRepresented.getCbw();
+unsupportedField.length = 100;
+unsupportedField.smoothing = unsupportedButRepresented.getSmoothing();
+unsupportedField.notSounding = unsupportedButRepresented.getNotSounding();
+unsupportedField.reserved = unsupportedButRepresented.getReserved();
+unsupportedField.aggregation = unsupportedButRepresented.getAggregation();
+unsupportedField.stbc = unsupportedButRepresented.getStbc();
+unsupportedField.fecCoding = unsupportedButRepresented.getFecCoding();
+unsupportedField.shortGi = unsupportedButRepresented.getShortGi();
+unsupportedField.numberOfExtensionSpatialStreams = unsupportedButRepresented.getNumberOfExtensionSpatialStreams();
+unsupportedField.tail = unsupportedButRepresented.getTail();
+unsupportedField.crc = computeIeee80211HtSignalFieldCrc(unsupportedField);
+unsupportedButRepresented.setCrc(unsupportedField.crc);
+const auto unsupportedResult = Ieee80211PhyModeResolver::resolve(unsupportedButRepresented, context40);
+require(unsupportedResult.status == Ieee80211PhyModeResolver::Status::SUCCESS, "unsupported but valid HT fields canonicalize");
+require(unsupportedResult.description->getMcs() == 32 && unsupportedResult.description->getFecCoding() &&
+    unsupportedResult.description->getCbw() && unsupportedResult.description->getNumberOfExtensionSpatialStreams() == 1,
+    "canonical description preserves unsupported fields");
+const auto greenfieldContext = [&] {
+    auto value = context;
+    value.preambleFormat = Ieee80211HtPreambleMode::HT_PREAMBLE_GREENFIELD;
+    return value;
+}();
+require(Ieee80211PhyModeResolver::resolve(valid, greenfieldContext).status == Ieee80211PhyModeResolver::Status::SUCCESS,
+    "greenfield canonicalization");
+
+// FORMAT_VIOLATION takes precedence over semantic reserved-field checks.
+auto badChunkLength = makeHeader(0);
+badChunkLength.setChunkLength(B(5));
+requireStatus(badChunkLength, Ieee80211PhyModeResolver::Status::FORMAT_VIOLATION, "chunk length format violation");
+auto badCrc = makeHeader(0);
+badCrc.setCrc(badCrc.getCrc() ^ 1);
+requireStatus(badCrc, Ieee80211PhyModeResolver::Status::FORMAT_VIOLATION, "CRC format violation");
+requireStatus(makeHeader(0, 0, 0, false), Ieee80211PhyModeResolver::Status::RESERVED_HT_SIG, "reserved flag");
+requireStatus(makeHeader(0, 0, 0, true, 1), Ieee80211PhyModeResolver::Status::RESERVED_HT_SIG, "nonzero tail");
+
+// The description is immutable and carries copied context, not receiver state.
+require(validResult.description->getChannelNumber() == 6 && validResult.description->getCenterFrequency() == MHz(2437),
+    "canonical context");
+const auto originalMcs = validResult.description->getMcs();
+auto copiedSignalField = validResult.description->getSignalField();
+copiedSignalField.mcs = 76;
+require(validResult.description->getMcs() == originalMcs, "description field immutability");
+static_assert(std::is_same<decltype(validResult.description), std::shared_ptr<const Ieee80211HtPpduDescription>>::value,
+    "resolver result must expose immutable description ownership");
+
+// Cache identity includes every mode dimension while preserving same-key reuse.
+const auto *sameA = Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs0BW20MHz,
+    Ieee80211HtMode::BAND_2_4GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+const auto *sameB = Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs0BW20MHz,
+    Ieee80211HtMode::BAND_2_4GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+require(sameA == sameB, "same HT mode cache identity");
+require(sameA != Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs0BW20MHz,
+    Ieee80211HtMode::BAND_5GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG), "band cache identity");
+require(sameA != Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs0BW20MHz,
+    Ieee80211HtMode::BAND_2_4GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_GREENFIELD, Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG), "preamble cache identity");
+require(sameA != Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs0BW20MHz,
+    Ieee80211HtMode::BAND_2_4GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211HtModeBase::HT_GUARD_INTERVAL_SHORT), "GI cache identity");
+const auto *shortGiMode = Ieee80211HtCompliantModes::getCompliantMode(
+    &Ieee80211HtmcsTable::htMcs0BW20MHz, Ieee80211HtMode::BAND_2_4GHZ,
+    Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+    Ieee80211HtModeBase::HT_GUARD_INTERVAL_SHORT);
+const b durationFixtureLength = B(100);
+const simtime_t longGiDataDuration = sameA->getDataMode()->getDuration(durationFixtureLength);
+const simtime_t shortGiDataDuration = shortGiMode->getDataMode()->getDuration(durationFixtureLength);
+require(longGiDataDuration.raw() % SimTime(4, SIMTIME_US).raw() == 0,
+    "long-GI HT data duration uses 4 us symbols");
+require(shortGiDataDuration.raw() % SimTime(3600, SIMTIME_NS).raw() == 0 &&
+    shortGiDataDuration < longGiDataDuration,
+    "short-GI HT data duration uses 3.6 us symbols");
+require(shortGiMode->getDataMode()->getDuration(durationFixtureLength, 1) ==
+    shortGiMode->getDataMode()->getDuration(durationFixtureLength, 2),
+    "all nonzero HT STBC encodings use the standard two-symbol rounding multiple");
+const auto *twoStreamModuleTestMode = Ieee80211ModeSet::getModeSet("n(mixed-2.4Ghz)")->getMode(
+    Mbps(14.394444), Mbps(14.494444), MHz(20), -1);
+require(twoStreamModuleTestMode->getDataMode()->getNumberOfSpatialStreams() == 2,
+    "module-test bitrate selects an unambiguous two-spatial-stream HT mode");
+require(sameA != Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs0BW40MHz,
+    Ieee80211HtMode::BAND_2_4GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG), "bandwidth cache identity");
+require(sameA != Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs1BW20MHz,
+    Ieee80211HtMode::BAND_2_4GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG), "MCS cache identity");
+const auto *stbcMode = Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs0BW20MHz,
+    Ieee80211HtMode::BAND_2_4GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG, false, 1);
+require(stbcMode != sameA && stbcMode->getHeaderMode()->getSTBC() == 1, "STBC cache identity");
+bool fecRejected = false;
+try {
+    Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs0BW20MHz,
+        Ieee80211HtMode::BAND_2_4GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG, true, 0);
+}
+catch (const cRuntimeError&) {
+    fecRejected = true;
+}
+require(fecRejected, "bounded BCC mode selection rejects unsupported LDPC");
+
+Ieee80211HtCapabilities localCapabilities(false, 0, 7, 1, true, false);
+static_assert(std::is_base_of<IIeee80211HtCapabilitiesConsumer, Ieee80211Transmitter>::value,
+    "IEEE 802.11 transmitter must implement the HT capability-delivery contract");
+static_assert(std::is_base_of<IIeee80211HtCapabilitiesConsumer, Ieee80211Receiver>::value,
+    "IEEE 802.11 receiver must implement the HT capability-delivery contract");
+TestHtCapabilitiesConsumer replacementConsumer;
+replacementConsumer.setHtCapabilities(&localCapabilities);
+require(replacementConsumer.receivedCapabilities == &localCapabilities,
+    "replacement submodule receives the immutable capability object through the interface");
+localCapabilities.validateTransmission(7, 1, MHz(20), false);
+require(throws([&] { localCapabilities.validateTransmission(8, 1, MHz(20), false); }),
+    "local transmitter rejects MCS above its capability");
+require(throws([&] { localCapabilities.validateTransmission(7, 2, MHz(20), false); }),
+    "local transmitter rejects NSS above its capability");
+require(throws([&] { localCapabilities.validateTransmission(7, 1, MHz(40), false); }),
+    "local transmitter rejects disabled HT40 width");
+require(throws([&] { localCapabilities.validateTransmission(7, 1, MHz(20), true); }),
+    "local transmitter rejects STBC when Tx-STBC is disabled");
+
+std::cout << "PASS\n";
+
+%contains: stdout
+PASS

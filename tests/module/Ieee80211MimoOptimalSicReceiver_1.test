@@ -1,0 +1,74 @@
+%description:
+
+Runs optimal K-of-N receive-antenna selection and deterministic perfect-
+cancellation MMSE-SIC through the actual IEEE 802.11 dimensional path. The
+same receiver also processes one ordinary single-stream MRC frame.
+
+%inifile: omnetpp.ini
+
+[General]
+network = inet.test.moduletest.lib.Ieee80211MimoReceiverTest
+ned-path = .;../../../../src;../../lib
+sim-time-limit = 12ms
+seed-set = 37
+record-vector-results = false
+
+**.ipv4.arp.typename = "GlobalArp"
+**.mobility.initFromDisplayString = false
+*.singleStreamSource.mobility.initialX = 0m
+*.singleStreamSource.mobility.initialY = 0m
+*.singleStreamSource.mobility.initialZ = 0m
+*.spatialStreamSource.mobility.initialX = 0m
+*.spatialStreamSource.mobility.initialY = 1m
+*.spatialStreamSource.mobility.initialZ = 0m
+*.destination.mobility.initialX = 1m
+*.destination.mobility.initialY = 0m
+*.destination.mobility.initialZ = 0m
+
+**.wlan[0].mgmt.typename = "Ieee80211MgmtAdhoc"
+**.wlan[0].agent.typename = ""
+**.wlan[0].opMode = "n(mixed-2.4Ghz)"
+*.spatialStreamSource.wlan[0].bitrate = 14.444444Mbps
+**.wlan[0].bitrate = 6.5Mbps
+**.wlan[0].radio.typename = "Ieee80211TgnRadio"
+*.singleStreamSource.wlan[0].radio.antenna.numAntennas = 1
+*.spatialStreamSource.wlan[0].radio.antenna.numAntennas = 2
+*.destination.wlan[0].radio.antenna.numAntennas = 3
+
+*.destination.wlan[0].radio.receiver.channelMatrixReceptionProcessor.antennaSelection = "optimal"
+*.destination.wlan[0].radio.receiver.channelMatrixReceptionProcessor.activeReceiveAntennaCount = 2
+*.destination.wlan[0].radio.receiver.channelMatrixReceptionProcessor.oneStreamCombiner = "mrc"
+*.destination.wlan[0].radio.receiver.channelMatrixReceptionProcessor.spatialStreamDetector = "mmseSic"
+
+*.singleStreamSource.numApps = 1
+*.singleStreamSource.app[0].typename = "UdpBasicApp"
+*.singleStreamSource.app[0].destAddresses = "destination"
+*.singleStreamSource.app[0].destPort = 5000
+*.singleStreamSource.app[0].messageLength = 200B
+*.singleStreamSource.app[0].sendInterval = 1s
+*.singleStreamSource.app[0].startTime = 5ms
+*.spatialStreamSource.numApps = 1
+*.spatialStreamSource.app[0].typename = "UdpBasicApp"
+*.spatialStreamSource.app[0].destAddresses = "destination"
+*.spatialStreamSource.app[0].destPort = 5000
+*.spatialStreamSource.app[0].messageLength = 200B
+*.spatialStreamSource.app[0].sendInterval = 1s
+*.spatialStreamSource.app[0].startTime = 8ms
+*.destination.numApps = 1
+*.destination.app[0].typename = "UdpSink"
+*.destination.app[0].localPort = 5000
+
+*.radioMedium.profile = "D"
+*.radioMedium.condition = "nlos"
+*.radioMedium.timeVariation = false
+*.radioMedium.reciprocal = true
+*.radioMedium.backgroundNoise.power = -110dBm
+
+%contains: results/General-#0.sca
+scalar Ieee80211MimoReceiverTest.destination.app[0] packetReceived:count 2
+
+%contains: results/General-#0.sca
+scalar Ieee80211MimoReceiverTest.singleStreamSource.wlan[0].mac.dcf packetReceivedFromPeer:count 1
+
+%contains: results/General-#0.sca
+scalar Ieee80211MimoReceiverTest.spatialStreamSource.wlan[0].mac.dcf packetReceivedFromPeer:count 1

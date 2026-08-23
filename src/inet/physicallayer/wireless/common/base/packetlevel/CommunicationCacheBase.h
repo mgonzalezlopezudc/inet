@@ -8,6 +8,8 @@
 #ifndef __INET_COMMUNICATIONCACHEBASE_H
 #define __INET_COMMUNICATIONCACHEBASE_H
 
+#include <cstdint>
+
 #include "inet/common/Module.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/ICommunicationCache.h"
 
@@ -67,6 +69,12 @@ class INET_API CommunicationCacheBase : public Module, public ICommunicationCach
         const ISnir *snir = nullptr;
         std::vector<const IReceptionDecision *> receptionDecisions;
         const IReceptionResult *receptionResult = nullptr;
+        uint64_t interferenceRevision = 0;
+        std::vector<const IInterference *> retiredInterferences;
+        std::vector<const INoise *> retiredNoises;
+        std::vector<const ISnir *> retiredSnirs;
+        std::vector<const IReceptionDecision *> retiredReceptionDecisions;
+        std::vector<const IReceptionResult *> retiredReceptionResults;
 
       public:
         ReceptionCacheEntry();
@@ -170,6 +178,9 @@ class INET_API CommunicationCacheBase : public Module, public ICommunicationCach
     virtual void setCachedSNIR(const IRadio *receiver, const ITransmission *transmission, const ISnir *snir) override;
     virtual void removeCachedSNIR(const IRadio *receiver, const ITransmission *transmission) override;
 
+    virtual uint64_t getInterferenceRevision(const IRadio *receiver, const ITransmission *transmission) override;
+    virtual void advanceInterferenceRevision(const IRadio *receiver, const ITransmission *transmission) override;
+
     virtual const IReceptionDecision *getCachedReceptionDecision(const IRadio *receiver, const ITransmission *transmission, IRadioSignal::SignalPart part) override;
     virtual void setCachedReceptionDecision(const IRadio *receiver, const ITransmission *transmission, IRadioSignal::SignalPart part, const IReceptionDecision *receptionDecision) override;
     virtual void removeCachedReceptionDecision(const IRadio *receiver, const ITransmission *transmission, IRadioSignal::SignalPart part) override;
@@ -189,4 +200,3 @@ class INET_API CommunicationCacheBase : public Module, public ICommunicationCach
 } // namespace inet
 
 #endif
-
