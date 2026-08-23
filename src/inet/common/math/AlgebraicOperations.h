@@ -54,6 +54,13 @@ class INET_API AddedFunction : public FunctionBase<R, D>
                         UnilinearFunction<R, D> g(i2.getLower(), i2.getUpper(), f2l->getValue(i2.getLower()) + f1c->getConstantValue(), f2l->getValue(i2.getUpper()) + f1c->getConstantValue(), f2l->getDimension());
                         simplifyAndCall(i2, &g, callback);
                     }
+                    else if (auto f2b = dynamic_cast<const BilinearFunction<R, D> *>(f2)) {
+                        BilinearFunction<R, D> g(f2b->getLowerLower(), f2b->getLowerUpper(), f2b->getUpperLower(), f2b->getUpperUpper(),
+                                f1c->getConstantValue() + f2b->getRLowerLower(), f1c->getConstantValue() + f2b->getRLowerUpper(),
+                                f1c->getConstantValue() + f2b->getRUpperLower(), f1c->getConstantValue() + f2b->getRUpperUpper(),
+                                f2b->getDimension1(), f2b->getDimension2());
+                        simplifyAndCall(i2, &g, callback);
+                    }
                     else
                         throw cRuntimeError("TODO");
                 }
@@ -87,6 +94,26 @@ class INET_API AddedFunction : public FunctionBase<R, D>
                             BilinearFunction<R, D> g(lowerLower, lowerUpper, upperLower, upperUpper, rLowerLower, rLowerUpper, rUpperLower, rUpperUpper, f1l->getDimension(), f2l->getDimension());
                             simplifyAndCall(i2, &g, callback);
                         }
+                    }
+                    else
+                        throw cRuntimeError("TODO");
+                }
+                else if (auto f1b = dynamic_cast<const BilinearFunction<R, D> *>(f1)) {
+                    if (auto f2c = dynamic_cast<const ConstantFunction<R, D> *>(f2)) {
+                        BilinearFunction<R, D> g(f1b->getLowerLower(), f1b->getLowerUpper(), f1b->getUpperLower(), f1b->getUpperUpper(),
+                                f1b->getRLowerLower() + f2c->getConstantValue(), f1b->getRLowerUpper() + f2c->getConstantValue(),
+                                f1b->getRUpperLower() + f2c->getConstantValue(), f1b->getRUpperUpper() + f2c->getConstantValue(),
+                                f1b->getDimension1(), f1b->getDimension2());
+                        simplifyAndCall(i2, &g, callback);
+                    }
+                    else if (auto f2b = dynamic_cast<const BilinearFunction<R, D> *>(f2)) {
+                        if (f1b->getDimension1() != f2b->getDimension1() || f1b->getDimension2() != f2b->getDimension2())
+                            throw cRuntimeError("Cannot add bilinear functions with different dimensions");
+                        BilinearFunction<R, D> g(f1b->getLowerLower(), f1b->getLowerUpper(), f1b->getUpperLower(), f1b->getUpperUpper(),
+                                f1b->getRLowerLower() + f2b->getValue(f1b->getLowerLower()), f1b->getRLowerUpper() + f2b->getValue(f1b->getLowerUpper()),
+                                f1b->getRUpperLower() + f2b->getValue(f1b->getUpperLower()), f1b->getRUpperUpper() + f2b->getValue(f1b->getUpperUpper()),
+                                f1b->getDimension1(), f1b->getDimension2());
+                        simplifyAndCall(i2, &g, callback);
                     }
                     else
                         throw cRuntimeError("TODO");
@@ -223,6 +250,13 @@ class INET_API MultipliedFunction : public FunctionBase<R, D>
                         UnilinearFunction<R, D> g(i2.getLower(), i2.getUpper(), f2l->getValue(i2.getLower()) * f1c->getConstantValue(), f2l->getValue(i2.getUpper()) * f1c->getConstantValue(), f2l->getDimension());
                         simplifyAndCall(i2, &g, callback);
                     }
+                    else if (auto f2b = dynamic_cast<const BilinearFunction<double, D> *>(f2)) {
+                        BilinearFunction<R, D> g(f2b->getLowerLower(), f2b->getLowerUpper(), f2b->getUpperLower(), f2b->getUpperUpper(),
+                                f1c->getConstantValue() * f2b->getRLowerLower(), f1c->getConstantValue() * f2b->getRLowerUpper(),
+                                f1c->getConstantValue() * f2b->getRUpperLower(), f1c->getConstantValue() * f2b->getRUpperUpper(),
+                                f2b->getDimension1(), f2b->getDimension2());
+                        simplifyAndCall(i2, &g, callback);
+                    }
                     else
                         throw cRuntimeError("TODO");
                 }
@@ -234,6 +268,17 @@ class INET_API MultipliedFunction : public FunctionBase<R, D>
                     else if (auto f2l = dynamic_cast<const UnilinearFunction<double, D> *>(f2)) {
 //                        QuadraticFunction<double, D> g();
                         throw cRuntimeError("TODO");
+                    }
+                    else
+                        throw cRuntimeError("TODO");
+                }
+                else if (auto f1b = dynamic_cast<const BilinearFunction<R, D> *>(f1)) {
+                    if (auto f2c = dynamic_cast<const ConstantFunction<double, D> *>(f2)) {
+                        BilinearFunction<R, D> g(f1b->getLowerLower(), f1b->getLowerUpper(), f1b->getUpperLower(), f1b->getUpperUpper(),
+                                f1b->getRLowerLower() * f2c->getConstantValue(), f1b->getRLowerUpper() * f2c->getConstantValue(),
+                                f1b->getRUpperLower() * f2c->getConstantValue(), f1b->getRUpperUpper() * f2c->getConstantValue(),
+                                f1b->getDimension1(), f1b->getDimension2());
+                        simplifyAndCall(i2, &g, callback);
                     }
                     else
                         throw cRuntimeError("TODO");
@@ -295,6 +340,17 @@ class INET_API DividedFunction : public FunctionBase<double, D>
                         UnireciprocalFunction<double, D> g(0, toDouble(f1c->getConstantValue()), f2l->getA(), f2l->getB(), f2l->getDimension());
                         simplifyAndCall(i2, &g, callback);
                     }
+                    else if (auto f2b = dynamic_cast<const BilinearFunction<R, D> *>(f2)) {
+                        // Keep the dimensional representation closed under division by
+                        // sampling the quotient at the four primitive corners. This is
+                        // the same piecewise-bilinear materialization policy used for
+                        // sampled channel gain and post-combiner noise.
+                        BilinearFunction<double, D> g(f2b->getLowerLower(), f2b->getLowerUpper(), f2b->getUpperLower(), f2b->getUpperUpper(),
+                                unit(f1c->getConstantValue() / f2b->getRLowerLower()).get(), unit(f1c->getConstantValue() / f2b->getRLowerUpper()).get(),
+                                unit(f1c->getConstantValue() / f2b->getRUpperLower()).get(), unit(f1c->getConstantValue() / f2b->getRUpperUpper()).get(),
+                                f2b->getDimension1(), f2b->getDimension2());
+                        simplifyAndCall(i2, &g, callback);
+                    }
                     else
                         throw cRuntimeError("TODO");
                 }
@@ -313,6 +369,28 @@ class INET_API DividedFunction : public FunctionBase<double, D>
 //                            BireciprocalFunction<double, D> g(...);
 //                            simplifyAndCall(i2, &g, f);
                         }
+                    }
+                    else
+                        throw cRuntimeError("TODO");
+                }
+                else if (auto f1b = dynamic_cast<const BilinearFunction<R, D> *>(f1)) {
+                    if (auto f2c = dynamic_cast<const ConstantFunction<R, D> *>(f2)) {
+                        BilinearFunction<double, D> g(f1b->getLowerLower(), f1b->getLowerUpper(), f1b->getUpperLower(), f1b->getUpperUpper(),
+                                unit(f1b->getRLowerLower() / f2c->getConstantValue()).get(), unit(f1b->getRLowerUpper() / f2c->getConstantValue()).get(),
+                                unit(f1b->getRUpperLower() / f2c->getConstantValue()).get(), unit(f1b->getRUpperUpper() / f2c->getConstantValue()).get(),
+                                f1b->getDimension1(), f1b->getDimension2());
+                        simplifyAndCall(i2, &g, callback);
+                    }
+                    else if (auto f2b = dynamic_cast<const BilinearFunction<R, D> *>(f2)) {
+                        if (f1b->getDimension1() != f2b->getDimension1() || f1b->getDimension2() != f2b->getDimension2())
+                            throw cRuntimeError("Cannot divide bilinear functions with different dimensions");
+                        BilinearFunction<double, D> g(f1b->getLowerLower(), f1b->getLowerUpper(), f1b->getUpperLower(), f1b->getUpperUpper(),
+                                unit(f1b->getRLowerLower() / f2b->getValue(f1b->getLowerLower())).get(),
+                                unit(f1b->getRLowerUpper() / f2b->getValue(f1b->getLowerUpper())).get(),
+                                unit(f1b->getRUpperLower() / f2b->getValue(f1b->getUpperLower())).get(),
+                                unit(f1b->getRUpperUpper() / f2b->getValue(f1b->getUpperUpper())).get(),
+                                f1b->getDimension1(), f1b->getDimension2());
+                        simplifyAndCall(i2, &g, callback);
                     }
                     else
                         throw cRuntimeError("TODO");
@@ -387,6 +465,13 @@ class INET_API SummedFunction : public FunctionBase<R, D>
                         UnilinearFunction<R, D> g(i1.getLower(), i1.getUpper(), f1l->getValue(i1.getLower()) + fc->getConstantValue(), f1l->getValue(i1.getUpper()) + fc->getConstantValue(), f1l->getDimension());
                         partition(index + 1, i1, callback, &g);
                     }
+                    else if (auto f1b = dynamic_cast<const BilinearFunction<R, D> *>(f1)) {
+                        BilinearFunction<R, D> g(f1b->getLowerLower(), f1b->getLowerUpper(), f1b->getUpperLower(), f1b->getUpperUpper(),
+                                fc->getConstantValue() + f1b->getRLowerLower(), fc->getConstantValue() + f1b->getRLowerUpper(),
+                                fc->getConstantValue() + f1b->getRUpperLower(), fc->getConstantValue() + f1b->getRUpperUpper(),
+                                f1b->getDimension1(), f1b->getDimension2());
+                        partition(index + 1, i1, callback, &g);
+                    }
                     else
                         throw cRuntimeError("TODO");
                 }
@@ -402,6 +487,26 @@ class INET_API SummedFunction : public FunctionBase<R, D>
                         }
                         else
                             throw cRuntimeError("TODO");
+                    }
+                    else
+                        throw cRuntimeError("TODO");
+                }
+                else if (auto fb = dynamic_cast<const BilinearFunction<R, D> *>(f)) {
+                    if (auto f1c = dynamic_cast<const ConstantFunction<R, D> *>(f1)) {
+                        BilinearFunction<R, D> g(fb->getLowerLower(), fb->getLowerUpper(), fb->getUpperLower(), fb->getUpperUpper(),
+                                fb->getRLowerLower() + f1c->getConstantValue(), fb->getRLowerUpper() + f1c->getConstantValue(),
+                                fb->getRUpperLower() + f1c->getConstantValue(), fb->getRUpperUpper() + f1c->getConstantValue(),
+                                fb->getDimension1(), fb->getDimension2());
+                        partition(index + 1, i1, callback, &g);
+                    }
+                    else if (auto f1b = dynamic_cast<const BilinearFunction<R, D> *>(f1)) {
+                        if (fb->getDimension1() != f1b->getDimension1() || fb->getDimension2() != f1b->getDimension2())
+                            throw cRuntimeError("Cannot sum bilinear functions with different dimensions");
+                        BilinearFunction<R, D> g(fb->getLowerLower(), fb->getLowerUpper(), fb->getUpperLower(), fb->getUpperUpper(),
+                                fb->getRLowerLower() + f1b->getValue(fb->getLowerLower()), fb->getRLowerUpper() + f1b->getValue(fb->getLowerUpper()),
+                                fb->getRUpperLower() + f1b->getValue(fb->getUpperLower()), fb->getRUpperUpper() + f1b->getValue(fb->getUpperUpper()),
+                                fb->getDimension1(), fb->getDimension2());
+                        partition(index + 1, i1, callback, &g);
                     }
                     else
                         throw cRuntimeError("TODO");
@@ -438,4 +543,3 @@ class INET_API SummedFunction : public FunctionBase<R, D>
 } // namespace inet
 
 #endif
-

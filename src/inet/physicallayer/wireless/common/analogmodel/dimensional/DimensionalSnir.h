@@ -10,12 +10,13 @@
 
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalNoise.h"
 #include "inet/physicallayer/wireless/common/base/packetlevel/SnirBase.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IDimensionalSnir.h"
 
 namespace inet {
 
 namespace physicallayer {
 
-class INET_API DimensionalSnir : public SnirBase
+class INET_API DimensionalSnir : public SnirBase, public IDimensionalSnir
 {
   protected:
     mutable double minSNIR;
@@ -36,7 +37,7 @@ class INET_API DimensionalSnir : public SnirBase
     virtual double getMax() const override;
     virtual double getMean() const override;
 
-    virtual const Ptr<const IFunction<double, Domain<simsec, Hz>>> getSnir() const;
+    virtual const Ptr<const IFunction<double, Domain<simsec, Hz>>> getSnir() const override;
 };
 
 } // namespace physicallayer
@@ -44,4 +45,3 @@ class INET_API DimensionalSnir : public SnirBase
 } // namespace inet
 
 #endif
-

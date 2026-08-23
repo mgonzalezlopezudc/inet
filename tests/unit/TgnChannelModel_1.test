@@ -1,0 +1,68 @@
+%description:
+
+Checks the TGn master-seed extraction and stable purpose-seed derivation
+contract, including field framing, link direction, and query-order independence.
+
+%includes:
+#include <cstdint>
+#include "inet/physicallayer/wireless/ieee80211/channelmodel/TgnChannelModel.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+class TestTgnChannelModel : public TgnChannelModel
+{
+  public:
+    static uint64_t seed(uint64_t family, const char *tx, const char *rx, int component, int row, int column, const char *effect) {
+        LinkKey key{tx, rx};
+        return derivePurposeSeed(family, key, TgnModel::D, TgnCondition::NLOS, component, row, column, effect);
+    }
+    static uint64_t extract(cRNG *rng) { return extractMasterSeed(rng); }
+};
+
+class WordRng : public cRNG
+{
+  protected:
+    uint32_t words[2];
+    int index = 0;
+
+  public:
+    WordRng(uint32_t first, uint32_t second) : words{first, second} {}
+    virtual void initialize(int, int, int, int, int, cConfiguration *) override {}
+    virtual void selfTest() override {}
+    virtual uint32_t intRand() override {
+        if (index >= 2)
+            throw cRuntimeError("TGn seed extraction consumed more than two words");
+        return words[index++];
+    }
+    virtual uint32_t intRandMax() override { return UINT32_MAX; }
+    virtual uint32_t intRand(uint32_t n) override { return intRand() % n; }
+    virtual double doubleRand() override { return 0; }
+    virtual double doubleRandNonz() override { return 0.5; }
+    virtual double doubleRandIncl1() override { return 0; }
+    int getConsumedWords() const { return index; }
+};
+
+static void require(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("TGn channel-model test failed: %s", message);
+}
+
+%activity:
+WordRng rng(UINT32_C(0x01234567), UINT32_C(0x89abcdef));
+require(TestTgnChannelModel::extract(&rng) == UINT64_C(0x0123456789abcdef), "64-bit master extraction");
+require(rng.getConsumedWords() == 2, "exactly two master words");
+const uint64_t golden = TestTgnChannelModel::seed(UINT64_C(0x0123456789abcdef), "tx", "rx", 7, 1, 2, "diffuseBell");
+require(golden == UINT64_C(15695006415662829421), "INET-TGN-SEED-V1 golden");
+require(TestTgnChannelModel::seed(UINT64_C(0x0123456789abcdef), "tx", "rx", 7, 1, 2, "diffuseBell") == golden, "repeatability");
+require(TestTgnChannelModel::seed(UINT64_C(0x0123456789abcdef), "rx", "tx", 7, 1, 2, "diffuseBell") != golden, "ordered link identity");
+require(TestTgnChannelModel::seed(UINT64_C(0x0123456789abcdef), "tx", "rx", 8, 1, 2, "diffuseBell") != golden, "component framing");
+require(TestTgnChannelModel::seed(UINT64_C(0x0123456789abcdef), "tx", "rx", 7, 2, 1, "diffuseBell") != golden, "matrix-coordinate framing");
+require(TestTgnChannelModel::seed(UINT64_C(0x0123456789abcdef), "tx", "rx", 7, 1, 2, "vehicleBell") != golden, "effect framing");
+std::cout << "PASS\n";
+
+%contains: stdout
+PASS

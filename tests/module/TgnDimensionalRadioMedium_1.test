@@ -1,0 +1,72 @@
+%description:
+
+Runs a time-varying TGn Model D 2x1 selected-column MRC link end to end. The
+HT data frame and its ordinary legacy ACK must both complete through the
+dimensional channel/noise/SNIR integration.
+
+%file: test.ned
+
+import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
+import inet.node.inet.WirelessHost;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211TgnRadioMedium;
+
+network TgnDimensionalRadioMediumTest
+{
+    submodules:
+        configurator: Ipv4NetworkConfigurator;
+        radioMedium: Ieee80211TgnRadioMedium;
+        sourceHost: WirelessHost;
+        destinationHost: WirelessHost;
+}
+
+%inifile: omnetpp.ini
+
+[General]
+network = TgnDimensionalRadioMediumTest
+ned-path = .;../../../../src
+sim-time-limit = 7ms
+seed-set = 11
+record-vector-results = false
+
+*.sourceHost.ipv4.arp.typename = "GlobalArp"
+*.destinationHost.ipv4.arp.typename = "GlobalArp"
+**.mobility.initFromDisplayString = false
+*.sourceHost.mobility.initialX = 0m
+*.sourceHost.mobility.initialY = 0m
+*.sourceHost.mobility.initialZ = 0m
+*.destinationHost.mobility.initialX = 1m
+*.destinationHost.mobility.initialY = 0m
+*.destinationHost.mobility.initialZ = 0m
+*.sourceHost.wlan[0].mgmt.typename = "Ieee80211MgmtAdhoc"
+*.destinationHost.wlan[0].mgmt.typename = "Ieee80211MgmtAdhoc"
+*.sourceHost.wlan[0].agent.typename = ""
+*.destinationHost.wlan[0].agent.typename = ""
+**.wlan[0].opMode = "n(mixed-2.4Ghz)"
+**.wlan[0].bitrate = 6.5Mbps
+**.wlan[0].radio.typename = "Ieee80211DimensionalRadio"
+
+*.sourceHost.numApps = 1
+*.sourceHost.app[0].typename = "UdpBasicApp"
+*.sourceHost.app[0].destAddresses = "destinationHost"
+*.sourceHost.app[0].destPort = 5000
+*.sourceHost.app[0].messageLength = 200B
+*.sourceHost.app[0].sendInterval = 1s
+*.sourceHost.app[0].startTime = 5ms
+*.destinationHost.numApps = 1
+*.destinationHost.app[0].typename = "UdpSink"
+*.destinationHost.app[0].localPort = 5000
+
+*.radioMedium.profile = "D"
+*.radioMedium.condition = "nlos"
+*.radioMedium.timeVariation = true
+*.radioMedium.reciprocal = true
+*.radioMedium.selectedTransmitAntenna = 0
+*.radioMedium.backgroundNoise.power = -110dBm
+*.sourceHost.wlan[0].radio.antenna.numAntennas = 1
+*.destinationHost.wlan[0].radio.antenna.numAntennas = 2
+
+%contains: results/General-#0.sca
+scalar TgnDimensionalRadioMediumTest.destinationHost.app[0] packetReceived:count 1
+
+%contains: results/General-#0.sca
+scalar TgnDimensionalRadioMediumTest.sourceHost.wlan[0].mac.dcf packetReceivedFromPeer:count 1

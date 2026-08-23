@@ -1,0 +1,3 @@
+coding,bandwidth_mhz,mcs,psdu_bytes,snr_db,per
+BCC,20,0,16,-10,0.5
+BCC,20,0,16,10,0.01

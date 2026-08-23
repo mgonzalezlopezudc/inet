@@ -1,0 +1,4 @@
+# Synthetic malformed fixture: PER increases as SNR increases.
+coding,bandwidth_mhz,mcs,psdu_bytes,snr_db,per
+BCC,20,0,32,-10,0.1
+BCC,20,0,32,0,0.2

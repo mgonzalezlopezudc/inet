@@ -1,0 +1,35 @@
+%description:
+
+Checks selected-column ideal MRC, including the exact 2x1 fixture and proof
+that unselected transmit columns do not enter the gain.
+
+%includes:
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/ChannelMatrixCombiner.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+static void require(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("Channel combiner test failed: %s", message);
+}
+
+%activity:
+ComplexMatrix oneByOne(1, 1, {{3, 4}});
+require(ChannelMatrixCombiner::computeSelectedColumnGain(oneByOne, 0) == 25, "SISO norm");
+ComplexMatrix fixture(2, 1, {{3, 4}, {0, 12}});
+require(ChannelMatrixCombiner::computeSelectedColumnGain(fixture, 0) == 169, "2x1 MRC fixture");
+ComplexMatrix twoColumns(2, 2, {{3, 4}, {100, 0}, {0, 12}, {100, 0}});
+require(ChannelMatrixCombiner::computeSelectedColumnGain(twoColumns, 0) == 169, "selected column isolation");
+require(ChannelMatrixCombiner::computeSelectedColumnGain(twoColumns, 1) == 20000, "second selected column");
+bool rejected = false;
+try { ChannelMatrixCombiner::computeSelectedColumnGain(twoColumns, 2); }
+catch (const cRuntimeError&) { rejected = true; }
+require(rejected, "invalid column");
+std::cout << "PASS\n";
+
+%contains: stdout
+PASS

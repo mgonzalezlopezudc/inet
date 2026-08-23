@@ -1,0 +1,249 @@
+%description:
+
+Checks TGn spatial correlation/root reconstruction, coherent wideband phase,
+absolute-time oscillator evaluation, LOS addition, and fluorescent harmonics.
+
+%includes:
+#include <cmath>
+#include <complex>
+#include <cstdlib>
+#include <fstream>
+#include <iomanip>
+#include <set>
+#include <string>
+#include <vector>
+#include "inet/physicallayer/wireless/ieee80211/channelmodel/TgnMimoChannel.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+static void require(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("TGn MIMO test failed: %s", message);
+}
+
+static TgnTemporalProcess fixedProcess(std::complex<double> value)
+{
+    TgnTemporalProcess result;
+    result.terms.push_back({1, TgnLorentzianProcess({0}, {value})});
+    return result;
+}
+
+static std::complex<double> integrateCorrelation(int panelsPerHalf, double spacing, int lag,
+    double meanAngleDegrees, double angularSpreadDegrees)
+{
+    constexpr double pi = 3.141592653589793238462643383279502884;
+    const double meanAngle = meanAngleDegrees * pi / 180;
+    const double angularSpread = angularSpreadDegrees * pi / 180;
+    std::complex<double> numerator = 0;
+    double denominator = 0;
+    for (int half = 0; half < 2; half++) {
+        const double begin = half == 0 ? -pi : 0;
+        const double end = half == 0 ? 0 : pi;
+        const double step = (end - begin) / panelsPerHalf;
+        for (int index = 0; index <= panelsPerHalf; index++) {
+            const double offset = begin + index * step;
+            const double weight = index == 0 || index == panelsPerHalf ? 1 : (index & 1 ? 4 : 2);
+            const double density = std::exp(-std::sqrt(2.0) * std::abs(offset) / angularSpread);
+            const double phase = -2 * pi * lag * spacing * std::sin(offset + meanAngle);
+            numerator += weight * density * std::exp(std::complex<double>(0, phase));
+            denominator += weight * density;
+        }
+    }
+    return numerator / denominator;
+}
+
+static double bellCorrelationError(int oscillatorCount)
+{
+    constexpr double pi = 3.141592653589793238462643383279502884;
+    double maximumError = 0;
+    // At integer multiples of the coherence time 1/(2*pi*halfWidth), the
+    // normalized Lorentzian correlation is exp(-lag).
+    for (int lag = 0; lag <= 5; lag++) {
+        std::complex<double> actual = 0;
+        for (int oscillator = 0; oscillator < oscillatorCount; oscillator++) {
+            const double quantile = (oscillator + 0.5) / oscillatorCount;
+            const double normalizedFrequency = std::tan(pi * (quantile - 0.5));
+            actual += std::exp(std::complex<double>(0, lag * normalizedFrequency));
+        }
+        actual /= oscillatorCount;
+        maximumError = std::max(maximumError, std::abs(actual - std::exp(-(double)lag)));
+    }
+    return maximumError;
+}
+
+%activity:
+// INET policy: deterministic principal root of the centered-ULA correlation.
+auto correlation = TgnMimoChannel::createSpatialCorrelation(4, 0.5, 45, 40);
+auto root = TgnMimoChannel::principalSquareRoot(correlation);
+auto reconstructed = TgnMimoChannel::multiply(root, TgnMimoChannel::conjugateTranspose(root));
+for (int row = 0; row < 4; row++)
+    for (int column = 0; column < 4; column++)
+        require(std::abs(reconstructed.get(row, column) - correlation.get(row, column)) < 1e-8, "root reconstruction");
+
+require(TgnMimoChannel::SPATIAL_QUADRATURE_PANELS == 8192, "frozen spatial quadrature count");
+double maximumQuadratureDifference = 0;
+for (int modelIndex = 0; modelIndex < 6; modelIndex++) {
+    auto profile = TgnChannelProfile::create((TgnModel)modelIndex);
+    for (const auto& cluster : profile.getClusters()) {
+        const double means[] = {cluster.meanAoADegrees, cluster.meanAoDDegrees};
+        const double spreads[] = {cluster.receiverAngularSpreadDegrees, cluster.transmitterAngularSpreadDegrees};
+        for (int side = 0; side < 2; side++)
+            for (double spacing : {0.25, 0.5, 1.0})
+                for (int lag = 0; lag < 8; lag++) {
+                    auto selected = integrateCorrelation(8192, spacing, lag, means[side], spreads[side]);
+                    auto reference = integrateCorrelation(16384, spacing, lag, means[side], spreads[side]);
+                    maximumQuadratureDifference = std::max(maximumQuadratureDifference, std::abs(selected - reference));
+                }
+    }
+}
+require(maximumQuadratureDifference <= 1e-10, "spatial quadrature convergence");
+
+int selectedOscillatorCount = -1;
+for (int candidate : {32, 64, 128, 256})
+    if (selectedOscillatorCount == -1 && bellCorrelationError(candidate) <= 0.03)
+        selectedOscillatorCount = candidate;
+require(selectedOscillatorCount == 256, "frozen Bell oscillator convergence count");
+// A normalized sum of independent proper CN(0,1) coefficients has exact unit
+// ensemble variance for every count, so its single-time capacity distribution
+// is count-invariant. The explicit squared weights seal that normalization.
+require(std::abs(256 * std::pow(1 / std::sqrt(256.0), 2) - 1) < 1e-15, "Bell marginal variance normalization");
+require(std::abs(512 * std::pow(1 / std::sqrt(512.0), 2) - 1) < 1e-15, "next-count marginal variance normalization");
+
+TgnLorentzianProcess rotating({5}, {{1, 0}});
+require(std::abs(TgnMimoChannel::evaluate(rotating, 0.05) - std::complex<double>(0, 1)) < 1e-12, "absolute-time oscillator");
+
+TgnChannelRealization realization;
+realization.numReceiveAntennas = 1;
+realization.numTransmitAntennas = 1;
+realization.referenceFrequency = GHz(5);
+realization.timeVariation = true;
+realization.shadowingPowerGain = 1;
+for (int index = 0; index < 2; index++) {
+    TgnComponentRealization component;
+    component.stableComponentIndex = index;
+    component.excessDelay = index == 0 ? SIMTIME_ZERO : SimTime(50, SIMTIME_NS);
+    component.normalizedLinearPower = 0.5;
+    component.receiverSquareRoot = ComplexMatrix(1, 1, {{1, 0}});
+    component.transmitterSquareRoot = ComplexMatrix(1, 1, {{1, 0}});
+    component.temporalProcesses.push_back(fixedProcess({1, 0}));
+    realization.components.push_back(component);
+}
+auto reinforced = TgnMimoChannel::evaluate(realization, 0, GHz(5));
+require(std::abs(reinforced.get(0, 0) - std::sqrt(2.0)) < 1e-12, "coherent reinforcement");
+auto cancelled = TgnMimoChannel::evaluate(realization, 0, GHz(5.01));
+require(std::abs(cancelled.get(0, 0)) < 1e-12, "negative-delay phase cancellation");
+
+realization.los = true;
+realization.firstTapKLinear = 4;
+realization.firstTapDiffusePower = 0.5;
+realization.fixedLosMatrix = ComplexMatrix(1, 1, {{1, 0}});
+auto withLos = TgnMimoChannel::evaluate(realization, 0, GHz(5));
+require(std::abs(withLos.get(0, 0) - (std::sqrt(2.0) + std::sqrt(2.0))) < 1e-12, "LOS addition");
+
+// Calibration-only ensemble normalization is one deterministic profile
+// factor: it preserves the realization's fading draw instead of normalizing
+// each response independently.
+realization.smallScalePowerNormalization = 1 / std::sqrt(1 + realization.firstTapKLinear * realization.firstTapDiffusePower);
+auto normalizedWithLos = TgnMimoChannel::evaluate(realization, 0, GHz(5));
+require(std::abs(normalizedWithLos.get(0, 0) - (std::sqrt(2.0) + std::sqrt(2.0)) / std::sqrt(3.0)) < 1e-12,
+    "whole-small-scale-profile ensemble normalization");
+realization.smallScalePowerNormalization = 1;
+realization.shadowingPowerGain = 1;
+auto shadowingDisabled = TgnMimoChannel::evaluate(realization, 0, GHz(5));
+realization.shadowingPowerGain = 4;
+auto shadowingEnabled = TgnMimoChannel::evaluate(realization, 0, GHz(5));
+require(std::abs(shadowingEnabled.get(0, 0) / shadowingDisabled.get(0, 0) - 2.0) < 1e-12,
+    "shadowing gain boundary");
+realization.shadowingPowerGain = 1;
+
+// INET policy: all affected components use one shared fluorescent function.
+realization.fluorescent = true;
+realization.fluorescentMainsFrequencyHz = 50;
+realization.fluorescentPhases = {{0, 0, 0}};
+auto fluorescentAtZero = TgnMimoChannel::evaluateFluorescent(realization, 0);
+require(std::abs(fluorescentAtZero.real() - (1 + std::pow(10.0, -15.0 / 20.0) + 0.1)) < 1e-12, "fluorescent amplitudes");
+require(std::abs(TgnMimoChannel::evaluateFluorescent(realization, 0.01) - fluorescentAtZero) < 1e-12, "fluorescent harmonic period");
+
+TgnChannelRealization fluorescentFixture;
+fluorescentFixture.numReceiveAntennas = 1;
+fluorescentFixture.numTransmitAntennas = 1;
+fluorescentFixture.referenceFrequency = GHz(5);
+fluorescentFixture.timeVariation = true;
+fluorescentFixture.shadowingPowerGain = 1;
+fluorescentFixture.fluorescent = true;
+fluorescentFixture.fluorescentMainsFrequencyHz = 50;
+fluorescentFixture.fluorescentPhases = {{0.13, 1.17, 2.41}};
+constexpr double targetFluorescentIc = 0.0025;
+const double meanFluorescentPower = 1 + std::pow(10.0, -15.0 / 10.0) + std::pow(10.0, -20.0 / 10.0);
+fluorescentFixture.fluorescentScale = std::sqrt(targetFluorescentIc / meanFluorescentPower);
+TgnComponentRealization fluorescentComponent;
+fluorescentComponent.stableComponentIndex = 0;
+fluorescentComponent.normalizedLinearPower = 1;
+fluorescentComponent.receiverSquareRoot = ComplexMatrix(1, 1, {{1, 0}});
+fluorescentComponent.transmitterSquareRoot = ComplexMatrix(1, 1, {{1, 0}});
+fluorescentComponent.temporalProcesses.push_back(fixedProcess({1, 0}));
+fluorescentComponent.fluorescent = true;
+fluorescentFixture.components.push_back(fluorescentComponent);
+double measuredFluorescentIc = 0;
+for (int sample = 0; sample < 1000; sample++) {
+    const simtime_t time = SimTime(sample * 10, SIMTIME_US);
+    const auto response = TgnMimoChannel::evaluate(fluorescentFixture, time, GHz(5)).get(0, 0);
+    measuredFluorescentIc += std::norm(response - std::complex<double>(1, 0)) / 1000;
+}
+require(std::abs(measuredFluorescentIc - targetFluorescentIc) < 1e-12, "fluorescent I/C normalization");
+
+TgnTemporalProcess vehicleFixture;
+vehicleFixture.terms.push_back({std::sqrt(0.75), TgnLorentzianProcess({0}, {{1, 0}})});
+vehicleFixture.terms.push_back({0.5, TgnLorentzianProcess({10}, {{1, 0}})});
+const auto positiveSpikeQuarterCycle = TgnMimoChannel::evaluate(vehicleFixture, 0.025);
+require(std::abs(positiveSpikeQuarterCycle - std::complex<double>(std::sqrt(0.75), 0.5)) < 1e-12,
+    "positive-frequency vehicle spike");
+
+realization.components[0].temporalProcesses[0] = TgnTemporalProcess{{{1, rotating}}};
+realization.timeVariation = false;
+auto staticAtZero = TgnMimoChannel::evaluate(realization, 0, GHz(5.001));
+auto staticLater = TgnMimoChannel::evaluate(realization, 0.137, GHz(5.001));
+require(staticAtZero.getCoefficients() == staticLater.getCoefficients(), "timeVariation=false");
+require(TgnMimoChannel::getActualMaximumTemporalFrequency(realization) == Hz(0), "static maximum temporal frequency");
+realization.timeVariation = true;
+auto firstQuery = TgnMimoChannel::evaluate(realization, 0.137, GHz(5.001));
+auto unrelatedQuery = TgnMimoChannel::evaluate(realization, 0.081, GHz(5.002));
+auto repeatedQuery = TgnMimoChannel::evaluate(realization, 0.137, GHz(5.001));
+require(firstQuery.getCoefficients() == repeatedQuery.getCoefficients(), "query-order independence");
+require(firstQuery.getCoefficients() != staticAtZero.getCoefficients(), "time-varying response");
+require(unrelatedQuery.isFinite(), "finite unrelated query");
+require(TgnMimoChannel::getActualMaximumTemporalFrequency(realization) == Hz(505), "oscillator plus fluorescent maximum frequency");
+
+std::cout << "spatial quadrature max difference=" << std::setprecision(12) << maximumQuadratureDifference
+          << " oscillator errors=" << bellCorrelationError(32) << ',' << bellCorrelationError(64) << ','
+          << bellCorrelationError(128) << ',' << bellCorrelationError(256) << "\n";
+
+if (const char *artifactDirectory = std::getenv("TGN_ARTIFACT_DIR")) {
+    const std::string prefix = std::string(artifactDirectory) + "/tgn-";
+    std::ofstream frequency(prefix + "frequency-response.csv");
+    frequency << "offset_hz,real,imag,magnitude,power\n" << std::setprecision(17);
+    for (int index = -100; index <= 100; index++) {
+        const double offset = index * 100000.0;
+        const auto value = TgnMimoChannel::evaluate(realization, SimTime(4, SIMTIME_MS), GHz(5) + Hz(offset)).get(0, 0);
+        frequency << offset << ',' << value.real() << ',' << value.imag() << ',' << std::abs(value) << ',' << std::norm(value) << '\n';
+    }
+    require(frequency.good(), "frequency-response artifact output");
+
+    std::ofstream evolution(prefix + "time-evolution.csv");
+    evolution << "absolute_time_s,real,imag,magnitude,power\n" << std::setprecision(17);
+    for (int index = 0; index <= 200; index++) {
+        const simtime_t time = SimTime(index * 100, SIMTIME_US);
+        const auto value = TgnMimoChannel::evaluate(realization, time, GHz(5.001)).get(0, 0);
+        evolution << time.dbl() << ',' << value.real() << ',' << value.imag() << ',' << std::abs(value) << ',' << std::norm(value) << '\n';
+    }
+    require(evolution.good(), "time-evolution artifact output");
+}
+std::cout << "PASS\n";
+
+%contains: stdout
+PASS

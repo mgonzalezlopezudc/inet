@@ -1,0 +1,149 @@
+%description:
+Checks the opt-in HT occupied-carrier dimensional spectrum: exact 56/114
+power-allocation carriers, retained uncoalesced metadata, nominal-band
+compatibility, power conservation, and flat-gain rejection.
+
+%includes:
+#include <cmath>
+#include <functional>
+#include "inet/common/packet/Packet.h"
+#include "inet/common/math/Functions.h"
+#include "inet/physicallayer/wireless/common/base/packetlevel/FlatTransmitterBase.h"
+#include "inet/physicallayer/wireless/common/analogmodel/common/TransmissionSpectrum.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalTransmitterAnalogModel.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalTransmissionAnalogModel.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+
+using namespace inet;
+using namespace inet::math;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+class TestDimensionalTransmitter : public DimensionalTransmitterAnalogModel
+{
+  public:
+    TestDimensionalTransmitter() {
+        timeGainsNormalization = "";
+        frequencyGainsNormalization = "integral";
+    }
+
+    void setTimeNormalization(const char *normalization) { timeGainsNormalization = normalization; }
+    void setFrequencyNormalization(const char *normalization) { frequencyGainsNormalization = normalization; }
+    void setTimeGains() { parseTimeGains("left s 0dB either e 3dB right"); }
+    void setFrequencyGains() { parseFrequencyGains("left s 0dB either e 3dB right"); }
+};
+
+class TestFlatTransmitter : public FlatTransmitterBase
+{
+  public:
+    using FlatTransmitterBase::computeTransmissionPower;
+    virtual const ITransmission *createTransmission(const IRadio *, const Packet *, const simtime_t) const override { return nullptr; }
+};
+
+static bool throwsRuntime(const std::function<void()>& action)
+{
+    try { action(); return false; }
+    catch (const cRuntimeError&) { return true; }
+}
+
+%activity:
+{
+    const Ieee80211HtDataMode ht20(&Ieee80211HtmcsTable::htMcs0BW20MHz, MHz(20), Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+    const auto& plan = ht20.getEqualPowerSpectrum();
+    TestDimensionalTransmitter transmitter;
+    auto *analog = transmitter.createAnalogModel(simtime_t(4e-6), simtime_t(4e-6), simtime_t(8e-6), GHz(5), MHz(20), W(2), nullptr, nullptr, &plan);
+    const auto *dimensional = dynamic_cast<const DimensionalTransmissionAnalogModel *>(analog);
+    ASSERT(dimensional != nullptr);
+    const auto *partitioned = dynamic_cast<const IPartitionedTransmissionSpectrum *>(analog);
+    ASSERT(partitioned != nullptr && partitioned->getPreambleSpectrum() == nullptr && partitioned->getHeaderSpectrum() == nullptr);
+    ASSERT(partitioned->getDataSpectrum() != nullptr && partitioned->getDataSpectrum() != &plan);
+    ASSERT(partitioned->getDataSpectrum()->getBands().size() == 56);
+    const auto& power = dimensional->getPower();
+    const simsec dataTime(12e-6);
+    double integral = 0;
+    for (const auto& band : partitioned->getDataSpectrum()->getBands()) {
+        const Hz width = band.upperFrequencyOffset - band.lowerFrequencyOffset;
+        const Hz frequency = GHz(5) + (band.lowerFrequencyOffset + band.upperFrequencyOffset) / 2;
+        const double actualDensity = power->getValue(Point<simsec, Hz>(dataTime, frequency)).get();
+        const double expectedDensity = 2.0 / (56.0 * 312500.0);
+        ASSERT(std::abs(actualDensity - expectedDensity) <= 1e-12 * expectedDensity);
+        integral += actualDensity * width.get();
+    }
+    ASSERT(std::abs(integral - 2.0) <= 1e-12 * 2.0);
+    ASSERT(power->getValue(Point<simsec, Hz>(dataTime, GHz(5))).get() == 0);
+    ASSERT(power->getValue(Point<simsec, Hz>(dataTime, GHz(5) + MHz(9.9))).get() == 0);
+    const double nominalDensity = power->getValue(Point<simsec, Hz>(simsec(2e-6), GHz(5))).get();
+    ASSERT(std::abs(nominalDensity - 2.0 / 20e6) <= 1e-12 * (2.0 / 20e6));
+    // The half-open part construction makes the exact header/Data boundary
+    // belong to Data, while the nominal preamble/header remain boxcars.
+    const double boundaryDataDensity = 2.0 / (56.0 * 312500.0);
+    ASSERT(std::abs(power->getValue(Point<simsec, Hz>(simsec(8e-6), GHz(5) + Hz(312500))).get() - boundaryDataDensity) <= 1e-12 * boundaryDataDensity);
+    ASSERT(std::abs(power->getValue(Point<simsec, Hz>(simsec(6e-6), GHz(5))).get() - 2.0 / 20e6) <= 1e-12 * (2.0 / 20e6));
+    delete analog;
+
+    const Ieee80211HtDataMode ht40(&Ieee80211HtmcsTable::htMcs0BW40MHz, MHz(40), Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+    const auto& plan40 = ht40.getEqualPowerSpectrum();
+    auto *analog40 = transmitter.createAnalogModel(simtime_t(4e-6), simtime_t(4e-6), simtime_t(8e-6), GHz(5), MHz(40), W(2), nullptr, nullptr, &plan40);
+    const auto *partitioned40 = dynamic_cast<const IPartitionedTransmissionSpectrum *>(analog40);
+    const auto *dimensional40 = dynamic_cast<const DimensionalTransmissionAnalogModel *>(analog40);
+    ASSERT(partitioned40 != nullptr && dimensional40 != nullptr && partitioned40->getDataSpectrum() != nullptr);
+    ASSERT(partitioned40->getDataSpectrum()->getBands().size() == 114);
+    const double dataDensity40 = 2.0 / (114.0 * 312500.0);
+    double integral40 = 0;
+    for (const auto& band : partitioned40->getDataSpectrum()->getBands()) {
+        const auto frequency = GHz(5) + (band.lowerFrequencyOffset + band.upperFrequencyOffset) / 2;
+        const double actualDensity = dimensional40->getPower()->getValue(Point<simsec, Hz>(simsec(12e-6), frequency)).get();
+        ASSERT(std::abs(actualDensity - dataDensity40) <= 1e-12 * dataDensity40);
+        integral40 += actualDensity * (band.upperFrequencyOffset - band.lowerFrequencyOffset).get();
+    }
+    ASSERT(std::abs(integral40 - 2.0) <= 1e-12 * 2.0);
+    ASSERT(dimensional40->getPower()->getValue(Point<simsec, Hz>(simsec(12e-6), GHz(5))).get() == 0);
+    ASSERT(dimensional40->getPower()->getValue(Point<simsec, Hz>(simsec(12e-6), GHz(5) + Hz(312500))).get() == 0);
+    ASSERT(std::abs(dimensional40->getPower()->getValue(Point<simsec, Hz>(simsec(2e-6), GHz(5))).get() - 2.0 / 40e6) <= 1e-12 * (2.0 / 40e6));
+    ASSERT(std::abs(dimensional40->getPower()->getValue(Point<simsec, Hz>(simsec(8e-6), GHz(5) + Hz(625000))).get() - dataDensity40) <= 1e-12 * dataDensity40);
+    delete analog40;
+
+    auto *nominal = transmitter.createAnalogModel(simtime_t(4e-6), simtime_t(4e-6), simtime_t(8e-6), GHz(5), MHz(20), W(2));
+    const auto *nominalPartitioned = dynamic_cast<const IPartitionedTransmissionSpectrum *>(nominal);
+    ASSERT(nominalPartitioned != nullptr && nominalPartitioned->getDataSpectrum() == nullptr);
+    delete nominal;
+
+    TransmissionSpectrum adjacent({PowerSpectralBand(MHz(-10), MHz(-5), 0.5), PowerSpectralBand(MHz(-5), MHz(0), 0.5)}, MHz(20));
+    auto *coalesced = transmitter.createAnalogModel(simtime_t(1e-6), simtime_t(1e-6), simtime_t(1e-6), GHz(5), MHz(20), W(1), nullptr, nullptr, &adjacent);
+    const auto& coalescedPower = dynamic_cast<const DimensionalTransmissionAnalogModel *>(coalesced)->getPower();
+    ASSERT(std::abs(coalescedPower->getValue(Point<simsec, Hz>(simsec(2.5e-6), GHz(5) + MHz(-7.5))).get() -
+                     coalescedPower->getValue(Point<simsec, Hz>(simsec(2.5e-6), GHz(5) + MHz(-2.5))).get()) < 1e-24);
+    delete coalesced;
+
+    ASSERT(throwsRuntime([&] { TransmissionSpectrum invalid({PowerSpectralBand(MHz(-11), MHz(-10), 1)}, MHz(20)); }));
+    TestDimensionalTransmitter frequencyMaximum;
+    frequencyMaximum.setFrequencyNormalization("maximum");
+    ASSERT(throwsRuntime([&] { frequencyMaximum.createAnalogModel(simtime_t(1e-6), simtime_t(1e-6), simtime_t(1e-6), GHz(5), MHz(20), W(1), nullptr, nullptr, &plan); }));
+    TestDimensionalTransmitter frequencyUnnormalized;
+    frequencyUnnormalized.setFrequencyNormalization("");
+    ASSERT(throwsRuntime([&] { frequencyUnnormalized.createAnalogModel(simtime_t(1e-6), simtime_t(1e-6), simtime_t(1e-6), GHz(5), MHz(20), W(1), nullptr, nullptr, &plan); }));
+    TestDimensionalTransmitter timeMaximum;
+    timeMaximum.setTimeNormalization("maximum");
+    ASSERT(throwsRuntime([&] { timeMaximum.createAnalogModel(simtime_t(1e-6), simtime_t(1e-6), simtime_t(1e-6), GHz(5), MHz(20), W(1), nullptr, nullptr, &plan); }));
+    TestDimensionalTransmitter timeGains;
+    timeGains.setTimeGains();
+    ASSERT(throwsRuntime([&] { timeGains.createAnalogModel(simtime_t(1e-6), simtime_t(1e-6), simtime_t(1e-6), GHz(5), MHz(20), W(1), nullptr, nullptr, &plan); }));
+    TestDimensionalTransmitter frequencyGains;
+    frequencyGains.setFrequencyGains();
+    ASSERT(throwsRuntime([&] { frequencyGains.createAnalogModel(simtime_t(1e-6), simtime_t(1e-6), simtime_t(1e-6), GHz(5), MHz(20), W(1), nullptr, nullptr, &plan); }));
+
+    // The existing packet-level power override is the direct SignalPowerReq
+    // seam; occupied-spectrum construction consumes the resulting W value.
+    TestFlatTransmitter flatTransmitter;
+    flatTransmitter.setPower(W(2));
+    Packet packet("signal-power");
+    ASSERT(flatTransmitter.computeTransmissionPower(&packet) == W(2));
+    auto powerReq = packet.addTagIfAbsent<SignalPowerReq>();
+    powerReq->setPower(W(3));
+    ASSERT(flatTransmitter.computeTransmissionPower(&packet) == W(3));
+    EV << "done" << endl;
+}
+
+%contains: stdout
+done

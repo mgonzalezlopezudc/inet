@@ -25,6 +25,7 @@
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IReceptionDecision.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/ISnir.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IWidebandChannelModel.h"
 
 namespace inet {
 namespace physicallayer {
@@ -116,6 +117,12 @@ class INET_API IRadioMedium : public virtual IPrintableObject
      * This function never returns nullptr.
      */
     virtual const IMediumAnalogModel *getAnalogModel() const = 0;
+
+    /**
+     * Returns the optional wideband channel model, or nullptr when the medium
+     * uses its unchanged scalar/dimensional propagation path.
+     */
+    virtual const IWidebandChannelModel *getChannelModel() const = 0;
 
     /**
      * Returns the background noise model of this medium.
@@ -251,4 +258,3 @@ class INET_API IRadioMedium : public virtual IPrintableObject
 } // namespace inet
 
 #endif
-

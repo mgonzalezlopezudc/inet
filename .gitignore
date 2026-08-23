@@ -46,6 +46,11 @@ CLAUDE.md
 /tests/*/work/
 /tests/*/*/work/
 /tests/*/results*/
+
+# User-authorized local-only AWGN and publication-derived beta artifacts.
+/showcases/wireless/eesm/local/
+/tests/unit/data/Ieee80211PerTable.user-supplied-candidate.csv
+/tests/unit/data/Ieee80211PerTable.user-supplied-candidate.json
 /tests/fingerprint/SelfDoc.xml
 /coverage
 *.orig

@@ -1,0 +1,84 @@
+%description:
+Pure deterministic EESM and synthetic-beta parser checks. No packet, receiver,
+or random-number path is exercised here.
+
+%includes:
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <functional>
+#include <limits>
+#include <vector>
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211Eesm.h"
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+static bool rejects(const std::function<void()>& action)
+{
+    try { action(); return false; }
+    catch (const cRuntimeError&) { return true; }
+}
+
+%activity:
+{
+    const double syntheticBeta = 2.0;
+    const double expectedEffective = 1.0 - syntheticBeta * (std::log(1.0 + std::exp(-3.0 / syntheticBeta)) - std::log(2.0));
+    const double effective = Ieee80211Eesm::computeEffectiveSnr({1.0, 4.0}, syntheticBeta);
+    ASSERT(std::fabs(effective - expectedEffective) < 1e-12);
+    ASSERT(std::fabs(Ieee80211Eesm::computeEffectiveSnr({2.5, 2.5, 2.5}, 4.0) - 2.5) < 1e-12);
+
+    auto values = std::vector<double>{0.1, 1.0, 10.0, 100.0};
+    auto permutation = std::vector<double>{100.0, 10.0, 1.0, 0.1};
+    ASSERT(std::fabs(Ieee80211Eesm::computeEffectiveSnr(values, 2.0) - Ieee80211Eesm::computeEffectiveSnr(permutation, 2.0)) < 1e-12);
+    ASSERT(Ieee80211Eesm::computeEffectiveSnr(values, 2.0) >= 0.1);
+    ASSERT(Ieee80211Eesm::computeEffectiveSnr(values, 2.0) <= 100.0);
+
+    // The production calibration contract consumes exactly the data-only
+    // HT20/HT40 vectors, not a carrier-count-normalized scalar.
+    const std::vector<double> flat52(52, 3.5);
+    const std::vector<double> flat108(108, 3.5);
+    ASSERT(std::fabs(Ieee80211Eesm::computeEffectiveSnr(flat52, 2.0) - 3.5) < 1e-12);
+    ASSERT(std::fabs(Ieee80211Eesm::computeEffectiveSnr(flat108, 2.0) - 3.5) < 1e-12);
+    auto permuted52 = flat52;
+    std::reverse(permuted52.begin(), permuted52.end());
+    ASSERT(std::fabs(Ieee80211Eesm::computeEffectiveSnr(flat52, 2.0) - Ieee80211Eesm::computeEffectiveSnr(permuted52, 2.0)) < 1e-12);
+    auto improved52 = flat52;
+    improved52[0] = 4.5;
+    ASSERT(Ieee80211Eesm::computeEffectiveSnr(improved52, 2.0) > Ieee80211Eesm::computeEffectiveSnr(flat52, 2.0));
+    auto deepFade52 = flat52;
+    deepFade52[0] = 0;
+    const double deepFade = Ieee80211Eesm::computeEffectiveSnr(deepFade52, 2.0);
+    ASSERT(deepFade >= 0 && deepFade < 3.5);
+    const double extreme = Ieee80211Eesm::computeEffectiveSnr({1e-300, 1e300}, 2.0);
+    ASSERT(std::isfinite(extreme) && extreme > 0);
+    ASSERT(rejects([] { Ieee80211Eesm::computeEffectiveSnr({}, 1.0); }));
+    ASSERT(rejects([] { Ieee80211Eesm::computeEffectiveSnr({1.0}, 0.0); }));
+    ASSERT(rejects([] { Ieee80211Eesm::computeEffectiveSnr({1.0}, -1.0); }));
+    ASSERT(rejects([] { Ieee80211Eesm::computeEffectiveSnr({std::numeric_limits<double>::quiet_NaN()}, 1.0); }));
+    ASSERT(rejects([] { Ieee80211Eesm::computeEffectiveSnr({-1.0}, 1.0); }));
+
+    const std::array<const char *, 4> sets = {"patidar2017-bcc-d20", "patidar2017-bcc-d40", "patidar2017-bcc-e20", "patidar2017-bcc-e40"};
+    const double expected[4][8] = {
+        {1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7},
+        {2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7},
+        {3.0, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7},
+        {4.0, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7}};
+    for (int set = 0; set < 4; set++) {
+        Ieee80211Eesm beta;
+        beta.loadBetaCsv("../../../../tests/module/data/Ieee80211Eesm.synthetic-beta.csv", sets[set]);
+        const int bandwidth = (set == 0 || set == 2) ? 20 : 40;
+        const int dataCarriers = bandwidth == 20 ? 52 : 108;
+        for (int mcs = 0; mcs < 8; mcs++)
+            ASSERT(std::fabs(beta.getBeta(sets[set], bandwidth, mcs, dataCarriers) - expected[set][mcs]) < 1e-12);
+    }
+    Ieee80211Eesm beta;
+    try { beta.loadBetaCsv("../../../../tests/module/data/Ieee80211Eesm.synthetic-beta.csv", "unknown"); ASSERT(false); } catch (const cRuntimeError&) {}
+    beta.loadBetaCsv("../../../../tests/module/data/Ieee80211Eesm.synthetic-beta.csv", "patidar2017-bcc-d20");
+    try { beta.getBeta("patidar2017-bcc-d20", 20, 0, 108); ASSERT(false); } catch (const cRuntimeError&) {}
+    try { beta.getBeta("patidar2017-bcc-d20", 40, 0, 52); ASSERT(false); } catch (const cRuntimeError&) {}
+    EV << "done" << endl;
+}
+
+%contains: stdout
+done

@@ -1,0 +1,84 @@
+%description:
+Valid synthetic HT40 occupied-spectrum integration for the MMIB policy.
+The Gray-labelled bit-channel mapping is selected with explicit beta=1 and an
+AWGN-only manifest. A broadcast data frame exercises the 108-carrier HT40 path.
+
+%file: test.ned
+
+import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
+import inet.node.inet.AdhocHost;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211DimensionalRadioMedium;
+
+network MmibErrorModelHt40IntegrationTest
+{
+    submodules:
+        radioMedium: Ieee80211DimensionalRadioMedium;
+        configurator: Ipv4NetworkConfigurator;
+        sender: AdhocHost;
+        receiver: AdhocHost;
+}
+
+%inifile: omnetpp.ini
+
+[General]
+record-vector-results = false
+network = MmibErrorModelHt40IntegrationTest
+sim-time-limit = 10ms
+cmdenv-express-mode = false
+ned-path = .;../../../../src;../../lib
+
+**.arp.typename = "GlobalArp"
+*.sender.ipv4.ip.limitedBroadcast = true
+**.mobility.typename = "StationaryMobility"
+**.mobility.initFromDisplayString = false
+**.sender.mobility.initialX = 0m
+**.sender.mobility.initialY = 0m
+**.receiver.mobility.initialX = 0m
+**.receiver.mobility.initialY = 0m
+**.wlan[*].radio.antenna.mobility.initFromDisplayString = false
+**.wlan[*].radio.antenna.mobility.initialX = 0m
+**.wlan[*].radio.antenna.mobility.initialY = 0m
+
+**.wlan[*].radio.typename = "Ieee80211DimensionalRadio"
+**.wlan[*].opMode = "n(mixed-2.4Ghz)"
+**.wlan[*].radio.opMode = "n(mixed-2.4Ghz)"
+**.wlan[*].radio.bandName = "2.4 GHz"
+**.wlan[*].radio.bandwidth = 40MHz
+**.wlan[*].radio.receiver.bandwidth = 40MHz
+**.wlan[*].bitrate = 15Mbps
+**.wlan[*].radio.transmitter.bitrate = 15Mbps
+**.wlan[*].radio.transmitter.dimensionalSpectrumMode = "occupiedSubcarriers"
+**.wlan[*].radio.transmitter.power = 1000mW
+**.wlan[*].radio.receiver.sensitivity = -90dBm
+**.wlan[*].radio.receiver.energyDetection = -90dBm
+**.wlan[*].radio.receiver.snirThreshold = -100dB
+**.wlan[*].radio.receiver.snirThresholdMode = "mean"
+**.radioMedium.backgroundNoise.power = -120dBm
+
+*.receiver.wlan[*].radio.receiver.errorModel.typename = "Ieee80211MmibErrorModel"
+*.receiver.wlan[*].radio.receiver.errorModel.beta = 1
+*.receiver.wlan[*].radio.receiver.errorModel.perTableFile = "../../data/Ieee80211Eesm.synthetic.csv"
+*.receiver.wlan[*].radio.receiver.errorModel.perTableManifest = readJSON("../../data/Ieee80211Mi.synthetic.manifest.json")
+
+*.sender.numApps = 1
+*.sender.app[0].typename = "UdpBasicApp"
+*.sender.app[0].destAddresses = "255.255.255.255"
+*.sender.app[0].destPort = 1000
+*.sender.app[0].messageLength = 100B
+*.sender.app[0].receiveBroadcast = true
+*.sender.app[0].sendInterval = 1s
+*.sender.app[0].startTime = 1ms
+*.sender.app[0].stopTime = 2ms
+
+*.receiver.numApps = 1
+*.receiver.app[0].typename = "UdpSink"
+*.receiver.app[0].localPort = 1000
+*.receiver.app[0].receiveBroadcast = true
+
+%contains-regex: stdout
+MmibErrorModelHt40IntegrationTest.receiver.app\[0\]: received 1 packets
+
+%postrun-command: grep -E "computePacketErrorRate" test.out | sort -u > error_rate_calls.out || true
+
+%contains: error_rate_calls.out
+computePacketErrorRate

@@ -1,0 +1,36 @@
+%description:
+Zero is not a valid MI beta. The explicit invalid value is rejected during
+initialization and cannot silently select an EESM calibration artifact.
+
+%file: test.ned
+
+import inet.node.inet.AdhocHost;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211DimensionalRadioMedium;
+
+network MiErrorModelZeroBetaRejectTest
+{
+    submodules:
+        radioMedium: Ieee80211DimensionalRadioMedium;
+        host: AdhocHost;
+}
+
+%inifile: omnetpp.ini
+
+[General]
+record-vector-results = false
+network = MiErrorModelZeroBetaRejectTest
+sim-time-limit = 1ms
+cmdenv-express-mode = false
+ned-path = .;../../../../src;../../lib
+
+*.host.wlan[*].radio.typename = "Ieee80211DimensionalRadio"
+*.host.wlan[*].opMode = "n(mixed-2.4Ghz)"
+*.host.wlan[*].radio.opMode = "n(mixed-2.4Ghz)"
+*.host.wlan[*].radio.receiver.errorModel.typename = "Ieee80211RbirErrorModel"
+*.host.wlan[*].radio.receiver.errorModel.beta = 0
+*.host.wlan[*].radio.receiver.errorModel.perTableFile = "../../data/Ieee80211Eesm.synthetic.csv"
+*.host.wlan[*].radio.receiver.errorModel.perTableManifest = readJSON("../../data/Ieee80211Mi.synthetic.manifest.json")
+
+%exitcode: 1
+%contains-regex: stderr
+Ieee80211RbirErrorModel: beta must be finite and strictly positive

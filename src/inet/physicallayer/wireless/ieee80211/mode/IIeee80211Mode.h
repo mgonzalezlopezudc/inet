@@ -15,6 +15,23 @@ namespace inet {
 
 namespace physicallayer {
 
+/** Immutable duration of the three generic signal-part intervals. */
+struct INET_API Ieee80211SignalPartDurations
+{
+    const simtime_t preambleDuration;
+    const simtime_t headerDuration;
+    const simtime_t dataDuration;
+
+    Ieee80211SignalPartDurations(simtime_t preambleDuration, simtime_t headerDuration, simtime_t dataDuration) :
+        preambleDuration(preambleDuration),
+        headerDuration(headerDuration),
+        dataDuration(dataDuration)
+    {
+    }
+
+    simtime_t getDuration() const { return preambleDuration + headerDuration + dataDuration; }
+};
+
 class INET_API IIeee80211PreambleMode : public cObject, public IPrintableObject
 {
   public:
@@ -61,6 +78,7 @@ class INET_API IIeee80211Mode : public cObject, public IPrintableObject
     IIeee80211HeaderMode *_getHeaderMode() const { return const_cast<IIeee80211HeaderMode *>(getHeaderMode()); }
     IIeee80211DataMode *_getDataMode() const { return const_cast<IIeee80211DataMode *>(getDataMode()); }
     virtual const simtime_t getDuration(b dataLength) const = 0;
+    virtual Ieee80211SignalPartDurations getSignalPartDurations(b dataLength) const = 0;
     virtual const simtime_t getSlotTime() const = 0;
     virtual const simtime_t getSifsTime() const = 0;
     virtual const simtime_t getRifsTime() const = 0;
@@ -77,4 +95,3 @@ class INET_API IIeee80211Mode : public cObject, public IPrintableObject
 } // namespace inet
 
 #endif
-

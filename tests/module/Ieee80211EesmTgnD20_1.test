@@ -1,0 +1,82 @@
+%description:
+
+Static SISO TGn Model D NLOS integration with occupied HT20 Data carriers and
+a committed synthetic local BCC AWGN fixture. This is a wiring and
+carrier-grid check; the ignored exact user artifact is exercised by the
+showcase. Bernoulli outcomes are circular for independent beta/Table-4
+validation.
+
+%file: test.ned
+
+import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
+import inet.node.inet.WirelessHost;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211TgnRadioMedium;
+
+network Ieee80211EesmTgnD20Test
+{
+    submodules:
+        configurator: Ipv4NetworkConfigurator;
+        radioMedium: Ieee80211TgnRadioMedium;
+        sourceHost: WirelessHost;
+        destinationHost: WirelessHost;
+}
+
+%inifile: omnetpp.ini
+
+[General]
+network = Ieee80211EesmTgnD20Test
+ned-path = .;../../../../src
+sim-time-limit = 5.5ms
+seed-set = 11
+record-vector-results = false
+cmdenv-express-mode = false
+
+*.sourceHost.ipv4.arp.typename = "GlobalArp"
+*.destinationHost.ipv4.arp.typename = "GlobalArp"
+**.mobility.initFromDisplayString = false
+*.sourceHost.mobility.initialX = 0m
+*.sourceHost.mobility.initialY = 0m
+*.sourceHost.mobility.initialZ = 0m
+*.destinationHost.mobility.initialX = 10m
+*.destinationHost.mobility.initialY = 0m
+*.destinationHost.mobility.initialZ = 0m
+*.sourceHost.wlan[0].mgmt.typename = "Ieee80211MgmtAdhoc"
+*.destinationHost.wlan[0].mgmt.typename = "Ieee80211MgmtAdhoc"
+*.sourceHost.wlan[0].agent.typename = ""
+*.destinationHost.wlan[0].agent.typename = ""
+**.wlan[0].opMode = "n(mixed-2.4Ghz)"
+**.wlan[0].bitrate = 6.5Mbps
+**.wlan[0].radio.typename = "Ieee80211DimensionalRadio"
+**.wlan[0].radio.transmitter.dimensionalSpectrumMode = "occupiedSubcarriers"
+
+*.radioMedium.profile = "D"
+*.radioMedium.condition = "nlos"
+*.radioMedium.timeVariation = false
+*.radioMedium.vehicleEffect = false
+*.radioMedium.fluorescentEffect = false
+*.radioMedium.shadowing = false
+*.radioMedium.ensembleNormalization = false
+*.radioMedium.reciprocal = false
+*.radioMedium.rangeFilter = ""
+*.radioMedium.backgroundNoise.power = -110dBm
+
+*.destinationHost.wlan[0].radio.receiver.errorModel.typename = "Ieee80211EesmErrorModel"
+*.destinationHost.wlan[0].radio.receiver.errorModel.artifactAcceptanceMode = "userAuthorizedLocal"
+*.destinationHost.wlan[0].radio.receiver.errorModel.perTableFile = "../../data/Ieee80211Eesm.synthetic.csv"
+*.destinationHost.wlan[0].radio.receiver.errorModel.betaTableFile = "../../data/Ieee80211Eesm.synthetic-beta.csv"
+*.destinationHost.wlan[0].radio.receiver.errorModel.calibrationSet = "patidar2017-bcc-d20"
+*.destinationHost.wlan[0].radio.receiver.errorModel.perTableManifest = readJSON("../../data/Ieee80211Eesm.synthetic-local.manifest.json")
+
+*.sourceHost.numApps = 1
+*.sourceHost.app[0].typename = "UdpBasicApp"
+*.sourceHost.app[0].destAddresses = "destinationHost"
+*.sourceHost.app[0].destPort = 5000
+*.sourceHost.app[0].messageLength = 200B
+*.sourceHost.app[0].sendInterval = 1s
+*.sourceHost.app[0].startTime = 5ms
+*.destinationHost.numApps = 1
+*.destinationHost.app[0].typename = "UdpSink"
+*.destinationHost.app[0].localPort = 5000
+
+%contains: results/General-#0.sca
+scalar Ieee80211EesmTgnD20Test.destinationHost.app[0] packetReceived:count 0

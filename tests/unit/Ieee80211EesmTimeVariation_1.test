@@ -1,0 +1,53 @@
+%description:
+Pure oracle for the fixed EESM time-variation comparison contract.  Reception
+code applies this predicate only to the open interior of [dataStart,dataEnd).
+
+%includes:
+#include <cmath>
+#include <limits>
+#include "inet/common/math/AlgebraicOperations.h"
+#include "inet/common/math/PrimitiveFunctions.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211Eesm.h"
+
+using namespace inet;
+using namespace inet::math;
+using namespace inet::physicallayer;
+
+%activity:
+{
+    ASSERT(!Ieee80211Eesm::hasSignificantInteriorVariation(2.0, 2.0 + 1e-12));
+    ASSERT(Ieee80211Eesm::hasSignificantInteriorVariation(2.0, 2.0 + 3e-12));
+    ASSERT(!Ieee80211Eesm::hasSignificantInteriorVariation(0.0, 5e-16));
+    ASSERT(Ieee80211Eesm::hasSignificantInteriorVariation(0.0, 2e-15));
+    ASSERT(Ieee80211Eesm::hasSignificantInteriorVariation(1.0, std::numeric_limits<double>::quiet_NaN()));
+
+    // Exercise the same exact open-time/fixed-frequency interval used by the
+    // receiver.  A change at dataStart is inside every non-endpoint sample,
+    // while a change beginning at dataEnd is outside the open interval.
+    const simsec dataStart(10e-6);
+    const simsec dataEnd(20e-6);
+    const Hz frequency(0);
+    const auto baseline = makeShared<Boxcar2DFunction<double, simsec, Hz>>(simsec(0), simsec(30e-6), Hz(-1), Hz(1), 1.0);
+    const auto atDataStart = makeShared<Boxcar2DFunction<double, simsec, Hz>>(dataStart, dataEnd, Hz(-1), Hz(1), 2.0);
+    const auto atDataEnd = makeShared<Boxcar2DFunction<double, simsec, Hz>>(dataEnd, simsec(30e-6), Hz(-1), Hz(1), 2.0);
+    const auto atInterior = makeShared<Boxcar2DFunction<double, simsec, Hz>>(dataStart + simsec(2e-6), dataEnd, Hz(-1), Hz(1), 2.0);
+    const Interval<simsec, Hz> dataInterior(Point<simsec, Hz>(dataStart, frequency), Point<simsec, Hz>(dataEnd, frequency), 0b01, 0b01, 0b01);
+    const auto startTransition = baseline->add(atDataStart);
+    const auto endTransition = baseline->add(atDataEnd);
+    const auto interiorTransition = baseline->add(atInterior);
+    ASSERT(startTransition->getValue(Point<simsec, Hz>(dataStart, frequency)) == 3.0);
+    ASSERT(startTransition->getMin(dataInterior) == 3.0);
+    ASSERT(startTransition->getMax(dataInterior) == 3.0);
+    ASSERT(!Ieee80211Eesm::hasSignificantInteriorVariation(startTransition->getMin(dataInterior), startTransition->getMax(dataInterior)));
+    ASSERT(endTransition->getValue(Point<simsec, Hz>(dataEnd, frequency)) == 3.0);
+    ASSERT(endTransition->getMin(dataInterior) == 1.0);
+    ASSERT(endTransition->getMax(dataInterior) == 1.0);
+    ASSERT(!Ieee80211Eesm::hasSignificantInteriorVariation(endTransition->getMin(dataInterior), endTransition->getMax(dataInterior)));
+    ASSERT(interiorTransition->getMin(dataInterior) == 1.0);
+    ASSERT(interiorTransition->getMax(dataInterior) == 3.0);
+    ASSERT(Ieee80211Eesm::hasSignificantInteriorVariation(interiorTransition->getMin(dataInterior), interiorTransition->getMax(dataInterior)));
+    EV << "done" << endl;
+}
+
+%contains: stdout
+done

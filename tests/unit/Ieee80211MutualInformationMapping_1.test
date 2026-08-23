@@ -1,0 +1,109 @@
+%description:
+Deterministic MI mappings for the HT subcarrier constellations.  The
+symbol-MI mapping is the common MIESM/RBIR policy; MMIB is the Gray-labelled
+bit-channel metric.  beta=1 is an explicit uncalibrated synthetic value.
+
+%includes:
+#include <cmath>
+#include <functional>
+#include <limits>
+#include <vector>
+
+#include "inet/physicallayer/wireless/common/modulation/BpskModulation.h"
+#include "inet/physicallayer/wireless/common/modulation/Qam16Modulation.h"
+#include "inet/physicallayer/wireless/common/modulation/Qam64Modulation.h"
+#include "inet/physicallayer/wireless/common/modulation/QpskModulation.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211MutualInformationMapping.h"
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+static bool rejects(const std::function<void()>& action)
+{
+    try { action(); return false; }
+    catch (const cRuntimeError&) { return true; }
+}
+
+static void checkClose(double actual, double expected)
+{
+    ASSERT(std::fabs(actual - expected) < 1e-4);
+}
+
+%activity:
+{
+    const auto *bpsk = &BpskModulation::singleton;
+    const auto *qpsk = &QpskModulation::singleton;
+    const auto *qam16 = &Qam16Modulation::singleton;
+    const auto *qam64 = &Qam64Modulation::singleton;
+    const std::vector<double> carriers = {0.1, 1.0, 10.0};
+
+    const auto symbolMean = [&](const auto *modulation) {
+        double sum = 0;
+        for (double snr : carriers)
+            sum += Ieee80211MutualInformationMapping::computeSymbolMutualInformation(modulation, snr);
+        return sum / carriers.size();
+    };
+    const auto bitMean = [&](const auto *modulation) {
+        double sum = 0;
+        for (double snr : carriers)
+            sum += Ieee80211MutualInformationMapping::computeBitMutualInformation(modulation, snr);
+        return sum / carriers.size();
+    };
+    checkClose(symbolMean(qam16), 0.35759835);
+    checkClose(bitMean(qam16), 0.34797782);
+    checkClose(symbolMean(qam64), 0.24432453);
+    checkClose(bitMean(qam64), 0.22884553);
+
+    // Independent quadrature/inversion oracles, beta=1.
+    checkClose(Ieee80211MutualInformationMapping::computeSymbolEffectiveSnr(carriers, qam16, 1.0), 1.7581046);
+    checkClose(Ieee80211MutualInformationMapping::computeBitEffectiveSnr(carriers, qam16, 1.0), 1.8380849);
+    checkClose(Ieee80211MutualInformationMapping::computeSymbolEffectiveSnr(carriers, qam64, 1.0), 1.8161637);
+    checkClose(Ieee80211MutualInformationMapping::computeBitEffectiveSnr(carriers, qam64, 1.0), 2.0109741);
+
+    // Flat channels are exact fixed points, and all-zero channels map to zero.
+    for (const ApskModulationBase *modulation : {static_cast<const ApskModulationBase *>(bpsk),
+                                                   static_cast<const ApskModulationBase *>(qpsk),
+                                                   static_cast<const ApskModulationBase *>(qam16),
+                                                   static_cast<const ApskModulationBase *>(qam64)}) {
+        for (double beta : {0.25, 1.0, 4.0}) {
+            const std::vector<double> flat(7, 2.5);
+            checkClose(Ieee80211MutualInformationMapping::computeSymbolEffectiveSnr(flat, modulation, beta), 2.5);
+            checkClose(Ieee80211MutualInformationMapping::computeBitEffectiveSnr(flat, modulation, beta), 2.5);
+            ASSERT(Ieee80211MutualInformationMapping::computeSymbolEffectiveSnr(std::vector<double>(7, 0.0), modulation, beta) == 0);
+            ASSERT(Ieee80211MutualInformationMapping::computeBitEffectiveSnr(std::vector<double>(7, 0.0), modulation, beta) == 0);
+        }
+    }
+
+    // Permutation and beta homogeneity, plus bracket bounds.
+    const std::vector<double> reversed = {10.0, 1.0, 0.1};
+    const double symbolEffective = Ieee80211MutualInformationMapping::computeSymbolEffectiveSnr(carriers, qam16, 1.0);
+    ASSERT(std::fabs(symbolEffective - Ieee80211MutualInformationMapping::computeSymbolEffectiveSnr(reversed, qam16, 1.0)) < 1e-10);
+    ASSERT(symbolEffective >= 0.1 && symbolEffective <= 10.0);
+    const std::vector<double> scaledCarriers = {0.05, 0.5, 5.0};
+    const double scaled = Ieee80211MutualInformationMapping::computeSymbolEffectiveSnr(carriers, qam16, 2.0);
+    const double normalized = Ieee80211MutualInformationMapping::computeSymbolEffectiveSnr(scaledCarriers, qam16, 1.0);
+    ASSERT(std::fabs(scaled - 2 * normalized) < 1e-8);
+
+    // For a fixed rectangular Gray-labelled modulation, normalized symbol MI
+    // and RBIR are the same metric; MIESM and RBIR therefore share a policy.
+    ASSERT(std::fabs(Ieee80211MutualInformationMapping::computeSymbolEffectiveSnr(carriers, bpsk, 1.0) -
+                     Ieee80211MutualInformationMapping::computeBitEffectiveSnr(carriers, bpsk, 1.0)) < 1e-10);
+    ASSERT(std::fabs(Ieee80211MutualInformationMapping::computeSymbolEffectiveSnr(carriers, qpsk, 1.0) -
+                     Ieee80211MutualInformationMapping::computeBitEffectiveSnr(carriers, qpsk, 1.0)) < 1e-10);
+    ASSERT(std::fabs(Ieee80211MutualInformationMapping::computeSymbolEffectiveSnr(carriers, qam16, 1.0) -
+                     Ieee80211MutualInformationMapping::computeBitEffectiveSnr(carriers, qam16, 1.0)) > 1e-3);
+
+    ASSERT(rejects([&] { Ieee80211MutualInformationMapping::computeSymbolEffectiveSnr({}, qam16, 1.0); }));
+    ASSERT(rejects([&] { Ieee80211MutualInformationMapping::computeBitEffectiveSnr(carriers, qam16, 0.0); }));
+    ASSERT(rejects([&] { Ieee80211MutualInformationMapping::computeBitEffectiveSnr(carriers, qam16, -1.0); }));
+    ASSERT(rejects([&] { Ieee80211MutualInformationMapping::computeBitEffectiveSnr(carriers, qam16, std::numeric_limits<double>::quiet_NaN()); }));
+    ASSERT(rejects([&] { Ieee80211MutualInformationMapping::computeBitEffectiveSnr(carriers, qam16, std::numeric_limits<double>::infinity()); }));
+    ASSERT(rejects([&] { Ieee80211MutualInformationMapping::computeSymbolEffectiveSnr({1.0, -1.0}, qam16, 1.0); }));
+    ASSERT(rejects([&] { Ieee80211MutualInformationMapping::computeSymbolEffectiveSnr({1.0, std::numeric_limits<double>::quiet_NaN()}, qam16, 1.0); }));
+    ASSERT(rejects([&] { Ieee80211MutualInformationMapping::computeSymbolEffectiveSnr({1.0, std::numeric_limits<double>::infinity()}, qam16, 1.0); }));
+    ASSERT(rejects([&] { Ieee80211MutualInformationMapping::computeBitMutualInformation(qam16, std::numeric_limits<double>::quiet_NaN()); }));
+    EV << "done" << endl;
+}
+
+%contains: stdout
+done

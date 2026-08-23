@@ -1,0 +1,59 @@
+%description:
+
+Checks the TGn indoor two-slope path loss, breakpoint continuity, inverse
+range, reference-distance clamp, and carrier-frequency dependence.
+
+%includes:
+#include <cmath>
+#include "inet/physicallayer/wireless/ieee80211/pathloss/TgnIndoorPathLoss.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+class TestTgnIndoorPathLoss : public TgnIndoorPathLoss
+{
+  public:
+    void configure(TgnModel value, m reference) {
+        model = value;
+        breakpointDistance = m(TgnChannelProfile::create(value).getBreakpointDistanceMeters());
+        referenceDistance = reference;
+    }
+};
+
+static void require(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("TGn path-loss test failed: %s", message);
+}
+
+%activity:
+TestTgnIndoorPathLoss pathLoss;
+pathLoss.configure(TgnModel::D, m(1));
+const mps speed(299792458);
+const Hz frequency = GHz(5);
+const double belowReference = pathLoss.computePathLoss(speed, frequency, m(0));
+const double atReference = pathLoss.computePathLoss(speed, frequency, m(1));
+require(belowReference == atReference, "reference-distance clamp");
+const double belowBreakpoint = pathLoss.computePathLoss(speed, frequency, m(9.999999));
+const double atBreakpoint = pathLoss.computePathLoss(speed, frequency, m(10));
+const double aboveBreakpoint = pathLoss.computePathLoss(speed, frequency, m(10.000001));
+require(std::abs(belowBreakpoint / atBreakpoint - 1) < 3e-7, "left breakpoint continuity");
+require(std::abs(aboveBreakpoint / atBreakpoint - 1) < 4e-7, "right breakpoint continuity");
+const double gain20 = pathLoss.computePathLoss(speed, frequency, m(20));
+require(std::abs(gain20 / atBreakpoint - std::pow(2.0, -3.5)) < 1e-13, "post-breakpoint exponent");
+const double doubledFrequency = pathLoss.computePathLoss(speed, GHz(10), m(10));
+require(std::abs(doubledFrequency / atBreakpoint - 0.25) < 1e-13, "frequency-square dependence");
+require(std::abs((pathLoss.computeRange(speed, frequency, gain20) - m(20)).get()) < 1e-9, "inverse range above breakpoint");
+const double gain5 = pathLoss.computePathLoss(speed, frequency, m(5));
+require(std::abs((pathLoss.computeRange(speed, frequency, gain5) - m(5)).get()) < 1e-9, "inverse range below breakpoint");
+bool rejected = false;
+try { pathLoss.computePathLoss(speed, frequency, m(-1)); }
+catch (const cRuntimeError&) { rejected = true; }
+require(rejected, "negative distance");
+std::cout << "PASS\n";
+
+%contains: stdout
+PASS

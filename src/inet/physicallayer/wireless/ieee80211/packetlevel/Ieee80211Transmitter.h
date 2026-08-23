@@ -9,6 +9,7 @@
 #define __INET_IEEE80211TRANSMITTER_H
 
 #include "inet/physicallayer/wireless/common/base/packetlevel/FlatTransmitterBase.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IDimensionalTransmitterAnalogModel.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
@@ -22,10 +23,14 @@ namespace physicallayer {
 class INET_API Ieee80211Transmitter : public FlatTransmitterBase
 {
   protected:
+    enum class DimensionalSpectrumMode { NOMINAL_BAND, OCCUPIED_SUBCARRIERS };
+
+  protected:
     const Ieee80211ModeSet *modeSet = nullptr;
     const IIeee80211Mode *mode = nullptr;
     const IIeee80211Band *band = nullptr;
     const Ieee80211Channel *channel = nullptr;
+    DimensionalSpectrumMode dimensionalSpectrumMode = DimensionalSpectrumMode::NOMINAL_BAND;
 
   protected:
     virtual void initialize(int stage) override;
@@ -52,4 +57,3 @@ class INET_API Ieee80211Transmitter : public FlatTransmitterBase
 } // namespace inet
 
 #endif
-

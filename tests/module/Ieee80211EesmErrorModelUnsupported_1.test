@@ -1,0 +1,69 @@
+%description:
+The BCC EESM implementation is HT-only. This negative integration sends a
+legacy ERP-OFDM frame through a dimensional nominal-band path and verifies
+that the missing HT carrier-plan capability is rejected.
+
+%file: test.ned
+
+import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
+import inet.node.inet.AdhocHost;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211DimensionalRadioMedium;
+
+network EesmErrorModelUnsupportedRejectTest
+{
+    submodules:
+        radioMedium: Ieee80211DimensionalRadioMedium;
+        configurator: Ipv4NetworkConfigurator;
+        sender: AdhocHost;
+        receiver: AdhocHost;
+}
+
+%inifile: omnetpp.ini
+
+[General]
+record-vector-results = false
+network = EesmErrorModelUnsupportedRejectTest
+sim-time-limit = 5ms
+cmdenv-express-mode = false
+ned-path = .;../../../../src;../../lib
+
+**.arp.typename = "GlobalArp"
+*.sender.ipv4.ip.limitedBroadcast = true
+**.mobility.typename = "StationaryMobility"
+**.mobility.initFromDisplayString = false
+**.mobility.initialX = 0m
+**.mobility.initialY = 0m
+**.wlan[*].radio.antenna.mobility.initFromDisplayString = false
+**.wlan[*].radio.antenna.mobility.initialX = 0m
+**.wlan[*].radio.antenna.mobility.initialY = 0m
+**.wlan[*].radio.typename = "Ieee80211DimensionalRadio"
+**.wlan[*].opMode = "g(erp)"
+**.wlan[*].radio.opMode = "g(erp)"
+**.wlan[*].radio.bandName = "2.4 GHz"
+**.wlan[*].radio.bandwidth = 20MHz
+**.wlan[*].bitrate = 6Mbps
+**.wlan[*].radio.transmitter.bitrate = 6Mbps
+**.wlan[*].radio.transmitter.dimensionalSpectrumMode = "nominalBand"
+**.wlan[*].radio.transmitter.power = 1000mW
+**.wlan[*].radio.receiver.sensitivity = -90dBm
+**.wlan[*].radio.receiver.energyDetection = -90dBm
+**.wlan[*].radio.receiver.snirThreshold = -100dB
+**.wlan[*].radio.receiver.snirThresholdMode = "mean"
+**.radioMedium.backgroundNoise.power = -120dBm
+*.receiver.wlan[*].radio.receiver.errorModel.typename = "Ieee80211EesmErrorModel"
+*.receiver.wlan[*].radio.receiver.errorModel.perTableFile = "../../data/Ieee80211Eesm.synthetic.csv"
+*.receiver.wlan[*].radio.receiver.errorModel.betaTableFile = "../../data/Ieee80211Eesm.synthetic-beta.csv"
+*.receiver.wlan[*].radio.receiver.errorModel.calibrationSet = "patidar2017-bcc-d40"
+*.receiver.wlan[*].radio.receiver.errorModel.perTableManifest = readJSON("../../data/Ieee80211Eesm.d40.manifest.json")
+*.sender.numApps = 1
+*.sender.app[0].typename = "UdpBasicApp"
+*.sender.app[0].destAddresses = "255.255.255.255"
+*.sender.app[0].destPort = 1000
+*.sender.app[0].messageLength = 100B
+*.sender.app[0].sendInterval = 1s
+*.sender.app[0].startTime = 1ms
+*.sender.app[0].stopTime = 2ms
+
+%exitcode: 1
+%contains-regex: stderr
+Ieee80211EesmErrorModel requires the HT data-mode carrier-plan capability

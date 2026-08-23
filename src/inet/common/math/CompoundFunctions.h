@@ -364,7 +364,9 @@ class INET_API ApproximatedFunction : public FunctionBase<R, D>
             for (X x = min; x < max; x += step) {
                 X x1 = x;
                 X x2 = x + step;
-                Interval<X> j(math::maxnan(x1, xl), math::minnan(x2, xu), true, fixed, fixed);
+                // fixed is a mask in the multidimensional domain, while Interval<X>
+                // expects a single-bit flag.
+                Interval<X> j(math::maxnan(x1, xl), math::minnan(x2, xu), true, fixed != 0, fixed != 0);
                 // determine the smallest intervals along the other dimensions for which the primitive functions are calculated
                 function->partition(i.template getFixed<X, DIMENSION>(x1), [&] (const typename D::I& i2, const IFunction<R, D> *f2) {
                     function->partition(i2.template getFixed<X, DIMENSION>(x2), [&] (const typename D::I& i3, const IFunction<R, D> *f3) {
@@ -390,13 +392,13 @@ class INET_API ApproximatedFunction : public FunctionBase<R, D>
                                 if (dynamic_cast<const ConstantInterpolatorBase<X, R> *>(interpolator))
                                     throw cRuntimeError("TODO");
                                 else if (dynamic_cast<const LinearInterpolator<X, R> *>(interpolator)) {
-                                    typename D::P lowerLower = i4.getLower();
-                                    typename D::P lowerUpper = i4.getUpper();
-                                    typename D::P upperLower = i3.getLower().template getReplaced<X, DIMENSION>(x1);
-                                    typename D::P upperUpper = i3.getUpper().template getReplaced<X, DIMENSION>(x2);
+                                    typename D::P lowerLower = f3l->getLower().template getReplaced<X, DIMENSION>(x1);
+                                    typename D::P lowerUpper = f3l->getLower().template getReplaced<X, DIMENSION>(x2);
+                                    typename D::P upperLower = f3l->getUpper().template getReplaced<X, DIMENSION>(x1);
+                                    typename D::P upperUpper = f3l->getUpper().template getReplaced<X, DIMENSION>(x2);
                                     R rLowerLower = f2c->getConstantValue();
-                                    R rLowerUpper = f2c->getConstantValue();
-                                    R rUpperLower = f3l->getRLower();
+                                    R rLowerUpper = f3l->getRLower();
+                                    R rUpperLower = f2c->getConstantValue();
                                     R rUpperUpper = f3l->getRUpper();
                                     BilinearFunction<R, D> g(lowerLower, lowerUpper, upperLower, upperUpper, rLowerLower, rLowerUpper, rUpperLower, rUpperUpper, f3l->getDimension(), DIMENSION);
                                     simplifyAndCall(i4, &g, callback);
@@ -412,13 +414,13 @@ class INET_API ApproximatedFunction : public FunctionBase<R, D>
                                 if (dynamic_cast<const ConstantInterpolatorBase<X, R> *>(interpolator))
                                     throw cRuntimeError("TODO");
                                 else if (dynamic_cast<const LinearInterpolator<X, R> *>(interpolator)) {
-                                    typename D::P lowerLower = i2.getLower().template getReplaced<X, DIMENSION>(x1);
-                                    typename D::P lowerUpper = i2.getUpper().template getReplaced<X, DIMENSION>(x2);
-                                    typename D::P upperLower = i4.getLower();
-                                    typename D::P upperUpper = i4.getUpper();
+                                    typename D::P lowerLower = f2l->getLower().template getReplaced<X, DIMENSION>(x1);
+                                    typename D::P lowerUpper = f2l->getLower().template getReplaced<X, DIMENSION>(x2);
+                                    typename D::P upperLower = f2l->getUpper().template getReplaced<X, DIMENSION>(x1);
+                                    typename D::P upperUpper = f2l->getUpper().template getReplaced<X, DIMENSION>(x2);
                                     R rLowerLower = f2l->getRLower();
-                                    R rLowerUpper = f2l->getRUpper();
-                                    R rUpperLower = f3c->getConstantValue();
+                                    R rLowerUpper = f3c->getConstantValue();
+                                    R rUpperLower = f2l->getRUpper();
                                     R rUpperUpper = f3c->getConstantValue();
                                     BilinearFunction<R, D> g(lowerLower, lowerUpper, upperLower, upperUpper, rLowerLower, rLowerUpper, rUpperLower, rUpperUpper, f2l->getDimension(), DIMENSION);
                                     simplifyAndCall(i4, &g, callback);
@@ -428,13 +430,13 @@ class INET_API ApproximatedFunction : public FunctionBase<R, D>
                             }
                             else if (auto f3l = dynamic_cast<const UnilinearFunction<R, D> *>(f3)) {
                                 ASSERT(f2l->getDimension() == f3l->getDimension());
-                                typename D::P lowerLower = i2.getLower().template getReplaced<X, DIMENSION>(x1);
-                                typename D::P lowerUpper = i2.getUpper().template getReplaced<X, DIMENSION>(x2);
-                                typename D::P upperLower = i3.getLower().template getReplaced<X, DIMENSION>(x1);
-                                typename D::P upperUpper = i3.getUpper().template getReplaced<X, DIMENSION>(x2);
+                                typename D::P lowerLower = f2l->getLower().template getReplaced<X, DIMENSION>(x1);
+                                typename D::P lowerUpper = f3l->getLower().template getReplaced<X, DIMENSION>(x2);
+                                typename D::P upperLower = f2l->getUpper().template getReplaced<X, DIMENSION>(x1);
+                                typename D::P upperUpper = f3l->getUpper().template getReplaced<X, DIMENSION>(x2);
                                 R rLowerLower = f2l->getRLower();
-                                R rLowerUpper = f2l->getRUpper();
-                                R rUpperLower = f3l->getRLower();
+                                R rLowerUpper = f3l->getRLower();
+                                R rUpperLower = f2l->getRUpper();
                                 R rUpperUpper = f3l->getRUpper();
                                 BilinearFunction<R, D> g(lowerLower, lowerUpper, upperLower, upperUpper, rLowerLower, rLowerUpper, rUpperLower, rUpperUpper, f2l->getDimension(), DIMENSION);
                                 simplifyAndCall(i4, &g, callback);
@@ -781,8 +783,14 @@ class INET_API IntegratedFunction<R, Domain<X, Y>, DIMS, RI, Domain<X>> : public
             if (first)
                 first = false;
             else {
+                Point<X> l5(xLower);
+                Point<X> u5(xUpper);
                 RI ri(0);
-                // NOTE: use the lower X for both interval ends, because we assume a constant function and intervals are closed at the lower end
+                bool hasBilinearPrimitive = false;
+                // Preserve the original constant/unilinear integration path
+                // exactly. Besides avoiding needless approximation, this keeps
+                // the established half-open boundary semantics of dimensional
+                // radios that don't use a wideband channel model.
                 Point<X, Y> l3(xLower, getLowerBound<Y>());
                 Point<X, Y> u3(xLower, getUpperBound<Y>());
                 Interval<X, Y> i3(l3, u3, DIMS, DIMS, DIMS);
@@ -799,14 +807,38 @@ class INET_API IntegratedFunction<R, Domain<X, Y>, DIMS, RI, Domain<X>> : public
                         else
                             throw cRuntimeError("TODO");
                     }
+                    else if (dynamic_cast<const BilinearFunction<R, Domain<X, Y>> *>(f4))
+                        hasBilinearPrimitive = true;
                     else
                         throw cRuntimeError("TODO");
                 });
-                ConstantFunction<RI, Domain<X>> g(ri);
-                Point<X> l5(xLower);
-                Point<X> u5(xUpper);
-                Interval<X> i5(l5, u5, first ? (i.getLowerClosed() & 0b10) >> 1 : 0b1, 0b0, 0b0);
-                callback(i5, &g);
+                if (!hasBilinearPrimitive) {
+                    ConstantFunction<RI, Domain<X>> g(ri);
+                    Interval<X> i5(l5, u5, first ? (i.getLowerClosed() & 0b10) >> 1 : 0b1, 0b0, 0b0);
+                    callback(i5, &g);
+                }
+                else {
+                    Interval<X> i5(l5, u5, 0b1, 0b0, 0b0);
+                    // Integrating a bilinear partition along Y yields a function
+                    // linear in X. Select the primitives at an interior point,
+                    // then evaluate their left/right boundary limits so a
+                    // half-open upper boundary cannot select the next branch.
+                    auto integrateAt = [&](X target) {
+                        RI result(0);
+                        X interior = xLower + (xUpper - xLower) / 2;
+                        Point<X, Y> l4(interior, getLowerBound<Y>());
+                        Point<X, Y> u4(interior, getUpperBound<Y>());
+                        Interval<X, Y> i4(l4, u4, DIMS, DIMS, DIMS);
+                        function->partition(i4, [&] (const Interval<X, Y>& i5, const IFunction<R, Domain<X, Y>> *f5) {
+                            auto targetInterval = i5.template getFixed<X, 0>(target);
+                            R r = f5->getIntegral(targetInterval);
+                            result += RI(toDouble(r));
+                        });
+                        return result;
+                    };
+                    UnilinearFunction<RI, Domain<X>> g(l5, u5, integrateAt(xLower), integrateAt(xUpper), 0);
+                    simplifyAndCall(i5, &g, callback);
+                }
             }
             xLower = xUpper;
         }
@@ -856,4 +888,3 @@ Ptr<const IFunction<RI, DI>> integrate(const Ptr<const IFunction<R, D>>& f) {
 } // namespace inet
 
 #endif
-

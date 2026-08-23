@@ -1,0 +1,149 @@
+%description:
+Valid synthetic HT20 occupied-spectrum integration for the opt-in BCC EESM
+model.  The receiver loads a complete non-production PER table, the reviewed
+beta artifact, and a fully validated object manifest.  A PingApp exchange
+proves that the dimensional Data metadata reaches computePacketErrorRate.
+
+%file: test.ned
+
+import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
+import inet.node.inet.AdhocHost;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211DimensionalRadioMedium;
+
+network EesmErrorModelIntegrationTest
+{
+    submodules:
+        radioMedium: Ieee80211DimensionalRadioMedium;
+        configurator: Ipv4NetworkConfigurator;
+        sender: AdhocHost;
+        receiver: AdhocHost;
+}
+
+%file: manifest.json
+{
+  "schemaVersion": "1",
+  "perTableSha256": "254026038873077b5144f4a23ec380e3b62992f00e65a2e90798a4e719efd9b2",
+  "betaTableSha256": "441389621258f397f651fd2e4247e21ac996eaec167efb99a7cbeb1f86492cf8",
+  "awgn": {
+    "schemaVersion": "1",
+    "observationsSha256": "254026038873077b5144f4a23ec380e3b62992f00e65a2e90798a4e719efd9b2",
+    "scope": "synthetic HT20 SISO BCC integration fixture",
+    "snrDefinition": "receiver-domain dimensional SNIR",
+    "psduLengthDefinition": "MAC PSDU octets",
+    "provenance": {
+      "method": "deterministic synthetic integration fixture",
+      "campaignId": "synthetic-eesm-module-v1",
+      "generatedDataLicense": "test-only",
+      "reviewedBy": "focused regression fixture",
+      "sourceDocuments": [
+        {"id": "patidar2017", "sha256": "a428fdcaa4423f331e3bd02044345ec4305ee54056c319404a897e713cdab16e"},
+        {"id": "ieee80211-2024", "sha256": "c08beb0e16bf8c36465a331d349dd8b8ea79b28d4a320288312ddeb5ce8d9bb1"}
+      ],
+      "forbiddenSourcesUsed": [],
+      "licenseApproved": true,
+      "cleanRoomVerified": true
+    },
+    "providerTool": {
+      "name": "synthetic-fixture",
+      "version": "1",
+      "gitCommit": "fixture",
+      "executableSha256": "441389621258f397f651fd2e4247e21ac996eaec167efb99a7cbeb1f86492cf8",
+      "toolchain": "repository test harness",
+      "configurationSha256": "254026038873077b5144f4a23ec380e3b62992f00e65a2e90798a4e719efd9b2"
+    },
+    "review": {"status": "approved", "reviewer": "focused regression fixture", "record": "synthetic"}
+  },
+  "beta": {
+    "schemaVersion": "1",
+    "tableSha256": "441389621258f397f651fd2e4247e21ac996eaec167efb99a7cbeb1f86492cf8",
+    "publicationSha256": "a428fdcaa4423f331e3bd02044345ec4305ee54056c319404a897e713cdab16e",
+    "calibrationSet": "patidar2017-bcc-d20",
+    "coding": "BCC",
+    "carrierSet": "dataOnly",
+    "ht20DataCarriers": 52,
+    "ht40DataCarriers": 108,
+    "sourceTable": "Patidar et al. Table 1, Model D, BCC MCS 0-7",
+    "citation": "M. Patidar et al., Link-to-System Mapping for ns-3 Wi-Fi OFDM Error Models, WNS3 2017",
+    "generatedDataLicense": "test-only synthetic fixture using versioned beta artifact",
+    "reviewedBy": "focused regression fixture",
+    "sourceRows": [
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "Patidar et al. Table 1, Model D, BCC MCS 0-7", "mcs": 0},
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "Patidar et al. Table 1, Model D, BCC MCS 0-7", "mcs": 1},
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "Patidar et al. Table 1, Model D, BCC MCS 0-7", "mcs": 2},
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "Patidar et al. Table 1, Model D, BCC MCS 0-7", "mcs": 3},
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "Patidar et al. Table 1, Model D, BCC MCS 0-7", "mcs": 4},
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "Patidar et al. Table 1, Model D, BCC MCS 0-7", "mcs": 5},
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "Patidar et al. Table 1, Model D, BCC MCS 0-7", "mcs": 6},
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "Patidar et al. Table 1, Model D, BCC MCS 0-7", "mcs": 7}
+    ],
+    "licenseApproved": true,
+    "cleanRoomVerified": true,
+    "review": {"status": "approved", "reviewer": "focused regression fixture", "record": "synthetic"}
+  }
+}
+
+%inifile: omnetpp.ini
+
+[General]
+record-vector-results = false
+network = EesmErrorModelIntegrationTest
+sim-time-limit = 10ms
+cmdenv-express-mode = false
+ned-path = .;../../../../src;../../lib
+
+**.arp.typename = "GlobalArp"
+**.mobility.typename = "StationaryMobility"
+**.mobility.initFromDisplayString = false
+**.sender.mobility.initialX = 0m
+**.sender.mobility.initialY = 0m
+**.receiver.mobility.initialX = 0m
+**.receiver.mobility.initialY = 0m
+**.wlan[*].radio.antenna.mobility.initFromDisplayString = false
+**.wlan[*].radio.antenna.mobility.initialX = 0m
+**.wlan[*].radio.antenna.mobility.initialY = 0m
+
+**.wlan[*].radio.typename = "Ieee80211DimensionalRadio"
+**.wlan[*].opMode = "n(mixed-2.4Ghz)"
+**.wlan[*].radio.opMode = "n(mixed-2.4Ghz)"
+**.wlan[*].radio.bandName = "2.4 GHz"
+**.wlan[*].bitrate = 6.5Mbps
+**.wlan[*].radio.transmitter.bitrate = 6.5Mbps
+**.wlan[*].radio.transmitter.dimensionalSpectrumMode = "occupiedSubcarriers"
+**.wlan[*].radio.transmitter.power = 1000mW
+**.wlan[*].radio.receiver.sensitivity = -90dBm
+**.wlan[*].radio.receiver.energyDetection = -90dBm
+**.wlan[*].radio.receiver.snirThreshold = -100dB
+**.wlan[*].radio.receiver.snirThresholdMode = "mean"
+**.radioMedium.backgroundNoise.power = -120dBm
+
+**.wlan[*].radio.receiver.errorModel.typename = "Ieee80211EesmErrorModel"
+**.wlan[*].radio.receiver.errorModel.perTableFile = "../../data/Ieee80211Eesm.synthetic.csv"
+**.wlan[*].radio.receiver.errorModel.betaTableFile = "../../data/Ieee80211Eesm.synthetic-beta.csv"
+**.wlan[*].radio.receiver.errorModel.calibrationSet = "patidar2017-bcc-d20"
+**.wlan[*].radio.receiver.errorModel.perTableManifest = readJSON("manifest.json")
+
+*.sender.numApps = 1
+*.sender.app[0].typename = "PingApp"
+*.sender.app[0].destAddr = "receiver"
+*.sender.app[0].count = 1
+*.sender.app[0].startTime = 1ms
+*.sender.app[0].printPing = true
+
+%contains-regex: stdout
+reply of .*ping0-reply
+
+%postrun-command: grep -E "compute(Packet|Bit|Symbol)ErrorRate" test.out | sort -u > error_rate_calls.out || true
+
+%contains: error_rate_calls.out
+computePacketErrorRate
+
+%contains: error_rate_calls.out
+computeBitErrorRate
+
+%contains: error_rate_calls.out
+computeSymbolErrorRate
+
+%postrun-command: grep -A 8 '^statistic EesmErrorModelIntegrationTest.receiver.wlan\[0\].radio packetErrorRate:histogram' results/General-#0.sca > error_rate_tag.out || true
+
+%contains-regex: error_rate_tag.out
+field count [1-9][0-9]*
