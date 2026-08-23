@@ -6,6 +6,10 @@
 
 
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalSnir.h"
+
+#include <algorithm>
+
+#include "inet/common/math/Functions.h"
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalReceptionAnalogModel.h"
 
 namespace inet {
@@ -18,6 +22,12 @@ DimensionalSnir::DimensionalSnir(const IReception *reception, const INoise *nois
     maxSNIR(NaN),
     meanSNIR(NaN)
 {
+}
+
+bool DimensionalSnir::isMultiband() const
+{
+    const auto dimensionalReception = check_and_cast<const DimensionalReceptionAnalogModel *>(reception->getAnalogModel());
+    return dimensionalReception->getOccupiedBands().size() > 1;
 }
 
 std::ostream& DimensionalSnir::printToStream(std::ostream& stream, int level, int evFlags) const
@@ -41,6 +51,15 @@ double DimensionalSnir::computeMin() const
     auto snir = receptionPower->divide(noisePower);
     simsec startTime = simsec(reception->getStartTime());
     simsec endTime = simsec(reception->getEndTime());
+    if (isMultiband()) {
+        double result = getUpperBound<double>();
+        for (const auto& band : dimensionalReception->getOccupiedBands()) {
+            Point<simsec, Hz> startPoint(startTime, band.getLowerFrequency());
+            Point<simsec, Hz> endPoint(endTime, band.getUpperFrequency());
+            result = std::min(result, snir->getMin(Interval<simsec, Hz>(startPoint, endPoint, 0b11, 0b00, 0b00)));
+        }
+        return result;
+    }
     Hz centerFrequency = dimensionalReception->getCenterFrequency();
     Hz bandwidth = dimensionalReception->getBandwidth();
     Point<simsec, Hz> startPoint(startTime, centerFrequency - bandwidth / 2);
@@ -66,6 +85,15 @@ double DimensionalSnir::computeMax() const
     auto snir = receptionPower->divide(noisePower);
     auto startTime = simsec(reception->getStartTime());
     auto endTime = simsec(reception->getEndTime());
+    if (isMultiband()) {
+        double result = getLowerBound<double>();
+        for (const auto& band : dimensionalReception->getOccupiedBands()) {
+            Point<simsec, Hz> startPoint(startTime, band.getLowerFrequency());
+            Point<simsec, Hz> endPoint(endTime, band.getUpperFrequency());
+            result = std::max(result, snir->getMax(Interval<simsec, Hz>(startPoint, endPoint, 0b11, 0b00, 0b00)));
+        }
+        return result;
+    }
     Hz centerFrequency = dimensionalReception->getCenterFrequency();
     Hz bandwidth = dimensionalReception->getBandwidth();
     Point<simsec, Hz> startPoint(startTime, centerFrequency - bandwidth / 2);
@@ -91,6 +119,17 @@ double DimensionalSnir::computeMean() const
     auto snir = receptionPower->divide(noisePower);
     auto startTime = simsec(reception->getStartTime());
     auto endTime = simsec(reception->getEndTime());
+    if (isMultiband()) {
+        double weightedMean = 0;
+        Hz totalBandwidth = Hz(0);
+        for (const auto& band : dimensionalReception->getOccupiedBands()) {
+            Point<simsec, Hz> startPoint(startTime, band.getLowerFrequency());
+            Point<simsec, Hz> endPoint(endTime, band.getUpperFrequency());
+            weightedMean += snir->getMean(Interval<simsec, Hz>(startPoint, endPoint, 0b11, 0b00, 0b00)) * band.bandwidth.get();
+            totalBandwidth += band.bandwidth;
+        }
+        return weightedMean / totalBandwidth.get();
+    }
     Hz centerFrequency = dimensionalReception->getCenterFrequency();
     Hz bandwidth = dimensionalReception->getBandwidth();
     Point<simsec, Hz> startPoint(startTime, centerFrequency - bandwidth / 2);
@@ -136,4 +175,3 @@ const Ptr<const IFunction<double, Domain<simsec, Hz>>> DimensionalSnir::getSnir(
 } // namespace physicallayer
 
 } // namespace inet
-

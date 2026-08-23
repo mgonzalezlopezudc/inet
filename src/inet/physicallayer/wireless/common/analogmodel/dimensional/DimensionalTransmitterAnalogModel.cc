@@ -41,6 +41,27 @@ ITransmissionAnalogModel* DimensionalTransmitterAnalogModel::createAnalogModel(s
     return new DimensionalTransmissionAnalogModel(preambleDuration, headerDuration, dataDuration, transmissionCenterFrequency, transmissionBandwidth, powerFunction);
 }
 
+ITransmissionAnalogModel* DimensionalTransmitterAnalogModel::createAnalogModel(simtime_t preambleDuration, simtime_t headerDuration, simtime_t dataDuration,
+        const std::vector<FrequencyBand>& requestedBands, W power) const
+{
+    auto occupiedBands = normalizeFrequencyBands(requestedBands);
+    if (occupiedBands.size() == 1)
+        return createAnalogModel(preambleDuration, headerDuration, dataDuration, occupiedBands.front().centerFrequency, occupiedBands.front().bandwidth, power);
+
+    simtime_t startTime = simTime();
+    simtime_t endTime = startTime + preambleDuration + headerDuration + dataDuration;
+    W transmissionPower = computePower(power);
+    Hz totalBandwidth = getFrequencyBandTotalBandwidth(occupiedBands);
+    std::vector<Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>> componentPowers;
+    componentPowers.reserve(occupiedBands.size());
+    for (const auto& band : occupiedBands) {
+        W segmentPower = transmissionPower * (band.bandwidth / totalBandwidth).get();
+        componentPowers.push_back(createPowerFunction(startTime, endTime, band.centerFrequency, band.bandwidth, segmentPower));
+    }
+    auto powerFunction = makeShared<MultibandFunction<WpHz>>(occupiedBands, componentPowers);
+    return new DimensionalTransmissionAnalogModel(preambleDuration, headerDuration, dataDuration, occupiedBands, powerFunction);
+}
+
 template<typename T>
 std::vector<DimensionalTransmitterAnalogModel::GainEntry<T>> DimensionalTransmitterAnalogModel::parseGains(const char *text) const
 {
@@ -238,4 +259,3 @@ Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> DimensionalTransmitterAnalogModel
 
 } // namespace physicallayer
 } // namespace inet
-

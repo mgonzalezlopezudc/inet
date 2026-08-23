@@ -1,0 +1,157 @@
+%description:
+Exercise the technology-neutral frequency-band union contracts and their
+dimensional analog-model behavior.
+
+%includes:
+#include <cmath>
+#include <memory>
+
+#include "inet/common/Units.h"
+#include "inet/common/math/Functions.h"
+#include "inet/physicallayer/wireless/common/analogmodel/common/MultibandFunction.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalNoise.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalReceptionAnalogModel.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalSnir.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalTransmissionAnalogModel.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/FrequencyBand.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IReception.h"
+#include "inet/physicallayer/wireless/common/radio/packetlevel/MultibandListening.h"
+
+%global:
+using namespace inet;
+using namespace inet::math;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+using PowerFunction = IFunction<WpHz, Domain<simsec, Hz>>;
+
+template<typename F>
+static bool throwsRuntimeError(F f)
+{
+    try {
+        f();
+        return false;
+    }
+    catch (const std::exception&) {
+        return true;
+    }
+}
+
+class TestReception : public IReception
+{
+  protected:
+    const DimensionalReceptionAnalogModel *analogModel;
+    const Coord position = Coord::ZERO;
+    const Quaternion orientation = Quaternion();
+
+  public:
+    TestReception(const std::vector<FrequencyBand>& bands, const Ptr<const PowerFunction>& power) :
+        analogModel(new DimensionalReceptionAnalogModel(0, 0, 1, bands, power))
+    {
+    }
+
+    virtual ~TestReception() { delete analogModel; }
+
+    virtual std::ostream& printToStream(std::ostream& stream, int level, int evFlags = 0) const override { return stream; }
+    virtual const IRadio *getReceiverRadio() const override { return nullptr; }
+    virtual const ITransmission *getTransmission() const override { return nullptr; }
+    virtual const simtime_t getStartTime() const override { return 0; }
+    virtual const simtime_t getEndTime() const override { return 1; }
+    virtual const simtime_t getStartTime(IRadioSignal::SignalPart) const override { return 0; }
+    virtual const simtime_t getEndTime(IRadioSignal::SignalPart) const override { return 1; }
+    virtual const simtime_t getPreambleStartTime() const override { return 0; }
+    virtual const simtime_t getPreambleEndTime() const override { return 0; }
+    virtual const simtime_t getHeaderStartTime() const override { return 0; }
+    virtual const simtime_t getHeaderEndTime() const override { return 0; }
+    virtual const simtime_t getDataStartTime() const override { return 0; }
+    virtual const simtime_t getDataEndTime() const override { return 1; }
+    virtual const simtime_t getDuration() const override { return 1; }
+    virtual const simtime_t getDuration(IRadioSignal::SignalPart) const override { return 1; }
+    virtual const simtime_t getPreambleDuration() const override { return 0; }
+    virtual const simtime_t getHeaderDuration() const override { return 0; }
+    virtual const simtime_t getDataDuration() const override { return 1; }
+    virtual const Coord& getStartPosition() const override { return position; }
+    virtual const Coord& getEndPosition() const override { return position; }
+    virtual const Quaternion& getStartOrientation() const override { return orientation; }
+    virtual const Quaternion& getEndOrientation() const override { return orientation; }
+    virtual const IReceptionAnalogModel *getAnalogModel() const override { return analogModel; }
+};
+
+%activity:
+{
+    const FrequencyBand low(GHz(5.18), MHz(80));
+    const FrequencyBand high(GHz(5.50), MHz(80));
+    const std::vector<FrequencyBand> inputBands{high, low};
+
+    // Normalization sorts the bands and keeps each PSD attached to its band.
+    auto lowPower = staticPtrCast<const PowerFunction>(makeShared<ConstantFunction<WpHz, Domain<simsec, Hz>>>(W(10) / MHz(80)));
+    auto highPower = staticPtrCast<const PowerFunction>(makeShared<ConstantFunction<WpHz, Domain<simsec, Hz>>>(W(10) / MHz(80)));
+    std::vector<Ptr<const PowerFunction>> inputComponents{highPower, lowPower};
+    auto power = makeShared<MultibandFunction<WpHz>>(inputBands, inputComponents);
+    ASSERT(power->getOccupiedBands().size() == 2);
+    ASSERT(power->getOccupiedBands()[0].centerFrequency == low.centerFrequency);
+    ASSERT(power->getOccupiedBands()[1].centerFrequency == high.centerFrequency);
+    ASSERT(power->getValue(Point<simsec, Hz>(simsec(0.5), low.centerFrequency)) == lowPower->getValue(Point<simsec, Hz>(simsec(0.5), low.centerFrequency)));
+    ASSERT(power->getValue(Point<simsec, Hz>(simsec(0.5), high.centerFrequency)) == highPower->getValue(Point<simsec, Hz>(simsec(0.5), high.centerFrequency)));
+    ASSERT(power->getValue(Point<simsec, Hz>(simsec(0.5), GHz(5.34))) == WpHz(0));
+    auto lowInterval = Interval<simsec, Hz>(Point<simsec, Hz>(simsec(0), low.getLowerFrequency()), Point<simsec, Hz>(simsec(1), low.getUpperFrequency()), 0b11, 0b00, 0b00);
+    auto envelopeInterval = Interval<simsec, Hz>(Point<simsec, Hz>(simsec(0), low.getLowerFrequency()), Point<simsec, Hz>(simsec(1), high.getUpperFrequency()), 0b11, 0b00, 0b00);
+    ASSERT(power->getMin(lowInterval) == lowPower->getValue(Point<simsec, Hz>(simsec(0.5), low.centerFrequency)));
+    ASSERT(power->getMax(lowInterval) == lowPower->getValue(Point<simsec, Hz>(simsec(0.5), low.centerFrequency)));
+    ASSERT(power->getMin(envelopeInterval) == WpHz(0));
+
+    auto integratedPower = integrate<WpHz, Domain<simsec, Hz>, 0b10, W, Domain<simsec>>(power);
+    ASSERT(integratedPower->getValue(Point<simsec>(simsec(0.5))) == W(20));
+
+    // A touching boundary is assigned to exactly one component, never both.
+    const std::vector<FrequencyBand> touchingBands{FrequencyBand(GHz(1.00), MHz(20)), FrequencyBand(GHz(1.02), MHz(20))};
+    auto one = staticPtrCast<const PowerFunction>(makeShared<ConstantFunction<WpHz, Domain<simsec, Hz>>>(W(1) / MHz(20)));
+    auto two = staticPtrCast<const PowerFunction>(makeShared<ConstantFunction<WpHz, Domain<simsec, Hz>>>(W(2) / MHz(20)));
+    auto touchingPower = makeShared<MultibandFunction<WpHz>>(touchingBands, std::vector<Ptr<const PowerFunction>>{one, two});
+    ASSERT(touchingPower->getValue(Point<simsec, Hz>(simsec(0.5), GHz(1.01))) == two->getValue(Point<simsec, Hz>(simsec(0.5), GHz(1.01))));
+    auto touchingIntegratedPower = integrate<WpHz, Domain<simsec, Hz>, 0b10, W, Domain<simsec>>(touchingPower);
+    ASSERT(touchingIntegratedPower->getValue(Point<simsec>(simsec(0.5))) == W(3));
+    ASSERT(throwsRuntimeError([&] { MultibandFunction<WpHz> bad({FrequencyBand(GHz(1.00), MHz(20)), FrequencyBand(GHz(1.01), MHz(20))}, {one, two}); }));
+
+    DimensionalTransmissionAnalogModel transmission(0, 0, 1, inputBands, power);
+    ASSERT(transmission.getOccupiedBands().size() == 2);
+    ASSERT(transmission.getCenterFrequency() == (low.getLowerFrequency() + high.getUpperFrequency()) / 2);
+    ASSERT(transmission.getBandwidth() == high.getUpperFrequency() - low.getLowerFrequency());
+
+    DimensionalReceptionAnalogModel receptionModel(0, 0, 1, inputBands, power);
+    ASSERT(receptionModel.getOccupiedBands().size() == 2);
+    ASSERT(receptionModel.getOccupiedBands()[0].centerFrequency == low.centerFrequency);
+    DimensionalNoise noise(0, 1, inputBands, power);
+    ASSERT(noise.getOccupiedBands().size() == 2);
+    ASSERT(noise.getOccupiedBands()[1].centerFrequency == high.centerFrequency);
+
+    MultibandListening listening(nullptr, 0, 1, Coord::ZERO, Coord::ZERO, inputBands);
+    ASSERT(listening.getOccupiedBands()[0].centerFrequency == low.centerFrequency);
+    ASSERT(listening.contains(low));
+    ASSERT(listening.contains(std::vector<FrequencyBand>{low, high}));
+    ASSERT(!listening.contains(FrequencyBand(low.centerFrequency + MHz(45), MHz(20))));
+    ASSERT(!listening.contains(std::vector<FrequencyBand>{low, FrequencyBand(GHz(5.34), MHz(20))}));
+    ASSERT(throwsRuntimeError([&] { MultibandListening overlap(nullptr, 0, 1, Coord::ZERO, Coord::ZERO, {low, FrequencyBand(GHz(5.20), MHz(80))}); }));
+
+    // The gap has deliberately hostile noise, but it is absent from the union.
+    auto lowSignal = staticPtrCast<const PowerFunction>(makeShared<ConstantFunction<WpHz, Domain<simsec, Hz>>>(W(10) / MHz(80)));
+    auto highSignal = staticPtrCast<const PowerFunction>(makeShared<ConstantFunction<WpHz, Domain<simsec, Hz>>>(W(4) / MHz(80)));
+    auto lowNoise = staticPtrCast<const PowerFunction>(makeShared<ConstantFunction<WpHz, Domain<simsec, Hz>>>(W(1) / MHz(80)));
+    auto highNoise = staticPtrCast<const PowerFunction>(makeShared<ConstantFunction<WpHz, Domain<simsec, Hz>>>(W(2) / MHz(80)));
+    auto hostileGapNoise = staticPtrCast<const PowerFunction>(makeShared<ConstantFunction<WpHz, Domain<simsec, Hz>>>(W(1000) / MHz(80)));
+    auto signal = makeShared<MultibandFunction<WpHz>>(inputBands, std::vector<Ptr<const PowerFunction>>{highSignal, lowSignal});
+    auto unionNoise = makeShared<MultibandFunction<WpHz>>(inputBands, std::vector<Ptr<const PowerFunction>>{highNoise, lowNoise});
+    auto gapNoise = makeShared<MultibandFunction<WpHz>>(inputBands, std::vector<Ptr<const PowerFunction>>{hostileGapNoise, hostileGapNoise});
+    ASSERT(gapNoise->getValue(Point<simsec, Hz>(simsec(0.5), GHz(5.34))) == WpHz(0));
+    TestReception testReception(inputBands, signal);
+    DimensionalNoise unionNoiseModel(0, 1, inputBands, unionNoise);
+    DimensionalSnir unionSnir(&testReception, &unionNoiseModel);
+    ASSERT(std::abs(unionSnir.getMin() - 2.0) < 1e-9);
+    ASSERT(std::abs(unionSnir.getMax() - 10.0) < 1e-9);
+    ASSERT(std::abs(unionSnir.getMean() - 6.0) < 1e-9);
+}
+
+EV << "Multiband dimensional analog-model tests PASSED.\n";
+
+%contains: stdout
+Multiband dimensional analog-model tests PASSED.

@@ -38,6 +38,12 @@ IListening *DimensionalReceiverAnalogModel::createListening(const IRadio *radio,
     return new BandListening(radio, startTime, endTime, startPosition, endPosition, centerFrequency, bandwidth);
 }
 
+IListening *DimensionalReceiverAnalogModel::createListening(const IRadio *radio, const simtime_t startTime, const simtime_t endTime,
+        const Coord& startPosition, const Coord& endPosition, const std::vector<FrequencyBand>& occupiedBands) const
+{
+    return new MultibandListening(radio, startTime, endTime, startPosition, endPosition, occupiedBands);
+}
+
 bool DimensionalReceiverAnalogModel::computeIsReceptionPossible(const IListening *listening, const IReception *reception, W sensitivity) const
 {
     if (std::isnan(sensitivity.get()))
@@ -46,28 +52,40 @@ bool DimensionalReceiverAnalogModel::computeIsReceptionPossible(const IListening
     if (std::isnan(sensitivity.get()))
         throw cRuntimeError("DimensionalReceiverAnalogModel: Sensitivity is not specified (neither as default nor as a runtime parameter)");
 
-    const BandListening *bandListening = check_and_cast<const BandListening *>(listening);
     const DimensionalReceptionAnalogModel *analogModel = check_and_cast<const DimensionalReceptionAnalogModel *>(reception->getAnalogModel());
-    auto listeningMin = bandListening->getCenterFrequency() - bandListening->getBandwidth() / 2;
-    auto listeningMax = bandListening->getCenterFrequency() + bandListening->getBandwidth() / 2;
-    auto receptionMin = analogModel->getCenterFrequency() - analogModel->getBandwidth() / 2;
-    auto receptionMax = analogModel->getCenterFrequency() + analogModel->getBandwidth() / 2;
-    if (receptionMin < listeningMin || receptionMax > listeningMax) {
+    if (auto multibandListening = dynamic_cast<const MultibandListening *>(listening)) {
+        if (!multibandListening->contains(analogModel->getOccupiedBands())) {
+            EV_DEBUG << "Computing whether reception is possible: listening and reception band sets differ -> reception is impossible" << endl;
+            return false;
+        }
+    }
+    else {
+        const BandListening *bandListening = check_and_cast<const BandListening *>(listening);
+        auto listeningMin = bandListening->getCenterFrequency() - bandListening->getBandwidth() / 2;
+        auto listeningMax = bandListening->getCenterFrequency() + bandListening->getBandwidth() / 2;
+        auto receptionMin = analogModel->getCenterFrequency() - analogModel->getBandwidth() / 2;
+        auto receptionMax = analogModel->getCenterFrequency() + analogModel->getBandwidth() / 2;
+        if (receptionMin >= listeningMin && receptionMax <= listeningMax) {
+            Point<simsec> startPoint{ simsec(reception->getStartTime()) };
+            Point<simsec> endPoint{ simsec(reception->getEndTime()) };
+            W minReceptionPower = integrate<WpHz, Domain<simsec, Hz>, 0b10, W, Domain<simsec>>(analogModel->getPower())->getMin(Interval<simsec>(startPoint, endPoint, 0b1, 0b1, 0b0));
+            ASSERT(W(0.0) <= minReceptionPower);
+            bool isReceptionPossible = minReceptionPower >= sensitivity;
+            EV_DEBUG << "Computing whether reception is possible" << EV_FIELD(minReceptionPower) << EV_FIELD(sensitivity) << " -> reception is " << (isReceptionPossible ? "possible" : "impossible") << endl;
+            return isReceptionPossible;
+        }
         EV_DEBUG << "Computing whether reception is possible: listening and reception bands are different -> reception is impossible" << endl;
         return false;
     }
-    else {
-        Point<simsec> startPoint{ simsec(reception->getStartTime()) };
-        Point<simsec> endPoint{ simsec(reception->getEndTime()) };
-        W minReceptionPower = integrate<WpHz, Domain<simsec, Hz>, 0b10, W, Domain<simsec>>(analogModel->getPower())->getMin(Interval<simsec>(startPoint, endPoint, 0b1, 0b1, 0b0));
-        ASSERT(W(0.0) <= minReceptionPower);
-        bool isReceptionPossible = minReceptionPower >= sensitivity;
-        EV_DEBUG << "Computing whether reception is possible" << EV_FIELD(minReceptionPower) << EV_FIELD(sensitivity) << " -> reception is " << (isReceptionPossible ? "possible" : "impossible") << endl;
-        return isReceptionPossible;
-    }
+    Point<simsec> startPoint{ simsec(reception->getStartTime()) };
+    Point<simsec> endPoint{ simsec(reception->getEndTime()) };
+    W minReceptionPower = integrate<WpHz, Domain<simsec, Hz>, 0b10, W, Domain<simsec>>(analogModel->getPower())->getMin(Interval<simsec>(startPoint, endPoint, 0b1, 0b1, 0b0));
+    ASSERT(W(0.0) <= minReceptionPower);
+    bool isReceptionPossible = minReceptionPower >= sensitivity;
+    EV_DEBUG << "Computing whether reception is possible" << EV_FIELD(minReceptionPower) << EV_FIELD(sensitivity) << " -> reception is " << (isReceptionPossible ? "possible" : "impossible") << endl;
+    return isReceptionPossible;
 }
 
 
 } // namespace physicallayer
 } // namespace inet
-

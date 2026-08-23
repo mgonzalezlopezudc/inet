@@ -14,8 +14,14 @@ namespace inet {
 namespace physicallayer {
 
 DimensionalNoise::DimensionalNoise(simtime_t startTime, simtime_t endTime, Hz centerFrequency, Hz bandwidth, const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power) :
-    NarrowbandNoiseBase(startTime, endTime, centerFrequency, bandwidth),
-    power(power)
+    DimensionalNoise(startTime, endTime, std::vector<FrequencyBand>{FrequencyBand(centerFrequency, bandwidth)}, power)
+{
+}
+
+DimensionalNoise::DimensionalNoise(simtime_t startTime, simtime_t endTime, const std::vector<FrequencyBand>& occupiedBands, const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power) :
+    NarrowbandNoiseBase(startTime, endTime, getFrequencyBandEnvelopeCenter(occupiedBands), getFrequencyBandEnvelopeBandwidth(occupiedBands)),
+    power(power),
+    occupiedBands(normalizeFrequencyBands(occupiedBands))
 {
 }
 
@@ -51,4 +57,3 @@ W DimensionalNoise::computeMaxPower(simtime_t startTime, simtime_t endTime) cons
 } // namespace physicallayer
 
 } // namespace inet
-

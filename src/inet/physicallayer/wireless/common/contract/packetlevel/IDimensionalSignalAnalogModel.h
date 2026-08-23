@@ -9,6 +9,7 @@
 #define __INET_IDIMENSIONALSIGNAL_H
 
 #include "inet/physicallayer/wireless/common/contract/bitlevel/ISignalAnalogModel.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IMultibandSignalAnalogModel.h"
 
 namespace inet {
 namespace physicallayer {
@@ -17,7 +18,7 @@ namespace physicallayer {
  * This interface represents the analog domain of a radio signal with a time and
  * frequency dependent power spectral density function.
  */
-class INET_API IDimensionalSignalAnalogModel : public virtual ISignalAnalogModel
+class INET_API IDimensionalSignalAnalogModel : public virtual ISignalAnalogModel, public virtual IMultibandSignalAnalogModel
 {
   public:
     virtual const Ptr<const math::IFunction<WpHz, math::Domain<simsec, Hz>>>& getPower() const = 0;
@@ -27,4 +28,3 @@ class INET_API IDimensionalSignalAnalogModel : public virtual ISignalAnalogModel
 } // namespace inet
 
 #endif
-

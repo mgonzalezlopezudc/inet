@@ -13,8 +13,14 @@ namespace inet {
 namespace physicallayer {
 
 DimensionalSignalAnalogModel::DimensionalSignalAnalogModel(const simtime_t preambleDuration, const simtime_t headerDuration, const simtime_t dataDuration, Hz centerFrequency, Hz bandwidth, const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power) :
-    NarrowbandSignalAnalogModel(preambleDuration, headerDuration, dataDuration, centerFrequency, bandwidth),
-    power(power)
+    DimensionalSignalAnalogModel(preambleDuration, headerDuration, dataDuration, std::vector<FrequencyBand>{FrequencyBand(centerFrequency, bandwidth)}, power)
+{
+}
+
+DimensionalSignalAnalogModel::DimensionalSignalAnalogModel(const simtime_t preambleDuration, const simtime_t headerDuration, const simtime_t dataDuration, const std::vector<FrequencyBand>& occupiedBands, const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power) :
+    NarrowbandSignalAnalogModel(preambleDuration, headerDuration, dataDuration, computeEnvelopeCenterFrequency(occupiedBands), computeEnvelopeBandwidth(occupiedBands)),
+    power(power),
+    occupiedBands(normalizeFrequencyBands(occupiedBands))
 {
 }
 
@@ -41,4 +47,3 @@ W DimensionalSignalAnalogModel::computeMinPower(simtime_t startTime, simtime_t e
 } // namespace physicallayer
 
 } // namespace inet
-

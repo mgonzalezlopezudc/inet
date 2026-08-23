@@ -9,6 +9,7 @@
 #define __INET_IEEE80211CHANNEL_H
 
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/FrequencyBand.h"
 
 namespace inet {
 
@@ -31,16 +32,7 @@ enum Ieee80211ChannelWidth {
     IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ,
 };
 
-struct INET_API Ieee80211ChannelBand
-{
-    Hz centerFrequency;
-    Hz bandwidth;
-
-    Ieee80211ChannelBand() : centerFrequency(Hz(NaN)), bandwidth(Hz(NaN)) {}
-    Ieee80211ChannelBand(Hz centerFrequency, Hz bandwidth) : centerFrequency(centerFrequency), bandwidth(bandwidth) {}
-    Hz getLowerFrequency() const { return centerFrequency - bandwidth / 2; }
-    Hz getUpperFrequency() const { return centerFrequency + bandwidth / 2; }
-};
+using Ieee80211ChannelBand = FrequencyBand;
 
 class INET_API Ieee80211Channel : public IPrintableObject
 {

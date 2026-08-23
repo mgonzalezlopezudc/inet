@@ -15,7 +15,11 @@ DimensionalTransmissionAnalogModel::DimensionalTransmissionAnalogModel(const sim
 {
 }
 
+DimensionalTransmissionAnalogModel::DimensionalTransmissionAnalogModel(const simtime_t preambleDuration, const simtime_t headerDuration, const simtime_t dataDuration, const std::vector<FrequencyBand>& occupiedBands, const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power) :
+    DimensionalSignalAnalogModel(preambleDuration, headerDuration, dataDuration, occupiedBands, power)
+{
+}
+
 } // namespace physicallayer
 
 } // namespace inet
-

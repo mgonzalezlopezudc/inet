@@ -26,6 +26,7 @@ class INET_API DimensionalSnir : public SnirBase
     virtual double computeMin() const;
     virtual double computeMax() const;
     virtual double computeMean() const;
+    virtual bool isMultiband() const;
 
   public:
     DimensionalSnir(const IReception *reception, const INoise *noise);
@@ -44,4 +45,3 @@ class INET_API DimensionalSnir : public SnirBase
 } // namespace inet
 
 #endif
-

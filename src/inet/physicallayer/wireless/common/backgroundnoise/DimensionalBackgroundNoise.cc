@@ -8,7 +8,9 @@
 #include "inet/physicallayer/wireless/common/backgroundnoise/DimensionalBackgroundNoise.h"
 
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalNoise.h"
+#include "inet/physicallayer/wireless/common/analogmodel/common/MultibandFunction.h"
 #include "inet/physicallayer/wireless/common/radio/packetlevel/BandListening.h"
+#include "inet/physicallayer/wireless/common/radio/packetlevel/MultibandListening.h"
 
 namespace inet {
 
@@ -37,16 +39,28 @@ std::ostream& DimensionalBackgroundNoise::printToStream(std::ostream& stream, in
 
 const INoise *DimensionalBackgroundNoise::computeNoise(const IListening *listening) const
 {
-    const BandListening *bandListening = check_and_cast<const BandListening *>(listening);
+    const auto multibandListening = dynamic_cast<const MultibandListening *>(listening);
+    const BandListening *bandListening = multibandListening == nullptr ? check_and_cast<const BandListening *>(listening) : nullptr;
     const simtime_t startTime = listening->getStartTime();
     const simtime_t endTime = listening->getEndTime();
-    Hz centerFrequency = bandListening->getCenterFrequency();
-    Hz bandwidth = bandListening->getBandwidth();
-    const auto& powerFunction = createPowerFunction(startTime, endTime, centerFrequency, bandwidth, power);
-    return new DimensionalNoise(startTime, endTime, centerFrequency, bandwidth, powerFunction);
+    if (multibandListening == nullptr) {
+        Hz centerFrequency = bandListening->getCenterFrequency();
+        Hz bandwidth = bandListening->getBandwidth();
+        const auto& powerFunction = createPowerFunction(startTime, endTime, centerFrequency, bandwidth, power);
+        return new DimensionalNoise(startTime, endTime, centerFrequency, bandwidth, powerFunction);
+    }
+    const auto& occupiedBands = multibandListening->getOccupiedBands();
+    Hz totalBandwidth = getFrequencyBandTotalBandwidth(occupiedBands);
+    std::vector<Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>> components;
+    components.reserve(occupiedBands.size());
+    for (const auto& band : occupiedBands) {
+        W segmentPower = power * (band.bandwidth / totalBandwidth).get();
+        components.push_back(createPowerFunction(startTime, endTime, band.centerFrequency, band.bandwidth, segmentPower));
+    }
+    auto powerFunction = makeShared<MultibandFunction<WpHz>>(occupiedBands, components);
+    return new DimensionalNoise(startTime, endTime, occupiedBands, powerFunction);
 }
 
 } // namespace physicallayer
 
 } // namespace inet
-

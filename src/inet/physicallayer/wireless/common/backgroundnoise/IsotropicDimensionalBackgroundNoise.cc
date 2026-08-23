@@ -9,7 +9,9 @@
 
 #include "inet/common/math/Functions.h"
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalNoise.h"
+#include "inet/physicallayer/wireless/common/analogmodel/common/MultibandFunction.h"
 #include "inet/physicallayer/wireless/common/radio/packetlevel/BandListening.h"
+#include "inet/physicallayer/wireless/common/radio/packetlevel/MultibandListening.h"
 
 namespace inet {
 
@@ -47,14 +49,16 @@ std::ostream& IsotropicDimensionalBackgroundNoise::printToStream(std::ostream& s
 
 const INoise *IsotropicDimensionalBackgroundNoise::computeNoise(const IListening *listening) const
 {
-    const BandListening *bandListening = check_and_cast<const BandListening *>(listening);
-    Hz centerFrequency = bandListening->getCenterFrequency();
-    Hz listeningBandwidth = bandListening->getBandwidth();
+    const auto multibandListening = dynamic_cast<const MultibandListening *>(listening);
+    const BandListening *bandListening = multibandListening == nullptr ? check_and_cast<const BandListening *>(listening) : nullptr;
+    Hz centerFrequency = bandListening != nullptr ? bandListening->getCenterFrequency() : multibandListening->getCenterFrequency();
+    Hz listeningBandwidth = bandListening != nullptr ? bandListening->getBandwidth() : multibandListening->getBandwidth();
     WpHz noisePowerSpectralDensity;
     if (!std::isnan(powerSpectralDensity.get()))
         noisePowerSpectralDensity = powerSpectralDensity;
     else {
-        Hz noiseBandwidth = std::isnan(bandwidth.get()) ? listeningBandwidth : bandwidth;
+        Hz noiseBandwidth = std::isnan(bandwidth.get()) ?
+                (multibandListening == nullptr ? listeningBandwidth : getFrequencyBandTotalBandwidth(multibandListening->getOccupiedBands())) : bandwidth;
         // A scalar power parameter denotes integrated power over the
         // configured band. Keep its equivalent flat PSD when a per-channel
         // CCA query selects a narrower HT40 slice.
@@ -63,10 +67,13 @@ const INoise *IsotropicDimensionalBackgroundNoise::computeNoise(const IListening
     const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& powerFunction = makeShared<ConstantFunction<WpHz, Domain<simsec, Hz>>>(noisePowerSpectralDensity);
     const simtime_t startTime = listening->getStartTime();
     const simtime_t endTime = listening->getEndTime();
-    return new DimensionalNoise(startTime, endTime, centerFrequency, listeningBandwidth, makeFirstQuadrantLimitedFunction(powerFunction));
+    if (multibandListening == nullptr)
+        return new DimensionalNoise(startTime, endTime, centerFrequency, listeningBandwidth, makeFirstQuadrantLimitedFunction(powerFunction));
+    std::vector<Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>> components(multibandListening->getOccupiedBands().size(), makeFirstQuadrantLimitedFunction(powerFunction));
+    auto maskedPower = makeShared<MultibandFunction<WpHz>>(multibandListening->getOccupiedBands(), components);
+    return new DimensionalNoise(startTime, endTime, multibandListening->getOccupiedBands(), maskedPower);
 }
 
 } // namespace physicallayer
 
 } // namespace inet
-

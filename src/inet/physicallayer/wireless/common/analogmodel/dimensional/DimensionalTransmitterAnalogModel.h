@@ -10,15 +10,17 @@
 
 #include "inet/common/math/IInterpolator.h"
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalTransmissionAnalogModel.h"
+#include "inet/physicallayer/wireless/common/analogmodel/common/MultibandFunction.h"
 #include "inet/physicallayer/wireless/common/base/packetlevel/TransmitterAnalogModelBase.h"
 #include "inet/physicallayer/wireless/common/contract/bitlevel/ISignalAnalogModel.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IMultibandTransmitterAnalogModel.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmitterAnalogModel.h"
 
 namespace inet {
 
 namespace physicallayer {
 
-class INET_API DimensionalTransmitterAnalogModel : public TransmitterAnalogModelBase, public ITransmitterAnalogModel
+class INET_API DimensionalTransmitterAnalogModel : public TransmitterAnalogModelBase, public IMultibandTransmitterAnalogModel
 {
   protected:
     template<typename T>
@@ -79,6 +81,8 @@ class INET_API DimensionalTransmitterAnalogModel : public TransmitterAnalogModel
 
   public:
     virtual ITransmissionAnalogModel* createAnalogModel(simtime_t preambleDuration, simtime_t headerDuration, simtime_t dataDuration, Hz centerFrequency, Hz bandwidth, W power) const override;
+    virtual ITransmissionAnalogModel* createAnalogModel(simtime_t preambleDuration, simtime_t headerDuration, simtime_t dataDuration,
+            const std::vector<FrequencyBand>& occupiedBands, W power) const override;
 };
 
 } // namespace physicallayer
@@ -86,4 +90,3 @@ class INET_API DimensionalTransmitterAnalogModel : public TransmitterAnalogModel
 } // namespace inet
 
 #endif
-
