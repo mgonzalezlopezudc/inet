@@ -1,0 +1,3 @@
+Selective-reuse analysis delivered to `/root`.
+
+Conclusion: the four commits are not safely cherry-pickable. They rely on five omitted intermediate commits and a 253-commit HE/802.11ax foundation absent from the checked branch. The safe approach is a manual, audited port of the final generic channel contracts, snapshots, MRC utilities, and minimal dimensional-medium integration, followed by a separate `Tgn*` implementation.

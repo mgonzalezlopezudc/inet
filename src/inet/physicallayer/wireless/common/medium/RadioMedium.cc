@@ -28,6 +28,7 @@ RadioMedium::RadioMedium() :
     pathLoss(nullptr),
     obstacleLoss(nullptr),
     analogModel(nullptr),
+    channelModel(nullptr),
     backgroundNoise(nullptr),
     physicalEnvironment(nullptr),
     material(nullptr),
@@ -78,6 +79,7 @@ void RadioMedium::initialize(int stage)
         pathLoss = check_and_cast<IPathLoss *>(getSubmodule("pathLoss"));
         obstacleLoss = dynamic_cast<IObstacleLoss *>(getSubmodule("obstacleLoss"));
         analogModel = check_and_cast<IMediumAnalogModel *>(getSubmodule("analogModel"));
+        channelModel = dynamic_cast<IWidebandChannelModel *>(getSubmodule("channelModel"));
         backgroundNoise = dynamic_cast<IBackgroundNoise *>(getSubmodule("backgroundNoise"));
         mediumLimitCache = check_and_cast<IMediumLimitCache *>(getSubmodule("mediumLimitCache"));
         neighborCache = dynamic_cast<INeighborCache *>(getSubmodule("neighborCache"));
@@ -170,6 +172,7 @@ std::ostream& RadioMedium::printToStream(std::ostream& stream, int level, int ev
         stream << EV_FIELD(propagation, printFieldToString(propagation, level + 1, evFlags))
                << EV_FIELD(pathLoss, printFieldToString(pathLoss, level + 1, evFlags))
                << EV_FIELD(analogModel, printFieldToString(analogModel, level + 1, evFlags))
+               << EV_FIELD(channelModel, printFieldToString(channelModel, level + 1, evFlags))
                << EV_FIELD(obstacleLoss, printFieldToString(obstacleLoss, level + 1, evFlags))
                << EV_FIELD(backgroundNoise, printFieldToString(backgroundNoise, level + 1, evFlags))
                << EV_FIELD(mediumLimitCache, printFieldToString(mediumLimitCache, level + 1, evFlags))
@@ -452,6 +455,8 @@ void RadioMedium::addRadio(const IRadio *radio)
         radioModule->subscribe(IRadio::listeningChangedSignal, this);
     if (macAddressFilter)
         getContainingNode(radioModule)->subscribe(interfaceConfigChangedSignal, this);
+    if (channelModel)
+        channelModel->addRadio(radio);
     emit(radioAddedSignal, radioModule);
 }
 
@@ -469,6 +474,8 @@ void RadioMedium::removeRadio(const IRadio *radio)
         radioModule->unsubscribe(IRadio::listeningChangedSignal, this);
     if (macAddressFilter)
         getContainingNode(radioModule)->unsubscribe(interfaceConfigChangedSignal, this);
+    if (channelModel)
+        channelModel->removeRadio(radio);
     emit(radioRemovedSignal, radioModule);
 }
 
@@ -785,4 +792,3 @@ void RadioMedium::receiveSignal(cComponent *source, simsignal_t signal, cObject 
 
 } // namespace physicallayer
 } // namespace inet
-

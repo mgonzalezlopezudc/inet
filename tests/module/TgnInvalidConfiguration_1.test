@@ -1,0 +1,29 @@
+%description:
+
+Checks that an invalid TGn physical parameter is rejected during channel-model
+initialization with a specific diagnostic.
+
+%file: test.ned
+
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211TgnRadioMedium;
+
+network TgnInvalidConfigurationTest
+{
+    submodules:
+        radioMedium: Ieee80211TgnRadioMedium;
+}
+
+%inifile: omnetpp.ini
+
+[General]
+network = TgnInvalidConfigurationTest
+ned-path = .;../../../../src
+record-vector-results = false
+*.radioMedium.environmentalSpeed = -1mps
+
+%exitcode: 1
+
+%postrun-command: grep "<!>" test.* > test_err.out || true
+
+%contains: test_err.out
+TGn environmental and vehicle speeds must be finite and nonnegative

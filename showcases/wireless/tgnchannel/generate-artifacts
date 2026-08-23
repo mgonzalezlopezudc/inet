@@ -1,0 +1,19 @@
+#!/bin/bash
+set -eu
+
+showcase_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repository_dir=$(CDPATH= cd -- "$showcase_dir/../../.." && pwd)
+mkdir -p "$showcase_dir/results"
+
+cd "$repository_dir"
+. ./setenv -f >/dev/null
+TGN_ARTIFACT_DIR="$showcase_dir/results" MPLCONFIGDIR=/tmp \
+    inet_run_unit_tests -m debug -f \
+    '(TgnMimoChannel|TgnMimoChannelStatistics)_1\.test'
+
+if command -v gnuplot >/dev/null 2>&1; then
+    cd "$showcase_dir"
+    gnuplot plot-artifacts.gnuplot
+else
+    echo "gnuplot is not installed; CSV artifacts were generated" >&2
+fi

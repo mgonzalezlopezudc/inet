@@ -1,0 +1,39 @@
+%description:
+
+Checks immutable matrix response dimensions, metadata, checked lookup, and
+ordinary (non-conjugating) reciprocal transpose.
+
+%includes:
+#include "inet/physicallayer/wireless/common/analogmodel/common/ChannelMatrixSnapshot.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+static void require(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("Channel snapshot test failed: %s", message);
+}
+
+%activity:
+auto response = std::make_shared<const ChannelMatrixResponse>(2, 1,
+    [](simtime_t time, Hz frequency) {
+        return ComplexMatrix(2, 1, {{1, 2}, {3, -4}});
+    });
+auto snapshot = std::make_shared<const ChannelMatrixSnapshot>(2, 1, GHz(5), 1, 2, 0.75, Hz(10), SimTime(50, SIMTIME_NS), response);
+require(snapshot->getNumReceiveAntennas() == 2 && snapshot->getNumTransmitAntennas() == 1, "dimensions");
+require(snapshot->getResponse(1, GHz(5)).get(1, 0) == std::complex<double>(3, -4), "response value");
+auto transposed = snapshot->transpose();
+require(transposed->getNumReceiveAntennas() == 1 && transposed->getNumTransmitAntennas() == 2, "transpose dimensions");
+require(transposed->getResponse(1, GHz(5)).get(0, 1) == std::complex<double>(3, -4), "ordinary transpose");
+bool rejected = false;
+try { snapshot->getResponse(1, GHz(5)).get(2, 0); }
+catch (const cRuntimeError&) { rejected = true; }
+require(rejected, "checked lookup");
+std::cout << "PASS\n";
+
+%contains: stdout
+PASS

@@ -135,19 +135,6 @@ class INET_API BilinearFunction : public FunctionBase<R, D>
     const int dimension1;
     const int dimension2;
 
-  protected:
-    typename D::I getOtherInterval(const typename D::I& i) const {
-        const typename D::P& lower = i.getLower();
-        const typename D::P& upper = i.getUpper();
-        typename D::P lowerUpper = D::P::getZero();
-        typename D::P upperLower = D::P::getZero();
-        lowerUpper.set(dimension1, lower.get(dimension1));
-        lowerUpper.set(dimension2, upper.get(dimension2));
-        upperLower.set(dimension1, upper.get(dimension1));
-        upperLower.set(dimension2, lower.get(dimension2));
-        return typename D::I(lowerUpper, upperLower, i.getLowerClosed(), i.getUpperClosed(), i.getFixed());
-    }
-
   public:
     BilinearFunction(const typename D::P& lowerLower, const typename D::P& lowerUpper, const typename D::P& upperLower, const typename D::P& upperUpper,
                      const R rLowerLower, const R rLowerUpper, const R rUpperLower, const R rUpperUpper, const int dimension1, const int dimension2) :
@@ -173,7 +160,11 @@ class INET_API BilinearFunction : public FunctionBase<R, D>
     }
 
     virtual R getValue(const typename D::P& p) const override {
-        double lowerAlpha = (p - lowerLower).get(dimension1) / (upperLower - lowerLower).get(dimension1);
+        double dimension1Span = (upperLower - lowerLower).get(dimension1);
+        if (dimension1Span == 0)
+            throw cRuntimeError("Degenerate bilinear function in dimension %d: %s, %s, %s, %s", dimension1,
+                    lowerLower.str().c_str(), lowerUpper.str().c_str(), upperLower.str().c_str(), upperUpper.str().c_str());
+        double lowerAlpha = (p - lowerLower).get(dimension1) / dimension1Span;
         R rLower = rLowerLower * (1 - lowerAlpha) + rUpperLower * lowerAlpha;
         const typename D::P lower = lowerLower * (1 - lowerAlpha) + upperLower * lowerAlpha;
 
@@ -181,7 +172,11 @@ class INET_API BilinearFunction : public FunctionBase<R, D>
         R rUpper = rLowerUpper * (1 - upperAlpha) + rUpperUpper * upperAlpha;
         const typename D::P upper = lowerUpper * (1 - upperAlpha) + upperUpper * upperAlpha;
 
-        double alpha = (p - lower).get(dimension2) / (upper - lower).get(dimension2);
+        double dimension2Span = (upper - lower).get(dimension2);
+        if (dimension2Span == 0)
+            throw cRuntimeError("Degenerate bilinear function in dimension %d: %s, %s, %s, %s", dimension2,
+                    lowerLower.str().c_str(), lowerUpper.str().c_str(), upperLower.str().c_str(), upperUpper.str().c_str());
+        double alpha = (p - lower).get(dimension2) / dimension2Span;
         return rLower * (1 - alpha) + rUpper * alpha;
     }
 
@@ -198,13 +193,19 @@ class INET_API BilinearFunction : public FunctionBase<R, D>
     }
 
     virtual R getMin(const typename D::I& i) const override {
-        auto j = getOtherInterval(i);
-        return math::minnan(math::minnan(getValue(i.getLower()), getValue(j.getLower())), math::minnan(getValue(j.getUpper()), getValue(i.getUpper())));
+        typename D::P lowerUpper = i.getLower();
+        typename D::P upperLower = i.getLower();
+        lowerUpper.set(dimension2, i.getUpper().get(dimension2));
+        upperLower.set(dimension1, i.getUpper().get(dimension1));
+        return math::minnan(math::minnan(getValue(i.getLower()), getValue(lowerUpper)), math::minnan(getValue(upperLower), getValue(i.getUpper())));
     }
 
     virtual R getMax(const typename D::I& i) const override {
-        auto j = getOtherInterval(i);
-        return math::maxnan(math::maxnan(getValue(i.getLower()), getValue(j.getLower())), math::maxnan(getValue(j.getUpper()), getValue(i.getUpper())));
+        typename D::P lowerUpper = i.getLower();
+        typename D::P upperLower = i.getLower();
+        lowerUpper.set(dimension2, i.getUpper().get(dimension2));
+        upperLower.set(dimension1, i.getUpper().get(dimension1));
+        return math::maxnan(math::maxnan(getValue(i.getLower()), getValue(lowerUpper)), math::maxnan(getValue(upperLower), getValue(i.getUpper())));
     }
 
     virtual R getMean(const typename D::I& i) const override {
@@ -803,4 +804,3 @@ void simplifyAndCall(const typename D::I& i, const BilinearFunction<R, D> *f, co
 } // namespace inet
 
 #endif
-

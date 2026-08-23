@@ -18,7 +18,7 @@ module DimensionalMediumAnalogModel extends Module like IMediumAnalogModel
 {
     parameters:
         bool attenuateWithCenterFrequency = default(true); // True means frequency selectivity will always use the carrier frequency as opposed to using the frequency where the change in power occurs
+        int selectedTransmitAntenna = default(0); // Full transmission power is assigned to this one channel-matrix column
         @display("i=block/tunnel");
         @class(DimensionalMediumAnalogModel);
 }
-

@@ -1,0 +1,208 @@
+%description:
+
+Validates the TGn 4x4 NLOS spatial channel against the report's Table III
+capacity means using 20 deterministic batches of 2000 realizations.
+
+%includes:
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <complex>
+#include <cstdlib>
+#include <cstdint>
+#include <fstream>
+#include <iomanip>
+#include <random>
+#include <string>
+#include <vector>
+#include "inet/physicallayer/wireless/ieee80211/channelmodel/TgnMimoChannel.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+using Matrix4 = std::array<std::complex<double>, 16>;
+
+struct StatisticalCluster {
+    Matrix4 receiverRoot;
+    Matrix4 transmitterRoot;
+    double power;
+};
+
+static Matrix4 toMatrix4(const ComplexMatrix& source)
+{
+    Matrix4 result;
+    for (int row = 0; row < 4; row++)
+        for (int column = 0; column < 4; column++)
+            result[row * 4 + column] = source.get(row, column);
+    return result;
+}
+
+static std::complex<double> drawComplexNormal(std::mt19937_64& generator)
+{
+    const long double scale = 1.0L / 18446744073709551616.0L;
+    const double u1 = (generator() + 0.5L) * scale;
+    const double u2 = (generator() + 0.5L) * scale;
+    const double radius = std::sqrt(-2 * std::log(u1));
+    const double angle = 2 * 3.141592653589793238462643383279502884 * u2;
+    return {radius * std::cos(angle) / std::sqrt(2.0), radius * std::sin(angle) / std::sqrt(2.0)};
+}
+
+static Matrix4 drawChannel(const std::vector<StatisticalCluster>& clusters, std::mt19937_64& generator)
+{
+    Matrix4 channel{};
+    for (const auto& cluster : clusters) {
+        Matrix4 independent;
+        for (auto& value : independent)
+            value = drawComplexNormal(generator);
+        const double amplitude = std::sqrt(cluster.power);
+        for (int row = 0; row < 4; row++)
+            for (int column = 0; column < 4; column++) {
+                std::complex<double> value = 0;
+                for (int a = 0; a < 4; a++)
+                    for (int b = 0; b < 4; b++)
+                        value += cluster.receiverRoot[row * 4 + a] * independent[a * 4 + b] *
+                            cluster.transmitterRoot[column * 4 + b];
+                channel[row * 4 + column] += amplitude * value;
+            }
+    }
+    return channel;
+}
+
+static Matrix4 drawIidChannel(std::mt19937_64& generator)
+{
+    Matrix4 channel;
+    for (auto& value : channel)
+        value = drawComplexNormal(generator);
+    return channel;
+}
+
+static double computeCapacity(const Matrix4& channel)
+{
+    Matrix4 positiveDefinite{};
+    for (int row = 0; row < 4; row++)
+        for (int column = 0; column < 4; column++) {
+            std::complex<double> value = row == column ? 1.0 : 0.0;
+            for (int stream = 0; stream < 4; stream++)
+                value += 2.5 * channel[row * 4 + stream] * std::conj(channel[column * 4 + stream]);
+            positiveDefinite[row * 4 + column] = value;
+        }
+    Matrix4 lower{};
+    double result = 0;
+    for (int row = 0; row < 4; row++) {
+        for (int column = 0; column <= row; column++) {
+            std::complex<double> value = positiveDefinite[row * 4 + column];
+            for (int k = 0; k < column; k++)
+                value -= lower[row * 4 + k] * std::conj(lower[column * 4 + k]);
+            if (row == column) {
+                if (value.real() <= 0 || std::abs(value.imag()) > 1e-9)
+                    throw cRuntimeError("TGn capacity Cholesky factorization failed");
+                lower[row * 4 + column] = std::sqrt(value.real());
+                result += 2 * std::log2(lower[row * 4 + column].real());
+            }
+            else
+                lower[row * 4 + column] = value / lower[column * 4 + column];
+        }
+    }
+    return result;
+}
+
+static std::vector<StatisticalCluster> buildClusters(TgnModel model)
+{
+    auto profile = TgnChannelProfile::create(model);
+    std::vector<StatisticalCluster> result;
+    for (const auto& cluster : profile.getClusters()) {
+        double power = 0;
+        for (const auto& component : profile.getComponents())
+            if (component.reportClusterIndex == cluster.reportClusterIndex)
+                power += component.normalizedLinearPower;
+        result.push_back({
+            toMatrix4(TgnMimoChannel::principalSquareRoot(TgnMimoChannel::createSpatialCorrelation(
+                4, 0.5, cluster.meanAoADegrees, cluster.receiverAngularSpreadDegrees))),
+            toMatrix4(TgnMimoChannel::principalSquareRoot(TgnMimoChannel::createSpatialCorrelation(
+                4, 0.5, cluster.meanAoDDegrees, cluster.transmitterAngularSpreadDegrees))),
+            power
+        });
+    }
+    return result;
+}
+
+static std::pair<double, double> summarize(const std::array<double, 20>& batches)
+{
+    double mean = 0;
+    for (double value : batches)
+        mean += value / batches.size();
+    double variance = 0;
+    for (double value : batches)
+        variance += (value - mean) * (value - mean) / (batches.size() - 1);
+    return {mean, 1.96 * std::sqrt(variance / batches.size())};
+}
+
+static void require(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("TGn statistical test failed: %s", message);
+}
+
+%activity:
+constexpr int batches = 20;
+constexpr int samplesPerBatch = 2000;
+const double expectedCapacity[] = {9.1, 8.9, 8.6, 10.0, 9.3, 10.4};
+const double expectedPercent[] = {83, 82, 79, 92, 85, 95};
+const char *artifactDirectory = std::getenv("TGN_ARTIFACT_DIR");
+std::array<std::vector<double>, 7> capacitySamples;
+std::array<std::pair<double, double>, 6> summaries;
+for (int modelIndex = 0; modelIndex < 6; modelIndex++) {
+    auto clusters = buildClusters((TgnModel)modelIndex);
+    std::array<double, batches> batchMeans{};
+    for (int batch = 0; batch < batches; batch++) {
+        std::mt19937_64 generator(UINT64_C(0x54474e0000000000) ^ ((uint64_t)modelIndex << 32) ^ batch);
+        for (int sample = 0; sample < samplesPerBatch; sample++) {
+            const double capacity = computeCapacity(drawChannel(clusters, generator));
+            batchMeans[batch] += capacity / samplesPerBatch;
+            if (artifactDirectory)
+                capacitySamples[modelIndex].push_back(capacity);
+        }
+    }
+    summaries[modelIndex] = summarize(batchMeans);
+}
+std::array<double, batches> iidBatchMeans{};
+for (int batch = 0; batch < batches; batch++) {
+    std::mt19937_64 generator(UINT64_C(0x54474eff00000000) ^ batch);
+    for (int sample = 0; sample < samplesPerBatch; sample++) {
+        const double capacity = computeCapacity(drawIidChannel(generator));
+        iidBatchMeans[batch] += capacity / samplesPerBatch;
+        if (artifactDirectory)
+            capacitySamples[6].push_back(capacity);
+    }
+}
+auto iid = summarize(iidBatchMeans);
+require(std::abs(iid.first - 10.9) <= iid.second + 0.15, "iid capacity oracle");
+for (int modelIndex = 0; modelIndex < 6; modelIndex++) {
+    std::cout << TgnChannelProfile::getModelName((TgnModel)modelIndex) << " mean=" << std::setprecision(6)
+              << summaries[modelIndex].first << " ci=" << summaries[modelIndex].second
+              << " percent=" << 100 * summaries[modelIndex].first / iid.first << "\n";
+    require(std::abs(summaries[modelIndex].first - expectedCapacity[modelIndex]) <= summaries[modelIndex].second + 0.15,
+        "Table III mean capacity");
+    require(std::abs(100 * summaries[modelIndex].first / iid.first - expectedPercent[modelIndex]) <= 3,
+        "Table III percent of iid");
+}
+std::cout << "iid mean=" << iid.first << " ci=" << iid.second << "\nPASS\n";
+if (artifactDirectory) {
+    std::ofstream cdf(std::string(artifactDirectory) + "/tgn-capacity-cdf.csv");
+    cdf << "model,probability,capacity_bit_per_s_per_hz\n" << std::setprecision(17);
+    for (int modelIndex = 0; modelIndex < 7; modelIndex++) {
+        auto& samples = capacitySamples[modelIndex];
+        std::sort(samples.begin(), samples.end());
+        const char *name = modelIndex == 6 ? "iid" : TgnChannelProfile::getModelName((TgnModel)modelIndex);
+        for (int quantile = 0; quantile <= 1000; quantile++) {
+            const size_t index = (size_t)std::llround(quantile * (samples.size() - 1) / 1000.0);
+            cdf << name << ',' << quantile / 1000.0 << ',' << samples[index] << '\n';
+        }
+    }
+    require(cdf.good(), "capacity CDF artifact output");
+}
+
+%contains: stdout
+PASS

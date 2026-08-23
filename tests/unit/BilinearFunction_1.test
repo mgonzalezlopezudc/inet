@@ -1,0 +1,58 @@
+%description:
+
+Checks bilinear corner ordering, extrema, constant scaling, addition, summation,
+and division used by dimensional TGn reception and SNIR functions.
+
+%includes:
+#include <cmath>
+#include "inet/common/math/Functions.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::math;
+
+static void require(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("Bilinear function test failed: %s", message);
+}
+
+%activity:
+using D = Domain<double, double>;
+Point<double, double> lowerLower(0, 0);
+Point<double, double> lowerUpper(0, 1);
+Point<double, double> upperLower(1, 0);
+Point<double, double> upperUpper(1, 1);
+auto bilinear = makeShared<BilinearFunction<double, D>>(lowerLower, lowerUpper, upperLower, upperUpper,
+    1, 2, 3, 4, 0, 1);
+auto constant = makeShared<ConstantFunction<double, D>>(2);
+Interval<double, double> interval(lowerLower, upperUpper, 0b11, 0b00, 0b00);
+require(bilinear->getValue(lowerLower) == 1, "lower-lower corner");
+require(bilinear->getValue(lowerUpper) == 2, "lower-upper corner");
+require(bilinear->getValue(upperLower) == 3, "upper-lower corner");
+require(bilinear->getValue(upperUpper) == 4, "upper-upper corner");
+require(bilinear->getValue(Point<double, double>(0.5, 0.5)) == 2.5, "center interpolation");
+require(bilinear->getMin(interval) == 1 && bilinear->getMax(interval) == 4, "corner extrema");
+auto product = constant->multiply(bilinear);
+require(product->getMin(interval) == 2 && product->getMax(interval) == 8, "constant-bilinear product");
+auto added = bilinear->add(constant);
+require(added->getMin(interval) == 3 && added->getMax(interval) == 6, "bilinear-constant addition");
+auto quotient = bilinear->divide(constant);
+require(quotient->getMin(interval) == 0.5 && quotient->getMax(interval) == 2, "bilinear-constant division");
+auto denominator = makeShared<BilinearFunction<double, D>>(lowerLower, lowerUpper, upperLower, upperUpper,
+    1, 1, 2, 2, 0, 1);
+auto bilinearQuotient = bilinear->divide(denominator);
+require(bilinearQuotient->getValue(lowerLower) == 1 && bilinearQuotient->getValue(lowerUpper) == 2 &&
+        bilinearQuotient->getValue(upperLower) == 1.5 && bilinearQuotient->getValue(upperUpper) == 2,
+        "bilinear-bilinear corner quotient");
+auto reciprocal = constant->divide(denominator);
+require(reciprocal->getMin(interval) == 1 && reciprocal->getMax(interval) == 2,
+        "constant-bilinear corner quotient");
+std::vector<Ptr<const IFunction<double, D>>> terms{constant, bilinear, bilinear};
+auto sum = makeShared<SummedFunction<double, D>>(terms);
+require(sum->getMin(interval) == 4 && sum->getMax(interval) == 10, "bilinear summation");
+std::cout << "PASS\n";
+
+%contains: stdout
+PASS
