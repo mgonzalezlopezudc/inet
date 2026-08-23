@@ -34,6 +34,10 @@ class INET_API Ieee80211Radio : public FlatRadioBase, public IIeee80211CcaProvid
     bool changingModeSet = false;
     FcsMode fcsMode = FCS_MODE_UNDEFINED;
     Ieee80211SecondaryChannelOffset htSecondaryChannelOffset = IEEE80211_SECONDARY_CHANNEL_NONE;
+    Ieee80211ChannelWidth channelWidth = IEEE80211_CHANNEL_WIDTH_20MHZ;
+    int primaryChannelCenterFrequencyIndex = -1;
+    int channelCenterFrequencyIndex0 = -1;
+    int channelCenterFrequencyIndex1 = 0;
     std::unique_ptr<Ieee80211CcaSnapshot> ccaSnapshot;
     std::string opMode;
     const Ieee80211ModeSet *modeSet = nullptr;
@@ -73,6 +77,7 @@ class INET_API Ieee80211Radio : public FlatRadioBase, public IIeee80211CcaProvid
     virtual void setBand(const IIeee80211Band *band);
     virtual void setChannel(const Ieee80211Channel *channel);
     virtual void setChannelNumber(int newChannelNumber);
+    virtual const Ieee80211Channel *createConfiguredChannel(int channelNumber) const;
 };
 
 } // namespace physicallayer

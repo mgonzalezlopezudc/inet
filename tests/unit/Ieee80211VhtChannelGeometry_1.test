@@ -1,0 +1,116 @@
+%description:
+Validate configured IEEE 802.11 20/40/80/160 MHz channel geometry and legacy HT40 compatibility.
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
+
+%global:
+using namespace inet;
+using namespace inet::physicallayer;
+
+template<typename F>
+static bool throwsChannelError(F f)
+{
+    try {
+        f();
+        return false;
+    }
+    catch (const std::exception&) {
+        return true;
+    }
+}
+
+%activity:
+{
+    const IIeee80211Band *band24 = Ieee80211CompliantBands::getBand("2.4 GHz");
+    const IIeee80211Band *band5 = Ieee80211CompliantBands::getBand("5 GHz");
+    ASSERT(band24 != nullptr);
+    ASSERT(band5 != nullptr);
+
+    ASSERT(Ieee80211Channel::parseChannelWidth("20MHz") == IEEE80211_CHANNEL_WIDTH_20MHZ);
+    ASSERT(Ieee80211Channel::parseChannelWidth("40MHz") == IEEE80211_CHANNEL_WIDTH_40MHZ);
+    ASSERT(Ieee80211Channel::parseChannelWidth("80MHz") == IEEE80211_CHANNEL_WIDTH_80MHZ);
+    ASSERT(Ieee80211Channel::parseChannelWidth("160MHz") == IEEE80211_CHANNEL_WIDTH_160MHZ);
+    ASSERT(std::string(Ieee80211Channel::getChannelWidthName(IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ)) == "80+80MHz");
+
+    // An explicit -1 center index is normalized to the primary index before validation.
+    Ieee80211Channel channel20(band5, 36, IEEE80211_CHANNEL_WIDTH_20MHZ, -1);
+    ASSERT(channel20.isExplicitGeometry());
+    ASSERT(channel20.getCenterFrequency() == GHz(5.18));
+    ASSERT(channel20.getCenterFrequencyIndex0() == 36);
+    ASSERT(channel20.getOperatingBandwidth() == MHz(20));
+    ASSERT(channel20.getOccupiedBands().size() == 1);
+
+    Ieee80211Channel channel40(band5, 36, IEEE80211_CHANNEL_WIDTH_40MHZ, 38);
+    ASSERT(channel40.getCenterFrequency() == GHz(5.18));
+    ASSERT(channel40.getPrimary40CenterFrequency() == GHz(5.19));
+    ASSERT(channel40.getSecondary20CenterFrequency() == GHz(5.20));
+    ASSERT(channel40.getSecondaryChannelOffset() == IEEE80211_SECONDARY_CHANNEL_ABOVE);
+    ASSERT(channel40.getOperatingBandwidth() == MHz(40));
+    ASSERT(throwsChannelError([&] { channel40.getSecondary40Band(); }));
+
+    // Primary 20 MHz channels in the lower and upper halves select different
+    // primary 40 MHz groups inside the same 80 MHz channel.
+    Ieee80211Channel channel80Lower(band5, 36, IEEE80211_CHANNEL_WIDTH_80MHZ, 42);
+    ASSERT(channel80Lower.getPrimary80CenterFrequency() == GHz(5.21));
+    ASSERT(channel80Lower.getPrimary40CenterFrequency() == GHz(5.19));
+    ASSERT(channel80Lower.getSecondary20CenterFrequency() == GHz(5.20));
+    ASSERT(channel80Lower.getSecondary40CenterFrequency() == GHz(5.23));
+    ASSERT(channel80Lower.getSecondary40Band().centerFrequency == GHz(5.23));
+    ASSERT(throwsChannelError([&] { channel80Lower.getSecondary80Band(); }));
+
+    Ieee80211Channel channel80Upper(band5, 44, IEEE80211_CHANNEL_WIDTH_80MHZ, 42);
+    ASSERT(channel80Upper.getPrimary40CenterFrequency() == GHz(5.23));
+    ASSERT(channel80Upper.getSecondary20CenterFrequency() == GHz(5.24));
+    ASSERT(channel80Upper.getSecondary40CenterFrequency() == GHz(5.19));
+
+    // For contiguous 160 MHz, center frequency index 0 is the full 160 MHz
+    // center; the primary 80 MHz center is derived from the primary 20 MHz.
+    Ieee80211Channel channel160Lower(band5, 36, IEEE80211_CHANNEL_WIDTH_160MHZ, 50);
+    ASSERT(channel160Lower.getOperatingCenterFrequency() == GHz(5.25));
+    ASSERT(channel160Lower.getPrimary80CenterFrequency() == GHz(5.21));
+    ASSERT(channel160Lower.getSecondary80CenterFrequency() == GHz(5.29));
+    ASSERT(channel160Lower.getPrimary40CenterFrequency() == GHz(5.19));
+    ASSERT(channel160Lower.getSecondary40CenterFrequency() == GHz(5.23));
+    ASSERT(channel160Lower.getSecondary20CenterFrequency() == GHz(5.20));
+    ASSERT(channel160Lower.getOccupiedBands().size() == 1);
+    ASSERT(channel160Lower.getOccupiedBands()[0].centerFrequency == GHz(5.25));
+
+    Ieee80211Channel channel160Upper(band5, 52, IEEE80211_CHANNEL_WIDTH_160MHZ, 50);
+    ASSERT(channel160Upper.getPrimary80CenterFrequency() == GHz(5.29));
+    ASSERT(channel160Upper.getSecondary80CenterFrequency() == GHz(5.21));
+    ASSERT(channel160Upper.getPrimary40CenterFrequency() == GHz(5.27));
+    ASSERT(channel160Upper.getSecondary40CenterFrequency() == GHz(5.31));
+
+    // Existing HT construction remains 40 MHz and keeps the above/below API.
+    Ieee80211Channel legacyHt40(band24, 0, IEEE80211_SECONDARY_CHANNEL_ABOVE);
+    ASSERT(!legacyHt40.isExplicitGeometry());
+    ASSERT(legacyHt40.getChannelWidth() == IEEE80211_CHANNEL_WIDTH_40MHZ);
+    ASSERT(legacyHt40.getOperatingBandwidth() == MHz(40));
+    ASSERT(legacyHt40.getPrimary40CenterFrequency() == GHz(2.422));
+    ASSERT(legacyHt40.getSecondary20CenterFrequency() == GHz(2.432));
+    ASSERT(legacyHt40.getSecondary20Band().centerFrequency == GHz(2.432));
+
+    ASSERT(throwsChannelError([&] { channel20.getSecondary20Band(); }));
+    ASSERT(throwsChannelError([&] { channel20.getPrimary40Band(); }));
+    ASSERT(throwsChannelError([&] { channel20.getPrimary80Band(); }));
+    ASSERT(throwsChannelError([&] { channel20.getFrequencyBand(50, IEEE80211_CHANNEL_WIDTH_160MHZ); }));
+    ASSERT(throwsChannelError([&] { channel20.validatePpduWidth(MHz(40)); }));
+    channel80Lower.validatePpduWidth(MHz(20));
+    channel80Lower.validatePpduWidth(MHz(40));
+    channel80Lower.validatePpduWidth(MHz(80));
+    ASSERT(throwsChannelError([&] { channel80Lower.validatePpduWidth(MHz(160)); }));
+    ASSERT(throwsChannelError([&] { Ieee80211Channel invalid(band5, 36, IEEE80211_CHANNEL_WIDTH_80MHZ, 50); }));
+    ASSERT(throwsChannelError([&] { Ieee80211Channel invalid(band5, 36, IEEE80211_CHANNEL_WIDTH_160MHZ, 50, 1); }));
+
+    EV << "20/40/80/160 and legacy HT40 channel geometry verified.\n";
+    EV << "Primary/secondary group guards and PPDU width validation verified.\n";
+}
+
+EV << ".\n";
+
+%contains: stdout
+20/40/80/160 and legacy HT40 channel geometry verified.
+Primary/secondary group guards and PPDU width validation verified.
+.

@@ -65,6 +65,8 @@ using namespace inet::physicallayer;
     ASSERT(cmdChannel.getChannel() != nullptr);
     ASSERT(cmdChannel.getChannel()->getBand() == band24);
     ASSERT(cmdChannel.getChannel()->getChannelNumber() == 6);
+    ASSERT(cmdChannel.getChannel()->getChannelWidth() == IEEE80211_CHANNEL_WIDTH_40MHZ);
+    ASSERT(cmdChannel.getChannel()->getOperatingBandwidth() == MHz(40));
     ASSERT(cmdChannel.getChannel()->getSecondaryChannelOffset() == IEEE80211_SECONDARY_CHANNEL_ABOVE);
     EV << "ConfigureRadioCommand with channel object verified.\n";
 }

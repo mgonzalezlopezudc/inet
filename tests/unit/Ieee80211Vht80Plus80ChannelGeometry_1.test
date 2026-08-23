@@ -1,0 +1,90 @@
+%description:
+Validate IEEE 802.11 VHT 80+80 MHz two-segment geometry and narrower PPDU placement.
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
+
+%global:
+using namespace inet;
+using namespace inet::physicallayer;
+
+template<typename F>
+static bool throwsVht80Plus80Error(F f)
+{
+    try {
+        f();
+        return false;
+    }
+    catch (const std::exception&) {
+        return true;
+    }
+}
+
+%activity:
+{
+    const IIeee80211Band *band5 = Ieee80211CompliantBands::getBand("5 GHz");
+    ASSERT(band5 != nullptr);
+
+    // center index 0 identifies the primary 80 MHz segment and index 1 the
+    // non-contiguous secondary 80 MHz segment.
+    Ieee80211Channel channel(band5, 36, IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ, 42, 155);
+    ASSERT(channel.is80Plus80());
+    ASSERT(channel.getOperatingBandwidth() == MHz(160));
+    ASSERT(channel.getPrimary80CenterFrequency() == GHz(5.21));
+    ASSERT(channel.getPrimary40CenterFrequency() == GHz(5.19));
+    ASSERT(channel.getSecondary20CenterFrequency() == GHz(5.20));
+    ASSERT(channel.getSecondary40CenterFrequency() == GHz(5.23));
+    ASSERT(channel.getSecondary80CenterFrequency() == GHz(5.775));
+    ASSERT(channel.getFrequencyBand(IEEE80211_CHANNEL_WIDTH_80MHZ).centerFrequency == GHz(5.21));
+
+    auto occupied = channel.getOccupiedBands();
+    ASSERT(occupied.size() == 2);
+    ASSERT(occupied[0].centerFrequency == GHz(5.21));
+    ASSERT(occupied[1].centerFrequency == GHz(5.775));
+    ASSERT(occupied[0].centerFrequency < occupied[1].centerFrequency);
+
+    // A VHT 80+80 operating channel can place narrower PPDUs on its primary
+    // hierarchy; 160 MHz selects the complete two-segment PPDU.
+    channel.validatePpduWidth(MHz(20));
+    channel.validatePpduWidth(MHz(40));
+    channel.validatePpduWidth(MHz(80));
+    channel.validatePpduWidth(MHz(160));
+    ASSERT(throwsVht80Plus80Error([&] { channel.getFrequencyBand(IEEE80211_CHANNEL_WIDTH_160MHZ); }));
+
+    // The secondary 40 MHz group is the other half of the primary 80 MHz
+    // segment, not the distant secondary 80 MHz segment.
+    Ieee80211Channel upperPrimary(band5, 44, IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ, 42, 155);
+    ASSERT(upperPrimary.getPrimary40CenterFrequency() == GHz(5.23));
+    ASSERT(upperPrimary.getSecondary40CenterFrequency() == GHz(5.19));
+
+    // Segments are exposed low-to-high even when center index 1 is below the
+    // primary segment. Both centers and the primary 20 MHz position are
+    // canonical 5 GHz VHT values (149/155 and 42).
+    Ieee80211Channel lowerSecondary(band5, 149, IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ, 155, 42);
+    auto reverseOccupied = lowerSecondary.getOccupiedBands();
+    ASSERT(reverseOccupied.size() == 2);
+    ASSERT(reverseOccupied[0].centerFrequency == GHz(5.21));
+    ASSERT(reverseOccupied[1].centerFrequency == GHz(5.775));
+
+    ASSERT(throwsVht80Plus80Error([&] {
+        Ieee80211Channel invalid(band5, 36, IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ, 42, 20);
+    }));
+    ASSERT(throwsVht80Plus80Error([&] {
+        Ieee80211Channel invalid(band5, 36, IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ, 42, 58);
+    }));
+    ASSERT(throwsVht80Plus80Error([&] {
+        Ieee80211Channel invalid(band5, 36, IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ, 42, 0);
+    }));
+    ASSERT(channel.getSecondary80Band().centerFrequency == GHz(5.775));
+
+    EV << "VHT 80+80 primary/secondary hierarchy verified.\n";
+    EV << "VHT 80+80 low/high segment ordering and validation verified.\n";
+}
+
+EV << ".\n";
+
+%contains: stdout
+VHT 80+80 primary/secondary hierarchy verified.
+VHT 80+80 low/high segment ordering and validation verified.
+.

@@ -105,10 +105,25 @@ void Ieee80211Radio::initialize(int stage)
         setBand(*bandName ? Ieee80211CompliantBands::getBand(bandName) : nullptr);
         setModeSet(*opMode.c_str() ? Ieee80211ModeSet::getModeSet(opMode.c_str()) : nullptr);
         htSecondaryChannelOffset = Ieee80211Channel::parseSecondaryChannelOffset(par("htSecondaryChannelOffset"));
+        channelWidth = Ieee80211Channel::parseChannelWidth(par("channelWidth"));
+        primaryChannelCenterFrequencyIndex = par("primaryChannelCenterFrequencyIndex");
+        channelCenterFrequencyIndex0 = par("channelCenterFrequencyIndex0");
+        channelCenterFrequencyIndex1 = par("channelCenterFrequencyIndex1");
+        int channelNumber = par("channelNumber");
         Ieee80211Receiver *ieee80211Receiver = const_cast<Ieee80211Receiver *>(check_and_cast<const Ieee80211Receiver *>(receiver));
         Ieee80211Transmitter *ieee80211Transmitter = const_cast<Ieee80211Transmitter *>(check_and_cast<const Ieee80211Transmitter *>(transmitter));
         Hz radioBw = !std::isnan(par("bandwidth").doubleValue()) ? Hz(par("bandwidth").doubleValue()) : ieee80211Receiver->getBandwidth();
-        if (radioBw == MHz(40)) {
+        if (channelWidth != IEEE80211_CHANNEL_WIDTH_20MHZ) {
+            if ((channelWidth == IEEE80211_CHANNEL_WIDTH_80MHZ ||
+                    channelWidth == IEEE80211_CHANNEL_WIDTH_160MHZ ||
+                    channelWidth == IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ) && opMode != "ac")
+                throw cRuntimeError("VHT 80/160 MHz operation requires ac operation mode");
+            if (channelWidth == IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ && strcmp(par("signalAnalogRepresentation"), "dimensional"))
+                throw cRuntimeError("VHT 80+80 MHz operation requires dimensional signal representation");
+            radioBw = Ieee80211Channel(band, primaryChannelCenterFrequencyIndex != -1 ? primaryChannelCenterFrequencyIndex :
+                    channelNumber, channelWidth, channelCenterFrequencyIndex0, channelCenterFrequencyIndex1).getOperatingBandwidth();
+        }
+        if (radioBw == MHz(40) || radioBw == MHz(80) || radioBw == MHz(160)) {
             ieee80211Receiver->setBandwidth(radioBw);
             ieee80211Transmitter->setBandwidth(radioBw);
         }
@@ -123,9 +138,8 @@ void Ieee80211Radio::initialize(int stage)
                     radioBw != MHz(40))
                 throw cRuntimeError("htSecondaryChannelOffset above/below requires HT 40 MHz operation");
         }
-        int channelNumber = par("channelNumber");
         if (channelNumber != -1)
-            setChannelNumber(channelNumber);
+            setChannel(createConfiguredChannel(primaryChannelCenterFrequencyIndex != -1 ? primaryChannelCenterFrequencyIndex : channelNumber));
     }
 }
 
@@ -154,18 +168,27 @@ void Ieee80211Radio::handleUpperCommand(cMessage *message)
                     currentChannel != nullptr ? currentChannel->getChannelNumber() : -1;
             auto targetSecondaryChannelOffset = channel != nullptr ? channel->getSecondaryChannelOffset() :
                     htSecondaryChannelOffset;
-            if (targetChannelNumber != -1 && (targetBand == nullptr || targetChannelNumber < 0 || targetChannelNumber >= targetBand->getNumChannels()))
+            auto targetChannelWidth = channel != nullptr ? channel->getChannelWidth() : this->channelWidth;
+            int targetCenterFrequencyIndex0 = channel != nullptr ? channel->getCenterFrequencyIndex0() : channelCenterFrequencyIndex0;
+            int targetCenterFrequencyIndex1 = channel != nullptr ? channel->getCenterFrequencyIndex1() : channelCenterFrequencyIndex1;
+            if (targetChannelNumber != -1 && (targetBand == nullptr || targetChannelNumber < 0))
                 throw cRuntimeError("Invalid target 802.11 channel number %d", targetChannelNumber);
-
             Hz newBandwidth = configureCommand->getBandwidth();
             Hz targetBandwidth = std::isnan(newBandwidth.get()) ? ieee80211Receiver->getBandwidth() : newBandwidth;
-            if (targetBandwidth == MHz(20))
+            if (targetBandwidth == MHz(20) && targetChannelWidth <= IEEE80211_CHANNEL_WIDTH_40MHZ)
                 targetSecondaryChannelOffset = IEEE80211_SECONDARY_CHANNEL_NONE;
+            std::unique_ptr<Ieee80211Channel> targetChannelObject;
             if (targetChannelNumber != -1) {
-                Ieee80211Channel targetChannel(targetBand, targetChannelNumber, targetSecondaryChannelOffset);
-                (void)targetChannel.getCenterFrequency();
-                if (targetSecondaryChannelOffset != IEEE80211_SECONDARY_CHANNEL_NONE)
-                    (void)targetChannel.getBondedCenterFrequency();
+                if (channel != nullptr && !channel->isExplicitGeometry())
+                    targetChannelObject = std::make_unique<Ieee80211Channel>(targetBand, targetChannelNumber, targetSecondaryChannelOffset);
+                else if (channel == nullptr && targetCenterFrequencyIndex0 == -1 && targetChannelWidth <= IEEE80211_CHANNEL_WIDTH_40MHZ)
+                    targetChannelObject = std::make_unique<Ieee80211Channel>(targetBand, targetChannelNumber, targetSecondaryChannelOffset);
+                else
+                    targetChannelObject = std::make_unique<Ieee80211Channel>(targetBand, targetChannelNumber, targetChannelWidth,
+                            targetCenterFrequencyIndex0, targetCenterFrequencyIndex1);
+                if (targetBandwidth == MHz(20) || targetBandwidth == MHz(40) ||
+                        targetBandwidth == MHz(80) || targetBandwidth == MHz(160))
+                    targetChannelObject->validatePpduWidth(targetBandwidth);
             }
             bps newBitrate = configureCommand->getBitrate();
             const IIeee80211Mode *mode = ieee80211Command != nullptr ? ieee80211Command->getMode() : nullptr;
@@ -182,22 +205,40 @@ void Ieee80211Radio::handleUpperCommand(cMessage *message)
                       resolvedMode->getDataMode()->getBandwidth() == MHz(40))) &&
                     targetSecondaryChannelOffset == IEEE80211_SECONDARY_CHANNEL_NONE)
                 throw cRuntimeError("HT 40 MHz operation requires a secondary channel offset of above or below");
+            if (targetChannelWidth == IEEE80211_CHANNEL_WIDTH_80MHZ ||
+                    targetChannelWidth == IEEE80211_CHANNEL_WIDTH_160MHZ ||
+                    targetChannelWidth == IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ) {
+                if (strcmp(targetOpMode.c_str(), "ac"))
+                    throw cRuntimeError("VHT 80/160 MHz operation requires ac operation mode");
+            }
+            if (targetChannelWidth == IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ) {
+                if (strcmp(par("signalAnalogRepresentation"), "dimensional"))
+                    throw cRuntimeError("VHT 80+80 MHz operation requires dimensional signal representation");
+            }
 
             bool publishModeSet = targetModeSet != this->modeSet || targetBand != this->band ||
                     *requestedOpMode;
 
-            bool changeChannel = targetChannelNumber != -1 &&
-                    (!std::isnan(newBandwidth.get()) || currentChannel == nullptr || targetBand != this->band ||
-                     targetChannelNumber != currentChannel->getChannelNumber() ||
-                     targetSecondaryChannelOffset != currentChannel->getSecondaryChannelOffset());
+            bool channelChanged = currentChannel == nullptr || targetBand != this->band;
+            if (!channelChanged && targetChannelObject != nullptr)
+                channelChanged = targetChannelNumber != currentChannel->getChannelNumber() ||
+                        targetChannelObject->getSecondaryChannelOffset() != currentChannel->getSecondaryChannelOffset() ||
+                        targetChannelObject->getChannelWidth() != currentChannel->getChannelWidth() ||
+                        targetChannelObject->isExplicitGeometry() != currentChannel->isExplicitGeometry() ||
+                        targetChannelObject->getCenterFrequencyIndex0() != currentChannel->getCenterFrequencyIndex0() ||
+                        targetChannelObject->getCenterFrequencyIndex1() != currentChannel->getCenterFrequencyIndex1();
+            bool changeChannel = targetChannelObject != nullptr && (channelChanged || !std::isnan(newBandwidth.get()));
             auto applyConfiguration = [&]() {
                 auto tx = const_cast<Ieee80211Transmitter *>(check_and_cast<const Ieee80211Transmitter *>(transmitter));
                 if (!std::isnan(newBandwidth.get()))
                     setBandwidth(targetBandwidth);
                 if (changeChannel) {
-                    tx->setChannel(new Ieee80211Channel(targetBand, targetChannelNumber, targetSecondaryChannelOffset));
-                    ieee80211Receiver->setChannel(new Ieee80211Channel(targetBand, targetChannelNumber, targetSecondaryChannelOffset));
-                    htSecondaryChannelOffset = targetSecondaryChannelOffset;
+                    tx->setChannel(new Ieee80211Channel(*targetChannelObject));
+                    ieee80211Receiver->setChannel(new Ieee80211Channel(*targetChannelObject));
+                    htSecondaryChannelOffset = targetChannelObject->getSecondaryChannelOffset();
+                    channelWidth = targetChannelObject->getChannelWidth();
+                    channelCenterFrequencyIndex0 = targetChannelObject->getCenterFrequencyIndex0();
+                    channelCenterFrequencyIndex1 = targetChannelObject->getCenterFrequencyIndex1();
                 }
                 else if (targetBand != this->band) {
                     tx->setBand(targetBand);
@@ -369,9 +410,20 @@ void Ieee80211Radio::setChannel(const Ieee80211Channel *channel)
     Ieee80211Transmitter *ieee80211Transmitter = const_cast<Ieee80211Transmitter *>(check_and_cast<const Ieee80211Transmitter *>(transmitter));
     Ieee80211Receiver *ieee80211Receiver = const_cast<Ieee80211Receiver *>(check_and_cast<const Ieee80211Receiver *>(receiver));
     ieee80211Transmitter->setChannel(channel);
-    ieee80211Receiver->setChannel(new Ieee80211Channel(channel->getBand(), channel->getChannelNumber(), channel->getSecondaryChannelOffset()));
+    ieee80211Receiver->setChannel(new Ieee80211Channel(*channel));
     band = channel->getBand();
     htSecondaryChannelOffset = channel->getSecondaryChannelOffset();
+    channelWidth = channel->getChannelWidth();
+    if (channel->isExplicitGeometry()) {
+        primaryChannelCenterFrequencyIndex = channel->getChannelNumber();
+        channelCenterFrequencyIndex0 = channel->getCenterFrequencyIndex0();
+        channelCenterFrequencyIndex1 = channel->getCenterFrequencyIndex1();
+    }
+    else {
+        primaryChannelCenterFrequencyIndex = -1;
+        channelCenterFrequencyIndex0 = -1;
+        channelCenterFrequencyIndex1 = 0;
+    }
     EV << "Changing radio channel to " << channel->getChannelNumber() << endl;
     receptionTimer = nullptr;
     emit(radioChannelChangedSignal, channel->getChannelNumber());
@@ -380,14 +432,20 @@ void Ieee80211Radio::setChannel(const Ieee80211Channel *channel)
 
 void Ieee80211Radio::setChannelNumber(int newChannelNumber)
 {
-    Ieee80211Transmitter *ieee80211Transmitter = const_cast<Ieee80211Transmitter *>(check_and_cast<const Ieee80211Transmitter *>(transmitter));
-    Ieee80211Receiver *ieee80211Receiver = const_cast<Ieee80211Receiver *>(check_and_cast<const Ieee80211Receiver *>(receiver));
-    ieee80211Transmitter->setChannel(new Ieee80211Channel(band, newChannelNumber, htSecondaryChannelOffset));
-    ieee80211Receiver->setChannel(new Ieee80211Channel(band, newChannelNumber, htSecondaryChannelOffset));
-    EV << "Changing radio channel to " << newChannelNumber << ".\n";
-    receptionTimer = nullptr;
-    emit(radioChannelChangedSignal, newChannelNumber);
-    emit(listeningChangedSignal, 0);
+    auto channel = createConfiguredChannel(newChannelNumber);
+    setChannel(channel);
+}
+
+const Ieee80211Channel *Ieee80211Radio::createConfiguredChannel(int channelNumber) const
+{
+    if ((channelWidth == IEEE80211_CHANNEL_WIDTH_20MHZ || channelWidth == IEEE80211_CHANNEL_WIDTH_40MHZ) &&
+            primaryChannelCenterFrequencyIndex == -1 && channelCenterFrequencyIndex0 == -1)
+        return new Ieee80211Channel(band, channelNumber, htSecondaryChannelOffset);
+    return new Ieee80211Channel(band,
+            channelNumber,
+            channelWidth,
+            channelCenterFrequencyIndex0 == -1 ? channelNumber : channelCenterFrequencyIndex0,
+            channelCenterFrequencyIndex1);
 }
 
 void Ieee80211Radio::insertFcs(const Ptr<Ieee80211PhyHeader>& phyHeader) const

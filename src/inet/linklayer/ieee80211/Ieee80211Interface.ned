@@ -65,6 +65,10 @@ module Ieee80211Interface extends NetworkInterface like IWirelessInterface
         string energySourceModule = default("");
         string opMode @enum("a","b","g(erp)","g(mixed)","n(mixed-2.4Ghz)","n(greenfield-2.4Ghz)","p","ac") = default("g(mixed)");
         string htSecondaryChannelOffset @enum("none", "above", "below") = default("none");
+        string channelWidth @enum("20MHz", "40MHz", "80MHz", "160MHz", "80+80MHz") = default("20MHz");
+        int primaryChannelCenterFrequencyIndex = default(-1);
+        int channelCenterFrequencyIndex0 = default(-1);
+        int channelCenterFrequencyIndex1 = default(0);
         string address @mutable = default("auto"); // MAC address as hex string (12 hex digits), or
                                                    // "auto". "auto" values will be replaced by
                                                    // a generated MAC address in init stage 0.
@@ -73,6 +77,10 @@ module Ieee80211Interface extends NetworkInterface like IWirelessInterface
         **.opMode = this.opMode;
         **.bitrate = this.bitrate;
         radio.htSecondaryChannelOffset = default(this.htSecondaryChannelOffset);
+        radio.channelWidth = default(this.channelWidth);
+        radio.primaryChannelCenterFrequencyIndex = default(this.primaryChannelCenterFrequencyIndex);
+        radio.channelCenterFrequencyIndex0 = default(this.channelCenterFrequencyIndex0);
+        radio.channelCenterFrequencyIndex1 = default(this.channelCenterFrequencyIndex1);
         mib.htSecondaryChannelOffset = default(this.htSecondaryChannelOffset == "above" ? 1 : this.htSecondaryChannelOffset == "below" ? 3 : 0);
         mac.modeSet = default(this.opMode);
         mac.*.rateSelection.dataFrameBitrate = default(this.bitrate);

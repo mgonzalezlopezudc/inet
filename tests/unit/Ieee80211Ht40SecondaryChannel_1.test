@@ -30,6 +30,8 @@ using namespace inet::physicallayer;
     Ieee80211Channel ch0Above(band24, 0, IEEE80211_SECONDARY_CHANNEL_ABOVE);
     ASSERT(ch0Above.getChannelNumber() == 0);
     ASSERT(ch0Above.getSecondaryChannelOffset() == IEEE80211_SECONDARY_CHANNEL_ABOVE);
+    ASSERT(ch0Above.getChannelWidth() == IEEE80211_CHANNEL_WIDTH_40MHZ);
+    ASSERT(ch0Above.getOperatingBandwidth() == MHz(40));
     ASSERT(ch0Above.getCenterFrequency() == Hz(2412000000.0));
     ASSERT(ch0Above.getSecondaryCenterFrequency() == Hz(2432000000.0));
     ASSERT(ch0Above.getBondedCenterFrequency() == Hz(2422000000.0));

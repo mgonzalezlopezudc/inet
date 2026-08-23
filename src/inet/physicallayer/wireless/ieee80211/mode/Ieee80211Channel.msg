@@ -41,4 +41,7 @@ class Ieee80211Channel
     IIeee80211Band *band;
     int channelNumber;
     int secondaryChannelOffset;
+    int channelWidth;
+    int centerFrequencyIndex0;
+    int centerFrequencyIndex1;
 }

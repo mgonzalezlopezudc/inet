@@ -29,6 +29,10 @@ module Ieee80211Radio extends FlatRadioBase
         string bandName @enum("2.4 GHz", "5 GHz", "5 GHz (20 MHz)", "5 GHz (40 MHz)", "5 GHz (80 MHz)", "5 GHz (160 MHz)", "5.9 GHz") = default("2.4 GHz"); // Band name
         int channelNumber = default(0);                                 // Initial channel number within the band (TODO this is offset by 1)
         string htSecondaryChannelOffset @enum("none", "above", "below") = default("none"); // HT40 secondary channel relative to the primary channel
+        string channelWidth @enum("20MHz", "40MHz", "80MHz", "160MHz", "80+80MHz") = default("20MHz"); // VHT operating channel width
+        int primaryChannelCenterFrequencyIndex = default(-1); // IEEE center-frequency index of the primary 20 MHz channel
+        int channelCenterFrequencyIndex0 = default(-1); // CCFS0 / primary 80 MHz center-frequency index
+        int channelCenterFrequencyIndex1 = default(0); // CCFS1 / secondary 80 or contiguous 160 MHz center-frequency index
         string fcsMode @enum("declared","computed") = default("declared");
         transmitter.typename = default("Ieee80211Transmitter");
         transmitter.channelNumber = this.channelNumber;
