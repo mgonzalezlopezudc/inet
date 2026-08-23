@@ -23,6 +23,21 @@ namespace physicallayer {
 
 Define_Module(DimensionalMediumAnalogModel);
 
+using DimensionalPowerFunction = IFunction<WpHz, Domain<simsec, Hz>>;
+
+static Ptr<const IFunction<double, Domain<simsec, Hz>>> createOccupiedUnionMask(simtime_t startTime, simtime_t endTime,
+        const std::vector<FrequencyBand>& occupiedBands)
+{
+    std::vector<Ptr<const IFunction<double, Domain<simsec, Hz>>>> masks;
+    masks.reserve(occupiedBands.size());
+    for (const auto& band : occupiedBands)
+        masks.push_back(makeShared<Boxcar2DFunction<double, simsec, Hz>>(simsec(startTime), simsec(endTime),
+                band.getLowerFrequency(), band.getUpperFrequency(), 1));
+    if (masks.size() == 1)
+        return masks.front();
+    return makeShared<SummedFunction<double, Domain<simsec, Hz>>>(masks);
+}
+
 void DimensionalMediumAnalogModel::initialize(int stage)
 {
     AnalogModelBase::initialize(stage);
@@ -38,18 +53,52 @@ std::ostream& DimensionalMediumAnalogModel::printToStream(std::ostream& stream, 
     return stream;
 }
 
-const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> DimensionalMediumAnalogModel::computeReceptionPower(const IRadio *receiverRadio, const ITransmission *transmission, const IArrival *arrival) const
+std::vector<Ptr<const DimensionalPowerFunction>> DimensionalMediumAnalogModel::computeReceptionPowerComponents(const IRadio *receiverRadio,
+        const ITransmission *transmission, const IArrival *arrival) const
 {
     const IRadioMedium *radioMedium = receiverRadio->getMedium();
     auto analogModel = check_and_cast<const DimensionalSignalAnalogModel *>(transmission->getAnalogModel());
+    const auto& occupiedBands = analogModel->getOccupiedBands();
+    const auto& componentPowers = analogModel->getComponentPowers();
+    if (occupiedBands.size() <= 1 || componentPowers.size() != occupiedBands.size())
+        return {};
+
+    const Coord& transmissionStartPosition = transmission->getStartPosition();
+    const Coord& receptionStartPosition = arrival->getStartPosition();
+    double transmitterAntennaGain = computeAntennaGain(transmission->getTransmitterAntennaGain(), transmissionStartPosition, arrival->getStartPosition(), transmission->getStartOrientation());
+    double receiverAntennaGain = computeAntennaGain(receiverRadio->getAntenna()->getGain().get(), arrival->getStartPosition(), transmissionStartPosition, arrival->getStartOrientation());
+    Point<simsec, Hz> propagationShift(simsec(arrival->getStartTime() - transmission->getStartTime()), Hz(0));
+    Ptr<const IFunction<double, Domain<simsec, Hz>>> attenuationFunction = makeShared<FrequencyDependentAttenuationFunction>(radioMedium, transmitterAntennaGain, receiverAntennaGain, transmissionStartPosition, receptionStartPosition);
+    std::vector<Ptr<const DimensionalPowerFunction>> receptionComponents;
+    receptionComponents.reserve(occupiedBands.size());
+    for (size_t i = 0; i < occupiedBands.size(); ++i) {
+        const auto& band = occupiedBands[i];
+        const auto& propagatedComponent = makeShared<DomainShiftedFunction<WpHz, Domain<simsec, Hz>>>(componentPowers[i], propagationShift);
+        Ptr<const IFunction<double, Domain<simsec, Hz>>> componentAttenuation;
+        if (attenuateWithCenterFrequency)
+            componentAttenuation = makeShared<ConstantFunction<double, Domain<simsec, Hz>>>(attenuationFunction->getValue(Point<simsec, Hz>(simsec(0), band.centerFrequency)));
+        else {
+            Hz step = band.bandwidth / 10; // TODO: parameter for 10
+            componentAttenuation = makeShared<ApproximatedFunction<double, Domain<simsec, Hz>, 1, Hz>>(band.getLowerFrequency(), band.getUpperFrequency(), step, &AverageInterpolator<Hz, double>::singleton, attenuationFunction);
+        }
+        receptionComponents.push_back(propagatedComponent->multiply(componentAttenuation));
+    }
+    return receptionComponents;
+}
+
+const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> DimensionalMediumAnalogModel::computeReceptionPower(const IRadio *receiverRadio, const ITransmission *transmission, const IArrival *arrival) const
+{
+    auto analogModel = check_and_cast<const DimensionalSignalAnalogModel *>(transmission->getAnalogModel());
+    auto receptionComponents = computeReceptionPowerComponents(receiverRadio, transmission, arrival);
+    if (!receptionComponents.empty())
+        return makeShared<SummedFunction<WpHz, Domain<simsec, Hz>>>(receptionComponents);
+
+    const IRadioMedium *radioMedium = receiverRadio->getMedium();
     const Coord& transmissionStartPosition = transmission->getStartPosition();
     const Coord& receptionStartPosition = arrival->getStartPosition();
     double transmitterAntennaGain = computeAntennaGain(transmission->getTransmitterAntennaGain(), transmissionStartPosition, arrival->getStartPosition(), transmission->getStartOrientation());
     double receiverAntennaGain = computeAntennaGain(receiverRadio->getAntenna()->getGain().get(), arrival->getStartPosition(), transmissionStartPosition, arrival->getStartOrientation());
     const auto& transmissionPowerFunction = analogModel->getPower();
-    EV_TRACE << "Transmission power begin " << endl;
-    EV_TRACE << *transmissionPowerFunction << endl;
-    EV_TRACE << "Transmission power end" << endl;
     Point<simsec, Hz> propagationShift(simsec(arrival->getStartTime() - transmission->getStartTime()), Hz(0));
     const auto& propagatedTransmissionPowerFunction = makeShared<DomainShiftedFunction<WpHz, Domain<simsec, Hz>>>(transmissionPowerFunction, propagationShift);
     Ptr<const IFunction<double, Domain<simsec, Hz>>> attenuationFunction = makeShared<FrequencyDependentAttenuationFunction>(radioMedium, transmitterAntennaGain, receiverAntennaGain, transmissionStartPosition, receptionStartPosition);
@@ -115,8 +164,8 @@ const INoise *DimensionalMediumAnalogModel::computeNoise(const IListening *liste
         const auto& bandpassFilter = makeShared<Boxcar2DFunction<double, simsec, Hz>>(simsec(listening->getStartTime()), simsec(listening->getEndTime()), centerFrequency - bandwidth / 2, centerFrequency + bandwidth / 2, 1);
         return new DimensionalNoise(listening->getStartTime(), listening->getEndTime(), centerFrequency, bandwidth, noisePower->multiply(bandpassFilter));
     }
-    std::vector<Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>> noiseComponents(multibandListening->getOccupiedBands().size(), noisePower);
-    auto maskedNoisePower = makeShared<MultibandFunction<WpHz>>(multibandListening->getOccupiedBands(), noiseComponents);
+    auto occupiedMask = createOccupiedUnionMask(listening->getStartTime(), listening->getEndTime(), multibandListening->getOccupiedBands());
+    auto maskedNoisePower = noisePower->multiply(occupiedMask);
     return new DimensionalNoise(listening->getStartTime(), listening->getEndTime(), multibandListening->getOccupiedBands(), maskedNoisePower);
 }
 
@@ -124,16 +173,11 @@ const INoise *DimensionalMediumAnalogModel::computeNoise(const IReception *recep
 {
     auto dimensionalReception = check_and_cast<const DimensionalReceptionAnalogModel *>(reception->getAnalogModel());
     auto dimensionalNoise = check_and_cast<const DimensionalNoise *>(noise);
-    if (dimensionalReception->getOccupiedBands().size() == 1) {
-        const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& noisePower = makeShared<AddedFunction<WpHz, Domain<simsec, Hz>>>(dimensionalReception->getPower(), dimensionalNoise->getPower());
-        return new DimensionalNoise(reception->getStartTime(), reception->getEndTime(), dimensionalReception->getCenterFrequency(), dimensionalReception->getBandwidth(), noisePower);
-    }
-    Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> backgroundPower = dimensionalNoise->getPower();
-    if (dimensionalNoise->getOccupiedBands().size() == 1) {
-        std::vector<Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>> backgroundComponents(dimensionalReception->getOccupiedBands().size(), backgroundPower);
-        backgroundPower = makeShared<MultibandFunction<WpHz>>(dimensionalReception->getOccupiedBands(), backgroundComponents);
-    }
+    auto occupiedMask = createOccupiedUnionMask(reception->getStartTime(), reception->getEndTime(), dimensionalReception->getOccupiedBands());
+    Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> backgroundPower = dimensionalNoise->getPower()->multiply(occupiedMask);
     const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& noisePower = makeShared<AddedFunction<WpHz, Domain<simsec, Hz>>>(dimensionalReception->getPower(), backgroundPower);
+    if (dimensionalReception->getOccupiedBands().size() == 1)
+        return new DimensionalNoise(reception->getStartTime(), reception->getEndTime(), dimensionalReception->getCenterFrequency(), dimensionalReception->getBandwidth(), noisePower);
     return new DimensionalNoise(reception->getStartTime(), reception->getEndTime(), dimensionalReception->getOccupiedBands(), noisePower);
 }
 
@@ -151,13 +195,18 @@ const IReception *DimensionalMediumAnalogModel::computeReception(const IRadio *r
     const Coord& receptionEndPosition = arrival->getEndPosition();
     const Quaternion& receptionStartOrientation = arrival->getStartOrientation();
     const Quaternion& receptionEndOrientation = arrival->getEndOrientation();
-    const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& receptionPower = computeReceptionPower(receiverRadio, transmission, arrival);
+    auto receptionComponents = computeReceptionPowerComponents(receiverRadio, transmission, arrival);
+    Ptr<const DimensionalPowerFunction> receptionPower;
+    if (receptionComponents.empty())
+        receptionPower = computeReceptionPower(receiverRadio, transmission, arrival);
+    else
+        receptionPower = makeShared<SummedFunction<WpHz, Domain<simsec, Hz>>>(receptionComponents);
     const auto& occupiedBands = transmissionAnalogModel->getOccupiedBands();
     DimensionalReceptionAnalogModel *receptionAnalogModel;
     if (occupiedBands.size() == 1)
         receptionAnalogModel = new DimensionalReceptionAnalogModel(transmissionAnalogModel->getPreambleDuration(), transmissionAnalogModel->getHeaderDuration(), transmissionAnalogModel->getDataDuration(), transmissionAnalogModel->getCenterFrequency(), transmissionAnalogModel->getBandwidth(), receptionPower);
     else
-        receptionAnalogModel = new DimensionalReceptionAnalogModel(transmissionAnalogModel->getPreambleDuration(), transmissionAnalogModel->getHeaderDuration(), transmissionAnalogModel->getDataDuration(), occupiedBands, receptionPower);
+        receptionAnalogModel = new DimensionalReceptionAnalogModel(transmissionAnalogModel->getPreambleDuration(), transmissionAnalogModel->getHeaderDuration(), transmissionAnalogModel->getDataDuration(), occupiedBands, receptionComponents, receptionPower);
     return new Reception(receiverRadio, transmission, receptionStartTime, receptionEndTime, receptionStartPosition, receptionEndPosition, receptionStartOrientation, receptionEndOrientation, receptionAnalogModel);
 }
 

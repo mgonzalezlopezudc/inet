@@ -48,6 +48,14 @@ ITransmissionAnalogModel* DimensionalTransmitterAnalogModel::createAnalogModel(s
     if (occupiedBands.size() == 1)
         return createAnalogModel(preambleDuration, headerDuration, dataDuration, occupiedBands.front().centerFrequency, occupiedBands.front().bandwidth, power);
 
+    // The multiband API receives aggregate power.  Segment powers are exact
+    // only when every configured gain dimension is integral-normalized (or
+    // uses the flat default).  Reject other policies instead of silently
+    // violating aggregate-power conservation.
+    if ((!timeGains.empty() && strcmp(timeGainsNormalization, "integral") != 0) ||
+            (!frequencyGains.empty() && strcmp(frequencyGainsNormalization, "integral") != 0))
+        throw cRuntimeError("Dimensional multiband transmission requires integral-normalized time and frequency gains");
+
     simtime_t startTime = simTime();
     simtime_t endTime = startTime + preambleDuration + headerDuration + dataDuration;
     W transmissionPower = computePower(power);
@@ -58,8 +66,13 @@ ITransmissionAnalogModel* DimensionalTransmitterAnalogModel::createAnalogModel(s
         W segmentPower = transmissionPower * (band.bandwidth / totalBandwidth).get();
         componentPowers.push_back(createPowerFunction(startTime, endTime, band.centerFrequency, band.bandwidth, segmentPower));
     }
-    auto powerFunction = makeShared<MultibandFunction<WpHz>>(occupiedBands, componentPowers);
-    return new DimensionalTransmissionAnalogModel(preambleDuration, headerDuration, dataDuration, occupiedBands, powerFunction);
+    // The occupied-band list is metadata for decoding and masking.  The
+    // emitted PSD is the sum of the completed per-segment functions so that
+    // configured spectral skirts are preserved and overlap/add in the linear
+    // domain.  With the default boxcar factory this still evaluates to zero
+    // in the gap.
+    auto powerFunction = makeShared<SummedFunction<WpHz, Domain<simsec, Hz>>>(componentPowers);
+    return new DimensionalTransmissionAnalogModel(preambleDuration, headerDuration, dataDuration, occupiedBands, componentPowers, powerFunction);
 }
 
 template<typename T>

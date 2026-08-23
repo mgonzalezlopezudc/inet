@@ -23,6 +23,9 @@ class INET_API DimensionalMediumAnalogModel : public AnalogModelBase
   protected:
     bool attenuateWithCenterFrequency = false;
 
+    virtual std::vector<Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>> computeReceptionPowerComponents(const IRadio *radio,
+            const ITransmission *transmission, const IArrival *arrival) const;
+
   protected:
     virtual void initialize(int stage) override;
 
@@ -41,4 +44,3 @@ class INET_API DimensionalMediumAnalogModel : public AnalogModelBase
 } // namespace inet
 
 #endif
-

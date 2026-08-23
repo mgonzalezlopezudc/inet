@@ -19,6 +19,10 @@ class INET_API DimensionalReceptionAnalogModel : public DimensionalSignalAnalogM
   public:
     DimensionalReceptionAnalogModel(const simtime_t preambleDuration, const simtime_t headerDuration, const simtime_t dataDuration, Hz centerFrequency, Hz bandwidth, const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power);
     DimensionalReceptionAnalogModel(const simtime_t preambleDuration, const simtime_t headerDuration, const simtime_t dataDuration, const std::vector<FrequencyBand>& occupiedBands, const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power);
+    DimensionalReceptionAnalogModel(const simtime_t preambleDuration, const simtime_t headerDuration, const simtime_t dataDuration,
+            const std::vector<FrequencyBand>& occupiedBands,
+            const std::vector<Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>>& componentPowers,
+            const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power);
 };
 
 } // namespace physicallayer

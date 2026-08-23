@@ -19,6 +19,8 @@ namespace physicallayer {
 class INET_API IMultibandTransmitterAnalogModel : public virtual ITransmitterAnalogModel
 {
   public:
+    using ITransmitterAnalogModel::createAnalogModel;
+
     virtual ITransmissionAnalogModel *createAnalogModel(simtime_t preambleDuration, simtime_t headerDuration, simtime_t dataDuration,
             const std::vector<FrequencyBand>& occupiedBands, W power) const = 0;
 };

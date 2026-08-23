@@ -18,9 +18,48 @@ DimensionalSignalAnalogModel::DimensionalSignalAnalogModel(const simtime_t pream
 }
 
 DimensionalSignalAnalogModel::DimensionalSignalAnalogModel(const simtime_t preambleDuration, const simtime_t headerDuration, const simtime_t dataDuration, const std::vector<FrequencyBand>& occupiedBands, const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power) :
+    DimensionalSignalAnalogModel(preambleDuration, headerDuration, dataDuration, occupiedBands,
+            occupiedBands.size() == 1 ? std::vector<Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>>{power} : std::vector<Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>>(), power)
+{
+}
+
+std::vector<Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>> DimensionalSignalAnalogModel::normalizeComponentPowers(
+        const std::vector<FrequencyBand>& bands,
+        const std::vector<Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>>& components,
+        const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& combinedPower)
+{
+    auto normalizedBands = normalizeFrequencyBands(bands);
+    if (components.empty()) {
+        if (normalizedBands.size() == 1)
+            return {combinedPower};
+        return {};
+    }
+    if (components.size() != bands.size())
+        throw cRuntimeError("A dimensional multiband signal requires one component per occupied band");
+    std::vector<Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>> result;
+    result.reserve(components.size());
+    for (const auto& normalizedBand : normalizedBands) {
+        auto it = std::find_if(bands.begin(), bands.end(), [&] (const FrequencyBand& band) {
+            return band.centerFrequency == normalizedBand.centerFrequency && band.bandwidth == normalizedBand.bandwidth;
+        });
+        if (it == bands.end())
+            throw cRuntimeError("Dimensional multiband signal band/component pairing is inconsistent");
+        auto component = components[it - bands.begin()];
+        if (component == nullptr)
+            throw cRuntimeError("A dimensional multiband signal cannot contain a null component");
+        result.push_back(component);
+    }
+    return result;
+}
+
+DimensionalSignalAnalogModel::DimensionalSignalAnalogModel(const simtime_t preambleDuration, const simtime_t headerDuration, const simtime_t dataDuration,
+        const std::vector<FrequencyBand>& occupiedBands,
+        const std::vector<Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>>& componentPowers,
+        const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power) :
     NarrowbandSignalAnalogModel(preambleDuration, headerDuration, dataDuration, computeEnvelopeCenterFrequency(occupiedBands), computeEnvelopeBandwidth(occupiedBands)),
     power(power),
-    occupiedBands(normalizeFrequencyBands(occupiedBands))
+    occupiedBands(normalizeFrequencyBands(occupiedBands)),
+    componentPowers(normalizeComponentPowers(occupiedBands, componentPowers, power))
 {
 }
 

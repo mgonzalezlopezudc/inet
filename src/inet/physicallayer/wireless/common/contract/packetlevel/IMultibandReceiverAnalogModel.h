@@ -19,6 +19,8 @@ namespace physicallayer {
 class INET_API IMultibandReceiverAnalogModel : public virtual IReceiverAnalogModel
 {
   public:
+    using IReceiverAnalogModel::createListening;
+
     virtual IListening *createListening(const IRadio *radio, const simtime_t startTime, const simtime_t endTime,
             const Coord& startPosition, const Coord& endPosition, const std::vector<FrequencyBand>& occupiedBands) const = 0;
 };

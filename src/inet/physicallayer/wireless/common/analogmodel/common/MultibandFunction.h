@@ -19,10 +19,11 @@ namespace physicallayer {
 using namespace inet::math;
 
 /**
- * A frequency-union function.  Each component is evaluated only inside its
- * corresponding occupied band, so the value in every spectral gap is zero.
- * The class also supplies union-aware extrema and integration instead of
- * treating the outer envelope as occupied spectrum.
+ * A frequency-union mask over component functions. Each component is
+ * evaluated only inside its corresponding occupied band, so the value in
+ * every spectral gap is zero. The dimensional PSD path uses SummedFunction
+ * when component skirts must be preserved; this helper is intentionally the
+ * strict occupied-union view used for masks and union-aware statistics.
  */
 template<typename R>
 class INET_API MultibandFunction : public FunctionBase<R, Domain<simsec, Hz>>
@@ -157,43 +158,59 @@ class INET_API MultibandFunction : public FunctionBase<R, Domain<simsec, Hz>>
     }
 
     virtual bool isFinite(const typename Domain<simsec, Hz>::I& interval) const override {
-        for (const auto& component : components)
-            if (!component->isFinite(interval))
+        for (size_t i = 0; i < components.size(); ++i) {
+            auto intersection = getBandIntersection(interval, occupiedBands[i]);
+            if (!intersection.isEmpty() && !components[i]->isFinite(intersection))
                 return false;
+        }
         return true;
     }
 
     virtual bool isNonZero(const typename Domain<simsec, Hz>::I& interval) const override {
         if (hasGap(interval))
             return false;
+        bool hasIntersection = false;
         for (size_t i = 0; i < components.size(); ++i) {
             auto intersection = getBandIntersection(interval, occupiedBands[i]);
-            if (!intersection.isEmpty() && components[i]->isNonZero(intersection))
-                return true;
+            if (!intersection.isEmpty()) {
+                hasIntersection = true;
+                if (!components[i]->isNonZero(intersection))
+                    return false;
+            }
         }
-        return false;
+        return hasIntersection;
     }
 
     virtual R getMin(const typename Domain<simsec, Hz>::I& interval) const override {
         if (hasGap(interval))
             return R(0);
         R result = getUpperBound<R>();
+        bool hasIntersection = false;
         for (size_t i = 0; i < components.size(); ++i) {
             auto intersection = getBandIntersection(interval, occupiedBands[i]);
-            if (!intersection.isEmpty())
+            if (!intersection.isEmpty()) {
+                hasIntersection = true;
                 result = minnan(result, components[i]->getMin(intersection));
+            }
         }
-        return result == getUpperBound<R>() ? R(0) : result;
+        return hasIntersection ? result : R(0);
     }
 
     virtual R getMax(const typename Domain<simsec, Hz>::I& interval) const override {
-        R result = R(0);
+        R result = getLowerBound<R>();
+        bool hasIntersection = false;
         for (size_t i = 0; i < components.size(); ++i) {
             auto intersection = getBandIntersection(interval, occupiedBands[i]);
-            if (!intersection.isEmpty())
+            if (!intersection.isEmpty()) {
+                hasIntersection = true;
                 result = maxnan(result, components[i]->getMax(intersection));
+            }
         }
-        return result;
+        // A gap is an explicitly masked zero, so it participates in extrema
+        // even when a component happens to contain negative values.
+        if (hasGap(interval))
+            result = maxnan(result, R(0));
+        return hasIntersection || hasGap(interval) ? result : R(0);
     }
 
     virtual R getIntegral(const typename Domain<simsec, Hz>::I& interval) const override {
@@ -207,7 +224,13 @@ class INET_API MultibandFunction : public FunctionBase<R, Domain<simsec, Hz>>
     }
 
     virtual R getMean(const typename Domain<simsec, Hz>::I& interval) const override {
-        return getIntegral(interval) / interval.getVolume();
+        double occupiedVolume = 0;
+        for (size_t i = 0; i < occupiedBands.size(); ++i) {
+            auto intersection = getBandIntersection(interval, occupiedBands[i]);
+            if (!intersection.isEmpty())
+                occupiedVolume += intersection.getVolume();
+        }
+        return occupiedVolume == 0 ? R(0) : getIntegral(interval) / occupiedVolume;
     }
 
     virtual void printStructure(std::ostream& os, int level = 0) const override {

@@ -60,6 +60,10 @@ bool DimensionalReceiverAnalogModel::computeIsReceptionPossible(const IListening
         }
     }
     else {
+        if (analogModel->getOccupiedBands().size() > 1) {
+            EV_DEBUG << "Computing whether reception is possible: a multiband reception requires a multiband listening mask" << endl;
+            return false;
+        }
         const BandListening *bandListening = check_and_cast<const BandListening *>(listening);
         auto listeningMin = bandListening->getCenterFrequency() - bandListening->getBandwidth() / 2;
         auto listeningMax = bandListening->getCenterFrequency() + bandListening->getBandwidth() / 2;

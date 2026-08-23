@@ -11,10 +11,13 @@ dimensional analog-model behavior.
 #include "inet/physicallayer/wireless/common/analogmodel/common/MultibandFunction.h"
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalNoise.h"
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalReceptionAnalogModel.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalReceiverAnalogModel.h"
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalSnir.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalTransmitterAnalogModel.h"
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalTransmissionAnalogModel.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/FrequencyBand.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IReception.h"
+#include "inet/physicallayer/wireless/common/radio/packetlevel/BandListening.h"
 #include "inet/physicallayer/wireless/common/radio/packetlevel/MultibandListening.h"
 
 %global:
@@ -75,6 +78,26 @@ class TestReception : public IReception
     virtual const Quaternion& getStartOrientation() const override { return orientation; }
     virtual const Quaternion& getEndOrientation() const override { return orientation; }
     virtual const IReceptionAnalogModel *getAnalogModel() const override { return analogModel; }
+};
+
+class TestDimensionalTransmitter : public DimensionalTransmitterAnalogModel
+{
+  public:
+    TestDimensionalTransmitter()
+    {
+        defaultCenterFrequency = GHz(5.3);
+        defaultBandwidth = MHz(80);
+        defaultPower = W(20);
+        gainFunctionCacheLimit = 0;
+        timeGainsNormalization = "";
+        frequencyGainsNormalization = "integral";
+    }
+
+    void useUnsupportedGainPolicy()
+    {
+        timeGainsNormalization = "maximum";
+        timeGains.emplace_back(nullptr, ' ', 0, simsec(0), 1);
+    }
 };
 
 %activity:
@@ -149,6 +172,42 @@ class TestReception : public IReception
     ASSERT(std::abs(unionSnir.getMin() - 2.0) < 1e-9);
     ASSERT(std::abs(unionSnir.getMax() - 10.0) < 1e-9);
     ASSERT(std::abs(unionSnir.getMean() - 6.0) < 1e-9);
+
+    // Exercise the actual dimensional transmitter factory.  Unequal
+    // occupied widths receive proportional powers, while the combined PSD
+    // remains a sum of the completed component functions.
+    const FrequencyBand narrow(GHz(5.18), MHz(40));
+    const FrequencyBand wide(GHz(5.50), MHz(80));
+    TestDimensionalTransmitter transmitterModel;
+    auto transmissionAnalog = std::unique_ptr<ITransmissionAnalogModel>(
+            transmitterModel.createAnalogModel(0, 0, 1, std::vector<FrequencyBand>{wide, narrow}, W(30)));
+    auto dimensionalTransmission = dynamic_cast<const DimensionalTransmissionAnalogModel *>(transmissionAnalog.get());
+    ASSERT(dimensionalTransmission != nullptr);
+    ASSERT(dimensionalTransmission->getOccupiedBands()[0].bandwidth == MHz(40));
+    ASSERT(dimensionalTransmission->getComponentPowers().size() == 2);
+    auto narrowPower = integrate<WpHz, Domain<simsec, Hz>, 0b10, W, Domain<simsec>>(dimensionalTransmission->getComponentPowers()[0])->getValue(Point<simsec>(simsec(0.5)));
+    auto widePower = integrate<WpHz, Domain<simsec, Hz>, 0b10, W, Domain<simsec>>(dimensionalTransmission->getComponentPowers()[1])->getValue(Point<simsec>(simsec(0.5)));
+    ASSERT(std::abs(narrowPower.get() - 10.0) < 1e-9);
+    ASSERT(std::abs(widePower.get() - 20.0) < 1e-9);
+    ASSERT(std::abs((narrowPower + widePower).get() - 30.0) < 1e-9);
+    ASSERT(dimensionalTransmission->getPower()->getValue(Point<simsec, Hz>(simsec(0.5), GHz(5.34))) == WpHz(0));
+
+    // A multiband reception cannot be hidden behind its outer envelope: the
+    // dimensional receiver requires the matching union listening mask.
+    DimensionalReceiverAnalogModel receiverModel;
+    MultibandListening unionListening(nullptr, 0, 1, Coord::ZERO, Coord::ZERO, inputBands);
+    BandListening envelopeListening(nullptr, 0, 1, Coord::ZERO, Coord::ZERO, unionListening.getCenterFrequency(), unionListening.getBandwidth());
+    ASSERT(receiverModel.computeIsReceptionPossible(&unionListening, &testReception, W(0)));
+    ASSERT(!receiverModel.computeIsReceptionPossible(&envelopeListening, &testReception, W(0)));
+
+    // Non-integral gain policies are rejected before any segment power is
+    // allocated, because their completed integral is not guaranteed to equal
+    // the requested segment power.
+    TestDimensionalTransmitter unsupportedTransmitter;
+    unsupportedTransmitter.useUnsupportedGainPolicy();
+    ASSERT(throwsRuntimeError([&] {
+        std::unique_ptr<ITransmissionAnalogModel> ignored(unsupportedTransmitter.createAnalogModel(0, 0, 1, inputBands, W(20)));
+    }));
 }
 
 EV << "Multiband dimensional analog-model tests PASSED.\n";

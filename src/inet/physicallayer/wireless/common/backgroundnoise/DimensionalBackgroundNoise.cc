@@ -7,8 +7,8 @@
 
 #include "inet/physicallayer/wireless/common/backgroundnoise/DimensionalBackgroundNoise.h"
 
+#include "inet/common/math/Functions.h"
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalNoise.h"
-#include "inet/physicallayer/wireless/common/analogmodel/common/MultibandFunction.h"
 #include "inet/physicallayer/wireless/common/radio/packetlevel/BandListening.h"
 #include "inet/physicallayer/wireless/common/radio/packetlevel/MultibandListening.h"
 
@@ -57,7 +57,7 @@ const INoise *DimensionalBackgroundNoise::computeNoise(const IListening *listeni
         W segmentPower = power * (band.bandwidth / totalBandwidth).get();
         components.push_back(createPowerFunction(startTime, endTime, band.centerFrequency, band.bandwidth, segmentPower));
     }
-    auto powerFunction = makeShared<MultibandFunction<WpHz>>(occupiedBands, components);
+    auto powerFunction = makeShared<SummedFunction<WpHz, Domain<simsec, Hz>>>(components);
     return new DimensionalNoise(startTime, endTime, occupiedBands, powerFunction);
 }
 
