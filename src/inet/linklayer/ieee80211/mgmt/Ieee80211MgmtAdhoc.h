@@ -25,6 +25,8 @@ class INET_API Ieee80211MgmtAdhoc : public Ieee80211MgmtBase
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
     virtual void initialize(int) override;
 
+    virtual Ieee80211VhtSigAParameters getVhtSigAParameters(const MacAddress& receiverAddress) const override;
+
     /** Implements abstract Ieee80211MgmtBase method */
     virtual void handleTimer(cMessage *msg) override;
 
@@ -51,4 +53,3 @@ class INET_API Ieee80211MgmtAdhoc : public Ieee80211MgmtBase
 } // namespace inet
 
 #endif
-

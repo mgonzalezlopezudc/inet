@@ -96,11 +96,15 @@ class INET_API Ieee80211VhtSignalMode : public IIeee80211HeaderMode, public Ieee
     virtual b getLength() const override;
     virtual bps getNetBitrate() const override { return Ieee80211VhtModeBase::getNetBitrate(); }
     virtual bps getGrossBitrate() const override { return Ieee80211VhtModeBase::getGrossBitrate(); }
-    virtual const simtime_t getSymbolInterval() const override { return Ieee80211HtTimingRelatedParametersBase::getSymbolInterval(); }
+    virtual const simtime_t getSymbolInterval() const override {
+        return guardIntervalType == HT_GUARD_INTERVAL_SHORT ?
+                Ieee80211HtTimingRelatedParametersBase::getShortGISymbolInterval() :
+                Ieee80211HtTimingRelatedParametersBase::getSymbolInterval();
+    }
     virtual const Ieee80211OfdmModulation *getModulation() const override { return modulation; }
     virtual const Ieee80211VhtCode *getCode() const { return code; }
 
-    virtual Ptr<Ieee80211PhyHeader> createHeader() const override { return makeShared<Ieee80211HtPhyHeader>(); }
+    virtual Ptr<Ieee80211PhyHeader> createHeader() const override { return makeShared<Ieee80211VhtPhyHeader>(); }
 };
 
 /*
@@ -209,6 +213,8 @@ class INET_API Ieee80211VhtDataMode : public IIeee80211DataMode, public Ieee8021
 {
   protected:
     const Ieee80211Vhtmcs *modulationAndCodingScheme;
+    const Ieee80211FecType fecType;
+    const int fecVariant;
     const unsigned int numberOfBccEncoders;
 
   protected:
@@ -223,11 +229,20 @@ class INET_API Ieee80211VhtDataMode : public IIeee80211DataMode, public Ieee8021
     unsigned int getNumberOfBccEncoders160MHz() const;
 
   public:
-    Ieee80211VhtDataMode(const Ieee80211Vhtmcs *modulationAndCodingScheme, const Hz bandwidth, GuardIntervalType guardIntervalType);
+    Ieee80211VhtDataMode(const Ieee80211Vhtmcs *modulationAndCodingScheme, const Hz bandwidth, GuardIntervalType guardIntervalType,
+            Ieee80211FecType fecType = Ieee80211FecType::BCC, int fecVariant = 0);
 
     b getServiceFieldLength() const { return b(16); }
-    b getTailFieldLength() const { return b(6) * numberOfBccEncoders; }
+    b getTailFieldLength() const { return fecType == Ieee80211FecType::BCC ? b(6) * numberOfBccEncoders : b(0); }
 
+    virtual Ieee80211FecType getFecType() const override { return fecType; }
+    virtual int getFecVariant() const override { return fecVariant; }
+    virtual Ieee80211PhyFormat getPhyFormat() const override { return Ieee80211PhyFormat::VHT_SU; }
+    virtual unsigned int getMcsIndex() const override { return modulationAndCodingScheme->getMcsIndex(); }
+    virtual Ieee80211CodeRate getCodeRate() const override;
+    virtual int getNumberOfCodedBitsPerSymbol() const override;
+    virtual int getNumberOfDataBitsPerSymbol() const override;
+    virtual Ieee80211DataEncodingPlan computeEncodingPlan(b dataLength) const override;
     virtual int getNumberOfSpatialStreams() const override { return Ieee80211VhtModeBase::getNumberOfSpatialStreams(); }
     virtual Hz getBandwidth() const override { return bandwidth; }
     virtual b getPaddingLength(b dataLength) const override { return b(0); }
@@ -237,7 +252,11 @@ class INET_API Ieee80211VhtDataMode : public IIeee80211DataMode, public Ieee8021
     virtual bps getGrossBitrate() const override { return Ieee80211VhtModeBase::getGrossBitrate(); }
     virtual const Ieee80211Vhtmcs *getModulationAndCodingScheme() const { return modulationAndCodingScheme; }
     virtual const Ieee80211VhtCode *getCode() const { return modulationAndCodingScheme->getCode(); }
-    virtual const simtime_t getSymbolInterval() const override { return Ieee80211HtTimingRelatedParametersBase::getSymbolInterval(); }
+    virtual const simtime_t getSymbolInterval() const override {
+        return guardIntervalType == HT_GUARD_INTERVAL_SHORT ?
+                Ieee80211HtTimingRelatedParametersBase::getShortGISymbolInterval() :
+                Ieee80211HtTimingRelatedParametersBase::getSymbolInterval();
+    }
     virtual const Ieee80211OfdmModulation *getModulation() const override { return modulationAndCodingScheme->getModulation(); }
 };
 
@@ -679,17 +698,21 @@ class INET_API Ieee80211VhtCompliantModes
   protected:
     static OPP_THREAD_LOCAL const Ieee80211VhtCompliantModes singleton;
 
-    mutable std::map<std::tuple<Hz, unsigned int, Ieee80211VhtModeBase::GuardIntervalType, unsigned int>, const Ieee80211VhtMode *> modeCache;
+    mutable std::map<std::tuple<Hz, unsigned int, Ieee80211VhtMode::BandMode,
+                                Ieee80211VhtPreambleMode::HighTroughputPreambleFormat,
+                                Ieee80211VhtModeBase::GuardIntervalType, unsigned int, Ieee80211FecType, int>, const Ieee80211VhtMode *> modeCache;
 
   public:
     Ieee80211VhtCompliantModes();
     virtual ~Ieee80211VhtCompliantModes();
 
-    static const Ieee80211VhtMode *getCompliantMode(const Ieee80211Vhtmcs *mcsMode, Ieee80211VhtMode::BandMode centerFrequencyMode, Ieee80211VhtPreambleMode::HighTroughputPreambleFormat preambleFormat, Ieee80211VhtModeBase::GuardIntervalType guardIntervalType);
+    static const Ieee80211VhtMode *getCompliantMode(const Ieee80211Vhtmcs *mcsMode, Ieee80211VhtMode::BandMode centerFrequencyMode,
+            Ieee80211VhtPreambleMode::HighTroughputPreambleFormat preambleFormat,
+            Ieee80211VhtModeBase::GuardIntervalType guardIntervalType,
+            Ieee80211FecType fecType = Ieee80211FecType::BCC, int fecVariant = 0);
 };
 
 } /* namespace physicallayer */
 } /* namespace inet */
 
 #endif
-

@@ -125,7 +125,11 @@ std::vector<Packet *> RecipientQosMacDataService::managementFrameReceived(Packet
     if (auto delba = dynamicPtrCast<const Ieee80211Delba>(mgmtHeader))
         blockAckReordering->processReceivedDelba(delba);
     // TODO Defrag, MSDU Integrity, Replay Detection, RX MSDU Rate Limiting
-    if (dynamicPtrCast<const Ieee80211ActionFrame>(mgmtHeader)) {
+    // Block Ack actions are consumed by the QoS MAC machinery. VHT Operating
+    // Mode Notification is management-owned because it updates peer PHY
+    // selection state and must therefore continue to the management module.
+    if (dynamicPtrCast<const Ieee80211ActionFrame>(mgmtHeader) &&
+        !dynamicPtrCast<const Ieee80211OperatingModeNotification>(mgmtHeader)) {
         delete mgmtPacket;
         return std::vector<Packet *>();
     }
@@ -196,4 +200,3 @@ RecipientQosMacDataService::~RecipientQosMacDataService()
 
 } /* namespace ieee80211 */
 } /* namespace inet */
-

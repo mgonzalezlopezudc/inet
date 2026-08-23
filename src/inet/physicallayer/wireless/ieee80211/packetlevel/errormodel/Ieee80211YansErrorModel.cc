@@ -235,7 +235,7 @@ double Ieee80211YansErrorModel::getHeaderSuccessRate(const IIeee80211Mode *mode,
     return successRate;
 }
 
-double Ieee80211YansErrorModel::getDataSuccessRate(const IIeee80211Mode *mode, unsigned int bitLength, double snr) const
+double Ieee80211YansErrorModel::getBccDataSuccessRate(const IIeee80211Mode *mode, unsigned int bitLength, double snr) const
 {
     double successRate = 0;
     if (auto ofdmMode = dynamic_cast<const Ieee80211OfdmMode *>(mode))
@@ -276,4 +276,3 @@ double Ieee80211YansErrorModel::getDataSuccessRate(const IIeee80211Mode *mode, u
 } // namespace physicallayer
 
 } // namespace inet
-

@@ -50,6 +50,7 @@ class INET_API Ieee80211MgmtSta : public Ieee80211MgmtBase
         Ieee80211SupportedRatesElement supportedRates;
         simtime_t beaconInterval;
         double rxPower;
+        Ieee80211PeerLdpcStatus ldpcStatus;
 
         bool isAuthenticated;
         int authSeqExpected; // valid while authenticating; values: 1,3,5...
@@ -98,6 +99,7 @@ class INET_API Ieee80211MgmtSta : public Ieee80211MgmtBase
     Ieee80211MgmtSta() : host(nullptr), numChannels(-1), isScanning(false), assocTimeoutMsg(nullptr) {}
 
     virtual const ApInfo *getAssociatedAp() { return &assocAP; }
+    virtual Ieee80211VhtSigAParameters getVhtSigAParameters(const MacAddress& receiverAddress) const override;
 
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
@@ -160,6 +162,9 @@ class INET_API Ieee80211MgmtSta : public Ieee80211MgmtBase
     /** Utility function: converts Ieee80211StatusCode (->frame) to Ieee80211PrimResultCode (->primitive) */
     virtual Ieee80211PrimResultCode statusCodeToPrimResultCode(int statusCode);
 
+  public:
+    virtual Ieee80211PeerLdpcStatus getPeerLdpcStatus(const MacAddress& peer) const override;
+
     /** @name Processing of different frame types */
     //@{
     virtual void handleAuthenticationFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>& header) override;
@@ -190,4 +195,3 @@ class INET_API Ieee80211MgmtSta : public Ieee80211MgmtBase
 } // namespace inet
 
 #endif
-

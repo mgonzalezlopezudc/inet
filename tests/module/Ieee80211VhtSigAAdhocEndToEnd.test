@@ -1,0 +1,105 @@
+%description:
+Simplified ad-hoc 802.11ac VHT-SIG-A integration. Two AdhocHost nodes use
+the no-management-frame ad-hoc management variant and exchange fixed MCS 0
+VHT-SU UDP data in both directions. Actual unicast VHT-SIG-A uses the IEEE
+Std 802.11-2024 clause 10.19 Table 10-13 otherwise row (GROUP_ID 63,
+PARTIAL_AID 0), and both packets arrive.
+
+%file: test.ned
+
+import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
+import inet.node.inet.AdhocHost;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadioMedium;
+import inet.test.moduletest.lib.ieee80211.Ieee80211VhtSigAEndToEndTest;
+
+network VhtSigAAdhocEndToEnd
+{
+    submodules:
+        configurator: Ipv4NetworkConfigurator;
+        radioMedium: Ieee80211ScalarRadioMedium;
+        station: AdhocHost;
+        ap: AdhocHost;
+        observer: Ieee80211VhtSigAEndToEndTest;
+}
+
+%inifile: omnetpp.ini
+
+[General]
+network = VhtSigAAdhocEndToEnd
+ned-path = .;../../../../src;../../lib
+sim-time-limit = 250ms
+seed-set = 97532
+record-vector-results = false
+cmdenv-express-mode = false
+
+**.constraintAreaMinX = 0m
+**.constraintAreaMinY = 0m
+**.constraintAreaMinZ = 0m
+**.constraintAreaMaxX = 200m
+**.constraintAreaMaxY = 200m
+**.constraintAreaMaxZ = 0m
+**.mobility.initFromDisplayString = false
+*.station.mobility.initialX = 100m
+*.station.mobility.initialY = 100m
+*.station.mobility.initialZ = 0m
+*.ap.mobility.initialX = 101m
+*.ap.mobility.initialY = 100m
+*.ap.mobility.initialZ = 0m
+
+**.arp.typename = "GlobalArp"
+**.wlan[0].opMode = "ac"
+**.wlan[0].radio.bandName = "5 GHz (20 MHz)"
+**.wlan[0].radio.centerFrequency = 5GHz
+**.wlan[0].radio.antenna.numAntennas = 1
+**.wlan[0].radio.transmitter.power = 1W
+**.wlan[0].radio.receiver.sensitivity = -100dBm
+**.wlan[0].radio.receiver.energyDetection = -100dBm
+**.wlan[0].radio.receiver.snirThreshold = 0dB
+*.station.wlan[0].address = "20:00:00:00:00:13"
+*.ap.wlan[0].address = "20:00:00:00:00:14"
+
+**.wlan[0].mac.dcf.rateSelection.vhtLdpcTxActivated = false
+**.wlan[0].mac.dcf.rateSelection.dataFrameBitrate = 6.5Mbps
+**.wlan[0].mac.dcf.rateSelection.dataFrameBandwidth = 20MHz
+**.wlan[0].mac.dcf.rateSelection.dataFrameNumSpatialStreams = 1
+**.wlan[0].mac.dcf.rtsPolicy.rtsThreshold = 2000B
+
+*.station.numApps = 2
+*.station.app[0].typename = "UdpBasicApp"
+*.station.app[0].destAddresses = "ap"
+*.station.app[0].destPort = 1000
+*.station.app[0].messageLength = 100B
+*.station.app[0].startTime = 100ms
+*.station.app[0].stopTime = 101ms
+*.station.app[0].sendInterval = 1s
+*.station.app[1].typename = "UdpSink"
+*.station.app[1].localPort = 2000
+
+*.ap.numApps = 2
+*.ap.app[0].typename = "UdpSink"
+*.ap.app[0].localPort = 1000
+*.ap.app[1].typename = "UdpBasicApp"
+*.ap.app[1].destAddresses = "station"
+*.ap.app[1].destPort = 2000
+*.ap.app[1].messageLength = 100B
+*.ap.app[1].startTime = 150ms
+*.ap.app[1].stopTime = 151ms
+*.ap.app[1].sendInterval = 1s
+
+*.observer.stationRadioModule = "^.station.wlan[0].radio"
+*.observer.apRadioModule = "^.ap.wlan[0].radio"
+*.observer.uplinkSinkModule = "^.ap.app[0]"
+*.observer.downlinkSinkModule = "^.station.app[1]"
+*.observer.apMibModule = "^.ap.wlan[0].mib"
+*.observer.stationAddress = "20:00:00:00:00:13"
+*.observer.bssid = "20:00:00:00:00:14"
+*.observer.expectedStaToApPartialAid = 0
+*.observer.expectedApToStaPartialAid = 0
+*.observer.expectedAdhoc = true
+
+%contains: stdout
+VHT-SIG-A end-to-end verdict: staToAp=1 staToApGid=63 staToApPaid=0 apToSta=1 apToStaGid=63 apToStaPaid=0 aid=0 uplinkDeliveries=1 downlinkDeliveries=1
+
+%postrun-command: grep "undisposed object:" test.out > test_undisposed.out || true
+%not-contains: test_undisposed.out
+undisposed object: (

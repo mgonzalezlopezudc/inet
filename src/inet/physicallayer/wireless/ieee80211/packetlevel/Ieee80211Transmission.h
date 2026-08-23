@@ -37,4 +37,3 @@ class INET_API Ieee80211Transmission : public TransmissionBase
 } // namespace inet
 
 #endif
-

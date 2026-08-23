@@ -1,0 +1,239 @@
+%description:
+Validate full HT/VHT LDPC capability and Operating Mode information elements
+in the four management-frame insertion points.
+
+%includes:
+#include "inet/common/MemoryInputStream.h"
+#include "inet/common/MemoryOutputStream.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrameSerializer.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrame_m.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtBase.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211CapabilityElements.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+class TestIeee80211MgmtFrameSerializer : public Ieee80211MgmtFrameSerializer
+{
+  public:
+    void write(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const { serialize(stream, chunk); }
+    const Ptr<Chunk> read(MemoryInputStream& stream, const std::type_info& typeInfo) const { return deserialize(stream, typeInfo); }
+};
+
+static Ptr<Ieee80211ProbeRequestFrame> makeProbeRequest()
+{
+    auto frame = makeShared<Ieee80211ProbeRequestFrame>();
+    frame->setSSID("x");
+    Ieee80211SupportedRatesElement rates;
+    rates.numRates = 1;
+    rates.rate[0] = 1.0;
+    frame->setSupportedRates(rates);
+    return frame;
+}
+
+static std::vector<uint8_t> serializeProbe(const Ptr<const Ieee80211ProbeRequestFrame>& frame)
+{
+    TestIeee80211MgmtFrameSerializer serializer;
+    MemoryOutputStream output;
+    serializer.write(output, frame);
+    ASSERT(output.getLength().get<b>() % 8 == 0);
+    return output.getData();
+}
+
+static Ptr<Ieee80211ProbeRequestFrame> deserializeProbe(const std::vector<uint8_t>& bytes)
+{
+    TestIeee80211MgmtFrameSerializer serializer;
+    MemoryInputStream input(bytes, B(bytes.size()));
+    return dynamicPtrCast<Ieee80211ProbeRequestFrame>(serializer.read(input, typeid(Ieee80211ProbeRequestFrame)));
+}
+
+%activity:
+
+// A Probe Request carries the complete HT and VHT Capabilities payloads in
+// their standard element order. Operating Mode Notification is intentionally
+// tested below in an Association Request, where the element is permitted.
+auto probe = makeProbeRequest();
+for (size_t i = 0; i < 26; i++)
+    probe->setHtCapabilities(i, (uint8_t)(0x10 + i));
+probe->setExtendedCapabilitiesArraySize(8);
+for (size_t i = 0; i < 8; i++)
+    probe->setExtendedCapabilities(i, (uint8_t)(0x20 + i));
+for (size_t i = 0; i < 12; i++)
+    probe->setVhtCapabilities(i, (uint8_t)(0x80 + i));
+probe->setHtCapabilities(0, probe->getHtCapabilities(0) | 0x01); // HT Capabilities Information B0
+probe->setVhtCapabilities(0, probe->getVhtCapabilities(0) | 0x10); // VHT Capabilities Information B4
+probe->setHtCapabilitiesPresent(true);
+probe->setExtendedCapabilitiesPresent(true);
+probe->setVhtCapabilitiesPresent(true);
+probe->setChunkLength(B(58));
+
+auto bytes = serializeProbe(probe);
+ASSERT(bytes.size() == 58); // fixed body + HT + Extended Capabilities + VHT TLVs
+ASSERT(bytes[6] == IEEE80211_HT_CAPABILITIES_ELEMENT_ID && bytes[7] == 26);
+for (size_t i = 0; i < 26; i++)
+    ASSERT(bytes[8 + i] == (i == 0 ? 0x11 : 0x10 + i));
+ASSERT(bytes[34] == IEEE80211_EXTENDED_CAPABILITIES_ELEMENT_ID && bytes[35] == 8);
+for (size_t i = 0; i < 8; i++)
+    ASSERT(bytes[36 + i] == 0x20 + i);
+ASSERT(bytes[44] == IEEE80211_VHT_CAPABILITIES_ELEMENT_ID && bytes[45] == 12);
+for (size_t i = 0; i < 12; i++)
+    ASSERT(bytes[46 + i] == (i == 0 ? 0x90 : 0x80 + i));
+ASSERT(probe->getChunkLength() == B(bytes.size()));
+
+auto decoded = deserializeProbe(bytes);
+ASSERT(!decoded->isIncorrect());
+ASSERT(decoded->getChunkLength() == B(bytes.size()));
+ASSERT(decoded->getHtCapabilitiesPresent());
+ASSERT(decoded->getExtendedCapabilitiesPresent());
+ASSERT(decoded->getVhtCapabilitiesPresent());
+ASSERT(!decoded->getOperatingModePresent());
+for (size_t i = 0; i < 26; i++)
+    ASSERT(decoded->getHtCapabilities(i) == (i == 0 ? 0x11 : 0x10 + i));
+for (size_t i = 0; i < 8; i++)
+    ASSERT(decoded->getExtendedCapabilities(i) == 0x20 + i);
+for (size_t i = 0; i < 12; i++)
+    ASSERT(decoded->getVhtCapabilities(i) == (i == 0 ? 0x90 : 0x80 + i));
+
+// A valid unknown TLV is consumed strictly without changing known payloads.
+auto unknown = bytes;
+unknown.push_back(7);
+unknown.push_back(2);
+unknown.push_back(0xAA);
+unknown.push_back(0x55);
+decoded = deserializeProbe(unknown);
+ASSERT(!decoded->isIncorrect());
+ASSERT(decoded->getChunkLength() == B(unknown.size()));
+ASSERT(decoded->getHtCapabilities(0) == 0x11 && decoded->getVhtCapabilities(0) == 0x90);
+
+// Duplicate known elements, bad fixed lengths, a truncated payload, and a
+// one-byte trailing fragment are rejected instead of being silently ignored.
+auto duplicate = bytes;
+duplicate.insert(duplicate.end(), bytes.begin() + 6, bytes.begin() + 6 + 28);
+ASSERT(deserializeProbe(duplicate)->isIncorrect());
+
+auto badLength = bytes;
+badLength[7] = 25;
+ASSERT(deserializeProbe(badLength)->isIncorrect());
+
+auto truncated = bytes;
+truncated.resize(47);
+ASSERT(deserializeProbe(truncated)->isIncorrect());
+
+auto dangling = bytes;
+dangling.push_back(0x01);
+ASSERT(deserializeProbe(dangling)->isIncorrect());
+
+// The other three insertion points serialize and parse their inherited
+// capability fields with the correct fixed-body offset.
+auto associationRequest = makeShared<Ieee80211AssociationRequestFrame>();
+associationRequest->setSSID("x");
+associationRequest->setSupportedRates(makeProbeRequest()->getSupportedRates());
+associationRequest->setHtCapabilitiesPresent(true);
+associationRequest->setHtCapabilities(0, 1);
+associationRequest->setOperatingModePresent(true);
+associationRequest->setOperatingMode(0x08);
+associationRequest->setChunkLength(B(10 + 28 + 3));
+TestIeee80211MgmtFrameSerializer serializer;
+MemoryOutputStream associationRequestOutput;
+serializer.write(associationRequestOutput, associationRequest);
+ASSERT(associationRequestOutput.getData().at(10) == IEEE80211_HT_CAPABILITIES_ELEMENT_ID);
+ASSERT(associationRequestOutput.getData().at(38) == IEEE80211_OPERATING_MODE_ELEMENT_ID);
+ASSERT(associationRequestOutput.getData().at(39) == 1);
+ASSERT(associationRequestOutput.getData().at(40) == 0x08);
+MemoryInputStream associationRequestInput(associationRequestOutput.getData(), associationRequestOutput.getLength());
+auto associationRequestDecoded = dynamicPtrCast<Ieee80211AssociationRequestFrame>(serializer.read(associationRequestInput, typeid(Ieee80211AssociationRequestFrame)));
+ASSERT(!associationRequestDecoded->isIncorrect() && associationRequestDecoded->getHtCapabilities(0) == 1);
+ASSERT(associationRequestDecoded->getOperatingModePresent() && associationRequestDecoded->getOperatingMode() == 0x08);
+
+auto associationResponse = makeShared<Ieee80211AssociationResponseFrame>();
+associationResponse->setStatusCode(SC_SUCCESSFUL);
+associationResponse->setSupportedRates(makeProbeRequest()->getSupportedRates());
+associationResponse->setVhtCapabilitiesPresent(true);
+associationResponse->setVhtCapabilities(0, 0x42);
+associationResponse->setChunkLength(B(9 + 14));
+MemoryOutputStream associationResponseOutput;
+serializer.write(associationResponseOutput, associationResponse);
+ASSERT(associationResponseOutput.getData().at(9) == IEEE80211_VHT_CAPABILITIES_ELEMENT_ID);
+MemoryInputStream associationResponseInput(associationResponseOutput.getData(), associationResponseOutput.getLength());
+auto associationResponseDecoded = dynamicPtrCast<Ieee80211AssociationResponseFrame>(serializer.read(associationResponseInput, typeid(Ieee80211AssociationResponseFrame)));
+ASSERT(!associationResponseDecoded->isIncorrect() && associationResponseDecoded->getVhtCapabilities(0) == 0x42);
+
+auto beacon = makeShared<Ieee80211BeaconFrame>();
+beacon->setSSID("x");
+beacon->setSupportedRates(makeProbeRequest()->getSupportedRates());
+beacon->setOperatingModePresent(true);
+beacon->setOperatingMode(0x08);
+beacon->setChunkLength(B(18 + 3));
+MemoryOutputStream beaconOutput;
+serializer.write(beaconOutput, beacon);
+ASSERT(beaconOutput.getData().at(18) == IEEE80211_OPERATING_MODE_ELEMENT_ID);
+MemoryInputStream beaconInput(beaconOutput.getData(), beaconOutput.getLength());
+auto beaconDecoded = dynamicPtrCast<Ieee80211BeaconFrame>(serializer.read(beaconInput, typeid(Ieee80211BeaconFrame)));
+ASSERT(!beaconDecoded->isIncorrect() && beaconDecoded->getOperatingMode() == 0x08);
+
+// A VHT STA is also an HT STA. The authoritative ac mode set therefore emits
+// both elements, advertises the required HT 20/40 capability, and derives a
+// nonempty compatible HT MCS mask instead of an all-zero HT payload.
+auto acCapabilities = makeShared<Ieee80211ProbeRequestFrame>();
+auto initialLength = acCapabilities->getChunkLength();
+populateIeee80211CapabilityElements(acCapabilities,
+        physicallayer::Ieee80211ModeSet::getModeSet("ac"), 1, true, true);
+ASSERT(acCapabilities->getHtCapabilitiesPresent());
+ASSERT(acCapabilities->getExtendedCapabilitiesPresent());
+ASSERT(acCapabilities->getExtendedCapabilitiesArraySize() == 8);
+ASSERT(acCapabilities->getVhtCapabilitiesPresent());
+ASSERT((acCapabilities->getHtCapabilities(0) & 0x03) == 0x03);
+ASSERT(acCapabilities->getHtCapabilities(3) == 0xFF); // HT MCS 0-7 for NSS 1
+ASSERT(acCapabilities->getHtCapabilities(4) == 0x00); // no unsupported NSS 2
+ASSERT((acCapabilities->getVhtCapabilities(0) & 0x14) == 0x14); // LDPC and 160 MHz
+ASSERT((acCapabilities->getExtendedCapabilities(7) & 0x40) == 0x40); // OM Notification bit 62
+ASSERT((acCapabilities->getVhtCapabilities(4) |
+        acCapabilities->getVhtCapabilities(5) << 8) == 0xFFFE); // NSS1 MCS0-9 only
+ASSERT(acCapabilities->getChunkLength() == initialLength + B(52));
+
+auto acTwoAntennas = makeShared<Ieee80211ProbeRequestFrame>();
+populateIeee80211CapabilityElements(acTwoAntennas,
+        physicallayer::Ieee80211ModeSet::getModeSet("ac"), 2, false, false);
+ASSERT(acTwoAntennas->getHtCapabilities(3) == 0xFF);
+ASSERT(acTwoAntennas->getHtCapabilities(4) == 0xFF);
+ASSERT((acTwoAntennas->getVhtCapabilities(4) |
+        acTwoAntennas->getVhtCapabilities(5) << 8) == 0xFFFA); // NSS1-2 MCS0-9
+
+auto acEightAntennas = makeShared<Ieee80211ProbeRequestFrame>();
+populateIeee80211CapabilityElements(acEightAntennas,
+        physicallayer::Ieee80211ModeSet::getModeSet("ac"), 8, false, false);
+for (int i = 3; i <= 6; i++)
+    ASSERT(acEightAntennas->getHtCapabilities(i) == 0xFF); // HT NSS1-4, MCS0-31
+for (int i = 7; i <= 12; i++)
+    ASSERT(acEightAntennas->getHtCapabilities(i) == 0x00); // never reinterpret VHT NSS5-8
+
+// The No-LDPC preference is state, not an attribute of every management
+// frame. A later capability refresh without an Operating Mode element must
+// preserve the most recently received value; an explicit later OM clears it.
+auto operatingModeUpdate = makeShared<Ieee80211ProbeResponseFrame>();
+operatingModeUpdate->setExtendedCapabilitiesPresent(true);
+operatingModeUpdate->setExtendedCapabilitiesArraySize(8);
+operatingModeUpdate->setExtendedCapabilities(7, 0x40);
+operatingModeUpdate->setOperatingModePresent(true);
+operatingModeUpdate->setOperatingMode(0x08);
+auto mergedStatus = Ieee80211MgmtBase::mergeLdpcCapabilities({}, *operatingModeUpdate);
+ASSERT(mergedStatus.operatingModeNotification == Ieee80211CapabilityStatus::SUPPORTED);
+ASSERT(mergedStatus.hasOperatingMode && mergedStatus.noLdpcPreferred);
+auto capabilityOnlyUpdate = makeShared<Ieee80211ProbeResponseFrame>();
+capabilityOnlyUpdate->setVhtCapabilitiesPresent(true);
+capabilityOnlyUpdate->setVhtCapabilities(0, 0x00);
+mergedStatus = Ieee80211MgmtBase::mergeLdpcCapabilities(mergedStatus, *capabilityOnlyUpdate);
+ASSERT(mergedStatus.vhtRxLdpc == Ieee80211CapabilityStatus::UNSUPPORTED);
+ASSERT(mergedStatus.hasOperatingMode && mergedStatus.noLdpcPreferred);
+auto clearOperatingMode = makeShared<Ieee80211ProbeResponseFrame>();
+clearOperatingMode->setOperatingModePresent(true);
+clearOperatingMode->setOperatingMode(0x00);
+mergedStatus = Ieee80211MgmtBase::mergeLdpcCapabilities(mergedStatus, *clearOperatingMode);
+ASSERT(mergedStatus.hasOperatingMode && !mergedStatus.noLdpcPreferred);
+
+EV << "Management capability information elements are byte-exact and strict.\n";
+
+%contains: stdout
+Management capability information elements are byte-exact and strict.

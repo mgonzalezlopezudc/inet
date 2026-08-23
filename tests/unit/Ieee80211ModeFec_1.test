@@ -1,0 +1,93 @@
+%description:
+FEC identity, cache-key, and ModeSet compatibility tests for HT/VHT modes.
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%activity:
+
+const auto *htMcs = &Ieee80211HtmcsTable::htMcs4BW20MHz;
+const auto *htBcc = Ieee80211HtCompliantModes::getCompliantMode(htMcs, Ieee80211HtMode::BAND_5GHZ,
+        Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+const auto *htLdpc = Ieee80211HtCompliantModes::getCompliantMode(htMcs, Ieee80211HtMode::BAND_5GHZ,
+        Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG,
+        Ieee80211FecType::LDPC);
+ASSERT(htBcc != htLdpc);
+ASSERT(htBcc->getDataMode()->getFecType() == Ieee80211FecType::BCC);
+ASSERT(htLdpc->getDataMode()->getFecType() == Ieee80211FecType::LDPC);
+ASSERT(htLdpc->getDataMode()->getFecVariant() == 0);
+ASSERT(htLdpc->getDataMode()->getTailFieldLength() == b(0));
+ASSERT(htLdpc->getDataMode()->getNumberOfCodedBitsPerSymbol() == 208);
+
+const auto *nModes = Ieee80211ModeSet::getModeSet("n(mixed-2.4Ghz)");
+int nModeCount = nModes->getNumModes();
+const auto *nBcc = nModes->getMode(4);
+const auto *nLdpc = nModes->getFecVariant(nBcc, Ieee80211FecType::LDPC);
+ASSERT(nLdpc != nBcc);
+ASSERT(nLdpc->getDataMode()->getFecType() == Ieee80211FecType::LDPC);
+ASSERT(nModes->containsMode(nLdpc));
+ASSERT(nModes->getIsMandatory(nLdpc) == nModes->isMandatory(4));
+ASSERT(nModes->getNumModes() == nModeCount);
+const auto *foundLdpc = nModes->findMode(nBcc->getDataMode()->getNetBitrate(), MHz(20), 1, Ieee80211FecType::LDPC);
+ASSERT(foundLdpc == nLdpc);
+ASSERT(foundLdpc->getDataMode()->getFecType() == Ieee80211FecType::LDPC);
+ASSERT(nModes->getSlowestMode(Ieee80211FecType::LDPC)->getDataMode()->getFecType() == Ieee80211FecType::LDPC);
+ASSERT(nModes->getFasterMode(nLdpc)->getDataMode()->getFecType() == Ieee80211FecType::LDPC);
+
+auto htPlan = htLdpc->getDataMode()->computeEncodingPlan(B(100));
+ASSERT(htPlan.getFecType() == Ieee80211FecType::LDPC);
+ASSERT(htPlan.getNumberOfSymbols() == 6);
+ASSERT(htLdpc->getDuration(B(100)) == htLdpc->getPreambleMode()->getDuration() + 6 * htLdpc->getDataMode()->getSymbolInterval());
+
+const auto *vhtMcs = &Ieee80211VhtmcsTable::vhtMcs4BW20MHzNss1;
+const auto *vhtBcc = Ieee80211VhtCompliantModes::getCompliantMode(vhtMcs, Ieee80211VhtMode::BAND_5GHZ,
+        Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG);
+const auto *vhtLdpc = Ieee80211VhtCompliantModes::getCompliantMode(vhtMcs, Ieee80211VhtMode::BAND_5GHZ,
+        Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG,
+        Ieee80211FecType::LDPC);
+ASSERT(vhtBcc != vhtLdpc);
+ASSERT(vhtLdpc->getDataMode()->getFecType() == Ieee80211FecType::LDPC);
+ASSERT(vhtLdpc->getDataMode()->getTailFieldLength() == b(0));
+ASSERT(dynamicPtrCast<const Ieee80211VhtPhyHeader>(vhtLdpc->getHeaderMode()->createHeader()) != nullptr);
+
+// A VHT receive mode set must accept the compatible HT modes that its
+// mandatory HT Capabilities element advertises, without mixing those modes
+// into originator rate selection.
+const auto *acModes = Ieee80211ModeSet::getModeSet("ac");
+ASSERT(acModes->containsMode(htBcc));
+ASSERT(acModes->containsMode(htLdpc));
+ASSERT(acModes->getIsMandatory(htBcc));
+ASSERT(acModes->getIsMandatory(htLdpc));
+
+const auto *htMcs8Bcc = Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs8BW20MHz,
+        Ieee80211HtMode::BAND_5GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+const auto *htMcs8Ldpc = Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs8BW20MHz,
+        Ieee80211HtMode::BAND_5GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG, Ieee80211FecType::LDPC);
+ASSERT(acModes->containsMode(htMcs8Bcc));
+ASSERT(acModes->containsMode(htMcs8Ldpc));
+ASSERT(!acModes->getIsMandatory(htMcs8Bcc));
+ASSERT(!acModes->getIsMandatory(htMcs8Ldpc));
+const auto *slowerForHtBcc = acModes->getSlowerMandatoryMode(htMcs8Bcc);
+const auto *slowerForHtLdpc = acModes->getSlowerMandatoryMode(htMcs8Ldpc);
+ASSERT(slowerForHtBcc != nullptr);
+ASSERT(slowerForHtLdpc != nullptr);
+ASSERT(slowerForHtBcc->getDataMode()->getPhyFormat() == Ieee80211PhyFormat::HT);
+ASSERT(slowerForHtLdpc->getDataMode()->getPhyFormat() == Ieee80211PhyFormat::HT);
+ASSERT(slowerForHtBcc->getDataMode()->getFecType() == Ieee80211FecType::BCC);
+ASSERT(slowerForHtLdpc->getDataMode()->getFecType() == Ieee80211FecType::LDPC);
+
+const auto *htMcs32 = Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs32BW40MHz,
+        Ieee80211HtMode::BAND_5GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+const auto *htMcs33 = Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs33BW20MHz,
+        Ieee80211HtMode::BAND_5GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+ASSERT(!acModes->containsMode(htMcs32));
+ASSERT(!acModes->containsMode(htMcs33));

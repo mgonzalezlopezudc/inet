@@ -9,6 +9,7 @@
 
 #include "inet/common/packet/chunk/BitCountChunk.h"
 #include "inet/common/ProtocolTag_m.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211DsssMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211DsssOfdmMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ErpOfdmMode.h"
@@ -19,14 +20,152 @@
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211OfdmMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211DataEncodingPlanTag.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211VhtSigA.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211VhtSigB.h"
 
 namespace inet {
 
 namespace physicallayer {
+
+namespace {
+
+uint8_t getVhtBandwidthCode(Hz bandwidth)
+{
+    if (bandwidth == MHz(20))
+        return 0;
+    if (bandwidth == MHz(40))
+        return 1;
+    if (bandwidth == MHz(80))
+        return 2;
+    if (bandwidth == MHz(160))
+        return 3;
+    throw cRuntimeError("Unsupported VHT-SIG-A bandwidth %s", bandwidth.str().c_str());
+}
+
+void populateHtOrVhtHeader(const Ptr<Ieee80211PhyHeader>& phyHeader,
+        const IIeee80211Mode *mode, b psduLength, const Packet *packet,
+        const Ieee80211DataEncodingPlan *plan)
+{
+    const auto *dataMode = mode->getDataMode();
+    if (auto htHeader = dynamicPtrCast<Ieee80211HtPhyHeader>(phyHeader)) {
+        auto htDataMode = check_and_cast<const Ieee80211HtDataMode *>(dataMode);
+        if (plan == nullptr || plan->getPhyFormat() != Ieee80211PhyFormat::HT ||
+            plan->getFecType() != htDataMode->getFecType())
+            throw cRuntimeError("HT PHY header requires its authoritative data encoding plan");
+        htHeader->setMcs(htDataMode->getModulationAndCodingScheme()->getMcsIndex());
+        htHeader->setChannelWidth40(htDataMode->getBandwidth() == MHz(40));
+        htHeader->setFecCoding(htDataMode->getFecType() == Ieee80211FecType::LDPC);
+        htHeader->setShortGi(htDataMode->getGuardIntervalType() == Ieee80211HtModeBase::HT_GUARD_INTERVAL_SHORT);
+    }
+    else if (auto vhtHeader = dynamicPtrCast<Ieee80211VhtPhyHeader>(phyHeader)) {
+        auto vhtDataMode = check_and_cast<const Ieee80211VhtDataMode *>(dataMode);
+        if (plan == nullptr || plan->getPhyFormat() != Ieee80211PhyFormat::VHT_SU ||
+            plan->getFecType() != vhtDataMode->getFecType())
+            throw cRuntimeError("VHT PHY header requires its authoritative data encoding plan");
+        bool shortGi = vhtDataMode->getGuardIntervalType() == Ieee80211VhtModeBase::HT_GUARD_INTERVAL_SHORT;
+        vhtHeader->setBandwidth(getVhtBandwidthCode(vhtDataMode->getBandwidth()));
+        auto sigBLayout = getVhtSuSigBLayout(vhtHeader->getBandwidth());
+        // Keep the aggregate chunk metadata authoritative even when this
+        // helper is used independently of encapsulate()'s mode-sized header.
+        vhtHeader->setChunkLength(b(48 + sigBLayout.getBitLength()));
+        vhtHeader->setVhtSigBLength(encodeVhtSuSigBLength(psduLength));
+        vhtHeader->setVhtSigBReserved(sigBLayout.getReservedValue());
+        vhtHeader->setVhtSigBTail(0);
+        if (auto request = packet->findTag<Ieee80211VhtSigAReq>()) {
+            validateVhtSuGroupIdAndPartialAid(request->getGroupId(), request->getPartialAid());
+            vhtHeader->setGroupId(request->getGroupId());
+            vhtHeader->setPartialAid(request->getPartialAid());
+        }
+        else {
+            auto macHeader = packet->peekAtFront<ieee80211::Ieee80211MacHeader>();
+            if (macHeader->getReceiverAddress().isMulticast()) {
+                vhtHeader->setGroupId(63);
+                vhtHeader->setPartialAid(0);
+            }
+            else if (auto dataOrMgmtHeader = dynamicPtrCast<const ieee80211::Ieee80211DataOrMgmtHeader>(macHeader);
+                     dataOrMgmtHeader != nullptr && dataOrMgmtHeader->getToDS() && !dataOrMgmtHeader->getFromDS()) {
+                vhtHeader->setGroupId(0);
+                vhtHeader->setPartialAid(computeVhtPartialAidForBssid(dataOrMgmtHeader->getReceiverAddress()));
+            }
+            else
+                throw cRuntimeError("VHT transmission requires MAC-supplied GROUP_ID/PARTIAL_AID context for this unicast frame");
+        }
+        vhtHeader->setNumberOfSpaceTimeStreams(vhtDataMode->getNumberOfSpatialStreams() - 1);
+        vhtHeader->setShortGi(shortGi);
+        vhtHeader->setShortGiNsymDisambiguation(shortGi && plan->getNumberOfSymbols() % 10 == 9);
+        vhtHeader->setCoding(vhtDataMode->getFecType() == Ieee80211FecType::LDPC);
+        vhtHeader->setLdpcExtraOfdmSymbol(vhtDataMode->getFecType() == Ieee80211FecType::LDPC &&
+                                          plan->getAdditionalCapacityApplied());
+        vhtHeader->setMcs(vhtDataMode->getModulationAndCodingScheme()->getMcsIndex());
+    }
+}
+
+bool validateHtOrVhtHeader(const Ptr<const Ieee80211PhyHeader>& phyHeader,
+        const IIeee80211Mode *mode, const Ieee80211DataEncodingPlan *plan)
+{
+    const auto *dataMode = mode->getDataMode();
+    if (auto htHeader = dynamicPtrCast<const Ieee80211HtPhyHeader>(phyHeader)) {
+        auto htDataMode = dynamic_cast<const Ieee80211HtDataMode *>(dataMode);
+        return htDataMode != nullptr && plan != nullptr &&
+               plan->getPhyFormat() == Ieee80211PhyFormat::HT &&
+               plan->getFecType() == htDataMode->getFecType() &&
+               htHeader->getMcs() == htDataMode->getModulationAndCodingScheme()->getMcsIndex() &&
+               htHeader->getChannelWidth40() == (htDataMode->getBandwidth() == MHz(40)) &&
+               htHeader->getFecCoding() == (htDataMode->getFecType() == Ieee80211FecType::LDPC) &&
+               htHeader->getShortGi() == (htDataMode->getGuardIntervalType() == Ieee80211HtModeBase::HT_GUARD_INTERVAL_SHORT);
+    }
+    if (auto vhtHeader = dynamicPtrCast<const Ieee80211VhtPhyHeader>(phyHeader)) {
+        auto vhtDataMode = dynamic_cast<const Ieee80211VhtDataMode *>(dataMode);
+        if (vhtDataMode == nullptr)
+            return false;
+        if (plan == nullptr || plan->getPhyFormat() != Ieee80211PhyFormat::VHT_SU ||
+            plan->getFecType() != vhtDataMode->getFecType())
+            return false;
+        bool isLdpc = vhtDataMode->getFecType() == Ieee80211FecType::LDPC;
+        bool shortGi = vhtDataMode->getGuardIntervalType() == Ieee80211VhtModeBase::HT_GUARD_INTERVAL_SHORT;
+        auto sigBLayout = getVhtSuSigBLayout(vhtHeader->getBandwidth());
+        bool valid = vhtHeader->getBandwidth() == getVhtBandwidthCode(vhtDataMode->getBandwidth()) &&
+               (vhtHeader->getGroupId() == 0 || vhtHeader->getGroupId() == 63) &&
+               vhtHeader->getPartialAid() <= 511 &&
+               vhtHeader->getNumberOfSpaceTimeStreams() == vhtDataMode->getNumberOfSpatialStreams() - 1 &&
+               vhtHeader->getShortGi() == shortGi &&
+               vhtHeader->getShortGiNsymDisambiguation() == (shortGi && plan->getNumberOfSymbols() % 10 == 9) &&
+               vhtHeader->getCoding() == isLdpc &&
+               vhtHeader->getLdpcExtraOfdmSymbol() == (isLdpc && plan->getAdditionalCapacityApplied()) &&
+               vhtHeader->getMcs() == vhtDataMode->getModulationAndCodingScheme()->getMcsIndex() &&
+               vhtHeader->getVhtSigBLength() == encodeVhtSuSigBLength(vhtHeader->getLengthField()) &&
+               vhtHeader->getVhtSigBReserved() == sigBLayout.getReservedValue() &&
+               vhtHeader->getVhtSigBTail() == 0;
+        if (!valid)
+            EV_DEBUG << "Received VHT-SU PHY header disagrees with receiver-derived mode/plan: "
+                     << "bw=" << vhtHeader->getBandwidth()
+                     << " expectedBw=" << unsigned(getVhtBandwidthCode(vhtDataMode->getBandwidth()))
+                     << " gid=" << vhtHeader->getGroupId()
+                     << " nsts=" << vhtHeader->getNumberOfSpaceTimeStreams()
+                     << " expectedNsts=" << vhtDataMode->getNumberOfSpatialStreams() - 1
+                     << " shortGi=" << vhtHeader->getShortGi()
+                     << " shortGiDisambiguation=" << vhtHeader->getShortGiNsymDisambiguation()
+                     << " expectedShortGiDisambiguation=" << (shortGi && plan->getNumberOfSymbols() % 10 == 9)
+                     << " coding=" << vhtHeader->getCoding()
+                     << " extra=" << vhtHeader->getLdpcExtraOfdmSymbol()
+                     << " expectedExtra=" << (isLdpc && plan->getAdditionalCapacityApplied())
+                     << " mcs=" << vhtHeader->getMcs()
+                     << " expectedMcs=" << vhtDataMode->getModulationAndCodingScheme()->getMcsIndex()
+                     << " sigBLength=" << vhtHeader->getVhtSigBLength()
+                     << " baseLength=" << vhtHeader->getLengthField()
+                     << " reserved=" << vhtHeader->getVhtSigBReserved()
+                     << " tail=" << vhtHeader->getVhtSigBTail() << endl;
+        return valid;
+    }
+    return true;
+}
+
+} // namespace
 
 Define_Module(Ieee80211Radio);
 
@@ -233,14 +372,63 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
 {
     auto ieee80211Transmitter = check_and_cast<const Ieee80211Transmitter *>(transmitter);
     auto mode = ieee80211Transmitter->computeTransmissionMode(packet);
+    std::unique_ptr<Ieee80211DataEncodingPlan> plan;
+    auto phyFormat = mode->getDataMode()->getPhyFormat();
+    b apepLength = B(packet->getDataLength());
+    if (phyFormat == Ieee80211PhyFormat::HT || phyFormat == Ieee80211PhyFormat::VHT_SU) {
+        // VHT-SU LDPC uses the exact, possibly unaligned APEP_LENGTH only
+        // while constructing the local TXVECTOR. The packet data itself is
+        // the complete PSDU after §10.12.6 MAC padding, so the local request
+        // must not be replaced by packet->getDataLength().
+        if (phyFormat == Ieee80211PhyFormat::VHT_SU &&
+            mode->getDataMode()->getFecType() == Ieee80211FecType::LDPC) {
+            auto request = packet->findTag<Ieee80211VhtApepReq>();
+            if (request == nullptr || request->getApepLength() < 0)
+                throw cRuntimeError("IEEE 802.11 VHT-SU LDPC requires a valid local APEP_LENGTH TXVECTOR request");
+            apepLength = B(request->getApepLength());
+        }
+        plan = std::make_unique<Ieee80211DataEncodingPlan>(
+                mode->getDataMode()->computeEncodingPlan(apepLength));
+        if (phyFormat == Ieee80211PhyFormat::VHT_SU &&
+            mode->getDataMode()->getFecType() == Ieee80211FecType::LDPC) {
+            b expectedPsduLength = B((plan->getUncodedDataBits() - 16) / 8);
+            if (packet->getDataLength() != expectedPsduLength)
+                throw cRuntimeError("IEEE 802.11 VHT-SU LDPC packet data length %s does not match the planned complete PSDU length %s",
+                                    packet->getDataLength().str().c_str(), expectedPsduLength.str().c_str());
+            // This request is MAC-to-PHY context only. Removing it before
+            // header insertion prevents exact APEP_LENGTH from entering the
+            // immutable transmission packet or crossing the medium.
+            packet->removeTagIfPresent<Ieee80211VhtApepReq>();
+        }
+        packet->addTagIfAbsent<Ieee80211DataEncodingPlanTag>()->setPlan(*plan);
+    }
     auto phyHeader = mode->getHeaderMode()->createHeader();
     phyHeader->setChunkLength(b(mode->getHeaderMode()->getLength()));
-    phyHeader->setLengthField(B(packet->getDataLength()));
+    phyHeader->setLengthField(apepLength);
+    populateHtOrVhtHeader(phyHeader, mode, apepLength, packet, plan.get());
+    if (phyFormat == Ieee80211PhyFormat::VHT_SU)
+        // VHT-SIG-A now contains the request's wire representation; the
+        // MAC-to-PHY request itself must not cross the radio boundary.
+        packet->removeTagIfPresent<Ieee80211VhtSigAReq>();
+    if (phyFormat == Ieee80211PhyFormat::VHT_SU &&
+        mode->getDataMode()->getFecType() == Ieee80211FecType::LDPC) {
+        // The generic lengthField is not serialized for VHT. Do not let it
+        // carry the exact sender APEP_LENGTH across the radio boundary: keep
+        // only the rounded RXVECTOR indication represented by VHT-SIG-B.
+        auto vhtHeader = dynamicPtrCast<Ieee80211VhtPhyHeader>(phyHeader);
+        phyHeader->setLengthField(decodeVhtSuSigBLength(vhtHeader->getVhtSigBLength()));
+    }
     insertFcs(phyHeader);
     packet->insertAtFront(phyHeader);
 
     auto tailLength = dynamic_cast<const Ieee80211OfdmMode *>(mode) ? b(6) : b(0);
-    auto paddingLength = mode->getDataMode()->getPaddingLength(B(phyHeader->getLengthField()));
+    // VHT-SU LDPC PHY padding is already represented by the residual bits
+    // between SERVICE+complete PSDU octets and Npld in the LDPC data field;
+    // do not derive or append structured byte padding from the local APEP
+    // lengthField. Other PHYs retain their existing mode-based padding.
+    auto paddingLength = (phyFormat == Ieee80211PhyFormat::VHT_SU &&
+                          mode->getDataMode()->getFecType() == Ieee80211FecType::LDPC) ?
+            b(0) : mode->getDataMode()->getPaddingLength(B(phyHeader->getLengthField()));
     if (tailLength + paddingLength != b(0)) {
         const auto& phyTrailer = makeShared<BitCountChunk>(tailLength + paddingLength);
         packet->insertAtBack(phyTrailer);
@@ -270,11 +458,26 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
 void Ieee80211Radio::decapsulate(Packet *packet) const
 {
     auto mode = packet->getTag<Ieee80211ModeInd>()->getMode();
+    auto planTag = packet->findTag<Ieee80211DataEncodingPlanTag>();
+    auto plan = planTag != nullptr && planTag->hasPlan() ? &planTag->getPlan() : nullptr;
     const auto& phyHeader = popIeee80211PhyHeaderAtFront(packet, b(-1), Chunk::PF_ALLOW_INCORRECT | Chunk::PF_ALLOW_INCOMPLETE | Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED);
-    if (phyHeader->isIncorrect() || phyHeader->isIncomplete() || phyHeader->isImproperlyRepresented() || !verifyFcs(phyHeader))
+    bool headerValid = !phyHeader->isIncorrect() && !phyHeader->isIncomplete() &&
+            !phyHeader->isImproperlyRepresented() && verifyFcs(phyHeader) &&
+            validateHtOrVhtHeader(phyHeader, mode, plan);
+    if (!headerValid) {
+        EV_DEBUG << "Received IEEE 802.11 PHY header validation failed: incorrect="
+                 << phyHeader->isIncorrect() << " incomplete=" << phyHeader->isIncomplete()
+                 << " improper=" << phyHeader->isImproperlyRepresented()
+                 << " plan=" << (plan != nullptr) << endl;
         packet->setBitError(true);
+    }
+    // The reconstructed plan is private PHY receive context used only for
+    // header/data validation. Do not leak it beyond decapsulation.
+    packet->removeTagIfPresent<Ieee80211DataEncodingPlanTag>();
     auto tailLength = dynamic_cast<const Ieee80211OfdmMode *>(mode) ? b(6) : b(0);
-    auto paddingLength = mode->getDataMode()->getPaddingLength(B(phyHeader->getLengthField()));
+    auto paddingLength = (mode->getDataMode()->getPhyFormat() == Ieee80211PhyFormat::VHT_SU &&
+                          mode->getDataMode()->getFecType() == Ieee80211FecType::LDPC) ?
+            b(0) : mode->getDataMode()->getPaddingLength(B(phyHeader->getLengthField()));
     if (tailLength + paddingLength != b(0))
         packet->popAtBack(tailLength + paddingLength, Chunk::PF_ALLOW_INCORRECT);
     packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211Mac);
@@ -329,4 +532,3 @@ const Ptr<const Ieee80211PhyHeader> Ieee80211Radio::peekIeee80211PhyHeaderAtFron
 } // namespace physicallayer
 
 } // namespace inet
-

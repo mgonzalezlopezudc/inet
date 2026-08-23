@@ -1,0 +1,174 @@
+%description:
+Packet-level IEEE 802.11 LDPC PER routing reconstructs the PPDU encoding plan
+from received timing and PHY fields, interpolates the configured curve in log10(PER) versus SNR dB, and
+fails explicitly when an LDPC curve is missing instead of falling back to the
+legacy BCC equation.
+
+%includes:
+#include <cmath>
+#include "inet/common/packet/Packet.h"
+#include "inet/physicallayer/wireless/common/base/packetlevel/ReceptionBase.h"
+#include "inet/physicallayer/wireless/common/base/packetlevel/SnirBase.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IAntenna.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211NistErrorModel.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%file: TestNetwork.ned
+
+import inet.physicallayer.wireless.ieee80211.packetlevel.errormodel.Ieee80211LdpcPerSuccessModel;
+import inet.physicallayer.wireless.ieee80211.packetlevel.errormodel.Ieee80211NistErrorModel;
+
+network TestNetwork
+{
+    submodules:
+        model: Ieee80211NistErrorModel {
+            parameters:
+                fecSuccessModel.typename = "Ieee80211LdpcPerSuccessModel";
+        }
+}
+
+%file: synthetic-ldpc-per.csv
+# Synthetic test-only values; they are not a production performance claim.
+phy_format,bandwidth_mhz,mcs,nss,number_of_codewords,ldpc_codeword_length,shortened_bits,punctured_bits,repeated_bits,snr_db,per
+HT,20,4,1,1,1944,642,54,0,-2,1
+HT,20,4,1,1,1944,642,54,0,0,0.1
+HT,20,4,1,1,1944,642,54,0,2,0.001
+
+%inifile: omnetpp.ini
+[General]
+ned-path = .;../../../../src;../../lib
+network = TestNetwork
+*.model.snirMode = "mean"
+*.model.fecSuccessModel.perTableFile = "synthetic-ldpc-per.csv"
+
+%global:
+
+class TestAntenna : public IAntenna
+{
+  public:
+    virtual IMobility *getMobility() const override { return nullptr; }
+    virtual bool isDirectional() const override { return false; }
+    virtual Ptr<const IAntennaGain> getGain() const override { return nullptr; }
+    virtual int getNumAntennas() const override { return 1; }
+};
+
+class TestRadio : public IRadio
+{
+  public:
+    virtual const cGate *getRadioGate() const override { return nullptr; }
+    virtual RadioMode getRadioMode() const override { return RADIO_MODE_RECEIVER; }
+    virtual void setRadioMode(RadioMode) override {}
+    virtual ReceptionState getReceptionState() const override { return RECEPTION_STATE_RECEIVING; }
+    virtual TransmissionState getTransmissionState() const override { return TRANSMISSION_STATE_IDLE; }
+    virtual int getId() const override { return 1; }
+    virtual const IAntenna *getAntenna() const override
+    {
+        static TestAntenna antenna;
+        return &antenna;
+    }
+    virtual const ITransmitter *getTransmitter() const override { return nullptr; }
+    virtual const IReceiver *getReceiver() const override { return nullptr; }
+    virtual const IRadioMedium *getMedium() const override { return nullptr; }
+    virtual const ITransmission *getTransmissionInProgress() const override { return nullptr; }
+    virtual const ITransmission *getReceptionInProgress() const override { return nullptr; }
+    virtual IRadioSignal::SignalPart getTransmittedSignalPart() const override { return IRadioSignal::SIGNAL_PART_NONE; }
+    virtual IRadioSignal::SignalPart getReceivedSignalPart() const override { return IRadioSignal::SIGNAL_PART_NONE; }
+};
+
+class TestSnir : public SnirBase
+{
+  protected:
+    double snir;
+
+  public:
+    TestSnir(const IReception *reception, double snir) : SnirBase(reception, nullptr), snir(snir) {}
+    virtual double getMin() const override { return snir; }
+    virtual double getMax() const override { return snir; }
+    virtual double getMean() const override { return snir; }
+};
+
+static const IIeee80211Mode *getLdpcMode()
+{
+    return Ieee80211HtCompliantModes::getCompliantMode(
+            &Ieee80211HtmcsTable::htMcs4BW20MHz, Ieee80211HtMode::BAND_5GHZ,
+            Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+            Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG, Ieee80211FecType::LDPC);
+}
+
+static Ieee80211Transmission *makeTransmission(const IIeee80211Mode *mode, b psduLength,
+        Packet& packet, TestRadio& radio)
+{
+    auto phyHeader = mode->getHeaderMode()->createHeader();
+    phyHeader->setLengthField(psduLength);
+    dynamicPtrCast<Ieee80211HtPhyHeader>(phyHeader)->setFecCoding(true);
+    packet.insertAtFront(phyHeader);
+    auto plan = mode->getDataMode()->computeEncodingPlan(psduLength);
+    auto preambleDuration = mode->getPreambleMode()->getDuration();
+    auto headerDuration = mode->getHeaderMode()->getDuration();
+    auto dataDuration = plan.getNumberOfSymbols() * mode->getDataMode()->getSymbolInterval();
+    return new Ieee80211Transmission(&radio, &packet, SIMTIME_ZERO,
+            preambleDuration + headerDuration + dataDuration, preambleDuration,
+            headerDuration, dataDuration, Coord(), Coord(), Quaternion(), Quaternion(),
+            nullptr, nullptr, nullptr, nullptr, nullptr, mode, nullptr);
+}
+
+%activity:
+
+auto model = check_and_cast<Ieee80211NistErrorModel *>(
+        cSimulation::getActiveSimulation()->getModuleByPath("TestNetwork.model"));
+const auto *mode = getLdpcMode();
+TestRadio radio;
+Packet packet("ldpc-per-test");
+auto transmission = makeTransmission(mode, B(100), packet, radio);
+ReceptionBase reception(nullptr, transmission, SIMTIME_ZERO, transmission->getDuration(),
+        Coord(), Coord(), Quaternion(), Quaternion(), nullptr);
+
+// 10*log10(10^0.1) = 1 dB. The expected PER is the geometric midpoint
+// between 0.1 and 0.001, proving routing through the packet-level path and
+// interpolation in log10(PER), rather than linear PER interpolation.
+TestSnir snir(&reception, std::pow(10.0, 0.1));
+double packetErrorRate = model->computePacketErrorRate(&snir, IRadioSignal::SIGNAL_PART_DATA);
+ASSERT(std::fabs(packetErrorRate - 0.01) < 1e-14);
+delete transmission;
+
+// A different PPDU length produces a different reconstructed LDPC plan/key, but
+// the calibrated PER curve is deliberately reused for the same PHY-mode key.
+Packet largerCurvePacket("ldpc-per-same-mode-larger-length");
+auto largerCurveTransmission = makeTransmission(mode, B(5000), largerCurvePacket, radio);
+ReceptionBase largerCurveReception(nullptr, largerCurveTransmission,
+        SIMTIME_ZERO, largerCurveTransmission->getDuration(), Coord(), Coord(),
+        Quaternion(), Quaternion(), nullptr);
+TestSnir largerCurveSnir(&largerCurveReception, std::pow(10.0, 0.1));
+double largerCurvePacketErrorRate = model->computePacketErrorRate(
+        &largerCurveSnir, IRadioSignal::SIGNAL_PART_DATA);
+ASSERT(std::fabs(largerCurvePacketErrorRate - 0.01) < 1e-14);
+delete largerCurveTransmission;
+
+// A legal but uncalibrated per-stream MCS must still fail explicitly; size
+// invariance never crosses format/BW/MCS/NSS mode keys.
+const auto *uncalibratedMode = Ieee80211HtCompliantModes::getCompliantMode(
+        &Ieee80211HtmcsTable::htMcs5BW20MHz, Ieee80211HtMode::BAND_5GHZ,
+        Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG, Ieee80211FecType::LDPC);
+ASSERT(uncalibratedMode != nullptr);
+Packet missingModePacket("ldpc-per-missing-mode");
+auto missingModeTransmission = makeTransmission(uncalibratedMode, B(100), missingModePacket, radio);
+ReceptionBase missingModeReception(nullptr, missingModeTransmission,
+        SIMTIME_ZERO, missingModeTransmission->getDuration(), Coord(), Coord(),
+        Quaternion(), Quaternion(), nullptr);
+TestSnir missingModeSnir(&missingModeReception, std::pow(10.0, 0.1));
+bool missingModeRejected = false;
+try {
+    model->computePacketErrorRate(&missingModeSnir, IRadioSignal::SIGNAL_PART_DATA);
+}
+catch (const cRuntimeError&) {
+    missingModeRejected = true;
+}
+ASSERT(missingModeRejected);
+delete missingModeTransmission;

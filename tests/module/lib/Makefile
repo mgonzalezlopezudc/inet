@@ -43,7 +43,11 @@ OBJS = \
     $O/TestIGMP.o \
     $O/TestMld.o \
     $O/ieee80211/Ieee80211BitDomainTest.o \
+    $O/ieee80211/Ieee80211LdpcEndToEndTest.o \
+    $O/ieee80211/Ieee80211LdpcSoftEndToEndTest.o \
     $O/ieee80211/Ieee80211SymbolDomainTest.o \
+    $O/ieee80211/Ieee80211VhtLdpcEndToEndTest.o \
+    $O/ieee80211/Ieee80211VhtSigAEndToEndTest.o \
     $O/ieee80211retransmissiontest/Ieee80211TesterMac.o \
     $O/ieee80211retransmissiontest/MpduGen.o
 

@@ -30,4 +30,3 @@ std::ostream& Ieee80211Transmission::printToStream(std::ostream& stream, int lev
 } // namespace physicallayer
 
 } // namespace inet
-

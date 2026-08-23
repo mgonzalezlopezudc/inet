@@ -7,6 +7,7 @@
 
 #include "inet/linklayer/ieee80211/mac/Ieee80211MacHeaderSerializer.h"
 
+#include "inet/common/checksum/Checksum.h"
 #include "inet/common/packet/serializer/ChunkSerializerRegistry.h"
 
 namespace inet {
@@ -97,6 +98,7 @@ Register_Serializer(Ieee80211CompressedBlockAck, Ieee80211MacHeaderSerializer);
 Register_Serializer(Ieee80211MultiTidBlockAck, Ieee80211MacHeaderSerializer);
 
 Register_Serializer(Ieee80211ActionFrame, Ieee80211MacHeaderSerializer);
+Register_Serializer(Ieee80211OperatingModeNotification, Ieee80211MacHeaderSerializer);
 Register_Serializer(Ieee80211AddbaRequest, Ieee80211MacHeaderSerializer);
 Register_Serializer(Ieee80211AddbaResponse, Ieee80211MacHeaderSerializer);
 Register_Serializer(Ieee80211Delba, Ieee80211MacHeaderSerializer);
@@ -126,21 +128,54 @@ const Ptr<Chunk> Ieee80211MsduSubframeHeaderSerializer::deserialize(MemoryInputS
 void Ieee80211MpduSubframeHeaderSerializer::serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const
 {
     auto mpduSubframe = dynamicPtrCast<const Ieee80211MpduSubframeHeader>(chunk);
-    stream.writeUint4(0);
-    stream.writeUint4(mpduSubframe->getLength() >> 8);
-    stream.writeUint8(mpduSubframe->getLength() & 0xFF);
-    stream.writeByte(0);
+    if (mpduSubframe->getLength() < 0 || mpduSubframe->getLength() > 0x3fff)
+        throw cRuntimeError("IEEE 802.11 A-MPDU delimiter MPDU length %d does not fit its 14-bit field",
+                            mpduSubframe->getLength());
+    if (mpduSubframe->getReserved())
+        throw cRuntimeError("IEEE 802.11 A-MPDU delimiter reserved bit must be zero");
+    // Figures 9-1329 and 9-1330: EOF/Tag and Reserved occupy B0/B1;
+    // MPDU Length High occupies B2/B3; MPDU Length Low occupies B4..B15.
+    uint8_t protectedBytes[2] = {
+        static_cast<uint8_t>((mpduSubframe->getEof() ? 0x01 : 0) |
+                             ((mpduSubframe->getLength() >> 10) & 0x0c) |
+                             ((mpduSubframe->getLength() & 0x0f) << 4)),
+        static_cast<uint8_t>((mpduSubframe->getLength() >> 4) & 0xff)
+    };
+    // IEEE Std 802.11-2024, 9.7.1/9.7.2: CRC-8 polynomial
+    // x^8+x^2+x+1, all-one initial state, one's-complement remainder.
+    // Figure 9-1332 explicitly shifts B15..B0 into the LFSR. Reverse the
+    // protected octet order, process each octet MSB-first, then bit-reverse
+    // the result because C7 is carried in raw delimiter position B16.
+    uint8_t crcInput[2] = {protectedBytes[1], protectedBytes[0]};
+    uint8_t crc = generic_crc8(crcInput, 2, 0x07, 0xff, false, true, 0xff);
+    stream.writeByte(protectedBytes[0]);
+    stream.writeByte(protectedBytes[1]);
+    stream.writeByte(crc);
     stream.writeByte(0x4E);
 }
 
 const Ptr<Chunk> Ieee80211MpduSubframeHeaderSerializer::deserialize(MemoryInputStream& stream) const
 {
     auto mpduSubframe = makeShared<Ieee80211MpduSubframeHeader>();
-    stream.readUint4();
-    mpduSubframe->setLength(stream.readUint4() >> 8);
-    mpduSubframe->setLength(stream.readUint8());
-    stream.readByte();
-    stream.readByte();
+    if (stream.getRemainingLength() < LENGTH_A_MPDU_SUBFRAME_HEADER)
+        throw cRuntimeError("Truncated IEEE 802.11 A-MPDU delimiter");
+    uint8_t protectedBytes[2] = {stream.readByte(), stream.readByte()};
+    uint8_t receivedCrc = stream.readByte();
+    uint8_t signature = stream.readByte();
+    if (signature != 0x4E)
+        throw cRuntimeError("Invalid IEEE 802.11 A-MPDU delimiter signature 0x%02x", signature);
+    uint8_t crcInput[2] = {protectedBytes[1], protectedBytes[0]};
+    uint8_t expectedCrc = generic_crc8(crcInput, 2, 0x07, 0xff, false, true, 0xff);
+    if (receivedCrc != expectedCrc)
+        throw cRuntimeError("Invalid IEEE 802.11 A-MPDU delimiter CRC 0x%02x (expected 0x%02x)",
+                            receivedCrc, expectedCrc);
+    mpduSubframe->setEof((protectedBytes[0] & 0x01) != 0);
+    mpduSubframe->setReserved((protectedBytes[0] & 0x02) != 0);
+    mpduSubframe->setLength(((protectedBytes[0] & 0x0c) << 10) |
+                            ((protectedBytes[0] & 0xf0) >> 4) |
+                            (protectedBytes[1] << 4));
+    if (mpduSubframe->getReserved())
+        throw cRuntimeError("Invalid IEEE 802.11 A-MPDU delimiter reserved bit");
     return mpduSubframe;
 }
 
@@ -228,6 +263,16 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                             default:
                                 throw cRuntimeError("Ieee80211MacHeaderSerializer: cannot serialize the Ieee80211ActionFrame frame, blockAckAction %d not supported.", actionFrame->getBlockAckAction());
                         }
+                        break;
+                    }
+                    case 21: {
+                        auto operatingModeNotification = dynamicPtrCast<const Ieee80211OperatingModeNotification>(chunk);
+                        if (operatingModeNotification == nullptr || operatingModeNotification->getVhtAction() != 2)
+                            throw cRuntimeError("Ieee80211MacHeaderSerializer: invalid VHT Operating Mode Notification action frame");
+                        stream.writeByte(operatingModeNotification->getCategory());
+                        stream.writeByte(operatingModeNotification->getVhtAction());
+                        stream.writeByte(operatingModeNotification->getOperatingMode());
+                        ASSERT(stream.getLength() - startPos == operatingModeNotification->getChunkLength());
                         break;
                     }
                     default:
@@ -472,6 +517,19 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                             return actionFrame;
                     }
                     break;
+                }
+                case 21: {
+                    uint8_t vhtAction = stream.readByte();
+                    if (vhtAction == 2) {
+                        auto operatingModeNotification = makeShared<Ieee80211OperatingModeNotification>();
+                        copyBasicFields(operatingModeNotification, macHeader);
+                        copyActionFrameFields(operatingModeNotification, actionFrame);
+                        operatingModeNotification->setVhtAction(vhtAction);
+                        operatingModeNotification->setOperatingMode(stream.readByte());
+                        return operatingModeNotification;
+                    }
+                    actionFrame->markIncorrect();
+                    return actionFrame;
                 }
                 default: {
                     actionFrame->markIncorrect();

@@ -1,0 +1,122 @@
+%description:
+Deterministic VHT-SU LDPC endpoint success. A fixed unicast UDP packet is
+selected as VHT-SU MCS 0 LDPC after VHT capability negotiation. The test
+checks VHT-SIG-A Coding, receiver-side plan reconstruction without sender
+metadata, the real CSV-backed packet-level FEC success model, the ACK, and
+application delivery.
+
+%file: test.ned
+
+import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
+import inet.node.ethernet.Eth100M;
+import inet.node.inet.StandardHost;
+import inet.node.inet.WirelessHost;
+import inet.node.wireless.AccessPoint;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadioMedium;
+import inet.test.moduletest.lib.ieee80211.Ieee80211VhtLdpcEndToEndTest;
+
+network VhtLdpcEndToEnd
+{
+    submodules:
+        configurator: Ipv4NetworkConfigurator;
+        radioMedium: Ieee80211ScalarRadioMedium;
+        station: WirelessHost;
+        ap: AccessPoint;
+        server: StandardHost;
+        observer: Ieee80211VhtLdpcEndToEndTest;
+    connections:
+        server.ethg++ <--> Eth100M <--> ap.ethg++;
+}
+
+%file: vht-ldpc-per.csv
+# Synthetic test-only endpoint; it is not a production performance claim.
+phy_format,bandwidth_mhz,mcs,nss,number_of_codewords,ldpc_codeword_length,shortened_bits,punctured_bits,repeated_bits,snr_db,per
+VHT_SU,20,0,1,2,1944,592,540,0,-100,1
+VHT_SU,20,0,1,2,1944,592,540,0,100,0.000000000001
+
+%inifile: omnetpp.ini
+
+[General]
+network = VhtLdpcEndToEnd
+ned-path = .;../../../../src;../../lib
+sim-time-limit = 250ms
+seed-set = 97531
+record-vector-results = false
+cmdenv-express-mode = false
+
+**.constraintAreaMinX = 0m
+**.constraintAreaMinY = 0m
+**.constraintAreaMinZ = 0m
+**.constraintAreaMaxX = 200m
+**.constraintAreaMaxY = 200m
+**.constraintAreaMaxZ = 0m
+**.mobility.initFromDisplayString = false
+*.station.mobility.initialX = 100m
+*.station.mobility.initialY = 100m
+*.station.mobility.initialZ = 0m
+*.ap.mobility.initialX = 101m
+*.ap.mobility.initialY = 100m
+*.ap.mobility.initialZ = 0m
+
+**.arp.typename = "GlobalArp"
+**.wlan[0].opMode = "ac"
+**.wlan[0].radio.bandName = "5 GHz (20 MHz)"
+**.wlan[0].radio.centerFrequency = 5GHz
+**.wlan[0].radio.antenna.numAntennas = 1
+**.wlan[0].radio.transmitter.power = 1W
+**.wlan[0].radio.receiver.sensitivity = -100dBm
+**.wlan[0].radio.receiver.energyDetection = -100dBm
+**.wlan[0].radio.receiver.snirThreshold = 0dB
+
+*.ap.wlan[0].address = "10:00:00:00:00:A6"
+*.station.wlan[0].address = "20:00:00:00:00:12"
+*.ap.wlan[0].mgmt.ssid = "vht-ldpc-test"
+*.ap.wlan[0].mgmt.vhtLdpcRxSupported = true
+*.station.wlan[0].mgmt.vhtLdpcRxSupported = true
+*.station.wlan[0].agent.defaultSsid = "vht-ldpc-test"
+*.station.wlan[0].agent.startingTime = 0s
+*.station.wlan[0].agent.channelsToScan = "0"
+*.station.wlan[0].agent.probeDelay = 0s
+*.station.wlan[0].agent.minChannelTime = 1ms
+*.station.wlan[0].agent.maxChannelTime = 2ms
+*.station.wlan[0].mgmt.numChannels = 1
+
+*.station.wlan[0].mac.dcf.rateSelection.vhtLdpcTxActivated = true
+*.station.wlan[0].mac.dcf.rateSelection.dataFrameBitrate = 6.5Mbps
+*.station.wlan[0].mac.dcf.rateSelection.dataFrameBandwidth = 20MHz
+*.station.wlan[0].mac.dcf.rateSelection.dataFrameNumSpatialStreams = 1
+*.station.wlan[0].mac.dcf.rtsPolicy.rtsThreshold = 2000B
+
+*.ap.wlan[0].radio.receiver.errorModel.typename = "Ieee80211NistErrorModel"
+*.ap.wlan[0].radio.receiver.errorModel.fecSuccessModel.typename = "RecordingIeee80211LdpcPerSuccessModel"
+*.ap.wlan[0].radio.receiver.errorModel.fecSuccessModel.perTableFile = "vht-ldpc-per.csv"
+
+*.station.numApps = 1
+*.station.app[0].typename = "UdpBasicApp"
+*.station.app[0].destAddresses = "server"
+*.station.app[0].destPort = 1000
+*.station.app[0].messageLength = 100B
+*.station.app[0].startTime = 100ms
+*.station.app[0].stopTime = 101ms
+*.station.app[0].sendInterval = 1s
+*.server.numApps = 1
+*.server.app[0].typename = "UdpSink"
+*.server.app[0].localPort = 1000
+
+*.observer.stationRadioModule = "^.station.wlan[0].radio"
+*.observer.stationDcfModule = "^.station.wlan[0].mac.dcf"
+*.observer.serverAppModule = "^.server.app[0]"
+*.observer.fecSuccessModelModule = "^.ap.wlan[0].radio.receiver.errorModel.fecSuccessModel"
+*.observer.apMibModule = "^.ap.wlan[0].mib"
+*.observer.stationAddress = "20:00:00:00:00:12"
+*.observer.bssid = "10:00:00:00:00:A6"
+*.observer.expectedAssociationId = 1
+# BSSID[39:47] = binary integer (BSSID byte 4 bit 7) | (byte 5 << 1).
+*.observer.expectedPartialAid = 332
+
+%contains: stdout
+VHT LDPC end-to-end verdict: airData=1 macData=1 retries=0 acks=1 deliveries=1
+
+%postrun-command: grep "undisposed object:" test.out > test_undisposed.out || true
+%not-contains: test_undisposed.out
+undisposed object: (

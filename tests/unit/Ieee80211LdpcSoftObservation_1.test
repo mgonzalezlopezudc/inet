@@ -1,0 +1,102 @@
+%description:
+Exact natural-log soft-demapper tests for every modulation supported by the
+bounded HT/VHT-SU LDPC radio.  The reference calculation deliberately uses
+long-double direct sums at a moderate noise density, independently of the
+production stable log-sum-exp implementation.
+
+%includes:
+#include <cmath>
+#include <complex>
+#include <type_traits>
+#include <utility>
+#include <vector>
+
+#include "inet/physicallayer/wireless/common/modulation/BpskModulation.h"
+#include "inet/physicallayer/wireless/common/modulation/Qam16Modulation.h"
+#include "inet/physicallayer/wireless/common/modulation/Qam64Modulation.h"
+#include "inet/physicallayer/wireless/common/modulation/Qam256Modulation.h"
+#include "inet/physicallayer/wireless/common/modulation/QpskModulation.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211LdpcSoftReceiver.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211LdpcSoftTransmissionModel.h"
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%global:
+
+template<typename T, typename = void>
+struct HasPsduOctetsAccessor : std::false_type {};
+
+template<typename T>
+struct HasPsduOctetsAccessor<T, std::void_t<
+        decltype(std::declval<const T&>().getPsduOctets())>> : std::true_type {};
+
+static_assert(!HasPsduOctetsAccessor<Ieee80211LdpcSoftTransmissionModel>::value,
+        "The soft transmission model must not carry an exact sender PSDU/APEP length oracle");
+
+static long double referenceLlr(const std::complex<double>& observation,
+        const ApskModulationBase *modulation, long double noiseSpectralDensity,
+        int bit)
+{
+    long double probabilityZero = 0;
+    long double probabilityOne = 0;
+    const auto *constellation = modulation->getConstellation();
+    for (size_t index = 0; index < constellation->size(); index++) {
+        long double deltaReal = static_cast<long double>(observation.real()) - (*constellation)[index].real();
+        long double deltaImag = static_cast<long double>(observation.imag()) - (*constellation)[index].imag();
+        long double weight = std::exp(-(deltaReal * deltaReal + deltaImag * deltaImag) /
+                                      noiseSpectralDensity);
+        if ((index >> bit) & 1)
+            probabilityOne += weight;
+        else
+            probabilityZero += weight;
+    }
+    return std::log(probabilityZero / probabilityOne);
+}
+
+%activity:
+
+const std::complex<double> observation(0.31, -0.27);
+const double noiseSpectralDensity = 0.83;
+const double maximumLlr = 100;
+const std::vector<const ApskModulationBase *> modulations = {
+    &BpskModulation::singleton,
+    &QpskModulation::singleton,
+    &Qam16Modulation::singleton,
+    &Qam64Modulation::singleton,
+    &Qam256Modulation::singleton,
+};
+
+for (const auto *modulation : modulations) {
+    for (unsigned int bit = 0; bit < modulation->getCodeWordSize(); bit++) {
+        double actual = Ieee80211LdpcSoftReceiver::computeBitLlr(observation,
+                modulation, noiseSpectralDensity, bit, maximumLlr);
+        long double expected = referenceLlr(observation, modulation,
+                noiseSpectralDensity, bit);
+        ASSERT(std::isfinite(actual));
+        ASSERT(std::abs(static_cast<long double>(actual) - expected) < 1e-12L);
+    }
+}
+
+// Reliability retains distance information even when the hard bit is the
+// same; this distinguishes the soft boundary from hard +/-constant inputs.
+const auto& bitZeroPoint = BpskModulation::singleton.getConstellation()->at(0);
+std::complex<double> weakObservation(bitZeroPoint.real() * 0.15, bitZeroPoint.imag() * 0.15);
+std::complex<double> strongObservation(bitZeroPoint.real() * 0.85, bitZeroPoint.imag() * 0.85);
+double weakLlr = Ieee80211LdpcSoftReceiver::computeBitLlr(weakObservation,
+        &BpskModulation::singleton, 0.5, 0, maximumLlr);
+double strongLlr = Ieee80211LdpcSoftReceiver::computeBitLlr(strongObservation,
+        &BpskModulation::singleton, 0.5, 0, maximumLlr);
+ASSERT((weakLlr > 0) == (strongLlr > 0));
+ASSERT(std::abs(strongLlr) > std::abs(weakLlr));
+
+// Extreme evidence is finite and clipped without changing the bit-label sign.
+const double clippingLimit = 3.25;
+for (unsigned int label = 0; label < BpskModulation::singleton.getConstellationSize(); label++) {
+    const auto& point = BpskModulation::singleton.getConstellation()->at(label);
+    double llr = Ieee80211LdpcSoftReceiver::computeBitLlr(point,
+            &BpskModulation::singleton, 1e-9, 0, clippingLimit);
+    ASSERT(std::isfinite(llr));
+    ASSERT(std::abs(std::abs(llr) - clippingLimit) < 1e-12);
+    ASSERT((llr > 0) == ((label & 1) == 0));
+}

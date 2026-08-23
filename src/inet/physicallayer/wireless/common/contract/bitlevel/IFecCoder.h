@@ -8,6 +8,9 @@
 #ifndef __INET_IFECCODER_H
 #define __INET_IFECCODER_H
 
+#include <cmath>
+#include <vector>
+
 #include "inet/common/BitVector.h"
 #include "inet/common/IPrintableObject.h"
 
@@ -23,11 +26,34 @@ class INET_API IForwardErrorCorrection : public IPrintableObject
     virtual double computeNetBitErrorRate(double grossBitErrorRate) const = 0;
 };
 
+using BitReliabilityVector = std::vector<double>;
+
+struct FecDecodingResult {
+    BitVector informationBits;
+    bool converged = false;
+    int iterations = 0;
+};
+
 class INET_API IFecCoder : public IPrintableObject
 {
   public:
     virtual BitVector encode(const BitVector& informationBits) const = 0;
     virtual std::pair<BitVector, bool> decode(const BitVector& encodedBits) const = 0;
+
+    // The default adapter keeps hard-decision FEC implementations source-compatible
+    // while giving reliability-aware coders an erasure-preserving entry point.
+    virtual FecDecodingResult decodeReliabilities(const BitReliabilityVector& reliabilities) const
+    {
+        BitVector encodedBits;
+        for (double reliability : reliabilities) {
+            if (!std::isfinite(reliability))
+                throw cRuntimeError("FEC reliability must be finite");
+            encodedBits.appendBit(reliability < 0);
+        }
+        auto result = decode(encodedBits);
+        return {result.first, result.second, 0};
+    }
+
     virtual const IForwardErrorCorrection *getForwardErrorCorrection() const = 0;
 };
 
@@ -35,4 +61,3 @@ class INET_API IFecCoder : public IPrintableObject
 } // namespace inet
 
 #endif
-

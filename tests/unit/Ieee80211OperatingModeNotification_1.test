@@ -1,0 +1,155 @@
+%description:
+VHT Operating Mode Notification action frames serialize byte-exactly, update
+the latest peer No-LDPC preference, and immediately gate LDPC mode selection.
+
+%includes:
+#include "inet/common/MemoryInputStream.h"
+#include "inet/common/MemoryOutputStream.h"
+#include "inet/common/Protocol.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211MacHeaderSerializer.h"
+#include "inet/linklayer/ieee80211/mac/rateselection/Ieee80211LdpcSelection.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtBase.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
+
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+%global:
+
+class TestIeee80211MacHeaderSerializer : public Ieee80211MacHeaderSerializer
+{
+  public:
+    void write(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const { serialize(stream, chunk); }
+    const Ptr<Chunk> read(MemoryInputStream& stream) const { return deserialize(stream); }
+};
+
+class TestOperatingModeMgmt : public Ieee80211MgmtBase
+{
+  protected:
+    virtual void handleTimer(cMessage *message) override { delete message; }
+    virtual void handleCommand(int, cObject *object) override { delete object; }
+    virtual void handleAuthenticationFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>&) override { delete packet; }
+    virtual void handleDeauthenticationFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>&) override { delete packet; }
+    virtual void handleAssociationRequestFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>&) override { delete packet; }
+    virtual void handleAssociationResponseFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>&) override { delete packet; }
+    virtual void handleReassociationRequestFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>&) override { delete packet; }
+    virtual void handleReassociationResponseFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>&) override { delete packet; }
+    virtual void handleDisassociationFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>&) override { delete packet; }
+    virtual void handleBeaconFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>&) override { delete packet; }
+    virtual void handleProbeRequestFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>&) override { delete packet; }
+    virtual void handleProbeResponseFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>&) override { delete packet; }
+
+  public:
+    TestOperatingModeMgmt() { numMgmtFramesReceived = numMgmtFramesDropped = 0; }
+
+    void dispatch(const Ptr<const Ieee80211DataOrMgmtHeader>& header)
+    {
+        processFrame(new Packet("operating-mode-notification"), header);
+    }
+
+    void dispatchFromMac(const Ptr<const Ieee80211DataOrMgmtHeader>& header)
+    {
+        auto packet = new Packet("operating-mode-notification-from-mac");
+        auto indication = packet->addTag<MacProtocolInd>();
+        indication->setProtocol(&Protocol::ieee80211Mac);
+        indication->setMacProtocolHeader(header);
+        processFrameFromMac(packet);
+    }
+
+    void resetLearnedState() { stop(); }
+
+    virtual Ieee80211PeerLdpcStatus getPeerLdpcStatus(const MacAddress& peer) const override
+    {
+        Ieee80211PeerLdpcStatus status;
+        status.htRxLdpc = Ieee80211CapabilityStatus::SUPPORTED;
+        status.vhtRxLdpc = Ieee80211CapabilityStatus::SUPPORTED;
+        status.operatingModeNotification = Ieee80211CapabilityStatus::SUPPORTED;
+        return applyLatestPeerOperatingMode(peer, status);
+    }
+};
+
+static Ptr<Ieee80211OperatingModeNotification> makeNotification(const MacAddress& peer, uint8_t operatingMode)
+{
+    auto frame = makeShared<Ieee80211OperatingModeNotification>();
+    frame->setReceiverAddress(MacAddress("02:00:00:00:00:01"));
+    frame->setTransmitterAddress(peer);
+    frame->setAddress3(MacAddress("02:00:00:00:00:03"));
+    frame->setSequenceNumber(SequenceNumberCyclic(0x123));
+    frame->setOperatingMode(operatingMode);
+    return frame;
+}
+
+%activity:
+
+const MacAddress peer("02:00:00:00:00:02");
+auto notification = makeNotification(peer, 0x08);
+TestIeee80211MacHeaderSerializer serializer;
+MemoryOutputStream output;
+serializer.write(output, notification);
+ASSERT(output.getLength() == B(27));
+ASSERT(output.getData().at(24) == 21); // VHT category, Table 9-81
+ASSERT(output.getData().at(25) == 2);  // Operating Mode Notification, Table 9-605
+ASSERT(output.getData().at(26) == 0x08); // No LDPC, 9.4.1.51 B3
+
+MemoryInputStream input(output.getData(), output.getLength());
+auto decoded = dynamicPtrCast<Ieee80211OperatingModeNotification>(serializer.read(input));
+ASSERT(decoded != nullptr && !decoded->isIncorrect());
+ASSERT(decoded->getCategory() == 21 && decoded->getVhtAction() == 2);
+ASSERT(decoded->getTransmitterAddress() == peer && decoded->getOperatingMode() == 0x08);
+
+TestOperatingModeMgmt management;
+management.dispatchFromMac(decoded);
+auto status = management.getPeerLdpcStatus(peer);
+ASSERT(status.hasOperatingMode && status.noLdpcPreferred);
+ASSERT(status.operatingModeType0Valid);
+ASSERT(status.operatingModeMaximumBandwidthMhz == 20);
+ASSERT(status.operatingModeMaximumSpatialStreams == 1);
+
+const auto *modeSet = Ieee80211ModeSet::getModeSet("ac");
+const IIeee80211Mode *vhtBcc = nullptr;
+for (int i = 0; i < modeSet->getNumModes(); i++) {
+    auto mode = modeSet->getMode(i);
+    if (mode->getDataMode()->getPhyFormat() == Ieee80211PhyFormat::VHT_SU &&
+        mode->getDataMode()->getFecType() == Ieee80211FecType::BCC) {
+        vhtBcc = mode;
+        break;
+    }
+}
+ASSERT(vhtBcc != nullptr);
+Ieee80211LdpcSelectionConfig enabled{true, true};
+auto result = selectIeee80211FecMode(modeSet, vhtBcc, false, enabled, &management,
+        peer, Ieee80211LdpcFrameContext::DATA_OR_MANAGEMENT);
+ASSERT(result.mode->getDataMode()->getFecType() == Ieee80211FecType::BCC);
+
+// Type-1 and reserved Type-0 updates change the latest No-LDPC preference but
+// do not erase the independently retained latest valid Type-0 width/NSS cap.
+management.dispatch(makeNotification(peer, 0x88));
+status = management.getPeerLdpcStatus(peer);
+ASSERT(status.noLdpcPreferred && status.operatingModeType0Valid);
+ASSERT(status.operatingModeMaximumBandwidthMhz == 20);
+ASSERT(status.operatingModeMaximumSpatialStreams == 1);
+management.dispatch(makeNotification(peer, 0x03));
+status = management.getPeerLdpcStatus(peer);
+ASSERT(!status.noLdpcPreferred && status.operatingModeType0Valid);
+ASSERT(status.operatingModeMaximumBandwidthMhz == 20);
+ASSERT(status.operatingModeMaximumSpatialStreams == 1);
+
+// The most recent notification is authoritative; a Type-0 80 MHz/2SS update
+// that clears B3 re-enables the otherwise legal LDPC selection without
+// refreshing capability elements.
+management.dispatch(makeNotification(peer, 0x12));
+status = management.getPeerLdpcStatus(peer);
+ASSERT(status.hasOperatingMode && !status.noLdpcPreferred);
+ASSERT(status.operatingModeType0Valid);
+ASSERT(status.operatingModeMaximumBandwidthMhz == 80);
+ASSERT(status.operatingModeMaximumSpatialStreams == 2);
+result = selectIeee80211FecMode(modeSet, vhtBcc, false, enabled, &management,
+        peer, Ieee80211LdpcFrameContext::DATA_OR_MANAGEMENT);
+ASSERT(result.mode->getDataMode()->getFecType() == Ieee80211FecType::LDPC);
+
+// Learned operating-mode state is scoped to one operational lifecycle.
+management.resetLearnedState();
+status = management.getPeerLdpcStatus(peer);
+ASSERT(!status.hasOperatingMode && !status.noLdpcPreferred);

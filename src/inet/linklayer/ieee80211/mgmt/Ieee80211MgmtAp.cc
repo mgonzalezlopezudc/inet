@@ -19,6 +19,7 @@
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtAp.h"
 #include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211VhtSigA.h"
 
 namespace inet {
 
@@ -148,6 +149,7 @@ void Ieee80211MgmtAp::sendBeacon()
     body->setBeaconInterval(beaconInterval);
     body->setChannelNumber(channelNumber);
     body->setChunkLength(B(8 + 2 + 2 + (2 + ssid.length()) + (2 + supportedRates.numRates)));
+    setLocalLdpcCapabilities(body);
     sendManagementFrame("Beacon", body, ST_BEACON, MacAddress::BROADCAST_ADDRESS);
 }
 
@@ -181,6 +183,8 @@ void Ieee80211MgmtAp::handleAuthenticationFrame(Packet *packet, const Ptr<const 
         }
         mib->bssAccessPointData.stations[sta->address] = Ieee80211Mib::NOT_AUTHENTICATED;
         sta->authSeqExpected = 1;
+        sta->ldpcStatus = {};
+        clearPeerOperatingMode(sta->address);
     }
 
     // check authentication sequence number is OK
@@ -240,6 +244,8 @@ void Ieee80211MgmtAp::handleDeauthenticationFrame(Packet *packet, const Ptr<cons
         }
         mib->bssAccessPointData.stations[sta->address] = Ieee80211Mib::NOT_AUTHENTICATED;
         sta->authSeqExpected = 1;
+        sta->ldpcStatus = {};
+        clearPeerOperatingMode(sta->address);
     }
 }
 
@@ -258,6 +264,8 @@ void Ieee80211MgmtAp::handleAssociationRequestFrame(Packet *packet, const Ptr<co
         return;
     }
 
+    const auto& requestBody = packet->peekData<Ieee80211AssociationRequestFrame>();
+    sta->ldpcStatus = mergePeerLdpcCapabilities(sta->address, sta->ldpcStatus, *requestBody);
     delete packet;
 
     // send OK response
@@ -266,6 +274,7 @@ void Ieee80211MgmtAp::handleAssociationRequestFrame(Packet *packet, const Ptr<co
     body->setAid(mib->allocateAssociationId(sta->address));
     body->setSupportedRates(supportedRates);
     body->setChunkLength(B(2 + 2 + 2 + body->getSupportedRates().numRates + 2));
+    setLocalLdpcCapabilities(body);
     sendManagementFrame("AssocResp-OK", body, ST_ASSOCIATIONRESPONSE, sta->address);
 }
 
@@ -289,6 +298,8 @@ void Ieee80211MgmtAp::handleReassociationRequestFrame(Packet *packet, const Ptr<
         return;
     }
 
+    const auto& requestBody = packet->peekData<Ieee80211ReassociationRequestFrame>();
+    sta->ldpcStatus = mergePeerLdpcCapabilities(sta->address, sta->ldpcStatus, *requestBody);
     delete packet;
 
     // send OK response
@@ -297,6 +308,7 @@ void Ieee80211MgmtAp::handleReassociationRequestFrame(Packet *packet, const Ptr<
     body->setAid(mib->allocateAssociationId(sta->address));
     body->setSupportedRates(supportedRates);
     body->setChunkLength(B(2 + (2 + ssid.length()) + (2 + supportedRates.numRates) + 6));
+    setLocalLdpcCapabilities(body);
     sendManagementFrame("ReassocResp-OK", body, ST_REASSOCIATIONRESPONSE, sta->address);
 }
 
@@ -316,6 +328,8 @@ void Ieee80211MgmtAp::handleDisassociationFrame(Packet *packet, const Ptr<const 
             mib->releaseAssociationId(sta->address);
         }
         mib->bssAccessPointData.stations[sta->address] = Ieee80211Mib::AUTHENTICATED;
+        sta->ldpcStatus = {};
+        clearPeerOperatingMode(sta->address);
     }
 }
 
@@ -345,6 +359,7 @@ void Ieee80211MgmtAp::handleProbeRequestFrame(Packet *packet, const Ptr<const Ie
     body->setBeaconInterval(beaconInterval);
     body->setChannelNumber(channelNumber);
     body->setChunkLength(B(8 + 2 + 2 + (2 + ssid.length()) + (2 + supportedRates.numRates)));
+    setLocalLdpcCapabilities(body);
     sendManagementFrame("ProbeResp", body, ST_PROBERESPONSE, staAddress);
 }
 
@@ -367,6 +382,45 @@ void Ieee80211MgmtAp::sendDisAssocNotification(const MacAddress& addr)
     notif.setApAddress(mib->address);
     notif.setStaAddress(addr);
     emit(l2ApDisassociatedSignal, &notif);
+}
+
+Ieee80211PeerLdpcStatus Ieee80211MgmtAp::getPeerLdpcStatus(const MacAddress& peer) const
+{
+    auto it = staList.find(peer);
+    return applyLatestPeerOperatingMode(peer,
+            it == staList.end() ? Ieee80211PeerLdpcStatus() : it->second.ldpcStatus);
+}
+
+Ieee80211IntendedReceiverSet Ieee80211MgmtAp::resolveIntendedReceivers(const MacAddress& receiverAddress) const
+{
+    if (!receiverAddress.isMulticast())
+        return {true, {receiverAddress}};
+    Ieee80211IntendedReceiverSet result;
+    result.complete = true;
+    for (const auto& entry : staList) {
+        auto status = mib->bssAccessPointData.stations.find(entry.first);
+        if (status != mib->bssAccessPointData.stations.end() && status->second == Ieee80211Mib::ASSOCIATED)
+            result.receivers.push_back(entry.first);
+    }
+    return result;
+}
+
+Ieee80211VhtSigAParameters Ieee80211MgmtAp::getVhtSigAParameters(const MacAddress& receiverAddress) const
+{
+    // IEEE Std 802.11-2024, 10.19, Table 10-13 and Equation (10-13).
+    if (receiverAddress.isMulticast())
+        return {true, 63, 0};
+    auto status = mib->bssAccessPointData.stations.find(receiverAddress);
+    auto aid = mib->bssAccessPointData.associationIds.find(receiverAddress);
+    if (status != mib->bssAccessPointData.stations.end() && status->second == Ieee80211Mib::ASSOCIATED) {
+        if (aid == mib->bssAccessPointData.associationIds.end())
+            throw cRuntimeError("Associated IEEE 802.11 station %s has no association ID", receiverAddress.str().c_str());
+        return {true, 63, static_cast<uint16_t>(physicallayer::computeVhtPartialAidForAssociatedSta(
+                aid->second, mib->bssData.bssid))};
+    }
+    // An AP transmission to a STA that is not associated is the explicit
+    // Table 10-13 "otherwise" case.
+    return {true, 63, 0};
 }
 
 void Ieee80211MgmtAp::start()

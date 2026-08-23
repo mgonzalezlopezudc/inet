@@ -7,7 +7,10 @@
 
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211ErrorModelBase.h"
 
+#include <cmath>
+
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ReceivedDataEncodingPlan.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 
 namespace inet {
@@ -18,6 +21,34 @@ Ieee80211ErrorModelBase::Ieee80211ErrorModelBase()
 {
 }
 
+double Ieee80211ErrorModelBase::computeHeaderPacketErrorRate(const ISnir *snir,
+        IRadioSignal::SignalPart part, const IIeee80211Mode *mode) const
+{
+    Enter_Method("computeHeaderPacketErrorRate");
+    if (snir == nullptr || mode == nullptr)
+        throw cRuntimeError("Cannot compute an IEEE 802.11 PHY-header error rate without SNIR and mode");
+    if (part == IRadioSignal::SIGNAL_PART_PREAMBLE)
+        return 0;
+    if (part != IRadioSignal::SIGNAL_PART_HEADER)
+        throw cRuntimeError("Expected IEEE 802.11 preamble or header, got signal part '%s'",
+                IRadioSignal::getSignalPartName(part));
+    auto headerLength = mode->getHeaderMode()->getLength();
+    return 1.0 - getHeaderSuccessRate(mode, headerLength.get<b>(), getScalarSnir(snir));
+}
+
+void Ieee80211ErrorModelBase::initialize(int stage)
+{
+    ErrorModelBase::initialize(stage);
+    if (stage == INITSTAGE_LOCAL) {
+        auto module = getSubmodule("fecSuccessModel");
+        if (module != nullptr) {
+            fecSuccessModel = dynamic_cast<const IIeee80211FecSuccessModel *>(module);
+            if (fecSuccessModel == nullptr)
+                throw cRuntimeError("fecSuccessModel submodule does not implement IIeee80211FecSuccessModel");
+        }
+    }
+}
+
 double Ieee80211ErrorModelBase::computePacketErrorRate(const ISnir *snir, IRadioSignal::SignalPart part) const
 {
     Enter_Method("computePacketErrorRate");
@@ -25,17 +56,50 @@ double Ieee80211ErrorModelBase::computePacketErrorRate(const ISnir *snir, IRadio
     auto mode = transmission->getMode();
     auto phyHeader = Ieee80211Radio::peekIeee80211PhyHeaderAtFront(transmission->getPacket());
     auto headerLength = mode->getHeaderMode()->getLength();
-    auto dataLength = b(mode->getDataMode()->getCompleteLength(B(phyHeader->getLengthField())));
-    // TODO check header length and data length for OFDM (signal) field
-    double headerSuccessRate = getHeaderSuccessRate(mode, headerLength.get<b>(), getScalarSnir(snir));
-    double dataSuccessRate = getDataSuccessRate(mode, dataLength.get<b>(), getScalarSnir(snir));
+    double scalarSnir = getScalarSnir(snir);
+
+    // Preserve the legacy BCC calculation path, including calculating both
+    // terms before selecting the requested signal part.
+    if (mode->getDataMode()->getFecType() == Ieee80211FecType::BCC) {
+        auto dataLength = b(mode->getDataMode()->getCompleteLength(B(phyHeader->getLengthField())));
+        double headerSuccessRate = getHeaderSuccessRate(mode, headerLength.get<b>(), scalarSnir);
+        double dataSuccessRate = getBccDataSuccessRate(mode, dataLength.get<b>(), scalarSnir);
+        switch (part) {
+            case IRadioSignal::SIGNAL_PART_WHOLE:
+                return 1.0 - headerSuccessRate * dataSuccessRate;
+            case IRadioSignal::SIGNAL_PART_PREAMBLE:
+                return 0;
+            case IRadioSignal::SIGNAL_PART_HEADER:
+                return 1.0 - headerSuccessRate;
+            case IRadioSignal::SIGNAL_PART_DATA:
+                return 1.0 - dataSuccessRate;
+            default:
+                throw cRuntimeError("Unknown signal part: '%s'", IRadioSignal::getSignalPartName(part));
+        }
+    }
+
+    // PHY headers remain BCC-coded. Header-only queries must not require an
+    // LDPC data curve.
+    if (part == IRadioSignal::SIGNAL_PART_PREAMBLE)
+        return 0;
+    double headerSuccessRate = NaN;
+    if (part == IRadioSignal::SIGNAL_PART_WHOLE || part == IRadioSignal::SIGNAL_PART_HEADER)
+        headerSuccessRate = getHeaderSuccessRate(mode, headerLength.get<b>(), scalarSnir);
+    if (part == IRadioSignal::SIGNAL_PART_HEADER)
+        return 1.0 - headerSuccessRate;
+
+    if (fecSuccessModel == nullptr)
+        throw cRuntimeError("LDPC selected without an IEEE 802.11 FEC success model");
+    if (std::isnan(scalarSnir) || scalarSnir < 0)
+        throw cRuntimeError("IEEE 802.11 LDPC success model requires a nonnegative SNIR");
+    double snrDb = scalarSnir == 0 ? -INFINITY : 10 * std::log10(scalarSnir);
+    auto dataEncodingPlan = reconstructIeee80211ReceivedDataEncodingPlan(
+            mode->getDataMode(), phyHeader, transmission->getDataDuration());
+    double dataSuccessRate = fecSuccessModel->computeDataSuccessRate(
+            *mode->getDataMode(), dataEncodingPlan, snrDb);
     switch (part) {
         case IRadioSignal::SIGNAL_PART_WHOLE:
             return 1.0 - headerSuccessRate * dataSuccessRate;
-        case IRadioSignal::SIGNAL_PART_PREAMBLE:
-            return 0;
-        case IRadioSignal::SIGNAL_PART_HEADER:
-            return 1.0 - headerSuccessRate;
         case IRadioSignal::SIGNAL_PART_DATA:
             return 1.0 - dataSuccessRate;
         default:
@@ -116,4 +180,3 @@ double Ieee80211ErrorModelBase::getDsssDqpskCck11SuccessRate(uint32_t bitLength,
 } // namespace physicallayer
 
 } // namespace inet
-

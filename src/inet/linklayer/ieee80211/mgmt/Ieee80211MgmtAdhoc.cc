@@ -21,6 +21,15 @@ void Ieee80211MgmtAdhoc::initialize(int stage)
     }
 }
 
+Ieee80211VhtSigAParameters Ieee80211MgmtAdhoc::getVhtSigAParameters(const MacAddress& receiverAddress) const
+{
+    if (receiverAddress.isMulticast())
+        return {true, 63, 0};
+    // An ad-hoc STA has no AP association context; IEEE Std 802.11-2024,
+    // 10.19, Table 10-13 therefore selects the otherwise row for unicast.
+    return {true, 63, 0};
+}
+
 void Ieee80211MgmtAdhoc::handleTimer(cMessage *msg)
 {
     ASSERT(false);
@@ -84,4 +93,3 @@ void Ieee80211MgmtAdhoc::handleProbeResponseFrame(Packet *packet, const Ptr<cons
 } // namespace ieee80211
 
 } // namespace inet
-

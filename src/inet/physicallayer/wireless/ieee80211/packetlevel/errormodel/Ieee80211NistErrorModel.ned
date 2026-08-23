@@ -7,12 +7,9 @@
 
 package inet.physicallayer.wireless.ieee80211.packetlevel.errormodel;
 
-import inet.physicallayer.wireless.common.base.packetlevel.ErrorModelBase;
-
-module Ieee80211NistErrorModel extends ErrorModelBase
+module Ieee80211NistErrorModel extends Ieee80211ErrorModelBase
 {
     parameters:
         @class(Ieee80211NistErrorModel);
         @display("i=block/broadcast");
 }
-

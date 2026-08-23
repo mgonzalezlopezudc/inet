@@ -15,12 +15,27 @@
 #include "inet/linklayer/ieee80211/mac/Ieee80211SubtypeTag_m.h"
 #include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadioMedium.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211VhtSigA.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/RadioControlInfo_m.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
 
 namespace inet {
 namespace ieee80211 {
+
+Ieee80211VhtSigAParameters Ieee80211MgmtSta::getVhtSigAParameters(const MacAddress& receiverAddress) const
+{
+    if (receiverAddress.isMulticast())
+        return {true, 63, 0};
+    if (mib->bssStationData.isAssociated && receiverAddress == assocAP.address)
+        return {true, 0, static_cast<uint16_t>(physicallayer::computeVhtPartialAidForBssid(receiverAddress))};
+    for (const auto& ap : apList)
+        if (receiverAddress == ap.address)
+            return {true, 0, static_cast<uint16_t>(physicallayer::computeVhtPartialAidForBssid(receiverAddress))};
+    // This infrastructure STA has no evidence that another unicast receiver
+    // is an AP, so it uses the explicit Table 10-13 "otherwise" case.
+    return {true, 63, 0};
+}
 
 using namespace physicallayer;
 
@@ -273,6 +288,7 @@ void Ieee80211MgmtSta::startAssociation(ApInfo *ap, simtime_t timeout)
 //    Ieee80211SupportedRatesElement supportedRates;
 
     body->setChunkLength(B(2 + 2 + strlen(body->getSSID()) + 2 + body->getSupportedRates().numRates + 2));
+    setLocalLdpcCapabilities(body);
     sendManagementFrame("Assoc", body, ST_ASSOCIATIONREQUEST, ap->address);
 
     // schedule timeout
@@ -377,6 +393,7 @@ void Ieee80211MgmtSta::sendProbeRequest()
     body->setSSID(scanning.ssid.c_str());
     body->setSupportedRates(supportedRates);
     body->setChunkLength(B((2 + scanning.ssid.length()) + (2 + body->getSupportedRates().numRates)));
+    setLocalLdpcCapabilities(body);
     sendManagementFrame("ProbeReq", body, ST_PROBEREQUEST, scanning.bssid);
 }
 
@@ -476,6 +493,7 @@ void Ieee80211MgmtSta::disassociate()
 {
     EV << "Disassociating from AP address=" << assocAP.address << "\n";
     ASSERT(mib->bssStationData.isAssociated);
+    clearPeerOperatingMode(assocAP.address);
     mib->bssStationData.isAssociated = false;
     cancelAndDelete(assocAP.beaconTimeoutMsg);
     assocAP.beaconTimeoutMsg = nullptr;
@@ -601,6 +619,8 @@ void Ieee80211MgmtSta::handleDeauthenticationFrame(Packet *packet, const Ptr<con
 
     EV << "Setting isAuthenticated flag for that AP to false\n";
     ap->isAuthenticated = false;
+    ap->ldpcStatus = {};
+    clearPeerOperatingMode(address);
     delete packet;
 }
 
@@ -625,15 +645,17 @@ void Ieee80211MgmtSta::handleAssociationResponseFrame(Packet *packet, const Ptr<
     int statusCode = responseBody->getStatusCode();
     // TODO short aid;
     // TODO Ieee80211SupportedRatesElement supportedRates;
-    delete packet;
 
     // look up AP data structure
     ApInfo *ap = lookupAP(address);
     if (!ap)
         throw cRuntimeError("handleAssociationResponseFrame: AP not known: address=%s", address.str().c_str());
+    ap->ldpcStatus = mergePeerLdpcCapabilities(address, ap->ldpcStatus, *responseBody);
+    delete packet;
 
     if (mib->bssStationData.isAssociated) {
         EV << "Breaking existing association with AP address=" << assocAP.address << "\n";
+        clearPeerOperatingMode(assocAP.address);
         mib->bssStationData.isAssociated = false;
         cancelAndDelete(assocAP.beaconTimeoutMsg);
         assocAP.beaconTimeoutMsg = nullptr;
@@ -673,7 +695,7 @@ void Ieee80211MgmtSta::handleReassociationRequestFrame(Packet *packet, const Ptr
 void Ieee80211MgmtSta::handleReassociationResponseFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>& header)
 {
     EV << "Received Reassociation Response frame\n";
-    // TODO handle with the same code as Association Response?
+    handleAssociationResponseFrame(packet, header);
 }
 
 void Ieee80211MgmtSta::handleDisassociationFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>& header)
@@ -693,9 +715,14 @@ void Ieee80211MgmtSta::handleDisassociationFrame(Packet *packet, const Ptr<const
     }
 
     EV << "Setting isAssociated flag to false\n";
+    clearPeerOperatingMode(address);
     mib->bssStationData.isAssociated = false;
     cancelAndDelete(assocAP.beaconTimeoutMsg);
     assocAP.beaconTimeoutMsg = nullptr;
+    assocAP.ldpcStatus = {};
+    if (auto ap = lookupAP(address))
+        ap->ldpcStatus = {};
+    delete packet;
 }
 
 void Ieee80211MgmtSta::handleBeaconFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>& header)
@@ -748,6 +775,9 @@ void Ieee80211MgmtSta::storeAPInfo(Packet *packet, const Ptr<const Ieee80211Mgmt
     ap->ssid = body->getSSID();
     ap->supportedRates = body->getSupportedRates();
     ap->beaconInterval = body->getBeaconInterval();
+    ap->ldpcStatus = mergePeerLdpcCapabilities(address, ap->ldpcStatus, *body);
+    if (ap->address == assocAP.address)
+        assocAP.ldpcStatus = ap->ldpcStatus;
     auto signalPowerInd = packet->getTag<SignalPowerInd>();
     if (signalPowerInd != nullptr) {
         ap->rxPower = signalPowerInd->getPower().get<W>();
@@ -756,6 +786,15 @@ void Ieee80211MgmtSta::storeAPInfo(Packet *packet, const Ptr<const Ieee80211Mgmt
     }
 }
 
+Ieee80211PeerLdpcStatus Ieee80211MgmtSta::getPeerLdpcStatus(const MacAddress& peer) const
+{
+    if (mib->bssStationData.isAssociated && assocAP.address == peer)
+        return applyLatestPeerOperatingMode(peer, assocAP.ldpcStatus);
+    for (const auto& ap : apList)
+        if (ap.address == peer)
+            return applyLatestPeerOperatingMode(peer, ap.ldpcStatus);
+    return applyLatestPeerOperatingMode(peer, {});
+}
+
 } // namespace ieee80211
 } // namespace inet
-

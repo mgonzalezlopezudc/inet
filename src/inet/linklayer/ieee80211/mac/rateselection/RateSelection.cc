@@ -14,6 +14,7 @@
 #include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211VhtSigA.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -29,6 +30,9 @@ void RateSelection::initialize(int stage)
     }
     else if (stage == INITSTAGE_LINK_LAYER) {
         dataOrMgmtRateControl = dynamic_cast<IRateControl *>(findModuleByPath(par("rateControlModule")));
+        peerCapabilities = dynamic_cast<IIeee80211PeerCapabilities *>(findModuleByPath(par("peerCapabilitiesModule")));
+        ldpcSelectionConfig.htTxActivated = par("htLdpcTxActivated");
+        ldpcSelectionConfig.vhtTxActivated = par("vhtLdpcTxActivated");
         double multicastFrameBitrate = par("multicastFrameBitrate");
         multicastFrameMode = (multicastFrameBitrate == -1) ? nullptr : modeSet->getMode(bps(multicastFrameBitrate));
         double dataFrameBitrate = par("dataFrameBitrate");
@@ -77,26 +81,38 @@ const IIeee80211Mode *RateSelection::getMode(Packet *packet, const Ptr<const Iee
 // frame in the frame exchange sequence (as defined in 9.7), if this rate belongs to the PHY mandatory rates, or
 // else at the highest possible rate belonging to the PHY rates in the BSSBasicRateSet.
 //
-const IIeee80211Mode *RateSelection::computeResponseAckFrameMode(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader)
+const IIeee80211Mode *RateSelection::computeResponseAckFrameMode(Packet *solicitingPacket, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader, Packet *responsePacket)
 {
+    const IIeee80211Mode *candidate;
+    const IIeee80211Mode *solicitingMode = getMode(solicitingPacket, dataOrMgmtHeader);
     if (responseAckFrameMode)
-        return responseAckFrameMode;
+        candidate = responseAckFrameMode;
     else {
-        auto mode = getMode(packet, dataOrMgmtHeader);
-        ASSERT(modeSet->containsMode(mode));
-        return modeSet->getIsMandatory(mode) ? mode : modeSet->getSlowerMandatoryMode(mode); // TODO BSSBasicRateSet
+        ASSERT(modeSet->containsMode(solicitingMode));
+        candidate = modeSet->getIsMandatory(solicitingMode) ? solicitingMode : modeSet->getSlowerMandatoryMode(solicitingMode); // TODO BSSBasicRateSet
     }
+    auto selectedMode = applyFecSelection(candidate, dataOrMgmtHeader->getTransmitterAddress(),
+            Ieee80211LdpcFrameContext::CONTROL_RESPONSE, solicitingMode);
+    if (responsePacket != nullptr)
+        attachVhtSigAParameters(responsePacket, dataOrMgmtHeader->getTransmitterAddress(), selectedMode);
+    return selectedMode;
 }
 
-const IIeee80211Mode *RateSelection::computeResponseCtsFrameMode(Packet *packet, const Ptr<const Ieee80211RtsFrame>& rtsFrame)
+const IIeee80211Mode *RateSelection::computeResponseCtsFrameMode(Packet *solicitingPacket, const Ptr<const Ieee80211RtsFrame>& rtsFrame, Packet *responsePacket)
 {
+    const IIeee80211Mode *candidate;
+    const IIeee80211Mode *solicitingMode = getMode(solicitingPacket, rtsFrame);
     if (responseCtsFrameMode)
-        return responseCtsFrameMode;
+        candidate = responseCtsFrameMode;
     else {
-        auto mode = getMode(packet, rtsFrame);
-        ASSERT(modeSet->containsMode(mode));
-        return modeSet->getIsMandatory(mode) ? mode : modeSet->getSlowerMandatoryMode(mode); // TODO BSSBasicRateSet
+        ASSERT(modeSet->containsMode(solicitingMode));
+        candidate = modeSet->getIsMandatory(solicitingMode) ? solicitingMode : modeSet->getSlowerMandatoryMode(solicitingMode); // TODO BSSBasicRateSet
     }
+    auto selectedMode = applyFecSelection(candidate, rtsFrame->getTransmitterAddress(),
+            Ieee80211LdpcFrameContext::CONTROL_RESPONSE, solicitingMode);
+    if (responsePacket != nullptr)
+        attachVhtSigAParameters(responsePacket, rtsFrame->getTransmitterAddress(), selectedMode);
+    return selectedMode;
 }
 
 // 802.11-1999 Std.
@@ -140,10 +156,53 @@ const IIeee80211Mode *RateSelection::computeControlFrameMode(const Ptr<const Iee
 
 const IIeee80211Mode *RateSelection::computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
 {
-    if (auto dataOrMgmtHeader = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(header))
-        return computeDataOrMgmtFrameMode(dataOrMgmtHeader);
-    else
-        return computeControlFrameMode(header);
+    auto requestedModeTag = packet->findTag<Ieee80211ModeReq>();
+    if (requestedModeTag != nullptr && requestedModeTag->getMode()->getDataMode()->getFecType() == Ieee80211FecType::BCC) {
+        auto selectedMode = constrainIeee80211ModeByPeerOperatingMode(modeSet,
+                requestedModeTag->getMode(), peerCapabilities, header->getReceiverAddress(), true);
+        attachVhtSigAParameters(packet, header->getReceiverAddress(), selectedMode);
+        return selectedMode;
+    }
+    bool forcedLdpc = requestedModeTag != nullptr && requestedModeTag->getMode()->getDataMode()->getFecType() == Ieee80211FecType::LDPC;
+    const IIeee80211Mode *candidate;
+    Ieee80211LdpcFrameContext context;
+    if (auto dataOrMgmtHeader = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(header)) {
+        candidate = forcedLdpc ? requestedModeTag->getMode() : computeDataOrMgmtFrameMode(dataOrMgmtHeader);
+        context = Ieee80211LdpcFrameContext::DATA_OR_MANAGEMENT;
+    }
+    else {
+        candidate = forcedLdpc ? requestedModeTag->getMode() : computeControlFrameMode(header);
+        context = Ieee80211LdpcFrameContext::OTHER_CONTROL;
+    }
+    auto selectedMode = applyFecSelection(candidate, header->getReceiverAddress(), context, nullptr, forcedLdpc);
+    attachVhtSigAParameters(packet, header->getReceiverAddress(), selectedMode);
+    return selectedMode;
+}
+
+const IIeee80211Mode *RateSelection::applyFecSelection(const IIeee80211Mode *candidate,
+        const MacAddress& receiverAddress, Ieee80211LdpcFrameContext context,
+        const IIeee80211Mode *solicitingMode, bool forcedLdpc) const
+{
+    return selectIeee80211FecMode(modeSet, candidate, forcedLdpc, ldpcSelectionConfig,
+            peerCapabilities, receiverAddress, context, solicitingMode).mode;
+}
+
+void RateSelection::attachVhtSigAParameters(Packet *packet, const MacAddress& receiverAddress,
+        const IIeee80211Mode *mode) const
+{
+    if (mode->getDataMode()->getPhyFormat() != Ieee80211PhyFormat::VHT_SU)
+        return;
+    Ieee80211VhtSigAParameters parameters;
+    if (receiverAddress.isMulticast())
+        parameters = {true, 63, 0};
+    else if (peerCapabilities != nullptr)
+        parameters = peerCapabilities->getVhtSigAParameters(receiverAddress);
+    if (parameters.known) {
+        validateVhtSuGroupIdAndPartialAid(parameters.groupId, parameters.partialAid);
+        auto request = packet->addTagIfAbsent<Ieee80211VhtSigAReq>();
+        request->setGroupId(parameters.groupId);
+        request->setPartialAid(parameters.partialAid);
+    }
 }
 
 void RateSelection::receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details)
@@ -170,4 +229,3 @@ void RateSelection::setFrameMode(Packet *packet, const Ptr<const Ieee80211MacHea
 
 } // namespace ieee80211
 } // namespace inet
-

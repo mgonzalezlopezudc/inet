@@ -1,0 +1,219 @@
+%description:
+Complete HT/VHT-SU LDPC data-field pipeline tests.  These tests cover
+SERVICE construction, deterministic scrambling, VHT-SU PHY padding, the
+immutable LDPC plan, stream/segment/tone mapping, and inverse decode.
+
+%includes:
+#include <functional>
+#include <string>
+#include <vector>
+
+#include "inet/physicallayer/wireless/ieee80211/bitlevel/Ieee80211LdpcDataPipeline.h"
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%global:
+
+static BitVector makeData(int length)
+{
+    BitVector result;
+    for (int i = 0; i < length; i++)
+        result.appendBit(((i * 29 + i / 7 + 3) % 23) < 11);
+    return result;
+}
+
+static Ieee80211LdpcMappedReliabilities makeMappedReliabilities(const Ieee80211LdpcMappedData& mapped, double magnitude)
+{
+    Ieee80211LdpcMappedReliabilities result(mapped.blocks.size());
+    for (size_t symbol = 0; symbol < mapped.blocks.size(); symbol++) {
+        result[symbol].resize(mapped.blocks[symbol].size());
+        for (size_t stream = 0; stream < mapped.blocks[symbol].size(); stream++) {
+            result[symbol][stream].resize(mapped.blocks[symbol][stream].size());
+            for (size_t block = 0; block < mapped.blocks[symbol][stream].size(); block++) {
+                const auto& bits = mapped.blocks[symbol][stream][block];
+                for (unsigned int i = 0; i < bits.getSize(); i++)
+                    result[symbol][stream][block].push_back(bits.getBit(i) ? -magnitude : magnitude);
+            }
+        }
+    }
+    return result;
+}
+
+static bool throws(const std::function<void()>& function)
+{
+    try {
+        function();
+        return false;
+    }
+    catch (const cRuntimeError&) {
+        return true;
+    }
+}
+
+%activity:
+
+// Equation (21-59), independently evaluated for the all-zero protected
+// vectors.  The three lengths are the VHT-SIG-B widths for 20, 40, and
+// 80/160 MHz transmissions.
+ASSERT(Ieee80211LdpcDataPipeline::computeVhtSigBCrc(std::vector<bool>(20, false)) == 0xac);
+ASSERT(Ieee80211LdpcDataPipeline::computeVhtSigBCrc(std::vector<bool>(21, false)) == 0x59);
+ASSERT(Ieee80211LdpcDataPipeline::computeVhtSigBCrc(std::vector<bool>(23, false)) == 0x69);
+std::vector<bool> vhtCrcExample;
+for (char bit : std::string("10011000000000000000011"))
+    vhtCrcExample.push_back(bit == '1');
+ASSERT(Ieee80211LdpcDataPipeline::computeVhtSigBCrc(vhtCrcExample) == 0x1c); // Figure 21-23
+auto vhtCrcExampleService = Ieee80211LdpcDataPipeline::buildServiceField(Ieee80211PhyFormat::VHT_SU, 0x1c);
+for (int i = 0; i < 8; i++)
+    ASSERT(vhtCrcExampleService.getBit(8 + i) == (std::string("00011100")[i] == '1'));
+ASSERT(throws([]() { Ieee80211LdpcDataPipeline::computeVhtSigBCrc(std::vector<bool>(22, false)); }));
+
+auto htPlan = Ieee80211LdpcPlanner::computeHt(100, 208, Ieee80211CodeRate(3, 4));
+auto htData = makeData(100 * 8);
+auto htPreScrambled = Ieee80211LdpcDataPipeline::buildPreScrambledData(htData, htPlan);
+ASSERT(htPreScrambled.getSize() == static_cast<unsigned int>(htPlan.getUncodedDataBits()));
+for (int i = 0; i < 16; i++)
+    ASSERT(!htPreScrambled.getBit(i));
+for (int i = 0; i < 800; i++)
+    ASSERT(htPreScrambled.getBit(16 + i) == htData.getBit(i));
+ASSERT(Ieee80211LdpcDataPipeline::descramble(Ieee80211LdpcDataPipeline::scramble(htPreScrambled)) == htPreScrambled);
+BitVector zeroBits;
+zeroBits.appendBit(false, 16);
+auto allOnesStateSequence = Ieee80211LdpcDataPipeline::scramble(zeroBits, 0x7f);
+for (int i = 0; i < 16; i++)
+    ASSERT(allOnesStateSequence.getBit(i) == (std::string("0000111011110010")[i] == '1'));
+// The first seven transmitted scrambling-sequence bits are not treated as
+// the internal LFSR register value.  Exhaustively prove the explicit receive
+// conversion for all nonzero seven-bit states.
+BitVector sevenZeroServiceBits;
+sevenZeroServiceBits.appendBit(false, 7);
+for (int state = 1; state <= 0x7f; state++) {
+    auto transmittedSequencePrefix = Ieee80211LdpcDataPipeline::scramble(sevenZeroServiceBits, state);
+    ASSERT(Ieee80211LdpcDataPipeline::recoverScramblerRegisterState(transmittedSequencePrefix) == state);
+}
+auto alternateSeedScrambled = Ieee80211LdpcDataPipeline::scramble(htPreScrambled, 0x37);
+ASSERT(Ieee80211LdpcDataPipeline::descramble(alternateSeedScrambled, 0x37) == htPreScrambled);
+
+auto htEncoded = Ieee80211LdpcDataPipeline::encodeAndMap(htData, htPlan, {4}, 20);
+ASSERT(htEncoded.preScrambledBits == htPreScrambled);
+auto htReliabilities = makeMappedReliabilities(htEncoded.mapped, 8.0);
+for (LdpcDecodingAlgorithm algorithm : {LdpcDecodingAlgorithm::SUM_PRODUCT, LdpcDecodingAlgorithm::NORMALIZED_MIN_SUM}) {
+    Ieee80211LdpcDataCoder decoder(algorithm, 20, 0.75, 20.0);
+    auto result = Ieee80211LdpcDataPipeline::inverseMapAndDecode(htReliabilities, htPlan, {4}, 20,
+                                                                  htData.getSize(), false, 0, 1, decoder);
+    ASSERT(result.converged);
+    ASSERT(result.psduBits == htData);
+    ASSERT(result.descrambledBits == htPreScrambled);
+}
+Ieee80211LdpcDataCoder alternateSeedCoder(LdpcDecodingAlgorithm::SUM_PRODUCT, 20, 0.75, 20.0);
+auto alternateSeedEncoded = Ieee80211LdpcDataPipeline::encodeAndMap(htData, htPlan, {4}, 20,
+                                                                      0, 1, alternateSeedCoder, 0x37);
+auto alternateSeedReliabilities = makeMappedReliabilities(alternateSeedEncoded.mapped, 8.0);
+auto alternateSeedDecoded = Ieee80211LdpcDataPipeline::inverseMapAndDecode(alternateSeedReliabilities,
+        htPlan, {4}, 20, htData.getSize(), false, 0, 1, alternateSeedCoder, 0x37);
+ASSERT(alternateSeedDecoded.converged);
+ASSERT(alternateSeedDecoded.psduBits == htData);
+auto recoveredSeedDecoded = Ieee80211LdpcDataPipeline::inverseMapAndDecode(alternateSeedReliabilities,
+        htPlan, {4}, 20, htData.getSize(), false, 0, 1, alternateSeedCoder, 0);
+ASSERT(recoveredSeedDecoded.converged);
+ASSERT(recoveredSeedDecoded.psduBits == htData);
+
+auto vhtPlan = Ieee80211LdpcPlanner::computeVhtSu(100, 468, 234, Ieee80211CodeRate(1, 2));
+auto vhtData = makeData(100 * 8);
+uint8_t vhtCrc = Ieee80211LdpcDataPipeline::computeVhtSigBCrc(std::vector<bool>(23, false));
+auto vhtService = Ieee80211LdpcDataPipeline::buildServiceField(Ieee80211PhyFormat::VHT_SU, vhtCrc);
+ASSERT(vhtService.getSize() == 16);
+for (int i = 0; i < 8; i++)
+    ASSERT(!vhtService.getBit(i));
+for (int i = 0; i < 8; i++)
+    ASSERT(vhtService.getBit(8 + i) == ((vhtCrc >> (7 - i)) & 1));
+auto vhtPreScrambled = Ieee80211LdpcDataPipeline::buildPreScrambledData(vhtData, vhtPlan, vhtCrc);
+ASSERT(vhtPreScrambled.getSize() == static_cast<unsigned int>(vhtPlan.getUncodedDataBits()));
+ASSERT(vhtPlan.getUncodedDataBits() > 16 + vhtData.getSize());
+for (int i = 16 + vhtData.getSize(); i < vhtPlan.getUncodedDataBits(); i++)
+    ASSERT(!vhtPreScrambled.getBit(i));
+
+auto vhtEncoded = Ieee80211LdpcDataPipeline::encodeAndMap(vhtData, vhtPlan, {1}, 160, vhtCrc);
+ASSERT(vhtEncoded.preScrambledBits == vhtPreScrambled);
+auto vhtReliabilities = makeMappedReliabilities(vhtEncoded.mapped, 8.0);
+for (LdpcDecodingAlgorithm algorithm : {LdpcDecodingAlgorithm::SUM_PRODUCT, LdpcDecodingAlgorithm::NORMALIZED_MIN_SUM}) {
+    Ieee80211LdpcDataCoder decoder(algorithm, 20, 0.75, 20.0);
+    auto result = Ieee80211LdpcDataPipeline::inverseMapAndDecode(vhtReliabilities, vhtPlan, {1}, 160,
+                                                                  vhtData.getSize(), true, vhtCrc, 1, decoder);
+    ASSERT(result.converged);
+    ASSERT(result.psduBits == vhtData);
+    ASSERT(result.descrambledBits == vhtPreScrambled);
+}
+auto wrongVhtCrc = Ieee80211LdpcDataPipeline::inverseMapAndDecode(vhtReliabilities,
+        vhtPlan, {1}, 160, vhtData.getSize(), true, vhtCrc ^ 1, 1);
+ASSERT(!wrongVhtCrc.converged);
+ASSERT(wrongVhtCrc.psduBits.getSize() == 0);
+ASSERT(wrongVhtCrc.descrambledBits.getSize() == 0);
+
+// VHT SERVICE B7 is set to zero by transmitters but ignored by receivers.
+// Encode a deliberately noncanonical value and prove that it does not block
+// an otherwise valid DATA decode or the VHT-SIG-B CRC check.
+auto ignoredB7PreScrambled = vhtPreScrambled;
+ignoredB7PreScrambled.setBit(7, true);
+auto ignoredB7Scrambled = Ieee80211LdpcDataPipeline::scramble(ignoredB7PreScrambled, 0x37);
+Ieee80211LdpcDataCoder ignoredB7Coder;
+auto ignoredB7Mapped = Ieee80211LdpcBitPipeline::encodeAndMap(ignoredB7Scrambled,
+        vhtPlan, {1}, 160, ignoredB7Coder);
+auto ignoredB7Reliabilities = makeMappedReliabilities(ignoredB7Mapped, 8.0);
+auto ignoredB7Result = Ieee80211LdpcDataPipeline::inverseMapAndDecode(
+        ignoredB7Reliabilities, vhtPlan, {1}, 160, vhtData.getSize(), true,
+        vhtCrc, 1, ignoredB7Coder, 0);
+ASSERT(ignoredB7Result.converged);
+ASSERT(ignoredB7Result.psduBits == vhtData);
+ASSERT(ignoredB7Result.descrambledBits.getBit(7));
+
+// NSS=2 exercises the complete ideal already-separated stream path.  The
+// per-stream 4-bit constellations are the legal HT MCS12 and VHT MCS4
+// geometries; both branches must survive mapping, reliability construction,
+// inverse mapping, and either supported decoder algorithm.
+auto htNss2Plan = Ieee80211LdpcPlanner::computeHt(100, 416, Ieee80211CodeRate(3, 4));
+auto htNss2Data = makeData(100 * 8);
+auto htNss2Encoded = Ieee80211LdpcDataPipeline::encodeAndMap(htNss2Data,
+        htNss2Plan, {4, 4}, 20);
+ASSERT(!htNss2Encoded.mapped.blocks.empty());
+for (const auto& symbol : htNss2Encoded.mapped.blocks) {
+    ASSERT(symbol.size() == 2);
+    ASSERT(symbol[0].size() == 1 && symbol[1].size() == 1);
+    ASSERT(symbol[0][0].getSize() > 0 && symbol[1][0].getSize() > 0);
+}
+auto htNss2Reliabilities = makeMappedReliabilities(htNss2Encoded.mapped, 8.0);
+for (LdpcDecodingAlgorithm algorithm : {LdpcDecodingAlgorithm::SUM_PRODUCT, LdpcDecodingAlgorithm::NORMALIZED_MIN_SUM}) {
+    Ieee80211LdpcDataCoder decoder(algorithm, 20, 0.75, 20.0);
+    auto result = Ieee80211LdpcDataPipeline::inverseMapAndDecode(htNss2Reliabilities,
+            htNss2Plan, {4, 4}, 20, htNss2Data.getSize(), false, 0, 1, decoder);
+    ASSERT(result.converged);
+    ASSERT(result.psduBits == htNss2Data);
+}
+
+auto vhtNss2Plan = Ieee80211LdpcPlanner::computeVhtSu(100, 864, 648,
+        Ieee80211CodeRate(3, 4));
+auto vhtNss2Data = makeData(100 * 8);
+uint8_t vhtNss2Crc = Ieee80211LdpcDataPipeline::computeVhtSigBCrc(
+        std::vector<bool>(21, false)); // 40 MHz VHT-SIG-B protected width
+auto vhtNss2Encoded = Ieee80211LdpcDataPipeline::encodeAndMap(vhtNss2Data,
+        vhtNss2Plan, {4, 4}, 40, vhtNss2Crc);
+ASSERT(!vhtNss2Encoded.mapped.blocks.empty());
+for (const auto& symbol : vhtNss2Encoded.mapped.blocks) {
+    ASSERT(symbol.size() == 2);
+    ASSERT(symbol[0].size() == 1 && symbol[1].size() == 1);
+    ASSERT(symbol[0][0].getSize() > 0 && symbol[1][0].getSize() > 0);
+}
+auto vhtNss2Reliabilities = makeMappedReliabilities(vhtNss2Encoded.mapped, 8.0);
+for (LdpcDecodingAlgorithm algorithm : {LdpcDecodingAlgorithm::SUM_PRODUCT, LdpcDecodingAlgorithm::NORMALIZED_MIN_SUM}) {
+    Ieee80211LdpcDataCoder decoder(algorithm, 20, 0.75, 20.0);
+    auto result = Ieee80211LdpcDataPipeline::inverseMapAndDecode(vhtNss2Reliabilities,
+            vhtNss2Plan, {4, 4}, 40, vhtNss2Data.getSize(), true, vhtNss2Crc, 1, decoder);
+    ASSERT(result.converged);
+    ASSERT(result.psduBits == vhtNss2Data);
+}
+
+ASSERT(throws([&]() { Ieee80211LdpcDataPipeline::buildServiceField(Ieee80211PhyFormat::HT, 1); }));
+ASSERT(throws([&]() { Ieee80211LdpcDataPipeline::encodeAndMap(htData, htPlan, {4}, 20, 0, 2); }));
+ASSERT(throws([&]() { Ieee80211LdpcDataPipeline::inverseMapAndDecode(htReliabilities, htPlan, {4}, 20,
+                                                                      htData.getSize(), true); }));
+ASSERT(throws([&]() { Ieee80211LdpcDataPipeline::scramble(htPreScrambled, 0); }));

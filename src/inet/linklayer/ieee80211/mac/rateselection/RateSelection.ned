@@ -19,6 +19,9 @@ simple RateSelection extends SimpleModule like IRateSelection
     parameters:
         @class(RateSelection);
         string rateControlModule;
+        string peerCapabilitiesModule = default("");
+        bool htLdpcTxActivated = default(false);
+        bool vhtLdpcTxActivated = default(false);
 
         double multicastFrameBitrate @unit(bps) = default(-1bps);
 
@@ -33,4 +36,3 @@ simple RateSelection extends SimpleModule like IRateSelection
         double controlFrameBitrate @unit(bps) = default(-1bps);
         @display("i=block/cogwheel");
 }
-

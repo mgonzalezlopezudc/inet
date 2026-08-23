@@ -1,0 +1,227 @@
+%description:
+IEEE 802.11 LDPC local activation, peer capability, receiver-set, preference, and control-frame gating tests.
+
+%includes:
+#include <map>
+
+#include "inet/linklayer/ieee80211/mac/rateselection/Ieee80211LdpcSelection.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
+
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+%global:
+
+class TestPeerCapabilities : public IIeee80211PeerCapabilities
+{
+  public:
+    Ieee80211IntendedReceiverSet receiverSet;
+    std::map<MacAddress, Ieee80211PeerLdpcStatus> statuses;
+
+    virtual Ieee80211PeerLdpcStatus getPeerLdpcStatus(const MacAddress& peer) const override
+    {
+        auto it = statuses.find(peer);
+        return it == statuses.end() ? Ieee80211PeerLdpcStatus() : it->second;
+    }
+
+    virtual Ieee80211IntendedReceiverSet resolveIntendedReceivers(const MacAddress&) const override
+    {
+        return receiverSet;
+    }
+
+    virtual Ieee80211VhtSigAParameters getVhtSigAParameters(const MacAddress&) const override
+    {
+        return {};
+    }
+};
+
+static bool throwsSelection(const Ieee80211ModeSet *modeSet, const IIeee80211Mode *candidate,
+        bool forcedLdpc, const Ieee80211LdpcSelectionConfig& config,
+        const IIeee80211PeerCapabilities *capabilities, const MacAddress& receiver,
+        Ieee80211LdpcFrameContext context, const IIeee80211Mode *solicitingMode = nullptr)
+{
+    try {
+        selectIeee80211FecMode(modeSet, candidate, forcedLdpc, config, capabilities, receiver, context, solicitingMode);
+        return false;
+    }
+    catch (const cRuntimeError&) {
+        return true;
+    }
+}
+
+%activity:
+
+const auto receiver1 = MacAddress("02:00:00:00:00:01");
+const auto receiver2 = MacAddress("02:00:00:00:00:02");
+const auto *modeSet = Ieee80211ModeSet::getModeSet("n(mixed-2.4Ghz)");
+const auto *htBcc = modeSet->getMode(4);
+const auto *htLdpc = modeSet->getFecVariant(htBcc, Ieee80211FecType::LDPC);
+ASSERT(htBcc->getDataMode()->getFecType() == Ieee80211FecType::BCC);
+ASSERT(htLdpc->getDataMode()->getFecType() == Ieee80211FecType::LDPC);
+
+TestPeerCapabilities capabilities;
+capabilities.receiverSet = {true, {receiver1}};
+Ieee80211PeerLdpcStatus supported;
+supported.htRxLdpc = Ieee80211CapabilityStatus::SUPPORTED;
+supported.vhtRxLdpc = Ieee80211CapabilityStatus::SUPPORTED;
+capabilities.statuses[receiver1] = supported;
+
+Ieee80211LdpcSelectionConfig disabled;
+auto result = selectIeee80211FecMode(modeSet, htBcc, false, disabled, &capabilities, receiver1,
+        Ieee80211LdpcFrameContext::DATA_OR_MANAGEMENT);
+ASSERT(result.mode == htBcc);
+ASSERT(throwsSelection(modeSet, htLdpc, true, disabled, &capabilities, receiver1,
+        Ieee80211LdpcFrameContext::DATA_OR_MANAGEMENT));
+
+Ieee80211LdpcSelectionConfig enabled {true, true};
+result = selectIeee80211FecMode(modeSet, htBcc, false, enabled, &capabilities, receiver1,
+        Ieee80211LdpcFrameContext::DATA_OR_MANAGEMENT);
+ASSERT(result.mode == htLdpc);
+
+capabilities.statuses[receiver1].htRxLdpc = Ieee80211CapabilityStatus::UNKNOWN;
+result = selectIeee80211FecMode(modeSet, htBcc, false, enabled, &capabilities, receiver1,
+        Ieee80211LdpcFrameContext::DATA_OR_MANAGEMENT);
+ASSERT(result.mode == htBcc);
+
+capabilities.statuses[receiver1] = supported;
+capabilities.receiverSet.complete = false;
+result = selectIeee80211FecMode(modeSet, htBcc, false, enabled, &capabilities, receiver1,
+        Ieee80211LdpcFrameContext::DATA_OR_MANAGEMENT);
+ASSERT(result.mode == htBcc);
+
+capabilities.receiverSet = {true, {receiver1, receiver2}};
+capabilities.statuses[receiver2] = supported;
+capabilities.statuses[receiver2].htRxLdpc = Ieee80211CapabilityStatus::UNSUPPORTED;
+result = selectIeee80211FecMode(modeSet, htBcc, false, enabled, &capabilities, receiver1,
+        Ieee80211LdpcFrameContext::DATA_OR_MANAGEMENT);
+ASSERT(result.mode == htBcc);
+
+capabilities.receiverSet = {true, {receiver1}};
+capabilities.statuses[receiver1] = supported;
+capabilities.statuses[receiver1].hasOperatingMode = true;
+capabilities.statuses[receiver1].noLdpcPreferred = true;
+result = selectIeee80211FecMode(modeSet, htBcc, false, enabled, &capabilities, receiver1,
+        Ieee80211LdpcFrameContext::DATA_OR_MANAGEMENT);
+ASSERT(result.mode == htBcc);
+result = selectIeee80211FecMode(modeSet, htLdpc, true, enabled, &capabilities, receiver1,
+        Ieee80211LdpcFrameContext::DATA_OR_MANAGEMENT);
+ASSERT(result.mode == htLdpc);
+ASSERT(result.noLdpcPreferenceOverridden);
+
+capabilities.statuses[receiver1].noLdpcPreferred = false;
+result = selectIeee80211FecMode(modeSet, htBcc, false, enabled, &capabilities, receiver1,
+        Ieee80211LdpcFrameContext::TXOP_INITIATING_CONTROL);
+ASSERT(result.mode == htBcc);
+ASSERT(throwsSelection(modeSet, htLdpc, true, enabled, &capabilities, receiver1,
+        Ieee80211LdpcFrameContext::TXOP_INITIATING_CONTROL));
+
+result = selectIeee80211FecMode(modeSet, htBcc, false, enabled, &capabilities, receiver1,
+        Ieee80211LdpcFrameContext::CONTROL_RESPONSE, htBcc);
+ASSERT(result.mode == htBcc);
+result = selectIeee80211FecMode(modeSet, htBcc, false, enabled, &capabilities, receiver1,
+        Ieee80211LdpcFrameContext::CONTROL_RESPONSE, htLdpc);
+ASSERT(result.mode == htLdpc);
+
+capabilities.receiverSet.receivers.clear();
+result = selectIeee80211FecMode(modeSet, htBcc, false, enabled, &capabilities, receiver1,
+        Ieee80211LdpcFrameContext::DATA_OR_MANAGEMENT);
+ASSERT(result.mode == htBcc);
+
+const auto *legacy = modeSet->getMode(0);
+result = selectIeee80211FecMode(modeSet, legacy, false, enabled, &capabilities, receiver1,
+        Ieee80211LdpcFrameContext::DATA_OR_MANAGEMENT);
+ASSERT(result.mode == legacy);
+
+const auto *acModeSet = Ieee80211ModeSet::getModeSet("ac");
+const IIeee80211Mode *vhtBcc = nullptr;
+for (int i = 0; i < acModeSet->getNumModes(); i++) {
+    if (dynamic_cast<const Ieee80211VhtMode *>(acModeSet->getMode(i)) != nullptr) {
+        vhtBcc = acModeSet->getMode(i);
+        break;
+    }
+}
+ASSERT(vhtBcc != nullptr);
+const auto *vhtLdpc = acModeSet->getFecVariant(vhtBcc, Ieee80211FecType::LDPC);
+capabilities.receiverSet = {true, {receiver1}};
+capabilities.statuses[receiver1] = supported;
+Ieee80211LdpcSelectionConfig vhtOnly {false, true};
+result = selectIeee80211FecMode(acModeSet, vhtBcc, false, vhtOnly, &capabilities, receiver1,
+        Ieee80211LdpcFrameContext::DATA_OR_MANAGEMENT);
+ASSERT(result.mode == vhtLdpc);
+capabilities.statuses[receiver1].vhtRxLdpc = Ieee80211CapabilityStatus::UNSUPPORTED;
+result = selectIeee80211FecMode(acModeSet, vhtBcc, false, vhtOnly, &capabilities, receiver1,
+        Ieee80211LdpcFrameContext::DATA_OR_MANAGEMENT);
+ASSERT(result.mode == vhtBcc);
+ASSERT(throwsSelection(acModeSet, vhtLdpc, true, vhtOnly, &capabilities, receiver1,
+        Ieee80211LdpcFrameContext::DATA_OR_MANAGEMENT));
+
+// A valid Type-0 Operating Mode is a mandatory width/NSS limit for every FEC.
+// Automatic selection chooses the fastest canonical legal fallback, whereas
+// an explicit illegal tuple fails instead of silently changing the request.
+const auto *vht80Nss2 = Ieee80211ModeSet::findMode(Ieee80211PhyFormat::VHT_SU,
+        0, MHz(80), 2, Ieee80211FecType::BCC);
+ASSERT(vht80Nss2 != nullptr);
+capabilities.statuses[receiver1] = supported;
+capabilities.statuses[receiver1].hasOperatingMode = true;
+capabilities.statuses[receiver1].noLdpcPreferred = true;
+capabilities.statuses[receiver1].operatingModeType0Valid = true;
+capabilities.statuses[receiver1].operatingModeMaximumBandwidthMhz = 20;
+capabilities.statuses[receiver1].operatingModeMaximumSpatialStreams = 1;
+capabilities.statuses[receiver1].vhtRxMcsMapKnown = true;
+capabilities.statuses[receiver1].vhtRxMcsMap = 0xFFFC; // NSS1 supports MCS0-7
+result = selectIeee80211FecMode(acModeSet, vht80Nss2, false, vhtOnly,
+        &capabilities, receiver1, Ieee80211LdpcFrameContext::DATA_OR_MANAGEMENT);
+ASSERT(result.mode->getDataMode()->getBandwidth() == MHz(20));
+ASSERT(result.mode->getDataMode()->getNumberOfSpatialStreams() == 1);
+ASSERT(result.mode->getDataMode()->getFecType() == Ieee80211FecType::BCC);
+bool forcedOperatingModeRejected = false;
+try {
+    constrainIeee80211ModeByPeerOperatingMode(acModeSet, vht80Nss2,
+            &capabilities, receiver1, true);
+}
+catch (const cRuntimeError&) {
+    forcedOperatingModeRejected = true;
+}
+ASSERT(forcedOperatingModeRejected);
+
+// The static VHT Rx-MCS map is also authoritative when there is no dynamic
+// width/NSS reduction.
+capabilities.statuses[receiver1].operatingModeType0Valid = false;
+const auto *vhtMcs8 = Ieee80211ModeSet::findMode(Ieee80211PhyFormat::VHT_SU,
+        8, MHz(20), 1, Ieee80211FecType::BCC);
+ASSERT(vhtMcs8 != nullptr);
+result = selectIeee80211FecMode(acModeSet, vhtMcs8, false, vhtOnly,
+        &capabilities, receiver1, Ieee80211LdpcFrameContext::DATA_OR_MANAGEMENT);
+ASSERT(result.mode->getDataMode()->getMcsIndex() <= 7);
+
+// Static HT/VHT channel-width capabilities apply even without an Operating
+// Mode update, for automatic and explicitly requested modes alike.
+capabilities.statuses[receiver1] = supported;
+capabilities.statuses[receiver1].maximumVhtRxBandwidthMhz = 80;
+capabilities.statuses[receiver1].vhtRxMcsMapKnown = true;
+capabilities.statuses[receiver1].vhtRxMcsMap = 0xFFFC;
+const auto *vht160 = Ieee80211ModeSet::findMode(Ieee80211PhyFormat::VHT_SU,
+        0, MHz(160), 1, Ieee80211FecType::BCC);
+ASSERT(vht160 != nullptr);
+result = selectIeee80211FecMode(acModeSet, vht160, false, vhtOnly,
+        &capabilities, receiver1, Ieee80211LdpcFrameContext::DATA_OR_MANAGEMENT);
+ASSERT(result.mode->getDataMode()->getBandwidth() <= MHz(80));
+ASSERT(throwsSelection(acModeSet, acModeSet->getFecVariant(vht160, Ieee80211FecType::LDPC),
+        true, vhtOnly, &capabilities, receiver1,
+        Ieee80211LdpcFrameContext::DATA_OR_MANAGEMENT));
+
+capabilities.statuses[receiver1] = supported;
+capabilities.statuses[receiver1].maximumHtRxBandwidthMhz = 20;
+capabilities.statuses[receiver1].htRxMcsSetKnown = true;
+capabilities.statuses[receiver1].htRxMcsSet[0] = 0xFF;
+const auto *ht40 = Ieee80211ModeSet::findMode(Ieee80211PhyFormat::HT,
+        0, MHz(40), 1, Ieee80211FecType::BCC);
+ASSERT(ht40 != nullptr);
+result = selectIeee80211FecMode(modeSet, ht40, false, enabled,
+        &capabilities, receiver1, Ieee80211LdpcFrameContext::DATA_OR_MANAGEMENT);
+ASSERT(result.mode->getDataMode()->getBandwidth() == MHz(20));
+ASSERT(throwsSelection(modeSet, modeSet->getFecVariant(ht40, Ieee80211FecType::LDPC),
+        true, enabled, &capabilities, receiver1,
+        Ieee80211LdpcFrameContext::DATA_OR_MANAGEMENT));

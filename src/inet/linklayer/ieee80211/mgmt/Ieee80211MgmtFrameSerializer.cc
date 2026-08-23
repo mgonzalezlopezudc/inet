@@ -14,6 +14,118 @@ namespace inet {
 
 namespace ieee80211 {
 
+namespace {
+
+void serializeCapabilityElements(MemoryOutputStream& stream, const Ieee80211MgmtFrame& frame)
+{
+    if (frame.getHtCapabilitiesPresent()) {
+        stream.writeByte(IEEE80211_HT_CAPABILITIES_ELEMENT_ID);
+        stream.writeByte(IEEE80211_HT_CAPABILITIES_ELEMENT_LENGTH);
+        for (size_t i = 0; i < IEEE80211_HT_CAPABILITIES_ELEMENT_LENGTH; i++)
+            stream.writeByte(frame.getHtCapabilities(i));
+    }
+    if (frame.getExtendedCapabilitiesPresent()) {
+        auto length = frame.getExtendedCapabilitiesArraySize();
+        if (length > 255)
+            throw cRuntimeError("IEEE 802.11 Extended Capabilities element is too long");
+        stream.writeByte(IEEE80211_EXTENDED_CAPABILITIES_ELEMENT_ID);
+        stream.writeByte(length);
+        for (size_t i = 0; i < length; i++)
+            stream.writeByte(frame.getExtendedCapabilities(i));
+    }
+    if (frame.getVhtCapabilitiesPresent()) {
+        stream.writeByte(IEEE80211_VHT_CAPABILITIES_ELEMENT_ID);
+        stream.writeByte(IEEE80211_VHT_CAPABILITIES_ELEMENT_LENGTH);
+        for (size_t i = 0; i < IEEE80211_VHT_CAPABILITIES_ELEMENT_LENGTH; i++)
+            stream.writeByte(frame.getVhtCapabilities(i));
+    }
+    if (frame.getOperatingModePresent()) {
+        stream.writeByte(IEEE80211_OPERATING_MODE_ELEMENT_ID);
+        stream.writeByte(IEEE80211_OPERATING_MODE_ELEMENT_LENGTH);
+        stream.writeByte(frame.getOperatingMode());
+    }
+}
+
+void markMalformedElement(Ieee80211MgmtFrame& frame, MemoryInputStream& stream, b length)
+{
+    frame.markIncorrect();
+    // Consume the complete advertised payload when it is available.  This
+    // keeps the resulting chunk length deterministic even for malformed input.
+    if (stream.getRemainingLength() >= length)
+        stream.seek(stream.getPosition() + length);
+    else
+        stream.seek(stream.getLength());
+}
+
+void deserializeCapabilityElements(MemoryInputStream& stream, Ieee80211MgmtFrame& frame)
+{
+    while (stream.getRemainingLength() > b(0)) {
+        if (stream.getRemainingLength() < B(2)) {
+            frame.markIncorrect();
+            stream.seek(stream.getLength());
+            return;
+        }
+
+        uint8_t elementId = stream.readByte();
+        uint8_t elementLength = stream.readByte();
+        if (stream.getRemainingLength() < B(elementLength)) {
+            markMalformedElement(frame, stream, B(elementLength));
+            return;
+        }
+
+        switch (elementId) {
+            case IEEE80211_HT_CAPABILITIES_ELEMENT_ID:
+                if (elementLength != IEEE80211_HT_CAPABILITIES_ELEMENT_LENGTH || frame.getHtCapabilitiesPresent()) {
+                    markMalformedElement(frame, stream, B(elementLength));
+                    return;
+                }
+                for (size_t i = 0; i < IEEE80211_HT_CAPABILITIES_ELEMENT_LENGTH; i++)
+                    frame.setHtCapabilities(i, stream.readByte());
+                frame.setHtCapabilitiesPresent(true);
+                break;
+
+            case IEEE80211_EXTENDED_CAPABILITIES_ELEMENT_ID:
+                if (frame.getExtendedCapabilitiesPresent()) {
+                    markMalformedElement(frame, stream, B(elementLength));
+                    return;
+                }
+                frame.setExtendedCapabilitiesArraySize(elementLength);
+                for (size_t i = 0; i < elementLength; i++)
+                    frame.setExtendedCapabilities(i, stream.readByte());
+                frame.setExtendedCapabilitiesPresent(true);
+                break;
+
+            case IEEE80211_VHT_CAPABILITIES_ELEMENT_ID:
+                if (elementLength != IEEE80211_VHT_CAPABILITIES_ELEMENT_LENGTH || frame.getVhtCapabilitiesPresent()) {
+                    markMalformedElement(frame, stream, B(elementLength));
+                    return;
+                }
+                for (size_t i = 0; i < IEEE80211_VHT_CAPABILITIES_ELEMENT_LENGTH; i++)
+                    frame.setVhtCapabilities(i, stream.readByte());
+                frame.setVhtCapabilitiesPresent(true);
+                break;
+
+            case IEEE80211_OPERATING_MODE_ELEMENT_ID:
+                if (elementLength != IEEE80211_OPERATING_MODE_ELEMENT_LENGTH || frame.getOperatingModePresent()) {
+                    markMalformedElement(frame, stream, B(elementLength));
+                    return;
+                }
+                frame.setOperatingMode(stream.readByte());
+                frame.setOperatingModePresent(true);
+                break;
+
+            default:
+                // Unknown information elements are legal here.  Their strict
+                // two-byte TLV framing and advertised length are still checked
+                // above, while known fixed-length elements are preserved.
+                stream.seek(stream.getPosition() + B(elementLength));
+                break;
+        }
+    }
+}
+
+} // namespace
+
 Register_Serializer(Ieee80211AssociationRequestFrame, Ieee80211MgmtFrameSerializer);
 Register_Serializer(Ieee80211AssociationResponseFrame, Ieee80211MgmtFrameSerializer);
 Register_Serializer(Ieee80211AuthenticationFrame, Ieee80211MgmtFrameSerializer);
@@ -67,7 +179,8 @@ void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const P
         // 4    Extended Supported Rates    The Extended Supported Rates element is present whenever there are more than eight supported rates, and it is optional otherwise.
         // Last Vendor Specific             One or more vendor-specific information elements may appear in this frame. This information element follows all other information elements.
     }
-    else if (auto associationRequestFrame = dynamicPtrCast<const Ieee80211AssociationRequestFrame>(chunk)) {
+    else if (auto associationRequestFrame = dynamicPtrCast<const Ieee80211AssociationRequestFrame>(chunk);
+             associationRequestFrame != nullptr && dynamicPtrCast<const Ieee80211ReassociationRequestFrame>(chunk) == nullptr) {
 //        type = ST_ASSOCIATIONREQUEST;
         // 1    Capability
         stream.writeUint16Be(0); // FIXME
@@ -126,7 +239,8 @@ void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const P
         // 10   QoS Capability             The QoS Capability element is present when dot11QosOption- Implemented is true.
         // Last Vendor Specific            One or more vendor-specific information elements may appear in this frame. This information element follows all other information elements.
     }
-    else if (auto associationResponseFrame = dynamicPtrCast<const Ieee80211AssociationResponseFrame>(chunk)) {
+    else if (auto associationResponseFrame = dynamicPtrCast<const Ieee80211AssociationResponseFrame>(chunk);
+             associationResponseFrame != nullptr && dynamicPtrCast<const Ieee80211ReassociationResponseFrame>(chunk) == nullptr) {
 //        type = ST_ASSOCIATIONRESPONSE;
         // 1    Capability
         stream.writeUint16Be(0); // FIXME
@@ -166,7 +280,8 @@ void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const P
         // 6    EDCA Parameter Set
         // Last Vendor Specific            One or more vendor-specific information elements may appear in this frame. This information element follows all other information elements.
     }
-    else if (auto beaconFrame = dynamicPtrCast<const Ieee80211BeaconFrame>(chunk)) {
+    else if (auto beaconFrame = dynamicPtrCast<const Ieee80211BeaconFrame>(chunk);
+             beaconFrame != nullptr && dynamicPtrCast<const Ieee80211ProbeResponseFrame>(chunk) == nullptr) {
 //        type = ST_BEACON;
         // 1    Timestamp
         stream.writeUint64Be(simTime().raw()); // FIXME
@@ -253,188 +368,162 @@ void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const P
     }
     else
         throw cRuntimeError("Cannot serialize frame");
+
+    auto mgmtFrame = staticPtrCast<const Ieee80211MgmtFrame>(chunk);
+    serializeCapabilityElements(stream, *mgmtFrame);
 }
 
 const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserialize(MemoryInputStream& stream) const
 {
-    switch (0) { // TODO receive and dispatch on type_info parameter
-        case 0xB0: // ST_AUTHENTICATION
-        {
-            auto frame = makeShared<Ieee80211AuthenticationFrame>();
+    throw cRuntimeError("Ieee80211MgmtFrameSerializer requires a chunk type for deserialization");
+}
+
+const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserialize(MemoryInputStream& stream, const std::type_info& typeInfo) const
+{
+    const b startPosition = stream.getPosition();
+    Ptr<Chunk> chunk;
+
+    auto require = [&](Ieee80211MgmtFrame& frame, b length) {
+        if (stream.getRemainingLength() < length) {
+            frame.markIncorrect();
+            stream.seek(stream.getLength());
+            return false;
+        }
+        return true;
+    };
+    auto readSsid = [&](Ieee80211MgmtFrame& frame, auto setter) {
+        if (!require(frame, B(2)))
+            return;
+        stream.readByte(); // element ID (the legacy model uses zero here)
+        uint8_t length = stream.readByte();
+        if (!require(frame, B(length)))
+            return;
+        std::vector<uint8_t> bytes;
+        stream.readBytes(bytes, B(length));
+        std::string ssid(bytes.begin(), bytes.end());
+        setter(ssid.c_str());
+    };
+    auto readSupportedRates = [&](Ieee80211MgmtFrame& frame, Ieee80211SupportedRatesElement& rates) {
+        if (!require(frame, B(2)))
+            return;
+        stream.readByte(); // Supported Rates element ID
+        uint8_t count = stream.readByte();
+        if (count > 8 || !require(frame, B(count))) {
+            frame.markIncorrect();
+            stream.seek(stream.getLength());
+            return;
+        }
+        rates.numRates = count;
+        for (uint8_t i = 0; i < count; i++)
+            rates.rate[i] = (double)(stream.readByte() & 0x7F) * 0.5;
+    };
+
+    if (typeInfo == typeid(Ieee80211AuthenticationFrame)) {
+        auto frame = makeShared<Ieee80211AuthenticationFrame>();
+        if (require(*frame, B(6))) {
             stream.readUint16Be();
             frame->setSequenceNumber(stream.readUint16Be());
             frame->setStatusCode((Ieee80211StatusCode)stream.readUint16Be());
-            return frame;
         }
-
-        case 0xC0: // ST_ST_DEAUTHENTICATION
-        {
-            auto frame = makeShared<Ieee80211DeauthenticationFrame>();
+        chunk = frame;
+    }
+    else if (typeInfo == typeid(Ieee80211DeauthenticationFrame)) {
+        auto frame = makeShared<Ieee80211DeauthenticationFrame>();
+        if (require(*frame, B(2)))
             frame->setReasonCode((Ieee80211ReasonCode)stream.readUint16Be());
-            return frame;
-        }
-
-        case 0xA0: // ST_DISASSOCIATION
-        {
-            auto frame = makeShared<Ieee80211DisassociationFrame>();
+        chunk = frame;
+    }
+    else if (typeInfo == typeid(Ieee80211DisassociationFrame)) {
+        auto frame = makeShared<Ieee80211DisassociationFrame>();
+        if (require(*frame, B(2)))
             frame->setReasonCode((Ieee80211ReasonCode)stream.readUint16Be());
-            return frame;
+        chunk = frame;
+    }
+    else if (typeInfo == typeid(Ieee80211ProbeRequestFrame)) {
+        auto frame = makeShared<Ieee80211ProbeRequestFrame>();
+        readSsid(*frame, [&](const char *ssid) { frame->setSSID(ssid); });
+        if (!frame->isIncorrect())
+            readSupportedRates(*frame, frame->getSupportedRatesForUpdate());
+        chunk = frame;
+    }
+    else if (typeInfo == typeid(Ieee80211AssociationRequestFrame)) {
+        auto frame = makeShared<Ieee80211AssociationRequestFrame>();
+        if (require(*frame, B(4))) {
+            stream.readUint16Be(); // Capability
+            stream.readUint16Be(); // Listen interval
+            readSsid(*frame, [&](const char *ssid) { frame->setSSID(ssid); });
+            if (!frame->isIncorrect())
+                readSupportedRates(*frame, frame->getSupportedRatesForUpdate());
         }
-
-        case 0x40: // ST_PROBEREQUEST
-        {
-            auto frame = makeShared<Ieee80211ProbeRequestFrame>();
-
-            char SSID[256];
-            stream.readByte();
-            unsigned int length = stream.readByte();
-            stream.readBytes((uint8_t *)SSID, B(length));
-            SSID[length] = '\0';
-            frame->setSSID(SSID);
-
-            Ieee80211SupportedRatesElement supRat;
-            stream.readByte();
-            supRat.numRates = stream.readByte();
-            for (int i = 0; i < supRat.numRates; i++)
-                supRat.rate[i] = (double)(stream.readByte() & 0x7F) * 0.5;
-            frame->setSupportedRates(supRat);
-            return frame;
-        }
-
-        case 0x00: // ST_ASSOCIATIONREQUEST
-        {
-            auto frame = makeShared<Ieee80211AssociationRequestFrame>();
-
-            char SSID[256];
-            stream.readByte();
-            unsigned int length = stream.readByte();
-            stream.readBytes((uint8_t *)SSID, B(length));
-            SSID[length] = '\0';
-            frame->setSSID(SSID);
-
-            Ieee80211SupportedRatesElement supRat;
-            stream.readByte();
-            supRat.numRates = stream.readByte();
-            for (int i = 0; i < supRat.numRates; i++)
-                supRat.rate[i] = (double)(stream.readByte() & 0x7F) * 0.5;
-            frame->setSupportedRates(supRat);
-            return frame;
-        }
-
-        case 0x02: // ST_REASSOCIATIONREQUEST
-        {
-            auto frame = makeShared<Ieee80211ReassociationRequestFrame>();
-            stream.readUint16Be();
-            stream.readUint16Be();
-
+        chunk = frame;
+    }
+    else if (typeInfo == typeid(Ieee80211ReassociationRequestFrame)) {
+        auto frame = makeShared<Ieee80211ReassociationRequestFrame>();
+        if (require(*frame, B(12))) {
+            stream.readUint16Be(); // Capability
+            stream.readUint16Be(); // Listen interval
             frame->setCurrentAP(stream.readMacAddress());
-
-            char SSID[256];
-            stream.readByte();
-            unsigned int length = stream.readByte();
-            stream.readBytes((uint8_t *)SSID, B(length));
-            SSID[length] = '\0';
-            frame->setSSID(SSID);
-
-            Ieee80211SupportedRatesElement supRat;
-            stream.readByte();
-            supRat.numRates = stream.readByte();
-            for (int i = 0; i < supRat.numRates; i++)
-                supRat.rate[i] = (double)(stream.readByte() & 0x7F) * 0.5;
-            frame->setSupportedRates(supRat);
-            return frame;
+            readSsid(*frame, [&](const char *ssid) { frame->setSSID(ssid); });
+            if (!frame->isIncorrect())
+                readSupportedRates(*frame, frame->getSupportedRatesForUpdate());
         }
-
-        case 0x01: // ST_ASSOCIATIONRESPONSE
-        {
-            auto frame = makeShared<Ieee80211AssociationResponseFrame>();
-            stream.readUint16Be();
+        chunk = frame;
+    }
+    else if (typeInfo == typeid(Ieee80211AssociationResponseFrame)) {
+        auto frame = makeShared<Ieee80211AssociationResponseFrame>();
+        if (require(*frame, B(6))) {
+            stream.readUint16Be(); // Capability
             frame->setStatusCode((Ieee80211StatusCode)stream.readUint16Be());
             frame->setAid(stream.readUint16Be());
-
-            Ieee80211SupportedRatesElement supRat;
-            stream.readByte();
-            supRat.numRates = stream.readByte();
-            for (int i = 0; i < supRat.numRates; i++)
-                supRat.rate[i] = (double)(stream.readByte() & 0x7F) * 0.5;
-            frame->setSupportedRates(supRat);
-            return frame;
+            readSupportedRates(*frame, frame->getSupportedRatesForUpdate());
         }
-
-        case 0x03: // ST_REASSOCIATIONRESPONSE
-        {
-            auto frame = makeShared<Ieee80211ReassociationResponseFrame>();
-            stream.readUint16Be();
+        chunk = frame;
+    }
+    else if (typeInfo == typeid(Ieee80211ReassociationResponseFrame)) {
+        auto frame = makeShared<Ieee80211ReassociationResponseFrame>();
+        if (require(*frame, B(6))) {
+            stream.readUint16Be(); // Capability
             frame->setStatusCode((Ieee80211StatusCode)stream.readUint16Be());
             frame->setAid(stream.readUint16Be());
-
-            Ieee80211SupportedRatesElement supRat;
-            stream.readByte();
-            supRat.numRates = stream.readByte();
-            for (int i = 0; i < supRat.numRates; i++)
-                supRat.rate[i] = (double)(stream.readByte() & 0x7F) * 0.5;
-            frame->setSupportedRates(supRat);
-            return frame;
+            readSupportedRates(*frame, frame->getSupportedRatesForUpdate());
         }
-
-        case 0x80: // ST_BEACON
-        {
-            auto frame = makeShared<Ieee80211BeaconFrame>();
-
-            simtime_t timetstamp;
-            timetstamp.setRaw(stream.readUint64Be()); // TODO store timestamp
-
+        chunk = frame;
+    }
+    else if (typeInfo == typeid(Ieee80211BeaconFrame)) {
+        auto frame = makeShared<Ieee80211BeaconFrame>();
+        if (require(*frame, B(12))) {
+            stream.readUint64Be(); // Timestamp
             frame->setBeaconInterval(SimTime((int64_t)stream.readUint16Be() * 1024, SIMTIME_US));
             stream.readUint16Be(); // Capability
-
-            char SSID[256];
-            stream.readByte();
-            unsigned int length = stream.readByte();
-            stream.readBytes((uint8_t *)SSID, B(length));
-            SSID[length] = '\0';
-            frame->setSSID(SSID);
-
-            Ieee80211SupportedRatesElement supRat;
-            stream.readByte();
-            supRat.numRates = stream.readByte();
-            for (int i = 0; i < supRat.numRates; i++)
-                supRat.rate[i] = (double)(stream.readByte() & 0x7F) * 0.5;
-            frame->setSupportedRates(supRat);
-            return frame;
+            readSsid(*frame, [&](const char *ssid) { frame->setSSID(ssid); });
+            if (!frame->isIncorrect())
+                readSupportedRates(*frame, frame->getSupportedRatesForUpdate());
         }
-
-        case 0x50: // ST_PROBERESPONSE
-        {
-            auto frame = makeShared<Ieee80211ProbeResponseFrame>();
-
-            simtime_t timestamp;
-            timestamp.setRaw(stream.readUint64Be()); // TODO store timestamp
-
-            frame->setBeaconInterval(SimTime((int64_t)stream.readUint16Be() * 1024, SIMTIME_US));
-            stream.readUint16Be();
-
-            char SSID[256];
-            stream.readByte();
-            unsigned int length = stream.readByte();
-            stream.readBytes((uint8_t *)SSID, B(length));
-            SSID[length] = '\0';
-            frame->setSSID(SSID);
-
-            Ieee80211SupportedRatesElement supRat;
-            stream.readByte();
-            supRat.numRates = stream.readByte();
-            for (int i = 0; i < supRat.numRates; i++)
-                supRat.rate[i] = (double)(stream.readByte() & 0x7F) * 0.5;
-            frame->setSupportedRates(supRat);
-            return frame;
-        }
-
-        default:
-            throw cRuntimeError("Cannot deserialize frame");
+        chunk = frame;
     }
+    else if (typeInfo == typeid(Ieee80211ProbeResponseFrame)) {
+        auto frame = makeShared<Ieee80211ProbeResponseFrame>();
+        if (require(*frame, B(12))) {
+            stream.readUint64Be(); // Timestamp
+            frame->setBeaconInterval(SimTime((int64_t)stream.readUint16Be() * 1024, SIMTIME_US));
+            stream.readUint16Be(); // Capability
+            readSsid(*frame, [&](const char *ssid) { frame->setSSID(ssid); });
+            if (!frame->isIncorrect())
+                readSupportedRates(*frame, frame->getSupportedRatesForUpdate());
+        }
+        chunk = frame;
+    }
+    else
+        throw cRuntimeError("Cannot deserialize frame type %s", typeInfo.name());
+
+    auto frame = staticPtrCast<Ieee80211MgmtFrame>(chunk);
+    if (!frame->isIncorrect())
+        deserializeCapabilityElements(stream, *frame);
+    frame->setChunkLength(stream.getPosition() - startPosition);
+
+    return frame;
 }
 
 } // namespace ieee80211
 
 } // namespace inet
-

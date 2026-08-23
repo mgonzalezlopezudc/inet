@@ -11,6 +11,7 @@
 #include "inet/common/SimpleModule.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRateControl.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRateSelection.h"
+#include "inet/linklayer/ieee80211/mac/rateselection/Ieee80211LdpcSelection.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 
 namespace inet {
@@ -33,6 +34,8 @@ class INET_API RateSelection : public IRateSelection, public SimpleModule, publi
 {
   protected:
     IRateControl *dataOrMgmtRateControl = nullptr;
+    const IIeee80211PeerCapabilities *peerCapabilities = nullptr;
+    Ieee80211LdpcSelectionConfig ldpcSelectionConfig;
     const physicallayer::IIeee80211Mode *fastestMandatoryMode = nullptr;
 
     const physicallayer::Ieee80211ModeSet *modeSet = nullptr;
@@ -56,6 +59,11 @@ class INET_API RateSelection : public IRateSelection, public SimpleModule, publi
     virtual const physicallayer::IIeee80211Mode *getMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header);
     virtual const physicallayer::IIeee80211Mode *computeControlFrameMode(const Ptr<const Ieee80211MacHeader>& header);
     virtual const physicallayer::IIeee80211Mode *computeDataOrMgmtFrameMode(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader);
+    virtual const physicallayer::IIeee80211Mode *applyFecSelection(const physicallayer::IIeee80211Mode *candidate,
+            const MacAddress& receiverAddress, Ieee80211LdpcFrameContext context,
+            const physicallayer::IIeee80211Mode *solicitingMode = nullptr, bool forcedLdpc = false) const;
+    virtual void attachVhtSigAParameters(Packet *packet, const MacAddress& receiverAddress,
+            const physicallayer::IIeee80211Mode *mode) const;
 
   public:
     static void setFrameMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, const physicallayer::IIeee80211Mode *mode);
@@ -65,8 +73,8 @@ class INET_API RateSelection : public IRateSelection, public SimpleModule, publi
     // reception, an ACK in response to a DATA reception, a BlockAck in response to a BlockAckReq reception. In
     // some situations, the transmission of a control frame is not a control response transmission, such as when a CTS
     // is used to initiate a TXOP.
-    virtual const physicallayer::IIeee80211Mode *computeResponseCtsFrameMode(Packet *packet, const Ptr<const Ieee80211RtsFrame>& rtsFrame) override;
-    virtual const physicallayer::IIeee80211Mode *computeResponseAckFrameMode(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) override;
+    virtual const physicallayer::IIeee80211Mode *computeResponseCtsFrameMode(Packet *solicitingPacket, const Ptr<const Ieee80211RtsFrame>& rtsFrame, Packet *responsePacket = nullptr) override;
+    virtual const physicallayer::IIeee80211Mode *computeResponseAckFrameMode(Packet *solicitingPacket, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader, Packet *responsePacket = nullptr) override;
 
     virtual const physicallayer::IIeee80211Mode *computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header) override;
 
@@ -77,4 +85,3 @@ class INET_API RateSelection : public IRateSelection, public SimpleModule, publi
 } // namespace inet
 
 #endif
-

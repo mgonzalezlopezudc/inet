@@ -1,0 +1,381 @@
+%description:
+Receiver-authoritative HT/VHT-SU LDPC context reconstruction. The resolver
+uses typed on-air PHY fields plus receiver-visible data duration. Sender plan
+tags and the non-serialized VHT base Length property are deliberately
+inconsistent and must not be receive authorities.
+
+%includes:
+#include <vector>
+
+#include "inet/common/Protocol.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BitsChunk.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211DataEncodingPlanTag.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211LdpcSoftReceiver.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ReceivedDataEncodingPlan.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211VhtSigB.h"
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%global:
+
+static void appendZeroPayload(Packet& packet, int octets)
+{
+    packet.insertAtBack(makeShared<BitsChunk>(std::vector<bool>(octets * 8, false)));
+}
+
+static bool rejectsReceivedPlan(const IIeee80211DataMode *dataMode,
+        const Ptr<const Ieee80211PhyHeader>& phyHeader, simtime_t dataDuration)
+{
+    try {
+        reconstructIeee80211ReceivedDataEncodingPlan(dataMode, phyHeader, dataDuration);
+        return false;
+    }
+    catch (const cRuntimeError&) {
+        return true;
+    }
+}
+
+%activity:
+
+const auto *htModeSet = Ieee80211ModeSet::getModeSet("n(mixed-2.4Ghz)");
+const auto *htMode = Ieee80211ModeSet::findMode(Ieee80211PhyFormat::HT, 4,
+        MHz(20), 1, Ieee80211FecType::LDPC);
+ASSERT(htMode != nullptr);
+auto expectedHtPlan = htMode->getDataMode()->computeEncodingPlan(B(100));
+
+Packet htPacket("ht-receiver-authority");
+auto htHeader = makeShared<Ieee80211HtPhyHeader>();
+htHeader->setChunkLength(b(48));
+htHeader->setLengthField(B(100));
+htHeader->setMcs(4);
+htHeader->setChannelWidth40(false);
+htHeader->setStbc(0);
+htHeader->setFecCoding(true);
+htHeader->setShortGi(false);
+htPacket.insertAtBack(htHeader);
+appendZeroPayload(htPacket, 100);
+htPacket.addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HtPhy);
+// Deliberately attach a valid but unrelated sender-side plan.  It must not
+// affect receiver reconstruction.
+const auto *otherHtMode = Ieee80211ModeSet::findMode(Ieee80211PhyFormat::HT, 0,
+        MHz(20), 1, Ieee80211FecType::LDPC);
+htPacket.addTag<Ieee80211DataEncodingPlanTag>()->setPlan(
+        otherHtMode->getDataMode()->computeEncodingPlan(B(100)));
+
+Ieee80211LdpcSoftReceiver::ReceptionContext htContext;
+auto htDuration = expectedHtPlan.getNumberOfSymbols() * htMode->getDataMode()->getSymbolInterval();
+ASSERT(Ieee80211LdpcSoftReceiver::resolveReceptionContext(&htPacket, htModeSet, htDuration, htContext));
+ASSERT(htContext.mode == htMode);
+ASSERT(htContext.plan != nullptr);
+ASSERT(*htContext.plan == expectedHtPlan);
+ASSERT(htContext.psduOctets == 100);
+ASSERT(htContext.bandwidthMhz == 20);
+ASSERT(htContext.bitsPerSubcarrier.size() == 1);
+ASSERT(!htContext.isVht);
+ASSERT(reconstructIeee80211ReceivedDataEncodingPlan(
+        htMode->getDataMode(), htHeader, htDuration) == expectedHtPlan);
+
+auto shortHtHeader = makeShared<Ieee80211HtPhyHeader>(*htHeader);
+shortHtHeader->setShortGi(true);
+Packet shortHt("supported-short-gi");
+shortHt.insertAtBack(shortHtHeader);
+appendZeroPayload(shortHt, 100);
+shortHt.addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HtPhy);
+Ieee80211LdpcSoftReceiver::ReceptionContext shortHtContext;
+const auto *shortHtMode = Ieee80211ModeSet::findMode(Ieee80211PhyFormat::HT, 4,
+        MHz(20), 1, Ieee80211FecType::LDPC, true);
+auto shortHtPlan = shortHtMode->getDataMode()->computeEncodingPlan(B(100));
+ASSERT(Ieee80211LdpcSoftReceiver::resolveReceptionContext(&shortHt, htModeSet,
+        shortHtPlan.getNumberOfSymbols() * shortHtMode->getDataMode()->getSymbolInterval(), shortHtContext));
+ASSERT(shortHtContext.mode != nullptr);
+ASSERT(dynamic_cast<const Ieee80211HtDataMode *>(shortHtContext.mode->getDataMode())->getGuardIntervalType() ==
+        Ieee80211HtModeBase::HT_GUARD_INTERVAL_SHORT);
+ASSERT(shortHtContext.plan != nullptr);
+
+// HT MCS encodes NSS; the exact boundary keeps both authoritative stream
+// modulations instead of collapsing NSS>1 to stream one.
+const auto *htNss2Mode = Ieee80211ModeSet::findMode(
+        Ieee80211PhyFormat::HT, 12, MHz(20), 2, Ieee80211FecType::LDPC, true);
+ASSERT(htNss2Mode != nullptr);
+auto htNss2Header = makeShared<Ieee80211HtPhyHeader>(*htHeader);
+htNss2Header->setMcs(12);
+htNss2Header->setShortGi(true);
+Packet htNss2Packet("ht-nss2");
+htNss2Packet.insertAtBack(htNss2Header);
+appendZeroPayload(htNss2Packet, 100);
+htNss2Packet.addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HtPhy);
+Ieee80211LdpcSoftReceiver::ReceptionContext htNss2Context;
+auto htNss2Plan = htNss2Mode->getDataMode()->computeEncodingPlan(B(100));
+ASSERT(Ieee80211LdpcSoftReceiver::resolveReceptionContext(&htNss2Packet, htModeSet,
+        htNss2Plan.getNumberOfSymbols() * htNss2Mode->getDataMode()->getSymbolInterval(), htNss2Context));
+ASSERT(htNss2Context.streamModulations.size() == 2);
+ASSERT(htNss2Context.bitsPerSubcarrier.size() == 2);
+
+// HT40 is represented for both received GI values, even when the operation
+// mode set stores only the opposite-GI entry as its capability metadata.
+for (bool shortGi : {false, true}) {
+    const auto *ht40Mode = Ieee80211ModeSet::findMode(
+            Ieee80211PhyFormat::HT, 4, MHz(40), 1, Ieee80211FecType::LDPC, shortGi);
+    ASSERT(ht40Mode != nullptr);
+    auto ht40Header = makeShared<Ieee80211HtPhyHeader>(*htHeader);
+    ht40Header->setChannelWidth40(true);
+    ht40Header->setShortGi(shortGi);
+    Packet ht40Packet(shortGi ? "ht40-short-gi" : "ht40-long-gi");
+    ht40Packet.insertAtBack(ht40Header);
+    appendZeroPayload(ht40Packet, 100);
+    ht40Packet.addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HtPhy);
+    Ieee80211LdpcSoftReceiver::ReceptionContext ht40Context;
+    auto ht40Plan = ht40Mode->getDataMode()->computeEncodingPlan(B(100));
+    ASSERT(Ieee80211LdpcSoftReceiver::resolveReceptionContext(
+            &ht40Packet, htModeSet,
+            ht40Plan.getNumberOfSymbols() * ht40Mode->getDataMode()->getSymbolInterval(), ht40Context));
+    ASSERT(ht40Context.mode != nullptr);
+    ASSERT(ht40Context.bandwidthMhz == 40);
+    ASSERT(dynamic_cast<const Ieee80211HtDataMode *>(ht40Context.mode->getDataMode())->getGuardIntervalType() ==
+            (shortGi ? Ieee80211HtModeBase::HT_GUARD_INTERVAL_SHORT : Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG));
+}
+
+auto invalidHtHeader = makeShared<Ieee80211HtPhyHeader>(*htHeader);
+invalidHtHeader->setReserved(false);
+Packet invalidHt("invalid-ht-reserved");
+invalidHt.insertAtBack(invalidHtHeader);
+appendZeroPayload(invalidHt, 100);
+invalidHt.addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HtPhy);
+Ieee80211LdpcSoftReceiver::ReceptionContext rejectedInvalidHt;
+ASSERT(!Ieee80211LdpcSoftReceiver::resolveReceptionContext(
+        &invalidHt, htModeSet, htDuration, rejectedInvalidHt));
+
+const auto *vhtModeSet = Ieee80211ModeSet::getModeSet("ac");
+const auto *vhtMode = Ieee80211ModeSet::findMode(Ieee80211PhyFormat::VHT_SU, 4,
+        MHz(20), 1, Ieee80211FecType::LDPC);
+ASSERT(vhtMode != nullptr);
+auto expectedVhtPlan = vhtMode->getDataMode()->computeEncodingPlan(B(100));
+ASSERT(!expectedVhtPlan.getAdditionalCapacityApplied());
+
+Packet vhtPacket("vht-receiver-authority");
+auto vhtHeader = makeShared<Ieee80211VhtPhyHeader>();
+vhtHeader->setChunkLength(b(74));
+vhtHeader->setLengthField(B(4)); // not serialized in VHT; must be ignored here
+vhtHeader->setBandwidth(0);
+vhtHeader->setGroupId(63);
+vhtHeader->setNumberOfSpaceTimeStreams(0);
+vhtHeader->setStbc(false);
+vhtHeader->setCoding(true);
+vhtHeader->setShortGi(false);
+vhtHeader->setMcs(4);
+vhtHeader->setBeamformed(false);
+vhtHeader->setVhtSigBLength(25); // 25 four-octet units = 100 octets
+vhtHeader->setVhtSigBReserved(7);
+vhtHeader->setVhtSigBTail(0);
+vhtHeader->setLdpcExtraOfdmSymbol(expectedVhtPlan.getAdditionalCapacityApplied());
+vhtPacket.insertAtBack(vhtHeader);
+appendZeroPayload(vhtPacket, 100);
+vhtPacket.addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211VhtPhy);
+vhtPacket.addTag<Ieee80211DataEncodingPlanTag>()->setPlan(expectedHtPlan);
+
+Ieee80211LdpcSoftReceiver::ReceptionContext vhtContext;
+auto vhtDuration = expectedVhtPlan.getNumberOfSymbols() * vhtMode->getDataMode()->getSymbolInterval();
+ASSERT(Ieee80211LdpcSoftReceiver::resolveReceptionContext(
+        &vhtPacket, vhtModeSet, vhtDuration, vhtContext));
+ASSERT(vhtContext.mode == vhtMode);
+ASSERT(vhtContext.plan != nullptr);
+ASSERT(*vhtContext.plan == expectedVhtPlan);
+ASSERT(vhtContext.psduOctets == (expectedVhtPlan.getUncodedDataBits() - 16) / 8);
+ASSERT(vhtContext.isVht);
+ASSERT(reconstructIeee80211ReceivedDataEncodingPlan(
+        vhtMode->getDataMode(), vhtHeader, vhtDuration) == expectedVhtPlan);
+
+// Exercise the received LDPC Extra OFDM Symbol=1 branch independently of
+// the ordinary no-extra fixture above.
+const auto *vhtExtraMode = Ieee80211ModeSet::findMode(Ieee80211PhyFormat::VHT_SU, 0,
+        MHz(20), 1, Ieee80211FecType::LDPC, false);
+ASSERT(vhtExtraMode != nullptr);
+int extraApepLength = -1;
+auto extraVhtPlan = vhtExtraMode->getDataMode()->computeEncodingPlan(B(5));
+for (int candidate = 5; candidate <= 200; candidate++) {
+    auto candidatePlan = vhtExtraMode->getDataMode()->computeEncodingPlan(B(candidate));
+    int candidatePsduLength = (candidatePlan.getUncodedDataBits() - 16) / 8;
+    int roundedCandidateApep = 4 * encodeVhtSuSigBLength(B(candidate));
+    if (candidatePlan.getAdditionalCapacityApplied() && roundedCandidateApep <= candidatePsduLength) {
+        extraApepLength = candidate;
+        extraVhtPlan = candidatePlan;
+        break;
+    }
+}
+ASSERT(extraApepLength >= 5 && extraVhtPlan.getAdditionalCapacityApplied());
+auto extraVhtHeader = makeShared<Ieee80211VhtPhyHeader>(*vhtHeader);
+extraVhtHeader->setMcs(0);
+extraVhtHeader->setVhtSigBLength(encodeVhtSuSigBLength(B(extraApepLength)));
+extraVhtHeader->setLdpcExtraOfdmSymbol(true);
+Packet extraVhtPacket("vht-received-extra-symbol");
+extraVhtPacket.insertAtBack(extraVhtHeader);
+appendZeroPayload(extraVhtPacket, (extraVhtPlan.getUncodedDataBits() - 16) / 8);
+extraVhtPacket.addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211VhtPhy);
+Ieee80211LdpcSoftReceiver::ReceptionContext extraVhtContext;
+ASSERT(Ieee80211LdpcSoftReceiver::resolveReceptionContext(&extraVhtPacket, vhtModeSet,
+        extraVhtPlan.getNumberOfSymbols() * vhtExtraMode->getDataMode()->getSymbolInterval(),
+        extraVhtContext));
+ASSERT(*extraVhtContext.plan == extraVhtPlan);
+ASSERT(extraVhtContext.plan->getAdditionalCapacityApplied());
+
+// The same ideal-stream representation applies to a legal VHT width/NSS>1
+// tuple; VHT-SIG-B's layout follows the received bandwidth code.
+const auto *vhtNss2Mode = Ieee80211ModeSet::findMode(
+        Ieee80211PhyFormat::VHT_SU, 4, MHz(40), 2, Ieee80211FecType::LDPC, true);
+ASSERT(vhtNss2Mode != nullptr);
+auto vhtNss2Plan = vhtNss2Mode->getDataMode()->computeEncodingPlan(B(100));
+auto vhtNss2Header = makeShared<Ieee80211VhtPhyHeader>(*vhtHeader);
+vhtNss2Header->setChunkLength(b(48 + getVhtSuSigBLayout(1).getBitLength()));
+vhtNss2Header->setLengthField(B(4));
+vhtNss2Header->setBandwidth(1);
+vhtNss2Header->setNumberOfSpaceTimeStreams(1);
+vhtNss2Header->setShortGi(true);
+vhtNss2Header->setShortGiNsymDisambiguation(vhtNss2Plan.getNumberOfSymbols() % 10 == 9);
+vhtNss2Header->setMcs(4);
+vhtNss2Header->setVhtSigBLength(encodeVhtSuSigBLength(B(100)));
+vhtNss2Header->setVhtSigBReserved(getVhtSuSigBLayout(1).getReservedValue());
+vhtNss2Header->setLdpcExtraOfdmSymbol(vhtNss2Plan.getAdditionalCapacityApplied());
+Packet vhtNss2Packet("vht-width40-nss2");
+vhtNss2Packet.insertAtBack(vhtNss2Header);
+appendZeroPayload(vhtNss2Packet, 100);
+vhtNss2Packet.addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211VhtPhy);
+Ieee80211LdpcSoftReceiver::ReceptionContext vhtNss2Context;
+ASSERT(Ieee80211LdpcSoftReceiver::resolveReceptionContext(&vhtNss2Packet, vhtModeSet,
+        vhtNss2Plan.getNumberOfSymbols() * vhtNss2Mode->getDataMode()->getSymbolInterval(), vhtNss2Context));
+ASSERT(vhtNss2Context.bandwidthMhz == 40);
+ASSERT(vhtNss2Context.streamModulations.size() == 2);
+ASSERT(vhtNss2Context.bitsPerSubcarrier.size() == 2);
+
+// VHT-SU 80 MHz and 160 MHz use the received bandwidth code and are tested
+// with both legal GI values.  The SIG-B layout/reserved value changes with
+// bandwidth, while exact APEP length remains absent at the receiver.
+for (int bandwidthCode : {2, 3}) {
+    int bandwidthMhz = bandwidthCode == 2 ? 80 : 160;
+    for (bool shortGi : {false, true}) {
+        const auto *wideVhtMode = Ieee80211ModeSet::findMode(
+                Ieee80211PhyFormat::VHT_SU, 4, MHz(bandwidthMhz), 1,
+                Ieee80211FecType::LDPC, shortGi);
+        ASSERT(wideVhtMode != nullptr);
+        auto widePlan = wideVhtMode->getDataMode()->computeEncodingPlan(B(100));
+        auto layout = getVhtSuSigBLayout(bandwidthCode);
+        auto wideHeader = makeShared<Ieee80211VhtPhyHeader>(*vhtHeader);
+        wideHeader->setChunkLength(b(48 + layout.getBitLength()));
+        wideHeader->setBandwidth(bandwidthCode);
+        wideHeader->setShortGi(shortGi);
+        wideHeader->setShortGiNsymDisambiguation(
+                shortGi && widePlan.getNumberOfSymbols() % 10 == 9);
+        wideHeader->setVhtSigBLength(encodeVhtSuSigBLength(B(100)));
+        wideHeader->setVhtSigBReserved(layout.getReservedValue());
+        wideHeader->setLdpcExtraOfdmSymbol(widePlan.getAdditionalCapacityApplied());
+        Packet wideVhtPacket(shortGi ? "wide-vht-short-gi" : "wide-vht-long-gi");
+        wideVhtPacket.insertAtBack(wideHeader);
+        appendZeroPayload(wideVhtPacket, 100);
+        wideVhtPacket.addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211VhtPhy);
+        Ieee80211LdpcSoftReceiver::ReceptionContext wideVhtContext;
+        ASSERT(Ieee80211LdpcSoftReceiver::resolveReceptionContext(
+                &wideVhtPacket, vhtModeSet,
+                widePlan.getNumberOfSymbols() * wideVhtMode->getDataMode()->getSymbolInterval(),
+                wideVhtContext));
+        ASSERT(wideVhtContext.mode != nullptr);
+        ASSERT(wideVhtContext.bandwidthMhz == bandwidthMhz);
+        ASSERT(dynamic_cast<const Ieee80211VhtDataMode *>(wideVhtContext.mode->getDataMode())->getGuardIntervalType() ==
+                (shortGi ? Ieee80211VhtModeBase::HT_GUARD_INTERVAL_SHORT : Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG));
+    }
+}
+
+// VHT-SIG-B reports ceil(APEP_LENGTH/4). Receive planning comes only from
+// timing; exact MPDU residues are recovered later from A-MPDU delimiters.
+for (int residue = 0; residue < 4; residue++) {
+    int exactLength = 100 + residue;
+    auto exactPlan = vhtMode->getDataMode()->computeEncodingPlan(B(exactLength));
+    auto residueHeader = makeShared<Ieee80211VhtPhyHeader>(*vhtHeader);
+    residueHeader->setLengthField(B(4)); // deliberately not receive authority
+    residueHeader->setVhtSigBLength(encodeVhtSuSigBLength(B(exactLength)));
+    residueHeader->setLdpcExtraOfdmSymbol(exactPlan.getAdditionalCapacityApplied());
+    Packet residuePacket("vht-residue");
+    residuePacket.insertAtBack(residueHeader);
+    appendZeroPayload(residuePacket, exactLength);
+    residuePacket.addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211VhtPhy);
+    Ieee80211LdpcSoftReceiver::ReceptionContext residueContext;
+    ASSERT(Ieee80211LdpcSoftReceiver::resolveReceptionContext(
+            &residuePacket, vhtModeSet,
+            exactPlan.getNumberOfSymbols() * vhtMode->getDataMode()->getSymbolInterval(), residueContext));
+    ASSERT(*residueContext.plan == exactPlan);
+    ASSERT(residueContext.psduOctets == (exactPlan.getUncodedDataBits() - 16) / 8);
+}
+
+auto rejectedHtStbcHeader = makeShared<Ieee80211HtPhyHeader>(*htHeader);
+rejectedHtStbcHeader->setStbc(1);
+Packet rejectedHtStbcPacket("rejected-ht-stbc");
+rejectedHtStbcPacket.insertAtBack(rejectedHtStbcHeader);
+appendZeroPayload(rejectedHtStbcPacket, 100);
+rejectedHtStbcPacket.addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HtPhy);
+Ieee80211LdpcSoftReceiver::ReceptionContext rejectedHtStbc;
+ASSERT(!Ieee80211LdpcSoftReceiver::resolveReceptionContext(
+        &rejectedHtStbcPacket, htModeSet, htDuration, rejectedHtStbc));
+
+auto rejectVht = [&](const char *name, bool stbc, unsigned int groupId, bool beamformed) {
+    auto header = makeShared<Ieee80211VhtPhyHeader>(*vhtHeader);
+    header->setStbc(stbc);
+    header->setGroupId(groupId);
+    header->setBeamformed(beamformed);
+    Packet packet(name);
+    packet.insertAtBack(header);
+    appendZeroPayload(packet, 100);
+    packet.addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211VhtPhy);
+    Ieee80211LdpcSoftReceiver::ReceptionContext context;
+    ASSERT(!Ieee80211LdpcSoftReceiver::resolveReceptionContext(
+            &packet, vhtModeSet, vhtDuration, context));
+};
+rejectVht("rejected-vht-stbc", true, 63, false);
+rejectVht("rejected-vht-mu", false, 1, false);
+rejectVht("rejected-vht-beamformed", false, 63, true);
+
+Ieee80211LdpcSoftReceiver::ReceptionContext rejectedNonIntegralDuration;
+auto nonIntegralDuration = vhtDuration + vhtMode->getDataMode()->getSymbolInterval() / 2;
+ASSERT(rejectsReceivedPlan(vhtMode->getDataMode(), vhtHeader, nonIntegralDuration));
+ASSERT(!Ieee80211LdpcSoftReceiver::resolveReceptionContext(
+        &vhtPacket, vhtModeSet, nonIntegralDuration, rejectedNonIntegralDuration));
+
+// The shared resolver and exact soft path reject the same malformed
+// receiver-visible timing/SIG combinations. These cases cover the three
+// fields that formerly had separate validation at each consumer.
+auto zeroSigBHeader = makeShared<Ieee80211VhtPhyHeader>(*vhtHeader);
+zeroSigBHeader->setVhtSigBLength(0);
+ASSERT(rejectsReceivedPlan(vhtMode->getDataMode(), zeroSigBHeader, vhtDuration));
+Packet zeroSigBPacket("rejected-zero-vht-sig-b-length");
+zeroSigBPacket.insertAtBack(zeroSigBHeader);
+appendZeroPayload(zeroSigBPacket, 100);
+zeroSigBPacket.addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211VhtPhy);
+Ieee80211LdpcSoftReceiver::ReceptionContext rejectedZeroSigB;
+ASSERT(!Ieee80211LdpcSoftReceiver::resolveReceptionContext(
+        &zeroSigBPacket, vhtModeSet, vhtDuration, rejectedZeroSigB));
+
+auto impossibleExtraHeader = makeShared<Ieee80211VhtPhyHeader>(*vhtHeader);
+impossibleExtraHeader->setLdpcExtraOfdmSymbol(true);
+auto oneSymbolDuration = vhtMode->getDataMode()->getSymbolInterval();
+ASSERT(rejectsReceivedPlan(vhtMode->getDataMode(), impossibleExtraHeader, oneSymbolDuration));
+Packet impossibleExtraPacket("rejected-impossible-extra-symbol");
+impossibleExtraPacket.insertAtBack(impossibleExtraHeader);
+appendZeroPayload(impossibleExtraPacket, 100);
+impossibleExtraPacket.addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211VhtPhy);
+Ieee80211LdpcSoftReceiver::ReceptionContext rejectedImpossibleExtra;
+ASSERT(!Ieee80211LdpcSoftReceiver::resolveReceptionContext(
+        &impossibleExtraPacket, vhtModeSet, oneSymbolDuration, rejectedImpossibleExtra));
+
+auto invalidVhtHeader = makeShared<Ieee80211VhtPhyHeader>(*vhtHeader);
+invalidVhtHeader->setVhtSigBReserved(0);
+Packet invalidVht("ignored-vht-sig-b-reserved");
+invalidVht.insertAtBack(invalidVhtHeader);
+appendZeroPayload(invalidVht, 100);
+invalidVht.addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211VhtPhy);
+Ieee80211LdpcSoftReceiver::ReceptionContext rejectedReservedVht;
+ASSERT(!Ieee80211LdpcSoftReceiver::resolveReceptionContext(
+        &invalidVht, vhtModeSet, vhtDuration, rejectedReservedVht));

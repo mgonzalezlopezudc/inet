@@ -1,0 +1,103 @@
+%description:
+High-SNIR HT MCS4 exact-LDPC success through the selectable scalar soft radio.  The
+observer proves the transmission owns mapped bits/complex symbols but no
+sender plan, the AP reconstructs the plan, invokes and converges the decoder,
+and UDP delivery is ACKed.
+
+%file: test.ned
+
+import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
+import inet.node.inet.AdhocHost;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadioMedium;
+import inet.test.moduletest.lib.ieee80211.Ieee80211LdpcSoftEndToEndTest;
+
+network LdpcSoftHtSuccess
+{
+    submodules:
+        configurator: Ipv4NetworkConfigurator;
+        radioMedium: Ieee80211ScalarRadioMedium;
+        station: AdhocHost;
+        ap: AdhocHost;
+        observer: Ieee80211LdpcSoftEndToEndTest;
+}
+
+%inifile: omnetpp.ini
+
+[General]
+network = LdpcSoftHtSuccess
+ned-path = .;../../../../src;../../lib
+sim-time-limit = 250ms
+seed-set = 24680
+record-vector-results = false
+cmdenv-express-mode = false
+
+**.constraintAreaMinX = 0m
+**.constraintAreaMinY = 0m
+**.constraintAreaMinZ = 0m
+**.constraintAreaMaxX = 200m
+**.constraintAreaMaxY = 200m
+**.constraintAreaMaxZ = 0m
+**.mobility.initFromDisplayString = false
+*.station.mobility.initialX = 100m
+*.station.mobility.initialY = 100m
+*.station.mobility.initialZ = 0m
+*.ap.mobility.initialX = 101m
+*.ap.mobility.initialY = 100m
+*.ap.mobility.initialZ = 0m
+
+**.arp.typename = "GlobalArp"
+**.checksumMode = "computed"
+**.wlan[0].opMode = "n(mixed-2.4Ghz)"
+**.wlan[0].mac.fcsMode = "computed"
+**.wlan[0].radio.typename = "Ieee80211LdpcSoftRadio"
+**.wlan[0].radio.bandName = "2.4 GHz"
+**.wlan[0].radio.channelNumber = 0
+**.wlan[0].radio.transmitter.power = 1W
+**.wlan[0].radio.receiver.sensitivity = -100dBm
+**.wlan[0].radio.receiver.energyDetection = -100dBm
+**.wlan[0].radio.receiver.snirThreshold = 0dB
+**.wlan[0].radio.receiver.errorModel.typename = "Ieee80211NistErrorModel"
+
+*.ap.wlan[0].address = "20:00:00:00:00:14"
+*.station.wlan[0].address = "20:00:00:00:00:13"
+*.ap.wlan[0].mgmt.htLdpcRxSupported = true
+*.station.wlan[0].mgmt.htLdpcRxSupported = true
+
+*.station.wlan[0].mac.dcf.rateSelection.htLdpcTxActivated = true
+*.station.wlan[0].mac.dcf.rateSelection.dataFrameBitrate = 39Mbps
+*.station.wlan[0].mac.dcf.rateSelection.dataFrameBandwidth = 20MHz
+*.station.wlan[0].mac.dcf.rateSelection.dataFrameNumSpatialStreams = 1
+*.station.wlan[0].mac.dcf.rateSelection.peerCapabilitiesModule = absPath("^.^.^.^.^.observer")
+*.station.wlan[0].mac.dcf.rtsPolicy.rtsThreshold = 2000B
+*.station.wlan[0].mac.dcf.recoveryProcedure.shortRetryLimit = 2
+
+*.station.numApps = 1
+*.station.app[0].typename = "UdpBasicApp"
+*.station.app[0].destAddresses = "ap"
+*.station.app[0].destPort = 1000
+*.station.app[0].messageLength = 100B
+*.station.app[0].startTime = 100ms
+*.station.app[0].stopTime = 101ms
+*.station.app[0].sendInterval = 1s
+*.ap.numApps = 1
+*.ap.app[0].typename = "UdpSink"
+*.ap.app[0].localPort = 1000
+
+*.observer.stationRadioModule = "^.station.wlan[0].radio"
+*.observer.stationDcfModule = "^.station.wlan[0].mac.dcf"
+*.observer.stationRecoveryModule = "^.station.wlan[0].mac.dcf.recoveryProcedure"
+*.observer.serverAppModule = "^.ap.app[0]"
+*.observer.stationTransmitterModule = "^.station.wlan[0].radio.transmitter"
+*.observer.apReceiverModule = "^.ap.wlan[0].radio.receiver"
+*.observer.expectedPhyFormat = "HT"
+*.observer.expectedExact = true
+*.observer.expectedSuccess = true
+*.observer.expectedAttempts = 1
+*.observer.minimumTargetPsduOctets = 150
+
+%contains: stdout
+LDPC soft-boundary verdict: exact=1 success=1 vht=0 airData=1 macData=1 retries=0 acks=1 retryDrops=0 deliveries=1 encodes=1 decodes=1 convergences=1
+
+%postrun-command: grep "undisposed object:" test.out > test_undisposed.out || true
+%not-contains: test_undisposed.out
+undisposed object: (

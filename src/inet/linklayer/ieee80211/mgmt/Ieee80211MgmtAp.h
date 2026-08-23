@@ -27,6 +27,7 @@ class INET_API Ieee80211MgmtAp : public Ieee80211MgmtApBase
     struct StaInfo {
         MacAddress address;
         int authSeqExpected; // when NOT_AUTHENTICATED: transaction sequence number of next expected auth frame
+        Ieee80211PeerLdpcStatus ldpcStatus;
 //        int consecFailedTrans; // TODO
 //        double expiry; // TODO association should expire after a while if STA is silent?
     };
@@ -103,6 +104,10 @@ class INET_API Ieee80211MgmtAp : public Ieee80211MgmtApBase
     void sendAssocNotification(const MacAddress& addr);
 
     void sendDisAssocNotification(const MacAddress& addr);
+
+    virtual Ieee80211PeerLdpcStatus getPeerLdpcStatus(const MacAddress& peer) const override;
+    virtual Ieee80211IntendedReceiverSet resolveIntendedReceivers(const MacAddress& receiverAddress) const override;
+    virtual Ieee80211VhtSigAParameters getVhtSigAParameters(const MacAddress& receiverAddress) const override;
 
     /** lifecycle support */
     //@{

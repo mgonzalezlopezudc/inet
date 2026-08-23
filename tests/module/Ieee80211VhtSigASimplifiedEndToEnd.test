@@ -1,0 +1,134 @@
+%description:
+Simplified-management 802.11ac VHT-SIG-A and LDPC integration. A statically
+associated one-antenna STA and AP exchange fixed MCS 0 VHT-SU UDP data in both
+directions. The simplified management modules provide deterministic BSSID/AID
+and peer LDPC state, actual VHT-SIG-A carries the IEEE Std 802.11-2024 clause
+10.19 Table 10-13 values, the
+VHT-SIG-A coding bit signals LDPC, and both packets are delivered.
+
+%file: test.ned
+
+import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
+import inet.node.ethernet.Eth100M;
+import inet.node.inet.StandardHost;
+import inet.node.inet.WirelessHost;
+import inet.node.wireless.AccessPoint;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadioMedium;
+import inet.test.moduletest.lib.ieee80211.Ieee80211LdpcEndToEndTest;
+import inet.test.moduletest.lib.ieee80211.Ieee80211VhtSigAEndToEndTest;
+
+network VhtSigASimplifiedEndToEnd
+{
+    submodules:
+        configurator: Ipv4NetworkConfigurator;
+        radioMedium: Ieee80211ScalarRadioMedium;
+        station: WirelessHost;
+        ap: AccessPoint;
+        server: StandardHost;
+        observer: Ieee80211VhtSigAEndToEndTest;
+    connections:
+        server.ethg++ <--> Eth100M <--> ap.ethg++;
+}
+
+%inifile: omnetpp.ini
+
+[General]
+network = VhtSigASimplifiedEndToEnd
+ned-path = .;../../../../src;../../lib
+sim-time-limit = 250ms
+seed-set = 13579
+record-vector-results = false
+cmdenv-express-mode = false
+
+**.constraintAreaMinX = 0m
+**.constraintAreaMinY = 0m
+**.constraintAreaMinZ = 0m
+**.constraintAreaMaxX = 200m
+**.constraintAreaMaxY = 200m
+**.constraintAreaMaxZ = 0m
+**.mobility.initFromDisplayString = false
+*.station.mobility.initialX = 100m
+*.station.mobility.initialY = 100m
+*.station.mobility.initialZ = 0m
+*.ap.mobility.initialX = 101m
+*.ap.mobility.initialY = 100m
+*.ap.mobility.initialZ = 0m
+
+**.arp.typename = "GlobalArp"
+**.wlan[0].opMode = "ac"
+**.wlan[0].radio.bandName = "5 GHz (20 MHz)"
+**.wlan[0].radio.centerFrequency = 5GHz
+**.wlan[0].radio.antenna.numAntennas = 1
+**.wlan[0].radio.transmitter.power = 1W
+**.wlan[0].radio.receiver.sensitivity = -100dBm
+**.wlan[0].radio.receiver.energyDetection = -100dBm
+**.wlan[0].radio.receiver.snirThreshold = 0dB
+
+*.ap.wlan[0].address = "10:00:00:00:00:A5"
+*.station.wlan[0].address = "20:00:00:00:00:11"
+*.ap.wlan[0].mgmt.typename = "Ieee80211MgmtApSimplified"
+*.station.wlan[0].mgmt.typename = "Ieee80211MgmtStaSimplified"
+*.station.wlan[0].agent.typename = ""
+*.station.wlan[0].mgmt.accessPointAddress = "10:00:00:00:00:A5"
+*.ap.wlan[0].mgmt.ssid = "vht-sig-a-simplified-test"
+*.ap.wlan[0].mgmt.vhtLdpcRxSupported = true
+*.station.wlan[0].mgmt.vhtLdpcRxSupported = true
+*.ap.wlan[0].mgmt.peerVhtLdpcRxSupported = true
+*.station.wlan[0].mgmt.peerVhtLdpcRxSupported = true
+
+**.wlan[0].mac.dcf.rateSelection.vhtLdpcTxActivated = true
+**.wlan[0].mac.dcf.rateSelection.dataFrameBitrate = 6.5Mbps
+**.wlan[0].mac.dcf.rateSelection.dataFrameBandwidth = 20MHz
+**.wlan[0].mac.dcf.rateSelection.dataFrameNumSpatialStreams = 1
+**.wlan[0].mac.dcf.rtsPolicy.rtsThreshold = 2000B
+
+*.ap.wlan[0].radio.receiver.errorModel.fecSuccessModel.typename = "DeterministicIeee80211FecSuccessModel"
+*.ap.wlan[0].radio.receiver.errorModel.fecSuccessModel.targetDataSuccessRate = 1
+*.ap.wlan[0].radio.receiver.errorModel.fecSuccessModel.minimumTargetUncodedBits = 500
+*.ap.wlan[0].radio.receiver.errorModel.fecSuccessModel.expectedPhyFormat = "VHT_SU"
+*.station.wlan[0].radio.receiver.errorModel.fecSuccessModel.typename = "DeterministicIeee80211FecSuccessModel"
+*.station.wlan[0].radio.receiver.errorModel.fecSuccessModel.targetDataSuccessRate = 1
+*.station.wlan[0].radio.receiver.errorModel.fecSuccessModel.minimumTargetUncodedBits = 500
+*.station.wlan[0].radio.receiver.errorModel.fecSuccessModel.expectedPhyFormat = "VHT_SU"
+
+*.station.numApps = 2
+*.station.app[0].typename = "UdpBasicApp"
+*.station.app[0].destAddresses = "server"
+*.station.app[0].destPort = 1000
+*.station.app[0].messageLength = 100B
+*.station.app[0].startTime = 100ms
+*.station.app[0].stopTime = 101ms
+*.station.app[0].sendInterval = 1s
+*.station.app[1].typename = "UdpSink"
+*.station.app[1].localPort = 2000
+
+*.server.numApps = 2
+*.server.app[0].typename = "UdpSink"
+*.server.app[0].localPort = 1000
+*.server.app[1].typename = "UdpBasicApp"
+*.server.app[1].destAddresses = "station"
+*.server.app[1].destPort = 2000
+*.server.app[1].messageLength = 100B
+*.server.app[1].startTime = 150ms
+*.server.app[1].stopTime = 151ms
+*.server.app[1].sendInterval = 1s
+
+*.observer.stationRadioModule = "^.station.wlan[0].radio"
+*.observer.apRadioModule = "^.ap.wlan[0].radio"
+*.observer.uplinkSinkModule = "^.server.app[0]"
+*.observer.downlinkSinkModule = "^.station.app[1]"
+*.observer.apMibModule = "^.ap.wlan[0].mib"
+*.observer.stationAddress = "20:00:00:00:00:11"
+*.observer.bssid = "10:00:00:00:00:A5"
+*.observer.expectedAssociationId = 1
+*.observer.expectedStaToApPartialAid = 330
+*.observer.expectedApToStaPartialAid = 481
+*.observer.expectedLdpc = true
+*.observer.verifyMissingAssociationIdInvariant = true
+
+%contains: stdout
+VHT-SIG-A end-to-end verdict: staToAp=1 staToApGid=0 staToApPaid=330 apToSta=1 apToStaGid=63 apToStaPaid=481 aid=1 uplinkDeliveries=1 downlinkDeliveries=1
+
+%postrun-command: grep "undisposed object:" test.out > test_undisposed.out || true
+%not-contains: test_undisposed.out
+undisposed object: (

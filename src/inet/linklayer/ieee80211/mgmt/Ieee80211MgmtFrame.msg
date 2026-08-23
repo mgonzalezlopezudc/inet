@@ -118,11 +118,46 @@ struct Ieee80211SupportedRatesElement
     double rate[8]; // in Mbit/s; should be multiple of 500 kbit/s
 }
 
+// Information element identifiers used by the HT/VHT capability exchange.
+// The payload arrays below deliberately contain the complete fixed-length
+// information element payload.  The management layer may interpret the bits
+// it owns, while the serializer keeps all other standard-defined bits intact.
+cplusplus {{
+const unsigned char IEEE80211_HT_CAPABILITIES_ELEMENT_ID = 45;
+const unsigned char IEEE80211_EXTENDED_CAPABILITIES_ELEMENT_ID = 127;
+const unsigned char IEEE80211_VHT_CAPABILITIES_ELEMENT_ID = 191;
+const unsigned char IEEE80211_OPERATING_MODE_ELEMENT_ID = 199;
+const unsigned char IEEE80211_HT_CAPABILITIES_ELEMENT_LENGTH = 26;
+const unsigned char IEEE80211_EXTENDED_CAPABILITIES_OPERATING_MODE_LENGTH = 8;
+const unsigned char IEEE80211_VHT_CAPABILITIES_ELEMENT_LENGTH = 12;
+const unsigned char IEEE80211_OPERATING_MODE_ELEMENT_LENGTH = 1;
+}}
+
 //
 // Frame body base class used to hide various frame body types
 //
 class Ieee80211MgmtFrame extends FieldsChunk
 {
+    // Optional HT Capabilities (element ID 45, length 26) information element.
+    // Byte 0 bit 0 is the HT LDPC coding capability.
+    bool htCapabilitiesPresent = false;
+    uint8_t htCapabilities[26] = 0;
+
+    // Optional Extended Capabilities (element ID 127). Byte 7 bit 6 is the
+    // Operating Mode Notification capability (bit 62).
+    bool extendedCapabilitiesPresent = false;
+    uint8_t extendedCapabilities[];
+
+    // Optional VHT Capabilities (element ID 191, length 12) information element.
+    // The Rx LDPC capability is one of the standard-defined bits in this
+    // complete payload; it is intentionally not reduced to a local boolean.
+    bool vhtCapabilitiesPresent = false;
+    uint8_t vhtCapabilities[12] = 0;
+
+    // Optional Operating Mode (element ID 199, length 1) information element.
+    // Bit 3 is the No LDPC coding preference.
+    bool operatingModePresent = false;
+    uint8_t operatingMode = 0;
 }
 
 //

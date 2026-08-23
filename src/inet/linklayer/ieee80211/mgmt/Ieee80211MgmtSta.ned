@@ -8,6 +8,7 @@
 package inet.linklayer.ieee80211.mgmt;
 
 import inet.common.SimpleModule;
+import inet.linklayer.ieee80211.mgmt.contract.IIeee80211PeerCapabilities;
 
 //
 // Used in 802.11 infrastructure mode: handles management frames for a station (STA).
@@ -24,12 +25,15 @@ import inet.common.SimpleModule;
 //
 // Relies on the MAC layer (~Ieee80211Mac) for reception and transmission of frames.
 //
-simple Ieee80211MgmtSta extends SimpleModule like IIeee80211Mgmt
+simple Ieee80211MgmtSta extends SimpleModule like IIeee80211Mgmt, IIeee80211PeerCapabilities
 {
     parameters:
         @class(Ieee80211MgmtSta);
         string interfaceTableModule;   // The path to the InterfaceTable module
         int numChannels = default(1);  // Number of channels to scan
+        bool htLdpcRxSupported = default(false);
+        bool vhtLdpcRxSupported = default(false);
+        string radioModule = default("^.radio");
         string mibModule;
         string macModule;               // The path to the MAC module
         @display("i=block/cogwheel");
@@ -41,4 +45,3 @@ simple Ieee80211MgmtSta extends SimpleModule like IIeee80211Mgmt
         input agentIn;   // Used for attaching an agent algorithm
         output agentOut; // Used for attaching an agent algorithm
 }
-

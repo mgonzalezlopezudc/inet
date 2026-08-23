@@ -36,6 +36,31 @@ class Ieee80211ModeInd extends Ieee80211ModeTagBase
 }
 
 //
+// Semantic VHT TXVECTOR fields supplied by the MAC/management owner. The
+// radio consumes this request when constructing VHT-SIG-A.
+//
+class Ieee80211VhtSigAReq extends TagBase
+{
+    uint8_t groupId;
+    uint16_t partialAid;
+}
+
+// Local MAC-to-PHY TXVECTOR context.  The radio consumes this request while
+// constructing VHT-SIG-A/SIG-B and removes it before creating the immutable
+// transmission, so exact TX APEP_LENGTH never crosses the PHY boundary.
+class Ieee80211VhtApepReq extends TagBase
+{
+    int apepLength;
+}
+
+// Receiver-local indication reconstructed from the serialized VHT-SIG-B
+// Length field. It is the rounded RXVECTOR APEP_LENGTH, not TX metadata.
+class Ieee80211VhtApepInd extends TagBase
+{
+    int apepLength;
+}
+
+//
 // This is an abstract base class that should not be directly added as a tag.
 //
 class Ieee80211ChannelTagBase extends TagBase

@@ -1,0 +1,40 @@
+%description:
+HT/VHT LDPC plan value semantics and the sender-plan-free transmission boundary.
+
+%includes:
+#include <type_traits>
+#include <utility>
+
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211DataEncodingPlan.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%global:
+
+template<typename T, typename = void>
+struct HasDataEncodingPlanAccessor : std::false_type {};
+
+template<typename T>
+struct HasDataEncodingPlanAccessor<T, std::void_t<
+        decltype(std::declval<const T&>().getDataEncodingPlan())>> : std::true_type {};
+
+static_assert(!HasDataEncodingPlanAccessor<Ieee80211Transmission>::value,
+        "Immutable transmissions must not expose a sender encoding-plan oracle");
+
+%activity:
+
+auto original = Ieee80211LdpcPlanner::computeHt(100, 208, Ieee80211CodeRate(3, 4));
+Ieee80211DataEncodingPlan copied = original;
+ASSERT(copied == original);
+ASSERT(copied.getCodewords().size() == 1);
+ASSERT(copied.getCodewords()[0].getCodewordLength() == 1944);
+
+// Plans remain value objects for local TX construction and RX reconstruction.
+auto other = Ieee80211LdpcPlanner::computeVhtSu(100, 208, 156, Ieee80211CodeRate(3, 4));
+ASSERT(!(other == original));
+ASSERT(original.getPhyFormat() == Ieee80211PhyFormat::HT);
+ASSERT(other.getPhyFormat() == Ieee80211PhyFormat::VHT_SU);
+ASSERT(original.getNumberOfSymbols() == 6);
+ASSERT(other.getNumberOfSymbols() == 6);

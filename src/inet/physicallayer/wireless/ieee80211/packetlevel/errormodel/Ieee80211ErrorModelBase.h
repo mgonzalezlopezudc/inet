@@ -10,6 +10,7 @@
 
 #include "inet/physicallayer/wireless/common/base/packetlevel/ErrorModelBase.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/contract/IIeee80211FecSuccessModel.h"
 
 namespace inet {
 
@@ -18,6 +19,7 @@ namespace physicallayer {
 class INET_API Ieee80211ErrorModelBase : public ErrorModelBase
 {
   protected:
+    const IIeee80211FecSuccessModel *fecSuccessModel = nullptr;
     double spectralEfficiency1bit = 2000000.0 / 1000000.0; // 1 bit per symbol with 1 MSPS
     double spectralEfficiency2bit = 2000000.0 / 1000000.0 / 2.0; // 2 bits per symbol, 1 MSPS
     double sirPerfect = 10.0;
@@ -25,7 +27,9 @@ class INET_API Ieee80211ErrorModelBase : public ErrorModelBase
 
   protected:
     virtual double getHeaderSuccessRate(const IIeee80211Mode *mode, unsigned int bitLength, double snir) const = 0;
-    virtual double getDataSuccessRate(const IIeee80211Mode *mode, unsigned int bitLength, double snir) const = 0;
+    virtual double getBccDataSuccessRate(const IIeee80211Mode *mode, unsigned int bitLength, double snir) const = 0;
+
+    virtual void initialize(int stage) override;
 
     virtual Packet *computeCorruptedPacket(const Packet *packet, double ber) const override;
 
@@ -37,6 +41,10 @@ class INET_API Ieee80211ErrorModelBase : public ErrorModelBase
   public:
     Ieee80211ErrorModelBase();
 
+    /** Computes only the BCC-coded PHY-header result for a receiver-resolved mode. */
+    virtual double computeHeaderPacketErrorRate(const ISnir *snir,
+            IRadioSignal::SignalPart part, const IIeee80211Mode *mode) const;
+
     virtual double computePacketErrorRate(const ISnir *snir, IRadioSignal::SignalPart part) const override;
     virtual double computeBitErrorRate(const ISnir *snir, IRadioSignal::SignalPart part) const override;
     virtual double computeSymbolErrorRate(const ISnir *snir, IRadioSignal::SignalPart part) const override;
@@ -47,4 +55,3 @@ class INET_API Ieee80211ErrorModelBase : public ErrorModelBase
 } // namespace inet
 
 #endif
-

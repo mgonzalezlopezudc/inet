@@ -8,6 +8,7 @@
 package inet.linklayer.ieee80211.mgmt;
 
 import inet.common.SimpleModule;
+import inet.linklayer.ieee80211.mgmt.contract.IIeee80211PeerCapabilities;
 
 //
 // Used in 802.11 infrastructure mode in an access point (AP).
@@ -20,13 +21,15 @@ import inet.common.SimpleModule;
 // This module relies on a connected ~Ieee80211Mac for actual
 // reception and transmission of frames.
 //
-simple Ieee80211MgmtAp extends SimpleModule like IIeee80211Mgmt
+simple Ieee80211MgmtAp extends SimpleModule like IIeee80211Mgmt, IIeee80211PeerCapabilities
 {
     parameters:
         @class(Ieee80211MgmtAp);
         string ssid = default("SSID");
         double beaconInterval @unit(s) = default(100ms);
         int numAuthSteps = default(4); // Use 2 for Open System auth, 4 for WEP
+        bool htLdpcRxSupported = default(false);
+        bool vhtLdpcRxSupported = default(false);
         string interfaceTableModule;
         string radioModule = default("^.radio");   // The path to the Radio module  //FIXME remove default value
         string mibModule;

@@ -7,15 +7,19 @@
 
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
 
+#include <memory>
+
 #include "inet/mobility/contract/IMobility.h"
 #include "inet/physicallayer/wireless/common/analogmodel/scalar/ScalarTransmitterAnalogModel.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/RadioControlInfo_m.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211DataEncodingPlanTag.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211DataEncodingPlan.h"
 
 namespace inet {
 
@@ -135,16 +139,33 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     Hz transmissionBandwidth = transmissionMode->getDataMode()->getBandwidth();
     if (transmissionMode->getDataMode()->getNumberOfSpatialStreams() > transmitter->getAntenna()->getNumAntennas())
         throw cRuntimeError("Number of spatial streams is higher than the number of antennas");
-    const simtime_t duration = transmissionMode->getDuration(B(phyHeader->getLengthField()));
+    const b psduLength = B(phyHeader->getLengthField());
+    auto planTag = packet->findTag<Ieee80211DataEncodingPlanTag>();
+    const Ieee80211DataEncodingPlan *localEncodingPlan = nullptr;
+    auto phyFormat = transmissionMode->getDataMode()->getPhyFormat();
+    if (phyFormat == Ieee80211PhyFormat::HT || phyFormat == Ieee80211PhyFormat::VHT_SU) {
+        if (planTag == nullptr || !planTag->hasPlan())
+            throw cRuntimeError("HT/VHT transmission has no authoritative data encoding plan tag");
+        localEncodingPlan = &planTag->getPlan();
+        if (localEncodingPlan->getPhyFormat() != phyFormat ||
+            localEncodingPlan->getFecType() != transmissionMode->getDataMode()->getFecType())
+            throw cRuntimeError("HT/VHT data encoding plan disagrees with the selected mode");
+    }
+    const simtime_t preambleDuration = transmissionMode->getPreambleMode()->getDuration();
+    const simtime_t headerDuration = transmissionMode->getHeaderMode()->getDuration();
+    const simtime_t dataDuration = localEncodingPlan != nullptr ?
+            localEncodingPlan->getNumberOfSymbols() * transmissionMode->getDataMode()->getSymbolInterval() :
+            transmissionMode->getDataMode()->getDuration(psduLength);
+    // The plan is a sender-local TXVECTOR construction aid. The receiver and
+    // error model reconstruct it from timing and serialized PHY fields.
+    const_cast<Packet *>(packet)->removeTagIfPresent<Ieee80211DataEncodingPlanTag>();
+    const simtime_t duration = preambleDuration + headerDuration + dataDuration;
     const simtime_t endTime = startTime + duration;
     IMobility *mobility = transmitter->getAntenna()->getMobility();
     const Coord& startPosition = mobility->getCurrentPosition();
     const Coord& endPosition = mobility->getCurrentPosition();
     const Quaternion& startOrientation = mobility->getCurrentAngularPosition();
     const Quaternion& endOrientation = mobility->getCurrentAngularPosition();
-    const simtime_t preambleDuration = transmissionMode->getPreambleMode()->getDuration();
-    const simtime_t headerDuration = transmissionMode->getHeaderMode()->getDuration();
-    const simtime_t dataDuration = duration - headerDuration - preambleDuration;
     auto analogModel = getAnalogModel()->createAnalogModel(preambleDuration, headerDuration, dataDuration, centerFrequency, transmissionBandwidth, transmissionPower);
     return new Ieee80211Transmission(transmitter, packet, startTime, endTime, preambleDuration, headerDuration, dataDuration, startPosition, endPosition, startOrientation, endOrientation, nullptr, nullptr, nullptr, nullptr, analogModel, transmissionMode, transmissionChannel);
 }
@@ -152,4 +173,3 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
 } // namespace physicallayer
 
 } // namespace inet
-

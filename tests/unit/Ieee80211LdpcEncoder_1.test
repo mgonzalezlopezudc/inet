@@ -1,0 +1,187 @@
+%description:
+Deterministic algebra and systematic-encoding tests for all twelve IEEE 802.11
+HT/VHT LDPC code variants.  The prototype dimensions and P_i direction are
+checked before every fixed information word is encoded.
+
+%includes:
+#include <cstdint>
+#include <cmath>
+#include <functional>
+#include <limits>
+#include "inet/common/BitVector.h"
+#include "inet/physicallayer/wireless/ieee80211/bitlevel/Ieee80211LdpcCode.h"
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%global:
+
+static const Ieee80211LdpcRate rates[] = {
+    Ieee80211LdpcRate::RATE_1_2,
+    Ieee80211LdpcRate::RATE_2_3,
+    Ieee80211LdpcRate::RATE_3_4,
+    Ieee80211LdpcRate::RATE_5_6
+};
+
+static BitVector makeInformation(int length)
+{
+    BitVector result;
+    for (int i = 0; i < length; i++)
+        result.appendBit(((i * 37 + i / 5 + 11) % 19) < 8);
+    return result;
+}
+
+// FNV-1a over each signed Annex F prototype entry encoded as a little-endian
+// 16-bit value. These constants make any accidental table edit visible while
+// keeping the test independent of whitespace and source formatting.
+static uint64_t getPrototypeDigest(const Ieee80211LdpcCode& code)
+{
+    uint64_t hash = UINT64_C(14695981039346656037);
+    for (int16_t shift : code.getShifts()) {
+        uint16_t value = static_cast<uint16_t>(shift);
+        for (int byte = 0; byte < 2; byte++) {
+            hash ^= (value >> (8 * byte)) & 0xFF;
+            hash *= UINT64_C(1099511628211);
+        }
+    }
+    return hash;
+}
+
+static uint64_t getExpectedPrototypeDigest(int codewordLength, Ieee80211LdpcRate rate)
+{
+    static const uint64_t digests[3][4] = {
+        {UINT64_C(0xD789E672973952BF), UINT64_C(0x0CEB9F0789F278AE), UINT64_C(0x209D3224DB59C1AA), UINT64_C(0x6F1ADBEC3AFE8ED6)},
+        {UINT64_C(0x6194214994615DD5), UINT64_C(0x32574F76B5E93177), UINT64_C(0x1E184A9CC2957CC7), UINT64_C(0x3E7DF9D3346B4071)},
+        {UINT64_C(0xD7AD0A58192EE436), UINT64_C(0xE2F81AD32F5137E5), UINT64_C(0x00717A4850495A66), UINT64_C(0xC01F0B98F3E3EE9C)}
+    };
+    int lengthIndex = codewordLength == 648 ? 0 : codewordLength == 1296 ? 1 : codewordLength == 1944 ? 2 : -1;
+    int rateIndex = static_cast<int>(rate);
+    if (lengthIndex < 0 || rateIndex < 0 || rateIndex >= 4)
+        throw cRuntimeError("Unsupported IEEE 802.11 LDPC digest key");
+    return digests[lengthIndex][rateIndex];
+}
+
+static bool getPackedBit(const std::vector<uint64_t>& row, int bit)
+{
+    return ((row[bit / 64] >> (bit % 64)) & 1U) != 0;
+}
+
+// Deliberately test-only reference encoder. It builds the expanded parity
+// equations from Tanner-graph edges, performs ordinary forward elimination,
+// and then back-substitutes. Production uses a precomputed Gauss-Jordan
+// inverse, so the two paths do not share their solving algorithm.
+static BitVector referenceEncode(const Ieee80211LdpcCode& code, const BitVector& information)
+{
+    int informationLength = code.getInformationLength();
+    int parityLength = code.getParityLength();
+    int augmentedBits = parityLength + 1;
+    int words = (augmentedBits + 63) / 64;
+    std::vector<std::vector<uint64_t>> equations(parityLength, std::vector<uint64_t>(words, 0));
+    for (const auto& edge : code.getEdges()) {
+        if (edge.variableNode < informationLength) {
+            if (information.getBit(edge.variableNode))
+                equations[edge.checkNode][parityLength / 64] ^= UINT64_C(1) << (parityLength % 64);
+        }
+        else {
+            int parityBit = edge.variableNode - informationLength;
+            equations[edge.checkNode][parityBit / 64] ^= UINT64_C(1) << (parityBit % 64);
+        }
+    }
+
+    for (int column = 0; column < parityLength; column++) {
+        int pivot = column;
+        while (pivot < parityLength && !getPackedBit(equations[pivot], column))
+            pivot++;
+        if (pivot == parityLength)
+            throw cRuntimeError("Reference LDPC parity system is rank deficient");
+        if (pivot != column)
+            std::swap(equations[pivot], equations[column]);
+        for (int row = column + 1; row < parityLength; row++) {
+            if (!getPackedBit(equations[row], column))
+                continue;
+            for (int word = column / 64; word < words; word++)
+                equations[row][word] ^= equations[column][word];
+        }
+    }
+
+    std::vector<bool> parity(parityLength, false);
+    for (int row = parityLength - 1; row >= 0; row--) {
+        bool value = getPackedBit(equations[row], parityLength);
+        for (int column = row + 1; column < parityLength; column++)
+            if (getPackedBit(equations[row], column) && parity[column])
+                value = !value;
+        parity[row] = value;
+    }
+
+    BitVector result = information;
+    for (bool bit : parity)
+        result.appendBit(bit);
+    return result;
+}
+
+static bool throws(const std::function<void()>& function)
+{
+    try {
+        function();
+        return false;
+    }
+    catch (const cRuntimeError&) {
+        return true;
+    }
+}
+
+%activity:
+
+for (int codewordLength : {648, 1296, 1944}) {
+    for (Ieee80211LdpcRate rate : rates) {
+        const auto& code = Ieee80211LdpcCode::getCode(codewordLength, rate);
+        ASSERT(code.getCodewordLength() == codewordLength);
+        ASSERT(code.getCodewordLength() == 24 * code.getExpansionFactor());
+        ASSERT(code.getShifts().size() == static_cast<size_t>(code.getBlockRows() * 24));
+        ASSERT(code.getInformationLength() + code.getParityLength() == codewordLength);
+        ASSERT(code.getEdges().size() > 0);
+        ASSERT(std::fabs(code.getCodeRate() - static_cast<double>(code.getInformationLength()) / codewordLength) < 1e-15);
+        ASSERT(getPrototypeDigest(code) == getExpectedPrototypeDigest(codewordLength, rate));
+        ASSERT(throws([&]() { code.computeNetBitErrorRate(0.1); }));
+
+        // Annex F P_i is a right shift: row 0 maps to column 1 and row Z-1
+        // maps back to column 0 for every prototype cell with shift 1.
+        bool checkedShiftDirection = false;
+        for (int blockRow = 0; blockRow < code.getBlockRows() && !checkedShiftDirection; blockRow++) {
+            for (int blockColumn = 0; blockColumn < 24 && !checkedShiftDirection; blockColumn++) {
+                if (code.getShift(blockRow, blockColumn) != 1)
+                    continue;
+                int firstCheck = blockRow * code.getExpansionFactor();
+                int lastCheck = firstCheck + code.getExpansionFactor() - 1;
+                int firstVariable = blockColumn * code.getExpansionFactor() + 1;
+                int lastVariable = blockColumn * code.getExpansionFactor();
+                bool firstFound = false;
+                bool lastFound = false;
+                for (int edge : code.getEdgesOfCheck(firstCheck))
+                    firstFound = firstFound || code.getEdge(edge).variableNode == firstVariable;
+                for (int edge : code.getEdgesOfCheck(lastCheck))
+                    lastFound = lastFound || code.getEdge(edge).variableNode == lastVariable;
+                ASSERT(firstFound && lastFound);
+                checkedShiftDirection = true;
+            }
+        }
+        ASSERT(checkedShiftDirection);
+
+        BitVector information = makeInformation(code.getInformationLength());
+        BitVector encoded = code.encode(information);
+        ASSERT(encoded == referenceEncode(code, information));
+        ASSERT(encoded.getSize() == static_cast<unsigned int>(codewordLength));
+        for (int i = 0; i < code.getInformationLength(); i++)
+            ASSERT(encoded.getBit(i) == information.getBit(i));
+        ASSERT(code.isCodeword(encoded));
+        BitVector syndrome = code.computeSyndrome(encoded);
+        for (unsigned int i = 0; i < syndrome.getSize(); i++)
+            ASSERT(!syndrome.getBit(i));
+
+        BitVector malformed = makeInformation(code.getInformationLength() - 1);
+        ASSERT(throws([&]() { code.encode(malformed); }));
+    }
+}
+
+ASSERT(throws([]() { Ieee80211LdpcCode::getCode(672, Ieee80211LdpcRate::RATE_1_2); }));
+ASSERT(throws([]() { Ieee80211LdpcCode::getCode(648, static_cast<Ieee80211LdpcRate>(99)); }));

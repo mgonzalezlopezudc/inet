@@ -1,0 +1,57 @@
+%description:
+Configured IEEE 802.11 LDPC PER success-model module maps the resolved HT mode
+and deterministic PPDU plan to a validated synthetic calibration and returns
+1-PER.
+
+%includes:
+#include <cmath>
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/contract/IIeee80211FecSuccessModel.h"
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%file: TestNetwork.ned
+
+import inet.physicallayer.wireless.ieee80211.packetlevel.errormodel.Ieee80211LdpcPerSuccessModel;
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        model: Ieee80211LdpcPerSuccessModel;
+}
+
+%file: synthetic-ldpc-per.csv
+# Synthetic test-only values; they are not a production performance claim.
+phy_format,bandwidth_mhz,mcs,nss,number_of_codewords,ldpc_codeword_length,shortened_bits,punctured_bits,repeated_bits,snr_db,per
+HT,20,4,1,1,1944,642,54,0,-2,1
+HT,20,4,1,1,1944,642,54,0,0,0.1
+HT,20,4,1,1,1944,642,54,0,2,0.001
+
+%inifile: omnetpp.ini
+[General]
+ned-path = .;../../../../src;../../lib
+network = TestNetwork
+*.model.perTableFile = "synthetic-ldpc-per.csv"
+
+%activity:
+
+auto model = check_and_cast<IIeee80211FecSuccessModel *>(
+    cSimulation::getActiveSimulation()->getModuleByPath("model"));
+const auto *mode = Ieee80211HtCompliantModes::getCompliantMode(
+    &Ieee80211HtmcsTable::htMcs4BW20MHz, Ieee80211HtMode::BAND_5GHZ,
+    Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+    Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG, Ieee80211FecType::LDPC);
+auto plan = mode->getDataMode()->computeEncodingPlan(B(100));
+double successLow = model->computeDataSuccessRate(*mode->getDataMode(), plan, -2);
+double successMiddle = model->computeDataSuccessRate(*mode->getDataMode(), plan, 0);
+double successHigh = model->computeDataSuccessRate(*mode->getDataMode(), plan, 2);
+ASSERT(successLow == 0);
+ASSERT(std::fabs(successMiddle - 0.9) < 1e-14);
+ASSERT(std::fabs(successHigh - 0.999) < 1e-14);
+ASSERT(successLow <= successMiddle && successMiddle <= successHigh);
+ASSERT(model->computeDataSuccessRate(*mode->getDataMode(), plan, -INFINITY) == successLow);
+ASSERT(model->computeDataSuccessRate(*mode->getDataMode(), plan, INFINITY) == successHigh);
+ASSERT(std::fabs(model->computeDataSuccessRate(*mode->getDataMode(), plan, -1) - (1 - std::sqrt(0.1))) < 1e-14);
+ASSERT(std::fabs(model->computeDataSuccessRate(*mode->getDataMode(), plan, 1) - 0.99) < 1e-14);

@@ -1,0 +1,58 @@
+%description:
+The NIST and Yans BCC equations remain independent of LDPC mode identity and
+produce the same result for otherwise identical HT BCC/LDPC variants.
+
+%includes:
+#include <cmath>
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211NistErrorModel.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211YansErrorModel.h"
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%global:
+
+class ExposedNistErrorModel : public Ieee80211NistErrorModel
+{
+  public:
+    using Ieee80211NistErrorModel::getBccDataSuccessRate;
+    using Ieee80211NistErrorModel::getHeaderSuccessRate;
+};
+
+class ExposedYansErrorModel : public Ieee80211YansErrorModel
+{
+  public:
+    using Ieee80211YansErrorModel::getBccDataSuccessRate;
+    using Ieee80211YansErrorModel::getHeaderSuccessRate;
+};
+
+%activity:
+
+const auto *mcs = &Ieee80211HtmcsTable::htMcs4BW20MHz;
+const auto *bcc = Ieee80211HtCompliantModes::getCompliantMode(mcs, Ieee80211HtMode::BAND_5GHZ,
+    Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG,
+    Ieee80211FecType::BCC);
+const auto *ldpc = Ieee80211HtCompliantModes::getCompliantMode(mcs, Ieee80211HtMode::BAND_5GHZ,
+    Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG,
+    Ieee80211FecType::LDPC);
+
+ExposedNistErrorModel nist;
+ExposedYansErrorModel yans;
+for (double snir : {0.1, 1.0, 10.0, 100.0}) {
+    double nistBcc = nist.getBccDataSuccessRate(bcc, 822, snir);
+    double nistVariant = nist.getBccDataSuccessRate(ldpc, 822, snir);
+    double yansBcc = yans.getBccDataSuccessRate(bcc, 822, snir);
+    double yansVariant = yans.getBccDataSuccessRate(ldpc, 822, snir);
+    ASSERT(nistBcc == nistVariant);
+    ASSERT(yansBcc == yansVariant);
+    ASSERT(0 <= nistBcc && nistBcc <= 1);
+    ASSERT(0 <= yansBcc && yansBcc <= 1);
+
+    double nistHeaderBcc = nist.getHeaderSuccessRate(bcc, 48, snir);
+    double nistHeaderVariant = nist.getHeaderSuccessRate(ldpc, 48, snir);
+    double yansHeaderBcc = yans.getHeaderSuccessRate(bcc, 48, snir);
+    double yansHeaderVariant = yans.getHeaderSuccessRate(ldpc, 48, snir);
+    ASSERT(nistHeaderBcc == nistHeaderVariant);
+    ASSERT(yansHeaderBcc == yansHeaderVariant);
+}

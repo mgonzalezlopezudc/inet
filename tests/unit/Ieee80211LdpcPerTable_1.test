@@ -1,0 +1,150 @@
+%description:
+Strict IEEE 802.11 LDPC PER CSV validation, exact lookup, endpoint clamping,
+and linear interpolation of log10(PER) versus SNR in dB.
+
+%includes:
+#include <cmath>
+#include <functional>
+#include <limits>
+#include <sstream>
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211LdpcPerTable.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%global:
+
+static const char *header =
+    "phy_format,bandwidth_mhz,mcs,nss,number_of_codewords,ldpc_codeword_length,shortened_bits,punctured_bits,repeated_bits,snr_db,per\n";
+
+static bool rejects(const std::string& body)
+{
+    try {
+        std::istringstream input(body);
+        Ieee80211LdpcPerTable table;
+        table.load(input, "synthetic-test.csv");
+        return false;
+    }
+    catch (const cRuntimeError&) {
+        return true;
+    }
+}
+
+%activity:
+
+// Annex I HT example 1 is used as a real planner signature. The values are
+// synthetic test data, not a production performance claim.
+std::istringstream valid(std::string("# synthetic test-only curve\n") + header +
+    "HT,20,4,1,1,1944,642,54,0,-2,1\n"
+    "HT,20,4,1,1,1944,642,54,0,0,0.1\n"
+    "# comments between curve data rows are ignored\n"
+    "HT,20,4,1,1,1944,642,54,0,2,0.001\n");
+Ieee80211LdpcPerTable table;
+table.load(valid, "synthetic-test.csv");
+ASSERT(table.getNumberOfCurves() == 1);
+Ieee80211LdpcPerCurveKey ht{Ieee80211PhyFormat::HT, 20, 4, 1, 1, 1944, 642, 54, 0};
+ASSERT(table.getCurve(ht).size() == 3);
+ASSERT(table.getPacketErrorRate(ht, -INFINITY) == 1.0);
+ASSERT(table.getPacketErrorRate(ht, -2) == 1.0);
+ASSERT(table.getPacketErrorRate(ht, 0) == 0.1);
+ASSERT(table.getPacketErrorRate(ht, INFINITY) == 0.001);
+ASSERT(std::fabs(table.getPacketErrorRate(ht, 1) - 0.01) < 1e-14); // geometric mean
+ASSERT(std::fabs(table.getPacketErrorRate(ht, -1) - std::sqrt(0.1)) < 1e-14);
+double quarterExpected = std::pow(10.0, std::log10(0.1) + 0.25 * (std::log10(0.001) - std::log10(0.1)));
+ASSERT(std::fabs(table.getPacketErrorRate(ht, 0.5) - quarterExpected) < 1e-14);
+
+const auto *htMode = Ieee80211HtCompliantModes::getCompliantMode(
+    &Ieee80211HtmcsTable::htMcs4BW20MHz, Ieee80211HtMode::BAND_5GHZ,
+    Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+    Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG, Ieee80211FecType::LDPC);
+auto resolvedPlan = htMode->getDataMode()->computeEncodingPlan(B(100));
+ASSERT(makeIeee80211LdpcPerCurveKey(*htMode->getDataMode(), resolvedPlan) == ht);
+
+// The calibration is keyed by PHY mode, not by one particular LDPC planner
+// signature. A second valid payload size must therefore reuse the same curve
+// (the production assumption is invariance across standard LDPC sizes).
+auto largerPlan = htMode->getDataMode()->computeEncodingPlan(B(1458));
+auto largerKey = makeIeee80211LdpcPerCurveKey(*htMode->getDataMode(), largerPlan);
+ASSERT(!(largerKey == ht));
+ASSERT(table.getCurve(largerKey).size() == table.getCurve(ht).size());
+ASSERT(table.getPacketErrorRate(largerKey, 0.5) == table.getPacketErrorRate(ht, 0.5));
+
+// Runtime lookup consumes a deterministic local or receiver-reconstructed
+// plan. It validates that plan directly against the resolved mode instead of
+// invoking the planner from an exact payload-length oracle.
+bool mismatchedFormatRejected = false;
+try {
+    Ieee80211DataEncodingPlan mismatchedFormat(Ieee80211FecType::LDPC,
+        Ieee80211PhyFormat::VHT_SU, resolvedPlan.getUncodedDataBits(),
+        resolvedPlan.getAvailableEncodedBits(), resolvedPlan.getInitialNumberOfSymbols(),
+        resolvedPlan.getNumberOfSymbols(), resolvedPlan.getNumberOfCodedBitsPerSymbol(),
+        resolvedPlan.getAdditionalCapacityApplied(), resolvedPlan.getCodewords());
+    makeIeee80211LdpcPerCurveKey(*htMode->getDataMode(), mismatchedFormat);
+}
+catch (const cRuntimeError&) { mismatchedFormatRejected = true; }
+ASSERT(mismatchedFormatRejected);
+
+bool mismatchedGeometryRejected = false;
+try {
+    Ieee80211DataEncodingPlan mismatchedGeometry(Ieee80211FecType::LDPC,
+        resolvedPlan.getPhyFormat(), resolvedPlan.getUncodedDataBits(),
+        resolvedPlan.getAvailableEncodedBits(), resolvedPlan.getInitialNumberOfSymbols() / 2,
+        resolvedPlan.getNumberOfSymbols() / 2, resolvedPlan.getNumberOfCodedBitsPerSymbol() * 2,
+        resolvedPlan.getAdditionalCapacityApplied(), resolvedPlan.getCodewords());
+    makeIeee80211LdpcPerCurveKey(*htMode->getDataMode(), mismatchedGeometry);
+}
+catch (const cRuntimeError&) { mismatchedGeometryRejected = true; }
+ASSERT(mismatchedGeometryRejected);
+
+// A structurally valid plan for another legal calibrated-mode tuple is not
+// calibrated by this synthetic table.  Missing-mode lookup must fail rather
+// than guessing from the nearest MCS or reusing another mode's curve.
+const auto *uncalibratedMode = Ieee80211HtCompliantModes::getCompliantMode(
+    &Ieee80211HtmcsTable::htMcs5BW20MHz, Ieee80211HtMode::BAND_5GHZ,
+    Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+    Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG, Ieee80211FecType::LDPC);
+ASSERT(uncalibratedMode != nullptr);
+auto uncalibratedPlan = uncalibratedMode->getDataMode()->computeEncodingPlan(B(100));
+auto uncalibratedKey = makeIeee80211LdpcPerCurveKey(*uncalibratedMode->getDataMode(), uncalibratedPlan);
+bool missingModeRejected = false;
+try { table.getPacketErrorRate(uncalibratedKey, 0); }
+catch (const cRuntimeError&) { missingModeRejected = true; }
+ASSERT(missingModeRejected);
+bool nanRejected = false;
+try { table.getPacketErrorRate(ht, std::numeric_limits<double>::quiet_NaN()); }
+catch (const cRuntimeError&) { nanRejected = true; }
+ASSERT(nanRejected);
+
+ASSERT(rejects(""));
+ASSERT(rejects("wrong,header\n"));
+ASSERT(rejects(std::string(header)));
+ASSERT(rejects(std::string(header) + "HT,20,4,1,1,1944,642,54,0,0\n"));
+ASSERT(rejects(std::string(header) + "\"HT\",20,4,1,1,1944,642,54,0,0,1\nHT,20,4,1,1,1944,642,54,0,1,0.1\n"));
+ASSERT(rejects(std::string(header) + "UNKNOWN,20,4,1,1,1944,642,54,0,0,1\nUNKNOWN,20,4,1,1,1944,642,54,0,1,0.1\n"));
+ASSERT(rejects(std::string(header) + "HT,20,4x,1,1,1944,642,54,0,0,1\nHT,20,4x,1,1,1944,642,54,0,1,0.1\n"));
+ASSERT(rejects(std::string(header) + "HT,20,4,1,1,1944,642,54,0,0junk,1\nHT,20,4,1,1,1944,642,54,0,1,0.1\n"));
+ASSERT(rejects(std::string(header) + "HT,20,4,1,1,1944,642,54,0,0,1junk\nHT,20,4,1,1,1944,642,54,0,1,0.1\n"));
+ASSERT(rejects(std::string(header) + "HT,20,4,1,1,1944,642,54,0,nan,1\nHT,20,4,1,1,1944,642,54,0,1,0.1\n"));
+ASSERT(rejects(std::string(header) + "HT,20,4,1,1,1944,642,54,0,inf,1\nHT,20,4,1,1,1944,642,54,0,1,0.1\n"));
+ASSERT(rejects(std::string(header) + "HT,20,4,1,1,1944,642,54,0,0,inf\nHT,20,4,1,1,1944,642,54,0,1,0.1\n"));
+ASSERT(rejects(std::string(header) + "HT,20,4,1,1,1944,642,54,0,0,0\nHT,20,4,1,1,1944,642,54,0,1,0.1\n"));
+ASSERT(rejects(std::string(header) + "HT,20,4,1,1,1944,642,54,0,0,1.1\nHT,20,4,1,1,1944,642,54,0,1,0.1\n"));
+ASSERT(rejects(std::string(header) + "HT,20,4,1,1,1944,642,54,0,0,0.1\nHT,20,4,1,1,1944,642,54,0,1,0.2\n"));
+ASSERT(rejects(std::string(header) + "HT,20,4,1,1,1944,642,54,0,0,1\nHT,20,4,1,1,1944,642,54,0,0,0.1\n"));
+ASSERT(rejects(std::string(header) + "HT,20,4,1,1,1944,642,54,0,0,1\n"));
+ASSERT(rejects(std::string(header) + "HT,20,4,1,1,1944,641,54,0,0,1\nHT,20,4,1,1,1944,641,54,0,1,0.1\n"));
+ASSERT(rejects(std::string(header) + "HT,80,4,1,1,1944,642,54,0,0,1\nHT,80,4,1,1,1944,642,54,0,1,0.1\n"));
+ASSERT(rejects(std::string(header) + "HT,20,4,2,1,1944,642,54,0,0,1\nHT,20,4,2,1,1944,642,54,0,1,0.1\n"));
+ASSERT(rejects(std::string(header) + "HT,20,4,1,0,1944,642,54,0,0,1\nHT,20,4,1,0,1944,642,54,0,1,0.1\n"));
+ASSERT(rejects(std::string(header) + "HT,20,4,1,1,650,642,54,0,0,1\nHT,20,4,1,1,650,642,54,0,1,0.1\n"));
+ASSERT(rejects(std::string(header) + "HT,20,4,1,1,1944,642,54,1,0,1\nHT,20,4,1,1,1944,642,54,1,1,0.1\n"));
+
+// Canonical curve-key ordering also prevents a curve from reappearing after
+// another key has begun.
+ASSERT(rejects(std::string(header) +
+    "HT,20,4,1,1,1944,642,54,0,0,1\n"
+    "HT,20,4,1,1,1944,642,54,0,1,0.1\n"
+    "VHT_SU,20,4,1,1,1296,36,12,0,0,1\n"
+    "VHT_SU,20,4,1,1,1296,36,12,0,1,0.1\n"
+    "HT,20,4,1,1,1944,642,54,0,2,0.01\n"));

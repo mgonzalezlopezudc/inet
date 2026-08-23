@@ -695,11 +695,11 @@ void Hcf::transmitControlResponseFrame(Packet *responsePacket, const Ptr<const I
     responsePacket->insertAtBack(makeShared<Ieee80211MacTrailer>());
     const IIeee80211Mode *responseMode = nullptr;
     if (auto rtsFrame = dynamicPtrCast<const Ieee80211RtsFrame>(receivedHeader))
-        responseMode = rateSelection->computeResponseCtsFrameMode(receivedPacket, rtsFrame);
+        responseMode = rateSelection->computeResponseCtsFrameMode(receivedPacket, rtsFrame, responsePacket);
     else if (auto blockAckReq = dynamicPtrCast<const Ieee80211BasicBlockAckReq>(receivedHeader))
-        responseMode = rateSelection->computeResponseBlockAckFrameMode(receivedPacket, blockAckReq);
+        responseMode = rateSelection->computeResponseBlockAckFrameMode(receivedPacket, blockAckReq, responsePacket);
     else if (auto dataOrMgmtHeader = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(receivedHeader))
-        responseMode = rateSelection->computeResponseAckFrameMode(receivedPacket, dataOrMgmtHeader);
+        responseMode = rateSelection->computeResponseAckFrameMode(receivedPacket, dataOrMgmtHeader, responsePacket);
     else
         throw cRuntimeError("Unknown received frame type");
     setFrameMode(responsePacket, responseHeader, responseMode);
@@ -784,4 +784,3 @@ Hcf::~Hcf()
 
 } // namespace ieee80211
 } // namespace inet
-

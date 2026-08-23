@@ -22,6 +22,31 @@ namespace inet {
 
 namespace physicallayer {
 
+namespace {
+
+const IIeee80211Mode *resolveFecVariant(const IIeee80211Mode *mode, Ieee80211FecType fecType)
+{
+    if (mode == nullptr)
+        return nullptr;
+    if (mode->getDataMode()->getFecType() == fecType)
+        return mode;
+    if (auto htMode = dynamic_cast<const Ieee80211HtMode *>(mode)) {
+        const auto *dataMode = htMode->getDataMode();
+        return Ieee80211HtCompliantModes::getCompliantMode(dataMode->getModulationAndCodingScheme(),
+                htMode->getCenterFrequencyMode(), htMode->getPreambleMode()->getPreambleFormat(),
+                dataMode->getGuardIntervalType(), fecType, 0);
+    }
+    if (auto vhtMode = dynamic_cast<const Ieee80211VhtMode *>(mode)) {
+        const auto *dataMode = vhtMode->getDataMode();
+        return Ieee80211VhtCompliantModes::getCompliantMode(dataMode->getModulationAndCodingScheme(),
+                vhtMode->getCenterFrequencyMode(), vhtMode->getPreambleMode()->getPreambleFormat(),
+                dataMode->getGuardIntervalType(), fecType, 0);
+    }
+    return nullptr;
+}
+
+} // namespace
+
 Register_Abstract_Class(Ieee80211ModeSet);
 
 const DelayedInitializer<std::vector<Ieee80211ModeSet>> Ieee80211ModeSet::modeSets([]() { return new std::vector<Ieee80211ModeSet> {
@@ -478,123 +503,204 @@ int Ieee80211ModeSet::findModeIndex(const IIeee80211Mode *mode) const
     for (size_t index = 0; index < entries.size(); index++)
         if (entries[index].mode == mode)
             return index;
+    if (mode != nullptr && mode->getDataMode()->getFecType() != Ieee80211FecType::BCC) {
+        const IIeee80211Mode *bccMode = resolveFecVariant(mode, Ieee80211FecType::BCC);
+        for (size_t index = 0; index < entries.size(); index++)
+            if (entries[index].mode == bccMode)
+                return index;
+    }
     return -1;
 }
 
-int Ieee80211ModeSet::getModeIndex(const IIeee80211Mode *mode) const
+int Ieee80211ModeSet::findCompatibleMetadataIndex(const IIeee80211Mode *mode) const
 {
-    int index = findModeIndex(mode);
-    if (index < 0)
-        throw cRuntimeError("Unknown mode");
-    else
-        return index;
+    int exactIndex = findModeIndex(mode);
+    if (exactIndex >= 0)
+        return exactIndex;
+    if (mode != nullptr && mode->getDataMode()->getPhyFormat() == Ieee80211PhyFormat::HT) {
+        const auto *htDataMode = mode->getDataMode();
+        // Initial VHT support covers only the equal-modulation HT MCS0-31
+        // capability mask. MCS32 and unequal-modulation MCS33-76 have no
+        // compatible VHT-SU metadata tuple.
+        if (htDataMode->getMcsIndex() > 31)
+            return -1;
+        int htBaseMcs = htDataMode->getMcsIndex() % 8;
+        for (size_t index = 0; index < entries.size(); index++) {
+            const auto *dataMode = entries[index].mode->getDataMode();
+            if (dataMode->getPhyFormat() == Ieee80211PhyFormat::VHT_SU &&
+                dataMode->getBandwidth() == htDataMode->getBandwidth() &&
+                dataMode->getNumberOfSpatialStreams() == htDataMode->getNumberOfSpatialStreams() &&
+                static_cast<int>(dataMode->getMcsIndex()) == htBaseMcs)
+                return index;
+        }
+    }
+    // A mode set entry may advertise the same legal PHY tuple with the
+    // opposite GI. GI is selected from the received header, so capability
+    // membership must compare the tuple without treating that entry's GI as
+    // an authority.
+    if (mode != nullptr) {
+        const auto *dataMode = mode->getDataMode();
+        for (size_t index = 0; index < entries.size(); index++) {
+            const auto *entryDataMode = entries[index].mode->getDataMode();
+            if (entryDataMode->getPhyFormat() == dataMode->getPhyFormat() &&
+                entryDataMode->getMcsIndex() == dataMode->getMcsIndex() &&
+                entryDataMode->getBandwidth() == dataMode->getBandwidth() &&
+                entryDataMode->getNumberOfSpatialStreams() == dataMode->getNumberOfSpatialStreams() &&
+                resolveFecVariant(entries[index].mode, dataMode->getFecType()) != nullptr)
+                return index;
+        }
+    }
+    return -1;
+}
+
+const IIeee80211Mode *Ieee80211ModeSet::resolveEntryMode(const IIeee80211Mode *entryMode,
+        const IIeee80211Mode *referenceMode) const
+{
+    if (entryMode == nullptr || referenceMode == nullptr)
+        return nullptr;
+    if (referenceMode->getDataMode()->getPhyFormat() == Ieee80211PhyFormat::HT &&
+        entryMode->getDataMode()->getPhyFormat() == Ieee80211PhyFormat::VHT_SU) {
+        const auto *referenceHtMode = check_and_cast<const Ieee80211HtMode *>(referenceMode);
+        const auto *entryDataMode = entryMode->getDataMode();
+        unsigned int baseMcs = entryDataMode->getMcsIndex();
+        unsigned int numberOfSpatialStreams = entryDataMode->getNumberOfSpatialStreams();
+        Hz bandwidth = entryDataMode->getBandwidth();
+        if (baseMcs > 7 || numberOfSpatialStreams < 1 || numberOfSpatialStreams > 4 ||
+            (bandwidth != MHz(20) && bandwidth != MHz(40)))
+            return nullptr;
+        unsigned int htMcsIndex = 8 * (numberOfSpatialStreams - 1) + baseMcs;
+        const auto *htMcs = Ieee80211HtmcsTable::getMcs(htMcsIndex, bandwidth);
+        const auto *referenceDataMode = referenceHtMode->getDataMode();
+        return Ieee80211HtCompliantModes::getCompliantMode(htMcs,
+                referenceHtMode->getCenterFrequencyMode(), referenceHtMode->getPreambleMode()->getPreambleFormat(),
+                referenceDataMode->getGuardIntervalType(), referenceDataMode->getFecType(), referenceDataMode->getFecVariant());
+    }
+    return resolveFecVariant(entryMode, referenceMode->getDataMode()->getFecType());
+}
+
+bool Ieee80211ModeSet::containsMode(const IIeee80211Mode *mode) const
+{
+    return findCompatibleMetadataIndex(mode) != -1;
 }
 
 bool Ieee80211ModeSet::getIsMandatory(const IIeee80211Mode *mode) const
 {
-    return entries[getModeIndex(mode)].isMandatory;
+    int index = findCompatibleMetadataIndex(mode);
+    if (index < 0)
+        throw cRuntimeError("Unknown mode");
+    return entries[index].isMandatory;
 }
 
-const IIeee80211Mode *Ieee80211ModeSet::findMode(bps bitrate, Hz bandwidth, int numSpatialStreams) const
+const IIeee80211Mode *Ieee80211ModeSet::getFecVariant(const IIeee80211Mode *mode, Ieee80211FecType fecType) const
 {
-    return findMode(bitrate - Mbps(0.05), bitrate + Mbps(0.05), bandwidth, numSpatialStreams);
+    return resolveFecVariant(mode, fecType);
 }
 
-const IIeee80211Mode *Ieee80211ModeSet::findMode(bps minBitrate, bps maxBitrate, Hz bandwidth, int numSpatialStreams) const
+const IIeee80211Mode *Ieee80211ModeSet::findMode(bps bitrate, Hz bandwidth, int numSpatialStreams, Ieee80211FecType fecType) const
+{
+    return findMode(bitrate - Mbps(0.05), bitrate + Mbps(0.05), bandwidth, numSpatialStreams, fecType);
+}
+
+const IIeee80211Mode *Ieee80211ModeSet::findMode(bps minBitrate, bps maxBitrate, Hz bandwidth, int numSpatialStreams, Ieee80211FecType fecType) const
 {
     for (size_t index = 0; index < entries.size(); index++) {
-        auto mode = entries[index].mode;
+        auto mode = resolveFecVariant(entries[index].mode, fecType);
+        if (mode == nullptr)
+            continue;
         auto dataMode = mode->getDataMode();
         auto bitrate = dataMode->getNetBitrate();
         if (minBitrate <= bitrate && bitrate <= maxBitrate &&
             (std::isnan(bandwidth.get()) || dataMode->getBandwidth() == bandwidth) &&
             (numSpatialStreams == -1 || dataMode->getNumberOfSpatialStreams() == numSpatialStreams))
         {
-            return entries[index].mode;
+            return mode;
         }
     }
     return nullptr;
 }
 
-const IIeee80211Mode *Ieee80211ModeSet::getMode(bps bitrate, Hz bandwidth, int numSpatialStreams) const
+const IIeee80211Mode *Ieee80211ModeSet::getMode(bps bitrate, Hz bandwidth, int numSpatialStreams, Ieee80211FecType fecType) const
 {
-    const IIeee80211Mode *mode = getMode(bitrate - Mbps(0.05), bitrate + Mbps(0.05), bandwidth, numSpatialStreams);
+    const IIeee80211Mode *mode = getMode(bitrate - Mbps(0.05), bitrate + Mbps(0.05), bandwidth, numSpatialStreams, fecType);
     if (mode == nullptr)
         throw cRuntimeError("Unknown bitrate: %g in operation mode: '%s'", bitrate.get(), getName());
     else
         return mode;
 }
 
-const IIeee80211Mode *Ieee80211ModeSet::getMode(bps minBitrate, bps maxBitrate, Hz bandwidth, int numSpatialStreams) const
+const IIeee80211Mode *Ieee80211ModeSet::getMode(bps minBitrate, bps maxBitrate, Hz bandwidth, int numSpatialStreams, Ieee80211FecType fecType) const
 {
-    const IIeee80211Mode *mode = findMode(minBitrate, maxBitrate, bandwidth, numSpatialStreams);
+    const IIeee80211Mode *mode = findMode(minBitrate, maxBitrate, bandwidth, numSpatialStreams, fecType);
     if (mode == nullptr)
         throw cRuntimeError("Unknown bitrate: (%g - %g) in operation mode: '%s'", minBitrate.get(), maxBitrate.get(), getName());
     else
         return mode;
 }
 
-const IIeee80211Mode *Ieee80211ModeSet::getSlowestMode() const
+const IIeee80211Mode *Ieee80211ModeSet::getSlowestMode(Ieee80211FecType fecType) const
 {
-    return entries.front().mode;
+    return resolveFecVariant(entries.front().mode, fecType);
 }
 
-const IIeee80211Mode *Ieee80211ModeSet::getFastestMode() const
+const IIeee80211Mode *Ieee80211ModeSet::getFastestMode(Ieee80211FecType fecType) const
 {
-    return entries.back().mode;
+    return resolveFecVariant(entries.back().mode, fecType);
 }
 
 const IIeee80211Mode *Ieee80211ModeSet::getSlowerMode(const IIeee80211Mode *mode) const
 {
-    int index = findModeIndex(mode);
-    if (index > 0)
-        return entries[index - 1].mode;
-    else
-        return nullptr;
+    int index = findCompatibleMetadataIndex(mode);
+    for (int i = index - 1; i >= 0; i--)
+        if (auto resolved = resolveEntryMode(entries[i].mode, mode))
+            return resolved;
+    return nullptr;
 }
 
 const IIeee80211Mode *Ieee80211ModeSet::getFasterMode(const IIeee80211Mode *mode) const
 {
-    int index = findModeIndex(mode);
-    if (index >= 0 && index < (int)entries.size() - 1)
-        return entries[index + 1].mode;
-    else
-        return nullptr;
-}
-
-const IIeee80211Mode *Ieee80211ModeSet::getSlowestMandatoryMode() const
-{
-    for (size_t i = 0; i < entries.size(); i++)
-        if (entries[i].isMandatory)
-            return entries[i].mode;
+    int index = findCompatibleMetadataIndex(mode);
+    if (index >= 0)
+        for (size_t i = index + 1; i < entries.size(); i++)
+            if (auto resolved = resolveEntryMode(entries[i].mode, mode))
+                return resolved;
     return nullptr;
 }
 
-const IIeee80211Mode *Ieee80211ModeSet::getFastestMandatoryMode() const
+const IIeee80211Mode *Ieee80211ModeSet::getSlowestMandatoryMode(Ieee80211FecType fecType) const
+{
+    for (size_t i = 0; i < entries.size(); i++)
+        if (entries[i].isMandatory)
+            return resolveFecVariant(entries[i].mode, fecType);
+    return nullptr;
+}
+
+const IIeee80211Mode *Ieee80211ModeSet::getFastestMandatoryMode(Ieee80211FecType fecType) const
 {
     for (int i = (int)entries.size() - 1; i >= 0; i--)
         if (entries[i].isMandatory)
-            return entries[i].mode;
+            return resolveFecVariant(entries[i].mode, fecType);
     return nullptr;
 }
 
 const IIeee80211Mode *Ieee80211ModeSet::getSlowerMandatoryMode(const IIeee80211Mode *mode) const
 {
-    int index = findModeIndex(mode);
+    int index = findCompatibleMetadataIndex(mode);
     if (index > 0)
         for (int i = index - 1; i >= 0; i--)
             if (entries[i].isMandatory)
-                return entries[i].mode;
+                if (auto resolved = resolveEntryMode(entries[i].mode, mode))
+                    return resolved;
     return nullptr;
 }
 
 const IIeee80211Mode *Ieee80211ModeSet::getFasterMandatoryMode(const IIeee80211Mode *mode) const
 {
-    int index = findModeIndex(mode);
+    int index = findCompatibleMetadataIndex(mode);
     if (index >= 0)
         for (size_t i = index + 1; i < entries.size(); i++)
             if (entries[i].isMandatory)
-                return entries[i].mode;
+                if (auto resolved = resolveEntryMode(entries[i].mode, mode))
+                    return resolved;
     return nullptr;
 }
 
@@ -606,6 +712,85 @@ const Ieee80211ModeSet *Ieee80211ModeSet::findModeSet(const char *mode)
             return modeSet;
     }
     return nullptr;
+}
+
+const IIeee80211Mode *Ieee80211ModeSet::findMode(Ieee80211PhyFormat phyFormat,
+        unsigned int mcsIndex, Hz bandwidth, unsigned int numberOfSpatialStreams,
+        Ieee80211FecType fecType)
+{
+    const Ieee80211ModeSet *modeSet;
+    if (phyFormat == Ieee80211PhyFormat::HT)
+        modeSet = getModeSet("n(mixed-2.4Ghz)");
+    else if (phyFormat == Ieee80211PhyFormat::VHT_SU)
+        modeSet = getModeSet("ac");
+    else
+        return nullptr;
+
+    for (int i = 0; i < modeSet->getNumModes(); i++) {
+        const auto *mode = modeSet->getMode(i);
+        const auto *dataMode = mode->getDataMode();
+        if (dataMode->getPhyFormat() == phyFormat && dataMode->getMcsIndex() == mcsIndex &&
+            dataMode->getBandwidth() == bandwidth &&
+            dataMode->getNumberOfSpatialStreams() == static_cast<int>(numberOfSpatialStreams))
+            return modeSet->getFecVariant(mode, fecType);
+    }
+    return nullptr;
+}
+
+const IIeee80211Mode *Ieee80211ModeSet::findMode(Ieee80211PhyFormat phyFormat,
+        unsigned int mcsIndex, Hz bandwidth, unsigned int numberOfSpatialStreams,
+        Ieee80211FecType fecType, bool shortGi)
+{
+    const Ieee80211ModeSet *modeSet;
+    if (phyFormat == Ieee80211PhyFormat::HT)
+        modeSet = getModeSet("n(mixed-2.4Ghz)");
+    else if (phyFormat == Ieee80211PhyFormat::VHT_SU)
+        modeSet = getModeSet("ac");
+    else
+        return nullptr;
+
+    const IIeee80211Mode *referenceMode = nullptr;
+    for (int i = 0; i < modeSet->getNumModes(); i++) {
+        const auto *candidate = modeSet->getMode(i);
+        const auto *dataMode = candidate->getDataMode();
+        if (dataMode->getPhyFormat() == phyFormat && dataMode->getMcsIndex() == mcsIndex &&
+            dataMode->getBandwidth() == bandwidth &&
+            dataMode->getNumberOfSpatialStreams() == static_cast<int>(numberOfSpatialStreams) &&
+            modeSet->getFecVariant(candidate, fecType) != nullptr) {
+            referenceMode = candidate;
+            break;
+        }
+    }
+    if (referenceMode == nullptr)
+        return nullptr;
+
+    if (phyFormat == Ieee80211PhyFormat::HT) {
+        const auto *htMode = dynamic_cast<const Ieee80211HtMode *>(referenceMode);
+        if (htMode == nullptr)
+            return nullptr;
+        const auto *fecMode = modeSet->getFecVariant(referenceMode, fecType);
+        if (fecMode == nullptr)
+            return nullptr;
+        const auto *dataMode = check_and_cast<const Ieee80211HtDataMode *>(fecMode->getDataMode());
+        return Ieee80211HtCompliantModes::getCompliantMode(
+                dataMode->getModulationAndCodingScheme(), htMode->getCenterFrequencyMode(),
+                htMode->getPreambleMode()->getPreambleFormat(),
+                shortGi ? Ieee80211HtModeBase::HT_GUARD_INTERVAL_SHORT : Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG,
+                fecType, dataMode->getFecVariant());
+    }
+
+    const auto *vhtMode = dynamic_cast<const Ieee80211VhtMode *>(referenceMode);
+    if (vhtMode == nullptr)
+        return nullptr;
+    const auto *fecMode = modeSet->getFecVariant(referenceMode, fecType);
+    if (fecMode == nullptr)
+        return nullptr;
+    const auto *dataMode = check_and_cast<const Ieee80211VhtDataMode *>(fecMode->getDataMode());
+    return Ieee80211VhtCompliantModes::getCompliantMode(
+            dataMode->getModulationAndCodingScheme(), vhtMode->getCenterFrequencyMode(),
+            vhtMode->getPreambleMode()->getPreambleFormat(),
+            shortGi ? Ieee80211VhtModeBase::HT_GUARD_INTERVAL_SHORT : Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG,
+            fecType, dataMode->getFecVariant());
 }
 
 const Ieee80211ModeSet *Ieee80211ModeSet::getModeSet(const char *mode)
@@ -626,4 +811,3 @@ const Ieee80211ModeSet *Ieee80211ModeSet::getModeSet(const char *mode)
 } // namespace physicallayer
 
 } // namespace inet
-

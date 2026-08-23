@@ -23,6 +23,9 @@ simple QosRateSelection extends SimpleModule
     parameters:
         @class(QosRateSelection);
         string rateControlModule;
+        string peerCapabilitiesModule = default("");
+        bool htLdpcTxActivated = default(false);
+        bool vhtLdpcTxActivated = default(false);
 
         double multicastFrameBitrate @unit(bps) = default(-1bps);
 
@@ -38,4 +41,3 @@ simple QosRateSelection extends SimpleModule
         double controlFrameBitrate @unit(bps) = default(-1bps);
         @display("i=block/cogwheel");
 }
-

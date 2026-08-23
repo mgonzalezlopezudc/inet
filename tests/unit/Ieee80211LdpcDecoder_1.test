@@ -1,0 +1,278 @@
+%description:
+Deterministic soft-decision decoder tests for all twelve IEEE 802.11 HT/VHT
+LDPC variants and both layered decoding algorithms.  Inputs are fixed; no
+wall-clock or unrecorded randomness is used.
+
+%includes:
+#include <cmath>
+#include <functional>
+#include <limits>
+#include "inet/physicallayer/wireless/ieee80211/bitlevel/Ieee80211LdpcCode.h"
+#include "inet/physicallayer/wireless/common/radio/bitlevel/LdpcCoder.h"
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%global:
+
+static const Ieee80211LdpcRate rates[] = {
+    Ieee80211LdpcRate::RATE_1_2,
+    Ieee80211LdpcRate::RATE_2_3,
+    Ieee80211LdpcRate::RATE_3_4,
+    Ieee80211LdpcRate::RATE_5_6
+};
+
+static BitVector makeInformation(int length)
+{
+    BitVector result;
+    for (int i = 0; i < length; i++)
+        result.appendBit(((i * 37 + i / 5 + 11) % 19) < 8);
+    return result;
+}
+
+static BitReliabilityVector makeReliabilities(const BitVector& codeword, double magnitude)
+{
+    BitReliabilityVector result;
+    result.reserve(codeword.getSize());
+    for (unsigned int i = 0; i < codeword.getSize(); i++)
+        result.push_back(codeword.getBit(i) ? -magnitude : magnitude);
+    return result;
+}
+
+static bool throws(const std::function<void()>& function)
+{
+    try {
+        function();
+        return false;
+    }
+    catch (const cRuntimeError&) {
+        return true;
+    }
+}
+
+static void assertSameResult(const FecDecodingResult& first, const FecDecodingResult& second)
+{
+    ASSERT(first.informationBits == second.informationBits);
+    ASSERT(first.converged == second.converged);
+    ASSERT(first.iterations == second.iterations);
+}
+
+static void assertSumProductOracle(const LdpcCoder& coder, const std::vector<double>& inputs, double maximumLlr)
+{
+    auto actual = coder.computeSumProductCheckMessages(inputs);
+    ASSERT(actual.size() == inputs.size());
+    for (size_t target = 0; target < inputs.size(); target++) {
+        long double product = 1.0L;
+        for (size_t i = 0; i < inputs.size(); i++) {
+            if (i == target)
+                continue;
+            long double clamped = std::max(-maximumLlr, std::min(maximumLlr, inputs[i]));
+            product *= std::tanh(clamped / 2.0L);
+        }
+        product = std::max(0.0L, std::min(std::nextafter(1.0L, 0.0L), std::fabs(product)));
+        long double expected = 2.0L * std::atanh(product);
+        int sign = 1;
+        for (size_t i = 0; i < inputs.size(); i++)
+            if (i != target && inputs[i] < 0)
+                sign = -sign;
+        expected = std::max(-static_cast<long double>(maximumLlr),
+                            std::min(static_cast<long double>(maximumLlr), sign * expected));
+        ASSERT(std::fabs(actual[target] - static_cast<double>(expected)) < 1e-11);
+    }
+}
+
+// Deliberately small and slow test-only decoder used to cross-check the
+// checked-in multi-error fixture. It computes each outgoing check message
+// independently instead of using the production prefix/suffix or two-minimum
+// optimizations, while retaining the standard deterministic layered schedule.
+static FecDecodingResult referenceDecode(const LdpcCode& code,
+        LdpcDecodingAlgorithm algorithm, const BitReliabilityVector& reliabilities,
+        int maxIterations, double normalizedMinSumFactor, double maximumLlr)
+{
+    auto clamp = [maximumLlr](double value) {
+        return std::max(-maximumLlr, std::min(maximumLlr, value));
+    };
+    std::vector<double> posterior(reliabilities.begin(), reliabilities.end());
+    for (double& value : posterior)
+        value = clamp(value);
+    std::vector<double> checkToVariable(code.getEdges().size(), 0.0);
+
+    for (int iteration = 1; iteration <= maxIterations; iteration++) {
+        for (int checkNode = 0; checkNode < code.getParityLength(); checkNode++) {
+            const auto& checkEdges = code.getEdgesOfCheck(checkNode);
+            std::vector<double> extrinsic(checkEdges.size());
+            for (size_t i = 0; i < checkEdges.size(); i++) {
+                const auto& edge = code.getEdge(checkEdges[i]);
+                extrinsic[i] = clamp(posterior[edge.variableNode] - checkToVariable[checkEdges[i]]);
+            }
+
+            for (size_t target = 0; target < checkEdges.size(); target++) {
+                double message;
+                if (algorithm == LdpcDecodingAlgorithm::SUM_PRODUCT) {
+                    long double product = 1.0L;
+                    for (size_t i = 0; i < checkEdges.size(); i++)
+                        if (i != target)
+                            product *= std::tanh(static_cast<long double>(extrinsic[i]) / 2.0L);
+                    long double limit = std::nextafter(1.0L, 0.0L);
+                    product = std::max(-limit, std::min(limit, product));
+                    message = clamp(static_cast<double>(2.0L * std::atanh(product)));
+                }
+                else {
+                    double minimum = std::numeric_limits<double>::infinity();
+                    int sign = 1;
+                    for (size_t i = 0; i < checkEdges.size(); i++) {
+                        if (i == target)
+                            continue;
+                        minimum = std::min(minimum, std::abs(extrinsic[i]));
+                        if (extrinsic[i] < 0)
+                            sign = -sign;
+                    }
+                    message = clamp(sign * normalizedMinSumFactor * minimum);
+                }
+                int edgeIndex = checkEdges[target];
+                const auto& edge = code.getEdge(edgeIndex);
+                checkToVariable[edgeIndex] = message;
+                posterior[edge.variableNode] = clamp(extrinsic[target] + message);
+            }
+        }
+
+        BitVector decision;
+        for (double value : posterior)
+            decision.appendBit(value < 0);
+        if (code.isCodeword(decision)) {
+            BitVector informationBits;
+            for (int i = 0; i < code.getInformationLength(); i++)
+                informationBits.appendBit(decision.getBit(i));
+            return {informationBits, true, iteration};
+        }
+    }
+
+    BitVector informationBits;
+    for (int i = 0; i < code.getInformationLength(); i++)
+        informationBits.appendBit(posterior[i] < 0);
+    return {informationBits, false, maxIterations};
+}
+
+%activity:
+
+for (int codewordLength : {648, 1296, 1944}) {
+    for (Ieee80211LdpcRate rate : rates) {
+        const auto& code = Ieee80211LdpcCode::getCode(codewordLength, rate);
+        BitVector information = makeInformation(code.getInformationLength());
+        BitVector codeword = code.encode(information);
+
+        for (LdpcDecodingAlgorithm algorithm : {LdpcDecodingAlgorithm::SUM_PRODUCT, LdpcDecodingAlgorithm::NORMALIZED_MIN_SUM}) {
+            LdpcCoder decoder(code, algorithm, 20, 0.75, 20.0);
+            BitReliabilityVector noiseless = makeReliabilities(codeword, 8.0);
+            FecDecodingResult first = decoder.decodeReliabilities(noiseless);
+            FecDecodingResult second = decoder.decodeReliabilities(noiseless);
+            ASSERT(first.converged);
+            ASSERT(first.iterations >= 1 && first.iterations <= 20);
+            ASSERT(first.informationBits == information);
+            assertSameResult(first, second);
+
+            auto hardResult = decoder.decode(codeword);
+            ASSERT(hardResult.second);
+            ASSERT(hardResult.first == information);
+
+            // Each weak wrong-sign observation is independently correctable;
+            // the sign convention is positive=bit 0.
+            BitReliabilityVector weakInformation = noiseless;
+            weakInformation[0] = codeword.getBit(0) ? 1.0 : -1.0;
+            auto weakInformationResult = decoder.decodeReliabilities(weakInformation);
+            ASSERT(weakInformationResult.converged);
+            ASSERT(weakInformationResult.informationBits == information);
+
+            BitReliabilityVector weakParity = noiseless;
+            int parityPosition = code.getInformationLength();
+            weakParity[parityPosition] = codeword.getBit(parityPosition) ? 1.0 : -1.0;
+            auto weakParityResult = decoder.decodeReliabilities(weakParity);
+            ASSERT(weakParityResult.converged);
+            ASSERT(weakParityResult.informationBits == information);
+
+            // This fixed two-error fixture is deliberately weak, so the
+            // iterative code—not a hard-decision shortcut—does the recovery.
+            // It was independently cross-checked with referenceDecode(), the
+            // intentionally naive test-only layered decoder above.
+            BitReliabilityVector weakPair = noiseless;
+            weakPair[0] = codeword.getBit(0) ? 0.5 : -0.5;
+            weakPair[1] = codeword.getBit(1) ? 0.5 : -0.5;
+            BitVector initialDecision;
+            for (double reliability : weakPair)
+                initialDecision.appendBit(reliability < 0);
+            ASSERT(!code.isCodeword(initialDecision));
+            auto weakPairFirst = decoder.decodeReliabilities(weakPair);
+            auto weakPairSecond = decoder.decodeReliabilities(weakPair);
+            auto weakPairReference = referenceDecode(code, algorithm, weakPair, 20, 0.75, 20.0);
+            ASSERT(weakPairFirst.converged);
+            ASSERT(weakPairFirst.informationBits == information);
+            assertSameResult(weakPairFirst, weakPairSecond);
+            assertSameResult(weakPairFirst, weakPairReference);
+
+            // With one strong nonzero observation and all remaining bits erased,
+            // no check-to-variable message can resolve the invalid syndrome in
+            // one iteration. Normal non-convergence is therefore deterministic.
+            BitReliabilityVector failing(code.getCodewordLength(), 0.0);
+            failing[0] = -20.0;
+            LdpcCoder oneIteration(code, algorithm, 1, 0.75, 20.0);
+            auto failure = oneIteration.decodeReliabilities(failing);
+            ASSERT(!failure.converged);
+            ASSERT(failure.iterations == 1);
+
+            // Finite values outside the configured dynamic range clamp to the
+            // same decision as the explicitly clamped input.
+            BitReliabilityVector huge = makeReliabilities(codeword, 1e100);
+            BitReliabilityVector clamped = makeReliabilities(codeword, 20.0);
+            auto hugeResult = decoder.decodeReliabilities(huge);
+            auto clampedResult = decoder.decodeReliabilities(clamped);
+            assertSameResult(hugeResult, clampedResult);
+
+            BitReliabilityVector shortVector = noiseless;
+            shortVector.pop_back();
+            BitReliabilityVector longVector = noiseless;
+            longVector.push_back(0.0);
+            ASSERT(throws([&]() { decoder.decodeReliabilities(shortVector); }));
+            ASSERT(throws([&]() { decoder.decodeReliabilities(longVector); }));
+            BitReliabilityVector nanVector = noiseless;
+            nanVector[0] = std::numeric_limits<double>::quiet_NaN();
+            ASSERT(throws([&]() { decoder.decodeReliabilities(nanVector); }));
+            BitReliabilityVector positiveInfinityVector = noiseless;
+            positiveInfinityVector[0] = std::numeric_limits<double>::infinity();
+            ASSERT(throws([&]() { decoder.decodeReliabilities(positiveInfinityVector); }));
+            BitReliabilityVector negativeInfinityVector = noiseless;
+            negativeInfinityVector[0] = -std::numeric_limits<double>::infinity();
+            ASSERT(throws([&]() { decoder.decodeReliabilities(negativeInfinityVector); }));
+        }
+    }
+}
+
+const auto& checkCode = Ieee80211LdpcCode::getCode(648, Ieee80211LdpcRate::RATE_1_2);
+LdpcCoder checkCoder(checkCode, LdpcDecodingAlgorithm::SUM_PRODUCT, 20, 0.75, 40.0);
+
+// Independent long-double oracles cover mixed signs, small magnitudes,
+// erasures, multiple simultaneous zeros, and configured-input saturation.
+assertSumProductOracle(checkCoder, {0.2, -0.7, 1.2, -2.1}, 40.0);
+assertSumProductOracle(checkCoder, {1e-8, -2e-8, 3e-8, 4e-8}, 40.0);
+assertSumProductOracle(checkCoder, {0.0, 1.0, -2.0, 3.0}, 40.0);
+assertSumProductOracle(checkCoder, {0.0, 0.0, -2.0, 3.0}, 40.0);
+assertSumProductOracle(checkCoder, {1000.0, -1000.0, 5.0, -7.0}, 40.0);
+auto zeroSpa = checkCoder.computeSumProductCheckMessages({0.0, 1.0, -2.0, 3.0});
+ASSERT(std::fabs(zeroSpa[0]) > 1e-6);
+for (size_t i = 1; i < zeroSpa.size(); i++)
+    ASSERT(std::fabs(zeroSpa[i]) < 1e-15);
+
+// Independent normalized-min-sum oracle: two minima, stable first tie, sign,
+// and normalization are all visible in this small check.
+auto actualNms = checkCoder.computeNormalizedMinSumCheckMessages({2.0, -1.0, 1.0, -4.0});
+ASSERT(std::fabs(actualNms[0] - 0.75) < 1e-12);
+ASSERT(std::fabs(actualNms[1] + 0.75) < 1e-12);
+ASSERT(std::fabs(actualNms[2] - 0.75) < 1e-12);
+ASSERT(std::fabs(actualNms[3] + 0.75) < 1e-12);
+auto tiedNms = checkCoder.computeNormalizedMinSumCheckMessages({0.0, 0.0, 2.0});
+for (double value : tiedNms)
+    ASSERT(std::fabs(value) < 1e-15);
+
+ASSERT(throws([&]() { LdpcCoder invalid(checkCode, LdpcDecodingAlgorithm::SUM_PRODUCT, 0); }));
+ASSERT(throws([&]() { LdpcCoder invalid(checkCode, LdpcDecodingAlgorithm::SUM_PRODUCT, 20, 0.0); }));
+ASSERT(throws([&]() { LdpcCoder invalid(checkCode, LdpcDecodingAlgorithm::SUM_PRODUCT, 20, 1.1); }));
+ASSERT(throws([&]() { LdpcCoder invalid(checkCode, LdpcDecodingAlgorithm::SUM_PRODUCT, 20, 0.75, 0.0); }));

@@ -9,7 +9,9 @@
 
 #include "inet/common/packet/serializer/ChunkSerializerRegistry.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211OfdmSignalField.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeaderCrc.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211VhtSigB.h"
 
 namespace inet {
 
@@ -36,6 +38,49 @@ void readOfdmSignal(MemoryInputStream& stream, uint8_t& rate, bool& reserved, ui
     length = field.length;
     parity = field.parity;
     tail = field.tail;
+}
+
+void appendLe(std::vector<bool>& bits, uint64_t value, int width)
+{
+    if (width < 0 || width > 64 || (width != 64 && value >= (uint64_t(1) << width)))
+        throw cRuntimeError("IEEE 802.11 PHY header field does not fit in %d bits", width);
+    for (int i = 0; i < width; i++)
+        bits.push_back((value >> i) & 1);
+}
+
+uint64_t readLe(MemoryInputStream& stream, std::vector<bool>& protectedBits, int width)
+{
+    uint64_t value = 0;
+    for (int i = 0; i < width; i++) {
+        bool bit = stream.readBit();
+        protectedBits.push_back(bit);
+        if (bit)
+            value |= uint64_t(1) << i;
+    }
+    return value;
+}
+
+void writeProtectedBits(MemoryOutputStream& stream, const std::vector<bool>& bits)
+{
+    if (bits.size() != 34)
+        throw cRuntimeError("IEEE 802.11 PHY header must contain 34 protected bits");
+    stream.writeBits(bits);
+    uint8_t crc = computeIeee80211PhyHeaderCrc(bits);
+    // Clause 19.3.9.4.4 denotes the result as {B7,...,B0} and transmits
+    // B7 first. The numeric result stores B7 in bit 7.
+    for (int i = 7; i >= 0; i--)
+        stream.writeBit((crc >> i) & 1);
+    stream.writeBitRepeatedly(false, 6);
+}
+
+uint8_t readCrcAndTail(MemoryInputStream& stream, bool& tailIsZero)
+{
+    uint8_t crc = 0;
+    for (int i = 7; i >= 0; i--)
+        if (stream.readBit())
+            crc |= 1 << i;
+    tailIsZero = stream.readBitRepeatedly(false, 6);
+    return crc;
 }
 
 } // namespace
@@ -195,11 +240,46 @@ const Ptr<Chunk> Ieee80211ErpOfdmPhyHeaderSerializer::deserialize(MemoryInputStr
 void Ieee80211HtPhyHeaderSerializer::serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const
 {
     auto htPhyHeader = dynamicPtrCast<const Ieee80211HtPhyHeader>(chunk);
+    std::vector<bool> bits;
+    appendLe(bits, htPhyHeader->getMcs(), 7);
+    appendLe(bits, htPhyHeader->getChannelWidth40(), 1);
+    auto length = htPhyHeader->getLengthField().get<B>();
+    if (length < 0 || length > 65535)
+        throw cRuntimeError("HT-SIG length is outside the 16-bit field");
+    appendLe(bits, length, 16);
+    appendLe(bits, htPhyHeader->getSmoothing(), 1);
+    appendLe(bits, htPhyHeader->getNotSounding(), 1);
+    appendLe(bits, htPhyHeader->getReserved(), 1);
+    appendLe(bits, htPhyHeader->getAggregation(), 1);
+    appendLe(bits, htPhyHeader->getStbc(), 2);
+    appendLe(bits, htPhyHeader->getFecCoding(), 1);
+    appendLe(bits, htPhyHeader->getShortGi(), 1);
+    appendLe(bits, htPhyHeader->getNumberOfExtensionSpatialStreams(), 2);
+    writeProtectedBits(stream, bits);
 }
 
 const Ptr<Chunk> Ieee80211HtPhyHeaderSerializer::deserialize(MemoryInputStream& stream) const
 {
     auto htPhyHeader = makeShared<Ieee80211HtPhyHeader>();
+    std::vector<bool> bits;
+    htPhyHeader->setMcs(readLe(stream, bits, 7));
+    htPhyHeader->setChannelWidth40(readLe(stream, bits, 1));
+    htPhyHeader->setLengthField(B(readLe(stream, bits, 16)));
+    htPhyHeader->setSmoothing(readLe(stream, bits, 1));
+    htPhyHeader->setNotSounding(readLe(stream, bits, 1));
+    htPhyHeader->setReserved(readLe(stream, bits, 1));
+    htPhyHeader->setAggregation(readLe(stream, bits, 1));
+    htPhyHeader->setStbc(readLe(stream, bits, 2));
+    htPhyHeader->setFecCoding(readLe(stream, bits, 1));
+    htPhyHeader->setShortGi(readLe(stream, bits, 1));
+    htPhyHeader->setNumberOfExtensionSpatialStreams(readLe(stream, bits, 2));
+    bool tailIsZero;
+    uint8_t crc = readCrcAndTail(stream, tailIsZero);
+    htPhyHeader->setCrc(crc);
+    if (crc != computeIeee80211PhyHeaderCrc(bits) || !htPhyHeader->getReserved())
+        htPhyHeader->markIncorrect();
+    if (!tailIsZero || htPhyHeader->getMcs() > 76 || htPhyHeader->getStbc() == 3)
+        htPhyHeader->markImproperlyRepresented();
     return htPhyHeader;
 }
 
@@ -209,11 +289,85 @@ const Ptr<Chunk> Ieee80211HtPhyHeaderSerializer::deserialize(MemoryInputStream& 
 void Ieee80211VhtPhyHeaderSerializer::serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const
 {
     auto vhtPhyHeader = dynamicPtrCast<const Ieee80211VhtPhyHeader>(chunk);
+    std::vector<bool> bits;
+    appendLe(bits, vhtPhyHeader->getBandwidth(), 2);
+    appendLe(bits, vhtPhyHeader->getReserved1(), 1);
+    appendLe(bits, vhtPhyHeader->getStbc(), 1);
+    appendLe(bits, vhtPhyHeader->getGroupId(), 6);
+    appendLe(bits, vhtPhyHeader->getNumberOfSpaceTimeStreams(), 3);
+    appendLe(bits, vhtPhyHeader->getPartialAid(), 9);
+    appendLe(bits, vhtPhyHeader->getTxopPsNotAllowed(), 1);
+    appendLe(bits, vhtPhyHeader->getReserved2(), 1);
+    appendLe(bits, vhtPhyHeader->getShortGi(), 1);
+    appendLe(bits, vhtPhyHeader->getShortGiNsymDisambiguation(), 1);
+    appendLe(bits, vhtPhyHeader->getCoding(), 1);
+    appendLe(bits, vhtPhyHeader->getLdpcExtraOfdmSymbol(), 1);
+    appendLe(bits, vhtPhyHeader->getMcs(), 4);
+    appendLe(bits, vhtPhyHeader->getBeamformed(), 1);
+    appendLe(bits, vhtPhyHeader->getReserved3(), 1);
+    writeProtectedBits(stream, bits);
+
+    auto sigBLayout = getVhtSuSigBLayout(vhtPhyHeader->getBandwidth());
+    auto expectedChunkLength = b(48 + sigBLayout.getBitLength());
+    if (vhtPhyHeader->getChunkLength() != expectedChunkLength)
+        throw cRuntimeError("VHT PHY header chunk length %s does not match bandwidth-code %u layout %s",
+                vhtPhyHeader->getChunkLength().str().c_str(), vhtPhyHeader->getBandwidth(), expectedChunkLength.str().c_str());
+    auto encodedLength = encodeVhtSuSigBLength(vhtPhyHeader->getLengthField());
+    if (encodedLength != vhtPhyHeader->getVhtSigBLength())
+        throw cRuntimeError("VHT-SIG-B Length %u does not encode APEP length %s",
+                vhtPhyHeader->getVhtSigBLength(), vhtPhyHeader->getLengthField().str().c_str());
+    std::vector<bool> sigBBits;
+    appendLe(sigBBits, encodedLength, sigBLayout.lengthFieldWidth);
+    appendLe(sigBBits, vhtPhyHeader->getVhtSigBReserved(), sigBLayout.reservedFieldWidth);
+    appendLe(sigBBits, vhtPhyHeader->getVhtSigBTail(), 6);
+    stream.writeBits(sigBBits);
 }
 
 const Ptr<Chunk> Ieee80211VhtPhyHeaderSerializer::deserialize(MemoryInputStream& stream) const
 {
     auto vhtPhyHeader = makeShared<Ieee80211VhtPhyHeader>();
+    std::vector<bool> bits;
+    vhtPhyHeader->setBandwidth(readLe(stream, bits, 2));
+    vhtPhyHeader->setReserved1(readLe(stream, bits, 1));
+    vhtPhyHeader->setStbc(readLe(stream, bits, 1));
+    vhtPhyHeader->setGroupId(readLe(stream, bits, 6));
+    vhtPhyHeader->setNumberOfSpaceTimeStreams(readLe(stream, bits, 3));
+    vhtPhyHeader->setPartialAid(readLe(stream, bits, 9));
+    vhtPhyHeader->setTxopPsNotAllowed(readLe(stream, bits, 1));
+    vhtPhyHeader->setReserved2(readLe(stream, bits, 1));
+    vhtPhyHeader->setShortGi(readLe(stream, bits, 1));
+    vhtPhyHeader->setShortGiNsymDisambiguation(readLe(stream, bits, 1));
+    vhtPhyHeader->setCoding(readLe(stream, bits, 1));
+    vhtPhyHeader->setLdpcExtraOfdmSymbol(readLe(stream, bits, 1));
+    vhtPhyHeader->setMcs(readLe(stream, bits, 4));
+    vhtPhyHeader->setBeamformed(readLe(stream, bits, 1));
+    vhtPhyHeader->setReserved3(readLe(stream, bits, 1));
+    bool tailIsZero;
+    uint8_t crc = readCrcAndTail(stream, tailIsZero);
+    vhtPhyHeader->setCrc(crc);
+    if (crc != computeIeee80211PhyHeaderCrc(bits) || !vhtPhyHeader->getReserved1() ||
+        !vhtPhyHeader->getReserved2() || !vhtPhyHeader->getReserved3() ||
+        (!vhtPhyHeader->getShortGi() && vhtPhyHeader->getShortGiNsymDisambiguation()) ||
+        (!vhtPhyHeader->getCoding() && vhtPhyHeader->getLdpcExtraOfdmSymbol()))
+        vhtPhyHeader->markIncorrect();
+    if (!tailIsZero || (vhtPhyHeader->getGroupId() != 0 && vhtPhyHeader->getGroupId() != 63) ||
+        vhtPhyHeader->getMcs() > 9 || vhtPhyHeader->getStbc())
+        vhtPhyHeader->markImproperlyRepresented();
+
+    auto sigBLayout = getVhtSuSigBLayout(vhtPhyHeader->getBandwidth());
+    std::vector<bool> sigBBits;
+    auto encodedLength = readLe(stream, sigBBits, sigBLayout.lengthFieldWidth);
+    auto reserved = readLe(stream, sigBBits, sigBLayout.reservedFieldWidth);
+    auto tail = readLe(stream, sigBBits, 6);
+    vhtPhyHeader->setVhtSigBLength(encodedLength);
+    vhtPhyHeader->setVhtSigBReserved(reserved);
+    vhtPhyHeader->setVhtSigBTail(tail);
+    vhtPhyHeader->setLengthField(decodeVhtSuSigBLength(encodedLength));
+    vhtPhyHeader->setChunkLength(b(48 + sigBLayout.getBitLength()));
+    if (reserved != sigBLayout.getReservedValue())
+        vhtPhyHeader->markIncorrect();
+    if (tail != 0)
+        vhtPhyHeader->markImproperlyRepresented();
     return vhtPhyHeader;
 }
 

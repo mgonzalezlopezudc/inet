@@ -1,0 +1,112 @@
+%description:
+Exact HT/VHT-SU LDPC stream parsing, VHT segment parsing, tone mapping, and soft inverse-pipeline tests.
+
+%includes:
+#include <functional>
+
+#include "inet/physicallayer/wireless/ieee80211/bitlevel/Ieee80211LdpcBitPipeline.h"
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%global:
+
+static BitVector makeData(int length)
+{
+    BitVector result;
+    for (int i = 0; i < length; i++)
+        result.appendBit(((i * 29 + i / 7 + 3) % 23) < 11);
+    return result;
+}
+
+static Ieee80211LdpcMappedReliabilities makeMappedReliabilities(const Ieee80211LdpcMappedData& mapped, double magnitude)
+{
+    Ieee80211LdpcMappedReliabilities result(mapped.blocks.size());
+    for (size_t symbol = 0; symbol < mapped.blocks.size(); symbol++) {
+        result[symbol].resize(mapped.blocks[symbol].size());
+        for (size_t stream = 0; stream < mapped.blocks[symbol].size(); stream++) {
+            result[symbol][stream].resize(mapped.blocks[symbol][stream].size());
+            for (size_t block = 0; block < mapped.blocks[symbol][stream].size(); block++) {
+                const auto& bits = mapped.blocks[symbol][stream][block];
+                for (unsigned int i = 0; i < bits.getSize(); i++)
+                    result[symbol][stream][block].push_back(bits.getBit(i) ? -magnitude : magnitude);
+            }
+        }
+    }
+    return result;
+}
+
+static bool throws(const std::function<void()>& function)
+{
+    try { function(); return false; }
+    catch (const cRuntimeError&) { return true; }
+}
+
+%activity:
+
+auto twoStream = Ieee80211LdpcBitPipeline::getSpatialStreamSourceIndices(16, {4, 4});
+ASSERT(twoStream.size() == 2);
+ASSERT(twoStream[0] == std::vector<int>({0, 1, 4, 5, 8, 9, 12, 13}));
+ASSERT(twoStream[1] == std::vector<int>({2, 3, 6, 7, 10, 11, 14, 15}));
+
+auto threeStream = Ieee80211LdpcBitPipeline::getSpatialStreamSourceIndices(18, {6, 6, 6});
+ASSERT(threeStream[0] == std::vector<int>({0, 1, 2, 9, 10, 11}));
+ASSERT(threeStream[1] == std::vector<int>({3, 4, 5, 12, 13, 14}));
+ASSERT(threeStream[2] == std::vector<int>({6, 7, 8, 15, 16, 17}));
+
+auto segments = Ieee80211LdpcBitPipeline::getVhtSegmentSourceIndices(16, 4);
+ASSERT(segments[0] == std::vector<int>({0, 1, 4, 5, 8, 9, 12, 13}));
+ASSERT(segments[1] == std::vector<int>({2, 3, 6, 7, 10, 11, 14, 15}));
+
+auto tones20 = Ieee80211LdpcBitPipeline::getVhtToneMapperOutputIndices(52, 4);
+ASSERT(tones20[0] == 0 && tones20[1] == 4 && tones20[12] == 48 && tones20[13] == 1);
+std::vector<int> outputOrder20(52);
+for (int input = 0; input < 52; input++)
+    outputOrder20[tones20[input]] = input;
+ASSERT(std::vector<int>(outputOrder20.begin(), outputOrder20.begin() + 12) ==
+       std::vector<int>({0, 13, 26, 39, 1, 14, 27, 40, 2, 15, 28, 41}));
+
+auto tones80 = Ieee80211LdpcBitPipeline::getVhtToneMapperOutputIndices(234, 9);
+std::vector<int> outputOrder80(234);
+for (int input = 0; input < 234; input++)
+    outputOrder80[tones80[input]] = input;
+ASSERT(std::vector<int>(outputOrder80.begin(), outputOrder80.begin() + 12) ==
+       std::vector<int>({0, 26, 52, 78, 104, 130, 156, 182, 208, 1, 27, 53}));
+
+auto htPlan = Ieee80211LdpcPlanner::computeHt(100, 208, Ieee80211CodeRate(3, 4));
+BitVector htData = makeData(htPlan.getUncodedDataBits());
+auto htMapped = Ieee80211LdpcBitPipeline::encodeAndMap(htData, htPlan, {4}, 20);
+ASSERT(htMapped.blocks.size() == 6);
+for (const auto& symbol : htMapped.blocks) {
+    ASSERT(symbol.size() == 1);
+    ASSERT(symbol[0].size() == 1); // no HT frequency interleaver/subblocks
+    ASSERT(symbol[0][0].getSize() == 208);
+}
+auto htReliabilities = makeMappedReliabilities(htMapped, 8.0);
+for (LdpcDecodingAlgorithm algorithm : {LdpcDecodingAlgorithm::SUM_PRODUCT, LdpcDecodingAlgorithm::NORMALIZED_MIN_SUM}) {
+    Ieee80211LdpcDataCoder decoder(algorithm, 20, 0.75, 20.0);
+    auto result = Ieee80211LdpcBitPipeline::inverseMapAndDecode(htReliabilities, htPlan, {4}, 20, decoder);
+    ASSERT(result.converged);
+    ASSERT(result.informationBits == htData);
+}
+
+auto vhtPlan = Ieee80211LdpcPlanner::computeVhtSu(100, 468, 234, Ieee80211CodeRate(1, 2));
+BitVector vhtData = makeData(vhtPlan.getUncodedDataBits());
+auto vhtMapped = Ieee80211LdpcBitPipeline::encodeAndMap(vhtData, vhtPlan, {1}, 160);
+ASSERT(vhtMapped.blocks.size() == static_cast<size_t>(vhtPlan.getNumberOfSymbols()));
+for (const auto& symbol : vhtMapped.blocks) {
+    ASSERT(symbol.size() == 1);
+    ASSERT(symbol[0].size() == 1); // one 160 MHz frequency segment
+    ASSERT(symbol[0][0].getSize() == 468); // lower then upper 234-tone subblock
+}
+auto vhtReliabilities = makeMappedReliabilities(vhtMapped, 8.0);
+for (LdpcDecodingAlgorithm algorithm : {LdpcDecodingAlgorithm::SUM_PRODUCT, LdpcDecodingAlgorithm::NORMALIZED_MIN_SUM}) {
+    Ieee80211LdpcDataCoder decoder(algorithm, 20, 0.75, 20.0);
+    auto result = Ieee80211LdpcBitPipeline::inverseMapAndDecode(vhtReliabilities, vhtPlan, {1}, 160, decoder);
+    ASSERT(result.converged);
+    ASSERT(result.informationBits == vhtData);
+}
+
+ASSERT(throws([]() { Ieee80211LdpcBitPipeline::getSpatialStreamSourceIndices(17, {4, 4}); }));
+ASSERT(throws([]() { Ieee80211LdpcBitPipeline::getVhtSegmentSourceIndices(15, 4); }));
+ASSERT(throws([]() { Ieee80211LdpcBitPipeline::getVhtToneMapperOutputIndices(52, 9); }));

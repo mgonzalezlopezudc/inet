@@ -8,8 +8,12 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
 
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211DataEncodingPlanTag.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ReceivedDataEncodingPlan.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211VhtSigB.h"
 
 namespace inet {
 
@@ -66,6 +70,36 @@ const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListeni
     auto packet = const_cast<Packet *>(receptionResult->getPacket());
     packet->addTagIfAbsent<Ieee80211ModeInd>()->setMode(transmission->getMode());
     packet->addTagIfAbsent<Ieee80211ChannelInd>()->setChannel(transmission->getChannel());
+    auto phyFormat = transmission->getMode()->getDataMode()->getPhyFormat();
+    if (phyFormat == Ieee80211PhyFormat::HT || phyFormat == Ieee80211PhyFormat::VHT_SU) {
+        try {
+            auto phyHeader = Ieee80211Radio::peekIeee80211PhyHeaderAtFront(packet,
+                    b(-1), Chunk::PF_ALLOW_INCORRECT | Chunk::PF_ALLOW_INCOMPLETE |
+                    Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED);
+            if (!phyHeader->isIncorrect() && !phyHeader->isIncomplete() && !phyHeader->isImproperlyRepresented()) {
+                packet->addTagIfAbsent<Ieee80211DataEncodingPlanTag>()->setPlan(
+                        reconstructIeee80211ReceivedDataEncodingPlan(
+                                transmission->getMode()->getDataMode(), phyHeader,
+                                transmission->getDataDuration()));
+                if (auto vhtHeader = dynamicPtrCast<const Ieee80211VhtPhyHeader>(phyHeader);
+                    vhtHeader != nullptr && transmission->getMode()->getDataMode()->getFecType() == Ieee80211FecType::LDPC) {
+                    // This RXVECTOR indication is reconstructed solely from
+                    // the received VHT-SIG-B Length field. It is rounded to
+                    // four octets and contains no sender-side exact APEP
+                    // metadata; the MAC recovers the exact MPDU length from
+                    // the decoded A-MPDU delimiter.
+                    packet->addTagIfAbsent<Ieee80211VhtApepInd>()->setApepLength(
+                            decodeVhtSuSigBLength(vhtHeader->getVhtSigBLength()).get<B>());
+                }
+            }
+        }
+        catch (const cRuntimeError& error) {
+            // Missing plan context makes validateHtOrVhtHeader mark the
+            // received packet erroneous during radio decapsulation.
+            EV_DEBUG << "Cannot reconstruct received IEEE 802.11 data encoding plan: "
+                     << error.what() << endl;
+        }
+    }
     return receptionResult;
 }
 
@@ -101,4 +135,3 @@ void Ieee80211Receiver::setChannelNumber(int channelNumber)
 } // namespace physicallayer
 
 } // namespace inet
-

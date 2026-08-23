@@ -1,0 +1,174 @@
+%description:
+IEEE 802.11 VHT A-MPDU delimiter and padding regressions for oracle-free LDPC
+reception. Exact MPDU lengths come from validated on-air delimiters, including
+all modulo-four residues and 14-bit lengths; EOF padding is never delivered.
+
+%includes:
+#include <vector>
+
+#include "inet/common/MemoryInputStream.h"
+#include "inet/common/MemoryOutputStream.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/ByteCountChunk.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211MacHeaderSerializer.h"
+#include "inet/linklayer/ieee80211/mac/aggregation/MpduAggregation.h"
+#include "inet/linklayer/ieee80211/mac/aggregation/MpduDeaggregation.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211VhtSigB.h"
+
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+%global:
+
+class TestMpduDelimiterSerializer : public Ieee80211MpduSubframeHeaderSerializer
+{
+  public:
+    void write(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const { serialize(stream, chunk); }
+    const Ptr<Chunk> read(MemoryInputStream& stream) const { return deserialize(stream); }
+};
+
+static uint8_t independentDelimiterCrc(uint8_t first, uint8_t second)
+{
+    uint8_t remainder = 0xff;
+    for (uint8_t octet : {second, first}) {
+        remainder ^= octet;
+        for (int bit = 0; bit < 8; bit++)
+            remainder = (remainder & 0x80) ? static_cast<uint8_t>((remainder << 1) ^ 0x07) :
+                                             static_cast<uint8_t>(remainder << 1);
+    }
+    remainder = static_cast<uint8_t>(~remainder);
+    uint8_t reversed = 0;
+    for (int bit = 0; bit < 8; bit++)
+        reversed |= ((remainder >> bit) & 1) << (7 - bit);
+    return reversed;
+}
+
+static std::vector<uint8_t> makeDelimiterBytes(int length, bool eof, bool reserved = false)
+{
+    uint8_t first = (eof ? 0x01 : 0) | (reserved ? 0x02 : 0) |
+                    ((length >> 10) & 0x0c) | ((length & 0x0f) << 4);
+    uint8_t second = (length >> 4) & 0xff;
+    return {first, second, independentDelimiterCrc(first, second), 0x4e};
+}
+
+static bool rejectsDelimiter(const std::vector<uint8_t>& bytes)
+{
+    TestMpduDelimiterSerializer serializer;
+    MemoryInputStream input(bytes, B(bytes.size()));
+    try {
+        serializer.read(input);
+        return false;
+    }
+    catch (const cRuntimeError&) {
+        return true;
+    }
+}
+
+static bool rejectsAggregate(const std::vector<uint8_t>& bytes)
+{
+    auto packet = new Packet("malformed-ampdu");
+    packet->insertAtBack(makeShared<BytesChunk>(bytes));
+    try {
+        auto frames = MpduDeaggregation().deaggregateFrame(packet);
+        for (auto frame : *frames)
+            delete frame;
+        delete frames;
+        return false;
+    }
+    catch (const cRuntimeError&) {
+        delete packet;
+        return true;
+    }
+}
+
+%activity:
+
+TestMpduDelimiterSerializer serializer;
+const std::vector<std::pair<int, std::vector<uint8_t>>> fixedDelimiterVectors = {
+    {0,      {0x00, 0x00, 0x14, 0x4e}},
+    {255,    {0xf0, 0x0f, 0xac, 0x4e}},
+    {256,    {0x00, 0x10, 0xfe, 0x4e}},
+    {1458,   {0x20, 0x5b, 0xca, 0x4e}},
+    {0x1234, {0x44, 0x23, 0x46, 0x4e}},
+    {0x3fff, {0xfc, 0xff, 0xa0, 0x4e}},
+};
+for (const auto& [length, expected] : fixedDelimiterVectors) {
+    auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
+    delimiter->setLength(length);
+    delimiter->setEof(false);
+    delimiter->setReserved(false);
+    MemoryOutputStream output;
+    serializer.write(output, delimiter);
+    ASSERT(output.getLength() == B(4));
+    ASSERT(output.getData() == expected);
+    ASSERT(makeDelimiterBytes(length, false) == expected);
+    MemoryInputStream input(output.getData(), output.getLength());
+    auto decoded = dynamicPtrCast<Ieee80211MpduSubframeHeader>(serializer.read(input));
+    ASSERT(decoded->getLength() == length);
+    ASSERT(!decoded->getEof() && !decoded->getReserved());
+}
+
+auto eofDelimiter = makeShared<Ieee80211MpduSubframeHeader>();
+eofDelimiter->setLength(0);
+eofDelimiter->setEof(true);
+eofDelimiter->setReserved(false);
+MemoryOutputStream eofOutput;
+serializer.write(eofOutput, eofDelimiter);
+ASSERT(eofOutput.getData() == std::vector<uint8_t>({0x01, 0x00, 0xf4, 0x4e}));
+ASSERT(makeDelimiterBytes(0, true) == eofOutput.getData());
+
+for (int bodyLength : {101, 102, 103, 104}) {
+    std::vector<uint8_t> payload(bodyLength);
+    for (int i = 0; i < bodyLength; i++)
+        payload[i] = static_cast<uint8_t>((17 * i + bodyLength) & 0xff);
+    auto mpdu = new Packet("mpdu");
+    mpdu->insertAtBack(makeShared<BytesChunk>(payload));
+    std::vector<Packet *> inputFrames = {mpdu};
+    auto aggregate = MpduAggregation().aggregateFrames(&inputFrames);
+    int apepLength = aggregate->getDataLength().get<B>();
+    ASSERT(apepLength == bodyLength + 4);
+    ASSERT(encodeVhtSuSigBLength(B(apepLength)) == 27);
+    auto dataDelimiter = aggregate->peekAtFront<Ieee80211MpduSubframeHeader>();
+    ASSERT(dataDelimiter->getLength() == bodyLength);
+    ASSERT(!dataDelimiter->getEof());
+
+    // IEEE Std 802.11-2024, 10.12.6: final-subframe padding, two complete
+    // EOF padding subframes, then two terminal padding octets.
+    int finalPadding = (4 - (apepLength % 4)) % 4;
+    if (finalPadding != 0)
+        aggregate->insertAtBack(makeShared<ByteCountChunk>(B(finalPadding)));
+    for (int i = 0; i < 2; i++) {
+        auto eof = makeShared<Ieee80211MpduSubframeHeader>();
+        eof->setLength(0);
+        eof->setEof(true);
+        eof->setReserved(false);
+        aggregate->insertAtBack(eof);
+    }
+    aggregate->insertAtBack(makeShared<ByteCountChunk>(B(2)));
+
+    auto outputFrames = MpduDeaggregation().deaggregateFrame(aggregate);
+    ASSERT(outputFrames->size() == 1);
+    auto recovered = outputFrames->front()->peekAllAsBytes();
+    ASSERT(recovered->getBytes() == payload);
+    delete outputFrames->front();
+    delete outputFrames;
+}
+
+auto badCrc = makeDelimiterBytes(5, false);
+badCrc[2] ^= 0x01;
+ASSERT(rejectsDelimiter(badCrc));
+auto badSignature = makeDelimiterBytes(5, false);
+badSignature[3] = 0;
+ASSERT(rejectsDelimiter(badSignature));
+ASSERT(rejectsDelimiter(makeDelimiterBytes(5, false, true)));
+ASSERT(rejectsDelimiter({0, 0, 0}));
+
+auto overlength = makeDelimiterBytes(10, false);
+overlength.insert(overlength.end(), 5, 0);
+ASSERT(rejectsAggregate(overlength));
+
+auto truncatedBody = makeDelimiterBytes(6, false);
+truncatedBody.insert(truncatedBody.end(), 5, 0);
+ASSERT(rejectsAggregate(truncatedBody));

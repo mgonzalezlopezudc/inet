@@ -1,0 +1,159 @@
+%description:
+Deterministic IEEE 802.11 HT/VHT-SU LDPC PPDU planning tests. The Annex I
+fixtures and Table 19-16 decisions use exact integer arithmetic.
+
+%includes:
+#include <functional>
+#include <utility>
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211DataEncodingPlan.h"
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%global:
+
+static bool throws(const std::function<void()>& function)
+{
+    try {
+        function();
+        return false;
+    }
+    catch (const cRuntimeError&) {
+        return true;
+    }
+}
+
+static void assertPlanInvariants(const Ieee80211DataEncodingPlan& plan)
+{
+    ASSERT(plan.getFecType() == Ieee80211FecType::LDPC);
+    ASSERT(plan.getNumberOfCodewords() >= 1);
+    ASSERT(plan.getShortenedBits() >= 0);
+    ASSERT(plan.getPuncturedBits() >= 0);
+    ASSERT(plan.getRepeatedBits() >= 0);
+    ASSERT(!(plan.getPuncturedBits() > 0 && plan.getRepeatedBits() > 0));
+    ASSERT(plan.getNumberOfSymbols() * plan.getNumberOfCodedBitsPerSymbol() == plan.getAvailableEncodedBits());
+    int transmittedBits = 0;
+    for (const auto& codeword : plan.getCodewords()) {
+        ASSERT(codeword.getCodewordLength() == 648 || codeword.getCodewordLength() == 1296 || codeword.getCodewordLength() == 1944);
+        transmittedBits += codeword.getTransmittedBits();
+    }
+    ASSERT(transmittedBits == plan.getAvailableEncodedBits());
+}
+
+%activity:
+
+// IEEE Std 802.11-2024 informative Annex I example 1 (I.2): HT 20 MHz,
+// MCS 4, 100-octet PSDU, shortening and puncturing.
+auto puncturing = Ieee80211LdpcPlanner::computeHt(100, 208, Ieee80211CodeRate(3, 4));
+assertPlanInvariants(puncturing);
+ASSERT(puncturing.getPhyFormat() == Ieee80211PhyFormat::HT);
+ASSERT(puncturing.getUncodedDataBits() == 816);
+ASSERT(puncturing.getNumberOfCodewords() == 1);
+ASSERT(puncturing.getCodewords()[0].getCodewordLength() == 1944);
+ASSERT(puncturing.getAvailableEncodedBits() == 1248);
+ASSERT(puncturing.getShortenedBits() == 642);
+ASSERT(puncturing.getPuncturedBits() == 54);
+ASSERT(puncturing.getRepeatedBits() == 0);
+ASSERT(puncturing.getNumberOfSymbols() == 6);
+ASSERT(!puncturing.getAdditionalCapacityApplied());
+
+// Informative Annex I example 2 (I.3): HT 40 MHz, MCS 1, 140-octet
+// PSDU and mSTBC=2. Production STBC support is deliberately a later gate,
+// but the standards planner must still reproduce this reference vector.
+auto repetition = Ieee80211LdpcPlanner::computeHt(140, 216, Ieee80211CodeRate(1, 2), 2);
+assertPlanInvariants(repetition);
+ASSERT(repetition.getUncodedDataBits() == 1136);
+ASSERT(repetition.getNumberOfCodewords() == 2);
+for (const auto& codeword : repetition.getCodewords()) {
+    ASSERT(codeword.getCodewordLength() == 1296);
+    ASSERT(codeword.getShortenedBits() == 80);
+    ASSERT(codeword.getPuncturedBits() == 0);
+    ASSERT(codeword.getRepeatedBits() == 80);
+}
+ASSERT(repetition.getAvailableEncodedBits() == 2592);
+ASSERT(repetition.getShortenedBits() == 160);
+ASSERT(repetition.getPuncturedBits() == 0);
+ASSERT(repetition.getRepeatedBits() == 160);
+ASSERT(repetition.getNumberOfSymbols() == 12);
+
+// VHT-SU first pads Npld to NSYM,init*NDBPS before applying Clause 19.
+auto vht = Ieee80211LdpcPlanner::computeVhtSu(100, 208, 156, Ieee80211CodeRate(3, 4));
+assertPlanInvariants(vht);
+ASSERT(vht.getPhyFormat() == Ieee80211PhyFormat::VHT_SU);
+ASSERT(vht.getInitialNumberOfSymbols() == 6);
+ASSERT(vht.getUncodedDataBits() == 936);
+ASSERT(vht.getAvailableEncodedBits() == 1248);
+ASSERT(!vht.getAdditionalCapacityApplied());
+auto reconstructedVht = Ieee80211LdpcPlanner::computeVhtSuFromReceivedSymbols(
+        vht.getInitialNumberOfSymbols(), 208, 156, Ieee80211CodeRate(3, 4));
+ASSERT(reconstructedVht == vht);
+
+// The receive-side constructor also reproduces Equation (19-39)'s one-extra
+// symbol case from N_SYM,init without any exact APEP length.
+auto vhtExtra = Ieee80211LdpcPlanner::computeVhtSu(1, 52, 26, Ieee80211CodeRate(1, 2));
+ASSERT(vhtExtra.getAdditionalCapacityApplied());
+ASSERT(vhtExtra.getNumberOfSymbols() == vhtExtra.getInitialNumberOfSymbols() + 1);
+auto reconstructedVhtExtra = Ieee80211LdpcPlanner::computeVhtSuFromReceivedSymbols(
+        vhtExtra.getInitialNumberOfSymbols(), 52, 26, Ieee80211CodeRate(1, 2));
+ASSERT(reconstructedVhtExtra == vhtExtra);
+
+// One application of Equation (19-39) adds NCBPS*mSTBC capacity and does
+// not rerun codeword selection or shortening.
+auto extra = Ieee80211LdpcPlanner::computeHt(1, 52, Ieee80211CodeRate(1, 2));
+assertPlanInvariants(extra);
+ASSERT(extra.getInitialNumberOfSymbols() == 1);
+ASSERT(extra.getNumberOfSymbols() == 2);
+ASSERT(extra.getAdditionalCapacityApplied());
+ASSERT(extra.getAvailableEncodedBits() == 104);
+
+// Direct Table 19-16 boundary and strict-threshold checks.
+auto select = [](int npld, int navbits, int p, int q) {
+    return Ieee80211LdpcPlanner::selectCodewords(npld, navbits, Ieee80211CodeRate(p, q));
+};
+
+// Exercise below/at/above every rate-dependent Table 19-16 threshold for
+// all four LDPC code rates.  The constants divide every denominator exactly,
+// so threshold is the first Navbits value selecting the larger codeword.
+for (auto rate : {std::pair<int, int>{1, 2}, {2, 3}, {3, 4}, {5, 6}}) {
+    int p = rate.first;
+    int q = rate.second;
+    int threshold648 = 100 + 912 * (q - p) / q;
+    ASSERT(select(100, threshold648 - 1, p, q).codewordLength == 648);
+    ASSERT(select(100, threshold648, p, q).codewordLength == 1296);
+    ASSERT(select(100, threshold648 + 1, p, q).codewordLength == 1296);
+
+    int threshold1296 = 500 + 1464 * (q - p) / q;
+    ASSERT(threshold1296 > 648 && threshold1296 < 1296);
+    ASSERT(select(500, threshold1296 - 1, p, q).codewordLength == 1296);
+    ASSERT(select(500, threshold1296, p, q).codewordLength == 1944);
+    ASSERT(select(500, threshold1296 + 1, p, q).codewordLength == 1944);
+
+    int thresholdNpld = p == 1 ? 500 : p == 2 ? 1000 : p == 3 ? 1250 : 1500;
+    int threshold2592 = thresholdNpld + 2916 * (q - p) / q;
+    ASSERT(threshold2592 > 1944 && threshold2592 < 2592);
+    ASSERT(select(thresholdNpld, threshold2592 - 1, p, q).codewordLength == 1296);
+    ASSERT(select(thresholdNpld, threshold2592 - 1, p, q).numberOfCodewords == 2);
+    ASSERT(select(thresholdNpld, threshold2592, p, q).codewordLength == 1944);
+    ASSERT(select(thresholdNpld, threshold2592, p, q).numberOfCodewords == 2);
+    ASSERT(select(thresholdNpld, threshold2592 + 1, p, q).codewordLength == 1944);
+}
+
+ASSERT(select(100, 648, 1, 2).numberOfCodewords == 1);
+ASSERT(select(100, 649, 1, 2).codewordLength == 1296);
+ASSERT(select(100, 831, 1, 2).codewordLength == 1296);
+ASSERT(select(100, 832, 1, 2).codewordLength == 1944);
+ASSERT(select(100, 1296, 1, 2).numberOfCodewords == 1);
+ASSERT(select(100, 1297, 1, 2).codewordLength == 1944);
+ASSERT(select(100, 1944, 1, 2).numberOfCodewords == 1);
+ASSERT(select(500, 1957, 1, 2).codewordLength == 1296);
+ASSERT(select(500, 1958, 1, 2).codewordLength == 1944);
+ASSERT(select(500, 2592, 1, 2).numberOfCodewords == 2);
+auto above2592 = select(1945, 2593, 1, 2);
+ASSERT(above2592.numberOfCodewords == 3);
+ASSERT(above2592.codewordLength == 1944);
+
+ASSERT(throws([]() { Ieee80211CodeRate(0, 2); }));
+ASSERT(throws([]() { Ieee80211LdpcPlanner::computeHt(-1, 208, Ieee80211CodeRate(3, 4)); }));
+ASSERT(throws([]() { Ieee80211LdpcPlanner::computeHt(100, 0, Ieee80211CodeRate(3, 4)); }));
+ASSERT(throws([]() { Ieee80211LdpcPlanner::computeHt(100, 208, Ieee80211CodeRate(4, 5)); }));
+ASSERT(throws([]() { Ieee80211LdpcPlanner::computeVhtSu(100, 208, 156, Ieee80211CodeRate(3, 4), 3); }));

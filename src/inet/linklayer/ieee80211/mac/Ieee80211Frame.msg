@@ -41,6 +41,7 @@ const b LENGTH_MGMT = B(28);    //bits
 const b LENGTH_ADDBAREQ = LENGTH_MGMT + B(9); // mgmt length + action body length
 const b LENGTH_ADDBARESP = LENGTH_MGMT + B(9); // mgmt length + action body length
 const b LENGTH_DELBA = LENGTH_MGMT + B(6); // mgmt length + action body length
+const b LENGTH_OPERATING_MODE_NOTIFICATION = LENGTH_MGMT + B(3); // mgmt length + VHT action body length
 const b LENGTH_BASIC_BLOCKACK = B(16 + 2 + (2 + 128) + 4); // header + ba control + ba information + fcs
 const b DATAFRAME_HEADER_MINLENGTH = B(2 + 2 + 3 * 6 + 2);    //bits without QoS, without Address4: 2 + 2 + 3*6(addresses) + 2
 const b QOSCONTROL_PART_LENGTH = b(2 * 8);    // QoS Control field length (bits)
@@ -240,6 +241,15 @@ class Ieee80211ActionFrame extends Ieee80211MgmtHeader
     //WirelessNetworkManagementAction action; // action TODO remove it
 }
 
+// IEEE Std 802.11-2024, 9.6.22.4 and Tables 9-81, 9-605, and 9-608.
+class Ieee80211OperatingModeNotification extends Ieee80211ActionFrame
+{
+    chunkLength = LENGTH_OPERATING_MODE_NOTIFICATION - B(4);
+    category = 21; // VHT
+    uint8_t vhtAction = 2; // Operating Mode Notification
+    uint8_t operatingMode; // 9.4.1.51; B3 is No LDPC
+}
+
 class Ieee80211MsduSubframeHeader extends FieldsChunk
 {
     chunkLength = LENGTH_A_MSDU_SUBFRAME_HEADER;
@@ -251,7 +261,9 @@ class Ieee80211MsduSubframeHeader extends FieldsChunk
 class Ieee80211MpduSubframeHeader extends FieldsChunk
 {
     chunkLength = LENGTH_A_MPDU_SUBFRAME_HEADER;
-    int length;
+    int length; // 14-bit MPDU Length (IEEE Std 802.11-2024, 9.7.1)
+    bool eof; // EOF/Tag bit; EOF applies when length is zero
+    bool reserved; // reserved bit; transmitted as zero
 }
 
 //

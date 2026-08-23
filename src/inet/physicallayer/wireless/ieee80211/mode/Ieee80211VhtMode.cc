@@ -62,11 +62,51 @@ Ieee80211VhtSignalMode::Ieee80211VhtSignalMode(unsigned int modulationAndCodingS
 {
 }
 
-Ieee80211VhtDataMode::Ieee80211VhtDataMode(const Ieee80211Vhtmcs *modulationAndCodingScheme, const Hz bandwidth, GuardIntervalType guardIntervalType) :
+Ieee80211VhtDataMode::Ieee80211VhtDataMode(const Ieee80211Vhtmcs *modulationAndCodingScheme, const Hz bandwidth, GuardIntervalType guardIntervalType,
+        Ieee80211FecType fecType, int fecVariant) :
     Ieee80211VhtModeBase(modulationAndCodingScheme->getMcsIndex(), computeNumberOfSpatialStreams(modulationAndCodingScheme), bandwidth, guardIntervalType),
     modulationAndCodingScheme(modulationAndCodingScheme),
-    numberOfBccEncoders(computeNumberOfBccEncoders())
+    fecType(fecType),
+    fecVariant(fecVariant),
+    numberOfBccEncoders(fecType == Ieee80211FecType::BCC ? computeNumberOfBccEncoders() : 0)
 {
+    if (fecVariant < 0)
+        throw cRuntimeError("Invalid IEEE 802.11 VHT FEC variant %d", fecVariant);
+}
+
+Ieee80211CodeRate Ieee80211VhtDataMode::getCodeRate() const
+{
+    const auto *convolutionalCode = getCode()->getForwardErrorCorrection();
+    return Ieee80211CodeRate(convolutionalCode->getCodeRatePuncturingK(), convolutionalCode->getCodeRatePuncturingN());
+}
+
+int Ieee80211VhtDataMode::getNumberOfCodedBitsPerSymbol() const
+{
+    return computeNumberOfCodedBitsPerSubcarrierSum() * getNumberOfDataSubcarriers();
+}
+
+int Ieee80211VhtDataMode::getNumberOfDataBitsPerSymbol() const
+{
+    int codedBits = getNumberOfCodedBitsPerSymbol();
+    auto rate = getCodeRate();
+    return codedBits * rate.getNumerator() / rate.getDenominator();
+}
+
+Ieee80211DataEncodingPlan Ieee80211VhtDataMode::computeEncodingPlan(b dataLength) const
+{
+    const int dataBits = dataLength.get<b>();
+    if (dataBits < 0 || dataBits % 8 != 0)
+        throw cRuntimeError("IEEE 802.11 VHT APEP length must be a nonnegative whole number of octets");
+    int codedBitsPerSymbol = getNumberOfCodedBitsPerSymbol();
+    int dataBitsPerSymbol = getNumberOfDataBitsPerSymbol();
+    if (fecType == Ieee80211FecType::LDPC)
+        return Ieee80211LdpcPlanner::computeVhtSu(dataBits / 8, codedBitsPerSymbol, dataBitsPerSymbol, getCodeRate());
+
+    int completeBits = dataBits + getServiceFieldLength().get<b>() + getTailFieldLength().get<b>();
+    int numberOfSymbols = (completeBits + dataBitsPerSymbol - 1) / dataBitsPerSymbol;
+    int availableBits = numberOfSymbols * codedBitsPerSymbol;
+    return {Ieee80211FecType::BCC, Ieee80211PhyFormat::VHT_SU, completeBits, availableBits,
+            numberOfSymbols, numberOfSymbols, codedBitsPerSymbol, false};
 }
 
 Ieee80211Vhtmcs::Ieee80211Vhtmcs(unsigned int mcsIndex, const ApskModulationBase *stream1SubcarrierModulation, const ApskModulationBase *stream2SubcarrierModulation, const ApskModulationBase *stream3SubcarrierModulation, const ApskModulationBase *stream4SubcarrierModulation, const ApskModulationBase *stream5SubcarrierModulation, const ApskModulationBase *stream6SubcarrierModulation, const ApskModulationBase *stream7SubcarrierModulation, const ApskModulationBase *stream8SubcarrierModulation, const Ieee80211ConvolutionalCode* convolutionalCode, Hz bandwidth) :
@@ -266,19 +306,16 @@ bps Ieee80211VhtSignalMode::computeNetBitrate() const
 
 b Ieee80211VhtSignalMode::getLength() const
 {
-    return getMCSLength() +
-           getCBWLength() +
-           getHTLengthLength() +
-           getSmoothingLength() +
-           getNotSoundingLength() +
-           getReservedLength() +
-           getAggregationLength() +
-           getSTBCLength() +
-           getFECCodingLength() +
-           getShortGILength() +
-           getNumOfExtensionSpatialStreamsLength() +
-           getFCSLength() +
-           getTailBitsLength();
+    // VHT-SIG-A1/A2 contribute 48 bits. IEEE Std 802.11-2024 Table 21-14
+    // adds 26, 27, or 29 uncoded VHT-SIG-B bits at 20, 40, or 80/160 MHz.
+    if (bandwidth == MHz(20))
+        return b(74);
+    else if (bandwidth == MHz(40))
+        return b(75);
+    else if (bandwidth == MHz(80) || bandwidth == MHz(160))
+        return b(77);
+    else
+        throw cRuntimeError("Unsupported VHT bandwidth %s", bandwidth.str().c_str());
 }
 
 bps Ieee80211VhtDataMode::computeGrossBitrate() const
@@ -345,6 +382,8 @@ int Ieee80211VhtModeBase::getNumberOfPilotSubcarriers() const
 
 b Ieee80211VhtDataMode::getCompleteLength(b dataLength) const
 {
+    if (fecType == Ieee80211FecType::LDPC)
+        return b(computeEncodingPlan(dataLength).getUncodedDataBits());
     return getServiceFieldLength() + getTailFieldLength() + dataLength; // TODO padding?
 }
 
@@ -631,6 +670,8 @@ unsigned int Ieee80211VhtDataMode::computeNumberOfBccEncoders() const
 
 const simtime_t Ieee80211VhtDataMode::getDuration(b dataLength) const
 {
+    if (fecType == Ieee80211FecType::LDPC)
+        return computeEncodingPlan(dataLength).getNumberOfSymbols() * getSymbolInterval();
     unsigned int numberOfCodedBitsPerSubcarrierSum = computeNumberOfCodedBitsPerSubcarrierSum();
     unsigned int numberOfCodedBitsPerSymbol = numberOfCodedBitsPerSubcarrierSum * getNumberOfDataSubcarriers();
     const IForwardErrorCorrection *forwardErrorCorrection = getCode() ? getCode()->getForwardErrorCorrection() : nullptr;
@@ -670,11 +711,16 @@ Ieee80211VhtCompliantModes::~Ieee80211VhtCompliantModes()
         delete entry.second;
 }
 
-const Ieee80211VhtMode *Ieee80211VhtCompliantModes::getCompliantMode(const Ieee80211Vhtmcs *mcsMode, Ieee80211VhtMode::BandMode centerFrequencyMode, Ieee80211VhtPreambleMode::HighTroughputPreambleFormat preambleFormat, Ieee80211VhtModeBase::GuardIntervalType guardIntervalType)
+const Ieee80211VhtMode *Ieee80211VhtCompliantModes::getCompliantMode(const Ieee80211Vhtmcs *mcsMode, Ieee80211VhtMode::BandMode centerFrequencyMode,
+        Ieee80211VhtPreambleMode::HighTroughputPreambleFormat preambleFormat,
+        Ieee80211VhtModeBase::GuardIntervalType guardIntervalType, Ieee80211FecType fecType, int fecVariant)
 {
+    if (mcsMode == nullptr)
+        throw cRuntimeError("Invalid IEEE 802.11 VHT MCS mode");
     const char *name = ""; // TODO
     unsigned int nss = mcsMode->getNumNss();
-    auto htModeId = std::make_tuple(mcsMode->getBandwidth(), mcsMode->getMcsIndex(), guardIntervalType, nss);
+    auto htModeId = std::make_tuple(mcsMode->getBandwidth(), mcsMode->getMcsIndex(), centerFrequencyMode,
+                                     preambleFormat, guardIntervalType, nss, fecType, fecVariant);
     auto mode = singleton.modeCache.find(htModeId);
     if (mode == singleton.modeCache.end()) {
         const Ieee80211OfdmSignalMode *legacySignal = nullptr;
@@ -690,10 +736,10 @@ const Ieee80211VhtMode *Ieee80211VhtCompliantModes::getCompliantMode(const Ieee8
             default:
                 throw cRuntimeError("Unknown preamble format");
         }
-        const Ieee80211VhtDataMode *dataMode = new Ieee80211VhtDataMode(mcsMode, mcsMode->getBandwidth(), guardIntervalType);
+        const Ieee80211VhtDataMode *dataMode = new Ieee80211VhtDataMode(mcsMode, mcsMode->getBandwidth(), guardIntervalType, fecType, fecVariant);
         const Ieee80211VhtPreambleMode *preambleMode = new Ieee80211VhtPreambleMode(htSignal, legacySignal, preambleFormat, dataMode->getNumberOfSpatialStreams());
         const Ieee80211VhtMode *htMode = new Ieee80211VhtMode(name, preambleMode, dataMode, centerFrequencyMode);
-        singleton.modeCache.insert(std::pair<std::tuple<Hz, unsigned int, Ieee80211VhtModeBase::GuardIntervalType, unsigned int>, const Ieee80211VhtMode *>(htModeId, htMode));
+        singleton.modeCache.insert(std::pair<decltype(htModeId), const Ieee80211VhtMode *>(htModeId, htMode));
         return htMode;
     }
     return mode->second;
@@ -1072,4 +1118,3 @@ const DI<Ieee80211Vhtmcs> Ieee80211VhtmcsTable::vhtMcs9BW160MHzNss8([](){ return
 
 } /* namespace physicallayer */
 } /* namespace inet */
-

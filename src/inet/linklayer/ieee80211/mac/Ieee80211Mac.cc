@@ -7,11 +7,14 @@
 
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 
+#include <algorithm>
+
 #include "inet/common/INETUtils.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/ProtocolTag_m.h"
 #include "inet/common/packet/Message.h"
 #include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/ByteCountChunk.h"
 #include "inet/linklayer/common/InterfaceTag_m.h"
 #include "inet/linklayer/common/MacAddressTag_m.h"
 #include "inet/linklayer/common/UserPriorityTag_m.h"
@@ -20,6 +23,8 @@
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211SubtypeTag_m.h"
 #include "inet/linklayer/ieee80211/mac/Rx.h"
+#include "inet/linklayer/ieee80211/mac/aggregation/MpduAggregation.h"
+#include "inet/linklayer/ieee80211/mac/aggregation/MpduDeaggregation.h"
 #include "inet/linklayer/ieee80211/mac/contract/IContention.h"
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequence.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRx.h"
@@ -32,6 +37,60 @@ namespace inet {
 namespace ieee80211 {
 
 using namespace inet::physicallayer;
+
+namespace {
+
+Packet *prepareVhtLdpcAmpdu(Packet *frame, const IIeee80211Mode *mode)
+{
+    std::vector<Packet *> frames = {frame};
+    auto aggregate = MpduAggregation().aggregateFrames(&frames);
+    const int apepLength = aggregate->getDataLength().get<B>();
+    if (apepLength <= 0)
+        throw cRuntimeError("IEEE 802.11 VHT-SU LDPC A-MPDU cannot be empty");
+    auto plan = mode->getDataMode()->computeEncodingPlan(B(apepLength));
+    int psduLength = (plan.getUncodedDataBits() - 16) / 8;
+    if (psduLength < apepLength)
+        throw cRuntimeError("IEEE 802.11 VHT-SU LDPC plan cannot carry its A-MPDU");
+
+    int remaining = psduLength - apepLength;
+    if (remaining > 0) {
+        // Final-subframe padding first reaches the next four-octet boundary.
+        int finalSubframePadding = (4 - (apepLength % 4)) % 4;
+        finalSubframePadding = std::min(finalSubframePadding, remaining);
+        if (finalSubframePadding > 0) {
+            aggregate->insertAtBack(makeShared<ByteCountChunk>(B(finalSubframePadding)));
+            remaining -= finalSubframePadding;
+        }
+
+        // §10.12.6 fills each complete four-octet unit with a zero-length
+        // EOF padding subframe. Table 9-659 requires EOF=1 for every such
+        // padding delimiter.
+        while (remaining >= 4) {
+            auto eofPadding = makeShared<Ieee80211MpduSubframeHeader>();
+            eofPadding->setLength(0);
+            eofPadding->setEof(true);
+            eofPadding->setReserved(false);
+            aggregate->insertAtBack(eofPadding);
+            remaining -= 4;
+        }
+        if (remaining > 0)
+            aggregate->insertAtBack(makeShared<ByteCountChunk>(B(remaining)));
+    }
+    aggregate->addTagIfAbsent<Ieee80211VhtApepReq>()->setApepLength(apepLength);
+    return aggregate;
+}
+
+bool isVhtLdpcFrame(const Packet *packet)
+{
+    auto modeReq = packet->findTag<Ieee80211ModeReq>();
+    if (modeReq == nullptr || modeReq->getMode() == nullptr)
+        return false;
+    const auto *dataMode = modeReq->getMode()->getDataMode();
+    return dataMode->getPhyFormat() == Ieee80211PhyFormat::VHT_SU &&
+           dataMode->getFecType() == Ieee80211FecType::LDPC;
+}
+
+} // namespace
 
 Define_Module(Ieee80211Mac);
 
@@ -142,10 +201,19 @@ void Ieee80211Mac::handleSelfMessage(cMessage *msg)
 
 void Ieee80211Mac::handleMgmtPacket(Packet *packet)
 {
-    const auto& header = makeShared<Ieee80211MgmtHeader>();
-    header->setType((Ieee80211FrameType)packet->getTag<Ieee80211SubtypeReq>()->getSubtype());
+    auto subtype = (Ieee80211FrameType)packet->getTag<Ieee80211SubtypeReq>()->getSubtype();
+    Ptr<Ieee80211MgmtHeader> header;
+    if (subtype == ST_ACTION) {
+        header = dynamicPtrCast<Ieee80211MgmtHeader>(packet->peekAtFront<Ieee80211ActionFrame>()->dupShared());
+        packet->popAtFront<Ieee80211ActionFrame>();
+    }
+    else {
+        header = makeShared<Ieee80211MgmtHeader>();
+        header->setType(subtype);
+    }
     header->setReceiverAddress(packet->getTag<MacAddressReq>()->getDestAddress());
-    if (mib->mode == Ieee80211Mib::INFRASTRUCTURE && mib->bssStationData.stationType == Ieee80211Mib::ACCESS_POINT)
+    if (mib->mode == Ieee80211Mib::INFRASTRUCTURE &&
+        (subtype == ST_ACTION || mib->bssStationData.stationType == Ieee80211Mib::ACCESS_POINT))
         header->setAddress3(mib->bssData.bssid);
     packet->insertAtFront(header);
     packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
@@ -183,6 +251,56 @@ void Ieee80211Mac::handleUpperPacket(Packet *packet)
 
 void Ieee80211Mac::handleLowerPacket(Packet *packet)
 {
+    // VHT-SU LDPC carries a complete A-MPDU PSDU, including MAC padding.
+    // Strip the delimiter/padding before Rx checks the MAC FCS and peeks the
+    // MAC header. This is done only for an otherwise successful PHY result;
+    // corrupted packets are never parsed as delimiters.
+    bool vhtLdpc = packet->findTag<Ieee80211ModeInd>() != nullptr &&
+            packet->getTag<Ieee80211ModeInd>()->getMode() != nullptr &&
+            packet->getTag<Ieee80211ModeInd>()->getMode()->getDataMode()->getPhyFormat() == Ieee80211PhyFormat::VHT_SU &&
+            packet->getTag<Ieee80211ModeInd>()->getMode()->getDataMode()->getFecType() == Ieee80211FecType::LDPC;
+    if (vhtLdpc && !packet->hasBitError() && packet->peekData()->isCorrect()) {
+        try {
+            auto apepInd = packet->findTag<Ieee80211VhtApepInd>();
+            auto delimiter = packet->peekAtFront<Ieee80211MpduSubframeHeader>();
+            int decodedApepLength = LENGTH_A_MPDU_SUBFRAME_HEADER.get<B>() + delimiter->getLength();
+            int roundedApepLength = 4 * ((decodedApepLength + 3) / 4);
+            if (apepInd == nullptr || apepInd->getApepLength() != roundedApepLength)
+                throw cRuntimeError("Decoded VHT-SU LDPC A-MPDU length disagrees with received VHT-SIG-B APEP indication");
+            // The rounded APEP indication is a PHY-to-MAC validation aid.
+            // Consume it before deaggregation so it is not copied onto the
+            // recovered MPDU or delivered above the MAC.
+            packet->removeTagIfPresent<Ieee80211VhtApepInd>();
+            auto frames = MpduDeaggregation().deaggregateFrame(packet);
+            if (frames->size() != 1) {
+                // The bounded VHT-SU path transmits exactly one MPDU. Keep
+                // one receiver-owned packet only as an error carrier so Rx
+                // follows its normal corrupted-frame path without peeking a
+                // MAC header or aborting the simulation.
+                Packet *malformed = frames->empty() ? new Packet("malformed-vht-ampdu") : frames->front();
+                for (size_t i = frames->empty() ? 0 : 1; i < frames->size(); i++)
+                    delete frames->at(i);
+                delete frames;
+                malformed->setBitError(true);
+                packet = malformed;
+            }
+            else {
+                packet = frames->front();
+                frames->clear();
+                delete frames;
+            }
+        }
+        catch (const cRuntimeError& error) {
+            // Delimiter CRC/signature/length failures are modeled receive
+            // failures, not configuration errors. MpduDeaggregation leaves
+            // the input packet owned by the caller on rejection.
+            EV_DEBUG << "Cannot decode received VHT-SU LDPC A-MPDU: "
+                     << error.what() << endl;
+            packet->setBitError(true);
+        }
+    }
+    else if (vhtLdpc)
+        packet->removeTagIfPresent<Ieee80211VhtApepInd>();
     if (rx->lowerFrameReceived(packet)) {
         auto header = packet->peekAtFront<Ieee80211MacHeader>();
         processLowerFrame(packet, header);
@@ -270,6 +388,9 @@ void Ieee80211Mac::encapsulate(Packet *packet)
 void Ieee80211Mac::decapsulate(Packet *packet)
 {
     const auto& header = packet->popAtFront<Ieee80211DataOrMgmtHeader>();
+    auto macProtocolInd = packet->addTagIfAbsent<MacProtocolInd>();
+    macProtocolInd->setProtocol(&Protocol::ieee80211Mac);
+    macProtocolInd->setMacProtocolHeader(header);
     auto packetProtocolTag = packet->addTagIfAbsent<PacketProtocolTag>();
     if (dynamicPtrCast<const Ieee80211DataHeader>(header))
         packetProtocolTag->setProtocol(llc->getProtocol());
@@ -360,6 +481,11 @@ void Ieee80211Mac::sendUpFrame(Packet *frame)
 void Ieee80211Mac::sendDownFrame(Packet *frame)
 {
     Enter_Method("sendDownFrame(\"%s\")", frame->getName());
+    auto modeReq = frame->findTag<Ieee80211ModeReq>();
+    const auto *mode = modeReq != nullptr ? modeReq->getMode() : nullptr;
+    if (mode != nullptr && mode->getDataMode()->getPhyFormat() == Ieee80211PhyFormat::VHT_SU &&
+        mode->getDataMode()->getFecType() == Ieee80211FecType::LDPC)
+        frame = prepareVhtLdpcAmpdu(frame, mode);
     take(frame);
     configureRadioMode(IRadio::RADIO_MODE_TRANSMITTER);
     frame->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211Mac);
@@ -418,4 +544,3 @@ void Ieee80211Mac::handleCrashOperation(LifecycleOperation *operation)
 
 } // namespace ieee80211
 } // namespace inet
-

@@ -1,0 +1,23 @@
+%description:
+The LDPC PER success model fails explicitly when its configured table file is
+missing, while the module default points to the checked-in 1458-byte curve.
+
+%file: TestNetwork.ned
+
+import inet.physicallayer.wireless.ieee80211.packetlevel.errormodel.Ieee80211LdpcPerSuccessModel;
+
+network TestNetwork
+{
+    submodules:
+        model: Ieee80211LdpcPerSuccessModel;
+}
+
+%inifile: omnetpp.ini
+[General]
+ned-path = .;../../../../src;../../lib
+network = TestNetwork
+*.model.perTableFile = "missing-ldpc-per.csv"
+
+%exitcode: 1
+%contains-regex: stderr
+.*Cannot resolve IEEE 802.11 LDPC PER table 'missing-ldpc-per\.csv'.*

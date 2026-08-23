@@ -1,0 +1,192 @@
+%description:
+IEEE 802.11 HT-SIG and VHT-SIG-A LDPC signaling, CRC, and validation tests.
+
+%includes:
+#include <tuple>
+
+#include "inet/common/MemoryInputStream.h"
+#include "inet/common/MemoryOutputStream.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeaderCrc.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeaderSerializer.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211VhtSigA.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211VhtSigB.h"
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%global:
+
+class TestHtPhyHeaderSerializer : public Ieee80211HtPhyHeaderSerializer
+{
+  public:
+    void write(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const { serialize(stream, chunk); }
+    const Ptr<Chunk> read(MemoryInputStream& stream) const { return deserialize(stream); }
+};
+
+class TestVhtPhyHeaderSerializer : public Ieee80211VhtPhyHeaderSerializer
+{
+  public:
+    void write(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const { serialize(stream, chunk); }
+    const Ptr<Chunk> read(MemoryInputStream& stream) const { return deserialize(stream); }
+};
+
+static bool getBit(const std::vector<uint8_t>& bytes, int index)
+{
+    return bytes.at(index / 8) & (1 << (7 - index % 8));
+}
+
+%activity:
+
+std::vector<bool> oracleBits;
+for (char bit : std::string("1111000100100110000000001110000000"))
+    oracleBits.push_back(bit == '1');
+ASSERT(computeIeee80211PhyHeaderCrc(oracleBits) == 0xA8);
+
+// IEEE 802.11-2024 19.3.9.4.4 exact HT-SIG oracle. The protected bits are
+// followed by transmitted {B7,...,B0}=10101000 and six zero tail bits.
+TestHtPhyHeaderSerializer htSerializer;
+auto oracleHt = makeShared<Ieee80211HtPhyHeader>();
+oracleHt->setMcs(15);
+oracleHt->setChannelWidth40(true);
+oracleHt->setLengthField(B(100));
+oracleHt->setSmoothing(true);
+oracleHt->setNotSounding(true);
+oracleHt->setReserved(true);
+oracleHt->setAggregation(false);
+oracleHt->setStbc(0);
+oracleHt->setFecCoding(false);
+oracleHt->setShortGi(false);
+oracleHt->setNumberOfExtensionSpatialStreams(0);
+MemoryOutputStream oracleHtOutput;
+htSerializer.write(oracleHtOutput, oracleHt);
+ASSERT(oracleHtOutput.getData() == std::vector<uint8_t>({0xF1, 0x26, 0x00, 0xE0, 0x2A, 0x00}));
+
+const MacAddress vhtBssid("00:21:6A:AC:53:52");
+ASSERT(computeVhtPartialAidForBssid(vhtBssid) == 164);
+ASSERT(computeVhtPartialAidForAssociatedSta(37, vhtBssid) == 261);
+validateVhtSuGroupIdAndPartialAid(0, 164);
+validateVhtSuGroupIdAndPartialAid(63, 261);
+bool invalidMuGroupRejected = false;
+try { validateVhtSuGroupIdAndPartialAid(1, 0); }
+catch (const cRuntimeError&) { invalidMuGroupRejected = true; }
+ASSERT(invalidMuGroupRejected);
+
+auto ht = makeShared<Ieee80211HtPhyHeader>();
+ht->setMcs(4);
+ht->setChannelWidth40(false);
+ht->setLengthField(B(100));
+ht->setSmoothing(true);
+ht->setNotSounding(true);
+ht->setReserved(true);
+ht->setAggregation(false);
+ht->setStbc(0);
+ht->setFecCoding(true);
+ht->setShortGi(false);
+ht->setNumberOfExtensionSpatialStreams(0);
+MemoryOutputStream htOutput;
+htSerializer.write(htOutput, ht);
+ASSERT(htOutput.getLength() == b(48));
+ASSERT(htOutput.getData() == std::vector<uint8_t>({0x20, 0x26, 0x00, 0xE2, 0x3D, 0x40}));
+ASSERT(getBit(htOutput.getData(), 30)); // HT-SIG2 B6: FEC Coding
+for (int i = 42; i < 48; i++)
+    ASSERT(!getBit(htOutput.getData(), i));
+MemoryInputStream htInput(htOutput.getData(), b(48));
+auto decodedHt = dynamicPtrCast<Ieee80211HtPhyHeader>(htSerializer.read(htInput));
+ASSERT(!decodedHt->isIncorrect());
+ASSERT(!decodedHt->isImproperlyRepresented());
+ASSERT(decodedHt->getMcs() == 4);
+ASSERT(decodedHt->getLengthField() == B(100));
+ASSERT(decodedHt->getFecCoding());
+
+auto corruptedHtBytes = htOutput.getData();
+corruptedHtBytes.at(0) ^= 0x80;
+MemoryInputStream corruptedHtInput(corruptedHtBytes, b(48));
+auto corruptedHt = dynamicPtrCast<Ieee80211HtPhyHeader>(htSerializer.read(corruptedHtInput));
+ASSERT(corruptedHt->isIncorrect());
+
+TestVhtPhyHeaderSerializer vhtSerializer;
+auto vht = makeShared<Ieee80211VhtPhyHeader>();
+vht->setLengthField(B(100));
+vht->setBandwidth(0);
+vht->setReserved1(true);
+vht->setStbc(false);
+vht->setGroupId(0);
+vht->setNumberOfSpaceTimeStreams(0);
+vht->setPartialAid(164);
+vht->setTxopPsNotAllowed(false);
+vht->setReserved2(true);
+vht->setShortGi(false);
+vht->setShortGiNsymDisambiguation(false);
+vht->setCoding(true);
+vht->setLdpcExtraOfdmSymbol(true);
+vht->setMcs(4);
+vht->setBeamformed(false);
+vht->setReserved3(true);
+vht->setVhtSigBLength(encodeVhtSuSigBLength(vht->getLengthField()));
+vht->setVhtSigBReserved(7);
+vht->setVhtSigBTail(0);
+MemoryOutputStream vhtOutput;
+vhtSerializer.write(vhtOutput, vht);
+ASSERT(vhtOutput.getLength() == b(74));
+ASSERT(getBit(vhtOutput.getData(), 26)); // VHT-SIG-A2 B2: Coding
+ASSERT(getBit(vhtOutput.getData(), 27)); // VHT-SIG-A2 B3: LDPC Extra OFDM Symbol
+MemoryInputStream vhtInput(vhtOutput.getData(), b(74));
+auto decodedVht = dynamicPtrCast<Ieee80211VhtPhyHeader>(vhtSerializer.read(vhtInput));
+ASSERT(!decodedVht->isIncorrect());
+ASSERT(!decodedVht->isImproperlyRepresented());
+ASSERT(decodedVht->getCoding());
+ASSERT(decodedVht->getLdpcExtraOfdmSymbol());
+ASSERT(decodedVht->getMcs() == 4);
+ASSERT(decodedVht->getGroupId() == 0);
+ASSERT(decodedVht->getPartialAid() == 164);
+ASSERT(decodedVht->getLengthField() == B(100));
+ASSERT(decodedVht->getVhtSigBLength() == 25);
+ASSERT(decodedVht->getVhtSigBReserved() == 7);
+ASSERT(decodedVht->getVhtSigBTail() == 0);
+
+// Table 21-14 makes the aggregate VHT-SIG-A/B representation bandwidth
+// dependent. Exercise every supported SU layout, including both 21-bit
+// Length variants represented by bandwidth codes 2 and 3.
+for (auto [bandwidthCode, sigBLength, reservedValue] :
+        std::vector<std::tuple<unsigned int, int, unsigned int>>({{0, 26, 7}, {1, 27, 3}, {2, 29, 3}, {3, 29, 3}})) {
+    auto layoutVht = makeShared<Ieee80211VhtPhyHeader>(*vht);
+    layoutVht->setBandwidth(bandwidthCode);
+    layoutVht->setChunkLength(b(48 + sigBLength));
+    layoutVht->setVhtSigBReserved(reservedValue);
+    MemoryOutputStream layoutOutput;
+    vhtSerializer.write(layoutOutput, layoutVht);
+    ASSERT(layoutOutput.getLength() == b(48 + sigBLength));
+    MemoryInputStream layoutInput(layoutOutput.getData(), b(48 + sigBLength));
+    auto decodedLayout = dynamicPtrCast<Ieee80211VhtPhyHeader>(vhtSerializer.read(layoutInput));
+    ASSERT(decodedLayout->getChunkLength() == b(48 + sigBLength));
+    ASSERT(decodedLayout->getLengthField() == B(100));
+    ASSERT(!decodedLayout->isIncorrect());
+    ASSERT(!decodedLayout->isImproperlyRepresented());
+}
+
+// Equation (21-46) carries ceil(APEP_LENGTH/4). The RXVECTOR reconstruction
+// is consequently the enclosing four-octet boundary for an unaligned input.
+auto unalignedVht = makeShared<Ieee80211VhtPhyHeader>(*vht);
+unalignedVht->setLengthField(B(101));
+unalignedVht->setVhtSigBLength(encodeVhtSuSigBLength(B(101)));
+MemoryOutputStream unalignedVhtOutput;
+vhtSerializer.write(unalignedVhtOutput, unalignedVht);
+MemoryInputStream unalignedVhtInput(unalignedVhtOutput.getData(), b(74));
+auto decodedUnalignedVht = dynamicPtrCast<Ieee80211VhtPhyHeader>(vhtSerializer.read(unalignedVhtInput));
+ASSERT(decodedUnalignedVht->getVhtSigBLength() == 26);
+ASSERT(decodedUnalignedVht->getLengthField() == B(104));
+
+auto bccVht = makeShared<Ieee80211VhtPhyHeader>(*vht);
+bccVht->setCoding(false);
+bccVht->setLdpcExtraOfdmSymbol(false);
+MemoryOutputStream bccVhtOutput;
+vhtSerializer.write(bccVhtOutput, bccVht);
+ASSERT(!getBit(bccVhtOutput.getData(), 26));
+ASSERT(!getBit(bccVhtOutput.getData(), 27));
+
+auto invalidVhtBytes = bccVhtOutput.getData();
+invalidVhtBytes.at(3) |= 0x10; // Set B3 while B2 remains zero; CRC mismatch is also invalid.
+MemoryInputStream invalidVhtInput(invalidVhtBytes, b(74));
+auto invalidVht = dynamicPtrCast<Ieee80211VhtPhyHeader>(vhtSerializer.read(invalidVhtInput));
+ASSERT(invalidVht->isIncorrect());

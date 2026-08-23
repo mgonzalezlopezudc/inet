@@ -1,0 +1,158 @@
+%description:
+The checked-in 1458-byte AWGN LDPC PER calibration is loaded through the
+production success-model default and is available for HT/VHT-SU, 20/40 MHz,
+per-stream MCS0-7, and all supported ideal-separated NSS values. All 32
+planner-derived calibration curves and all 336 stored SNR/PER samples are
+checked, including exact interior-sample lookup.
+
+%includes:
+#include <cmath>
+#include <string>
+#include <vector>
+
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211LdpcPerTable.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211LdpcPerSuccessModel.h"
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%file: TestNetwork.ned
+
+import inet.physicallayer.wireless.ieee80211.packetlevel.errormodel.Ieee80211LdpcPerSuccessModel;
+
+network TestNetwork
+{
+    submodules:
+        model: Ieee80211LdpcPerSuccessModel;
+}
+
+%inifile: omnetpp.ini
+[General]
+ned-path = .;../../../../src;../../lib
+network = TestNetwork
+
+%global:
+struct ProductionPerSample {
+    double snrDb;
+    double per;
+};
+
+static const std::vector<std::vector<ProductionPerSample>> productionSamples = {
+    {
+        {-1.50, 1.00000}, {-1.25, 0.97950}, {-1.00, 0.60480}, {-0.75, 0.17050},
+        {-0.50, 0.03320}, {-0.25, 0.00530}, {0.00, 0.00085}, {0.25, 0.00022},
+        {0.50, 0.00004}, {0.75, 0.5 / 40001.0}
+    },
+    {
+        {1.50, 1.00000}, {1.75, 0.97470}, {2.00, 0.62330}, {2.25, 0.18590},
+        {2.50, 0.03400}, {2.75, 0.00550}, {3.00, 0.00083}, {3.25, 0.00015},
+        {3.50, 0.00003}, {3.75, 0.5 / 40001.0}
+    },
+    {
+        {4.00, 1.00000}, {4.25, 0.98720}, {4.50, 0.62560}, {4.75, 0.15800},
+        {5.00, 0.02090}, {5.25, 0.00250}, {5.50, 0.00034}, {5.75, 0.00003},
+        {6.00, 0.5 / 40001.0}
+    },
+    {
+        {6.75, 1.00000}, {7.00, 0.99800}, {7.25, 0.94340}, {7.50, 0.57890},
+        {7.75, 0.20640}, {8.00, 0.04840}, {8.25, 0.00930}, {8.50, 0.00180},
+        {8.75, 0.00040}, {9.00, 0.00011}, {9.25, 0.00002}, {9.50, 0.5 / 40001.0}
+    },
+    {
+        {10.00, 1.00000}, {10.25, 0.99310}, {10.50, 0.70890}, {10.75, 0.24720},
+        {11.00, 0.04700}, {11.25, 0.00590}, {11.50, 0.00091}, {11.75, 0.00016},
+        {12.00, 0.00003}, {12.25, 0.5 / 40001.0}
+    },
+    {
+        {14.00, 1.00000}, {14.25, 0.99700}, {14.50, 0.91830}, {14.75, 0.53790},
+        {15.00, 0.16610}, {15.25, 0.03690}, {15.50, 0.00650}, {15.75, 0.00100},
+        {16.00, 0.00031}, {16.25, 0.00005}, {16.50, 0.5 / 40001.0}
+    },
+    {
+        {15.50, 1.00000}, {15.75, 0.98140}, {16.00, 0.73930}, {16.25, 0.33110},
+        {16.50, 0.08150}, {16.75, 0.01620}, {17.00, 0.00270}, {17.25, 0.00052},
+        {17.50, 0.00005}, {17.75, 0.00003}, {18.00, 0.5 / 40001.0}
+    },
+    {
+        {17.00, 1.00000}, {17.25, 0.97750}, {17.50, 0.73980}, {17.75, 0.33190},
+        {18.00, 0.09640}, {18.25, 0.02180}, {18.50, 0.00470}, {18.75, 0.00087},
+        {19.00, 0.00018}, {19.25, 0.00003}, {19.50, 0.5 / 40001.0}
+    }
+};
+
+%activity:
+auto model = check_and_cast<Ieee80211LdpcPerSuccessModel *>(
+    cSimulation::getActiveSimulation()->getModuleByPath("model"));
+const std::string resourcePath = model->resolveResourcePath(
+    "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211LdpcPer1458B.csv");
+Ieee80211LdpcPerTable table;
+table.load(resourcePath.c_str());
+ASSERT(table.getNumberOfCurves() == 32);
+int rowCount = 0;
+
+for (auto format : {Ieee80211PhyFormat::HT, Ieee80211PhyFormat::VHT_SU}) {
+    for (int bandwidth : {20, 40}) {
+        for (int mcs = 0; mcs <= 7; mcs++) {
+            const auto *mode = Ieee80211ModeSet::findMode(format, mcs, MHz(bandwidth), 1,
+                                                          Ieee80211FecType::LDPC);
+            ASSERT(mode != nullptr);
+            auto plan = mode->getDataMode()->computeEncodingPlan(B(1458));
+            auto key = makeIeee80211LdpcPerCurveKey(*mode->getDataMode(), plan);
+            const auto& curve = table.getCurve(key);
+            ASSERT(curve.size() == productionSamples[mcs].size());
+            for (size_t i = 0; i < curve.size(); i++) {
+                ASSERT(curve[i].snrDb == productionSamples[mcs][i].snrDb);
+                ASSERT(curve[i].packetErrorRate == productionSamples[mcs][i].per);
+                ASSERT(std::fabs(model->computeDataSuccessRate(*mode->getDataMode(), plan,
+                        productionSamples[mcs][i].snrDb) - (1.0 - productionSamples[mcs][i].per)) < 1e-15);
+                rowCount++;
+            }
+            if (format == Ieee80211PhyFormat::HT && bandwidth == 20 && mcs == 0)
+                ASSERT(table.getPacketErrorRate(key, 0.25) == 0.00022);
+
+            // The checked-in 1458-byte calibration is deliberately reused for
+            // another valid planner signature of the same calibrated mode.
+            if (format == Ieee80211PhyFormat::HT && bandwidth == 20 && mcs == 4) {
+                auto smallerPlan = mode->getDataMode()->computeEncodingPlan(B(100));
+                auto smallerKey = makeIeee80211LdpcPerCurveKey(*mode->getDataMode(), smallerPlan);
+                ASSERT(!(smallerKey == key));
+                ASSERT(table.getPacketErrorRate(smallerKey, 11.25) == 0.00590);
+            }
+            if (format == Ieee80211PhyFormat::VHT_SU && bandwidth == 20 && mcs == 4) {
+                auto unalignedPlan = mode->getDataMode()->computeEncodingPlan(B(1457));
+                auto unalignedKey = makeIeee80211LdpcPerCurveKey(*mode->getDataMode(), unalignedPlan);
+                ASSERT(!(unalignedKey == key));
+                ASSERT(table.getPacketErrorRate(unalignedKey, 11.25) == 0.00590);
+            }
+        }
+    }
+}
+ASSERT(rowCount == 336);
+
+// The supplied NSS1 calibration is reused for ideal separated streams. HT
+// carries NSS in the MCS index, whereas VHT carries NSS separately.
+const auto *htNss2Mode = Ieee80211ModeSet::findMode(
+        Ieee80211PhyFormat::HT, 12, MHz(20), 2, Ieee80211FecType::LDPC);
+ASSERT(htNss2Mode != nullptr);
+auto htNss2Plan = htNss2Mode->getDataMode()->computeEncodingPlan(B(1458));
+ASSERT(table.getPacketErrorRate(
+        makeIeee80211LdpcPerCurveKey(*htNss2Mode->getDataMode(), htNss2Plan), 11.25) == 0.00590);
+
+const auto *vhtNss2Mode = Ieee80211ModeSet::findMode(
+        Ieee80211PhyFormat::VHT_SU, 4, MHz(20), 2, Ieee80211FecType::LDPC);
+ASSERT(vhtNss2Mode != nullptr);
+auto vhtNss2Plan = vhtNss2Mode->getDataMode()->computeEncodingPlan(B(1458));
+ASSERT(table.getPacketErrorRate(
+        makeIeee80211LdpcPerCurveKey(*vhtNss2Mode->getDataMode(), vhtNss2Plan), 11.25) == 0.00590);
+
+// A structurally valid plan for an uncalibrated per-stream MCS remains an
+// explicit failure; invariance never crosses format/BW/per-stream-MCS keys.
+const auto *uncalibratedMode = Ieee80211ModeSet::findMode(
+        Ieee80211PhyFormat::VHT_SU, 8, MHz(20), 1, Ieee80211FecType::LDPC);
+ASSERT(uncalibratedMode != nullptr);
+auto uncalibratedPlan = uncalibratedMode->getDataMode()->computeEncodingPlan(B(1458));
+bool missingModeRejected = false;
+try { table.getPacketErrorRate(makeIeee80211LdpcPerCurveKey(*uncalibratedMode->getDataMode(), uncalibratedPlan), 10); }
+catch (const cRuntimeError&) { missingModeRejected = true; }
+ASSERT(missingModeRejected);

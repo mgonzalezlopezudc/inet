@@ -137,6 +137,18 @@ class Ieee80211HtPhyPreamble extends Ieee80211PhyPreamble
 
 class Ieee80211HtPhyHeader extends Ieee80211PhyHeader
 {
+    chunkLength = b(48);
+    uint8_t mcs;
+    bool channelWidth40 = false;
+    bool smoothing = true;
+    bool notSounding = true;
+    bool reserved = true;
+    bool aggregation = false;
+    uint8_t stbc = 0;
+    bool fecCoding = false; // HT-SIG2 B6: false=BCC, true=LDPC
+    bool shortGi = false;
+    uint8_t numberOfExtensionSpatialStreams = 0;
+    uint8_t crc;
 }
 
 // IEEE 802.11 21. High Throughput (VHT)
@@ -147,4 +159,29 @@ class Ieee80211VhtPhyPreamble extends Ieee80211PhyPreamble
 
 class Ieee80211VhtPhyHeader extends Ieee80211PhyHeader
 {
+    // VHT-SIG-A is 48 bits. VHT-SIG-B is 26, 27, or 29 bits for
+    // 20, 40, or 80/160 MHz respectively (IEEE Std 802.11-2024 Table 21-14).
+    chunkLength = b(74);
+    uint8_t bandwidth;
+    bool reserved1 = true;
+    bool stbc = false;
+    uint8_t groupId = 63;
+    uint8_t numberOfSpaceTimeStreams = 0; // NSTS-1 for the no-STBC SU path
+    uint16_t partialAid = 0;
+    bool txopPsNotAllowed = true;
+    bool reserved2 = true;
+    bool shortGi = false;
+    bool shortGiNsymDisambiguation = false;
+    bool coding = false; // VHT-SIG-A2 B2: false=BCC, true=LDPC
+    bool ldpcExtraOfdmSymbol = false;
+    uint8_t mcs;
+    bool beamformed = false;
+    bool reserved3 = true;
+    uint8_t crc;
+    // VHT-SIG-B Length is in units of four octets and is encoded as
+    // ceil(lengthField / 4). On receive, lengthField is reconstructed as
+    // four times this value, as specified for RXVECTOR APEP_LENGTH.
+    uint32_t vhtSigBLength;
+    uint8_t vhtSigBReserved = 7;
+    uint8_t vhtSigBTail = 0;
 }

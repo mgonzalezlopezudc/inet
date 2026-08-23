@@ -36,7 +36,8 @@ class INET_API Ieee80211ModeSet : public IPrintableObject, public cObject
 
   protected:
     int findModeIndex(const IIeee80211Mode *mode) const;
-    int getModeIndex(const IIeee80211Mode *mode) const;
+    int findCompatibleMetadataIndex(const IIeee80211Mode *mode) const;
+    const IIeee80211Mode *resolveEntryMode(const IIeee80211Mode *entryMode, const IIeee80211Mode *referenceMode) const;
 
   public:
     Ieee80211ModeSet(const char *name, const std::vector<Entry> entries);
@@ -46,27 +47,42 @@ class INET_API Ieee80211ModeSet : public IPrintableObject, public cObject
     const char *getName() const override { return name.c_str(); }
 
     int getNumModes() const { return entries.size(); }
-    const IIeee80211Mode *getMode(int index) { return entries[index].mode; }
-    bool isMandatory(int index) { return entries[index].isMandatory; }
+    const IIeee80211Mode *getMode(int index) const { return entries[index].mode; }
+    bool isMandatory(int index) const { return entries[index].isMandatory; }
 
-    bool containsMode(const IIeee80211Mode *mode) const { return findModeIndex(mode) != -1; }
+    bool containsMode(const IIeee80211Mode *mode) const;
     bool getIsMandatory(const IIeee80211Mode *mode) const;
 
-    const IIeee80211Mode *findMode(bps bitrate, Hz bandwidth = Hz(NaN), int numSpatialStreams = -1) const;
-    const IIeee80211Mode *findMode(bps minBitrate, bps maxBitrate, Hz bandwidth = Hz(NaN), int numSpatialStreams = -1) const;
-    const IIeee80211Mode *getMode(bps bitrate, Hz bandwidth = Hz(NaN), int numSpatialStreams = -1) const;
-    const IIeee80211Mode *getMode(bps minBitrate, bps maxBitrate, Hz bandwidth = Hz(NaN), int numSpatialStreams = -1) const;
-    const IIeee80211Mode *getSlowestMode() const;
-    const IIeee80211Mode *getFastestMode() const;
+    const IIeee80211Mode *getFecVariant(const IIeee80211Mode *mode, Ieee80211FecType fecType) const;
+    const IIeee80211Mode *findMode(bps bitrate, Hz bandwidth = Hz(NaN), int numSpatialStreams = -1, Ieee80211FecType fecType = Ieee80211FecType::BCC) const;
+    const IIeee80211Mode *findMode(bps minBitrate, bps maxBitrate, Hz bandwidth = Hz(NaN), int numSpatialStreams = -1, Ieee80211FecType fecType = Ieee80211FecType::BCC) const;
+    const IIeee80211Mode *getMode(bps bitrate, Hz bandwidth = Hz(NaN), int numSpatialStreams = -1, Ieee80211FecType fecType = Ieee80211FecType::BCC) const;
+    const IIeee80211Mode *getMode(bps minBitrate, bps maxBitrate, Hz bandwidth = Hz(NaN), int numSpatialStreams = -1, Ieee80211FecType fecType = Ieee80211FecType::BCC) const;
+    const IIeee80211Mode *getSlowestMode(Ieee80211FecType fecType = Ieee80211FecType::BCC) const;
+    const IIeee80211Mode *getFastestMode(Ieee80211FecType fecType = Ieee80211FecType::BCC) const;
     const IIeee80211Mode *getSlowerMode(const IIeee80211Mode *mode) const;
     const IIeee80211Mode *getFasterMode(const IIeee80211Mode *mode) const;
-    const IIeee80211Mode *getSlowestMandatoryMode() const;
-    const IIeee80211Mode *getFastestMandatoryMode() const;
+    const IIeee80211Mode *getSlowestMandatoryMode(Ieee80211FecType fecType = Ieee80211FecType::BCC) const;
+    const IIeee80211Mode *getFastestMandatoryMode(Ieee80211FecType fecType = Ieee80211FecType::BCC) const;
     const IIeee80211Mode *getSlowerMandatoryMode(const IIeee80211Mode *mode) const;
     const IIeee80211Mode *getFasterMandatoryMode(const IIeee80211Mode *mode) const;
 
     static const Ieee80211ModeSet *findModeSet(const char *mode);
     static const Ieee80211ModeSet *getModeSet(const char *mode);
+    /** Resolves an exact canonical HT/VHT mode tuple, or returns nullptr when the tuple is not legal. */
+    static const IIeee80211Mode *findMode(Ieee80211PhyFormat phyFormat, unsigned int mcsIndex,
+            Hz bandwidth, unsigned int numberOfSpatialStreams,
+            Ieee80211FecType fecType = Ieee80211FecType::BCC);
+    /**
+     * Resolves an exact canonical HT/VHT mode tuple including the received GI.
+     * The capability check is made against the canonical operation-mode set,
+     * while the returned mode is constructed by the canonical HT/VHT mode
+     * factory so a mode-set entry's incidental GI does not override the
+     * received PHY header.
+     */
+    static const IIeee80211Mode *findMode(Ieee80211PhyFormat phyFormat, unsigned int mcsIndex,
+            Hz bandwidth, unsigned int numberOfSpatialStreams,
+            Ieee80211FecType fecType, bool shortGi);
 
     simtime_t getSifsTime() const { return entries[0].mode->getSifsTime(); }
     simtime_t getSlotTime() const { return entries[0].mode->getSlotTime(); }
@@ -84,4 +100,3 @@ class INET_API Ieee80211ModeSet : public IPrintableObject, public cObject
 } // namespace inet
 
 #endif
-

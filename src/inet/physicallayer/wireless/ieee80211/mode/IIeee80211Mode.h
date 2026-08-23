@@ -9,6 +9,7 @@
 #define __INET_IIEEE80211MODE_H
 
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IModulation.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211DataEncodingPlan.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 
 namespace inet {
@@ -37,6 +38,16 @@ class INET_API IIeee80211HeaderMode : public cObject, public IPrintableObject
 class INET_API IIeee80211DataMode : public cObject, public IPrintableObject
 {
   public:
+    // Legacy data modes remain BCC by default.  HT/VHT modes override these
+    // methods when their FEC identity is explicitly selected.
+    virtual Ieee80211FecType getFecType() const { return Ieee80211FecType::BCC; }
+    virtual int getFecVariant() const { return 0; }
+    virtual Ieee80211PhyFormat getPhyFormat() const { return Ieee80211PhyFormat::LEGACY; }
+    virtual unsigned int getMcsIndex() const { throw cRuntimeError("MCS index is not available for this data mode"); }
+    virtual Ieee80211CodeRate getCodeRate() const { throw cRuntimeError("Code rate is not available for this data mode"); }
+    virtual int getNumberOfCodedBitsPerSymbol() const { throw cRuntimeError("Coded bits per symbol are not available for this data mode"); }
+    virtual int getNumberOfDataBitsPerSymbol() const { throw cRuntimeError("Data bits per symbol are not available for this data mode"); }
+    virtual Ieee80211DataEncodingPlan computeEncodingPlan(b dataLength) const { throw cRuntimeError("Data encoding plan is not available for this data mode"); }
     virtual Hz getBandwidth() const = 0;
     virtual bps getNetBitrate() const = 0;
     virtual bps getGrossBitrate() const = 0;
@@ -77,4 +88,3 @@ class INET_API IIeee80211Mode : public cObject, public IPrintableObject
 } // namespace inet
 
 #endif
-
