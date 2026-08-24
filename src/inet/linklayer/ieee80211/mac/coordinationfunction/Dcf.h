@@ -13,6 +13,7 @@
 #include "inet/linklayer/ieee80211/mac/channelaccess/Dcaf.h"
 #include "inet/linklayer/ieee80211/mac/common/ModeSetListener.h"
 #include "inet/linklayer/ieee80211/mac/contract/ICoordinationFunction.h"
+#include "inet/linklayer/ieee80211/mac/contract/Ieee80211ChannelAccessPolicy.h"
 #include "inet/linklayer/ieee80211/mac/contract/ICtsPolicy.h"
 #include "inet/linklayer/ieee80211/mac/contract/ICtsProcedure.h"
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequenceHandler.h"
@@ -96,6 +97,9 @@ class INET_API Dcf : public ICoordinationFunction, public IFrameSequenceHandler:
     // Station counters
     StationRetryCounters *stationRetryCounters = nullptr;
 
+    Ieee80211ChannelWidthSelectionPolicy channelWidthSelectionPolicy = Ieee80211ChannelWidthSelectionPolicy::DYNAMIC;
+    physicallayer::Ieee80211ChannelWidth activeTxopChannelWidth = physicallayer::IEEE80211_CHANNEL_WIDTH_20MHZ;
+
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
     virtual void initialize(int stage) override;
@@ -106,6 +110,7 @@ class INET_API Dcf : public ICoordinationFunction, public IFrameSequenceHandler:
     virtual bool hasFrameToTransmit();
     virtual bool isReceptionInProgress();
     virtual FrameSequenceContext *buildContext();
+    virtual bool selectChannelAccessWidth();
 
     virtual void recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header);
     virtual void recipientProcessReceivedControlFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header);

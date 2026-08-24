@@ -1,0 +1,140 @@
+%description:
+Exercise the real IEEE 802.11 Rx grouped-CCA state owner.  State changes are
+delivered through ccaStateChanged at exact PIFS boundaries; configuration
+revisions reset idle histories, while primary20 alone controls medium-free.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/Rx.h"
+#include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211CcaProvider.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+class TestCcaRxHarness : public Rx
+{
+  protected:
+    cMessage *stepEvent = nullptr;
+    int step = 0;
+    bool verified = false;
+    simtime_t pifs;
+
+    virtual void initialize(int stage) override
+    {
+        if (stage == INITSTAGE_LOCAL) {
+            endNavTimer = new cMessage("NAV");
+            stepEvent = new cMessage("CCA step");
+            pifs = Ieee80211ModeSet::getModeSet("ac")->getSifsTime() +
+                    Ieee80211ModeSet::getModeSet("ac")->getSlotTime();
+            scheduleAt(SIMTIME_ZERO, stepEvent);
+        }
+    }
+
+    virtual void handleMessage(cMessage *message) override
+    {
+        ASSERT(message == stepEvent);
+        if (step == 0) {
+            ccaStateChanged(Ieee80211CcaSnapshot(true, IEEE80211_CHANNEL_WIDTH_80MHZ, 1,
+                    false, false, false, false));
+            ASSERT(!isChannelIdleForTransmission(IEEE80211_CHANNEL_WIDTH_80MHZ, pifs));
+            ASSERT(isMediumFree());
+            step++;
+            scheduleAt(simTime() + pifs, stepEvent);
+        }
+        else if (step == 1) {
+            ASSERT(isChannelIdleForTransmission(IEEE80211_CHANNEL_WIDTH_80MHZ, pifs));
+            // Even identical bits reset all secondary histories when the
+            // radio publishes a new geometry/configuration revision.
+            ccaStateChanged(Ieee80211CcaSnapshot(true, IEEE80211_CHANNEL_WIDTH_80MHZ, 2,
+                    false, false, false, false));
+            ASSERT(!isChannelIdleForTransmission(IEEE80211_CHANNEL_WIDTH_80MHZ, pifs));
+            step++;
+            scheduleAt(simTime() + pifs, stepEvent);
+        }
+        else if (step == 2) {
+            ASSERT(isChannelIdleForTransmission(IEEE80211_CHANNEL_WIDTH_80MHZ, pifs));
+            // Busy primary20 does not change the geometry revision; the
+            // secondary idle history therefore remains valid for this exact
+            // PIFS check while primary EDCA becomes busy.
+            ccaStateChanged(Ieee80211CcaSnapshot(true, IEEE80211_CHANNEL_WIDTH_80MHZ, 2,
+                    true, false, false, false));
+            ASSERT(!isMediumFree());
+            ASSERT(isChannelIdleForTransmission(IEEE80211_CHANNEL_WIDTH_80MHZ, pifs));
+            step++;
+            scheduleAt(simTime() + pifs, stepEvent);
+        }
+        else if (step == 3) {
+            ccaStateChanged(Ieee80211CcaSnapshot(true, IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ, 4,
+                    false, false, false, true));
+            // A width/revision change starts a fresh PIFS history.
+            ASSERT(!isChannelIdleForTransmission(IEEE80211_CHANNEL_WIDTH_80MHZ, pifs));
+            ASSERT(!isChannelIdleForTransmission(IEEE80211_CHANNEL_WIDTH_160MHZ, pifs));
+            step++;
+            scheduleAt(simTime() + pifs, stepEvent);
+        }
+        else if (step == 4) {
+            // Remote CCFS1 activity blocks a full-width PIFS gate, but does
+            // not freeze primary-only EDCA medium contention.
+            ASSERT(isMediumFree());
+            ASSERT(!isChannelIdleForTransmission(IEEE80211_CHANNEL_WIDTH_160MHZ, pifs));
+            ASSERT(isChannelIdleForTransmission(IEEE80211_CHANNEL_WIDTH_80MHZ, pifs));
+            // Clearing the remote group starts its own PIFS history.
+            ccaStateChanged(Ieee80211CcaSnapshot(true, IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ, 4,
+                    false, false, false, false));
+            ASSERT(!isChannelIdleForTransmission(IEEE80211_CHANNEL_WIDTH_160MHZ, pifs));
+            step++;
+            scheduleAt(simTime() + pifs, stepEvent);
+        }
+        else {
+            ASSERT(isMediumFree());
+            ASSERT(isChannelIdleForTransmission(IEEE80211_CHANNEL_WIDTH_160MHZ, pifs));
+            verified = true;
+            cancelAndDelete(stepEvent);
+            stepEvent = nullptr;
+        }
+    }
+
+  public:
+    TestCcaRxHarness() {}
+    virtual ~TestCcaRxHarness() { cancelAndDelete(stepEvent); }
+    bool isVerified() const { return verified; }
+};
+
+Define_Module(TestCcaRxHarness);
+
+%file: TestNetwork.ned
+simple TestRxHarness
+{
+    parameters:
+        @class(TestCcaRxHarness);
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        harness: TestRxHarness;
+}
+
+%inifile: omnetpp.ini
+[General]
+ned-path = .;../../../../src;../../lib
+network = TestNetwork
+sim-time-limit = 180us
+
+%activity:
+{
+    auto *harness = check_and_cast<TestCcaRxHarness *>(
+            cSimulation::getActiveSimulation()->getModuleByPath("harness"));
+    wait(0.000150);
+    ASSERT(harness->isVerified());
+    EV << "Production Rx CCA histories, PIFS, revision reset, and primary-only medium-free verified.\n";
+}
+
+EV << ".\n";
+
+%contains: stdout
+Production Rx CCA histories, PIFS, revision reset, and primary-only medium-free verified.
+.

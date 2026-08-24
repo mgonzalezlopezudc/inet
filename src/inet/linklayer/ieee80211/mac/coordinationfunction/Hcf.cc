@@ -46,6 +46,7 @@ void Hcf::initialize(int stage)
 {
     ModeSetListener::initialize(stage);
     if (stage == INITSTAGE_LOCAL) {
+        channelWidthSelectionPolicy = parseIeee80211ChannelWidthSelectionPolicy(par("channelWidthSelectionPolicy"));
         mac = check_and_cast<Ieee80211Mac *>(getContainingNicModule(this)->getSubmodule("mac"));
         startRxTimer = new cMessage("startRxTimeout");
         inactivityTimer = new cMessage("blockAckInactivityTimer");
@@ -651,7 +652,7 @@ void Hcf::processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>&
     }
 }
 
-bool Hcf::shouldRestartHt40ChannelAccess(Edcaf *edcaf)
+bool Hcf::selectChannelAccessWidth(Edcaf *edcaf)
 {
     Packet *frame = edcaf->getInProgressFrames()->getFrameToTransmit();
     if (frame == nullptr)
@@ -659,16 +660,21 @@ bool Hcf::shouldRestartHt40ChannelAccess(Edcaf *edcaf)
     const auto& header = frame->peekAtFront<Ieee80211MacHeader>();
     auto modeReq = frame->findTag<Ieee80211ModeReq>();
     auto mode = modeReq != nullptr ? modeReq->getMode() : rateSelection->computeMode(frame, header, edcaf->getTxopProcedure());
-    if (mode == nullptr || dynamic_cast<const Ieee80211HtMode *>(mode) == nullptr ||
-            mode->getDataMode()->getBandwidth() != MHz(40))
-        return false;
-    // IEEE Std 802.11-2024, 11.15.9 item b):
-    // Secondary channel must be idle during an interval of DIFS for the 2.4 GHz band
-    // and PIFS for the 5 GHz band immediately preceding the expiration of the backoff counter.
-    // If the secondary channel was busy during this interval, invoke the backoff procedure with the current CW[AC].
-    bool is24GHz = modeSet != nullptr && strstr(modeSet->getName(), "2.4Ghz") != nullptr;
-    simtime_t requiredIdle = modeSet->getSifsTime() + (is24GHz ? 2 : 1) * modeSet->getSlotTime();
-    return !rx->isSecondaryChannelIdleFor(requiredIdle);
+    auto effectivePolicy = channelWidthSelectionPolicy;
+    // Preserve the legacy HT40 rule (11.15.9 item b): an unavailable
+    // secondary channel restarts the current CW; dynamic VHT fallback is a
+    // separate policy for ac operation.
+    if (mode != nullptr && modeSet != nullptr && modeSet->isHtOperationSupported() &&
+            getIeee80211ChannelWidth(mode) == IEEE80211_CHANNEL_WIDTH_40MHZ)
+        effectivePolicy = Ieee80211ChannelWidthSelectionPolicy::STATIC;
+    auto selection = selectIeee80211ChannelAccess(modeSet, mode, rx,
+            getIeee80211SecondaryChannelIdleInterval(modeSet), effectivePolicy);
+    if (selection.restart)
+        return true;
+    activeTxopChannelWidth = selection.channelWidth;
+    if (selection.mode != mode)
+        setFrameMode(frame, header, selection.mode);
+    return false;
 }
 
 void Hcf::channelGranted(IChannelAccess *channelAccess)
@@ -693,8 +699,8 @@ void Hcf::channelGranted(IChannelAccess *channelAccess)
             mac->sendDownPendingRadioConfigMsg();
             return;
         }
-        if (shouldRestartHt40ChannelAccess(edcaf)) {
-            EV_INFO << "Secondary channel was busy during required interval before channel access for HT40 transmission, restarting backoff.\n";
+        if (selectChannelAccessWidth(edcaf)) {
+            EV_INFO << "Requested PPDU width is unavailable; restarting EDCA contention with the current CW.\n";
             edcaf->restartChannelAccess(this);
             return;
         }
@@ -786,6 +792,7 @@ void Hcf::frameSequenceFinished()
 {
     Enter_Method("frameSequenceFinished");
     emit(IFrameSequenceHandler::frameSequenceFinishedSignal, frameSequenceHandler->getContext());
+    activeTxopChannelWidth = IEEE80211_CHANNEL_WIDTH_20MHZ;
     auto edcaf = edca->getChannelOwner();
     if (edcaf) {
         edcaf->releaseChannel(this);
@@ -1374,7 +1381,12 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
             dataHeader->setAckPolicy(ackPolicy);
             packet->insertAtFront(dataHeader);
         }
-        auto mode = rateSelection->computeMode(packet, header, txop);
+        auto modeReq = packet->findTag<Ieee80211ModeReq>();
+        auto mode = modeReq != nullptr ? modeReq->getMode() : rateSelection->computeMode(packet, header, txop);
+        if (getIeee80211ChannelWidthMHz(getIeee80211ChannelWidth(mode)) > getIeee80211ChannelWidthMHz(activeTxopChannelWidth))
+            mode = findWidestIeee80211Mode(modeSet, mode, activeTxopChannelWidth);
+        if (mode == nullptr)
+            throw cRuntimeError("No IEEE 802.11 mode is available for the selected channel width");
         setFrameMode(packet, header, mode);
         RateSelection::emitDatarateSelected(this, header, mode);
         EV_DEBUG << "Datarate for " << packet->getName() << " is set to " << mode->getDataMode()->getNetBitrate() << ".\n";

@@ -37,6 +37,7 @@ class INET_API IRx
     // from Contention
     virtual bool isMediumFree() const = 0;
     virtual bool isSecondaryChannelIdleFor(simtime_t interval) const = 0;
+    virtual bool isChannelIdleForTransmission(physicallayer::Ieee80211ChannelWidth channelWidth, simtime_t interval) const = 0;
     virtual void frameTransmitted(simtime_t durationField) = 0;
 
     // from Coordination functions
@@ -54,4 +55,3 @@ class INET_API IRx
 } // namespace inet
 
 #endif
-

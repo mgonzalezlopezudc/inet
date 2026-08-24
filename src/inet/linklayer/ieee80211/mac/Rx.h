@@ -37,10 +37,16 @@ class INET_API Rx : public SimpleModule, public IRx
     physicallayer::IRadio::TransmissionState transmissionState = physicallayer::IRadio::TRANSMISSION_STATE_UNDEFINED;
     physicallayer::IRadioSignal::SignalPart receivedPart = physicallayer::IRadioSignal::SIGNAL_PART_NONE;
     bool mediumFree = true; // cached state
-    bool ht40Cca = false;
-    bool primaryCcaBusy = false;
-    bool secondaryCcaBusy = false;
-    simtime_t secondaryCcaIdleSince = -1;
+    bool ccaEnabled = false;
+    physicallayer::Ieee80211ChannelWidth ccaChannelWidth = physicallayer::IEEE80211_CHANNEL_WIDTH_20MHZ;
+    uint64_t ccaConfigurationRevision = 0;
+    bool primary20CcaBusy = false;
+    bool secondary20CcaBusy = false;
+    bool secondary40CcaBusy = false;
+    bool secondary80CcaBusy = false;
+    simtime_t secondary20CcaIdleSince = -1;
+    simtime_t secondary40CcaIdleSince = -1;
+    simtime_t secondary80CcaIdleSince = -1;
 
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
@@ -58,6 +64,7 @@ class INET_API Rx : public SimpleModule, public IRx
     virtual bool isReceptionInProgress() const override;
     virtual bool isMediumFree() const override { return mediumFree; }
     virtual bool isSecondaryChannelIdleFor(simtime_t interval) const override;
+    virtual bool isChannelIdleForTransmission(physicallayer::Ieee80211ChannelWidth channelWidth, simtime_t interval) const override;
     virtual void receptionStateChanged(physicallayer::IRadio::ReceptionState newReceptionState) override;
     virtual void ccaStateChanged(const physicallayer::Ieee80211CcaSnapshot& snapshot) override;
     virtual void transmissionStateChanged(physicallayer::IRadio::TransmissionState transmissionState) override;
@@ -71,4 +78,3 @@ class INET_API Rx : public SimpleModule, public IRx
 } // namespace inet
 
 #endif
-

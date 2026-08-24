@@ -31,6 +31,7 @@ void Dcf::initialize(int stage)
 {
     ModeSetListener::initialize(stage);
     if (stage == INITSTAGE_LINK_LAYER) {
+        channelWidthSelectionPolicy = parseIeee80211ChannelWidthSelectionPolicy(par("channelWidthSelectionPolicy"));
         startRxTimer = new cMessage("startRxTimeout");
         mac = check_and_cast<Ieee80211Mac *>(getContainingNicModule(this)->getSubmodule("mac"));
         dataAndMgmtRateControl = dynamic_cast<IRateControl *>(getSubmodule(("rateControl")));
@@ -83,6 +84,11 @@ void Dcf::channelGranted(IChannelAccess *channelAccess)
 {
     Enter_Method("channelGranted");
     ASSERT(this->channelAccess == channelAccess);
+    if (selectChannelAccessWidth()) {
+        EV_INFO << "Requested PPDU width is unavailable; restarting DCF contention with the current CW.\n";
+        this->channelAccess->restartChannelAccess(this);
+        return;
+    }
     if (!frameSequenceHandler->isSequenceRunning()) {
         if (this->channelAccess->getInProgressFrames()->getFrameToTransmit() == nullptr) {
             EV_DETAIL << "Releasing channel because no frame is available.\n";
@@ -93,6 +99,31 @@ void Dcf::channelGranted(IChannelAccess *channelAccess)
         frameSequenceHandler->startFrameSequence(new DcfFs(), buildContext(), this);
         emit(IFrameSequenceHandler::frameSequenceStartedSignal, frameSequenceHandler->getContext());
     }
+}
+
+bool Dcf::selectChannelAccessWidth()
+{
+    Packet *frame = channelAccess->getInProgressFrames()->getFrameToTransmit();
+    if (frame == nullptr)
+        return false;
+    const auto& header = frame->peekAtFront<Ieee80211MacHeader>();
+    auto modeReq = frame->findTag<Ieee80211ModeReq>();
+    auto mode = modeReq != nullptr ? modeReq->getMode() : rateSelection->computeMode(frame, header);
+    auto effectivePolicy = channelWidthSelectionPolicy;
+    // Preserve the legacy HT40 rule (11.15.9 item b): an unavailable
+    // secondary channel restarts the current CW; dynamic VHT fallback is a
+    // separate policy for ac operation.
+    if (mode != nullptr && modeSet != nullptr && modeSet->isHtOperationSupported() &&
+            getIeee80211ChannelWidth(mode) == IEEE80211_CHANNEL_WIDTH_40MHZ)
+        effectivePolicy = Ieee80211ChannelWidthSelectionPolicy::STATIC;
+    auto selection = selectIeee80211ChannelAccess(modeSet, mode, rx,
+            getIeee80211SecondaryChannelIdleInterval(modeSet), effectivePolicy);
+    if (selection.restart)
+        return true;
+    activeTxopChannelWidth = selection.channelWidth;
+    if (selection.mode != mode)
+        RateSelection::setFrameMode(frame, header, selection.mode);
+    return false;
 }
 
 void Dcf::processUpperFrame(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header)
@@ -350,6 +381,10 @@ void Dcf::transmitFrame(Packet *packet, simtime_t ifs)
     const auto& header = packet->peekAtFront<Ieee80211MacHeader>();
     auto modeReq = packet->findTag<Ieee80211ModeReq>();
     auto mode = modeReq != nullptr ? modeReq->getMode() : rateSelection->computeMode(packet, header);
+    if (getIeee80211ChannelWidthMHz(getIeee80211ChannelWidth(mode)) > getIeee80211ChannelWidthMHz(activeTxopChannelWidth))
+        mode = findWidestIeee80211Mode(modeSet, mode, activeTxopChannelWidth);
+    if (mode == nullptr)
+        throw cRuntimeError("No IEEE 802.11 mode is available for the selected channel width");
     RateSelection::setFrameMode(packet, header, mode);
     RateSelection::emitDatarateSelected(this, header, mode);
     EV_DEBUG << "Datarate for " << packet->getName() << " is set to " << mode->getDataMode()->getNetBitrate() << ".\n";
@@ -372,6 +407,7 @@ void Dcf::frameSequenceFinished()
 {
     Enter_Method("frameSequenceFinished");
     emit(IFrameSequenceHandler::frameSequenceFinishedSignal, frameSequenceHandler->getContext());
+    activeTxopChannelWidth = IEEE80211_CHANNEL_WIDTH_20MHZ;
     channelAccess->releaseChannel(this);
     if (hasFrameToTransmit())
         channelAccess->requestChannel(this);

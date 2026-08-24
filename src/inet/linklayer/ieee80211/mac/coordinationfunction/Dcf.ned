@@ -28,6 +28,7 @@ import inet.linklayer.ieee80211.mac.recipient.RecipientMacDataService;
 module Dcf extends Module like IDcf
 {
     parameters:
+        string channelWidthSelectionPolicy @enum("dynamic", "static") = default("dynamic");
         string rxModule;
         string txModule;
         string mibModule = default("^.^.mib");
@@ -125,4 +126,3 @@ module Dcf extends Module like IDcf
                 @display("p=550,400");
         }
 }
-

@@ -28,6 +28,7 @@ import inet.linklayer.ieee80211.mac.recipient.RecipientQosMacDataService;
 module Hcf extends Module like IHcf
 {
     parameters:
+        string channelWidthSelectionPolicy @enum("dynamic", "static") = default("dynamic");
         bool isBlockAckSupported = default(false);
 
         string rxModule;
@@ -139,4 +140,3 @@ module Hcf extends Module like IHcf
                 @display("p=550,600");
         }
 }
-

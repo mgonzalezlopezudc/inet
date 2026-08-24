@@ -14,6 +14,6 @@ package inet.linklayer.ieee80211.mac.contract;
 moduleinterface IDcf
 {
     parameters:
+        string channelWidthSelectionPolicy @enum("dynamic", "static");
         @display("i=block/layer");
 }
-

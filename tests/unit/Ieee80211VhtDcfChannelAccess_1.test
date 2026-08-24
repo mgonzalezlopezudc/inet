@@ -1,0 +1,152 @@
+%description:
+Exercise the production DCF grant callback with a narrow exposed harness.  A
+dynamic grant changes the frame's selected mode to the widest idle primary
+hierarchy width; a static unavailable grant restarts the current contention
+without entering a frame sequence.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/Dcf.h"
+#include "inet/linklayer/ieee80211/mac/queue/InProgressFrames.h"
+#include "inet/linklayer/ieee80211/mac/contract/IRx.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+class TestDcfRx : public IRx
+{
+  public:
+    bool idle20 = true;
+    bool idle40 = true;
+    bool idle80 = false;
+    bool idle160 = false;
+    bool isReceptionInProgress() const override { return false; }
+    bool isMediumFree() const override { return true; }
+    bool isSecondaryChannelIdleFor(simtime_t) const override { return idle40; }
+    bool isChannelIdleForTransmission(Ieee80211ChannelWidth width, simtime_t) const override {
+        switch (width) {
+            case IEEE80211_CHANNEL_WIDTH_20MHZ: return idle20;
+            case IEEE80211_CHANNEL_WIDTH_40MHZ: return idle40;
+            case IEEE80211_CHANNEL_WIDTH_80MHZ: return idle80;
+            case IEEE80211_CHANNEL_WIDTH_160MHZ:
+            case IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ: return idle160;
+            default: return false;
+        }
+    }
+    void frameTransmitted(simtime_t) override {}
+    void registerContention(IContention *) override {}
+    void receptionStateChanged(IRadio::ReceptionState) override {}
+    void ccaStateChanged(const Ieee80211CcaSnapshot&) override {}
+    void transmissionStateChanged(IRadio::TransmissionState) override {}
+    void receivedSignalPartChanged(IRadioSignal::SignalPart) override {}
+    bool lowerFrameReceived(Packet *) override { return false; }
+};
+
+class TestInProgressFrames : public InProgressFrames
+{
+  public:
+    Packet *frame = nullptr;
+    Packet *getFrameToTransmit() override { return frame; }
+};
+
+class TestDcaf : public Dcaf
+{
+  public:
+    TestInProgressFrames *frames = nullptr;
+    int restartCount = 0;
+    InProgressFrames *getInProgressFrames() const override { return frames; }
+    void restartChannelAccess(IChannelAccess::ICallback *) override { restartCount++; }
+};
+
+class TestDcfHarness : public Dcf
+{
+  protected:
+    TestDcfRx rxHarness;
+    TestInProgressFrames framesHarness;
+    TestDcaf dcafHarness;
+    cMessage *event = nullptr;
+    bool verified = false;
+
+    virtual void initialize(int stage) override
+    {
+        if (stage == INITSTAGE_LOCAL) {
+            modeSet = const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ac"));
+            rx = &rxHarness;
+            dcafHarness.frames = &framesHarness;
+            channelAccess = &dcafHarness;
+            event = new cMessage("grant");
+            scheduleAt(SIMTIME_ZERO, event);
+        }
+    }
+
+    virtual void handleMessage(cMessage *message) override
+    {
+        ASSERT(message == event);
+        const auto *mode80 = modeSet->getFastestMode(MHz(80));
+        ASSERT(mode80 != nullptr);
+        auto *packet = new Packet("DCF width-selection");
+        packet->insertAtFront(makeShared<Ieee80211DataHeader>());
+        packet->addTag<Ieee80211ModeReq>()->setMode(mode80);
+        framesHarness.frame = packet;
+
+        channelWidthSelectionPolicy = Ieee80211ChannelWidthSelectionPolicy::DYNAMIC;
+        ASSERT(!selectChannelAccessWidth());
+        auto selected = packet->findTag<Ieee80211ModeReq>()->getMode();
+        ASSERT(selected != nullptr);
+        ASSERT(selected->getDataMode()->getBandwidth() == MHz(40));
+
+        packet->getTagForUpdate<Ieee80211ModeReq>()->setMode(mode80);
+        channelWidthSelectionPolicy = Ieee80211ChannelWidthSelectionPolicy::STATIC;
+        rxHarness.idle40 = false;
+        channelGranted(&dcafHarness);
+        ASSERT(dcafHarness.restartCount == 1);
+        verified = true;
+        cancelAndDelete(event);
+        event = nullptr;
+    }
+
+  public:
+    virtual ~TestDcfHarness() { cancelAndDelete(event); }
+    bool isVerified() const { return verified; }
+};
+
+Define_Module(TestDcfHarness);
+
+%file: TestNetwork.ned
+simple DcfHarness
+{
+    parameters:
+        @class(TestDcfHarness);
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        harness: DcfHarness;
+}
+
+%inifile: omnetpp.ini
+[General]
+ned-path = .;../../../../src;../../lib
+network = TestNetwork
+sim-time-limit = 50us
+
+%activity:
+{
+    auto *harness = check_and_cast<TestDcfHarness *>(
+            cSimulation::getActiveSimulation()->getModuleByPath("harness"));
+    wait(0.000025);
+    ASSERT(harness->isVerified());
+    EV << "Production DCF grant selector, mode fallback, and static CW restart callback verified.\n";
+}
+
+EV << ".\n";
+
+%contains: stdout
+Production DCF grant selector, mode fallback, and static CW restart callback verified.
+.

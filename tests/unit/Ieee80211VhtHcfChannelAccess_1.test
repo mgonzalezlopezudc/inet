@@ -1,0 +1,152 @@
+%description:
+Exercise the production HCF/EDCA width selector and grant callback with a
+minimal QoS harness.  Dynamic selection changes the mode to the available
+primary width; static selection invokes the EDCA current-CW restart path.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
+#include "inet/linklayer/ieee80211/mac/channelaccess/Edca.h"
+#include "inet/linklayer/ieee80211/mac/queue/InProgressFrames.h"
+#include "inet/linklayer/ieee80211/mac/contract/IRx.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+class TestHcfRx : public IRx
+{
+  public:
+    bool idle40 = true;
+    bool isReceptionInProgress() const override { return false; }
+    bool isMediumFree() const override { return true; }
+    bool isSecondaryChannelIdleFor(simtime_t) const override { return idle40; }
+    bool isChannelIdleForTransmission(Ieee80211ChannelWidth width, simtime_t) const override {
+        return width == IEEE80211_CHANNEL_WIDTH_20MHZ ||
+                (width == IEEE80211_CHANNEL_WIDTH_40MHZ && idle40);
+    }
+    void frameTransmitted(simtime_t) override {}
+    void registerContention(IContention *) override {}
+    void receptionStateChanged(IRadio::ReceptionState) override {}
+    void ccaStateChanged(const Ieee80211CcaSnapshot&) override {}
+    void transmissionStateChanged(IRadio::TransmissionState) override {}
+    void receivedSignalPartChanged(IRadioSignal::SignalPart) override {}
+    bool lowerFrameReceived(Packet *) override { return false; }
+};
+
+class TestEdcafFrames : public InProgressFrames
+{
+  public:
+    Packet *frame = nullptr;
+    Packet *getFrameToTransmit() override { return frame; }
+};
+
+class TestEdcaf : public Edcaf
+{
+  public:
+    TestEdcafFrames *frames = nullptr;
+    int restartCount = 0;
+    InProgressFrames *getInProgressFrames() const override { return frames; }
+    void restartChannelAccess(IChannelAccess::ICallback *) override { restartCount++; }
+    AccessCategory getAccessCategory() override { return AC_BE; }
+};
+
+class TestEdca : public Edca
+{
+  public:
+    std::vector<Edcaf *> getInternallyCollidedEdcafs() override { return {}; }
+};
+
+class TestHcfHarness : public Hcf
+{
+  protected:
+    bool hasFrameToTransmit(AccessCategory) override { return framesHarness.frame != nullptr; }
+    TestHcfRx rxHarness;
+    TestEdcafFrames framesHarness;
+    TestEdcaf edcafHarness;
+    TestEdca edcaHarness;
+    cMessage *event = nullptr;
+    bool verified = false;
+
+    virtual void initialize(int stage) override
+    {
+        if (stage == INITSTAGE_LOCAL) {
+            modeSet = const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ac"));
+            rx = &rxHarness;
+            edcafHarness.frames = &framesHarness;
+            edca = &edcaHarness;
+            event = new cMessage("grant");
+            scheduleAt(SIMTIME_ZERO, event);
+        }
+    }
+
+    virtual void handleMessage(cMessage *message) override
+    {
+        ASSERT(message == event);
+        const auto *mode80 = modeSet->getFastestMode(MHz(80));
+        ASSERT(mode80 != nullptr);
+        auto *packet = new Packet("HCF width-selection");
+        packet->insertAtFront(makeShared<Ieee80211DataHeader>());
+        packet->addTag<Ieee80211ModeReq>()->setMode(mode80);
+        framesHarness.frame = packet;
+
+        channelWidthSelectionPolicy = Ieee80211ChannelWidthSelectionPolicy::DYNAMIC;
+        ASSERT(!selectChannelAccessWidth(&edcafHarness));
+        auto selected = packet->findTag<Ieee80211ModeReq>()->getMode();
+        ASSERT(selected != nullptr);
+        ASSERT(selected->getDataMode()->getBandwidth() == MHz(40));
+
+        packet->getTagForUpdate<Ieee80211ModeReq>()->setMode(mode80);
+        channelWidthSelectionPolicy = Ieee80211ChannelWidthSelectionPolicy::STATIC;
+        rxHarness.idle40 = false;
+        channelGranted(&edcafHarness);
+        ASSERT(edcafHarness.restartCount == 1);
+        verified = true;
+        cancelAndDelete(event);
+        event = nullptr;
+    }
+
+  public:
+    virtual ~TestHcfHarness() { cancelAndDelete(event); }
+    bool isVerified() const { return verified; }
+};
+
+Define_Module(TestHcfHarness);
+
+%file: TestNetwork.ned
+simple HcfHarness
+{
+    parameters:
+        @class(TestHcfHarness);
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        harness: HcfHarness;
+}
+
+%inifile: omnetpp.ini
+[General]
+ned-path = .;../../../../src;../../lib
+network = TestNetwork
+sim-time-limit = 50us
+
+%activity:
+{
+    auto *harness = check_and_cast<TestHcfHarness *>(
+            cSimulation::getActiveSimulation()->getModuleByPath("harness"));
+    wait(0.000025);
+    ASSERT(harness->isVerified());
+    EV << "Production HCF/EDCA grant selector, mode fallback, and static CW restart callback verified.\n";
+}
+
+EV << ".\n";
+
+%contains: stdout
+Production HCF/EDCA grant selector, mode fallback, and static CW restart callback verified.
+.

@@ -19,6 +19,7 @@
 #include "inet/linklayer/ieee80211/mac/contract/IAckHandler.h"
 #include "inet/linklayer/ieee80211/mac/contract/IBlockAckAgreementHandlerCallback.h"
 #include "inet/linklayer/ieee80211/mac/contract/ICoordinationFunction.h"
+#include "inet/linklayer/ieee80211/mac/contract/Ieee80211ChannelAccessPolicy.h"
 #include "inet/linklayer/ieee80211/mac/contract/ICtsPolicy.h"
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementHandler.h"
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementPolicy.h"
@@ -134,6 +135,9 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     // Protection mechanisms
     SingleProtectionMechanism *singleProtectionMechanism = nullptr;
 
+    Ieee80211ChannelWidthSelectionPolicy channelWidthSelectionPolicy = Ieee80211ChannelWidthSelectionPolicy::DYNAMIC;
+    physicallayer::Ieee80211ChannelWidth activeTxopChannelWidth = physicallayer::IEEE80211_CHANNEL_WIDTH_20MHZ;
+
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
     virtual void initialize(int stage) override;
@@ -180,7 +184,7 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     virtual void setFrameMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, const physicallayer::IIeee80211Mode *mode) const;
     virtual bool isSentByUs(const Ptr<const Ieee80211MacHeader>& header) const;
     virtual bool isForUs(const Ptr<const Ieee80211MacHeader>& header) const;
-    virtual bool shouldRestartHt40ChannelAccess(Edcaf *edcaf);
+    virtual bool selectChannelAccessWidth(Edcaf *edcaf);
 
   protected:
     // IFrameSequenceHandler::ICallback

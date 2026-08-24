@@ -160,7 +160,7 @@ void Rx::recomputeMediumFree()
     bool oldMediumFree = mediumFree;
     // note: the duration of mode switching (rx-to-tx or tx-to-rx) should also count as busy
     bool primaryPhysicallyIdle = (receptionState != IRadio::RECEPTION_STATE_RECEIVING) &&
-            (!ht40Cca ? (receptionState == IRadio::RECEPTION_STATE_IDLE) : !primaryCcaBusy);
+            (!ccaEnabled ? (receptionState == IRadio::RECEPTION_STATE_IDLE) : !primary20CcaBusy);
     mediumFree = primaryPhysicallyIdle && transmissionState == IRadio::TRANSMISSION_STATE_UNDEFINED && !endNavTimer->isScheduled();
     if (mediumFree != oldMediumFree) {
         for (auto contention : contentions)
@@ -170,22 +170,71 @@ void Rx::recomputeMediumFree()
 
 bool Rx::isSecondaryChannelIdleFor(simtime_t interval) const
 {
-    return !ht40Cca || (!secondaryCcaBusy && secondaryCcaIdleSince >= SIMTIME_ZERO &&
-            simTime() - secondaryCcaIdleSince >= interval);
+    return isChannelIdleForTransmission(physicallayer::IEEE80211_CHANNEL_WIDTH_40MHZ, interval);
+}
+
+bool Rx::isChannelIdleForTransmission(physicallayer::Ieee80211ChannelWidth channelWidth, simtime_t interval) const
+{
+    if (!ccaEnabled)
+        return true; // legacy radios without a grouped CCA provider
+    auto idleFor = [&] (bool available, bool busy, simtime_t idleSince) {
+        return available && !busy && idleSince >= SIMTIME_ZERO && simTime() - idleSince >= interval;
+    };
+    if (channelWidth == physicallayer::IEEE80211_CHANNEL_WIDTH_20MHZ)
+        return true;
+    if (channelWidth == physicallayer::IEEE80211_CHANNEL_WIDTH_40MHZ)
+        return idleFor(ccaChannelWidth != physicallayer::IEEE80211_CHANNEL_WIDTH_20MHZ,
+                secondary20CcaBusy, secondary20CcaIdleSince);
+    if (channelWidth == physicallayer::IEEE80211_CHANNEL_WIDTH_80MHZ)
+        return idleFor(ccaChannelWidth == physicallayer::IEEE80211_CHANNEL_WIDTH_80MHZ ||
+                       ccaChannelWidth == physicallayer::IEEE80211_CHANNEL_WIDTH_160MHZ ||
+                       ccaChannelWidth == physicallayer::IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ,
+                secondary20CcaBusy, secondary20CcaIdleSince) &&
+                idleFor(ccaChannelWidth == physicallayer::IEEE80211_CHANNEL_WIDTH_80MHZ ||
+                        ccaChannelWidth == physicallayer::IEEE80211_CHANNEL_WIDTH_160MHZ ||
+                        ccaChannelWidth == physicallayer::IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ,
+                        secondary40CcaBusy, secondary40CcaIdleSince);
+    if (channelWidth == physicallayer::IEEE80211_CHANNEL_WIDTH_160MHZ)
+        return isChannelIdleForTransmission(physicallayer::IEEE80211_CHANNEL_WIDTH_80MHZ, interval) &&
+                idleFor(ccaChannelWidth == physicallayer::IEEE80211_CHANNEL_WIDTH_160MHZ ||
+                        ccaChannelWidth == physicallayer::IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ,
+                        secondary80CcaBusy, secondary80CcaIdleSince);
+    return false;
 }
 
 void Rx::ccaStateChanged(const Ieee80211CcaSnapshot& snapshot)
 {
     Enter_Method("ccaStateChanged");
-    bool wasHt40Cca = ht40Cca;
-    bool wasSecondaryBusy = secondaryCcaBusy;
-    ht40Cca = snapshot.isHt40();
-    primaryCcaBusy = snapshot.isPrimaryBusy();
-    secondaryCcaBusy = snapshot.isSecondaryBusy();
-    if (!ht40Cca || secondaryCcaBusy)
-        secondaryCcaIdleSince = -1;
-    else if (!wasHt40Cca || wasSecondaryBusy)
-        secondaryCcaIdleSince = simTime();
+    bool oldEnabled = ccaEnabled;
+    auto oldWidth = ccaChannelWidth;
+    uint64_t oldRevision = ccaConfigurationRevision;
+    bool oldSecondary20Available = ccaEnabled && oldWidth != physicallayer::IEEE80211_CHANNEL_WIDTH_20MHZ;
+    bool oldSecondary40Available = ccaEnabled && (oldWidth == physicallayer::IEEE80211_CHANNEL_WIDTH_80MHZ ||
+            oldWidth == physicallayer::IEEE80211_CHANNEL_WIDTH_160MHZ || oldWidth == physicallayer::IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ);
+    bool oldSecondary80Available = ccaEnabled && (oldWidth == physicallayer::IEEE80211_CHANNEL_WIDTH_160MHZ ||
+            oldWidth == physicallayer::IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ);
+    ccaEnabled = snapshot.isEnabled();
+    ccaChannelWidth = snapshot.getChannelWidth();
+    ccaConfigurationRevision = snapshot.getConfigurationRevision();
+    primary20CcaBusy = snapshot.isPrimary20Busy();
+    secondary20CcaBusy = snapshot.isSecondary20Busy();
+    secondary40CcaBusy = snapshot.isSecondary40Busy();
+    secondary80CcaBusy = snapshot.isSecondary80Busy();
+    bool resetHistories = oldEnabled != ccaEnabled || oldWidth != ccaChannelWidth || oldRevision != ccaConfigurationRevision;
+    bool secondary20Available = ccaEnabled && ccaChannelWidth != physicallayer::IEEE80211_CHANNEL_WIDTH_20MHZ;
+    bool secondary40Available = ccaEnabled && (ccaChannelWidth == physicallayer::IEEE80211_CHANNEL_WIDTH_80MHZ ||
+            ccaChannelWidth == physicallayer::IEEE80211_CHANNEL_WIDTH_160MHZ || ccaChannelWidth == physicallayer::IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ);
+    bool secondary80Available = ccaEnabled && (ccaChannelWidth == physicallayer::IEEE80211_CHANNEL_WIDTH_160MHZ ||
+            ccaChannelWidth == physicallayer::IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ);
+    auto updateHistory = [&] (bool available, bool oldAvailable, bool busy, simtime_t& idleSince) {
+        if (!available || busy)
+            idleSince = -1;
+        else if (resetHistories || !oldAvailable || idleSince < SIMTIME_ZERO)
+            idleSince = simTime();
+    };
+    updateHistory(secondary20Available, oldSecondary20Available, secondary20CcaBusy, secondary20CcaIdleSince);
+    updateHistory(secondary40Available, oldSecondary40Available, secondary40CcaBusy, secondary40CcaIdleSince);
+    updateHistory(secondary80Available, oldSecondary80Available, secondary80CcaBusy, secondary80CcaIdleSince);
     recomputeMediumFree();
 }
 
@@ -239,4 +288,3 @@ void Rx::registerContention(IContention *contention)
 
 } // namespace ieee80211
 } // namespace inet
-

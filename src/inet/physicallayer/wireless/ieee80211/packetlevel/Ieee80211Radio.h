@@ -38,6 +38,7 @@ class INET_API Ieee80211Radio : public FlatRadioBase, public IIeee80211CcaProvid
     int primaryChannelCenterFrequencyIndex = -1;
     int channelCenterFrequencyIndex0 = -1;
     int channelCenterFrequencyIndex1 = 0;
+    uint64_t ccaConfigurationRevision = 0;
     std::unique_ptr<Ieee80211CcaSnapshot> ccaSnapshot;
     std::string opMode;
     const Ieee80211ModeSet *modeSet = nullptr;
@@ -57,7 +58,7 @@ class INET_API Ieee80211Radio : public FlatRadioBase, public IIeee80211CcaProvid
     virtual void encapsulate(Packet *packet) const override;
     virtual void decapsulate(Packet *packet) const override;
 
-    virtual bool computeIsBandBusy(Hz centerFrequency) const;
+    virtual bool computeIsBandBusy(const FrequencyBand& band, Ieee80211CcaGroup group, bool legacyHt40 = false) const;
     virtual void updateCcaState();
     virtual void updateTransceiverState() override;
 
@@ -65,6 +66,8 @@ class INET_API Ieee80211Radio : public FlatRadioBase, public IIeee80211CcaProvid
     Ieee80211Radio();
 
     virtual const Ieee80211CcaSnapshot& getCcaSnapshot() const override { return *ccaSnapshot; }
+    virtual const Ieee80211ModeSet *getModeSet() const { return modeSet; }
+    virtual const IIeee80211Band *getBand() const { return band; }
     virtual const Ieee80211Channel *getChannel() const { return check_and_cast<const Ieee80211Receiver *>(receiver)->getChannel(); }
 
     // These setters snapshot transactional mode-set consumers before applying

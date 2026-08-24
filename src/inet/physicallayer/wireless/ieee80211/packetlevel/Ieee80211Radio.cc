@@ -34,6 +34,7 @@
 #include "inet/physicallayer/wireless/common/radio/packetlevel/BandListening.h"
 #include "inet/physicallayer/wireless/common/radio/packetlevel/ListeningDecision.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211CcaListening.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
 
@@ -150,13 +151,16 @@ Ieee80211Radio::Ieee80211Radio() :
 {
 }
 
-bool Ieee80211Radio::computeIsBandBusy(Hz centerFrequency) const
+bool Ieee80211Radio::computeIsBandBusy(const FrequencyBand& frequencyBand, Ieee80211CcaGroup group, bool legacyHt40) const
 {
     const simtime_t now = simTime();
     const Coord& position = antenna->getMobility()->getCurrentPosition();
-    BandListening listening(this, now, now + SimTime::fromRaw(1), position, position,
-            centerFrequency, MHz(20));
+    Ieee80211CcaListening listening(this, now, now + SimTime::fromRaw(1), position, position,
+            frequencyBand.centerFrequency, frequencyBand.bandwidth, group, legacyHt40);
     const IListeningDecision *decision = medium->listenOnMedium(this, &listening);
+    // INET's ListeningDecision uses isListeningPossible() for the radio's
+    // energy-present/busy state (Radio maps it to RECEPTION_STATE_BUSY).
+    // Preserve that established contract while exposing a typed CCA marker.
     bool busy = decision->isListeningPossible();
     delete decision;
     return busy;
@@ -170,18 +174,50 @@ void Ieee80211Radio::updateCcaState()
             channel->getSecondaryChannelOffset() != IEEE80211_SECONDARY_CHANNEL_NONE &&
             modeSet != nullptr && modeSet->isHtOperationSupported() &&
             ieee80211Receiver->getBandwidth() == MHz(40);
-    bool ht40 = ht40Configured && isReceiverMode(radioMode);
-    bool primaryBusy = false;
-    bool secondaryBusy = false;
-    if (ht40) {
-        // IEEE Std 802.11-2024, 8.3.5.12/Table 8-5 and 19.3.19.6.5:
-        // preserve {primary}, {secondary}, and {primary,secondary} CCA state.
-        primaryBusy = computeIsBandBusy(channel->getCenterFrequency());
-        secondaryBusy = computeIsBandBusy(channel->getSecondaryCenterFrequency());
+    bool groupedCcaConfigured = channel != nullptr && modeSet != nullptr && !strcmp(modeSet->getName(), "ac") &&
+            (channel->getChannelWidth() == IEEE80211_CHANNEL_WIDTH_80MHZ ||
+             channel->getChannelWidth() == IEEE80211_CHANNEL_WIDTH_160MHZ ||
+             channel->getChannelWidth() == IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ);
+    bool ccaConfigured = ht40Configured || groupedCcaConfigured;
+    bool ccaEnabled = ccaConfigured && isReceiverMode(radioMode);
+    bool primary20Busy = false;
+    bool secondary20Busy = false;
+    bool secondary40Busy = false;
+    bool secondary80Busy = false;
+    bool radioRegistered = false;
+    if (medium != nullptr && medium->getCommunicationCache() != nullptr) {
+        medium->getCommunicationCache()->mapRadios([&] (const IRadio *radio) {
+            radioRegistered = radioRegistered || radio == this;
+        });
     }
-    if (ccaSnapshot->isHt40() != ht40 || ccaSnapshot->isPrimaryBusy() != primaryBusy ||
-            ccaSnapshot->isSecondaryBusy() != secondaryBusy) {
-        ccaSnapshot = std::make_unique<Ieee80211CcaSnapshot>(ht40, primaryBusy, secondaryBusy);
+    if (ccaEnabled && channel != nullptr && radioRegistered) {
+        // IEEE Std 802.11-2024, 21.3.18.5.2/.3/.4: sample each configured
+        // CCA group independently. The receiver owns threshold/preamble
+        // classification; the radio only samples and publishes the result.
+        if (ht40Configured) {
+            primary20Busy = computeIsBandBusy(channel->getPrimary20Band(), IEEE80211_CCA_PRIMARY20, true);
+            secondary20Busy = computeIsBandBusy(channel->getSecondary20Band(), IEEE80211_CCA_SECONDARY20, true);
+        }
+        else if (groupedCcaConfigured) {
+            primary20Busy = computeIsBandBusy(channel->getPrimary20Band(), IEEE80211_CCA_PRIMARY20);
+            if (channel->getChannelWidth() != IEEE80211_CHANNEL_WIDTH_20MHZ)
+                secondary20Busy = computeIsBandBusy(channel->getSecondary20Band(), IEEE80211_CCA_SECONDARY20);
+            if (channel->getChannelWidth() == IEEE80211_CHANNEL_WIDTH_80MHZ ||
+                    channel->getChannelWidth() == IEEE80211_CHANNEL_WIDTH_160MHZ ||
+                    channel->getChannelWidth() == IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ)
+                secondary40Busy = computeIsBandBusy(channel->getSecondary40Band(), IEEE80211_CCA_SECONDARY40);
+            if (channel->getChannelWidth() == IEEE80211_CHANNEL_WIDTH_160MHZ ||
+                    channel->getChannelWidth() == IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ)
+                secondary80Busy = computeIsBandBusy(channel->getSecondary80Band(), IEEE80211_CCA_SECONDARY80);
+        }
+    }
+    auto snapshotWidth = channel == nullptr ? channelWidth : channel->getChannelWidth();
+    if (ccaSnapshot->isEnabled() != ccaEnabled || ccaSnapshot->getChannelWidth() != snapshotWidth ||
+            ccaSnapshot->getConfigurationRevision() != ccaConfigurationRevision ||
+            ccaSnapshot->isPrimary20Busy() != primary20Busy || ccaSnapshot->isSecondary20Busy() != secondary20Busy ||
+            ccaSnapshot->isSecondary40Busy() != secondary40Busy || ccaSnapshot->isSecondary80Busy() != secondary80Busy) {
+        ccaSnapshot = std::make_unique<Ieee80211CcaSnapshot>(ccaEnabled, snapshotWidth, ccaConfigurationRevision,
+                primary20Busy, secondary20Busy, secondary40Busy, secondary80Busy);
         emit(IIeee80211CcaProvider::ccaStateChangedSignal, ccaSnapshot.get());
     }
 }
@@ -570,6 +606,8 @@ void Ieee80211Radio::changeModeSet(const Ieee80211ModeSet *modeSet, const IIeee8
         throw;
     }
     this->modeSet = modeSet;
+    ++ccaConfigurationRevision;
+    EV << "Changing radio mode set to " << modeSet << endl;
     receptionTimer = nullptr;
     // The transaction is committed. Observer failures must not undo a state
     // already published to earlier listeners. Keep the reentrancy guard during
@@ -613,6 +651,7 @@ void Ieee80211Radio::setMode(const IIeee80211Mode *mode)
         throw cRuntimeError("Reentrant radio configuration change");
     Ieee80211Transmitter *ieee80211Transmitter = const_cast<Ieee80211Transmitter *>(check_and_cast<const Ieee80211Transmitter *>(transmitter));
     ieee80211Transmitter->setMode(mode);
+    ++ccaConfigurationRevision;
     EV << "Changing radio mode to " << mode << endl;
     receptionTimer = nullptr;
     if (getComponentType() != nullptr)
@@ -635,6 +674,7 @@ void Ieee80211Radio::setBand(const IIeee80211Band *band)
         ieee80211Receiver->setBand(band);
         this->band = band;
     }
+    ++ccaConfigurationRevision;
     EV << "Changing radio band to " << band << endl;
     receptionTimer = nullptr;
     const auto *channel = ieee80211Transmitter->getChannel();
@@ -657,6 +697,7 @@ void Ieee80211Radio::setChannel(const Ieee80211Channel *channel)
     band = channel->getBand();
     htSecondaryChannelOffset = channel->getSecondaryChannelOffset();
     channelWidth = channel->getChannelWidth();
+    ++ccaConfigurationRevision;
     if (channel->isExplicitGeometry()) {
         primaryChannelCenterFrequencyIndex = channel->getChannelNumber();
         channelCenterFrequencyIndex0 = channel->getCenterFrequencyIndex0();

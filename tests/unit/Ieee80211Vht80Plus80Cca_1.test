@@ -1,0 +1,50 @@
+%description:
+Validate grouped CCA identity for VHT 80+80, including remote secondary80
+activity that must not become primary-channel activity.
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211CcaProvider.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
+
+%global:
+using namespace inet;
+using namespace inet::physicallayer;
+
+%activity:
+{
+    const auto *band5 = Ieee80211CompliantBands::getBand("5 GHz");
+    ASSERT(band5 != nullptr);
+    Ieee80211Channel channel(band5, 36, IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ, 42, 155);
+    const auto primary20 = channel.getPrimary20Band();
+    const auto primary80 = channel.getPrimary80Band();
+    const auto remote80 = channel.getSecondary80Band();
+    ASSERT(primary80.getUpperFrequency() < remote80.getLowerFrequency());
+    ASSERT(Ieee80211Receiver::isPrimary20Overlapping(&channel, primary20));
+    ASSERT(!Ieee80211Receiver::isPrimary20Overlapping(&channel, remote80));
+
+    // Independent group results are represented in one immutable snapshot.
+    // Remote CCFS1 activity sets only secondary80Busy; primary contention and
+    // primary20 recognition remain available.
+    Ieee80211CcaSnapshot remoteBusy(true, IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ, 23,
+            false, false, false, true);
+    ASSERT(remoteBusy.getChannelWidth() == IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ);
+    ASSERT(!remoteBusy.isPrimary20Busy());
+    ASSERT(!remoteBusy.isSecondary20Busy());
+    ASSERT(!remoteBusy.isSecondary40Busy());
+    ASSERT(remoteBusy.isSecondary80Busy());
+    ASSERT(!remoteBusy.isBusy(IEEE80211_CCA_PRIMARY20));
+    ASSERT(remoteBusy.isBusy(IEEE80211_CCA_SECONDARY80));
+    ASSERT(remoteBusy.getConfigurationRevision() == 23);
+
+    EV << "VHT 80+80 grouped CCA segment identity verified.\n";
+    EV << "Remote secondary80 activity preserves primary20 availability.\n";
+}
+
+EV << ".\n";
+
+%contains: stdout
+VHT 80+80 grouped CCA segment identity verified.
+Remote secondary80 activity preserves primary20 availability.
+.

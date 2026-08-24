@@ -1,0 +1,60 @@
+%description:
+Validate grouped VHT CCA thresholds, exact boundary values, and immutable
+snapshot group state.
+
+%includes:
+#include <cmath>
+
+#include "inet/common/math/Functions.h"
+#include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211CcaProvider.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
+
+%global:
+using namespace inet;
+using namespace inet::physicallayer;
+
+%activity:
+{
+    const W primary = mW(math::dBmW2mW(-82.0));
+    const W secondary20 = mW(math::dBmW2mW(-72.0));
+    const W secondary80 = mW(math::dBmW2mW(-69.0));
+    const W energyPrimary = mW(math::dBmW2mW(-62.0));
+
+    // IEEE Std 802.11-2024, 21.3.18.5.3/.4: ED is -62/-59/-56 dBm for
+    // primary20/secondary40/secondary80, while recognized signals use the
+    // group-specific -82/-72/-69 dBm thresholds.
+    ASSERT(Ieee80211Receiver::getGroupedCcaEnergyDetectionThreshold(IEEE80211_CCA_PRIMARY20, energyPrimary) == energyPrimary);
+    ASSERT(Ieee80211Receiver::getGroupedCcaEnergyDetectionThreshold(IEEE80211_CCA_SECONDARY20, energyPrimary) == energyPrimary);
+    ASSERT(Ieee80211Receiver::getGroupedCcaEnergyDetectionThreshold(IEEE80211_CCA_SECONDARY40, energyPrimary) > energyPrimary);
+    ASSERT(Ieee80211Receiver::getGroupedCcaEnergyDetectionThreshold(IEEE80211_CCA_SECONDARY80, energyPrimary) >
+            Ieee80211Receiver::getGroupedCcaEnergyDetectionThreshold(IEEE80211_CCA_SECONDARY40, energyPrimary));
+
+    ASSERT(Ieee80211Receiver::getGroupedCcaSignalDetectionThreshold(IEEE80211_CCA_PRIMARY20, MHz(20), primary, secondary20, secondary80) == primary);
+    ASSERT(std::isnan(Ieee80211Receiver::getGroupedCcaSignalDetectionThreshold(IEEE80211_CCA_PRIMARY20, MHz(40), primary, secondary20, secondary80).get()));
+    ASSERT(Ieee80211Receiver::getGroupedCcaSignalDetectionThreshold(IEEE80211_CCA_SECONDARY20, MHz(20), primary, secondary20, secondary80) == secondary20);
+    ASSERT(Ieee80211Receiver::getGroupedCcaSignalDetectionThreshold(IEEE80211_CCA_SECONDARY40, MHz(40), primary, secondary20, secondary80) == secondary20);
+    ASSERT(Ieee80211Receiver::getGroupedCcaSignalDetectionThreshold(IEEE80211_CCA_SECONDARY80, MHz(80), primary, secondary20, secondary80) == secondary80);
+    ASSERT(Ieee80211Receiver::getGroupedCcaSignalDetectionThreshold(IEEE80211_CCA_SECONDARY80, MHz(40), primary, secondary20, secondary80) == secondary20);
+
+    Ieee80211CcaSnapshot snapshot(true, IEEE80211_CHANNEL_WIDTH_160MHZ, 17,
+            false, true, false, true);
+    ASSERT(snapshot.isEnabled());
+    ASSERT(snapshot.getChannelWidth() == IEEE80211_CHANNEL_WIDTH_160MHZ);
+    ASSERT(snapshot.getConfigurationRevision() == 17);
+    ASSERT(!snapshot.isBusy(IEEE80211_CCA_PRIMARY20));
+    ASSERT(snapshot.isBusy(IEEE80211_CCA_SECONDARY20));
+    ASSERT(!snapshot.isBusy(IEEE80211_CCA_SECONDARY40));
+    ASSERT(snapshot.isBusy(IEEE80211_CCA_SECONDARY80));
+    ASSERT(snapshot.isPrimaryBusy() == snapshot.isPrimary20Busy());
+    ASSERT(snapshot.isSecondaryBusy() == snapshot.isSecondary20Busy());
+
+    EV << "Grouped VHT CCA thresholds and inclusive boundaries verified.\n";
+    EV << "Immutable grouped CCA snapshot fields and revision verified.\n";
+}
+
+EV << ".\n";
+
+%contains: stdout
+Grouped VHT CCA thresholds and inclusive boundaries verified.
+Immutable grouped CCA snapshot fields and revision verified.
+.

@@ -1,0 +1,73 @@
+%description:
+Validate the 80+80 access-policy contract: remote secondary80 blocking
+selects a narrower primary-contiguous PPDU in dynamic mode and restarts the
+current CW in static mode.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/contract/Ieee80211ChannelAccessPolicy.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+class Test80Plus80Rx : public IRx
+{
+  public:
+    bool remoteSecondary80Busy = true;
+    bool isReceptionInProgress() const override { return false; }
+    bool isMediumFree() const override { return true; }
+    bool isSecondaryChannelIdleFor(simtime_t) const override { return true; }
+    bool isChannelIdleForTransmission(Ieee80211ChannelWidth width, simtime_t) const override {
+        return width != IEEE80211_CHANNEL_WIDTH_160MHZ || !remoteSecondary80Busy;
+    }
+    void frameTransmitted(simtime_t) override {}
+    void registerContention(IContention *) override {}
+    void receptionStateChanged(IRadio::ReceptionState) override {}
+    void ccaStateChanged(const Ieee80211CcaSnapshot&) override {}
+    void transmissionStateChanged(IRadio::TransmissionState) override {}
+    void receivedSignalPartChanged(IRadioSignal::SignalPart) override {}
+    bool lowerFrameReceived(Packet *) override { return false; }
+};
+
+static const IIeee80211Mode *findModeAtBandwidth(const Ieee80211ModeSet *modeSet, Hz bandwidth)
+{
+    for (int i = 0; i < modeSet->getNumModes(); i++)
+        if (modeSet->getMode(i)->getDataMode()->getBandwidth() == bandwidth)
+            return modeSet->getMode(i);
+    return nullptr;
+}
+
+%activity:
+{
+    const auto *modeSet = Ieee80211ModeSet::getModeSet("ac");
+    const auto *fullMode = findModeAtBandwidth(modeSet, MHz(160));
+    ASSERT(modeSet != nullptr);
+    ASSERT(fullMode != nullptr);
+    Test80Plus80Rx rx;
+
+    auto dynamicSelection = selectIeee80211ChannelAccess(modeSet, fullMode, &rx,
+            simtime_t(0.001), Ieee80211ChannelWidthSelectionPolicy::DYNAMIC);
+    ASSERT(!dynamicSelection.restart);
+    ASSERT(dynamicSelection.channelWidth == IEEE80211_CHANNEL_WIDTH_80MHZ);
+    ASSERT(dynamicSelection.mode->getDataMode()->getBandwidth() == MHz(80));
+
+    auto staticSelection = selectIeee80211ChannelAccess(modeSet, fullMode, &rx,
+            simtime_t(0.001), Ieee80211ChannelWidthSelectionPolicy::STATIC);
+    ASSERT(staticSelection.restart);
+
+    rx.remoteSecondary80Busy = false;
+    auto fullWidthSelection = selectIeee80211ChannelAccess(modeSet, fullMode, &rx,
+            simtime_t(0.001), Ieee80211ChannelWidthSelectionPolicy::STATIC);
+    ASSERT(!fullWidthSelection.restart);
+    ASSERT(fullWidthSelection.channelWidth == IEEE80211_CHANNEL_WIDTH_160MHZ);
+    ASSERT(fullWidthSelection.mode == fullMode);
+
+    EV << "80+80 remote-secondary fallback and static restart verified.\n";
+}
+
+EV << ".\n";
+
+%contains: stdout
+80+80 remote-secondary fallback and static restart verified.
+.

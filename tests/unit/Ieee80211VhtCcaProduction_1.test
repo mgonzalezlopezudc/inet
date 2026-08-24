@@ -1,0 +1,385 @@
+%description:
+Exercise the production IEEE 802.11 receiver CCA decision path with scalar
+interference.  The cases cover inclusive signal thresholds, aggregate ED,
+partial-overlap ED-only behavior, and an activity-only secondary segment.
+
+%includes:
+#include <memory>
+#include <vector>
+
+#include "inet/common/math/Functions.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalReceptionAnalogModel.h"
+#include "inet/physicallayer/wireless/common/analogmodel/scalar/ScalarReceptionAnalogModel.h"
+#include "inet/physicallayer/wireless/common/radio/packetlevel/Reception.h"
+#include "inet/physicallayer/wireless/common/signal/Interference.h"
+#include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211CcaProvider.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211CcaListening.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+
+%global:
+using namespace inet;
+using namespace inet::math;
+using namespace inet::physicallayer;
+using PowerFunction = IFunction<WpHz, Domain<simsec, Hz>>;
+
+class TestCcaReceiver : public Ieee80211Receiver
+{
+  public:
+    using Ieee80211Receiver::computeGroupedCcaBusy;
+    using Ieee80211Receiver::computeListeningDecision;
+};
+
+Define_Module(TestCcaReceiver);
+
+class TestReception : public Reception
+{
+  protected:
+    std::unique_ptr<Ieee80211Transmission> transmissionOwner;
+
+  public:
+    TestReception(const IRadio *radio, std::unique_ptr<Ieee80211Transmission> transmission,
+            IReceptionAnalogModel *analogModel) :
+        Reception(radio, transmission.get(), 0, 1, Coord::ZERO, Coord::ZERO,
+                Quaternion(), Quaternion(), analogModel),
+        transmissionOwner(std::move(transmission))
+    {
+    }
+};
+
+static std::unique_ptr<Reception> makeDimensionalReception(const IRadio *radio,
+        const IIeee80211Mode *mode, const Ieee80211Channel *channel,
+        Hz centerFrequency, Hz bandwidth, W power)
+{
+    auto transmission = std::make_unique<Ieee80211Transmission>(radio, nullptr, 0, 1, 0, 0, 1,
+            Coord::ZERO, Coord::ZERO, Quaternion(), Quaternion(), nullptr, nullptr, nullptr, nullptr,
+            nullptr, mode, channel);
+    auto psd = staticPtrCast<const PowerFunction>(makeShared<Boxcar2DFunction<WpHz, simsec, Hz>>(
+            simsec(0), simsec(1), centerFrequency - bandwidth / 2,
+            centerFrequency + bandwidth / 2, power / bandwidth));
+    auto analogModel = new DimensionalReceptionAnalogModel(0, 0, 1, centerFrequency, bandwidth, psd);
+    return std::make_unique<TestReception>(radio, std::move(transmission), analogModel);
+}
+
+static const IIeee80211Mode *findMode(const Ieee80211ModeSet *modeSet, Hz bandwidth)
+{
+    for (int i = 0; i < modeSet->getNumModes(); ++i)
+        if (modeSet->getMode(i)->getDataMode()->getBandwidth() == bandwidth)
+            return modeSet->getMode(i);
+    return nullptr;
+}
+
+static std::unique_ptr<Reception> makeScalarReception(const IRadio *radio,
+        const IIeee80211Mode *mode, const Ieee80211Channel *channel,
+        Hz centerFrequency, Hz bandwidth, W power)
+{
+    auto transmission = std::make_unique<Ieee80211Transmission>(radio, nullptr, 0, 1, 0, 0, 1,
+            Coord::ZERO, Coord::ZERO, Quaternion(), Quaternion(), nullptr, nullptr, nullptr, nullptr,
+            nullptr, mode, channel);
+    auto analogModel = new ScalarReceptionAnalogModel(0, 0, 1, centerFrequency, bandwidth, power);
+    return std::make_unique<TestReception>(radio, std::move(transmission), analogModel);
+}
+
+static bool computeBusy(TestCcaReceiver *receiver, const IRadio *radio,
+        Ieee80211CcaGroup group, Hz centerFrequency, Hz bandwidth,
+        const std::vector<std::unique_ptr<Reception>>& receptions)
+{
+    Ieee80211CcaListening listening(radio, 0, 1, Coord::ZERO, Coord::ZERO,
+            centerFrequency, bandwidth, group);
+    auto pointers = std::make_unique<std::vector<const IReception *>>();
+    for (const auto& reception : receptions)
+        pointers->push_back(reception.get());
+    Interference interference(nullptr, pointers.release());
+    // Invoke the production grouped classifier and its ListeningDecision
+    // wrapper; the latter must preserve INET's established energy-present
+    // (busy) result contract.
+    bool busy = receiver->computeGroupedCcaBusy(&listening, &interference);
+    const auto *decision = receiver->computeListeningDecision(&listening, &interference);
+        // ListeningDecision's established INET contract reports energy
+        // present (the radio's busy state), not a contention-free result.
+        ASSERT(decision->isListeningPossible() == busy);
+    delete decision;
+    return busy;
+}
+
+%file: TestNetwork.ned
+import inet.mobility.static.StationaryMobility;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211DimensionalRadio;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211DimensionalRadioMedium;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadio;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadioMedium;
+
+module TestCcaReceiver extends inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211Receiver
+{
+    parameters:
+        @class(TestCcaReceiver);
+}
+
+module TestRadio extends Ieee80211ScalarRadio
+{
+    parameters:
+        receiver.typename = default("TestCcaReceiver");
+}
+
+module TestDimensionalRadio extends Ieee80211DimensionalRadio
+{
+    parameters:
+        receiver.typename = default("TestCcaReceiver");
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        mobility: StationaryMobility {
+            parameters:
+                subjectModule = "";
+                initialX = 0m;
+                initialY = 0m;
+                initialZ = 0m;
+        }
+        mobilityD: StationaryMobility {
+            parameters:
+                subjectModule = "";
+                initialX = 0m;
+                initialY = 0m;
+                initialZ = 0m;
+        }
+        radioMedium: Ieee80211ScalarRadioMedium {
+            parameters:
+                physicalEnvironmentModule = "";
+        }
+        radioMediumD: Ieee80211DimensionalRadioMedium {
+            parameters:
+                physicalEnvironmentModule = "";
+        }
+        radio: TestRadio {
+            parameters:
+                radioMediumModule = "^.radioMedium";
+                antenna.mobilityModule = "^.^.mobility";
+                opMode = "ac";
+                bandName = "5 GHz";
+                channelNumber = 36;
+                channelWidth = "20MHz";
+                bandwidth = 20MHz;
+                initialRadioMode = "off";
+                signalAnalogRepresentation = "scalar";
+        }
+        radioD: TestDimensionalRadio {
+            parameters:
+                radioMediumModule = "^.radioMediumD";
+                antenna.mobilityModule = "^.^.mobilityD";
+                opMode = "ac";
+                bandName = "5 GHz";
+                channelNumber = 36;
+                channelWidth = "20MHz";
+                bandwidth = 20MHz;
+                initialRadioMode = "off";
+                signalAnalogRepresentation = "dimensional";
+        }
+    connections allowunconnected:
+}
+
+%inifile: omnetpp.ini
+[General]
+ned-path = .;../../../../src;../../lib
+network = TestNetwork
+sim-time-limit = 0s
+*.radioMediumD.backgroundNoise.power = -200dBm
+
+%activity:
+{
+    auto *radio = check_and_cast<Ieee80211Radio *>(cSimulation::getActiveSimulation()->getModuleByPath("radio"));
+    auto *receiver = check_and_cast<TestCcaReceiver *>(const_cast<IReceiver *>(radio->getReceiver()));
+    const auto *band = Ieee80211CompliantBands::getBand("5 GHz");
+    const auto *modeSet = Ieee80211ModeSet::getModeSet("ac");
+    ASSERT(band != nullptr);
+    ASSERT(modeSet != nullptr);
+    const auto *mode20 = findMode(modeSet, MHz(20));
+    const auto *mode40 = findMode(modeSet, MHz(40));
+    const auto *mode80 = findMode(modeSet, MHz(80));
+    ASSERT(mode20 != nullptr);
+    ASSERT(mode40 != nullptr);
+    ASSERT(mode80 != nullptr);
+
+    Ieee80211Channel channel20(band, 36);
+    Ieee80211Channel channel80(band, 36, IEEE80211_CHANNEL_WIDTH_80MHZ, 42);
+    const auto primary20 = channel80.getPrimary20Band();
+    const auto secondary40 = channel80.getSecondary40Band();
+
+    // A scalar 20 MHz PPDU exactly at -82 dBm is recognized on primary20.
+    {
+        std::vector<std::unique_ptr<Reception>> receptions;
+        receptions.push_back(makeScalarReception(radio, mode20, &channel20,
+                primary20.centerFrequency, MHz(20), mW(math::dBmW2mW(-82))));
+        ASSERT(computeBusy(receiver, radio, IEEE80211_CCA_PRIMARY20,
+                primary20.centerFrequency, MHz(20), receptions));
+        receptions.clear();
+        receptions.push_back(makeScalarReception(radio, mode20, &channel20,
+                primary20.centerFrequency, MHz(20), mW(math::dBmW2mW(-82.01))));
+        ASSERT(!computeBusy(receiver, radio, IEEE80211_CCA_PRIMARY20,
+                primary20.centerFrequency, MHz(20), receptions));
+    }
+
+    // A wide primary PPDU is recognized from its primary 20 MHz slice.  The
+    // total 40 MHz power is doubled so its measured primary slice is exactly
+    // the -82 dBm threshold.
+    {
+        std::vector<std::unique_ptr<Reception>> receptions;
+        receptions.push_back(makeScalarReception(radio, mode40, &channel80,
+                channel80.getPrimary40CenterFrequency(), MHz(40),
+                mW(math::dBmW2mW(-82)) * 2));
+        ASSERT(computeBusy(receiver, radio, IEEE80211_CCA_PRIMARY20,
+                primary20.centerFrequency, MHz(20), receptions));
+    }
+
+    // Two individually sub-threshold foreign signals add to cross secondary40
+    // ED; a null mode deliberately prevents either one from being counted as
+    // a recognized IEEE preamble, proving aggregate group energy rather than
+    // ORed 20 MHz decisions.
+    {
+        auto first = secondary40.getLowerFrequency() + MHz(10);
+        auto second = secondary40.getLowerFrequency() + MHz(30);
+        std::vector<std::unique_ptr<Reception>> one;
+        one.push_back(makeScalarReception(radio, nullptr, &channel80,
+                first, MHz(20), mW(math::dBmW2mW(-62))));
+        ASSERT(!computeBusy(receiver, radio, IEEE80211_CCA_SECONDARY40,
+                secondary40.centerFrequency, secondary40.bandwidth, one));
+        std::vector<std::unique_ptr<Reception>> receptions;
+        receptions.push_back(std::move(one.front()));
+        receptions.push_back(makeScalarReception(radio, nullptr, &channel80,
+                second, MHz(20), mW(math::dBmW2mW(-62))));
+        ASSERT(computeBusy(receiver, radio, IEEE80211_CCA_SECONDARY40,
+                secondary40.centerFrequency, secondary40.bandwidth, receptions));
+    }
+
+    // A partially overlapping VHT80 signal cannot satisfy secondary40
+    // preamble containment.  Below ED it remains idle, while higher overlap
+    // energy marks the group busy through ED only.
+    {
+        std::vector<std::unique_ptr<Reception>> receptions;
+        receptions.push_back(makeScalarReception(radio, mode80, &channel80,
+                channel80.getPrimary80CenterFrequency(), MHz(80),
+                mW(math::dBmW2mW(-60))));
+        ASSERT(!computeBusy(receiver, radio, IEEE80211_CCA_SECONDARY40,
+                secondary40.centerFrequency, secondary40.bandwidth, receptions));
+        receptions.clear();
+        receptions.push_back(makeScalarReception(radio, mode80, &channel80,
+                channel80.getPrimary80CenterFrequency(), MHz(80),
+                mW(math::dBmW2mW(-50))));
+        ASSERT(computeBusy(receiver, radio, IEEE80211_CCA_SECONDARY40,
+                secondary40.centerFrequency, secondary40.bandwidth, receptions));
+    }
+
+    // Exact recognized-signal boundaries for each secondary group.  The
+    // signal bandwidth also selects the applicable 20/40/80 threshold.
+    const auto secondary20 = channel80.getSecondary20Band();
+    {
+        std::vector<std::unique_ptr<Reception>> receptions;
+        receptions.push_back(makeScalarReception(radio, mode20, &channel80,
+                secondary20.centerFrequency, MHz(20), mW(math::dBmW2mW(-72))));
+        ASSERT(computeBusy(receiver, radio, IEEE80211_CCA_SECONDARY20,
+                secondary20.centerFrequency, secondary20.bandwidth, receptions));
+        receptions.clear();
+        receptions.push_back(makeScalarReception(radio, mode20, &channel80,
+                secondary20.centerFrequency, MHz(20), mW(math::dBmW2mW(-72.01))));
+        ASSERT(!computeBusy(receiver, radio, IEEE80211_CCA_SECONDARY20,
+                secondary20.centerFrequency, secondary20.bandwidth, receptions));
+    }
+    {
+        std::vector<std::unique_ptr<Reception>> receptions;
+        receptions.push_back(makeScalarReception(radio, mode20, &channel80,
+                secondary40.getLowerFrequency() + MHz(10), MHz(20), mW(math::dBmW2mW(-72))));
+        ASSERT(computeBusy(receiver, radio, IEEE80211_CCA_SECONDARY40,
+                secondary40.centerFrequency, secondary40.bandwidth, receptions));
+        receptions.clear();
+        receptions.push_back(makeScalarReception(radio, mode20, &channel80,
+                secondary40.getLowerFrequency() + MHz(10), MHz(20), mW(math::dBmW2mW(-72.01))));
+        ASSERT(!computeBusy(receiver, radio, IEEE80211_CCA_SECONDARY40,
+                secondary40.centerFrequency, secondary40.bandwidth, receptions));
+        receptions.clear();
+        receptions.push_back(makeScalarReception(radio, mode40, &channel80,
+                secondary40.centerFrequency, MHz(40), mW(math::dBmW2mW(-72))));
+        ASSERT(computeBusy(receiver, radio, IEEE80211_CCA_SECONDARY40,
+                secondary40.centerFrequency, secondary40.bandwidth, receptions));
+        receptions.clear();
+        receptions.push_back(makeScalarReception(radio, mode40, &channel80,
+                secondary40.centerFrequency, MHz(40), mW(math::dBmW2mW(-72.01))));
+        ASSERT(!computeBusy(receiver, radio, IEEE80211_CCA_SECONDARY40,
+                secondary40.centerFrequency, secondary40.bandwidth, receptions));
+    }
+
+    // Activity in an explicitly measured remote 80 MHz group leaves primary20
+    // idle.  This is the same group decision used for an 80+80 CCFS1 segment;
+    // no primary contention bit is synthesized from the remote band.
+    {
+        const Hz remoteCenter = GHz(5.775);
+        std::vector<std::unique_ptr<Reception>> receptions;
+        receptions.push_back(makeScalarReception(radio, mode80, &channel80,
+                remoteCenter, MHz(80), mW(math::dBmW2mW(-50))));
+        ASSERT(!computeBusy(receiver, radio, IEEE80211_CCA_PRIMARY20,
+                primary20.centerFrequency, MHz(20), receptions));
+        ASSERT(computeBusy(receiver, radio, IEEE80211_CCA_SECONDARY80,
+                remoteCenter, MHz(80), receptions));
+
+        receptions.clear();
+        receptions.push_back(makeScalarReception(radio, mode80, &channel80,
+                remoteCenter, MHz(80), mW(math::dBmW2mW(-69))));
+        ASSERT(computeBusy(receiver, radio, IEEE80211_CCA_SECONDARY80,
+                remoteCenter, MHz(80), receptions));
+        receptions.clear();
+        receptions.push_back(makeScalarReception(radio, mode80, &channel80,
+                remoteCenter, MHz(80), mW(math::dBmW2mW(-69.01))));
+        ASSERT(!computeBusy(receiver, radio, IEEE80211_CCA_SECONDARY80,
+                remoteCenter, MHz(80), receptions));
+        receptions.clear();
+        receptions.push_back(makeScalarReception(radio, mode20, &channel80,
+                remoteCenter - MHz(30), MHz(20), mW(math::dBmW2mW(-72))));
+        ASSERT(computeBusy(receiver, radio, IEEE80211_CCA_SECONDARY80,
+                remoteCenter, MHz(80), receptions));
+        receptions.clear();
+        receptions.push_back(makeScalarReception(radio, mode20, &channel80,
+                remoteCenter - MHz(30), MHz(20), mW(math::dBmW2mW(-72.01))));
+        ASSERT(!computeBusy(receiver, radio, IEEE80211_CCA_SECONDARY80,
+                remoteCenter, MHz(80), receptions));
+        receptions.clear();
+        receptions.push_back(makeScalarReception(radio, mode40, &channel80,
+                remoteCenter - MHz(20), MHz(40), mW(math::dBmW2mW(-72))));
+        ASSERT(computeBusy(receiver, radio, IEEE80211_CCA_SECONDARY80,
+                remoteCenter, MHz(80), receptions));
+        receptions.clear();
+        receptions.push_back(makeScalarReception(radio, mode40, &channel80,
+                remoteCenter - MHz(20), MHz(40), mW(math::dBmW2mW(-72.01))));
+        ASSERT(!computeBusy(receiver, radio, IEEE80211_CCA_SECONDARY80,
+                remoteCenter, MHz(80), receptions));
+    }
+
+    // The same primary threshold is exercised through the dimensional medium
+    // and PSD-based reception model, ensuring grouped CCA is not scalar-only.
+    auto *radioD = check_and_cast<Ieee80211Radio *>(cSimulation::getActiveSimulation()->getModuleByPath("radioD"));
+    auto *receiverD = check_and_cast<TestCcaReceiver *>(const_cast<IReceiver *>(radioD->getReceiver()));
+    {
+        std::vector<std::unique_ptr<Reception>> receptions;
+        receptions.push_back(makeDimensionalReception(radioD, mode20, &channel20,
+                primary20.centerFrequency, MHz(20), mW(math::dBmW2mW(-81.9))));
+        ASSERT(computeBusy(receiverD, radioD, IEEE80211_CCA_PRIMARY20,
+                primary20.centerFrequency, MHz(20), receptions));
+        receptions.clear();
+        receptions.push_back(makeDimensionalReception(radioD, mode20, &channel20,
+                primary20.centerFrequency, MHz(20), mW(math::dBmW2mW(-90))));
+        ASSERT(!computeBusy(receiverD, radioD, IEEE80211_CCA_PRIMARY20,
+                primary20.centerFrequency, MHz(20), receptions));
+    }
+
+    EV << "Production grouped CCA decisions and threshold boundaries verified.\n";
+}
+
+EV << ".\n";
+
+%contains: stdout
+Production grouped CCA decisions and threshold boundaries verified.
+.

@@ -28,6 +28,8 @@ module Ieee80211Receiver extends NarrowbandReceiverBase
         double htCca20Sensitivity @unit(dBm) = default(-82 dBm); // IEEE 802.11 HT 20 MHz CCA sensitivity
         double htCca40Sensitivity @unit(dBm) = default(-79 dBm); // IEEE 802.11 HT 40 MHz CCA sensitivity
         double htCcaEnergyDetection @unit(dBm) = default(-62 dBm); // IEEE 802.11 HT energy-detection threshold
+        double ccaSecondary20Sensitivity @unit(dBm) = default(-72 dBm); // IEEE 802.11 secondary 20/40 CCA recognized-signal threshold
+        double ccaSecondary80Sensitivity @unit(dBm) = default(-69 dBm); // IEEE 802.11 secondary 80 CCA recognized-signal threshold
         int channelNumber = default(-1);
         modulation = default("BPSK"); // TODO this is simply wrong
         errorModel.typename = default("Ieee80211NistErrorModel");

@@ -11,6 +11,7 @@
 #include <functional>
 
 #include "inet/physicallayer/wireless/common/base/packetlevel/FlatReceiverBase.h"
+#include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211CcaProvider.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"
@@ -25,6 +26,8 @@ class INET_API Ieee80211Receiver : public FlatReceiverBase
     W htCca20Sensitivity = W(NaN);
     W htCca40Sensitivity = W(NaN);
     W htCcaEnergyDetection = W(NaN);
+    W ccaSecondary20Sensitivity = W(NaN);
+    W ccaSecondary80Sensitivity = W(NaN);
 
     const Ieee80211ModeSet *modeSet = nullptr;
     const IIeee80211Band *band = nullptr;
@@ -42,6 +45,7 @@ class INET_API Ieee80211Receiver : public FlatReceiverBase
     virtual const IListeningDecision *computeListeningDecision(const IListening *listening, const IInterference *interference) const override;
     virtual bool isHtCcaOperation() const;
     virtual bool computeHtCcaBusy(const IListening *listening, const IInterference *interference) const;
+    virtual bool computeGroupedCcaBusy(const IListening *listening, const IInterference *interference) const;
 
     virtual const IReceptionResult *computeReceptionResult(const IListening *listening, const IReception *reception, const IInterference *interference, const ISnir *snir, const std::vector<const IReceptionDecision *> *decisions) const override;
 
@@ -55,6 +59,9 @@ class INET_API Ieee80211Receiver : public FlatReceiverBase
     // band before it can reach RXSTART/delivery.
     static bool isPrimary20Overlapping(const Ieee80211Channel *channel, const FrequencyBand& signalBand);
     static bool isPrimary20Overlapping(const Ieee80211Channel *channel, const std::vector<FrequencyBand>& signalBands);
+    static W getGroupedCcaEnergyDetectionThreshold(Ieee80211CcaGroup group, W primaryThreshold);
+    static W getGroupedCcaSignalDetectionThreshold(Ieee80211CcaGroup group, Hz bandwidth,
+            W primaryThreshold, W secondary20Threshold, W secondary80Threshold);
 
     virtual std::ostream& printToStream(std::ostream& stream, int level, int evFlags = 0) const override;
 
