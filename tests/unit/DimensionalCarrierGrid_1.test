@@ -1,0 +1,54 @@
+%description:
+
+Checks the generic dimensional-medium carrier-grid contract. A regular
+occupied spectrum forces the delay-adaptive grid to include every occupied
+carrier center for both 20 and 40 MHz plans; absent or irregular metadata
+retains the existing adaptive fallback.
+
+%includes:
+#include <cmath>
+#include <vector>
+#include "inet/physicallayer/wireless/common/analogmodel/common/TransmissionSpectrum.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalMediumAnalogModel.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+static void require(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("Dimensional carrier-grid test failed: %s", message);
+}
+
+static TransmissionSpectrum makeSpectrum(int first, int last)
+{
+    std::vector<PowerSpectralBand> bands;
+    const Hz spacing = Hz(312500);
+    for (int index = first; index <= last; index++) {
+        if (index == 0 || (last == 58 && (index == -1 || index == 1)))
+            continue;
+        const Hz center = spacing * index;
+        bands.emplace_back(center - spacing / 2, center + spacing / 2, 1.0 / (last == 28 ? 56 : 114));
+    }
+    return TransmissionSpectrum(bands);
+}
+
+%activity:
+auto ht20 = makeSpectrum(-28, 28);
+auto ht40 = makeSpectrum(-58, 58);
+require(DimensionalMediumAnalogModel::computeCarrierAlignedFrequencyIntervals(MHz(5), MHz(20), &ht20, 20) % 64 == 0,
+    "HT20 carrier spacing alignment");
+require(DimensionalMediumAnalogModel::computeCarrierAlignedFrequencyIntervals(MHz(5), MHz(40), &ht40, 20) % 128 == 0,
+    "HT40 carrier spacing alignment");
+require(DimensionalMediumAnalogModel::computeCarrierAlignedFrequencyIntervals(MHz(5), MHz(20), nullptr, 20) == 20,
+    "missing metadata fallback");
+std::vector<PowerSpectralBand> irregularBands{{MHz(-1), MHz(-0.3), 0.5}, {MHz(0.1), MHz(0.9), 0.5}};
+TransmissionSpectrum irregular(irregularBands);
+require(DimensionalMediumAnalogModel::computeCarrierAlignedFrequencyIntervals(MHz(5), MHz(20), &irregular, 20) == 20,
+    "irregular metadata fallback");
+std::cout << "PASS\n";
+
+%contains: stdout
+PASS

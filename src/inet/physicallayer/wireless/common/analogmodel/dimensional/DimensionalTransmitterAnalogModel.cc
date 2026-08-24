@@ -7,6 +7,9 @@
 
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalTransmitterAnalogModel.h"
 
+#include <algorithm>
+#include <cmath>
+
 #include "inet/common/math/Functions.h"
 
 namespace inet {
@@ -39,6 +42,72 @@ ITransmissionAnalogModel* DimensionalTransmitterAnalogModel::createAnalogModel(s
     auto transmissionPower = computePower(power);
     const auto &powerFunction = createPowerFunction(startTime, endTime, transmissionCenterFrequency, transmissionBandwidth, transmissionPower);
     return new DimensionalTransmissionAnalogModel(preambleDuration, headerDuration, dataDuration, transmissionCenterFrequency, transmissionBandwidth, powerFunction);
+}
+
+Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> DimensionalTransmitterAnalogModel::createPartPowerFunction(simtime_t startTime, simtime_t endTime, Hz centerFrequency, Hz bandwidth, W power, const ITransmissionSpectrum *spectrum) const
+{
+    if (startTime == endTime)
+        return makeShared<ConstantFunction<WpHz, Domain<simsec, Hz>>>(WpHz(0));
+    if (spectrum == nullptr)
+        return makeShared<Boxcar2DFunction<WpHz, simsec, Hz>>(simsec(startTime), simsec(endTime), centerFrequency - bandwidth / 2, centerFrequency + bandwidth / 2, power / bandwidth);
+    if (!timeGains.empty() || !frequencyGains.empty() || timeGainsNormalization == nullptr || frequencyGainsNormalization == nullptr || strcmp(timeGainsNormalization, "") != 0 || strcmp(frequencyGainsNormalization, "integral") != 0)
+        throw cRuntimeError("Spectrum-aware dimensional transmission requires flat/default gain settings");
+    std::vector<PowerSpectralBand> coalesced;
+    coalesced.reserve(spectrum->getBands().size());
+    for (const auto& band : spectrum->getBands()) {
+        if (band.lowerFrequencyOffset < -bandwidth / 2 || band.upperFrequencyOffset > bandwidth / 2)
+            throw cRuntimeError("Spectrum-aware dimensional transmission contains a band outside the nominal bandwidth");
+        if (!coalesced.empty()) {
+            auto& previous = coalesced.back();
+            const double previousDensity = previous.powerFraction / (previous.upperFrequencyOffset - previous.lowerFrequencyOffset).get();
+            const double currentDensity = band.powerFraction / (band.upperFrequencyOffset - band.lowerFrequencyOffset).get();
+            const double densityScale = std::max(std::abs(previousDensity), std::abs(currentDensity));
+            const double tolerance = densityScale == 0 ? 1e-15 : 1e-12 * densityScale;
+            if (previous.upperFrequencyOffset == band.lowerFrequencyOffset && std::abs(previousDensity - currentDensity) <= tolerance) {
+                previous.upperFrequencyOffset = band.upperFrequencyOffset;
+                previous.powerFraction += band.powerFraction;
+                continue;
+            }
+        }
+        coalesced.push_back(band);
+    }
+    double fractionSum = 0;
+    for (const auto& band : coalesced)
+        fractionSum += band.powerFraction;
+    if (std::abs(fractionSum - 1.0) > 1e-12)
+        throw cRuntimeError("Spectrum-aware dimensional transmission does not conserve its power fractions");
+    std::vector<Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>> bands;
+    for (const auto& band : coalesced) {
+        const Hz width = band.upperFrequencyOffset - band.lowerFrequencyOffset;
+        bands.push_back(makeShared<Boxcar2DFunction<WpHz, simsec, Hz>>(simsec(startTime), simsec(endTime), centerFrequency + band.lowerFrequencyOffset, centerFrequency + band.upperFrequencyOffset, power * band.powerFraction / width));
+    }
+    const auto summedPower = makeShared<SummedFunction<WpHz, Domain<simsec, Hz>>>(bands);
+    const auto integratedPower = integrate<WpHz, Domain<simsec, Hz>, 0b10, W, Domain<simsec>>(summedPower);
+    const auto midpoint = simsec(startTime + (endTime - startTime) / 2);
+    const double expectedPower = power.get();
+    const double actualPower = integratedPower->getValue(Point<simsec>(midpoint)).get();
+    const double integrationTolerance = std::max(1e-24, 1e-12 * std::abs(expectedPower));
+    if (!std::isfinite(actualPower) || std::abs(actualPower - expectedPower) > integrationTolerance)
+        throw cRuntimeError("Spectrum-aware dimensional transmission failed frequency-integral validation: expected %g W, got %g W", expectedPower, actualPower);
+    return summedPower;
+}
+
+ITransmissionAnalogModel* DimensionalTransmitterAnalogModel::createAnalogModel(simtime_t preambleDuration, simtime_t headerDuration, simtime_t dataDuration, Hz centerFrequency, Hz bandwidth, W power, const ITransmissionSpectrum *preambleSpectrum, const ITransmissionSpectrum *headerSpectrum, const ITransmissionSpectrum *dataSpectrum) const
+{
+    const simtime_t startTime = simTime();
+    const simtime_t preambleEnd = startTime + preambleDuration;
+    const simtime_t headerEnd = preambleEnd + headerDuration;
+    const simtime_t dataEnd = headerEnd + dataDuration;
+    const Hz transmissionCenterFrequency = computeCenterFrequency(centerFrequency);
+    const Hz transmissionBandwidth = computeBandwidth(bandwidth);
+    const W transmissionPower = computePower(power);
+    const auto preamblePower = createPartPowerFunction(startTime, preambleEnd, transmissionCenterFrequency, transmissionBandwidth, transmissionPower, preambleSpectrum);
+    const auto headerPower = createPartPowerFunction(preambleEnd, headerEnd, transmissionCenterFrequency, transmissionBandwidth, transmissionPower, headerSpectrum);
+    const auto dataPower = createPartPowerFunction(headerEnd, dataEnd, transmissionCenterFrequency, transmissionBandwidth, transmissionPower, dataSpectrum);
+    std::vector<Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>> parts{preamblePower, headerPower, dataPower};
+    const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> summedPowerFunction = makeShared<SummedFunction<WpHz, Domain<simsec, Hz>>>(parts);
+    const auto powerFunction = makeFirstQuadrantLimitedFunction(summedPowerFunction);
+    return new DimensionalTransmissionAnalogModel(preambleDuration, headerDuration, dataDuration, transmissionCenterFrequency, transmissionBandwidth, powerFunction, preambleSpectrum, headerSpectrum, dataSpectrum);
 }
 
 template<typename T>
@@ -238,4 +307,3 @@ Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> DimensionalTransmitterAnalogModel
 
 } // namespace physicallayer
 } // namespace inet
-

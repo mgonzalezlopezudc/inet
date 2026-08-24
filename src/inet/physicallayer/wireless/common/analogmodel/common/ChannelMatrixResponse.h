@@ -7,6 +7,7 @@
 
 #include <functional>
 
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ComplexMatrix.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IChannelMatrixSnapshot.h"
 
 namespace inet {
@@ -24,6 +25,8 @@ class INET_API ChannelMatrixResponse
 
   public:
     ChannelMatrixResponse(int numReceiveAntennas, int numTransmitAntennas, const Evaluator& evaluator);
+    int getNumReceiveAntennas() const { return numReceiveAntennas; }
+    int getNumTransmitAntennas() const { return numTransmitAntennas; }
     ComplexMatrix getValue(simtime_t absoluteTime, Hz frequency) const;
     std::shared_ptr<const ChannelMatrixResponse> transpose() const;
 };

@@ -1,0 +1,89 @@
+%description:
+Synthetic-fixture parser, complete 32-curve/HT40-alias coverage, and Eq. 1 length-scaling checks.
+
+%includes:
+#include <cmath>
+#include <cstdint>
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211PerTable.h"
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+class InspectableIeee80211PerTable : public Ieee80211PerTable
+{
+  public:
+    size_t curveCount() const { return tables.size(); }
+
+    const std::vector<Point>& curve(int bandwidthMHz, int mcs, uint64_t referenceLength) const {
+        return tables.at({bandwidthMHz, mcs, referenceLength});
+    }
+
+    bool ht40DuplicatesHt20() const {
+        for (int mcs = 0; mcs <= 7; mcs++) {
+            for (uint64_t referenceLength : {uint64_t(32), uint64_t(1458)}) {
+                const auto& ht20 = curve(20, mcs, referenceLength);
+                const auto& ht40 = curve(40, mcs, referenceLength);
+                if (ht20.size() != ht40.size())
+                    return false;
+                for (size_t i = 0; i < ht20.size(); i++) {
+                    if (ht20[i].snrDb != ht40[i].snrDb || ht20[i].per != ht40[i].per)
+                        return false;
+                }
+            }
+        }
+        return true;
+    }
+};
+
+%activity:
+{
+    Ieee80211PerTable table;
+    table.loadCsv("../../../../tests/unit/data/Ieee80211PerTable.synthetic.csv");
+    const double shortPacket = table.getPacketErrorRate(20, 0, 32, 0);
+    const double longPacket = table.getPacketErrorRate(20, 0, 400, 0);
+    ASSERT(shortPacket > 0 && longPacket > shortPacket);
+    ASSERT(std::fabs(table.getPacketErrorRate(20, 0, 400, -10) - (1 - std::pow(0.5, 12.5))) < 1e-12);
+    // The two interior endpoints use complementary-log-log interpolation,
+    // not linear PER interpolation.
+    const double lowerZ = std::log(-std::log1p(-0.5));
+    const double upperZ = std::log(-std::log1p(-0.01));
+    const double midpointPer = -std::expm1(-std::exp((lowerZ + upperZ) / 2));
+    ASSERT(std::fabs(midpointPer - 0.08007647264281458) < 1e-14);
+    ASSERT(std::fabs(table.getPacketErrorRate(20, 0, 32, 0) - midpointPer) < 1e-14);
+    // SNR values outside the declared grid clamp to the corresponding
+    // endpoint before packet-length scaling.
+    ASSERT(std::fabs(table.getPacketErrorRate(20, 0, 32, -20) - 0.5) < 1e-15);
+    ASSERT(std::fabs(table.getPacketErrorRate(20, 0, 32, 20) - 0.01) < 1e-15);
+    // The complete synthetic fixture also exercises exact PER 0 and PER 1.
+    Ieee80211PerTable endpointTable;
+    endpointTable.loadCsv("../../../../tests/module/data/Ieee80211Eesm.synthetic.csv");
+    ASSERT(endpointTable.getPacketErrorRate(20, 0, 32, 20) == 0);
+    ASSERT(table.getPacketErrorRate(20, 1, 32, -20) == 1);
+    ASSERT(std::fabs(table.getPacketErrorRate(20, 0, 32, 10) - 0.01) < 1e-12);
+    ASSERT(std::fabs(table.getPacketErrorRate(20, 0, 1458, 10) - 0.005) < 1e-12);
+    ASSERT(std::fabs(table.getPacketErrorRate(20, 0, 400, 10) - (1 - std::pow(0.99, 12.5))) < 1e-12);
+    ASSERT(std::fabs(table.getPacketErrorRate(20, 0, 401, 10) - (1 - std::pow(0.995, 401.0 / 1458.0))) < 1e-12);
+    ASSERT(std::fabs(table.getPacketErrorRate(40, 7, 1, 10) - (1 - std::pow(0.99, 1.0 / 32.0))) < 1e-12);
+    const std::string fixture = "../../../../tests/unit/data/Ieee80211PerTable.synthetic.csv";
+    table.requireSha256(fixture, "a33d6364b96680bdb1b920201daa03f7fd689b7d996445e183f701583a1fea61");
+    try { table.requireSha256(fixture, std::string(64, '0')); ASSERT(false); } catch (const cRuntimeError&) {}
+    const auto rejects = [](const char *filename) {
+        try { Ieee80211PerTable malformed; malformed.loadCsv(filename); return false; }
+        catch (const cRuntimeError&) { return true; }
+    };
+    ASSERT(rejects("../../../../tests/unit/data/Ieee80211PerTable.no-header.csv"));
+    ASSERT(rejects("../../../../tests/unit/data/Ieee80211PerTable.extra-length.csv"));
+    ASSERT(rejects("../../../../tests/unit/data/Ieee80211PerTable.one-point.csv"));
+    ASSERT(rejects("../../../../tests/unit/data/Ieee80211PerTable.non-bcc.csv"));
+    ASSERT(rejects("../../../../tests/unit/data/Ieee80211PerTable.nonmonotone.csv"));
+
+    // The committed synthetic fixture covers all 32 BCC SISO curves and the
+    // HT40=HT20 table shape without depending on ignored user artifacts.
+    InspectableIeee80211PerTable syntheticTable;
+    syntheticTable.loadCsv("../../../../tests/unit/data/Ieee80211PerTable.synthetic.csv");
+    ASSERT(syntheticTable.curveCount() == 32);
+    EV << "done" << endl;
+}
+
+%contains: stdout
+done

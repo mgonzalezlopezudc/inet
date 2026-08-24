@@ -6,6 +6,7 @@
 #define __INET_CHANNELMATRIXSNAPSHOT_H
 
 #include "inet/physicallayer/wireless/common/analogmodel/common/ChannelMatrixResponse.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ComplexMatrix.h"
 
 namespace inet {
 namespace physicallayer {

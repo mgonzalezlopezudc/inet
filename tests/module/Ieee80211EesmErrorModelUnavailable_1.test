@@ -1,0 +1,26 @@
+%description:
+Selecting the opt-in EESM model with its default empty artifact parameters
+must fail during module initialization because no production AWGN table is
+bundled.
+
+%file: test.ned
+
+import inet.physicallayer.wireless.ieee80211.packetlevel.errormodel.Ieee80211EesmErrorModel;
+
+network EesmErrorModelUnavailableDataTest
+{
+    submodules:
+        errorModel: Ieee80211EesmErrorModel;
+}
+
+%inifile: omnetpp.ini
+
+[General]
+record-vector-results = false
+network = EesmErrorModelUnavailableDataTest
+cmdenv-express-mode = false
+ned-path = .;../../../../src;../../lib
+
+%exitcode: 1
+%contains: stderr
+perTableFile is empty; AWGN PER tables are not bundled and must be supplied

@@ -314,7 +314,8 @@ ComplexMatrix TgnMimoChannel::evaluate(const TgnChannelRealization& realization,
         realization.numTransmitAntennas < 1 || realization.numTransmitAntennas > 8 ||
         !std::isfinite(realization.referenceFrequency.get()) || realization.referenceFrequency <= Hz(0) ||
         !std::isfinite(frequency.get()) || frequency <= Hz(0) ||
-        !std::isfinite(realization.shadowingPowerGain) || realization.shadowingPowerGain <= 0)
+        !std::isfinite(realization.shadowingPowerGain) || realization.shadowingPowerGain <= 0 ||
+        !std::isfinite(realization.smallScalePowerNormalization) || realization.smallScalePowerNormalization <= 0)
         throw cRuntimeError("Invalid TGn channel realization metadata");
     const simtime_t processTime = realization.timeVariation ? absoluteTime : SIMTIME_ZERO;
     const std::complex<double> fluorescent = realization.fluorescent ?
@@ -353,7 +354,7 @@ ComplexMatrix TgnMimoChannel::evaluate(const TgnChannelRealization& realization,
         response = add(response, scale(realization.fixedLosMatrix,
             std::sqrt(realization.firstTapKLinear * realization.firstTapDiffusePower)));
     }
-    response = scale(response, std::sqrt(realization.shadowingPowerGain));
+    response = scale(response, realization.smallScalePowerNormalization * std::sqrt(realization.shadowingPowerGain));
     if (!response.isFinite())
         throw cRuntimeError("TGn channel evaluation produced a nonfinite coefficient");
     return response;

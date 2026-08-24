@@ -21,6 +21,8 @@ module TgnChannelModel extends Module like IWidebandChannelModel
         bool timeVariation = default(true);
         bool vehicleEffect = default(true);
         bool fluorescentEffect = default(true);
+        bool shadowing = default(true);
+        bool ensembleNormalization = default(false);
         double fluorescentMainsFrequency @unit(Hz) = default(50Hz);
         double environmentalSpeed @unit(mps) = default(0.333333333333mps);
         double vehicleSpeed @unit(mps) = default(11.111111111111mps);

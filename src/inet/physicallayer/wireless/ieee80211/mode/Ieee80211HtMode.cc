@@ -109,6 +109,56 @@ Ieee80211HtDataMode::Ieee80211HtDataMode(const Ieee80211Htmcs *modulationAndCodi
 {
 }
 
+void Ieee80211HtDataMode::ensureSubcarrierPlan() const
+{
+    if (subcarriers != nullptr)
+        return;
+    if (mcsIndex == 32)
+        throw cRuntimeError("HT MCS 32 has no supported HT20/HT40 data-carrier plan");
+    if (bandwidth != MHz(20) && bandwidth != MHz(40))
+        throw cRuntimeError("Unsupported HT subcarrier-plan bandwidth: %s", bandwidth.str().c_str());
+
+    const int first = bandwidth == MHz(20) ? -28 : -58;
+    const int last = bandwidth == MHz(20) ? 28 : 58;
+    const std::set<int> pilots = bandwidth == MHz(20) ? std::set<int>{-21, -7, 7, 21} : std::set<int>{-53, -25, -11, 11, 25, 53};
+    const int expectedData = bandwidth == MHz(20) ? 52 : 108;
+    const int expectedTotal = bandwidth == MHz(20) ? 56 : 114;
+    const Hz spacing = Hz(312500);
+    auto generatedSubcarriers = std::make_unique<std::vector<Ieee80211OfdmSubcarrier>>();
+    auto spectrumBands = std::vector<PowerSpectralBand>();
+    generatedSubcarriers->reserve(expectedTotal);
+    spectrumBands.reserve(expectedTotal);
+    for (int index = first; index <= last; index++) {
+        if (index == 0 || (bandwidth == MHz(40) && (index == -1 || index == 1)))
+            continue;
+        const Hz centerOffset = spacing * index;
+        const Hz lowerOffset = centerOffset - spacing / 2;
+        const Hz upperOffset = centerOffset + spacing / 2;
+        const auto role = pilots.count(index) != 0 ? Ieee80211SubcarrierRole::PILOT : Ieee80211SubcarrierRole::DATA;
+        generatedSubcarriers->push_back({index, role, lowerOffset, centerOffset, upperOffset});
+        spectrumBands.emplace_back(lowerOffset, upperOffset, 1.0 / expectedTotal);
+    }
+    if ((int)generatedSubcarriers->size() != expectedTotal)
+        throw cRuntimeError("Generated HT carrier plan has %zu carriers, expected %d", generatedSubcarriers->size(), expectedTotal);
+    const int dataCount = std::count_if(generatedSubcarriers->begin(), generatedSubcarriers->end(), [](const auto& subcarrier) { return subcarrier.role == Ieee80211SubcarrierRole::DATA; });
+    if (dataCount != expectedData || dataCount != getNumberOfDataSubcarriers() || expectedTotal != getNumberOfTotalSubcarriers())
+        throw cRuntimeError("HT carrier plan count mismatch for bandwidth %s", bandwidth.str().c_str());
+    subcarriers = std::move(generatedSubcarriers);
+    equalPowerSpectrum = std::make_unique<TransmissionSpectrum>(spectrumBands, bandwidth);
+}
+
+const std::vector<Ieee80211OfdmSubcarrier>& Ieee80211HtDataMode::getSubcarriers() const
+{
+    ensureSubcarrierPlan();
+    return *subcarriers;
+}
+
+const ITransmissionSpectrum& Ieee80211HtDataMode::getEqualPowerSpectrum() const
+{
+    ensureSubcarrierPlan();
+    return *equalPowerSpectrum;
+}
+
 Ieee80211Htmcs::Ieee80211Htmcs(unsigned int mcsIndex, const ApskModulationBase *stream1SubcarrierModulation, const ApskModulationBase *stream2SubcarrierModulation, const ApskModulationBase *stream3SubcarrierModulation, const ApskModulationBase *stream4SubcarrierModulation, const Ieee80211ConvolutionalCode* convolutionalCode, Hz bandwidth) :
     mcsIndex(mcsIndex),
     stream1Modulation(new Ieee80211OfdmModulation(getNumberOfTotalSubcarriers(bandwidth, mcsIndex), stream1SubcarrierModulation)),
@@ -202,18 +252,63 @@ unsigned int Ieee80211HtPreambleMode::computeNumberOfHTLongTrainings(unsigned in
     return numberOfSpaceTimeStreams == 3 ? 4 : numberOfSpaceTimeStreams;
 }
 
+Ieee80211HtPreambleMode::PreDataFieldDurations Ieee80211HtPreambleMode::getPreDataFieldDurations() const
+{
+    return PreDataFieldDurations(
+        preambleFormat == HT_PREAMBLE_MIXED ? getNonHTShortTrainingSequenceDuration() : SIMTIME_ZERO,
+        preambleFormat == HT_PREAMBLE_MIXED ? getNonHTLongTrainingFieldDuration() : SIMTIME_ZERO,
+        preambleFormat == HT_PREAMBLE_MIXED ? getLSIGDuration() : SIMTIME_ZERO,
+        preambleFormat == HT_PREAMBLE_GREENFIELD ? getHTGreenfieldShortTrainingFieldDuration() : SIMTIME_ZERO,
+        highThroughputSignalMode->getDuration(),
+        preambleFormat == HT_PREAMBLE_MIXED ? getHTShortTrainingFieldDuration() : SIMTIME_ZERO,
+        getFirstHTLongTrainingFieldDuration(),
+        getSecondAndSubsequentHTLongTrainingFielDuration(),
+        numberOfHTLongTrainings);
+}
+
 const simtime_t Ieee80211HtPreambleMode::getDuration() const
 {
-    // 20.3.7 Mathematical description of signals
-    simtime_t sumOfHTLTFs = getFirstHTLongTrainingFieldDuration() + getSecondAndSubsequentHTLongTrainingFielDuration() * (numberOfHTLongTrainings - 1);
-    if (preambleFormat == HT_PREAMBLE_MIXED)
-        // L-STF -> L-LTF -> L-SIG -> HT-SIG -> HT-STF -> HT-LTF1 -> HT-LTF2 -> ... -> HT_LTFn
-        return getNonHTShortTrainingSequenceDuration() + getNonHTLongTrainingFieldDuration() + legacySignalMode->getDuration() + highThroughputSignalMode->getDuration() + getHTShortTrainingFieldDuration() + sumOfHTLTFs;
-    else if (preambleFormat == HT_PREAMBLE_GREENFIELD)
-        // HT-GF-STF -> HT-LTF1 -> HT-SIG -> HT-LTF2 -> ... -> HT-LTFn
-        return getHTGreenfieldShortTrainingFieldDuration() + highThroughputSignalMode->getDuration() + sumOfHTLTFs;
+    return getPreDataFieldDurations().getDuration();
+}
+
+Ieee80211SignalPartDurations Ieee80211HtMode::getHtPreDataSignalPartDurations() const
+{
+    const auto fields = preambleMode->getPreDataFieldDurations();
+    simtime_t preambleDuration;
+    simtime_t headerDuration;
+    if (preambleMode->getPreambleFormat() == Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED) {
+        // IEEE Std 802.11-2024 Clause 19.3.7, Figure 19-4, (19-2):
+        // L-STF -> L-LTF -> L-SIG -> HT-SIG -> HT-STF -> HT-LTFs -> Data.
+        preambleDuration = fields.lStfDuration + fields.lLtfDuration + fields.lSigDuration;
+        headerDuration = fields.htSigDuration + fields.htStfDuration + fields.htLtf1Duration +
+                         fields.htLtfSubsequentDuration * (fields.numberOfHtLtf - 1);
+    }
+    else if (preambleMode->getPreambleFormat() == Ieee80211HtPreambleMode::HT_PREAMBLE_GREENFIELD) {
+        // IEEE Std 802.11-2024 Clause 19.3.7, Figure 19-4, (19-3):
+        // HT-GF-STF -> HT-LTF1 -> HT-SIG -> HT-LTFs -> Data.
+        preambleDuration = fields.htGfStfDuration + fields.htLtf1Duration;
+        headerDuration = fields.htSigDuration + fields.htLtfSubsequentDuration * (fields.numberOfHtLtf - 1);
+    }
     else
-        throw cRuntimeError("Unknown preamble format");
+        throw cRuntimeError("Unknown HT preamble format");
+    if (preambleDuration + headerDuration != fields.getDuration())
+        throw cRuntimeError("HT pre-Data field breakdown does not match its grouped duration");
+    return Ieee80211SignalPartDurations(preambleDuration, headerDuration, SIMTIME_ZERO);
+}
+
+const simtime_t Ieee80211HtMode::getDuration(b dataLength) const
+{
+    return getHtPreDataSignalPartDurations().getDuration() + dataMode->getDuration(dataLength, getHeaderMode()->getSTBC());
+}
+
+Ieee80211SignalPartDurations Ieee80211HtMode::getSignalPartDurations(b dataLength) const
+{
+    const auto preDataDurations = getHtPreDataSignalPartDurations();
+    const auto durations = Ieee80211SignalPartDurations(preDataDurations.preambleDuration, preDataDurations.headerDuration,
+        dataMode->getDuration(dataLength, getHeaderMode()->getSTBC()));
+    if (durations.getDuration() != getDuration(dataLength))
+        throw cRuntimeError("HT signal-part durations do not sum to the mode duration");
+    return durations;
 }
 
 bps Ieee80211HtSignalMode::computeGrossBitrate() const

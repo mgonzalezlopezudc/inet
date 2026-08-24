@@ -9,6 +9,7 @@
 #include <complex>
 #include <vector>
 
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ComplexMatrix.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IChannelMatrixSnapshot.h"
 #include "inet/physicallayer/wireless/ieee80211/channelmodel/TgnChannelProfile.h"
 
@@ -56,6 +57,10 @@ struct INET_API TgnChannelRealization
     bool los = false;
     double firstTapKLinear = 0;
     double firstTapDiffusePower = 0;
+    // Optional calibration-only normalization of the expected complete
+    // small-scale LOS profile. This is a profile-level factor, not a
+    // per-realization renormalization.
+    double smallScalePowerNormalization = 1;
     double shadowingPowerGain = NaN;
     std::vector<TgnComponentRealization> components;
     ComplexMatrix fixedLosMatrix;

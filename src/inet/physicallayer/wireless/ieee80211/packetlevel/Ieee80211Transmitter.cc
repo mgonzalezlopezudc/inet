@@ -10,6 +10,7 @@
 #include "inet/mobility/contract/IMobility.h"
 #include "inet/physicallayer/wireless/common/analogmodel/common/SpatialTransmissionPlan.h"
 #include "inet/physicallayer/wireless/common/analogmodel/scalar/ScalarTransmitterAnalogModel.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IDimensionalTransmitterAnalogModel.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/RadioControlInfo_m.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
@@ -20,6 +21,7 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211SpatialTransmissionPlanBuilder.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211OfdmSubcarrierPlan.h"
 
 #include <limits>
 #include <sstream>
@@ -71,6 +73,13 @@ void Ieee80211Transmitter::initialize(int stage)
     FlatTransmitterBase::initialize(stage);
     if (stage == INITSTAGE_LOCAL) {
         const char *opMode = par("opMode");
+        const char *spectrumMode = par("dimensionalSpectrumMode");
+        if (!strcmp(spectrumMode, "nominalBand"))
+            dimensionalSpectrumMode = DimensionalSpectrumMode::NOMINAL_BAND;
+        else if (!strcmp(spectrumMode, "occupiedSubcarriers"))
+            dimensionalSpectrumMode = DimensionalSpectrumMode::OCCUPIED_SUBCARRIERS;
+        else
+            throw cRuntimeError("Unknown dimensional spectrum mode: '%s'", spectrumMode);
         setModeSet(*opMode ? Ieee80211ModeSet::getModeSet(opMode) : nullptr);
         const char *bandName = par("bandName");
         setBand(*bandName != '\0' ? Ieee80211CompliantBands::getBand(bandName) : nullptr);
@@ -218,17 +227,18 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     const Coord& endPosition = mobility->getCurrentPosition();
     const Quaternion& startOrientation = mobility->getCurrentAngularPosition();
     const Quaternion& endOrientation = mobility->getCurrentAngularPosition();
-    const simtime_t preambleDuration = transmissionMode->getPreambleMode()->getDuration();
-    const simtime_t headerDuration = transmissionMode->getHeaderMode()->getDuration();
-    const simtime_t dataDuration = duration - headerDuration - preambleDuration;
+    const auto durations = transmissionMode->getSignalPartDurations(B(phyHeader->getLengthField()));
+    if (durations.getDuration() != duration)
+        throw cRuntimeError("Mode signal-part durations do not sum to the transmission duration");
     std::shared_ptr<const SpatialTransmissionPlan> spatialTransmissionPlan;
     const std::string antennaIndexText = par("spatialTransmitAntennaIndices").stdstringValue();
     const auto antennaIndices = parseSpatialTransmitAntennaIndices(antennaIndexText);
     if (htPpduDescription != nullptr) {
         const Ieee80211HtPpduLayout layout(*htPpduDescription, duration);
-        if (preambleDuration != layout.getDataStart())
-            throw cRuntimeError("HT sender mode preamble duration %s contradicts canonical HT-LTF boundary %s",
-                preambleDuration.str().c_str(), layout.getDataStart().str().c_str());
+        const simtime_t dataStart = durations.preambleDuration + durations.headerDuration;
+        if (dataStart != layout.getDataStart())
+            throw cRuntimeError("HT sender mode pre-Data duration %s contradicts canonical HT-LTF boundary %s",
+                dataStart.str().c_str(), layout.getDataStart().str().c_str());
         spatialTransmissionPlan = Ieee80211SpatialTransmissionPlanBuilder::build(*htPpduDescription,
             duration, transmitter->getAntenna()->getNumAntennas(), antennaIndices);
     }
@@ -246,8 +256,23 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
             numberOfTransmitAntennas, std::vector<SpatialTransmissionPlan::Segment>{segment});
         spatialTransmissionPlan->validateCompleteCoverage(duration);
     }
-    auto analogModel = getAnalogModel()->createAnalogModel(preambleDuration, headerDuration, dataDuration, centerFrequency, transmissionBandwidth, transmissionPower);
-    return new Ieee80211Transmission(transmitter, packet, startTime, endTime, preambleDuration, headerDuration, dataDuration, startPosition, endPosition, startOrientation, endOrientation, nullptr, nullptr, nullptr, nullptr, analogModel, transmissionMode, transmissionChannel, spatialTransmissionPlan, htPpduDescription);
+    ITransmissionAnalogModel *analogModel;
+    if (dimensionalSpectrumMode == DimensionalSpectrumMode::NOMINAL_BAND)
+        analogModel = getAnalogModel()->createAnalogModel(durations.preambleDuration, durations.headerDuration, durations.dataDuration, centerFrequency, transmissionBandwidth, transmissionPower);
+    else {
+        auto dimensionalModel = dynamic_cast<const IDimensionalTransmitterAnalogModel *>(getAnalogModel());
+        if (dimensionalModel == nullptr)
+            throw cRuntimeError("occupiedSubcarriers requires a dimensional transmitter analog model");
+        auto carrierPlan = dynamic_cast<const IIeee80211OfdmSubcarrierPlan *>(transmissionMode->getDataMode());
+        if (carrierPlan == nullptr)
+            throw cRuntimeError("selected IEEE 802.11 data mode has no OFDM subcarrier plan");
+        analogModel = dimensionalModel->createAnalogModel(durations.preambleDuration, durations.headerDuration, durations.dataDuration, centerFrequency, transmissionBandwidth, transmissionPower, nullptr, nullptr, &carrierPlan->getEqualPowerSpectrum());
+    }
+    return new Ieee80211Transmission(transmitter, packet, startTime, endTime,
+        durations.preambleDuration, durations.headerDuration, durations.dataDuration,
+        startPosition, endPosition, startOrientation, endOrientation,
+        nullptr, nullptr, nullptr, nullptr, analogModel, transmissionMode,
+        transmissionChannel, spatialTransmissionPlan, htPpduDescription);
 }
 
 } // namespace physicallayer

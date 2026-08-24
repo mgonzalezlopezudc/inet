@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "1",
+  "perTableSha256": "254026038873077b5144f4a23ec380e3b62992f00e65a2e90798a4e719efd9b2",
+  "awgn": {
+    "schemaVersion": "1",
+    "observationsSha256": "254026038873077b5144f4a23ec380e3b62992f00e65a2e90798a4e719efd9b2",
+    "scope": "synthetic HT20 and HT40 occupied-spectrum SISO BCC integration fixture",
+    "snrDefinition": "receiver-domain dimensional SNIR",
+    "psduLengthDefinition": "MAC PSDU octets",
+    "provenance": {
+      "method": "deterministic synthetic integration fixture",
+      "campaignId": "synthetic-mi-module-v1",
+      "generatedDataLicense": "test-only",
+      "reviewedBy": "focused regression fixture",
+      "sourceDocuments": [
+        {"id": "patidar2017", "sha256": "a428fdcaa4423f331e3bd02044345ec4305ee54056c319404a897e713cdab16e"},
+        {"id": "ieee80211-2024", "sha256": "c08beb0e16bf8c36465a331d349dd8b8ea79b28d4a320288312ddeb5ce8d9bb1"}
+      ],
+      "forbiddenSourcesUsed": [],
+      "licenseApproved": true,
+      "cleanRoomVerified": true
+    },
+    "providerTool": {
+      "name": "synthetic-fixture",
+      "version": "1",
+      "gitCommit": "fixture",
+      "executableSha256": "441389621258f397f651fd2e4247e21ac996eaec167efb99a7cbeb1f86492cf8",
+      "toolchain": "repository test harness",
+      "configurationSha256": "254026038873077b5144f4a23ec380e3b62992f00e65a2e90798a4e719efd9b2"
+    },
+    "review": {"status": "approved", "reviewer": "focused regression fixture", "record": "synthetic"}
+  }
+}

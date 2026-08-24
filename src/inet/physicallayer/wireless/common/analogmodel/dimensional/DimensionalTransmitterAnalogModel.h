@@ -12,13 +12,14 @@
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalTransmissionAnalogModel.h"
 #include "inet/physicallayer/wireless/common/base/packetlevel/TransmitterAnalogModelBase.h"
 #include "inet/physicallayer/wireless/common/contract/bitlevel/ISignalAnalogModel.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IDimensionalTransmitterAnalogModel.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmitterAnalogModel.h"
 
 namespace inet {
 
 namespace physicallayer {
 
-class INET_API DimensionalTransmitterAnalogModel : public TransmitterAnalogModelBase, public ITransmitterAnalogModel
+class INET_API DimensionalTransmitterAnalogModel : public TransmitterAnalogModelBase, public IDimensionalTransmitterAnalogModel
 {
   protected:
     template<typename T>
@@ -79,6 +80,10 @@ class INET_API DimensionalTransmitterAnalogModel : public TransmitterAnalogModel
 
   public:
     virtual ITransmissionAnalogModel* createAnalogModel(simtime_t preambleDuration, simtime_t headerDuration, simtime_t dataDuration, Hz centerFrequency, Hz bandwidth, W power) const override;
+    virtual ITransmissionAnalogModel* createAnalogModel(simtime_t preambleDuration, simtime_t headerDuration, simtime_t dataDuration, Hz centerFrequency, Hz bandwidth, W power, const ITransmissionSpectrum *preambleSpectrum, const ITransmissionSpectrum *headerSpectrum, const ITransmissionSpectrum *dataSpectrum) const override;
+
+  protected:
+    virtual Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> createPartPowerFunction(simtime_t startTime, simtime_t endTime, Hz centerFrequency, Hz bandwidth, W power, const ITransmissionSpectrum *spectrum) const;
 };
 
 } // namespace physicallayer
@@ -86,4 +91,3 @@ class INET_API DimensionalTransmitterAnalogModel : public TransmitterAnalogModel
 } // namespace inet
 
 #endif
-

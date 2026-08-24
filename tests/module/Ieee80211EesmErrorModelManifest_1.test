@@ -1,0 +1,37 @@
+%description:
+Selecting EESM without an explicitly supplied reviewed manifest must fail
+at initialization because production AWGN PER tables are intentionally not
+bundled.
+
+%file: test.ned
+
+import inet.node.inet.AdhocHost;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211DimensionalRadioMedium;
+
+network EesmErrorModelManifestRejectTest
+{
+    submodules:
+        radioMedium: Ieee80211DimensionalRadioMedium;
+        host: AdhocHost;
+}
+
+%inifile: omnetpp.ini
+
+[General]
+record-vector-results = false
+network = EesmErrorModelManifestRejectTest
+sim-time-limit = 1ms
+cmdenv-express-mode = false
+ned-path = .;../../../../src;../../lib
+
+**.wlan[*].radio.typename = "Ieee80211DimensionalRadio"
+**.wlan[*].opMode = "n(mixed-2.4Ghz)"
+**.wlan[*].radio.opMode = "n(mixed-2.4Ghz)"
+**.wlan[*].radio.receiver.errorModel.typename = "Ieee80211EesmErrorModel"
+**.wlan[*].radio.receiver.errorModel.perTableFile = "../../data/Ieee80211Eesm.synthetic.csv"
+**.wlan[*].radio.receiver.errorModel.betaTableFile = "../../data/Ieee80211Eesm.synthetic-beta.csv"
+**.wlan[*].radio.receiver.errorModel.calibrationSet = "patidar2017-bcc-d40"
+
+%exitcode: 1
+%contains-regex: stderr
+Ieee80211EesmErrorModel: manifest requires nonempty string key 'schemaVersion'

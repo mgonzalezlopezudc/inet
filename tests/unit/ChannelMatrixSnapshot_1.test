@@ -23,6 +23,18 @@ auto response = std::make_shared<const ChannelMatrixResponse>(2, 1,
     [](simtime_t time, Hz frequency) {
         return ComplexMatrix(2, 1, {{1, 2}, {3, -4}});
     });
+auto oneByOneResponse = std::make_shared<const ChannelMatrixResponse>(1, 1,
+    [](simtime_t time, Hz frequency) {
+        return ComplexMatrix(1, 1, {{1, 0}});
+    });
+bool mismatchRejected = false;
+try {
+    std::make_shared<const ChannelMatrixSnapshot>(2, 2, GHz(5), 1, 2, 0.75, Hz(10), SimTime(50, SIMTIME_NS), oneByOneResponse);
+}
+catch (const cRuntimeError&) {
+    mismatchRejected = true;
+}
+require(mismatchRejected, "response dimension mismatch");
 auto snapshot = std::make_shared<const ChannelMatrixSnapshot>(2, 1, GHz(5), 1, 2, 0.75, Hz(10), SimTime(50, SIMTIME_NS), response);
 require(snapshot->getNumReceiveAntennas() == 2 && snapshot->getNumTransmitAntennas() == 1, "dimensions");
 require(snapshot->getResponse(1, GHz(5)).get(1, 0) == std::complex<double>(3, -4), "response value");

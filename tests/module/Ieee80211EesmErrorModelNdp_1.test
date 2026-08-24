@@ -1,0 +1,160 @@
+%description:
+IEEE Std 802.11-2024 Table 19-11 defines HT Length 0 as an NDP.
+This deterministic probe constructs that PHY header directly and verifies
+that the EESM error model rejects it before consulting SNIR or PER data.
+
+%file: test.ned
+
+import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
+import inet.node.inet.AdhocHost;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211DimensionalRadioMedium;
+
+simple EesmNdpProbe
+{
+    parameters:
+        @class(::Ieee80211EesmErrorModelNdp_1::EesmNdpProbe);
+}
+
+network EesmErrorModelNdpRejectTest
+{
+    submodules:
+        radioMedium: Ieee80211DimensionalRadioMedium;
+        configurator: Ipv4NetworkConfigurator;
+        sender: AdhocHost;
+        receiver: AdhocHost;
+        probe: EesmNdpProbe;
+}
+
+%file: test.cc
+
+#include <memory>
+
+#include <omnetpp.h>
+
+#include "inet/common/InitStages.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/physicallayer/wireless/common/base/packetlevel/ReceptionBase.h"
+#include "inet/physicallayer/wireless/common/base/packetlevel/SnirBase.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HtSignalField.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211EesmErrorModel.h"
+
+using namespace omnetpp;
+using namespace inet;
+using namespace inet::physicallayer;
+
+namespace Ieee80211EesmErrorModelNdp_1 {
+
+class UnusedSnir : public SnirBase
+{
+  public:
+    explicit UnusedSnir(const IReception *reception) : SnirBase(reception, nullptr) {}
+
+    virtual double getMin() const override { throw cRuntimeError("NDP rejection reached SNIR minimum"); }
+    virtual double getMax() const override { throw cRuntimeError("NDP rejection reached SNIR maximum"); }
+    virtual double getMean() const override { throw cRuntimeError("NDP rejection reached SNIR mean"); }
+};
+
+class EesmNdpProbe : public cSimpleModule
+{
+  protected:
+    virtual int numInitStages() const override { return NUM_INIT_STAGES; }
+
+    virtual void initialize(int stage) override
+    {
+        if (stage != INITSTAGE_LAST)
+            return;
+
+        auto senderRadio = check_and_cast<Ieee80211Radio *>(getSimulation()->getModuleByPath("sender.wlan[0].radio"));
+        auto receiverRadio = check_and_cast<Ieee80211Radio *>(getSimulation()->getModuleByPath("receiver.wlan[0].radio"));
+        auto transmitter = check_and_cast<Ieee80211Transmitter *>(getSimulation()->getModuleByPath("sender.wlan[0].radio.transmitter"));
+        auto errorModel = check_and_cast<Ieee80211EesmErrorModel *>(getSimulation()->getModuleByPath("receiver.wlan[0].radio.receiver.errorModel"));
+
+        Packet packet("ht-ndp");
+        const auto *mode = transmitter->computeTransmissionMode(&packet);
+        const auto *htMode = check_and_cast<const Ieee80211HtMode *>(mode);
+        auto phyHeader = mode->getHeaderMode()->createHeader();
+        phyHeader->setChunkLength(mode->getHeaderMode()->getLength());
+        phyHeader->setLengthField(B(0));
+        auto *htHeader = check_and_cast<Ieee80211HtPhyHeader *>(phyHeader.get());
+        Ieee80211HtSignalField field;
+        field.mcs = static_cast<uint8_t>(htMode->getDataMode()->getModulationAndCodingScheme()->getMcsIndex());
+        field.cbw = htMode->getDataMode()->getBandwidth() == MHz(40);
+        field.length = 0;
+        field.smoothing = true;
+        field.notSounding = true;
+        field.reserved = true;
+        field.aggregation = false;
+        field.stbc = static_cast<uint8_t>(htMode->getHeaderMode()->getSTBC());
+        field.fecCoding = false;
+        field.shortGi = htMode->getDataMode()->getGuardIntervalType() == Ieee80211HtModeBase::HT_GUARD_INTERVAL_SHORT;
+        field.numberOfExtensionSpatialStreams = 0;
+        field.tail = 0;
+        field.crc = computeIeee80211HtSignalFieldCrc(field);
+        htHeader->setMcs(field.mcs);
+        htHeader->setCbw(field.cbw);
+        htHeader->setSmoothing(field.smoothing);
+        htHeader->setNotSounding(field.notSounding);
+        htHeader->setReserved(field.reserved);
+        htHeader->setAggregation(field.aggregation);
+        htHeader->setStbc(field.stbc);
+        htHeader->setFecCoding(field.fecCoding);
+        htHeader->setShortGi(field.shortGi);
+        htHeader->setNumberOfExtensionSpatialStreams(field.numberOfExtensionSpatialStreams);
+        htHeader->setCrc(field.crc);
+        htHeader->setTail(field.tail);
+        packet.insertAtFront(phyHeader);
+        packet.addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HtPhy);
+
+        std::unique_ptr<const ITransmission> transmission(transmitter->createTransmission(senderRadio, &packet, SIMTIME_ZERO));
+        ReceptionBase reception(receiverRadio, transmission.get(), transmission->getStartTime(), transmission->getEndTime(),
+                transmission->getStartPosition(), transmission->getEndPosition(), transmission->getStartOrientation(), transmission->getEndOrientation(), nullptr);
+        UnusedSnir snir(&reception);
+        errorModel->computePacketErrorRate(&snir, IRadioSignal::SIGNAL_PART_WHOLE);
+    }
+};
+
+Define_Module(EesmNdpProbe);
+
+} // namespace Ieee80211EesmErrorModelNdp_1
+
+%inifile: omnetpp.ini
+
+[General]
+record-vector-results = false
+network = EesmErrorModelNdpRejectTest
+sim-time-limit = 1ms
+cmdenv-express-mode = false
+ned-path = .;../../../../src;../../lib
+
+**.arp.typename = "GlobalArp"
+**.mobility.typename = "StationaryMobility"
+**.mobility.initFromDisplayString = false
+**.mobility.initialX = 0m
+**.mobility.initialY = 0m
+**.wlan[*].radio.antenna.mobility.initFromDisplayString = false
+**.wlan[*].radio.antenna.mobility.initialX = 0m
+**.wlan[*].radio.antenna.mobility.initialY = 0m
+
+**.wlan[*].radio.typename = "Ieee80211DimensionalRadio"
+**.wlan[*].opMode = "n(mixed-2.4Ghz)"
+**.wlan[*].radio.opMode = "n(mixed-2.4Ghz)"
+**.wlan[*].radio.bandName = "2.4 GHz"
+**.wlan[*].radio.bandwidth = 40MHz
+**.wlan[*].radio.receiver.bandwidth = 40MHz
+**.wlan[*].bitrate = 15Mbps
+**.wlan[*].radio.transmitter.bitrate = 15Mbps
+**.wlan[*].radio.transmitter.dimensionalSpectrumMode = "occupiedSubcarriers"
+
+*.receiver.wlan[*].radio.receiver.errorModel.typename = "Ieee80211EesmErrorModel"
+*.receiver.wlan[*].radio.receiver.errorModel.perTableFile = "../../data/Ieee80211Eesm.synthetic.csv"
+*.receiver.wlan[*].radio.receiver.errorModel.betaTableFile = "../../data/Ieee80211Eesm.synthetic-beta.csv"
+*.receiver.wlan[*].radio.receiver.errorModel.calibrationSet = "patidar2017-bcc-d40"
+*.receiver.wlan[*].radio.receiver.errorModel.perTableManifest = readJSON("../../data/Ieee80211Eesm.d40.manifest.json")
+
+%exitcode: 1
+%contains: stderr
+Ieee80211EesmErrorModel rejects zero-length HT NDP/PSDU

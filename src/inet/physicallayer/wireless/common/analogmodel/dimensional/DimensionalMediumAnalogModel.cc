@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/ChannelMatrixNoise.h"
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/ChannelMatrixReceptionAnalogModel.h"
@@ -40,7 +41,7 @@ Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> createZeroPowerFunction()
 
 std::shared_ptr<const SpatialTransmissionPlan> getSpatialTransmissionPlan(
     const ITransmission *transmission, const std::shared_ptr<const IChannelMatrixSnapshot>& snapshot,
-    int selectedTransmitAntenna, simtime_t duration)
+    simtime_t duration)
 {
     if (const auto spatialTransmission = dynamic_cast<const ISpatialTransmission *>(transmission)) {
         const auto& plan = spatialTransmission->getSpatialTransmissionPlan();
@@ -52,28 +53,56 @@ std::shared_ptr<const SpatialTransmissionPlan> getSpatialTransmissionPlan(
             return plan;
         }
     }
-    if (selectedTransmitAntenna < 0 || selectedTransmitAntenna >= snapshot->getNumTransmitAntennas())
-        throw cRuntimeError("Selected transmit antenna %d is outside a %d-column channel snapshot",
-            selectedTransmitAntenna, snapshot->getNumTransmitAntennas());
-    ComplexMatrix mapping(snapshot->getNumTransmitAntennas(), 1);
-    mapping.get(selectedTransmitAntenna, 0) = 1;
-    SpatialTransmissionPlan::Segment segment(0, duration, 1, 1, mapping, {1.0});
-    auto plan = std::make_shared<const SpatialTransmissionPlan>(snapshot->getNumTransmitAntennas(),
-        std::vector<SpatialTransmissionPlan::Segment>{segment});
-    plan->validateCompleteCoverage(duration);
-    return plan;
+    throw cRuntimeError("Channel-matrix transmission requires an immutable spatial transmission plan");
 }
 
 } // namespace
+
+int DimensionalMediumAnalogModel::computeCarrierAlignedFrequencyIntervals(Hz centerFrequency, Hz bandwidth,
+    const ITransmissionSpectrum *dataSpectrum, int minimumIntervals)
+{
+    if (dataSpectrum == nullptr || dataSpectrum->getBands().empty())
+        return minimumIntervals;
+
+    const Hz lowerFrequency = centerFrequency - bandwidth / 2;
+    const double bandwidthHz = bandwidth.get();
+    std::vector<double> centers;
+    centers.reserve(dataSpectrum->getBands().size());
+    for (const auto& band : dataSpectrum->getBands())
+        centers.push_back((band.lowerFrequencyOffset + band.upperFrequencyOffset).get() / 2 + centerFrequency.get());
+
+    double carrierSpacingHz = std::numeric_limits<double>::infinity();
+    for (size_t i = 0; i < centers.size(); i++)
+        for (size_t j = i + 1; j < centers.size(); j++) {
+            const double difference = std::abs(centers[i] - centers[j]);
+            if (difference > 0)
+                carrierSpacingHz = std::min(carrierSpacingHz, difference);
+        }
+    if (!std::isfinite(carrierSpacingHz))
+        carrierSpacingHz = bandwidthHz / 2;
+    if (!(carrierSpacingHz > 0) || !(bandwidthHz > 0))
+        return minimumIntervals;
+    const int carrierIntervals = (int)std::llround(bandwidthHz / carrierSpacingHz);
+    if (carrierIntervals < 1 || std::abs(bandwidthHz / carrierIntervals - carrierSpacingHz) > 1e-6)
+        return minimumIntervals;
+
+    const double toleranceHz = std::max(1e-6, bandwidthHz * 1e-12);
+    for (double center : centers) {
+        const double index = (center - lowerFrequency.get()) / carrierSpacingHz;
+        if (std::abs(index - std::round(index)) > toleranceHz / carrierSpacingHz)
+            return minimumIntervals;
+    }
+    int multiples = (minimumIntervals + carrierIntervals - 1) / carrierIntervals;
+    if (multiples % 2 != 0)
+        ++multiples;
+    return std::max(2, multiples * carrierIntervals);
+}
 
 void DimensionalMediumAnalogModel::initialize(int stage)
 {
     AnalogModelBase::initialize(stage);
     if (stage == INITSTAGE_LOCAL) {
         attenuateWithCenterFrequency = par("attenuateWithCenterFrequency"); // TODO rename center
-        selectedTransmitAntenna = par("selectedTransmitAntenna");
-        if (selectedTransmitAntenna < 0)
-            throw cRuntimeError("Selected transmit antenna must be nonnegative");
     }
 }
 
@@ -81,8 +110,7 @@ std::ostream& DimensionalMediumAnalogModel::printToStream(std::ostream& stream, 
 {
     stream << "DimensionalMediumAnalogModel";
     if (level <= PRINT_LEVEL_DEBUG)
-        stream << EV_FIELD(attenuateWithCenterFrequency)
-               << EV_FIELD(selectedTransmitAntenna);
+        stream << EV_FIELD(attenuateWithCenterFrequency);
     return stream;
 }
 
@@ -249,7 +277,7 @@ const IReception *DimensionalMediumAnalogModel::computeReception(const IRadio *r
                 receiverRadio->getAntenna()->getNumAntennas(), transmission->getTransmitterRadio()->getAntenna()->getNumAntennas());
         const auto deterministicPower = computeReceptionPower(receiverRadio, transmission, arrival);
         const auto spatialTransmissionPlan = getSpatialTransmissionPlan(transmission, snapshot,
-            selectedTransmitAntenna, arrival->getEndTime() - arrival->getStartTime());
+            arrival->getEndTime() - arrival->getStartTime());
         const auto physicalPower = ChannelMatrixPhysicalPowerMaterializer::materialize(snapshot,
             spatialTransmissionPlan, arrival->getStartTime(), arrival->getEndTime(),
             transmissionAnalogModel->getCenterFrequency(), transmissionAnalogModel->getBandwidth(), deterministicPower);

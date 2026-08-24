@@ -21,6 +21,8 @@ module Ieee80211TgnRadioMedium extends Ieee80211DimensionalRadioMedium
         bool timeVariation = default(true);
         bool vehicleEffect = default(true);
         bool fluorescentEffect = default(true);
+        bool shadowing = default(true);
+        bool ensembleNormalization = default(false);
         double fluorescentMainsFrequency @unit(Hz) = default(50Hz);
         double environmentalSpeed @unit(mps) = default(0.333333333333mps);
         double vehicleSpeed @unit(mps) = default(11.111111111111mps);
@@ -42,6 +44,8 @@ module Ieee80211TgnRadioMedium extends Ieee80211DimensionalRadioMedium
         channelModel.timeVariation = this.timeVariation;
         channelModel.vehicleEffect = this.vehicleEffect;
         channelModel.fluorescentEffect = this.fluorescentEffect;
+        channelModel.shadowing = this.shadowing;
+        channelModel.ensembleNormalization = this.ensembleNormalization;
         channelModel.fluorescentMainsFrequency = this.fluorescentMainsFrequency;
         channelModel.environmentalSpeed = this.environmentalSpeed;
         channelModel.vehicleSpeed = this.vehicleSpeed;

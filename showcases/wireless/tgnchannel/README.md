@@ -12,9 +12,9 @@ convention follows IEEE Std 802.11-2024, Clause 19.3.12.1; compiling this model
 does not select it or alter legacy operation modes.
 
 The channel snapshot is a complete receive-row/transmit-column complex matrix.
-The current receiver policy sends one stream through selected transmit column
-0 and applies ideal MRC across the receive rows. It is not spatial
-multiplexing, beamforming, or an MRC packet-error calibration.
+Transmitters attach immutable spatial plans, and the opt-in TGn radio eagerly
+materializes resource-cell receptions using its configured antenna-selection,
+combining, or spatial-stream-detection strategy.
 
 The configured `Ieee80211NistErrorModel` remains INET's ordinary scalar packet
 error policy. Packet results demonstrate integration only; they are not a TGn
@@ -24,7 +24,7 @@ tests, for channel validation.
 Run a fixed-seed channel example from this directory with:
 
 ```sh
-../../../bin/inet -u Cmdenv -c ModelD -f omnetpp.ini
+../../../bin/inet --debug -u Cmdenv -c ModelD -f omnetpp.ini
 ```
 
 Generate the diagnostic fixed-time frequency response, absolute-time response,

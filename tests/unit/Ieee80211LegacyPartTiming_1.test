@@ -1,0 +1,36 @@
+%description:
+Legacy mode split compatibility regression.  The default mode-base
+implementation keeps the historical preamble/header aggregate and leaves the
+data-mode duration as the residual interval.
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211DsssMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ErpOfdmMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211OfdmMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%activity:
+{
+    const auto verify = [](const IIeee80211Mode *mode, b length) {
+        auto parts = mode->getSignalPartDurations(length);
+        ASSERT(parts.preambleDuration == mode->getPreambleMode()->getDuration());
+        ASSERT(parts.headerDuration == mode->getHeaderMode()->getDuration());
+        ASSERT(parts.dataDuration == mode->getDuration(length) - parts.preambleDuration - parts.headerDuration);
+        ASSERT(parts.getDuration() == mode->getDuration(length));
+    };
+    verify(&Ieee80211DsssCompliantModes::dsssMode1Mbps, B(100));
+    verify(&Ieee80211OfdmCompliantModes::ofdmMode6MbpsCS20MHz, B(100));
+    verify(&Ieee80211ErpOfdmCompliantModes::erpOfdmMode6Mbps, B(100));
+    ASSERT(Ieee80211ErpOfdmCompliantModes::erpOfdmMode6Mbps.getSignalPartDurations(B(100)).dataDuration ==
+           Ieee80211ErpOfdmCompliantModes::erpOfdmMode6Mbps.getDataMode()->getDuration(B(100)) + 6e-6);
+    verify(Ieee80211VhtCompliantModes::getCompliantMode(&Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss1,
+        Ieee80211VhtMode::BAND_5GHZ, Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG), B(100));
+    EV << "done" << endl;
+}
+
+%contains: stdout
+done

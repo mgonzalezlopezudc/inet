@@ -29,6 +29,9 @@ ChannelMatrixSnapshot::ChannelMatrixSnapshot(int numReceiveAntennas, int numTran
         throw cRuntimeError("Channel snapshot temporal metadata is invalid");
     if (!response)
         throw cRuntimeError("Channel snapshot response is null");
+    if (response->getNumReceiveAntennas() != numReceiveAntennas || response->getNumTransmitAntennas() != numTransmitAntennas)
+        throw cRuntimeError("Channel snapshot dimensions %d x %d do not match response dimensions %d x %d",
+            numReceiveAntennas, numTransmitAntennas, response->getNumReceiveAntennas(), response->getNumTransmitAntennas());
 }
 
 ComplexMatrix ChannelMatrixSnapshot::getResponse(simtime_t absoluteTime, Hz frequency) const

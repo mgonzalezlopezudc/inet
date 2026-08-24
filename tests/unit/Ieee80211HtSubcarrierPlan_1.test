@@ -1,0 +1,96 @@
+%description:
+IEEE Std 802.11-2024 Clause 19.3.6/Table 19-6 and Clauses 19.3.11.11.3--
+19.3.11.11.4 carrier-plan oracle for HT20 and HT40.
+
+%includes:
+#include <cmath>
+#include <set>
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%activity:
+{
+    const auto *mcs20 = &Ieee80211HtmcsTable::htMcs0BW20MHz;
+    Ieee80211HtDataMode ht20(mcs20, MHz(20), Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+    const auto& carriers20 = ht20.getSubcarriers();
+    ASSERT(carriers20.size() == 56);
+    ASSERT(ht20.getNumberOfDataSubcarriers() == 52);
+    ASSERT(ht20.getNumberOfPilotSubcarriers() == 4);
+    std::set<int> pilots20;
+    std::set<int> indices20;
+    int data20 = 0;
+    for (const auto& carrier : carriers20) {
+        ASSERT(carrier.index != 0);
+        ASSERT(carrier.upperFrequencyOffset - carrier.lowerFrequencyOffset == Hz(312500));
+        ASSERT(carrier.centerFrequencyOffset == carrier.lowerFrequencyOffset + Hz(156250));
+        ASSERT(carrier.centerFrequencyOffset == Hz(312500) * carrier.index);
+        ASSERT(carrier.lowerFrequencyOffset < carrier.centerFrequencyOffset && carrier.centerFrequencyOffset < carrier.upperFrequencyOffset);
+        indices20.insert(carrier.index);
+        if (carrier.role == Ieee80211SubcarrierRole::PILOT)
+            pilots20.insert(carrier.index);
+        else
+            data20++;
+    }
+    ASSERT(pilots20 == std::set<int>({-21, -7, 7, 21}));
+    std::set<int> expectedIndices20;
+    for (int index = -28; index <= 28; index++)
+        if (index != 0)
+            expectedIndices20.insert(index);
+    ASSERT(indices20 == expectedIndices20);
+    ASSERT(data20 == 52);
+    ASSERT(ht20.getEqualPowerSpectrum().getBands().size() == 56);
+    double fraction20 = 0;
+    for (const auto& band : ht20.getEqualPowerSpectrum().getBands()) {
+        ASSERT(band.powerFraction == 1.0 / 56);
+        ASSERT(band.lowerFrequencyOffset >= -MHz(20) / 2 && band.upperFrequencyOffset <= MHz(20) / 2);
+        fraction20 += band.powerFraction;
+    }
+    ASSERT(std::fabs(fraction20 - 1) < 1e-12);
+
+    const auto *mcs40 = &Ieee80211HtmcsTable::htMcs0BW40MHz;
+    Ieee80211HtDataMode ht40(mcs40, MHz(40), Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+    const auto& carriers40 = ht40.getSubcarriers();
+    ASSERT(carriers40.size() == 114);
+    ASSERT(ht40.getNumberOfDataSubcarriers() == 108);
+    ASSERT(ht40.getNumberOfPilotSubcarriers() == 6);
+    std::set<int> pilots40;
+    std::set<int> indices40;
+    int data40 = 0;
+    for (const auto& carrier : carriers40) {
+        ASSERT(carrier.index != 0 && carrier.index != -1 && carrier.index != 1);
+        ASSERT(carrier.upperFrequencyOffset - carrier.lowerFrequencyOffset == Hz(312500));
+        ASSERT(carrier.centerFrequencyOffset == Hz(312500) * carrier.index);
+        indices40.insert(carrier.index);
+        if (carrier.role == Ieee80211SubcarrierRole::PILOT)
+            pilots40.insert(carrier.index);
+        else
+            data40++;
+    }
+    ASSERT(pilots40 == std::set<int>({-53, -25, -11, 11, 25, 53}));
+    std::set<int> expectedIndices40;
+    for (int index = -58; index <= 58; index++)
+        if (index != -1 && index != 0 && index != 1)
+            expectedIndices40.insert(index);
+    ASSERT(indices40 == expectedIndices40);
+    ASSERT(data40 == 108);
+    ASSERT(ht40.getEqualPowerSpectrum().getBands().size() == 114);
+    double fraction40 = 0;
+    for (const auto& band : ht40.getEqualPowerSpectrum().getBands()) {
+        ASSERT(band.powerFraction == 1.0 / 114);
+        ASSERT(band.lowerFrequencyOffset >= -MHz(40) / 2 && band.upperFrequencyOffset <= MHz(40) / 2);
+        fraction40 += band.powerFraction;
+    }
+    ASSERT(std::fabs(fraction40 - 1) < 1e-12);
+
+    // HT MCS 32 is the special 40 MHz format, not one of the supported
+    // data-only BCC MCS 0-7 carrier plans.
+    Ieee80211HtDataMode mcs32(&Ieee80211HtmcsTable::htMcs32BW40MHz, MHz(40), Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+    try { mcs32.getSubcarriers(); ASSERT(false); } catch (const cRuntimeError&) {}
+    try { mcs32.getEqualPowerSpectrum(); ASSERT(false); } catch (const cRuntimeError&) {}
+    EV << "done" << endl;
+}
+
+%contains: stdout
+done

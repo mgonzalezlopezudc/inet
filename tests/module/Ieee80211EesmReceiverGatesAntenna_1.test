@@ -1,0 +1,143 @@
+%description:
+The published BCC beta calibration is SISO.  This focused negative module
+fixture reaches the packet error model with a two-antenna receiver and checks
+that the immutable antenna-cardinality proxy rejects the unsupported chain.
+
+%file: test.ned
+
+import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
+import inet.node.inet.AdhocHost;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211DimensionalRadioMedium;
+
+network EesmReceiverAntennaRejectTest
+{
+    submodules:
+        radioMedium: Ieee80211DimensionalRadioMedium;
+        configurator: Ipv4NetworkConfigurator;
+        sender: AdhocHost;
+        receiver: AdhocHost;
+}
+
+%file: manifest.json
+{
+  "schemaVersion": "1",
+  "perTableSha256": "254026038873077b5144f4a23ec380e3b62992f00e65a2e90798a4e719efd9b2",
+  "betaTableSha256": "441389621258f397f651fd2e4247e21ac996eaec167efb99a7cbeb1f86492cf8",
+  "awgn": {
+    "schemaVersion": "1",
+    "observationsSha256": "254026038873077b5144f4a23ec380e3b62992f00e65a2e90798a4e719efd9b2",
+    "scope": "synthetic HT20 SISO BCC integration fixture",
+    "snrDefinition": "receiver-domain dimensional SNIR",
+    "psduLengthDefinition": "MAC PSDU octets",
+    "provenance": {
+      "method": "deterministic synthetic integration fixture",
+      "campaignId": "synthetic-eesm-module-v1",
+      "generatedDataLicense": "test-only",
+      "reviewedBy": "focused regression fixture",
+      "sourceDocuments": [
+        {"id": "patidar2017", "sha256": "a428fdcaa4423f331e3bd02044345ec4305ee54056c319404a897e713cdab16e"},
+        {"id": "ieee80211-2024", "sha256": "c08beb0e16bf8c36465a331d349dd8b8ea79b28d4a320288312ddeb5ce8d9bb1"}
+      ],
+      "forbiddenSourcesUsed": [],
+      "licenseApproved": true,
+      "cleanRoomVerified": true
+    },
+    "providerTool": {
+      "name": "synthetic-fixture",
+      "version": "1",
+      "gitCommit": "fixture",
+      "executableSha256": "441389621258f397f651fd2e4247e21ac996eaec167efb99a7cbeb1f86492cf8",
+      "toolchain": "repository test harness",
+      "configurationSha256": "254026038873077b5144f4a23ec380e3b62992f00e65a2e90798a4e719efd9b2"
+    },
+    "review": {"status": "approved", "reviewer": "focused regression fixture", "record": "synthetic"}
+  },
+  "beta": {
+    "schemaVersion": "1",
+    "tableSha256": "441389621258f397f651fd2e4247e21ac996eaec167efb99a7cbeb1f86492cf8",
+    "publicationSha256": "a428fdcaa4423f331e3bd02044345ec4305ee54056c319404a897e713cdab16e",
+    "calibrationSet": "patidar2017-bcc-d20",
+    "coding": "BCC",
+    "carrierSet": "dataOnly",
+    "ht20DataCarriers": 52,
+    "ht40DataCarriers": 108,
+    "sourceTable": "Patidar et al. Table 1, Model D, BCC MCS 0-7",
+    "citation": "M. Patidar et al., Link-to-System Mapping for ns-3 Wi-Fi OFDM Error Models, WNS3 2017",
+    "generatedDataLicense": "test-only synthetic fixture using versioned beta artifact",
+    "reviewedBy": "focused regression fixture",
+    "sourceRows": [
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "Patidar et al. Table 1, Model D, BCC MCS 0-7", "mcs": 0},
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "Patidar et al. Table 1, Model D, BCC MCS 0-7", "mcs": 1},
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "Patidar et al. Table 1, Model D, BCC MCS 0-7", "mcs": 2},
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "Patidar et al. Table 1, Model D, BCC MCS 0-7", "mcs": 3},
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "Patidar et al. Table 1, Model D, BCC MCS 0-7", "mcs": 4},
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "Patidar et al. Table 1, Model D, BCC MCS 0-7", "mcs": 5},
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "Patidar et al. Table 1, Model D, BCC MCS 0-7", "mcs": 6},
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "Patidar et al. Table 1, Model D, BCC MCS 0-7", "mcs": 7}
+    ],
+    "licenseApproved": true,
+    "cleanRoomVerified": true,
+    "review": {"status": "approved", "reviewer": "focused regression fixture", "record": "synthetic"}
+  }
+}
+
+%inifile: omnetpp.ini
+
+[General]
+record-vector-results = false
+network = EesmReceiverAntennaRejectTest
+sim-time-limit = 5ms
+cmdenv-express-mode = false
+ned-path = .;../../../../src;../../lib
+
+**.arp.typename = "GlobalArp"
+*.sender.ipv4.ip.limitedBroadcast = true
+**.mobility.typename = "StationaryMobility"
+**.mobility.initFromDisplayString = false
+**.sender.mobility.initialX = 0m
+**.sender.mobility.initialY = 0m
+**.receiver.mobility.initialX = 0m
+**.receiver.mobility.initialY = 0m
+**.wlan[*].radio.antenna.mobility.initFromDisplayString = false
+**.wlan[*].radio.antenna.mobility.initialX = 0m
+**.wlan[*].radio.antenna.mobility.initialY = 0m
+
+**.wlan[*].radio.typename = "Ieee80211DimensionalRadio"
+**.wlan[*].opMode = "n(mixed-2.4Ghz)"
+**.wlan[*].radio.opMode = "n(mixed-2.4Ghz)"
+**.wlan[*].radio.bandName = "2.4 GHz"
+**.wlan[*].bitrate = 6.5Mbps
+**.wlan[*].radio.transmitter.bitrate = 6.5Mbps
+**.wlan[*].radio.transmitter.dimensionalSpectrumMode = "occupiedSubcarriers"
+**.wlan[*].radio.transmitter.power = 1000mW
+**.wlan[*].radio.receiver.sensitivity = -90dBm
+**.wlan[*].radio.receiver.energyDetection = -90dBm
+**.wlan[*].radio.receiver.snirThreshold = -100dB
+**.wlan[*].radio.receiver.snirThresholdMode = "mean"
+**.radioMedium.backgroundNoise.power = -120dBm
+
+**.wlan[*].radio.receiver.errorModel.typename = "Ieee80211EesmErrorModel"
+**.wlan[*].radio.receiver.errorModel.perTableFile = "../../data/Ieee80211Eesm.synthetic.csv"
+**.wlan[*].radio.receiver.errorModel.betaTableFile = "../../data/Ieee80211Eesm.synthetic-beta.csv"
+**.wlan[*].radio.receiver.errorModel.calibrationSet = "patidar2017-bcc-d20"
+**.wlan[*].radio.receiver.errorModel.perTableManifest = readJSON("manifest.json")
+
+**.receiver.wlan[*].radio.antenna.numAntennas = 2
+
+*.receiver.numApps = 1
+*.receiver.app[0].typename = "UdpSink"
+*.receiver.app[0].localPort = 1000
+*.receiver.app[0].receiveBroadcast = true
+
+*.sender.numApps = 1
+*.sender.app[0].typename = "UdpBasicApp"
+*.sender.app[0].destAddresses = "255.255.255.255"
+*.sender.app[0].destPort = 1000
+*.sender.app[0].messageLength = 100B
+*.sender.app[0].sendInterval = 1s
+*.sender.app[0].startTime = 1ms
+*.sender.app[0].stopTime = 2ms
+
+%exitcode: 1
+%contains-regex: stderr
+Ieee80211EesmErrorModel supports one receive antenna, got 2

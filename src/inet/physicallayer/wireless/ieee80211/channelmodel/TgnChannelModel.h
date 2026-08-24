@@ -37,6 +37,8 @@ class INET_API TgnChannelModel : public Module, public IWidebandChannelModel
     bool timeVariation = true;
     bool vehicleEffect = true;
     bool fluorescentEffect = true;
+    bool shadowing = true;
+    bool ensembleNormalization = false;
     double fluorescentMainsFrequencyHz = NaN;
     double environmentalSpeedMps = NaN;
     double vehicleSpeedMps = NaN;

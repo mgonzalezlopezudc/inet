@@ -5,6 +5,7 @@
 #ifndef __INET_CHANNELMATRIXCOMBINER_H
 #define __INET_CHANNELMATRIXCOMBINER_H
 
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ComplexMatrix.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IChannelMatrixSnapshot.h"
 
 namespace inet {

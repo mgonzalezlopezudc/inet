@@ -145,6 +145,22 @@ realization.fixedLosMatrix = ComplexMatrix(1, 1, {{1, 0}});
 auto withLos = TgnMimoChannel::evaluate(realization, 0, GHz(5));
 require(std::abs(withLos.get(0, 0) - (std::sqrt(2.0) + std::sqrt(2.0))) < 1e-12, "LOS addition");
 
+// Calibration-only ensemble normalization is one deterministic profile
+// factor: it preserves the realization's fading draw instead of normalizing
+// each response independently.
+realization.smallScalePowerNormalization = 1 / std::sqrt(1 + realization.firstTapKLinear * realization.firstTapDiffusePower);
+auto normalizedWithLos = TgnMimoChannel::evaluate(realization, 0, GHz(5));
+require(std::abs(normalizedWithLos.get(0, 0) - (std::sqrt(2.0) + std::sqrt(2.0)) / std::sqrt(3.0)) < 1e-12,
+    "whole-small-scale-profile ensemble normalization");
+realization.smallScalePowerNormalization = 1;
+realization.shadowingPowerGain = 1;
+auto shadowingDisabled = TgnMimoChannel::evaluate(realization, 0, GHz(5));
+realization.shadowingPowerGain = 4;
+auto shadowingEnabled = TgnMimoChannel::evaluate(realization, 0, GHz(5));
+require(std::abs(shadowingEnabled.get(0, 0) / shadowingDisabled.get(0, 0) - 2.0) < 1e-12,
+    "shadowing gain boundary");
+realization.shadowingPowerGain = 1;
+
 // INET policy: all affected components use one shared fluorescent function.
 realization.fluorescent = true;
 realization.fluorescentMainsFrequencyHz = 50;

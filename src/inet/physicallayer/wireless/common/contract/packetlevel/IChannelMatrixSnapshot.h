@@ -5,39 +5,17 @@
 #ifndef __INET_ICHANNELMATRIXSNAPSHOT_H
 #define __INET_ICHANNELMATRIXSNAPSHOT_H
 
-#include <complex>
 #include <memory>
-#include <vector>
 
 #include "inet/common/INETDefs.h"
 #include "inet/common/IPrintableObject.h"
 #include "inet/common/Units.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ComplexMatrix.h"
 
 namespace inet {
 namespace physicallayer {
 
 using namespace inet::units::values;
-
-class INET_API ComplexMatrix
-{
-  protected:
-    int numRows = 0;
-    int numColumns = 0;
-    std::vector<std::complex<double>> coefficients;
-
-  public:
-    ComplexMatrix() = default;
-    ComplexMatrix(int numRows, int numColumns);
-    ComplexMatrix(int numRows, int numColumns, const std::vector<std::complex<double>>& coefficients);
-
-    int getNumRows() const { return numRows; }
-    int getNumColumns() const { return numColumns; }
-    const std::vector<std::complex<double>>& getCoefficients() const { return coefficients; }
-    const std::complex<double>& get(int row, int column) const;
-    std::complex<double>& get(int row, int column);
-    bool isFinite() const;
-    ComplexMatrix transpose() const;
-};
 
 class INET_API IChannelMatrixSnapshot : public virtual IPrintableObject
 {

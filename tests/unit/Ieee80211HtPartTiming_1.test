@@ -1,0 +1,79 @@
+%description:
+HT signal-part boundary regression.  IEEE Std 802.11-2024 Clause 19.3.7
+Figure 19-4 and Equations (19-2),(19-3) are the field-order authority.
+
+%includes:
+#include <array>
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%activity:
+{
+    const std::array<const Ieee80211Htmcs *, 4> mcsModes = {
+        &Ieee80211HtmcsTable::htMcs0BW20MHz, &Ieee80211HtmcsTable::htMcs7BW20MHz,
+        &Ieee80211HtmcsTable::htMcs0BW40MHz, &Ieee80211HtmcsTable::htMcs7BW40MHz};
+    for (const auto *mcs : mcsModes) {
+        for (auto preambleFormat : {Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211HtPreambleMode::HT_PREAMBLE_GREENFIELD}) {
+            for (auto guardInterval : {Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG, Ieee80211HtModeBase::HT_GUARD_INTERVAL_SHORT}) {
+                const auto *mode = Ieee80211HtCompliantModes::getCompliantMode(mcs,
+                    mcs->getBandwidth() == MHz(20) ? Ieee80211HtMode::BAND_2_4GHZ : Ieee80211HtMode::BAND_5GHZ,
+                    preambleFormat, guardInterval);
+                const auto fields = mode->getPreambleMode()->getPreDataFieldDurations();
+                const auto parts = mode->getSignalPartDurations(B(1));
+                const auto multiSymbolParts = mode->getSignalPartDurations(B(1000));
+                ASSERT(fields.numberOfHtLtf > 0);
+                ASSERT(parts.getDuration() == mode->getDuration(B(1)));
+                ASSERT(parts.dataDuration == mode->getDataMode()->getDuration(B(1)));
+                ASSERT(multiSymbolParts.dataDuration == mode->getDataMode()->getDuration(B(1000)));
+                ASSERT(parts.preambleDuration + parts.headerDuration == fields.getDuration());
+                ASSERT(fields.htSigDuration == mode->getHeaderMode()->getDuration());
+                ASSERT(fields.htSigDuration == simtime_t(8e-6));
+                if (preambleFormat == Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED) {
+                    ASSERT(parts.preambleDuration == fields.lStfDuration + fields.lLtfDuration + fields.lSigDuration);
+                    ASSERT(parts.headerDuration == fields.htSigDuration + fields.htStfDuration + fields.htLtf1Duration + fields.htLtfSubsequentDuration * (fields.numberOfHtLtf - 1));
+                    ASSERT(fields.lSigDuration > SIMTIME_ZERO);
+                    ASSERT(parts.preambleDuration + parts.headerDuration == simtime_t(36e-6));
+                }
+                else {
+                    ASSERT(parts.preambleDuration == fields.htGfStfDuration + fields.htLtf1Duration);
+                    ASSERT(parts.headerDuration == fields.htSigDuration + fields.htLtfSubsequentDuration * (fields.numberOfHtLtf - 1));
+                    ASSERT(fields.lStfDuration == SIMTIME_ZERO && fields.lLtfDuration == SIMTIME_ZERO && fields.lSigDuration == SIMTIME_ZERO);
+                    ASSERT(parts.preambleDuration + parts.headerDuration == simtime_t(24e-6));
+                }
+            }
+        }
+    }
+
+    // The HT-LTF count is derived from the valid NSS cases (Clause 19.3.9.4.6):
+    // NSS 2 uses two HT-LTFs, while NSS 3 and 4 use four.
+    const std::array<const Ieee80211Htmcs *, 3> multiStreamModes = {
+        &Ieee80211HtmcsTable::htMcs8BW20MHz, &Ieee80211HtmcsTable::htMcs16BW20MHz,
+        &Ieee80211HtmcsTable::htMcs24BW20MHz};
+    const std::array<unsigned int, 3> expectedLtfCounts = {2, 4, 4};
+    for (size_t i = 0; i < multiStreamModes.size(); i++) {
+        const auto *mode = Ieee80211HtCompliantModes::getCompliantMode(multiStreamModes[i], Ieee80211HtMode::BAND_5GHZ,
+            Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+        const auto fields = mode->getPreambleMode()->getPreDataFieldDurations();
+        ASSERT(fields.numberOfHtLtf == expectedLtfCounts[i]);
+        const auto parts = mode->getSignalPartDurations(B(1000));
+        ASSERT(parts.preambleDuration + parts.headerDuration == simtime_t(36e-6) + simtime_t(4e-6) * (expectedLtfCounts[i] - 1));
+        ASSERT(parts.headerDuration == fields.htSigDuration + fields.htStfDuration + fields.htLtf1Duration +
+            fields.htLtfSubsequentDuration * (fields.numberOfHtLtf - 1));
+    }
+
+    // Cache identity includes center-frequency mode and preamble format.
+    const auto *mixed24 = Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs0BW20MHz,
+        Ieee80211HtMode::BAND_2_4GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+    const auto *mixed5 = Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs0BW20MHz,
+        Ieee80211HtMode::BAND_5GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+    const auto *green24 = Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs0BW20MHz,
+        Ieee80211HtMode::BAND_2_4GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_GREENFIELD, Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+    ASSERT(mixed24 != mixed5);
+    ASSERT(mixed24 != green24);
+    EV << "done" << endl;
+}
+
+%contains: stdout
+done

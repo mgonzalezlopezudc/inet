@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //
 
-#include "inet/physicallayer/wireless/common/contract/packetlevel/IChannelMatrixSnapshot.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ComplexMatrix.h"
 
 #include <cmath>
 

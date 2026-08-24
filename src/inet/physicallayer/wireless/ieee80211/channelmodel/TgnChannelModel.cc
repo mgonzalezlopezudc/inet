@@ -125,6 +125,8 @@ void TgnChannelModel::initialize(int stage)
         timeVariation = par("timeVariation");
         vehicleEffect = par("vehicleEffect");
         fluorescentEffect = par("fluorescentEffect");
+        shadowing = par("shadowing");
+        ensembleNormalization = par("ensembleNormalization");
         fluorescentMainsFrequencyHz = Hz(par("fluorescentMainsFrequency")).get();
         environmentalSpeedMps = mps(par("environmentalSpeed")).get();
         vehicleSpeedMps = mps(par("vehicleSpeed")).get();
@@ -272,11 +274,23 @@ std::shared_ptr<const TgnChannelRealization> TgnChannelModel::createLinkState(co
     realization->firstTapKLinear = profile.getFirstTapKLinear();
     realization->firstTapDiffusePower = profile.getFirstTapComponent().normalizedLinearPower;
     {
-        auto rng = makeRng(shadowingFamilySeed, -1, -1, -1, "shadowing");
-        const double sigmaDb = realization->los ? profile.getShadowSigmaLosDb() : profile.getShadowSigmaNlosDb();
-        const double shadowDb = omnetpp::normal(rng.get(), 0, sigmaDb);
-        realization->shadowingPowerGain = std::pow(10.0, -shadowDb / 10.0);
+        if (!shadowing) {
+            realization->shadowingPowerGain = 1;
+        }
+        else {
+            auto rng = makeRng(shadowingFamilySeed, -1, -1, -1, "shadowing");
+            const double sigmaDb = realization->los ? profile.getShadowSigmaLosDb() : profile.getShadowSigmaNlosDb();
+            const double shadowDb = omnetpp::normal(rng.get(), 0, sigmaDb);
+            realization->shadowingPowerGain = std::pow(10.0, -shadowDb / 10.0);
+        }
     }
+
+    // The TGn LOS construction adds sqrt(K*p0) to the diffuse first tap.
+    // Normalize the expected complete small-scale profile once, using the
+    // deterministic profile factor 1/sqrt(1+K*p0). Individual realizations
+    // retain their natural fading variance.
+    realization->smallScalePowerNormalization = ensembleNormalization && realization->los ?
+        1.0 / std::sqrt(1.0 + realization->firstTapKLinear * realization->firstTapDiffusePower) : 1.0;
 
     std::map<int, std::pair<ComplexMatrix, ComplexMatrix>> squareRoots;
     for (const auto& cluster : profile.getClusters()) {

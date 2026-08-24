@@ -13,10 +13,16 @@
 
 #define DI    DelayedInitializer
 
+#include <algorithm>
+#include <memory>
+#include <set>
+
 #include "inet/common/DelayedInitializer.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtCode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211OfdmMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211OfdmSubcarrierPlan.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"
+#include "inet/physicallayer/wireless/common/analogmodel/common/TransmissionSpectrum.h"
 
 namespace inet {
 namespace physicallayer {
@@ -131,6 +137,47 @@ class INET_API Ieee80211HtPreambleMode : public IIeee80211PreambleMode, public I
         HT_PREAMBLE_GREENFIELD // all of the non-HT fields are omitted
     };
 
+    /**
+     * Immutable named breakdown of the physical fields before the HT Data
+     * field. Inactive fields for a preamble format have zero duration.
+     * IEEE Std 802.11-2024 Clause 19.3.7, Figure 19-4, and (19-2)/(19-3)
+     * define the ordering represented here.
+     */
+    struct INET_API PreDataFieldDurations
+    {
+        const simtime_t lStfDuration;
+        const simtime_t lLtfDuration;
+        const simtime_t lSigDuration;
+        const simtime_t htGfStfDuration;
+        const simtime_t htSigDuration;
+        const simtime_t htStfDuration;
+        const simtime_t htLtf1Duration;
+        const simtime_t htLtfSubsequentDuration;
+        const unsigned int numberOfHtLtf;
+
+        PreDataFieldDurations(simtime_t lStfDuration, simtime_t lLtfDuration, simtime_t lSigDuration,
+                simtime_t htGfStfDuration, simtime_t htSigDuration, simtime_t htStfDuration,
+                simtime_t htLtf1Duration, simtime_t htLtfSubsequentDuration, unsigned int numberOfHtLtf) :
+            lStfDuration(lStfDuration),
+            lLtfDuration(lLtfDuration),
+            lSigDuration(lSigDuration),
+            htGfStfDuration(htGfStfDuration),
+            htSigDuration(htSigDuration),
+            htStfDuration(htStfDuration),
+            htLtf1Duration(htLtf1Duration),
+            htLtfSubsequentDuration(htLtfSubsequentDuration),
+            numberOfHtLtf(numberOfHtLtf)
+        {
+            if (numberOfHtLtf == 0)
+                throw cRuntimeError("HT pre-Data field breakdown requires at least one HT-LTF");
+        }
+
+        simtime_t getDuration() const {
+            return lStfDuration + lLtfDuration + lSigDuration + htGfStfDuration + htSigDuration + htStfDuration +
+                   htLtf1Duration + htLtfSubsequentDuration * (numberOfHtLtf - 1);
+        }
+    };
+
   protected:
     const Ieee80211HtSignalMode *highThroughputSignalMode; // In HT-terminology the HT-SIG (signal field) and L-SIG are part of the preamble
     const Ieee80211OfdmSignalMode *legacySignalMode; // L-SIG
@@ -159,6 +206,7 @@ class INET_API Ieee80211HtPreambleMode : public IIeee80211PreambleMode, public I
     virtual const simtime_t getFirstHTLongTrainingFieldDuration() const;
     virtual const simtime_t getSecondAndSubsequentHTLongTrainingFielDuration() const { return 4E-6; } // HT-LTFs, s = 2,3,..,n
     virtual unsigned int getNumberOfHtLongTrainings() const { return numberOfHTLongTrainings; }
+    virtual PreDataFieldDurations getPreDataFieldDurations() const;
 
     virtual const simtime_t getDuration() const override;
 
@@ -197,11 +245,15 @@ class INET_API Ieee80211Htmcs
 
 };
 
-class INET_API Ieee80211HtDataMode : public IIeee80211DataMode, public Ieee80211HtModeBase, public Ieee80211HtTimingRelatedParametersBase
+class INET_API Ieee80211HtDataMode : public IIeee80211DataMode, public Ieee80211HtModeBase, public Ieee80211HtTimingRelatedParametersBase, public IIeee80211HtDataMode
 {
   protected:
     const Ieee80211Htmcs *modulationAndCodingScheme;
     const unsigned int numberOfBccEncoders;
+    mutable std::unique_ptr<std::vector<Ieee80211OfdmSubcarrier>> subcarriers;
+    mutable std::unique_ptr<TransmissionSpectrum> equalPowerSpectrum;
+
+    void ensureSubcarrierPlan() const;
 
   protected:
     bps computeGrossBitrate() const override;
@@ -216,6 +268,7 @@ class INET_API Ieee80211HtDataMode : public IIeee80211DataMode, public Ieee80211
     b getTailFieldLength() const { return b(6) * numberOfBccEncoders; }
 
     virtual Hz getBandwidth() const override { return bandwidth; }
+    virtual unsigned int getMcsIndex() const override { return Ieee80211HtModeBase::getMcsIndex(); }
     virtual int getNumberOfSpatialStreams() const override { return Ieee80211HtModeBase::getNumberOfSpatialStreams(); }
     virtual b getPaddingLength(b dataLength) const override { return b(0); }
     virtual b getCompleteLength(b dataLength) const override;
@@ -225,8 +278,15 @@ class INET_API Ieee80211HtDataMode : public IIeee80211DataMode, public Ieee80211
     virtual bps getGrossBitrate() const override { return Ieee80211HtModeBase::getGrossBitrate(); }
     virtual const Ieee80211Htmcs *getModulationAndCodingScheme() const { return modulationAndCodingScheme; }
     virtual const Ieee80211HtCode *getCode() const { return modulationAndCodingScheme->getCode(); }
+    virtual bool isBcc() const override { return getCode() != nullptr && getCode()->getForwardErrorCorrection() != nullptr; }
     virtual const simtime_t getSymbolInterval() const override { return Ieee80211HtTimingRelatedParametersBase::getSymbolInterval(); }
     virtual const Ieee80211OfdmModulation *getModulation() const override { return modulationAndCodingScheme->getModulation(); }
+    virtual const std::vector<Ieee80211OfdmSubcarrier>& getSubcarriers() const override;
+    virtual const ITransmissionSpectrum& getEqualPowerSpectrum() const override;
+    virtual int getNumberOfDataSubcarriers() const override { return Ieee80211HtModeBase::getNumberOfDataSubcarriers(); }
+    virtual int getNumberOfPilotSubcarriers() const override { return Ieee80211HtModeBase::getNumberOfPilotSubcarriers(); }
+    virtual int getNumberOfTotalSubcarriers() const override { return Ieee80211HtModeBase::getNumberOfTotalSubcarriers(); }
+    virtual Hz getSubcarrierFrequencySpacing() const override { return Hz(312500); }
 };
 
 class INET_API Ieee80211HtMode : public Ieee80211ModeBase
@@ -245,6 +305,8 @@ class INET_API Ieee80211HtMode : public Ieee80211ModeBase
   protected:
     virtual int getLegacyCwMin() const override { return 15; }
     virtual int getLegacyCwMax() const override { return 1023; }
+    /** Single production authority for the HT pre-Data field chronology. */
+    virtual Ieee80211SignalPartDurations getHtPreDataSignalPartDurations() const;
 
   public:
     Ieee80211HtMode(const char *name, const Ieee80211HtPreambleMode *preambleMode, const Ieee80211HtDataMode *dataMode, const BandMode centerFrequencyMode);
@@ -268,7 +330,9 @@ class INET_API Ieee80211HtMode : public Ieee80211ModeBase
     virtual int getMpduMaxLength() const override { return 65535; } // in octets
     virtual BandMode getCenterFrequencyMode() const { return centerFrequencyMode; }
 
-    virtual const simtime_t getDuration(b dataLength) const override { return preambleMode->getDuration() + dataMode->getDuration(dataLength, getHeaderMode()->getSTBC()); }
+    virtual Ieee80211SignalPartDurations getSignalPartDurations(b dataLength) const override;
+
+    virtual const simtime_t getDuration(b dataLength) const override;
 };
 
 // A specification of the high-throughput (HT) physical layer (PHY)

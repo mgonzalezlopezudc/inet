@@ -1,0 +1,68 @@
+{
+  "schemaVersion": "1",
+  "artifactAcceptanceMode": "userAuthorizedLocal",
+  "perTableSha256": "254026038873077b5144f4a23ec380e3b62992f00e65a2e90798a4e719efd9b2",
+  "betaTableSha256": "441389621258f397f651fd2e4247e21ac996eaec167efb99a7cbeb1f86492cf8",
+  "deploymentScope": "localEvaluationOnly",
+  "localAuthorization": {
+    "authorizedBy": "synthetic regression fixture",
+    "authorizationDate": "2026-01-01",
+    "authorizationRecord": "committed test fixture authorization",
+    "sourceRecord": "synthetic fixture; no external custody or redistribution claim",
+    "ht40TableAssumption": "synthetic fixture uses explicit HT40 rows",
+    "rawCountsStatus": "notApplicable",
+    "snrNormalizationStatus": "notApplicable",
+    "providerStatus": "notApplicable",
+    "cleanRoomStatus": "notApplicable",
+    "licenseStatus": "granted"
+  },
+  "limitations": [
+    "Synthetic fixture exercises policy validation only.",
+    "It is not an AWGN calibration or publication reproduction."
+  ],
+  "awgn": {
+    "schemaVersion": "1",
+    "observationsStatus": "notApplicable",
+    "scope": "synthetic HT20/HT40 BCC SISO regression table",
+    "snrDefinition": "synthetic test values",
+    "psduLengthDefinition": "synthetic test values",
+    "provenance": {
+      "method": "synthetic local regression fixture",
+      "campaignId": "synthetic-eesm-module-v1",
+      "generatedDataLicense": "LGPL-3.0-or-later",
+      "reviewedBy": "notApplicable",
+      "sourceDocuments": [],
+      "forbiddenSourcesUsed": [],
+      "rawPacketCounts": "notApplicable",
+      "snrNormalization": "notApplicable",
+      "provider": "notApplicable"
+    }
+  },
+  "beta": {
+    "schemaVersion": "1",
+    "tableSha256": "441389621258f397f651fd2e4247e21ac996eaec167efb99a7cbeb1f86492cf8",
+    "publicationStatus": "notApplicable",
+    "calibrationSet": "patidar2017-bcc-d20",
+    "coding": "BCC",
+    "carrierSet": "dataOnly",
+    "ht20DataCarriers": 52,
+    "ht40DataCarriers": 108,
+    "sourceTable": "synthetic regression fixture",
+    "citation": "synthetic test fixture",
+    "generatedDataLicense": "LGPL-3.0-or-later",
+    "reviewedBy": "focused regression fixture",
+    "reviewStatus": "notApplicable",
+    "licenseStatus": "granted",
+    "cleanRoomStatus": "notApplicable",
+    "sourceRows": [
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "synthetic regression fixture", "mcs": 0},
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "synthetic regression fixture", "mcs": 1},
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "synthetic regression fixture", "mcs": 2},
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "synthetic regression fixture", "mcs": 3},
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "synthetic regression fixture", "mcs": 4},
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "synthetic regression fixture", "mcs": 5},
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "synthetic regression fixture", "mcs": 6},
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "synthetic regression fixture", "mcs": 7}
+    ]
+  }
+}

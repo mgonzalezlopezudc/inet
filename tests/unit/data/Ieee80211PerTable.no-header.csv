@@ -1,0 +1,3 @@
+# Synthetic malformed fixture: schema header is intentionally absent.
+BCC,20,0,32,-10,0.5
+BCC,20,0,32,10,0.01

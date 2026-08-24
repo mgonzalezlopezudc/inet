@@ -21,10 +21,17 @@ class INET_API Ieee80211ModeBase : public IIeee80211Mode
   public:
     Ieee80211ModeBase(const char *name) : name(name) {}
     virtual const char *getName() const override { return name.c_str(); }
+    virtual Ieee80211SignalPartDurations getSignalPartDurations(b dataLength) const override {
+        const auto preambleDuration = getPreambleMode()->getDuration();
+        const auto headerDuration = getHeaderMode()->getDuration();
+        const auto dataDuration = getDuration(dataLength) - preambleDuration - headerDuration;
+        if (dataDuration < SIMTIME_ZERO)
+            throw cRuntimeError("Mode '%s' has a negative residual Data duration", getName());
+        return Ieee80211SignalPartDurations(preambleDuration, headerDuration, dataDuration);
+    }
 };
 
 } /* namespace physicallayer */
 } /* namespace inet */
 
 #endif
-

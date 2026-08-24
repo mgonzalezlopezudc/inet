@@ -9,15 +9,29 @@
 #define __INET_DIMENSIONALTRANSMISSIONANALOGMODEL_H
 
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalSignalAnalogModel.h"
+#include "inet/physicallayer/wireless/common/analogmodel/common/TransmissionSpectrum.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IPartitionedTransmissionSpectrum.h"
+
+#include <memory>
 
 namespace inet {
 
 namespace physicallayer {
 
-class INET_API DimensionalTransmissionAnalogModel : public DimensionalSignalAnalogModel, public virtual ITransmissionAnalogModel
+class INET_API DimensionalTransmissionAnalogModel : public DimensionalSignalAnalogModel, public virtual ITransmissionAnalogModel, public IPartitionedTransmissionSpectrum
 {
+  protected:
+    const std::unique_ptr<const TransmissionSpectrum> preambleSpectrum;
+    const std::unique_ptr<const TransmissionSpectrum> headerSpectrum;
+    const std::unique_ptr<const TransmissionSpectrum> dataSpectrum;
+
   public:
     DimensionalTransmissionAnalogModel(const simtime_t preambleDuration, const simtime_t headerDuration, const simtime_t dataDuration, Hz centerFrequency, Hz bandwidth, const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power);
+    DimensionalTransmissionAnalogModel(const simtime_t preambleDuration, const simtime_t headerDuration, const simtime_t dataDuration, Hz centerFrequency, Hz bandwidth, const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power, const ITransmissionSpectrum *preambleSpectrum, const ITransmissionSpectrum *headerSpectrum, const ITransmissionSpectrum *dataSpectrum);
+
+    virtual const ITransmissionSpectrum *getPreambleSpectrum() const override { return preambleSpectrum.get(); }
+    virtual const ITransmissionSpectrum *getHeaderSpectrum() const override { return headerSpectrum.get(); }
+    virtual const ITransmissionSpectrum *getDataSpectrum() const override { return dataSpectrum.get(); }
 };
 
 } // namespace physicallayer
@@ -25,4 +39,3 @@ class INET_API DimensionalTransmissionAnalogModel : public DimensionalSignalAnal
 } // namespace inet
 
 #endif
-

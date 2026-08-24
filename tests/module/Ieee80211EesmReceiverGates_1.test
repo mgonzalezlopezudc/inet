@@ -1,0 +1,318 @@
+%description:
+The reviewed Patidar beta calibration is one transmit/one receive chain.
+This integration uses the complete synthetic PER fixture with one antenna
+and one broadcast transmission.  Three receivers share the same occupied
+signal but use low-clamped, interior, and high-clamped effective SNIR; their
+receiver-owned RNG streams are mapped to dedicated global streams.  The
+inline probe records cRNG::getNumbersDrawn() at the last initialization stage
+and at finish, asserting that FlatReceiverBase makes no draw for PER 1 or 0
+and exactly one draw for an interior PER.  The separate EesmErrorModel module
+fixture covers mean-admission and successful packet delivery.
+
+%file: test.ned
+
+import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
+import inet.node.inet.AdhocHost;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211DimensionalRadioMedium;
+
+simple EesmRngProbe
+{
+    parameters:
+        @class(::Ieee80211EesmReceiverGates_1::EesmRngProbe);
+}
+
+network EesmReceiverGateTest
+{
+    submodules:
+        radioMedium: Ieee80211DimensionalRadioMedium;
+        configurator: Ipv4NetworkConfigurator;
+        sender: AdhocHost;
+        receiverPerOne: AdhocHost;
+        receiverInterior: AdhocHost;
+        receiverPerZero: AdhocHost;
+        receiverMin: AdhocHost;
+        receiverSensitivityAccept: AdhocHost;
+        receiverSensitivityReject: AdhocHost;
+        receiverEnergyAccept: AdhocHost;
+        receiverEnergyReject: AdhocHost;
+        rngProbe: EesmRngProbe;
+}
+
+%file: test.cc
+
+#include <cstdint>
+
+#include <omnetpp.h>
+
+#include "inet/common/InitStages.h"
+
+using namespace omnetpp;
+using namespace inet;
+
+namespace Ieee80211EesmReceiverGates_1 {
+
+class EesmRngProbe : public cSimpleModule
+{
+  private:
+    cRNG *perOneRng = nullptr;
+    cRNG *interiorRng = nullptr;
+    cRNG *perZeroRng = nullptr;
+    uint64_t perOneBefore = 0;
+    uint64_t interiorBefore = 0;
+    uint64_t perZeroBefore = 0;
+
+  protected:
+    virtual int numInitStages() const override { return NUM_INIT_STAGES; }
+
+    virtual void initialize(int stage) override
+    {
+        if (stage == INITSTAGE_LAST) {
+            perOneRng = getSimulation()->getModuleByPath("receiverPerOne.wlan[0].radio.receiver")->getRNG(0);
+            interiorRng = getSimulation()->getModuleByPath("receiverInterior.wlan[0].radio.receiver")->getRNG(0);
+            perZeroRng = getSimulation()->getModuleByPath("receiverPerZero.wlan[0].radio.receiver")->getRNG(0);
+            perOneBefore = perOneRng->getNumbersDrawn();
+            interiorBefore = interiorRng->getNumbersDrawn();
+            perZeroBefore = perZeroRng->getNumbersDrawn();
+            EV_INFO << "EESM RNG baselines perOne=" << perOneBefore
+                    << " interior=" << interiorBefore
+                    << " perZero=" << perZeroBefore << endl;
+            EV_INFO << "Receiver gate thresholds sensitivityAccept="
+                    << getSimulation()->getModuleByPath("receiverSensitivityAccept.wlan[0].radio.receiver")->par("sensitivity").doubleValue()
+                    << " sensitivityReject="
+                    << getSimulation()->getModuleByPath("receiverSensitivityReject.wlan[0].radio.receiver")->par("sensitivity").doubleValue()
+                    << " energyAccept="
+                    << getSimulation()->getModuleByPath("receiverEnergyAccept.wlan[0].radio.receiver")->par("energyDetection").doubleValue()
+                    << " energyReject="
+                    << getSimulation()->getModuleByPath("receiverEnergyReject.wlan[0].radio.receiver")->par("energyDetection").doubleValue() << endl;
+            EV_INFO << "Receiver SNIR modes min="
+                    << getSimulation()->getModuleByPath("receiverMin.wlan[0].radio.receiver")->par("snirThresholdMode").stringValue()
+                    << " mean="
+                    << getSimulation()->getModuleByPath("receiverPerZero.wlan[0].radio.receiver")->par("snirThresholdMode").stringValue() << endl;
+        }
+    }
+
+    virtual void finish() override
+    {
+        const auto perOneDraws = perOneRng->getNumbersDrawn() - perOneBefore;
+        const auto interiorDraws = interiorRng->getNumbersDrawn() - interiorBefore;
+        const auto perZeroDraws = perZeroRng->getNumbersDrawn() - perZeroBefore;
+        EV_INFO << "EESM RNG draws perOne=" << perOneDraws
+                << " interior=" << interiorDraws
+                << " perZero=" << perZeroDraws << endl;
+        ASSERT(perOneDraws == 0);
+        ASSERT(interiorDraws == 1);
+        ASSERT(perZeroDraws == 0);
+    }
+};
+
+Define_Module(EesmRngProbe);
+
+} // namespace Ieee80211EesmReceiverGates_1
+
+%file: manifest.json
+{
+  "schemaVersion": "1",
+  "perTableSha256": "254026038873077b5144f4a23ec380e3b62992f00e65a2e90798a4e719efd9b2",
+  "betaTableSha256": "441389621258f397f651fd2e4247e21ac996eaec167efb99a7cbeb1f86492cf8",
+  "awgn": {
+    "schemaVersion": "1",
+    "observationsSha256": "254026038873077b5144f4a23ec380e3b62992f00e65a2e90798a4e719efd9b2",
+    "scope": "synthetic HT20 SISO BCC integration fixture",
+    "snrDefinition": "receiver-domain dimensional SNIR",
+    "psduLengthDefinition": "MAC PSDU octets",
+    "provenance": {
+      "method": "deterministic synthetic integration fixture",
+      "campaignId": "synthetic-eesm-module-v1",
+      "generatedDataLicense": "test-only",
+      "reviewedBy": "focused regression fixture",
+      "sourceDocuments": [
+        {"id": "patidar2017", "sha256": "a428fdcaa4423f331e3bd02044345ec4305ee54056c319404a897e713cdab16e"},
+        {"id": "ieee80211-2024", "sha256": "c08beb0e16bf8c36465a331d349dd8b8ea79b28d4a320288312ddeb5ce8d9bb1"}
+      ],
+      "forbiddenSourcesUsed": [],
+      "licenseApproved": true,
+      "cleanRoomVerified": true
+    },
+    "providerTool": {
+      "name": "synthetic-fixture",
+      "version": "1",
+      "gitCommit": "fixture",
+      "executableSha256": "441389621258f397f651fd2e4247e21ac996eaec167efb99a7cbeb1f86492cf8",
+      "toolchain": "repository test harness",
+      "configurationSha256": "254026038873077b5144f4a23ec380e3b62992f00e65a2e90798a4e719efd9b2"
+    },
+    "review": {"status": "approved", "reviewer": "focused regression fixture", "record": "synthetic"}
+  },
+  "beta": {
+    "schemaVersion": "1",
+    "tableSha256": "441389621258f397f651fd2e4247e21ac996eaec167efb99a7cbeb1f86492cf8",
+    "publicationSha256": "a428fdcaa4423f331e3bd02044345ec4305ee54056c319404a897e713cdab16e",
+    "calibrationSet": "patidar2017-bcc-d20",
+    "coding": "BCC",
+    "carrierSet": "dataOnly",
+    "ht20DataCarriers": 52,
+    "ht40DataCarriers": 108,
+    "sourceTable": "Patidar et al. Table 1, Model D, BCC MCS 0-7",
+    "citation": "M. Patidar et al., Link-to-System Mapping for ns-3 Wi-Fi OFDM Error Models, WNS3 2017",
+    "generatedDataLicense": "test-only synthetic fixture using versioned beta artifact",
+    "reviewedBy": "focused regression fixture",
+    "sourceRows": [
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "Patidar et al. Table 1, Model D, BCC MCS 0-7", "mcs": 0},
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "Patidar et al. Table 1, Model D, BCC MCS 0-7", "mcs": 1},
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "Patidar et al. Table 1, Model D, BCC MCS 0-7", "mcs": 2},
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "Patidar et al. Table 1, Model D, BCC MCS 0-7", "mcs": 3},
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "Patidar et al. Table 1, Model D, BCC MCS 0-7", "mcs": 4},
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "Patidar et al. Table 1, Model D, BCC MCS 0-7", "mcs": 5},
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "Patidar et al. Table 1, Model D, BCC MCS 0-7", "mcs": 6},
+      {"calibrationSet": "patidar2017-bcc-d20", "sourceTable": "Patidar et al. Table 1, Model D, BCC MCS 0-7", "mcs": 7}
+    ],
+    "licenseApproved": true,
+    "cleanRoomVerified": true,
+    "review": {"status": "approved", "reviewer": "focused regression fixture", "record": "synthetic"}
+  }
+}
+
+%inifile: omnetpp.ini
+
+[General]
+record-vector-results = false
+network = EesmReceiverGateTest
+sim-time-limit = 10ms
+cmdenv-express-mode = false
+ned-path = .;../../../../src;../../lib
+
+**.arp.typename = "GlobalArp"
+*.sender.ipv4.ip.limitedBroadcast = true
+**.mobility.typename = "StationaryMobility"
+**.mobility.initFromDisplayString = false
+**.sender.mobility.initialX = 0m
+**.sender.mobility.initialY = 0m
+**.receiverPerOne.mobility.initialX = 0m
+**.receiverPerOne.mobility.initialY = 0m
+**.receiverInterior.mobility.initialX = 0m
+**.receiverInterior.mobility.initialY = 0m
+**.receiverPerZero.mobility.initialX = 0m
+**.receiverPerZero.mobility.initialY = 0m
+**.receiverMin.mobility.initialX = 0m
+**.receiverMin.mobility.initialY = 0m
+**.receiverSensitivityAccept.mobility.initialX = 0m
+**.receiverSensitivityAccept.mobility.initialY = 0m
+**.receiverSensitivityReject.mobility.initialX = 0m
+**.receiverSensitivityReject.mobility.initialY = 0m
+**.receiverEnergyAccept.mobility.initialX = 0m
+**.receiverEnergyAccept.mobility.initialY = 0m
+**.receiverEnergyReject.mobility.initialX = 0m
+**.receiverEnergyReject.mobility.initialY = 0m
+**.wlan[*].radio.antenna.mobility.initFromDisplayString = false
+**.wlan[*].radio.antenna.mobility.initialX = 0m
+**.wlan[*].radio.antenna.mobility.initialY = 0m
+
+**.wlan[*].radio.typename = "Ieee80211DimensionalRadio"
+**.wlan[*].opMode = "n(mixed-2.4Ghz)"
+**.wlan[*].radio.opMode = "n(mixed-2.4Ghz)"
+**.wlan[*].radio.bandName = "2.4 GHz"
+**.wlan[*].bitrate = 6.5Mbps
+**.wlan[*].radio.transmitter.bitrate = 6.5Mbps
+**.wlan[*].radio.transmitter.dimensionalSpectrumMode = "occupiedSubcarriers"
+**.wlan[*].radio.transmitter.power = 1000mW
+**.wlan[*].radio.receiver.snirThreshold = -100dB
+**.radioMedium.backgroundNoise.power = -120dBm
+
+*.receiverPerOne.wlan[*].radio.antenna.numAntennas = 1
+*.receiverInterior.wlan[*].radio.antenna.numAntennas = 1
+*.receiverPerZero.wlan[*].radio.antenna.numAntennas = 1
+*.receiverMin.wlan[*].radio.antenna.numAntennas = 1
+*.receiverSensitivityAccept.wlan[*].radio.antenna.numAntennas = 1
+*.receiverSensitivityReject.wlan[*].radio.antenna.numAntennas = 1
+*.receiverEnergyAccept.wlan[*].radio.antenna.numAntennas = 1
+*.receiverEnergyReject.wlan[*].radio.antenna.numAntennas = 1
+
+**.receiverMin.wlan[*].radio.receiver.snirThresholdMode = "min"
+**.receiverPerOne.wlan[*].radio.receiver.snirThresholdMode = "mean"
+**.receiverInterior.wlan[*].radio.receiver.snirThresholdMode = "mean"
+**.receiverPerZero.wlan[*].radio.receiver.snirThresholdMode = "mean"
+**.receiverSensitivityAccept.wlan[*].radio.receiver.snirThresholdMode = "mean"
+**.receiverSensitivityReject.wlan[*].radio.receiver.snirThresholdMode = "mean"
+**.receiverEnergyAccept.wlan[*].radio.receiver.snirThresholdMode = "mean"
+**.receiverEnergyReject.wlan[*].radio.receiver.snirThresholdMode = "mean"
+**.receiverSensitivityAccept.wlan[*].radio.receiver.sensitivity = 29.99dBm
+**.receiverSensitivityReject.wlan[*].radio.receiver.sensitivity = 30.01dBm
+**.receiverEnergyAccept.wlan[*].radio.receiver.energyDetection = 29.99dBm
+**.receiverEnergyReject.wlan[*].radio.receiver.energyDetection = 30.01dBm
+**.receiverPerOne.wlan[*].radio.receiver.sensitivity = -90dBm
+**.receiverPerOne.wlan[*].radio.receiver.energyDetection = -90dBm
+**.receiverInterior.wlan[*].radio.receiver.sensitivity = -90dBm
+**.receiverInterior.wlan[*].radio.receiver.energyDetection = -90dBm
+**.receiverPerZero.wlan[*].radio.receiver.sensitivity = -90dBm
+**.receiverPerZero.wlan[*].radio.receiver.energyDetection = -90dBm
+**.receiverMin.wlan[*].radio.receiver.sensitivity = -90dBm
+**.receiverMin.wlan[*].radio.receiver.energyDetection = -90dBm
+
+num-rngs = 4
+seed-set = 0
+*.receiverPerOne.wlan[*].radio.receiver.rng-0 = 1
+*.receiverInterior.wlan[*].radio.receiver.rng-0 = 2
+*.receiverPerZero.wlan[*].radio.receiver.rng-0 = 3
+
+*.receiverPerOne.wlan[*].radio.receiver.errorModel.snirOffset = -170dB
+*.receiverInterior.wlan[*].radio.receiver.errorModel.snirOffset = -160dB
+*.receiverPerZero.wlan[*].radio.receiver.errorModel.snirOffset = 0dB
+
+**.wlan[*].radio.receiver.errorModel.typename = "Ieee80211EesmErrorModel"
+**.wlan[*].radio.receiver.errorModel.perTableFile = "../../data/Ieee80211Eesm.synthetic.csv"
+**.wlan[*].radio.receiver.errorModel.betaTableFile = "../../data/Ieee80211Eesm.synthetic-beta.csv"
+**.wlan[*].radio.receiver.errorModel.calibrationSet = "patidar2017-bcc-d20"
+**.wlan[*].radio.receiver.errorModel.perTableManifest = readJSON("manifest.json")
+
+*.sender.numApps = 1
+*.sender.app[0].typename = "UdpBasicApp"
+*.sender.app[0].destAddresses = "255.255.255.255"
+*.sender.app[0].destPort = 1000
+*.sender.app[0].messageLength = 100B
+*.sender.app[0].receiveBroadcast = true
+*.sender.app[0].sendInterval = 1s
+*.sender.app[0].startTime = 1ms
+*.sender.app[0].stopTime = 2ms
+
+*.receiverPerOne.numApps = 1
+*.receiverPerOne.app[0].typename = "UdpSink"
+*.receiverPerOne.app[0].localPort = 1000
+*.receiverPerOne.app[0].receiveBroadcast = true
+*.receiverInterior.numApps = 1
+*.receiverInterior.app[0].typename = "UdpSink"
+*.receiverInterior.app[0].localPort = 1000
+*.receiverInterior.app[0].receiveBroadcast = true
+*.receiverPerZero.numApps = 1
+*.receiverPerZero.app[0].typename = "UdpSink"
+*.receiverPerZero.app[0].localPort = 1000
+*.receiverPerZero.app[0].receiveBroadcast = true
+*.receiverMin.numApps = 1
+*.receiverMin.app[0].typename = "UdpSink"
+*.receiverMin.app[0].localPort = 1000
+*.receiverMin.app[0].receiveBroadcast = true
+
+%exitcode: 0
+%contains-regex: stdout
+EESM RNG baselines perOne=[0-9]+ interior=[0-9]+ perZero=[0-9]+
+%contains-regex: stdout
+EESM RNG draws perOne=0 interior=1 perZero=0
+%contains-regex: stdout
+receiverMin.*ReceptionDecision, possible, attempted, unsuccessful
+%contains-regex: stdout
+EesmReceiverGateTest.receiverPerZero.app\[0\]: received 1 packets
+%not-contains-regex: stdout
+EesmReceiverGateTest.receiverMin.app\[0\]: received [1-9][0-9]* packets
+%contains-regex: stdout
+receiverSensitivityAccept.*sensitivity = 997.7 mW
+%contains-regex: stdout
+receiverSensitivityReject.*sensitivity = 1.00231 W
+%contains-regex: stdout
+receiverEnergyAccept.*energyDetection = 997.7 mW
+%contains-regex: stdout
+receiverEnergyReject.*energyDetection = 1.00231 W
+%contains-regex: stdout
+reception is possible
+%contains-regex: stdout
+reception is impossible
+%contains-regex: stdout
+listening is impossible

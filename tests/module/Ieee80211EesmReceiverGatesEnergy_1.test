@@ -1,0 +1,41 @@
+%description:
+The receiver energy-detection lower boundary is intentionally invalid: the
+threshold is below the configured background-noise power.  The focused
+initialization failure documents that this state leaves the receiver busy
+without a corresponding transmission.  The positive gate matrix is covered
+by Ieee80211EesmReceiverGates_1.test.
+
+%file: test.ned
+
+import inet.node.inet.AdhocHost;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211DimensionalRadioMedium;
+
+network EesmReceiverEnergyBoundaryTest
+{
+    submodules:
+        radioMedium: Ieee80211DimensionalRadioMedium;
+        receiver: AdhocHost;
+}
+
+%inifile: omnetpp.ini
+
+[General]
+record-vector-results = false
+network = EesmReceiverEnergyBoundaryTest
+sim-time-limit = 1ms
+cmdenv-express-mode = false
+ned-path = .;../../../../src;../../lib
+
+**.mobility.typename = "StationaryMobility"
+**.mobility.initFromDisplayString = false
+**.wlan[*].radio.typename = "Ieee80211DimensionalRadio"
+**.wlan[*].opMode = "n(mixed-2.4Ghz)"
+**.wlan[*].radio.opMode = "n(mixed-2.4Ghz)"
+**.wlan[*].radio.bandName = "2.4 GHz"
+**.wlan[*].radio.receiver.sensitivity = -90dBm
+**.wlan[*].radio.receiver.energyDetection = -121dBm
+**.radioMedium.backgroundNoise.power = -120dBm
+
+%exitcode: 1
+%contains-regex: stderr
+Receiver is busy without any ongoing transmission, probably energy detection level is too low or background noise level is too high
