@@ -110,7 +110,7 @@ bool isSignalOnPrimary20(const Ieee80211Channel *channel, const ITransmission *t
 
 bool isModeAccepted(const Ieee80211ModeSet *modeSet, const IIeee80211Mode *mode)
 {
-    if (modeSet == nullptr || mode == nullptr || !modeSet->containsMode(mode))
+    if (modeSet == nullptr || mode == nullptr || !modeSet->supportsMode(mode))
         return false;
     return mode->getDataMode()->getBandwidth() < MHz(80) || dynamic_cast<const Ieee80211VhtMode *>(mode) != nullptr;
 }
@@ -358,7 +358,7 @@ const IListening *Ieee80211Receiver::createListening(const IRadio *radio, const 
 bool Ieee80211Receiver::computeIsReceptionPossible(const IListening *listening, const ITransmission *transmission) const
 {
     auto ieee80211Transmission = dynamic_cast<const Ieee80211Transmission *>(transmission);
-    if (ieee80211Transmission == nullptr || !modeSet->supportsMode(ieee80211Transmission->getMode()) || !isSignalOnPrimary20(channel, transmission))
+    if (ieee80211Transmission == nullptr || !isModeAccepted(modeSet, ieee80211Transmission->getMode()) || !isSignalOnPrimary20(channel, transmission))
         return false;
     auto *multibandListening = dynamic_cast<const MultibandListening *>(listening);
     auto *multibandSignal = dynamic_cast<const IMultibandSignalAnalogModel *>(transmission->getAnalogModel());
@@ -379,7 +379,7 @@ bool Ieee80211Receiver::computeIsReceptionPossible(const IListening *listening, 
 bool Ieee80211Receiver::computeIsReceptionPossible(const IListening *listening, const IReception *reception, IRadioSignal::SignalPart part) const
 {
     auto ieee80211Transmission = dynamic_cast<const Ieee80211Transmission *>(reception->getTransmission());
-    return ieee80211Transmission && modeSet->supportsMode(ieee80211Transmission->getMode()) &&
+    return ieee80211Transmission && isModeAccepted(modeSet, ieee80211Transmission->getMode()) &&
             isSignalOnPrimary20(channel, reception->getTransmission()) &&
             isPrimaryComponentDetectable(channel, reception, sensitivity) &&
             getAnalogModel()->computeIsReceptionPossible(listening, reception, sensitivity);

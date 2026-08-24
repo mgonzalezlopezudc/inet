@@ -11,7 +11,6 @@
 #include "inet/physicallayer/wireless/common/analogmodel/scalar/ScalarTransmitterAnalogModel.h"
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalMediumAnalogModel.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
-#include "inet/physicallayer/wireless/common/contract/packetlevel/IMultibandReceiverAnalogModel.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IMultibandTransmitterAnalogModel.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/RadioControlInfo_m.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
@@ -42,6 +41,19 @@ const Ieee80211Channel *cloneChannelForBand(const Ieee80211Channel *channel, con
         return new Ieee80211Channel(band, channel->getChannelNumber(), channel->getChannelWidth(),
                 channel->getCenterFrequencyIndex0(), channel->getCenterFrequencyIndex1());
     return new Ieee80211Channel(band, channel->getChannelNumber(), channel->getSecondaryChannelOffset());
+}
+
+bool sameChannelGeometry(const Ieee80211Channel *first, const Ieee80211Channel *second)
+{
+    if (first == nullptr || second == nullptr)
+        return first == second;
+    return first->getBand() == second->getBand() &&
+            first->getChannelNumber() == second->getChannelNumber() &&
+            first->getSecondaryChannelOffset() == second->getSecondaryChannelOffset() &&
+            first->getChannelWidth() == second->getChannelWidth() &&
+            first->isExplicitGeometry() == second->isExplicitGeometry() &&
+            first->getCenterFrequencyIndex0() == second->getCenterFrequencyIndex0() &&
+            first->getCenterFrequencyIndex1() == second->getCenterFrequencyIndex1();
 }
 
 void validateTransmissionMode(const Ieee80211Channel *channel, const IIeee80211Mode *mode)
@@ -153,6 +165,9 @@ const Ieee80211Channel *Ieee80211Transmitter::computeTransmissionChannel(const P
     transmissionChannel = channelReq != nullptr ? channelReq->getChannel() : channel;
     if (transmissionChannel == nullptr)
         throw cRuntimeError("Transmission channel is undefined");
+    if (channelReq != nullptr && transmissionChannel->is80Plus80() &&
+            (channel == nullptr || !channel->is80Plus80() || !sameChannelGeometry(channel, transmissionChannel)))
+        throw cRuntimeError("IEEE 802.11 VHT 80+80 MHz ChannelReq geometry must match the configured radio channel");
     return transmissionChannel;
 }
 
@@ -285,9 +300,6 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
         auto multibandFactory = dynamic_cast<const IMultibandTransmitterAnalogModel *>(getAnalogModel());
         if (multibandFactory == nullptr)
             throw cRuntimeError("IEEE 802.11 VHT 80+80 MHz requires a multiband transmitter analog model");
-        const auto *ieee80211Receiver = dynamic_cast<const Ieee80211Receiver *>(transmitter->getReceiver());
-        if (ieee80211Receiver == nullptr || dynamic_cast<const IMultibandReceiverAnalogModel *>(ieee80211Receiver->getAnalogModel()) == nullptr)
-            throw cRuntimeError("IEEE 802.11 VHT 80+80 MHz requires a multiband receiver analog model");
         auto occupiedBands = transmissionChannel->getOccupiedBands();
         if (occupiedBands.size() != 2)
             throw cRuntimeError("IEEE 802.11 VHT 80+80 MHz requires exactly two occupied 80 MHz bands");

@@ -70,6 +70,7 @@ class INET_API Ieee80211Receiver : public FlatReceiverBase
     // Captures geometry for a synchronous radio configuration transaction.
     // The returned one-shot restore callback neither throws nor emits signals.
     std::function<void()> saveChannelState();
+    virtual const IIeee80211Band *getBand() const { return band; }
     virtual void setBand(const IIeee80211Band *band);
     virtual void setChannel(const Ieee80211Channel *channel);
     virtual void setChannelNumber(int channelNumber);

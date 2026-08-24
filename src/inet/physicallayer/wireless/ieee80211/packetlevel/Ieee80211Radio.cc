@@ -143,6 +143,62 @@ void validate80Plus80Contracts(const Ieee80211Channel *channel, const Ieee80211T
         throw cRuntimeError("IEEE 802.11 VHT 80+80 MHz requires a dimensional medium analog model");
 }
 
+const IIeee80211Mode *resolveModeForChannel(const Ieee80211ModeSet *modeSet,
+        const IIeee80211Mode *currentMode, const Ieee80211Channel *channel)
+{
+    if (modeSet == nullptr)
+        return nullptr;
+    if (currentMode != nullptr && modeSet->containsMode(currentMode) &&
+            (channel == nullptr || isModeCompatibleWithChannel(channel, currentMode)))
+        return currentMode;
+    if (channel != nullptr) {
+        auto resolvedMode = findFastestMode(modeSet, channel->getOperatingBandwidth());
+        if (resolvedMode != nullptr)
+            return resolvedMode;
+    }
+    return modeSet->getFastestMode();
+}
+
+void validateRadioTarget(const Ieee80211Channel *channel, const std::string& operationMode,
+        const Ieee80211ModeSet *modeSet, const IIeee80211Mode *mode, Hz bandwidth,
+        const Ieee80211Transmitter *transmitter, const Ieee80211Receiver *receiver,
+        const IRadioMedium *medium)
+{
+    std::string effectiveOperationMode = operationMode;
+    if (effectiveOperationMode.empty() && modeSet != nullptr)
+        effectiveOperationMode = modeSet->getName();
+    validateModeSetAndOperationMode(effectiveOperationMode, modeSet);
+    if (channel == nullptr) {
+        if (mode != nullptr && (modeSet == nullptr || !modeSet->containsMode(mode)))
+            throw cRuntimeError("Requested IEEE 802.11 mode is not in the target mode set");
+        return;
+    }
+    if (channel->getBand() == nullptr)
+        throw cRuntimeError("IEEE 802.11 target channel requires a band");
+    if (std::isnan(bandwidth.get()))
+        bandwidth = channel->getOperatingBandwidth();
+    if (isWideChannel(channel) && channel->getOperatingBandwidth() != bandwidth)
+        throw cRuntimeError("IEEE 802.11 target channel bandwidth %s does not match its operating bandwidth %s",
+                bandwidth.str().c_str(), channel->getOperatingBandwidth().str().c_str());
+    if (isCanonicalPpduBandwidth(bandwidth))
+        channel->validatePpduWidth(bandwidth);
+    validateWideConfiguration(channel, effectiveOperationMode, modeSet);
+    validate80Plus80Contracts(channel, transmitter, receiver, medium);
+    if (channel->is80Plus80()) {
+        if (bandwidth != MHz(160))
+            throw cRuntimeError("IEEE 802.11 VHT 80+80 MHz requires a 160 MHz radio bandwidth");
+        if (mode != nullptr && mode->getDataMode()->getBandwidth() != MHz(160))
+            throw cRuntimeError("IEEE 802.11 VHT 80+80 MHz requires a 160 MHz radio mode");
+    }
+    if (mode != nullptr) {
+        if (modeSet == nullptr || !modeSet->containsMode(mode))
+            throw cRuntimeError("Requested IEEE 802.11 mode is not in the target mode set");
+        validateModeForChannel(channel, mode);
+    }
+    else if (isWideChannel(channel))
+        throw cRuntimeError("A wide IEEE 802.11 target channel requires a compatible mode");
+}
+
 }
 
 Ieee80211Radio::Ieee80211Radio() :
@@ -168,6 +224,8 @@ bool Ieee80211Radio::computeIsBandBusy(const FrequencyBand& frequencyBand, Ieee8
 
 void Ieee80211Radio::updateCcaState()
 {
+    if (isConfigurationTransactionActive())
+        return;
     auto ieee80211Receiver = dynamic_cast<const Ieee80211Receiver *>(receiver);
     auto channel = ieee80211Receiver == nullptr ? nullptr : ieee80211Receiver->getChannel();
     bool ht40Configured = channel != nullptr &&
@@ -226,6 +284,38 @@ void Ieee80211Radio::updateTransceiverState()
 {
     FlatRadioBase::updateTransceiverState();
     updateCcaState();
+}
+
+void Ieee80211Radio::beginConfigurationTransaction()
+{
+    if (configurationTransactionDepth++ == 0) {
+        configurationChanged = false;
+        pendingChannelChanged = false;
+        pendingChannelNumber = -1;
+    }
+}
+
+void Ieee80211Radio::endConfigurationTransaction()
+{
+    if (configurationTransactionDepth <= 0)
+        throw cRuntimeError("Unbalanced IEEE 802.11 radio configuration transaction");
+    if (--configurationTransactionDepth != 0 || !configurationChanged)
+        return;
+    ++ccaConfigurationRevision;
+    receptionTimer = nullptr;
+    if (pendingChannelChanged)
+        emit(radioChannelChangedSignal, pendingChannelNumber);
+    emit(listeningChangedSignal, 0);
+    updateCcaState();
+}
+
+void Ieee80211Radio::markConfigurationChanged(bool channelChanged, int channelNumber)
+{
+    configurationChanged = true;
+    if (channelChanged) {
+        pendingChannelChanged = true;
+        pendingChannelNumber = channelNumber;
+    }
 }
 
 void Ieee80211Radio::initialize(int stage)
@@ -308,8 +398,14 @@ void Ieee80211Radio::initialize(int stage)
                 (targetModeSet == nullptr || !targetModeSet->isHtOperationSupported() || targetBandwidth != MHz(40)))
             throw cRuntimeError("htSecondaryChannelOffset above/below requires HT 40 MHz operation");
 
+        validateRadioTarget(targetChannel.get(), opMode, targetModeSet, targetMode, targetBandwidth,
+                ieee80211Transmitter, ieee80211Receiver, medium.get());
+
         // All validation above is complete before any authoritative radio,
         // child-channel, bandwidth, mode-set, or mode field is changed.
+        const bool targetChannelConfigured = targetChannel != nullptr;
+        const int targetChannelNumber = targetChannelConfigured ? targetChannel->getChannelNumber() : -1;
+        beginConfigurationTransaction();
         this->band = targetBand;
         this->modeSet = targetModeSet;
         if (targetChannel != nullptr)
@@ -324,6 +420,8 @@ void Ieee80211Radio::initialize(int stage)
         ieee80211Transmitter->setBandwidth(targetBandwidth);
         if (targetMode != nullptr)
             ieee80211Transmitter->setMode(targetMode);
+        markConfigurationChanged(targetChannelConfigured, targetChannelNumber);
+        endConfigurationTransaction();
     }
 }
 
@@ -365,7 +463,7 @@ void Ieee80211Radio::handleUpperCommand(cMessage *message)
                 throw cRuntimeError("Invalid target 802.11 channel number %d", targetChannelNumber);
             Hz newBandwidth = configureCommand->getBandwidth();
             Hz targetBandwidth = std::isnan(newBandwidth.get()) ? ieee80211Receiver->getBandwidth() : newBandwidth;
-            if (targetBandwidth == MHz(20) && targetChannelWidth <= IEEE80211_CHANNEL_WIDTH_40MHZ)
+            if (newBandwidth == MHz(20) && targetChannelWidth <= IEEE80211_CHANNEL_WIDTH_40MHZ)
                 targetSecondaryChannelOffset = IEEE80211_SECONDARY_CHANNEL_NONE;
             std::unique_ptr<Ieee80211Channel> targetChannelObject;
             if (targetChannelNumber != -1) {
@@ -409,6 +507,11 @@ void Ieee80211Radio::handleUpperCommand(cMessage *message)
                 resolvedMode = isCanonicalPpduBandwidth(targetBandwidth) ? targetModeSet->getMode(newBitrate, targetBandwidth) : targetModeSet->getMode(newBitrate);
             if (resolvedMode == nullptr && targetModeSet != nullptr) {
                 const auto *currentMode = ieee80211Transmitter->getMode();
+                if (targetModeSet != this->modeSet && currentMode != nullptr) {
+                    resolvedMode = targetModeSet->findCompatibleMode(currentMode);
+                    if (resolvedMode == nullptr)
+                        throw cRuntimeError("Cannot map current mode to target operation mode without changing its PHY tuple");
+                }
                 // A channel-only transition to 80+80 establishes the complete
                 // operating state.  Do not silently retain a current VHT80
                 // mode; narrower primary-hierarchy PPDUs remain available as
@@ -430,9 +533,12 @@ void Ieee80211Radio::handleUpperCommand(cMessage *message)
             if (targetModeSet != nullptr && targetModeSet->isHtOperationSupported() &&
                     ((targetBandwidth == MHz(40)) ||
                      (resolvedMode != nullptr && dynamic_cast<const Ieee80211HtMode *>(resolvedMode) != nullptr &&
-                      resolvedMode->getDataMode()->getBandwidth() == MHz(40))) &&
+                     resolvedMode->getDataMode()->getBandwidth() == MHz(40))) &&
                     targetSecondaryChannelOffset == IEEE80211_SECONDARY_CHANNEL_NONE)
                 throw cRuntimeError("HT 40 MHz operation requires a secondary channel offset of above or below");
+            validateRadioTarget(targetChannelObject != nullptr ? targetChannelObject.get() : currentChannel,
+                    targetOpMode, targetModeSet, resolvedMode, targetBandwidth,
+                    ieee80211Transmitter, ieee80211Receiver, medium.get());
 
             // Validate inherited Radio/Narrowband/Flat fields before changing
             // any IEEE state.  The base classes otherwise apply these fields
@@ -470,6 +576,7 @@ void Ieee80211Radio::handleUpperCommand(cMessage *message)
             const bool targetChannelOwnsBandwidth = targetChannelConfigured &&
                     (targetChannelObject->isExplicitGeometry() || targetChannelObject->getChannelWidth() != IEEE80211_CHANNEL_WIDTH_20MHZ);
 
+            bool publishModeSet = targetModeSet != this->modeSet || targetBand != this->band || *requestedOpMode;
             bool channelChanged = currentChannel == nullptr || targetBand != this->band;
             if (!channelChanged && targetChannelObject != nullptr)
                 channelChanged = targetChannelNumber != currentChannel->getChannelNumber() ||
@@ -490,8 +597,9 @@ void Ieee80211Radio::handleUpperCommand(cMessage *message)
                     ieee80211Receiver->setChannel(new Ieee80211Channel(*targetChannelObject));
                     htSecondaryChannelOffset = targetChannelObject->getSecondaryChannelOffset();
                     channelWidth = targetChannelObject->getChannelWidth();
-                    channelCenterFrequencyIndex0 = targetChannelObject->getCenterFrequencyIndex0();
-                    channelCenterFrequencyIndex1 = targetChannelObject->getCenterFrequencyIndex1();
+                    primaryChannelCenterFrequencyIndex = targetChannelObject->isExplicitGeometry() ? targetChannelNumber : -1;
+                    channelCenterFrequencyIndex0 = targetChannelObject->isExplicitGeometry() ? targetChannelObject->getCenterFrequencyIndex0() : -1;
+                    channelCenterFrequencyIndex1 = targetChannelObject->isExplicitGeometry() ? targetChannelObject->getCenterFrequencyIndex1() : 0;
                 }
                 else if (targetBand != this->band) {
                     tx->setBand(targetBand);
@@ -501,27 +609,39 @@ void Ieee80211Radio::handleUpperCommand(cMessage *message)
                 this->opMode = targetOpMode;
                 if (!std::isnan(configureCommand->getCenterFrequency().get()))
                     setCenterFrequency(configureCommand->getCenterFrequency());
+                // Apply inherited fields only after the complete target tuple has
+                // been validated and installed.  A channel-owned center/bandwidth
+                // is already synchronized by setChannel and is intentionally not
+                // passed through the generic base setters.
+                if (configureCommand->getModulation() != nullptr &&
+                        (ieee80211Transmitter->getModulation() != configureCommand->getModulation() ||
+                         ieee80211Receiver->getModulation() != configureCommand->getModulation())) {
+                    markConfigurationChanged();
+                    setModulation(configureCommand->getModulation());
+                }
+                if (!std::isnan(newPower.get()) && ieee80211Transmitter->getPower() != newPower) {
+                    markConfigurationChanged();
+                    setPower(newPower);
+                }
+                if (!std::isnan(inheritedBitrate.get()) && ieee80211Transmitter->getBitrate() != inheritedBitrate) {
+                    markConfigurationChanged();
+                    setBitrate(inheritedBitrate);
+                }
+                if (!targetChannelConfigured && !std::isnan(inheritedCenterFrequency.get()) &&
+                        (ieee80211Transmitter->getCenterFrequency() != inheritedCenterFrequency ||
+                         ieee80211Receiver->getCenterFrequency() != inheritedCenterFrequency)) {
+                    markConfigurationChanged();
+                    setCenterFrequency(inheritedCenterFrequency);
+                }
+                if (!targetChannelOwnsBandwidth && !std::isnan(inheritedBandwidth.get()) &&
+                        (ieee80211Transmitter->getBandwidth() != inheritedBandwidth ||
+                         ieee80211Receiver->getBandwidth() != inheritedBandwidth)) {
+                    markConfigurationChanged();
+                    setBandwidth(inheritedBandwidth);
+                }
             };
-            if (publishModeSet || resolvedMode != nullptr || changeChannel || !std::isnan(newBandwidth.get()) ||
-                    !std::isnan(configureCommand->getCenterFrequency().get()))
-                changeModeSet(targetModeSet, resolvedMode, resolvedMode != nullptr, applyConfiguration,
-                        publishModeSet, changeChannel ? targetChannelNumber : -1);
-            // Apply inherited fields only after the complete target tuple has
-            // been validated and installed.  A channel-owned center/bandwidth
-            // is already synchronized by setChannel and is intentionally not
-            // passed through the generic base setters.
-            if (configureCommand->getModulation() != nullptr)
-                setModulation(configureCommand->getModulation());
-            if (!std::isnan(newPower.get()))
-                setPower(newPower);
-            if (!std::isnan(inheritedBitrate.get()))
-                setBitrate(inheritedBitrate);
-            if (!targetChannelConfigured && !std::isnan(inheritedCenterFrequency.get()))
-                setCenterFrequency(inheritedCenterFrequency);
-            if (!targetChannelOwnsBandwidth && !std::isnan(inheritedBandwidth.get()))
-                setBandwidth(inheritedBandwidth);
-            if (requestedRadioMode != -1)
-                setRadioMode((RadioMode)requestedRadioMode);
+            changeModeSet(targetModeSet, resolvedMode, resolvedMode != nullptr, applyConfiguration,
+                    publishModeSet, changeChannel ? targetChannelNumber : -1, requestedRadioMode);
             delete message;
             return;
         }
@@ -542,7 +662,7 @@ void Ieee80211Radio::setModeSetAndMode(const Ieee80211ModeSet *modeSet, const II
 }
 
 void Ieee80211Radio::changeModeSet(const Ieee80211ModeSet *modeSet, const IIeee80211Mode *mode, bool explicitMode,
-        const std::function<void()>& applyConfiguration, bool publishModeSet, int channelNumber)
+        const std::function<void()>& applyConfiguration, bool publishModeSet, int channelNumber, int requestedRadioMode)
 {
     if (changingModeSet)
         throw cRuntimeError("Reentrant radio mode-set change");
@@ -550,6 +670,15 @@ void Ieee80211Radio::changeModeSet(const Ieee80211ModeSet *modeSet, const IIeee8
         throw cRuntimeError("Invalid mode");
     auto transmitter = const_cast<Ieee80211Transmitter *>(check_and_cast<const Ieee80211Transmitter *>(this->transmitter));
     auto receiver = const_cast<Ieee80211Receiver *>(check_and_cast<const Ieee80211Receiver *>(this->receiver));
+    if (!applyConfiguration) {
+        const auto *targetMode = explicitMode ? mode : transmitter->getMode();
+        if (!explicitMode && modeSet != nullptr && targetMode != nullptr && !modeSet->containsMode(targetMode))
+            targetMode = modeSet->findCompatibleMode(targetMode);
+        if (modeSet != nullptr && targetMode == nullptr && transmitter->getMode() != nullptr)
+            throw cRuntimeError("Cannot map current mode to target mode set");
+        validateRadioTarget(receiver->getChannel(), isWideChannel(receiver->getChannel()) ? opMode : (modeSet != nullptr ? modeSet->getName() : ""), modeSet, targetMode, receiver->getBandwidth(),
+                transmitter, receiver, receiver->getChannel() != nullptr && receiver->getChannel()->is80Plus80() ? medium.get() : nullptr);
+    }
     const auto *oldTransmitterModeSet = transmitter->getModeSet();
     const auto *oldReceiverModeSet = receiver->getModeSet();
     const auto *oldMode = transmitter->getMode();
@@ -557,6 +686,14 @@ void Ieee80211Radio::changeModeSet(const Ieee80211ModeSet *modeSet, const IIeee8
     auto oldBand = band;
     auto oldOpMode = opMode;
     auto oldSecondaryChannelOffset = htSecondaryChannelOffset;
+    auto oldPower = transmitter->getPower();
+    auto oldBitrate = transmitter->getBitrate();
+    auto oldTxModulation = transmitter->getModulation();
+    auto oldRxModulation = receiver->getModulation();
+    auto oldChannelWidth = channelWidth;
+    auto oldPrimaryIndex = primaryChannelCenterFrequencyIndex;
+    auto oldCenterIndex0 = channelCenterFrequencyIndex0;
+    auto oldCenterIndex1 = channelCenterFrequencyIndex1;
     auto restoreTransmitterChannel = applyConfiguration ? transmitter->saveChannelState() : std::function<void()>();
     auto restoreReceiverChannel = applyConfiguration ? receiver->saveChannelState() : std::function<void()>();
 
@@ -578,6 +715,7 @@ void Ieee80211Radio::changeModeSet(const Ieee80211ModeSet *modeSet, const IIeee8
         restore.push_back(participant->saveModeSetState());
 
     changingModeSet = true;
+    beginConfigurationTransaction();
     try {
         if (explicitMode)
             transmitter->setModeSetAndMode(modeSet, mode);
@@ -595,17 +733,31 @@ void Ieee80211Radio::changeModeSet(const Ieee80211ModeSet *modeSet, const IIeee8
         if (applyConfiguration) {
             restoreTransmitterChannel();
             restoreReceiverChannel();
+            transmitter->setPower(oldPower);
+            transmitter->setBitrate(oldBitrate);
+            transmitter->setModulation(oldTxModulation);
+            receiver->setModulation(oldRxModulation);
             band = oldBand;
             opMode.swap(oldOpMode);
             htSecondaryChannelOffset = oldSecondaryChannelOffset;
+            channelWidth = oldChannelWidth;
+            primaryChannelCenterFrequencyIndex = oldPrimaryIndex;
+            channelCenterFrequencyIndex0 = oldCenterIndex0;
+            channelCenterFrequencyIndex1 = oldCenterIndex1;
         }
         for (auto it = restore.rbegin(); it != restore.rend(); ++it)
             (*it)();
         receptionTimer = oldReceptionTimer;
+        configurationTransactionDepth = 0;
+        configurationChanged = false;
+        pendingChannelChanged = false;
         changingModeSet = false;
         throw;
     }
     this->modeSet = modeSet;
+    if (requestedRadioMode != -1 && requestedRadioMode != getRadioMode())
+        setRadioMode((RadioMode)requestedRadioMode);
+    configurationTransactionDepth = 0;
     ++ccaConfigurationRevision;
     EV << "Changing radio mode set to " << modeSet << endl;
     receptionTimer = nullptr;
@@ -639,6 +791,13 @@ void Ieee80211Radio::changeModeSet(const Ieee80211ModeSet *modeSet, const IIeee8
                 observerFailure = std::current_exception();
         }
     }
+    try {
+        updateCcaState();
+    }
+    catch (...) {
+        if (!observerFailure)
+            observerFailure = std::current_exception();
+    }
     changingModeSet = false;
     if (observerFailure)
         std::rethrow_exception(observerFailure);
@@ -650,12 +809,23 @@ void Ieee80211Radio::setMode(const IIeee80211Mode *mode)
     if (changingModeSet)
         throw cRuntimeError("Reentrant radio configuration change");
     Ieee80211Transmitter *ieee80211Transmitter = const_cast<Ieee80211Transmitter *>(check_and_cast<const Ieee80211Transmitter *>(transmitter));
+    Ieee80211Receiver *ieee80211Receiver = const_cast<Ieee80211Receiver *>(check_and_cast<const Ieee80211Receiver *>(receiver));
+    const Ieee80211Channel *channel = ieee80211Receiver->getChannel();
+    Hz targetBandwidth = channel != nullptr && isWideChannel(channel) ? channel->getOperatingBandwidth() : ieee80211Receiver->getBandwidth();
+    if (!isConfigurationTransactionActive())
+        validateRadioTarget(channel, opMode, modeSet, mode, targetBandwidth,
+                ieee80211Transmitter, ieee80211Receiver, medium.get());
+    const auto oldMode = ieee80211Transmitter->getMode();
+    const bool outerTransaction = !isConfigurationTransactionActive();
+    if (outerTransaction)
+        beginConfigurationTransaction();
     ieee80211Transmitter->setMode(mode);
-    ++ccaConfigurationRevision;
-    EV << "Changing radio mode to " << mode << endl;
-    receptionTimer = nullptr;
-    if (getComponentType() != nullptr)
-        emit(listeningChangedSignal, 0);
+    if (oldMode != mode) {
+        EV << "Changing radio mode to " << mode << endl;
+        markConfigurationChanged();
+    }
+    if (outerTransaction)
+        endConfigurationTransaction();
 }
 
 void Ieee80211Radio::setBand(const IIeee80211Band *band)
@@ -667,20 +837,31 @@ void Ieee80211Radio::setBand(const IIeee80211Band *band)
     const Ieee80211Channel *currentChannel = ieee80211Receiver->getChannel();
     if (currentChannel != nullptr) {
         auto replacement = std::unique_ptr<const Ieee80211Channel>(cloneChannelForBand(currentChannel, band));
+        if (!isConfigurationTransactionActive()) {
+            const auto *targetMode = resolveModeForChannel(modeSet, ieee80211Transmitter->getMode(), replacement.get());
+            validateRadioTarget(replacement.get(), opMode, modeSet, targetMode, replacement->getOperatingBandwidth(),
+                    ieee80211Transmitter, ieee80211Receiver, medium.get());
+        }
         setChannel(replacement.release());
     }
     else {
+        if (!isConfigurationTransactionActive()) {
+            const auto *targetMode = resolveModeForChannel(modeSet, ieee80211Transmitter->getMode(), nullptr);
+            validateRadioTarget(nullptr, opMode, modeSet, targetMode, ieee80211Receiver->getBandwidth(),
+                    ieee80211Transmitter, ieee80211Receiver, medium.get());
+        }
+        const auto oldBand = this->band;
+        const bool outerTransaction = !isConfigurationTransactionActive();
+        if (outerTransaction)
+            beginConfigurationTransaction();
         ieee80211Transmitter->setBand(band);
         ieee80211Receiver->setBand(band);
         this->band = band;
+        if (oldBand != band)
+            markConfigurationChanged();
+        if (outerTransaction)
+            endConfigurationTransaction();
     }
-    ++ccaConfigurationRevision;
-    EV << "Changing radio band to " << band << endl;
-    receptionTimer = nullptr;
-    const auto *channel = ieee80211Transmitter->getChannel();
-    if (channel != nullptr)
-        emit(radioChannelChangedSignal, channel->getChannelNumber());
-    emit(listeningChangedSignal, 0);
 }
 
 void Ieee80211Radio::setChannel(const Ieee80211Channel *channel)
@@ -691,13 +872,25 @@ void Ieee80211Radio::setChannel(const Ieee80211Channel *channel)
         throw cRuntimeError("IEEE 802.11 radio channel cannot be null");
     Ieee80211Transmitter *ieee80211Transmitter = const_cast<Ieee80211Transmitter *>(check_and_cast<const Ieee80211Transmitter *>(transmitter));
     Ieee80211Receiver *ieee80211Receiver = const_cast<Ieee80211Receiver *>(check_and_cast<const Ieee80211Receiver *>(receiver));
+    const auto *currentChannel = ieee80211Receiver->getChannel();
+    if (channel == currentChannel || channel == ieee80211Transmitter->getChannel())
+        return;
+    const bool outerTransaction = !isConfigurationTransactionActive();
+    const auto *targetMode = outerTransaction ? resolveModeForChannel(modeSet, ieee80211Transmitter->getMode(), channel) : ieee80211Transmitter->getMode();
+    if (outerTransaction)
+        validateRadioTarget(channel, opMode, modeSet, targetMode, channel->getOperatingBandwidth(),
+                ieee80211Transmitter, ieee80211Receiver, medium.get());
+    // Preallocate the receiver-owned copy before beginning publication. Once
+    // the transaction starts, the remaining child assignments are no-throw
+    // pointer/value updates under the fully validated target tuple.
     std::unique_ptr<Ieee80211Channel> receiverChannel = std::make_unique<Ieee80211Channel>(*channel);
+    if (outerTransaction)
+        beginConfigurationTransaction();
     ieee80211Transmitter->setChannel(channel);
     ieee80211Receiver->setChannel(receiverChannel.release());
     band = channel->getBand();
     htSecondaryChannelOffset = channel->getSecondaryChannelOffset();
     channelWidth = channel->getChannelWidth();
-    ++ccaConfigurationRevision;
     if (channel->isExplicitGeometry()) {
         primaryChannelCenterFrequencyIndex = channel->getChannelNumber();
         channelCenterFrequencyIndex0 = channel->getCenterFrequencyIndex0();
@@ -708,21 +901,77 @@ void Ieee80211Radio::setChannel(const Ieee80211Channel *channel)
         channelCenterFrequencyIndex0 = -1;
         channelCenterFrequencyIndex1 = 0;
     }
-    if (channel->isExplicitGeometry() || channel->getChannelWidth() != IEEE80211_CHANNEL_WIDTH_20MHZ) {
-        Hz operatingBandwidth = channel->getOperatingBandwidth();
-        ieee80211Receiver->setBandwidth(operatingBandwidth);
-        ieee80211Transmitter->setBandwidth(operatingBandwidth);
-    }
+    Hz operatingBandwidth = channel->getOperatingBandwidth();
+    ieee80211Receiver->setBandwidth(operatingBandwidth);
+    ieee80211Transmitter->setBandwidth(operatingBandwidth);
+    if (outerTransaction && targetMode != ieee80211Transmitter->getMode())
+        ieee80211Transmitter->setMode(targetMode);
     EV << "Changing radio channel to " << channel->getChannelNumber() << endl;
-    receptionTimer = nullptr;
-    emit(radioChannelChangedSignal, channel->getChannelNumber());
-    emit(listeningChangedSignal, 0);
+    markConfigurationChanged(true, channel->getChannelNumber());
+    if (outerTransaction)
+        endConfigurationTransaction();
 }
 
 void Ieee80211Radio::setChannelNumber(int newChannelNumber)
 {
-    auto channel = createConfiguredChannel(newChannelNumber);
-    setChannel(channel);
+    std::unique_ptr<const Ieee80211Channel> channel(createConfiguredChannel(newChannelNumber));
+    setChannel(channel.release());
+}
+
+void Ieee80211Radio::setCenterFrequency(Hz newCenterFrequency)
+{
+    if (!std::isfinite(newCenterFrequency.get()) || newCenterFrequency <= Hz(0))
+        throw cRuntimeError("IEEE 802.11 radio center frequency must be positive and finite");
+    const auto *ieee80211Receiver = check_and_cast<const Ieee80211Receiver *>(receiver);
+    const auto *channel = ieee80211Receiver->getChannel();
+    if (!isConfigurationTransactionActive() && channel != nullptr &&
+            newCenterFrequency != channel->getOperatingCenterFrequency())
+        throw cRuntimeError("IEEE 802.11 configured channel owns the center frequency");
+    const auto *ieee80211Transmitter = check_and_cast<const Ieee80211Transmitter *>(transmitter);
+    bool changed = ieee80211Transmitter->getCenterFrequency() != newCenterFrequency ||
+            ieee80211Receiver->getCenterFrequency() != newCenterFrequency;
+    const bool outerTransaction = !isConfigurationTransactionActive();
+    if (outerTransaction)
+        beginConfigurationTransaction();
+    NarrowbandRadioBase::setCenterFrequency(newCenterFrequency);
+    if (changed)
+        markConfigurationChanged();
+    if (outerTransaction)
+        endConfigurationTransaction();
+}
+
+void Ieee80211Radio::setBandwidth(Hz newBandwidth)
+{
+    if (!std::isfinite(newBandwidth.get()) || newBandwidth <= Hz(0))
+        throw cRuntimeError("IEEE 802.11 radio bandwidth must be positive and finite");
+    const auto *ieee80211Receiver = check_and_cast<const Ieee80211Receiver *>(receiver);
+    const auto *channel = ieee80211Receiver->getChannel();
+    const auto *ieee80211Transmitter = check_and_cast<const Ieee80211Transmitter *>(transmitter);
+    if (!isConfigurationTransactionActive() && channel != nullptr) {
+        const bool channelOwnsBandwidth = channel->isExplicitGeometry() ||
+                channel->getChannelWidth() != IEEE80211_CHANNEL_WIDTH_20MHZ;
+        if (channelOwnsBandwidth && newBandwidth != channel->getOperatingBandwidth())
+            throw cRuntimeError("IEEE 802.11 configured channel owns bandwidth %s; requested radio bandwidth is %s",
+                    channel->getOperatingBandwidth().str().c_str(), newBandwidth.str().c_str());
+        if (!channelOwnsBandwidth && newBandwidth > channel->getOperatingBandwidth())
+            throw cRuntimeError("IEEE 802.11 radio bandwidth %s exceeds configured channel bandwidth %s",
+                    newBandwidth.str().c_str(), channel->getOperatingBandwidth().str().c_str());
+        const auto *mode = ieee80211Transmitter->getMode();
+        if (mode != nullptr && isCanonicalPpduBandwidth(newBandwidth) &&
+                mode->getDataMode()->getBandwidth() > newBandwidth)
+            throw cRuntimeError("IEEE 802.11 radio bandwidth %s is narrower than the configured mode bandwidth %s",
+                    newBandwidth.str().c_str(), mode->getDataMode()->getBandwidth().str().c_str());
+    }
+    bool changed = ieee80211Transmitter->getBandwidth() != newBandwidth ||
+            ieee80211Receiver->getBandwidth() != newBandwidth;
+    const bool outerTransaction = !isConfigurationTransactionActive();
+    if (outerTransaction)
+        beginConfigurationTransaction();
+    NarrowbandRadioBase::setBandwidth(newBandwidth);
+    if (changed)
+        markConfigurationChanged();
+    if (outerTransaction)
+        endConfigurationTransaction();
 }
 
 const Ieee80211Channel *Ieee80211Radio::createConfiguredChannel(int channelNumber) const

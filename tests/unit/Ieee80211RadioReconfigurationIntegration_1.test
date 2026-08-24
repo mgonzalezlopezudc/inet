@@ -5,13 +5,16 @@ and 80+80-to-80 transitions, and failed-command rollback.
 
 %includes:
 #include <exception>
+#include <limits>
 #include <memory>
 
+#include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211CcaProvider.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
 
@@ -32,6 +35,35 @@ class TestDriver : public cSimpleModule
 };
 
 Define_Module(TestDriver);
+
+class RadioSignalCounter : public cListener
+{
+  public:
+    int listeningChanged = 0;
+    int ccaChanged = 0;
+    int channelChanged = 0;
+
+    virtual void receiveSignal(cComponent *, simsignal_t signal, intval_t, cObject *) override
+    {
+        if (signal == IRadio::listeningChangedSignal)
+            listeningChanged++;
+        else if (signal == Ieee80211Radio::radioChannelChangedSignal)
+            channelChanged++;
+    }
+
+    virtual void receiveSignal(cComponent *, simsignal_t signal, cObject *, cObject *) override
+    {
+        if (signal == IIeee80211CcaProvider::ccaStateChangedSignal)
+            ccaChanged++;
+    }
+
+    void reset()
+    {
+        listeningChanged = 0;
+        ccaChanged = 0;
+        channelChanged = 0;
+    }
+};
 
 template<typename F>
 static bool throwsReconfigurationError(F f)
@@ -112,6 +144,10 @@ sim-time-limit = 0s
     auto *radio = check_and_cast<TestIeee80211Radio *>(cSimulation::getActiveSimulation()->getModuleByPath("radio"));
     auto *transmitter = check_and_cast<const Ieee80211Transmitter *>(radio->getTransmitter());
     auto *receiver = check_and_cast<const Ieee80211Receiver *>(radio->getReceiver());
+    RadioSignalCounter signalCounter;
+    radio->subscribe(IRadio::listeningChangedSignal, &signalCounter);
+    radio->subscribe(IIeee80211CcaProvider::ccaStateChangedSignal, &signalCounter);
+    radio->subscribe(Ieee80211Radio::radioChannelChangedSignal, &signalCounter);
     const IIeee80211Band *band5 = Ieee80211CompliantBands::getBand("5 GHz");
     ASSERT(band5 != nullptr);
     ASSERT(radio->getChannel()->getChannelWidth() == IEEE80211_CHANNEL_WIDTH_80MHZ);
@@ -120,6 +156,24 @@ sim-time-limit = 0s
     ASSERT(radio->getChannel()->getChannelNumber() == 40);
     ASSERT(transmitter->getChannel()->getChannelNumber() == 40);
     ASSERT(receiver->getChannel()->getChannelNumber() == 40);
+
+    // A radio-mode-only command still changes the CCA-enabled state.  It is
+    // part of the same externally visible configuration commit even though
+    // no channel geometry changes.
+    const auto modeRevision = radio->getCcaSnapshot().getConfigurationRevision();
+    signalCounter.reset();
+    auto *modeMessage = new cMessage("configure-radio-mode");
+    modeMessage->setKind(RADIO_C_CONFIGURE);
+    auto *modeCommand = new Ieee80211ConfigureRadioCommand();
+    modeCommand->setRadioMode(IRadio::RADIO_MODE_RECEIVER);
+    modeMessage->setControlInfo(modeCommand);
+    radio->handleUpperCommand(modeMessage);
+    ASSERT(radio->getRadioMode() == IRadio::RADIO_MODE_RECEIVER);
+    ASSERT(signalCounter.listeningChanged == 1);
+    ASSERT(signalCounter.ccaChanged == 1);
+    ASSERT(signalCounter.channelChanged == 0);
+    ASSERT(radio->getCcaSnapshot().getConfigurationRevision() == modeRevision + 1);
+    ASSERT(radio->getCcaSnapshot().isEnabled());
     ASSERT(transmitter->getChannel()->getCenterFrequencyIndex0() == 42);
     ASSERT(receiver->getChannel()->getCenterFrequencyIndex0() == 42);
 
@@ -132,6 +186,16 @@ sim-time-limit = 0s
         radio->handleUpperCommand(message);
     };
 
+    auto configureChannelAndCheckOneCommit = [&] (Ieee80211Channel *channel) {
+        const auto oldRevision = radio->getCcaSnapshot().getConfigurationRevision();
+        signalCounter.reset();
+        configureChannel(channel);
+        ASSERT(signalCounter.listeningChanged == 1);
+        ASSERT(signalCounter.ccaChanged == 1);
+        ASSERT(signalCounter.channelChanged == 1);
+        ASSERT(radio->getCcaSnapshot().getConfigurationRevision() == oldRevision + 1);
+    };
+
     // A transmission captures immutable channel geometry.  Reconfiguration
     // must not leave an in-flight transmission pointing at the receiver's
     // subsequently replaced channel object.
@@ -142,7 +206,7 @@ sim-time-limit = 0s
     ASSERT(retainedTransmission->getChannel()->getChannelWidth() == IEEE80211_CHANNEL_WIDTH_80MHZ);
 
     Ieee80211Channel channel160(band5, 36, IEEE80211_CHANNEL_WIDTH_160MHZ, 50);
-    configureChannel(&channel160);
+    configureChannelAndCheckOneCommit(&channel160);
     ASSERT(retainedTransmission->getChannel()->getChannelNumber() == 40);
     ASSERT(retainedTransmission->getChannel()->getChannelWidth() == IEEE80211_CHANNEL_WIDTH_80MHZ);
     ASSERT(radio->getChannel()->getChannelWidth() == IEEE80211_CHANNEL_WIDTH_160MHZ);
@@ -155,7 +219,7 @@ sim-time-limit = 0s
     // A channel-only transition to 80+80 must select a full 160 MHz VHT
     // operating mode, even if the previous mode was a narrower VHT mode.
     Ieee80211Channel channel80Plus80(band5, 36, IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ, 42, 155);
-    configureChannel(&channel80Plus80);
+    configureChannelAndCheckOneCommit(&channel80Plus80);
     ASSERT(radio->getChannel()->is80Plus80());
     ASSERT(transmitter->getMode() != nullptr);
     ASSERT(transmitter->getMode()->getDataMode()->getBandwidth() == MHz(160));
@@ -164,10 +228,18 @@ sim-time-limit = 0s
     ASSERT(transmitter->getBandwidth() == MHz(160));
     ASSERT(receiver->getBandwidth() == MHz(160));
 
+    // A packet-level 80+80 ChannelReq may not bypass the radio's configured
+    // primary/secondary geometry.  The transmitter rejects a different
+    // valid 80+80 tuple before constructing a transmission.
+    Packet bypassPacket("bypass-channel-request");
+    Ieee80211Channel bypassChannel(band5, 52, IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ, 58, 155);
+    bypassPacket.addTag<Ieee80211ChannelReq>()->setChannel(&bypassChannel);
+    ASSERT(throwsReconfigurationError([&] { transmitter->computeTransmissionChannel(&bypassPacket); }));
+
     // Narrowing the configured operating channel resolves a compatible 80 MHz
     // mode and keeps all three channel objects synchronized.
     Ieee80211Channel channel80(band5, 36, IEEE80211_CHANNEL_WIDTH_80MHZ, 42);
-    configureChannel(&channel80);
+    configureChannelAndCheckOneCommit(&channel80);
     ASSERT(!radio->getChannel()->is80Plus80());
     ASSERT(radio->getChannel()->getChannelWidth() == IEEE80211_CHANNEL_WIDTH_80MHZ);
     ASSERT(transmitter->getMode()->getDataMode()->getBandwidth() == MHz(80));
@@ -175,6 +247,78 @@ sim-time-limit = 0s
     ASSERT(receiver->getChannel()->getChannelWidth() == IEEE80211_CHANNEL_WIDTH_80MHZ);
     ASSERT(transmitter->getBandwidth() == MHz(80));
     ASSERT(receiver->getBandwidth() == MHz(80));
+
+    // Public setters validate the complete tuple before mutating either child
+    // or the radio-level CCA publication state.  Every invalid call below
+    // therefore leaves state, revision, and all three relevant signals alone.
+    const auto *publicChannel = radio->getChannel();
+    const auto *publicReceiverChannel = receiver->getChannel();
+    const auto *publicModeSet = radio->getModeSet();
+    const auto *publicMode = transmitter->getMode();
+    const auto *publicBand = radio->getBand();
+    const auto publicTxBandwidth = transmitter->getBandwidth();
+    const auto publicRxBandwidth = receiver->getBandwidth();
+    const auto publicTxCenterFrequency = transmitter->getCenterFrequency();
+    const auto publicRxCenterFrequency = receiver->getCenterFrequency();
+    const auto publicRevision = radio->getCcaSnapshot().getConfigurationRevision();
+    auto expectSetterRejectsWithoutMutation = [&] (auto setter) {
+        signalCounter.reset();
+        ASSERT(throwsReconfigurationError(setter));
+        ASSERT(signalCounter.listeningChanged == 0);
+        ASSERT(signalCounter.ccaChanged == 0);
+        ASSERT(signalCounter.channelChanged == 0);
+        ASSERT(radio->getChannel() == publicChannel);
+        ASSERT(receiver->getChannel() == publicReceiverChannel);
+        ASSERT(radio->getModeSet() == publicModeSet);
+        ASSERT(transmitter->getMode() == publicMode);
+        ASSERT(radio->getBand() == publicBand);
+        ASSERT(transmitter->getBandwidth() == publicTxBandwidth);
+        ASSERT(receiver->getBandwidth() == publicRxBandwidth);
+        ASSERT(transmitter->getCenterFrequency() == publicTxCenterFrequency);
+        ASSERT(receiver->getCenterFrequency() == publicRxCenterFrequency);
+        ASSERT(radio->getCcaSnapshot().getConfigurationRevision() == publicRevision);
+    };
+    expectSetterRejectsWithoutMutation([&] { radio->setModeSet(Ieee80211ModeSet::getModeSet("a")); });
+    const auto *mode160 = transmitter->getModeSet()->getFastestMode(MHz(160));
+    ASSERT(mode160 != nullptr);
+    expectSetterRejectsWithoutMutation([&] { radio->setMode(mode160); });
+    expectSetterRejectsWithoutMutation([&] { radio->setBand(Ieee80211CompliantBands::getBand("2.4 GHz")); });
+    expectSetterRejectsWithoutMutation([&] { radio->setChannel(nullptr); });
+    expectSetterRejectsWithoutMutation([&] { radio->setChannelNumber(149); });
+    expectSetterRejectsWithoutMutation([&] { radio->setCenterFrequency(GHz(5.5)); });
+    expectSetterRejectsWithoutMutation([&] { radio->setBandwidth(MHz(160)); });
+    const auto setterRevision = radio->getCcaSnapshot().getConfigurationRevision();
+    signalCounter.reset();
+    radio->setChannelNumber(40);
+    ASSERT(signalCounter.listeningChanged == 1);
+    ASSERT(signalCounter.ccaChanged == 1);
+    ASSERT(signalCounter.channelChanged == 1);
+    ASSERT(radio->getCcaSnapshot().getConfigurationRevision() == setterRevision + 1);
+    ASSERT(radio->getChannel()->getChannelNumber() == 40);
+    ASSERT(transmitter->getChannel()->getChannelNumber() == 40);
+    ASSERT(receiver->getChannel()->getChannelNumber() == 40);
+
+    // Selecting a legal narrower PPDU mode must not permit the radio's
+    // listening bandwidth to diverge from its explicit VHT80 channel.
+    const auto *mode40 = transmitter->getModeSet()->getFastestMode(MHz(40));
+    ASSERT(mode40 != nullptr);
+    radio->setMode(mode40);
+    const auto narrowModeRevision = radio->getCcaSnapshot().getConfigurationRevision();
+    auto expectBandwidthRejectsWithoutMutation = [&] (Hz bandwidth) {
+        signalCounter.reset();
+        ASSERT(throwsReconfigurationError([&] { radio->setBandwidth(bandwidth); }));
+        ASSERT(signalCounter.listeningChanged == 0);
+        ASSERT(signalCounter.ccaChanged == 0);
+        ASSERT(signalCounter.channelChanged == 0);
+        ASSERT(transmitter->getMode() == mode40);
+        ASSERT(transmitter->getBandwidth() == MHz(80));
+        ASSERT(receiver->getBandwidth() == MHz(80));
+        ASSERT(radio->getCcaSnapshot().getConfigurationRevision() == narrowModeRevision);
+    };
+    expectBandwidthRejectsWithoutMutation(MHz(40));
+    expectBandwidthRejectsWithoutMutation(Hz(std::numeric_limits<double>::quiet_NaN()));
+    expectBandwidthRejectsWithoutMutation(Hz(-1));
+    radio->setMode(publicMode);
 
     // An incompatible operation-mode request fails before any authoritative
     // or child field is changed.
@@ -194,6 +338,8 @@ sim-time-limit = 0s
     const auto oldRxBandwidth = receiver->getBandwidth();
     const auto *oldTxModulation = transmitter->getModulation();
     const auto *oldRxModulation = receiver->getModulation();
+    const auto oldRevision = radio->getCcaSnapshot().getConfigurationRevision();
+    signalCounter.reset();
     auto *invalidMessage = new cMessage("invalid-configure");
     invalidMessage->setKind(RADIO_C_CONFIGURE);
     auto *invalidCommand = new Ieee80211ConfigureRadioCommand();
@@ -219,6 +365,10 @@ sim-time-limit = 0s
     ASSERT(receiver->getBandwidth() == oldRxBandwidth);
     ASSERT(transmitter->getModulation() == oldTxModulation);
     ASSERT(receiver->getModulation() == oldRxModulation);
+    ASSERT(signalCounter.listeningChanged == 0);
+    ASSERT(signalCounter.ccaChanged == 0);
+    ASSERT(signalCounter.channelChanged == 0);
+    ASSERT(radio->getCcaSnapshot().getConfigurationRevision() == oldRevision);
 
     // A generic inherited center-frequency field is validated in the same
     // transaction as the channel.  It must not be applied after a successful
@@ -268,6 +418,10 @@ sim-time-limit = 0s
     ASSERT(receiver->getBandwidth() == rollbackRxBandwidth);
     ASSERT(transmitter->getModulation() == rollbackTxModulation);
     ASSERT(receiver->getModulation() == rollbackRxModulation);
+
+    radio->unsubscribe(IRadio::listeningChangedSignal, &signalCounter);
+    radio->unsubscribe(IIeee80211CcaProvider::ccaStateChangedSignal, &signalCounter);
+    radio->unsubscribe(Ieee80211Radio::radioChannelChangedSignal, &signalCounter);
 
     EV << "Initialized radio reconfiguration and child synchronization verified.\n";
     EV << "80+80 full-mode selection, narrowing, and rollback verified.\n";

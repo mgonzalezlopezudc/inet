@@ -40,6 +40,10 @@ class INET_API Ieee80211Radio : public FlatRadioBase, public IIeee80211CcaProvid
     int channelCenterFrequencyIndex1 = 0;
     uint64_t ccaConfigurationRevision = 0;
     std::unique_ptr<Ieee80211CcaSnapshot> ccaSnapshot;
+    int configurationTransactionDepth = 0;
+    bool configurationChanged = false;
+    bool pendingChannelChanged = false;
+    int pendingChannelNumber = -1;
     std::string opMode;
     const Ieee80211ModeSet *modeSet = nullptr;
     const IIeee80211Band *band = nullptr;
@@ -48,7 +52,7 @@ class INET_API Ieee80211Radio : public FlatRadioBase, public IIeee80211CcaProvid
     virtual void initialize(int stage) override;
 
     void changeModeSet(const Ieee80211ModeSet *modeSet, const IIeee80211Mode *mode, bool explicitMode,
-            const std::function<void()>& applyConfiguration = {}, bool publishModeSet = true, int channelNumber = -1);
+            const std::function<void()>& applyConfiguration = {}, bool publishModeSet = true, int channelNumber = -1, int requestedRadioMode = -1);
 
     virtual void handleUpperCommand(cMessage *message) override;
 
@@ -61,6 +65,11 @@ class INET_API Ieee80211Radio : public FlatRadioBase, public IIeee80211CcaProvid
     virtual bool computeIsBandBusy(const FrequencyBand& band, Ieee80211CcaGroup group, bool legacyHt40 = false) const;
     virtual void updateCcaState();
     virtual void updateTransceiverState() override;
+
+    virtual void beginConfigurationTransaction();
+    virtual void endConfigurationTransaction();
+    virtual void markConfigurationChanged(bool channelChanged = false, int channelNumber = -1);
+    virtual bool isConfigurationTransactionActive() const { return configurationTransactionDepth != 0; }
 
   public:
     Ieee80211Radio();
@@ -80,6 +89,8 @@ class INET_API Ieee80211Radio : public FlatRadioBase, public IIeee80211CcaProvid
     virtual void setBand(const IIeee80211Band *band);
     virtual void setChannel(const Ieee80211Channel *channel);
     virtual void setChannelNumber(int newChannelNumber);
+    virtual void setCenterFrequency(Hz newCenterFrequency) override;
+    virtual void setBandwidth(Hz newBandwidth) override;
     virtual const Ieee80211Channel *createConfiguredChannel(int channelNumber) const;
 };
 
