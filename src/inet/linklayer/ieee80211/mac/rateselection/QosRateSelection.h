@@ -83,8 +83,11 @@ class INET_API QosRateSelection : public IQosRateSelection, public ModeSetListen
     // some situations, the transmission of a control frame is not a control response transmission, such as when a CTS
     // is used to initiate a TXOP.
     virtual const physicallayer::IIeee80211Mode *computeResponseCtsFrameMode(Packet *packet, const Ptr<const Ieee80211RtsFrame>& rtsFrame) override;
+    virtual const physicallayer::IIeee80211Mode *computeResponseCtsFrameMode(const physicallayer::IIeee80211Mode *initiatingMode) override;
     virtual const physicallayer::IIeee80211Mode *computeResponseAckFrameMode(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) override;
+    virtual const physicallayer::IIeee80211Mode *computeResponseAckFrameMode(const physicallayer::IIeee80211Mode *initiatingMode) override;
     virtual const physicallayer::IIeee80211Mode *computeResponseBlockAckFrameMode(Packet *packet, const Ptr<const Ieee80211BlockAckReq>& blockAckReq) override;
+    virtual const physicallayer::IIeee80211Mode *computeResponseBlockAckFrameMode(const physicallayer::IIeee80211Mode *initiatingMode) override;
 
     virtual const physicallayer::IIeee80211Mode *computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, TxopProcedure *txopProcedure) override;
     virtual const physicallayer::IIeee80211Mode *computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header,

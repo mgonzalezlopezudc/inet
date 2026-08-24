@@ -10,6 +10,7 @@
 
 #include "inet/common/packet/Packet.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -20,11 +21,10 @@ class INET_API IOriginatorAckPolicy
     virtual ~IOriginatorAckPolicy() {}
 
     virtual bool isAckNeeded(const Ptr<const Ieee80211DataOrMgmtHeader>& header) const = 0;
-    virtual simtime_t getAckTimeout(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header) const = 0;
+    virtual simtime_t getAckTimeout(const physicallayer::IIeee80211Mode *initiatingMode) const = 0;
 };
 
 } // namespace ieee80211
 } // namespace inet
 
 #endif
-

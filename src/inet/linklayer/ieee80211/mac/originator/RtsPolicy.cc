@@ -48,11 +48,10 @@ bool RtsPolicy::isRtsNeeded(Packet *packet, const Ptr<const Ieee80211MacHeader>&
 // the transmission of the RTS has failed, and this STA shall invoke its backoff procedure upon expiration of the
 // CTSTimeout interval.
 //
-simtime_t RtsPolicy::getCtsTimeout(Packet *packet, const Ptr<const Ieee80211RtsFrame>& rtsFrame) const
+simtime_t RtsPolicy::getCtsTimeout(const physicallayer::IIeee80211Mode *initiatingMode) const
 {
-    return ctsTimeout == -1 ? modeSet->getSifsTime() + modeSet->getSlotTime() + rateSelection->computeResponseCtsFrameMode(packet, rtsFrame)->getPhyRxStartDelay() : ctsTimeout;
+    return ctsTimeout == -1 ? modeSet->getSifsTime() + modeSet->getSlotTime() + rateSelection->computeResponseCtsFrameMode(initiatingMode)->getPhyRxStartDelay() : ctsTimeout;
 }
 
 } /* namespace ieee80211 */
 } /* namespace inet */
-

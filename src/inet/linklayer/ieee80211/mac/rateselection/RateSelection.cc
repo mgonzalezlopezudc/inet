@@ -143,6 +143,18 @@ const IIeee80211Mode *RateSelection::getMode(Packet *packet, const Ptr<const Iee
 // frame in the frame exchange sequence (as defined in 9.7), if this rate belongs to the PHY mandatory rates, or
 // else at the highest possible rate belonging to the PHY rates in the BSSBasicRateSet.
 //
+
+const IIeee80211Mode *RateSelection::computeResponseAckFrameMode(const IIeee80211Mode *initiatingMode)
+{
+    return responseAckFrameMode ? modeSet->getNonHtControlResponseMode(responseAckFrameMode, false) :
+            modeSet->getMandatoryControlResponseMode(initiatingMode);
+}
+
+const IIeee80211Mode *RateSelection::computeResponseCtsFrameMode(const IIeee80211Mode *initiatingMode)
+{
+    return modeSet->getControlResponseMode(initiatingMode, responseCtsFrameMode);
+}
+
 const IIeee80211Mode *RateSelection::computeResponseAckFrameMode(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader)
 {
     // Keep configured responses independent of the eliciting packet; callers may

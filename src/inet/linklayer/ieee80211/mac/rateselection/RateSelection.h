@@ -95,7 +95,9 @@ class INET_API RateSelection : public IRateSelection, public SimpleModule, publi
     // some situations, the transmission of a control frame is not a control response transmission, such as when a CTS
     // is used to initiate a TXOP.
     virtual const physicallayer::IIeee80211Mode *computeResponseCtsFrameMode(Packet *packet, const Ptr<const Ieee80211RtsFrame>& rtsFrame) override;
+    virtual const physicallayer::IIeee80211Mode *computeResponseCtsFrameMode(const physicallayer::IIeee80211Mode *initiatingMode) override;
     virtual const physicallayer::IIeee80211Mode *computeResponseAckFrameMode(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) override;
+    virtual const physicallayer::IIeee80211Mode *computeResponseAckFrameMode(const physicallayer::IIeee80211Mode *initiatingMode) override;
 
     virtual const physicallayer::IIeee80211Mode *computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header) override;
     virtual const physicallayer::IIeee80211Mode *computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header,

@@ -33,7 +33,7 @@ class INET_API FrameSequenceHandler : public IFrameSequenceHandler
     virtual const IFrameSequence *getFrameSequence() const override { return frameSequence; }
     virtual void startFrameSequence(IFrameSequence *frameSequence, FrameSequenceContext *context, IFrameSequenceHandler::ICallback *callback) override;
     virtual bool processResponse(Packet *frame) override;
-    virtual void transmissionComplete() override;
+    virtual void transmissionComplete(const physicallayer::IIeee80211Mode *transmittedMode) override;
     virtual void handleStartRxTimeout() override;
     virtual bool isSequenceRunning() override { return frameSequence != nullptr; }
     virtual void cancelFrameSequence() override { if (isSequenceRunning()) frameSequenceCancellationRequested = true; }

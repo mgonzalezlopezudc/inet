@@ -28,14 +28,23 @@ simtime_t FrameSequenceContext::getIfs() const
     return getNumSteps() == 0 ? 0 : modeSet->getSifsTime(); // TODO pifs
 }
 
-simtime_t FrameSequenceContext::getAckTimeout(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtframe) const
+simtime_t FrameSequenceContext::getAckTimeout() const
 {
-    return qosContext ? qosContext->ackPolicy->getAckTimeout(packet, dataOrMgmtframe) : nonQoSContext->ackPolicy->getAckTimeout(packet, dataOrMgmtframe);
+    ASSERT(lastTransmittedMode != nullptr);
+    return qosContext ? qosContext->ackPolicy->getAckTimeout(lastTransmittedMode) : nonQoSContext->ackPolicy->getAckTimeout(lastTransmittedMode);
 }
 
-simtime_t FrameSequenceContext::getCtsTimeout(Packet *packet, const Ptr<const Ieee80211RtsFrame>& rtsFrame) const
+simtime_t FrameSequenceContext::getCtsTimeout() const
 {
-    return rtsPolicy->getCtsTimeout(packet, rtsFrame);
+    ASSERT(lastTransmittedMode != nullptr);
+    return rtsPolicy->getCtsTimeout(lastTransmittedMode);
+}
+
+simtime_t FrameSequenceContext::getBlockAckTimeout() const
+{
+    ASSERT(lastTransmittedMode != nullptr);
+    ASSERT(qosContext != nullptr);
+    return qosContext->ackPolicy->getBlockAckTimeout(lastTransmittedMode);
 }
 
 bool FrameSequenceContext::isForUs(const Ptr<const Ieee80211MacHeader>& header) const
@@ -78,4 +87,3 @@ void FrameSequenceNumPacketsFilter::receiveSignal(cResultFilter *prev, simtime_t
 
 } // namespace ieee80211
 } // namespace inet
-

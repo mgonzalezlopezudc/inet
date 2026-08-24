@@ -58,6 +58,7 @@ class INET_API FrameSequenceContext : public cObject
     physicallayer::Ieee80211ModeSet *modeSet = nullptr;
     InProgressFrames *inProgressFrames = nullptr;
     std::vector<IFrameSequenceStep *> steps;
+    const physicallayer::IIeee80211Mode *lastTransmittedMode = nullptr;
 
     IRtsProcedure *rtsProcedure = nullptr;
     IRtsPolicy *rtsPolicy = nullptr;
@@ -84,8 +85,12 @@ class INET_API FrameSequenceContext : public cObject
     virtual NonQoSContext *getNonQoSContext() const { return nonQoSContext; }
     virtual QoSContext *getQoSContext() const { return qosContext; }
 
-    virtual simtime_t getAckTimeout(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtframe) const;
-    virtual simtime_t getCtsTimeout(Packet *packet, const Ptr<const Ieee80211RtsFrame>& rtsFrame) const;
+    virtual void setLastTransmittedMode(const physicallayer::IIeee80211Mode *mode) { lastTransmittedMode = mode; }
+    virtual const physicallayer::IIeee80211Mode *getLastTransmittedMode() const { return lastTransmittedMode; }
+
+    virtual simtime_t getAckTimeout() const;
+    virtual simtime_t getCtsTimeout() const;
+    virtual simtime_t getBlockAckTimeout() const;
     virtual simtime_t getIfs() const;
 
     virtual bool isForUs(const Ptr<const Ieee80211MacHeader>& header) const;
@@ -110,4 +115,3 @@ class INET_API FrameSequenceNumPacketsFilter : public cObjectResultFilter
 } // namespace inet
 
 #endif
-

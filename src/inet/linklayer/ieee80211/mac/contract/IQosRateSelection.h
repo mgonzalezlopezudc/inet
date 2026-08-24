@@ -28,8 +28,11 @@ class INET_API IQosRateSelection
     virtual ~IQosRateSelection() {}
 
     virtual const physicallayer::IIeee80211Mode *computeResponseCtsFrameMode(Packet *packet, const Ptr<const Ieee80211RtsFrame>& rtsFrame) = 0;
+    virtual const physicallayer::IIeee80211Mode *computeResponseCtsFrameMode(const physicallayer::IIeee80211Mode *initiatingMode) = 0;
     virtual const physicallayer::IIeee80211Mode *computeResponseAckFrameMode(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) = 0;
+    virtual const physicallayer::IIeee80211Mode *computeResponseAckFrameMode(const physicallayer::IIeee80211Mode *initiatingMode) = 0;
     virtual const physicallayer::IIeee80211Mode *computeResponseBlockAckFrameMode(Packet *packet, const Ptr<const Ieee80211BlockAckReq>& blockAckReq) = 0;
+    virtual const physicallayer::IIeee80211Mode *computeResponseBlockAckFrameMode(const physicallayer::IIeee80211Mode *initiatingMode) = 0;
 
     virtual const physicallayer::IIeee80211Mode *computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, TxopProcedure *txopProcedure) = 0;
     virtual const physicallayer::IIeee80211Mode *computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header,

@@ -1,0 +1,118 @@
+%description:
+Verify that an originator frame sequence records the mode of the packet copy
+actually transmitted by Tx and uses it for the following response timeout.
+The queued frame intentionally has no ModeReq tag.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/contract/IOriginatorAckPolicy.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceHandler.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+class TestAckPolicy : public IOriginatorAckPolicy
+{
+  public:
+    const IIeee80211Mode *observedMode = nullptr;
+
+    bool isAckNeeded(const Ptr<const Ieee80211DataOrMgmtHeader>&) const override { return true; }
+
+    simtime_t getAckTimeout(const IIeee80211Mode *initiatingMode) const override
+    {
+        const_cast<TestAckPolicy *>(this)->observedMode = initiatingMode;
+        return SimTime(37, SIMTIME_US);
+    }
+};
+
+class TestFrameSequence : public IFrameSequence
+{
+  protected:
+    int step = -1;
+
+  public:
+    Packet *queuedFrame = nullptr;
+
+    void startSequence(FrameSequenceContext *, int) override { step = 0; }
+
+    IFrameSequenceStep *prepareStep(FrameSequenceContext *context) override
+    {
+        switch (step) {
+            case 0: {
+                queuedFrame = new Packet("queued DATA");
+                queuedFrame->insertAtFront(makeShared<Ieee80211DataHeader>());
+                return new TransmitStep(queuedFrame, SIMTIME_ZERO, true);
+            }
+            case 1:
+                return new ReceiveStep(context->getAckTimeout());
+            case 2:
+                return nullptr;
+            default:
+                throw cRuntimeError("Unknown step");
+        }
+    }
+
+    bool completeStep(FrameSequenceContext *) override
+    {
+        step++;
+        return true;
+    }
+
+    std::string getHistory() const override { return "transmit ACK-timeout"; }
+};
+
+class TestFrameSequenceCallback : public IFrameSequenceHandler::ICallback
+{
+  public:
+    Packet *transmittedFrame = nullptr;
+    simtime_t scheduledTimeout = -1;
+    bool transmittedProcessed = false;
+    bool failedProcessed = false;
+    bool sequenceFinished = false;
+
+    void transmitFrame(Packet *packet, simtime_t) override { transmittedFrame = packet; }
+    void originatorProcessRtsProtectionFailed(Packet *) override { ASSERT(false); }
+    void originatorProcessTransmittedFrame(Packet *) override { transmittedProcessed = true; }
+    void originatorProcessReceivedFrame(Packet *, Packet *) override { ASSERT(false); }
+    void originatorProcessFailedFrame(Packet *) override { failedProcessed = true; }
+    void frameSequenceFinished() override { sequenceFinished = true; }
+    void scheduleStartRxTimer(simtime_t timeout) override { scheduledTimeout = timeout; }
+};
+
+%activity:
+TestAckPolicy ackPolicy;
+InProgressFrames inProgressFrames;
+auto *context = new FrameSequenceContext(MacAddress::UNSPECIFIED_ADDRESS,
+        const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ac")),
+        &inProgressFrames, nullptr, nullptr, new NonQoSContext(&ackPolicy), nullptr);
+auto *sequence = new TestFrameSequence();
+TestFrameSequenceCallback callback;
+FrameSequenceHandler handler;
+
+handler.startFrameSequence(sequence, context, &callback);
+ASSERT(callback.transmittedFrame == sequence->queuedFrame);
+ASSERT(callback.transmittedFrame->findTag<Ieee80211ModeReq>() == nullptr);
+
+const auto *transmittedMode = Ieee80211ModeSet::getModeSet("ac")->getFastestMode(MHz(40));
+ASSERT(transmittedMode != nullptr);
+handler.transmissionComplete(transmittedMode);
+
+ASSERT(callback.transmittedProcessed);
+ASSERT(ackPolicy.observedMode == transmittedMode);
+ASSERT(callback.scheduledTimeout == SimTime(37, SIMTIME_US));
+ASSERT(sequence->queuedFrame->findTag<Ieee80211ModeReq>() == nullptr);
+
+handler.handleStartRxTimeout();
+ASSERT(!handler.isSequenceRunning());
+ASSERT(callback.failedProcessed);
+ASSERT(callback.sequenceFinished);
+
+EV << "TXOP-local transmitted mode drives ACK timeout without modifying the queued frame.\n";
+
+%contains: stdout
+TXOP-local transmitted mode drives ACK timeout without modifying the queued frame.

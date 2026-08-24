@@ -136,6 +136,18 @@ bool QosRateSelection::isControlResponseFrame(const Ptr<const Ieee80211MacHeader
 // non-HT PPDU CTS or ACK control response frame at either the primary rate or the alternate rate, if
 // one exists.
 //
+
+const IIeee80211Mode *QosRateSelection::computeResponseAckFrameMode(const IIeee80211Mode *initiatingMode)
+{
+    return responseAckFrameMode ? modeSet->getNonHtControlResponseMode(responseAckFrameMode, false) :
+            modeSet->getMandatoryControlResponseMode(initiatingMode);
+}
+
+const IIeee80211Mode *QosRateSelection::computeResponseCtsFrameMode(const IIeee80211Mode *initiatingMode)
+{
+    return modeSet->getControlResponseMode(initiatingMode, responseCtsFrameMode);
+}
+
 const IIeee80211Mode *QosRateSelection::computeResponseAckFrameMode(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader)
 {
     const IIeee80211Mode *responseMode = nullptr;
@@ -183,6 +195,11 @@ const IIeee80211Mode *QosRateSelection::computeResponseBlockAckFrameMode(Packet 
     }
     auto peerAddress = mib && blockAckReq->getReceiverAddress() == mib->address ? blockAckReq->getTransmitterAddress() : blockAckReq->getReceiverAddress();
     return getPeerCompatibleMode(peerAddress, responseMode);
+}
+
+const IIeee80211Mode *QosRateSelection::computeResponseBlockAckFrameMode(const IIeee80211Mode *initiatingMode)
+{
+    return modeSet->getNonHtControlResponseMode(responseBlockAckFrameMode ? responseBlockAckFrameMode : initiatingMode, false);
 }
 
 const IIeee80211Mode *QosRateSelection::computeDataOrMgmtFrameMode(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader)

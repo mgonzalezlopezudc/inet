@@ -912,7 +912,7 @@ class TestFrameSequenceHandler : public IFrameSequenceHandler
         numStartedSequences++;
     }
     virtual bool processResponse(Packet *) override { return true; }
-    virtual void transmissionComplete() override {}
+    virtual void transmissionComplete(const physicallayer::IIeee80211Mode *) override {}
     virtual bool isSequenceRunning() override { return running; }
     virtual void handleStartRxTimeout() override {}
     virtual void cancelFrameSequence() override { cancellationRequested = true; }
@@ -933,6 +933,8 @@ class TestDcaf : public Dcaf
 
 class TestDcf : public Dcf
 {
+  protected:
+    bool selectChannelAccessWidth() override { return false; }
   public:
     virtual ~TestDcf() {
         for (auto listener : getLocalSignalListeners(Ieee80211Mac::frameTransmissionOutcomeSignal))

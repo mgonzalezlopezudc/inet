@@ -162,14 +162,14 @@ bool OriginatorQosAckPolicy::checkAgreementPolicy(const Ptr<const Ieee80211DataH
 // ACKTimeout interval, the STA concludes that the transmission of the MPDU has failed, and this STA shall
 // invoke its backoff procedure upon expiration of the ACKTimeout interval.
 //
-simtime_t OriginatorQosAckPolicy::getAckTimeout(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) const
+simtime_t OriginatorQosAckPolicy::getAckTimeout(const physicallayer::IIeee80211Mode *initiatingMode) const
 {
-    return ackTimeout == -1 ? modeSet->getSifsTime() + modeSet->getSlotTime() + rateSelection->computeResponseAckFrameMode(packet, dataOrMgmtHeader)->getPhyRxStartDelay() : ackTimeout;
+    return ackTimeout == -1 ? modeSet->getSifsTime() + modeSet->getSlotTime() + rateSelection->computeResponseAckFrameMode(initiatingMode)->getPhyRxStartDelay() : ackTimeout;
 }
 
-simtime_t OriginatorQosAckPolicy::getBlockAckTimeout(Packet *packet, const Ptr<const Ieee80211BlockAckReq>& blockAckReq) const
+simtime_t OriginatorQosAckPolicy::getBlockAckTimeout(const physicallayer::IIeee80211Mode *initiatingMode) const
 {
-    return blockAckTimeout == -1 ? modeSet->getSifsTime() + modeSet->getSlotTime() + rateSelection->computeResponseBlockAckFrameMode(packet, blockAckReq)->getPhyRxStartDelay() : blockAckTimeout;
+    return blockAckTimeout == -1 ? modeSet->getSifsTime() + modeSet->getSlotTime() + rateSelection->computeResponseBlockAckFrameMode(initiatingMode)->getPhyRxStartDelay() : blockAckTimeout;
 }
 
 } /* namespace ieee80211 */

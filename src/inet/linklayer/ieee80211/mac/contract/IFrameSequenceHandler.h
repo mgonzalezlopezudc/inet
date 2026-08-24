@@ -9,6 +9,7 @@
 #define __INET_IFRAMESEQUENCEHANDLER_H
 
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequence.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -45,7 +46,7 @@ class INET_API IFrameSequenceHandler
     // Returns true when the handler consumes the frame; false leaves ownership
     // with the caller because the active receive step remains unchanged.
     virtual bool processResponse(Packet *frame) = 0;
-    virtual void transmissionComplete() = 0;
+    virtual void transmissionComplete(const physicallayer::IIeee80211Mode *transmittedMode) = 0;
     virtual bool isSequenceRunning() = 0;
     virtual void handleStartRxTimeout() = 0;
 

@@ -460,7 +460,9 @@ void Dcf::transmissionComplete(Packet *packet, const Ptr<const Ieee80211MacHeade
 {
     Enter_Method("transmissionComplete");
     if (frameSequenceHandler->isSequenceRunning()) {
-        frameSequenceHandler->transmissionComplete();
+        const auto& modeReq = packet->getTag<Ieee80211ModeReq>();
+        ASSERT(modeReq->getMode() != nullptr);
+        frameSequenceHandler->transmissionComplete(modeReq->getMode());
     }
     else
         recipientProcessTransmittedControlResponseFrame(packet, header);

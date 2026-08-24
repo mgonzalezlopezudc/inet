@@ -76,9 +76,11 @@ bool FrameSequenceHandler::processResponse(Packet *frame)
     }
 }
 
-void FrameSequenceHandler::transmissionComplete()
+void FrameSequenceHandler::transmissionComplete(const physicallayer::IIeee80211Mode *transmittedMode)
 {
     if (isSequenceRunning()) {
+        ASSERT(transmittedMode != nullptr);
+        context->setLastTransmittedMode(transmittedMode);
         if (frameSequenceCancellationRequested)
             abortFrameSequence();
         else

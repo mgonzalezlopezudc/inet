@@ -12,6 +12,7 @@
 #include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreement.h"
 #include "inet/linklayer/ieee80211/mac/originator/TxopProcedure.h"
 #include "inet/linklayer/ieee80211/mac/queue/InProgressFrames.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -30,8 +31,8 @@ class INET_API IOriginatorQoSAckPolicy
     virtual std::tuple<MacAddress, SequenceNumberCyclic, Tid> computeBlockAckReqParameters(InProgressFrames *inProgressFrames, TxopProcedure *txopProcedure, IOriginatorBlockAckAgreementHandler *blockAckAgreementHandler) const = 0;
     virtual bool isCompressedBlockAckReq(const std::vector<Packet *>& outstandingFrames, OriginatorBlockAckAgreement *agreement) const = 0;
 
-    virtual simtime_t getAckTimeout(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) const = 0;
-    virtual simtime_t getBlockAckTimeout(Packet *packet, const Ptr<const Ieee80211BlockAckReq>& blockAckReq) const = 0;
+    virtual simtime_t getAckTimeout(const physicallayer::IIeee80211Mode *initiatingMode) const = 0;
+    virtual simtime_t getBlockAckTimeout(const physicallayer::IIeee80211Mode *initiatingMode) const = 0;
 };
 
 } // namespace ieee80211

@@ -31,7 +31,9 @@ class INET_API IRateSelection
     virtual ~IRateSelection() {}
 
     virtual const physicallayer::IIeee80211Mode *computeResponseCtsFrameMode(Packet *packet, const Ptr<const Ieee80211RtsFrame>& rtsFrame) = 0;
+    virtual const physicallayer::IIeee80211Mode *computeResponseCtsFrameMode(const physicallayer::IIeee80211Mode *initiatingMode) = 0;
     virtual const physicallayer::IIeee80211Mode *computeResponseAckFrameMode(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) = 0;
+    virtual const physicallayer::IIeee80211Mode *computeResponseAckFrameMode(const physicallayer::IIeee80211Mode *initiatingMode) = 0;
 
     virtual const physicallayer::IIeee80211Mode *computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header) = 0;
     virtual const physicallayer::IIeee80211Mode *computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header,

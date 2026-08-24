@@ -36,11 +36,10 @@ bool OriginatorAckPolicy::isAckNeeded(const Ptr<const Ieee80211DataOrMgmtHeader>
 // ACKTimeout interval, the STA concludes that the transmission of the MPDU has failed, and this STA shall
 // invoke its backoff procedure upon expiration of the ACKTimeout interval.
 //
-simtime_t OriginatorAckPolicy::getAckTimeout(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header) const
+simtime_t OriginatorAckPolicy::getAckTimeout(const physicallayer::IIeee80211Mode *initiatingMode) const
 {
-    return ackTimeout == -1 ? modeSet->getSifsTime() + modeSet->getSlotTime() + rateSelection->computeResponseAckFrameMode(packet, header)->getPhyRxStartDelay() : ackTimeout;
+    return ackTimeout == -1 ? modeSet->getSifsTime() + modeSet->getSlotTime() + rateSelection->computeResponseAckFrameMode(initiatingMode)->getPhyRxStartDelay() : ackTimeout;
 }
 
 } /* namespace ieee80211 */
 } /* namespace inet */
-

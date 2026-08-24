@@ -65,8 +65,8 @@ class TestOriginatorQosAckPolicy : public IOriginatorQoSAckPolicy
         return std::make_tuple(PEER_ONE, SequenceNumberCyclic(startingSequenceNumber), CURRENT_TID);
     }
     virtual bool isCompressedBlockAckReq(const std::vector<Packet *>&, OriginatorBlockAckAgreement *) const override { return compressed; }
-    virtual simtime_t getAckTimeout(Packet *, const Ptr<const Ieee80211DataOrMgmtHeader>&) const override { return SimTime(1, SIMTIME_MS); }
-    virtual simtime_t getBlockAckTimeout(Packet *, const Ptr<const Ieee80211BlockAckReq>&) const override { return SimTime(1, SIMTIME_MS); }
+    virtual simtime_t getAckTimeout(const physicallayer::IIeee80211Mode *) const override { return SimTime(1, SIMTIME_MS); }
+    virtual simtime_t getBlockAckTimeout(const physicallayer::IIeee80211Mode *) const override { return SimTime(1, SIMTIME_MS); }
 };
 
 class TestInProgressFrames : public InProgressFrames
@@ -138,7 +138,7 @@ class TestHcfBlockAckResponseCorrelation : public Hcf
         transmittedFrames++;
         // The synthetic test frame is handed to the live FrameSequenceHandler
         // at the same boundary where Tx would report PHY-TXEND.confirm.
-        frameSequenceHandler->transmissionComplete();
+        frameSequenceHandler->transmissionComplete(physicallayer::Ieee80211ModeSet::getModeSet("a")->getSlowestMode());
     }
 
     virtual void originatorProcessTransmittedFrame(Packet *packet) override

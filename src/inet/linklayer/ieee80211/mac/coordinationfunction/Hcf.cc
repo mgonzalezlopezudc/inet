@@ -940,7 +940,9 @@ void Hcf::transmissionComplete(Packet *packet, const Ptr<const Ieee80211MacHeade
     Enter_Method("transmissionComplete");
     auto edcaf = edca->getChannelOwner();
     if (edcaf) {
-        frameSequenceHandler->transmissionComplete();
+        const auto& modeReq = packet->getTag<Ieee80211ModeReq>();
+        ASSERT(modeReq->getMode() != nullptr);
+        frameSequenceHandler->transmissionComplete(modeReq->getMode());
     }
     else if (hcca->isOwning())
         throw cRuntimeError("Hcca is unimplemented!");

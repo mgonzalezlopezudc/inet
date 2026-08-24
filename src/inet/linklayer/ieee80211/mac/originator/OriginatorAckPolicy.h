@@ -27,11 +27,10 @@ class INET_API OriginatorAckPolicy : public ModeSetListener, public IOriginatorA
 
   public:
     virtual bool isAckNeeded(const Ptr<const Ieee80211DataOrMgmtHeader>& header) const override;
-    virtual simtime_t getAckTimeout(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header) const override;
+    virtual simtime_t getAckTimeout(const physicallayer::IIeee80211Mode *initiatingMode) const override;
 };
 
 } /* namespace ieee80211 */
 } /* namespace inet */
 
 #endif
-
