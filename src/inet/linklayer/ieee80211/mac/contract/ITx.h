@@ -42,22 +42,13 @@ class INET_API ITx
      */
     virtual bool cancelPendingTransmission(ICallback *owner) = 0;
 
-    /**
-     * Transmit using a TXOP-local mode without modifying the queued packet's
-     * ModeReq tag.  The default delegates to the legacy path for custom ITx
-     * implementations; the production Tx implementation stages the mode on
-     * its private duplicate.
-     */
+    /** Transmit using a TXOP-local mode without modifying the queued packet's
+     * ModeReq tag.  Implementations must stage the mode on their private
+     * transmission duplicate. */
     virtual void transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header,
-            const physicallayer::IIeee80211Mode *mode, ICallback *callback)
-    {
-        transmitFrame(packet, header, callback);
-    }
+            const physicallayer::IIeee80211Mode *mode, ICallback *callback) = 0;
     virtual void transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, simtime_t ifs,
-            const physicallayer::IIeee80211Mode *mode, ICallback *callback)
-    {
-        transmitFrame(packet, header, ifs, callback);
-    }
+            const physicallayer::IIeee80211Mode *mode, ICallback *callback) = 0;
     virtual void radioTransmissionFinished() = 0;
 };
 
