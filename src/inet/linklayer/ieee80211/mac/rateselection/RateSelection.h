@@ -98,6 +98,8 @@ class INET_API RateSelection : public IRateSelection, public SimpleModule, publi
     virtual const physicallayer::IIeee80211Mode *computeResponseAckFrameMode(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) override;
 
     virtual const physicallayer::IIeee80211Mode *computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header) override;
+    virtual const physicallayer::IIeee80211Mode *computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header,
+            physicallayer::Ieee80211ChannelWidth maximumWidth) override;
 
     virtual void frameTransmitted(Packet *packet, const Ptr<const Ieee80211MacHeader>& header);
 };

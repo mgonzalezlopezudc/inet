@@ -15,6 +15,7 @@
 #include "inet/linklayer/ieee80211/mac/contract/FrameTransmissionDetails_m.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/DcfFs.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/Ieee80211ModeRequestGuard.h"
 #include "inet/linklayer/ieee80211/mac/rateselection/RateSelection.h"
 #include "inet/linklayer/ieee80211/mac/recipient/RecipientAckProcedure.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtTransactionTag_m.h"
@@ -116,13 +117,11 @@ bool Dcf::selectChannelAccessWidth()
     if (mode != nullptr && modeSet != nullptr && modeSet->isHtOperationSupported() &&
             getIeee80211ChannelWidth(mode) == IEEE80211_CHANNEL_WIDTH_40MHZ)
         effectivePolicy = Ieee80211ChannelWidthSelectionPolicy::STATIC;
-    auto selection = selectIeee80211ChannelAccess(modeSet, mode, rx,
+    auto selection = selectIeee80211ChannelAccess(mode, rx,
             getIeee80211SecondaryChannelIdleInterval(modeSet), effectivePolicy);
     if (selection.restart)
         return true;
     activeTxopChannelWidth = selection.channelWidth;
-    if (selection.mode != mode)
-        RateSelection::setFrameMode(frame, header, selection.mode);
     return false;
 }
 
@@ -379,22 +378,22 @@ void Dcf::transmitFrame(Packet *packet, simtime_t ifs)
 {
     Enter_Method("transmitFrame");
     const auto& header = packet->peekAtFront<Ieee80211MacHeader>();
-    auto modeReq = packet->findTag<Ieee80211ModeReq>();
-    auto mode = modeReq != nullptr ? modeReq->getMode() : rateSelection->computeMode(packet, header);
-    if (getIeee80211ChannelWidthMHz(getIeee80211ChannelWidth(mode)) > getIeee80211ChannelWidthMHz(activeTxopChannelWidth))
-        mode = findWidestIeee80211Mode(modeSet, mode, activeTxopChannelWidth);
-    if (mode == nullptr)
-        throw cRuntimeError("No IEEE 802.11 mode is available for the selected channel width");
-    RateSelection::setFrameMode(packet, header, mode);
+    auto mode = rateSelection->computeMode(packet, header, activeTxopChannelWidth);
     RateSelection::emitDatarateSelected(this, header, mode);
     EV_DEBUG << "Datarate for " << packet->getName() << " is set to " << mode->getDataMode()->getNetBitrate() << ".\n";
     auto pendingPacket = channelAccess->getInProgressFrames()->getPendingFrameFor(packet);
-    auto duration = originatorProtectionMechanism->computeDurationField(packet, header, pendingPacket, pendingPacket == nullptr ? nullptr : pendingPacket->peekAtFront<Ieee80211DataOrMgmtHeader>());
+    simtime_t duration;
+    {
+        Ieee80211ModeRequestGuard modeRequestGuard(packet);
+        modeRequestGuard.setMode(mode);
+        duration = originatorProtectionMechanism->computeDurationField(packet, header, pendingPacket,
+                pendingPacket == nullptr ? nullptr : pendingPacket->peekAtFront<Ieee80211DataOrMgmtHeader>());
+    }
     const auto& updatedHeader = packet->removeAtFront<Ieee80211MacHeader>();
     updatedHeader->setDurationField(duration);
     EV_DEBUG << "Duration for " << packet->getName() << " is set to " << duration << " s.\n";
     packet->insertAtFront(updatedHeader);
-    tx->transmitFrame(packet, packet->peekAtFront<Ieee80211MacHeader>(), ifs, this);
+    tx->transmitFrame(packet, packet->peekAtFront<Ieee80211MacHeader>(), ifs, mode, this);
 }
 
 /*

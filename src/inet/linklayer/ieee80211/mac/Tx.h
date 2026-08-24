@@ -42,6 +42,10 @@ class INET_API Tx : public SimpleModule, public ITx
     virtual void transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, ITx::ICallback *txCallback) override;
     virtual void transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, simtime_t ifs, ITx::ICallback *txCallback) override;
     virtual bool cancelPendingTransmission(ITx::ICallback *owner) override;
+    virtual void transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header,
+            const physicallayer::IIeee80211Mode *mode, ITx::ICallback *txCallback) override;
+    virtual void transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, simtime_t ifs,
+            const physicallayer::IIeee80211Mode *mode, ITx::ICallback *txCallback) override;
     virtual void radioTransmissionFinished() override;
 };
 

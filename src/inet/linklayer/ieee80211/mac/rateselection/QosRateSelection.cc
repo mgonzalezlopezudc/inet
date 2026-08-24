@@ -13,6 +13,7 @@
 #include "inet/common/Simsignals.h"
 #include "inet/linklayer/ieee80211/mac/rateselection/Ieee80211PeerModeSelection.h"
 #include "inet/networklayer/common/NetworkInterface.h"
+#include "inet/linklayer/ieee80211/mac/rateselection/Ieee80211RateSelectionUtils.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 
 namespace inet {
@@ -274,6 +275,14 @@ const IIeee80211Mode *QosRateSelection::computeMode(Packet *packet, const Ptr<co
         return computeDataOrMgmtFrameMode(dataOrMgmtHeader);
     else
         return getPeerCompatibleMode(header->getReceiverAddress(), computeControlFrameMode(header, txopProcedure));
+}
+
+const IIeee80211Mode *QosRateSelection::computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header,
+        TxopProcedure *txopProcedure, Ieee80211ChannelWidth maximumWidth)
+{
+    const auto *requestedMode = packet->findTag<Ieee80211ModeReq>() != nullptr ?
+            packet->findTag<Ieee80211ModeReq>()->getMode() : computeMode(packet, header, txopProcedure);
+    return selectIeee80211ModeForWidth(modeSet, requestedMode, maximumWidth);
 }
 
 void QosRateSelection::receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details)

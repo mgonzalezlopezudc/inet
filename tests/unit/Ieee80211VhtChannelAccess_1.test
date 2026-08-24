@@ -3,7 +3,7 @@ Validate shared IEEE 802.11 width selection policy for dynamic fallback and
 static current-CW restart decisions.
 
 %includes:
-#include "inet/linklayer/ieee80211/mac/contract/Ieee80211ChannelAccessPolicy.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/Ieee80211ChannelAccessPolicy.h"
 
 %global:
 using namespace inet;
@@ -60,14 +60,12 @@ static const IIeee80211Mode *findModeAtBandwidth(const Ieee80211ModeSet *modeSet
     TestRxForChannelAccess rx;
     rx.idle80 = false;
     rx.idle40 = true;
-    auto dynamicSelection = selectIeee80211ChannelAccess(modeSet, requested80, &rx,
+    auto dynamicSelection = selectIeee80211ChannelAccess(requested80, &rx,
             simtime_t(0.001), Ieee80211ChannelWidthSelectionPolicy::DYNAMIC);
     ASSERT(!dynamicSelection.restart);
     ASSERT(dynamicSelection.channelWidth == IEEE80211_CHANNEL_WIDTH_40MHZ);
-    ASSERT(dynamicSelection.mode != nullptr);
-    ASSERT(dynamicSelection.mode->getDataMode()->getBandwidth() == MHz(40));
 
-    auto staticSelection = selectIeee80211ChannelAccess(modeSet, requested80, &rx,
+    auto staticSelection = selectIeee80211ChannelAccess(requested80, &rx,
             simtime_t(0.001), Ieee80211ChannelWidthSelectionPolicy::STATIC);
     ASSERT(staticSelection.restart);
 
@@ -75,17 +73,15 @@ static const IIeee80211Mode *findModeAtBandwidth(const Ieee80211ModeSet *modeSet
     // only the remote/secondary80 group is unavailable.
     rx.idle80 = true;
     rx.idle160 = false;
-    auto fullSelection = selectIeee80211ChannelAccess(modeSet, requested160, &rx,
+    auto fullSelection = selectIeee80211ChannelAccess(requested160, &rx,
             simtime_t(0.001), Ieee80211ChannelWidthSelectionPolicy::DYNAMIC);
     ASSERT(!fullSelection.restart);
     ASSERT(fullSelection.channelWidth == IEEE80211_CHANNEL_WIDTH_80MHZ);
-    ASSERT(fullSelection.mode->getDataMode()->getBandwidth() == MHz(80));
 
     // A primary20 PPDU never requires a secondary group.
     rx.idle20 = true;
     rx.idle40 = false;
-    auto primarySelection = selectIeee80211ChannelAccess(modeSet,
-            findModeAtBandwidth(modeSet, MHz(20)), &rx, simtime_t(0.001),
+    auto primarySelection = selectIeee80211ChannelAccess(findModeAtBandwidth(modeSet, MHz(20)), &rx, simtime_t(0.001),
             Ieee80211ChannelWidthSelectionPolicy::STATIC);
     ASSERT(!primarySelection.restart);
     ASSERT(primarySelection.channelWidth == IEEE80211_CHANNEL_WIDTH_20MHZ);

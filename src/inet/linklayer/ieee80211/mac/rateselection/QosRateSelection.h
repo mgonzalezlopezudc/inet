@@ -87,6 +87,8 @@ class INET_API QosRateSelection : public IQosRateSelection, public ModeSetListen
     virtual const physicallayer::IIeee80211Mode *computeResponseBlockAckFrameMode(Packet *packet, const Ptr<const Ieee80211BlockAckReq>& blockAckReq) override;
 
     virtual const physicallayer::IIeee80211Mode *computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, TxopProcedure *txopProcedure) override;
+    virtual const physicallayer::IIeee80211Mode *computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header,
+            TxopProcedure *txopProcedure, physicallayer::Ieee80211ChannelWidth maximumWidth) override;
 
     virtual void frameTransmitted(Packet *packet, const Ptr<const Ieee80211MacHeader>& header);
 };

@@ -21,12 +21,14 @@ class TestHcfRx : public IRx
 {
   public:
     bool idle40 = true;
+    bool idle80 = false;
     bool isReceptionInProgress() const override { return false; }
     bool isMediumFree() const override { return true; }
     bool isSecondaryChannelIdleFor(simtime_t) const override { return idle40; }
     bool isChannelIdleForTransmission(Ieee80211ChannelWidth width, simtime_t) const override {
         return width == IEEE80211_CHANNEL_WIDTH_20MHZ ||
-                (width == IEEE80211_CHANNEL_WIDTH_40MHZ && idle40);
+                (width == IEEE80211_CHANNEL_WIDTH_40MHZ && idle40) ||
+                (width == IEEE80211_CHANNEL_WIDTH_80MHZ && idle80);
     }
     void frameTransmitted(simtime_t) override {}
     void registerContention(IContention *) override {}
@@ -96,11 +98,16 @@ class TestHcfHarness : public Hcf
         channelWidthSelectionPolicy = Ieee80211ChannelWidthSelectionPolicy::DYNAMIC;
         ASSERT(!selectChannelAccessWidth(&edcafHarness));
         auto selected = packet->findTag<Ieee80211ModeReq>()->getMode();
-        ASSERT(selected != nullptr);
-        ASSERT(selected->getDataMode()->getBandwidth() == MHz(40));
+        ASSERT(selected == mode80);
 
-        packet->getTagForUpdate<Ieee80211ModeReq>()->setMode(mode80);
+        // The queued request is unchanged and widens again when a later
+        // grant observes the complete 80 MHz hierarchy idle.
+        rxHarness.idle40 = true;
+        rxHarness.idle80 = true;
+        ASSERT(!selectChannelAccessWidth(&edcafHarness));
+        ASSERT(packet->findTag<Ieee80211ModeReq>()->getMode() == mode80);
         channelWidthSelectionPolicy = Ieee80211ChannelWidthSelectionPolicy::STATIC;
+        rxHarness.idle80 = false;
         rxHarness.idle40 = false;
         channelGranted(&edcafHarness);
         ASSERT(edcafHarness.restartCount == 1);

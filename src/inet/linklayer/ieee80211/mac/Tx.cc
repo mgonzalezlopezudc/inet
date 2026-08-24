@@ -14,6 +14,7 @@
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRx.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -41,10 +42,22 @@ void Tx::initialize(int stage)
 
 void Tx::transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, ITx::ICallback *txCallback)
 {
-    transmitFrame(packet, header, SIMTIME_ZERO, txCallback);
+    transmitFrame(packet, header, SIMTIME_ZERO, nullptr, txCallback);
 }
 
 void Tx::transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, simtime_t ifs, ITx::ICallback *txCallback)
+{
+    transmitFrame(packet, header, ifs, nullptr, txCallback);
+}
+
+void Tx::transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header,
+        const physicallayer::IIeee80211Mode *mode, ITx::ICallback *txCallback)
+{
+    transmitFrame(packet, header, SIMTIME_ZERO, mode, txCallback);
+}
+
+void Tx::transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, simtime_t ifs,
+        const physicallayer::IIeee80211Mode *mode, ITx::ICallback *txCallback)
 {
     Enter_Method("transmitFrame(\"%s\")", packet->getName());
     ASSERT(this->txCallback == nullptr);
@@ -72,6 +85,8 @@ void Tx::transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& head
     }
     packet->insertAtBack(updatedTrailer);
     this->frame = packet->dup();
+    if (mode != nullptr)
+        this->frame->addTagIfAbsent<physicallayer::Ieee80211ModeReq>()->setMode(mode);
     ASSERT(!endIfsTimer->isScheduled() && !transmitting); // we are idle
     if (ifs == 0) {
         // do directly what handleMessage() would do

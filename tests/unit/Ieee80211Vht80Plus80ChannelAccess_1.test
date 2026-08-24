@@ -4,7 +4,7 @@ selects a narrower primary-contiguous PPDU in dynamic mode and restarts the
 current CW in static mode.
 
 %includes:
-#include "inet/linklayer/ieee80211/mac/contract/Ieee80211ChannelAccessPolicy.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/Ieee80211ChannelAccessPolicy.h"
 
 %global:
 using namespace inet;
@@ -46,22 +46,20 @@ static const IIeee80211Mode *findModeAtBandwidth(const Ieee80211ModeSet *modeSet
     ASSERT(fullMode != nullptr);
     Test80Plus80Rx rx;
 
-    auto dynamicSelection = selectIeee80211ChannelAccess(modeSet, fullMode, &rx,
+    auto dynamicSelection = selectIeee80211ChannelAccess(fullMode, &rx,
             simtime_t(0.001), Ieee80211ChannelWidthSelectionPolicy::DYNAMIC);
     ASSERT(!dynamicSelection.restart);
     ASSERT(dynamicSelection.channelWidth == IEEE80211_CHANNEL_WIDTH_80MHZ);
-    ASSERT(dynamicSelection.mode->getDataMode()->getBandwidth() == MHz(80));
 
-    auto staticSelection = selectIeee80211ChannelAccess(modeSet, fullMode, &rx,
+    auto staticSelection = selectIeee80211ChannelAccess(fullMode, &rx,
             simtime_t(0.001), Ieee80211ChannelWidthSelectionPolicy::STATIC);
     ASSERT(staticSelection.restart);
 
     rx.remoteSecondary80Busy = false;
-    auto fullWidthSelection = selectIeee80211ChannelAccess(modeSet, fullMode, &rx,
+    auto fullWidthSelection = selectIeee80211ChannelAccess(fullMode, &rx,
             simtime_t(0.001), Ieee80211ChannelWidthSelectionPolicy::STATIC);
     ASSERT(!fullWidthSelection.restart);
     ASSERT(fullWidthSelection.channelWidth == IEEE80211_CHANNEL_WIDTH_160MHZ);
-    ASSERT(fullWidthSelection.mode == fullMode);
 
     EV << "80+80 remote-secondary fallback and static restart verified.\n";
 }

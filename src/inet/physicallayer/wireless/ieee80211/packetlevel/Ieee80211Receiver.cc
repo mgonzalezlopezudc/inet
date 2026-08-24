@@ -79,6 +79,19 @@ bool isAlignedCcaSignal(const FrequencyBand& listeningBand, const FrequencyBand&
     return std::fabs(offsetSlotsReal - offsetSlots) <= 1e-9 && offsetSlots % signalSlots == 0;
 }
 
+bool isRecognizableCcaMode(const IIeee80211Mode *mode)
+{
+    // CCA preamble recognition is a PHY classification decision.  It must
+    // not depend on whether the receiver's configured operation-mode set
+    // happens to contain the exact transmitting mode.  ERP-OFDM is an OFDM
+    // mode and is therefore covered by the OFDM base class; HT and VHT are
+    // listed explicitly for clarity and for mode implementations that do not
+    // share that inheritance.
+    return dynamic_cast<const Ieee80211OfdmMode *>(mode) != nullptr ||
+            dynamic_cast<const Ieee80211HtMode *>(mode) != nullptr ||
+            dynamic_cast<const Ieee80211VhtMode *>(mode) != nullptr;
+}
+
 bool isSignalOnPrimary20(const Ieee80211Channel *channel, const ITransmission *transmission)
 {
     if (channel == nullptr)
@@ -403,7 +416,7 @@ bool Ieee80211Receiver::computeGroupedCcaBusy(const IListening *listening, const
     const FrequencyBand listeningBand(ccaListening->getCenterFrequency(), ccaListening->getBandwidth());
     for (const auto *reception : *interference->getInterferingReceptions()) {
         const auto *transmission = dynamic_cast<const Ieee80211Transmission *>(reception->getTransmission());
-        if (transmission == nullptr || transmission->getMode() == nullptr || modeSet == nullptr || !modeSet->containsMode(transmission->getMode()))
+        if (transmission == nullptr || !isRecognizableCcaMode(transmission->getMode()))
             continue;
         for (const auto& signalBand : getSignalBands(reception)) {
             bool primaryGroup = ccaListening->getGroup() == IEEE80211_CCA_PRIMARY20;

@@ -96,11 +96,15 @@ class TestDcfHarness : public Dcf
         channelWidthSelectionPolicy = Ieee80211ChannelWidthSelectionPolicy::DYNAMIC;
         ASSERT(!selectChannelAccessWidth());
         auto selected = packet->findTag<Ieee80211ModeReq>()->getMode();
-        ASSERT(selected != nullptr);
-        ASSERT(selected->getDataMode()->getBandwidth() == MHz(40));
+        ASSERT(selected == mode80);
 
-        packet->getTagForUpdate<Ieee80211ModeReq>()->setMode(mode80);
+        // The queued request is unchanged.  A later grant with the wider
+        // hierarchy idle can therefore widen again without rewriting it.
+        rxHarness.idle80 = true;
+        ASSERT(!selectChannelAccessWidth());
+        ASSERT(packet->findTag<Ieee80211ModeReq>()->getMode() == mode80);
         channelWidthSelectionPolicy = Ieee80211ChannelWidthSelectionPolicy::STATIC;
+        rxHarness.idle80 = false;
         rxHarness.idle40 = false;
         channelGranted(&dcafHarness);
         ASSERT(dcafHarness.restartCount == 1);

@@ -13,7 +13,7 @@
 #include "inet/linklayer/ieee80211/mac/channelaccess/Dcaf.h"
 #include "inet/linklayer/ieee80211/mac/common/ModeSetListener.h"
 #include "inet/linklayer/ieee80211/mac/contract/ICoordinationFunction.h"
-#include "inet/linklayer/ieee80211/mac/contract/Ieee80211ChannelAccessPolicy.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/Ieee80211ChannelAccessPolicy.h"
 #include "inet/linklayer/ieee80211/mac/contract/ICtsPolicy.h"
 #include "inet/linklayer/ieee80211/mac/contract/ICtsProcedure.h"
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequenceHandler.h"

@@ -19,7 +19,7 @@
 #include "inet/linklayer/ieee80211/mac/contract/IAckHandler.h"
 #include "inet/linklayer/ieee80211/mac/contract/IBlockAckAgreementHandlerCallback.h"
 #include "inet/linklayer/ieee80211/mac/contract/ICoordinationFunction.h"
-#include "inet/linklayer/ieee80211/mac/contract/Ieee80211ChannelAccessPolicy.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/Ieee80211ChannelAccessPolicy.h"
 #include "inet/linklayer/ieee80211/mac/contract/ICtsPolicy.h"
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementHandler.h"
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementPolicy.h"

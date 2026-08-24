@@ -10,6 +10,7 @@
 
 #include "inet/common/packet/Packet.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -40,6 +41,23 @@ class INET_API ITx
      * A transmission that is already in progress is left untouched.
      */
     virtual bool cancelPendingTransmission(ICallback *owner) = 0;
+
+    /**
+     * Transmit using a TXOP-local mode without modifying the queued packet's
+     * ModeReq tag.  The default delegates to the legacy path for custom ITx
+     * implementations; the production Tx implementation stages the mode on
+     * its private duplicate.
+     */
+    virtual void transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header,
+            const physicallayer::IIeee80211Mode *mode, ICallback *callback)
+    {
+        transmitFrame(packet, header, callback);
+    }
+    virtual void transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, simtime_t ifs,
+            const physicallayer::IIeee80211Mode *mode, ICallback *callback)
+    {
+        transmitFrame(packet, header, ifs, callback);
+    }
     virtual void radioTransmissionFinished() = 0;
 };
 

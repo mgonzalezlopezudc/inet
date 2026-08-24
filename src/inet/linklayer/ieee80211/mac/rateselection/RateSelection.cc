@@ -14,6 +14,7 @@
 #include "inet/linklayer/ieee80211/mac/contract/IRateControl.h"
 #include "inet/linklayer/ieee80211/mac/rateselection/Ieee80211PeerModeSelection.h"
 #include "inet/networklayer/common/L3AddressResolver.h"
+#include "inet/linklayer/ieee80211/mac/rateselection/Ieee80211RateSelectionUtils.h"
 #include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
@@ -227,6 +228,14 @@ const IIeee80211Mode *RateSelection::computeMode(Packet *packet, const Ptr<const
         return computeDataOrMgmtFrameMode(dataOrMgmtHeader);
     else
         return computeControlFrameMode(header);
+}
+
+const IIeee80211Mode *RateSelection::computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header,
+        Ieee80211ChannelWidth maximumWidth)
+{
+    const auto *requestedMode = packet->findTag<Ieee80211ModeReq>() != nullptr ?
+            packet->findTag<Ieee80211ModeReq>()->getMode() : computeMode(packet, header);
+    return selectIeee80211ModeForWidth(modeSet, requestedMode, maximumWidth);
 }
 
 void RateSelection::receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details)
