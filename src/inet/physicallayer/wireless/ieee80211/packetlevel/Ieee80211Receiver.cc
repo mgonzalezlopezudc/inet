@@ -8,6 +8,8 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
 
 #include "inet/common/math/Functions.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalMediumAnalogModel.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalSignalAnalogModel.h"
 #include "inet/physicallayer/wireless/common/analogmodel/scalar/ScalarMediumAnalogModel.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/INarrowbandSignalAnalogModel.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IMultibandReceiverAnalogModel.h"
@@ -74,6 +76,44 @@ bool isModeAccepted(const Ieee80211ModeSet *modeSet, const IIeee80211Mode *mode)
     return mode->getDataMode()->getBandwidth() < MHz(80) || dynamic_cast<const Ieee80211VhtMode *>(mode) != nullptr;
 }
 
+bool isPrimaryComponentDetectable(const Ieee80211Channel *channel, const IReception *reception, W sensitivity)
+{
+    const auto *multibandSignal = dynamic_cast<const IMultibandSignalAnalogModel *>(reception->getAnalogModel());
+    if (multibandSignal == nullptr || multibandSignal->getOccupiedBands().size() <= 1)
+        return true;
+
+    // A composite PPDU is eligible only when the component that contains the
+    // configured primary 20 MHz is itself detectable.  Testing the aggregate
+    // envelope would allow a strong remote 80 MHz segment to make a weak
+    // primary segment appear as RXSTART-capable.
+    const auto *dimensionalSignal = dynamic_cast<const DimensionalSignalAnalogModel *>(reception->getAnalogModel());
+    if (dimensionalSignal == nullptr || dimensionalSignal->getComponentPowers().size() != multibandSignal->getOccupiedBands().size())
+        return false;
+    const auto primary20 = channel->getPrimary20Band();
+    auto bands = multibandSignal->getOccupiedBands();
+    const auto& components = dimensionalSignal->getComponentPowers();
+    for (size_t index = 0; index < bands.size(); ++index) {
+        const auto& componentBand = bands[index];
+        const auto lower = std::max(componentBand.getLowerFrequency(), primary20.getLowerFrequency());
+        const auto upper = std::min(componentBand.getUpperFrequency(), primary20.getUpperFrequency());
+        if (lower < upper) {
+            Point<simsec, Hz> primaryStart(simsec(reception->getStartTime()), lower);
+            Point<simsec, Hz> primaryEnd(simsec(reception->getEndTime()), upper);
+            auto primaryInterval = Interval<simsec, Hz>(primaryStart, primaryEnd, 0b11, 0b11, 0b00);
+            auto componentInterval = components[index]->getDomain().getIntersected(primaryInterval);
+            if (componentInterval.isEmpty())
+                return false;
+            auto primaryComponent = makeShared<DomainLimitedFunction<WpHz, Domain<simsec, Hz>>>(components[index], componentInterval);
+            Point<simsec> componentStart(simsec(reception->getStartTime()));
+            Point<simsec> componentEnd(simsec(reception->getEndTime()));
+            auto primaryPower = integrate<WpHz, Domain<simsec, Hz>, 0b10, W, Domain<simsec>>(primaryComponent)->getMin(
+                    Interval<simsec>(componentStart, componentEnd, 0b1, 0b1, 0b0));
+            return primaryPower >= sensitivity;
+        }
+    }
+    return false;
+}
+
 }
 
 Ieee80211Receiver::~Ieee80211Receiver()
@@ -131,6 +171,8 @@ const IListening *Ieee80211Receiver::createListening(const IRadio *radio, const 
     if (channel == nullptr)
         return NarrowbandReceiverBase::createListening(radio, startTime, endTime, startPosition, endPosition);
     if (channel->is80Plus80()) {
+        if (radio->getMedium() == nullptr || dynamic_cast<const DimensionalMediumAnalogModel *>(radio->getMedium()->getAnalogModel()) == nullptr)
+            throw cRuntimeError("IEEE 802.11 VHT 80+80 MHz requires a dimensional medium analog model");
         auto *multibandFactory = dynamic_cast<const IMultibandReceiverAnalogModel *>(getAnalogModel());
         if (multibandFactory == nullptr)
             throw cRuntimeError("IEEE 802.11 VHT 80+80 MHz requires a multiband receiver analog model");
@@ -165,7 +207,9 @@ bool Ieee80211Receiver::computeIsReceptionPossible(const IListening *listening, 
 {
     auto ieee80211Transmission = dynamic_cast<const Ieee80211Transmission *>(reception->getTransmission());
     return ieee80211Transmission && modeSet->supportsMode(ieee80211Transmission->getMode()) &&
-            isSignalOnPrimary20(channel, reception->getTransmission()) && getAnalogModel()->computeIsReceptionPossible(listening, reception, sensitivity);
+            isSignalOnPrimary20(channel, reception->getTransmission()) &&
+            isPrimaryComponentDetectable(channel, reception, sensitivity) &&
+            getAnalogModel()->computeIsReceptionPossible(listening, reception, sensitivity);
 }
 
 const IListeningDecision *Ieee80211Receiver::computeListeningDecision(const IListening *listening, const IInterference *interference) const

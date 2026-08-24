@@ -9,7 +9,9 @@
 
 #include "inet/mobility/contract/IMobility.h"
 #include "inet/physicallayer/wireless/common/analogmodel/scalar/ScalarTransmitterAnalogModel.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalMediumAnalogModel.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IMultibandReceiverAnalogModel.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IMultibandTransmitterAnalogModel.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/RadioControlInfo_m.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
@@ -278,9 +280,14 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     // occupied 80 MHz components.
     ITransmissionAnalogModel *analogModel;
     if (transmissionChannel->is80Plus80() && transmissionBandwidth == MHz(160)) {
+        if (transmitter->getMedium() == nullptr || dynamic_cast<const DimensionalMediumAnalogModel *>(transmitter->getMedium()->getAnalogModel()) == nullptr)
+            throw cRuntimeError("IEEE 802.11 VHT 80+80 MHz requires a dimensional medium analog model");
         auto multibandFactory = dynamic_cast<const IMultibandTransmitterAnalogModel *>(getAnalogModel());
         if (multibandFactory == nullptr)
             throw cRuntimeError("IEEE 802.11 VHT 80+80 MHz requires a multiband transmitter analog model");
+        const auto *ieee80211Receiver = dynamic_cast<const Ieee80211Receiver *>(transmitter->getReceiver());
+        if (ieee80211Receiver == nullptr || dynamic_cast<const IMultibandReceiverAnalogModel *>(ieee80211Receiver->getAnalogModel()) == nullptr)
+            throw cRuntimeError("IEEE 802.11 VHT 80+80 MHz requires a multiband receiver analog model");
         auto occupiedBands = transmissionChannel->getOccupiedBands();
         if (occupiedBands.size() != 2)
             throw cRuntimeError("IEEE 802.11 VHT 80+80 MHz requires exactly two occupied 80 MHz bands");

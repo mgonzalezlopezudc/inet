@@ -24,6 +24,9 @@
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211IrMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211OfdmMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalMediumAnalogModel.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IMultibandReceiverAnalogModel.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IMultibandTransmitterAnalogModel.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/mobility/contract/IMobility.h"
@@ -126,6 +129,19 @@ void validateWideConfiguration(const Ieee80211Channel *channel, const std::strin
     }
 }
 
+void validate80Plus80Contracts(const Ieee80211Channel *channel, const Ieee80211Transmitter *transmitter,
+        const Ieee80211Receiver *receiver, const IRadioMedium *medium)
+{
+    if (channel == nullptr || !channel->is80Plus80())
+        return;
+    if (transmitter == nullptr || dynamic_cast<const IMultibandTransmitterAnalogModel *>(transmitter->getAnalogModel()) == nullptr)
+        throw cRuntimeError("IEEE 802.11 VHT 80+80 MHz requires a multiband transmitter analog model");
+    if (receiver == nullptr || dynamic_cast<const IMultibandReceiverAnalogModel *>(receiver->getAnalogModel()) == nullptr)
+        throw cRuntimeError("IEEE 802.11 VHT 80+80 MHz requires a multiband receiver analog model");
+    if (medium == nullptr || dynamic_cast<const DimensionalMediumAnalogModel *>(medium->getAnalogModel()) == nullptr)
+        throw cRuntimeError("IEEE 802.11 VHT 80+80 MHz requires a dimensional medium analog model");
+}
+
 }
 
 Ieee80211Radio::Ieee80211Radio() :
@@ -206,10 +222,18 @@ void Ieee80211Radio::initialize(int stage)
             if ((targetChannelWidth == IEEE80211_CHANNEL_WIDTH_20MHZ || targetChannelWidth == IEEE80211_CHANNEL_WIDTH_40MHZ) &&
                     targetPrimaryChannelCenterFrequencyIndex == -1 && targetChannelCenterFrequencyIndex0 == -1)
                 targetChannel = std::make_unique<Ieee80211Channel>(targetBand, channelNumber, targetSecondaryChannelOffset);
-            else
+            else {
+                // An explicit primary center-frequency index is the
+                // authoritative primary-channel identity.  channelNumber is
+                // only the legacy/default identity when that field is not
+                // configured; using it unconditionally loses the requested
+                // primary subchannel when the two parameters differ.
+                int targetPrimaryChannelNumber = targetPrimaryChannelCenterFrequencyIndex != -1 ?
+                        targetPrimaryChannelCenterFrequencyIndex : channelNumber;
                 targetChannel = std::make_unique<Ieee80211Channel>(targetBand,
-                        channelNumber,
+                        targetPrimaryChannelNumber,
                         targetChannelWidth, targetChannelCenterFrequencyIndex0, targetChannelCenterFrequencyIndex1);
+            }
         }
 
         Hz configuredBandwidth = Hz(par("bandwidth").doubleValue());
@@ -220,11 +244,13 @@ void Ieee80211Radio::initialize(int stage)
             targetBandwidth = targetChannel->getOperatingBandwidth();
         else
             targetBandwidth = ieee80211Receiver->getBandwidth();
+        if (targetChannel != nullptr && targetChannel->is80Plus80() &&
+                !std::isnan(targetBandwidth.get()) && targetBandwidth != MHz(160))
+            throw cRuntimeError("Configured VHT 80+80 MHz operation requires a 160 MHz default bandwidth");
         if (targetChannel != nullptr && isCanonicalPpduBandwidth(targetBandwidth))
             targetChannel->validatePpduWidth(targetBandwidth);
         validateWideConfiguration(targetChannel.get(), opMode, targetModeSet);
-        if (targetChannel != nullptr && targetChannel->is80Plus80() && strcmp(par("signalAnalogRepresentation"), "dimensional"))
-            throw cRuntimeError("VHT 80+80 MHz operation requires dimensional signal representation");
+        validate80Plus80Contracts(targetChannel.get(), ieee80211Transmitter, ieee80211Receiver, medium.get());
 
         const IIeee80211Mode *targetMode = nullptr;
         if (targetModeSet != nullptr) {
@@ -325,14 +351,20 @@ void Ieee80211Radio::handleUpperCommand(cMessage *message)
                 targetBandwidth = targetChannelObject->getOperatingBandwidth();
             else
                 targetBandwidth = ieee80211Receiver->getBandwidth();
+            bps newBitrate = configureCommand->getBitrate();
+            const IIeee80211Mode *requestedMode = ieee80211Command != nullptr ? ieee80211Command->getMode() : nullptr;
+            if (targetChannelObject != nullptr && targetChannelObject->is80Plus80()) {
+                if (!std::isnan(newBandwidth.get()) && newBandwidth != MHz(160))
+                    throw cRuntimeError("Configured VHT 80+80 MHz operation requires a 160 MHz default bandwidth");
+                if (requestedMode != nullptr && requestedMode->getDataMode()->getBandwidth() != MHz(160))
+                    throw cRuntimeError("Configured VHT 80+80 MHz operation requires a 160 MHz default mode");
+                targetBandwidth = MHz(160);
+            }
             if (targetChannelObject != nullptr && isCanonicalPpduBandwidth(targetBandwidth))
                 targetChannelObject->validatePpduWidth(targetBandwidth);
             validateWideConfiguration(targetChannelObject.get(), targetOpMode, targetModeSet);
-            if (targetChannelObject != nullptr && targetChannelObject->is80Plus80() && strcmp(par("signalAnalogRepresentation"), "dimensional"))
-                throw cRuntimeError("VHT 80+80 MHz operation requires dimensional signal representation");
+            validate80Plus80Contracts(targetChannelObject.get(), ieee80211Transmitter, ieee80211Receiver, medium.get());
 
-            bps newBitrate = configureCommand->getBitrate();
-            const IIeee80211Mode *requestedMode = ieee80211Command != nullptr ? ieee80211Command->getMode() : nullptr;
             const IIeee80211Mode *resolvedMode = requestedMode;
             const bool hasExplicitModeOrBitrate = requestedMode != nullptr || !std::isnan(newBitrate.get());
             if (resolvedMode != nullptr && (targetModeSet == nullptr || !targetModeSet->containsMode(resolvedMode)))
@@ -365,6 +397,43 @@ void Ieee80211Radio::handleUpperCommand(cMessage *message)
                       resolvedMode->getDataMode()->getBandwidth() == MHz(40))) &&
                     targetSecondaryChannelOffset == IEEE80211_SECONDARY_CHANNEL_NONE)
                 throw cRuntimeError("HT 40 MHz operation requires a secondary channel offset of above or below");
+
+            // Validate inherited Radio/Narrowband/Flat fields before changing
+            // any IEEE state.  The base classes otherwise apply these fields
+            // after this method returns, which can overwrite a complete
+            // channel geometry or throw after a partial commit.
+            W newPower = configureCommand->getPower();
+            bps inheritedBitrate = configureCommand->getBitrate();
+            Hz inheritedCenterFrequency = configureCommand->getCenterFrequency();
+            Hz inheritedBandwidth = configureCommand->getBandwidth();
+            if (!std::isnan(newPower.get()) && (!std::isfinite(newPower.get()) || newPower <= W(0)))
+                throw cRuntimeError("IEEE 802.11 configure command requires a positive finite power");
+            if (!std::isnan(inheritedBitrate.get()) && (!std::isfinite(inheritedBitrate.get()) || inheritedBitrate <= bps(0)))
+                throw cRuntimeError("IEEE 802.11 configure command requires a positive finite bitrate");
+            if (!std::isnan(inheritedCenterFrequency.get()) && (!std::isfinite(inheritedCenterFrequency.get()) || inheritedCenterFrequency <= Hz(0)))
+                throw cRuntimeError("IEEE 802.11 configure command requires a positive finite center frequency");
+            if (!std::isnan(inheritedBandwidth.get()) && (!std::isfinite(inheritedBandwidth.get()) || inheritedBandwidth <= Hz(0)))
+                throw cRuntimeError("IEEE 802.11 configure command requires a positive finite bandwidth");
+            if (!std::isnan(inheritedCenterFrequency.get()) && targetChannelObject != nullptr &&
+                    inheritedCenterFrequency != targetChannelObject->getOperatingCenterFrequency())
+                throw cRuntimeError("A configured IEEE 802.11 channel owns the center frequency; the generic center override is inconsistent");
+            if (!std::isnan(inheritedBandwidth.get()) && targetChannelObject != nullptr &&
+                    (targetChannelObject->isExplicitGeometry() || targetChannelObject->getChannelWidth() != IEEE80211_CHANNEL_WIDTH_20MHZ) &&
+                    inheritedBandwidth != targetBandwidth)
+                throw cRuntimeError("A configured IEEE 802.11 channel owns the bandwidth; the generic bandwidth override is inconsistent");
+            int requestedRadioMode = configureCommand->getRadioMode();
+            if (requestedRadioMode != -1 && (requestedRadioMode < RADIO_MODE_OFF || requestedRadioMode > RADIO_MODE_SWITCHING ||
+                    requestedRadioMode == RADIO_MODE_SWITCHING || getRadioMode() == RADIO_MODE_SWITCHING))
+                throw cRuntimeError("Invalid or currently unavailable IEEE 802.11 radio mode request: %d", requestedRadioMode);
+
+            // Keep this fact separate from the unique_ptr below: releasing a
+            // target channel transfers ownership to the child transmitter,
+            // but it must not make inherited-field validation look as if no
+            // channel was configured.
+            const bool targetChannelConfigured = targetChannelObject != nullptr;
+            const bool targetChannelOwnsBandwidth = targetChannelConfigured &&
+                    (targetChannelObject->isExplicitGeometry() || targetChannelObject->getChannelWidth() != IEEE80211_CHANNEL_WIDTH_20MHZ);
+
             bool channelChanged = currentChannel == nullptr || targetBand != this->band;
             if (!channelChanged && targetChannelObject != nullptr)
                 channelChanged = targetChannelNumber != currentChannel->getChannelNumber() ||
@@ -401,6 +470,24 @@ void Ieee80211Radio::handleUpperCommand(cMessage *message)
                     !std::isnan(configureCommand->getCenterFrequency().get()))
                 changeModeSet(targetModeSet, resolvedMode, resolvedMode != nullptr, applyConfiguration,
                         publishModeSet, changeChannel ? targetChannelNumber : -1);
+            // Apply inherited fields only after the complete target tuple has
+            // been validated and installed.  A channel-owned center/bandwidth
+            // is already synchronized by setChannel and is intentionally not
+            // passed through the generic base setters.
+            if (configureCommand->getModulation() != nullptr)
+                setModulation(configureCommand->getModulation());
+            if (!std::isnan(newPower.get()))
+                setPower(newPower);
+            if (!std::isnan(inheritedBitrate.get()))
+                setBitrate(inheritedBitrate);
+            if (!targetChannelConfigured && !std::isnan(inheritedCenterFrequency.get()))
+                setCenterFrequency(inheritedCenterFrequency);
+            if (!targetChannelOwnsBandwidth && !std::isnan(inheritedBandwidth.get()))
+                setBandwidth(inheritedBandwidth);
+            if (requestedRadioMode != -1)
+                setRadioMode((RadioMode)requestedRadioMode);
+            delete message;
+            return;
         }
     }
     FlatRadioBase::handleUpperCommand(message);

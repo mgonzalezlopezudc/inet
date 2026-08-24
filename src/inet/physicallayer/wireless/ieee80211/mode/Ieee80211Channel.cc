@@ -462,7 +462,11 @@ void Ieee80211Channel::validateGeometry() const
             indexDifference != 10 && indexDifference != 14)
         throw cRuntimeError("The primary 20 MHz channel is not in the configured contiguous 160 MHz channel");
     if (isCanonical5GHzBand(band)) {
-        if (channelWidth == IEEE80211_CHANNEL_WIDTH_80MHZ || channelWidth == IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ)
+        if (channelWidth == IEEE80211_CHANNEL_WIDTH_20MHZ)
+            validateCanonicalVht20Subchannels(centerFrequencyIndex0, {0});
+        else if (channelWidth == IEEE80211_CHANNEL_WIDTH_40MHZ)
+            validateCanonicalVht20Subchannels(centerFrequencyIndex0, {-2, 2});
+        else if (channelWidth == IEEE80211_CHANNEL_WIDTH_80MHZ || channelWidth == IEEE80211_CHANNEL_WIDTH_80_PLUS_80MHZ)
             validateCanonicalVht20Subchannels(centerFrequencyIndex0, {-6, -2, 2, 6});
         else if (channelWidth == IEEE80211_CHANNEL_WIDTH_160MHZ)
             validateCanonicalVht20Subchannels(centerFrequencyIndex0, {-14, -10, -6, -2, 2, 6, 10, 14});

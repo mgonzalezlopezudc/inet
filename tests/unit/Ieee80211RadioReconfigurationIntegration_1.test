@@ -5,12 +5,14 @@ and 80+80-to-80 transitions, and failed-command rollback.
 
 %includes:
 #include <exception>
+#include <memory>
 
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
 
 %global:
@@ -87,6 +89,7 @@ network TestNetwork
                 opMode = "ac";
                 bandName = "5 GHz";
                 channelNumber = 36;
+                primaryChannelCenterFrequencyIndex = 40;
                 channelWidth = "80MHz";
                 channelCenterFrequencyIndex0 = 42;
                 channelCenterFrequencyIndex1 = 0;
@@ -112,6 +115,11 @@ sim-time-limit = 0s
     const IIeee80211Band *band5 = Ieee80211CompliantBands::getBand("5 GHz");
     ASSERT(band5 != nullptr);
     ASSERT(radio->getChannel()->getChannelWidth() == IEEE80211_CHANNEL_WIDTH_80MHZ);
+    // The explicit primary center-frequency index is authoritative even when
+    // the legacy channelNumber parameter names a different 20 MHz subchannel.
+    ASSERT(radio->getChannel()->getChannelNumber() == 40);
+    ASSERT(transmitter->getChannel()->getChannelNumber() == 40);
+    ASSERT(receiver->getChannel()->getChannelNumber() == 40);
     ASSERT(transmitter->getChannel()->getCenterFrequencyIndex0() == 42);
     ASSERT(receiver->getChannel()->getCenterFrequencyIndex0() == 42);
 
@@ -124,7 +132,18 @@ sim-time-limit = 0s
         radio->handleUpperCommand(message);
     };
 
+    // A transmission captures immutable channel geometry.  Reconfiguration
+    // must not leave an in-flight transmission pointing at the receiver's
+    // subsequently replaced channel object.
+    auto retainedTransmission = std::make_unique<Ieee80211Transmission>(radio, nullptr, 0, 1, 0, 0, 1,
+            Coord::ZERO, Coord::ZERO, Quaternion(), Quaternion(), nullptr, nullptr, nullptr, nullptr, nullptr,
+            transmitter->getMode(), radio->getChannel());
+    ASSERT(retainedTransmission->getChannel()->getChannelNumber() == 40);
+    ASSERT(retainedTransmission->getChannel()->getChannelWidth() == IEEE80211_CHANNEL_WIDTH_80MHZ);
+
     configureChannel(new Ieee80211Channel(band5, 36, IEEE80211_CHANNEL_WIDTH_160MHZ, 50));
+    ASSERT(retainedTransmission->getChannel()->getChannelNumber() == 40);
+    ASSERT(retainedTransmission->getChannel()->getChannelWidth() == IEEE80211_CHANNEL_WIDTH_80MHZ);
     ASSERT(radio->getChannel()->getChannelWidth() == IEEE80211_CHANNEL_WIDTH_160MHZ);
     ASSERT(radio->getChannel()->getOperatingBandwidth() == MHz(160));
     ASSERT(transmitter->getChannel()->getOperatingBandwidth() == MHz(160));
@@ -169,6 +188,28 @@ sim-time-limit = 0s
     ASSERT(radio->getChannel() == oldChannel);
     ASSERT(transmitter->getModeSet() == oldModeSet);
     ASSERT(receiver->getChannel() == oldChannel || receiver->getChannel()->getChannelWidth() == IEEE80211_CHANNEL_WIDTH_80MHZ);
+
+    // A generic inherited center-frequency field is validated in the same
+    // transaction as the channel.  It must not be applied after a successful
+    // channel mutation, and the complete child/radio tuple remains intact.
+    const auto *rollbackChannel = radio->getChannel();
+    const auto *rollbackMode = transmitter->getMode();
+    const auto *rollbackModeSet = transmitter->getModeSet();
+    const auto rollbackWidth = radio->getChannel()->getChannelWidth();
+    const auto rollbackBandwidth = transmitter->getBandwidth();
+    auto *lateInvalidMessage = new cMessage("late-inherited-invalid-configure");
+    lateInvalidMessage->setKind(RADIO_C_CONFIGURE);
+    auto *lateInvalidCommand = new Ieee80211ConfigureRadioCommand();
+    lateInvalidCommand->setChannel(new Ieee80211Channel(band5, 36, IEEE80211_CHANNEL_WIDTH_80MHZ, 42));
+    lateInvalidCommand->setCenterFrequency(GHz(5.5));
+    lateInvalidMessage->setControlInfo(lateInvalidCommand);
+    ASSERT(throwsReconfigurationError([&] { radio->handleUpperCommand(lateInvalidMessage); }));
+    delete lateInvalidMessage;
+    ASSERT(radio->getChannel() == rollbackChannel);
+    ASSERT(transmitter->getMode() == rollbackMode);
+    ASSERT(transmitter->getModeSet() == rollbackModeSet);
+    ASSERT(radio->getChannel()->getChannelWidth() == rollbackWidth);
+    ASSERT(transmitter->getBandwidth() == rollbackBandwidth);
 
     EV << "Initialized radio reconfiguration and child synchronization verified.\n";
     EV << "80+80 full-mode selection, narrowing, and rollback verified.\n";
