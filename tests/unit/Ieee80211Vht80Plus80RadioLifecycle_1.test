@@ -1,0 +1,506 @@
+%description:
+Exercise the packet-level IEEE 802.11 radio and dimensional medium with real
+VHT 80+80 transmissions.  The test checks the two-component transmission
+model, successful reception, primary-channel detection, secondary-only
+non-detection, and whole-packet failure under secondary interference.
+
+%includes:
+#include <cmath>
+#include <cstring>
+#include <string>
+#include <vector>
+
+#include "inet/common/Simsignals.h"
+#include "inet/common/math/Functions.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalTransmissionAnalogModel.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IReception.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmission.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+
+%global:
+using namespace inet;
+using namespace inet::math;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+using PowerFunction = IFunction<WpHz, Domain<simsec, Hz>>;
+
+class VhtLifecycleDriver : public cSimpleModule, public cListener
+{
+  protected:
+    cMessage *goodPacketEvent = nullptr;
+    cMessage *activateEvent = nullptr;
+    cMessage *secondaryOnlyEvent = nullptr;
+    cMessage *weakPrimaryEvent = nullptr;
+    cMessage *jointFailureEvent = nullptr;
+    cMessage *finishEvent = nullptr;
+
+    Ieee80211Radio *txRadio = nullptr;
+    Ieee80211Radio *rxRadio = nullptr;
+
+    int txTransmissionCount = 0;
+    int rxStartedCount = 0;
+    int rxEndedCount = 0;
+    int upperPacketCount = 0;
+
+    int goodRxStarted = 0;
+    int goodRxEnded = 0;
+    int goodDelivered = 0;
+    int goodErrored = 0;
+
+    int secondaryRxStarted = 0;
+    int secondaryRxEnded = 0;
+    int secondaryDelivered = 0;
+
+    int weakRxStarted = 0;
+    int weakRxEnded = 0;
+    int remoteSecondaryRxStarted = 0;
+    int remoteSecondaryRxEnded = 0;
+
+    int jointRxStarted = 0;
+    int jointRxEnded = 0;
+    int jointDelivered = 0;
+    int jointErrored = 0;
+
+    bool transmissionShapeVerified = false;
+    bool verified = false;
+
+    static W integratePower(const Ptr<const PowerFunction>& power, simtime_t time)
+    {
+        auto integrated = integrate<WpHz, Domain<simsec, Hz>, 0b10, W, Domain<simsec>>(power);
+        return integrated->getValue(Point<simsec>(simsec(time)));
+    }
+
+    Packet *createPacket(const char *name, Hz bandwidth) const
+    {
+        auto packet = new Packet(name);
+        packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>(100, 0xA5)));
+        const auto *modeSet = Ieee80211ModeSet::getModeSet("ac");
+        ASSERT(modeSet != nullptr);
+        const IIeee80211Mode *mode = nullptr;
+        for (int index = modeSet->getNumModes() - 1; index >= 0; --index) {
+            const auto *candidate = modeSet->getMode(index);
+            if (candidate->getDataMode()->getBandwidth() == bandwidth &&
+                    candidate->getDataMode()->getNumberOfSpatialStreams() == 1) {
+                mode = candidate;
+                break;
+            }
+        }
+        ASSERT(mode != nullptr);
+        packet->addTag<Ieee80211ModeReq>()->setMode(mode);
+        return packet;
+    }
+
+    void verifyTransmission(const Ieee80211Transmission *transmission)
+    {
+        ASSERT(transmission != nullptr);
+        ASSERT(transmission->getPacket() != nullptr);
+        ASSERT(transmission->getChannel() != nullptr);
+        ASSERT(transmission->getChannel()->is80Plus80());
+        ASSERT(transmission->getChannel()->getOperatingBandwidth() == MHz(160));
+
+        const auto *analog = dynamic_cast<const DimensionalTransmissionAnalogModel *>(transmission->getAnalogModel());
+        ASSERT(analog != nullptr);
+        ASSERT(analog->getOccupiedBands().size() == 2);
+        ASSERT(analog->getComponentPowers().size() == 2);
+        ASSERT(analog->getOccupiedBands()[0].bandwidth == MHz(80));
+        ASSERT(analog->getOccupiedBands()[1].bandwidth == MHz(80));
+        ASSERT(analog->getOccupiedBands()[0].centerFrequency == GHz(5.21));
+        ASSERT(analog->getOccupiedBands()[1].centerFrequency == GHz(5.775));
+
+        const simtime_t midpoint = transmission->getStartTime() + transmission->getDuration() / 2;
+        const W firstPower = integratePower(analog->getComponentPowers()[0], midpoint);
+        const W secondPower = integratePower(analog->getComponentPowers()[1], midpoint);
+        ASSERT(std::abs(firstPower.get() - 0.5) < 1e-9);
+        ASSERT(std::abs(secondPower.get() - 0.5) < 1e-9);
+        ASSERT(std::abs((firstPower + secondPower).get() - 1.0) < 1e-9);
+
+        const auto gapPower = analog->getPower()->getValue(
+                Point<simsec, Hz>(simsec(midpoint), GHz(5.49)));
+        ASSERT(gapPower == WpHz(0));
+        transmissionShapeVerified = true;
+    }
+
+    void countReception(const IReception *reception, bool started)
+    {
+        ASSERT(reception != nullptr);
+        const auto *transmission = reception->getTransmission();
+        ASSERT(transmission != nullptr);
+        const auto *packet = transmission->getPacket();
+        ASSERT(packet != nullptr);
+        const char *name = packet->getName();
+
+        if (started)
+            rxStartedCount++;
+        else
+            rxEndedCount++;
+
+        if (!strcmp(name, "good")) {
+            if (started)
+                goodRxStarted++;
+            else
+                goodRxEnded++;
+        }
+        else if (!strcmp(name, "secondary-only")) {
+            if (started)
+                secondaryRxStarted++;
+            else
+                secondaryRxEnded++;
+        }
+        else if (!strcmp(name, "weak-primary")) {
+            if (started)
+                weakRxStarted++;
+            else
+                weakRxEnded++;
+        }
+        else if (!strcmp(name, "remote-secondary")) {
+            if (started)
+                remoteSecondaryRxStarted++;
+            else
+                remoteSecondaryRxEnded++;
+        }
+        else if (!strcmp(name, "joint")) {
+            if (started)
+                jointRxStarted++;
+            else
+                jointRxEnded++;
+        }
+    }
+
+    void verifyResults() const
+    {
+        ASSERT(verified == false);
+
+        // The two full-width packets take the packet-level radio path and each
+        // creates one immutable 80+80 Ieee80211Transmission.
+        ASSERT(txTransmissionCount == 2);
+        ASSERT(transmissionShapeVerified);
+
+        // Good full 80+80 PPDU: one attempted reception and one clean packet.
+        ASSERT(goodRxStarted == 1);
+        ASSERT(goodRxEnded == 1);
+        ASSERT(goodDelivered == 1);
+        ASSERT(goodErrored == 0);
+
+        // A secondary-only 80 MHz signal does not contain the configured
+        // primary 20 MHz and therefore cannot produce RXSTART or a packet.
+        ASSERT(secondaryRxStarted == 0);
+        ASSERT(secondaryRxEnded == 0);
+        ASSERT(secondaryDelivered == 0);
+
+        // A weak primary signal remains below sensitivity even when a remote
+        // secondary segment is strong.
+        ASSERT(weakRxStarted == 0);
+        ASSERT(weakRxEnded == 0);
+        ASSERT(remoteSecondaryRxStarted == 0);
+        ASSERT(remoteSecondaryRxEnded == 0);
+
+        // The joint case is one attempted whole PPDU.  Failure is represented
+        // by one errored packet, never by one packet per 80 MHz component.
+        ASSERT(jointRxStarted == 1);
+        ASSERT(jointRxEnded == 1);
+        ASSERT(jointDelivered == 1);
+        ASSERT(jointErrored == 1);
+        ASSERT(upperPacketCount == 2);
+        ASSERT(rxStartedCount == 2);
+        ASSERT(rxEndedCount == 2);
+    }
+
+  public:
+    VhtLifecycleDriver()
+    {
+        goodPacketEvent = new cMessage("goodPacket");
+        activateEvent = new cMessage("activate");
+        secondaryOnlyEvent = new cMessage("secondaryOnly");
+        weakPrimaryEvent = new cMessage("weakPrimary");
+        jointFailureEvent = new cMessage("jointFailure");
+        finishEvent = new cMessage("finish");
+    }
+
+    virtual ~VhtLifecycleDriver()
+    {
+        cancelAndDelete(goodPacketEvent);
+        cancelAndDelete(activateEvent);
+        cancelAndDelete(secondaryOnlyEvent);
+        cancelAndDelete(weakPrimaryEvent);
+        cancelAndDelete(jointFailureEvent);
+        cancelAndDelete(finishEvent);
+    }
+
+    bool isVerified() const { return verified; }
+
+  protected:
+    virtual int numInitStages() const override { return NUM_INIT_STAGES; }
+
+    virtual void initialize(int stage) override
+    {
+        cSimpleModule::initialize(stage);
+        if (stage == INITSTAGE_LAST) {
+            auto *simulation = cSimulation::getActiveSimulation();
+            txRadio = check_and_cast<Ieee80211Radio *>(simulation->getModuleByPath("txRadio"));
+            rxRadio = check_and_cast<Ieee80211Radio *>(simulation->getModuleByPath("rxRadio"));
+
+            txRadio->subscribe(transmissionStartedSignal, this);
+            rxRadio->subscribe(receptionStartedSignal, this);
+            rxRadio->subscribe(receptionEndedSignal, this);
+
+            scheduleAt(0.00001, activateEvent);
+            scheduleAt(0.0001, goodPacketEvent);
+            scheduleAt(0.0010, secondaryOnlyEvent);
+            scheduleAt(0.0020, weakPrimaryEvent);
+            scheduleAt(0.0030, jointFailureEvent);
+            scheduleAt(0.0050, finishEvent);
+        }
+    }
+
+    virtual void handleMessage(cMessage *message) override
+    {
+        if (message == activateEvent) {
+            {
+                cContextSwitcher contextSwitcher(txRadio);
+                txRadio->setRadioMode(IRadio::RADIO_MODE_TRANSCEIVER);
+            }
+            {
+                cContextSwitcher contextSwitcher(rxRadio);
+                rxRadio->setRadioMode(IRadio::RADIO_MODE_RECEIVER);
+            }
+            for (auto *radio : {"secondaryRadio", "weakRadio", "jammerRadio"}) {
+                auto *module = check_and_cast<Ieee80211Radio *>(
+                        cSimulation::getActiveSimulation()->getModuleByPath(radio));
+                cContextSwitcher contextSwitcher(module);
+                module->setRadioMode(IRadio::RADIO_MODE_TRANSMITTER);
+            }
+        }
+        else if (message == goodPacketEvent) {
+            send(createPacket("good", MHz(160)), "txOut");
+        }
+        else if (message == secondaryOnlyEvent) {
+            send(createPacket("secondary-only", MHz(80)), "secondaryOut");
+        }
+        else if (message == weakPrimaryEvent) {
+            send(createPacket("weak-primary", MHz(20)), "weakOut");
+            send(createPacket("remote-secondary", MHz(80)), "secondaryOut");
+        }
+        else if (message == jointFailureEvent) {
+            // The full PPDU is sent first so it has the lower transmission ID
+            // when the two starts have the same simulation time.
+            send(createPacket("joint", MHz(160)), "txOut");
+            send(createPacket("jammer", MHz(80)), "jammerOut");
+        }
+        else if (message == finishEvent) {
+            verifyResults();
+            verified = true;
+        }
+        else {
+            auto *packet = check_and_cast<Packet *>(message);
+            const char *name = packet->getName();
+            upperPacketCount++;
+            if (!strcmp(name, "good")) {
+                goodDelivered++;
+                if (packet->hasBitError())
+                    goodErrored++;
+            }
+            else if (!strcmp(name, "secondary-only"))
+                secondaryDelivered++;
+            else if (!strcmp(name, "joint")) {
+                jointDelivered++;
+                if (packet->hasBitError())
+                    jointErrored++;
+            }
+            delete packet;
+        }
+    }
+
+    virtual void receiveSignal(cComponent *source, simsignal_t signal, cObject *value, cObject *) override
+    {
+        if (source == txRadio && signal == transmissionStartedSignal) {
+            const auto *transmission = check_and_cast<const Ieee80211Transmission *>(value);
+            txTransmissionCount++;
+            verifyTransmission(transmission);
+        }
+        else if (source == rxRadio && signal == receptionStartedSignal)
+            countReception(check_and_cast<const IReception *>(value), true);
+        else if (source == rxRadio && signal == receptionEndedSignal)
+            countReception(check_and_cast<const IReception *>(value), false);
+    }
+};
+
+Define_Module(VhtLifecycleDriver);
+
+%file: TestNetwork.ned
+import inet.mobility.static.StationaryMobility;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211DimensionalRadio;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211DimensionalRadioMedium;
+
+simple VhtDriver
+{
+    parameters:
+        @class(VhtLifecycleDriver);
+    gates:
+        input rxIn;
+        output txOut;
+        output weakOut;
+        output secondaryOut;
+        output jammerOut;
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        driver: VhtDriver;
+
+        txMobility: StationaryMobility {
+            parameters:
+                subjectModule = "";
+                initialX = 0m;
+                initialY = 0m;
+                initialZ = 0m;
+        }
+        rxMobility: StationaryMobility {
+            parameters:
+                subjectModule = "";
+                initialX = 1m;
+                initialY = 0m;
+                initialZ = 0m;
+        }
+        secondaryMobility: StationaryMobility {
+            parameters:
+                subjectModule = "";
+                initialX = 1m;
+                initialY = 0m;
+                initialZ = 0m;
+        }
+        weakMobility: StationaryMobility {
+            parameters:
+                subjectModule = "";
+                initialX = 1m;
+                initialY = 0m;
+                initialZ = 0m;
+        }
+        jammerMobility: StationaryMobility {
+            parameters:
+                subjectModule = "";
+                initialX = 1m;
+                initialY = 0m;
+                initialZ = 0m;
+        }
+
+        radioMedium: Ieee80211DimensionalRadioMedium {
+            parameters:
+                physicalEnvironmentModule = "";
+                sameTransmissionStartTimeCheck = "ignore";
+                radioModeFilter = false;
+                listeningFilter = false;
+        }
+
+        txRadio: Ieee80211DimensionalRadio {
+            parameters:
+                radioMediumModule = "^.radioMedium";
+                antenna.mobilityModule = "^.^.txMobility";
+                opMode = "ac";
+                bandName = "5 GHz";
+                channelNumber = 36;
+                channelWidth = "80+80MHz";
+                channelCenterFrequencyIndex0 = 42;
+                channelCenterFrequencyIndex1 = 155;
+                initialRadioMode = "off";
+                signalAnalogRepresentation = "dimensional";
+        }
+
+        rxRadio: Ieee80211DimensionalRadio {
+            parameters:
+                radioMediumModule = "^.radioMedium";
+                antenna.mobilityModule = "^.^.rxMobility";
+                opMode = "ac";
+                bandName = "5 GHz";
+                channelNumber = 36;
+                channelWidth = "80+80MHz";
+                channelCenterFrequencyIndex0 = 42;
+                channelCenterFrequencyIndex1 = 155;
+                initialRadioMode = "off";
+                signalAnalogRepresentation = "dimensional";
+                receiver.errorModel.typename = "";
+        }
+
+        secondaryRadio: Ieee80211DimensionalRadio {
+            parameters:
+                radioMediumModule = "^.radioMedium";
+                antenna.mobilityModule = "^.^.secondaryMobility";
+                opMode = "ac";
+                bandName = "5 GHz";
+                channelNumber = 149;
+                channelWidth = "80MHz";
+                channelCenterFrequencyIndex0 = 155;
+                initialRadioMode = "off";
+                signalAnalogRepresentation = "dimensional";
+        }
+
+        weakRadio: Ieee80211DimensionalRadio {
+            parameters:
+                radioMediumModule = "^.radioMedium";
+                antenna.mobilityModule = "^.^.weakMobility";
+                opMode = "ac";
+                bandName = "5 GHz";
+                channelNumber = 36;
+                channelWidth = "20MHz";
+                bandwidth = 20MHz;
+                initialRadioMode = "off";
+                signalAnalogRepresentation = "dimensional";
+        }
+
+        jammerRadio: Ieee80211DimensionalRadio {
+            parameters:
+                radioMediumModule = "^.radioMedium";
+                antenna.mobilityModule = "^.^.jammerMobility";
+                opMode = "ac";
+                bandName = "5 GHz";
+                channelNumber = 149;
+                channelWidth = "80MHz";
+                channelCenterFrequencyIndex0 = 155;
+                initialRadioMode = "off";
+                signalAnalogRepresentation = "dimensional";
+        }
+
+    connections allowunconnected:
+        driver.txOut --> txRadio.upperLayerIn;
+        driver.weakOut --> weakRadio.upperLayerIn;
+        driver.secondaryOut --> secondaryRadio.upperLayerIn;
+        driver.jammerOut --> jammerRadio.upperLayerIn;
+        rxRadio.upperLayerOut --> driver.rxIn;
+}
+
+%inifile: omnetpp.ini
+[General]
+ned-path = .;../../../../src;../../lib
+network = TestNetwork
+sim-time-limit = 6ms
+
+*.radioMedium.backgroundNoise.power = -120dBm
+
+*.txRadio.transmitter.power = 1W
+*.secondaryRadio.transmitter.power = 1W
+*.weakRadio.transmitter.power = 1pW
+*.jammerRadio.transmitter.power = 100W
+
+*.rxRadio.receiver.sensitivity = -85dBm
+*.rxRadio.receiver.energyDetection = -85dBm
+*.rxRadio.receiver.snirThreshold = 4dB
+*.rxRadio.receiver.snirThresholdMode = "min"
+
+%activity:
+{
+    auto *driver = check_and_cast<VhtLifecycleDriver *>(
+            cSimulation::getActiveSimulation()->getModuleByPath("driver"));
+    wait(0.006);
+    ASSERT(driver->isVerified());
+}
+
+EV << ".\n";
+
+%contains: stdout
+.
