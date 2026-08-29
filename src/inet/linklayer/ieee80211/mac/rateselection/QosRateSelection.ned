@@ -32,8 +32,9 @@ simple QosRateSelection extends SimpleModule
         double responseCtsFrameBitrate @unit(bps) = default(-1bps);
 
         double dataFrameBitrate @unit(bps) = default(-1bps); // Fastest
-        double dataFrameBandwidth @unit(Hz) = default(nan Hz); // Unspecified by default
-        int dataFrameNumSpatialStreams = default(-1); // Unspecified by default
+        double dataFrameBandwidth @unit(Hz) = default(nan Hz); // Explicit mode qualifier when dataFrameBitrate is specified
+        int dataFrameNumSpatialStreams = default(-1); // Explicit mode qualifier when dataFrameBitrate is specified
+        double dataFrameGuardInterval @unit(s) = default(-1s); // Explicit mode qualifier when dataFrameBitrate is specified; negative means unspecified, otherwise it must equal the selected PHY mode's modeled GI
 
         double mgmtFrameBitrate @unit(bps) = default(-1bps); // Fastest
         double controlFrameBitrate @unit(bps) = default(-1bps);

@@ -29,7 +29,7 @@ void QosRateSelection::initialize(int stage)
         double multicastFrameBitrate = par("multicastFrameBitrate");
         multicastFrameMode = (multicastFrameBitrate == -1) ? nullptr : modeSet->getMode(bps(multicastFrameBitrate));
         double dataFrameBitrate = par("dataFrameBitrate");
-        dataFrameMode = (dataFrameBitrate == -1) ? nullptr : modeSet->getMode(bps(dataFrameBitrate), Hz(par("dataFrameBandwidth")), par("dataFrameNumSpatialStreams"));
+        dataFrameMode = (dataFrameBitrate == -1) ? nullptr : modeSet->getMode(bps(dataFrameBitrate), Hz(par("dataFrameBandwidth")), par("dataFrameNumSpatialStreams"), par("dataFrameGuardInterval"));
         double mgmtFrameBitrate = par("mgmtFrameBitrate");
         mgmtFrameMode = (mgmtFrameBitrate == -1) ? nullptr : modeSet->getMode(bps(mgmtFrameBitrate));
         double controlFrameBitrate = par("controlFrameBitrate");
@@ -79,10 +79,8 @@ const IIeee80211Mode *QosRateSelection::computeResponseAckFrameMode(Packet *pack
     ASSERT(modeSet->containsMode(mode));
     const IIeee80211Mode *responseMode;
     if (!responseAckFrameMode) {
-        if (modeSet->getIsMandatory(mode))
-            responseMode = mode;
-        else if (auto slowerMode = modeSet->getSlowerMandatoryMode(mode))
-            responseMode = slowerMode;
+        if (auto mandatoryMode = modeSet->getMandatoryModeAtOrBelow(mode))
+            responseMode = mandatoryMode;
         else
             throw cRuntimeError("Mandatory mode not found");
     }
@@ -98,10 +96,8 @@ const IIeee80211Mode *QosRateSelection::computeResponseCtsFrameMode(Packet *pack
     ASSERT(modeSet->containsMode(mode));
     const IIeee80211Mode *responseMode;
     if (!responseCtsFrameMode) {
-        if (modeSet->getIsMandatory(mode))
-            responseMode = mode;
-        else if (auto slowerMode = modeSet->getSlowerMandatoryMode(mode))
-            responseMode = slowerMode;
+        if (auto mandatoryMode = modeSet->getMandatoryModeAtOrBelow(mode))
+            responseMode = mandatoryMode;
         else
             throw cRuntimeError("Mandatory mode not found");
     }
