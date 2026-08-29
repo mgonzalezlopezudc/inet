@@ -93,9 +93,11 @@ void Ieee80211Radio::setModeSet(const Ieee80211ModeSet *modeSet)
     ieee80211Receiver->setModeSet(modeSet);
     EV << "Changing radio mode set to " << modeSet << endl;
     receptionTimer = nullptr;
-    emit(listeningChangedSignal, 0);
-    if (modeSet != nullptr)
-        emit(modesetChangedSignal, const_cast<Ieee80211ModeSet *>(modeSet));
+    if (getComponentType() != nullptr) {
+        emit(listeningChangedSignal, 0);
+        if (modeSet != nullptr)
+            emit(modesetChangedSignal, const_cast<Ieee80211ModeSet *>(modeSet));
+    }
 }
 
 void Ieee80211Radio::setModeSetAndMode(const Ieee80211ModeSet *modeSet, const IIeee80211Mode *mode)
@@ -108,9 +110,11 @@ void Ieee80211Radio::setModeSetAndMode(const Ieee80211ModeSet *modeSet, const II
     ieee80211Receiver->setModeSet(modeSet);
     EV << "Changing radio mode set to " << modeSet << " and mode to " << mode << endl;
     receptionTimer = nullptr;
-    emit(listeningChangedSignal, 0);
-    if (modeSet != nullptr)
-        emit(modesetChangedSignal, const_cast<Ieee80211ModeSet *>(modeSet));
+    if (getComponentType() != nullptr) {
+        emit(listeningChangedSignal, 0);
+        if (modeSet != nullptr)
+            emit(modesetChangedSignal, const_cast<Ieee80211ModeSet *>(modeSet));
+    }
 }
 
 void Ieee80211Radio::setMode(const IIeee80211Mode *mode)
@@ -119,7 +123,8 @@ void Ieee80211Radio::setMode(const IIeee80211Mode *mode)
     ieee80211Transmitter->setMode(mode);
     EV << "Changing radio mode to " << mode << endl;
     receptionTimer = nullptr;
-    emit(listeningChangedSignal, 0);
+    if (getComponentType() != nullptr)
+        emit(listeningChangedSignal, 0);
 }
 
 void Ieee80211Radio::setBand(const IIeee80211Band *band)
