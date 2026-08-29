@@ -25,11 +25,11 @@ class SparseModeSet : public Ieee80211ModeSet
     {}
 };
 
-static const IIeee80211Mode *findHtMode(const Ieee80211ModeSet *modeSet, int mcsIndex, Hz bandwidth)
+static const IIeee80211Mode *findHtMode(const Ieee80211ModeSet *modeSet, int mcsIndex, Hz bandwidth, bool shortGi = false)
 {
     for (int i = 0; i < modeSet->getNumModes(); i++) {
         const auto *mode = modeSet->getMode(i);
-        if (mode->getHtMcsIndex() == mcsIndex && mode->getDataMode()->getBandwidth() == bandwidth)
+        if (mode->getHtMcsIndex() == mcsIndex && mode->getDataMode()->getBandwidth() == bandwidth && mode->isHtShortGuardInterval() == shortGi)
             return mode;
     }
     return nullptr;
@@ -46,8 +46,8 @@ ASSERT(!vhtOnlyModeSet->isHtOperationSupported());
 std::vector<SparseModeSet::Entry> sparseEntries;
 for (int mcsIndex = 0; mcsIndex < 8; mcsIndex++)
     sparseEntries.push_back({true, findHtMode(htModeSet, mcsIndex, MHz(20))});
-sparseEntries.push_back({false, findHtMode(htModeSet, 8, MHz(20))});
-sparseEntries.push_back({false, findHtMode(htModeSet, 10, MHz(20))});
+sparseEntries.push_back({false, findHtMode(htModeSet, 8, MHz(20), true)});
+sparseEntries.push_back({false, findHtMode(htModeSet, 10, MHz(20), true)});
 // IEEE Std 802.11-2024, 9.4.2.3 and 11.1.4.6: an ordinary HT profile
 // includes its applicable legacy operational rates in Supported Rates.
 sparseEntries.push_back({true, htModeSet->getMode(Mbps(1)), true});
@@ -84,16 +84,16 @@ ASSERT(sparse.isHtShortGuardIntervalSupported(MHz(20)));
 // profile may therefore expose a short-GI mode independently of its mandatory
 // long-GI MCS entries, while non-HT/VHT modes cannot contribute to HT bits.
 SparseModeSet short20({
-        { false, findHtMode(htModeSet, 8, MHz(20)) },
+        { false, findHtMode(htModeSet, 8, MHz(20), true) },
         { true, htModeSet->getMode(Mbps(1)), true },
-    }, findHtMode(htModeSet, 8, MHz(20)), false);
+    }, findHtMode(htModeSet, 8, MHz(20), true), false);
 ASSERT(short20.isHtShortGuardIntervalSupported(MHz(20)));
 ASSERT(!short20.isHtShortGuardIntervalSupported(MHz(40)));
 
 SparseModeSet short40({
-        { false, findHtMode(htModeSet, 0, MHz(40)) },
+        { false, findHtMode(htModeSet, 0, MHz(40), true) },
         { true, htModeSet->getMode(Mbps(1)), true },
-    }, findHtMode(htModeSet, 0, MHz(40)), false);
+    }, findHtMode(htModeSet, 0, MHz(40), true), false);
 ASSERT(!short40.isHtShortGuardIntervalSupported(MHz(20)));
 ASSERT(short40.isHtShortGuardIntervalSupported(MHz(40)));
 

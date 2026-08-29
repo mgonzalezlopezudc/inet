@@ -46,7 +46,8 @@ void Ieee80211MgmtBase::receiveSignal(cComponent *source, simsignal_t signalID, 
 
     if (signalID == modesetChangedSignal) {
         modeSet = check_and_cast<physicallayer::Ieee80211ModeSet *>(obj);
-        mib->updateLocalHtCapabilities(modeSet);
+        if (mib.getNullable() != nullptr)
+            mib->updateLocalHtCapabilities(modeSet);
         supportedRates = Ieee80211SupportedRatesElement();
         extendedSupportedRates = Ieee80211ExtendedSupportedRatesElement();
         int rateIndex = 0;

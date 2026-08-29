@@ -15,11 +15,11 @@ using namespace inet::units::values;
 
 %global:
 
-static const IIeee80211Mode *findHtMode(const Ieee80211ModeSet *modeSet, int mcsIndex, Hz bandwidth)
+static const IIeee80211Mode *findHtMode(const Ieee80211ModeSet *modeSet, int mcsIndex, Hz bandwidth, bool shortGi = false)
 {
     for (int i = 0; i < modeSet->getNumModes(); i++) {
         const auto *mode = modeSet->getMode(i);
-        if (mode->getHtMcsIndex() == mcsIndex && mode->getDataMode()->getBandwidth() == bandwidth)
+        if (mode->getHtMcsIndex() == mcsIndex && mode->getDataMode()->getBandwidth() == bandwidth && mode->isHtShortGuardInterval() == shortGi)
             return mode;
     }
     return nullptr;
@@ -48,8 +48,8 @@ const auto *modeSet = Ieee80211ModeSet::getModeSet("n(mixed-2.4Ghz)");
 const auto *mcs0 = findHtMode(modeSet, 0, MHz(20));
 const auto *mcs1 = findHtMode(modeSet, 1, MHz(20));
 const auto *mcs2 = findHtMode(modeSet, 2, MHz(20));
-const auto *mcs8 = findHtMode(modeSet, 8, MHz(20));
-const auto *mcs0_40 = findHtMode(modeSet, 0, MHz(40));
+const auto *mcs8 = findHtMode(modeSet, 8, MHz(20), true);
+const auto *mcs0_40 = findHtMode(modeSet, 0, MHz(40), true);
 ASSERT(mcs0 != nullptr);
 ASSERT(mcs1 != nullptr);
 ASSERT(mcs2 != nullptr);
@@ -110,8 +110,13 @@ ASSERT(selectPeerCompatibleMode(modeSet, &twentyOperationPeer, mcs0_40, peer) ==
 // receiver capability bit.
 auto shortGiDisabledPeer = makePeerState({0, 8}, {MHz(20)}, MHz(20));
 const auto *shortGiFallback = selectPeerCompatibleMode(modeSet, &shortGiDisabledPeer, mcs8, peer);
-ASSERT(shortGiFallback == mcs0);
+const auto *mcs8Long = findHtMode(modeSet, 8, MHz(20), false);
+ASSERT(shortGiFallback == mcs8Long);
 ASSERT(!shortGiFallback->isHtShortGuardInterval());
+
+auto shortGiDisabledOnlyMcs0Peer = makePeerState({0}, {MHz(20)}, MHz(20));
+const auto *shortGiMcs0Fallback = selectPeerCompatibleMode(modeSet, &shortGiDisabledOnlyMcs0Peer, mcs8, peer);
+ASSERT(shortGiMcs0Fallback == mcs0);
 
 auto compatiblePeer = makePeerState({2}, {MHz(20)}, MHz(40));
 ASSERT(selectPeerCompatibleMode(modeSet, &compatiblePeer, mcs2, peer) == mcs2);
@@ -138,7 +143,7 @@ auto deterministicPeer = makePeerState({0, 2, 8}, {MHz(20)}, MHz(20));
 const auto *firstSelection = selectPeerCompatibleMode(modeSet, &deterministicPeer, mcs8, peer);
 const auto *secondSelection = selectPeerCompatibleMode(modeSet, &deterministicPeer, mcs8, peer);
 ASSERT(firstSelection == secondSelection);
-ASSERT(firstSelection->getHtMcsIndex() == 0);
+ASSERT(firstSelection->getHtMcsIndex() == 8);
 ASSERT(!firstSelection->isHtShortGuardInterval());
 
 EV << "Peer-compatible HT mode selection checks verified.\n";
