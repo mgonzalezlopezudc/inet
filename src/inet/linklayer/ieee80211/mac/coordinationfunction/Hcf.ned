@@ -32,9 +32,11 @@ module Hcf extends Module like IHcf
 
         string rxModule;
         string txModule;
+        string mibModule;
 
         *.rateSelectionModule = "^.rateSelection";
         *.rxModule = "^." + this.rxModule;
+        *.mibModule = default(absPath(this.mibModule));
         *.*.originatorMacDataServiceModule = "^.^.originatorMacDataService";
 
         @class(Hcf);
