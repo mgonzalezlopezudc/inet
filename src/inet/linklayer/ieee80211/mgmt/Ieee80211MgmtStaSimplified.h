@@ -48,8 +48,6 @@ class INET_API Ieee80211MgmtStaSimplified : public Ieee80211MgmtBase
 };
 
 } // namespace ieee80211
-
 } // namespace inet
 
 #endif
-
