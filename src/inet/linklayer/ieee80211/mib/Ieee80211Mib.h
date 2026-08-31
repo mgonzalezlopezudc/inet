@@ -79,6 +79,7 @@ class INET_API Ieee80211Mib : public SimpleModule
     bool localHtCapabilitiesValid = false;
     Ieee80211HtCapabilities localHtCapabilities;
     Ieee80211HtOperation htOperation;
+    bool primaryChannelAvailable = false;
 
   private:
     std::map<MacAddress, PeerHtState> peerHtStates;
@@ -94,6 +95,10 @@ class INET_API Ieee80211Mib : public SimpleModule
     void releaseAssociationId(const MacAddress& address);
     void updateLocalHtCapabilities(const physicallayer::Ieee80211ModeSet *modeSet);
     bool isHtOperationSupported() const { return localHtCapabilitiesValid; }
+    bool hasPrimaryChannel() const { return primaryChannelAvailable; }
+    int requirePrimaryChannel() const;
+    void setPrimaryChannel(int primaryChannel);
+    const Ieee80211HtOperation& getHtOperation() const;
     const PeerHtState *findPeerHtState(const MacAddress& address) const;
     void setPeerHtCapabilities(const MacAddress& address, const Ieee80211HtCapabilities& capabilities, const Ieee80211HtOperation& operation);
     void removePeerHtCapabilities(const MacAddress& address);
