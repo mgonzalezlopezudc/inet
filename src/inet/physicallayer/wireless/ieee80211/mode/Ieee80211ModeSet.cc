@@ -542,10 +542,10 @@ const DelayedInitializer<std::vector<Ieee80211ModeSet>> Ieee80211ModeSet::modeSe
     }, Ieee80211VhtCompliantModes::getCompliantMode(&Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss1, Ieee80211VhtMode::BAND_5GHZ, Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG), PhyType::VHT),}; });
 
 Ieee80211ModeSet::Ieee80211ModeSet(const char *name, const std::vector<Entry> entries, const IIeee80211Mode *referenceMode,
-        PhyType operatingPhy, bool htOperationSupported) :
+        PhyType phyType, bool htOperationSupported) :
     name(name),
     entries(entries),
-    operatingPhy(operatingPhy),
+    phyType(phyType),
     referenceMode(referenceMode),
     htOperationSupported(htOperationSupported)
 {
