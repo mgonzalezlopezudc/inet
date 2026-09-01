@@ -47,4 +47,3 @@ class INET_API IPacketBuffer : public virtual IPacketCollection
 } // namespace inet
 
 #endif
-

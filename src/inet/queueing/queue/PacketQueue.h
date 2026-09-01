@@ -77,4 +77,3 @@ class INET_API PacketQueue : public PacketQueueBase, public IPacketBuffer::ICall
 } // namespace inet
 
 #endif
-

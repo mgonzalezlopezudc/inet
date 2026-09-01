@@ -67,4 +67,3 @@ class INET_API CompoundPacketQueueBase : public PacketQueueBase, public cListene
 } // namespace inet
 
 #endif
-
