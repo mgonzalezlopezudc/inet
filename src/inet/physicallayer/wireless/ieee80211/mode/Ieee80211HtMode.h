@@ -475,3 +475,4 @@ class INET_API Ieee80211HtCompliantModes
 } /* namespace inet */
 
 #endif
+

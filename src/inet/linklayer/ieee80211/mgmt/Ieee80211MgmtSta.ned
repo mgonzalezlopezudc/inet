@@ -42,3 +42,4 @@ simple Ieee80211MgmtSta extends SimpleModule like IIeee80211Mgmt
         input agentIn;   // Used for attaching an agent algorithm
         output agentOut; // Used for attaching an agent algorithm
 }
+

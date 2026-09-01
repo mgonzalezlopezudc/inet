@@ -42,3 +42,4 @@ class INET_API IPacketQueue : public virtual IPacketCollection, public virtual I
 } // namespace inet
 
 #endif
+

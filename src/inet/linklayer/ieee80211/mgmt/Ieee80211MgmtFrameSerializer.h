@@ -47,3 +47,4 @@ class Ieee80211TypedMgmtFrameSerializer : public Ieee80211MgmtFrameSerializer
 } // namespace inet
 
 #endif
+

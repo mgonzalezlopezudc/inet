@@ -259,3 +259,4 @@ class INET_API Ieee80211MgmtSta : public Ieee80211MgmtBase
 } // namespace inet
 
 #endif
+

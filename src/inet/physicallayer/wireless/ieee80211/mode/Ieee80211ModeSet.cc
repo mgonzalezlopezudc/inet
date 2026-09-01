@@ -806,3 +806,4 @@ const Ieee80211ModeSet *Ieee80211ModeSet::getModeSet(const char *mode)
 } // namespace physicallayer
 
 } // namespace inet
+

@@ -92,3 +92,4 @@ class INET_API QosRateSelection : public IQosRateSelection, public ModeSetListen
 } /* namespace inet */
 
 #endif
+

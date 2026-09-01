@@ -118,3 +118,4 @@ Packet *PacketBuffer::getPacket(int index) const
 
 } // namespace queueing
 } // namespace inet
+

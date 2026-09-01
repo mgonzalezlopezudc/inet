@@ -27,3 +27,4 @@ simple Ieee80211Mib extends SimpleModule
         displayStringTextFormat = default("Address: {address}{ssidStr}\n{modeStr}{stationTypeStr}{qosStr}{associatedStr}");
         @display("i=block/table");
 }
+

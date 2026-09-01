@@ -134,3 +134,4 @@ class INET_API Dcf : public ICoordinationFunction, public IFrameSequenceHandler:
 } /* namespace inet */
 
 #endif
+

@@ -42,3 +42,4 @@ simple RateSelection extends SimpleModule like IRateSelection
         double controlFrameBitrate @unit(bps) = default(-1bps);
         @display("i=block/cogwheel");
 }
+

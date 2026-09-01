@@ -736,3 +736,4 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserializeFrame(MemoryInputStrea
 } // namespace ieee80211
 
 } // namespace inet
+

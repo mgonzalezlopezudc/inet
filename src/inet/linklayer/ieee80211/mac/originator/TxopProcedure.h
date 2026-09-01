@@ -70,3 +70,4 @@ class INET_API TxopDurationFilter : public cObjectResultFilter
 } /* namespace inet */
 
 #endif
+

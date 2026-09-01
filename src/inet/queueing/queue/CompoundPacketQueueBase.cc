@@ -128,3 +128,4 @@ void CompoundPacketQueueBase::receiveSignal(cComponent *source, simsignal_t sign
 
 } // namespace queueing
 } // namespace inet
+

@@ -125,3 +125,4 @@ class INET_API Ieee80211ModeSet : public IPrintableObject, public cObject
 } // namespace inet
 
 #endif
+

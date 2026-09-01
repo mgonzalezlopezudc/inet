@@ -175,3 +175,4 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
 } /* namespace inet */
 
 #endif
+

@@ -1062,3 +1062,4 @@ void Ieee80211MgmtSta::storeAPInfo(Packet *packet, const Ptr<const Ieee80211Mgmt
 
 } // namespace ieee80211
 } // namespace inet
+

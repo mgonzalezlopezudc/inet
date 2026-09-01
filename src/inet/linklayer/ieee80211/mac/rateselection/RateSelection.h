@@ -100,3 +100,4 @@ class INET_API RateSelection : public IRateSelection, public SimpleModule, publi
 } // namespace inet
 
 #endif
+

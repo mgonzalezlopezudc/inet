@@ -140,3 +140,4 @@ void TxopDurationFilter::receiveSignal(cResultFilter *prev, simtime_t_cref t, cO
 
 } // namespace ieee80211
 } // namespace inet
+

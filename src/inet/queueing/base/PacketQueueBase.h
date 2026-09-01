@@ -55,3 +55,4 @@ class INET_API PacketQueueBase : public PacketProcessorBase, public virtual IPac
 } // namespace inet
 
 #endif
+

@@ -62,3 +62,4 @@ void Ieee80211MgmtProtocolPrinter::print(const Ptr<const Chunk>& chunk, const Pr
 
 } // namespace ieee80211
 } // namespace inet
+

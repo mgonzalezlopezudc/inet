@@ -49,3 +49,4 @@ void Ieee80211MgmtApBase::receiveSignal(cComponent *source, simsignal_t signalID
 } // namespace ieee80211
 
 } // namespace inet
+

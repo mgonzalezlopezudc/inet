@@ -195,3 +195,4 @@ void PacketQueue::handlePacketRemoved(Packet *packet)
 
 } // namespace queueing
 } // namespace inet
+
