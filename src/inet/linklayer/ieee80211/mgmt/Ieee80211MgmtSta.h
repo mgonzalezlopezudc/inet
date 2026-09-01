@@ -71,7 +71,7 @@ class INET_API Ieee80211MgmtSta : public Ieee80211MgmtBase
     // Stores AP info received during scanning
     //
     struct ApInfo : public cObject {
-        int channel;
+        int channel; // internal zero-based radio channel index
         MacAddress address; // alias bssid
         std::string ssid;
         Ieee80211SupportedRatesElement supportedRates;
@@ -173,6 +173,7 @@ class INET_API Ieee80211MgmtSta : public Ieee80211MgmtBase
     /** Classifies the HT elements in a successful association response. */
     virtual HtAssociationResponseStatus classifyAssociationResponse(
             const Ptr<const Ieee80211AssociationResponseFrame>& responseBody,
+            const physicallayer::IIeee80211Band *band,
             Ieee80211HtCapabilities& responseHtCapabilities, Ieee80211HtOperation& responseHtOperation,
             std::string& reason) const;
 

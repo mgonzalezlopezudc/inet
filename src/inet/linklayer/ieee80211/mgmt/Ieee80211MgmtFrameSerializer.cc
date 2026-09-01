@@ -18,6 +18,8 @@ namespace inet {
 
 namespace ieee80211 {
 
+// IEEE Std 802.11-2024, 9.2.2: fixed-width numeric management fields use least-significant octet first.
+
 Register_Serializer(Ieee80211AssociationRequestFrame, Ieee80211TypedMgmtFrameSerializer<Ieee80211AssociationRequestFrame>);
 Register_Serializer(Ieee80211AssociationResponseFrame, Ieee80211TypedMgmtFrameSerializer<Ieee80211AssociationResponseFrame>);
 Register_Serializer(Ieee80211AuthenticationFrame, Ieee80211TypedMgmtFrameSerializer<Ieee80211AuthenticationFrame>);
@@ -373,23 +375,23 @@ void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const P
     if (auto authenticationFrame = dynamicPtrCast<const Ieee80211AuthenticationFrame>(chunk)) {
 //        type = ST_AUTHENTICATION;
         // 1    Authentication algorithm number
-        stream.writeUint16Be(0);
+        stream.writeUint16Le(0);
         // 2    Authentication transaction sequence number
-        stream.writeUint16Be(authenticationFrame->getSequenceNumber());
+        stream.writeUint16Le(authenticationFrame->getSequenceNumber());
         // 3    Status code                                 The status code information is reserved in certain Authentication frames as defined in Table 7-17.
-        stream.writeUint16Be(authenticationFrame->getStatusCode());
+        stream.writeUint16Le(authenticationFrame->getStatusCode());
         // 4    Challenge text                              The challenge text information is present only in certain Authentication frames as defined in Table 7-17.
         // Last Vendor Specific                             One or more vendor-specific information elements may appear in this frame. This information element follows all other information elements.
         writeHtElements(stream, authenticationFrame, HT_ELEMENT_NONE);
     }
     else if (auto deauthenticationFrame = dynamicPtrCast<const Ieee80211DeauthenticationFrame>(chunk)) {
 //        type = ST_DEAUTHENTICATION;
-        stream.writeUint16Be(deauthenticationFrame->getReasonCode());
+        stream.writeUint16Le(deauthenticationFrame->getReasonCode());
         writeHtElements(stream, deauthenticationFrame, HT_ELEMENT_NONE);
     }
     else if (auto disassociationFrame = dynamicPtrCast<const Ieee80211DisassociationFrame>(chunk)) {
 //        type = ST_DISASSOCIATION;
-        stream.writeUint16Be(disassociationFrame->getReasonCode());
+        stream.writeUint16Le(disassociationFrame->getReasonCode());
         writeHtElements(stream, disassociationFrame, HT_ELEMENT_NONE);
     }
     else if (auto probeRequestFrame = dynamicPtrCast<const Ieee80211ProbeRequestFrame>(chunk)) {
@@ -410,9 +412,9 @@ void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const P
     else if (auto associationRequestFrame = dynamicPtrCast<const Ieee80211AssociationRequestFrame>(chunk); associationRequestFrame && !dynamicPtrCast<const Ieee80211ReassociationRequestFrame>(chunk)) {
 //        type = ST_ASSOCIATIONREQUEST;
         // 1    Capability
-        stream.writeUint16Be(0); // FIXME
+        stream.writeUint16Le(0); // FIXME
         // 2    Listen interval
-        stream.writeUint16Be(0); // FIXME
+        stream.writeUint16Le(0); // FIXME
         // 3    SSID
         const char *SSID = associationRequestFrame->getSSID();
         unsigned int length = strlen(SSID);
@@ -432,9 +434,9 @@ void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const P
     else if (auto reassociationRequestFrame = dynamicPtrCast<const Ieee80211ReassociationRequestFrame>(chunk)) {
 //        type = ST_REASSOCIATIONREQUEST;
         // 1    Capability
-        stream.writeUint16Be(0); // FIXME
+        stream.writeUint16Le(0); // FIXME
         // 2    Listen interval
-        stream.writeUint16Be(0); // FIXME
+        stream.writeUint16Le(0); // FIXME
         // 3    Current AP address
         stream.writeMacAddress(reassociationRequestFrame->getCurrentAP());
         // 4    SSID
@@ -457,9 +459,9 @@ void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const P
     else if (auto associationResponseFrame = dynamicPtrCast<const Ieee80211AssociationResponseFrame>(chunk); associationResponseFrame && !dynamicPtrCast<const Ieee80211ReassociationResponseFrame>(chunk)) {
 //        type = ST_ASSOCIATIONRESPONSE;
         // 1    Capability
-        stream.writeUint16Be(0); // FIXME
+        stream.writeUint16Le(0); // FIXME
         // 2    Status code
-        stream.writeUint16Be(associationResponseFrame->getStatusCode());
+        stream.writeUint16Le(associationResponseFrame->getStatusCode());
         // 3    AID
         stream.writeUint16Le(encodeAssociationId(associationResponseFrame->getStatusCode(), associationResponseFrame->getAid()));
         // 4    Supported rates
@@ -472,9 +474,9 @@ void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const P
     else if (auto reassociationResponseFrame = dynamicPtrCast<const Ieee80211ReassociationResponseFrame>(chunk)) {
 //        type = ST_REASSOCIATIONRESPONSE;
         // 1    Capability
-        stream.writeUint16Be(0); // FIXME
+        stream.writeUint16Le(0); // FIXME
         // 2    Status code
-        stream.writeUint16Be(reassociationResponseFrame->getStatusCode());
+        stream.writeUint16Le(reassociationResponseFrame->getStatusCode());
         // 3    AID
         stream.writeUint16Le(encodeAssociationId(reassociationResponseFrame->getStatusCode(), reassociationResponseFrame->getAid()));
         // 4    Supported rates
@@ -487,11 +489,11 @@ void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const P
     else if (auto beaconFrame = dynamicPtrCast<const Ieee80211BeaconFrame>(chunk); beaconFrame && !dynamicPtrCast<const Ieee80211ProbeResponseFrame>(chunk)) {
 //        type = ST_BEACON;
         // 1    Timestamp
-        stream.writeUint64Be(simTime().raw()); // FIXME
+        stream.writeUint64Le(simTime().raw()); // FIXME
         // 2    Beacon interval
-        stream.writeUint16Be((uint16_t)(beaconFrame->getBeaconInterval().inUnit(SIMTIME_US) / 1024));
+        stream.writeUint16Le((uint16_t)(beaconFrame->getBeaconInterval().inUnit(SIMTIME_US) / 1024));
         // 3    Capability
-        stream.writeUint16Be(0); // FIXME set  capability
+        stream.writeUint16Le(0); // FIXME set  capability
         // 4    Service Set Identifier (SSID)
         const char *SSID = beaconFrame->getSSID();
         unsigned int length = strlen(SSID);
@@ -525,11 +527,11 @@ void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const P
     else if (auto probeResponseFrame = dynamicPtrCast<const Ieee80211ProbeResponseFrame>(chunk)) {
 //        type = ST_PROBERESPONSE;
         // 1      Timestamp
-        stream.writeUint64Be(simTime().raw()); // FIXME
+        stream.writeUint64Le(simTime().raw()); // FIXME
         // 2      Beacon interval
-        stream.writeUint16Be((uint16_t)(probeResponseFrame->getBeaconInterval().inUnit(SIMTIME_US) / 1024));
+        stream.writeUint16Le((uint16_t)(probeResponseFrame->getBeaconInterval().inUnit(SIMTIME_US) / 1024));
         // 3      Capability
-        stream.writeUint16Be(0); // FIXME
+        stream.writeUint16Le(0); // FIXME
         // 4      SSID
         const char *SSID = probeResponseFrame->getSSID();
         unsigned int length = strlen(SSID);
@@ -582,9 +584,9 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserializeFrame(MemoryInputStrea
         case 0xB0: // ST_AUTHENTICATION
         {
             auto frame = makeShared<Ieee80211AuthenticationFrame>();
-            stream.readUint16Be();
-            frame->setSequenceNumber(stream.readUint16Be());
-            frame->setStatusCode((Ieee80211StatusCode)stream.readUint16Be());
+            stream.readUint16Le();
+            frame->setSequenceNumber(stream.readUint16Le());
+            frame->setStatusCode((Ieee80211StatusCode)stream.readUint16Le());
             readHtElements(stream, frame, HT_ELEMENT_NONE);
             return frame;
         }
@@ -592,7 +594,7 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserializeFrame(MemoryInputStrea
         case 0xC0: // ST_ST_DEAUTHENTICATION
         {
             auto frame = makeShared<Ieee80211DeauthenticationFrame>();
-            frame->setReasonCode((Ieee80211ReasonCode)stream.readUint16Be());
+            frame->setReasonCode((Ieee80211ReasonCode)stream.readUint16Le());
             readHtElements(stream, frame, HT_ELEMENT_NONE);
             return frame;
         }
@@ -600,7 +602,7 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserializeFrame(MemoryInputStrea
         case 0xA0: // ST_DISASSOCIATION
         {
             auto frame = makeShared<Ieee80211DisassociationFrame>();
-            frame->setReasonCode((Ieee80211ReasonCode)stream.readUint16Be());
+            frame->setReasonCode((Ieee80211ReasonCode)stream.readUint16Le());
             readHtElements(stream, frame, HT_ELEMENT_NONE);
             return frame;
         }
@@ -625,8 +627,8 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserializeFrame(MemoryInputStrea
         {
             auto frame = makeShared<Ieee80211AssociationRequestFrame>();
 
-            stream.readUint16Be();
-            stream.readUint16Be();
+            stream.readUint16Le();
+            stream.readUint16Le();
 
             char SSID[256];
             stream.readByte();
@@ -643,8 +645,8 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserializeFrame(MemoryInputStrea
         case 0x02: // ST_REASSOCIATIONREQUEST
         {
             auto frame = makeShared<Ieee80211ReassociationRequestFrame>();
-            stream.readUint16Be();
-            stream.readUint16Be();
+            stream.readUint16Le();
+            stream.readUint16Le();
 
             frame->setCurrentAP(stream.readMacAddress());
 
@@ -663,8 +665,8 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserializeFrame(MemoryInputStrea
         case 0x01: // ST_ASSOCIATIONRESPONSE
         {
             auto frame = makeShared<Ieee80211AssociationResponseFrame>();
-            stream.readUint16Be();
-            frame->setStatusCode((Ieee80211StatusCode)stream.readUint16Be());
+            stream.readUint16Le();
+            frame->setStatusCode((Ieee80211StatusCode)stream.readUint16Le());
             frame->setAid(decodeAssociationId(frame->getStatusCode(), stream.readUint16Le()));
 
             frame->setSupportedRates(readSupportedRatesElement(stream));
@@ -675,8 +677,8 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserializeFrame(MemoryInputStrea
         case 0x03: // ST_REASSOCIATIONRESPONSE
         {
             auto frame = makeShared<Ieee80211ReassociationResponseFrame>();
-            stream.readUint16Be();
-            frame->setStatusCode((Ieee80211StatusCode)stream.readUint16Be());
+            stream.readUint16Le();
+            frame->setStatusCode((Ieee80211StatusCode)stream.readUint16Le());
             frame->setAid(decodeAssociationId(frame->getStatusCode(), stream.readUint16Le()));
 
             frame->setSupportedRates(readSupportedRatesElement(stream));
@@ -689,10 +691,10 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserializeFrame(MemoryInputStrea
             auto frame = makeShared<Ieee80211BeaconFrame>();
 
             simtime_t timetstamp;
-            timetstamp.setRaw(stream.readUint64Be()); // TODO store timestamp
+            timetstamp.setRaw(stream.readUint64Le()); // TODO store timestamp
 
-            frame->setBeaconInterval(SimTime((int64_t)stream.readUint16Be() * 1024, SIMTIME_US));
-            stream.readUint16Be(); // Capability
+            frame->setBeaconInterval(SimTime((int64_t)stream.readUint16Le() * 1024, SIMTIME_US));
+            stream.readUint16Le(); // Capability
 
             char SSID[256];
             stream.readByte();
@@ -711,10 +713,10 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserializeFrame(MemoryInputStrea
             auto frame = makeShared<Ieee80211ProbeResponseFrame>();
 
             simtime_t timestamp;
-            timestamp.setRaw(stream.readUint64Be()); // TODO store timestamp
+            timestamp.setRaw(stream.readUint64Le()); // TODO store timestamp
 
-            frame->setBeaconInterval(SimTime((int64_t)stream.readUint16Be() * 1024, SIMTIME_US));
-            stream.readUint16Be();
+            frame->setBeaconInterval(SimTime((int64_t)stream.readUint16Le() * 1024, SIMTIME_US));
+            stream.readUint16Le();
 
             char SSID[256];
             stream.readByte();

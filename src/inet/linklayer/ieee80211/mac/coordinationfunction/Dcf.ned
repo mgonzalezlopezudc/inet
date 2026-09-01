@@ -30,7 +30,7 @@ module Dcf extends Module like IDcf
     parameters:
         string rxModule;
         string txModule;
-        string mibModule;
+        string mibModule = default("^.^.mib");
 
         *.rateSelectionModule = "^.rateSelection";
         *.rxModule = "^." + this.rxModule;

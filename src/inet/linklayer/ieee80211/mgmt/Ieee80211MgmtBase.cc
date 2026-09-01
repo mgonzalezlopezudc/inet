@@ -81,10 +81,10 @@ void Ieee80211MgmtBase::addHtCapabilities(const Ptr<Ieee80211MgmtFrame>& frame) 
         setHtCapabilities(frame, mib->localHtCapabilities);
 }
 
-void Ieee80211MgmtBase::addHtOperation(const Ptr<Ieee80211MgmtFrame>& frame) const
+void Ieee80211MgmtBase::addHtOperation(const Ptr<Ieee80211MgmtFrame>& frame, const physicallayer::IIeee80211Band *band) const
 {
     if (mib->isHtOperationSupported())
-        setHtOperation(frame, mib->getHtOperation());
+        setHtOperation(frame, band, mib->getHtOperation());
 }
 
 void Ieee80211MgmtBase::handleMessageWhenUp(cMessage *msg)

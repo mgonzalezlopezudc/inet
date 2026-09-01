@@ -11,6 +11,7 @@ at both ends.
 #include "inet/common/SimpleModule.h"
 #include "inet/common/packet/Packet.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211HtMgmtElements.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrame_m.h"
 #include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
 
@@ -43,6 +44,8 @@ class Ieee80211HtAssociationChecker : public SimpleModule, public cListener
 
   protected:
     int apAssociationNotifications = 0;
+    bool associationResponseWireChannelChecked = false;
+    bool staTunedToInternalChannelSix = false;
     cMessage *channelChangeTimer = nullptr;
     cModule *apQosEdcaf = nullptr;
 
@@ -59,6 +62,8 @@ class Ieee80211HtAssociationChecker : public SimpleModule, public cListener
         getModuleByPath("^.ap.wlan[0].mgmt")->subscribe(l2ApAssociatedSignal, this);
         apQosEdcaf = getModuleByPath("^.ap.wlan[0].mac.hcf.edca.edcaf[3]");
         apQosEdcaf->subscribe(packetSentToPeerSignal, this);
+        auto staRadio = getModuleByPath("^.sta.wlan[0].radio");
+        staRadio->subscribe(physicallayer::Ieee80211Radio::radioChannelChangedSignal, this);
         channelChangeTimer = new cMessage("channelChange");
     }
 
@@ -86,11 +91,24 @@ class Ieee80211HtAssociationChecker : public SimpleModule, public cListener
         if (source == apQosEdcaf && signalID == packetSentToPeerSignal) {
             auto packet = check_and_cast<Packet *>(value);
             const auto& header = packet->peekAtFront<Ieee80211MacHeader>();
-            if (header->getType() == ST_ASSOCIATIONRESPONSE && channelChangeTimer != nullptr && !channelChangeTimer->isScheduled())
-                scheduleAfter(SimTime(1, SIMTIME_US), channelChangeTimer);
+            if (header->getType() == ST_ASSOCIATIONRESPONSE) {
+                const auto& responseBody = packet->peekAt<Ieee80211AssociationResponseFrame>(header->getChunkLength());
+                ASSERT(responseBody->getHtOperationPresent());
+                ASSERT(responseBody->getHtOperation().primaryChannel == 7);
+                associationResponseWireChannelChecked = true;
+                if (channelChangeTimer != nullptr && !channelChangeTimer->isScheduled())
+                    scheduleAfter(SimTime(1, SIMTIME_US), channelChangeTimer);
+            }
         }
         else if (signalID == l2ApAssociatedSignal)
             apAssociationNotifications++;
+    }
+
+    virtual void receiveSignal(cComponent *source, simsignal_t signalID, intval_t value, cObject *details) override
+    {
+        if (source == getModuleByPath("^.sta.wlan[0].radio") &&
+                signalID == physicallayer::Ieee80211Radio::radioChannelChangedSignal && value == 6)
+            staTunedToInternalChannelSix = true;
     }
 
     virtual void finish() override
@@ -104,6 +122,8 @@ class Ieee80211HtAssociationChecker : public SimpleModule, public cListener
         ASSERT(apMib->bssAccessPointData.associationIds.at(staAddress) != 0);
         ASSERT(apMib->findPeerHtState(staAddress) != nullptr);
         ASSERT(apMib->findPeerHtState(staAddress)->valid);
+        ASSERT(associationResponseWireChannelChecked);
+        ASSERT(staTunedToInternalChannelSix);
         ASSERT(apMib->hasPrimaryChannel());
         ASSERT(apMib->requirePrimaryChannel() == 11);
         ASSERT(apMib->findPeerHtState(staAddress)->negotiatedCapabilities.operation.primaryChannel == 6);

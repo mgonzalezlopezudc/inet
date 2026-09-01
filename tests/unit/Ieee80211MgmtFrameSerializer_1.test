@@ -1,0 +1,165 @@
+%description:
+Verify IEEE 802.11 management-frame fixed numeric fields use little-endian
+wire order while MAC addresses, association IDs, and HT elements retain their
+existing encodings.
+
+%includes:
+#include <string>
+#include <vector>
+
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrame_m.h"
+
+using namespace inet;
+using namespace inet::ieee80211;
+
+%global:
+
+template<typename Frame>
+static std::vector<uint8_t> serializeFrame(const Ptr<Frame>& frame)
+{
+    Packet packet("serialized", frame);
+    return packet.peekAllAsBytes()->getBytes();
+}
+
+template<typename Frame>
+static Ptr<const Frame> deserializeFrame(const std::vector<uint8_t>& bytes)
+{
+    Packet packet("encoded", makeShared<BytesChunk>(bytes));
+    return packet.popAtFront<Frame>(B(bytes.size()));
+}
+
+static Ieee80211SupportedRatesElement makeRates()
+{
+    Ieee80211SupportedRatesElement rates;
+    rates.numRates = 1;
+    rates.rate[0] = 6;
+    return rates;
+}
+
+%activity:
+
+auto authentication = makeShared<Ieee80211AuthenticationFrame>();
+authentication->setSequenceNumber(0x1234);
+authentication->setStatusCode(static_cast<Ieee80211StatusCode>(0x5678));
+authentication->setChunkLength(B(6));
+ASSERT(serializeFrame(authentication) == std::vector<uint8_t>({0, 0, 0x34, 0x12, 0x78, 0x56}));
+
+auto deauthentication = makeShared<Ieee80211DeauthenticationFrame>();
+deauthentication->setReasonCode(static_cast<Ieee80211ReasonCode>(0x5678));
+deauthentication->setChunkLength(B(2));
+ASSERT(serializeFrame(deauthentication) == std::vector<uint8_t>({0x78, 0x56}));
+
+auto disassociation = makeShared<Ieee80211DisassociationFrame>();
+disassociation->setReasonCode(static_cast<Ieee80211ReasonCode>(0x9abc));
+disassociation->setChunkLength(B(2));
+ASSERT(serializeFrame(disassociation) == std::vector<uint8_t>({0xbc, 0x9a}));
+
+auto associationRequest = makeShared<Ieee80211AssociationRequestFrame>();
+associationRequest->setSSID("abc");
+associationRequest->setSupportedRates(makeRates());
+associationRequest->setChunkLength(B(12));
+ASSERT(serializeFrame(associationRequest) == std::vector<uint8_t>({
+        0, 0, 0, 0, 0, 3, 'a', 'b', 'c', 1, 1, 12}));
+
+auto reassociationRequest = makeShared<Ieee80211ReassociationRequestFrame>();
+reassociationRequest->setCurrentAP(MacAddress("02:04:06:08:0a:0c"));
+reassociationRequest->setSSID("abc");
+reassociationRequest->setSupportedRates(makeRates());
+reassociationRequest->setChunkLength(B(18));
+ASSERT(serializeFrame(reassociationRequest) == std::vector<uint8_t>({
+        0, 0, 0, 0, 0x02, 0x04, 0x06, 0x08, 0x0a, 0x0c,
+        0, 3, 'a', 'b', 'c', 1, 1, 12}));
+
+auto associationResponse = makeShared<Ieee80211AssociationResponseFrame>();
+associationResponse->setStatusCode(static_cast<Ieee80211StatusCode>(0x1234));
+associationResponse->setAid(0);
+associationResponse->setSupportedRates(makeRates());
+associationResponse->setChunkLength(B(9));
+ASSERT(serializeFrame(associationResponse) == std::vector<uint8_t>({
+        0, 0, 0x34, 0x12, 0, 0, 1, 1, 12}));
+
+auto successfulAssociationResponse = makeShared<Ieee80211AssociationResponseFrame>();
+successfulAssociationResponse->setStatusCode(SC_SUCCESSFUL);
+successfulAssociationResponse->setAid(1);
+successfulAssociationResponse->setSupportedRates(makeRates());
+successfulAssociationResponse->setChunkLength(B(9));
+auto successfulAssociationResponseBytes = serializeFrame(successfulAssociationResponse);
+ASSERT(successfulAssociationResponseBytes[4] == 0x01 && successfulAssociationResponseBytes[5] == 0xc0);
+
+auto reassociationResponse = makeShared<Ieee80211ReassociationResponseFrame>();
+reassociationResponse->setStatusCode(static_cast<Ieee80211StatusCode>(0x3456));
+reassociationResponse->setAid(0);
+reassociationResponse->setSupportedRates(makeRates());
+reassociationResponse->setChunkLength(B(9));
+ASSERT(serializeFrame(reassociationResponse) == std::vector<uint8_t>({
+        0, 0, 0x56, 0x34, 0, 0, 1, 1, 12}));
+
+auto beacon = makeShared<Ieee80211BeaconFrame>();
+beacon->setSSID("abc");
+beacon->setBeaconInterval(SimTime(0x1234 * 1024, SIMTIME_US));
+beacon->setSupportedRates(makeRates());
+beacon->setChunkLength(B(20));
+ASSERT(serializeFrame(beacon) == std::vector<uint8_t>({
+        0, 0, 0, 0, 0, 0, 0, 0, 0x34, 0x12, 0, 0,
+        0, 3, 'a', 'b', 'c', 1, 1, 12}));
+
+auto probeResponse = makeShared<Ieee80211ProbeResponseFrame>();
+probeResponse->setSSID("abc");
+probeResponse->setBeaconInterval(SimTime(0x1234 * 1024, SIMTIME_US));
+probeResponse->setSupportedRates(makeRates());
+probeResponse->setChunkLength(B(20));
+ASSERT(serializeFrame(probeResponse) == std::vector<uint8_t>({
+        0, 0, 0, 0, 0, 0, 0, 0, 0x34, 0x12, 0, 0,
+        0, 3, 'a', 'b', 'c', 1, 1, 12}));
+
+auto decodedAuthentication = deserializeFrame<Ieee80211AuthenticationFrame>({0, 0, 0x34, 0x12, 0x78, 0x56});
+ASSERT(decodedAuthentication->getSequenceNumber() == 0x1234);
+ASSERT(decodedAuthentication->getStatusCode() == static_cast<Ieee80211StatusCode>(0x5678));
+
+auto decodedDeauthentication = deserializeFrame<Ieee80211DeauthenticationFrame>({0x78, 0x56});
+ASSERT(decodedDeauthentication->getReasonCode() == static_cast<Ieee80211ReasonCode>(0x5678));
+
+auto decodedDisassociation = deserializeFrame<Ieee80211DisassociationFrame>({0xbc, 0x9a});
+ASSERT(decodedDisassociation->getReasonCode() == static_cast<Ieee80211ReasonCode>(0x9abc));
+
+auto decodedAssociationRequest = deserializeFrame<Ieee80211AssociationRequestFrame>({
+        0x34, 0x12, 0x78, 0x56, 0, 3, 'a', 'b', 'c', 1, 1, 12});
+ASSERT(std::string(decodedAssociationRequest->getSSID()) == "abc");
+ASSERT(decodedAssociationRequest->getSupportedRates().rate[0] == 6);
+
+auto decodedReassociationRequest = deserializeFrame<Ieee80211ReassociationRequestFrame>({
+        0x34, 0x12, 0x78, 0x56, 0x02, 0x04, 0x06, 0x08, 0x0a, 0x0c,
+        0, 3, 'a', 'b', 'c', 1, 1, 12});
+ASSERT(decodedReassociationRequest->getCurrentAP() == MacAddress("02:04:06:08:0a:0c"));
+ASSERT(std::string(decodedReassociationRequest->getSSID()) == "abc");
+
+auto decodedAssociationResponse = deserializeFrame<Ieee80211AssociationResponseFrame>({
+        0x34, 0x12, 0x78, 0x56, 0, 0, 1, 1, 12});
+ASSERT(decodedAssociationResponse->getStatusCode() == static_cast<Ieee80211StatusCode>(0x5678));
+ASSERT(decodedAssociationResponse->getAid() == 0);
+
+auto decodedReassociationResponse = deserializeFrame<Ieee80211ReassociationResponseFrame>({
+        0x34, 0x12, 0x56, 0x34, 0, 0, 1, 1, 12});
+ASSERT(decodedReassociationResponse->getStatusCode() == static_cast<Ieee80211StatusCode>(0x3456));
+ASSERT(decodedReassociationResponse->getAid() == 0);
+
+auto decodedBeacon = deserializeFrame<Ieee80211BeaconFrame>({
+        1, 2, 3, 4, 5, 6, 7, 8, 0x34, 0x12, 0x78, 0x56,
+        0, 3, 'a', 'b', 'c', 1, 1, 12});
+ASSERT(decodedBeacon->getBeaconInterval() == SimTime(0x1234 * 1024, SIMTIME_US));
+ASSERT(std::string(decodedBeacon->getSSID()) == "abc");
+ASSERT(decodedBeacon->getSupportedRates().rate[0] == 6);
+
+auto decodedProbeResponse = deserializeFrame<Ieee80211ProbeResponseFrame>({
+        8, 7, 6, 5, 4, 3, 2, 1, 0x34, 0x12, 0x78, 0x56,
+        0, 3, 'a', 'b', 'c', 1, 1, 12});
+ASSERT(decodedProbeResponse->getBeaconInterval() == SimTime(0x1234 * 1024, SIMTIME_US));
+ASSERT(std::string(decodedProbeResponse->getSSID()) == "abc");
+ASSERT(decodedProbeResponse->getSupportedRates().rate[0] == 6);
+
+EV << "IEEE 802.11 management serializer byte-order checks passed.\n";
+
+%contains: stdout
+IEEE 802.11 management serializer byte-order checks passed.

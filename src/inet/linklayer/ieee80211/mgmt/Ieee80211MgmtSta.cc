@@ -19,6 +19,7 @@
 #include "inet/physicallayer/wireless/common/contract/packetlevel/RadioControlInfo_m.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -840,8 +841,18 @@ void Ieee80211MgmtSta::processAssociationResponse(Packet *packet, const Ptr<cons
     Ieee80211HtCapabilities responseHtCapabilities;
     Ieee80211HtOperation responseHtOperation;
     std::string responseHtReason;
+    const auto& channelInd = packet->findTag<Ieee80211ChannelInd>();
+    const auto *receivedChannel = channelInd != nullptr ? channelInd->getChannel() : nullptr;
+    const auto *band = receivedChannel != nullptr ? receivedChannel->getBand() : nullptr;
     if (statusCode == SC_SUCCESSFUL)
-        responseHtStatus = classifyAssociationResponse(responseBody, responseHtCapabilities, responseHtOperation, responseHtReason);
+        responseHtStatus = classifyAssociationResponse(responseBody, band, responseHtCapabilities, responseHtOperation, responseHtReason);
+    if (responseHtStatus == HtAssociationResponseStatus::VALID_HT &&
+            (receivedChannel == nullptr || responseHtOperation.primaryChannel != receivedChannel->getChannelNumber())) {
+        responseHtStatus = HtAssociationResponseStatus::INVALID_HT;
+        responseHtReason = receivedChannel == nullptr ?
+                "successful HT association response has no received channel indication" :
+                "HT Operation primary channel does not match the received channel";
+    }
     delete packet;
 
     cancelPendingAssociation();
@@ -901,6 +912,7 @@ void Ieee80211MgmtSta::processAssociationResponse(Packet *packet, const Ptr<cons
 
 Ieee80211MgmtSta::HtAssociationResponseStatus Ieee80211MgmtSta::classifyAssociationResponse(
         const Ptr<const Ieee80211AssociationResponseFrame>& responseBody,
+        const physicallayer::IIeee80211Band *band,
         Ieee80211HtCapabilities& responseHtCapabilities, Ieee80211HtOperation& responseHtOperation,
         std::string& reason) const
 {
@@ -918,9 +930,11 @@ Ieee80211MgmtSta::HtAssociationResponseStatus Ieee80211MgmtSta::classifyAssociat
         return HtAssociationResponseStatus::INVALID_HT;
     }
     // Keep the existing deserialization behavior: malformed received HT
-    // elements are rejected by makeHtCapabilities/makeHtOperation.
+    // elements are rejected by makeHtCapabilities/makeHtOperation. The
+    // standards-facing primary channel is converted to the internal radio
+    // channel index by the received band's explicit mapping.
     responseHtCapabilities = makeHtCapabilities(responseBody->getHtCapabilities());
-    responseHtOperation = makeHtOperation(responseBody->getHtOperation());
+    responseHtOperation = makeHtOperation(band, responseBody->getHtOperation());
     auto negotiated = negotiateHtCapabilities(mib->localHtCapabilities, responseHtCapabilities, responseHtOperation);
     if (!supportsBasicHtMcsSet(mib->localHtCapabilities, responseHtOperation) ||
             !negotiated.localTxPeerRx.valid || !negotiated.localRxPeerTx.valid) {
@@ -1042,11 +1056,18 @@ void Ieee80211MgmtSta::storeAPInfo(Packet *packet, const Ptr<const Ieee80211Mgmt
         ap->htCapabilities = makeHtCapabilities(body->getHtCapabilities());
     ap->htOperationPresent = body->getHtOperationPresent();
     if (ap->htOperationPresent) {
-        ap->htOperation = makeHtOperation(body->getHtOperation());
+        const auto& channelInd = packet->findTag<Ieee80211ChannelInd>();
+        const auto *receivedChannel = channelInd != nullptr ? channelInd->getChannel() : nullptr;
+        if (receivedChannel == nullptr)
+            throw cRuntimeError("HT Operation discovery requires an IEEE 802.11 channel indication");
+        ap->htOperation = makeHtOperation(receivedChannel->getBand(), body->getHtOperation());
+        if (ap->htOperation.primaryChannel != receivedChannel->getChannelNumber())
+            throw cRuntimeError("HT Operation primary channel %d does not match received channel index %d",
+                    ap->htOperation.primaryChannel, receivedChannel->getChannelNumber());
         // IEEE Std 802.11-2024, Table 9-230 and 11.14: the HT Operation
         // element is the authoritative advertisement of the BSS primary
-        // channel. The fixed channelNumber field is not serialized by the
-        // management-body serializer and may therefore be its default value.
+        // channel. Its standards-facing channel number has already been
+        // converted to the received radio's internal channel index above.
         ap->channel = ap->htOperation.primaryChannel;
     }
     else

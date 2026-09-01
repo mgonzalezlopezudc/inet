@@ -32,7 +32,7 @@ module Hcf extends Module like IHcf
 
         string rxModule;
         string txModule;
-        string mibModule;
+        string mibModule = default("^.^.mib");
 
         *.rateSelectionModule = "^.rateSelection";
         *.rxModule = "^." + this.rxModule;

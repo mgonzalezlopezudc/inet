@@ -19,7 +19,7 @@ simple RateSelection extends SimpleModule like IRateSelection
     parameters:
         @class(RateSelection);
         string rateControlModule;
-        string mibModule;
+        string mibModule = default("^.^.^.mib");
 
         double multicastFrameBitrate @unit(bps) = default(-1bps);
 

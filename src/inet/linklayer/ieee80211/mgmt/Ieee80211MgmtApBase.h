@@ -15,6 +15,10 @@ namespace inet {
 
 class EtherFrame;
 
+namespace physicallayer {
+class IIeee80211Band;
+}
+
 namespace ieee80211 {
 
 /**
@@ -26,6 +30,10 @@ namespace ieee80211 {
 class INET_API Ieee80211MgmtApBase : public Ieee80211MgmtBase
 {
   protected:
+    cModule *radio = nullptr;
+
+    const physicallayer::IIeee80211Band *getHtOperationBand() const;
+
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
     virtual void initialize(int) override;
     using Ieee80211MgmtBase::receiveSignal;

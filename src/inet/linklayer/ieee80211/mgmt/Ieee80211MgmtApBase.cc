@@ -16,9 +16,17 @@
 #endif // ifdef INET_WITH_ETHERNET
 
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtApBase.h"
-#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
+#include "inet/physicallayer/wireless/ieee80211/contract/packetlevel/IIeee80211ChannelProvider.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
 
 namespace inet {
+
+namespace {
+
+const simsignal_t ieee80211RadioChannelChangedSignal = cComponent::registerSignal("radioChannelChanged");
+
+}
 
 namespace ieee80211 {
 
@@ -29,8 +37,8 @@ void Ieee80211MgmtApBase::initialize(int stage)
         mib->mode = Ieee80211Mib::INFRASTRUCTURE;
         mib->bssStationData.stationType = Ieee80211Mib::ACCESS_POINT;
         mib->bssData.ssid = par("ssid").stdstringValue();
-        auto radioModule = getModuleFromPar<cModule>(par("radioModule"), this);
-        radioModule->subscribe(physicallayer::Ieee80211Radio::radioChannelChangedSignal, this);
+        radio = getModuleFromPar<cModule>(par("radioModule"), this);
+        radio->subscribe(ieee80211RadioChannelChangedSignal, this);
     }
     else if (stage == INITSTAGE_LINK_LAYER)
         mib->bssData.bssid = mib->address;
@@ -40,10 +48,26 @@ void Ieee80211MgmtApBase::receiveSignal(cComponent *source, simsignal_t signalID
 {
     Enter_Method("%s", cComponent::getSignalName(signalID));
 
-    if (signalID == physicallayer::Ieee80211Radio::radioChannelChangedSignal) {
+    if (source == radio && signalID == ieee80211RadioChannelChangedSignal) {
         EV << "Updating AP primary channel to " << value << ".\n";
         mib->setPrimaryChannel(value);
     }
+}
+
+const physicallayer::IIeee80211Band *Ieee80211MgmtApBase::getHtOperationBand() const
+{
+    if (radio == nullptr)
+        throw cRuntimeError("HT Operation channel conversion requires a configured radioModule");
+    const auto *radioContract = dynamic_cast<const physicallayer::IRadio *>(radio);
+    if (radioContract == nullptr)
+        throw cRuntimeError("HT Operation channel conversion requires radioModule to reference a radio, got %s", radio->getClassName());
+    const auto *channelProvider = dynamic_cast<const physicallayer::IIeee80211ChannelProvider *>(radioContract->getTransmitter());
+    if (channelProvider == nullptr)
+        throw cRuntimeError("HT Operation channel conversion requires radioModule's transmitter to provide an IEEE 802.11 channel");
+    const auto *channel = channelProvider->getChannel();
+    if (channel == nullptr || channel->getBand() == nullptr)
+        throw cRuntimeError("HT Operation channel conversion requires radioModule's IEEE 802.11 transmitter to have a configured channel and band");
+    return channel->getBand();
 }
 
 } // namespace ieee80211

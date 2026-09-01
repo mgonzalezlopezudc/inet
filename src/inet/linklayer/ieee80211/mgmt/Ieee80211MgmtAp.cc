@@ -196,7 +196,7 @@ void Ieee80211MgmtAp::sendBeacon()
     body->setChannelNumber(primaryChannel);
     addHtCapabilities(body);
     if (mib->isHtOperationSupported())
-        setHtOperation(body, htOperation);
+        setHtOperation(body, getHtOperationBand(), htOperation);
     body->setChunkLength(B(8 + 2 + 2 + (2 + ssid.length())) + getSupportedRateElementsLength(body) + getHtMgmtElementsLength(body));
     sendManagementFrame("Beacon", body, ST_BEACON, MacAddress::BROADCAST_ADDRESS);
 }
@@ -343,7 +343,7 @@ void Ieee80211MgmtAp::handleAssociationRequestFrame(Packet *packet, const Ptr<co
     // Do this before reserving an AID or publishing pending transaction state,
     // so an unavailable channel cannot leave a half-created association.
     if (pendingHtOperationValid)
-        setHtOperation(body, pendingHtOperation);
+        setHtOperation(body, getHtOperationBand(), pendingHtOperation);
     body->setStatusCode(basicHtMcsSupported ? SC_SUCCESSFUL : SC_DATARATE_UNSUP);
     short associationId = basicHtMcsSupported ? mib->reserveAssociationId(sta->address) : 0;
     body->setAid(associationId);
@@ -404,7 +404,7 @@ void Ieee80211MgmtAp::handleReassociationRequestFrame(Packet *packet, const Ptr<
     // See the association response path above: fail while constructing the
     // response, before mutating association bookkeeping.
     if (pendingHtOperationValid)
-        setHtOperation(body, pendingHtOperation);
+        setHtOperation(body, getHtOperationBand(), pendingHtOperation);
     body->setStatusCode(basicHtMcsSupported ? SC_SUCCESSFUL : SC_DATARATE_UNSUP);
     short associationId = basicHtMcsSupported ? mib->reserveAssociationId(sta->address) : 0;
     body->setAid(associationId);
@@ -471,7 +471,7 @@ void Ieee80211MgmtAp::handleProbeRequestFrame(Packet *packet, const Ptr<const Ie
     body->setChannelNumber(primaryChannel);
     addHtCapabilities(body);
     if (mib->isHtOperationSupported())
-        setHtOperation(body, htOperation);
+        setHtOperation(body, getHtOperationBand(), htOperation);
     body->setChunkLength(B(8 + 2 + 2 + (2 + ssid.length())) + getSupportedRateElementsLength(body) + getHtMgmtElementsLength(body));
     sendManagementFrame("ProbeResp", body, ST_PROBERESPONSE, staAddress);
 }
