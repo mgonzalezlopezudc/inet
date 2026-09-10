@@ -5,7 +5,7 @@ revisions reset idle histories, while primary20 alone controls medium-free.
 
 %includes:
 #include "inet/linklayer/ieee80211/mac/Rx.h"
-#include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211CcaProvider.h"
+#include "inet/physicallayer/wireless/ieee80211/contract/Ieee80211CcaSnapshot.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 
 %global:

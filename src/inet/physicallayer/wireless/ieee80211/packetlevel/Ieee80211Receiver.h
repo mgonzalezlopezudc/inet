@@ -11,7 +11,7 @@
 #include <functional>
 
 #include "inet/physicallayer/wireless/common/base/packetlevel/FlatReceiverBase.h"
-#include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211CcaProvider.h"
+#include "inet/physicallayer/wireless/ieee80211/contract/Ieee80211CcaSnapshot.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"

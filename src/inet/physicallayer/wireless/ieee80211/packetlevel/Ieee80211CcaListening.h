@@ -6,7 +6,7 @@
 #define __INET_IEEE80211CCALISTENING_H
 
 #include "inet/physicallayer/wireless/common/radio/packetlevel/BandListening.h"
-#include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211CcaProvider.h"
+#include "inet/physicallayer/wireless/ieee80211/contract/Ieee80211CcaSnapshot.h"
 
 namespace inet {
 namespace physicallayer {

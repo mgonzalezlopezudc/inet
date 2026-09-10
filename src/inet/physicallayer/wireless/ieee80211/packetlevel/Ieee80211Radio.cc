@@ -47,7 +47,7 @@ namespace physicallayer {
 Define_Module(Ieee80211Radio);
 
 simsignal_t Ieee80211Radio::radioChannelChangedSignal = cComponent::registerSignal("radioChannelChanged");
-simsignal_t IIeee80211CcaProvider::ccaStateChangedSignal = cComponent::registerSignal("ccaStateChanged");
+simsignal_t Ieee80211Radio::ccaStateChangedSignal = cComponent::registerSignal("ccaStateChanged");
 
 namespace {
 
@@ -276,7 +276,7 @@ void Ieee80211Radio::updateCcaState()
             ccaSnapshot->isSecondary40Busy() != secondary40Busy || ccaSnapshot->isSecondary80Busy() != secondary80Busy) {
         ccaSnapshot = std::make_unique<Ieee80211CcaSnapshot>(ccaEnabled, snapshotWidth, ccaConfigurationRevision,
                 primary20Busy, secondary20Busy, secondary40Busy, secondary80Busy);
-        emit(IIeee80211CcaProvider::ccaStateChangedSignal, ccaSnapshot.get());
+        emit(ccaStateChangedSignal, ccaSnapshot.get());
     }
 }
 

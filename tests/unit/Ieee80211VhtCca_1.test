@@ -6,7 +6,7 @@ snapshot group state.
 #include <cmath>
 
 #include "inet/common/math/Functions.h"
-#include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211CcaProvider.h"
+#include "inet/physicallayer/wireless/ieee80211/contract/Ieee80211CcaSnapshot.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
 
 %global:

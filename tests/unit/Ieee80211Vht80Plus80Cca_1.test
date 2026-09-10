@@ -3,7 +3,7 @@ Validate grouped CCA identity for VHT 80+80, including remote secondary80
 activity that must not become primary-channel activity.
 
 %includes:
-#include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211CcaProvider.h"
+#include "inet/physicallayer/wireless/ieee80211/contract/Ieee80211CcaSnapshot.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"

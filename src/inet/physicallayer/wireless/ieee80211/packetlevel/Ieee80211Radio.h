@@ -9,7 +9,7 @@
 #define __INET_IEEE80211RADIO_H
 
 #include "inet/physicallayer/wireless/common/base/packetlevel/FlatRadioBase.h"
-#include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211CcaProvider.h"
+#include "inet/physicallayer/wireless/ieee80211/contract/Ieee80211CcaSnapshot.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
@@ -19,7 +19,7 @@
 namespace inet {
 namespace physicallayer {
 
-class INET_API Ieee80211Radio : public FlatRadioBase, public IIeee80211CcaProvider
+class INET_API Ieee80211Radio : public FlatRadioBase
 {
   public:
     /**
@@ -27,6 +27,11 @@ class INET_API Ieee80211Radio : public FlatRadioBase, public IIeee80211CcaProvid
      * The signal value is the new radio channel.
      */
     static simsignal_t radioChannelChangedSignal;
+    /**
+     * This signal is emitted every time the per-channel PHY-CCA state changes.
+     * The signal value is the new Ieee80211CcaSnapshot.
+     */
+    static simsignal_t ccaStateChangedSignal;
     static const Ptr<const Ieee80211PhyHeader> popIeee80211PhyHeaderAtFront(Packet *packet, b length = b(-1), int flags = 0);
     static const Ptr<const Ieee80211PhyHeader> peekIeee80211PhyHeaderAtFront(const Packet *packet, b length = b(-1), int flags = 0);
 
@@ -74,7 +79,7 @@ class INET_API Ieee80211Radio : public FlatRadioBase, public IIeee80211CcaProvid
   public:
     Ieee80211Radio();
 
-    virtual const Ieee80211CcaSnapshot& getCcaSnapshot() const override { return *ccaSnapshot; }
+    virtual const Ieee80211CcaSnapshot& getCcaSnapshot() const { return *ccaSnapshot; }
     virtual const Ieee80211ModeSet *getModeSet() const { return modeSet; }
     virtual const IIeee80211Band *getBand() const { return band; }
     virtual const Ieee80211Channel *getChannel() const { return check_and_cast<const Ieee80211Receiver *>(receiver)->getChannel(); }

@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //
 
-#ifndef __INET_IIEEE80211CCAPROVIDER_H
-#define __INET_IIEEE80211CCAPROVIDER_H
+#ifndef __INET_IEEE80211CCASNAPSHOT_H
+#define __INET_IEEE80211CCASNAPSHOT_H
 
 #include "inet/common/INETDefs.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
@@ -18,6 +18,10 @@ enum Ieee80211CcaGroup {
     IEEE80211_CCA_SECONDARY80,
 };
 
+/**
+ * Local IEEE 802.11 per-channel PHY-CCA state. The snapshot is local PHY/MAC
+ * control information and is not transmitted on air.
+ */
 class INET_API Ieee80211CcaSnapshot : public cObject
 {
   protected:
@@ -70,20 +74,6 @@ class INET_API Ieee80211CcaSnapshot : public cObject
     bool isHt40() const { return enabled && channelWidth == IEEE80211_CHANNEL_WIDTH_40MHZ; }
     bool isPrimaryBusy() const { return primary20Busy; }
     bool isSecondaryBusy() const { return secondary20Busy; }
-};
-
-/**
- * Provides the local IEEE 802.11 per-channel PHY-CCA state. The snapshot is
- * local PHY/MAC control information and is not transmitted on air.
- */
-class INET_API IIeee80211CcaProvider
-{
-  public:
-    static simsignal_t ccaStateChangedSignal;
-
-    virtual ~IIeee80211CcaProvider() {}
-
-    virtual const Ieee80211CcaSnapshot& getCcaSnapshot() const = 0;
 };
 
 } // namespace physicallayer

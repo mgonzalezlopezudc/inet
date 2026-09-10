@@ -12,7 +12,7 @@
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/contract/IContention.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
-#include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211CcaProvider.h"
+#include "inet/physicallayer/wireless/ieee80211/contract/Ieee80211CcaSnapshot.h"
 
 namespace inet {
 namespace ieee80211 {

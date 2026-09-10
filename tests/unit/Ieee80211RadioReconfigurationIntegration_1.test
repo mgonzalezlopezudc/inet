@@ -8,7 +8,7 @@ and 80+80-to-80 transitions, and failed-command rollback.
 #include <limits>
 #include <memory>
 
-#include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211CcaProvider.h"
+#include "inet/physicallayer/wireless/ieee80211/contract/Ieee80211CcaSnapshot.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
@@ -53,7 +53,7 @@ class RadioSignalCounter : public cListener
 
     virtual void receiveSignal(cComponent *, simsignal_t signal, cObject *, cObject *) override
     {
-        if (signal == IIeee80211CcaProvider::ccaStateChangedSignal)
+        if (signal == Ieee80211Radio::ccaStateChangedSignal)
             ccaChanged++;
     }
 
@@ -146,7 +146,7 @@ sim-time-limit = 0s
     auto *receiver = check_and_cast<const Ieee80211Receiver *>(radio->getReceiver());
     RadioSignalCounter signalCounter;
     radio->subscribe(IRadio::listeningChangedSignal, &signalCounter);
-    radio->subscribe(IIeee80211CcaProvider::ccaStateChangedSignal, &signalCounter);
+    radio->subscribe(Ieee80211Radio::ccaStateChangedSignal, &signalCounter);
     radio->subscribe(Ieee80211Radio::radioChannelChangedSignal, &signalCounter);
     const IIeee80211Band *band5 = Ieee80211CompliantBands::getBand("5 GHz");
     ASSERT(band5 != nullptr);
@@ -420,7 +420,7 @@ sim-time-limit = 0s
     ASSERT(receiver->getModulation() == rollbackRxModulation);
 
     radio->unsubscribe(IRadio::listeningChangedSignal, &signalCounter);
-    radio->unsubscribe(IIeee80211CcaProvider::ccaStateChangedSignal, &signalCounter);
+    radio->unsubscribe(Ieee80211Radio::ccaStateChangedSignal, &signalCounter);
     radio->unsubscribe(Ieee80211Radio::radioChannelChangedSignal, &signalCounter);
 
     EV << "Initialized radio reconfiguration and child synchronization verified.\n";

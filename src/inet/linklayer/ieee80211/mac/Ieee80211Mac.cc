@@ -28,8 +28,9 @@
 #include "inet/linklayer/ieee80211/mac/contract/IRx.h"
 #include "inet/linklayer/ieee80211/mac/contract/ITx.h"
 #include "inet/networklayer/contract/IInterfaceTable.h"
-#include "inet/physicallayer/wireless/ieee80211/contract/IIeee80211CcaProvider.h"
+#include "inet/physicallayer/wireless/ieee80211/contract/Ieee80211CcaSnapshot.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
@@ -76,10 +77,10 @@ void Ieee80211Mac::initialize(int stage)
         rx = check_and_cast<IRx *>(getSubmodule("rx"));
         tx = check_and_cast<ITx *>(getSubmodule("tx"));
         updateLocalHtCapabilities();
-        auto ccaProvider = dynamic_cast<IIeee80211CcaProvider *>(radio.get());
-        if (ccaProvider != nullptr) {
-            radioModule->subscribe(IIeee80211CcaProvider::ccaStateChangedSignal, this);
-            rx->ccaStateChanged(ccaProvider->getCcaSnapshot());
+        auto ieee80211Radio = dynamic_cast<Ieee80211Radio *>(radio.get());
+        if (ieee80211Radio != nullptr) {
+            radioModule->subscribe(Ieee80211Radio::ccaStateChangedSignal, this);
+            rx->ccaStateChanged(ieee80211Radio->getCcaSnapshot());
         }
         emit(modesetChangedSignal, modeSet);
         if (isUp())
@@ -363,7 +364,7 @@ void Ieee80211Mac::receiveSignal(cComponent *source, simsignal_t signalID, cObje
     Enter_Method("%s", cComponent::getSignalName(signalID));
     if (signalID == modesetChangedSignal && obj != modeSet)
         applyModeSet(check_and_cast<physicallayer::Ieee80211ModeSet *>(obj));
-    else if (signalID == IIeee80211CcaProvider::ccaStateChangedSignal)
+    else if (signalID == Ieee80211Radio::ccaStateChangedSignal)
         rx->ccaStateChanged(*check_and_cast<Ieee80211CcaSnapshot *>(obj));
 }
 
