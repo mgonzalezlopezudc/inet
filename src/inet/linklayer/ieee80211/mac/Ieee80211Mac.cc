@@ -7,7 +7,6 @@
 
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211Class3FrameInd_m.h"
-#include "inet/linklayer/ieee80211/mac/Ieee80211BssidReq_m.h"
 
 #include <algorithm>
 
@@ -23,6 +22,7 @@
 #include "inet/linklayer/ieee80211/llc/LlcProtocolTag_m.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211SubtypeTag_m.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211BssidReq_m.h"
 #include "inet/linklayer/ieee80211/mac/Rx.h"
 #include "inet/linklayer/ieee80211/mac/contract/IContention.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRx.h"
@@ -48,8 +48,8 @@ Ieee80211Mac::Ieee80211Mac()
 
 Ieee80211Mac::~Ieee80211Mac()
 {
-    if (pendingRadioConfigMsg)
-        delete pendingRadioConfigMsg;
+    cancelAndDelete(radioConfigRetry);
+    delete pendingRadioConfigMsg;
 }
 
 void Ieee80211Mac::initialize(int stage)
@@ -158,7 +158,33 @@ void Ieee80211Mac::handleMessageWhenUp(cMessage *message)
 
 void Ieee80211Mac::handleSelfMessage(cMessage *msg)
 {
-    ASSERT(false);
+    if (msg == radioConfigRetry) {
+        // Retry after delivered receptions and exchange callbacks have reserved any SIFS response.
+        if (pendingRadioConfigMsg && rx->isMediumFree() && !tx->isTransmissionPending() &&
+            !(mib->qos ? hcf->isFrameSequenceRunning() : dcf->isFrameSequenceRunning()))
+            sendDownPendingRadioConfigMsg();
+    }
+    else
+        ASSERT(false);
+}
+
+void Ieee80211Mac::scheduleRadioConfigRetry()
+{
+    Enter_Method("scheduleRadioConfigRetry");
+    if (pendingRadioConfigMsg) {
+        if (!radioConfigRetry)
+            radioConfigRetry = new cMessage("radioConfigRetry");
+        if (!radioConfigRetry->isScheduled())
+            scheduleAt(simTime(), radioConfigRetry);
+    }
+}
+
+void Ieee80211Mac::clearPendingRadioConfig()
+{
+    if (radioConfigRetry)
+        cancelEvent(radioConfigRetry);
+    delete pendingRadioConfigMsg;
+    pendingRadioConfigMsg = nullptr;
 }
 
 void Ieee80211Mac::handleMgmtPacket(Packet *packet)
@@ -214,7 +240,6 @@ void Ieee80211Mac::notifyClass3FrameRejected(const Ptr<const Ieee80211DataHeader
     send(indication, "mgmtOut");
 }
 
-
 bool Ieee80211Mac::isDataFrameFromAssociatedStation(const Ptr<const Ieee80211DataHeader>& header) const
 {
     // IEEE Std 802.11-2024, 11.3.3 and 11.3.5.1: infrastructure data is Class 3.
@@ -224,7 +249,6 @@ bool Ieee80211Mac::isDataFrameFromAssociatedStation(const Ptr<const Ieee80211Dat
     auto it = mib->bssAccessPointData.stations.find(header->getTransmitterAddress());
     return it != mib->bssAccessPointData.stations.end() && it->second == Ieee80211Mib::ASSOCIATED;
 }
-
 
 void Ieee80211Mac::handleLowerPacket(Packet *packet)
 {
@@ -265,9 +289,9 @@ void Ieee80211Mac::handleUpperCommand(cMessage *msg)
             sendDown(msg);
         }
         else {
-            // TODO waiting potentially indefinitely?! wtf?!
             EV_DEBUG << "Delaying " << msg->getName() << " until next IDLE or DEFER state\n";
             pendingRadioConfigMsg = msg;
+            scheduleRadioConfigRetry();
         }
     }
     else {
@@ -366,6 +390,8 @@ void Ieee80211Mac::receiveSignal(cComponent *source, simsignal_t signalID, intva
             configureRadioMode(IRadio::RADIO_MODE_RECEIVER); // FIXME this is in a very wrong place!!! should be done explicitly from coordination function!
         }
         rx->transmissionStateChanged(transmissionState);
+        if (transmissionFinished)
+            scheduleRadioConfigRetry();
     }
     else if (signalID == IRadio::receivedSignalPartChangedSignal) {
         rx->receivedSignalPartChanged(static_cast<IRadioSignal::SignalPart>(value));
@@ -454,11 +480,13 @@ void Ieee80211Mac::handleStartOperation(LifecycleOperation *operation)
 // FIXME
 void Ieee80211Mac::handleStopOperation(LifecycleOperation *operation)
 {
+    clearPendingRadioConfig();
 }
 
 // FIXME
 void Ieee80211Mac::handleCrashOperation(LifecycleOperation *operation)
 {
+    clearPendingRadioConfig();
 }
 
 } // namespace ieee80211
