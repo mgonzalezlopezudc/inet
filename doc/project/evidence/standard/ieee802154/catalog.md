@@ -53,6 +53,48 @@ Model applicability and execution evidence live in the [model ledger](../../mode
 | [IEEE802154-PIB-3](#ieee802154-pib-3) | Reset can preserve or restore MAC PIB values. |
 | [IEEE802154-SCAN-1](#ieee802154-scan-1) | All devices support passive scan. |
 | [IEEE802154-SCAN-2](#ieee802154-scan-2) | Scan visits channels in ascending order. |
+| [IEEE802154-WIRE-7](#ieee802154-wire-7) | Legacy frames cannot suppress their sequence number. |
+| [IEEE802154-WIRE-8](#ieee802154-wire-8) | Legacy frames cannot advertise IEs. |
+| [IEEE802154-WIRE-9](#ieee802154-wire-9) | Destination addressing mode must not be reserved. |
+| [IEEE802154-WIRE-10](#ieee802154-wire-10) | Legacy source omission implies a present destination. |
+| [IEEE802154-WIRE-11](#ieee802154-wire-11) | Legacy destination omission implies a present source. |
+| [IEEE802154-WIRE-12](#ieee802154-wire-12) | Security control and auxiliary-header presence are related. |
+| [IEEE802154-WIRE-13](#ieee802154-wire-13) | FCS covers MAC header and payload. |
+| [IEEE802154-WIRE-14](#ieee802154-wire-14) | Two-octet FCS uses the specified polynomial division. |
+| [IEEE802154-WIRE-15](#ieee802154-wire-15) | Immediate ACK FCF contains only its permitted fields. |
+| [IEEE802154-WIRE-16](#ieee802154-wire-16) | Frame Pending is clear outside its specified mechanisms. |
+| [IEEE802154-RECEIVE-5](#ieee802154-receive-5) | Reserved frame types fail filtering. |
+| [IEEE802154-RECEIVE-6](#ieee802154-receive-6) | Reserved frame versions fail filtering. |
+| [IEEE802154-RECEIVE-7](#ieee802154-receive-7) | Short destination acceptance includes local and broadcast addresses. |
+| [IEEE802154-RECEIVE-8](#ieee802154-receive-8) | Extended destination acceptance includes enabled group addresses. |
+| [IEEE802154-RECEIVE-9](#ieee802154-receive-9) | Implicit broadcast is an explicit receive predicate. |
+| [IEEE802154-RECEIVE-10](#ieee802154-receive-10) | PAN coordinators accept matching source-only data. |
+| [IEEE802154-RECEIVE-11](#ieee802154-receive-11) | An omitted source PAN can be inferred from destination PAN. |
+| [IEEE802154-RECEIVE-12](#ieee802154-receive-12) | Idle receiver control is restored after a transceiver task. |
+| [IEEE802154-RECEIVE-13](#ieee802154-receive-13) | Promiscuous entry enables reception. |
+| [IEEE802154-RECEIVE-14](#ieee802154-receive-14) | Promiscuous indications contain MAC header plus payload. |
+| [IEEE802154-RECEIVE-15](#ieee802154-receive-15) | Promiscuous exit restores the idle receiver policy. |
+| [IEEE802154-PHY-9](#ieee802154-phy-9) | TX-to-RX readiness is bounded by turnaround. |
+| [IEEE802154-PHY-10](#ieee802154-phy-10) | RX-to-TX turnaround is bounded. |
+| [IEEE802154-PHY-11](#ieee802154-phy-11) | ED zero identifies sufficiently low power. |
+| [IEEE802154-PHY-12](#ieee802154-phy-12) | ED spans at least 40 dB with linear decibel mapping. |
+| [IEEE802154-PHY-13](#ieee802154-phy-13) | LQI is measured for every received packet. |
+| [IEEE802154-PHY-14](#ieee802154-phy-14) | 2450 MHz channels use the specified center frequencies. |
+| [IEEE802154-PHY-15](#ieee802154-phy-15) | Supported PHY channels include those allowed in the operating region. |
+| [IEEE802154-PIB-4](#ieee802154-pib-4) | PHY PIB read-only markers restrict upper writes. |
+| [IEEE802154-PIB-5](#ieee802154-pib-5) | Read-only writes report READ_ONLY. |
+| [IEEE802154-PIB-6](#ieee802154-pib-6) | Unknown writes report UNSUPPORTED_ATTRIBUTE. |
+| [IEEE802154-PIB-7](#ieee802154-pib-7) | Out-of-range writes report INVALID_PARAMETER. |
+| [IEEE802154-PIB-8](#ieee802154-pib-8) | Invalid hierarchical indices have a distinct status. |
+| [IEEE802154-PIB-9](#ieee802154-pib-9) | Reset success is reported on completion. |
+| [IEEE802154-SERVICE-2](#ieee802154-service-2) | Legacy data cannot omit both addresses. |
+| [IEEE802154-SERVICE-3](#ieee802154-service-3) | Direct retry exhaustion reports NO_ACK. |
+| [IEEE802154-SERVICE-4](#ieee802154-service-4) | Direct access exhaustion reports CHANNEL_ACCESS_FAILURE. |
+| [IEEE802154-SERVICE-5](#ieee802154-service-5) | Indications expose received DSN when present. |
+| [IEEE802154-SERVICE-6](#ieee802154-service-6) | AckSent indicates an ACK actually sent. |
+| [IEEE802154-SERVICE-7](#ieee802154-service-7) | O-QPSK service DataRate uses the default selector. |
+| [IEEE802154-WIRE-17](#ieee802154-wire-17) | Reserved fields are zero on transmission and ignored on reception. |
+| [IEEE802154-RECEIVE-16](#ieee802154-receive-16) | Promiscuous mode accepts received frames for monitor delivery. |
 
 ## IEEE802154-ADDRESS-1
 
@@ -454,12 +496,519 @@ Model applicability and execution evidence live in the [model ledger](../../mode
 - Condition: Channel scan.
 - Check idea: Submit an unordered channel set and observe ascending visits and terminal results.
 
+## IEEE802154-WIRE-7
+
+**Legacy frames cannot suppress their sequence number.**
+
+- Source: `ieee802154-2024:clause:7.2.2.7`, physical PDF pp. 81–81; `ieee802154-2024@371560:371926`.
+- Source excerpt: “If the Frame Version field is 0b00 or 0b01, the Sequence Number Suppression field shall be zero.”
+- Strength: `shall`; observation class: `encoding`.
+- Condition: Frame version 0 or 1.
+- Check idea: Check the bit and one-octet DSN presence; do not use version-2 offsets for a malformed legacy combination.
+
+## IEEE802154-WIRE-8
+
+**Legacy frames cannot advertise IEs.**
+
+- Source: `ieee802154-2024:clause:7.2.2.8`, physical PDF pp. 81–81; `ieee802154-2024@371926:372182`.
+- Source excerpt: “If the Frame Version field is 0b00 or 0b01, the IE Present field shall be zero.”
+- Strength: `shall`; observation class: `encoding`.
+- Condition: Frame version 0 or 1.
+- Check idea: Verify transmitted bit zero and distinguish unsupported enhanced frames from invalid legacy IE flags.
+
+## IEEE802154-WIRE-9
+
+**Destination addressing mode must not be reserved.**
+
+- Source: `ieee802154-2024:clause:7.2.2.9`, physical PDF pp. 81–81; `ieee802154-2024@372182:372371`.
+- Source excerpt: “The Destination Addressing Mode field shall be set to one of the non-reserved values listed in Table 7-3.”
+- Strength: `shall`; observation class: `encoding`.
+- Condition: General FCF destination mode.
+- Check idea: Enumerate mode 00, 10 and 11; do not treat reserved 01 as a two- or eight-octet address.
+
+## IEEE802154-WIRE-10
+
+**Legacy source omission implies a present destination.**
+
+- Source: `ieee802154-2024:clause:7.2.2.11`, physical PDF pp. 82–82; `ieee802154-2024@375465:375983`.
+- Source excerpt: “the Destination Addressing Mode field shall be nonzero,”
+- Strength: `shall`; observation class: `encoding`.
+- Condition: Source mode zero in version-0/1 data or MAC command; full predicate in 7.2.2.11.
+- Check idea: Generate destination-only traffic from a PAN coordinator; reject local legacy data requests omitting both addresses.
+
+## IEEE802154-WIRE-11
+
+**Legacy destination omission implies a present source.**
+
+- Source: `ieee802154-2024:table:7-3`, physical PDF pp. 81–82; `ieee802154-2024@372371:373776`.
+- Source excerpt: “the Source Addressing Mode field shall be nonzero,”
+- Strength: `shall`; observation class: `encoding`.
+- Condition: Destination mode zero in version-0/1 data or MAC command; continuation of 7.2.2.9 after Table 7-3.
+- Check idea: Generate source-only traffic to the PAN coordinator; verify source PAN field and no destination fields.
+
+## IEEE802154-WIRE-12
+
+**Security control and auxiliary-header presence are related.**
+
+- Source: `ieee802154-2024:clause:7.2.2.3`, physical PDF pp. 79–80; `ieee802154-2024@365417:365949`.
+- Source excerpt: “The Auxiliary Security Header field of the MHR shall be present only if the Security Enabled field is set to one.”
+- Strength: `shall`; observation class: `encoding`.
+- Condition: General MAC header.
+- Check idea: Ensure unsecured legacy payload is not parsed as an auxiliary security header.
+
+## IEEE802154-WIRE-13
+
+**FCS covers MAC header and payload.**
+
+- Source: `ieee802154-2024:clause:7.2.11`, physical PDF pp. 84–85; `ieee802154-2024@380293:384026`.
+- Source excerpt: “The FCS is calculated over the MHR and MAC payload parts of the frame; these parts together are referred to as the calculation field.”
+- Strength: `description`; observation class: `encoding`.
+- Condition: Frame has an FCS.
+- Check idea: Change one MHR bit and one payload bit separately; PHY preamble and PHR are outside CRC coverage.
+
+## IEEE802154-WIRE-14
+
+**Two-octet FCS uses the specified polynomial division.**
+
+- Source: `ieee802154-2024:clause:7.2.11`, physical PDF pp. 84–85; `ieee802154-2024@380293:384026`.
+- Source excerpt: “The 2-octet FCS shall be calculated for transmission using the following algorithm:”
+- Strength: `shall`; observation class: `encoding`.
+- Condition: Two-octet FCS; full polynomial/bit order in 7.2.11.
+- Check idea: Divide x^16 times the transmitted-bit polynomial by x^16+x^12+x^5+1. Verify the source ACK example 02 00 6A yields E4 79.
+
+## IEEE802154-WIRE-15
+
+**Immediate ACK FCF contains only its permitted fields.**
+
+- Source: `ieee802154-2024:figure:7-16`, physical PDF pp. 91–92; `ieee802154-2024@406235:409068`.
+- Source excerpt: “In an Imm-Ack frame, all other fields in the Frame Control field shall be set to zero.”
+- Strength: `shall`; observation class: `encoding`.
+- Condition: Immediate ACK; frame type, pending and AR are described in the preceding 7.3.3 continuation.
+- Check idea: For ordinary data outside CSL, verify FCF 0x0002, no addressing/security/compression and AR zero; copy received DSN.
+
+## IEEE802154-WIRE-16
+
+**Frame Pending is clear outside its specified mechanisms.**
+
+- Source: `ieee802154-2024:clause:7.2.2.4`, physical PDF pp. 80–80; `ieee802154-2024@365949:366572`.
+- Source excerpt: “At all other times, the frame pending bit shall be set to zero on transmission and ignored on reception.”
+- Strength: `shall`; observation class: `wire`.
+- Condition: Not indirect, LE CSL or applicable TSCH pending behavior.
+- Check idea: Transmit static direct data with pending clear; do not start a polling exchange merely from an irrelevant received pending bit.
+
+## IEEE802154-RECEIVE-5
+
+**Reserved frame types fail filtering.**
+
+- Source: `ieee802154-2024:clause:6.6.2`, physical PDF pp. 70–72; `ieee802154-2024@329415:338486`.
+- Source excerpt: “The Frame Type field shall not contain a reserved frame type.”
+- Strength: `shall`; observation class: `end-to-end`.
+- Condition: Not scanning; apply Table 7-1 classifications.
+- Check idea: Inject type 100 with valid FCS and verify no normal delivery or ACK; distinguish other unsupported but assigned types.
+
+## IEEE802154-RECEIVE-6
+
+**Reserved frame versions fail filtering.**
+
+- Source: `ieee802154-2024:clause:6.6.2`, physical PDF pp. 70–72; `ieee802154-2024@329415:338486`.
+- Source excerpt: “The Frame Version field shall not contain a reserved value.”
+- Strength: `shall`; observation class: `end-to-end`.
+- Condition: Not scanning; interpret version within its frame-type format.
+- Check idea: Inject legacy-layout data with version 3 and verify rejection; do not apply this bit location to formats without the field.
+
+## IEEE802154-RECEIVE-7
+
+**Short destination acceptance includes local and broadcast addresses.**
+
+- Source: `ieee802154-2024:clause:6.6.2`, physical PDF pp. 70–72; `ieee802154-2024@329415:338486`.
+- Source excerpt: “A short destination address is included in the frame, and it matches either macShortAddress or the broadcast address.”
+- Strength: `description`; observation class: `end-to-end`.
+- Condition: Short addressing, non-scan validity predicate 6.6.2(d)(1).
+- Check idea: Compare local, 0xFFFF and foreign short destinations with matching PAN and correct FCS.
+
+## IEEE802154-RECEIVE-8
+
+**Extended destination acceptance includes enabled group addresses.**
+
+- Source: `ieee802154-2024:clause:6.6.2`, physical PDF pp. 70–72; `ieee802154-2024@329415:338486`.
+- Source excerpt: “An extended destination address is included in the frame and matches either macExtendedAddress or, if macGroupRxMode is set to TRUE, a 64-bit group address, as defined in IEEE Std 802.”
+- Strength: `description`; observation class: `end-to-end`.
+- Condition: Extended addressing, predicate 6.6.2(d)(2).
+- Check idea: Test exact EUI-64 equality, a high-bit mismatch and group reception with the feature disabled/enabled.
+
+## IEEE802154-RECEIVE-9
+
+**Implicit broadcast is an explicit receive predicate.**
+
+- Source: `ieee802154-2024:clause:6.6.2`, physical PDF pp. 70–72; `ieee802154-2024@329415:338486`.
+- Source excerpt: “The Destination Address field and the Destination PAN ID field are not included in the frame. and macImplicitBroadcast is TRUE.”
+- Strength: `description`; observation class: `end-to-end`.
+- Condition: Predicate 6.6.2(d)(3); quoted punctuation follows the source.
+- Check idea: Use a structurally legal source-only legacy frame; compare implicit-broadcast false and true independently of PAN-coordinator acceptance.
+
+## IEEE802154-RECEIVE-10
+
+**PAN coordinators accept matching source-only data.**
+
+- Source: `ieee802154-2024:clause:6.6.2`, physical PDF pp. 70–72; `ieee802154-2024@329415:338486`.
+- Source excerpt: “The device is the PAN coordinator, only source addressing fields are included in a Data frame or MAC command and the source PAN ID matches macPanId.”
+- Strength: `description`; observation class: `end-to-end`.
+- Condition: Predicate 6.6.2(d)(4).
+- Check idea: Send identical source-only legacy data to coordinator and noncoordinator receivers, with implicit broadcast disabled; vary source PAN.
+
+## IEEE802154-RECEIVE-11
+
+**An omitted source PAN can be inferred from destination PAN.**
+
+- Source: `ieee802154-2024:clause:6.6.2`, physical PDF pp. 70–72; `ieee802154-2024@329415:338486`.
+- Source excerpt: “If the Source PAN ID field is not included in the frame and the Destination PAN ID field is included in the frame, the MAC sublayer shall use the value of the Destination PAN ID field as the source PAN ID.”
+- Strength: `shall`; observation class: `internal`.
+- Condition: Source PAN absent and destination PAN present.
+- Check idea: Verify effective source PAN in filtering/security context separately from whether an indication field is wire-present/valid.
+
+## IEEE802154-RECEIVE-12
+
+**Idle receiver control is restored after a transceiver task.**
+
+- Source: `ieee802154-2024:clause:6.6.2`, physical PDF pp. 70–72; `ieee802154-2024@329415:338486`.
+- Source excerpt: “On completion of each transceiver task, the MAC sublayer shall request that the PHY enables or disables its receiver, depending on the values of macBeaconOrder and macRxOnWhenIdle.”
+- Strength: `shall`; observation class: `internal`.
+- Condition: Transceiver task completion; BO=15 makes idle policy relevant at all times.
+- Check idea: With idle reception false, transmit with ACK requested and observe receiver enabled for the ACK then restored; repeat with true.
+
+## IEEE802154-RECEIVE-13
+
+**Promiscuous entry enables reception.**
+
+- Source: `ieee802154-2024:clause:10.23.1`, physical PDF pp. 379–380; `ieee802154-2024@1491164:1492266`.
+- Source excerpt: “If the MLME is requested to set macPromiscuousMode to TRUE, the MLME shall then request that the PHY enable its receiver.”
+- Strength: `shall`; observation class: `internal`.
+- Condition: Optional promiscuous mode is supported and enabled.
+- Check idea: Enter with macRxOnWhenIdle=false and observe the receiver-enable request.
+
+## IEEE802154-RECEIVE-14
+
+**Promiscuous indications contain MAC header plus payload.**
+
+- Source: `ieee802154-2024:clause:10.23.1`, physical PDF pp. 379–380; `ieee802154-2024@1491164:1492266`.
+- Source excerpt: “The Msdu parameter shall contain the MHR concatenated with the MAC payload, as illustrated in Figure 7-1.”
+- Strength: `shall`; observation class: `end-to-end`.
+- Condition: Promiscuous indication; only Msdu, MpduLinkQuality, Timestamp and Rssi are valid, as the preceding sentence specifies.
+- Check idea: Verify raw MHR+payload excludes FCS; do not interpret DSN/address/AckSent parameters as valid ordinary indications.
+
+## IEEE802154-RECEIVE-15
+
+**Promiscuous exit restores the idle receiver policy.**
+
+- Source: `ieee802154-2024:clause:10.23.1`, physical PDF pp. 379–380; `ieee802154-2024@1491164:1492266`.
+- Source excerpt: “If the MLME is requested to set macPromiscuousMode to FALSE, the MLME shall request that the PHY set its receiver to the state specified by macRxOnWhenIdle.”
+- Strength: `shall`; observation class: `internal`.
+- Condition: Optional promiscuous mode is disabled.
+- Check idea: Exit under both idle policies and verify receiver state without changing the stored idle attribute.
+
+## IEEE802154-PHY-9
+
+**TX-to-RX readiness is bounded by turnaround.**
+
+- Source: `ieee802154-2024:clause:11.2.2`, physical PDF pp. 594–595; `ieee802154-2024@2368024:2368734`.
+- Source excerpt: “The TX-to-RX turnaround time shall be less than or equal to aTurnaroundTime, as defined in Table 12-1.”
+- Strength: `shall`; observation class: `wire`.
+- Condition: At the air interface from last transmitted part/chip to readiness for the next received first part/chip.
+- Check idea: For O-QPSK bound readiness by 12 symbols; do not add turnaround again after an already inclusive ACK wait.
+
+## IEEE802154-PHY-10
+
+**RX-to-TX turnaround is bounded.**
+
+- Source: `ieee802154-2024:clause:11.2.3`, physical PDF pp. 595–595; `ieee802154-2024@2368734:2369197`.
+- Source excerpt: “The RX-to-TX turnaround time shall be less than or equal to aTurnaroundTime, as defined in Table 12-1.”
+- Strength: `shall`; observation class: `wire`.
+- Condition: Air-interface turnaround as defined in 11.2.3.
+- Check idea: Verify selected O-QPSK transition supports the 12-symbol immediate-ACK start rule; distinguish request completion from PPDU start.
+
+## IEEE802154-PHY-11
+
+**ED zero identifies sufficiently low power.**
+
+- Source: `ieee802154-2024:clause:11.2.6`, physical PDF pp. 596–596; `ieee802154-2024@2372030:2373030`.
+- Source excerpt: “The minimum ED value (zero) shall indicate received power less than 10 dB above the lowest specified receiver sensitivity, in dBm, for the PHY.”
+- Strength: `shall`; observation class: `internal`.
+- Condition: Receiver ED.
+- Check idea: Declare the ED transfer function and verify that every zero result denotes power below the lowest specified PHY sensitivity plus 10 dB; do not infer an exact universal zero/nonzero threshold.
+
+## IEEE802154-PHY-12
+
+**ED spans at least 40 dB with linear decibel mapping.**
+
+- Source: `ieee802154-2024:clause:11.2.6`, physical PDF pp. 596–596; `ieee802154-2024@2372030:2373030`.
+- Source excerpt: “The range of received power spanned by the ED values shall be at least 40 dB.”
+- Strength: `shall`; observation class: `internal`.
+- Condition: Receiver ED; the next sentence also requires linear dB mapping with ±6 dB accuracy.
+- Check idea: Sweep at least 40 dB; compare the declared transfer curve, tolerance and saturation without assuming linear watts.
+
+## IEEE802154-PHY-13
+
+**LQI is measured for every received packet.**
+
+- Source: `ieee802154-2024:clause:11.2.7`, physical PDF pp. 596–596; `ieee802154-2024@2373030:2373831`.
+- Source excerpt: “The LQI measurement shall be performed for each received packet.”
+- Strength: `shall`; observation class: `internal`.
+- Condition: Packet reception.
+- Check idea: Send multiple distinct packets at different qualities and verify each indication carries that packet's measurement.
+
+## IEEE802154-PHY-14
+
+**2450 MHz channels use the specified center frequencies.**
+
+- Source: `ieee802154-2024:clause:11.1.3.3`, physical PDF pp. 566–566; `ieee802154-2024@2259908:2260971`.
+- Source excerpt: “fc = 2405 + 5 (k – 11) in megahertz, for k = 11, 12, …, 26”
+- Strength: `description`; observation class: `internal`.
+- Condition: Selected 2450 MHz O-QPSK band; not the excluded SUN/LECIM/MSK channel assignments.
+- Check idea: Check every channel 11–26; endpoints are 2405 and 2480 MHz.
+
+## IEEE802154-PHY-15
+
+**Supported PHY channels include those allowed in the operating region.**
+
+- Source: `ieee802154-2024:clause:11.1.3.1`, physical PDF pp. 565–566; `ieee802154-2024@2258178:2259440`.
+- Source excerpt: “For each PHY supported, a compliant device shall support all channels allowed by regulations for the region in which the device operates.”
+- Strength: `shall`; observation class: `internal`.
+- Condition: PHY/channel support; subsequent HRP/LRP exceptions are outside O-QPSK.
+- Check idea: Declare the operating channel set; do not infer regulatory permission from the model's 16-channel capability.
+
+## IEEE802154-PIB-4
+
+**PHY PIB read-only markers restrict upper writes.**
+
+- Source: `ieee802154-2024:clause:12.3.1`, physical PDF pp. 601–601; `ieee802154-2024@2388544:2389020`.
+- Source excerpt: “Attributes marked with a dagger (†) are read-only attributes (i.e., attribute can only be set by the PHY),”
+- Strength: `description`; observation class: `internal`.
+- Condition: PHY PIB attributes marked dagger.
+- Check idea: Check PHY-owned read-only values through management services; keep their authority in the PHY.
+
+## IEEE802154-PIB-5
+
+**Read-only writes report READ_ONLY.**
+
+- Source: `ieee802154-2024:table:8-11`, physical PDF pp. 122–122; `ieee802154-2024@527680:529776`.
+- Source excerpt: “READ_ONLY: The PibAttribute parameter specifies an attribute that is a read-only attribute.”
+- Strength: `description`; observation class: `error-signal`.
+- Condition: MLME-SET selecting a read-only attribute.
+- Check idea: Try to overwrite the native extended address through MLME-SET; verify status and unchanged identity.
+
+## IEEE802154-PIB-6
+
+**Unknown writes report UNSUPPORTED_ATTRIBUTE.**
+
+- Source: `ieee802154-2024:table:8-11`, physical PDF pp. 122–122; `ieee802154-2024@527680:529776`.
+- Source excerpt: “UNSUPPORTED_ATTRIBUTE: The PibAttribute parameter specifies an attribute that was not found in the database.”
+- Strength: `description`; observation class: `error-signal`.
+- Condition: MLME-SET selecting an absent attribute.
+- Check idea: Verify no silent insertion or fallback parameter mutation.
+
+## IEEE802154-PIB-7
+
+**Out-of-range writes report INVALID_PARAMETER.**
+
+- Source: `ieee802154-2024:table:8-11`, physical PDF pp. 122–122; `ieee802154-2024@527680:529776`.
+- Source excerpt: “INVALID_PARAMETER: The PibAttributeValue parameter specifies a value that is out of the valid range for the given attribute.”
+- Strength: `description`; observation class: `error-signal`.
+- Condition: MLME-SET range failure.
+- Check idea: Probe range endpoints and neighbors and verify the previous value remains observable.
+
+## IEEE802154-PIB-8
+
+**Invalid hierarchical indices have a distinct status.**
+
+- Source: `ieee802154-2024:table:8-11`, physical PDF pp. 122–122; `ieee802154-2024@527680:529776`.
+- Source excerpt: “INVALID_INDEX: The index inside the hierarchical values in PibAttribute is out of range.”
+- Strength: `description`; observation class: `error-signal`.
+- Condition: Supported hierarchical PIB attribute with out-of-range index.
+- Check idea: Distinguish an absent attribute from a present attribute with an invalid element index.
+
+## IEEE802154-PIB-9
+
+**Reset success is reported on completion.**
+
+- Source: `ieee802154-2024:table:8-13`, physical PDF pp. 123–123; `ieee802154-2024@531952:532329`.
+- Source excerpt: “The Status parameter is set to SUCCESS on completion of the reset procedure.”
+- Strength: `description`; observation class: `error-signal`.
+- Condition: MLME-RESET.
+- Check idea: Check successful confirm follows completed reset, rather than initial request acceptance.
+
+## IEEE802154-SERVICE-2
+
+**Legacy data cannot omit both addresses.**
+
+- Source: `ieee802154-2024:table:8-31`, physical PDF pp. 146–148; `ieee802154-2024@633380:637006`, `ieee802154-2024@637006:643870`.
+- Source excerpt: “the Status shall be set to INVALID_ADDRESS.”
+- Strength: `shall`; observation class: `error-signal`.
+- Condition: Generated version-0/1 data with both SrcAddrMode and DstAddrMode NONE; full sentence in Table 8-31 continuation.
+- Check idea: Submit the invalid address combination and verify no frame transmission and correct confirm handle.
+
+## IEEE802154-SERVICE-3
+
+**Direct retry exhaustion reports NO_ACK.**
+
+- Source: `ieee802154-2024:table:8-31`, physical PDF pp. 146–148; `ieee802154-2024@633380:637006`, `ieee802154-2024@637006:643870`.
+- Source excerpt: “it will discard the MSDU and issue the MCPS-DATA.confirm primitive with a Status of NO_ACK.”
+- Strength: `description`; observation class: `error-signal`.
+- Condition: Direct request with no acknowledgment after macMaxFrameRetries retransmissions.
+- Check idea: Drop ACKs while observing actual transmissions and distinguish this outcome from busy-channel access failure.
+
+## IEEE802154-SERVICE-4
+
+**Direct access exhaustion reports CHANNEL_ACCESS_FAILURE.**
+
+- Source: `ieee802154-2024:table:8-31`, physical PDF pp. 146–148; `ieee802154-2024@633380:637006`, `ieee802154-2024@637006:643870`.
+- Source excerpt: “the MAC sublayer will discard the MSDU, and the Status will be set to CHANNEL_ACCESS_FAILURE.”
+- Strength: `description`; observation class: `error-signal`.
+- Condition: Direct request; CSMA-CA failed due to channel conditions.
+- Check idea: Keep CCA busy through exhaustion and verify no frame and exactly the associated failed confirm.
+
+## IEEE802154-SERVICE-5
+
+**Indications expose received DSN when present.**
+
+- Source: `ieee802154-2024:table:8-32`, physical PDF pp. 149–150; `ieee802154-2024@646089:651055`, `ieee802154-2024@651055:653714`.
+- Source excerpt: “The DSN of the received Data frame if one was present.”
+- Strength: `description`; observation class: `end-to-end`.
+- Condition: Ordinary data indication; Dsn row, not promiscuous mode.
+- Check idea: Match the indicated DSN to serialized received octets through wrap.
+
+## IEEE802154-SERVICE-6
+
+**AckSent indicates an ACK actually sent.**
+
+- Source: `ieee802154-2024:table:8-32`, physical PDF pp. 149–150; `ieee802154-2024@646089:651055`, `ieee802154-2024@651055:653714`.
+- Source excerpt: “TRUE if the received frame requested an acknowledgment that has been sent, FALSE otherwise.”
+- Strength: `description`; observation class: `end-to-end`.
+- Condition: Ordinary MCPS-DATA.indication AckSent field.
+- Check idea: Delay or interrupt ACK transmission and verify the indication does not equate AR=1 with completed ACK emission.
+
+## IEEE802154-SERVICE-7
+
+**O-QPSK service DataRate uses the default selector.**
+
+- Source: `ieee802154-2024:table:8-29`, physical PDF pp. 142–143; `ieee802154-2024@617271:620339`, `ieee802154-2024@620339:623550`.
+- Source excerpt: “For all other PHYs, the parameter is set to zero.”
+- Strength: `description`; observation class: `internal`.
+- Condition: DataRate selector for a PHY not enumerated in the preceding list, including ordinary O-QPSK.
+- Check idea: Use DataRate=0 for 250 kbit/s O-QPSK; do not place 250000 into the selector field.
+
+## IEEE802154-WIRE-17
+
+**Reserved fields are zero on transmission and ignored on reception.**
+
+- Source: `ieee802154-2024:clause:4.6`, physical PDF pp. 51–52; `ieee802154-2024@267001:267498`.
+- Source excerpt: “Each bit within any Reserved field shall be set to zero on transmission and shall be ignored on reception.”
+- Strength: `shall`; observation class: `encoding`.
+- Condition: A field designated Reserved; distinguish from specific frame-type/version rejection rules in 6.6.2.
+- Check idea: Set FCF reserved bit 7 on an otherwise valid received frame and repair FCS; verify identical filtering, ACK and payload behavior.
+
+## IEEE802154-RECEIVE-16
+
+**Promiscuous mode accepts received frames for monitor delivery.**
+
+- Source: `ieee802154-2024:table:10-114`, physical PDF pp. 380–380; `ieee802154-2024@1492433:1493180`.
+- Source excerpt: “A value of TRUE indicates that the MAC sublayer accepts all frames received from the PHY.”
+- Strength: `description`; observation class: `end-to-end`.
+- Condition: Optional macPromiscuousMode=true, with 10.23.1 requiring correctly received frames and processing per 6.6.2.
+- Check idea: Compare foreign-address monitoring with ordinary filtering; keep ACK eligibility and monitor acceptance distinct and record the interpretation of the cross-reference.
+
+## PIB field domains
+
+These are source-table data for the validation/access/reset checks above, not a selected-model
+attribute list. The MAC source is `ieee802154-2024:table:8-36`, PDF pp. 152–156, locators
+`ieee802154-2024@660132:662629`, `@662629:668924`, `@668924:674671`,
+`@674671:680445`, `@680445:682982`. The dagger/asterisk meanings come from 8.4.3.1:
+read-only to the upper layer, and optional, respectively. A dash is unspecified, not zero.
+
+| Attribute | Type | Range | Default | Marker |
+|---|---|---|---|---|
+| `macAoaEnable` | Boolean | TRUE, FALSE | FALSE | — |
+| `macAutoRequest` | Boolean | TRUE, FALSE | TRUE | — |
+| `macBattLifeExt` | Boolean | TRUE, FALSE | FALSE | — |
+| `macBattLifeExtPeriods` | Integer | 6–41 | Dependent on currently selected PHY | — |
+| `macBeaconOrder` | Integer | 0–15 | 15 | `*` optional |
+| `macBeaconPayload` | Set of octets | — | NULL | `*` optional |
+| `macBsn` | Integer | 0x00–0xff | Random value from within the range | `*` optional |
+| `macCoordExtendedAddress` | IEEE address | An extended IEEE address | — | — |
+| `macCoordShortAddress` | Integer | 0x0000–0xffff | 0xffff | — |
+| `macDsn` | Integer | 0x00–0xff | Random value from within the range | — |
+| `macExtendedAddress` | IEEE address | Device specific | — | `†` read-only |
+| `macFcsType` | Integer | 0–1 | 0 | — |
+| `macGroupRxMode` | Boolean | TRUE, FALSE | FALSE | — |
+| `macGtsPermit` | Boolean | TRUE, FALSE | TRUE | `*` optional |
+| `macImplicitBroadcast` | Boolean | TRUE, FALSE | FALSE | — |
+| `macLifsPeriod` | Integer | As defined in 11.1.4 | PHY dependent | `†` read-only |
+| `macMaxBe` | Integer | 3–8 | 5 | — |
+| `macMaxCsmaBackoffs` | Integer | 0–5 | 4 | — |
+| `macMaxFrameRetries` | Integer | 0–7 | 3 | — |
+| `macNotifyAllBeacons` | Boolean | TRUE, FALSE | FALSE | — |
+| `macMinBe` | Integer | 0–`macMaxBe` | 3 | — |
+| `macPanId` | Integer | 0x0000–0xffff | 0xffff | — |
+| `macResponseWaitTime` | Integer | 2–64 | 32 | — |
+| `macRxOnWhenIdle` | Boolean | TRUE, FALSE | FALSE | — |
+| `macSecurityEnabled` | Boolean | TRUE, FALSE | FALSE | — |
+| `macShortAddress` | Integer | 0x0000–0xffff | 0xffff | — |
+| `macSifsPeriod` | Integer | As defined in 11.1.4 | PHY dependent | `†` read-only |
+| `macSyncSymbolOffset` | Integer | 0x000–0x100 for the 2.4 GHz band; 0x000–0x400 for the 868 MHz and 915 MHz bands, and the SUN FSK and SUN OFDM PHYs | — | `†` read-only |
+| `macTimestampSupported` | Boolean | TRUE, FALSE | — | `†` read-only |
+| `macTransactionPersistenceTime` | Integer | 0x0000–0xffff | 0x01f4 | `*` optional |
+| `macUnitBackoffPeriod` | Integer | PHY specific | `aTurnaroundTime + ceil(phyCcaDuration / symbolDuration)` in symbols | — |
+
+
+The PHY source is `ieee802154-2024:table:12-2`, PDF pp. 601–603, locators
+`ieee802154-2024@2389231:2391190` and `@2391190:2396656`; read-only access is defined
+by 12.3.1. **Table 12-2 has no default column**; the column below records that absence rather
+than supplying defaults from a particular implementation.
+
+| Attribute | Type | Range | Default | Marker |
+|---|---|---|---|---|
+| `phyBroadcastTxPower` | Signed integer | — | Not specified in Table 12-2 | — |
+| `phyCcaDuration` | Integer | 1–1000000 | Not specified in Table 12-2 | — |
+| `phyCcaMode` | Enumeration | MODE_1, MODE_2, MODE_3A, MODE_3B, MODE_4, MODE_5, MODE_6 | Not specified in Table 12-2 | — |
+| `phyCurrentChannelInfo` | Channel Information structure as defined in 11.1.3.1 | PHY dependent as defined in 11.1.3.1 | Not specified in Table 12-2 | — |
+| `phyCcaEdThreshold` | Implementation dependent | Implementation dependent | Not specified in Table 12-2 | — |
+| `phyMaxPacketSize` | Integer | 16–4095 | Not specified in Table 12-2 | — |
+| `phyMaxTxPower` | Signed integer | — | Not specified in Table 12-2 | `†` read-only |
+| `phyPeersTxPower` | List of parameters as defined in Table 12-3 | — | Not specified in Table 12-2 | — |
+| `phyRanging` | Boolean | TRUE, FALSE | Not specified in Table 12-2 | `†` read-only |
+| `phyRxRmarkerOffset` | Integer | 0x00000000–0xffffffff | Not specified in Table 12-2 | — |
+| `phyTxPower` | Signed integer | — | Not specified in Table 12-2 | — |
+| `phyTxRmarkerOffset` | Integer | 0x00000000–0xffffffff | Not specified in Table 12-2 | — |
+| `phyUnicastTxPower` | Signed integer | — | Not specified in Table 12-2 | — |
+
+
+Qualifying conditions from the table descriptions remain part of these domains:
+
+- `macFcsType` is valid only for LECIM, TVWS, SUN and HRP UWB in HPRF mode; its zero
+  default must not select a four-octet FCS for O-QPSK.
+- `macUnitBackoffPeriod` uses the CCA duration rounded upward to whole symbols before adding
+  turnaround. This is a default expression; the table does not say that every PHY attribute
+  write automatically overwrites an explicitly configured MAC backoff period.
+- `phyMaxPacketSize` is 127 octets for ordinary O-QPSK; other PHY-specific descriptions
+  override the generic 16–4095 range. The attribute is not dagger-marked in Table 12-2.
+- `phyCcaDuration` is in microseconds; absent a PHY-specific recommendation, eight symbols
+  are recommended. This recommendation is not a universal fixed default.
+- `phyBroadcastTxPower` and `phyUnicastTxPower` do not exceed `phyTxPower`, which does not
+  exceed `phyMaxTxPower`. `phyPeersTxPower` uses the element structure in Table 12-3.
+- `macMinBe` depends on `macMaxBe`; a successful change cannot leave the pair outside the
+  tabulated domains. The source does not prescribe a transactional multi-attribute API.
+- `macPanId=0xffff` means not associated. Coordinator short addresses are chosen before PAN
+  start; other devices receive their short addresses during association. Static setup does not
+  establish that the association procedure has been implemented.
+
+Other PHY-specific tables and optional-mode PIB tables are outside this data inventory; absence
+here is not evidence that their attributes are optional or inapplicable to another selected mode.
+
 ## Extraction boundary
 
 This catalog extracts selected legacy data/ACK, unslotted access, unsecured-policy, O-QPSK,
-PIB and passive-scan statements. It does not exhaust these clauses: complete receive-address
-predicates, reserved-bit rules, CRC arithmetic, PIB tables, channel definitions, service error
-precedence, reset interactions and references from the extracted nodes require further extraction.
+PIB and passive-scan statements. It does not exhaust these clauses: cross-document group-address definitions, additional PHY/optional-mode
+PIB tables, service error precedence, reset interactions and transitive references require further
+audit. The field domains above cover Tables 8-36 and 12-2, not every PIB table in the standard.
 Beacon scheduling, indirect delivery beyond the retry distinction, association, security transforms,
 enhanced formats, scheduled access, other PHYs and amendment requirements are outside this
 extraction. Their absence does not assert that they are optional for a particular device role.

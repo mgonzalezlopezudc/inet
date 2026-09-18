@@ -28,7 +28,11 @@ Level: **mandatory under the catalog conditions**. At least one core source uses
 
 Core statements: [IEEE802154-ADDRESS-1](../../standard/ieee802154/catalog.md#ieee802154-address-1), [IEEE802154-ADDRESS-2](../../standard/ieee802154/catalog.md#ieee802154-address-2), [IEEE802154-WIRE-1](../../standard/ieee802154/catalog.md#ieee802154-wire-1), [IEEE802154-WIRE-2](../../standard/ieee802154/catalog.md#ieee802154-wire-2), [IEEE802154-WIRE-3](../../standard/ieee802154/catalog.md#ieee802154-wire-3), [IEEE802154-WIRE-4](../../standard/ieee802154/catalog.md#ieee802154-wire-4), [IEEE802154-WIRE-5](../../standard/ieee802154/catalog.md#ieee802154-wire-5), [IEEE802154-WIRE-6](../../standard/ieee802154/catalog.md#ieee802154-wire-6).
 
+Additional core statements under their stated conditions: [IEEE802154-WIRE-7](../../standard/ieee802154/catalog.md#ieee802154-wire-7), [IEEE802154-WIRE-8](../../standard/ieee802154/catalog.md#ieee802154-wire-8), [IEEE802154-WIRE-9](../../standard/ieee802154/catalog.md#ieee802154-wire-9), [IEEE802154-WIRE-10](../../standard/ieee802154/catalog.md#ieee802154-wire-10), [IEEE802154-WIRE-11](../../standard/ieee802154/catalog.md#ieee802154-wire-11), [IEEE802154-WIRE-12](../../standard/ieee802154/catalog.md#ieee802154-wire-12), [IEEE802154-WIRE-13](../../standard/ieee802154/catalog.md#ieee802154-wire-13), [IEEE802154-WIRE-14](../../standard/ieee802154/catalog.md#ieee802154-wire-14), [IEEE802154-WIRE-15](../../standard/ieee802154/catalog.md#ieee802154-wire-15), [IEEE802154-WIRE-16](../../standard/ieee802154/catalog.md#ieee802154-wire-16).
+
 Procedure: [IEEE802154-C-WIRE](checks.md#ieee802154-c-wire).
+
+Additional core statement: [IEEE802154-WIRE-17](../../standard/ieee802154/catalog.md#ieee802154-wire-17).
 
 ## IEEE802154-F-ACCESS
 
@@ -58,7 +62,11 @@ Level: **mandatory under the catalog conditions**. At least one core source uses
 
 Core statements: [IEEE802154-RECEIVE-1](../../standard/ieee802154/catalog.md#ieee802154-receive-1), [IEEE802154-RECEIVE-2](../../standard/ieee802154/catalog.md#ieee802154-receive-2), [IEEE802154-RECEIVE-3](../../standard/ieee802154/catalog.md#ieee802154-receive-3), [IEEE802154-RECEIVE-4](../../standard/ieee802154/catalog.md#ieee802154-receive-4).
 
+Additional core statements under their stated conditions: [IEEE802154-RECEIVE-5](../../standard/ieee802154/catalog.md#ieee802154-receive-5), [IEEE802154-RECEIVE-6](../../standard/ieee802154/catalog.md#ieee802154-receive-6), [IEEE802154-RECEIVE-7](../../standard/ieee802154/catalog.md#ieee802154-receive-7), [IEEE802154-RECEIVE-8](../../standard/ieee802154/catalog.md#ieee802154-receive-8), [IEEE802154-RECEIVE-9](../../standard/ieee802154/catalog.md#ieee802154-receive-9), [IEEE802154-RECEIVE-10](../../standard/ieee802154/catalog.md#ieee802154-receive-10), [IEEE802154-RECEIVE-11](../../standard/ieee802154/catalog.md#ieee802154-receive-11), [IEEE802154-RECEIVE-12](../../standard/ieee802154/catalog.md#ieee802154-receive-12), [IEEE802154-RECEIVE-13](../../standard/ieee802154/catalog.md#ieee802154-receive-13), [IEEE802154-RECEIVE-14](../../standard/ieee802154/catalog.md#ieee802154-receive-14), [IEEE802154-RECEIVE-15](../../standard/ieee802154/catalog.md#ieee802154-receive-15).
+
 Procedure: [IEEE802154-C-RECEIVE](checks.md#ieee802154-c-receive).
+
+Additional core statement: [IEEE802154-RECEIVE-16](../../standard/ieee802154/catalog.md#ieee802154-receive-16).
 
 ## IEEE802154-F-ACK
 
@@ -88,6 +96,8 @@ Level: **mandatory under the catalog conditions**. At least one core source uses
 
 Core statements: [IEEE802154-PHY-1](../../standard/ieee802154/catalog.md#ieee802154-phy-1), [IEEE802154-PHY-2](../../standard/ieee802154/catalog.md#ieee802154-phy-2), [IEEE802154-PHY-3](../../standard/ieee802154/catalog.md#ieee802154-phy-3), [IEEE802154-PHY-4](../../standard/ieee802154/catalog.md#ieee802154-phy-4), [IEEE802154-PHY-5](../../standard/ieee802154/catalog.md#ieee802154-phy-5), [IEEE802154-PHY-6](../../standard/ieee802154/catalog.md#ieee802154-phy-6), [IEEE802154-PHY-7](../../standard/ieee802154/catalog.md#ieee802154-phy-7), [IEEE802154-PHY-8](../../standard/ieee802154/catalog.md#ieee802154-phy-8).
 
+Additional core statements under their stated conditions: [IEEE802154-PHY-9](../../standard/ieee802154/catalog.md#ieee802154-phy-9), [IEEE802154-PHY-10](../../standard/ieee802154/catalog.md#ieee802154-phy-10), [IEEE802154-PHY-11](../../standard/ieee802154/catalog.md#ieee802154-phy-11), [IEEE802154-PHY-12](../../standard/ieee802154/catalog.md#ieee802154-phy-12), [IEEE802154-PHY-13](../../standard/ieee802154/catalog.md#ieee802154-phy-13), [IEEE802154-PHY-14](../../standard/ieee802154/catalog.md#ieee802154-phy-14), [IEEE802154-PHY-15](../../standard/ieee802154/catalog.md#ieee802154-phy-15).
+
 Procedure: [IEEE802154-C-PHY](checks.md#ieee802154-c-phy).
 
 ## IEEE802154-F-SERVICE
@@ -97,6 +107,8 @@ Procedure: [IEEE802154-C-PHY](checks.md#ieee802154-c-phy).
 Level: **mandatory under the catalog conditions**. Required service outcomes; the oversize-frame statement uses “shall”. Governing source: IEEE Std 802.15.4-2024, no overrides.
 
 Core statements: [IEEE802154-SERVICE-1](../../standard/ieee802154/catalog.md#ieee802154-service-1), [IEEE802154-PIB-1](../../standard/ieee802154/catalog.md#ieee802154-pib-1), [IEEE802154-PIB-2](../../standard/ieee802154/catalog.md#ieee802154-pib-2), [IEEE802154-PIB-3](../../standard/ieee802154/catalog.md#ieee802154-pib-3).
+
+Additional core statements under their stated conditions: [IEEE802154-PIB-4](../../standard/ieee802154/catalog.md#ieee802154-pib-4), [IEEE802154-PIB-5](../../standard/ieee802154/catalog.md#ieee802154-pib-5), [IEEE802154-PIB-6](../../standard/ieee802154/catalog.md#ieee802154-pib-6), [IEEE802154-PIB-7](../../standard/ieee802154/catalog.md#ieee802154-pib-7), [IEEE802154-PIB-8](../../standard/ieee802154/catalog.md#ieee802154-pib-8), [IEEE802154-PIB-9](../../standard/ieee802154/catalog.md#ieee802154-pib-9), [IEEE802154-SERVICE-2](../../standard/ieee802154/catalog.md#ieee802154-service-2), [IEEE802154-SERVICE-3](../../standard/ieee802154/catalog.md#ieee802154-service-3), [IEEE802154-SERVICE-4](../../standard/ieee802154/catalog.md#ieee802154-service-4), [IEEE802154-SERVICE-5](../../standard/ieee802154/catalog.md#ieee802154-service-5), [IEEE802154-SERVICE-6](../../standard/ieee802154/catalog.md#ieee802154-service-6), [IEEE802154-SERVICE-7](../../standard/ieee802154/catalog.md#ieee802154-service-7).
 
 Procedure: [IEEE802154-C-SERVICE](checks.md#ieee802154-c-service).
 
