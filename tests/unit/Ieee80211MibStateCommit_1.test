@@ -1,7 +1,7 @@
 %description:
 Check combined HT and rate publication, duplicate updates, HT removal,
 unknown peer rates, invalid input, local-state retention, and replacement
-records installed by a callback.
+records installed after read-only notification delivery.
 
 %includes:
 #include <functional>
@@ -27,7 +27,7 @@ class Observer : public cListener {
 
 %file: TestNetwork.ned
 import inet.linklayer.ieee80211.mib.Ieee80211Mib;
-network TestNetwork { submodules: mib: Ieee80211Mib; test: Test; }
+network TestNetwork { submodules: mib: Ieee80211Mib; disabled: Ieee80211Mib; test: Test; }
 
 %inifile: omnetpp.ini
 [General]
@@ -40,16 +40,24 @@ record-scalar-results = false
 %activity:
 using namespace Ieee80211MibStateCommit_1;
 auto mib = check_and_cast<Ieee80211Mib *>(getModuleByPath("mib"));
-mib->setPrimaryChannel(1);
-mib->updateLocalHtCapabilities(Ieee80211ModeSet::getModeSet("n(mixed-2.4Ghz)"), {MHz(20)}, 1);
-auto capabilities = mib->localHtCapabilities;
-auto operation = mib->getHtOperation();
+Ieee80211HtCapabilities capabilities;
+capabilities.supportedChannelWidths.insert(MHz(20));
+for (int mcs = 0; mcs < 8; mcs++)
+    capabilities.rxMcsSupported[mcs] = true;
+capabilities.txMcsNss.maxMcsPerNss[0] = 7;
+Ieee80211HtOperation operation;
+operation.primaryChannel = 1;
+operation.basicMcsSupported[0] = true;
+mib->installLocalHtCapabilities(capabilities, true);
+mib->configureBssRole(Ieee80211Mib::ACCESS_POINT);
+mib->commitBss("test", MacAddress::UNSPECIFIED_ADDRESS, nullptr, 1, &operation);
 const MacAddress peer("02:00:00:00:00:01");
 Ieee80211RateSetState rates;
 rates.supported.known = true;
 rates.supported.legacyRates.insert(Mbps(6));
 rates.basic = rates.operational = rates.supported;
 mib->setLocalRateSet(rates);
+mib->publishStateChange();
 Observer observer;
 mib->subscribe(Ieee80211Mib::rateStateChangedSignal, &observer);
 bool expectHt = true;
@@ -65,12 +73,18 @@ observer.check = [&]() {
         ASSERT(ht->advertisedCapabilities == capabilities);
 };
 auto install = [&]() {
-    mib->installBssAndPeerState(expectedRates, peer, expectedRates, expectHt ? &capabilities : nullptr, operation);
+    mib->installBssAndPeerState(expectedRates, peer, expectedRates, expectHt ? &capabilities : nullptr);
+    mib->publishStateChange();
 };
 install();
 ASSERT(observer.notifications == 1);
 install();
 ASSERT(observer.notifications == 1);
+auto previousSnapshot = mib->findPeerHtState(peer)->negotiatedCapabilities;
+mib->installBssAndPeerState(expectedRates, peer, expectedRates, &capabilities, true);
+mib->publishStateChange();
+ASSERT(observer.notifications == 1);
+ASSERT(mib->findPeerHtState(peer)->negotiatedCapabilities != previousSnapshot);
 capabilities.shortGi20 = !capabilities.shortGi20;
 install();
 ASSERT(observer.notifications == 2);
@@ -92,20 +106,29 @@ auto invalid = rates;
 invalid.operational.legacyRates.insert(Mbps(0));
 bool rejected = false;
 try {
-    mib->installBssAndPeerState(rates, peer, invalid, &capabilities, operation);
+    mib->installBssAndPeerState(rates, peer, invalid, &capabilities);
+    mib->publishStateChange();
 }
 catch (const cRuntimeError&) { rejected = true; }
 ASSERT(rejected && observer.notifications == 5);
 observer.check();
-mib->localHtCapabilitiesValid = false;
 rejected = false;
 try {
-    mib->installBssAndPeerState(rates, peer, rates, &capabilities, operation);
+    mib->installLocalHtCapabilities(capabilities, false);
 }
 catch (const cRuntimeError&) { rejected = true; }
 ASSERT(rejected && observer.notifications == 5);
 observer.check();
-mib->localHtCapabilitiesValid = true;
+
+auto disabled = check_and_cast<Ieee80211Mib *>(getModuleByPath("disabled"));
+disabled->installLocalHtCapabilities(Ieee80211HtCapabilities(), false);
+rejected = false;
+try { disabled->installBssAndPeerState(rates, peer, rates, &capabilities); }
+catch (const cRuntimeError&) { rejected = true; }
+ASSERT(rejected);
+ASSERT(disabled->findPeerCapabilities(peer) == nullptr);
+ASSERT(disabled->findPeerRateSet(peer) == nullptr);
+ASSERT(disabled->getBssRateSet() == Ieee80211RateSetState());
 
 bool replaced = false;
 observer.check = [&]() {
@@ -115,9 +138,17 @@ observer.check = [&]() {
     ASSERT(mib->getBssRateSet() == rates);
     ASSERT(*mib->findPeerRateSet(peer) == rates);
     replaced = true;
-    mib->installBssAndPeerState(Ieee80211RateSetState(), peer, Ieee80211RateSetState(), nullptr, operation);
+    bool mutationRejected = false;
+    try { mib->installBssAndPeerState(Ieee80211RateSetState(), peer, Ieee80211RateSetState(), nullptr); }
+    catch (const cRuntimeError&) { mutationRejected = true; }
+    ASSERT(mutationRejected);
 };
-mib->installBssAndPeerState(rates, peer, rates, &capabilities, operation);
+mib->installBssAndPeerState(rates, peer, rates, &capabilities);
+mib->publishStateChange();
+ASSERT(replaced && mib->findPeerHtState(peer) != nullptr);
+observer.check = nullptr;
+mib->installBssAndPeerState(Ieee80211RateSetState(), peer, Ieee80211RateSetState(), nullptr);
+mib->publishStateChange();
 ASSERT(mib->findPeerHtState(peer) == nullptr);
 ASSERT(mib->findPeerRateSet(peer) != nullptr && !mib->findPeerRateSet(peer)->operational.known);
 ASSERT(mib->getBssRateSet() == Ieee80211RateSetState());

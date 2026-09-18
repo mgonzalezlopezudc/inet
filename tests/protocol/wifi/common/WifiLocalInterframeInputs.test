@@ -27,8 +27,9 @@ class LocalInputMac : public Ieee80211Mac {
   public:
     void reselectModeSet() {
         Enter_Method("reselectModeSet");
-        modeSet = Ieee80211ModeSet::getModeSet("a");
-        emit(modesetChangedSignal, const_cast<Ieee80211ModeSet *>(modeSet));
+        auto radio = check_and_cast<Ieee80211Radio *>(gate("lowerLayerOut")->getNextGate()->getOwnerModule());
+        radio->setModeSet(Ieee80211ModeSet::getModeSet("a"));
+        ASSERT(modeSet == getConfiguredModeSet());
     }
 };
 Define_Module(LocalInputMac);
@@ -277,8 +278,15 @@ class LocalInputDriver : public cSimpleModule, public cListener, public ITx::ICa
                 }
             }
             if (scenario >= 31 && scenario <= 48) {
-                if (scenario == 35 || scenario == 45 || scenario == 48)
-                    check_and_cast<Ieee80211Mib *>(getSimulation()->getModuleByPath("receiver.wlan[0].mib"))->setPrimaryChannel(1);
+                if (scenario == 35 || scenario == 45 || scenario == 48) {
+                    auto mib = check_and_cast<Ieee80211Mib *>(getSimulation()->getModuleByPath("receiver.wlan[0].mib"));
+                    // This no-association fixture explicitly supplies the accepted operation.
+                    Ieee80211HtOperation operation;
+                    operation.protectionMode = Ieee80211HtProtectionMode::NON_HT_MIXED;
+                    operation.primaryChannel = 1;
+                    mib->commitBss(mib->getBssData().ssid, mib->getBssData().bssid, mib->getOperationBand(), 1, &operation);
+                    mib->publishStateChange();
+                }
                 gap = SimTime(2, SIMTIME_US);
                 if (scenario == 41 || scenario == 43)
                     gap += SimTime(200, SIMTIME_NS);

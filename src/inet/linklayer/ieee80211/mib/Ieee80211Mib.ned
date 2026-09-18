@@ -20,6 +20,7 @@ simple Ieee80211Mib extends SimpleModule
 {
     parameters:
         @class(Ieee80211Mib);
+        @signal[bssStateChanged](type=bool); // committed active state; synchronous read-only observation
         // True after a committed change to rates, HT capabilities, or channel operation.
         // Equal updates emit nothing. Listeners query the MIB for current state.
         @signal[rateStateChanged](type=bool);
