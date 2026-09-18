@@ -2,7 +2,7 @@
 
 > **Kind:** report · **Status:** snapshot 2026-09-19 · **Seal:** none · **Owns:** — · **Stands on:** [coverage.md](coverage.md), [applicability.md](applicability.md)
 
-Baseline `fd6f800222`, working directory `/home/user/omnetpp_ws/inet-ieee802154-standards`.
+Initial baseline `fd6f800222`; continuation baseline `6cb03df7c8`. Working directory `/home/user/omnetpp_ws/inet-ieee802154-standards`.
 Mode: documentation/source/capture inspection; no simulation or library build. The checkout has
 no `out/` or `src/libINET*` artifacts. All nine new English checks are `NOT_RUN`; there are no
 executable test paths yet. This pass does not establish a Level 2 result or a conformance verdict.
@@ -40,7 +40,7 @@ For each catalog source node, use the same directory arguments with these operat
 ```
 
 The angle-bracket arguments above are templates; actual node IDs and physical page/source spans
-are recorded per catalog entry. All 40 source excerpts were compared to their retrieved node text
+are recorded per catalog entry. The initial 40 source excerpts were compared to their retrieved node text
 with whitespace normalization. Twenty-seven distinct source nodes yielded 66 outgoing references,
 all resolved. No request hit the 100-reference limit. Resolution does not establish applicability
 or extraction of the target. In particular, the corpus places continuation prose under table/figure
@@ -60,6 +60,60 @@ The continuation after Figure 7-16 was retrieved for the remaining ACK FCF rules
 | `Ieee802154Mac.cc` | `SeqNrParent` allocates per destination; `SeqNrChild` compares received `long` sequence against monotonically expected value with `<` | After serialized 255→0, this comparison can classify a fresh frame as old; no production wrap exchange was executed |
 | `src/inet/networklayer/common/NetworkInterface.h` | Generic address/filter APIs use `MacAddress`; protocol data can be attached | Does not prove native-address tags, dispatch or upper consumers work |
 | `src/inet/common/packet/recorder/PcapReader.cc` | Link type 195 sets FCS present; 230 sets FCS absent | Sealed source inspected only; no replay/writer correctness claim |
+
+## PHY feasibility inspection
+
+Read-only source inspection at the continuation baseline found an energy-observation path that
+does not require a successfully decoded PPDU:
+
+| Boundary | Source evidence | Remaining implementation/evidence |
+| --- | --- | --- |
+| Existing CCA | `Ieee802154Mac::updateStatusCCA()` checks reception state at timer expiry; duration is rxSetupTime + ccaDetectionTime | Does not establish observation over the complete interval |
+| Medium observation | `IRadioMedium::listenOnMedium()` and `RadioMedium::listenOnMedium()` construct interference/background noise and invoke receiver listening decisions | Timed request, cancellation and terminal-result ownership |
+| Scalar energy | `FlatReceiverBase::computeListeningDecision()` compares maximum noise power in W over an interval against the ED threshold | Quantitative ED requires averaging and calibration; a Boolean maximum-power result is insufficient |
+| Available extension | Public virtual receiver listening decision; scalar noise exposes time-dependent power | Define a protocol-local measurement contract and check cache retention for energy that ends before completion |
+| Propagation | IPropagation exposes speed and actual arrivals, but no universal maximum-delay guarantee | Pin a supported propagation model and finite geometry/movement assumptions or provide a separate explicit bound |
+
+These symbols are under `src/inet/physicallayer/wireless/common/` except the existing MAC under
+`src/inet/linklayer/ieee802154/`. The scalar medium supports compatible same-center/contained-band
+interference; partial overlap has additional restrictions. Medium filters and retained interference
+history must be pinned by the fixture. The existing instantaneous radio-state query does not retain
+all information needed by a timed observation. No source change is needed in the sealed packet tree
+for the candidate protocol-local provider/receiver extension.
+
+The minimum production fixture is a timed CCA/ED request with an undecodable energy pulse wholly
+inside the observation interval, ending before completion. Observe outcome, no PSDU delivery,
+completion time, threshold cases and cancellation. A separate stationary two-radio fixture under
+ConstantSpeedPropagation must compare actual arrivals with the declared ACK timing allowance.
+These are proposed checks, not executed results; neither architectural feasibility nor declared
+radio defaults establish PHY validation.
+
+## Extended source audit
+
+The continuation adds 42 source-checked statements, bringing the catalog to 82. It records all
+31 MAC rows in Table 8-36 and 13 generic PHY rows in Table 12-2, including access markers,
+PHY-specific domains and the absence of a PHY default column. Table 12-3 closes the peer-power
+structure lookup. These field inventories are not 44 additional catalog statement IDs.
+
+Fifty distinct catalog source nodes produced 122 extracted outgoing references, all resolved,
+without query truncation. This is a first-hop target check, not transitive applicability closure.
+Table 8-1 has 33 primitive rows (7 unstarred, 26 with starred references) and 73 distinct
+cell labels; all 73 were resolved by direct target lookup. Service and PICS tables expose
+cell references that the extractor omits; complete continuation inspection remains necessary. Annex E is informative; its generic
+ED/LQI option labels do not override mandatory O-QPSK clauses 13.3.12/13.3.13. Extraction also
+found false/unresolved Annex references, so the successful catalog-node edge check must not be
+reported as a clean whole-standard reference audit.
+
+Physical PDF page 84 was visually checked for the 7.2.11 independent CRC example. The transmitted
+bit sequence corresponds to `02 00 6A`, with FCS `E4 79`; polynomial long division using
+`x^16+x^12+x^5+1` independently reproduced the remainder. The resulting five-octet ACK has
+352 µs PPDU duration under the selected O-QPSK format. This checks source arithmetic, not the
+INET serializer. The exact octets and check procedure live in the
+[wire check](../../protocol/ieee802154/checks.md#ieee802154-c-wire).
+
+Four bounded specialist lanes supplied the mandatory/service/PICS inventory, PIB/PHY extraction,
+receive interpretation and existing medium feasibility. Root integration retained source versus
+model distinctions and did not accept the extraction summaries as conformance verdicts.
 
 ## Migration inventory
 
@@ -117,11 +171,18 @@ git diff --check
 ```
 
 The three scoped link checks covered 2, 3 and 4 files respectively, with zero broken links.
-A structural check confirmed 40 unique catalog headings, nine unique check headings, every
-catalog ID present in the feature map/checks/ledger, and the 37-selected/3-deferred partition.
+The initial structural check confirmed 40 unique catalog headings and the 37-selected/3-deferred
+partition. The continuation checks 82 unique catalog headings, nine unique check headings, every
+catalog ID present in the feature map/checks/ledger, and the 79-selected/3-deferred partition.
 Specification documents were checked for model class names and run-verdict leakage.
 
 The broader command `python3 doc/project/enforcement/check_links.py plan/pending` exited 1:
 four existing relative links in `pr-1155-resolve-audit-findings.md` do not resolve. None is in the
 802.15.4 plan or changed by this pass; that separate plan was left unchanged. Documentation checks
 are not simulation evidence, and no serializer, module, protocol or fingerprint result is claimed.
+
+The targeted independent documentation review identified an overbroad group-ACK receive rule,
+an invented ED cutoff and interrupted Markdown table rendering. All three were corrected and
+confirmed resolved by the same reviewer. The stable results sections received no additional
+actionable findings. This review did not exhaust transitive normative dependencies or verify
+production behavior; the applicability gate remains open.

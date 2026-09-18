@@ -22,7 +22,7 @@ Baseline: `fd6f800222`, 2026-09-19. Scope and open dependencies are in
 [feature map](../../protocol/ieee802154/features.md) and
 [English checks](../../protocol/ieee802154/checks.md) are drafts. **Step 0 is not closed.**
 
-There are 40 extracted statements: 37 selected for the M1 engineering subset and 3 deferred
+There are 82 extracted statements: 79 selected for the M1 engineering subset and 3 deferred
 selected-profile obligations. These are counts of the current extraction, not the denominator
 of a complete profile. No executable tests exist for these new check IDs; all run verdicts are
 `NOT_RUN`. Existing survey claims are not promoted to support claims by writing English checks.
@@ -34,7 +34,6 @@ owed by a later selected profile; neither status is a justified applicability ex
 
 | Statement | Selection | Delivery | English check | Executable / verdict |
 | --- | --- | --- | --- | --- |
-
 | [IEEE802154-ADDRESS-1](../../standard/ieee802154/catalog.md#ieee802154-address-1) | selected; owed | 1a, 1d, 2 | [IEEE802154-C-WIRE](../../protocol/ieee802154/checks.md#ieee802154-c-wire) | None / `NOT_RUN` |
 | [IEEE802154-ADDRESS-2](../../standard/ieee802154/catalog.md#ieee802154-address-2) | selected; owed | 1a, 1d, 2 | [IEEE802154-C-WIRE](../../protocol/ieee802154/checks.md#ieee802154-c-wire) | None / `NOT_RUN` |
 | [IEEE802154-WIRE-1](../../standard/ieee802154/catalog.md#ieee802154-wire-1) | selected; owed | 2–3 | [IEEE802154-C-WIRE](../../protocol/ieee802154/checks.md#ieee802154-c-wire) | None / `NOT_RUN` |
@@ -75,6 +74,48 @@ owed by a later selected profile; neither status is a justified applicability ex
 | [IEEE802154-PIB-3](../../standard/ieee802154/catalog.md#ieee802154-pib-3) | selected; owed | 1b | [IEEE802154-C-SERVICE](../../protocol/ieee802154/checks.md#ieee802154-c-service) | None / `NOT_RUN` |
 | [IEEE802154-SCAN-1](../../standard/ieee802154/catalog.md#ieee802154-scan-1) | later; owed | M2 step 8 | [IEEE802154-C-SCAN](../../protocol/ieee802154/checks.md#ieee802154-c-scan) | None / `NOT_RUN` |
 | [IEEE802154-SCAN-2](../../standard/ieee802154/catalog.md#ieee802154-scan-2) | later; owed | M2 step 8 | [IEEE802154-C-SCAN](../../protocol/ieee802154/checks.md#ieee802154-c-scan) | None / `NOT_RUN` |
+| [IEEE802154-WIRE-7](../../standard/ieee802154/catalog.md#ieee802154-wire-7) | selected; owed | 2–3 | [IEEE802154-C-WIRE](../../protocol/ieee802154/checks.md#ieee802154-c-wire) | None / `NOT_RUN` |
+| [IEEE802154-WIRE-8](../../standard/ieee802154/catalog.md#ieee802154-wire-8) | selected; owed | 2–3 | [IEEE802154-C-WIRE](../../protocol/ieee802154/checks.md#ieee802154-c-wire) | None / `NOT_RUN` |
+| [IEEE802154-WIRE-9](../../standard/ieee802154/catalog.md#ieee802154-wire-9) | selected; owed | 2–3 | [IEEE802154-C-WIRE](../../protocol/ieee802154/checks.md#ieee802154-c-wire) | None / `NOT_RUN` |
+| [IEEE802154-WIRE-10](../../standard/ieee802154/catalog.md#ieee802154-wire-10) | selected; owed | 2–3 | [IEEE802154-C-WIRE](../../protocol/ieee802154/checks.md#ieee802154-c-wire) | None / `NOT_RUN` |
+| [IEEE802154-WIRE-11](../../standard/ieee802154/catalog.md#ieee802154-wire-11) | selected; owed | 2–3 | [IEEE802154-C-WIRE](../../protocol/ieee802154/checks.md#ieee802154-c-wire) | None / `NOT_RUN` |
+| [IEEE802154-WIRE-12](../../standard/ieee802154/catalog.md#ieee802154-wire-12) | selected; owed | 2–3 | [IEEE802154-C-WIRE](../../protocol/ieee802154/checks.md#ieee802154-c-wire) | None / `NOT_RUN` |
+| [IEEE802154-WIRE-13](../../standard/ieee802154/catalog.md#ieee802154-wire-13) | selected; owed | 2–3 | [IEEE802154-C-WIRE](../../protocol/ieee802154/checks.md#ieee802154-c-wire) | None / `NOT_RUN` |
+| [IEEE802154-WIRE-14](../../standard/ieee802154/catalog.md#ieee802154-wire-14) | selected; owed | 2–3 | [IEEE802154-C-WIRE](../../protocol/ieee802154/checks.md#ieee802154-c-wire) | None / `NOT_RUN` |
+| [IEEE802154-WIRE-15](../../standard/ieee802154/catalog.md#ieee802154-wire-15) | selected; owed | 2–3 | [IEEE802154-C-WIRE](../../protocol/ieee802154/checks.md#ieee802154-c-wire) | None / `NOT_RUN` |
+| [IEEE802154-WIRE-16](../../standard/ieee802154/catalog.md#ieee802154-wire-16) | selected; owed | 2–3 | [IEEE802154-C-WIRE](../../protocol/ieee802154/checks.md#ieee802154-c-wire) | None / `NOT_RUN` |
+| [IEEE802154-RECEIVE-5](../../standard/ieee802154/catalog.md#ieee802154-receive-5) | selected; owed | 6 | [IEEE802154-C-RECEIVE](../../protocol/ieee802154/checks.md#ieee802154-c-receive) | None / `NOT_RUN` |
+| [IEEE802154-RECEIVE-6](../../standard/ieee802154/catalog.md#ieee802154-receive-6) | selected; owed | 6 | [IEEE802154-C-RECEIVE](../../protocol/ieee802154/checks.md#ieee802154-c-receive) | None / `NOT_RUN` |
+| [IEEE802154-RECEIVE-7](../../standard/ieee802154/catalog.md#ieee802154-receive-7) | selected; owed | 6 | [IEEE802154-C-RECEIVE](../../protocol/ieee802154/checks.md#ieee802154-c-receive) | None / `NOT_RUN` |
+| [IEEE802154-RECEIVE-8](../../standard/ieee802154/catalog.md#ieee802154-receive-8) | selected; owed | 6 | [IEEE802154-C-RECEIVE](../../protocol/ieee802154/checks.md#ieee802154-c-receive) | None / `NOT_RUN` |
+| [IEEE802154-RECEIVE-9](../../standard/ieee802154/catalog.md#ieee802154-receive-9) | selected; owed | 6 | [IEEE802154-C-RECEIVE](../../protocol/ieee802154/checks.md#ieee802154-c-receive) | None / `NOT_RUN` |
+| [IEEE802154-RECEIVE-10](../../standard/ieee802154/catalog.md#ieee802154-receive-10) | selected; owed | 6 | [IEEE802154-C-RECEIVE](../../protocol/ieee802154/checks.md#ieee802154-c-receive) | None / `NOT_RUN` |
+| [IEEE802154-RECEIVE-11](../../standard/ieee802154/catalog.md#ieee802154-receive-11) | selected; owed | 6 | [IEEE802154-C-RECEIVE](../../protocol/ieee802154/checks.md#ieee802154-c-receive) | None / `NOT_RUN` |
+| [IEEE802154-RECEIVE-12](../../standard/ieee802154/catalog.md#ieee802154-receive-12) | selected; owed | 6 | [IEEE802154-C-RECEIVE](../../protocol/ieee802154/checks.md#ieee802154-c-receive) | None / `NOT_RUN` |
+| [IEEE802154-RECEIVE-13](../../standard/ieee802154/catalog.md#ieee802154-receive-13) | selected; owed | 6 | [IEEE802154-C-RECEIVE](../../protocol/ieee802154/checks.md#ieee802154-c-receive) | None / `NOT_RUN` |
+| [IEEE802154-RECEIVE-14](../../standard/ieee802154/catalog.md#ieee802154-receive-14) | selected; owed | 6 | [IEEE802154-C-RECEIVE](../../protocol/ieee802154/checks.md#ieee802154-c-receive) | None / `NOT_RUN` |
+| [IEEE802154-RECEIVE-15](../../standard/ieee802154/catalog.md#ieee802154-receive-15) | selected; owed | 6 | [IEEE802154-C-RECEIVE](../../protocol/ieee802154/checks.md#ieee802154-c-receive) | None / `NOT_RUN` |
+| [IEEE802154-PHY-9](../../standard/ieee802154/catalog.md#ieee802154-phy-9) | selected; owed | 1c, 4 | [IEEE802154-C-PHY](../../protocol/ieee802154/checks.md#ieee802154-c-phy) | None / `NOT_RUN` |
+| [IEEE802154-PHY-10](../../standard/ieee802154/catalog.md#ieee802154-phy-10) | selected; owed | 1c, 4 | [IEEE802154-C-PHY](../../protocol/ieee802154/checks.md#ieee802154-c-phy) | None / `NOT_RUN` |
+| [IEEE802154-PHY-11](../../standard/ieee802154/catalog.md#ieee802154-phy-11) | selected; owed | 1c, 4 | [IEEE802154-C-PHY](../../protocol/ieee802154/checks.md#ieee802154-c-phy) | None / `NOT_RUN` |
+| [IEEE802154-PHY-12](../../standard/ieee802154/catalog.md#ieee802154-phy-12) | selected; owed | 1c, 4 | [IEEE802154-C-PHY](../../protocol/ieee802154/checks.md#ieee802154-c-phy) | None / `NOT_RUN` |
+| [IEEE802154-PHY-13](../../standard/ieee802154/catalog.md#ieee802154-phy-13) | selected; owed | 1c, 4 | [IEEE802154-C-PHY](../../protocol/ieee802154/checks.md#ieee802154-c-phy) | None / `NOT_RUN` |
+| [IEEE802154-PHY-14](../../standard/ieee802154/catalog.md#ieee802154-phy-14) | selected; owed | 1c, 4 | [IEEE802154-C-PHY](../../protocol/ieee802154/checks.md#ieee802154-c-phy) | None / `NOT_RUN` |
+| [IEEE802154-PHY-15](../../standard/ieee802154/catalog.md#ieee802154-phy-15) | selected; owed | 1c, 4 | [IEEE802154-C-PHY](../../protocol/ieee802154/checks.md#ieee802154-c-phy) | None / `NOT_RUN` |
+| [IEEE802154-PIB-4](../../standard/ieee802154/catalog.md#ieee802154-pib-4) | selected; owed | 1b | [IEEE802154-C-SERVICE](../../protocol/ieee802154/checks.md#ieee802154-c-service) | None / `NOT_RUN` |
+| [IEEE802154-PIB-5](../../standard/ieee802154/catalog.md#ieee802154-pib-5) | selected; owed | 1b | [IEEE802154-C-SERVICE](../../protocol/ieee802154/checks.md#ieee802154-c-service) | None / `NOT_RUN` |
+| [IEEE802154-PIB-6](../../standard/ieee802154/catalog.md#ieee802154-pib-6) | selected; owed | 1b | [IEEE802154-C-SERVICE](../../protocol/ieee802154/checks.md#ieee802154-c-service) | None / `NOT_RUN` |
+| [IEEE802154-PIB-7](../../standard/ieee802154/catalog.md#ieee802154-pib-7) | selected; owed | 1b | [IEEE802154-C-SERVICE](../../protocol/ieee802154/checks.md#ieee802154-c-service) | None / `NOT_RUN` |
+| [IEEE802154-PIB-8](../../standard/ieee802154/catalog.md#ieee802154-pib-8) | selected; owed | 1b | [IEEE802154-C-SERVICE](../../protocol/ieee802154/checks.md#ieee802154-c-service) | None / `NOT_RUN` |
+| [IEEE802154-PIB-9](../../standard/ieee802154/catalog.md#ieee802154-pib-9) | selected; owed | 1b | [IEEE802154-C-SERVICE](../../protocol/ieee802154/checks.md#ieee802154-c-service) | None / `NOT_RUN` |
+| [IEEE802154-SERVICE-2](../../standard/ieee802154/catalog.md#ieee802154-service-2) | selected; owed | 1a, 3, 6 | [IEEE802154-C-SERVICE](../../protocol/ieee802154/checks.md#ieee802154-c-service) | None / `NOT_RUN` |
+| [IEEE802154-SERVICE-3](../../standard/ieee802154/catalog.md#ieee802154-service-3) | selected; owed | 1a, 3, 6 | [IEEE802154-C-SERVICE](../../protocol/ieee802154/checks.md#ieee802154-c-service) | None / `NOT_RUN` |
+| [IEEE802154-SERVICE-4](../../standard/ieee802154/catalog.md#ieee802154-service-4) | selected; owed | 1a, 3, 6 | [IEEE802154-C-SERVICE](../../protocol/ieee802154/checks.md#ieee802154-c-service) | None / `NOT_RUN` |
+| [IEEE802154-SERVICE-5](../../standard/ieee802154/catalog.md#ieee802154-service-5) | selected; owed | 1a, 3, 6 | [IEEE802154-C-SERVICE](../../protocol/ieee802154/checks.md#ieee802154-c-service) | None / `NOT_RUN` |
+| [IEEE802154-SERVICE-6](../../standard/ieee802154/catalog.md#ieee802154-service-6) | selected; owed | 1a, 3, 6 | [IEEE802154-C-SERVICE](../../protocol/ieee802154/checks.md#ieee802154-c-service) | None / `NOT_RUN` |
+| [IEEE802154-SERVICE-7](../../standard/ieee802154/catalog.md#ieee802154-service-7) | selected; owed | 1a, 3, 6 | [IEEE802154-C-SERVICE](../../protocol/ieee802154/checks.md#ieee802154-c-service) | None / `NOT_RUN` |
+| [IEEE802154-WIRE-17](../../standard/ieee802154/catalog.md#ieee802154-wire-17) | selected; owed | 2–3 | [IEEE802154-C-WIRE](../../protocol/ieee802154/checks.md#ieee802154-c-wire) | None / `NOT_RUN` |
+| [IEEE802154-RECEIVE-16](../../standard/ieee802154/catalog.md#ieee802154-receive-16) | selected; owed | 6 | [IEEE802154-C-RECEIVE](../../protocol/ieee802154/checks.md#ieee802154-c-receive) | None / `NOT_RUN` |
 
 ### Planned evidence categories
 
@@ -99,3 +140,4 @@ provisional until actual fixtures demonstrate that they reach the claimed observ
 | --- | --- | --- |
 | 2026-09-18 | Standards/claim survey | Level 1; no simulation checks |
 | 2026-09-19 | Initial step-0 extraction | 40 source-checked entries, nine English procedures, role/version/receive matrices and first consumer/capture inventory; applicability closure and executable tests still owed |
+| 2026-09-19 | Extended step-0 audit | 82 entries and nine expanded English procedures; complete base MAC/PHY PIB field inventory, service/PICS comparison and PHY feasibility inspection; no runtime support verdict |
