@@ -2,4 +2,4 @@ IEEE 802.11 capability and BSS state ownership
 
 HT capabilities are prepared independently of active BSS operation. Simplified associations prepare both peers before network configuration, regardless of node order. Management publishes BSS and rate-state notifications after completing transaction and timer bookkeeping. The MIB retains local, BSS, and peer rate sets, while negotiated capability snapshots remain immutable and BSS operation is queried separately. Peer cleanup and directional response-rate selection remain in effect.
 
-Custom modules must replace ModeSetListener and modesetChanged with an explicit modeSetModule provider, and direct MIB BSS/profile writes with the owner APIs. Custom HT PHY contributors use typed capability interfaces. See the migration guide for source and wiring changes.
+Custom modules must replace ModeSetListener and modesetChanged with an explicit modeSetModule using IIeee80211ModeSetProvider, and direct MIB BSS/profile writes with the owner APIs. Custom HT PHY contributors use typed capability interfaces. See the migration guide for source and wiring changes.
