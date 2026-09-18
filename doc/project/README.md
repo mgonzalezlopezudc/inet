@@ -56,7 +56,8 @@ history/       How did the current state come to be?
    [guide/analyze-simulation-results.md](guide/analyze-simulation-results.md).
 7. **Asking "why does INET not do X?"** — [design/rejected-designs.md](design/rejected-designs.md).
 8. **About to derive protocol tests from a standard** —
-   [guide/derive-tests-from-a-standard.md](guide/derive-tests-from-a-standard.md).
+   [guide/derive-tests-from-a-standard.md](guide/derive-tests-from-a-standard.md). For local IEEE
+   source retrieval, use [guide/inspect-ieee-standards.md](guide/inspect-ieee-standards.md).
 9. **Writing in this folder** — [rule/documentation.md](rule/documentation.md).
 
 ## Every document
@@ -105,6 +106,7 @@ In the order of the chain.
 | [guide/review-a-pull-request.md](guide/review-a-pull-request.md) | procedure | — | How do I audit a branch against the `PR-*` rules? |
 | [guide/change-a-baseline.md](guide/change-a-baseline.md) | procedure | — | How do I change a recorded expectation? |
 | [guide/derive-tests-from-a-standard.md](guide/derive-tests-from-a-standard.md) | procedure | — | How do I turn a protocol standard into protocol tests? |
+| [guide/inspect-ieee-standards.md](guide/inspect-ieee-standards.md) | procedure | — | How do I retrieve and cite local IEEE 802.11 and 802.15.4 source evidence? |
 | [guide/run-the-gates.md](guide/run-the-gates.md) | procedure | — | What do I run before a push? |
 | [guide/diagnose-a-simulation.md](guide/diagnose-a-simulation.md) | procedure | — | How do I explain a failed run or implausible result with reproducible evidence? |
 | [guide/analyze-simulation-results.md](guide/analyze-simulation-results.md) | procedure | — | How do I compare, summarize, and plot simulation results without false repetitions? |
