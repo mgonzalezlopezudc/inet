@@ -22,20 +22,28 @@ The following are project delivery profiles, not IEEE-defined conformance classe
 
 | Milestone | Selected behavior | Explicit limits | Release gate |
 | --- | --- | --- | --- |
-| M1: static non-beacon data transfer | 2.4 GHz O-QPSK, channel page 0/channels 11–26, 250 kbit/s; static PAN and native short/extended addressing; legacy frame versions 0/1 as applicable; data and immediate ACK; unslotted CSMA-CA; retries, filtering and DSN handling; PHY CCA, ED and LQI services | Unsecured operation; no dynamic association, periodic beacons, GTS, enhanced frames or ranging; packet-level PHY fidelity; an engineering milestone, not complete device conformance | Steps 0–6 and 10; every selected M1 obligation has passing direct evidence |
+| M1: static non-beacon data transfer | 2.4 GHz O-QPSK, channel page 0/channels 11–26, 250 kbit/s; static PAN and native short/extended addressing; legacy frame versions 0/1 as applicable; data and immediate ACK; unslotted CSMA-CA; retries, filtering and DSN handling; PHY CCA, ED and LQI services | Unsecured operation; no dynamic association, periodic beacons, GTS, enhanced frames or ranging; packet-level PHY fidelity; an engineering milestone, not complete device conformance | Steps 0–6 and 10; every obligation in the M1 engineering subset has passing direct evidence; deferred profile obligations remain visible |
 | M2: managed non-beacon PAN | M1 plus coordinator start, scan, association/disassociation, indirect transactions, polling, receiver control and selected orphan recovery/PAN conflict procedures | No claim of beacon-enabled operation or security | Steps 7–10; join, exchange, sleep/poll, failure and recovery scenarios pass |
 | M3: beacon and secured operation | Beacon synchronization/superframes, slotted CSMA-CA, GTS/CFP, and a separately selectable base-standard security capability | Security and beacon mode have independent coverage; neither is implied merely by landing shared fields | Follow-on work packages B1–B3 and S1 |
 | Later profiles | Enhanced frames/IEs, TSCH, DSME, additional PHYs and modern UWB/ranging | Each requires its own applicability matrix and validation | Follow-on packages E1, T1, D1, P1 and A1 |
 
-Before coding, step 0 must reconcile each profile with all mandatory and conditional requirements
-for its selected roles and modes. A necessary dependency discovered there joins the profile;
-it cannot be excluded merely to meet this schedule. Until that closure is complete, use
+Before implementing each profile, extend step 0 to reconcile its mandatory and conditional
+requirements for the selected roles and modes; the first PR closes the bounded M1 audit. A necessary dependency discovered there joins the profile;
+it cannot be excluded merely to meet this schedule. If needed for an M1 behavior, it blocks that
+behavior until implemented; otherwise record its later delivery milestone without claiming profile
+completion at M1. Until that closure is complete, use
 “implementation of the selected subset,” not a whole-standard conformance claim.
 
 In particular, 6.4.1.1 requires passive scanning for all devices. Its implementation is scheduled
 in step 8, so it remains **owed** at M1 rather than being declared inapplicable to static PANs.
 M2 is the first candidate for a complete selected-device-profile claim, subject to step 0's
 mandatory-service inventory and the final evidence gate.
+
+Maintain two explicit sets in the existing model coverage ledger: the **M1 engineering subset**
+and **deferred selected-profile obligations**, including passive scan. Distinguish known deferred
+implementation from unresolved applicability. M1 completion closes the first set only; a complete
+selected-device-profile claim requires every applicable obligation to have passing direct evidence
+and no unresolved applicability questions. M2 is a candidate, not a guarantee of that closure.
 
 6LoWPAN, IPv6 neighbor discovery, routing and CoAP are separate projects. This plan supplies their
 MAC address, payload and service boundaries; it does not promise an operational IPv6 stack merely
@@ -75,7 +83,7 @@ normative expectations for the new tests.
 
 | Surface | Observed limitation | Planned owner/change |
 | --- | --- | --- |
-| [MAC header](../../src/inet/linklayer/ieee802154/Ieee802154MacHeader.msg) and [serializer](../../src/inet/linklayer/ieee802154/Ieee802154MacHeaderSerializer.cc) | Fixed `0xCC01`, padded 48-bit addresses, Source PAN ID carries `networkProtocol`; emitted header is 23 octets | Address value type and version-aware frame codec, steps 2–3 |
+| [MAC header](../../src/inet/linklayer/ieee802154/Ieee802154MacHeader.msg) and [serializer](../../src/inet/linklayer/ieee802154/Ieee802154MacHeaderSerializer.cc) | Fixed `0xCC01`, padded 48-bit addresses, Source PAN ID carries `networkProtocol`; emitted header is 23 octets | Address value type in 1a; version-aware frame codec, steps 2–3 |
 | [Narrowband MAC NED](../../src/inet/linklayer/ieee802154/Ieee802154NarrowbandMac.ned) | Fixed 72-bit header and 118-byte MTU derived from minimum overhead | Derive actual frame sizes; validate per-request payload capacity, steps 3–6 |
 | [MAC implementation](../../src/inet/linklayer/ieee802154/Ieee802154Mac.cc) | ACK detection uses `CSMA-Ack`; reception-state CCA; host-integer sequence maps | Transaction, access and receive owners, steps 4–6 |
 | [Dissector](../../src/inet/linklayer/ieee802154/Ieee802154ProtocolDissector.cc) | Payload decoding uses the nonstandard protocol field | Opaque payload or explicit receiver-side adaptation, step 3 |
@@ -159,7 +167,7 @@ contracts in step 1 using the [naming rules](../../doc/project/rule/naming.md).
 | Protocol-local address/frame values | None/short/extended address, FCF fields, PAN fields, command payloads, optional wire structures and FCS | `linklayer/ieee802154`; independent of MAC timers and radio implementations |
 | MAC PIB | Validated MAC attributes, defaults and access restrictions | One authoritative store; no duplicate NED/management/runtime copies |
 | PHY service provider | Channel/page, transceiver operation, CCA/ED, transmission timing, receive metadata | Paired contracts in PHY-owned `contract`; implementation under `physicallayer/wireless/ieee802154`; no dependency back to concrete MAC |
-| MAC transaction controller | Current request, DSN, ACK matching, retry count, exactly one terminal result | Calls access and PHY contracts; owns packet lifetime through completion |
+| MAC transaction controller | Explicit operation type, current request, DSN, ACK matching, retry count, exactly one terminal result | Calls access and PHY contracts; owns packet lifetime through completion |
 | Unslotted/slotted access provider | Per-attempt backoff state and timers | Returns access success/failure; does not own retries, association or upper-layer policy |
 | Receive processing | Length/FCS/filter checks, ACK eligibility and delivery; optional duplicate policy has explicit ownership | Single receive decision path for typed and byte-backed packets |
 | Management | Scan, start, association/disassociation and recovery procedures | Uses shared transmission services; PAN choice/address-allocation policy is supplied by a higher-layer client |
@@ -168,7 +176,11 @@ contracts in step 1 using the [naming rules](../../doc/project/rule/naming.md).
 
 Queueing uses existing queue contracts. Do not create a submodule for every value type; use
 replaceable modules for independently selectable behavior and plain values for packet/state data.
-Keep management and channel access out of one expanding MAC FSM.
+Keep management and channel access out of one expanding MAC FSM. Specify separate direct,
+indirect-delivery, poll and association operation lifetimes and completion events. Direct retry
+exhaustion, indirect retention for another poll, poll response waiting and association completion
+must not share an implicit success/failure rule. Decide whether to share an exchange engine only
+after these contracts are explicit; no particular policy-class hierarchy is required.
 
 Every asynchronous operation has a request identity, result/status, packet ownership rules,
 cancellation behavior and lifecycle semantics. PHY busy, unsupported operation, invalid request,
@@ -177,13 +189,28 @@ have one owner; late callbacks after cancellation or stop cannot complete a repl
 
 **Address integration:** native 16/64-bit identity lives in the protocol. Use protocol-specific
 request/indication tags and attached interface data where existing extension points permit it.
-Do not widen `MacAddress`, truncate EUI-64, or add protocol switches to the core. Before M1,
-prove that two extended addresses sharing their low 48 bits remain distinct through the actual
+Do not widen `MacAddress`, truncate EUI-64, or add protocol switches to the core. In step 1d,
+before codec and operational MAC work, prove that two extended addresses sharing their low 48 bits remain distinct through the actual
 interface. Any framework contract gap is a separate design decision with its own change surface.
+Produce a compatibility matrix for interface identity, upper destination requests, lower source
+indications, queue classification, neighbor/forwarding lookups, filtering, display/configuration,
+and generic consumers expecting `MacAddress`. Mark each as supported, adapted or outside M1;
+name the actual extension point and required evidence for supported paths. M1 need not make every
+generic upper layer compatible, but its native MAC application path must work end to end.
 
-**Payload integration:** initially accept opaque MAC service payloads. Where a configured upper
-protocol is supported, the receiver independently supplies that context. Mixed payload protocols
-require an actual adaptation-layer discriminator. Unknown capture payloads stay opaque.
+**Payload integration:** M1 accepts opaque MAC service payloads and optionally one configured
+upper protocol per interface. The receiver supplies that protocol tag for delivered data payloads;
+without configuration, payloads remain opaque and use the native MAC service boundary. Unknown
+capture payloads stay opaque. Mixed upper protocols on one interface are unsupported until an
+adaptation-layer discriminator exists. The MAC and dissector must use the same context rule.
+
+**PIB mutation:** step 1b defines each attribute's access, startup/runtime mutability, validation,
+cross-attribute constraints, reset default and retention, effective-change event and notifications.
+NED parameters initialize the authoritative store; they are not a competing runtime value. Define
+how MLME-SET interacts with active operations and reject unsupported changes with explicit status.
+The owning procedure applies operational changes after validation; the store must not reach into
+unrelated modules. Preserve consistent state across failed changes. Add atomic multi-attribute
+operations only if a supported procedure requires them, with explicit commit/failure semantics.
 
 **Frame order:** follow the selected version's layout: MAC header (including applicable auxiliary
 security/header IEs), MAC payload (including applicable payload IEs in their specified position),
@@ -197,9 +224,10 @@ not grant permission to edit sealed code.
 
 ## 5. Ordered implementation work
 
-Each numbered step is a reviewable work package, potentially several commits. Land dependencies
-first; every PR must build and keep its selected operational mode coherent. The owner column in
-section 4 names responsibility, not staffing assignments.
+Numbered steps are roadmap stages, not promises of one PR each. Split them at the gates below,
+with a bounded change surface and direct checks for each PR. Land dependencies first; every PR
+must build and keep its selected operational mode coherent. The owner column in section 4 names
+responsibility, not staffing assignments.
 
 ### Step 0 — Close the profile and write the checks
 
@@ -211,9 +239,23 @@ Dependencies: none. Source baseline and local survey already exist; refresh them
 - [ ] Create protocol-only `features.md`, `checks.md` and focused check descriptions under
   `doc/project/evidence/protocol/ieee802154/`, following
   [standard-derived tests](../../doc/project/guide/derive-tests-from-a-standard.md).
-- [ ] Record role/mode applicability, chosen frame versions, CCA mode support, all M1/M2
-  requirements and exclusions in the model-side coverage ledger. Keep implementation status
-  and test outcomes out of the standard catalog and protocol feature map.
+- [ ] Pin the first audit to M1's static non-beacon O-QPSK data service and its necessary
+  dependencies. Declare which device, coordinator and PAN-coordinator roles are exercised;
+  distinguish configured roles from support for their management procedures. Record exposed
+  services, selected CCA mode, conditional predicates and unsupported PIB requests/statuses.
+- [ ] Record the M1 engineering subset and known deferred profile obligations in the model ledger.
+  Follow applicable cross-references to closure for the bounded M1 claim. Extend the audit to M2
+  roles/services before steps 7–9; the first PR need not close unrelated M2 procedures. Keep
+  implementation status and outcomes out of the standard catalog and protocol feature map.
+- [ ] Produce a version matrix separating transmitted, structurally decoded and operationally
+  processed formats, legal-but-unsupported combinations and malformed/reserved combinations.
+  Resolve version 0/1 selection before codec work. Version-2 recognition must never imply
+  legacy-layout parsing or operational support; E1 remains the implementation gate.
+- [ ] Derive a receive decision table from the applicable clauses: for each rejection or acceptance
+  cause, record ordering, promiscuous visibility, ACK eligibility, DSN indication, delivery,
+  duplicate-state effects and status/statistic. Include malformed security fields, valid secured
+  but unsupported traffic and unsecured traffic; add companion outcomes for local requests
+  asking for unavailable security. Resolve the table before step 6; do not reduce ACK eligibility to one generic accepted flag.
 - [ ] Record apparent source contradictions with exact clauses/figures and resolve their
   interpretation before turning them into timing oracles. Do not silently substitute an older
   edition, an extracted table fragment or another simulator's algorithm.
@@ -221,33 +263,45 @@ Dependencies: none. Source baseline and local survey already exist; refresh them
   identify migration consumers and capture provenance. Reproduce suspected defects separately.
 
 **Exit:** a reviewer can determine the profile's obligations without reading implementation code.
-Every obligation has a planned observable check or a justified applicability exclusion; unresolved
-normative dependencies block the affected step. A machine-readable coverage export, if useful,
-is derived from the ledger rather than maintained as another source of truth.
+Every applicable obligation in the bounded audit has a planned observable check and delivery
+milestone; exclusions have explicit predicates and source justification. The bounded M1 audit has
+zero unresolved applicability questions or unclassified necessary references. Known implementation
+debt remains visible and does not count as an applicability exclusion. Unresolved questions for
+later procedures block those procedures and any complete-profile claim, not unrelated M1 work.
+A machine-readable coverage export, if useful, is derived from the ledger rather than maintained
+as another source of truth.
 
 ### Step 1 — Fix contracts, state ownership and migration boundaries
 
-Dependencies: step 0.
+Dependencies: step 0. Deliver as separate bounded PRs; each builds with the existing default.
 
-- [ ] Record the architecture decision; declare the NED surface, units, defaults and paired
-  contracts for substitutable roles before implementing them.
-- [ ] Define MCPS request/confirm/indication semantics, minimal MLME reset/get/set/start contracts,
-  PHY operations, statuses and cancellation. Implement the initial PIB with range/access checks.
-- [ ] Prove native-address interface attachment and payload dispatch with a minimal production
-  interface fixture. Identify adapters needed by existing upper layers.
-- [ ] Keep the existing default operational until the M1 cutover. Develop the replacement through
-  an explicit selectable implementation; settle public type names before adding that selection.
-  The temporary legacy path must not invoke the new codec with old header assumptions.
+| Package | Deliverable and exit gate | Dependencies |
+| --- | --- | --- |
+| 1a: protocol values and MAC services | Native none/short/extended address type, parsing/formatting, equality/hash and reserved values; MCPS and minimal MLME primitives, statuses, request identity, ownership and cancellation. Value/contract tests cover refusal and distinct identities. | Step 0 |
+| 1b: MAC PIB | Authoritative store plus the attribute mutation table specified in section 4; initialization, validation, reset and failed-change tests. | 1a |
+| 1c: PHY contracts | Paired substitutable contracts, units, status/lifecycle rules and event/timer ownership table below. Contract tests distinguish acceptance from completion and stale callbacks. | 1a |
+| 1d: address and payload integration | Compatibility matrix and minimal production interface fixture, including two EUI-64 identities with identical low 48 bits, request/indication identity and configured/opaque delivery. Resolve required adapters and framework gaps. | 1a–1c |
+| 1e: selectable composition | Public type names, paired C++/NED contracts and explicit replacement selection. Prove existing default initialization and replacement contract wiring; isolate old wire assumptions. | 1d |
 
-**Exit:** contract/module tests demonstrate validation, ownership on refusal, reset/stop behavior
-and distinct results. The architecture has no core switch additions or concrete PHY-to-MAC cycle.
+Record these decisions before dependent behavior, without requiring all contracts to land in one
+PR. No concrete PHY-to-MAC dependency or protocol switch in core is permitted.
 
-### Step 2 — Native addresses and basic frame codec together
+The PHY event/timer table must define request acceptance, PPDU start, PSDU/FCS completion, PPDU end,
+turnaround completion and receive indication, including timestamp reference points and result
+availability. Assign one owner to CCA/ED observation, turnaround, backoff, immediate-ACK scheduling,
+interframe spacing, ACK timeout and transmit completion. Specify which events start each wait,
+which intervals overlap, units/rounding and cancellation/reset behavior. Resolve exact assignments
+against the selected clauses before step 4; no timing implementation may rely on an unassigned row.
+
+**Exit:** all five package gates pass; validation, refusal ownership, reset/stop and distinct
+operation results are explicit. Step 2 consumes the address type already proven by 1d.
+
+### Step 2 — Basic frame codec using native addresses
 
 Dependencies: step 1.
 
-- [ ] Add the protocol-local address type, parsing/formatting, equality/hash and reserved-value
-  handling. Cover none, short, extended, broadcast and unallocated-address semantics.
+- [ ] Use the step 1a address type and step 0 version matrix; carry broadcast and
+  unallocated-address semantics through the actual wire boundary.
 - [ ] Add the M1 FCF/address/sequence representation and registered serializers together.
   Derive the version-dependent address/PAN presence table from the specification.
 - [ ] Support data and immediate ACK layout, variable lengths and exact octet order; distinguish
@@ -280,8 +334,13 @@ required to decode captured payload boundaries. Core capture defects are isolate
 
 ### Step 4 — O-QPSK PHY services before MAC timing
 
-Dependencies: steps 1 and 3.
+Dependencies: steps 1 and 3. A read-only feasibility investigation or isolated fixture may run
+once 1c is defined, before complete MPDU integration.
 
+- [ ] Establish a CCA/ED feasibility gate: identify the existing medium/radio energy observation
+  API and demonstrate energy detection without a decodable frame. If insufficient, define and
+  validate a bounded PHY-local listening/energy contract before promising Mode 1 behavior.
+  Treat insufficiency as an investigated result, not an assumption about the current medium.
 - [ ] Implement the PHY provider over the existing narrowband radio infrastructure: timed CCA,
   ED, state changes, channel/page selection, PD-DATA completion and receive metadata/LQI.
 - [ ] Derive symbol timing, SHR/PHR/PSDU duration, turnaround and size checks from the selected
@@ -311,13 +370,14 @@ Dependencies: steps 3–4.
 symbol times for idle, persistently busy and busy-then-idle channels. No transmission follows
 an access failure, and no request is completed twice or stranded.
 
-### Step 6 — Receive filtering, ACKs, retries and duplicates
+### Step 6 — Receive filtering, ACKs, retries and DSN handling
 
 Dependencies: step 5.
 
 - [ ] Apply length/FCS, version, frame type, PAN/address and receive-mode checks in the required
-  order, including promiscuous behavior. Decide ACK eligibility from accepted frame fields.
-- [ ] Implement the applicable unsecured branches of outgoing/incoming security processing
+  order from step 0's decision table, including promiscuous behavior. Test ACK eligibility
+  independently of upper delivery and optional suppression.
+- [ ] Implement unsecured-profile security-policy handling through the applicable branches
   (9.2.2 and 9.2.5) with `macSecurityEnabled=false`; reject unsupported configuration and
   secured traffic with defined outcomes. This does not implement cryptographic security.
 - [ ] Generate real immediate ACKs with specified timing and transaction matching. Cover
@@ -325,7 +385,8 @@ Dependencies: step 5.
 - [ ] Implement ACK timeout/retry exhaustion and interframe timing. Keep DSN stable across a
   retransmission; allocate new DSNs device-wide with the specified width and ownership (6.6.1).
 - [ ] Deliver DSN and source identity through the data indication. Resolve duplicate policy from
-  step 0's evidence; if bounded suppression is retained as a model/adaptation option, document
+  step 0's evidence. Unless an applicable requirement is found, suppression is disabled by
+  default and remains outside the conformance claim. If retained as an opt-in policy, document
   its cache key, lifetime, reset behavior and ambiguity limits. It must not prevent required ACKs.
   Test wraparound, peer restart, interleaved destinations, late ACKs and unexpected ACK sequences.
 
@@ -335,7 +396,7 @@ usable. Run the same cases on typed and byte-backed frames. Complete step 10 bef
 
 ### Step 7 — Command frames and indirect transaction engine
 
-Dependencies: step 6.
+Dependencies: step 6 and closure of the M2 applicability extension from step 0.
 
 - [ ] Add each selected command payload with codec and independent vectors; include Data
   Request and association/disassociation commands required by M2.
@@ -395,7 +456,13 @@ Dependencies: step 6 for M1; step 9 for M2. Prepare fixtures and evidence throug
 - [ ] Inventory old consumers and migrate examples deliberately. At M1 cutover, replace the
   default narrowband path only after migration tests pass; document removed/changed parameters,
   addresses, MTU and wire incompatibility. Retire the temporary old narrowband path on a stated
-  schedule. Do not reinterpret old captures as standard frames.
+  schedule: retain an explicitly named legacy narrowband type for the first release shipping
+  the replacement as default, deprecate it in that release, and remove it no earlier than the
+  following release after inventoried consumers are migrated and regression gates pass.
+  Set concrete type names in 1e and release identifiers at cutover. Do not add silent address,
+  wire-format or parameter conversions; document any explicit adapter's limits. This retirement
+  policy excludes the separately retained legacy UWB composition. Do not reinterpret old
+  captures as standard frames.
 - [ ] Update `.oppfeatures`, examples, user/migration documentation and `WHATSNEW`; distinguish
   packet-level abstraction from waveform fidelity and M1/M2 from whole-standard support.
 - [ ] Run relevant regression gates and feature-disabled builds. Attribute every changed
@@ -487,10 +554,6 @@ make -j$(nproc) MODE=release
 ```
 
 These are future implementation gates, not tests executed while writing this plan.
-The supplied `AGENTS.md` also requests skill-suite validation/packaging, but this checkout has
-neither `scripts/validate_skill_suite.py`, `scripts/package_skill_suite.py` nor
-`tests/skill-suite/`. Record that tooling mismatch; do not substitute a run in another repository
-or claim the checks passed. This plan changes no skill package.
 
 ## 9. First implementation PR
 
@@ -499,6 +562,11 @@ checks, then map them to the existing model ledger. Include targeted reproductio
 wire format/length mismatch and sequence truncation where feasible, with current behavior
 reported honestly. Do not change simulation behavior or fingerprints in this PR.
 
-The next PR establishes step 1's contracts and native-address integration. Steps 2–6 then deliver
-M1, with step 10 as its release gate. This is the critical path; association, security and scheduled
+The next PR is 1a; packages 1b–1e establish the remaining contracts and prove native-address
+integration before the codec. Steps 2–6 then deliver M1, with step 10 as its release gate.
+Keep each new wire chunk paired with its serializer and vectors. Within step 3, separate complete
+MPDU/FCS proof from capture integration where independently buildable. Within step 6, separate
+receive decisions/unsecured policy, immediate ACKs, and direct retry/DSN lifecycle into coherent
+PRs with explicit dependencies and production-path evidence. This does not postpone integrated
+exchange checks until release. This is the critical path; association, security and scheduled
 MAC modes must not delay establishing a correct, independently observable basic frame exchange.
