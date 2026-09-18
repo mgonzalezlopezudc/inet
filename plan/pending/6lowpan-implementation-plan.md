@@ -85,8 +85,10 @@ IPv6 ↔ Ieee802154LowpanInterface
 Define NED parameters with units and validation: IPv6 MTU, frame-size profile, addressing,
 static bindings, reassembly timeout `(0, 60 s]`, maximum buffered bytes/datagrams, and
 compression enablement. Pin concrete defaults in the first implementation PR. Declare
-signals for datagrams/fragments sent and received, completion, timeout, malformed input,
-unsupported format, context failure, resource rejection and queue loss.
+stable datagram, fragment and reassembly outcome signals with typed drop/rejection reasons
+for malformed input, unsupported format, context failure and resource limits. Define each
+event's owner and counting boundary. Observe queue drops through the selected queue's
+existing signals; do not count the same loss again as a separate adaptation loss.
 
 Separate `127-octet PSDU limit` from PHY overhead. For every frame compute
 `LoWPAN capacity = PSDU limit − MAC header − security overhead − FCS`.
@@ -98,6 +100,60 @@ address indications at each boundary. After reconstruction the upper packet is I
 the correct interface indication and no stale lower-layer dispatch request. Each outgoing
 fragment has the correct next-hop request. Region metadata and ownership survive slicing
 and reassembly according to the existing packet API.
+
+### 3.1 Adaptation-facing link contract — required by P2a
+
+Native address values and request/indication tags belong to the IEEE 802.15.4 domain and
+are available before the native frame codec. They identify address mode, full 16-/64-bit
+value and PAN scope. LoWPAN codecs, static neighbors and fragment/reassembly logic use
+these values from the outset; `MacAddressReq`/`MacAddressInd` occur only on the legacy
+side of the compatibility adapter. P1 repairs that legacy receive boundary alone.
+
+The initial compatibility mode uses an explicit, immutable table mapping each configured
+native unicast identity to a legacy unicast `MacAddress`, with an inverse receive mapping.
+Require uniqueness throughout the legacy MAC delivery/filtering domain, not just within
+one node's neighbor table. Reject collisions, reserved/broadcast aliases and inconsistent
+peer tables at initialization; never truncate or derive native identities from alias bits.
+An unknown next-hop binding or received alias produces a named drop. The legacy MAC uses
+aliases for filtering, sequence/retry state and ACK behavior; adaptation uses native values.
+
+Configure one PAN per compatibility link. Map native short `0xffff` to legacy broadcast;
+recover destination PAN from the configured receiving link and source identity from the
+inverse table. Reject configurations where different PANs share a legacy delivery domain
+without enforced isolation: aliases and configuration do not create real PAN filtering.
+Bindings remain fixed while TX/RX state exists; reconfiguration requires interface teardown.
+Native operation in P6 replaces this mapping with indications decoded from actual headers.
+
+Use a configured single upper payload protocol for this interface. In LoWPAN mode the MAC
+bypasses EtherType lookup and the PAN-as-protocol convention, delivers opaque payload bytes
+to the adapter, and selects local dispatch tags from receiver configuration. LoWPAN parses
+its dispatch from those bytes. No added wire discriminator or sender-only request tag is
+used to classify receive traffic. Mixed upper MAC clients are unsupported in this mode;
+existing configurations retain their legacy payload-selection behavior.
+
+Above adaptation, `PacketProtocolTag` identifies IPv6. Below adaptation it identifies the
+package-owned LoWPAN protocol; separate tags carry native next-hop requests. The adapter translates
+those requests to legacy requests; the MAC owns encapsulation and its IEEE 802.15.4 protocol
+tag. On receive, the adapter reconstructs native indications and removes legacy requests;
+reassembly delivers IPv6 with `InterfaceInd` and no stale lower dispatch request. Tests
+must inject received bytes without preserved transmit tags.
+
+### 3.2 Lower payload-budget contract — required by P2a
+
+The lower boundary owns frame-overhead calculations. Prepare a transmission using its
+native source/destination/PAN and supported MAC options; return usable payload octets and
+an immutable envelope describing the addressing modes, frame version, PAN compression,
+security and FCS accounting that make that budget valid. The fragment planner consumes
+the budget without duplicating MAC-header arithmetic. Compatibility budgets describe the
+actual legacy representation; native budgets describe the selected IEEE frame subset.
+
+Initially enforce one homogeneous envelope for every fragment of a datagram, including
+retries, and retain it through queueing. Preparation fails explicitly for unsupported
+options. If configuration invalidates the envelope before transmission, cancel pending
+fragments with a named outcome; never transmit using a stale budget. A future boundary
+allowing different envelopes must supply each fragment's budget and replan accordingly.
+A fixed profile is sufficient only when it validates and freezes these assumptions.
+Pin the native frame subset in P0 so the contract can express its requirements before P6.
 
 ## 4. Implementation sequence and exit gates
 
@@ -111,10 +167,15 @@ Dependencies: none.
 
 - [ ] Record the exact source revision, local changes, RFC text hashes and selected clauses.
   Use the cached texts; check applicable updates/errata before asserting conformance.
-  Pin the IEEE 802.15.4 edition and frame subset before P6; the RFC cache does not supply it.
+  Pin the IEEE 802.15.4 edition and frame subset before P2a; the RFC cache does not supply it.
 - [ ] Extend the existing RFC catalogs for the complete supported TF/address-mode matrices,
   malformed input, disassociation cleanup and compression/fragmentation interaction.
   Existing catalogs explicitly state that they are selective.
+- [ ] Publish separate IPHC compressor-selection and decompressor-acceptance matrices:
+  TF, HLIM, NH, SAC/SAM, M/DAC/DAM and CID combinations; inline lengths; link-local and
+  non-link-local addresses; unspecified source; IID derivation prerequisites; multicast
+  forms; and reserved/unsupported outcomes. Cover legal encodings the compressor does not
+  select. Distinguish the context-independent unspecified source from stateful compression.
 - [ ] Create standards-only `features.md` and `checks/` under
   `doc/project/evidence/protocol/6lowpan/`. Put implementation mappings and planned/run
   status under `doc/project/evidence/model/6lowpan/`, following the derivation guide.
@@ -130,6 +191,7 @@ test-depth achievement is inferred from the inventory.
 Dependencies: P0 scope; independent of the new feature.
 
 - [ ] Set destination as well as source in `Ieee802154Mac::decapsulate()`.
+  This fixes legacy `MacAddressInd`; it does not define native LoWPAN link identity.
 - [ ] Add a production-MAC receive test observing both addresses, interface and payload
   protocol; include unicast and broadcast. Exercise the real receive/decapsulation path.
 - [ ] Run focused existing IEEE 802.15.4 regressions and record any changed expectations.
@@ -137,44 +199,82 @@ Dependencies: P0 scope; independent of the new feature.
 Exit: upper receive indications contain the transmitted destination and source, with no
 unexplained change in existing MAC behavior.
 
-### P2 — Uncompressed adaptation and simulation bring-up
+### P2a — Native link contracts and compatibility boundary
 
 Dependencies: P0, P1.
 
-- [ ] Add `Lowpan`, `LowpanExamples`, `LowpanTests` feature entries with discovered dependencies,
-  `LowpanLayer`, its processing contract and `Ieee802154LowpanInterface`.
-- [ ] Register package-owned protocol identity and packet tooling. Implement LOWPAN_IPV6
+- [ ] Add `Lowpan`, `LowpanExamples`, `LowpanTests` feature entries with discovered dependencies.
+  Keep the core independent of optional applications/examples; use the feature decomposition
+  prescribed by the add-a-protocol guide and verify the actual dependency graph.
+- [ ] Implement IEEE 802.15.4-owned native address values and request/indication metadata,
+  the static next-hop provider, and the compatibility mapping contract in §3.1.
+- [ ] Implement the lower preparation/budget contract in §3.2; test extended unicast and
+  short broadcast requests, envelope validity, unsupported options and collision rejection.
+- [ ] Register package-owned protocol identity and implement configured opaque lower
+  payload selection. Test receive classification from bytes without transmit-side tags.
+- [ ] Pin C++/NED contract names, ownership, validation and failures. Demonstrate that the
+  future native boundary can supply the same adaptation-facing semantics without aliases.
+
+Exit: contract tests prove reversible configured mappings, PAN isolation, tag transitions
+and budget validity; feature-off build succeeds. No adaptation helper depends on legacy
+address width or header math.
+P2b cannot start with unresolved mapping, payload-selection or capacity contracts.
+
+### P2b — Uncompressed adaptation and simulation bring-up
+
+Dependencies: P2a.
+
+- [ ] Add `LowpanLayer`, its processing contract and `Ieee802154LowpanInterface`.
+- [ ] Register packet tooling. Implement LOWPAN_IPV6
   dispatch (`0x41`) and bounded rejection of malformed/unsupported input.
-- [ ] Supply a MAC payload-selection path that bypasses the EtherType/PAN convention for
-  LoWPAN, while retaining existing configurations. Local protocol selection is configuration
-  or metadata; the receiver parses the adaptation dispatch from bytes.
+- [ ] Integrate the tested P2a adapter, payload-selection and preparation contracts.
 - [ ] Configure MTU 1280 and test the effective value after all initialization stages.
   Apply multicast-to-link-broadcast mapping. Start with static IPv6 addresses, routes and
   next-hop bindings through the explicitly named compatibility mode.
 - [ ] Add small UDP and ICMPv6 exchanges and test start/stop/crash/restart ownership.
 
 Exit: single-frame packets enter through IPv6, cross the actual MAC/radio path and return
-as the original IPv6 bytes. Oversized packets are explicitly rejected until P3. The
-intermediate feature documentation states this limitation. Feature-off build succeeds.
+as the original IPv6 bytes. Packets exceeding single-frame capacity produce an adaptation
+drop with reason `fragmentationUnavailable` until P3; do not lower the advertised IPv6 MTU
+or report a smaller IP MTU. Examples use verified fitting packets. The intermediate feature
+documentation explicitly states that this bring-up milestone is not release-capable and
+does not yet deliver all packets admitted by MTU 1280. Feature-off build succeeds.
 
 ### P3 — RFC 4944 fragmentation and bounded reassembly
 
-Dependencies: P2; agree the compressed-header coverage contract before implementing.
+Dependencies: P2b; agree the compressed-header coverage contract and the reassembly/reuse
+policies below before implementing.
 
 - [ ] Add FRAG1/FRAGN chunks and serializers with independent golden vectors. Use original
   IPv6 size and eight-octet offset units; strip encapsulation dispatch from reconstructed IP.
 - [ ] Fragment only when needed. Produce non-final coverage aligned to eight octets and
   increment the 16-bit tag per fragmented datagram, including wrap.
-- [ ] Key reassembly by source/originator, destination/final destination, size and tag,
-  additionally isolating interfaces/PANs. Accept FRAGN before FRAG1 and interleaved senders.
+- [ ] Key initial route-over reassembly by receiving interface/PAN, native link source,
+  native link destination, size and tag. Accept FRAGN before FRAG1 and interleaved senders.
+  Mesh originator/final-destination substitution belongs to P12; fabricate no such metadata.
 - [ ] Track ranges and reject out-of-bounds/invalid lengths before allocating or writing.
-  Implement RFC 4944 §5.3 overlap discard precisely. Separate exact duplicates from overlaps;
-  define deterministic rejection for same-range conflicting bytes as a local hardening policy.
+  Implement RFC 4944 §5.3 overlap discard precisely. Ignore byte-identical same-range
+  duplicates without extending expiry. On partial overlap discard accumulated fragments;
+  pin whether to restart with the incoming fragment (permitted by the RFC) or reject it.
+  For same-range conflicting bytes, specify a separate local hardening policy. Before P3
+  coding, record whether rejected keys permit later fragments to create a fresh context or
+  remain quarantined, with bounded storage and a fixed expiry for any quarantine. Quarantine
+  is not an RFC requirement and must not silently replace its overlap semantics.
+- [ ] Pin a deterministic tag-reuse policy before P3 coding: sender guard lifetime and its
+  scope, behavior at guard exhaustion, restart handling, and receiver behavior when an active
+  key is reused. Preserve increment-and-wrap semantics. State the assumed maximum stale
+  fragment lifetime; a sender guard only mitigates collisions under that assumption.
+  Nonconflicting fragments from different generations with the same complete key cannot
+  be distinguished on the wire. Do not claim that a guard or quarantine solves that ambiguity.
 - [ ] Start expiry on the first received fragment, including FRAGN; duplicates do not
   extend it. Bound total bytes and datagrams with an explicit admission/eviction policy.
 - [ ] Flush partial RX and pending TX on disassociation where modeled and on interface
   teardown; cancel timers and release packets on stop/crash/restart. If no association
   event exists in the chosen MAC, state that scope limit and test the lifecycle path available.
+  Pin the actual event provider and affected interface/PAN scope; do not infer peer-specific
+  disassociation. Honor RFC 4944 §5.3 cleanup within that scope. Static neighbor configuration
+  is separate from transient TX/RX state; define its restart retention explicitly. Future
+  compression-context invalidation belongs to P8.
 
 Exit: 1280-octet IPv6 datagrams are delivered byte-exactly through multiple MAC frames;
 loss, overlap, exhaustion and timeout never produce partial upper-layer delivery. Tests
@@ -182,7 +282,7 @@ cover all rows marked P3 in §5, including observable timer/storage cleanup.
 
 ### P4 — Stateless IPHC
 
-Dependencies: P3 and link-identity/codec contracts from P0.
+Dependencies: P3, P2a native link contracts and completed P0 encode/accept matrices.
 
 - [ ] Implement all TF and HLIM modes; inline NH; stateless unicast/multicast forms;
   unspecified source; fully inline fallback when IID elision is invalid. Test all supported
@@ -194,7 +294,12 @@ Dependencies: P3 and link-identity/codec contracts from P0.
   never from the compressed FRAG1 length. Validate every inline-field read.
 - [ ] Integrate compression with fragmentation: all compressed headers fit wholly in
   FRAG1; later fragments contain original datagram bytes at original IPv6 offsets.
-  Fall back to inline headers/uncompressed dispatch when the first-frame budget requires it.
+  If a header cannot fit there, leave affected headers uncompressed or select LOWPAN_IPV6,
+  then recompute coverage and alignment. Uncompressed header bytes may extend into later
+  fragments; a larger total encoding can therefore satisfy the placement constraint.
+  Reject transmission only when no supported representation yields a valid fragment plan
+  (RFC 6282 §2). Distinguish this placement fallback from invalid-IID/unsupported-compression
+  fallback, and test both.
 
 Exit: independent golden bytes and production-path tests agree for every selected mode,
 including a compressed packet whose original size requires several fragments. Context-based
@@ -211,20 +316,22 @@ Dependencies: P4.
 - [ ] Add a three-node, two-link route-over network with two distinguishable flows. Observe
   complete reassembly before IPv6 forwarding, Hop Limit decrement, and new per-hop
   compression/fragmentation with the outgoing next-hop identity.
-- [ ] Test forwarded packets exceeding MTU for ICMPv6 Packet Too Big, and locally originated
-  oversized packets through the existing IPv6 fragmentation path. Do not require an IPv6
-  Fragment header merely because a datagram smaller than/equal to 1280 spans MAC frames.
+- [ ] Test forwarded IPv6 packets larger than 1280 for ICMPv6 Packet Too Big, and locally
+  originated packets larger than 1280 through existing IPv6 source fragmentation. Datagrams
+  at or below 1280 acquire no IPv6 Fragment header solely because they span MAC frames.
+  LoWPAN fragmentation operates on each resulting complete IPv6 packet's bytes, including
+  any IPv6 Fragment header already supplied by source fragmentation.
 
 Exit: the **simulation data plane** acceptance point in §1 is met. Its evidence still
 labels the compatibility MAC as non-interoperable.
 
 ### P6 — Native IEEE 802.15.4 address and wire boundary
 
-Dependencies: P0 contracts and pinned IEEE edition; algorithm development P2–P5 can proceed
+Dependencies: P0 pinned IEEE edition/subset and P2a contracts; algorithm development P2b–P5 can proceed
 before this package completes. P6 must complete before first-release acceptance.
 
-- [ ] Implement protocol-owned native 16-/64-bit address representation and request/
-  indication metadata in the IEEE 802.15.4 domain; use it through MAC filtering, retries,
+- [ ] Integrate the P2a IEEE 802.15.4-owned native address representation and request/
+  indication metadata through native MAC filtering, retries,
   ACK handling, neighbor bindings and IPv6 interface-token construction. Avoid widening
   generic `MacAddress` as an incidental change.
 - [ ] In a separate reviewable substep, implement the chosen data/ACK frame subset's frame
@@ -272,15 +379,19 @@ are useful but can conceal a compressor and decompressor sharing the same error.
 | Package / claim | Deterministic stimulus and invariant | Evidence category |
 | --- | --- | --- |
 | P1 metadata | Real MAC receives unicast and broadcast; upper source, destination and interface equal the transmitted values | Module, plus protocol receive observation |
-| P2 dispatch | Valid `0x41`, empty/truncated fields, unknown dispatch, `0x7f` recognized as IPHC; unsupported ESC/page input is not delivered as IPv6 | Unit vectors + production protocol injection |
-| P2/P6 MTU and multicast | Initialized interface reports 1280; `ff02::1` emits link broadcast; native mode has short destination `0xffff` and correct PAN | Module + protocol |
+| P2a address boundary | Asymmetric 64-bit identities survive alias/inverse mapping; duplicate/reserved aliases, inconsistent tables, unknown peers and unisolated PAN configurations fail explicitly; no native identity comes from alias bits | Unit + module contract checks |
+| P2a payload/tags | Inject opaque received bytes without TX tags; configured protocol reaches dispatch parsing; observe IPv6/LoWPAN/MAC protocol transitions and native request/indication reconstruction | Production MAC/adapter injection |
+| P2a budget | Unicast/broadcast preparation returns capacity for the actual lower envelope; unsupported options fail; queued fragments retain the envelope or are cancelled on invalidation | Unit + module frame-length assertions |
+| P2b dispatch | Valid `0x41`, empty/truncated fields, unknown dispatch, `0x7f` recognized as IPHC; unsupported ESC/page input is not delivered as IPv6 | Unit vectors + production protocol injection |
+| P2b temporary limit | Effective MTU remains 1280; a valid packet exceeding single-frame capacity has exactly one `fragmentationUnavailable` drop and no lower transmission | Production adaptation boundary |
+| P2b/P6 MTU and multicast | Initialized interface reports 1280; `ff02::1` emits link broadcast; native mode has short destination `0xffff` and correct PAN | Module + protocol |
 | P3 frame boundaries | For each supported overhead profile, enumerate sizes around no-fragment/FRAG1/FRAGN capacity (`boundary−1`, `boundary`, `boundary+1`) and each eight-byte alignment edge through 1280 | Unit planner + protocol frame-length/offset assertions |
 | P3 reassembly | In-order, reverse order, FRAGN first, duplicate, missing last, two interleaved peers, same tag across interfaces/PANs; exactly one delivery on completion | Protocol with controlled injection/delay |
-| P3 invalid input | Partial overlap, conflicting same-range duplicate, offset past size, inconsistent size, truncated header, invalid non-final alignment | Unit + protocol; no partial delivery or out-of-range writes |
-| P3 resource/lifecycle | Fill each configured limit; late fragment after timeout; events just before/at/after expiry; stop/crash/restart with pending TX/RX | Module state/ownership checks + protocol absence, with a guard proving stimulus arrived |
-| P3 tag wrap | Successive fragmented datagrams at tags 65534, 65535, 0; independently reassembled; document behavior if a tag is reused while stale state remains | Unit + protocol |
+| P3 invalid input | Partial overlap, conflicting same-range duplicate, offset past size, inconsistent size, truncated header, invalid non-final alignment; later fragments exercise the selected restart/quarantine policy and its expiry | Unit + protocol; no partial delivery or out-of-range writes |
+| P3 resource/lifecycle | Fill each configured limit including any quarantine; late fragment after timeout; events just before/at/after expiry; stop/crash/restart with pending TX/RX; modeled disassociation scope and static-binding retention | Module state/ownership checks + protocol absence, with a guard proving stimulus arrived |
+| P3 tag wrap/reuse | Tags 65534, 65535, 0; active-key reuse, sender guard expiry/exhaustion and restart under the pinned policy; document indistinguishable nonconflicting generations | Unit + protocol |
 | P4 IPHC | Exhaust legal supported TF, HLIM, SAM/DAM, multicast and unspecified-source forms; asymmetric addresses, IID mismatch, reserved combinations | Independent byte vectors + production codec paths |
-| P4 compressed fragmentation | Known IPv6/header/payload bytes; FRAG1 compressed size differs from original coverage; header exactly fits/exceeds first-frame capacity | Protocol; size and FRAGN offsets compared with original IPv6 bytes |
+| P4/P5 compressed fragmentation | Known IPv6/header/payload bytes; FRAG1 compressed size differs from original coverage; compressed header exactly fits/exceeds capacity; legal uncompressed fallback spanning fragments, NHC fallback and no-valid-plan rejection | Protocol; size and FRAGN offsets compared with original IPv6 bytes |
 | P5 UDP | Four port modes including range boundaries; fragmented/unfragmented UDP; checksum preserved; C=1 without integrity rejected | Unit vectors + protocol payload/checksum assertions |
 | P5 routing/IP MTU | Two hops, different next hops, mixed compressed/inline headers; exact bytes except forwarded Hop Limit; 1280 and 1281-byte IPv6 inputs | Network behavior + protocol boundary observations |
 | P6 wire | Extended unicast, short broadcast, asymmetric PAN/address values, ACK/retry behavior and 127-octet limit | Serialization + protocol + external validation |
