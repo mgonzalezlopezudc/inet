@@ -1,6 +1,8 @@
 # Implement IEEE 802.15.4 in INET
 
-Status: **planned**. No implementation step or conformance check is complete.
+Status: **in progress — step 0**. The initial applicability extraction and English checks are
+recorded in the [model coverage ledger](../../doc/project/evidence/model/ieee802154/coverage.md).
+Step 0's closure gate remains open; no implementation step or executable conformance check is complete.
 Prepared against INET `c913a63a8335ca39a319cb2089daf835ea5e95cd` and the local
 IEEE 802.15.4 survey on 2026-09-19.
 
@@ -232,6 +234,11 @@ responsibility, not staffing assignments.
 ### Step 0 — Close the profile and write the checks
 
 Dependencies: none. Source baseline and local survey already exist; refresh them if HEAD moves.
+
+Execution record: [applicability audit](../../doc/project/evidence/model/ieee802154/applicability.md)
+and [inspection evidence](../../doc/project/evidence/model/ieee802154/results.md). Initial catalog,
+feature map and English procedures exist; retain the unchecked items below until their full scope
+and the zero-unresolved exit condition are met.
 
 - [ ] Extract the selected normative statements into
   `doc/project/evidence/standard/ieee802154/catalog.md`, including conditions, revision, clause,

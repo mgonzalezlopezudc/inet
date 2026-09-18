@@ -19,5 +19,5 @@ The source PDF and generated text remain local corpus artifacts. Citations use t
 edition, clause/object label, and physical PDF page or source-span locator. Physical page 64,
 for example, is printed page 63; these numbers must not be interchanged.
 
-The survey does not extract a mandatory-statement catalog. A later test-derivation pass can
-add `catalog.md` here, independently of any implementation or test outcome.
+The [statement catalog](catalog.md) is a bounded extraction from this source. It carries no
+implementation status or test outcome and does not claim exhaustive mandatory coverage.

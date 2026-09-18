@@ -1,14 +1,19 @@
-# IEEE 802.15.4 — standards family and survey scope
+# IEEE 802.15.4 — standards family and extraction scope
 
 > **Kind:** what · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [derive-tests-from-a-standard.md](../../../guide/derive-tests-from-a-standard.md)
 
 ## In-scope set
 
-This Level 1 survey pins **IEEE Std 802.15.4-2024, IEEE Standard for Low-Rate Wireless
+The in-scope set pins **IEEE Std 802.15.4-2024, IEEE Standard for Low-Rate Wireless
 Networks**, without later amendments. Its scope includes the MAC and the PHY variants defined
-by that edition. The target is a standards and claims survey; no protocol checks are specified
-at this level. The [source record](../../standard/ieee802154/source.md) identifies the exact PDF.
+by that edition. The family-wide survey is complemented by a bounded legacy-data/O-QPSK requirement extraction. The [source record](../../standard/ieee802154/source.md) identifies the exact PDF.
 The versionless document folder follows the naming convention in the derivation guide.
+
+The extraction targets normal data/ACK operation plus negative-input and timing requirements for
+nonperiodic-beacon O-QPSK operation. This is preparation toward Levels 2–4 for those mechanisms,
+not a complete Level 2 catalog of the base standard. The [catalog](../../standard/ieee802154/catalog.md),
+[features](features.md) and [checks](checks.md) state the current extraction boundaries. Achieved
+levels and execution results remain in the model ledger; the wider survey scope is retained.
 
 ## Family
 
