@@ -1,0 +1,10 @@
+<config>
+  <interface hosts="node[0]" names="wlan0" address="2001:db8:1::1"/>
+  <interface hosts="node[1]" names="wlan0" address="2001:db8:1::fe"/>
+  <interface hosts="node[1]" names="wlan1" address="2001:db8:2::fe"/>
+  <interface hosts="node[2]" names="wlan0" address="2001:db8:2::1"/>
+  <route hosts="node[0]" destination="2001:db8:2::1/128" gateway="fe80::211:2233:4455:6602" interface="wlan0"/>
+  <route hosts="node[1]" destination="2001:db8:2::1/128" gateway="fe80::211:2233:4455:6604" interface="wlan1"/>
+  <route hosts="node[1]" destination="2001:db8:1::1/128" gateway="fe80::211:2233:4455:6601" interface="wlan0"/>
+  <route hosts="node[2]" destination="2001:db8:1::1/128" gateway="fe80::211:2233:4455:6603" interface="wlan0"/>
+</config>

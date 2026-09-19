@@ -1,0 +1,172 @@
+%description:
+Pinned ns-3 5e35cfbc28bd43aa9ceb0d1edea44078d6e76830 IPHC+UDP carried-checksum
+fragments enter production adaptation as bytes. Reversed, interleaved tags deliver
+exactly two original IPv6 datagrams; no peer link-layer wire behavior is claimed.
+
+%file: DomainCheck.cc
+#include <fstream>
+#include "inet/common/InitStages.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/ieee802154/Ieee802154AddressTagBase_m.h"
+using namespace inet;
+namespace LowpanPeerReceive {
+class DomainCheck : public cSimpleModule {
+    int delivered = 0;
+    std::vector<uint8_t> expected;
+    std::vector<std::vector<uint8_t>> fragments;
+    std::vector<uint8_t> parse(const std::string& text) {
+        std::vector<uint8_t> result;
+        for (size_t i=0; i<text.size(); i+=2) result.push_back(std::stoul(text.substr(i,2), nullptr, 16));
+        return result;
+    }
+    virtual int numInitStages() const override { return NUM_INIT_STAGES; }
+    virtual void initialize(int stage) override {
+        if (stage != INITSTAGE_LAST) return;
+        std::string line;
+        std::ifstream original("original.hex"); original >> line; expected = parse(line);
+        std::ifstream input("peer.hex"); while (input >> line) fragments.push_back(parse(line));
+        ASSERT(fragments.size() > 1 && expected.size() == 1280);
+        // Two distinct tags, reverse order and interleaving: FRAGN precedes FRAG1.
+        for (int i = 0; i < 2 * int(fragments.size()); i++)
+            scheduleAt(SimTime(i+1, SIMTIME_MS), new cMessage("fragment", i));
+    }
+    virtual void handleMessage(cMessage *message) override {
+        if (!message->isSelfMessage()) {
+            auto packet = check_and_cast<Packet *>(message);
+            ASSERT(packet->peekDataAsBytes()->getBytes() == expected);
+            delivered++; delete packet; return;
+        }
+        auto bytes = fragments[fragments.size() - 1 - message->getKind()/2];
+        if (message->getKind()%2) bytes[3] ^= 1; // Independent reassembly key.
+        auto packet = new Packet("ns3-fragment", makeShared<BytesChunk>(bytes));
+        auto ind = packet->addTag<Ieee802154AddressInd>();
+        ind->setSrcAddress(Ieee802154Address("0011223344556601"));
+        ind->setDestAddress(Ieee802154Address("0011223344556602"));
+        ind->setSrcPanId(4660); ind->setDestPanId(4660);
+        send(packet, "out"); delete message;
+    }
+    virtual void finish() override {
+        ASSERT(delivered == 2);
+        std::cout << "Independent ns-3 fragmented UDP vectors reconstructed exactly\n";
+    }
+};
+Define_Module(DomainCheck);
+}
+
+%file: test.ned
+import inet.linklayer.lowpan.LowpanNativeMac;
+import inet.linklayer.lowpan.LowpanLayer;
+import inet.linklayer.lowpan.LowpanNativeBoundary;
+import inet.networklayer.common.NetworkInterface;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandRadio;
+import inet.queueing.queue.PacketQueue;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.networklayer.common.InterfaceTable;
+import inet.mobility.static.StationaryMobility;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+
+simple DomainCheck
+{
+    parameters:
+        @display("i=block/app");
+    gates:
+        output out;
+        input in[2];
+}
+module DomainInterface extends NetworkInterface
+{
+    parameters:
+        string interfaceTableModule = "^.interfaceTable";
+    gates:
+        input upperLayerIn;
+        output upperLayerOut;
+        input radioIn;
+    submodules:
+        lowpan: LowpanLayer;
+        boundary: LowpanNativeBoundary { linkDomainModule = "^.^.^.domain"; }
+        queue: PacketQueue { packetCapacity = default(2); }
+        mac: LowpanNativeMac {
+            interfaceTableModule = "^.^.interfaceTable";
+            linkDomainModule = "^.^.^.domain";
+        }
+        radio: Ieee802154NarrowbandRadio;
+    connections allowunconnected:
+        upperLayerIn --> lowpan.lowerLayerIn;
+        lowpan.lowerLayerOut --> boundary.in;
+        boundary.out --> queue.in;
+        queue.out --> mac.upperLayerIn;
+        mac.upperLayerOut --> boundary.lowerLayerIn;
+        lowpan.upperLayerOut --> upperLayerOut;
+        mac.lowerLayerOut --> radio.upperLayerIn;
+        radio.upperLayerOut --> mac.lowerLayerIn;
+        radioIn --> radio.radioIn;
+}
+module DomainNode
+{
+    parameters:
+        @networkNode;
+        @display("i=device/wifilaptop");
+    gates:
+        input in;
+        output out;
+    submodules:
+        interfaceTable: InterfaceTable;
+        mobility: StationaryMobility;
+        nic: DomainInterface;
+    connections allowunconnected:
+        in --> nic.upperLayerIn;
+        nic.upperLayerOut --> out;
+}
+network DomainNetwork
+{
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        domain: LowpanNativeLinkDomain;
+        node[2]: DomainNode;
+        check: DomainCheck;
+    connections allowunconnected:
+        check.out --> node[0].in;
+        node[0].out --> check.in[0];
+        node[1].out --> check.in[1];
+}
+
+
+%inifile: omnetpp.ini
+[General]
+**.lowpan.headerCompression = "none"
+network = DomainNetwork
+sim-time-limit = 100ms
+**.queue.packetCapacity = 2
+*.domain.panId = 4660
+*.domain.radioMediumModule = "^.radioMedium"
+*.domain.config = xml("<domain><peer interface='node[0].nic' native='0011223344556602'/><peer interface='node[1].nic' native='0011223344556601'/><neighbor interface='node[0].nic' ipv6='fe80::1' native='0011223344556601'/><neighbor interface='node[1].nic' ipv6='fe80::1' native='0011223344556602'/></domain>")
+**.radio.antenna.mobilityModule = "^.^.^.mobility"
+**.mobility.initialX = 0m
+**.mobility.initialY = 0m
+**.mobility.initialZ = 0m
+**.mobility.initFromDisplayString = false
+**.mobility.updateFromDisplayString = false
+
+
+%file: original.hex
+6000000004d8112020010db800010000000000000000000120010db8000200000000000000000001f0b0f0bf04d88153000004d0000000003f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f
+
+%file: peer.hex
+c500ddb37c002020010db800010000000000000000000120010db8000200000000000000000001f30f8153000004d0000000003f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f
+e500ddb30d3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f
+e500ddb3193f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f
+e500ddb3253f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f
+e500ddb3313f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f
+e500ddb33d3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f
+e500ddb3493f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f
+e500ddb3553f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f
+e500ddb3613f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f
+e500ddb36d3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f
+e500ddb3793f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f
+e500ddb3853f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f
+e500ddb3913f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f
+e500ddb39d3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f
+
+%contains: stdout
+Independent ns-3 fragmented UDP vectors reconstructed exactly

@@ -1,0 +1,3 @@
+Optional native 6LoWPAN IPv6 data plane
+
+Optional 6LoWPAN data-plane support adds RFC 4944 fragmentation/reassembly, stateless IPHC and UDP NHC with carried checksums, native IEEE 802.15.4 extended unicast/short broadcast, and static-neighbor route-over examples. Enable Lowpan and LowpanExamples to use examples/lowpan. A legacy MAC adapter is also available. Dynamic ND, security, stateful compression and mesh-under are outside this profile. Release validation remains pending current errata retrieval and broader peer interoperability; see the 6LoWPAN evidence ledger.

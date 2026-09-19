@@ -1,0 +1,62 @@
+%description:
+Independent RFC 4944 fragment header vectors and planner original-coordinate,
+alignment and capacity boundaries, including compressed-header coverage preparation.
+
+%includes:
+#include "inet/linklayer/lowpan/LowpanFrag1Header_m.h"
+#include "inet/linklayer/lowpan/LowpanFragnHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanFragmenter.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+using namespace inet;
+using namespace inet::lowpan;
+
+%activity:
+auto first = makeShared<LowpanFrag1Header>();
+first->setDatagramSize(1280);
+first->setDatagramTag(0x1234);
+Packet firstPacket("first", first);
+ASSERT(firstPacket.peekDataAsBytes()->getBytes() == std::vector<uint8_t>({0xc5, 0, 0x12, 0x34}));
+auto next = makeShared<LowpanFragnHeader>();
+next->setDatagramSize(1280);
+next->setDatagramTag(0x1234);
+next->setDatagramOffset(12);
+Packet nextPacket("next", next);
+ASSERT(nextPacket.peekDataAsBytes()->getBytes() == std::vector<uint8_t>({0xe5, 0, 0x12, 0x34, 12}));
+Packet external("external", makeShared<BytesChunk>(std::vector<uint8_t>{0xe7, 0xff, 0xff, 0xff, 0xff}));
+auto parsed = external.popAtFront<LowpanFragnHeader>();
+ASSERT(parsed->getDatagramSize() == 2047 && parsed->getDatagramTag() == 65535 && parsed->getDatagramOffset() == 255);
+for (const auto& bytes : {std::vector<uint8_t>{0xe0, 39, 0, 1, 1}, {0xc0, 80, 0, 1, 1}, {0xe0, 80, 0, 1, 0}}) {
+    Packet invalid("invalid", makeShared<BytesChunk>(bytes));
+    auto header = invalid.peekAtFront<LowpanFragnHeader>(B(5), Chunk::PF_ALLOW_INCORRECT);
+    ASSERT(header->isIncorrect());
+}
+ASSERT(LowpanFragmenter::plan(103, 104, 104, 1, 0).size() == 1);
+ASSERT(LowpanFragmenter::plan(104, 104, 104, 1, 0).size() == 2);
+ASSERT(LowpanFragmenter::plan(1280, 4, 104, 1, 0).empty());
+ASSERT(LowpanFragmenter::plan(1280, 104, 12, 1, 0).empty());
+auto shortFinal = LowpanFragmenter::plan(103, 103, 12, 1, 0);
+ASSERT(shortFinal.size() == 2 && shortFinal[0].length == 96 && shortFinal[1].length == 7);
+ASSERT(LowpanFragmenter::plan(1280, 8, 104, 6, 40).empty());
+for (int size : {104, 127, 128, 255, 1280, 2047}) {
+    for (int headerCoverage : {0, 40, 48}) {
+        int encoded = headerCoverage ? 6 : 1;
+        auto ranges = LowpanFragmenter::plan(size, 104, 99, encoded, headerCoverage);
+        ASSERT(!ranges.empty());
+        int covered = 0;
+        for (unsigned int i = 0; i < ranges.size(); i++) {
+            auto range = ranges[i];
+            ASSERT(range.offset == covered && range.length > 0);
+            int wireLength = i == 0 ? range.length - headerCoverage + encoded : range.length;
+            if (ranges.size() > 1) wireLength += i == 0 ? 4 : 5;
+            ASSERT(wireLength <= (i == 0 ? 104 : 99));
+            covered += range.length;
+            if (i + 1 < ranges.size()) ASSERT(covered % 8 == 0);
+        }
+        ASSERT(covered == size);
+    }
+}
+EV << "Fragment vectors and original-coordinate budgets verified\n";
+
+%contains: stdout
+Fragment vectors and original-coordinate budgets verified

@@ -1,0 +1,47 @@
+%description:
+Configured aliases are reversible and collision-free; native high bits are preserved.
+Static bindings key the IPv6 next hop. Failed lookups do not fabricate identities.
+This helper test does not establish production PAN/delivery-domain isolation.
+
+%includes:
+#include "inet/linklayer/lowpan/LowpanLinkAddressMap.h"
+#include "inet/linklayer/lowpan/LowpanProtocol.h"
+using namespace inet;
+using namespace inet::lowpan;
+
+%activity:
+inet::lowpan::LowpanLinkAddressMap table;
+Ieee802154Address a("0123456789abcdef"), b("a123456789abcdef");
+MacAddress x("02:00:00:00:00:01"), y("02:00:00:00:00:02");
+table.addPeer(a, x);
+table.addPeer(b, y);
+ASSERT(*table.findIdentity(x) == a && *table.findIdentity(y) == b);
+ASSERT(*table.findAlias(a) == x && *table.findAlias(b) == y);
+Ipv6Address nextHop("2001:db8::2");
+table.bind(10, nextHop, b);
+ASSERT(*table.findNeighbor(10, nextHop) == b);
+ASSERT(table.findNeighbor(10, Ipv6Address("2001:db8::3")) == nullptr);
+ASSERT(table.findIdentity(MacAddress("02:00:00:00:00:03")) == nullptr);
+ASSERT(table.findAlias(Ieee802154Address("0022")) == nullptr);
+auto rejects = [](auto action) {
+    bool rejected = false;
+    try { action(); } catch (const cRuntimeError&) { rejected = true; }
+    ASSERT(rejected);
+};
+rejects([&] { table.addPeer(a, y); });
+rejects([&] { table.addPeer(Ieee802154Address("0022"), x); });
+rejects([&] { table.addPeer(Ieee802154Address("ffff"), MacAddress("02:00:00:00:00:03")); });
+rejects([&] { table.addPeer(Ieee802154Address("0022"), MacAddress::BROADCAST_ADDRESS); });
+rejects([&] { table.bind(10, nextHop, a); });
+rejects([&] { table.bind(10, Ipv6Address("ff02::1"), b); });
+rejects([&] { table.bind(10, Ipv6Address("2001:db8::3"), Ieee802154Address("0022")); });
+ASSERT(*table.findNeighbor(10, nextHop) == b);
+table.bind(11, nextHop, a);
+ASSERT(*table.findNeighbor(11, nextHop) == a);
+ASSERT(*table.findNeighbor(10, nextHop) == b);
+ASSERT(table.findNeighbor(12, nextHop) == nullptr);
+ASSERT(Protocol::getProtocol("lowpan") == &lowpanProtocol);
+EV << "Reversible aliases and static next hops verified\n";
+
+%contains: stdout
+Reversible aliases and static next hops verified

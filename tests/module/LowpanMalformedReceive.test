@@ -1,0 +1,181 @@
+%description:
+Inject independent bytes and native metadata into production LowpanLayer receive.
+Bounded malformed/unsupported rejection must not deliver partial IPv6; a following
+valid byte packet is delivered with fresh receiver dispatch and interface metadata.
+
+%file: DomainCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/common/InterfaceTag_m.h"
+#include "inet/linklayer/lowpan/LowpanPacketDropDetails_m.h"
+#include "inet/linklayer/ieee802154/Ieee802154AddressTagBase_m.h"
+#include "inet/networklayer/common/NextHopAddressTag_m.h"
+using namespace inet;
+using namespace inet::lowpan;
+namespace LowpanMalformedReceive {
+class DomainCheck : public cSimpleModule, public cListener
+{
+    int dropped = 0;
+    int received = 0;
+    virtual int numInitStages() const override { return NUM_INIT_STAGES; }
+    virtual void initialize(int stage) override
+    {
+        if (stage != INITSTAGE_LAST)
+            return;
+        getParentModule()->getSubmodule("node", 0)->getSubmodule("nic")->getSubmodule("lowpan")->subscribe("packetDropped", this);
+        for (int i = 0; i < 10; i++)
+            scheduleAt(SimTime(i + 1, SIMTIME_MS), new cMessage("inject", i));
+    }
+    virtual void receiveSignal(cComponent *, simsignal_t, cObject *, cObject *details) override
+    {
+        auto reason = check_and_cast<LowpanPacketDropDetails *>(details)->getLowpanReason();
+        ASSERT(reason == (dropped == 1 ? LOWPAN_UNSUPPORTED_DISPATCH : LOWPAN_MALFORMED));
+        dropped++;
+    }
+    virtual void handleMessage(cMessage *message) override
+    {
+        if (!message->isSelfMessage()) {
+            auto packet = check_and_cast<Packet *>(message);
+            ASSERT(packet->getDataLength() == B(40));
+            ASSERT(packet->peekDataAsBytes()->getBytes()[0] == 0x60);
+            ASSERT(packet->getTag<PacketProtocolTag>()->getProtocol() == &Protocol::ipv6);
+            ASSERT(packet->getTag<DispatchProtocolReq>()->getProtocol() == &Protocol::ipv6);
+            ASSERT(packet->findTag<InterfaceInd>() != nullptr);
+            ASSERT(packet->findTag<NextHopAddressReq>() == nullptr);
+            received++;
+            delete packet;
+            return;
+        }
+        int variant = message->getKind();
+        auto packet = new Packet("injected");
+        std::vector<uint8_t> bytes(41, 0);
+        bytes[0] = 0x41;
+        bytes[1] = 0x60;
+        bytes[7] = 59;
+        bytes[8] = 64;
+        if (variant == 0) bytes.clear();
+        if (variant == 1) bytes[0] = 0x42;
+        if (variant == 2) bytes[1] = 0x40;
+        if (variant == 3) bytes[6] = 1;
+        if (variant == 4) bytes.resize(12);
+        if (!bytes.empty()) packet->insertAtBack(makeShared<BytesChunk>(bytes));
+        if (variant != 5) {
+            auto ind = packet->addTag<Ieee802154AddressInd>();
+            ind->setSrcAddress(Ieee802154Address(variant == 8 ? "ffff" : "a123456789abcdef"));
+            ind->setDestAddress(Ieee802154Address(variant == 7 ? "1111222233334444" : "0123456789abcdef"));
+            ind->setSrcPanId(variant == 6 ? 7 : 4660);
+            ind->setDestPanId(4660);
+        }
+        packet->addTag<NextHopAddressReq>()->setNextHopAddress(Ipv6Address("fe80::dead"));
+        packet->addTag<DispatchProtocolReq>()->setProtocol(&Protocol::udp);
+        send(packet, "out");
+        delete message;
+    }
+    virtual void finish() override
+    {
+        ASSERT(dropped == 9 && received == 1);
+        std::cout << "Malformed receive rejection and recovery verified\n";
+    }
+};
+Define_Module(DomainCheck);
+}
+
+%file: test.ned
+import inet.linklayer.lowpan.LowpanCompatibilityMac;
+import inet.linklayer.lowpan.LowpanLayer;
+import inet.linklayer.lowpan.LowpanCompatibilityBoundary;
+import inet.networklayer.common.NetworkInterface;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandRadio;
+import inet.queueing.queue.PacketQueue;
+import inet.linklayer.lowpan.LowpanLinkDomain;
+import inet.networklayer.common.InterfaceTable;
+import inet.mobility.static.StationaryMobility;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+
+simple DomainCheck
+{
+    parameters:
+        @display("i=block/app");
+    gates:
+        output out;
+        input in[2];
+}
+module DomainInterface extends NetworkInterface
+{
+    parameters:
+        string interfaceTableModule = "^.interfaceTable";
+    gates:
+        input upperLayerIn;
+        output upperLayerOut;
+        input radioIn;
+    submodules:
+        lowpan: LowpanLayer;
+        boundary: LowpanCompatibilityBoundary { linkDomainModule = "^.^.^.domain"; }
+        queue: PacketQueue { packetCapacity = default(2); }
+        mac: LowpanCompatibilityMac {
+            interfaceTableModule = "^.^.interfaceTable";
+            linkDomainModule = "^.^.^.domain";
+        }
+        radio: Ieee802154NarrowbandRadio;
+    connections allowunconnected:
+        upperLayerIn --> lowpan.lowerLayerIn;
+        lowpan.lowerLayerOut --> boundary.in;
+        boundary.out --> queue.in;
+        queue.out --> mac.upperLayerIn;
+        mac.upperLayerOut --> boundary.lowerLayerIn;
+        lowpan.upperLayerOut --> upperLayerOut;
+        mac.lowerLayerOut --> radio.upperLayerIn;
+        radio.upperLayerOut --> mac.lowerLayerIn;
+        radioIn --> radio.radioIn;
+}
+module DomainNode
+{
+    parameters:
+        @networkNode;
+        @display("i=device/wifilaptop");
+    gates:
+        input in;
+        output out;
+    submodules:
+        interfaceTable: InterfaceTable;
+        mobility: StationaryMobility;
+        nic: DomainInterface;
+    connections allowunconnected:
+        in --> nic.upperLayerIn;
+        nic.upperLayerOut --> out;
+}
+network DomainNetwork
+{
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        domain: LowpanLinkDomain;
+        node[2]: DomainNode;
+        check: DomainCheck;
+    connections allowunconnected:
+        check.out --> node[0].in;
+        node[0].out --> check.in[0];
+        node[1].out --> check.in[1];
+}
+
+%inifile: omnetpp.ini
+[General]
+**.lowpan.headerCompression = "none"
+network = DomainNetwork
+sim-time-limit = 40ms
+**.queue.packetCapacity = 2
+*.domain.panId = 4660
+*.domain.radioMediumModule = "^.radioMedium"
+*.domain.config = xml("<domain><peer interface='node[0].nic' native='0123456789abcdef' alias='02:00:00:00:00:01'/><peer interface='node[1].nic' native='a123456789abcdef' alias='02:00:00:00:00:02'/><neighbor interface='node[0].nic' ipv6='fe80::1' native='a123456789abcdef'/><neighbor interface='node[1].nic' ipv6='fe80::1' native='0123456789abcdef'/></domain>")
+*.node[0].nic.mac.address = "02:00:00:00:00:01"
+*.node[1].nic.mac.address = "02:00:00:00:00:02"
+**.radio.antenna.mobilityModule = "^.^.^.mobility"
+**.mobility.initialX = 0m
+**.mobility.initialY = 0m
+**.mobility.initialZ = 0m
+**.mobility.initFromDisplayString = false
+**.mobility.updateFromDisplayString = false
+
+%contains: stdout
+Malformed receive rejection and recovery verified

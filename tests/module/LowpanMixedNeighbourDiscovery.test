@@ -1,0 +1,95 @@
+%description:
+Mixed-interface static LoWPAN profile leaves ordinary Ethernet DAD enabled while
+native addresses are immediately permanent and no native ND radio traffic is emitted.
+
+%file: ExchangeCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/linklayer/lowpan/LowpanProtocol.h"
+#include "inet/networklayer/common/NetworkInterface.h"
+#include "inet/networklayer/ipv6/Ipv6InterfaceData.h"
+using namespace inet;
+using namespace inet::lowpan;
+namespace LowpanMixedNeighbourDiscovery {
+class ExchangeCheck : public cSimpleModule, public cListener
+{
+    int dad = 0;
+    int tx = 0;
+    virtual int numInitStages() const override { return NUM_INIT_STAGES; }
+    virtual void initialize(int stage) override
+    {
+        if (stage != INITSTAGE_LAST)
+            return;
+        for (int i = 0; i < 2; i++) {
+            auto node = getParentModule()->getSubmodule("node", i);
+            auto nic = check_and_cast<NetworkInterface *>(node->getSubmodule("wlan", 0));
+            auto data = nic->getProtocolData<Ipv6InterfaceData>();
+            ASSERT(!data->isTentativeAddress(data->getLinkLocalAddress()));
+            nic->getSubmodule("radio")->subscribe("transmissionStarted", this);
+            node->getSubmodule("ipv6")->getSubmodule("neighbourDiscovery")->subscribe("startDad", this);
+        }
+    }
+    virtual void receiveSignal(cComponent *, simsignal_t, intval_t, cObject *) override { dad++; }
+    virtual void receiveSignal(cComponent *, simsignal_t, cObject *, cObject *) override { tx++; }
+    virtual void finish() override
+    {
+        ASSERT(dad == 2);
+        ASSERT(tx == 0);
+        for (int i = 0; i < 2; i++) {
+            auto node = getParentModule()->getSubmodule("node", i);
+            for (const char *name : {"wlan", "eth"}) {
+                auto nic = check_and_cast<NetworkInterface *>(node->getSubmodule(name, 0));
+                auto data = nic->getProtocolData<Ipv6InterfaceData>();
+                ASSERT(!data->isTentativeAddress(data->getLinkLocalAddress()));
+            }
+        }
+        std::cout << "Ordinary DAD and native static readiness verified\n";
+    }
+};
+Define_Module(ExchangeCheck);
+}
+
+%file: test.ned
+import inet.node.inet.StandardHost;
+import inet.linklayer.lowpan.LowpanLinkDomain;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple ExchangeCheck
+{
+    parameters:
+        @display("i=block/app");
+}
+network ExchangeNetwork
+{
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        domain: LowpanLinkDomain;
+        node[2]: StandardHost;
+        check: ExchangeCheck;
+    connections:
+        node[0].ethg++ <--> { datarate = 100Mbps; delay = 1us; } <--> node[1].ethg++;
+}
+
+%inifile: omnetpp.ini
+[General]
+**.lowpan.headerCompression = "none"
+network = ExchangeNetwork
+sim-time-limit = 2200ms
+*.node[*].ipv6.neighbourDiscovery.hostBootupTime = 100ms
+*.node[*].hasIpv4 = false
+*.node[*].hasIpv6 = true
+*.node[*].ipv6.typename = "LowpanIpv6NetworkLayer"
+*.node[*].numWlanInterfaces = 1
+*.node[*].wlan[0].typename = "Ieee802154LowpanInterface"
+*.node[*].wlan[0].linkDomainModule = "^.^.domain"
+*.node[0].wlan[0].mac.address = "02:00:00:00:00:01"
+*.node[1].wlan[0].mac.address = "02:00:00:00:00:02"
+*.domain.panId = 4660
+*.domain.config = xml("<domain><peer interface='node[0].wlan[0]' native='0123456789abcdef' alias='02:00:00:00:00:01'/><peer interface='node[1].wlan[0]' native='a123456789abcdef' alias='02:00:00:00:00:02'/><neighbor interface='node[0].wlan[0]' ipv6='fe80::a323:4567:89ab:cdef' native='a123456789abcdef'/><neighbor interface='node[1].wlan[0]' ipv6='fe80::323:4567:89ab:cdef' native='0123456789abcdef'/></domain>")
+**.radio.antenna.mobilityModule = "^.^.^.mobility"
+**.mobility.initialX = 0m
+**.mobility.initialY = 0m
+**.mobility.initialZ = 0m
+**.mobility.initFromDisplayString = false
+**.mobility.updateFromDisplayString = false
+
+%contains: stdout
+Ordinary DAD and native static readiness verified

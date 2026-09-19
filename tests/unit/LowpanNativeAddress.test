@@ -1,0 +1,65 @@
+%description:
+Native IEEE 802.15.4 address values retain all 64 bits and their address mode.
+Invalid widths/syntax are rejected; duplicate metadata retains both PANs and identities.
+This is value/tag coverage, not evidence of the compatibility or native MAC data path.
+
+%includes:
+#include <omnetpp/cmemcommbuffer.h>
+#include "inet/linklayer/ieee802154/Ieee802154Address.h"
+#include "inet/linklayer/ieee802154/Ieee802154AddressTagBase_m.h"
+using namespace inet;
+
+%activity:
+Ieee802154Address high("a123456789abcdef");
+Ieee802154Address low("0123456789abcdef");
+ASSERT(high != low);
+ASSERT(high.getInt() == UINT64_C(0xa123456789abcdef));
+ASSERT(high.getMode() == Ieee802154Address::EXTENDED);
+ASSERT(Ieee802154Address(high.str().c_str()) == high);
+ASSERT(Ieee802154Address("FFFF").isBroadcast());
+ASSERT(!Ieee802154Address("000000000000ffff").isBroadcast());
+ASSERT(Ieee802154Address("ffff") != Ieee802154Address("000000000000ffff"));
+ASSERT(Ieee802154Address("unspecified").isUnspecified());
+ASSERT(Ieee802154Address("0000").getMode() == Ieee802154Address::SHORT);
+for (auto text : {"", "0", "fffff", "123456789abcdef00", "0123456789abcdeg", "-001", " 001"}) {
+    bool rejected = false;
+    try { Ieee802154Address address(text); }
+    catch (const cRuntimeError&) { rejected = true; }
+    ASSERT(rejected);
+}
+for (auto mode : {0, 1, 2, 4}) {
+    bool rejected = false;
+    try { Ieee802154Address address(static_cast<Ieee802154Address::Mode>(mode), UINT64_C(0x10000)); }
+    catch (const cRuntimeError&) { rejected = true; }
+    ASSERT(rejected);
+}
+Ieee802154AddressReq request;
+request.setSrcAddress(high);
+request.setDestAddress(low);
+request.setSrcPanId(0x1234);
+request.setDestPanId(0xabcd);
+auto copy = request.dup();
+ASSERT(copy->getSrcAddress() == high && copy->getDestAddress() == low);
+ASSERT(copy->getSrcPanId() == 0x1234 && copy->getDestPanId() == 0xabcd);
+delete copy;
+cMemCommBuffer buffer;
+request.parsimPack(&buffer);
+Ieee802154AddressReq restored;
+restored.parsimUnpack(&buffer);
+buffer.assertBufferEmpty();
+ASSERT(restored.getSrcAddress() == high && restored.getDestAddress() == low);
+ASSERT(restored.getSrcPanId() == 0x1234 && restored.getDestPanId() == 0xabcd);
+for (auto mode : {1, 2, 4}) {
+    buffer.reset();
+    buffer.pack(mode);
+    buffer.pack(UINT64_C(0x10000));
+    Ieee802154Address unchanged = high;
+    bool rejected = false;
+    try { doParsimUnpacking(&buffer, unchanged); }
+    catch (const cRuntimeError&) { rejected = true; }
+    ASSERT(rejected && unchanged == high);
+}
+EV << "Native addresses and PAN metadata verified\n";
+
+%contains: stdout
+Native addresses and PAN metadata verified

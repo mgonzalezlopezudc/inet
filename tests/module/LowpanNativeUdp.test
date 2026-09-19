@@ -1,0 +1,168 @@
+%description:
+Production UDP delivery over the compatibility radio path, using unicast and
+IPv6 multicast mapped to native short broadcast in separate runs.
+
+%extraargs: -r 0..3
+
+%file: ExchangeCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/linklayer/common/MacAddressTag_m.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanIphcHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanUdpNhcHeader_m.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/lowpan/LowpanPacketDropDetails_m.h"
+#include "inet/linklayer/lowpan/LowpanProtocol.h"
+#include "inet/networklayer/common/NetworkInterface.h"
+#include "inet/networklayer/ipv6/Ipv6InterfaceData.h"
+#include "inet/networklayer/ipv6/Ipv6Header_m.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmission.h"
+using namespace inet;
+using namespace inet::lowpan;
+namespace LowpanNativeUdp {
+class ExchangeCheck : public cSimpleModule, public cListener
+{
+    int payloadSize = 0;
+    bool multicast = false;
+    int tx = 0;
+    int completed = 0;
+    int drops = 0;
+    int replies = 0;
+    int accepted = 0;
+    virtual int numInitStages() const override { return NUM_INIT_STAGES; }
+    virtual void initialize(int stage) override
+    {
+        if (stage != INITSTAGE_LAST)
+            return;
+        payloadSize = getParentModule()->getSubmodule("node", 0)->getSubmodule("app", 0)->par("messageLength");
+        multicast = getParentModule()->getSubmodule("node", 0)->getSubmodule("app", 0)->par("destAddresses").stdstringValue() == "ff02::1";
+        for (int i = 0; i < 2; i++) {
+            auto node = getParentModule()->getSubmodule("node", i);
+            auto nic = check_and_cast<NetworkInterface *>(node->getSubmodule("wlan", 0));
+            ASSERT(nic->getMtu() == 1280);
+            ASSERT(nic->getProtocol() == &lowpanProtocol);
+            ASSERT(nic->getProtocolData<Ipv6InterfaceData>()->getLinkLocalAddress() ==
+                Ipv6Address(i == 0 ? "fe80::323:4567:89ab:cdef" : "fe80::a323:4567:89ab:cdef"));
+            nic->getSubmodule("lowpan")->subscribe("datagramCompleted", this);
+            if (i == 0) nic->getSubmodule("lowpan")->subscribe("datagramAccepted", this);
+            nic->getSubmodule("lowpan")->subscribe("packetDropped", this);
+            nic->getSubmodule("radio")->subscribe("transmissionStarted", this);
+            if (i == 1)
+                node->getSubmodule("app", 0)->subscribe("packetReceived", this);
+        }
+    }
+    virtual void receiveSignal(cComponent *, simsignal_t, intval_t, cObject *) override { replies++; }
+    virtual void receiveSignal(cComponent *, simsignal_t signal, cObject *object, cObject *details) override
+    {
+        if (signal == registerSignal("datagramAccepted")) {
+            auto packet = check_and_cast<Packet *>(object);
+            ASSERT(packet->getTag<PacketProtocolTag>()->getProtocol() == &Protocol::ipv6);
+            ASSERT(packet->getDataLength() == B(payloadSize + 48));
+            accepted++;
+        }
+        else if (signal == registerSignal("packetReceived")) {
+            ASSERT(check_and_cast<Packet *>(object)->getDataLength() == B(payloadSize));
+            replies++;
+        }
+        else if (signal == registerSignal("packetDropped")) {
+            auto drop = check_and_cast<LowpanPacketDropDetails *>(details);
+            ASSERT(drop->getLowpanReason() == LOWPAN_FRAGMENTATION_UNAVAILABLE);
+            drops++;
+        }
+        else if (signal == registerSignal("datagramCompleted")) {
+            auto packet = check_and_cast<Packet *>(object);
+            ASSERT(packet->getTag<PacketProtocolTag>()->getProtocol() == &Protocol::ipv6);
+            ASSERT(!packet->findTag<MacAddressReq>() && !packet->findTag<MacAddressInd>());
+            ASSERT(packet->peekAtFront<Ipv6Header>()->getProtocolId() == IP_PROT_UDP);
+            completed++;
+        }
+        else {
+            auto packet = check_and_cast<physicallayer::ITransmission *>(object)->getPacket();
+            auto mac = packet->peekAtFront<Ieee802154FrameHeader>();
+            if (mac->getFrameControl() == 2)
+                return;
+            ASSERT(packet->getDataLength() <= B(127));
+            auto dispatch = packet->peekDataAt<BytesChunk>(mac->getChunkLength(), B(1))->getBytes()[0];
+            if ((dispatch & 0xf8) != 0xe0) {
+                B offset = B(mac->getChunkLength()) + B((dispatch & 0xf8) == 0xc0 ? 4 : 0);
+                auto iphc = packet->peekDataAt<LowpanIphcHeader>(offset);
+                ASSERT(iphc->getNh());
+                auto nhc = packet->peekDataAt<LowpanUdpNhcHeader>(offset + iphc->getChunkLength());
+                ASSERT(nhc->getPortMode() == 3 && !nhc->getChecksumElided() && nhc->getChecksum() != 0);
+            }
+            tx++;
+        }
+    }
+    virtual void finish() override
+    {
+        ASSERT(replies == 1 && accepted == 1);
+        ASSERT(completed == 1);
+        ASSERT(tx == (payloadSize == 16 ? 1 : multicast ? 12 : 13));
+        ASSERT(drops == 0);
+        std::cout << "UDP NHC delivery verified\n";
+    }
+};
+Define_Module(ExchangeCheck);
+}
+
+%file: test.ned
+import inet.node.inet.StandardHost;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple ExchangeCheck
+{
+    parameters:
+        @display("i=block/app");
+}
+network ExchangeNetwork
+{
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        domain: LowpanNativeLinkDomain;
+        node[2]: StandardHost;
+        check: ExchangeCheck;
+}
+
+%inifile: omnetpp.ini
+[General]
+**.lowpan.headerCompression = "iphc"
+network = ExchangeNetwork
+sim-time-limit = 500ms
+*.node[0].numPcapRecorders = 1
+*.node[0].pcapRecorder[*].helpers = "inet::lowpan::LowpanNativePcapHelper"
+*.node[0].pcapRecorder[*].dumpProtocols = "lowpanNative"
+*.node[0].pcapRecorder[*].sendingSignalNames = "packetSentToLower"
+*.node[0].pcapRecorder[*].receivingSignalNames = ""
+*.node[0].pcapRecorder[*].pcapFile = "native-udp-${runnumber}.pcapng"
+*.node[*].hasIpv4 = false
+*.node[*].hasIpv6 = true
+*.node[*].ipv6.typename = "LowpanIpv6NetworkLayer"
+*.node[*].numWlanInterfaces = 1
+*.node[*].wlan[0].typename = "Ieee802154NativeLowpanInterface"
+*.node[*].wlan[0].linkDomainModule = "^.^.domain"
+*.node[*].numApps = 1
+*.node[0].app[0].typename = "UdpBasicApp"
+*.node[0].app[0].destAddresses = ${destination="fe80::a323:4567:89ab:cdef","ff02::1"}
+*.node[0].app[0].destPort = 61631
+*.node[0].app[0].localPort = 61616
+*.node[0].app[0].startTime = 10ms
+*.node[0].app[0].stopTime = 20ms
+*.node[0].app[0].sendInterval = 1s
+*.node[0].app[0].messageLength = ${size=16B,1232B}
+*.node[0].app[0].multicastInterface = "wlan0"
+*.node[1].app[0].typename = "UdpSink"
+*.node[1].app[0].localPort = 61631
+*.node[1].app[0].multicastGroup = "ff02::1"
+*.node[*].udp.checksumMode = "computed"
+*.domain.panId = 4660
+*.domain.config = xml("<domain><peer interface='node[0].wlan[0]' native='0123456789abcdef'/><peer interface='node[1].wlan[0]' native='a123456789abcdef'/><neighbor interface='node[0].wlan[0]' ipv6='fe80::a323:4567:89ab:cdef' native='a123456789abcdef'/><neighbor interface='node[1].wlan[0]' ipv6='fe80::323:4567:89ab:cdef' native='0123456789abcdef'/></domain>")
+**.radio.antenna.mobilityModule = "^.^.^.mobility"
+**.mobility.initialX = 0m
+**.mobility.initialY = 0m
+**.mobility.initialZ = 0m
+**.mobility.initFromDisplayString = false
+**.mobility.updateFromDisplayString = false
+
+%contains: stdout
+UDP NHC delivery verified

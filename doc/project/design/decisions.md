@@ -89,6 +89,22 @@ Every decision in document order. The identifier links to the decision; the stat
 - *Costs* an interface for every role, and the discipline to keep it minimal while defining every meaningful outcome. A contract that grows a method for one implementation, or lets implementations reinterpret absence, refusal or failure, stops being a contract.
 - *Kept true by* [AR-ORG-CONTRACTS](../rule/architecture.md#ar-org-contracts), [AR-MOD-PLUGGABLE](../rule/architecture.md#ar-mod-pluggable).
 
+### D-LOWPAN-LINK
+
+**6LoWPAN adaptation uses native IEEE 802.15.4 identities and a prepared lower envelope.**
+
+`ILowpanLink` adds native next-hop lookup and preparation to the passive packet-sink role;
+`ILowpanMac` supplies the preparation operation at the MAC. `ILowpanLayer` names the
+four-gate adaptation slot. Compatibility aliases remain below these contracts. The
+prepared envelope carries capacity and an enforced delivery deadline, so fragmentation
+does not reproduce a MAC header layout or infer how long queued retries can survive.
+
+- *Serves* the replaceable-role decision [D-CONTRACTS](#d-contracts) for legacy and native
+  IEEE 802.15.4 boundaries.
+- *Costs* an explicit compatibility adapter and a restricted, validated lower timing
+  profile until additional MAC/PHY profiles provide the same guarantees.
+- *Implementation contract and evidence:* [6LoWPAN link contract](../evidence/model/6lowpan/link-contract.md).
+
 ### D-OWNERSHIP
 
 **Every object's lifetime follows one explicit ownership model**
