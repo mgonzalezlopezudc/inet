@@ -1,8 +1,9 @@
 # Implement IEEE 802.15.4 in INET
 
-Status: **in progress — step 0 complete; package 1a next**. The expanded applicability extraction (87 statements, including two imported address definitions) and nine English checks are
+Status: **in progress — package 1a complete; MAC PIB (1b) next**. The expanded applicability extraction (87 statements, including two imported address definitions) and nine English checks are
 recorded in the [model coverage ledger](../../doc/project/evidence/model/ieee802154/coverage.md).
-Independent review passed the bounded M1 applicability gate on 2026-09-19. No implementation package or executable conformance check is complete; deferred device-profile obligations remain owed.
+Independent review passed the bounded M1 applicability gate on 2026-09-19. Package 1a has passing value and test-local service-contract evidence. No executable conformance
+check is complete; deferred device-profile obligations remain owed.
 Prepared against INET `c913a63a8335ca39a319cb2089daf835ea5e95cd` and the local
 IEEE 802.15.4 survey on 2026-09-19.
 
@@ -291,6 +292,13 @@ Dependencies: step 0. Deliver as separate bounded PRs; each builds with the exis
 | 1d: address and payload integration | Compatibility matrix and minimal production interface fixture, including two EUI-64 identities with identical low 48 bits, request/indication identity and configured/opaque delivery. Resolve required adapters and framework gaps. | 1a–1c |
 | 1e: selectable composition | Public type names, paired C++/NED contracts and explicit replacement selection. Prove existing default initialization and replacement contract wiring; isolate old wire assumptions. | 1d |
 
+Package 1a is complete: the standalone native address value and paired MAC service contracts have
+passing focused unit/module cases and independent reviews. See the
+[value evidence](../../doc/project/evidence/model/ieee802154/results.md#step-1a-native-address-value) and
+[service-contract evidence](../../doc/project/evidence/model/ieee802154/results.md#step-1a-mac-service-contracts).
+The module fixture uses a test-local provider. Production PIB behavior (1b), PHY contracts (1c),
+the real interface fixture (1d), and wire-codec checks remain owed.
+
 Record these decisions before dependent behavior, without requiring all contracts to land in one
 PR. No concrete PHY-to-MAC dependency or protocol switch in core is permitted.
 
@@ -571,7 +579,8 @@ remain NOT_RUN. The documented source findings on wire format/length and sequenc
 remain candidates for targeted production reproductions. This documentation package changes no
 simulation behavior or fingerprints.
 
-The next PR is 1a; packages 1b–1e establish the remaining contracts and prove native-address
+Package 1a is implemented and verified locally; the next package is 1b. Packages 1b–1e
+establish the remaining contracts and prove native-address
 integration before the codec. Steps 2–6 then deliver M1, with step 10 as its release gate.
 Keep each new wire chunk paired with its serializer and vectors. Within step 3, separate complete
 MPDU/FCS proof from capture integration where independently buildable. Within step 6, separate
