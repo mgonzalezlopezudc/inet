@@ -3,7 +3,7 @@
 > **Kind:** ledger · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [conformance.md](conformance.md), [derive-tests-from-a-standard.md](../../../guide/derive-tests-from-a-standard.md)
 
 Level reached: **1 (Survey)** for the model families named in the claim survey. The initial survey ran no checks. The step-0 pass below adds draft English checks,
-but no executable check has run and no higher achieved level is claimed. No protocol conformance verdict is
+but no protocol check has run and no higher achieved level is claimed. No protocol conformance verdict is
 recorded; successful corpus retrieval validates tooling, not the simulation model.
 
 | Area | Survey evidence | Next evidence needed |
@@ -16,13 +16,14 @@ recorded; successful corpus retrieval validates tooling, not the simulation mode
 
 ## Step-0 extraction pass
 
-Initial baseline: `fd6f800222`; latest continuation baseline: `837ee6dbe8`, 2026-09-19. Scope and open dependencies are in
+Initial baseline: `fd6f800222`; latest continuation baseline: `5f3845f055`, 2026-09-19. Scope and open dependencies are in
 [applicability.md](applicability.md); commands, source findings and capture inspection are in
 [results.md](results.md). The [catalog](../../standard/ieee802154/catalog.md),
 [feature map](../../protocol/ieee802154/features.md) and
-[English checks](../../protocol/ieee802154/checks.md) are drafts. **Step 0 is not closed.**
+[English checks](../../protocol/ieee802154/checks.md) define the bounded engineering audit. **Step 0 passed independent review on 2026-09-19;
+implementation and executable verification remain owed.**
 
-There are 85 extracted statements (83 base-standard statements and two imported address definitions): 82 selected for the M1 engineering subset and 3 deferred
+There are 87 extracted statements (85 base-standard statements and two imported address definitions): 84 selected for the M1 engineering subset and 3 deferred
 selected-profile obligations. These are counts of the current extraction, not the denominator
 of a complete profile. No executable tests exist for these new check IDs; all run verdicts are
 `NOT_RUN`. Existing survey claims are not promoted to support claims by writing English checks.
@@ -119,6 +120,8 @@ owed by a later selected profile; neither status is a justified applicability ex
 | [IEEE802154-SERVICE-8](../../standard/ieee802154/catalog.md#ieee802154-service-8) | selected; owed | 1a, 6 | [IEEE802154-C-SECURITY](../../protocol/ieee802154/checks.md#ieee802154-c-security) | None / `NOT_RUN` |
 | [IEEE802-ADDRESS-1](../../standard/ieee802/catalog.md#ieee802-address-1) | selected; owed | 1a, 2, 6 | [IEEE802154-C-WIRE](../../protocol/ieee802154/checks.md#ieee802154-c-wire) | None / `NOT_RUN` |
 | [IEEE802-ADDRESS-2](../../standard/ieee802/catalog.md#ieee802-address-2) | selected; owed | 1a, 2, 6 | [IEEE802154-C-WIRE](../../protocol/ieee802154/checks.md#ieee802154-c-wire) | None / `NOT_RUN` |
+| [IEEE802154-SERVICE-9](../../standard/ieee802154/catalog.md#ieee802154-service-9) | selected; owed | 1a, 1b | [IEEE802154-C-SERVICE](../../protocol/ieee802154/checks.md#ieee802154-c-service) | None / `NOT_RUN` |
+| [IEEE802154-ACCESS-3](../../standard/ieee802154/catalog.md#ieee802154-access-3) | selected; owed | 1c, 6 | [IEEE802154-C-ACK](../../protocol/ieee802154/checks.md#ieee802154-c-ack) | None / `NOT_RUN` |
 
 ### Planned evidence categories
 
@@ -146,3 +149,4 @@ provisional until actual fixtures demonstrate that they reach the claimed observ
 | 2026-09-19 | Extended step-0 audit | 82 entries and nine expanded English procedures; complete base MAC/PHY PIB field inventory, service/PICS comparison and PHY feasibility inspection; no runtime support verdict |
 | 2026-09-19 | Service/integration dependency closure | 83 statements; direct security-error service routing, channel descriptor, clause-6 procedure dispositions and native consumer compatibility recorded; runtime tests remain NOT_RUN |
 | 2026-09-19 | Companion address reference | Pinned IEEE Std 802-2024; two imported definitions and three address vectors resolve group-bit layout; sender/receiver AR distinction resolved without an invented receive-filter rule |
+| 2026-09-19 | Bounded M1 step-0 closure | PASS after independent review; 87 mapped statements and nine procedures, explicit policy/timing/admission decisions and bounded reference dispositions; no executable support evidence |

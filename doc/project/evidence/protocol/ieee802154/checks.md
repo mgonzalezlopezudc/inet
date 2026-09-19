@@ -179,7 +179,8 @@ Additional procedure variants:
 | Enter and exit supported promiscuous mode while idle reception is false | Entry enables reception; exit restores false. Indication MSDU is MHR+MAC payload, excluding FCS; only Msdu, MpduLinkQuality, Timestamp and Rssi may be treated as valid. |
 
 Promiscuous acceptance and normal ACK eligibility must be tested as separate observations under
-10.23.1 and 6.6.2. The four-field indication validity rule means a monitor cannot treat the
+10.23.1 and 6.6.2. Optional timestamp support must be declared; the allowed-field list does not
+create a valid timestamp when that capability is absent. The four-field indication validity rule means a monitor cannot treat the
 ordinary Dsn, SrcAddr or AckSent parameters as valid; it must inspect the raw MHR if needed.
 
 Additional checked statement: [IEEE802154-RECEIVE-16](../../standard/ieee802154/catalog.md#ieee802154-receive-16).
@@ -187,6 +188,8 @@ Additional checked statement: [IEEE802154-RECEIVE-16](../../standard/ieee802154/
 In promiscuous mode inject correctly received foreign-address input and observe the raw MHR+payload indication separately from ACK behavior. Do not equate monitor delivery with a normal addressed-data acceptance decision; the source cross-reference interpretation must be stated.
 
 ## IEEE802154-C-ACK
+
+Interframe spacing: [IEEE802154-ACCESS-3](../../standard/ieee802154/catalog.md#ieee802154-access-3).
 
 **Acknowledgment and direct/indirect retry distinction.**
 
@@ -207,6 +210,14 @@ Expected observations:
 2. For O-QPSK, ACK starts macSifsPeriod after the last received data symbol and carries the data DSN.
 3. In both loss cases, direct transmission attempts number 1 and 3 respectively; every retry retains DSN, and exhaustion reports NO_ACK. Data loss produces no receiver data indication, whereas ACK loss can follow a successful receiver indication. Wrong/late ACKs do not establish success for an unrelated exchange.
 4. Failed indirect delivery does not retry by itself. A new Data Request permits sending the retained frame with the same DSN.
+
+Additional spacing variant: queue a second Data frame after complete 18-octet and 19-octet
+MPDUs, first without requesting ACK, then with a successful ACK. Use the selected PHY's 12-symbol
+SIFS/turnaround and 40-symbol LIFS. The next PPDU starts no earlier than 192 µs or 640 µs,
+respectively, after the first PPDU ends in the unacknowledged case, or after ACK reception ends
+at the sender in the acknowledged case (Figure 6-1). Keep backoff observable so a long random
+wait does not hide a missing IFS guard. MAC length includes FCS and excludes SHR/PHR. This check
+is distinct from the AIFS delay before the ACK itself and from the sender's ACK deadline.
 
 Arithmetic and scope: At 250 kbit/s and 4 bits/symbol, one symbol is 16 microseconds; 12-symbol AIFS is 192 microseconds. Specify the sender's expected-time deadline and event ordering before implementing late-ACK tests: 6.6.3.4 does not itself provide a numeric timeout. The continuation text of Figures 6-11 and 6-12 distinguishes lost-data and lost-ACK outcomes. Full poll/release timing belongs to a separate indirect-service extraction.
 
@@ -277,6 +288,8 @@ contribution to the default backoff unit is rounded to nine symbols.
 
 ## IEEE802154-C-SERVICE
 
+Parameter support: [IEEE802154-SERVICE-9](../../standard/ieee802154/catalog.md#ieee802154-service-9).
+
 **PIB access, reset and request capacity.**
 
 Checks: [IEEE802154-SERVICE-1](../../standard/ieee802154/catalog.md#ieee802154-service-1), [IEEE802154-PIB-1](../../standard/ieee802154/catalog.md#ieee802154-pib-1), [IEEE802154-PIB-2](../../standard/ieee802154/catalog.md#ieee802154-pib-2), [IEEE802154-PIB-3](../../standard/ieee802154/catalog.md#ieee802154-pib-3); strengths are retained in those entries.
@@ -310,6 +323,11 @@ Additional procedure variants:
 | Observe ordinary data indications at DSN wrap and after ACK generation | Dsn equals the received field. AckSent reports an ACK that has been sent, not merely AR=1 or an ACK scheduled for later. |
 | Request ordinary O-QPSK transmission | DataRate selector is zero; the PHY rate is 250 kbit/s. The selector is not a rate in bits/second. |
 | Reset with both SetDefaultPib values | SUCCESS is reported only after reset completion; reset(false) retains MAC PIB values, while reset(true) applies defaults. |
+
+For MLME-SET of a present writable attribute, also request a source-valid value that the tested
+capability declaration does not support. Clause 8.2.2 requires INVALID_PARAMETER; do not
+substitute READ_ONLY or UNSUPPORTED_ATTRIBUTE merely because that value is unsupported.
+Check preservation of the previous value under the declared failure-atomicity contract.
 
 Test each specified status using a request with only that defect. Where several defects coexist,
 a precedence order requires an explicit source or implementation contract; this procedure does

@@ -260,3 +260,31 @@ it does not assert that the violating injected transmitter conforms.
 The four scoped link checks passed (2/2/3/4 files), as did whitespace checks and the 85-ID mapping,
 82-selected/3-deferred partition and three synthetic byte-vector calculations. The added source
 PDF remains an ignored local artifact; no executable runtime check has been added or run.
+
+## Bounded M1 step-0 gate review
+
+At baseline `5f3845f055`, the remaining malformed/capability policy was resolved using 8.2.2,
+Table 8-11 and the ordered security early returns. SERVICE-9 records unsupported-parameter
+INVALID_PARAMETER; ACCESS-3 makes the IFS size boundary explicitly checkable. Table 8-37 adds
+22 Boolean capability/enable fields to the source inventory. Optional Data timestamping is
+explicitly disabled; invalid typed MCPS metadata is a documented model representation.
+
+The [dependency record](dependencies.md) classifies all 86 first-frontier targets. Expanding the
+34 selected targets produced 80 occurrences: 79 resolved plus a non-protocol trademark footnote
+that remains an unresolved parser record. The 18 additional target IDs contain one original
+source (Figure 7-16), leaving 17 new to the original source/target union. Figure 4-5 was visually
+checked on physical page 51; its outgoing-reference query returned zero. Table 9-6 selects level
+zero, records level 4 as reserved/deprecated, and references only already reviewed 9.2.4.
+Manual IFS root 6.3.1/Table 8-35 adds the 18-octet boundary. Predicate cuts stop disabled features
+without declaring mandatory deferred profile capabilities inapplicable.
+
+Independent standards review returned PASS for the bounded M1 applicability gate, then rechecked
+the dedicated IFS addition and retained that verdict without findings. It did not assess runtime
+support, a concrete propagation bound, integration fixtures or complete-device conformance.
+Detailed mutation, event ordering and API representation remain the assigned implementation work.
+
+Documentation validation after closure passed: scoped `check_links.py` runs for the base-standard,
+protocol and model evidence directories (2/3/5 files, zero broken links), `check-seals.sh`
+(19 document seal units, index consistent), and `git diff --check`. A structural check confirmed
+87 unique catalog IDs, exact coverage-row correspondence, the 84-selected/3-deferred partition,
+and nine English checks. These are documentation checks, not executable model evidence.

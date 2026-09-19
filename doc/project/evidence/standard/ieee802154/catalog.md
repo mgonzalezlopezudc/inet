@@ -13,6 +13,8 @@ Model applicability and execution evidence live in the [model ledger](../../mode
 
 | ID | Statement |
 | --- | --- |
+| [IEEE802154-ACCESS-3](#ieee802154-access-3) | Interframe spacing depends on the preceding MPDU length. |
+| [IEEE802154-SERVICE-9](#ieee802154-service-9) | Unsupported or out-of-range MLME request parameters report INVALID_PARAMETER. |
 | [IEEE802154-SERVICE-8](#ieee802154-service-8) | Incoming security errors generate a communication-status indication. |
 | [IEEE802154-ADDRESS-1](#ieee802154-address-1) | Device extended identity uses EUI-64. |
 | [IEEE802154-ADDRESS-2](#ieee802154-address-2) | Address octets are transmitted from rightmost to leftmost. |
@@ -96,6 +98,26 @@ Model applicability and execution evidence live in the [model ledger](../../mode
 | [IEEE802154-SERVICE-7](#ieee802154-service-7) | O-QPSK service DataRate uses the default selector. |
 | [IEEE802154-WIRE-17](#ieee802154-wire-17) | Reserved fields are zero on transmission and ignored on reception. |
 | [IEEE802154-RECEIVE-16](#ieee802154-receive-16) | Promiscuous mode accepts received frames for monitor delivery. |
+
+## IEEE802154-ACCESS-3
+
+**Interframe spacing depends on the preceding MPDU length.**
+
+- Source: `ieee802154-2024:clause:6.3.1`, physical PDF pp. 62–63; `ieee802154-2024@304032:305918`; Figure 6-1 on p. 63; aMaxSifsFrameSize in Table 8-35 on p. 152 (`ieee802154-2024@658233:659380`).
+- Source excerpt: “Frames (i.e., MPDUs) of up to aMaxSifsFrameSize shall be followed by a short interfame space (SIFS) period of a duration of at least max(macSifsPeriod, aTurnaroundTime).”
+- Strength: `shall`; observation class: `wire`.
+- Condition: Successive transmissions; the same clause requires max(macLifsPeriod, aTurnaroundTime) for longer MPDUs. aMaxSifsFrameSize is 18 octets. The acknowledged exchange also obeys the AIFS lower bound and Figure 6-1's size-dependent interval after ACK.
+- Check idea: Exercise complete 18- and 19-octet MPDUs, with and without acknowledgment, and observe the next actual transmission boundary. Use MPDU length including FCS, not MSDU length or PHY overhead.
+
+## IEEE802154-SERVICE-9
+
+**Unsupported or out-of-range MLME request parameters report INVALID_PARAMETER.**
+
+- Source: `ieee802154-2024:clause:8.2.2`, physical PDF pp. 112–114; `ieee802154-2024@489336:494944`.
+- Source excerpt: “If any parameter in the request primitive is not supported or is out of range, the MAC sublayer will issue the corresponding confirm primitive with a Status of INVALID_PARAMETER.”
+- Strength: `description`; observation class: `error-signal`.
+- Condition: MLME request parameter support/range validation; preserve more specific primitive error predicates such as absent or read-only PIB attributes.
+- Check idea: Set a present writable attribute to a valid but unsupported capability value and observe INVALID_PARAMETER, separately from absent-attribute, read-only, invalid-index and out-of-range cases.
 
 ## IEEE802154-SERVICE-8
 
@@ -395,7 +417,7 @@ Model applicability and execution evidence live in the [model ledger](../../mode
 - Source excerpt: “The CCA detection time shall be equal to phyCcaDuration, as defined in Table 12-2.”
 - Strength: `shall`; observation class: `internal`.
 - Condition: CCA operation.
-- Check idea: Measure accepted request to observation completion and test a nonintegral number of symbols.
+- Check idea: Measure actual observation start to completion and test a nonintegral number of symbols.
 
 ## IEEE802154-PHY-4
 
@@ -1014,12 +1036,45 @@ Qualifying conditions from the table descriptions remain part of these domains:
 Other PHY-specific tables and optional-mode PIB tables are outside this data inventory; absence
 here is not evidence that their attributes are optional or inapplicable to another selected mode.
 
+### Functional-organization attributes
+
+Table 8-37, physical PDF pp. 156–157,
+`ieee802154-2024@683532:690780`, defines these additional Boolean attributes. Dagger marks
+upper-layer read-only access. An unspecified default is not an implicit FALSE.
+
+| Attribute | Type | Range | Default | Access marker |
+| --- | --- | --- | --- | --- |
+| `macDsmeCapable` | Boolean | TRUE, FALSE | Unspecified | † |
+| `macDsmeEnabled` | Boolean | TRUE, FALSE | Unspecified | — |
+| `macDaCapable` | Boolean | TRUE, FALSE | Unspecified | † |
+| `macDaEnabled` | Boolean | TRUE, FALSE | Unspecified | — |
+| `macExtendedDsmeCapable` | Boolean | TRUE, FALSE | Unspecified | † |
+| `macExtendedDsmeEnabled` | Boolean | TRUE, FALSE | FALSE | — |
+| `macHoppingCapable` | Boolean | TRUE, FALSE | Unspecified | † |
+| `macHoppingEnabled` | Boolean | TRUE, FALSE | Unspecified | — |
+| `macLeCapable` | Boolean | TRUE, FALSE | Unspecified | † |
+| `macLeEnabled` | Boolean | TRUE, FALSE | Unspecified | — |
+| `macLeHsEnabled` | Boolean | TRUE, FALSE | Unspecified | — |
+| `macMetricsCapable` | Boolean | TRUE, FALSE | Unspecified | † |
+| `macMetricsEnabled` | Boolean | TRUE, FALSE | Unspecified | — |
+| `macRccnCapable` | Boolean | TRUE, FALSE | Unspecified | † |
+| `macRccnEnabled` | Boolean | TRUE, FALSE | Unspecified | — |
+| `macSrmCapable` | Boolean | TRUE, FALSE | Unspecified | † |
+| `macSrmEnabled` | Boolean | TRUE, FALSE | Unspecified | — |
+| `macTrleCapable` | Boolean | TRUE, FALSE | Unspecified | † |
+| `macTrleEnabled` | Boolean | TRUE, FALSE | Unspecified | — |
+| `macTrleRelayingMode` | Boolean | TRUE, FALSE | Unspecified | — |
+| `macTschCapable` | Boolean | TRUE, FALSE | Unspecified | † |
+| `macTschEnabled` | Boolean | TRUE, FALSE | Unspecified | — |
+
 ## Extraction boundary
 
 This catalog extracts selected legacy data/ACK, unslotted access, unsecured-policy, O-QPSK,
 PIB and passive-scan statements. It does not exhaust these clauses: additional PHY/optional-mode
-PIB tables, service error precedence, reset interactions and transitive references require further
-audit. The field domains above cover Tables 8-36 and 12-2, not every PIB table in the standard.
+PIB tables and references for later enabled features require further audit. The bounded M1
+reference closure is recorded in the [dependency ledger](../../model/ieee802154/dependencies.md).
+Concrete local service error precedence and reset semantics remain implementation contracts for
+packages 1a–1b. The field domains above cover Tables 8-36, 8-37 and 12-2, not every PIB table in the standard.
 Beacon scheduling, indirect delivery beyond the retry distinction, association, security transforms,
 enhanced formats, scheduled access, other PHYs and amendment requirements are outside this
 extraction. Their absence does not assert that they are optional for a particular device role.

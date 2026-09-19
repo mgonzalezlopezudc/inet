@@ -38,13 +38,16 @@ Additional core statement: [IEEE802154-WIRE-17](../../standard/ieee802154/catalo
 
 ## IEEE802154-F-ACCESS
 
+Interframe spacing: [IEEE802154-ACCESS-3](../../standard/ieee802154/catalog.md#ieee802154-access-3).
+
 **Unslotted channel access.**
 
 Level: **mandatory under the catalog conditions**. At least one core source uses “shall”; exact excerpts and conditional predicates are in the catalog. Governing source: IEEE Std 802.15.4-2024, no overrides.
 
 Core statements: [IEEE802154-ACCESS-1](../../standard/ieee802154/catalog.md#ieee802154-access-1), [IEEE802154-ACCESS-2](../../standard/ieee802154/catalog.md#ieee802154-access-2).
 
-Procedure: [IEEE802154-C-ACCESS](checks.md#ieee802154-c-access).
+Procedures: [IEEE802154-C-ACCESS](checks.md#ieee802154-c-access), plus the spacing variant in
+[IEEE802154-C-ACK](checks.md#ieee802154-c-ack).
 
 ## IEEE802154-F-SEQUENCE
 
@@ -105,6 +108,8 @@ Additional core statements under their stated conditions: [IEEE802154-PHY-9](../
 Procedure: [IEEE802154-C-PHY](checks.md#ieee802154-c-phy).
 
 ## IEEE802154-F-SERVICE
+
+Parameter support: [IEEE802154-SERVICE-9](../../standard/ieee802154/catalog.md#ieee802154-service-9).
 
 **PIB access, reset and request capacity.**
 
