@@ -15,6 +15,10 @@ New APIs:
   These are extension contracts with test-local implementations; operational
   MAC services are not yet provided.
 
+- Ieee802154MacPib provides validated selected-profile MAC attributes, startup
+  configuration and reset defaults for new MAC implementations. It does not
+  yet replace parameter storage in the existing IEEE 802.15.4 MAC.
+
 Notable backward incompatible changes are the following:
 
 1. IEEE 802.11 rate control per receiver
