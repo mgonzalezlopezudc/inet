@@ -1,8 +1,8 @@
 # Implement IEEE 802.15.4 in INET
 
-Status: **in progress — step 0**. The expanded applicability extraction (85 statements, including two imported address definitions) and nine English checks are
+Status: **in progress — step 0 complete; package 1a next**. The expanded applicability extraction (87 statements, including two imported address definitions) and nine English checks are
 recorded in the [model coverage ledger](../../doc/project/evidence/model/ieee802154/coverage.md).
-Step 0's closure gate remains open; no implementation step or executable conformance check is complete.
+Independent review passed the bounded M1 applicability gate on 2026-09-19. No implementation package or executable conformance check is complete; deferred device-profile obligations remain owed.
 Prepared against INET `c913a63a8335ca39a319cb2089daf835ea5e95cd` and the local
 IEEE 802.15.4 survey on 2026-09-19.
 
@@ -236,38 +236,39 @@ responsibility, not staffing assignments.
 Dependencies: none. Source baseline and local survey already exist; refresh them if HEAD moves.
 
 Execution record: [applicability audit](../../doc/project/evidence/model/ieee802154/applicability.md)
-and [inspection evidence](../../doc/project/evidence/model/ieee802154/results.md). Initial catalog,
-feature map and English procedures exist; retain the unchecked items below until their full scope
-and the zero-unresolved exit condition are met.
+and [inspection evidence](../../doc/project/evidence/model/ieee802154/results.md). The bounded
+M1 audit passed independent review; the [reference dispositions](../../doc/project/evidence/model/ieee802154/dependencies.md)
+record its closure boundary. This does not close the later M2 audit or any runtime gate.
 
-- [ ] Extract the selected normative statements into
+- [x] Extract the selected normative statements into
   `doc/project/evidence/standard/ieee802154/catalog.md`, including conditions, revision, clause,
   physical page/source span and cross-references. Inspect ambiguous tables/figures in the PDF.
-- [ ] Create protocol-only `features.md`, `checks.md` and focused check descriptions under
+- [x] Create protocol-only `features.md`, `checks.md` and focused check descriptions under
   `doc/project/evidence/protocol/ieee802154/`, following
   [standard-derived tests](../../doc/project/guide/derive-tests-from-a-standard.md).
-- [ ] Pin the first audit to M1's static non-beacon O-QPSK data service and its necessary
+- [x] Pin the first audit to M1's static non-beacon O-QPSK data service and its necessary
   dependencies. Declare which device, coordinator and PAN-coordinator roles are exercised;
   distinguish configured roles from support for their management procedures. Record exposed
   services, selected CCA mode, conditional predicates and unsupported PIB requests/statuses.
-- [ ] Record the M1 engineering subset and known deferred profile obligations in the model ledger.
+- [x] Record the M1 engineering subset and known deferred profile obligations in the model ledger.
   Follow applicable cross-references to closure for the bounded M1 claim. Extend the audit to M2
   roles/services before steps 7–9; the first PR need not close unrelated M2 procedures. Keep
   implementation status and outcomes out of the standard catalog and protocol feature map.
-- [ ] Produce a version matrix separating transmitted, structurally decoded and operationally
+- [x] Produce a version matrix separating transmitted, structurally decoded and operationally
   processed formats, legal-but-unsupported combinations and malformed/reserved combinations.
   Resolve version 0/1 selection before codec work. Version-2 recognition must never imply
   legacy-layout parsing or operational support; E1 remains the implementation gate.
-- [ ] Derive a receive decision table from the applicable clauses: for each rejection or acceptance
+- [x] Derive a receive decision table from the applicable clauses: for each rejection or acceptance
   cause, record ordering, promiscuous visibility, ACK eligibility, DSN indication, delivery,
   duplicate-state effects and status/statistic. Include malformed security fields, valid secured
   but unsupported traffic and unsecured traffic; add companion outcomes for local requests
   asking for unavailable security. Resolve the table before step 6; do not reduce ACK eligibility to one generic accepted flag.
-- [ ] Record apparent source contradictions with exact clauses/figures and resolve their
+- [x] Record apparent source contradictions with exact clauses/figures and resolve their
   interpretation before turning them into timing oracles. Do not silently substitute an older
   edition, an extracted table fragment or another simulator's algorithm.
-- [ ] Audit existing examples, callers, address tags, PCAP paths, `.oppfeatures` and fingerprints;
-  identify migration consumers and capture provenance. Reproduce suspected defects separately.
+- [x] Audit existing examples, callers, address tags, PCAP paths, `.oppfeatures` and fingerprints;
+  identify migration consumers and capture provenance/admission. Suspected defects remain assigned
+  to separate production-path reproductions; source arithmetic is not reported as a reproduced run.
 
 **Exit:** a reviewer can determine the profile's obligations without reading implementation code.
 Every applicable obligation in the bounded audit has a planned observable check and delivery
@@ -564,10 +565,11 @@ These are future implementation gates, not tests executed while writing this pla
 
 ## 9. First implementation PR
 
-Start with **step 0 only**: close M1 applicability and author its normative catalog and English
-checks, then map them to the existing model ledger. Include targeted reproductions of the fixed
-wire format/length mismatch and sequence truncation where feasible, with current behavior
-reported honestly. Do not change simulation behavior or fingerprints in this PR.
+The initial **step 0** package closes bounded M1 applicability, authors its normative catalog and
+English checks, and maps them to the model ledger. That audit gate has passed; executable checks
+remain NOT_RUN. The documented source findings on wire format/length and sequence truncation
+remain candidates for targeted production reproductions. This documentation package changes no
+simulation behavior or fingerprints.
 
 The next PR is 1a; packages 1b–1e establish the remaining contracts and prove native-address
 integration before the codec. Steps 2–6 then deliver M1, with step 10 as its release gate.
