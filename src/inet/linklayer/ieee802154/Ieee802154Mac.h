@@ -24,6 +24,7 @@
 #ifndef __INET_IEEE802154MAC_H
 #define __INET_IEEE802154MAC_H
 
+#include "inet/common/Protocol.h"
 #include "inet/linklayer/base/MacProtocolBase.h"
 #include "inet/linklayer/common/MacAddress.h"
 #include "inet/linklayer/contract/IMacProtocol.h"
@@ -188,6 +189,7 @@ class INET_API Ieee802154Mac : public MacProtocolBase, public IMacProtocol, publ
 
     /** @brief Length of the header*/
     int headerLength = 0;
+    const Protocol *upperLayerProtocol = nullptr;
 
     bool transmissionAttemptInterruptedByRx = false;
     /** @brief CCA detection time */
@@ -288,4 +290,3 @@ class INET_API Ieee802154Mac : public MacProtocolBase, public IMacProtocol, publ
 } // namespace inet
 
 #endif
-

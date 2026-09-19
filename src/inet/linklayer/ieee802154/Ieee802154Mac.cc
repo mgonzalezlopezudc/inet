@@ -50,6 +50,8 @@ void Ieee802154Mac::initialize(int stage)
         useMACAcks = par("useMACAcks");
         sifs = par("sifs");
         headerLength = par("headerLength");
+        const char *protocolName = par("upperLayerProtocol");
+        upperLayerProtocol = *protocolName ? Protocol::getProtocol(protocolName) : nullptr;
         transmissionAttemptInterruptedByRx = false;
         nbTxFrames = 0;
         nbRxFrames = 0;
@@ -187,7 +189,15 @@ void Ieee802154Mac::encapsulate(Packet *packet)
     macPkt->setChunkLength(b(headerLength));
     MacAddress dest = packet->getTag<MacAddressReq>()->getDestAddress();
     EV_DETAIL << "CSMA received a message from upper layer, name is " << packet->getName() << ", CInfo removed, mac addr=" << dest << endl;
-    macPkt->setNetworkProtocol(ProtocolGroup::getEthertypeProtocolGroup()->getProtocolNumber(packet->getTag<PacketProtocolTag>()->getProtocol()));
+    auto payloadProtocol = packet->getTag<PacketProtocolTag>()->getProtocol();
+    if (upperLayerProtocol != nullptr) {
+        if (payloadProtocol != upperLayerProtocol)
+            throw cRuntimeError("Payload protocol does not match configured upperLayerProtocol");
+        // The legacy serializer places this value in Source PAN ID. It is not a discriminator.
+        macPkt->setNetworkProtocol(0xffff);
+    }
+    else
+        macPkt->setNetworkProtocol(ProtocolGroup::getEthertypeProtocolGroup()->getProtocolNumber(payloadProtocol));
     macPkt->setDestAddr(dest);
     delete packet->removeControlInfo();
     macPkt->setSrcAddr(networkInterface->getMacAddress());
@@ -909,8 +919,10 @@ void Ieee802154Mac::decapsulate(Packet *packet)
 {
     const auto& csmaHeader = packet->popAtFront<Ieee802154MacHeader>();
     packet->addTagIfAbsent<MacAddressInd>()->setSrcAddress(csmaHeader->getSrcAddr());
+    packet->addTagIfAbsent<MacAddressInd>()->setDestAddress(csmaHeader->getDestAddr());
     packet->addTagIfAbsent<InterfaceInd>()->setInterfaceId(networkInterface->getInterfaceId());
-    auto payloadProtocol = ProtocolGroup::getEthertypeProtocolGroup()->getProtocol(csmaHeader->getNetworkProtocol());
+    auto payloadProtocol = upperLayerProtocol != nullptr ? upperLayerProtocol :
+            ProtocolGroup::getEthertypeProtocolGroup()->getProtocol(csmaHeader->getNetworkProtocol());
     packet->addTagIfAbsent<DispatchProtocolReq>()->setProtocol(payloadProtocol);
     packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(payloadProtocol);
 }
@@ -986,4 +998,3 @@ void Ieee802154Mac::handlePullPacketProcessed(Packet *packet, const cGate *gate,
 }
 
 } // namespace inet
-

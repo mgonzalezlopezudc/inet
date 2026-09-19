@@ -304,6 +304,11 @@ Notable backward incompatible changes are the following:
 
 Notable backward compatible changes are the following:
 
+IEEE 802.15.4 receive indications now include the destination address. An
+optional upperLayerProtocol selects one opaque payload protocol without using
+the legacy EtherType/PAN convention; the default legacy behavior is retained.
+
+
 1. IEEE 802.11 per-station rate statistics
 
    The datarateChanged signal of the rate controls is now emitted with the name of

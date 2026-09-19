@@ -31,6 +31,7 @@ import inet.linklayer.contract.IMacProtocol;
 module Ieee802154Mac extends MacProtocolBase like IMacProtocol
 {
     parameters:
+        string upperLayerProtocol = default(""); // A single configured payload protocol; empty keeps legacy EtherType selection. Mixed clients are unsupported when set.
         string address @mutable = default("auto"); // MAC address as a hex string (12 hex digits), or
                                                    // "auto". "auto" values will be replaced by
                                                    // a generated MAC address in init stage 0.
@@ -97,4 +98,3 @@ module Ieee802154Mac extends MacProtocolBase like IMacProtocol
         @statistic[packetDropRetryLimitReached](title="packet drop: retry limit reached"; source=packetDropReasonIsRetryLimitReached(packetDropped); record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
         @statistic[packetDropBackoffLimitReached](title="packet drop: backoff limit reached"; source=packetDropReasonIsCongestion(packetDropped); record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
 }
-
