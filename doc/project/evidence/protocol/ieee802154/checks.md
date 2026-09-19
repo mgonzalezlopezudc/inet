@@ -28,6 +28,8 @@ upper client U -> device A <---- radio link ----> device B -> upper observer
 
 ## IEEE802154-C-WIRE
 
+Imported definitions: [IEEE802-ADDRESS-1](../../standard/ieee802/catalog.md#ieee802-address-1), [IEEE802-ADDRESS-2](../../standard/ieee802/catalog.md#ieee802-address-2).
+
 **Native address and legacy data/ACK encoding.**
 
 Checks: [IEEE802154-ADDRESS-1](../../standard/ieee802154/catalog.md#ieee802154-address-1), [IEEE802154-ADDRESS-2](../../standard/ieee802154/catalog.md#ieee802154-address-2), [IEEE802154-WIRE-1](../../standard/ieee802154/catalog.md#ieee802154-wire-1), [IEEE802154-WIRE-2](../../standard/ieee802154/catalog.md#ieee802154-wire-2), [IEEE802154-WIRE-3](../../standard/ieee802154/catalog.md#ieee802154-wire-3), [IEEE802154-WIRE-4](../../standard/ieee802154/catalog.md#ieee802154-wire-4), [IEEE802154-WIRE-5](../../standard/ieee802154/catalog.md#ieee802154-wire-5), [IEEE802154-WIRE-6](../../standard/ieee802154/catalog.md#ieee802154-wire-6); strengths are retained in those entries.
@@ -75,6 +77,23 @@ This one vector does not exhaust data-frame CRC/length checks.
 Additional checked statement: [IEEE802154-WIRE-17](../../standard/ieee802154/catalog.md#ieee802154-wire-17).
 
 Inject FCF bit 7 set with a recomputed valid FCS. Observe the bit in the stimulus and verify that normal receive/ACK behavior matches the bit-clear control. The reserved bit is not a reserved frame-type or version value.
+
+Imported-address vectors (synthetic bit-pattern checks, not allocation claims): combine IEEE 802
+8.2.2 conventional notation with IEEE 802.15.4 4.5.1 rightmost-octet-first transmission.
+
+| Conventional 64-bit value | Serialized address octets | Classification |
+| --- | --- | --- |
+| 0011223344556677 | 77 66 55 44 33 22 11 00 | Individual, despite numeric bit 0 being one |
+| 0111223344556676 | 76 66 55 44 33 22 11 01 | Group, not broadcast, despite numeric bit 0 being zero |
+| FFFFFFFFFFFFFFFF | FF FF FF FF FF FF FF FF | Group and broadcast |
+
+Thus the numeric group mask is 0x0100000000000000; on these serialized bytes it is byte 7,
+bit 0. With conforming group AR=0, check reception with macGroupRxMode=false and true, including
+extended broadcast. IEEE 802.15.4 6.6.2(d)(2) does not give extended broadcast the unconditional
+short-broadcast acceptance alternative. For an injected nonbroadcast group AR=1 legacy frame passing ordinary filtering with group
+reception enabled, verify the immediate ACK required by 7.2.2.5 and 6.6.2. This injection violates
+the sender rule in 6.6.3.1; the implementation must not generate such a frame itself. Repeat
+with group reception disabled (filter discard/no ACK) and all-ones broadcast (no ACK).
 
 ## IEEE802154-C-ACCESS
 
@@ -154,7 +173,7 @@ Additional procedure variants:
 | Compare exact EUI-64 match and an address differing only in its upper 16 bits | Only the complete matching identity passes; no low-48-bit approximation. |
 | Inject a valid source-only frame with macImplicitBroadcast=false at a device and PAN coordinator, then vary source PAN | Only the PAN coordinator accepts it through predicate (d)(4), and only for matching source PAN. |
 | Enable macImplicitBroadcast and repeat source-only input | Predicate (d)(3) admits the destination-omitted frame; apply broadcast semantics for ACK eligibility. |
-| Inject an extended group destination with group reception disabled and enabled | Acceptance follows macGroupRxMode; group traffic does not request ACK. IEEE Std 802 group-address definitions must be supplied before asserting a particular group identifier. |
+| Inject an extended group destination with group reception disabled and enabled | Acceptance follows macGroupRxMode; group traffic does not request ACK. Use the imported address definitions and [C-WIRE vectors](#ieee802154-c-wire). |
 | Receive a compressed-PAN frame | Use destination PAN as effective source PAN internally; keep wire-presence validity distinct in upper metadata. |
 | Complete an acknowledged transmit task with macRxOnWhenIdle=false, then true | Receive for the ACK as required, then restore the selected idle reception state; idle=false cannot disable a required ACK wait. |
 | Enter and exit supported promiscuous mode while idle reception is false | Entry enables reception; exit restores false. Indication MSDU is MHR+MAC payload, excluding FCS; only Msdu, MpduLinkQuality, Timestamp and Rssi may be treated as valid. |
@@ -179,19 +198,21 @@ Procedure:
 
 1. Transmit broadcast and unicast AR-clear data. Confirm the outgoing AR bit and observe completion without ACK.
 2. Transmit AR-set unicast outside CAP, observe the received data end and ACK start, and compare the ACK DSN with the data DSN.
-3. Suppress every ACK for a direct transmission with macMaxFrameRetries=0 and then 2. Include wrong-DSN and late-ACK injections in separate runs.
+3. Suppress every ACK for a direct transmission with macMaxFrameRetries=0 and then 2. Repeat by losing every Data frame before receiver delivery. Include wrong-DSN and late-ACK injections in separate runs.
 4. For a pending indirect frame, suppress the data ACK after one poll. Observe silence before a new poll, then request again.
 
 Expected observations:
 
 1. Broadcast traffic has AR=0; AR-clear unicast is delivered without generating ACK or autonomous retransmissions.
 2. For O-QPSK, ACK starts macSifsPeriod after the last received data symbol and carries the data DSN.
-3. Direct transmission attempts number 1 and 3 respectively; every retry retains DSN, and exhaustion reports NO_ACK. Wrong/late ACKs do not establish success for an unrelated exchange.
+3. In both loss cases, direct transmission attempts number 1 and 3 respectively; every retry retains DSN, and exhaustion reports NO_ACK. Data loss produces no receiver data indication, whereas ACK loss can follow a successful receiver indication. Wrong/late ACKs do not establish success for an unrelated exchange.
 4. Failed indirect delivery does not retry by itself. A new Data Request permits sending the retained frame with the same DSN.
 
-Arithmetic and scope: At 250 kbit/s and 4 bits/symbol, one symbol is 16 microseconds; 12-symbol AIFS is 192 microseconds. Specify the sender's expected-time deadline and event ordering before implementing late-ACK tests: 6.6.3.4 does not itself provide a numeric timeout. Full poll/release timing belongs to a separate indirect-service extraction.
+Arithmetic and scope: At 250 kbit/s and 4 bits/symbol, one symbol is 16 microseconds; 12-symbol AIFS is 192 microseconds. Specify the sender's expected-time deadline and event ordering before implementing late-ACK tests: 6.6.3.4 does not itself provide a numeric timeout. The continuation text of Figures 6-11 and 6-12 distinguishes lost-data and lost-ACK outcomes. Full poll/release timing belongs to a separate indirect-service extraction.
 
 ## IEEE802154-C-SECURITY
+
+Service routing: [IEEE802154-SERVICE-8](../../standard/ieee802154/catalog.md#ieee802154-service-8).
 
 **Unsecured-profile security outcomes.**
 
@@ -207,11 +228,11 @@ Procedure:
 
 Expected observations:
 
-1. SecurityLevel=0 returns the unchanged frame with SUCCESS; a nonzero request reports UNSUPPORTED_SECURITY and does not transmit.
+1. SecurityLevel=0 returns the unchanged frame with SUCCESS from the security procedure, then continues normal access/transmission. It does not immediately complete the upper request successfully: channel-access failure or ACK exhaustion may still determine MCPS-DATA.confirm. A nonzero request with security disabled produces MCPS-DATA.confirm(UNSUPPORTED_SECURITY), associated with its MsduHandle, without transmission.
 2. Unsecured reception returns SUCCESS without requiring key lookup.
-3. Secured version 0 reports UNSUPPORTED_LEGACY; secured version 1 reports UNSUPPORTED_SECURITY. Neither supplies a valid plaintext MSDU. Required legacy ACK behavior is checked independently by IEEE802154-C-RECEIVE.
+3. Secured version 0 produces MLME-COMM-STATUS.indication(UNSUPPORTED_LEGACY); secured version 1 produces MLME-COMM-STATUS.indication(UNSUPPORTED_SECURITY). Neither supplies a valid plaintext MSDU. Required legacy ACK behavior is checked independently by IEEE802154-C-RECEIVE. Repeat with AR=0: the same security-error indication occurs without an ACK. Incorrect FCS and ordinary filter failures are discarded before this incoming-security path and do not establish a security-error indication.
 
-Arithmetic and scope: Do not read output security parameters that the procedure has not initialized. Malformed/truncated security representations need structural safety checks separately; these well-formed-input checks do not assign them invented standardized statuses.
+Arithmetic and scope: Table 8-5 continuation routes incoming security errors to COMM-STATUS; Table 8-31 and 6.6.1 route outgoing request errors to DATA.confirm. Do not read output security parameters that the procedure has not initialized. In 9.2.4(a)/(b), Status is set before returning, but the auxiliary-header parsing in (c) has not occurred. Represent security/key/plaintext output validity explicitly; retain usable frame addressing separately. Malformed/truncated security representations need structural safety checks separately; these well-formed-input checks do not assign them invented standardized statuses.
 
 ## IEEE802154-C-PHY
 

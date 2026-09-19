@@ -2,7 +2,7 @@
 
 > **Kind:** report · **Status:** snapshot 2026-09-19 · **Seal:** none · **Owns:** — · **Stands on:** [coverage.md](coverage.md), [catalog.md](../../standard/ieee802154/catalog.md)
 
-Latest audit baseline: `6cb03df7c8` (initial pass: `fd6f800222`). This is the continuing extraction for step 0 of the
+Latest audit baseline: `837ee6dbe8` (initial pass: `fd6f800222`). This is the continuing extraction for step 0 of the
 [implementation plan](../../../../../plan/pending/802154-implementation-plan.md).
 **The applicability gate is open, not passed.** The extracted statements and English procedures
 are reviewable inputs to closure; they are not a complete inventory of the selected profile.
@@ -80,15 +80,20 @@ Additional selected receive decisions:
 | Same frame at ordinary device with implicit broadcast false | Filter discard; no ACK | Monitor if structurally supported and FCS-correct |
 | No destination address or destination PAN, implicit broadcast true | Accept through 6.6.2(d)(3); Table 8-36 describes broadcast treatment, so no ACK | Monitor with the same four-field validity rule |
 | Extended group destination, group reception enabled, conforming AR=0 | Accept through 6.6.2(d)(2); no ACK requested | Monitor under the same field-validity rule |
+| Injected nonbroadcast group destination, group reception enabled, AR=1, otherwise valid legacy data | Accept through ordinary filtering and ACK; sender violates the group AR rule | Ordinary ACK eligibility is retained; monitoring does not add eligibility |
 | Foreign PAN/address frame, otherwise correctly received | No normal indication or ACK | Monitor MHR+payload; no ACK gained merely by monitoring |
 | Correct local secured legacy AR frame | ACK eligible, security error and no plaintext MSDU delivery | Raw protected MHR+payload under the documented interpretation; AckSent is not a valid monitor parameter |
 
-For nonbroadcast group frames received with AR=1, retain an open interpretation item: 6.6.3.1
-requires senders to clear AR, whereas the immediate-ACK receiver predicate in 6.6.2 excludes
-broadcast specifically. Do not infer a blanket receiver ACK prohibition from a sender rule.
+For an injected nonbroadcast group frame with AR=1, apply ordinary legacy receive filtering
+and generate an immediate ACK if accepted. Clause 7.2.2.5 (physical p. 80,
+`ieee802154-2024@366572:367029`) ties AR to 6.6.2 filtering; the latter excludes broadcast
+from immediate ACK, not all groups. Clause 6.6.3.1 requires transmitters to clear AR for groups
+but adds no receive-filter predicate. M1 never generates group AR=1; this receive decision does
+not declare the injected transmitter conformant. All-ones broadcast retains its ACK exclusion.
 
-IEEE Std 802 group-address definitions remain a cross-document dependency; the simulator's
-native-EUI-64 representation must not silently substitute MacAddress group tests. Ordinary
+The [imported IEEE Std 802 definitions](../../standard/ieee802/catalog.md) now close the
+group-address source dependency. The native 64-bit address representation must not silently
+substitute MacAddress group tests or call group addresses EUI-64 device identities. Ordinary
 MCPS-DATA.indication AckSent is true only after an ACK has been sent (Table 8-32), not on AR
 inspection or ACK scheduling. For PAN compression, distinguish the effective source PAN inferred
 by 6.6.2 from the wire-presence validity of the SrcPanId indication field. Lifecycle and packet
@@ -120,7 +125,7 @@ it does not change source access markers or turn deferred capability into a norm
 | macDsn, macMinBe, macMaxBe, macMaxCsmaBackoffs, macMaxFrameRetries | Device-wide sequence and direct-access/retry state; validate cross-attribute BE domains. |
 | macSifsPeriod, macLifsPeriod, macUnitBackoffPeriod | PHY-derived timing and default backoff calculation. SIFS/LIFS are upper-layer read-only; backoff period is not dagger-marked. Automatic recomputation after PHY mutation is a step-1b decision, not implied by the default expression. |
 | macRxOnWhenIdle, macImplicitBroadcast | Idle-receiver and receive-filter behavior. TRUE/FALSE transitions need direct tests, including ACK wait while idle reception is false. |
-| macGroupRxMode | Default false is usable; enabling group reception requires the IEEE Std 802 group-address definition. This cross-document prerequisite remains open, not silently replaced by the generic 48-bit address helper. |
+| macGroupRxMode | Use the pinned IEEE Std 802-2024 group definition and the C-WIRE vectors. Default false; enabled group reception must use the full-width predicate, not the generic 48-bit address helper. |
 | macSecurityEnabled | Disabled profile only; enabling unsupported security must not silently succeed. Status mapping for model capability restrictions is a step-1a/1b contract decision, separate from out-of-range source rules. |
 | macSyncSymbolOffset, macTimestampSupported | Decide optional timestamp support explicitly. A false capability cannot be presented as valid per-frame time metadata; enabled support needs the 6.5.3 boundary and width rules. |
 | macBeaconOrder | BO=15 context for M1; periodic values require later beacon-mode support. Optional attribute in the source does not erase the non-beacon receive-policy predicate. |
@@ -152,6 +157,28 @@ Record both for a future ranging contract; do not invent an alias and call it an
 status. Likewise, its Rssi type is printed Boolean; numeric ACK-RSSI representation needs an
 explicit contract interpretation rather than a silent claim that the table says Integer.
 
+## Selected channel descriptor
+
+Clause 11.1.3.1 (physical PDF pp. 565–566,
+`ieee802154-2024@2258178:2259440`) defines a PHY-specific channel information structure,
+not a universal numeric channel or fixed field layout. Its listed fields are examples; its
+requirement is enough information to identify all channel radio parameters. Table 12-2 makes
+phyCurrentChannelInfo this structure for following transmissions and receptions.
+
+For M1, the model contract selects O-QPSK, the 2450 MHz band and channel 11–26 as a single
+validated descriptor. The selected mode fixes 250 kbit/s and the channel-frequency mapping already
+cataloged in IEEE802154-PHY-14. Any legacy page-0 setting is a compatibility input to this
+selection, not a substitute for the 2024 channel structure. Reject a descriptor naming another
+PHY/band before applying a numerically overlapping channel index. This is the chosen model API
+shape; the source does not prescribe its C++ representation.
+
+Step 1b/1c must define when a validated descriptor takes effect relative to in-flight CCA,
+transmission and reception. The source's “following” wording does not by itself define atomic
+mutation or cancellation. The existing C-PHY channel sweep covers the selected frequency map;
+the paired service fixture must additionally test mismatched PHY/band and rejected mutation
+leaving the previous descriptor intact. This closes the source lookup, not the implementation
+contract or runtime evidence.
+
 ## Mandatory-service and PICS reconciliation
 
 Clause 6.1 (physical PDF p. 62, `ieee802154-2024@302462:302610`) declares clause 6
@@ -165,7 +192,7 @@ from the referenced procedures.
 | --- | --- |
 | MCPS-DATA request/confirm/indication | Selected; direct data contracts and field-validity checks in 1a/6. |
 | MLME-GET, SET and RESET request/confirm | Selected; attribute domains and status rules extracted, mutation semantics owed in 1b. |
-| MLME-COMM-STATUS indication | Unstarred; classify each generation predicate, including rejected incoming security, before closing the 1a service surface. |
+| MLME-COMM-STATUS indication | Selected for incoming security errors; valid secured version 0 gives UNSUPPORTED_LEGACY and version 1 with disabled security gives UNSUPPORTED_SECURITY. Response-primitive transmission outcomes remain with their managed services. |
 | MLME-START request/confirm | Unstarred; static configured endpoints do not establish this service. Managed start remains later debt; classify non-beacon prerequisites before M2. |
 | MLME-BEACON request/confirm/indication and BEACON-REQUEST indication | Unstarred; audit procedure predicates with passive scan and coordinator response. Neither a blanket M1 obligation nor a justified exclusion follows from the table alone. |
 | MLME-SCAN request/confirm | Starred interface; passive-scan capability remains mandatory under 6.4.1.1. Retain M2 debt. |
@@ -184,6 +211,39 @@ E.7.4.2 (pp. 945–946, `@3512820:3515260`) labels generic ED/LQI optional, but 
 O-QPSK clauses 13.3.12/13.3.13 require them. Preserve those PHY-specific requirements.
 The PICS M/O labels do not alter the normative catalog or establish a full-device claim.
 
+## Clause-6 applicability inventory
+
+The structural walk found 28 descendant clause nodes and 14 table/figure nodes. The following
+classifies the remaining procedure groups; it does not claim every referenced statement has an
+executable check. In particular, a mandatory capability deferred from the engineering subset
+remains profile debt.
+
+| Clause / source | Predicate and M1 disposition | Delivery / evidence boundary |
+| --- | --- | --- |
+| 6.1–6.2; p. 62 | Mandatory-feature scope, broadcast constants and symbol-unit conventions apply | Existing catalog plus the pinned IEEE Std 802-2024 address definitions |
+| 6.3.1–6.3.2.1, Figures 6-1/6-2; pp. 62–64 | IFS and unslotted access apply | C-ACCESS/C-ACK and 1c timing contract; algorithm figures previously inspected |
+| 6.4.1.1; pp. 64–65, `@310297:311546` | Passive scan capability is mandatory; during a scan suspend applicable beacon transmission and accept only relevant frames | Deferred to M2 step 8; optional ED/active/orphan modes are not inferred as mandatory |
+| 6.4.1.2 and Figure 6-3 continuation; pp. 65–66, `@311546:316861` | Passive scan receives beacons without extracting their pending data; channel changes, receiver duration, descriptor storage, notification and termination rules apply when scanning | Extend C-SCAN before step 8 with macAutoRequest true/false, capacity and security-error variants; static M1 does not satisfy this debt |
+| 6.4.2.1–6.4.2.2; pp. 66–67, `@316908:320648` | Starting a non-superframe PAN uses MLME-START. Prior reset, ED/active scan and distinct PAN selection are recommendations (“should”) in this procedure | Managed start is deferred; configured M1 PAN context is not MLME-START evidence. Do not promote recommendations into mandatory active-scan support |
+| 6.5.1; p. 67, `@320751:321108` | Beacon synchronization uses decoded beacons; non-beacon synchronization uses coordinator polling | M1 claims direct transfer only, not synchronization/polling. Preserve M2 indirect/poll debt |
+| 6.5.2 and Table 6-1; pp. 67–68, `@321108:324096` | Enhanced-beacon response/filter and requested-IE rules are triggered by enhanced requests and selected attributes | Enhanced requests/IE processing are excluded from M1's legacy operational formats; classify with E1 and the selected optional mechanisms before enabling them |
+| 6.5.3; pp. 68–69, `@324096:325354` | Exported timestamps use the specified symbol boundary, units, width/precision and rollover | Optional timestamp capability remains an explicit 1a/1b selection. Internal simulator timestamps alone do not establish this service capability |
+| 6.6.1–6.6.3.4; pp. 69–73 | Direct generation, filtering, security routing, ACK and retry rules apply; indirect retry branch remains deferred | C-WIRE/C-RECEIVE/C-SECURITY/C-ACK; expected-time deadline still needs 1c model assumptions |
+| 6.6.4–6.6.5 and Figures 6-7–6-10; pp. 73–75 | ATI-end admission and clock-drift guard time apply to allocated transmission intervals | No periodic-beacon, GTS, TSCH or DSME ATI is selected in M1. Do not use this guard-time rule as the direct ACK-timeout formula |
+| 6.6.6 and Figures 6-11–6-13; pp. 75–77, `@352845:359503` | Success, lost data and lost ACK have distinct observable paths; both direct-loss cases retry up to the same limit | C-ACK must inject data loss as well as ACK loss; indirect queue retention/expiry belongs to step 7 |
+
+The Figure 6-3 continuation adds concrete M2 obligations: at least one PAN descriptor can be
+stored; macAutoRequest=true returns stored descriptors and terminates at descriptor capacity
+or after all available channels have been scanned, while false emits per-beacon notifications
+and scans every channel. Nonempty beacon payloads also cause
+notifications. Protected beacon information is retained with its security status even on security
+error. This is scan behavior, not permission to deliver failed-security direct data as plaintext.
+The full descriptor/SCAN/BEACON-NOTIFY contracts remain an M2 audit dependency.
+
+The corpus omits some references, including 8.2.8.3 in 6.4.1.1, 10.8 in 6.5.1,
+10.29.1.5 in 6.5.3 and the 11 distinct IE targets in Table 6-1. Direct lookup resolved those
+targets; their existence is not evidence of implementation or recursive audit completion.
+
 ## PHY measurement boundary
 
 The selected 2450 MHz O-QPSK profile brings all applicable clause 13.3 RF requirements, not
@@ -201,27 +261,53 @@ CCA Mode 1's energy decision and ED's quantitative average are distinct observat
 The [feasibility inspection](results.md#phy-feasibility-inspection) identifies suitable extension
 points and the missing timed contract. A Boolean listening decision does not prove ED calibration.
 
+## Native-address compatibility decision
+
+This matrix selects the bounded M1 integration boundary from existing public extension points.
+It is a design decision for step 1d, not evidence that the replacement composition works.
+Paths below are relative to `src/inet/`; the production fixture remains required.
+
+| Consumer / boundary | Existing contract | M1 decision |
+| --- | --- | --- |
+| Interface identity | `networklayer/common/NetworkInterface.h`: addProtocolData/getProtocolData and integer interface ID; generic MAC accessors use MacAddress | Store native identity/PAN/short context in protocol-owned attached data; route by interface ID. Prove full-width identity and notification behavior. |
+| Upper destination / lower source | `linklayer/common/MacAddressTag.msg` stores MacAddress only; Packet supports protocol-owned tags | Define native request/indication tags or typed primitives. Reject generic 48-bit address requests at the native boundary; no truncating adapter. |
+| Queue transport / classification | Selectable IPacketQueue; `queueing/contract/IPacketClassifierFunction.h` accepts Packet | Use the chosen queue unchanged. If classification is needed, register a protocol-local classifier using native tags. Prove tag preservation and duplication. |
+| Address filters | ReceiveAtMacAddress/SendToMacAddress and PacketFilter conversions use MacAddress | Exclude these native-address selectors from M1; implement native MAC filtering locally. Generic expression support is unproven, and PacketFilter is sealed. |
+| Neighbor discovery | ARP and IPv6 ND resolve to MacAddress; ND reads generic interface identity | Exclude existing ARP/ND from native M1. Configured payload transfer does not imply IPv4/IPv6 support. |
+| Forwarding / lookup | IMacForwardingTable and L3AddressResolver MAC lookup use MacAddress | Exclude Ethernet bridging and generic MAC lookup for native M1. Native configuration resolution is protocol-local. |
+| Configuration | `NetworkInterface.cc` interprets a parent interface parameter named address as MacAddress during interface configuration | Use distinct native parameter ownership/parser; do not pass EUI-64 into inherited address handling. Prove initialization ordering and full-width parse/format. |
+| Display | NetworkInterface %m is generic MAC; str() includes attached protocol data | Display native identity through attached data or protocol-local presentation. No claim that %m becomes EUI-64. |
+| Payload / dispatch | ProtocolTag, registration callbacks and MessageDispatcher interface/protocol routing do not require native address values | One configured upper protocol per interface; receive adapter supplies it. Unknown capture payloads remain opaque. Mixed upper protocols require a later discriminator. |
+| Medium address optimization | RadioMedium macAddressFilter inspects MacAddressInd/generic interface identity | Keep macAddressFilter=false for native M1 and perform native filtering in MAC. Never count this optimization as native filtering proof. |
+
+Step 1d must exercise two EUI-64 identities with identical low 48 bits through the real interface,
+queue and service adapter, plus a negative destination case. Observe upper destination, attached
+identity, serialized addresses, lower source and configured payload dispatch. Include unsupported
+generic requests, duplication and configuration/display round trips. These decisions need no
+widening of MacAddress or planned modification to sealed common/packet source.
+
 ## Remaining closure work
 
 These are **open audit work**, not justified exclusions. No zero-unresolved claim is made.
 
-1. Pin the IEEE Std 802 normative group-address definition. Clause 2's reference is undated;
-   no companion normative text is available in the local corpus. Clause 6.2 independently defines
-   extended broadcast as all ones, but 6.6.2(d)(2) still gates extended-group acceptance on
-   macGroupRxMode. Do not give extended broadcast the unconditional short-broadcast predicate.
-2. Close remaining structural/security rejection and service-generation predicates, particularly
-   COMM-STATUS and the boundary between malformed secured input and valid unsupported security.
-   Record explicit unsupported-capability outcomes before the 1a contract is ready.
-3. Classify the remaining clause-6 descendants and transitive references for the selected roles.
-   Fifty catalog source nodes now yield 122 resolved extracted edges; this establishes target
-   resolution, not semantic closure. Table-cell references require manual inventory as well.
-   Reconcile beacon/command/start dependencies with the bounded M1 claim and retain M2 debt.
-4. Finish selected channel-descriptor and timing dependencies. Concrete PIB mutation/notification,
+1. Complete the bounded malformed-input policy and unsupported-capability outcomes before 1a.
+   Direct-data security service routing is closed by IEEE802154-SERVICE-8 and C-SECURITY:
+   incoming errors use COMM-STATUS, outgoing request errors use DATA.confirm. Malformed framing
+   remains a bounds-check/discard policy without an invented universal IEEE security status;
+   structurally valid secured input must still reach the specified early security returns.
+2. Close transitive dependencies of the selected generation/filter/codec statements. The complete
+   clause-6 structural inventory and procedure dispositions are recorded above; the earlier
+   50-source/122-edge check establishes target resolution, not semantic closure. Detailed
+   scan/start/beacon service contracts remain M2 debt, rather than silent M1 exclusions.
+3. Finish selected timing dependencies. The channel-descriptor source and M1 selection are now
+   recorded above. Concrete PIB mutation/notification,
    reset/configuration and timing ownership belong to 1b/1c, after their normative inputs close.
    A general propagation bound is absent from the current medium API; 1c must specify supported
    propagation assumptions and an explicit ACK allowance before timing behavior is implemented.
-5. Complete consumer/adapter classification and admit independent capture vectors for their
-   intended claims. The existing capture has incomplete provenance; it cannot serve as the sole
-   codec oracle. Production integration proof remains the deliverable of 1d, not this audit.
+4. Admit independent capture vectors for their intended claims. The native consumer/adapter
+   classification above now supplies the 1d design boundary; its production integration proof
+   remains a 1d deliverable. The existing capture has incomplete provenance and is excluded as
+   a sole codec oracle; the independently checked source CRC vector is admitted for its bounded
+   FCS arithmetic claim, not capture provenance or full codec interoperability.
 
 Until these are closed, step 0 remains in progress. No executable standard-derived check has run.

@@ -50,3 +50,11 @@ implementation claim.
 
 No clause-equivalence assertion between 2006/2007 and 2024 is made without the older texts.
 The model-side survey is [conformance.md](../../model/ieee802154/conformance.md).
+
+## Imported addressing reference
+
+IEEE Std 802-2024 supplies the group-address definition referenced by base clause 2 and
+6.6.2. Its [source identity](../../standard/ieee802/source.md) and
+[address catalog](../../standard/ieee802/catalog.md) are separate from the IEEE 802.15.4
+catalog. This resolves the bounded address-definition dependency without changing the selected
+IEEE 802.15.4 edition or importing an unrelated PHY/MAC conformance claim.
