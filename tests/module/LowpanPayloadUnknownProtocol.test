@@ -1,0 +1,174 @@
+%description:
+Exercise the production Ieee802154Mac lower gate, filtering, receive state machine,
+decapsulation and upper gate for unicast and broadcast. Inject no sender tags; check
+source/destination MacAddressInd, InterfaceInd and local payload protocol selection.
+This tests configured opaque payload selection without a standards EtherType.
+It is compatibility behavior, not native IEEE 802.15.4 wire validation.
+
+%file: ReceiveMetadataDriver.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/Protocol.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/common/InterfaceTag_m.h"
+#include "inet/linklayer/common/MacAddressTag_m.h"
+#include "inet/linklayer/ieee802154/Ieee802154MacHeader_m.h"
+#include "inet/networklayer/common/NetworkInterface.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmission.h"
+
+using namespace inet;
+
+namespace LowpanPayloadUnknownProtocol {
+
+const Protocol testLowpanProtocol("testLowpan", "Test opaque LoWPAN payload", Protocol::LinkLayer);
+
+class ReceiveMetadataDriver : public cSimpleModule, public cListener
+{
+  protected:
+    int received = 0;
+    int sent = 0;
+    virtual int numInitStages() const override { return NUM_INIT_STAGES; }
+    virtual void initialize(int stage) override
+    {
+        if (stage == INITSTAGE_LAST) {
+            getParentModule()->getSubmodule("radio")->subscribe("transmissionStarted", this);
+            scheduleAt(SimTime(3, SIMTIME_MS), new cMessage("transmit"));
+            scheduleAt(SimTime(1, SIMTIME_MS), new cMessage("unicast"));
+            scheduleAt(SimTime(2, SIMTIME_MS), new cMessage("broadcast"));
+        }
+    }
+    virtual void handleMessage(cMessage *message) override
+    {
+        if (message->isSelfMessage() && !strcmp(message->getName(), "transmit")) {
+            auto packet = new Packet("opaqueTx");
+            packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0x41, 0x60, 0, 0}));
+            packet->addTag<PacketProtocolTag>()->setProtocol(&testLowpanProtocol);
+            packet->addTag<MacAddressReq>()->setDestAddress(MacAddress::BROADCAST_ADDRESS);
+            send(packet, "txOut");
+            delete message;
+        }
+        else if (message->isSelfMessage()) {
+            bool broadcast = !strcmp(message->getName(), "broadcast");
+            auto packet = new Packet(message->getName());
+            auto header = makeShared<Ieee802154MacHeader>();
+            header->setChunkLength(B(9));
+            header->setSrcAddr(MacAddress("02:12:34:56:78:9a"));
+            header->setDestAddr(broadcast ? MacAddress::BROADCAST_ADDRESS : MacAddress("02:ab:cd:ef:01:23"));
+            header->setNetworkProtocol(0xbeef); // Deliberately absent from EtherType; receiver configuration wins.
+            header->setSequenceId(broadcast ? 1 : 0);
+            packet->insertAtBack(header);
+            packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0x60, 0x12, 0x34, 0x56}));
+            send(packet, "out");
+            delete message;
+        }
+        else {
+            auto packet = check_and_cast<Packet *>(message);
+            auto indication = packet->getTag<MacAddressInd>();
+            ASSERT(indication->getSrcAddress() == MacAddress("02:12:34:56:78:9a"));
+            auto destination = received == 0 ? MacAddress("02:ab:cd:ef:01:23") : MacAddress::BROADCAST_ADDRESS;
+            ASSERT(indication->getDestAddress() == destination);
+            auto interface = check_and_cast<NetworkInterface *>(getParentModule());
+            ASSERT(packet->getTag<InterfaceInd>()->getInterfaceId() == interface->getInterfaceId());
+            ASSERT(packet->getTag<PacketProtocolTag>()->getProtocol() == &testLowpanProtocol);
+            ASSERT(packet->getTag<DispatchProtocolReq>()->getProtocol() == &testLowpanProtocol);
+            ASSERT(packet->peekDataAsBytes()->getBytes() == std::vector<uint8_t>({0x60, 0x12, 0x34, 0x56}));
+            received++;
+            delete packet;
+        }
+    }
+    virtual void receiveSignal(cComponent *, simsignal_t, cObject *object, cObject *) override
+    {
+        auto packet = check_and_cast<physicallayer::ITransmission *>(object)->getPacket();
+        auto header = packet->peekAtFront<Ieee802154MacHeader>();
+        ASSERT(header->getNetworkProtocol() == 0xffff);
+        ASSERT(packet->getTag<PacketProtocolTag>()->getProtocol() == &Protocol::ieee802154);
+        sent++;
+    }
+    virtual void finish() override
+    {
+        ASSERT(received == 2 && sent == 1);
+        std::cout << "Configured opaque receive and transmit verified\n";
+    }
+};
+Define_Module(ReceiveMetadataDriver);
+
+} // namespace LowpanPayloadUnknownProtocol
+
+%file: test.ned
+import inet.linklayer.ieee802154.Ieee802154Mac;
+import inet.networklayer.common.InterfaceTable;
+import inet.networklayer.common.NetworkInterface;
+import inet.mobility.static.StationaryMobility;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandRadio;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+import inet.queueing.queue.DropTailQueue;
+
+simple ReceiveMetadataDriver
+{
+    parameters:
+        @display("i=block/app");
+    gates:
+        input in;
+        output out;
+        output txOut;
+}
+module ReceiveMetadataInterface extends NetworkInterface
+{
+    parameters:
+        string interfaceTableModule = "^.interfaceTable";
+    gates:
+        input upperLayerIn;
+        output upperLayerOut;
+    submodules:
+        driver: ReceiveMetadataDriver;
+        queue: DropTailQueue;
+        mac: Ieee802154Mac {
+            interfaceTableModule = "^.^.interfaceTable";
+            radioModule = "^.radio";
+            useMACAcks = false;
+            upperLayerProtocol = "missingLowpanProtocol";
+            address = "02:ab:cd:ef:01:23";
+        }
+        radio: Ieee802154NarrowbandRadio;
+    connections allowunconnected:
+        driver.txOut --> queue.in;
+        queue.out --> mac.upperLayerIn;
+        driver.out --> mac.lowerLayerIn;
+        mac.upperLayerOut --> driver.in;
+        mac.lowerLayerOut --> radio.upperLayerIn;
+}
+module ReceiveMetadataNode
+{
+    parameters:
+        @networkNode;
+        @display("i=device/wifilaptop");
+    submodules:
+        interfaceTable: InterfaceTable;
+        mobility: StationaryMobility;
+        nic: ReceiveMetadataInterface;
+    connections allowunconnected:
+}
+network ReceiveMetadataNetwork
+{
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        node: ReceiveMetadataNode;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = ReceiveMetadataNetwork
+sim-time-limit = 20ms
+seed-set = 0
+**.radio.antenna.mobilityModule = "^.^.^.mobility"
+**.mobility.initialX = 0m
+**.mobility.initialY = 0m
+**.mobility.initialZ = 0m
+**.mobility.initFromDisplayString = false
+**.mobility.updateFromDisplayString = false
+
+%exitcode: 1
+
+%contains: stderr
+Unknown protocol: name = missingLowpanProtocol
