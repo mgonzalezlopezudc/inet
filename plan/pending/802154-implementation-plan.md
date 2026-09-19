@@ -1,8 +1,8 @@
 # Implement IEEE 802.15.4 in INET
 
-Status: **in progress — package 1a complete; MAC PIB (1b) next**. The expanded applicability extraction (87 statements, including two imported address definitions) and nine English checks are
+Status: **in progress — package 1b complete; PHY contracts (1c) next**. The expanded applicability extraction (87 statements, including two imported address definitions) and nine English checks are
 recorded in the [model coverage ledger](../../doc/project/evidence/model/ieee802154/coverage.md).
-Independent review passed the bounded M1 applicability gate on 2026-09-19. Package 1a has passing value and test-local service-contract evidence. No executable conformance
+Independent review passed the bounded M1 applicability gate on 2026-09-19. Packages 1a and 1b have passing value, test-local service-contract and standalone PIB evidence. No executable conformance
 check is complete; deferred device-profile obligations remain owed.
 Prepared against INET `c913a63a8335ca39a319cb2089daf835ea5e95cd` and the local
 IEEE 802.15.4 survey on 2026-09-19.
@@ -296,8 +296,15 @@ Package 1a is complete: the standalone native address value and paired MAC servi
 passing focused unit/module cases and independent reviews. See the
 [value evidence](../../doc/project/evidence/model/ieee802154/results.md#step-1a-native-address-value) and
 [service-contract evidence](../../doc/project/evidence/model/ieee802154/results.md#step-1a-mac-service-contracts).
-The module fixture uses a test-local provider. Production PIB behavior (1b), PHY contracts (1c),
-the real interface fixture (1d), and wire-codec checks remain owed.
+The module fixture uses a test-local provider. The selected PIB store is implemented in 1b;
+operational service integration, PHY contracts (1c), the real interface fixture (1d), and wire-codec
+checks remain owed.
+
+Package 1b is complete at the store boundary: the selected 43-attribute MAC PIB has a passing
+focused unit case and independent review. The
+[selected MAC PIB contract](../../doc/project/evidence/model/ieee802154/pib.md) records access,
+mutation, startup and reset semantics; [results](../../doc/project/evidence/model/ieee802154/results.md#step-1b-selected-mac-pib)
+record the evidence and operational integration limits.
 
 Record these decisions before dependent behavior, without requiring all contracts to land in one
 PR. No concrete PHY-to-MAC dependency or protocol switch in core is permitted.
@@ -579,7 +586,7 @@ remain NOT_RUN. The documented source findings on wire format/length and sequenc
 remain candidates for targeted production reproductions. This documentation package changes no
 simulation behavior or fingerprints.
 
-Package 1a is implemented and verified locally; the next package is 1b. Packages 1b–1e
+Packages 1a and 1b are implemented and verified locally; the next package is 1c. Packages 1c–1e
 establish the remaining contracts and prove native-address
 integration before the codec. Steps 2–6 then deliver M1, with step 10 as its release gate.
 Keep each new wire chunk paired with its serializer and vectors. Within step 3, separate complete
