@@ -4,6 +4,12 @@ Recent changes in the INET Framework
 INET-4.7.x (in development)
 ---------------------------
 
+New APIs:
+
+- Ieee802154Address represents absent, short and full 64-bit extended addresses
+  with strict parsing, formatting and identity comparisons. It is not yet used
+  by the existing IEEE 802.15.4 MAC.
+
 Notable backward incompatible changes are the following:
 
 1. IEEE 802.11 rate control per receiver
