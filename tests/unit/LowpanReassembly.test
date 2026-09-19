@@ -1,0 +1,78 @@
+%description:
+Reassembly accepts FRAGN-first; original coordinates, per-hop identity, exact duplicates,
+conflicts/quarantine, RFC overlap restart, admission bounds and exact expiry are explicit.
+
+%includes:
+#include "inet/linklayer/lowpan/LowpanReassemblyTable.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/common/TimeTag_m.h"
+using namespace inet;
+using namespace inet::lowpan;
+
+%activity:
+using Table = inet::lowpan::LowpanReassemblyTable;
+Table::Key key{10, 0x1234, 0x1234, Ieee802154Address("0123456789abcdef"), Ieee802154Address("a123456789abcdef"), 80, 65535};
+Packet a("a", makeShared<BytesChunk>(std::vector<uint8_t>(40, 0x60)));
+Packet b("b", makeShared<BytesChunk>(std::vector<uint8_t>(40, 0x61)));
+Packet overlap("overlap", makeShared<BytesChunk>(std::vector<uint8_t>(40, 0x62)));
+Table table(2, 160, SimTime(60));
+ASSERT(table.accept(key, 40, false, b, SimTime(1)).status == Table::STORED);
+ASSERT(table.getReservedBytes() == 80 && table.getNextExpiry() == SimTime(61));
+ASSERT(table.accept(key, 40, false, b, SimTime(20)).status == Table::DUPLICATE);
+ASSERT(table.getNextExpiry() == SimTime(61));
+auto done = table.accept(key, 0, true, a, SimTime(21));
+ASSERT(done.status == Table::COMPLETED && done.packet->getDataLength() == B(80));
+auto bytes = done.packet->peekDataAsBytes()->getBytes();
+ASSERT(bytes[0] == 0x60 && bytes[39] == 0x60 && bytes[40] == 0x61 && bytes[79] == 0x61);
+ASSERT(table.getNumContexts() == 0 && table.getReservedBytes() == 0);
+ASSERT(table.accept(key, 0, true, a, SimTime(30)).status == Table::STORED);
+ASSERT(table.accept(key, 0, true, b, SimTime(31)).status == Table::CONFLICT);
+ASSERT(table.getNumContexts() == 1 && table.getReservedBytes() == 0);
+ASSERT(table.accept(key, 40, false, b, SimTime(89)).status == Table::QUARANTINED);
+ASSERT(table.accept(key, 40, false, b, SimTime(90)).status == Table::STORED);
+ASSERT(table.getNextExpiry() == SimTime(150));
+table.clear();
+ASSERT(table.accept(key, 0, true, a, SimTime(1)).status == Table::STORED);
+ASSERT(table.accept(key, 32, false, overlap, SimTime(2)).status == Table::RESTARTED);
+ASSERT(table.getNextExpiry() == SimTime(62));
+ASSERT(table.accept(key, 0, true, a, SimTime(3)).status == Table::RESTARTED);
+ASSERT(table.accept(key, 40, false, b, SimTime(4)).status == Table::COMPLETED);
+ASSERT(table.accept(key, 41, false, b, SimTime(5)).status == Table::INVALID);
+ASSERT(table.accept(key, 48, false, b, SimTime(5)).status == Table::INVALID);
+ASSERT(table.accept(key, 0, false, a, SimTime(5)).status == Table::INVALID);
+auto other = key;
+other.source = Ieee802154Address("1123456789abcdef");
+auto third = key;
+third.tag = 0;
+ASSERT(table.accept(key, 0, true, a, SimTime(10)).status == Table::STORED);
+ASSERT(table.accept(other, 40, false, b, SimTime(11)).status == Table::STORED);
+ASSERT(table.accept(third, 0, true, a, SimTime(12)).status == Table::RESOURCE_LIMIT);
+ASSERT(table.expire(SimTime(70)) == 1);
+ASSERT(table.getNumContexts() == 1 && table.getReservedBytes() == 80);
+ASSERT(table.accept(third, 0, true, a, SimTime(70)).status == Table::STORED);
+ASSERT(table.expire(SimTime(71)) == 1);
+table.clear();
+ASSERT(table.getNumContexts() == 0 && table.getReservedBytes() == 0);
+Table small(3, 79, SimTime(60));
+ASSERT(small.accept(key, 0, true, a, SimTime(0)).status == Table::RESOURCE_LIMIT);
+Packet taggedFirst("tagged-first", makeShared<BytesChunk>(std::vector<uint8_t>(45, 0x60)));
+taggedFirst.addRegionTag<CreationTimeTag>(B(35), B(10))->setCreationTime(SimTime(7));
+taggedFirst.popAtFront(B(5));
+Packet taggedLast("tagged-last", makeShared<BytesChunk>(std::vector<uint8_t>(45, 0x61)));
+taggedLast.addRegionTag<CreationTimeTag>(B(5), B(10))->setCreationTime(SimTime(7));
+taggedLast.popAtFront(B(5));
+ASSERT(table.accept(key, 0, true, taggedFirst, SimTime(1)).status == Table::STORED);
+auto taggedDone = table.accept(key, 40, false, taggedLast, SimTime(2));
+ASSERT(taggedDone.status == Table::COMPLETED);
+auto regions = taggedDone.packet->getAllRegionTags<CreationTimeTag>();
+int taggedBytes = 0;
+for (const auto& region : regions) {
+    ASSERT(region.getStartOffset() >= B(30) && region.getEndOffset() <= B(50));
+    ASSERT(region.getTag()->getCreationTime() == SimTime(7));
+    taggedBytes += region.getLength().get<B>();
+}
+ASSERT(taggedBytes == 20);
+EV << "Bounded reassembly identities expiry overlap and quarantine verified\n";
+
+%contains: stdout
+Bounded reassembly identities expiry overlap and quarantine verified

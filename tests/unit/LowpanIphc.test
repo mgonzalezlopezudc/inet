@@ -1,0 +1,105 @@
+%description:
+Independent RFC 6282 stateless IPHC wire vectors, TF/HLIM and address selection,
+unused CID decoding, missing identities, unsupported contexts and truncation.
+
+%includes:
+#include "inet/linklayer/lowpan/LowpanIphcCodec.h"
+#include "inet/linklayer/lowpan/LowpanProtocolDissector.h"
+#include "inet/linklayer/lowpan/LowpanProtocol.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+using namespace inet;
+using namespace inet::lowpan;
+
+%global:
+class IphcObserver : public ProtocolDissector::ICallback {
+  public:
+    int incorrect = 0;
+    virtual void startProtocolDataUnit(const Protocol *) override {}
+    virtual void endProtocolDataUnit(const Protocol *) override {}
+    virtual void markIncorrect() override { incorrect++; }
+    virtual void visitChunk(const Ptr<const Chunk>&, const Protocol *) override {}
+    virtual void dissectPacket(Packet *, const Protocol *) override { ASSERT(false); }
+};
+
+%activity:
+Ieee802154Address source("0123456789abcdef"), destination("a123456789abcdef");
+auto ipv6 = makeShared<Ipv6Header>();
+ipv6->setSrcAddress(Ipv6Address("fe80::323:4567:89ab:cdef"));
+ipv6->setDestAddress(Ipv6Address("fe80::a323:4567:89ab:cdef"));
+ipv6->setProtocolId(IP_PROT_IPv6_ICMP);
+ipv6->setHopLimit(64);
+ipv6->setPayloadLength(B(1240));
+auto encoded = LowpanIphcCodec::encode(*ipv6, source, destination);
+Packet output("golden", encoded);
+ASSERT(output.peekDataAsBytes()->getBytes() == std::vector<uint8_t>({0x7a, 0x33, 0x3a}));
+for (const auto& bytes : {std::vector<uint8_t>{0x7a, 0x33, 0x3a}, {0x7a, 0xb3, 0xab, 0x3a}}) {
+    Packet input("independent", makeShared<BytesChunk>(bytes));
+    auto header = input.peekAtFront<LowpanIphcHeader>();
+    auto decoded = LowpanIphcCodec::decode(*header, 1280, source, destination);
+    ASSERT(decoded && decoded->getSrcAddress() == ipv6->getSrcAddress());
+    ASSERT(decoded->getDestAddress() == ipv6->getDestAddress());
+    ASSERT(decoded->getPayloadLength() == B(1240) && decoded->getHopLimit() == 64);
+    ASSERT(!LowpanIphcCodec::decode(*header, 1280, Ieee802154Address(), destination));
+}
+// Literal independently calculated traffic-class/flow-label fields, all TF modes.
+const std::vector<std::vector<uint8_t>> golden = {
+    {0x62, 0x33, 0xe9, 0x0a, 0xbc, 0xde, 0x3a},
+    {0x6a, 0x33, 0x8a, 0xbc, 0xde, 0x3a},
+    {0x72, 0x33, 0xe9, 0x3a}, {0x7a, 0x33, 0x3a}};
+for (int tf = 0; tf < 4; tf++) {
+    ipv6->setTrafficClass(tf == 0 || tf == 2 ? 0xa7 : tf == 1 ? 2 : 0);
+    ipv6->setFlowLabel(tf < 2 ? 0xabcde : 0);
+    auto header = LowpanIphcCodec::encode(*ipv6, source, destination);
+    Packet packet("tf", header);
+    ASSERT(packet.peekDataAsBytes()->getBytes() == golden[tf]);
+    Packet input("tf-independent", makeShared<BytesChunk>(golden[tf]));
+    auto decoded = LowpanIphcCodec::decode(*input.peekAtFront<LowpanIphcHeader>(), 1280, source, destination);
+    ASSERT(decoded && decoded->getTrafficClass() == ipv6->getTrafficClass());
+    ASSERT(decoded->getFlowLabel() == ipv6->getFlowLabel());
+}
+ipv6->setTrafficClass(0);
+ipv6->setFlowLabel(0);
+for (int hop : {0, 1, 30, 64, 255}) {
+    ipv6->setHopLimit(hop);
+    auto header = LowpanIphcCodec::encode(*ipv6, source, destination);
+    auto decoded = LowpanIphcCodec::decode(*header, 40, source, destination);
+    ASSERT(decoded && decoded->getHopLimit() == hop && decoded->getPayloadLength() == B(0));
+}
+ipv6->setHopLimit(64);
+const char *unicast[] = {"2001:db8::1", "fe80::1234:5678:9abc:def0", "fe80::ff:fe00:1234", "fe80::a323:4567:89ab:cdef"};
+for (int mode = 0; mode < 4; mode++) {
+    ipv6->setDestAddress(Ipv6Address(unicast[mode]));
+    auto header = LowpanIphcCodec::encode(*ipv6, source, destination);
+    ASSERT(header->getDam() == mode);
+    auto decoded = LowpanIphcCodec::decode(*header, 80, source, destination);
+    ASSERT(decoded && decoded->getDestAddress() == ipv6->getDestAddress());
+}
+const char *multicast[] = {"ff05:1234::1", "ff05::12:3456:789a", "ff05::12:3456", "ff02::1"};
+for (int mode = 0; mode < 4; mode++) {
+    ipv6->setDestAddress(Ipv6Address(multicast[mode]));
+    auto header = LowpanIphcCodec::encode(*ipv6, source, destination);
+    ASSERT(header->getM() && header->getDam() == mode);
+    auto decoded = LowpanIphcCodec::decode(*header, 80, source, destination);
+    ASSERT(decoded && decoded->getDestAddress() == ipv6->getDestAddress());
+}
+ipv6->setSrcAddress(Ipv6Address::UNSPECIFIED_ADDRESS);
+ipv6->setDestAddress(Ipv6Address("fe80::a323:4567:89ab:cdef"));
+Packet unspecified("unspecified", LowpanIphcCodec::encode(*ipv6, source, destination));
+ASSERT(unspecified.peekDataAsBytes()->getBytes() == std::vector<uint8_t>({0x7a, 0x43, 0x3a}));
+for (const auto& bytes : {std::vector<uint8_t>{0x7e, 0x33}, {0x7a, 0x53, 0x3a, 0,0,0,0,0,0,0,0}, {0x7a, 0x37, 0x3a}}) {
+    Packet input("unsupported", makeShared<BytesChunk>(bytes));
+    auto header = input.peekAtFront<LowpanIphcHeader>(b(-1), Chunk::PF_ALLOW_INCORRECT);
+    ASSERT(!LowpanIphcCodec::decode(*header, 80, source, destination));
+}
+LowpanProtocolDissector dissector;
+for (size_t length = 1; length < golden[0].size(); length++) {
+    Packet truncated("truncated", makeShared<BytesChunk>(std::vector<uint8_t>(golden[0].begin(), golden[0].begin() + length)));
+    IphcObserver observer;
+    dissector.dissect(&truncated, &lowpanProtocol, observer);
+    ASSERT(observer.incorrect == 1 && truncated.getDataLength() == B(0));
+}
+EV << "IPHC independent vectors and stateless matrix verified\n";
+
+%contains: stdout
+IPHC independent vectors and stateless matrix verified

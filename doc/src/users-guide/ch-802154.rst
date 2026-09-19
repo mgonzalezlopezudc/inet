@@ -81,3 +81,29 @@ The :ned:`Ieee802154Mac` type in INET is currently a parameterized version of a
 generic CSMA/CA protocol model with ACK support.
 
 There is also a :ned:`Ieee802154NarrowbandMac`.
+
+6LoWPAN
+-------
+
+The optional ``Lowpan`` feature provides RFC 4944 dispatch and fragmentation,
+stateless RFC 6282 IPHC, and UDP NHC with carried checksums. Enable
+``LowpanExamples`` for the example in ``examples/lowpan``.
+
+Use :ned:`Ieee802154NativeLowpanInterface` together with
+:ned:`LowpanIpv6NetworkLayer` and :ned:`LowpanNativeLinkDomain`. The domain
+configures native extended addresses and static IPv6 next-hop bindings. The
+IPv6 MTU is 1280; adaptation fragmentation is independent of IPv6 source
+fragmentation. Route-over nodes reassemble before IPv6 forwarding and prepare
+new link fragments on egress.
+
+The native MAC implements a bounded unsecured, same-PAN data/ACK profile at
+250 kbit/s, with extended unicast and short broadcast addresses, native frame
+encoding and FCS. The initial configuration requires stationary radios and a
+dedicated medium. Ordinary Neighbor Discovery is suppressed on these interfaces.
+Association, security, stateful IPHC, extension-header NHC and mesh-under are
+outside this profile. External-peer release validation is still pending.
+
+:ned:`Ieee802154LowpanInterface` is a separate compatibility path using the
+legacy MAC and explicit collision-checked 48-bit aliases in
+:ned:`LowpanLinkDomain`. Its successful exchanges do not establish native-wire
+interoperability.

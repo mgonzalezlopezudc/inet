@@ -1,0 +1,178 @@
+%description:
+Two independent PANs, global IPv6 destinations, static routed next hops, complete
+per-hop reassembly and forwarding with decremented Hop Limit. Separate 1280 and1281
+runs verify adaptation fragmentation versus IPv6 source fragmentation.
+
+%extraargs: -r 0..1
+
+%file: RouteCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/linklayer/lowpan/LowpanTransmissionReq_m.h"
+#include "inet/linklayer/lowpan/LowpanFrag1Header_m.h"
+#include "inet/networklayer/common/NetworkInterface.h"
+#include "inet/networklayer/ipv6/Ipv6InterfaceData.h"
+#include "inet/networklayer/ipv6/Ipv6RoutingTable.h"
+#include "inet/networklayer/ipv6/Ipv6Header_m.h"
+#include "inet/networklayer/ipv6/Ipv6ExtensionHeaders_m.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+using namespace inet;
+using namespace inet::lowpan;
+namespace LowpanRouteOver {
+class RouteCheck : public cSimpleModule, public cListener
+{
+    NetworkInterface *interfaces[4]{};
+    int receivedRouter = 0, receivedDestination = 0, delivered = 0;
+    int payloadSize = 0;
+    simtime_t routerComplete;
+    bool forwarded = false;
+    virtual int numInitStages() const override { return NUM_INIT_STAGES; }
+    virtual void initialize(int stage) override
+    {
+        if (stage != INITSTAGE_LAST) return;
+        auto root = getParentModule();
+        auto a = root->getSubmodule("node", 0);
+        auto r = root->getSubmodule("node", 1);
+        auto b = root->getSubmodule("node", 2);
+        interfaces[0] = check_and_cast<NetworkInterface *>(a->getSubmodule("wlan", 0));
+        interfaces[1] = check_and_cast<NetworkInterface *>(r->getSubmodule("wlan", 0));
+        interfaces[2] = check_and_cast<NetworkInterface *>(r->getSubmodule("wlan", 1));
+        interfaces[3] = check_and_cast<NetworkInterface *>(b->getSubmodule("wlan", 0));
+        const char *globals[] = {"2001:db8:1::1", "2001:db8:1::fe", "2001:db8:2::fe", "2001:db8:2::1"};
+        for (int i = 0; i < 4; i++) {
+            interfaces[i]->getProtocolDataForUpdate<Ipv6InterfaceData>()->assignAddress(Ipv6Address(globals[i]), false, SIMTIME_ZERO, SIMTIME_ZERO);
+            interfaces[i]->getSubmodule("lowpan")->subscribe("datagramCompleted", this);
+            interfaces[i]->getSubmodule("lowpan")->subscribe("fragmentSent", this);
+        }
+        auto route = [&](cModule *node, const char *destination, int interface, const char *nextHop) {
+            check_and_cast<Ipv6RoutingTable *>(node->getSubmodule("ipv6")->getSubmodule("routingTable"))->addStaticRoute(
+                Ipv6Address(destination), 128, interfaces[interface]->getInterfaceId(), Ipv6Address(nextHop));
+        };
+        route(a, globals[3], 0, "fe80::211:2233:4455:6602");
+        route(r, globals[3], 2, "fe80::211:2233:4455:6604");
+        route(b, globals[0], 3, "fe80::211:2233:4455:6603");
+        route(r, globals[0], 1, "fe80::211:2233:4455:6601");
+        payloadSize = a->getSubmodule("app", 0)->par("messageLength");
+        b->getSubmodule("app", 0)->subscribe("packetReceived", this);
+    }
+    virtual void receiveSignal(cComponent *source, simsignal_t signal, cObject *object, cObject *) override
+    {
+        auto packet = check_and_cast<Packet *>(object);
+        if (signal == registerSignal("packetReceived")) {
+            ASSERT(packet->getDataLength() == B(payloadSize));
+            delivered++;
+        }
+        else if (signal == registerSignal("datagramCompleted")) {
+            auto ip = packet->peekAtFront<Ipv6Header>();
+            ASSERT(ip->getDestAddress() == Ipv6Address("2001:db8:2::1"));
+            ASSERT(ip->getSrcAddress() == Ipv6Address("2001:db8:1::1"));
+            bool router = source == interfaces[1]->getSubmodule("lowpan");
+            ASSERT(router || source == interfaces[3]->getSubmodule("lowpan"));
+            ASSERT(ip->getHopLimit() == (router ? 32 : 31));
+            if (payloadSize == 1232) {
+                ASSERT(packet->getDataLength() == B(1280));
+                ASSERT(ip->getProtocolId() == IP_PROT_UDP);
+            }
+            else {
+                ASSERT(ip->getProtocolId() == IP_PROT_IPv6EXT_FRAGMENT);
+                auto fragment = packet->peekDataAt<Ipv6FragmentHeader>(B(40));
+                ASSERT(fragment->getFragmentOffset() == 0 || fragment->getFragmentOffset() == 1232);
+                ASSERT(packet->getDataLength() == B(fragment->getMoreFragments() ? 1280 : 57));
+            }
+            if (router) { receivedRouter++; routerComplete = simTime(); }
+            else receivedDestination++;
+        }
+        else {
+            auto request = packet->getTag<LowpanTransmissionReq>();
+            if (source == interfaces[0]->getSubmodule("lowpan")) {
+                ASSERT(request->getDestAddress() == Ieee802154Address("0011223344556602"));
+                ASSERT(request->getDestPanId() == 4660);
+            }
+            else {
+                ASSERT(source == interfaces[2]->getSubmodule("lowpan"));
+                ASSERT(receivedRouter > 0 && simTime() >= routerComplete);
+                ASSERT(request->getSrcAddress() == Ieee802154Address("0011223344556603"));
+                ASSERT(request->getDestAddress() == Ieee802154Address("0011223344556604"));
+                ASSERT(request->getDestPanId() == 9029);
+                forwarded = true;
+            }
+        }
+    }
+    virtual void finish() override {
+        ASSERT(delivered == 1 && forwarded);
+        ASSERT(receivedRouter == (payloadSize == 1232 ? 1 : 2));
+        ASSERT(receivedDestination == receivedRouter);
+        std::cout << "Route-over and IPv6 source fragmentation verified\n";
+    }
+};
+Define_Module(RouteCheck);
+}
+
+%file: test.ned
+import inet.node.inet.StandardHost;
+import inet.linklayer.lowpan.LowpanLinkDomain;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple RouteCheck {}
+network RouteNetwork
+{
+    submodules:
+        mediumLeft: Ieee802154NarrowbandScalarRadioMedium;
+        mediumRight: Ieee802154NarrowbandScalarRadioMedium;
+        domainLeft: LowpanLinkDomain;
+        domainRight: LowpanLinkDomain;
+        node[3]: StandardHost;
+        check: RouteCheck;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = RouteNetwork
+sim-time-limit = 1s
+*.node[*].hasIpv4 = false
+*.node[*].hasIpv6 = true
+*.node[*].ipv6.typename = "LowpanIpv6NetworkLayer"
+*.node[1].forwarding = true
+*.node[1].numWlanInterfaces = 2
+*.node[*].numWlanInterfaces = 1
+*.node[*].wlan[*].typename = "Ieee802154LowpanInterface"
+*.node[0].wlan[0].linkDomainModule = "^.^.domainLeft"
+*.node[1].wlan[0].linkDomainModule = "^.^.domainLeft"
+*.node[1].wlan[1].linkDomainModule = "^.^.domainRight"
+*.node[2].wlan[0].linkDomainModule = "^.^.domainRight"
+*.node[0].wlan[0].radio.radioMediumModule = "mediumLeft"
+*.node[1].wlan[0].radio.radioMediumModule = "mediumLeft"
+*.node[1].wlan[1].radio.radioMediumModule = "mediumRight"
+*.node[2].wlan[0].radio.radioMediumModule = "mediumRight"
+*.node[0].wlan[0].mac.address = "02:00:00:00:00:01"
+*.node[1].wlan[0].mac.address = "02:00:00:00:00:02"
+*.node[1].wlan[1].mac.address = "02:00:00:00:00:03"
+*.node[2].wlan[0].mac.address = "02:00:00:00:00:04"
+*.node[0].numApps = 1
+*.node[0].app[0].typename = "UdpBasicApp"
+*.node[0].app[0].destAddresses = "2001:db8:2::1"
+*.node[0].app[0].destPort = 61631
+*.node[0].app[0].localPort = 61616
+*.node[0].app[0].timeToLive = 32
+*.node[0].app[0].startTime = 10ms
+*.node[0].app[0].stopTime = 20ms
+*.node[0].app[0].sendInterval = 1s
+*.node[0].app[0].messageLength = ${size=1232B,1233B}
+*.node[2].numApps = 1
+*.node[2].app[0].typename = "UdpSink"
+*.node[2].app[0].localPort = 61631
+*.node[*].udp.checksumMode = "computed"
+*.domainLeft.panId = 4660
+*.domainRight.panId = 9029
+*.domainLeft.radioMediumModule = "mediumLeft"
+*.domainRight.radioMediumModule = "mediumRight"
+*.domainLeft.config = xml("<domain><peer interface='node[0].wlan[0]' native='0011223344556601' alias='02:00:00:00:00:01'/><peer interface='node[1].wlan[0]' native='0011223344556602' alias='02:00:00:00:00:02'/><neighbor interface='node[0].wlan[0]' ipv6='fe80::211:2233:4455:6602' native='0011223344556602'/><neighbor interface='node[1].wlan[0]' ipv6='fe80::211:2233:4455:6601' native='0011223344556601'/></domain>")
+*.domainRight.config = xml("<domain><peer interface='node[1].wlan[1]' native='0011223344556603' alias='02:00:00:00:00:03'/><peer interface='node[2].wlan[0]' native='0011223344556604' alias='02:00:00:00:00:04'/><neighbor interface='node[1].wlan[1]' ipv6='fe80::211:2233:4455:6604' native='0011223344556604'/><neighbor interface='node[2].wlan[0]' ipv6='fe80::211:2233:4455:6603' native='0011223344556603'/></domain>")
+**.radio.antenna.mobilityModule = "^.^.^.mobility"
+**.mobility.initialX = 0m
+**.mobility.initialY = 0m
+**.mobility.initialZ = 0m
+**.mobility.initFromDisplayString = false
+**.mobility.updateFromDisplayString = false
+
+%contains: stdout
+Route-over and IPv6 source fragmentation verified

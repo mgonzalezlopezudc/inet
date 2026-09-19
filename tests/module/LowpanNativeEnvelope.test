@@ -1,0 +1,209 @@
+%description:
+Invalidate a prepared native frame before transmission by changing its profile, size, or source.
+Each case must report one envelope drop and no transmission.
+
+%extraargs: -r 0..2
+
+%file: DomainCheck.cc
+#include "inet/linklayer/lowpan/LowpanNativeBoundary.h"
+#include "inet/linklayer/lowpan/LowpanNativeMac.h"
+#include "inet/linklayer/lowpan/LowpanProtocol.h"
+#include "inet/linklayer/lowpan/LowpanPacketDropDetails_m.h"
+#include "inet/queueing/queue/PacketQueue.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/common/MacAddressTag_m.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameHeader_m.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmission.h"
+using namespace inet;
+using namespace inet::lowpan;
+namespace LowpanNativeEnvelope {
+class CorruptMac : public LowpanNativeMac {
+  public:
+    void corrupt(int kind) {
+        Enter_Method("corrupt");
+        ASSERT(currentTxFrame != nullptr);
+        if (kind == 0) currentTxFrame->getTagForUpdate<LowpanTransmissionReq>()->setProfile(99);
+        else if (kind == 1) currentTxFrame->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0}));
+        else currentTxFrame->getTagForUpdate<LowpanTransmissionReq>()->setSrcAddress(Ieee802154Address("1122334455667788"));
+    }
+};
+Define_Module(CorruptMac);
+class DomainCheck : public cSimpleModule, public cListener
+{
+  protected:
+    inet::lowpan::LowpanNativeBoundary *boundary = nullptr;
+    int received = 0;
+    int transmitted = 0;
+    int dropped = 0;
+    bool refusal = false;
+    virtual int numInitStages() const override { return NUM_INIT_STAGES; }
+    virtual void initialize(int stage) override
+    {
+        if (stage != INITSTAGE_LAST)
+            return;
+        auto nic = getParentModule()->getSubmodule("node", 0)->getSubmodule("nic");
+        boundary = check_and_cast<inet::lowpan::LowpanNativeBoundary *>(nic->getSubmodule("boundary"));
+        refusal = nic->getSubmodule("queue")->par("packetCapacity").intValue() == 0;
+        nic->getSubmodule("mac")->subscribe("packetDropped", this);
+        nic->getSubmodule("radio")->subscribe("transmissionStarted", this);
+        scheduleAt(SimTime(1, SIMTIME_MS), new cMessage("broadcast"));
+        scheduleAt(SimTime(1100, SIMTIME_US), new cMessage("mutate", 1));
+    }
+    virtual void handleMessage(cMessage *message) override
+    {
+        if (message->isSelfMessage() && message->getKind() == 1) {
+            auto mac = getParentModule()->getSubmodule("node",0)->getSubmodule("nic")->getSubmodule("mac");
+            check_and_cast<CorruptMac *>(mac)->corrupt(par("failureCase"));
+            delete message;
+        }
+        else if (message->isSelfMessage()) {
+            Ieee802154AddressReq request;
+            request.setSrcAddress(boundary->getLinkAddress());
+            request.setDestAddress(Ieee802154Address(!strcmp(message->getName(), "broadcast") ? "ffff" : "a123456789abcdef"));
+            request.setSrcPanId(boundary->getPanId());
+            request.setDestPanId(boundary->getPanId());
+            auto prepared = boundary->prepareTransmission(request);
+            ASSERT(prepared->getPayloadLimit() == 110);
+            auto packet = new Packet(message->getName());
+            packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>(110, 0x41)));
+            *packet->addTag<LowpanTransmissionReq>() = *prepared;
+            send(packet, "out");
+            delete message;
+        }
+        else {
+            auto packet = check_and_cast<Packet *>(message);
+            const auto& indication = packet->getTag<Ieee802154AddressInd>();
+            ASSERT(indication->getSrcAddress() == Ieee802154Address("0123456789abcdef"));
+            ASSERT(indication->getDestAddress() == Ieee802154Address(received == 0 ? "ffff" : "a123456789abcdef"));
+            ASSERT(indication->getSrcPanId() == 0x1234 && indication->getDestPanId() == 0x1234);
+            ASSERT(!packet->findTag<MacAddressInd>() && !packet->findTag<MacAddressReq>());
+            ASSERT(!packet->findTag<LowpanTransmissionReq>());
+            ASSERT(packet->getTag<PacketProtocolTag>()->getProtocol() == &lowpanProtocol);
+            ASSERT(packet->peekDataAsBytes()->getBytes() == std::vector<uint8_t>(110, 0x41));
+            received++;
+            delete packet;
+        }
+    }
+    virtual void receiveSignal(cComponent *, simsignal_t signal, cObject *object, cObject *details) override
+    {
+        if (signal == registerSignal("packetDropped")) {
+            ASSERT(check_and_cast<LowpanPacketDropDetails *>(details)->getLowpanReason() == LOWPAN_ENVELOPE_INVALIDATED);
+            dropped++;
+        }
+        else {
+            auto packet = check_and_cast<physicallayer::ITransmission *>(object)->getPacket();
+            auto header = packet->peekAtFront<Ieee802154FrameHeader>();
+            ASSERT(header->getChunkLength() == B(23));
+            ASSERT(packet->getDataLength() == B(127));
+            transmitted++;
+        }
+    }
+    virtual void finish() override
+    {
+        ASSERT(received == 0);
+        ASSERT(transmitted == 0);
+        ASSERT(dropped == 1);
+        std::cout << "Native retained profile, size and identity invalidation verified\n";
+    }
+};
+Define_Module(DomainCheck);
+}
+
+%file: test.ned
+import inet.linklayer.lowpan.LowpanNativeMac;
+simple CorruptMac extends LowpanNativeMac { @class(CorruptMac); }
+import inet.linklayer.lowpan.LowpanNativeBoundary;
+import inet.networklayer.common.NetworkInterface;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandRadio;
+import inet.queueing.queue.PacketQueue;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.networklayer.common.InterfaceTable;
+import inet.mobility.static.StationaryMobility;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+
+simple DomainCheck
+{
+    parameters:
+        int failureCase = default(0);
+        @display("i=block/app");
+    gates:
+        output out;
+        input in[2];
+}
+module DomainInterface extends NetworkInterface
+{
+    parameters:
+        string interfaceTableModule = "^.interfaceTable";
+    gates:
+        input upperLayerIn;
+        output upperLayerOut;
+        input radioIn;
+    submodules:
+        boundary: LowpanNativeBoundary { linkDomainModule = "^.^.^.domain"; }
+        queue: PacketQueue { packetCapacity = default(2); }
+        mac: CorruptMac {
+            interfaceTableModule = "^.^.interfaceTable";
+            linkDomainModule = "^.^.^.domain";
+        }
+        radio: Ieee802154NarrowbandRadio;
+    connections:
+        upperLayerIn --> boundary.in;
+        boundary.out --> queue.in;
+        queue.out --> mac.upperLayerIn;
+        mac.upperLayerOut --> boundary.lowerLayerIn;
+        boundary.upperLayerOut --> upperLayerOut;
+        mac.lowerLayerOut --> radio.upperLayerIn;
+        radio.upperLayerOut --> mac.lowerLayerIn;
+        radioIn --> radio.radioIn;
+}
+module DomainNode
+{
+    parameters:
+        @networkNode;
+        @display("i=device/wifilaptop");
+    gates:
+        input in;
+        output out;
+    submodules:
+        interfaceTable: InterfaceTable;
+        mobility: StationaryMobility;
+        nic: DomainInterface;
+    connections allowunconnected:
+        in --> nic.upperLayerIn;
+        nic.upperLayerOut --> out;
+}
+network DomainNetwork
+{
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        domain: LowpanNativeLinkDomain;
+        node[2]: DomainNode;
+        check: DomainCheck;
+    connections allowunconnected:
+        check.out --> node[0].in;
+        node[0].out --> check.in[0];
+        node[1].out --> check.in[1];
+}
+
+%inifile: omnetpp.ini
+[General]
+network = DomainNetwork
+sim-time-limit = 40ms
+**.queue.packetCapacity = 2
+*.check.failureCase = ${failure=0,1,2}
+**.mac.maxLowerDeliveryLifetime = 1s
+**.mac.macMinBE = 0
+**.mac.macMaxBE = 0
+*.domain.panId = 4660
+*.domain.radioMediumModule = "^.radioMedium"
+*.domain.config = xml("<domain><peer interface='node[0].nic' native='0123456789abcdef'/><peer interface='node[1].nic' native='a123456789abcdef'/><neighbor interface='node[0].nic' ipv6='fe80::1' native='a123456789abcdef'/><neighbor interface='node[1].nic' ipv6='fe80::1' native='0123456789abcdef'/></domain>")
+**.radio.antenna.mobilityModule = "^.^.^.mobility"
+**.mobility.initialX = 0m
+**.mobility.initialY = 0m
+**.mobility.initialZ = 0m
+**.mobility.initFromDisplayString = false
+**.mobility.updateFromDisplayString = false
+
+%contains: stdout
+Native retained profile, size and identity invalidation verified

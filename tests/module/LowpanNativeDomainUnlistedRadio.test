@@ -1,0 +1,86 @@
+%description:
+Reject invalid native-domain configuration before traffic.
+
+%file: test.ned
+import inet.linklayer.lowpan.LowpanNativeMac;
+import inet.linklayer.ieee802154.Ieee802154NarrowbandInterface;
+import inet.networklayer.common.NetworkInterface;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandRadio;
+import inet.queueing.queue.PacketQueue;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.networklayer.common.InterfaceTable;
+import inet.mobility.static.StationaryMobility;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+
+module DomainInterface extends NetworkInterface
+{
+    parameters:
+        string interfaceTableModule = "^.interfaceTable";
+    gates:
+        input upperLayerIn;
+        output upperLayerOut;
+        input radioIn;
+    submodules:
+        queue: PacketQueue { packetCapacity = 2; }
+        mac: LowpanNativeMac {
+            interfaceTableModule = "^.^.interfaceTable";
+            linkDomainModule = "^.^.^.domain";
+        }
+        radio: Ieee802154NarrowbandRadio;
+    connections:
+        upperLayerIn --> queue.in;
+        queue.out --> mac.upperLayerIn;
+        mac.upperLayerOut --> upperLayerOut;
+        mac.lowerLayerOut --> radio.upperLayerIn;
+        radio.upperLayerOut --> mac.lowerLayerIn;
+        radioIn --> radio.radioIn;
+}
+module DomainNode
+{
+    parameters:
+        @networkNode;
+        @display("i=device/wifilaptop");
+    submodules:
+        interfaceTable: InterfaceTable;
+        mobility: StationaryMobility;
+        nic: DomainInterface;
+    connections allowunconnected:
+}
+module RogueNode
+{
+    parameters:
+        @networkNode;
+        @display("i=device/wifilaptop");
+    submodules:
+        interfaceTable: InterfaceTable;
+        mobility: StationaryMobility;
+        nic: Ieee802154NarrowbandInterface { interfaceTableModule = "^.interfaceTable"; }
+    connections allowunconnected:
+}
+network DomainNetwork
+{
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        domain: LowpanNativeLinkDomain;
+        node[2]: DomainNode;
+        rogue: RogueNode;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = DomainNetwork
+sim-time-limit = 1us
+*.domain.panId = 4660
+*.domain.radioMediumModule = "^.radioMedium"
+*.domain.config = xml("<domain><peer interface='node[0].nic' native='0123456789abcdef'/><peer interface='node[1].nic' native='a123456789abcdef'/><neighbor interface='node[0].nic' ipv6='fe80::1' native='a123456789abcdef'/><neighbor interface='node[1].nic' ipv6='fe80::1' native='0123456789abcdef'/></domain>")
+**.radio.antenna.mobilityModule = "^.^.^.mobility"
+**.mobility.initialX = 0m
+**.mobility.initialY = 0m
+**.mobility.initialZ = 0m
+**.mobility.initFromDisplayString = false
+**.mobility.updateFromDisplayString = false
+
+%exitcode: 1
+
+%contains: stderr
+Unlisted radio shares native LoWPAN domain medium

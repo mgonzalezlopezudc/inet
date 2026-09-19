@@ -1,6 +1,6 @@
 # Implement 6LoWPAN adaptation in INET
 
-Status: **proposed; implementation not started**. Written 2026-09-19 against
+Status: **implemented through the native P6 data plane; P0 provenance and P7 release validation remain open**. Written 2026-09-19 against
 `c913a63a8335ca39a319cb2089daf835ea5e95cd` and the local, uncommitted standards inventory.
 Starting point: [6lowpan-initial-plan.md](6lowpan-initial-plan.md).
 
@@ -159,7 +159,8 @@ Pin the native frame subset in P0 so the contract can express its requirements b
 
 Each numbered item is a reviewable work package, normally one PR. Keep behavior, wire
 representation and its direct tests together; split oversized packages by the substeps
-listed here. All checkboxes are initially open.
+listed here. Checkboxes record completed work only; open gates remain explicit.
+Execution evidence: [coverage.md](../../doc/project/evidence/model/6lowpan/coverage.md).
 
 ### P0 — Pin scope and derive the checks
 
@@ -168,18 +169,18 @@ Dependencies: none.
 - [ ] Record the exact source revision, local changes, RFC text hashes and selected clauses.
   Use the cached texts; check applicable updates/errata before asserting conformance.
   Pin the IEEE 802.15.4 edition and frame subset before P2a; the RFC cache does not supply it.
-- [ ] Extend the existing RFC catalogs for the complete supported TF/address-mode matrices,
+- [x] Extend the existing RFC catalogs for the complete supported TF/address-mode matrices,
   malformed input, disassociation cleanup and compression/fragmentation interaction.
   Existing catalogs explicitly state that they are selective.
-- [ ] Publish separate IPHC compressor-selection and decompressor-acceptance matrices:
+- [x] Publish separate IPHC compressor-selection and decompressor-acceptance matrices:
   TF, HLIM, NH, SAC/SAM, M/DAC/DAM and CID combinations; inline lengths; link-local and
   non-link-local addresses; unspecified source; IID derivation prerequisites; multicast
   forms; and reserved/unsupported outcomes. Cover legal encodings the compressor does not
   select. Distinguish the context-independent unspecified source from stateful compression.
-- [ ] Create standards-only `features.md` and `checks/` under
+- [x] Create standards-only `features.md` and `checks/` under
   `doc/project/evidence/protocol/6lowpan/`. Put implementation mappings and planned/run
   status under `doc/project/evidence/model/6lowpan/`, following the derivation guide.
-- [ ] Record the contracts in §3, especially protocol registration, lower dispatch,
+- [x] Record the contracts in §3, especially protocol registration, lower dispatch,
   interface initialization, queue ownership and static neighbor addressing.
 
 Exit: every first-release claim has a clause, a planned check, a test category and an
@@ -190,11 +191,11 @@ test-depth achievement is inferred from the inventory.
 
 Dependencies: P0 scope; independent of the new feature.
 
-- [ ] Set destination as well as source in `Ieee802154Mac::decapsulate()`.
+- [x] Set destination as well as source in `Ieee802154Mac::decapsulate()`.
   This fixes legacy `MacAddressInd`; it does not define native LoWPAN link identity.
-- [ ] Add a production-MAC receive test observing both addresses, interface and payload
+- [x] Add a production-MAC receive test observing both addresses, interface and payload
   protocol; include unicast and broadcast. Exercise the real receive/decapsulation path.
-- [ ] Run focused existing IEEE 802.15.4 regressions and record any changed expectations.
+- [x] Run focused existing IEEE 802.15.4 regressions and record any changed expectations.
 
 Exit: upper receive indications contain the transmitted destination and source, with no
 unexplained change in existing MAC behavior.
@@ -203,16 +204,16 @@ unexplained change in existing MAC behavior.
 
 Dependencies: P0, P1.
 
-- [ ] Add `Lowpan`, `LowpanExamples`, `LowpanTests` feature entries with discovered dependencies.
+- [x] Add `Lowpan`, `LowpanExamples`, `LowpanTests` feature entries with discovered dependencies.
   Keep the core independent of optional applications/examples; use the feature decomposition
   prescribed by the add-a-protocol guide and verify the actual dependency graph.
-- [ ] Implement IEEE 802.15.4-owned native address values and request/indication metadata,
+- [x] Implement IEEE 802.15.4-owned native address values and request/indication metadata,
   the static next-hop provider, and the compatibility mapping contract in §3.1.
-- [ ] Implement the lower preparation/budget contract in §3.2; test extended unicast and
+- [x] Implement the lower preparation/budget contract in §3.2; test extended unicast and
   short broadcast requests, envelope validity, unsupported options and collision rejection.
-- [ ] Register package-owned protocol identity and implement configured opaque lower
+- [x] Register package-owned protocol identity and implement configured opaque lower
   payload selection. Test receive classification from bytes without transmit-side tags.
-- [ ] Pin C++/NED contract names, ownership, validation and failures. Demonstrate that the
+- [x] Pin C++/NED contract names, ownership, validation and failures. Demonstrate that the
   future native boundary can supply the same adaptation-facing semantics without aliases.
 
 Exit: contract tests prove reversible configured mappings, PAN isolation, tag transitions
@@ -224,14 +225,14 @@ P2b cannot start with unresolved mapping, payload-selection or capacity contract
 
 Dependencies: P2a.
 
-- [ ] Add `LowpanLayer`, its processing contract and `Ieee802154LowpanInterface`.
-- [ ] Register packet tooling. Implement LOWPAN_IPV6
+- [x] Add `LowpanLayer`, its processing contract and `Ieee802154LowpanInterface`.
+- [x] Register packet tooling. Implement LOWPAN_IPV6
   dispatch (`0x41`) and bounded rejection of malformed/unsupported input.
-- [ ] Integrate the tested P2a adapter, payload-selection and preparation contracts.
-- [ ] Configure MTU 1280 and test the effective value after all initialization stages.
+- [x] Integrate the tested P2a adapter, payload-selection and preparation contracts.
+- [x] Configure MTU 1280 and test the effective value after all initialization stages.
   Apply multicast-to-link-broadcast mapping. Start with static IPv6 addresses, routes and
   next-hop bindings through the explicitly named compatibility mode.
-- [ ] Add small UDP and ICMPv6 exchanges and test start/stop/crash/restart ownership.
+- [x] Add small UDP and ICMPv6 exchanges and test start/stop/crash/restart ownership.
 
 Exit: single-frame packets enter through IPv6, cross the actual MAC/radio path and return
 as the original IPv6 bytes. Packets exceeding single-frame capacity produce an adaptation
@@ -245,14 +246,14 @@ does not yet deliver all packets admitted by MTU 1280. Feature-off build succeed
 Dependencies: P2b; agree the compressed-header coverage contract and the reassembly/reuse
 policies below before implementing.
 
-- [ ] Add FRAG1/FRAGN chunks and serializers with independent golden vectors. Use original
+- [x] Add FRAG1/FRAGN chunks and serializers with independent golden vectors. Use original
   IPv6 size and eight-octet offset units; strip encapsulation dispatch from reconstructed IP.
-- [ ] Fragment only when needed. Produce non-final coverage aligned to eight octets and
+- [x] Fragment only when needed. Produce non-final coverage aligned to eight octets and
   increment the 16-bit tag per fragmented datagram, including wrap.
-- [ ] Key initial route-over reassembly by receiving interface/PAN, native link source,
+- [x] Key initial route-over reassembly by receiving interface/PAN, native link source,
   native link destination, size and tag. Accept FRAGN before FRAG1 and interleaved senders.
   Mesh originator/final-destination substitution belongs to P12; fabricate no such metadata.
-- [ ] Track ranges and reject out-of-bounds/invalid lengths before allocating or writing.
+- [x] Track ranges and reject out-of-bounds/invalid lengths before allocating or writing.
   Implement RFC 4944 §5.3 overlap discard precisely. Ignore byte-identical same-range
   duplicates without extending expiry. On partial overlap discard accumulated fragments;
   pin whether to restart with the incoming fragment (permitted by the RFC) or reject it.
@@ -260,15 +261,15 @@ policies below before implementing.
   coding, record whether rejected keys permit later fragments to create a fresh context or
   remain quarantined, with bounded storage and a fixed expiry for any quarantine. Quarantine
   is not an RFC requirement and must not silently replace its overlap semantics.
-- [ ] Pin a deterministic tag-reuse policy before P3 coding: sender guard lifetime and its
+- [x] Pin a deterministic tag-reuse policy before P3 coding: sender guard lifetime and its
   scope, behavior at guard exhaustion, restart handling, and receiver behavior when an active
   key is reused. Preserve increment-and-wrap semantics. State the assumed maximum stale
   fragment lifetime; a sender guard only mitigates collisions under that assumption.
   Nonconflicting fragments from different generations with the same complete key cannot
   be distinguished on the wire. Do not claim that a guard or quarantine solves that ambiguity.
-- [ ] Start expiry on the first received fragment, including FRAGN; duplicates do not
+- [x] Start expiry on the first received fragment, including FRAGN; duplicates do not
   extend it. Bound total bytes and datagrams with an explicit admission/eviction policy.
-- [ ] Flush partial RX and pending TX on disassociation where modeled and on interface
+- [x] Flush partial RX and pending TX on disassociation where modeled and on interface
   teardown; cancel timers and release packets on stop/crash/restart. If no association
   event exists in the chosen MAC, state that scope limit and test the lifecycle path available.
   Pin the actual event provider and affected interface/PAN scope; do not infer peer-specific
@@ -284,15 +285,15 @@ cover all rows marked P3 in §5, including observable timer/storage cleanup.
 
 Dependencies: P3, P2a native link contracts and completed P0 encode/accept matrices.
 
-- [ ] Implement all TF and HLIM modes; inline NH; stateless unicast/multicast forms;
+- [x] Implement all TF and HLIM modes; inline NH; stateless unicast/multicast forms;
   unspecified source; fully inline fallback when IID elision is invalid. Test all supported
   legal encodings and reserved combinations, not only encodings selected by the compressor.
-- [ ] Derive extended-address IIDs by the RFC 6282 U/L-bit rule and short-address IIDs by
+- [x] Derive extended-address IIDs by the RFC 6282 U/L-bit rule and short-address IIDs by
   its `0000:00ff:fe00:XXXX` rule. Do not conflate that rule with RFC 4944 §6's PAN-based
   short-address autoconfiguration procedure.
-- [ ] Reconstruct IPv6 payload length from the complete uncompressed datagram coverage,
+- [x] Reconstruct IPv6 payload length from the complete uncompressed datagram coverage,
   never from the compressed FRAG1 length. Validate every inline-field read.
-- [ ] Integrate compression with fragmentation: all compressed headers fit wholly in
+- [x] Integrate compression with fragmentation: all compressed headers fit wholly in
   FRAG1; later fragments contain original datagram bytes at original IPv6 offsets.
   If a header cannot fit there, leave affected headers uncompressed or select LOWPAN_IPV6,
   then recompute coverage and alignment. Uncompressed header bytes may extend into later
@@ -309,14 +310,14 @@ forms remain explicitly unsupported except the context-independent unspecified-s
 
 Dependencies: P4.
 
-- [ ] Implement all four port modes, infer UDP length and preserve the carried checksum.
+- [x] Implement all four port modes, infer UDP length and preserve the carried checksum.
   C=1 input without the required integrity support is dropped; no checksum-elision option
   is offered in this release. Use computed checksums in byte/capture validation.
-- [ ] Test port-range endpoints and values just outside each compression range.
-- [ ] Add a three-node, two-link route-over network with two distinguishable flows. Observe
+- [x] Test port-range endpoints and values just outside each compression range.
+- [x] Add a three-node, two-link route-over network with two distinguishable flows. Observe
   complete reassembly before IPv6 forwarding, Hop Limit decrement, and new per-hop
   compression/fragmentation with the outgoing next-hop identity.
-- [ ] Test forwarded IPv6 packets larger than 1280 for ICMPv6 Packet Too Big, and locally
+- [x] Test forwarded IPv6 packets larger than 1280 for ICMPv6 Packet Too Big, and locally
   originated packets larger than 1280 through existing IPv6 source fragmentation. Datagrams
   at or below 1280 acquire no IPv6 Fragment header solely because they span MAC frames.
   LoWPAN fragmentation operates on each resulting complete IPv6 packet's bytes, including
@@ -330,20 +331,20 @@ labels the compatibility MAC as non-interoperable.
 Dependencies: P0 pinned IEEE edition/subset and P2a contracts; algorithm development P2b–P5 can proceed
 before this package completes. P6 must complete before first-release acceptance.
 
-- [ ] Integrate the P2a IEEE 802.15.4-owned native address representation and request/
+- [x] Integrate the P2a IEEE 802.15.4-owned native address representation and request/
   indication metadata through native MAC filtering, retries,
   ACK handling, neighbor bindings and IPv6 interface-token construction. Avoid widening
   generic `MacAddress` as an incidental change.
-- [ ] In a separate reviewable substep, implement the chosen data/ACK frame subset's frame
+- [x] In a separate reviewable substep, implement the chosen data/ACK frame subset's frame
   control, PAN/address modes, PAN compression, byte order, variable header length and
   two-octet FCS. Remove the PAN-as-protocol convention on this path. Align simulated chunk
   length, serialized byte count and the MAC/radio size budget.
-- [ ] Support extended unicast and short `0xffff` broadcast with the actual destination
+- [x] Support extended unicast and short `0xffff` broadcast with the actual destination
   PAN. Explicitly reject unsupported frame versions/security/forms. Broader short-unicast
   operation may follow after its allocation and neighbor semantics are tested.
-- [ ] Replace compatibility bindings in the release examples with native bindings. Preserve
+- [x] Replace compatibility bindings in the release examples with native bindings. Preserve
   or explicitly migrate existing 802.15.4 configurations and document changed fingerprints.
-- [ ] Produce captures with the correct link type and FCS convention. Decode them with
+- [x] Produce captures with the correct link type and FCS convention. Decode them with
   an independent dissector and exchange serialized vectors in both directions with a pinned
   external 6LoWPAN implementation. Record peer version, setup and exact supported subset.
 
@@ -358,11 +359,11 @@ Dependencies: P5, P6.
 
 - [ ] Re-run the complete first-release matrix on the native MAC path, including feature-off
   and existing IPv6/802.15.4 regression selections. Keep compatibility results separate.
-- [ ] Assess ordinary ND as its own substep: encode native link-address options, resolve
+- [x] Assess ordinary ND as its own substep: encode native link-address options, resolve
   64-bit next hops without truncation, and test link-local creation, DAD, RS/RA and NS/NA.
   If this needs a wider neighbor-cache refactor, retain documented static-neighbor operation
   for the first release and track dynamic ND as outstanding. Do not call that RFC 6775 ND.
-- [ ] Publish minimal single-hop and route-over examples, limitations, feature/configuration
+- [x] Publish minimal single-hop and route-over examples, limitations, feature/configuration
   instructions and release/migration notes. Update model coverage with actual commands,
   verdicts and artifacts, and correct the old user-guide statement.
 

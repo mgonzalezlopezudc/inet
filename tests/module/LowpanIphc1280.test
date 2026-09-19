@@ -1,0 +1,145 @@
+%description:
+Production IPv6 echo request/reply over the native adaptation contract and compatibility
+MAC/radio. A second run submits a valid packet exceeding one frame and observes
+RFC 4944 fragmentation/reassembly while the IPv6 MTU remains 1280.
+
+
+
+%file: ExchangeCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/linklayer/common/MacAddressTag_m.h"
+#include "inet/linklayer/ieee802154/Ieee802154MacHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanHeader_m.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/lowpan/LowpanPacketDropDetails_m.h"
+#include "inet/linklayer/lowpan/LowpanProtocol.h"
+#include "inet/networklayer/common/NetworkInterface.h"
+#include "inet/networklayer/ipv6/Ipv6InterfaceData.h"
+#include "inet/networklayer/ipv6/Ipv6Header_m.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmission.h"
+using namespace inet;
+using namespace inet::lowpan;
+namespace LowpanIphc1280 {
+class ExchangeCheck : public cSimpleModule, public cListener
+{
+    int tx = 0;
+    int completed = 0;
+    int drops = 0;
+    int replies = 0;
+    bool oversized = false;
+    virtual int numInitStages() const override { return NUM_INIT_STAGES; }
+    virtual void initialize(int stage) override
+    {
+        if (stage != INITSTAGE_LAST)
+            return;
+        for (int i = 0; i < 2; i++) {
+            auto node = getParentModule()->getSubmodule("node", i);
+            auto nic = check_and_cast<NetworkInterface *>(node->getSubmodule("wlan", 0));
+            ASSERT(nic->getMtu() == 1280);
+            ASSERT(nic->getProtocol() == &lowpanProtocol);
+            ASSERT(nic->getProtocolData<Ipv6InterfaceData>()->getLinkLocalAddress() ==
+                Ipv6Address(i == 0 ? "fe80::323:4567:89ab:cdef" : "fe80::a323:4567:89ab:cdef"));
+            nic->getSubmodule("lowpan")->subscribe("datagramCompleted", this);
+            nic->getSubmodule("lowpan")->subscribe("packetDropped", this);
+            nic->getSubmodule("radio")->subscribe("transmissionStarted", this);
+            if (i == 0) {
+                auto app = node->getSubmodule("app", 0);
+                oversized = app->par("packetSize").intValue() == 1232;
+                app->subscribe("pingRxSeq", this);
+            }
+        }
+    }
+    virtual void receiveSignal(cComponent *, simsignal_t, intval_t, cObject *) override { replies++; }
+    virtual void receiveSignal(cComponent *, simsignal_t signal, cObject *object, cObject *details) override
+    {
+        if (signal == registerSignal("packetDropped")) {
+            auto drop = check_and_cast<LowpanPacketDropDetails *>(details);
+            ASSERT(drop->getLowpanReason() == LOWPAN_FRAGMENTATION_UNAVAILABLE);
+            drops++;
+        }
+        else if (signal == registerSignal("datagramCompleted")) {
+            auto packet = check_and_cast<Packet *>(object);
+            ASSERT(packet->getTag<PacketProtocolTag>()->getProtocol() == &Protocol::ipv6);
+            ASSERT(!packet->findTag<MacAddressReq>() && !packet->findTag<MacAddressInd>());
+            ASSERT(packet->peekAtFront<Ipv6Header>()->getProtocolId() == IP_PROT_IPv6_ICMP);
+            ASSERT(packet->getDataLength() == B(1280));
+            ASSERT(packet->peekDataAt<BytesChunk>(B(48), B(1232))->getBytes() == std::vector<uint8_t>(1232, 0x3f));
+            completed++;
+        }
+        else {
+            auto packet = check_and_cast<physicallayer::ITransmission *>(object)->getPacket();
+            auto mac = packet->peekAtFront<Ieee802154MacHeader>();
+            if (packet->getDataLength() < B(23))
+                return;
+            ASSERT(packet->getDataLength() <= B(127));
+            auto dispatch = packet->peekDataAt<BytesChunk>(B(23), B(1))->getBytes()[0];
+            ASSERT(oversized ? ((dispatch & 0xf8) == 0xc0 || (dispatch & 0xf8) == 0xe0) : dispatch == 0x41);
+            if ((dispatch & 0xf8) == 0xc0) {
+                auto bytes = packet->peekDataAt<BytesChunk>(B(27), B(4))->getBytes();
+                ASSERT(bytes == std::vector<uint8_t>({0x78, 0x33, 0x3a, 0x1e}));
+            }
+            tx++;
+        }
+    }
+    virtual void finish() override
+    {
+        ASSERT(replies == 1);
+        ASSERT(completed == 2);
+        ASSERT(tx == (26));
+        ASSERT(drops == 0);
+        std::cout << (oversized ? "IPHC fragmented IPv6 echo verified\n" : "IPv6 radio echo verified\n");
+    }
+};
+Define_Module(ExchangeCheck);
+}
+
+%file: test.ned
+import inet.node.inet.StandardHost;
+import inet.linklayer.lowpan.LowpanLinkDomain;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple ExchangeCheck
+{
+    parameters:
+        @display("i=block/app");
+}
+network ExchangeNetwork
+{
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        domain: LowpanLinkDomain;
+        node[2]: StandardHost;
+        check: ExchangeCheck;
+}
+
+%inifile: omnetpp.ini
+[General]
+**.lowpan.headerCompression = "iphc"
+network = ExchangeNetwork
+sim-time-limit = 500ms
+*.node[*].hasIpv4 = false
+*.node[*].hasIpv6 = true
+*.node[*].ipv6.typename = "LowpanIpv6NetworkLayer"
+*.node[*].numWlanInterfaces = 1
+*.node[*].wlan[0].typename = "Ieee802154LowpanInterface"
+*.node[*].wlan[0].linkDomainModule = "^.^.domain"
+*.node[0].wlan[0].mac.address = "02:00:00:00:00:01"
+*.node[1].wlan[0].mac.address = "02:00:00:00:00:02"
+*.node[0].numApps = 1
+*.node[0].app[0].typename = "PingApp"
+*.node[0].app[0].destAddr = "fe80::a323:4567:89ab:cdef"
+*.node[0].app[0].startTime = 10ms
+*.node[0].app[0].count = 1
+*.node[0].app[0].packetSize = 1232B
+*.node[0].app[0].checksumMode = "computed"
+*.domain.panId = 4660
+*.domain.config = xml("<domain><peer interface='node[0].wlan[0]' native='0123456789abcdef' alias='02:00:00:00:00:01'/><peer interface='node[1].wlan[0]' native='a123456789abcdef' alias='02:00:00:00:00:02'/><neighbor interface='node[0].wlan[0]' ipv6='fe80::a323:4567:89ab:cdef' native='a123456789abcdef'/><neighbor interface='node[1].wlan[0]' ipv6='fe80::323:4567:89ab:cdef' native='0123456789abcdef'/></domain>")
+**.radio.antenna.mobilityModule = "^.^.^.mobility"
+**.mobility.initialX = 0m
+**.mobility.initialY = 0m
+**.mobility.initialZ = 0m
+**.mobility.initFromDisplayString = false
+**.mobility.updateFromDisplayString = false
+
+%contains: stdout
+IPHC fragmented IPv6 echo verified

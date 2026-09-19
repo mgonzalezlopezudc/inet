@@ -1,0 +1,22 @@
+%description:
+Tag allocation increments and wraps, refuses a guarded next tag without skipping it,
+and permits reuse at the exact guard deadline.
+
+%includes:
+#include "inet/linklayer/lowpan/LowpanDatagramTagAllocator.h"
+using namespace inet;
+using namespace inet::lowpan;
+
+%activity:
+LowpanDatagramTagAllocator allocator(65535);
+for (unsigned int i = 0; i < 65536; i++) {
+    auto tag = allocator.allocate(SimTime(0), SimTime(61));
+    ASSERT(tag && *tag == uint16_t(65535 + i));
+}
+ASSERT(!allocator.allocate(SimTime(60), SimTime(121)));
+ASSERT(allocator.allocate(SimTime(61), SimTime(122)).value() == 65535);
+ASSERT(allocator.allocate(SimTime(61), SimTime(122)).value() == 0);
+EV << "Increment wrap exhaustion and exact tag reuse boundary verified\n";
+
+%contains: stdout
+Increment wrap exhaustion and exact tag reuse boundary verified

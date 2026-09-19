@@ -1,0 +1,5 @@
+capture	sha256	frames	max_psdu_bytes	valid_fcs	valid_icmpv6	valid_udp
+tests/module/work/LowpanNativeUdp/native-udp-0.pcapng	526c8923876db2fa0881a514be7de69150e5c223913b79d411496097868afee2	1	46	1	0	1
+tests/module/work/LowpanNativeUdp/native-udp-1.pcapng	b61debb04f57cc9507828e9c4cc1492d71d8a29e9ed972797bdf0d17d99ce848	13	124	13	0	1
+tests/module/work/LowpanNativeUdp/native-udp-2.pcapng	b4d0c37834ca1011b76f88819bd3a49a7cf9bab272f8a9f81af56062a89580b1	1	41	1	0	1
+tests/module/work/LowpanNativeUdp/native-udp-3.pcapng	bf5ecf2967aa26f4ee245fa3b4340c463ecd9e366eb813fff861a67773e53878	12	126	12	0	1

@@ -1,0 +1,67 @@
+%description:
+RFC 4944 section 5.1 literal LOWPAN_IPV6 dispatch, independent byte decoding,
+invalid typed-header rejection and bounded dissector progress.
+
+%includes:
+#include "inet/linklayer/lowpan/LowpanHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanProtocol.h"
+#include "inet/linklayer/lowpan/LowpanProtocolDissector.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+using namespace inet;
+using namespace inet::lowpan;
+
+%global:
+class DispatchObserver : public ProtocolDissector::ICallback
+{
+  public:
+    int starts = 0, ends = 0, ipv6 = 0, incorrect = 0;
+    virtual void startProtocolDataUnit(const Protocol *protocol) override { starts++; }
+    virtual void endProtocolDataUnit(const Protocol *protocol) override { ends++; }
+    virtual void markIncorrect() override { incorrect++; }
+    virtual void visitChunk(const Ptr<const Chunk>& chunk, const Protocol *protocol) override {}
+    virtual void dissectPacket(Packet *packet, const Protocol *protocol) override {
+        ASSERT(protocol == &Protocol::ipv6);
+        ipv6++;
+        packet->popAtFront();
+    }
+};
+
+%activity:
+Packet encoded("encoded", makeShared<LowpanHeader>());
+ASSERT(encoded.peekDataAsBytes()->getBytes() == std::vector<uint8_t>({0x41}));
+Packet independent("independent", makeShared<BytesChunk>(std::vector<uint8_t>{0x41}));
+ASSERT(independent.popAtFront<LowpanHeader>()->getDispatch() == 0x41);
+ASSERT(independent.getDataLength() == B(0));
+auto invalid = makeShared<LowpanHeader>();
+invalid->setDispatch(0x42);
+Packet invalidPacket("invalid", invalid);
+bool rejected = false;
+try { invalidPacket.peekDataAsBytes(); }
+catch (const cRuntimeError&) { rejected = true; }
+ASSERT(rejected);
+LowpanProtocolDissector dissector;
+for (int testCase = 0; testCase < 4; testCase++) {
+    std::vector<uint8_t> bytes;
+    if (testCase == 1)
+        bytes = {0x41};
+    else if (testCase == 2)
+        bytes = {0x42, 0xff, 0xff, 0xff}; // Unrecognized dispatch stays opaque.
+    else if (testCase == 3) {
+        bytes.resize(41, 0);
+        bytes[0] = 0x41;
+        bytes[1] = 0x60;
+    }
+    Packet packet("dispatch");
+    if (!bytes.empty())
+        packet.insertAtBack(makeShared<BytesChunk>(bytes));
+    DispatchObserver observer;
+    dissector.dissect(&packet, &lowpanProtocol, observer);
+    ASSERT(observer.starts == 1 && observer.ends == 1);
+    ASSERT(observer.incorrect == (testCase < 2 ? 1 : 0));
+    ASSERT(observer.ipv6 == (testCase == 3 ? 1 : 0));
+    ASSERT(packet.getDataLength() == B(0));
+}
+EV << "LOWPAN_IPV6 dispatch and bounded tooling verified\n";
+
+%contains: stdout
+LOWPAN_IPV6 dispatch and bounded tooling verified

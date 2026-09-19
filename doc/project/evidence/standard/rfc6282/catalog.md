@@ -44,6 +44,11 @@ only to the roles, modes and prerequisites named in their source paragraphs.
 | [RFC6282-UDP-7](#rfc6282-udp-7) | UDP port mode three elides the common 0xf0b prefix of both ports. |
 | [RFC6282-UDP-8](#rfc6282-udp-8) | UDP Length is elided and inferred from lower layers. |
 | [RFC6282-DISPATCH-1](#rfc6282-dispatch-1) | LOWPAN_IPHC preempts the old ESC value and reserves 0x40 as its replacement. |
+| [RFC6282-TF-1](#rfc6282-tf-1) | TF selects four, three, one or zero inline octets for ECN/DSCP and Flow Label. |
+| [RFC6282-ADDR-2](#rfc6282-addr-2) | Stateless unicast SAM/DAM selects 128, 64, 16 or zero inline address bits. |
+| [RFC6282-MCAST-2](#rfc6282-mcast-2) | Stateless multicast DAM selects literal, 48-bit, 32-bit or 8-bit forms. |
+| [RFC6282-ADDR-3](#rfc6282-addr-3) | Stateful destination address combinations include reserved selectors. |
+| [RFC6282-NH-1](#rfc6282-nh-1) | NH selects inline Next Header or a LOWPAN_NHC encoding. |
 
 ## Checkable statements
 
@@ -375,6 +380,56 @@ only to the roles, modes and prerequisites named in their source paragraphs.
 - Check idea: Interpret 0x7f as an IPHC dispatch and reserve 0x40 for the later ESC definition.
 - Overridden by: [RFC8066-ESC-1](../rfc8066/catalog.md#rfc8066-esc-1). RFC 8066 defines the reserved replacement ESC value and its extension octet format.
 
+### RFC6282-TF-1
+
+**TF selects four, three, one or zero inline octets for ECN/DSCP and Flow Label.**
+
+TF=00 carries ECN, DSCP, padding and Flow Label in four octets; 01 elides DSCP and uses three; 10 elides Flow Label and uses one; 11 elides both fields.
+
+— §3.1.1, rfc6282.txt:316–327. Paraphrase; strength: description. Class: encoding.
+
+- Check idea: Exercise all four selectors with zero and nonzero fields, independently check bit placement and every truncated inline length.
+
+### RFC6282-ADDR-2
+
+**Stateless unicast SAM/DAM selects 128, 64, 16 or zero inline address bits.**
+
+For SAC=0 or M=0,DAC=0, mode 00 is literal; 01 restores fe80::/64; 10 restores that prefix and IID 0000:00ff:fe00:XXXX; 11 derives the IID from encapsulating link identity.
+
+— §3.1.1, rfc6282.txt:379–408 and 451–477. Paraphrase; strength: description. Class: encoding.
+
+- Check idea: Exercise every mode with asymmetric source/destination addresses, both link-address widths and unavailable or mismatching IID information.
+
+### RFC6282-MCAST-2
+
+**Stateless multicast DAM selects literal, 48-bit, 32-bit or 8-bit forms.**
+
+For M=1,DAC=0 the forms are full 128 bits, ffXX::00XX:XXXX:XXXX, ffXX::00XX:XXXX and ff02::00XX respectively.
+
+— §3.1.1, rfc6282.txt:519–527. Paraphrase; strength: description. Class: encoding.
+
+- Check idea: Check all forms with independently constructed bytes, different scopes and values just outside each compressible shape.
+
+### RFC6282-ADDR-3
+
+**Stateful destination address combinations include reserved selectors.**
+
+M=0,DAC=1,DAM=00 is reserved. For M=1,DAC=1 only DAM=00 denotes a context-based multicast form; the other three DAM values are reserved.
+
+— §3.1.1, rfc6282.txt:479–545. Paraphrase; strength: description. Class: encoding.
+
+- Check idea: Distinguish reserved selectors from legal context-dependent forms and from SAC=1,SAM=00 unspecified source.
+
+### RFC6282-NH-1
+
+**NH selects inline Next Header or a LOWPAN_NHC encoding.**
+
+NH=0 carries the eight-bit Next Header inline; NH=1 signals LOWPAN_NHC.
+
+— §3.1.1, rfc6282.txt:343–348. Paraphrase; strength: description. Class: encoding.
+
+- Check idea: Check inline extension-header preservation, recognized NHC, unknown NHC and truncated chained fields.
+
 ## Areas outside this selection
 
-This catalog selects IPHC field handling, fragmentation interaction, selected address encodings, extension-header limits and UDP compression. The complete TF, SAC/SAM, DAC/DAM and context-ID encoding matrices (§3), all extension-header EIDs (§4.2), forwarding-node checksum authorization (§4.3.2), future NHC allocations (§5) and the security analysis (§6) are not exhaustively cataloged.
+This catalog selects IPHC field handling, fragmentation interaction, selected address encodings, extension-header limits and UDP compression. The complete context-dependent SAC/SAM, DAC/DAM and context-ID semantics (§3), all extension-header EIDs (§4.2), forwarding-node checksum authorization (§4.3.2), future NHC allocations (§5) and the security analysis (§6) are not exhaustively cataloged.

@@ -1,0 +1,180 @@
+%description:
+Independent RFC 6282 literal-byte receive combinations cross all TF, HLIM,
+stateless source/destination/multicast, unspecified-source and unused-CID modes.
+Each production delivery must equal independently assembled IPv6 bytes.
+
+%file: DomainCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/ieee802154/Ieee802154AddressTagBase_m.h"
+using namespace inet;
+namespace LowpanIphcReceiveMatrix {
+class DomainCheck : public cSimpleModule {
+    std::vector<std::vector<uint8_t>> wire, expected;
+    int delivered = 0;
+    std::vector<uint8_t> hex(const std::string& value) {
+        std::vector<uint8_t> bytes;
+        for (size_t i=0; i<value.size(); i+=2) bytes.push_back(std::stoul(value.substr(i,2), nullptr, 16));
+        return bytes;
+    }
+    virtual int numInitStages() const override { return NUM_INIT_STAGES; }
+    virtual void initialize(int stage) override {
+        if (stage != INITSTAGE_LAST) return;
+        const char *sources[] = {"20010db8000000000000000000000001", "fe800000000000001122334455667788", "fe80000000000000000000fffe001234", "fe800000000000000323456789abcdef", "00000000000000000000000000000000"};
+        const char *unicast[] = {"20010db8000000000000000000000002", "fe800000000000008877665544332211", "fe80000000000000000000fffe00abcd", "fe80000000000000a323456789abcdef"};
+        const char *multicast[] = {"ff051234000000000000000000000001", "ff05000000000000000000123456789a", "ff050000000000000000000000123456", "ff020000000000000000000000000001"};
+        const std::vector<std::vector<uint8_t>> tfBytes{{0xe9,0x0a,0xbc,0xde},{0x8a,0xbc,0xde},{0xe9},{}};
+        const int trafficClasses[] = {0xa7,2,0xa7,0};
+        const int hops[] = {30,1,64,255}, starts[] = {0,8,14,16};
+        for (int tf=0; tf<4; tf++) for (int hlim=0; hlim<4; hlim++)
+        for (int sam=0; sam<5; sam++) for (int dam=0; dam<4; dam++)
+        for (bool m : {false,true}) for (bool cid : {false,true}) {
+            auto source = hex(sources[sam]), destination = hex(m ? multicast[dam] : unicast[dam]);
+            std::vector<uint8_t> bytes{uint8_t(0x60 | tf<<3 | hlim), uint8_t((cid?0x80:0) | (sam==4?0x40:sam<<4) | (m?8:0) | dam)};
+            if (cid) bytes.push_back(0xab);
+            bytes.insert(bytes.end(),tfBytes[tf].begin(),tfBytes[tf].end());
+            bytes.push_back(59); // Inline Next Header, no extension headers.
+            if (!hlim) bytes.push_back(30);
+            if (sam<4) bytes.insert(bytes.end(),source.begin()+starts[sam],source.end());
+            if (!m) bytes.insert(bytes.end(),destination.begin()+starts[dam],destination.end());
+            else if (!dam) bytes.insert(bytes.end(),destination.begin(),destination.end());
+            else {
+                if (dam<3) bytes.push_back(destination[1]);
+                int count = dam==1 ? 5 : dam==2 ? 3 : 1;
+                bytes.insert(bytes.end(),destination.end()-count,destination.end());
+            }
+            for (int i=0; i<8; i++) bytes.push_back(i);
+            wire.push_back(bytes);
+            uint32_t word = 0x60000000u | trafficClasses[tf]<<20 | (tf<2 ? 0xabcde : 0);
+            std::vector<uint8_t> original{uint8_t(word>>24),uint8_t(word>>16),uint8_t(word>>8),uint8_t(word),0,8,59,uint8_t(hops[hlim])};
+            original.insert(original.end(),source.begin(),source.end());
+            original.insert(original.end(),destination.begin(),destination.end());
+            for (int i=0; i<8; i++) original.push_back(i);
+            expected.push_back(original);
+        }
+        ASSERT(wire.size() == 1280);
+        for (int i=0; i<int(wire.size()); i++) scheduleAt(SimTime(i+1,SIMTIME_MS),new cMessage("literal",i));
+    }
+    virtual void handleMessage(cMessage *message) override {
+        if (!message->isSelfMessage()) {
+            auto packet = check_and_cast<Packet *>(message);
+            ASSERT(delivered < int(expected.size()));
+            ASSERT(packet->peekDataAsBytes()->getBytes() == expected[delivered]);
+            delivered++; delete packet; return;
+        }
+        auto bytes = wire[message->getKind()];
+        auto packet = new Packet("literal-iphc",makeShared<BytesChunk>(bytes));
+        auto ind = packet->addTag<Ieee802154AddressInd>();
+        ind->setSrcAddress(Ieee802154Address("0123456789abcdef"));
+        ind->setDestAddress(Ieee802154Address(bytes[1]&8 ? "ffff" : "a123456789abcdef"));
+        ind->setSrcPanId(4660); ind->setDestPanId(4660);
+        send(packet,"out"); delete message;
+    }
+    virtual void finish() override {
+        ASSERT(delivered == 1280);
+        std::cout << "1280 independent production IPHC receive combinations verified\n";
+    }
+};
+Define_Module(DomainCheck);
+}
+
+%file: test.ned
+import inet.linklayer.lowpan.LowpanNativeMac;
+import inet.linklayer.lowpan.LowpanLayer;
+import inet.linklayer.lowpan.LowpanNativeBoundary;
+import inet.networklayer.common.NetworkInterface;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandRadio;
+import inet.queueing.queue.PacketQueue;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.networklayer.common.InterfaceTable;
+import inet.mobility.static.StationaryMobility;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+
+simple DomainCheck
+{
+    parameters:
+        @display("i=block/app");
+    gates:
+        output out;
+        input in[2];
+}
+module DomainInterface extends NetworkInterface
+{
+    parameters:
+        string interfaceTableModule = "^.interfaceTable";
+    gates:
+        input upperLayerIn;
+        output upperLayerOut;
+        input radioIn;
+    submodules:
+        lowpan: LowpanLayer;
+        boundary: LowpanNativeBoundary { linkDomainModule = "^.^.^.domain"; }
+        queue: PacketQueue { packetCapacity = default(2); }
+        mac: LowpanNativeMac {
+            interfaceTableModule = "^.^.interfaceTable";
+            linkDomainModule = "^.^.^.domain";
+        }
+        radio: Ieee802154NarrowbandRadio;
+    connections allowunconnected:
+        upperLayerIn --> lowpan.lowerLayerIn;
+        lowpan.lowerLayerOut --> boundary.in;
+        boundary.out --> queue.in;
+        queue.out --> mac.upperLayerIn;
+        mac.upperLayerOut --> boundary.lowerLayerIn;
+        lowpan.upperLayerOut --> upperLayerOut;
+        mac.lowerLayerOut --> radio.upperLayerIn;
+        radio.upperLayerOut --> mac.lowerLayerIn;
+        radioIn --> radio.radioIn;
+}
+module DomainNode
+{
+    parameters:
+        @networkNode;
+        @display("i=device/wifilaptop");
+    gates:
+        input in;
+        output out;
+    submodules:
+        interfaceTable: InterfaceTable;
+        mobility: StationaryMobility;
+        nic: DomainInterface;
+    connections allowunconnected:
+        in --> nic.upperLayerIn;
+        nic.upperLayerOut --> out;
+}
+network DomainNetwork
+{
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        domain: LowpanNativeLinkDomain;
+        node[2]: DomainNode;
+        check: DomainCheck;
+    connections allowunconnected:
+        check.out --> node[0].in;
+        node[0].out --> check.in[0];
+        node[1].out --> check.in[1];
+}
+
+
+
+%inifile: omnetpp.ini
+[General]
+**.lowpan.headerCompression = "none"
+network = DomainNetwork
+sim-time-limit = 2s
+**.queue.packetCapacity = 2
+*.domain.panId = 4660
+*.domain.radioMediumModule = "^.radioMedium"
+*.domain.config = xml("<domain><peer interface='node[0].nic' native='a123456789abcdef'/><peer interface='node[1].nic' native='0123456789abcdef'/><neighbor interface='node[0].nic' ipv6='fe80::1' native='0123456789abcdef'/><neighbor interface='node[1].nic' ipv6='fe80::1' native='a123456789abcdef'/></domain>")
+**.radio.antenna.mobilityModule = "^.^.^.mobility"
+**.mobility.initialX = 0m
+**.mobility.initialY = 0m
+**.mobility.initialZ = 0m
+**.mobility.initFromDisplayString = false
+**.mobility.updateFromDisplayString = false
+
+
+
+%contains: stdout
+1280 independent production IPHC receive combinations verified

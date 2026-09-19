@@ -1,0 +1,143 @@
+%description:
+Production adaptation with a controlled ILowpanLink budget. A complete compressed
+header must fit FRAG1: exercise uncompressed dispatch, inline UDP after IPHC,
+and UDP NHC as successively larger budgets become available. The uncompressed
+IPv6 header spans fragments and every reconstructed byte must match. This is an
+adaptation contract test, not a native MAC profile with these artificial budgets.
+
+%extraargs: -r 0..2
+
+%file: BudgetCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/queueing/base/PacketPusherBase.h"
+#include "inet/linklayer/lowpan/contract/ILowpanLink.h"
+#include "inet/linklayer/lowpan/LowpanProtocol.h"
+#include "inet/networklayer/common/NetworkInterface.h"
+#include "inet/networklayer/common/NextHopAddressTag_m.h"
+#include "inet/networklayer/ipv6/Ipv6Header_m.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+using namespace inet;
+using namespace inet::lowpan;
+namespace LowpanCompressionBudget {
+class BudgetLink : public queueing::PacketPusherBase, public ILowpanLink {
+    Ieee802154Address address{"0123456789abcdef"};
+    int frames = 0;
+    virtual void initialize(int stage) override {
+        PacketPusherBase::initialize(stage);
+        if (stage == INITSTAGE_LOCAL) {
+            auto nic = check_and_cast<NetworkInterface *>(getParentModule());
+            nic->setMtu(1280); nic->setProtocol(&lowpanProtocol);
+        }
+    }
+  public:
+    virtual Ieee802154Address getLinkAddress() const override { return address; }
+    virtual uint16_t getPanId() const override { return 4660; }
+    virtual const Ieee802154Address *resolveNeighbor(const Ipv6Address&) const override { return &address; }
+    virtual Ptr<const LowpanTransmissionReq> prepareTransmission(const Ieee802154AddressReq& request) const override {
+        auto result = makeShared<LowpanTransmissionReq>();
+        result->setSrcAddress(request.getSrcAddress()); result->setDestAddress(request.getDestAddress());
+        result->setSrcPanId(request.getSrcPanId()); result->setDestPanId(request.getDestPanId());
+        result->setProfile(99); result->setPayloadLimit(par("budget"));
+        result->setDeliveryDeadline(simTime()+1);
+        return result;
+    }
+    virtual bool canPushSomePacket(const cGate *) const override { return true; }
+    virtual bool canPushPacket(Packet *packet, const cGate *) const override { return packet->getDataLength() <= B(par("budget").intValue()); }
+    virtual void pushPacket(Packet *packet, const cGate *) override {
+        Enter_Method("pushPacket"); take(packet);
+        auto bytes = packet->peekDataAsBytes()->getBytes();
+        ASSERT(bytes.size() <= size_t(par("budget").intValue()));
+        if (!frames++) {
+            ASSERT((bytes[0] & 0xf8) == 0xc0);
+            int budget = par("budget");
+            if (budget == 16) ASSERT(bytes[4] == 0x41);
+            else {
+                ASSERT((bytes[4] & 0xe0) == 0x60);
+                ASSERT(bool(bytes[4] & 4) == (budget == 50));
+            }
+        }
+        // Receive only serialized bytes; do not preserve sender chunk structure/tags.
+        delete packet;
+        auto received = new Packet("looped-fragment", makeShared<BytesChunk>(bytes));
+        auto indication = received->addTag<Ieee802154AddressInd>();
+        indication->setSrcAddress(address); indication->setDestAddress(address);
+        indication->setSrcPanId(4660); indication->setDestPanId(4660);
+        send(received,"out");
+    }
+    virtual void finish() override { ASSERT(frames > 1); }
+};
+Define_Module(BudgetLink);
+class BudgetCheck : public cSimpleModule {
+    std::vector<uint8_t> expected;
+    int received = 0;
+    virtual void initialize() override { scheduleAt(SimTime(1,SIMTIME_MS),new cMessage("send")); }
+    virtual void handleMessage(cMessage *message) override {
+        if (!message->isSelfMessage()) {
+            auto packet = check_and_cast<Packet *>(message);
+            ASSERT(packet->peekDataAsBytes()->getBytes() == expected);
+            received++; delete packet; return;
+        }
+        auto ip = makeShared<Ipv6Header>();
+        ip->setSrcAddress(Ipv6Address("2001:db8::1")); ip->setDestAddress(Ipv6Address("2001:db8::2"));
+        ip->setTrafficClass(0xa7); ip->setFlowLabel(0xabcde); ip->setHopLimit(30);
+        ip->setProtocolId(IP_PROT_UDP); ip->setPayloadLength(B(88));
+        auto packet = new Packet("original",ip);
+        // Opaque carried UDP checksum; this test exercises adaptation, not UDP validation.
+        std::vector<uint8_t> payload{0x12,0x34,0x56,0x78,0,88,0x12,0x34};
+        for (int i=0; i<80; i++) payload.push_back(i);
+        packet->insertAtBack(makeShared<BytesChunk>(payload));
+        packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ipv6);
+        packet->addTag<NextHopAddressReq>()->setNextHopAddress(ip->getDestAddress());
+        expected = packet->peekDataAsBytes()->getBytes();
+        send(packet,"out"); delete message;
+    }
+    virtual void finish() override {
+        ASSERT(received == 1);
+        std::cout << "Production compressed-header placement fallback verified\n";
+    }
+};
+Define_Module(BudgetCheck);
+}
+
+%file: test.ned
+import inet.queueing.base.PacketPusherBase;
+import inet.linklayer.lowpan.LowpanLayer;
+import inet.networklayer.common.NetworkInterface;
+import inet.networklayer.common.InterfaceTable;
+simple BudgetLink extends PacketPusherBase { parameters: int budget; @class(BudgetLink); }
+simple BudgetCheck { @display("i=block/control"); gates: input in; output out; }
+module Nic extends NetworkInterface {
+    parameters:
+        string interfaceTableModule = "^.interfaceTable";
+    gates:
+        input upperLayerIn;
+        output upperLayerOut;
+    submodules:
+        lowpan: LowpanLayer;
+        link: BudgetLink;
+    connections:
+        upperLayerIn --> lowpan.upperLayerIn;
+        lowpan.lowerLayerOut --> link.in;
+        link.out --> lowpan.lowerLayerIn;
+        lowpan.upperLayerOut --> upperLayerOut;
+}
+network Test {
+    parameters: @networkNode;
+    submodules:
+        interfaceTable: InterfaceTable;
+        nic: Nic;
+        check: BudgetCheck;
+    connections:
+        check.out --> nic.upperLayerIn;
+        nic.upperLayerOut --> check.in;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = Test
+sim-time-limit = 10ms
+*.nic.link.budget = ${budget=16,44,50}
+
+%contains: stdout
+Production compressed-header placement fallback verified

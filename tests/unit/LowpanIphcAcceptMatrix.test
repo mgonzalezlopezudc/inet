@@ -1,0 +1,38 @@
+%description:
+Independent literal RFC 6282 stateless unicast accept matrix, including legal
+nonminimal encodings, short-IID reconstruction, unused CID and every truncation.
+
+%includes:
+#include "inet/linklayer/lowpan/LowpanIphcCodec.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+using namespace inet;
+using namespace inet::lowpan;
+
+%activity:
+const std::vector<uint8_t> source{0xfe,0x80,0,0,0,0,0,0,0,0,0,0xff,0xfe,0,0x12,0x34};
+const std::vector<uint8_t> destination{0xfe,0x80,0,0,0,0,0,0,0,0,0,0xff,0xfe,0,0xab,0xcd};
+const int starts[] = {0, 8, 14, 16};
+for (int sam = 0; sam < 4; sam++) for (int dam = 0; dam < 4; dam++) for (bool cid : {false, true}) {
+    std::vector<uint8_t> bytes{0x7a, uint8_t((cid ? 0x80 : 0) | sam << 4 | dam)};
+    if (cid) bytes.push_back(0xab); // No context is used by these stateless forms.
+    bytes.push_back(58);
+    bytes.insert(bytes.end(), source.begin()+starts[sam], source.end());
+    bytes.insert(bytes.end(), destination.begin()+starts[dam], destination.end());
+    Packet packet("independent", makeShared<BytesChunk>(bytes));
+    auto header = packet.peekAtFront<LowpanIphcHeader>();
+    ASSERT(header->getChunkLength() == B(bytes.size()));
+    auto decoded = LowpanIphcCodec::decode(*header, 80, Ieee802154Address("1234"), Ieee802154Address("abcd"));
+    ASSERT(decoded && decoded->getSrcAddress() == Ipv6Address("fe80::ff:fe00:1234"));
+    ASSERT(decoded->getDestAddress() == Ipv6Address("fe80::ff:fe00:abcd"));
+    ASSERT(decoded->getProtocolId() == IP_PROT_IPv6_ICMP && decoded->getPayloadLength() == B(40));
+    for (size_t length = 1; length < bytes.size(); length++) {
+        Packet truncated("truncated", makeShared<BytesChunk>(std::vector<uint8_t>(bytes.begin(), bytes.begin()+length)));
+        auto partial = truncated.peekAtFront<LowpanIphcHeader>(b(-1), Chunk::PF_ALLOW_INCOMPLETE | Chunk::PF_ALLOW_INCORRECT);
+        ASSERT(partial->isIncomplete() || partial->isIncorrect());
+    }
+}
+EV << "All literal stateless unicast accept forms and truncations verified\n";
+
+%contains: stdout
+All literal stateless unicast accept forms and truncations verified

@@ -753,6 +753,45 @@
         linkerFlags = ""
         />
     <feature
+        id = "Lowpan"
+        name = "6LoWPAN adaptation"
+        description = "Native link contracts and IPv6 adaptation for IEEE 802.15.4; implementation in progress."
+        initiallyEnabled = "false"
+        requires = "Ieee802154 Ipv6 Queueing"
+        recommended = ""
+        labels = "nic wireless"
+        nedPackages = "inet.linklayer.lowpan"
+        extraSourceFolders = ""
+        compileFlags = "-DINET_WITH_LOWPAN"
+        linkerFlags = ""
+        />
+    <feature
+        id = "LowpanExamples"
+        name = "6LoWPAN examples"
+        description = "Explicit compatibility-path 6LoWPAN examples."
+        initiallyEnabled = "false"
+        requires = "Lowpan Loopback Udp"
+        recommended = ""
+        labels = "examples"
+        nedPackages = "inet.examples.lowpan"
+        extraSourceFolders = ""
+        compileFlags = ""
+        linkerFlags = ""
+        />
+    <feature
+        id = "LowpanTests"
+        name = "6LoWPAN tests"
+        description = "Explicit compatibility-path 6LoWPAN tests."
+        initiallyEnabled = "false"
+        requires = "Lowpan Loopback Udp"
+        recommended = ""
+        labels = "tests"
+        nedPackages = "inet.tests.lowpan"
+        extraSourceFolders = ""
+        compileFlags = ""
+        linkerFlags = ""
+        />
+    <feature
         id = "Loopback"
         name = "Loopback"
         description = "Loopback network interface."

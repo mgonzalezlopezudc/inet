@@ -1,0 +1,53 @@
+%description:
+Native IEEE802154-2024 pinned data/ACK subset: independent little-endian PAN/EUI64
+vectors, exact variable header lengths, unsupported controls and every truncation.
+CRC16-CCITT reflected checksum is checked against the CRC-KERMIT check value.
+
+%includes:
+#include "inet/linklayer/ieee802154/Ieee802154FrameHeader_m.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/common/checksum/Checksum.h"
+using namespace inet;
+
+%activity:
+const std::vector<std::vector<uint8_t>> golden = {
+    {0x61,0xdc,0x5a,0x34,0x12,0xef,0xcd,0xab,0x89,0x67,0x45,0x23,0xa1,0xef,0xcd,0xab,0x89,0x67,0x45,0x23,0x01},
+    {0x41,0xd8,0x5a,0x34,0x12,0xff,0xff,0xef,0xcd,0xab,0x89,0x67,0x45,0x23,0x01},
+    {0x02,0x00,0x5a}};
+for (int mode = 0; mode < 3; mode++) {
+    auto header = makeShared<Ieee802154FrameHeader>();
+    header->setFrameControl(mode == 0 ? 0xdc61 : mode == 1 ? 0xd841 : 2);
+    header->setSequenceNumber(0x5a);
+    header->setChunkLength(B(golden[mode].size()));
+    if (mode != 2) {
+        header->setPanId(0x1234);
+        header->setSourceAddress(Ieee802154Address("0123456789abcdef"));
+        header->setDestinationAddress(Ieee802154Address(mode == 0 ? "a123456789abcdef" : "ffff"));
+    }
+    Packet output("output", header);
+    ASSERT(output.peekDataAsBytes()->getBytes() == golden[mode]);
+    Packet input("independent", makeShared<BytesChunk>(golden[mode]));
+    auto decoded = input.peekAtFront<Ieee802154FrameHeader>();
+    ASSERT(decoded->getFrameControl() == header->getFrameControl() && decoded->getSequenceNumber() == 0x5a);
+    ASSERT(decoded->getPanId() == header->getPanId());
+    ASSERT(decoded->getSourceAddress() == header->getSourceAddress());
+    ASSERT(decoded->getDestinationAddress() == header->getDestinationAddress());
+    for (size_t length = 1; length < golden[mode].size(); length++) {
+        Packet truncated("truncated", makeShared<BytesChunk>(std::vector<uint8_t>(golden[mode].begin(), golden[mode].begin() + length)));
+        auto partial = truncated.peekAtFront<Ieee802154FrameHeader>(b(-1), Chunk::PF_ALLOW_INCOMPLETE | Chunk::PF_ALLOW_INCORRECT);
+        ASSERT(partial->isIncomplete() || partial->isIncorrect());
+    }
+}
+for (uint16_t control : {0xcc61, 0xdc69, 0xde61, 0xec61, 0xd861, 0x1002}) {
+    Packet invalid("unsupported", makeShared<BytesChunk>(std::vector<uint8_t>{uint8_t(control), uint8_t(control >> 8), 0}));
+    ASSERT(invalid.peekAtFront<Ieee802154FrameHeader>(b(-1), Chunk::PF_ALLOW_INCORRECT)->isIncorrect());
+}
+std::vector<uint8_t> check{'1','2','3','4','5','6','7','8','9'};
+ASSERT(crc16_ccitt(check) == 0x2189);
+check.push_back(0x89); check.push_back(0x21);
+ASSERT(crc16_ccitt(check) == 0);
+EV << "Native IEEE802154 vectors and CRC verified\n";
+
+%contains: stdout
+Native IEEE802154 vectors and CRC verified
