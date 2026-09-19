@@ -1,6 +1,6 @@
 # Implement IEEE 802.15.4 in INET
 
-Status: **in progress — step 0**. The expanded applicability extraction (82 statements) and nine English checks are
+Status: **in progress — step 0**. The expanded applicability extraction (85 statements, including two imported address definitions) and nine English checks are
 recorded in the [model coverage ledger](../../doc/project/evidence/model/ieee802154/coverage.md).
 Step 0's closure gate remains open; no implementation step or executable conformance check is complete.
 Prepared against INET `c913a63a8335ca39a319cb2089daf835ea5e95cd` and the local

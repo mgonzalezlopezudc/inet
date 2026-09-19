@@ -22,6 +22,8 @@ There is no implementation-support verdict in this document.
 
 ## IEEE802154-F-WIRE
 
+Imported definitions: [IEEE802-ADDRESS-1](../../standard/ieee802/catalog.md#ieee802-address-1), [IEEE802-ADDRESS-2](../../standard/ieee802/catalog.md#ieee802-address-2).
+
 **Native address and legacy data/ACK encoding.**
 
 Level: **mandatory under the catalog conditions**. At least one core source uses “shall”; exact excerpts and conditional predicates are in the catalog. Governing source: IEEE Std 802.15.4-2024, no overrides.
@@ -79,6 +81,8 @@ Core statements: [IEEE802154-ACK-1](../../standard/ieee802154/catalog.md#ieee802
 Procedure: [IEEE802154-C-ACK](checks.md#ieee802154-c-ack).
 
 ## IEEE802154-F-SECURITY
+
+Service routing: [IEEE802154-SERVICE-8](../../standard/ieee802154/catalog.md#ieee802154-service-8).
 
 **Unsecured-profile security outcomes.**
 

@@ -16,13 +16,13 @@ recorded; successful corpus retrieval validates tooling, not the simulation mode
 
 ## Step-0 extraction pass
 
-Baseline: `fd6f800222`, 2026-09-19. Scope and open dependencies are in
+Initial baseline: `fd6f800222`; latest continuation baseline: `837ee6dbe8`, 2026-09-19. Scope and open dependencies are in
 [applicability.md](applicability.md); commands, source findings and capture inspection are in
 [results.md](results.md). The [catalog](../../standard/ieee802154/catalog.md),
 [feature map](../../protocol/ieee802154/features.md) and
 [English checks](../../protocol/ieee802154/checks.md) are drafts. **Step 0 is not closed.**
 
-There are 82 extracted statements: 79 selected for the M1 engineering subset and 3 deferred
+There are 85 extracted statements (83 base-standard statements and two imported address definitions): 82 selected for the M1 engineering subset and 3 deferred
 selected-profile obligations. These are counts of the current extraction, not the denominator
 of a complete profile. No executable tests exist for these new check IDs; all run verdicts are
 `NOT_RUN`. Existing survey claims are not promoted to support claims by writing English checks.
@@ -116,6 +116,9 @@ owed by a later selected profile; neither status is a justified applicability ex
 | [IEEE802154-SERVICE-7](../../standard/ieee802154/catalog.md#ieee802154-service-7) | selected; owed | 1a, 3, 6 | [IEEE802154-C-SERVICE](../../protocol/ieee802154/checks.md#ieee802154-c-service) | None / `NOT_RUN` |
 | [IEEE802154-WIRE-17](../../standard/ieee802154/catalog.md#ieee802154-wire-17) | selected; owed | 2–3 | [IEEE802154-C-WIRE](../../protocol/ieee802154/checks.md#ieee802154-c-wire) | None / `NOT_RUN` |
 | [IEEE802154-RECEIVE-16](../../standard/ieee802154/catalog.md#ieee802154-receive-16) | selected; owed | 6 | [IEEE802154-C-RECEIVE](../../protocol/ieee802154/checks.md#ieee802154-c-receive) | None / `NOT_RUN` |
+| [IEEE802154-SERVICE-8](../../standard/ieee802154/catalog.md#ieee802154-service-8) | selected; owed | 1a, 6 | [IEEE802154-C-SECURITY](../../protocol/ieee802154/checks.md#ieee802154-c-security) | None / `NOT_RUN` |
+| [IEEE802-ADDRESS-1](../../standard/ieee802/catalog.md#ieee802-address-1) | selected; owed | 1a, 2, 6 | [IEEE802154-C-WIRE](../../protocol/ieee802154/checks.md#ieee802154-c-wire) | None / `NOT_RUN` |
+| [IEEE802-ADDRESS-2](../../standard/ieee802/catalog.md#ieee802-address-2) | selected; owed | 1a, 2, 6 | [IEEE802154-C-WIRE](../../protocol/ieee802154/checks.md#ieee802154-c-wire) | None / `NOT_RUN` |
 
 ### Planned evidence categories
 
@@ -141,3 +144,5 @@ provisional until actual fixtures demonstrate that they reach the claimed observ
 | 2026-09-18 | Standards/claim survey | Level 1; no simulation checks |
 | 2026-09-19 | Initial step-0 extraction | 40 source-checked entries, nine English procedures, role/version/receive matrices and first consumer/capture inventory; applicability closure and executable tests still owed |
 | 2026-09-19 | Extended step-0 audit | 82 entries and nine expanded English procedures; complete base MAC/PHY PIB field inventory, service/PICS comparison and PHY feasibility inspection; no runtime support verdict |
+| 2026-09-19 | Service/integration dependency closure | 83 statements; direct security-error service routing, channel descriptor, clause-6 procedure dispositions and native consumer compatibility recorded; runtime tests remain NOT_RUN |
+| 2026-09-19 | Companion address reference | Pinned IEEE Std 802-2024; two imported definitions and three address vectors resolve group-bit layout; sender/receiver AR distinction resolved without an invented receive-filter rule |

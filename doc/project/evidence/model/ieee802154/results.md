@@ -186,3 +186,77 @@ an invented ED cutoff and interrupted Markdown table rendering. All three were c
 confirmed resolved by the same reviewer. The stable results sections received no additional
 actionable findings. This review did not exhaust transitive normative dependencies or verify
 production behavior; the applicability gate remains open.
+
+## Service and integration closure continuation
+
+Baseline `837ee6dbe8`. Corpus status remained ready/fresh for the pinned IEEE 802.15.4-2024
+source; unrelated 802.11 corpora remain absent. Retrieved 11.1.3.1 and Table 12-2 to close the
+channel descriptor lookup. The selected M1 descriptor and its distinction from a legacy page
+number are recorded in [applicability.md](applicability.md#selected-channel-descriptor).
+
+The [IEEE 802-2024 publication record](https://ieeexplore.ieee.org/document/10935844/footnotes)
+identifies the companion standard and its IEEE GET distribution route. Attempts to access the
+GET page and PDF through the web tool failed (HTTP 418 and inaccessible PDF endpoint).
+No normative companion text was retrieved; the group-address prerequisite remains open.
+Publication metadata and informative address guidance are not replacements for that source.
+
+The service lookup resolved direct-data error routing from 8.2.4.4/Table 8-5, 6.6.1–6.6.2,
+9.2.2/9.2.4 and Table 8-31. The additional SERVICE-8 excerpt was compared against the complete
+Table 8-5 continuation. The catalog now has 83 statements (80 selected, 3 deferred), with nine
+English procedures; no executable results were added.
+
+Read-only consumer tracing produced the
+[native compatibility decision](applicability.md#native-address-compatibility-decision).
+In particular, NetworkInterface's parameter named address is parsed as MacAddress, generic
+ARP/ND/forwarding consumers remain 48-bit, and radio-medium address filtering does not provide
+a native-address contract. Public attachment, tag, registration and classifier APIs provide the
+candidate integration route. This is static source evidence, not successful module initialization
+or an architecture-compliance verdict.
+
+The clause-6 walk inventoried 28 descendant clause nodes and 14 table/figure nodes. Detailed
+6.4/6.5 leaf retrieval included the passive-scan prose under Figure 6-3, and the 11 distinct
+Table 6-1 IE targets resolved through direct lookup despite zero extracted table edges.
+Root also retrieved 6.6.4–6.6.6 and Figures 6-7–6-13 to classify ATI/guard-time predicates and
+preserve distinct lost-data versus lost-ACK checks. No new timing oracle was inferred from the
+diagrams; this pass used their continuation prose. Full M2 service extraction remains deferred.
+
+Continuation validation passed the three scoped link checks (2/3/4 files), git diff --check,
+83 unique catalog headings with complete feature/check/ledger mapping, the 80-selected/3-deferred
+partition, nine check headings and exact normalized comparison of the new SERVICE-8 excerpt.
+Independent targeted review corrected SERVICE-8 metadata to the defined vocabulary and retained
+mandatory scan termination at descriptor capacity. The same reviewer confirmed both findings
+resolved. This was documentation verification; all executable checks remain NOT_RUN.
+
+## Companion IEEE 802 source closure
+
+The supplied `standards/802-2024.pdf` resolves the earlier retrieval failure. Its pinned identity
+is in the [companion source record](../../standard/ieee802/source.md). The tracked processor's
+reviewed document list does not include this document, so direct PDF fallback was used without
+inventing a processed-corpus node ID or modifying the shared processor.
+
+```sh
+sha256sum standards/802-2024.pdf
+pdfinfo standards/802-2024.pdf
+pdftotext -layout standards/802-2024.pdf /tmp/ieee802-2024.txt
+pdftoppm -f 41 -l 41 -scale-to 1500 -png -singlefile standards/802-2024.pdf /tmp/ieee802-address
+pdftoppm -f 43 -l 43 -scale-to 1500 -png -singlefile standards/802-2024.pdf /tmp/ieee802-eui64
+```
+
+Commands exited zero. Physical pages 41 and 43 were visually inspected; clause 8.2.2 identifies
+the group bit in conventional notation and Figure 10 identifies the first octet. Clause 8.5 on
+physical page 49 distinguishes group MAC addresses from EUI identities. Combining that source
+with IEEE 802.15.4 4.5.1 yields the masks and three synthetic vectors in C-WIRE. Their byte-order
+arithmetic was checked independently; it is not an executed production codec or filter result.
+Two companion definitions bring the ledger to 85 statements: 83 from IEEE 802.15.4 plus two
+from IEEE 802, with 82 selected and three deferred. Source availability and the group-bit layout
+are closed; reception/ACK policy remains governed separately by IEEE 802.15.4.
+
+A targeted independent review confirmed the companion source, derived masks and vectors. It
+also checked 7.2.2.5, 6.6.2 and 6.6.3.1: no additional receive rejection predicate invalidates a
+nonbroadcast group frame solely because AR=1. The documented receive decision applies ordinary
+filtering and ACK rules while preserving the sender prohibition. This closes that interpretation;
+it does not assert that the violating injected transmitter conforms.
+
+The four scoped link checks passed (2/2/3/4 files), as did whitespace checks and the 85-ID mapping,
+82-selected/3-deferred partition and three synthetic byte-vector calculations. The added source
+PDF remains an ignored local artifact; no executable runtime check has been added or run.
