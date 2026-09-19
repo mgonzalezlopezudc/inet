@@ -4,6 +4,11 @@ Recent changes in the INET Framework
 INET-4.7.x (in development)
 ---------------------------
 
+ICMPv6 computed checksums now include the IPv6 pseudo-header and the complete
+message after source selection, before fragmentation. Error quotations include
+the outer IPv6 header in the 1280-byte limit. Custom computed-checksum producers
+should follow the migration guide. Declared checksum modes are unchanged.
+
 Notable backward incompatible changes are the following:
 
 1. IEEE 802.11 rate control per receiver
