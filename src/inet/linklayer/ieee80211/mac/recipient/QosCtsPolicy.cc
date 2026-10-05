@@ -25,7 +25,8 @@ void QosCtsPolicy::initialize(int stage)
 
 simtime_t QosCtsPolicy::computeCtsDuration(Packet *rtsPacket, const Ptr<const Ieee80211RtsFrame>& rtsFrame) const
 {
-    return rateSelection->computeResponseCtsFrameMode(rtsPacket, rtsFrame)->getDuration(LENGTH_CTS);
+    auto mode = rateSelection->computeResponseCtsFrameMode(rtsPacket, rtsFrame);
+    return mode ? mode->getDuration(LENGTH_CTS) : SimTime(-1);
 }
 
 //
@@ -36,7 +37,10 @@ simtime_t QosCtsPolicy::computeCtsDuration(Packet *rtsPacket, const Ptr<const Ie
 //
 simtime_t QosCtsPolicy::computeCtsDurationField(Packet *rtsPacket, const Ptr<const Ieee80211RtsFrame>& rtsFrame) const
 {
-    simtime_t duration = rtsFrame->getDurationField() - modeSet->getSifsTime() - computeCtsDuration(rtsPacket, rtsFrame);
+    auto ctsDuration = computeCtsDuration(rtsPacket, rtsFrame);
+    if (ctsDuration < SIMTIME_ZERO)
+        return -1;
+    simtime_t duration = rtsFrame->getDurationField() - modeSet->getSifsTime() - ctsDuration;
     return duration < 0 ? 0 : duration;
 }
 
@@ -52,4 +56,3 @@ bool QosCtsPolicy::isCtsNeeded(const Ptr<const Ieee80211RtsFrame>& rtsFrame) con
 
 } /* namespace ieee80211 */
 } /* namespace inet */
-

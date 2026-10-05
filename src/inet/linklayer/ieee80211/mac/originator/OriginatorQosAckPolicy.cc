@@ -6,6 +6,7 @@
 
 
 #include "inet/linklayer/ieee80211/mac/originator/OriginatorQosAckPolicy.h"
+#include "inet/linklayer/ieee80211/mac/rateselection/Ieee80211ResponseModeSelection.h"
 
 #include <tuple>
 
@@ -130,7 +131,8 @@ bool OriginatorQosAckPolicy::checkAgreementPolicy(const Ptr<const Ieee80211DataH
 //
 simtime_t OriginatorQosAckPolicy::getAckTimeout(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) const
 {
-    return ackTimeout == -1 ? modeSet->getSifsTime() + modeSet->getSlotTime() + rateSelection->computeResponseAckFrameMode(packet, dataOrMgmtHeader)->getPhyRxStartDelay() : ackTimeout;
+    return ackTimeout == -1 ? modeSet->getSifsTime() + modeSet->getSlotTime() +
+        Ieee80211ResponseModeSelection::predictResponseMode(rateSelection, packet, dataOrMgmtHeader, ControlResponseKind::ACK, modeSet)->getPhyRxStartDelay() : ackTimeout;
 }
 
 simtime_t OriginatorQosAckPolicy::getBlockAckTimeout(Packet *packet, const Ptr<const Ieee80211BlockAckReq>& blockAckReq) const

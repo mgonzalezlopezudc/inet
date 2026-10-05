@@ -272,9 +272,9 @@
 /showcases/wireless/handover/,       -f omnetpp.ini -c General -r 0,                                            250s,            6150-7a8b/tplx;bcc9-11d2/~tNl;f5f2-ed4e/~tND;02e9-9ad3/tyf, PASS,    wireless
 
 /showcases/wireless/hiddennode/,     -f omnetpp.ini -c WallOnRtsOff -r 0,                                       5s,            7912-bed4/tplx;c1e8-3622/~tNl;9b60-a38b/~tND;d824-8757/tyf, PASS,    wireless Ipv4
-/showcases/wireless/hiddennode/,     -f omnetpp.ini -c WallOnRtsOn -r 0,                                        5s,            321b-f7f2/tplx;75e5-07b7/~tNl;4c45-33b3/~tND;35cb-1d85/tyf, PASS,    wireless Ipv4
+/showcases/wireless/hiddennode/,     -f omnetpp.ini -c WallOnRtsOn -r 0,                                        5s,            928d-4cd7/tplx;47d8-0585/~tNl;1b27-6ca1/~tND;35cb-1d85/tyf, PASS,    wireless Ipv4
 /showcases/wireless/hiddennode/,     -f omnetpp.ini -c WallOffRtsOff -r 0,                                      5s,            0712-b86a/tplx;57a0-9a27/~tNl;15ce-9281/~tND;23b3-39d5/tyf, PASS,    wireless Ipv4
-/showcases/wireless/hiddennode/,     -f omnetpp.ini -c WallOffRtsOn -r 0,                                      5s,            b9cb-6393/tplx;61b5-984b/~tNl;e467-891a/~tND;56d6-8a96/tyf, PASS,    wireless Ipv4
+/showcases/wireless/hiddennode/,     -f omnetpp.ini -c WallOffRtsOn -r 0,                                      5s,            6d5f-3739/tplx;ea6d-4982/~tNl;c7eb-a048/~tND;56d6-8a96/tyf, PASS,    wireless Ipv4
 
 # /showcases/wireless/ieee802154/,     -f omnetpp.ini -c Ieee802154 -r 0,             100s,         0000-0000/tplx;0000-0000/~tNl;0000-0000/~tND;0000-0000/tyf, PASS,   wireless ieee802154 # Ieee802154 extended
 /showcases/wireless/ieee802154/,     -f omnetpp.ini -c Ieee802154Power -r 0,        100s,         4507-9162/tplx;b99a-4436/~tNl;f6bf-fa08/tyf, PASS,    wireless ieee802154 Ipv4

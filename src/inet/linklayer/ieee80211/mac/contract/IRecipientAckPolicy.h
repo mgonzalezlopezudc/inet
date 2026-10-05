@@ -20,6 +20,7 @@ class INET_API IRecipientAckPolicy
     virtual ~IRecipientAckPolicy() {}
 
     virtual bool isAckNeeded(const Ptr<const Ieee80211DataOrMgmtHeader>& header) const = 0;
+    // A negative result means that the required response mode is unsupported.
     virtual simtime_t computeAckDurationField(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header) const = 0;
 };
 
@@ -27,4 +28,3 @@ class INET_API IRecipientAckPolicy
 } // namespace inet
 
 #endif
-

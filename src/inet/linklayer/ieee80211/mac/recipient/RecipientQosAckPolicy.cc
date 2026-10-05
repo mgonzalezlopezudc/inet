@@ -29,7 +29,8 @@ simtime_t RecipientQosAckPolicy::computeBasicBlockAckDuration(Packet *packet, co
 
 simtime_t RecipientQosAckPolicy::computeAckDuration(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) const
 {
-    return rateSelection->computeResponseAckFrameMode(packet, dataOrMgmtHeader)->getDuration(LENGTH_ACK);
+    auto mode = rateSelection->computeResponseAckFrameMode(packet, dataOrMgmtHeader);
+    return mode ? mode->getDuration(LENGTH_ACK) : SimTime(-1);
 }
 
 //
@@ -78,7 +79,10 @@ bool RecipientQosAckPolicy::isBlockAckNeeded(const Ptr<const Ieee80211BlockAckRe
 //
 simtime_t RecipientQosAckPolicy::computeAckDurationField(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header) const
 {
-    simtime_t duration = header->getDurationField() - modeSet->getSifsTime() - computeAckDuration(packet, header);
+    auto ackDuration = computeAckDuration(packet, header);
+    if (ackDuration < SIMTIME_ZERO)
+        return -1;
+    simtime_t duration = header->getDurationField() - modeSet->getSifsTime() - ackDuration;
     return duration < 0 ? 0 : duration;
 }
 
@@ -96,4 +100,3 @@ simtime_t RecipientQosAckPolicy::computeBasicBlockAckDurationField(Packet *packe
 
 } /* namespace ieee80211 */
 } /* namespace inet */
-

@@ -6,6 +6,8 @@ namespace inet::ieee80211 {
 
 void FrameSequencePlan::append(std::unique_ptr<FrameSequencePlan> child)
 {
+    if (!child->projectedHistory.empty())
+        projectedHistory = child->projectedHistory;
     duration += child->duration;
     stepCount += child->stepCount;
     children.push_back(std::move(child));

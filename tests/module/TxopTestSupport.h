@@ -54,7 +54,7 @@ class ExchangeHcf : public Hcf
             }
             header->setReceiverAddress(group ? MacAddress::BROADCAST_ADDRESS : MacAddress("02:00:00:00:00:02"));
             header->setTransmitterAddress(MacAddress("02:00:00:00:00:01"));
-            header->setAddress3(MacAddress("02:00:00:00:00:01"));
+            header->setAddress3(check_and_cast<Ieee80211Mib *>(getModuleByPath("^.^.mib"))->bssData.bssid);
             auto packet = new Packet("duration-data", header);
             packet->insertAtBack(makeShared<ByteCountChunk>(B(200)));
             packet->insertAtBack(makeShared<Ieee80211MacTrailer>());

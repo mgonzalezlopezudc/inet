@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequencePlanningContext.h"
+#include "inet/linklayer/ieee80211/mac/rateselection/Ieee80211ResponseModeSelection.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 
 namespace inet::ieee80211 {
@@ -65,6 +66,11 @@ void FrameSequencePlanningContext::projectCompletion()
     lastTransmit = nullptr;
 }
 
+void FrameSequencePlanningContext::seedHistory(const FrameSequencePlan& preceding)
+{
+    projectedHistory = preceding.projectedHistory;
+}
+
 std::unique_ptr<FrameSequencePlan> FrameSequencePlanningContext::makePlan(const IFrameSequence *sequence) const
 {
     auto plan = std::make_unique<FrameSequencePlan>();
@@ -84,6 +90,7 @@ void FrameSequencePlanningContext::addTransmit(FrameSequencePlan& plan, bool rts
     std::unique_ptr<TransmitStep> step;
     if (rts) {
         auto header = rtsProcedure->buildRtsFrame(packet->peekAtFront<Ieee80211DataOrMgmtHeader>());
+        header->setTransmitterAddress(address);
         auto control = new Packet("RTS", header);
         control->insertAtBack(makeShared<Ieee80211MacTrailer>());
         step = std::make_unique<RtsTransmitStep>(packet, control, getIfs());
@@ -96,9 +103,21 @@ void FrameSequencePlanningContext::addTransmit(FrameSequencePlan& plan, bool rts
     record.ifs = getIfs();
     record.ackPolicy = getAckPolicy();
     std::unique_ptr<Packet> view(record.frame->dup());
-    record.mode = rateSelection->computeMode(view.get(), view->peekAtFront<Ieee80211MacHeader>(), qosContext->txopProcedure);
-    if (!record.mode)
-        throw cRuntimeError("Rate policy returned no prepared mode");
+    auto header = view->peekAtFront<Ieee80211MacHeader>();
+    auto peer = header->getReceiverAddress();
+    auto previous = projectedHistory.find(peer);
+    auto history = previous == projectedHistory.end() ? rateSelection->getPreviousPeerTransmission(peer) :
+        std::optional<PreviousPeerTransmission>(previous->second);
+    record.rates = rateSelection->snapshotResponseRateContext(header, ResponseRequestRole::ORIGINATED,
+        Ieee80211ResponseModeSelection::getFrameContext(view.get()));
+    PreparedModeInput input{view.get(), header, continuation || offset != 0 ?
+        PreparedControlPosition::TXOP_CONTINUATION : PreparedControlPosition::TXOP_INITIAL, history, record.rates, modeSet};
+    auto result = rateSelection->computePreparedMode(input);
+    if (result.status != ModePreparationStatus::READY || !result.mode)
+        throw cRuntimeError("Unsupported prepared request: %s", result.reason.c_str());
+    record.mode = result.mode;
+    projectedHistory[peer] = {peer, record.mode, record.frame->getId(), 0};
+    plan.projectedHistory = projectedHistory;
     record.airtime = record.mode->getDuration(record.length);
     record.offset = offset++;
     step->setPreparedTransmit(record);
@@ -114,24 +133,27 @@ void FrameSequencePlanningContext::addReceive(FrameSequencePlan& plan, bool cts)
         throw cRuntimeError("Prepared response has no request");
     auto request = lastTransmit->getPreparedTransmit();
     std::unique_ptr<Packet> view(request->frame->dup());
-    view->addTagIfAbsent<physicallayer::Ieee80211ModeReq>()->setMode(request->mode);
     PreparedReceive record;
     record.request = request->frame;
     record.ifs = modeSet->getSifsTime();
     simtime_t timeout;
     if (cts) {
         auto header = view->peekAtFront<Ieee80211RtsFrame>();
-        record.mode = rateSelection->computeResponseCtsFrameMode(view.get(), header);
-        record.length = makeShared<Ieee80211CtsFrame>()->getChunkLength() + B(4);
-        timeout = rtsPolicy->getCtsTimeoutForMode(record.mode);
+        record.response = rateSelection->computeResponseMode(Ieee80211ResponseModeSelection::makeInput(rateSelection,
+            view.get(), header, request->mode, ControlResponseKind::CTS, ResponseRequestRole::ORIGINATED, modeSet));
+        record.length = LENGTH_CTS;
     }
     else {
         auto header = view->peekAtFront<Ieee80211DataOrMgmtHeader>();
-        record.mode = rateSelection->computeResponseAckFrameMode(view.get(), header);
-        record.length = makeShared<Ieee80211AckFrame>()->getChunkLength() + B(4);
-        timeout = qosContext->ackPolicy->getAckTimeoutForMode(record.mode);
+        record.response = rateSelection->computeResponseMode(Ieee80211ResponseModeSelection::makeInput(rateSelection,
+            view.get(), header, request->mode, ControlResponseKind::ACK, ResponseRequestRole::ORIGINATED, modeSet));
+        record.length = LENGTH_ACK;
     }
-    record.airtime = record.mode->getDuration(record.length);
+    if (record.response.status != ModePreparationStatus::READY)
+        throw cRuntimeError("Unsupported prepared response: %s", record.response.reason.c_str());
+    record.mode = record.response.primaryMode;
+    record.airtime = record.response.airtime;
+    timeout = cts ? rtsPolicy->getCtsTimeoutForMode(record.mode) : qosContext->ackPolicy->getAckTimeoutForMode(record.mode);
     record.offset = offset++;
     auto step = std::make_unique<ReceiveStep>(timeout);
     step->setPreparedReceive(record);

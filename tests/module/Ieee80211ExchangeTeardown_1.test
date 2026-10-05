@@ -123,7 +123,7 @@ class TeardownCoordination : public Base
         }
         header->setReceiverAddress(MacAddress("02:00:00:00:00:02"));
         header->setTransmitterAddress(MacAddress("02:00:00:00:00:01"));
-        header->setAddress3(MacAddress("02:00:00:00:00:01"));
+        header->setAddress3(check_and_cast<Ieee80211Mib *>(this->getModuleByPath("^.^.mib"))->bssData.bssid);
         auto frame = new Packet("teardown-data", header);
         frame->insertAtBack(makeShared<ByteCountChunk>(B(200)));
         frame->insertAtBack(makeShared<Ieee80211MacTrailer>());

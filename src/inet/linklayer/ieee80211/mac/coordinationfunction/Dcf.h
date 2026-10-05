@@ -78,6 +78,9 @@ class INET_API Dcf : public ICoordinationFunction, public IFrameSequenceHandler:
 
     TxRequestId activeRequest;
     const PreparedTransmit *preparedTransmit = nullptr;
+    std::optional<ResponseModeResult> pendingResponse;
+    const physicallayer::IIeee80211Mode *pendingResponseMode = nullptr;
+    uint64_t txopGeneration = 0;
     bool responseRequest = false;
     bool requestOnAir = false;
     bool lifecycleStopped = false;

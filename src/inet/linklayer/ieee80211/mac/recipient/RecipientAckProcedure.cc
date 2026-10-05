@@ -18,6 +18,10 @@ void RecipientAckProcedure::processReceivedFrame(Packet *packet, const Ptr<const
     if (ackPolicy->isAckNeeded(dataOrMgmtHeader)) {
         auto ackFrame = buildAck(dataOrMgmtHeader);
         auto duration = ackPolicy->computeAckDurationField(packet, dataOrMgmtHeader);
+        if (duration < SIMTIME_ZERO) {
+            EV_WARN << "Unsupported ACK response; no transmission.\n";
+            return;
+        }
         ackFrame->setDurationField(duration);
         auto ackPacket = new Packet("WlanAck", ackFrame);
         EV_DEBUG << "Duration for " << ackFrame->getName() << " is set to " << duration << " s.\n";
@@ -39,4 +43,3 @@ const Ptr<Ieee80211AckFrame> RecipientAckProcedure::buildAck(const Ptr<const Iee
 
 } /* namespace ieee80211 */
 } /* namespace inet */
-

@@ -54,10 +54,27 @@ Define_Module(DurationAckPolicy);
 class DurationRates : public IQosRateSelection
 {
   public:
-    int originated = 0;
-    int responses = 0;
+    mutable int originated = 0;
+    mutable int responses = 0;
     const IIeee80211Mode *first = Ieee80211ModeSet::getModeSet("a")->getMode(bps(24000000));
     const IIeee80211Mode *second = Ieee80211ModeSet::getModeSet("a")->getMode(bps(6000000));
+    ResponseRateContext snapshotResponseRateContext(const Ptr<const Ieee80211MacHeader>&,
+            ResponseRequestRole, const std::optional<BssRateContextRef>&) const override { return {}; }
+    ResponseModeResult computeResponseMode(const ResponseModeInput& input) const override
+    {
+        responses++;
+        ResponseModeResult result;
+        result.status = ModePreparationStatus::READY;
+        result.primaryMode = first;
+        result.permittedModes = {first};
+        result.input = input;
+        result.airtime = first->getDuration(input.length);
+        return result;
+    }
+    PreparedModeResult computePreparedMode(const PreparedModeInput&) const override
+        { return {ModePreparationStatus::READY, originated++ == 0 ? first : second, {}}; }
+    std::optional<PreviousPeerTransmission> getPreviousPeerTransmission(const MacAddress&) const override { return std::nullopt; }
+    void frameTransmitted(Packet *, const Ptr<const Ieee80211MacHeader>&, uint64_t) override {}
     virtual const IIeee80211Mode *computeMode(Packet *, const Ptr<const Ieee80211MacHeader>&, TxopProcedure *) override { return originated++ == 0 ? first : second; }
     virtual const IIeee80211Mode *computeResponseAckFrameMode(Packet *, const Ptr<const Ieee80211DataOrMgmtHeader>&) override { responses++; return first; }
     virtual const IIeee80211Mode *computeResponseCtsFrameMode(Packet *, const Ptr<const Ieee80211RtsFrame>&) override { responses++; return first; }

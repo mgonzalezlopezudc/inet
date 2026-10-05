@@ -93,7 +93,10 @@ class INET_API RateSelection : public IRateSelection, public SimpleModule, publi
 
     virtual const physicallayer::IIeee80211Mode *computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header) override;
 
-    virtual void frameTransmitted(Packet *packet, const Ptr<const Ieee80211MacHeader>& header);
+    ResponseRateContext snapshotResponseRateContext(const Ptr<const Ieee80211MacHeader>& requestHeader,
+            ResponseRequestRole role, const std::optional<BssRateContextRef>& explicitContext) const override;
+    ResponseModeResult computeResponseMode(const ResponseModeInput& input) const override;
+    void frameTransmitted(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, uint64_t txopGeneration) override;
 };
 
 } // namespace ieee80211

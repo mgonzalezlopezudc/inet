@@ -99,6 +99,9 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
 
     TxRequestId activeRequest;
     const PreparedTransmit *preparedTransmit = nullptr;
+    std::optional<ResponseModeResult> pendingResponse;
+    const physicallayer::IIeee80211Mode *pendingResponseMode = nullptr;
+    uint64_t txopGeneration = 0;
     bool responseRequest = false;
     bool requestOnAir = false;
     bool lifecycleStopped = false;
@@ -116,6 +119,7 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     virtual void forEachChild(cVisitor *v) override;
     virtual void handleMessage(cMessage *msg) override;
     virtual void receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details) override;
+    void receiveSignal(cComponent *source, simsignal_t signalID, bool value, cObject *details) override;
     virtual void refreshDisplay() const override;
 
     void startFrameSequence(AccessCategory ac);

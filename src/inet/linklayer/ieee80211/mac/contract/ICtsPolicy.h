@@ -20,6 +20,7 @@ class INET_API ICtsPolicy
     virtual ~ICtsPolicy() {}
 
     virtual bool isCtsNeeded(const Ptr<const Ieee80211RtsFrame>& rtsFrame) const = 0;
+    // A negative result means that the required response mode is unsupported.
     virtual simtime_t computeCtsDurationField(Packet *packet, const Ptr<const Ieee80211RtsFrame>& rtsFrame) const = 0;
 };
 
@@ -27,4 +28,3 @@ class INET_API ICtsPolicy
 } // namespace inet
 
 #endif
-

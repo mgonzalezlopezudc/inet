@@ -17,6 +17,7 @@
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HcfFs.h"
 #include "inet/linklayer/ieee80211/mac/rateselection/RateSelection.h"
+#include "inet/linklayer/ieee80211/mac/rateselection/Ieee80211ResponseModeSelection.h"
 #include "inet/linklayer/ieee80211/mac/recipient/RecipientAckProcedure.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtTransactionTag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
@@ -37,6 +38,7 @@ void Hcf::initialize(int stage)
     ModeSetListener::initialize(stage);
     if (stage == INITSTAGE_LOCAL) {
         mac = check_and_cast<Ieee80211Mac *>(getContainingNicModule(this)->getSubmodule("mac"));
+        getModuleByPath(par("mibModule"))->subscribe(Ieee80211Mib::rateStateChangedSignal, this);
         startRxTimer = new cMessage("startRxTimeout");
         inactivityTimer = new cMessage("blockAckInactivityTimer");
         edca = check_and_cast<Edca *>(getSubmodule("edca"));
@@ -177,6 +179,39 @@ void Hcf::receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, 
             if (!responseRequest && tx->cancelPendingTransmission(activeRequest) == ITx::Cancellation::CANCELED)
                 transmissionCanceled(activeRequest);
         }
+    }
+}
+
+void Hcf::receiveSignal(cComponent *source, simsignal_t signalID, bool value, cObject *details)
+{
+    Enter_Method("%s", cComponent::getSignalName(signalID));
+    if (signalID != Ieee80211Mib::rateStateChangedSignal || !frameSequenceHandler || !frameSequenceHandler->isSequenceRunning())
+        return;
+    auto context = const_cast<FrameSequenceContext *>(frameSequenceHandler->getContext());
+    if (!context->usesPlanning())
+        return;
+    bool changed = false;
+    for (auto plan : {context->getActivePlan(), context->getNextPlan()}) {
+        if (!plan)
+            continue;
+        for (auto step : plan->flatten()) {
+            auto transmit = dynamic_cast<ITransmitStep *>(step);
+            if (!transmit)
+                continue;
+            auto record = transmit->getPreparedTransmit();
+            auto header = record->frame->peekAtFront<Ieee80211MacHeader>();
+            auto current = rateSelection->snapshotResponseRateContext(header, ResponseRequestRole::ORIGINATED,
+                Ieee80211ResponseModeSelection::getFrameContext(record->frame));
+            changed |= current.known != record->rates.known || current.context != record->rates.context ||
+                current.localRates != record->rates.localRates || current.bssRates != record->rates.bssRates ||
+                current.peerRates != record->rates.peerRates;
+        }
+    }
+    if (changed) {
+        context->invalidatePlans();
+        auto id = activeRequest;
+        if (!responseRequest && tx->cancelPendingTransmission(id) == ITx::Cancellation::CANCELED)
+            transmissionCanceled(id);
     }
 }
 
@@ -344,6 +379,7 @@ void Hcf::handleInternalCollision(std::vector<Edcaf *> internallyCollidedEdcafs)
 
 void Hcf::frameSequenceStarted()
 {
+    txopGeneration++;
     emit(IFrameSequenceHandler::frameSequenceStartedSignal, frameSequenceHandler->getContext());
 }
 
@@ -442,6 +478,9 @@ void Hcf::transmissionComplete(TxRequestId id, Packet *packet, const Ptr<const I
     Enter_Method("transmissionComplete");
     if (id != activeRequest || !mac->isCurrentTxRequest(id))
         return;
+    rateSelection->frameTransmitted(packet, header, txopGeneration);
+    pendingResponse.reset();
+    pendingResponseMode = nullptr;
     bool recipient = responseRequest;
     activeRequest = {};
     preparedTransmit = nullptr;
@@ -799,7 +838,33 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs, const PreparedTransmit *p
             dataHeader->setAckPolicy(ackPolicy);
             packet->insertAtFront(dataHeader);
         }
-        auto mode = rateSelection->computeMode(packet, header, txop);
+        auto context = const_cast<FrameSequenceContext *>(frameSequenceHandler->getContext());
+        const IIeee80211Mode *mode;
+        if (dynamicPtrCast<const Ieee80211RtsFrame>(header)) {
+            PreparedModeInput input{packet, header, context->getNumSteps() == 1 ?
+                PreparedControlPosition::TXOP_INITIAL : PreparedControlPosition::TXOP_CONTINUATION,
+                rateSelection->getPreviousPeerTransmission(header->getReceiverAddress()),
+                rateSelection->snapshotResponseRateContext(header, ResponseRequestRole::ORIGINATED,
+                    Ieee80211ResponseModeSelection::getFrameContext(packet)), modeSet};
+            auto selection = rateSelection->computePreparedMode(input);
+            if (selection.status != ModePreparationStatus::READY)
+                throw cRuntimeError("Unsupported RTS: %s", selection.reason.c_str());
+            mode = selection.mode;
+        }
+        else
+            mode = rateSelection->computeMode(packet, header, txop);
+        context->setExpectedResponse(std::nullopt);
+        bool needsAck = !header->getReceiverAddress().isMulticast();
+        if (auto data = dynamicPtrCast<const Ieee80211DataHeader>(header))
+            needsAck &= data->getAckPolicy() == NORMAL_ACK;
+        if (dynamicPtrCast<const Ieee80211RtsFrame>(header) || (needsAck && dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(header))) {
+            auto kind = dynamicPtrCast<const Ieee80211RtsFrame>(header) ? ControlResponseKind::CTS : ControlResponseKind::ACK;
+            auto response = rateSelection->computeResponseMode(Ieee80211ResponseModeSelection::makeInput(rateSelection,
+                packet, header, mode, kind, ResponseRequestRole::ORIGINATED, modeSet));
+            if (response.status != ModePreparationStatus::READY)
+                throw cRuntimeError("Unsupported originated response: %s", response.reason.c_str());
+            context->setExpectedResponse(response);
+        }
         setFrameMode(packet, header, mode);
         RateSelection::emitDatarateSelected(this, header, mode);
         EV_DEBUG << "Datarate for " << packet->getName() << " is set to " << mode->getDataMode()->getNetBitrate() << ".\n";
@@ -832,6 +897,18 @@ void Hcf::transmitControlResponseFrame(Packet *responsePacket, const Ptr<const I
     Enter_Method("transmitControlResponseFrame");
     responsePacket->insertAtBack(makeShared<Ieee80211MacTrailer>());
     const IIeee80211Mode *responseMode = nullptr;
+    std::optional<ResponseModeResult> permission;
+    if (dynamicPtrCast<const Ieee80211RtsFrame>(receivedHeader) || dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(receivedHeader)) {
+        auto indication = receivedPacket->findTag<Ieee80211ModeInd>();
+        auto kind = dynamicPtrCast<const Ieee80211RtsFrame>(receivedHeader) ? ControlResponseKind::CTS : ControlResponseKind::ACK;
+        permission = rateSelection->computeResponseMode(Ieee80211ResponseModeSelection::makeInput(rateSelection,
+            receivedPacket, receivedHeader, indication ? indication->getMode() : nullptr, kind, ResponseRequestRole::RECEIVED, modeSet));
+        if (permission->status != ModePreparationStatus::READY) {
+            EV_WARN << "Unsupported control response: " << permission->reason << ".\n";
+            delete responsePacket;
+            return;
+        }
+    }
     if (auto rtsFrame = dynamicPtrCast<const Ieee80211RtsFrame>(receivedHeader))
         responseMode = rateSelection->computeResponseCtsFrameMode(receivedPacket, rtsFrame);
     else if (auto blockAckReq = dynamicPtrCast<const Ieee80211BasicBlockAckReq>(receivedHeader))
@@ -840,6 +917,14 @@ void Hcf::transmitControlResponseFrame(Packet *responsePacket, const Ptr<const I
         responseMode = rateSelection->computeResponseAckFrameMode(receivedPacket, dataOrMgmtHeader);
     else
         throw cRuntimeError("Unknown received frame type");
+    if (permission && !Ieee80211ResponseModeSelection::containsMode(*permission, responseMode))
+        throw cRuntimeError("Illegal final control response mode before transmission");
+    if (!responseMode) {
+        delete responsePacket;
+        return;
+    }
+    pendingResponse = permission;
+    pendingResponseMode = responseMode;
     setFrameMode(responsePacket, responseHeader, responseMode);
     RateSelection::emitDatarateSelected(this, responseHeader, responseMode);
     EV_DEBUG << "Datarate for " << responsePacket->getName() << " is set to " << responseMode->getDataMode()->getNetBitrate() << ".\n";
@@ -936,6 +1021,8 @@ bool Hcf::isTransmissionPermitted(TxRequestId id)
 {
     if (id != activeRequest || lifecycleStopped || !mac->isCurrentTxRequest(id))
         return false;
+    if (responseRequest && pendingResponse)
+        return Ieee80211ResponseModeSelection::containsMode(*pendingResponse, pendingResponseMode);
     if (responseRequest || !preparedTransmit)
         return true;
     auto context = frameSequenceHandler->getContext();
@@ -984,6 +1071,9 @@ void Hcf::transmissionCanceled(TxRequestId id)
 
 void Hcf::resetForLifecycle()
 {
+    rateSelection->frameTransmitted(nullptr, nullptr, 0);
+    pendingResponse.reset();
+    pendingResponseMode = nullptr;
     Enter_Method("resetForLifecycle");
     if (lifecycleStopped)
         return;

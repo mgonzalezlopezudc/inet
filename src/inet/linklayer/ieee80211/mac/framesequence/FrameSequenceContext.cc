@@ -128,6 +128,7 @@ void FrameSequenceContext::prepareNextExchange(IFrameSequence *sequence)
 {
     inProgressFrames->stageForPlanning();
     FrameSequencePlanningContext planning(*this, planningRateSelection, activePlan->continuation);
+    planning.seedHistory(*activePlan);
     if (!planning.getCandidate() || planning.getCandidate()->identity != activePlan->candidate.identity)
         throw cRuntimeError("Active exchange lost its staged candidate");
     planning.projectCompletion();

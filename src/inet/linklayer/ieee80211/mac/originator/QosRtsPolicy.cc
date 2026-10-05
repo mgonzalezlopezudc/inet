@@ -6,6 +6,7 @@
 
 
 #include "inet/linklayer/ieee80211/mac/originator/QosRtsPolicy.h"
+#include "inet/linklayer/ieee80211/mac/rateselection/Ieee80211ResponseModeSelection.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -52,7 +53,8 @@ bool QosRtsPolicy::isRtsNeeded(Packet *packet, const Ptr<const Ieee80211MacHeade
 //
 simtime_t QosRtsPolicy::getCtsTimeout(Packet *packet, const Ptr<const Ieee80211RtsFrame>& rtsFrame) const
 {
-    return ctsTimeout == -1 ? modeSet->getSifsTime() + modeSet->getSlotTime() + rateSelection->computeResponseCtsFrameMode(packet, rtsFrame)->getPhyRxStartDelay() : ctsTimeout;
+    return ctsTimeout == -1 ? modeSet->getSifsTime() + modeSet->getSlotTime() +
+        Ieee80211ResponseModeSelection::predictResponseMode(rateSelection, packet, rtsFrame, ControlResponseKind::CTS, modeSet)->getPhyRxStartDelay() : ctsTimeout;
 }
 
 simtime_t QosRtsPolicy::getCtsTimeoutForMode(const physicallayer::IIeee80211Mode *responseMode) const

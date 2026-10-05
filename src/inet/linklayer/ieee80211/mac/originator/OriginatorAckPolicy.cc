@@ -6,6 +6,7 @@
 
 
 #include "inet/linklayer/ieee80211/mac/originator/OriginatorAckPolicy.h"
+#include "inet/linklayer/ieee80211/mac/rateselection/Ieee80211ResponseModeSelection.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -38,9 +39,9 @@ bool OriginatorAckPolicy::isAckNeeded(const Ptr<const Ieee80211DataOrMgmtHeader>
 //
 simtime_t OriginatorAckPolicy::getAckTimeout(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header) const
 {
-    return ackTimeout == -1 ? modeSet->getSifsTime() + modeSet->getSlotTime() + rateSelection->computeResponseAckFrameMode(packet, header)->getPhyRxStartDelay() : ackTimeout;
+    return ackTimeout == -1 ? modeSet->getSifsTime() + modeSet->getSlotTime() +
+        Ieee80211ResponseModeSelection::predictResponseMode(rateSelection, packet, header, ControlResponseKind::ACK, modeSet)->getPhyRxStartDelay() : ackTimeout;
 }
 
 } /* namespace ieee80211 */
 } /* namespace inet */
-

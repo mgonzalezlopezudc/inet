@@ -36,6 +36,22 @@ class TestRateSelection : public SimpleModule, public IRateSelection, public IQo
     }
 
   public:
+    ResponseRateContext snapshotResponseRateContext(const Ptr<const Ieee80211MacHeader>&,
+            ResponseRequestRole, const std::optional<BssRateContextRef>&) const override { return {}; }
+    ResponseModeResult computeResponseMode(const ResponseModeInput& input) const override
+    {
+        ResponseModeResult result;
+        result.status = ModePreparationStatus::READY;
+        result.primaryMode = responseMode;
+        result.permittedModes = {responseMode};
+        result.input = input;
+        result.airtime = responseMode->getDuration(input.length);
+        return result;
+    }
+    PreparedModeResult computePreparedMode(const PreparedModeInput&) const override
+        { return {ModePreparationStatus::READY, responseMode, {}}; }
+    std::optional<PreviousPeerTransmission> getPreviousPeerTransmission(const MacAddress&) const override { return std::nullopt; }
+    void frameTransmitted(Packet *, const Ptr<const Ieee80211MacHeader>&, uint64_t) override {}
     virtual const physicallayer::IIeee80211Mode *computeResponseCtsFrameMode(Packet *packet,
             const Ptr<const Ieee80211RtsFrame>& rtsFrame) override { return responseMode; }
     virtual const physicallayer::IIeee80211Mode *computeResponseAckFrameMode(Packet *packet,
@@ -63,7 +79,12 @@ class TestOriginatorAckPolicy : public OriginatorAckPolicy
     }
 
   public:
-    simtime_t calculateAckTimeout() const { return getAckTimeout(nullptr, Ptr<const Ieee80211DataOrMgmtHeader>()); }
+    simtime_t calculateAckTimeout() const
+    {
+        auto header = makeShared<Ieee80211DataHeader>();
+        Packet request("timeout-data", header);
+        return getAckTimeout(&request, header);
+    }
 };
 
 Define_Module(TestOriginatorAckPolicy);
@@ -81,7 +102,12 @@ class TestRtsPolicy : public RtsPolicy
     }
 
   public:
-    simtime_t calculateCtsTimeout() const { return getCtsTimeout(nullptr, Ptr<const Ieee80211RtsFrame>()); }
+    simtime_t calculateCtsTimeout() const
+    {
+        auto header = makeShared<Ieee80211RtsFrame>();
+        Packet request("timeout-RTS", header);
+        return getCtsTimeout(&request, header);
+    }
 };
 
 Define_Module(TestRtsPolicy);
@@ -99,7 +125,12 @@ class TestQosRtsPolicy : public QosRtsPolicy
     }
 
   public:
-    simtime_t calculateCtsTimeout() const { return getCtsTimeout(nullptr, Ptr<const Ieee80211RtsFrame>()); }
+    simtime_t calculateCtsTimeout() const
+    {
+        auto header = makeShared<Ieee80211RtsFrame>();
+        Packet request("timeout-RTS", header);
+        return getCtsTimeout(&request, header);
+    }
 };
 
 Define_Module(TestQosRtsPolicy);
@@ -118,7 +149,12 @@ class TestOriginatorQosAckPolicy : public OriginatorQosAckPolicy
     }
 
   public:
-    simtime_t calculateAckTimeout() const { return getAckTimeout(nullptr, Ptr<const Ieee80211DataOrMgmtHeader>()); }
+    simtime_t calculateAckTimeout() const
+    {
+        auto header = makeShared<Ieee80211DataHeader>();
+        Packet request("timeout-data", header);
+        return getAckTimeout(&request, header);
+    }
     simtime_t calculateBlockAckTimeout() const { return getBlockAckTimeout(nullptr, Ptr<const Ieee80211BlockAckReq>()); }
 };
 

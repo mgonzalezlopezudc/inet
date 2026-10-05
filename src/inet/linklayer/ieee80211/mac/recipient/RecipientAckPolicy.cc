@@ -24,7 +24,8 @@ void RecipientAckPolicy::initialize(int stage)
 
 simtime_t RecipientAckPolicy::computeAckDuration(Packet *dataOrMgmtPacket, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) const
 {
-    return rateSelection->computeResponseAckFrameMode(dataOrMgmtPacket, dataOrMgmtHeader)->getDuration(LENGTH_ACK);
+    auto mode = rateSelection->computeResponseAckFrameMode(dataOrMgmtPacket, dataOrMgmtHeader);
+    return mode ? mode->getDuration(LENGTH_ACK) : SimTime(-1);
 }
 
 //
@@ -53,7 +54,10 @@ bool RecipientAckPolicy::isAckNeeded(const Ptr<const Ieee80211DataOrMgmtHeader>&
 simtime_t RecipientAckPolicy::computeAckDurationField(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header) const
 {
     if (header->getMoreFragments()) {
-        auto duration = header->getDurationField() - modeSet->getSifsTime() - computeAckDuration(packet, header);
+        auto ackDuration = computeAckDuration(packet, header);
+        if (ackDuration < SIMTIME_ZERO)
+            return -1;
+        auto duration = header->getDurationField() - modeSet->getSifsTime() - ackDuration;
         duration = ceil(duration, SimTime(1, SIMTIME_US));
         if (duration < 0)
             EV_WARN << "ACK duration field would be negative, returning 0 instead.\n";
@@ -64,4 +68,3 @@ simtime_t RecipientAckPolicy::computeAckDurationField(Packet *packet, const Ptr<
 
 } /* namespace ieee80211 */
 } /* namespace inet */
-

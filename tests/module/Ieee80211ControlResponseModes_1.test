@@ -1,0 +1,513 @@
+%description:
+Exercise HCF and DCF control response dispatch and completion with real radios.
+Check legal alternates, rejected overrides, invalid external responses, and SIFS changes.
+Use seed 0, zero propagation, separate MPDUs, and no Block Ack.
+
+%file: ControlResponse.cc
+#include <type_traits>
+
+#include "inet/common/packet/Message.h"
+#include "inet/common/packet/chunk/ByteCountChunk.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/Dcf.h"
+#include "inet/linklayer/ieee80211/mac/rateselection/QosRateSelection.h"
+#include "inet/linklayer/ieee80211/mac/rateselection/Ieee80211ResponseModeSelection.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtAdhoc.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
+
+namespace inet::ieee80211 {
+using namespace physicallayer;
+
+class ControlMgmt : public Ieee80211MgmtAdhoc
+{
+  public:
+    void basicRates(std::initializer_list<int> basic)
+    {
+        Enter_Method("basicRates");
+        for (int i = 0; i < supportedRates.numRates; i++)
+            supportedRates.basicRate[i] = std::find(basic.begin(), basic.end(), supportedRates.rate[i]) != basic.end();
+        for (int i = 0; i < extendedSupportedRates.numRates; i++)
+            extendedSupportedRates.basicRate[i] = std::find(basic.begin(), basic.end(), extendedSupportedRates.rate[i]) != basic.end();
+        publishLocalRateSet();
+    }
+};
+Define_Module(ControlMgmt);
+
+class ControlMac : public Ieee80211Mac
+{
+  public:
+    bool deferred = false;
+    void queueConfig()
+    {
+        Enter_Method("queueConfig");
+        auto request = new Request("test-config", RADIO_C_CONFIGURE);
+        auto command = new Ieee80211ConfigureRadioCommand();
+        command->setBitrate(Mbps(24));
+        request->setControlInfo(command);
+        handleUpperCommand(request);
+        deferred = pendingRadioConfigMsg == request;
+        ASSERT(deferred);
+    }
+};
+Define_Module(ControlMac);
+
+template<typename Base>
+class ControlFunction : public Base
+{
+  public:
+    int acknowledgments = 0;
+    int failures = 0;
+    int rtsFailures = 0;
+    int responses = 0;
+    int grants = 0;
+    int cancellations = 0;
+    int errors = 0;
+    int selections = 0;
+    bool changed = false;
+    bool corrupted = false;
+    std::vector<bps> rtsRates;
+    std::vector<bps> reservedRtsRates;
+    std::vector<bps> responseRates;
+    std::vector<simtime_t> durations;
+
+    int scenario() const { return this->par("scenario"); }
+    Ieee80211Mib *mib() const { return check_and_cast<Ieee80211Mib *>(this->getModuleByPath("^.^.mib")); }
+
+    void inject()
+    {
+        Enter_Method("inject");
+        for (int i = 0; i < 3; i++) {
+            auto header = makeShared<Ieee80211DataHeader>();
+            if constexpr (std::is_same_v<Base, Hcf>) {
+                header->setType(ST_DATA_WITH_QOS);
+                header->addChunkLength(QOSCONTROL_PART_LENGTH);
+                header->setTid(5);
+            }
+            header->setReceiverAddress(MacAddress("02:00:00:00:00:02"));
+            header->setTransmitterAddress(MacAddress("02:00:00:00:00:01"));
+            header->setAddress3(mib()->bssData.bssid);
+            auto packet = new Packet("control-data", header);
+            packet->insertAtBack(makeShared<ByteCountChunk>(B(200)));
+            packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+            this->processUpperFrame(packet, header);
+        }
+    }
+
+    void externalRequest(const IIeee80211Mode *mode, bool rts)
+    {
+        Enter_Method("externalRequest");
+        Ptr<Ieee80211MacHeader> header;
+        if (rts) {
+            auto request = makeShared<Ieee80211RtsFrame>();
+            request->setTransmitterAddress(MacAddress("02:00:00:00:00:04"));
+            header = request;
+        }
+        else {
+            auto data = makeShared<Ieee80211DataHeader>();
+            data->setTransmitterAddress(MacAddress("02:00:00:00:00:04"));
+            data->setAddress3(scenario() == 24 ? MacAddress("02:00:00:00:00:04") : mib()->bssData.bssid);
+            data->setSequenceNumber(SequenceNumberCyclic(100));
+            header = data;
+        }
+        header->setReceiverAddress(mib()->address);
+        header->setDurationField(SimTime(100, SIMTIME_US));
+        auto packet = new Packet("external-request", header);
+        if (!rts)
+            packet->insertAtBack(makeShared<ByteCountChunk>(B(200)));
+        packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+        packet->addTag<Ieee80211ModeInd>()->setMode(mode);
+        if (scenario() == 23)
+            packet->addTag<Ieee80211ModeReq>()->setMode(Ieee80211ModeSet::getModeSet("a")->getMode(Mbps(6)));
+        Base::processLowerFrame(packet, header);
+    }
+
+  protected:
+    void initialize(int stage) override
+    {
+        Base::initialize(stage);
+        if (stage == INITSTAGE_LOCAL)
+            this->subscribe(IRateSelection::datarateSelectedSignal, this);
+    }
+
+    void receiveSignal(cComponent *source, simsignal_t signal, double value, cObject *details) override
+    {
+        if (signal == IRateSelection::datarateSelectedSignal)
+            selections++;
+    }
+
+    void channelGranted(IChannelAccess *access) override
+    {
+        grants++;
+        try { Base::channelGranted(access); }
+        catch (const cRuntimeError& error) {
+            if (scenario() != 6 && scenario() != 16)
+                throw;
+            std::string message = error.what();
+            ASSERT(message.find(scenario() == 6 ? "Illegal RTS override" : "unknown BSS") != std::string::npos);
+            errors++;
+            this->lifecycleStopped = true;
+            this->frameSequenceHandler->resetForLifecycle(false);
+        }
+    }
+
+    void frameSequenceStarted() override
+    {
+        if constexpr (std::is_same_v<Base, Hcf>) {
+            auto policy = this->rateSelection;
+            auto context = this->frameSequenceHandler->getContext();
+            // Initial preparation creates no actual history or tags.
+            if (grants == 1 && acknowledgments == 0 && failures == 0 && rtsFailures == 0) {
+                ASSERT(selections == 0);
+                ASSERT(!policy->getPreviousPeerTransmission(MacAddress("02:00:00:00:00:02")));
+                for (auto step : context->getActivePlan()->flatten())
+                    if (auto transmit = dynamic_cast<ITransmitStep *>(step))
+                        ASSERT(!transmit->getFrameToTransmit()->template findTag<Ieee80211ModeReq>());
+            }
+            for (auto step : context->getActivePlan()->flatten())
+                if (auto receive = dynamic_cast<IReceiveStep *>(step)) {
+                    auto result = receive->getPreparedReceive();
+                    ASSERT(result->airtime == result->response.airtime);
+                    ASSERT(result->mode == result->response.primaryMode);
+                }
+            if (auto successor = context->getNextPlan())
+                for (auto step : successor->flatten())
+                    if (auto transmit = dynamic_cast<ITransmitStep *>(step))
+                        if (transmit->getPreparedTransmit()->frame->template peekAtFront<Ieee80211MacHeader>()->getType() == ST_RTS)
+                            reservedRtsRates.push_back(transmit->getPreparedTransmit()->mode->getDataMode()->getNetBitrate());
+        }
+        Base::frameSequenceStarted();
+    }
+
+    void transmitFrame(Packet *packet, simtime_t ifs, const PreparedTransmit *prepared) override
+    {
+        Base::transmitFrame(packet, ifs, prepared);
+        if constexpr (std::is_same_v<Base, Hcf>) {
+            if (!changed && acknowledgments == 1 && scenario() >= 13 && scenario() <= 15) {
+                changed = true;
+                ASSERT(ifs > SIMTIME_ZERO);
+                if (scenario() == 13) {
+                    auto peer = check_and_cast<ControlMgmt *>(this->getModuleByPath("^.^.^.^.receiver.wlan[0].mgmt"));
+                    auto local = check_and_cast<ControlMgmt *>(this->getModuleByPath("^.^.mgmt"));
+                    peer->basicRates({6});
+                    local->basicRates({6});
+                }
+                else if (scenario() == 14) {
+                    auto rates = mib()->getBssRateSet();
+                    mib()->clearBssRateSet();
+                    mib()->setBssRateSet(rates);
+                }
+                else
+                    mib()->setPeerRateSet(MacAddress("02:00:00:00:00:03"), mib()->getLocalRateSet());
+            }
+        }
+    }
+
+    void transmissionCanceled(TxRequestId id) override
+    {
+        cancellations++;
+        Base::transmissionCanceled(id);
+    }
+
+    void processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header) override
+    {
+        auto actualHeader = header;
+        bool ackCase = scenario() >= 7 && scenario() <= 11 && header->getType() == ST_ACK;
+        bool ctsCase = (scenario() == 18 || scenario() == 19) && header->getType() == ST_CTS;
+        if (!corrupted && (ackCase || ctsCase)) {
+            corrupted = true;
+            ASSERT(acknowledgments == 0);
+            if (scenario() == 7 || scenario() == 18)
+                packet->template getTagForUpdate<Ieee80211ModeInd>()->setMode(Ieee80211ModeSet::getModeSet("a")->getMode(Mbps(24)));
+            else if (scenario() == 8)
+                packet->template removeTag<Ieee80211ModeInd>();
+            else if (scenario() == 9 || scenario() == 19)
+                packet->insertAtBack(makeShared<ByteCountChunk>(B(1)));
+            else if (scenario() == 10)
+                packet->template getTagForUpdate<Ieee80211ModeInd>()->setMode(Ieee80211ModeSet::getModeSet("g(erp)")->getMode(Mbps(12)));
+            else {
+                packet->template removeAtFront<Ieee80211MacHeader>();
+                auto wrong = makeShared<Ieee80211CtsFrame>();
+                wrong->setReceiverAddress(header->getReceiverAddress());
+                packet->insertAtFront(wrong);
+                actualHeader = wrong;
+            }
+        }
+        try { Base::processLowerFrame(packet, actualHeader); }
+        catch (const cRuntimeError& error) {
+            if (scenario() != 4 && scenario() != 5)
+                throw;
+            ASSERT(std::string(error.what()).find(scenario() == 4 ? "Illegal ACK override" : "Illegal CTS override") != std::string::npos);
+            ASSERT(!this->tx->hasTransmission() && responses == 0);
+            errors++;
+            this->take(packet);
+            delete packet;
+        }
+    }
+
+    void originatorProcessTransmittedFrame(Packet *packet) override
+    {
+        auto header = packet->template peekAtFront<Ieee80211MacHeader>();
+        if (header->getType() == ST_RTS)
+            rtsRates.push_back(packet->template getTag<Ieee80211ModeReq>()->getMode()->getDataMode()->getNetBitrate());
+        else
+            durations.push_back(header->getDurationField());
+        Base::originatorProcessTransmittedFrame(packet);
+    }
+
+    void originatorProcessReceivedFrame(Packet *packet, Packet *request) override
+    {
+        if (packet->template peekAtFront<Ieee80211MacHeader>()->getType() == ST_ACK)
+            acknowledgments++;
+        Base::originatorProcessReceivedFrame(packet, request);
+    }
+
+    void originatorProcessFailedFrame(Packet *packet) override
+    {
+        if (corrupted && failures == 0)
+            ASSERT(acknowledgments == 0);
+        failures++;
+        Base::originatorProcessFailedFrame(packet);
+    }
+
+    void originatorProcessRtsProtectionFailed(Packet *packet) override
+    {
+        ASSERT(acknowledgments == 0);
+        rtsFailures++;
+        Base::originatorProcessRtsProtectionFailed(packet);
+    }
+
+    void transmitControlResponseFrame(Packet *response, const Ptr<const Ieee80211MacHeader>& header,
+            Packet *request, const Ptr<const Ieee80211MacHeader>& requestHeader) override
+    {
+        try { Base::transmitControlResponseFrame(response, header, request, requestHeader); }
+        catch (const cRuntimeError& error) {
+            if (scenario() != 4 && scenario() != 5)
+                throw;
+            ASSERT(std::string(error.what()).find(scenario() == 4 ? "Illegal ACK override" : "Illegal CTS override") != std::string::npos);
+            ASSERT(!this->tx->hasTransmission() && responses == 0);
+            errors++;
+            delete response;
+            return;
+        }
+        if (scenario() == 12 && !changed) {
+            changed = true;
+            auto local = check_and_cast<ControlMgmt *>(this->getModuleByPath("^.^.mgmt"));
+            local->basicRates({6});
+            check_and_cast<ControlMac *>(this->mac)->queueConfig();
+        }
+    }
+
+    void recipientProcessTransmittedControlResponseFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header) override
+    {
+        ASSERT(packet->getDataLength() == LENGTH_ACK);
+        responses++;
+        responseRates.push_back(packet->template getTag<Ieee80211ModeReq>()->getMode()->getDataMode()->getNetBitrate());
+        Base::recipientProcessTransmittedControlResponseFrame(packet, header);
+        if (scenario() == 12)
+            check_and_cast<ControlMgmt *>(this->getModuleByPath("^.^.mgmt"))->basicRates({6, 12});
+    }
+
+    void sendUp(const std::vector<Packet *>& packets) override
+    {
+        for (auto packet : packets) {
+            this->take(packet);
+            delete packet;
+        }
+    }
+};
+
+class ControlHcf : public ControlFunction<Hcf> {};
+class ControlDcf : public ControlFunction<Dcf> {};
+Define_Module(ControlHcf);
+Define_Module(ControlDcf);
+
+class ControlResponseTest : public cSimpleModule
+{
+  public:
+    ControlResponseTest() : cSimpleModule(65536) {}
+  protected:
+    template<typename Function>
+    void run(Function *sender, Function *receiver, bool qos, int scenario)
+    {
+        if (scenario == 16) {
+            auto rates = sender->mib()->getBssRateSet();
+            rates.basic = {};
+            sender->mib()->setBssRateSet(rates);
+        }
+        if (scenario == 17 || (scenario >= 20 && scenario <= 24)) {
+            auto modes = Ieee80211ModeSet::getModeSet(scenario == 21 ? "ac" : "n(mixed-2.4Ghz)");
+            const IIeee80211Mode *requestMode = nullptr;
+            for (int i = 0; i < modes->getNumModes(); i++) {
+                auto mode = modes->getMode(i);
+                auto width = scenario == 22 ? MHz(40) : MHz(20);
+                auto modulation = scenario == 21 ? IIeee80211Mode::ModulationClass::VHT : IIeee80211Mode::ModulationClass::HT;
+                if (mode->getModulationClass() == modulation && mode->getDataMode()->getBandwidth() == width &&
+                        mode->getNonHtReferenceRate() == Mbps(24)) {
+                    requestMode = mode;
+                    break;
+                }
+            }
+            ASSERT(requestMode);
+            receiver->externalRequest(requestMode, scenario == 17);
+            wait(SimTime(1, SIMTIME_MS));
+            ASSERT(receiver->responses == (scenario == 20 || scenario == 21 || scenario == 23 ? 1 : 0));
+            if (scenario == 23)
+                ASSERT(receiver->responseRates == std::vector<bps>({Mbps(12)}));
+            return;
+        }
+        sender->inject();
+        wait(SimTime(10, SIMTIME_MS));
+        if (scenario == 6 || scenario == 16) {
+            ASSERT(sender->errors == 1 && sender->durations.empty() && sender->rtsRates.empty());
+            ASSERT(receiver->responses == 0);
+            return;
+        }
+        if (scenario == 4 || scenario == 5) {
+            ASSERT(receiver->errors > 0 && receiver->responses == 0 && sender->acknowledgments == 0);
+            return;
+        }
+        ASSERT(sender->acknowledgments == 3);
+        ASSERT(sender->failures == (scenario >= 7 && scenario <= 11 ? 1 : 0));
+        ASSERT(sender->rtsFailures == (scenario == 18 || scenario == 19 ? 1 : 0));
+        if (scenario == 25) {
+            ASSERT(sender->rtsRates == std::vector<bps>({Mbps(12), Mbps(12), Mbps(12)}));
+            for (auto rate : receiver->responseRates)
+                ASSERT(rate == Mbps(12));
+        }
+        if (scenario == 1) {
+            for (auto rate : receiver->responseRates)
+                ASSERT(rate == Mbps(54));
+            auto primary = Ieee80211ModeSet::getModeSet("a")->getMode(Mbps(48));
+            ASSERT(sender->durations.back() == primary->getSifsTime() + primary->getDuration(LENGTH_ACK));
+        }
+        if (scenario == 2) {
+            // Existing TXNAV admission requires new grants for these protected exchanges.
+            ASSERT(sender->grants == 3);
+            ASSERT(sender->rtsRates == std::vector<bps>({Mbps(12), Mbps(12), Mbps(12)}));
+            if constexpr (std::is_same_v<Function, ControlHcf>) {
+                ASSERT(sender->reservedRtsRates == std::vector<bps>({Mbps(6), Mbps(6)}));
+                auto policy = check_and_cast<IQosRateSelection *>(sender->getSubmodule("rateSelection"));
+                auto previous = policy->getPreviousPeerTransmission(MacAddress("02:00:00:00:00:02"));
+                ASSERT(previous && previous->mode->getDataMode()->getNetBitrate() == Mbps(6));
+                ASSERT(!policy->getPreviousPeerTransmission(MacAddress("02:00:00:00:00:03")));
+                auto rts = makeShared<Ieee80211RtsFrame>();
+                rts->setReceiverAddress(previous->peer);
+                auto rates = policy->snapshotResponseRateContext(rts, ResponseRequestRole::ORIGINATED, std::nullopt);
+                PreparedModeInput input{nullptr, rts, PreparedControlPosition::TXOP_CONTINUATION, previous, rates, Ieee80211ModeSet::getModeSet("a")};
+                ASSERT(policy->computePreparedMode(input).mode->getDataMode()->getNetBitrate() == Mbps(6));
+            }
+        }
+        if (scenario == 12)
+            ASSERT(check_and_cast<ControlMac *>(receiver->getModuleByPath("^"))->deferred);
+        if (qos && (scenario == 13 || scenario == 14))
+            ASSERT(sender->cancellations == 1 && sender->grants == 2);
+        if (qos && scenario == 15)
+            ASSERT(sender->cancellations == 0 && sender->grants == 1);
+        if (scenario == 0 || scenario == 3) {
+            for (auto rate : receiver->responseRates)
+                ASSERT(rate == (scenario == 3 ? Mbps(24) : Mbps(12)));
+        }
+    }
+
+    void activity() override
+    {
+        wait(SimTime(1, SIMTIME_MS));
+        int scenario = par("scenario");
+        auto senderMgmt = check_and_cast<ControlMgmt *>(getModuleByPath("^.sender.wlan[0].mgmt"));
+        auto receiverMgmt = check_and_cast<ControlMgmt *>(getModuleByPath("^.receiver.wlan[0].mgmt"));
+        for (auto management : {senderMgmt, receiverMgmt}) {
+            if (scenario == 1)
+                management->basicRates({48, 54});
+            else if (scenario == 3)
+                management->basicRates({});
+            else
+                management->basicRates({6, 12});
+        }
+        bool qos = par("qos");
+        if (qos)
+            run(check_and_cast<ControlHcf *>(getModuleByPath("^.sender.wlan[0].mac.hcf")),
+                check_and_cast<ControlHcf *>(getModuleByPath("^.receiver.wlan[0].mac.hcf")), true, scenario);
+        else
+            run(check_and_cast<ControlDcf *>(getModuleByPath("^.sender.wlan[0].mac.dcf")),
+                check_and_cast<ControlDcf *>(getModuleByPath("^.receiver.wlan[0].mac.dcf")), false, scenario);
+        std::cout << "Control response production paths verified.\n";
+    }
+};
+Define_Module(ControlResponseTest);
+} // namespace inet::ieee80211
+
+%file: test.ned
+import inet.common.SimpleModule;
+import inet.linklayer.ieee80211.mac.Ieee80211Mac;
+import inet.linklayer.ieee80211.mac.coordinationfunction.Hcf;
+import inet.linklayer.ieee80211.mac.coordinationfunction.Dcf;
+import inet.linklayer.ieee80211.mac.rateselection.QosRateSelection;
+import inet.linklayer.ieee80211.mgmt.Ieee80211MgmtAdhoc;
+import inet.node.inet.WirelessHost;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadioMedium;
+
+module ControlMgmt extends Ieee80211MgmtAdhoc { parameters: @class(::inet::ieee80211::ControlMgmt); }
+module ControlMac extends Ieee80211Mac { parameters: @class(::inet::ieee80211::ControlMac); }
+module ControlHcf extends Hcf { parameters: int scenario; @class(::inet::ieee80211::ControlHcf); }
+module ControlDcf extends Dcf { parameters: int scenario; @class(::inet::ieee80211::ControlDcf); }
+simple ControlResponseTest extends SimpleModule { parameters: int scenario; bool qos; @class(::inet::ieee80211::ControlResponseTest); }
+network ControlResponseNetwork
+{
+    submodules:
+        radioMedium: Ieee80211ScalarRadioMedium;
+        sender: WirelessHost;
+        receiver: WirelessHost;
+        test: ControlResponseTest;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = ControlResponseNetwork
+ned-path = .;../../../../src;../../lib
+sim-time-limit = 12ms
+seed-set = 0
+cmdenv-express-mode = true
+record-vector-results = false
+record-scalar-results = false
+*.test.scenario = ${scenario=0..25}
+*.test.qos = ${qos=true,false}
+*.radioMedium.propagation.typename = "ConstantTimePropagation"
+*.radioMedium.propagation.propagationTime = 0s
+**.wlan[*].agent.typename = ""
+**.wlan[*].mgmt.typename = "ControlMgmt"
+**.wlan[*].mac.typename = "ControlMac"
+**.wlan[*].mac.qosStation = ${qos}
+**.wlan[*].mac.hcf.typename = "ControlHcf"
+**.wlan[*].mac.dcf.typename = "ControlDcf"
+**.wlan[*].mac.*.scenario = ${scenario}
+**.wlan[*].mac.hcf.isBlockAckSupported = false
+**.wlan[*].mac.hcf.edca.edcaf[2].txopProcedure.txopLimit = 2ms
+**.wlan[*].mac.hcf.originatorMacDataService.msduAggregationPolicy.typename = ""
+**.wlan[*].mac.hcf.originatorMacDataService.mpduAggregationPolicy.typename = ""
+**.wlan[*].mac.*.rtsPolicy.rtsThreshold = (${scenario} == 2 || ${scenario} == 5 || ${scenario} == 6 || ${scenario} == 18 || ${scenario} == 19 || ${scenario} == 25) ? 0B : 4096B
+**.wlan[*].mac.*.rateSelection.dataFrameBitrate = ${scenario} == 1 ? 48Mbps : (${scenario} == 2 ? 6Mbps : 24Mbps)
+**.wlan[*].mac.*.rateSelection.controlFrameBitrate = ${scenario} == 6 ? 24Mbps : -1bps
+**.wlan[*].mac.*.rateSelection.responseAckFrameBitrate = ${scenario} == 1 ? 54Mbps : (${scenario} == 4 ? 24Mbps : -1bps)
+**.wlan[*].mac.*.rateSelection.responseCtsFrameBitrate = ${scenario} == 5 ? 24Mbps : -1bps
+**.wlan[*].opMode = ${scenario} == 25 ? "g(mixed)" : "a"
+**.wlan[*].bitrate = 24Mbps
+*.sender.wlan[0].address = "02:00:00:00:00:01"
+*.receiver.wlan[0].address = "02:00:00:00:00:02"
+**.mobility.initFromDisplayString = false
+**.mobility.constraintAreaMinX = 0m
+**.mobility.constraintAreaMinY = 0m
+**.mobility.constraintAreaMinZ = 0m
+**.mobility.constraintAreaMaxX = 100m
+**.mobility.constraintAreaMaxY = 100m
+**.mobility.constraintAreaMaxZ = 0m
+*.sender.mobility.initialX = 0m
+*.sender.mobility.initialY = 0m
+*.receiver.mobility.initialX = 1m
+*.receiver.mobility.initialY = 0m
+**.wlan[*].radio.transmitter.power = 100mW
+**.wlan[*].radio.receiver.sensitivity = -85dBm
+**.wlan[*].radio.receiver.snirThreshold = 4dB
+
+%contains: stdout
+Control response production paths verified.

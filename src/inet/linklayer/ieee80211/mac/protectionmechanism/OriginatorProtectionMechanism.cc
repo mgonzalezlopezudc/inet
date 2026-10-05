@@ -9,6 +9,7 @@
 
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Dcf.h"
 #include "inet/linklayer/ieee80211/mac/rateselection/RateSelection.h"
+#include "inet/linklayer/ieee80211/mac/rateselection/Ieee80211ResponseModeSelection.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -34,8 +35,8 @@ simtime_t OriginatorProtectionMechanism::computeRtsDurationField(Packet *rtsPack
     auto pendingFrameMode = rateSelection->computeMode(pendingPacket, pendingHeader);
     RateSelection::setFrameMode(pendingPacket, pendingHeader, pendingFrameMode); // KLUDGE
     simtime_t pendingFrameDuration = pendingFrameMode->getDuration(pendingPacket->getDataLength());
-    simtime_t ctsFrameDuration = rateSelection->computeResponseCtsFrameMode(rtsPacket, rtsFrame)->getDuration(LENGTH_CTS);
-    simtime_t ackFrameDuration = rateSelection->computeResponseAckFrameMode(pendingPacket, pendingHeader)->getDuration(LENGTH_ACK);
+    simtime_t ctsFrameDuration = Ieee80211ResponseModeSelection::predictResponseMode(rateSelection, rtsPacket, rtsFrame, ControlResponseKind::CTS, modeSet)->getDuration(LENGTH_CTS);
+    simtime_t ackFrameDuration = Ieee80211ResponseModeSelection::predictResponseMode(rateSelection, pendingPacket, pendingHeader, ControlResponseKind::ACK, modeSet)->getDuration(LENGTH_ACK);
     simtime_t durationId = ctsFrameDuration + pendingFrameDuration + ackFrameDuration;
     return durationId + 3 * modeSet->getSifsTime();
 }
@@ -52,16 +53,16 @@ simtime_t OriginatorProtectionMechanism::computeRtsDurationField(Packet *rtsPack
 //
 simtime_t OriginatorProtectionMechanism::computeDataFrameDurationField(Packet *dataPacket, const Ptr<const Ieee80211DataHeader>& dataHeader, Packet *pendingPacket, const Ptr<const Ieee80211DataOrMgmtHeader>& pendingHeader)
 {
-    simtime_t ackToDataFrameDuration = rateSelection->computeResponseAckFrameMode(dataPacket, dataHeader)->getDuration(LENGTH_ACK);
     if (dataHeader->getReceiverAddress().isMulticast())
         return 0;
+    simtime_t ackToDataFrameDuration = Ieee80211ResponseModeSelection::predictResponseMode(rateSelection, dataPacket, dataHeader, ControlResponseKind::ACK, modeSet)->getDuration(LENGTH_ACK);
     if (!dataHeader->getMoreFragments())
         return ackToDataFrameDuration + modeSet->getSifsTime();
     else {
-        simtime_t pendingFrameDuration = rateSelection->computeMode(pendingPacket, pendingHeader)->getDuration(pendingPacket->getDataLength());
         auto pendingFrameMode = rateSelection->computeMode(pendingPacket, pendingHeader);
+        simtime_t pendingFrameDuration = pendingFrameMode->getDuration(pendingPacket->getDataLength());
         RateSelection::setFrameMode(pendingPacket, pendingHeader, pendingFrameMode);
-        simtime_t ackToPendingFrame = pendingFrameMode->getDuration(LENGTH_ACK);
+        simtime_t ackToPendingFrame = Ieee80211ResponseModeSelection::predictResponseMode(rateSelection, pendingPacket, pendingHeader, ControlResponseKind::ACK, modeSet)->getDuration(LENGTH_ACK);
         return pendingFrameDuration + ackToDataFrameDuration + ackToPendingFrame + 3 * modeSet->getSifsTime();
     }
 }
@@ -78,15 +79,17 @@ simtime_t OriginatorProtectionMechanism::computeDataFrameDurationField(Packet *d
 //
 simtime_t OriginatorProtectionMechanism::computeMgmtFrameDurationField(Packet *mgmtPacket, const Ptr<const Ieee80211MgmtHeader>& mgmtHeader, Packet *pendingPacket, const Ptr<const Ieee80211DataOrMgmtHeader>& pendingHeader)
 {
-    simtime_t ackFrameDuration = rateSelection->computeResponseAckFrameMode(mgmtPacket, mgmtHeader)->getDuration(LENGTH_ACK);
     if (mgmtHeader->getReceiverAddress().isMulticast())
         return 0;
+    simtime_t ackFrameDuration = Ieee80211ResponseModeSelection::predictResponseMode(rateSelection, mgmtPacket, mgmtHeader, ControlResponseKind::ACK, modeSet)->getDuration(LENGTH_ACK);
     if (!mgmtHeader->getMoreFragments()) {
         return ackFrameDuration + modeSet->getSifsTime();
     }
     else {
-        simtime_t pendingFrameDuration = rateSelection->computeMode(pendingPacket, pendingHeader)->getDuration(pendingPacket->getDataLength());
-        return pendingFrameDuration + 2 * ackFrameDuration + 3 * modeSet->getSifsTime();
+        auto pendingMode = rateSelection->computeMode(pendingPacket, pendingHeader);
+        RateSelection::setFrameMode(pendingPacket, pendingHeader, pendingMode);
+        auto pendingAck = Ieee80211ResponseModeSelection::predictResponseMode(rateSelection, pendingPacket, pendingHeader, ControlResponseKind::ACK, modeSet);
+        return pendingMode->getDuration(pendingPacket->getDataLength()) + ackFrameDuration + pendingAck->getDuration(LENGTH_ACK) + 3 * modeSet->getSifsTime();
     }
 }
 

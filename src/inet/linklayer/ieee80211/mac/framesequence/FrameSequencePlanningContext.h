@@ -20,6 +20,7 @@ class INET_API FrameSequencePlanningContext : public FrameSequenceContext
     IQosRateSelection *rateSelection;
     TransmitStep *lastTransmit = nullptr;
     std::set<int64_t> repeatedCandidates;
+    std::map<MacAddress, PreviousPeerTransmission> projectedHistory;
 
   public:
     FrameSequencePlanningContext(const FrameSequenceContext& source, IQosRateSelection *rateSelection, bool continuation);
@@ -33,6 +34,7 @@ class INET_API FrameSequencePlanningContext : public FrameSequenceContext
     [[nodiscard]] bool supportsPreparation() const { return qosContext && qosContext->ackPolicy && qosContext->txopProcedure && rateSelection && rtsPolicy && rtsProcedure; }
     bool enterRepetition() { return getCandidate() && repeatedCandidates.insert(getCandidate()->identity).second; }
     void projectCompletion();
+    void seedHistory(const FrameSequencePlan& preceding);
     [[nodiscard]] std::unique_ptr<FrameSequencePlan> makePlan(const IFrameSequence *sequence) const;
     void addTransmit(FrameSequencePlan& plan, bool rts);
     void addReceive(FrameSequencePlan& plan, bool cts);

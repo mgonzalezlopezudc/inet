@@ -25,7 +25,8 @@ void CtsPolicy::initialize(int stage)
 
 simtime_t CtsPolicy::computeCtsDuration(Packet *rtsPacket, const Ptr<const Ieee80211RtsFrame>& rtsFrame) const
 {
-    return rateSelection->computeResponseCtsFrameMode(rtsPacket, rtsFrame)->getDuration(LENGTH_CTS);
+    auto mode = rateSelection->computeResponseCtsFrameMode(rtsPacket, rtsFrame);
+    return mode ? mode->getDuration(LENGTH_CTS) : SimTime(-1);
 }
 
 //
@@ -35,7 +36,10 @@ simtime_t CtsPolicy::computeCtsDuration(Packet *rtsPacket, const Ptr<const Ieee8
 //
 simtime_t CtsPolicy::computeCtsDurationField(Packet *rtsPacket, const Ptr<const Ieee80211RtsFrame>& rtsFrame) const
 {
-    simtime_t duration = rtsFrame->getDurationField() - modeSet->getSifsTime() - computeCtsDuration(rtsPacket, rtsFrame);
+    auto ctsDuration = computeCtsDuration(rtsPacket, rtsFrame);
+    if (ctsDuration < SIMTIME_ZERO)
+        return -1;
+    simtime_t duration = rtsFrame->getDurationField() - modeSet->getSifsTime() - ctsDuration;
     return duration < 0 ? 0 : duration;
 }
 
@@ -51,4 +55,3 @@ bool CtsPolicy::isCtsNeeded(const Ptr<const Ieee80211RtsFrame>& rtsFrame) const
 
 } /* namespace ieee80211 */
 } /* namespace inet */
-

@@ -4,6 +4,47 @@ Migrating Code from INET 3.x
 ============================
 Release: |release|
 
+IEEE 802.11 RTS and ACK/CTS Modes
+--------------------------------
+
+Rate selection now uses BSS basic rates before mandatory PHY rates for ACK and CTS responses.
+An initial RTS uses basic rates when the BSS basic set is nonempty.
+A later RTS uses a bound from the latest actual transmission to the same peer.
+The selected control rates can therefore differ from earlier defaults.
+
+Both rate contracts require ``snapshotResponseRateContext()`` and ``computeResponseMode()``.
+The snapshot query returns copied rate facts and relationship identities.
+It resolves the receiver for an originated request and the transmitter for a received request.
+Pass the exact local ``BssRateContextRef`` when the frame contains one.
+Return an unsupported result for unknown required facts or an absent primary representation.
+Do not treat an unknown BSS as a known empty basic set.
+
+``IQosRateSelection`` also requires ``computePreparedMode()`` and ``getPreviousPeerTransmission()``.
+The caller supplies the position within the whole TXOP and the latest same-peer transmission.
+Preparation advances private history for reserved successors.
+It changes no actual history, frame tags, acknowledgment state, or transmission signals.
+Both contracts require ``frameTransmitted()`` for actual history.
+A null frame clears that history during lifecycle teardown.
+
+The originator predicts the primary response without its recipient overrides.
+``ResponseModeResult`` retains all permitted modes and the complete response airtime.
+The complete length includes the FCS.
+An alternate response requires the same complete airtime, rate permission, modulation class, preamble, and channel width.
+The originator checks the received indication and complete length before acknowledgment progress.
+An invalid response enters the normal exchange failure path.
+
+``controlFrameBitrate``, ``responseAckFrameBitrate``, and ``responseCtsFrameBitrate`` request permitted choices.
+An illegal override raises an error before transmission.
+Custom policies must validate their final mode after any compatibility substitution.
+The recipient sends no response when the required facts or representation are unsupported.
+ACK and CTS duration policies return a negative value for that unsupported result.
+An accepted immediate response retains its copied context through SIFS.
+Rate changes invalidate affected future prepared transmissions.
+
+The supported profile covers represented non-HT responses and ordinary represented HT/VHT data requests.
+Required HT/VHT responses and unrepresented HT Control, STBC, duplicate, and bandwidth-signaling procedures remain unsupported.
+This change adds no Block Ack or aggregate support.
+
 IEEE 802.11 Management Rate Context
 ----------------------------------
 
@@ -40,7 +81,8 @@ Each continuation includes its leading SIFS.
 The separate TXNAV check uses the reservation from this station's actual transmissions.
 
 The duration guarantee assumes zero propagation delay and responses after nominal SIFS.
-The actual response mode and complete frame length must match the prediction.
+The actual response mode must belong to the retained permitted set.
+Its complete airtime and frame length must match the prediction.
 HCF uses actual elapsed time for each continuation check.
 An oversized initial exchange without a supported exception raises a model-limit error before transmission.
 The model does not fragment a frame automatically to meet an airtime budget.

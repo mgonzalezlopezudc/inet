@@ -5,6 +5,7 @@
 
 #include "inet/linklayer/ieee80211/mac/common/StagedFrameView.h"
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequence.h"
+#include "inet/linklayer/ieee80211/mac/contract/Ieee80211ControlMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"
 
 namespace inet::ieee80211 {
@@ -19,6 +20,7 @@ struct INET_API PreparedTransmit
     simtime_t duration;
     AckPolicy ackPolicy = NORMAL_ACK;
     int offset = 0;
+    ResponseRateContext rates;
 };
 
 struct INET_API PreparedReceive
@@ -29,6 +31,7 @@ struct INET_API PreparedReceive
     simtime_t airtime;
     simtime_t ifs;
     int offset = 0;
+    ResponseModeResult response;
 };
 
 // Each node records one use of one object in the existing constructor tree.
@@ -44,6 +47,7 @@ struct INET_API FrameSequencePlan
     StagedFrameView candidate;
     std::vector<std::unique_ptr<FrameSequencePlan>> children;
     std::vector<std::unique_ptr<IFrameSequenceStep>> steps;
+    std::map<MacAddress, PreviousPeerTransmission> projectedHistory;
 
     void append(std::unique_ptr<FrameSequencePlan> child);
     [[nodiscard]] std::vector<IFrameSequenceStep *> flatten() const;

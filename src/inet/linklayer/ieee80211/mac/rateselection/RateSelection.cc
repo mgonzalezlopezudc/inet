@@ -11,6 +11,7 @@
 #include "inet/common/Simsignals.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRateControl.h"
 #include "inet/linklayer/ieee80211/mac/rateselection/Ieee80211PeerModeSelection.h"
+#include "inet/linklayer/ieee80211/mac/rateselection/Ieee80211ResponseModeSelection.h"
 #include "inet/networklayer/common/L3AddressResolver.h"
 #include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"
@@ -92,7 +93,7 @@ const IIeee80211Mode *RateSelection::getMode(Packet *packet, const Ptr<const Iee
     const auto& modeIndTag = packet->findTag<Ieee80211ModeInd>();
     if (modeIndTag)
         return modeIndTag->getMode();
-    throw cRuntimeError("Missing mode");
+    return nullptr;
 }
 
 //
@@ -103,26 +104,18 @@ const IIeee80211Mode *RateSelection::getMode(Packet *packet, const Ptr<const Iee
 //
 const IIeee80211Mode *RateSelection::computeResponseAckFrameMode(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader)
 {
-    if (responseAckFrameMode)
-        return getPeerCompatibleMode(dataOrMgmtHeader->getTransmitterAddress(), responseAckFrameMode);
-    else {
-        auto mode = getMode(packet, dataOrMgmtHeader);
-        ASSERT(modeSet->containsMode(mode));
-        auto responseMode = modeSet->getIsMandatory(mode) ? mode : modeSet->getSlowerMandatoryMode(mode); // TODO BSSBasicRateSet
-        return getPeerCompatibleMode(dataOrMgmtHeader->getTransmitterAddress(), responseMode);
-    }
+    auto indication = packet->findTag<Ieee80211ModeInd>();
+    ResponseModeInput input{ControlResponseKind::ACK, indication ? indication->getMode() : nullptr, LENGTH_ACK,
+        snapshotResponseRateContext(dataOrMgmtHeader, ResponseRequestRole::RECEIVED, std::nullopt), modeSet, dataOrMgmtHeader->getOrder()};
+    return Ieee80211ResponseModeSelection::selectResponse(computeResponseMode(input), responseAckFrameMode);
 }
 
 const IIeee80211Mode *RateSelection::computeResponseCtsFrameMode(Packet *packet, const Ptr<const Ieee80211RtsFrame>& rtsFrame)
 {
-    if (responseCtsFrameMode)
-        return getPeerCompatibleMode(rtsFrame->getTransmitterAddress(), responseCtsFrameMode);
-    else {
-        auto mode = getMode(packet, rtsFrame);
-        ASSERT(modeSet->containsMode(mode));
-        auto responseMode = modeSet->getIsMandatory(mode) ? mode : modeSet->getSlowerMandatoryMode(mode); // TODO BSSBasicRateSet
-        return getPeerCompatibleMode(rtsFrame->getTransmitterAddress(), responseMode);
-    }
+    auto indication = packet->findTag<Ieee80211ModeInd>();
+    ResponseModeInput input{ControlResponseKind::CTS, indication ? indication->getMode() : nullptr, LENGTH_CTS,
+        snapshotResponseRateContext(rtsFrame, ResponseRequestRole::RECEIVED, std::nullopt), modeSet, rtsFrame->getOrder()};
+    return Ieee80211ResponseModeSelection::selectResponse(computeResponseMode(input), responseCtsFrameMode);
 }
 
 // 802.11-1999 Std.
@@ -178,6 +171,14 @@ const IIeee80211Mode *RateSelection::computeControlFrameMode(const Ptr<const Iee
 
 const IIeee80211Mode *RateSelection::computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
 {
+    if (dynamicPtrCast<const Ieee80211RtsFrame>(header)) {
+        PreparedModeInput input{packet, header, PreparedControlPosition::TXOP_INITIAL, std::nullopt,
+            snapshotResponseRateContext(header, ResponseRequestRole::ORIGINATED, Ieee80211ResponseModeSelection::getFrameContext(packet)), modeSet};
+        auto result = Ieee80211ResponseModeSelection::computeRts(input, controlFrameMode);
+        if (result.status != ModePreparationStatus::READY)
+            throw cRuntimeError("Unsupported RTS: %s", result.reason.c_str());
+        return result.mode;
+    }
     if (auto dataOrMgmtHeader = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(header))
         return computeDataOrMgmtFrameMode(dataOrMgmtHeader);
     else
@@ -194,8 +195,12 @@ void RateSelection::receiveSignal(cComponent *source, simsignal_t signalID, cObj
     }
 }
 
-void RateSelection::frameTransmitted(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
+void RateSelection::frameTransmitted(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, uint64_t txopGeneration)
 {
+    if (!packet) {
+        lastTransmittedFrameMode.clear();
+        return;
+    }
     auto receiverAddr = header->getReceiverAddress();
     lastTransmittedFrameMode[receiverAddr] = getMode(packet, header);
 }
@@ -217,6 +222,24 @@ void RateSelection::emitDatarateSelected(cComponent *emitter, const Ptr<const Ie
     }
     else
         emitter->emit(IRateSelection::datarateSelectedSignal, rate);
+}
+
+ResponseRateContext RateSelection::snapshotResponseRateContext(const Ptr<const Ieee80211MacHeader>& requestHeader,
+        ResponseRequestRole role, const std::optional<BssRateContextRef>& explicitContext) const
+{
+    auto twoAddress = dynamicPtrCast<const Ieee80211TwoAddressHeader>(requestHeader);
+    auto peer = role == ResponseRequestRole::ORIGINATED ? requestHeader->getReceiverAddress() :
+        (twoAddress ? twoAddress->getTransmitterAddress() : MacAddress());
+    auto bssid = Ieee80211ResponseModeSelection::getRequestBssid(requestHeader);
+    // Tx sets the final transmitter address after selection for an AP forward.
+    if (role == ResponseRequestRole::ORIGINATED && requestHeader->getFromDS() && !requestHeader->getToDS())
+        bssid = mib->address;
+    return mib->snapshotRateContext(peer, requestHeader->getType(), bssid, explicitContext);
+}
+
+ResponseModeResult RateSelection::computeResponseMode(const ResponseModeInput& input) const
+{
+    return Ieee80211ResponseModeSelection::computeResponse(input);
 }
 
 const IIeee80211Mode *RateSelection::getPeerCompatibleMode(const MacAddress& peerAddress, const IIeee80211Mode *mode) const

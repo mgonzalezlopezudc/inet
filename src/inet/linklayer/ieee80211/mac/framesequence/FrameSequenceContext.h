@@ -72,6 +72,7 @@ class INET_API FrameSequenceContext : public cObject
     std::vector<std::unique_ptr<FrameSequencePlan>> retiredPlans;
     int activeFirstStep = 0;
     bool planValid = true;
+    std::optional<ResponseModeResult> expectedResponse;
 
   public:
     FrameSequenceContext(MacAddress address, physicallayer::Ieee80211ModeSet *modeSet, InProgressFrames *inProgressFrames, IRtsProcedure *rtsProcedure, IRtsPolicy *rtsPolicy, NonQoSContext *nonQosContext, QoSContext *qosContext);
@@ -105,6 +106,8 @@ class INET_API FrameSequenceContext : public cObject
     [[nodiscard]] FrameSequencePlan *getNextPlan() const { return nextPlan.get(); }
     [[nodiscard]] bool isPlanValid() const { return planValid; }
     void invalidatePlans() { planValid = false; }
+    void setExpectedResponse(const std::optional<ResponseModeResult>& response) { expectedResponse = response; }
+    const std::optional<ResponseModeResult>& getExpectedResponse() const { return expectedResponse; }
     bool prepareInitialExchange(IFrameSequence *sequence);
     bool advanceExchange(IFrameSequence *sequence);
     [[nodiscard]] bool isPreparedTransmissionPermitted(const PreparedTransmit& record) const;

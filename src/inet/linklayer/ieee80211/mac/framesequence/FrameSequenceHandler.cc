@@ -10,6 +10,7 @@
 #include "inet/common/INETUtils.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
+#include "inet/linklayer/ieee80211/mac/rateselection/Ieee80211ResponseModeSelection.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -42,6 +43,18 @@ void FrameSequenceHandler::processResponse(Packet *frame)
             // TODO check if not for us and abort
             auto receiveStep = check_and_cast<IReceiveStep *>(context->getLastStep());
             receiveStep->setFrameToReceive(frame);
+            auto prepared = receiveStep->getPreparedReceive();
+            auto expected = prepared ? &prepared->response :
+                (context->getExpectedResponse() ? &*context->getExpectedResponse() : nullptr);
+            if (expected) {
+                auto reason = Ieee80211ResponseModeSelection::validateResponse(*expected, frame);
+                if (!reason.empty()) {
+                    EV_WARN << "Rejected control response: " << reason << ".\n";
+                    receiveStep->setCompletion(IFrameSequenceStep::Completion::REJECTED);
+                    abortFrameSequence();
+                    break;
+                }
+            }
             finishFrameSequenceStep();
             if (isSequenceRunning() && generation == currentGeneration)
                 startFrameSequenceStep();

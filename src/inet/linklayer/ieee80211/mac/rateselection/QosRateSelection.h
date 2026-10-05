@@ -38,6 +38,7 @@ class INET_API QosRateSelection : public IQosRateSelection, public ModeSetListen
 
     const physicallayer::Ieee80211ModeSet *modeSet = nullptr;
     std::map<MacAddress, const physicallayer::IIeee80211Mode *> lastTransmittedFrameMode;
+    std::map<MacAddress, PreviousPeerTransmission> previousTransmissions;
 
     // originator frame modes
     const physicallayer::IIeee80211Mode *multicastFrameMode = nullptr;
@@ -52,8 +53,8 @@ class INET_API QosRateSelection : public IQosRateSelection, public ModeSetListen
     const physicallayer::IIeee80211Mode *responseBlockAckFrameMode = nullptr;
 
     // per-receiver unicast data-frame modes, resolved lazily from dataFrameBitratePerReceiver
-    std::map<MacAddress, const physicallayer::IIeee80211Mode *> perReceiverDataFrameMode;
-    bool perReceiverResolved = false;
+    mutable std::map<MacAddress, const physicallayer::IIeee80211Mode *> perReceiverDataFrameMode;
+    mutable bool perReceiverResolved = false;
 
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
@@ -63,11 +64,11 @@ class INET_API QosRateSelection : public IQosRateSelection, public ModeSetListen
     // Builds perReceiverDataFrameMode on first use. Deferred out of initialize() because peer
     // MAC addresses are assigned during INITSTAGE_LINK_LAYER with undefined intra-stage module
     // ordering; the first transmitted data frame occurs after all init stages, so this is race-free.
-    virtual void ensurePerReceiverModesResolved();
+    virtual void ensurePerReceiverModesResolved() const;
 
     virtual const physicallayer::IIeee80211Mode *getMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header);
     virtual const physicallayer::IIeee80211Mode *computeControlFrameMode(const Ptr<const Ieee80211MacHeader>& header, TxopProcedure *txopProcedure);
-    virtual const physicallayer::IIeee80211Mode *computeDataOrMgmtFrameMode(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader);
+    virtual const physicallayer::IIeee80211Mode *computeDataOrMgmtFrameMode(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) const;
     virtual const physicallayer::IIeee80211Mode *getPeerCompatibleMode(const MacAddress& peerAddress,
             const physicallayer::IIeee80211Mode *mode) const;
 
@@ -85,7 +86,12 @@ class INET_API QosRateSelection : public IQosRateSelection, public ModeSetListen
 
     virtual const physicallayer::IIeee80211Mode *computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, TxopProcedure *txopProcedure) override;
 
-    virtual void frameTransmitted(Packet *packet, const Ptr<const Ieee80211MacHeader>& header);
+    ResponseRateContext snapshotResponseRateContext(const Ptr<const Ieee80211MacHeader>& requestHeader,
+            ResponseRequestRole role, const std::optional<BssRateContextRef>& explicitContext) const override;
+    ResponseModeResult computeResponseMode(const ResponseModeInput& input) const override;
+    PreparedModeResult computePreparedMode(const PreparedModeInput& input) const override;
+    std::optional<PreviousPeerTransmission> getPreviousPeerTransmission(const MacAddress& peer) const override;
+    void frameTransmitted(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, uint64_t txopGeneration) override;
 };
 
 } /* namespace ieee80211 */

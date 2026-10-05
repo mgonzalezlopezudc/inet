@@ -1,0 +1,238 @@
+%description:
+IEEE Std 802.11-2024, 10.6.6: basic precedence, complete airtime,
+explicit unsupported results, and RTS position with same-peer history.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/rateselection/Ieee80211ResponseModeSelection.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211OfdmMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211IrMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HrDsssMode.h"
+
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+%global:
+class SparseResponseModes : public Ieee80211ModeSet
+{
+  public:
+    SparseResponseModes(const IIeee80211Mode *six, const IIeee80211Mode *extra) :
+        Ieee80211ModeSet("sparse-response", {{true, six, true}, {false, extra, true}}, six, PhyType::OFDM) {}
+};
+
+static ResponseRateContext responseRates(const Ieee80211ModeSet *modes, std::initializer_list<int> basic)
+{
+    ResponseRateContext rates;
+    rates.known = true;
+    rates.context.kind = BssRateContextRef::ACTIVE;
+    rates.localAddress = MacAddress("02:00:00:00:00:01");
+    rates.peerAddress = MacAddress("02:00:00:00:00:02");
+    rates.localRates.supported.known = rates.localRates.operational.known = rates.bssRates.basic.known = true;
+    for (int i = 0; i < modes->getNumModes(); i++) {
+        auto mode = modes->getMode(i);
+        if (mode->getHtMcsIndex() < 0) {
+            rates.localRates.supported.legacyRates.insert(mode->getDataMode()->getNetBitrate());
+            rates.localRates.operational.legacyRates.insert(mode->getDataMode()->getNetBitrate());
+        }
+    }
+    for (auto rate : basic)
+        rates.bssRates.basic.legacyRates.insert(Mbps(rate));
+    return rates;
+}
+
+%activity:
+auto modes = Ieee80211ModeSet::getModeSet("a");
+auto six = modes->getMode(Mbps(6));
+auto twelve = modes->getMode(Mbps(12));
+auto twentyFour = modes->getMode(Mbps(24));
+auto fortyEight = modes->getMode(Mbps(48));
+auto fiftyFour = modes->getMode(Mbps(54));
+auto rates = responseRates(modes, {6, 12});
+auto data = makeShared<Ieee80211DataHeader>();
+data->setReceiverAddress(rates.localAddress);
+data->setTransmitterAddress(rates.peerAddress);
+data->setAddress3(MacAddress("02:00:00:00:00:03"));
+ASSERT(Ieee80211ResponseModeSelection::getRequestBssid(data) == data->getAddress3());
+data->setToDS(true);
+ASSERT(Ieee80211ResponseModeSelection::getRequestBssid(data) == rates.localAddress);
+data->setToDS(false);
+data->setFromDS(true);
+ASSERT(Ieee80211ResponseModeSelection::getRequestBssid(data) == rates.peerAddress);
+data->setToDS(true);
+ASSERT(!Ieee80211ResponseModeSelection::getRequestBssid(data));
+ResponseModeInput input{ControlResponseKind::ACK, twentyFour, LENGTH_ACK, rates, modes};
+auto result = Ieee80211ResponseModeSelection::computeResponse(input);
+ASSERT(result.status == ModePreparationStatus::READY && result.primaryMode == twelve);
+ASSERT(result.airtime == twelve->getDuration(LENGTH_ACK));
+ASSERT(!Ieee80211ResponseModeSelection::containsMode(result, twentyFour));
+// Illegal slow entries and input order cannot change the primary or its airtime.
+Ieee80211ModeSet extraModes("extra-response", {{false, modes->getMode(Mbps(9)), true},
+    {true, twelve, true}, {true, six, true}, {true, twentyFour, true}}, six, Ieee80211ModeSet::PhyType::OFDM);
+Ieee80211ModeSet reversedModes("reversed-response", {{true, twentyFour, true},
+    {true, six, true}, {true, twelve, true}}, six, Ieee80211ModeSet::PhyType::OFDM);
+for (auto catalog : {&extraModes, &reversedModes}) {
+    auto changedInput = input;
+    changedInput.transmitModes = catalog;
+    auto changed = Ieee80211ResponseModeSelection::computeResponse(changedInput);
+    ASSERT(changed.primaryMode == result.primaryMode && changed.airtime == result.airtime);
+    ASSERT(!Ieee80211ResponseModeSelection::containsMode(changed, modes->getMode(Mbps(9))));
+}
+input.kind = ControlResponseKind::CTS;
+ASSERT(Ieee80211ResponseModeSelection::computeResponse(input).primaryMode == twelve);
+
+input.rates.bssRates.basic.legacyRates = {Mbps(24)};
+input.requestMode = six;
+ASSERT(Ieee80211ResponseModeSelection::computeResponse(input).primaryMode == six);
+input.rates.bssRates.basic.legacyRates.clear();
+input.requestMode = twentyFour;
+ASSERT(Ieee80211ResponseModeSelection::computeResponse(input).primaryMode == twentyFour);
+input.rates.bssRates.basic.known = false;
+ASSERT(Ieee80211ResponseModeSelection::computeResponse(input).status == ModePreparationStatus::UNSUPPORTED);
+input.rates.context.kind = BssRateContextRef::NONE;
+ASSERT(Ieee80211ResponseModeSelection::computeResponse(input).primaryMode == twentyFour);
+input.rates.known = false;
+ASSERT(Ieee80211ResponseModeSelection::computeResponse(input).status == ModePreparationStatus::UNSUPPORTED);
+
+input.rates = rates;
+SparseResponseModes sparse(six, modes->getMode(Mbps(9)));
+input.transmitModes = &sparse;
+auto missing = Ieee80211ResponseModeSelection::computeResponse(input);
+ASSERT(missing.status == ModePreparationStatus::UNSUPPORTED);
+ASSERT(missing.reason.find("primary") != std::string::npos);
+input.transmitModes = modes;
+input.rates.peerRates.supported.known = true;
+input.rates.peerRates.supported.legacyRates = {Mbps(6)};
+ASSERT(Ieee80211ResponseModeSelection::computeResponse(input).status == ModePreparationStatus::UNSUPPORTED);
+input.rates = rates;
+input.rates.peerRates.operational.known = true;
+ASSERT(Ieee80211ResponseModeSelection::computeResponse(input).status == ModePreparationStatus::UNSUPPORTED);
+input.rates = rates;
+input.rates.localRates.operational.known = false;
+ASSERT(Ieee80211ResponseModeSelection::computeResponse(input).status == ModePreparationStatus::UNSUPPORTED);
+
+input.rates = responseRates(modes, {48, 54});
+input.requestMode = fortyEight;
+result = Ieee80211ResponseModeSelection::computeResponse(input);
+ASSERT(result.primaryMode == fortyEight);
+ASSERT(result.airtime == fortyEight->getDuration(LENGTH_CTS));
+ASSERT(Ieee80211ResponseModeSelection::containsMode(result, fiftyFour));
+ASSERT(Ieee80211ResponseModeSelection::selectResponse(result, fiftyFour) == fiftyFour);
+bool rejected = false;
+try { Ieee80211ResponseModeSelection::selectResponse(result, twentyFour); }
+catch (const cRuntimeError& error) { rejected = std::string(error.what()).find("Illegal CTS override") != std::string::npos; }
+ASSERT(rejected);
+
+auto ackHeader = makeShared<Ieee80211AckFrame>();
+Packet ack("actual-ACK", ackHeader);
+ack.insertAtBack(makeShared<Ieee80211MacTrailer>());
+input.kind = ControlResponseKind::ACK;
+result = Ieee80211ResponseModeSelection::computeResponse(input);
+ASSERT(!Ieee80211ResponseModeSelection::validateResponse(result, &ack).empty());
+// A separate object with the same physical tuple remains a permitted mode.
+Ieee80211OfdmMode separate(*check_and_cast<const Ieee80211OfdmMode *>(fiftyFour));
+ack.addTag<Ieee80211ModeInd>()->setMode(&separate);
+ASSERT(&separate != fiftyFour);
+ASSERT(Ieee80211ResponseModeSelection::validateResponse(result, &ack).empty());
+ack.getTagForUpdate<Ieee80211ModeInd>()->setMode(six);
+ASSERT(!Ieee80211ResponseModeSelection::validateResponse(result, &ack).empty());
+ack.getTagForUpdate<Ieee80211ModeInd>()->setMode(Ieee80211ModeSet::getModeSet("g(erp)")->getMode(Mbps(54)));
+ASSERT(!Ieee80211ResponseModeSelection::validateResponse(result, &ack).empty());
+ack.getTagForUpdate<Ieee80211ModeInd>()->setMode(fiftyFour);
+ack.insertAtBack(makeShared<Ieee80211MacTrailer>());
+ASSERT(!Ieee80211ResponseModeSelection::validateResponse(result, &ack).empty());
+Packet wrongKind("wrong-kind", makeShared<Ieee80211CtsFrame>());
+wrongKind.insertAtBack(makeShared<Ieee80211MacTrailer>());
+wrongKind.addTag<Ieee80211ModeInd>()->setMode(fiftyFour);
+ASSERT(!Ieee80211ResponseModeSelection::validateResponse(result, &wrongKind).empty());
+
+auto ht = Ieee80211ModeSet::getModeSet("n(mixed-2.4Ghz)");
+input.transmitModes = ht;
+input.rates = responseRates(ht, {6, 12});
+for (int i = 0; i < ht->getNumModes(); i++) {
+    auto mode = ht->getMode(i);
+    if (mode->getHtMcsIndex() != 3)
+        continue;
+    input.requestMode = mode;
+    result = Ieee80211ResponseModeSelection::computeResponse(input);
+    if (mode->getDataMode()->getBandwidth() == MHz(20)) {
+        ASSERT(result.status == ModePreparationStatus::READY);
+        ASSERT(result.primaryMode->getDataMode()->getNetBitrate() == Mbps(12));
+        ASSERT(result.primaryMode->getDataMode()->getBandwidth() == MHz(20));
+    }
+    else
+        ASSERT(result.status == ModePreparationStatus::UNSUPPORTED);
+    input.kind = ControlResponseKind::CTS;
+    ASSERT(Ieee80211ResponseModeSelection::computeResponse(input).status == ModePreparationStatus::UNSUPPORTED);
+    input.kind = ControlResponseKind::ACK;
+}
+auto vht = Ieee80211ModeSet::getModeSet("ac");
+input.transmitModes = modes;
+input.rates = rates;
+for (int i = 0; i < vht->getNumModes(); i++) {
+    auto mode = vht->getMode(i);
+    if (mode->getModulationClass() != IIeee80211Mode::ModulationClass::VHT)
+        continue;
+    input.requestMode = mode;
+    result = Ieee80211ResponseModeSelection::computeResponse(input);
+    ASSERT((result.status == ModePreparationStatus::READY) == (mode->getDataMode()->getBandwidth() == MHz(20)));
+}
+input.requestMode = &Ieee80211IrCompliantModes::irMode1Mbps;
+ASSERT(Ieee80211ResponseModeSelection::computeResponse(input).status == ModePreparationStatus::UNSUPPORTED);
+input.requestMode = twentyFour;
+input.requiresHtVhtResponse = true;
+ASSERT(Ieee80211ResponseModeSelection::computeResponse(input).status == ModePreparationStatus::UNSUPPORTED);
+input.requiresHtVhtResponse = false;
+input.length = LENGTH_ACK + B(1);
+ASSERT(Ieee80211ResponseModeSelection::computeResponse(input).status == ModePreparationStatus::UNSUPPORTED);
+
+auto rts = makeShared<Ieee80211RtsFrame>();
+rts->setReceiverAddress(rates.peerAddress);
+PreparedModeInput rtsInput{nullptr, rts, PreparedControlPosition::TXOP_INITIAL, std::nullopt, rates, modes};
+ASSERT(Ieee80211ResponseModeSelection::computeRts(rtsInput, nullptr).mode == twelve);
+auto mixed = Ieee80211ModeSet::getModeSet("g(mixed)");
+auto mixedInput = rtsInput;
+mixedInput.transmitModes = mixed;
+mixedInput.rates = responseRates(mixed, {6, 12});
+ASSERT(mixed->getReferenceMode()->getDataMode()->getBandwidth() != MHz(20));
+ASSERT(Ieee80211ResponseModeSelection::computeRts(mixedInput, nullptr).mode->getDataMode()->getNetBitrate() == Mbps(12));
+ASSERT(Ieee80211ResponseModeSelection::computeRts(mixedInput, nullptr).mode->getDataMode()->getBandwidth() == MHz(20));
+rtsInput.rates.bssRates.basic.legacyRates = {Mbps(48)};
+ASSERT(Ieee80211ResponseModeSelection::computeRts(rtsInput, nullptr).mode == fortyEight);
+rtsInput.rates.bssRates.basic.legacyRates.clear();
+ASSERT(Ieee80211ResponseModeSelection::computeRts(rtsInput, nullptr).mode == twentyFour);
+rtsInput.rates.bssRates.basic.known = false;
+ASSERT(Ieee80211ResponseModeSelection::computeRts(rtsInput, nullptr).status == ModePreparationStatus::UNSUPPORTED);
+rtsInput.rates = rates;
+rtsInput.position = PreparedControlPosition::TXOP_CONTINUATION;
+ASSERT(Ieee80211ResponseModeSelection::computeRts(rtsInput, nullptr).status == ModePreparationStatus::UNSUPPORTED);
+rtsInput.previousToSamePeer = PreviousPeerTransmission{rates.peerAddress, twentyFour, 100, 1};
+ASSERT(Ieee80211ResponseModeSelection::computeRts(rtsInput, nullptr).mode == twelve);
+rtsInput.previousToSamePeer->mode = six;
+ASSERT(Ieee80211ResponseModeSelection::computeRts(rtsInput, nullptr).mode == six);
+rejected = false;
+try { Ieee80211ResponseModeSelection::computeRts(rtsInput, twelve); }
+catch (const cRuntimeError&) { rejected = true; }
+ASSERT(rejected);
+rtsInput.previousToSamePeer->peer = MacAddress("02:00:00:00:00:03");
+ASSERT(Ieee80211ResponseModeSelection::computeRts(rtsInput, nullptr).status == ModePreparationStatus::UNSUPPORTED);
+rtsInput.position = PreparedControlPosition::TXOP_INITIAL;
+rtsInput.transmitModes = &sparse;
+rtsInput.rates.bssRates.basic.legacyRates = {Mbps(12)};
+ASSERT(Ieee80211ResponseModeSelection::computeRts(rtsInput, nullptr).status == ModePreparationStatus::UNSUPPORTED);
+// A short request requires a short response representation at the primary rate.
+auto longMode = &Ieee80211HrDsssCompliantModes::hrDsssMode11MbpsCckLongPreamble;
+auto shortMode = &Ieee80211HrDsssCompliantModes::hrDsssMode11MbpsCckShortPreamble;
+Ieee80211ModeSet preambles("response-preambles", {{true, shortMode, true}, {true, longMode, true}},
+    longMode, Ieee80211ModeSet::PhyType::HR_DSSS);
+input = {ControlResponseKind::ACK, shortMode, LENGTH_ACK, responseRates(&preambles, {11}), &preambles};
+result = Ieee80211ResponseModeSelection::computeResponse(input);
+ASSERT(result.primaryMode == shortMode);
+ASSERT(!Ieee80211ResponseModeSelection::containsMode(result, longMode));
+Ieee80211ModeSet onlyLong("long-response", {{true, longMode, true}}, longMode, Ieee80211ModeSet::PhyType::HR_DSSS);
+input.transmitModes = &onlyLong;
+ASSERT(Ieee80211ResponseModeSelection::computeResponse(input).status == ModePreparationStatus::UNSUPPORTED);
+std::cout << "Response permission and RTS history rules verified.\n";
+
+%contains: stdout
+Response permission and RTS history rules verified.
