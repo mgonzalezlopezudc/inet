@@ -122,6 +122,8 @@ RateContextSnapshot Ieee80211Mib::snapshotRateContext(const MacAddress& peer, in
     result.peerAddress = peer;
     result.localRates = localRateSet;
     result.generation = rateGeneration;
+    if (auto state = findPeerHtState(peer))
+        result.peerHtCapabilities = state->negotiatedCapabilities;
     int pairedSubtype = frameSubtype;
     if (frameSubtype == ST_ASSOCIATIONREQUEST)
         pairedSubtype = ST_ASSOCIATIONRESPONSE;

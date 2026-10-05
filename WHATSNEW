@@ -38,6 +38,20 @@ IEEE 802.11 HCF complete exchange admission
    External sequence, step, handler, ACK, timeout-policy, and Tx implementations
    require source changes and a rebuild. The migration guide describes the new contracts.
 
+IEEE 802.11 RTS and ACK/CTS mode permissions
+
+   Rate selection uses BSS basic rates before mandatory PHY rates for ACK and
+   CTS responses. RTS selection now applies a permitted controlFrameBitrate
+   override. The hidden-node showcase therefore sends RTS at its configured
+   6 Mbps instead of the previous 24 Mbps default. This changes its fingerprints.
+
+   HCF cancels a future prepared HT transmission when its peer capability
+   inputs change. Rate selection supplies a new permitted mode before transmission.
+   A peer that removes short-GI support therefore receives the next data frame
+   with a long GI. Equal capability values and unrelated peers cause no cancellation.
+   Accepted immediate responses retain their copied context through SIFS.
+   The migration guide describes the contracts for custom rate policies.
+
 1. IEEE 802.11 rate control per receiver
 
    IEEE 802.11 rate control now selects and adapts the transmission rate

@@ -6,6 +6,9 @@
 #ifndef __INET_IEEE80211RATECONTEXT_H
 #define __INET_IEEE80211RATECONTEXT_H
 
+#include <optional>
+
+#include "inet/linklayer/ieee80211/mib/Ieee80211HtCapabilities.h"
 #include "inet/linklayer/ieee80211/mib/Ieee80211RateSet.h"
 
 namespace inet {
@@ -37,6 +40,7 @@ struct INET_API RateContextSnapshot
     Ieee80211RateSetState localRates;
     Ieee80211RateSetState bssRates;
     Ieee80211RateSetState peerRates;
+    std::optional<Ieee80211NegotiatedHtCapabilities> peerHtCapabilities;
 };
 
 } // namespace ieee80211

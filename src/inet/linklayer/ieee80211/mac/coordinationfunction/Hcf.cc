@@ -205,6 +205,15 @@ void Hcf::receiveSignal(cComponent *source, simsignal_t signalID, bool value, cO
             changed |= current.known != record->rates.known || current.context != record->rates.context ||
                 current.localRates != record->rates.localRates || current.bssRates != record->rates.bssRates ||
                 current.peerRates != record->rates.peerRates;
+            if (record->mode->getHtMcsIndex() >= 0) {
+                const auto& previousHt = record->rates.peerHtCapabilities;
+                const auto& currentHt = current.peerHtCapabilities;
+                changed |= previousHt.has_value() != currentHt.has_value();
+                if (previousHt && currentHt)
+                    changed |= !(previousHt->localAdvertisement == currentHt->localAdvertisement) ||
+                            !(previousHt->peerAdvertisement == currentHt->peerAdvertisement) ||
+                            !(previousHt->operation == currentHt->operation);
+            }
         }
     }
     if (changed) {

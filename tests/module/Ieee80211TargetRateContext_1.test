@@ -161,7 +161,7 @@ class RateContextTest : public cSimpleModule, public cListener
     int notifications = 0;
     std::function<void()> checkCleanup;
   public:
-    RateContextTest() : cSimpleModule(65536) {}
+    RateContextTest() : cSimpleModule(131072) {}
   protected:
     void receiveSignal(cComponent *, simsignal_t, bool, cObject *) override
     {

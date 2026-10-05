@@ -2,6 +2,7 @@
 Exercise HCF and DCF control response dispatch and completion with real radios.
 Check legal alternates, rejected overrides, invalid external responses, and SIFS changes.
 Use seed 0, zero propagation, separate MPDUs, and no Block Ack.
+IEEE Std 802.11-2024, 10.17: future HT requests follow changed short-GI permissions.
 
 %file: ControlResponse.cc
 #include <type_traits>
@@ -70,6 +71,7 @@ class ControlFunction : public Base
     std::vector<bps> reservedRtsRates;
     std::vector<bps> responseRates;
     std::vector<simtime_t> durations;
+    std::vector<bool> dataShortGi;
 
     int scenario() const { return this->par("scenario"); }
     Ieee80211Mib *mib() const { return check_and_cast<Ieee80211Mib *>(this->getModuleByPath("^.^.mib")); }
@@ -183,6 +185,41 @@ class ControlFunction : public Base
     {
         Base::transmitFrame(packet, ifs, prepared);
         if constexpr (std::is_same_v<Base, Hcf>) {
+            if (!changed && acknowledgments == 1 && scenario() >= 26) {
+                changed = true;
+                ASSERT(prepared && ifs > SIMTIME_ZERO && prepared->mode->isHtShortGuardInterval());
+                auto owner = mib();
+                auto peer = MacAddress("02:00:00:00:00:02");
+                auto before = owner->snapshotRateContext(peer, ST_DATA_WITH_QOS, owner->bssData.bssid, std::nullopt);
+                ASSERT(before.peerHtCapabilities && before.peerHtCapabilities->peerAdvertisement.shortGi20);
+                auto capabilities = owner->findPeerHtState(peer)->advertisedCapabilities;
+                auto operation = owner->getHtOperation();
+                if (scenario() == 26) {
+                    capabilities.shortGi20 = false;
+                    owner->setPeerHtCapabilities(peer, capabilities, operation);
+                }
+                else if (scenario() == 27) {
+                    capabilities.shortGi20 = false;
+                    owner->setPeerHtCapabilities(MacAddress("02:00:00:00:00:03"), capabilities, operation);
+                }
+                else if (scenario() == 28) {
+                    owner->setPeerHtCapabilities(peer, capabilities, operation);
+                    // Trigger a notification after an identical update increments the peer generation.
+                    owner->setPeerRateSet(MacAddress("02:00:00:00:00:03"), owner->getLocalRateSet());
+                }
+                else
+                    owner->removePeerHtCapabilities(peer);
+                auto after = owner->snapshotRateContext(peer, ST_DATA_WITH_QOS, owner->bssData.bssid, std::nullopt);
+                ASSERT(before.context == after.context && before.localRates == after.localRates &&
+                    before.bssRates == after.bssRates && before.peerRates == after.peerRates);
+                ASSERT(before.peerHtCapabilities->peerAdvertisement.shortGi20);
+                ASSERT(after.peerHtCapabilities.has_value() == (scenario() != 29));
+                if (after.peerHtCapabilities)
+                    ASSERT(after.peerHtCapabilities->peerAdvertisement.shortGi20 == (scenario() != 26));
+                bool affected = scenario() == 26 || scenario() == 29;
+                ASSERT(cancellations == (affected ? 1 : 0));
+                ASSERT(this->tx->hasTransmission() != affected);
+            }
             if (!changed && acknowledgments == 1 && scenario() >= 13 && scenario() <= 15) {
                 changed = true;
                 ASSERT(ifs > SIMTIME_ZERO);
@@ -248,6 +285,16 @@ class ControlFunction : public Base
     void originatorProcessTransmittedFrame(Packet *packet) override
     {
         auto header = packet->template peekAtFront<Ieee80211MacHeader>();
+        if (scenario() >= 26 && dynamicPtrCast<const Ieee80211DataHeader>(header)) {
+            auto mode = packet->template getTag<Ieee80211ModeReq>()->getMode();
+            dataShortGi.push_back(mode->isHtShortGuardInterval());
+            if (changed && (scenario() == 26 || scenario() == 29))
+                ASSERT(!mode->isHtShortGuardInterval());
+            if (changed && scenario() == 26)
+                ASSERT(mode->getHtMcsIndex() >= 0);
+            if (changed && scenario() == 29)
+                ASSERT(mode->getHtMcsIndex() < 0);
+        }
         if (header->getType() == ST_RTS)
             rtsRates.push_back(packet->template getTag<Ieee80211ModeReq>()->getMode()->getDataMode()->getNetBitrate());
         else
@@ -404,6 +451,12 @@ class ControlResponseTest : public cSimpleModule
             ASSERT(sender->cancellations == 1 && sender->grants == 2);
         if (qos && scenario == 15)
             ASSERT(sender->cancellations == 0 && sender->grants == 1);
+        if (scenario >= 26) {
+            bool affected = scenario == 26 || scenario == 29;
+            ASSERT(sender->changed && sender->cancellations == (affected ? 1 : 0));
+            ASSERT(sender->grants == (affected ? 2 : 1));
+            ASSERT(sender->dataShortGi == std::vector<bool>({true, !affected, !affected}));
+        }
         if (scenario == 0 || scenario == 3) {
             for (auto rate : receiver->responseRates)
                 ASSERT(rate == (scenario == 3 ? Mbps(24) : Mbps(12)));
@@ -425,6 +478,14 @@ class ControlResponseTest : public cSimpleModule
                 management->basicRates({6, 12});
         }
         bool qos = par("qos");
+        if (scenario >= 26) {
+            ASSERT(qos);
+            auto owner = check_and_cast<Ieee80211Mib *>(getModuleByPath("^.sender.wlan[0].mib"));
+            owner->setPrimaryChannel(1);
+            auto capabilities = owner->localHtCapabilities;
+            ASSERT(capabilities.shortGi20);
+            owner->setPeerHtCapabilities(MacAddress("02:00:00:00:00:02"), capabilities, owner->getHtOperation());
+        }
         if (qos)
             run(check_and_cast<ControlHcf *>(getModuleByPath("^.sender.wlan[0].mac.hcf")),
                 check_and_cast<ControlHcf *>(getModuleByPath("^.receiver.wlan[0].mac.hcf")), true, scenario);
@@ -470,8 +531,9 @@ seed-set = 0
 cmdenv-express-mode = true
 record-vector-results = false
 record-scalar-results = false
-*.test.scenario = ${scenario=0..25}
+*.test.scenario = ${scenario=0..29}
 *.test.qos = ${qos=true,false}
+constraint = $scenario < 26 || $qos
 *.radioMedium.propagation.typename = "ConstantTimePropagation"
 *.radioMedium.propagation.propagationTime = 0s
 **.wlan[*].agent.typename = ""
@@ -486,11 +548,11 @@ record-scalar-results = false
 **.wlan[*].mac.hcf.originatorMacDataService.msduAggregationPolicy.typename = ""
 **.wlan[*].mac.hcf.originatorMacDataService.mpduAggregationPolicy.typename = ""
 **.wlan[*].mac.*.rtsPolicy.rtsThreshold = (${scenario} == 2 || ${scenario} == 5 || ${scenario} == 6 || ${scenario} == 18 || ${scenario} == 19 || ${scenario} == 25) ? 0B : 4096B
-**.wlan[*].mac.*.rateSelection.dataFrameBitrate = ${scenario} == 1 ? 48Mbps : (${scenario} == 2 ? 6Mbps : 24Mbps)
+**.wlan[*].mac.*.rateSelection.dataFrameBitrate = ${scenario} >= 26 ? 72.2Mbps : (${scenario} == 1 ? 48Mbps : (${scenario} == 2 ? 6Mbps : 24Mbps))
 **.wlan[*].mac.*.rateSelection.controlFrameBitrate = ${scenario} == 6 ? 24Mbps : -1bps
 **.wlan[*].mac.*.rateSelection.responseAckFrameBitrate = ${scenario} == 1 ? 54Mbps : (${scenario} == 4 ? 24Mbps : -1bps)
 **.wlan[*].mac.*.rateSelection.responseCtsFrameBitrate = ${scenario} == 5 ? 24Mbps : -1bps
-**.wlan[*].opMode = ${scenario} == 25 ? "g(mixed)" : "a"
+**.wlan[*].opMode = ${scenario} >= 26 ? "n(mixed-2.4Ghz)" : (${scenario} == 25 ? "g(mixed)" : "a")
 **.wlan[*].bitrate = 24Mbps
 *.sender.wlan[0].address = "02:00:00:00:00:01"
 *.receiver.wlan[0].address = "02:00:00:00:00:02"

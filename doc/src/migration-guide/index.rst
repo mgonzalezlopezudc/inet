@@ -13,7 +13,7 @@ A later RTS uses a bound from the latest actual transmission to the same peer.
 The selected control rates can therefore differ from earlier defaults.
 
 Both rate contracts require ``snapshotResponseRateContext()`` and ``computeResponseMode()``.
-The snapshot query returns copied rate facts and relationship identities.
+The snapshot query returns copied rate facts, peer HT capabilities, and relationship identities.
 It resolves the receiver for an originated request and the transmitter for a received request.
 Pass the exact local ``BssRateContextRef`` when the frame contains one.
 Return an unsupported result for unknown required facts or an absent primary representation.
@@ -40,6 +40,9 @@ The recipient sends no response when the required facts or representation are un
 ACK and CTS duration policies return a negative value for that unsupported result.
 An accepted immediate response retains its copied context through SIFS.
 Rate changes invalidate affected future prepared transmissions.
+HCF also invalidates a prepared HT transmission when its local or peer capabilities or operation inputs change.
+Removal of peer HT state invalidates that transmission.
+Equal capability values and changes to unrelated peers do not invalidate it.
 
 The supported profile covers represented non-HT responses and ordinary represented HT/VHT data requests.
 Required HT/VHT responses and unrepresented HT Control, STBC, duplicate, and bandwidth-signaling procedures remain unsupported.
@@ -50,7 +53,9 @@ IEEE 802.11 Management Rate Context
 
 Management publishes local, BSS, peer, and target rate facts through ``Ieee80211Mib``.
 ``Ieee80211RateSetState`` preserves unknown facts and known empty sets.
-``snapshotRateContext()`` returns an owned ``RateContextSnapshot`` with copied rates and identities.
+``snapshotRateContext()`` returns an owned ``RateContextSnapshot`` with copied rates, identities, and optional peer HT capabilities.
+``peerHtCapabilities`` copies the negotiated peer state that HT mode selection uses.
+The field has no value when the MIB has no valid HT state for that peer.
 The query takes the peer, frame subtype, optional BSSID, and optional ``BssRateContextRef``.
 An unresolved or conflicting identity returns ``known == false``.
 An unknown target never falls back to the active BSS.
