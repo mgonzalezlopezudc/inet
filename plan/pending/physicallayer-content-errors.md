@@ -437,7 +437,7 @@ Verification: the fingerprints must keep all values. A unit test would need a st
 
 ### C6
 
-Status: open. Purpose and scope: `RadioMedium::isReceptionSuccessful()` returns the result of `getReceptionDecision()`, so that the decisions of separate parts come from the cache. Remove the TODO in `Radio::endReception()`.
+Status: done. Purpose and scope: `RadioMedium::isReceptionSuccessful()` returns the result of `getReceptionDecision()`, so that the decisions of separate parts come from the cache. Remove the TODO in `Radio::endReception()`.
 
 Verification: the radio module tests and the fingerprints keep their results. The scalar "reception decision computation count" increases in configurations with separate parts, because these decisions now go through the counted function. The statistics repository holds `showcases/wireless/throughput/omnetpp.ini-General-#0.sca` with this scalar (9876 on master), which needs an update at the landing.
 
