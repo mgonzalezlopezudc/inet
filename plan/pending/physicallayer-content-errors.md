@@ -1,6 +1,6 @@
 # Implementation plan: error decisions and corruption in packet-level radio reception
 
-> **Kind:** procedure · **Status:** draft · **Seal:** none · **Owns:** — · **Stands on:** [implementation plan procedure](../../doc/project/guide/write-an-implementation-plan.md), [IEEE 802.11 rules](../../doc/project/domain/ieee80211.md), [Packet design](../../doc/project/design/packet-anatomy.md)
+> **Kind:** procedure · **Status:** done · **Seal:** none · **Owns:** — · **Stands on:** [implementation plan procedure](../../doc/project/guide/write-an-implementation-plan.md), [IEEE 802.11 rules](../../doc/project/domain/ieee80211.md), [Packet design](../../doc/project/design/packet-anatomy.md)
 
 Checkout and revision: worktree `inet-physicallayer-content-errors`, branch `topic/physicallayer-content-errors`, base `master` at `6a6bd60bd0`. The checkout has no other local changes.
 
@@ -532,4 +532,41 @@ The approval covers draft 3 of this plan and the commits C0 to C12. It does not 
 
 ## 9. Results
 
-C11 records the results.
+Status: done on the branch `topic/physicallayer-content-errors`, not merged. The branch stands on master `6a6bd60bd0`. The earlier implementations are kept as the references `refs/backup/physicallayer-content-errors-draft2` (draft 2) and `refs/backup/physicallayer-content-errors-draft3` (draft 3 in the order that moved the modes one by one) until the landing.
+
+| Commit | Subject |
+| --- | --- |
+| `f7b00275bd` | `plan: add: define error decisions and corruption for packet-level reception` |
+| `9dadccd168` | `AckingMac: fix: check the bit error before the header is read` |
+| `a4a2cf3ee1` | `physicallayer: fix: compute the SNIR of a reception again after a new interferer` |
+| `a0c0935e85` | `physicallayer: fix: initialize the base of the stochastic and BER table error models` |
+| `50928ac0e6` | `ieee80211: fix: do not count the signal field of HT and VHT in the preamble` |
+| `73ce269f28` | `physicallayer: add: SNIR of a time interval` |
+| `a985528b50` | `physicallayer: change: compute each part decision once` |
+| `393b0d8e54` | `physicallayer: add: error rates of signal regions` |
+| `40601f9860` | `physicallayer: add: packet ranges and region times of signal parts` |
+| `5d854a5172` | `physicallayer: add: corruption of failed signal regions` |
+| `82373970a8` | `physicallayer: change: decide the errors of each region before the corruption` |
+
+Executed checks, all in debug mode with `omnetpp-6.x` and the commands of section 7, unless the item names another mode:
+
+- Each commit builds alone in a detached worktree, without warnings.
+- The source of C10 is the same as the source of the earlier order of the series, on which these checks ran: the release build without warnings; the unit suite with 154 PASS; the module suite with 842 PASS; the protocol suite with 773 PASS, 306 expected skips, 47 expected failures, and the same 67 unexpected failures as master, test by test; and the full fingerprint suite with 1767 PASS. Only `tests/unit/RegionCorruption_1.test` differs, and it passes on C9 and C10.
+- Full fingerprint runs. On C9: 1767 PASS, so C1 to C9 move no fingerprint, and the HT and VHT repair of C4 moves none. C10 updates 217 fingerprints: 207 of 78 configurations in the packet mode, all of them wireless configurations with a flat radio and an error model, and the 4 `ChunkCorruptionMode` and the 6 `ByteCorruptionMode` and `BitCorruptionMode` values of `examples/wireless/corruptionmode`. The full runs before the update moved only these. In each run, `examples/ipv6/mipv6 -c Handover` fails with the same values as on master, and 22 configurations need features that this build does not have.
+- The new tests pass on their commits: `RegionErrorRates_1` (C7), `RegionCorruption_1` and `UnitCorruption_1` (C9), and `ContentErrors_ApskScalarRadio_1`, `ContentErrors_Ieee80211Radio_1`, and `ConcurrentRadio_7` (C10). The means of the flip counts are within 0.4 % of the expected values.
+- Gates on C10: `check-pull-request.sh --base 6a6bd60bd0` passes; its one note on C10 asks whether three kinds of fingerprint movement show a second change, and the C10 message answers it. `check-source-seals.sh`, `check-architecture.sh src/inet/physicallayer`, and `check-naming.sh --base 6a6bd60bd0 src/inet/physicallayer` pass. `check-interfaces.sh` reports the same 16 old violations as master.
+
+Facts found during the implementation:
+
+- The network configurator computes the error rate of a wireless link with a transmission outside the radio medium and its own WHOLE decision. The received packet thus reads its regions from the WHOLE decision that it receives, not from the cache (C10).
+- `ErrorModelBase::computeCorruptedPacket()` must not enter the module of the error model: the radio medium deletes the received packet and warns about a packet that another module owns (C9). The reception tests check that no such warning occurs.
+- The HT and VHT preamble durations contained the signal field (C4, D15).
+- The error model draws from the random number generator of its module, so the test of `corruptUnits()` is a module test (C9).
+- A series that moved the modes one by one needed temporary conditions on the mode in `FlatReceiverBase` and in the old corruption path, which later commits changed and removed. The order of section 6 has none (D16).
+
+Findings outside this series:
+
+- The statistics repository needs updates at the landing: `showcases/wireless/throughput` for the scalar of C6, and `examples/wireless/corruptionmode` and the wireless simulations with reception errors for C10.
+- F5: the whole-part rate of `StochasticErrorModel` reads the bit model of the transmission when `packetErrorRate` is not set. The open PR #1431 repairs it, together with the initialization of C3.
+
+Gaps: `check-cpp.sh` did not run, because `clang-tidy` is not installed on this machine. The PSDU bound of `Ieee80211Receiver` and the EIFS rule after a frame with incorrect content have no test. No step measured the speed; section 4.8 is an estimate.
