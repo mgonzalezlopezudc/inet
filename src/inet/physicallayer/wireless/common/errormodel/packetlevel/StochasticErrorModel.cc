@@ -69,6 +69,19 @@ double StochasticErrorModel::computePacketErrorRate(const ISnir *snir, IRadioSig
     }
 }
 
+double StochasticErrorModel::computePacketErrorRate(const ISnir *snir, IRadioSignal::SignalPart part, b length, simtime_t startTime, simtime_t endTime) const
+{
+    Enter_Method("computePacketErrorRate");
+    checkRegionPart(part);
+    if (!std::isnan(packetErrorRate)) {
+        // the parameter is the packet error rate of the whole reception
+        double factor = (endTime - startTime) / snir->getReception()->getDuration();
+        return 1.0 - std::pow(1.0 - packetErrorRate, factor);
+    }
+    else
+        return 1.0 - std::pow(1.0 - computeBitErrorRate(snir, part), length.get<b>());
+}
+
 double StochasticErrorModel::computeBitErrorRate(const ISnir *snir, IRadioSignal::SignalPart part) const
 {
     Enter_Method("computeBitErrorRate");

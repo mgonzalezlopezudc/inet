@@ -48,6 +48,16 @@ double Ieee802154ErrorModel::computePacketErrorRate(const ISnir *snir, IRadioSig
     }
 }
 
+double Ieee802154ErrorModel::computePacketErrorRate(const ISnir *snir, IRadioSignal::SignalPart part, b length, simtime_t startTime, simtime_t endTime) const
+{
+    Enter_Method("computePacketErrorRate");
+    checkRegionPart(part);
+    auto ieee802154Transmission = check_and_cast<const Ieee802154Transmission *>(snir->getReception()->getTransmission());
+    auto modulation = check_and_cast<const ApskModulationBase *>(ieee802154Transmission->getModulation());
+    double bitErrorRate = modulation->calculateBER(getScalarSnir(snir, startTime, endTime), ieee802154Transmission->getBandwidth(), ieee802154Transmission->getBitrate());
+    return 1.0 - std::pow(1.0 - bitErrorRate, length.get<b>());
+}
+
 double Ieee802154ErrorModel::computeBitErrorRate(const ISnir *snir, IRadioSignal::SignalPart part) const
 {
     Enter_Method("computeBitErrorRate");

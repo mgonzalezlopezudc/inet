@@ -1,0 +1,3 @@
+Error rates of signal regions
+
+IErrorModel has a new pure virtual function: a second computePacketErrorRate() gives the error rate of a region of the header part or the data part, that is, a number of bits that the transmitter sends in a time interval. The rate uses the SNIR of that interval. StochasticErrorModel, ApskErrorModel, Ieee802154ErrorModel, the IEEE 802.11 NIST and Yans models, and Ieee80211BerTableErrorModel give region rates. An IErrorModel implementation outside INET must add the function.

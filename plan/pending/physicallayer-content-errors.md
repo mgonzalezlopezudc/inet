@@ -443,7 +443,7 @@ Verification: the radio module tests and the fingerprints keep their results. Th
 
 ### C7
 
-Status: open. Purpose and scope: the region overload of `IErrorModel::computePacketErrorRate()`, the interval `ErrorModelBase::getScalarSnir()`, the protected `checkRegionPart()`, the region rates of section 4.6, and the SERVICE move. No receiver calls the region rate yet. Release note `doc/whatsnew/incompatible/physicallayer-region-error-rates.txt` and the migration guide section.
+Status: done. Purpose and scope: the region overload of `IErrorModel::computePacketErrorRate()`, the interval `ErrorModelBase::getScalarSnir()`, the protected `checkRegionPart()`, the region rates of section 4.6, and the SERVICE move. No receiver calls the region rate yet. Release note `doc/whatsnew/incompatible/physicallayer-region-error-rates.txt` and the migration guide section.
 
 Verification: a new unit test `tests/unit/RegionErrorRates_1.test` uses a small subclass of `StochasticErrorModel` with a fixed BER, without a network. It checks that the region rate is 1 − (1 − BER)^length, that the limits of the BER give 0 and 1, and that the PREAMBLE and WHOLE parts have no regions. The fingerprints must keep all values; this checks the SERVICE move.
 

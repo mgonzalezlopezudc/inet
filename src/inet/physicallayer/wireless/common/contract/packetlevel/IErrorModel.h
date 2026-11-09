@@ -33,6 +33,14 @@ class INET_API IErrorModel : public virtual IPrintableObject
     virtual double computePacketErrorRate(const ISnir *snir, IRadioSignal::SignalPart part) const = 0;
 
     /**
+     * Returns the probability that a region of the provided signal part has at
+     * least one error. The region has the provided length, and the transmitter
+     * sends it from startTime to endTime. Only the header part and the data part
+     * have regions.
+     */
+    virtual double computePacketErrorRate(const ISnir *snir, IRadioSignal::SignalPart part, b length, simtime_t startTime, simtime_t endTime) const = 0;
+
+    /**
      * Returns the bit error rate based on SNIR, modulation, FEC encoding
      * and any other physical layer characteristics.
      */

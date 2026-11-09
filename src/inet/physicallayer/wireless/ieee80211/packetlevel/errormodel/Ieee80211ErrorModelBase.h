@@ -38,6 +38,7 @@ class INET_API Ieee80211ErrorModelBase : public ErrorModelBase
     Ieee80211ErrorModelBase();
 
     virtual double computePacketErrorRate(const ISnir *snir, IRadioSignal::SignalPart part) const override;
+    virtual double computePacketErrorRate(const ISnir *snir, IRadioSignal::SignalPart part, b length, simtime_t startTime, simtime_t endTime) const override;
     virtual double computeBitErrorRate(const ISnir *snir, IRadioSignal::SignalPart part) const override;
     virtual double computeSymbolErrorRate(const ISnir *snir, IRadioSignal::SignalPart part) const override;
 };

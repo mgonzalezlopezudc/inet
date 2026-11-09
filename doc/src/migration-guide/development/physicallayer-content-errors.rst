@@ -19,3 +19,24 @@ they return the values of the whole reception. In :cpp:`ScalarSnir` and
 :cpp:`DimensionalSnir`, the protected functions :cpp:`computeMin()`,
 :cpp:`computeMax()`, and :cpp:`computeMean()` now take the start and the end
 of the interval.
+
+Error Rates of Signal Regions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+:cpp:`IErrorModel` has a new pure virtual method:
+
+.. code-block:: c++
+
+   virtual double computePacketErrorRate(const ISnir *snir, IRadioSignal::SignalPart part, b length, simtime_t startTime, simtime_t endTime) const = 0;
+
+The method gives the error rate of a region of the header part or the data
+part. The region has the given length, and the transmitter sends it from
+``startTime`` to ``endTime``. Use the SNIR of that interval, for example with
+:cpp:`ErrorModelBase::getScalarSnir(snir, startTime, endTime)`. An
+:cpp:`IErrorModel` implementation outside INET no longer compiles until it
+overrides this method.
+
+A model that derives from :cpp:`Ieee80211ErrorModelBase` and overrides
+:cpp:`getDataSuccessRate()` gets the exact number of bits to count. For an OFDM
+mode, :cpp:`computePacketErrorRate()` now adds the SERVICE bits before the call,
+and :cpp:`getDataSuccessRate()` no longer adds them.
