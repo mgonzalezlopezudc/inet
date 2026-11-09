@@ -45,6 +45,24 @@ std::ostream& Ieee802154NarrowbandReceiver::printToStream(std::ostream& stream, 
     return FlatReceiverBase::printToStream(stream, level);
 }
 
+bool Ieee802154NarrowbandReceiver::computePartRange(const ITransmission *transmission, IRadioSignal::SignalPart part, b& offset, b& length) const
+{
+    auto ieee802154Transmission = check_and_cast<const Ieee802154Transmission *>(transmission);
+    if (part == IRadioSignal::SIGNAL_PART_HEADER) {
+        // the radio sends the header bits, but the packet holds no header chunk
+        offset = b(-1);
+        length = ieee802154Transmission->getHeaderLength();
+        return true;
+    }
+    else if (part == IRadioSignal::SIGNAL_PART_DATA) {
+        offset = b(0);
+        length = ieee802154Transmission->getDataLength();
+        return length <= transmission->getPacket()->getTotalLength();
+    }
+    else
+        throw cRuntimeError("Only the header part and the data part have content");
+}
+
 } // namespace physicallayer
 
 } // namespace inet

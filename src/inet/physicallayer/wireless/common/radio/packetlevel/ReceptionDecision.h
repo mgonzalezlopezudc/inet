@@ -8,6 +8,7 @@
 #ifndef __INET_RECEPTIONDECISION_H
 #define __INET_RECEPTIONDECISION_H
 
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IErrorModel.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IReceptionDecision.h"
 
 namespace inet {
@@ -21,9 +22,11 @@ class INET_API ReceptionDecision : public IReceptionDecision, public cObject
     const bool isReceptionPossible_;
     const bool isReceptionAttempted_;
     const bool isReceptionSuccessful_;
+    // the errors that the decision found in its part, if the receiver decides the regions of the part
+    const PartErrors errors;
 
   public:
-    ReceptionDecision(const IReception *reception, IRadioSignal::SignalPart part, bool isReceptionPossible, bool isReceptionAttempted, bool isReceptionSuccessful);
+    ReceptionDecision(const IReception *reception, IRadioSignal::SignalPart part, bool isReceptionPossible, bool isReceptionAttempted, bool isReceptionSuccessful, const PartErrors& errors = PartErrors());
 
     virtual std::ostream& printToStream(std::ostream& stream, int level, int evFlags = 0) const override;
 
@@ -33,6 +36,8 @@ class INET_API ReceptionDecision : public IReceptionDecision, public cObject
     virtual bool isReceptionPossible() const override { return isReceptionPossible_; }
     virtual bool isReceptionAttempted() const override { return isReceptionAttempted_; }
     virtual bool isReceptionSuccessful() const override { return isReceptionSuccessful_; }
+
+    virtual const PartErrors& getErrors() const { return errors; }
 };
 
 } // namespace physicallayer

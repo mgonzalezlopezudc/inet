@@ -31,6 +31,26 @@ class INET_API FlatReceiverBase : public NarrowbandReceiverBase
 
     virtual Packet *computeReceivedPacket(const ISnir *snir, bool isReceptionSuccessful) const override;
 
+    /** @name Error decisions of the signal regions */
+    //@{
+    /**
+     * Gives the range of the transmitted packet that carries the bits of the
+     * header part or the data part. The header range comes before the data range.
+     * The offset is -1 if the packet does not hold the bits of the part as content,
+     * for example a header that the radio does not represent as a chunk; the length
+     * is then the number of bits of the part. Returns false if the packet does not
+     * hold the complete range. This implementation throws an error.
+     */
+    virtual bool computePartRange(const ITransmission *transmission, IRadioSignal::SignalPart part, b& offset, b& length) const;
+
+    /**
+     * Gives the interval in which the transmitter sends the bits [offset, offset +
+     * length) of a part that has partLength bits. This implementation divides the
+     * time of the part in proportion to the bits.
+     */
+    virtual void computeRegionInterval(const IReception *reception, IRadioSignal::SignalPart part, b offset, b length, b partLength, simtime_t& startTime, simtime_t& endTime) const;
+    //@}
+
   public:
     FlatReceiverBase();
 

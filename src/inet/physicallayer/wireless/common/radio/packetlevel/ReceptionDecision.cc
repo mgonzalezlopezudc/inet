@@ -10,12 +10,13 @@
 namespace inet {
 namespace physicallayer {
 
-ReceptionDecision::ReceptionDecision(const IReception *reception, IRadioSignal::SignalPart part, bool isReceptionPossible, bool isReceptionAttempted, bool isReceptionSuccessful) :
+ReceptionDecision::ReceptionDecision(const IReception *reception, IRadioSignal::SignalPart part, bool isReceptionPossible, bool isReceptionAttempted, bool isReceptionSuccessful, const PartErrors& errors) :
     reception(reception),
     part(part),
     isReceptionPossible_(isReceptionPossible),
     isReceptionAttempted_(isReceptionAttempted),
-    isReceptionSuccessful_(isReceptionSuccessful)
+    isReceptionSuccessful_(isReceptionSuccessful),
+    errors(errors)
 {
 }
 

@@ -8,6 +8,7 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
 
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 
@@ -57,6 +58,25 @@ bool Ieee80211Receiver::computeIsReceptionPossible(const IListening *listening, 
 {
     auto ieee80211Transmission = dynamic_cast<const Ieee80211Transmission *>(reception->getTransmission());
     return ieee80211Transmission && modeSet->containsMode(ieee80211Transmission->getMode()) && getAnalogModel()->computeIsReceptionPossible(listening, reception, sensitivity);
+}
+
+bool Ieee80211Receiver::computePartRange(const ITransmission *transmission, IRadioSignal::SignalPart part, b& offset, b& length) const
+{
+    auto packet = transmission->getPacket();
+    const auto& phyHeader = Ieee80211Radio::peekIeee80211PhyHeaderAtFront(packet, b(-1), Chunk::PF_ALLOW_INCOMPLETE | Chunk::PF_ALLOW_INCORRECT | Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED);
+    if (part == IRadioSignal::SIGNAL_PART_HEADER) {
+        offset = b(0);
+        length = phyHeader->getChunkLength();
+        return true;
+    }
+    else if (part == IRadioSignal::SIGNAL_PART_DATA) {
+        // the PSDU follows the PHY header; the tail and pad bits after it carry no content
+        offset = phyHeader->getChunkLength();
+        length = B(phyHeader->getLengthField());
+        return offset + length <= packet->getTotalLength();
+    }
+    else
+        throw cRuntimeError("Only the header part and the data part have content");
 }
 
 const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListening *listening, const IReception *reception, const IInterference *interference, const ISnir *snir, const std::vector<const IReceptionDecision *> *decisions) const

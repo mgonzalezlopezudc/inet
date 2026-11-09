@@ -31,6 +31,13 @@ class INET_API SnirReceiverBase : public ReceiverBase
   protected:
     virtual void initialize(int stage) override;
 
+    /**
+     * Returns true if the SNIR in the provided interval of the reception is above
+     * the threshold, according to the threshold mode. A part or a region of the
+     * signal uses the interval of its own time.
+     */
+    virtual bool computeIsSnirAboveThreshold(const ISnir *snir, simtime_t startTime, simtime_t endTime) const;
+
   public:
     virtual std::ostream& printToStream(std::ostream& stream, int level, int evFlags = 0) const override;
 

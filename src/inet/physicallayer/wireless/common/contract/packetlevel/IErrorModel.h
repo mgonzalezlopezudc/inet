@@ -15,6 +15,34 @@ namespace inet {
 namespace physicallayer {
 
 /**
+ * A region of the transmitted packet that an error decision found erroneous.
+ */
+struct ErrorRegion
+{
+    // the offset of the region in the transmitted packet
+    b offset;
+    // the length of the region
+    b length;
+    // the region error rate of the error model, at the SNIR of the time of the region
+    double errorRate;
+};
+
+/**
+ * The error decision of one signal part, the header or the data. The decision
+ * of the whole signal combines them: it keeps the failed regions of the data,
+ * which the received packet gets.
+ */
+struct PartErrors
+{
+    // true if the prerequisites of the part held and the packet holds the complete range of the part
+    bool isDecoded = false;
+    // true if at least one region failed, also a region without content in the packet
+    bool hasErrors = false;
+    // the failed regions that the packet holds, in packet order
+    std::vector<ErrorRegion> regions;
+};
+
+/**
  * The error model describes how the signal to noise ratio affects the amount of
  * errors at the receiver. The main purpose of this model is to determine whether
  * if the received packet has errors or not. It also computes various physical

@@ -36,6 +36,16 @@ std::ostream& SnirReceiverBase::printToStream(std::ostream& stream, int level, i
     return ReceiverBase::printToStream(stream, level, evFlags);
 }
 
+bool SnirReceiverBase::computeIsSnirAboveThreshold(const ISnir *snir, simtime_t startTime, simtime_t endTime) const
+{
+    if (snirThresholdMode == SnirThresholdMode::STM_MIN)
+        return snir->getMin(startTime, endTime) > snirThreshold;
+    else if (snirThresholdMode == SnirThresholdMode::STM_MEAN)
+        return snir->getMean(startTime, endTime) > snirThreshold;
+    else
+        throw cRuntimeError("Unknown SNIR threshold mode: '%d'", static_cast<int>(snirThresholdMode));
+}
+
 bool SnirReceiverBase::computeIsReceptionSuccessful(const IListening *listening, const IReception *reception, IRadioSignal::SignalPart part, const IInterference *interference, const ISnir *snir) const
 {
     if (snirThresholdMode == SnirThresholdMode::STM_MIN) {

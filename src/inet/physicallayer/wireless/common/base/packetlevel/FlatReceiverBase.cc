@@ -90,6 +90,19 @@ const IReceptionResult *FlatReceiverBase::computeReceptionResult(const IListenin
     return receptionResult;
 }
 
+bool FlatReceiverBase::computePartRange(const ITransmission *transmission, IRadioSignal::SignalPart part, b& offset, b& length) const
+{
+    throw cRuntimeError("%s does not define the content of the signal parts, which the error decisions of the signal regions need", getClassName());
+}
+
+void FlatReceiverBase::computeRegionInterval(const IReception *reception, IRadioSignal::SignalPart part, b offset, b length, b partLength, simtime_t& startTime, simtime_t& endTime) const
+{
+    simtime_t partStartTime = reception->getStartTime(part);
+    simtime_t partDuration = reception->getEndTime(part) - partStartTime;
+    startTime = partStartTime + partDuration * (offset.get<b>() / (double)partLength.get<b>());
+    endTime = partStartTime + partDuration * ((offset + length).get<b>() / (double)partLength.get<b>());
+}
+
 Packet *FlatReceiverBase::computeReceivedPacket(const ISnir *snir, bool isReceptionSuccessful) const
 {
     if (errorModel == nullptr || isReceptionSuccessful)

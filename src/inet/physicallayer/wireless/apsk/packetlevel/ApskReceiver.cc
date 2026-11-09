@@ -34,6 +34,23 @@ bool ApskReceiver::computeIsReceptionPossible(const IListening *listening, const
 }
 
 
+bool ApskReceiver::computePartRange(const ITransmission *transmission, IRadioSignal::SignalPart part, b& offset, b& length) const
+{
+    auto apskTransmission = check_and_cast<const ApskTransmission *>(transmission);
+    if (part == IRadioSignal::SIGNAL_PART_HEADER) {
+        offset = b(0);
+        length = apskTransmission->getHeaderLength();
+    }
+    else if (part == IRadioSignal::SIGNAL_PART_DATA) {
+        // the data part also holds the padding of the modulation
+        offset = apskTransmission->getHeaderLength();
+        length = apskTransmission->getDataLength();
+    }
+    else
+        throw cRuntimeError("Only the header part and the data part have content");
+    return offset + length <= transmission->getPacket()->getTotalLength();
+}
+
 } // namespace physicallayer
 
 } // namespace inet
