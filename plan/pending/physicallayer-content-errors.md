@@ -413,7 +413,7 @@ Verification: the AckingMac module tests, and the run of the C10 module test in 
 
 ### C2
 
-Status: open. Purpose and scope: with `separateReceptionParts = true`, the radio medium caches the interference, noise, and SNIR of a reception at its first decision. Nothing removes them, so a transmission that starts later does not count for the rest of the reception, also in the packet mode. `RadioMedium::addTransmission()` now deletes the cached interference, noise, and SNIR of each reception that the new transmission overlaps at a radio. It asks the interval tree of the radio for these receptions (section 4.8). The decisions made so far stay, because they were correct at their time. In the default mode, nothing is cached at that time, so the commit changes no result there.
+Status: done. Purpose and scope: with `separateReceptionParts = true`, the radio medium caches the interference, noise, and SNIR of a reception at its first decision. Nothing removes them, so a transmission that starts later does not count for the rest of the reception, also in the packet mode. `RadioMedium::addTransmission()` now deletes the cached interference, noise, and SNIR of each reception that the new transmission overlaps at a radio. It asks the interval tree of the radio for these receptions (section 4.8). The decisions made so far stay, because they were correct at their time. In the default mode, nothing is cached at that time, so the commit changes no result there.
 
 Verification: the run of the C10 module test with separate parts and a late interferer, the `ConcurrentRadio` tests, and the fingerprints.
 
