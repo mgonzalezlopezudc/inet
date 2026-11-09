@@ -52,7 +52,30 @@ struct PartErrors
 class INET_API IErrorModel : public virtual IPrintableObject
 {
   public:
+    enum class CorruptionMode {
+        CM_UNDEFINED = -1,
+        CM_PACKET,
+        CM_CHUNK,
+        CM_BYTE,
+        CM_BIT
+    };
+
+  public:
+    /**
+     * Returns the corruption mode: the unit of the error decisions of a
+     * receiver, and the representation of the errors in the received packet.
+     */
+    virtual CorruptionMode getCorruptionMode() const = 0;
+
     virtual Packet *computeCorruptedPacket(const ISnir *snir) const = 0;
+
+    /**
+     * Returns the received packet that contains the provided failed regions of
+     * the transmitted packet, in the representation of the corruption mode.
+     * The error decisions of the receiver found the regions; this function makes
+     * no new decision. The transmitted packet stays unchanged.
+     */
+    virtual Packet *computeCorruptedPacket(const Packet *packet, const std::vector<ErrorRegion>& regions) const = 0;
 
     /**
      * Returns the packet error rate based on SNIR, modulation, FEC encoding

@@ -18,14 +18,6 @@ namespace physicallayer {
 class INET_API ErrorModelBase : public Module, public IErrorModel
 {
   public:
-    enum class CorruptionMode {
-        CM_UNDEFINED = -1,
-        CM_PACKET,
-        CM_CHUNK,
-        CM_BYTE,
-        CM_BIT
-    };
-
     enum class SnirMode {
         SM_UNDEFINED = -1,
         SM_MIN,
@@ -52,6 +44,24 @@ class INET_API ErrorModelBase : public Module, public IErrorModel
 
     virtual Packet *computeCorruptedPacket(const Packet *packet, double ber) const;
     virtual Packet *computeCorruptedPacket(const ISnir *snir) const override;
+
+    /**
+     * Returns the received form of a failed region of the packet in the
+     * representation of the corruption mode.
+     */
+    virtual Ptr<const Chunk> computeCorruptedChunk(const Packet *packet, const ErrorRegion& region) const;
+
+    /**
+     * Corrupts the units of a failed region of numUnits units: corruptUnit()
+     * receives the index of each unit with an error. The errors follow the error
+     * rate of the region, and at least one unit has an error, because the region
+     * failed.
+     */
+    virtual void corruptUnits(int numUnits, double errorRate, const std::function<void(int)>& corruptUnit) const;
+
+  public:
+    virtual CorruptionMode getCorruptionMode() const override { return corruptionMode; }
+    virtual Packet *computeCorruptedPacket(const Packet *packet, const std::vector<ErrorRegion>& regions) const override;
 };
 
 } // namespace physicallayer
