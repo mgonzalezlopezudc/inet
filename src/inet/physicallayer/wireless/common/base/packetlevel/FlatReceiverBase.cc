@@ -7,6 +7,8 @@
 
 #include "inet/physicallayer/wireless/common/base/packetlevel/FlatReceiverBase.h"
 
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/packet/chunk/SequenceChunk.h"
 #include "inet/physicallayer/wireless/common/base/packetlevel/ApskModulationBase.h"
 #include "inet/physicallayer/wireless/common/base/packetlevel/NarrowbandNoiseBase.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadioMedium.h"
@@ -59,25 +61,6 @@ const IListeningDecision *FlatReceiverBase::computeListeningDecision(const IList
     return new ListeningDecision(listening, isListeningPossible);
 }
 
-bool FlatReceiverBase::computeIsReceptionSuccessful(const IListening *listening, const IReception *reception, IRadioSignal::SignalPart part, const IInterference *interference, const ISnir *snir) const
-{
-    if (!SnirReceiverBase::computeIsReceptionSuccessful(listening, reception, part, interference, snir))
-        return false;
-    else if (!errorModel)
-        return true;
-    else {
-        double packetErrorRate = errorModel->computePacketErrorRate(snir, part);
-        if (packetErrorRate == 0.0)
-            return true;
-        else if (packetErrorRate == 1.0)
-            return false;
-        else {
-            ASSERT(0.0 < packetErrorRate && packetErrorRate < 1.0);
-            return dblrand() > packetErrorRate;
-        }
-    }
-}
-
 const IReceptionResult *FlatReceiverBase::computeReceptionResult(const IListening *listening, const IReception *reception, const IInterference *interference, const ISnir *snir, const std::vector<const IReceptionDecision *> *decisions) const
 {
     auto receptionResult = NarrowbandReceiverBase::computeReceptionResult(listening, reception, interference, snir, decisions);
@@ -88,6 +71,51 @@ const IReceptionResult *FlatReceiverBase::computeReceptionResult(const IListenin
         errorRateInd->setSymbolErrorRate(errorModel->computeSymbolErrorRate(snir, IRadioSignal::SIGNAL_PART_WHOLE));
     }
     return receptionResult;
+}
+
+const IReceptionDecision *FlatReceiverBase::computeReceptionDecision(const IListening *listening, const IReception *reception, IRadioSignal::SignalPart part, const IInterference *interference, const ISnir *snir) const
+{
+    if (errorModel == nullptr)
+        return NarrowbandReceiverBase::computeReceptionDecision(listening, reception, part, interference, snir);
+    // the decisions read only the errors of the other parts, because their
+    // attempted flags can differ from the one of this decision
+    bool isReceptionPossible = computeIsReceptionPossible(listening, reception, part);
+    bool isReceptionAttempted = isReceptionPossible && computeIsReceptionAttempted(listening, reception, part, interference);
+    PartErrors errors;
+    bool isPartReceived = false;
+    switch (part) {
+        case IRadioSignal::SIGNAL_PART_PREAMBLE:
+            isPartReceived = computeIsPreambleReceived(reception, snir);
+            break;
+        case IRadioSignal::SIGNAL_PART_HEADER:
+            if (computeIsPreambleReceived(reception, snir))
+                errors = computePartErrors(reception, snir, part);
+            isPartReceived = errors.isDecoded && !errors.hasErrors;
+            break;
+        case IRadioSignal::SIGNAL_PART_DATA: {
+            // without a correct header, the receiver cannot decode the data
+            const auto& headerErrors = getPartErrors(listening, reception, IRadioSignal::SIGNAL_PART_HEADER);
+            if (headerErrors.isDecoded && !headerErrors.hasErrors)
+                errors = computePartErrors(reception, snir, part);
+            isPartReceived = errors.isDecoded && !errors.hasErrors;
+            break;
+        }
+        case IRadioSignal::SIGNAL_PART_WHOLE: {
+            // the whole signal keeps the failed regions of the data, which the received packet gets;
+            // without a correct header or a complete data part, it fails without regions
+            const auto& headerErrors = getPartErrors(listening, reception, IRadioSignal::SIGNAL_PART_HEADER);
+            const auto& dataErrors = getPartErrors(listening, reception, IRadioSignal::SIGNAL_PART_DATA);
+            errors.isDecoded = headerErrors.isDecoded && !headerErrors.hasErrors && dataErrors.isDecoded;
+            errors.hasErrors = !errors.isDecoded || dataErrors.hasErrors;
+            if (errors.isDecoded)
+                errors.regions = dataErrors.regions;
+            isPartReceived = !errors.hasErrors;
+            break;
+        }
+        default:
+            throw cRuntimeError("Unknown signal part: '%s'", IRadioSignal::getSignalPartName(part));
+    }
+    return new ReceptionDecision(reception, part, isReceptionPossible, isReceptionAttempted, isReceptionAttempted && isPartReceived, errors);
 }
 
 bool FlatReceiverBase::computePartRange(const ITransmission *transmission, IRadioSignal::SignalPart part, b& offset, b& length) const
@@ -103,12 +131,82 @@ void FlatReceiverBase::computeRegionInterval(const IReception *reception, IRadio
     endTime = partStartTime + partDuration * ((offset + length).get<b>() / (double)partLength.get<b>());
 }
 
-Packet *FlatReceiverBase::computeReceivedPacket(const ISnir *snir, bool isReceptionSuccessful) const
+bool FlatReceiverBase::computeIsPreambleReceived(const IReception *reception, const ISnir *snir) const
 {
-    if (errorModel == nullptr || isReceptionSuccessful)
-        return ReceiverBase::computeReceivedPacket(snir, isReceptionSuccessful);
-    else
-        return errorModel->computeCorruptedPacket(snir);
+    simtime_t startTime = reception->getStartTime(IRadioSignal::SIGNAL_PART_PREAMBLE);
+    simtime_t endTime = reception->getEndTime(IRadioSignal::SIGNAL_PART_PREAMBLE);
+    return endTime <= startTime || computeIsSnirAboveThreshold(snir, startTime, endTime);
+}
+
+PartErrors FlatReceiverBase::computePartErrors(const IReception *reception, const ISnir *snir, IRadioSignal::SignalPart part) const
+{
+    PartErrors errors;
+    auto transmission = reception->getTransmission();
+    b partOffset, partLength;
+    if (!computePartRange(transmission, part, partOffset, partLength))
+        return errors;
+    errors.isDecoded = true;
+    // a part without content in the packet is one region, the packet mode has one
+    // region for each part, and the other modes have one region for each chunk
+    std::vector<std::pair<b, b>> regions;
+    if (partOffset == b(-1))
+        regions.push_back({b(-1), partLength});
+    else if (partLength != b(0) && errorModel->getCorruptionMode() == IErrorModel::CorruptionMode::CM_PACKET)
+        regions.push_back({partOffset, partLength});
+    else if (partLength != b(0)) {
+        const auto& content = transmission->getPacket()->peekAt(partOffset, partLength, Chunk::PF_ALLOW_INCOMPLETE | Chunk::PF_ALLOW_INCORRECT | Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED);
+        b offset = partOffset;
+        auto addRegion = [&] (const Ptr<const Chunk>& chunk) {
+            regions.push_back({offset, chunk->getChunkLength()});
+            offset += chunk->getChunkLength();
+        };
+        if (content->getChunkType() == Chunk::CT_SEQUENCE) {
+            for (const auto& chunk : staticPtrCast<const SequenceChunk>(content)->getChunks())
+                addRegion(chunk);
+        }
+        else
+            addRegion(content);
+    }
+    for (const auto& [offset, length] : regions) {
+        simtime_t startTime, endTime;
+        computeRegionInterval(reception, part, offset == b(-1) ? b(0) : offset - partOffset, length, partLength, startTime, endTime);
+        double errorRate = errorModel->computePacketErrorRate(snir, part, length, startTime, endTime);
+        if (!(0 <= errorRate && errorRate <= 1))
+            throw cRuntimeError("Invalid error rate of a region: %g", errorRate);
+        // the threshold is a condition, and the error rate is a probability
+        bool isFailed = !computeIsSnirAboveThreshold(snir, startTime, endTime) || (errorRate != 0 && (errorRate == 1 || !(dblrand() > errorRate)));
+        if (isFailed) {
+            errors.hasErrors = true;
+            if (offset != b(-1))
+                errors.regions.push_back({offset, length, errorRate});
+        }
+    }
+    return errors;
+}
+
+const PartErrors& FlatReceiverBase::getPartErrors(const IListening *listening, const IReception *reception, IRadioSignal::SignalPart part) const
+{
+    auto radio = reception->getReceiverRadio();
+    auto decision = radio->getMedium()->getReceptionDecision(radio, listening, reception->getTransmission(), part);
+    return check_and_cast<const ReceptionDecision *>(decision)->getErrors();
+}
+
+Packet *FlatReceiverBase::computeReceivedPacket(const ISnir *snir, const std::vector<const IReceptionDecision *> *decisions) const
+{
+    // the decision of the whole signal keeps the failed regions that the received packet gets
+    for (auto decision : *decisions) {
+        if (decision->getSignalPart() == IRadioSignal::SIGNAL_PART_WHOLE) {
+            const auto& regions = check_and_cast<const ReceptionDecision *>(decision)->getErrors().regions;
+            if (!regions.empty()) {
+                auto transmittedPacket = snir->getReception()->getTransmission()->getPacket();
+                auto receivedPacket = errorModel->computeCorruptedPacket(transmittedPacket, regions);
+                receivedPacket->clearTags();
+                receivedPacket->addTag<PacketProtocolTag>()->setProtocol(transmittedPacket->getTag<PacketProtocolTag>()->getProtocol());
+                return receivedPacket;
+            }
+        }
+    }
+    return NarrowbandReceiverBase::computeReceivedPacket(snir, decisions);
 }
 
 } // namespace physicallayer

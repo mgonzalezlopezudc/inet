@@ -186,6 +186,23 @@ or samples depending on the lowest simulated physical domain where the
 real decoding starts. The error model is optional (if omitted, all
 receptions are considered successful).
 
+The ``corruptionMode`` parameter of the error model selects the regions of the
+error decisions and how the flat model represents errors. The receiver decides
+the header and the data region by region. A region fails if its SNIR is not
+above the SNIR threshold, or else if one random draw against its error rate
+fails, both with the SNIR of the time of that region. The data needs a correct
+header. In the ``packet`` mode, the default, each part is one region, and a
+failed region gives a packet with a bit error. In the ``chunk`` mode, each chunk
+is one region, and the received packet has an incorrect copy of each failed
+chunk. Only a failed header then gives a packet-level bit error, so interference
+that covers the end of a frame marks only the late chunks incorrect, and a MAC
+can keep the MPDUs before it in an aggregate. The ``byte`` and ``bit`` modes have
+the regions of the chunk mode, and a failed chunk becomes a raw chunk with
+flipped bytes or bits, marked incorrect. The number of flipped units follows
+the error rate of the region, and at least one unit is flipped. The regions do
+not contain bits that the packet does not hold, such as the SERVICE, tail, and
+pad bits of an IEEE 802.11 OFDM mode.
+
 The following list provides some examples:
 
 -  :ned:`StochasticErrorModel`: simplistic error model with constant

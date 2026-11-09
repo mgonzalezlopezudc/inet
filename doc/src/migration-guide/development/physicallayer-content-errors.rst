@@ -60,3 +60,33 @@ a region with the protected :cpp:`computeCorruptedChunk()`, and
 :cpp:`corruptUnits()` gives the units with errors of a failed region. An
 :cpp:`IErrorModel` implementation outside INET no longer compiles until it
 overrides the two methods.
+
+Error Decisions of Signal Regions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A flat receiver with an error model must tell which range of the transmitted
+packet carries the header part and the data part:
+
+.. code-block:: c++
+
+   virtual bool computePartRange(const ITransmission *transmission, IRadioSignal::SignalPart part, b& offset, b& length) const override;
+
+The offset is ``b(-1)`` for a part whose bits are not in the packet, for
+example a header that the radio does not represent as a chunk. The function
+returns false if the packet does not hold the complete range. The
+implementation of :cpp:`FlatReceiverBase` throws an error, so a receiver
+without an override refuses an error model. :cpp:`ReceptionDecision` holds the
+errors of its part, which :cpp:`getErrors()` returns as :cpp:`PartErrors`, and
+the protected :cpp:`SnirReceiverBase::computeIsSnirAboveThreshold()` checks the
+SNIR threshold for a time interval. :cpp:`FlatReceiverBase` overrides
+:cpp:`computeReceivedPacket(snir, decisions)`, the overload that
+:cpp:`ReceiverBase::computeReceptionResult()` calls.
+
+:cpp:`IErrorModel::computeCorruptedPacket(const ISnir *snir)` no longer exists,
+because no mode corrupts the whole packet after a decision of the whole
+reception. The functions :cpp:`corruptPacket()`, :cpp:`corruptChunks()`,
+:cpp:`corruptBytes()`, :cpp:`corruptBits()`, :cpp:`hasProbabilisticError()`,
+and :cpp:`computeCorruptedPacket(packet, ber)` of :cpp:`ErrorModelBase` no
+longer exist either. :cpp:`FlatReceiverBase::computeIsReceptionSuccessful()` no
+longer exists; a flat receiver without an error model uses the SNIR threshold
+of :cpp:`SnirReceiverBase`.

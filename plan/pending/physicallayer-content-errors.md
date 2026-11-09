@@ -469,7 +469,7 @@ The fingerprints must keep all values.
 
 ### C10
 
-Status: open. Purpose and scope: `FlatReceiverBase` decides the regions of each part in all four modes (section 4.5): `computeReceptionDecision()`, `computeIsPreambleReceived()`, `computePartErrors()`, `getPartErrors()`, and the override of `computeReceivedPacket(snir, decisions)`. The WHOLE decision keeps the failed DATA regions, which the received packet gets. Remove the old path: `IErrorModel::computeCorruptedPacket(snir)`; `corruptPacket()`, `corruptChunks()`, `corruptBytes()`, `corruptBits()`, `computeCorruptedPacket(packet, ber)`, `hasProbabilisticError()`, and the retry loop of `ErrorModelBase`; `FlatReceiverBase::computeIsReceptionSuccessful()` with its error-model draw, and the `bool` override of `computeReceivedPacket()`; the refusal of `Ieee80211ErrorModelBase`. Update all fingerprints that move. Release notes, the users guide paragraph, and the migration guide section.
+Status: done. Purpose and scope: `FlatReceiverBase` decides the regions of each part in all four modes (section 4.5): `computeReceptionDecision()`, `computeIsPreambleReceived()`, `computePartErrors()`, `getPartErrors()`, and the override of `computeReceivedPacket(snir, decisions)`. The WHOLE decision keeps the failed DATA regions, which the received packet gets. Remove the old path: `IErrorModel::computeCorruptedPacket(snir)`; `corruptPacket()`, `corruptChunks()`, `corruptBytes()`, `corruptBits()`, `computeCorruptedPacket(packet, ber)`, `hasProbabilisticError()`, and the retry loop of `ErrorModelBase`; `FlatReceiverBase::computeIsReceptionSuccessful()` with its error-model draw, and the `bool` override of `computeReceivedPacket()`; the refusal of `Ieee80211ErrorModelBase`. Update all fingerprints that move. Release notes, the users guide paragraph, and the migration guide section.
 
 Verification:
 
@@ -478,6 +478,8 @@ Verification:
 - A new module test `tests/module/ConcurrentRadio_7.test` runs two overlapping receptions in the chunk mode with the dimensional radio.
 - The reception tests check that no module deletes a packet that it does not own.
 - The full fingerprint run shows which configurations move. Each moved configuration must be a wireless configuration with errors in the reception, or a configuration of `examples/wireless/corruptionmode`.
+
+Implementation facts: the received packet reads the failed regions from the WHOLE decision that `computeReceptionResult()` receives, not from the cache of the radio medium. The network configurator computes the error rate of a wireless link with a transmission outside the radio medium and its own WHOLE decision, and a read from the cache stops at such a transmission. `ErrorModelBase::computeCorruptedPacket()` does not enter the module of the error model, because the receiver and the radio medium own the received packet; otherwise the radio medium warns when it deletes the packet. In `examples/wireless/corruptionmode`, the failed regions have the rate 1, so all units flip without a draw, and the byte and bit modes differ only in the content fingerprint `tyf`.
 
 ### C11 and C12
 
