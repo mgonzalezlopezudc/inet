@@ -419,7 +419,7 @@ Verification: the run of the C10 module test with separate parts and a late inte
 
 ### C3
 
-Status: open. Purpose and scope: `StochasticErrorModel::initialize()` and `Ieee80211BerTableErrorModel::initialize()` do not call `ErrorModelBase::initialize()`, so `corruptionMode`, `snirMode`, and `snirOffset` stay undefined. The commit adds the call. The whole-part rate of the BER table model reads the data length from the bit model of the transmission, and a packet-level IEEE 802.11 transmission has none. The model now reads the PSDU length from the length field of the PHY header, as `Ieee80211ErrorModelBase` does. No example, showcase, or test uses these two models now. The open [PR #1431](https://github.com/inet-framework/inet/pull/1431) repairs the same initialization of `StochasticErrorModel`; if it lands first, this commit keeps only the part of the BER table model.
+Status: done. Purpose and scope: `StochasticErrorModel::initialize()` and `Ieee80211BerTableErrorModel::initialize()` do not call `ErrorModelBase::initialize()`, so `corruptionMode`, `snirMode`, and `snirOffset` stay undefined. The commit adds the call. The whole-part rate of the BER table model reads the data length from the bit model of the transmission, and a packet-level IEEE 802.11 transmission has none. The model now reads the PSDU length from the length field of the PHY header, as `Ieee80211ErrorModelBase` does. No example, showcase, or test uses these two models now. The open [PR #1431](https://github.com/inet-framework/inet/pull/1431) repairs the same initialization of `StochasticErrorModel`; if it lands first, this commit keeps only the part of the BER table model.
 
 Verification: the C10 module test runs the BER table model.
 
