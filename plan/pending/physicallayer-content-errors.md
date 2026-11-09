@@ -407,7 +407,7 @@ C0 adds this plan. It changes no source.
 
 ### C1
 
-Status: open. Purpose and scope: `AckingMac::handleLowerPacket()` reads its MAC header with `peekAtFront()` before it checks `hasBitError()`. If the header chunk is incorrect, the peek stops the simulation with "Returning an incorrect chunk is not allowed". The commit moves the check above the read. The other wireless MACs already check first.
+Status: done. Purpose and scope: `AckingMac::handleLowerPacket()` reads its MAC header with `peekAtFront()` before it checks `hasBitError()`. If the header chunk is incorrect, the peek stops the simulation with "Returning an incorrect chunk is not allowed". The commit moves the check above the read. The other wireless MACs already check first.
 
 Verification: the AckingMac module tests, and the run of the C10 module test in which the MAC header chunk is incorrect.
 
