@@ -1,0 +1,3 @@
+The SNIR of a time interval
+
+ISnir has three new pure virtual functions: getMin(startTime, endTime), getMax(startTime, endTime), and getMean(startTime, endTime). They return the SNIR of a time interval inside the reception. A model of a part of the signal, for example of one chunk of the data, can thus use the SNIR of the time of that part. ScalarSnir, DimensionalSnir, and UnitDiskSnir implement them, and the whole-reception values do not change. An ISnir implementation outside INET must add the three functions.

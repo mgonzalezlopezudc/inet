@@ -431,7 +431,7 @@ Verification: the IEEE 802.11 module tests, and the full fingerprint run, which 
 
 ### C5
 
-Status: open. Purpose and scope: the interval overloads of `ISnir` in `ScalarSnir`, `DimensionalSnir`, and `UnitDiskSnir`. The whole-reception getters call the interval functions with the limits of the reception and keep their cached values. `DimensionalSnir` keeps its SNIR function, so that many interval queries do not divide the functions again. `ScalarSnir` and `DimensionalSnir` also keep the limits of the last interval query, with its minimum, maximum, and mean, each computed when first asked (section 4.8). Release note `doc/whatsnew/incompatible/physicallayer-snir-interval.txt` and the migration guide section.
+Status: done. Purpose and scope: the interval overloads of `ISnir` in `ScalarSnir`, `DimensionalSnir`, and `UnitDiskSnir`. The whole-reception getters call the interval functions with the limits of the reception and keep their cached values. `DimensionalSnir` keeps its SNIR function, so that many interval queries do not divide the functions again. `ScalarSnir` and `DimensionalSnir` also keep the limits of the last interval query, with its minimum, maximum, and mean, each computed when first asked (section 4.8). Release note `doc/whatsnew/incompatible/physicallayer-snir-interval.txt` and the migration guide section.
 
 Verification: the fingerprints must keep all values. A unit test would need a stub transmission and a stub reception, because `ReceptionBase` reads its part durations from a transmission. Thus the module tests of C10 check the interval values.
 

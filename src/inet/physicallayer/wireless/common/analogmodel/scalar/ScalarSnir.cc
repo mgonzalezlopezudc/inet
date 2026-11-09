@@ -32,31 +32,66 @@ std::ostream& ScalarSnir::printToStream(std::ostream& stream, int level, int evF
     return stream;
 }
 
-double ScalarSnir::computeMin() const
+double ScalarSnir::computeMin(simtime_t startTime, simtime_t endTime) const
 {
     auto scalarSignalAnalogModel = check_and_cast<const ScalarReceptionAnalogModel *>(reception->getAnalogModel());
     const ScalarNoise *scalarNoise = check_and_cast<const ScalarNoise *>(noise);
-    return (scalarSignalAnalogModel->getPower() / scalarNoise->computeMaxPower(reception->getStartTime(), reception->getEndTime())).get<unit>();
+    return (scalarSignalAnalogModel->getPower() / scalarNoise->computeMaxPower(startTime, endTime)).get<unit>();
 }
 
-double ScalarSnir::computeMax() const
+double ScalarSnir::computeMax(simtime_t startTime, simtime_t endTime) const
 {
     auto scalarSignalAnalogModel = check_and_cast<const ScalarReceptionAnalogModel *>(reception->getAnalogModel());
     const ScalarNoise *scalarNoise = check_and_cast<const ScalarNoise *>(noise);
-    return (scalarSignalAnalogModel->getPower() / scalarNoise->computeMinPower(reception->getStartTime(), reception->getEndTime())).get<unit>();
+    return (scalarSignalAnalogModel->getPower() / scalarNoise->computeMinPower(startTime, endTime)).get<unit>();
+}
+
+void ScalarSnir::updateLastInterval(simtime_t startTime, simtime_t endTime) const
+{
+    if (startTime != lastStartTime || endTime != lastEndTime) {
+        lastStartTime = startTime;
+        lastEndTime = endTime;
+        lastMinSNIR = NaN;
+        lastMaxSNIR = NaN;
+        lastMeanSNIR = NaN;
+    }
+}
+
+double ScalarSnir::getMin(simtime_t startTime, simtime_t endTime) const
+{
+    updateLastInterval(startTime, endTime);
+    if (std::isnan(lastMinSNIR))
+        lastMinSNIR = computeMin(startTime, endTime);
+    return lastMinSNIR;
+}
+
+double ScalarSnir::getMax(simtime_t startTime, simtime_t endTime) const
+{
+    updateLastInterval(startTime, endTime);
+    if (std::isnan(lastMaxSNIR))
+        lastMaxSNIR = computeMax(startTime, endTime);
+    return lastMaxSNIR;
+}
+
+double ScalarSnir::getMean(simtime_t startTime, simtime_t endTime) const
+{
+    updateLastInterval(startTime, endTime);
+    if (std::isnan(lastMeanSNIR))
+        lastMeanSNIR = computeMean(startTime, endTime);
+    return lastMeanSNIR;
 }
 
 double ScalarSnir::getMin() const
 {
     if (std::isnan(minSNIR))
-        minSNIR = computeMin();
+        minSNIR = computeMin(reception->getStartTime(), reception->getEndTime());
     return minSNIR;
 }
 
 double ScalarSnir::getMax() const
 {
     if (std::isnan(maxSNIR))
-        maxSNIR = computeMax();
+        maxSNIR = computeMax(reception->getStartTime(), reception->getEndTime());
     return maxSNIR;
 }
 
