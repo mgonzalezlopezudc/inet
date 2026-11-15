@@ -1,0 +1,202 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+//
+#include "inet/applications/ieee802154/Ieee802154ManagementApp.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+
+namespace inet {
+
+Define_Module(Ieee802154ManagementApp);
+
+Ieee802154ManagementApp::~Ieee802154ManagementApp() { cancelAndDelete(actionTimer); }
+
+void Ieee802154ManagementApp::initialize()
+{
+    service.reference(this,"serviceModule",true);
+    management.reference(this,"serviceModule",true);
+    coordinator = par("coordinator");
+    if (par("panId").intValue() < 0 || par("panId").intValue() >= 65535 ||
+            par("channelNumber").intValue() < 11 || par("channelNumber").intValue() > 26 || par("cycles").intValue() < 1)
+        throw cRuntimeError("Invalid management example PAN/channel/cycle configuration");
+    actionTimer = new cMessage("actionTimer");
+    action = coordinator ? Action::START : Action::RESET;
+    scheduleAt(SimTime(coordinator ? 1 : 2,SIMTIME_MS),actionTimer);
+}
+
+uint64_t Ieee802154ManagementApp::allocateId()
+{
+    if (nextId == UINT64_MAX)
+        throw cRuntimeError("Native service request IDs exhausted");
+    return ++nextId;
+}
+
+void Ieee802154ManagementApp::accepted(Ieee802154MacServiceAdmission admission) const
+{
+    if (admission != Ieee802154MacServiceAdmission::ACCEPTED)
+        throw cRuntimeError("Management example request refused (%d)",int(admission));
+}
+
+void Ieee802154ManagementApp::succeeded(const Ieee802154MacServiceResult& result) const
+{
+    if (result != Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS))
+        throw cRuntimeError("Management example primitive did not succeed");
+}
+
+physicallayer::Ieee802154PhyChannel Ieee802154ManagementApp::channel() const
+{
+    return {physicallayer::Ieee802154PhyChannel::Phy::O_QPSK,physicallayer::Ieee802154PhyChannel::Band::MHZ_2450,int(par("channelNumber"))};
+}
+
+void Ieee802154ManagementApp::set(const char *name, const Ieee802154MacPibValue& value)
+{
+    accepted(service->submitSet(allocateId(),{name,value}));
+}
+
+void Ieee802154ManagementApp::handleMessage(cMessage *message)
+{
+    if (message != actionTimer)
+        throw cRuntimeError("Unexpected management example input");
+    if (action == Action::START) {
+        set("macMinBe",uint64_t(0));
+        set("macAssociationPermit",true);
+        accepted(management->submitStart(allocateId(),{uint16_t(par("panId")),channel()}));
+    }
+    else if (action == Action::RESET) {
+        selectedPan.reset();
+        accepted(service->submitReset(allocateId(),{true}));
+    }
+    else
+        accepted(management->submitPoll(allocateId(),{selectedPan->coordinatorPanId,selectedPan->coordinatorAddress}));
+}
+
+void Ieee802154ManagementApp::handleResetConfirm(uint64_t, const Ieee802154MacResetConfirm& confirm)
+{
+    Enter_Method("handleResetConfirm");
+    succeeded(confirm.result);
+    set("macMinBe",uint64_t(0));
+    set("macResponseWaitTime",uint64_t(2));
+    Ieee802154MacScanRequest request;
+    request.type = Ieee802154ScanType::ACTIVE;
+    auto first = channel(); first.channel = 11;
+    request.channels = {first,channel()};
+    request.duration = 256;
+    accepted(management->submitScan(allocateId(),request));
+}
+
+void Ieee802154ManagementApp::handleStartConfirm(uint64_t, const Ieee802154MacStartConfirm& confirm)
+{
+    Enter_Method("handleStartConfirm"); succeeded(confirm.result);
+}
+
+void Ieee802154ManagementApp::handleScanConfirm(uint64_t, const Ieee802154MacScanConfirm& confirm)
+{
+    Enter_Method("handleScanConfirm"); succeeded(confirm.result);
+    for (const auto& descriptor : confirm.panDescriptors)
+        if (descriptor.coordinatorPanId == par("panId").intValue() && descriptor.contentAvailable &&
+                descriptor.securityStatus == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS)) {
+            selectedPan = descriptor;
+            break;
+        }
+    if (!selectedPan)
+        throw cRuntimeError("Requested PAN not discovered");
+    accepted(management->submitAssociate(allocateId(),{selectedPan->channel,selectedPan->coordinatorPanId,selectedPan->coordinatorAddress}));
+}
+
+void Ieee802154ManagementApp::handleAssociateIndication(const Ieee802154MacAssociateIndication& indication)
+{
+    Enter_Method("handleAssociateIndication");
+    auto found = allocations.find(indication.deviceAddress);
+    if (found == allocations.end()) {
+        if (nextShortAddress >= 0xfffe)
+            throw cRuntimeError("Example short-address allocation exhausted");
+        found = allocations.emplace(indication.deviceAddress,nextShortAddress++).first;
+    }
+    accepted(management->submitAssociateResponse(allocateId(),{indication.deviceAddress,found->second,0}));
+}
+
+void Ieee802154ManagementApp::handleAssociateResponseStatus(uint64_t, const Ieee802154MacAssociateResponseStatus& status)
+{
+    Enter_Method("handleAssociateResponseStatus"); succeeded(status.result);
+}
+
+void Ieee802154ManagementApp::sendData(const Ieee802154Address& destination, uint16_t panId, bool indirect)
+{
+    auto packet = new Packet(indirect ? "sleeping device reply" : "associated device DATA");
+    packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{uint8_t(completedCycles),0x42}));
+    Ieee802154MacDataRequest request;
+    request.destinationAddress = destination; request.destinationPanId = panId;
+    request.sourceAddressMode = coordinator ? Ieee802154Address::AddressType::EXTENDED : Ieee802154Address::AddressType::SHORT;
+    request.ackTx = true; request.indirectTx = indirect;
+    auto admission = service->submitData(allocateId(),packet,request);
+    if (admission != Ieee802154MacServiceAdmission::ACCEPTED)
+        delete packet;
+    accepted(admission);
+}
+
+void Ieee802154ManagementApp::handleAssociateConfirm(uint64_t, const Ieee802154MacAssociateConfirm& confirm)
+{
+    Enter_Method("handleAssociateConfirm"); succeeded(confirm.result);
+    if (confirm.associationStatus != 0)
+        throw cRuntimeError("Example association rejected");
+    sendData(selectedPan->coordinatorAddress,selectedPan->coordinatorPanId,false);
+}
+
+void Ieee802154ManagementApp::handleDataConfirm(uint64_t, const Ieee802154MacDataConfirm& confirm)
+{
+    Enter_Method("handleDataConfirm"); succeeded(confirm.result); confirmedMsdus++;
+    if (!coordinator) {
+        action = Action::POLL;
+        scheduleAfter(SimTime(5,SIMTIME_MS),actionTimer);
+    }
+}
+
+void Ieee802154ManagementApp::handleDataIndication(Packet *packet, const Ieee802154MacDataIndication& indication)
+{
+    Enter_Method("handleDataIndication"); take(packet); receivedMsdus++; delete packet;
+    if (coordinator)
+        sendData(indication.sourceAddress,indication.effectiveSourcePanId.value(),true);
+}
+
+void Ieee802154ManagementApp::handlePollConfirm(uint64_t, const Ieee802154MacPollConfirm& confirm)
+{
+    Enter_Method("handlePollConfirm"); succeeded(confirm.result);
+    accepted(management->submitDisassociate(allocateId(),{selectedPan->coordinatorPanId,selectedPan->coordinatorAddress,2,false}));
+}
+
+void Ieee802154ManagementApp::handleDisassociateConfirm(uint64_t, const Ieee802154MacDisassociateConfirm& confirm)
+{
+    Enter_Method("handleDisassociateConfirm"); succeeded(confirm.result); completedCycles++;
+    EV_INFO << "Managed cycle " << completedCycles << " completed with " << receivedMsdus << " received replies.\n";
+    if (completedCycles < par("cycles").intValue()) {
+        action = Action::RESET;
+        scheduleAfter(SimTime(1,SIMTIME_MS),actionTimer);
+    }
+}
+
+void Ieee802154ManagementApp::handleDisassociateIndication(const Ieee802154MacDisassociateIndication& indication)
+{
+    Enter_Method("handleDisassociateIndication"); allocations.erase(indication.deviceAddress);
+}
+
+void Ieee802154ManagementApp::finish()
+{
+    recordScalar("completedCycles",completedCycles);
+    recordScalar("receivedMsdus",receivedMsdus);
+    recordScalar("confirmedMsdus",confirmedMsdus);
+}
+
+void Ieee802154ManagementApp::handleSetConfirm(uint64_t, const Ieee802154MacSetConfirm& confirm) { Enter_Method("handleSetConfirm"); succeeded(confirm.result); }
+void Ieee802154ManagementApp::handleGetConfirm(uint64_t, const Ieee802154MacGetConfirm&) { throw cRuntimeError("Example did not issue GET"); }
+void Ieee802154ManagementApp::handlePurgeConfirm(uint64_t, const Ieee802154MacPurgeConfirm&) { throw cRuntimeError("Example did not issue PURGE"); }
+void Ieee802154ManagementApp::handleBeaconNotifyIndication(const Ieee802154PanDescriptor&) { Enter_Method("handleBeaconNotifyIndication"); }
+void Ieee802154ManagementApp::handleBeaconConfirm(uint64_t, const Ieee802154MacBeaconConfirm&) { throw cRuntimeError("Example did not issue BEACON"); }
+void Ieee802154ManagementApp::handleBeaconRequestIndication(const Ieee802154MacBeaconRequestIndication&) { Enter_Method("handleBeaconRequestIndication"); }
+void Ieee802154ManagementApp::handleOrphanIndication(const Ieee802154MacOrphanIndication&) { Enter_Method("handleOrphanIndication"); }
+void Ieee802154ManagementApp::handleOrphanResponseStatus(uint64_t, const Ieee802154MacOrphanResponseStatus&) { throw cRuntimeError("Example did not issue ORPHAN response"); }
+void Ieee802154ManagementApp::handleSyncLossIndication(const Ieee802154MacSyncLossIndication&) { Enter_Method("handleSyncLossIndication"); }
+void Ieee802154ManagementApp::handleRxEnableConfirm(uint64_t, const Ieee802154MacRxEnableConfirm&) { throw cRuntimeError("Example did not issue RX-ENABLE"); }
+void Ieee802154ManagementApp::handleRxEnableIndication(const Ieee802154MacRxEnableIndication&) { Enter_Method("handleRxEnableIndication"); }
+void Ieee802154ManagementApp::handlePromiscuousIndication(Packet *packet, const Ieee802154MacPromiscuousIndication&) { Enter_Method("handlePromiscuousIndication"); take(packet); delete packet; }
+void Ieee802154ManagementApp::handleCommStatusIndication(Packet *packet, const Ieee802154MacCommStatusIndication&) { Enter_Method("handleCommStatusIndication"); if (packet) { take(packet); delete packet; } }
+
+} // namespace inet

@@ -1,0 +1,3 @@
+Native managed IEEE 802.15.4 PAN example
+
+Added a native example that selects a coordinator, associates, exchanges direct and polled data, leaves and rejoins using full EUI-64 identities.

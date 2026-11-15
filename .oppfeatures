@@ -504,12 +504,13 @@
     <feature
         id = "Ieee802154"
         name = "IEEE 802.15.4"
-        description = "Provides IEEE 802.15.4 Narrowband and Ultra-Wideband NICs."
+        description = "Provides native IEEE 802.15.4 O-QPSK services, a management example client, and retained legacy narrowband/UWB NICs."
         initiallyEnabled = "true"
         requires = "AckingMac PhysicalLayerWirelessCommon"
         recommended = "Mobility"
         labels = "nic wireless"
         nedPackages = "
+                       inet.applications.ieee802154
                        inet.linklayer.ieee802154
                        inet.physicallayer.wireless.ieee802154
                       "
