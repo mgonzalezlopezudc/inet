@@ -1,0 +1,207 @@
+{
+  "scope": "P10 native M=0 host discovery, SLAAC and ARO registration client; common native NS responder prerequisite",
+  "cwd": "/home/miguel/workspace/inet-6lowpan-standard",
+  "mode": "debug",
+  "seed": 0,
+  "full_p10_complete": false,
+  "source_sha256": {
+    "src/inet/linklayer/lowpan/LowpanHostRegistration.h": "e7a9cc9e202252fdf6e4d2a6c16ef6979ef8352eaf57521a5b418ef38d8236a5",
+    "src/inet/linklayer/lowpan/LowpanHostRegistration.cc": "f33dbbdd5ff48eb7345386ce8a8e93f8747812b9dfbca89317be32b59390d8b0",
+    "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.h": "21e0a2afed80faee8fd2a333c65b8a6fb472fbc5c5b52dd199d68528410b0951",
+    "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.cc": "f80bc34de27a2df4d631efc55f77f82c19d8020748c270f0557081addd546818",
+    "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.ned": "29dc9736094dea669ec70aebc4064d1f119dd53fedbdd1b2c21eaa67ebef0a4e",
+    "src/inet/linklayer/lowpan/LowpanIpv6.h": "f56e34972a53d5d3cba41117985385081682ba4b49ce874d04a015c5a83ffcfe",
+    "src/inet/linklayer/lowpan/LowpanIpv6.cc": "033582019e30383864263097f20a354460837e91d44f059c359342b857fee8c1",
+    "src/inet/linklayer/lowpan/LowpanIpv6NetworkLayer.ned": "57bec791cb6fa61e2db38b55b84bb380c5296c7d2bffc61083614cea4bcf4682",
+    "src/inet/linklayer/lowpan/LowpanLayer.ned": "2946d2f110ed20e081d173c3657f799e1117efe2ce89badcd7b81917cd795332",
+    "tests/protocol/6lowpan/LowpanHostRegistration.test": "2aeef9549429467f9cc407e942ce3837669eea317da7f961cf1db837fdc33da3",
+    "tests/protocol/6lowpan/host-registration.md": "361aab686cdd1be81020b80aa167b8a8119c7dd837840cd7830676ef2b5783f2",
+    "tests/protocol/6lowpan/LowpanNeighborRegistration.test": "fed569edaefb51549b18c43fb76f58abb88535a72b259f33e090278a11145968",
+    "tests/protocol/6lowpan/neighbor-registration.md": "be882bca1ce5fad85989ab5ef85f6d527e4ea257a33c68ec555f33c739765823",
+    "doc/whatsnew/compatible/lowpan-host-registration.txt": "700611bf811938fe516f74a31058310fb0a15b2084b7e5672a58c6b1c5447998",
+    "doc/whatsnew/compatible/lowpan-neighbor-solicitation.txt": "39b880b90873184d2b15b54841935a73c1851fe1327d8e8190873c875991c42e"
+  },
+  "checks": [
+    {
+      "command": [
+        "make",
+        "MODE=debug",
+        "-j8"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-p10-stage2-20261115/host-build.log"
+    },
+    {
+      "command": [
+        "make",
+        "MODE=release",
+        "-j8"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-p10-stage2-20261115/host-release-build.log"
+    },
+    {
+      "command": [
+        "opp_run_protocol_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-w",
+        "^tests/protocol/6lowpan$",
+        "-f",
+        "Lowpan(HostRegistration|RouterDiscovery|NeighborRegistration)\\.test$"
+      ],
+      "exit_code": 0,
+      "fixtures": 3,
+      "runs": 8,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-p10-stage2-20261115/host-protocol.log"
+    },
+    {
+      "command": [
+        "opp_run_module_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-f",
+        "Lowpan(MixedNeighbourDiscovery|NativeLifecycle|NativeRouteOver|DynamicBindings|OwnedBindings)\\.test$"
+      ],
+      "exit_code": 0,
+      "fixtures": 5,
+      "runs": 6,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-p10-stage2-20261115/host-module.log"
+    },
+    {
+      "command": [
+        "doc/project/enforcement/check-architecture.sh",
+        "src/inet/linklayer/lowpan"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-p10-stage2-20261115/host-architecture.log"
+    },
+    {
+      "command": [
+        "doc/project/enforcement/check-naming.sh",
+        "src/inet/linklayer/lowpan"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-p10-stage2-20261115/host-naming.log"
+    }
+  ],
+  "host_observations": [
+    {
+      "scenario": 0,
+      "RS": 3,
+      "NS": 12,
+      "RA": 3,
+      "NA": 14,
+      "accepted": 9,
+      "discovered": 2,
+      "guard": 8,
+      "unrouted": 1,
+      "data": 4,
+      "alias": 1
+    },
+    {
+      "scenario": 1,
+      "RS": 8,
+      "NS": 16,
+      "RA": 8,
+      "NA": 16,
+      "accepted": 8,
+      "discovered": 8,
+      "guard": 2,
+      "unrouted": 2,
+      "data": 0,
+      "alias": 0
+    },
+    {
+      "scenario": 2,
+      "RS": 2,
+      "NS": 4,
+      "RA": 2,
+      "NA": 4,
+      "accepted": 3,
+      "discovered": 2,
+      "guard": 2,
+      "unrouted": 2,
+      "data": 0,
+      "alias": 0
+    },
+    {
+      "scenario": 3,
+      "RS": 5,
+      "NS": 3,
+      "RA": 1,
+      "NA": 0,
+      "accepted": 0,
+      "discovered": 1,
+      "guard": 2,
+      "unrouted": 2,
+      "data": 0,
+      "alias": 0
+    },
+    {
+      "scenario": 4,
+      "RS": 5,
+      "NS": 0,
+      "RA": 4,
+      "NA": 0,
+      "accepted": 0,
+      "discovered": 0,
+      "guard": 2,
+      "unrouted": 2,
+      "data": 0,
+      "alias": 0
+    },
+    {
+      "scenario": 5,
+      "RS": 5,
+      "NS": 4,
+      "RA": 3,
+      "NA": 8,
+      "accepted": 8,
+      "discovered": 3,
+      "guard": 2,
+      "unrouted": 1,
+      "data": 0,
+      "alias": 0
+    }
+  ],
+  "asserted_edges": [
+    "ordinary data before registration is dropped, including no-default-route handoff, with no queued replay",
+    "finite manual outbound and inbound exact-deadline checks run before the owning expiry timer",
+    "valid ordinary alias permits local delivery; tentative ordinary/native aliases do not",
+    "native ordinary zero-option unicast NS returns real radio NA; invalid hop/checksum/target/tentative/expired target produce no NA",
+    "RFC4862 two-hour valid-lifetime branches, preferred update, manual-address preservation and large finite wire lifetime",
+    "runtime address assignment immediately registers; late base-ARO error after expiry cannot affect following address",
+    "success and duplicate NA at pending-address exact deadline cannot emit expired success or evict still-useful router",
+    "refresh, bounded three-attempt failure, cache-full, duplicate rejection, M=1 unsupported, crash and restart",
+    "unknown lifetime-zero RA restarts receiving-interface discovery while another interface retains a usable router"
+  ],
+  "router_prerequisite_assertions": {
+    "injected_frames": 21,
+    "aro_radio_replies": 11,
+    "ordinary_unicast_radio_replies": 2,
+    "dad_broadcast_peer_receptions": 2,
+    "malformed_drops": 6,
+    "registration_counts_unchanged_by_ordinary_ns": true
+  },
+  "not_run": [
+    "release-mode behavioral tests",
+    "feature matrix"
+  ],
+  "remaining_scope": [
+    "6CO/ABRO distribution",
+    "DAR/DAC policy and routed duplicate checking",
+    "DHCPv6 integration",
+    "multi-router interoperability"
+  ]
+}
