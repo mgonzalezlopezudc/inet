@@ -56,6 +56,12 @@ The [host record](p10-host-verification.json) retains fifteen exact source/test/
 
 The [static Ethernet fixture](../../../../../tests/protocol/6lowpan/nd-wire-validation.md) needs no authority helper. Its unchanged inputs fail against the source-equivalent parent at event 7, time 0.01000789 seconds, with the strict-peek exception. Applying only the guard passes all eight controls: five malformed drops, two unsupported valid DAR drops and one ordinary NA. The [standalone comparison record](p10-nd-wire-validation-verification.json) retains both runs, matching debug/release builds, four fixed debug protocol fixtures/nine runs, raw hashes and clean independent review. Release behavioral assertions and the combined feature matrix remain unexecuted.
 
+## P10 — Routed registration authority
+
+The ordinary-interface `borderRouter` authority owns a bounded IPv6-address/owner/lifetime table independently of native neighbor bindings. Literal DARs travel through an Ethernet transit router; fresh DACs return through normal IPv6 routing with Hop Limit 64. Validation accepts the pinned compatible eight-byte Code-one form, ignores base reserved/TID/status input, checks original wire checksums and option bounds, and requires a valid local non-link-local response source. Conflict, full-table and removal outcomes preserve other owners. Exact expiry and refresh are enforced before lookup, independently of timer order.
+
+The [authority fixture](../../../../../tests/protocol/6lowpan/registration-authority.md) passes both scheduling-priority runs. Each checks twenty-nine controls, twenty-eight Ethernet traversals, twenty-two DACs and five ND drops, including a late competing owner after the original deadline but before a refreshed deadline. The [record](p10-authority-verification.json) retains thirteen source/document hashes, thirty-two runtime hashes, matching debug/release builds, five protocol fixtures/eleven runs and five module fixtures/six runs. Independent source and publication reviews are clean. This authority stage does not yet enable local native border-router admission or a relay's tentative requests; those remain separate work before P10 is complete.
+
 ## Remaining packages
 
 P10–P15 remain in execution order under the completion plan. Optimized/extended ND, mesh-under, paging, virtual fragment forwarding and selective recovery are not inferred from header compression support.

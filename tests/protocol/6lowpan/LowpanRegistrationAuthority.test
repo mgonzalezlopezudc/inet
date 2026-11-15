@@ -1,0 +1,225 @@
+%description:
+Literal DAR crosses an Ethernet transit router to
+an ordinary-interface-only 6LBR, whose routed DAC preserves owner/lifetime fields.
+Owner conflict, capacity, removal, compatibility, expiry and lifecycle are checked.
+The two runs deliver the exact-expiry probe before and after the expiry timer.
+
+%extraargs: -r 0..1
+
+%file: AuthorityCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/MemoryOutputStream.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/checksum/Checksum.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/common/InterfaceTag_m.h"
+#include "inet/linklayer/common/MacAddressTag_m.h"
+#include "inet/networklayer/common/HopLimitTag_m.h"
+#include "inet/networklayer/common/L3AddressTag_m.h"
+#include "inet/networklayer/contract/IInterfaceTable.h"
+#include "inet/networklayer/icmpv6/Icmpv6.h"
+#include "inet/networklayer/icmpv6/Ipv6NdMessage_m.h"
+#include "inet/networklayer/ipv6/Ipv6Header_m.h"
+#include "inet/networklayer/ipv6/Ipv6RoutingTable.h"
+#include <deque>
+#include <cstdio>
+
+namespace inet::protocoltest {
+class AuthorityCheck : public cSimpleModule, public cListener
+{
+    struct Input {
+        Ipv6Address registered;
+        int owner, lifetime, expectedStatus;
+        int code=0, reserved=0, status=0, ownerLength=8, type=157,hop=64,optionLength=1;
+        bool option=false;
+        bool badChecksum=false, truncated=false, direct=false;
+    };
+    std::vector<Input> inputs;
+    std::deque<Input> expected;
+    cModule *requesterIp=nullptr,*transitIp=nullptr,*authorityIp=nullptr,*authorityNd=nullptr;
+    NetworkInterface *requesterInterface=nullptr,*transitInterface=nullptr,*authorityInterface=nullptr;
+    Ipv6RoutingTable *authorityRoutes=nullptr;
+    int injected=0,ethernetInputs=0,authorityInputs=0,dacProduced=0,dacForwarded=0,dacReceived=0,drops=0;
+    bool boundaryScheduled=false,boundaryReceived=false;
+    simtime_t boundaryTime;
+    Ipv6Address requesterAddress{"2001:db8:1::10"},authorityAddress{"2001:db8:2::20"};
+    Ipv6Address a{"2001:db8:99::a"},b{"2001:db8:99::b"},c{"2001:db8:99::c"},d{"2001:db8:99::d"};
+
+    std::vector<uint8_t> body(const Input& input,bool confirmation=false) const {
+        std::vector<uint8_t> bytes{uint8_t(confirmation?158:input.type),uint8_t(confirmation?0:input.code),0,0,
+            uint8_t(confirmation?input.expectedStatus:input.status),uint8_t(confirmation?0:input.reserved),
+            uint8_t(input.lifetime>>8),uint8_t(input.lifetime)};
+        for (int i=0;i<(confirmation?8:input.ownerLength);i++) bytes.push_back(uint8_t(1+16*(input.owner-1)+i));
+        MemoryOutputStream address;address.writeIpv6Address(input.registered);
+        bytes.insert(bytes.end(),address.getData().begin(),address.getData().end());
+        if (input.option && !confirmation) bytes.insert(bytes.end(),{99,uint8_t(input.optionLength),1,2,3,4,5,6});
+        if (input.truncated && !confirmation) bytes.pop_back();
+        return bytes;
+    }
+    std::vector<uint8_t> checksum(std::vector<uint8_t> bytes,const Ipv6Address& source,const Ipv6Address& destination) const {
+        MemoryOutputStream stream;stream.writeIpv6Address(source);stream.writeIpv6Address(destination);
+        stream.writeUint32Be(bytes.size());stream.writeUint32Be(58);stream.writeBytes(bytes);
+        auto value=internetChecksum(stream.getData());bytes[2]=value>>8;bytes[3]=value;return bytes;
+    }
+    void add(simtime_t time,Input input) {
+        inputs.push_back(input);auto event=new cMessage("authority-input",inputs.size()-1);
+        if (input.direct) event->setSchedulingPriority(par("expiryPriority"));
+        scheduleAt(time,event);
+    }
+    void assertNoDataRoutes() const {
+        for (int i=0;i<authorityRoutes->getNumRoutes();i++) {
+            auto route=authorityRoutes->getRoute(i);
+            if (route->getSource()==authorityNd)
+                ASSERT(route->getPrefixLength()!=128 || (route->getDestPrefix()!=a && route->getDestPrefix()!=b && route->getDestPrefix()!=c && route->getDestPrefix()!=d));
+        }
+        ASSERT(getModuleByPath("^.authority")->par("numWlanInterfaces").intValue()==0);
+    }
+    void inject(const Input& input,int index) {
+        if (input.expectedStatus>=0) expected.push_back(input);
+        auto bytes=checksum(body(input),requesterAddress,authorityAddress);
+        if (input.badChecksum) bytes[2]^=1;
+        std::vector<uint8_t> datagram{0x60,0,0,0,uint8_t(bytes.size()>>8),uint8_t(bytes.size()),58,uint8_t(input.direct?63:input.hop)};
+        MemoryOutputStream addresses;addresses.writeIpv6Address(requesterAddress);addresses.writeIpv6Address(authorityAddress);
+        datagram.insert(datagram.end(),addresses.getData().begin(),addresses.getData().end());datagram.insert(datagram.end(),bytes.begin(),bytes.end());
+        auto packet=new Packet((std::string("authority-dar-")+std::to_string(index)).c_str(),makeShared<BytesChunk>(datagram));
+        packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ipv6);
+        if (input.direct) {
+            packet->setSchedulingPriority(par("expiryPriority"));
+            packet->addTag<InterfaceInd>()->setInterfaceId(authorityInterface->getInterfaceId());
+            sendDirect(packet,authorityIp->gate("queueIn")->getPathStartGate());
+        }
+        else {
+            auto mac=packet->addTag<MacAddressReq>();mac->setSrcAddress(requesterInterface->getMacAddress());mac->setDestAddress(transitInterface->getMacAddress());
+            packet->addTag<InterfaceReq>()->setInterfaceId(requesterInterface->getInterfaceId());
+            // Enter Ethernet encapsulation after IPv6 postrouting, preserving deliberately bad ICMP bytes.
+            sendDirect(packet,getModuleByPath("^.requester.ethernet")->gate("upperLayerIn")->getPathStartGate());
+        }
+        injected++;
+    }
+
+  protected:
+    int numInitStages() const override {return NUM_INIT_STAGES;}
+    void initialize(int stage) override {
+        if (stage!=INITSTAGE_LAST) return;
+        requesterIp=getModuleByPath("^.requester.ipv6.ipv6");transitIp=getModuleByPath("^.transit.ipv6.ipv6");
+        authorityIp=getModuleByPath("^.authority.ipv6.ipv6");authorityNd=getModuleByPath("^.authority.ipv6.neighbourDiscovery");
+        requesterInterface=check_and_cast<NetworkInterface *>(getModuleByPath("^.requester.eth[0]"));
+        transitInterface=check_and_cast<NetworkInterface *>(getModuleByPath("^.transit.eth[0]"));
+        authorityInterface=check_and_cast<NetworkInterface *>(getModuleByPath("^.authority.eth[0]"));
+        authorityRoutes=check_and_cast<Ipv6RoutingTable *>(getModuleByPath("^.authority.ipv6.routingTable"));
+        for (auto module : {requesterIp,transitIp,authorityIp}) module->subscribe("packetReceivedFromLower",this);
+        authorityIp->subscribe("packetReceivedFromUpper",this);authorityNd->subscribe("packetDropped",this);
+        add(SimTime(1),{a,1,1,0});add(SimTime(2),{a,1,2,0});add(SimTime(3),{a,2,2,1});
+        add(SimTime(4),{b,2,1,2});add(SimTime(5),{a,2,0,1});add(SimTime(6),{a,1,0,0});
+        add(SimTime(7),{b,2,1,0});Input compatible{b,2,1,0};compatible.code=1;compatible.reserved=0x7b;compatible.hop=2;compatible.option=true;add(SimTime(8),compatible);
+        add(SimTime(9),{b,1,1,1});add(SimTime(10),{b,2,0,0});add(SimTime(11),{c,1,1,0});
+        Input malformed{c,1,1,-1};malformed.badChecksum=true;add(SimTime(12),malformed);
+        malformed.badChecksum=false;malformed.code=5;add(SimTime(13),malformed);
+        malformed.code=0;malformed.truncated=true;add(SimTime(14),malformed);
+        malformed.truncated=false;malformed.registered=Ipv6Address::ALL_NODES_2;add(SimTime(15),malformed);
+        Input ignoredStatus{c,2,1,1};ignoredStatus.status=7;add(SimTime(16),ignoredStatus);
+        malformed.registered=c;
+        malformed.status=0;malformed.code=2;malformed.ownerLength=16;add(SimTime(17),malformed);
+        malformed.code=0;malformed.ownerLength=8;malformed.type=158;malformed.lifetime=0;add(SimTime(18),malformed);
+        malformed.type=157;malformed.lifetime=1;malformed.option=true;malformed.optionLength=0;add(SimTime(18500,SIMTIME_MS),malformed);
+        add(SimTime(19),{c,2,1,1});add(SimTime(20),{d,3,1,2});
+        add(SimTime(72200,SIMTIME_MS),{d,4,1,0});add(SimTime(72600,SIMTIME_MS),{d,5,1,0});
+        add(SimTime(73),{d,5,1,0});add(SimTime(132800,SIMTIME_MS),{d,6,1,1});
+        assertNoDataRoutes();
+    }
+    void receiveSignal(cComponent *component,simsignal_t signal,cObject *object,cObject *) override {
+        Enter_Method_Silent();
+        if (signal==registerSignal("packetDropped")) {drops++;return;}
+        auto packet=check_and_cast<Packet *>(object);
+        if (signal==registerSignal("packetReceivedFromUpper")) {
+            auto bytes=packet->peekDataAsBytes()->getBytes();if (bytes.empty() || bytes[0]!=158) return;
+            auto request=packet->getTag<L3AddressReq>();ASSERT(request->getSrcAddress()==L3Address(authorityAddress) && request->getDestAddress()==L3Address(requesterAddress));
+            ASSERT(packet->getTag<HopLimitReq>()->getHopLimit()==64 && packet->getTag<PacketProtocolTag>()->getProtocol()==&Protocol::icmpv6);
+            ASSERT(!packet->findTag<InterfaceInd>() && !packet->findTag<InterfaceReq>());dacProduced++;assertNoDataRoutes();
+            // This is the same-time local send event after table processing, before any Ethernet propagation.
+            if (!boundaryScheduled && bytes.size()==32 && bytes[4]==0 && bytes[6]==0 && bytes[7]==1 &&
+                    packet->peekAtFront<Ipv6DuplicateAddressHeader>()->getRegisteredAddress()==c) {
+                ASSERT(simTime()>=SimTime(11) && simTime()<SimTime(11010,SIMTIME_MS));
+                boundaryScheduled=true;boundaryTime=simTime()+SimTime(60);Input probe{c,2,1,0};probe.direct=true;add(boundaryTime,probe);
+                add(boundaryTime+SimTime(100,SIMTIME_MS),{c,1,1,1});add(boundaryTime+SimTime(200,SIMTIME_MS),{c,2,0,0});
+                add(boundaryTime+SimTime(300,SIMTIME_MS),{d,3,1,0});
+            }
+            return;
+        }
+        auto ip=packet->peekAtFront<Ipv6Header>();if (ip->getProtocolId()!=IP_PROT_IPv6_ICMP) return;
+        auto type=packet->peekDataAt<BytesChunk>(ip->getChunkLength(),B(1))->getBytes()[0];if (type!=157 && type!=158) return;
+        if (ip->getSrcAddress()==requesterAddress) {
+            int index=-1;ASSERT(std::sscanf(packet->getName(),"authority-dar-%d",&index)==1);const auto& input=inputs.at(index);
+            if (component==transitIp) {ASSERT(ip->getHopLimit()==input.hop);ethernetInputs++;}
+            else if (component==authorityIp) {ASSERT(ip->getHopLimit()==input.hop-1);authorityInputs++;assertNoDataRoutes();}
+            return;
+        }
+        ASSERT(type==158 && ip->getSrcAddress()==authorityAddress && ip->getDestAddress()==requesterAddress);
+        if (component==transitIp) {ASSERT(ip->getHopLimit()==64);dacForwarded++;return;}
+        ASSERT(component==requesterIp && ip->getHopLimit()==63 && !expected.empty());
+        auto wanted=expected.front();expected.pop_front();auto bytes=packet->peekDataAt<BytesChunk>(B(40),B(32))->getBytes();
+        ASSERT(ip->getPayloadLength()==B(32) && bytes==checksum(body(wanted,true),authorityAddress,requesterAddress));
+        Packet copy(*packet);copy.popAtFront<Ipv6Header>();auto addresses=copy.addTagIfAbsent<L3AddressInd>();addresses->setSrcAddress(authorityAddress);addresses->setDestAddress(requesterAddress);
+        ASSERT(Icmpv6::verifyChecksum(&copy) && !packet->findTag<InterfaceReq>());
+        if (wanted.direct) {ASSERT(simTime()>=boundaryTime && simTime()<boundaryTime+SimTime(10,SIMTIME_MS));boundaryReceived=true;}
+        dacReceived++;assertNoDataRoutes();
+    }
+    void handleMessage(cMessage *event) override {int index=event->getKind();delete event;inject(inputs.at(index),index);}
+    void finish() override {
+        ASSERT(injected==29 && ethernetInputs==28 && authorityInputs==29);
+        ASSERT(dacProduced==22 && dacForwarded==22 && dacReceived==22 && expected.empty() && boundaryReceived);
+        assertNoDataRoutes();
+        std::cout << "priority=" << par("expiryPriority") << " inputs=" << injected << " ethernet=" << ethernetInputs << " authority=" << authorityInputs
+                  << " DAC=" << dacReceived << " drops=" << drops << '\n';
+        std::cout << "Routed registration authority ownership, wire replies, expiry and lifecycle verified\n";
+    }
+};
+Define_Module(AuthorityCheck);
+}
+
+%file: test.ned
+@namespace(inet::protocoltest);
+import inet.common.scenario.ScenarioManager;
+import inet.networklayer.configurator.ipv6.Ipv6NetworkConfigurator;
+import inet.node.ethernet.Eth100M;
+import inet.node.inet.Router;
+import inet.node.inet.StandardHost;
+simple AuthorityCheck { parameters: int expiryPriority; }
+network AuthorityNetwork {
+    submodules:
+        configurator: Ipv6NetworkConfigurator;
+        scenarioManager: ScenarioManager;
+        requester: StandardHost;
+        transit: Router;
+        authority: StandardHost;
+        check: AuthorityCheck;
+    connections:
+        requester.ethg++ <--> Eth100M <--> transit.ethg++;
+        transit.ethg++ <--> Eth100M <--> authority.ethg++;
+}
+
+%inifile: omnetpp.ini
+[General]
+network=AuthorityNetwork
+sim-time-limit=134s
+seed-set=0
+*.check.expiryPriority=${priority=-10,10}
+**.hasIpv4=false
+**.hasIpv6=true
+*.authority.hasStatus=true
+*.authority.forwarding=true
+*.authority.numWlanInterfaces=0
+*.authority.ipv6.typename="LowpanIpv6NetworkLayer"
+*.authority.ipv6.neighbourDiscovery.nativeNdRole="borderRouter"
+*.authority.ipv6.neighbourDiscovery.maxDuplicateAddressEntries=1
+**.ipv6.configurator.networkConfiguratorModule="configurator"
+**.ipv6.neighbourDiscovery.hostBootupTime=0s
+**.ipv6.neighbourDiscovery.routerBootupTime=0s
+**.ipv6.neighbourDiscovery.dupAddrDetectTransmits=0
+**.ipv6.icmpv6.checksumMode="computed"
+*.configurator.config=xml("<config><interface hosts='requester' names='eth0' address='2001:db8:1::10'/><interface hosts='transit' names='eth0' address='2001:db8:1::1'/><interface hosts='transit' names='eth1' address='2001:db8:2::1'/><interface hosts='authority' names='eth0' address='2001:db8:2::20'/></config>")
+*.scenarioManager.script=xml("<scenario><at t='72'><crash module='authority'/></at><at t='72.1'><startup module='authority'/></at><at t='72.4'><shutdown module='authority'/></at><at t='72.5'><startup module='authority'/></at></scenario>")
+
+%contains: stdout
+Routed registration authority ownership, wire replies, expiry and lifecycle verified
