@@ -1,14 +1,14 @@
 # Implement IEEE 802.15.4 in INET
 
-Status: **in progress — operational M1, indirect DATA/commands, START, scan/discovery, association and disassociation pass; receiver control/recovery and release closure remain**. The expanded applicability extraction (87 statements, including two imported address definitions) and nine English checks are
-recorded in the [model coverage ledger](../../doc/project/evidence/model/ieee802154/coverage.md).
-Independent review passed the bounded M1 applicability gate on 2026-09-19. Native integration,
-codec, PHY/access and direct DATA/ACK paths now have executed evidence. The eight-file production
-protocol batch passes 288 simulation runs; see the [current results](../../doc/project/evidence/model/ieee802154/results.md).
-The approved captured-length repair and admitted wire-vector serializer test now pass.
-This does not close release validation: remaining boundary checks, external PHY validation,
-migration and regressions remain open. M2 management services
-and deferred device-profile obligations remain owed. No complete-profile conformance claim is made.
+Status: **M1/M2 implementation and validation complete, 2026-11-15 — steps 0–10 closed**.
+The [current results](../../doc/project/evidence/model/ieee802154/results.md) record
+17 protocol fixtures/564 passing simulations, 14 module fixtures, eight unit fixtures,
+native capture and external PHY checks, managed cycles, migration, stored fingerprints,
+feature isolation and independent lifecycle rereview. All 87 selected statements
+have an explicit bounded verdict; PIB-8 is conditional on an indexed service absent
+from this binding. Inherited serializer/global mechanical failures remain visible.
+No whole-standard or waveform conformance claim is made. Section 6 lists separate
+later feature series. The completed plan remains here until the change lands.
 Prepared against INET `c913a63a8335ca39a319cb2089daf835ea5e95cd` and the local
 IEEE 802.15.4 survey on 2026-09-19.
 
@@ -297,13 +297,16 @@ Dependencies: step 0. Deliver as separate bounded PRs; each builds with the exis
 | 1d: address and payload integration | Compatibility matrix and minimal production interface fixture, including two EUI-64 identities with identical low 48 bits, request/indication identity and configured/opaque delivery. Resolve required adapters and framework gaps. | 1a–1c |
 | 1e: selectable composition | Public type names, paired C++/NED contracts and explicit replacement selection. Prove existing default initialization and replacement contract wiring; isolate old wire assumptions. | 1d |
 
+The following package paragraphs preserve their initial boundary checkpoints;
+steps 2–10 and the final execution record close their then-pending production gates.
+
 Package 1a is complete: the standalone native address value and paired MAC service contracts have
 passing focused unit/module cases and independent reviews. See the
 [value evidence](../../doc/project/evidence/model/ieee802154/results.md#step-1a-native-address-value) and
 [service-contract evidence](../../doc/project/evidence/model/ieee802154/results.md#step-1a-mac-service-contracts).
 The module fixture uses a test-local provider. The selected PIB store is implemented in 1b;
 operational service integration, the real interface fixture (1d), and wire-codec
-checks remain owed.
+checks were still owed at that checkpoint. Those gates are now closed by steps 2–10.
 
 Package 1b is complete at the store boundary: the selected 43-attribute MAC PIB has a passing
 focused unit case and independent review. The
@@ -504,7 +507,8 @@ Dependencies: step 6 and closure of the M2 applicability extension from step 0.
 
 Current execution: selected legacy command and beacon codecs pass independent vector/unit
 checks. The shared immutable pending store is connected to production indirect DATA, POLL,
-PURGE and lifecycle barriers, with 44 passing typed/raw protocol runs. See
+PURGE and lifecycle barriers, with 62 passing indirect typed/raw protocol runs plus
+24 broadcast and 76 receiver-enable runs. See
 [indirect transactions](../../doc/project/evidence/model/ieee802154/indirect-transactions.md),
 [polling](../../doc/project/evidence/model/ieee802154/polling.md) and the
 [managed applicability extension](../../doc/project/evidence/model/ieee802154/managed-applicability.md).
@@ -535,7 +539,7 @@ Dependencies: steps 4, 6 and 7.
   collection/deduplication, cancellation and restoration of radio/PIB state.
 - [x] Add the selected orphan scan/realignment and PAN conflict procedures with their own
   command fields, timeout outcomes and scope. Keep beacon-loss synchronization for B1.
-- [ ] Keep PAN selection policy outside the MAC; expose sufficient descriptors/status to a
+- [x] Keep PAN selection policy outside the MAC; expose sufficient descriptors/status to a
   small management client used by examples and tests.
 
 **Exit:** discovery on multiple configured channels, no coordinator, duplicate responses,
@@ -562,12 +566,12 @@ PIB/state. Complete step 10 again for the expanded M2 claim.
 
 Dependencies: step 6 for M1; step 9 for M2. Prepare fixtures and evidence throughout the series.
 
-- [ ] Close every selected obligation in the coverage ledger with test identity, exact command,
+- [x] Close every selected obligation in the coverage ledger with test identity, exact command,
   result, revision and artifacts; leave unimplemented obligations visible.
-- [ ] Add external validation for timing and the chosen PHY reception/error abstraction.
+- [x] Add external validation for timing and the chosen PHY reception/error abstraction.
   Specify modulation, channel/noise assumptions, frame length, reference source and tolerance
   before comparing results. Correct or narrow unsupported PER claims.
-- [ ] Inventory old consumers and migrate examples deliberately. At M1 cutover, replace the
+- [x] Inventory old consumers and migrate examples deliberately. At M1 cutover, replace the
   default narrowband path only after migration tests pass; document removed/changed parameters,
   addresses, MTU and wire incompatibility. Retire the temporary old narrowband path on a stated
   schedule: retain an explicitly named legacy narrowband type for the first release shipping
@@ -577,9 +581,9 @@ Dependencies: step 6 for M1; step 9 for M2. Prepare fixtures and evidence throug
   wire-format or parameter conversions; document any explicit adapter's limits. This retirement
   policy excludes the separately retained legacy UWB composition. Do not reinterpret old
   captures as standard frames.
-- [ ] Update `.oppfeatures`, examples, user/migration documentation and `WHATSNEW`; distinguish
+- [x] Update `.oppfeatures`, examples, user/migration documentation and `WHATSNEW`; distinguish
   packet-level abstraction from waveform fidelity and M1/M2 from whole-standard support.
-- [ ] Run relevant regression gates and feature-disabled builds. Attribute every changed
+- [x] Run relevant regression gates and feature-disabled builds. Attribute every changed
   fingerprint to the behavior that moved it; retain the known UWB baseline or investigate changes.
 
 **Exit:** reproducible evidence bundle, migration instructions and a profile-specific support
@@ -644,6 +648,11 @@ and independent vectors, but another simulator's behavior is not a normative ora
 ### Final implementation publication sequence
 
 The remaining work is published as the following dependency-ordered commits.
+The managed example explicitly selects Ieee802154StandardInterface so its commit
+does not depend on the later public-default cutover. The isolated intermediate
+run reproduced the former ordering defect (unknown extendedAddress on the old
+default); this configuration-only correction preserves the final native module
+graph. Its direct check is the same two-run example and scalar checker.
 The final integrated tree has focused executed evidence; isolated intermediate
 builds and selected checks are verified before publication. No recorded
 fingerprint changes are planned. The new MAC is one protocol service owner with
@@ -654,7 +663,7 @@ default cutover remain separate commits rather than being bundled into it.
 | Commit | Decision and surface | Direct verification |
 | --- | --- | --- |
 | `ieee802154: add: complete native legacy-frame codecs` | Native wire chunks, frame/command/beacon codecs, serializer/dissector/printer and admitted vectors. | Fcs, FrameWire, Commands, Beacons unit fixtures; dedicated serializer. |
-| `pcap: fix: preserve captured length in truncated records` | Approved bounded PcapReader repair and capture-boundary unit fixture. Depends on wire fixtures for native round-trip checks. | Capture unit; parent/current generic serializer comparison. |
+| `packet: fix: preserve captured length in truncated records` | Approved bounded PcapReader repair and capture-boundary unit fixture. Depends on wire fixtures for native round-trip checks. | Capture unit; parent/current generic serializer comparison. |
 | `ieee802154: add: timed native O-QPSK PHY services` | Paired PHY roles, measurements, state/TX timing and observable PPDU representation. | PhyServiceContract, PhyServices, Measurements, ExternalPhy module fixtures. |
 | `ieee802154: add: native nonbeacon MAC services` | Native identity/adapter, unslotted access, DATA/ACK, queued management, scans, join/leave/recovery, receiver schedules and lifecycle. | NativeInterface, UnslottedAccess, Start, Discovery, PassiveScan modules; MacPib/PendingTransactions units; all native protocol fixtures and companions. |
 | `ieee802154: add: managed PAN example policy` | Application-owned PAN selection/allocation and repeated managed cycles; feature package registration. | Two typed/raw managed example runs and scalar checker. |
@@ -687,24 +696,23 @@ doc/project/enforcement/check-interfaces.sh
 make -j$(nproc) MODE=release
 ```
 
-These are future implementation gates, not tests executed while writing this plan.
+These gates were not executed while initially writing the plan. Their final
+executions and explicit inherited failures are now recorded in the results ledger.
 
-## 9. First implementation PR
+## 9. Completed execution record
 
-The initial **step 0** package closes bounded M1 applicability, authors its normative catalog and
-English checks, and maps them to the model ledger. That audit gate has passed; executable checks
-remain NOT_RUN. The documented source findings on wire format/length and sequence truncation
-remain candidates for targeted production reproductions. This documentation package changes no
-simulation behavior or fingerprints.
+Steps 0–10 deliver the selected M1/M2 services. The publication sequence above
+separates independent wire, shared capture, PHY, native MAC, example policy and
+default cutover decisions. Every source-bearing unit has a matching debug build
+and selected checks in the isolated control checkout. The final tree also compiles
+in release mode; enabled/disabled feature configurations and stored legacy
+trajectories are verified without baseline changes.
 
-Packages 1a–1d are implemented and verified locally at their stated value/contract/integration
-boundaries. Package 1e's replacement composition and step 2's codec fixtures pass, with the
-remaining integration gates recorded above. Step 3 has a reproduced capture-reader blocker;
-step 4's energy feasibility fixture passes. Steps 2–6 deliver M1 only after all their gates
-and step 10's release gate close.
-Keep each new wire chunk paired with its serializer and vectors. Within step 3, separate complete
-MPDU/FCS proof from capture integration where independently buildable. Within step 6, separate
-receive decisions/unsecured policy, immediate ACKs, and direct retry/DSN lifecycle into coherent
-PRs with explicit dependencies and production-path evidence. This does not postpone integrated
-exchange checks until release. This is the critical path; association, security and scheduled
-MAC modes must not delay establishing a correct, independently observable basic frame exchange.
+The source/test manifest, exact commands, per-statement mapping, parent controls,
+review scope, model limits and inherited failures are linked from the
+[results ledger](../../doc/project/evidence/model/ieee802154/results.md) and
+[machine-readable record](../../doc/project/evidence/model/ieee802154/verification-20261115.json).
+The matched-object reuse for the example/cutover checks is explicitly recorded;
+it is not reported as independent recompilation of every translation unit.
+Future feature packages in section 6 require their own applicability and
+implementation gates. Completing this plan does not claim those features.

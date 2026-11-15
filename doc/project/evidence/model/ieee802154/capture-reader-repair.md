@@ -2,6 +2,11 @@
 
 > **Kind:** report · **Status:** snapshot 2026-11-15 · **Seal:** none · **Owns:** — · **Stands on:** [frame-codec.md](frame-codec.md), [results.md](results.md)
 
+The user approved this exact sealed file and bounded repair in this session.
+The implemented repair passes the production capture unit, including both FCS
+link types, truncated records, radiotap stripping and invalid offsets. The final
+evidence and parent/current generic serializer comparison are in [results.md](results.md).
+
 `tests/unit/Ieee802154Capture_1.test` reproduces a shared PCAP reader defect using production
 `PcapWriter` and `PcapReader`. An ACK has five bytes; writing it with snaplen 3 records
 `incl_len=3`, `orig_len=5`. Reading returns `{02,00,6a,00,00}` instead of the three supplied
