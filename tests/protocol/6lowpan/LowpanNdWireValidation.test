@@ -1,0 +1,116 @@
+%description:
+Static LoWPAN IPv6 safely drops malformed ND wire input before generic ND
+peeking, leaves valid unsupported DAR to ordinary ND, and retains ordinary NS/NA.
+All eight literal controls enter actual Ethernet transmission and IPv6 reception.
+
+%file: WireCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/MemoryOutputStream.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/checksum/Checksum.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/common/InterfaceTag_m.h"
+#include "inet/linklayer/common/MacAddressTag_m.h"
+#include "inet/linklayer/lowpan/LowpanPacketDropDetails_m.h"
+#include "inet/networklayer/common/L3AddressTag_m.h"
+#include "inet/networklayer/common/NetworkInterface.h"
+#include "inet/networklayer/icmpv6/Icmpv6.h"
+#include "inet/networklayer/ipv6/Ipv6Header_m.h"
+namespace inet::protocoltest {
+class WireCheck : public cSimpleModule, public cListener
+{
+    cModule *receiverIp=nullptr,*senderIp=nullptr,*receiverNd=nullptr;
+    NetworkInterface *senderInterface=nullptr,*receiverInterface=nullptr;
+    Ipv6Address source{"2001:db8:1::10"},destination{"2001:db8:1::20"};
+    std::vector<std::vector<uint8_t>> messages;
+    int injected=0,received=0,wireDrops=0,unsupportedDrops=0,ordinaryReplies=0;
+
+    std::vector<uint8_t> checksum(std::vector<uint8_t> bytes) {
+        MemoryOutputStream stream;stream.writeIpv6Address(source);stream.writeIpv6Address(destination);
+        stream.writeUint32Be(bytes.size());stream.writeUint32Be(58);stream.writeBytes(bytes);
+        auto value=internetChecksum(stream.getData());bytes[2]=value>>8;bytes[3]=value;return bytes;
+    }
+  protected:
+    int numInitStages() const override {return NUM_INIT_STAGES;}
+    void initialize(int stage) override {
+        if (stage!=INITSTAGE_LAST) return;
+        senderIp=getModuleByPath("^.node[0].ipv6.ipv6");receiverIp=getModuleByPath("^.node[1].ipv6.ipv6");receiverNd=getModuleByPath("^.node[1].ipv6.neighbourDiscovery");
+        senderInterface=check_and_cast<NetworkInterface *>(getModuleByPath("^.node[0].eth[0]"));receiverInterface=check_and_cast<NetworkInterface *>(getModuleByPath("^.node[1].eth[0]"));
+        receiverIp->subscribe("packetDropped",this);receiverNd->subscribe("packetDropped",this);
+        receiverIp->subscribe("packetReceivedFromLower",this);senderIp->subscribe("packetReceivedFromLower",this);
+        std::vector<uint8_t> dar{157,0,0,0,0,0,0,1,1,2,3,4,5,6,7,8};
+        MemoryOutputStream registered;registered.writeIpv6Address(Ipv6Address("2001:db8:99::1"));dar.insert(dar.end(),registered.getData().begin(),registered.getData().end());
+        auto code=dar;code[1]=5;messages.push_back(checksum(code));
+        auto truncated=dar;truncated.pop_back();messages.push_back(checksum(truncated));
+        messages.push_back({158}); // Known duplicate-address type, shorter than even the ICMP base header.
+        std::vector<uint8_t> ns{135,0,0,0,0,0,0,0};MemoryOutputStream target;target.writeIpv6Address(destination);ns.insert(ns.end(),target.getData().begin(),target.getData().end());
+        auto badNs=ns;badNs.insert(badNs.end(),{1,0});messages.push_back(checksum(badNs));
+        std::vector<uint8_t> badRa(16,0);badRa[0]=134;badRa[4]=64;badRa[7]=120;badRa.insert(badRa.end(),{3,4});messages.push_back(checksum(badRa));
+        messages.push_back(checksum(dar));dar[1]=1;dar[5]=0x7b;messages.push_back(checksum(dar));
+        ns.insert(ns.end(),{1,1});for (int i=0;i<6;i++) ns.push_back(senderInterface->getMacAddress().getAddressByte(i));messages.push_back(checksum(ns));
+        for (int i=0;i<int(messages.size());i++) scheduleAt(SimTime((i+1)*10,SIMTIME_MS),new cMessage("literal-wire-control",i));
+    }
+    void receiveSignal(cComponent *component,simsignal_t signal,cObject *object,cObject *details) override {
+        Enter_Method_Silent();
+        if (signal==registerSignal("packetDropped")) {
+            ASSERT(check_and_cast<PacketDropDetails *>(details)->getReason()==OTHER_PACKET_DROP);
+            if (component==receiverIp) {ASSERT(check_and_cast<lowpan::LowpanPacketDropDetails *>(details)->getLowpanReason()==lowpan::LOWPAN_MALFORMED);wireDrops++;}
+            else {ASSERT(component==receiverNd);unsupportedDrops++;}return;
+        }
+        auto packet=check_and_cast<Packet *>(object);auto ip=packet->peekAtFront<Ipv6Header>();if (ip->getProtocolId()!=IP_PROT_IPv6_ICMP) return;
+        auto type=packet->peekDataAt<BytesChunk>(B(40),B(1))->getBytes()[0];
+        if (component==receiverIp) {ASSERT(ip->getSrcAddress()==source && ip->getDestAddress()==destination);received++;return;}
+        if (type!=136) return;
+        ASSERT(ip->getSrcAddress()==destination && ip->getDestAddress()==source && ip->getHopLimit()==255);
+        Packet copy(*packet);copy.popAtFront<Ipv6Header>();auto addresses=copy.addTagIfAbsent<L3AddressInd>();addresses->setSrcAddress(destination);addresses->setDestAddress(source);
+        ASSERT(Icmpv6::verifyChecksum(&copy));ordinaryReplies++;
+    }
+    void handleMessage(cMessage *event) override {
+        auto bytes=messages.at(event->getKind());delete event;
+        std::vector<uint8_t> datagram{0x60,0,0,0,0,uint8_t(bytes.size()),58,255};MemoryOutputStream addresses;addresses.writeIpv6Address(source);addresses.writeIpv6Address(destination);
+        datagram.insert(datagram.end(),addresses.getData().begin(),addresses.getData().end());datagram.insert(datagram.end(),bytes.begin(),bytes.end());
+        auto packet=new Packet("literal-registration-wire",makeShared<BytesChunk>(datagram));packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ipv6);
+        packet->addTag<InterfaceReq>()->setInterfaceId(senderInterface->getInterfaceId());auto mac=packet->addTag<MacAddressReq>();mac->setSrcAddress(senderInterface->getMacAddress());mac->setDestAddress(receiverInterface->getMacAddress());
+        sendDirect(packet,getModuleByPath("^.node[0].ethernet")->gate("upperLayerIn")->getPathStartGate());injected++;
+    }
+    void finish() override {
+        ASSERT(injected==8 && received==8 && wireDrops==5 && unsupportedDrops==2 && ordinaryReplies==1);
+        std::cout << "Static LoWPAN malformed ND wire drops, safe unsupported dispatch and ordinary NS reply verified\n";
+    }
+};
+Define_Module(WireCheck);
+}
+
+%file: test.ned
+@namespace(inet::protocoltest);
+import inet.networklayer.configurator.ipv6.Ipv6NetworkConfigurator;
+import inet.node.ethernet.Eth100M;
+import inet.node.inet.StandardHost;
+simple WireCheck { }
+network WireNetwork {
+    submodules:
+        configurator: Ipv6NetworkConfigurator;
+        node[2]: StandardHost;
+        check: WireCheck;
+    connections: node[0].ethg++ <--> Eth100M <--> node[1].ethg++;
+}
+
+%inifile: omnetpp.ini
+[General]
+network=WireNetwork
+sim-time-limit=0.2s
+seed-set=0
+*.node[*].hasIpv4=false
+*.node[*].hasIpv6=true
+*.node[1].ipv6.typename="LowpanIpv6NetworkLayer"
+*.node[1].ipv6.neighbourDiscovery.nativeNdRole="static"
+**.ipv6.configurator.networkConfiguratorModule="configurator"
+**.ipv6.neighbourDiscovery.hostBootupTime=100s
+**.ipv6.neighbourDiscovery.dupAddrDetectTransmits=0
+**.ipv6.neighbourDiscovery.checksumMode="computed"
+**.ipv6.icmpv6.checksumMode="computed"
+*.configurator.config=xml("<config><interface hosts='node[0]' names='eth0' address='2001:db8:1::10'/><interface hosts='node[1]' names='eth0' address='2001:db8:1::20'/></config>")
+
+%contains: stdout
+Static LoWPAN malformed ND wire drops, safe unsupported dispatch and ordinary NS reply verified

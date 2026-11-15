@@ -50,6 +50,12 @@ The [host fixture](../../../../../tests/protocol/6lowpan/host-registration.md) c
 
 The [host record](p10-host-verification.json) retains fifteen exact source/test/document hashes, commands, seed zero, durable logs and observed packet counts. Matching debug/release builds, three protocol fixtures/eight runs and five module fixtures/six runs pass. Independent review confirms all three reported mechanisms resolved; scoped architecture/naming and whitespace checks pass. Release-mode behavioral execution and the combined feature matrix remain unexecuted. This completes the selected M=0 host stage; authoritative context distribution and routed duplicate registration remain separate P10 work.
 
+## P10 — ND receive validation before dispatch
+
+`LowpanIpv6` rejects malformed known ND and DAR/DAC messages before inherited IPv6 performs a strict chunk peek. Fixed minimum lengths and permitted inspection of incorrect/incomplete decoded headers turn these inputs into observable malformed drops. Other ICMPv6 types and valid ordinary ND retain their inherited path. Generic IPv6 and sealed packet code are unchanged.
+
+The [static Ethernet fixture](../../../../../tests/protocol/6lowpan/nd-wire-validation.md) needs no authority helper. Its unchanged inputs fail against the source-equivalent parent at event 7, time 0.01000789 seconds, with the strict-peek exception. Applying only the guard passes all eight controls: five malformed drops, two unsupported valid DAR drops and one ordinary NA. The [standalone comparison record](p10-nd-wire-validation-verification.json) retains both runs, matching debug/release builds, four fixed debug protocol fixtures/nine runs, raw hashes and clean independent review. Release behavioral assertions and the combined feature matrix remain unexecuted.
+
 ## Remaining packages
 
 P10–P15 remain in execution order under the completion plan. Optimized/extended ND, mesh-under, paging, virtual fragment forwarding and selective recovery are not inferred from header compression support.
