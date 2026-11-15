@@ -1,0 +1,113 @@
+%description:
+Native domain dynamic bindings preserve static entries and owner isolation,
+expire exactly, and validated explicit native requests traverse the real radio.
+
+%file: BindingCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/lowpan/LowpanNativeLinkDomain.h"
+#include "inet/linklayer/lowpan/LowpanTransmissionReq_m.h"
+namespace inet::protocoltest {
+using namespace lowpan;
+class BindingCheck : public cSimpleModule, public cListener
+{
+    LowpanNativeLinkDomain *domain=nullptr;
+    NetworkInterface *nic=nullptr;
+    cObject owner,other;
+    int delivered=0,dropped=0;
+    Ipv6Address learned{"2001:db8::1"},fixed{"2001:db8::2"};
+    Ieee802154Address first{"0011223344556601"},second{"0011223344556602"};
+  protected:
+    int numInitStages() const override {return NUM_INIT_STAGES;}
+    void initialize(int stage) override {
+        if (stage!=INITSTAGE_LAST) return;
+        domain=check_and_cast<LowpanNativeLinkDomain *>(getModuleByPath("^.domain"));
+        nic=check_and_cast<NetworkInterface *>(getModuleByPath("^.node[0].nic"));
+        nic->getSubmodule("lowpan")->subscribe("packetDropped",this);
+        ASSERT(!domain->resolveNeighbor(nic->getId(),learned));
+        ASSERT(domain->installDynamicNeighbor(nic->getId(),learned,second,SimTime(5,SIMTIME_MS),&owner));
+        ASSERT(*domain->resolveNeighbor(nic->getId(),learned)==second);
+        ASSERT(!domain->installDynamicNeighbor(nic->getId(),learned,first,SimTime(6,SIMTIME_MS),&other));
+        ASSERT(!domain->removeDynamicNeighbor(nic->getId(),learned,&other));
+        ASSERT(!domain->installDynamicNeighbor(nic->getId(),fixed,first,SimTime(5,SIMTIME_MS),&owner));
+        ASSERT(domain->installDynamicNeighbor(nic->getId(),fixed,second,SimTime(5,SIMTIME_MS),&owner));
+        ASSERT(domain->removeDynamicNeighbor(nic->getId(),fixed,&owner));
+        ASSERT(*domain->resolveNeighbor(nic->getId(),fixed)==second);
+        for (int ms : {1,2,5}) scheduleAt(SimTime(ms,SIMTIME_MS),new cMessage("binding-step",ms));
+    }
+    void receiveSignal(cComponent *,simsignal_t,cObject *,cObject *) override {dropped++;}
+    void handleMessage(cMessage *message) override {
+        if (message->isSelfMessage()) {
+            int step=message->getKind();delete message;
+            if (step==5) {
+                ASSERT(!domain->resolveNeighbor(nic->getId(),learned));
+                ASSERT(domain->installDynamicNeighbor(nic->getId(),learned,first,SimTime(6,SIMTIME_MS),&other));
+                ASSERT(!domain->removeDynamicNeighbor(nic->getId(),learned,&owner));
+                ASSERT(domain->removeDynamicNeighbor(nic->getId(),learned,&other));return;
+            }
+            std::vector<uint8_t> bytes{0x60,0,0,0,0,8,59,64,
+                0xfe,0x80,0,0,0,0,0,0,2,0x11,0x22,0x33,0x44,0x55,0x66,1,
+                0xfe,0x80,0,0,0,0,0,0,2,0x11,0x22,0x33,0x44,0x55,0x66,2,1,2,3,4,5,6,7,8};
+            auto packet=new Packet("explicit-native",makeShared<BytesChunk>(bytes));
+            packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ipv6);
+            auto request=packet->addTag<Ieee802154AddressReq>();request->setSrcAddress(step==1?first:second);
+            request->setDestAddress(second);request->setSrcPanId(4660);request->setDestPanId(4660);send(packet,"out");return;
+        }
+        auto packet=check_and_cast<Packet *>(message);
+        ASSERT(!packet->findTag<Ieee802154AddressReq>() && packet->getDataLength()==B(48));
+        ASSERT(packet->getTag<Ieee802154AddressInd>()->getSrcAddress()==first);
+        ASSERT(packet->getTag<Ieee802154AddressInd>()->getDestAddress()==second);delivered++;delete packet;
+    }
+    void finish() override {
+        ASSERT(delivered==1 && dropped==1);std::cout << "Owned native bindings, exact expiry and explicit requests verified\n";
+    }
+};
+Define_Module(BindingCheck);
+}
+
+%file: test.ned
+@namespace(inet::protocoltest);
+import inet.networklayer.common.InterfaceTable;
+import inet.mobility.static.StationaryMobility;
+import inet.linklayer.lowpan.Ieee802154NativeLowpanInterface;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple BindingCheck { gates: output out; input in; }
+module BindingNode {
+    parameters: @networkNode;
+    gates: input in; output out;
+    submodules:
+        interfaceTable: InterfaceTable;
+        mobility: StationaryMobility;
+        nic: Ieee802154NativeLowpanInterface {
+            interfaceTableModule="^.interfaceTable";linkDomainModule="^.^.domain";
+        }
+    connections allowunconnected: in --> nic.upperLayerIn;nic.upperLayerOut --> out;
+}
+network BindingNetwork {
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        domain: LowpanNativeLinkDomain;
+        node[2]: BindingNode;
+        check: BindingCheck;
+    connections allowunconnected: check.out --> node[0].in;node[1].out --> check.in;
+}
+
+%inifile: omnetpp.ini
+[General]
+network=BindingNetwork
+sim-time-limit=10ms
+seed-set=0
+*.domain.panId=4660
+*.domain.config=xml("<domain><peer interface='node[0].nic' native='0011223344556601'/><peer interface='node[1].nic' native='0011223344556602'/><neighbor interface='node[0].nic' ipv6='2001:db8::2' native='0011223344556602'/></domain>")
+**.radio.antenna.mobilityModule="^.^.^.mobility"
+**.mobility.initialX=0m
+**.mobility.initialY=0m
+**.mobility.initialZ=0m
+**.mobility.initFromDisplayString=false
+**.mobility.updateFromDisplayString=false
+
+%contains: stdout
+Owned native bindings, exact expiry and explicit requests verified

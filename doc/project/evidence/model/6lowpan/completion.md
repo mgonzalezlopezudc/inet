@@ -20,6 +20,14 @@ Direct evidence is the [native protocol fixture](../../../../../tests/protocol/6
 
 The [P9 record](p9-verification.json) retains source hashes and exact commands: debug/release builds, fifteen units, sixty-two module fixtures/eighty-four parameter runs, seven protocol fixtures/thirteen parameter runs and three CSMA fingerprint configurations pass. Two units supplement P9 with generic checksum/ND-wire controls; they do not establish registration policy. Initial module failures exposed a shared IPv6 decoded-Fragment-header lifetime bug and one obsolete wire assertion. The separate IPv6 prerequisite retains the shared chunk through reassembly, and a direct serialized-fragment fixture plus every affected case passes. Independent P9 review found no actionable runtime defect; its introspection-placement and legal-chain-budget coverage requests are resolved. The final combined feature matrix remains pending.
 
+## P10 — Local server stage
+
+The native ND owner now accepts local RFC 6775 ARO registrations with `nativeNdRole="router"` and IPv6 forwarding enabled. Module-wide capacity, owner identity, actual native address and absolute expiry are separate state. Successful registrations install owner-specific native bindings and /128 routes. Duplicate, cache-full, refresh, zero lifetime, exact expiry and lifecycle paths preserve other owners and static configuration. Native control replies compute their wire checksum. The default static role is preserved.
+
+The [native server fixture](../../../../../tests/protocol/6lowpan/neighbor-registration.md) requires sixteen injected frames, eleven actual radio NAs, one data packet delivered through a learned route and four malformed-input drops. It checks error delivery to an ARO owner different from the sender, reserved receive/transmit rules, a static-conflict address separate from the learned links, refreshed route expiry, crash/restart and graceful stop/restart. The [stage record](p10-stage1-verification.json) retains exact hashes and commands: matching debug/release builds, one protocol fixture and five module fixtures/six parameter runs pass. Independent review reports no unresolved finding. The owned-domain storage prerequisite has its own direct module fixture and commit before packet handling.
+
+P10 remains open: host RS/RA discovery and refresh, 6CO/ABRO distribution and multihop DAR/DAC have not been established by the server stage. The final combined feature matrix also remains pending.
+
 ## Remaining packages
 
 P10–P15 remain in execution order under the completion plan. Optimized/extended ND, mesh-under, paging, virtual fragment forwarding and selective recovery are not inferred from header compression support.

@@ -3,20 +3,50 @@
 #define __INET_LOWPANIPV6NEIGHBOURDISCOVERY_H
 
 #include "inet/networklayer/icmpv6/Ipv6NeighbourDiscovery.h"
+#include "inet/linklayer/lowpan/LowpanNativeLinkDomain.h"
 
 namespace inet { namespace lowpan {
 
-// Static native bindings: ordinary RFC 4861 remains active on other interfaces.
+// Native registration ownership is separate from the ordinary 48-bit ND cache.
 class INET_API LowpanIpv6NeighbourDiscovery : public Ipv6NeighbourDiscovery
 {
   protected:
+    struct Registration {
+        Ieee802154Address owner;
+        Ieee802154Address address;
+        opp_component_ptr<LowpanNativeLinkDomain> domain;
+        int interfaceModuleId = -1;
+        simtime_t validUntil;
+    };
+    using RegistrationKey = std::pair<int, Ipv6Address>;
+    std::map<RegistrationKey, Registration> registrations;
+    bool registrationRouter = false;
+    int maxRegistrations = 0;
+    cMessage *registrationExpiryTimer = nullptr;
+    static simsignal_t registrationCountChangedSignal;
+    virtual void initialize(int stage) override;
+    virtual void handleMessageWhenUp(cMessage *message) override;
     virtual void start() override;
+    virtual void stop() override;
     virtual void initiateDad(const Ipv6Address& tentativeAddr, NetworkInterface *ie) override;
     virtual void startRouterDiscovery(NetworkInterface *ie) override;
     virtual void createRaTimer(NetworkInterface *ie) override;
     virtual void processNDMessage(Packet *packet, const Icmpv6Header *message) override;
+    void processRegistration(Packet *packet, const Ipv6NeighbourSolicitation *message, NetworkInterface *interface,
+            LowpanNativeLinkDomain *domain);
+    bool readRegistration(const Packet *packet, const Ipv6NeighbourSolicitation *message, NetworkInterface *interface,
+            LowpanNativeLinkDomain *domain, Registration& requested, const Ipv6NdOption *&aro) const;
+    int applyRegistration(const RegistrationKey& key, const Registration& requested);
+    void sendRegistrationAdvertisement(const RegistrationKey& key, const Registration& requested,
+            const Ipv6NdOption& aro, int status, const Ipv6Address& routerAddress);
+    void removeRegistration(const RegistrationKey& key, bool notify = true);
+    void clearRegistrations(bool notify);
+    void expireRegistrations();
+    void scheduleRegistrationExpiry();
+    void removeRegistrationRoute(const RegistrationKey& key);
 
   public:
+    virtual ~LowpanIpv6NeighbourDiscovery();
     virtual void sendRedirect(Packet *redirectedPacket, const Ipv6Address& targetAddr,
             const Ipv6Address& destAddr, NetworkInterface *ie) override;
 };

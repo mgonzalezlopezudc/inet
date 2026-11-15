@@ -12,6 +12,7 @@ class INET_API LowpanNativeBoundary : public LowpanBoundaryBase
     virtual void handleMessage(cMessage *message) override;
     virtual bool isMacDomainValid(cModule *module) const override;
   public:
+    LowpanNativeLinkDomain *getLinkDomain() const { return domain; }
     virtual Ieee802154Address getLinkAddress() const override;
     virtual uint16_t getPanId() const override;
     virtual const Ieee802154Address *resolveNeighbor(const Ipv6Address& nextHop) const override;

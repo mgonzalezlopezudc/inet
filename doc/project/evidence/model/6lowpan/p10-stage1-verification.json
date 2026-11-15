@@ -1,0 +1,119 @@
+{
+  "scope": "P10 stage 1 local native ARO server and owned binding prerequisite",
+  "cwd": "/home/miguel/workspace/inet-6lowpan-standard",
+  "full_p10_complete": false,
+  "mode": "debug",
+  "seed": 0,
+  "source_sha256": {
+    "src/inet/linklayer/lowpan/LowpanNativeLinkDomain.h": "518b840870d169589d9a7ea23762173bcba83776f5a6a1f490e35d99acbf1f57",
+    "src/inet/linklayer/lowpan/LowpanNativeLinkDomain.cc": "d4658d6269c9503b5d878ce2592769bcb5e1e795409e8e0fdc8d8b316073e54c",
+    "src/inet/linklayer/lowpan/LowpanNativeBoundary.h": "ba57a3c4fb0b90f1d30f913a0892413d78ec8339297748d87842f01692e35665",
+    "src/inet/linklayer/lowpan/LowpanLayer.cc": "1373cf1f71f38c5557f361f441271431c4efacbf984c7d54865d4246ab1dc04a",
+    "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.h": "2a1aa8261ecce7c26d65caef3293845c0559f927107172e1a0ea4bcbd37b88d0",
+    "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.cc": "ff1f9d9aac7c513f32a5dbfe0acc3fc876af1bac90136077cb13359625d04e71",
+    "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.ned": "da263c7bb5b8c15a3d485bd5b1f823c3633d47380025a752db4705a43f8c542b",
+    "tests/module/LowpanOwnedBindings.test": "d4ed3caf0ce017f6d47c02f9cba845991f0602939d622e2733e8e27dce602021",
+    "tests/module/LowpanDynamicBindings.test": "4e8fbe6b985bd548604b57408a61fe915609d482c0f124c197c3d37510a7f143",
+    "tests/protocol/6lowpan/LowpanNeighborRegistration.test": "e520d1245376775f7bc65d23e9051716427bd6881f83c4092ed0b25f393da291",
+    "tests/protocol/6lowpan/neighbor-registration.md": "568f47d470020c95f5034dceac91c077262389ce8b2761706c79cc7936d425ff",
+    "doc/whatsnew/compatible/lowpan-neighbor-registration.txt": "19daf5877ac0a945700b2f71d671051ab9862dcc95b6f5821b93b07dc6cd1222"
+  },
+  "checks": [
+    {
+      "command": [
+        "make",
+        "MODE=debug",
+        "-j8"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p10-stage1/server-build.log"
+    },
+    {
+      "command": [
+        "opp_run_protocol_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-w",
+        "^tests/protocol/6lowpan$",
+        "-f",
+        "LowpanNeighborRegistration\\.test$"
+      ],
+      "exit_code": 0,
+      "fixtures": 1,
+      "runs": 1,
+      "log": "/tmp/lowpan-p10-stage1/server-protocol.log"
+    },
+    {
+      "command": [
+        "opp_run_module_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-f",
+        "Lowpan(OwnedBindings|DynamicBindings|MixedNeighbourDiscovery|NativeLifecycle|NativeRouteOver)\\.test$"
+      ],
+      "exit_code": 0,
+      "fixtures": 5,
+      "runs": 6,
+      "log": "/tmp/lowpan-p10-stage1/regression-module.log"
+    },
+    {
+      "command": [
+        "doc/project/enforcement/check-architecture.sh",
+        "src/inet/linklayer/lowpan"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p10-stage1/architecture.log"
+    },
+    {
+      "command": [
+        "doc/project/enforcement/check-naming.sh",
+        "src/inet/linklayer/lowpan"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p10-stage1/naming.log"
+    },
+    {
+      "command": [
+        "make",
+        "MODE=release",
+        "-j8"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p10-stage1/release-build.log"
+    }
+  ],
+  "native_protocol_assertions": {
+    "injected_frames": 16,
+    "radio_advertisements": 11,
+    "learned_route_data_packets": 1,
+    "malformed_registration_drops": 4,
+    "registration_counts": [
+      1,
+      0,
+      1,
+      0,
+      1,
+      0,
+      1,
+      0,
+      1
+    ]
+  },
+  "earlier_attempts": "Retained attempt logs: missing fixture includes; cMessage short kind overflow; duplicate-option frames injected during MAC transmission. These are corrected fixture defects, not production failures.",
+  "not_run": [
+    "feature matrix",
+    "full P10 host/distribution/multihop stages"
+  ],
+  "review": "Independent read-only review: 22 PASS,12 N/A,0 FLAG,0 QUESTION; domain-only prep and server integration split; static zero-lifetime conflict and final wire/doc counts confirmed.",
+  "prerequisite_commit": "e1a2631bc2"
+}
