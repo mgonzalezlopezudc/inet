@@ -1,0 +1,250 @@
+{
+  "scope": "Generic ICMPv6 ND option enum represents every wire octet without changing enum-typed API or option policy",
+  "cwd": "/home/miguel/workspace/inet-6lowpan-standard",
+  "source_sha256": {
+    "src/inet/networklayer/icmpv6/Ipv6NdMessage.msg": "3052abcfc33de7572e9f49dffa8aa19644ac29750c9f80f3663a8a8c4ee69aee",
+    "tests/unit/Ipv6NdRegistrationWire.test": "71e39654bb91184839bb73c30809e18d8d747c485de86210eb82b15659d68ddf",
+    "tests/protocol/6lowpan/nd-option-values.md": "ac6533024399bce13d5920a0993dc59af0141bbe78e3c9fd1cc9a988e07e6ff6",
+    "doc/whatsnew/compatible/icmpv6-nd-option-byte-values.txt": "d99bbc32c0329fe61abde6c46471dd669b8bd4867acbc1f48cf8db9b57ef115a"
+  },
+  "generated_header_sha256": "e71e6d7042ab79ebb4aa77482cefc7bbde47db3c26b9cd2e0f4d3bb86f9a2b6a",
+  "generated_enum_declaration": "enum Ipv6NdOptionTypes : uint8_t",
+  "checks": [
+    {
+      "command": [
+        "make",
+        "MODE=debug",
+        "-j2"
+      ],
+      "mode": "debug",
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/build-debug.log"
+    },
+    {
+      "command": [
+        "make",
+        "MODE=release",
+        "-j4"
+      ],
+      "mode": "release",
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/build-release.log"
+    },
+    {
+      "command": [
+        "opp_run_unit_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-f",
+        "Ipv6NdRegistrationWire\\.test$"
+      ],
+      "exit_code": 0,
+      "fixtures": 1,
+      "runs": 1,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/unit-debug.log"
+    },
+    {
+      "command": [
+        "opp_run_module_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-f",
+        "Ipv6NdUnsupportedRegistration\\.test$"
+      ],
+      "exit_code": 0,
+      "fixtures": 1,
+      "runs": 1,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/module-debug.log"
+    },
+    {
+      "command": [
+        "opp_run_protocol_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-w",
+        "^tests/protocol/6lowpan$",
+        "-f",
+        "LowpanNeighborRegistration\\.test$"
+      ],
+      "exit_code": 0,
+      "fixtures": 1,
+      "runs": 1,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/protocol-debug.log"
+    },
+    {
+      "command": [
+        "opp_run_protocol_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "release",
+        "--no-build",
+        "-w",
+        "^tests/protocol/6lowpan$",
+        "-f",
+        "LowpanNeighborRegistration\\.test$"
+      ],
+      "exit_code": 0,
+      "fixtures": 1,
+      "runs": 1,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/protocol-release.log"
+    },
+    {
+      "command": [
+        "python3",
+        "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/run_enum_probe.py"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/probe.log",
+      "variants": [
+        "ubsan",
+        "release",
+        "strict"
+      ],
+      "values_per_variant": 256
+    },
+    {
+      "command": [
+        "doc/project/enforcement/check-architecture.sh",
+        "src/inet/networklayer/icmpv6"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/architecture.log"
+    },
+    {
+      "command": [
+        "doc/project/enforcement/check-naming.sh",
+        "src/inet/networklayer/icmpv6"
+      ],
+      "exit_code": 1,
+      "status": "PRE_EXISTING_CANDIDATES",
+      "unmodified_paths": [
+        "src/inet/networklayer/icmpv6/Icmpv6Header.msg:55 MTU",
+        "src/inet/networklayer/icmpv6/Mldv2Message.msg:21 file stem"
+      ],
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/naming.log"
+    },
+    {
+      "command": [
+        "python3",
+        "doc/project/enforcement/check-ned-msg-naming.py",
+        "src/inet/networklayer/icmpv6/Ipv6NdMessage.msg"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/naming-changed-msg.log"
+    },
+    {
+      "command": [
+        "doc/project/enforcement/check-source-seals.sh",
+        "src/inet/networklayer/icmpv6/Ipv6NdMessage.msg"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/source-seals.log"
+    }
+  ],
+  "artifact_sha256": {
+    "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/build-debug.log": "06f85f23adcc35b565a1beccef09d155f1e3fb7dc98a222f781148dc81e148d5",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/build-release.log": "1e62340bd9d1f56f5f24ee21d25e9cfed4a07127c75f9c067502a87894e4fd08",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/unit-debug.log": "c80550643a97866248127af87127ff7a1b5346a54e94ad8fd8cecb9285f4d527",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/module-debug.log": "325bf9d9ed71d967ef16d134e692a1d379203f83d37dbe761c0a9a0135a2f3ab",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/protocol-debug.log": "9fb87b51e6c5bc224b2a3429563b9fd28c240483ed404f46a073edaafb058112",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/protocol-release.log": "d46e205861abeb11632858b8b9877fe4225cc54933a961492576247c35588c5f",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/probe.log": "d88a4f9d1989efe45ec9817b95ae55d132427a685c29bde9b67dfbc6afa969fb",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/architecture.log": "d08037a4313c12250b605f16c2c834ccb738d2418989468ce85c186548cc48d3",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/naming.log": "5a50665e5c9d482ec781656a942f094ef3c05908aa1357c01423917fd38f599a",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/naming-changed-msg.log": "f28386d210a10353168b0ccaae17ee8f1fe5159cbedb7bd19ea530ad5767a66e",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/source-seals.log": "4d5110553efecb3ef3b5837e2c26e345ad8bdd3edeeaf3aab5502dc60769dc16",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/enum-range.cc": "2f7b2675a7ab797a85bfc10c797a0f649c27f24a57773506b9d564d292a6bb2d",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/run_enum_probe.py": "e5126f058e3582f0fe2d83a08b85bc56af21a777bc1f54b98eb799600caade3e",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/full-byte-results.json": "b56648cc92d521d1a8b19e39f4263ed824793d574efbcd0908a430fc5cf544b2",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/runtime/debug/Ipv6NdUnsupportedRegistration/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/runtime/debug/Ipv6NdUnsupportedRegistration/omnetpp.ini": "6faa816a44b17f096c28c6bb8b9ede477b56d7619f624d44d79fa55d7b8c39fd",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/runtime/debug/Ipv6NdUnsupportedRegistration/test.out": "860550da2656619fdc927704f048f259c0083799e2563f35a865f40378fb93cd",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/runtime/debug/Ipv6NdRegistrationWire/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/runtime/debug/Ipv6NdRegistrationWire/test.out": "04e5358253543bef064f9c58e36ddeef4b8929c6d7efb07c9667b790dc836de0",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/runtime/debug/LowpanNeighborRegistration/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/runtime/debug/LowpanNeighborRegistration/omnetpp.ini": "92c767dc7407760d53d45270c02806d096a667d0c71006484a4688246e83c2d8",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/runtime/debug/LowpanNeighborRegistration/test.out": "f7f5824dc01756e0e92d674f7dc3bbaed4ef644ff1dc9430242c4e2a89418aaf",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/runtime/release/LowpanNeighborRegistration/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/runtime/release/LowpanNeighborRegistration/omnetpp.ini": "92c767dc7407760d53d45270c02806d096a667d0c71006484a4688246e83c2d8",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/runtime/release/LowpanNeighborRegistration/test.out": "deec6cc501b3de39f73725febb8228bfc8c0785c2c821756b82c88742b301751"
+  },
+  "range_probe": "/home/miguel/workspace/.codex-artifacts/lowpan-nd-option-values-20261115/full-byte-results.json",
+  "native_counts_independently_checked_outside_ndebug_assertions": {
+    "debug": {
+      "injected": 21,
+      "aro_advertisements": 11,
+      "data_packets": 1,
+      "malformed_drops": 6,
+      "registration_counts": [
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1
+      ]
+    },
+    "release": {
+      "injected": 21,
+      "aro_advertisements": 11,
+      "data_packets": 1,
+      "malformed_drops": 6,
+      "registration_counts": [
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1
+      ]
+    }
+  },
+  "prior_diagnostic_evidence": "/home/miguel/workspace/.codex-artifacts/lowpan-nd-enum-probe-20261115/results.json",
+  "observations": {
+    "all_256_values_legal_under_ubsan_o3_and_strict_enum_optimization": true,
+    "unknown_option_values_force_reserialization": [
+      99,
+      255
+    ],
+    "existing_aro_native64_and_typed48_cases_preserved": true,
+    "native_protocol_runs_per_mode": 1,
+    "old_ordinary_o3_probe_failure_observed": false,
+    "old_ubsan_invalid_values": [
+      33,
+      99,
+      255
+    ],
+    "old_strict_enum_option33_comparison_folded_false": true
+  },
+  "release_test_assertions": "OMNeT ASSERT is disabled by NDEBUG; native printed counters were independently checked, and enum probe uses explicit condition/exit checks",
+  "not_run": [
+    "release wire unit assertions",
+    "full-library sanitizer build",
+    "failing-parent full-simulation comparison",
+    "feature matrix"
+  ]
+}

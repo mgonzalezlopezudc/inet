@@ -1,0 +1,3 @@
+Fixed-width Neighbor Discovery option types
+
+Neighbor Discovery option types now use a fixed eight-bit enum representation. Registration options and unknown option byte values retain their values without undefined enum conversions. The enum-typed API, option wire values and existing option validation policy are preserved. Rebuild dependent model libraries.

@@ -7,9 +7,37 @@ native64 link-layer options preserve exact bytes independently of LoWPAN policy.
 #include "inet/common/packet/chunk/BytesChunk.h"
 #include "inet/networklayer/icmpv6/Ipv6NdMessage_m.h"
 #include <climits>
+#include <type_traits>
 using namespace inet;
 
 %activity:
+static_assert(std::is_same<std::underlying_type<Ipv6NdOptionTypes>::type,uint8_t>::value,
+        "ND option types must represent every value of their wire octet");
+static_assert(std::is_same<decltype(Ipv6NdOption().getType()),Ipv6NdOptionTypes>::value,
+        "The ND option getter retains its enum-typed API");
+for (int value=0;value<=255;value++) {
+    Ipv6NdOption option;option.setType(static_cast<Ipv6NdOptionTypes>(value));
+    ASSERT(int(option.getType())==value);
+}
+// Unknown byte values use the raw option representation, never a known option's checked field cast.
+for (int value : {99,255}) {
+    std::vector<uint8_t> golden{133,0,0x12,0x34,0,0,0,0,uint8_t(value),1,10,20,30,40,50,60};
+    auto solicitation=makeShared<Ipv6RouterSolicitation>();solicitation->setChksum(0x1234);
+    auto option=new Ipv6NdOption();option->setType(static_cast<Ipv6NdOptionTypes>(value));
+    option->setOptionLength(1);option->setPaddingBytesArraySize(6);
+    for (int i=0;i<6;i++) option->setPaddingBytes(i,golden[i+10]);
+    solicitation->getOptionsForUpdate().appendOption(option);solicitation->addChunkLength(B(8));
+    Packet encoded("unknown-option",solicitation);ASSERT(encoded.peekDataAsBytes()->getBytes()==golden);
+    Packet raw("unknown-option-bytes",makeShared<BytesChunk>(golden));
+    auto decoded=dynamicPtrCast<const Ipv6RouterSolicitation>(raw.peekAtFront<Icmpv6Header>());
+    ASSERT(decoded && decoded->getOptions().getOptionArraySize()==1);
+    auto parsed=decoded->getOptions().getOption(0);ASSERT(int(parsed->getType())==value);
+    ASSERT(parsed->getOptionLength()==1 && parsed->getPaddingBytesArraySize()==6);
+    for (int i=0;i<6;i++) ASSERT(uint8_t(parsed->getPaddingBytes(i))==golden[i+10]);
+    auto changed=makeShared<Ipv6RouterSolicitation>(*decoded);changed->setChksum(0xabcd);
+    golden[2]=0xab;golden[3]=0xcd;Packet reencoded("unknown-option-copy",changed);
+    ASSERT(reencoded.peekDataAsBytes()->getBytes()==golden);
+}
 const std::vector<uint8_t> address{0x20,1,0x0d,0xb8,0,0,0,0,0,0,0,0,0,0,0,1};
 for (auto type : {ICMPv6_DUPLICATE_ADDRESS_REQUEST,ICMPv6_DUPLICATE_ADDRESS_CONFIRMATION}) {
     for (int code=0;code<=4;code++) {

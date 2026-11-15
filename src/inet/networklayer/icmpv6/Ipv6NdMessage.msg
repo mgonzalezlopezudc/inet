@@ -25,6 +25,7 @@ const B IPv6ND_MTU_OPTION_LENGTH = B(8);                   // RFC 2461, Section 
 // TLB options (type, length, bytes), length must be divisible by eight, max value is 8*255
 // Type codes:          // RFC 2461
 enum Ipv6NdOptionTypes {
+    @baseType(uint8_t);
     IPv6ND_SOURCE_LINK_LAYER_ADDR_OPTION = 1;
     IPv6ND_TARGET_LINK_LAYER_ADDR_OPTION = 2;
     IPv6ND_PREFIX_INFORMATION = 3;
