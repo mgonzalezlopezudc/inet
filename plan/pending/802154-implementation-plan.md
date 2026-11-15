@@ -82,6 +82,8 @@ because MAC frames are correct. Native MAC test applications are sufficient for 
 
 ## 3. Evidence and current change surface
 
+The starting-state observations in this section describe the preparation baseline named above, before M1/M2 implementation. They explain the original change surface; they are not a fresh inventory of the completed native implementation. Current results are linked at the top, and section 6 links the follow-on plans' verified starting points.
+
 The existing [claim survey](../../doc/project/evidence/model/ieee802154/conformance.md) and
 [coverage ledger](../../doc/project/evidence/model/ieee802154/coverage.md) establish Level 1
 survey evidence only. Extend them rather than creating a competing status inventory.
@@ -595,12 +597,14 @@ to the corresponding claim, even if the broad regression suite passes.
 These are scoped follow-on packages, not promises hidden inside M1/M2. Before starting one,
 repeat step 0 for its requirements and expand it into PR-sized tasks.
 
+Detailed draft execution plans now cover [B1–B3: beacons, slotted access and GTS](802154-superframe-gts-plan.md) and [E1: version-2 frames and Information Elements](802154-enhanced-frames-plan.md). They define source-grounded ownership, ordered commits, exact proposed tests/reviewer documents and acceptance gates. Their implementation is not started. B1's timing/tracking core precedes B2; coordinator realignment and complete managed beacon operation close after the CAP backend exists. E1 core can proceed independently, while scheduled enhanced-beacon/GTS integration depends on B1–B3.
+
 | Package | Prerequisites | Work and acceptance gate |
 | --- | --- | --- |
-| B1: beacon scheduler | M2 | Periodic beacons, BO/SO, active/inactive intervals, synchronization and loss; assert symbol boundaries, drift/reacquisition and pending-address advertisement |
-| B2: slotted access | B1 | Slotted algorithm, contention window and CAP fit/defer rules; prove boundary behavior when a complete exchange cannot fit and across inactive intervals |
-| B3: GTS/CFP | B2 | Request/allocation/deallocation, descriptors, direction, expiration and scheduling; prove exclusive scheduled use and return to contention after removal |
-| E1: modern frame machinery | M1 codec/contracts | Version-2 address/PAN rules, sequence suppression, bounded Header/Payload IE parsing, termination rules and unknown IE preservation; enhanced ACK/beacon behavior requires separate production exchanges |
+| [B1: beacon scheduler](802154-superframe-gts-plan.md) | M2; B2 CAP backend for complete managed operation | Periodic beacons, BO/SO, active/inactive intervals, synchronization/loss, linked coordinator timing and realignment; direct radio/clock and lifecycle checks |
+| [B2: slotted access](802154-superframe-gts-plan.md) | B1 timing/tracking core | Slotted NB/BE/CW, BLE, CAP fit and distinct pause/resample rules; actual managed exchanges and boundary/lifecycle checks |
+| [B3: GTS/CFP](802154-superframe-gts-plan.md) | Complete B1/B2 | Request/allocation, both CFP data directions, descriptor persistence, deallocation/repacking and inactivity expiration; real beacon/command/DATA/ACK evidence |
+| [E1: modern frame machinery](802154-enhanced-frames-plan.md) | M1/M2 for core; B1–B3 for scheduled integration | Version-2 PAN/sequence presence, Header/Payload/Nested IEs, enhanced ACK and beacon exchanges; separate structural, operational and scheduled gates |
 | S1: base MAC security | M1; E1 for enhanced-frame claims | Auxiliary header, key/device/security-level state, AES-based operations, authenticated fields, nonce/counter rules, replay protection and status handling; independent crypto vectors plus secured exchanges, tampering, counter exhaustion and reset/persistence tests |
 | T1: TSCH | E1, PHY switching/timing, selected S1 joining policy | ASN, slotframes/links, templates, hopping, shared/dedicated links, enhanced beacons, synchronization/drift and keepalive; fixed schedule first, pluggable scheduling policy later; test slot/channel oracles and synchronization loss |
 | D1: DSME | E1 and relevant beacon/security services | Separate scheduler, multi-superframes, allocation commands and conflict recovery; test simultaneous allocation, expiration and channel use |
