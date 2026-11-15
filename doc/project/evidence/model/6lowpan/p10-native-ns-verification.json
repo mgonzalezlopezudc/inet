@@ -1,0 +1,215 @@
+{
+  "scope": "P10 independently usable native router ordinary NS responder before host client",
+  "cwd": "/home/miguel/workspace/.codex-artifacts/lowpan-ns-prerequisite-20261115",
+  "environment": [
+    "source /home/miguel/omnetpp-6.4.0aipre2/setenv",
+    "source setenv"
+  ],
+  "seed": 0,
+  "host_client_present": false,
+  "full_p10_complete": false,
+  "source_sha256": {
+    "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.cc": "04d6fc2cf2ca6107cd94cee5787d0300e8a78a50413618a03c253b9156c00a55",
+    "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.h": "069989fca39935a1e84166b4bf1c8dfd8ef90132aea86745e3ee83427f8e3cb5",
+    "tests/protocol/6lowpan/LowpanNeighborRegistration.test": "fed569edaefb51549b18c43fb76f58abb88535a72b259f33e090278a11145968",
+    "tests/protocol/6lowpan/neighbor-registration.md": "be882bca1ce5fad85989ab5ef85f6d527e4ea257a33c68ec555f33c739765823",
+    "doc/whatsnew/compatible/lowpan-neighbor-solicitation.txt": "39b880b90873184d2b15b54841935a73c1851fe1327d8e8190873c875991c42e"
+  },
+  "dependency_sha256": {
+    "src/inet/networklayer/icmpv6/Ipv6NdMessage.msg": "3052abcfc33de7572e9f49dffa8aa19644ac29750c9f80f3663a8a8c4ee69aee"
+  },
+  "dependency_note": "The fixed eight-bit ND option enum prerequisite is present in all checks below. Initial cold builds and pre-correction runs remain separate artifacts; the listed matching rebuilds and checks ran after the representation repair.",
+  "checks": [
+    {
+      "command": [
+        "make",
+        "-j4",
+        "MODE=debug"
+      ],
+      "mode": "debug",
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-debug.log"
+    },
+    {
+      "command": [
+        "make",
+        "-j4",
+        "MODE=release"
+      ],
+      "mode": "release",
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-release.log"
+    },
+    {
+      "command": [
+        "opp_run_protocol_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-w",
+        "^tests/protocol/6lowpan$",
+        "-f",
+        "Lowpan(NeighborRegistration|RouterDiscovery)\\.test$",
+        "--no-concurrent",
+        "-l",
+        "INFO",
+        "-L",
+        "INFO",
+        "--log-file",
+        "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-protocol-driver.log"
+      ],
+      "mode": "debug",
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-protocol.log",
+      "fixtures": 2,
+      "runs": 2
+    },
+    {
+      "command": [
+        "opp_run_protocol_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "release",
+        "--no-build",
+        "-w",
+        "^tests/protocol/6lowpan$",
+        "-f",
+        "LowpanNeighborRegistration\\.test$",
+        "--no-concurrent",
+        "-l",
+        "INFO",
+        "-L",
+        "INFO",
+        "--log-file",
+        "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-release-protocol-driver.log"
+      ],
+      "mode": "release",
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-release-protocol.log",
+      "fixtures": 1,
+      "runs": 1,
+      "assertions_disabled": true
+    },
+    {
+      "command": [
+        "doc/project/enforcement/check-architecture.sh",
+        "src/inet/linklayer/lowpan"
+      ],
+      "mode": "static",
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-ns-prerequisite-architecture.log"
+    },
+    {
+      "command": [
+        "doc/project/enforcement/check-naming.sh",
+        "src/inet/linklayer/lowpan"
+      ],
+      "mode": "static",
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-ns-prerequisite-naming.log"
+    },
+    {
+      "command": [
+        "doc/project/enforcement/check-source-seals.sh",
+        "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.cc",
+        "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.h"
+      ],
+      "mode": "static",
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-ns-prerequisite-seals.log"
+    }
+  ],
+  "runtime_sha256": {
+    "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-runtime-20261115/debug/LowpanNeighborRegistration/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-runtime-20261115/debug/LowpanNeighborRegistration/test.ned": "640813af7660d3d063260e2bef08c85385b3c66342d9be756e234876c8e8c0ed",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-runtime-20261115/debug/LowpanNeighborRegistration/RegistrationCheck.cc": "432b3da2488b7f3b17d95262af3dadac3f68d59a8c7325e4e757140fa09da346",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-runtime-20261115/debug/LowpanNeighborRegistration/omnetpp.ini": "92c767dc7407760d53d45270c02806d096a667d0c71006484a4688246e83c2d8",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-runtime-20261115/debug/LowpanNeighborRegistration/package.ned": "ff74c63e890551d5cb8339be877a4e6569ab0413355daa8f6a49924ef3155cd2",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-runtime-20261115/debug/LowpanNeighborRegistration/test.out": "67fd4ae5c039205bcbf32c1648cdd2e361d7f45c24da29650050ca992adea1c7",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-runtime-20261115/debug/LowpanRouterDiscovery/DiscoveryCheck.cc": "152dc30614885d83529cceb23578002f87f4dbdeeddaad2633e35931a9972946",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-runtime-20261115/debug/LowpanRouterDiscovery/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-runtime-20261115/debug/LowpanRouterDiscovery/test.ned": "ac63872ca58164f93d6ccb70171aa72be206bec424c7ba59aac6ccc0558d31e0",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-runtime-20261115/debug/LowpanRouterDiscovery/omnetpp.ini": "8c6c4631a1cb40f81c02c4a548449f2e30357ff4130515a84eb00c1bd21184a4",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-runtime-20261115/debug/LowpanRouterDiscovery/package.ned": "fa26eef8688285c0a0240650d7852fd96269dd7c634ed5a90c21adabc08bfd16",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-runtime-20261115/debug/LowpanRouterDiscovery/test.out": "9fd6c1e2811623b20729208c539747927f22733729579a15c385ec59440e1cae",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-runtime-20261115/release/LowpanNeighborRegistration/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-runtime-20261115/release/LowpanNeighborRegistration/test.ned": "640813af7660d3d063260e2bef08c85385b3c66342d9be756e234876c8e8c0ed",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-runtime-20261115/release/LowpanNeighborRegistration/RegistrationCheck.cc": "432b3da2488b7f3b17d95262af3dadac3f68d59a8c7325e4e757140fa09da346",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-runtime-20261115/release/LowpanNeighborRegistration/omnetpp.ini": "92c767dc7407760d53d45270c02806d096a667d0c71006484a4688246e83c2d8",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-runtime-20261115/release/LowpanNeighborRegistration/package.ned": "ff74c63e890551d5cb8339be877a4e6569ab0413355daa8f6a49924ef3155cd2",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-runtime-20261115/release/LowpanNeighborRegistration/test.out": "d6a931b42ea0574f317dd94b1b4ce198936488e15b946d28bdb9f47b05216c04"
+  },
+  "debug_assertions": {
+    "native_frames": 21,
+    "aro_radio_replies": 11,
+    "ordinary_unicast_radio_replies": 2,
+    "dad_broadcast_peer_receptions": 2,
+    "learned_route_data_packets": 1,
+    "malformed_drops": 6,
+    "registration_counts": [
+      1,
+      0,
+      1,
+      0,
+      1,
+      0,
+      1,
+      0,
+      1
+    ],
+    "ordinary_ns_preserves_registrations": true,
+    "dad_unspecified_source_eligibility_and_flags": true
+  },
+  "release_observed": {
+    "observed": {
+      "injected": 21,
+      "aro_advertisements": 11,
+      "data": 1,
+      "drops": 6,
+      "registration_counts": [
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1
+      ]
+    },
+    "assertions_disabled": true,
+    "limit": "Independent printed-count checks prove the ARO consumer trajectory; per-field ASSERTs and unprinted ordinary-NS/DAD counts are not release evidence.",
+    "runtime_sha256": {
+      "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-runtime-20261115/release/LowpanNeighborRegistration/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-runtime-20261115/release/LowpanNeighborRegistration/test.ned": "640813af7660d3d063260e2bef08c85385b3c66342d9be756e234876c8e8c0ed",
+      "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-runtime-20261115/release/LowpanNeighborRegistration/RegistrationCheck.cc": "432b3da2488b7f3b17d95262af3dadac3f68d59a8c7325e4e757140fa09da346",
+      "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-runtime-20261115/release/LowpanNeighborRegistration/omnetpp.ini": "92c767dc7407760d53d45270c02806d096a667d0c71006484a4688246e83c2d8",
+      "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-runtime-20261115/release/LowpanNeighborRegistration/package.ned": "ff74c63e890551d5cb8339be877a4e6569ab0413355daa8f6a49924ef3155cd2",
+      "/home/miguel/workspace/.codex-artifacts/lowpan-ns-enum-runtime-20261115/release/LowpanNeighborRegistration/test.out": "d6a931b42ea0574f317dd94b1b4ce198936488e15b946d28bdb9f47b05216c04"
+    }
+  },
+  "independent_review": {
+    "PASS": 22,
+    "NA": 12,
+    "FLAG": 0,
+    "QUESTION": 0
+  },
+  "not_run": [
+    "failing-parent simulation comparison",
+    "release field-level ASSERT verification (NDEBUG disables ASSERT)",
+    "combined feature matrix"
+  ],
+  "remaining_scope": [
+    "host client is a separate tested stage",
+    "native border and relay registration",
+    "authoritative context distribution"
+  ]
+}

@@ -37,6 +37,8 @@ class INET_API LowpanIpv6NeighbourDiscovery : public Ipv6NeighbourDiscovery
     virtual void startRouterDiscovery(NetworkInterface *ie) override;
     virtual void createRaTimer(NetworkInterface *ie) override;
     virtual void processNDMessage(Packet *packet, const Icmpv6Header *message) override;
+    void processNativeNeighbourSolicitation(Packet *packet, const Ipv6NeighbourSolicitation *message,
+            NetworkInterface *interface, LowpanNativeLinkDomain *domain);
     void processRegistration(Packet *packet, const Ipv6NeighbourSolicitation *message, NetworkInterface *interface,
             LowpanNativeLinkDomain *domain);
     bool readRegistration(const Packet *packet, const Ipv6NeighbourSolicitation *message, NetworkInterface *interface,

@@ -36,6 +36,12 @@ The [router discovery fixture](../../../../../tests/protocol/6lowpan/router-disc
 
 Host discovery/registration generation and the distribution/multihop stage remain in progress; this responder alone does not complete P10.
 
+## P10 — Ordinary native neighbor solicitations
+
+Native registration routers distinguish ordinary Neighbor Solicitations from ARO requests. Valid unicast probes may omit SLLAO and receive a solicited NA without TLLAO or Override. Multicast probes receive native TLLAO, while valid unspecified-source DAD probes receive an all-nodes native broadcast NA with Solicited clear. Target lifetime and tentative status are checked before replying. These replies preserve existing registrations and use validated native receive identities rather than the Ethernet ND decoder.
+
+The [standalone record](p10-native-ns-verification.json) verifies the responder before the host client in an isolated checkout, with the fixed ND option enum prerequisite present. Matching debug/release builds and two debug protocol fixtures/two runs pass. The registration fixture observes twenty-one inputs, eleven ARO replies, two ordinary unicast replies, two peer receptions of the DAD broadcast, one learned-route data delivery and six malformed drops. The release consumer's printed ARO/data/drop/count sequence is independently checked; disabled release ASSERTs do not establish its per-field checks. Independent source review is clean, and scoped architecture, naming and source-protection checks pass. The [shared enum repair](nd-option-values-verification.json) separately proves all 256 values representable and unknown options 99/255 reserializable without changing their wire values.
+
 ## Remaining packages
 
 P10–P15 remain in execution order under the completion plan. Optimized/extended ND, mesh-under, paging, virtual fragment forwarding and selective recovery are not inferred from header compression support.
