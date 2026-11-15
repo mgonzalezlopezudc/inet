@@ -1,0 +1,37 @@
+%description:
+Read-only address validity distinguishes finite, infinite and missing assignments
+at exact deadlines and observes lifetime updates without removing address rows.
+
+%includes:
+#include "inet/networklayer/ipv6/Ipv6InterfaceData.h"
+using namespace inet;
+
+%activity:
+Ipv6InterfaceData data;
+Ipv6Address finite("2001:db8::1"),infinite("2001:db8::2"),missing("2001:db8::3");
+data.assignAddress(finite,false,SimTime(2),SimTime(1));
+data.assignAddress(infinite,false,SIMTIME_ZERO,SIMTIME_ZERO);
+auto index=[&](const Ipv6Address& address) {
+    for (int i=0;i<data.getNumAddresses();i++) if (data.getAddress(i)==address) return i;
+    ASSERT(false);return -1;
+};
+ASSERT(data.getNumAddresses()==2 && data.getAddressExpiryTime(index(finite))==SimTime(2) && data.getAddressExpiryTime(index(infinite))==SIMTIME_ZERO);
+ASSERT(data.hasValidAddress(finite,SimTime(1999,SIMTIME_MS)));
+ASSERT(!data.hasValidAddress(finite,SimTime(2)) && !data.hasValidAddress(finite,SimTime(3)));
+ASSERT(data.hasValidAddress(infinite,SimTime(1000000)) && !data.hasValidAddress(missing,SIMTIME_ZERO));
+ASSERT(data.getNumAddresses()==2 && data.hasAddress(finite)); // Queries must not expire or erase assignments.
+data.updateMatchingAddressExpiryTimes(finite,128,SimTime(5),SimTime(4));
+ASSERT(data.getAddressExpiryTime(index(finite))==SimTime(5) && data.getAddressExpiryTime(index(infinite))==SIMTIME_ZERO);
+ASSERT(data.hasValidAddress(finite,SimTime(4)) && !data.hasValidAddress(finite,SimTime(5)));
+data.updateMatchingAddressExpiryTimes(finite,128,SIMTIME_ZERO,SIMTIME_ZERO);
+ASSERT(data.getAddressExpiryTime(index(finite))==SIMTIME_ZERO && data.hasValidAddress(finite,SimTime(1000000)));
+data.removeAddress(finite);
+ASSERT(!data.hasValidAddress(finite,SIMTIME_ZERO) && data.getNumAddresses()==1);
+ASSERT(data.getAddress(0)==infinite && data.getAddressExpiryTime(0)==SIMTIME_ZERO);
+Ipv6Address tentative("2001:db8::4");data.assignAddress(tentative,true,SimTime(10),SimTime(5));
+ASSERT(data.isTentativeAddress(tentative) && data.hasValidAddress(tentative,SimTime(5)));
+ASSERT(!data.hasValidAddress(tentative,SimTime(10)) && data.isTentativeAddress(tentative));
+EV << "IPv6 address validity deadlines, refresh and read-only queries verified\n";
+
+%contains: stdout
+IPv6 address validity deadlines, refresh and read-only queries verified

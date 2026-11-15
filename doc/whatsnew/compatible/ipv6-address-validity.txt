@@ -1,0 +1,3 @@
+IPv6 address validity queries
+
+Ipv6InterfaceData exposes read-only queries for each address's valid-lifetime deadline and validity at an explicit simulation time. Exact expiry is invalid, zero deadlines remain infinite, and the queries preserve the assignment list and existing hasAddress() behavior.

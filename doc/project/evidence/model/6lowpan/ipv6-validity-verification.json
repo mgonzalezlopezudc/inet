@@ -1,0 +1,65 @@
+{
+  "scope": "Read-only IPv6 interface address deadline and validity queries",
+  "cwd": "/home/miguel/workspace/inet-6lowpan-standard",
+  "mode": "debug",
+  "source_sha256": {
+    "src/inet/networklayer/ipv6/Ipv6InterfaceData.h": "edb845f0240b6d59ec143c92dee1ba31841b54e04a1c193cf5d575a80b8153c7",
+    "src/inet/networklayer/ipv6/Ipv6InterfaceData.cc": "ef8c0f1cf36921c91f273c6650fedccdcc70e3531c9770af1b724eafcbe8cc83",
+    "tests/unit/Ipv6AddressLifetimes.test": "9bd07b865f852b8a1f0b96be60775907b1fbb0772c017c83436338807caafab1",
+    "doc/whatsnew/compatible/ipv6-address-validity.txt": "7c4c16ade850c582a42844b11f7775b32dacee96b7db23889969c1f0afaa0b3b"
+  },
+  "checks": [
+    {
+      "command": [
+        "make",
+        "MODE=debug",
+        "-j8"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-p10-stage2-20261115/validity-build.log"
+    },
+    {
+      "command": [
+        "opp_run_unit_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-f",
+        "Ipv6AddressLifetimes\\.test$"
+      ],
+      "exit_code": 0,
+      "fixtures": 1,
+      "runs": 1,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-p10-stage2-20261115/validity-unit.log"
+    },
+    {
+      "command": [
+        "doc/project/enforcement/check-architecture.sh",
+        "src/inet/networklayer/ipv6"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-p10-stage2-20261115/validity-architecture.log"
+    },
+    {
+      "command": [
+        "make",
+        "MODE=release",
+        "-j8"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-p10-stage2-20261115/router-validity-release.log"
+    }
+  ],
+  "assertions": [
+    "finite/infinite/missing address",
+    "exact expiry",
+    "read-only query leaves assignments intact",
+    "current deadline after lifetime update/reordering/removal",
+    "tentative status independent of lifetime validity"
+  ],
+  "initial_attempt": "Fixture incorrectly assumed assignment insertion order; choosePreferredAddress sorts the address vector. Corrected fixture finds indexes by address."
+}

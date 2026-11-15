@@ -475,6 +475,8 @@ class INET_API Ipv6InterfaceData : public InterfaceProtocolData
      * Returns ith address of the interface.
      */
     const Ipv6Address& getAddress(int i) const;
+    /** Returns the address's absolute valid-lifetime deadline; zero means infinity. */
+    simtime_t getAddressExpiryTime(int i) const;
     /*
      * Returns Global address of the interface.
      * */
@@ -495,13 +497,13 @@ class INET_API Ipv6InterfaceData : public InterfaceProtocolData
      */
     AddressType getAddressType(const Ipv6Address& addr) const;
 
-// FIXME address validity check missing. introduce hasValidAddress(addr, now) which would compare lifetimes too?
-
     /**
      * Returns true if the given address is one of the addresses assigned,
      * regardless whether it is tentative or not.
      */
     bool hasAddress(const Ipv6Address& addr) const;
+    /** Checks only the valid-lifetime deadline at now, independently of tentative status; does not mutate the list. */
+    bool hasValidAddress(const Ipv6Address& addr, simtime_t now) const;
 
     /**
      * Returns true if the interface has an address matching the given
