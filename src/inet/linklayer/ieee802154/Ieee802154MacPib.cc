@@ -22,12 +22,13 @@ uint32_t Ieee802154MacPib::calculateUnitBackoffPeriod(uint32_t ccaDurationUs)
     return 12 + (ccaDurationUs + 15) / 16;
 }
 
-Ieee802154MacPib::State Ieee802154MacPib::makeDefaultState(const Ieee802154Address& deviceExtendedAddress, uint8_t dsn, uint32_t ccaDurationUs)
+Ieee802154MacPib::State Ieee802154MacPib::makeDefaultState(const Ieee802154Address& deviceExtendedAddress, uint8_t dsn, uint32_t ccaDurationUs, uint8_t bsn)
 {
     State result;
     result.macExtendedAddress = deviceExtendedAddress;
     result.macCoordExtendedAddress = Ieee802154Address::NONE_ADDRESS;
     result.macDsn = dsn;
+    result.macBsn = bsn;
     result.macUnitBackoffPeriod = calculateUnitBackoffPeriod(ccaDurationUs);
     return result;
 }
@@ -43,6 +44,15 @@ Ieee802154MacStatus Ieee802154MacPib::getValue(const State& state, const std::st
     GET_INTEGER(macCoordShortAddress)
     GET_INTEGER(macPanId)
     GET_INTEGER(macDsn)
+    GET_INTEGER(macBsn)
+    GET_BOOLEAN(macAutoRequest)
+    GET_BOOLEAN(macNotifyAllBeacons)
+    GET_BOOLEAN(macBeaconAutoRespond)
+    GET_BOOLEAN(macAssociatedPanCoord)
+    GET_BOOLEAN(macAssociationPermit)
+    GET_INTEGER(macResponseWaitTime)
+    GET_INTEGER(macTransactionPersistenceTime)
+    if (attribute == "macBeaconPayload") { value = state.macBeaconPayload; return Ieee802154MacStatus::SUCCESS; }
     GET_INTEGER(macMinBe)
     GET_INTEGER(macMaxBe)
     GET_INTEGER(macMaxCsmaBackoffs)
@@ -136,10 +146,28 @@ Ieee802154MacStatus Ieee802154MacPib::setValue(State& state, const std::string& 
         else state.macPanId = static_cast<uint16_t>(integerValue);
         return Ieee802154MacStatus::SUCCESS;
     }
-    if (attribute == "macDsn") {
+    if (attribute == "macDsn" || attribute == "macBsn") {
         if (!getNonnegativeInteger(value, integerValue) || integerValue > 0xff)
             return Ieee802154MacStatus::INVALID_PARAMETER;
-        state.macDsn = static_cast<uint8_t>(integerValue);
+        if (attribute == "macDsn") state.macDsn = static_cast<uint8_t>(integerValue);
+        else state.macBsn = static_cast<uint8_t>(integerValue);
+        return Ieee802154MacStatus::SUCCESS;
+    }
+    if (attribute == "macResponseWaitTime" || attribute == "macTransactionPersistenceTime") {
+        // IEEE Std 802.15.4-2024, Table 8-36: periods, not symbols or microseconds.
+        auto minimum = attribute == "macResponseWaitTime" ? 2u : 0u;
+        auto maximum = attribute == "macResponseWaitTime" ? 64u : 65535u;
+        if (!getNonnegativeInteger(value, integerValue) || integerValue < minimum || integerValue > maximum)
+            return Ieee802154MacStatus::INVALID_PARAMETER;
+        if (attribute == "macResponseWaitTime") state.macResponseWaitTime = integerValue;
+        else state.macTransactionPersistenceTime = integerValue;
+        return Ieee802154MacStatus::SUCCESS;
+    }
+    if (attribute == "macBeaconPayload") {
+        const auto *bytes = std::get_if<std::vector<uint8_t>>(&value);
+        if (!bytes)
+            return Ieee802154MacStatus::INVALID_PARAMETER;
+        state.macBeaconPayload = *bytes;
         return Ieee802154MacStatus::SUCCESS;
     }
     if (attribute == "macMinBe") {
@@ -177,14 +205,21 @@ Ieee802154MacStatus Ieee802154MacPib::setValue(State& state, const std::string& 
         return Ieee802154MacStatus::SUCCESS;
     }
     if (attribute == "macRxOnWhenIdle" || attribute == "macImplicitBroadcast" ||
-            attribute == "macGroupRxMode" || attribute == "macPromiscuousMode") {
+            attribute == "macGroupRxMode" || attribute == "macPromiscuousMode" ||
+            attribute == "macAutoRequest" || attribute == "macNotifyAllBeacons" || attribute == "macBeaconAutoRespond" ||
+            attribute == "macAssociatedPanCoord" || attribute == "macAssociationPermit") {
         const auto *booleanValue = std::get_if<bool>(&value);
         if (booleanValue == nullptr)
             return Ieee802154MacStatus::INVALID_PARAMETER;
         if (attribute == "macRxOnWhenIdle") state.macRxOnWhenIdle = *booleanValue;
         else if (attribute == "macImplicitBroadcast") state.macImplicitBroadcast = *booleanValue;
         else if (attribute == "macGroupRxMode") state.macGroupRxMode = *booleanValue;
-        else state.macPromiscuousMode = *booleanValue;
+        else if (attribute == "macPromiscuousMode") state.macPromiscuousMode = *booleanValue;
+        else if (attribute == "macAutoRequest") state.macAutoRequest = *booleanValue;
+        else if (attribute == "macNotifyAllBeacons") state.macNotifyAllBeacons = *booleanValue;
+        else if (attribute == "macBeaconAutoRespond") state.macBeaconAutoRespond = *booleanValue;
+        else if (attribute == "macAssociatedPanCoord") state.macAssociatedPanCoord = *booleanValue;
+        else state.macAssociationPermit = *booleanValue;
         return Ieee802154MacStatus::SUCCESS;
     }
     if (attribute == "macSecurityEnabled" || attribute == "macDsmeEnabled" || attribute == "macDaEnabled" ||
@@ -217,8 +252,8 @@ Ieee802154MacStatus Ieee802154MacPib::setValue(State& state, const std::string& 
 }
 
 Ieee802154MacPib::Ieee802154MacPib(Ieee802154Address deviceExtendedAddress, uint8_t injectedDsn,
-        uint32_t ccaDurationUs, const std::vector<Ieee802154MacSetRequest>& startupOverrides) :
-    state(makeDefaultState(deviceExtendedAddress, injectedDsn, ccaDurationUs)),
+        uint32_t ccaDurationUs, const std::vector<Ieee802154MacSetRequest>& startupOverrides, uint8_t injectedBsn) :
+    state(makeDefaultState(deviceExtendedAddress, injectedDsn, ccaDurationUs, injectedBsn)),
     ccaDurationUs(ccaDurationUs)
 {
     if (!isIndividualExtendedAddress(deviceExtendedAddress))
@@ -256,10 +291,26 @@ Ieee802154MacStatus Ieee802154MacPib::set(const std::string& attribute, const Ie
     return status;
 }
 
-void Ieee802154MacPib::reset(bool setDefaultPib, uint8_t injectedDsn)
+void Ieee802154MacPib::reset(bool setDefaultPib, uint8_t injectedDsn, uint8_t injectedBsn)
 {
     if (setDefaultPib)
-        state = makeDefaultState(state.macExtendedAddress, injectedDsn, ccaDurationUs);
+        state = makeDefaultState(state.macExtendedAddress, injectedDsn, ccaDurationUs, injectedBsn);
+}
+
+void Ieee802154MacPib::clearAssociation()
+{
+    // IEEE Std 802.15.4-2024, 10.21.3: disassociation restores these five defaults only.
+    state.macPanId = 0xffff;
+    state.macShortAddress = 0xffff;
+    state.macAssociatedPanCoord = false;
+    state.macCoordShortAddress = 0xffff;
+    state.macCoordExtendedAddress = Ieee802154Address::NONE_ADDRESS;
+}
+
+void Ieee802154MacPib::updateCcaDuration(uint32_t durationUs)
+{
+    calculateUnitBackoffPeriod(durationUs); // Validate before replacing the reset context.
+    ccaDurationUs = durationUs;
 }
 
 } // namespace inet

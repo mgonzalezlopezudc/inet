@@ -1,0 +1,135 @@
+%description:
+Exercise production unslotted access transitions and actual selected backoff
+times. A test-local MAC client supplies CCA results; PHY integration is separate.
+
+%file: AccessFixture.cc
+#include <map>
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154AccessClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154AccessProvider.h"
+
+namespace inet {
+class AccessExercise : public cSimpleModule, public IIeee802154AccessClient, public cListener
+{
+    ModuleRefByPar<IIeee802154AccessProvider> access;
+    std::map<uint64_t, Ieee802154MacServiceResult> results;
+    std::map<uint64_t, uint8_t> backoffs;
+    int slots = 0, nb = 0, be = 0, requests = 0;
+    simtime_t selectedAt;
+    bool done = false;
+
+  public:
+    AccessExercise() : cSimpleModule(32768) {}
+    virtual void initialize() override {
+        access.reference(this, "accessModule", true);
+        auto module = getModuleByPath(par("accessModule"));
+        for (auto signal : {"backoffSlots", "backoffCount", "backoffExponent"})
+            module->subscribe(signal, this);
+    }
+    virtual void receiveSignal(cComponent *, simsignal_t signal, long value, cObject *) override {
+        if (signal == registerSignal("backoffSlots")) { slots = value; selectedAt = simTime(); }
+        else if (signal == registerSignal("backoffCount")) nb = value;
+        else be = value;
+    }
+    virtual void handleCcaRequest(uint64_t) override {
+        Enter_Method("handleCcaRequest");
+        ASSERT(simTime() == selectedAt + SimTime(slots, SIMTIME_US));
+        ASSERT(slots >= 0 && slots < (1 << be));
+        ++requests;
+    }
+    virtual void handleAccessConfirm(uint64_t id, const Ieee802154MacServiceResult& result, uint8_t count) override {
+        Enter_Method("handleAccessConfirm");
+        ASSERT(!results.count(id));
+        results.emplace(id, result);
+        backoffs[id] = count;
+    }
+
+  protected:
+    virtual void activity() override {
+        using Admission = Ieee802154MacServiceAdmission;
+        using Status = Ieee802154MacStatus;
+        Ieee802154AccessRequest parameters{0, 3, 2, SimTime(1, SIMTIME_US)};
+        ASSERT(access->start(1, parameters) == Admission::ACCEPTED);
+        ASSERT(requests == 1 && slots == 0 && nb == 0 && be == 0);
+        access->handleCcaResult(99, true);
+        ASSERT(!results.count(1));
+        access->handleCcaResult(1, true);
+        ASSERT(results.at(1) == Ieee802154MacServiceResult(Status::SUCCESS) && backoffs.at(1) == 0);
+        ASSERT(access->start(1, parameters) == Admission::INVALID_REQUEST);
+
+        ASSERT(access->start(2, parameters) == Admission::ACCEPTED);
+        ASSERT(nb == 0 && be == 0);
+        access->handleCcaResult(2, false);
+        ASSERT(nb == 1 && be == 1);
+        wait(SimTime(10, SIMTIME_US));
+        access->handleCcaResult(2, false);
+        ASSERT(nb == 2 && be == 2);
+        wait(SimTime(10, SIMTIME_US));
+        access->handleCcaResult(2, false);
+        ASSERT(results.at(2) == Ieee802154MacServiceResult(Status::CHANNEL_ACCESS_FAILURE));
+        ASSERT(backoffs.at(2) == 3); // Failure is NB > limit, not NB == limit.
+
+        parameters.minBe = 3;
+        parameters.maxBackoffs = 5;
+        ASSERT(access->start(3, parameters) == Admission::ACCEPTED);
+        for (int busy = 0; busy < 4; ++busy) {
+            ASSERT(be == 3 && nb == busy);
+            wait(SimTime(10, SIMTIME_US));
+            access->handleCcaResult(3, false);
+        }
+        wait(SimTime(10, SIMTIME_US));
+        access->handleCcaResult(3, true);
+        ASSERT(results.at(3) == Ieee802154MacServiceResult(Status::SUCCESS) && backoffs.at(3) == 4);
+        auto oldRequests = requests;
+        ASSERT(access->start(4, parameters) == Admission::ACCEPTED);
+        ASSERT(access->cancel(4, Ieee802154MacServiceAbortReason::CANCELLED) == Ieee802154MacServiceCancelResult::CANCELLED);
+        ASSERT(results.at(4) == Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::CANCELLED));
+        wait(SimTime(10, SIMTIME_US));
+        ASSERT(requests <= oldRequests + 1); // A zero-slot CCA may have happened inline before cancellation.
+        access->handleCcaResult(4, true);
+        parameters.minBe = 0;
+        ASSERT(access->start(5, parameters) == Admission::ACCEPTED);
+        access->handleCcaResult(4, true);
+        ASSERT(!results.count(5));
+        access->handleCcaResult(5, true);
+        ASSERT(results.at(5) == Ieee802154MacServiceResult(Status::SUCCESS));
+        done = true;
+    }
+    virtual void finish() override {
+        ASSERT(done);
+        std::cout << "Unslotted NB/BE, exact backoff times, attempt limits and stale cancellation verified.\n";
+    }
+};
+Define_Module(AccessExercise);
+}
+
+%file: AccessFixture.ned
+import inet.common.SimpleModule;
+import inet.linklayer.ieee802154.Ieee802154UnslottedAccess;
+import inet.linklayer.ieee802154.contract.IIeee802154AccessClient;
+
+simple AccessExercise extends SimpleModule like IIeee802154AccessClient
+{
+    parameters:
+        @class(::inet::AccessExercise);
+        string accessModule;
+}
+network AccessTest
+{
+    submodules:
+        access: Ieee802154UnslottedAccess { clientModule = "^.exercise"; }
+        exercise: AccessExercise { accessModule = "^.access"; }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = AccessTest
+ned-path = .;../../../../src;../../lib
+sim-time-limit = 1ms
+seed-set = 0
+cmdenv-express-mode = true
+record-vector-results = false
+record-scalar-results = false
+
+%contains: stdout
+Unslotted NB/BE, exact backoff times, attempt limits and stale cancellation verified.

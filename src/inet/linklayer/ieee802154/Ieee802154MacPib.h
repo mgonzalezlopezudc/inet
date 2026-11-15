@@ -15,7 +15,7 @@ namespace inet {
 
 /**
  * Synchronous storage and validation for the selected IEEE 802.15.4 MAC PIB.
- * The future service provider owns admission, request IDs, notifications, and
+ * The service provider owns admission, request IDs, notifications, and
  * applying accepted values to radio or access procedures; this class has no
  * module, PHY, RNG, callback, or operational state.
  */
@@ -29,6 +29,15 @@ class INET_API Ieee802154MacPib
         uint16_t macCoordShortAddress = 0xffff;
         uint16_t macPanId = 0xffff;
         uint8_t macDsn = 0;
+        uint8_t macBsn = 0; ///< Deterministic helper injection; randomized by the operational owner.
+        bool macAutoRequest = true;
+        bool macNotifyAllBeacons = false;
+        bool macBeaconAutoRespond = true;
+        bool macAssociatedPanCoord = false;
+        bool macAssociationPermit = false;
+        uint8_t macResponseWaitTime = 32; ///< Base-superframe periods.
+        uint16_t macTransactionPersistenceTime = 0x01f4; ///< Base-superframe periods in the selected BO=15 profile.
+        std::vector<uint8_t> macBeaconPayload;
         uint8_t macMinBe = 3;
         uint8_t macMaxBe = 5;
         uint8_t macMaxCsmaBackoffs = 4;
@@ -69,13 +78,13 @@ class INET_API Ieee802154MacPib
     };
 
     State state;
-    const uint32_t ccaDurationUs;
+    uint32_t ccaDurationUs;
 
     static bool isIndividualExtendedAddress(const Ieee802154Address& address);
     static uint32_t calculateUnitBackoffPeriod(uint32_t ccaDurationUs);
     static Ieee802154MacStatus getValue(const State& state, const std::string& attribute, Ieee802154MacPibValue& value);
     static Ieee802154MacStatus setValue(State& state, const std::string& attribute, const Ieee802154MacPibValue& value, bool validateCrossAttributes);
-    static State makeDefaultState(const Ieee802154Address& deviceExtendedAddress, uint8_t dsn, uint32_t ccaDurationUs);
+    static State makeDefaultState(const Ieee802154Address& deviceExtendedAddress, uint8_t dsn, uint32_t ccaDurationUs, uint8_t bsn);
 
   public:
     /**
@@ -89,7 +98,7 @@ class INET_API Ieee802154MacPib
      * object is constructed.
      */
     Ieee802154MacPib(Ieee802154Address deviceExtendedAddress, uint8_t injectedDsn,
-            uint32_t ccaDurationUs = 128, const std::vector<Ieee802154MacSetRequest>& startupOverrides = {});
+            uint32_t ccaDurationUs = 128, const std::vector<Ieee802154MacSetRequest>& startupOverrides = {}, uint8_t injectedBsn = 0);
 
     /** GET echoes the exact name; an unsupported name returns UNSUPPORTED_ATTRIBUTE with no value. */
     Ieee802154MacGetConfirm get(const std::string& attribute) const;
@@ -107,7 +116,11 @@ class INET_API Ieee802154MacPib
      * values; true restores selected defaults and uses the caller-supplied
      * DSN. PHY reset and operation abortion belong to the service provider.
      */
-    void reset(bool setDefaultPib, uint8_t injectedDsn);
+    void reset(bool setDefaultPib, uint8_t injectedDsn, uint8_t injectedBsn = 0);
+    /** Clause 10.21.3: clear PAN and coordinator references, preserving other PIB values. */
+    void clearAssociation();
+    /** Refresh PHY context for future defaults; the current writable backoff period is retained. */
+    void updateCcaDuration(uint32_t durationUs);
 };
 
 } // namespace inet

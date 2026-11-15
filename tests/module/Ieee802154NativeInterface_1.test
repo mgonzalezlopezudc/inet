@@ -1,0 +1,232 @@
+%description:
+Exercise the production native MCPS gate adapter and attached interface data on
+real NetworkInterface instances. The provider is test-local; no radio delivery
+or operational MAC behavior is claimed.
+
+%file: NativeInterfaceFixture.cc
+
+#include "inet/common/InitStages.h"
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/common/Protocol.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/SimpleModule.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/ieee802154/Ieee802154InterfaceData.h"
+#include "inet/linklayer/ieee802154/Ieee802154MacServiceTag.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceProvider.h"
+
+namespace inet {
+
+class NativeInterfaceProvider : public SimpleModule, public IIeee802154MacServiceProvider
+{
+    ModuleRefByPar<IIeee802154MacServiceClient> client;
+    ModuleRefByPar<IIeee802154MacServiceClient> peer;
+    Ieee802154Address identity;
+    uint64_t lastId = 0;
+
+  protected:
+    virtual int numInitStages() const override { return NUM_INIT_STAGES; }
+    virtual void initialize(int stage) override {
+        if (stage == INITSTAGE_LOCAL) {
+            client.reference(this, "clientModule", true);
+            peer.reference(this, "peerClientModule", true);
+            identity.set(par("nativeAddress"));
+        }
+        else if (stage == INITSTAGE_LINK_LAYER) {
+            auto interface = check_and_cast<NetworkInterface *>(getParentModule());
+            interface->addProtocolData<Ieee802154InterfaceData>()->setIdentity(
+                    identity, Ieee802154Address::SHORT_UNALLOCATED_ADDRESS, 0x1234);
+            ASSERT(interface->getMacAddress().isUnspecified());
+        }
+    }
+
+  public:
+    virtual Ieee802154MacServiceAdmission submitData(uint64_t id, Packet *packet, const Ieee802154MacDataRequest& request) override {
+        Enter_Method("submitData");
+        ASSERT(id > lastId);
+        lastId = id;
+        ASSERT(request.destinationAddress == Ieee802154Address(par("peerAddress")));
+        ASSERT(request.destinationPanId == 0x1234);
+        ASSERT(request.sourceAddressMode == Ieee802154Address::AddressType::EXTENDED);
+        ASSERT(!packet->findTag<Ieee802154MacDataReq>());
+        if (request.msduHandle == 99)
+            return Ieee802154MacServiceAdmission::BUSY;
+        take(packet);
+        auto received = packet->dup();
+        // Deliberately poison local metadata: receiver configuration must win.
+        received->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::udp);
+        received->addTag<Ieee802154MacDataReq>()->request = request;
+        Ieee802154MacDataIndication indication;
+        indication.sourceAddress = identity;
+        indication.destinationAddress = request.destinationAddress;
+        indication.sourcePanId = indication.destinationPanId = 0x1234;
+        indication.effectiveSourcePanId = 0x1234;
+        indication.dsn = request.msduHandle;
+        delete packet;
+        Ieee802154MacDataConfirm confirm(request.msduHandle, Ieee802154MacStatus::SUCCESS);
+        confirm.numBackoffs = 0;
+        client->handleDataConfirm(id, confirm);
+        peer->handleDataIndication(received, indication);
+        return Ieee802154MacServiceAdmission::ACCEPTED;
+    }
+    virtual Ieee802154MacServiceAdmission submitGet(uint64_t, const Ieee802154MacGetRequest&) override { return Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION; }
+    virtual Ieee802154MacServiceAdmission submitSet(uint64_t, const Ieee802154MacSetRequest&) override { return Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION; }
+    virtual Ieee802154MacServiceAdmission submitReset(uint64_t, const Ieee802154MacResetRequest&) override { return Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION; }
+    virtual Ieee802154MacServiceCancelResult cancel(uint64_t) override { return Ieee802154MacServiceCancelResult::NOT_PENDING; }
+};
+Define_Module(NativeInterfaceProvider);
+
+class NativeInterfaceObserver : public SimpleModule
+{
+    int received = 0;
+    int confirms = 0;
+    int refusals = 0;
+
+  protected:
+    virtual void initialize() override { scheduleAt(SIMTIME_ZERO, new cMessage("start")); }
+    virtual void handleMessage(cMessage *message) override {
+        if (message->isSelfMessage()) {
+            delete message;
+            for (int i = 0; i < 2; ++i) {
+                auto interface = check_and_cast<NetworkInterface *>(getParentModule()->getSubmodule("nic", i));
+                auto data = interface->getProtocolData<Ieee802154InterfaceData>();
+                auto expected = Ieee802154Address::fromExtended(i == 0 ? 0x0201123456789abcULL : 0x0401123456789abcULL);
+                ASSERT(data->getExtendedAddress() == expected);
+                ASSERT(data->getShortAddress().isShortUnallocated());
+                ASSERT(data->getPanId() == 0x1234);
+                for (int j = 0; j < 2; ++j) {
+                    auto packet = new Packet("native-msdu");
+                    packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0xde, 0xad, 0xbe, 0xef}));
+                    auto& request = packet->addTag<Ieee802154MacDataReq>()->request;
+                    request.sourceAddressMode = Ieee802154Address::AddressType::EXTENDED;
+                    request.destinationAddress = Ieee802154Address::fromExtended(i == 0 ? 0x0401123456789abcULL : 0x0201123456789abcULL);
+                    request.destinationPanId = 0x1234;
+                    request.msduHandle = j == 0 ? 7 : 99;
+                    send(packet, "out", i);
+                }
+            }
+        }
+        else {
+            auto packet = check_and_cast<Packet *>(message);
+            int index = packet->getArrivalGate()->getIndex();
+            if (auto tag = packet->findTag<Ieee802154MacDataInd>()) {
+                auto expectedSource = Ieee802154Address::fromExtended(index == 0 ? 0x0401123456789abcULL : 0x0201123456789abcULL);
+                ASSERT(tag->indication.sourceAddress == expectedSource);
+                ASSERT(tag->indication.sourcePanId == 0x1234 && tag->indication.dsn == 7);
+                ASSERT(packet->peekDataAsBytes()->getBytes() == std::vector<uint8_t>({0xde, 0xad, 0xbe, 0xef}));
+                ASSERT(!packet->findTag<Ieee802154MacDataReq>());
+                auto protocol = packet->findTag<PacketProtocolTag>();
+                ASSERT(index == 0 ? !protocol : protocol && protocol->getProtocol() == &Protocol::ipv4);
+                received++;
+            }
+            else {
+                auto result = packet->getTag<Ieee802154MacDataResultInd>();
+                if (result->confirm) {
+                    ASSERT(result->msduHandle == 7);
+                    ASSERT(result->requestId == 1 && result->confirm->msduHandle == 7);
+                    ASSERT(result->confirm->result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS));
+                    confirms++;
+                }
+                else {
+                    ASSERT(result->msduHandle == 99);
+                    ASSERT(result->requestId == 2 && result->admission == Ieee802154MacServiceAdmission::BUSY);
+                    refusals++;
+                }
+            }
+            delete packet;
+        }
+    }
+    virtual void finish() override {
+        ASSERT(received == 2 && confirms == 2 && refusals == 2);
+        std::cout << "Native interface identities, requests, indications and receiver payload context verified.\n";
+    }
+};
+Define_Module(NativeInterfaceObserver);
+} // namespace inet
+
+%file: NativeInterfaceFixture.ned
+
+import inet.common.SimpleModule;
+import inet.networklayer.common.NetworkInterface;
+import inet.linklayer.ieee802154.Ieee802154MacServiceAdapter;
+import inet.linklayer.ieee802154.contract.IIeee802154MacServiceProvider;
+
+simple NativeInterfaceProvider extends SimpleModule like IIeee802154MacServiceProvider
+{
+    parameters:
+        @class(::inet::NativeInterfaceProvider);
+        string clientModule;
+        string peerClientModule;
+        string nativeAddress;
+        string peerAddress;
+}
+
+simple NativeInterfaceObserver extends SimpleModule
+{
+    parameters:
+        @class(::inet::NativeInterfaceObserver);
+    gates:
+        input in[2];
+        output out[2];
+}
+
+module NativeFixtureInterface extends NetworkInterface
+{
+    parameters:
+        string interfaceTableModule = default("");
+        string nativeAddress;
+        string peerAddress;
+        string peerClientModule;
+        string upperProtocol = default("");
+    gates:
+        input upperLayerIn;
+        output upperLayerOut;
+    submodules:
+        adapter: Ieee802154MacServiceAdapter {
+            serviceModule = "^.provider";
+            upperProtocol = parent.upperProtocol;
+        }
+        provider: NativeInterfaceProvider {
+            clientModule = "^.adapter";
+            peerClientModule = parent.peerClientModule;
+            nativeAddress = parent.nativeAddress;
+            peerAddress = parent.peerAddress;
+        }
+    connections:
+        upperLayerIn --> adapter.upperLayerIn;
+        adapter.upperLayerOut --> upperLayerOut;
+}
+
+network NativeInterfaceTest
+{
+    submodules:
+        nic[2]: NativeFixtureInterface;
+        observer: NativeInterfaceObserver;
+    connections:
+        for i=0..1 {
+            observer.out[i] --> nic[i].upperLayerIn;
+            nic[i].upperLayerOut --> observer.in[i];
+        }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = NativeInterfaceTest
+ned-path = .;../../../../src;../../lib
+sim-time-limit = 1ms
+seed-set = 0
+cmdenv-express-mode = true
+record-vector-results = false
+record-scalar-results = false
+*.nic[0].nativeAddress = "extended:02-01-12-34-56-78-9A-BC"
+*.nic[1].nativeAddress = "extended:04-01-12-34-56-78-9A-BC"
+*.nic[0].peerAddress = "extended:04-01-12-34-56-78-9A-BC"
+*.nic[1].peerAddress = "extended:02-01-12-34-56-78-9A-BC"
+*.nic[0].peerClientModule = "^.^.nic[1].adapter"
+*.nic[1].peerClientModule = "^.^.nic[0].adapter"
+*.nic[1].upperProtocol = "ipv4"
+
+%contains: stdout
+Native interface identities, requests, indications and receiver payload context verified.

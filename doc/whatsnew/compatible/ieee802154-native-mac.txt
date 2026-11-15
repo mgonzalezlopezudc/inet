@@ -1,0 +1,3 @@
+Native nonbeacon IEEE 802.15.4 MAC
+
+Added DATA/ACK, unslotted access, indirect transactions, PAN management, scanning, association, recovery and timed receiver control. The selected unsecured legacy-frame profile is documented; scheduled MAC modes and security transforms remain outside this implementation.

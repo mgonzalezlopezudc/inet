@@ -1,0 +1,176 @@
+%description:
+Exercise the 18-octet SIFS/LIFS boundary on actual short-address frames, with
+unacknowledged/acknowledged requests and broadcast AR suppression. Two MSDUs are
+submitted through ordinary callback reentry. Verify readiness overlaps IFS.
+
+%extraargs: -r 0..15
+
+%includes:
+#include "ProtocolTest.h"
+
+%global:
+using namespace inet;
+using namespace inet::protocoltest;
+Define_ProtocolTestProgram()
+{
+    auto network = getSimulation()->getSystemModule();
+    int payload = network->par("payloadLength");
+    bool ack = network->par("ack").boolValue() && !network->par("broadcast").boolValue();
+    double duration = (17 + payload) * 32e-6;
+    double spacing = payload == 7 ? 192e-6 : 640e-6;
+    double delta = duration + spacing + 320e-6 + (ack ? 544e-6 : 0);
+    return ProtocolTest("ieee802154_ifs")
+        .once(on("host[0].nic.mac").signal("packetSentToLower").filterPacket("Ieee802154Frame.frameType == 1 && Ieee802154Frame.dsn == 1").within(0.002))
+        .once(on("host[0].nic.mac").signal("packetSentToLower").filterPacket("Ieee802154Frame.frameType == 1 && Ieee802154Frame.dsn == 2")
+              .describe("second DATA starts after size-dependent IFS, CCA and TX readiness").notBefore(delta).within(delta + 0.000002))
+        .unordered({on("host[0].app").signal("allDone").filterValue(2).within(0.003),
+                    on("host[1].app").signal("allReceived").filterValue(2).within(0.003)});
+}
+
+%activity:
+EV << "ieee802154_ifs compiled\n";
+
+%file: IfsClient.cc
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceProvider.h"
+
+namespace inet {
+class NativeIfsClient : public cSimpleModule, public IIeee802154MacServiceClient
+{
+    ModuleRefByPar<IIeee802154MacServiceProvider> service;
+    uint64_t requestId = 0;
+    int completed = 0, received = 0;
+    simsignal_t doneSignal, receivedSignal;
+    bool effectiveAck() const { return par("ack").boolValue() && !par("broadcast").boolValue(); }
+    void sendNext() {
+        auto packet = new Packet("ifs-msdu");
+        packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>(par("payloadLength").intValue(),completed)));
+        Ieee802154MacDataRequest request;
+        request.sourceAddressMode = Ieee802154Address::AddressType::SHORT;
+        request.destinationAddress = Ieee802154Address::fromShort(par("broadcast").boolValue() ? 0xffff : 0x1002);
+        request.destinationPanId = 0x1234; request.ackTx = par("ack"); request.msduHandle = completed + 1;
+        ASSERT(service->submitData(++requestId,packet,request) == Ieee802154MacServiceAdmission::ACCEPTED);
+    }
+  protected:
+    virtual void initialize() override {
+        service.reference(this,"serviceModule",true); doneSignal = registerSignal("allDone"); receivedSignal = registerSignal("allReceived");
+        if (par("sender").boolValue()) scheduleAt(SimTime(1,SIMTIME_MS),new cMessage("send"));
+    }
+    virtual void handleMessage(cMessage *message) override {
+        delete message;
+        ASSERT(service->submitSet(++requestId,{"macMinBe",uint64_t(0)}) == Ieee802154MacServiceAdmission::ACCEPTED);
+        ASSERT(service->submitSet(++requestId,{"macDsn",uint64_t(1)}) == Ieee802154MacServiceAdmission::ACCEPTED);
+        sendNext();
+    }
+    virtual void finish() override {
+        if (par("sender").boolValue()) ASSERT(completed == 2 && received == 0);
+        else ASSERT(received == 2);
+    }
+  public:
+    virtual void handleDataConfirm(uint64_t id,const Ieee802154MacDataConfirm& confirm) override {
+        Enter_Method("handleDataConfirm");
+        ASSERT(id == requestId && confirm.msduHandle == completed + 1 && confirm.result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS));
+        ASSERT(confirm.ackFramePending.has_value() == effectiveAck());
+        ++completed;
+        if (completed == 1) sendNext(); else emit(doneSignal,2L);
+    }
+    virtual void handleSetConfirm(uint64_t,const Ieee802154MacSetConfirm& confirm) override { Enter_Method("handleSetConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS)); }
+    virtual void handleGetConfirm(uint64_t,const Ieee802154MacGetConfirm&) override { ASSERT(false); }
+    virtual void handleResetConfirm(uint64_t,const Ieee802154MacResetConfirm&) override { ASSERT(false); }
+    virtual void handleDataIndication(Packet *packet,const Ieee802154MacDataIndication& indication) override {
+        Enter_Method("handleDataIndication"); take(packet);
+        ASSERT(indication.sourceAddress == Ieee802154Address::fromShort(0x1001));
+        ASSERT(indication.destinationAddress == Ieee802154Address::fromShort(par("broadcast").boolValue() ? 0xffff : 0x1002));
+        ASSERT(indication.dsn == received + 1 && indication.ackSent == effectiveAck());
+        auto bytes = packet->peekDataAsBytes();
+        ASSERT(bytes->getBytes() == std::vector<uint8_t>(par("payloadLength").intValue(),received));
+        ++received; delete packet;
+        if (received == 2) emit(receivedSignal,2L);
+    }
+    virtual void handlePromiscuousIndication(Packet *,const Ieee802154MacPromiscuousIndication&) override { ASSERT(false); }
+    virtual void handleCommStatusIndication(Packet *,const Ieee802154MacCommStatusIndication&) override { ASSERT(false); }
+};
+Define_Module(NativeIfsClient);
+}
+
+%file: test.ned
+import inet.common.SimpleModule;
+import inet.mobility.static.StationaryMobility;
+import inet.physicallayer.wireless.common.medium.RadioMedium;
+import inet.linklayer.ieee802154.Ieee802154StandardInterface;
+import inet.linklayer.ieee802154.contract.IIeee802154MacServiceClient;
+simple NativeIfsClient extends SimpleModule like IIeee802154MacServiceClient
+{
+    parameters:
+        @class(::inet::NativeIfsClient);
+        string serviceModule;
+        bool sender;
+        bool ack;
+        bool broadcast;
+        int payloadLength;
+        @signal[allDone](type=long);
+        @signal[allReceived](type=long);
+}
+module NativeIfsHost
+{
+    parameters:
+        @networkNode;
+    submodules:
+        mobility: StationaryMobility;
+        nic: Ieee802154StandardInterface { panId = 4660; rxOnWhenIdle = true; mac.clientModule = "^.^.app"; }
+        app: NativeIfsClient { serviceModule = "^.nic.mac"; }
+    connections allowunconnected:
+}
+network NativeIfsTest
+{
+    parameters:
+        int payloadLength;
+        bool ack;
+        bool broadcast;
+    submodules:
+        radioMedium: RadioMedium;
+        host[2]: NativeIfsHost;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = NativeIfsTest
+sim-time-limit = 12ms
+seed-set = 0
+cmdenv-express-mode = true
+*.payloadLength = ${payloadLength=7,8}
+*.ack = ${ack=false,true}
+*.broadcast = ${broadcast=false,true}
+*.host[*].app.payloadLength = ${payloadLength}
+*.host[*].app.ack = ${ack}
+*.host[*].app.broadcast = ${broadcast}
+*.host[*].nic.radio.sendRawBytes = ${raw=false,true}
+*.host[0].app.sender = true
+*.host[1].app.sender = false
+*.host[0].nic.extendedAddress = "extended:02-01-12-34-56-78-9A-BC"
+*.host[1].nic.extendedAddress = "extended:04-01-12-34-56-78-9A-BC"
+*.host[0].nic.shortAddress = 4097
+*.host[1].nic.shortAddress = 4098
+*.host[*].nic.radio.antenna.mobilityModule = "^.^.^.mobility"
+*.radioMedium.signalAnalogRepresentation = "scalar"
+*.radioMedium.backgroundNoise.power = -110dBm
+*.host[*].mobility.initFromDisplayString = false
+*.host[0].mobility.initialX = 0m
+*.host[1].mobility.initialX = 1m
+*.host[*].mobility.initialY = 0m
+*.host[*].mobility.initialZ = 0m
+*.host[*].mobility.constraintAreaMinX = 0m
+*.host[*].mobility.constraintAreaMinY = 0m
+*.host[*].mobility.constraintAreaMinZ = 0m
+*.host[*].mobility.constraintAreaMaxX = 100m
+*.host[*].mobility.constraintAreaMaxY = 100m
+*.host[*].mobility.constraintAreaMaxZ = 100m
+
+%contains: stdout
+PROTOCOLTEST ieee802154_ifs: PASS
+
+%not-contains: stdout
+PROTOCOLTEST ieee802154_ifs: FAIL

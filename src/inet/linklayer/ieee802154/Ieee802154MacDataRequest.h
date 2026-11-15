@@ -29,9 +29,9 @@ struct Ieee802154MacSecurityParameters
 };
 
 /**
- * Bounded M1 MCPS-DATA.request metadata. Source identity comes from the
+ * Selected MCPS-DATA.request metadata. Source identity comes from the
  * authoritative MAC PIB. The service fixes LegacyTx=true and DataRate=0;
- * GTS, indirect, ranging, IE, and multipurpose options are outside this API.
+ * GTS, ranging, IE, and multipurpose options are outside this API.
  */
 struct Ieee802154MacDataRequest
 {
@@ -40,6 +40,7 @@ struct Ieee802154MacDataRequest
     uint16_t destinationPanId = 0; ///< IEEE Std 802.15.4-2024, Table 8-30, 0x0000..0xffff.
     uint8_t msduHandle = 0; ///< IEEE Std 802.15.4-2024, Table 8-30, 0x00..0xff.
     bool ackTx = false; ///< Direct acknowledged transmission selection.
+    bool indirectTx = false; ///< Coordinator queues for polling; ignored for a non-coordinator or omitted destination (Table 8-30).
     Ieee802154MacSecurityParameters security;
 };
 

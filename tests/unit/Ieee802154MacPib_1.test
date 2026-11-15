@@ -35,6 +35,15 @@ const std::vector<ExpectedAttribute> expected = {
     {"macCoordShortAddress", uint64_t{0xffff}, false},
     {"macPanId", uint64_t{0xffff}, false},
     {"macDsn", uint64_t{37}, false},
+    {"macBsn", uint64_t{0}, false},
+    {"macAutoRequest", true, false},
+    {"macNotifyAllBeacons", false, false},
+    {"macBeaconAutoRespond", true, false},
+    {"macAssociatedPanCoord", false, false},
+    {"macAssociationPermit", false, false},
+    {"macResponseWaitTime", uint64_t{32}, false},
+    {"macTransactionPersistenceTime", uint64_t{500}, false},
+    {"macBeaconPayload", std::vector<uint8_t>{}, false},
     {"macMinBe", uint64_t{3}, false},
     {"macMaxBe", uint64_t{5}, false},
     {"macMaxCsmaBackoffs", uint64_t{4}, false},
@@ -74,7 +83,7 @@ const std::vector<ExpectedAttribute> expected = {
     {"macTschEnabled", false, false},
 };
 
-ASSERT(expected.size() == 43);
+ASSERT(expected.size() == 52);
 Ieee802154MacPib pib(identity, 37);
 
 auto read = [](const Ieee802154MacPib& target, const std::string& name) -> Value {
@@ -105,7 +114,7 @@ for (const auto& attribute : expected) {
 
 // Exact spelling is preserved; names outside this selected MAC surface are unsupported.
 auto beforeUnknownAttributes = snapshot(pib);
-for (const auto& name : {std::string("MacPanId"), std::string("macAutoRequest"), std::string("phyCcaDuration"), std::string("macLinkTable[0]")}) {
+for (const auto& name : {std::string("MacPanId"), std::string("macAutoRequests"), std::string("phyCcaDuration"), std::string("macLinkTable[0]")}) {
     const auto confirm = pib.get(name);
     ASSERT(confirm.attribute == name);
     ASSERT(std::get<Status>(confirm.result) == Status::UNSUPPORTED_ATTRIBUTE);
@@ -256,6 +265,62 @@ ASSERT(read(resetPib, "macShortAddress") == Value(uint64_t{0xffff}));
 ASSERT(read(resetPib, "macUnitBackoffPeriod") == Value(uint64_t{14}));
 ASSERT(read(resetPib, "macDsn") == Value(uint64_t{255}));
 ASSERT(read(resetPib, "macExtendedAddress") == Value(identity));
+
+Ieee802154MacPib refreshed(identity, 7);
+ASSERT(refreshed.set("macUnitBackoffPeriod", uint64_t{37}) == Status::SUCCESS);
+refreshed.updateCcaDuration(17);
+ASSERT(read(refreshed, "macUnitBackoffPeriod") == Value(uint64_t{37}));
+refreshed.reset(false, 9);
+ASSERT(read(refreshed, "macUnitBackoffPeriod") == Value(uint64_t{37}));
+refreshed.reset(true, 9);
+ASSERT(read(refreshed, "macUnitBackoffPeriod") == Value(uint64_t{14}));
+bool invalidContext = false;
+try { refreshed.updateCcaDuration(0); } catch (const cRuntimeError&) { invalidContext = true; }
+ASSERT(invalidContext);
+refreshed.reset(true, 10);
+ASSERT(read(refreshed, "macUnitBackoffPeriod") == Value(uint64_t{14}));
+
+// Managed attributes have their own units and do not imply operational management support.
+Ieee802154MacPib managed(identity, 7, 128, {}, 251);
+ASSERT(read(managed, "macBsn") == Value(uint64_t{251}));
+ASSERT(managed.set("macResponseWaitTime", uint64_t{2}) == Status::SUCCESS);
+ASSERT(managed.set("macResponseWaitTime", uint64_t{64}) == Status::SUCCESS);
+ASSERT(managed.set("macResponseWaitTime", uint64_t{1}) == Status::INVALID_PARAMETER);
+ASSERT(managed.set("macResponseWaitTime", uint64_t{65}) == Status::INVALID_PARAMETER);
+ASSERT(read(managed, "macResponseWaitTime") == Value(uint64_t{64}));
+ASSERT(managed.set("macTransactionPersistenceTime", uint64_t{0}) == Status::SUCCESS);
+ASSERT(managed.set("macTransactionPersistenceTime", uint64_t{65535}) == Status::SUCCESS);
+ASSERT(managed.set("macTransactionPersistenceTime", uint64_t{65536}) == Status::INVALID_PARAMETER);
+ASSERT(managed.set("macTransactionPersistenceTime", int64_t{-1}) == Status::INVALID_PARAMETER);
+ASSERT(read(managed, "macTransactionPersistenceTime") == Value(uint64_t{65535}));
+ASSERT(managed.set("macBeaconPayload", std::vector<uint8_t>{0xde, 0xad, 0, 0xff}) == Status::SUCCESS);
+ASSERT(managed.set("macBeaconPayload", uint64_t{0}) == Status::INVALID_PARAMETER);
+ASSERT(read(managed, "macBeaconPayload") == Value(std::vector<uint8_t>{0xde, 0xad, 0, 0xff}));
+for (const char *name : {"macAutoRequest", "macNotifyAllBeacons", "macBeaconAutoRespond", "macAssociatedPanCoord", "macAssociationPermit"}) {
+    ASSERT(managed.set(name, true) == Status::SUCCESS);
+    ASSERT(managed.set(name, uint64_t{1}) == Status::INVALID_PARAMETER);
+    ASSERT(read(managed, name) == Value(true));
+}
+ASSERT(managed.set("macPanId", uint64_t{0x1234}) == Status::SUCCESS);
+ASSERT(managed.set("macShortAddress", uint64_t{0x5678}) == Status::SUCCESS);
+ASSERT(managed.set("macCoordShortAddress", uint64_t{0x9abc}) == Status::SUCCESS);
+ASSERT(managed.set("macCoordExtendedAddress", coordinator) == Status::SUCCESS);
+managed.clearAssociation();
+ASSERT(read(managed, "macPanId") == Value(uint64_t{0xffff}));
+ASSERT(read(managed, "macShortAddress") == Value(uint64_t{0xffff}));
+ASSERT(read(managed, "macCoordShortAddress") == Value(uint64_t{0xffff}));
+ASSERT(read(managed, "macCoordExtendedAddress") == Value(Ieee802154Address::NONE_ADDRESS));
+ASSERT(read(managed, "macAssociatedPanCoord") == Value(false));
+ASSERT(read(managed, "macDsn") == Value(uint64_t{7}) && read(managed, "macBsn") == Value(uint64_t{251}));
+ASSERT(read(managed, "macAssociationPermit") == Value(true));
+auto retained = snapshot(managed);
+managed.reset(false, 8, 9);
+ASSERT(snapshot(managed) == retained);
+managed.reset(true, 8, 9);
+ASSERT(read(managed, "macBsn") == Value(uint64_t{9}));
+ASSERT(read(managed, "macResponseWaitTime") == Value(uint64_t{32}));
+ASSERT(read(managed, "macTransactionPersistenceTime") == Value(uint64_t{500}));
+ASSERT(read(managed, "macBeaconPayload") == Value(std::vector<uint8_t>{}));
 
 EV << "Selected IEEE 802.15.4 MAC PIB checks passed.\n";
 

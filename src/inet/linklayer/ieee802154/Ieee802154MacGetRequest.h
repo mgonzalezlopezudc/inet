@@ -9,14 +9,18 @@
 #include <string>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #include "inet/linklayer/ieee802154/Ieee802154Address.h"
 #include "inet/linklayer/ieee802154/Ieee802154MacServiceResult.h"
+#include "inet/physicallayer/wireless/ieee802154/contract/Ieee802154PhyServicePrimitives.h"
 
 namespace inet {
 
-/** Bounded MAC-only PIB value representation; no generic string value is hidden here. */
-using Ieee802154MacPibValue = std::variant<bool, int64_t, uint64_t, Ieee802154Address>;
+/** Typed MLME PIB representation, including delegated PHY attributes; no string fallback. */
+using Ieee802154MacPibValue = std::variant<bool, int64_t, uint64_t, Ieee802154Address, simtime_t,
+        units::values::W, physicallayer::Ieee802154PhyCcaMode, physicallayer::Ieee802154PhyChannel,
+        std::vector<physicallayer::Ieee802154PhyPeerPower>, std::vector<uint8_t>>;
 
 /**
  * String identifiers are preserved verbatim, including unknown names. The

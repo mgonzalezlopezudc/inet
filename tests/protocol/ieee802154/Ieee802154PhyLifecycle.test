@@ -1,0 +1,234 @@
+%description:
+Stop only the native PHY during CCA, idle RX, TX readiness, on-air TX,
+ACK waiting, initial RX readiness and backoff. Exercise callback restart too.
+Require local STOPPED, caller ownership on refusal, automatic RX recovery and
+actual replacement DATA/ACK, with both typed and raw radio representations.
+
+%extraargs: -r 0..19
+
+%includes:
+#include "ProtocolTest.h"
+
+%global:
+using namespace inet;
+using namespace inet::protocoltest;
+Define_ProtocolTestProgram()
+{
+    ProtocolTest test("ieee802154_phy_lifecycle");
+    return test.once(on("host[0].app").signal("replacementDone").filterValue(1).within(0.02));
+}
+
+%activity:
+EV << "ieee802154_phy_lifecycle compiled\n";
+
+%file: PhyLifecycleClient.cc
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/common/lifecycle/LifecycleController.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceProvider.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
+
+namespace inet {
+class PhyLifecycleMsdu : public Packet
+{
+  public:
+    static int destroyed;
+    PhyLifecycleMsdu() : Packet("tracked-phy-msdu") {}
+    virtual ~PhyLifecycleMsdu() { ++destroyed; }
+};
+int PhyLifecycleMsdu::destroyed = 0;
+
+class PhyLifecycleClient : public cSimpleModule, public IIeee802154MacServiceClient, public LifecycleController
+{
+    ModuleRefByPar<IIeee802154MacServiceProvider> service;
+    uint64_t nextId = 0, firstId = 0, secondId = 0, queuedId = 0, resetId = 0;
+    int scenario = 0, abortCount = 0, successCount = 0, queuedCount = 0, resetCount = 0;
+    void operate(bool start) {
+        auto module = getParentModule()->getSubmodule("nic")->getSubmodule("phy");
+        LifecycleOperation *operation = start ? static_cast<LifecycleOperation *>(new ModuleStartOperation) : new ModuleStopOperation;
+        LifecycleOperation::StringMap parameters;
+        operation->initialize(module,parameters);
+        ASSERT(initiateOperation(operation));
+    }
+    void set(const char *name, uint64_t value) {
+        ASSERT(service->submitSet(++nextId,{name,value}) == Ieee802154MacServiceAdmission::ACCEPTED);
+    }
+    Ieee802154MacDataRequest request() {
+        Ieee802154MacDataRequest result;
+        result.sourceAddressMode = Ieee802154Address::AddressType::EXTENDED;
+        result.destinationAddress = Ieee802154Address::fromExtended(0x0401123456789abcULL);
+        result.destinationPanId = 0x1234; result.ackTx = true;
+        return result;
+    }
+    void sendMsdu(bool first) {
+        auto packet = new PhyLifecycleMsdu;
+        packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{1,2,3,4}));
+        auto id = ++nextId;
+        (first ? firstId : secondId) = id;
+        ASSERT(service->submitData(id,packet,request()) == Ieee802154MacServiceAdmission::ACCEPTED);
+    }
+    void probe(Ieee802154MacServiceAdmission expected) {
+        auto packet = new Packet("caller-owned");
+        ASSERT(service->submitData(++nextId,packet,request()) == expected);
+        ASSERT(packet->getOwner() == this);
+        delete packet;
+    }
+  protected:
+    virtual void initialize() override {
+        service.reference(this,"serviceModule",true);
+        scenario = par("scenario");
+        if (par("sender").boolValue()) {
+            PhyLifecycleMsdu::destroyed = 0;
+            scheduleAt(SimTime(1,SIMTIME_MS),new cMessage("first",0));
+        }
+    }
+    virtual void handleMessage(cMessage *message) override {
+        int kind = message->getKind(); delete message;
+        if (kind == 0) {
+            set("macMaxBe",scenario == 6 ? 8 : 3); set("macMinBe",scenario == 6 ? 8 : 0);
+            set("macMaxFrameRetries",0);
+            if (scenario != 1) sendMsdu(true);
+            if (scenario >= 8) {
+                auto packet = new Packet("queued-msdu");
+                packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{5}));
+                auto indirect = request(); indirect.indirectTx = true;
+                queuedId = ++nextId;
+                ASSERT(service->submitData(queuedId,packet,indirect) == Ieee802154MacServiceAdmission::ACCEPTED);
+            }
+            const int interruptUs[] = {1050,1050,1200,1500,2600,1050,1050,1050,1050,1050};
+            scheduleAt(SimTime(interruptUs[scenario],SIMTIME_US),new cMessage("stop",1));
+        }
+        else if (kind == 1) {
+            if (scenario >= 8) {
+                resetId = ++nextId;
+                ASSERT(service->submitReset(resetId,{false}) == Ieee802154MacServiceAdmission::ACCEPTED);
+                ASSERT(queuedCount == 1 && resetCount == 1);
+            }
+            else operate(false);
+            ASSERT(abortCount == (scenario == 1 ? 0 : 1));
+            ASSERT(PhyLifecycleMsdu::destroyed == (scenario == 1 ? 0 : 1));
+            if (scenario != 7 && scenario != 9) probe(Ieee802154MacServiceAdmission::UNAVAILABLE);
+            scheduleAt(simTime()+SimTime(2,SIMTIME_MS),new cMessage("restart",2));
+        }
+        else if (kind == 2) {
+            if (scenario != 7 && scenario != 9) operate(true);
+            scheduleAfter(SimTime(1,SIMTIME_MS),new cMessage("replacement",3));
+        }
+        else {
+            auto radio = check_and_cast<physicallayer::IRadio *>(getParentModule()->getSubmodule("nic")->getSubmodule("radio"));
+            if (scenario != 5) ASSERT(radio->getRadioMode() == physicallayer::IRadio::RADIO_MODE_RECEIVER);
+            set("macMinBe",0);
+            sendMsdu(false);
+        }
+    }
+    virtual void finish() override {
+        if (!par("sender").boolValue()) return;
+        ASSERT(successCount == 1 && abortCount == (scenario == 1 ? 0 : 1));
+        ASSERT(PhyLifecycleMsdu::destroyed == (scenario == 1 ? 1 : 2));
+    }
+  public:
+    void handleDataConfirm(uint64_t id,const Ieee802154MacDataConfirm& confirm) override {
+        Enter_Method("handleDataConfirm");
+        if (id == queuedId) {
+            ASSERT(confirm.result == Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::RESET));
+            ASSERT(++queuedCount == 1 && resetCount == 0);
+        }
+        else if (id == firstId) {
+            ASSERT(confirm.result == Ieee802154MacServiceResult(scenario >= 8 ? Ieee802154MacServiceAbortReason::RESET : Ieee802154MacServiceAbortReason::STOPPED));
+            ASSERT(++abortCount == 1 && PhyLifecycleMsdu::destroyed == 1);
+            if (scenario >= 8) operate(false);
+            if (scenario == 7 || scenario == 9) operate(true);
+            probe(Ieee802154MacServiceAdmission::BUSY);
+        }
+        else {
+            ASSERT(id == secondId && confirm.result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS));
+            ASSERT(++successCount == 1);
+            emit(registerSignal("replacementDone"),1L);
+        }
+    }
+    void handleSetConfirm(uint64_t,const Ieee802154MacSetConfirm& confirm) override { Enter_Method("handleSetConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS)); }
+    void handleGetConfirm(uint64_t,const Ieee802154MacGetConfirm&) override { ASSERT(false); }
+    void handleResetConfirm(uint64_t id,const Ieee802154MacResetConfirm& confirm) override {
+        Enter_Method("handleResetConfirm");
+        ASSERT(id == resetId && confirm.result == Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::STOPPED));
+        ASSERT(abortCount == 1 && queuedCount == 1 && ++resetCount == 1);
+    }
+    void handleDataIndication(Packet *packet,const Ieee802154MacDataIndication&) override { Enter_Method("handleDataIndication"); take(packet); delete packet; }
+    void handlePromiscuousIndication(Packet *,const Ieee802154MacPromiscuousIndication&) override { ASSERT(false); }
+    void handleCommStatusIndication(Packet *,const Ieee802154MacCommStatusIndication&) override { ASSERT(false); }
+};
+Define_Module(PhyLifecycleClient);
+}
+
+%file: test.ned
+import inet.common.SimpleModule;
+import inet.common.lifecycle.NodeStatus;
+import inet.mobility.static.StationaryMobility;
+import inet.physicallayer.wireless.common.medium.RadioMedium;
+import inet.linklayer.ieee802154.Ieee802154StandardInterface;
+import inet.linklayer.ieee802154.contract.IIeee802154MacServiceClient;
+simple PhyLifecycleClient extends SimpleModule like IIeee802154MacServiceClient
+{
+    parameters:
+        @class(::inet::PhyLifecycleClient);
+        string serviceModule;
+        bool sender;
+        int scenario;
+        @signal[replacementDone](type=long);
+}
+module PhyLifecycleHost
+{
+    parameters:
+        @networkNode;
+    submodules:
+        status: NodeStatus;
+        mobility: StationaryMobility;
+        nic: Ieee802154StandardInterface { panId = 4660; rxOnWhenIdle = true; mac.clientModule = "^.^.app"; }
+        app: PhyLifecycleClient { serviceModule = "^.nic.mac"; }
+    connections allowunconnected:
+}
+network PhyLifecycleTest
+{
+    submodules:
+        radioMedium: RadioMedium;
+        host[2]: PhyLifecycleHost;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = PhyLifecycleTest
+sim-time-limit = 25ms
+seed-set = 0
+cmdenv-express-mode = true
+*.host[*].app.scenario = ${scenario=0..9}
+*.host[0].nic.mac.isPanCoordinator = ${scenario} >= 8
+*.host[0].nic.enableManagement = ${scenario} >= 8
+*.host[0].nic.rxOnWhenIdle = ${scenario} != 5
+*.host[*].nic.radio.sendRawBytes = ${raw=false,true}
+*.host[0].app.sender = true
+*.host[1].app.sender = false
+*.host[0].nic.extendedAddress = "extended:02-01-12-34-56-78-9A-BC"
+*.host[1].nic.extendedAddress = "extended:04-01-12-34-56-78-9A-BC"
+*.host[*].nic.radio.antenna.mobilityModule = "^.^.^.mobility"
+*.radioMedium.signalAnalogRepresentation = "scalar"
+*.radioMedium.backgroundNoise.power = -110dBm
+*.host[*].mobility.initFromDisplayString = false
+*.host[0].mobility.initialX = 0m
+*.host[1].mobility.initialX = 1m
+*.host[*].mobility.initialY = 0m
+*.host[*].mobility.initialZ = 0m
+*.host[*].mobility.constraintAreaMinX = 0m
+*.host[*].mobility.constraintAreaMinY = 0m
+*.host[*].mobility.constraintAreaMinZ = 0m
+*.host[*].mobility.constraintAreaMaxX = 100m
+*.host[*].mobility.constraintAreaMaxY = 100m
+*.host[*].mobility.constraintAreaMaxZ = 100m
+
+%contains: stdout
+PROTOCOLTEST ieee802154_phy_lifecycle: PASS
+
+%not-contains: stdout
+PROTOCOLTEST ieee802154_phy_lifecycle: FAIL
