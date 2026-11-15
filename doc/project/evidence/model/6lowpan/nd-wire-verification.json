@@ -1,0 +1,76 @@
+{
+  "scope": "P10/P11 generic wire prerequisite only",
+  "base": "3e053e2d4b",
+  "checks": [
+    {
+      "name": "build",
+      "command": [
+        "make",
+        "MODE=debug",
+        "-j8"
+      ],
+      "exit_code": 0,
+      "fixtures": null,
+      "log": "/tmp/lowpan-p9/generic-consumers-build.log"
+    },
+    {
+      "name": "unit",
+      "command": [
+        "opp_run_unit_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-f",
+        "Ipv6NdRegistrationWire\\.test$"
+      ],
+      "exit_code": 0,
+      "fixtures": 1,
+      "log": "/tmp/lowpan-p9/generic-consumers-unit.log"
+    },
+    {
+      "name": "module",
+      "command": [
+        "opp_run_module_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-f",
+        "(Ipv6NdUnsupportedRegistration|LowpanMixedNeighbourDiscovery)\\.test$"
+      ],
+      "exit_code": 0,
+      "fixtures": 2,
+      "log": "/tmp/lowpan-p9/generic-consumers-module.log"
+    },
+    {
+      "name": "release",
+      "command": [
+        "make",
+        "MODE=release",
+        "-j8"
+      ],
+      "exit_code": 0,
+      "fixtures": null,
+      "log": "/tmp/lowpan-p9/generic-consumers-release.log"
+    }
+  ],
+  "source_sha256": {
+    "src/inet/networklayer/common/Icmpv6Type.msg": "b531d6ff21ffec29db1af0a9ac6b76caaf2453008eeda541ae90a57bf13c136b",
+    "src/inet/networklayer/icmpv6/Ipv6NdMessage.msg": "9113dcb07b5830607c5e851dac1e5b68a3203d968bf030b67bbe1534459ed447",
+    "src/inet/networklayer/icmpv6/Icmpv6HeaderSerializer.cc": "f8969eeaef39d1cf4c2713448eccfc6d129062db5165d88514c6cd98531f6300",
+    "src/inet/networklayer/icmpv6/Icmpv6ProtocolPrinter.cc": "c8118d1146ba371140d05b2337669f12b21e10fcdc1ed82c5b82cc9a4b82358c",
+    "src/inet/networklayer/icmpv6/Ipv6NeighbourDiscovery.cc": "662b83344c08a9434b6148037f4973f1ad4c8fc7c4ec53def382902da37e932d",
+    "src/inet/networklayer/icmpv6/Ipv6NeighbourDiscovery.ned": "ec71d60ea2b8d43a0d3920ca5dc2d275133ebc7f8a41f1272977f8b5f07538b8",
+    "tests/unit/Ipv6NdRegistrationWire.test": "600c757fa325e46a6d054b58be10317e7687e1df551c54f570354913f61e72ce",
+    "tests/module/Ipv6NdUnsupportedRegistration.test": "b87507f22cbfc4218bf03b4f1b932148e66a27051f0cae397e31798c2ac7424f"
+  },
+  "review": "All generic receive-path and naming findings confirmed resolved by independent read-only reviewer; 26 PASS,8 N/A,0 FLAG,0 QUESTION.",
+  "baseline_changes": false
+}

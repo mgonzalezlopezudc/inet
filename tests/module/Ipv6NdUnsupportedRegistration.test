@@ -1,0 +1,94 @@
+%description:
+Ordinary IPv6 dispatch routes byte-decoded DAR/DAC and native64 ND options to
+generic Neighbor Discovery, which safely drops unsupported wire representations.
+
+%file: UnsupportedNdCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/checksum/Checksum.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/common/InterfaceTag_m.h"
+#include "inet/networklayer/common/InterfaceTable.h"
+#include "inet/networklayer/ipv6/Ipv6InterfaceData.h"
+namespace inet::protocoltest {
+class UnsupportedNdCheck : public cSimpleModule, public cListener
+{
+    int drops=0,received=0,sent=0;
+    NetworkInterface *interface=nullptr;
+    std::vector<std::vector<uint8_t>> messages;
+  protected:
+    int numInitStages() const override {return NUM_INIT_STAGES;}
+    void initialize(int stage) override {
+        if (stage!=INITSTAGE_LAST) return;
+        auto node=getParentModule()->getSubmodule("node");
+        interface=check_and_cast<InterfaceTable *>(node->getSubmodule("interfaceTable"))->findFirstLoopbackInterface();
+        ASSERT(interface && interface->getProtocolData<Ipv6InterfaceData>()->hasAddress(Ipv6Address("::1")));
+        auto ipv6=node->getSubmodule("ipv6");
+        ipv6->getSubmodule("neighbourDiscovery")->subscribe("packetDropped",this);
+        ipv6->getSubmodule("ipv6")->subscribe("packetReceivedFromLower",this);
+        std::vector<uint8_t> address{0xfe,0x80,0,0,0,0,0,0,0,0,0,0,0,0,0,1};
+        for (uint8_t type : {157,158}) {
+            std::vector<uint8_t> message{type,0,0,0,0,0,0,1,1,2,3,4,5,6,7,8};
+            message.insert(message.end(),address.begin(),address.end());messages.push_back(message);
+        }
+        for (int type : {133,134,135,136,137}) {
+            std::vector<uint8_t> message(type==133?8:type==134?16:type==137?40:24,0);message[0]=type;
+            if (type==134) {message[4]=64;message[7]=10;}
+            if (type==135 || type==136 || type==137) std::copy(address.begin(),address.end(),message.begin()+8);
+            if (type==136) message[4]=0x60;
+            if (type==137) std::copy(address.begin(),address.end(),message.begin()+24);
+            message.insert(message.end(),{uint8_t(type>=136?2:1),2,1,2,3,4,5,6,7,8,0,0,0,0,0,0});
+            messages.push_back(message);
+        }
+        for (int i=0;i<int(messages.size());i++) scheduleAt(SimTime(i+1,SIMTIME_MS),new cMessage("wire-nd",i));
+    }
+    void receiveSignal(cComponent *,simsignal_t signal,cObject *,cObject *) override {
+        if (signal==registerSignal("packetDropped")) drops++;
+        else {ASSERT(signal==registerSignal("packetReceivedFromLower"));received++;}
+    }
+    void handleMessage(cMessage *timer) override {
+        auto message=messages.at(timer->getKind());delete timer;
+        std::vector<uint8_t> source{0xfe,0x80,0,0,0,0,0,0,0,0,0,0,0,0,0,1};
+        std::vector<uint8_t> destination(16,0);destination.back()=1;
+        std::vector<uint8_t> pseudo=source;pseudo.insert(pseudo.end(),destination.begin(),destination.end());
+        pseudo.insert(pseudo.end(),{0,0,0,uint8_t(message.size()),0,0,0,58});pseudo.insert(pseudo.end(),message.begin(),message.end());
+        auto checksum=internetChecksum(pseudo);message[2]=checksum>>8;message[3]=checksum;
+        std::vector<uint8_t> bytes{0x60,0,0,0,0,uint8_t(message.size()),58,255};
+        bytes.insert(bytes.end(),source.begin(),source.end());bytes.insert(bytes.end(),destination.begin(),destination.end());
+        bytes.insert(bytes.end(),message.begin(),message.end());
+        auto packet=new Packet("ordinary-ipv6-nd-input",makeShared<BytesChunk>(bytes));
+        packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ipv6);
+        packet->addTag<InterfaceInd>()->setInterfaceId(interface->getInterfaceId());
+        auto ipv6=getParentModule()->getSubmodule("node")->getSubmodule("ipv6")->getSubmodule("ipv6");
+        sendDirect(packet,ipv6->gate("queueIn")->getPathStartGate());sent++;
+    }
+    void finish() override {
+        ASSERT(sent==7 && received==7 && drops==7);
+        std::cout << "Ordinary IPv6 to ND safely drops DAR DAC and five native64 option messages\n";
+    }
+};
+Define_Module(UnsupportedNdCheck);
+}
+
+%file: test.ned
+@namespace(inet::protocoltest);
+import inet.node.inet.StandardHost;
+simple UnsupportedNdCheck { }
+network UnsupportedNdNetwork {
+    submodules:
+        node: StandardHost;
+        check: UnsupportedNdCheck;
+    connections allowunconnected:
+}
+
+%inifile: omnetpp.ini
+[General]
+network=UnsupportedNdNetwork
+sim-time-limit=10ms
+*.node.hasIpv4=false
+*.node.hasIpv6=true
+*.node.ipv6.neighbourDiscovery.hostBootupTime=100s
+
+%contains: stdout
+Ordinary IPv6 to ND safely drops DAR DAC and five native64 option messages

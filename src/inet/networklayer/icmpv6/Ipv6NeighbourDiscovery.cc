@@ -196,6 +196,41 @@ void Ipv6NeighbourDiscovery::handleMessageWhenUp(cMessage *msg)
 
 void Ipv6NeighbourDiscovery::processNDMessage(Packet *packet, const Icmpv6Header *icmpv6Header)
 {
+    const Ipv6NdOptions *options = nullptr;
+    if (auto message = dynamic_cast<const Ipv6RouterSolicitation *>(icmpv6Header))
+        options = &message->getOptions();
+    else if (auto message = dynamic_cast<const Ipv6RouterAdvertisement *>(icmpv6Header))
+        options = &message->getOptions();
+    else if (auto message = dynamic_cast<const Ipv6NeighbourSolicitation *>(icmpv6Header))
+        options = &message->getOptions();
+    else if (auto message = dynamic_cast<const Ipv6NeighbourAdvertisement *>(icmpv6Header))
+        options = &message->getOptions();
+    else if (auto message = dynamic_cast<const Ipv6Redirect *>(icmpv6Header))
+        options = &message->getOptions();
+
+    // The ordinary ND cache supports Ethernet addresses. Other ND owners may
+    // consume these wire formats before calling this implementation.
+    bool unsupported = icmpv6Header->getType() == ICMPv6_DUPLICATE_ADDRESS_REQUEST ||
+        icmpv6Header->getType() == ICMPv6_DUPLICATE_ADDRESS_CONFIRMATION;
+    if (options != nullptr) {
+        for (size_t i = 0; i < options->getOptionArraySize(); i++) {
+            auto option = options->getOption(i);
+            if ((option->getType() == IPv6ND_SOURCE_LINK_LAYER_ADDR_OPTION &&
+                    dynamic_cast<const Ipv6NdSourceLinkLayerAddress *>(option) == nullptr) ||
+                (option->getType() == IPv6ND_TARGET_LINK_LAYER_ADDR_OPTION &&
+                    dynamic_cast<const Ipv6NdTargetLinkLayerAddress *>(option) == nullptr))
+                unsupported = true;
+        }
+    }
+    if (unsupported) {
+        EV_WARN << "Unsupported ND message or link-layer address representation, dropping packet\n";
+        PacketDropDetails details;
+        details.setReason(OTHER_PACKET_DROP);
+        emit(packetDroppedSignal, packet, &details);
+        delete packet;
+        return;
+    }
+
     switch(icmpv6Header->getType()) {
         case ICMPv6_ROUTER_SOL:
             processRsPacket(packet, check_and_cast<const Ipv6RouterSolicitation *>(icmpv6Header));

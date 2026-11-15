@@ -41,8 +41,10 @@ simple Ipv6NeighbourDiscovery extends SimpleModule
         @signal[startDad](type=long); // Emits value=1
         @signal[dadCompleted](type=long); // Emits value=1
         @signal[dadFailed](type=long); // Emits value=1
+        @signal[packetDropped](type=inet::Packet);
         @statistic[startDad](title="DAD started";record=count,vector);
         @statistic[dadCompleted](title="DAD completed";record=count,vector);
+        @statistic[packetDropped](record=count);
         @statistic[dadFailed](title="DAD failed";record=count,vector);
     gates:
         input ipv6In;

@@ -1,0 +1,112 @@
+%description:
+Independent DAR/DAC and extended ROVR wire vectors, unknown ND options and
+native64 link-layer options preserve exact bytes independently of LoWPAN policy.
+
+%includes:
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/networklayer/icmpv6/Ipv6NdMessage_m.h"
+#include <climits>
+using namespace inet;
+
+%activity:
+const std::vector<uint8_t> address{0x20,1,0x0d,0xb8,0,0,0,0,0,0,0,0,0,0,0,1};
+for (auto type : {ICMPv6_DUPLICATE_ADDRESS_REQUEST,ICMPv6_DUPLICATE_ADDRESS_CONFIRMATION}) {
+    for (int code=0;code<=4;code++) {
+        int length=code==0?8:code*8;
+        int status=type==ICMPv6_DUPLICATE_ADDRESS_REQUEST?0:2;
+        std::vector<uint8_t> golden{uint8_t(type),uint8_t(code),0x12,0x34,uint8_t(status),uint8_t(code==0?0:240),0,1};
+        for (int i=0;i<length;i++) golden.push_back(i+1);
+        golden.insert(golden.end(),address.begin(),address.end());
+        auto fields=makeShared<Ipv6DuplicateAddressHeader>();
+        fields->setType(type);fields->setCode(code);fields->setChksum(0x1234);fields->setStatus(status);
+        fields->setTransactionId(code==0?0:240);fields->setRegistrationLifetime(1);
+        fields->setRegistrationOwnershipVerifierArraySize(length);
+        for (int i=0;i<length;i++) fields->setRegistrationOwnershipVerifier(i,i+1);
+        fields->setRegisteredAddress(Ipv6Address("2001:db8::1"));fields->setChunkLength(B(24+length));
+        Packet emitted("fields",fields);ASSERT(emitted.peekDataAsBytes()->getBytes()==golden);
+        Packet literal("literal",makeShared<BytesChunk>(golden));
+        auto decoded=dynamicPtrCast<const Ipv6DuplicateAddressHeader>(literal.peekAtFront<Icmpv6Header>());
+        ASSERT(decoded && dynamicPtrCast<const Ipv6NdMessage>(decoded));
+        ASSERT(!decoded->isIncorrect() && !decoded->isIncomplete() && decoded->getChunkLength()==B(golden.size()));
+        ASSERT(decoded->getType()==type && decoded->getCode()==code && decoded->getChksum()==0x1234);
+        ASSERT(decoded->getStatus()==status && decoded->getTransactionId()==(code==0?0:240));
+        ASSERT(decoded->getRegistrationLifetime()==1 && decoded->getRegisteredAddress()==Ipv6Address("2001:db8::1"));
+        ASSERT(decoded->getRegistrationOwnershipVerifierArraySize()==size_t(length));
+        for (int i=0;i<length;i++) ASSERT(decoded->getRegistrationOwnershipVerifier(i)==i+1);
+        auto reconstructed=makeShared<Ipv6DuplicateAddressHeader>(*decoded);reconstructed->setChksum(0x5678);
+        auto changed=golden;changed[2]=0x56;changed[3]=0x78;
+        Packet modified("modified",reconstructed);ASSERT(modified.peekDataAsBytes()->getBytes()==changed);
+        for (int size=4;size<int(golden.size());size++) {
+            Packet truncated("truncated",makeShared<BytesChunk>(std::vector<uint8_t>(golden.begin(),golden.begin()+size)));
+            auto partial=truncated.peekAtFront<Icmpv6Header>(b(-1),Chunk::PF_ALLOW_INCOMPLETE|Chunk::PF_ALLOW_INCORRECT);
+            ASSERT(partial->isIncomplete() || partial->isIncorrect());
+        }
+        // Reserved Code Prefix and base reserved/TID octet are ignored on receipt.
+        golden[1]|=0xf0;if (code==0) golden[5]=0xff;
+        Packet reserved("ignored-reserved",makeShared<BytesChunk>(golden));
+        auto ignored=dynamicPtrCast<const Ipv6DuplicateAddressHeader>(reserved.peekAtFront<Icmpv6Header>());
+        ASSERT(ignored && !ignored->isIncorrect() && ignored->getCode()==code);
+        ASSERT(ignored->getTransactionId()==(code==0?0:240));
+    }
+}
+for (int code : {5,15,0x15,0xff}) {
+    Packet invalid("invalid-code",makeShared<BytesChunk>(std::vector<uint8_t>{157,uint8_t(code),0,0,0,0,0,1}));
+    ASSERT(invalid.peekAtFront<Icmpv6Header>(b(-1),Chunk::PF_ALLOW_INCORRECT)->isIncorrect());
+}
+for (int kind=0;kind<5;kind++) {
+    auto invalid=makeShared<Ipv6DuplicateAddressHeader>();
+    invalid->setCode(kind==0?5:kind==1?2:0);
+    invalid->setRegistrationOwnershipVerifierArraySize(8);
+    if (kind==2) invalid->setChunkLength(B(40));
+    if (kind==3) invalid->setTransactionId(1);
+    if (kind==4) invalid->setCode(INT_MAX);
+    Packet packet("invalid-fields",invalid);bool rejected=false;
+    try {packet.peekDataAsBytes();}catch (const cRuntimeError&) {rejected=true;}
+    ASSERT(rejected);
+}
+// NS with native64 SLLAO, base ARO, and a distinct unknown option. Changing the
+// ICMP checksum forces reserialization rather than trusting the decoded cache.
+std::vector<uint8_t> ns{135,0,0x12,0x34,0,0,0,0};ns.insert(ns.end(),address.begin(),address.end());
+const std::vector<uint8_t> source{1,2,1,2,3,4,5,6,7,8,0,0,0,0,0,0};
+const std::vector<uint8_t> aro{33,2,0,0,0,0,0,1,1,2,3,4,5,6,7,8};
+const std::vector<uint8_t> unknown{222,1,9,8,7,6,5,4};
+ns.insert(ns.end(),source.begin(),source.end());ns.insert(ns.end(),aro.begin(),aro.end());ns.insert(ns.end(),unknown.begin(),unknown.end());
+Packet literalNs("literal-ns",makeShared<BytesChunk>(ns));
+auto parsedNs=dynamicPtrCast<const Ipv6NeighbourSolicitation>(literalNs.peekAtFront<Icmpv6Header>());
+ASSERT(parsedNs && !parsedNs->isIncorrect() && parsedNs->getOptions().getOptionArraySize()==3);
+auto link=parsedNs->getOptions().getOption(0);
+ASSERT(link->getType()==IPv6ND_SOURCE_LINK_LAYER_ADDR_OPTION && link->getOptionLength()==2);
+ASSERT(dynamic_cast<const Ipv6NdSourceTargetLinkLayerAddress *>(link)==nullptr);
+for (int i=0;i<14;i++) ASSERT(uint8_t(link->getPaddingBytes(i))==source[i+2]);
+auto modifiedNs=makeShared<Ipv6NeighbourSolicitation>(*parsedNs);modifiedNs->setChksum(0xabcd);
+Packet emittedNs("modified-ns",modifiedNs);ns[2]=0xab;ns[3]=0xcd;ASSERT(emittedNs.peekDataAsBytes()->getBytes()==ns);
+// The identical variable-length representation also preserves a native TLLAO.
+ns[24]=2;
+Packet targetRaw("native-tllao",makeShared<BytesChunk>(ns));
+auto targetParsed=dynamicPtrCast<const Ipv6NeighbourSolicitation>(targetRaw.peekAtFront<Icmpv6Header>());
+ASSERT(targetParsed && targetParsed->getOptions().getOption(0)->getType()==IPv6ND_TARGET_LINK_LAYER_ADDR_OPTION);
+auto targetCopy=makeShared<Ipv6NeighbourSolicitation>(*targetParsed);targetCopy->setChksum(0x1234);
+ns[2]=0x12;ns[3]=0x34;Packet targetReencoded("native-tllao-copy",targetCopy);
+ASSERT(targetReencoded.peekDataAsBytes()->getBytes()==ns);
+// The existing Ethernet option remains a typed six-octet address.
+auto ordinary=makeShared<Ipv6RouterSolicitation>();auto sllao=new Ipv6NdSourceLinkLayerAddress();
+sllao->setLinkLayerAddress(MacAddress("01:02:03:04:05:06"));ordinary->getOptionsForUpdate().appendOption(sllao);
+ordinary->setChunkLength(B(16));Packet ordinaryPacket("ordinary",ordinary);
+auto ordinaryBytes=ordinaryPacket.peekDataAsBytes()->getBytes();
+Packet ordinaryRaw("ordinary-raw",makeShared<BytesChunk>(ordinaryBytes));
+auto ordinaryParsed=dynamicPtrCast<const Ipv6RouterSolicitation>(ordinaryRaw.peekAtFront<Icmpv6Header>());
+auto ordinaryOption=dynamic_cast<const Ipv6NdSourceLinkLayerAddress *>(ordinaryParsed->getOptions().getOption(0));
+ASSERT(ordinaryOption && ordinaryOption->getLinkLayerAddress()==MacAddress("01:02:03:04:05:06"));
+for (int length : {0,1,2,256}) {
+    auto solicitation=makeShared<Ipv6RouterSolicitation>();auto raw=new Ipv6NdOption();
+    raw->setType(static_cast<Ipv6NdOptionTypes>(222));raw->setOptionLength(length);raw->setPaddingBytesArraySize(7);
+    solicitation->getOptionsForUpdate().appendOption(raw);solicitation->setChunkLength(B(17));
+    Packet invalid("invalid-raw-option",solicitation);bool rejected=false;
+    try {invalid.peekDataAsBytes();}catch (const cRuntimeError&) {rejected=true;}
+    ASSERT(rejected);
+}
+EV << "Generic duplicate-address messages and variable ND options verified\n";
+
+%contains: stdout
+Generic duplicate-address messages and variable ND options verified

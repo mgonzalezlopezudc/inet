@@ -137,6 +137,19 @@ class Ipv6NdMessage extends Icmpv6Header
     int code = 0;
 }
 
+// RFC 6775 sections 4.4/4.5 and RFC 8505 section 4.2.
+// Code 0 carries an eight-octet EUI-64; codes 1..4 carry 8*code ROVR octets.
+class Ipv6DuplicateAddressHeader extends Ipv6NdMessage
+{
+    chunkLength = B(32);
+    type = ICMPv6_DUPLICATE_ADDRESS_REQUEST;
+    uint8_t status = 0;
+    uint8_t transactionId = 0; // reserved and zero in the base (code 0) format
+    uint16_t registrationLifetime = 0; // units of 60 seconds
+    uint8_t registrationOwnershipVerifier[];
+    Ipv6Address registeredAddress;
+}
+
 //
 // Router Solicitation Message Format
 // RFC 4861 Section 4.1
