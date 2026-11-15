@@ -41,7 +41,7 @@ DSSS-OQPSK modulation and operates at 2.45 GHz. By default, signals
 are transmitted with a bandwidth of 2.8 MHz using 2.24 mW transmission
 power. The model is configured to use the scalar analog model.
 
-The :ned:`Ieee802154NarrowbandInterface` module contains an
+The explicitly selected :ned:`Ieee802154LegacyNarrowbandInterface` module contains an
 :ned:`Ieee802154NarrowbandRadio` and the corresponding
 :ned:`Ieee802154NarrowbandMac`. The radio medium module required by
 the radio is :ned:`Ieee802154NarrowbandScalarRadioMedium`. The analog model type is set
@@ -76,8 +76,9 @@ from :download:`omnetpp.ini <../omnetpp.ini>`. It uses the following network:
    :width: 60%
    :align: center
 
-The network contains 14 hosts of the :ned:`SensorNode` type, which has an
-:ned:`Ieee802154NarrowbandInterface` by default. The network also contains
+The network contains 14 hosts of the :ned:`SensorNode` type. This IPv4 showcase
+explicitly selects :ned:`Ieee802154LegacyNarrowbandInterface` to retain its
+48-bit ARP and legacy wire contract. The network also contains
 an :ned:`Ipv4NetworkConfigurator`, an :ned:`Ieee802154NarrowbandScalarRadioMedium`,
 and an :ned:`IntegratedCanvasVisualizer` module.
 

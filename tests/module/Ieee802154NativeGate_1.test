@@ -1,0 +1,125 @@
+%description:
+Operational native upper-gate adapter over two production default narrowband
+interfaces: full EUI-64, actual DATA/ACK, opaque/configured dispatch, typed/raw.
+
+%extraargs: -r 0..3
+
+%file: NativeGateApp.cc
+#include "inet/common/SimpleModule.h"
+#include "inet/common/Protocol.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/ieee802154/Ieee802154MacServiceTag.h"
+
+namespace inet {
+class NativeGateApp : public SimpleModule
+{
+    int confirmations = 0, indications = 0;
+    virtual void initialize() override {
+        if (par("sender")) scheduleAt(SimTime(1,SIMTIME_MS),new cMessage("send"));
+    }
+    virtual void handleMessage(cMessage *message) override {
+        if (message->isSelfMessage()) {
+            delete message;
+            auto packet = new Packet("opaque native gate MSDU");
+            packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0x45,0,0xde,0xad}));
+            auto& request = packet->addTag<Ieee802154MacDataReq>()->request;
+            request.sourceAddressMode = Ieee802154Address::AddressType::EXTENDED;
+            request.destinationAddress = Ieee802154Address::fromExtended(0x0401123456789abcULL);
+            request.destinationPanId = 0x1234; request.ackTx = true; request.msduHandle = 255;
+            packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::udp);
+            send(packet,"out");
+            return;
+        }
+        auto packet = check_and_cast<Packet *>(message);
+        if (par("sender")) {
+            auto result = packet->getTag<Ieee802154MacDataResultInd>();
+            ASSERT(result->requestId == 1 && result->msduHandle == 255 && result->confirm);
+            ASSERT(result->confirm->result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS));
+            ASSERT(result->confirm->ackFramePending == false && result->confirm->numBackoffs);
+            confirmations++;
+        }
+        else {
+            auto& indication = packet->getTag<Ieee802154MacDataInd>()->indication;
+            ASSERT(indication.sourceAddress == Ieee802154Address::fromExtended(0x0201123456789abcULL));
+            ASSERT(indication.destinationAddress == Ieee802154Address::fromExtended(0x0401123456789abcULL));
+            ASSERT(indication.ackSent && indication.frameVersion == 1);
+            ASSERT(packet->peekDataAsBytes()->getBytes() == std::vector<uint8_t>({0x45,0,0xde,0xad}));
+            ASSERT(!packet->findTag<Ieee802154MacDataReq>());
+            auto protocol = packet->findTag<PacketProtocolTag>();
+            if (par("configuredProtocol").stdstringValue().empty()) ASSERT(!protocol);
+            else ASSERT(protocol && protocol->getProtocol() == &Protocol::ipv4);
+            indications++;
+        }
+        delete packet;
+    }
+    virtual void finish() override {
+        ASSERT(confirmations == (par("sender").boolValue() ? 1 : 0));
+        ASSERT(indications == (par("sender").boolValue() ? 0 : 1));
+        std::cout << "Production native gate DATA/ACK and receiver-owned dispatch verified.\n";
+    }
+};
+Define_Module(NativeGateApp);
+}
+
+%file: NativeGateFixture.ned
+import inet.common.SimpleModule;
+import inet.linklayer.ieee802154.Ieee802154NarrowbandInterface;
+import inet.mobility.static.StationaryMobility;
+import inet.physicallayer.wireless.common.medium.RadioMedium;
+simple NativeGateApp extends SimpleModule
+{
+    parameters: @class(::inet::NativeGateApp); bool sender; string configuredProtocol;
+    gates: input in; output out;
+}
+module NativeGateHost
+{
+    parameters: bool sender; string configuredProtocol; @networkNode;
+    submodules:
+        mobility: StationaryMobility;
+        nic: Ieee802154NarrowbandInterface {
+            panId = 4660; rxOnWhenIdle = true;
+            upperProtocol = parent.configuredProtocol;
+        }
+        app: NativeGateApp { sender = parent.sender; configuredProtocol = parent.configuredProtocol; }
+    connections allowunconnected:
+        app.out --> nic.upperLayerIn;
+        nic.upperLayerOut --> app.in;
+}
+network NativeGateTest
+{
+    submodules:
+        radioMedium: RadioMedium;
+        host[2]: NativeGateHost { sender = index == 0; }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = NativeGateTest
+sim-time-limit = 20ms
+cmdenv-express-mode = true
+*.host[*].configuredProtocol = ${protocol="","ipv4"}
+*.host[*].nic.radio.sendRawBytes = ${raw=false,true}
+*.radioMedium.signalAnalogRepresentation = "scalar"
+*.radioMedium.backgroundNoise.power = -110dBm
+*.host[0].nic.extendedAddress = "extended:02-01-12-34-56-78-9A-BC"
+*.host[1].nic.extendedAddress = "extended:04-01-12-34-56-78-9A-BC"
+*.host[*].nic.radio.antenna.mobilityModule = "^.^.^.mobility"
+*.host[*].mobility.initFromDisplayString = false
+*.host[0].mobility.initialX = 0m
+*.host[1].mobility.initialX = 1m
+*.host[*].mobility.initialY = 0m
+*.host[*].mobility.initialZ = 0m
+*.host[*].mobility.constraintAreaMinX = 0m
+*.host[*].mobility.constraintAreaMinY = 0m
+*.host[*].mobility.constraintAreaMinZ = 0m
+*.host[*].mobility.constraintAreaMaxX = 100m
+*.host[*].mobility.constraintAreaMaxY = 100m
+*.host[*].mobility.constraintAreaMaxZ = 100m
+
+%contains: stdout
+Production native gate DATA/ACK and receiver-owned dispatch verified.
+
+%not-contains: stderr
+Error:

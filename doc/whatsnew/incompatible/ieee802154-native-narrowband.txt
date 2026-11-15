@@ -1,0 +1,3 @@
+Native IEEE 802.15.4 narrowband interface
+
+Ieee802154NarrowbandInterface now selects native short/EUI-64 services and standard legacy MPDUs over the packet-level O-QPSK PHY. The breaking cutover is targeted at INET 5.0. Existing 48-bit/ARP configurations must explicitly select Ieee802154LegacyNarrowbandInterface or supply a native upper-layer adaptation; addresses and wire formats are not silently converted. The explicit legacy narrowband type is deprecated for 5.0 and retained until at least 6.0. The separate legacy UWB composition is retained. See the native narrowband migration guide and examples/wireless/ieee802154managed.

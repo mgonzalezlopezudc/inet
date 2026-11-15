@@ -1,0 +1,93 @@
+%description:
+Initialize the production replacement interface and MAC service owner. Verify
+the native published PIB identity and explicit unsupported DATA admission before
+radio integration. This is a composition check, not a successful exchange.
+
+%file: CompositionFixture.cc
+#include "inet/common/SimpleModule.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/linklayer/ieee802154/Ieee802154InterfaceData.h"
+#include "inet/linklayer/ieee802154/Ieee802154MacServiceTag.h"
+
+namespace inet {
+class Ieee802154CompositionObserver : public SimpleModule
+{
+    bool observed = false;
+  protected:
+    virtual void initialize() override { scheduleAt(SIMTIME_ZERO, new cMessage("start")); }
+    virtual void handleMessage(cMessage *message) override {
+        if (message->isSelfMessage()) {
+            delete message;
+            auto interface = check_and_cast<NetworkInterface *>(getParentModule()->getSubmodule("nic"));
+            auto data = interface->getProtocolData<Ieee802154InterfaceData>();
+            ASSERT(data->getExtendedAddress() == Ieee802154Address::fromExtended(0x0201123456789abcULL));
+            ASSERT(data->getShortAddress() == Ieee802154Address::fromShort(0x1234));
+            ASSERT(data->getPanId() == 0xabcd);
+            for (int i = 0; i < 2; ++i) {
+                auto defaultInterface = check_and_cast<NetworkInterface *>(getParentModule()->getSubmodule("defaultNic",i));
+                auto native = defaultInterface->getProtocolData<Ieee802154InterfaceData>();
+                ASSERT(native->getExtendedAddress() == Ieee802154Address::fromExtended(0x0200000000000000ULL | static_cast<uint64_t>(defaultInterface->getId())));
+                ASSERT(defaultInterface->getMacAddress().isUnspecified());
+            }
+            auto packet = new Packet("request");
+            packet->addTag<Ieee802154MacDataReq>()->request.destinationAddress = Ieee802154Address::SHORT_BROADCAST_ADDRESS;
+            send(packet, "out");
+        }
+        else {
+            auto packet = check_and_cast<Packet *>(message);
+            auto result = packet->getTag<Ieee802154MacDataResultInd>();
+            ASSERT(result->requestId == 1 && !result->confirm);
+            ASSERT(result->admission == Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION);
+            ASSERT(!observed);
+            observed = true;
+            delete packet;
+        }
+    }
+    virtual void finish() override {
+        ASSERT(observed);
+        std::cout << "Replacement composition publishes native identity and explicit unavailable data capability.\n";
+    }
+};
+Define_Module(Ieee802154CompositionObserver);
+}
+
+%file: CompositionFixture.ned
+import inet.common.SimpleModule;
+import inet.linklayer.ieee802154.Ieee802154NarrowbandInterface;
+
+simple Ieee802154CompositionObserver extends SimpleModule
+{
+    parameters:
+        @class(::inet::Ieee802154CompositionObserver);
+    gates:
+        input in;
+        output out;
+}
+network CompositionTest
+{
+    submodules:
+        nic: Ieee802154NarrowbandInterface {
+            enableRadio = false;
+            extendedAddress = "extended:02-01-12-34-56-78-9A-BC";
+            shortAddress = 4660;
+            panId = 43981;
+        }
+        observer: Ieee802154CompositionObserver;
+        defaultNic[2]: Ieee802154NarrowbandInterface { enableRadio = false; }
+    connections allowunconnected:
+        observer.out --> nic.upperLayerIn;
+        nic.upperLayerOut --> observer.in;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = CompositionTest
+ned-path = .;../../../../src;../../lib
+sim-time-limit = 1ms
+seed-set = 0
+cmdenv-express-mode = true
+record-vector-results = false
+record-scalar-results = false
+
+%contains: stdout
+Replacement composition publishes native identity and explicit unavailable data capability.
