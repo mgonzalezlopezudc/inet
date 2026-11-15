@@ -2,7 +2,7 @@
 
 > **Kind:** design · **Status:** draft · **Seal:** none · **Owns:** — · **Stands on:** [RFC 6282 catalog](../../standard/rfc6282/catalog.md)
 
-This records the P0 stateless selection and the optional P8 context extension. Execution evidence is kept separately from this encoding contract. Inline fields follow RFC 6282 order. Decode accepts legal supported encodings even when encode would choose a smaller representation. Missing bytes fail before any read beyond input.
+This records the P0 stateless selection, optional P8 contexts and P9 extension NHC. Execution evidence is kept separately from this encoding contract. Inline fields follow RFC 6282 order. Decode accepts legal supported encodings even when encode would choose a smaller representation. Missing bytes fail before any read beyond input.
 
 | Field | Encoder selection | Decoder acceptance |
 | --- | --- | --- |
@@ -13,7 +13,7 @@ This records the P0 stateless selection and the optional P8 context extension. E
 | HLIM=00 | Hop limit other than 1, 64, 255 | Any inline octet, including those three values |
 | HLIM=01/10/11 | Hop limit 1/64/255 respectively | Same fixed values |
 | NH=0 | P4: every next header; P5: every non-UDP or fallback header | Inline next-header octet, including extension headers |
-| NH=1 | P5: supported UDP NHC that fits FRAG1 | P5: UDP NHC only; other NHC rejected as unsupported |
+| NH=1 | Supported contiguous NHC chain that fits FRAG1 | UDP, extension EIDs 0–4 and nested IPv6 EID 7; reserved EIDs reject |
 | CID=0 | Default when both selected context IDs are zero or unused | Use context 0 only for context-dependent fields; ignore unused selectors |
 | CID=1 | P8: nonzero selected SCI and/or DCI | Consume the extension byte; source and destination lookups are independent; missing/expired required contexts reject |
 
@@ -44,6 +44,8 @@ UDP NHC emits C=0 only. Choose P=11 when both ports are in 0xf0b0..0xf0bf,
 otherwise P=01 when destination is in 0xf000..0xf0ff, otherwise P=10 when source
 is in that range, otherwise P=00. Decoder accepts all four modes with C=0 and
 infers length from uncompressed coverage. C=1 is rejected without integrity support.
+
+Extension EIDs 0–4 represent Hop-by-Hop, Routing, Fragment, Destination and Mobility. NH=0 carries the original next-header octet; NH=1 continues the NHC chain. General length counts compressed body octets and cannot exceed 255. Fragment has seven body bytes and no length field. One trailing Pad1/PadN of at most seven bytes can be removed from Hop-by-Hop/Destination; decoding restores alignment to eight bytes. Nested EID 7 requires NH=0 followed by IPHC. Its elided IIDs copy the enclosing IPv6 addresses' last 64 bits without another U/L inversion. Codec and structural dissector recursion is bounded at sixteen levels.
 
 If a compressed header cannot fit FRAG1, reduce the compressed chain or select
 LOWPAN_IPV6, recompute original-byte coverage and alignment, and reject only when no

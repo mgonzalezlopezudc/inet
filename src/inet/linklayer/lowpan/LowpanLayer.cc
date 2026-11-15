@@ -10,8 +10,7 @@
 #include "inet/linklayer/lowpan/LowpanFragnHeader_m.h"
 #include "inet/linklayer/lowpan/LowpanFragmenter.h"
 #include "inet/linklayer/lowpan/LowpanIphcCodec.h"
-#include "inet/linklayer/lowpan/LowpanUdpNhcCodec.h"
-#include "inet/common/packet/chunk/SequenceChunk.h"
+#include "inet/linklayer/lowpan/LowpanNhcCodec.h"
 #include "inet/linklayer/lowpan/LowpanProtocol.h"
 #include "inet/linklayer/common/InterfaceTag_m.h"
 #include "inet/networklayer/common/NextHopAddressTag_m.h"
@@ -227,25 +226,12 @@ void LowpanLayer::processUpperPacket(Packet *packet)
             }
         }
     }
-    if (useIphc && originalHeaderLength == 40 && size >= 48 &&
-        packet->peekAtFront<Ipv6Header>()->getProtocolId() == IP_PROT_UDP) {
-        try {
-            auto nhc = LowpanUdpNhcCodec::encode(packet->peekDataAt<BytesChunk>(B(40), B(8))->getBytes(), size - 40);
-            if (nhc != nullptr) {
-                auto iphc = LowpanIphcCodec::encode(*packet->peekAtFront<Ipv6Header>(), request.getSrcAddress(), request.getDestAddress(), true, &compressionContexts, simTime());
-                int length = (iphc->getChunkLength() + nhc->getChunkLength()).get<B>();
-                if (size - 48 + length <= prepared->getPayloadLimit() || length + 4 <= prepared->getPayloadLimit()) {
-                    auto chain = makeShared<SequenceChunk>();
-                    chain->insertAtBack(iphc);
-                    chain->insertAtBack(nhc);
-                    encodedHeader = chain;
-                    originalHeaderLength = 48;
-                }
-            }
-        }
-        catch (const cRuntimeError& error) {
-            // E.g. a declared rather than computed transport checksum stays inline.
-            EV_DEBUG << "UDP NHC fallback: " << error.what() << endl;
+    if (useIphc && originalHeaderLength == 40) {
+        auto chain = LowpanNhcCodec::encode(*packet, request.getSrcAddress(), request.getDestAddress(), &compressionContexts, simTime());
+        if (chain.header && (size - chain.originalLength + chain.encodedLength <= prepared->getPayloadLimit() ||
+                chain.encodedLength + 4 <= prepared->getPayloadLimit())) {
+            encodedHeader = chain.header;
+            originalHeaderLength = chain.originalLength;
         }
     }
     int encodedLength = encodedHeader->getChunkLength().get<B>();
@@ -418,41 +404,15 @@ void LowpanLayer::processFragment(Packet *packet, bool first)
 
 bool LowpanLayer::decompressHeader(Packet *packet, int originalSize)
 {
-    try {
-        auto header = packet->peekAtFront<LowpanIphcHeader>(b(-1), Chunk::PF_ALLOW_INCOMPLETE | Chunk::PF_ALLOW_INCORRECT);
-        if (header->isIncomplete() || header->isIncorrect() || header->getChunkLength() > packet->getDataLength())
-            return false;
-        auto encodedLength = header->getChunkLength();
-        Ptr<const LowpanUdpNhcHeader> nhc;
-        if (header->getNh()) {
-            nhc = packet->peekDataAt<LowpanUdpNhcHeader>(encodedLength, b(-1), Chunk::PF_ALLOW_INCOMPLETE | Chunk::PF_ALLOW_INCORRECT);
-            if (nhc->isIncomplete() || nhc->isIncorrect() || nhc->getChecksumElided())
-                return false;
-            encodedLength += nhc->getChunkLength();
-            if (encodedLength > packet->getDataLength())
-                return false;
-        }
-        if (originalSize < 0)
-            originalSize = (nhc ? 48 : 40) + (packet->getDataLength() - encodedLength).get<B>();
-        auto indication = packet->getTag<Ieee802154AddressInd>();
-        auto ipv6 = LowpanIphcCodec::decode(*header, originalSize, indication->getSrcAddress(), indication->getDestAddress(), nhc != nullptr, &compressionContexts, simTime());
-        if (ipv6 == nullptr)
-            return false;
-        auto udp = nhc ? LowpanUdpNhcCodec::decode(*nhc, originalSize - 40) : nullptr;
-        if (nhc && !udp)
-            return false;
-        // Normalize byte-only FRAG1 input before inserting reconstructed headers.
-        // The data part may start after an already popped fragmentation header.
-        packet->popAtFront(encodedLength);
-        packet->trimFront();
-        if (udp)
-            packet->insertAtFront(udp);
-        packet->insertAtFront(ipv6);
-        return true;
-    }
-    catch (const cRuntimeError&) {
+    auto indication = packet->getTag<Ieee802154AddressInd>();
+    auto result = LowpanNhcCodec::decode(*packet, originalSize, indication->getSrcAddress(), indication->getDestAddress(), &compressionContexts, simTime());
+    if (!result.header)
         return false;
-    }
+    // Normalize byte-only FRAG1 input before inserting reconstructed headers.
+    packet->popAtFront(B(result.encodedLength));
+    packet->trimFront();
+    packet->insertAtFront(result.header);
+    return true;
 }
 
 void LowpanLayer::deliverIpv6(Packet *packet)

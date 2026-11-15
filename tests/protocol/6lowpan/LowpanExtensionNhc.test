@@ -1,0 +1,151 @@
+%description:
+Literal native frames exercise every RFC 6282 extension EID, nested IPv6,
+FRAG1 expansion and malformed input. Real radio transmissions check NHC output.
+
+%file: ExtensionNhcCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/checksum/Checksum.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/networklayer/common/NextHopAddressTag_m.h"
+namespace inet::protocoltest {
+class ExtensionNhcCheck : public cSimpleModule, public cListener
+{
+    std::vector<std::vector<uint8_t>> frames,expected;
+    int delivered=0,injected=0,dropped=0,tx=0,fallbackFirst=0,fallbackTail=0;
+    std::vector<uint8_t> original(int protocol,int payload,bool reverse=false) {
+        return {0x60,0,0,0,uint8_t(payload>>8),uint8_t(payload),uint8_t(protocol),64,
+            0xfe,0x80,0,0,0,0,0,0,2,0x11,0x22,0x33,0x44,0x55,0x66,uint8_t(reverse?2:1),
+            0xfe,0x80,0,0,0,0,0,0,2,0x11,0x22,0x33,0x44,0x55,0x66,uint8_t(reverse?1:2)};
+    }
+    void input(int ms,const std::vector<uint8_t>& payload) {
+        std::vector<uint8_t> frame{0x41,0xdc,uint8_t(frames.size()),0x34,0x12,
+            2,0x66,0x55,0x44,0x33,0x22,0x11,0,1,0x66,0x55,0x44,0x33,0x22,0x11,0};
+        frame.insert(frame.end(),payload.begin(),payload.end());auto crc=crc16_ccitt(frame);
+        frame.push_back(crc);frame.push_back(crc>>8);ASSERT(frame.size()<=127);frames.push_back(frame);
+        scheduleAt(SimTime(ms,SIMTIME_MS),new cMessage("literal-extension",frames.size()-1));
+    }
+  protected:
+    int numInitStages() const override {return NUM_INIT_STAGES;}
+    void initialize(int stage) override {
+        if (stage!=INITSTAGE_LAST) return;
+        getModuleByPath("^.node[0].nic.lowpan")->subscribe("packetDropped",this);
+        getModuleByPath("^.node[0].nic.mac")->subscribe("packetSentToLower",this);
+        int protocols[]={0,43,44,60,135};
+        for (int eid=0;eid<5;eid++) {
+            auto body=eid==2 ? std::vector<uint8_t>{0,0,8,0x12,0x34,0x56,0x78} :
+                eid==0 || eid==3 ? std::vector<uint8_t>{0x22,2,3,4} : std::vector<uint8_t>{2,0,3,4,5,6};
+            std::vector<uint8_t> wire{0x7e,0x33,uint8_t(0xe0|(eid<<1)),59};
+            if (eid!=2) wire.push_back(body.size());
+            wire.insert(wire.end(),body.begin(),body.end());wire.insert(wire.end(),{9,8,7,6});input(eid+1,wire);
+            auto expanded=original(protocols[eid],12);expanded.push_back(59);
+            if (eid!=2) expanded.push_back(0);
+            expanded.insert(expanded.end(),body.begin(),body.end());
+            if (eid==0 || eid==3) expanded.insert(expanded.end(),{1,0});
+            expanded.insert(expanded.end(),{9,8,7,6});expected.push_back(expanded);
+        }
+        input(6,{0x7e,0x33,0xee,0x7a,0x33,59,9,8,7,6});
+        auto nested=original(41,44),inner=original(59,4);nested.insert(nested.end(),inner.begin(),inner.end());
+        nested.insert(nested.end(),{9,8,7,6});expected.push_back(nested);
+        std::vector<uint8_t> first{0xc0,104,0x12,0x34,0x7e,0x33,0xe0,59,4,0x22,2,3,4};
+        for (int i=0;i<16;i++) first.push_back(i);input(7,first);
+        std::vector<uint8_t> tail{0xe0,104,0x12,0x34,8};for (int i=16;i<56;i++) tail.push_back(i);input(8,tail);
+        auto fragmented=original(0,64);fragmented.insert(fragmented.end(),{59,0,0x22,2,3,4,1,0});
+        for (int i=0;i<56;i++) fragmented.push_back(i);expected.push_back(fragmented);
+        input(9,{0x7e,0x33,0xea});input(10,{0x7e,0x33,0xef});input(11,{0x7e,0x33,0xe2,59,1,0});
+        scheduleAt(SimTime(15,SIMTIME_MS),new cMessage("production-tx",-1));
+        auto sent=original(0,12,true);sent.insert(sent.end(),{59,0,0x22,2,3,4,1,0,9,8,7,6});expected.push_back(sent);
+        auto large=original(43,268,true);large.insert(large.end(),{59,32});large.insert(large.end(),262,0x55);
+        large.insert(large.end(),{9,8,7,6});expected.push_back(large);
+        scheduleAt(SimTime(20,SIMTIME_MS),new cMessage("oversized-chain",-2));
+        auto legal=original(43,260,true);legal.insert(legal.end(),{59,31});legal.insert(legal.end(),254,0x55);
+        legal.insert(legal.end(),{9,8,7,6});expected.push_back(legal);
+        scheduleAt(SimTime(40,SIMTIME_MS),new cMessage("first-fragment-budget",-3));
+    }
+    void receiveSignal(cComponent *,simsignal_t signal,cObject *object,cObject *) override {
+        if (signal==registerSignal("packetDropped")) {dropped++;return;}
+        auto bytes=check_and_cast<Packet *>(object)->peekDataAsBytes()->getBytes();
+        if ((bytes[21]&0xf8)==0xc0) {
+            ASSERT(bytes[21]==0xc1 && (bytes[22]==52 || bytes[22]==44) && bytes[25]==0x7a && bytes[26]==0x33 && bytes[27]==43);
+            fallbackFirst++;return;
+        }
+        if ((bytes[21]&0xf8)==0xe0) {fallbackTail++;return;}
+        std::vector<uint8_t> wire{0x7e,0x33,0xe0,59,4,0x22,2,3,4,9,8,7,6};
+        ASSERT(bytes.size()==23+wire.size() && std::equal(wire.begin(),wire.end(),bytes.begin()+21));tx++;
+    }
+    void handleMessage(cMessage *message) override {
+        if (message->isSelfMessage()) {
+            if (message->getKind()>=0) {
+                auto packet=new Packet("literal-extension",makeShared<BytesChunk>(frames.at(message->getKind())));
+                sendDirect(packet,getModuleByPath("^.node[0].nic.mac")->gate("lowerLayerIn")->getPathStartGate());injected++;
+            }
+            else {
+                auto packet=new Packet("production-extension",makeShared<BytesChunk>(expected.at(6-message->getKind())));
+                packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ipv6);
+                packet->addTag<NextHopAddressReq>()->setNextHopAddress(Ipv6Address("fe80::211:2233:4455:6601"));send(packet,"out");
+            }
+            delete message;return;
+        }
+        auto packet=check_and_cast<Packet *>(message);ASSERT(delivered<int(expected.size()));
+        ASSERT(message->getArrivalGate()->getIndex()==(delivered>=7?1:0));
+        ASSERT(packet->peekDataAsBytes()->getBytes()==expected[delivered]);delivered++;delete packet;
+    }
+    void finish() override {
+        ASSERT(delivered==10 && injected==11 && dropped==3 && tx==1 && fallbackFirst==2 && fallbackTail>0);
+        std::cout << "Native extension EIDs, nesting, fragment expansion and radio NHC verified\n";
+    }
+};
+Define_Module(ExtensionNhcCheck);
+}
+
+%file: test.ned
+@namespace(inet::protocoltest);
+import inet.networklayer.common.InterfaceTable;
+import inet.mobility.static.StationaryMobility;
+import inet.linklayer.lowpan.Ieee802154NativeLowpanInterface;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple ExtensionNhcCheck { gates: output out; input in[2]; }
+module ExtensionNode {
+    parameters: @networkNode;
+    gates: input in; output out;
+    submodules:
+        interfaceTable: InterfaceTable;
+        mobility: StationaryMobility;
+        nic: Ieee802154NativeLowpanInterface {
+            interfaceTableModule="^.interfaceTable";
+            linkDomainModule="^.^.domain";
+        }
+    connections allowunconnected:
+        in --> nic.upperLayerIn;
+        nic.upperLayerOut --> out;
+}
+network ExtensionNetwork {
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        domain: LowpanNativeLinkDomain;
+        node[2]: ExtensionNode;
+        check: ExtensionNhcCheck;
+    connections allowunconnected:
+        check.out --> node[0].in;
+        node[0].out --> check.in[0];
+        node[1].out --> check.in[1];
+}
+
+%inifile: omnetpp.ini
+[General]
+network=ExtensionNetwork
+sim-time-limit=80ms
+seed-set=0
+*.domain.panId=4660
+*.domain.config=xml("<domain><peer interface='node[0].nic' native='0011223344556602'/><peer interface='node[1].nic' native='0011223344556601'/><neighbor interface='node[0].nic' ipv6='fe80::211:2233:4455:6601' native='0011223344556601'/></domain>")
+**.radio.antenna.mobilityModule="^.^.^.mobility"
+**.mobility.initialX=0m
+**.mobility.initialY=0m
+**.mobility.initialZ=0m
+**.mobility.initFromDisplayString=false
+**.mobility.updateFromDisplayString=false
+
+%contains: stdout
+Native extension EIDs, nesting, fragment expansion and radio NHC verified

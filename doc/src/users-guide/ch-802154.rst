@@ -86,7 +86,7 @@ There is also a :ned:`Ieee802154NarrowbandMac`.
 -------
 
 The optional ``Lowpan`` feature provides RFC 4944 dispatch and fragmentation,
-stateless RFC 6282 IPHC, and UDP NHC with carried checksums. Enable
+RFC 6282 IPHC, extension-header NHC, and UDP NHC with carried checksums. Enable
 ``LowpanExamples`` for the example in ``examples/lowpan``.
 
 Use :ned:`Ieee802154NativeLowpanInterface` together with
@@ -100,7 +100,7 @@ The native MAC implements a bounded unsecured, same-PAN data/ACK profile at
 250 kbit/s, with extended unicast and short broadcast addresses, native frame
 encoding and FCS. The initial configuration requires stationary radios and a
 dedicated medium. Ordinary Neighbor Discovery is suppressed on these interfaces.
-Association, security, stateful IPHC, extension-header NHC and mesh-under are
+Association, security and mesh-under are
 outside this profile. Independent captures validate frame/FCS and transport checksums,
 and serialized global-address vectors agree with a pinned external implementation.
 A known external-peer mismatch affects fully elided EUI-derived addresses; live
@@ -120,6 +120,14 @@ An empty context configuration preserves stateless operation. The codec supports
 independent source/destination contexts and prefix-based multicast. Replacing a
 prefix discards partial receive state on that interface; refreshing the same
 prefix does not change already reconstructed packet bytes.
+
+With IPHC enabled, contiguous Hop-by-Hop, Routing, Fragment, Destination and
+Mobility headers can use NHC and precede compressed UDP. Nested IPv6 uses its
+own IPHC encoding and derives elided IIDs from the enclosing IPv6 addresses.
+Headers with a compressed body above 255 bytes stay inline. When the complete
+compressed chain cannot fit the first adaptation fragment, the sender retains
+the inline next-header value in base IPHC and fragments the original extension
+bytes. Fragment offsets always count reconstructed IPv6 bytes.
 
 :ned:`Ieee802154LowpanInterface` is a separate compatibility path using the
 legacy MAC and explicit collision-checked 48-bit aliases in

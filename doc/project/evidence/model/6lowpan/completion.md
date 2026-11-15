@@ -12,6 +12,14 @@ Direct evidence: `LowpanStatefulContexts` unit vectors and the [native protocol 
 
 The [P8 verification record](p8-verification.json) retains exact changed-source hashes, commands, exit statuses and log paths. All selected checks pass: 12 units, 62 modules and six protocol fixtures/twelve parameter runs, matching debug/release builds, feature-off build/five shared modules/three IEEE 802.15.4 fingerprint configurations, and core-without-UDP build/three units/one stateful protocol fixture. Original feature-state bytes and generated NED exclusions are restored. Raw logs remain under `/tmp/lowpan-p8/`. The initial unit enum spelling error was a fixture compilation error, not a protocol failure; its correction is retained in the raw attempt logs. The complete parent protocol fixture cannot execute unchanged against the parent API, so no runtime failing-parent claim is made.
 
+## P9 — Extension NHC
+
+`LowpanNhcCodec` transforms only the contiguous header prefix. The adaptation owner uses its expanded/compressed lengths for RFC 4944 coordinates and falls back to inline extensions when the complete compressed chain exceeds FRAG1. Registered chunks, serializers, printer and dissector cover extension EIDs 0–4 and nested IPv6 EID 7. Recursion is bounded at sixteen levels. Nested elided IIDs derive from the enclosing IPv6 fields without another U/L inversion.
+
+Direct evidence is the [native protocol fixture](../../../../../tests/protocol/6lowpan/extension-nhc.md), plus independent wire and chain units. Eleven native input frames and three real senders produce ten exact IPv6 deliveries, three malformed-input drops and two separately checked fallback first fragments. Both a prohibited 262-byte Routing body and a legal 254-byte body exceeding the first-frame budget remain inline. Mixed extension/UDP and nested chains have literal unit vectors.
+
+The [P9 record](p9-verification.json) retains source hashes and exact commands: debug/release builds, fifteen units, sixty-two module fixtures/eighty-four parameter runs, seven protocol fixtures/thirteen parameter runs and three CSMA fingerprint configurations pass. Two units supplement P9 with generic checksum/ND-wire controls; they do not establish registration policy. Initial module failures exposed a shared IPv6 decoded-Fragment-header lifetime bug and one obsolete wire assertion. The separate IPv6 prerequisite retains the shared chunk through reassembly, and a direct serialized-fragment fixture plus every affected case passes. Independent P9 review found no actionable runtime defect; its introspection-placement and legal-chain-budget coverage requests are resolved. The final combined feature matrix remains pending.
+
 ## Remaining packages
 
-P9–P15 remain in execution order under the completion plan. Extension-header NHC, optimized/extended ND, mesh-under, paging, virtual fragment forwarding and selective recovery are not inferred from context support.
+P10–P15 remain in execution order under the completion plan. Optimized/extended ND, mesh-under, paging, virtual fragment forwarding and selective recovery are not inferred from header compression support.

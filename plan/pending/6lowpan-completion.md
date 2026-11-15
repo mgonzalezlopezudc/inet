@@ -38,7 +38,7 @@ P9 is split into a wire-representation/nested-IID preparation commit with `Lowpa
 P9 runtime regression exposed a shared IPv6 prerequisite: local delivery stored a decoded Fragment header's raw pointer after its scan-local owning chunk was destroyed. Preserve a shared chunk reference through reassembly in a separate `ipv6: fix:` commit, verified by literal serialized fragments and the affected route-over/source-fragmentation cases, before enabling NHC reconstruction.
 
 - [x] P8 stateful contexts and production evidence: [p8-verification.json](../../doc/project/evidence/model/6lowpan/p8-verification.json).
-- [ ] P9 extension/nested-header NHC and production evidence.
+- [x] P9 extension/nested-header NHC and production evidence: [p9-verification.json](../../doc/project/evidence/model/6lowpan/p9-verification.json).
 - [ ] P10 optimized ND roles, options and registration.
 - [ ] P11 extended registration and later-update profile.
 - [ ] P12 mesh-under forwarding and duplicate/hop bounds.

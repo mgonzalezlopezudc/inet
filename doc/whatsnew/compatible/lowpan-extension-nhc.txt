@@ -1,0 +1,3 @@
+Extension NHC transmission and reconstruction
+
+6LoWPAN IPHC supports RFC 6282 extension-header NHC chains and nested IPv6. Hop-by-Hop, Routing, Fragment, Destination and Mobility headers can precede compressed UDP. Headers exceeding the byte-length or first-frame budget stay inline and use ordinary fragmentation. Nested IPv6 elided IIDs derive from the enclosing IPv6 addresses.
