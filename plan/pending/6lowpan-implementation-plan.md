@@ -364,6 +364,15 @@ Dependencies: P5, P6.
 - [x] Execute [LowpanNativeFragmentBoundaries.test](../../tests/protocol/6lowpan/LowpanNativeFragmentBoundaries.test) across uncompressed/IPHC and extended-unicast/short-broadcast profiles, observing every size 40–1280 at sender frame output and remote native IPv6 delivery. Its [reviewer document](../../tests/protocol/6lowpan/native-reassembly.md) defines the deterministic boundary campaign.
 - [x] Move the existing 1,280-case IPHC acceptance matrix to literal native frame input, requiring the real MAC to reconstruct PAN/address metadata before decompression. Extend native protocol rejection checks through truncated fragmentation/NHC fields and checksum-elision forms; preserve the source-derived peer disagreement separately.
 - [ ] Close the remaining rows in the [release validation matrix](../../doc/project/evidence/model/6lowpan/release-validation.md); record the current native, compatibility, feature-disabled, independent-capture and pinned-peer results separately.
+
+The remaining P7 commits add coverage to the existing production behavior in this order. Each includes a protocol fixture, a reviewer document beside it, and its executed result in the release matrix; no production or baseline change is planned.
+
+| Commit | Intent and dependency | Direct verification |
+| --- | --- | --- |
+| `tests: add: native 6LoWPAN reassembly identity isolation` | Interleave equal tag/size tuples across senders, receiving interfaces/PANs and destinations; depends on the native boundary coverage. | `LowpanNativeIdentityIsolation.test`, seed 0; exact separate delivery and zero mixed bytes. |
+| `tests: add: native 6LoWPAN receive restart coverage` | Incomplete native receive state cannot survive shutdown/crash and startup; depends on identity coverage. | `LowpanNativeReceiveRestart.test`, two lifecycle runs, seed 0; late tails cannot complete old state and fresh first fragments restore delivery. |
+| `tests: add: native 6LoWPAN sender tag guard coverage` | Exercise the real adaptation sender's complete 16-bit tag cycle, exhaustion, restart retention and exact reuse deadline; depends on receive lifecycle coverage. | `LowpanNativeTagGuards.test`, two lifecycle runs, seed 0; controlled queue loss avoids a radio stress campaign. |
+
 - [x] Assess ordinary ND as its own substep: encode native link-address options, resolve
   64-bit next hops without truncation, and test link-local creation, DAD, RS/RA and NS/NA.
   If this needs a wider neighbor-cache refactor, retain documented static-neighbor operation

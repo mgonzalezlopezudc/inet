@@ -1,0 +1,36 @@
+{
+  "production_commit": "6a11f885acd503273abd53ab47d546f12b38b41e",
+  "validation_base": "fde06276347eb9e5f0ab308d1e345540a5f4f3cf",
+  "production_source_unchanged": true,
+  "build_mode": "debug",
+  "library_status": "REUSED: compiled source and feature configuration unchanged from successful debug/release builds",
+  "command": [
+    "opp_run_protocol_tests",
+    "--load",
+    ".",
+    "-p",
+    "inet",
+    "-m",
+    "debug",
+    "--no-build",
+    "-w",
+    "^tests/protocol/6lowpan$",
+    "-f",
+    "LowpanNative(IdentityIsolation|ReceiveRestart|TagGuards|Reassembly|FragmentBoundaries)\\.test$"
+  ],
+  "working_directory": "/home/miguel/workspace/inet-6lowpan-standard",
+  "exit_code": 0,
+  "log": "/tmp/lowpan-p7-closure-20261115/final-protocol.log",
+  "seed": 0,
+  "all_fixtures_passed": 5,
+  "all_parameter_runs_passed": 11,
+  "cases": {
+    "LowpanNativeIdentityIsolation": {
+      "path": "tests/protocol/6lowpan/LowpanNativeIdentityIsolation.test",
+      "sha256": "bc109dff28f5825a6f0f78d73ad118684bf982207108f80aa64c6f11cf1a8dd8",
+      "parameter_runs": 1,
+      "status": "PASS",
+      "output": "/tmp/lowpan-p7-closure-20261115/LowpanNativeIdentityIsolation.out"
+    }
+  }
+}
