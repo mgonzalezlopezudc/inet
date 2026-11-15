@@ -1,0 +1,85 @@
+%description:
+Independent RFC 6282 extension chains, nested IPHC, malformed lengths and
+first-fragment reconstruction in original IPv6 coordinates.
+
+%includes:
+#include "inet/linklayer/lowpan/LowpanNhcCodec.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+using namespace inet;
+using namespace inet::lowpan;
+
+%activity:
+Ieee802154Address source("0011223344556601"),destination("0011223344556602");
+auto base=[](int protocol,int payload) {
+    std::vector<uint8_t> b{0x60,0,0,0,uint8_t(payload>>8),uint8_t(payload),uint8_t(protocol),64,
+        0xfe,0x80,0,0,0,0,0,0,2,0x11,0x22,0x33,0x44,0x55,0x66,1,
+        0xfe,0x80,0,0,0,0,0,0,2,0x11,0x22,0x33,0x44,0x55,0x66,2};
+    return b;
+};
+std::vector<uint8_t> udp{0xf0,0xb1,0xf0,0xb2,0,12,0x12,0x34,9,8,7,6};
+for (int eid=0;eid<5;eid++) {
+    int protocols[]={0,43,44,60,135};
+    auto original=base(protocols[eid],20);
+    std::vector<uint8_t> ext=eid==2 ? std::vector<uint8_t>{17,0,0,8,0x12,0x34,0x56,0x78} :
+        (eid==0 || eid==3) ? std::vector<uint8_t>{17,0,0x22,2,3,4,1,0} :
+        std::vector<uint8_t>{17,0,2,0,3,4,5,6};
+    original.insert(original.end(),ext.begin(),ext.end());original.insert(original.end(),udp.begin(),udp.end());
+    std::vector<uint8_t> wire{0x7e,0x33,uint8_t(0xe1|(eid<<1))};
+    if (eid!=2) wire.push_back(eid==0 || eid==3 ? 4 : 6);
+    wire.insert(wire.end(),ext.begin()+(eid==2?1:2),ext.end()-(eid==0 || eid==3 ? 2:0));
+    wire.insert(wire.end(),{0xf3,0x12,0x12,0x34,9,8,7,6});
+    Packet packet("original",makeShared<BytesChunk>(original));
+    auto encoded=LowpanNhcCodec::encode(packet,source,destination,nullptr,SIMTIME_ZERO);ASSERT(encoded.header);
+    Packet actual("encoded",encoded.header);actual.insertAtBack(packet.peekDataAt(B(encoded.originalLength)));
+    ASSERT(actual.peekDataAsBytes()->getBytes()==wire);
+    for (int total : {-1,int(original.size())}) {
+        Packet input("independent",makeShared<BytesChunk>(wire));
+        auto decoded=LowpanNhcCodec::decode(input,total,source,destination,nullptr,SIMTIME_ZERO);ASSERT(decoded.header);
+        ASSERT(decoded.originalLength==56 && decoded.encodedLength==int(wire.size())-4);
+        Packet restored("restored",decoded.header);restored.insertAtBack(input.peekDataAt(B(decoded.encodedLength)));
+        ASSERT(restored.peekDataAsBytes()->getBytes()==original);
+    }
+    for (int size=2;size<int(wire.size())-4;size++) {
+        Packet input("truncated",makeShared<BytesChunk>(std::vector<uint8_t>(wire.begin(),wire.begin()+size)));
+        ASSERT(!LowpanNhcCodec::decode(input,60,source,destination,nullptr,SIMTIME_ZERO).header);
+    }
+}
+auto inner=base(17,12),outer=base(41,52);inner.insert(inner.end(),udp.begin(),udp.end());outer.insert(outer.end(),inner.begin(),inner.end());
+Packet nested("nested",makeShared<BytesChunk>(outer));
+auto encoded=LowpanNhcCodec::encode(nested,source,destination,nullptr,SIMTIME_ZERO);ASSERT(encoded.header);
+Packet nestedWire("nested-wire",encoded.header);nestedWire.insertAtBack(nested.peekDataAt(B(encoded.originalLength)));
+ASSERT(nestedWire.peekDataAsBytes()->getBytes()==std::vector<uint8_t>({0x7e,0x33,0xee,0x7e,0x33,0xf3,0x12,0x12,0x34,9,8,7,6}));
+auto decoded=LowpanNhcCodec::decode(nestedWire,-1,source,destination,nullptr,SIMTIME_ZERO);ASSERT(decoded.header);
+Packet restored("nested-restored",decoded.header);restored.insertAtBack(nestedWire.peekDataAt(B(decoded.encodedLength)));
+ASSERT(restored.peekDataAsBytes()->getBytes()==outer);
+for (auto wire : {std::vector<uint8_t>{0x7e,0x33,0xea}, {0x7e,0x33,0xef},
+        {0x7e,0x33,0xe2,59,1,0}, {0x7e,0x33,0xe0,59,1,0x22}, {0x7e,0x33,0xf7,0,0}}) {
+    Packet input("malformed",makeShared<BytesChunk>(wire));
+    ASSERT(!LowpanNhcCodec::decode(input,-1,source,destination,nullptr,SIMTIME_ZERO).header);
+}
+// An extension can terminate a compressed prefix before an unsupported header.
+auto inlinePacket=base(0,8);inlinePacket.insert(inlinePacket.end(),{51,0,0x22,2,3,4,1,0});
+Packet inlineInput("inline-next",makeShared<BytesChunk>(inlinePacket));
+auto prefix=LowpanNhcCodec::encode(inlineInput,source,destination,nullptr,SIMTIME_ZERO);ASSERT(prefix.header);
+Packet inlineWire("inline-wire",prefix.header);
+ASSERT(inlineWire.peekDataAsBytes()->getBytes()==std::vector<uint8_t>({0x7e,0x33,0xe0,51,4,0x22,2,3,4}));
+for (int size : {256,264}) {
+    auto large=base(43,size);large.push_back(59);large.push_back(size/8-1);large.insert(large.end(),size-2,0x55);
+    Packet largePacket("length-boundary",makeShared<BytesChunk>(large));
+    auto result=LowpanNhcCodec::encode(largePacket,source,destination,nullptr,SIMTIME_ZERO);ASSERT(result.header);
+    ASSERT(result.originalLength==(size==256?296:40)); // 254-byte body is legal; 262 stays inline.
+}
+// Mixed chain: HBH -> Routing -> Destination -> UDP; all NHC IDs contiguous.
+auto multi=base(0,36);multi.insert(multi.end(),{43,0,0x22,2,3,4,1,0,60,0,2,0,3,4,5,6,17,0,0x22,2,3,4,1,0});
+multi.insert(multi.end(),udp.begin(),udp.end());
+Packet multiInput("multi",makeShared<BytesChunk>(multi));
+auto multiResult=LowpanNhcCodec::encode(multiInput,source,destination,nullptr,SIMTIME_ZERO);ASSERT(multiResult.header);
+Packet multiWire("multi-wire",multiResult.header);multiWire.insertAtBack(multiInput.peekDataAt(B(multiResult.originalLength)));
+ASSERT(multiWire.peekDataAsBytes()->getBytes()==std::vector<uint8_t>({0x7e,0x33,0xe1,4,0x22,2,3,4,0xe3,6,2,0,3,4,5,6,0xe7,4,0x22,2,3,4,0xf3,0x12,0x12,0x34,9,8,7,6}));
+auto multiDecoded=LowpanNhcCodec::decode(multiWire,-1,source,destination,nullptr,SIMTIME_ZERO);ASSERT(multiDecoded.header);
+Packet multiRestored("multi-restored",multiDecoded.header);multiRestored.insertAtBack(multiWire.peekDataAt(B(multiDecoded.encodedLength)));
+ASSERT(multiRestored.peekDataAsBytes()->getBytes()==multi);
+EV << "Independent extension chains and nested IPv6 verified\n";
+
+%contains: stdout
+Independent extension chains and nested IPv6 verified

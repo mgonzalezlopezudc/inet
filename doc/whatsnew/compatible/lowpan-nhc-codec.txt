@@ -1,0 +1,3 @@
+Bounded extension NHC chain codec
+
+The 6LoWPAN header codec supports bounded contiguous extension NHC chains, including trailing option padding reconstruction and nested IPv6/UDP headers. It reports both compressed and original header lengths for fragment offsets.
