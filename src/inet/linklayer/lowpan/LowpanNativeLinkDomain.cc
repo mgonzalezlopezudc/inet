@@ -92,8 +92,44 @@ bool LowpanNativeLinkDomain::contains(const Ieee802154Address& address) const
 
 const Ieee802154Address *LowpanNativeLinkDomain::resolveNeighbor(int interfaceId, const Ipv6Address& nextHop) const
 {
-    auto it = neighbors.find({interfaceId, nextHop});
+    if (auto fixed = resolveStaticNeighbor(interfaceId, nextHop))
+        return fixed;
+    auto dynamic = dynamicNeighbors.find({interfaceId, nextHop});
+    return dynamic == dynamicNeighbors.end() || dynamic->second.validUntil <= simTime() ? nullptr : &dynamic->second.address;
+}
+
+const Ieee802154Address *LowpanNativeLinkDomain::resolveStaticNeighbor(int interfaceModuleId, const Ipv6Address& nextHop) const
+{
+    auto it = neighbors.find({interfaceModuleId, nextHop});
     return it == neighbors.end() ? nullptr : &it->second;
+}
+
+bool LowpanNativeLinkDomain::installDynamicNeighbor(int interfaceModuleId, const Ipv6Address& nextHop,
+        const Ieee802154Address& address, simtime_t validUntil, const cObject *owner)
+{
+    Enter_Method("installDynamicNeighbor");
+    if (owner == nullptr || peers.count(interfaceModuleId) == 0 || nextHop.isUnspecified() || nextHop.isMulticast() ||
+            !contains(address) || validUntil <= simTime())
+        throw cRuntimeError("Invalid dynamic native LoWPAN next-hop binding");
+    auto key = std::make_pair(interfaceModuleId, nextHop);
+    auto fixed = neighbors.find(key);
+    if (fixed != neighbors.end() && fixed->second != address)
+        return false;
+    auto existing = dynamicNeighbors.find(key);
+    if (existing != dynamicNeighbors.end() && existing->second.validUntil > simTime() && existing->second.owner != owner)
+        return false;
+    dynamicNeighbors[key] = {address, validUntil, owner};
+    return true;
+}
+
+bool LowpanNativeLinkDomain::removeDynamicNeighbor(int interfaceModuleId, const Ipv6Address& nextHop, const cObject *owner)
+{
+    Enter_Method("removeDynamicNeighbor");
+    auto it = dynamicNeighbors.find({interfaceModuleId, nextHop});
+    if (it == dynamicNeighbors.end() || it->second.owner != owner)
+        return false;
+    dynamicNeighbors.erase(it);
+    return true;
 }
 
 simtime_t LowpanNativeLinkDomain::getMaximumPropagationDelay(const NetworkInterface *sender) const

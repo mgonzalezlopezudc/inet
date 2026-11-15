@@ -1,0 +1,3 @@
+Expiring owner-specific native bindings
+
+The native LoWPAN link domain supports owner-specific IPv6 neighbor bindings with absolute expiry. Dynamic updates preserve configured static mappings and cannot replace another live owner's entry. Lookup rejects expired entries.

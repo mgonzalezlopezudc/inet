@@ -1,0 +1,103 @@
+%description:
+Domain-only dynamic binding ownership, replacement, exact expiry, static binding
+preservation and invalid input rejection, without enabling a native ND caller.
+
+%file: OwnedBindingCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/linklayer/lowpan/LowpanNativeLinkDomain.h"
+namespace inet::protocoltest {
+using namespace lowpan;
+class OwnedBindingCheck : public cSimpleModule
+{
+    LowpanNativeLinkDomain *domain=nullptr;
+    int interfaceId=-1;
+    cObject firstOwner,secondOwner;
+    Ipv6Address learned{"2001:db8::1"},fixed{"2001:db8::2"};
+    Ieee802154Address first{"0011223344556601"},second{"0011223344556602"};
+    bool checked=false;
+  protected:
+    int numInitStages() const override {return NUM_INIT_STAGES;}
+    void initialize(int stage) override {
+        if (stage!=INITSTAGE_LAST) return;
+        domain=check_and_cast<LowpanNativeLinkDomain *>(getModuleByPath("^.domain"));
+        interfaceId=getModuleByPath("^.node[0].nic")->getId();
+        ASSERT(!domain->resolveNeighbor(interfaceId,learned));
+        ASSERT(!domain->resolveStaticNeighbor(interfaceId,learned));
+        ASSERT(*domain->resolveStaticNeighbor(interfaceId,fixed)==second);
+        ASSERT(domain->installDynamicNeighbor(interfaceId,learned,second,SimTime(5,SIMTIME_MS),&firstOwner));
+        ASSERT(*domain->resolveNeighbor(interfaceId,learned)==second);
+        ASSERT(!domain->installDynamicNeighbor(interfaceId,learned,first,SimTime(6,SIMTIME_MS),&secondOwner));
+        ASSERT(!domain->removeDynamicNeighbor(interfaceId,learned,&secondOwner));
+        ASSERT(domain->installDynamicNeighbor(interfaceId,learned,second,SimTime(6,SIMTIME_MS),&firstOwner));
+        ASSERT(!domain->installDynamicNeighbor(interfaceId,fixed,first,SimTime(6,SIMTIME_MS),&firstOwner));
+        ASSERT(domain->installDynamicNeighbor(interfaceId,fixed,second,SimTime(6,SIMTIME_MS),&firstOwner));
+        ASSERT(domain->removeDynamicNeighbor(interfaceId,fixed,&firstOwner));
+        ASSERT(*domain->resolveNeighbor(interfaceId,fixed)==second);
+        for (int invalid=0;invalid<5;invalid++) {
+            bool rejected=false;
+            try {
+                domain->installDynamicNeighbor(invalid==0?-1:interfaceId,
+                    invalid==1?Ipv6Address("ff02::1"):learned,
+                    invalid==2?Ieee802154Address("0011223344556699"):second,
+                    invalid==3?SIMTIME_ZERO:SimTime(6,SIMTIME_MS),invalid==4?nullptr:&firstOwner);
+            }
+            catch (const cRuntimeError&) {rejected=true;}
+            ASSERT(rejected);
+        }
+        scheduleAt(SimTime(6,SIMTIME_MS),new cMessage("exact-binding-expiry"));
+    }
+    void handleMessage(cMessage *message) override {
+        ASSERT(message->isSelfMessage());delete message;
+        ASSERT(!domain->resolveNeighbor(interfaceId,learned));
+        ASSERT(domain->installDynamicNeighbor(interfaceId,learned,first,SimTime(7,SIMTIME_MS),&secondOwner));
+        ASSERT(!domain->removeDynamicNeighbor(interfaceId,learned,&firstOwner));
+        ASSERT(domain->removeDynamicNeighbor(interfaceId,learned,&secondOwner));
+        ASSERT(!domain->resolveNeighbor(interfaceId,learned) && *domain->resolveNeighbor(interfaceId,fixed)==second);checked=true;
+    }
+    void finish() override {ASSERT(checked);std::cout << "Owned domain binding replacement, validation and expiry verified\n";}
+};
+Define_Module(OwnedBindingCheck);
+}
+
+%file: test.ned
+@namespace(inet::protocoltest);
+import inet.networklayer.common.InterfaceTable;
+import inet.mobility.static.StationaryMobility;
+import inet.linklayer.lowpan.Ieee802154NativeLowpanInterface;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple OwnedBindingCheck {}
+module OwnedBindingNode {
+    parameters: @networkNode;
+    submodules:
+        interfaceTable: InterfaceTable;
+        mobility: StationaryMobility;
+        nic: Ieee802154NativeLowpanInterface {
+            interfaceTableModule="^.interfaceTable";linkDomainModule="^.^.domain";
+        }
+    connections allowunconnected:
+}
+network OwnedBindingNetwork {
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        domain: LowpanNativeLinkDomain;
+        node[2]: OwnedBindingNode;
+        check: OwnedBindingCheck;
+}
+
+%inifile: omnetpp.ini
+[General]
+network=OwnedBindingNetwork
+sim-time-limit=8ms
+seed-set=0
+*.domain.panId=4660
+*.domain.config=xml("<domain><peer interface='node[0].nic' native='0011223344556601'/><peer interface='node[1].nic' native='0011223344556602'/><neighbor interface='node[0].nic' ipv6='2001:db8::2' native='0011223344556602'/></domain>")
+**.radio.antenna.mobilityModule="^.^.^.mobility"
+**.mobility.initialX=0m
+**.mobility.initialY=0m
+**.mobility.initialZ=0m
+**.mobility.initFromDisplayString=false
+**.mobility.updateFromDisplayString=false
+
+%contains: stdout
+Owned domain binding replacement, validation and expiry verified
