@@ -3,7 +3,7 @@
   "validation_base": "fde06276347eb9e5f0ab308d1e345540a5f4f3cf",
   "production_source_unchanged": true,
   "build_mode": "debug",
-  "library_status": "REUSED: compiled source and feature configuration unchanged from successful debug/release builds",
+  "library_status": "Matching debug and release builds confirmed; no production source changes",
   "command": [
     "opp_run_protocol_tests",
     "--load",
@@ -60,5 +60,39 @@
       "status": "PASS",
       "output": "/tmp/lowpan-p7-closure-20261115/LowpanNativeFragmentBoundaries.out"
     }
+  },
+  "acceptance_status": "COMPLETE for bounded P0-P7 native first-release profile",
+  "scope_exclusions": [
+    "dynamic native ND/optimized ND",
+    "stateful IPHC and extension-header NHC",
+    "association/security/short unicast",
+    "mesh-under/paging/advanced fragmentation",
+    "live external MAC interoperability",
+    "agreement with pinned ns-3 on fully elided EUI-derived IIDs"
+  ],
+  "known_external_comparison": {
+    "result": "FAIL",
+    "artifact": "peer-elided-result.json",
+    "cause": "Pinned peer Mac64 IID derivation omits U/L-bit inversion; normative INET mapping independently passes"
+  },
+  "plan": "plan/done/6lowpan-implementation-plan.md",
+  "feature_state_sha256": "b06952dd9375d04782d2a1e3e57112bbc1f5ff74d118256dec14a8f4f62b7e27",
+  "debug_build": {
+    "command": [
+      "make",
+      "MODE=debug",
+      "-j8"
+    ],
+    "exit_code": 0,
+    "log": "/tmp/lowpan-p7-closure-20261115/debug-confirm.log"
+  },
+  "release_build": {
+    "command": [
+      "make",
+      "MODE=release",
+      "-j8"
+    ],
+    "exit_code": 0,
+    "log": "/tmp/lowpan-p7-closure-20261115/release-confirm.log"
   }
 }

@@ -1,19 +1,19 @@
 # 6LoWPAN implementation evidence
 
-> **Kind:** ledger · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [implementation plan](../../../../../plan/pending/6lowpan-implementation-plan.md), [features](../../protocol/6lowpan/features.md)
+> **Kind:** ledger · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [implementation plan](../../../../../plan/done/6lowpan-implementation-plan.md), [features](../../protocol/6lowpan/features.md)
 
-Execution began 2026-09-19 at `14df0d93a48cd0f4c619d3a16066809c6f40243d`, with a clean working tree. P1–P6 implementation has focused debug, release-build and independent wire/vector evidence. P0 provenance is recorded in the [current snapshot](provenance.md). The full P7 release matrix remains open; [release-validation.md](release-validation.md) separates the current native, compatibility and external evidence and names its remaining gaps. Earlier milestone sections below are historical; the current validation record supersedes their status. Status below distinguishes executed checks from planned work.
+Execution began 2026-09-19 at `14df0d93a48cd0f4c619d3a16066809c6f40243d`, with a clean working tree. P0–P7 are complete for the bounded native first-release profile. P0 provenance is recorded in the [current snapshot](provenance.md), and [release-validation.md](release-validation.md) owns the acceptance matrix, current native/compatibility/external evidence and retained peer incompatibility. P8–P15 remain deferred. Earlier milestone sections below are historical; the current validation record supersedes their status. Status below distinguishes executed checks from broader unclaimed conformance.
 
 | Package | Behavior / check | Owner | Category | Status |
 | --- | --- | --- | --- | --- |
 | P1 | Legacy receive source, destination, interface and protocol | Ieee802154Mac::decapsulate | Production module receive + protocol observation | covered, PASS |
-| P2a | Native aliases, collisions, PAN isolation, opaque RX and budgets | IEEE 802.15.4 types; compatibility adapter | Unit + module | partial coverage, see executed checks below |
+| P2a | Native aliases, collisions, PAN isolation, opaque RX and budgets | IEEE 802.15.4 types; compatibility adapter | Unit + module | selected static-domain checks PASS; native and compatibility evidence kept separate |
 | P2b | 0x41, bounded dispatch, MTU and fitting exchange | Lowpan processing module | Unit + production module + standalone simulation | covered for P2b; see executed checks |
 | P3 | Original offsets, reassembly identities, timer, overlap and limits | Fragment planner; reassembly table | Unit + protocol + lifecycle module | implemented; focused PASS, see remaining evidence below |
 | P4 | Encode/accept matrix and compression/fragmentation interaction | IPHC codec | Independent byte vectors + production protocol | supported literal receive matrix and placement fallback PASS |
 | P5 | UDP checksum/ports; per-hop reconstruction; IPv6 MTU behavior | NHC codec; IPv6 integration | Unit + two-link protocol | NHC, two-flow route-over, queued egress and IPv6 MTU cases PASS |
 | P6 | Native data/ACK subset, filtering/retries, FCS and external bytes | IEEE 802.15.4 MAC/serializer | Module + serialization + external peer | implemented; bounded native and peer evidence PASS, see limits below |
-| P7 | Native first-release rerun, features, docs; static neighbors | Interface integration | Build + protocol | selected native matrix, examples and both builds PASS; provenance and broader peer limits remain open |
+| P7 | Native first-release rerun, features, docs; static neighbors | Interface integration | Build + protocol | bounded first-release matrix complete; five native protocol fixtures/eleven runs PASS; broader peer interoperability not claimed |
 
 The [standards-only procedures](../../protocol/6lowpan/checks/data-plane.md) define
 packet expectations. The plan's §5 defines detailed boundary/lifecycle stimuli. The
@@ -260,9 +260,9 @@ Both debug and release library builds pass. The release library was rebuilt afte
 byte-normalization (`/tmp/lowpan-final-release-build.log`). Final feature-off and
 post-observable-change results follow; the complete release claim remains open.
 
-### Release limits still open
+### First-release scope and retained limits
 
-The implementation remains in `plan/pending/`. P0's complete errata retrieval is closed by the [2026-11-15 export review](provenance.md#current-errata-snapshot). The full P7 acceptance matrix remains open; its current evidence and precise gaps are in [release-validation.md](release-validation.md).
+The first-release plan is archived in `plan/done/`. P0's complete errata retrieval is closed by the [2026-11-15 export review](provenance.md#current-errata-snapshot), and [release-validation.md](release-validation.md) records P7 acceptance within the selected native profile. This does not close the deferred features or expand the bounded peer evidence below.
 The controlled-budget fixture now exercises placement fallback separately from the
 native profile, whose minimum 104-byte budget exceeds its supported compressed
 IPv6/UDP header chain. Dynamic ND, association/disassociation, security, short

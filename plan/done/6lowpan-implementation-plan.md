@@ -1,7 +1,7 @@
 # Implement 6LoWPAN adaptation in INET
 
-Status: **implemented through the native P6 data plane; P0 provenance recorded; P7 release validation in progress**. Written 2026-09-19 against `c913a63a8335ca39a319cb2089daf835ea5e95cd` and the local, uncommitted standards inventory.
-Starting point: [6lowpan-initial-plan.md](6lowpan-initial-plan.md).
+Status: **complete for the bounded first-release profile, P0–P7; P8–P15 remain deferred follow-on deliverables**. First-release validation completed 2026-11-15; scope, passing checks and retained peer incompatibility are recorded in [release-validation.md](../../doc/project/evidence/model/6lowpan/release-validation.md). Written 2026-09-19 against `c913a63a8335ca39a319cb2089daf835ea5e95cd` and the local, uncommitted standards inventory.
+Starting point: [6lowpan-initial-plan.md](../pending/6lowpan-initial-plan.md).
 
 ## 1. Deliverable and completion boundary
 
@@ -357,15 +357,15 @@ and leave the first-release gate open.
 
 Dependencies: P5, P6.
 
-- [ ] Re-run the complete first-release matrix on the native MAC path, including feature-off
+- [x] Re-run the complete first-release matrix on the native MAC path, including feature-off
   and existing IPv6/802.15.4 regression selections. Keep compatibility results separate.
 - [x] Add the native receive protocol fixture [LowpanNativeReassembly.test](../../tests/protocol/6lowpan/LowpanNativeReassembly.test) and its [reviewer document](../../tests/protocol/6lowpan/native-reassembly.md). Drive native frame bytes through MAC decoding, boundary metadata and adaptation; observe reordered/interleaved fragments, overlap/quarantine, separate context/byte limits, expiry, malformed dispatch and fully elided EUI-derived addresses. This adds evidence without changing production behavior.
 - [x] Extend `LowpanFragmentation.test` to cover both native payload capacities and every original datagram size from 40 through 1280 bytes. Keep this helper evidence distinct from native sender/radio observations.
 - [x] Execute [LowpanNativeFragmentBoundaries.test](../../tests/protocol/6lowpan/LowpanNativeFragmentBoundaries.test) across uncompressed/IPHC and extended-unicast/short-broadcast profiles, observing every size 40–1280 at sender frame output and remote native IPv6 delivery. Its [reviewer document](../../tests/protocol/6lowpan/native-reassembly.md) defines the deterministic boundary campaign.
 - [x] Move the existing 1,280-case IPHC acceptance matrix to literal native frame input, requiring the real MAC to reconstruct PAN/address metadata before decompression. Extend native protocol rejection checks through truncated fragmentation/NHC fields and checksum-elision forms; preserve the source-derived peer disagreement separately.
-- [ ] Close the remaining rows in the [release validation matrix](../../doc/project/evidence/model/6lowpan/release-validation.md); record the current native, compatibility, feature-disabled, independent-capture and pinned-peer results separately.
+- [x] Close the remaining rows in the [release validation matrix](../../doc/project/evidence/model/6lowpan/release-validation.md); record the current native, compatibility, feature-disabled, independent-capture and pinned-peer results separately.
 
-The remaining P7 commits add coverage to the existing production behavior in this order. Each includes a protocol fixture, a reviewer document beside it, and its executed result in the release matrix; no production or baseline change is planned.
+The P7 closure uses the following separate coverage commits in dependency order. Each includes a protocol fixture, a reviewer document beside it, and its executed result in the release matrix. All three controls pass on the existing production implementation; no production or baseline change was required.
 
 | Commit | Intent and dependency | Direct verification |
 | --- | --- | --- |

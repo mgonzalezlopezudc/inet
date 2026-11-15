@@ -101,7 +101,10 @@ The native MAC implements a bounded unsecured, same-PAN data/ACK profile at
 encoding and FCS. The initial configuration requires stationary radios and a
 dedicated medium. Ordinary Neighbor Discovery is suppressed on these interfaces.
 Association, security, stateful IPHC, extension-header NHC and mesh-under are
-outside this profile. External-peer release validation is still pending.
+outside this profile. Independent captures validate frame/FCS and transport checksums,
+and serialized global-address vectors agree with a pinned external implementation.
+A known external-peer mismatch affects fully elided EUI-derived addresses; live
+external-MAC interoperability is not established by these checks.
 
 :ned:`Ieee802154LowpanInterface` is a separate compatibility path using the
 legacy MAC and explicit collision-checked 48-bit aliases in

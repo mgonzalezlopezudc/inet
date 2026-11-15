@@ -1,6 +1,6 @@
 # Native reassembly identity isolation
 
-> **Kind:** report · **Status:** snapshot 2026-11-15 · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-implementation-plan.md](../../../plan/pending/6lowpan-implementation-plan.md), [data-plane.md](../../../doc/project/evidence/protocol/6lowpan/checks/data-plane.md)
+> **Kind:** report · **Status:** snapshot 2026-11-15 · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-implementation-plan.md](../../../plan/done/6lowpan-implementation-plan.md), [data-plane.md](../../../doc/project/evidence/protocol/6lowpan/checks/data-plane.md)
 
 The P7 identity row needs evidence that identical tag/size values cannot mix native datagrams from different senders, receiving interfaces/PANs or destinations. `LowpanNativeIdentityIsolation.test` adds that coverage to the existing production implementation. Its planned commit is `tests: add: native 6LoWPAN reassembly identity isolation`. The parent already has the correct behavior; this is a control, not a bug repair.
 

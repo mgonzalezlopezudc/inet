@@ -1,6 +1,6 @@
 # Native sender tag guards
 
-> **Kind:** report · **Status:** snapshot 2026-11-15 · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-implementation-plan.md](../../../plan/pending/6lowpan-implementation-plan.md), [data-plane.md](../../../doc/project/evidence/protocol/6lowpan/checks/data-plane.md)
+> **Kind:** report · **Status:** snapshot 2026-11-15 · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-implementation-plan.md](../../../plan/done/6lowpan-implementation-plan.md), [data-plane.md](../../../doc/project/evidence/protocol/6lowpan/checks/data-plane.md)
 
 The P7 sender row needs the real adaptation sender, not only an allocator helper. `LowpanNativeTagGuards.test` drives that path through an entire 16-bit tag cycle, restart, and the exact reuse deadline. Its planned commit is `tests: add: native 6LoWPAN sender tag guard coverage`. It adds a control for existing production behavior and makes no bug-repair claim.
 

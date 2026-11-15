@@ -1,8 +1,8 @@
 # 6LoWPAN first-release validation
 
-> **Kind:** ledger · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-implementation-plan.md](../../../../../plan/pending/6lowpan-implementation-plan.md), [provenance.md](provenance.md), [encoding-profile.md](encoding-profile.md)
+> **Kind:** ledger · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-implementation-plan.md](../../../../../plan/done/6lowpan-implementation-plan.md), [provenance.md](provenance.md), [encoding-profile.md](encoding-profile.md)
 
-P0's standards provenance is recorded. P1–P6 production source is implemented. P7 remains open: the selected tests pass, but the complete first-release matrix still has the native production-path gaps identified below. A pass of a helper, compatibility fixture, capture decoder or peer vector has the scope of that observation; it does not silently complete a different acceptance row.
+P0–P7 implementation and validation are complete for the bounded first-release profile: static neighbors, native extended unicast/short broadcast, RFC 4944 fragmentation, stateless IPHC and carried-checksum UDP NHC. The acceptance rows below have passing checks or explicit scope exclusions. This is not a full RFC conformance or live external-MAC interoperability claim. The reproduced ns-3 fully elided EUI incompatibility remains a failed external comparison, separately characterized against the normative INET expectation. P8–P15 remain deferred.
 
 ## Source and execution environment
 
@@ -12,7 +12,7 @@ The installed runners are `opp_run_unit_tests`, `opp_run_module_tests`, `opp_run
 
 ## Acceptance mapping
 
-Names below are fixture basenames. `PASS` means the stated observation ran; `PARTIAL` keeps the uncovered portion of the plan's row explicit. Native MAC input injection observes decoding, indications and adaptation; it bypasses radio propagation. Full sender/radio fixtures and external byte checks are identified separately.
+Names below are fixture basenames. `PASS` means the stated observation ran within its specified scope. Native MAC input injection observes decoding, indications and adaptation; it bypasses radio propagation. Full sender/radio fixtures and external byte checks are identified separately. A helper, compatibility or queue-loss check does not stand in for a different production path.
 
 | Plan row | Direct evidence | Current scope and remaining gap |
 | --- | --- | --- |
@@ -78,7 +78,7 @@ The [peer README](../../protocol/6lowpan/checks/peer/README.md) pins ns-3 `5e35c
 
 The peer's elided-address decode is separately executed and still differs at IPv6 offsets 16 and 32: expected `0x02`, observed `0x00` ([retained result](peer-elided-result.json)). It exactly reproduces the saved incompatible output. The cause is established in the pinned `src/network/utils/ipv6-address.cc`, `MakeAutoconfiguredLinkLocalAddress(Mac64Address)`, which copies the eight EUI bytes without U/L inversion. INET's native protocol fixture independently passes the inversion required by RFC 6282 section 3.2.2. This is a characterized peer incompatibility; it remains a failed external comparison, not an expected-pass result or a reason to change INET's mapping.
 
-## Remaining P7 work
+## P7 closure and acceptance
 
 The [identity protocol control](../../../../../tests/protocol/6lowpan/native-identity.md) closes the sender/interface/PAN/destination isolation gap. Its 12 injected fragments produce exactly six separate byte-exact datagrams, no drops and no expiry; [p7-closure.json](p7-closure.json) records the tested source, fixture hash and raw output. A fixed NED domain assignment initially prevented the second PAN's INI override; `identity-domain-setup.err` preserves that setup error. Correcting the fixture default required no production change.
 
@@ -86,4 +86,6 @@ The [receive restart control](../../../../../tests/protocol/6lowpan/native-recei
 
 The [sender tag guard control](../../../../../tests/protocol/6lowpan/native-tag-guards.md) closes the final native protocol gap. In each shutdown/crash run, 65,541 production input attempts yield 65,538 accepted datagrams, 131,076 serialized/queue-discarded fragments and exactly three timed tag refusals. Guards outlive restart, and tag 0 is reusable at 61.001 s, followed by tag 1 one tick later. This is native preparation/adaptation integration, not radio-delivery or production-queue-loss evidence.
 
-The combined protocol command in [p7-closure.json](p7-closure.json) passes all five fixtures and eleven parameter runs on unchanged production source. The first-release acceptance record can now reconcile the selected matrix with its documented exclusions. The peer's incompatible elided-address result remains visible alongside the normative INET expectation; no stateful IPHC, optimized ND, security, association, short unicast, mesh-under or advanced fragmentation is enabled by these tests.
+The combined protocol command in [p7-closure.json](p7-closure.json) passes all five fixtures and eleven parameter runs on unchanged production source. Raw logs and per-run output are retained in `/tmp/lowpan-p7-closure-20261115/`; the three reviewer documents define each fixture's setup, assertions and limits. Matching debug and release compilation checks pass. The new commit audit reports zero violations and notes; document/source protection checks pass. No fingerprint or statistical baseline changes.
+
+Every agreed first-release row is now covered within the documented native subset, so P7 is complete and the [plan is archived](../../../../../plan/done/6lowpan-implementation-plan.md). The peer's incompatible elided-address comparison remains failed, not converted into a passing expectation. It does not refute the independently checked RFC 6282 mapping in INET. Broad peer interoperability, live external MAC exchange, stateful IPHC, optimized ND, security, association, short unicast, mesh-under and advanced fragmentation remain outside this acceptance. P8–P15 need their own implementation work and evidence.

@@ -8,7 +8,7 @@ The first-release profile uses RFC 4944 fragmentation, RFC 6282 stateless IPHC a
 
 Implementation source: `6a11f885acd503273abd53ab47d546f12b38b41e`, tree `067ce2a25597f99d2d38f2a2d78a32c149380a15`. The pre-existing local `AGENTS.md` edit is outside the model. The P7 continuation adds test and evidence files without modifying production source. Exact runtime commands, fixture hashes and verdicts belong to [release-validation.md](release-validation.md).
 
-All eight cached RFC text hashes match [source-hashes.sha256](source-hashes.sha256). The shared IEEE PDF is `../inet-standards/802154-2024.pdf` relative to the INET checkout; its SHA-256 is `851d81127297f898c956fdd1ce92929324d68cd696fd338d1e876f6a372f22d3`, matching the original source inventory. Selected IEEE clauses and source-span locators are in the coverage ledger. The first-release RFC clause selections and deterministic stimuli are in the [plan's test matrix](../../../../../plan/pending/6lowpan-implementation-plan.md#5-required-test-matrix) and [encoding profile](encoding-profile.md).
+All eight cached RFC text hashes match [source-hashes.sha256](source-hashes.sha256). The shared IEEE PDF is `../inet-standards/802154-2024.pdf` relative to the INET checkout; its SHA-256 is `851d81127297f898c956fdd1ce92929324d68cd696fd338d1e876f6a372f22d3`, matching the original source inventory. Selected IEEE clauses and source-span locators are in the coverage ledger. The first-release RFC clause selections and deterministic stimuli are in the [plan's test matrix](../../../../../plan/done/6lowpan-implementation-plan.md#5-required-test-matrix) and [encoding profile](encoding-profile.md).
 
 ## Current errata snapshot
 

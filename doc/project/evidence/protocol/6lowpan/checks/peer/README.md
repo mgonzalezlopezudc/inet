@@ -28,8 +28,7 @@ Scope: one fragmented UDP datagram, global addresses, stateless IPHC and carried
 checksum. This is serialized-vector interoperability, not a live MAC/radio exchange.
 The pinned peer's Mac64 link-local derivation copies the EUI without the U/L flip;
 fully elided native EUI address interoperability is not established by these vectors.
-Short broadcast and other encoding forms require separate peer evidence. These
-limits keep the broader first-release validation gate open.
+Short broadcast and other encoding forms require separate peer evidence. These limits bound the peer-agreement claim; independent native MAC/capture evidence is recorded separately in the scoped first-release validation.
 
 The [current release validation record](../../../../model/6lowpan/release-validation.md) records the fresh canonical-peer build, exact byte comparisons and INET native tests. RFC 6282 section 3.2.2 requires the EUI-64 U/L-bit inversion. The pinned peer's `src/network/utils/ipv6-address.cc`, `MakeAutoconfiguredLinkLocalAddress(Mac64Address)`, copies the eight address octets without that inversion. INET's independently constructed native-wire expectation passes; preserving the peer's incompatible result does not imply changing INET's normative mapping.
 

@@ -23,9 +23,7 @@ The legacy compatibility interface remains available as
 `Ieee802154LowpanInterface`, with `LowpanLinkDomain` and explicit collision-checked
 48-bit aliases. It is not a native wire format. Native capture decoding and a
 pinned ns-3 exchange of fragmented global-address UDP vectors pass independently.
-The peer reconstructs fully elided EUI addresses differently; broader interoperability
-and release gates remain open. See the
-[peer evidence](../../doc/project/evidence/protocol/6lowpan/checks/peer/README.md).
+The peer reconstructs fully elided EUI addresses differently; broad peer interoperability is not claimed. The bounded first-release data-plane checks are complete; see the [validation scope](../../doc/project/evidence/model/6lowpan/release-validation.md) and [peer evidence](../../doc/project/evidence/protocol/6lowpan/checks/peer/README.md).
 
 The two-PAN route-over example uses explicit IPv6 addresses and routes in
 `route.xml` and distinct native neighbor tables on each PAN:

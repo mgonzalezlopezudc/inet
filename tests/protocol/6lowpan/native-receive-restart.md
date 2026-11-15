@@ -1,6 +1,6 @@
 # Native receive state across restart
 
-> **Kind:** report · **Status:** snapshot 2026-11-15 · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-implementation-plan.md](../../../plan/pending/6lowpan-implementation-plan.md), [data-plane.md](../../../doc/project/evidence/protocol/6lowpan/checks/data-plane.md)
+> **Kind:** report · **Status:** snapshot 2026-11-15 · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-implementation-plan.md](../../../plan/done/6lowpan-implementation-plan.md), [data-plane.md](../../../doc/project/evidence/protocol/6lowpan/checks/data-plane.md)
 
 The P7 lifecycle row needs a native protocol sequence with pending RX state and late fragments. `LowpanNativeReceiveRestart.test` adds that control for the existing stop/crash cleanup. Its planned commit is `tests: add: native 6LoWPAN receive restart coverage`. No production defect is repaired: the real adaptation module already clears its reassembly table and cancels its timer on both operations.
 

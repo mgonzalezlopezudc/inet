@@ -332,5 +332,6 @@
     "total_datagrams_delivered": 4964
   },
   "original_feature_state_sha256": "b06952dd9375d04782d2a1e3e57112bbc1f5ff74d118256dec14a8f4f62b7e27",
-  "acceptance_status": "PARTIAL: P7 identity isolation, RX teardown/restart and production sender tag guard sequences remain open"
+  "acceptance_status": "COMPLETE for bounded P0-P7 native first-release profile; broad/live external interoperability and P8-P15 excluded",
+  "closure_record": "p7-closure.json"
 }
