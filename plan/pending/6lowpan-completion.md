@@ -29,7 +29,13 @@ The affected source is restricted to unsealed `src/inet/linklayer/lowpan/` codec
 
 ## Progress
 
+P10/P11 use RFC 6775 and RFC 8505 individual unicast-address registration, including the RFC 8505 base-peer compatibility flow. Later updates are explicitly outside this package: RFC 8928 cryptographic AP-ND, RFC 8929 backbone federation, RFC 9010 RPL signaling, RFC 9685 multicast/anycast subscriptions and RFC 9926 prefix registration. ROVR comparison is an ownership identifier match, not cryptographic proof. The generic ICMPv6 wire prerequisite precedes native registration policy; it preserves variable-length options and decodes DAR/DAC subclasses without a dependency on the optional LoWPAN feature.
+
+P10/P11 first add the separately reviewable generic ICMPv6 wire prerequisite: `Ipv6DuplicateAddressMessage` supports DAR/DAC and extended 8/16/24/32-byte ROVRs through the ordinary ICMPv6 serializer and `Ipv6NdMessage` dispatch. Raw ND options, including variable-sized link-layer addresses, retain their bytes without optional LoWPAN dependencies; existing eight-byte Ethernet options remain typed. Proposed direct coverage is `tests/unit/Ipv6NdRegistrationWire.test`, selected by `opp_run_unit_tests --load . -p inet -m debug --no-build -f 'Ipv6NdRegistrationWire\.test$'` after a fresh debug build. This prerequisite does not claim registration policy or live native ND integration.
+
 P9 is split into a wire-representation/nested-IID preparation commit with `LowpanExtensionNhcWire` unit vectors, a chain-codec commit with independent chain vectors, and production integration with `LowpanExtensionNhc.test` and its reviewer document. Preparation does not claim live extension compression before the production caller is connected.
+
+P9 runtime regression exposed a shared IPv6 prerequisite: local delivery stored a decoded Fragment header's raw pointer after its scan-local owning chunk was destroyed. Preserve a shared chunk reference through reassembly in a separate `ipv6: fix:` commit, verified by literal serialized fragments and the affected route-over/source-fragmentation cases, before enabling NHC reconstruction.
 
 - [x] P8 stateful contexts and production evidence: [p8-verification.json](../../doc/project/evidence/model/6lowpan/p8-verification.json).
 - [ ] P9 extension/nested-header NHC and production evidence.
