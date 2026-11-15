@@ -1,0 +1,150 @@
+%description:
+Shutdown/crash with two partial native datagrams, then restart and inject late tails.
+Old first ranges and expiry events must be gone. Fresh ranges restore exact delivery;
+wire-identical stale generations are not claimed to be distinguishable.
+
+%extraargs: -r 0..1
+
+%file: NativeReceiveRestartCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/checksum/Checksum.h"
+#include "inet/common/lifecycle/NodeStatus.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+
+namespace inet::protocoltest {
+class NativeReceiveRestartCheck : public cSimpleModule, public cListener
+{
+    std::vector<std::vector<uint8_t>> frames, expected;
+    std::vector<int> times;
+    int injected=0,delivered=0,fragments=0,completed=0,downChecks=0,upChecks=0;
+    std::vector<simtime_t> expirations;
+    std::vector<uint8_t> datagram(uint8_t marker) {
+        std::vector<uint8_t> bytes(80,marker);
+        const std::vector<uint8_t> header{0x60,0,0,0,0,40,59,64,
+            0x20,1,0x0d,0xb8,0,0,0,0,0,0,0,0,0,0,0,1,
+            0x20,1,0x0d,0xb8,0,0,0,0,0,0,0,0,0,0,0,2};
+        std::copy(header.begin(),header.end(),bytes.begin());return bytes;
+    }
+    void input(int ms,uint16_t tag,const std::vector<uint8_t>& bytes,bool first) {
+        std::vector<uint8_t> frame{0x41,0xdc,uint8_t(frames.size()),0x34,0x12,
+            0xef,0xcd,0xab,0x89,0x67,0x45,0x23,0xa1,
+            0xef,0xcd,0xab,0x89,0x67,0x45,0x23,0x01,
+            uint8_t(first ? 0xc0 : 0xe0),80,uint8_t(tag>>8),uint8_t(tag),uint8_t(first ? 0x41 : 5)};
+        frame.insert(frame.end(),bytes.begin()+(first ? 0 : 40),bytes.begin()+(first ? 40 : 80));
+        auto fcs=crc16_ccitt(frame);frame.push_back(fcs);frame.push_back(fcs>>8);
+        frames.push_back(frame);
+        scheduleAt(SimTime(ms,SIMTIME_MS),new cMessage("native-fragment",frames.size()-1));
+    }
+  protected:
+    int numInitStages() const override { return NUM_INIT_STAGES; }
+    void initialize(int stage) override {
+        if (stage != INITSTAGE_LAST) return;
+        auto layer=getModuleByPath("^.node[0].nic.lowpan");
+        for (auto signal : {"fragmentReceived","reassemblyCompleted","reassemblyExpired","packetDropped"}) layer->subscribe(signal,this);
+        auto a=datagram(0x11),b=datagram(0x22),c=datagram(0x33);
+        input(1,0x1234,a,true);input(2,0x1235,b,true);
+        input(11,0x1234,a,false); // Old first must not cause a delivery here.
+        input(12,0x1234,a,true);expected.push_back(a);times.push_back(12);
+        input(13,0x1236,c,true);input(14,0x1236,c,false);expected.push_back(c);times.push_back(14);
+        input(15,0x1235,b,false); // Must expire as a new partial, not complete old state.
+        scheduleAt(SimTime(6,SIMTIME_MS),new cMessage("verify-down",-1));
+        scheduleAt(SimTime(10500,SIMTIME_US),new cMessage("verify-up",-2));
+    }
+    void receiveSignal(cComponent *,simsignal_t signal,cObject *,cObject *) override {
+        ASSERT(signal != registerSignal("packetDropped"));
+        if (signal == registerSignal("fragmentReceived")) fragments++;
+        else { ASSERT(signal == registerSignal("reassemblyCompleted"));completed++; }
+    }
+    void receiveSignal(cComponent *,simsignal_t,long count,cObject *) override {
+        ASSERT(count == 1);expirations.push_back(simTime());
+    }
+    void handleMessage(cMessage *message) override {
+        if (message->isSelfMessage()) {
+            if (message->getKind()<0) {
+                auto status=check_and_cast<NodeStatus *>(getModuleByPath("^.node[0].status"));
+                if (message->getKind()==-1) { ASSERT(status->getState()==NodeStatus::DOWN);downChecks++; }
+                else { ASSERT(status->getState()==NodeStatus::UP);upChecks++; }
+                delete message;return;
+            }
+            auto packet=new Packet("restart-native-fragment",makeShared<BytesChunk>(frames.at(message->getKind())));
+            auto mac=getModuleByPath("^.node[0].nic.mac");
+            sendDirect(packet,mac->gate("lowerLayerIn")->getPathStartGate());
+            injected++;delete message;return;
+        }
+        auto packet=check_and_cast<Packet *>(message);
+        ASSERT(delivered<int(expected.size()) && simTime()==SimTime(times[delivered],SIMTIME_MS));
+        ASSERT(packet->peekDataAsBytes()->getBytes()==expected[delivered]);
+        delivered++;delete packet;
+    }
+    void finish() override {
+        ASSERT(injected==7 && fragments==7 && completed==2 && delivered==2 && downChecks==1 && upChecks==1);
+        ASSERT(expirations==std::vector<simtime_t>({SimTime(115,SIMTIME_MS)}));
+        std::cout << "Native partial receive state and old timers cleared across restart\n";
+    }
+};
+Define_Module(NativeReceiveRestartCheck);
+}
+
+%file: test.ned
+@namespace(inet::protocoltest);
+import inet.common.lifecycle.NodeStatus;
+import inet.common.scenario.ScenarioManager;
+import inet.networklayer.common.InterfaceTable;
+import inet.mobility.static.StationaryMobility;
+import inet.linklayer.lowpan.Ieee802154NativeLowpanInterface;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple NativeReceiveRestartCheck
+{
+    gates:
+        input in[2];
+}
+module RestartNode
+{
+    parameters:
+        @networkNode;
+    gates:
+        output out;
+    submodules:
+        status: NodeStatus;
+        interfaceTable: InterfaceTable;
+        mobility: StationaryMobility;
+        nic: Ieee802154NativeLowpanInterface {
+            interfaceTableModule="^.interfaceTable";
+            linkDomainModule="^.^.domain";
+        }
+    connections allowunconnected:
+        nic.upperLayerOut --> out;
+}
+network NativeRestartNetwork
+{
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        domain: LowpanNativeLinkDomain;
+        scenarioManager: ScenarioManager;
+        node[2]: RestartNode;
+        check: NativeReceiveRestartCheck;
+    connections allowunconnected:
+        node[0].out --> check.in[0];
+        node[1].out --> check.in[1];
+}
+
+%inifile: omnetpp.ini
+[General]
+network=NativeRestartNetwork
+sim-time-limit=130ms
+seed-set=0
+**.lowpan.reassemblyTimeout=100ms
+*.scenarioManager.script=xml("<scenario><at t='0.005'><${operation=shutdown,crash} module='node[0]'/></at><at t='0.010'><startup module='node[0]'/></at></scenario>")
+*.domain.panId=4660
+*.domain.config=xml("<domain><peer interface='node[0].nic' native='a123456789abcdef'/><peer interface='node[1].nic' native='0123456789abcdef'/></domain>")
+**.radio.antenna.mobilityModule="^.^.^.mobility"
+**.mobility.initialX=0m
+**.mobility.initialY=0m
+**.mobility.initialZ=0m
+**.mobility.initFromDisplayString=false
+**.mobility.updateFromDisplayString=false
+
+%contains: stdout
+Native partial receive state and old timers cleared across restart

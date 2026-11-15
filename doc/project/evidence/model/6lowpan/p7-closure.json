@@ -31,6 +31,13 @@
       "parameter_runs": 1,
       "status": "PASS",
       "output": "/tmp/lowpan-p7-closure-20261115/LowpanNativeIdentityIsolation.out"
+    },
+    "LowpanNativeReceiveRestart": {
+      "path": "tests/protocol/6lowpan/LowpanNativeReceiveRestart.test",
+      "sha256": "da6148c4087d8b3202822c9bdc1b0ec4bbbb89e9285eeadc0645f18f5a23c5c4",
+      "parameter_runs": 2,
+      "status": "PASS",
+      "output": "/tmp/lowpan-p7-closure-20261115/LowpanNativeReceiveRestart.out"
     }
   }
 }
