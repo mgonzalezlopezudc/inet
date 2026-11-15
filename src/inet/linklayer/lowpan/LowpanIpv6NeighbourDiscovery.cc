@@ -187,7 +187,8 @@ bool LowpanIpv6NeighbourDiscovery::readRegistration(const Packet *packet, const 
         source->getSrcAddress().toIpv6().isUnicast() && !source->getSrcAddress().toIpv6().isUnspecified() &&
         source->getDestAddress() == L3Address(message->getTargetAddress()) &&
         hop != nullptr && hop->getHopLimit() == 255 && native != nullptr &&
-        data->hasAddress(message->getTargetAddress()) && !data->isTentativeAddress(message->getTargetAddress()) &&
+        data->hasValidAddress(message->getTargetAddress(), simTime()) &&
+        !data->isTentativeAddress(message->getTargetAddress()) &&
         aroCount == 1 && sllaoCount == 1 && aro->getOptionLength() == 2 && aro->getPaddingBytesArraySize() == 14 &&
         sllao->getOptionLength() == 2 && sllao->getPaddingBytesArraySize() == 14 && uint8_t(aro->getPaddingBytes(0)) == 0 &&
         message->getChunkLength() == packet->getDataLength();
@@ -204,8 +205,11 @@ bool LowpanIpv6NeighbourDiscovery::readRegistration(const Packet *packet, const 
     if (!valid)
         return false;
     int lifetime = (uint8_t(aro->getPaddingBytes(4)) << 8) | uint8_t(aro->getPaddingBytes(5));
+    int seconds = 60 * lifetime;
+    auto deadline = double(seconds) >= (SIMTIME_MAX - simTime()).dbl() ?
+        SIMTIME_MAX : simTime() + SimTime(seconds);
     requested = {Ieee802154Address(Ieee802154Address::EXTENDED, ownerValue), native->getSrcAddress(),
-        domain, interface->getId(), simTime() + SimTime(60 * lifetime)};
+        domain, interface->getId(), deadline};
     return true;
 }
 

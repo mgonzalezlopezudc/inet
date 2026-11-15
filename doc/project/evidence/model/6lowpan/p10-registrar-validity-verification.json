@@ -1,0 +1,185 @@
+{
+  "scope": "Native registrar checks current target lifetime and saturates the ARO expiry before constructing a relative duration",
+  "cwd": "/home/miguel/workspace/inet-6lowpan-standard",
+  "source_sha256": {
+    "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.cc": "8232245557783dd56eff4c42cf25a2bccf9352aa47f51d142f1e65b1495f0ef9",
+    "tests/protocol/6lowpan/LowpanRegistrarValidity.test": "c635894fee64dcd447781f6da1118db80d049693a47e1fddb4339af152f92411",
+    "tests/protocol/6lowpan/registrar-validity.md": "d3f0c9f86cfeafdc0e05bce7313ceba8a1907a0858a64c176cd165339ba678d9",
+    "doc/whatsnew/compatible/lowpan-registrar-validity.txt": "fe2ddc172635f580b23b57af70dba1b33b7965649452add489dd14cd29693212"
+  },
+  "checks": [
+    {
+      "command": [
+        "make",
+        "MODE=debug",
+        "-j4"
+      ],
+      "mode": "debug",
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/build-debug.log"
+    },
+    {
+      "command": [
+        "make",
+        "MODE=release",
+        "-j2"
+      ],
+      "mode": "release",
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/build-release.log"
+    },
+    {
+      "command": [
+        "opp_run_protocol_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-w",
+        "^tests/protocol/6lowpan$",
+        "-f",
+        "Lowpan(RegistrarValidity|NeighborRegistration)\\.test$"
+      ],
+      "mode": "debug",
+      "exit_code": 0,
+      "fixtures": 2,
+      "runs": 3,
+      "seed": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/protocol-horizon.log"
+    },
+    {
+      "command": [
+        "opp_run_module_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-f",
+        "Lowpan(OwnedBindings|DynamicBindings|MixedNeighbourDiscovery)\\.test$"
+      ],
+      "mode": "debug",
+      "exit_code": 0,
+      "fixtures": 3,
+      "runs": 3,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/module-debug.log"
+    },
+    {
+      "command": [
+        "doc/project/enforcement/check-architecture.sh",
+        "src/inet/linklayer/lowpan"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/architecture.log"
+    },
+    {
+      "command": [
+        "doc/project/enforcement/check-naming.sh",
+        "src/inet/linklayer/lowpan"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/naming.log"
+    },
+    {
+      "command": [
+        "doc/project/enforcement/check-source-seals.sh",
+        "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.cc"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/source-seals.log"
+    }
+  ],
+  "artifact_sha256": {
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/build-debug.log": "f72d1c9e90bc24c9b6463665a67478016c510dcf86d743b40249098e07c26505",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/build-release.log": "805853a3901eaa23800451d9f83358aaad8c15c25b5b4626e727c7f4cf27e997",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/protocol-horizon.log": "66db0109f123b86fd33f3510a8d94f37c0e57e53961402adf6fafa1656eeb706",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/module-debug.log": "84e3bc0347754dd9ab46a03890db182aa2d962027846faf5b8ac2b1e8d8a9b38",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/architecture.log": "21a5c76254de41eab0151b63d3351b6d4d0e242d9f8a2cdf3056b5b0f6ddee41",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/naming.log": "7b003bb1f254feabd4cac482b98f4c6d6cc171c5ae729375e7d97b1986105e05",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/source-seals.log": "4d5110553efecb3ef3b5837e2c26e345ad8bdd3edeeaf3aab5502dc60769dc16",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/runtime/module/LowpanOwnedBindings/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/runtime/module/LowpanOwnedBindings/_defaults.ini": "971cad1cb7d426025e643349557688a1420fcd0274b6a9cfa907aa353ac73361",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/runtime/module/LowpanOwnedBindings/omnetpp.ini": "9d0a05afaf42d71753529037cf3a423622b187f332b9a0557eba382c44a45629",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/runtime/module/LowpanOwnedBindings/test.out": "dcf0153526b46cf6e3da8425263eff3804d8779f87e6690aca2ea756df4a2ba1",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/runtime/module/LowpanDynamicBindings/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/runtime/module/LowpanDynamicBindings/_defaults.ini": "971cad1cb7d426025e643349557688a1420fcd0274b6a9cfa907aa353ac73361",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/runtime/module/LowpanDynamicBindings/omnetpp.ini": "09f97d65268c8b04f3e1b4730d7915bcaa79c3c89842d77151ff9c4016ab6cc1",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/runtime/module/LowpanDynamicBindings/test.out": "3529628f0ff00dea1c65d8fd8972d7dbd45e90481e9f2d19064e89be57aec461",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/runtime/module/LowpanMixedNeighbourDiscovery/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/runtime/module/LowpanMixedNeighbourDiscovery/_defaults.ini": "971cad1cb7d426025e643349557688a1420fcd0274b6a9cfa907aa353ac73361",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/runtime/module/LowpanMixedNeighbourDiscovery/omnetpp.ini": "2405846ec24abc74aba5c0da0f1122388b78ae0312a85ee8b738343f33b1cb80",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/runtime/module/LowpanMixedNeighbourDiscovery/test.out": "d3749ac28dab229d69b8e322aa3cc41c0fce70b2dd7afcb3c8465213c3ab3bf8",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/runtime/debug/LowpanRegistrarValidity/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/runtime/debug/LowpanRegistrarValidity/_defaults.ini": "971cad1cb7d426025e643349557688a1420fcd0274b6a9cfa907aa353ac73361",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/runtime/debug/LowpanRegistrarValidity/omnetpp.ini": "c4581d48ee5332b2d8192459a00cedccfcf7fc1e4fa98692391c28300b490d61",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/runtime/debug/LowpanRegistrarValidity/test.out": "5ccfcbbb9d4a8a580bf2c03957d460d4ab4a9d90b757f7f4d52659ed78b9f23f",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/runtime/debug/LowpanNeighborRegistration/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/runtime/debug/LowpanNeighborRegistration/_defaults.ini": "971cad1cb7d426025e643349557688a1420fcd0274b6a9cfa907aa353ac73361",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/runtime/debug/LowpanNeighborRegistration/omnetpp.ini": "92c767dc7407760d53d45270c02806d096a667d0c71006484a4688246e83c2d8",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/runtime/debug/LowpanNeighborRegistration/test.out": "3c558567a744eee79cfaebc694579084abb933cee040576d94ffc5457967792d",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/attempt-fixture-mobility.log": "aed1d072ec3c558c956d2b3cdb80badceb5a66e6c99951dc7db3b4be73583fcf",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/attempt-throughput-recorder.log": "ee335e9069b5aad3825abfa208a55c172179a6e242c66244898b8f91eb717022",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/late-clock-backtrace.log": "07288948be457bafeb3f8f1e11c0d0988f5a45985fe228d05342567cc60a1b2f",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/attempt-late-phy-interval.log": "80fb17cc6e8ae0f77fdb034f90dd9e27e3d63a20e1ef3e5f8098e8bbc79e14db",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/late-phy-backtrace.log": "a5176bc1977262f7dc6904f9c26711780b48272b8f5510190c26491b9c0466db"
+  },
+  "observations": {
+    "finite_target": {
+      "inputs": 3,
+      "radio_na": 1,
+      "malformed_drops": 2,
+      "registration_counts": [
+        1
+      ],
+      "initial_route_deadline_seconds": 60.9,
+      "expired_alias_row_remained_present": true
+    },
+    "clock_horizon": {
+      "inputs": 2,
+      "radio_na": 2,
+      "malformed_drops": 0,
+      "registration_counts": [
+        1,
+        0
+      ],
+      "resolution": "fs",
+      "input_time_seconds": 0.9,
+      "wire_lifetime_minutes": 65535,
+      "positive_route_expiry": "SIMTIME_MAX",
+      "matching_zero_removed_route_and_binding": true
+    },
+    "existing_registration_control": {
+      "inputs": 21,
+      "aro_na": 11,
+      "data": 1,
+      "malformed_drops": 6
+    }
+  },
+  "diagnostic_attempts": [
+    {
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/attempt-fixture-mobility.log",
+      "classification": "fixture initialization: incorrect mobility module path; corrected before acceptance"
+    },
+    {
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/attempt-throughput-recorder.log",
+      "trace": "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/late-clock-backtrace.log",
+      "classification": "setup: throughput statistics filled bins across a large virtual jump; terminated owned run"
+    },
+    {
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/attempt-late-phy-interval.log",
+      "trace": "/home/miguel/workspace/.codex-artifacts/lowpan-registrar-validity-20261116/late-phy-backtrace.log",
+      "classification": "unvalidated large absolute timestamp: analog radio interval error after registrar emitted NA; no PHY production change"
+    }
+  ],
+  "limits": [
+    "No failing-parent execution claimed",
+    "No large-absolute-timestamp analog-radio validity claim",
+    "Release compilation passed; runtime assertions were exercised only in debug",
+    "No native border-router or relay policy claim"
+  ]
+}

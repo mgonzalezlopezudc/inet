@@ -62,6 +62,12 @@ The ordinary-interface `borderRouter` authority owns a bounded IPv6-address/owne
 
 The [authority fixture](../../../../../tests/protocol/6lowpan/registration-authority.md) passes both scheduling-priority runs. Each checks twenty-nine controls, twenty-eight Ethernet traversals, twenty-two DACs and five ND drops, including a late competing owner after the original deadline but before a refreshed deadline. The [record](p10-authority-verification.json) retains thirteen source/document hashes, thirty-two runtime hashes, matching debug/release builds, five protocol fixtures/eleven runs and five module fixtures/six runs. Independent source and publication reviews are clean. This authority stage does not yet enable local native border-router admission or a relay's tentative requests; those remain separate work before P10 is complete.
 
+## P10 — Registrar target and lifetime validity
+
+Registration admission now checks the target address's valid lifetime at the current time, even when an expired row remains assigned. Minute-based deadlines are bounded before constructing a simulation duration; zero still removes the matching registration. This changes no ownership, reply format or lifecycle policy.
+
+The [registrar fixture](../../../../../tests/protocol/6lowpan/registrar-validity.md) proves acceptance before a finite target deadline and rejection at/after it while retaining the original 60.9-second learned route. Its second run uses normal time and femtosecond resolution: lifetime 65535 exceeds the representable clock range, receives a real NA and saturated route/binding, then zero removes both. The [record](p10-registrar-validity-verification.json) retains four source hashes and thirty-two artifact hashes. Debug/release builds, two protocol fixtures/three runs and three module fixtures/three runs pass; independent review and scoped gates are clean. Huge absolute-timestamp recorder and PHY diagnostics are preserved separately and are not validated claims.
+
 ## Remaining packages
 
 P10–P15 remain in execution order under the completion plan. Optimized/extended ND, mesh-under, paging, virtual fragment forwarding and selective recovery are not inferred from header compression support.
