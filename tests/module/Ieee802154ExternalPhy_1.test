@@ -1,0 +1,173 @@
+%description:
+Production PHY airtime oracle and actual IEEE 802.15.4 error-model calculations against
+the ns-3.45 reference BER vectors and an independent-bit mathematical oracle.
+
+%file: ExternalPhyExercise.cc
+#include <array>
+#include <cmath>
+#include <iomanip>
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/common/Protocol.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/physicallayer/wireless/ieee802154/packetlevel/Ieee802154StandardTransmission.h"
+#include "inet/physicallayer/wireless/ieee802154/packetlevel/errormodel/Ieee802154ErrorModel.h"
+#include "inet/physicallayer/wireless/common/base/packetlevel/ReceptionBase.h"
+#include "inet/physicallayer/wireless/common/base/packetlevel/SnirBase.h"
+#include "inet/physicallayer/wireless/ieee802154/contract/IIeee802154PhyServiceProvider.h"
+#include "inet/physicallayer/wireless/ieee802154/contract/IIeee802154PhyServiceClient.h"
+
+namespace inet {
+using namespace physicallayer;
+class ConstantReferenceSnir : public SnirBase
+{
+    double value;
+  public:
+    ConstantReferenceSnir(const IReception *reception, double value) : SnirBase(reception,nullptr), value(value) {}
+    virtual double getMin() const override { return value; }
+    virtual double getMax() const override { return value; }
+    virtual double getMean() const override { return value; }
+};
+class ExternalPhyExercise : public cSimpleModule, public cListener, public IIeee802154PhyServiceClient
+{
+    ModuleRefByPar<IIeee802154PhyServiceProvider> provider;
+    uint64_t nextId = 0;
+    int transmissions = 0, confirms = 0, comparisons = 0;
+    static long double referenceBer(long double snir) {
+        long double sum = 0, coefficient = 16;
+        for (int k=2; k<=16; k++) {
+            coefficient *= static_cast<long double>(17-k)/k;
+            sum += (k%2 ? -1 : 1) * coefficient * std::exp(20*snir*(1.0L/k-1));
+        }
+        return sum/30;
+    }
+    static void close(double actual, long double expected) {
+        ASSERT(std::abs(static_cast<long double>(actual)-expected) <= 1e-12L + 1e-8L*std::abs(expected));
+    }
+  public:
+    ExternalPhyExercise() : cSimpleModule(65536) {}
+    virtual void initialize() override {
+        provider.reference(this,"providerModule",true);
+        getModuleByPath("^.host.radio")->subscribe("transmissionStarted",this);
+    }
+  protected:
+    virtual void activity() override {
+        wait(SimTime(1,SIMTIME_US));
+        ASSERT(provider->submitState(++nextId,Ieee802154PhyState::TRANSMIT) == Ieee802154PhyServiceAdmission::ACCEPTED);
+        wait(SimTime(200,SIMTIME_US));
+        for (auto length : {2,5,18,20,127}) {
+            auto packet = new Packet("external PHY oracle");
+            packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>(length,0)));
+            packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee802154);
+            ASSERT(provider->submitTransmit(++nextId,packet,{}) == Ieee802154PhyServiceAdmission::ACCEPTED);
+            wait(SimTime(5,SIMTIME_MS));
+        }
+        ASSERT(transmissions == 5 && confirms == 5 && comparisons == 25);
+        std::cout << "External PHY airtime and BER/PER abstraction checks passed.\n";
+    }
+    virtual void receiveSignal(cComponent *, simsignal_t, cObject *object, cObject *) override {
+        Enter_Method_Silent();
+        auto tx = check_and_cast<const Ieee802154StandardTransmission *>(object);
+        auto length = tx->getDataLength().get<b>()/8;
+        ASSERT(tx->getDuration() == SimTime((6+length)*32,SIMTIME_US));
+        ASSERT(tx->getPreambleDuration() == SimTime(128,SIMTIME_US));
+        ASSERT(tx->getHeaderLength() == b(16) && tx->getBitrate() == kbps(250));
+        ASSERT(tx->getBandwidth() == MHz(2.8));
+        ASSERT((tx->getPhyHeader() == std::array<uint8_t,6>({0,0,0,0,0xa7,uint8_t(length)})));
+        auto ppdu = tx->getPpduBytes();
+        std::vector<uint8_t> expectedPpdu = {0,0,0,0,0xa7,uint8_t(length)};
+        expectedPpdu.resize(6+length,0);
+        ASSERT(ppdu == expectedPpdu);
+        ReceptionBase reception(nullptr,tx,tx->getStartTime(),tx->getEndTime(),Coord(),Coord(),Quaternion(),Quaternion(),nullptr);
+        auto model = check_and_cast<Ieee802154ErrorModel *>(getModuleByPath("^.host.radio.receiver.errorModel"));
+        const std::array<double,5> db = {5,2,-1,-4,-7};
+        const std::array<double,5> targets = {7.38e-14,5.13e-7,0.00114,0.0391,0.175};
+        const std::array<double,5> tolerance = {1e-16,1e-9,1e-5,1e-4,1e-3};
+        for (size_t i=0; i<db.size(); i++) {
+            double snir = std::pow(10.0,db[i]/10);
+            ConstantReferenceSnir observation(&reception,snir);
+            auto ber = model->computeBitErrorRate(&observation,IRadioSignal::SIGNAL_PART_WHOLE);
+            ASSERT(std::abs(ber-targets[i]) <= tolerance[i]);
+            auto expected = referenceBer(snir);
+            close(ber,expected);
+            auto data = model->computePacketErrorRate(&observation,IRadioSignal::SIGNAL_PART_DATA);
+            auto whole = model->computePacketErrorRate(&observation,IRadioSignal::SIGNAL_PART_WHOLE);
+            close(data,1-std::pow(1-expected,length*8));
+            close(whole,1-std::pow(1-expected,length*8+16));
+            close(model->computePacketErrorRate(&observation,IRadioSignal::SIGNAL_PART_HEADER),1-std::pow(1-expected,16));
+            ASSERT(model->computePacketErrorRate(&observation,IRadioSignal::SIGNAL_PART_PREAMBLE) == 0);
+            ASSERT(std::isnan(model->computeSymbolErrorRate(&observation,IRadioSignal::SIGNAL_PART_WHOLE)));
+            std::cout << std::setprecision(17) << "PHY_REFERENCE," << length << ',' << db[i] << ',' << ber << ',' << data << ',' << whole << '\n';
+            comparisons++;
+        }
+        transmissions++;
+    }
+  public:
+    virtual void handleStateConfirm(uint64_t, const Ieee802154PhyStateConfirm& confirm) override { Enter_Method("handleStateConfirm"); ASSERT(confirm.state == Ieee802154PhyState::TRANSMIT); }
+    virtual void handleTransmitStarted(uint64_t, const Ieee802154PhyTransmitStart&) override { Enter_Method("handleTransmitStarted"); }
+    virtual void handleTransmitConfirm(uint64_t, const Ieee802154PhyTransmitConfirm& confirm) override { Enter_Method("handleTransmitConfirm"); ASSERT(confirm.result == Ieee802154PhyServiceResult(Ieee802154PhyServiceStatus::SUCCESS)); confirms++; }
+    virtual void handleCcaConfirm(uint64_t, const Ieee802154PhyCcaConfirm&) override { ASSERT(false); }
+    virtual void handleEdConfirm(uint64_t, const Ieee802154PhyEdConfirm&) override { ASSERT(false); }
+    virtual void handleGetConfirm(uint64_t, const Ieee802154PhyGetConfirm&) override { ASSERT(false); }
+    virtual void handleSetConfirm(uint64_t, const Ieee802154PhySetConfirm&) override { ASSERT(false); }
+    virtual void handleResetConfirm(uint64_t, const Ieee802154PhyResetConfirm&) override { ASSERT(false); }
+    void handleAvailabilityIndication(const inet::physicallayer::Ieee802154PhyAvailabilityIndication&) override {}
+virtual void handleReceiveIndication(Packet *, const Ieee802154PhyReceiveIndication&) override { ASSERT(false); }
+};
+Define_Module(ExternalPhyExercise);
+}
+
+%file: ExternalPhyFixture.ned
+import inet.common.SimpleModule;
+import inet.mobility.static.StationaryMobility;
+import inet.physicallayer.wireless.common.medium.RadioMedium;
+import inet.physicallayer.wireless.ieee802154.Ieee802154PhyService;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154StandardRadio;
+import inet.physicallayer.wireless.ieee802154.contract.IIeee802154PhyServiceClient;
+simple ExternalPhyExercise extends SimpleModule like IIeee802154PhyServiceClient
+{
+    parameters: @class(::inet::ExternalPhyExercise); string providerModule;
+}
+module ExternalPhyHost
+{
+    parameters: @networkNode;
+    submodules:
+        mobility: StationaryMobility;
+        radio: Ieee802154StandardRadio;
+        phy: Ieee802154PhyService { radioModule = "^.radio"; clientModule = "^.^.exercise"; }
+    connections allowunconnected:
+        radio.upperLayerOut --> phy.lowerLayerIn;
+}
+network ExternalPhyTest
+{
+    submodules:
+        radioMedium: RadioMedium;
+        host: ExternalPhyHost;
+        exercise: ExternalPhyExercise { providerModule = "^.host.phy"; }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = ExternalPhyTest
+sim-time-limit = 26ms
+cmdenv-express-mode = true
+*.radioMedium.signalAnalogRepresentation = "scalar"
+*.radioMedium.backgroundNoise.power = -110dBm
+*.host.radio.antenna.mobilityModule = "^.^.mobility"
+*.host.mobility.initFromDisplayString = false
+*.host.mobility.initialX = 0m
+*.host.mobility.initialY = 0m
+*.host.mobility.initialZ = 0m
+*.host.mobility.constraintAreaMinX = 0m
+*.host.mobility.constraintAreaMinY = 0m
+*.host.mobility.constraintAreaMinZ = 0m
+*.host.mobility.constraintAreaMaxX = 100m
+*.host.mobility.constraintAreaMaxY = 100m
+*.host.mobility.constraintAreaMaxZ = 100m
+
+%contains: stdout
+External PHY airtime and BER/PER abstraction checks passed.
+
+%not-contains: stderr
+Error:

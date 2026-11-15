@@ -1,0 +1,302 @@
+%description:
+Exercise the production O-QPSK PHY provider, radio and scalar medium through
+typed service calls. Verify actual PPDU timing, receive metadata, CCA/ED,
+atomic mutation, cancellation, reset and lifecycle interruption.
+
+%file: PhyServicesFixture.cc
+#include <map>
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/common/Protocol.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/physicallayer/wireless/ieee802154/contract/IIeee802154PhyServiceProvider.h"
+#include "inet/physicallayer/wireless/ieee802154/contract/IIeee802154PhyServiceClient.h"
+
+namespace inet {
+using namespace physicallayer;
+class PhyServicesExercise : public cSimpleModule, public IIeee802154PhyServiceClient
+{
+    using Status = Ieee802154PhyServiceStatus;
+    using Abort = Ieee802154PhyServiceAbortReason;
+    using Admission = Ieee802154PhyServiceAdmission;
+    using State = Ieee802154PhyState;
+    ModuleRefByPar<IIeee802154PhyServiceProvider> service, peer;
+    uint64_t nextId = 0;
+    std::map<uint64_t, Ieee802154PhyServiceResult> results;
+    std::map<uint64_t, Ieee802154PhyFrameTiming> transmissions;
+    std::map<uint64_t, Ieee802154PhyCcaOutcome> ccas;
+    std::map<uint64_t, Ieee802154PhyPibValue> values;
+    std::map<uint64_t, uint8_t> levels;
+    std::map<uint64_t, simtime_t> starts;
+    int received = 0;
+    bool resetProbe = false;
+    bool done = false;
+    uint64_t id() { return ++nextId; }
+    void record(uint64_t request, const Ieee802154PhyServiceResult& result) {
+        ASSERT(!results.count(request));
+        results.emplace(request, result);
+    }
+    void success(uint64_t request) {
+        ASSERT(results.at(request) == Ieee802154PhyServiceResult(Status::SUCCESS));
+    }
+    Packet *packet() {
+        auto result = new Packet("PSDU-20");
+        result->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>(20, 0)));
+        result->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee802154);
+        return result;
+    }
+
+  public:
+    PhyServicesExercise() : cSimpleModule(65536) {}
+    virtual void initialize() override {
+        service.reference(this, "providerModule", true);
+        peer.reference(this, "peerProviderModule", true);
+    }
+    virtual void handleTransmitStarted(uint64_t request, const Ieee802154PhyTransmitStart& start) override {
+        Enter_Method("handleTransmitStarted");
+        ASSERT(!starts.count(request) && !results.count(request));
+        ASSERT(start.ppduStart == simTime());
+        ASSERT(start.expectedPsduStart == simTime() + SimTime(192, SIMTIME_US));
+        ASSERT(start.expectedPpduEnd == simTime() + SimTime(832, SIMTIME_US));
+        starts[request] = simTime();
+    }
+    virtual void handleTransmitConfirm(uint64_t request, const Ieee802154PhyTransmitConfirm& confirm) override {
+        Enter_Method("handleTransmitConfirm");
+        record(request, confirm.result);
+        if (confirm.timing) {
+            ASSERT(confirm.timing->ppduEnd == simTime());
+            ASSERT(confirm.timing->ppduEnd - confirm.timing->ppduStart == SimTime(832, SIMTIME_US));
+            transmissions[request] = *confirm.timing;
+        }
+    }
+    virtual void handleCcaConfirm(uint64_t request, const Ieee802154PhyCcaConfirm& confirm) override {
+        Enter_Method("handleCcaConfirm");
+        record(request, confirm.result);
+        if (confirm.outcome) {
+            ASSERT(confirm.timing && confirm.timing->end == simTime());
+            ASSERT(confirm.timing->end - confirm.timing->start == SimTime(128, SIMTIME_US));
+            ccas[request] = *confirm.outcome;
+        }
+        else ASSERT(!confirm.timing);
+        if (resetProbe && confirm.result == Ieee802154PhyServiceResult(Abort::RESET)) {
+            ASSERT(service->submitGet(id(), {"phyCcaMode"}) == Admission::BUSY);
+            resetProbe = false;
+        }
+    }
+    virtual void handleEdConfirm(uint64_t request, const Ieee802154PhyEdConfirm& confirm) override {
+        Enter_Method("handleEdConfirm");
+        record(request, confirm.result);
+        if (confirm.level) {
+            ASSERT(confirm.timing && confirm.timing->end == simTime() && confirm.meanPower);
+            ASSERT(confirm.timing->end - confirm.timing->start == SimTime(128, SIMTIME_US));
+            levels[request] = *confirm.level;
+        }
+        else ASSERT(!confirm.timing && !confirm.meanPower);
+    }
+    virtual void handleStateConfirm(uint64_t request, const Ieee802154PhyStateConfirm& confirm) override {
+        Enter_Method("handleStateConfirm");
+        record(request, confirm.result);
+        if (confirm.readyAt) ASSERT(*confirm.readyAt == simTime() && confirm.state);
+    }
+    virtual void handleGetConfirm(uint64_t request, const Ieee802154PhyGetConfirm& confirm) override {
+        Enter_Method("handleGetConfirm");
+        record(request, confirm.result);
+        if (confirm.value) values.emplace(request, *confirm.value);
+    }
+    virtual void handleSetConfirm(uint64_t request, const Ieee802154PhySetConfirm& confirm) override {
+        Enter_Method("handleSetConfirm");
+        record(request, confirm.result);
+    }
+    virtual void handleResetConfirm(uint64_t request, const Ieee802154PhyResetConfirm& confirm) override {
+        Enter_Method("handleResetConfirm");
+        record(request, confirm.result);
+    }
+    void handleAvailabilityIndication(const inet::physicallayer::Ieee802154PhyAvailabilityIndication&) override {}
+virtual void handleReceiveIndication(Packet *psdu, const Ieee802154PhyReceiveIndication& indication) override {
+        Enter_Method("handleReceiveIndication");
+        take(psdu);
+        ASSERT(psdu->getDataLength() == B(20));
+        ASSERT(indication.timing.ppduEnd == simTime());
+        ASSERT(indication.timing.psduStart - indication.timing.ppduStart == SimTime(192, SIMTIME_US));
+        ASSERT(indication.timing.ppduEnd - indication.timing.ppduStart == SimTime(832, SIMTIME_US));
+        ASSERT(indication.lqi && indication.meanPower && indication.fcsLength == B(2));
+        ++received;
+        delete psdu;
+    }
+
+  protected:
+    virtual void activity() override {
+        wait(SimTime(1, SIMTIME_US));
+        auto timing = service->getTimingParameters();
+        ASSERT(timing.symbolPeriod == SimTime(16, SIMTIME_US));
+        auto wrong = id();
+        ASSERT(service->submitCca(wrong) == Admission::ACCEPTED);
+        ASSERT(results.at(wrong) == Ieee802154PhyServiceResult(Status::WRONG_TRANSCEIVER_STATE));
+        auto peerReady = id();
+        ASSERT(peer->submitState(peerReady, State::RECEIVE) == Admission::ACCEPTED);
+        ASSERT(!results.count(peerReady));
+        wait(SimTime(192, SIMTIME_US));
+        success(peerReady);
+        auto localReady = id();
+        ASSERT(service->submitState(localReady, State::TRANSMIT) == Admission::ACCEPTED);
+        wait(SimTime(192, SIMTIME_US));
+        success(localReady);
+
+        Ieee802154PhyTransmitRequest request;
+        request.startAt = simTime() + SimTime(20, SIMTIME_US);
+        auto cancelled = id();
+        ASSERT(service->submitTransmit(cancelled, packet(), request) == Admission::ACCEPTED);
+        ASSERT(service->cancel(cancelled) == Ieee802154PhyServiceCancelResult::CANCELLED);
+        ASSERT(results.at(cancelled) == Ieee802154PhyServiceResult(Abort::CANCELLED));
+        auto sent = id();
+        ASSERT(service->submitTransmit(sent, packet(), request) == Admission::ACCEPTED);
+        wait(SimTime(20, SIMTIME_US));
+        ASSERT(starts.count(sent));
+        ASSERT(service->cancel(sent) == Ieee802154PhyServiceCancelResult::NOT_CANCELLABLE);
+        ASSERT(service->submitSet(id(), {"phyTxPower", int64_t(1)}) == Admission::BUSY);
+        wait(SimTime(833, SIMTIME_US));
+        success(sent);
+        ASSERT(received == 1 && !starts.count(cancelled));
+        auto receiveReady = id();
+        ASSERT(service->submitState(receiveReady, State::RECEIVE) == Admission::ACCEPTED);
+        wait(SimTime(192, SIMTIME_US));
+        success(receiveReady);
+        auto idle = id();
+        ASSERT(service->submitCca(idle) == Admission::ACCEPTED);
+        wait(SimTime(128, SIMTIME_US));
+        ASSERT(ccas.at(idle) == Ieee802154PhyCcaOutcome::IDLE);
+        auto setting = id();
+        ASSERT(service->submitSet(setting, {"phyCcaEdThreshold", W(5e-15)}) == Admission::ACCEPTED);
+        success(setting);
+        auto busy = id();
+        ASSERT(service->submitCca(busy) == Admission::ACCEPTED);
+        wait(SimTime(128, SIMTIME_US));
+        ASSERT(ccas.at(busy) == Ieee802154PhyCcaOutcome::BUSY);
+        auto ed = id();
+        ASSERT(service->submitEd(ed) == Admission::ACCEPTED);
+        wait(SimTime(128, SIMTIME_US));
+        ASSERT(levels.at(ed) == 0);
+        auto unsupported = id();
+        ASSERT(service->submitSet(unsupported, {"phyCcaMode", Ieee802154PhyCcaMode::MODE_2}) == Admission::ACCEPTED);
+        ASSERT(results.at(unsupported) == Ieee802154PhyServiceResult(Status::UNSUPPORTED_CONFIGURATION));
+        Ieee802154PhyChannel invalid{Ieee802154PhyChannel::Phy::HRP_UWB, Ieee802154PhyChannel::Band::MHZ_2450, 20};
+        auto badChannel = id();
+        ASSERT(service->submitSet(badChannel, {"phyCurrentChannelInfo", invalid}) == Admission::ACCEPTED);
+        ASSERT(results.at(badChannel) == Ieee802154PhyServiceResult(Status::UNSUPPORTED_CONFIGURATION));
+        auto channel = id();
+        ASSERT(service->submitGet(channel, {"phyCurrentChannelInfo"}) == Admission::ACCEPTED);
+        ASSERT(std::get<Ieee802154PhyChannel>(values.at(channel)).phy == Ieee802154PhyChannel::Phy::O_QPSK);
+        auto interrupted = id();
+        ASSERT(service->submitCca(interrupted) == Admission::ACCEPTED);
+        resetProbe = true;
+        auto reset = id();
+        ASSERT(service->submitReset(reset, true) == Admission::ACCEPTED);
+        ASSERT(!resetProbe);
+        ASSERT(results.at(interrupted) == Ieee802154PhyServiceResult(Abort::RESET));
+        success(reset);
+        wait(SimTime(129, SIMTIME_US));
+        auto readyAgain = id();
+        ASSERT(service->submitState(readyAgain, State::RECEIVE) == Admission::ACCEPTED);
+        wait(SimTime(192, SIMTIME_US));
+        success(readyAgain);
+
+        wait(SimTime(7980, SIMTIME_US) - simTime());
+        auto stopped = id();
+        ASSERT(service->submitCca(stopped) == Admission::ACCEPTED);
+        wait(SimTime(40, SIMTIME_US));
+        ASSERT(results.at(stopped) == Ieee802154PhyServiceResult(Abort::STOPPED));
+        ASSERT(service->submitGet(id(), {"phyCcaMode"}) == Admission::UNAVAILABLE);
+        wait(SimTime(200, SIMTIME_US));
+        ASSERT(service->submitGet(stopped, {"phyCcaMode"}) == Admission::INVALID_REQUEST);
+        auto afterStart = id();
+        ASSERT(service->submitGet(afterStart, {"phyCcaMode"}) == Admission::ACCEPTED);
+        success(afterStart);
+        ASSERT(service->submitGet(UINT64_MAX, {"phyCcaMode"}) == Admission::ACCEPTED);
+        success(UINT64_MAX);
+        ASSERT(service->submitGet(UINT64_MAX, {"phyCcaMode"}) == Admission::INVALID_REQUEST);
+        done = true;
+    }
+    virtual void finish() override {
+        ASSERT(done);
+        std::cout << "Production O-QPSK PHY timing, reception, energy primitives and lifecycle verified.\n";
+    }
+};
+Define_Module(PhyServicesExercise);
+}
+
+%file: PhyServicesFixture.ned
+import inet.common.SimpleModule;
+import inet.mobility.static.StationaryMobility;
+import inet.common.scenario.ScenarioManager;
+import inet.physicallayer.wireless.common.medium.RadioMedium;
+import inet.physicallayer.wireless.ieee802154.Ieee802154PhyService;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154StandardRadio;
+import inet.physicallayer.wireless.ieee802154.contract.IIeee802154PhyServiceClient;
+
+simple PhyServicesExercise extends SimpleModule like IIeee802154PhyServiceClient
+{
+    parameters:
+        @class(::inet::PhyServicesExercise);
+        string providerModule;
+        string peerProviderModule;
+}
+module PhyServicesHost
+{
+    parameters:
+        @networkNode;
+    submodules:
+        mobility: StationaryMobility;
+        radio: Ieee802154StandardRadio;
+        phy: Ieee802154PhyService {
+            radioModule = "^.radio";
+            clientModule = "^.^.exercise";
+        }
+    connections allowunconnected:
+        radio.upperLayerOut --> phy.lowerLayerIn;
+}
+network PhyServicesTest
+{
+    submodules:
+        radioMedium: RadioMedium;
+        scenarioManager: ScenarioManager;
+        host[2]: PhyServicesHost;
+        exercise: PhyServicesExercise {
+            providerModule = "^.host[0].phy";
+            peerProviderModule = "^.host[1].phy";
+        }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = PhyServicesTest
+ned-path = .;../../../../src;../../lib
+sim-time-limit = 9ms
+seed-set = 0
+cmdenv-express-mode = true
+record-vector-results = false
+record-scalar-results = false
+*.radioMedium.signalAnalogRepresentation = "scalar"
+*.radioMedium.backgroundNoise.power = -110dBm
+*.host[*].radio.antenna.mobilityModule = "^.^.mobility"
+*.host[*].mobility.initFromDisplayString = false
+*.host[0].mobility.initialX = 0m
+*.host[1].mobility.initialX = 1m
+*.host[*].mobility.initialY = 0m
+*.host[*].mobility.initialZ = 0m
+*.host[*].mobility.constraintAreaMinX = 0m
+*.host[*].mobility.constraintAreaMinY = 0m
+*.host[*].mobility.constraintAreaMinZ = 0m
+*.host[*].mobility.constraintAreaMaxX = 100m
+*.host[*].mobility.constraintAreaMaxY = 100m
+*.host[*].mobility.constraintAreaMaxZ = 100m
+*.scenarioManager.script = xmldoc("scenario.xml")
+
+%file: scenario.xml
+<scenario>
+    <at t="8ms"><shutdown module="host[0].phy"/></at>
+    <at t="8.1ms"><startup module="host[0].phy"/></at>
+</scenario>
+
+%contains: stdout
+Production O-QPSK PHY timing, reception, energy primitives and lifecycle verified.

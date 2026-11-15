@@ -1,0 +1,229 @@
+%description:
+Quantitative production O-QPSK ED/LQI boundaries, PPDU-busy CCA independent of
+energy threshold, min(8 symbols, CCA) ED duration and off-channel isolation.
+Controlled antenna/noise settings validate the declared model mappings, not hardware PER.
+
+%file: MeasurementsFixture.cc
+#include <cmath>
+#include <set>
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/physicallayer/wireless/ieee802154/contract/IIeee802154PhyServiceProvider.h"
+#include "inet/physicallayer/wireless/ieee802154/contract/IIeee802154PhyServiceClient.h"
+#include "inet/physicallayer/wireless/ieee802154/packetlevel/Ieee802154StandardRadio.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmitter.h"
+
+namespace inet {
+using namespace physicallayer;
+class MeasurementsExercise : public cSimpleModule, public IIeee802154PhyServiceClient
+{
+    using Admission = Ieee802154PhyServiceAdmission;
+    using Status = Ieee802154PhyServiceStatus;
+    ModuleRefByPar<IIeee802154PhyServiceProvider> transmitter, receiver;
+    uint64_t nextId = 0;
+    std::set<uint64_t> completed;
+    std::set<int> lqiValues;
+    struct Sample { int txDbm; int lqi; int ed; };
+    const std::vector<Sample> samples = {
+        {-100,0,0}, {-90,0,0}, {-80,32,0}, {-75,48,0}, {-70,64,0}, {-65,80,0},
+        {-60,96,32}, {-55,112,64}, {-50,128,96}, {-45,143,128}, {-40,159,159},
+        {-35,175,191}, {-30,191,223}, {-25,207,255}, {-20,223,255}, {-10,255,255}, {0,255,255}, {20,255,255}
+    };
+    size_t sampleIndex = 0;
+    int received = 0, edLevel = 0;
+    double expectedSignalPower = 0, expectedEdPower = 0;
+    simtime_t measurementStart, edDuration = SimTime(128,SIMTIME_US);
+    Ieee802154PhyCcaOutcome expectedCca = Ieee802154PhyCcaOutcome::BUSY;
+    bool done = false;
+    uint64_t id() { return ++nextId; }
+    void record(uint64_t request, const Ieee802154PhyServiceResult& result) {
+        ASSERT(result == Ieee802154PhyServiceResult(Status::SUCCESS) && completed.insert(request).second);
+    }
+    void set(IIeee802154PhyServiceProvider *provider, const char *name, const Ieee802154PhyPibValue& value) {
+        auto request = id();
+        ASSERT(provider->submitSet(request,{name,value}) == Admission::ACCEPTED);
+        ASSERT(completed.count(request));
+    }
+    void sendPsdu() {
+        auto packet = new Packet("measurement PSDU");
+        packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>(20,0)));
+        packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee802154);
+        ASSERT(transmitter->submitTransmit(id(),packet,{}) == Admission::ACCEPTED);
+    }
+    void ed() {
+        measurementStart = simTime();
+        auto request = id();
+        ASSERT(receiver->submitEd(request) == Admission::ACCEPTED);
+        wait(edDuration + SimTime(1,SIMTIME_US));
+        ASSERT(completed.count(request));
+    }
+    void cca() {
+        measurementStart = simTime();
+        auto request = id();
+        ASSERT(receiver->submitCca(request) == Admission::ACCEPTED);
+        wait(SimTime(129,SIMTIME_US));
+        ASSERT(completed.count(request));
+    }
+  public:
+    MeasurementsExercise() : cSimpleModule(65536) {}
+    virtual void initialize() override {
+        transmitter.reference(this,"providerModule",true);
+        receiver.reference(this,"receiverModule",true);
+    }
+    virtual void handleTransmitStarted(uint64_t, const Ieee802154PhyTransmitStart& start) override {
+        Enter_Method("handleTransmitStarted");
+        ASSERT(start.ppduStart == simTime() && start.expectedPpduEnd - start.ppduStart == SimTime(832,SIMTIME_US));
+    }
+    virtual void handleTransmitConfirm(uint64_t request, const Ieee802154PhyTransmitConfirm& confirm) override {
+        Enter_Method("handleTransmitConfirm"); record(request,confirm.result);
+        ASSERT(confirm.timing && confirm.timing->ppduEnd == simTime());
+    }
+    virtual void handleStateConfirm(uint64_t request, const Ieee802154PhyStateConfirm& confirm) override {
+        Enter_Method("handleStateConfirm"); record(request,confirm.result); ASSERT(confirm.readyAt == simTime());
+    }
+    virtual void handleSetConfirm(uint64_t request, const Ieee802154PhySetConfirm& confirm) override {
+        Enter_Method("handleSetConfirm"); record(request,confirm.result);
+    }
+    virtual void handleCcaConfirm(uint64_t request, const Ieee802154PhyCcaConfirm& confirm) override {
+        Enter_Method("handleCcaConfirm"); record(request,confirm.result);
+        ASSERT(confirm.outcome == expectedCca && confirm.timing);
+        ASSERT(confirm.timing->start == measurementStart && confirm.timing->end == simTime());
+        ASSERT(simTime() - measurementStart == SimTime(128,SIMTIME_US));
+    }
+    virtual void handleEdConfirm(uint64_t request, const Ieee802154PhyEdConfirm& confirm) override {
+        Enter_Method("handleEdConfirm"); record(request,confirm.result);
+        ASSERT(confirm.level == edLevel && confirm.meanPower && confirm.timing);
+        ASSERT(confirm.timing->start == measurementStart && confirm.timing->end == simTime());
+        ASSERT(simTime() - measurementStart == edDuration);
+        ASSERT(std::abs(confirm.meanPower->get<W>() - expectedEdPower) <= std::max(expectedEdPower * 1e-10,1e-30));
+    }
+    void handleAvailabilityIndication(const inet::physicallayer::Ieee802154PhyAvailabilityIndication&) override {}
+virtual void handleReceiveIndication(Packet *packet, const Ieee802154PhyReceiveIndication& indication) override {
+        Enter_Method("handleReceiveIndication"); take(packet);
+        ASSERT(sampleIndex < samples.size() && indication.lqi == samples[sampleIndex].lqi && indication.meanPower);
+        ASSERT(std::abs(indication.meanPower->get<W>() - expectedSignalPower) <= expectedSignalPower * 1e-10);
+        ASSERT(packet->getDataLength() == B(20) && !packet->hasBitError());
+        lqiValues.insert(*indication.lqi); ++received; delete packet;
+    }
+    virtual void handleGetConfirm(uint64_t, const Ieee802154PhyGetConfirm&) override { ASSERT(false); }
+    virtual void handleResetConfirm(uint64_t, const Ieee802154PhyResetConfirm&) override { ASSERT(false); }
+  protected:
+    virtual void activity() override {
+        wait(SimTime(1,SIMTIME_US));
+        auto radio = check_and_cast<Ieee802154StandardRadio *>(getModuleByPath("^.host[0].radio"));
+        ASSERT(radio->getTransmitter()->getMaxPower() == W(0.1));
+        ASSERT(transmitter->submitState(id(),Ieee802154PhyState::TRANSMIT) == Admission::ACCEPTED);
+        ASSERT(receiver->submitState(id(),Ieee802154PhyState::RECEIVE) == Admission::ACCEPTED);
+        wait(SimTime(193,SIMTIME_US));
+        set(transmitter.get(),"phyBroadcastTxPower",int64_t(-100));
+        set(transmitter.get(),"phyUnicastTxPower",int64_t(-100));
+        set(receiver.get(),"phyCcaEdThreshold",W(1));
+        for (sampleIndex = 0; sampleIndex < samples.size(); ++sampleIndex) {
+            const auto& sample = samples[sampleIndex];
+            set(transmitter.get(),"phyTxPower",int64_t(sample.txDbm));
+            expectedSignalPower = std::pow(10.0,(sample.txDbm - 10) / 10.0) / 1000;
+            expectedEdPower = expectedSignalPower + 1e-21; edLevel = sample.ed;
+            auto start = simTime();
+            sendPsdu();
+            wait(SimTime(16,SIMTIME_US));
+            cca(); // A decodable PPDU forces BUSY despite a threshold above all observed powers.
+            ed();
+            wait(start + SimTime(1000,SIMTIME_US) - simTime());
+            ASSERT(received == int(sampleIndex + 1));
+        }
+        ASSERT(lqiValues.size() >= 8 && lqiValues.count(0) && lqiValues.count(255));
+        expectedEdPower = 1e-21; edLevel = 0;
+        for (int duration : {1,17,128,1000}) {
+            set(receiver.get(),"phyCcaDuration",SimTime(duration,SIMTIME_US));
+            edDuration = SimTime(std::min(duration,128),SIMTIME_US);
+            ed();
+        }
+        set(receiver.get(),"phyCcaDuration",SimTime(128,SIMTIME_US));
+        edDuration = SimTime(128,SIMTIME_US);
+        set(transmitter.get(),"phyCurrentChannelInfo",Ieee802154PhyChannel{Ieee802154PhyChannel::Phy::O_QPSK,Ieee802154PhyChannel::Band::MHZ_2450,26});
+        set(receiver.get(),"phyCurrentChannelInfo",Ieee802154PhyChannel{Ieee802154PhyChannel::Phy::O_QPSK,Ieee802154PhyChannel::Band::MHZ_2450,11});
+        auto start = simTime();
+        sendPsdu(); wait(SimTime(16,SIMTIME_US));
+        expectedCca = Ieee802154PhyCcaOutcome::IDLE;
+        cca(); ed();
+        wait(start + SimTime(1000,SIMTIME_US) - simTime());
+        ASSERT(received == int(samples.size()));
+        done = true;
+    }
+    virtual void finish() override {
+        ASSERT(done);
+        std::cout << "Production ED/LQI saturation, measurement durations and channel isolation verified.\n";
+    }
+};
+Define_Module(MeasurementsExercise);
+}
+
+%file: MeasurementsFixture.ned
+import inet.common.SimpleModule;
+import inet.mobility.static.StationaryMobility;
+import inet.physicallayer.wireless.common.medium.RadioMedium;
+import inet.physicallayer.wireless.ieee802154.Ieee802154PhyService;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154StandardRadio;
+import inet.physicallayer.wireless.ieee802154.contract.IIeee802154PhyServiceClient;
+simple MeasurementsExercise extends SimpleModule like IIeee802154PhyServiceClient
+{
+    parameters:
+        @class(::inet::MeasurementsExercise);
+        string providerModule;
+        string receiverModule;
+}
+module MeasurementsHost
+{
+    parameters:
+        @networkNode;
+    submodules:
+        mobility: StationaryMobility;
+        radio: Ieee802154StandardRadio;
+        phy: Ieee802154PhyService {
+            radioModule = "^.radio";
+            clientModule = "^.^.exercise";
+        }
+    connections allowunconnected:
+        radio.upperLayerOut --> phy.lowerLayerIn;
+}
+network MeasurementsTest
+{
+    submodules:
+        radioMedium: RadioMedium;
+        host[2]: MeasurementsHost;
+        exercise: MeasurementsExercise {
+            providerModule = "^.host[0].phy";
+            receiverModule = "^.host[1].phy";
+        }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = MeasurementsTest
+ned-path = .;../../../../src;../../lib
+sim-time-limit = 25ms
+seed-set = 0
+cmdenv-express-mode = true
+record-vector-results = false
+record-scalar-results = false
+*.radioMedium.signalAnalogRepresentation = "scalar"
+*.radioMedium.backgroundNoise.power = -180dBm
+*.host[*].radio.antenna.mobilityModule = "^.^.mobility"
+*.host[1].radio.antenna.typename = "ConstantGainAntenna"
+*.host[1].radio.antenna.gain = -10dB
+*.host[1].radio.receiver.sensitivity = -120dBm
+*.host[*].mobility.initFromDisplayString = false
+*.host[*].mobility.initialX = 0m
+*.host[*].mobility.initialY = 0m
+*.host[*].mobility.initialZ = 0m
+*.host[*].mobility.constraintAreaMinX = 0m
+*.host[*].mobility.constraintAreaMinY = 0m
+*.host[*].mobility.constraintAreaMinZ = 0m
+*.host[*].mobility.constraintAreaMaxX = 100m
+*.host[*].mobility.constraintAreaMaxY = 100m
+*.host[*].mobility.constraintAreaMaxZ = 100m
+
+%contains: stdout
+Production ED/LQI saturation, measurement durations and channel isolation verified.
