@@ -1,0 +1,80 @@
+%description:
+RFC 6282 stateful unicast/multicast literal bytes, independent SCI/DCI and CID 0,
+receive-only/expired contexts, non-octet and IID-overlapping prefixes, and truncation.
+
+%includes:
+#include "inet/linklayer/lowpan/LowpanContextTable.h"
+#include "inet/linklayer/lowpan/LowpanIphcCodec.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+using namespace inet;
+using namespace inet::lowpan;
+
+%activity:
+const Ieee802154Address source("0011223344556601"), destination("0011223344556602");
+LowpanContextTable contexts;
+contexts.install(3,Ipv6Address("2001:db8:1::"),64,true,SimTime(10));
+contexts.install(5,Ipv6Address("2001:db8:2::"),64,true,SimTime(10));
+auto check = [&](const char *src,const char *dst,const std::vector<uint8_t>& golden,LowpanContextTable& table) {
+    Ipv6Header ipv6;
+    ipv6.setSrcAddress(Ipv6Address(src));ipv6.setDestAddress(Ipv6Address(dst));
+    ipv6.setHopLimit(64);ipv6.setProtocolId(IP_PROT_NONE);ipv6.setPayloadLength(B(40));
+    auto encoded=LowpanIphcCodec::encode(ipv6,source,destination,false,&table,SimTime(1));
+    ASSERT(encoded);
+    Packet output("stateful",encoded);
+    ASSERT(output.peekDataAsBytes()->getBytes()==golden);
+    Packet input("independent",makeShared<BytesChunk>(golden));
+    auto header=input.peekAtFront<LowpanIphcHeader>();
+    auto decoded=LowpanIphcCodec::decode(*header,80,source,destination,false,&table,SimTime(1));
+    ASSERT(decoded && decoded->getSrcAddress()==ipv6.getSrcAddress() && decoded->getDestAddress()==ipv6.getDestAddress());
+    ASSERT(!LowpanIphcCodec::decode(*header,80,source,destination,false,nullptr,SimTime(1)));
+    for (size_t n=1;n<golden.size();n++) {
+        Packet truncated("truncated",makeShared<BytesChunk>(std::vector<uint8_t>(golden.begin(),golden.begin()+n)));
+        auto partial=truncated.peekAtFront<LowpanIphcHeader>(b(-1),Chunk::PF_ALLOW_INCOMPLETE|Chunk::PF_ALLOW_INCORRECT);
+        ASSERT(!LowpanIphcCodec::decode(*partial,80,source,destination,false,&table,SimTime(1)));
+    }
+};
+check("2001:db8:1:0:211:2233:4455:6601","2001:db8:2:0:211:2233:4455:6602",{0x7a,0xf7,0x35,59},contexts);
+check("2001:db8:1:0:1122:3344:5566:7788","2001:db8:2:0:211:2233:4455:6602",
+    {0x7a,0xd7,0x35,59,0x11,0x22,0x33,0x44,0x55,0x66,0x77,0x88},contexts);
+check("2001:db8:1::ff:fe00:1234","2001:db8:2:0:211:2233:4455:6602",{0x7a,0xe7,0x35,59,0x12,0x34},contexts);
+check("2001:db8:1:0:211:2233:4455:6601","2001:db8:2::ff:fe00:abcd",{0x7a,0xf6,0x35,59,0xab,0xcd},contexts);
+check("2001:db8:1:0:211:2233:4455:6601","ff3e:40:2001:db8:2::1",{0x7a,0xfc,0x35,59,0x3e,0,0,0,0,1},contexts);
+LowpanContextTable zero;
+zero.install(0,Ipv6Address("2001:db8::"),64,true,SimTime(10));
+check("2001:db8::211:2233:4455:6601","2001:db8::211:2233:4455:6602",{0x7a,0x77,59},zero);
+LowpanContextTable shortPrefix;
+shortPrefix.install(7,Ipv6Address("2001:db8::"),32,true,SimTime(10));
+check("2001:db8::211:2233:4455:6601","2001:db8::211:2233:4455:6602",{0x7a,0xf7,0x77,59},shortPrefix);
+LowpanContextTable overlap;
+overlap.install(8,Ipv6Address("2001:db8::8000:0:0:0"),65,true,SimTime(10));
+check("2001:db8::8211:2233:4455:6601","2001:db8::8211:2233:4455:6602",{0x7a,0xf7,0x88,59},overlap);
+LowpanContextTable full;
+full.install(1,Ipv6Address("2001:db8::1234"),128,true,SimTime(10));
+check("2001:db8::1234","2001:db8::1234",{0x7a,0xf7,0x11,59},full);
+Packet fullyKnown("fully-known",makeShared<BytesChunk>(std::vector<uint8_t>{0x7a,0xf7,0x11,59}));
+auto fullyKnownHeader=fullyKnown.peekAtFront<LowpanIphcHeader>();
+ASSERT(LowpanIphcCodec::decode(*fullyKnownHeader,80,Ieee802154Address(),Ieee802154Address(),false,&full,SimTime(1)));
+Packet literal("literal",makeShared<BytesChunk>(std::vector<uint8_t>{0x7a,0xf7,0x35,59}));
+auto header=literal.peekAtFront<LowpanIphcHeader>();
+ASSERT(!LowpanIphcCodec::decode(*header,80,source,destination,false,&contexts,SimTime(10)));
+contexts.install(3,Ipv6Address("2001:db8:1::"),64,false,SimTime(10));
+ASSERT(LowpanIphcCodec::decode(*header,80,source,destination,false,&contexts,SimTime(1)));
+Ipv6Header ipv6;
+ipv6.setSrcAddress(Ipv6Address("2001:db8:1:0:211:2233:4455:6601"));
+ipv6.setDestAddress(Ipv6Address("2001:db8:2:0:211:2233:4455:6602"));
+auto receiveOnly=LowpanIphcCodec::encode(ipv6,source,destination,false,&contexts,SimTime(1));
+ASSERT(receiveOnly && !receiveOnly->getSac() && receiveOnly->getDac());
+ASSERT(!contexts.find(16,SimTime(1)) && !contexts.find(-1,SimTime(1)));
+bool rejected=false;
+try { contexts.install(16,Ipv6Address("2001:db8::"),64,true,SimTime(10)); }
+catch (const cRuntimeError&) { rejected=true; }
+ASSERT(rejected);
+rejected=false;
+try { contexts.install(1,Ipv6Address("2001:db8::1"),64,true,SimTime(10)); }
+catch (const cRuntimeError&) { rejected=true; }
+ASSERT(rejected);
+EV << "Stateful context vectors, prefix precedence, permissions and expiry verified\n";
+
+%contains: stdout
+Stateful context vectors, prefix precedence, permissions and expiry verified

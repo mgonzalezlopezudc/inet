@@ -436,6 +436,8 @@ Core normative anchors in the cached texts:
 
 These have separate exit gates and must not expand the initial critical path implicitly.
 
+Execution of P8–P15 is tracked in [6lowpan-completion.md](../pending/6lowpan-completion.md); the completed first-release status above remains scoped to P0–P7.
+
 | Package | Dependencies and actionable scope | Acceptance gate |
 | --- | --- | --- |
 | P8 static stateful IPHC | P7; table of context ID, prefix/length, compression permission and validity; CID=0 and nonzero SCI/DCI; stateful unicast/multicast; keep decompression eligibility distinct from permission to compress | Golden vectors and production cases for valid/missing/expired contexts, unequal source/destination contexts and context changes during reassembly; pin the context version or invalidate affected partial datagrams explicitly |

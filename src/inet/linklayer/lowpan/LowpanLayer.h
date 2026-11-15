@@ -5,6 +5,7 @@
 #include "inet/common/lifecycle/ModuleOperations.h"
 #include "inet/common/lifecycle/OperationalMixin.h"
 #include "inet/linklayer/lowpan/LowpanPacketDropDetails_m.h"
+#include "inet/linklayer/lowpan/LowpanContextTable.h"
 #include "inet/linklayer/lowpan/LowpanReassemblyTable.h"
 #include "inet/linklayer/lowpan/LowpanDatagramTagAllocator.h"
 #include "inet/linklayer/lowpan/contract/ILowpanLink.h"
@@ -23,6 +24,7 @@ class INET_API LowpanLayer : public OperationalMixin<queueing::PacketProcessorBa
     NetworkInterface *networkInterface = nullptr;
     std::unique_ptr<LowpanReassemblyTable> reassembly;
     LowpanDatagramTagAllocator tagAllocator;
+    LowpanContextTable compressionContexts;
     simtime_t reassemblyTimeout;
     bool useIphc = false;
     cMessage *expiryTimer = nullptr;
@@ -32,6 +34,7 @@ class INET_API LowpanLayer : public OperationalMixin<queueing::PacketProcessorBa
     static simsignal_t fragmentReceivedSignal;
     static simsignal_t reassemblyCompletedSignal;
     static simsignal_t reassemblyExpiredSignal;
+    static simsignal_t reassemblyInvalidatedSignal;
     virtual void initialize(int stage) override;
     virtual void handleMessageWhenUp(cMessage *message) override;
     virtual void handleMessageWhenDown(cMessage *message) override;
@@ -54,6 +57,10 @@ class INET_API LowpanLayer : public OperationalMixin<queueing::PacketProcessorBa
 
   public:
     virtual ~LowpanLayer();
+    // Prefix replacement invalidates partial RX; refresh of the same prefix
+    // changes future lookup eligibility without changing reconstructed bytes.
+    void setCompressionContext(int id, const Ipv6Address& prefix, int prefixLength,
+            bool allowCompression, simtime_t validUntil);
     virtual bool supportsPacketPushing(const cGate *gate) const override { return gate == this->gate("lowerLayerOut"); }
     virtual bool supportsPacketPulling(const cGate *gate) const override { return false; }
     virtual queueing::IPassivePacketSink *getConsumer(const cGate *gate) override { return consumer.get(); }

@@ -106,6 +106,21 @@ and serialized global-address vectors agree with a pinned external implementatio
 A known external-peer mismatch affects fully elided EUI-derived addresses; live
 external-MAC interoperability is not established by these checks.
 
+Stateful IPHC can be enabled separately by configuring up to sixteen compression
+contexts on each interface. For example::
+
+    *.node[*].wlan[0].lowpan.compressionContexts = xml("<contexts><context id='3' prefix='2001:db8:1::' prefixLength='64' compress='true' validUntil='100s'/></contexts>")
+
+Each context supplies a canonical IPv6 prefix, its length in bits, permission to
+compress, and an optional absolute simulation expiry time. Omitted expiry means
+unlimited validity. A valid context with ``compress='false'`` can still decode
+received packets. Sender and receiver must share the appropriate context IDs and
+prefixes; automatic distribution is a separate Neighbor Discovery capability.
+An empty context configuration preserves stateless operation. The codec supports
+independent source/destination contexts and prefix-based multicast. Replacing a
+prefix discards partial receive state on that interface; refreshing the same
+prefix does not change already reconstructed packet bytes.
+
 :ned:`Ieee802154LowpanInterface` is a separate compatibility path using the
 legacy MAC and explicit collision-checked 48-bit aliases in
 :ned:`LowpanLinkDomain`. Its successful exchanges do not establish native-wire
