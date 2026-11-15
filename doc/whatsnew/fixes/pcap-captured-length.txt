@@ -1,0 +1,3 @@
+Preserve truncated PCAP records
+
+The PCAP reader now returns only captured bytes for truncated records and retains the incomplete marker. It no longer pads the packet to its original wire length. Link-header lengths exceeding the captured record are rejected before the payload length is computed.

@@ -1,0 +1,91 @@
+%description:
+Exercise the production PCAP writer/reader with IEEE 802.15.4 link types 195
+and 230, preserving MPDU bytes and FCS presence. Truncated records must contain
+only captured bytes, never zero-filled bytes fabricated up to orig_len.
+
+%includes:
+#include "inet/common/FcsInd_m.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/common/packet/recorder/PcapReader.h"
+#include "inet/common/packet/recorder/PcapWriter.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
+using namespace inet;
+
+%activity:
+for (bool hasFcs : {true, false}) {
+    auto bytes = hasFcs ? std::vector<uint8_t>{2, 0, 0x6a, 0xe4, 0x79} : std::vector<uint8_t>{2, 0, 0x6a};
+    const char *name = hasFcs ? "with-fcs.pcap" : "no-fcs.pcap";
+    Packet packet("ack");
+    packet.insertAtBack(makeShared<BytesChunk>(bytes));
+    PcapWriter writer;
+    writer.open(name, 65535, 6);
+    writer.writePacket(SimTime(1.25), &packet, b(0), b(0), DIRECTION_INBOUND, nullptr,
+            hasFcs ? LINKTYPE_IEEE802_15_4 : LINKTYPE_IEEE802_15_4_NOFCS);
+    writer.close();
+    PcapReader reader;
+    reader.openPcap(name, nullptr);
+    auto record = reader.readPacket();
+    ASSERT(record.first.sec == 1 && record.first.usec == 250000);
+    auto read = record.second;
+    ASSERT(read && read->getTag<FcsInd>()->getHasFcs() == hasFcs);
+    auto byteChunk = read->peekDataAsBytes();
+    ASSERT(byteChunk->getBytes() == bytes);
+    auto decoded = Ieee802154FrameCodec::decode(byteChunk->getBytes(), hasFcs);
+    ASSERT(decoded->getDecodeStatus() == Ieee802154FrameCodec::OK);
+    ASSERT(Ieee802154FrameCodec::encode(*decoded) == bytes);
+    delete read;
+    ASSERT(reader.readPacket().second == nullptr);
+    reader.closePcap();
+}
+
+Packet full("snaplen");
+full.insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{2, 0, 0x6a, 0xe4, 0x79}));
+PcapWriter truncatedWriter;
+truncatedWriter.open("truncated.pcap", 3, 6);
+truncatedWriter.writePacket(SIMTIME_ZERO, &full, b(0), b(0), DIRECTION_INBOUND, nullptr, LINKTYPE_IEEE802_15_4);
+truncatedWriter.close();
+PcapReader truncatedReader;
+truncatedReader.openPcap("truncated.pcap", nullptr);
+auto truncated = truncatedReader.readPacket().second;
+auto captured = truncated->peekDataAsBytes(Chunk::PF_ALLOW_INCOMPLETE | Chunk::PF_ALLOW_INCORRECT | Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED);
+std::cout << "Truncated PCAP: captured=3, returned=" << captured->getBytes().size() << "\n";
+ASSERT(captured->getBytes() == std::vector<uint8_t>({2, 0, 0x6a}));
+ASSERT(!captured->isComplete());
+delete truncated;
+truncatedReader.closePcap();
+
+// Synthetic radiotap plus opaque payload tests stripping, without claiming an 802.11 frame.
+const std::vector<uint8_t> radiotap = {0, 0, 9, 0, 2, 0, 0, 0, 0x10, 2, 0, 0x6a, 0xe4, 0x79};
+for (bool shorten : {false, true}) {
+    Packet packet("radiotap ACK", makeShared<BytesChunk>(radiotap));
+    PcapWriter writer;
+    writer.open("radiotap-boundary.pcap", shorten ? 12 : 65535, 6);
+    writer.writePacket(SIMTIME_ZERO, &packet, b(0), b(0), DIRECTION_INBOUND, nullptr, LINKTYPE_IEEE802_11_RADIOTAP);
+    writer.close();
+    PcapReader reader;
+    reader.openPcap("radiotap-boundary.pcap", nullptr);
+    auto read = reader.readPacket().second;
+    auto chunk = read->peekDataAsBytes(Chunk::PF_ALLOW_INCOMPLETE | Chunk::PF_ALLOW_INCORRECT | Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED);
+    ASSERT(chunk->getBytes() == (shorten ? std::vector<uint8_t>{2, 0, 0x6a} : std::vector<uint8_t>{2, 0, 0x6a, 0xe4, 0x79}));
+    ASSERT(chunk->isComplete() == !shorten && read->getTag<FcsInd>()->getHasFcs());
+    delete read;
+    reader.closePcap();
+}
+// A link header extending beyond captured bytes must not underflow the output size.
+Packet invalidLinkHeader("bad link header", makeShared<BytesChunk>(std::vector<uint8_t>{0, 0, 32, 0, 0, 0, 0, 0}));
+PcapWriter invalidWriter;
+invalidWriter.open("invalid-offset.pcap", 65535, 6);
+invalidWriter.writePacket(SIMTIME_ZERO, &invalidLinkHeader, b(0), b(0), DIRECTION_INBOUND, nullptr, LINKTYPE_IEEE802_11_RADIOTAP);
+invalidWriter.close();
+PcapReader invalidReader;
+invalidReader.openPcap("invalid-offset.pcap", nullptr);
+bool rejected = false;
+try { auto record = invalidReader.readPacket(); delete record.second; }
+catch (const cRuntimeError& error) { rejected = std::string(error.what()).find("exceeds captured length") != std::string::npos; }
+ASSERT(rejected);
+invalidReader.closePcap();
+std::cout << "Production PCAP FCS modes and captured byte boundaries verified.\n";
+
+%contains: stdout
+Production PCAP FCS modes and captured byte boundaries verified.
