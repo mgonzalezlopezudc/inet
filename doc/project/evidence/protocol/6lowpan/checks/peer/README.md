@@ -2,13 +2,11 @@
 
 > **Kind:** report · **Status:** snapshot 2026-09-19 · **Seal:** none · **Owns:** — · **Stands on:** [6LoWPAN features](../../features.md)
 
-Peer: ns-3 `5e35cfbc28bd43aa9ceb0d1edea44078d6e76830` (`3-dev`), clean local checkout
-`/home/user/ns-3-dev`, existing default build. The adapter compiles the peer's
-existing test MockNetDevice directly; no peer production code is modified or copied.
+Peer: ns-3 `5e35cfbc28bd43aa9ceb0d1edea44078d6e76830` (`3-dev`), available from the canonical [ns-3 GitLab repository](https://gitlab.com/nsnam/ns-3-dev). Use a clean checkout at that exact revision and a default-profile build with the `sixlowpan` module and its dependencies. The adapter compiles the peer's existing test MockNetDevice directly; no peer production code is modified or copied. The GitHub mirror did not provide this revision during the 2026-11-15 reproduction.
 
 ```
-doc/project/evidence/protocol/6lowpan/checks/peer/run.sh /home/user/ns-3-dev
-MPLCONFIGDIR=/tmp/lowpan-matplotlib inet_run_module_tests -m debug -f 'LowpanPeerReceive\.test$' --no-concurrent
+doc/project/evidence/protocol/6lowpan/checks/peer/run.sh /path/to/ns-3 /tmp/lowpan-peer
+opp_run_module_tests --load . -p inet -m debug --no-build -f 'LowpanPeerReceive\.test$'
 ```
 
 `LowpanNativeRouteOver.test`, payload1232 run, exports the original1280-byte IPv6
@@ -32,6 +30,8 @@ The pinned peer's Mac64 link-local derivation copies the EUI without the U/L fli
 fully elided native EUI address interoperability is not established by these vectors.
 Short broadcast and other encoding forms require separate peer evidence. These
 limits keep the broader first-release validation gate open.
+
+The [current release validation record](../../../../model/6lowpan/release-validation.md) records the fresh canonical-peer build, exact byte comparisons and INET native tests. RFC 6282 section 3.2.2 requires the EUI-64 U/L-bit inversion. The pinned peer's `src/network/utils/ipv6-address.cc`, `MakeAutoconfiguredLinkLocalAddress(Mac64Address)`, copies the eight address octets without that inversion. INET's independently constructed native-wire expectation passes; preserving the peer's incompatible result does not imply changing INET's normative mapping.
 
 The native-EUI limitation was also reproduced directly: decoding
 `elided-input.hex` yields `elided-ns3-observed.hex`, differing from the independently

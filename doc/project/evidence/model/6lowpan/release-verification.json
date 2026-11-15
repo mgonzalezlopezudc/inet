@@ -1,0 +1,336 @@
+{
+  "production_commit": "6a11f885acd503273abd53ab47d546f12b38b41e",
+  "production_source_diff": [],
+  "fixture_sha256": {
+    "tests/unit/LowpanFragmentation.test": "18b950ccb36153cfb8b59aaddc72c2978b02a9ce074a35d078fccdbe41d336d8",
+    "tests/module/LowpanIphcReceiveMatrix.test": "08d61181b531fd84517960b0c621eff3375af3014d0126f2b16c95581e939373",
+    "tests/protocol/6lowpan/LowpanNativeReassembly.test": "844da87a2112e52ca97a7b3c140c0af0b26db97c8af4992e91a0f944c927d715",
+    "tests/protocol/6lowpan/LowpanNativeFragmentBoundaries.test": "f57a2f10b6071a84339ae4bb6942ab8e060f8965bba067eadc19649491d19ba6"
+  },
+  "features_restored": true,
+  "checks": [
+    {
+      "name": "final-unit",
+      "category": "unit",
+      "fixtures_or_configs": 11,
+      "exit_code": 0,
+      "status": "PASS",
+      "log": "/tmp/lowpan-p7-20261115/final-unit.log",
+      "command": [
+        "opp_run_unit_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-f",
+        "(Lowpan.*|Icmpv6PseudoHeader)\\.test$"
+      ],
+      "normalized": "/tmp/lowpan-p7-20261115/final-unit.json"
+    },
+    {
+      "name": "final-module",
+      "category": "module",
+      "fixtures_or_configs": 65,
+      "exit_code": 0,
+      "status": "PASS",
+      "log": "/tmp/lowpan-p7-20261115/final-module.log",
+      "command": [
+        "opp_run_module_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-f",
+        "(Lowpan.*|Ieee802154ReceiveMetadata|Icmpv6LocalChecksum|Icmpv6ExtensionChecksum|ICMPv6_delivery|IPv6_packet_too_big|MLD_smoke)\\.test$"
+      ],
+      "normalized": "/tmp/lowpan-p7-20261115/final-module.json"
+    },
+    {
+      "name": "core-unit",
+      "category": "unit",
+      "fixtures_or_configs": 11,
+      "exit_code": 0,
+      "status": "PASS",
+      "log": "/tmp/lowpan-p7-20261115/core-unit.log",
+      "command": [
+        "opp_run_unit_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-f",
+        "(Lowpan.*|Icmpv6PseudoHeader)\\.test$"
+      ],
+      "normalized": "/tmp/lowpan-p7-20261115/core-unit.json"
+    },
+    {
+      "name": "core-module",
+      "category": "module",
+      "fixtures_or_configs": 2,
+      "exit_code": 0,
+      "status": "PASS",
+      "log": "/tmp/lowpan-p7-20261115/core-module.log",
+      "command": [
+        "opp_run_module_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-f",
+        "(LowpanIphcReceiveMatrix|LowpanNativeCcaPulse)\\.test$"
+      ],
+      "normalized": "/tmp/lowpan-p7-20261115/core-module.json"
+    },
+    {
+      "name": "feature-off-module",
+      "category": "module",
+      "fixtures_or_configs": 5,
+      "exit_code": 0,
+      "status": "PASS",
+      "log": "/tmp/lowpan-p7-20261115/feature-off-module.log",
+      "command": [
+        "opp_run_module_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-f",
+        "(Ieee802154ReceiveMetadata|ICMPv6_delivery|IPv6_packet_too_big|Icmpv6LocalChecksum|Icmpv6ExtensionChecksum)\\.test$"
+      ],
+      "normalized": "/tmp/lowpan-p7-20261115/feature-off-module.json"
+    },
+    {
+      "name": "feature-off-fingerprint",
+      "category": "fingerprint",
+      "fixtures_or_configs": 3,
+      "exit_code": 0,
+      "status": "PASS",
+      "log": "/tmp/lowpan-p7-20261115/feature-off-fingerprint.log",
+      "command": [
+        "opp_run_fingerprint_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-w",
+        "^examples/wireless/nic$",
+        "-c",
+        "^CSMAWith(UnitDisk|ApskScalar|ApskDimensional)Radio$",
+        "-r",
+        "^0$"
+      ],
+      "sim_time_limit": "100s",
+      "ingredients": [
+        "tplx",
+        "~tNl",
+        "~tND"
+      ]
+    },
+    {
+      "name": "final-protocol-current",
+      "category": "protocol",
+      "fixtures_or_configs": 2,
+      "parameter_runs": 6,
+      "exit_code": 0,
+      "status": "PASS",
+      "log": "/tmp/lowpan-p7-20261115/final-protocol-current.log",
+      "command": [
+        "opp_run_protocol_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-w",
+        "^tests/protocol/6lowpan$",
+        "-f",
+        "LowpanNative(Reassembly|FragmentBoundaries)\\.test$"
+      ]
+    }
+  ],
+  "feature_matrix": [
+    {
+      "name": "core-enable",
+      "command": [
+        "opp_featuretool",
+        "enable",
+        "Lowpan"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p7-20261115/core-enable.log"
+    },
+    {
+      "name": "udp-disable",
+      "command": [
+        "opp_featuretool",
+        "disable",
+        "-f",
+        "Udp"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p7-20261115/udp-disable.log"
+    },
+    {
+      "name": "core-build",
+      "command": [
+        "make",
+        "MODE=debug",
+        "-j8"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p7-20261115/core-build.log"
+    },
+    {
+      "name": "core-unit",
+      "command": [
+        "opp_run_unit_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-f",
+        "(Lowpan.*|Icmpv6PseudoHeader)\\.test$"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p7-20261115/core-unit.log"
+    },
+    {
+      "name": "core-module",
+      "command": [
+        "opp_run_module_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-f",
+        "(LowpanIphcReceiveMatrix|LowpanNativeCcaPulse)\\.test$"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p7-20261115/core-module.log"
+    },
+    {
+      "name": "restored-debug-build",
+      "command": [
+        "make",
+        "MODE=debug",
+        "-j8"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p7-20261115/restored-debug-build.log"
+    },
+    {
+      "name": "restored-release-build",
+      "command": [
+        "make",
+        "MODE=release",
+        "-j8"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p7-20261115/restored-release-build.log"
+    }
+  ],
+  "examples": [
+    {
+      "name": "single-hop",
+      "command": [
+        "inet",
+        "--debug",
+        "-u",
+        "Cmdenv",
+        "-f",
+        "omnetpp.ini",
+        "-c",
+        "General",
+        "-r",
+        "0"
+      ],
+      "exit_code": 0,
+      "working_directory": "/home/miguel/workspace/inet-6lowpan-standard/examples/lowpan",
+      "log": "/tmp/lowpan-p7-20261115/example-final-single-hop.log"
+    },
+    {
+      "name": "uncompressed",
+      "command": [
+        "inet",
+        "--debug",
+        "-u",
+        "Cmdenv",
+        "-f",
+        "omnetpp.ini",
+        "-c",
+        "Uncompressed",
+        "-r",
+        "0"
+      ],
+      "exit_code": 0,
+      "working_directory": "/home/miguel/workspace/inet-6lowpan-standard/examples/lowpan",
+      "log": "/tmp/lowpan-p7-20261115/example-final-uncompressed.log"
+    },
+    {
+      "name": "route-over",
+      "command": [
+        "inet",
+        "--debug",
+        "-u",
+        "Cmdenv",
+        "-f",
+        "route.ini",
+        "-c",
+        "General",
+        "-r",
+        "0"
+      ],
+      "exit_code": 0,
+      "working_directory": "/home/miguel/workspace/inet-6lowpan-standard/examples/lowpan",
+      "log": "/tmp/lowpan-p7-20261115/example-final-route-over.log"
+    }
+  ],
+  "peer": {
+    "revision": "5e35cfbc28bd43aa9ceb0d1edea44078d6e76830",
+    "global_vectors": "PASS",
+    "native_elided_vectors": "FAIL",
+    "known_differences": [
+      16,
+      32
+    ],
+    "result": "doc/project/evidence/model/6lowpan/peer-elided-result.json"
+  },
+  "final_receive_case": {
+    "parameter_runs": 2,
+    "frames_injected_per_run": 61,
+    "datagrams_delivered_per_run": 9
+  },
+  "sender_boundary_case": {
+    "parameter_runs": 4,
+    "datagrams_delivered_per_run": 1241,
+    "total_datagrams_delivered": 4964
+  },
+  "original_feature_state_sha256": "b06952dd9375d04782d2a1e3e57112bbc1f5ff74d118256dec14a8f4f62b7e27",
+  "acceptance_status": "PARTIAL: P7 identity isolation, RX teardown/restart and production sender tag guard sequences remain open"
+}

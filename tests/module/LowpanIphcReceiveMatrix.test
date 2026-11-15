@@ -1,10 +1,12 @@
 %description:
 Independent RFC 6282 literal-byte receive combinations cross all TF, HLIM,
 stateless source/destination/multicast, unspecified-source and unused-CID modes.
-Each production delivery must equal independently assembled IPv6 bytes.
+Every literal encoding enters as native IEEE 802.15.4 frame bytes through the
+production MAC and boundary. Each delivery equals independently assembled IPv6 bytes.
 
 %file: DomainCheck.cc
 #include "inet/common/InitStages.h"
+#include "inet/common/checksum/Checksum.h"
 #include "inet/common/packet/Packet.h"
 #include "inet/common/packet/chunk/BytesChunk.h"
 #include "inet/linklayer/ieee802154/Ieee802154AddressTagBase_m.h"
@@ -64,12 +66,18 @@ class DomainCheck : public cSimpleModule {
             delivered++; delete packet; return;
         }
         auto bytes = wire[message->getKind()];
-        auto packet = new Packet("literal-iphc",makeShared<BytesChunk>(bytes));
-        auto ind = packet->addTag<Ieee802154AddressInd>();
-        ind->setSrcAddress(Ieee802154Address("0123456789abcdef"));
-        ind->setDestAddress(Ieee802154Address(bytes[1]&8 ? "ffff" : "a123456789abcdef"));
-        ind->setSrcPanId(4660); ind->setDestPanId(4660);
-        send(packet,"out"); delete message;
+        bool multicast = bytes[1] & 8;
+        std::vector<uint8_t> frame{0x41,uint8_t(multicast ? 0xd8 : 0xdc),uint8_t(message->getKind()),0x34,0x12};
+        if (multicast) frame.insert(frame.end(),{0xff,0xff});
+        else frame.insert(frame.end(),{0xef,0xcd,0xab,0x89,0x67,0x45,0x23,0xa1});
+        frame.insert(frame.end(),{0xef,0xcd,0xab,0x89,0x67,0x45,0x23,0x01});
+        frame.insert(frame.end(),bytes.begin(),bytes.end());
+        auto fcs = crc16_ccitt(frame); frame.push_back(fcs); frame.push_back(fcs >> 8);
+        ASSERT(frame.size() <= 127);
+        auto packet = new Packet("literal-native-iphc",makeShared<BytesChunk>(frame));
+        auto mac = getModuleByPath("^.node[0].nic.mac");
+        sendDirect(packet,mac->gate("lowerLayerIn")->getPathStartGate());
+        delete message;
     }
     virtual void finish() override {
         ASSERT(delivered == 1280);
@@ -117,11 +125,12 @@ module DomainInterface extends NetworkInterface
         }
         radio: Ieee802154NarrowbandRadio;
     connections allowunconnected:
-        upperLayerIn --> lowpan.lowerLayerIn;
+        upperLayerIn --> lowpan.upperLayerIn;
         lowpan.lowerLayerOut --> boundary.in;
         boundary.out --> queue.in;
         queue.out --> mac.upperLayerIn;
         mac.upperLayerOut --> boundary.lowerLayerIn;
+        boundary.upperLayerOut --> lowpan.lowerLayerIn;
         lowpan.upperLayerOut --> upperLayerOut;
         mac.lowerLayerOut --> radio.upperLayerIn;
         radio.upperLayerOut --> mac.lowerLayerIn;

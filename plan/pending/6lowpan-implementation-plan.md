@@ -1,7 +1,6 @@
 # Implement 6LoWPAN adaptation in INET
 
-Status: **implemented through the native P6 data plane; P0 provenance and P7 release validation remain open**. Written 2026-09-19 against
-`c913a63a8335ca39a319cb2089daf835ea5e95cd` and the local, uncommitted standards inventory.
+Status: **implemented through the native P6 data plane; P0 provenance recorded; P7 release validation in progress**. Written 2026-09-19 against `c913a63a8335ca39a319cb2089daf835ea5e95cd` and the local, uncommitted standards inventory.
 Starting point: [6lowpan-initial-plan.md](6lowpan-initial-plan.md).
 
 ## 1. Deliverable and completion boundary
@@ -166,9 +165,10 @@ Execution evidence: [coverage.md](../../doc/project/evidence/model/6lowpan/cover
 
 Dependencies: none.
 
-- [ ] Record the exact source revision, local changes, RFC text hashes and selected clauses.
+- [x] Record the exact source revision, local changes, RFC text hashes and selected clauses.
   Use the cached texts; check applicable updates/errata before asserting conformance.
   Pin the IEEE 802.15.4 edition and frame subset before P2a; the RFC cache does not supply it.
+  Current snapshot and applicability review: [provenance.md](../../doc/project/evidence/model/6lowpan/provenance.md).
 - [x] Extend the existing RFC catalogs for the complete supported TF/address-mode matrices,
   malformed input, disassociation cleanup and compression/fragmentation interaction.
   Existing catalogs explicitly state that they are selective.
@@ -359,6 +359,11 @@ Dependencies: P5, P6.
 
 - [ ] Re-run the complete first-release matrix on the native MAC path, including feature-off
   and existing IPv6/802.15.4 regression selections. Keep compatibility results separate.
+- [x] Add the native receive protocol fixture [LowpanNativeReassembly.test](../../tests/protocol/6lowpan/LowpanNativeReassembly.test) and its [reviewer document](../../tests/protocol/6lowpan/native-reassembly.md). Drive native frame bytes through MAC decoding, boundary metadata and adaptation; observe reordered/interleaved fragments, overlap/quarantine, separate context/byte limits, expiry, malformed dispatch and fully elided EUI-derived addresses. This adds evidence without changing production behavior.
+- [x] Extend `LowpanFragmentation.test` to cover both native payload capacities and every original datagram size from 40 through 1280 bytes. Keep this helper evidence distinct from native sender/radio observations.
+- [x] Execute [LowpanNativeFragmentBoundaries.test](../../tests/protocol/6lowpan/LowpanNativeFragmentBoundaries.test) across uncompressed/IPHC and extended-unicast/short-broadcast profiles, observing every size 40–1280 at sender frame output and remote native IPv6 delivery. Its [reviewer document](../../tests/protocol/6lowpan/native-reassembly.md) defines the deterministic boundary campaign.
+- [x] Move the existing 1,280-case IPHC acceptance matrix to literal native frame input, requiring the real MAC to reconstruct PAN/address metadata before decompression. Extend native protocol rejection checks through truncated fragmentation/NHC fields and checksum-elision forms; preserve the source-derived peer disagreement separately.
+- [ ] Close the remaining rows in the [release validation matrix](../../doc/project/evidence/model/6lowpan/release-validation.md); record the current native, compatibility, feature-disabled, independent-capture and pinned-peer results separately.
 - [x] Assess ordinary ND as its own substep: encode native link-address options, resolve
   64-bit next hops without truncation, and test link-local creation, DAD, RS/RA and NS/NA.
   If this needs a wider neighbor-cache refactor, retain documented static-neighbor operation

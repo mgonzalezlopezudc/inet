@@ -1,0 +1,222 @@
+%description:
+RFC 4944 reassembly and RFC 6282 EUI-derived IIDs through byte-only native MAC
+input. Interleaving, FRAGN-first, duplicates, partial overlap, conflict quarantine,
+resource refusal and exact original expiry are observed in production adaptation.
+
+%extraargs: -r 0..1
+
+%file: NativeReassemblyCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/checksum/Checksum.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/lowpan/LowpanPacketDropDetails_m.h"
+
+namespace inet::protocoltest {
+using namespace lowpan;
+class NativeReassemblyCheck : public cSimpleModule, public cListener
+{
+    cModule *mac = nullptr;
+    std::vector<std::vector<uint8_t>> inputs, expected;
+    std::vector<simtime_t> deliveryTimes;
+    int delivered = 0, injected = 0, reassembled = 0, rejected = 0, refused = 0;
+    int sequence = 0, malformed = 0, unsupported = 0;
+    std::vector<simtime_t> expirations;
+
+    std::vector<uint8_t> original(uint8_t marker) {
+        std::vector<uint8_t> bytes(80, marker);
+        const std::vector<uint8_t> header{0x60,0,0,0,0,40,59,64,
+            0xfe,0x80,0,0,0,0,0,0,0x03,0x23,0x45,0x67,0x89,0xab,0xcd,0xef,
+            0xfe,0x80,0,0,0,0,0,0,0xa3,0x23,0x45,0x67,0x89,0xab,0xcd,0xef};
+        std::copy(header.begin(), header.end(), bytes.begin());
+        return bytes;
+    }
+    void input(int millisecond, const std::vector<uint8_t>& payload) {
+        // IEEE 802.15.4-2024 selected data subset: extended addresses, compressed PAN,
+        // version 1, no ACK request. Address octets are least significant first.
+        std::vector<uint8_t> frame{0x41,0xdc,uint8_t(sequence++),0x34,0x12,
+            0xef,0xcd,0xab,0x89,0x67,0x45,0x23,0xa1,
+            0xef,0xcd,0xab,0x89,0x67,0x45,0x23,0x01};
+        frame.insert(frame.end(), payload.begin(), payload.end());
+        auto fcs = crc16_ccitt(frame);
+        frame.push_back(fcs); frame.push_back(fcs >> 8);
+        ASSERT(frame.size() <= 127);
+        inputs.push_back(frame);
+        scheduleAt(SimTime(millisecond, SIMTIME_MS), new cMessage("native-frame", inputs.size()-1));
+    }
+    void fragment(int millisecond, uint16_t tag, const std::vector<uint8_t>& bytes, int offset, int count) {
+        std::vector<uint8_t> payload{uint8_t(offset ? 0xe0 : 0xc0),80,uint8_t(tag >> 8),uint8_t(tag)};
+        payload.push_back(offset ? offset/8 : 0x41);
+        payload.insert(payload.end(), bytes.begin()+offset, bytes.begin()+offset+count);
+        input(millisecond, payload);
+    }
+    void expect(int millisecond, const std::vector<uint8_t>& bytes) {
+        expected.push_back(bytes);
+        deliveryTimes.push_back(SimTime(millisecond, SIMTIME_MS));
+    }
+
+  protected:
+    int numInitStages() const override { return NUM_INIT_STAGES; }
+    void initialize(int stage) override {
+        if (stage != INITSTAGE_LAST) return;
+        auto nic = getModuleByPath("^.node[0].nic");
+        mac = nic->getSubmodule("mac");
+        auto layer = nic->getSubmodule("lowpan");
+        for (auto name : {"reassemblyCompleted", "packetDropped", "reassemblyExpired"})
+            layer->subscribe(name, this);
+        auto a = original(0x11), b = original(0x22), c = original(0x33);
+        fragment(1,65535,a,40,40); fragment(2,0,b,40,40);
+        fragment(3,65535,a,40,40); // Exact duplicate must not produce an extra delivery.
+        fragment(4,0,b,0,40); expect(4,b);
+        fragment(5,65535,a,0,40); expect(5,a);
+        fragment(10,1,c,0,48);
+        fragment(11,1,c,40,40); // Partial overlap restarts with the incoming range.
+        fragment(12,1,c,0,40); expect(12,c);
+        fragment(20,2,a,0,40);
+        auto conflict = a; conflict[7] = 63;
+        fragment(21,2,conflict,0,40); // Same range, different bytes: local quarantine policy.
+        fragment(22,2,a,40,40);
+        fragment(40,3,a,40,40);
+        fragment(49,3,a,40,40); // Duplicate must not move the 50ms deadline.
+        fragment(51,3,a,0,40); // Expired last range cannot complete this new context.
+        fragment(70,4,a,0,40); fragment(71,5,b,0,40);
+        fragment(72,6,c,0,40); // Run 0 fills the context limit; run 1 fills the byte limit.
+        fragment(73,4,a,40,40); expect(73,a);
+        fragment(74,6,c,0,40); // Freed reservation must be reusable.
+        fragment(75,5,b,40,40); expect(75,b);
+        fragment(76,6,c,40,40); expect(76,c);
+        fragment(80,7,a,0,41); // Invalid non-final alignment.
+        std::vector<uint8_t> invalid{0xe0,80,0,7,9};
+        invalid.insert(invalid.end(),16,0x11); input(81,invalid); // Extends past datagram size.
+        fragment(82,7,a,0,40); fragment(83,7,a,40,40); expect(83,a);
+        // RFC 6282 section 3.2.2: invert the EUI-64 U/L bit in both fully elided IIDs.
+        std::vector<uint8_t> elided{0x7a,0x33,59,0,1,2,3,4,5,6,7};
+        input(90,elided);
+        auto reconstructed = original(0); reconstructed.resize(48); reconstructed[5] = 8;
+        for (int i=0; i<8; i++) reconstructed[40+i] = i;
+        expect(90,reconstructed);
+        input(91,{0x7f}); // IPHC dispatch recognized, but its fields are truncated.
+        input(92,{0x42}); // Unknown dispatch.
+        input(93,{}); // Empty adaptation payload.
+        input(94,{0x50}); // Unsupported page switch.
+        input(95,{0x7a,0x04,59}); // Reserved stateful unicast destination encoding.
+        input(96,{0xc0,80,0}); // Truncated FRAG1 header.
+        input(97,{0xe0,80,0,8,5}); // FRAGN with no range bytes.
+        fragment(100,8,a,0,40);
+        std::vector<uint8_t> differentSize{0xe0,72,0,8,5};
+        differentSize.insert(differentSize.end(),32,0x11); input(101,differentSize);
+        fragment(102,8,a,40,40); expect(102,a); // Size 72 cannot join the size-80 context.
+        const std::vector<std::vector<uint8_t>> nhc{
+            {0xf0,0x12,0x34,0x56,0x78,0xab,0xcd},
+            {0xf1,0x12,0x34,0xff,0xab,0xcd},
+            {0xf2,0x00,0x56,0x78,0xab,0xcd}, {0xf3,0x0f,0xab,0xcd}};
+        int at = 120;
+        for (const auto& encoding : nhc) {
+            for (size_t length=1; length<encoding.size(); length++) {
+                std::vector<uint8_t> truncated{0x7e,0x33};
+                truncated.insert(truncated.end(),encoding.begin(),encoding.begin()+length);
+                input(at++,truncated);
+            }
+            std::vector<uint8_t> elidedChecksum{0x7e,0x33,uint8_t(encoding[0]|4)};
+            elidedChecksum.insert(elidedChecksum.end(),encoding.begin()+1,encoding.end()-2);
+            input(at++,elidedChecksum);
+        }
+        input(at,{0x7e,0x33,0xe3,0x12,0xab,0xcd}); // Unsupported NHC identifier.
+        input(at+1,{0x7e,0x33}); // Compressed Next Header is signaled, but no NHC octet follows.
+    }
+    void receiveSignal(cComponent *, simsignal_t signal, cObject *, cObject *details) override {
+        if (signal == registerSignal("reassemblyCompleted")) { reassembled++; return; }
+        auto reason = check_and_cast<LowpanPacketDropDetails *>(details)->getLowpanReason();
+        if (reason == LOWPAN_RESOURCE_LIMIT) refused++;
+        else if (reason == LOWPAN_MALFORMED) malformed++;
+        else if (reason == LOWPAN_UNSUPPORTED_DISPATCH) unsupported++;
+        else { ASSERT(reason == LOWPAN_REASSEMBLY_REJECTED); rejected++; }
+    }
+    void receiveSignal(cComponent *, simsignal_t, long count, cObject *) override {
+        ASSERT(count == 1);
+        expirations.push_back(simTime());
+    }
+    void handleMessage(cMessage *message) override {
+        if (message->isSelfMessage()) {
+            auto packet = new Packet("independent-native-input", makeShared<BytesChunk>(inputs.at(message->getKind())));
+            sendDirect(packet,mac->gate("lowerLayerIn")->getPathStartGate());
+            injected++; delete message; return;
+        }
+        auto packet = check_and_cast<Packet *>(message);
+        ASSERT(delivered < int(expected.size()));
+        ASSERT(simTime() == deliveryTimes[delivered]);
+        ASSERT(packet->peekDataAsBytes()->getBytes() == expected[delivered]);
+        delivered++; delete packet;
+    }
+    void finish() override {
+        ASSERT(injected == int(inputs.size()) && injected == 61);
+        ASSERT(delivered == 9 && reassembled == 8 && refused == 1 && rejected == 4);
+        ASSERT(malformed == 30 && unsupported == 2);
+        ASSERT(expirations == std::vector<simtime_t>({SimTime(30,SIMTIME_MS),SimTime(50,SIMTIME_MS),SimTime(61,SIMTIME_MS),SimTime(111,SIMTIME_MS)}));
+        std::cout << "Native wire reassembly, bounded recovery and elided EUI IIDs verified\n";
+    }
+};
+Define_Module(NativeReassemblyCheck);
+}
+
+%file: test.ned
+@namespace(inet::protocoltest);
+import inet.networklayer.common.InterfaceTable;
+import inet.mobility.static.StationaryMobility;
+import inet.linklayer.lowpan.Ieee802154NativeLowpanInterface;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple NativeReassemblyCheck
+{
+    parameters:
+        @class(NativeReassemblyCheck);
+    gates:
+        input in[2];
+}
+module NativeNode
+{
+    parameters:
+        @networkNode;
+    gates:
+        output out;
+    submodules:
+        interfaceTable: InterfaceTable;
+        mobility: StationaryMobility;
+        nic: Ieee802154NativeLowpanInterface {
+            interfaceTableModule = "^.interfaceTable";
+            linkDomainModule = "^.^.domain";
+        }
+    connections allowunconnected:
+        nic.upperLayerOut --> out;
+}
+network NativeReassemblyNetwork
+{
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        domain: LowpanNativeLinkDomain;
+        node[2]: NativeNode;
+        check: NativeReassemblyCheck;
+    connections allowunconnected:
+        node[0].out --> check.in[0];
+        node[1].out --> check.in[1];
+}
+
+%inifile: omnetpp.ini
+[General]
+network = NativeReassemblyNetwork
+sim-time-limit = 160ms
+seed-set = 0
+**.lowpan.reassemblyTimeout = 10ms
+**.lowpan.maxReassemblyDatagrams = ${contexts=2,3}
+**.lowpan.maxReassemblyBytes = ${bytes=240B,160B ! contexts}
+*.domain.panId = 4660
+*.domain.config = xml("<domain><peer interface='node[0].nic' native='a123456789abcdef'/><peer interface='node[1].nic' native='0123456789abcdef'/></domain>")
+**.radio.antenna.mobilityModule = "^.^.^.mobility"
+**.mobility.initialX = 0m
+**.mobility.initialY = 0m
+**.mobility.initialZ = 0m
+**.mobility.initFromDisplayString = false
+**.mobility.updateFromDisplayString = false
+
+%contains: stdout
+Native wire reassembly, bounded recovery and elided EUI IIDs verified

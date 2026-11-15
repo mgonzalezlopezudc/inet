@@ -1,0 +1,182 @@
+%description:
+Every IPv6 datagram size 40..1280 crosses the real native sender, MAC and radio.
+Uncompressed/stateless IPHC and extended unicast/short broadcast independently
+check original-coordinate fragment bytes, 127-byte frame bounds and exact delivery.
+
+%extraargs: -r 0..3
+
+%file: NativeFragmentBoundaryCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/networklayer/common/NextHopAddressTag_m.h"
+
+namespace inet::protocoltest {
+class NativeFragmentBoundaryCheck : public cSimpleModule, public cListener
+{
+    bool multicast = false, compressed = false;
+    int size = 40, received = 0, covered = 0, frames = 0, fragmentTag = -1;
+    int fragmented = 0;
+    std::vector<uint8_t> original;
+    bool pending = false;
+    int read16(const std::vector<uint8_t>& bytes, int offset) {
+        return (bytes.at(offset) << 8) | bytes.at(offset+1);
+    }
+  protected:
+    int numInitStages() const override { return NUM_INIT_STAGES; }
+    void initialize(int stage) override {
+        if (stage != INITSTAGE_LAST) return;
+        multicast = par("multicast");
+        compressed = getModuleByPath("^.node[0].nic.lowpan")->par("headerCompression").stdstringValue() == "iphc";
+        getModuleByPath("^.node[0].nic.mac")->subscribe("packetSentToLower",this);
+        for (int i=0; i<2; i++) {
+            getParentModule()->getSubmodule("node",i)->getSubmodule("nic")->getSubmodule("lowpan")->subscribe("packetDropped",this);
+            getParentModule()->getSubmodule("node",i)->getSubmodule("nic")->getSubmodule("mac")->subscribe("packetDropped",this);
+        }
+        scheduleAfter(SimTime(1,SIMTIME_MS),new cMessage("next-size"));
+    }
+    void handleMessage(cMessage *message) override {
+        if (!message->isSelfMessage()) {
+            auto packet = check_and_cast<Packet *>(message);
+            ASSERT(pending && packet->peekDataAsBytes()->getBytes() == original);
+            ASSERT(covered == size);
+            received++; size++; pending = false;
+            delete packet;
+            if (size <= 1280) scheduleAfter(SimTime(1,SIMTIME_MS),new cMessage("next-size"));
+            return;
+        }
+        delete message;
+        ASSERT(!pending && size <= 1280);
+        original = {0x60,0,0,0,uint8_t((size-40)>>8),uint8_t(size-40),59,64,
+            0xfe,0x80,0,0,0,0,0,0,0x03,0x23,0x45,0x67,0x89,0xab,0xcd,0xef};
+        std::vector<uint8_t> destination{0xfe,0x80,0,0,0,0,0,0,0xa3,0x23,0x45,0x67,0x89,0xab,0xcd,0xef};
+        if (multicast) destination = {0xff,2,0,0,0,0,0,0,0,0,0,0,0,0,0,1};
+        original.insert(original.end(),destination.begin(),destination.end());
+        for (int i=40; i<size; i++) original.push_back((i-40)%251);
+        covered = 0; fragmentTag = -1; pending = true;
+        auto packet = new Packet("boundary-ipv6",makeShared<BytesChunk>(original));
+        packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ipv6);
+        packet->addTag<NextHopAddressReq>()->setNextHopAddress(Ipv6Address("fe80::a323:4567:89ab:cdef"));
+        send(packet,"out");
+    }
+    void receiveSignal(cComponent *, simsignal_t signal, cObject *value, cObject *) override {
+        ASSERT(signal != registerSignal("packetDropped"));
+        ASSERT(pending);
+        const auto bytes = check_and_cast<Packet *>(value)->peekDataAsBytes()->getBytes();
+        int macLength = multicast ? 15 : 21;
+        ASSERT(bytes.size() <= 127 && bytes.size() > unsigned(macLength+2));
+        ASSERT(bytes[0] == (multicast ? 0x41 : 0x61)); // No broadcast ACK; unicast requests one.
+        ASSERT(bytes[1] == (multicast ? 0xd8 : 0xdc));
+        ASSERT(bytes[3] == 0x34 && bytes[4] == 0x12);
+        if (multicast) ASSERT(bytes[5] == 0xff && bytes[6] == 0xff);
+        else ASSERT(std::vector<uint8_t>(bytes.begin()+5,bytes.begin()+13) ==
+                    std::vector<uint8_t>({0xef,0xcd,0xab,0x89,0x67,0x45,0x23,0xa1}));
+        int begin = macLength, end = bytes.size()-2;
+        bool first = (bytes[begin]&0xf8) == 0xc0;
+        bool next = (bytes[begin]&0xf8) == 0xe0;
+        if (first || next) {
+            ASSERT((((bytes[begin]&7)<<8) | bytes[begin+1]) == size);
+            int tag = read16(bytes,begin+2);
+            if (first) {
+                ASSERT(covered == 0 && tag == fragmented++);
+                fragmentTag = tag; begin += 4;
+            }
+            else {
+                ASSERT(tag == fragmentTag && bytes[begin+4]*8 == covered);
+                begin += 5;
+            }
+        }
+        else ASSERT(covered == 0);
+        if (!next) {
+            if (compressed) {
+                std::vector<uint8_t> encoding{0x7a,uint8_t(multicast ? 0x3b : 0x33),59};
+                if (multicast) encoding.push_back(1);
+                ASSERT(std::vector<uint8_t>(bytes.begin()+begin,bytes.begin()+begin+encoding.size()) == encoding);
+                begin += encoding.size(); covered = 40;
+            }
+            else { ASSERT(bytes[begin] == 0x41); begin++; }
+        }
+        ASSERT(end >= begin && covered+end-begin <= size);
+        ASSERT(std::equal(bytes.begin()+begin,bytes.begin()+end,original.begin()+covered));
+        covered += end-begin;
+        if (first || next) {
+            if (covered < size) ASSERT(covered%8 == 0);
+        }
+        else ASSERT(covered == size);
+        frames++;
+    }
+    void finish() override {
+        ASSERT(received == 1241 && !pending && frames > received && fragmented > 0);
+        std::cout << "All 1241 native sender size boundaries delivered byte-exactly\n";
+    }
+};
+Define_Module(NativeFragmentBoundaryCheck);
+}
+
+%file: test.ned
+@namespace(inet::protocoltest);
+import inet.networklayer.common.InterfaceTable;
+import inet.mobility.static.StationaryMobility;
+import inet.linklayer.lowpan.Ieee802154NativeLowpanInterface;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple NativeFragmentBoundaryCheck
+{
+    parameters:
+        bool multicast;
+    gates:
+        output out;
+        input in;
+}
+module BoundaryNode
+{
+    parameters:
+        @networkNode;
+    gates:
+        input in;
+        output out;
+    submodules:
+        interfaceTable: InterfaceTable;
+        mobility: StationaryMobility;
+        nic: Ieee802154NativeLowpanInterface {
+            interfaceTableModule = "^.interfaceTable";
+            linkDomainModule = "^.^.domain";
+        }
+    connections allowunconnected:
+        in --> nic.upperLayerIn;
+        nic.upperLayerOut --> out;
+}
+network NativeBoundaryNetwork
+{
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        domain: LowpanNativeLinkDomain;
+        node[2]: BoundaryNode;
+        check: NativeFragmentBoundaryCheck;
+    connections allowunconnected:
+        check.out --> node[0].in;
+        node[1].out --> check.in;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = NativeBoundaryNetwork
+sim-time-limit = 300s
+seed-set = 0
+cmdenv-express-mode = true
+cmdenv-event-banners = false
+**.cmdenv-log-level = off
+*.check.multicast = ${broadcast=false,true}
+**.lowpan.headerCompression = "${compression=none,iphc}"
+*.domain.panId = 4660
+*.domain.config = xml("<domain><peer interface='node[0].nic' native='0123456789abcdef'/><peer interface='node[1].nic' native='a123456789abcdef'/><neighbor interface='node[0].nic' ipv6='fe80::a323:4567:89ab:cdef' native='a123456789abcdef'/></domain>")
+**.radio.antenna.mobilityModule = "^.^.^.mobility"
+**.mobility.initialX = 0m
+**.mobility.initialY = 0m
+**.mobility.initialZ = 0m
+**.mobility.initFromDisplayString = false
+**.mobility.updateFromDisplayString = false
+
+%contains: stdout
+All 1241 native sender size boundaries delivered byte-exactly

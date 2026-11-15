@@ -2,11 +2,7 @@
 
 > **Kind:** ledger · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [implementation plan](../../../../../plan/pending/6lowpan-implementation-plan.md), [features](../../protocol/6lowpan/features.md)
 
-Execution began 2026-09-19 at `14df0d93a48cd0f4c619d3a16066809c6f40243d`, with a clean
-working tree. P1–P6 implementation has focused debug, release-build and independent
-wire/vector evidence. P0 provenance and the full P7 release matrix remain open.
-Earlier milestone sections below are historical; the final sections supersede their status.
-Status below distinguishes executed checks from planned work.
+Execution began 2026-09-19 at `14df0d93a48cd0f4c619d3a16066809c6f40243d`, with a clean working tree. P1–P6 implementation has focused debug, release-build and independent wire/vector evidence. P0 provenance is recorded in the [current snapshot](provenance.md). The full P7 release matrix remains open; [release-validation.md](release-validation.md) separates the current native, compatibility and external evidence and names its remaining gaps. Earlier milestone sections below are historical; the current validation record supersedes their status. Status below distinguishes executed checks from planned work.
 
 | Package | Behavior / check | Owner | Category | Status |
 | --- | --- | --- | --- | --- |
@@ -58,6 +54,8 @@ The P1 production receive test is recorded below. Native capture and pinned-peer
 are recorded in the final sections; no broad external interoperability claim is made.
 
 ## Standards provenance
+
+The [2026-11-15 provenance review](provenance.md) supersedes the retrieval status below. The complete RFC Editor JSON export was retrieved and reviewed for all eight selected RFCs; the source hashes and pinned IEEE PDF agree with the original inventory. The following paragraphs retain the historical retrieval attempts.
 
 See [source hashes](source-hashes.sha256). RFC texts are unchanged local copies.
 RFC 4944 errata checked at <https://www.rfc-editor.org/errata/rfc4944> on 2026-09-19:
@@ -264,12 +262,7 @@ post-observable-change results follow; the complete release claim remains open.
 
 ### Release limits still open
 
-The implementation remains in `plan/pending/`. P0's complete current errata retrieval
-is not closed: the official RFC4944 list confirms verified4359 and6194, but the
-RFC6282 complete-list endpoint still returns429; the indexed rejected4814 record
-is not a substitute for a current full list. The RFC Editor's new RFC6282 info page
-links to `https://errata.rfc-editor.org/search/?rfc_number=6282`; that endpoint and
-the corresponding RFC8025/RFC8066 searches were also inaccessible on 2026-09-19.
+The implementation remains in `plan/pending/`. P0's complete errata retrieval is closed by the [2026-11-15 export review](provenance.md#current-errata-snapshot). The full P7 acceptance matrix remains open; its current evidence and precise gaps are in [release-validation.md](release-validation.md).
 The controlled-budget fixture now exercises placement fallback separately from the
 native profile, whose minimum 104-byte budget exceeds its supported compressed
 IPv6/UDP header chain. Dynamic ND, association/disassociation, security, short

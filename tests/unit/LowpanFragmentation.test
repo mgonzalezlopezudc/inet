@@ -58,5 +58,38 @@ for (int size : {104, 127, 128, 255, 1280, 2047}) {
 }
 EV << "Fragment vectors and original-coordinate budgets verified\n";
 
+// Exhaust both native payload capacities, every octet through the IPv6 MTU,
+// and each supported uncompressed/header-coverage profile. These invariants
+// check coverage and wire bounds without reproducing the planner's choices.
+for (int budget : {104, 110}) {
+    for (int size = 40; size <= 1280; size++) {
+        for (int headerCoverage : {0, 40, 48}) {
+            if (headerCoverage > size) continue;
+            int encoded = headerCoverage ? 6 : 1;
+            auto ranges = LowpanFragmenter::plan(size, budget, budget, encoded, headerCoverage);
+            ASSERT(!ranges.empty());
+            int covered = 0;
+            for (unsigned int i = 0; i < ranges.size(); i++) {
+                const auto& range = ranges[i];
+                ASSERT(range.offset == covered && range.length > 0);
+                int wireLength = range.length;
+                if (i == 0) {
+                    ASSERT(range.length >= headerCoverage);
+                    wireLength += encoded - headerCoverage;
+                }
+                if (ranges.size() > 1) wireLength += i == 0 ? 4 : 5;
+                ASSERT(wireLength <= budget);
+                covered += range.length;
+                if (i + 1 < ranges.size()) ASSERT(covered % 8 == 0);
+            }
+            ASSERT(covered == size);
+        }
+    }
+}
+EV << "All native capacity and eight-octet alignment edges through MTU 1280 verified\n";
+
 %contains: stdout
 Fragment vectors and original-coordinate budgets verified
+
+%contains: stdout
+All native capacity and eight-octet alignment edges through MTU 1280 verified
