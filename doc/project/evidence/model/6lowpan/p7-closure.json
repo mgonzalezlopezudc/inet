@@ -38,6 +38,27 @@
       "parameter_runs": 2,
       "status": "PASS",
       "output": "/tmp/lowpan-p7-closure-20261115/LowpanNativeReceiveRestart.out"
+    },
+    "LowpanNativeTagGuards": {
+      "path": "tests/protocol/6lowpan/LowpanNativeTagGuards.test",
+      "sha256": "37703d7ff4385bf3788cebc9ead9481743085d9cad57ebbddb654e4493304eae",
+      "parameter_runs": 2,
+      "status": "PASS",
+      "output": "/tmp/lowpan-p7-closure-20261115/LowpanNativeTagGuards.out"
+    },
+    "LowpanNativeReassembly": {
+      "path": "tests/protocol/6lowpan/LowpanNativeReassembly.test",
+      "sha256": "844da87a2112e52ca97a7b3c140c0af0b26db97c8af4992e91a0f944c927d715",
+      "parameter_runs": 2,
+      "status": "PASS",
+      "output": "/tmp/lowpan-p7-closure-20261115/LowpanNativeReassembly.out"
+    },
+    "LowpanNativeFragmentBoundaries": {
+      "path": "tests/protocol/6lowpan/LowpanNativeFragmentBoundaries.test",
+      "sha256": "f57a2f10b6071a84339ae4bb6942ab8e060f8965bba067eadc19649491d19ba6",
+      "parameter_runs": 4,
+      "status": "PASS",
+      "output": "/tmp/lowpan-p7-closure-20261115/LowpanNativeFragmentBoundaries.out"
     }
   }
 }
