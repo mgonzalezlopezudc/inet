@@ -29,6 +29,8 @@ The affected source is restricted to unsealed `src/inet/linklayer/lowpan/` codec
 
 ## Progress
 
+P9 is split into a wire-representation/nested-IID preparation commit with `LowpanExtensionNhcWire` unit vectors, a chain-codec commit with independent chain vectors, and production integration with `LowpanExtensionNhc.test` and its reviewer document. Preparation does not claim live extension compression before the production caller is connected.
+
 - [x] P8 stateful contexts and production evidence: [p8-verification.json](../../doc/project/evidence/model/6lowpan/p8-verification.json).
 - [ ] P9 extension/nested-header NHC and production evidence.
 - [ ] P10 optimized ND roles, options and registration.

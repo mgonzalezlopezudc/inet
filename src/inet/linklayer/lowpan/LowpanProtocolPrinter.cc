@@ -7,6 +7,7 @@
 #include "inet/linklayer/ieee802154/Ieee802154FrameHeader_m.h"
 #include "inet/linklayer/lowpan/LowpanIphcHeader_m.h"
 #include "inet/linklayer/lowpan/LowpanUdpNhcHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanNhcExtensionHeader_m.h"
 #include "inet/common/packet/printer/ProtocolPrinterRegistry.h"
 
 namespace inet { namespace lowpan {
@@ -28,6 +29,8 @@ void LowpanProtocolPrinter::print(const Ptr<const Chunk>& chunk, const Protocol 
     else if (auto header = dynamicPtrCast<const LowpanUdpNhcHeader>(chunk))
         context.infoColumn << "UDP NHC " << header->getSourcePort() << " > " << header->getDestinationPort()
                            << " C=" << header->getChecksumElided();
+    else if (auto header = dynamicPtrCast<const LowpanNhcExtensionHeader>(chunk))
+        context.infoColumn << "Extension NHC EID=" << int(header->getEid()) << " NH=" << header->getNh();
     else if (auto header = dynamicPtrCast<const Ieee802154FrameHeader>(chunk))
         context.infoColumn << "IEEE802154 " << (header->getFrameControl() == 2 ? "ACK" : "DATA")
                            << " DSN=" << int(header->getSequenceNumber()) << " PAN=" << header->getPanId()

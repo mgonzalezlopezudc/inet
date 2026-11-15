@@ -34,8 +34,15 @@ bool zeroRange(const AddressBytes& bytes, int begin, int end)
     return true;
 }
 
-std::optional<AddressBytes> derivedAddress(const Ieee802154Address& address)
+std::optional<AddressBytes> derivedAddress(const Ieee802154Address& address, const Ipv6Address *encapsulating = nullptr)
 {
+    if (encapsulating) {
+        auto bytes = addressBytes(*encapsulating);
+        std::fill(bytes.begin(), bytes.begin() + 8, 0);
+        bytes[0] = 0xfe;
+        bytes[1] = 0x80;
+        return bytes;
+    }
     if (address.isUnspecified() || address.isBroadcast() ||
         (address.getMode() == Ieee802154Address::SHORT && address.getInt() == 0xfffe))
         return std::nullopt;
@@ -50,10 +57,11 @@ std::optional<AddressBytes> derivedAddress(const Ieee802154Address& address)
     return bytes;
 }
 
-int encodeUnicast(const AddressBytes& address, const Ieee802154Address& link, std::vector<uint8_t>& data)
+int encodeUnicast(const AddressBytes& address, const Ieee802154Address& link, std::vector<uint8_t>& data,
+        const Ipv6Address *encapsulating)
 {
     if (address[0] == 0xfe && address[1] == 0x80 && zeroRange(address, 2, 8)) {
-        auto derived = derivedAddress(link);
+        auto derived = derivedAddress(link, encapsulating);
         if (derived && *derived == address)
             return 3;
         if (zeroRange(address, 8, 11) && address[11] == 0xff && address[12] == 0xfe && address[13] == 0) {
@@ -88,11 +96,11 @@ int encodeMulticast(const AddressBytes& address, std::vector<uint8_t>& data)
 }
 
 std::optional<AddressBytes> statefulUnicast(int mode, const LowpanContextTable::Context& context,
-        const Ieee802154Address& link, const std::vector<uint8_t>& inlined)
+        const Ieee802154Address& link, const std::vector<uint8_t>& inlined, const Ipv6Address *encapsulating)
 {
     AddressBytes bytes{};
     if (mode == 3) {
-        auto derived = derivedAddress(link);
+        auto derived = derivedAddress(link, encapsulating);
         if (!derived && context.prefixLength != 128)
             return std::nullopt;
         if (derived)
@@ -124,10 +132,10 @@ struct EncodedAddress {
 };
 
 EncodedAddress chooseUnicast(const AddressBytes& address, const Ieee802154Address& link,
-        const LowpanContextTable *contexts, simtime_t now)
+        const LowpanContextTable *contexts, simtime_t now, const Ipv6Address *encapsulating)
 {
     EncodedAddress best;
-    best.mode = encodeUnicast(address, link, best.data);
+    best.mode = encodeUnicast(address, link, best.data, encapsulating);
     if (contexts == nullptr)
         return best;
     for (int id = 0; id < 16; id++) {
@@ -137,7 +145,7 @@ EncodedAddress chooseUnicast(const AddressBytes& address, const Ieee802154Addres
         for (int mode : {3, 2, 1}) {
             int start = mode == 3 ? 16 : mode == 2 ? 14 : 8;
             std::vector<uint8_t> candidate(address.begin() + start, address.end());
-            auto reconstructed = statefulUnicast(mode, *context, link, candidate);
+            auto reconstructed = statefulUnicast(mode, *context, link, candidate, encapsulating);
             if (reconstructed && *reconstructed == address && candidate.size() < best.data.size())
                 best = EncodedAddress{mode, true, id, std::move(candidate)};
         }
@@ -184,7 +192,7 @@ int LowpanIphcCodec::getInlineLength(const LowpanIphcHeader& header)
 
 Ptr<const LowpanIphcHeader> LowpanIphcCodec::encode(const Ipv6Header& ipv6,
         const Ieee802154Address& source, const Ieee802154Address& destination, bool udpNhc,
-        const LowpanContextTable *contexts, simtime_t now)
+        const LowpanContextTable *contexts, simtime_t now, const Ipv6Header *encapsulating)
 {
     if (ipv6.getVersion() != 6 || ipv6.getFlowLabel() > 0xfffff || ipv6.getSrcAddress().isMulticast())
         return nullptr;
@@ -227,7 +235,8 @@ Ptr<const LowpanIphcHeader> LowpanIphcCodec::encode(const Ipv6Header& ipv6,
         header->setSam(0);
     }
     else {
-        auto encoded = chooseUnicast(addressBytes(ipv6.getSrcAddress()), source, contexts, now);
+        auto encoded = chooseUnicast(addressBytes(ipv6.getSrcAddress()), source, contexts, now,
+            encapsulating ? &encapsulating->getSrcAddress() : nullptr);
         header->setSam(encoded.mode);
         header->setSac(encoded.stateful);
         sourceContext = encoded.contextId;
@@ -235,7 +244,8 @@ Ptr<const LowpanIphcHeader> LowpanIphcCodec::encode(const Ipv6Header& ipv6,
     }
     header->setM(ipv6.getDestAddress().isMulticast());
     auto encodedDestination = header->getM() ? chooseMulticast(addressBytes(ipv6.getDestAddress()), contexts, now) :
-        chooseUnicast(addressBytes(ipv6.getDestAddress()), destination, contexts, now);
+        chooseUnicast(addressBytes(ipv6.getDestAddress()), destination, contexts, now,
+            encapsulating ? &encapsulating->getDestAddress() : nullptr);
     header->setDam(encodedDestination.mode);
     header->setDac(encodedDestination.stateful);
     data.insert(data.end(), encodedDestination.data.begin(), encodedDestination.data.end());
@@ -252,7 +262,7 @@ Ptr<const LowpanIphcHeader> LowpanIphcCodec::encode(const Ipv6Header& ipv6,
 
 Ptr<Ipv6Header> LowpanIphcCodec::decode(const LowpanIphcHeader& header, int originalSize,
         const Ieee802154Address& source, const Ieee802154Address& destination, bool udpNhc,
-        const LowpanContextTable *contexts, simtime_t now)
+        const LowpanContextTable *contexts, simtime_t now, const Ipv6Header *encapsulating)
 {
     int expected = getInlineLength(header);
     if (header.isIncorrect() || header.isIncomplete() || expected < 0 ||
@@ -288,9 +298,9 @@ Ptr<Ipv6Header> LowpanIphcCodec::decode(const LowpanIphcHeader& header, int orig
     ipv6->setProtocolId(header.getNh() ? IP_PROT_UDP : static_cast<IpProtocolId>(read()));
     static const uint8_t hopLimits[] = {0, 1, 64, 255};
     ipv6->setHopLimit(header.getHlim() == 0 ? read() : hopLimits[header.getHlim()]);
-    auto decodeUnicast = [&](int mode, const Ieee802154Address& link) -> std::optional<AddressBytes> {
+    auto decodeUnicast = [&](int mode, const Ieee802154Address& link, const Ipv6Address *outer) -> std::optional<AddressBytes> {
         if (mode == 3)
-            return derivedAddress(link);
+            return derivedAddress(link, outer);
         AddressBytes bytes{};
         int start = 0;
         if (mode != 0) {
@@ -308,7 +318,7 @@ Ptr<Ipv6Header> LowpanIphcCodec::decode(const LowpanIphcHeader& header, int orig
             return std::nullopt;
         return bytes;
     };
-    auto decodeStateful = [&](int mode, int id, const Ieee802154Address& link) -> std::optional<AddressBytes> {
+    auto decodeStateful = [&](int mode, int id, const Ieee802154Address& link, const Ipv6Address *outer) -> std::optional<AddressBytes> {
         auto context = contexts ? contexts->find(id, now) : nullptr;
         if (!context)
             return std::nullopt;
@@ -316,15 +326,16 @@ Ptr<Ipv6Header> LowpanIphcCodec::decode(const LowpanIphcHeader& header, int orig
         int length = mode == 1 ? 8 : mode == 2 ? 2 : 0;
         for (int i = 0; i < length; i++)
             bytes.push_back(read());
-        return statefulUnicast(mode, *context, link, bytes);
+        return statefulUnicast(mode, *context, link, bytes, outer);
     };
     int sourceContext = header.getCid() ? header.getContextId() >> 4 : 0;
     int destinationContext = header.getCid() ? header.getContextId() & 15 : 0;
     if (header.getSac() && header.getSam() == 0)
         ipv6->setSrcAddress(Ipv6Address::UNSPECIFIED_ADDRESS);
     else {
-        auto address = header.getSac() ? decodeStateful(header.getSam(), sourceContext, source) :
-            decodeUnicast(header.getSam(), source);
+        auto outer = encapsulating ? &encapsulating->getSrcAddress() : nullptr;
+        auto address = header.getSac() ? decodeStateful(header.getSam(), sourceContext, source, outer) :
+            decodeUnicast(header.getSam(), source, outer);
         if (!address)
             return nullptr;
         ipv6->setSrcAddress(ipv6Address(*address));
@@ -360,8 +371,9 @@ Ptr<Ipv6Header> LowpanIphcCodec::decode(const LowpanIphcHeader& header, int orig
         ipv6->setDestAddress(ipv6Address(bytes));
     }
     else {
-        auto address = header.getDac() ? decodeStateful(header.getDam(), destinationContext, destination) :
-            decodeUnicast(header.getDam(), destination);
+        auto outer = encapsulating ? &encapsulating->getDestAddress() : nullptr;
+        auto address = header.getDac() ? decodeStateful(header.getDam(), destinationContext, destination, outer) :
+            decodeUnicast(header.getDam(), destination, outer);
         if (!address)
             return nullptr;
         ipv6->setDestAddress(ipv6Address(*address));

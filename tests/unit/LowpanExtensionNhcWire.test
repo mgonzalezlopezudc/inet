@@ -1,0 +1,69 @@
+%description:
+Independent extension LOWPAN_NHC field bytes for every EID, NH elision,
+255/256-byte length bounds, reserved encodings and nested IPv6 IID derivation.
+
+%includes:
+#include "inet/linklayer/lowpan/LowpanNhcExtensionHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanIphcCodec.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+using namespace inet;
+using namespace inet::lowpan;
+
+%activity:
+for (int eid : {0,1,2,3,4,7}) for (bool nh : {false,true}) {
+    if (eid==7 && nh) continue;
+    std::vector<uint8_t> body=eid==7 ? std::vector<uint8_t>{} :
+        eid==2 ? std::vector<uint8_t>{0,0,8,0x12,0x34,0x56,0x78} : std::vector<uint8_t>{1,4,0,0,0,0};
+    std::vector<uint8_t> golden{uint8_t(0xe0|(eid<<1)|nh)};
+    if (eid!=7) {
+        if (!nh) golden.push_back(59);
+        if (eid!=2) golden.push_back(body.size());
+        golden.insert(golden.end(),body.begin(),body.end());
+    }
+    auto header=makeShared<LowpanNhcExtensionHeader>();
+    header->setEid(eid);header->setNh(nh);header->setNextHeader(59);header->setDataArraySize(body.size());
+    for (size_t i=0;i<body.size();i++) header->setData(i,body[i]);
+    header->setChunkLength(B(golden.size()));
+    Packet emitted("extension-nhc",header);ASSERT(emitted.peekDataAsBytes()->getBytes()==golden);
+    Packet input("independent",makeShared<BytesChunk>(golden));
+    auto parsed=input.peekAtFront<LowpanNhcExtensionHeader>();
+    ASSERT(!parsed->isIncorrect() && !parsed->isIncomplete() && parsed->getEid()==eid && parsed->getNh()==nh);
+    ASSERT(parsed->getDataArraySize()==body.size());
+    for (size_t i=0;i<body.size();i++) ASSERT(parsed->getData(i)==body[i]);
+    for (size_t size=1;size<golden.size();size++) {
+        Packet truncated("truncated",makeShared<BytesChunk>(std::vector<uint8_t>(golden.begin(),golden.begin()+size)));
+        auto partial=truncated.peekAtFront<LowpanNhcExtensionHeader>(b(-1),Chunk::PF_ALLOW_INCOMPLETE|Chunk::PF_ALLOW_INCORRECT);
+        ASSERT(partial->isIncomplete() || partial->isIncorrect());
+    }
+}
+for (uint8_t dispatch : {0xea,0xec,0xef}) {
+    Packet bad("reserved",makeShared<BytesChunk>(std::vector<uint8_t>{dispatch}));
+    ASSERT(bad.peekAtFront<LowpanNhcExtensionHeader>(b(-1),Chunk::PF_ALLOW_INCORRECT)->isIncorrect());
+}
+for (int length : {255,256}) {
+    auto header=makeShared<LowpanNhcExtensionHeader>();header->setDataArraySize(length);header->setChunkLength(B(3+length));
+    for (int i=0;i<length;i++) header->setData(i,0);
+    Packet packet("length-boundary",header);bool rejected=false;
+    try { ASSERT(packet.peekDataAsBytes()->getBytes().size()==size_t(length+3)); }
+    catch (const cRuntimeError&) {rejected=true;}
+    ASSERT(rejected==(length==256));
+}
+Ipv6Header outer,inner;
+outer.setSrcAddress(Ipv6Address("2001:db8::1122:3344:5566:7788"));
+outer.setDestAddress(Ipv6Address("2001:db8::8877:6655:4433:2211"));
+inner.setSrcAddress(Ipv6Address("fe80::1122:3344:5566:7788"));
+inner.setDestAddress(Ipv6Address("fe80::8877:6655:4433:2211"));
+inner.setHopLimit(64);inner.setProtocolId(IP_PROT_NONE);
+Ieee802154Address nativeSource("0011223344556601"),nativeDestination("0011223344556602");
+auto encoded=LowpanIphcCodec::encode(inner,nativeSource,nativeDestination,false,nullptr,SIMTIME_ZERO,&outer);
+Packet nested("nested-iphc",encoded);
+ASSERT(nested.peekDataAsBytes()->getBytes()==std::vector<uint8_t>({0x7a,0x33,59}));
+auto decoded=LowpanIphcCodec::decode(*encoded,48,nativeSource,nativeDestination,false,nullptr,SIMTIME_ZERO,&outer);
+ASSERT(decoded && decoded->getSrcAddress()==inner.getSrcAddress() && decoded->getDestAddress()==inner.getDestAddress());
+auto nativeOnly=LowpanIphcCodec::encode(inner,nativeSource,nativeDestination);
+ASSERT(nativeOnly->getSam()==1 && nativeOnly->getDam()==1);
+EV << "Extension NHC wire forms and enclosing-IPv6 IID derivation verified\n";
+
+%contains: stdout
+Extension NHC wire forms and enclosing-IPv6 IID derivation verified

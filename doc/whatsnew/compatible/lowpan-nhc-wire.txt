@@ -1,0 +1,3 @@
+Extension NHC packet representations
+
+6LoWPAN packet chunks and serializers represent RFC 6282 extension NHC fields, including Fragment and nested IPv6 markers. The IPHC codec can derive nested IPv6 interface identifiers from enclosing IPv6 addresses.
