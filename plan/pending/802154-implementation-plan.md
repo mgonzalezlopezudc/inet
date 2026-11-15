@@ -1,9 +1,14 @@
 # Implement IEEE 802.15.4 in INET
 
-Status: **in progress — package 1b complete; PHY contracts (1c) next**. The expanded applicability extraction (87 statements, including two imported address definitions) and nine English checks are
+Status: **in progress — operational M1, indirect DATA/commands, START, scan/discovery, association and disassociation pass; receiver control/recovery and release closure remain**. The expanded applicability extraction (87 statements, including two imported address definitions) and nine English checks are
 recorded in the [model coverage ledger](../../doc/project/evidence/model/ieee802154/coverage.md).
-Independent review passed the bounded M1 applicability gate on 2026-09-19. Packages 1a and 1b have passing value, test-local service-contract and standalone PIB evidence. No executable conformance
-check is complete; deferred device-profile obligations remain owed.
+Independent review passed the bounded M1 applicability gate on 2026-09-19. Native integration,
+codec, PHY/access and direct DATA/ACK paths now have executed evidence. The eight-file production
+protocol batch passes 288 simulation runs; see the [current results](../../doc/project/evidence/model/ieee802154/results.md).
+The approved captured-length repair and admitted wire-vector serializer test now pass.
+This does not close release validation: remaining boundary checks, external PHY validation,
+migration and regressions remain open. M2 management services
+and deferred device-profile obligations remain owed. No complete-profile conformance claim is made.
 Prepared against INET `c913a63a8335ca39a319cb2089daf835ea5e95cd` and the local
 IEEE 802.15.4 survey on 2026-09-19.
 
@@ -297,7 +302,7 @@ passing focused unit/module cases and independent reviews. See the
 [value evidence](../../doc/project/evidence/model/ieee802154/results.md#step-1a-native-address-value) and
 [service-contract evidence](../../doc/project/evidence/model/ieee802154/results.md#step-1a-mac-service-contracts).
 The module fixture uses a test-local provider. The selected PIB store is implemented in 1b;
-operational service integration, PHY contracts (1c), the real interface fixture (1d), and wire-codec
+operational service integration, the real interface fixture (1d), and wire-codec
 checks remain owed.
 
 Package 1b is complete at the store boundary: the selected 43-attribute MAC PIB has a passing
@@ -305,6 +310,43 @@ focused unit case and independent review. The
 [selected MAC PIB contract](../../doc/project/evidence/model/ieee802154/pib.md) records access,
 mutation, startup and reset semantics; [results](../../doc/project/evidence/model/ieee802154/results.md#step-1b-selected-mac-pib)
 record the evidence and operational integration limits.
+
+Package 1c is complete at the structural contract boundary: paired PHY roles, typed operation
+values and the [event/timer ownership contract](../../doc/project/evidence/model/ieee802154/phy-services.md)
+have a passing test-local module case. Production PHY timing/measurements, radio adaptation,
+runtime PHY-to-MAC PIB context refresh and propagation-bound validation remain steps 4–6 work.
+The contract uses the 2024 source's undefined PD/PLME-SAP boundary; its methods and local statuses
+do not claim standardized primitive signatures. See the
+[execution evidence](../../doc/project/evidence/model/ieee802154/results.md#step-1c-phy-service-contracts).
+
+#### IEEE802154-1C — paired PHY services and timing ownership
+
+Proposed subject: `ieee802154: add: define typed PHY service contracts`.
+Parent dependency: packages 1a/1b. Purpose: make admission, owned PSDUs, readiness, channel
+mutation and exact air-event boundaries explicit before a real PHY adapter or MAC exchange uses
+them. Previously there was no typed PHY provider/client boundary; acceptance could not establish
+when an on-air operation began or when its result became usable.
+
+The owner is the PHY service provider. Changes are confined to
+`src/inet/physicallayer/wireless/ieee802154/contract/`, the model contract/evidence documents,
+`tests/module/Ieee802154PhyServiceContract_1.test` and the compatible release-note fragment.
+The caller uses pure paired C++/NED roles. A requested PPDU start is absolute; the actual-start
+callback and successful terminal timing distinguish admission, prediction and completion.
+Configuration stays unchanged on refusal or failed validation. Reset/stop retire old IDs and
+packets before callbacks. No existing MAC, PHY, default interface, wire format or baseline changes.
+
+Verification: fresh debug INET library, then the exact module selector
+`Ieee802154PhyServiceContract_1\.test$` with `--load . -p inet -m debug --no-build`.
+The new fixture fixes run/seed 0 and uses typed calls plus scheduled completion, stop/crash and
+receive events. It asserts retained ownership on refusal, provider ownership after acceptance,
+packet destruction before confirmation, atomic channel validation, copied request identity,
+readiness/airtime/measurement metadata, scheduled-start cancellation, callback reentry, reset
+ordering, stale completion rejection, same-time deadline precedence and deleted-client cleanup.
+Before this commit the fixture cannot compile because the API is absent; no runtime before/after
+protocol comparison is claimed. Protocol tests and a protocol reviewer document do not apply
+to this structural contract addition. The production PHY and protocol checks remain step 4–6
+deliverables. Scoped architecture, interface, naming and NED checks apply to the new contract
+subtree; the run record distinguishes executed checks from those later obligations.
 
 Record these decisions before dependent behavior, without requiring all contracts to land in one
 PR. No concrete PHY-to-MAC dependency or protocol switch in core is permitted.
@@ -319,35 +361,58 @@ against the selected clauses before step 4; no timing implementation may rely on
 **Exit:** all five package gates pass; validation, refusal ownership, reset/stop and distinct
 operation results are explicit. Step 2 consumes the address type already proven by 1d.
 
+Continuation on 2026-11-15: package 1d's production native adapter and attached interface data
+pass `Ieee802154NativeInterface_1.test`, including distinct high address bits and receiver-owned
+payload dispatch. Package 1e's replacement composition passes `Ieee802154Composition_1.test`.
+Existing-default initialization and operational radio/access wiring remain gates; replacement
+DATA explicitly refuses unsupported operation at this stage. The
+[integration contract](../../doc/project/evidence/model/ieee802154/integration.md) records the
+compatibility matrix and exact public type names. No default cutover has occurred.
+
+Series entries for these additions are `IEEE802154-1D` (`ieee802154: add: integrate native MAC
+service identity`) and `IEEE802154-1E` (`ieee802154: add: expose selectable standard MAC
+composition`). Their production gate/module fixtures and limitations are recorded in that
+contract and in the execution results. The composition is structural; it does not claim a new
+on-air protocol capability. Later operational packages must include protocol tests and reviewer
+documents when they enable that capability.
+
 ### Step 2 — Basic frame codec using native addresses
 
 Dependencies: step 1.
 
-- [ ] Use the step 1a address type and step 0 version matrix; carry broadcast and
+- [x] Use the step 1a address type and step 0 version matrix; carry broadcast and
   unallocated-address semantics through the actual wire boundary.
-- [ ] Add the M1 FCF/address/sequence representation and registered serializers together.
+- [x] Add the M1 FCF/address/sequence representation and registered serializers together.
   Derive the version-dependent address/PAN presence table from the specification.
-- [ ] Support data and immediate ACK layout, variable lengths and exact octet order; distinguish
+- [x] Support data and immediate ACK layout, variable lengths and exact octet order; distinguish
   unsupported legal formats from malformed inputs. Do not use `ASSERT` for untrusted wire input.
-- [ ] Establish the extension boundary for security and IEs. Until their codec work lands,
+- [x] Establish the extension boundary for security and IEs. Until their codec work lands,
   reject unsupported combinations explicitly rather than consuming them as ordinary data.
 
 **Exit:** independent golden bytes for every supported addressing/PAN-presence combination,
 high EUI-64 bits, sequence boundaries and ACK format; truncated/reserved inputs terminate safely.
 Typed-to-bytes and bytes-to-typed checks agree on consumed length and field presence.
 
+Codec work is implemented behind the new complete `Ieee802154Frame` representation and its
+registered serializer. `Ieee802154FrameWire_1.test` and `Ieee802154Fcs_1.test` pass in debug mode;
+the [codec contract](../../doc/project/evidence/model/ieee802154/frame-codec.md) records source
+locators and the independent CRC oracle. Production byte injection and observations now live
+in `Ieee802154ReceiveSecurity.test`, `Ieee802154DataAck.test` and their reviewer companions,
+under `tests/protocol/ieee802154/`. These actual artifact names supersede the planned
+`frame-wire.test`/`frame-wire.md` names; no empty placeholder is required.
+
 ### Step 3 — Complete MPDU, FCS and capture tooling
 
 Dependencies: step 2.
 
-- [ ] Add the selected PHY's MAC FCS trailer and CRC with independent known-answer vectors;
+- [x] Add the selected PHY's MAC FCS trailer and CRC with independent known-answer vectors;
   derive total MPDU length from actual chunks. Reject oversized PSDUs before transmission.
-- [ ] Remove `networkProtocol` from the new wire format; finish opaque/configured payload
+- [x] Remove `networkProtocol` from the new wire format; finish opaque/configured payload
   handling in the MAC and dissector. Add printer/filter visibility and capture registration.
-- [ ] Exercise both with-FCS and no-FCS capture input and output through production tooling.
+- [x] Exercise both with-FCS and no-FCS capture input and output through production tooling.
   Define absent, computed, invalid and simulation-declared FCS handling. Never invent captured
   bytes to make a truncated packet round-trip; preserve supplied invalid FCS in forensic decoding.
-- [ ] Restore supported captures to the serializer suite, recording provenance, hashes, frame
+- [x] Restore supported captures to the serializer suite, recording provenance, hashes, frame
   selection and external decoder version. Compare MPDU bytes, separately from PCAP timestamps
   and container metadata. Use independent decoded fields as well as round trips.
 
@@ -355,38 +420,54 @@ Dependencies: step 2.
 packet length, FCS coverage, PHY PSDU length and observed bytes agree. No sender metadata is
 required to decode captured payload boundaries. Core capture defects are isolated if encountered.
 
+The direct production capture fixture `Ieee802154Capture_1.test` passes complete and truncated
+records in both FCS modes. The user-approved
+[bounded reader repair](../../doc/project/evidence/model/ieee802154/capture-reader-repair.md)
+preserves actual captured bytes and checks stripped-header offsets. The admitted
+`serializer_ieee802154.test` passes four frames from two independently generated captures,
+also decoded with Scapy 2.8.0. Existing radiotap and receiver-copy module checks pass. The
+generic serializer corpus has two unchanged Wi-Fi byte mismatches; the
+[results](../../doc/project/evidence/model/ieee802154/results.md) record them without refreshing
+expectations. Final request-boundary and migration gates remain in step 10.
+
 ### Step 4 — O-QPSK PHY services before MAC timing
 
 Dependencies: steps 1 and 3. A read-only feasibility investigation or isolated fixture may run
 once 1c is defined, before complete MPDU integration.
 
-- [ ] Establish a CCA/ED feasibility gate: identify the existing medium/radio energy observation
+- [x] Establish a CCA/ED feasibility gate: identify the existing medium/radio energy observation
   API and demonstrate energy detection without a decodable frame. If insufficient, define and
   validate a bounded PHY-local listening/energy contract before promising Mode 1 behavior.
   Treat insufficiency as an investigated result, not an assumption about the current medium.
-- [ ] Implement the PHY provider over the existing narrowband radio infrastructure: timed CCA,
+- [x] Implement the PHY provider over the existing narrowband radio infrastructure: timed CCA,
   ED, state changes, channel/page selection, PD-DATA completion and receive metadata/LQI.
-- [ ] Derive symbol timing, SHR/PHR/PSDU duration, turnaround and size checks from the selected
+- [x] Derive symbol timing, SHR/PHR/PSDU duration, turnaround and size checks from the selected
   O-QPSK mode. Account for each PHY/MAC overhead exactly once.
-- [ ] Implement and advertise CCA Mode 1, observation duration and thresholds;
+- [x] Implement and advertise CCA Mode 1, observation duration and thresholds;
   unsupported modes fail explicitly. Test energy/interference without a decodable frame, not
   just the radio's current reception-state enum.
-- [ ] Define ED/LQI mapping and saturation with documented model limits. Validate timing and
+- [x] Define ED/LQI mapping and saturation with documented model limits. Validate timing and
   channel selection independently of the existing generic BER/PER formula.
 
 **Exit:** module tests cover successful/refused/interrupted operations, channel switching,
 CCA threshold/time boundaries, ED bounds and LQI delivery. A PHY timing oracle matches
 generated transmissions. PER claims await the separate validation gate in step 10.
 
+The [scalar energy observation design](../../doc/project/evidence/model/ieee802154/energy-observation.md)
+and production helper have a passing feasibility module fixture with real scalar radios/medium:
+background energy and two undecodable BPSK transmissions contribute to peak/mean power without
+packet delivery. Production timed PHY/PIB/lifecycle fixtures also pass; ED/LQI saturation,
+remaining energy boundaries and external reception/error validation remain open.
+
 ### Step 5 — Unslotted access and transmission lifecycle
 
 Dependencies: steps 3–4.
 
-- [ ] Implement specification-derived NB/BE initialization, random backoff range, busy-CCA
+- [x] Implement specification-derived NB/BE initialization, random backoff range, busy-CCA
   updates, exponent cap and access-failure boundary, using a named simulation RNG stream.
-- [ ] Wire access success to real PHY transmission and completion. Separate access attempts
+- [x] Wire access success to real PHY transmission and completion. Separate access attempts
   from frame retransmission attempts; handle zero backoff and configured limit boundaries.
-- [ ] Define queue admission, refusal, cancellation and one terminal MCPS result per request.
+- [x] Define queue admission, refusal, cancellation and one terminal MCPS result per request.
   Handle stop/crash/reset during backoff, CCA and transmission; cancel owned timers.
 
 **Exit:** deterministic production-path traces match the clause-derived state transitions and
@@ -397,17 +478,17 @@ an access failure, and no request is completed twice or stranded.
 
 Dependencies: step 5.
 
-- [ ] Apply length/FCS, version, frame type, PAN/address and receive-mode checks in the required
+- [x] Apply length/FCS, version, frame type, PAN/address and receive-mode checks in the required
   order from step 0's decision table, including promiscuous behavior. Test ACK eligibility
   independently of upper delivery and optional suppression.
-- [ ] Implement unsecured-profile security-policy handling through the applicable branches
+- [x] Implement unsecured-profile security-policy handling through the applicable branches
   (9.2.2 and 9.2.5) with `macSecurityEnabled=false`; reject unsupported configuration and
   secured traffic with defined outcomes. This does not implement cryptographic security.
-- [ ] Generate real immediate ACKs with specified timing and transaction matching. Cover
+- [x] Generate real immediate ACKs with specified timing and transaction matching. Cover
   ACK-disabled traffic and broadcasts; a packet name never determines frame type.
-- [ ] Implement ACK timeout/retry exhaustion and interframe timing. Keep DSN stable across a
+- [x] Implement ACK timeout/retry exhaustion and interframe timing. Keep DSN stable across a
   retransmission; allocate new DSNs device-wide with the specified width and ownership (6.6.1).
-- [ ] Deliver DSN and source identity through the data indication. Resolve duplicate policy from
+- [x] Deliver DSN and source identity through the data indication. Resolve duplicate policy from
   step 0's evidence. Unless an applicable requirement is found, suppression is disabled by
   default and remains outside the conformance claim. If retained as an opt-in policy, document
   its cache key, lifetime, reset behavior and ambiguity limits. It must not prevent required ACKs.
@@ -421,13 +502,23 @@ usable. Run the same cases on typed and byte-backed frames. Complete step 10 bef
 
 Dependencies: step 6 and closure of the M2 applicability extension from step 0.
 
-- [ ] Add each selected command payload with codec and independent vectors; include Data
+Current execution: selected legacy command and beacon codecs pass independent vector/unit
+checks. The shared immutable pending store is connected to production indirect DATA, POLL,
+PURGE and lifecycle barriers, with 44 passing typed/raw protocol runs. See
+[indirect transactions](../../doc/project/evidence/model/ieee802154/indirect-transactions.md),
+[polling](../../doc/project/evidence/model/ieee802154/polling.md) and the
+[managed applicability extension](../../doc/project/evidence/model/ieee802154/managed-applicability.md).
+Association-response integration, broadcast release, active-extraction interruption
+and scheduled receiver control now have focused production evidence in the
+[results ledger](../../doc/project/evidence/model/ieee802154/results.md).
+
+- [x] Add each selected command payload with codec and independent vectors; include Data
   Request and association/disassociation commands required by M2.
-- [ ] Implement pending transactions keyed by native device identity, expiration, bounded
+- [x] Implement pending transactions keyed by native device identity, expiration, bounded
   queue capacity, purge and ownership. Association responses and data use the same store.
-- [ ] Implement polling, Frame Pending behavior, empty response/no-data behavior and the
+- [x] Implement polling, Frame Pending behavior, empty response/no-data behavior and the
   specified data-release timing/access rules. Implement receiver-enable/sleep coordination.
-- [ ] Keep a failed indirect frame pending for the next Data Request, retaining its DSN;
+- [x] Keep a failed indirect frame pending for the next Data Request, retaining its DSN;
   do not route it through the direct-transmission retry loop (6.6.3.4).
 
 **Exit:** poll with zero/one/multiple pending transactions; expiration at a poll boundary;
@@ -438,11 +529,11 @@ to the wrong device, or success confirmation before its defining event.
 
 Dependencies: steps 4, 6 and 7.
 
-- [ ] Implement non-beacon coordinator start and selected beacon/command generation for scan
+- [x] Implement non-beacon coordinator start and selected beacon/command generation for scan
   responses. A scan-response beacon does not imply periodic beacon support.
-- [ ] Add ED, active and passive scan contracts, channel iteration, durations, PAN descriptor
+- [x] Add ED, active and passive scan contracts, channel iteration, durations, PAN descriptor
   collection/deduplication, cancellation and restoration of radio/PIB state.
-- [ ] Add the selected orphan scan/realignment and PAN conflict procedures with their own
+- [x] Add the selected orphan scan/realignment and PAN conflict procedures with their own
   command fields, timeout outcomes and scope. Keep beacon-loss synchronization for B1.
 - [ ] Keep PAN selection policy outside the MAC; expose sufficient descriptors/status to a
   small management client used by examples and tests.
@@ -454,13 +545,13 @@ partial/invalid channel sets, scan interruption, and state restoration all have 
 
 Dependencies: steps 7–8.
 
-- [ ] Implement reset/scan/select/associate orchestration and device/coordinator procedure
+- [x] Implement reset/scan/select/associate orchestration and device/coordinator procedure
   states. Higher-layer policy decides admission and allocates unique permitted addresses.
-- [ ] Deliver Association Response through the pending store and device polling procedure.
+- [x] Deliver Association Response through the pending store and device polling procedure.
   Apply the specified response wait and failure semantics; do not infer success from request ACK.
-- [ ] Support associated devices without an allocated short address, rejection, timeout,
+- [x] Support associated devices without an allocated short address, rejection, timeout,
   repeated association and stale responses; keep identities distinct across PANs.
-- [ ] Implement both selected disassociation directions and cleanup of pending transactions,
+- [x] Implement both selected disassociation directions and cleanup of pending transactions,
   duplicate state and timers. Test reassociation and recovery after interruption.
 
 **Exit / M2 candidate:** an initially unassociated device discovers a PAN, joins, exchanges
@@ -550,6 +641,26 @@ and independent vectors, but another simulator's behavior is not a normative ora
 
 ## 8. Per-PR verification and completion record
 
+### Final implementation publication sequence
+
+The remaining work is published as the following dependency-ordered commits.
+The final integrated tree has focused executed evidence; isolated intermediate
+builds and selected checks are verified before publication. No recorded
+fingerprint changes are planned. The new MAC is one protocol service owner with
+coupled DATA, ACK, management and lifecycle transitions; its initial addition
+exceeds the source-size advisory. Independent codecs, PHY, example policy and
+default cutover remain separate commits rather than being bundled into it.
+
+| Commit | Decision and surface | Direct verification |
+| --- | --- | --- |
+| `ieee802154: add: complete native legacy-frame codecs` | Native wire chunks, frame/command/beacon codecs, serializer/dissector/printer and admitted vectors. | Fcs, FrameWire, Commands, Beacons unit fixtures; dedicated serializer. |
+| `pcap: fix: preserve captured length in truncated records` | Approved bounded PcapReader repair and capture-boundary unit fixture. Depends on wire fixtures for native round-trip checks. | Capture unit; parent/current generic serializer comparison. |
+| `ieee802154: add: timed native O-QPSK PHY services` | Paired PHY roles, measurements, state/TX timing and observable PPDU representation. | PhyServiceContract, PhyServices, Measurements, ExternalPhy module fixtures. |
+| `ieee802154: add: native nonbeacon MAC services` | Native identity/adapter, unslotted access, DATA/ACK, queued management, scans, join/leave/recovery, receiver schedules and lifecycle. | NativeInterface, UnslottedAccess, Start, Discovery, PassiveScan modules; MacPib/PendingTransactions units; all native protocol fixtures and companions. |
+| `ieee802154: add: managed PAN example policy` | Application-owned PAN selection/allocation and repeated managed cycles; feature package registration. | Two typed/raw managed example runs and scalar checker. |
+| `ieee802154: change: select native narrowband interface` | Public native default, explicit deprecated legacy type, inventoried consumer selections and migration/release guidance. | Composition, NativeGate, EnergyObservation, LegacyUwb module fixtures; stored legacy fingerprints and fake-GUI visual fingerprint. |
+| `doc: change: close native IEEE 802.15.4 milestones` | Final obligation mapping, source/artifact identity, commands, scoped review and known inherited gate failures. | Link/seal/WHATSNEW checks and final diff review. |
+
 Follow [run the gates](../../doc/project/guide/run-the-gates.md). For each implementation PR:
 
 1. Record changed paths/contracts, normative check IDs and explicitly selected test cases.
@@ -586,9 +697,11 @@ remain NOT_RUN. The documented source findings on wire format/length and sequenc
 remain candidates for targeted production reproductions. This documentation package changes no
 simulation behavior or fingerprints.
 
-Packages 1a and 1b are implemented and verified locally; the next package is 1c. Packages 1c–1e
-establish the remaining contracts and prove native-address
-integration before the codec. Steps 2–6 then deliver M1, with step 10 as its release gate.
+Packages 1a–1d are implemented and verified locally at their stated value/contract/integration
+boundaries. Package 1e's replacement composition and step 2's codec fixtures pass, with the
+remaining integration gates recorded above. Step 3 has a reproduced capture-reader blocker;
+step 4's energy feasibility fixture passes. Steps 2–6 deliver M1 only after all their gates
+and step 10's release gate close.
 Keep each new wire chunk paired with its serializer and vectors. Within step 3, separate complete
 MPDU/FCS proof from capture integration where independently buildable. Within step 6, separate
 receive decisions/unsecured policy, immediate ACKs, and direct retry/DSN lifecycle into coherent
