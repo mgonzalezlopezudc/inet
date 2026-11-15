@@ -28,6 +28,14 @@ The [native server fixture](../../../../../tests/protocol/6lowpan/neighbor-regis
 
 P10 remains open: host RS/RA discovery and refresh, 6CO/ABRO distribution and multihop DAR/DAC have not been established by the server stage. The final combined feature matrix also remains pending.
 
+## P10 — Native router advertisements
+
+Advertising-enabled native router interfaces now validate RS input and send unicast RAs with native SLLAO and off-link PIOs. Pending requester tuples are bounded and coalesced, responses use the simulation RNG with delay up to two seconds, and prefix lifetimes are sampled at emission. Advertising permission is checked before queuing and again at transmission. Stop/crash clear the pending responses and destruction cancels their timer. Receiving an RS does not change an existing native binding.
+
+The [router discovery fixture](../../../../../tests/protocol/6lowpan/router-discovery.md) checks eleven native RS frames, three real RAs carried by six radio fragments, three malformed drops, disabled advertising, pending-response coalescing, both lifecycle cancellation paths and restart. Prefix addresses and absolute/relative/infinite lifetimes are checked against actual emission times. The [router record](p10-router-verification.json) retains matching debug/release builds and two protocol fixtures/two runs; independent review confirms the advertising-permission and randomized-delay findings resolved. The separate [IPv6 validity prerequisite](ipv6-validity-verification.json) passes its focused exact-deadline unit and both builds, supplying read-only lifetime checks for the following host client.
+
+Host discovery/registration generation and the distribution/multihop stage remain in progress; this responder alone does not complete P10.
+
 ## Remaining packages
 
 P10–P15 remain in execution order under the completion plan. Optimized/extended ND, mesh-under, paging, virtual fragment forwarding and selective recovery are not inferred from header compression support.

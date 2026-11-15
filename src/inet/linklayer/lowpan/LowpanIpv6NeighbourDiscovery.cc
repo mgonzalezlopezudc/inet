@@ -17,8 +17,21 @@ namespace inet { namespace lowpan {
 Define_Module(LowpanIpv6NeighbourDiscovery);
 simsignal_t LowpanIpv6NeighbourDiscovery::registrationCountChangedSignal = registerSignal("registrationCountChanged");
 
+namespace {
+uint32_t prefixLifetime(simtime_t configured)
+{
+    // Ipv6InterfaceData::AdvPrefix uses zero for infinity, negative for a duration.
+    if (configured == SIMTIME_ZERO)
+        return UINT32_MAX;
+    auto remaining = configured < SIMTIME_ZERO ? -configured : std::max(SIMTIME_ZERO, configured - simTime());
+    return remaining.dbl() >= UINT32_MAX ? UINT32_MAX : uint32_t(remaining.dbl());
+}
+}
+
 LowpanIpv6NeighbourDiscovery::~LowpanIpv6NeighbourDiscovery()
 {
+    cancelAndDelete(routerAdvertisementTimer);
+    routerAdvertisementTimer = nullptr;
     cancelAndDelete(registrationExpiryTimer);
     registrationExpiryTimer = nullptr;
     clearRegistrations(false);
@@ -36,13 +49,30 @@ void LowpanIpv6NeighbourDiscovery::initialize(int stage)
         if (maxRegistrations <= 0)
             throw cRuntimeError("Native registration capacity must be positive");
         registrationExpiryTimer = new cMessage("registrationExpiryTimer");
+        routerAdvertisementTimer = new cMessage("routerAdvertisementTimer");
+        maxPendingRouterAdvertisements = par("maxPendingRouterAdvertisements");
+        if (maxPendingRouterAdvertisements <= 0)
+            throw cRuntimeError("Native pending RA capacity must be positive");
         WATCH_EXPR("numNativeRegistrations", registrations.size());
+        WATCH_EXPR("numPendingRouterAdvertisements", pendingRouterAdvertisements.size());
     }
 }
 
 void LowpanIpv6NeighbourDiscovery::handleMessageWhenUp(cMessage *message)
 {
-    if (message == registrationExpiryTimer) {
+    if (message == routerAdvertisementTimer) {
+        for (auto it = pendingRouterAdvertisements.begin(); it != pendingRouterAdvertisements.end();) {
+            if (it->second <= simTime()) {
+                auto key = it->first;
+                it = pendingRouterAdvertisements.erase(it);
+                sendNativeRouterAdvertisement(key);
+            }
+            else
+                ++it;
+        }
+        scheduleRouterAdvertisements();
+    }
+    else if (message == registrationExpiryTimer) {
         expireRegistrations();
         scheduleRegistrationExpiry();
     }
@@ -52,6 +82,7 @@ void LowpanIpv6NeighbourDiscovery::handleMessageWhenUp(cMessage *message)
 
 void LowpanIpv6NeighbourDiscovery::stop()
 {
+    clearRouterAdvertisements();
     clearRegistrations(true);
     Ipv6NeighbourDiscovery::stop();
 }
@@ -238,6 +269,146 @@ void LowpanIpv6NeighbourDiscovery::processRegistration(Packet *packet, const Ipv
     delete packet;
 }
 
+bool LowpanIpv6NeighbourDiscovery::readNativeSource(const Packet *packet, const Ipv6NdOptions& options,
+        LowpanNativeLinkDomain *domain, Ieee802154Address& address) const
+{
+    auto source = packet->findTag<L3AddressInd>();
+    auto hop = packet->findTag<HopLimitInd>();
+    auto native = packet->findTag<Ieee802154AddressInd>();
+    const Ipv6NdOption *sllao = nullptr;
+    int count = 0;
+    for (size_t i = 0; i < options.getOptionArraySize(); i++)
+        if (options.getOption(i)->getType() == IPv6ND_SOURCE_LINK_LAYER_ADDR_OPTION) {
+            sllao = options.getOption(i);
+            count++;
+        }
+    if (!source || source->getSrcAddress().getType() != L3Address::IPv6 ||
+            !source->getSrcAddress().toIpv6().isUnicast() || source->getSrcAddress().toIpv6().isUnspecified() ||
+            !hop || hop->getHopLimit() != 255 || !native || count != 1 || sllao->getOptionLength() != 2 ||
+            sllao->getPaddingBytesArraySize() != 14)
+        return false;
+    uint64_t value = 0;
+    for (int i = 0; i < 8; i++)
+        value = (value << 8) | uint8_t(sllao->getPaddingBytes(i));
+    address = Ieee802154Address(Ieee802154Address::EXTENDED, value);
+    return address == native->getSrcAddress() && domain->contains(address) &&
+        native->getSrcPanId() == domain->getPanId() && native->getDestPanId() == domain->getPanId() &&
+        Icmpv6::verifyChecksum(packet);
+}
+
+Ipv6NdOption *LowpanIpv6NeighbourDiscovery::createNativeLinkOption(const Ieee802154Address& address) const
+{
+    auto option = new Ipv6NdOption();
+    option->setType(IPv6ND_SOURCE_LINK_LAYER_ADDR_OPTION);
+    option->setOptionLength(2);
+    option->setPaddingBytesArraySize(14);
+    for (int i = 0; i < 14; i++)
+        option->setPaddingBytes(i, i < 8 ? uint8_t(address.getInt() >> (8 * (7 - i))) : 0);
+    return option;
+}
+
+void LowpanIpv6NeighbourDiscovery::processNativeRouterSolicitation(Packet *packet, const Ipv6RouterSolicitation *message,
+        NetworkInterface *interface, LowpanNativeLinkDomain *domain)
+{
+    Ieee802154Address requester;
+    if (message->isIncorrect() || message->isIncomplete() || message->getCode() != 0 ||
+            message->getChunkLength() != packet->getDataLength() ||
+            !readNativeSource(packet, message->getOptions(), domain, requester)) {
+        LowpanPacketDropDetails details;
+        details.setReason(OTHER_PACKET_DROP);
+        details.setLowpanReason(LOWPAN_MALFORMED);
+        emit(packetDroppedSignal, packet, &details);
+        delete packet;
+        return;
+    }
+    auto data = interface->getProtocolData<Ipv6InterfaceData>();
+    if (!data->getAdvSendAdvertisements()) {
+        delete packet;
+        return;
+    }
+    RouterAdvertisementKey key{interface->getInterfaceId(), packet->getTag<L3AddressInd>()->getSrcAddress().toIpv6(), requester};
+    if (pendingRouterAdvertisements.count(key) == 0) {
+        if (int(pendingRouterAdvertisements.size()) >= maxPendingRouterAdvertisements) {
+            LowpanPacketDropDetails details;
+            details.setReason(OTHER_PACKET_DROP);
+            details.setLowpanReason(LOWPAN_RESOURCE_LIMIT);
+            emit(packetDroppedSignal, packet, &details);
+            delete packet;
+            return;
+        }
+        // RFC 4861 section 6.2.6 and RFC 6775 section 9: random delay up to two seconds.
+        pendingRouterAdvertisements.emplace(key, simTime() + SimTime(uniform(0, 2)));
+        scheduleRouterAdvertisements();
+    }
+    delete packet;
+}
+
+void LowpanIpv6NeighbourDiscovery::scheduleRouterAdvertisements()
+{
+    cancelEvent(routerAdvertisementTimer);
+    if (pendingRouterAdvertisements.empty())
+        return;
+    auto earliest = SIMTIME_MAX;
+    for (const auto& response : pendingRouterAdvertisements)
+        earliest = std::min(earliest, response.second);
+    scheduleAt(earliest, routerAdvertisementTimer);
+}
+
+void LowpanIpv6NeighbourDiscovery::clearRouterAdvertisements()
+{
+    cancelEvent(routerAdvertisementTimer);
+    pendingRouterAdvertisements.clear();
+}
+
+void LowpanIpv6NeighbourDiscovery::sendNativeRouterAdvertisement(const RouterAdvertisementKey& key)
+{
+    auto interface = ift->getInterfaceById(std::get<0>(key));
+    auto boundary = interface ? dynamic_cast<LowpanNativeBoundary *>(interface->getSubmodule("boundary")) : nullptr;
+    if (!boundary || !interface->isUp())
+        return;
+    auto domain = boundary->getLinkDomain();
+    auto data = interface->getProtocolData<Ipv6InterfaceData>();
+    if (!data->getAdvSendAdvertisements() || data->getLinkLocalAddress().isUnspecified())
+        return;
+    auto lifetime = data->getAdvDefaultLifetime();
+    if (lifetime < SIMTIME_ZERO || lifetime > SimTime(65535))
+        throw cRuntimeError("Native RA router lifetime must fit its 16-bit seconds field");
+    auto advertisement = makeShared<Ipv6RouterAdvertisement>();
+    advertisement->setCurHopLimit(data->getAdvCurHopLimit());
+    advertisement->setManagedAddrConfFlag(data->getAdvManagedFlag());
+    advertisement->setOtherStatefulConfFlag(data->getAdvOtherConfigFlag());
+    advertisement->setRouterLifetime(lifetime.dbl());
+    advertisement->setReachableTime(data->getAdvReachableTime());
+    advertisement->setRetransTimer(data->getAdvRetransTimer());
+    advertisement->getOptionsForUpdate().appendOption(createNativeLinkOption(domain->getPeer(interface).address));
+    advertisement->addChunkLength(B(16));
+    for (int i = 0; i < data->getNumAdvPrefixes(); i++) {
+        auto prefix = data->getAdvPrefix(i);
+        auto option = new Ipv6NdPrefixInformation();
+        option->setPrefix(prefix.prefix);
+        option->setPrefixLength(prefix.prefixLength);
+        option->setOnlinkFlag(false); // RFC 6775 section 6.3: 6LR prefixes are off-link.
+        option->setAutoAddressConfFlag(prefix.advAutonomousFlag);
+        auto valid = prefixLifetime(prefix.advValidLifetime);
+        auto preferred = prefixLifetime(prefix.advPreferredLifetime);
+        if (preferred > valid)
+            throw cRuntimeError("Native RA prefix preferred lifetime exceeds its valid lifetime");
+        option->setValidLifetime(valid);
+        option->setPreferredLifetime(preferred);
+        advertisement->getOptionsForUpdate().appendOption(option);
+        advertisement->addChunkLength(B(32));
+    }
+    auto output = new Packet("native-router-advertisement");
+    Icmpv6::insertChecksum(CHECKSUM_COMPUTED, advertisement, output);
+    output->insertAtFront(advertisement);
+    auto request = output->addTag<Ieee802154AddressReq>();
+    request->setSrcAddress(domain->getPeer(interface).address);
+    request->setDestAddress(std::get<2>(key));
+    request->setSrcPanId(domain->getPanId());
+    request->setDestPanId(domain->getPanId());
+    sendPacketToIpv6Module(output, std::get<1>(key), data->getLinkLocalAddress(), interface->getInterfaceId());
+}
+
 void LowpanIpv6NeighbourDiscovery::start()
 {
     if (registrationRouter && !rt6->isRouter())
@@ -285,6 +456,10 @@ void LowpanIpv6NeighbourDiscovery::processNDMessage(Packet *packet, const Icmpv6
     auto interface = indication != nullptr ? ift->getInterfaceById(indication->getInterfaceId()) : nullptr;
     auto boundary = interface != nullptr ? dynamic_cast<LowpanNativeBoundary *>(interface->getSubmodule("boundary")) : nullptr;
     if (registrationRouter && boundary != nullptr) {
+        if (auto solicitation = dynamic_cast<const Ipv6RouterSolicitation *>(message)) {
+            processNativeRouterSolicitation(packet, solicitation, interface, boundary->getLinkDomain());
+            return;
+        }
         if (auto solicitation = dynamic_cast<const Ipv6NeighbourSolicitation *>(message)) {
             processRegistration(packet, solicitation, interface, boundary->getLinkDomain());
             return;

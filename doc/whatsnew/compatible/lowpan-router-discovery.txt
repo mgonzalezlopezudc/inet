@@ -1,0 +1,3 @@
+Native Router Solicitation responses
+
+The native LoWPAN ND router role responds to validated Router Solicitations with delayed unicast Router Advertisements carrying the native EUI-64 SLLAO and off-link prefix options. A bounded pending table coalesces repeated solicitations; advertising flags and lifecycle cleanup control whether queued replies are sent. Solicitations do not create or replace neighbor bindings. Advertised prefix lifetimes preserve absolute-expiry, relative-duration and infinite configurations; native replies use computed wire checksums.

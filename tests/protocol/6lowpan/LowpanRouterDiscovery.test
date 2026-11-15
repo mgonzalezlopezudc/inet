@@ -1,0 +1,187 @@
+%description:
+Literal native RS inputs reach IPv6 ND and produce a real unicast RA without
+changing neighbor bindings. Native SLLAO, off-link PIOs, remaining lifetimes,
+fragmentation, flags and malformed solicitations are checked directly.
+
+%file: DiscoveryCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/checksum/Checksum.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/ieee802154/Ieee802154AddressTagBase_m.h"
+#include "inet/linklayer/lowpan/LowpanNativeLinkDomain.h"
+#include "inet/networklayer/common/L3AddressTag_m.h"
+#include "inet/networklayer/icmpv6/Icmpv6.h"
+#include "inet/networklayer/icmpv6/Ipv6NdMessage_m.h"
+#include "inet/networklayer/ipv6/Ipv6Header_m.h"
+#include "inet/networklayer/ipv6/Ipv6InterfaceData.h"
+namespace inet::protocoltest {
+using namespace lowpan;
+class DiscoveryCheck : public cSimpleModule, public cListener
+{
+    std::vector<std::vector<uint8_t>> frames;
+    LowpanNativeLinkDomain *domain=nullptr;
+    NetworkInterface *interface=nullptr;
+    int dropped=0,delivered=0,injected=0,fragments=0;
+    std::vector<simtime_t> acceptedTimes;
+    void input(simtime_t time,int hop=255,bool badChecksum=false,int sllao=1) {
+        int step=frames.size();
+        std::vector<uint8_t> source{0xfe,0x80,0,0,0,0,0,0,2,0x11,0x22,0x33,0x44,0x55,0x66,1};
+        std::vector<uint8_t> destination{0xff,2,0,0,0,0,0,0,0,0,0,0,0,0,0,2};
+        std::vector<uint8_t> rs{133,0,0,0,0,0,0,0,1,2,0,0x11,0x22,0x33,0x44,0x55,0x66,uint8_t(sllao),0,0,0,0,0,0};
+        std::vector<uint8_t> pseudo=source;pseudo.insert(pseudo.end(),destination.begin(),destination.end());
+        pseudo.insert(pseudo.end(),{0,0,0,24,0,0,0,58});pseudo.insert(pseudo.end(),rs.begin(),rs.end());
+        auto checksum=internetChecksum(pseudo);rs[2]=checksum>>8;rs[3]=checksum;if (badChecksum) rs[3]^=1;
+        std::vector<uint8_t> ip{0x41,0x60,0,0,0,0,24,58,uint8_t(hop)};
+        ip.insert(ip.end(),source.begin(),source.end());ip.insert(ip.end(),destination.begin(),destination.end());ip.insert(ip.end(),rs.begin(),rs.end());
+        std::vector<uint8_t> frame{0x41,0xd8,uint8_t(step),0x34,0x12,0xff,0xff,1,0x66,0x55,0x44,0x33,0x22,0x11,0};
+        frame.insert(frame.end(),ip.begin(),ip.end());auto crc=crc16_ccitt(frame);frame.push_back(crc);frame.push_back(crc>>8);
+        ASSERT(frame.size()<=127);frames.push_back(frame);scheduleAt(time,new cMessage("literal-rs",step));
+    }
+    void verifyBinding() {
+        auto result=domain->resolveNeighbor(interface->getId(),Ipv6Address("fe80::211:2233:4455:6601"));
+        ASSERT(result && *result==Ieee802154Address("0011223344556602"));
+    }
+    void configure() {
+        auto data=interface->getProtocolDataForUpdate<Ipv6InterfaceData>();
+        data->setAdvSendAdvertisements(true);
+        while (data->getNumAdvPrefixes()!=0) data->removeAdvPrefix(0);
+        data->setAdvDefaultLifetime(SimTime(120));data->setAdvCurHopLimit(42);data->setAdvManagedFlag(true);data->setAdvOtherConfigFlag(true);
+        data->setAdvReachableTime(1000);data->setAdvRetransTimer(200);
+        for (int i=1;i<=3;i++) {
+            Ipv6InterfaceData::AdvPrefix prefix(Ipv6Address(i==1?"2001:db8:1::":i==2?"2001:db8:2::":"2001:db8:3::"),64);
+            prefix.advOnLinkFlag=true;prefix.advAutonomousFlag=true;
+            prefix.advValidLifetime=i==1?SimTime(200):i==2?SimTime(-300):SIMTIME_ZERO;
+            prefix.advPreferredLifetime=i==1?SimTime(100):i==2?SimTime(-150):SIMTIME_ZERO;data->addAdvPrefix(prefix);
+        }
+    }
+  protected:
+    int numInitStages() const override {return NUM_INIT_STAGES;}
+    void initialize(int stage) override {
+        if (stage!=INITSTAGE_LAST) return;
+        domain=check_and_cast<LowpanNativeLinkDomain *>(getModuleByPath("^.domain"));
+        interface=check_and_cast<NetworkInterface *>(getModuleByPath("^.router.wlan[0]"));
+        getModuleByPath("^.router.ipv6.neighbourDiscovery")->subscribe("packetDropped",this);
+        interface->getSubmodule("lowpan")->subscribe("fragmentSent",this);
+        interface->getSubmodule("lowpan")->subscribe("datagramAccepted",this);
+        configure();verifyBinding();
+        input(SimTime(4800,SIMTIME_MS));input(SimTime(5));input(SimTime(5)+SimTime(1,SIMTIME_PS));input(SimTime(8));
+        input(SimTime(10300,SIMTIME_MS),254);input(SimTime(10400,SIMTIME_MS),255,true);input(SimTime(10500,SIMTIME_MS),255,false,2);
+        input(SimTime(11));input(SimTime(14));input(SimTime(15));input(SimTime(18));
+        scheduleAt(SimTime(4700,SIMTIME_MS),new cMessage("disable-advertisements",-1));
+        scheduleAt(SimTime(4900,SIMTIME_MS),new cMessage("enable-advertisements",-2));
+        for (auto time : {SimTime(11200,SIMTIME_MS),SimTime(14200,SIMTIME_MS)}) scheduleAt(time,new cMessage("configure-restarted-interface",-3));
+        for (auto time : {SimTime(11050,SIMTIME_MS),SimTime(14050,SIMTIME_MS)}) scheduleAt(time,new cMessage("check-canceled-response",-4));
+        scheduleAt(SimTime(18)+SimTime(1,SIMTIME_PS),new cMessage("disable-pending-advertisement",-1));
+    }
+    void receiveSignal(cComponent *,simsignal_t signal,cObject *,cObject *) override {
+        if (signal==registerSignal("packetDropped")) dropped++;
+        else if (signal==registerSignal("fragmentSent")) fragments++;
+        else {
+            const int requests[]={5,8,15};ASSERT(acceptedTimes.size()<3);
+            auto delay=simTime()-SimTime(requests[acceptedTimes.size()]);ASSERT(delay>SIMTIME_ZERO && delay<=SimTime(2));
+            acceptedTimes.push_back(simTime());
+        }
+    }
+    void handleMessage(cMessage *message) override {
+        if (message->isSelfMessage()) {
+            if (message->getKind()<0) {
+                if (message->getKind()==-3) {configure();delete message;return;}
+                if (message->getKind()==-4) {ASSERT(delivered==2 && acceptedTimes.size()==2 && fragments==4);delete message;return;}
+                bool enabled=message->getKind()==-2;
+                if (enabled) ASSERT(delivered==0 && fragments==0 && dropped==0);
+                interface->getProtocolDataForUpdate<Ipv6InterfaceData>()->setAdvSendAdvertisements(enabled);
+                delete message;return;
+            }
+            auto packet=new Packet("literal-rs",makeShared<BytesChunk>(frames.at(message->getKind())));
+            delete message;sendDirect(packet,interface->getSubmodule("mac")->gate("lowerLayerIn")->getPathStartGate());injected++;return;
+        }
+        auto packet=check_and_cast<Packet *>(message);ASSERT(delivered<3 && message->getArrivalGate()->getIndex()==0);
+        ASSERT(!packet->findTag<Ieee802154AddressReq>());
+        ASSERT(packet->getTag<Ieee802154AddressInd>()->getDestAddress()==Ieee802154Address("0011223344556601"));
+        auto ip=packet->popAtFront<Ipv6Header>();ASSERT(ip->getSrcAddress()==Ipv6Address("fe80::211:2233:4455:6603"));
+        ASSERT(ip->getDestAddress()==Ipv6Address("fe80::211:2233:4455:6601") && ip->getHopLimit()==255);
+        auto addresses=packet->addTag<L3AddressInd>();addresses->setSrcAddress(ip->getSrcAddress());addresses->setDestAddress(ip->getDestAddress());
+        ASSERT(Icmpv6::verifyChecksum(packet));auto ra=packet->peekAtFront<Ipv6RouterAdvertisement>();
+        ASSERT(ra->getCode()==0 && ra->getRouterLifetime()==120 && ra->getCurHopLimit()==42 && ra->getManagedAddrConfFlag() && ra->getOtherStatefulConfFlag());
+        ASSERT(ra->getReachableTime()==1000 && ra->getRetransTimer()==200 && ra->getOptions().getOptionArraySize()==4);
+        auto sllao=ra->getOptions().getOption(0);ASSERT(sllao->getType()==IPv6ND_SOURCE_LINK_LAYER_ADDR_OPTION && sllao->getOptionLength()==2);
+        for (int i=0;i<8;i++) ASSERT(uint8_t(sllao->getPaddingBytes(i))==uint8_t(UINT64_C(0x0011223344556603)>>(8*(7-i))));
+        const uint32_t valid[]={uint32_t((SimTime(200)-acceptedTimes.at(delivered)).dbl()),300,UINT32_MAX};
+        const uint32_t preferred[]={uint32_t((SimTime(100)-acceptedTimes.at(delivered)).dbl()),150,UINT32_MAX};
+        for (int i=0;i<3;i++) {
+            auto prefix=check_and_cast<const Ipv6NdPrefixInformation *>(ra->getOptions().getOption(i+1));
+            ASSERT(prefix->getPrefixLength()==64 && !prefix->getOnlinkFlag() && prefix->getAutoAddressConfFlag());
+            ASSERT(prefix->getPrefix()==Ipv6Address(i==0?"2001:db8:1::":i==1?"2001:db8:2::":"2001:db8:3::"));
+            ASSERT(prefix->getValidLifetime()==valid[i] && prefix->getPreferredLifetime()==preferred[i]);
+        }
+        verifyBinding();delivered++;delete packet;
+    }
+    void finish() override {
+        verifyBinding();ASSERT(injected==11 && delivered==3 && dropped==3 && fragments==6 && acceptedTimes.size()==3);
+        ASSERT(acceptedTimes[0]-SimTime(5)!=acceptedTimes[1]-SimTime(8));
+        std::cout << "Native RS unicast RA, off-link prefixes, remaining lifetimes and unchanged binding verified\n";
+    }
+};
+Define_Module(DiscoveryCheck);
+}
+
+%file: test.ned
+@namespace(inet::protocoltest);
+import inet.node.inet.StandardHost;
+import inet.common.scenario.ScenarioManager;
+import inet.networklayer.common.InterfaceTable;
+import inet.mobility.static.StationaryMobility;
+import inet.linklayer.lowpan.Ieee802154NativeLowpanInterface;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple DiscoveryCheck { gates: input in[2]; }
+module DiscoveryPeer {
+    parameters: @networkNode;
+    gates: output out;
+    submodules:
+        interfaceTable: InterfaceTable;
+        mobility: StationaryMobility;
+        nic: Ieee802154NativeLowpanInterface { interfaceTableModule="^.interfaceTable";linkDomainModule="^.^.domain"; }
+    connections allowunconnected: nic.upperLayerOut --> out;
+}
+network DiscoveryNetwork {
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        domain: LowpanNativeLinkDomain;
+        scenarioManager: ScenarioManager;
+        router: StandardHost;
+        peer[2]: DiscoveryPeer;
+        check: DiscoveryCheck;
+    connections allowunconnected: peer[0].out --> check.in[0];peer[1].out --> check.in[1];
+}
+
+%inifile: omnetpp.ini
+[General]
+network=DiscoveryNetwork
+sim-time-limit=20.2s
+seed-set=0
+*.router.hasIpv4=false
+*.router.hasStatus=true
+*.router.hasIpv6=true
+*.router.forwarding=true
+*.router.ipv6.typename="LowpanIpv6NetworkLayer"
+*.router.ipv6.neighbourDiscovery.nativeNdRole="router"
+*.router.ipv6.neighbourDiscovery.routerBootupTime=0s
+*.router.numWlanInterfaces=1
+*.router.wlan[0].typename="Ieee802154NativeLowpanInterface"
+*.router.wlan[0].linkDomainModule="^.^.domain"
+*.router.wlan[0].radio.antenna.mobilityModule="^.^.^.mobility"
+*.scenarioManager.script=xml("<scenario><at t='11.000000000001'><crash module='router'/></at><at t='11.1'><startup module='router'/></at><at t='14.000000000001'><shutdown module='router'/></at><at t='14.1'><startup module='router'/></at></scenario>")
+*.peer[*].nic.radio.antenna.mobilityModule="^.^.^.mobility"
+*.domain.panId=4660
+*.domain.config=xml("<domain><peer interface='peer[0].nic' native='0011223344556601'/><peer interface='peer[1].nic' native='0011223344556602'/><peer interface='router.wlan[0]' native='0011223344556603'/><neighbor interface='router.wlan[0]' ipv6='fe80::211:2233:4455:6601' native='0011223344556602'/></domain>")
+**.lowpan.headerCompression="none"
+**.mobility.initialX=0m
+**.mobility.initialY=0m
+**.mobility.initialZ=0m
+**.mobility.initFromDisplayString=false
+**.mobility.updateFromDisplayString=false
+
+%contains: stdout
+Native RS unicast RA, off-link prefixes, remaining lifetimes and unchanged binding verified
