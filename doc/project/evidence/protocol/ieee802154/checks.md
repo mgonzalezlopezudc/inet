@@ -16,6 +16,8 @@ upper client U -> device A <---- radio link ----> device B -> upper observer
 
 ## Index
 
+The separate [enhanced-frame checks](enhanced-checks.md) own `IEEE802154-C-ENHANCED-*`; the legacy and conventional-superframe checks below keep their existing identifiers.
+
 - [IEEE802154-C-WIRE](#ieee802154-c-wire) — Native address and legacy data/ACK encoding.
 - [IEEE802154-C-ACCESS](#ieee802154-c-access) — Unslotted channel access.
 - [IEEE802154-C-SEQUENCE](#ieee802154-c-sequence) — Device-wide sequence allocation and wrap.

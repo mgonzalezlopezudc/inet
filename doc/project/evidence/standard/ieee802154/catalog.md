@@ -11,6 +11,8 @@ Model applicability and execution evidence live in the [model ledger](../../mode
 
 ## Index
 
+Version-2 frame, IE, enhanced-ACK and enhanced-discovery obligations are owned by the separate [enhanced-frame catalog](enhanced-catalog.md), using `IEEE802154-ENHANCED-*` identifiers.
+
 | ID | Statement |
 | --- | --- |
 | [IEEE802154-SUPERFRAME-1](#ieee802154-superframe-1) | BO and SO define the beacon interval and active duration. |
