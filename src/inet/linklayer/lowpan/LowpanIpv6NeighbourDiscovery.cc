@@ -5,6 +5,7 @@
 #include "inet/linklayer/lowpan/LowpanProtocol.h"
 #include "inet/linklayer/lowpan/LowpanNativeBoundary.h"
 #include "inet/linklayer/lowpan/LowpanHostRegistration.h"
+#include "inet/linklayer/lowpan/LowpanContextAdvertisements.h"
 #include "inet/linklayer/lowpan/LowpanRegistrationAuthority.h"
 #include "inet/linklayer/lowpan/LowpanRegistrationRelay.h"
 #include "inet/linklayer/ieee802154/Ieee802154AddressTagBase_m.h"
@@ -39,6 +40,7 @@ LowpanIpv6NeighbourDiscovery::~LowpanIpv6NeighbourDiscovery()
 {
     updateHostAddressSubscription(false);
     hostRegistration.reset();
+    contextAdvertisements.reset();
     registrationRelay.reset();
     registrationAuthority.reset();
     cancelAndDelete(routerAdvertisementTimer);
@@ -66,6 +68,8 @@ void LowpanIpv6NeighbourDiscovery::initialize(int stage)
             throw cRuntimeError("Routed registration requires router role and both authority/source addresses");
         if (authorityConfigured)
             registrationRelay = std::make_unique<LowpanRegistrationRelay>(*this);
+        if (par("contextDistribution"))
+            contextAdvertisements = std::make_unique<LowpanContextAdvertisements>(*this);
         maxRegistrations = par("maxRegistrations");
         if (maxRegistrations <= 0)
             throw cRuntimeError("Native registration capacity must be positive");
@@ -80,12 +84,15 @@ void LowpanIpv6NeighbourDiscovery::initialize(int stage)
         WATCH_EXPR("numNativeHostAddresses", hostRegistration ? hostRegistration->getNumAddresses() : 0);
         WATCH_EXPR("numDuplicateAddressEntries", registrationAuthority ? registrationAuthority->getNumEntries() : 0);
         WATCH_EXPR("numPendingRegistrations", registrationRelay ? registrationRelay->getNumPending() : 0);
+        WATCH_EXPR("numContextAuthorityGroups", contextAdvertisements ? contextAdvertisements->getNumGroups() : 0);
     }
 }
 
 void LowpanIpv6NeighbourDiscovery::handleMessageWhenUp(cMessage *message)
 {
-    if (registrationRelay && registrationRelay->ownsTimer(message))
+    if (contextAdvertisements && contextAdvertisements->ownsTimer(message))
+        contextAdvertisements->handleTimer();
+    else if (registrationRelay && registrationRelay->ownsTimer(message))
         registrationRelay->handleTimer();
     else if (registrationAuthority && registrationAuthority->ownsTimer(message))
         registrationAuthority->handleTimer();
@@ -116,6 +123,8 @@ void LowpanIpv6NeighbourDiscovery::stop()
     updateHostAddressSubscription(false);
     if (hostRegistration)
         hostRegistration->clear();
+    if (contextAdvertisements)
+        contextAdvertisements->clear();
     if (registrationRelay)
         registrationRelay->clear();
     if (registrationAuthority)
@@ -426,6 +435,10 @@ void LowpanIpv6NeighbourDiscovery::sendNativeRouterAdvertisement(const RouterAdv
     auto boundary = interface ? dynamic_cast<LowpanNativeBoundary *>(interface->getSubmodule("boundary")) : nullptr;
     if (!boundary || !interface->isUp())
         return;
+    if (contextAdvertisements) {
+        contextAdvertisements->sendAdvertisements(interface, std::get<1>(key), std::get<2>(key));
+        return;
+    }
     auto domain = boundary->getLinkDomain();
     auto data = interface->getProtocolData<Ipv6InterfaceData>();
     if (!data->getAdvSendAdvertisements() || data->getLinkLocalAddress().isUnspecified())
@@ -476,7 +489,7 @@ void LowpanIpv6NeighbourDiscovery::start()
     Ipv6NeighbourDiscovery::start();
     if (registrationRelay)
         registrationRelay->start();
-    if (hostRegistration)
+    if (hostRegistration || contextAdvertisements)
         updateHostAddressSubscription(true);
     for (int i = 0; i < ift->getNumInterfaces(); i++) {
         auto interface = ift->getInterface(i);
@@ -492,6 +505,8 @@ void LowpanIpv6NeighbourDiscovery::start()
                 !data->getLinkLocalAddress().isUnspecified())
             startRouterDiscovery(interface);
     }
+    if (contextAdvertisements)
+        contextAdvertisements->start();
 }
 
 void LowpanIpv6NeighbourDiscovery::updateHostAddressSubscription(bool enabled)
@@ -508,11 +523,13 @@ void LowpanIpv6NeighbourDiscovery::updateHostAddressSubscription(bool enabled)
 
 void LowpanIpv6NeighbourDiscovery::receiveSignal(cComponent *source, simsignal_t signal, cObject *object, cObject *details)
 {
-    if (signal == ipv6AddressAssignedSignal && hostRegistration) {
+    if (signal == ipv6AddressAssignedSignal && (hostRegistration || contextAdvertisements)) {
         Enter_Method_Silent();
         auto info = check_and_cast<Ipv6AddressInfo *>(object);
-        if (isUp() && info->ie && dynamic_cast<LowpanNativeBoundary *>(info->ie->getSubmodule("boundary")))
-            hostRegistration->addressAssigned(info->ie);
+        if (isUp() && info->ie && dynamic_cast<LowpanNativeBoundary *>(info->ie->getSubmodule("boundary"))) {
+            if (hostRegistration) hostRegistration->addressAssigned(info->ie);
+            if (contextAdvertisements) contextAdvertisements->addressReady(info->ie);
+        }
     }
     else
         Ipv6NeighbourDiscovery::receiveSignal(source, signal, object, details);
@@ -539,8 +556,34 @@ void LowpanIpv6NeighbourDiscovery::startRouterDiscovery(NetworkInterface *ie)
 
 void LowpanIpv6NeighbourDiscovery::createRaTimer(NetworkInterface *ie)
 {
-    if (ie->getProtocol() != &lowpanProtocol)
+    if (ie->getProtocol() != &lowpanProtocol || (contextAdvertisements && registrationRouter &&
+            dynamic_cast<LowpanNativeBoundary *>(ie->getSubmodule("boundary"))))
         Ipv6NeighbourDiscovery::createRaTimer(ie);
+}
+
+void LowpanIpv6NeighbourDiscovery::assignLinkLocalAddress(cMessage *message)
+{
+    Ipv6NeighbourDiscovery::assignLinkLocalAddress(message);
+    if (contextAdvertisements)
+        for (int i = 0; i < ift->getNumInterfaces(); i++)
+            contextAdvertisements->addressReady(ift->getInterface(i));
+}
+
+void LowpanIpv6NeighbourDiscovery::createAndSendRaPacket(const Ipv6Address& destination, NetworkInterface *ie)
+{
+    if (contextAdvertisements && dynamic_cast<LowpanNativeBoundary *>(ie->getSubmodule("boundary")))
+        contextAdvertisements->sendAdvertisements(ie, destination, Ieee802154Address("ffff"));
+    else
+        Ipv6NeighbourDiscovery::createAndSendRaPacket(destination, ie);
+}
+
+void LowpanIpv6NeighbourDiscovery::sendPeriodicRa(cMessage *message)
+{
+    auto interface = static_cast<NetworkInterface *>(message->getContextPointer());
+    if (contextAdvertisements && dynamic_cast<LowpanNativeBoundary *>(interface->getSubmodule("boundary")))
+        contextAdvertisements->sendPeriodic(message);
+    else
+        Ipv6NeighbourDiscovery::sendPeriodicRa(message);
 }
 
 void LowpanIpv6NeighbourDiscovery::processNativeNeighbourSolicitation(Packet *packet,
@@ -627,6 +670,11 @@ void LowpanIpv6NeighbourDiscovery::processNDMessage(Packet *packet, const Icmpv6
         }
     if (hostRegistration && boundary && hostRegistration->processPacket(packet, message, interface, boundary->getLinkDomain()))
         return;
+    if (contextAdvertisements && registrationRouter && boundary)
+        if (auto advertisement = dynamic_cast<const Ipv6RouterAdvertisement *>(message)) {
+            contextAdvertisements->processAdvertisement(packet, advertisement, interface, boundary->getLinkDomain());
+            return;
+        }
     if (registrationRouter && boundary != nullptr) {
         if (auto solicitation = dynamic_cast<const Ipv6RouterSolicitation *>(message)) {
             processNativeRouterSolicitation(packet, solicitation, interface, boundary->getLinkDomain());

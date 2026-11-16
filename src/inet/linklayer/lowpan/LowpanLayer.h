@@ -25,6 +25,7 @@ class INET_API LowpanLayer : public OperationalMixin<queueing::PacketProcessorBa
     std::unique_ptr<LowpanReassemblyTable> reassembly;
     LowpanDatagramTagAllocator tagAllocator;
     LowpanContextTable compressionContexts;
+    std::array<bool, 16> configuredContexts{};
     simtime_t reassemblyTimeout;
     bool useIphc = false;
     cMessage *expiryTimer = nullptr;
@@ -54,6 +55,8 @@ class INET_API LowpanLayer : public OperationalMixin<queueing::PacketProcessorBa
     bool isValidIpv6Packet(const Packet *packet) const;
     void dropLowpanPacket(Packet *packet, LowpanDropReason reason);
     void removeRequestTags(Packet *packet) const;
+    void installContext(int id, const Ipv6Address& prefix, int prefixLength,
+            bool allowCompression, simtime_t compressionUntil, simtime_t validUntil);
 
   public:
     virtual ~LowpanLayer();
@@ -61,6 +64,11 @@ class INET_API LowpanLayer : public OperationalMixin<queueing::PacketProcessorBa
     // changes future lookup eligibility without changing reconstructed bytes.
     void setCompressionContext(int id, const Ipv6Address& prefix, int prefixLength,
             bool allowCompression, simtime_t validUntil);
+    bool isConfiguredContext(int id) const;
+    const LowpanContextTable::Context *getCompressionContext(int id) const;
+    void setLearnedContext(int id, const Ipv6Address& prefix, int prefixLength,
+            bool allowCompression, simtime_t compressionUntil, simtime_t validUntil);
+    void removeLearnedContext(int id);
     virtual bool supportsPacketPushing(const cGate *gate) const override { return gate == this->gate("lowerLayerOut"); }
     virtual bool supportsPacketPulling(const cGate *gate) const override { return false; }
     virtual queueing::IPassivePacketSink *getConsumer(const cGate *gate) override { return consumer.get(); }

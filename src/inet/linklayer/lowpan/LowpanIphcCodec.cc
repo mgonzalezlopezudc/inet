@@ -139,7 +139,7 @@ EncodedAddress chooseUnicast(const AddressBytes& address, const Ieee802154Addres
     if (contexts == nullptr)
         return best;
     for (int id = 0; id < 16; id++) {
-        auto context = contexts->find(id, now);
+        auto context = contexts->findForCompression(id, now);
         if (!context || !context->allowCompression)
             continue;
         for (int mode : {3, 2, 1}) {
@@ -160,7 +160,7 @@ EncodedAddress chooseMulticast(const AddressBytes& address, const LowpanContextT
     if (contexts == nullptr || (address[1] & 0x30) != 0x30)
         return best;
     for (int id = 0; id < 16; id++) {
-        auto context = contexts->find(id, now);
+        auto context = contexts->findForCompression(id, now);
         if (!context || !context->allowCompression || context->prefixLength > 64 || address[3] != context->prefixLength)
             continue;
         auto prefix = addressBytes(context->prefix);

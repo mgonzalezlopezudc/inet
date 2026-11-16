@@ -121,7 +121,7 @@ P9 runtime regression exposed a shared IPv6 prerequisite: local delivery stored 
 
 - [x] P8 stateful contexts and production evidence: [p8-verification.json](../../doc/project/evidence/model/6lowpan/p8-verification.json).
 - [x] P9 extension/nested-header NHC and production evidence: [p9-verification.json](../../doc/project/evidence/model/6lowpan/p9-verification.json).
-- [ ] P10 optimized ND roles, options and registration.
+- [x] P10 optimized ND roles, options and registration: [context closure](../../doc/project/evidence/model/6lowpan/p10-context-verification.json), with the earlier role/discovery/relay records in the [completion ledger](../../doc/project/evidence/model/6lowpan/completion.md).
 - [ ] P11 extended registration and later-update profile.
 - [ ] P12 mesh-under forwarding and duplicate/hop bounds.
 - [ ] P13 page/ESC parsing and transit behavior.

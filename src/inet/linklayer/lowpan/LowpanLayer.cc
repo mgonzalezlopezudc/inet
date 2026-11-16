@@ -104,6 +104,7 @@ void LowpanLayer::initialize(int stage)
                 throw cRuntimeError("Invalid or duplicate LoWPAN compression context");
             compressionContexts.install(id, Ipv6Address(prefix), prefixLength,
                 permission == nullptr || strcmp(permission, "true") == 0, until ? SimTime::parse(until) : SimTime::getMaxTime());
+            configuredContexts[id] = true;
             seen[id] = true;
         }
     }
@@ -123,12 +124,52 @@ void LowpanLayer::setCompressionContext(int id, const Ipv6Address& prefix, int p
         bool allowCompression, simtime_t validUntil)
 {
     Enter_Method("setCompressionContext");
-    if (compressionContexts.install(id, prefix, prefixLength, allowCompression, validUntil)) {
+    installContext(id, prefix, prefixLength, allowCompression, validUntil, validUntil);
+    configuredContexts.at(id) = true;
+}
+
+bool LowpanLayer::isConfiguredContext(int id) const
+{
+    Enter_Method_Silent();
+    return id >= 0 && id < 16 && configuredContexts[id];
+}
+
+const LowpanContextTable::Context *LowpanLayer::getCompressionContext(int id) const
+{
+    Enter_Method_Silent();
+    return compressionContexts.get(id);
+}
+
+void LowpanLayer::setLearnedContext(int id, const Ipv6Address& prefix, int prefixLength,
+        bool allowCompression, simtime_t compressionUntil, simtime_t validUntil)
+{
+    Enter_Method("setLearnedContext");
+    if (isConfiguredContext(id))
+        throw cRuntimeError("Learned LoWPAN context overlaps configured CID %d", id);
+    installContext(id, prefix, prefixLength, allowCompression, compressionUntil, validUntil);
+}
+
+void LowpanLayer::installContext(int id, const Ipv6Address& prefix, int prefixLength,
+        bool allowCompression, simtime_t compressionUntil, simtime_t validUntil)
+{
+    if (compressionContexts.install(id, prefix, prefixLength, allowCompression, compressionUntil, validUntil)) {
         long count = reassembly->getNumContexts();
         reassembly->clear();
         cancelEvent(expiryTimer);
         if (count != 0)
             emit(reassemblyInvalidatedSignal, count);
+    }
+}
+
+void LowpanLayer::removeLearnedContext(int id)
+{
+    Enter_Method("removeLearnedContext");
+    if (isConfiguredContext(id))
+        return;
+    if (auto context = compressionContexts.get(id)) {
+        auto prefix = context->prefix;
+        auto length = context->prefixLength;
+        compressionContexts.install(id, prefix, length, false, SIMTIME_ZERO, SIMTIME_ZERO);
     }
 }
 

@@ -19,6 +19,7 @@ class INET_API LowpanContextTable
         Ipv6Address prefix;
         int prefixLength = 0; // Leading IPv6 prefix bits, 0..128.
         bool allowCompression = false;
+        simtime_t compressionUntil; // Absolute compression cutoff, before receive-only grace.
         simtime_t validUntil; // Absolute simulation time; maximum means no expiry.
     };
 
@@ -29,7 +30,11 @@ class INET_API LowpanContextTable
     // Returns true when a new prefix interpretation replaces the old one.
     bool install(int id, const Ipv6Address& prefix, int prefixLength,
             bool allowCompression, simtime_t validUntil);
+    bool install(int id, const Ipv6Address& prefix, int prefixLength,
+            bool allowCompression, simtime_t compressionUntil, simtime_t validUntil);
     const Context *find(int id, simtime_t now) const;
+    const Context *findForCompression(int id, simtime_t now) const;
+    const Context *get(int id) const;
 };
 
 } } // namespace inet::lowpan
