@@ -31,6 +31,8 @@ simple LowpanLayer extends SimpleModule like ILowpanLayer
         @signal[reassemblyExpired](type=long);
         @signal[reassemblyInvalidated](type=long);
         @signal[meshForwarded](type=inet::Packet);
+        @signal[nativeFrameTransmissionSucceeded](type=inet::Packet); // Borrowed terminal original; matched ACK or local broadcast TX, not remote delivery.
+        @signal[nativeFrameTransmissionFailed](type=inet::Packet); // Borrowed live-correlated result; lifecycle cancellation is not replayed.
         @statistic[datagramAccepted](record=count);
         @statistic[datagramCompleted](record=count);
         @statistic[packetDropped](record=count);
@@ -40,6 +42,8 @@ simple LowpanLayer extends SimpleModule like ILowpanLayer
         @statistic[reassemblyExpired](record=sum);
         @statistic[reassemblyInvalidated](record=sum);
         @statistic[meshForwarded](record=count);
+        @statistic[nativeFrameTransmissionSucceeded](record=count);
+        @statistic[nativeFrameTransmissionFailed](record=count);
     gates:
         input upperLayerIn;
         output upperLayerOut;

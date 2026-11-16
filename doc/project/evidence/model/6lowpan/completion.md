@@ -156,6 +156,14 @@ The [three-case radio fixture](../../../../../tests/protocol/6lowpan/paging-disp
 
 The [record](p13-paging-verification.json) retains matching debug/release builds, nineteen protocol fixtures/119 debug simulations, seven unit fixtures, seven module fixtures and scoped gates. Five release fixtures complete 45 simulations; forty-three paging/mesh/host counter rows match debug, while two controls establish normal completion. Assertions remain debug-only. These results complete P13's selected parser profile; final feature-matrix verification remains pending.
 
+## P14 native transmission-completion prerequisite
+
+Validated native-boundary compositions now report terminal results through the existing borrowed-original packet-push callback. Layer registers IDs before pushing, removes tracking before notification and exposes native success/failure observations. The MAC detaches originals before callback/deletion, guards reentry and drains current/queued ownership before generic lifecycle cleanup. Exact operating-state checks at both ends suppress continuation regardless of module stop order. Compatibility and standalone native compositions retain their prior behavior; standalone MACs do not acquire completion capability.
+
+The [direct module fixture](../../../../../tests/module/LowpanNativeTransmissionCompletion.test) supplies twenty cases for ACK/broadcast results, synchronous failure/deletion, envelope/deadline/retry/CCA reasons, actual Layer success/failure, refusal, reentrant queueing, stop/crash ordering, destruction and both excluded compositions. MAC-only lifecycle probes observe Layer still operating and its interface up while native readiness rejects new work. Broadcast success means local transmission completion.
+
+The [record](p14-native-completion-verification.json) retains matching debug/release builds and fourteen module fixtures in each mode: 38 completed simulations plus one expected initialization diagnostic. Debug passes nineteen protocol fixtures/119 simulations; five release protocol fixtures complete 45 simulations. Twenty direct and forty-three protocol counter rows match independently; assertions remain debug-only. Scoped gates pass. The initial mandatory-boundary regression and fixture setup attempts remain separately classified; final matching runs include the unchanged propagation diagnostic and actual standalone data control. This completes the notification prerequisite; source pacing, VRB forwarding and selective recovery remain separate work.
+
 ## Remaining packages
 
 P14–P15 and the final feature matrix remain under the completion plan. Virtual fragment forwarding and selective recovery are not inferred from optimized ND, header compression, updated registration, mesh forwarding or dispatch parsing.

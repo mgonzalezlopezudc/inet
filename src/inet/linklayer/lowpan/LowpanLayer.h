@@ -4,6 +4,7 @@
 
 #include <bitset>
 #include <map>
+#include <set>
 
 #include "inet/common/lifecycle/ModuleOperations.h"
 #include "inet/common/lifecycle/OperationalMixin.h"
@@ -49,6 +50,7 @@ class INET_API LowpanLayer : public OperationalMixin<queueing::PacketProcessorBa
     std::map<std::pair<Ieee802154Address, uint8_t>, BroadcastRecord> broadcasts;
     std::array<simtime_t, 256> sequenceReservations{};
     uint8_t nextBroadcastSequence = 0;
+    std::set<int64_t> pendingNativeTransmissions; // IDs only; bounded by the finite lower queue/current frame.
     static simsignal_t datagramAcceptedSignal;
     static simsignal_t datagramCompletedSignal;
     static simsignal_t fragmentSentSignal;
@@ -57,6 +59,8 @@ class INET_API LowpanLayer : public OperationalMixin<queueing::PacketProcessorBa
     static simsignal_t reassemblyExpiredSignal;
     static simsignal_t reassemblyInvalidatedSignal;
     static simsignal_t meshForwardedSignal;
+    static simsignal_t nativeFrameTransmissionSucceededSignal;
+    static simsignal_t nativeFrameTransmissionFailedSignal;
     virtual void initialize(int stage) override;
     virtual void handleMessageWhenUp(cMessage *message) override;
     virtual void handleMessageWhenDown(cMessage *message) override;
@@ -84,6 +88,10 @@ class INET_API LowpanLayer : public OperationalMixin<queueing::PacketProcessorBa
     simtime_t meshReservation(uint8_t hops, simtime_t retention) const;
     void scheduleExpiry();
     void clearTransientState();
+    bool isNativeTransmissionOperational() const;
+    bool canPushPreparedPacket(Packet *packet) const;
+    PacketDropReason preparedRefusalReason() const;
+    bool pushPreparedPacket(Packet *packet); // Consumes packet on both admission and refusal.
     bool isValidIpv6Packet(const Packet *packet) const;
     void dropLowpanPacket(Packet *packet, LowpanDropReason reason);
     void removeRequestTags(Packet *packet) const;
@@ -105,7 +113,7 @@ class INET_API LowpanLayer : public OperationalMixin<queueing::PacketProcessorBa
     virtual bool supportsPacketPulling(const cGate *gate) const override { return false; }
     virtual queueing::IPassivePacketSink *getConsumer(const cGate *gate) override { return consumer.get(); }
     virtual void handleCanPushPacketChanged(const cGate *gate) override {}
-    virtual void handlePushPacketProcessed(Packet *packet, const cGate *gate, bool successful) override {}
+    virtual void handlePushPacketProcessed(Packet *packet, const cGate *gate, bool successful) override;
 };
 
 } } // namespace inet::lowpan

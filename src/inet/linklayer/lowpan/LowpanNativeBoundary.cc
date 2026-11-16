@@ -16,6 +16,26 @@ bool LowpanNativeBoundary::isMacDomainValid(cModule *module) const
     auto native = dynamic_cast<LowpanNativeMac *>(module);
     return native != nullptr && native->getLinkDomain() == domain;
 }
+bool LowpanNativeBoundary::isTransmissionOperational() const
+{
+    auto native = dynamic_cast<const LowpanNativeMac *>(mac);
+    return native && native->isTransmissionOperational();
+}
+bool LowpanNativeBoundary::canPushSomePacket(const cGate *gate) const
+{
+    return isTransmissionOperational() && LowpanBoundaryBase::canPushSomePacket(gate);
+}
+bool LowpanNativeBoundary::canPushPacket(Packet *packet, const cGate *gate) const
+{
+    return isTransmissionOperational() && LowpanBoundaryBase::canPushPacket(packet, gate);
+}
+void LowpanNativeBoundary::dropRefusedPacket(Packet *packet)
+{
+    auto reason = isTransmissionOperational() ? QUEUE_OVERFLOW : INTERFACE_DOWN;
+    // Borrow the boundary-owned original only for the synchronous result call.
+    handlePushPacketProcessed(packet, inputGate, false);
+    dropPacket(packet, reason);
+}
 Ieee802154Address LowpanNativeBoundary::getLinkAddress() const { return domain->getPeer(networkInterface).address; }
 uint16_t LowpanNativeBoundary::getPanId() const { return domain->getPanId(); }
 const Ieee802154Address *LowpanNativeBoundary::resolveNeighbor(const Ipv6Address& nextHop) const

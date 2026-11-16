@@ -12,6 +12,7 @@ class INET_API LowpanBoundaryBase : public queueing::PacketPusherBase, public IL
     NetworkInterface *networkInterface = nullptr;
     virtual void initialize(int stage) override;
     virtual bool isMacDomainValid(cModule *module) const = 0;
+    virtual void dropRefusedPacket(Packet *packet);
   public:
     virtual Ptr<const LowpanTransmissionReq> prepareTransmission(const Ieee802154AddressReq& request) const override;
     virtual bool supportsPacketPushing(const cGate *gate) const override;

@@ -6,6 +6,7 @@
 #include "inet/linklayer/lowpan/LowpanNativeLinkDomain.h"
 #include "inet/linklayer/lowpan/contract/ILowpanMac.h"
 #include "inet/queueing/contract/IActivePacketSink.h"
+#include "inet/queueing/common/ActivePacketSourceRef.h"
 namespace inet { namespace lowpan {
 class INET_API LowpanNativeMac : public MacProtocolBase, public IMacProtocol, public queueing::IActivePacketSink, public ILowpanMac
 {
@@ -23,6 +24,9 @@ class INET_API LowpanNativeMac : public MacProtocolBase, public IMacProtocol, pu
     simtime_t maxLifetime, nextAccessTime;
     physicallayer::IRadio::TransmissionState previousTransmission = physicallayer::IRadio::TRANSMISSION_STATE_UNDEFINED;
     bool ccaBusy = false;
+    bool completing = false;
+    bool draining = false;
+    queueing::ActivePacketSourceRef completionProducer;
     virtual void initialize(int stage) override;
     virtual void configureNetworkInterface() override;
     virtual void handleSelfMessage(cMessage *message) override;
@@ -36,6 +40,8 @@ class INET_API LowpanNativeMac : public MacProtocolBase, public IMacProtocol, pu
     void startNextFrame();
     void startBackoff();
     void finishData(bool successful, PacketDropReason reason = OTHER_PACKET_DROP);
+    void completeCurrentFrame(bool successful, PacketDropDetails *details = nullptr);
+    void failPendingFrames();
     void transmissionFinished();
     bool isRequestValid(const Ieee802154AddressReq& request) const;
     bool isPreparedValid(const Packet *packet, bool encapsulated) const;
@@ -46,6 +52,7 @@ class INET_API LowpanNativeMac : public MacProtocolBase, public IMacProtocol, pu
   public:
     virtual ~LowpanNativeMac();
     const LowpanNativeLinkDomain *getLinkDomain() const { return domain; }
+    bool isTransmissionOperational() const { return operationalState == OPERATING && !draining; }
     virtual Ptr<const LowpanTransmissionReq> prepareTransmission(const Ieee802154AddressReq& request) const override;
     virtual queueing::IPassivePacketSource *getProvider(const cGate *gate) override;
     virtual void handleCanPullPacketChanged(const cGate *gate) override;
