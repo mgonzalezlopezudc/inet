@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //
 #include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameLayout.h"
 
 namespace inet {
 
@@ -8,6 +9,12 @@ namespace {
 int addressMode(const Ieee802154Address& address)
 {
     return address.isNone() ? 0 : address.isShort() ? 2 : 3;
+}
+
+std::optional<Ieee802154FrameLayout> layoutFor(const Ieee802154Frame& frame)
+{
+    return Ieee802154FrameLayout::fromControl(frame.getFrameVersion(),addressMode(frame.getDestinationAddress()),
+            addressMode(frame.getSourceAddress()),frame.getPanCompression(),frame.getSequenceSuppressed());
 }
 
 void appendLe(std::vector<uint8_t>& bytes, uint64_t value, unsigned int length)
@@ -45,39 +52,44 @@ std::vector<uint8_t> Ieee802154FrameCodec::encode(const Ieee802154Frame& frame)
             raw.push_back(frame.getRawBytes(i));
         return raw;
     }
-    if (frame.getFrameVersion() < 0 || frame.getFrameVersion() > 1 ||
+    if (frame.getFrameVersion() < 0 || frame.getFrameVersion() > 2 ||
             frame.getFrameType() < 0 || frame.getFrameType() > 3)
         throw cRuntimeError("Unsupported IEEE 802.15.4 transmit frame/version");
     const auto& destination = frame.getDestinationAddress();
     const auto& source = frame.getSourceAddress();
     bool hasDestination = !destination.isNone(), hasSource = !source.isNone();
-    if (frame.getPanCompression() && (!hasDestination || !hasSource || frame.getDestinationPanId() != frame.getSourcePanId()))
+    auto layout = layoutFor(frame);
+    if (!layout || (frame.getFrameVersion() < 2 && frame.getInformationElementsPresent()))
+        throw cRuntimeError("Invalid IEEE 802.15.4 frame layout");
+    if (frame.getFrameVersion() < 2 && frame.getPanCompression() && frame.getDestinationPanId() != frame.getSourcePanId())
         throw cRuntimeError("Invalid legacy IEEE 802.15.4 PAN compression");
     if (frame.getSecurityEnabled() && frame.getComputeFcs())
         throw cRuntimeError("Security transformation is unavailable for generated IEEE 802.15.4 frames");
-    if (frame.getFrameType() == 3 && !frame.getPayloadArraySize())
+    if (frame.getFrameType() == 3 && !frame.getPayloadArraySize() &&
+            (frame.getFrameVersion() < 2 || (!frame.getInformationElementsPresent() && !frame.getSecurityEnabled())))
         throw cRuntimeError("IEEE 802.15.4 command needs a Command ID");
-    if (frame.getFrameType() == 0 && (hasDestination || !hasSource || frame.getAckRequest() || frame.getPanCompression() ||
+    if (frame.getFrameVersion() < 2 && frame.getFrameType() == 0 && (hasDestination || !hasSource || frame.getAckRequest() || frame.getPanCompression() ||
             (!frame.getSecurityEnabled() && frame.getPayloadArraySize() < 4)))
         throw cRuntimeError("Invalid legacy IEEE 802.15.4 beacon fields");
-    if (frame.getFrameType() == 2 && (hasDestination || hasSource || frame.getAckRequest() || frame.getSecurityEnabled() || frame.getPanCompression() || frame.getPayloadArraySize()))
+    if (frame.getFrameVersion() < 2 && frame.getFrameType() == 2 && (hasDestination || hasSource || frame.getAckRequest() || frame.getSecurityEnabled() || frame.getPanCompression() || frame.getPayloadArraySize()))
         throw cRuntimeError("Invalid immediate ACK fields");
     uint16_t control = frame.getFrameType() | (frame.getFramePending() ? 0x10 : 0) |
             (frame.getSecurityEnabled() ? 8 : 0) | (frame.getReservedBit7() ? 0x80 : 0) |
+            (frame.getSequenceSuppressed() ? 0x100 : 0) | (frame.getInformationElementsPresent() ? 0x200 : 0) |
             (frame.getAckRequest() ? 0x20 : 0) | (frame.getPanCompression() ? 0x40 : 0) |
             (addressMode(destination) << 10) | (frame.getFrameVersion() << 12) | (addressMode(source) << 14);
     std::vector<uint8_t> bytes;
     appendLe(bytes, control, 2);
-    bytes.push_back(frame.getDsn());
-    if (hasDestination) {
+    if (layout->sequencePresent)
+        bytes.push_back(frame.getDsn());
+    if (layout->destinationPanPresent)
         appendLe(bytes, frame.getDestinationPanId(), 2);
+    if (hasDestination)
         appendAddress(bytes, destination);
-    }
-    if (hasSource) {
-        if (!frame.getPanCompression())
-            appendLe(bytes, frame.getSourcePanId(), 2);
+    if (layout->sourcePanPresent)
+        appendLe(bytes, frame.getSourcePanId(), 2);
+    if (hasSource)
         appendAddress(bytes, source);
-    }
     for (size_t i = 0; i < frame.getPayloadArraySize(); ++i)
         bytes.push_back(frame.getPayload(i));
     if (frame.getFcsPresent())
@@ -109,7 +121,7 @@ Ptr<Ieee802154Frame> Ieee802154FrameCodec::decode(const std::vector<uint8_t>& by
             frame->markImproperlyRepresented();
         return frame;
     };
-    if (bytes.size() < size_t(fcsPresent ? 5 : 3))
+    if (bytes.size() < size_t(fcsPresent ? 4 : 2))
         return failure(TRUNCATED);
     if (bytes.size() + (fcsPresent ? 0 : 2) > 127)
         return failure(MALFORMED);
@@ -117,50 +129,61 @@ Ptr<Ieee802154Frame> Ieee802154FrameCodec::decode(const std::vector<uint8_t>& by
     uint16_t control = bytes[0] | uint16_t(bytes[1]) << 8;
     int type = control & 7, destinationMode = (control >> 10) & 3;
     int version = (control >> 12) & 3, sourceMode = (control >> 14) & 3;
+    if (version < 2 && limit < 3)
+        return failure(TRUNCATED); // Preserve the legacy minimum before classifying its FCF.
     if (version == 3 || destinationMode == 1 || sourceMode == 1 || type == 4)
         return failure(MALFORMED);
-    if (version == 2 || type > 3)
+    if (type > 3)
         return failure(UNSUPPORTED);
-    if (type != 0 && (control & 0x300))
+    if (version < 2 && type != 0 && (control & 0x300))
         return failure(MALFORMED); // 7.2.2: sequence suppression and IE bits in legacy frames.
-    bool compressed = type != 0 && (control & 0x40); // Legacy beacon reserved FCF fields are ignored.
-    if (compressed && (!destinationMode || !sourceMode))
+    bool compressed = (version == 2 || type != 0) && (control & 0x40); // Legacy beacon reserved FCF fields are ignored.
+    bool sequenceSuppressed = version == 2 && (control & 0x100);
+    bool informationElementsPresent = version == 2 && (control & 0x200);
+    auto layout = Ieee802154FrameLayout::fromControl(version,destinationMode,sourceMode,compressed,sequenceSuppressed);
+    if (!layout)
         return failure(MALFORMED);
-    if (type == 2 && (destinationMode || sourceMode || (control & 0x68) || limit != 3))
+    if (version < 2 && type == 2 && (destinationMode || sourceMode || (control & 0x68) || limit != 3))
         return failure(MALFORMED);
-    if (type == 0 && (destinationMode || !sourceMode))
+    if (version < 2 && type == 0 && (destinationMode || !sourceMode))
         return failure(MALFORMED);
+    if (limit < layout->headerLength())
+        return failure(TRUNCATED);
     frame->setFrameType(type);
     frame->setFrameVersion(version);
-    frame->setAckRequest(type != 0 && (control & 0x20));
+    frame->setAckRequest((version == 2 || type != 0) && (control & 0x20));
     frame->setSecurityEnabled(control & 8);
     frame->setReservedBit7(control & 0x80); // 4.6: ignore reserved fields; retain captured bits.
+    frame->setSequenceSuppressed(sequenceSuppressed);
+    frame->setInformationElementsPresent(informationElementsPresent);
     frame->setFramePending(control & 0x10);
     frame->setPanCompression(compressed);
-    frame->setDsn(bytes[2]);
-    size_t position = 3;
+    size_t position = 2;
+    if (layout->sequencePresent)
+        frame->setDsn(bytes[position++]);
     auto readLe = [&](unsigned int count) {
         uint64_t value = 0;
         for (unsigned int i = 0; i < count; ++i)
             value |= uint64_t(bytes[position++]) << (i * 8);
         return value;
     };
-    unsigned int destinationLength = destinationMode == 2 ? 2 : destinationMode == 3 ? 8 : 0;
-    unsigned int sourceLength = sourceMode == 2 ? 2 : sourceMode == 3 ? 8 : 0;
-    size_t headerLength = 3 + (destinationLength ? 2 + destinationLength : 0) + (sourceLength ? sourceLength + (compressed ? 0 : 2) : 0);
-    if (limit < headerLength)
+    unsigned int destinationLength = layout->destinationAddressLength;
+    unsigned int sourceLength = layout->sourceAddressLength;
+    if (type == 3 && limit == layout->headerLength() && (version < 2 || (!informationElementsPresent && !(control & 8))))
         return failure(TRUNCATED);
-    if (type == 3 && limit == headerLength)
+    if (version < 2 && type == 0 && !(control & 8) && limit < layout->headerLength() + 4)
         return failure(TRUNCATED);
-    if (type == 0 && !(control & 8) && limit < headerLength + 4)
-        return failure(TRUNCATED);
-    if (destinationLength) {
+    if (layout->destinationPanPresent)
         frame->setDestinationPanId(readLe(2));
+    if (destinationLength) {
         auto value = readLe(destinationLength);
         frame->setDestinationAddress(destinationMode == 2 ? Ieee802154Address::fromShort(value) : Ieee802154Address::fromExtended(value));
     }
+    if (layout->sourcePanPresent)
+        frame->setSourcePanId(readLe(2));
+    else if (sourceLength && layout->destinationPanPresent)
+        frame->setSourcePanId(frame->getDestinationPanId());
     if (sourceLength) {
-        frame->setSourcePanId(compressed ? frame->getDestinationPanId() : readLe(2));
         auto value = readLe(sourceLength);
         frame->setSourceAddress(sourceMode == 2 ? Ieee802154Address::fromShort(value) : Ieee802154Address::fromExtended(value));
     }
@@ -176,6 +199,24 @@ Ptr<Ieee802154Frame> Ieee802154FrameCodec::decode(const std::vector<uint8_t>& by
             frame->markIncorrect();
     }
     return frame;
+}
+
+std::optional<uint8_t> Ieee802154FrameCodec::sequenceNumber(const Ieee802154Frame& frame)
+{
+    auto layout = layoutFor(frame);
+    return frame.getDecodeStatus() == OK && layout && layout->sequencePresent ? std::optional<uint8_t>(frame.getDsn()) : std::nullopt;
+}
+
+std::optional<uint16_t> Ieee802154FrameCodec::destinationPanField(const Ieee802154Frame& frame)
+{
+    auto layout = layoutFor(frame);
+    return frame.getDecodeStatus() == OK && layout && layout->destinationPanPresent ? std::optional<uint16_t>(frame.getDestinationPanId()) : std::nullopt;
+}
+
+std::optional<uint16_t> Ieee802154FrameCodec::sourcePanField(const Ieee802154Frame& frame)
+{
+    auto layout = layoutFor(frame);
+    return frame.getDecodeStatus() == OK && layout && layout->sourcePanPresent ? std::optional<uint16_t>(frame.getSourcePanId()) : std::nullopt;
 }
 
 } // namespace inet

@@ -26,7 +26,8 @@ This record distinguishes source-audit closure, compilation, executed fixtures a
 | B3-06 | Completed | Fresh debug,3 unit/3 module fixtures and250/250 protocol cases PASS (`b306-acceptance1/`). Independent source closure23 PASS/11 N/A/0 FLAG/0 QUESTION. C++ follow-up1771 rows/zero errors/286 unique adds no unmatched diagnostic. |
 | B-99 | Conventional package closure complete | Fresh debug,6 units,15 modules and1464/1464 protocol cases across38 fixtures PASS; stored Power/coexistence trajectories and Power fake-GUI visual fingerprint PASS without baseline changes. Final combined B/E publication matrix remains separate. |
 | E1-00 | Source/layout/service audit complete; independent review confirmed closure | Enhanced catalog/checks/profile contain complete PAN-presence and termination matrices, enhanced PIB/service inputs, concrete consumers and selected service/filter boundaries. No new runtime result is implied. |
-| E1-01 through E1-99 | NOT_RUN | All implementation and direct runtime acceptance gates remain open. |
+| E1-01 | Debug acceptance complete; independent findings repaired | Fresh debug,6 units,legacy serializer and188/188 protocol cases PASS (`e101-acceptance1/`). Structural version2 layouts are enabled; native enhanced operation remains gated. C++ follow-up adds no unmatched diagnostic; inherited warning gate remains FAIL. |
+| E1-02 through E1-99 | NOT_RUN | Dependent IE and operational implementation/runtime gates remain open. |
 
 ## Baseline control run
 
@@ -593,6 +594,44 @@ Commands, result JSON, logs, baseline hash and unchanged-baseline assertion are 
 the execution artifact directory. These five comparisons detect trajectory changes; they
 do not replace the direct protocol evidence. Enhanced-frame implementation and final
 release/feature-isolation/publication gates remain open.
+
+## E1-01 version-aware layouts
+
+The first candidate passes six layout/wire/FCS/address/command/beacon unit fixtures,
+the legacy serializer and178 existing protocol cases. The new radio fixture initially
+executes zero cases because its MAC-only client declares two nonexistent callbacks
+(`e101-first/`); removing those methods passes all ten typed/raw gate cases against
+the same source/library (`e101-gate-fix1/`). No enhanced service is operationally enabled.
+
+Independent review finds a legacy forensic-classification regression: the shorter modern
+minimum changes incomplete legacy FCF prefixes into malformed/unsupported input, and
+layout-length checking hides already-forbidden legacy ACK/beacon controls as truncation.
+Both fixed-vector assertions fail on the candidate (`e101-classification-red/`,
+`e101-minimum-red/`). Restoring the known legacy minimum and invalid-control priority
+preserves their status, completeness/proper-representation flags and exact raw replay.
+Review also corrects the protocol fixture's parent-compatibility claim: its observation
+now checks raw FCF/FCS through existing APIs, while new structural-OK proof belongs to
+the unit. Parent runtime execution is NOT_RUN; the compatibility conclusion is source-derived.
+
+Fresh repaired acceptance passes all six units, the legacy serializer and188/188 protocol
+cases across EnhancedFrameGate10, ReceiveSecurity66, DataAck16 and GtsData96, with188
+actual ProtocolTest PASS and zero errors/skips/FAIL (`e101-acceptance1/`). The layout unit
+covers144 frame-type/mode/suppression combinations, independent both-extended and PAN-only
+octets, present0xffff versus absent, and the two-octet suppressed MHR with/without FCS.
+Exact selections, commands, native sources, generated fields and library hashes are retained.
+
+The initial three-TU C++ check reports1784 warning rows, zero errors and294 unique native
+diagnostics:293 match retained baseline lines and one new repeated layout branch is merged.
+Six generated legacy-header warnings are attributed only after byte-identical verification
+against the earlier printer snapshot (`e101-cpp-baseline-identities.json`). The final codec
+follow-up reports1034 warning rows, zero errors and26 native diagnostics, all matching
+unchanged initial lines with zero unmatched warnings. This remains a failed inherited warning
+gate, not a mechanical PASS. Scoped architecture/naming/interfaces, source/document seals,
+release fragments and model/protocol links pass; no baseline is changed.
+
+Independent closure confirms both findings resolved on the matching repaired source with
+23 PASS/11 N/A/0 FLAG/0 QUESTION. Structural layout support and the disabled operational
+gate are complete; IE framing and enhanced MAC services remain the subsequent units.
 
 ## Publication gate
 

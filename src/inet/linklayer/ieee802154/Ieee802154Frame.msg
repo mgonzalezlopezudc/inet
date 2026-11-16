@@ -13,6 +13,8 @@ class Ieee802154Frame extends FieldsChunk
     bool ackRequest = false;
     bool securityEnabled = false; // Protected remainder is opaque; no security transformation is implied.
     bool reservedBit7 = false; // Retained for forensic decoding; ignored on reception.
+    bool sequenceSuppressed = false; // Version 2: DSN is absent from the wire.
+    bool informationElementsPresent = false; // Version 2: payload begins with an IE list.
     bool framePending = false;
     bool panCompression = false;
     uint8_t dsn = 0;

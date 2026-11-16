@@ -1,0 +1,79 @@
+%description:
+Version-2 Table 7-2 wire presence, suppression and independent octets.
+
+%includes:
+#include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameLayout.h"
+#include <vector>
+using namespace inet;
+
+%activity:
+using Codec = Ieee802154FrameCodec;
+using Layout = Ieee802154FrameLayout;
+using Address = Ieee802154Address;
+struct Row { int destination; int source; bool compressed; bool destinationPan; bool sourcePan; };
+// Table 7-2's P rows are expanded to short and extended modes.
+const Row rows[] = {
+    {0,0,0,0,0},{0,0,1,1,0},
+    {2,0,0,1,0},{3,0,0,1,0},{2,0,1,0,0},{3,0,1,0,0},
+    {0,2,0,0,1},{0,3,0,0,1},{0,2,1,0,0},{0,3,1,0,0},
+    {3,3,0,1,0},{3,3,1,0,0},
+    {2,2,0,1,1},{2,3,0,1,1},{3,2,0,1,1},
+    {2,2,1,1,0},{2,3,1,1,0},{3,2,1,1,0}
+};
+auto address = [](int mode) { return mode == 0 ? Address() : mode == 2 ? Address::fromShort(0x5678) : Address::fromExtended(0x0201123456789abcULL); };
+for (const auto& row : rows) {
+    for (bool suppressed : {false,true}) {
+        auto layout = Layout::fromControl(2,row.destination,row.source,row.compressed,suppressed);
+        ASSERT(layout && layout->sequencePresent == !suppressed);
+        ASSERT(layout->destinationPanPresent == row.destinationPan && layout->sourcePanPresent == row.sourcePan);
+        for (int type : {0,1,2,3}) {
+            auto frame = makeShared<Ieee802154Frame>();
+            frame->setFrameType(type); frame->setFrameVersion(2); frame->setSequenceSuppressed(suppressed);
+            frame->setPanCompression(row.compressed); frame->setDsn(0x7a);
+            frame->setDestinationAddress(address(row.destination)); frame->setSourceAddress(address(row.source));
+            frame->setDestinationPanId(0xffff); frame->setSourcePanId(0xabcd);
+            frame->setFcsPresent(false);
+            if (type == 3) { frame->setPayloadArraySize(1); frame->setPayload(0,7); }
+            auto bytes = Codec::encode(*frame);
+            ASSERT(bytes.size() == layout->headerLength() + (type == 3 ? 1 : 0));
+            auto decoded = Codec::decode(bytes,false);
+            ASSERT(decoded->getDecodeStatus() == Codec::OK && decoded->getFrameType() == type);
+            ASSERT(decoded->getDestinationAddress() == address(row.destination) && decoded->getSourceAddress() == address(row.source));
+            ASSERT(Codec::sequenceNumber(*decoded).has_value() == !suppressed);
+            ASSERT(Codec::destinationPanField(*decoded).has_value() == row.destinationPan);
+            ASSERT(Codec::sourcePanField(*decoded).has_value() == row.sourcePan);
+            if (row.destinationPan) ASSERT(*Codec::destinationPanField(*decoded) == 0xffff);
+            if (row.sourcePan) ASSERT(*Codec::sourcePanField(*decoded) == 0xabcd);
+            ASSERT(Codec::encode(*decoded) == bytes);
+            for (size_t n = 0; n < layout->headerLength(); ++n)
+                ASSERT(Codec::decode(std::vector<uint8_t>(bytes.begin(),bytes.begin() + n),false)->getDecodeStatus() == Codec::TRUNCATED);
+        }
+    }
+}
+ASSERT(!Layout::fromControl(2,1,0,false,false));
+ASSERT(!Layout::fromControl(2,0,1,false,false));
+ASSERT(!Layout::fromControl(3,0,0,false,false));
+ASSERT(!Layout::fromControl(1,0,0,false,true));
+const std::vector<uint8_t> extendedUncompressed = {0x01,0xec,0x7a,0x34,0x12,
+    0xbc,0x9a,0x78,0x56,0x34,0x12,0x01,0x02,0xbc,0x9a,0x78,0x56,0x34,0x12,0x01,0x02};
+const std::vector<uint8_t> extendedCompressed = {0x41,0xed,
+    0xbc,0x9a,0x78,0x56,0x34,0x12,0x01,0x02,0xbc,0x9a,0x78,0x56,0x34,0x12,0x01,0x02};
+for (const auto& bytes : {extendedUncompressed,extendedCompressed}) {
+    auto decoded = Codec::decode(bytes,false);
+    ASSERT(decoded->getDecodeStatus() == Codec::OK && Codec::encode(*decoded) == bytes);
+}
+auto panOnly = Codec::decode({0x41,0x21,0xff,0xff},false);
+ASSERT(panOnly->getDecodeStatus() == Codec::OK && Codec::destinationPanField(*panOnly) == 0xffff);
+ASSERT(!Codec::sourcePanField(*panOnly) && !Codec::sequenceNumber(*panOnly));
+auto shortest = Codec::decode({0x01,0x21},false);
+ASSERT(shortest->getDecodeStatus() == Codec::OK && Codec::encode(*shortest) == std::vector<uint8_t>({0x01,0x21}));
+shortest->setFcsPresent(true); shortest->setComputeFcs(true);
+auto withFcs = Codec::encode(*shortest);
+ASSERT(withFcs.size() == 4 && Codec::decode(withFcs,true)->getFcsValid());
+ASSERT(Codec::decode({0x01,0x31},false)->getDecodeStatus() == Codec::MALFORMED);
+ASSERT(Codec::decode({0x01,0x25},false)->getDecodeStatus() == Codec::MALFORMED);
+std::cout << "Version-2 wire layout and presence verified.\n";
+
+%contains: stdout
+Version-2 wire layout and presence verified.

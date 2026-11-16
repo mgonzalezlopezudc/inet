@@ -2078,6 +2078,8 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
     auto frame = Ieee802154FrameCodec::decode(bytes);
     if (frame->getDecodeStatus() != Ieee802154FrameCodec::OK || !frame->getFcsValid())
         return;
+    if (frame->getFrameVersion() == 2)
+        return; // Structural decoding alone does not enable enhanced MAC operation.
     if (phyOperation && phyOperation->purpose == PhyPurpose::CCA && frame->getFrameType() != 0)
         return; // 6.3.2.1 permits discarding frames during CCA; beacon observation does not preempt the PHY.
     if (par("enableManagement").boolValue()) {

@@ -4,6 +4,7 @@
 #define __INET_IEEE802154FRAMECODEC_H
 
 #include <vector>
+#include <optional>
 #include "inet/linklayer/ieee802154/Ieee802154Frame_m.h"
 
 namespace inet {
@@ -16,6 +17,9 @@ class INET_API Ieee802154FrameCodec
     static std::vector<uint8_t> encode(const Ieee802154Frame& frame);
     static Ptr<Ieee802154Frame> decode(const std::vector<uint8_t>& bytes, bool fcsPresent = true);
     static void finalize(Ieee802154Frame& frame);
+    static std::optional<uint8_t> sequenceNumber(const Ieee802154Frame& frame);
+    static std::optional<uint16_t> destinationPanField(const Ieee802154Frame& frame);
+    static std::optional<uint16_t> sourcePanField(const Ieee802154Frame& frame);
 };
 
 } // namespace inet
