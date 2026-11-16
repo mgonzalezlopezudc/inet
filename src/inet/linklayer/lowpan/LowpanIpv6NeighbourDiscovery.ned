@@ -14,7 +14,7 @@ simple LowpanIpv6NeighbourDiscovery extends Ipv6NeighbourDiscovery
         int maxCandidateRouters = default(4); // Positive module-wide host router bound.
         int maxHostAddresses = default(16); // Positive module-wide host address inventory bound, including configured, autonomous and rejected addresses.
         int nativeRegistrationLifetime = default(1); // Host ARO lifetime in minutes, range 1..65535.
-        double nativeRegistrationRetryInterval @unit(s) = default(1s); // At least one second; registration transmits at most three requests per router/address attempt.
+        double nativeRegistrationRetryInterval @unit(s) = default(1s); // At least one second; floor for the advertised per-interface RetransTimer. Three requests per attempt, with twice the effective interval to await the final response.
         double nativeRegistrationRefreshFraction = default(0.8); // Strictly between zero and one; fraction of accepted lifetime before refresh.
         @signal[packetDropped](type=inet::Packet);
         @statistic[packetDropped](record=count);

@@ -9,13 +9,20 @@
 #include "inet/networklayer/icmpv6/Icmpv6.h"
 #include "inet/networklayer/ipv6/Ipv6InterfaceData.h"
 #include "inet/networklayer/ipv6/Ipv6RoutingTable.h"
+#include <cmath>
 
 namespace inet { namespace lowpan {
 namespace {
+simtime_t deadlineAfter(simtime_t reference, double seconds, int multiplier = 1)
+{
+    // Compare before constructing a duration or doubling a simulation time.
+    return seconds >= (SIMTIME_MAX - reference).dbl() / multiplier ? SIMTIME_MAX :
+        reference + SimTime(seconds * multiplier);
+}
+
 simtime_t finiteDeadline(uint32_t seconds)
 {
-    auto horizon = SIMTIME_MAX - simTime();
-    return double(seconds) >= horizon.dbl() ? SIMTIME_MAX : simTime() + SimTime(seconds);
+    return deadlineAfter(simTime(), seconds);
 }
 
 simtime_t prefixDeadline(uint32_t seconds)
@@ -31,10 +38,10 @@ LowpanHostRegistration::LowpanHostRegistration(LowpanIpv6NeighbourDiscovery& own
     maxRouters = owner.par("maxCandidateRouters");
     maxAddresses = owner.par("maxHostAddresses");
     registrationLifetime = owner.par("nativeRegistrationLifetime");
-    retryInterval = owner.par("nativeRegistrationRetryInterval");
+    retryIntervalSeconds = owner.par("nativeRegistrationRetryInterval").doubleValue();
     refreshFraction = owner.par("nativeRegistrationRefreshFraction");
     if (maxRouters <= 0 || maxAddresses <= 0 || registrationLifetime < 1 || registrationLifetime > 65535 ||
-            retryInterval < SimTime(1) || refreshFraction <= 0 || refreshFraction >= 1)
+            !std::isfinite(retryIntervalSeconds) || retryIntervalSeconds < 1 || refreshFraction <= 0 || refreshFraction >= 1)
         throw cRuntimeError("Invalid native host registration limits, lifetime, retry interval or refresh fraction");
     hostTimer = new cMessage("nativeHostTimer");
 }
@@ -58,13 +65,14 @@ void LowpanHostRegistration::startDiscovery(NetworkInterface *interface, bool ba
 {
     auto& discovery = discoveries[interface->getInterfaceId()];
     if (backoff) {
-        discovery.blockedUntil = simTime() + SimTime(10);
+        discovery.blockedUntil = finiteDeadline(10);
         discovery.active = false;
     }
     if (!discovery.active) {
         discovery.active = true;
         discovery.attempts = 0;
-        discovery.next = std::max({simTime(), discovery.blockedUntil, discovery.lastSent + SimTime(10)});
+        auto earliest = discovery.lastSent < SIMTIME_ZERO ? simTime() : deadlineAfter(discovery.lastSent, 10);
+        discovery.next = std::max({simTime(), discovery.blockedUntil, earliest});
         if (discovery.next <= simTime())
             sendRouterSolicitation(interface, discovery);
     }
@@ -91,7 +99,7 @@ void LowpanHostRegistration::sendRouterSolicitation(NetworkInterface *interface,
     discovery.attempts++;
     // RFC 6775 section 5.3: three initial ten-second intervals, then bounded backoff.
     int interval = discovery.attempts < 3 ? 10 : discovery.attempts == 3 ? 20 : discovery.attempts == 4 ? 40 : 60;
-    discovery.next = simTime() + SimTime(interval);
+    discovery.next = finiteDeadline(interval);
 }
 
 void LowpanHostRegistration::removeRouterRoute(const RouterKey& key)
@@ -233,6 +241,8 @@ void LowpanHostRegistration::processAdvertisement(Packet *packet, const Ipv6Rout
         drop(packet, LOWPAN_ND_UNSUPPORTED); // Selected native host profile uses M=0 address assignment.
         return;
     }
+    if (message->getRetransTimer() != 0)
+        interface->getProtocolDataForUpdate<Ipv6InterfaceData>()->setRetransTimer(message->getRetransTimer());
     auto& discovery = discoveries[interface->getInterfaceId()];
     if (discovery.blockedUntil > simTime()) {
         delete packet;
@@ -270,13 +280,13 @@ void LowpanHostRegistration::processAdvertisement(Packet *packet, const Ipv6Rout
     router.domain = domain;
     router.interfaceModuleId = interface->getId();
     router.validUntil = until;
-    simtime_t informationLifetime(message->getRouterLifetime());
+    uint32_t informationLifetime = message->getRouterLifetime();
     for (size_t i = 0; i < message->getOptions().getOptionArraySize(); i++)
         if (auto prefix = dynamic_cast<const Ipv6NdPrefixInformation *>(message->getOptions().getOption(i)))
             if (!prefix->getOnlinkFlag() && prefix->getValidLifetime() != 0 && prefix->getValidLifetime() != UINT32_MAX &&
-                    double(prefix->getValidLifetime()) < informationLifetime.dbl())
-                informationLifetime = std::min(informationLifetime, SimTime(prefix->getValidLifetime()));
-    router.informationRefreshAt = simTime() + informationLifetime * refreshFraction;
+                    prefix->getValidLifetime() < informationLifetime)
+                informationLifetime = prefix->getValidLifetime();
+    router.informationRefreshAt = deadlineAfter(simTime(), double(informationLifetime) * refreshFraction);
     removeRouterRoute(key);
     auto route = new Ipv6Route(Ipv6Address::UNSPECIFIED_ADDRESS, 0, IRoute::ROUTER_ADVERTISEMENT);
     route->setSource(&owner);
@@ -353,11 +363,18 @@ void LowpanHostRegistration::startNextRegistration(const RouterKey& key)
         if (accepted.validUntil <= simTime() || accepted.refreshAt <= simTime()) {
             router.pending = address;
             router.attempts = 1;
-            router.retryAt = simTime() + retryInterval;
+            router.retryAt = registrationRetryDeadline(interface, false);
             sendRegistration(key, address, registrationLifetime);
             break;
         }
     }
+}
+
+simtime_t LowpanHostRegistration::registrationRetryDeadline(NetworkInterface *interface, bool finalAttempt) const
+{
+    auto advertised = interface->getProtocolData<Ipv6InterfaceData>()->getRetransTimer();
+    double interval = std::max({1.0, retryIntervalSeconds, double(advertised) / 1000});
+    return deadlineAfter(simTime(), interval, finalAttempt ? 2 : 1);
 }
 
 void LowpanHostRegistration::rejectAddress(const AddressKey& key)
@@ -371,7 +388,7 @@ void LowpanHostRegistration::rejectAddress(const AddressKey& key)
             entry.second.registrations.erase(key.second);
             entry.second.pending = Ipv6Address::UNSPECIFIED_ADDRESS;
             entry.second.retryAt = SIMTIME_MAX;
-            entry.second.blockedUntil = simTime() + SimTime(10);
+            entry.second.blockedUntil = finiteDeadline(10);
         }
     auto existing = addresses.find(key);
     if (existing != addresses.end()) existing->second.rejected = true;
@@ -451,7 +468,7 @@ void LowpanHostRegistration::expireAddresses()
                     router.second.retryAt = SIMTIME_MAX;
                     // Base ARO errors identify no address. Let replies to the expired request drain
                     // before another address can become the outstanding registration on this router.
-                    router.second.blockedUntil = simTime() + SimTime(10);
+                    router.second.blockedUntil = finiteDeadline(10);
                 }
             }
         if (interface && interface->getProtocolData<Ipv6InterfaceData>()->hasAddress(current->first.second))
@@ -472,7 +489,7 @@ void LowpanHostRegistration::handleTimer()
         if (!router.pending.isUnspecified() && router.retryAt <= simTime()) {
             if (router.attempts >= 3) { removeRouter(key, true); continue; }
             router.attempts++;
-            router.retryAt = simTime() + retryInterval;
+            router.retryAt = registrationRetryDeadline(interface, router.attempts == 3);
             sendRegistration(key, router.pending, registrationLifetime);
         }
         if (router.informationRefreshAt <= simTime()) {
