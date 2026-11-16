@@ -56,6 +56,7 @@ const std::vector<ExpectedAttribute> expected = {
     {"macGroupRxMode", false, false},
     {"macSecurityEnabled", false, false},
     {"macBeaconOrder", uint64_t{15}, false},
+    {"macBeaconTxTime", uint64_t{0}, true},
     {"macSuperframeOrder", uint64_t{15}, true},
     {"macBattLifeExt", false, false},
     {"macBattLifeExtPeriods", uint64_t{6}, false},
@@ -86,7 +87,7 @@ const std::vector<ExpectedAttribute> expected = {
     {"macTschEnabled", false, false},
 };
 
-ASSERT(expected.size() == 55);
+ASSERT(expected.size() == 56);
 Ieee802154MacPib pib(identity, 37);
 
 auto read = [](const Ieee802154MacPib& target, const std::string& name) -> Value {
@@ -137,7 +138,7 @@ ASSERT(pib.set("macBeaconOrder", uint64_t{14}) == Status::INVALID_PARAMETER);
 ASSERT(pib.set("macBattLifeExtPeriods", uint64_t{5}) == Status::INVALID_PARAMETER);
 ASSERT(pib.set("macBattLifeExtPeriods", uint64_t{42}) == Status::INVALID_PARAMETER);
 ASSERT(pib.set("macSuperframeOrder", uint64_t{0}) == Status::READ_ONLY);
-ASSERT(pib.set("macBeaconTxTime", uint64_t{0}) == Status::UNSUPPORTED_ATTRIBUTE);
+ASSERT(pib.set("macBeaconTxTime", uint64_t{0}) == Status::READ_ONLY);
 ASSERT(pib.set("macGtsPermit", true) == Status::UNSUPPORTED_ATTRIBUTE);
 ASSERT(pib.set("macCoordExtendedAddress", Ieee802154Address::NONE_ADDRESS) == Status::INVALID_PARAMETER);
 ASSERT(pib.set("macCoordExtendedAddress", Ieee802154Address::fromExtended(std::numeric_limits<uint64_t>::max())) == Status::INVALID_PARAMETER);

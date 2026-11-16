@@ -1,0 +1,3 @@
+IEEE 802.15.4 superframe management service
+
+Custom IEEE 802.15.4 management service providers and clients must implement the new START-SUPERFRAME request and confirmation methods and rebuild. See the IEEE 802.15.4 Superframe Management migration guide.

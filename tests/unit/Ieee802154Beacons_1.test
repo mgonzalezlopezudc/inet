@@ -18,6 +18,15 @@ using Address = Ieee802154Address;
 Content content;
 content.superframeSpecification = 0xcfff; // BO/SO 15, final CAP 15, PAN coordinator, association permit.
 ASSERT(Codec::encode(content) == std::vector<uint8_t>({0xff, 0xcf, 0, 0}));
+// Periodic coordinator field vectors: BO/SO, final CAP slot 15 and PAN coordinator.
+for (const auto& [specification, wire] : std::vector<std::pair<uint16_t,std::vector<uint8_t>>>{
+        {0x4f00,{0x00,0x4f,0,0}}, {0x4f13,{0x13,0x4f,0,0}},
+        {0x4fee,{0xee,0x4f,0,0}}, {0x4ff3,{0xf3,0x4f,0,0}}}) {
+    Content periodic;
+    periodic.superframeSpecification = specification;
+    ASSERT(Codec::encode(periodic) == wire);
+    ASSERT(std::get<Content>(Codec::decode(wire)).superframeSpecification == specification);
+}
 content.gtsPermit = true;
 content.gtsDirections = 1;
 content.gtsDescriptors = {0x78, 0x56, 0x23};
