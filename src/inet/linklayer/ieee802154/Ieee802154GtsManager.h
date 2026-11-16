@@ -32,6 +32,7 @@ class INET_API Ieee802154GtsManager
     [[nodiscard]] size_t reservedCount() const;
     bool putGrant(const Grant& grant);
     bool removeGrant(const Key& key);
+    bool removeAdvertisement(const Key& key);
     bool advertise(const Key& key, uint8_t start, uint8_t length);
     void markPublished(const std::vector<Advertisement>& snapshot);
     void ageAdvertisements();

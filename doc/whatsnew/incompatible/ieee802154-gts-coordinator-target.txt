@@ -1,0 +1,4 @@
+IEEE 802.15.4 native GTS coordinator target
+
+The native GTS request value includes an optional coordinator removal target.
+Rebuild custom management clients and providers against the updated contract.

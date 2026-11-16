@@ -22,6 +22,7 @@ class GtsContractStandIn
     void complete(IIeee802154ManagementServiceClient& client) {
         auto value = *pending; pending.reset();
         ASSERT(value.second.security.securityLevel == 5);
+        ASSERT(value.second.coordinatorDevice == 7);
         client.handleGtsConfirm(value.first,{value.second.characteristics,Ieee802154MacStatus::SUCCESS});
     }
 };
@@ -79,6 +80,7 @@ class GtsServiceClient : public SimpleModule, public IIeee802154MacServiceClient
         delete message;
         Ieee802154MacGtsRequest request{{3,Ieee802154GtsDirection::DEVICE_RECEIVE,true}};
         request.security.securityLevel = 5;
+        request.coordinatorDevice = 7;
         auto copied = request;
         GtsContractStandIn standIn;
         standIn.submit(42,request);
@@ -87,7 +89,9 @@ class GtsServiceClient : public SimpleModule, public IIeee802154MacServiceClient
         ASSERT(management->submitGts(gtsId,request) == Admission::UNSUPPORTED_OPERATION);
         request.characteristics.length = 9;
         request.security.securityLevel = 0;
+        request.coordinatorDevice = 8;
         ASSERT(copied.characteristics.length == 3);
+        ASSERT(copied.coordinatorDevice == 7);
         standIn.complete(*this);
         ASSERT(gtsConfirms == 1);
         ASSERT(management->submitGts(gtsId,copied) == Admission::INVALID_REQUEST);

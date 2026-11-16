@@ -944,7 +944,9 @@ void Ieee802154StandardMac::completeData(const Ieee802154MacServiceResult& resul
     }
     else if (completed.kind == Transaction::Kind::GTS_REQUEST) {
         if (gtsRequest && gtsRequest->id == completed.id) {
-            if (result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS) && synchronization && superframe) {
+            if (result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS) && !gtsRequest->request.characteristics.allocate)
+                completeGts(result);
+            else if (result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS) && synchronization && superframe) {
                 gtsRequest->waiting = true;
                 auto symbols = int64_t(4 * 960) << synchronization->beaconOrder;
                 auto deadline = superframe->getCurrentClockTime() + SIMTIME_AS_CLOCKTIME(SimTime(symbols * 16,SIMTIME_US));
@@ -2033,7 +2035,7 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
             if (auto gts = std::get_if<Ieee802154CommandCodec::GtsRequest>(command)) {
                 if (!panCoordinator || !periodicBeaconing || !superframe || !frame->getSourceAddress().isShort() ||
                         !frame->getDestinationAddress().isNone() || frame->getSourcePanId() != getInteger("macPanId") ||
-                        !frame->getAckRequest() || !gts->characteristics.allocate || !gts->characteristics.length)
+                        !frame->getAckRequest() || !gts->characteristics.length)
                     return;
                 for (const auto& [peer,shortAddress] : associatedDevices)
                     if (peer.first == frame->getSourcePanId() && shortAddress == frame->getSourceAddress().getShort() && peer.second.isExtended()) {
@@ -5012,7 +5014,7 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitGts(uint64_t id, cons
     auto admission = admitRadio(id);
     if (admission != Ieee802154MacServiceAdmission::ACCEPTED)
         return admission;
-    if (!par("enableManagement").boolValue() || !managementClient || !superframe || !slottedAccess || !phy || !request.characteristics.allocate)
+    if (!par("enableManagement").boolValue() || !managementClient || !superframe || !slottedAccess || !phy)
         return Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION;
     if (gtsRequest)
         return Ieee802154MacServiceAdmission::BUSY;
@@ -5028,9 +5030,55 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitGts(uint64_t id, cons
         managementClient->handleGtsConfirm(id,{request.characteristics,result});
         return admission;
     }
+    if (panCoordinator && (request.characteristics.allocate || !request.coordinatorDevice))
+        return Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION;
+    if (request.coordinatorDevice && !panCoordinator) {
+        managementClient->handleGtsConfirm(id,{request.characteristics,Ieee802154MacStatus::INVALID_PARAMETER});
+        return admission;
+    }
+    if (request.coordinatorDevice) {
+        if (!periodicBeaconing) {
+            managementClient->handleGtsConfirm(id,{request.characteristics,Ieee802154MacStatus::INVALID_PARAMETER});
+            return admission;
+        }
+        std::optional<Ieee802154GtsManager::Key> key;
+        for (const auto& grant : gtsManager.getGrants())
+            if (grant.key.panId == getInteger("macPanId") && grant.key.shortAddress == *request.coordinatorDevice &&
+                    grant.key.direction == request.characteristics.direction && grant.length == request.characteristics.length &&
+                    associatedDevices.count({grant.key.panId,Ieee802154Address::fromExtended(grant.key.extendedAddress)}) &&
+                    associatedDevices.at({grant.key.panId,Ieee802154Address::fromExtended(grant.key.extendedAddress)}) == grant.key.shortAddress) {
+                key = grant.key;
+                break;
+            }
+        if (!key) {
+            managementClient->handleGtsConfirm(id,{request.characteristics,Ieee802154MacStatus::INVALID_PARAMETER});
+            return admission;
+        }
+        auto outerNotifications = syncLossNotificationsActive;
+        syncLossNotificationsActive = true;
+        removeGtsGrant(*key,true,false);
+        managementClient->handleGtsConfirm(id,{request.characteristics,Ieee802154MacStatus::SUCCESS});
+        syncLossNotificationsActive = outerNotifications;
+        if (!outerNotifications && resetRequest && resetRequest->deferredResult) {
+            auto deferred = *resetRequest->deferredResult;
+            finishReset(deferred);
+        }
+        return admission;
+    }
     if (!parentAssociated || !getBoolean("macAssociatedPanCoord") || !synchronization || !synchronization->installed ||
             !synchronization->request.trackBeacon || !synchronization->anchored || !incomingSuperframe || !incomingSuperframe->panCoordinator)
         return Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION;
+    std::optional<Ieee802154GtsManager::Key> localRemoval;
+    if (!request.characteristics.allocate) {
+        auto extended = std::get<Ieee802154Address>(*pib->get("macExtendedAddress").value).getExtended();
+        Ieee802154GtsManager::Key key{uint16_t(getInteger("macPanId")),extended,uint16_t(shortAddress),request.characteristics.direction};
+        auto grant = gtsManager.findGrant(key);
+        if (!grant || grant->length != request.characteristics.length) {
+            managementClient->handleGtsConfirm(id,{request.characteristics,Ieee802154MacStatus::INVALID_PARAMETER});
+            return admission;
+        }
+        localRemoval = key;
+    }
     auto frame = makeShared<Ieee802154Frame>();
     frame->setFrameType(3);
     frame->setFrameVersion(0);
@@ -5046,6 +5094,11 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitGts(uint64_t id, cons
     gtsRequest = GtsRequestState{id,request};
     transaction = Transaction{id,nullptr,0,frame};
     transaction->kind = Transaction::Kind::GTS_REQUEST;
+    if (localRemoval) {
+        gtsManager.removeGrant(*localRemoval);
+        gtsManager.removeAdvertisement(*localRemoval);
+        refreshCfp();
+    }
     startData();
     return admission;
 }
@@ -5065,8 +5118,15 @@ void Ieee802154StandardMac::decideGts(const Ieee802154GtsManager::Key& key, cons
 {
     auto membership = associatedDevices.find({key.panId,Ieee802154Address::fromExtended(key.extendedAddress)});
     if (!panCoordinator || !periodicBeaconing || !outgoingEpoch || outgoingEpoch->superframeOrder >= 15 ||
-            key.panId != getInteger("macPanId") || membership == associatedDevices.end() || membership->second != key.shortAddress ||
-            !getBoolean("macGtsPermit") || gtsManager.findGrant(key) || !gtsManager.canReserve(key))
+            key.panId != getInteger("macPanId") || membership == associatedDevices.end() || membership->second != key.shortAddress)
+        return;
+    if (!characteristics.allocate) {
+        auto grant = gtsManager.findGrant(key);
+        if (grant && grant->length == characteristics.length)
+            removeGtsGrant(key,false);
+        return;
+    }
+    if (!getBoolean("macGtsPermit") || gtsManager.findGrant(key) || !gtsManager.canReserve(key))
         return;
     unsigned int used = 0;
     for (const auto& grant : gtsManager.getGrants()) used += grant.length;
@@ -5100,26 +5160,36 @@ void Ieee802154StandardMac::decideGts(const Ieee802154GtsManager::Key& key, cons
         managementClient->handleGtsIndication({Ieee802154Address::fromShort(key.shortAddress),characteristics});
 }
 
-void Ieee802154StandardMac::removeGtsGrant(const Ieee802154GtsManager::Key& key)
+void Ieee802154StandardMac::removeGtsGrant(const Ieee802154GtsManager::Key& key, bool advertiseRemoval, bool notify)
 {
     auto grant = gtsManager.findGrant(key);
     if (!grant)
         return;
     auto length = grant->length;
-    removeGtsFromLedger(gtsManager,key);
+    auto outerNotifications = syncLossNotificationsActive;
+    syncLossNotificationsActive = true;
+    removeGtsFromLedger(gtsManager,key,advertiseRemoval);
     retireInvalidGtsData();
-    if (managementClient)
+    refreshCfp();
+    if (notify && managementClient)
         managementClient->handleGtsIndication({Ieee802154Address::fromShort(key.shortAddress),{length,key.direction,false}});
+    syncLossNotificationsActive = outerNotifications;
+    if (!outerNotifications && resetRequest && resetRequest->deferredResult) {
+        auto deferred = *resetRequest->deferredResult;
+        finishReset(deferred);
+    }
 }
 
-void Ieee802154StandardMac::removeGtsFromLedger(Ieee802154GtsManager& ledger, const Ieee802154GtsManager::Key& key)
+void Ieee802154StandardMac::removeGtsFromLedger(Ieee802154GtsManager& ledger, const Ieee802154GtsManager::Key& key, bool advertiseRemoval)
 {
     auto grant = ledger.findGrant(key);
     if (!grant)
         return;
     auto length = grant->length;
     ledger.removeGrant(key);
-    if (!ledger.advertise(key,0,length))
+    if (!advertiseRemoval)
+        ledger.removeAdvertisement(key);
+    else if (!ledger.advertise(key,0,length))
         throw cRuntimeError("Cannot retain IEEE 802.15.4 GTS removal descriptor");
     unsigned int used = 0;
     auto grants = ledger.getGrants();
