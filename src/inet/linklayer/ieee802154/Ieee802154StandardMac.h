@@ -57,6 +57,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
         simtime_t ackDeadline;
         std::optional<bool> ackFramePending;
         std::optional<uint8_t> ackRssi;
+        std::optional<simtime_t> accessStartAt;
         std::optional<std::pair<uint16_t,Ieee802154Address>> pendingDevice; ///< Queue key retained across allocation changes.
         enum class Kind { DATA, POLL, INDIRECT, BEACON, AUTO_BEACON, SCAN_REQUEST, ASSOCIATE_REQUEST, DISASSOCIATE, ORPHAN_RESPONSE, PAN_CONFLICT } kind = Kind::DATA;
     };
@@ -331,7 +332,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     virtual Ieee802154MacServiceCancelResult cancel(uint64_t id) override;
     virtual bool handleOperationStage(LifecycleOperation *operation, IDoneCallback *doneCallback) override;
     virtual void handleCcaRequest(uint64_t id) override;
-    virtual void handleAccessConfirm(uint64_t id, const Ieee802154MacServiceResult& result, uint8_t numBackoffs) override;
+    virtual void handleAccessConfirm(uint64_t id, const Ieee802154MacServiceResult& result, uint8_t numBackoffs, std::optional<simtime_t> startAt) override;
     virtual void handleTransmitStarted(uint64_t id, const physicallayer::Ieee802154PhyTransmitStart& start) override;
     virtual void handleReceiveStarted(const physicallayer::Ieee802154PhyReceiveStart& start) override;
     virtual void handleSuperframeBoundary(clocktime_t boundary) override;

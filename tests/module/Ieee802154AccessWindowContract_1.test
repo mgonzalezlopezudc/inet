@@ -1,0 +1,245 @@
+%description:
+The production unslotted role refuses a CAP window and retains its existing
+no-window path. A scripted replacement checks copied window values, stale IDs,
+future-opportunity delivery and cancellation. A native MAC/PHY/radio composition
+checks actual transmission timing and terminal behavior; the scripted provider
+is not a slotted algorithm.
+
+%extraargs: -r 0..5
+
+%file: AccessWindowFixture.cc
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/common/SimpleModule.h"
+#include "inet/common/Simsignals.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceProvider.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154AccessClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154AccessProvider.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmission.h"
+
+namespace inet {
+class ScriptedWindowProvider : public SimpleModule, public IIeee802154AccessProvider
+{
+    ModuleRefByPar<IIeee802154AccessClient> client;
+    std::optional<Ieee802154AccessRequest> request;
+    uint64_t activeId = 0;
+  protected:
+    virtual void initialize(int stage) override { if (stage == 0) client.reference(this,"clientModule",true); }
+  public:
+    virtual Ieee802154MacServiceAdmission start(uint64_t id, const Ieee802154AccessRequest& value) override {
+        Enter_Method("start"); if (activeId) return Ieee802154MacServiceAdmission::BUSY;
+        activeId = id; request = value; return Ieee802154MacServiceAdmission::ACCEPTED;
+    }
+    virtual Ieee802154MacServiceAdmission updateWindow(uint64_t id, const Ieee802154AccessWindow& window) override {
+        Enter_Method("updateWindow"); if (!activeId || id != activeId) return Ieee802154MacServiceAdmission::INVALID_REQUEST;
+        request->window = window; return Ieee802154MacServiceAdmission::ACCEPTED;
+    }
+    virtual void handleCcaResult(uint64_t, bool) override { ASSERT(false); }
+    virtual Ieee802154MacServiceCancelResult cancel(uint64_t id, Ieee802154MacServiceAbortReason reason) override {
+        Enter_Method("cancel"); if (id != activeId) return Ieee802154MacServiceCancelResult::NOT_PENDING;
+        activeId = 0; request.reset(); client->handleAccessConfirm(id,reason,0,{}); return Ieee802154MacServiceCancelResult::CANCELLED;
+    }
+    Ieee802154AccessWindow copiedWindow() const { return *request->window; }
+    void completeAt(simtime_t time) {
+        Enter_Method("completeAt"); auto id = activeId; activeId = 0; request.reset();
+        client->handleAccessConfirm(id,Ieee802154MacStatus::SUCCESS,0,time);
+    }
+};
+Define_Module(ScriptedWindowProvider);
+
+class ScriptedNativeAccess : public SimpleModule, public IIeee802154AccessProvider
+{
+    ModuleRefByPar<IIeee802154AccessClient> client;
+    simtime_t target;
+  protected:
+    virtual void initialize(int stage) override { if (stage == 0) client.reference(this,"clientModule",true); }
+  public:
+    virtual Ieee802154MacServiceAdmission start(uint64_t id, const Ieee802154AccessRequest& request) override {
+        Enter_Method("start"); ASSERT(!request.window && request.exchangeDuration > SIMTIME_ZERO);
+        int scenario = par("scenario");
+        target = simTime() + (scenario == 1 ? SIMTIME_ZERO : scenario == 2 ? SimTime(100,SIMTIME_US) :
+                scenario == 3 ? -SimTime::fromRaw(1) : SimTime(2,SIMTIME_MS));
+        client->handleAccessConfirm(id,Ieee802154MacStatus::SUCCESS,0,target);
+        return Ieee802154MacServiceAdmission::ACCEPTED;
+    }
+    virtual Ieee802154MacServiceAdmission updateWindow(uint64_t, const Ieee802154AccessWindow&) override { return Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION; }
+    virtual void handleCcaResult(uint64_t, bool) override { ASSERT(false); }
+    virtual Ieee802154MacServiceCancelResult cancel(uint64_t, Ieee802154MacServiceAbortReason) override { return Ieee802154MacServiceCancelResult::NOT_PENDING; }
+    simtime_t getTarget() const { return target; }
+};
+Define_Module(ScriptedNativeAccess);
+
+class AccessWindowExercise : public cSimpleModule, public cListener, public IIeee802154AccessClient, public IIeee802154MacServiceClient
+{
+    ModuleRefByPar<IIeee802154AccessProvider> unslotted, deferred;
+    ModuleRefByPar<IIeee802154MacServiceProvider> nativeMac;
+    int ccaRequests = 0, confirmations = 0;
+    int nativeConfirms = 0, nativeResets = 0, nativeTransmissions = 0;
+    simtime_t nativeStart;
+    Ieee802154MacServiceResult nativeResult = Ieee802154MacStatus::SUCCESS;
+    std::optional<simtime_t> lastStart;
+    Ieee802154MacServiceResult lastResult = Ieee802154MacStatus::SUCCESS;
+  protected:
+    virtual void initialize() override {
+        unslotted.reference(this,"unslottedModule",true); deferred.reference(this,"deferredModule",true);
+        nativeMac.reference(this,"serviceModule",true);
+        getModuleByPath(par("radioModule"))->subscribe(transmissionStartedSignal,this);
+    }
+    virtual void activity() override {
+        using Admission = Ieee802154MacServiceAdmission;
+        Ieee802154AccessWindow window{7,SIMTIME_AS_CLOCKTIME(SimTime(1,SIMTIME_MS)),SIMTIME_AS_CLOCKTIME(SimTime(5,SIMTIME_MS)),
+                SIMTIME_AS_CLOCKTIME(SimTime(1,SIMTIME_MS)),SIMTIME_AS_CLOCKTIME(SimTime(3,SIMTIME_MS))};
+        Ieee802154AccessRequest request{0,3,0,SimTime(320,SIMTIME_US)};
+        request.window = window; request.exchangeDuration = SimTime(1,SIMTIME_MS);
+        ASSERT(unslotted->start(1,request) == Admission::UNSUPPORTED_OPERATION && confirmations == 0);
+        ASSERT(unslotted->updateWindow(1,window) == Admission::UNSUPPORTED_OPERATION && confirmations == 0);
+        request.window.reset();
+        ASSERT(unslotted->start(2,request) == Admission::ACCEPTED);
+        ASSERT(ccaRequests == 1 && confirmations == 1 && !lastStart && lastResult == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS));
+        request.window = window;
+        ASSERT(deferred->start(1,request) == Admission::ACCEPTED);
+        request.window->epoch = 99;
+        auto scripted = check_and_cast<ScriptedWindowProvider *>(getModuleByPath(par("deferredModule")));
+        ASSERT(scripted->copiedWindow().epoch == 7);
+        window.epoch = 8;
+        ASSERT(deferred->updateWindow(2,window) == Admission::INVALID_REQUEST && scripted->copiedWindow().epoch == 7);
+        ASSERT(deferred->updateWindow(1,window) == Admission::ACCEPTED);
+        window.epoch = 10;
+        ASSERT(scripted->copiedWindow().epoch == 8 && confirmations == 1);
+        scripted->completeAt(SimTime(4,SIMTIME_MS));
+        ASSERT(confirmations == 2 && lastStart == SimTime(4,SIMTIME_MS));
+        ASSERT(deferred->updateWindow(1,window) == Admission::INVALID_REQUEST);
+        ASSERT(deferred->start(2,request) == Admission::ACCEPTED);
+        ASSERT(deferred->cancel(2,Ieee802154MacServiceAbortReason::CANCELLED) == Ieee802154MacServiceCancelResult::CANCELLED);
+        ASSERT(confirmations == 3 && lastResult == Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::CANCELLED) && !lastStart);
+        wait(SimTime(1,SIMTIME_MS));
+        auto packet = new Packet("native-data");
+        packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0x42}));
+        Ieee802154MacDataRequest data;
+        data.sourceAddressMode = Ieee802154Address::AddressType::SHORT;
+        data.destinationAddress = Ieee802154Address::fromShort(2);
+        data.destinationPanId = 0x1234;
+        ASSERT(nativeMac->submitData(1,packet,data) == Admission::ACCEPTED);
+        wait(SimTime(1,SIMTIME_MS));
+        int scenario = par("scenario");
+        if (scenario == 4) ASSERT(nativeMac->cancel(1) == Ieee802154MacServiceCancelResult::CANCELLED);
+        if (scenario == 5) ASSERT(nativeMac->submitReset(2,{false}) == Admission::ACCEPTED);
+        wait(SimTime(4,SIMTIME_MS));
+        auto access = check_and_cast<ScriptedNativeAccess *>(getModuleByPath(par("nativeAccessModule")));
+        ASSERT(nativeConfirms == 1 && nativeResets == (scenario == 5 ? 1 : 0));
+        if (scenario == 0) {
+            ASSERT(nativeResult == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS));
+            ASSERT(nativeTransmissions == 1 && nativeStart == access->getTarget());
+        }
+        else {
+            auto expected = scenario == 4 ? Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::CANCELLED) :
+                    scenario == 5 ? Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::RESET) :
+                    Ieee802154MacServiceResult(Ieee802154MacStatus::CHANNEL_ACCESS_FAILURE);
+            ASSERT(nativeResult == expected && nativeTransmissions == 0);
+        }
+        std::cout << "Access window role and unslotted refusal verified.\n";
+    }
+  public:
+    AccessWindowExercise() : cSimpleModule(65536) {}
+    virtual void handleCcaRequest(uint64_t id) override { Enter_Method("handleCcaRequest"); ++ccaRequests; unslotted->handleCcaResult(id,true); }
+    virtual void handleAccessConfirm(uint64_t, const Ieee802154MacServiceResult& result, uint8_t, std::optional<simtime_t> startAt) override {
+        Enter_Method("handleAccessConfirm"); ++confirmations; lastResult = result; lastStart = startAt;
+    }
+    virtual void receiveSignal(cComponent *, simsignal_t, cObject *object, cObject *) override {
+        Enter_Method("receiveSignal"); auto transmission = check_and_cast<const physicallayer::ITransmission *>(object);
+        ++nativeTransmissions; nativeStart = transmission->getStartTime();
+    }
+    virtual void handleDataConfirm(uint64_t, const Ieee802154MacDataConfirm& confirm) override { Enter_Method("handleDataConfirm"); ++nativeConfirms; nativeResult = confirm.result; }
+    virtual void handleResetConfirm(uint64_t, const Ieee802154MacResetConfirm& confirm) override { Enter_Method("handleResetConfirm"); ASSERT(nativeConfirms == 1 && confirm.result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS)); ++nativeResets; }
+    virtual void handleGetConfirm(uint64_t, const Ieee802154MacGetConfirm&) override { ASSERT(false); }
+    virtual void handleSetConfirm(uint64_t, const Ieee802154MacSetConfirm&) override { ASSERT(false); }
+    virtual void handleDataIndication(Packet *, const Ieee802154MacDataIndication&) override { ASSERT(false); }
+    virtual void handlePromiscuousIndication(Packet *, const Ieee802154MacPromiscuousIndication&) override { ASSERT(false); }
+    virtual void handleCommStatusIndication(Packet *, const Ieee802154MacCommStatusIndication&) override { ASSERT(false); }
+};
+Define_Module(AccessWindowExercise);
+}
+
+%file: AccessWindowFixture.ned
+import inet.common.SimpleModule;
+import inet.linklayer.ieee802154.Ieee802154UnslottedAccess;
+import inet.linklayer.ieee802154.contract.IIeee802154AccessClient;
+import inet.linklayer.ieee802154.contract.IIeee802154AccessProvider;
+import inet.linklayer.ieee802154.Ieee802154StandardMac;
+import inet.linklayer.ieee802154.contract.IIeee802154MacServiceClient;
+import inet.networklayer.common.NetworkInterface;
+import inet.mobility.static.StationaryMobility;
+import inet.physicallayer.wireless.ieee802154.Ieee802154PhyService;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154StandardRadio;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple ScriptedWindowProvider extends SimpleModule like IIeee802154AccessProvider
+{
+    parameters: string clientModule; @class(::inet::ScriptedWindowProvider);
+}
+simple ScriptedNativeAccess extends SimpleModule like IIeee802154AccessProvider
+{
+    parameters: string clientModule; int scenario; @class(::inet::ScriptedNativeAccess);
+}
+simple AccessWindowExercise extends SimpleModule like IIeee802154AccessClient, IIeee802154MacServiceClient
+{
+    parameters: string accessModule; string unslottedModule; string deferredModule; string serviceModule; string nativeAccessModule; string radioModule; int scenario; @class(::inet::AccessWindowExercise);
+}
+module AccessWindowInterface extends NetworkInterface
+{
+    parameters: string interfaceTableModule = default(""); int scenario;
+    gates: input upperLayerIn; output upperLayerOut; input radioIn;
+    submodules:
+        mac: Ieee802154StandardMac {
+            clientModule = "^.^.^.exercise"; interfaceModule = "^"; accessModule = "^.access"; providerModule = "^.phy";
+            extendedAddress = "extended:02-01-12-34-56-78-9A-BC"; shortAddress = 1; panId = 4660;
+        }
+        access: ScriptedNativeAccess { clientModule = "^.mac"; scenario = parent.scenario; }
+        phy: Ieee802154PhyService { clientModule = "^.mac"; radioModule = "^.radio"; }
+        radio: Ieee802154StandardRadio;
+    connections allowunconnected:
+        radioIn --> radio.radioIn;
+        radio.upperLayerOut --> phy.lowerLayerIn;
+}
+module AccessWindowHost
+{
+    parameters: @networkNode; int scenario;
+    submodules:
+        mobility: StationaryMobility;
+        nic: AccessWindowInterface { scenario = parent.scenario; }
+    connections allowunconnected:
+}
+network AccessWindowTest
+{
+    parameters: int scenario;
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        host: AccessWindowHost { scenario = parent.scenario; }
+        unslotted: Ieee802154UnslottedAccess { clientModule = "^.exercise"; }
+        deferred: ScriptedWindowProvider { clientModule = "^.exercise"; }
+        exercise: AccessWindowExercise {
+            accessModule = "^.unslotted"; unslottedModule = "^.unslotted"; deferredModule = "^.deferred";
+            serviceModule = "^.host.nic.mac"; nativeAccessModule = "^.host.nic.access"; radioModule = "^.host.nic.radio"; scenario = parent.scenario;
+        }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = AccessWindowTest
+sim-time-limit = 10ms
+*.scenario = ${scenario=0..5}
+*.host.nic.radio.antenna.mobilityModule = "^.^.^.mobility"
+*.host.mobility.initFromDisplayString = false
+*.host.mobility.initialX = 0m
+*.host.mobility.initialY = 0m
+*.host.mobility.initialZ = 0m
+*.host.mobility.constraintAreaMinX = 0m
+*.host.mobility.constraintAreaMinY = 0m
+*.host.mobility.constraintAreaMinZ = 0m
+*.host.mobility.constraintAreaMaxX = 100m
+*.host.mobility.constraintAreaMaxY = 100m
+*.host.mobility.constraintAreaMaxZ = 100m
+
+%contains: stdout
+Access window role and unslotted refusal verified.
