@@ -1,0 +1,3 @@
+IEEE 802.15.4 slotted CAP access
+
+The optional native superframe composition supports slotted CSMA-CA for direct DATA and the existing shared command access path. It uses actual beacon-derived CAP windows, two CCAs, BLE, cross-superframe backoff deferral and PHY-ready grid-aligned transmissions. Managed beacon-mode procedures and GTS remain separate capabilities. The supported external-clock profile and updated role interfaces are described in the IEEE 802.15.4 Slotted Access Roles migration guide.

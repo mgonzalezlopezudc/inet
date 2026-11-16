@@ -1,0 +1,141 @@
+%description:
+Exercise residual backoff, fresh-draw deferral, and BLE countdown deferral in
+the production slotted provider with an independently timed scripted CCA peer.
+
+%extraargs: -r 0..2
+
+%file: SlottedDeferralFixture.cc
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154AccessClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154AccessProvider.h"
+
+namespace inet {
+class SlottedDeferralExercise : public cSimpleModule, public cListener, public IIeee802154AccessClient
+{
+    ModuleRefByPar<IIeee802154AccessProvider> access;
+    cMessage *update = nullptr, *cca = nullptr;
+    uint64_t id = 0;
+    int scenario = 0, draws = 0, selectedSlots = -1, requests = 0, completions = 0;
+    bool selecting = false, finished = false;
+    simtime_t firstCca;
+
+    Ieee802154AccessWindow window(uint64_t epoch, simtime_t start, simtime_t end, bool ble, simtime_t bleEnd) {
+        Ieee802154AccessWindow result{epoch, SIMTIME_AS_CLOCKTIME(start), SIMTIME_AS_CLOCKTIME(end), SIMTIME_AS_CLOCKTIME(SIMTIME_ZERO), {}};
+        result.physicalCapStart = start;
+        result.physicalCapEnd = end;
+        result.notBefore = start;
+        if (ble) {
+            result.bleStart = SIMTIME_AS_CLOCKTIME(start);
+            result.bleEnd = SIMTIME_AS_CLOCKTIME(bleEnd);
+        }
+        return result;
+    }
+    Ieee802154AccessRequest parameters() {
+        Ieee802154AccessRequest request{uint8_t(scenario == 1 ? 0 : 8), 8, 4, SimTime(320,SIMTIME_US)};
+        request.ccaDuration = SimTime(128,SIMTIME_US);
+        request.turnaroundTime = SimTime(192,SIMTIME_US);
+        request.exchangeDuration = SimTime(scenario == 1 ? 700 : 100,SIMTIME_US);
+        request.window = window(1,SIMTIME_ZERO,SimTime(scenario == 1 ? 800 : 1000,SIMTIME_US),scenario == 2,SimTime(320,SIMTIME_US));
+        return request;
+    }
+  protected:
+    virtual void initialize() override {
+        access.reference(this,"accessModule",true);
+        scenario = par("scenario");
+        getModuleByPath(par("accessModule"))->subscribe("backoffSlots",this);
+        update = new cMessage("update"); cca = new cMessage("cca");
+        scheduleAt(SIMTIME_ZERO,update);
+    }
+    virtual void handleMessage(cMessage *message) override {
+        if (message == cca) {
+            access->handleCcaResult(id,true);
+            return;
+        }
+        ASSERT(message == update);
+        if (simTime() == SIMTIME_ZERO) {
+            auto request = parameters();
+            do {
+                selecting = true;
+                selectedSlots = -1;
+                ASSERT(access->start(++id,request) == Ieee802154MacServiceAdmission::ACCEPTED);
+                selecting = false;
+                if (scenario == 1 || selectedSlots > (scenario == 2 ? 1 : 3))
+                    break;
+                ASSERT(id < 100);
+                selecting = true;
+                ASSERT(access->cancel(id,Ieee802154MacServiceAbortReason::CANCELLED) == Ieee802154MacServiceCancelResult::CANCELLED);
+                selecting = false;
+            } while (true);
+            scheduleAt(SimTime(2,SIMTIME_MS),update);
+        }
+        else {
+            auto before = draws;
+            auto next = window(2,SimTime(2240,SIMTIME_US),SimTime(200,SIMTIME_MS),scenario == 2,SimTime(194240,SIMTIME_US));
+            ASSERT(access->updateWindow(id,next) == Ieee802154MacServiceAdmission::ACCEPTED);
+            ASSERT(draws == before + (scenario == 0 ? 0 : 1));
+            if (scenario == 0)
+                firstCca = SimTime(2240,SIMTIME_US) + SimTime(320,SIMTIME_US) * (selectedSlots - 3);
+        }
+    }
+    virtual void finish() override {
+        ASSERT(finished && requests == 2 && completions == 1);
+        std::cout << "Slotted CAP deferral state verified.\n";
+    }
+  public:
+    using cListener::finish;
+    virtual ~SlottedDeferralExercise() { cancelAndDelete(update); cancelAndDelete(cca); }
+    virtual void receiveSignal(cComponent *, simsignal_t, long value, cObject *) override { Enter_Method_Silent(); ++draws; selectedSlots = value; }
+    virtual void handleCcaRequest(uint64_t request) override {
+        Enter_Method("handleCcaRequest");
+        ASSERT(request == id && simTime() >= SimTime(2240,SIMTIME_US));
+        if (scenario == 0 && requests == 0) ASSERT(simTime() == firstCca);
+        ++requests;
+        scheduleAt(simTime() + SimTime(128,SIMTIME_US),cca);
+    }
+    virtual void handleAccessConfirm(uint64_t request, const Ieee802154MacServiceResult& result,
+            uint8_t, std::optional<simtime_t> startAt) override {
+        Enter_Method("handleAccessConfirm");
+        ASSERT(request == id);
+        if (selecting) {
+            ASSERT(result == Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::CANCELLED));
+            return;
+        }
+        ASSERT(result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS) && startAt && *startAt >= simTime());
+        ++completions;
+        finished = true;
+    }
+};
+Define_Module(SlottedDeferralExercise);
+}
+
+%file: SlottedDeferralFixture.ned
+import inet.common.SimpleModule;
+import inet.linklayer.ieee802154.Ieee802154SlottedAccess;
+import inet.linklayer.ieee802154.contract.IIeee802154AccessClient;
+simple SlottedDeferralExercise extends SimpleModule like IIeee802154AccessClient
+{
+    parameters:
+        @class(::inet::SlottedDeferralExercise);
+        string accessModule;
+        int scenario;
+}
+network SlottedDeferralTest
+{
+    submodules:
+        access: Ieee802154SlottedAccess { clientModule = "^.exercise"; }
+        exercise: SlottedDeferralExercise { accessModule = "^.access"; }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = SlottedDeferralTest
+ned-path = .;../../../../src;../../lib
+*.exercise.scenario = ${scenario=0..2}
+sim-time-limit = 200ms
+seed-set = 0
+cmdenv-express-mode = true
+record-vector-results = false
+record-scalar-results = false
+
+%contains: stdout
+Slotted CAP deferral state verified.

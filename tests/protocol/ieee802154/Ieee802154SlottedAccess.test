@@ -1,0 +1,328 @@
+%description:
+Native coordinator and two or five synchronized children contend with BLE on
+and off. Both encoded and typed radio paths use twenty declared seeds.
+
+%extraargs: -r 0..159
+
+%includes:
+#include "ProtocolTest.h"
+
+%global:
+using namespace inet;
+using namespace inet::protocoltest;
+Define_ProtocolTestProgram()
+{
+    ProtocolTest test("ieee802154_slotted_access");
+    return test.once(on("exercise").signal("verificationComplete").filterValue(1).within(1.5));
+}
+
+%activity:
+EV << "ieee802154_slotted_access compiled\n";
+
+%file: SlottedAccessExercise.cc
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/common/Simsignals.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceProvider.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceProvider.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmission.h"
+#include <map>
+#include <set>
+
+namespace inet {
+class SlottedProtocolExercise : public cSimpleModule, public cListener, public IIeee802154MacServiceClient, public IIeee802154ManagementServiceClient
+{
+    using Status = Ieee802154MacStatus;
+    using Admission = Ieee802154MacServiceAdmission;
+    ModuleRefByPar<IIeee802154MacServiceProvider> coordinator, child;
+    ModuleRefByPar<IIeee802154ManagementServiceProvider> coordinatorManagement, childManagement;
+    uint64_t nextId = 0;
+    int starts = 0, syncs = 0, notices = 0, confirmations = 0, indications = 0;
+    std::map<cComponent *, std::vector<long>> cw;
+    std::set<uint64_t> pendingData;
+    std::set<uint64_t> cancelling;
+    std::map<uint64_t, int> pendingNodes;
+    std::map<cComponent *, simtime_t> lastDraw;
+    std::map<cComponent *, int> drawCount;
+    std::vector<IIeee802154MacServiceProvider *> contenders;
+    std::vector<IIeee802154ManagementServiceProvider *> contenderManagement;
+    std::vector<cComponent *> accessModules;
+    std::map<cComponent *, int> radioNodes;
+    std::map<int, simtime_t> lastDataStart;
+    cComponent *coordinatorRadio = nullptr;
+    simtime_t lastBeaconStart;
+    int actualTransmissions = 0;
+    int succeeded = 0, accessFailed = 0, cancelled = 0;
+
+    void set(IIeee802154MacServiceProvider *provider, const char *name, const Ieee802154MacPibValue& value) {
+        ASSERT(provider->submitSet(++nextId, {name, value}) == Admission::ACCEPTED);
+    }
+    physicallayer::Ieee802154PhyChannel channel() const {
+        return {physicallayer::Ieee802154PhyChannel::Phy::O_QPSK, physicallayer::Ieee802154PhyChannel::Band::MHZ_2450, 20};
+    }
+  protected:
+    virtual void initialize() override {
+        coordinator.reference(this,"coordinatorModule",true);
+        child.reference(this,"childModule",true);
+        coordinatorManagement.reference(this,"coordinatorModule",true);
+        childManagement.reference(this,"childModule",true);
+        coordinatorRadio = getModuleByPath("^.host[0].nic.radio");
+        coordinatorRadio->subscribe(transmissionStartedSignal,this);
+        for (int i = 1; i <= par("contenders").intValue(); ++i) {
+            auto base = std::string("^.host[") + std::to_string(i) + "].nic.";
+            auto mac = getModuleByPath((base + "mac").c_str());
+            contenders.push_back(check_and_cast<IIeee802154MacServiceProvider *>(mac));
+            contenderManagement.push_back(check_and_cast<IIeee802154ManagementServiceProvider *>(mac));
+            auto access = getModuleByPath((base + "slottedAccess").c_str());
+            accessModules.push_back(access);
+            access->subscribe("contentionWindow",this);
+            access->subscribe("backoffSlots",this);
+            auto radio = getModuleByPath((base + "radio").c_str());
+            radioNodes[radio] = i - 1;
+            radio->subscribe(transmissionStartedSignal,this);
+        }
+    }
+    virtual void activity() override {
+        wait(SimTime(300,SIMTIME_US));
+        int nodeIndex = 0;
+        for (auto contender : contenders) {
+            set(contender, "macCoordShortAddress", uint64_t(1));
+            set(contender, "macBeaconOrder", uint64_t(3));
+            set(contender, "macAutoRequest", false);
+        }
+        Ieee802154MacStartSuperframeRequest start;
+        start.panId = 0x1234; start.channel = channel(); start.beaconOrder = 3; start.superframeOrder = 1;
+        start.batteryLifeExtension = par("ble").boolValue();
+        ASSERT(coordinatorManagement->submitStartSuperframe(++nextId,start) == Admission::ACCEPTED);
+        wait(SimTime(700,SIMTIME_US));
+        for (auto management : contenderManagement)
+            ASSERT(management->submitSync(++nextId,{channel(),true}) == Admission::ACCEPTED);
+        wait(SimTime(129,SIMTIME_MS));
+        ASSERT(starts == 1 && syncs == int(contenders.size()) && notices >= int(contenders.size()));
+        for (auto contender : contenders) {
+            auto packet = new Packet("slotted-data");
+            packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>(8, 0x5a)));
+            Ieee802154MacDataRequest data;
+            data.sourceAddressMode = Ieee802154Address::AddressType::SHORT;
+            data.destinationAddress = Ieee802154Address::fromShort(1);
+            data.destinationPanId = 0x1234;
+            auto id = ++nextId;
+            pendingData.insert(id);
+            pendingNodes[id] = nodeIndex++;
+            ASSERT(contender->submitData(id,packet,data) == Admission::ACCEPTED);
+        }
+        wait(SimTime(1100,SIMTIME_MS));
+        if (par("diagnostic").boolValue()) {
+            for (auto id : pendingData) {
+                auto access = accessModules.at(pendingNodes.at(id));
+                std::cout << "PENDING id=" << id << " access=" << access->getFullPath()
+                          << " draws=" << drawCount[access] << " lastDraw=" << lastDraw[access] << "\n";
+            }
+        }
+        auto cutoff = simTime();
+        auto oldTransmissions = actualTransmissions;
+        auto remaining = pendingData;
+        for (auto id : remaining) {
+            auto index = pendingNodes.at(id);
+            cancelling.insert(id);
+            auto result = contenders.at(index)->cancel(id);
+            if (result == Ieee802154MacServiceCancelResult::NOT_CANCELLABLE) {
+                ASSERT(lastDataStart[index] > SIMTIME_ZERO && lastDataStart[index] <= cutoff);
+                cancelling.erase(id);
+            }
+            else {
+                ASSERT(result == Ieee802154MacServiceCancelResult::CANCELLED);
+                ASSERT(drawCount[accessModules.at(index)] > 0);
+                if (par("ble").boolValue())
+                    ASSERT(lastDraw[accessModules.at(index)] >= lastBeaconStart && lastDraw[accessModules.at(index)] <= cutoff);
+            }
+        }
+        wait(SimTime(250,SIMTIME_MS));
+        ASSERT(actualTransmissions == oldTransmissions);
+        ASSERT(confirmations == int(contenders.size()) && pendingData.empty());
+        ASSERT(succeeded + accessFailed + cancelled == int(contenders.size()));
+        ASSERT(actualTransmissions > 0 && indications <= actualTransmissions);
+        for (auto access : accessModules) {
+            ASSERT(!cw[access].empty() && cw[access][0] == 2);
+            if (cw[access].back() == 0) ASSERT(cw[access].size() >= 3 && cw[access][cw[access].size()-2] == 1);
+        }
+        std::cout << "CAMPAIGN success=" << succeeded << " accessFailure=" << accessFailed
+                  << " cancelled=" << cancelled << " received=" << indications << "\n";
+        emit(registerSignal("verificationComplete"),1L);
+    }
+  public:
+    SlottedProtocolExercise() : cSimpleModule(65536) {}
+    virtual void receiveSignal(cComponent *source, simsignal_t signal, long value, cObject *) override {
+        if (signal == registerSignal("backoffSlots")) {
+            ++drawCount[source];
+            lastDraw[source] = simTime();
+            if (par("diagnostic").boolValue())
+                std::cout << "DRAW time=" << simTime() << " access=" << source->getFullPath() << " slots=" << value << "\n";
+        }
+        else
+            cw[source].push_back(value);
+    }
+    virtual void receiveSignal(cComponent *source, simsignal_t, cObject *object, cObject *) override {
+        auto transmission = check_and_cast<const physicallayer::ITransmission *>(object);
+        if (source == coordinatorRadio) {
+            lastBeaconStart = transmission->getStartTime();
+            if (par("diagnostic").boolValue()) std::cout << "BEACON time=" << lastBeaconStart << "\n";
+            return;
+        }
+        ASSERT(lastBeaconStart > SIMTIME_ZERO && transmission->getStartTime() == simTime());
+        lastDataStart[radioNodes.at(source)] = simTime();
+        auto offset = (simTime() - lastBeaconStart).raw() % SimTime(320,SIMTIME_US).raw();
+        ASSERT(offset >= 0 && offset <= SimTime(100,SIMTIME_NS).raw());
+        ASSERT(transmission->getEndTime() <= lastBeaconStart + SimTime(30720,SIMTIME_US));
+        ++actualTransmissions;
+    }
+    virtual void handleSetConfirm(uint64_t, const Ieee802154MacSetConfirm& c) override { Enter_Method("handleSetConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); }
+    virtual void handleStartSuperframeConfirm(uint64_t, const Ieee802154MacStartSuperframeConfirm& c) override { Enter_Method("handleStartSuperframeConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); ++starts; }
+    virtual void handleSyncConfirm(uint64_t, const Ieee802154MacSyncConfirm& c) override { Enter_Method("handleSyncConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); ++syncs; }
+    virtual void handleBeaconNotifyIndication(const Ieee802154PanDescriptor&) override { Enter_Method("handleBeaconNotifyIndication"); ++notices; }
+    virtual void handleDataConfirm(uint64_t id, const Ieee802154MacDataConfirm& c) override {
+        Enter_Method("handleDataConfirm");
+        ASSERT(pendingData.erase(id) == 1);
+        if (c.result == Ieee802154MacServiceResult(Status::SUCCESS)) ++succeeded;
+        else if (c.result == Ieee802154MacServiceResult(Status::CHANNEL_ACCESS_FAILURE)) ++accessFailed;
+        else {
+            ASSERT(c.result == Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::CANCELLED) && cancelling.erase(id) == 1);
+            ++cancelled;
+        }
+        if (par("diagnostic").boolValue()) std::cout << "CONFIRM time=" << simTime() << " id=" << id << "\n";
+        ++confirmations;
+    }
+    virtual void handleDataIndication(Packet *packet, const Ieee802154MacDataIndication&) override { Enter_Method("handleDataIndication"); take(packet); delete packet; ++indications; }
+    virtual void handleGetConfirm(uint64_t, const Ieee802154MacGetConfirm&) override { ASSERT(false); }
+    virtual void handleResetConfirm(uint64_t, const Ieee802154MacResetConfirm&) override { ASSERT(false); }
+    virtual void handlePromiscuousIndication(Packet *, const Ieee802154MacPromiscuousIndication&) override { ASSERT(false); }
+    virtual void handleCommStatusIndication(Packet *, const Ieee802154MacCommStatusIndication&) override { ASSERT(false); }
+    virtual void handlePollConfirm(uint64_t, const Ieee802154MacPollConfirm&) override { ASSERT(false); }
+    virtual void handlePurgeConfirm(uint64_t, const Ieee802154MacPurgeConfirm&) override { ASSERT(false); }
+    virtual void handleStartConfirm(uint64_t, const Ieee802154MacStartConfirm&) override { ASSERT(false); }
+    virtual void handleScanConfirm(uint64_t, const Ieee802154MacScanConfirm&) override { ASSERT(false); }
+    virtual void handleBeaconConfirm(uint64_t, const Ieee802154MacBeaconConfirm&) override { ASSERT(false); }
+    virtual void handleBeaconRequestIndication(const Ieee802154MacBeaconRequestIndication&) override { ASSERT(false); }
+    virtual void handleSyncLossIndication(const Ieee802154MacSyncLossIndication&) override { ASSERT(false); }
+    virtual void handleAssociateResponseStatus(uint64_t, const Ieee802154MacAssociateResponseStatus&) override { ASSERT(false); }
+    virtual void handleAssociateConfirm(uint64_t, const Ieee802154MacAssociateConfirm&) override { ASSERT(false); }
+    virtual void handleAssociateIndication(const Ieee802154MacAssociateIndication&) override { ASSERT(false); }
+    virtual void handleDisassociateConfirm(uint64_t, const Ieee802154MacDisassociateConfirm&) override { ASSERT(false); }
+    virtual void handleDisassociateIndication(const Ieee802154MacDisassociateIndication&) override { ASSERT(false); }
+    virtual void handleOrphanIndication(const Ieee802154MacOrphanIndication&) override { ASSERT(false); }
+    virtual void handleOrphanResponseStatus(uint64_t, const Ieee802154MacOrphanResponseStatus&) override { ASSERT(false); }
+    virtual void handleRxEnableConfirm(uint64_t, const Ieee802154MacRxEnableConfirm&) override { ASSERT(false); }
+    virtual void handleRxEnableIndication(const Ieee802154MacRxEnableIndication&) override { ASSERT(false); }
+};
+Define_Module(SlottedProtocolExercise);
+}
+
+%file: SlottedAccessFixture.ned
+import inet.common.SimpleModule;
+import inet.mobility.static.StationaryMobility;
+import inet.linklayer.ieee802154.Ieee802154StandardInterface;
+import inet.linklayer.ieee802154.contract.IIeee802154MacServiceClient;
+import inet.linklayer.ieee802154.contract.IIeee802154ManagementServiceClient;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+
+simple SlottedProtocolExercise extends SimpleModule like IIeee802154MacServiceClient, IIeee802154ManagementServiceClient
+{
+    parameters:
+        string coordinatorModule;
+        string childModule;
+        string accessModule;
+        string serviceModule;
+        int contenders;
+        bool ble;
+        bool diagnostic = default(false);
+        @class(::inet::SlottedProtocolExercise);
+        @signal[verificationComplete](type=long);
+}
+module SlottedHost
+{
+    parameters: @networkNode;
+    submodules:
+        mobility: StationaryMobility;
+        nic: Ieee802154StandardInterface {
+            enableManagement = true;
+            enableSuperframe = true;
+            mac.clientModule = "^.^.^.exercise";
+            mac.managementClientModule = "^.^.^.exercise";
+        }
+    connections allowunconnected:
+}
+network SlottedAccessTest
+{
+    parameters:
+        int contenders;
+        bool ble;
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        host[6]: SlottedHost;
+        exercise: SlottedProtocolExercise {
+            coordinatorModule = "^.host[0].nic.mac";
+            childModule = "^.host[1].nic.mac";
+            accessModule = "^.host[1].nic.slottedAccess";
+            serviceModule = "^.host[1].nic.mac";
+            contenders = parent.contenders;
+            ble = parent.ble;
+        }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = SlottedAccessTest
+sim-time-limit = 1500ms
+seed-set = ${seed=0..19}
+cmdenv-express-mode = true
+cmdenv-stop-batch-on-error = false
+record-vector-results = false
+record-scalar-results = false
+*.contenders = ${count=2,5}
+*.ble = ${ble=false,true}
+*.**.radio.sendRawBytes = ${raw=false,true}
+*.radioMedium.backgroundNoise.power = -110dBm
+*.host[0].nic.extendedAddress = "extended:02-01-12-34-56-78-9A-BC"
+*.host[0].nic.shortAddress = 1
+*.host[0].nic.panId = 4660
+*.host[0].nic.mac.isPanCoordinator = true
+*.host[1].nic.extendedAddress = "extended:04-01-12-34-56-78-9A-BC"
+*.host[1].nic.shortAddress = 2
+*.host[1].nic.panId = 4660
+*.host[2].nic.extendedAddress = "extended:06-01-12-34-56-78-9A-BC"
+*.host[2].nic.shortAddress = 3
+*.host[2].nic.panId = 4660
+*.host[3].nic.extendedAddress = "extended:08-01-12-34-56-78-9A-BC"
+*.host[3].nic.shortAddress = 4
+*.host[3].nic.panId = 4660
+*.host[4].nic.extendedAddress = "extended:0A-01-12-34-56-78-9A-BC"
+*.host[4].nic.shortAddress = 5
+*.host[4].nic.panId = 4660
+*.host[5].nic.extendedAddress = "extended:0C-01-12-34-56-78-9A-BC"
+*.host[5].nic.shortAddress = 6
+*.host[5].nic.panId = 4660
+*.host[*].nic.radio.antenna.mobilityModule = "^.^.^.mobility"
+*.host[*].mobility.initFromDisplayString = false
+*.host[0].mobility.initialX = 0m
+*.host[1].mobility.initialX = 1m
+*.host[2].mobility.initialX = 2m
+*.host[3].mobility.initialX = 3m
+*.host[4].mobility.initialX = 4m
+*.host[5].mobility.initialX = 5m
+*.host[*].mobility.initialY = 0m
+*.host[*].mobility.initialZ = 0m
+*.host[*].mobility.constraintAreaMinX = 0m
+*.host[*].mobility.constraintAreaMinY = 0m
+*.host[*].mobility.constraintAreaMinZ = 0m
+*.host[*].mobility.constraintAreaMaxX = 100m
+*.host[*].mobility.constraintAreaMaxY = 100m
+*.host[*].mobility.constraintAreaMaxZ = 100m
+
+%contains: stdout
+PROTOCOLTEST ieee802154_slotted_access: PASS
+
+%not-contains: stdout
+PROTOCOLTEST ieee802154_slotted_access: FAIL

@@ -24,6 +24,16 @@ simtime_t Ieee802154ExchangeTiming::ackWait(const physicallayer::Ieee802154PhyTi
     return phy.turnaroundTime + ackDuration(phy);
 }
 
+simtime_t Ieee802154ExchangeTiming::slottedAckWait(const physicallayer::Ieee802154PhyTimingParameters& phy,
+        simtime_t aifs, simtime_t backoffPeriod, simtime_t propagationBound)
+{
+    auto q = aifs + backoffPeriod;
+    auto ticks = q.raw();
+    // Split the product so the outward 81 ppm rounding cannot overflow.
+    auto guard = (ticks / 1000000) * 81 + ((ticks % 1000000) * 81 + 999999) / 1000000;
+    return ackDuration(phy) + q + SimTime::fromRaw(guard + 2) + 2 * propagationBound;
+}
+
 simtime_t Ieee802154ExchangeTiming::ccaAndReadiness(simtime_t ccaDuration, const physicallayer::Ieee802154PhyTimingParameters& phy)
 {
     return ccaDuration + phy.turnaroundTime;

@@ -1,0 +1,315 @@
+%description:
+A coordinator sends its mandatory beacon after either a deferred DATA frame or
+an ACK deadline exactly coincident with beacon preparation.
+
+%extraargs: -r 0..11
+
+%includes:
+#include "ProtocolTest.h"
+
+%global:
+using namespace inet;
+using namespace inet::protocoltest;
+Define_ProtocolTestProgram()
+{
+    ProtocolTest test("ieee802154_slotted_priority");
+    return test.once(on("exercise").signal("verificationComplete").filterValue(1).within(0.2));
+}
+
+%activity:
+EV << "ieee802154_slotted_priority compiled\n";
+
+%file: SlottedSearchExercise.cc
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/clock/contract/IClock.h"
+#include "inet/clock/contract/ClockEvent.h"
+#ifdef INET_WITH_CLOCK
+#include "inet/clock/common/ClockEvent.h"
+#endif
+#include "inet/common/Simsignals.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceProvider.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceProvider.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmission.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IReception.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
+
+namespace inet {
+class PreparationProbe : public cSimpleModule
+{
+    ClockEvent *event = nullptr;
+    IClock *clock = nullptr;
+  public:
+    simtime_t observed = SIMTIME_ZERO;
+    void arm(IClock *source, clocktime_t when) {
+        Enter_Method("arm");
+        clock = source; event = new ClockEvent("preparationProbe");
+        if (clock) clock->scheduleClockEventAt(when,event);
+        else scheduleAt(CLOCKTIME_AS_SIMTIME(when),event);
+    }
+    virtual ~PreparationProbe() {
+        if (event) {
+            if (clock && clock->isScheduledClockEvent(event)) clock->cancelClockEvent(event);
+            else if (!clock && event->isScheduled()) cancelEvent(event);
+            delete event;
+        }
+    }
+  protected:
+    virtual void handleMessage(cMessage *message) override {
+        ASSERT(message == event);
+        observed = simTime(); delete event; event = nullptr;
+    }
+};
+Define_Module(PreparationProbe);
+
+class SlottedSearchExercise : public cSimpleModule, public cListener, public IIeee802154MacServiceClient, public IIeee802154ManagementServiceClient
+{
+    using Status = Ieee802154MacStatus;
+    using Admission = Ieee802154MacServiceAdmission;
+    ModuleRefByPar<IIeee802154MacServiceProvider> coordinator, child;
+    ModuleRefByPar<IIeee802154ManagementServiceProvider> coordinatorManagement;
+    ModuleRefByPar<IIeee802154ManagementServiceProvider> childManagement;
+    uint64_t nextId = 0;
+    int scenario = 0, starts = 0, syncs = 0, confirms = 0, indications = 0, slottedDraws = 0, transmissions = 0, beacons = 0;
+    std::vector<long> cw;
+    std::vector<simtime_t> cwTimes;
+    std::vector<simtime_t> dataStarts;
+    std::vector<uint8_t> dsns;
+    simtime_t anchor;
+    simtime_t previousBeacon, dataStart, confirmTime;
+    simtime_t expectedDataStart;
+    clocktime_t beaconLocal;
+    int backend = 0;
+    cComponent *coordinatorRadio = nullptr;
+    cComponent *slotted = nullptr;
+    IClock *diagnosticClock = nullptr;
+    PreparationProbe *preparationProbe = nullptr;
+    void set(IIeee802154MacServiceProvider *provider, const char *name, const Ieee802154MacPibValue& value) {
+        ASSERT(provider->submitSet(++nextId,{name,value}) == Admission::ACCEPTED);
+    }
+    physicallayer::Ieee802154PhyChannel channel() const {
+        return {physicallayer::Ieee802154PhyChannel::Phy::O_QPSK,physicallayer::Ieee802154PhyChannel::Band::MHZ_2450,20};
+    }
+  protected:
+    virtual void initialize() override {
+        coordinator.reference(this,"coordinatorModule",true);
+        child.reference(this,"childModule",true);
+        coordinatorManagement.reference(this,"coordinatorModule",true);
+        childManagement.reference(this,"childModule",true);
+        scenario = par("scenario");
+        backend = getSimulation()->getSystemModule()->par("backend");
+        slotted = getModuleByPath("^.host[0].nic.slottedAccess");
+        slotted->subscribe("backoffSlots",this);
+        slotted->subscribe("contentionWindow",this);
+        coordinatorRadio = getModuleByPath("^.host[0].nic.radio");
+        diagnosticClock = check_and_cast<IClock *>(getModuleByPath("^.clock"));
+        preparationProbe = check_and_cast<PreparationProbe *>(getModuleByPath("^.probe"));
+        auto radio = getModuleByPath("^.host[1].nic.radio");
+        radio->subscribe(receptionStartedSignal,this);
+        coordinatorRadio->subscribe(transmissionStartedSignal,this);
+    }
+    virtual void activity() override {
+        wait(SimTime(300,SIMTIME_US));
+        set(child.get(),"macCoordShortAddress",uint64_t(1));
+        set(child.get(),"macBeaconOrder",uint64_t(0));
+        set(child.get(),"macAutoRequest",false);
+        set(coordinator.get(),"macMinBe",uint64_t(0));
+        set(coordinator.get(),"macDsn",uint64_t(7));
+        if (scenario == 1) set(coordinator.get(),"macMaxFrameRetries",uint64_t(0));
+        Ieee802154MacStartSuperframeRequest start;
+        start.panId = 0x1234; start.channel = channel(); start.beaconOrder = 0; start.superframeOrder = 0;
+        ASSERT(coordinatorManagement->submitStartSuperframe(++nextId,start) == Admission::ACCEPTED);
+        wait(SimTime(700,SIMTIME_US));
+        ASSERT(childManagement->submitSync(++nextId,{channel(),true}) == Admission::ACCEPTED);
+        wait(SimTime(19,SIMTIME_MS));
+        ASSERT(starts == 1 && syncs == 1 && anchor > SIMTIME_ZERO);
+        set(child.get(),"macRxOnWhenIdle",true);
+        previousBeacon = dataStarts.back();
+        if (scenario == 1) {
+            auto target = beaconLocal + SIMTIME_AS_CLOCKTIME(SimTime(12800,SIMTIME_US));
+            expectedDataStart = backend == 0 ? CLOCKTIME_AS_SIMTIME(target) : diagnosticClock->computeSimTimeFromClockTime(target);
+            auto next = beaconLocal + SIMTIME_AS_CLOCKTIME(SimTime(15360,SIMTIME_US));
+            auto nextPhysical = backend == 0 ? CLOCKTIME_AS_SIMTIME(next) : diagnosticClock->computeSimTimeFromClockTime(next);
+            auto nominalPreparation = nextPhysical - SimTime(192,SIMTIME_US);
+            auto preparationClock = backend == 0 ? SIMTIME_AS_CLOCKTIME(nominalPreparation) : diagnosticClock->computeClockTimeFromSimTime(nominalPreparation);
+            preparationProbe->arm(backend == 0 ? nullptr : diagnosticClock, preparationClock);
+        }
+        auto submission = scenario == 0 ? anchor + SimTime(14700,SIMTIME_US) :
+                expectedDataStart - SimTime(640,SIMTIME_US);
+        wait(submission - simTime());
+        auto packet = new Packet("deferred-coordinator-data");
+        packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>(scenario == 0 ? 100 : 1,0x5a)));
+        Ieee802154MacDataRequest data;
+        data.sourceAddressMode = scenario == 0 ? Ieee802154Address::AddressType::SHORT : Ieee802154Address::AddressType::NONE;
+        data.destinationAddress = Ieee802154Address::fromShort(scenario == 0 ? 2 : 3);
+        data.destinationPanId = 0x1234;
+        data.ackTx = scenario == 1;
+        ASSERT(coordinator->submitData(++nextId,packet,data) == Admission::ACCEPTED);
+        auto previousBeaconCount = beacons;
+        ASSERT(slottedDraws == 1 && transmissions == 0);
+        wait(SimTime(10,SIMTIME_MS));
+        ASSERT(beacons == previousBeaconCount + 1);
+        ASSERT(dataStarts.back() == previousBeacon + SimTime(15360,SIMTIME_US));
+        ASSERT(confirms == 1 && indications == int(scenario == 0) && transmissions == 1 && dsns.size() == 1 && dsns[0] == 7);
+        if (scenario == 0) {
+            ASSERT(slottedDraws >= 2 && dataStart > dataStarts.back() && dataStart < dataStarts.back() + SimTime(15360,SIMTIME_US));
+        }
+        else {
+            ASSERT(cw.size() >= 3 && cw[0] == 2 && cw[1] == 1 && cw[2] == 0);
+            ASSERT(cwTimes[2] - cwTimes[1] == SimTime(320,SIMTIME_US));
+            ASSERT(dataStart >= cwTimes[2] + SimTime(192,SIMTIME_US));
+            ASSERT(dataStart == expectedDataStart);
+            ASSERT(confirmTime == expectedDataStart + SimTime(2368,SIMTIME_US));
+            ASSERT(preparationProbe->observed == confirmTime);
+        }
+        emit(registerSignal("verificationComplete"),1L);
+    }
+  public:
+    SlottedSearchExercise() : cSimpleModule(65536) {}
+    virtual void receiveSignal(cComponent *source, simsignal_t signal, long value, cObject *) override {
+        ASSERT(source == slotted);
+        if (signal == registerSignal("backoffSlots")) ++slottedDraws;
+        else { cw.push_back(value); cwTimes.push_back(simTime()); }
+    }
+    virtual void receiveSignal(cComponent *, simsignal_t signal, cObject *object, cObject *) override {
+        if (signal == receptionStartedSignal) {
+            auto reception = check_and_cast<const physicallayer::IReception *>(object);
+            if (reception->getTransmission()->getTransmitterRadio() == check_and_cast<physicallayer::IRadio *>(coordinatorRadio))
+                anchor = reception->getStartTime();
+            return;
+        }
+        auto tx = check_and_cast<const physicallayer::ITransmission *>(object);
+        ASSERT(tx->getStartTime() == simTime());
+        auto frame = Ieee802154FrameCodec::decode(tx->getPacket()->peekDataAsBytes()->getBytes());
+        ASSERT(frame->getDecodeStatus() == Ieee802154FrameCodec::OK);
+        if (frame->getFrameType() == 0) {
+            ++beacons; dataStarts.push_back(simTime());
+            beaconLocal = backend == 0 ? SIMTIME_AS_CLOCKTIME(simTime()) : diagnosticClock->getClockTime();
+        }
+        else { ASSERT(frame->getFrameType() == 1); dataStart = simTime(); ++transmissions; dsns.push_back(frame->getDsn()); }
+    }
+    virtual void handleSetConfirm(uint64_t, const Ieee802154MacSetConfirm& c) override { Enter_Method("handleSetConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); }
+    virtual void handleDataConfirm(uint64_t, const Ieee802154MacDataConfirm& c) override { Enter_Method("handleDataConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(scenario == 0 ? Status::SUCCESS : Status::NO_ACK)); confirmTime = simTime(); ++confirms; }
+    virtual void handleDataIndication(Packet *packet, const Ieee802154MacDataIndication&) override { Enter_Method("handleDataIndication"); take(packet); delete packet; ++indications; }
+    virtual void handleStartSuperframeConfirm(uint64_t, const Ieee802154MacStartSuperframeConfirm& c) override { Enter_Method("handleStartSuperframeConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); ++starts; }
+    virtual void handleBeaconNotifyIndication(const Ieee802154PanDescriptor&) override { Enter_Method("handleBeaconNotifyIndication"); }
+    virtual void handleGetConfirm(uint64_t, const Ieee802154MacGetConfirm&) override { ASSERT(false); }
+    virtual void handleResetConfirm(uint64_t, const Ieee802154MacResetConfirm&) override { ASSERT(false); }
+    virtual void handlePromiscuousIndication(Packet *, const Ieee802154MacPromiscuousIndication&) override { ASSERT(false); }
+    virtual void handleCommStatusIndication(Packet *, const Ieee802154MacCommStatusIndication&) override { ASSERT(false); }
+    virtual void handlePollConfirm(uint64_t, const Ieee802154MacPollConfirm&) override { ASSERT(false); }
+    virtual void handlePurgeConfirm(uint64_t, const Ieee802154MacPurgeConfirm&) override { ASSERT(false); }
+    virtual void handleStartConfirm(uint64_t, const Ieee802154MacStartConfirm&) override { ASSERT(false); }
+    virtual void handleScanConfirm(uint64_t, const Ieee802154MacScanConfirm&) override { ASSERT(false); }
+    virtual void handleBeaconConfirm(uint64_t, const Ieee802154MacBeaconConfirm&) override { ASSERT(false); }
+    virtual void handleBeaconRequestIndication(const Ieee802154MacBeaconRequestIndication&) override { ASSERT(false); }
+    virtual void handleSyncConfirm(uint64_t, const Ieee802154MacSyncConfirm& c) override { Enter_Method("handleSyncConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); ++syncs; }
+    virtual void handleSyncLossIndication(const Ieee802154MacSyncLossIndication&) override { ASSERT(false); }
+    virtual void handleAssociateResponseStatus(uint64_t, const Ieee802154MacAssociateResponseStatus&) override { ASSERT(false); }
+    virtual void handleAssociateConfirm(uint64_t, const Ieee802154MacAssociateConfirm&) override { ASSERT(false); }
+    virtual void handleAssociateIndication(const Ieee802154MacAssociateIndication&) override { ASSERT(false); }
+    virtual void handleDisassociateConfirm(uint64_t, const Ieee802154MacDisassociateConfirm&) override { ASSERT(false); }
+    virtual void handleDisassociateIndication(const Ieee802154MacDisassociateIndication&) override { ASSERT(false); }
+    virtual void handleOrphanIndication(const Ieee802154MacOrphanIndication&) override { ASSERT(false); }
+    virtual void handleOrphanResponseStatus(uint64_t, const Ieee802154MacOrphanResponseStatus&) override { ASSERT(false); }
+    virtual void handleRxEnableConfirm(uint64_t, const Ieee802154MacRxEnableConfirm&) override { ASSERT(false); }
+    virtual void handleRxEnableIndication(const Ieee802154MacRxEnableIndication&) override { ASSERT(false); }
+};
+Define_Module(SlottedSearchExercise);
+}
+
+%file: SlottedSearchFixture.ned
+import inet.common.SimpleModule;
+import inet.mobility.static.StationaryMobility;
+import inet.clock.model.OscillatorBasedClock;
+import inet.linklayer.ieee802154.Ieee802154StandardInterface;
+import inet.linklayer.ieee802154.contract.IIeee802154MacServiceClient;
+import inet.linklayer.ieee802154.contract.IIeee802154ManagementServiceClient;
+import inet.protocoltest.TapRadioMedium;
+simple PreparationProbe extends SimpleModule { parameters: @class(::inet::PreparationProbe); }
+simple SlottedSearchExercise extends SimpleModule like IIeee802154MacServiceClient, IIeee802154ManagementServiceClient
+{
+    parameters:
+        string coordinatorModule;
+        string childModule;
+        string serviceModule;
+        int scenario;
+        @class(::inet::SlottedSearchExercise);
+        @signal[verificationComplete](type=long);
+}
+module SlottedSearchHost
+{
+    parameters: @networkNode;
+    submodules:
+        mobility: StationaryMobility;
+        nic: Ieee802154StandardInterface {
+            enableManagement = true;
+            enableSuperframe = true;
+            mac.clientModule = "^.^.^.exercise";
+            mac.managementClientModule = "^.^.^.exercise";
+        }
+    connections allowunconnected:
+}
+network SlottedSearchTest
+{
+    parameters: int scenario; int backend;
+    submodules:
+        radioMedium: TapRadioMedium;
+        clock: OscillatorBasedClock;
+        probe: PreparationProbe;
+        host[2]: SlottedSearchHost;
+        exercise: SlottedSearchExercise {
+            coordinatorModule = "^.host[0].nic.mac";
+            childModule = "^.host[1].nic.mac";
+            serviceModule = "^.host[1].nic.mac";
+            scenario = parent.scenario;
+        }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = SlottedSearchTest
+sim-time-limit = 200ms
+*.scenario = ${scenario=0..1}
+*.backend = ${backend=0..2}
+*.**.radio.sendRawBytes = ${raw=false,true}
+seed-set = 0
+cmdenv-express-mode = true
+record-vector-results = false
+record-scalar-results = false
+*.radioMedium.backgroundNoise.power = -110dBm
+*.radioMedium.signalAnalogRepresentation = "scalar"
+*.host[0].nic.extendedAddress = "extended:02-01-12-34-56-78-9A-BC"
+*.host[0].nic.shortAddress = 1
+*.host[0].nic.panId = 4660
+*.host[0].nic.mac.isPanCoordinator = true
+*.host[0].nic.mac.maxPropagationDelay = ${scenario} == 1 ? 495.979263us : 1us
+*.host[0].nic.clockModule = ${backend} == 0 ? "" : "^.^.^.clock"
+*.clock.initialClockTime = 0.25s
+*.clock.oscillator.nominalTickLength = 1us
+*.clock.useFutureEventSet = ${backend} != 2
+*.host[1].nic.extendedAddress = "extended:04-01-12-34-56-78-9A-BC"
+*.host[1].nic.shortAddress = 2
+*.host[1].nic.panId = 4660
+*.host[*].nic.radio.antenna.mobilityModule = "^.^.^.mobility"
+*.host[*].mobility.initFromDisplayString = false
+*.host[0].mobility.initialX = 0m
+*.host[1].mobility.initialX = 1m
+*.host[*].mobility.initialY = 0m
+*.host[*].mobility.initialZ = 0m
+*.host[*].mobility.constraintAreaMinX = 0m
+*.host[*].mobility.constraintAreaMinY = 0m
+*.host[*].mobility.constraintAreaMinZ = 0m
+*.host[*].mobility.constraintAreaMaxX = 100m
+*.host[*].mobility.constraintAreaMaxY = 100m
+*.host[*].mobility.constraintAreaMaxZ = 100m
+
+%contains: stdout
+PROTOCOLTEST ieee802154_slotted_priority: PASS
+
+%not-contains: stdout
+PROTOCOLTEST ieee802154_slotted_priority: FAIL

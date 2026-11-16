@@ -38,6 +38,7 @@ class INET_API Ieee802154UnslottedAccess : public SimpleModule, public IIeee8021
     virtual Ieee802154MacServiceAdmission start(uint64_t id, const Ieee802154AccessRequest& request) override;
     virtual Ieee802154MacServiceAdmission updateWindow(uint64_t id, const Ieee802154AccessWindow& window) override;
     virtual void handleCcaResult(uint64_t id, bool idle) override;
+    virtual void deferCca(uint64_t id, simtime_t notBefore) override;
     virtual Ieee802154MacServiceCancelResult cancel(uint64_t id, Ieee802154MacServiceAbortReason reason) override;
     virtual bool handleOperationStage(LifecycleOperation *operation, IDoneCallback *callback) override;
 };

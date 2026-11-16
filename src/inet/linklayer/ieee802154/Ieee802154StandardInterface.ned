@@ -19,7 +19,7 @@ module Ieee802154StandardInterface extends NetworkInterface like IWirelessInterf
         string upperProtocol = default("");
         bool enableRadio = default(true);
         bool enableManagement = default(false);
-        bool enableSuperframe = default(false); // Requires radio and management; adds clock/anchor preparation only.
+        bool enableSuperframe = default(false); // Requires radio and management.
         string clockModule = default(""); // Empty selects simulation time.
         bool rxOnWhenIdle = default(false);
         double ccaDuration @unit(s) = default(128us);
@@ -39,6 +39,7 @@ module Ieee802154StandardInterface extends NetworkInterface like IWirelessInterf
             shortAddress = parent.shortAddress;
             panId = parent.panId;
             accessModule = parent.enableRadio ? "^.access" : "";
+            slottedAccessModule = parent.enableSuperframe ? "^.slottedAccess" : "";
             providerModule = parent.enableRadio ? "^.phy" : "";
             superframeModule = parent.enableSuperframe ? "^.superframeController" : "";
             rxOnWhenIdle = parent.rxOnWhenIdle;
@@ -47,6 +48,10 @@ module Ieee802154StandardInterface extends NetworkInterface like IWirelessInterf
         }
         access: Ieee802154UnslottedAccess if enableRadio {
             clientModule = "^.mac";
+        }
+        slottedAccess: Ieee802154SlottedAccess if enableSuperframe {
+            clientModule = "^.mac";
+            clockModule = parent.clockModule;
         }
         superframeController: Ieee802154SuperframeController if enableSuperframe {
             clientModule = "^.mac";

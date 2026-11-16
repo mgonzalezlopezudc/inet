@@ -19,6 +19,11 @@ ASSERT(Timing::interframeSpacing(B(18),phy.symbolPeriod,12,40) == SimTime(192,SI
 ASSERT(Timing::interframeSpacing(B(19),phy.symbolPeriod,12,40) == SimTime(640,SIMTIME_US));
 ASSERT(Timing::ackDuration(phy) == SimTime(352,SIMTIME_US));
 ASSERT(Timing::ackWait(phy) == SimTime(544,SIMTIME_US));
+auto slottedAck = Timing::slottedAckWait(phy, SimTime(192,SIMTIME_US), SimTime(320,SIMTIME_US), SimTime(1,SIMTIME_US));
+auto q = SimTime(512,SIMTIME_US).raw();
+auto guard = (q / 1000000) * 81 + ((q % 1000000) * 81 + 999999) / 1000000;
+ASSERT(slottedAck == SimTime(866,SIMTIME_US) + SimTime::fromRaw(guard + 2));
+ASSERT(slottedAck > Timing::ackWait(phy) + SimTime(2,SIMTIME_US));
 ASSERT(Timing::ccaAndReadiness(SimTime(128,SIMTIME_US),phy) == SimTime(320,SIMTIME_US));
 ASSERT(Timing::exchangeDuration(B(19),false,SimTime(1,SIMTIME_US),12,40,phy) == SimTime(1440,SIMTIME_US));
 ASSERT(Timing::exchangeDuration(B(19),true,SimTime(1,SIMTIME_US),12,40,phy) == SimTime(1986,SIMTIME_US));

@@ -15,6 +15,7 @@ Ieee802154SuperframeController::~Ieee802154SuperframeController()
     if (beaconPreparation && isScheduledClockEvent(beaconPreparation))
         cancelClockEvent(beaconPreparation);
     delete beaconPreparation;
+    cancelAndDelete(beaconDispatch);
     if (capEnd && isScheduledClockEvent(capEnd))
         cancelClockEvent(capEnd);
     delete capEnd;
@@ -22,6 +23,8 @@ Ieee802154SuperframeController::~Ieee802154SuperframeController()
     if (syncDeadline && isScheduledClockEvent(syncDeadline)) cancelClockEvent(syncDeadline);
     delete syncWake;
     delete syncDeadline;
+    if (accessSearchDeadline && isScheduledClockEvent(accessSearchDeadline)) cancelClockEvent(accessSearchDeadline);
+    delete accessSearchDeadline;
 }
 
 int Ieee802154SuperframeController::numInitStages() const { return NUM_INIT_STAGES; }
@@ -32,10 +35,14 @@ void Ieee802154SuperframeController::initialize(int stage)
     if (stage == INITSTAGE_LOCAL) {
         client.reference(this, "clientModule", true);
         beaconPreparation = new ClockEvent("beaconPreparation");
+        beaconDispatch = new cMessage("beaconDispatch");
+        beaconDispatch->setSchedulingPriority(2); // Packet delivery and ACK expiry settle first at equality.
         capEnd = new ClockEvent("capEnd");
         syncWake = new ClockEvent("syncWake");
         syncDeadline = new ClockEvent("syncDeadline");
+        accessSearchDeadline = new ClockEvent("accessSearchDeadline");
         syncDeadline->setSchedulingPriority(1); // Equal-time packet delivery precedes search expiry.
+        accessSearchDeadline->setSchedulingPriority(1);
     }
     else if (stage == INITSTAGE_LINK_LAYER) {
         auto node = findContainingNode(this);
@@ -47,6 +54,10 @@ void Ieee802154SuperframeController::initialize(int stage)
 void Ieee802154SuperframeController::handleMessage(cMessage *message)
 {
     if (message == beaconPreparation) {
+        scheduleAt(simTime(), beaconDispatch);
+        return;
+    }
+    if (message == beaconDispatch) {
         client->handleSuperframeBoundary(beaconBoundary);
         return;
     }
@@ -62,6 +73,10 @@ void Ieee802154SuperframeController::handleMessage(cMessage *message)
         client->handleSyncDeadline();
         return;
     }
+    if (message == accessSearchDeadline) {
+        client->handleAccessSearchDeadline();
+        return;
+    }
     throw cRuntimeError("Unexpected superframe message %s", message->getName());
 }
 
@@ -70,6 +85,8 @@ bool Ieee802154SuperframeController::scheduleBeaconPreparation(clocktime_t bound
     Enter_Method("scheduleBeaconPreparation");
     if (isScheduledClockEvent(beaconPreparation))
         cancelClockEvent(beaconPreparation);
+    if (beaconDispatch->isScheduled())
+        cancelEvent(beaconDispatch);
     if (!started || readinessLead < SIMTIME_ZERO || boundary < getClockTime())
         return false;
     auto preparation = computeSimTimeFromClockTime(boundary) - readinessLead;
@@ -85,6 +102,8 @@ void Ieee802154SuperframeController::cancelBeaconPreparation()
     Enter_Method("cancelBeaconPreparation");
     if (isScheduledClockEvent(beaconPreparation))
         cancelClockEvent(beaconPreparation);
+    if (beaconDispatch->isScheduled())
+        cancelEvent(beaconDispatch);
 }
 
 bool Ieee802154SuperframeController::scheduleCapEnd(clocktime_t boundary)
@@ -123,6 +142,41 @@ void Ieee802154SuperframeController::cancelSyncEvents()
     Enter_Method("cancelSyncEvents");
     if (isScheduledClockEvent(syncWake)) cancelClockEvent(syncWake);
     if (isScheduledClockEvent(syncDeadline)) cancelClockEvent(syncDeadline);
+}
+
+Ieee802154AccessWindow Ieee802154SuperframeController::publishAccessWindow(const Ieee802154AccessWindow& window)
+{
+    Enter_Method("publishAccessWindow");
+    if (accessEpoch == UINT64_MAX)
+        throw cRuntimeError("IEEE 802.15.4 CAP epoch IDs exhausted");
+    accessWindow = window;
+    accessWindow->epoch = ++accessEpoch;
+    return *accessWindow;
+}
+
+std::optional<Ieee802154AccessWindow> Ieee802154SuperframeController::getAccessWindow() const
+{
+    return accessWindow && accessWindow->end > getClockTime() && accessWindow->physicalCapEnd > simTime() ? accessWindow : std::nullopt;
+}
+
+void Ieee802154SuperframeController::clearAccessWindow()
+{
+    Enter_Method("clearAccessWindow");
+    accessWindow.reset();
+}
+
+void Ieee802154SuperframeController::scheduleAccessSearchDeadline(clocktime_t when)
+{
+    Enter_Method("scheduleAccessSearchDeadline");
+    cancelAccessSearchDeadline();
+    scheduleClockEventAt(when, accessSearchDeadline);
+}
+
+void Ieee802154SuperframeController::cancelAccessSearchDeadline()
+{
+    Enter_Method("cancelAccessSearchDeadline");
+    if (isScheduledClockEvent(accessSearchDeadline))
+        cancelClockEvent(accessSearchDeadline);
 }
 
 void Ieee802154SuperframeController::recordReceptionStart(const physicallayer::Ieee802154PhyReceiveStart& start)
@@ -175,9 +229,13 @@ bool Ieee802154SuperframeController::handleOperationStage(LifecycleOperation *op
             started = false;
             if (isScheduledClockEvent(beaconPreparation))
                 cancelClockEvent(beaconPreparation);
+            if (beaconDispatch->isScheduled())
+                cancelEvent(beaconDispatch);
             if (isScheduledClockEvent(capEnd))
                 cancelClockEvent(capEnd);
             cancelSyncEvents();
+            cancelAccessSearchDeadline();
+            accessWindow.reset();
             receptionAnchors.clear();
         }
     }
@@ -185,9 +243,13 @@ bool Ieee802154SuperframeController::handleOperationStage(LifecycleOperation *op
         started = false;
         if (isScheduledClockEvent(beaconPreparation))
             cancelClockEvent(beaconPreparation);
+        if (beaconDispatch->isScheduled())
+            cancelEvent(beaconDispatch);
         if (isScheduledClockEvent(capEnd))
             cancelClockEvent(capEnd);
         cancelSyncEvents();
+        cancelAccessSearchDeadline();
+        accessWindow.reset();
         receptionAnchors.clear();
     }
     else
