@@ -1,0 +1,4 @@
+IEEE 802.15.4 information-element framing
+
+Inspect and encode bounded version-2 Header and Payload IE lists and auxiliary
+security extents without enabling enhanced MAC operation or cryptography.

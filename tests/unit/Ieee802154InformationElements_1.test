@@ -1,0 +1,226 @@
+%description:
+Independent version-2 IE termination, bounded regions and auxiliary security vectors.
+
+%includes:
+#include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
+#include "inet/linklayer/ieee802154/Ieee802154InformationElements.h"
+#include "inet/linklayer/ieee802154/Ieee802154ProtocolDissector.h"
+#include "inet/common/packet/Packet.h"
+#include <vector>
+using namespace inet;
+
+%global:
+class IeDissectorProbe : public ProtocolDissector::ICallback {
+  public:
+    bool incorrect = false, visited = false, checkLayout = true;
+    void startProtocolDataUnit(const Protocol *) override {}
+    void endProtocolDataUnit(const Protocol *) override {}
+    void markIncorrect() override { incorrect = true; }
+    void visitChunk(const Ptr<const Chunk>& chunk,const Protocol *) override {
+        auto frame = dynamicPtrCast<const Ieee802154Frame>(chunk); ASSERT(frame); visited = true;
+        auto view = Ieee802154InformationElements::inspect(*frame);
+        if (!incorrect && checkLayout) {
+            ASSERT(std::holds_alternative<Ieee802154InformationElements::View>(view));
+            auto value = std::get<Ieee802154InformationElements::View>(view);
+            ASSERT(value.fixedMhr.length == 2 && value.headerIes.offset == 2 && value.headerIes.length == 3);
+        }
+    }
+    void dissectPacket(Packet *,const Protocol *) override { ASSERT(false); }
+};
+
+%activity:
+using IE = Ieee802154InformationElements;
+using Codec = Ieee802154FrameCodec;
+auto typedCommand = makeShared<Ieee802154Frame>();
+typedCommand->setFrameType(3); typedCommand->setFrameVersion(2); typedCommand->setSequenceSuppressed(true);
+typedCommand->setInformationElementsPresent(true); typedCommand->setFcsPresent(false);
+typedCommand->setPayloadArraySize(2); typedCommand->setPayload(0,0x80); typedCommand->setPayload(1,0x3f); typedCommand->setChunkLength(B(4));
+Packet typedCommandPacket("typed command without ID"); typedCommandPacket.insertAtBack(typedCommand);
+Ieee802154ProtocolDissector typedCommandDissector; IeDissectorProbe commandProbe; commandProbe.checkLayout = false;
+typedCommandDissector.dissect(&typedCommandPacket,&Protocol::ieee802154,commandProbe);
+ASSERT(commandProbe.visited && commandProbe.incorrect);
+for (const auto& bytes : std::vector<std::vector<uint8_t>>{
+        {0x03,0x23,0x80,0x3f}, {0x03,0x23,0x01,0x09,0xaa},
+        {0x03,0x23,0x00,0x3f,0x02,0x90,0xbb,0xcc}}) {
+    auto frame = Codec::decode(bytes,false);
+    ASSERT(frame->getDecodeStatus() == Codec::TRUNCATED && Codec::encode(*frame) == bytes);
+}
+auto command = makeShared<Ieee802154Frame>();
+command->setFrameType(3); command->setFrameVersion(2); command->setSequenceSuppressed(true);
+command->setInformationElementsPresent(true); command->setFcsPresent(false);
+command->setPayloadArraySize(2); command->setPayload(0,0x80); command->setPayload(1,0x3f);
+bool rejectedCommand = false;
+try { Codec::encode(*command); } catch (const cRuntimeError&) { rejectedCommand = true; }
+ASSERT(rejectedCommand);
+ASSERT(Codec::decode({0x03,0x23,0x80,0x3f,0x07},false)->getDecodeStatus() == Codec::OK);
+ASSERT(Codec::decode({0x0b,0x21,0x21,0xa1,0xa2,0xa3,0xa4},false)->getDecodeStatus() == Codec::OK);
+const IE::Header header{0x12,{0xaa}};
+const IE::Payload payload{2,{0xbb,0xcc}};
+const std::vector<uint8_t> data{0xde,0xad};
+struct Row { bool h, p, d; std::vector<uint8_t> bytes; };
+const Row rows[] = {
+    {0,0,0,{}}, {1,0,0,{0x01,0x09,0xaa}},
+    {0,1,0,{0x00,0x3f,0x02,0x90,0xbb,0xcc}},
+    {1,1,0,{0x01,0x09,0xaa,0x00,0x3f,0x02,0x90,0xbb,0xcc}},
+    {0,0,1,{0xde,0xad}}, {1,0,1,{0x01,0x09,0xaa,0x80,0x3f,0xde,0xad}},
+    {0,1,1,{0x00,0x3f,0x02,0x90,0xbb,0xcc,0x00,0xf8,0xde,0xad}},
+    {1,1,1,{0x01,0x09,0xaa,0x00,0x3f,0x02,0x90,0xbb,0xcc,0x00,0xf8,0xde,0xad}}
+};
+for (const auto& row : rows) {
+    std::vector<IE::Header> headers = row.h ? std::vector<IE::Header>{header} : std::vector<IE::Header>{};
+    std::vector<IE::Payload> payloads = row.p ? std::vector<IE::Payload>{payload} : std::vector<IE::Payload>{};
+    ASSERT(IE::encode(headers,payloads,row.d ? data : std::vector<uint8_t>{}) == row.bytes);
+    auto frame = makeShared<Ieee802154Frame>();
+    frame->setFrameVersion(2); frame->setSequenceSuppressed(true); frame->setFcsPresent(false);
+    frame->setInformationElementsPresent(row.h || row.p);
+    frame->setPayloadArraySize(row.bytes.size());
+    for (size_t i = 0; i < row.bytes.size(); ++i) frame->setPayload(i,row.bytes[i]);
+    auto result = IE::inspect(*frame);
+    ASSERT(std::holds_alternative<IE::View>(result));
+    auto view = std::get<IE::View>(result);
+    ASSERT(view.fixedMhr.offset == 0 && view.fixedMhr.length == 2 && view.auxiliary.length == 0);
+    ASSERT(view.headers.size() == size_t(row.h) && view.payloads.size() == size_t(row.p));
+    ASSERT(view.headerTermination1 == row.p && view.headerTermination2 == (row.h && !row.p && row.d));
+    ASSERT(view.payloadTermination == (row.p && row.d));
+    ASSERT(view.data.length == (row.d ? 2 : 0) && view.fcs.offset == 2 + row.bytes.size());
+    if (row.h && row.p && row.d) {
+        ASSERT(view.headerIes.offset == 2 && view.headerIes.length == 5);
+        ASSERT(view.payloadIes.offset == 7 && view.payloadIes.length == 6);
+        ASSERT(view.data.offset == 13 && view.data.length == 2 && view.fcs.offset == 15);
+        ASSERT(std::vector<uint8_t>(row.bytes.begin() + view.payloadIes.offset - 2,row.bytes.begin() + view.data.offset - 2) ==
+                std::vector<uint8_t>({0x02,0x90,0xbb,0xcc,0x00,0xf8}));
+        ASSERT(std::vector<uint8_t>(row.bytes.begin() + view.data.offset - 2,row.bytes.end()) == data);
+    }
+    if (row.h) ASSERT(view.headers[0].id == 0x12 && view.headers[0].content == std::vector<uint8_t>({0xaa}));
+    if (row.p) ASSERT(view.payloads[0].group == 2 && view.payloads[0].content == std::vector<uint8_t>({0xbb,0xcc}));
+    ASSERT(IE::encode(view.headers,view.payloads,row.d ? data : std::vector<uint8_t>{}) == row.bytes);
+    auto bytes = Codec::encode(*frame);
+    auto decoded = Codec::decode(bytes,false);
+    ASSERT(decoded->getDecodeStatus() == Codec::OK && Codec::encode(*decoded) == bytes);
+}
+ASSERT(IE::encode({}, {payload}, {}, true) == std::vector<uint8_t>({0x00,0x3f,0x02,0x90,0xbb,0xcc,0x00,0xf8}));
+ASSERT(IE::encode({{0xff,{}}}, {}, {}) == std::vector<uint8_t>({0x80,0x7f}));
+ASSERT(IE::encode({{1,std::vector<uint8_t>(127,1)}}, {}, {}).size() == 129);
+ASSERT(IE::encode({}, {{1,std::vector<uint8_t>(2047,2)}}, {}).size() == 2051);
+auto ordered = IE::encode({{0xff,{1}},{0x12,{}},{0xff,{2}}},{{14,{3}},{2,{}},{14,{4}}},{5});
+auto orderedFrame = makeShared<Ieee802154Frame>();
+orderedFrame->setFrameVersion(2); orderedFrame->setSequenceSuppressed(true); orderedFrame->setInformationElementsPresent(true); orderedFrame->setFcsPresent(false);
+orderedFrame->setPayloadArraySize(ordered.size()); for (size_t i = 0; i < ordered.size(); ++i) orderedFrame->setPayload(i,ordered[i]);
+auto orderedView = std::get<IE::View>(IE::inspect(*orderedFrame));
+ASSERT(orderedView.headers.size() == 3 && orderedView.headers[0].id == 0xff && orderedView.headers[1].content.empty() && orderedView.headers[2].content == std::vector<uint8_t>({2}));
+ASSERT(orderedView.payloads.size() == 3 && orderedView.payloads[0].group == 14 && orderedView.payloads[1].content.empty() && orderedView.payloads[2].content == std::vector<uint8_t>({4}));
+for (const auto& body : std::vector<std::vector<uint8_t>>{{0x00,0x3f},{0x80,0x3f},{0x00,0x3f,0x00,0xf8}}) {
+    std::vector<uint8_t> bytes{0x01,0x23}; bytes.insert(bytes.end(),body.begin(),body.end());
+    auto frame = Codec::decode(bytes,false);
+    ASSERT(frame->getDecodeStatus() == Codec::OK && Codec::encode(*frame) == bytes);
+}
+
+// Every strict prefix of this single length-five Header IE cuts a required field.
+const std::vector<uint8_t> longHeader{0x01,0x23,0x05,0x09,1,2,3,4,5};
+for (size_t n = 0; n < longHeader.size(); ++n) {
+    std::vector<uint8_t> prefix(longHeader.begin(),longHeader.begin() + n);
+    auto frame = Codec::decode(prefix,false);
+    ASSERT(frame->getDecodeStatus() == Codec::TRUNCATED && Codec::encode(*frame) == prefix);
+}
+const std::vector<uint8_t> longPayload{0x01,0x23,0x00,0x3f,0x04,0x90,1,2,3,4};
+for (size_t n = 0; n < longPayload.size(); ++n) {
+    std::vector<uint8_t> prefix(longPayload.begin(),longPayload.begin() + n);
+    auto frame = Codec::decode(prefix,false);
+    // A complete empty HT1 is a bounded noncanonical frame, not an incomplete descriptor.
+    ASSERT(frame->getDecodeStatus() == (n == 4 ? Codec::OK : Codec::TRUNCATED));
+    ASSERT(Codec::encode(*frame) == prefix);
+}
+const std::vector<uint8_t> fcsVector{0x01,0x23,0x01,0x09,0xaa,0x80,0x3f,0xde,0xad,0xd4,0x37};
+auto fcsFrame = Codec::decode(fcsVector,true);
+ASSERT(fcsFrame->getDecodeStatus() == Codec::OK && fcsFrame->getFcsValid() && Codec::encode(*fcsFrame) == fcsVector);
+auto corrupt = fcsVector; corrupt.back() ^= 1;
+auto corruptFrame = Codec::decode(corrupt,true);
+ASSERT(corruptFrame->getDecodeStatus() == Codec::OK && !corruptFrame->getFcsValid() && !corruptFrame->isCorrect());
+ASSERT(Codec::encode(*corruptFrame) == corrupt);
+auto typed = makeShared<Ieee802154Frame>();
+typed->setFrameVersion(2); typed->setSequenceSuppressed(true); typed->setInformationElementsPresent(true); typed->setFcsPresent(false);
+typed->setPayloadArraySize(3); typed->setPayload(0,0x01); typed->setPayload(1,0x09); typed->setPayload(2,0xaa); typed->setChunkLength(B(5));
+Packet validTyped("valid typed IE"); validTyped.insertAtBack(typed);
+Ieee802154ProtocolDissector dissector; IeDissectorProbe validProbe;
+dissector.dissect(&validTyped,&Protocol::ieee802154,validProbe);
+ASSERT(validProbe.visited && !validProbe.incorrect);
+auto invalidTyped = makeShared<Ieee802154Frame>(*typed); invalidTyped->setPayload(0,0x02);
+Packet invalidPacket("truncated typed IE"); invalidPacket.insertAtBack(invalidTyped);
+IeDissectorProbe invalidProbe; dissector.dissect(&invalidPacket,&Protocol::ieee802154,invalidProbe);
+ASSERT(invalidProbe.visited && invalidProbe.incorrect);
+
+for (const auto& bytes : std::vector<std::vector<uint8_t>>{
+        {0x01,0x23,0x01}, {0x01,0x23,0x7f,0x00,0xaa}, {0x01,0x23,0x00,0x3f,0xff,0x87,0x01}}) {
+    auto frame = Codec::decode(bytes,false);
+    ASSERT(frame->getDecodeStatus() == Codec::TRUNCATED && Codec::encode(*frame) == bytes);
+}
+const std::vector<uint8_t> longAux{0x09,0x21,0x12,1,2,3,4,5,6,7,8,9,0xa1,0xa2,0xa3,0xa4,0xa5,0xa6,0xa7,0xa8};
+for (size_t n = 0; n < longAux.size(); ++n) for (bool fcsPresent : {false,true}) {
+    std::vector<uint8_t> prefix(longAux.begin(),longAux.begin() + n);
+    if (fcsPresent) { prefix.push_back(0); prefix.push_back(0); }
+    auto frame = Codec::decode(prefix,fcsPresent);
+    ASSERT(frame->getDecodeStatus() == Codec::TRUNCATED && Codec::encode(*frame) == prefix);
+}
+auto maximum = makeShared<Ieee802154Frame>();
+maximum->setFrameVersion(2); maximum->setSequenceSuppressed(true); maximum->setInformationElementsPresent(true);
+auto maximumBody = IE::encode({{1,std::vector<uint8_t>(121,0x44)}},{},{});
+maximum->setPayloadArraySize(maximumBody.size()); for (size_t i = 0; i < maximumBody.size(); ++i) maximum->setPayload(i,maximumBody[i]);
+auto maximumWire = Codec::encode(*maximum);
+ASSERT(maximumWire.size() == 127 && Codec::decode(maximumWire,true)->getFcsValid());
+maximum->setPayloadArraySize(maximumBody.size() + 1); maximum->setPayload(0,0x7a);
+bool rejectedOversize = false;
+try { Codec::encode(*maximum); } catch (const cRuntimeError&) { rejectedOversize = true; }
+ASSERT(rejectedOversize);
+for (const auto& bytes : std::vector<std::vector<uint8_t>>{
+        {0x01,0x23,0x01,0x3f}, {0x01,0x23,0x81,0x3f}, {0x01,0x23,0x00,0x80},
+        {0x01,0x23,0x00,0x3f,0x00,0x00}, {0x01,0x23,0x00,0x3f,0x01,0xf8}}) {
+    auto frame = Codec::decode(bytes,false);
+    ASSERT(frame->getDecodeStatus() == Codec::MALFORMED && Codec::encode(*frame) == bytes);
+}
+
+const size_t mic[] = {0,4,8,16,0,4,8,16};
+for (uint8_t level = 0; level < 8; ++level) {
+    std::vector<uint8_t> bytes{0x09,0x21,uint8_t(0x20 | level)}; // Suppressed sequence/counter, key mode zero.
+    bytes.insert(bytes.end(),mic[level],0xa5);
+    auto frame = Codec::decode(bytes,false);
+    ASSERT(frame->getDecodeStatus() == Codec::OK && Codec::encode(*frame) == bytes);
+    auto view = std::get<IE::View>(IE::inspect(*frame));
+    ASSERT(view.auxiliary.offset == 2 && view.auxiliary.length == 1 && view.protectedRemainder);
+    ASSERT(view.securityLevel == level && view.securityLevelReserved == (level == 4) && view.micLength == mic[level]);
+    ASSERT(view.data.offset == 3 && view.data.length == mic[level]);
+    if (mic[level]) {
+        bytes.pop_back();
+        auto shortFrame = Codec::decode(bytes,false);
+        ASSERT(shortFrame->getDecodeStatus() == Codec::TRUNCATED && Codec::encode(*shortFrame) == bytes);
+    }
+}
+for (uint8_t mode = 0; mode < 4; ++mode) for (bool suppressed : {false,true}) {
+    const size_t keyLength[] = {0,1,5,9};
+    std::vector<uint8_t> bytes{0x09,0x21,uint8_t((mode << 3) | (suppressed ? 0x20 : 0))};
+    bytes.insert(bytes.end(),(suppressed ? 0 : 4) + keyLength[mode],0x31);
+    auto frame = Codec::decode(bytes,false);
+    ASSERT(frame->getDecodeStatus() == Codec::OK);
+    auto view = std::get<IE::View>(IE::inspect(*frame));
+    ASSERT(view.auxiliary.length == 1 + (suppressed ? 0 : 4) + keyLength[mode]);
+    if (view.auxiliary.length > 1) {
+        bytes.pop_back(); ASSERT(Codec::decode(bytes,false)->getDecodeStatus() == Codec::TRUNCATED);
+    }
+}
+const std::vector<uint8_t> securedHeaders{0x09,0x23,0x21,0x01,0x09,0xaa,0x80,0x3f,0xde,0xa1,0xa2,0xa3,0xa4};
+auto secured = Codec::decode(securedHeaders,false);
+ASSERT(secured->getDecodeStatus() == Codec::OK && Codec::encode(*secured) == securedHeaders);
+auto securedView = std::get<IE::View>(IE::inspect(*secured));
+ASSERT(securedView.auxiliary.offset == 2 && securedView.auxiliary.length == 1);
+ASSERT(securedView.headerIes.offset == 3 && securedView.headerIes.length == 5 && securedView.headers.size() == 1);
+ASSERT(securedView.headerTermination2 && securedView.payloads.empty() && securedView.protectedRemainder && securedView.data.offset == 8 && securedView.data.length == 5);
+auto intoMic = securedHeaders; intoMic[3] = 6;
+ASSERT(Codec::decode(intoMic,false)->getDecodeStatus() == Codec::TRUNCATED);
+const std::vector<uint8_t> reservedLevel{0x09,0x23,0x24,0xff,0xff};
+auto reservedFrame = Codec::decode(reservedLevel,false);
+ASSERT(reservedFrame->getDecodeStatus() == Codec::OK && Codec::encode(*reservedFrame) == reservedLevel);
+auto reservedView = std::get<IE::View>(IE::inspect(*reservedFrame));
+ASSERT(reservedView.securityLevelReserved && reservedView.protectedRemainder && reservedView.headers.empty() && reservedView.data.length == 2);
+std::cout << "IE framing and security extents verified.\n";
+
+%contains: stdout
+IE framing and security extents verified.

@@ -1,0 +1,32 @@
+%description:
+Independent version-2 IE and opaque-security vectors round-trip through the
+registered production dissector and serializer, with and without FCS.
+
+%includes:
+#include "SerializerTestLib.h"
+using namespace inet;
+
+%activity:
+cLog::logLevel = LOGLEVEL_WARN;
+beginSerializerCoverage();
+testPcapSerialization("../../pcap/generated/ieee802154-e102-with-fcs.pcap", true);
+testPcapSerialization("../../pcap/generated/ieee802154-e102-no-fcs.pcap", false);
+reportSerializerCoverage();
+
+%contains: stdout
+Files:  2 tested, 2 clean, 0 with differences
+
+%contains: stdout
+Frames: 22 total, 22 same, 0 differ, 0 error, 0 truncated
+
+%contains: stdout
+USED inet::Ieee802154Frame
+
+%not-contains: stdout
+TOPLEVEL-RAWBYTES
+
+%not-contains: stdout
+EXCEPTION
+
+%not-contains: stdout
+Some frames differ in file

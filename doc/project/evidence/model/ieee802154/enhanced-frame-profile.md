@@ -29,6 +29,12 @@ The pinned Table 7-2 footnote literally requires compression zero iff PANs are i
 
 Native DATA transmission retains version 1 as default and adds explicit version 2 selection; version-0 wire inspection/reception remains supported under its legacy rules. Version-2 operational DATA requires applicable local/peer PAN context and explicit source/destination identities for sequence-suppressed acknowledged exchanges. No-address/PAN-only layouts are structurally representable but do not establish an operational endpoint. Version 3 and reserved addressing are invalid. Multipurpose, Fragment and Extended frames remain opaque unsupported.
 
+An unsecured version-2 Command requires its one-octet Command ID after the IE region
+(7.3.4.1/Figure7-17, PDF92). The shared complete-frame inspection enforces that minimum
+for raw decoding, generation and typed dissection. A complete IE list without that field
+is truncated Command structure; an empty Beacon/DATA region is not subjected to the Command
+rule. Protected remainder stays opaque rather than acquiring an invented Command ID.
+
 The existing indication's optional DSN/source-PAN fields and separate effective source PAN are reused. An omitted value never becomes zero/0xffff, and no DSN is added to DATA.confirm. A legal but unsupported local operating combination uses `UNSUPPORTED_FEATURE` after accepted semantic validation; local provider/profile absence uses `UNSUPPORTED_OPERATION` refusal with caller ownership retained. Invalid controls/ranges use `INVALID_PARAMETER`, invalid identities use `INVALID_ADDRESS`, oversize uses `FRAME_TOO_LONG`, and nonzero security retains the existing security outcomes.
 
 ## IE grammar and boundaries
@@ -46,9 +52,20 @@ Table 7-6, PDF97, gives the complete list-termination matrix. H/P/D indicate Hea
 | no | yes | yes | HT1 | required |
 | yes | yes | yes | HT1 | required |
 
+Canonical generation follows these inclusion rows and omits redundant empty termination
+forms. Structural decoding preserves zero-content HT1-only, HT2-only and HT1-plus-Payload-
+Termination-only forms as empty bounded regions. Clause7.2.9 defines termination descriptors
+as IEs, while7.4.1/Table7-6's “None” and “no termination is required” wording does not
+uniquely establish a receive-discard rule for redundant empty transitions. This is the selected
+forensic decoding policy, not a claim that IEEE requires those forms to be emitted. Nonzero
+termination content, overrun, missing HT1 at a Payload-IE transition, and an IE-present field
+with no descriptor remain structural failures. No configurable strictness mode is added.
+
 Descriptors are little-endian 16-bit words. Header IEs use length bits0–6, ID7–14, type15=0; Payload IEs use length0–10, group11–14, type15=1. Short Nested IEs use length0–7, sub-ID8–14, type15=0; long Nested IEs use length0–10, sub-ID11–14, type15=1. MLME is Payload group1. HT1/HT2 IDs are 0x7e/0x7f with zero content; Payload Termination is group0xf with zero content. Every length is checked against its immediate enclosing region and actual FCS-excluded bytes before advancing. Unknown identifiers preserve order/content without introducing semantics; arbitrary recursive containers are not supported.
 
-The auxiliary Security Control octet determines security level, key-ID mode, frame-counter suppression and ASN-in-nonce selection. A nonsuppressed counter occupies four octets; key modes0/1/2/3 occupy 0/1/5/9 key-identifier octets (9.4.1, PDF173). The structural decoder establishes those extents before Header IEs. Protected payload and any MIC remain opaque under the unsupported-security outcome; E1 never authenticates, interprets encrypted Payload IEs or creates keys/counters/replay state. HT/IE parsing and FCS verification never consume beyond the enclosing MPDU.
+The registered dissector retains one typed Frame callback and invokes shared codec inspection even on its typed fast path. A computed view exposes ordered values and nonoverlapping byte regions from the MPDU start; offsets are not stored again in MSG. The initial region is the fixed MHR prefix, followed by auxiliary/Header-IE regions where present, since these also belong to the complete MHR. This preserves existing frame serialization and consumer behavior without packet-region classes or core callback changes. Independent value-encoding tests complement the registered serializer and real dissector callback observations.
+
+The auxiliary Security Control octet determines security level, key-ID mode, frame-counter suppression and ASN-in-nonce selection. A nonsuppressed counter occupies four octets; key modes0/1/2/3 occupy 0/1/5/9 key-identifier octets (9.4.1, PDF173). The structural decoder establishes those extents before Header IEs. Table9-6 and its continuation (PDF173–174) give MIC lengths0/4/8/16 for levels0/(1,5)/(2,6)/(3,7). Reserve the known MIC extent when bounding clear Header IEs and reject a missing required extent; this is a structural minimum, not authentication. Protected payload and MIC remain one opaque remainder under the unsupported-security outcome; E1 never authenticates, interprets protected Payload IEs or creates keys/counters/replay state. Level4 is reserved/deprecated in this edition: a structurally inspectable frame may expose that reserved level, with its post-auxiliary remainder opaque and no assumed MIC extent, while native operation discards it as unsupported security. Structural OK is not security validity or an encryption-only capability. HT/IE parsing and FCS verification never consume beyond the enclosing MPDU.
 
 ## Sequence and ACK contract
 

@@ -3,6 +3,7 @@
 #include "inet/common/packet/printer/ProtocolPrinterRegistry.h"
 #include "inet/linklayer/ieee802154/Ieee802154Frame_m.h"
 #include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
+#include "inet/linklayer/ieee802154/Ieee802154InformationElements.h"
 #include "inet/linklayer/ieee802154/Ieee802154MacHeader_m.h"
 
 namespace inet {
@@ -23,6 +24,14 @@ class Ieee802154ProtocolPrinter : public ProtocolPrinter
             else context.infoColumn << "absent";
             context.infoColumn << " parse=" << frame->getDecodeStatus() << " FCS="
                     << (!frame->getFcsPresent() ? "absent" : frame->getComputeFcs() ? "computed" : frame->getFcsValid() ? "valid" : "invalid");
+            if (frame->getFrameVersion() == 2 && frame->getDecodeStatus() == Ieee802154FrameCodec::OK) {
+                auto inspected = Ieee802154InformationElements::inspect(*frame);
+                if (auto view = std::get_if<Ieee802154InformationElements::View>(&inspected))
+                    context.infoColumn << " HIE=" << view->headers.size() << " PIE=" << view->payloads.size()
+                            << (view->protectedRemainder ? " protected" : "") << " data=" << view->data.length << "B";
+                else
+                    context.infoColumn << " IE=invalid";
+            }
         }
         else if (auto legacy = dynamicPtrCast<const Ieee802154MacHeader>(chunk)) {
             context.sourceColumn << legacy->getSrcAddr();

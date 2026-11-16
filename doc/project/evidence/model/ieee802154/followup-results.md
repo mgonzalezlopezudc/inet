@@ -27,7 +27,8 @@ This record distinguishes source-audit closure, compilation, executed fixtures a
 | B-99 | Conventional package closure complete | Fresh debug,6 units,15 modules and1464/1464 protocol cases across38 fixtures PASS; stored Power/coexistence trajectories and Power fake-GUI visual fingerprint PASS without baseline changes. Final combined B/E publication matrix remains separate. |
 | E1-00 | Source/layout/service audit complete; independent review confirmed closure | Enhanced catalog/checks/profile contain complete PAN-presence and termination matrices, enhanced PIB/service inputs, concrete consumers and selected service/filter boundaries. No new runtime result is implied. |
 | E1-01 | Debug acceptance complete; independent findings repaired | Fresh debug,6 units,legacy serializer and188/188 protocol cases PASS (`e101-acceptance1/`). Structural version2 layouts are enabled; native enhanced operation remains gated. C++ follow-up adds no unmatched diagnostic; inherited warning gate remains FAIL. |
-| E1-02 through E1-99 | NOT_RUN | Dependent IE and operational implementation/runtime gates remain open. |
+| E1-02 | Repaired debug acceptance complete; independent findings source-closed | Fresh debug,8 units,2 serializer fixtures and200/200 actual protocol cases PASS (`e102-acceptance2/`). C++ follow-up adds no unmatched diagnostic; inherited warning gate remains FAIL. IE/security structural inspection does not enable enhanced MAC operation. |
+| E1-03 through E1-99 | NOT_RUN | Nested IE and operational implementation/runtime gates remain open. |
 
 ## Baseline control run
 
@@ -632,6 +633,69 @@ release fragments and model/protocol links pass; no baseline is changed.
 Independent closure confirms both findings resolved on the matching repaired source with
 23 PASS/11 N/A/0 FLAG/0 QUESTION. Structural layout support and the disabled operational
 gate are complete; IE framing and enhanced MAC services remain the subsequent units.
+
+E1-01 is committed as `de2c7791fe`; B-99 is `84f7242591`. A metadata-only repair corrects
+classification trailer vocabulary after the series checker rejects the original spellings.
+Both trees, author/committer identities and dates remain identical; the mapping and original
+commit objects are retained in `e101-classification-metadata-repair.json` and its companion
+text files. Classification recheck passes. Existing source/library acceptance evidence is
+unchanged by this message-only repair; the full series is checked again with later units.
+
+## E1-02 bounded IE framing
+
+The first frozen candidate passes a fresh debug build, eight units, two serializer fixtures
+and198/198 protocol runs/actual ProtocolTest PASS, zero errors/skips/FAIL (`e102-first/`).
+The extended gate contributes20 typed/raw cases; ReceiveSecurity66, DataAck16 and GtsData96
+remain controls. The new registered serializer reproduces22 independent capture frames
+across both FCS modes; the legacy serializer reproduces its four frames. Capture inputs,
+generation script, provenance, source/library identity, generated work and exact selections
+are retained. Native enhanced operation remains disabled.
+
+The selected representation keeps one typed Frame callback with a computed region/value
+view and validates the production dissector's typed fast path. The independent source
+decision preserves bounded redundant empty terminators on forensic decoding while canonical
+generation follows Table7-6; the [profile](enhanced-frame-profile.md#ie-grammar-and-boundaries)
+records the precise interpretation and structural failure boundary. The local security
+source audit also reserves Table9-6 MIC extents without authentication/decryption and keeps
+reserved level4 opaque. These are structural obligations, not an S1 implementation.
+
+The external decoder capability probe uses Scapy2.8.0 (`e102-scapy-capability.json`). Its
+unconditional sequence field and reserved representation of the suppression/IE control bits
+cannot validate modern IE/PAN layouts. Across22 records, FCF fields are only partially
+available and the two shortest records cannot be parsed. This is an external-decoder
+limitation, not native protocol failure or complete modern wire validation. Independent
+octets, value-encoding units and registered serializer/dissector observations provide the
+bounded evidence above.
+
+Independent review finds that IE-only unsecured Command frames can omit their mandatory
+one-octet Command ID. Fixed HT2-only, Header-only and Payload-only vectors reproduce the
+missing-field classification (`e102-command-red/`). The first codec repair passes a fresh
+eight-unit/two-serializer/200-case campaign (`e102-acceptance1/`), but leaves the production
+typed-frame dissector path unchecked. A typed Command probe reproduces that same missing
+validation (`e102-typed-command-red/`). The final repair moves the minimum into the existing
+shared complete-frame inspection and removes duplicate codec checks. Protected remainder
+stays opaque; ordinary empty Beacon/DATA bodies do not acquire Command restrictions.
+
+The review also closes a region-oracle gap without claiming a source offset defect: unit
+expectations independently pin Header/Payload/MSDU spans and sliced bytes, and one added
+actual-radio case per representation observes Header IEs, Payload IEs and separate MSDU
+through the production dissector. Its fixed MHR21/Header5/Payload6/MSDU2/FCS2 regions total36
+octets, matching the actual RF PSDU. Fresh final acceptance passes all eight units, both
+serializers and200/200 actual protocol cases (`e102-acceptance2/`), zero errors/skips/FAIL.
+EnhancedFrameGate contributes22 cases; the178 existing controls remain unchanged.
+
+The initial four-TU C++ check reports1317 warning rows, zero errors and35 unique native
+diagnostics, all matched to baseline lines. Two legacy dissector-header warnings are
+attributed after byte-identical verification across retained snapshots. The final shared-
+validation two-TU follow-up reports1034 warning rows, zero errors and26 native diagnostics,
+all matching unchanged lines with zero unmatched warnings. Exact logs/comparisons are retained;
+the inherited warning gate remains FAIL. Scoped architecture/naming/interfaces, source/document
+seals, release and model/protocol/plan links pass. No baseline is changed.
+
+Independent final closure reports23 PASS/11 N/A/0 FLAG/0 QUESTION on source hashes matching
+`e102-acceptance2/checkpoint.json`. Both the shared Command-ID validation and the independent
+region/extraction proof are closed. No architecture/naming exception or protection change
+is introduced; Nested IE and operational enhanced services remain the next units.
 
 ## Publication gate
 
