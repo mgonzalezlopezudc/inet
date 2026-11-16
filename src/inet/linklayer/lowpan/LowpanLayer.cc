@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "inet/linklayer/lowpan/LowpanLayer.h"
+#include "inet/linklayer/lowpan/LowpanSourceFragmentation.h"
 
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/ProtocolTag_m.h"
@@ -64,7 +65,7 @@ std::optional<MeshPayload> inspectMeshPayload(const Packet& packet, LowpanDispat
     return result;
 }
 
-bool isRouterDiscovery(const Packet *packet)
+bool isRouterDiscovery(const Packet *packet, bool includeOtherNdControl = false)
 {
     try {
         auto protocol = packet->peekAtFront<Ipv6Header>(B(40))->getProtocolId();
@@ -86,7 +87,9 @@ bool isRouterDiscovery(const Packet *packet)
         if (protocol != IP_PROT_IPv6_ICMP || offset >= packet->getDataLength())
             return false;
         auto type = packet->peekDataAt<BytesChunk>(offset, B(1))->getBytes()[0];
-        return type == ICMPv6_ROUTER_SOL || type == ICMPv6_ROUTER_AD;
+        return type == ICMPv6_ROUTER_SOL || type == ICMPv6_ROUTER_AD ||
+            (includeOtherNdControl && ((type >= ICMPv6_NEIGHBOUR_SOL && type <= ICMPv6_REDIRECT) ||
+                type == ICMPv6_DUPLICATE_ADDRESS_REQUEST || type == ICMPv6_DUPLICATE_ADDRESS_CONFIRMATION));
     }
     catch (const cRuntimeError&) {
         return false; // Inspection must not replace the existing malformed-packet handling.
@@ -106,6 +109,8 @@ simsignal_t LowpanLayer::meshForwardedSignal = registerSignal("meshForwarded");
 simsignal_t LowpanLayer::nativeFrameTransmissionSucceededSignal = registerSignal("nativeFrameTransmissionSucceeded");
 simsignal_t LowpanLayer::nativeFrameTransmissionFailedSignal = registerSignal("nativeFrameTransmissionFailed");
 
+LowpanLayer::LowpanLayer() = default;
+
 LowpanLayer::~LowpanLayer()
 {
     cancelAndDelete(expiryTimer);
@@ -124,6 +129,13 @@ void LowpanLayer::initialize(int stage)
             throw cRuntimeError("Unsupported LoWPAN headerCompression profile");
         useIphc = compression == "iphc";
         meshUnder = par("meshUnder");
+        if (par("nativeFragmentPacing").boolValue()) {
+            if (meshUnder || dynamic_cast<LowpanNativeBoundary *>(link) == nullptr)
+                throw cRuntimeError("Paced source fragmentation requires a native boundary without Mesh");
+            sourceFragments = std::make_unique<LowpanSourceFragmentation>(*this);
+            WATCH_EXPR("numPacedSourceDatagrams", sourceFragments->getNumDatagrams());
+            WATCH_EXPR("pacedSourceBytes", sourceFragments->getRetainedBytes());
+        }
         int hops = par("meshHops");
         double residenceSeconds = par("meshResidence").doubleValue();
         double retentionSeconds = par("broadcastRetention").doubleValue();
@@ -249,6 +261,7 @@ void LowpanLayer::removeLearnedContext(int id)
 
 void LowpanLayer::clearTransientState()
 {
+    if (sourceFragments) sourceFragments->clear();
     pendingNativeTransmissions.clear();
     cancelEvent(expiryTimer);
     reassembly->clear();
@@ -287,12 +300,17 @@ bool LowpanLayer::pushPreparedPacket(Packet *packet)
 void LowpanLayer::handlePushPacketProcessed(Packet *packet, const cGate *, bool successful)
 {
     Enter_Method("handlePushPacketProcessed");
-    auto found = pendingNativeTransmissions.find(packet->getId());
+    auto id = packet->getId();
+    auto found = pendingNativeTransmissions.find(id);
     if (found == pendingNativeTransmissions.end()) return;
     pendingNativeTransmissions.erase(found);
     // STOPPING/CRASHING still satisfy isUp(); neither side may continue during drain.
-    if (!isNativeTransmissionOperational()) return;
+    if (!isNativeTransmissionOperational()) {
+        if (sourceFragments) sourceFragments->completed(id, false);
+        return;
+    }
     emit(successful ? nativeFrameTransmissionSucceededSignal : nativeFrameTransmissionFailedSignal, packet);
+    if (sourceFragments) sourceFragments->completed(id, successful && isNativeTransmissionOperational());
 }
 
 void LowpanLayer::handleStopOperation(LifecycleOperation *operation)
@@ -319,6 +337,7 @@ void LowpanLayer::handleMessageWhenDown(cMessage *message)
 
 void LowpanLayer::handleMessageWhenUp(cMessage *message)
 {
+    if (sourceFragments && sourceFragments->isTimer(message)) { sourceFragments->handleTimer(); return; }
     if (message == expiryTimer) {
         auto expired = reassembly->expire(simTime());
         if (expired != 0)
@@ -487,6 +506,11 @@ void LowpanLayer::processUpperPacket(Packet *packet)
         if (mesh) frame->insertAtFront(mesh);
     };
     if (ranges.size() > 1) {
+        // Bootstrap/control retains immediate timing; ordinary native unicast uses the opt-in scheduler.
+        if (sourceFragments && !destination.isBroadcast() && !isRouterDiscovery(packet, true)) {
+            sourceFragments->admit(packet, encodedHeader, originalHeaderLength, ranges, request, prepared->getPayloadLimit());
+            return;
+        }
         // RFC 4944 receiver lifetime is at most 60 seconds. Use that maximum
         // even when this interface's own receive timeout is configured shorter.
         auto reuseAfter = meshUnder ? meshReservation(meshHops, meshClockDuration(60)) : prepared->getDeliveryDeadline() + SimTime(60);

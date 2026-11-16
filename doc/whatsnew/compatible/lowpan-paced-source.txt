@@ -1,0 +1,3 @@
+ACK-gated native source fragmentation
+
+Native LoWPAN sources can opt into ACK-gated fragmentation with bounded retained datagrams, a fixed delivery horizon and a gap between acknowledged frames. Encoding is frozen across context expiry. Neighbor Discovery control and broadcast retain immediate timing; lifecycle cancellation releases unsent ownership.
