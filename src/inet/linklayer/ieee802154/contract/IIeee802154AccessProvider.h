@@ -8,6 +8,8 @@
 #include "inet/linklayer/ieee802154/Ieee802154MacServiceResult.h"
 
 namespace inet {
+
+enum class Ieee802154AccessWindowOrigin { UNKNOWN, INCOMING, OUTGOING };
 /** One immutable CAP epoch on the device clock; a complete exchange may end at a boundary. */
 struct Ieee802154AccessWindow
 {
@@ -22,6 +24,7 @@ struct Ieee802154AccessWindow
     simtime_t physicalCapEnd = SIMTIME_ZERO; ///< CAP end converted while still future.
     std::optional<simtime_t> latestCompletion; ///< Earlier local radio reservation, if any.
     uint8_t beaconOrder = 15; ///< Actual beacon epoch, retained if the tracker or PIB changes.
+    Ieee802154AccessWindowOrigin origin = Ieee802154AccessWindowOrigin::UNKNOWN;
 };
 
 struct Ieee802154AccessRequest

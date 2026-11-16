@@ -124,12 +124,22 @@ class INET_API Ieee802154MacPib
     void reset(bool setDefaultPib, uint8_t injectedDsn, uint8_t injectedBsn = 0);
     /** Clause 10.21.3: clear PAN and coordinator references, preserving other PIB values. */
     void clearAssociation();
+    /** Retire the parent binding while retaining this coordinator's own PAN and short address. */
+    void clearParentAssociation();
     /** Refresh PHY context for future defaults; the current writable backoff period is retained. */
     void updateCcaDuration(uint32_t durationUs);
     simtime_t getCcaDuration() const { return SimTime(ccaDurationUs, SIMTIME_US); }
     /** Called at an actual beacon transmission start, in the selected 24-bit symbol timebase. */
     void updateBeaconTxTime(uint32_t timestamp) { state.macBeaconTxTime = timestamp & 0xffffff; }
-    void setSynchronizationBeaconOrder(uint8_t beaconOrder) { state.macBeaconOrder = beaconOrder; }
+    /** Validate the coupled BO/SO pair before changing either value. */
+    Ieee802154MacStatus setBeaconOrder(uint8_t beaconOrder) {
+        if (beaconOrder > 15 || (beaconOrder < 15 && state.macSuperframeOrder < 15 && state.macSuperframeOrder > beaconOrder))
+            return Ieee802154MacStatus::INVALID_PARAMETER;
+        state.macBeaconOrder = beaconOrder;
+        if (beaconOrder == 15)
+            state.macSuperframeOrder = 15;
+        return Ieee802154MacStatus::SUCCESS;
+    }
     /** Atomically install the validated coordinator service configuration. */
     void updateSuperframeConfiguration(uint16_t panId, uint8_t beaconOrder, uint8_t superframeOrder, bool batteryLifeExtension) {
         state.macPanId = panId;

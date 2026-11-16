@@ -25,6 +25,10 @@ class INET_API Ieee802154SuperframeTiming
   public:
     /** Invalid order combinations return no geometry. BO=15 normalizes SO to 15. */
     static std::optional<Ieee802154SuperframeGeometry> geometry(unsigned int beaconOrder, unsigned int superframeOrder);
+    /** Selected model policy: round a nonzero StartTime upward in symbol units. */
+    static uint64_t roundStartTime(uint32_t symbols, uint32_t backoffPeriod);
+    /** Physical half-open intervals: touching endpoints do not overlap. */
+    static bool physicalIntervalsOverlap(simtime_t firstStart, simtime_t firstEnd, simtime_t secondStart, simtime_t secondEnd);
     /** Low 24 bits of the local-clock symbol count, rounded down at symbol boundaries. */
     static uint32_t timestamp(clocktime_t localTime);
 };

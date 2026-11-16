@@ -22,6 +22,16 @@ const auto identity = Ieee802154Address::fromExtended(0x1022334455667788ULL);
 const auto otherIdentity = Ieee802154Address::fromExtended(0xAA22334455667788ULL);
 const auto coordinator = Ieee802154Address::fromExtended(0x1020304050607080ULL);
 
+Ieee802154MacPib coupled(identity,0,128,{},0,true);
+coupled.updateSuperframeConfiguration(0x1234,3,2,false);
+ASSERT(coupled.setBeaconOrder(1) == Status::INVALID_PARAMETER);
+ASSERT(std::get<uint64_t>(*coupled.get("macBeaconOrder").value) == 3);
+ASSERT(std::get<uint64_t>(*coupled.get("macSuperframeOrder").value) == 2);
+ASSERT(coupled.setBeaconOrder(4) == Status::SUCCESS);
+ASSERT(coupled.setBeaconOrder(15) == Status::SUCCESS);
+ASSERT(std::get<uint64_t>(*coupled.get("macBeaconOrder").value) == 15);
+ASSERT(std::get<uint64_t>(*coupled.get("macSuperframeOrder").value) == 15);
+
 struct ExpectedAttribute {
     const char *name;
     Value value;
@@ -325,6 +335,12 @@ ASSERT(managed.set("macPanId", uint64_t{0x1234}) == Status::SUCCESS);
 ASSERT(managed.set("macShortAddress", uint64_t{0x5678}) == Status::SUCCESS);
 ASSERT(managed.set("macCoordShortAddress", uint64_t{0x9abc}) == Status::SUCCESS);
 ASSERT(managed.set("macCoordExtendedAddress", coordinator) == Status::SUCCESS);
+managed.clearParentAssociation();
+ASSERT(read(managed, "macPanId") == Value(uint64_t{0x1234}));
+ASSERT(read(managed, "macShortAddress") == Value(uint64_t{0x5678}));
+ASSERT(read(managed, "macCoordShortAddress") == Value(uint64_t{0xffff}));
+ASSERT(read(managed, "macCoordExtendedAddress") == Value(Ieee802154Address::NONE_ADDRESS));
+ASSERT(read(managed, "macAssociatedPanCoord") == Value(false));
 managed.clearAssociation();
 ASSERT(read(managed, "macPanId") == Value(uint64_t{0xffff}));
 ASSERT(read(managed, "macShortAddress") == Value(uint64_t{0xffff}));

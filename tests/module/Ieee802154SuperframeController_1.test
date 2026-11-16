@@ -92,6 +92,8 @@ class SuperframeControllerExercise : public cSimpleModule, public IIeee802154Phy
   protected:
     virtual void activity() override {
         wait(SimTime(1, SIMTIME_US));
+        auto forecast = controller->getForecastUncertainty(SimTime(1,SIMTIME_S),SIMTIME_ZERO);
+        ASSERT(forecast > SimTime(113,SIMTIME_US) && forecast < SimTime(114,SIMTIME_US));
         auto r = id(); ASSERT(receiver->submitState(r, Ieee802154PhyState::RECEIVE) == Ieee802154PhyServiceAdmission::ACCEPTED);
         auto s = id(); ASSERT(sender->submitState(s, Ieee802154PhyState::TRANSMIT) == Ieee802154PhyServiceAdmission::ACCEPTED);
         wait(SimTime(192, SIMTIME_US)); success(r); success(s);

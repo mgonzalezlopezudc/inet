@@ -78,7 +78,7 @@ void Ieee802154StandardMac::initialize(int stage)
         outgoingCapActiveSignal = registerSignal("outgoingCapActive");
         syncMissedSignal = registerSignal("syncMissed");
         syncLostSignal = registerSignal("syncLost");
-        initialPanCoordinator = panCoordinator = par("isPanCoordinator").boolValue();
+        initialPanCoordinator = panCoordinator = coordinator = par("isPanCoordinator").boolValue();
         client.reference(this, "clientModule", true);
         managementClient.reference(this, "managementClientModule", false);
         networkInterface.reference(this, "interfaceModule", true);
@@ -172,7 +172,7 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitData(uint64_t id, Pac
 {
     Enter_Method("submitData");
     // IEEE Std 802.15.4-2024, Table 8-30: ignore IndirectTx outside the coordinator/destination predicates.
-    bool indirect = request.indirectTx && panCoordinator && !request.destinationAddress.isNone();
+    bool indirect = request.indirectTx && coordinator && !request.destinationAddress.isNone();
     auto admission = indirect ? admit(id,true) : admitRadio(id);
     if (admission != Ieee802154MacServiceAdmission::ACCEPTED)
         return admission;
@@ -314,18 +314,25 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitSet(uint64_t id, cons
             auto payload = std::get_if<std::vector<uint8_t>>(&request.value);
             bool oversizedBeacon = request.attribute == "macBeaconPayload" && payload && !fitsBeaconPayload(*payload);
             auto status = Ieee802154MacStatus::SUCCESS;
-            if (request.attribute == "macBeaconOrder" && superframe && !periodicBeaconing) {
+            if (request.attribute == "macBeaconOrder" && superframe) {
                 auto unsignedValue = std::get_if<uint64_t>(&request.value);
                 auto signedValue = std::get_if<int64_t>(&request.value);
+                std::optional<uint8_t> value;
                 if (unsignedValue && *unsignedValue <= 15)
-                    pib->setSynchronizationBeaconOrder(*unsignedValue);
+                    value = *unsignedValue;
                 else if (signedValue && *signedValue >= 0 && *signedValue <= 15)
-                    pib->setSynchronizationBeaconOrder(*signedValue);
-                else
+                    value = *signedValue;
+                if (!value || (*value < 15 && periodicBeaconing && incomingSuperframe && getBoolean("macAssociatedPanCoord") &&
+                        (*value != incomingSuperframe->beaconOrder || getInteger("macSuperframeOrder") != incomingSuperframe->superframeOrder)))
                     status = Ieee802154MacStatus::INVALID_PARAMETER;
+                else {
+                    status = pib->setBeaconOrder(*value);
+                    if (status == Ieee802154MacStatus::SUCCESS && *value == 15 && periodicBeaconing)
+                        retirePeriodicBeaconing(Ieee802154MacServiceAbortReason::CANCELLED);
+                }
             }
             else
-                status = oversizedBeacon || (periodicBeaconing && (request.attribute == "macBeaconOrder" || request.attribute == "macBattLifeExt" || request.attribute == "macBattLifeExtPeriods" || request.attribute == "macPanId" || request.attribute == "macShortAddress")) ?
+                status = oversizedBeacon || (periodicBeaconing && (request.attribute == "macBattLifeExtPeriods" || request.attribute == "macPanId" || request.attribute == "macShortAddress")) ?
                         Ieee802154MacStatus::INVALID_PARAMETER : pib->set(request.attribute, request.value);
             Ieee802154MacSetConfirm confirm(request.attribute, status);
             publishIdentity();
@@ -343,6 +350,7 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitReset(uint64_t id, co
     if (admission == Ieee802154MacServiceAdmission::ACCEPTED) {
         resetRequest = ResetRequest{id, request.setDefaultPib};
         retireReceives();
+        incomingSuperframe.reset();
         if (superframe) {
             superframe->clearAccessWindow();
             superframe->cancelAccessSearchDeadline();
@@ -412,6 +420,13 @@ Ieee802154MacServiceCancelResult Ieee802154StandardMac::cancel(uint64_t id)
     }
     if (startRequest && startRequest->id == id)
         return Ieee802154MacServiceCancelResult::NOT_CANCELLABLE;
+    if (superframeStartRequest && superframeStartRequest->id == id && superframeStartRequest->awaitingFirstBoundary &&
+            !resetRequest && !retiringRequests && started && superframeStartRequest->originalChannel &&
+            *superframeStartRequest->originalChannel == superframeStartRequest->parameters.channel) {
+        superframe->cancelBeaconPreparation();
+        completeSuperframeStart(Ieee802154MacServiceAbortReason::CANCELLED);
+        return Ieee802154MacServiceCancelResult::CANCELLED;
+    }
     if (superframeStartRequest && superframeStartRequest->id == id)
         return Ieee802154MacServiceCancelResult::NOT_CANCELLABLE;
     if (beaconPreparation && *beaconPreparation == id)
@@ -506,7 +521,10 @@ void Ieee802154StandardMac::requestState(PhyState state, PhyPurpose purpose)
 
 void Ieee802154StandardMac::restoreIdle()
 {
-    if (!started || !phyAvailable || resetRequest || retiringRequests || transaction || ackExchange || managementRequest || startRequest || superframeStartRequest || interruptedSuperframeChannel || scanRequest || beaconPreparation || orphanResponseRequest || phyOperation || !phy)
+    if (!started || !phyAvailable || resetRequest || retiringRequests || transaction || ackExchange || managementRequest || startRequest ||
+            (superframeStartRequest && ((superframeStartRequest->phase == SuperframeStartRequest::Phase::INITIAL && !superframeStartRequest->awaitingFirstBoundary) ||
+                    superframeStartRequest->phase == SuperframeStartRequest::Phase::IMMEDIATE_ACTIVATION)) ||
+            interruptedSuperframeChannel || scanRequest || beaconPreparation || orphanResponseRequest || phyOperation || !phy)
         return;
     if (beaconResponses && !beaconScheduleActive()) {
         --beaconResponses;
@@ -560,6 +578,23 @@ void Ieee802154StandardMac::startData()
 void Ieee802154StandardMac::startAccess()
 {
     auto window = superframe ? superframe->getAccessWindow() : std::nullopt;
+    bool toParent = false;
+    if (periodicBeaconing && !panCoordinator && getBoolean("macAssociatedPanCoord")) {
+        const auto& destination = transaction->frame->getDestinationAddress();
+        auto parentExtended = std::get<Ieee802154Address>(*pib->get("macCoordExtendedAddress").value);
+        toParent = transaction->kind != Transaction::Kind::SUPERFRAME_REALIGN &&
+                transaction->frame->getDestinationPanId() == getInteger("macPanId") &&
+                ((destination.isShort() && destination.getShort() < 0xfffe && destination.getShort() == getInteger("macCoordShortAddress")) ||
+                 (destination.isExtended() && !destination.isExtendedGroup() && destination == parentExtended));
+        auto required = toParent ? Ieee802154AccessWindowOrigin::INCOMING : Ieee802154AccessWindowOrigin::OUTGOING;
+        if (window && window->origin != required) {
+            if (transaction->accessPending) {
+                transaction->phase = Phase::ACCESS;
+                return; // Keep the provider's existing attempt until a matching window is published.
+            }
+            window.reset();
+        }
+    }
     if (window && window->beaconOrder < 15)
         transaction->capBeaconOrder = window->beaconOrder;
     else if (synchronization && synchronization->installed)
@@ -572,7 +607,7 @@ void Ieee802154StandardMac::startAccess()
         scheduled = false;
     if (scheduled && !window) {
         transaction->phase = Phase::WAIT_CAP;
-        if (!periodicBeaconing && !(synchronization && synchronization->installed) &&
+        if ((!periodicBeaconing || toParent) && !(synchronization && synchronization->installed) &&
                 transaction->search == Transaction::Search::NONE) {
             transaction->search = Transaction::Search::SEARCHING;
             auto symbols = int64_t(960) * ((int64_t(1) << transaction->capBeaconOrder) + 1);
@@ -643,7 +678,26 @@ void Ieee802154StandardMac::completeData(const Ieee802154MacServiceResult& resul
     if ((completed.kind == Transaction::Kind::BEACON || completed.kind == Transaction::Kind::AUTO_BEACON) &&
             result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS) && completed.frame->getFramePending())
         pendingPolls.push_front({uint16_t(completed.frame->getSourcePanId()),Ieee802154Address::fromShort(0xffff),simTime()});
-    if (completed.kind == Transaction::Kind::PAN_CONFLICT) {
+    if (completed.kind == Transaction::Kind::SUPERFRAME_REALIGN) {
+        if (superframeStartRequest && superframeStartRequest->phase == SuperframeStartRequest::Phase::COMMAND) {
+            if (result != Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS)) {
+                completeSuperframeStart(result);
+                scheduleNextPeriodicBeacon();
+            }
+            else if (periodicBeaconing)
+                superframeStartRequest->phase = SuperframeStartRequest::Phase::WAIT_ACTIVATION;
+            else {
+                superframeStartRequest->phase = SuperframeStartRequest::Phase::IMMEDIATE_ACTIVATION;
+                auto operationId = allocatePhyId();
+                phyOperation = PhyOperation{operationId,PhyPurpose::SUPERFRAME_GET};
+                if (phy->submitGet(operationId,{"phyCurrentChannelInfo"}) != PhyAdmission::ACCEPTED) {
+                    phyOperation.reset();
+                    completeSuperframeStart(Ieee802154MacServiceAbortReason::STOPPED);
+                }
+            }
+        }
+    }
+    else if (completed.kind == Transaction::Kind::PAN_CONFLICT) {
         auto conflict = pendingPanConflict;
         pendingPanConflict.reset();
         if (conflict && started && !resetRequest && getBoolean("macAssociatedPanCoord") &&
@@ -735,7 +789,7 @@ void Ieee802154StandardMac::finishReset(const Ieee802154MacServiceResult& result
 {
     if (!resetRequest)
         return;
-    if (resetRequest->retiring || pendingCallbacksActive) {
+    if (resetRequest->retiring || pendingCallbacksActive || syncLossNotificationsActive) {
         resetRequest->deferredResult = result;
         return;
     }
@@ -744,8 +798,10 @@ void Ieee802154StandardMac::finishReset(const Ieee802154MacServiceResult& result
         auto defaultDsn = request.defaults ? intuniform(0, 255, par("dsnRng")) : 0;
         auto defaultBsn = request.defaults && par("enableManagement").boolValue() ? intuniform(0, 255, par("dsnRng")) : 0;
         pib->reset(request.defaults, defaultDsn, defaultBsn);
-        if (request.defaults)
+        if (request.defaults) {
             panCoordinator = initialPanCoordinator;
+            coordinator = initialPanCoordinator;
+        }
         if (request.defaults)
             associatedDevices.clear();
         publishIdentity();
@@ -769,6 +825,7 @@ void Ieee802154StandardMac::stop()
 {
     started = false;
     retireReceives();
+    incomingSuperframe.reset();
     if (superframe) {
         superframe->clearAccessWindow();
         superframe->cancelAccessSearchDeadline();
@@ -1030,7 +1087,7 @@ void Ieee802154StandardMac::handleStateConfirm(uint64_t id, const physicallayer:
     }
     if (purpose == PhyPurpose::SUPERFRAME_READY) {
         if (confirm.result != physicallayer::Ieee802154PhyServiceResult(PhyStatus::SUCCESS)) {
-            if (superframeStartRequest)
+            if (superframeStartRequest && !superframeStartRequest->awaitingFirstBoundary)
                 failSuperframeStart(macResult(confirm.result));
             else
                 skipPeriodicBeacon();
@@ -1039,6 +1096,63 @@ void Ieee802154StandardMac::handleStateConfirm(uint64_t id, const physicallayer:
             phyState = *confirm.state;
             sendPeriodicBeacon();
         }
+        return;
+    }
+    if (purpose == PhyPurpose::SUPERFRAME_RETUNE_OFF && superframeStartRequest) {
+        if (confirm.result != physicallayer::Ieee802154PhyServiceResult(PhyStatus::SUCCESS)) {
+            failSuperframeStart(macResult(confirm.result));
+            return;
+        }
+        phyState = PhyState::OFF;
+        auto operationId = allocatePhyId();
+        phyOperation = PhyOperation{operationId,PhyPurpose::SUPERFRAME_GET};
+        if (phy->submitGet(operationId,{"phyCurrentChannelInfo"}) != PhyAdmission::ACCEPTED) {
+            phyOperation.reset();
+            failSuperframeStart(Ieee802154MacServiceAbortReason::STOPPED);
+        }
+        return;
+    }
+    if (purpose == PhyPurpose::SUPERFRAME_ACTIVATION_READY && superframeStartRequest) {
+        if (confirm.result != physicallayer::Ieee802154PhyServiceResult(PhyStatus::SUCCESS)) {
+            failSuperframeStart(macResult(confirm.result));
+            return;
+        }
+        phyState = *confirm.state;
+        auto request = superframeStartRequest->parameters;
+        auto requestId = superframeStartRequest->id;
+        auto geometry = Ieee802154SuperframeTiming::geometry(request.beaconOrder,request.superframeOrder);
+        bool delayedChild = !request.panCoordinator && request.beaconOrder < 15 && request.startTime && incomingSuperframe;
+        auto firstTarget = delayedChild ? std::optional<clocktime_t>(advanceChildBeaconTarget(request,*superframeStartRequest->firstTarget)) : std::nullopt;
+        if (!request.panCoordinator && request.beaconOrder < 15 && !request.startTime && incomingSuperframe) {
+            auto candidate = makeBeacon(request.panId,request.beaconOrder,request.superframeOrder,request.batteryLifeExtension,false);
+            if (!candidate || overlapsIncomingSuperframe(superframe->getCurrentClockTime(),request.beaconOrder,request.superframeOrder,candidate->getChunkLength())) {
+                failSuperframeStart(candidate ? Ieee802154MacStatus::SUPERFRAME_OVERLAP : Ieee802154MacStatus::FRAME_TOO_LONG);
+                return;
+            }
+        }
+        commitSuperframeChannel();
+        pib->updateSuperframeConfiguration(request.panId,request.beaconOrder,geometry->superframeOrder,request.batteryLifeExtension);
+        panCoordinator = request.panCoordinator;
+        coordinator = true;
+        periodicBeaconing = request.beaconOrder < 15;
+        periodicTarget = firstTarget;
+        if (delayedChild) {
+            auto rounded = Ieee802154SuperframeTiming::roundStartTime(request.startTime,getInteger("macUnitBackoffPeriod"));
+            childPhase = SIMTIME_AS_CLOCKTIME(SimTime(int64_t(rounded % *geometry->beaconInterval) * 16,SIMTIME_US));
+            outgoingEpoch = BeaconConfiguration{request.beaconOrder,geometry->superframeOrder,request.batteryLifeExtension,
+                    uint32_t(getInteger("macBattLifeExtPeriods")),uint32_t(getInteger("macUnitBackoffPeriod"))};
+            transmittedBeaconAnchor.reset();
+        }
+        publishIdentity();
+        superframeStartRequest.reset();
+        if (delayedChild)
+            scheduleNextPeriodicBeacon();
+        if (managementClient)
+            managementClient->handleStartSuperframeConfirm(requestId,{Ieee802154MacStatus::SUCCESS});
+        if (!delayedChild && periodicBeaconing && started && phyAvailable && !resetRequest && !phyOperation && !transaction)
+            sendPeriodicBeacon();
+        else
+            restoreIdle();
         return;
     }
     if (purpose == PhyPurpose::SCAN_REALIGN_OFF && scanRequest && scanRequest->realignment) {
@@ -1158,17 +1272,33 @@ void Ieee802154StandardMac::handleTransmitStarted(uint64_t id, const physicallay
         phyOperation->transmitStarted = true;
         auto now = superframe->getCurrentClockTime();
         transmittedBeaconAnchor = now;
+        auto previousEpoch = outgoingEpoch;
+        outgoingEpoch = constructedBeacon;
         auto timestamp = Ieee802154SuperframeTiming::timestamp(now);
         pib->updateBeaconTxTime(timestamp);
         emit(periodicBeaconStartSignal,long(timestamp));
         if (!phyOperation || phyOperation->id != id || phyOperation->purpose != PhyPurpose::SUPERFRAME_TRANSMIT)
             return;
-        if (superframeStartRequest) {
+        if (superframeStartRequest && ((superframeStartRequest->phase == SuperframeStartRequest::Phase::INITIAL && superframeStartRequest->preparingFirstBeacon) ||
+                superframeStartRequest->phase == SuperframeStartRequest::Phase::WAIT_ACTIVATION)) {
             auto request = superframeStartRequest->parameters;
             auto requestId = superframeStartRequest->id;
             auto geometry = Ieee802154SuperframeTiming::geometry(request.beaconOrder,request.superframeOrder);
+            commitSuperframeChannel();
             pib->updateSuperframeConfiguration(request.panId,request.beaconOrder,geometry->superframeOrder,request.batteryLifeExtension);
-            panCoordinator = true;
+            panCoordinator = request.panCoordinator;
+            coordinator = true;
+            childPhase.reset();
+            if (!request.panCoordinator && incomingSuperframe && synchronization && synchronization->installed && synchronization->request.trackBeacon) {
+                auto interval = SimTime(int64_t(*geometry->beaconInterval) * 16,SIMTIME_US);
+                auto phase = request.startTime ?
+                        SimTime(int64_t(Ieee802154SuperframeTiming::roundStartTime(request.startTime,getInteger("macUnitBackoffPeriod"))) * 16,SIMTIME_US) :
+                        CLOCKTIME_AS_SIMTIME(now - incomingSuperframe->anchor);
+                auto raw = phase.raw() % interval.raw();
+                if (raw < 0)
+                    raw += interval.raw();
+                childPhase = SIMTIME_AS_CLOCKTIME(SimTime::fromRaw(raw));
+            }
             publishIdentity();
             if (!superframeStartRequest || superframeStartRequest->id != requestId || !phyOperation || phyOperation->id != id)
                 return;
@@ -1179,9 +1309,19 @@ void Ieee802154StandardMac::handleTransmitStarted(uint64_t id, const physicallay
             if (managementClient)
                 managementClient->handleStartSuperframeConfirm(requestId,{Ieee802154MacStatus::SUCCESS});
         }
-        else if (periodicBeaconing && periodicTarget) {
-            auto geometry = Ieee802154SuperframeTiming::geometry(getInteger("macBeaconOrder"),getInteger("macSuperframeOrder"));
-            *periodicTarget += SIMTIME_AS_CLOCKTIME(SimTime(int64_t(*geometry->beaconInterval) * 16,SIMTIME_US));
+        else if (periodicBeaconing) {
+            auto geometry = Ieee802154SuperframeTiming::geometry(outgoingEpoch->beaconOrder,outgoingEpoch->superframeOrder);
+            auto interval = SIMTIME_AS_CLOCKTIME(SimTime(int64_t(*geometry->beaconInterval) * 16,SIMTIME_US));
+            if (!childPhase && !panCoordinator && incomingSuperframe && synchronization && synchronization->installed && synchronization->request.trackBeacon) {
+                auto raw = CLOCKTIME_AS_SIMTIME(now - incomingSuperframe->anchor).raw() % CLOCKTIME_AS_SIMTIME(interval).raw();
+                if (raw < 0)
+                    raw += CLOCKTIME_AS_SIMTIME(interval).raw();
+                childPhase = SIMTIME_AS_CLOCKTIME(SimTime::fromRaw(raw));
+            }
+            if (!periodicTarget || (previousEpoch && previousEpoch->beaconOrder != outgoingEpoch->beaconOrder))
+                periodicTarget = now + interval;
+            else
+                *periodicTarget += interval;
             scheduleNextPeriodicBeacon();
         }
         return;
@@ -1205,7 +1345,22 @@ void Ieee802154StandardMac::handleTransmitConfirm(uint64_t id, const physicallay
     auto transmitStarted = phyOperation->transmitStarted;
     phyOperation.reset();
     if (purpose == PhyPurpose::SUPERFRAME_TRANSMIT) {
-        if (superframeStartRequest)
+        if (superframeStartRequest && superframeStartRequest->phase == SuperframeStartRequest::Phase::WAIT_OLD_BEACON) {
+            if (!transmitStarted || confirm.result != physicallayer::Ieee802154PhyServiceResult(PhyStatus::SUCCESS))
+                completeSuperframeStart(confirm.result == physicallayer::Ieee802154PhyServiceResult(PhyStatus::SUCCESS) ?
+                        Ieee802154MacServiceResult(Ieee802154MacStatus::CHANNEL_ACCESS_FAILURE) : macResult(confirm.result));
+            else {
+                eligibleAt = std::max(eligibleAt, simTime() + transmittedBeaconIfs);
+                startOutgoingCap();
+                if (superframeStartRequest && superframeStartRequest->phase == SuperframeStartRequest::Phase::WAIT_OLD_BEACON) {
+                    superframeStartRequest->phase = SuperframeStartRequest::Phase::COMMAND;
+                    transmitSuperframeRealignment();
+                }
+            }
+        }
+        else if (superframeStartRequest && ((superframeStartRequest->phase == SuperframeStartRequest::Phase::INITIAL &&
+                superframeStartRequest->preparingFirstBeacon && !superframeStartRequest->awaitingFirstBoundary) ||
+                superframeStartRequest->phase == SuperframeStartRequest::Phase::WAIT_ACTIVATION))
             failSuperframeStart(confirm.result == physicallayer::Ieee802154PhyServiceResult(PhyStatus::SUCCESS) ?
                     Ieee802154MacServiceResult(Ieee802154MacStatus::INVALID_PARAMETER) : macResult(confirm.result));
         else {
@@ -1229,8 +1384,7 @@ void Ieee802154StandardMac::handleTransmitConfirm(uint64_t id, const physicallay
             auto reservationId = allocatePhyId();
             phyOperation = PhyOperation{reservationId,PhyPurpose::SUPERFRAME_READY};
             finishAck(confirm.result == physicallayer::Ieee802154PhyServiceResult(PhyStatus::SUCCESS));
-            if (!phyOperation || phyOperation->id != reservationId || !periodicBeaconing || !periodicTarget ||
-                    *periodicTarget != boundary || !started || !phyAvailable || resetRequest)
+            if (!phyOperation || phyOperation->id != reservationId || !ownsBeaconBoundary(boundary) || !started || !phyAvailable || resetRequest)
                 return;
             phyOperation.reset();
             sendPeriodicBeacon();
@@ -1300,8 +1454,44 @@ void Ieee802154StandardMac::handleReceiveStarted(const physicallayer::Ieee802154
 void Ieee802154StandardMac::handleSuperframeBoundary(clocktime_t boundary)
 {
     Enter_Method("handleSuperframeBoundary");
-    if (!periodicBeaconing || !periodicTarget || *periodicTarget != boundary || superframeStartRequest || !started || !phyAvailable)
+    bool firstBoundary = superframeStartRequest && superframeStartRequest->awaitingFirstBoundary && superframeStartRequest->firstTarget &&
+            *superframeStartRequest->firstTarget == boundary && started && phyAvailable;
+    if (firstBoundary) {
+        superframeStartRequest->awaitingFirstBoundary = false;
+        superframeStartRequest->preparingFirstBeacon = true;
+    }
+    else if (!periodicBeaconing || !periodicTarget || *periodicTarget != boundary || !started || !phyAvailable ||
+            (superframeStartRequest && superframeStartRequest->phase == SuperframeStartRequest::Phase::INITIAL && !superframeStartRequest->awaitingFirstBoundary))
         return;
+    if (superframeStartRequest && superframeStartRequest->phase == SuperframeStartRequest::Phase::WAIT_ACTIVATION) {
+        if (superframeStartRequest->parameters.beaconOrder == 15 && !superframeStartRequest->awaitingShutdownBoundary) {
+            superframeStartRequest->awaitingShutdownBoundary = true;
+            if (!superframe->scheduleBeaconPreparation(boundary,SIMTIME_ZERO)) {
+                superframeStartRequest->awaitingShutdownBoundary = false;
+                failSuperframeStart(Ieee802154MacServiceAbortReason::STOPPED);
+            }
+            return;
+        }
+        if (phyOperation && phyOperation->purpose == PhyPurpose::IDLE) {
+            auto oldId = phyOperation->id;
+            phyOperation.reset();
+            phy->cancel(oldId);
+            phyState = PhyState::OFF;
+        }
+        if (!superframeStartRequest || !started || !phyAvailable || resetRequest)
+            return;
+        if (phyOperation || transaction || ackExchange) {
+            failSuperframeStart(Ieee802154MacServiceAbortReason::STOPPED);
+            return;
+        }
+        auto operationId = allocatePhyId();
+        phyOperation = PhyOperation{operationId,PhyPurpose::SUPERFRAME_RETUNE_OFF};
+        if (phy->submitState(operationId,PhyState::OFF) != PhyAdmission::ACCEPTED) {
+            phyOperation.reset();
+            failSuperframeStart(Ieee802154MacServiceAbortReason::STOPPED);
+        }
+        return;
+    }
     if (phyOperation && phyOperation->purpose == PhyPurpose::ACK_READY && ackExchange) {
         auto ackId = phyOperation->id;
         phyOperation.reset();
@@ -1310,8 +1500,7 @@ void Ieee802154StandardMac::handleSuperframeBoundary(clocktime_t boundary)
         auto reservationId = allocatePhyId();
         phyOperation = PhyOperation{reservationId,PhyPurpose::SUPERFRAME_READY};
         finishAck(false);
-        if (!phyOperation || phyOperation->id != reservationId || !periodicBeaconing || !periodicTarget ||
-                *periodicTarget != boundary || !started || !phyAvailable || resetRequest)
+        if (!phyOperation || phyOperation->id != reservationId || !ownsBeaconBoundary(boundary) || !started || !phyAvailable || resetRequest)
             return;
         phyOperation.reset();
     }
@@ -1327,14 +1516,23 @@ void Ieee802154StandardMac::handleSuperframeBoundary(clocktime_t boundary)
         phyOperation.reset();
         phy->cancel(id);
         phyState = PhyState::OFF;
-        if (!periodicBeaconing || !started || !phyAvailable || resetRequest)
+        if (!ownsBeaconBoundary(boundary) || !started || !phyAvailable || resetRequest)
             return;
     }
     bool deferredAccess = transaction && (transaction->phase == Phase::WAIT_IFS || transaction->phase == Phase::WAIT_RX ||
             transaction->phase == Phase::WAIT_CAP ||
             (transaction->phase == Phase::ACCESS && transaction->slotted && transaction->accessPending));
     if (phyOperation || (transaction && !deferredAccess) || ackExchange || scanRequest || managementRequest) {
-        skipPeriodicBeacon();
+        if (firstBoundary && superframeStartRequest) {
+            const auto& request = superframeStartRequest->parameters;
+            auto geometry = Ieee802154SuperframeTiming::geometry(request.beaconOrder,request.superframeOrder);
+            *superframeStartRequest->firstTarget += SIMTIME_AS_CLOCKTIME(SimTime(int64_t(*geometry->beaconInterval) * 16,SIMTIME_US));
+            superframeStartRequest->awaitingFirstBoundary = true;
+            superframeStartRequest->preparingFirstBeacon = false;
+            scheduleNextPeriodicBeacon();
+        }
+        else
+            skipPeriodicBeacon();
         return;
     }
     preparePeriodicBeacon();
@@ -1411,7 +1609,7 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
         orphanScanId = scanRequest->id;
         cancelEvent(scanTimer);
     }
-    if (par("enableManagement").boolValue() && panCoordinator && frame->getFrameType() == 3 && !frame->getSecurityEnabled() &&
+    if (par("enableManagement").boolValue() && coordinator && frame->getFrameType() == 3 && !frame->getSecurityEnabled() &&
             frame->getPayloadArraySize() == 1 && frame->getPayload(0) == 7 && frame->getSourceAddress().isNone() &&
             frame->getDestinationAddress().isShortBroadcast() && frame->getDestinationPanId() == 0xffff && !frame->getAckRequest()) {
         if (getBoolean("macBeaconAutoRespond") && !beaconScheduleActive()) {
@@ -1424,7 +1622,7 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
             managementClient->handleBeaconRequestIndication({frame->getSourceAddress(),frame->getDestinationPanId()});
         return;
     }
-    if (panCoordinator && parsedCommand && std::holds_alternative<Ieee802154CommandCodec::OrphanNotification>(*parsedCommand) &&
+    if (coordinator && parsedCommand && std::holds_alternative<Ieee802154CommandCodec::OrphanNotification>(*parsedCommand) &&
             frame->getSourceAddress().isExtended() && !frame->getSourceAddress().isExtendedGroup() &&
             frame->getDestinationAddress().isShortBroadcast() && frame->getDestinationPanId() == 0xffff && frame->getPanCompression()) {
         if (managementClient)
@@ -1474,7 +1672,7 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
                     frame->getSourceAddress().isExtended() && frame->getDestinationAddress().isExtended() && frame->getPanCompression() &&
                     frame->getSourcePanId() == getInteger("macPanId") &&
                     associatedDevices.count({uint16_t(getInteger("macPanId")),frame->getSourceAddress()});
-            dataRequest = panCoordinator && std::holds_alternative<Ieee802154CommandCodec::DataRequest>(*command);
+            dataRequest = coordinator && std::holds_alternative<Ieee802154CommandCodec::DataRequest>(*command);
             associationResponse = std::holds_alternative<Ieee802154CommandCodec::AssociationResponse>(*command) &&
                     frame->getSourceAddress().isExtended() && frame->getDestinationAddress().isExtended() &&
                     frame->getPanCompression() && frame->getAckRequest();
@@ -1483,14 +1681,14 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
             if (auto disassociation = std::get_if<Ieee802154CommandCodec::DisassociationNotification>(command)) {
                 bool authority = (getBoolean("macAssociatedPanCoord") && frame->getSourceAddress() ==
                         std::get<Ieee802154Address>(*pib->get("macCoordExtendedAddress").value)) ||
-                        (panCoordinator && associatedDevices.count({uint16_t(getInteger("macPanId")),frame->getSourceAddress()}));
+                        (coordinator && associatedDevices.count({uint16_t(getInteger("macPanId")),frame->getSourceAddress()}));
                 if (authority && frame->getSourceAddress().isExtended() && frame->getPanCompression() &&
                         frame->getDestinationPanId() == getInteger("macPanId") && !frame->getDestinationAddress().isNone() &&
                         !frame->getDestinationAddress().isBroadcast() && !frame->getDestinationAddress().isExtendedGroup() &&
                         (disassociation->reason == 1 || disassociation->reason == 2))
                     disassociationReason = disassociation->reason;
             }
-            if (panCoordinator && std::holds_alternative<Ieee802154CommandCodec::AssociationRequest>(*command) &&
+            if (coordinator && std::holds_alternative<Ieee802154CommandCodec::AssociationRequest>(*command) &&
                     frame->getSourceAddress().isExtended() && frame->getSourcePanId() == 0xffff && frame->getAckRequest()) {
                 if (!getBoolean("macAssociationPermit"))
                     return; // IEEE Std 802.15.4-2024, 10.21.2: ignore when association is not permitted.
@@ -1507,7 +1705,7 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
     bool implicitBroadcast = destination.isNone() && getBoolean("macImplicitBroadcast");
     bool accepted;
     if (destination.isNone())
-        accepted = implicitBroadcast || (!frame->getSourceAddress().isNone() && panCoordinator && frame->getSourcePanId() == pan);
+        accepted = implicitBroadcast || (!frame->getSourceAddress().isNone() && coordinator && frame->getSourcePanId() == pan);
     else {
         bool addressMatches = destination.isBroadcast() || destination == std::get<Ieee802154Address>(*pib->get("macExtendedAddress").value) ||
                 (destination.isShort() && !destination.isShortUnallocated() && destination.getShort() == getInteger("macShortAddress")) ||
@@ -1671,11 +1869,12 @@ void Ieee802154StandardMac::startAck()
         finishAck(false);
         return;
     }
-    if (periodicBeaconing && periodicTarget) {
+    auto boundary = nextBeaconBoundary();
+    if (boundary) {
         auto timing = phy->getTimingParameters();
         auto ackDuration = Ieee802154ExchangeTiming::ackDuration(timing);
-        if (*periodicTarget <= superframe->getCurrentClockTime() ||
-                simTime() + ackDuration > superframe->getFutureSimulationTime(*periodicTarget)) {
+        if (*boundary <= superframe->getCurrentClockTime() ||
+                simTime() + ackDuration > superframe->getFutureSimulationTime(*boundary)) {
             finishAck(false);
             return;
         }
@@ -2078,6 +2277,7 @@ void Ieee802154StandardMac::handleSetConfirm(uint64_t id, const physicallayer::I
         phyOperation.reset();
         // A PHY confirmation proves this replacement was accepted; retire its old CAP before any callback can reenter.
         superframe->clearAccessWindow();
+        incomingSuperframe.reset();
         if (confirm.result != physicallayer::Ieee802154PhyServiceResult(PhyStatus::SUCCESS)) {
             retireSynchronization(macResult(confirm.result));
             return;
@@ -2107,6 +2307,9 @@ void Ieee802154StandardMac::handleSetConfirm(uint64_t id, const physicallayer::I
             periodicBeaconing = false;
             periodicTarget.reset();
             transmittedBeaconAnchor.reset();
+            constructedBeacon.reset();
+            outgoingEpoch.reset();
+            childPhase.reset();
             outgoingCapEnd.reset();
             superframe->cancelCapEnd();
             setOutgoingCapActive(false);
@@ -2124,11 +2327,27 @@ void Ieee802154StandardMac::handleSetConfirm(uint64_t id, const physicallayer::I
             return;
         }
         auto request = superframeStartRequest->parameters;
-        if (request.beaconOrder == 15) {
-            superframe->clearAccessWindow();
+        if (superframeStartRequest->phase == SuperframeStartRequest::Phase::IMMEDIATE_ACTIVATION) {
+            auto state = request.beaconOrder < 15 ? PhyState::TRANSMIT :
+                    (getBoolean("macRxOnWhenIdle") ? PhyState::RECEIVE : PhyState::OFF);
+            auto operationId = allocatePhyId();
+            phyOperation = PhyOperation{operationId,PhyPurpose::SUPERFRAME_ACTIVATION_READY};
+            if (phy->submitState(operationId,state) != PhyAdmission::ACCEPTED) {
+                phyOperation.reset();
+                failSuperframeStart(Ieee802154MacServiceAbortReason::STOPPED);
+            }
+        }
+        else if (request.beaconOrder == 15) {
+            commitSuperframeChannel();
+            auto window = superframe->getAccessWindow();
+            if (!window || window->origin != Ieee802154AccessWindowOrigin::INCOMING)
+                superframe->clearAccessWindow();
             periodicBeaconing = false;
             periodicTarget.reset();
             transmittedBeaconAnchor.reset();
+            constructedBeacon.reset();
+            outgoingEpoch.reset();
+            childPhase.reset();
             outgoingCapEnd.reset();
             superframe->cancelCapEnd();
             auto requestId = superframeStartRequest->id;
@@ -2136,9 +2355,17 @@ void Ieee802154StandardMac::handleSetConfirm(uint64_t id, const physicallayer::I
             if (!superframeStartRequest || superframeStartRequest->id != requestId)
                 return;
             pib->updateSuperframeConfiguration(request.panId,15,15,request.batteryLifeExtension);
-            panCoordinator = true;
+            panCoordinator = request.panCoordinator;
+            coordinator = true;
             publishIdentity();
             completeSuperframeStart(Ieee802154MacStatus::SUCCESS);
+        }
+        else if (!request.panCoordinator && request.startTime && incomingSuperframe) {
+            superframeStartRequest->firstTarget = advanceChildBeaconTarget(request,*superframeStartRequest->firstTarget);
+            superframeStartRequest->awaitingFirstBoundary = true;
+            superframeStartRequest->preparingFirstBeacon = false;
+            scheduleNextPeriodicBeacon();
+            restoreIdle();
         }
         else
             preparePeriodicBeacon();
@@ -2235,10 +2462,12 @@ void Ieee802154StandardMac::handleSetConfirm(uint64_t id, const physicallayer::I
     if (phyOperation && phyOperation->id == id && phyOperation->purpose == PhyPurpose::START_CHANNEL && startRequest) {
         phyOperation.reset();
         if (confirm.result == physicallayer::Ieee802154PhyServiceResult(PhyStatus::SUCCESS)) {
+            retireParentContext(true);
             if (getInteger("macPanId") != startRequest->parameters.panId)
                 associatedDevices.clear();
             pib->set("macPanId", uint64_t(startRequest->parameters.panId));
             panCoordinator = true;
+            coordinator = true;
             publishIdentity();
         }
         completeStart(macResult(confirm.result));
@@ -2416,11 +2645,47 @@ void Ieee802154StandardMac::handleSyncDeadline()
         auto coordinator = std::get<Ieee802154Address>(*pib->get("macCoordExtendedAddress").value);
         if (coordinator.isNone() && getInteger("macCoordShortAddress") < 0xfffe)
             coordinator = Ieee802154Address::fromShort(getInteger("macCoordShortAddress"));
+        auto outerNotifications = syncLossNotificationsActive;
+        syncLossNotificationsActive = true;
         retireSynchronization(Ieee802154MacServiceAbortReason::STOPPED);
+        auto dependentStart = superframeStartRequest && (childPhase || (!superframeStartRequest->parameters.panCoordinator &&
+                superframeStartRequest->parameters.beaconOrder < 15 && superframeStartRequest->parameters.startTime)) ?
+                superframeStartRequest->id : IEEE802154_INVALID_REQUEST_ID;
+        bool ownedCommand = dependentStart && transaction && transaction->id == dependentStart &&
+                transaction->kind == Transaction::Kind::SUPERFRAME_REALIGN;
+        bool ownedPreparation = dependentStart && phyOperation &&
+                (phyOperation->purpose == PhyPurpose::SUPERFRAME_GET || phyOperation->purpose == PhyPurpose::SUPERFRAME_CHANNEL ||
+                 phyOperation->purpose == PhyPurpose::SUPERFRAME_READY || phyOperation->purpose == PhyPurpose::SUPERFRAME_ACTIVATION_READY ||
+                 phyOperation->purpose == PhyPurpose::SUPERFRAME_RETUNE_OFF || phyOperation->purpose == PhyPurpose::SUPERFRAME_TRANSMIT);
+        auto outerRetirement = retiringRequests;
+        if (ownedCommand) {
+            retiringRequests = true;
+            superframeStartRequest.reset(); // Detach both obligations before any START callback.
+        }
+        if (ownedCommand || ownedPreparation)
+            retireDataRadio();
+        if (ownedCommand && transaction && transaction->id == dependentStart && transaction->kind == Transaction::Kind::SUPERFRAME_REALIGN)
+            completeData(Ieee802154MacServiceAbortReason::STOPPED);
+        if (childPhase)
+            retirePeriodicBeaconing(Ieee802154MacServiceAbortReason::STOPPED);
+        if (ownedCommand) {
+            retiringRequests = outerRetirement;
+            if (managementClient)
+                managementClient->handleStartSuperframeConfirm(dependentStart,{Ieee802154MacServiceAbortReason::STOPPED});
+        }
+        if (dependentStart && superframeStartRequest && superframeStartRequest->id == dependentStart) {
+            superframe->cancelBeaconPreparation();
+            completeSuperframeStart(Ieee802154MacServiceAbortReason::STOPPED);
+        }
         if (started && managementClient)
             managementClient->handleSyncLossIndication({Ieee802154SyncLossReason::BEACON_LOST,pan,channel,coordinator,{},{}});
         emit(syncMissedSignal,long(misses));
         emit(syncLostSignal,1L);
+        syncLossNotificationsActive = outerNotifications;
+        if (!outerNotifications && resetRequest && resetRequest->deferredResult) {
+            auto result = *resetRequest->deferredResult;
+            finishReset(result);
+        }
         if (!synchronization && transaction && (transaction->phase == Phase::WAIT_CAP ||
                 (transaction->phase == Phase::ACCESS && transaction->slotted && transaction->accessPending))) {
             auto accessRequest = transaction->accessId;
@@ -2453,7 +2718,7 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitStartSuperframe(uint6
     auto admission = admitRadio(id);
     if (admission != Ieee802154MacServiceAdmission::ACCEPTED)
         return admission;
-    if (!superframe || !managementClient || !phy || !request.panCoordinator || request.coordinatorRealignment)
+    if (!superframe || !managementClient || !phy || (request.coordinatorRealignment && !access))
         return Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION;
     if (phyOperation || !pendingOriginals.empty())
         return Ieee802154MacServiceAdmission::BUSY;
@@ -2477,6 +2742,49 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitStartSuperframe(uint6
         completeSuperframeStart(Ieee802154MacStatus::NO_SHORT_ADDRESS);
         return admission;
     }
+    if (!request.panCoordinator && !getBoolean("macAssociatedPanCoord")) {
+        completeSuperframeStart(Ieee802154MacStatus::INVALID_PARAMETER);
+        return admission;
+    }
+    if (!request.panCoordinator && request.beaconOrder < 15 && incomingSuperframe &&
+            (request.beaconOrder != incomingSuperframe->beaconOrder || request.superframeOrder != incomingSuperframe->superframeOrder)) {
+        completeSuperframeStart(Ieee802154MacStatus::INVALID_PARAMETER);
+        return admission;
+    }
+    if (!request.panCoordinator && request.beaconOrder < 15 && request.startTime &&
+            (!synchronization || !synchronization->installed || !synchronization->request.trackBeacon || !incomingSuperframe)) {
+        completeSuperframeStart(Ieee802154MacStatus::TRACKING_OFF);
+        return admission;
+    }
+    if (!request.panCoordinator && request.beaconOrder < 15 && request.startTime &&
+            !(synchronization->request.channel == request.channel)) {
+        completeSuperframeStart(Ieee802154MacStatus::INVALID_PARAMETER);
+        return admission;
+    }
+    if (!request.panCoordinator && request.beaconOrder < 15 && request.startTime && incomingSuperframe) {
+        auto target = firstChildBeaconTarget(request);
+        auto candidate = makeBeacon(request.panId,request.beaconOrder,request.superframeOrder,request.batteryLifeExtension,false);
+        if (!candidate) {
+            completeSuperframeStart(Ieee802154MacStatus::FRAME_TOO_LONG);
+            return admission;
+        }
+        if (overlapsIncomingSuperframe(target,request.beaconOrder,request.superframeOrder,candidate->getChunkLength())) {
+            completeSuperframeStart(Ieee802154MacStatus::SUPERFRAME_OVERLAP);
+            return admission;
+        }
+        superframeStartRequest->firstTarget = target;
+    }
+    if (request.coordinatorRealignment) {
+        if (periodicBeaconing) {
+            superframeStartRequest->phase = SuperframeStartRequest::Phase::WAIT_OLD_BEACON;
+            scheduleNextPeriodicBeacon();
+        }
+        else {
+            superframeStartRequest->phase = SuperframeStartRequest::Phase::COMMAND;
+            transmitSuperframeRealignment();
+        }
+        return admission;
+    }
     superframe->cancelBeaconPreparation();
     auto internalId = allocatePhyId();
     phyOperation = PhyOperation{internalId,PhyPurpose::SUPERFRAME_GET};
@@ -2495,17 +2803,53 @@ void Ieee802154StandardMac::completeSuperframeStart(const Ieee802154MacServiceRe
     if (!superframeStartRequest)
         return;
     auto id = superframeStartRequest->id;
+    bool awaitingBoundary = superframeStartRequest->awaitingFirstBoundary;
     superframeStartRequest.reset();
+    if (awaitingBoundary) {
+        superframe->cancelBeaconPreparation();
+        scheduleNextPeriodicBeacon();
+    }
     if (managementClient)
         managementClient->handleStartSuperframeConfirm(id,{result});
     restoreIdle();
 }
 
+void Ieee802154StandardMac::commitSuperframeChannel()
+{
+    if (!superframeStartRequest)
+        return;
+    const auto& request = superframeStartRequest->parameters;
+    bool channelChanged = superframeStartRequest->originalChannel && !(*superframeStartRequest->originalChannel == request.channel);
+    bool promoted = request.panCoordinator && (!panCoordinator || getBoolean("macAssociatedPanCoord"));
+    if (channelChanged || promoted)
+        retireParentContext(promoted);
+    if (getInteger("macPanId") != request.panId)
+        associatedDevices.clear();
+}
+
+void Ieee802154StandardMac::retireParentContext(bool clearAssociation)
+{
+    if (superframe)
+        superframe->clearAccessWindow();
+    incomingSuperframe.reset();
+    childPhase.reset();
+    retireSynchronization(Ieee802154MacServiceAbortReason::STOPPED);
+    retireReceives();
+    if (clearAssociation) {
+        pendingPanConflict.reset();
+        broadcastReceivePending = false;
+        pib->clearParentAssociation();
+    }
+}
+
 void Ieee802154StandardMac::retirePeriodicBeaconing(const Ieee802154MacServiceResult& result)
 {
     auto requestId = superframeStartRequest ? superframeStartRequest->id : 0;
-    if (superframe && periodicBeaconing)
-        superframe->clearAccessWindow();
+    if (superframe && periodicBeaconing) {
+        auto window = superframe->getAccessWindow();
+        if (!window || window->origin != Ieee802154AccessWindowOrigin::INCOMING)
+            superframe->clearAccessWindow();
+    }
     if (superframe)
         superframe->cancelBeaconPreparation();
     if (superframe)
@@ -2514,6 +2858,9 @@ void Ieee802154StandardMac::retirePeriodicBeaconing(const Ieee802154MacServiceRe
     periodicTarget.reset();
     beaconAfterAck.reset();
     transmittedBeaconAnchor.reset();
+    constructedBeacon.reset();
+    outgoingEpoch.reset();
+    childPhase.reset();
     outgoingCapEnd.reset();
     interruptedSuperframeChannel.reset();
     setOutgoingCapActive(false);
@@ -2536,6 +2883,8 @@ void Ieee802154StandardMac::failSuperframeStart(const Ieee802154MacServiceResult
         periodicBeaconing = false;
         periodicTarget.reset();
         transmittedBeaconAnchor.reset();
+        constructedBeacon.reset();
+        outgoingEpoch.reset();
         outgoingCapEnd.reset();
         superframe->cancelCapEnd();
         setOutgoingCapActive(false);
@@ -2546,28 +2895,91 @@ void Ieee802154StandardMac::failSuperframeStart(const Ieee802154MacServiceResult
     scheduleNextPeriodicBeacon();
 }
 
+clocktime_t Ieee802154StandardMac::firstChildBeaconTarget(const Ieee802154MacStartSuperframeRequest& request) const
+{
+    auto offset = Ieee802154SuperframeTiming::roundStartTime(request.startTime,getInteger("macUnitBackoffPeriod"));
+    auto target = incomingSuperframe->anchor + SIMTIME_AS_CLOCKTIME(SimTime(int64_t(offset) * 16,SIMTIME_US));
+    return advanceChildBeaconTarget(request,target);
+}
+
+clocktime_t Ieee802154StandardMac::advanceChildBeaconTarget(const Ieee802154MacStartSuperframeRequest& request, clocktime_t target) const
+{
+    auto geometry = Ieee802154SuperframeTiming::geometry(request.beaconOrder,request.superframeOrder);
+    auto interval = SIMTIME_AS_CLOCKTIME(SimTime(int64_t(*geometry->beaconInterval) * 16,SIMTIME_US));
+    auto earliest = superframe->getFutureClockTime(simTime() + phy->getTimingParameters().turnaroundTime);
+    if (target < earliest) {
+        auto delta = CLOCKTIME_AS_SIMTIME(earliest - target).raw();
+        auto ticks = CLOCKTIME_AS_SIMTIME(interval).raw();
+        target += interval * ((delta + ticks - 1) / ticks);
+    }
+    return target;
+}
+
+std::optional<clocktime_t> Ieee802154StandardMac::nextBeaconBoundary() const
+{
+    std::optional<clocktime_t> target = periodicBeaconing ? periodicTarget : std::nullopt;
+    if (superframeStartRequest && superframeStartRequest->phase == SuperframeStartRequest::Phase::INITIAL &&
+            superframeStartRequest->firstTarget && (!target || *superframeStartRequest->firstTarget < *target))
+        target = superframeStartRequest->firstTarget;
+    return target;
+}
+
+bool Ieee802154StandardMac::ownsBeaconBoundary(clocktime_t boundary) const
+{
+    return (periodicBeaconing && periodicTarget && *periodicTarget == boundary) ||
+            (superframeStartRequest && superframeStartRequest->phase == SuperframeStartRequest::Phase::INITIAL &&
+             superframeStartRequest->firstTarget && *superframeStartRequest->firstTarget == boundary);
+}
+
 void Ieee802154StandardMac::scheduleNextPeriodicBeacon()
 {
-    if (!periodicBeaconing || !periodicTarget || !superframe || !started || !phyAvailable || superframeStartRequest)
+    if (!superframe || !started || !phyAvailable ||
+            (superframeStartRequest && superframeStartRequest->phase == SuperframeStartRequest::Phase::INITIAL && !superframeStartRequest->awaitingFirstBoundary))
         return;
-    auto geometry = Ieee802154SuperframeTiming::geometry(getInteger("macBeaconOrder"),getInteger("macSuperframeOrder"));
-    auto interval = SIMTIME_AS_CLOCKTIME(SimTime(int64_t(*geometry->beaconInterval) * 16,SIMTIME_US));
     auto readinessLead = phy->getTimingParameters().turnaroundTime;
-    if (superframe->scheduleBeaconPreparation(*periodicTarget,readinessLead))
-        return;
     auto earliest = superframe->getFutureClockTime(simTime() + readinessLead);
-    if (*periodicTarget <= earliest) {
-        auto missed = CLOCKTIME_AS_SIMTIME(earliest - *periodicTarget).raw() / CLOCKTIME_AS_SIMTIME(interval).raw() + 1;
-        *periodicTarget += interval * missed;
+    auto advance = [&](clocktime_t& target, uint8_t bo, uint8_t so) {
+        if (target < earliest) {
+            auto geometry = Ieee802154SuperframeTiming::geometry(bo,so);
+            auto interval = SIMTIME_AS_CLOCKTIME(SimTime(int64_t(*geometry->beaconInterval) * 16,SIMTIME_US));
+            auto delta = CLOCKTIME_AS_SIMTIME(earliest - target).raw();
+            auto ticks = CLOCKTIME_AS_SIMTIME(interval).raw();
+            auto missed = (delta + ticks - 1) / ticks;
+            target += interval * missed;
+        }
+    };
+    if (periodicBeaconing && periodicTarget && outgoingEpoch)
+        advance(*periodicTarget,outgoingEpoch->beaconOrder,outgoingEpoch->superframeOrder);
+    if (superframeStartRequest && superframeStartRequest->awaitingFirstBoundary && superframeStartRequest->firstTarget) {
+        const auto& request = superframeStartRequest->parameters;
+        advance(*superframeStartRequest->firstTarget,request.beaconOrder,request.superframeOrder);
     }
-    superframe->scheduleBeaconPreparation(*periodicTarget,readinessLead);
+    auto target = nextBeaconBoundary();
+    if (target && !superframe->scheduleBeaconPreparation(*target,readinessLead)) {
+        if (superframeStartRequest && superframeStartRequest->awaitingFirstBoundary && superframeStartRequest->firstTarget &&
+                *superframeStartRequest->firstTarget == *target) {
+            const auto& request = superframeStartRequest->parameters;
+            auto geometry = Ieee802154SuperframeTiming::geometry(request.beaconOrder,request.superframeOrder);
+            *superframeStartRequest->firstTarget += SIMTIME_AS_CLOCKTIME(SimTime(int64_t(*geometry->beaconInterval) * 16,SIMTIME_US));
+        }
+        if (periodicTarget && outgoingEpoch && *periodicTarget == *target) {
+            auto geometry = Ieee802154SuperframeTiming::geometry(outgoingEpoch->beaconOrder,outgoingEpoch->superframeOrder);
+            *periodicTarget += SIMTIME_AS_CLOCKTIME(SimTime(int64_t(*geometry->beaconInterval) * 16,SIMTIME_US));
+        }
+        auto next = nextBeaconBoundary();
+        if (next && !superframe->scheduleBeaconPreparation(*next,readinessLead) &&
+                superframeStartRequest && superframeStartRequest->awaitingFirstBoundary) {
+            superframeStartRequest->awaitingFirstBoundary = false;
+            completeSuperframeStart(Ieee802154MacServiceAbortReason::STOPPED);
+        }
+    }
 }
 
 void Ieee802154StandardMac::skipPeriodicBeacon()
 {
     if (!periodicBeaconing || !periodicTarget)
         return;
-    auto geometry = Ieee802154SuperframeTiming::geometry(getInteger("macBeaconOrder"),getInteger("macSuperframeOrder"));
+    auto geometry = Ieee802154SuperframeTiming::geometry(outgoingEpoch->beaconOrder,outgoingEpoch->superframeOrder);
     *periodicTarget += SIMTIME_AS_CLOCKTIME(SimTime(int64_t(*geometry->beaconInterval) * 16,SIMTIME_US));
     scheduleNextPeriodicBeacon();
 }
@@ -2579,21 +2991,46 @@ void Ieee802154StandardMac::preparePeriodicBeacon()
     auto admission = phy->submitState(id,PhyState::TRANSMIT);
     if (admission != PhyAdmission::ACCEPTED) {
         phyOperation.reset();
-        if (superframeStartRequest)
+        if (superframeStartRequest && !superframeStartRequest->awaitingFirstBoundary)
             failSuperframeStart(Ieee802154MacServiceAbortReason::STOPPED);
         else
             skipPeriodicBeacon();
     }
 }
 
+void Ieee802154StandardMac::transmitSuperframeRealignment()
+{
+    auto frame = makeShared<Ieee802154Frame>();
+    frame->setFrameType(3);
+    frame->setFrameVersion(1);
+    frame->setDsn(getInteger("macDsn"));
+    frame->setSourceAddress(std::get<Ieee802154Address>(*pib->get("macExtendedAddress").value));
+    frame->setSourcePanId(getInteger("macPanId"));
+    frame->setDestinationAddress(Ieee802154Address::SHORT_BROADCAST_ADDRESS);
+    frame->setDestinationPanId(0xffff);
+    frame->setAckRequest(false);
+    const auto& request = superframeStartRequest->parameters;
+    auto bytes = Ieee802154CommandCodec::encode(Ieee802154CommandCodec::CoordinatorRealignment{
+            request.panId,uint16_t(getInteger("macShortAddress")),uint8_t(request.channel.channel),0xffff});
+    frame->setPayloadArraySize(bytes.size());
+    for (size_t i = 0; i < bytes.size(); ++i)
+        frame->setPayload(i,bytes[i]);
+    Ieee802154FrameCodec::finalize(*frame);
+    pib->set("macDsn",uint64_t((frame->getDsn() + 1) & 255));
+    transaction = Transaction{superframeStartRequest->id,nullptr,0,frame};
+    transaction->kind = Transaction::Kind::SUPERFRAME_REALIGN;
+    startData();
+}
+
 void Ieee802154StandardMac::sendPeriodicBeacon()
 {
-    auto initial = bool(superframeStartRequest);
+    auto initial = superframeStartRequest && ((superframeStartRequest->phase == SuperframeStartRequest::Phase::INITIAL && superframeStartRequest->preparingFirstBeacon) ||
+            superframeStartRequest->phase == SuperframeStartRequest::Phase::WAIT_ACTIVATION);
     auto panId = initial ? superframeStartRequest->parameters.panId : getInteger("macPanId");
     auto bo = initial ? superframeStartRequest->parameters.beaconOrder : getInteger("macBeaconOrder");
     auto so = initial ? superframeStartRequest->parameters.superframeOrder : getInteger("macSuperframeOrder");
     auto ble = initial ? superframeStartRequest->parameters.batteryLifeExtension : getBoolean("macBattLifeExt");
-    auto frame = makeBeacon(panId,bo,so,ble);
+    auto frame = makeBeacon(panId,bo,so,ble,false);
     if (!frame) {
         if (initial)
             failSuperframeStart(Ieee802154MacStatus::FRAME_TOO_LONG);
@@ -2601,20 +3038,55 @@ void Ieee802154StandardMac::sendPeriodicBeacon()
             skipPeriodicBeacon();
         return;
     }
+    auto target = initial && superframeStartRequest->firstTarget ? superframeStartRequest->firstTarget : periodicTarget;
+    auto geometryTarget = target;
+    if (initial && !superframeStartRequest->parameters.panCoordinator && !superframeStartRequest->parameters.startTime)
+        geometryTarget = superframe->getCurrentClockTime();
+    if (incomingSuperframe && geometryTarget &&
+            (childPhase || (initial && !superframeStartRequest->parameters.panCoordinator)) &&
+            overlapsIncomingSuperframe(*geometryTarget,bo,so,frame->getChunkLength())) {
+        if (initial)
+            failSuperframeStart(Ieee802154MacStatus::SUPERFRAME_OVERLAP);
+        else {
+            auto channel = synchronization ? synchronization->request.channel : physicallayer::Ieee802154PhyChannel{};
+            auto pan = uint16_t(getInteger("macPanId"));
+            auto address = std::get<Ieee802154Address>(*pib->get("macCoordExtendedAddress").value);
+            auto epoch = receiveRetirementEpoch;
+            retirePeriodicBeaconing(Ieee802154MacServiceAbortReason::STOPPED);
+            if (epoch == receiveRetirementEpoch && managementClient)
+                managementClient->handleSyncLossIndication({Ieee802154SyncLossReason::SUPERFRAME_OVERLAP,pan,channel,address,{},{}});
+            restoreIdle();
+        }
+        return;
+    }
+    pib->set("macBsn",uint64_t((frame->getDsn() + 1) & 255));
+    if (superframeStartRequest && superframeStartRequest->phase == SuperframeStartRequest::Phase::WAIT_OLD_BEACON) {
+        frame->setFramePending(true);
+        Ieee802154FrameCodec::finalize(*frame);
+    }
+    constructedBeacon = BeaconConfiguration{uint8_t(bo),uint8_t(so),ble,
+            uint32_t(getInteger("macBattLifeExtPeriods")),uint32_t(getInteger("macUnitBackoffPeriod"))};
     auto packet = new Packet("IEEE802154-periodic-beacon");
     transmittedBeaconIfs = interframeSpacing(frame->getChunkLength());
     packet->insertAtBack(frame);
     packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee802154);
     auto id = allocatePhyId();
+    auto initialRequestId = initial ? std::optional<uint64_t>(superframeStartRequest->id) : std::nullopt;
     phyOperation = PhyOperation{id,PhyPurpose::SUPERFRAME_TRANSMIT};
     emit(packetSentToLowerSignal,packet);
-    if (!phyOperation || phyOperation->id != id || !started || !phyAvailable) {
+    if (!phyOperation || phyOperation->id != id || !started || !phyAvailable ||
+            (initialRequestId && (!superframeStartRequest || superframeStartRequest->id != *initialRequestId)) ||
+            (!initialRequestId && !periodicBeaconing)) {
+        if (phyOperation && phyOperation->id == id)
+            phyOperation.reset();
         delete packet;
+        restoreIdle();
         return;
     }
     physicallayer::Ieee802154PhyTransmitRequest request;
-    if (!initial && periodicTarget)
-        request.startAt = superframe->getFutureSimulationTime(*periodicTarget);
+    if (target && (!initial || superframeStartRequest->phase == SuperframeStartRequest::Phase::WAIT_ACTIVATION ||
+            (!superframeStartRequest->parameters.panCoordinator && superframeStartRequest->parameters.startTime)))
+        request.startAt = superframe->getFutureSimulationTime(*target);
     if (request.startAt && *request.startAt < simTime()) {
         delete packet;
         phyOperation.reset();
@@ -2633,15 +3105,16 @@ void Ieee802154StandardMac::sendPeriodicBeacon()
 
 void Ieee802154StandardMac::startOutgoingCap()
 {
-    if (!periodicBeaconing || !transmittedBeaconAnchor)
+    if (!periodicBeaconing || !transmittedBeaconAnchor || !outgoingEpoch)
         return;
-    auto geometry = Ieee802154SuperframeTiming::geometry(getInteger("macBeaconOrder"),getInteger("macSuperframeOrder"));
+    auto epoch = *outgoingEpoch;
+    auto geometry = Ieee802154SuperframeTiming::geometry(epoch.beaconOrder,epoch.superframeOrder);
     if (!geometry->activeDuration)
         return;
     clocktime_t end;
-    if (getBoolean("macBattLifeExt")) {
+    if (epoch.batteryLifeExtension) {
         auto afterIfs = superframe->getFutureClockTime(simTime() + transmittedBeaconIfs);
-        end = afterIfs + SIMTIME_AS_CLOCKTIME(SimTime(int64_t(getInteger("macBattLifeExtPeriods")) * int64_t(getInteger("macUnitBackoffPeriod")) * 16,SIMTIME_US));
+        end = afterIfs + SIMTIME_AS_CLOCKTIME(SimTime(int64_t(epoch.batteryLifePeriods) * int64_t(epoch.backoffPeriod) * 16,SIMTIME_US));
     }
     else
         end = *transmittedBeaconAnchor + SIMTIME_AS_CLOCKTIME(SimTime(int64_t(*geometry->activeDuration) * 16,SIMTIME_US));
@@ -2650,11 +3123,13 @@ void Ieee802154StandardMac::startOutgoingCap()
     auto anchor = *transmittedBeaconAnchor;
     setOutgoingCapActive(scheduled);
     if (periodicBeaconing && transmittedBeaconAnchor && *transmittedBeaconAnchor == anchor)
-        publishAccessWindow(anchor, simTime(), transmittedBeaconIfs, getInteger("macBeaconOrder"), getInteger("macSuperframeOrder"), 15, getBoolean("macBattLifeExt"));
+        publishAccessWindow(anchor, simTime(), transmittedBeaconIfs, epoch.beaconOrder, epoch.superframeOrder, 15,
+                epoch.batteryLifeExtension, epoch.backoffPeriod, epoch.batteryLifePeriods, Ieee802154AccessWindowOrigin::OUTGOING);
 }
 
 void Ieee802154StandardMac::publishAccessWindow(clocktime_t anchor, simtime_t beaconEnd, simtime_t beaconIfs,
-        uint8_t beaconOrder, uint8_t superframeOrder, uint8_t finalCapSlot, bool batteryLifeExtension)
+        uint8_t beaconOrder, uint8_t superframeOrder, uint8_t finalCapSlot, bool batteryLifeExtension,
+        uint32_t backoffPeriod, uint32_t batteryLifePeriods, Ieee802154AccessWindowOrigin origin)
 {
     if (!superframe || !slottedAccess || superframeOrder >= 15 || finalCapSlot > 15)
         return;
@@ -2662,9 +3137,10 @@ void Ieee802154StandardMac::publishAccessWindow(clocktime_t anchor, simtime_t be
     if (end <= superframe->getCurrentClockTime())
         return;
     auto start = superframe->getFutureClockTime(beaconEnd);
-    auto period = SIMTIME_AS_CLOCKTIME(SimTime(16, SIMTIME_US) * getInteger("macUnitBackoffPeriod"));
+    auto period = SIMTIME_AS_CLOCKTIME(SimTime(16, SIMTIME_US) * backoffPeriod);
     Ieee802154AccessWindow window{0, start, end, anchor, {}};
     window.beaconOrder = beaconOrder;
+    window.origin = origin;
     window.notBefore = beaconEnd;
     window.physicalCapStart = beaconEnd;
     window.physicalCapEnd = superframe->getFutureSimulationTime(end);
@@ -2679,11 +3155,11 @@ void Ieee802154StandardMac::publishAccessWindow(clocktime_t anchor, simtime_t be
         while (first < superframe->getCurrentClockTime() || superframe->getFutureSimulationTime(first) < beaconEnd + beaconIfs)
             first += period;
         window.bleStart = first;
-        window.bleEnd = first + period * int64_t(getInteger("macBattLifeExtPeriods"));
+        window.bleEnd = first + period * int64_t(batteryLifePeriods);
     }
-    if (periodicBeaconing && transmittedBeaconAnchor && *transmittedBeaconAnchor == anchor && periodicTarget &&
-            *periodicTarget > superframe->getCurrentClockTime()) {
-        auto preparation = superframe->getFutureSimulationTime(*periodicTarget) - phy->getTimingParameters().turnaroundTime;
+    auto nextBoundary = nextBeaconBoundary();
+    if (nextBoundary && *nextBoundary > superframe->getCurrentClockTime()) {
+        auto preparation = superframe->getFutureSimulationTime(*nextBoundary) - phy->getTimingParameters().turnaroundTime;
         if (preparation >= simTime()) {
             auto preparationClock = superframe->getFutureClockTime(preparation);
             window.latestCompletion = preparationClock >= superframe->getCurrentClockTime() ?
@@ -2999,7 +3475,63 @@ void Ieee802154StandardMac::transmitBeacon(uint64_t id, bool automatic)
     startData();
 }
 
-Ptr<Ieee802154Frame> Ieee802154StandardMac::makeBeacon(uint16_t panId, uint8_t beaconOrder, uint8_t superframeOrder, bool batteryLifeExtension)
+bool Ieee802154StandardMac::overlapsIncomingSuperframe(clocktime_t target, uint8_t beaconOrder,
+        uint8_t superframeOrder, b psduLength) const
+{
+    if (!incomingSuperframe)
+        return false;
+    const auto& incoming = *incomingSuperframe;
+    auto parent = Ieee802154SuperframeTiming::geometry(incoming.beaconOrder,incoming.superframeOrder);
+    auto outgoing = Ieee802154SuperframeTiming::geometry(beaconOrder,superframeOrder);
+    if (!parent || !parent->beaconInterval || !outgoing || !outgoing->beaconInterval)
+        return false;
+    auto now = superframe->getCurrentClockTime();
+    auto childStart = target <= now ? simTime() : superframe->getFutureSimulationTime(target);
+    auto childEnd = outgoing->activeDuration ? superframe->getFutureSimulationTime(target +
+            SIMTIME_AS_CLOCKTIME(SimTime(int64_t(*outgoing->activeDuration) * 16,SIMTIME_US))) :
+            childStart + Ieee802154ExchangeTiming::ppduDuration(psduLength,phy->getTimingParameters());
+    auto period = SIMTIME_AS_CLOCKTIME(SimTime(int64_t(*parent->beaconInterval) * 16,SIMTIME_US));
+    auto delta = CLOCKTIME_AS_SIMTIME(target - incoming.anchor).raw();
+    auto periodTicks = CLOCKTIME_AS_SIMTIME(period).raw();
+    if (parent->activeDuration) {
+        auto phase = delta % periodTicks;
+        if (phase < 0)
+            phase += periodTicks;
+        auto activeTicks = SimTime(int64_t(*parent->activeDuration) * 16,SIMTIME_US).raw();
+        if (phase < activeTicks)
+            return true; // The predicted parent cycle can already have started when START is submitted.
+    }
+    int64_t cycle = delta > 0 ? delta / periodTicks : 0;
+    for (int64_t index = std::max<int64_t>(0,cycle - 1); index <= cycle + 1; ++index) {
+        auto parentClock = incoming.anchor + period * index;
+        simtime_t parentStart;
+        if (index == 0)
+            parentStart = incoming.physicalStart;
+        else if (parentClock > now)
+            parentStart = superframe->getFutureSimulationTime(parentClock);
+        else
+            continue; // No actually received parent beacon is known for this past cycle.
+        simtime_t parentEnd;
+        if (parent->activeDuration) {
+            auto endClock = parentClock + SIMTIME_AS_CLOCKTIME(SimTime(int64_t(*parent->activeDuration) * 16,SIMTIME_US));
+            if (endClock <= now)
+                continue;
+            parentEnd = superframe->getFutureSimulationTime(endClock);
+        }
+        else
+            parentEnd = index == 0 ? incoming.physicalEnd : parentStart + (incoming.physicalEnd - incoming.physicalStart);
+        if (index > 0) {
+            auto uncertainty = superframe->getForecastUncertainty(parentStart - incoming.physicalStart,SimTime(par("maxPropagationDelay")));
+            parentStart -= uncertainty;
+            parentEnd += uncertainty;
+        }
+        if (Ieee802154SuperframeTiming::physicalIntervalsOverlap(childStart,childEnd,parentStart,parentEnd))
+            return true;
+    }
+    return false;
+}
+
+Ptr<Ieee802154Frame> Ieee802154StandardMac::makeBeacon(uint16_t panId, uint8_t beaconOrder, uint8_t superframeOrder, bool batteryLifeExtension, bool consumeSequence)
 {
     auto frame = makeShared<Ieee802154Frame>();
     frame->setFrameType(0);
@@ -3012,7 +3544,9 @@ Ptr<Ieee802154Frame> Ieee802154StandardMac::makeBeacon(uint16_t panId, uint8_t b
     frame->setFramePending(pending->count(frame->getSourcePanId(),Ieee802154Address::fromShort(0xffff),simTime()) != 0);
     Ieee802154BeaconCodec::Content content;
     content.superframeSpecification = beaconOrder | (superframeOrder << 4) | 0x0f00 |
-            (batteryLifeExtension ? 0x1000 : 0) | (panCoordinator || superframeStartRequest ? 0x4000 : 0) |
+            (batteryLifeExtension ? 0x1000 : 0) | ((superframeStartRequest &&
+                    ((superframeStartRequest->phase == SuperframeStartRequest::Phase::INITIAL && superframeStartRequest->preparingFirstBeacon) || superframeStartRequest->phase == SuperframeStartRequest::Phase::WAIT_ACTIVATION) ?
+                    superframeStartRequest->parameters.panCoordinator : panCoordinator) ? 0x4000 : 0) |
             (getBoolean("macAssociationPermit") ? 0x8000 : 0);
     content.payload = std::get<std::vector<uint8_t>>(*pib->get("macBeaconPayload").value);
     auto overhead = size_t(7 + (frame->getSourceAddress().isShort() ? 2 : 8) + 4);
@@ -3025,7 +3559,8 @@ Ptr<Ieee802154Frame> Ieee802154StandardMac::makeBeacon(uint16_t panId, uint8_t b
     frame->setPayloadArraySize(bytes.size());
     for (size_t i = 0; i < bytes.size(); i++) frame->setPayload(i,bytes[i]);
     Ieee802154FrameCodec::finalize(*frame);
-    pib->set("macBsn",uint64_t((frame->getDsn() + 1) & 255));
+    if (consumeSequence)
+        pib->set("macBsn",uint64_t((frame->getDsn() + 1) & 255));
     return frame;
 }
 
@@ -3069,7 +3604,7 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitAssociateResponse(uin
     auto admission = admit(id,true);
     if (admission != Ieee802154MacServiceAdmission::ACCEPTED)
         return admission;
-    if (!par("enableManagement").boolValue() || !managementClient || !panCoordinator || !phy || !access)
+    if (!par("enableManagement").boolValue() || !managementClient || !coordinator || !phy || !access)
         return Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION;
     std::optional<Ieee802154MacStatus> failure;
     if (!response.deviceAddress.isExtended() || response.deviceAddress.isExtendedGroup())
@@ -3246,7 +3781,7 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitDisassociate(uint64_t
     bool leaving = getBoolean("macAssociatedPanCoord") &&
             (request.deviceAddress == coordinatorExtended || (request.deviceAddress.isShort() &&
                     coordinatorShort < 0xfffe && request.deviceAddress.getShort() == coordinatorShort));
-    bool indirect = request.indirectTx && panCoordinator && !leaving;
+    bool indirect = request.indirectTx && coordinator && !leaving;
     auto admission = indirect ? admit(id,true) : admitRadio(id);
     if (admission != Ieee802154MacServiceAdmission::ACCEPTED)
         return admission;
@@ -3260,7 +3795,7 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitDisassociate(uint64_t
             request.deviceAddress.isShortUnallocated())
         failure = Ieee802154MacStatus::INVALID_ADDRESS;
     else if (request.devicePanId != getInteger("macPanId") || request.reason != (leaving ? 2 : 1) ||
-            (!leaving && (!panCoordinator || !associatedDevices.count({request.devicePanId,peer}))) || request.security.securityLevel > 7)
+            (!leaving && (!coordinator || !associatedDevices.count({request.devicePanId,peer}))) || request.security.securityLevel > 7)
         failure = Ieee802154MacStatus::INVALID_PARAMETER;
     else if (request.security.securityLevel != 0)
         failure = Ieee802154MacStatus::UNSUPPORTED_SECURITY;
@@ -3369,7 +3904,7 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitOrphanResponse(uint64
         return admission;
     if (beaconScheduleActive() && response.associatedMember && !slottedAccess)
         return Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION;
-    if (!par("enableManagement").boolValue() || !managementClient || !phy || !access || !panCoordinator)
+    if (!par("enableManagement").boolValue() || !managementClient || !phy || !access || !coordinator)
         return Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION;
     if (phyOperation)
         return Ieee802154MacServiceAdmission::BUSY;
@@ -3474,9 +4009,63 @@ bool Ieee802154StandardMac::receiveManagedBeacon(const Ptr<Ieee802154Frame>& fra
     if (located && anchor && descriptor->contentAvailable) {
         auto specification = descriptor->beacon.superframeSpecification;
         auto geometry = Ieee802154SuperframeTiming::geometry(specification & 15, (specification >> 4) & 15);
-        if (geometry && geometry->beaconInterval && geometry->activeDuration)
-            publishAccessWindow(anchor->localStart, quality.timing.ppduEnd, interframeSpacing(frame->getChunkLength()),
-                    geometry->beaconOrder, geometry->superframeOrder, (specification >> 8) & 15, (specification & 0x1000) != 0);
+        if (geometry && geometry->beaconInterval) {
+            incomingSuperframe = IncomingSuperframe{anchor->localStart,geometry->beaconOrder,geometry->superframeOrder,
+                    anchor->physicalStart,quality.timing.ppduEnd};
+            if (superframeStartRequest && superframeStartRequest->awaitingFirstBoundary && superframeStartRequest->firstTarget &&
+                    *superframeStartRequest->firstTarget > superframe->getCurrentClockTime()) {
+                auto request = superframeStartRequest->parameters;
+                auto candidate = makeBeacon(request.panId,request.beaconOrder,request.superframeOrder,request.batteryLifeExtension,false);
+                if (candidate && overlapsIncomingSuperframe(*superframeStartRequest->firstTarget,request.beaconOrder,request.superframeOrder,candidate->getChunkLength())) {
+                    superframe->cancelBeaconPreparation();
+                    completeSuperframeStart(Ieee802154MacStatus::SUPERFRAME_OVERLAP);
+                    if (receiveEpoch != receiveRetirementEpoch)
+                        return true;
+                }
+            }
+            if (childPhase && periodicBeaconing && outgoingEpoch) {
+                auto outgoing = Ieee802154SuperframeTiming::geometry(outgoingEpoch->beaconOrder,outgoingEpoch->superframeOrder);
+                auto period = SIMTIME_AS_CLOCKTIME(SimTime(int64_t(*outgoing->beaconInterval) * 16,SIMTIME_US));
+                auto target = anchor->localStart + *childPhase;
+                if (!transmittedBeaconAnchor && periodicTarget && target < *periodicTarget) {
+                    auto delta = CLOCKTIME_AS_SIMTIME(*periodicTarget - target).raw();
+                    auto ticks = CLOCKTIME_AS_SIMTIME(period).raw();
+                    target += period * ((delta + ticks / 2) / ticks);
+                }
+                auto earliest = superframe->getFutureClockTime(simTime() + phy->getTimingParameters().turnaroundTime);
+                if (target < earliest) {
+                    auto delta = CLOCKTIME_AS_SIMTIME(earliest - target).raw();
+                    auto ticks = CLOCKTIME_AS_SIMTIME(period).raw();
+                    auto count = (delta + ticks - 1) / ticks;
+                    target += period * count;
+                }
+                auto candidate = makeBeacon(getInteger("macPanId"),outgoingEpoch->beaconOrder,outgoingEpoch->superframeOrder,
+                        outgoingEpoch->batteryLifeExtension,false);
+                bool overlap = candidate && overlapsIncomingSuperframe(target,outgoingEpoch->beaconOrder,
+                        outgoingEpoch->superframeOrder,candidate->getChunkLength());
+                if (overlap) {
+                    auto channel = descriptor->channel;
+                    auto pan = descriptor->coordinatorPanId;
+                    auto address = descriptor->coordinatorAddress;
+                    retirePeriodicBeaconing(Ieee802154MacServiceAbortReason::STOPPED);
+                    if (receiveEpoch != receiveRetirementEpoch)
+                        return true;
+                    if (managementClient)
+                        managementClient->handleSyncLossIndication({Ieee802154SyncLossReason::SUPERFRAME_OVERLAP,pan,channel,address,{},{}});
+                    if (receiveEpoch != receiveRetirementEpoch)
+                        return true;
+                }
+                else {
+                    superframe->cancelBeaconPreparation();
+                    periodicTarget = target;
+                    scheduleNextPeriodicBeacon();
+                }
+            }
+            if (geometry->activeDuration)
+                publishAccessWindow(anchor->localStart, quality.timing.ppduEnd, interframeSpacing(frame->getChunkLength()),
+                    geometry->beaconOrder, geometry->superframeOrder, (specification >> 8) & 15, (specification & 0x1000) != 0,
+                    getInteger("macUnitBackoffPeriod"),getInteger("macBattLifeExtPeriods"),Ieee802154AccessWindowOrigin::INCOMING);
+        }
         if (receiveEpoch != receiveRetirementEpoch)
             return true;
     }

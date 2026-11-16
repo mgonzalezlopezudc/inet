@@ -29,6 +29,18 @@ for (unsigned int so = 0; so <= 15; ++so) {
 }
 ASSERT(!Ieee802154SuperframeTiming::geometry(16, 0));
 ASSERT(!Ieee802154SuperframeTiming::geometry(0, 16));
+ASSERT(Ieee802154SuperframeTiming::roundStartTime(0,20) == 0);
+ASSERT(Ieee802154SuperframeTiming::roundStartTime(19,20) == 20);
+ASSERT(Ieee802154SuperframeTiming::roundStartTime(20,20) == 20);
+ASSERT(Ieee802154SuperframeTiming::roundStartTime(21,20) == 40);
+ASSERT(Ieee802154SuperframeTiming::roundStartTime(0xffffff,UINT32_MAX) == UINT32_MAX);
+auto overlap = Ieee802154SuperframeTiming::physicalIntervalsOverlap;
+auto tick = SimTime::fromRaw(1);
+auto boundary = SimTime(608,SIMTIME_US);
+ASSERT(overlap(SIMTIME_ZERO,boundary,boundary - tick,boundary + SimTime(1,SIMTIME_US)));
+ASSERT(!overlap(SIMTIME_ZERO,boundary,boundary,boundary + SimTime(1,SIMTIME_US)));
+ASSERT(!overlap(SIMTIME_ZERO,boundary,boundary + tick,boundary + SimTime(1,SIMTIME_US)));
+ASSERT(!overlap(boundary,boundary + SimTime(1,SIMTIME_US),SIMTIME_ZERO,boundary));
 
 auto timestamp = [](simtime_t value) { return Ieee802154SuperframeTiming::timestamp(SIMTIME_AS_CLOCKTIME(value)); };
 ASSERT(timestamp(SimTime(0, SIMTIME_US)) == 0);

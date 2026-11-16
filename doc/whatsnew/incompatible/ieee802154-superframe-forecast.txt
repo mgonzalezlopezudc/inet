@@ -1,0 +1,3 @@
+IEEE 802.15.4 superframe forecast contract
+
+Custom superframe providers must implement getForecastUncertainty(elapsed, maxPropagationDelay), returning the conservative clock-profile phase bound. See the IEEE 802.15.4 Dual-CAP Window Origin migration guide.
