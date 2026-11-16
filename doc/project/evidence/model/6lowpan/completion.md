@@ -2,7 +2,27 @@
 
 > **Kind:** ledger · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../../../plan/pending/6lowpan-completion.md), [release-validation.md](release-validation.md)
 
-This ledger tracks P8–P15 separately from the archived P0–P7 acceptance. The user requested completion of the remaining packages on 2026-11-15. Passing one package does not establish later functionality. Existing first-release fixtures remain regression controls.
+P8–P15 and the final combined campaign are complete for the selected profiles. This ledger separates them from the archived P0–P7 acceptance. The package sections below retain their historical checkpoint results; statements there about later work are superseded by the final campaign here. Existing first-release fixtures remain regression controls.
+
+## Final combined campaign
+
+The [final verification record](final-verification.json) retains exact selectors, executed runs, seed/configuration inputs, source and library hashes, raw artifacts and gate dispositions. All executable inputs match the tested source after the documentation-only release-note repair.
+
+| Profile | Executed checks | Result |
+| --- | --- | --- |
+| Enabled debug | 22 units; 69 module fixtures/110 runs; 33 protocol fixtures/285 runs | All fixture expectations pass; the module total includes 93 normal runs and 17 declared error exits. |
+| Targeted release | 16 protocol fixtures/226 runs; native-completion module/20 runs | Completion passes; all 391 selected unconditional observation rows match debug. Assertions remain disabled in release. |
+| LoWPAN disabled | Fresh debug build; five shared module fixtures; three run-0 IEEE 802.15.4 simulations | Module expectations pass; all nine stored fingerprint comparisons match at 100 s with seed 0. No baseline changes. |
+| LoWPAN core without UDP | Fresh debug build; 22 units; three module fixtures/22 runs; eight protocol fixtures/98 runs | All expectations pass, including the three original-MTU cases and 37 raw recovery cases. |
+| Restored original profile | Exact feature/NED bytes restored after feature-tool regeneration; fresh debug/release builds; compressed, uncompressed and routed examples | All three examples complete at their configured 500 ms, 500 ms and 1 s limits. |
+
+The internal constant naming cleanup changes exactly six identifier tokens; independent reversal reproduces both parent files byte for byte. The actual-egress-MTU follow-up and the UDP-disabled evidence deferred by its stage record are closed by this campaign.
+
+The repaired 92-commit series passes commit, classification, include, parameter and release-note checks. The original series is retained by the backup ref and old-to-new map in the final record; every model/test/configuration object and commit message/author/date is unchanged by that repair. Historical stage records retain their original source IDs and note hashes. The final documentation also removes obsolete statements that host registration remains a future stage.
+
+Project-wide architecture, naming and interface gates retain inherited findings: architecture output matches pinned master exactly; all 24 naming paths have identical base objects; the same 16 interface violations and nine review candidates remain, with seven additional pure interfaces. Source and document seals pass. The canonical 47-source C++ gate exits 1 with 3,796 unique diagnostics, zero compiler errors, zero new diagnostic signatures and zero input drift. Independent triage is retained; it does not turn the warning result into a pass. These dispositions are explicit acceptance limits, not unresolved LoWPAN implementation packages.
+
+The selected-profile, clock/path, static-domain and external-peer limits in the package documents remain applicable. This campaign does not claim all INET regressions or broad RFC conformance. The recorded first-release ns-3 elided-EUI comparison remains a characterized incompatibility; the model has no ns-3 runtime dependency.
 
 ## P8 — Stateful contexts
 
@@ -202,6 +222,6 @@ The [three-case native fixture](../../../../../tests/protocol/6lowpan/fragment-f
 
 The [follow-up record](p14-mtu-verification.json) retains the same final checker/inputs/arguments with verified pre-fix and fixed libraries. Both defects reproduce on the pre-fix library; the compatible control passes. Matching debug/release builds and five protocol fixtures/90 simulations per mode pass, with three debug units and twenty native-completion runs per mode. All 108 unconditional primary rows match. The original P14 record remains a historical checkpoint. Actual UDP-disabled execution of the new fixture is explicitly assigned to the final combined campaign.
 
-## Remaining packages
+## Completion
 
-The final naming audit, combined feature matrix, evidence reconciliation and commit audit remain under the completion plan.
+All implementation packages and the combined validation/reconciliation work are complete for the selected profiles. The verification record and this ledger distinguish the runtime passes from the retained global gate findings and historical external-comparison limit.

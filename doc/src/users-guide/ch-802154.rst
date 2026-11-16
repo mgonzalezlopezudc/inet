@@ -93,15 +93,19 @@ Use :ned:`Ieee802154NativeLowpanInterface` together with
 :ned:`LowpanIpv6NetworkLayer` and :ned:`LowpanNativeLinkDomain`. The domain
 configures native extended addresses and static IPv6 next-hop bindings. The
 IPv6 MTU is 1280; adaptation fragmentation is independent of IPv6 source
-fragmentation. Route-over nodes reassemble before IPv6 forwarding and prepare
-new link fragments on egress.
+fragmentation. Ordinary route-over nodes reassemble before IPv6 forwarding and
+prepare new link fragments on egress.
+
+Configure UDP and ICMPv6 modules that send serialized native traffic with
+``checksumMode="computed"``. Declared checksum metadata does not travel in the
+wire bytes; receivers verify the decoded checksum, including ICMPv6 errors.
 
 The native MAC implements a bounded unsecured, same-PAN data/ACK profile at
 250 kbit/s, with extended unicast and short broadcast addresses, native frame
 encoding and FCS. The initial configuration requires stationary radios and a
-dedicated medium. Ordinary Neighbor Discovery is suppressed on these interfaces.
-Association, security and mesh-under are
-outside this profile. Independent captures validate frame/FCS and transport checksums,
+dedicated medium. The default static role suppresses ordinary Neighbor Discovery
+on these interfaces. Association and secured MAC frames are outside this profile.
+Independent captures validate frame/FCS and transport checksums,
 and serialized global-address vectors agree with a pinned external implementation.
 A known external-peer mismatch affects fully elided EUI-derived addresses; live
 external-MAC interoperability is not established by these checks.
@@ -127,7 +131,126 @@ own IPHC encoding and derives elided IIDs from the enclosing IPv6 addresses.
 Headers with a compressed body above 255 bytes stay inline. When the complete
 compressed chain cannot fit the first adaptation fragment, the sender retains
 the inline next-header value in base IPHC and fragments the original extension
-bytes. Fragment offsets always count reconstructed IPv6 bytes.
+bytes. RFC 4944 fragment offsets count reconstructed IPv6 bytes.
+
+Native Neighbor Discovery is configured through ``nativeNdRole`` on
+:ned:`LowpanIpv6NeighbourDiscovery`. The default ``static`` role retains configured
+bindings. The ``host`` role discovers routers, forms addresses and registers them
+before ordinary data can use them. The ``router`` and ``borderRouter`` roles
+require IPv6 forwarding; the latter also provides routed duplicate-address
+authority. A router can delegate registration checks to a configured authority.
+This is individual unicast-address registration with RFC 6775 and optional
+RFC 8505 ``extendedRegistration``. Extended ownership identifiers are compared
+as protocol identifiers; cryptographic address protection, backbone federation,
+RPL signaling and later multicast/prefix-registration extensions are outside
+this model.
+
+``contextDistribution`` enables ABRO/6CO context advertisements. A border-router
+origin advertises its configured adaptation contexts and IPv6 advertised
+prefixes; a distribution router learns and advertises accepted authority groups
+on its native interfaces. Hosts also accept supported individual context updates.
+Configured and learned context IDs must not overlap. Retirement and introduction
+staging is configuration-owned. Context expiry does not revoke an independently
+valid SLAAC address or change bytes already reconstructed from a first fragment.
+
+``meshUnder`` on :ned:`LowpanLayer` enables a separate configured Layer 2 mesh.
+``meshRoutes`` supplies exact final-native-address to next-hop bindings, and
+``meshHops`` bounds forwarding. Intermediate nodes forward opaque fragments
+without IPv6 reassembly or Hop Limit changes. Broadcast uses a bounded duplicate
+cache with finite retention; it does not promise suppression of arbitrarily late
+copies after that retention expires. Use compatible residence/retention settings
+throughout the mesh. Native registration remains a one-hop link function;
+mesh forwarding does not provide multihop Neighbor Discovery or route discovery.
+
+Dispatch parsing supports packet-local RFC 8025 page switches and RFC 8066 ESC
+selectors. IPHC is accepted on pages zero and one. Unknown extended-dispatch
+payloads are rejected at an interpreting endpoint; mesh transit can preserve
+their opaque bytes. Recognizing an ESC selector does not implement its payload
+protocol.
+
+``nativeFragmentPacing`` enables bounded source fragmentation for native unicast
+data. It waits for the previous frame's matched MAC ACK before sending another
+fragment of the same datagram, with a default 500 ms gap and a fixed admission
+deadline (20 s by default).
+Failure or interface shutdown cancels unsent fragments. ND controls and broadcast
+retain their immediate path. This option defaults off and cannot be combined
+with ``meshUnder``; a local MAC ACK is not an end-to-end delivery acknowledgement.
+
+``nativeFragmentForwarding`` adds opt-in RFC 8930 forwarding before full relay
+reassembly. It requires native source pacing and excludes Mesh. Configure
+``fragmentForwardingPeers`` with the actual previous native senders whose data
+uses the compatible pacing and tag-protection profile; the default empty list
+keeps ingress ordinary. For example::
+
+    *.source.wlan[*].lowpan.nativeFragmentPacing = true
+    *.relay.wlan[*].lowpan.nativeFragmentPacing = true
+    *.relay.wlan[*].lowpan.nativeFragmentForwarding = true
+    *.relay.wlan[*].lowpan.routingTableModule = "^.^.ipv6.routingTable"
+    *.relay.wlan[*].lowpan.icmpv6Module = "^.^.ipv6.icmpv6"
+    *.relay.wlan[*].lowpan.ipv6Module = "^.^.ipv6.ipv6"
+    *.relay.wlan[0].lowpan.fragmentForwardingPeers = xml("<peers><peer native='0011223344556601'/></peers>")
+
+These relative module paths apply to a ``StandardHost`` using
+``LowpanIpv6NetworkLayer`` in its ``ipv6`` slot. Other compositions must point
+the three parameters at their actual same-node modules. Relays need ordinary
+IPv6 routes, forwarding enabled, and native next-hop bindings. Peer declarations
+are scoped to the receiving interface/PAN; there is no remote capability discovery.
+
+The supported profile declares at most eight forwarding hops and a one-second
+limit from arrival at a relay to reception at the next hop. Relay spacing is
+150 ms; paced source data and swapped tags receive 150 s protection. ND controls
+and broadcast retain their ordinary guards. Waiting above or inside the MAC
+consumes that same time limit. Compatible data records have fixed 90 s active
+and 120 s identity limits.
+Use compatible settings at participating sources and relays. Stop/start
+cancels pending data while retaining bounded identity/tag history; recreating a
+module loses that history.
+
+Forwarding selects the actual IPv6 route once, decrements only the outer Hop
+Limit and uses a new native tag at each hop. It honors egress compression settings
+and can move fragment boundaries without changing original-byte coordinates.
+Datagrams exceeding the selected IPv6 MTU use ordinary reassembly and IPv6
+Packet Too Big processing. Changes that invalidate the frozen route, binding,
+MTU or interface cancel pending output. Controls, unlisted
+peers, IPv6 policy hooks and unsupported optimization cases use ordinary
+reassembly/IPv6 processing. A relay's computed-UDP checksum hook also selects
+this fallback; a router without UDP applications can omit its UDP transport.
+A listed peer's fragment arriving before its first
+fragment is dropped, including a control fragment that cannot yet be identified.
+First-hop MAC success permits continuation; it does not confirm destination
+reassembly or application delivery.
+
+``nativeSelectiveRecovery`` selects RFC 8931 recovery for eligible native unicast
+data that needs adaptation fragmentation. Enable it on participating source,
+relay and destination interfaces in a compatible deployment. It defaults off,
+requires IPHC and excludes Mesh. Ordinary unfragmented packets, broadcast and
+Neighbor Discovery controls keep their existing paths. Configure the three
+module selectors on every recovery interface using the paths described above.
+Relays also need ordinary IPv6 forwarding, routes and native next-hop bindings.
+
+Recovery uses separate six-byte RFRAG/RFRAG-ACK headers and eight-bit tags.
+Its offsets count compressed bytes, unlike RFC 4944 offsets. Relays change only
+the outer header and adjust subsequent offsets; they do not repartition the
+fragments. The source reserves first-fragment space for header expansion along
+the declared path. With the default minimum path payload of 94 bytes, its first
+data fragment contains at most 71 bytes, even if the local link permits more.
+Every source fragment, including the final one, respects the configured size
+bounds; an infeasible partition is refused before transmission.
+
+``recoveryWindow`` is 1--32, default 32. The sender offers the initial fragments
+before repairing missing sequences and uses bounded timeout probes. The default
+``recoveryOperationLifetime`` is 45 s; congestion or repeated loss can end an
+operation without delivery. Relays require a compatible declared path of at most
+eight links and 50 ms residence per link. Completed receivers retain
+FULL responses for 30 s; fixed identity history and 166 s tag guards prevent
+immediate reuse. Stop/start cancels active work while preserving those guards.
+
+Local destinations reassemble and then use normal IPv6 processing. A relay
+aborts recovery if a required policy hook, unsupported egress or incomplete
+first-fragment header chain prevents safe direct forwarding. Recovery has no
+ordinary RFC 4944 fallback for those compressed coordinates. FULL confirms
+reassembly at the recovery endpoint; IPv6 processing or an application can still
+discard the datagram afterwards.
 
 :ned:`Ieee802154LowpanInterface` is a separate compatibility path using the
 legacy MAC and explicit collision-checked 48-bit aliases in

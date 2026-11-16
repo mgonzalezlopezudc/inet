@@ -2,7 +2,7 @@
 
 > **Kind:** ledger · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [implementation plan](../../../../../plan/done/6lowpan-implementation-plan.md), [features](../../protocol/6lowpan/features.md)
 
-Execution began 2026-09-19 at `14df0d93a48cd0f4c619d3a16066809c6f40243d`, with a clean working tree. P0–P7 are complete for the bounded native first-release profile. P0 provenance is recorded in the [current snapshot](provenance.md), and [release-validation.md](release-validation.md) owns that profile's acceptance matrix, native/compatibility/external evidence and retained peer incompatibility. P8–P10 are complete for their selected profiles; the [completion ledger](completion.md) owns their evidence and the remaining P11–P15 and final feature-matrix work. Earlier milestone sections below are historical; the current validation records supersede their status. Status below distinguishes executed checks from broader unclaimed conformance.
+Execution began 2026-09-19 at `14df0d93a48cd0f4c619d3a16066809c6f40243d`, with a clean working tree. P0–P7 are complete for the bounded native first-release profile. P0 provenance is recorded in the [first-release snapshot](provenance.md), and [release-validation.md](release-validation.md) owns that profile's acceptance matrix, native/compatibility/external evidence and retained peer incompatibility. P8–P15, the actual-egress-MTU follow-up, internal constant naming cleanup and combined feature matrix are complete for their selected profiles. The [completion ledger](completion.md#final-combined-campaign) and [final verification record](final-verification.json) own current acceptance and the explicit inherited gate findings. Earlier milestone sections below are historical; the current validation records supersede their status. Status below distinguishes executed checks from broader unclaimed conformance.
 
 | Package | Behavior / check | Owner | Category | Status |
 | --- | --- | --- | --- | --- |
@@ -266,7 +266,8 @@ The first-release plan is archived in `plan/done/`. P0's complete errata retriev
 The controlled-budget fixture now exercises placement fallback separately from the
 native profile, whose minimum 104-byte budget exceeds its supported compressed
 IPv6/UDP header chain. Dynamic ND, association/disassociation, security, short
-unicast and deferred P8–P15 features remain outside this implementation.
+unicast and P8–P15 features are outside the bounded P0–P7 first-release acceptance.
+The [completion ledger](completion.md) records subsequent implementations and their limits.
 
 The external peer limitation is reproduced in the saved elided-address vectors:
 ns-3 reconstructs both IID U/L bits differently. It must remain a visible failed

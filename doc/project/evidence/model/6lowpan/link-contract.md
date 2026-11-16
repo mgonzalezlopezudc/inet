@@ -1,8 +1,8 @@
 # 6LoWPAN adaptation and link integration contracts
 
-> **Kind:** design · **Status:** draft · **Seal:** none · **Owns:** — · **Stands on:** [implementation plan](../../../../../plan/done/6lowpan-implementation-plan.md), [encoding profile](encoding-profile.md)
+> **Kind:** design · **Status:** snapshot 2026-11-15 · **Seal:** none · **Owns:** — · **Stands on:** [implementation plan](../../../../../plan/done/6lowpan-implementation-plan.md), [encoding profile](encoding-profile.md)
 
-These are implementation contracts. They do not claim an implemented feature.
+This is the historical P0–P7 implementation-contract record, retaining its pre-write obligations and original profile choices. The [completion ledger](completion.md) and [encoding profile](encoding-profile.md) describe subsequent implemented behavior. In particular, ND rejection here belongs to the static role, sequential tag allocation to the older profile, and evidence obligations and retained-original observation rules below belong to their recorded checkpoints. They do not override later registration, forwarding or paced-admission contracts.
 
 ## Identity and dispatch
 

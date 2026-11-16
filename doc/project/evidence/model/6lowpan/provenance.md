@@ -4,6 +4,8 @@
 
 The first-release profile uses RFC 4944 fragmentation, RFC 6282 stateless IPHC and carried-checksum UDP NHC, and the unsecured IEEE 802.15.4-2024 subset recorded in [coverage.md](coverage.md#native-subset-selected-for-implementation). This review closes P0's retrieval gap; it does not establish release acceptance or support for the deferred protocol extensions.
 
+This snapshot remains pinned to the first-release source below. The [completion ledger](completion.md) records subsequent implementation and validation; it does not change this snapshot's retrieval or errata findings.
+
 ## Inputs and revision
 
 Implementation source: `6a11f885acd503273abd53ab47d546f12b38b41e`, tree `067ce2a25597f99d2d38f2a2d78a32c149380a15`. The pre-existing local `AGENTS.md` edit is outside the model. The P7 continuation adds test and evidence files without modifying production source. Exact runtime commands, fixture hashes and verdicts belong to [release-validation.md](release-validation.md).
