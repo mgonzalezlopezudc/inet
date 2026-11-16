@@ -53,7 +53,9 @@ protocol; no protocol identifier is carried in the MAC frame.
 The complete MPDU must fit 127 bytes, including its variable native header and
 FCS. There is no fixed MSDU MTU or automatic fragmentation. Idle reception is
 disabled by default; enable ``rxOnWhenIdle`` or request scheduled receiver
-windows through management when the device must listen.
+windows through management when the device must listen. In beacon mode,
+``rxOnWhenIdle`` grants idle reception only during an applicable CAP; tracking,
+scheduled receiver windows and allocated GTS reception have their own duties.
 
 :ned:`Ieee802154LegacyNarrowbandInterface` retains the old narrowband queue,
 48-bit upper-layer contract and wire representation. Existing IPv4 showcases
@@ -102,7 +104,10 @@ a 2024 symbol count, not the older exponent encoding.
 ``examples/wireless/ieee802154managed`` supplies a small native higher-layer
 client. A device discovers a PAN, joins, sends DATA, sleeps, polls for a queued
 reply, leaves and repeats with a new allocation. Run both typed/raw-byte
-configurations and inspect the application's completion and MSDU scalars.
+configurations and inspect the application's completion and MSDU scalars. From
+the example directory, ``inet -u Cmdenv -c Beacon -r 0,1`` runs the sleeping
+BO3/SO1 policy; ``inet -u Cmdenv -c Gts -r 0,1`` runs the default-off
+bidirectional GTS policy. Both configurations run for four simulated seconds.
 
 The native profile also supports periodic beacons, tracking and slotted CAP
 access. An associated device tracking its PAN coordinator may request a GTS;

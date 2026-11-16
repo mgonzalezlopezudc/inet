@@ -24,7 +24,7 @@ This record distinguishes source-audit closure, compilation, executed fixtures a
 | B3-04 | Completed | Fresh debug,3 unit/2 module fixtures and248/248 protocol cases PASS (`b304-acceptance1/`). Independent source closure23 PASS/11 N/A/0 FLAG/0 QUESTION; native captures independently decoded. C++ follow-up FAIL retains one new mandatory-PIB lookup disposition. |
 | B3-05 | Completed | Fresh debug,3 unit/3 module fixtures and236/236 protocol cases PASS (`b305-acceptance1/`). Independent source closure23 PASS/11 N/A/0 FLAG/0 QUESTION and finite19-case oracle audit complete. C++ gate FAIL with bounded dispositions; final2-TU follow-up adds no unmatched diagnostics. |
 | B3-06 | Completed | Fresh debug,3 unit/3 module fixtures and250/250 protocol cases PASS (`b306-acceptance1/`). Independent source closure23 PASS/11 N/A/0 FLAG/0 QUESTION. C++ follow-up1771 rows/zero errors/286 unique adds no unmatched diagnostic. |
-| B-99 | NOT_RUN | Final package documentation/configuration and publication evidence remain open. |
+| B-99 | Conventional package closure complete | Fresh debug,6 units,15 modules and1464/1464 protocol cases across38 fixtures PASS; stored Power/coexistence trajectories and Power fake-GUI visual fingerprint PASS without baseline changes. Final combined B/E publication matrix remains separate. |
 | E1-00 | Source/layout/service audit complete; independent review confirmed closure | Enhanced catalog/checks/profile contain complete PAN-presence and termination matrices, enhanced PIB/service inputs, concrete consumers and selected service/filter boundaries. No new runtime result is implied. |
 | E1-01 through E1-99 | NOT_RUN | All implementation and direct runtime acceptance gates remain open. |
 
@@ -572,6 +572,27 @@ The allocation pair reproduces the missing indication in `b306-signal-reset-red/
 The two-TU C++ follow-up reports1771 warning rows, zero errors and286 unique native diagnostics, all matching unchanged lines from B3-05 with zero unmatched warnings (`b306-signal-reset-fix1/clang-tidy.log`, `cpp-comparison.json`). The full warning gate remains FAIL with its prior bounded dispositions.
 
 Final matching-source acceptance passes a fresh debug build,3 units,3 modules and250/250 protocol cases across allocation, DATA, deallocation, expiry and managed application (`b306-acceptance1/`), with250 actual ProtocolTest PASS and zero errors/skips/FAIL. Source/library/fixture identities and exact commands are retained. All scoped architecture/naming/interfaces, source/document seals, release-note and model/protocol/plan link gates pass. Companion results preserve the separate earlier-stage counts. The observation events are additive; no baseline is rewritten.
+
+## B-99 conventional profile closure
+
+The complete conventional source at `f684867902c93a0fe3e59fbdc58613c90ca4e54f`
+passes a fresh debug build, all six selected units, fifteen modules and thirty-eight protocol
+fixtures:1464/1464 successful runs and1464 actual ProtocolTest PASS, zero errors/skips/FAIL.
+`b99-acceptance1/` retains source/library hashes, fixtures, generated work, exact commands and
+raw logs; `b99-acceptance-selection.json` is the exact selection. The twelve new selected
+obligations are mapped in the [statement ledger](statement-results.md#conventional-superframe-extension).
+The user guide and managed-example README explain beacon duty cycling, both GTS directions,
+explicit removal, inactivity and the boundary between installed windows and actual RF.
+The existing Beacon/Gts normal/raw configurations already exercise the intended application;
+this documentation closure changes no source or INI behavior.
+
+Stored run0/seed0 trajectory controls also pass: `Ieee802154Power`100s and `Coexistence`5s
+each match `tplx` and `~tNl`, and Power100s matches `tyf` with fake GUI enabled.
+Commands, result JSON, logs, baseline hash and unchanged-baseline assertion are retained in
+`b99-fingerprint-execution.json` and `b99-fingerprint-{power,coexistence,visual}.*` under
+the execution artifact directory. These five comparisons detect trajectory changes; they
+do not replace the direct protocol evidence. Enhanced-frame implementation and final
+release/feature-isolation/publication gates remain open.
 
 ## Publication gate
 

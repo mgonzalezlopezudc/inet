@@ -15,6 +15,15 @@ records counts, exact test selectors, source identity and explicit limits.
 PIB-8 is conditional on an indexed service absent from this whole-value binding;
 all other verdicts retain their catalog predicates. Later feature packages remain
 outside these selected milestones.
+The conventional beacon/slotted/GTS extension is tracked separately in
+[followup-results.md](followup-results.md) and its
+[twelve-statement mapping](statement-results.md#conventional-superframe-extension).
+It adds periodic/linked schedules, acquisition/loss, slotted access, both CFP
+directions, deallocation and activity expiry under the
+[bounded profile](beacon-profile.md). Its per-unit behavioral gates are complete;
+the full package regression and stored trajectory controls are being closed for
+B-99. Enhanced-frame source decisions are in [enhanced-frame-profile.md](enhanced-frame-profile.md);
+their structural/operational/scheduled execution remains separate.
 The step-0 table below preserves its initial extraction verdicts; the current executable
 support table distinguishes subsequent evidence from remaining obligations. Successful
 corpus retrieval validates tooling, not simulation behavior.
