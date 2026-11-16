@@ -1,0 +1,4 @@
+IEEE 802.15.4 nested MLME IE framing
+
+Inspect and encode bounded short and long Nested IE lists inside an MLME
+Payload IE while preserving unknown values and their order.

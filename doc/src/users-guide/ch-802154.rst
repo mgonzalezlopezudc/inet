@@ -110,7 +110,8 @@ BO3/SO1 policy; ``inet -u Cmdenv -c Gts -r 0,1`` runs the default-off
 bidirectional GTS policy. Both configurations run for four simulated seconds.
 
 The frame codec can inspect selected version-2 field layouts, including absent
-sequence or PAN fields and bounded Header/Payload IE regions. Security
+sequence or PAN fields, bounded Header/Payload IE regions and nested MLME IE
+framing. Unknown nested values do not enable their feature semantics. Security
 auxiliary extents can be inspected, but protected payload and MIC stay opaque.
 Structural decoding alone does not enable enhanced frame delivery or
 acknowledgement in the native MAC.
