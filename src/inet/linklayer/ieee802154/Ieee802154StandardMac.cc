@@ -6,6 +6,7 @@
 #include "inet/common/lifecycle/NodeStatus.h"
 #include "inet/linklayer/ieee802154/Ieee802154InterfaceData.h"
 #include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameLayout.h"
 #include "inet/linklayer/ieee802154/Ieee802154CommandCodec.h"
 #include "inet/linklayer/ieee802154/Ieee802154SuperframeTiming.h"
 #include "inet/linklayer/ieee802154/Ieee802154ExchangeTiming.h"
@@ -202,9 +203,12 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitData(uint64_t id, Pac
         return Ieee802154MacServiceAdmission::INVALID_REQUEST;
     if (!phy || !access)
         return Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION;
+    if (!request.legacyTx && !par("enableEnhancedFrames").boolValue())
+        return Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION;
     take(packet);
     auto frame = makeShared<Ieee802154Frame>();
-    frame->setFrameVersion(1); // Table 8-30: selected LegacyTx service.
+    frame->setFrameVersion(request.legacyTx ? 1 : 2);
+    frame->setSequenceSuppressed(!request.legacyTx && request.sequenceSuppressed);
     frame->setDsn(getInteger("macDsn"));
     frame->setDestinationAddress(request.destinationAddress);
     frame->setDestinationPanId(request.destinationPanId);
@@ -212,7 +216,8 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitData(uint64_t id, Pac
     frame->setAckRequest(request.ackTx && !request.destinationAddress.isBroadcast() && !request.destinationAddress.isExtendedGroup());
     std::optional<Ieee802154MacStatus> failure;
     std::optional<Ieee802154GtsManager::Key> gtsKey;
-    if (packet->getDataLength().get<b>() % 8)
+    if (packet->getDataLength().get<b>() % 8 ||
+            (request.legacyTx && (request.sequenceSuppressed || request.panIdSuppressed || !request.headerIes.empty() || !request.payloadIes.empty())))
         failure = Ieee802154MacStatus::INVALID_PARAMETER;
     else if (indirect && (!par("enableManagement").boolValue() || (request.destinationAddress.isExtendedGroup() && !request.destinationAddress.isBroadcast())))
         failure = Ieee802154MacStatus::UNSUPPORTED_FEATURE;
@@ -220,6 +225,8 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitData(uint64_t id, Pac
         failure = Ieee802154MacStatus::INVALID_PARAMETER;
     else if (request.security.securityLevel != 0)
         failure = Ieee802154MacStatus::UNSUPPORTED_SECURITY;
+    else if (!request.legacyTx && (request.ackTx || request.gtsTx))
+        failure = Ieee802154MacStatus::UNSUPPORTED_FEATURE; // Enhanced ACK and scheduled integration are later stages.
     else if (request.destinationAddress.isShortUnallocated())
         failure = Ieee802154MacStatus::INVALID_ADDRESS;
     else if (request.sourceAddressMode == Ieee802154Address::AddressType::SHORT) {
@@ -255,9 +262,70 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitData(uint64_t id, Pac
                 failure = Ieee802154MacStatus::INVALID_GTS;
         }
     }
-    if (frame->getSourceAddress().isNone() && request.destinationAddress.isNone())
-        failure = Ieee802154MacStatus::INVALID_ADDRESS;
-    frame->setPanCompression(!frame->getSourceAddress().isNone() && !request.destinationAddress.isNone() && frame->getSourcePanId() == request.destinationPanId);
+    if (frame->getSourceAddress().isNone() && request.destinationAddress.isNone() && (request.legacyTx || !failure))
+        failure = request.legacyTx ? Ieee802154MacStatus::INVALID_ADDRESS : Ieee802154MacStatus::UNSUPPORTED_FEATURE;
+    bool source = !frame->getSourceAddress().isNone(), destination = !request.destinationAddress.isNone();
+    if (!failure && !request.legacyTx && (!source || !destination))
+        failure = Ieee802154MacStatus::UNSUPPORTED_FEATURE;
+    bool samePan = frame->getSourcePanId() == request.destinationPanId;
+    bool bothExtended = frame->getSourceAddress().isExtended() && request.destinationAddress.isExtended();
+    bool compressed = request.legacyTx ? source && destination && samePan :
+            (bothExtended || !source || !destination ? request.panIdSuppressed : !samePan);
+    frame->setPanCompression(compressed);
+    auto mode = [](const Ieee802154Address& address) { return address.isNone() ? 0 : address.isShort() ? 2 : 3; };
+    auto layout = Ieee802154FrameLayout::fromControl(frame->getFrameVersion(),mode(frame->getDestinationAddress()),
+            mode(frame->getSourceAddress()),compressed,frame->getSequenceSuppressed());
+    if (!failure && !request.legacyTx) {
+        if (!layout)
+            failure = Ieee802154MacStatus::INVALID_PARAMETER;
+        else if ((request.panIdSuppressed && (layout->destinationPanPresent || layout->sourcePanPresent)) ||
+                (!request.panIdSuppressed && !layout->destinationPanPresent && !layout->sourcePanPresent) ||
+                (source && !layout->sourcePanPresent && layout->destinationPanPresent && !samePan) ||
+                (!layout->destinationPanPresent && !layout->sourcePanPresent && !hasEnhancedPeerContext(request.destinationPanId,request.destinationAddress)))
+            failure = Ieee802154MacStatus::UNSUPPORTED_FEATURE;
+    }
+    // Operational DATA eligibility is narrower than the forensic IE grammar.
+    if (!failure && !request.legacyTx) {
+        for (const auto& ie : request.headerIes) {
+            if (ie.id == 0x00) {
+                if (ie.content.size() < 3)
+                    failure = Ieee802154MacStatus::INVALID_PARAMETER;
+            }
+            else if (ie.id == 0x1a || ie.id == 0x1b || ie.id == 0x25 || ie.id == 0x26 || ie.id == 0x27 || ie.id == 0x2a || ie.id == 0x2c)
+                failure = Ieee802154MacStatus::UNSUPPORTED_FEATURE;
+            else
+                failure = Ieee802154MacStatus::INVALID_PARAMETER;
+            if (failure)
+                break;
+        }
+        for (const auto& ie : request.payloadIes) {
+            if (failure)
+                break;
+            if (ie.group > 2 || (ie.group == 2 && ie.content.size() < 3))
+                failure = Ieee802154MacStatus::INVALID_PARAMETER;
+            else if (ie.group == 1) {
+                auto nested = Ieee802154InformationElements::inspectNested(ie);
+                if (auto elements = std::get_if<std::vector<Ieee802154InformationElements::Nested>>(&nested)) {
+                    for (const auto& element : *elements) {
+                        auto id = element.id;
+                        bool vendor = element.longForm ? id == 8 : id == 0x40;
+                        bool dataEligible = element.longForm ? vendor :
+                                (id >= 0x1f && id <= 0x20) || (id >= 0x22 && id <= 0x24) || id == 0x26 ||
+                                (id >= 0x28 && id <= 0x29) || id == 0x2c || id == 0x36 ||
+                                (id >= 0x38 && id <= 0x39) || vendor || (id >= 0x47 && id <= 0x59) || id == 0x5c;
+                        if (!dataEligible || (vendor && element.content.size() < 3))
+                            failure = Ieee802154MacStatus::INVALID_PARAMETER;
+                        else if (!vendor)
+                            failure = Ieee802154MacStatus::UNSUPPORTED_FEATURE;
+                        if (failure)
+                            break;
+                    }
+                }
+                else
+                    failure = Ieee802154MacStatus::INVALID_PARAMETER;
+            }
+        }
+    }
     if (!failure) {
         try {
             std::vector<uint8_t> bytes;
@@ -265,8 +333,11 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitData(uint64_t id, Pac
                 auto chunk = packet->peekDataAsBytes();
                 bytes = chunk->getBytes();
             }
-            size_t headerLength = 5 + (request.destinationAddress.isNone() ? 0 : request.destinationAddress.isShort() ? 4 : 10) +
-                    (frame->getSourceAddress().isNone() ? 0 : (frame->getPanCompression() ? 0 : 2) + (frame->getSourceAddress().isShort() ? 2 : 8));
+            if (!request.legacyTx) {
+                bytes = Ieee802154InformationElements::encode(request.headerIes,request.payloadIes,bytes);
+                frame->setInformationElementsPresent(!request.headerIes.empty() || !request.payloadIes.empty());
+            }
+            size_t headerLength = layout->headerLength() + 2;
             if (headerLength + bytes.size() > 127)
                 failure = Ieee802154MacStatus::FRAME_TOO_LONG;
             else {
@@ -295,14 +366,16 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitData(uint64_t id, Pac
         }
         else {
             pendingOriginals.emplace(id, PendingOriginal{packet, request.msduHandle});
-            pib->set("macDsn", uint64_t((frame->getDsn() + 1) & 255));
+            if (!frame->getSequenceSuppressed())
+                pib->set("macDsn", uint64_t((frame->getDsn() + 1) & 255));
             expirePending();
             if (panCoordinator && periodicBeaconing && outgoingEpoch && !constructedGtsCandidate && started && !resetRequest)
                 maintainGtsCapacity(outgoingEpoch->superframeOrder);
         }
     }
     else {
-        pib->set("macDsn", uint64_t((frame->getDsn() + 1) & 255));
+        if (!frame->getSequenceSuppressed())
+            pib->set("macDsn", uint64_t((frame->getDsn() + 1) & 255));
         transaction = Transaction{id, packet, request.msduHandle, frame};
         transaction->gtsKey = gtsKey;
         startData();
@@ -2078,14 +2151,28 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
     auto frame = Ieee802154FrameCodec::decode(bytes);
     if (frame->getDecodeStatus() != Ieee802154FrameCodec::OK || !frame->getFcsValid())
         return;
-    if (frame->getFrameVersion() == 2)
-        return; // Structural decoding alone does not enable enhanced MAC operation.
+    bool enhanced = frame->getFrameVersion() == 2;
+    if (enhanced) {
+        if (!par("enableEnhancedFrames").boolValue() || frame->getFrameType() != 1 || frame->getAckRequest() || frame->getSecurityEnabled())
+            return; // Enhanced ACK/Command and security are not enabled by this stage.
+        if (frame->getSourceAddress().isNone() || frame->getDestinationAddress().isNone())
+            return;
+    }
     if (phyOperation && phyOperation->purpose == PhyPurpose::CCA && frame->getFrameType() != 0)
         return; // 6.3.2.1 permits discarding frames during CCA; beacon observation does not preempt the PHY.
     if (par("enableManagement").boolValue()) {
         expirePending(); // Equality at a persistence deadline precedes every managed receive decision.
         if (receiveEpoch != receiveRetirementEpoch || !started || resetRequest || !client)
             return;
+    }
+    if (enhanced) {
+        auto destinationPan = Ieee802154FrameCodec::destinationPanField(*frame);
+        auto sourcePan = Ieee802154FrameCodec::sourcePanField(*frame);
+        auto localPan = uint16_t(getInteger("macPanId"));
+        if (!destinationPan && !hasEnhancedPeerContext(localPan,frame->getSourceAddress()))
+            return;
+        frame->setDestinationPanId(destinationPan.value_or(localPan));
+        frame->setSourcePanId(sourcePan.value_or(destinationPan.value_or(localPan)));
     }
     std::optional<Ieee802154CommandCodec::Command> parsedCommand;
     if (frame->getFrameType() == 3 && par("enableManagement").boolValue() && !frame->getSecurityEnabled()) {
@@ -2135,7 +2222,7 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
         return;
     }
     std::optional<Ieee802154GtsManager::Grant> observedActivity;
-    if (panCoordinator && frame->getFrameType() == 1 && !frame->getSecurityEnabled() &&
+    if (!enhanced && panCoordinator && frame->getFrameType() == 1 && !frame->getSecurityEnabled() &&
             frame->getSourcePanId() == getInteger("macPanId") && frame->getSourceAddress().isShort() &&
             frame->getDestinationPanId() == getInteger("macPanId") &&
             (frame->getDestinationAddress() == std::get<Ieee802154Address>(*pib->get("macExtendedAddress").value) ||
@@ -2281,10 +2368,12 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
     indication.destinationPanId = destination.isNone() ? pan : frame->getDestinationPanId();
     if (!frame->getSourceAddress().isNone()) {
         indication.effectiveSourcePanId = frame->getSourcePanId();
-        if (!frame->getPanCompression())
+        if (enhanced)
+            indication.sourcePanId = Ieee802154FrameCodec::sourcePanField(*frame);
+        else if (!frame->getPanCompression())
             indication.sourcePanId = frame->getSourcePanId();
     }
-    indication.dsn = frame->getDsn();
+    indication.dsn = Ieee802154FrameCodec::sequenceNumber(*frame);
     indication.framePending = frame->getFramePending();
     indication.frameVersion = frame->getFrameVersion();
     indication.lqi = quality.lqi.value_or(0);
@@ -2319,7 +2408,14 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
         received.securityError = frame->getFrameVersion() == 0 ? Ieee802154MacStatus::UNSUPPORTED_LEGACY : Ieee802154MacStatus::UNSUPPORTED_SECURITY;
     else if (!promiscuous && !dataRequest && !associationResponse && !associationCapability && !disassociationReason && !acceptRealignment && !panConflict && !gtsCommand && !(received.receivedPollResponse && !frame->getPayloadArraySize())) {
         std::vector<uint8_t> payload;
-        for (size_t i = 0; i < frame->getPayloadArraySize(); ++i)
+        size_t payloadStart = 0;
+        if (enhanced) {
+            auto view = std::get<Ieee802154InformationElements::View>(Ieee802154InformationElements::inspect(*frame));
+            indication.headerIes = view.headers;
+            indication.payloadIes = view.payloads;
+            payloadStart = view.data.offset - view.fixedMhr.length;
+        }
+        for (size_t i = payloadStart; i < frame->getPayloadArraySize(); ++i)
             payload.push_back(frame->getPayload(i));
         received.msdu = new Packet("MCPS-DATA.indication");
         if (!payload.empty())
@@ -5150,6 +5246,14 @@ bool Ieee802154StandardMac::isAssociatedCoordinator(uint16_t panId, const Ieee80
     return parentAssociated && panId == getInteger("macPanId") &&
             ((address.isExtended() && !address.isExtendedGroup() && address == std::get<Ieee802154Address>(*pib->get("macCoordExtendedAddress").value)) ||
             (address.isShort() && address.getShort() < 0xfffe && address.getShort() == getInteger("macCoordShortAddress")));
+}
+
+bool Ieee802154StandardMac::hasEnhancedPeerContext(uint16_t panId, const Ieee802154Address& address) const
+{
+    if (panId == 0xffff || panId != getInteger("macPanId") || address.isNone() || address.isBroadcast() || address.isExtendedGroup())
+        return false;
+    return isAssociatedCoordinator(panId,address) ||
+            (coordinator && associatedDevices.count({panId,canonicalAddress(panId,address)}) != 0);
 }
 
 bool Ieee802154StandardMac::receiverWantsRx() const

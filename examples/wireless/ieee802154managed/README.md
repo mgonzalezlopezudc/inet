@@ -6,6 +6,7 @@ After setting up the INET environment, run these commands from this directory:
 inet -u Cmdenv -r 0,1             # Non-beacon association and polling
 inet -u Cmdenv -c Beacon -r 0,1   # Sleeping BO3/SO1 beacon PAN
 inet -u Cmdenv -c Gts -r 0,1      # Bidirectional GTS DATA
+inet -u Cmdenv -c Enhanced -r 0,1 # Unacknowledged version-2 DATA
 ```
 
 Each pair uses typed frames and raw bytes respectively. Both peers explicitly
@@ -30,8 +31,20 @@ DATA, poll, leave and rejoin cycles.
 This configuration explicitly enables the superframe composition on the same
 `Ieee802154StandardInterface`. Its two runs each completed two device cycles
 with two received replies and two confirmed device MSDUs in the diagnostic
-campaign. Security transforms, enhanced frames and waveform fidelity are
-outside this selected legacy unsecured profile.
+campaign. Security transforms and waveform fidelity are outside this selected
+legacy unsecured profile.
+
+The optional Enhanced configuration explicitly enables version-2 DATA at both
+interfaces. The application sends it without requesting an acknowledgement;
+association, polling and departure continue to use their existing procedures.
+This is an unsecured DATA example, not enhanced management or ACK support.
+Its device sends with a short source address, so enabling
+`enhancedPanIdSuppressed` is not supported by this example's address layout;
+the PAN-omitted native profile requires both extended addresses and an
+established peer context. The default Enhanced setting keeps PAN suppression
+off. Both the default and sequence-suppressed Enhanced configurations completed
+two device cycles and two DATA deliveries and confirmations per role in each
+300 ms typed/raw E1-04 acceptance run.
 
 The default-off bidirectional GTS policy waits for transmit and receive
 allocation confirmations, then exchanges acknowledged DATA with the coordinator

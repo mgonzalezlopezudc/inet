@@ -304,6 +304,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     std::optional<PanConflict> pendingPanConflict;
     bool broadcastReceivePending = false;
     bool isAssociatedCoordinator(uint16_t panId, const Ieee802154Address& address) const;
+    bool hasEnhancedPeerContext(uint16_t panId, const Ieee802154Address& address) const;
     struct ReceiverWindow {
         uint64_t id;
         std::optional<simtime_t> startsAt;

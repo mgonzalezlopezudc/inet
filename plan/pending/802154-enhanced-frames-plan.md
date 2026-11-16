@@ -152,6 +152,14 @@ Depends on E1-02. Add standard short/long Nested IE handling inside MLME Payload
 
 Depends on E1-03 and E1-00's closed service/DSN/context tables. Add explicit request options and version-aware receiver filtering/admission, and populate the existing optional indication metadata from the new layout. Copy new request values through the native gate tag without changing the indication's DSN type. Enable unsecured version-2 DATA without ACK first; acknowledge-requested modern transmission remains explicitly unsupported until E1-05. Resolve omitted PANs only using a declared applicable local/peer context. Preserve current version-1 request defaults and document the additive options in this commit.
 
+Copy Table8-32's received Header/Payload IE lists, excluding termination/FCS, through the
+existing indication and its result tag as well. Keep the native packet's original-MSDU-only
+binding explicit beside the separate copied lists; the standard's Msdu parameter includes
+Payload IEs. Prove actual callback/tag values rather than relying on an RF observer that
+cannot reveal service information loss. Resolve required peer context after mandatory expiry
+retirement and its receive-epoch guard, before protocol state updates; test a peer removal
+coincident with the final received symbol and a still-bound control.
+
 Add default-legacy format options to the production `src/inet/applications/ieee802154/Ieee802154ManagementApp` and its NED declaration, and an explicit enhanced-interface example configuration. The application chooses native request metadata; the MAC/codec still validate and encode it. Any IE configuration uses typed protocol-local values through existing NED value facilities, not a new ad-hoc string grammar. Keep the old example's requests unchanged.
 
 **Write protocol tests:** `tests/protocol/ieee802154/Ieee802154EnhancedData.test`. Send addressed unicast/broadcast DATA with short/EUI combinations, explicit/implicit PAN fields, sequence present/suppressed and Header/Payload/unknown IEs. Observe receiver MSDU bytes and optional native sequence/source metadata independently of sender tags. Include two peers whose EUIs share the low 48 bits, foreign PAN/peer context, unsupported no-address combinations, invalid legacy+IE options, and 127/128-byte total-MPDU boundaries including all IE/auxiliary/termination bytes. Interleave legacy and suppressed transfers around DSN rollover according to the audited allocation rule. Require refusal/semantic-error packet ownership, one terminal, no unexpected ACK and no fabricated absent field. Parent has structural support but keeps operational version-2 delivery disabled; this commit changes the service and receive decision that produce real delivery.

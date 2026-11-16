@@ -1,0 +1,5 @@
+IEEE 802.15.4 enhanced DATA
+
+The native MAC can optionally exchange unsecured, unacknowledged version-2
+DATA with supported address layouts and information elements. Legacy DATA
+remains the default; both interfaces must explicitly enable enhanced frames.

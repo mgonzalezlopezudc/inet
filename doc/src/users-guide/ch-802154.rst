@@ -113,8 +113,12 @@ The frame codec can inspect selected version-2 field layouts, including absent
 sequence or PAN fields, bounded Header/Payload IE regions and nested MLME IE
 framing. Unknown nested values do not enable their feature semantics. Security
 auxiliary extents can be inspected, but protected payload and MIC stay opaque.
-Structural decoding alone does not enable enhanced frame delivery or
-acknowledgement in the native MAC.
+The native MAC can also send and receive unsecured, unacknowledged version-2
+DATA when both interfaces set ``enableEnhancedFrames = true``. The default
+request remains legacy. Enhanced DATA accepts selected address and PAN layouts,
+optional sequence suppression, and the supported IE values; unsupported
+feature IEs and enhanced acknowledgements are not enabled by this option.
+An omitted PAN is resolved only from an existing local association context.
 
 The native profile also supports periodic beacons, tracking and slotted CAP
 access. An associated device tracking its PAN coordinator may request a GTS;
@@ -130,7 +134,7 @@ profile requires a fixed rate within ±40 ppm, an initial offset aligned to the
 scheduling grid, and a
 scheduling quantum that divides the 16 µs symbol. The supported
 ``OscillatorBasedClock`` configuration uses ``clockGranularity = 0`` and an
-unchanged oscillator. Enhanced frames/IEs,
+unchanged oscillator. Enhanced management and acknowledgement frames,
 cryptographic security, TSCH, DSME, ranging and modern UWB are separate future
 profiles. The retained :ned:`Ieee802154Mac` and :ned:`Ieee802154NarrowbandMac`
 continue to serve explicit legacy configurations.

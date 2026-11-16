@@ -16,6 +16,7 @@ simple Ieee802154StandardMac extends SimpleModule like IIeee802154MacServiceProv
         string clientModule = default("^.adapter");
         string managementClientModule = default("");
         bool enableManagement = default(false);
+        bool enableEnhancedFrames = default(false); // Disabled unless the containing interface opts in.
         int pendingCapacity = default(16);
         int scanCapacity = default(16);
         double pollResponseWait @unit(s) = default(2s); // Model bound for the selected peer's response access delay.

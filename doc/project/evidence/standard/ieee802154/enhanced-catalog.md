@@ -26,7 +26,12 @@ Source: `clause:6.6.1`, `clause:6.6.3.4`; 69, 72–73.
 
 Header, Payload and Nested IE descriptors use their own length/identifier/type fields. The enclosing frame/group bounds each element. Header and Payload lists follow the Table 7-6 termination combinations.
 
-Source: `clause:7.4.1`, `table:7-6`, `clause:7.4.2.1`, `clause:7.4.3.1`, `clause:7.4.4.1`; 96–102.
+Allocated IE types have the frame-type applicability specified by Tables7-7 through7-10;
+structural descriptor width alone does not establish permitted emission. Vendor Specific
+Header/Payload/Nested content begins with a three-octet assigned Vendor OUI/CID before any
+vendor-defined information.
+
+Source: `clause:7.4.1`, `table:7-6`, `clause:7.4.2.1`, `table:7-7`, `clause:7.4.2.2`, `clause:7.4.3.1`, `table:7-8`, `clause:7.4.4.1`, `table:7-9`, `table:7-10`, `clause:7.4.4.3`; 96–106.
 
 ## IEEE802154-ENHANCED-5
 
