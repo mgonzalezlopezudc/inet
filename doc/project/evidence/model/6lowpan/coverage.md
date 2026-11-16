@@ -2,7 +2,7 @@
 
 > **Kind:** ledger · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [implementation plan](../../../../../plan/done/6lowpan-implementation-plan.md), [features](../../protocol/6lowpan/features.md)
 
-Execution began 2026-09-19 at `14df0d93a48cd0f4c619d3a16066809c6f40243d`, with a clean working tree. P0–P7 are complete for the bounded native first-release profile. P0 provenance is recorded in the [current snapshot](provenance.md), and [release-validation.md](release-validation.md) owns the acceptance matrix, current native/compatibility/external evidence and retained peer incompatibility. P8–P15 remain deferred. Earlier milestone sections below are historical; the current validation record supersedes their status. Status below distinguishes executed checks from broader unclaimed conformance.
+Execution began 2026-09-19 at `14df0d93a48cd0f4c619d3a16066809c6f40243d`, with a clean working tree. P0–P7 are complete for the bounded native first-release profile. P0 provenance is recorded in the [current snapshot](provenance.md), and [release-validation.md](release-validation.md) owns that profile's acceptance matrix, native/compatibility/external evidence and retained peer incompatibility. P8–P10 are complete for their selected profiles; the [completion ledger](completion.md) owns their evidence and the remaining P11–P15 and final feature-matrix work. Earlier milestone sections below are historical; the current validation records supersede their status. Status below distinguishes executed checks from broader unclaimed conformance.
 
 | Package | Behavior / check | Owner | Category | Status |
 | --- | --- | --- | --- | --- |
