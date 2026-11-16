@@ -24,6 +24,7 @@ Define_Module(LowpanIpv6NeighbourDiscovery);
 simsignal_t LowpanIpv6NeighbourDiscovery::registrationCountChangedSignal = registerSignal("registrationCountChanged");
 simsignal_t LowpanIpv6NeighbourDiscovery::nativeRouterDiscoveredSignal = registerSignal("nativeRouterDiscovered");
 simsignal_t LowpanIpv6NeighbourDiscovery::nativeHostRegistrationSucceededSignal = registerSignal("nativeHostRegistrationSucceeded");
+simsignal_t LowpanIpv6NeighbourDiscovery::nativeHostRegistrationHistoryFullSignal = registerSignal("nativeHostRegistrationHistoryFull");
 simsignal_t LowpanIpv6NeighbourDiscovery::duplicateAddressEntryCountChangedSignal = registerSignal("duplicateAddressEntryCountChanged");
 
 namespace {
@@ -60,8 +61,8 @@ void LowpanIpv6NeighbourDiscovery::initialize(int stage)
             throw cRuntimeError("Invalid native LoWPAN ND role");
         registrationRouter = role == "router" || role == "borderRouter";
         extendedRegistration = par("extendedRegistration");
-        if (extendedRegistration && !registrationRouter)
-            throw cRuntimeError("Extended registration currently requires router or borderRouter role; updated host is not implemented");
+        if (extendedRegistration && !registrationRouter && role != "host")
+            throw cRuntimeError("Extended registration requires native host, router or borderRouter role");
         maxRegistrationLocations = par("maxRegistrationLocations");
         removalDelaySeconds = par("registrationRemovalDelay").doubleValue();
         if (maxRegistrationLocations <= 0 || !std::isfinite(removalDelaySeconds) || removalDelaySeconds <= 0)
@@ -92,6 +93,7 @@ void LowpanIpv6NeighbourDiscovery::initialize(int stage)
         WATCH_EXPR("numPendingRouterAdvertisements", pendingRouterAdvertisements.size());
         WATCH_EXPR("numNativeRouters", hostRegistration ? hostRegistration->getNumRouters() : 0);
         WATCH_EXPR("numNativeHostAddresses", hostRegistration ? hostRegistration->getNumAddresses() : 0);
+        WATCH_EXPR("numNativeHostRegistrationHistories", getNumNativeHostRegistrationHistories());
         WATCH_EXPR("numDuplicateAddressEntries", registrationAuthority ? registrationAuthority->getNumEntries() : 0);
         WATCH_EXPR("numPendingRegistrations", registrationRelay ? registrationRelay->getNumPending() : 0);
         WATCH_EXPR("numContextAuthorityGroups", contextAdvertisements ? contextAdvertisements->getNumGroups() : 0);
@@ -635,7 +637,8 @@ void LowpanIpv6NeighbourDiscovery::appendCapabilities(Ipv6NdOptions& options, Ip
     auto option = new Ipv6NdOption();
     option->setType(static_cast<Ipv6NdOptionTypes>(36)); option->setOptionLength(1); option->setPaddingBytesArraySize(6);
     for (int i = 0; i < 6; i++) option->setPaddingBytes(i, 0);
-    int flags = 2 | 16 | 4; // EARO, 6LR and the implemented R1 routing-registrar service.
+    int flags = 2; // EARO; a host does not request router-capable discovery responses.
+    if (registrationRouter) flags |= 16 | 4;
     if (registrationAuthority) flags |= 8;
     if (!solicitation && authorityExtended) flags |= 32;
     option->setPaddingBytes(1, flags);
@@ -789,20 +792,31 @@ void LowpanIpv6NeighbourDiscovery::updateHostAddressSubscription(bool enabled)
         return;
     if (ift) {
         auto component = check_and_cast<cComponent *>(ift.get());
-        if (enabled) component->subscribe(ipv6AddressAssignedSignal, this);
-        else component->unsubscribe(ipv6AddressAssignedSignal, this);
+        if (enabled) {
+            component->subscribe(ipv6AddressAssignedSignal, this);
+            if (extendedRegistration && hostRegistration) component->subscribe(ipv6AddressRemovedSignal, this);
+        }
+        else {
+            component->unsubscribe(ipv6AddressAssignedSignal, this);
+            if (extendedRegistration && hostRegistration) component->unsubscribe(ipv6AddressRemovedSignal, this);
+        }
     }
     hostAddressSubscription = enabled;
 }
 
 void LowpanIpv6NeighbourDiscovery::receiveSignal(cComponent *source, simsignal_t signal, cObject *object, cObject *details)
 {
-    if (signal == ipv6AddressAssignedSignal && (hostRegistration || contextAdvertisements)) {
+    if ((signal == ipv6AddressAssignedSignal || signal == ipv6AddressRemovedSignal) && (hostRegistration || contextAdvertisements)) {
         Enter_Method_Silent();
         auto info = check_and_cast<Ipv6AddressInfo *>(object);
         if (isUp() && info->ie && dynamic_cast<LowpanNativeBoundary *>(info->ie->getSubmodule("boundary"))) {
-            if (hostRegistration) hostRegistration->addressAssigned(info->ie);
-            if (contextAdvertisements) contextAdvertisements->addressReady(info->ie);
+            if (signal == ipv6AddressRemovedSignal) {
+                if (hostRegistration) hostRegistration->addressRemoved(info->ie, info->address);
+            }
+            else {
+                if (hostRegistration) hostRegistration->addressAssigned(info->ie, info->address);
+                if (contextAdvertisements) contextAdvertisements->addressReady(info->ie);
+            }
         }
     }
     else
@@ -980,6 +994,11 @@ bool LowpanIpv6NeighbourDiscovery::isNativeSourceUsable(NetworkInterface *interf
     Enter_Method_Silent();
     return !hostRegistration || !dynamic_cast<LowpanNativeBoundary *>(interface->getSubmodule("boundary")) ||
         hostRegistration->isSourceUsable(interface, address);
+}
+
+size_t LowpanIpv6NeighbourDiscovery::getNumNativeHostRegistrationHistories() const
+{
+    return hostRegistration ? hostRegistration->getNumHistories() : 0;
 }
 
 void LowpanIpv6NeighbourDiscovery::processIpv6Datagram(Packet *packet)

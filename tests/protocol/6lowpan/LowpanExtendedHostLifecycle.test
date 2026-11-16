@@ -1,0 +1,317 @@
+%description:
+Real automatic updated hosts retain bounded per-address identity/TID history
+through address retirement/re-addition and STOP/START. Capacity refusal is
+observable. Invalid LL sources cancel pending work; stale unsolicited Moved
+preserves newer service while matching current Moved retires it.
+
+%extraargs: -r 0..4
+
+%file: ExtendedHostLifecycleCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/MemoryOutputStream.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/checksum/Checksum.h"
+#include "inet/common/lifecycle/LifecycleController.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
+#include "inet/common/lifecycle/NodeStatus.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/common/InterfaceTag_m.h"
+#include "inet/linklayer/ieee802154/Ieee802154AddressTagBase_m.h"
+#include "inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.h"
+#include "inet/linklayer/lowpan/LowpanNativeLinkDomain.h"
+#include "inet/networklayer/common/HopLimitTag_m.h"
+#include "inet/networklayer/common/L3AddressTag_m.h"
+#include "inet/networklayer/icmpv6/Icmpv6.h"
+#include "inet/networklayer/icmpv6/Ipv6NdMessage_m.h"
+#include "inet/networklayer/ipv6/Ipv6Header_m.h"
+#include "inet/networklayer/ipv6/Ipv6InterfaceData.h"
+#include "inet/networklayer/ipv6/Ipv6RoutingTable.h"
+#include <algorithm>
+#include <map>
+#include <vector>
+
+namespace inet::protocoltest {
+using namespace lowpan;
+class ExtendedHostLifecycleCheck : public cSimpleModule, public LifecycleController, public cListener
+{
+    enum Action { INSTALL_TAP, REMOVE_A, ADD_B, REUSE_A, READD_A, STOP_HOST, CHECK_DOWN, START_HOST,
+        RESTORE_MANUAL, INVALIDATE_LL, INJECT_LATE, CHECK_INVALID, INJECT_STALE, CHECK_STALE,
+        INJECT_CURRENT, CHECK_CURRENT, SEND_DATA, END, TIMEOUT };
+    struct Wire {
+        Ipv6Address target,source;
+        int status=0,tid=0,lifetime=0,opaque=0,flags=0;
+        std::vector<uint8_t> owner;
+    };
+    NetworkInterface *host=nullptr,*router=nullptr;
+    LowpanIpv6NeighbourDiscovery *nd=nullptr;
+    LowpanNativeLinkDomain *domain=nullptr;
+    Ipv6RoutingTable *hostRoutes=nullptr;
+    NodeStatus *status=nullptr;
+    cModule *hostIp=nullptr,*routerIp=nullptr,*authorityIp=nullptr;
+    cDelayChannel *ndTap=nullptr;
+    std::vector<cMessage *> timers;
+    std::map<int,int> acceptedA,positiveA,zeroA;
+    Wire initial,current;
+    int scenario=0,rs=0,ra=0,ns=0,receivedAtRegistrar=0,historyRefusals=0,zeroReplies=0,globalAccepted=0;
+    int authorityDar=0,lateAtNd=0,lateAtMac=0,staleAtMac=0,currentAtMac=0,dataSent=0,dataReturned=0,postInvalidNs=0;
+    bool initialSeen=false,secondSeen=false,removed=false,readded=false,refusalHandled=false,zeroReaddScheduled=false;
+    bool stopStarted=false,stopObserved=false,restarted=false,reassigned=false,sourceInvalid=false,pendingSeen=false;
+    bool lateInjected=false,currentInjected=false,currentRetired=false;
+    simtime_t lateSent,zeroReplyAt;
+    const Ipv6Address hostLocal{"fe80::211:2233:4455:6601"},routerLocal{"fe80::211:2233:4455:6602"};
+    const Ipv6Address a{"2001:db8:3::a"},b{"2001:db8:3::b"};
+    const Ipv6Address relaySource{"2001:db8:1::10"},authority{"2001:db8:1::20"};
+    std::vector<uint8_t> expectedOwner() const {std::vector<uint8_t> value;for(int i=1;i<=16;i++)value.push_back(i);return value;}
+    void step(simtime_t time,Action action,int priority=0) {
+        auto event=new cMessage("extended-host-lifecycle",action);event->setSchedulingPriority(priority);
+        timers.push_back(event);scheduleAt(time,event);
+    }
+    const Ipv6NdOption *earo(const Ipv6NdOptions& options) const {
+        const Ipv6NdOption *found=nullptr;
+        for(size_t i=0;i<options.getOptionArraySize();i++)if(int(options.getOption(i)->getType())==33){ASSERT(!found);found=options.getOption(i);}
+        return found;
+    }
+    Wire read(const Ipv6Address& target,const Ipv6Address& source,const Ipv6NdOption& option) const {
+        ASSERT(option.getOptionLength()==3 && option.getPaddingBytesArraySize()==22);
+        Wire value;value.target=target;value.source=source;value.status=uint8_t(option.getPaddingBytes(0));
+        value.opaque=uint8_t(option.getPaddingBytes(1));value.flags=uint8_t(option.getPaddingBytes(2));
+        value.tid=uint8_t(option.getPaddingBytes(3));value.lifetime=(uint8_t(option.getPaddingBytes(4))<<8)|uint8_t(option.getPaddingBytes(5));
+        for(int i=6;i<22;i++)value.owner.push_back(uint8_t(option.getPaddingBytes(i)));
+        ASSERT(value.flags==3 && value.owner==expectedOwner());return value;
+    }
+    bool validWire(const Packet *packet) const {
+        Packet copy(*packet);auto ip=copy.popAtFront<Ipv6Header>();auto addresses=copy.addTagIfAbsent<L3AddressInd>();
+        addresses->setSrcAddress(ip->getSrcAddress());addresses->setDestAddress(ip->getDestAddress());return Icmpv6::verifyChecksum(&copy);
+    }
+    bool ownedDefault() const {
+        for(int i=0;i<hostRoutes->getNumRoutes();i++){auto route=hostRoutes->getRoute(i);if(route->getSource()==nd && route->getPrefixLength()==0)return true;}
+        return false;
+    }
+    void assign(const Ipv6Address& address,bool tentative=false) {host->getProtocolDataForUpdate<Ipv6InterfaceData>()->assignAddress(address,tentative,SIMTIME_ZERO,SIMTIME_ZERO);}
+    void data() {
+        ASSERT(nd->isNativeSourceUsable(host,a));int sequence=++dataSent;
+        auto packet=new Packet("lifecycle-data",makeShared<BytesChunk>(std::vector<uint8_t>{0x7a,uint8_t(sequence)}));auto echo=makeShared<Icmpv6EchoRequestMsg>();
+        echo->setIdentifier(0x4c50);echo->setSeqNumber(sequence);Icmpv6::insertChecksum(CHECKSUM_COMPUTED,echo,packet);packet->insertAtFront(echo);
+        packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::icmpv6);auto addresses=packet->addTag<L3AddressReq>();
+        addresses->setSrcAddress(a);addresses->setDestAddress(routerLocal);sendDirect(packet,hostIp->gate("transportIn")->getPathStartGate());
+    }
+    std::vector<uint8_t> checksum(std::vector<uint8_t> bytes,const Ipv6Address& source,const Ipv6Address& destination) const {
+        MemoryOutputStream pseudo;pseudo.writeIpv6Address(source);pseudo.writeIpv6Address(destination);pseudo.writeUint32Be(bytes.size());pseudo.writeUint32Be(58);pseudo.writeBytes(bytes);
+        auto result=internetChecksum(pseudo.getData());bytes[2]=result>>8;bytes[3]=result;return bytes;
+    }
+    void adverseReply(const Wire& saved,int replyStatus) {
+        ASSERT(saved.target==a && saved.owner==expectedOwner());
+        // Moved is unsolicited (S=0); the delayed positive reply is solicited.
+        std::vector<uint8_t> bytes{136,0,0,0,uint8_t(replyStatus==3?0xa0:0xe0),0,0,0};MemoryOutputStream target;target.writeIpv6Address(saved.target);
+        bytes.insert(bytes.end(),target.getData().begin(),target.getData().end());
+        bytes.insert(bytes.end(),{33,3,uint8_t(replyStatus),uint8_t(saved.opaque),uint8_t(saved.flags),uint8_t(saved.tid),uint8_t(saved.lifetime>>8),uint8_t(saved.lifetime)});
+        bytes.insert(bytes.end(),saved.owner.begin(),saved.owner.end());bytes=checksum(bytes,routerLocal,saved.source);
+        auto packet=new Packet(replyStatus==3?"literal-unsolicited-moved":"literal-late-success",makeShared<BytesChunk>(bytes));packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::icmpv6);
+        auto addresses=packet->addTag<L3AddressReq>();addresses->setSrcAddress(routerLocal);addresses->setDestAddress(saved.source);
+        packet->addTag<InterfaceReq>()->setInterfaceId(router->getInterfaceId());packet->addTag<HopLimitReq>()->setHopLimit(255);
+        auto native=packet->addTag<Ieee802154AddressReq>();native->setSrcAddress(Ieee802154Address("0011223344556602"));native->setDestAddress(Ieee802154Address("0011223344556601"));native->setSrcPanId(4660);native->setDestPanId(4660);
+        sendDirect(packet,routerIp->gate("transportIn")->getPathStartGate());
+    }
+    void observeNs(const Packet *packet,bool atHost) {
+        auto ip=packet->peekAtFront<Ipv6Header>();auto message=packet->peekDataAt<Ipv6NeighbourSolicitation>(B(40));auto option=earo(message->getOptions());if(!option)return;
+        auto value=read(message->getTargetAddress(),ip->getSrcAddress(),*option);ASSERT(value.status==0 && ip->getDestAddress()==routerLocal && value.source==hostLocal && validWire(packet));
+        if(!atHost){receivedAtRegistrar++;if(value.target==a && value.lifetime>0)secondSeen=true;
+            if(scenario==1 && value.target==a && value.lifetime==0 && !zeroReaddScheduled){zeroReaddScheduled=true;step(simTime(),READD_A);}return;}
+        ns++;if(sourceInvalid){postInvalidNs++;ASSERT(false);}
+        ASSERT(value.target==hostLocal || value.target==a); // History-refused B must never be transmitted.
+        if(value.target!=a)return;
+        if(value.lifetime==0){if(scenario==0 || scenario==1)ASSERT(removed && value.tid==241);zeroA[value.tid]++;return;}
+        ASSERT(!currentInjected);positiveA[value.tid]++;
+        if(!initialSeen){ASSERT(value.tid==240);initial=value;initialSeen=true;}
+        if(scenario==0 || scenario==1){if(removed){ASSERT(value.tid==242);if(scenario==1)ASSERT(zeroReplyAt!=SIMTIME_ZERO && simTime()>=zeroReplyAt);}}
+        if(scenario==2 && restarted)ASSERT(value.tid>initial.tid);
+        if(value.tid==241)current=value;
+    }
+    void accepted(Packet *packet) {
+        auto message=packet->peekAtFront<Ipv6NeighbourAdvertisement>();auto option=earo(message->getOptions());ASSERT(option);
+        auto value=read(message->getTargetAddress(),hostLocal,*option);if(value.status!=0 || value.lifetime==0 || value.target!=a)return;
+        ASSERT(nd->isNativeSourceUsable(host,a) && nd->getNumNativeHostRegistrationHistories()==2);globalAccepted++;acceptedA[value.tid]++;
+        if(scenario==3)ASSERT(false);
+        if(globalAccepted==1){ASSERT(value.tid==240);
+            if(scenario==0 || scenario==1)step(simTime()+SimTime(0.1),REMOVE_A);
+            if(scenario==2){step(simTime()+SimTime(0.02),SEND_DATA);step(simTime()+SimTime(0.15),STOP_HOST);}
+            return;
+        }
+        if(scenario==0 || scenario==1){ASSERT(value.tid==242 && readded);step(simTime()+SimTime(0.02),SEND_DATA);step(simTime()+SimTime(0.3),END);}
+        if(scenario==2){ASSERT(restarted && value.tid>240);step(simTime()+SimTime(0.02),SEND_DATA);step(simTime()+SimTime(0.3),END);}
+        if(scenario==4){ASSERT(value.tid==241 && current.target==a);step(simTime()+SimTime(0.02),SEND_DATA);step(simTime()+SimTime(0.15),INJECT_STALE);step(simTime()+SimTime(0.35),CHECK_STALE);step(simTime()+SimTime(0.6),INJECT_CURRENT);step(simTime()+SimTime(0.75),CHECK_CURRENT);}
+    }
+    void observeNa(const Packet *packet) {
+        auto ip=packet->peekAtFront<Ipv6Header>();auto message=packet->peekDataAt<Ipv6NeighbourAdvertisement>(B(40));auto option=earo(message->getOptions());if(!option)return;
+        auto value=read(message->getTargetAddress(),hostLocal,*option);ASSERT(validWire(packet));
+        if(value.target!=a)return;
+        if(value.status==0 && value.lifetime==0){zeroReplies++;if(scenario==0 || scenario==1){ASSERT(removed && value.tid==241);zeroReplyAt=simTime();if(scenario==0 && zeroReplies==1)step(simTime()+SimTime(0.02),ADD_B);}}
+        if(scenario==3 && lateInjected && value.status==0 && value.tid==initial.tid && simTime()<lateSent+SimTime(0.3))lateAtMac++;
+        if(scenario==4 && value.status==3){ASSERT(!message->getSolicitedFlag());if(value.tid==240)staleAtMac++;else{ASSERT(value.tid==241);currentAtMac++;}}
+        ASSERT(ip->getSrcAddress()==routerLocal && ip->getDestAddress()==hostLocal);
+    }
+  protected:
+    int numInitStages() const override {return NUM_INIT_STAGES;}
+    void initialize(int stage) override {
+        if(stage!=INITSTAGE_LAST)return;scenario=getParentModule()->par("scenario");
+        host=check_and_cast<NetworkInterface *>(getModuleByPath("^.host.wlan[0]"));router=check_and_cast<NetworkInterface *>(getModuleByPath("^.router.wlan[0]"));
+        nd=check_and_cast<LowpanIpv6NeighbourDiscovery *>(getModuleByPath("^.host.ipv6.neighbourDiscovery"));domain=check_and_cast<LowpanNativeLinkDomain *>(getModuleByPath("^.domain"));
+        hostRoutes=check_and_cast<Ipv6RoutingTable *>(getModuleByPath("^.host.ipv6.routingTable"));status=check_and_cast<NodeStatus *>(getModuleByPath("^.host.status"));
+        hostIp=getModuleByPath("^.host.ipv6.ipv6");routerIp=getModuleByPath("^.router.ipv6.ipv6");authorityIp=getModuleByPath("^.authority.ipv6.ipv6");
+        host->getSubmodule("lowpan")->subscribe("datagramAccepted",this);host->getSubmodule("lowpan")->subscribe("datagramCompleted",this);router->getSubmodule("lowpan")->subscribe("datagramAccepted",this);router->getSubmodule("lowpan")->subscribe("datagramCompleted",this);
+        nd->subscribe("nativeHostRegistrationSucceeded",this);nd->subscribe("nativeHostRegistrationHistoryFull",this);status->subscribe("nodeStatusChanged",this);authorityIp->subscribe("packetReceivedFromLower",this);
+        router->getProtocolDataForUpdate<Ipv6InterfaceData>()->setAdvDefaultLifetime(SimTime(120));assign(a);
+        if(scenario==3)step(SIMTIME_ZERO,INSTALL_TAP,-100);step(SimTime(25),TIMEOUT);
+    }
+    void receiveSignal(cComponent *component,simsignal_t signal,cObject *object,cObject *) override {
+        Enter_Method_Silent();
+        if(component==ndTap){
+            auto sent=check_and_cast<cChannel::MessageSentSignalValue *>(object);auto packet=check_and_cast<Packet *>(sent->getMessage());
+            ASSERT(hostIp->gate("ndOut")->getNextGate()==nd->gate("ipv6In") && ndTap->getDelay()==SIMTIME_ZERO);
+            auto protocol=packet->findTag<PacketProtocolTag>();if(!protocol || protocol->getProtocol()!=&Protocol::icmpv6)return;
+            auto header=packet->peekAtFront<Icmpv6Header>();if(header->getType()!=ICMPv6_NEIGHBOUR_AD)return;
+            auto message=packet->peekAtFront<Ipv6NeighbourAdvertisement>();auto option=earo(message->getOptions());if(!option)return;
+            auto value=read(message->getTargetAddress(),hostLocal,*option);
+            if(lateInjected && value.target==a && value.status==0 && value.tid==initial.tid && simTime()<lateSent+SimTime(0.3)){
+                ASSERT(sourceInvalid && hostRoutes->isLocalAddress(hostLocal) && host->getProtocolData<Ipv6InterfaceData>()->isTentativeAddress(hostLocal));
+                ASSERT(!nd->isNativeSourceUsable(host,hostLocal));auto addresses=packet->getTag<L3AddressInd>();ASSERT(addresses->getSrcAddress()==L3Address(routerLocal) && addresses->getDestAddress()==L3Address(hostLocal));
+                Packet copy(*packet);ASSERT(Icmpv6::verifyChecksum(&copy));lateAtNd++;
+            }return;
+        }
+        if(signal==registerSignal("nativeHostRegistrationHistoryFull")){
+            auto info=check_and_cast<Ipv6AddressInfo *>(object);ASSERT(scenario==0 && info->ie==host && info->address==b && nd->getNumNativeHostRegistrationHistories()==2);historyRefusals++;
+            if(!refusalHandled){refusalHandled=true;step(simTime()+SimTime(0.02),REUSE_A);}return;
+        }
+        if(signal==registerSignal("nodeStatusChanged")){
+            if(scenario==2 && status->getState()==NodeStatus::DOWN){stopObserved=true;step(simTime()+SimTime(0.001),CHECK_DOWN);}
+            if(scenario==2 && restarted && status->getState()==NodeStatus::UP)step(simTime()+SimTime(0.001),RESTORE_MANUAL);return;
+        }
+        auto packet=check_and_cast<Packet *>(object);
+        if(signal==registerSignal("nativeHostRegistrationSucceeded")){accepted(packet);return;}
+        auto ip=packet->peekAtFront<Ipv6Header>();if(ip->getProtocolId()!=IP_PROT_IPv6_ICMP)return;
+        auto type=packet->peekDataAt<BytesChunk>(B(40),B(1))->getBytes()[0];
+        if(component==authorityIp){
+            if(type==157){auto request=packet->peekDataAt<Ipv6DuplicateAddressHeader>(B(40));ASSERT(scenario==3 && request->getRegisteredAddress()==a && request->getTransactionId()==240 && validWire(packet));authorityDar++;
+                if(!pendingSeen){pendingSeen=true;ASSERT(initialSeen && secondSeen);step(simTime()+SimTime(0.02),INVALIDATE_LL);step(simTime()+SimTime(0.52),INJECT_LATE);step(simTime()+SimTime(0.75),CHECK_INVALID);step(simTime()+SimTime(4.4),END);}}
+            return;
+        }
+        bool atHost=component==host->getSubmodule("lowpan");bool outgoing=signal==registerSignal("datagramAccepted");
+        if(outgoing){if(atHost && type==133)rs++;if(!atHost && type==134)ra++;if(atHost && type==135)observeNs(packet,true);}
+        else {if(!atHost && type==135)observeNs(packet,false);if(atHost && type==136)observeNa(packet);
+            if(atHost && type==129){auto reply=packet->peekDataAt<Icmpv6EchoReplyMsg>(B(40));ASSERT(reply->getIdentifier()==0x4c50 && reply->getSeqNumber()==dataReturned+1 && ip->getDestAddress()==a && validWire(packet));ASSERT(packet->getDataLength()==B(50) && packet->peekDataAt<BytesChunk>(B(48),B(2))->getBytes()==std::vector<uint8_t>({0x7a,uint8_t(dataReturned+1)}));dataReturned++;}}
+    }
+    void handleMessage(cMessage *message) override {
+        ASSERT(message->isSelfMessage());auto found=std::find(timers.begin(),timers.end(),message);ASSERT(found!=timers.end());timers.erase(found);
+        auto action=static_cast<Action>(message->getKind());delete message;auto data=host->findProtocolDataForUpdate<Ipv6InterfaceData>();
+        // Generic STOP clears interface protocol tags. Down/start observations
+        // use persistent owners and must not require address data to survive.
+        if(action!=CHECK_DOWN && action!=START_HOST && action!=END && action!=TIMEOUT)ASSERT(data);
+        switch(action){
+            case INSTALL_TAP:{auto gate=hostIp->gate("ndOut");ASSERT(gate->getNextGate()==nd->gate("ipv6In") && !gate->getChannel());ndTap=cDelayChannel::create("hostNdObservation");ndTap->setDelay(0);gate->reconnectWith(ndTap);ndTap->subscribe("messageSent",this);break;}
+            case REMOVE_A:ASSERT(nd->isNativeSourceUsable(host,a));removed=true;data->removeAddress(a);ASSERT(!nd->isNativeSourceUsable(host,a) && nd->getNumNativeHostRegistrationHistories()==2);break;
+            case ADD_B:ASSERT(!data->hasAddress(a) && zeroReplies>0 && nd->getNumNativeHostRegistrationHistories()==2);assign(b);break;
+            case REUSE_A:ASSERT(historyRefusals>0 && !nd->isNativeSourceUsable(host,b));if(data->hasAddress(b))data->removeAddress(b);readded=true;assign(a);break;
+            case READD_A:ASSERT(removed && !data->hasAddress(a) && zeroReplies==0);readded=true;assign(a);break;
+            case STOP_HOST:{stopStarted=true;auto operation=new ModuleStopOperation();LifecycleOperation::StringMap parameters;operation->initialize(getModuleByPath("^.host"),parameters);initiateOperation(operation);break;}
+            case CHECK_DOWN:ASSERT(status->getState()==NodeStatus::DOWN && !host->isUp() && !ownedDefault() && !domain->resolveNeighbor(host->getId(),routerLocal) && nd->getNumNativeHostRegistrationHistories()==2);step(simTime()+SimTime(0.2),START_HOST);break;
+            case START_HOST:{restarted=true;auto operation=new ModuleStartOperation();LifecycleOperation::StringMap parameters;operation->initialize(getModuleByPath("^.host"),parameters);initiateOperation(operation);break;}
+            case RESTORE_MANUAL:ASSERT(nd->getNumNativeHostRegistrationHistories()==2);if(!data->hasAddress(a)){reassigned=true;assign(a);}break;
+            case INVALIDATE_LL:ASSERT(initialSeen && secondSeen && pendingSeen && !nd->isNativeSourceUsable(host,a));sourceInvalid=true;data->removeAddress(hostLocal);assign(hostLocal,true);ASSERT(data->isTentativeAddress(hostLocal) && hostRoutes->isLocalAddress(hostLocal));break;
+            case INJECT_LATE:ASSERT(sourceInvalid && data->isTentativeAddress(hostLocal));lateInjected=true;lateSent=simTime();adverseReply(initial,0);break;
+            case CHECK_INVALID:ASSERT(lateAtMac==1 && lateAtNd==1 && data->isTentativeAddress(hostLocal) && !nd->isNativeSourceUsable(host,hostLocal) && !nd->isNativeSourceUsable(host,a) && globalAccepted==0 && postInvalidNs==0);break;
+            case INJECT_STALE:ASSERT(acceptedA[241]==1 && nd->isNativeSourceUsable(host,a));adverseReply(initial,3);break;
+            case CHECK_STALE:ASSERT(staleAtMac==1 && nd->isNativeSourceUsable(host,a) && nd->getNumNativeHostRegistrationHistories()==2);this->data();break;
+            case INJECT_CURRENT:ASSERT(dataReturned==2 && nd->isNativeSourceUsable(host,a));currentInjected=true;adverseReply(current,3);break;
+            case CHECK_CURRENT:ASSERT(currentAtMac==1 && !nd->isNativeSourceUsable(host,a) && nd->isNativeSourceUsable(host,hostLocal) && nd->getNumNativeHostRegistrationHistories()==2);currentRetired=true;step(simTime()+SimTime(0.1),END);break;
+            case SEND_DATA:this->data();break;
+            case END:endSimulation();break;
+            case TIMEOUT:throw cRuntimeError("Extended automatic-host lifecycle did not reach its required observations");
+        }
+    }
+    void finish() override {
+        ASSERT(rs>=1 && ra>=1 && initialSeen && receivedAtRegistrar>=2 && nd->getNumNativeHostRegistrationHistories()==2);
+        if(scenario==0 || scenario==1){ASSERT(acceptedA[240]==1 && acceptedA[242]==1 && globalAccepted==2 && zeroA[241]>=1 && zeroReplies>=1 && readded && nd->isNativeSourceUsable(host,a) && dataReturned==1);if(scenario==0)ASSERT(historyRefusals>=1);else ASSERT(zeroReaddScheduled && historyRefusals==0);}
+        if(scenario==2)ASSERT(stopStarted && stopObserved && restarted && globalAccepted==2 && acceptedA[240]==1 && nd->isNativeSourceUsable(host,a) && dataReturned==2);
+        if(scenario==3)ASSERT(sourceInvalid && pendingSeen && authorityDar>=1 && authorityDar<=3 && lateAtMac==1 && lateAtNd==1 && globalAccepted==0 && postInvalidNs==0 && !nd->isNativeSourceUsable(host,a) && dataReturned==0);
+        if(scenario==4)ASSERT(acceptedA[240]==1 && acceptedA[241]==1 && globalAccepted==2 && staleAtMac==1 && currentAtMac==1 && currentRetired && dataReturned==2 && !nd->isNativeSourceUsable(host,a));
+        std::cout<<"case="<<scenario<<" RS="<<rs<<" RA="<<ra<<" NS="<<ns<<" registrarNS="<<receivedAtRegistrar<<" history="<<nd->getNumNativeHostRegistrationHistories()<<" full="<<historyRefusals<<" accepted="<<globalAccepted<<" zeroNA="<<zeroReplies<<" DAR="<<authorityDar<<" lateND="<<lateAtNd<<" data="<<dataReturned<<" reassigned="<<reassigned<<'\n';
+        std::cout<<"Automatic extended host history, retirement, restart and stale-reply lifecycle verified\n";
+    }
+  public:
+    ~ExtendedHostLifecycleCheck() override {while(!timers.empty()){auto event=timers.back();timers.pop_back();cancelAndDelete(event);}}
+};
+Define_Module(ExtendedHostLifecycleCheck);
+}
+
+%file: test.ned
+@namespace(inet::protocoltest);
+import inet.node.inet.StandardHost;
+import inet.node.ethernet.Eth100M;
+import inet.networklayer.configurator.ipv6.Ipv6NetworkConfigurator;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple ExtendedHostLifecycleCheck { }
+network ExtendedHostLifecycleNetwork {
+    parameters: int scenario;
+    submodules:
+        configurator: Ipv6NetworkConfigurator;
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        domain: LowpanNativeLinkDomain;
+        host: StandardHost;
+        router: StandardHost;
+        authority: StandardHost;
+        check: ExtendedHostLifecycleCheck;
+    connections allowunconnected: router.ethg++ <--> Eth100M <--> authority.ethg++;
+}
+
+%inifile: omnetpp.ini
+[General]
+network=ExtendedHostLifecycleNetwork
+sim-time-limit=26s
+seed-set=0
+*.scenario=${case=0..4}
+**.vector-recording=false
+**.scalar-recording=false
+**.hasIpv4=false
+**.hasIpv6=true
+*.host.hasStatus=true
+*.host.ipv6.typename="LowpanIpv6NetworkLayer"
+*.router.ipv6.typename="LowpanIpv6NetworkLayer"
+*.host.ipv6.neighbourDiscovery.nativeNdRole="host"
+*.router.ipv6.neighbourDiscovery.nativeNdRole="router"
+*.host.ipv6.neighbourDiscovery.extendedRegistration=true
+*.router.ipv6.neighbourDiscovery.extendedRegistration=true
+*.host.ipv6.neighbourDiscovery.nativeRegistrationOwnershipVerifier="0102030405060708090a0b0c0d0e0f10"
+*.host.ipv6.neighbourDiscovery.maxHostAddresses=(${case}==0?2:8)
+*.host.ipv6.neighbourDiscovery.nativeRegistrationLifetime=1
+*.host.ipv6.neighbourDiscovery.nativeRegistrationRefreshFraction=(${case}==4?0.05:0.8)
+*.router.ipv6.neighbourDiscovery.registrationAuthorityAddress=(${case}==3?"2001:db8:1::20":"")
+*.router.ipv6.neighbourDiscovery.registrationSourceAddress=(${case}==3?"2001:db8:1::10":"")
+*.router.ipv6.neighbourDiscovery.registrationAuthoritySupportsExtended=true
+*.router.forwarding=true
+*.host.numWlanInterfaces=1
+*.router.numWlanInterfaces=1
+*.host.wlan[0].typename="Ieee802154NativeLowpanInterface"
+*.router.wlan[0].typename="Ieee802154NativeLowpanInterface"
+*.host.wlan[0].linkDomainModule="^.^.domain"
+*.router.wlan[0].linkDomainModule="^.^.domain"
+*.host.wlan[0].radio.antenna.mobilityModule="^.^.^.mobility"
+*.router.wlan[0].radio.antenna.mobilityModule="^.^.^.mobility"
+**.ipv6.configurator.networkConfiguratorModule="configurator"
+**.ipv6.neighbourDiscovery.hostBootupTime=0s
+**.ipv6.neighbourDiscovery.routerBootupTime=0s
+**.ipv6.neighbourDiscovery.dupAddrDetectTransmits=0
+**.ipv6.icmpv6.checksumMode="computed"
+*.configurator.config=xml("<config><interface hosts='router' names='eth0' address='2001:db8:1::10'/><interface hosts='authority' names='eth0' address='2001:db8:1::20'/></config>")
+*.domain.panId=4660
+*.domain.config=xml("<domain><peer interface='host.wlan[0]' native='0011223344556601'/><peer interface='router.wlan[0]' native='0011223344556602'/></domain>")
+**.lowpan.headerCompression="none"
+**.mobility.initialX=0m
+**.mobility.initialY=0m
+**.mobility.initialZ=0m
+**.mobility.initFromDisplayString=false
+**.mobility.updateFromDisplayString=false
+
+%contains: stdout
+Automatic extended host history, retirement, restart and stale-reply lifecycle verified

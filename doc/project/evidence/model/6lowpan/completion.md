@@ -132,6 +132,14 @@ Explicit-interface IPv6 output bypassed the native source check in route/MAC loo
 
 The [legacy-profile fixture](../../../../../tests/protocol/6lowpan/pinned-source-validity.md) reproduces actual delivery from an unregistered source on the parent, then verifies explicit and automatically selected source drops and both registered delivery controls. The [record](p11-source-validity-verification.json) retains matching debug/release builds, eleven debug simulations across three fixtures, three release completions with matching printed counters, and scoped gates. Debug assertions supply semantic checks; release assertions are disabled. Queued post-routing source expiry is source-traced, without a dedicated runtime scenario.
 
+## P11 automatic updated hosts
+
+Opt-in automatic hosts now originate updated registrations with configurable 8/16/24/32-byte ownership identifiers, persistent bounded per-address transaction history and link-local bootstrap. Each logical transaction freezes its identity across retries and parallel router copies. Capability changes, authority cooldowns, delayed replies, address removal, movement and lifecycle transitions preserve transaction correlation and prevent obsolete replies from restoring retired source state. Legacy peers retain the representable legacy exchange.
+
+The [twenty-case host fixture](../../../../../tests/protocol/6lowpan/extended-host-registration.md) exercises actual native exchanges and data delivery. Five independently authored [lifecycle cases](../../../../../tests/protocol/6lowpan/extended-host-lifecycle.md) cover history capacity, removal/readdition, real stop/start, tentative-source completion and stale/current Moved handling. Their documents state the radio, literal-input and observation boundaries. The earlier registrar activation-rejection control is historical to its frozen receiver-only stage.
+
+The [host record](p11-host-verification.json) retains matching debug/release builds, fourteen protocol fixtures/ninety-two debug simulations, two unit fixtures, three module fixtures and scoped gates. Twenty-five release simulations complete with printed counter sequences independently matched to debug; assertions remain debug-only. Invalid ownership configuration controls are separate expected initialization failures. These results complete P11's selected profile; the final feature matrix remains pending.
+
 ## Remaining packages
 
-P11 automatic updated-host transactions are next, followed by P12–P15 and the final feature matrix under the completion plan. Mesh-under, paging, virtual fragment forwarding and selective recovery are not inferred from optimized ND, header compression or the updated registrar path.
+P12–P15 and the final feature matrix remain under the completion plan. Mesh-under, paging, virtual fragment forwarding and selective recovery are not inferred from optimized ND, header compression or the updated registration paths.
