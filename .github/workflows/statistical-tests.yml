@@ -99,6 +99,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           path: inet
+          fetch-depth: 0
           # empty for a push and a pull request; the merge ref of the pull request for a run by hand
           ref: ${{ needs.changes.outputs.ref }}
           persist-credentials: false
@@ -143,7 +144,7 @@ jobs:
           echo "::group::Running statistical tests"
           # INET's inet.opp gives the baseline folder (statistics) and run 0 of each config
           set +e
-          opp_run_statistical_tests --load $INET_ROOT -p inet -m $MODE --result-file "$RUNNER_TEMP/statistical.json"
+          doc/project/enforcement/check-baseline-attribution.sh run 980f5c3f9eb903fd9155dd8d24216a1c265d5f55..87b64031ee68e9c59398b19fd6a71b36a0437120 --baseline-repository statistical=statistics --log-folder "$GITHUB_WORKSPACE/dtls-attribution" --checkout "opp_checkout_test_baselines --load . -p inet statistical" --statistical "opp_run_statistical_tests --load . -p inet -m release --no-build"
           status=$?
           set -e
           echo "::endgroup::"
@@ -182,6 +183,12 @@ jobs:
         with:
           name: statistical-candidates
           path: ${{ github.workspace }}/candidates
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: dtls-attribution
+          path: ${{ github.workspace }}/dtls-attribution
           if-no-files-found: ignore
 
   status:
