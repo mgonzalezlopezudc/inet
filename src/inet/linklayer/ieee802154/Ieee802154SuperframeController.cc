@@ -18,6 +18,10 @@ Ieee802154SuperframeController::~Ieee802154SuperframeController()
     if (capEnd && isScheduledClockEvent(capEnd))
         cancelClockEvent(capEnd);
     delete capEnd;
+    if (syncWake && isScheduledClockEvent(syncWake)) cancelClockEvent(syncWake);
+    if (syncDeadline && isScheduledClockEvent(syncDeadline)) cancelClockEvent(syncDeadline);
+    delete syncWake;
+    delete syncDeadline;
 }
 
 int Ieee802154SuperframeController::numInitStages() const { return NUM_INIT_STAGES; }
@@ -29,6 +33,9 @@ void Ieee802154SuperframeController::initialize(int stage)
         client.reference(this, "clientModule", true);
         beaconPreparation = new ClockEvent("beaconPreparation");
         capEnd = new ClockEvent("capEnd");
+        syncWake = new ClockEvent("syncWake");
+        syncDeadline = new ClockEvent("syncDeadline");
+        syncDeadline->setSchedulingPriority(1); // Equal-time packet delivery precedes search expiry.
     }
     else if (stage == INITSTAGE_LINK_LAYER) {
         auto node = findContainingNode(this);
@@ -45,6 +52,14 @@ void Ieee802154SuperframeController::handleMessage(cMessage *message)
     }
     if (message == capEnd) {
         client->handleSuperframeCapEnd();
+        return;
+    }
+    if (message == syncWake) {
+        client->handleSyncWake();
+        return;
+    }
+    if (message == syncDeadline) {
+        client->handleSyncDeadline();
         return;
     }
     throw cRuntimeError("Unexpected superframe message %s", message->getName());
@@ -87,6 +102,27 @@ void Ieee802154SuperframeController::cancelCapEnd()
     Enter_Method("cancelCapEnd");
     if (isScheduledClockEvent(capEnd))
         cancelClockEvent(capEnd);
+}
+
+void Ieee802154SuperframeController::scheduleSyncWake(clocktime_t when)
+{
+    Enter_Method("scheduleSyncWake");
+    if (isScheduledClockEvent(syncWake)) cancelClockEvent(syncWake);
+    scheduleClockEventAt(when,syncWake);
+}
+
+void Ieee802154SuperframeController::scheduleSyncDeadline(clocktime_t when)
+{
+    Enter_Method("scheduleSyncDeadline");
+    if (isScheduledClockEvent(syncDeadline)) cancelClockEvent(syncDeadline);
+    scheduleClockEventAt(when,syncDeadline);
+}
+
+void Ieee802154SuperframeController::cancelSyncEvents()
+{
+    Enter_Method("cancelSyncEvents");
+    if (isScheduledClockEvent(syncWake)) cancelClockEvent(syncWake);
+    if (isScheduledClockEvent(syncDeadline)) cancelClockEvent(syncDeadline);
 }
 
 void Ieee802154SuperframeController::recordReceptionStart(const physicallayer::Ieee802154PhyReceiveStart& start)
@@ -141,6 +177,7 @@ bool Ieee802154SuperframeController::handleOperationStage(LifecycleOperation *op
                 cancelClockEvent(beaconPreparation);
             if (isScheduledClockEvent(capEnd))
                 cancelClockEvent(capEnd);
+            cancelSyncEvents();
             receptionAnchors.clear();
         }
     }
@@ -150,6 +187,7 @@ bool Ieee802154SuperframeController::handleOperationStage(LifecycleOperation *op
             cancelClockEvent(beaconPreparation);
         if (isScheduledClockEvent(capEnd))
             cancelClockEvent(capEnd);
+        cancelSyncEvents();
         receptionAnchors.clear();
     }
     else

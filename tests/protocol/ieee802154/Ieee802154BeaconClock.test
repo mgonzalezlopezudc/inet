@@ -123,6 +123,7 @@ class BeaconClockExercise : public cSimpleModule, public cListener,
     virtual void handleCommStatusIndication(Packet *, const Ieee802154MacCommStatusIndication&) override { ASSERT(false); }
     virtual void handlePollConfirm(uint64_t, const Ieee802154MacPollConfirm&) override { ASSERT(false); }
     virtual void handlePurgeConfirm(uint64_t, const Ieee802154MacPurgeConfirm&) override { ASSERT(false); }
+    virtual void handleSyncConfirm(uint64_t, const Ieee802154MacSyncConfirm&) override { ASSERT(false); }
     virtual void handleStartSuperframeConfirm(uint64_t, const Ieee802154MacStartSuperframeConfirm&) override { ASSERT(false); }
     virtual void handleStartConfirm(uint64_t, const Ieee802154MacStartConfirm&) override { ASSERT(false); }
     virtual void handleScanConfirm(uint64_t, const Ieee802154MacScanConfirm&) override { ASSERT(false); }

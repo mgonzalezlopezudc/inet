@@ -217,6 +217,7 @@ class ReceiverEnableExercise : public cSimpleModule, public LifecycleController,
     virtual void handleGetConfirm(uint64_t, const Ieee802154MacGetConfirm&) override { ASSERT(false); }
     virtual void handleSetConfirm(uint64_t, const Ieee802154MacSetConfirm& confirm) override { Enter_Method("handleSetConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); }
     virtual void handleBeaconNotifyIndication(const Ieee802154PanDescriptor&) override { ASSERT(false); }
+    virtual void handleSyncConfirm(uint64_t, const Ieee802154MacSyncConfirm&) override { ASSERT(false); }
     virtual void handleStartSuperframeConfirm(uint64_t, const Ieee802154MacStartSuperframeConfirm&) override { ASSERT(false); }
     virtual void handleStartConfirm(uint64_t, const Ieee802154MacStartConfirm&) override { ASSERT(false); }
     virtual void handleScanConfirm(uint64_t, const Ieee802154MacScanConfirm& confirm) override { Enter_Method("handleScanConfirm"); ASSERT(scenario == 32 && confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); scanConfirms++; }

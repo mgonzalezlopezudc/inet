@@ -175,6 +175,7 @@ class ReassociationExercise : public cSimpleModule,
     }
     virtual void handleDisassociateConfirm(uint64_t, const Ieee802154MacDisassociateConfirm& confirm) override { Enter_Method("handleDisassociateConfirm"); ASSERT(phase == 0 && confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); disassociationConfirms++; }
     virtual void handleDisassociateIndication(const Ieee802154MacDisassociateIndication& indication) override { Enter_Method("handleDisassociateIndication"); ASSERT(indication.deviceAddress == deviceAddress() && indication.reason == 2); disassociationIndications++; }
+    virtual void handleSyncConfirm(uint64_t, const Ieee802154MacSyncConfirm&) override { ASSERT(false); }
     virtual void handleStartSuperframeConfirm(uint64_t, const Ieee802154MacStartSuperframeConfirm&) override { ASSERT(false); }
     virtual void handleStartConfirm(uint64_t, const Ieee802154MacStartConfirm& confirm) override { Enter_Method("handleStartConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); }
     virtual void handleResetConfirm(uint64_t, const Ieee802154MacResetConfirm& confirm) override { Enter_Method("handleResetConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); resets++; }

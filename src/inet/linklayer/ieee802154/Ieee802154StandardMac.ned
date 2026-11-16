@@ -38,4 +38,6 @@ simple Ieee802154StandardMac extends SimpleModule like IIeee802154MacServiceProv
         @signal[packetReceivedFromLower](type=inet::Packet);
         @signal[periodicBeaconStart](type=long); // Actual first-symbol local time, low 24 bits in symbols.
         @signal[outgoingCapActive](type=bool); // Outgoing CAP receive duty starts/ends.
+        @signal[syncMissed](type=long); // Consecutive acquisition or tracking failures.
+        @signal[syncLost](type=long); // BEACON_LOST after four failures.
 }

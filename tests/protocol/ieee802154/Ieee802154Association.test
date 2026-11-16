@@ -374,6 +374,7 @@ class AssociationExercise : public cSimpleModule, public cListener, public Lifec
             ASSERT(coordinator->submitData(++nextId,pending,request) == Admission::ACCEPTED);
         }
     }
+    virtual void handleSyncConfirm(uint64_t, const Ieee802154MacSyncConfirm&) override { ASSERT(false); }
     virtual void handleStartSuperframeConfirm(uint64_t, const Ieee802154MacStartSuperframeConfirm&) override { ASSERT(false); }
     virtual void handleStartConfirm(uint64_t, const Ieee802154MacStartConfirm& confirm) override { Enter_Method("handleStartConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); }
     virtual void handleGetConfirm(uint64_t, const Ieee802154MacGetConfirm& confirm) override { Enter_Method("handleGetConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); value = confirm.value; }

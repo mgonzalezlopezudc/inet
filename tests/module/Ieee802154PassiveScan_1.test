@@ -199,6 +199,7 @@ class ScanExercise : public cSimpleModule, public cListener, public IIeee802154M
             set("macRxOnWhenIdle",true);
     }
     virtual void handleCommStatusIndication(Packet *, const Ieee802154MacCommStatusIndication&) override { ASSERT(false); }
+    virtual void handleSyncConfirm(uint64_t, const Ieee802154MacSyncConfirm&) override { ASSERT(false); }
     virtual void handleStartSuperframeConfirm(uint64_t, const Ieee802154MacStartSuperframeConfirm&) override { ASSERT(false); }
     virtual void handleStartConfirm(uint64_t, const Ieee802154MacStartConfirm&) override { ASSERT(false); }
     virtual void handleBeaconConfirm(uint64_t, const Ieee802154MacBeaconConfirm&) override { ASSERT(false); }
