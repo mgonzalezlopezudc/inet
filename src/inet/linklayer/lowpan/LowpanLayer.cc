@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "inet/linklayer/lowpan/LowpanLayer.h"
 #include "inet/linklayer/lowpan/LowpanSourceFragmentation.h"
+#include "inet/linklayer/lowpan/LowpanFragmentForwarding.h"
 
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/ProtocolTag_m.h"
@@ -136,6 +137,13 @@ void LowpanLayer::initialize(int stage)
             WATCH_EXPR("numPacedSourceDatagrams", sourceFragments->getNumDatagrams());
             WATCH_EXPR("pacedSourceBytes", sourceFragments->getRetainedBytes());
         }
+        if (par("nativeFragmentForwarding").boolValue()) {
+            if (!sourceFragments || meshUnder || dynamic_cast<LowpanNativeBoundary *>(link) == nullptr)
+                throw cRuntimeError("Native fragment forwarding requires pacing and native mode without Mesh");
+            fragmentForwarding = std::make_unique<LowpanFragmentForwarding>(*this);
+            WATCH_EXPR("numFragmentForwardingRecords", fragmentForwarding->getNumRecords());
+            WATCH_EXPR("fragmentForwardingBytes", fragmentForwarding->getBufferedBytes());
+        }
         int hops = par("meshHops");
         double residenceSeconds = par("meshResidence").doubleValue();
         double retentionSeconds = par("broadcastRetention").doubleValue();
@@ -204,6 +212,7 @@ void LowpanLayer::initialize(int stage)
             if (gate->getChannel() != nullptr)
                 throw cRuntimeError("LoWPAN deadline profile requires an undelayed receive boundary");
     }
+    else if (stage == INITSTAGE_LAST && fragmentForwarding) fragmentForwarding->validatePeers();
 }
 
 void LowpanLayer::setCompressionContext(int id, const Ipv6Address& prefix, int prefixLength,
@@ -261,6 +270,8 @@ void LowpanLayer::removeLearnedContext(int id)
 
 void LowpanLayer::clearTransientState()
 {
+    notifyForwardingUnavailable();
+    forwardedTransmissions.clear();
     if (sourceFragments) sourceFragments->clear();
     pendingNativeTransmissions.clear();
     cancelEvent(expiryTimer);
@@ -297,20 +308,58 @@ bool LowpanLayer::pushPreparedPacket(Packet *packet)
     return true;
 }
 
+std::optional<uint16_t> LowpanLayer::allocateDatagramTag(simtime_t now, simtime_t reuseAfter)
+{
+    return fragmentForwarding ? tagAllocator.allocate(now, reuseAfter, uint16_t(intrand(65536))) : tagAllocator.allocate(now, reuseAfter);
+}
+
+bool LowpanLayer::pushForwardedPacket(Packet *packet, int ownerModuleId, int64_t token)
+{
+    Enter_Method("pushForwardedPacket");
+    take(packet);
+    auto id = packet->getId();
+    forwardedTransmissions.emplace(id, ForwardedTransmission{ownerModuleId, token});
+    bool accepted = pushPreparedPacket(packet);
+    if (!accepted) forwardedTransmissions.erase(id);
+    return accepted; // The original may have been deleted synchronously.
+}
+
+void LowpanLayer::notifyForwardingUnavailable()
+{
+    if (!fragmentForwarding) return;
+    std::vector<int> layers;
+    auto table = networkInterface->getInterfaceTable();
+    for (int i = 0; i < table->getNumInterfaces(); i++)
+        for (cModule::SubmoduleIterator it(table->getInterface(i)); !it.end(); ++it)
+            if (auto layer = dynamic_cast<LowpanLayer *>(*it)) layers.push_back(layer->getId());
+    for (auto id : layers)
+        if (auto layer = dynamic_cast<LowpanLayer *>(getSimulation()->getModule(id)))
+            if (layer->fragmentForwarding) layer->fragmentForwarding->handleInterfaceUnavailable(networkInterface->getId());
+}
+
 void LowpanLayer::handlePushPacketProcessed(Packet *packet, const cGate *, bool successful)
 {
     Enter_Method("handlePushPacketProcessed");
     auto id = packet->getId();
+    std::optional<ForwardedTransmission> forwarded;
+    auto context = forwardedTransmissions.find(id);
+    if (context != forwardedTransmissions.end()) { forwarded = context->second; forwardedTransmissions.erase(context); }
     auto found = pendingNativeTransmissions.find(id);
     if (found == pendingNativeTransmissions.end()) return;
     pendingNativeTransmissions.erase(found);
     // STOPPING/CRASHING still satisfy isUp(); neither side may continue during drain.
     if (!isNativeTransmissionOperational()) {
         if (sourceFragments) sourceFragments->completed(id, false);
+        if (forwarded)
+            if (auto layer = dynamic_cast<LowpanLayer *>(getSimulation()->getModule(forwarded->ownerModuleId)))
+                if (layer->fragmentForwarding) layer->fragmentForwarding->handleTransmissionCompleted(forwarded->token, id, false);
         return;
     }
     emit(successful ? nativeFrameTransmissionSucceededSignal : nativeFrameTransmissionFailedSignal, packet);
     if (sourceFragments) sourceFragments->completed(id, successful && isNativeTransmissionOperational());
+    if (forwarded)
+        if (auto layer = dynamic_cast<LowpanLayer *>(getSimulation()->getModule(forwarded->ownerModuleId)))
+            if (layer->fragmentForwarding) layer->fragmentForwarding->handleTransmissionCompleted(forwarded->token, id, successful && isNativeTransmissionOperational());
 }
 
 void LowpanLayer::handleStopOperation(LifecycleOperation *operation)
@@ -330,19 +379,25 @@ void LowpanLayer::scheduleExpiry()
         scheduleAt(reassembly->getNextExpiry(), expiryTimer);
 }
 
+void LowpanLayer::expireReassembly()
+{
+    auto expired = reassembly->expire(simTime());
+    if (expired != 0) emit(reassemblyExpiredSignal, (long)expired);
+    scheduleExpiry();
+}
+
 void LowpanLayer::handleMessageWhenDown(cMessage *message)
 {
+    if (fragmentForwarding && fragmentForwarding->isTimer(message)) { fragmentForwarding->handleTimer(); return; }
     dropPacket(check_and_cast<Packet *>(message), INTERFACE_DOWN);
 }
 
 void LowpanLayer::handleMessageWhenUp(cMessage *message)
 {
+    if (fragmentForwarding && fragmentForwarding->isTimer(message)) { fragmentForwarding->handleTimer(); return; }
     if (sourceFragments && sourceFragments->isTimer(message)) { sourceFragments->handleTimer(); return; }
     if (message == expiryTimer) {
-        auto expired = reassembly->expire(simTime());
-        if (expired != 0)
-            emit(reassemblyExpiredSignal, (long)expired);
-        scheduleExpiry();
+        expireReassembly();
         return;
     }
     auto packet = check_and_cast<Packet *>(message);
@@ -513,8 +568,10 @@ void LowpanLayer::processUpperPacket(Packet *packet)
         }
         // RFC 4944 receiver lifetime is at most 60 seconds. Use that maximum
         // even when this interface's own receive timeout is configured shorter.
-        auto reuseAfter = meshUnder ? meshReservation(meshHops, meshClockDuration(60)) : prepared->getDeliveryDeadline() + SimTime(60);
-        auto tag = tagAllocator.allocate(simTime(), reuseAfter);
+        auto reuseAfter = meshUnder ? meshReservation(meshHops, meshClockDuration(60)) :
+            fragmentForwarding ? SimTime::fromRaw(prepared->getDeliveryDeadline().raw() > SimTime::getMaxTime().raw() - meshClockDuration(60).raw() ?
+                SimTime::getMaxTime().raw() : prepared->getDeliveryDeadline().raw() + meshClockDuration(60).raw()) : prepared->getDeliveryDeadline() + SimTime(60);
+        auto tag = allocateDatagramTag(simTime(), reuseAfter);
         if (!tag) {
             dropLowpanPacket(packet, LOWPAN_TAG_EXHAUSTED);
             return;
@@ -769,6 +826,7 @@ void LowpanLayer::processFragment(Packet *packet, bool first, const Ieee802154Ad
         LowpanDispatchPrefix::State state)
 {
     emit(fragmentReceivedSignal, packet);
+    if (fragmentForwarding && fragmentForwarding->process(packet, first, source, destination, state)) return;
     auto expired = reassembly->expire(simTime());
     if (expired != 0)
         emit(reassemblyExpiredSignal, (long)expired);
@@ -811,6 +869,7 @@ void LowpanLayer::processFragment(Packet *packet, bool first, const Ieee802154Ad
     LowpanReassemblyTable::Key key{networkInterface->getId(), indication->getSrcPanId(), indication->getDestPanId(),
         source, destination, size, tag};
     auto result = reassembly->accept(key, offset, first, *packet, simTime());
+    if (fragmentForwarding) fragmentForwarding->handleReassemblyChanged(key);
     scheduleExpiry();
     if (result.packet != nullptr) {
         *result.packet->addTag<Ieee802154AddressInd>() = *indication;

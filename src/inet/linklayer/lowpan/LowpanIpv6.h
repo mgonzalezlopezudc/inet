@@ -9,6 +9,14 @@ namespace inet { namespace lowpan {
 // Native next-hop resolution is performed by the adaptation link contract.
 class INET_API LowpanIpv6 : public Ipv6
 {
+  public:
+    bool isNativeSourceUsable(NetworkInterface *interface, const Ipv6Address& source) const;
+    // The exact associated ICMP module is inert for received InterfaceInd traffic.
+    bool hasPolicyHooks() const {
+        for (const auto& hook : hooks)
+            if (hook.second != icmp.get() || typeid(*hook.second) != typeid(Icmpv6)) return true;
+        return false;
+    }
   protected:
     Ipv6Address fragmentNextHop;
     bool isNativeNdControl(const Packet *packet) const;

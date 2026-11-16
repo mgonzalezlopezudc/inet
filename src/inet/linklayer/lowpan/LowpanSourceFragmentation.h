@@ -50,6 +50,8 @@ class INET_API LowpanSourceFragmentation : public cListener
     void clear();
     int getNumDatagrams() const { return flows.size(); }
     int getRetainedBytes() const { return retainedBytes; }
+    simtime_t getResidence() const { return residence; }
+    simtime_t getTagProtection() const { return protection; }
 };
 } }
 #endif

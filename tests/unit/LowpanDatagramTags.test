@@ -18,5 +18,21 @@ ASSERT(allocator.allocate(SimTime(61), SimTime(122)).value() == 65535);
 ASSERT(allocator.allocate(SimTime(61), SimTime(122)).value() == 0);
 EV << "Increment wrap exhaustion and exact tag reuse boundary verified\n";
 
+LowpanDatagramTagAllocator shared;
+ASSERT(shared.allocate(SimTime(0), SimTime(10)).value() == 0);
+ASSERT(shared.allocate(SimTime(0), SimTime(20), 0).value() == 1);
+ASSERT(shared.allocate(SimTime(0), SimTime(30), 0).value() == 2);
+// Default sequential semantics remain unchanged even when other slots are free.
+ASSERT(!shared.allocate(SimTime(1), SimTime(40)));
+ASSERT(shared.allocate(SimTime(10), SimTime(40), 0).value() == 0);
+ASSERT(shared.allocate(SimTime(10), SimTime(40), 1).value() == 3);
+for (unsigned int i = 4; i < 65536; i++)
+    ASSERT(shared.allocate(SimTime(10), SimTime(40), i).value() == i);
+ASSERT(!shared.allocate(SimTime(19), SimTime(50), 65535));
+ASSERT(shared.allocate(SimTime(20), SimTime(50), 1).value() == 1);
+ASSERT(!shared.allocate(SimTime(29), SimTime(50), 0));
+ASSERT(shared.allocate(SimTime(30), SimTime(50), 2).value() == 2);
+EV << "Shared preferred search, collision avoidance and exact expiry verified\n";
+
 %contains: stdout
 Increment wrap exhaustion and exact tag reuse boundary verified

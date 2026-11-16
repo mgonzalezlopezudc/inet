@@ -1,0 +1,308 @@
+%description:
+Real A-B-C native route-over forwarding across two isolated PANs. Actual source
+pacing, first native ACK barriers, global IPv6 routes, general header expansion,
+adaptation repartition, fallback and real registered policy hooks are observed.
+
+%extraargs: -r 0..51
+
+%file: VrbCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/networklayer/common/L3AddressTag_m.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/lowpan/LowpanLayer.h"
+#include "inet/linklayer/lowpan/LowpanNativeBoundary.h"
+#include "inet/linklayer/lowpan/LowpanNativeMac.h"
+#include "inet/linklayer/lowpan/LowpanIpv6.h"
+#include "inet/linklayer/lowpan/LowpanNhcCodec.h"
+#include "inet/linklayer/lowpan/LowpanFrag1Header_m.h"
+#include "inet/linklayer/lowpan/LowpanFragnHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanPacketDropDetails_m.h"
+#include "inet/linklayer/lowpan/LowpanTransmissionReq_m.h"
+#include "inet/networklayer/ipv6/Ipv6InterfaceData.h"
+#include "inet/networklayer/ipv6/Ipv6RoutingTable.h"
+#include "inet/networklayer/icmpv6/Icmpv6.h"
+#include "inet/networklayer/icmpv6/Icmpv6Header_m.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmission.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
+namespace inet::protocoltest {
+using namespace lowpan;
+class VrbAckDropMac : public LowpanNativeMac {
+    void handleLowerPacket(Packet *packet)override{
+        auto root=getSimulation()->getSystemModule();auto bytes=packet->peekDataAsBytes()->getBytes();
+        if(root->getSubmodule("check")->par("scenario").intValue()==10&&bytes.size()==5&&bytes[0]==2){emit(registerSignal("testAckDropped"),1L);delete packet;return;}
+        LowpanNativeMac::handleLowerPacket(packet);
+    }
+};
+Define_Module(VrbAckDropMac);
+class VrbPolicy : public NetfilterBase::HookBase {
+  public:
+    int pre=0,forward=0;
+    Result datagramPreRoutingHook(Packet*)override{pre++;return ACCEPT;}
+    Result datagramForwardHook(Packet*)override{forward++;return ACCEPT;}
+    Result datagramPostRoutingHook(Packet*)override{return ACCEPT;}
+    Result datagramLocalInHook(Packet*)override{return ACCEPT;}
+    Result datagramLocalOutHook(Packet*)override{return ACCEPT;}
+};
+class VrbCheck : public cSimpleModule,public cListener {
+    NetworkInterface *nic[4]{};
+    cModule *layer[4]{};
+    LowpanIpv6 *router=nullptr;
+    VrbPolicy policy;
+    int scenario=0,aFragments=0,bFragments=0,cReceived=0,routerReassembled=0,appDelivered=0,returnedErrors=0,bFailed=0,wire=0;
+    int coverage=0;
+    simtime_t firstB,lastA,routerComplete,lastAck;
+    bool ackSeen=false;
+    int lastWireOffset=-1;
+    std::vector<uint8_t> expected;
+    std::set<int64_t> bFrames;
+    std::set<uint16_t> bTags;
+    std::vector<std::vector<uint8_t>> savedOutput;
+    std::vector<uint8_t> firstInput;
+    std::vector<uint8_t> secondInput;
+    std::vector<std::vector<uint8_t>> literal;
+    int ackDropped=0;
+    int rejected=0;
+    int sourceRefused=0;
+    std::map<int,int> dropReasons;
+    int partialExpired=0,literalCompleted=0,literalSent=0;
+    std::map<uint16_t,simtime_t> wireAck;
+    std::map<int64_t,uint16_t> frameTags;
+    Ipv6Route *installedRoute=nullptr; // Fixture ownership only; production retains copied tuples.
+    bool fallback()const{return scenario==2||scenario==3||scenario==6||scenario==8||scenario==12||scenario==24||scenario==42||scenario==48;}
+    bool failed()const{return scenario==4||scenario==5||scenario==10||scenario==15||scenario==16||scenario==18||scenario==19||scenario==21||scenario==22||scenario==25||scenario==43||scenario==49||scenario==51;}
+    bool literalCase()const{return scenario>=26&&scenario<48&&scenario!=42&&scenario!=43;}
+    void input(const std::vector<uint8_t>& bytes,int from=0){
+        auto boundary=check_and_cast<LowpanNativeBoundary*>(nic[from]->getSubmodule("boundary"));
+        Ieee802154AddressReq request;request.setSrcAddress(boundary->getLinkAddress());request.setDestAddress(Ieee802154Address(scenario==41?"ffff":from?"0011223344556604":"0011223344556602"));request.setSrcPanId(boundary->getPanId());request.setDestPanId(boundary->getPanId());
+        auto packet=new Packet("literal-vrb-input",makeShared<BytesChunk>(bytes));*packet->addTag<LowpanTransmissionReq>()=*boundary->prepareTransmission(request);boundary->pushPacket(packet,boundary->gate("in"));
+    }
+    void later(double time,std::vector<uint8_t> bytes){literal.push_back(std::move(bytes));scheduleAt(SimTime(time),new cMessage("disposition-literal",literal.size()-1));}
+    std::vector<uint8_t> rawFirst(int size,int tag,int protocol,bool local=false){
+        auto header=makeShared<Ipv6Header>();header->setSrcAddress(Ipv6Address("2001:db8:1::211:2233:4455:6601"));header->setDestAddress(Ipv6Address(local?"2001:db8:1::211:2233:4455:6602":"2001:db8:2::211:2233:4455:6602"));header->setProtocolId(static_cast<IpProtocolId>(protocol));header->setHopLimit(64);header->setPayloadLength(B(size-40));Packet packet("literal-header",header);auto bytes=packet.peekDataAsBytes()->getBytes();std::vector<uint8_t> first{uint8_t(0xc0|(size>>8)),uint8_t(size),uint8_t(tag>>8),uint8_t(tag),0x41};first.insert(first.end(),bytes.begin(),bytes.end());return first;
+    }
+    std::vector<uint8_t> rawTail(int size,int tag,int offset,int count){std::vector<uint8_t> bytes{uint8_t(0xe0|(size>>8)),uint8_t(size),uint8_t(tag>>8),uint8_t(tag),uint8_t(offset/8)};bytes.insert(bytes.end(),count,0x55);return bytes;}
+  protected:
+    int numInitStages()const override{return NUM_INIT_STAGES;}
+    void initialize(int stage)override{
+        if(stage!=INITSTAGE_LAST)return;
+        scenario=par("scenario");auto root=getParentModule();auto a=root->getSubmodule("node",0),b=root->getSubmodule("node",1),c=root->getSubmodule("node",2);
+        nic[0]=check_and_cast<NetworkInterface*>(a->getSubmodule("wlan",0));nic[1]=check_and_cast<NetworkInterface*>(b->getSubmodule("wlan",0));nic[2]=check_and_cast<NetworkInterface*>(b->getSubmodule("wlan",1));nic[3]=check_and_cast<NetworkInterface*>(c->getSubmodule("wlan",0));
+        const char *addresses[]={"2001:db8:1::211:2233:4455:6601","2001:db8:1::211:2233:4455:6602","2001:db8:2::211:2233:4455:6603","2001:db8:2::211:2233:4455:6602"};
+        for(int i=0;i<4;i++){nic[i]->getProtocolDataForUpdate<Ipv6InterfaceData>()->assignAddress(Ipv6Address(addresses[i]),false,SIMTIME_ZERO,SIMTIME_ZERO);layer[i]=nic[i]->getSubmodule("lowpan");for(auto name:{"datagramAccepted","fragmentSent","datagramCompleted","nativeFrameTransmissionSucceeded","nativeFrameTransmissionFailed"})layer[i]->subscribe(name,this);}
+        auto route=[&](cModule*node,const char*dest,int interface,const char*next){auto table=check_and_cast<Ipv6RoutingTable*>(node->getSubmodule("ipv6")->getSubmodule("routingTable"));table->addStaticRoute(Ipv6Address(dest),128,nic[interface]->getInterfaceId(),Ipv6Address(next));if(node==b&&interface==2)installedRoute=const_cast<Ipv6Route*>(table->doLongestPrefixMatch(Ipv6Address(dest)));};
+        route(a,addresses[3],0,"fe80::211:2233:4455:6602");
+        if(scenario!=7)route(b,addresses[3],2,"fe80::211:2233:4455:6604");
+        route(c,addresses[0],3,"fe80::211:2233:4455:6603");route(b,addresses[0],1,"fe80::211:2233:4455:6601");
+        router=check_and_cast<LowpanIpv6*>(b->getSubmodule("ipv6")->getSubmodule("ipv6"));
+        router->subscribe("packetDropped",this);
+        ASSERT(router->hasPolicyHooks()==(scenario==8)); // Exact ICMP is inert; even the ordinary UDP hook conservatively falls back.
+        if(scenario==3){router->registerHook(10,&policy);ASSERT(router->hasPolicyHooks());}
+        if(scenario==4)scheduleAt(SimTime(.2),new cMessage("late-policy"));
+        if(scenario==5)check_and_cast<physicallayer::IRadio*>(nic[3]->getSubmodule("radio"))->setRadioMode(physicallayer::IRadio::RADIO_MODE_OFF);
+        nic[2]->getSubmodule("radio")->subscribe("transmissionStarted",this);
+        nic[2]->getSubmodule("mac")->subscribe("testAckDropped",this);
+        ASSERT(check_and_cast<LowpanIpv6*>(c->getSubmodule("ipv6")->getSubmodule("ipv6"))->hasPolicyHooks()); // Real computed UDP hook remains at final local delivery.
+        if(scenario==9)scheduleAt(SimTime(20),new cMessage("local-history-replay"));
+        layer[1]->subscribe("packetDropped",this);
+        layer[1]->subscribe("fragmentReceived",this);
+        layer[1]->subscribe("reassemblyExpired",this);
+        if(literalCase()){
+            if(scenario<=33){auto first=rawFirst(320,0x1234,scenario==33?0:58);first.insert(first.end(),56,0);if(scenario==33){first[45]=59;first[46]=7;}else{int types[]={133,134,135,136,137,157,158};first[45]=types[scenario-26];}later(.1,first);later(61.1,first);}
+            else if(scenario<=38||scenario==44){bool local=scenario>=35;auto first=rawFirst(80,0x1234,scenario==34?58:59,local);if(scenario==34){first.insert(first.end(),24,0);first[45]=135;}auto tail=rawTail(80,0x1234,40,40);
+                if(scenario<=36||scenario==44){later(.1,tail);later(.2,first);}else{later(.1,first);later(.6,tail);later(60.2,first);later(60.7,tail);later(120.2,first);later(120.7,tail);if(scenario==38){auto other=first;other[3]++;later(1,other);}}}
+            else if(scenario==39){for(int tag=1;tag<=2;tag++){auto first=rawFirst(320,tag,59);first.insert(first.end(),56,0x55);later(.1*tag,first);later(.5+.1*tag,rawTail(320,tag,96,96));later(1+.1*tag,rawTail(320,tag,192,96));later(1.5+.1*tag,rawTail(320,tag,288,32));}}
+            else if(scenario==41){auto first=rawFirst(320,0x1234,59);first.insert(first.end(),56,0x55);later(.1,first);later(61.1,first);}
+            else if(scenario==46){auto first=rawFirst(320,0x1234,59,true);first.insert(first.end(),40,0x55);later(.1,first);later(59,rawTail(320,0x1234,72,80));later(118,rawTail(320,0x1234,144,80));later(150.2,first);later(150.7,rawTail(320,0x1234,80,80));later(151.2,rawTail(320,0x1234,160,80));later(151.7,rawTail(320,0x1234,240,80));scheduleAt(SimTime(91),new cMessage("fixed-local-active-deadline",-2));}
+            else if(scenario==47){Packet full("deep-compressed-header");for(int i=0;i<7;i++){auto bytes=rawFirst(320-40*i,0,i==6?59:41);bytes.erase(bytes.begin(),bytes.begin()+5);full.insertAtBack(makeShared<BytesChunk>(bytes));}full.insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>(40,0x55)));LowpanContextTable contexts;contexts.install(5,Ipv6Address("2001:db8:1::"),64,true,SimTime::getMaxTime());contexts.install(6,Ipv6Address("2001:db8:2::"),64,true,SimTime::getMaxTime());auto result=LowpanNhcCodec::encode(full,Ieee802154Address("0011223344556601"),Ieee802154Address("0011223344556602"),&contexts,SIMTIME_ZERO);ASSERT(result.header&&result.originalLength==280);Packet encoded("deep-wire",result.header);auto bytes=encoded.peekDataAsBytes()->getBytes();std::vector<uint8_t> first{0xc1,64,0x12,0x34};first.insert(first.end(),bytes.begin(),bytes.end());ASSERT(first.size()<=104);later(.1,first);later(61.1,first);}
+            else{auto first=rawFirst(320,0x1234,58);first[12]=1;first.insert(first.end(),56,0);first[45]=scenario==45?128:1;later(.1,first);} // ICMP error-to-error is suppressed at Hop Limit one.
+        }
+        if(scenario==13){
+            // Independent IPv6/HBH/UDP bytes. The checksum sums the IPv6 pseudo
+            // header and the real UDP length, excluding the HBH header.
+            auto header=makeShared<Ipv6Header>();header->setSrcAddress(Ipv6Address(addresses[0]));header->setDestAddress(Ipv6Address(addresses[3]));header->setProtocolId(IP_PROT_IPv6EXT_HOP);header->setHopLimit(64);header->setPayloadLength(B(280));
+            Packet full("general-first-header",header);full.insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{17,0,1,4,0,0,0,0}));
+            std::vector<uint8_t> udp(272);udp[0]=0xf0;udp[1]=0xb0;udp[2]=0xf0;udp[3]=0xbf;udp[4]=1;udp[5]=16;for(int i=8;i<272;i++)udp[i]=i;
+            Packet addressesPacket("pseudo",header);auto bytes=addressesPacket.peekDataAsBytes()->getBytes();uint32_t sum=272+17;for(int i=8;i<40;i+=2)sum+=(bytes[i]<<8)|bytes[i+1];for(int i=0;i<272;i+=2)sum+=(udp[i]<<8)|udp[i+1];while(sum>>16)sum=(sum&65535)+(sum>>16);auto checksum=uint16_t(~sum);udp[6]=checksum>>8;udp[7]=checksum;
+            full.insertAtBack(makeShared<BytesChunk>(udp));expected=full.peekDataAsBytes()->getBytes();expected[7]=63;
+            LowpanContextTable contexts;contexts.install(5,Ipv6Address("2001:db8:1::"),64,true,SimTime::getMaxTime());contexts.install(6,Ipv6Address("2001:db8:2::"),64,true,SimTime::getMaxTime());
+            auto result=LowpanNhcCodec::encode(full,Ieee802154Address("0011223344556601"),Ieee802154Address("0011223344556602"),&contexts,SIMTIME_ZERO);ASSERT(result.header&&result.originalLength==56);
+            Packet prefix("compressed",result.header);auto encoded=prefix.peekDataAsBytes()->getBytes();ASSERT((encoded[0]&4)&&encoded[3]==0xe1);
+            int end=136;std::vector<uint8_t> first{0xc1,64,0x12,0x34};first.insert(first.end(),encoded.begin(),encoded.end());first.insert(first.end(),expected.begin()+56,expected.begin()+end);literal.push_back(first);
+            for(int offset=end;offset<320;){int count=std::min(96,320-offset);std::vector<uint8_t> tail{0xe1,64,0x12,0x34,uint8_t(offset/8)};tail.insert(tail.end(),expected.begin()+offset,expected.begin()+offset+count);literal.push_back(tail);offset+=count;}
+            for(int i=0;i<int(literal.size());i++)scheduleAt(SimTime(.1+.5*i),new cMessage("general-header",i));
+        }
+        if(scenario==14||scenario==15||scenario==16||scenario==17||scenario==20||scenario==21||scenario==22||scenario==23||scenario==49)scheduleAt(SimTime(.13),new cMessage("mid-flow-control"));
+        if(scenario==50||scenario==51)scheduleAt(SimTime(.65),new cMessage("nonfirst-shape-repeat"));
+        if(scenario==25)installedRoute->setExpiryTime(SimTime(.1));
+        c->getSubmodule("app",0)->subscribe("packetReceived",this);
+    }
+    void handleMessage(cMessage*message)override{int index=message->getKind();delete message;if(index==-2){ASSERT(scenario==46&&dropReasons[LOWPAN_LOWER_LIFETIME_EXPIRED]==1&&partialExpired==0);return;}if(scenario==13||literalCase()){literalSent++;input(literal.at(index));return;}if(scenario==9){
+        auto boundary=check_and_cast<LowpanNativeBoundary*>(nic[2]->getSubmodule("boundary"));
+        Ieee802154AddressReq request;request.setSrcAddress(boundary->getLinkAddress());request.setDestAddress(Ieee802154Address("0011223344556604"));request.setSrcPanId(boundary->getPanId());request.setDestPanId(boundary->getPanId());
+        for(const auto& bytes:savedOutput){auto packet=new Packet("replayed-local-history",makeShared<BytesChunk>(bytes));*packet->addTag<LowpanTransmissionReq>()=*boundary->prepareTransmission(request);boundary->pushPacket(packet,boundary->gate("in"));}return;
+        }if(scenario==14||scenario==15||scenario==16||scenario==17||scenario==23||scenario==49){ASSERT(!firstInput.empty());auto bytes=firstInput;if(scenario==15)bytes.back()^=1;if(scenario==49){ASSERT(bFragments==1);bytes[1]=8;}if(scenario==16||scenario==17){bytes[0]=0xe5;bytes[1]=0;bytes.erase(bytes.begin()+5,bytes.end());bytes[4]=18;bytes.insert(bytes.end(),8,0x55);if(scenario==17){bytes[2]=0x78;bytes[3]=0x9a;}}if(scenario==23){bytes[2]^=0x80;}input(bytes);return;}
+        if(scenario==50||scenario==51){ASSERT(secondInput.size()==101&&aFragments>=2);auto bytes=secondInput;if(scenario==50)bytes.back()^=0xff;else bytes.resize(bytes.size()-8);input(bytes);return;}
+        if(scenario==20||scenario==21||scenario==22){auto table=check_and_cast<Ipv6RoutingTable*>(getParentModule()->getSubmodule("node",1)->getSubmodule("ipv6")->getSubmodule("routingTable"));table->deleteRoute(installedRoute);installedRoute=nullptr;if(scenario==20||scenario==22)table->addStaticRoute(Ipv6Address("2001:db8:2::211:2233:4455:6602"),128,nic[2]->getInterfaceId(),Ipv6Address(scenario==20?"fe80::211:2233:4455:6604":"fe80::211:2233:4455:6603"));return;}
+        ASSERT(scenario==4);router->registerHook(10,&policy);ASSERT(router->hasPolicyHooks());}
+    void receiveSignal(cComponent*,simsignal_t signal,long count,cObject*)override{if(signal==registerSignal("reassemblyExpired"))partialExpired+=count;else ackDropped+=count;}
+    void receiveSignal(cComponent*source,simsignal_t signal,cObject*object,cObject*details)override{
+        Enter_Method_Silent();
+        if(signal==registerSignal("packetDropped")){if(source==router){auto packet=check_and_cast<Packet*>(object);if(packet->getDataLength()==B(1280)){auto header=packet->peekAtFront<Ipv6Header>();if(header->getSrcAddress()==Ipv6Address("2001:db8:1::211:2233:4455:6601")&&header->getDestAddress()==Ipv6Address("2001:db8:2::211:2233:4455:6602")){ASSERT(check_and_cast<PacketDropDetails*>(details)->getReason()==ADDRESS_RESOLUTION_FAILED);sourceRefused++;}}return;}rejected++;if(auto lowpan=dynamic_cast<LowpanPacketDropDetails*>(details))dropReasons[lowpan->getLowpanReason()]++;return;}
+        if(signal==registerSignal("fragmentReceived"))return;
+        if(literalCase()){
+            if(signal==registerSignal("transmissionStarted")){auto packet=check_and_cast<physicallayer::ITransmission*>(object)->getPacket();auto bytes=packet->peekDataAsBytes()->getBytes();if((bytes[0]&7)==1){wire++;auto tag=uint16_t((bytes[23]<<8)|bytes[24]);if(wireAck.count(tag))ASSERT(simTime()>=wireAck[tag]+SimTime(150,SIMTIME_MS));}return;}
+            auto packet=check_and_cast<Packet*>(object);
+            if(signal==registerSignal("fragmentSent")){if(source==layer[1]&&packet->getTag<LowpanTransmissionReq>()->getDestAddress()==Ieee802154Address("0011223344556604")){auto bytes=packet->peekDataAsBytes()->getBytes();auto tag=uint16_t((bytes[2]<<8)|bytes[3]);bTags.insert(tag);frameTags.emplace(packet->getId(),tag);bFragments++;}return;}
+            if(signal==registerSignal("nativeFrameTransmissionSucceeded")){auto it=frameTags.find(packet->getId());if(it!=frameTags.end())wireAck[it->second]=simTime();return;}
+            if(signal==registerSignal("datagramCompleted")){auto header=packet->peekAtFront<Ipv6Header>();if(source==layer[1])literalCompleted++;if(source==layer[3]){ASSERT(scenario==39&&header->getHopLimit()==63&&packet->getDataLength()==B(320));auto expectedBytes=rawFirst(320,0,59);expectedBytes.erase(expectedBytes.begin(),expectedBytes.begin()+5);expectedBytes[7]=63;expectedBytes.insert(expectedBytes.end(),280,0x55);ASSERT(packet->peekDataAsBytes()->getBytes()==expectedBytes);cReceived++;}if(source==layer[0]){Packet copy(*packet);copy.popAtFront<Ipv6Header>();auto indication=copy.addTag<L3AddressInd>();indication->setSrcAddress(header->getSrcAddress());indication->setDestAddress(header->getDestAddress());ASSERT(Icmpv6::verifyChecksum(&copy));if(scenario==45)ASSERT(copy.peekAtFront<Icmpv6Header>()->getType()==ICMPv6_TIME_EXCEEDED);else ASSERT(scenario==35||scenario==37||scenario==38||scenario==39||scenario==44||scenario==46);returnedErrors++;}}return;
+        }
+        if(signal==registerSignal("transmissionStarted")){
+            auto packet=check_and_cast<physicallayer::ITransmission*>(object)->getPacket();auto bytes=packet->peekDataAsBytes()->getBytes();if((bytes[0]&7)!=1)return;wire++;
+            int offset=(bytes[21]&0xf8)==0xc0?0:8*bytes[25];
+            if(!fallback()&&scenario!=7&&lastWireOffset>=0&&offset!=lastWireOffset){ASSERT(ackSeen);ASSERT(simTime()>=lastAck+SimTime(150,SIMTIME_MS));}
+            lastWireOffset=offset;
+            return;
+        }
+        auto packet=check_and_cast<Packet*>(object);
+        if(signal==registerSignal("packetReceived")){ASSERT(packet->getDataLength()==B(scenario==13?264:1232));appDelivered++;return;}
+        if(signal==registerSignal("datagramAccepted")){if(source==layer[0]){expected=packet->peekDataAsBytes()->getBytes();ASSERT(expected.size()==1280&&expected[7]==64);expected[7]=63;}return;}
+        if(signal==registerSignal("nativeFrameTransmissionSucceeded")){if(source==layer[2]&&bFrames.count(packet->getId())){lastAck=simTime();ackSeen=true;}return;}
+        if(signal==registerSignal("nativeFrameTransmissionFailed")){if(source==layer[2]&&bFrames.count(packet->getId()))bFailed++;return;}
+        if(signal==registerSignal("datagramCompleted")){
+            auto header=packet->peekAtFront<Ipv6Header>();
+            if(header->getDestAddress()==Ipv6Address("2001:db8:2::211:2233:4455:6602")){
+                if(source==layer[1]){routerReassembled++;routerComplete=simTime();}
+                else if(source==layer[3]){ASSERT(packet->peekDataAsBytes()->getBytes()==expected);cReceived++;}
+            }
+            else if(source==layer[0]&&header->getProtocolId()==IP_PROT_IPv6_ICMP&&header->getDestAddress()==Ipv6Address("2001:db8:1::211:2233:4455:6601")){Packet copy(*packet);copy.popAtFront<Ipv6Header>();auto ind=copy.addTag<L3AddressInd>();ind->setSrcAddress(header->getSrcAddress());ind->setDestAddress(header->getDestAddress());ASSERT(Icmpv6::verifyChecksum(&copy));auto error=copy.peekAtFront<Icmpv6DestUnreachableMsg>();ASSERT((scenario==7||scenario==25)&&error->getType()==ICMPv6_DESTINATION_UNREACHABLE&&error->getCode()==0);returnedErrors++;}
+            return;
+        }
+        ASSERT(signal==registerSignal("fragmentSent"));auto bytes=packet->peekDataAsBytes()->getBytes();bool first=(bytes[0]&0xf8)==0xc0;int offset=first?0:8*bytes[4];
+        if(source==layer[0]){aFragments++;lastA=simTime();if(first){firstInput=bytes;ASSERT((bytes[4]&7)==6&&((bytes[5]>>4)&3)==3&&(bytes[5]&3)==3&&bytes[6]==0x56);}else if(aFragments==2)secondInput=bytes;return;}
+        auto request=packet->getTag<LowpanTransmissionReq>();
+        if(request->getDestAddress()!=Ieee802154Address("0011223344556604"))return;
+        bFrames.insert(packet->getId());if(bFragments++==0)firstB=simTime();bTags.insert(uint16_t((bytes[2]<<8)|bytes[3]));
+        savedOutput.push_back(bytes);
+        ASSERT(((bytes[0]&7)<<8|bytes[1])==(scenario==13?320:1280));
+        if(!fallback()){
+            if(first){if(scenario==11){ASSERT(bytes[4]==0x41&&bytes[12]==63);}else ASSERT((bytes[4]&7)==0&&((bytes[5]>>4)&3)==1&&(bytes[5]&3)==1&&bytes[6]==0x56&&bytes[7]==(scenario==13?0:17)&&bytes[8]==63);}
+            int length=first?40+int(bytes.size())-4-(scenario==11?41:21):int(bytes.size())-5;
+            ASSERT(offset==coverage&&length>0);coverage+=length;ASSERT(coverage==(scenario==13?320:1280)||coverage%8==0);
+            ASSERT(bytes.size()<=size_t(scenario==1||scenario==18||scenario==19?64:104));
+        }
+    }
+    void finish()override{
+        std::cout<<"reasons="<<scenario;for(auto item:dropReasons)std::cout<<' '<<item.first<<':'<<item.second;std::cout<<'\n';
+        if(scenario==18||scenario==19)ASSERT(dropReasons[LOWPAN_RESOURCE_LIMIT]==1);
+        if(scenario==43)ASSERT(dropReasons[LOWPAN_LOWER_LIFETIME_EXPIRED]==1);
+        if(scenario>=26)std::cout<<"observed="<<scenario<<" forwarded="<<bFragments<<" completed="<<literalCompleted<<" received="<<cReceived<<" tags="<<bTags.size()<<" expired="<<partialExpired<<" rejected="<<rejected<<'\n';
+        if(literalCase()){ASSERT(literalSent==int(literal.size()));if(scenario<=33||scenario==41||scenario==47){ASSERT(partialExpired==2&&literalCompleted==0&&bFragments==0&&rejected==0);}else if(scenario==34||scenario==36){ASSERT(rejected==(scenario==36?2:1)&&partialExpired==1&&literalCompleted==0&&bFragments==0);}else if(scenario==35||scenario==44){ASSERT(literalCompleted==1&&partialExpired==0&&rejected==0&&bFragments==0);}else if(scenario==37||scenario==38){ASSERT(literalCompleted==2&&partialExpired==0&&rejected==(scenario==38?3:2)&&bFragments==0);}else if(scenario==39){ASSERT(cReceived==2&&literalCompleted==0&&bTags.size()==2&&bFragments>6);}else if(scenario==46){ASSERT(literalCompleted==1&&partialExpired==0&&rejected==2&&dropReasons[LOWPAN_LOWER_LIFETIME_EXPIRED]==1&&bFragments==0);}else{ASSERT(bFragments==0&&returnedErrors==(scenario==45?1:0));}
+            std::cout<<"case="<<scenario<<" literal="<<literalSent<<" forwarded="<<bFragments<<" localCompleted="<<literalCompleted<<" cReceived="<<cReceived<<" expired="<<partialExpired<<" rejected="<<rejected<<" errors="<<returnedErrors<<'\n';std::cout<<"Native VRB early forwarding, original coordinates and routed delivery verified\n";return;}
+        ASSERT(scenario==13||aFragments>10);
+        if(scenario==48){ASSERT(routerReassembled==1&&sourceRefused==1&&bFragments==0&&cReceived==0&&appDelivered==0&&returnedErrors==0);}
+        else if(failed()){ASSERT(cReceived==0&&appDelivered==0&&routerReassembled==0);if(scenario==4||scenario==5||scenario==10||scenario==15||scenario==21||scenario==22||scenario==49)ASSERT(bFragments==1);if(scenario==51)ASSERT(bFragments==3);if(scenario==25)ASSERT(bFragments==0&&returnedErrors==1);if(scenario==5||scenario==10)ASSERT(bFailed==1&&wire==2);if(scenario==10)ASSERT(ackDropped==2);if(scenario==15||scenario==16||scenario==18||scenario==19||scenario==49||scenario==51)ASSERT(rejected>0);}
+        else if(scenario==7){ASSERT(cReceived==0&&appDelivered==0&&bFragments==0&&returnedErrors==1);}
+        else {ASSERT(cReceived==1&&appDelivered==1&&bTags.size()==1);if(fallback()){ASSERT(routerReassembled==1&&firstB>=routerComplete&&routerComplete>=lastA);if(scenario==3)ASSERT(policy.pre>0&&policy.forward>0);}else{ASSERT(routerReassembled==0&&(scenario==13||firstB<lastA)&&coverage==(scenario==13?320:1280));}if(scenario==17||scenario==23)ASSERT(rejected>0);}
+        std::cout<<"case="<<scenario<<" source="<<aFragments<<" forwarded="<<bFragments<<" routerReassembled="<<routerReassembled<<" cReceived="<<cReceived<<" app="<<appDelivered<<" wire="<<wire<<" failed="<<bFailed<<" errors="<<returnedErrors<<" policy="<<policy.pre<<','<<policy.forward<<" ackDropped="<<ackDropped<<" sourceRefused="<<sourceRefused<<'\n';
+        std::cout<<"Native VRB early forwarding, original coordinates and routed delivery verified\n";
+    }
+};
+Define_Module(VrbCheck);
+}
+
+%file: test.ned
+@namespace(inet::protocoltest);
+import inet.node.inet.StandardHost;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.linklayer.lowpan.LowpanNativeMac;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple VrbCheck {parameters:int scenario;}
+simple VrbAckDropMac extends LowpanNativeMac {@class(VrbAckDropMac);}
+network VrbNetwork {
+    submodules:
+        mediumLeft:Ieee802154NarrowbandScalarRadioMedium;
+        mediumRight:Ieee802154NarrowbandScalarRadioMedium;
+        domainLeft:LowpanNativeLinkDomain;
+        domainRight:LowpanNativeLinkDomain;
+        node[3]:StandardHost;
+        check:VrbCheck;
+}
+
+%inifile: omnetpp.ini
+[General]
+network=VrbNetwork
+sim-time-limit=${case}==46 ? 154s : (((${case}>=26 && ${case}<=38) || ${case}==41 || ${case}==47) ? 123s : (${case}==9 ? 22s : 18s))
+seed-set=0
+*.check.scenario=${case=0..51}
+**.vector-recording=false
+**.scalar-recording=false
+*.node[*].hasIpv4=false
+*.node[*].hasIpv6=true
+*.node[*].ipv6.typename="LowpanIpv6NetworkLayer"
+*.node[1].forwarding=true
+*.node[1].hasUdp=${case}==8
+*.node[1].ipv6.neighbourDiscovery.nativeNdRole=${case}==48 ? "host" : "static"
+*.node[1].numWlanInterfaces=2
+*.node[*].numWlanInterfaces=1
+*.node[*].wlan[*].typename="Ieee802154NativeLowpanInterface"
+*.node[0].wlan[0].linkDomainModule="^.^.domainLeft"
+*.node[1].wlan[0].linkDomainModule="^.^.domainLeft"
+*.node[1].wlan[1].linkDomainModule="^.^.domainRight"
+*.node[2].wlan[0].linkDomainModule="^.^.domainRight"
+*.node[0].wlan[0].radio.radioMediumModule="mediumLeft"
+*.node[1].wlan[0].radio.radioMediumModule="mediumLeft"
+*.node[1].wlan[1].radio.radioMediumModule="mediumRight"
+*.node[2].wlan[0].radio.radioMediumModule="mediumRight"
+**.lowpan.nativeFragmentPacing=true
+*.node[1].wlan[0].lowpan.nativeFragmentForwarding=${case}!=44
+*.node[1].wlan[1].lowpan.nativeFragmentForwarding=${case}!=12
+*.node[2].wlan[0].lowpan.nativeFragmentForwarding=true
+**.lowpan.routingTableModule="^.^.ipv6.routingTable"
+**.lowpan.icmpv6Module="^.^.ipv6.icmpv6"
+**.lowpan.ipv6Module="^.^.ipv6.ipv6"
+*.node[1].wlan[0].lowpan.fragmentForwardingPeers=xml((${case}==2 || ${case}==35) ? "<peers/>" : "<peers><peer native='0011223344556601'/></peers>")
+*.node[2].wlan[0].lowpan.fragmentForwardingPeers=xml("<peers><peer native='0011223344556603'/></peers>")
+*.node[1].wlan[0].lowpan.forwardingPayloadLimit=(${case}==1 || ${case}==18 || ${case}==19) ? 64B : (${case}==6 ? 13B : 0B)
+*.node[1].wlan[0].lowpan.maxForwardingBytes=${case}==18 ? 136B : 32768B
+*.node[1].wlan[0].lowpan.maxForwardingRanges=${case}==19 ? 1 : 4
+*.node[1].wlan[0].lowpan.maxForwardingPendingBytes=${case}==24 ? 100B : 512B
+*.node[1].wlan[0].lowpan.maxForwardingCarryBytes=${case}==42 ? 0B : 128B
+*.node[1].wlan[0].lowpan.forwardingResidence=${case}==43 ? 40ms : 1s
+*.node[1].wlan[0].lowpan.maxForwardingRecords=(${case}==23 || ${case}==38) ? 1 : 64
+*.node[1].wlan[0].lowpan.forwardingGap=${case}==18 ? 800ms : (${case}==19 ? 400ms : 150ms)
+*.node[1].wlan[1].lowpan.headerCompression=${case}==11 ? "none" : "iphc"
+*.node[1].wlan[1].mac.typename="VrbAckDropMac"
+**.lowpan.compressionContexts=xml("<contexts><context id='5' prefix='2001:db8:1::' prefixLength='64'/><context id='6' prefix='2001:db8:2::' prefixLength='64'/></contexts>")
+**.mac.macMinBE=0
+**.mac.macMaxBE=0
+**.mac.macMaxFrameRetries=1
+*.node[0].numApps=1
+*.node[0].app[0].typename="UdpBasicApp"
+*.node[0].app[0].destAddresses="2001:db8:2::211:2233:4455:6602"
+*.node[0].app[0].destPort=61631
+*.node[0].app[0].localPort=61616
+*.node[0].app[0].timeToLive=64
+*.node[0].app[0].startTime=(${case}==13 || (${case}>=26 && ${case}<48 && ${case}!=42 && ${case}!=43)) ? 200s : 100ms
+*.node[0].app[0].stopTime=(${case}==13 || (${case}>=26 && ${case}<48 && ${case}!=42 && ${case}!=43)) ? 201s : 110ms
+*.node[0].app[0].sendInterval=1s
+*.node[0].app[0].messageLength=1232B
+*.node[2].numApps=1
+*.node[2].app[0].typename="UdpSink"
+*.node[2].app[0].localPort=61631
+*.node[*].udp.checksumMode="computed"
+*.domainLeft.panId=4660
+*.domainRight.panId=9029
+*.domainLeft.radioMediumModule="mediumLeft"
+*.domainRight.radioMediumModule="mediumRight"
+*.domainLeft.config=xml("<domain><peer interface='node[0].wlan[0]' native='0011223344556601'/><peer interface='node[1].wlan[0]' native='0011223344556602'/><neighbor interface='node[0].wlan[0]' ipv6='fe80::211:2233:4455:6602' native='0011223344556602'/><neighbor interface='node[1].wlan[0]' ipv6='fe80::211:2233:4455:6601' native='0011223344556601'/></domain>")
+*.domainRight.config=xml("<domain><peer interface='node[1].wlan[1]' native='0011223344556603'/><peer interface='node[2].wlan[0]' native='0011223344556604'/><neighbor interface='node[1].wlan[1]' ipv6='fe80::211:2233:4455:6604' native='0011223344556604'/><neighbor interface='node[2].wlan[0]' ipv6='fe80::211:2233:4455:6603' native='0011223344556603'/></domain>")
+**.radio.antenna.mobilityModule="^.^.^.mobility"
+**.mobility.initialX=0m
+**.mobility.initialY=0m
+**.mobility.initialZ=0m
+**.mobility.initFromDisplayString=false
+**.mobility.updateFromDisplayString=false
+
+%contains: stdout
+Native VRB early forwarding, original coordinates and routed delivery verified

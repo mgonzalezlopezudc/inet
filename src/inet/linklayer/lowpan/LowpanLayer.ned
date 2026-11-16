@@ -16,6 +16,22 @@ simple LowpanLayer extends SimpleModule like ILowpanLayer
         double reassemblyTimeout @unit(s) = default(60s); // RFC 4944 maximum is 60 seconds.
         bool meshUnder = default(false); // Native-only configured L2 mesh; optimized ND remains one-hop.
         bool nativeFragmentPacing = default(false); // Native unicast data only; Mesh unsupported. Control/broadcast remain immediate.
+        bool nativeFragmentForwarding = default(false); // Requires native pacing, no Mesh, and declared <=8-hop compatible data deployment.
+        xml fragmentForwardingPeers = default(xml("<peers/>")); // Administrative actual-native peer allowlist, scoped by this interface/PAN. Empty keeps ingress ordinary.
+        string routingTableModule = default("");
+        string icmpv6Module = default("");
+        string ipv6Module = default(""); // Same-node LowpanIpv6; registered policy hooks force ordinary fallback.
+        int maxForwardingRecords = default(64); // 1..64, including ordinary dispositions and closed identities.
+        int maxForwardingRanges = default(4); // 1..4 pending input ranges; carry is additional.
+        int maxForwardingPendingBytes @unit(B) = default(512B);
+        int maxForwardingCarryBytes @unit(B) = default(128B);
+        int maxForwardingBytes @unit(B) = default(32768B); // Aggregate retained pending/carry originals, excluding bounded header/range metadata.
+        int forwardingPayloadLimit @unit(B) = default(0B); // 0: native envelope; otherwise 13..127, further limited by actual envelope. No MAC MTU change.
+        int forwardingMaxHops = default(8); // Declared deployment maximum, 1..8; never inferred from IPv6 Hop Limit.
+        double forwardingResidence @unit(s) = default(1s); // Finite >=one tick and <=1s, anchored at ingress, includes queue/MAC/propagation.
+        double forwardingGap @unit(s) = default(150ms); // Finite >=one tick, after prior matched lower success.
+        double forwardingActiveLifetime @unit(s) = default(90s); // <=90s; must exceed effective source residence + hop residence +60s.
+        double forwardingHistoryLifetime @unit(s) = default(120s); // <=120s; outlives active; source protection must cover full path/history sum.
         int maxPacedSourceDatagrams = default(64);
         int maxPacedSourceBytes @unit(B) = default(32768B); // Retained originals; bounded per-flow header/range metadata is additional.
         double sourceFragmentGap @unit(s) = default(500ms); // After previous matched ACK; at least one simulation tick.

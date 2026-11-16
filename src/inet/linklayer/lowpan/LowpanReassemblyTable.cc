@@ -108,6 +108,21 @@ void LowpanReassemblyTable::clear()
     reservedBytes = 0;
 }
 
+std::optional<simtime_t> LowpanReassemblyTable::getExpiry(const Key& key) const
+{
+    auto found = contexts.find(key);
+    return found == contexts.end() ? std::nullopt : std::optional<simtime_t>(found->second.expiry);
+}
+
+bool LowpanReassemblyTable::remove(const Key& key)
+{
+    auto found = contexts.find(key);
+    if (found == contexts.end()) return false;
+    if (!found->second.quarantined) reservedBytes -= key.size;
+    contexts.erase(found);
+    return true;
+}
+
 simtime_t LowpanReassemblyTable::getNextExpiry() const
 {
     simtime_t next = SimTime::getMaxTime();

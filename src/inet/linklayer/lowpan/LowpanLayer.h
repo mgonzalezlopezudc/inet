@@ -20,11 +20,13 @@
 
 namespace inet { namespace lowpan {
 class LowpanSourceFragmentation;
+class LowpanFragmentForwarding;
 
 // IPv6 adaptation with optional mesh-under transit before endpoint reassembly.
 class INET_API LowpanLayer : public OperationalMixin<queueing::PacketProcessorBase>, public queueing::IActivePacketSource
 {
     friend class LowpanSourceFragmentation;
+    friend class LowpanFragmentForwarding;
   protected:
     queueing::PassivePacketSinkRef consumer;
     ILowpanLink *link = nullptr;
@@ -32,6 +34,9 @@ class INET_API LowpanLayer : public OperationalMixin<queueing::PacketProcessorBa
     std::unique_ptr<LowpanReassemblyTable> reassembly;
     LowpanDatagramTagAllocator tagAllocator;
     std::unique_ptr<LowpanSourceFragmentation> sourceFragments;
+    std::unique_ptr<LowpanFragmentForwarding> fragmentForwarding;
+    struct ForwardedTransmission { int ownerModuleId; int64_t token; };
+    std::map<int64_t, ForwardedTransmission> forwardedTransmissions;
     LowpanContextTable compressionContexts;
     std::array<bool, 16> configuredContexts{};
     simtime_t reassemblyTimeout;
@@ -90,11 +95,15 @@ class INET_API LowpanLayer : public OperationalMixin<queueing::PacketProcessorBa
     simtime_t meshDeadline(simtime_t duration) const;
     simtime_t meshReservation(uint8_t hops, simtime_t retention) const;
     void scheduleExpiry();
+    void expireReassembly();
     void clearTransientState();
     bool isNativeTransmissionOperational() const;
     bool canPushPreparedPacket(Packet *packet) const;
     PacketDropReason preparedRefusalReason() const;
     bool pushPreparedPacket(Packet *packet); // Consumes packet on both admission and refusal.
+    std::optional<uint16_t> allocateDatagramTag(simtime_t now, simtime_t reuseAfter);
+    bool pushForwardedPacket(Packet *packet, int ownerModuleId, int64_t token);
+    void notifyForwardingUnavailable();
     bool isValidIpv6Packet(const Packet *packet) const;
     void dropLowpanPacket(Packet *packet, LowpanDropReason reason);
     void removeRequestTags(Packet *packet) const;

@@ -120,13 +120,18 @@ void LowpanIpv6::localDeliverFinish(Packet *packet)
     Ipv6::localDeliverFinish(packet);
 }
 
+bool LowpanIpv6::isNativeSourceUsable(NetworkInterface *interface, const Ipv6Address& source) const
+{
+    auto nativeNd = dynamic_cast<const LowpanIpv6NeighbourDiscovery *>(nd.get());
+    return !nativeNd || nativeNd->isNativeSourceUsable(interface, source);
+}
+
 void LowpanIpv6::fragmentAndSend(Packet *packet)
 {
     auto interface = ift->getInterfaceById(packet->getTag<InterfaceReq>()->getInterfaceId());
     if (interface->getProtocol() == &lowpanProtocol) {
-        auto nativeNd = dynamic_cast<LowpanIpv6NeighbourDiscovery *>(nd.get());
         auto ipv6 = packet->peekAtFront<Ipv6Header>();
-        if (nativeNd && !nativeNd->isNativeSourceUsable(interface, ipv6->getSrcAddress()) && !isNativeNdControl(packet)) {
+        if (!isNativeSourceUsable(interface, ipv6->getSrcAddress()) && !isNativeNdControl(packet)) {
             PacketDropDetails details;
             details.setReason(ADDRESS_RESOLUTION_FAILED);
             emit(packetDroppedSignal, packet, &details);
