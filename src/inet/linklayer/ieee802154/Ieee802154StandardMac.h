@@ -20,6 +20,7 @@
 #include "inet/linklayer/ieee802154/Ieee802154Frame_m.h"
 #include "inet/linklayer/ieee802154/Ieee802154PendingTransactions.h"
 #include "inet/linklayer/ieee802154/Ieee802154CommandCodec.h"
+#include "inet/linklayer/ieee802154/Ieee802154GtsManager.h"
 #include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceClient.h"
 #include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceProvider.h"
 #include "inet/physicallayer/wireless/ieee802154/contract/IIeee802154PhyServiceClient.h"
@@ -37,6 +38,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     ModuleRefByPar<IIeee802154ManagementServiceClient> managementClient;
     ModuleRefByPar<NetworkInterface> networkInterface;
     std::unique_ptr<Ieee802154MacPib> pib;
+    Ieee802154GtsManager gtsManager;
     uint64_t lastRequestId = 0;
     bool started = true;
     bool phyAvailable = true;
@@ -390,6 +392,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     virtual Ieee802154MacServiceAdmission submitDisassociate(uint64_t id, const Ieee802154MacDisassociateRequest& request) override;
     virtual Ieee802154MacServiceAdmission submitOrphanResponse(uint64_t id, const Ieee802154MacOrphanResponse& response) override;
     virtual Ieee802154MacServiceAdmission submitRxEnable(uint64_t id, const Ieee802154MacRxEnableRequest& request) override;
+    Ieee802154MacServiceAdmission submitGts(uint64_t id, const Ieee802154MacGtsRequest& request) override;
     virtual Ieee802154MacServiceCancelResult cancel(uint64_t id) override;
     virtual bool handleOperationStage(LifecycleOperation *operation, IDoneCallback *doneCallback) override;
     virtual void handleCcaRequest(uint64_t id) override;

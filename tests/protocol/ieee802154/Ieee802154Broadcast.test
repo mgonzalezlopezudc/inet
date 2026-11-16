@@ -202,6 +202,8 @@ class BroadcastExercise : public cSimpleModule, public cListener, public Lifecyc
     }
     virtual void handleRxEnableConfirm(uint64_t, const Ieee802154MacRxEnableConfirm& confirm) override { Enter_Method("handleRxEnableConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); }
     virtual void handleRxEnableIndication(const Ieee802154MacRxEnableIndication&) override { ASSERT(false); }
+    virtual void handleGtsConfirm(uint64_t, const Ieee802154MacGtsConfirm&) override { ASSERT(false); }
+    virtual void handleGtsIndication(const Ieee802154MacGtsIndication&) override { ASSERT(false); }
     virtual void handleResetConfirm(uint64_t, const Ieee802154MacResetConfirm& confirm) override { Enter_Method("handleResetConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); resets++; }
     virtual void handleBeaconNotifyIndication(const Ieee802154PanDescriptor&) override {}
     virtual void handleScanConfirm(uint64_t, const Ieee802154MacScanConfirm&) override { ASSERT(false); }

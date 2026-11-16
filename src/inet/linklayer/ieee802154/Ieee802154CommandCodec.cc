@@ -25,10 +25,12 @@ std::vector<uint8_t> Ieee802154CommandCodec::encode(const Command& command)
             return {6};
         else if constexpr (std::is_same_v<T, BeaconRequest>)
             return {7};
-        else
+        else if constexpr (std::is_same_v<T, CoordinatorRealignment>)
             return {8, uint8_t(value.panId), uint8_t(value.panId >> 8),
                     uint8_t(value.coordinatorShortAddress), uint8_t(value.coordinatorShortAddress >> 8),
                     value.channelNumber, uint8_t(value.shortAddress), uint8_t(value.shortAddress >> 8)};
+        else
+            return {9, value.characteristics.encode()};
     }, command);
 }
 
@@ -37,9 +39,9 @@ Ieee802154CommandCodec::DecodeResult Ieee802154CommandCodec::decode(const std::v
     if (bytes.empty())
         return Error::TRUNCATED;
     // IEEE Std 802.15.4-2024, Table 7-11: other IDs belong to unselected procedures.
-    if (bytes[0] < 1 || bytes[0] > 8)
+    if (bytes[0] < 1 || bytes[0] > 9)
         return Error::UNSUPPORTED;
-    const size_t lengths[] = {0, 2, 4, 2, 1, 1, 1, 1, 8};
+    const size_t lengths[] = {0, 2, 4, 2, 1, 1, 1, 1, 8, 2};
     auto expected = lengths[bytes[0]];
     if (bytes.size() < expected)
         return Error::TRUNCATED;
@@ -60,6 +62,7 @@ Ieee802154CommandCodec::DecodeResult Ieee802154CommandCodec::decode(const std::v
         case 6: return Command(OrphanNotification{});
         case 7: return Command(BeaconRequest{});
         case 8: return Command(CoordinatorRealignment{readLe(1), readLe(3), bytes[5], readLe(6)});
+        case 9: return Command(GtsRequest{Ieee802154GtsCharacteristics::decode(bytes[1])});
     }
     throw cRuntimeError("Invalid IEEE 802.15.4 command dispatch");
 }

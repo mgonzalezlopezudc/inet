@@ -118,6 +118,8 @@ class DiscoveryExercise : public cSimpleModule, public cListener,
     virtual void handleSyncLossIndication(const Ieee802154MacSyncLossIndication&) override { ASSERT(false); }
     virtual void handleRxEnableConfirm(uint64_t, const Ieee802154MacRxEnableConfirm&) override { ASSERT(false); }
     virtual void handleRxEnableIndication(const Ieee802154MacRxEnableIndication&) override { ASSERT(false); }
+    virtual void handleGtsConfirm(uint64_t, const Ieee802154MacGtsConfirm&) override { ASSERT(false); }
+    virtual void handleGtsIndication(const Ieee802154MacGtsIndication&) override { ASSERT(false); }
     virtual void handleDataIndication(Packet *, const Ieee802154MacDataIndication&) override { ASSERT(false); }
     virtual void handlePromiscuousIndication(Packet *, const Ieee802154MacPromiscuousIndication&) override { ASSERT(false); }
     virtual void handleCommStatusIndication(Packet *, const Ieee802154MacCommStatusIndication&) override { ASSERT(false); }

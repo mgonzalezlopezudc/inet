@@ -98,6 +98,8 @@ enum class Ieee802154MacStatus : uint8_t {
     TRACKING_OFF,
     SUPERFRAME_OVERLAP,
     ON_TIME_TOO_LONG,
+    DENIED,
+    INVALID_GTS,
 };
 
 /**

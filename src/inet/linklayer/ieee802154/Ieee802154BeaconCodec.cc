@@ -4,6 +4,38 @@
 
 namespace inet {
 
+std::vector<Ieee802154GtsDescriptor> Ieee802154BeaconCodec::Content::getGtsDescriptors() const
+{
+    if (gtsDescriptors.size() % 3 || gtsDescriptors.size() > 21)
+        throw cRuntimeError("Invalid IEEE 802.15.4 GTS descriptor count");
+    std::vector<Ieee802154GtsDescriptor> result;
+    for (size_t i = 0; i < gtsDescriptors.size() / 3; ++i) {
+        size_t p = i * 3;
+        result.push_back({uint16_t(gtsDescriptors[p] | uint16_t(gtsDescriptors[p + 1]) << 8),
+                uint8_t(gtsDescriptors[p + 2] & 15), uint8_t(gtsDescriptors[p + 2] >> 4),
+                Ieee802154GtsDirection((gtsDirections >> i) & 1)});
+    }
+    return result;
+}
+
+void Ieee802154BeaconCodec::Content::setGtsDescriptors(const std::vector<Ieee802154GtsDescriptor>& descriptors)
+{
+    if (descriptors.size() > 7)
+        throw cRuntimeError("Too many IEEE 802.15.4 GTS descriptors");
+    std::vector<uint8_t> bytes;
+    uint8_t directions = 0;
+    for (size_t i = 0; i < descriptors.size(); ++i) {
+        const auto& descriptor = descriptors[i];
+        if (descriptor.start > 15 || descriptor.length > 15 || uint8_t(descriptor.direction) > 1)
+            throw cRuntimeError("Invalid IEEE 802.15.4 GTS descriptor");
+        bytes.insert(bytes.end(), {uint8_t(descriptor.shortAddress), uint8_t(descriptor.shortAddress >> 8),
+                uint8_t(descriptor.start | descriptor.length << 4)});
+        directions |= uint8_t(descriptor.direction) << i;
+    }
+    gtsDescriptors = std::move(bytes);
+    gtsDirections = directions;
+}
+
 std::vector<uint8_t> Ieee802154BeaconCodec::encode(const Content& content)
 {
     if (content.gtsDescriptors.size() % 3 || content.gtsDescriptors.size() > 21 || content.pendingAddresses.size() > 7)

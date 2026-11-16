@@ -14,6 +14,7 @@
 #include "inet/linklayer/ieee802154/Ieee802154MacDisassociateRequest.h"
 #include "inet/linklayer/ieee802154/Ieee802154MacOrphanResponse.h"
 #include "inet/linklayer/ieee802154/Ieee802154MacRxEnableRequest.h"
+#include "inet/linklayer/ieee802154/Ieee802154MacGtsRequest.h"
 
 namespace inet {
 
@@ -34,6 +35,7 @@ class INET_API IIeee802154ManagementServiceProvider
     virtual Ieee802154MacServiceAdmission submitDisassociate(uint64_t id, const Ieee802154MacDisassociateRequest& request) = 0;
     virtual Ieee802154MacServiceAdmission submitOrphanResponse(uint64_t id, const Ieee802154MacOrphanResponse& response) = 0;
     virtual Ieee802154MacServiceAdmission submitRxEnable(uint64_t id, const Ieee802154MacRxEnableRequest& request) = 0;
+    virtual Ieee802154MacServiceAdmission submitGts(uint64_t id, const Ieee802154MacGtsRequest& request) = 0;
 };
 
 } // namespace inet

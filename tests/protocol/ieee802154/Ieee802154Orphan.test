@@ -200,6 +200,8 @@ class OrphanExercise : public cSimpleModule, public cListener,
     }
     virtual void handleRxEnableConfirm(uint64_t, const Ieee802154MacRxEnableConfirm&) override { ASSERT(false); }
     virtual void handleRxEnableIndication(const Ieee802154MacRxEnableIndication&) override { ASSERT(false); }
+    virtual void handleGtsConfirm(uint64_t, const Ieee802154MacGtsConfirm&) override { ASSERT(false); }
+    virtual void handleGtsIndication(const Ieee802154MacGtsIndication&) override { ASSERT(false); }
     virtual void handleSyncLossIndication(const Ieee802154MacSyncLossIndication& indication) override {
         Enter_Method("handleSyncLossIndication"); ASSERT(scenario == 5 || scenario == 6);
         ASSERT(indication.reason == Ieee802154SyncLossReason::REALIGNMENT && indication.panId == 0x2345 && indication.channel == channel(12));

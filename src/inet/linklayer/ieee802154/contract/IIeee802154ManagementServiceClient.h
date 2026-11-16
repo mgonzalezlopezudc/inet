@@ -14,6 +14,7 @@
 #include "inet/linklayer/ieee802154/Ieee802154MacDisassociateRequest.h"
 #include "inet/linklayer/ieee802154/Ieee802154MacOrphanResponse.h"
 #include "inet/linklayer/ieee802154/Ieee802154MacRxEnableRequest.h"
+#include "inet/linklayer/ieee802154/Ieee802154MacGtsRequest.h"
 
 namespace inet {
 
@@ -41,6 +42,8 @@ class INET_API IIeee802154ManagementServiceClient
     virtual void handleSyncLossIndication(const Ieee802154MacSyncLossIndication& indication) = 0;
     virtual void handleRxEnableConfirm(uint64_t id, const Ieee802154MacRxEnableConfirm& confirm) = 0;
     virtual void handleRxEnableIndication(const Ieee802154MacRxEnableIndication& indication) = 0;
+    virtual void handleGtsConfirm(uint64_t id, const Ieee802154MacGtsConfirm& confirm) = 0;
+    virtual void handleGtsIndication(const Ieee802154MacGtsIndication& indication) = 0;
 };
 
 } // namespace inet

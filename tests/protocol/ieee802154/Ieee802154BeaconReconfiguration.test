@@ -972,6 +972,8 @@ class BeaconReconfigurationExercise : public cSimpleModule, public cListener, pu
     }
     virtual void handleRxEnableConfirm(uint64_t,const Ieee802154MacRxEnableConfirm& c) override { Enter_Method("handleRxEnableConfirm"); ASSERT(((scenario >= 38 && scenario <= 40) || scenario == 59) && c.result == Ieee802154MacServiceResult(Status::SUCCESS)); }
     virtual void handleRxEnableIndication(const Ieee802154MacRxEnableIndication&) override { Enter_Method("handleRxEnableIndication"); ASSERT((scenario >= 38 && scenario <= 40) || scenario == 59); }
+    virtual void handleGtsConfirm(uint64_t, const Ieee802154MacGtsConfirm&) override { ASSERT(false); }
+    virtual void handleGtsIndication(const Ieee802154MacGtsIndication&) override { ASSERT(false); }
     virtual void handleAvailabilityIndication(const physicallayer::Ieee802154PhyAvailabilityIndication&) override {}
     virtual void handleReceiveStarted(const physicallayer::Ieee802154PhyReceiveStart&) override {}
     virtual void handleTransmitStarted(uint64_t,const physicallayer::Ieee802154PhyTransmitStart&) override {}

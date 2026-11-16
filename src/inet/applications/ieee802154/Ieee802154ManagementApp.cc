@@ -238,6 +238,8 @@ void Ieee802154ManagementApp::handleOrphanResponseStatus(uint64_t, const Ieee802
 void Ieee802154ManagementApp::handleSyncLossIndication(const Ieee802154MacSyncLossIndication&) { Enter_Method("handleSyncLossIndication"); }
 void Ieee802154ManagementApp::handleRxEnableConfirm(uint64_t, const Ieee802154MacRxEnableConfirm&) { throw cRuntimeError("Example did not issue RX-ENABLE"); }
 void Ieee802154ManagementApp::handleRxEnableIndication(const Ieee802154MacRxEnableIndication&) { Enter_Method("handleRxEnableIndication"); }
+void Ieee802154ManagementApp::handleGtsConfirm(uint64_t, const Ieee802154MacGtsConfirm&) { Enter_Method("handleGtsConfirm"); }
+void Ieee802154ManagementApp::handleGtsIndication(const Ieee802154MacGtsIndication&) { Enter_Method("handleGtsIndication"); }
 void Ieee802154ManagementApp::handlePromiscuousIndication(Packet *packet, const Ieee802154MacPromiscuousIndication&) { Enter_Method("handlePromiscuousIndication"); take(packet); delete packet; }
 void Ieee802154ManagementApp::handleCommStatusIndication(Packet *packet, const Ieee802154MacCommStatusIndication&) { Enter_Method("handleCommStatusIndication"); if (packet) { take(packet); delete packet; } }
 

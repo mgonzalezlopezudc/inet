@@ -51,7 +51,7 @@ for (const auto& [command, bytes] : vectors) {
         ASSERT(std::get<Error>(Codec::decode(extra)) == Error::UNSUPPORTED);
     }
 }
-for (int id : {0, 9, 0x13, 0xff})
+for (int id : {0, 0x13, 0xff})
     ASSERT(std::get<Error>(Codec::decode({uint8_t(id)})) == Error::UNSUPPORTED);
 
 // Beacon Request: version 0, short destination, broadcast PAN/address, no source, no AR.

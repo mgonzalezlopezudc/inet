@@ -1,0 +1,4 @@
+IEEE 802.15.4 GTS values and ledger
+
+IEEE 802.15.4 adds typed GTS command and beacon descriptor values and a
+bounded allocation ledger. GTS operation remains unavailable at this stage.

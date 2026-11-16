@@ -6,6 +6,7 @@
 #include <variant>
 #include <vector>
 #include "inet/common/INETDefs.h"
+#include "inet/linklayer/ieee802154/Ieee802154GtsValues.h"
 
 namespace inet {
 
@@ -20,6 +21,7 @@ class INET_API Ieee802154CommandCodec
     struct PanConflictNotification {};
     struct OrphanNotification {};
     struct BeaconRequest {};
+    struct GtsRequest { Ieee802154GtsCharacteristics characteristics; };
     struct CoordinatorRealignment {
         uint16_t panId;
         uint16_t coordinatorShortAddress;
@@ -27,7 +29,7 @@ class INET_API Ieee802154CommandCodec
         uint16_t shortAddress;
     };
     using Command = std::variant<AssociationRequest, AssociationResponse, DisassociationNotification,
-            DataRequest, PanConflictNotification, OrphanNotification, BeaconRequest, CoordinatorRealignment>;
+            DataRequest, PanConflictNotification, OrphanNotification, BeaconRequest, CoordinatorRealignment, GtsRequest>;
     enum class Error { TRUNCATED, MALFORMED, UNSUPPORTED };
     using DecodeResult = std::variant<Command, Error>;
     static std::vector<uint8_t> encode(const Command& command);

@@ -162,6 +162,8 @@ class SlottedTooLongExercise : public cSimpleModule, public cListener, public II
     virtual void handleOrphanResponseStatus(uint64_t, const Ieee802154MacOrphanResponseStatus&) override { ASSERT(false); }
     virtual void handleRxEnableConfirm(uint64_t, const Ieee802154MacRxEnableConfirm&) override { ASSERT(false); }
     virtual void handleRxEnableIndication(const Ieee802154MacRxEnableIndication&) override { ASSERT(false); }
+    virtual void handleGtsConfirm(uint64_t, const Ieee802154MacGtsConfirm&) override { ASSERT(false); }
+    virtual void handleGtsIndication(const Ieee802154MacGtsIndication&) override { ASSERT(false); }
     virtual void handleAvailabilityIndication(const physicallayer::Ieee802154PhyAvailabilityIndication&) override {}
     virtual void handleReceiveStarted(const physicallayer::Ieee802154PhyReceiveStart&) override {}
     virtual void handleTransmitStarted(uint64_t id, const physicallayer::Ieee802154PhyTransmitStart& start) override {

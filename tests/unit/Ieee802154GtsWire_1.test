@@ -1,0 +1,44 @@
+%description:
+GTS command and typed beacon descriptor wire values, including reserved bits.
+
+%includes:
+#include "inet/linklayer/ieee802154/Ieee802154BeaconCodec.h"
+#include "inet/linklayer/ieee802154/Ieee802154CommandCodec.h"
+using namespace inet;
+
+%activity:
+using C = Ieee802154CommandCodec;
+using D = Ieee802154GtsDirection;
+for (unsigned int length : {0u,15u}) {
+    for (auto direction : {D::DEVICE_TRANSMIT,D::DEVICE_RECEIVE}) {
+        for (bool allocation : {false,true}) {
+            Ieee802154GtsCharacteristics value{uint8_t(length),direction,allocation};
+            auto wire = C::encode(C::GtsRequest{value});
+            ASSERT(wire == std::vector<uint8_t>({9,uint8_t(length | (uint8_t(direction) << 4) | (allocation ? 32 : 0))}));
+            wire[1] |= 0xc0;
+            auto decoded = std::get<C::GtsRequest>(std::get<C::Command>(C::decode(wire))).characteristics;
+            ASSERT(decoded.length == length && decoded.direction == direction && decoded.allocate == allocation);
+            ASSERT(C::encode(C::GtsRequest{decoded})[1] == (wire[1] & 0x3f));
+        }
+    }
+}
+ASSERT(std::get<C::Error>(C::decode({9})) == C::Error::TRUNCATED);
+for (const auto& invalid : std::vector<Ieee802154GtsCharacteristics>{{16,D::DEVICE_TRANSMIT,false},{1,D(2),false}}) {
+    bool rejected = false;
+    try { C::encode(C::GtsRequest{invalid}); } catch (const cRuntimeError&) { rejected = true; }
+    ASSERT(rejected);
+}
+Ieee802154BeaconCodec::Content content;
+content.setGtsDescriptors({{0x1234,0,0,D::DEVICE_TRANSMIT},{0xabcd,1,15,D::DEVICE_RECEIVE}});
+ASSERT(content.gtsDescriptors == std::vector<uint8_t>({0x34,0x12,0,0xcd,0xab,0xf1}));
+ASSERT(content.gtsDirections == 2);
+auto parsed = std::get<Ieee802154BeaconCodec::Content>(Ieee802154BeaconCodec::decode(Ieee802154BeaconCodec::encode(content)));
+auto descriptors = parsed.getGtsDescriptors();
+ASSERT(descriptors.size() == 2 && descriptors[1].shortAddress == 0xabcd && descriptors[1].start == 1 && descriptors[1].length == 15 && descriptors[1].direction == D::DEVICE_RECEIVE);
+std::vector<Ieee802154GtsDescriptor> maximum(7,{1,1,1,D::DEVICE_TRANSMIT});
+content.setGtsDescriptors(maximum);
+ASSERT(content.getGtsDescriptors().size() == 7);
+maximum.push_back({2,1,1,D::DEVICE_RECEIVE});
+bool rejected = false;
+try { content.setGtsDescriptors(maximum); } catch (const cRuntimeError&) { rejected = true; }
+ASSERT(rejected && content.getGtsDescriptors().size() == 7);

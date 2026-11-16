@@ -340,6 +340,8 @@ class IndirectClient : public cSimpleModule, public cListener, public LifecycleC
     virtual void handleSyncLossIndication(const Ieee802154MacSyncLossIndication&) override { ASSERT(false); }
     virtual void handleRxEnableConfirm(uint64_t, const Ieee802154MacRxEnableConfirm&) override { ASSERT(false); }
     virtual void handleRxEnableIndication(const Ieee802154MacRxEnableIndication&) override { ASSERT(false); }
+    virtual void handleGtsConfirm(uint64_t, const Ieee802154MacGtsConfirm&) override { ASSERT(false); }
+    virtual void handleGtsIndication(const Ieee802154MacGtsIndication&) override { ASSERT(false); }
     virtual void handleAssociateResponseStatus(uint64_t request, const Ieee802154MacAssociateResponseStatus& status) override {
         Enter_Method("handleAssociateResponseStatus");
         ASSERT(coordinator && scenario >= 22 && request == responseId && ++responseConfirms == 1);

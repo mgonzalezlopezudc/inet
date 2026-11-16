@@ -6,6 +6,7 @@
 #include <variant>
 #include <vector>
 #include "inet/linklayer/ieee802154/Ieee802154Address.h"
+#include "inet/linklayer/ieee802154/Ieee802154GtsValues.h"
 
 namespace inet {
 
@@ -20,6 +21,8 @@ class INET_API Ieee802154BeaconCodec
         std::vector<uint8_t> gtsDescriptors; ///< Complete three-octet descriptors, at most seven.
         std::vector<Ieee802154Address> pendingAddresses; ///< Short addresses precede extended addresses on wire.
         std::vector<uint8_t> payload;
+        [[nodiscard]] std::vector<Ieee802154GtsDescriptor> getGtsDescriptors() const;
+        void setGtsDescriptors(const std::vector<Ieee802154GtsDescriptor>& descriptors);
     };
     enum class Error { TRUNCATED, MALFORMED };
     using DecodeResult = std::variant<Content, Error>;
