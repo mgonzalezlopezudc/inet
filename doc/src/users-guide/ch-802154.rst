@@ -108,6 +108,10 @@ The native profile also supports periodic beacons, tracking and slotted CAP
 access. An associated device tracking its PAN coordinator may request a GTS;
 the coordinator advertises its decision in subsequent beacons. An explicit
 GTS DATA request uses the matching transmit reservation without contention.
+The PAN coordinator removes an inactive GTS after its BO-dependent number of
+superframes. Received device DATA and a matching ACK for coordinator DATA
+renew the respective grants. Unacknowledged coordinator DATA suspends expiry
+monitoring for that receive grant until an acknowledged transmission starts.
 Devices and PAN coordinators may explicitly remove a reservation; the
 coordinator advertises resulting relocations. With an external clock, this
 profile requires a fixed rate within ±40 ppm, an initial offset aligned to the

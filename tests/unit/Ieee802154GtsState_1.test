@@ -55,3 +55,27 @@ ASSERT(removal.putGrant({first,14,2}) && removal.advertise(first,14,2));
 ASSERT(removal.removeGrant(first) && removal.removeAdvertisement(first));
 ASSERT(removal.getAdvertisements().empty() && removal.reservedCount() == 0);
 ASSERT(!removal.removeAdvertisement(first));
+ASSERT(M::inactivityLimit(0) == 512 && M::inactivityLimit(8) == 2 && M::inactivityLimit(9) == 2);
+M activity;
+ASSERT(activity.putGrant({first,14,2}));
+ASSERT(!activity.finishOpportunity(first,9,0)); // Not published yet.
+activity.armActivity(first,-1);
+ASSERT(!activity.finishOpportunity(first,9,0));
+activity.noteActivity(first);
+ASSERT(!activity.finishOpportunity(first,9,1));
+ASSERT(!activity.finishOpportunity(first,9,2));
+ASSERT(activity.finishOpportunity(first,9,3));
+activity.armActivity(first,3,true);
+activity.setActivitySuspended(first,true);
+for (int i = 4; i < 8; ++i) ASSERT(!activity.finishOpportunity(first,9,i));
+activity.setActivitySuspended(first,false);
+ASSERT(!activity.finishOpportunity(first,9,8));
+ASSERT(activity.finishOpportunity(first,9,9));
+activity.armActivity(first,9,true);
+ASSERT(!activity.finishOpportunity(first,9,10));
+activity.rephaseActivity(first,20);
+ASSERT(activity.finishOpportunity(first,9,21)); // Rephasing preserves completed inactivity.
+activity.armActivity(first,21,true);
+ASSERT(!activity.finishOpportunity(first,9,22));
+activity.setActivitySuspended(first,false); // Repeated acknowledged-mode starts are not activity.
+ASSERT(activity.finishOpportunity(first,9,23));

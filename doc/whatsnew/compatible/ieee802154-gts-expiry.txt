@@ -1,0 +1,4 @@
+IEEE 802.15.4 GTS inactivity expiration
+
+Expire inactive GTS grants using the beacon-order-dependent superframe bound
+and advertise their removal.

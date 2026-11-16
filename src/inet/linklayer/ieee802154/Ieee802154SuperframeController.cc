@@ -42,6 +42,7 @@ void Ieee802154SuperframeController::initialize(int stage)
         beaconDispatch->setSchedulingPriority(2); // Packet delivery and ACK expiry settle first at equality.
         capEnd = new ClockEvent("capEnd");
         cfpBoundaryEvent = new cMessage("cfpBoundary");
+        cfpBoundaryEvent->setSchedulingPriority(1); // Delivery settles first; expiry precedes the next beacon dispatch.
         syncWake = new ClockEvent("syncWake");
         syncDeadline = new ClockEvent("syncDeadline");
         accessSearchDeadline = new ClockEvent("accessSearchDeadline");

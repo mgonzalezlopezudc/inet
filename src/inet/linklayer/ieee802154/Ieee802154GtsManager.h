@@ -4,6 +4,7 @@
 #define INET_IEE_E802154_GTSMANAGER_H
 
 #include <vector>
+#include <optional>
 #include "inet/common/INETDefs.h"
 #include "inet/linklayer/ieee802154/Ieee802154GtsValues.h"
 
@@ -14,7 +15,16 @@ class INET_API Ieee802154GtsManager
 {
   public:
     struct Key { uint16_t panId; uint64_t extendedAddress; uint16_t shortAddress; Ieee802154GtsDirection direction; };
-    struct Grant { Key key; uint8_t start; uint8_t length; };
+    struct Grant {
+        Key key;
+        uint8_t start;
+        uint8_t length;
+        unsigned int inactive = 0;
+        bool activityArmed = false;
+        bool activitySuspended = false;
+        bool activeInOpportunity = false;
+        std::optional<int64_t> lastOpportunity;
+    };
     struct Advertisement { Key key; uint8_t start; uint8_t length; unsigned int remaining; uint64_t revision; bool published; };
 
   private:
@@ -28,6 +38,13 @@ class INET_API Ieee802154GtsManager
     [[nodiscard]] const std::vector<Grant>& getGrants() const { return grants; }
     [[nodiscard]] const std::vector<Advertisement>& getAdvertisements() const { return advertisements; }
     [[nodiscard]] const Grant *findGrant(const Key& key) const;
+    [[nodiscard]] static unsigned int inactivityLimit(uint8_t beaconOrder);
+    void armActivity(const Key& key, int64_t previousEpoch, bool rebaseline = false);
+    void rephaseActivity(const Key& key, int64_t previousEpoch);
+    void noteActivity(const Key& key);
+    void setActivitySuspended(const Key& key, bool suspended);
+    [[nodiscard]] bool finishOpportunity(const Key& key, uint8_t beaconOrder, int64_t epoch);
+    void copyActivityFrom(const Ieee802154GtsManager& source);
     [[nodiscard]] bool canReserve(const Key& key) const { return available(key); }
     [[nodiscard]] size_t reservedCount() const;
     bool putGrant(const Grant& grant);

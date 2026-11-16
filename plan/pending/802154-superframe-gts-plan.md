@@ -32,7 +32,8 @@ flowchart LR
     J --> K[B3-03 CFP exchange]
     K --> L[B3-04 deallocation and repacking]
     L --> M[B3-05 expiration]
-    M --> N[B-99 release evidence]
+    M --> O[B3-06 direct observations]
+    O --> N[B-99 release evidence]
 ```
 
 E1 can proceed on a separate branch from the same M1/M2 base. The two plans share the existing MAC/codec and must coordinate those edits; their independent dependency graphs do not authorize concurrent edits to the same files.
@@ -325,13 +326,23 @@ Reuse B3-02's CAP-maintenance removal/repacking operation for explicit coordinat
 
 Depends on B3-04. Count actual DATA received in a device-transmit grant and actual ACK received for a device-receive grant. Apply the BO-dependent inactivity bound, reset only on the specified successful evidence and reuse the deallocation/advertisement path. With unacknowledged coordinator-to-device traffic, do not invent inactivity evidence from absent ACKs. Keep descriptor aging and grant activity as separate lifetimes.
 
+The execution-time source audit closes the unspecified initial/mixed-mode bookkeeping in the [profile](../../doc/project/evidence/model/ieee802154/beacon-profile.md#gts-allocation-timing-and-capacity): first actual grant publication arms counting; a full copied opportunity settles before expiry; post-publication skipped epochs count separately from four-epoch descriptor aging; actual unacknowledged downlink suspends monitoring and actual acknowledged downlink re-arms a fresh interval; changed-BO publication rebaselines surviving armed counters while preserving suspension. These are explicit model policies, not extra quoted IEEE rules. Reuse existing CFP/outgoing event owners and prevent staged beacon state from restoring a removed grant or overwriting newer activity.
+
 **Write protocol tests:** `tests/protocol/ieee802154/Ieee802154GtsExpiry.test`. Use BO 0, 8 and 9 to cross the exponent boundary; drive activity one superframe before, at and after expiration. Independently stop device DATA, lose all receive-GTS ACKs and run unacknowledged downlink traffic. Require the specified expiration/deallocation beacon, preserved unacknowledged receive grant unless explicitly removed, and no duplicate removal notification. Parent lacks activity-based expiry; the observed zero-start descriptor and subsequent absence of slot use must distinguish the change.
+
+Cover first-publication delay, last-opportunity/inclusive-end versus one-tick-late completion, skipped-epoch catch-up beyond four, uplink activity despite lost ACK, actual ACK-mode transitions versus pre-RF refusal, BO rebaselining and relocation without renewal. An immediate same-BO START phase replacement preserves completed inactivity while retiring the unfinished old phase; test both zero and one already-consumed opportunity so resetting the counter cannot masquerade as a repair. Check native terminals/removal before RESET callbacks. Combine related stimuli within bounded scenarios rather than duplicating the allocation suite.
 
 **Write reviewer document:** `tests/protocol/ieee802154/gts-expiry.md`, B3-05. Show activity counters in superframes rather than elapsed seconds. Verify the new selector plus GtsData/GtsDeallocation and unit BO-boundary calculations.
 
+### B3-06 — `ieee802154: add: superframe and GTS observations`
+
+Depends on B3-05. This execution-time split assigns section6's already approved observation obligation to a source commit rather than hiding it in B-99. Expose committed CAP/CFP physical bounds and grant allocation/removal/qualifying activity through minimal declared signals/statistics from their existing owners. Distinguish installed future window bounds from actual RF activity, ledger allocation from requester confirmation, and successful DATA/ACK evidence from configuration or observability rebasing. Do not add a producer registry, copied authoritative state, timer, control listener or generic event framework. Keep existing native callbacks as the upper-layer service contract.
+
+Extend the owning GtsData/GtsExpiry and SlottedManagement fixtures with passive observers, independent actual beacon/RF comparisons and event counts. Retain their timing/terminal assertions and use the existing raw/typed controls; no parallel protocol fixture is needed. Review signal-time callback reentry against the existing retirement/RESET barriers. Document each signal's value/timing and add its compatible release fragment. Update the existing companions with the observer setup and limits.
+
 ### B-99 — `doc: change: publish beacon and GTS support evidence`
 
-Depends on B3-05 and all earlier acceptance gates. Finalize the sleeping-beacon-PAN and bidirectional-GTS example settings/explanations, update user/migration documentation and WHATSNEW, and close the new model ledger rows with exact source/configuration/artifact identity. Production example application changes ship in B2-03/B3-03. Keep S1/E1/TSCH/DSME and excluded PHYs visibly unsupported. New source release notes travel with the behavior commits above; this commit consolidates documentation/configuration, not missing code or tests. A new protocol reviewer document does not apply to this closure; all protocol companions are already assigned.
+Depends on B3-06 and all earlier acceptance gates. Finalize the sleeping-beacon-PAN and bidirectional-GTS example settings/explanations, update user/migration documentation and WHATSNEW, and close the new model ledger rows with exact source/configuration/artifact identity. Production example application changes ship in B2-03/B3-03. Keep S1/E1/TSCH/DSME and excluded PHYs visibly unsupported. New source release notes travel with the behavior commits above; this commit consolidates documentation/configuration, not missing code or tests. A new protocol reviewer document does not apply to this closure; all protocol companions are already assigned.
 
 ## 6. Verification campaign and release gate
 
