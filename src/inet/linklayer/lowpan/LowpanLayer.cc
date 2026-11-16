@@ -15,10 +15,42 @@
 #include "inet/linklayer/lowpan/LowpanNativeBoundary.h"
 #include "inet/linklayer/common/InterfaceTag_m.h"
 #include "inet/networklayer/common/NextHopAddressTag_m.h"
+#include "inet/networklayer/common/Icmpv6Type_m.h"
+#include "inet/networklayer/ipv6/Ipv6ExtensionHeaders.h"
 #include "inet/networklayer/ipv6/Ipv6Header_m.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
 
 namespace inet { namespace lowpan {
+namespace {
+bool isRouterDiscovery(const Packet *packet)
+{
+    try {
+        auto protocol = packet->peekAtFront<Ipv6Header>(B(40))->getProtocolId();
+        b offset = B(40);
+        while (isIpv6ExtensionHeader(protocol)) {
+            auto remaining = packet->getDataLength() - offset;
+            if (remaining < B(8))
+                return false;
+            auto extension = peekIpv6ExtensionHeaderAt(packet, offset, protocol);
+            auto length = extension->getChunkLength();
+            if (length < B(8) || length > remaining || length.get() % 8 != 0)
+                return false;
+            if (auto fragment = dynamicPtrCast<const Ipv6FragmentHeader>(extension))
+                if (fragment->getFragmentOffset() != 0)
+                    return false;
+            protocol = extension->getNextHeaderProtocol();
+            offset += length;
+        }
+        if (protocol != IP_PROT_IPv6_ICMP || offset >= packet->getDataLength())
+            return false;
+        auto type = packet->peekDataAt<BytesChunk>(offset, B(1))->getBytes()[0];
+        return type == ICMPv6_ROUTER_SOL || type == ICMPv6_ROUTER_AD;
+    }
+    catch (const cRuntimeError&) {
+        return false; // Inspection must not replace the existing malformed-packet handling.
+    }
+}
+}
 
 Define_Module(LowpanLayer);
 simsignal_t LowpanLayer::datagramAcceptedSignal = registerSignal("datagramAccepted");
@@ -227,8 +259,10 @@ void LowpanLayer::processUpperPacket(Packet *packet)
     int size = packet->getDataLength().get<B>();
     Ptr<const Chunk> encodedHeader = makeShared<LowpanHeader>();
     int originalHeaderLength = 0;
+    // Discovery establishes context knowledge; both encoding passes must bootstrap without it.
+    const LowpanContextTable *contexts = useIphc && isRouterDiscovery(packet) ? nullptr : &compressionContexts;
     if (useIphc) {
-        auto iphc = LowpanIphcCodec::encode(*packet->peekAtFront<Ipv6Header>(), request.getSrcAddress(), request.getDestAddress(), false, &compressionContexts, simTime());
+        auto iphc = LowpanIphcCodec::encode(*packet->peekAtFront<Ipv6Header>(), request.getSrcAddress(), request.getDestAddress(), false, contexts, simTime());
         if (iphc != nullptr) {
             int length = iphc->getChunkLength().get<B>();
             // RFC 6282 section 4: compressed headers must fit wholly in FRAG1.
@@ -240,7 +274,7 @@ void LowpanLayer::processUpperPacket(Packet *packet)
         }
     }
     if (useIphc && originalHeaderLength == 40) {
-        auto chain = LowpanNhcCodec::encode(*packet, request.getSrcAddress(), request.getDestAddress(), &compressionContexts, simTime());
+        auto chain = LowpanNhcCodec::encode(*packet, request.getSrcAddress(), request.getDestAddress(), contexts, simTime());
         if (chain.header && (size - chain.originalLength + chain.encodedLength <= prepared->getPayloadLimit() ||
                 chain.encodedLength + 4 <= prepared->getPayloadLimit())) {
             encodedHeader = chain.header;

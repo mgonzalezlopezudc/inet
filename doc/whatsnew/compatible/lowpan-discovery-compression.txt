@@ -1,0 +1,3 @@
+Stateless compression of 6LoWPAN discovery
+
+6LoWPAN Router Solicitation and Router Advertisement compression now uses stateless IPHC even when matching stateful contexts are configured, including supported extension-header discovery packets. This allows discovery with peers that have not yet learned those contexts.

@@ -1,0 +1,126 @@
+%description:
+Real global-source RS receives a real radio RA despite asymmetric CID5 knowledge.
+An HBH RS sender has CID5 while its router lacks it, proving NHC re-encoding also
+keeps discovery stateless. MAC bytes and decoded RA/checksum are independent checks.
+
+%extraargs: -r 0..1
+
+%file: ContextDiscoveryCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/MemoryOutputStream.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/checksum/Checksum.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/ieee802154/Ieee802154AddressTagBase_m.h"
+#include "inet/linklayer/lowpan/LowpanPacketDropDetails_m.h"
+#include "inet/networklayer/common/L3AddressTag_m.h"
+#include "inet/networklayer/icmpv6/Icmpv6.h"
+#include "inet/networklayer/icmpv6/Ipv6NdMessage_m.h"
+#include "inet/networklayer/ipv6/Ipv6Header_m.h"
+#include "inet/networklayer/ipv6/Ipv6InterfaceData.h"
+
+namespace inet::protocoltest {
+using namespace lowpan;
+class ContextDiscoveryCheck : public cSimpleModule, public cListener
+{
+    NetworkInterface *router=nullptr;
+    cModule *peerMac=nullptr,*routerMac=nullptr;
+    int scenario=0,rsWire=0,raWire=0,dependent=0,nhc=0,drops=0,delivered=0;
+    Ipv6Address source{"2001:db8:1:0:211:2233:4455:6601"},routerLocal{"fe80::211:2233:4455:6603"};
+  protected:
+    int numInitStages() const override {return NUM_INIT_STAGES;}
+    void initialize(int stage) override {
+        if(stage!=INITSTAGE_LAST)return;scenario=par("scenario");router=check_and_cast<NetworkInterface *>(getModuleByPath("^.router.wlan[0]"));peerMac=getModuleByPath("^.peer.nic.mac");routerMac=router->getSubmodule("mac");
+        peerMac->subscribe("packetSentToLower",this);routerMac->subscribe("packetSentToLower",this);getModuleByPath("^.peer.nic.lowpan")->subscribe("packetDropped",this);router->getSubmodule("lowpan")->subscribe("packetDropped",this);
+        auto info=router->getProtocolDataForUpdate<Ipv6InterfaceData>();info->setAdvSendAdvertisements(true);info->setAdvDefaultLifetime(SimTime(120));info->setAdvCurHopLimit(42);while(info->getNumAdvPrefixes())info->removeAdvPrefix(0);
+        scheduleAt(SimTime(100,SIMTIME_MS),new cMessage("global-rs"));scheduleAt(SimTime(3),new cMessage("finish"));
+    }
+    void receiveSignal(cComponent *component,simsignal_t signal,cObject *object,cObject *details) override {
+        Enter_Method_Silent();
+        if(signal==registerSignal("packetDropped")){auto drop=check_and_cast<LowpanPacketDropDetails *>(details);ASSERT(drop->getLowpanReason()==LOWPAN_MALFORMED);drops++;std::cout<<"receiver-drop="<<component->getFullPath()<<" lowpanReason="<<drop->getLowpanReason()<<'\n';return;}
+        auto bytes=check_and_cast<Packet *>(object)->peekDataAsBytes()->getBytes();ASSERT(bytes.size()>=5);int fcf=bytes[0]|(bytes[1]<<8);if((fcf&7)!=1)return;
+        bool reply=component==routerMac;ASSERT(reply || component==peerMac);ASSERT((fcf&0xc000)==0xc000 && (fcf&0x40)!=0);int offset=reply?21:15;ASSERT(((fcf>>10)&3)==(reply?3:2) && bytes.size()>size_t(offset+3));
+        std::vector<uint8_t> payload(bytes.begin()+offset,bytes.end()-2);ASSERT((payload[0]&0xe0)==0x60);int flags=payload[1],sac=(flags>>6)&1,dac=(flags>>2)&1,cid=(flags>>7)&1;int sci=cid?payload[2]>>4:0,dci=cid?payload[2]&15:0;
+        dependent+=sac||dac||cid;if(reply)raWire++;else rsWire++;
+        if(!reply && scenario==1){const std::vector<uint8_t> marker{0xe0,58,0};ASSERT((payload[0]&4)!=0 && std::search(payload.begin(),payload.end(),marker.begin(),marker.end())!=payload.end());nhc++;}
+        std::cout<<"wire="<<(reply?"RA":"RS")<<" SAC="<<sac<<" DAC="<<dac<<" CID="<<cid<<" SCI="<<sci<<" DCI="<<dci<<" NH="<<((payload[0]>>2)&1)<<'\n';
+    }
+    void handleMessage(cMessage *message) override {
+        if(message->isSelfMessage()){bool finish=std::string(message->getName())=="finish";delete message;if(finish){endSimulation();return;}
+            std::vector<uint8_t> rs{133,0,0,0,0,0,0,0,1,2,0,0x11,0x22,0x33,0x44,0x55,0x66,1,0,0,0,0,0,0};MemoryOutputStream pseudo;pseudo.writeIpv6Address(source);pseudo.writeIpv6Address(Ipv6Address::ALL_ROUTERS_2);pseudo.writeUint32Be(rs.size());pseudo.writeUint32Be(58);pseudo.writeBytes(rs);auto checksum=internetChecksum(pseudo.getData());rs[2]=checksum>>8;rs[3]=checksum;
+            std::vector<uint8_t> ip{0x60,0,0,0,0,uint8_t(rs.size()+(scenario==1?8:0)),uint8_t(scenario==1?0:58),255};MemoryOutputStream addresses;addresses.writeIpv6Address(source);addresses.writeIpv6Address(Ipv6Address::ALL_ROUTERS_2);ip.insert(ip.end(),addresses.getData().begin(),addresses.getData().end());if(scenario==1)ip.insert(ip.end(),{58,0,1,4,0,0,0,0});ip.insert(ip.end(),rs.begin(),rs.end());
+            auto packet=new Packet("global-source-discovery-rs",makeShared<BytesChunk>(ip));packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ipv6);sendDirect(packet,getModuleByPath("^.peer.nic")->gate("upperLayerIn"));return;
+        }
+        auto packet=check_and_cast<Packet *>(message);ASSERT(!packet->findTag<Ieee802154AddressReq>());auto ip=packet->popAtFront<Ipv6Header>();ASSERT(ip->getSrcAddress()==routerLocal && ip->getDestAddress()==source && ip->getHopLimit()==255 && ip->getProtocolId()==IP_PROT_IPv6_ICMP);auto addresses=packet->addTag<L3AddressInd>();addresses->setSrcAddress(routerLocal);addresses->setDestAddress(source);ASSERT(Icmpv6::verifyChecksum(packet));auto ra=packet->peekAtFront<Ipv6RouterAdvertisement>();ASSERT(ra->getCode()==0 && ra->getRouterLifetime()==120 && ra->getCurHopLimit()==42 && ra->getOptions().getOptionArraySize()==1);auto sllao=ra->getOptions().getOption(0);ASSERT(sllao->getType()==IPv6ND_SOURCE_LINK_LAYER_ADDR_OPTION && sllao->getOptionLength()==2 && sllao->getPaddingBytesArraySize()==14);for(int i=0;i<8;i++)ASSERT(uint8_t(sllao->getPaddingBytes(i))==uint8_t(UINT64_C(0x0011223344556603)>>(8*(7-i))));delivered++;delete packet;
+    }
+    void finish() override {
+        std::cout<<"scenario="<<scenario<<" RS="<<rsWire<<" RA="<<raWire<<" contextDependent="<<dependent<<" NHC="<<nhc<<" drops="<<drops<<" delivered="<<delivered<<'\n';
+        ASSERT(rsWire==1 && raWire==1 && dependent==0 && nhc==scenario && drops==0 && delivered==1);
+        std::cout<<"Native context-independent discovery, extension NHC and decoded RA verified\n";
+    }
+};
+Define_Module(ContextDiscoveryCheck);
+}
+
+%file: test.ned
+@namespace(inet::protocoltest);
+import inet.node.inet.StandardHost;
+import inet.networklayer.common.InterfaceTable;
+import inet.mobility.static.StationaryMobility;
+import inet.linklayer.lowpan.Ieee802154NativeLowpanInterface;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple ContextDiscoveryCheck {parameters:int scenario;gates:input in;}
+module ContextDiscoveryPeer {
+    parameters:@networkNode;
+    gates:output out;
+    submodules:
+        interfaceTable:InterfaceTable;
+        mobility:StationaryMobility;
+        nic:Ieee802154NativeLowpanInterface {interfaceTableModule="^.interfaceTable";linkDomainModule="^.^.domain";}
+    connections allowunconnected:nic.upperLayerOut --> out;
+}
+network ContextDiscoveryNetwork {
+    submodules:
+        radioMedium:Ieee802154NarrowbandScalarRadioMedium;
+        domain:LowpanNativeLinkDomain;
+        router:StandardHost;
+        peer:ContextDiscoveryPeer;
+        check:ContextDiscoveryCheck;
+    connections allowunconnected:peer.out --> check.in;
+}
+
+%inifile: omnetpp.ini
+[General]
+network=ContextDiscoveryNetwork
+sim-time-limit=4s
+seed-set=0
+*.check.scenario=${case=0,1}
+**.vector-recording=false
+**.scalar-recording=false
+*.router.hasIpv4=false
+*.router.hasIpv6=true
+*.router.forwarding=true
+*.router.ipv6.typename="LowpanIpv6NetworkLayer"
+*.router.ipv6.neighbourDiscovery.nativeNdRole="router"
+*.router.ipv6.neighbourDiscovery.routerBootupTime=0s
+*.router.ipv6.neighbourDiscovery.dupAddrDetectTransmits=0
+*.router.numWlanInterfaces=1
+*.router.wlan[0].typename="Ieee802154NativeLowpanInterface"
+*.router.wlan[0].linkDomainModule="^.^.domain"
+*.router.wlan[0].radio.antenna.mobilityModule="^.^.^.mobility"
+*.peer.nic.radio.antenna.mobilityModule="^.^.^.mobility"
+*.domain.panId=4660
+*.domain.config=xml("<domain><peer interface='peer.nic' native='0011223344556601'/><peer interface='router.wlan[0]' native='0011223344556603'/></domain>")
+*.router.wlan[0].lowpan.compressionContexts=xml(${case}==0 ? "<contexts><context id='5' prefix='2001:db8:1::' prefixLength='64'/></contexts>" : "<contexts/>")
+*.peer.nic.lowpan.compressionContexts=xml(${case}==1 ? "<contexts><context id='5' prefix='2001:db8:1::' prefixLength='64'/></contexts>" : "<contexts/>")
+**.lowpan.headerCompression="iphc"
+**.mobility.initialX=0m
+**.mobility.initialY=0m
+**.mobility.initialZ=0m
+**.mobility.initFromDisplayString=false
+**.mobility.updateFromDisplayString=false
+
+%contains: stdout
+Native context-independent discovery, extension NHC and decoded RA verified
