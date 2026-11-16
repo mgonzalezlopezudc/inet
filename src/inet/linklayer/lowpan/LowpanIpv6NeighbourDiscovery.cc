@@ -6,6 +6,7 @@
 #include "inet/linklayer/lowpan/LowpanNativeBoundary.h"
 #include "inet/linklayer/lowpan/LowpanHostRegistration.h"
 #include "inet/linklayer/lowpan/LowpanRegistrationAuthority.h"
+#include "inet/linklayer/lowpan/LowpanRegistrationRelay.h"
 #include "inet/linklayer/ieee802154/Ieee802154AddressTagBase_m.h"
 #include "inet/linklayer/common/InterfaceTag_m.h"
 #include "inet/networklayer/common/HopLimitTag_m.h"
@@ -38,6 +39,7 @@ LowpanIpv6NeighbourDiscovery::~LowpanIpv6NeighbourDiscovery()
 {
     updateHostAddressSubscription(false);
     hostRegistration.reset();
+    registrationRelay.reset();
     registrationAuthority.reset();
     cancelAndDelete(routerAdvertisementTimer);
     routerAdvertisementTimer = nullptr;
@@ -58,6 +60,12 @@ void LowpanIpv6NeighbourDiscovery::initialize(int stage)
             hostRegistration = std::make_unique<LowpanHostRegistration>(*this);
         if (role == "borderRouter")
             registrationAuthority = std::make_unique<LowpanRegistrationAuthority>(*this);
+        bool authorityConfigured = *par("registrationAuthorityAddress").stringValue() != '\0';
+        bool sourceConfigured = *par("registrationSourceAddress").stringValue() != '\0';
+        if (authorityConfigured != sourceConfigured || (authorityConfigured && role != "router"))
+            throw cRuntimeError("Routed registration requires router role and both authority/source addresses");
+        if (authorityConfigured)
+            registrationRelay = std::make_unique<LowpanRegistrationRelay>(*this);
         maxRegistrations = par("maxRegistrations");
         if (maxRegistrations <= 0)
             throw cRuntimeError("Native registration capacity must be positive");
@@ -71,12 +79,15 @@ void LowpanIpv6NeighbourDiscovery::initialize(int stage)
         WATCH_EXPR("numNativeRouters", hostRegistration ? hostRegistration->getNumRouters() : 0);
         WATCH_EXPR("numNativeHostAddresses", hostRegistration ? hostRegistration->getNumAddresses() : 0);
         WATCH_EXPR("numDuplicateAddressEntries", registrationAuthority ? registrationAuthority->getNumEntries() : 0);
+        WATCH_EXPR("numPendingRegistrations", registrationRelay ? registrationRelay->getNumPending() : 0);
     }
 }
 
 void LowpanIpv6NeighbourDiscovery::handleMessageWhenUp(cMessage *message)
 {
-    if (registrationAuthority && registrationAuthority->ownsTimer(message))
+    if (registrationRelay && registrationRelay->ownsTimer(message))
+        registrationRelay->handleTimer();
+    else if (registrationAuthority && registrationAuthority->ownsTimer(message))
         registrationAuthority->handleTimer();
     else if (hostRegistration && hostRegistration->ownsTimer(message))
         hostRegistration->handleTimer();
@@ -105,6 +116,8 @@ void LowpanIpv6NeighbourDiscovery::stop()
     updateHostAddressSubscription(false);
     if (hostRegistration)
         hostRegistration->clear();
+    if (registrationRelay)
+        registrationRelay->clear();
     if (registrationAuthority)
         registrationAuthority->clear();
     clearRouterAdvertisements();
@@ -304,6 +317,12 @@ void LowpanIpv6NeighbourDiscovery::processRegistration(Packet *packet, const Ipv
     }
     expireRegistrations();
     RegistrationKey key{interface->getInterfaceId(), packet->getTag<L3AddressInd>()->getSrcAddress().toIpv6()};
+    if (registrationRelay) {
+        registrationRelay->processRegistration(key, requested, *aro, message->getTargetAddress());
+        scheduleRegistrationExpiry();
+        delete packet;
+        return;
+    }
     int status = applyRegistration(key, requested);
     scheduleRegistrationExpiry();
     sendRegistrationAdvertisement(key, requested, *aro, status, message->getTargetAddress());
@@ -455,6 +474,8 @@ void LowpanIpv6NeighbourDiscovery::start()
     if ((registrationRouter || registrationAuthority) && !rt6->isRouter())
         throw cRuntimeError("Native ND router and borderRouter roles require IPv6 forwarding to be enabled");
     Ipv6NeighbourDiscovery::start();
+    if (registrationRelay)
+        registrationRelay->start();
     if (hostRegistration)
         updateHostAddressSubscription(true);
     for (int i = 0; i < ift->getNumInterfaces(); i++) {
@@ -586,6 +607,8 @@ void LowpanIpv6NeighbourDiscovery::processNativeNeighbourSolicitation(Packet *pa
 
 void LowpanIpv6NeighbourDiscovery::processNDMessage(Packet *packet, const Icmpv6Header *message)
 {
+    if (registrationRelay && registrationRelay->processPacket(packet, message))
+        return;
     if (registrationAuthority && registrationAuthority->processPacket(packet, message))
         return;
     auto indication = packet->findTag<InterfaceInd>();

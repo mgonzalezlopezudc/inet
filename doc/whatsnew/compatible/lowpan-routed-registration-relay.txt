@@ -1,0 +1,3 @@
+Native routed registration confirmation
+
+Native 6LoWPAN routers can now confirm registrations with a configured routed duplicate-address authority before installing bindings. The relay bounds pending operations, correlates operation lifetimes, preserves data during refresh and supports the RFC 6775 unanswered-request success fallback with the default host. Configured DAR sources must be non-loopback as well as valid assigned non-link-local unicast addresses.

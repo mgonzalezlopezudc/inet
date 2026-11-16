@@ -9,15 +9,18 @@
 namespace inet { namespace lowpan {
 class LowpanHostRegistration;
 class LowpanRegistrationAuthority;
+class LowpanRegistrationRelay;
 
 // Native registration ownership is separate from the ordinary 48-bit ND cache.
 class INET_API LowpanIpv6NeighbourDiscovery : public Ipv6NeighbourDiscovery
 {
     friend class LowpanHostRegistration;
     friend class LowpanRegistrationAuthority;
+    friend class LowpanRegistrationRelay;
   protected:
     std::unique_ptr<LowpanHostRegistration> hostRegistration;
     std::unique_ptr<LowpanRegistrationAuthority> registrationAuthority;
+    std::unique_ptr<LowpanRegistrationRelay> registrationRelay;
     bool hostAddressSubscription = false;
     struct Registration {
         Ieee802154Address owner;
