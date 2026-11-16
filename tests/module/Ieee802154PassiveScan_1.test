@@ -3,7 +3,7 @@ Production passive and ED scanning over a real scalar medium: ordered channels, 
 native descriptor identity, duplicate beacons, notification/capacity policy,
 DATA rejection, zero duration, bad channel, cancel/reset readiness restoration.
 
-%extraargs: -r 0..41
+%extraargs: -r 0..59
 
 %file: ScanFixture.cc
 #include "inet/common/ModuleRefByPar.h"
@@ -20,7 +20,7 @@ DATA rejection, zero duration, bad channel, cancel/reset readiness restoration.
 
 namespace inet {
 using namespace physicallayer;
-class ScanExercise : public cSimpleModule, public IIeee802154MacServiceClient,
+class ScanExercise : public cSimpleModule, public cListener, public IIeee802154MacServiceClient,
         public IIeee802154ManagementServiceClient, public IIeee802154PhyServiceClient
 {
     using Status = Ieee802154MacStatus;
@@ -30,6 +30,7 @@ class ScanExercise : public cSimpleModule, public IIeee802154MacServiceClient,
     ModuleRefByPar<IIeee802154PhyServiceProvider> transmitter;
     uint64_t nextId = 0;
     int scenario = 0, scans = 0, notices = 0, resets = 0, transmitted = 0;
+    int promiscuousIndications = 0, packetSignals = 0, syncLosses = 0;
     bool isEd() const { return scenario >= 7 && scenario <= 13; }
     std::optional<Ieee802154MacPibValue> readValue;
     uint64_t id() { return ++nextId; }
@@ -49,6 +50,7 @@ class ScanExercise : public cSimpleModule, public IIeee802154MacServiceClient,
         frame->setSourcePanId(0x1234);
         frame->setDsn(7);
         Ieee802154BeaconCodec::Content beacon;
+        if (scenario == 29) beacon.superframeSpecification |= 0x4000;
         if (scenario < 16) beacon.payload = {0x42};
         beacon.pendingAddresses = {Ieee802154Address::fromShort(7)};
         auto payload = Ieee802154BeaconCodec::encode(beacon);
@@ -56,7 +58,12 @@ class ScanExercise : public cSimpleModule, public IIeee802154MacServiceClient,
         for (size_t i = 0; i < payload.size(); i++) frame->setPayload(i,payload[i]);
         Ieee802154FrameCodec::finalize(*frame);
         auto packet = new Packet(data ? "irrelevant DATA" : "scan beacon");
-        if ((scenario == 14 || scenario == 15) && !data) {
+        if (scenario == 25 && transmitted == 0) {
+            auto bytes = Ieee802154FrameCodec::encode(*frame);
+            bytes.back() ^= 1; // A real malformed-FCS beacon must consume its start sample.
+            packet->insertAtBack(makeShared<BytesChunk>(bytes));
+        }
+        else if ((scenario == 14 || scenario == 15) && !data) {
             auto bytes = Ieee802154FrameCodec::encode(*frame);
             bytes[0] |= 8;
             bytes.resize(13); // Common extended-source header; protected body is independent opaque input.
@@ -76,10 +83,14 @@ class ScanExercise : public cSimpleModule, public IIeee802154MacServiceClient,
         management.reference(this,"serviceModule",true);
         transmitter.reference(this,"providerModule",true);
         scenario = par("scenario");
+        if (scenario == 28)
+            getModuleByPath(par("serviceModule"))->subscribe("packetReceivedFromLower", this);
     }
     virtual void handleScanConfirm(uint64_t, const Ieee802154MacScanConfirm& confirm) override {
         Enter_Method("handleScanConfirm");
-        ASSERT(++scans == 1 && confirm.type == (isEd() ? Ieee802154ScanType::ED : Ieee802154ScanType::PASSIVE));
+        ++scans;
+        ASSERT((scenario == 23 || scenario == 24 ? scans <= 2 : scans == 1) &&
+                confirm.type == (isEd() ? Ieee802154ScanType::ED : Ieee802154ScanType::PASSIVE));
         if (!isEd()) ASSERT(confirm.energyDetectList.empty());
         Ieee802154MacServiceResult result = Status::SUCCESS;
         if (scenario == 2) result = Status::LIMIT_REACHED;
@@ -88,11 +99,31 @@ class ScanExercise : public cSimpleModule, public IIeee802154MacServiceClient,
         if (scenario == 6) result = Status::BAD_CHANNEL;
         if (scenario == 8 || scenario == 13) result = Ieee802154MacServiceAbortReason::CANCELLED;
         if (scenario == 9) result = Ieee802154MacServiceAbortReason::RESET;
+        if (scenario >= 23 && scenario <= 24) {
+            if (scans == 1) {
+                auto expected = scenario == 23 ? Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::RESET) :
+                        Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::STOPPED);
+                ASSERT(confirm.result == expected && confirm.panDescriptors.empty());
+            }
+            else {
+                ASSERT(scans == 2 && confirm.result == Ieee802154MacServiceResult(Status::SUCCESS));
+                ASSERT(confirm.panDescriptors.size() == 1 && confirm.panDescriptors.front().timestamp == 16031);
+            }
+            return;
+        }
         ASSERT(confirm.result == result);
+        if (scenario == 25) {
+            ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS));
+            ASSERT(confirm.panDescriptors.size() == 1 && confirm.panDescriptors.front().timestamp == 15781);
+            return;
+        }
         if (scenario >= 19) {
-            ASSERT(confirm.panDescriptors.size() == (scenario == 19 ? 1 : 0));
+            ASSERT(confirm.panDescriptors.size() == (scenario == 19 || scenario == 21 ? 1 : 0));
             ASSERT(confirm.unscannedChannels.empty() && simTime() == SimTime(5192,SIMTIME_US));
             if (scenario == 19) ASSERT(confirm.panDescriptors.front().timestamp == 280);
+            if (scenario == 21) {
+                ASSERT(confirm.panDescriptors.size() == 1 && confirm.panDescriptors.front().timestamp == 15895);
+            }
             return;
         }
         if (isEd()) {
@@ -130,6 +161,9 @@ class ScanExercise : public cSimpleModule, public IIeee802154MacServiceClient,
         Enter_Method("handleBeaconNotifyIndication"); notices++;
         ASSERT(descriptor.coordinatorPanId == 0x1234 && descriptor.lqi > 0);
         ASSERT(descriptor.sequenceNumber == 7);
+        if (scenario == 22) ASSERT(descriptor.timestamp == 15895);
+        if (scenario == 26 || scenario == 28 || scenario == 29) ASSERT(descriptor.timestamp == 15781);
+        if (scenario == 27) ASSERT(descriptor.timestamp == 15712);
         if (scenario == 15) {
             ASSERT(!descriptor.contentAvailable && descriptor.beacon.payload.empty() && descriptor.beacon.pendingAddresses.empty());
             ASSERT(descriptor.securityStatus == Ieee802154MacServiceResult(Status::UNSUPPORTED_SECURITY));
@@ -148,11 +182,22 @@ class ScanExercise : public cSimpleModule, public IIeee802154MacServiceClient,
         Enter_Method("handleSetConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS));
     }
     virtual void handleResetConfirm(uint64_t, const Ieee802154MacResetConfirm& confirm) override {
-        Enter_Method("handleResetConfirm"); ASSERT(scans == 1 && confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); resets++;
+        Enter_Method("handleResetConfirm");
+        ASSERT(scans == (scenario >= 26 ? 0 : 1) && confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); resets++;
     }
     virtual void handleDataConfirm(uint64_t, const Ieee802154MacDataConfirm&) override { ASSERT(false); }
     virtual void handleDataIndication(Packet *, const Ieee802154MacDataIndication&) override { ASSERT(false); }
-    virtual void handlePromiscuousIndication(Packet *, const Ieee802154MacPromiscuousIndication&) override { ASSERT(false); }
+    virtual void handlePromiscuousIndication(Packet *packet, const Ieee802154MacPromiscuousIndication&) override {
+        Enter_Method("handlePromiscuousIndication");
+        ASSERT(scenario == 26 || scenario == 27);
+        take(packet);
+        delete packet;
+        ++promiscuousIndications;
+        if (promiscuousIndications == 1 && scenario == 26)
+            ASSERT(mac->submitReset(id(),{false}) == Admission::ACCEPTED);
+        if (promiscuousIndications == 1 && scenario == 27)
+            set("macRxOnWhenIdle",true);
+    }
     virtual void handleCommStatusIndication(Packet *, const Ieee802154MacCommStatusIndication&) override { ASSERT(false); }
     virtual void handleStartConfirm(uint64_t, const Ieee802154MacStartConfirm&) override { ASSERT(false); }
     virtual void handleBeaconConfirm(uint64_t, const Ieee802154MacBeaconConfirm&) override { ASSERT(false); }
@@ -163,7 +208,12 @@ class ScanExercise : public cSimpleModule, public IIeee802154MacServiceClient,
     virtual void handleDisassociateIndication(const Ieee802154MacDisassociateIndication&) override { ASSERT(false); }
     virtual void handleOrphanIndication(const Ieee802154MacOrphanIndication&) override { ASSERT(false); }
     virtual void handleOrphanResponseStatus(uint64_t, const Ieee802154MacOrphanResponseStatus&) override { ASSERT(false); }
-    virtual void handleSyncLossIndication(const Ieee802154MacSyncLossIndication&) override { ASSERT(false); }
+    virtual void handleSyncLossIndication(const Ieee802154MacSyncLossIndication&) override {
+        Enter_Method("handleSyncLossIndication");
+        ASSERT(scenario == 29);
+        if (++syncLosses == 1)
+            ASSERT(mac->submitReset(id(),{false}) == Admission::ACCEPTED);
+    }
     virtual void handleRxEnableConfirm(uint64_t, const Ieee802154MacRxEnableConfirm&) override { ASSERT(false); }
     virtual void handleRxEnableIndication(const Ieee802154MacRxEnableIndication&) override { ASSERT(false); }
     virtual void handleBeaconRequestIndication(const Ieee802154MacBeaconRequestIndication&) override { ASSERT(false); }
@@ -184,16 +234,40 @@ class ScanExercise : public cSimpleModule, public IIeee802154MacServiceClient,
     virtual void handleCcaConfirm(uint64_t, const Ieee802154PhyCcaConfirm&) override { ASSERT(false); }
     virtual void handleResetConfirm(uint64_t, const Ieee802154PhyResetConfirm&) override { ASSERT(false); }
     void handleAvailabilityIndication(const inet::physicallayer::Ieee802154PhyAvailabilityIndication&) override {}
+    void handleReceiveStarted(const inet::physicallayer::Ieee802154PhyReceiveStart&) override {}
 virtual void handleReceiveIndication(Packet *, const Ieee802154PhyReceiveIndication&) override { ASSERT(false); }
+    virtual void receiveSignal(cComponent *, simsignal_t, cObject *, cObject *) override {
+        Enter_Method("receiveSignal");
+        ASSERT(scenario == 28);
+        if (++packetSignals == 1)
+            ASSERT(mac->submitReset(id(),{false}) == Admission::ACCEPTED);
+    }
   protected:
     virtual void activity() override {
         until(1);
         ASSERT(transmitter->submitState(id(),Ieee802154PhyState::TRANSMIT) == Ieee802154PhyServiceAdmission::ACCEPTED);
         until(1000);
-        set("macAutoRequest",scenario != 1 && scenario != 15 && scenario != 18);
+        set("macAutoRequest",scenario != 1 && scenario != 15 && scenario != 18 && scenario != 22 && scenario < 26);
         set("macNotifyAllBeacons",scenario == 16);
         set("phyCcaDuration",SimTime(17,SIMTIME_US));
         ASSERT(transmitter->submitSet(id(),{"phyTxPower",int64_t(20)}) == Ieee802154PhyServiceAdmission::ACCEPTED);
+        if (scenario >= 26) {
+            set("phyCurrentChannelInfo",channel(11));
+            if (scenario == 26 || scenario == 27) set("macPromiscuousMode",true);
+            else set("macRxOnWhenIdle",true);
+            if (scenario == 29) set("macPanId",uint64_t(0x1234));
+            until(1400); sendFrame(11);
+            if (scenario != 27) { until(2500); sendFrame(11); }
+            until(4000);
+            ASSERT(scans == 0 && notices == 1 && resets == (scenario == 27 ? 0 : 1));
+            ASSERT(transmitted == (scenario == 27 ? 1 : 2));
+            if (scenario == 26) ASSERT(promiscuousIndications == 2);
+            if (scenario == 27) ASSERT(promiscuousIndications == 1);
+            if (scenario == 28) ASSERT(packetSignals == 2);
+            if (scenario == 29) ASSERT(syncLosses == 2);
+            std::cout << "Production passive scan, notification and restoration verified.\n";
+            return;
+        }
         Ieee802154MacScanRequest request;
         request.channels = {channel(12),channel(11),channel(12)};
         request.duration = scenario == 5 || scenario == 12 ? 0 : scenario == 11 ? 1 : 250;
@@ -202,12 +276,36 @@ virtual void handleReceiveIndication(Packet *, const Ieee802154PhyReceiveIndicat
         if (scenario >= 19) request.channels = {channel(11)};
         auto scanId = id();
         ASSERT(management->submitScan(scanId,request) == Admission::ACCEPTED);
-        if (scenario >= 19) {
+        if (scenario >= 19 && scenario <= 24) {
             until(4328);
             if (scenario == 20) wait(SimTime(2,SIMTIME_PS));
             sendFrame(11);
+            if (scenario >= 23) {
+                until(4350);
+                if (scenario == 23) ASSERT(mac->submitReset(id(),{false}) == Admission::ACCEPTED);
+                until(6000);
+                ASSERT(scans == 1);
+                ASSERT(management->submitScan(id(),request) == Admission::ACCEPTED);
+                until(6500); sendFrame(11);
+                until(11000);
+                ASSERT(scans == 2 && transmitted == 2 && resets == (scenario == 23 ? 1 : 0));
+                std::cout << "Production passive scan, notification and restoration verified.\n";
+                return;
+            }
             until(10000);
-            ASSERT(scans == 1 && transmitted == 1 && notices == 0);
+            ASSERT(scans == 1 && transmitted == 1 && notices == (scenario == 22 ? 1 : 0));
+            if (scenario >= 21) {
+                ASSERT(mac->submitGet(id(),{"macSyncSymbolOffset"}) == Admission::ACCEPTED);
+                ASSERT(readValue && std::get<uint64_t>(*readValue) == 10);
+            }
+            std::cout << "Production passive scan, notification and restoration verified.\n";
+            return;
+        }
+        if (scenario == 25) {
+            until(1400); sendFrame(11);
+            until(2500); sendFrame(11);
+            until(10000);
+            ASSERT(scans == 1 && transmitted == 2 && notices == 0);
             std::cout << "Production passive scan, notification and restoration verified.\n";
             return;
         }
@@ -236,6 +334,8 @@ Define_Module(ScanExercise);
 
 %file: ScanFixture.ned
 import inet.common.SimpleModule;
+import inet.common.scenario.ScenarioManager;
+import inet.clock.model.OscillatorBasedClock;
 import inet.mobility.static.StationaryMobility;
 import inet.linklayer.ieee802154.Ieee802154StandardInterface;
 import inet.linklayer.ieee802154.contract.IIeee802154MacServiceClient;
@@ -264,11 +364,16 @@ module ScanSender
 }
 module ScanReceiver
 {
-    parameters: @networkNode;
+    parameters:
+        bool enableClock = default(false);
+        @networkNode;
     submodules:
         mobility: StationaryMobility;
+        clock: OscillatorBasedClock if enableClock;
         nic: Ieee802154StandardInterface {
             enableManagement = true;
+            enableSuperframe = parent.enableClock;
+            clockModule = parent.enableClock ? "^.^.clock" : "";
             extendedAddress = "extended:06-01-12-34-56-78-9A-BC";
             panId = 22136;
             mac.clientModule = "^.^.^.exercise";
@@ -280,6 +385,7 @@ network ScanTest
 {
     submodules:
         radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        scenarioManager: ScenarioManager;
         sender: ScanSender;
         receiver: ScanReceiver;
         exercise: ScanExercise { serviceModule = "^.receiver.nic.mac"; providerModule = "^.sender.phy"; }
@@ -289,12 +395,18 @@ network ScanTest
 [General]
 network = ScanTest
 ned-path = .;../../../../src;../../lib
-sim-time-limit = 11ms
+sim-time-limit = 15ms
 cmdenv-express-mode = true
 record-vector-results = false
 record-scalar-results = false
-*.exercise.scenario = ${scenario=0..20}
+*.exercise.scenario = ${scenario=0..29}
 *.**.radio.sendRawBytes = ${raw=false,true}
+*.receiver.enableClock = ${scenario} >= 21
+*.receiver.nic.mac.isPanCoordinator = ${scenario} == 29
+*.receiver.clock.initialClockTime = 0.25s
+*.receiver.clock.oscillator.nominalTickLength = 1us
+*.receiver.clock.oscillator.driftRate = (${scenario} == 21 || ${scenario} == 23) ? -40ppm : 40ppm
+*.scenarioManager.script = xmldoc(${scenario} == 24 ? "phy-stop.xml" : "no-events.xml")
 *.receiver.nic.mac.scanCapacity = ${scenario} == 2 ? 1 : 16
 *.sender.radio.antenna.mobilityModule = "^.^.mobility"
 *.receiver.nic.radio.antenna.mobilityModule = "^.^.^.mobility"
@@ -309,6 +421,15 @@ record-scalar-results = false
 **.mobility.constraintAreaMaxX = 100m
 **.mobility.constraintAreaMaxY = 100m
 **.mobility.constraintAreaMaxZ = 100m
+
+%file: phy-stop.xml
+<scenario>
+    <at t="4.35ms"><shutdown module="receiver.nic.phy"/></at>
+    <at t="5.5ms"><startup module="receiver.nic.phy"/></at>
+</scenario>
+
+%file: no-events.xml
+<scenario/>
 
 %contains: stdout
 Production passive scan, notification and restoration verified.

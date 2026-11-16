@@ -113,6 +113,7 @@ class ExternalPhyExercise : public cSimpleModule, public cListener, public IIeee
     virtual void handleSetConfirm(uint64_t, const Ieee802154PhySetConfirm&) override { ASSERT(false); }
     virtual void handleResetConfirm(uint64_t, const Ieee802154PhyResetConfirm&) override { ASSERT(false); }
     void handleAvailabilityIndication(const inet::physicallayer::Ieee802154PhyAvailabilityIndication&) override {}
+    void handleReceiveStarted(const inet::physicallayer::Ieee802154PhyReceiveStart&) override {}
 virtual void handleReceiveIndication(Packet *, const Ieee802154PhyReceiveIndication&) override { ASSERT(false); }
 };
 Define_Module(ExternalPhyExercise);

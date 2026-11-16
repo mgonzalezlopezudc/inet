@@ -56,6 +56,9 @@ const std::vector<ExpectedAttribute> expected = {
     {"macGroupRxMode", false, false},
     {"macSecurityEnabled", false, false},
     {"macBeaconOrder", uint64_t{15}, false},
+    {"macSuperframeOrder", uint64_t{15}, true},
+    {"macBattLifeExt", false, false},
+    {"macBattLifeExtPeriods", uint64_t{6}, false},
     {"macTimestampSupported", false, true},
     {"macSyncSymbolOffset", uint64_t{0}, true},
     {"macPromiscuousMode", false, false},
@@ -83,7 +86,7 @@ const std::vector<ExpectedAttribute> expected = {
     {"macTschEnabled", false, false},
 };
 
-ASSERT(expected.size() == 52);
+ASSERT(expected.size() == 55);
 Ieee802154MacPib pib(identity, 37);
 
 auto read = [](const Ieee802154MacPib& target, const std::string& name) -> Value {
@@ -131,6 +134,11 @@ ASSERT(pib.set("macPanId", identity) == Status::INVALID_PARAMETER);
 ASSERT(pib.set("macRxOnWhenIdle", uint64_t{1}) == Status::INVALID_PARAMETER);
 ASSERT(pib.set("macSecurityEnabled", true) == Status::INVALID_PARAMETER);
 ASSERT(pib.set("macBeaconOrder", uint64_t{14}) == Status::INVALID_PARAMETER);
+ASSERT(pib.set("macBattLifeExtPeriods", uint64_t{5}) == Status::INVALID_PARAMETER);
+ASSERT(pib.set("macBattLifeExtPeriods", uint64_t{42}) == Status::INVALID_PARAMETER);
+ASSERT(pib.set("macSuperframeOrder", uint64_t{0}) == Status::READ_ONLY);
+ASSERT(pib.set("macBeaconTxTime", uint64_t{0}) == Status::UNSUPPORTED_ATTRIBUTE);
+ASSERT(pib.set("macGtsPermit", true) == Status::UNSUPPORTED_ATTRIBUTE);
 ASSERT(pib.set("macCoordExtendedAddress", Ieee802154Address::NONE_ADDRESS) == Status::INVALID_PARAMETER);
 ASSERT(pib.set("macCoordExtendedAddress", Ieee802154Address::fromExtended(std::numeric_limits<uint64_t>::max())) == Status::INVALID_PARAMETER);
 ASSERT(pib.set("macExtendedAddress", false) == Status::READ_ONLY);
@@ -159,12 +167,23 @@ ASSERT(identity != otherIdentity);
 ASSERT((identity.getExtended() & 0x0000ffffffffffffULL) == (otherIdentity.getExtended() & 0x0000ffffffffffffULL));
 
 Ieee802154MacPib boundaries(identity, 0);
+ASSERT(boundaries.set("macBattLifeExtPeriods", uint64_t{6}) == Status::SUCCESS);
+ASSERT(boundaries.set("macBattLifeExtPeriods", uint64_t{41}) == Status::SUCCESS);
 ASSERT(boundaries.set("macShortAddress", int64_t{0}) == Status::SUCCESS);
 ASSERT(boundaries.set("macShortAddress", int64_t{0xffff}) == Status::SUCCESS);
 ASSERT(boundaries.set("macCoordShortAddress", uint64_t{0}) == Status::SUCCESS);
 ASSERT(boundaries.set("macCoordShortAddress", uint64_t{0xffff}) == Status::SUCCESS);
 ASSERT(boundaries.set("macPanId", uint64_t{0}) == Status::SUCCESS);
 ASSERT(boundaries.set("macPanId", uint64_t{0xffff}) == Status::SUCCESS);
+
+Ieee802154MacPib scheduled(identity, 3, 128, {}, 4, true);
+ASSERT(read(scheduled, "macSyncSymbolOffset") == Value(uint64_t{10}));
+ASSERT(scheduled.set("macSyncSymbolOffset", uint64_t{0}) == Status::READ_ONLY);
+ASSERT(scheduled.set("macBeaconOrder", uint64_t{0}) == Status::INVALID_PARAMETER);
+scheduled.reset(false, 9, 10);
+ASSERT(read(scheduled, "macSyncSymbolOffset") == Value(uint64_t{10}));
+scheduled.reset(true, 9, 10);
+ASSERT(read(scheduled, "macSyncSymbolOffset") == Value(uint64_t{10}));
 ASSERT(boundaries.set("macDsn", uint64_t{0}) == Status::SUCCESS);
 ASSERT(boundaries.set("macDsn", uint64_t{255}) == Status::SUCCESS);
 ASSERT(boundaries.set("macMinBe", uint64_t{0}) == Status::SUCCESS);

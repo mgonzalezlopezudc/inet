@@ -6,10 +6,11 @@ import inet.common.SimpleModule;
 import inet.linklayer.ieee802154.contract.IIeee802154MacServiceProvider;
 import inet.linklayer.ieee802154.contract.IIeee802154AccessClient;
 import inet.linklayer.ieee802154.contract.IIeee802154ManagementServiceProvider;
+import inet.linklayer.ieee802154.contract.IIeee802154SuperframeClient;
 import inet.physicallayer.wireless.ieee802154.contract.IIeee802154PhyServiceClient;
 
 // Native service owner with explicitly selected managed receive capability.
-simple Ieee802154StandardMac extends SimpleModule like IIeee802154MacServiceProvider, IIeee802154AccessClient, IIeee802154PhyServiceClient, IIeee802154ManagementServiceProvider
+simple Ieee802154StandardMac extends SimpleModule like IIeee802154MacServiceProvider, IIeee802154AccessClient, IIeee802154PhyServiceClient, IIeee802154ManagementServiceProvider, IIeee802154SuperframeClient
 {
     parameters:
         string clientModule = default("^.adapter");
@@ -21,6 +22,7 @@ simple Ieee802154StandardMac extends SimpleModule like IIeee802154MacServiceProv
         string interfaceModule = default("^");
         string accessModule = default("");
         string providerModule = default("");
+        string superframeModule = default("");
         string extendedAddress = default(ieee802154LocalAddress());
         int shortAddress = default(65535);
         int panId = default(65535);

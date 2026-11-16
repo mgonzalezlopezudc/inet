@@ -1,0 +1,45 @@
+%description:
+Verify conventional superframe geometry and the local-clock timestamp boundary
+from IEEE Std 802.15.4-2024, 10.2.2.1 and 6.5.3. This is arithmetic evidence,
+not an operational beacon or tracking test.
+
+%includes:
+#include "inet/linklayer/ieee802154/Ieee802154SuperframeTiming.h"
+
+using namespace inet;
+
+%activity:
+for (unsigned int bo = 0; bo <= 14; ++bo) {
+    for (unsigned int so = 0; so <= bo; ++so) {
+        auto value = Ieee802154SuperframeTiming::geometry(bo, so);
+        ASSERT(value && value->beaconOrder == bo && value->superframeOrder == so);
+        ASSERT(value->beaconInterval && *value->beaconInterval == 960u * (1u << bo));
+        ASSERT(value->activeDuration && *value->activeDuration == 960u * (1u << so));
+        ASSERT(value->slotDuration && *value->slotDuration == 60u * (1u << so));
+    }
+    auto beaconOnly = Ieee802154SuperframeTiming::geometry(bo, 15);
+    ASSERT(beaconOnly && beaconOnly->beaconInterval && !beaconOnly->activeDuration && !beaconOnly->slotDuration);
+    if (bo < 14)
+        ASSERT(!Ieee802154SuperframeTiming::geometry(bo, bo + 1));
+}
+for (unsigned int so = 0; so <= 15; ++so) {
+    auto nonbeacon = Ieee802154SuperframeTiming::geometry(15, so);
+    ASSERT(nonbeacon && nonbeacon->superframeOrder == 15);
+    ASSERT(!nonbeacon->beaconInterval && !nonbeacon->activeDuration && !nonbeacon->slotDuration);
+}
+ASSERT(!Ieee802154SuperframeTiming::geometry(16, 0));
+ASSERT(!Ieee802154SuperframeTiming::geometry(0, 16));
+
+auto timestamp = [](simtime_t value) { return Ieee802154SuperframeTiming::timestamp(SIMTIME_AS_CLOCKTIME(value)); };
+ASSERT(timestamp(SimTime(0, SIMTIME_US)) == 0);
+ASSERT(timestamp(SimTime(15, SIMTIME_US)) == 0);
+ASSERT(timestamp(SimTime(16, SIMTIME_US)) == 1);
+ASSERT(timestamp(SimTime(-1, SIMTIME_US)) == 0xffffff);
+ASSERT(timestamp(SimTime(int64_t(0xffffff) * 16, SIMTIME_US)) == 0xffffff);
+ASSERT(timestamp(SimTime(int64_t(0x1000000) * 16, SIMTIME_US)) == 0);
+ASSERT(timestamp(SimTime(int64_t(0x1000000 + 17) * 16, SIMTIME_US)) == 17);
+
+EV << "Superframe geometry and symbol timestamps verified.\n";
+
+%contains: stdout
+Superframe geometry and symbol timestamps verified.

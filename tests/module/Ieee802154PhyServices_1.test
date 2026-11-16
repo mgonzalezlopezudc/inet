@@ -29,6 +29,7 @@ class PhyServicesExercise : public cSimpleModule, public IIeee802154PhyServiceCl
     std::map<uint64_t, Ieee802154PhyPibValue> values;
     std::map<uint64_t, uint8_t> levels;
     std::map<uint64_t, simtime_t> starts;
+    std::map<int, simtime_t> receiveStarts;
     int received = 0;
     bool resetProbe = false;
     bool done = false;
@@ -113,11 +114,17 @@ class PhyServicesExercise : public cSimpleModule, public IIeee802154PhyServiceCl
         record(request, confirm.result);
     }
     void handleAvailabilityIndication(const inet::physicallayer::Ieee802154PhyAvailabilityIndication&) override {}
+    void handleReceiveStarted(const inet::physicallayer::Ieee802154PhyReceiveStart& start) override {
+        Enter_Method("handleReceiveStarted");
+        ASSERT(start.ppduStart == simTime() && start.expectedPpduEnd > start.ppduStart);
+        ASSERT(receiveStarts.emplace(start.transmissionId, start.ppduStart).second);
+    }
 virtual void handleReceiveIndication(Packet *psdu, const Ieee802154PhyReceiveIndication& indication) override {
         Enter_Method("handleReceiveIndication");
         take(psdu);
         ASSERT(psdu->getDataLength() == B(20));
         ASSERT(indication.timing.ppduEnd == simTime());
+        ASSERT(indication.transmissionId && receiveStarts.at(*indication.transmissionId) == indication.timing.ppduStart);
         ASSERT(indication.timing.psduStart - indication.timing.ppduStart == SimTime(192, SIMTIME_US));
         ASSERT(indication.timing.ppduEnd - indication.timing.ppduStart == SimTime(832, SIMTIME_US));
         ASSERT(indication.lqi && indication.meanPower && indication.fcsLength == B(2));

@@ -1,0 +1,3 @@
+IEEE 802.15.4 PHY reception-start callback
+
+Custom IIeee802154PhyServiceClient implementations must implement the new handleReceiveStarted callback and rebuild. Custom providers used with the optional superframe controller must report the actual first arrival and correlate it with the receive indication. See the IEEE 802.15.4 PHY Reception Start migration guide.

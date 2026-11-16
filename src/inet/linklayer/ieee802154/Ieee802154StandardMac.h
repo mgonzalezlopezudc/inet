@@ -15,6 +15,8 @@
 #include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceProvider.h"
 #include "inet/linklayer/ieee802154/contract/IIeee802154AccessClient.h"
 #include "inet/linklayer/ieee802154/contract/IIeee802154AccessProvider.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154SuperframeClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154SuperframeProvider.h"
 #include "inet/linklayer/ieee802154/Ieee802154Frame_m.h"
 #include "inet/linklayer/ieee802154/Ieee802154PendingTransactions.h"
 #include "inet/linklayer/ieee802154/Ieee802154CommandCodec.h"
@@ -27,7 +29,8 @@
 namespace inet {
 
 class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154MacServiceProvider, public ILifecycle,
-        public IIeee802154AccessClient, public physicallayer::IIeee802154PhyServiceClient, public IIeee802154ManagementServiceProvider
+        public IIeee802154AccessClient, public physicallayer::IIeee802154PhyServiceClient, public IIeee802154ManagementServiceProvider,
+        public IIeee802154SuperframeClient
 {
   private:
     ModuleRefByPar<IIeee802154MacServiceClient> client;
@@ -115,7 +118,8 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     void finishScan(const Ieee802154MacServiceResult& result);
     void completeScan();
     void receiveScanBeacon(const Ptr<Ieee802154Frame>& frame,
-            const physicallayer::Ieee802154PhyReceiveIndication& quality);
+            const physicallayer::Ieee802154PhyReceiveIndication& quality,
+            const std::optional<Ieee802154SuperframeReceptionAnchor>& anchor);
     void beginResetPhy();
     std::optional<uint64_t> beaconPreparation;
     uint64_t beaconResponses = 0;
@@ -162,15 +166,22 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     void clearReceiverWindow();
     void finishReceiverWindow();
     bool consumeReceiverWindow();
-    void processReceivedPacket(Packet *packet, const physicallayer::Ieee802154PhyReceiveIndication& quality);
+    void processReceivedPacket(Packet *packet, const physicallayer::Ieee802154PhyReceiveIndication& quality,
+            const std::optional<Ieee802154SuperframeReceptionAnchor>& anchor, uint64_t receiveEpoch);
     void transmitPanConflict();
     bool receiveManagedBeacon(const Ptr<Ieee802154Frame>& frame,
-            const physicallayer::Ieee802154PhyReceiveIndication& quality);
-    static std::optional<Ieee802154PanDescriptor> describeBeacon(const Ptr<Ieee802154Frame>& frame,
-            const physicallayer::Ieee802154PhyReceiveIndication& quality);
+            const physicallayer::Ieee802154PhyReceiveIndication& quality,
+            const std::optional<Ieee802154SuperframeReceptionAnchor>& anchor, uint64_t receiveEpoch);
+    std::optional<Ieee802154PanDescriptor> describeBeacon(const Ptr<Ieee802154Frame>& frame,
+            const physicallayer::Ieee802154PhyReceiveIndication& quality,
+            const std::optional<Ieee802154SuperframeReceptionAnchor>& anchor) const;
     std::optional<AckExchange> ackExchange;
     ModuleRefByPar<IIeee802154AccessProvider> access;
     ModuleRefByPar<physicallayer::IIeee802154PhyServiceProvider> phy;
+    ModuleRefByPar<IIeee802154SuperframeProvider> superframe;
+    // A synchronous callback may retire and restart the receiver while an old beacon is being processed.
+    uint64_t receiveRetirementEpoch = 0;
+    void retireReceives();
     physicallayer::Ieee802154PhyState phyState = physicallayer::Ieee802154PhyState::OFF;
     uint64_t phyId = 0, accessId = 0;
     simtime_t eligibleAt;
@@ -268,6 +279,8 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     virtual void handleCcaRequest(uint64_t id) override;
     virtual void handleAccessConfirm(uint64_t id, const Ieee802154MacServiceResult& result, uint8_t numBackoffs) override;
     virtual void handleTransmitStarted(uint64_t id, const physicallayer::Ieee802154PhyTransmitStart& start) override;
+    virtual void handleReceiveStarted(const physicallayer::Ieee802154PhyReceiveStart& start) override;
+    virtual void handleSuperframeBoundary(clocktime_t boundary) override;
     virtual void handleAvailabilityIndication(const physicallayer::Ieee802154PhyAvailabilityIndication& indication) override;
     virtual void handleTransmitConfirm(uint64_t id, const physicallayer::Ieee802154PhyTransmitConfirm& confirm) override;
     virtual void handleCcaConfirm(uint64_t id, const physicallayer::Ieee802154PhyCcaConfirm& confirm) override;

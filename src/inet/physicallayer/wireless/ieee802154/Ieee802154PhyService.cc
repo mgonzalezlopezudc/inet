@@ -470,8 +470,10 @@ void Ieee802154PhyService::handleMessage(cMessage *message)
     auto packet = check_and_cast<Packet *>(message);
     auto receivedPower = receivedPowers.find(packet->getId());
     std::optional<W> meanPower;
+    std::optional<int> transmissionId;
     if (receivedPower != receivedPowers.end()) {
-        meanPower = receivedPower->second;
+        meanPower = receivedPower->second.power;
+        transmissionId = receivedPower->second.transmissionId;
         receivedPowers.erase(receivedPower);
     }
     if (!packet->arrivedOn("lowerLayerIn") || state != State::RECEIVE || !started || !client) {
@@ -483,6 +485,7 @@ void Ieee802154PhyService::handleMessage(cMessage *message)
     indication.channel = channel;
     indication.timing = {signalTime->getStartTime(), signalTime->getStartTime() + SimTime(192, SIMTIME_US), signalTime->getEndTime(), signalTime->getEndTime()};
     indication.fcsLength = B(2);
+    indication.transmissionId = transmissionId;
     if (meanPower) {
         indication.meanPower = *meanPower;
         indication.lqi = powerLevel(*meanPower, -100, -20);
@@ -500,13 +503,17 @@ void Ieee802154PhyService::receiveSignal(cComponent *, simsignal_t id, cObject *
     if (id == receptionStartedSignal) {
         if (pending && pending->kind == Kind::CCA && simTime() < pending->start + ccaDuration)
             pending->receivedPpdu = true;
+        auto reception = check_and_cast<const IReception *>(object);
+        Ieee802154PhyReceiveStart start{reception->getTransmission()->getId(), reception->getStartTime(), reception->getEndTime()};
+        if (started && client)
+            client->handleReceiveStarted(start);
         return;
     }
     if (id == receptionEndedSignal) {
         auto reception = check_and_cast<const IReception *>(object);
         auto packet = check_and_cast<Packet *>(details);
         auto scalar = check_and_cast<const ScalarReceptionAnalogModel *>(reception->getAnalogModel());
-        receivedPowers.emplace(packet->getId(), scalar->getPower());
+        receivedPowers.emplace(packet->getId(), ReceivedQuality{scalar->getPower(), reception->getTransmission()->getId()});
         return;
     }
     auto transmission = check_and_cast<const ITransmission *>(object);

@@ -50,6 +50,9 @@ class INET_API Ieee802154MacPib
         bool macGroupRxMode = false;
         bool macSecurityEnabled = false;
         uint8_t macBeaconOrder = 15;
+        uint8_t macSuperframeOrder = 15;
+        bool macBattLifeExt = false;
+        uint8_t macBattLifeExtPeriods = 6;
         bool macTimestampSupported = false;
         uint16_t macSyncSymbolOffset = 0;
         bool macPromiscuousMode = false;
@@ -98,7 +101,8 @@ class INET_API Ieee802154MacPib
      * object is constructed.
      */
     Ieee802154MacPib(Ieee802154Address deviceExtendedAddress, uint8_t injectedDsn,
-            uint32_t ccaDurationUs = 128, const std::vector<Ieee802154MacSetRequest>& startupOverrides = {}, uint8_t injectedBsn = 0);
+            uint32_t ccaDurationUs = 128, const std::vector<Ieee802154MacSetRequest>& startupOverrides = {}, uint8_t injectedBsn = 0,
+            bool superframeEnabled = false);
 
     /** GET echoes the exact name; an unsupported name returns UNSUPPORTED_ATTRIBUTE with no value. */
     Ieee802154MacGetConfirm get(const std::string& attribute) const;

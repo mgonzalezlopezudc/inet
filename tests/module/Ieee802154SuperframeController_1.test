@@ -1,0 +1,250 @@
+%description:
+Exercise the production native PHY and superframe controller with a scalar
+radio medium and a real fixed-rate clock. Actual reception-start samples are
+correlated to delivery; coincident, late, abandoned and retired samples are
+checked independently of a beacon decoder. Periodic transmission remains
+outside this structural prerequisite.
+
+%file: SuperframeControllerExercise.cc
+#include <cmath>
+#include <map>
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/common/Protocol.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/clock/contract/IClock.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154SuperframeClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154SuperframeProvider.h"
+#include "inet/physicallayer/wireless/ieee802154/contract/IIeee802154PhyServiceClient.h"
+#include "inet/physicallayer/wireless/ieee802154/contract/IIeee802154PhyServiceProvider.h"
+
+namespace inet {
+using namespace physicallayer;
+class SuperframeControllerExercise : public cSimpleModule, public IIeee802154PhyServiceClient, public IIeee802154SuperframeClient
+{
+    ModuleRefByPar<IIeee802154PhyServiceProvider> sender, receiver;
+    ModuleRefByPar<IIeee802154SuperframeProvider> controller;
+    ModuleRefByPar<IClock> clock;
+    uint64_t nextId = 0;
+    std::map<uint64_t, Ieee802154PhyServiceResult> results;
+    std::map<int, clocktime_t> observedStarts;
+    int received = 0;
+    int lastReception = -1;
+    bool done = false;
+    uint64_t id() { return ++nextId; }
+    void record(uint64_t request, const Ieee802154PhyServiceResult& result) {
+        ASSERT(!results.count(request));
+        results.emplace(request, result);
+    }
+    Packet *packet() {
+        auto packet = new Packet("opaque PSDU");
+        packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>(20, 0)));
+        packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee802154);
+        return packet;
+    }
+    void success(uint64_t request) { ASSERT(results.at(request) == Ieee802154PhyServiceResult(Ieee802154PhyServiceStatus::SUCCESS)); }
+  public:
+    SuperframeControllerExercise() : cSimpleModule(65536) {}
+    virtual void initialize() override {
+        sender.reference(this, "senderModule", true);
+        receiver.reference(this, "receiverModule", true);
+        controller.reference(this, "superframeModule", true);
+        clock.reference(this, "clockModule", true);
+    }
+    virtual void handleSuperframeBoundary(clocktime_t) override { throw cRuntimeError("Unexpected scheduled boundary"); }
+    virtual void handleAvailabilityIndication(const Ieee802154PhyAvailabilityIndication& indication) override {
+        Enter_Method("handleAvailabilityIndication");
+        if (!indication.available) controller->clearReceptionAnchors();
+    }
+    virtual void handleReceiveStarted(const Ieee802154PhyReceiveStart& start) override {
+        Enter_Method("handleReceiveStarted");
+        lastReception = start.transmissionId;
+        if (start.ppduStart == simTime()) observedStarts.emplace(start.transmissionId, clock->getClockTime());
+        controller->recordReceptionStart(start);
+    }
+    virtual void handleReceiveIndication(Packet *psdu, const Ieee802154PhyReceiveIndication& indication) override {
+        Enter_Method("handleReceiveIndication");
+        take(psdu);
+        ASSERT(indication.transmissionId);
+        auto anchor = controller->takeReceptionAnchor(*indication.transmissionId);
+        ASSERT(anchor && anchor->physicalStart == indication.timing.ppduStart);
+        ASSERT(anchor->localStart == observedStarts.at(*indication.transmissionId));
+        ASSERT(anchor->expectedEnd == indication.timing.ppduEnd && simTime() > anchor->physicalStart);
+        auto expected = 0.25 + anchor->physicalStart.dbl() * (1 + par("driftPpm").doubleValue() * 1e-6);
+        ASSERT(std::fabs(CLOCKTIME_AS_SIMTIME(anchor->localStart).dbl() - expected) < 2e-6);
+        ASSERT(!controller->takeReceptionAnchor(*indication.transmissionId));
+        ++received;
+        delete psdu;
+    }
+    virtual void handleTransmitStarted(uint64_t, const Ieee802154PhyTransmitStart&) override {}
+    virtual void handleTransmitConfirm(uint64_t request, const Ieee802154PhyTransmitConfirm& value) override { record(request, value.result); }
+    virtual void handleCcaConfirm(uint64_t request, const Ieee802154PhyCcaConfirm& value) override { record(request, value.result); }
+    virtual void handleEdConfirm(uint64_t request, const Ieee802154PhyEdConfirm& value) override { record(request, value.result); }
+    virtual void handleStateConfirm(uint64_t request, const Ieee802154PhyStateConfirm& value) override { record(request, value.result); }
+    virtual void handleGetConfirm(uint64_t request, const Ieee802154PhyGetConfirm& value) override { record(request, value.result); }
+    virtual void handleSetConfirm(uint64_t request, const Ieee802154PhySetConfirm& value) override { record(request, value.result); }
+    virtual void handleResetConfirm(uint64_t request, const Ieee802154PhyResetConfirm& value) override { record(request, value.result); }
+  protected:
+    virtual void activity() override {
+        wait(SimTime(1, SIMTIME_US));
+        auto r = id(); ASSERT(receiver->submitState(r, Ieee802154PhyState::RECEIVE) == Ieee802154PhyServiceAdmission::ACCEPTED);
+        auto s = id(); ASSERT(sender->submitState(s, Ieee802154PhyState::TRANSMIT) == Ieee802154PhyServiceAdmission::ACCEPTED);
+        wait(SimTime(192, SIMTIME_US)); success(r); success(s);
+        wait(SimTime(1, SIMTIME_S) - simTime());
+        auto tx = id(); ASSERT(sender->submitTransmit(tx, packet(), {}) == Ieee802154PhyServiceAdmission::ACCEPTED);
+        wait(SimTime(833, SIMTIME_US)); success(tx); ASSERT(received == 1);
+        // Two starts at the same event retain distinct copied keys, including a malformed payload.
+        auto second = id(); ASSERT(sender->submitTransmit(second, packet(), {}) == Ieee802154PhyServiceAdmission::ACCEPTED);
+        wait(SimTime(833, SIMTIME_US)); success(second); ASSERT(received == 2);
+        // Turn the receiver off while a real PPDU is in progress. Radio abandonment
+        // produces no receive indication; the expected-end prune retires the sample.
+        auto abandoned = id(); ASSERT(sender->submitTransmit(abandoned, packet(), {}) == Ieee802154PhyServiceAdmission::ACCEPTED);
+        wait(SimTime(100, SIMTIME_US));
+        auto abandonedReception = lastReception;
+        ASSERT(abandonedReception >= 0);
+        auto off = id(); ASSERT(receiver->submitState(off, Ieee802154PhyState::OFF) == Ieee802154PhyServiceAdmission::ACCEPTED);
+        wait(SimTime(192, SIMTIME_US)); success(off);
+        wait(SimTime(600, SIMTIME_US)); success(abandoned); ASSERT(received == 2);
+        controller->retireExpiredReceptionAnchors();
+        ASSERT(!controller->takeReceptionAnchor(abandonedReception));
+        auto now = simTime();
+        controller->recordReceptionStart({100001, now, now + SimTime(10, SIMTIME_US)});
+        controller->recordReceptionStart({100002, now, now + SimTime(10, SIMTIME_US)});
+        ASSERT(controller->takeReceptionAnchor(100001));
+        ASSERT(controller->takeReceptionAnchor(100002));
+        controller->recordReceptionStart({100003, now - SimTime(1, SIMTIME_US), now + SimTime(10, SIMTIME_US)});
+        ASSERT(!controller->takeReceptionAnchor(100003));
+        controller->recordReceptionStart({100004, now, now + SimTime(10, SIMTIME_US)});
+        wait(SimTime(10, SIMTIME_US));
+        ASSERT(controller->takeReceptionAnchor(100004)); // Equality preserves same-time delivery.
+        now = simTime();
+        controller->recordReceptionStart({100005, now, now + SimTime(10, SIMTIME_US)});
+        wait(SimTime(11, SIMTIME_US));
+        controller->retireExpiredReceptionAnchors();
+        ASSERT(!controller->takeReceptionAnchor(100005));
+        now = simTime();
+        controller->recordReceptionStart({100006, now, now + SimTime(100, SIMTIME_US)});
+        controller->clearReceptionAnchors();
+        ASSERT(!controller->takeReceptionAnchor(100006));
+        // The PHY-only shutdown notification clears an outstanding anchor, even
+        // when there is no later reception to trigger pruning.
+        wait(SimTime(1003990, SIMTIME_US) - simTime());
+        now = simTime();
+        controller->recordReceptionStart({100007, now, now + SimTime(2, SIMTIME_MS)});
+        wait(SimTime(220, SIMTIME_US));
+        ASSERT(!controller->takeReceptionAnchor(100007));
+        // Controller stop/start and crash/start reuse the module without old anchors.
+        wait(SimTime(1004990, SIMTIME_US) - simTime());
+        now = simTime(); controller->recordReceptionStart({100008, now, now + SimTime(2, SIMTIME_MS)});
+        wait(SimTime(220, SIMTIME_US)); ASSERT(!controller->takeReceptionAnchor(100008));
+        wait(SimTime(1005990, SIMTIME_US) - simTime());
+        now = simTime(); controller->recordReceptionStart({100009, now, now + SimTime(2, SIMTIME_MS)});
+        wait(SimTime(220, SIMTIME_US)); ASSERT(!controller->takeReceptionAnchor(100009));
+        now = simTime(); controller->recordReceptionStart({100010, now, now + SimTime(2, SIMTIME_MS)});
+        ASSERT(controller->takeReceptionAnchor(100010));
+        done = true;
+    }
+    virtual void finish() override { ASSERT(done && received == 2); std::cout << "Superframe reception clock anchors verified.\n"; }
+};
+Define_Module(SuperframeControllerExercise);
+}
+
+%file: SuperframeControllerFixture.ned
+import inet.common.SimpleModule;
+import inet.common.scenario.ScenarioManager;
+import inet.mobility.static.StationaryMobility;
+import inet.clock.model.OscillatorBasedClock;
+import inet.linklayer.ieee802154.Ieee802154SuperframeController;
+import inet.linklayer.ieee802154.contract.IIeee802154SuperframeClient;
+import inet.physicallayer.wireless.common.medium.RadioMedium;
+import inet.physicallayer.wireless.ieee802154.Ieee802154PhyService;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154StandardRadio;
+import inet.physicallayer.wireless.ieee802154.contract.IIeee802154PhyServiceClient;
+
+simple SuperframeControllerExercise extends SimpleModule like IIeee802154PhyServiceClient, IIeee802154SuperframeClient
+{
+    parameters:
+        string senderModule;
+        string receiverModule;
+        string providerModule;
+        string superframeModule;
+        string clockModule;
+        double driftPpm;
+        @class(::inet::SuperframeControllerExercise);
+}
+module SuperframeRadioHost
+{
+    parameters:
+        @networkNode;
+    submodules:
+        mobility: StationaryMobility;
+        radio: Ieee802154StandardRadio;
+        phy: Ieee802154PhyService {
+            radioModule = "^.radio";
+            clientModule = "^.^.exercise";
+        }
+    connections allowunconnected:
+        radio.upperLayerOut --> phy.lowerLayerIn;
+}
+network SuperframeControllerTest
+{
+    submodules:
+        radioMedium: RadioMedium;
+        scenarioManager: ScenarioManager;
+        host[2]: SuperframeRadioHost;
+        clock: OscillatorBasedClock;
+        controller: Ieee802154SuperframeController {
+            clientModule = "^.exercise";
+            clockModule = "^.clock";
+        }
+        exercise: SuperframeControllerExercise {
+            senderModule = "^.host[0].phy";
+            receiverModule = "^.host[1].phy";
+            providerModule = "^.host[1].phy";
+            superframeModule = "^.controller";
+            clockModule = "^.clock";
+        }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = SuperframeControllerTest
+ned-path = .;../../../../src;../../lib
+sim-time-limit = 1.01s
+seed-set = 0
+cmdenv-express-mode = true
+record-vector-results = false
+record-scalar-results = false
+*.exercise.driftPpm = ${drift=-40,40}
+*.clock.initialClockTime = 0.25s
+*.clock.oscillator.nominalTickLength = 1us
+*.clock.oscillator.driftRate = ${drift} * 1ppm
+*.radioMedium.signalAnalogRepresentation = "scalar"
+*.radioMedium.backgroundNoise.power = -110dBm
+*.host[*].radio.antenna.mobilityModule = "^.^.mobility"
+*.host[*].mobility.initFromDisplayString = false
+*.host[0].mobility.initialX = 0m
+*.host[1].mobility.initialX = 1m
+*.host[*].mobility.initialY = 0m
+*.host[*].mobility.initialZ = 0m
+*.host[*].mobility.constraintAreaMinX = 0m
+*.host[*].mobility.constraintAreaMinY = 0m
+*.host[*].mobility.constraintAreaMinZ = 0m
+*.host[*].mobility.constraintAreaMaxX = 100m
+*.host[*].mobility.constraintAreaMaxY = 100m
+*.host[*].mobility.constraintAreaMaxZ = 100m
+*.scenarioManager.script = xmldoc("scenario.xml")
+
+%file: scenario.xml
+<scenario>
+    <at t="1.004s"><shutdown module="host[1].phy"/></at>
+    <at t="1.0042s"><startup module="host[1].phy"/></at>
+    <at t="1.005s"><shutdown module="controller"/></at>
+    <at t="1.0052s"><startup module="controller"/></at>
+    <at t="1.006s"><crash module="controller"/></at>
+    <at t="1.0062s"><startup module="controller"/></at>
+</scenario>
+
+%contains: stdout
+Superframe reception clock anchors verified.
