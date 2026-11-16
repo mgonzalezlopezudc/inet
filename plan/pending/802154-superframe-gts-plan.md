@@ -255,7 +255,7 @@ Retain existing local BUSY admission for conflicting active primary/ACK/manageme
 
 Extend the existing production `src/inet/applications/ieee802154/Ieee802154ManagementApp` and its NED declaration here with an explicit default-off beacon-operation policy, plus the matching example configuration. The application chooses the PAN and issues the new synchronization/start requests; it does not schedule CAPs itself. Keep its existing nonbeacon cycle unchanged. The new example must select StandardInterface explicitly so it works independently of any future public-default change.
 
-**Write protocol tests:** `tests/protocol/ieee802154/Ieee802154SlottedManagement.test`. A device scans, joins, sleeps, wakes for a pending-address beacon, polls and receives a queued frame, leaves and rejoins under BO=3/SO=1. Queue a broadcast and require release only after an actually successful beacon, in the correct CAP. Arrange a poll/response near CAP end, a queue expiry at a beacon boundary, an RX-ENABLE window crossing active/inactive time and loss during scanning. Observe command/DATA/ACK fields, queue terminals, radio duty and no off-window transmission. The assumed parent supports slotted DATA but these M2 paths have not been integrated; the scenario must expose those remaining gaps, not just exercise the access helper.
+**Write protocol tests:** `tests/protocol/ieee802154/Ieee802154SlottedManagement.test` exercises the production managed application; `Ieee802154SlottedManagementBoundary.test` in the same folder owns the native boundary stimuli. A device scans, joins, sleeps, wakes for a pending-address beacon, polls and receives a queued frame, leaves and rejoins under BO=3/SO=1. Queue a broadcast and require release only after an actually successful beacon, in the correct CAP. Arrange a poll/response near CAP end, a queue expiry at a beacon boundary, an RX-ENABLE window crossing active/inactive time and loss during scanning. Observe command/DATA/ACK fields, queue terminals, radio duty and no off-window transmission. The assumed parent supports slotted DATA but these M2 paths have not been integrated; the scenario must expose those remaining gaps, not just exercise the access helper.
 
 Scan an idle coordinator/child for less than one interval and through four missed expected beacons. Require suspended periodic TX, actual channel restoration, phase-preserving future resumption for a coordinator and loss/reacquisition for the child. Cancel a short scan and abort a scan with reset/stop/PHY loss; verify exactly-once scan terminals and no retired duty rearmed. Separately require BUSY without retuning when a conflicting transaction is active. The allocated-GTS scan cases belong to B3-03 below.
 
@@ -342,7 +342,7 @@ opp_run_protocol_tests --load . -p inet -m debug --no-build \
   -w '^tests/protocol/ieee802154$' -f 'Ieee802154Slotted(Access|Busy|Clock|Fit|Ifs|LateAck|Lifecycle|Priority|Retry|Search|TooLong)[.]test$'
 ```
 
-The matching unit/module forms are `opp_run_unit_tests` and `opp_run_module_tests` with `--load . -p inet -m debug --no-build -f 'Ieee802154<exact-name>_1\.test$'`. Each commit runs its named files and the explicitly named existing controls; do not substitute an unfiltered category. The final combined new protocol selector is `Ieee802154(BeaconClock|BeaconSchedule|BeaconSynchronization|BeaconReconfiguration|Slotted(Access|Busy|Clock|Fit|Ifs|LateAck|Lifecycle|Priority|Retry|Search|TooLong|Management)|GtsAllocation|GtsData|GtsDeallocation|GtsExpiry)[.]test$` in the same suite; later implementation adds any further owning fixtures to this explicit selection.
+The matching unit/module forms are `opp_run_unit_tests` and `opp_run_module_tests` with `--load . -p inet -m debug --no-build -f 'Ieee802154<exact-name>_1\.test$'`. Each commit runs its named files and the explicitly named existing controls; do not substitute an unfiltered category. The final combined new protocol selector is `Ieee802154(BeaconClock|BeaconSchedule|BeaconSynchronization|BeaconReconfiguration|Slotted(Access|Busy|Clock|Fit|Ifs|LateAck|Lifecycle|Priority|Retry|Search|TooLong|Management(Boundary)?)|GtsAllocation|GtsData|GtsDeallocation|GtsExpiry)[.]test$` in the same suite; later implementation adds any further owning fixtures to this explicit selection.
 
 Exact proposed protocol `-f` selectors by owning commit are:
 
@@ -353,7 +353,7 @@ Exact proposed protocol `-f` selectors by owning commit are:
 | B1-03 | `Ieee802154BeaconSynchronization\.test$` |
 | B2-02 | `Ieee802154Slotted(Access|Busy|Clock|Fit|Ifs|LateAck|Lifecycle|Priority|Retry|Search|TooLong)[.]test$` |
 | B1-04 | `Ieee802154BeaconReconfiguration\.test$` |
-| B2-03 | `Ieee802154SlottedManagement\.test$` |
+| B2-03 | `Ieee802154SlottedManagement(Boundary)?[.]test$` |
 | B3-02 | `Ieee802154GtsAllocation\.test$` |
 | B3-03 | `Ieee802154GtsData\.test$` |
 | B3-04 | `Ieee802154GtsDeallocation\.test$` |

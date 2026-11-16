@@ -16,7 +16,8 @@ Define_ProtocolTestProgram()
 {
     ProtocolTest test("ieee802154_broadcast_release");
     if (getSimulation()->getSystemModule()->par("scenario").intValue() == 11)
-        test.intercept(tap("radioMedium").from("host[1]").to("host[0]")
+        test.once(on("exercise").signal("associationReady").filterValue(1).within(1))
+            .meanwhile(tap("radioMedium").from("host[1]").to("host[0]")
             .filterPacket("Ieee802154Frame.frameType == 3")
             .mutate([](Packet *packet) {
                 auto raw = packet->peekDataAsBytes(); auto bytes = raw->getBytes(); ASSERT(bytes.size() == 24);
@@ -59,9 +60,10 @@ class BroadcastExercise : public cSimpleModule, public cListener, public Lifecyc
     std::vector<uint8_t> deliveredHandles;
     bool releaseBlocked = false;
     simtime_t beaconCompletedAt;
-    int pollConfirms = 0;
+    int pollConfirms = 0, associations = 0;
+    simtime_t timeOffset;
     Ieee802154MacServiceResult expected = Status::SUCCESS;
-    void until(simtime_t target) { ASSERT(target >= simTime()); if (target > simTime()) wait(target-simTime()); }
+    void until(simtime_t target) { target += timeOffset; ASSERT(target >= simTime()); if (target > simTime()) wait(target-simTime()); }
     void set(IIeee802154MacServiceProvider *provider, const char *name, const Ieee802154MacPibValue& value) {
         ASSERT(provider->submitSet(++nextId,{name,value}) == Admission::ACCEPTED);
     }
@@ -88,15 +90,24 @@ class BroadcastExercise : public cSimpleModule, public cListener, public Lifecyc
         sender.reference(this,"senderModule",true); senderManagement.reference(this,"senderModule",true);
         receiver.reference(this,"serviceModule",true); management.reference(this,"serviceModule",true);
         scenario = par("scenario");
-        getModuleByPath(par("senderModule"))->subscribe("packetSentToLower",this);
     }
   protected:
     virtual void activity() override {
+        wait(SimTime(500,SIMTIME_US));
+        set(sender.get(),"macMinBe",uint64_t(0));
+        set(receiver.get(),"macMinBe",uint64_t(0));
+        set(receiver.get(),"macResponseWaitTime",uint64_t(2));
+        set(sender.get(),"macAssociationPermit",true);
+        physicallayer::Ieee802154PhyChannel associationChannel{physicallayer::Ieee802154PhyChannel::Phy::O_QPSK,physicallayer::Ieee802154PhyChannel::Band::MHZ_2450,20};
+        ASSERT(management->submitAssociate(++nextId,{associationChannel,0x1234,Ieee802154Address::fromExtended(0x0201123456789abcULL)}) == Admission::ACCEPTED);
+        wait(SimTime(55,SIMTIME_MS));
+        ASSERT(associations == 1);
+        timeOffset = simTime();
+        getModuleByPath(par("senderModule"))->subscribe("packetSentToLower",this);
+        if (scenario == 11) emit(registerSignal("associationReady"),1L);
         until(SimTime(500,SIMTIME_US));
         set(sender.get(),"macMinBe",uint64_t(0)); set(sender.get(),"macMaxCsmaBackoffs",uint64_t(0));
         set(sender.get(),"macDsn",uint64_t(7)); set(sender.get(),"macTransactionPersistenceTime",uint64_t(scenario == 3 ? 0 : 10));
-        set(receiver.get(),"macAssociatedPanCoord",true);
-        set(receiver.get(),"macCoordExtendedAddress",Ieee802154Address::fromExtended(0x0201123456789abcULL));
         ASSERT(management->submitRxEnable(++nextId,{{{0,0xffffff,true}},false,false}) == Admission::ACCEPTED);
         until(SimTime(1,SIMTIME_MS));
         if (scenario == 3) expected = Status::TRANSACTION_EXPIRED;
@@ -111,12 +122,13 @@ class BroadcastExercise : public cSimpleModule, public cListener, public Lifecyc
         if (scenario >= 8 && scenario <= 10) set(sender.get(),"phyCcaDuration",SimTime(2,SIMTIME_MS));
         if (scenario == 11) {
             until(SimTime(1500,SIMTIME_US));
+            set(receiver.get(),"macShortAddress",uint64_t(0xfffe));
             acceptedPoll();
         }
         until(SimTime(scenario == 11 ? 8 : 2,SIMTIME_MS)); beacon();
         if (scenario >= 8 && scenario <= 10) {
             while (!beaconConfirms) wait(SimTime(100,SIMTIME_US));
-            until(beaconCompletedAt + SimTime(1,SIMTIME_MS));
+            until(beaconCompletedAt + SimTime(1,SIMTIME_MS) - timeOffset);
             interruptRelease();
         }
         until(SimTime(10,SIMTIME_MS));
@@ -207,9 +219,9 @@ class BroadcastExercise : public cSimpleModule, public cListener, public Lifecyc
     virtual void handleStartSuperframeConfirm(uint64_t, const Ieee802154MacStartSuperframeConfirm&) override { ASSERT(false); }
     virtual void handleStartConfirm(uint64_t, const Ieee802154MacStartConfirm&) override { ASSERT(false); }
     virtual void handleBeaconRequestIndication(const Ieee802154MacBeaconRequestIndication&) override { ASSERT(false); }
-    virtual void handleAssociateConfirm(uint64_t, const Ieee802154MacAssociateConfirm&) override { ASSERT(false); }
-    virtual void handleAssociateIndication(const Ieee802154MacAssociateIndication&) override { ASSERT(false); }
-    virtual void handleAssociateResponseStatus(uint64_t, const Ieee802154MacAssociateResponseStatus&) override { ASSERT(false); }
+    virtual void handleAssociateConfirm(uint64_t, const Ieee802154MacAssociateConfirm& c) override { Enter_Method("handleAssociateConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); ++associations; }
+    virtual void handleAssociateIndication(const Ieee802154MacAssociateIndication& i) override { Enter_Method("handleAssociateIndication"); ASSERT(senderManagement->submitAssociateResponse(++nextId,{i.deviceAddress,2,0}) == Admission::ACCEPTED); }
+    virtual void handleAssociateResponseStatus(uint64_t, const Ieee802154MacAssociateResponseStatus& c) override { Enter_Method("handleAssociateResponseStatus"); ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); }
     virtual void handleDisassociateConfirm(uint64_t, const Ieee802154MacDisassociateConfirm&) override { ASSERT(false); }
     virtual void handleDisassociateIndication(const Ieee802154MacDisassociateIndication&) override { ASSERT(false); }
     virtual void handleOrphanIndication(const Ieee802154MacOrphanIndication&) override { ASSERT(false); }
@@ -237,6 +249,7 @@ simple BroadcastExercise extends SimpleModule like IIeee802154MacServiceClient, 
         string serviceModule;
         int scenario;
         @signal[verificationComplete](type=long);
+        @signal[associationReady](type=long);
 }
 module BroadcastHost
 {
@@ -261,7 +274,7 @@ network BroadcastTest
 %inifile: omnetpp.ini
 [General]
 network = BroadcastTest
-sim-time-limit = 100ms
+sim-time-limit = 200ms
 cmdenv-express-mode = true
 *.scenario = ${scenario=0..11}
 *.host[*].nic.radio.sendRawBytes = ${raw=false,true}

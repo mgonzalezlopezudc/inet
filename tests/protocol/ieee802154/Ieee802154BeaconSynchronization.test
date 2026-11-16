@@ -232,6 +232,7 @@ class BeaconSynchronizationExercise : public cSimpleModule, public cListener,
             return;
         }
         if (scenario == 15) {
+            set(child.get(),"macPromiscuousMode",true); // Keep RX active for deliberately off-window foreign beacons.
             for (int time : {30,45,60,75}) {
                 until(SimTime(time,SIMTIME_MS));
                 ASSERT(foreignManagement->submitBeacon(++nextId,{channel()}) == Admission::ACCEPTED);

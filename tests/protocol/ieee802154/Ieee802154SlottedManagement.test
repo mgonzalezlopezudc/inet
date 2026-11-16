@@ -1,0 +1,82 @@
+%description:
+Managed beacon-mode association and exchanges use the production policy and native radio.
+
+%includes:
+#include "ProtocolTest.h"
+
+%global:
+using namespace inet::protocoltest;
+Define_ProtocolTestProgram()
+{
+    ProtocolTest test("ieee802154_slotted_management");
+    return test.once(on("device.app").signal("completedCycle").filterValue(2).within(4));
+}
+
+%activity:
+EV << "slotted management fixture compiled\n";
+
+%file: SlottedManagementFixture.ned
+import inet.applications.ieee802154.Ieee802154ManagementApp;
+import inet.linklayer.ieee802154.Ieee802154StandardInterface;
+import inet.mobility.static.StationaryMobility;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+
+module SlottedManagementHost
+{
+    parameters:
+        bool coordinator;
+        string extendedAddress;
+        @networkNode;
+    submodules:
+        mobility: StationaryMobility;
+        nic: Ieee802154StandardInterface {
+            extendedAddress = parent.extendedAddress;
+            enableManagement = true;
+            enableSuperframe = true;
+            shortAddress = parent.coordinator ? 1 : 65535;
+            rxOnWhenIdle = parent.coordinator;
+            mac.isPanCoordinator = parent.coordinator;
+            mac.clientModule = "^.^.app";
+            mac.managementClientModule = "^.^.app";
+        }
+        app: Ieee802154ManagementApp {
+            coordinator = parent.coordinator;
+            beaconOperation = true;
+            serviceModule = "^.nic.mac";
+        }
+    connections allowunconnected:
+}
+
+network SlottedManagementTest
+{
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        coordinator: SlottedManagementHost { coordinator = true; extendedAddress = "extended:02-01-12-34-56-78-9A-BC"; }
+        device: SlottedManagementHost { coordinator = false; extendedAddress = "extended:04-01-12-34-56-78-9A-BC"; }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = SlottedManagementTest
+sim-time-limit = 4s
+cmdenv-express-mode = true
+*.**.radio.sendRawBytes = ${raw=false,true}
+*.radioMedium.backgroundNoise.power = -110dBm
+**.nic.radio.antenna.mobilityModule = "^.^.^.mobility"
+*.coordinator.mobility.initialX = 0m
+*.device.mobility.initialX = 1m
+**.mobility.initFromDisplayString = false
+**.mobility.initialY = 0m
+**.mobility.initialZ = 0m
+**.mobility.constraintAreaMinX = 0m
+**.mobility.constraintAreaMinY = 0m
+**.mobility.constraintAreaMinZ = 0m
+**.mobility.constraintAreaMaxX = 100m
+**.mobility.constraintAreaMaxY = 100m
+**.mobility.constraintAreaMaxZ = 100m
+
+%contains: stdout
+PROTOCOLTEST ieee802154_slotted_management: PASS
+
+%not-contains: stdout
+PROTOCOLTEST ieee802154_slotted_management: FAIL

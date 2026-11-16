@@ -12,9 +12,11 @@ simple Ieee802154ManagementApp extends SimpleModule like IIeee802154MacServiceCl
     parameters:
         string serviceModule = default("^.nic.mac");
         bool coordinator = default(false);
+        bool beaconOperation = default(false); // Explicit opt-in to a BO3/SO1 managed PAN.
         int panId = default(4660);
         int channelNumber = default(20);
         int cycles = default(2);
+        @signal[completedCycle](type=long);
         @class(Ieee802154ManagementApp);
         @display("i=block/app");
 }

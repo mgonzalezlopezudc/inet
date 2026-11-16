@@ -1,0 +1,868 @@
+%description:
+Native beacon scan suspension and superframe-relative RX-ENABLE boundaries.
+
+%extraargs: -r 0..87
+
+%includes:
+#include "ProtocolTest.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+
+%global:
+using namespace inet;
+using namespace inet::protocoltest;
+Define_ProtocolTestProgram()
+{
+    ProtocolTest test("ieee802154_managed_boundary");
+    if (getSimulation()->getSystemModule()->par("scenario").intValue() == 18)
+        test.once(on("exercise").signal("faultArmed").filterValue(1).within(1))
+            .meanwhile(tap("radioMedium").to("host[0]").filterPacket("Ieee802154Frame.frameType == 2").nth(1).drop());
+    if (getSimulation()->getSystemModule()->par("scenario").intValue() == 38) {
+        test.once(on("exercise").signal("faultArmed").filterValue(1).within(1))
+            .meanwhile(tap("radioMedium").from("host[1]").to("host[0]").filterPacket("Ieee802154Frame.frameType == 3").nth(1).mutate([](Packet *packet) {
+                auto frame = Ieee802154FrameCodec::decode(packet->peekDataAsBytes()->getBytes());
+                frame->setDestinationPanId(0x1234); frame->setSourcePanId(0x1234);
+                frame->setComputeFcs(true);
+                Ieee802154FrameCodec::finalize(*frame);
+                auto bytes = Ieee802154FrameCodec::encode(*frame);
+                packet->eraseAll(); packet->insertAtBack(makeShared<BytesChunk>(bytes));
+            }))
+            .meanwhile(tap("radioMedium").from("host[0]").to("host[1]").filterPacket("Ieee802154Frame.frameType == 1").nth(1).mutate([](Packet *packet) {
+                auto frame = Ieee802154FrameCodec::decode(packet->peekDataAsBytes()->getBytes());
+                frame->setPanCompression(false); frame->setSourcePanId(0x2345);
+                frame->setComputeFcs(true);
+                Ieee802154FrameCodec::finalize(*frame);
+                auto bytes = Ieee802154FrameCodec::encode(*frame);
+                packet->eraseAll(); packet->insertAtBack(makeShared<BytesChunk>(bytes));
+            }));
+    }
+    return test.once(on("exercise").signal("verificationComplete").filterValue(1).within(1.5));
+}
+
+%activity:
+EV << "managed boundary fixture compiled\n";
+
+%file: ManagedBoundaryExercise.cc
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/common/Simsignals.h"
+#include "inet/common/lifecycle/LifecycleController.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
+#include "inet/clock/contract/IClock.h"
+#include "inet/linklayer/ieee802154/Ieee802154Frame_m.h"
+#include "inet/linklayer/ieee802154/Ieee802154SuperframeTiming.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceProvider.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceProvider.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmission.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IReception.h"
+
+namespace inet {
+class ManagedBoundaryExercise : public cSimpleModule, public cListener, public IIeee802154MacServiceClient, public IIeee802154ManagementServiceClient, public LifecycleController
+{
+    using Admission = Ieee802154MacServiceAdmission;
+    using Status = Ieee802154MacStatus;
+    ModuleRefByPar<IIeee802154MacServiceProvider> root, child, leaf;
+    ModuleRefByPar<IIeee802154ManagementServiceProvider> rootManagement, childManagement, leafManagement;
+    uint64_t nextId = 0, primaryId = 0;
+    int scenario = 0, starts = 0, syncs = 0, scans = 0, losses = 0, rxConfirms = 0, rxIndications = 0, dataConfirms = 0, associations = 0, leafConflicts = 0, polls = 0, received = 0, rootDraws = 0, resets = 0, orphans = 0, departures = 0;
+    Status expectedRx = Status::SUCCESS;
+    bool cancelScan = false;
+    std::optional<Ieee802154MacServiceAbortReason> scanAbort;
+    std::vector<simtime_t> beacons;
+    std::vector<simtime_t> broadcastFrames;
+    std::vector<bool> beaconPending;
+    bool enqueueAtBeacon = false;
+    bool observingQuick = false;
+    bool stopOnPendingBeacon = false, stoppedOnPendingBeacon = false, observeAutoPoll = false;
+    int childPollCommands = 0;
+    bool longPollObserved = false, faultFired = false, autoPollExtended = false, controllerStopped = false;
+    std::optional<simtime_t> pollAckEnd, quickDataStart;
+    std::optional<clocktime_t> beaconClockAnchor;
+    std::optional<simtime_t> rxIndicatedAt;
+    std::optional<simtime_t> expectedQuickPhysical;
+    std::optional<uint32_t> scanReceptionTimestamp;
+    int scanNotices = 0;
+    std::vector<uint8_t> quickDsns;
+    std::optional<Ieee802154MacPibValue> value;
+    std::vector<Ieee802154PanDescriptor> scannedPans;
+    bool expectingDepartureAbort = false, resetWasBusy = false;
+    physicallayer::Ieee802154PhyChannel channel(int n = 20) const {
+        return {physicallayer::Ieee802154PhyChannel::Phy::O_QPSK,physicallayer::Ieee802154PhyChannel::Band::MHZ_2450,n};
+    }
+    void set(IIeee802154MacServiceProvider *p, const char *name, const Ieee802154MacPibValue& value) {
+        ASSERT(p->submitSet(++nextId,{name,value}) == Admission::ACCEPTED);
+    }
+    void until(simtime_t time) { ASSERT(time >= simTime()); if (time > simTime()) wait(time - simTime()); }
+  protected:
+    virtual void initialize() override {
+        root.reference(this,"rootModule",true); child.reference(this,"serviceModule",true);
+        rootManagement.reference(this,"rootModule",true); childManagement.reference(this,"serviceModule",true);
+        leaf.reference(this,"leafModule",true); leafManagement.reference(this,"leafModule",true);
+        scenario = par("scenario");
+        getModuleByPath("^.host[0].nic.radio")->subscribe(transmissionStartedSignal,this);
+        getModuleByPath(par("rootModule"))->subscribe(packetSentToLowerSignal,this);
+        getModuleByPath(par("rootModule"))->subscribe(registerSignal("outgoingCapActive"),this);
+        getModuleByPath(par("serviceModule"))->subscribe(packetSentToLowerSignal,this);
+        getModuleByPath(par("leafModule"))->subscribe(packetSentToLowerSignal,this);
+        getModuleByPath("^.host[0].nic.slottedAccess")->subscribe(registerSignal("backoffSlots"),this);
+        if (scenario >= 30 && scenario <= 32)
+            getModuleByPath("^.fault")->subscribe(registerSignal("faultFired"),this);
+        if (scenario == 19 || scenario == 20)
+            getModuleByPath("^.host[1].nic.radio")->subscribe(receptionStartedSignal,this);
+    }
+    virtual void activity() override {
+        until(SimTime(1,SIMTIME_MS));
+        if (scenario == 21) {
+            set(child.get(),"macMinBe",uint64_t(0));
+            set(child.get(),"macMaxFrameRetries",uint64_t(0));
+            Ieee802154MacAssociateRequest join{channel(),0x1234,Ieee802154Address::fromShort(1)};
+            ASSERT(childManagement->submitAssociate(++nextId,join) == Admission::ACCEPTED);
+            wait(SimTime(30,SIMTIME_MS));
+            ASSERT(associations == 1);
+            ASSERT(child->submitGet(++nextId,{"macAssociatedPanCoord"}) == Admission::ACCEPTED);
+            ASSERT(value && !std::get<bool>(*value));
+            set(child.get(),"macShortAddress",uint64_t(2));
+            Ieee802154MacStartSuperframeRequest childStart{0x1234,channel()}; childStart.panCoordinator = false;
+            ASSERT(childManagement->submitStartSuperframe(++nextId,childStart) == Admission::ACCEPTED);
+            ASSERT(starts == 1);
+            emit(registerSignal("verificationComplete"),1L);
+            return;
+        }
+        if ((scenario >= 6 && scenario <= 8) || (scenario >= 15 && scenario <= 18) || (scenario >= 22 && scenario <= 24) || (scenario >= 29 && scenario <= 36) || scenario == 38 || scenario == 40) {
+            set(root.get(),"macAssociationPermit",true);
+            set(child.get(),"macResponseWaitTime",uint64_t(2));
+            set(leaf.get(),"macResponseWaitTime",uint64_t(2));
+            set(root.get(),"macMinBe",uint64_t(0));
+            set(child.get(),"macMinBe",uint64_t(0));
+            set(leaf.get(),"macMinBe",uint64_t(0));
+            Ieee802154MacAssociateRequest join{channel(),0x1234,Ieee802154Address::fromShort(1)};
+            ASSERT(childManagement->submitAssociate(++nextId,join) == Admission::ACCEPTED);
+            wait(SimTime(55,SIMTIME_MS));
+            ASSERT(associations == 1);
+            Ieee802154MacStartSuperframeRequest childStart{0x1234,channel()};
+            childStart.panCoordinator = false;
+            ASSERT(childManagement->submitStartSuperframe(++nextId,childStart) == Admission::ACCEPTED);
+            wait(SimTime(2,SIMTIME_MS));
+            ASSERT(starts == 1);
+            set(child.get(),"macAssociationPermit",true);
+            join.coordinatorAddress = Ieee802154Address::fromShort(2);
+            join.coordinatorIsPanCoordinator = false;
+            ASSERT(leafManagement->submitAssociate(++nextId,join) == Admission::ACCEPTED);
+            wait(SimTime(55,SIMTIME_MS));
+            ASSERT(associations == 2);
+            ASSERT(leaf->submitGet(++nextId,{"macAssociatedPanCoord"}) == Admission::ACCEPTED);
+            ASSERT(value && !std::get<bool>(*value));
+            if (scenario == 6) {
+                ASSERT(leafManagement->submitStartSuperframe(++nextId,childStart) == Admission::ACCEPTED);
+                wait(SimTime(2,SIMTIME_MS));
+                ASSERT(starts == 2);
+                set(leaf.get(),"macCoordShortAddress",uint64_t(1));
+                ASSERT(leafManagement->submitStartSuperframe(++nextId,childStart) == Admission::ACCEPTED);
+                ASSERT(starts == 3);
+                emit(registerSignal("verificationComplete"),1L);
+                return;
+            }
+            if (scenario == 22) {
+                Ieee802154MacScanRequest orphan; orphan.type = Ieee802154ScanType::ORPHAN; orphan.channels = {channel()};
+                ASSERT(leafManagement->submitScan(++nextId,orphan) == Admission::ACCEPTED);
+                wait(SimTime(50,SIMTIME_MS));
+                ASSERT(scans == 1 && orphans >= 1);
+                ASSERT(leaf->submitGet(++nextId,{"macAssociatedPanCoord"}) == Admission::ACCEPTED);
+                ASSERT(value && !std::get<bool>(*value));
+                ASSERT(leafManagement->submitStartSuperframe(++nextId,childStart) == Admission::ACCEPTED);
+                wait(SimTime(2,SIMTIME_MS));
+                ASSERT(starts == 2);
+                emit(registerSignal("verificationComplete"),1L);
+                return;
+            }
+            if (scenario == 23) {
+                ASSERT(leaf->submitReset(++nextId,{true}) == Admission::ACCEPTED);
+                wait(SimTime(2,SIMTIME_MS));
+                ASSERT(resets == 1);
+                childStart.beaconOrder = 3; childStart.superframeOrder = 1;
+                ASSERT(childManagement->submitStartSuperframe(++nextId,childStart) == Admission::ACCEPTED);
+                wait(SimTime(3,SIMTIME_MS));
+                ASSERT(starts == 2);
+                Ieee802154MacScanRequest scan; scan.type = Ieee802154ScanType::PASSIVE; scan.channels = {channel()}; scan.duration = 9600;
+                ASSERT(leafManagement->submitScan(++nextId,scan) == Admission::ACCEPTED);
+                wait(SimTime(160,SIMTIME_MS));
+                ASSERT(scans == 1 && scannedPans.size() == 1 && !(scannedPans[0].beacon.superframeSpecification & 0x4000));
+                set(leaf.get(),"macPanId",uint64_t(0x1234));
+                set(leaf.get(),"macCoordShortAddress",uint64_t(2));
+                set(leaf.get(),"macBeaconOrder",uint64_t(3));
+                set(leaf.get(),"macResponseWaitTime",uint64_t(32));
+                ASSERT(leafManagement->submitSync(++nextId,{channel(),true}) == Admission::ACCEPTED);
+                wait(SimTime(130,SIMTIME_MS));
+                ASSERT(syncs == 1);
+                Ieee802154MacAssociateRequest again{channel(),0x1234,Ieee802154Address::fromShort(2)};
+                ASSERT(again.coordinatorIsPanCoordinator);
+                ASSERT(leafManagement->submitAssociate(++nextId,again) == Admission::ACCEPTED);
+                wait(SimTime(450,SIMTIME_MS));
+                ASSERT(associations == 3);
+                ASSERT(leaf->submitGet(++nextId,{"macAssociatedPanCoord"}) == Admission::ACCEPTED);
+                ASSERT(value && !std::get<bool>(*value));
+                emit(registerSignal("verificationComplete"),1L);
+                return;
+            }
+        }
+        Ieee802154MacStartSuperframeRequest start{0x1234,channel()};
+        start.beaconOrder = 3; start.superframeOrder = 1;
+        if (scenario == 43) {
+            set(root.get(),"macUnitBackoffPeriod",uint64_t(40));
+            set(root.get(),"macBattLifeExtPeriods",uint64_t(41));
+            start.beaconOrder = 0; start.superframeOrder = 0; start.batteryLifeExtension = true;
+        }
+        ASSERT(rootManagement->submitStartSuperframe(++nextId,start) == Admission::ACCEPTED);
+        wait(SimTime(4,SIMTIME_MS));
+        ASSERT(starts == (((scenario >= 6 && scenario <= 8) || (scenario >= 15 && scenario <= 18) || scenario == 24 || (scenario >= 29 && scenario <= 36) || scenario == 38 || scenario == 40) ? 2 : 1) && beacons.size() == 1);
+        auto anchor = beacons.front();
+        if (scenario == 43) {
+            wait(SimTime(30,SIMTIME_MS));
+            ASSERT(controllerStopped && resets == 1 && beacons.size() == 2);
+        }
+        else if (scenario == 41) {
+            auto radio = check_and_cast<physicallayer::IRadio *>(getModuleByPath("^.host[0].nic.radio"));
+            ASSERT(radio->getRadioMode() == physicallayer::IRadio::RADIO_MODE_RECEIVER);
+            auto stop = new ModuleStopOperation;
+            LifecycleOperation::StringMap parameters;
+            stop->initialize(getModuleByPath("^.host[0].nic.phy"),parameters);
+            ASSERT(initiateOperation(stop));
+            wait(SimTime(5,SIMTIME_MS));
+            auto restart = new ModuleStartOperation;
+            restart->initialize(getModuleByPath("^.host[0].nic.phy"),parameters);
+            ASSERT(initiateOperation(restart));
+            wait(SimTime(1,SIMTIME_MS));
+            ASSERT(radio->getRadioMode() == physicallayer::IRadio::RADIO_MODE_RECEIVER);
+            until(anchor + SimTime(35,SIMTIME_MS));
+            ASSERT(radio->getRadioMode() == physicallayer::IRadio::RADIO_MODE_OFF);
+        }
+        else if (scenario == 42) {
+            auto radio = check_and_cast<physicallayer::IRadio *>(getModuleByPath("^.host[0].nic.radio"));
+            ASSERT(controllerStopped && radio->getRadioMode() == physicallayer::IRadio::RADIO_MODE_OFF);
+        }
+        else if (scenario == 39) {
+            auto radio = check_and_cast<physicallayer::IRadio *>(getModuleByPath("^.host[0].nic.radio"));
+            until(anchor + SimTime(35,SIMTIME_MS));
+            ASSERT(radio->getRadioMode() == physicallayer::IRadio::RADIO_MODE_OFF);
+            until(anchor + SimTime(125,SIMTIME_MS));
+            ASSERT(radio->getRadioMode() == physicallayer::IRadio::RADIO_MODE_RECEIVER);
+        }
+        else if (scenario == 40) {
+            set(child.get(),"macBeaconOrder",uint64_t(3));
+            ASSERT(childManagement->submitSync(++nextId,{channel(),true}) == Admission::ACCEPTED);
+            wait(SimTime(130,SIMTIME_MS));
+            auto stop = new ModuleStopOperation;
+            LifecycleOperation::StringMap parameters;
+            stop->initialize(getModuleByPath("^.host[1].nic.mac"),parameters);
+            ASSERT(initiateOperation(stop));
+            auto restart = new ModuleStartOperation;
+            restart->initialize(getModuleByPath("^.host[1].nic.mac"),parameters);
+            ASSERT(initiateOperation(restart));
+            wait(SimTime(2,SIMTIME_MS));
+            auto radio = check_and_cast<physicallayer::IRadio *>(getModuleByPath("^.host[1].nic.radio"));
+            ASSERT(radio->getRadioMode() == physicallayer::IRadio::RADIO_MODE_OFF);
+        }
+        else if (scenario == 38) {
+            set(child.get(),"macBeaconOrder",uint64_t(3));
+            set(child.get(),"macAutoRequest",false);
+            ASSERT(childManagement->submitSync(++nextId,{channel(),true}) == Admission::ACCEPTED);
+            wait(SimTime(130,SIMTIME_MS));
+            auto data = new Packet("foreign-pan-collision");
+            data->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0x55}));
+            Ieee802154MacDataRequest request; request.sourceAddressMode = Ieee802154Address::AddressType::SHORT;
+            request.destinationAddress = Ieee802154Address::fromShort(2); request.destinationPanId = 0x1234;
+            request.ackTx = true; request.indirectTx = true;
+            ASSERT(root->submitData(++nextId,data,request) == Admission::ACCEPTED);
+            emit(registerSignal("faultArmed"),1L);
+            ASSERT(childManagement->submitPoll(++nextId,{0x2345,Ieee802154Address::fromExtended(0x0201123456789abcULL)}) == Admission::ACCEPTED);
+            wait(SimTime(300,SIMTIME_MS));
+            ASSERT(received == 1 && dataConfirms == 1 && polls == 1);
+        }
+        else if (scenario == 37) {
+            set(child.get(),"macPanId",uint64_t(0x1234));
+            set(child.get(),"macCoordShortAddress",uint64_t(1));
+            set(child.get(),"macBeaconOrder",uint64_t(3));
+            ASSERT(childManagement->submitSync(++nextId,{channel(),true}) == Admission::ACCEPTED);
+            wait(SimTime(130,SIMTIME_MS));
+            ASSERT(syncs == 1);
+            Ieee802154MacAssociateRequest wrongChannel{channel(11),0x1234,Ieee802154Address::fromShort(1)};
+            ASSERT(childManagement->submitAssociate(++nextId,wrongChannel) == Admission::UNSUPPORTED_OPERATION);
+            Ieee802154MacAssociateRequest wrongPan{channel(),0x2345,Ieee802154Address::fromShort(1)};
+            ASSERT(childManagement->submitAssociate(++nextId,wrongPan) == Admission::UNSUPPORTED_OPERATION);
+            Ieee802154MacAssociateRequest wrongPeer{channel(),0x1234,Ieee802154Address::fromShort(2)};
+            ASSERT(childManagement->submitAssociate(++nextId,wrongPeer) == Admission::UNSUPPORTED_OPERATION);
+            ASSERT(child->submitGet(++nextId,{"macPanId"}) == Admission::ACCEPTED);
+            ASSERT(value && std::get<uint64_t>(*value) == 0x1234);
+            ASSERT(child->submitGet(++nextId,{"phyCurrentChannelInfo"}) == Admission::ACCEPTED);
+            ASSERT(value && std::get<physicallayer::Ieee802154PhyChannel>(*value).channel == 20);
+            wait(SimTime(130,SIMTIME_MS));
+            ASSERT(losses == 0 && beacons.size() >= 3);
+        }
+        else if (scenario == 33 || scenario == 35) {
+            set(child.get(),"macBeaconOrder",uint64_t(3));
+            ASSERT(childManagement->submitSync(++nextId,{channel(),true}) == Admission::ACCEPTED);
+            wait(SimTime(130,SIMTIME_MS));
+            ASSERT(syncs == 1);
+            set(child.get(),"macRxOnWhenIdle",scenario == 35);
+            if (scenario == 35)
+                until(beacons.back() + SimTime(35,SIMTIME_MS));
+            else
+                wait(SimTime(5,SIMTIME_MS));
+            auto radio = check_and_cast<physicallayer::IRadio *>(getModuleByPath("^.host[1].nic.radio"));
+            ASSERT(radio->getRadioMode() == physicallayer::IRadio::RADIO_MODE_OFF);
+            auto data = new Packet("automatic-pending-data");
+            data->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0x55}));
+            Ieee802154MacDataRequest request; request.sourceAddressMode = Ieee802154Address::AddressType::SHORT;
+            request.destinationAddress = Ieee802154Address::fromExtended(0x0401123456789abcULL);
+            request.destinationPanId = 0x1234; request.ackTx = true; request.indirectTx = true;
+            observeAutoPoll = true;
+            ASSERT(root->submitData(++nextId,data,request) == Admission::ACCEPTED);
+            wait(SimTime(200,SIMTIME_MS));
+            ASSERT(childPollCommands == 1 && received == 1 && dataConfirms == 1 && polls == 0 && autoPollExtended);
+        }
+        else if (scenario == 29 || scenario == 34) {
+            set(child.get(),"macBeaconOrder",uint64_t(3));
+            set(child.get(),"macNotifyAllBeacons",true);
+            ASSERT(childManagement->submitSync(++nextId,{channel(),true}) == Admission::ACCEPTED);
+            wait(SimTime(130,SIMTIME_MS));
+            ASSERT(syncs == 1 && beacons.size() >= 2);
+            auto pending = new Packet("pending-before-phy-stop");
+            pending->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0x55}));
+            Ieee802154MacDataRequest indirect; indirect.sourceAddressMode = Ieee802154Address::AddressType::SHORT;
+            indirect.destinationAddress = Ieee802154Address::fromExtended(0x0401123456789abcULL);
+            indirect.destinationPanId = 0x1234; indirect.indirectTx = true;
+            ASSERT(root->submitData(++nextId,pending,indirect) == Admission::ACCEPTED);
+            until(beacons.back() + SimTime(35,SIMTIME_MS));
+            auto primary = new Packet("deferred-primary");
+            primary->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0x66}));
+            Ieee802154MacDataRequest direct; direct.sourceAddressMode = Ieee802154Address::AddressType::SHORT;
+            direct.destinationAddress = Ieee802154Address::fromShort(1); direct.destinationPanId = 0x1234;
+            primaryId = ++nextId;
+            ASSERT(child->submitData(primaryId,primary,direct) == Admission::ACCEPTED);
+            stopOnPendingBeacon = true;
+            wait(SimTime(130,SIMTIME_MS));
+            ASSERT(stoppedOnPendingBeacon && dataConfirms == 1 && childPollCommands == 0);
+            auto restart = new ModuleStartOperation;
+            LifecycleOperation::StringMap parameters;
+            restart->initialize(getModuleByPath(scenario == 29 ? "^.host[1].nic.phy" : "^.host[1].nic.mac"),parameters);
+            ASSERT(initiateOperation(restart));
+            wait(SimTime(20,SIMTIME_MS));
+            ASSERT(childPollCommands == 0 && dataConfirms == 1);
+            auto probe = new Packet("post-restart-admission");
+            probe->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0x77}));
+            auto probeId = ++nextId;
+            auto admitted = child->submitData(probeId,probe,direct);
+            if (admitted != Admission::ACCEPTED) delete probe;
+            ASSERT(admitted == Admission::ACCEPTED);
+            ASSERT(child->cancel(probeId) == Ieee802154MacServiceCancelResult::CANCELLED);
+            ASSERT(dataConfirms == 2);
+        }
+        else if (scenario == 24) {
+            set(child.get(),"macBeaconOrder",uint64_t(3));
+            ASSERT(childManagement->submitSync(++nextId,{channel(),true}) == Admission::ACCEPTED);
+            wait(SimTime(130,SIMTIME_MS));
+            Ieee802154MacStartSuperframeRequest childStart{0x1234,channel()};
+            childStart.panCoordinator = false; childStart.beaconOrder = 3; childStart.superframeOrder = 1; childStart.startTime = 1940;
+            ASSERT(childManagement->submitStartSuperframe(++nextId,childStart) == Admission::ACCEPTED);
+            wait(SimTime(50,SIMTIME_MS));
+            ASSERT(starts == 3 && syncs == 1);
+            set(child.get(),"macMaxBe",uint64_t(8)); set(child.get(),"macMinBe",uint64_t(8));
+            childStart.startTime += 5 * 7680; childStart.coordinatorRealignment = true;
+            expectingDepartureAbort = true;
+            ASSERT(childManagement->submitStartSuperframe(++nextId,childStart) == Admission::ACCEPTED);
+            wait(SimTime(130,SIMTIME_MS));
+            ASSERT(starts == 3);
+            ASSERT(rootManagement->submitDisassociate(++nextId,{0x1234,Ieee802154Address::fromExtended(0x0401123456789abcULL),1,false}) == Admission::ACCEPTED);
+            wait(SimTime(150,SIMTIME_MS));
+            ASSERT(departures == 1 && starts == 4 && resetWasBusy);
+            ASSERT(child->submitReset(++nextId,{false}) == Admission::ACCEPTED);
+            wait(SimTime(2,SIMTIME_MS));
+            ASSERT(resets == 1);
+        }
+        else if (scenario == 19 || scenario == 20) {
+            set(child.get(),"macPanId",uint64_t(0x1234));
+            set(child.get(),"macCoordShortAddress",uint64_t(1));
+            set(child.get(),"macBeaconOrder",uint64_t(3));
+            ASSERT(childManagement->submitSync(++nextId,{channel(),true}) == Admission::ACCEPTED);
+            wait(SimTime(130,SIMTIME_MS));
+            ASSERT(syncs == 1);
+            scanReceptionTimestamp.reset();
+            Ieee802154MacScanRequest scan; scan.type = Ieee802154ScanType::PASSIVE;
+            scan.channels = {channel()}; scan.duration = 9600;
+            ASSERT(childManagement->submitScan(++nextId,scan) == Admission::ACCEPTED);
+            wait(SimTime(160,SIMTIME_MS));
+            ASSERT(scans == 1 && scanReceptionTimestamp);
+            set(child.get(),"macAutoRequest",false);
+            scanReceptionTimestamp.reset();
+            ASSERT(childManagement->submitScan(++nextId,scan) == Admission::ACCEPTED);
+            wait(SimTime(160,SIMTIME_MS));
+            ASSERT(scans == 2 && scanNotices >= 1);
+        }
+        else if (scenario == 8 || (scenario >= 15 && scenario <= 18) || (scenario >= 30 && scenario <= 32)) {
+            set(child.get(),"macBeaconOrder",uint64_t(3));
+            set(child.get(),"macAutoRequest",false);
+            set(child.get(),"macShortAddress",uint64_t(0xfffe));
+            ASSERT(childManagement->submitSync(++nextId,{channel(),true}) == Admission::ACCEPTED);
+            wait(SimTime(130,SIMTIME_MS));
+            ASSERT(syncs == 1 && beacons.size() >= 2);
+            auto data = new Packet("quick-pending-data");
+            data->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>(scenario == 17 ? 50 : 1,0x55)));
+            Ieee802154MacDataRequest request;
+            request.sourceAddressMode = Ieee802154Address::AddressType::SHORT;
+            request.destinationAddress = Ieee802154Address::fromExtended(0x0401123456789abcULL);
+            request.destinationPanId = 0x1234; request.ackTx = true; request.indirectTx = true;
+            auto pendingId = ++nextId;
+            ASSERT(root->submitData(pendingId,data,request) == Admission::ACCEPTED);
+            observingQuick = true;
+            if (scenario >= 30)
+                emit(registerSignal("quickArmed"),long(pendingId));
+            if (scenario == 17) {
+                auto target = beacons.back() + SimTime(28000,SIMTIME_US);
+                until(target);
+            }
+            if (scenario == 18)
+                emit(registerSignal("faultArmed"),1L);
+            auto pollPeer = scenario == 17 ? Ieee802154Address::fromShort(1) : Ieee802154Address::fromExtended(0x0201123456789abcULL);
+            ASSERT(childManagement->submitPoll(++nextId,{0x1234,pollPeer}) == Admission::ACCEPTED);
+            wait(SimTime(scenario == 17 ? 110 : 100,SIMTIME_MS));
+            if (scenario >= 30) {
+                ASSERT(faultFired && dataConfirms == 1 && !quickDataStart && longPollObserved);
+                emit(registerSignal("verificationComplete"),1L);
+                return;
+            }
+            if (scenario == 18) {
+                ASSERT(polls == 1 && received == 1 && dataConfirms == 0 && quickDsns.size() == 1);
+                ASSERT(childManagement->submitPoll(++nextId,{0x1234,pollPeer}) == Admission::ACCEPTED);
+                wait(SimTime(150,SIMTIME_MS));
+                ASSERT(polls == 2 && received >= 2 && dataConfirms == 1 && quickDsns.size() == 2 && quickDsns[0] == quickDsns[1]);
+            }
+            else if (scenario == 17)
+                ASSERT(polls == 1 && received == 1 && dataConfirms == 1 && rootDraws > 0 && pollAckEnd && quickDataStart && *quickDataStart > *pollAckEnd + SimTime(512,SIMTIME_US));
+            else
+                ASSERT(polls == 1 && received == 1 && dataConfirms == 1 && rootDraws == 0 && pollAckEnd && quickDataStart);
+            if (scenario != 17) ASSERT(*quickDataStart >= *pollAckEnd + SimTime(192,SIMTIME_US) && *quickDataStart <= *pollAckEnd + SimTime(512,SIMTIME_US));
+            if (scenario != 17) ASSERT(longPollObserved);
+            if (scenario == 8 || scenario == 18) {
+                auto boundary = std::upper_bound(beacons.begin(),beacons.end(),*quickDataStart);
+                ASSERT(boundary != beacons.begin());
+                auto origin = *std::prev(boundary);
+                ASSERT(((*quickDataStart - origin).raw() % SimTime(320,SIMTIME_US).raw()) == 0);
+                ASSERT(*quickDataStart < origin + SimTime(30720,SIMTIME_US));
+            }
+            else if (scenario != 17) {
+                ASSERT(expectedQuickPhysical && *quickDataStart == *expectedQuickPhysical);
+            }
+        }
+        else if (scenario == 7) {
+            wait(SimTime(260,SIMTIME_MS));
+            ASSERT(beacons.size() >= 3 && leafConflicts == 0);
+        }
+        else if (scenario == 0) {
+            until(anchor + SimTime(110,SIMTIME_MS));
+            Ieee802154MacScanRequest scan; scan.type = Ieee802154ScanType::PASSIVE;
+            scan.channels = {channel(11)}; scan.duration = 2500;
+            auto from = simTime();
+            ASSERT(rootManagement->submitScan(++nextId,scan) == Admission::ACCEPTED);
+            wait(SimTime(50,SIMTIME_MS));
+            ASSERT(scans == 1 && beacons.size() == 1);
+            until(anchor + SimTime(250,SIMTIME_MS));
+            ASSERT(beacons.size() >= 2 && beacons[1] == anchor + SimTime(245760,SIMTIME_US) && beacons[1] > from + SimTime(40,SIMTIME_MS));
+        }
+        else if (scenario == 1) {
+            set(child.get(),"macPanId",uint64_t(0x1234));
+            set(child.get(),"macCoordShortAddress",uint64_t(1));
+            set(child.get(),"macBeaconOrder",uint64_t(3));
+            ASSERT(childManagement->submitSync(++nextId,{channel(),true}) == Admission::ACCEPTED);
+            wait(SimTime(130,SIMTIME_MS));
+            ASSERT(syncs == 1);
+            Ieee802154MacScanRequest scan; scan.type = Ieee802154ScanType::PASSIVE;
+            scan.channels = {channel(11)}; scan.duration = 36000;
+            ASSERT(childManagement->submitScan(++nextId,scan) == Admission::ACCEPTED);
+            wait(SimTime(600,SIMTIME_MS));
+            ASSERT(scans == 1 && losses == 1);
+        }
+        else if (scenario == 36) {
+            set(root.get(),"macMaxBe",uint64_t(8)); set(root.get(),"macMinBe",uint64_t(8));
+            for (int i = 0; i < 2; ++i) {
+                auto data = new Packet("carried-broadcast");
+                data->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{uint8_t(i)}));
+                Ieee802154MacDataRequest request; request.destinationAddress = Ieee802154Address::SHORT_BROADCAST_ADDRESS;
+                request.destinationPanId = 0x1234; request.sourceAddressMode = Ieee802154Address::AddressType::SHORT; request.indirectTx = true;
+                ASSERT(root->submitData(++nextId,data,request) == Admission::ACCEPTED);
+            }
+            wait(SimTime(1100,SIMTIME_MS));
+            ASSERT(dataConfirms == 2 && broadcastFrames.size() == 2 && beacons.size() >= 4);
+            ASSERT(broadcastFrames[0] > beacons[2]);
+            auto first = std::upper_bound(beacons.begin(),beacons.end(),broadcastFrames[0]);
+            auto second = std::upper_bound(beacons.begin(),beacons.end(),broadcastFrames[1]);
+            ASSERT(first != beacons.begin() && second != beacons.begin() && first != second);
+        }
+        else if (scenario == 3) {
+            enqueueAtBeacon = true;
+            wait(SimTime(400,SIMTIME_MS));
+            ASSERT(beacons.size() >= 4 && beaconPending.size() >= 4);
+            ASSERT(!beaconPending[1] && beaconPending[2] && beaconPending[3]);
+            ASSERT(broadcastFrames.size() == 2 && dataConfirms == 2);
+            ASSERT(broadcastFrames[0] > beacons[2] && broadcastFrames[0] < beacons[3]);
+            ASSERT(broadcastFrames[1] > beacons[3]);
+        }
+        else if (scenario == 4 || scenario == 9 || scenario == 10 || scenario == 13) {
+            set(root.get(),"macTransactionPersistenceTime",uint64_t(1));
+            auto data = new Packet("expiring-indirect");
+            data->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0x55}));
+            Ieee802154MacDataRequest request; request.destinationAddress = Ieee802154Address::fromShort(2);
+            request.destinationPanId = 0x1234; request.sourceAddressMode = Ieee802154Address::AddressType::SHORT;
+            request.indirectTx = true;
+            auto queued = simTime();
+            auto expiry = queued + SimTime(122880,SIMTIME_US);
+            if (scenario >= 9) {
+                auto clock = check_and_cast<IClock *>(getModuleByPath("^.rootClock"));
+                expiry = clock->computeSimTimeFromClockTime(clock->getClockTime() + SIMTIME_AS_CLOCKTIME(SimTime(122880,SIMTIME_US)));
+            }
+            ASSERT(root->submitData(++nextId,data,request) == Admission::ACCEPTED);
+            set(root.get(),"macBeaconOrder",uint64_t(4));
+            until(expiry - SimTime::fromRaw(1));
+            ASSERT(dataConfirms == 0);
+            wait(SimTime::fromRaw(2));
+            ASSERT(dataConfirms == 1);
+        }
+        else if (scenario == 5) {
+            until(anchor + SimTime(110,SIMTIME_MS));
+            Ieee802154MacScanRequest scan; scan.type = Ieee802154ScanType::PASSIVE;
+            scan.channels = {channel(11)}; scan.duration = 2500;
+            auto id = ++nextId;
+            ASSERT(rootManagement->submitScan(id,scan) == Admission::ACCEPTED);
+            wait(SimTime(5,SIMTIME_MS));
+            cancelScan = true;
+            ASSERT(root->cancel(id) == Ieee802154MacServiceCancelResult::CANCELLED);
+            until(anchor + SimTime(128,SIMTIME_MS));
+            ASSERT(scans == 1 && beacons.size() >= 2 && beacons[1] == anchor + SimTime(122880,SIMTIME_US));
+        }
+        else if (scenario >= 25 && scenario <= 27) {
+            until(anchor + SimTime(110,SIMTIME_MS));
+            Ieee802154MacScanRequest scan; scan.type = Ieee802154ScanType::PASSIVE;
+            scan.channels = {channel(11)}; scan.duration = 2500;
+            ASSERT(rootManagement->submitScan(++nextId,scan) == Admission::ACCEPTED);
+            wait(SimTime(5,SIMTIME_MS));
+            scanAbort = scenario == 25 ? Ieee802154MacServiceAbortReason::RESET : Ieee802154MacServiceAbortReason::STOPPED;
+            if (scenario == 25)
+                ASSERT(root->submitReset(++nextId,{false}) == Admission::ACCEPTED);
+            else {
+                auto stop = new ModuleStopOperation;
+                LifecycleOperation::StringMap parameters;
+                stop->initialize(getModuleByPath(scenario == 26 ? "^.host[0].nic.mac" : "^.host[0].nic.phy"),parameters);
+                ASSERT(initiateOperation(stop));
+            }
+            wait(SimTime(45,SIMTIME_MS));
+            ASSERT(scans == 1 && beacons.size() == 1 && (scenario != 25 || resets == 1));
+            if (scenario == 27) {
+                auto restart = new ModuleStartOperation;
+                LifecycleOperation::StringMap parameters;
+                restart->initialize(getModuleByPath("^.host[0].nic.phy"),parameters);
+                ASSERT(initiateOperation(restart));
+                until(anchor + SimTime(250,SIMTIME_MS));
+                ASSERT(beacons.size() >= 2 && beacons[1] == anchor + SimTime(245760,SIMTIME_US));
+            }
+            else if (scenario == 26) {
+                auto restart = new ModuleStartOperation;
+                LifecycleOperation::StringMap parameters;
+                restart->initialize(getModuleByPath("^.host[0].nic.mac"),parameters);
+                ASSERT(initiateOperation(restart));
+                ASSERT(rootManagement->submitStartSuperframe(++nextId,start) == Admission::ACCEPTED);
+                wait(SimTime(4,SIMTIME_MS));
+                ASSERT(starts == 2 && beacons.size() == 2);
+            }
+        }
+        else if (scenario == 28) {
+            set(root.get(),"macMaxBe",uint64_t(8)); set(root.get(),"macMinBe",uint64_t(8));
+            auto data = new Packet("active-primary");
+            data->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0x55}));
+            Ieee802154MacDataRequest request; request.destinationAddress = Ieee802154Address::fromExtended(0x0401123456789abcULL);
+            request.destinationPanId = 0x1234; request.sourceAddressMode = Ieee802154Address::AddressType::SHORT;
+            auto id = ++nextId;
+            ASSERT(root->submitData(id,data,request) == Admission::ACCEPTED);
+            Ieee802154MacScanRequest scan; scan.type = Ieee802154ScanType::PASSIVE; scan.channels = {channel(11)}; scan.duration = 2500;
+            ASSERT(rootManagement->submitScan(++nextId,scan) == Admission::BUSY);
+            ASSERT(root->cancel(id) == Ieee802154MacServiceCancelResult::CANCELLED);
+            ASSERT(scans == 0 && dataConfirms == 1);
+        }
+        else {
+            Ieee802154MacRxEnableRequest request;
+            request.instances.push_back({1000,1000,false});
+            std::optional<simtime_t> expectedEnd;
+            if (scenario >= 11) {
+                ASSERT(beaconClockAnchor);
+                auto clock = check_and_cast<IClock *>(getModuleByPath("^.rootClock"));
+                expectedEnd = clock->computeSimTimeFromClockTime(*beaconClockAnchor + SIMTIME_AS_CLOCKTIME(SimTime(32000,SIMTIME_US)));
+            }
+            ASSERT(rootManagement->submitRxEnable(++nextId,request) == Admission::ACCEPTED);
+            ASSERT(rxConfirms == 1);
+            auto radio = check_and_cast<physicallayer::IRadio *>(getModuleByPath("^.host[0].nic.radio"));
+            until(anchor + SimTime(31,SIMTIME_MS));
+            ASSERT(radio->getRadioMode() == physicallayer::IRadio::RADIO_MODE_RECEIVER);
+            until(expectedEnd.value_or(anchor + SimTime(32,SIMTIME_MS)) + SimTime(2,SIMTIME_MS));
+            ASSERT(rxIndications == 1 && radio->getRadioMode() == physicallayer::IRadio::RADIO_MODE_OFF);
+            if (expectedEnd) ASSERT(rxIndicatedAt && *rxIndicatedAt == *expectedEnd);
+            expectedRx = Status::ON_TIME_TOO_LONG;
+            request.instances.front() = {7000,680,false};
+            ASSERT(rootManagement->submitRxEnable(++nextId,request) == Admission::ACCEPTED);
+            ASSERT(rxConfirms == 2);
+            expectedRx = Status::PAST_TIME;
+            request.instances.front() = {1000,100,false};
+            ASSERT(rootManagement->submitRxEnable(++nextId,request) == Admission::ACCEPTED);
+            ASSERT(rxConfirms == 3);
+            expectedRx = Status::SUCCESS;
+            request.deferPermit = true;
+            ASSERT(rootManagement->submitRxEnable(++nextId,request) == Admission::ACCEPTED);
+            ASSERT(rxConfirms == 4);
+        }
+        emit(registerSignal("verificationComplete"),1L);
+    }
+  public:
+    ManagedBoundaryExercise() : cSimpleModule(65536) {}
+    virtual void receiveSignal(cComponent *, simsignal_t signal, long, cObject *) override { Enter_Method("receiveSignal"); if (signal == registerSignal("faultFired")) faultFired = true; else if (observingQuick) ++rootDraws; }
+    virtual void receiveSignal(cComponent *, simsignal_t signal, bool value, cObject *) override {
+        Enter_Method("receiveSignal");
+        if (scenario == 43 && signal == registerSignal("outgoingCapActive") && !value && controllerStopped)
+            ASSERT(root->submitReset(++nextId,{false}) == Admission::ACCEPTED);
+    }
+    virtual void receiveSignal(cComponent *source, simsignal_t signal, cObject *object, cObject *) override {
+        Enter_Method("receiveSignal");
+        if (signal == receptionStartedSignal) {
+            auto rx = check_and_cast<const physicallayer::IReception *>(object);
+            if (std::string(rx->getTransmission()->getPacket()->getName()) == "IEEE802154-periodic-beacon")
+                scanReceptionTimestamp = Ieee802154SuperframeTiming::timestamp(check_and_cast<IClock *>(getModuleByPath("^.childClock"))->getClockTime());
+            return;
+        }
+        if (signal == packetSentToLowerSignal) {
+            auto packet = check_and_cast<Packet *>(object);
+            auto frame = packet->peekAtFront<Ieee802154Frame>();
+            if (source == getModuleByPath(par("serviceModule"))) {
+                if (observeAutoPoll && frame->getFrameType() == 3 && frame->getPayloadArraySize() && frame->getPayload(0) == 4)
+                    autoPollExtended = frame->getSourceAddress().isExtended();
+                if (observingQuick && frame->getFrameType() == 3 && frame->getPayloadArraySize() && frame->getPayload(0) == 4 && frame->getChunkLength() > b(18 * 8))
+                    longPollObserved = true;
+                if ((stopOnPendingBeacon || stoppedOnPendingBeacon || observeAutoPoll) && frame->getFrameType() == 3 && frame->getPayloadArraySize() && frame->getPayload(0) == 4)
+                    ++childPollCommands;
+                return;
+            }
+            if (source == getModuleByPath(par("leafModule"))) {
+                if (frame->getFrameType() == 3 && frame->getPayloadArraySize() && frame->getPayload(0) == 5)
+                    ++leafConflicts;
+                return;
+            }
+            if (frame->getFrameType() == 0) {
+                beaconPending.push_back(frame->getFramePending());
+                if (enqueueAtBeacon) {
+                    enqueueAtBeacon = false;
+                    ASSERT(!frame->getFramePending());
+                    for (int i = 0; i < 2; ++i) {
+                        auto data = new Packet("queued-broadcast");
+                        data->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{uint8_t(i)}));
+                        Ieee802154MacDataRequest request; request.destinationAddress = Ieee802154Address::SHORT_BROADCAST_ADDRESS;
+                        request.destinationPanId = 0x1234; request.sourceAddressMode = Ieee802154Address::AddressType::SHORT;
+                        request.indirectTx = true;
+                        ASSERT(root->submitData(++nextId,data,request) == Admission::ACCEPTED);
+                    }
+                }
+            }
+            else if (frame->getFrameType() == 1 && frame->getDestinationAddress().isShortBroadcast())
+                broadcastFrames.push_back(simTime());
+            else if (scenario >= 15 && scenario <= 18 && observingQuick && frame->getFrameType() == 1) {
+                quickDsns.push_back(frame->getDsn());
+                if (scenario >= 17)
+                    return;
+                ASSERT(beaconClockAnchor);
+                auto clock = check_and_cast<IClock *>(getModuleByPath("^.rootClock"));
+                auto period = SIMTIME_AS_CLOCKTIME(SimTime(320,SIMTIME_US));
+                ASSERT(pollAckEnd);
+                auto earliest = std::max(simTime(),*pollAckEnd + SimTime(192,SIMTIME_US));
+                auto earliestClock = clock->computeClockTimeFromSimTime(earliest);
+                auto difference = CLOCKTIME_AS_SIMTIME(earliestClock - *beaconClockAnchor).raw();
+                auto ticks = SimTime(320,SIMTIME_US).raw();
+                auto count = difference > 0 ? (difference + ticks - 1) / ticks : 0;
+                auto target = *beaconClockAnchor + period * count;
+                while (clock->computeSimTimeFromClockTime(target) < earliest)
+                    target += period;
+                expectedQuickPhysical = clock->computeSimTimeFromClockTime(target);
+            }
+            return;
+        }
+        auto tx = check_and_cast<const physicallayer::ITransmission *>(object);
+        if ((scenario == 42 || (scenario == 43 && !beacons.empty())) && !controllerStopped && std::string(tx->getPacket()->getName()) == "IEEE802154-periodic-beacon") {
+            controllerStopped = true;
+            auto stop = new ModuleStopOperation;
+            LifecycleOperation::StringMap parameters;
+            stop->initialize(getModuleByPath("^.host[0].nic.superframeController"),parameters);
+            ASSERT(initiateOperation(stop));
+        }
+        if ((scenario == 8 || (scenario >= 15 && scenario <= 18) || (scenario >= 30 && scenario <= 32)) && observingQuick) {
+            auto name = std::string(tx->getPacket()->getName());
+            if (name == "IEEE802154-ACK") pollAckEnd = tx->getEndTime();
+            else if (name == "IEEE802154-DATA") quickDataStart = tx->getStartTime();
+        }
+        if (std::string(tx->getPacket()->getName()) == "IEEE802154-periodic-beacon") {
+            beacons.push_back(tx->getStartTime());
+            if (scenario >= 9 && scenario <= 16) beaconClockAnchor = check_and_cast<IClock *>(getModuleByPath("^.rootClock"))->getClockTime();
+        }
+    }
+    virtual void handleDataConfirm(uint64_t id,const Ieee802154MacDataConfirm& c) override { Enter_Method("handleDataConfirm"); ASSERT(((scenario == 3 || scenario == 8 || scenario == 33 || scenario == 35 || scenario == 36 || scenario == 38 || (scenario >= 15 && scenario <= 18)) && c.result == Ieee802154MacServiceResult(Status::SUCCESS)) || ((scenario == 4 || scenario == 9 || scenario == 10 || scenario == 13) && c.result == Ieee802154MacServiceResult(Status::TRANSACTION_EXPIRED)) || ((scenario == 28 || ((scenario == 29 || scenario == 34) && id != primaryId) || scenario == 30) && c.result == Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::CANCELLED)) || ((((scenario == 29 || scenario == 34) && id == primaryId) || scenario == 32) && c.result == Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::STOPPED)) || (scenario == 31 && c.result == Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::RESET))); ++dataConfirms; if (scenario == 36 && dataConfirms == 1) set(root.get(),"macMinBe",uint64_t(0)); }
+    virtual void handleDataIndication(Packet *packet,const Ieee802154MacDataIndication&) override { Enter_Method("handleDataIndication"); take(packet); delete packet; ++received; }
+    virtual void handleGetConfirm(uint64_t,const Ieee802154MacGetConfirm& c) override { Enter_Method("handleGetConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); value = c.value; }
+    virtual void handleSetConfirm(uint64_t,const Ieee802154MacSetConfirm& c) override { Enter_Method("handleSetConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); }
+    virtual void handleResetConfirm(uint64_t,const Ieee802154MacResetConfirm& c) override { Enter_Method("handleResetConfirm"); ASSERT((scenario == 23 || scenario == 24 || scenario == 25 || scenario == 31 || scenario == 43) && c.result == Ieee802154MacServiceResult(Status::SUCCESS)); ++resets; }
+    virtual void handlePromiscuousIndication(Packet *packet,const Ieee802154MacPromiscuousIndication&) override { Enter_Method("handlePromiscuousIndication"); take(packet); delete packet; }
+    virtual void handleCommStatusIndication(Packet *packet,const Ieee802154MacCommStatusIndication&) override { Enter_Method("handleCommStatusIndication"); if (packet) { take(packet); delete packet; } }
+    virtual void handlePollConfirm(uint64_t,const Ieee802154MacPollConfirm& c) override { Enter_Method("handlePollConfirm"); ASSERT((scenario == 38 && c.result == Ieee802154MacServiceResult(Status::NO_DATA)) || ((scenario == 8 || (scenario >= 15 && scenario <= 18)) && c.result == Ieee802154MacServiceResult(Status::SUCCESS))); ++polls; }
+    virtual void handlePurgeConfirm(uint64_t,const Ieee802154MacPurgeConfirm&) override { ASSERT(false); }
+    virtual void handleStartConfirm(uint64_t,const Ieee802154MacStartConfirm&) override { ASSERT(false); }
+    virtual void handleStartSuperframeConfirm(uint64_t id,const Ieee802154MacStartSuperframeConfirm& c) override { Enter_Method("handleStartSuperframeConfirm"); auto expected = expectingDepartureAbort ? Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::DISASSOCIATED) : Ieee802154MacServiceResult((scenario == 6 && starts == 2) || scenario == 21 ? Status::INVALID_PARAMETER : Status::SUCCESS); ASSERT(c.result == expected); ++starts; if (expectingDepartureAbort) { ASSERT(child->cancel(id) == Ieee802154MacServiceCancelResult::NOT_PENDING); resetWasBusy = child->submitReset(++nextId,{false}) == Admission::BUSY; expectingDepartureAbort = false; } }
+    virtual void handleSyncConfirm(uint64_t,const Ieee802154MacSyncConfirm& c) override { Enter_Method("handleSyncConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); ++syncs; }
+    virtual void handleScanConfirm(uint64_t,const Ieee802154MacScanConfirm& c) override { Enter_Method("handleScanConfirm"); ASSERT(c.result == (cancelScan ? Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::CANCELLED) : scanAbort ? Ieee802154MacServiceResult(*scanAbort) : Ieee802154MacServiceResult(Status::SUCCESS))); if ((scenario == 19 || scenario == 20) && scans == 0) ASSERT(c.panDescriptors.size() == 1 && scanReceptionTimestamp && c.panDescriptors[0].timestamp == *scanReceptionTimestamp); if (scenario == 23) scannedPans = c.panDescriptors; ++scans; }
+    virtual void handleBeaconNotifyIndication(const Ieee802154PanDescriptor& d) override { auto caller = getSimulation()->getContextModule(); Enter_Method("handleBeaconNotifyIndication"); if (scenario == 19 || scenario == 20) { ASSERT(scanReceptionTimestamp && d.timestamp == *scanReceptionTimestamp); ++scanNotices; } if ((scenario == 29 || scenario == 34) && stopOnPendingBeacon && caller == getModuleByPath(par("serviceModule")) && !d.beacon.pendingAddresses.empty()) { stopOnPendingBeacon = false; stoppedOnPendingBeacon = true; auto stop = new ModuleStopOperation; LifecycleOperation::StringMap parameters; stop->initialize(getModuleByPath(scenario == 29 ? "^.host[1].nic.phy" : "^.host[1].nic.mac"),parameters); ASSERT(initiateOperation(stop)); } }
+    virtual void handleBeaconConfirm(uint64_t,const Ieee802154MacBeaconConfirm&) override { ASSERT(false); }
+    virtual void handleBeaconRequestIndication(const Ieee802154MacBeaconRequestIndication&) override { ASSERT(false); }
+    virtual void handleAssociateResponseStatus(uint64_t,const Ieee802154MacAssociateResponseStatus& c) override { Enter_Method("handleAssociateResponseStatus"); ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); }
+    virtual void handleAssociateConfirm(uint64_t,const Ieee802154MacAssociateConfirm& c) override { Enter_Method("handleAssociateConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(scenario == 21 ? Status::NO_ACK : Status::SUCCESS)); ++associations; }
+    virtual void handleAssociateIndication(const Ieee802154MacAssociateIndication& i) override { Enter_Method("handleAssociateIndication"); bool first = i.deviceAddress == Ieee802154Address::fromExtended(0x0401123456789abcULL); ASSERT((first ? rootManagement.get() : childManagement.get())->submitAssociateResponse(++nextId,{i.deviceAddress,uint16_t(first ? 2 : 3),0}) == Admission::ACCEPTED); }
+    virtual void handleDisassociateConfirm(uint64_t,const Ieee802154MacDisassociateConfirm& c) override { Enter_Method("handleDisassociateConfirm"); ASSERT(scenario == 24 && c.result == Ieee802154MacServiceResult(Status::SUCCESS)); }
+    virtual void handleDisassociateIndication(const Ieee802154MacDisassociateIndication&) override { Enter_Method("handleDisassociateIndication"); ASSERT(scenario == 24); ++departures; }
+    virtual void handleOrphanIndication(const Ieee802154MacOrphanIndication& i) override { auto caller = getSimulation()->getContextModule(); Enter_Method("handleOrphanIndication"); ASSERT(scenario == 22); if (caller == getModuleByPath(par("serviceModule"))) { ++orphans; ASSERT(childManagement->submitOrphanResponse(++nextId,{i.orphanAddress,3,true}) == Admission::ACCEPTED); } }
+    virtual void handleOrphanResponseStatus(uint64_t,const Ieee802154MacOrphanResponseStatus& c) override { Enter_Method("handleOrphanResponseStatus"); ASSERT(scenario == 22 && c.result == Ieee802154MacServiceResult(Status::SUCCESS)); }
+    virtual void handleSyncLossIndication(const Ieee802154MacSyncLossIndication& i) override { Enter_Method("handleSyncLossIndication"); ASSERT(i.reason == Ieee802154SyncLossReason::BEACON_LOST); ++losses; }
+    virtual void handleRxEnableConfirm(uint64_t,const Ieee802154MacRxEnableConfirm& c) override { Enter_Method("handleRxEnableConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(expectedRx)); ++rxConfirms; }
+    virtual void handleRxEnableIndication(const Ieee802154MacRxEnableIndication&) override { Enter_Method("handleRxEnableIndication"); rxIndicatedAt = simTime(); ++rxIndications; }
+};
+Define_Module(ManagedBoundaryExercise);
+
+class ManagedQuickFault : public cSimpleModule, public cListener, public LifecycleController
+{
+    ModuleRefByPar<IIeee802154MacServiceProvider> root;
+    uint64_t pendingId = 0;
+    int scenario = 0;
+    cMessage *trigger = nullptr;
+  protected:
+    virtual void initialize() override {
+        root.reference(this,"rootModule",true);
+        scenario = par("scenario");
+        trigger = new cMessage("interrupt reserved quick transmission");
+        getModuleByPath("^.exercise")->subscribe(registerSignal("quickArmed"),this);
+        getModuleByPath(par("rootModule"))->subscribe(packetSentToLowerSignal,this);
+    }
+    virtual void handleMessage(cMessage *message) override {
+        ASSERT(message == trigger && pendingId);
+        if (scenario == 30)
+            ASSERT(root->cancel(pendingId) == Ieee802154MacServiceCancelResult::CANCELLED);
+        else if (scenario == 31)
+            ASSERT(root->submitReset(uint64_t(1) << 50,{false}) == Ieee802154MacServiceAdmission::ACCEPTED);
+        else {
+            auto stop = new ModuleStopOperation;
+            LifecycleOperation::StringMap parameters;
+            stop->initialize(getModuleByPath("^.host[0].nic.phy"),parameters);
+            ASSERT(initiateOperation(stop));
+        }
+        emit(registerSignal("faultFired"),1L);
+    }
+  public:
+    virtual ~ManagedQuickFault() { cancelAndDelete(trigger); }
+    virtual void receiveSignal(cComponent *, simsignal_t signal, long value, cObject *) override {
+        Enter_Method("receiveSignal");
+        if (signal == registerSignal("quickArmed")) pendingId = value;
+    }
+    virtual void receiveSignal(cComponent *, simsignal_t signal, cObject *object, cObject *) override {
+        Enter_Method("receiveSignal");
+        if (signal != packetSentToLowerSignal || !pendingId || trigger->isScheduled()) return;
+        auto frame = check_and_cast<Packet *>(object)->peekAtFront<Ieee802154Frame>();
+        if (frame->getFrameType() == 1)
+            scheduleAt(simTime() + SimTime::fromRaw(1),trigger);
+    }
+};
+Define_Module(ManagedQuickFault);
+}
+
+%file: ManagedBoundaryFixture.ned
+import inet.common.SimpleModule;
+import inet.linklayer.ieee802154.Ieee802154StandardInterface;
+import inet.linklayer.ieee802154.contract.IIeee802154MacServiceClient;
+import inet.linklayer.ieee802154.contract.IIeee802154ManagementServiceClient;
+import inet.mobility.static.StationaryMobility;
+import inet.clock.model.OscillatorBasedClock;
+import inet.protocoltest.TapRadioMedium;
+
+simple ManagedBoundaryExercise extends SimpleModule like IIeee802154MacServiceClient, IIeee802154ManagementServiceClient {
+    parameters: string rootModule; string serviceModule; string leafModule; int scenario; @class(::inet::ManagedBoundaryExercise); @signal[verificationComplete](type=long); @signal[faultArmed](type=long); @signal[quickArmed](type=long);
+}
+simple ManagedQuickFault extends SimpleModule { parameters: string rootModule; int scenario; @class(::inet::ManagedQuickFault); @signal[faultFired](type=long); }
+module ManagedBoundaryHost {
+    parameters: @networkNode;
+    submodules:
+        mobility: StationaryMobility;
+        nic: Ieee802154StandardInterface {
+            enableManagement = true; enableSuperframe = true;
+            mac.clientModule = "^.^.^.exercise"; mac.managementClientModule = "^.^.^.exercise";
+        }
+    connections allowunconnected:
+}
+network ManagedBoundaryTest {
+    parameters: int scenario;
+    submodules:
+        radioMedium: TapRadioMedium;
+        rootClock: OscillatorBasedClock if scenario >= 9 && scenario <= 16;
+        childClock: OscillatorBasedClock if scenario == 19 || scenario == 20;
+        host[3]: ManagedBoundaryHost;
+        exercise: ManagedBoundaryExercise { rootModule = "^.host[0].nic.mac"; serviceModule = "^.host[1].nic.mac"; leafModule = "^.host[2].nic.mac"; scenario = parent.scenario; }
+        fault: ManagedQuickFault if scenario >= 30 && scenario <= 32 { rootModule = "^.host[0].nic.mac"; scenario = parent.scenario; }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = ManagedBoundaryTest
+sim-time-limit = 1.5s
+cmdenv-express-mode = true
+cmdenv-stop-batch-on-error = false
+*.scenario = ${scenario=0..43}
+*.**.radio.sendRawBytes = ${raw=false,true}
+*.radioMedium.backgroundNoise.power = -110dBm
+*.radioMedium.signalAnalogRepresentation = "scalar"
+*.host[0].nic.extendedAddress = "extended:02-01-12-34-56-78-9A-BC"
+*.host[1].nic.extendedAddress = "extended:04-01-12-34-56-78-9A-BC"
+*.host[2].nic.extendedAddress = "extended:06-01-12-34-56-78-9A-BC"
+*.host[0].nic.shortAddress = 1
+*.host[0].nic.panId = 4660
+*.host[0].nic.mac.isPanCoordinator = true
+*.host[0].nic.rxOnWhenIdle = (${scenario} >= 6 && ${scenario} <= 8) || (${scenario} >= 15 && ${scenario} <= 18) || (${scenario} >= 21 && ${scenario} <= 24) || (${scenario} >= 29 && ${scenario} <= 36) || (${scenario} >= 38 && ${scenario} <= 40)
+*.host[1].nic.rxOnWhenIdle = (${scenario} >= 6 && ${scenario} <= 8) || (${scenario} >= 15 && ${scenario} <= 18) || (${scenario} >= 21 && ${scenario} <= 24) || (${scenario} >= 29 && ${scenario} <= 36) || ${scenario} == 38 || ${scenario} == 40
+*.host[2].nic.rxOnWhenIdle = (${scenario} >= 6 && ${scenario} <= 8) || (${scenario} >= 15 && ${scenario} <= 18) || (${scenario} >= 21 && ${scenario} <= 24) || (${scenario} >= 29 && ${scenario} <= 36) || ${scenario} == 38 || ${scenario} == 40
+*.host[1].nic.mac.pollResponseWait = ${scenario} == 38 ? 200ms : 2s
+*.host[0].nic.clockModule = ${scenario} >= 9 && ${scenario} <= 16 ? "^.^.^.rootClock" : ""
+*.rootClock.initialClockTime = 0.25s
+*.rootClock.oscillator.nominalTickLength = 1us
+*.rootClock.oscillator.driftRate = ${scenario} == 9 || ${scenario} == 11 || ${scenario} == 15 ? 40ppm : -40ppm
+*.rootClock.useFutureEventSet = ${scenario} != 13 && ${scenario} != 14
+*.host[1].nic.clockModule = ${scenario} == 19 || ${scenario} == 20 ? "^.^.^.childClock" : ""
+*.childClock.initialClockTime = 0.25s
+*.childClock.oscillator.nominalTickLength = 1us
+*.childClock.oscillator.driftRate = ${scenario} == 19 ? 40ppm : -40ppm
+*.host[*].nic.radio.antenna.mobilityModule = "^.^.^.mobility"
+*.host[*].mobility.initFromDisplayString = false
+*.host[0].mobility.initialX = 0m
+*.host[1].mobility.initialX = 1m
+*.host[2].mobility.initialX = 2m
+*.host[*].mobility.initialY = 0m
+*.host[*].mobility.initialZ = 0m
+*.host[*].mobility.constraintAreaMinX = 0m
+*.host[*].mobility.constraintAreaMinY = 0m
+*.host[*].mobility.constraintAreaMinZ = 0m
+*.host[*].mobility.constraintAreaMaxX = 100m
+*.host[*].mobility.constraintAreaMaxY = 100m
+*.host[*].mobility.constraintAreaMaxZ = 100m
+
+%contains: stdout
+PROTOCOLTEST ieee802154_managed_boundary: PASS
+
+%not-contains: stdout
+PROTOCOLTEST ieee802154_managed_boundary: FAIL
