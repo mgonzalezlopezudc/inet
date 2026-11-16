@@ -21,6 +21,7 @@
 #include "inet/linklayer/ieee802154/Ieee802154PendingTransactions.h"
 #include "inet/linklayer/ieee802154/Ieee802154CommandCodec.h"
 #include "inet/linklayer/ieee802154/Ieee802154GtsManager.h"
+#include "inet/linklayer/ieee802154/Ieee802154MacObservations.h"
 #include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceClient.h"
 #include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceProvider.h"
 #include "inet/physicallayer/wireless/ieee802154/contract/IIeee802154PhyServiceClient.h"
@@ -173,6 +174,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     void retireInvalidGtsData();
     void expireGtsGrant(const Ieee802154GtsManager::Key& key);
     bool settleSkippedGtsOpportunities();
+    void emitGtsObservation(simsignal_t signal, const Ieee802154GtsManager::Grant& grant);
     struct GtsRequestState { uint64_t id; Ieee802154MacGtsRequest request; bool waiting = false; };
     std::optional<GtsRequestState> gtsRequest;
     cMessage *gtsTimer = nullptr;
@@ -190,6 +192,11 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     std::optional<clocktime_t> outgoingCapEnd;
     std::optional<clocktime_t> incomingCapEnd;
     simsignal_t periodicBeaconStartSignal = SIMSIGNAL_NULL;
+    simsignal_t capWindowInstalledSignal = SIMSIGNAL_NULL;
+    simsignal_t cfpWindowInstalledSignal = SIMSIGNAL_NULL;
+    simsignal_t gtsAllocatedSignal = SIMSIGNAL_NULL;
+    simsignal_t gtsDeallocatedSignal = SIMSIGNAL_NULL;
+    simsignal_t gtsActivitySignal = SIMSIGNAL_NULL;
     simsignal_t outgoingCapActiveSignal = SIMSIGNAL_NULL;
     void setOutgoingCapActive(bool active);
     bool scheduleCapDutyEnd();

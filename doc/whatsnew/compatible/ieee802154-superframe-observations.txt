@@ -1,0 +1,4 @@
+IEEE 802.15.4 superframe and GTS observations
+
+Expose physical CAP and CFP reservation bounds and coordinator GTS allocation,
+individual deallocation and qualifying activity through declared MAC signals.

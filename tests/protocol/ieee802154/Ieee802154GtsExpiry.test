@@ -1,7 +1,7 @@
 %description:
 GTS inactivity expiration at the BO 0, 8 and 9 bounds over actual PHY beacons.
 
-%extraargs: -r 0..37
+%extraargs: -r 0..41
 
 %includes:
 #include "ProtocolTest.h"
@@ -26,6 +26,7 @@ Define_ProtocolTestProgram()
 EV << "GTS expiration fixture compiled\n";
 
 %file: GtsExpiryExercise.cc
+#include <map>
 #include "inet/common/ModuleRefByPar.h"
 #include "inet/common/Simsignals.h"
 #include "inet/common/packet/Packet.h"
@@ -36,6 +37,7 @@ EV << "GTS expiration fixture compiled\n";
 #include "inet/linklayer/ieee802154/Ieee802154Frame_m.h"
 #include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
 #include "inet/linklayer/ieee802154/Ieee802154BeaconCodec.h"
+#include "inet/linklayer/ieee802154/Ieee802154MacObservations.h"
 #include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceProvider.h"
 #include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceClient.h"
 #include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceProvider.h"
@@ -56,6 +58,8 @@ class GtsExpiryExercise : public cSimpleModule, public cListener, public IIeee80
     uint64_t nextId = 0;
     int bo = 0, scenario = 0, associations = 0, starts = 0, syncs = 0, beacons = 0, grants = 0, rootRemovals = 0, deviceRemovals = 0;
     int dataConfirms = 0, deliveries = 0, dataFrames = 0, resets = 0;
+    int allocationIndications = 0, retiredGts = 0;
+    int allocations = 0, deallocations = 0, activities = 0, capWindows = 0, cfpWindows = 0;
     bool rebase = false, rebaseConstructed = false, measuringData = false, phaseReplacementPending = false;
     bool stopNextBeacon = false, stopBeforePublication = false, stopped = false;
     bool positiveConstructed = false, removalConstructed = false, removalPublished = false;
@@ -65,6 +69,8 @@ class GtsExpiryExercise : public cSimpleModule, public cListener, public IIeee80
     std::optional<simtime_t> secondPublication;
     bool secondConstructed = false, relocated = false;
     std::optional<simtime_t> rootAnchor, dataAnchor;
+    std::optional<simtime_t> rootBeaconEnd;
+    std::map<int,std::pair<simtime_t,simtime_t>> observedCfp;
     std::optional<simtime_t> scriptedEnd;
     uint64_t phyId = 0;
     std::vector<simtime_t> dataAnchors;
@@ -77,6 +83,8 @@ class GtsExpiryExercise : public cSimpleModule, public cListener, public IIeee80
         rootManagement.reference(this,"rootModule",true); childManagement.reference(this,"childModule",true);
         if (scenario >= 21 && scenario <= 23) script.reference(this,"scriptModule",true);
         getModuleByPath(par("rootModule"))->subscribe(packetSentToLowerSignal,this);
+        auto mac = getModuleByPath(par("rootModule"));
+        for (const char *name : {"capWindowInstalled","cfpWindowInstalled","gtsAllocated","gtsDeallocated","gtsActivity"}) mac->subscribe(name,this);
         getModuleByPath("^.host[0].nic.radio")->subscribe(transmissionStartedSignal,this);
         getModuleByPath("^.host[1].nic.radio")->subscribe(transmissionStartedSignal,this);
         if (scenario >= 21 && scenario <= 23) getModuleByPath("^.host[0].nic.radio")->subscribe(receptionStartedSignal,this);
@@ -100,6 +108,12 @@ class GtsExpiryExercise : public cSimpleModule, public cListener, public IIeee80
         Ieee802154MacGtsRequest request{{2,scenario == 12 || scenario == 13 || scenario == 18 || scenario == 25 ? Ieee802154GtsDirection::DEVICE_RECEIVE : Ieee802154GtsDirection::DEVICE_TRANSMIT,true}};
         if (scenario == 15) stopBeforePublication = true;
         ASSERT(childManagement->submitGts(++nextId,request) == Admission::ACCEPTED);
+        if (scenario == 27) {
+            for (int i = 0; i < 4000 && (!resets || !retiredGts); ++i) wait(SimTime(10,SIMTIME_MS));
+            ASSERT(allocations == 1 && allocationIndications == 1 && resets == 1 && retiredGts == 1);
+            wait(SimTime(200,SIMTIME_MS)); ASSERT(allocationIndications == 1 && resets == 1 && retiredGts == 1);
+            emit(registerSignal("verificationComplete"),1L); return;
+        }
         if (scenario == 15) {
             for (int i = 0; i < 100 && !stopped; ++i) wait(SimTime(10,SIMTIME_MS));
             ASSERT(stopped && !firstPublication && rootRemovals == 0);
@@ -220,18 +234,46 @@ class GtsExpiryExercise : public cSimpleModule, public cListener, public IIeee80
             for (int i = 0; i < 1100 && starts < 2; ++i) wait(SimTime(10,SIMTIME_MS));
             ASSERT(starts == 2 && rebasedPublication && rootRemovals == 0);
         }
-        if (scenario == 17) {
+        if (scenario == 17 || scenario == 26) {
             for (int i = 0; i < 2500 && !resets; ++i) wait(SimTime(10,SIMTIME_MS));
-            ASSERT(rootRemovals == 1 && resets == 1);
+            ASSERT(rootRemovals == 1 && resets == 1 && deallocations == 1);
             wait(SimTime(200,SIMTIME_MS)); ASSERT(rootRemovals == 1 && resets == 1);
             emit(registerSignal("verificationComplete"),1L); return;
         }
         for (int i = 0; i < 5000 && !removalPublished; ++i) wait(SimTime(10,SIMTIME_MS));
         ASSERT(rootRemovals == 1 && (rebase || scenario == 19 || scenario == 20 || scenario == 24 || deviceRemovals == (scenario == 16 ? 2 : 1)) && removalPublished);
+        if (scenario == 11 || scenario == 12 || scenario == 25)
+            ASSERT(allocations == 1 && deallocations == 1 && activities == (scenario == 12 ? 0 : 1) && capWindows > 0 && cfpWindows > 0);
         emit(registerSignal("verificationComplete"),1L);
     }
   public:
     GtsExpiryExercise() : cSimpleModule(65536) {}
+    void receiveSignal(cComponent *,simsignal_t signal,long value,cObject *details) override {
+        Enter_Method("receiveSignal"); ASSERT(value == 1);
+        if (signal == registerSignal("capWindowInstalled")) {
+            auto window = check_and_cast<Ieee802154MacWindowObservation *>(details);
+            ASSERT(window->outgoing && rootBeaconEnd && window->start == *rootBeaconEnd && window->end > window->start);
+            ++capWindows;
+        }
+        else if (signal == registerSignal("cfpWindowInstalled")) {
+            auto window = check_and_cast<Ieee802154MacWindowObservation *>(details);
+            ASSERT(window->outgoing && window->shortAddress == 2 && window->start < window->end);
+            observedCfp[int(window->direction)] = {window->start,window->end}; ++cfpWindows;
+        }
+        else {
+            auto grant = check_and_cast<Ieee802154MacGtsObservation *>(details);
+            ASSERT(grant->shortAddress == 2 && grant->length == 2);
+            if (signal == registerSignal("gtsAllocated")) {
+                ++allocations;
+                if (scenario == 27) ASSERT(root->submitReset(++nextId,{false}) == Admission::ACCEPTED);
+            }
+            else if (signal == registerSignal("gtsDeallocated")) {
+                ++deallocations;
+                if (scenario == 26) ASSERT(root->submitReset(++nextId,{false}) == Admission::ACCEPTED);
+            }
+            else { ASSERT(signal == registerSignal("gtsActivity")); ++activities; }
+        }
+    }
     void receiveSignal(cComponent *,simsignal_t signal,cObject *object,cObject *) override {
         Enter_Method("receiveSignal");
         if (signal == receptionStartedSignal) {
@@ -243,6 +285,7 @@ class GtsExpiryExercise : public cSimpleModule, public cListener, public IIeee80
             auto transmission = check_and_cast<const physicallayer::ITransmission *>(object);
             if (std::string(transmission->getPacket()->getName()) == "IEEE802154-periodic-beacon") {
                 rootAnchor = transmission->getStartTime();
+                rootBeaconEnd = transmission->getEndTime();
                 if (positiveConstructed && !firstPublication) firstPublication = transmission->getStartTime();
                 if (secondConstructed && !secondPublication) secondPublication = transmission->getStartTime();
                 if (rebaseConstructed && !rebasedPublication) rebasedPublication = transmission->getStartTime();
@@ -258,6 +301,10 @@ class GtsExpiryExercise : public cSimpleModule, public cListener, public IIeee80
             }
             else if (std::string(transmission->getPacket()->getName()) == "IEEE802154-DATA" && measuringData) {
                 ASSERT(rootAnchor);
+                auto direction = scenario == 11 ? Ieee802154GtsDirection::DEVICE_TRANSMIT : Ieee802154GtsDirection::DEVICE_RECEIVE;
+                ASSERT(observedCfp.count(int(direction)));
+                auto window = observedCfp.at(int(direction));
+                ASSERT(transmission->getStartTime() >= window.first && transmission->getEndTime() <= window.second);
                 dataAnchor = rootAnchor;
                 dataAnchors.push_back(*rootAnchor);
                 ++dataFrames;
@@ -294,7 +341,7 @@ class GtsExpiryExercise : public cSimpleModule, public cListener, public IIeee80
     void handleDataIndication(Packet *p,const Ieee802154MacDataIndication& i) override { Enter_Method("handleDataIndication"); if (scenario >= 21 && scenario <= 23) ASSERT(i.sourceAddress == Ieee802154Address::fromShort(2) && i.effectiveSourcePanId == 0x1234); take(p); delete p; ASSERT(scenario >= 11); ++deliveries; }
     void handleGetConfirm(uint64_t,const Ieee802154MacGetConfirm&) override { ASSERT(false); }
     void handleSetConfirm(uint64_t,const Ieee802154MacSetConfirm& c) override { Enter_Method("handleSetConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); }
-    void handleResetConfirm(uint64_t,const Ieee802154MacResetConfirm& c) override { Enter_Method("handleResetConfirm"); ASSERT(scenario == 17 && rootRemovals == 1 && c.result == Ieee802154MacServiceResult(Status::SUCCESS)); ++resets; }
+    void handleResetConfirm(uint64_t,const Ieee802154MacResetConfirm& c) override { Enter_Method("handleResetConfirm"); ASSERT(((scenario == 17 || scenario == 26) && rootRemovals == 1) || (scenario == 27 && allocationIndications == 1)); ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); ++resets; }
     void handlePromiscuousIndication(Packet *p,const Ieee802154MacPromiscuousIndication&) override { delete p; ASSERT(false); }
     void handleCommStatusIndication(Packet *p,const Ieee802154MacCommStatusIndication&) override { delete p; ASSERT(false); }
     void handlePollConfirm(uint64_t,const Ieee802154MacPollConfirm&) override { ASSERT(false); }
@@ -313,12 +360,13 @@ class GtsExpiryExercise : public cSimpleModule, public cListener, public IIeee80
     void handleDisassociateIndication(const Ieee802154MacDisassociateIndication&) override { ASSERT(false); }
     void handleOrphanIndication(const Ieee802154MacOrphanIndication&) override { ASSERT(false); }
     void handleOrphanResponseStatus(uint64_t,const Ieee802154MacOrphanResponseStatus&) override { ASSERT(false); }
-    void handleSyncLossIndication(const Ieee802154MacSyncLossIndication& i) override { Enter_Method("handleSyncLossIndication"); ASSERT((rebase || scenario == 14 || scenario == 17 || scenario == 19 || scenario == 20 || scenario == 24) && (i.reason == Ieee802154SyncLossReason::REALIGNMENT || i.reason == Ieee802154SyncLossReason::BEACON_LOST)); }
+    void handleSyncLossIndication(const Ieee802154MacSyncLossIndication& i) override { Enter_Method("handleSyncLossIndication"); ASSERT((rebase || scenario == 14 || scenario == 17 || scenario == 19 || scenario == 20 || scenario == 24 || scenario == 26 || scenario == 27) && (i.reason == Ieee802154SyncLossReason::REALIGNMENT || i.reason == Ieee802154SyncLossReason::BEACON_LOST)); }
     void handleRxEnableConfirm(uint64_t,const Ieee802154MacRxEnableConfirm&) override { ASSERT(false); }
     void handleRxEnableIndication(const Ieee802154MacRxEnableIndication&) override { ASSERT(false); }
-    void handleGtsConfirm(uint64_t,const Ieee802154MacGtsConfirm& c) override { Enter_Method("handleGtsConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); if (c.characteristics.allocate) ++grants; }
+    void handleGtsConfirm(uint64_t,const Ieee802154MacGtsConfirm& c) override { Enter_Method("handleGtsConfirm"); if (scenario == 27) { ASSERT(c.result == Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::STOPPED)); ++retiredGts; return; } ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); if (c.characteristics.allocate) ++grants; }
     void handleGtsIndication(const Ieee802154MacGtsIndication& i) override {
         auto caller = getSimulation()->getContextModule(); Enter_Method("handleGtsIndication");
+        if (scenario == 27 && i.characteristics.allocate && caller == getModuleByPath(par("rootModule"))) ++allocationIndications;
         if (!i.characteristics.allocate) {
             ASSERT(i.deviceAddress == Ieee802154Address::fromShort(2) && i.characteristics.length == 2);
             if (caller == getModuleByPath(par("rootModule"))) {
@@ -396,7 +444,7 @@ network GtsExpiryTest {
 %inifile: omnetpp.ini
 [General]
 network = GtsExpiryTest
-*.beaconOrder = ${bo=0,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25}
+*.beaconOrder = ${bo=0,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27}
 sim-time-limit = 75s
 cmdenv-express-mode = true
 cmdenv-stop-batch-on-error = false

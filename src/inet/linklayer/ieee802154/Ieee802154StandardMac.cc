@@ -76,6 +76,11 @@ void Ieee802154StandardMac::initialize(int stage)
 {
     if (stage == INITSTAGE_LOCAL) {
         periodicBeaconStartSignal = registerSignal("periodicBeaconStart");
+        capWindowInstalledSignal = registerSignal("capWindowInstalled");
+        cfpWindowInstalledSignal = registerSignal("cfpWindowInstalled");
+        gtsAllocatedSignal = registerSignal("gtsAllocated");
+        gtsDeallocatedSignal = registerSignal("gtsDeallocated");
+        gtsActivitySignal = registerSignal("gtsActivity");
         outgoingCapActiveSignal = registerSignal("outgoingCapActive");
         syncMissedSignal = registerSignal("syncMissed");
         syncLostSignal = registerSignal("syncLost");
@@ -676,7 +681,24 @@ void Ieee802154StandardMac::installCfpWindows(clocktime_t anchor, uint8_t superf
                 grant.key.direction == Ieee802154GtsDirection::DEVICE_RECEIVE,outgoing,false,
                 outgoing && outgoingEpoch ? outgoingEpoch->beaconOrder : uint8_t(15),CLOCKTIME_AS_SIMTIME(anchor).raw()});
     }
+    auto installed = cfpWindows;
     cfpWindows.insert(cfpWindows.end(),ending.begin(),ending.end());
+    auto receiveEpoch = receiveRetirementEpoch;
+    for (const auto& window : installed) {
+        Ieee802154MacWindowObservation observation;
+        observation.start = window.physicalStart; observation.end = window.physicalEnd;
+        observation.outgoing = window.outgoing; observation.receive = window.receive;
+        observation.shortAddress = window.key.shortAddress; observation.direction = window.key.direction;
+        emit(cfpWindowInstalledSignal,1L,&observation);
+        if (receiveEpoch != receiveRetirementEpoch || !started || resetRequest ||
+                std::none_of(cfpWindows.begin(),cfpWindows.end(),[&](const auto& current) {
+                    return current.physicalStart == window.physicalStart && current.physicalEnd == window.physicalEnd &&
+                            current.outgoing == window.outgoing && current.key.panId == window.key.panId &&
+                            current.key.extendedAddress == window.key.extendedAddress && current.key.shortAddress == window.key.shortAddress &&
+                            current.key.direction == window.key.direction;
+                }))
+            return;
+    }
     refreshCfp();
 }
 
@@ -774,6 +796,14 @@ void Ieee802154StandardMac::expireGtsGrant(const Ieee802154GtsManager::Key& key)
         }),candidate.removed.end());
     }
     removeGtsGrant(key);
+}
+
+void Ieee802154StandardMac::emitGtsObservation(simsignal_t signal, const Ieee802154GtsManager::Grant& grant)
+{
+    Ieee802154MacGtsObservation observation;
+    observation.shortAddress = grant.key.shortAddress;
+    observation.direction = grant.key.direction; observation.length = grant.length;
+    emit(signal,1L,&observation);
 }
 
 bool Ieee802154StandardMac::settleSkippedGtsOpportunities()
@@ -1681,9 +1711,11 @@ void Ieee802154StandardMac::handleTransmitStarted(uint64_t id, const physicallay
             syncLossNotificationsActive = true;
         auto publishStart = [&]() {
             if (candidate) {
-                for (const auto& grant : candidate->removed)
+                for (const auto& grant : candidate->removed) {
+                    emitGtsObservation(gtsDeallocatedSignal,grant);
                     if (managementClient)
                         managementClient->handleGtsIndication({Ieee802154Address::fromShort(grant.key.shortAddress),{grant.length,grant.key.direction,false}});
+                }
             }
             emit(periodicBeaconStartSignal,long(timestamp));
             if (candidate) {
@@ -2100,6 +2132,7 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
             managementClient->handleOrphanIndication({frame->getSourceAddress()});
         return;
     }
+    std::optional<Ieee802154GtsManager::Grant> observedActivity;
     if (panCoordinator && frame->getFrameType() == 1 && !frame->getSecurityEnabled() &&
             frame->getSourcePanId() == getInteger("macPanId") && frame->getSourceAddress().isShort() &&
             frame->getDestinationPanId() == getInteger("macPanId") &&
@@ -2108,8 +2141,9 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
         for (const auto& window : cfpWindows)
             if (window.outgoing && window.key.direction == Ieee802154GtsDirection::DEVICE_TRANSMIT &&
                     window.key.shortAddress == frame->getSourceAddress().getShort() &&
-                    quality.timing.ppduStart >= window.physicalStart && quality.timing.ppduEnd <= window.physicalEnd)
-                gtsManager.noteActivity(window.key);
+                    quality.timing.ppduStart >= window.physicalStart && quality.timing.ppduEnd <= window.physicalEnd &&
+                    gtsManager.noteActivity(window.key))
+                observedActivity = *gtsManager.findGrant(window.key);
     if (panCoordinator && frame->getFrameType() == 2 && transaction && transaction->gtsKey &&
             transaction->gtsKey->direction == Ieee802154GtsDirection::DEVICE_RECEIVE &&
             transaction->phase == Phase::WAIT_ACK && frame->getDsn() == transaction->frame->getDsn() &&
@@ -2120,8 +2154,14 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
                     window.key.extendedAddress == transaction->gtsKey->extendedAddress &&
                     window.key.shortAddress == transaction->gtsKey->shortAddress &&
                     window.key.direction == transaction->gtsKey->direction &&
-                    quality.timing.ppduStart >= window.physicalStart && quality.timing.ppduEnd <= window.physicalEnd)
-                gtsManager.noteActivity(window.key);
+                    quality.timing.ppduStart >= window.physicalStart && quality.timing.ppduEnd <= window.physicalEnd &&
+                    gtsManager.noteActivity(window.key))
+                observedActivity = *gtsManager.findGrant(window.key);
+    if (observedActivity) {
+        emitGtsObservation(gtsActivitySignal,*observedActivity);
+        if (receiveEpoch != receiveRetirementEpoch || !started || resetRequest || !client)
+            return;
+    }
     bool promiscuous = getBoolean("macPromiscuousMode");
     if (promiscuous) {
         auto monitor = new Packet("MCPS-DATA.promiscuous");
@@ -3914,7 +3954,15 @@ void Ieee802154StandardMac::publishAccessWindow(clocktime_t anchor, simtime_t be
         else
             window.latestCompletion = simTime();
     }
-    superframe->publishAccessWindow(window);
+    auto installed = superframe->publishAccessWindow(window);
+    auto receiveEpoch = receiveRetirementEpoch;
+    Ieee802154MacWindowObservation observation;
+    observation.start = installed.physicalCapStart; observation.end = installed.physicalCapEnd;
+    observation.outgoing = origin == Ieee802154AccessWindowOrigin::OUTGOING;
+    emit(capWindowInstalledSignal,1L,&observation);
+    auto current = superframe->getAccessWindow();
+    if (receiveEpoch != receiveRetirementEpoch || !started || resetRequest || !current || current->epoch != installed.epoch)
+        return;
     resumeCapAccess();
 }
 
@@ -4144,7 +4192,7 @@ void Ieee802154StandardMac::receiveScanBeacon(const Ptr<Ieee802154Frame>& frame,
         limit = list.size() >= size_t(par("scanCapacity").intValue());
     }
     auto id = scanRequest->id;
-    if (notify && managementClient)
+    if (notify && started && managementClient)
         managementClient->handleBeaconNotifyIndication(descriptor);
     if (scanRequest && scanRequest->id == id && !scanRequest->closing && limit)
         finishScan(Ieee802154MacStatus::LIMIT_REACHED);
@@ -4984,6 +5032,8 @@ bool Ieee802154StandardMac::receiveManagedBeacon(const Ptr<Ieee802154Frame>& fra
                 publishAccessWindow(anchor->localStart, quality.timing.ppduEnd, interframeSpacing(frame->getChunkLength()),
                     geometry->beaconOrder, geometry->superframeOrder, (specification >> 8) & 15, (specification & 0x1000) != 0,
                     getInteger("macUnitBackoffPeriod"),getInteger("macBattLifeExtPeriods"),Ieee802154AccessWindowOrigin::INCOMING);
+            if (receiveEpoch != receiveRetirementEpoch || !started || resetRequest)
+                return true;
             if (synchronization && synchronization->installed && synchronization->request.trackBeacon)
                 installCfpWindows(anchor->localStart,geometry->superframeOrder,false,gtsManager.getGrants());
         }
@@ -5288,8 +5338,18 @@ void Ieee802154StandardMac::decideGts(const Ieee802154GtsManager::Key& key, cons
     }
     if (gtsManager.reservedCount() >= 7)
         pib->set("macGtsPermit",false);
-    if (granted && managementClient)
-        managementClient->handleGtsIndication({Ieee802154Address::fromShort(key.shortAddress),characteristics});
+    if (granted) {
+        auto outerNotifications = syncLossNotificationsActive;
+        syncLossNotificationsActive = true;
+        emitGtsObservation(gtsAllocatedSignal,{key,start,length});
+        if (started && managementClient)
+            managementClient->handleGtsIndication({Ieee802154Address::fromShort(key.shortAddress),characteristics});
+        syncLossNotificationsActive = outerNotifications;
+        if (!outerNotifications && resetRequest && resetRequest->deferredResult) {
+            auto deferred = *resetRequest->deferredResult;
+            finishReset(deferred);
+        }
+    }
 }
 
 void Ieee802154StandardMac::removeGtsGrant(const Ieee802154GtsManager::Key& key, bool advertiseRemoval, bool notify)
@@ -5297,11 +5357,13 @@ void Ieee802154StandardMac::removeGtsGrant(const Ieee802154GtsManager::Key& key,
     auto grant = gtsManager.findGrant(key);
     if (!grant)
         return;
-    auto length = grant->length;
+    auto removed = *grant;
+    auto length = removed.length;
     auto outerNotifications = syncLossNotificationsActive;
     syncLossNotificationsActive = true;
     removeGtsFromLedger(gtsManager,key,advertiseRemoval);
     retireInvalidGtsData();
+    emitGtsObservation(gtsDeallocatedSignal,removed);
     refreshCfp();
     if (notify && managementClient)
         managementClient->handleGtsIndication({Ieee802154Address::fromShort(key.shortAddress),{length,key.direction,false}});

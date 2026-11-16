@@ -122,3 +122,13 @@ unchanged oscillator. Enhanced frames/IEs,
 cryptographic security, TSCH, DSME, ranging and modern UWB are separate future
 profiles. The retained :ned:`Ieee802154Mac` and :ned:`Ieee802154NarrowbandMac`
 continue to serve explicit legacy configurations.
+
+The native MAC exposes ``capWindowInstalled`` and ``cfpWindowInstalled``
+signals for physical reservation bounds. Their borrowed details distinguish
+incoming and outgoing windows and identify CFP direction and local radio role;
+they do not imply RF activity. Coordinator ``gtsAllocated``, ``gtsDeallocated``
+and ``gtsActivity`` signals carry borrowed short-address, direction and length
+details, with event-count statistics. Deallocation events represent individual
+committed coordinator removals; lifecycle-wide clears are separate. Activity
+events represent qualifying received DATA or matching ACK, not configuration
+changes or unacknowledged-mode transitions.

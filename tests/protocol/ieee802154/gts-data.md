@@ -34,6 +34,7 @@ GtsData scenarios each run with typed and raw frames:
 | 19–24 | Short, cancelled and long off-channel scans, PHY outage during scan, one dropped parent beacon and interrupted ED scan. | Current duties are suspended during scan; a missed beacon suppresses GTS use, four misses retire the grant, and outage recovery restores the actual channel and temporary CCA duration before use. |
 | 25–36 | RESET, MAC stop and PHY loss in waiting, readiness, on-air and ACK phases. | Each accepted DATA has one correct terminal and no later retry; RESET confirmation follows its DATA terminal. |
 | 37–44 | Cancel a request that fits a later occurrence; test wrong direction, broadcast, the legacy DATA default, active-RX RESET, SYNC replacement, local address change and BO15 shutdown. | Cancellation is terminal, invalid grants are rejected, default DATA still contends, and retired CFP duties cannot survive their owning context. |
+| 45–47 | RESET from CAP or CFP installation signals, and from deallocation while coordinator DATA waits for its grant. | A signal callback cannot revive a retired window; the invalidated DATA terminates with INVALID_GTS before RESET confirmation. |
 
 The access observations cover both providers' backoff notifications and the
 slotted provider's contention-window notifications. The MAC's CFP path bypasses
@@ -64,6 +65,12 @@ the MAC while a late request waits for the next matching reservation. A packet
 whose exchange cannot fit in the whole grant terminates with FRAME_TOO_LONG;
 missing or wrong-peer grants terminate with INVALID_GTS.
 
+The B3-06 observer additionally compares the coordinator's copied CFP-window
+signal details with actual DATA RF intervals. These window signals announce
+installed future reservations, not a transmission or reception. Scenario 0
+checks both directions; the production managed-app observer independently
+checks the same distinction and the CAP start against the actual beacon end.
+
 ```text
 grant start                  exact latest start          grant end
     |--- readiness ---| DATA + optional ACK + IFS ----------|
@@ -79,3 +86,8 @@ protocol runs across 36 fixtures, six unit fixtures and fifteen module fixtures.
 Independent review returned 23 PASS, 11 N/A and no open findings. The scoped
 C++ gate remains **FAIL**; its changed-consumer follow-up found no new
 diagnostics against the retained baseline. Mermaid rendering is **NOT_RUN**.
+
+The later B3-06 combined acceptance passed all 250 protocol cases across five
+fixtures, plus three unit and three module fixtures. This includes the new
+passive observers and signal-triggered RESET controls; there were no protocol
+errors, skips or failures.

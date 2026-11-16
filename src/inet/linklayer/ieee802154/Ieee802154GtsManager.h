@@ -41,7 +41,7 @@ class INET_API Ieee802154GtsManager
     [[nodiscard]] static unsigned int inactivityLimit(uint8_t beaconOrder);
     void armActivity(const Key& key, int64_t previousEpoch, bool rebaseline = false);
     void rephaseActivity(const Key& key, int64_t previousEpoch);
-    void noteActivity(const Key& key);
+    bool noteActivity(const Key& key);
     void setActivitySuspended(const Key& key, bool suspended);
     [[nodiscard]] bool finishOpportunity(const Key& key, uint8_t beaconOrder, int64_t epoch);
     void copyActivityFrom(const Ieee802154GtsManager& source);
