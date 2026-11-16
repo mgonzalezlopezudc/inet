@@ -11,6 +11,7 @@
 #include "inet/linklayer/lowpan/LowpanContextTable.h"
 #include "inet/linklayer/lowpan/LowpanReassemblyTable.h"
 #include "inet/linklayer/lowpan/LowpanDatagramTagAllocator.h"
+#include "inet/linklayer/lowpan/LowpanDispatchPrefix.h"
 #include "inet/linklayer/lowpan/contract/ILowpanLink.h"
 #include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/queueing/base/PacketProcessorBase.h"
@@ -67,14 +68,18 @@ class INET_API LowpanLayer : public OperationalMixin<queueing::PacketProcessorBa
     virtual bool isModuleStopStage(int stage) const override { return stage == ModuleStopOperation::STAGE_LINK_LAYER; }
     void processUpperPacket(Packet *packet);
     void processLowerPacket(Packet *packet);
-    void processInnerPacket(Packet *packet, const Ieee802154Address& source, const Ieee802154Address& destination);
-    void processMeshPacket(Packet *packet);
-    void processFragment(Packet *packet, bool first, const Ieee802154Address& source, const Ieee802154Address& destination);
+    void processInnerPacket(Packet *packet, const Ieee802154Address& source, const Ieee802154Address& destination,
+            LowpanDispatchPrefix::State state = {0, false});
+    void processMeshPacket(Packet *packet, LowpanDispatchPrefix::State state, const Ptr<const Chunk>& leadingPages);
+    void processFragment(Packet *packet, bool first, const Ieee802154Address& source, const Ieee802154Address& destination,
+            LowpanDispatchPrefix::State state);
     void deliverIpv6(Packet *packet);
     bool decompressHeader(Packet *packet, int originalSize, const Ieee802154Address& source, const Ieee802154Address& destination);
     void expireBroadcasts();
-    bool acceptBroadcast(Packet *packet, const Ieee802154Address& originator, uint8_t sequence);
-    void forwardMesh(Packet *packet, const Ptr<const Chunk>& header, const Ieee802154Address& destination);
+    bool acceptBroadcast(Packet *packet, const Ieee802154Address& originator, uint8_t sequence,
+            LowpanDispatchPrefix::State state);
+    void forwardMesh(Packet *packet, const Ptr<const Chunk>& header, const Ieee802154Address& destination,
+            const Ptr<const Chunk>& leadingPages);
     simtime_t meshDeadline(simtime_t duration) const;
     simtime_t meshReservation(uint8_t hops, simtime_t retention) const;
     void scheduleExpiry();

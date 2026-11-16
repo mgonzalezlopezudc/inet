@@ -8,6 +8,7 @@
 #include "inet/linklayer/lowpan/LowpanHeader_m.h"
 #include "inet/linklayer/lowpan/LowpanMeshHeader_m.h"
 #include "inet/linklayer/lowpan/LowpanBroadcastHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanExtendedDispatchHeader_m.h"
 #include "inet/linklayer/lowpan/LowpanFrag1Header_m.h"
 #include "inet/linklayer/lowpan/LowpanFragnHeader_m.h"
 #include "inet/linklayer/lowpan/LowpanFragmenter.h"
@@ -36,24 +37,29 @@ struct MeshPayload {
     uint8_t offset = 0;
 };
 
-std::optional<MeshPayload> inspectMeshPayload(const Packet& packet)
+std::optional<MeshPayload> inspectMeshPayload(const Packet& packet, LowpanDispatchPrefix::State state)
 {
+    using Prefix = LowpanDispatchPrefix;
+    auto prefix = Prefix::parse(packet, 0, state);
+    if (prefix.kind == Prefix::MALFORMED || prefix.kind == Prefix::MESH || prefix.kind == Prefix::BROADCAST)
+        return std::nullopt;
     auto bytes = packet.peekDataAsBytes()->getBytes();
-    if (bytes.empty() || (bytes[0] & 0xc0) == 0x80 || bytes[0] == 0x50) return std::nullopt;
-    bool first = (bytes[0] & 0xf8) == 0xc0;
-    bool following = (bytes[0] & 0xf8) == 0xe0;
+    int start = prefix.pagingLength;
+    bool first = prefix.kind == Prefix::FRAG1;
+    bool following = prefix.kind == Prefix::FRAGN;
     MeshPayload result{first || following};
     if (!result.fragmented) return result; // Unknown inner dispatch remains opaque in transit.
     int header = first ? 4 : 5;
-    if (int(bytes.size()) <= header) return std::nullopt;
-    result.size = ((bytes[0] & 7) << 8) | bytes[1];
-    result.tag = (bytes[2] << 8) | bytes[3];
-    if (following) result.offset = bytes[4];
-    auto payload = bytes.size() - header;
+    if (int(bytes.size()) <= start + header) return std::nullopt;
+    result.size = ((bytes[start] & 7) << 8) | bytes[start + 1];
+    result.tag = (bytes[start + 2] << 8) | bytes[start + 3];
+    if (following) result.offset = bytes[start + 4];
+    auto payload = bytes.size() - start - header;
+    auto inner = first ? Prefix::parse(packet, start + header, prefix.state).kind : Prefix::UNKNOWN;
     if (result.size < 40 || (following && (result.offset == 0 || 8 * result.offset >= result.size ||
             8 * result.offset + payload > result.size || (8 * result.offset + payload < result.size && payload % 8 != 0))) ||
-            (first && ((bytes[4] & 0xc0) == 0x80 || bytes[4] == 0x50 ||
-                (bytes[4] & 0xf8) == 0xc0 || (bytes[4] & 0xf8) == 0xe0)))
+            (first && (inner == Prefix::MALFORMED || inner == Prefix::MESH || inner == Prefix::BROADCAST ||
+                inner == Prefix::FRAG1 || inner == Prefix::FRAGN)))
         return std::nullopt;
     return result;
 }
@@ -516,9 +522,11 @@ void LowpanLayer::processLowerPacket(Packet *packet)
         dropLowpanPacket(packet, LOWPAN_MALFORMED);
         return;
     }
-    auto dispatch = packet->peekAtFront<BytesChunk>(B(1))->getBytes()[0];
-    if ((dispatch & 0xc0) == 0x80 && meshUnder) {
-        processMeshPacket(packet);
+    auto prefix = LowpanDispatchPrefix::parse(*packet);
+    if (prefix.kind == LowpanDispatchPrefix::MESH && meshUnder) {
+        Ptr<const Chunk> leading;
+        if (prefix.pagingLength != 0) leading = packet->popAtFront(B(prefix.pagingLength));
+        processMeshPacket(packet, prefix.state, leading);
         return;
     }
     processInnerPacket(packet, indication->getSrcAddress(), indication->getDestAddress());
@@ -546,9 +554,10 @@ void LowpanLayer::expireBroadcasts()
         if (it->second.expires <= simTime()) it = broadcasts.erase(it); else ++it;
 }
 
-bool LowpanLayer::acceptBroadcast(Packet *packet, const Ieee802154Address& originator, uint8_t sequence)
+bool LowpanLayer::acceptBroadcast(Packet *packet, const Ieee802154Address& originator, uint8_t sequence,
+        LowpanDispatchPrefix::State state)
 {
-    auto shape = inspectMeshPayload(*packet);
+    auto shape = inspectMeshPayload(*packet, state);
     ASSERT(shape);
     expireBroadcasts();
     auto key = std::make_pair(originator, sequence);
@@ -570,7 +579,8 @@ bool LowpanLayer::acceptBroadcast(Packet *packet, const Ieee802154Address& origi
     return true;
 }
 
-void LowpanLayer::forwardMesh(Packet *packet, const Ptr<const Chunk>& header, const Ieee802154Address& destination)
+void LowpanLayer::forwardMesh(Packet *packet, const Ptr<const Chunk>& header, const Ieee802154Address& destination,
+        const Ptr<const Chunk>& leadingPages)
 {
     Ieee802154AddressReq request;
     request.setSrcAddress(link->getLinkAddress());
@@ -584,6 +594,7 @@ void LowpanLayer::forwardMesh(Packet *packet, const Ptr<const Chunk>& header, co
     packet->removeTagIfPresent<Ieee802154AddressInd>();
     packet->removeTagIfPresent<InterfaceInd>();
     packet->insertAtFront(header);
+    if (leadingPages) packet->insertAtFront(leadingPages);
     *packet->addTag<LowpanTransmissionReq>() = *envelope;
     packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&lowpanProtocol);
     if (packet->getDataLength() > B(envelope->getPayloadLimit())) {
@@ -594,7 +605,8 @@ void LowpanLayer::forwardMesh(Packet *packet, const Ptr<const Chunk>& header, co
     consumer.pushPacket(packet);
 }
 
-void LowpanLayer::processMeshPacket(Packet *packet)
+void LowpanLayer::processMeshPacket(Packet *packet, LowpanDispatchPrefix::State state,
+        const Ptr<const Chunk>& leadingPages)
 {
     auto first = packet->peekAtFront<BytesChunk>(B(1))->getBytes()[0];
     int length = 1 + ((first & 15) == 15 ? 1 : 0) + (first & 0x20 ? 2 : 8) + (first & 0x10 ? 2 : 8);
@@ -605,27 +617,31 @@ void LowpanLayer::processMeshPacket(Packet *packet)
             (final.getMode() != Ieee802154Address::EXTENDED && !final.isBroadcast())) {
         dropLowpanPacket(packet, LOWPAN_MALFORMED); return;
     }
-    auto dispatch = packet->peekAtFront<BytesChunk>(B(1))->getBytes()[0];
+    using Prefix = LowpanDispatchPrefix;
+    auto prefix = Prefix::parse(*packet, 0, state);
     bool broadcast = final.isBroadcast();
-    if (broadcast != (dispatch == 0x50) || (dispatch & 0xc0) == 0x80) {
+    if (broadcast != (prefix.kind == Prefix::BROADCAST) || prefix.kind == Prefix::MESH) {
         dropLowpanPacket(packet, LOWPAN_MALFORMED); return;
     }
     Ptr<const LowpanBroadcastHeader> bc0;
+    Ptr<const Chunk> beforeBc0;
     if (broadcast) {
         if (originator == link->getLinkAddress()) { dropLowpanPacket(packet, LOWPAN_BROADCAST_DUPLICATE); return; }
-        if (packet->getDataLength() <= B(2)) { dropLowpanPacket(packet, LOWPAN_MALFORMED); return; }
+        if (packet->getDataLength() <= B(prefix.pagingLength + 2)) { dropLowpanPacket(packet, LOWPAN_MALFORMED); return; }
+        if (prefix.pagingLength != 0) beforeBc0 = packet->popAtFront(B(prefix.pagingLength));
         bc0 = packet->popAtFront<LowpanBroadcastHeader>(B(2));
+        state = prefix.state;
     }
-    if (!inspectMeshPayload(*packet)) { dropLowpanPacket(packet, LOWPAN_MALFORMED); return; }
+    if (!inspectMeshPayload(*packet, state)) { dropLowpanPacket(packet, LOWPAN_MALFORMED); return; }
     if (broadcast) {
-        if (!acceptBroadcast(packet, originator, bc0->getSequenceNumber())) return;
+        if (!acceptBroadcast(packet, originator, bc0->getSequenceNumber(), state)) return;
     }
     if (!broadcast && final == link->getLinkAddress()) {
-        processInnerPacket(packet, originator, final);
+        processInnerPacket(packet, originator, final, state);
         return;
     }
     if (mesh->getHopsLeft() <= 1) {
-        if (broadcast) processInnerPacket(packet, originator, final);
+        if (broadcast) processInnerPacket(packet, originator, final, state);
         else dropLowpanPacket(packet, LOWPAN_MESH_HOP_EXHAUSTED);
         return;
     }
@@ -639,19 +655,30 @@ void LowpanLayer::processMeshPacket(Packet *packet)
     forwarded->setHopsLeft(mesh->getHopsLeft() - 1);
     auto transit = broadcast ? packet->dup() : packet;
     if (bc0) transit->insertAtFront(bc0);
-    forwardMesh(transit, forwarded, destination);
-    if (broadcast) processInnerPacket(packet, originator, final);
+    if (beforeBc0) transit->insertAtFront(beforeBc0);
+    forwardMesh(transit, forwarded, destination, leadingPages);
+    if (broadcast) processInnerPacket(packet, originator, final, state);
 }
 
-void LowpanLayer::processInnerPacket(Packet *packet, const Ieee802154Address& source, const Ieee802154Address& destination)
+void LowpanLayer::processInnerPacket(Packet *packet, const Ieee802154Address& source, const Ieee802154Address& destination,
+        LowpanDispatchPrefix::State state)
 {
-    auto dispatch = packet->peekAtFront<BytesChunk>(B(1))->getBytes()[0];
-    if (meshUnder && dispatch == 0x50) { dropLowpanPacket(packet, LOWPAN_MALFORMED); return; }
-    if ((dispatch & 0xf8) == 0xc0 || (dispatch & 0xf8) == 0xe0) {
-        processFragment(packet, (dispatch & 0xf8) == 0xc0, source, destination);
+    using Prefix = LowpanDispatchPrefix;
+    auto prefix = Prefix::parse(*packet, 0, state);
+    if (prefix.pagingLength != 0) packet->popAtFront(B(prefix.pagingLength));
+    if (prefix.kind == Prefix::MALFORMED || (meshUnder && prefix.kind == Prefix::BROADCAST)) {
+        dropLowpanPacket(packet, LOWPAN_MALFORMED); return;
+    }
+    if (prefix.kind == Prefix::UNSUPPORTED_PAGE) { dropLowpanPacket(packet, LOWPAN_UNSUPPORTED_PAGE); return; }
+    if (prefix.kind == Prefix::ESC) {
+        auto type = packet->peekAtFront<LowpanExtendedDispatchHeader>(B(2))->getExtensionType();
+        dropLowpanPacket(packet, type == 0 || type == 255 ? LOWPAN_MALFORMED : LOWPAN_UNSUPPORTED_EXTENSION); return;
+    }
+    if (prefix.kind == Prefix::FRAG1 || prefix.kind == Prefix::FRAGN) {
+        processFragment(packet, prefix.kind == Prefix::FRAG1, source, destination, prefix.state);
         return;
     }
-    if ((dispatch & 0xe0) == 0x60) {
+    if (prefix.kind == Prefix::IPHC) {
         if (!decompressHeader(packet, -1, source, destination)) {
             dropLowpanPacket(packet, LOWPAN_MALFORMED);
             return;
@@ -659,7 +686,7 @@ void LowpanLayer::processInnerPacket(Packet *packet, const Ieee802154Address& so
         deliverIpv6(packet);
         return;
     }
-    if (dispatch != 0x41) {
+    if (prefix.kind != Prefix::IPV6) {
         dropLowpanPacket(packet, LOWPAN_UNSUPPORTED_DISPATCH);
         return;
     }
@@ -667,7 +694,8 @@ void LowpanLayer::processInnerPacket(Packet *packet, const Ieee802154Address& so
     deliverIpv6(packet);
 }
 
-void LowpanLayer::processFragment(Packet *packet, bool first, const Ieee802154Address& source, const Ieee802154Address& destination)
+void LowpanLayer::processFragment(Packet *packet, bool first, const Ieee802154Address& source, const Ieee802154Address& destination,
+        LowpanDispatchPrefix::State state)
 {
     emit(fragmentReceivedSignal, packet);
     auto expired = reassembly->expire(simTime());
@@ -686,10 +714,12 @@ void LowpanLayer::processFragment(Packet *packet, bool first, const Ieee802154Ad
         size = header->getDatagramSize();
         tag = header->getDatagramTag();
         valid = !header->isIncorrect();
-        auto dispatch = packet->peekAtFront<BytesChunk>(B(1))->getBytes()[0];
-        if (dispatch == 0x41)
+        using Prefix = LowpanDispatchPrefix;
+        auto prefix = Prefix::parse(*packet, 0, state);
+        if (prefix.pagingLength != 0) packet->popAtFront(B(prefix.pagingLength));
+        if (prefix.kind == Prefix::IPV6)
             packet->popAtFront<LowpanHeader>(B(1));
-        else if ((dispatch & 0xe0) == 0x60)
+        else if (prefix.kind == Prefix::IPHC)
             valid = valid && decompressHeader(packet, size, source, destination);
         else
             valid = false;

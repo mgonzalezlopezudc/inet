@@ -148,6 +148,14 @@ The [twenty-case radio fixture](../../../../../tests/protocol/6lowpan/mesh-forwa
 
 The [record](p12-mesh-verification.json) retains matching debug/release builds, eighteen protocol fixtures/116 debug simulations, six unit fixtures, seven module fixtures and scoped gates. Four release fixtures complete 42 simulations; forty mesh/updated-host counter rows match debug, while two controls establish normal completion. Assertions remain debug-only. The final malformed-input correction refreshes the changed fixture's twenty debug/release runs; unchanged controls retain their matching input snapshots. Two supplementary successful clock runs and two expected initialization failures are recorded separately. These results complete P12's selected profile; the final feature matrix remains pending.
 
+## P13 paging and extended dispatch
+
+A shared packet-local prefix parser recognizes universal paging, IPHC on pages zero/one and the two-octet ESC/EET envelope. First-page-one history remains monotonic across Mesh/BC0/FRAG1 handling. Prefix bytes contribute no original IPv6 octets; FRAGN data and NHC retain their separate grammars. Unsupported EET drops at an interpreting endpoint, while valid mesh transit preserves the same opaque bytes. The local dissector and printer expose both new wire headers.
+
+The [three-case radio fixture](../../../../../tests/protocol/6lowpan/paging-dispatch.md) checks thirty endpoint inputs, four byte-exact fragmented reassemblies and whole-frame transit comparisons. It covers page reset/recovery, ordering, paged broadcast discrimination and identical unknown-EET bytes at transit and endpoint. Two partial expirations come from intentionally supplied FRAGN-only leftovers. This static L2 fixture proves adaptation-output bytes, without application/checksum delivery or an implemented EET payload/multiple-ESC success claim.
+
+The [record](p13-paging-verification.json) retains matching debug/release builds, nineteen protocol fixtures/119 debug simulations, seven unit fixtures, seven module fixtures and scoped gates. Five release fixtures complete 45 simulations; forty-three paging/mesh/host counter rows match debug, while two controls establish normal completion. Assertions remain debug-only. These results complete P13's selected parser profile; final feature-matrix verification remains pending.
+
 ## Remaining packages
 
-P13–P15 and the final feature matrix remain under the completion plan. Paging, virtual fragment forwarding and selective recovery are not inferred from optimized ND, header compression, updated registration or mesh forwarding.
+P14–P15 and the final feature matrix remain under the completion plan. Virtual fragment forwarding and selective recovery are not inferred from optimized ND, header compression, updated registration, mesh forwarding or dispatch parsing.

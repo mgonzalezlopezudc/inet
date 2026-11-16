@@ -1,0 +1,227 @@
+%description:
+Independent actual-radio page/ESC endpoint vectors, paged FRAG1 accounting and
+opaque FRAGN data; the same unknown EET crosses real A-B-C then drops at final.
+
+%extraargs: -r 0..2
+
+%file: PagingCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/lowpan/LowpanNativeBoundary.h"
+#include "inet/linklayer/lowpan/LowpanProtocol.h"
+#include "inet/linklayer/lowpan/LowpanPacketDropDetails_m.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameHeader_m.h"
+#include "inet/networklayer/ipv6/Ipv6Header_m.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmission.h"
+using namespace inet;
+using namespace inet::lowpan;
+namespace inet::protocoltest {
+class PagingCheck : public cSimpleModule, public cListener
+{
+    struct Input {std::vector<uint8_t> wire, expected;int sender=0,destination=1,drop=-1;};
+    std::vector<Input> inputs;
+    std::vector<std::vector<uint8_t>> completed;
+    std::vector<simtime_t> expiryTimes;
+    std::set<int> received,dropped;
+    int scenario=0,delivered[3]{},forwarded=0,radioForwarded=0,reassembled=0,fragments=0,expirations=0,directAC=0;
+    int dropNodes[3]{},tx[3]{};
+    cModule *nic[3]{};
+    Ieee802154Address address[3]{Ieee802154Address("0102030405060708"),Ieee802154Address("1112131415161718"),Ieee802154Address("2122232425262728")};
+    std::vector<uint8_t> ip(int size=44,bool multicast=false,int protocol=59) {
+        std::vector<uint8_t> bytes(size,0x5a);std::vector<uint8_t> h{0x60,0,0,0,uint8_t((size-40)>>8),uint8_t(size-40),uint8_t(protocol),64,
+            0xfe,0x80,0,0,0,0,0,0,3,2,3,4,5,6,7,8,
+            0xfe,0x80,0,0,0,0,0,0,0x13,0x12,0x13,0x14,0x15,0x16,0x17,0x18};
+        if(multicast){std::fill(h.begin()+24,h.end(),0);h[24]=0xff;h[25]=2;h[39]=1;}
+        std::copy(h.begin(),h.end(),bytes.begin());return bytes;
+    }
+    std::vector<uint8_t> uncompressed(const std::vector<uint8_t>& bytes) {auto result=bytes;result.insert(result.begin(),0x41);return result;}
+    std::vector<uint8_t> mesh(const std::vector<uint8_t>& bytes,int final=1,int hops=0) {
+        std::vector<uint8_t> result{uint8_t((final<0?0x90:0x80)|hops)};
+        for(int i=7;i>=0;i--)result.push_back(address[0].getInt()>>(8*i));
+        if(final<0)result.insert(result.end(),{0xff,0xff});
+        else for(int i=7;i>=0;i--)result.push_back(address[final].getInt()>>(8*i));
+        result.insert(result.end(),bytes.begin(),bytes.end());return result;
+    }
+    void add(const std::vector<uint8_t>& wire,const std::vector<uint8_t>& expected={},int drop=-1,int sender=0,int destination=1) {
+        inputs.push_back({wire,expected,sender,destination,drop});
+    }
+    void prefix(const std::vector<uint8_t>& pages,const std::vector<uint8_t>& body,const std::vector<uint8_t>& expected={},int drop=-1) {
+        auto wire=pages;wire.insert(wire.end(),body.begin(),body.end());add(wire,expected,drop);
+    }
+    int index(cComponent *source) {for(int i=0;i<3;i++)for(auto at=dynamic_cast<cModule *>(source);at;at=at->getParentModule())if(at==nic[i])return i;throw cRuntimeError("Unknown source");}
+    void endpointCases() {
+        auto expected=ip();expected[40]=0x40;expected[41]=0xf0;expected[42]=0xf1;expected[43]=0xaa;
+        std::vector<uint8_t> body{0x7a,0x33,59,0x40,0xf0,0xf1,0xaa};
+        prefix({},body,expected);prefix({0xf1},body,expected);add(uncompressed(expected),expected);
+        for(const auto& pages:{std::vector<uint8_t>{0xf0},{0xf1,0xf1},{0xf2,0xf0},{0xff,0xf1}})prefix(pages,body,expected);
+        prefix({0xf1,0xf0},uncompressed(expected),expected);
+        prefix({0xf0},mesh(body),expected);prefix({0xf2,0xf0},mesh(body),expected);
+        add(mesh(std::vector<uint8_t>{0xf1,0x7a,0x33,59,0x40,0xf0,0xf1,0xaa}),expected);
+        auto multicast=ip(44,true);auto b=std::vector<uint8_t>{0xf1,0xf0,0x50,9};auto full=uncompressed(multicast);b.insert(b.end(),full.begin(),full.end());add(mesh(b,-1),multicast,-1,0,-1);
+        for(const auto& pages:{std::vector<uint8_t>{0xf2},{0xff}})prefix(pages,body,{},LOWPAN_UNSUPPORTED_PAGE);
+        prefix({0xf2},uncompressed(expected),{},LOWPAN_UNSUPPORTED_PAGE);
+        add({0xf2,0x40,0x7e,0x41},{},LOWPAN_UNSUPPORTED_PAGE);
+        prefix({0xf1},uncompressed(expected),{},LOWPAN_UNSUPPORTED_DISPATCH);
+        for(const auto& wire:{std::vector<uint8_t>{},{0xf0},{0xf1},{0x40},{0xf1,0x7a},{0x40,0},{0x40,255}})add(wire,{},LOWPAN_MALFORMED);
+        add({0x40,0x7e,0xab,0xcd},{},LOWPAN_UNSUPPORTED_EXTENSION);
+        auto escaped=std::vector<uint8_t>{0x40,0x7e,0xf0};auto plain=uncompressed(expected);escaped.insert(escaped.end(),plain.begin(),plain.end());add(escaped,{},LOWPAN_UNSUPPORTED_EXTENSION);
+        prefix({0xf1,0xf0},mesh(body),{},LOWPAN_MALFORMED);
+        add({0xf1,0xf0,0xc0,80,0,1,0x41},{},LOWPAN_MALFORMED);
+        prefix({0xf0,0},uncompressed(expected),{},LOWPAN_UNSUPPORTED_DISPATCH);
+        auto udp=ip(50,false,17);std::vector<uint8_t> datagram{0x12,0x34,0x56,0x78,0,10,0xab,0xcd,0x40,0xf1};std::copy(datagram.begin(),datagram.end(),udp.begin()+40);
+        add({0xf1,0x7e,0x33,0xf0,0x12,0x34,0x56,0x78,0xab,0xcd,0x40,0xf1},udp);
+    }
+    void fragmentCases() {
+        auto expected=ip(80);expected[48]=0xf1;expected[49]=0xf0;expected[50]=0x40;
+        for(int mode=0;mode<3;mode++){
+            std::vector<uint8_t> first{0xc0,80,0,uint8_t(mode),0xf1,0x7a,0x33,59};first.insert(first.end(),expected.begin()+40,expected.begin()+48);
+            std::vector<uint8_t> tail{0xe0,80,0,uint8_t(mode),6};tail.insert(tail.end(),expected.begin()+48,expected.end());
+            if(mode==1){first=mesh(first);tail=mesh(tail);}
+            if(mode==2){first.insert(first.begin(),0xf0);tail.insert(tail.begin(),0xf0);}
+            add(first);add(tail,expected,-1,mode==1?2:0);
+            completed.push_back(expected);
+        }
+        add({0xf1,0xf0,0xc0,80,0,3,0x41},{},LOWPAN_MALFORMED);
+        std::vector<uint8_t> tail{0xe0,80,0,3,6};tail.insert(tail.end(),expected.begin()+48,expected.end());add(tail);
+        auto first=std::vector<uint8_t>{0xc0,80,0,4,0xf1,0xf0};auto nested=mesh({0x41});first.insert(first.end(),nested.begin(),nested.end());add(first,{},LOWPAN_MALFORMED);
+        tail[3]=4;add(tail);
+        auto multicast=ip(80,true);multicast[48]=0xf1;multicast[49]=0xf0;
+        first={0x50,7,0xf0,0xc0,80,0,5,0x41};first.insert(first.end(),multicast.begin(),multicast.begin()+48);
+        tail={0x50,7,0xf0,0xe0,80,0,5,6};tail.insert(tail.end(),multicast.begin()+48,multicast.end());
+        add(mesh(first,-1),{},-1,0,-1);add(mesh(tail,-1),multicast,-1,0,-1);completed.push_back(multicast);
+        first.insert(first.begin(),{0xf1,0xf0});add(mesh(first,-1),{},LOWPAN_MALFORMED,0,-1);
+        add({0xc0,80,0,6,0x40,0x7e,0xf0,0x41},{},LOWPAN_MALFORMED);
+    }
+    void transitCases() {
+        const std::vector<uint8_t> escaped{0x40,0x7e,0xab,0xcd};
+        add(mesh(escaped,2,2),{},LOWPAN_UNSUPPORTED_EXTENSION);
+        prefix({0xf0},mesh(escaped,2,2),{},LOWPAN_UNSUPPORTED_EXTENSION);
+        prefix({0xf2,0xf0},mesh(escaped,2,2),{},LOWPAN_UNSUPPORTED_EXTENSION);
+        add(mesh(escaped,1,2),{},LOWPAN_UNSUPPORTED_EXTENSION);
+        prefix({0xf2},mesh(escaped,2,2),{},LOWPAN_UNSUPPORTED_PAGE);
+        prefix({0xf1,0xf0},mesh(escaped,2,2),{},LOWPAN_MALFORMED);
+        auto multicast=ip(44,true);auto body=std::vector<uint8_t>{0xf1,0xf0,0x50,11};auto plain=uncompressed(multicast);body.insert(body.end(),plain.begin(),plain.end());
+        add(mesh(body,-1,2),multicast,-1,0,-1);
+    }
+  protected:
+    int numInitStages() const override {return NUM_INIT_STAGES;}
+    void initialize(int stage) override {
+        if(stage!=INITSTAGE_LAST)return;scenario=par("scenario");
+        for(int i=0;i<3;i++){
+            nic[i]=getParentModule()->getSubmodule("node",i)->getSubmodule("nic");
+            for(auto name:{"packetDropped","meshForwarded","reassemblyCompleted","fragmentReceived","reassemblyExpired"})nic[i]->getSubmodule("lowpan")->subscribe(name,this);
+            nic[i]->getSubmodule("radio")->subscribe("transmissionStarted",this);
+            nic[i]->getSubmodule("mac")->subscribe("packetSentToUpper",this);
+        }
+        if(scenario==0)endpointCases();else if(scenario==1)fragmentCases();else transitCases();
+        for(int i=0;i<int(inputs.size());i++)scheduleAt(SimTime(.1+.03*i),new cMessage("input",i));
+        scheduleAt(SimTime(2),new cMessage("finish",-1));
+    }
+    void handleMessage(cMessage *message) override {
+        if(message->isSelfMessage()){
+            int action=message->getKind();delete message;if(action<0){endSimulation();return;}
+            const auto& input=inputs.at(action);auto packet=new Packet(("input-"+std::to_string(action)).c_str());
+            if(!input.wire.empty())packet->insertAtBack(makeShared<BytesChunk>(input.wire));
+            auto boundary=check_and_cast<LowpanNativeBoundary *>(nic[input.sender]->getSubmodule("boundary"));
+            Ieee802154AddressReq request;request.setSrcAddress(address[input.sender]);request.setDestAddress(input.destination<0?Ieee802154Address("ffff"):address[input.destination]);request.setSrcPanId(4660);request.setDestPanId(4660);
+            *packet->addTag<LowpanTransmissionReq>()=*boundary->prepareTransmission(request);packet->addTag<PacketProtocolTag>()->setProtocol(&lowpanProtocol);boundary->pushPacket(packet,boundary->gate("in"));return;
+        }
+        auto packet=check_and_cast<Packet *>(message);int node=message->getArrivalGate()->getIndex();
+        if(scenario==1){ASSERT(delivered[1]<int(completed.size()) && packet->peekDataAsBytes()->getBytes()==completed[delivered[1]]);}
+        else{int item=std::stoi(std::string(packet->getName()).substr(6));ASSERT(!inputs.at(item).expected.empty() && packet->peekDataAsBytes()->getBytes()==inputs[item].expected);received.insert(item);}
+        if(scenario==2 && node==2)ASSERT(packet->getTag<Ieee802154AddressInd>()->getSrcAddress()==address[1]);
+        delivered[node]++;delete packet;
+    }
+    void receiveSignal(cComponent *source,simsignal_t signal,cObject *object,cObject *details) override {
+        int node=index(source);
+        if(signal==registerSignal("packetDropped")){
+            auto packet=check_and_cast<Packet *>(object);auto drop=check_and_cast<LowpanPacketDropDetails *>(details);
+            if(drop->getLowpanReason()==LOWPAN_BROADCAST_DUPLICATE){ASSERT(scenario==2 && node==0);return;}
+            int item=std::stoi(std::string(packet->getName()).substr(6));ASSERT(inputs.at(item).drop==drop->getLowpanReason());
+            if(scenario==2)ASSERT(node==(item<3?2:1));else ASSERT(node==1);
+            dropped.insert(item);dropNodes[node]++;return;
+        }
+        if(signal==registerSignal("meshForwarded")){ASSERT(node==1);forwarded++;return;}
+        if(signal==registerSignal("reassemblyCompleted")){reassembled++;return;}
+        if(signal==registerSignal("fragmentReceived")){fragments++;return;}
+        if(signal==registerSignal("packetSentToUpper")){if(node==2 && check_and_cast<Packet *>(object)->getTag<Ieee802154AddressInd>()->getSrcAddress()==address[0])directAC++;return;}
+        auto packet=check_and_cast<physicallayer::ITransmission *>(object)->getPacket();auto header=packet->peekAtFront<Ieee802154FrameHeader>();if(header->getFrameControl()==2)return;tx[node]++;
+        if(scenario==2 && node==1){
+            int item=std::stoi(std::string(packet->getName()).substr(6));ASSERT(item<3 || item==6);
+            auto expected=inputs.at(item).wire;int prefix=item==1?1:item==2?2:0;expected[prefix]=(expected[prefix]&0xf0)|1;
+            auto bytes=packet->peekDataAsBytes()->getBytes();ASSERT(bytes.size()==expected.size()+size_t(header->getChunkLength().get<B>())+2);
+            ASSERT(std::equal(expected.begin(),expected.end(),bytes.begin()+header->getChunkLength().get<B>()));
+            ASSERT(header->getSourceAddress()==address[1] && header->getDestinationAddress()==(item==6?Ieee802154Address("ffff"):address[2]));radioForwarded++;
+        }
+    }
+    void receiveSignal(cComponent *,simsignal_t,long value,cObject *) override {expirations+=value;expiryTimes.push_back(simTime());}
+    void finish() override {
+        int positives=0,negatives=0;for(const auto& input:inputs){positives+=!input.expected.empty();negatives+=input.drop>=0;}
+        ASSERT(directAC==0 && int(dropped.size())==negatives);
+        if(scenario==0)ASSERT(delivered[1]==positives && delivered[2]==0 && int(received.size())==positives && fragments==0 && forwarded==0);
+        if(scenario==1)ASSERT(delivered[1]==4 && delivered[2]==0 && reassembled==4 && expirations==2 && forwarded==0);
+        if(scenario==2)ASSERT(forwarded==4 && radioForwarded==4 && delivered[1]==1 && delivered[2]==1 && dropNodes[1]==3 && dropNodes[2]==3);
+        std::cout<<"case="<<scenario<<" inputs="<<inputs.size()<<" delivered="<<delivered[0]<<','<<delivered[1]<<','<<delivered[2]<<" dropped="<<dropped.size()<<" forwarded="<<forwarded<<" radioForwarded="<<radioForwarded<<" fragments="<<fragments<<" reassembled="<<reassembled<<" expired="<<expirations<<'\n';
+        std::cout<<"Packet-local paging, fragmented coordinates and opaque mesh EET transit verified\n";
+    }
+};
+Define_Module(PagingCheck);
+}
+
+%file: test.ned
+@namespace(inet::protocoltest);
+import inet.networklayer.common.InterfaceTable;
+import inet.mobility.static.StationaryMobility;
+import inet.linklayer.lowpan.Ieee802154NativeLowpanInterface;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple PagingCheck {parameters: int scenario;gates: input in[3];}
+module PagingNode {
+    parameters: @networkNode;
+    gates: output out;
+    submodules:
+        interfaceTable: InterfaceTable;
+        mobility: StationaryMobility;
+        nic: Ieee802154NativeLowpanInterface {interfaceTableModule="^.interfaceTable";linkDomainModule="^.^.domain";}
+    connections allowunconnected: nic.upperLayerOut --> out;
+}
+network PagingNetwork {
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        domain: LowpanNativeLinkDomain;
+        node[3]: PagingNode;
+        check: PagingCheck;
+    connections allowunconnected: for i=0..2 {node[i].out --> check.in[i];}
+}
+
+%inifile: omnetpp.ini
+[General]
+network=PagingNetwork
+sim-time-limit=3s
+seed-set=0
+*.check.scenario=${case=0..2}
+**.scalar-recording=false
+**.vector-recording=false
+**.nic.lowpan.meshUnder=true
+**.nic.lowpan.reassemblyTimeout=200ms
+**.nic.queue.packetCapacity=64
+**.nic.mac.macMinBE=0
+**.nic.mac.macMaxBE=0
+*.node[1].nic.lowpan.meshRoutes=xml("<routes><route final='2122232425262728' nextHop='2122232425262728'/></routes>")
+*.radioMedium.pathLoss.typename="FreeSpacePathLoss"
+*.domain.panId=4660
+*.domain.config=xml("<domain><peer interface='node[0].nic' native='0102030405060708'/><peer interface='node[1].nic' native='1112131415161718'/><peer interface='node[2].nic' native='2122232425262728'/></domain>")
+**.radio.antenna.mobilityModule="^.^.^.mobility"
+**.radio.receiver.sensitivity=-80dBm
+**.radio.receiver.energyDetection=-80dBm
+*.node[0].mobility.initialX=0m
+*.node[1].mobility.initialX=100m
+*.node[2].mobility.initialX=200m
+**.mobility.initialY=0m
+**.mobility.initialZ=0m
+**.mobility.initFromDisplayString=false
+**.mobility.updateFromDisplayString=false
+
+%contains: stdout
+Packet-local paging, fragmented coordinates and opaque mesh EET transit verified

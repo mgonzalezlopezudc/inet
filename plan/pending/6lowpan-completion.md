@@ -196,7 +196,7 @@ P9 runtime regression exposed a shared IPv6 prerequisite: local delivery stored 
 - [x] P10 optimized ND roles, options and registration: [context closure](../../doc/project/evidence/model/6lowpan/p10-context-verification.json), with the earlier role/discovery/relay records in the [completion ledger](../../doc/project/evidence/model/6lowpan/completion.md).
 - [x] P11 extended registration and selected later-update profile: [registrar record](../../doc/project/evidence/model/6lowpan/p11-registrars-verification.json), [host record](../../doc/project/evidence/model/6lowpan/p11-host-verification.json) and separately verified corrections in the [completion ledger](../../doc/project/evidence/model/6lowpan/completion.md).
 - [x] P12 mesh-under forwarding and duplicate/hop bounds: [verification record](../../doc/project/evidence/model/6lowpan/p12-mesh-verification.json) and [production fixture](../../tests/protocol/6lowpan/mesh-forwarding.md).
-- [ ] P13 page/ESC parsing and transit behavior.
+- [x] P13 page/ESC parsing and transit behavior: [verification record](../../doc/project/evidence/model/6lowpan/p13-paging-verification.json) and [production fixture](../../tests/protocol/6lowpan/paging-dispatch.md).
 - [ ] P14 virtual fragment forwarding.
 - [ ] P15 selective recovery/congestion behavior.
 - [ ] Full feature matrix, regression checks, evidence reconciliation, commit audit and final documentation.

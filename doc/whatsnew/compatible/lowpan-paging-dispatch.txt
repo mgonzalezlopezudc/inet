@@ -1,0 +1,3 @@
+Packet-local paging and ESC dispatch
+
+LoWPAN dispatch now recognizes packet-local RFC 8025 paging, including IPHC on pages zero and one, and RFC 8066 ESC/EET selectors. Unsupported pages/types drop at interpreting endpoints; mesh transit preserves opaque inner EET bytes. Fragmented decoding preserves original IPv6 coordinates and leaves FRAGN data and the nested NHC grammar unchanged. No EET payload protocol is implemented.
