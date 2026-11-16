@@ -122,6 +122,10 @@ The [main fixture](../../../../../tests/protocol/6lowpan/extended-registration.m
 
 Matching debug/release builds pass. Debug verification passes eleven protocol fixtures/sixty-four simulations, two unit fixtures and three module fixtures. Twenty new release simulations complete with independently matched printed counter sequences; assertion-based semantic proof remains debug-only. A separate no-radio control cleanly rejects unsupported updated-host activation before events. The [verification record](p11-registrars-verification.json) retains commands, source/generated-input/binary/library hashes, scoped gates and separately classified earlier attempts. No baseline changes are made; final feature-matrix verification remains separate.
 
+## P11 asynchronous notification sender correction
+
+Saved Moved notifications now clear the NA Solicited flag, while direct registration replies retain it. The existing native-wire fixture checks both forms. The [isolated comparison](p11-moved-flags-verification.json) uses the committed registrar implementation without automatic-host changes: the unchanged sender fails run 4 at 5.008832 seconds/event 399 on the unsolicited flag, and the minimal sender correction passes thirteen main plus seven race simulations in debug. Matching debug/release builds pass; twenty release simulations complete with matching printed counters, with assertion-based semantics still limited to debug. Scoped architecture, naming, explicit source-seal and whitespace checks pass. An early cancelled isolated-project setup build is retained separately from the causal protocol failure. No baseline is changed.
+
 ## Remaining packages
 
 P11 automatic updated-host transactions are next, followed by P12–P15 and the final feature matrix under the completion plan. Mesh-under, paging, virtual fragment forwarding and selective recovery are not inferred from optimized ND, header compression or the updated registrar path.

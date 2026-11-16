@@ -91,7 +91,7 @@ class INET_API LowpanIpv6NeighbourDiscovery : public Ipv6NeighbourDiscovery
     void appendCapabilities(Ipv6NdOptions& options, Ipv6NdMessage& message, bool solicitation, bool authorityExtended = false) const;
     bool readCapabilities(const Ipv6NdOptions& options, bool solicitation, int& flags) const;
     void sendRegistrationAdvertisement(const RegistrationKey& key, const Registration& requested,
-            const Ipv6NdOption& aro, int status, const Ipv6Address& routerAddress);
+            const Ipv6NdOption& aro, int status, const Ipv6Address& routerAddress, bool solicited = true);
     bool readNativeSource(const Packet *packet, const Ipv6NdOptions& options, LowpanNativeLinkDomain *domain,
             Ieee802154Address& address) const;
     Ipv6NdOption *createNativeLinkOption(const Ieee802154Address& address) const;
