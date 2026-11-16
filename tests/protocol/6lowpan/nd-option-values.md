@@ -1,6 +1,6 @@
 # Neighbor Discovery option byte values
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/pending/6lowpan-completion.md), [C++ enum value rules](https://eel.is/c++draft/dcl.enum#8)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/done/6lowpan-completion.md), [C++ enum value rules](https://eel.is/c++draft/dcl.enum#8)
 
 This document accompanies the generic ICMPv6 representation prerequisite. It reuses the existing wire unit, ordinary ND receive fixture and native registration protocol fixture; it introduces no new registration policy or optional LoWPAN dependency in generic ICMPv6.
 

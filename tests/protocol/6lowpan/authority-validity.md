@@ -1,6 +1,6 @@
 # Routed authority lifetime at the clock horizon
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/pending/6lowpan-completion.md), [RFC 6775 §8.2.4](https://www.rfc-editor.org/rfc/rfc6775.html#section-8.2.4)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/done/6lowpan-completion.md), [RFC 6775 §8.2.4](https://www.rfc-editor.org/rfc/rfc6775.html#section-8.2.4)
 
 **Execution status: debug PASS, one run.** This fixture tests the ordinary-interface routed authority independently of native admission, a 6LN client or a 6LR relay. It uses no authority-helper private API.
 

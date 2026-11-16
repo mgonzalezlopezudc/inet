@@ -1,6 +1,6 @@
 # Native selective recovery
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6LoWPAN plan](../../../plan/pending/6lowpan-completion.md)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6LoWPAN plan](../../../plan/done/6lowpan-completion.md)
 
 `LowpanSelectiveRecovery.test` exercises the opt-in RFC8931 source, receiver and
 route-over relay through actual native radios. The configuration contract lives

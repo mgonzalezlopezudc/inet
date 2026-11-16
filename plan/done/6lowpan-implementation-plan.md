@@ -436,7 +436,7 @@ Core normative anchors in the cached texts:
 
 These have separate exit gates and must not expand the initial critical path implicitly.
 
-Execution of P8–P15 is tracked in [6lowpan-completion.md](../pending/6lowpan-completion.md); the completed first-release status above remains scoped to P0–P7.
+Execution of P8–P15 is tracked in [6lowpan-completion.md](../done/6lowpan-completion.md); the completed first-release status above remains scoped to P0–P7.
 
 | Package | Dependencies and actionable scope | Acceptance gate |
 | --- | --- | --- |

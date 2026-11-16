@@ -1,6 +1,6 @@
 # Native mesh-under forwarding
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/pending/6lowpan-completion.md), [RFC 4944](https://www.rfc-editor.org/rfc/rfc4944.html)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/done/6lowpan-completion.md), [RFC 4944](https://www.rfc-editor.org/rfc/rfc4944.html)
 
 The native adaptation layer can forward outer Mesh/BC0 frames before interpreting
 their IPv6 or fragmentation payload. Its opt-in configuration and supported

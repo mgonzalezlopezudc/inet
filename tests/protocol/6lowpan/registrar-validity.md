@@ -1,6 +1,6 @@
 # Native registrar target and lifetime validity
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/pending/6lowpan-completion.md), [RFC 4862 §2](https://www.rfc-editor.org/rfc/rfc4862.html#section-2), [RFC 6775 §6.5](https://www.rfc-editor.org/rfc/rfc6775.html#section-6.5)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/done/6lowpan-completion.md), [RFC 4862 §2](https://www.rfc-editor.org/rfc/rfc4862.html#section-2), [RFC 6775 §6.5](https://www.rfc-editor.org/rfc/rfc6775.html#section-6.5)
 
 **Execution status: debug PASS, two runs.** `LowpanRegistrarValidity.test` directly tests the existing local registration server. It does not require border-router admission or a routed DAR relay.
 

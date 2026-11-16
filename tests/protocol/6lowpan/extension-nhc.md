@@ -1,6 +1,6 @@
 # Native extension-header compression
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [RFC 6282 section 4.2](../../../doc/project/evidence/standard/rfc6282/rfc6282.txt), [6lowpan-completion.md](../../../plan/pending/6lowpan-completion.md)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [RFC 6282 section 4.2](../../../doc/project/evidence/standard/rfc6282/rfc6282.txt), [6lowpan-completion.md](../../../plan/done/6lowpan-completion.md)
 
 `LowpanExtensionNhc.test` uses two native IEEE 802.15.4 interfaces on one dedicated scalar radio medium. Node 0 is `0011223344556602`; node 1 is `0011223344556601`. Their IPv6 IIDs invert the native U/L bit. The only configured neighbor binding supports the node 0 transmitter; literal receive frames do not use it. The run lasts 80 ms with seed 0.
 

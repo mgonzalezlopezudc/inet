@@ -1,6 +1,6 @@
 # Discovery compression without prior context knowledge
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/pending/6lowpan-completion.md), [RFC 6282 §3](https://www.rfc-editor.org/rfc/rfc6282.html#section-3), [RFC 6775 §6.3](https://www.rfc-editor.org/rfc/rfc6775.html#section-6.3)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/done/6lowpan-completion.md), [RFC 6282 §3](https://www.rfc-editor.org/rfc/rfc6282.html#section-3), [RFC 6775 §6.3](https://www.rfc-editor.org/rfc/rfc6775.html#section-6.3)
 
 **Execution status: debug PASS, two simulations.** The adaptation layer keeps outgoing outer ICMPv6 Router Solicitations and Router Advertisements independent of its compression-context table. Stateless IPHC remains enabled. This prevents a unicast RA to a valid global RS source from requiring a context the requester has not learned yet.
 

@@ -3,7 +3,7 @@
 This fixture checks the optional RFC 6775 context-distribution path through native
 IEEE 802.15.4 radio interfaces. It is a protocol test, rather than a test of a
 private authority-table API. The selected profile and remaining work belong to
-[the completion plan](../../../plan/pending/6lowpan-completion.md).
+[the completion plan](../../../plan/done/6lowpan-completion.md).
 
 ```mermaid
 flowchart LR

@@ -1,6 +1,6 @@
 # Routed registration authority
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/pending/6lowpan-completion.md), [RFC 6775 §4.4](https://www.rfc-editor.org/rfc/rfc6775.html#section-4.4), [RFC 6775 §8.2](https://www.rfc-editor.org/rfc/rfc6775.html#section-8.2)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/done/6lowpan-completion.md), [RFC 6775 §4.4](https://www.rfc-editor.org/rfc/rfc6775.html#section-4.4), [RFC 6775 §8.2](https://www.rfc-editor.org/rfc/rfc6775.html#section-8.2)
 
 `LowpanRegistrationAuthority.test` passes both fixed-seed priority runs through the production registration authority and routed Ethernet path. It validates the authority independently of a 6LR registration relay.
 

@@ -1,6 +1,6 @@
 # Native border-router registration and routed ownership
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/pending/6lowpan-completion.md), [RFC 6775 §6.5](https://www.rfc-editor.org/rfc/rfc6775.html#section-6.5), [RFC 6775 §8.2.4](https://www.rfc-editor.org/rfc/rfc6775.html#section-8.2.4)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/done/6lowpan-completion.md), [RFC 6775 §6.5](https://www.rfc-editor.org/rfc/rfc6775.html#section-6.5), [RFC 6775 §8.2.4](https://www.rfc-editor.org/rfc/rfc6775.html#section-8.2.4)
 
 **Execution status: debug PASS, three runs.** This stage couples a border router's local native registrations with its duplicate-address authority. It does not implement a separate 6LR's asynchronous DAR relay, ABRO distribution or compression-context distribution.
 

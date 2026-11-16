@@ -1,6 +1,6 @@
 # Native host discovery and address registration
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/pending/6lowpan-completion.md), [RFC 6775](../../../doc/project/evidence/standard/rfc6775/rfc6775.txt), [RFC 4862 §5.5.3](https://www.rfc-editor.org/rfc/rfc4862.html#section-5.5.3)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/done/6lowpan-completion.md), [RFC 6775](../../../doc/project/evidence/standard/rfc6775/rfc6775.txt), [RFC 4862 §5.5.3](https://www.rfc-editor.org/rfc/rfc4862.html#section-5.5.3)
 
 `LowpanHostRegistration.test` exercises the native `host` role against the production native `router` role. Discovery, registration and subsequent UDP data cross the actual IEEE 802.15.4 radio, adaptation and IPv6 paths. Neither learned endpoint has an XML `<neighbor>` mapping.
 

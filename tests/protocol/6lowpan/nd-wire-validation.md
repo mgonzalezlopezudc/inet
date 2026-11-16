@@ -1,6 +1,6 @@
 # ND wire validation before dispatch
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/pending/6lowpan-completion.md), [RFC 6775 §4.4](https://www.rfc-editor.org/rfc/rfc6775.html#section-4.4)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/done/6lowpan-completion.md), [RFC 6775 §4.4](https://www.rfc-editor.org/rfc/rfc6775.html#section-4.4)
 
 `LowpanNdWireValidation.test` is the direct protocol fixture for the LoWPAN IPv6 malformed ND receive guard. It uses the existing static role and needs no registration-authority helper, border-router role or authority parameters.
 

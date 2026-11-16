@@ -1,6 +1,6 @@
 # Native Router Solicitation responses
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/pending/6lowpan-completion.md), [RFC 6775](../../../doc/project/evidence/standard/rfc6775/rfc6775.txt)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/done/6lowpan-completion.md), [RFC 6775](../../../doc/project/evidence/standard/rfc6775/rfc6775.txt)
 
 `LowpanRouterDiscovery.test` sends literal Router Solicitations through the native MAC and IPv6 receive path. A router returns a real unicast Router Advertisement with its full native source link-layer address and off-link prefixes. The fixture deliberately configures a conflicting static binding for the soliciting IPv6 address: the RA reaches the actual requesting native peer while the incumbent binding remains unchanged.
 

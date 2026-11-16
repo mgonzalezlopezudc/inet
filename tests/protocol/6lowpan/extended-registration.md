@@ -1,6 +1,6 @@
 # Updated native and routed registrars
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/pending/6lowpan-completion.md), [RFC 8505](https://www.rfc-editor.org/rfc/rfc8505.html), [RFC 6775](https://www.rfc-editor.org/rfc/rfc6775.html)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/done/6lowpan-completion.md), [RFC 8505](https://www.rfc-editor.org/rfc/rfc8505.html), [RFC 6775](https://www.rfc-editor.org/rfc/rfc6775.html)
 
 This registrar fixture covers opt-in updated registrar, relay and authority behavior. Default automatic native hosts continue to send legacy registrations; the separately implemented [updated automatic-host consumer](extended-host-registration.md) has its own production fixture. The configuration declarations belong to [LowpanIpv6NeighbourDiscovery.ned](../../../src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.ned); their capacities cover confirmed, pending and removal protection rather than silently evicting protected state.
 

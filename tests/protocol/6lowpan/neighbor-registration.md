@@ -1,6 +1,6 @@
 # Native address registration server
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/pending/6lowpan-completion.md), [RFC 6775](../../../doc/project/evidence/standard/rfc6775/rfc6775.txt)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/done/6lowpan-completion.md), [RFC 6775](../../../doc/project/evidence/standard/rfc6775/rfc6775.txt)
 
 `LowpanNeighborRegistration.test` exercises the local 6LR registration server through native MAC reception, IPv6 delivery and the ND owner. The server returns real radio Neighbor Advertisements and installs routes used by later data. The learned addresses have no static neighbor bindings. One distinct static address checks conflict handling without masking learning. This is P10's local-server stage; host discovery, context distribution and multihop DAD are separate stages.
 

@@ -1,6 +1,6 @@
 # Paging and extended dispatch
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/pending/6lowpan-completion.md), [RFC 8025](https://www.rfc-editor.org/rfc/rfc8025.html), [RFC 8066](https://www.rfc-editor.org/rfc/rfc8066.html)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/done/6lowpan-completion.md), [RFC 8025](https://www.rfc-editor.org/rfc/rfc8025.html), [RFC 8066](https://www.rfc-editor.org/rfc/rfc8066.html)
 
 The adaptation owner recognizes RFC 8025 paging and RFC 8066 ESC selectors
 without storing page state between packets. The shared

@@ -1,6 +1,6 @@
 # 6LoWPAN completion evidence
 
-> **Kind:** ledger · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../../../plan/pending/6lowpan-completion.md), [release-validation.md](release-validation.md)
+> **Kind:** ledger · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../../../plan/done/6lowpan-completion.md), [release-validation.md](release-validation.md)
 
 P8–P15 and the final combined campaign are complete for the selected profiles. This ledger separates them from the archived P0–P7 acceptance. The package sections below retain their historical checkpoint results; statements there about later work are superseded by the final campaign here. Existing first-release fixtures remain regression controls.
 

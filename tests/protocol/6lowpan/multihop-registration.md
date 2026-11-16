@@ -1,6 +1,6 @@
 # Routed native registration confirmation and fallback
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/pending/6lowpan-completion.md), [RFC 6775 §6.5.2](https://www.rfc-editor.org/rfc/rfc6775.html#section-6.5.2), [RFC 6775 §8.2](https://www.rfc-editor.org/rfc/rfc6775.html#section-8.2), [RFC 4291 §2.5.3](https://www.rfc-editor.org/rfc/rfc4291.html#section-2.5.3)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/done/6lowpan-completion.md), [RFC 6775 §6.5.2](https://www.rfc-editor.org/rfc/rfc6775.html#section-6.5.2), [RFC 6775 §8.2](https://www.rfc-editor.org/rfc/rfc6775.html#section-8.2), [RFC 4291 §2.5.3](https://www.rfc-editor.org/rfc/rfc4291.html#section-2.5.3)
 
 **Execution status: debug PASS, four relay simulations.** The optional 6LR relay uses one configured authority, an explicitly assigned non-link-local DAR source, copied pending operations and one ND-owned timer. The native `router` profile retains local registration when both address parameters are empty. `borderRouter` continues to use its already implemented coupled local authority. The relay does not distribute ABROs or compression contexts.
 

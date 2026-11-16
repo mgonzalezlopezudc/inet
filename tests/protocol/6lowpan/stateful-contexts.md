@@ -1,6 +1,6 @@
 # Stateful IPHC contexts
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/pending/6lowpan-completion.md), [RFC 6282 catalog](../../../doc/project/evidence/standard/rfc6282/catalog.md)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/done/6lowpan-completion.md), [RFC 6282 catalog](../../../doc/project/evidence/standard/rfc6282/catalog.md)
 
 P8 adds RFC 6282 sections 3.1.1–3.2.4 context-based address compression. The parent codec explicitly rejects stateful source/destination forms and has no context owner. The adaptation module now owns a bounded table of canonical prefixes and validity deadlines. Compression permission is independent from decompression eligibility: a retiring context may still decode in-flight input. Empty tables retain the existing stateless behavior. Context ID 0 is implicit; nonzero and unequal source/destination IDs use the extension octet.
 
