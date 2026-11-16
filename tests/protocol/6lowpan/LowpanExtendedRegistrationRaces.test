@@ -1,0 +1,363 @@
+%description:
+Literal updated registrations cross native MACs on two LR interfaces. Global
+ownership precedes capacity while LL ownership stays scoped. Routed Moved
+cancels an old changed-lifetime refresh, even after short protection expires,
+without cancelling a genuinely newer pending transaction.
+
+%extraargs: -r 0..6
+
+%file: ExtendedRaceCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/MemoryOutputStream.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/checksum/Checksum.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/common/InterfaceTag_m.h"
+#include "inet/linklayer/common/MacAddressTag_m.h"
+#include "inet/linklayer/ieee802154/Ieee802154AddressTagBase_m.h"
+#include "inet/linklayer/lowpan/LowpanNativeLinkDomain.h"
+#include "inet/networklayer/common/L3AddressTag_m.h"
+#include "inet/networklayer/icmpv6/Icmpv6.h"
+#include "inet/networklayer/icmpv6/Ipv6NdMessage_m.h"
+#include "inet/networklayer/ipv6/Ipv6Header_m.h"
+#include "inet/networklayer/ipv6/Ipv6RoutingTable.h"
+#include <map>
+#include <tuple>
+#include <vector>
+
+namespace inet::protocoltest {
+using namespace lowpan;
+class ExtendedRaceCheck : public cSimpleModule, public cListener
+{
+    struct Frame {int interface; std::vector<uint8_t> bytes;};
+    struct Dac {int status,tid,lifetime;};
+    std::vector<Frame> frames;
+    std::vector<Dac> confirmations;
+    std::map<std::pair<int,int>,int> requests;
+    std::map<std::pair<int,int>,int> deliveredRequests;
+    std::map<int,std::vector<simtime_t>> requestTimes;
+    std::map<std::tuple<int,int,int,int>,int> advertisements;
+    int deliveredConfirmations=0;
+    NetworkInterface *native[2]{},*backbone=nullptr,*authorityInterface=nullptr;
+    LowpanNativeLinkDomain *domain=nullptr;
+    Ipv6RoutingTable *routes=nullptr;
+    cModule *nd=nullptr,*lrIp=nullptr,*authorityIp=nullptr;
+    int scenario=0,sequence=0,tag=1,injected=0,directInputs=0,linkLocalReplies=0,movedReplies=0,dataPackets=0,authorityRequests=0;
+    const Ipv6Address commonLocal{"fe80::aa"},registered{"2001:db8:3::a"};
+    const Ipv6Address relaySource{"2001:db8:1::10"},authority{"2001:db8:1::20"};
+    Ieee802154Address peer(int index) const {return Ieee802154Address(Ieee802154Address::EXTENDED,UINT64_C(0x0011223344556601)+index);}
+    Ipv6Address routerLocal(int index) const {return Ipv6Address(index==0?"fe80::211:2233:4455:6603":"fe80::211:2233:4455:6605");}
+    std::vector<uint8_t> owner(int seed) const {std::vector<uint8_t> result;for(int i=0;i<16;i++)result.push_back(uint8_t(seed+i));return result;}
+    void event(double time,int kind) {scheduleAt(SimTime(time),new cMessage("extended-race-step",kind));}
+    std::vector<uint8_t> checksum(std::vector<uint8_t> bytes,const Ipv6Address& from,const Ipv6Address& to) {
+        MemoryOutputStream pseudo;pseudo.writeIpv6Address(from);pseudo.writeIpv6Address(to);
+        pseudo.writeUint32Be(bytes.size());pseudo.writeUint32Be(58);pseudo.writeBytes(bytes);
+        auto sum=internetChecksum(pseudo.getData());bytes[2]=sum>>8;bytes[3]=sum;return bytes;
+    }
+    std::vector<uint8_t> ipv6(const std::vector<uint8_t>& bytes,const Ipv6Address& from,const Ipv6Address& to,int hop) {
+        std::vector<uint8_t> result{0x60,0,0,0,uint8_t(bytes.size()>>8),uint8_t(bytes.size()),58,uint8_t(hop)};
+        MemoryOutputStream addresses;addresses.writeIpv6Address(from);addresses.writeIpv6Address(to);
+        result.insert(result.end(),addresses.getData().begin(),addresses.getData().end());result.insert(result.end(),bytes.begin(),bytes.end());return result;
+    }
+    void frame(double time,int index,const std::vector<uint8_t>& payload) {
+        int destination=index==0?3:5;
+        std::vector<uint8_t> bytes{0x41,0xdc,uint8_t(sequence++),0x34,0x12,uint8_t(destination),0x66,0x55,0x44,0x33,0x22,0x11,0,
+            uint8_t(index+1),0x66,0x55,0x44,0x33,0x22,0x11,0};
+        bytes.insert(bytes.end(),payload.begin(),payload.end());auto crc=crc16_ccitt(bytes);bytes.push_back(crc);bytes.push_back(crc>>8);
+        ASSERT(bytes.size()<=127);frames.push_back({index,bytes});event(time,1000+frames.size()-1);
+    }
+    std::vector<uint8_t> solicitationBytes(int index,const Ipv6Address& target,int seed,int tid,int lifetime) {
+        std::vector<uint8_t> bytes{135,0,0,0,0,0,0,0};MemoryOutputStream address;address.writeIpv6Address(target);
+        bytes.insert(bytes.end(),address.getData().begin(),address.getData().end());
+        bytes.insert(bytes.end(),{1,2,0,0x11,0x22,0x33,0x44,0x55,0x66,uint8_t(index+1),0,0,0,0,0,0});
+        // RFC 8505 Figure 1 uses MSB-first diagram indices: numeric T=1, R=2.
+        bytes.insert(bytes.end(),{33,3,0,0x5a,3,uint8_t(tid),uint8_t(lifetime>>8),uint8_t(lifetime)});
+        auto rovr=owner(seed);bytes.insert(bytes.end(),rovr.begin(),rovr.end());
+        return ipv6(checksum(bytes,commonLocal,routerLocal(index)),commonLocal,routerLocal(index),255);
+    }
+    void solicitation(double time,int index,const Ipv6Address& target,int seed,int tid,int lifetime) {
+        auto ip=solicitationBytes(index,target,seed,tid,lifetime);
+        // This literal 128-bit EARO NS needs two native frames. Coordinates are
+        // original IPv6 bytes; only FRAG1 carries the uncompressed dispatch.
+        int size=ip.size(),currentTag=tag++;
+        std::vector<uint8_t> first{uint8_t(0xc0|(size>>8)),uint8_t(size),uint8_t(currentTag>>8),uint8_t(currentTag),0x41};
+        first.insert(first.end(),ip.begin(),ip.begin()+80);frame(time,index,first);
+        std::vector<uint8_t> tail{uint8_t(0xe0|(size>>8)),uint8_t(size),uint8_t(currentTag>>8),uint8_t(currentTag),10};
+        tail.insert(tail.end(),ip.begin()+80,ip.end());frame(time+0.001,index,tail);
+    }
+    void directSolicitation(int index,int tid) {
+        auto packet=new Packet("tied-fallback-ns",makeShared<BytesChunk>(solicitationBytes(index,registered,0x71,tid,2)));
+        packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ipv6);
+        packet->addTag<InterfaceInd>()->setInterfaceId(native[index]->getInterfaceId());
+        auto indication=packet->addTag<Ieee802154AddressInd>();indication->setSrcAddress(peer(index));
+        indication->setDestAddress(Ieee802154Address(Ieee802154Address::EXTENDED,UINT64_C(0x0011223344556600)+(index==0?3:5)));
+        indication->setSrcPanId(4660);indication->setDestPanId(4660);
+        sendDirect(packet,lrIp->gate("queueIn")->getPathStartGate());directInputs++;
+    }
+    void confirmation(double time,int status,int tid,int lifetime) {confirmations.push_back({status,tid,lifetime});event(time,2000+confirmations.size()-1);}
+    void injectConfirmation(const Dac& input) {
+        // A scripted response cannot stand in for a DAR that never passed
+        // ordinary Ethernet neighbor resolution and reached the authority.
+        ASSERT(deliveredRequests[std::make_pair(input.tid,input.lifetime)]>0);
+        if(input.status==3) {
+            ASSERT(deliveredRequests[std::make_pair(240,3)]>0);
+            if(scenario==2)ASSERT(deliveredRequests[std::make_pair(241,4)]>0);
+        }
+        std::vector<uint8_t> bytes{158,2,0,0,uint8_t(input.status),uint8_t(input.tid),uint8_t(input.lifetime>>8),uint8_t(input.lifetime)};
+        auto rovr=owner(0x71);bytes.insert(bytes.end(),rovr.begin(),rovr.end());MemoryOutputStream address;address.writeIpv6Address(registered);
+        bytes.insert(bytes.end(),address.getData().begin(),address.getData().end());
+        auto packet=new Packet("literal-authority-edac",makeShared<BytesChunk>(ipv6(checksum(bytes,authority,relaySource),authority,relaySource,64)));
+        packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ipv6);
+        auto mac=packet->addTag<MacAddressReq>();mac->setSrcAddress(authorityInterface->getMacAddress());mac->setDestAddress(backbone->getMacAddress());
+        packet->addTag<InterfaceReq>()->setInterfaceId(authorityInterface->getInterfaceId());
+        sendDirect(packet,getModuleByPath("^.authority.ethernet")->gate("upperLayerIn")->getPathStartGate());
+    }
+    bool binding(int index,const Ipv6Address& address) const {return domain->resolveNeighbor(native[index]->getId(),address)!=nullptr;}
+    bool route(int index) const {
+        for(int i=0;i<routes->getNumRoutes();i++){auto entry=routes->getRoute(i);if(entry->getSource()==nd && entry->getInterface()==native[index] && entry->getDestPrefix()==registered && entry->getPrefixLength()==128)return true;}
+        return false;
+    }
+    bool validIcmp(const Packet *packet) const {
+        Packet copy(*packet);auto ip=copy.popAtFront<Ipv6Header>();auto addresses=copy.addTagIfAbsent<L3AddressInd>();
+        addresses->setSrcAddress(ip->getSrcAddress());addresses->setDestAddress(ip->getDestAddress());return Icmpv6::verifyChecksum(&copy);
+    }
+    void data(int index=0) {
+        auto packet=new Packet("post-race-data");auto echo=makeShared<Icmpv6EchoRequestMsg>();echo->setIdentifier(123);echo->setSeqNumber(77);
+        Icmpv6::insertChecksum(CHECKSUM_COMPUTED,echo,packet);packet->insertAtFront(echo);packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::icmpv6);
+        auto addresses=packet->addTag<L3AddressReq>();addresses->setSrcAddress(routerLocal(index));addresses->setDestAddress(registered);
+        sendDirect(packet,lrIp->gate("transportIn")->getPathStartGate());
+    }
+  protected:
+    int numInitStages() const override {return NUM_INIT_STAGES;}
+    void initialize(int stage) override {
+        if(stage!=INITSTAGE_LAST)return;
+        scenario=getParentModule()->par("scenario");for(int i=0;i<2;i++)native[i]=check_and_cast<NetworkInterface *>(getModuleByPath(i==0?"^.lr.wlan[0]":"^.lr.wlan[1]"));
+        backbone=check_and_cast<NetworkInterface *>(getModuleByPath("^.lr.eth[0]"));authorityInterface=check_and_cast<NetworkInterface *>(getModuleByPath("^.authority.eth[0]"));
+        domain=check_and_cast<LowpanNativeLinkDomain *>(getModuleByPath("^.domain"));routes=check_and_cast<Ipv6RoutingTable *>(getModuleByPath("^.lr.ipv6.routingTable"));
+        nd=getModuleByPath("^.lr.ipv6.neighbourDiscovery");lrIp=getModuleByPath("^.lr.ipv6.ipv6");authorityIp=getModuleByPath("^.authority.ipv6.ipv6");
+        lrIp->subscribe("packetReceivedFromUpper",this);lrIp->subscribe("packetReceivedFromLower",this);authorityIp->subscribe("packetReceivedFromLower",this);
+        solicitation(0.1,0,commonLocal,0x31,240,3);
+        if(scenario==0 || scenario>=3)solicitation(0.2,1,commonLocal,0x41,240,3);
+        if(scenario==0){
+            solicitation(0.3,0,registered,0x71,240,2);
+            solicitation(0.4,1,registered,0x81,240,2);event(0.5,-1);event(0.8,-9);
+        }
+        else if(scenario==5) {
+            ASSERT(native[0]->getInterfaceId()<native[1]->getInterfaceId());
+            event(1,-8);event(3.9,-10);event(4.2,-11);event(4.5,-12);event(4.6,-9);
+        }
+        else if(scenario==6) {
+            event(1,-13);event(1.1,-14);event(1.2,-15);event(4.15,-16);event(4.4,-17);event(4.8,-9);
+        }
+        else if(scenario>=3) {
+            solicitation(0.3,0,registered,0x71,240,2);
+            if(scenario==3){solicitation(0.4,1,registered,0x71,250,2);solicitation(0.5,1,registered,0x71,5,2);event(0.6,-6);}
+            else {solicitation(0.4,1,registered,0x71,240,2);solicitation(0.5,0,registered,0x71,250,0);event(0.55,-7);solicitation(0.6,1,registered,0x71,5,2);event(0.7,-6);}
+            event(0.85,-9);
+        }
+        else {
+            solicitation(1,0,registered,0x71,240,2);confirmation(1.1,0,240,2);
+            solicitation(1.2,0,registered,0x71,240,3);
+            if(scenario==2)solicitation(1.25,0,registered,0x71,241,4);
+            confirmation(1.3,3,240,2);confirmation(2,0,240,3);event(2.05,-2);
+            if(scenario==2){confirmation(2.1,0,241,4);event(2.3,-3);confirmation(2.4,3,240,2);event(2.55,-4);}
+            event(4.5,-5);event(4.6,-9);
+        }
+    }
+    void receiveSignal(cComponent *component,simsignal_t signal,cObject *object,cObject *) override {
+        Enter_Method_Silent();auto packet=check_and_cast<Packet *>(object);
+        if(signal==registerSignal("packetReceivedFromUpper")) {
+            auto protocol=packet->findTag<PacketProtocolTag>();if(!protocol || protocol->getProtocol()!=&Protocol::icmpv6)return;
+            auto header=packet->peekAtFront<Icmpv6Header>();if(header->getType()!=ICMPv6_DUPLICATE_ADDRESS_REQUEST)return;
+            auto request=packet->peekAtFront<Ipv6DuplicateAddressHeader>();ASSERT(request->getRegisteredAddress()==registered && request->getCode()==2 && request->getRegistrationOwnershipVerifierArraySize()==16);
+            auto rovr=owner(0x71);for(int i=0;i<16;i++)ASSERT(request->getRegistrationOwnershipVerifier(i)==rovr[i]);
+            auto addresses=packet->getTag<L3AddressReq>();ASSERT(addresses->getSrcAddress()==L3Address(relaySource) && addresses->getDestAddress()==L3Address(authority));
+            requests[{request->getTransactionId(),request->getRegistrationLifetime()}]++;
+            requestTimes[request->getTransactionId()].push_back(simTime());return;
+        }
+        if(component==authorityIp) {
+            auto ip=packet->peekAtFront<Ipv6Header>();if(ip->getProtocolId()!=IP_PROT_IPv6_ICMP)return;
+            if(packet->peekDataAt<BytesChunk>(B(40),B(1))->getBytes()[0]==157){
+                ASSERT(ip->getSrcAddress()==relaySource && ip->getDestAddress()==authority && ip->getHopLimit()==64 && validIcmp(packet));
+                auto request=packet->peekDataAt<Ipv6DuplicateAddressHeader>(B(40));
+                ASSERT(request->getRegisteredAddress()==registered && request->getCode()==2 && request->getRegistrationOwnershipVerifierArraySize()==16);
+                deliveredRequests[{request->getTransactionId(),request->getRegistrationLifetime()}]++;authorityRequests++;
+            }
+        }
+        else if(component==lrIp) {
+            auto ip=packet->peekAtFront<Ipv6Header>();if(ip->getProtocolId()!=IP_PROT_IPv6_ICMP)return;
+            if(packet->peekDataAt<BytesChunk>(B(40),B(1))->getBytes()[0]==158){ASSERT(ip->getSrcAddress()==authority && ip->getDestAddress()==relaySource && ip->getHopLimit()==64 && validIcmp(packet));deliveredConfirmations++;}
+        }
+    }
+    void handleMessage(cMessage *message) override {
+        if(message->isSelfMessage()) {
+            int kind=message->getKind();delete message;
+            if(kind>=2000){injectConfirmation(confirmations.at(kind-2000));return;}
+            if(kind>=1000){const auto& input=frames.at(kind-1000);sendDirect(new Packet("literal-extended-race",makeShared<BytesChunk>(input.bytes)),native[input.interface]->getSubmodule("mac")->gate("lowerLayerIn")->getPathStartGate());injected++;return;}
+            if(kind==-1){ASSERT(binding(0,commonLocal) && binding(1,commonLocal));ASSERT(*domain->resolveNeighbor(native[0]->getId(),commonLocal)==peer(0) && *domain->resolveNeighbor(native[1]->getId(),commonLocal)==peer(1));ASSERT(binding(0,registered) && route(0) && !binding(1,registered) && !route(1));data();}
+            if(kind==-2)ASSERT(!binding(0,registered) && !route(0));
+            if(kind==-3){ASSERT(binding(0,registered) && route(0));data();}
+            if(kind==-4)ASSERT(binding(0,registered) && route(0));
+            if(kind==-5)ASSERT(binding(0,registered)==(scenario==2) && route(0)==(scenario==2));
+            if(kind==-6){ASSERT(!binding(0,registered) && !route(0) && binding(1,registered) && route(1));data(1);}
+            if(kind==-7)ASSERT(!binding(0,registered) && !route(0) && binding(1,registered) && route(1));
+            if(kind==-8){
+                // Same event, older higher key first: both retry deadlines are
+                // exactly 2,3,4s, while the timer's map order is newer first.
+                directSolicitation(1,240);directSolicitation(0,250);
+            }
+            if(kind==-10){ASSERT(!binding(0,registered) && !route(0) && !binding(1,registered) && !route(1));ASSERT(requestTimes[240]==std::vector<simtime_t>({SimTime(1),SimTime(2),SimTime(3)}) && requestTimes[250]==requestTimes[240]);}
+            if(kind==-11){ASSERT(binding(0,registered) && route(0) && !binding(1,registered) && !route(1));data();}
+            if(kind==-12)ASSERT(binding(0,registered) && route(0) && !binding(1,registered) && !route(1));
+            if(kind==-13)directSolicitation(0,240);
+            if(kind==-14)directSolicitation(1,250);
+            if(kind==-15){ASSERT(deliveredRequests[std::make_pair(240,2)]>=1 && deliveredRequests[std::make_pair(250,2)]>=1);directSolicitation(0,5);}
+            if(kind==-16)ASSERT(!binding(0,registered) && !route(0) && !binding(1,registered) && !route(1));
+            if(kind==-17){ASSERT(binding(0,registered) && route(0) && !binding(1,registered) && !route(1));data();}
+            if(kind==-9)endSimulation();return;
+        }
+        int index=message->getArrivalGate()->getIndex();auto packet=check_and_cast<Packet *>(message);
+        auto ip=packet->popAtFront<Ipv6Header>();ASSERT(ip->getProtocolId()==IP_PROT_IPv6_ICMP);
+        auto addresses=packet->addTagIfAbsent<L3AddressInd>();addresses->setSrcAddress(ip->getSrcAddress());addresses->setDestAddress(ip->getDestAddress());ASSERT(Icmpv6::verifyChecksum(packet));
+        auto header=packet->peekAtFront<Icmpv6Header>();
+        if(header->getType()==ICMPv6_ECHO_REQUEST){auto echo=packet->peekAtFront<Icmpv6EchoRequestMsg>();ASSERT(index==(scenario==3 || scenario==4?1:0) && ip->getDestAddress()==registered && echo->getIdentifier()==123 && echo->getSeqNumber()==77);dataPackets++;delete packet;return;}
+        auto na=packet->peekAtFront<Ipv6NeighbourAdvertisement>();ASSERT(ip->getHopLimit()==255 && ip->getSrcAddress()==routerLocal(index) && ip->getDestAddress()==commonLocal && na->getRouterFlag() && na->getOptions().getOptionArraySize()==1);
+        auto option=na->getOptions().getOption(0);ASSERT(int(option->getType())==33 && option->getOptionLength()==3 && option->getPaddingBytesArraySize()==22);
+        ASSERT(uint8_t(option->getPaddingBytes(1))==0x5a && uint8_t(option->getPaddingBytes(2))==3);
+        int status=uint8_t(option->getPaddingBytes(0)),tid=uint8_t(option->getPaddingBytes(3));
+        int lifetime=(uint8_t(option->getPaddingBytes(4))<<8)|uint8_t(option->getPaddingBytes(5));
+        int seed=na->getTargetAddress()==commonLocal?(index==0?0x31:0x41):(status==1?0x81:0x71);auto rovr=owner(seed);
+        for(int i=0;i<16;i++)ASSERT(uint8_t(option->getPaddingBytes(6+i))==rovr[i]);
+        ASSERT(packet->getTag<Ieee802154AddressInd>()->getDestAddress()==peer(index));
+        if(na->getTargetAddress()==commonLocal){ASSERT(status==0 && tid==240 && lifetime==3);linkLocalReplies++;}
+        else {
+            ASSERT(na->getTargetAddress()==registered);advertisements[{index,status,tid,lifetime}]++;
+            if(status==3){ASSERT(scenario>0 && scenario!=5 && scenario!=6 && ((tid==240 && lifetime==2)||(scenario>=3 && tid==250 && (lifetime==0 || lifetime==2))));movedReplies++;}
+            else if(status==1)ASSERT(scenario==0 && index==1 && tid==240 && lifetime==2);
+            else {
+                ASSERT(status==0);
+                if(scenario==5){ASSERT(index==0 && tid==250 && lifetime==2 && simTime()>=SimTime(4));ASSERT(binding(0,registered) && route(0));}
+                else if(scenario==6){ASSERT(index==0 && tid==5 && lifetime==2 && simTime()>=SimTime(4.2));ASSERT(binding(0,registered) && route(0));}
+                else if(scenario>=3) {
+                    ASSERT((tid==240 && lifetime==2 && (index==0 || scenario==4)) ||
+                        (scenario==3 && index==1 && tid==250 && lifetime==2) ||
+                        (scenario==4 && index==0 && tid==250 && lifetime==0) || (index==1 && tid==5 && lifetime==2));
+                    if(lifetime==0)ASSERT(!binding(0,registered) && !route(0) && binding(1,registered) && route(1));
+                    else ASSERT(binding(index,registered) && route(index));
+                }
+                else {ASSERT(index==0 && ((tid==240 && lifetime==2)||(scenario==2 && tid==241 && lifetime==4)));ASSERT(binding(0,registered) && route(0));}
+            }
+        }
+        delete packet;
+    }
+    void finish() override {
+        ASSERT(linkLocalReplies==(scenario==0 || scenario>=3?2:1));ASSERT(advertisements[std::make_tuple(0,0,240,2)]==(scenario>=5?0:1));
+        ASSERT(advertisements[std::make_tuple(0,0,240,3)]==0);
+        if(scenario==0){ASSERT(advertisements[std::make_tuple(1,1,240,2)]==1 && requests.empty() && authorityRequests==0 && deliveredConfirmations==0 && dataPackets==1 && injected==8);}
+        else if(scenario==5) {
+            ASSERT(requests[std::make_pair(240,2)]==3 && requests[std::make_pair(250,2)]==3 && authorityRequests==6 && deliveredConfirmations==0);
+            ASSERT(injected==4 && directInputs==2 && dataPackets==1 && movedReplies==0 && advertisements[std::make_tuple(0,0,250,2)]==1);
+            int replies=0;for(const auto& entry:advertisements)replies+=entry.second;ASSERT(replies==1);
+        }
+        else if(scenario==6) {
+            ASSERT(requests[std::make_pair(240,2)]>=1 && requests[std::make_pair(240,2)]<=3 && requests[std::make_pair(250,2)]>=1 && requests[std::make_pair(250,2)]<=3);
+            ASSERT(requestTimes[5]==std::vector<simtime_t>({SimTime(1.2),SimTime(2.2),SimTime(3.2)}));
+            ASSERT(authorityRequests==requests[std::make_pair(240,2)]+requests[std::make_pair(250,2)]+requests[std::make_pair(5,2)] && deliveredConfirmations==0);
+            ASSERT(injected==4 && directInputs==3 && dataPackets==1 && movedReplies==0 && advertisements[std::make_tuple(0,0,5,2)]==1);
+            int replies=0;for(const auto& entry:advertisements)replies+=entry.second;ASSERT(replies==1);
+        }
+        else if(scenario>=3) {
+            ASSERT(requests.empty() && authorityRequests==0 && deliveredConfirmations==0 && dataPackets==1 && injected==(scenario==3?10:12));
+            ASSERT(advertisements[std::make_tuple(1,0,5,2)]==1);
+            if(scenario==3)ASSERT(advertisements[std::make_tuple(1,0,250,2)]==1 && movedReplies>=1);
+            else ASSERT(advertisements[std::make_tuple(1,0,240,2)]==1 && advertisements[std::make_tuple(0,0,250,0)]==1);
+        }
+        else {
+            ASSERT(requests[std::make_pair(240,2)]==1 && requests[std::make_pair(240,3)]==1 && movedReplies>=1);
+            ASSERT(requests[std::make_pair(241,4)]==(scenario==2?1:0));ASSERT(authorityRequests==(scenario==2?3:2) && deliveredConfirmations==(scenario==2?5:3));
+            ASSERT(advertisements[std::make_tuple(0,0,241,4)]==(scenario==2?1:0));ASSERT(dataPackets==(scenario==2?1:0) && injected==(scenario==2?8:6));
+        }
+        std::cout<<"case="<<scenario<<" nativeFrames="<<injected<<" directNS="<<directInputs<<" LL="<<linkLocalReplies<<" moved="<<movedReplies<<" authorityDAR="<<authorityRequests<<" data="<<dataPackets<<'\n';
+        std::cout<<"Extended cross-interface ownership and pending Moved races verified\n";
+    }
+};
+Define_Module(ExtendedRaceCheck);
+}
+
+%file: test.ned
+@namespace(inet::protocoltest);
+import inet.node.inet.StandardHost;
+import inet.node.ethernet.Eth100M;
+import inet.networklayer.configurator.ipv6.Ipv6NetworkConfigurator;
+import inet.networklayer.common.InterfaceTable;
+import inet.mobility.static.StationaryMobility;
+import inet.linklayer.lowpan.Ieee802154NativeLowpanInterface;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple ExtendedRaceCheck { gates: input in[2]; }
+module ExtendedRacePeer {
+    parameters: @networkNode;
+    gates: output out;
+    submodules:
+        interfaceTable: InterfaceTable;
+        mobility: StationaryMobility;
+        nic: Ieee802154NativeLowpanInterface {interfaceTableModule="^.interfaceTable";linkDomainModule="^.^.domain";}
+    connections allowunconnected: nic.upperLayerOut --> out;
+}
+network ExtendedRaceNetwork {
+    parameters: int scenario;
+    submodules:
+        configurator: Ipv6NetworkConfigurator;
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        domain: LowpanNativeLinkDomain;
+        lr: StandardHost;
+        authority: StandardHost;
+        peer[2]: ExtendedRacePeer;
+        check: ExtendedRaceCheck;
+    connections allowunconnected:
+        lr.ethg++ <--> Eth100M <--> authority.ethg++;
+        peer[0].out --> check.in[0];peer[1].out --> check.in[1];
+}
+
+%inifile: omnetpp.ini
+[General]
+network=ExtendedRaceNetwork
+sim-time-limit=5s
+seed-set=0
+*.scenario=${case=0..6}
+**.vector-recording=false
+**.scalar-recording=false
+**.hasIpv4=false
+**.hasIpv6=true
+*.lr.forwarding=true
+*.lr.ipv6.typename="LowpanIpv6NetworkLayer"
+*.lr.ipv6.neighbourDiscovery.nativeNdRole="router"
+*.lr.ipv6.neighbourDiscovery.extendedRegistration=true
+*.lr.ipv6.neighbourDiscovery.registrationRemovalDelay=0.5s
+*.lr.ipv6.neighbourDiscovery.maxRegistrations=(${case}==0?3:64)
+*.lr.ipv6.neighbourDiscovery.registrationAuthorityAddress=(${case}==1 || ${case}==2 || ${case}>=5?"2001:db8:1::20":"")
+*.lr.ipv6.neighbourDiscovery.registrationSourceAddress=(${case}==1 || ${case}==2 || ${case}>=5?"2001:db8:1::10":"")
+*.lr.ipv6.neighbourDiscovery.registrationAuthoritySupportsExtended=true
+*.lr.numWlanInterfaces=2
+*.lr.wlan[*].typename="Ieee802154NativeLowpanInterface"
+*.lr.wlan[*].linkDomainModule="^.^.domain"
+*.lr.wlan[*].radio.antenna.mobilityModule="^.^.^.mobility"
+*.peer[*].nic.radio.antenna.mobilityModule="^.^.^.mobility"
+**.ipv6.configurator.networkConfiguratorModule="configurator"
+**.ipv6.neighbourDiscovery.hostBootupTime=0s
+**.ipv6.neighbourDiscovery.routerBootupTime=0s
+**.ipv6.neighbourDiscovery.dupAddrDetectTransmits=0
+**.ipv6.icmpv6.checksumMode="computed"
+*.configurator.config=xml("<config><interface hosts='lr' names='eth0' address='2001:db8:1::10'/><interface hosts='authority' names='eth0' address='2001:db8:1::20'/></config>")
+*.domain.panId=4660
+*.domain.config=xml("<domain><peer interface='peer[0].nic' native='0011223344556601'/><peer interface='peer[1].nic' native='0011223344556602'/><peer interface='lr.wlan[0]' native='0011223344556603'/><peer interface='lr.wlan[1]' native='0011223344556605'/></domain>")
+**.lowpan.headerCompression="none"
+**.mobility.initialX=0m
+**.mobility.initialY=0m
+**.mobility.initialZ=0m
+**.mobility.initFromDisplayString=false
+**.mobility.updateFromDisplayString=false
+
+%contains: stdout
+Extended cross-interface ownership and pending Moved races verified
