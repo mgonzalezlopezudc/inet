@@ -1,0 +1,3 @@
+Native mesh-under forwarding
+
+Native LoWPAN interfaces can opt in to configured mesh-under forwarding with Mesh/BC0 headers, independent logical and immediate link identities, bounded hop budgets and duplicate history. Mesh transit forwards opaque fragments before endpoint reassembly. The default per-hop profile remains unchanged. This static mesh-data profile does not establish multihop optimized Neighbor Discovery.

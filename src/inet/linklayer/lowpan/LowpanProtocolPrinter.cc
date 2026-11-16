@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "inet/linklayer/lowpan/LowpanProtocolPrinter.h"
 #include "inet/linklayer/lowpan/LowpanHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanMeshHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanBroadcastHeader_m.h"
 #include "inet/linklayer/lowpan/LowpanFrag1Header_m.h"
 #include "inet/linklayer/lowpan/LowpanFragnHeader_m.h"
 #include "inet/linklayer/lowpan/LowpanProtocol.h"
@@ -18,6 +20,11 @@ void LowpanProtocolPrinter::print(const Ptr<const Chunk>& chunk, const Protocol 
 {
     if (dynamicPtrCast<const LowpanHeader>(chunk))
         context.infoColumn << "LOWPAN_IPV6";
+    else if (auto header = dynamicPtrCast<const LowpanMeshHeader>(chunk))
+        context.infoColumn << "Mesh " << header->getOriginator() << " > " << header->getFinalDestination()
+                           << " hops=" << int(header->getHopsLeft()) << (header->getDeepHops() ? " deep" : "");
+    else if (auto header = dynamicPtrCast<const LowpanBroadcastHeader>(chunk))
+        context.infoColumn << "BC0 sequence=" << int(header->getSequenceNumber());
     else if (auto header = dynamicPtrCast<const LowpanFrag1Header>(chunk))
         context.infoColumn << "FRAG1 size=" << header->getDatagramSize() << " tag=" << header->getDatagramTag();
     else if (auto header = dynamicPtrCast<const LowpanFragnHeader>(chunk))

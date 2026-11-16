@@ -14,6 +14,12 @@ simple LowpanLayer extends SimpleModule like ILowpanLayer
         int maxReassemblyDatagrams = default(64);
         int maxReassemblyBytes @unit(B) = default(131008B);
         double reassemblyTimeout @unit(s) = default(60s); // RFC 4944 maximum is 60 seconds.
+        bool meshUnder = default(false); // Native-only configured L2 mesh; optimized ND remains one-hop.
+        xml meshRoutes = default(xml("<routes/>")); // Exact route elements: final and nextHop native extended addresses; duplicate finals rejected.
+        int meshHops = default(8); // Initial transmission budget, 0..255; zero refuses source transmission.
+        double meshResidence @unit(s) = default(1s); // Finite >= one simulation tick; quantized per-hop queue/MAC/propagation budget, uniform across participants.
+        double broadcastRetention @unit(s) = default(60s); // Finite >= one tick; quantized first-arrival retention, uniform across participants. Large durations saturate at clock range.
+        int maxBroadcastDatagrams = default(256); // Positive record count; each has a fixed 256-offset bitmap. No live eviction.
         @display("i=block/layer");
         @lifecycleSupport;
         @signal[datagramAccepted](type=inet::Packet);
@@ -24,6 +30,7 @@ simple LowpanLayer extends SimpleModule like ILowpanLayer
         @signal[reassemblyCompleted](type=inet::Packet);
         @signal[reassemblyExpired](type=long);
         @signal[reassemblyInvalidated](type=long);
+        @signal[meshForwarded](type=inet::Packet);
         @statistic[datagramAccepted](record=count);
         @statistic[datagramCompleted](record=count);
         @statistic[packetDropped](record=count);
@@ -32,6 +39,7 @@ simple LowpanLayer extends SimpleModule like ILowpanLayer
         @statistic[reassemblyCompleted](record=count);
         @statistic[reassemblyExpired](record=sum);
         @statistic[reassemblyInvalidated](record=sum);
+        @statistic[meshForwarded](record=count);
     gates:
         input upperLayerIn;
         output upperLayerOut;

@@ -6,6 +6,8 @@
 #include "inet/common/packet/chunk/BytesChunk.h"
 #include "inet/linklayer/common/MacAddressTag_m.h"
 #include "inet/linklayer/lowpan/LowpanHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanMeshHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanBroadcastHeader_m.h"
 #include "inet/linklayer/lowpan/LowpanFrag1Header_m.h"
 #include "inet/linklayer/lowpan/LowpanFragnHeader_m.h"
 #include "inet/linklayer/lowpan/LowpanFragmenter.h"
@@ -22,6 +24,40 @@
 
 namespace inet { namespace lowpan {
 namespace {
+simtime_t meshClockDuration(double seconds)
+{
+    return seconds >= SIMTIME_MAX.dbl() ? SIMTIME_MAX : SimTime(seconds);
+}
+
+struct MeshPayload {
+    bool fragmented;
+    uint16_t size = 0;
+    uint16_t tag = 0;
+    uint8_t offset = 0;
+};
+
+std::optional<MeshPayload> inspectMeshPayload(const Packet& packet)
+{
+    auto bytes = packet.peekDataAsBytes()->getBytes();
+    if (bytes.empty() || (bytes[0] & 0xc0) == 0x80 || bytes[0] == 0x50) return std::nullopt;
+    bool first = (bytes[0] & 0xf8) == 0xc0;
+    bool following = (bytes[0] & 0xf8) == 0xe0;
+    MeshPayload result{first || following};
+    if (!result.fragmented) return result; // Unknown inner dispatch remains opaque in transit.
+    int header = first ? 4 : 5;
+    if (int(bytes.size()) <= header) return std::nullopt;
+    result.size = ((bytes[0] & 7) << 8) | bytes[1];
+    result.tag = (bytes[2] << 8) | bytes[3];
+    if (following) result.offset = bytes[4];
+    auto payload = bytes.size() - header;
+    if (result.size < 40 || (following && (result.offset == 0 || 8 * result.offset >= result.size ||
+            8 * result.offset + payload > result.size || (8 * result.offset + payload < result.size && payload % 8 != 0))) ||
+            (first && ((bytes[4] & 0xc0) == 0x80 || bytes[4] == 0x50 ||
+                (bytes[4] & 0xf8) == 0xc0 || (bytes[4] & 0xf8) == 0xe0)))
+        return std::nullopt;
+    return result;
+}
+
 bool isRouterDiscovery(const Packet *packet)
 {
     try {
@@ -60,6 +96,7 @@ simsignal_t LowpanLayer::fragmentReceivedSignal = registerSignal("fragmentReceiv
 simsignal_t LowpanLayer::reassemblyCompletedSignal = registerSignal("reassemblyCompleted");
 simsignal_t LowpanLayer::reassemblyExpiredSignal = registerSignal("reassemblyExpired");
 simsignal_t LowpanLayer::reassemblyInvalidatedSignal = registerSignal("reassemblyInvalidated");
+simsignal_t LowpanLayer::meshForwardedSignal = registerSignal("meshForwarded");
 
 LowpanLayer::~LowpanLayer()
 {
@@ -78,6 +115,25 @@ void LowpanLayer::initialize(int stage)
         if (compression != "none" && compression != "iphc")
             throw cRuntimeError("Unsupported LoWPAN headerCompression profile");
         useIphc = compression == "iphc";
+        meshUnder = par("meshUnder");
+        int hops = par("meshHops");
+        double residenceSeconds = par("meshResidence").doubleValue();
+        double retentionSeconds = par("broadcastRetention").doubleValue();
+        double tickSeconds = SimTime::fromRaw(1).dbl();
+        maxBroadcastDatagrams = par("maxBroadcastDatagrams");
+        if (hops < 0 || hops > 255 || !std::isfinite(residenceSeconds) || residenceSeconds < tickSeconds ||
+                !std::isfinite(retentionSeconds) || retentionSeconds < tickSeconds || maxBroadcastDatagrams <= 0)
+            throw cRuntimeError("Invalid LoWPAN mesh limits: durations must be finite and at least one simulation tick");
+        meshResidence = meshClockDuration(residenceSeconds);
+        broadcastRetention = meshClockDuration(retentionSeconds);
+        meshHops = hops;
+        for (auto route : par("meshRoutes").xmlValue()->getChildren()) {
+            auto final = route->getAttribute("final"), next = route->getAttribute("nextHop");
+            if (strcmp(route->getTagName(), "route") || !final || !next ||
+                    !meshRoutes.emplace(Ieee802154Address(final), Ieee802154Address(next)).second)
+                throw cRuntimeError("Invalid or duplicate LoWPAN mesh route");
+        }
+        WATCH_EXPR("numBroadcastDatagrams", broadcasts.size());
         reassembly = std::make_unique<LowpanReassemblyTable>(par("maxReassemblyDatagrams"), par("maxReassemblyBytes"), reassemblyTimeout);
         expiryTimer = new cMessage("lowpanReassemblyExpiry");
         std::array<bool, 16> seen{};
@@ -111,6 +167,15 @@ void LowpanLayer::initialize(int stage)
     else if (stage == INITSTAGE_LINK_LAYER) {
         if (networkInterface->getMtu() != 1280 || networkInterface->getProtocol() != &lowpanProtocol)
             throw cRuntimeError("LoWPAN requires the native link contract and IPv6 MTU 1280");
+        if (meshUnder) {
+            auto native = dynamic_cast<LowpanNativeBoundary *>(link);
+            if (!native) throw cRuntimeError("LoWPAN mesh-under requires a native interface");
+            for (const auto& route : meshRoutes)
+                if (route.first.getMode() != Ieee802154Address::EXTENDED || route.first.getInt() == UINT64_MAX ||
+                        route.second.getMode() != Ieee802154Address::EXTENDED || route.second == link->getLinkAddress() ||
+                        !native->getLinkDomain()->contains(route.second))
+                    throw cRuntimeError("LoWPAN mesh route requires a valid extended final and native next hop");
+        }
     }
     else if (stage == INITSTAGE_QUEUEING) {
         checkPacketOperationSupport(gate("lowerLayerOut"));
@@ -292,46 +357,90 @@ void LowpanLayer::processUpperPacket(Packet *packet)
         destination = *neighbor;
     }
     Ieee802154AddressReq request;
+    auto finalDestination = destination;
+    if (meshUnder && !destination.isBroadcast()) {
+        auto route = meshRoutes.find(destination);
+        if (route == meshRoutes.end()) {
+            dropLowpanPacket(packet, LOWPAN_MESH_NO_ROUTE);
+            return;
+        }
+        destination = route->second;
+    }
+    if (meshUnder && meshHops == 0) {
+        dropLowpanPacket(packet, LOWPAN_MESH_HOP_EXHAUSTED);
+        return;
+    }
     request.setSrcAddress(link->getLinkAddress());
     request.setDestAddress(destination);
     request.setSrcPanId(link->getPanId());
     request.setDestPanId(link->getPanId());
     auto prepared = link->prepareTransmission(request);
+    Ptr<const LowpanMeshHeader> mesh;
+    Ptr<const LowpanBroadcastHeader> broadcast;
+    if (meshUnder) {
+        auto envelope = makeShared<LowpanTransmissionReq>(*prepared);
+        envelope->setDeliveryDeadline(std::min(prepared->getDeliveryDeadline(), meshDeadline(meshResidence)));
+        prepared = envelope;
+        auto header = makeShared<LowpanMeshHeader>();
+        header->setOriginator(link->getLinkAddress());
+        header->setFinalDestination(finalDestination);
+        header->setHopsLeft(meshHops);
+        header->setDeepHops(meshHops >= 15);
+        header->setChunkLength(B(1 + (meshHops >= 15 ? 1 : 0) + 8 + (finalDestination.isBroadcast() ? 2 : 8)));
+        mesh = header;
+    }
+    int outerLength = mesh ? mesh->getChunkLength().get<B>() + (finalDestination.isBroadcast() ? 2 : 0) : 0;
+    int frameBudget = prepared->getPayloadLimit() - outerLength;
     int size = packet->getDataLength().get<B>();
     Ptr<const Chunk> encodedHeader = makeShared<LowpanHeader>();
     int originalHeaderLength = 0;
     // Discovery establishes context knowledge; both encoding passes must bootstrap without it.
     const LowpanContextTable *contexts = useIphc && isRouterDiscovery(packet) ? nullptr : &compressionContexts;
     if (useIphc) {
-        auto iphc = LowpanIphcCodec::encode(*packet->peekAtFront<Ipv6Header>(), request.getSrcAddress(), request.getDestAddress(), false, contexts, simTime());
+        auto iphc = LowpanIphcCodec::encode(*packet->peekAtFront<Ipv6Header>(), request.getSrcAddress(), finalDestination, false, contexts, simTime());
         if (iphc != nullptr) {
             int length = iphc->getChunkLength().get<B>();
             // RFC 6282 section 4: compressed headers must fit wholly in FRAG1.
             // Uncompressed dispatch remains valid when its IPv6 bytes must span frames.
-            if (size - 40 + length <= prepared->getPayloadLimit() || length + 4 <= prepared->getPayloadLimit()) {
+            if (size - 40 + length <= frameBudget || length + 4 <= frameBudget) {
                 encodedHeader = iphc;
                 originalHeaderLength = 40;
             }
         }
     }
     if (useIphc && originalHeaderLength == 40) {
-        auto chain = LowpanNhcCodec::encode(*packet, request.getSrcAddress(), request.getDestAddress(), contexts, simTime());
-        if (chain.header && (size - chain.originalLength + chain.encodedLength <= prepared->getPayloadLimit() ||
-                chain.encodedLength + 4 <= prepared->getPayloadLimit())) {
+        auto chain = LowpanNhcCodec::encode(*packet, request.getSrcAddress(), finalDestination, contexts, simTime());
+        if (chain.header && (size - chain.originalLength + chain.encodedLength <= frameBudget ||
+                chain.encodedLength + 4 <= frameBudget)) {
             encodedHeader = chain.header;
             originalHeaderLength = chain.originalLength;
         }
     }
     int encodedLength = encodedHeader->getChunkLength().get<B>();
-    auto ranges = LowpanFragmenter::plan(size, prepared->getPayloadLimit(), prepared->getPayloadLimit(), encodedLength, originalHeaderLength);
+    auto ranges = LowpanFragmenter::plan(size, frameBudget, frameBudget, encodedLength, originalHeaderLength);
     if (ranges.empty()) {
         dropLowpanPacket(packet, LOWPAN_RESOURCE_LIMIT);
         return;
     }
+    if (mesh && finalDestination.isBroadcast()) {
+        if (sequenceReservations[nextBroadcastSequence] > simTime()) {
+            dropLowpanPacket(packet, LOWPAN_BROADCAST_SEQUENCE_EXHAUSTED);
+            return;
+        }
+        auto header = makeShared<LowpanBroadcastHeader>();
+        header->setSequenceNumber(nextBroadcastSequence);
+        sequenceReservations[nextBroadcastSequence++] = meshReservation(meshHops, broadcastRetention);
+        broadcast = header;
+    }
+    auto prependOuter = [&](Packet *frame) {
+        if (broadcast) frame->insertAtFront(broadcast);
+        if (mesh) frame->insertAtFront(mesh);
+    };
     if (ranges.size() > 1) {
         // RFC 4944 receiver lifetime is at most 60 seconds. Use that maximum
         // even when this interface's own receive timeout is configured shorter.
-        auto tag = tagAllocator.allocate(simTime(), prepared->getDeliveryDeadline() + SimTime(60));
+        auto reuseAfter = meshUnder ? meshReservation(meshHops, meshClockDuration(60)) : prepared->getDeliveryDeadline() + SimTime(60);
+        auto tag = tagAllocator.allocate(simTime(), reuseAfter);
         if (!tag) {
             dropLowpanPacket(packet, LOWPAN_TAG_EXHAUSTED);
             return;
@@ -359,6 +468,7 @@ void LowpanLayer::processUpperPacket(Packet *packet)
                 header->setDatagramOffset(range.offset / 8);
                 fragment->insertAtFront(header);
             }
+            prependOuter(fragment);
             *fragment->addTag<LowpanTransmissionReq>() = *prepared;
             fragment->addTag<PacketProtocolTag>()->setProtocol(&lowpanProtocol);
             if (!consumer.canPushPacket(fragment)) {
@@ -385,6 +495,7 @@ void LowpanLayer::processUpperPacket(Packet *packet)
     if (originalHeaderLength != 0)
         packet->removeAtFront(B(originalHeaderLength));
     packet->insertAtFront(encodedHeader);
+    prependOuter(packet);
     packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&lowpanProtocol);
     if (!consumer.canPushPacket(packet)) {
         dropPacket(packet, QUEUE_OVERFLOW);
@@ -406,12 +517,142 @@ void LowpanLayer::processLowerPacket(Packet *packet)
         return;
     }
     auto dispatch = packet->peekAtFront<BytesChunk>(B(1))->getBytes()[0];
+    if ((dispatch & 0xc0) == 0x80 && meshUnder) {
+        processMeshPacket(packet);
+        return;
+    }
+    processInnerPacket(packet, indication->getSrcAddress(), indication->getDestAddress());
+}
+
+simtime_t LowpanLayer::meshDeadline(simtime_t duration) const
+{
+    auto room = SIMTIME_MAX.raw() - simTime().raw();
+    return duration.raw() >= room ? SIMTIME_MAX : SimTime::fromRaw(simTime().raw() + duration.raw());
+}
+
+simtime_t LowpanLayer::meshReservation(uint8_t hops, simtime_t retention) const
+{
+    // Reserve the sum of the same quantized durations enforced at each hop/cache.
+    auto room = SIMTIME_MAX.raw() - simTime().raw();
+    if (hops != 0 && meshResidence.raw() > room / hops) return SIMTIME_MAX;
+    room -= hops * meshResidence.raw();
+    if (retention.raw() >= room) return SIMTIME_MAX;
+    return SimTime::fromRaw(SIMTIME_MAX.raw() - (room - retention.raw()));
+}
+
+void LowpanLayer::expireBroadcasts()
+{
+    for (auto it = broadcasts.begin(); it != broadcasts.end();)
+        if (it->second.expires <= simTime()) it = broadcasts.erase(it); else ++it;
+}
+
+bool LowpanLayer::acceptBroadcast(Packet *packet, const Ieee802154Address& originator, uint8_t sequence)
+{
+    auto shape = inspectMeshPayload(*packet);
+    ASSERT(shape);
+    expireBroadcasts();
+    auto key = std::make_pair(originator, sequence);
+    auto found = broadcasts.find(key);
+    if (found == broadcasts.end()) {
+        if (broadcasts.size() >= size_t(maxBroadcastDatagrams)) {
+            dropLowpanPacket(packet, LOWPAN_RESOURCE_LIMIT); return false;
+        }
+        found = broadcasts.emplace(key, BroadcastRecord{meshDeadline(broadcastRetention), shape->fragmented, shape->size, shape->tag, {}}).first;
+    }
+    auto& record = found->second;
+    if (record.fragmented != shape->fragmented || record.size != shape->size || record.tag != shape->tag) {
+        dropLowpanPacket(packet, LOWPAN_MALFORMED); return false;
+    }
+    if (record.offsets.test(shape->offset)) {
+        dropLowpanPacket(packet, LOWPAN_BROADCAST_DUPLICATE); return false;
+    }
+    record.offsets.set(shape->offset); // Commit before either local delivery or queue admission.
+    return true;
+}
+
+void LowpanLayer::forwardMesh(Packet *packet, const Ptr<const Chunk>& header, const Ieee802154Address& destination)
+{
+    Ieee802154AddressReq request;
+    request.setSrcAddress(link->getLinkAddress());
+    request.setDestAddress(destination);
+    request.setSrcPanId(link->getPanId());
+    request.setDestPanId(link->getPanId());
+    auto prepared = link->prepareTransmission(request);
+    auto envelope = makeShared<LowpanTransmissionReq>(*prepared);
+    envelope->setDeliveryDeadline(std::min(prepared->getDeliveryDeadline(), meshDeadline(meshResidence)));
+    removeRequestTags(packet);
+    packet->removeTagIfPresent<Ieee802154AddressInd>();
+    packet->removeTagIfPresent<InterfaceInd>();
+    packet->insertAtFront(header);
+    *packet->addTag<LowpanTransmissionReq>() = *envelope;
+    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&lowpanProtocol);
+    if (packet->getDataLength() > B(envelope->getPayloadLimit())) {
+        dropLowpanPacket(packet, LOWPAN_RESOURCE_LIMIT); return;
+    }
+    if (!consumer.canPushPacket(packet)) { dropPacket(packet, QUEUE_OVERFLOW); return; }
+    emit(meshForwardedSignal, packet);
+    consumer.pushPacket(packet);
+}
+
+void LowpanLayer::processMeshPacket(Packet *packet)
+{
+    auto first = packet->peekAtFront<BytesChunk>(B(1))->getBytes()[0];
+    int length = 1 + ((first & 15) == 15 ? 1 : 0) + (first & 0x20 ? 2 : 8) + (first & 0x10 ? 2 : 8);
+    if (packet->getDataLength() <= B(length)) { dropLowpanPacket(packet, LOWPAN_MALFORMED); return; }
+    auto mesh = packet->popAtFront<LowpanMeshHeader>(B(length), Chunk::PF_ALLOW_INCORRECT);
+    auto originator = mesh->getOriginator(), final = mesh->getFinalDestination();
+    if (mesh->isIncorrect() || originator.getMode() != Ieee802154Address::EXTENDED ||
+            (final.getMode() != Ieee802154Address::EXTENDED && !final.isBroadcast())) {
+        dropLowpanPacket(packet, LOWPAN_MALFORMED); return;
+    }
+    auto dispatch = packet->peekAtFront<BytesChunk>(B(1))->getBytes()[0];
+    bool broadcast = final.isBroadcast();
+    if (broadcast != (dispatch == 0x50) || (dispatch & 0xc0) == 0x80) {
+        dropLowpanPacket(packet, LOWPAN_MALFORMED); return;
+    }
+    Ptr<const LowpanBroadcastHeader> bc0;
+    if (broadcast) {
+        if (originator == link->getLinkAddress()) { dropLowpanPacket(packet, LOWPAN_BROADCAST_DUPLICATE); return; }
+        if (packet->getDataLength() <= B(2)) { dropLowpanPacket(packet, LOWPAN_MALFORMED); return; }
+        bc0 = packet->popAtFront<LowpanBroadcastHeader>(B(2));
+    }
+    if (!inspectMeshPayload(*packet)) { dropLowpanPacket(packet, LOWPAN_MALFORMED); return; }
+    if (broadcast) {
+        if (!acceptBroadcast(packet, originator, bc0->getSequenceNumber())) return;
+    }
+    if (!broadcast && final == link->getLinkAddress()) {
+        processInnerPacket(packet, originator, final);
+        return;
+    }
+    if (mesh->getHopsLeft() <= 1) {
+        if (broadcast) processInnerPacket(packet, originator, final);
+        else dropLowpanPacket(packet, LOWPAN_MESH_HOP_EXHAUSTED);
+        return;
+    }
+    Ieee802154Address destination("ffff");
+    if (!broadcast) {
+        auto route = meshRoutes.find(final);
+        if (route == meshRoutes.end()) { dropLowpanPacket(packet, LOWPAN_MESH_NO_ROUTE); return; }
+        destination = route->second;
+    }
+    auto forwarded = makeShared<LowpanMeshHeader>(*mesh);
+    forwarded->setHopsLeft(mesh->getHopsLeft() - 1);
+    auto transit = broadcast ? packet->dup() : packet;
+    if (bc0) transit->insertAtFront(bc0);
+    forwardMesh(transit, forwarded, destination);
+    if (broadcast) processInnerPacket(packet, originator, final);
+}
+
+void LowpanLayer::processInnerPacket(Packet *packet, const Ieee802154Address& source, const Ieee802154Address& destination)
+{
+    auto dispatch = packet->peekAtFront<BytesChunk>(B(1))->getBytes()[0];
+    if (meshUnder && dispatch == 0x50) { dropLowpanPacket(packet, LOWPAN_MALFORMED); return; }
     if ((dispatch & 0xf8) == 0xc0 || (dispatch & 0xf8) == 0xe0) {
-        processFragment(packet, (dispatch & 0xf8) == 0xc0);
+        processFragment(packet, (dispatch & 0xf8) == 0xc0, source, destination);
         return;
     }
     if ((dispatch & 0xe0) == 0x60) {
-        if (!decompressHeader(packet, -1)) {
+        if (!decompressHeader(packet, -1, source, destination)) {
             dropLowpanPacket(packet, LOWPAN_MALFORMED);
             return;
         }
@@ -426,7 +667,7 @@ void LowpanLayer::processLowerPacket(Packet *packet)
     deliverIpv6(packet);
 }
 
-void LowpanLayer::processFragment(Packet *packet, bool first)
+void LowpanLayer::processFragment(Packet *packet, bool first, const Ieee802154Address& source, const Ieee802154Address& destination)
 {
     emit(fragmentReceivedSignal, packet);
     auto expired = reassembly->expire(simTime());
@@ -449,7 +690,7 @@ void LowpanLayer::processFragment(Packet *packet, bool first)
         if (dispatch == 0x41)
             packet->popAtFront<LowpanHeader>(B(1));
         else if ((dispatch & 0xe0) == 0x60)
-            valid = valid && decompressHeader(packet, size);
+            valid = valid && decompressHeader(packet, size, source, destination);
         else
             valid = false;
     }
@@ -467,7 +708,7 @@ void LowpanLayer::processFragment(Packet *packet, bool first)
     }
     auto indication = packet->getTag<Ieee802154AddressInd>();
     LowpanReassemblyTable::Key key{networkInterface->getId(), indication->getSrcPanId(), indication->getDestPanId(),
-        indication->getSrcAddress(), indication->getDestAddress(), size, tag};
+        source, destination, size, tag};
     auto result = reassembly->accept(key, offset, first, *packet, simTime());
     scheduleExpiry();
     if (result.packet != nullptr) {
@@ -490,10 +731,9 @@ void LowpanLayer::processFragment(Packet *packet, bool first)
         delete packet;
 }
 
-bool LowpanLayer::decompressHeader(Packet *packet, int originalSize)
+bool LowpanLayer::decompressHeader(Packet *packet, int originalSize, const Ieee802154Address& source, const Ieee802154Address& destination)
 {
-    auto indication = packet->getTag<Ieee802154AddressInd>();
-    auto result = LowpanNhcCodec::decode(*packet, originalSize, indication->getSrcAddress(), indication->getDestAddress(), &compressionContexts, simTime());
+    auto result = LowpanNhcCodec::decode(*packet, originalSize, source, destination, &compressionContexts, simTime());
     if (!result.header)
         return false;
     // Normalize byte-only FRAG1 input before inserting reconstructed headers.

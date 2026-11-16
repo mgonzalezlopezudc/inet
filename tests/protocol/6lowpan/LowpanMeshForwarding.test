@@ -1,0 +1,279 @@
+%description:
+Actual native A-B-C mesh-under unicast/broadcast, opaque early forwarding,
+logical IID/reassembly identities, BC0 bounds, lifecycle and outer validation.
+Static L2 composition; no multihop optimized-ND claim.
+
+%extraargs: -r 0..19
+
+%file: MeshCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/lifecycle/NodeStatus.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/lowpan/LowpanLayer.h"
+#include "inet/linklayer/lowpan/LowpanProtocol.h"
+#include "inet/linklayer/lowpan/LowpanNativeBoundary.h"
+#include "inet/linklayer/lowpan/LowpanMeshHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanBroadcastHeader_m.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameHeader_m.h"
+#include "inet/networklayer/common/NextHopAddressTag_m.h"
+#include "inet/networklayer/ipv6/Ipv6Header_m.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmission.h"
+using namespace inet;
+using namespace inet::lowpan;
+namespace inet::protocoltest {
+class MeshCheck : public cSimpleModule, public cListener
+{
+    int scenario=0, delivered[3]{}, forwarded[3]{}, reassembled[3]{}, fragments[3]{};
+    int radioFrames[3]{}, maxFrame[3]{}, expiredByNode[3]{}, directAC=0, malformed=0, exhausted=0, duplicates=0, capacity=0, queueDrops=0, hopDrops=0,noRoutes=0,expired=0,downChecks=0,lowerExpired=0;
+    simtime_t firstForward=SIMTIME_MAX, lastSource=SIMTIME_ZERO;
+    std::vector<uint8_t> original;
+    std::vector<std::vector<uint8_t>> literal;
+    std::map<int,std::set<std::vector<uint8_t>>> inners;
+    std::vector<int> refusedSequences;
+    std::vector<simtime_t> bDeliveryTimes;
+    cModule *nic[3]{};
+    const Ieee802154Address addresses[3]{Ieee802154Address("0102030405060708"),Ieee802154Address("1112131415161718"),Ieee802154Address("2122232425262728")};
+    Ipv6Address ip(int node) { uint64_t iid=addresses[node].getInt()^UINT64_C(0x0200000000000000);return Ipv6Address(0xfe800000,0,iid>>32,uint32_t(iid)); }
+    std::vector<uint8_t> datagram(int size,bool broadcast=false) {
+        auto header=makeShared<Ipv6Header>();header->setSrcAddress(ip(0));header->setDestAddress(broadcast?Ipv6Address::ALL_NODES_2:ip(2));
+        header->setProtocolId(IP_PROT_NONE);header->setHopLimit(37);header->setPayloadLength(B(size-40));
+        Packet packet("original",header);packet.insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>(size-40,0x5a)));
+        return packet.peekDataAsBytes()->getBytes();
+    }
+    void upper(int size,bool broadcast=false) {
+        original=datagram(size,broadcast);
+        auto packet=new Packet("mesh-source",makeShared<BytesChunk>(original));
+        packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ipv6);
+        packet->addTag<NextHopAddressReq>()->setNextHopAddress(ip(2));
+        sendDirect(packet,nic[0]->gate("upperLayerIn")->getPathStartGate());
+    }
+    std::vector<uint8_t> mesh(const std::vector<uint8_t>& inner,int final=2,int hops=2,int sequence=-1) {
+        std::vector<uint8_t> bytes{uint8_t((final<0?0x90:0x80)|(hops>=15?15:hops))};
+        if(hops>=15)bytes.push_back(hops);
+        for(int i=7;i>=0;i--)bytes.push_back(addresses[0].getInt()>>(8*i));
+        if(final<0){bytes.insert(bytes.end(),{0xff,0xff,0x50,uint8_t(sequence)});}
+        else for(int i=7;i>=0;i--)bytes.push_back(addresses[final].getInt()>>(8*i));
+        bytes.insert(bytes.end(),inner.begin(),inner.end());return bytes;
+    }
+    void raw(const std::vector<uint8_t>& bytes,int sender=0,int destination=1) {
+        auto boundary=check_and_cast<LowpanNativeBoundary *>(nic[sender]->getSubmodule("boundary"));
+        Ieee802154AddressReq request;request.setSrcAddress(addresses[sender]);request.setDestAddress(destination<0?Ieee802154Address("ffff"):addresses[destination]);
+        request.setSrcPanId(4660);request.setDestPanId(4660);
+        auto packet=new Packet("literal-mesh",makeShared<BytesChunk>(bytes));
+        *packet->addTag<LowpanTransmissionReq>()=*boundary->prepareTransmission(request);
+        packet->addTag<PacketProtocolTag>()->setProtocol(&lowpanProtocol);
+        boundary->pushPacket(packet,boundary->gate("in"));
+    }
+    void event(double seconds,int kind) {scheduleAt(SimTime(seconds),new cMessage("action",kind));}
+    int node(cComponent *source) { for(int i=0;i<3;i++)for(auto at=dynamic_cast<cModule *>(source);at;at=at->getParentModule())if(at==nic[i])return i;throw cRuntimeError("Unknown observer source"); }
+  protected:
+    int numInitStages() const override {return NUM_INIT_STAGES;}
+    void initialize(int stage) override {
+        if(stage!=INITSTAGE_LAST)return;
+        scenario=par("scenario");
+        for(int i=0;i<3;i++){
+            nic[i]=getParentModule()->getSubmodule("node",i)->getSubmodule("nic");
+            auto layer=nic[i]->getSubmodule("lowpan");
+            for(auto name:{"meshForwarded","reassemblyCompleted","fragmentReceived","packetDropped"})layer->subscribe(name,this);
+            layer->subscribe("reassemblyExpired",this);
+            nic[i]->getSubmodule("mac")->subscribe("packetDropped",this);
+            nic[i]->getSubmodule("mac")->subscribe("packetSentToUpper",this);
+            nic[i]->getSubmodule("radio")->subscribe("transmissionStarted",this);
+        }
+        if(scenario<=5 || scenario==11){event(.1,0);if(scenario==1)event(.8,1);event(2,99);}
+        if(scenario==6){
+            original=datagram(80);auto header=std::vector<uint8_t>{0xc0,80,0x12,0x34,0x41};header.insert(header.end(),original.begin(),original.begin()+48);
+            literal.push_back(mesh(header,1,0));header={0xe0,80,0x12,0x34,6};header.insert(header.end(),original.begin()+48,original.end());literal.push_back(mesh(header,1,0));
+            event(.1,10);event(.2,11);event(.5,99);
+        }
+        if(scenario==7){
+            auto data=datagram(48);std::vector<uint8_t> body{0x41};body.insert(body.end(),data.begin(),data.end());
+            literal={{0x8f},{0x80,1,2},{0x50,1,0x41},mesh({0x50,1,0x41},1),mesh({0x41},-1,0,1),mesh({0x80},1),mesh({0xc0,80,0,1,0x50,1},1),mesh({0xe0,80,0,1,0,0},1),mesh({0x50},-1,0,1)};
+            // Remove mandatory BC0 from one otherwise complete broadcast envelope.
+            literal[4].erase(literal[4].begin()+11,literal[4].begin()+13);
+            literal[8]=mesh({},-1,0,1);literal[8].pop_back(); // BC0 dispatch without its sequence octet.
+            for(int i=0;i<int(literal.size());i++)event(.1+.1*i,20+i);event(2,99);
+        }
+        if(scenario==8 || scenario==9){
+            original=datagram(48,true);std::vector<uint8_t> body{0x41};body.insert(body.end(),original.begin(),original.end());
+            literal={mesh(body,-1,scenario==9?2:0,7),mesh(body,-1,0,8),mesh(body,-1,0,9),mesh({0xe0,80,0,1,1,0,0,0,0,0,0,0,0},-1,0,7)};
+            event(.1,30);event(.2,31);event(.3,32);event(.4,30);event(.5,33);event(60.1,30);event(61,99);
+        }
+        if(scenario==10){event(.1,40);event(.3,41);event(68.1,42);event(69,99);}
+        if(scenario==12){
+            original=datagram(48,true);std::vector<uint8_t> body{0x41};body.insert(body.end(),original.begin(),original.end());
+            auto partial=datagram(80);std::vector<uint8_t> first{0xc0,80,0x56,0x78,0x41};first.insert(first.end(),partial.begin(),partial.begin()+48);
+            std::vector<uint8_t> tail{0xe0,80,0x56,0x78,6};tail.insert(tail.end(),partial.begin()+48,partial.end());
+            literal={mesh(body,-1,0,7),mesh(first,-1,0,8),mesh(tail,-1,0,8)};
+            event(.1,30);event(.2,31);event(.27,55);event(.4,31);event(.5,32);event(.6,30);event(60.1,30);event(60.21,34);event(61,99);
+        }
+        if(scenario>=13 && scenario<=17){event(.1,0);event(2,99);}
+        if(scenario==18){original=datagram(48);std::vector<uint8_t> body{0x41};body.insert(body.end(),original.begin(),original.end());literal={mesh(body,2,0)};event(.1,10);event(.5,99);}
+        if(scenario==19){event(.1,40);event(SimTime::getScaleExp()==-6?6.2002:6.2001,41);event(SimTime::getScaleExp()==-6?6.200255:6.2001534,42);event(7,99);}
+    }
+    void handleMessage(cMessage *message) override {
+        if(!message->isSelfMessage()){
+            auto packet=check_and_cast<Packet *>(message);int index=message->getArrivalGate()->getIndex();
+            ASSERT(packet->peekDataAsBytes()->getBytes()==original);
+            auto indication=packet->getTag<Ieee802154AddressInd>();
+            if(scenario==0 || scenario==3 || scenario==5 || scenario==11)ASSERT(index==2 && indication->getSrcAddress()==addresses[1]);
+            if(scenario==6)ASSERT(index==1 && indication->getSrcAddress()==addresses[2]);
+            ASSERT(!packet->findTag<LowpanTransmissionReq>() && !packet->findTag<Ieee802154AddressReq>());
+            if(index==1)bDeliveryTimes.push_back(simTime());delivered[index]++;delete packet;return;
+        }
+        int action=message->getKind();delete message;
+        if(action==0)upper(scenario==0||scenario==1||scenario==11?320:scenario>=16?96:48,scenario==1||scenario==15||scenario>=16);
+        else if(action==1){for(const auto& bytes:inners[0])if((bytes[0]&0xf8)==0xc0){raw(mesh(bytes,-1,2,0),0,-1);break;}}
+        else if(action==10)raw(literal[0]);else if(action==11)raw(literal[1],2);
+        else if(action>=20 && action<29)raw(literal[action-20]);
+        else if(action>=30 && action<=33)raw(literal[action-30],0,-1);
+        else if(action==34){auto bytes=literal[0];bytes[12]=8;raw(bytes,0,-1);}
+        else if(action==40){for(int i=0;i<257;i++)upper(48,true);}
+        else if(action==41)upper(48,true);
+        else if(action==42)upper(48,true);
+        else if(action==55){ASSERT(check_and_cast<NodeStatus *>(getParentModule()->getSubmodule("node",1)->getSubmodule("status"))->getState()==NodeStatus::DOWN);downChecks++;}
+        else if(action==99)endSimulation();
+    }
+    void receiveSignal(cComponent *source,simsignal_t signal,cObject *object,cObject *details) override {
+        int index=node(source);
+        if(signal==registerSignal("packetDropped")){
+            auto drop=dynamic_cast<LowpanPacketDropDetails *>(details);
+            if(drop){switch(drop->getLowpanReason()){
+                case LOWPAN_MALFORMED:malformed++;break;case LOWPAN_MESH_HOP_EXHAUSTED:hopDrops++;break;
+                case LOWPAN_BROADCAST_DUPLICATE:duplicates++;break;case LOWPAN_RESOURCE_LIMIT:capacity++;break;
+                case LOWPAN_BROADCAST_SEQUENCE_EXHAUSTED:exhausted++;break;default:break;}}
+            if(drop && drop->getLowpanReason()==LOWPAN_LOWER_LIFETIME_EXPIRED){lowerExpired++;expiredByNode[index]++;}
+            if(drop && drop->getLowpanReason()==LOWPAN_MESH_NO_ROUTE)noRoutes++;
+            if(auto generic=dynamic_cast<PacketDropDetails *>(details))if(generic->getReason()==QUEUE_OVERFLOW){
+                queueDrops++;
+                if((scenario==10||scenario==19) && index==0){auto copy=check_and_cast<Packet *>(object)->dup();copy->popAtFront<LowpanMeshHeader>();refusedSequences.push_back(copy->popAtFront<LowpanBroadcastHeader>()->getSequenceNumber());delete copy;}
+            }
+            return;
+        }
+        if(signal==registerSignal("meshForwarded")){forwarded[index]++;return;}
+        if(signal==registerSignal("reassemblyCompleted")){reassembled[index]++;return;}
+        if(signal==registerSignal("fragmentReceived")){fragments[index]++;return;}
+        if(signal==registerSignal("packetSentToUpper")){
+            if(index==2 && check_and_cast<Packet *>(object)->getTag<Ieee802154AddressInd>()->getSrcAddress()==addresses[0])directAC++;
+            return;
+        }
+        auto packet=check_and_cast<physicallayer::ITransmission *>(object)->getPacket();
+        auto mac=packet->peekAtFront<Ieee802154FrameHeader>();if(mac->getFrameControl()==2)return;
+        radioFrames[index]++;
+        if(scenario==7)return;
+        auto bytes=packet->peekDataAsBytes()->getBytes();int offset=mac->getChunkLength().get<B>();
+        maxFrame[index]=std::max(maxFrame[index],int(bytes.size()));
+        ASSERT(bytes.size()<=127 && (bytes[offset]&0xc0)==0x80);
+        int meshLength=1+((bytes[offset]&15)==15?1:0)+(bytes[offset]&0x20?2:8)+(bytes[offset]&0x10?2:8);
+        if(scenario<=5 || scenario==11){
+            ASSERT(mac->getSourceAddress()==addresses[index]);
+            if(scenario!=1)ASSERT(mac->getDestinationAddress()==addresses[index==0?1:2]);
+            auto meshPacket=Packet("outer",makeShared<BytesChunk>(std::vector<uint8_t>(bytes.begin()+offset,bytes.end()-2)));
+            auto header=meshPacket.popAtFront<LowpanMeshHeader>(B(meshLength));
+            ASSERT(header->getOriginator()==addresses[0] && header->getFinalDestination()==(scenario==1?Ieee802154Address("ffff"):addresses[2]));
+            ASSERT(header->getHopsLeft()==(scenario==5?255:scenario==2?1:scenario==3||scenario==1?2:8)-index);
+            ASSERT(header->getDeepHops()==(scenario==5));
+            if(scenario==1)meshPacket.popAtFront<LowpanBroadcastHeader>(B(2));
+            inners[index].insert(meshPacket.peekDataAsBytes()->getBytes());
+        }
+        if(index==0)lastSource=simTime();if(index==1)firstForward=std::min(firstForward,simTime());
+    }
+    void receiveSignal(cComponent *,simsignal_t signal,long value,cObject *) override {ASSERT(signal==registerSignal("reassemblyExpired"));expired+=value;}
+    void finish() override {
+        std::cout<<"observed case="<<scenario<<" delivered="<<delivered[0]<<','<<delivered[1]<<','<<delivered[2]<<" tx="<<radioFrames[0]<<','<<radioFrames[1]<<','<<radioFrames[2]<<" forward="<<forwarded[1]<<" malformed="<<malformed<<" duplicate="<<duplicates<<" capacity="<<capacity<<" exhausted="<<exhausted<<" queue="<<queueDrops<<'\n';
+        ASSERT(directAC==0);
+        if(scenario==0 || scenario==3 || scenario==5 || scenario==11){ASSERT(delivered[2]==1 && delivered[0]==0 && delivered[1]==0);ASSERT(forwarded[1]>0 && reassembled[1]==0 && fragments[1]==0);ASSERT(inners[0]==inners[1]);}
+        if(scenario==0 || scenario==11)ASSERT(reassembled[2]==1 && firstForward<lastSource);
+        if(scenario==1){ASSERT(delivered[1]==1 && delivered[2]==1 && delivered[0]==0);ASSERT(reassembled[1]==1 && reassembled[2]==1 && duplicates>0);ASSERT(inners[0]==inners[1]);}
+        if(scenario==2)ASSERT(delivered[2]==0 && radioFrames[1]==0 && hopDrops>0);
+        if(scenario==4)ASSERT(radioFrames[0]==0 && hopDrops==1);
+        if(scenario==6)ASSERT(delivered[1]==1 && reassembled[1]==1 && fragments[1]==2);
+        if(scenario==7)ASSERT(malformed==9 && delivered[0]+delivered[1]+delivered[2]==0);
+        if(scenario==8 || scenario==9){ASSERT(delivered[1]==3 && duplicates==1 && capacity==1 && malformed==1 && bDeliveryTimes[2]-bDeliveryTimes[0]==SimTime(60));if(scenario==9)ASSERT(queueDrops==2);}
+        if(scenario==10||scenario==19){ASSERT(exhausted==2 && radioFrames[0]==0 && refusedSequences.size()==257);for(int i=0;i<256;i++)ASSERT(refusedSequences[i]==i);ASSERT(refusedSequences.back()==0);}
+        if(scenario==12)ASSERT(delivered[1]==3 && duplicates==2 && fragments[1]==2 && reassembled[1]==0 && expired==1 && downChecks==1 && bDeliveryTimes[1]-bDeliveryTimes[0]==SimTime(60));
+        if(scenario==13)ASSERT(noRoutes==1 && radioFrames[0]==0);
+        if(scenario==14)ASSERT(noRoutes==1 && radioFrames[0]>0 && radioFrames[1]==0);
+        if(scenario==15)ASSERT(radioFrames[0]==1 && radioFrames[1]==0 && delivered[2]==0);
+        if(scenario==16)ASSERT(lowerExpired==1 && radioFrames[0]==0 && delivered[2]==0);
+        if(scenario==17)ASSERT(expiredByNode[0]==0 && expiredByNode[1]==1 && radioFrames[0]==1 && maxFrame[0]==127 && delivered[1]==1 && delivered[2]==0);
+        if(scenario==18)ASSERT(hopDrops==1 && radioFrames[0]==1 && radioFrames[1]==0 && delivered[2]==0);
+        std::cout<<"case="<<scenario<<" delivered="<<delivered[0]<<','<<delivered[1]<<','<<delivered[2]<<" tx="<<radioFrames[0]<<','<<radioFrames[1]<<','<<radioFrames[2]<<" forward="<<forwarded[1]<<" malformed="<<malformed<<" duplicate="<<duplicates<<" capacity="<<capacity<<" exhausted="<<exhausted<<" queue="<<queueDrops<<" lowerExpired="<<lowerExpired<<'\n';
+        std::cout<<"Native mesh-under forwarding, logical identities and bounded broadcast paths verified\n";
+    }
+};
+Define_Module(MeshCheck);
+}
+
+%file: test.ned
+@namespace(inet::protocoltest);
+import inet.common.lifecycle.NodeStatus;
+import inet.common.scenario.ScenarioManager;
+import inet.networklayer.common.InterfaceTable;
+import inet.mobility.static.StationaryMobility;
+import inet.linklayer.lowpan.Ieee802154NativeLowpanInterface;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple MeshCheck { parameters: int scenario; gates: input in[3]; }
+module MeshNode {
+    parameters: @networkNode;
+    gates: input in; output out;
+    submodules:
+        status: NodeStatus;
+        interfaceTable: InterfaceTable;
+        mobility: StationaryMobility;
+        nic: Ieee802154NativeLowpanInterface { interfaceTableModule="^.interfaceTable";linkDomainModule="^.^.domain"; }
+    connections allowunconnected: in --> nic.upperLayerIn; nic.upperLayerOut --> out;
+}
+network MeshNetwork {
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        domain: LowpanNativeLinkDomain;
+        scenarioManager: ScenarioManager;
+        node[3]: MeshNode;
+        check: MeshCheck;
+    connections allowunconnected: for i=0..2 {node[i].out --> check.in[i];}
+}
+
+%inifile: omnetpp.ini
+[General]
+network=MeshNetwork
+sim-time-limit=70s
+seed-set=0
+*.check.scenario=${case=0..19}
+**.scalar-recording=false
+**.vector-recording=false
+**.nic.lowpan.meshUnder=true
+**.nic.lowpan.headerCompression=(${case}==11 || ${case}>=16) ? "none" : "iphc"
+**.nic.lowpan.meshResidence=${case}==16 ? 0.004768667128s : ${case}==17 ? 0.004768667129s : ${case}==19 ? 0.0200006s : 1s
+**.nic.lowpan.broadcastRetention=${case}==19 ? 1.0000004s : 60s
+*.node[0].nic.queue.packetCapacity=(${case}==10 || ${case}==19) ? 0 : 64
+*.node[1].nic.queue.packetCapacity=${case}==9 ? 0 : 64
+**.nic.queue.packetCapacity=64
+*.node[0].nic.lowpan.meshHops=${case}==19 || ${case}==5 ? 255 : ${case}==2 ? 1 : (${case}==3 || ${case}==1 || ${case}==16 || ${case}==17) ? 2 : ${case}==4 ? 0 : 8
+*.node[1].nic.lowpan.maxBroadcastDatagrams=2
+*.node[0].nic.lowpan.meshRoutes=${case}==13 ? xml("<routes/>") : xml("<routes><route final='2122232425262728' nextHop='1112131415161718'/></routes>")
+*.node[1].nic.lowpan.meshRoutes=${case}==14 ? xml("<routes/>") : xml("<routes><route final='2122232425262728' nextHop='2122232425262728'/></routes>")
+*.node[0].nic.mac.macMinBE=${case}==1 ? 6 : 0
+*.node[0].nic.mac.macMaxBE=${case}==1 ? 6 : 0
+*.node[1..2].nic.mac.macMinBE=0
+*.node[1..2].nic.mac.macMaxBE=0
+*.domain.panId=4660
+*.radioMedium.pathLoss.typename="FreeSpacePathLoss"
+*.domain.config=xml("<domain><peer interface='node[0].nic' native='0102030405060708'/><peer interface='node[1].nic' native='1112131415161718'/><peer interface='node[2].nic' native='2122232425262728'/><neighbor interface='node[0].nic' ipv6='fe80::2322:2324:2526:2728' native='2122232425262728'/></domain>")
+*.scenarioManager.script=${case}==10 ? xml("<scenario><at t='0.2'><shutdown module='node[0]'/></at><at t='0.25'><startup module='node[0]'/></at></scenario>") : ${case}==12 ? xml("<scenario><at t='0.25'><crash module='node[1]'/></at><at t='0.3'><startup module='node[1]'/></at></scenario>") : xml("<scenario/>")
+*.node[1].status.initialStatus=${case}==15 ? "DOWN" : "UP"
+**.radio.antenna.mobilityModule="^.^.^.mobility"
+**.radio.receiver.sensitivity=-80dBm
+**.radio.receiver.energyDetection=-80dBm
+*.node[0].mobility.initialX=0m
+*.node[1].mobility.initialX=100m
+*.node[2].mobility.initialX=200m
+**.mobility.initialY=0m
+**.mobility.initialZ=0m
+**.mobility.initFromDisplayString=false
+**.mobility.updateFromDisplayString=false
+
+%contains: stdout
+Native mesh-under forwarding, logical identities and bounded broadcast paths verified

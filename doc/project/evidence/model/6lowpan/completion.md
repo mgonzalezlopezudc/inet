@@ -140,6 +140,14 @@ The [twenty-case host fixture](../../../../../tests/protocol/6lowpan/extended-ho
 
 The [host record](p11-host-verification.json) retains matching debug/release builds, fourteen protocol fixtures/ninety-two debug simulations, two unit fixtures, three module fixtures and scoped gates. Twenty-five release simulations complete with printed counter sequences independently matched to debug; assertions remain debug-only. Invalid ownership configuration controls are separate expected initialization failures. These results complete P11's selected profile; the final feature matrix remains pending.
 
+## P12 mesh-under forwarding
+
+Opt-in native mesh forwarding carries logical originator/final addresses separately from immediate MAC peers. Configured exact routes select unicast next hops; broadcast uses BC0 and a bounded fragment-aware duplicate cache. Transit forwards opaque inner bytes before reassembly, spends the mesh hop budget and preserves IPv6 Hop Limit. Local packet inspection exposes Mesh/BC0 headers. Uniform per-hop residence, whole-path source reservations and fixed duplicate deadlines use consistent simulation-clock ticks and survive ordinary restart.
+
+The [twenty-case radio fixture](../../../../../tests/protocol/6lowpan/mesh-forwarding.md) proves early A–B–C forwarding, exact endpoint delivery, geometry isolation, fragmented broadcast/replay, multiple immediate peers, hop limits, malformed input, capacity, expiry, queue refusal and lifecycle retention. Direct wire/introspection units cover all address-width combinations. Separate clock controls establish fractional-tick reservation timing, large-duration saturation and sub-tick configuration rejection. Finite duplicate suppression applies during each live record interval; delayed alternate-path copies after expiry can be accepted again. Static mesh data does not establish multihop optimized ND.
+
+The [record](p12-mesh-verification.json) retains matching debug/release builds, eighteen protocol fixtures/116 debug simulations, six unit fixtures, seven module fixtures and scoped gates. Four release fixtures complete 42 simulations; forty mesh/updated-host counter rows match debug, while two controls establish normal completion. Assertions remain debug-only. The final malformed-input correction refreshes the changed fixture's twenty debug/release runs; unchanged controls retain their matching input snapshots. Two supplementary successful clock runs and two expected initialization failures are recorded separately. These results complete P12's selected profile; the final feature matrix remains pending.
+
 ## Remaining packages
 
-P12–P15 and the final feature matrix remain under the completion plan. Mesh-under, paging, virtual fragment forwarding and selective recovery are not inferred from optimized ND, header compression or the updated registration paths.
+P13–P15 and the final feature matrix remain under the completion plan. Paging, virtual fragment forwarding and selective recovery are not inferred from optimized ND, header compression, updated registration or mesh forwarding.

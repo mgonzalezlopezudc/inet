@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "inet/linklayer/lowpan/LowpanProtocolDissector.h"
 #include "inet/linklayer/lowpan/LowpanHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanMeshHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanBroadcastHeader_m.h"
 #include "inet/linklayer/lowpan/LowpanFrag1Header_m.h"
 #include "inet/linklayer/lowpan/LowpanFragnHeader_m.h"
 #include "inet/linklayer/lowpan/LowpanProtocol.h"
@@ -59,7 +61,28 @@ void LowpanProtocolDissector::dissect(Packet *packet, const Protocol *protocol, 
         if (packet->getDataLength() > b(0))
             callback.visitChunk(packet->popAtFront(), &lowpanProtocol);
     };
-    if (packet->getDataLength() < B(1) || packet->getDataLength().get() % 8 != 0) {
+    auto dissectOuter = [&]() {
+        try {
+            auto dispatch = packet->peekAtFront<BytesChunk>(B(1))->getBytes()[0];
+            bool mesh = (dispatch & 0xc0) == 0x80;
+            if (mesh) {
+                int length = 1 + ((dispatch & 15) == 15 ? 1 : 0) + (dispatch & 0x20 ? 2 : 8) + (dispatch & 0x10 ? 2 : 8);
+                if (packet->getDataLength() <= B(length)) return false;
+                auto header = packet->popAtFront<LowpanMeshHeader>(B(length), Chunk::PF_ALLOW_INCORRECT);
+                callback.visitChunk(header, &lowpanProtocol);
+                if (header->isIncorrect()) return false;
+                dispatch = packet->peekAtFront<BytesChunk>(B(1))->getBytes()[0];
+            }
+            if (dispatch == 0x50) {
+                if (!mesh || packet->getDataLength() <= B(2)) return false;
+                callback.visitChunk(packet->popAtFront<LowpanBroadcastHeader>(B(2)), &lowpanProtocol);
+                dispatch = packet->peekAtFront<BytesChunk>(B(1))->getBytes()[0];
+            }
+            return (dispatch & 0xc0) != 0x80 && dispatch != 0x50;
+        }
+        catch (const cRuntimeError&) { return false; }
+    };
+    if (packet->getDataLength() < B(1) || packet->getDataLength().get() % 8 != 0 || !dissectOuter()) {
         callback.markIncorrect();
         if (packet->getDataLength() > b(0))
             callback.visitChunk(packet->popAtFront(), &lowpanProtocol);
