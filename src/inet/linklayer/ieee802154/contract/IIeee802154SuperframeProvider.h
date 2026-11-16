@@ -30,6 +30,9 @@ class INET_API IIeee802154SuperframeProvider
     virtual void cancelBeaconPreparation() = 0;
     virtual bool scheduleCapEnd(clocktime_t boundary) = 0;
     virtual void cancelCapEnd() = 0;
+    /** Notify at an actual-beacon-derived future physical CFP edge. */
+    virtual bool scheduleCfpBoundary(simtime_t when) = 0;
+    virtual void cancelCfpBoundary() = 0;
     virtual void scheduleSyncWake(clocktime_t when) = 0;
     virtual void scheduleSyncDeadline(clocktime_t when) = 0;
     virtual void cancelSyncEvents() = 0;

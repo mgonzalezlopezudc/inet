@@ -22,6 +22,7 @@ class INET_API Ieee802154SuperframeController : public ClockUserModuleMixin<Simp
     ClockEvent *beaconPreparation = nullptr;
     cMessage *beaconDispatch = nullptr;
     ClockEvent *capEnd = nullptr;
+    cMessage *cfpBoundaryEvent = nullptr;
     ClockEvent *syncWake = nullptr;
     ClockEvent *syncDeadline = nullptr;
     ClockEvent *accessSearchDeadline = nullptr;
@@ -42,6 +43,8 @@ class INET_API Ieee802154SuperframeController : public ClockUserModuleMixin<Simp
     virtual void cancelBeaconPreparation() override;
     virtual bool scheduleCapEnd(clocktime_t boundary) override;
     virtual void cancelCapEnd() override;
+    bool scheduleCfpBoundary(simtime_t when) override;
+    void cancelCfpBoundary() override;
     virtual void scheduleSyncWake(clocktime_t when) override;
     virtual void scheduleSyncDeadline(clocktime_t when) override;
     virtual void cancelSyncEvents() override;

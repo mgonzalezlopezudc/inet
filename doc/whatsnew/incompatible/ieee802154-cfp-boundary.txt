@@ -1,0 +1,4 @@
+IEEE 802.15.4 superframe CFP boundary contract
+
+Custom IEEE 802.15.4 superframe providers and clients implement the paired CFP
+boundary scheduling and notification methods used by GTS DATA.

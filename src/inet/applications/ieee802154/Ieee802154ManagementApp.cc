@@ -16,8 +16,10 @@ void Ieee802154ManagementApp::initialize()
     management.reference(this,"serviceModule",true);
     coordinator = par("coordinator");
     beaconOperation = par("beaconOperation");
+    gtsOperation = par("gtsOperation");
     if (par("panId").intValue() < 0 || par("panId").intValue() >= 65535 ||
-            par("channelNumber").intValue() < 11 || par("channelNumber").intValue() > 26 || par("cycles").intValue() < 1)
+            par("channelNumber").intValue() < 11 || par("channelNumber").intValue() > 26 || par("cycles").intValue() < 1 ||
+            (gtsOperation && !beaconOperation) || par("gtsBatchSize").intValue() < 1 || SimTime(par("gtsBatchDelay")) <= SIMTIME_ZERO)
         throw cRuntimeError("Invalid management example PAN/channel/cycle configuration");
     actionTimer = new cMessage("actionTimer");
     action = coordinator ? Action::START : Action::RESET;
@@ -72,8 +74,17 @@ void Ieee802154ManagementApp::handleMessage(cMessage *message)
         selectedPan.reset();
         accepted(service->submitReset(allocateId(),{true}));
     }
-    else
+    else if (action == Action::POLL)
         accepted(management->submitPoll(allocateId(),{selectedPan->coordinatorPanId,selectedPan->coordinatorAddress}));
+    else if (action == Action::GTS_REQUEST)
+        requestGts(pendingGtsDirection);
+    else {
+        auto id = allocateId();
+        permitRequest = id;
+        auto admission = service->submitSet(id,{"macGtsPermit",true});
+        if (admission != Ieee802154MacServiceAdmission::ACCEPTED)
+            permitRequest.reset(); // A later configured batch may attempt reopening again.
+    }
 }
 
 void Ieee802154ManagementApp::handleResetConfirm(uint64_t, const Ieee802154MacResetConfirm& confirm)
@@ -164,8 +175,8 @@ void Ieee802154ManagementApp::sendData(const Ieee802154Address& destination, uin
     packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{uint8_t(completedCycles),0x42}));
     Ieee802154MacDataRequest request;
     request.destinationAddress = destination; request.destinationPanId = panId;
-    request.sourceAddressMode = coordinator ? Ieee802154Address::AddressType::EXTENDED : Ieee802154Address::AddressType::SHORT;
-    request.ackTx = true; request.indirectTx = indirect;
+    request.sourceAddressMode = coordinator && !gtsOperation ? Ieee802154Address::AddressType::EXTENDED : Ieee802154Address::AddressType::SHORT;
+    request.ackTx = true; request.indirectTx = indirect; request.gtsTx = gtsOperation;
     auto admission = service->submitData(allocateId(),packet,request);
     if (admission != Ieee802154MacServiceAdmission::ACCEPTED)
         delete packet;
@@ -179,13 +190,16 @@ void Ieee802154ManagementApp::handleAssociateConfirm(uint64_t, const Ieee802154M
         throw cRuntimeError("Example association rejected");
     if (beaconOperation)
         set("macAutoRequest",true);
-    sendData(selectedPan->coordinatorAddress,selectedPan->coordinatorPanId,false);
+    if (gtsOperation)
+        requestGts(Ieee802154GtsDirection::DEVICE_TRANSMIT);
+    else
+        sendData(selectedPan->coordinatorAddress,selectedPan->coordinatorPanId,false);
 }
 
 void Ieee802154ManagementApp::handleDataConfirm(uint64_t, const Ieee802154MacDataConfirm& confirm)
 {
     Enter_Method("handleDataConfirm"); succeeded(confirm.result); confirmedMsdus++;
-    if (!coordinator) {
+    if (!coordinator && !gtsOperation) {
         action = Action::POLL;
         scheduleAfter(SimTime(5,SIMTIME_MS),actionTimer);
     }
@@ -195,7 +209,9 @@ void Ieee802154ManagementApp::handleDataIndication(Packet *packet, const Ieee802
 {
     Enter_Method("handleDataIndication"); take(packet); receivedMsdus++; delete packet;
     if (coordinator)
-        sendData(indication.sourceAddress,indication.effectiveSourcePanId.value(),true);
+        sendData(indication.sourceAddress,indication.effectiveSourcePanId.value(),!gtsOperation);
+    else if (gtsOperation)
+        accepted(management->submitDisassociate(allocateId(),{selectedPan->coordinatorPanId,selectedPan->coordinatorAddress,2,false}));
 }
 
 void Ieee802154ManagementApp::handlePollConfirm(uint64_t, const Ieee802154MacPollConfirm& confirm)
@@ -227,7 +243,7 @@ void Ieee802154ManagementApp::finish()
     recordScalar("confirmedMsdus",confirmedMsdus);
 }
 
-void Ieee802154ManagementApp::handleSetConfirm(uint64_t, const Ieee802154MacSetConfirm& confirm) { Enter_Method("handleSetConfirm"); succeeded(confirm.result); }
+void Ieee802154ManagementApp::handleSetConfirm(uint64_t id, const Ieee802154MacSetConfirm& confirm) { Enter_Method("handleSetConfirm"); if (permitRequest && *permitRequest == id) { permitRequest.reset(); return; } succeeded(confirm.result); }
 void Ieee802154ManagementApp::handleGetConfirm(uint64_t, const Ieee802154MacGetConfirm&) { throw cRuntimeError("Example did not issue GET"); }
 void Ieee802154ManagementApp::handlePurgeConfirm(uint64_t, const Ieee802154MacPurgeConfirm&) { throw cRuntimeError("Example did not issue PURGE"); }
 void Ieee802154ManagementApp::handleBeaconNotifyIndication(const Ieee802154PanDescriptor& descriptor) { Enter_Method("handleBeaconNotifyIndication"); if (awaitingAssociationBeacon && selectedPan && descriptor.coordinatorPanId == selectedPan->coordinatorPanId && descriptor.coordinatorAddress == selectedPan->coordinatorAddress) { awaitingAssociationBeacon = false; associateSelectedPan(); } }
@@ -238,8 +254,41 @@ void Ieee802154ManagementApp::handleOrphanResponseStatus(uint64_t, const Ieee802
 void Ieee802154ManagementApp::handleSyncLossIndication(const Ieee802154MacSyncLossIndication&) { Enter_Method("handleSyncLossIndication"); }
 void Ieee802154ManagementApp::handleRxEnableConfirm(uint64_t, const Ieee802154MacRxEnableConfirm&) { throw cRuntimeError("Example did not issue RX-ENABLE"); }
 void Ieee802154ManagementApp::handleRxEnableIndication(const Ieee802154MacRxEnableIndication&) { Enter_Method("handleRxEnableIndication"); }
-void Ieee802154ManagementApp::handleGtsConfirm(uint64_t, const Ieee802154MacGtsConfirm&) { Enter_Method("handleGtsConfirm"); }
-void Ieee802154ManagementApp::handleGtsIndication(const Ieee802154MacGtsIndication&) { Enter_Method("handleGtsIndication"); }
+void Ieee802154ManagementApp::requestGts(Ieee802154GtsDirection direction)
+{
+    pendingGtsDirection = direction;
+    Ieee802154MacGtsRequest request{{2,direction,true}};
+    auto admission = management->submitGts(allocateId(),request);
+    if (admission != Ieee802154MacServiceAdmission::ACCEPTED) {
+        action = Action::GTS_REQUEST;
+        scheduleAfter(SimTime(par("gtsBatchDelay")),actionTimer);
+    }
+}
+
+void Ieee802154ManagementApp::handleGtsConfirm(uint64_t, const Ieee802154MacGtsConfirm& confirm)
+{
+    Enter_Method("handleGtsConfirm");
+    if (confirm.result != Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS)) {
+        action = Action::GTS_REQUEST;
+        scheduleAfter(SimTime(par("gtsBatchDelay")),actionTimer);
+    }
+    else if (confirm.characteristics.direction == Ieee802154GtsDirection::DEVICE_TRANSMIT)
+        requestGts(Ieee802154GtsDirection::DEVICE_RECEIVE);
+    else
+        sendData(selectedPan->coordinatorAddress,selectedPan->coordinatorPanId,false);
+}
+
+void Ieee802154ManagementApp::handleGtsIndication(const Ieee802154MacGtsIndication& indication)
+{
+    Enter_Method("handleGtsIndication");
+    if (gtsOperation && coordinator && indication.characteristics.allocate && ++gtsRequestsInBatch >= par("gtsBatchSize").intValue()) {
+        gtsRequestsInBatch = 0;
+        if (!actionTimer->isScheduled()) {
+            action = Action::REOPEN_PERMIT;
+            scheduleAfter(SimTime(par("gtsBatchDelay")),actionTimer);
+        }
+    }
+}
 void Ieee802154ManagementApp::handlePromiscuousIndication(Packet *packet, const Ieee802154MacPromiscuousIndication&) { Enter_Method("handlePromiscuousIndication"); take(packet); delete packet; }
 void Ieee802154ManagementApp::handleCommStatusIndication(Packet *packet, const Ieee802154MacCommStatusIndication&) { Enter_Method("handleCommStatusIndication"); if (packet) { take(packet); delete packet; } }
 

@@ -47,8 +47,8 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     bool coordinator = false; // Coordinator services remain available without an outgoing superframe.
     bool parentAssociated = false; // Committed association, independent of the parent's PAN-coordinator role.
     simtime_t transactionPersistence() const;
-    enum class Phase { WAIT_IFS, WAIT_RX, WAIT_CAP, ACCESS, WAIT_TX, TRANSMIT, WAIT_ACK };
-    enum class PhyPurpose { IDLE, RX_FOR_ACCESS, CCA, TX_READY, TRANSMIT, ACK_LISTEN, ACK_READY, ACK_TRANSMIT, MANAGEMENT_GET, MANAGEMENT_SET, START_CHANNEL, BEACON_CHANNEL, ASSOCIATE_CHANNEL, ORPHAN_CHANNEL_GET, SCAN_GET, SCAN_CCA_GET, SCAN_OFF, SCAN_CHANNEL, SCAN_RX, SCAN_ED_DURATION, SCAN_ED, SCAN_RESTORE_OFF, SCAN_CCA_RESTORE, SCAN_RESTORE, SCAN_REALIGN_OFF, SCAN_REALIGN_CHANNEL, RESET, SUPERFRAME_GET, SUPERFRAME_CHANNEL, SUPERFRAME_RESTORE, SUPERFRAME_PHY_RESTORE, SUPERFRAME_READY, SUPERFRAME_ACTIVATION_READY, SUPERFRAME_RETUNE_OFF, SUPERFRAME_TRANSMIT, SYNC_CHANNEL, SYNC_READY };
+    enum class Phase { WAIT_IFS, WAIT_RX, WAIT_CAP, WAIT_GTS, ACCESS, WAIT_TX, TRANSMIT, WAIT_ACK };
+    enum class PhyPurpose { IDLE, RX_FOR_ACCESS, CCA, TX_READY, TRANSMIT, ACK_LISTEN, ACK_READY, ACK_TRANSMIT, MANAGEMENT_GET, MANAGEMENT_SET, START_CHANNEL, BEACON_CHANNEL, ASSOCIATE_CHANNEL, ORPHAN_CHANNEL_GET, SCAN_GET, SCAN_CCA_GET, SCAN_OFF, SCAN_CHANNEL, SCAN_RX, SCAN_ED_DURATION, SCAN_ED, SCAN_RESTORE_OFF, SCAN_CCA_RESTORE, SCAN_PHY_CCA_RESTORE, SCAN_RESTORE, SCAN_REALIGN_OFF, SCAN_REALIGN_CHANNEL, RESET, SUPERFRAME_GET, SUPERFRAME_CHANNEL, SUPERFRAME_RESTORE, SUPERFRAME_PHY_RESTORE, SUPERFRAME_READY, SUPERFRAME_ACTIVATION_READY, SUPERFRAME_RETUNE_OFF, SUPERFRAME_TRANSMIT, SYNC_CHANNEL, SYNC_READY };
     struct Transaction {
         uint64_t id;
         Packet *msdu;
@@ -67,6 +67,8 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
         bool slotted = false;
         bool accessPending = false;
         bool transmittedInCap = false;
+        std::optional<Ieee802154GtsManager::Key> gtsKey;
+        std::optional<simtime_t> gtsEnd;
         uint8_t capBeaconOrder = 15;
         std::optional<std::pair<uint16_t,Ieee802154Address>> pendingDevice; ///< Queue key retained across allocation changes.
         enum class Kind { DATA, POLL, INDIRECT, BEACON, AUTO_BEACON, SCAN_REQUEST, ASSOCIATE_REQUEST, DISASSOCIATE, ORPHAN_RESPONSE, PAN_CONFLICT, SUPERFRAME_REALIGN, GTS_REQUEST } kind = Kind::DATA;
@@ -119,6 +121,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     };
     std::optional<SuperframeStartRequest> superframeStartRequest;
     std::optional<physicallayer::Ieee802154PhyChannel> interruptedSuperframeChannel;
+    std::optional<simtime_t> interruptedScanCcaDuration;
     bool periodicBeaconing = false;
     std::optional<clocktime_t> periodicTarget;
     std::optional<clocktime_t> beaconAfterAck;
@@ -132,6 +135,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     };
     std::optional<BeaconConfiguration> constructedBeacon;
     std::vector<Ieee802154GtsManager::Advertisement> constructedGtsAdvertisements;
+    std::vector<Ieee802154GtsManager::Grant> constructedCfpGrants;
     struct GtsCandidate { Ieee802154GtsManager ledger; std::vector<Ieee802154GtsManager::Grant> removed; bool agesImmediateEpoch = false; };
     std::optional<GtsCandidate> constructedGtsCandidate;
     std::optional<clocktime_t> lastGtsAgedBoundary;
@@ -150,6 +154,18 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
         physicallayer::Ieee802154PhyChannel channel;
     };
     std::optional<IncomingSuperframe> incomingSuperframe;
+    struct CfpWindow {
+        Ieee802154GtsManager::Key key;
+        simtime_t physicalStart;
+        simtime_t physicalEnd;
+        bool receive;
+    };
+    std::vector<CfpWindow> cfpWindows;
+    bool cfpReceive = false;
+    void installCfpWindows(clocktime_t anchor, uint8_t superframeOrder, bool outgoing, const std::vector<Ieee802154GtsManager::Grant>& grants);
+    void refreshCfp();
+    void clearCfp();
+    void retireInvalidGtsData();
     struct GtsRequestState { uint64_t id; Ieee802154MacGtsRequest request; bool waiting = false; };
     std::optional<GtsRequestState> gtsRequest;
     cMessage *gtsTimer = nullptr;
@@ -417,6 +433,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     virtual void handleReceiveStarted(const physicallayer::Ieee802154PhyReceiveStart& start) override;
     virtual void handleSuperframeBoundary(clocktime_t boundary) override;
     virtual void handleSuperframeCapEnd() override;
+    void handleCfpBoundary() override;
     virtual void handleSyncWake() override;
     virtual void handleSyncDeadline() override;
     virtual void handleAccessSearchDeadline() override;

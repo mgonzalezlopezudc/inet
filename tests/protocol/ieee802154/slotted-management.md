@@ -85,5 +85,10 @@ and the individual boundary cases. The combined boundary fixture passed all
 88 typed and raw runs in the acceptance campaign. That campaign had four
 reconfiguration fixture failures, subsequently addressed by explicit receive
 windows and verified in the eight affected runs; it was not rerun in full.
-Mermaid rendering is **NOT_RUN**. These tests do not claim GTS, security
-transforms, enhanced frames, or network-layer forwarding.
+The B3-03 extension runs the production application with GTS disabled and
+enabled in typed and raw modes. Its observer checks actual DATA radio intervals
+against the two advertised slots and requires no access-provider activity
+during those exchanges. All four focused runs passed. The allocated-device
+scan, cancellation, missed-beacon and PHY-outage cases are owned by the native
+[GTS DATA fixture](gts-data.md). Mermaid rendering is **NOT_RUN**. These tests
+do not claim security transforms, enhanced frames, or network-layer forwarding.

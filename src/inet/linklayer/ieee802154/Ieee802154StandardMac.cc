@@ -165,7 +165,7 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::admit(uint64_t id, bool con
 Ieee802154MacServiceAdmission Ieee802154StandardMac::admitRadio(uint64_t id, bool concurrent, bool duringManagement)
 {
     auto admission = admit(id,concurrent,duringManagement);
-    if (admission == Ieee802154MacServiceAdmission::ACCEPTED && phyAvailable && interruptedSuperframeChannel)
+    if (admission == Ieee802154MacServiceAdmission::ACCEPTED && phyAvailable && (interruptedSuperframeChannel || interruptedScanCcaDuration))
         return Ieee802154MacServiceAdmission::BUSY;
     return admission == Ieee802154MacServiceAdmission::ACCEPTED && !phyAvailable ?
             Ieee802154MacServiceAdmission::UNAVAILABLE : admission;
@@ -206,6 +206,7 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitData(uint64_t id, Pac
     frame->setSourcePanId(getInteger("macPanId"));
     frame->setAckRequest(request.ackTx && !request.destinationAddress.isBroadcast() && !request.destinationAddress.isExtendedGroup());
     std::optional<Ieee802154MacStatus> failure;
+    std::optional<Ieee802154GtsManager::Key> gtsKey;
     if (packet->getDataLength().get<b>() % 8)
         failure = Ieee802154MacStatus::INVALID_PARAMETER;
     else if (indirect && (!par("enableManagement").boolValue() || (request.destinationAddress.isExtendedGroup() && !request.destinationAddress.isBroadcast())))
@@ -227,6 +228,28 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitData(uint64_t id, Pac
         frame->setSourceAddress(std::get<Ieee802154Address>(*pib->get("macExtendedAddress").value));
     else if (request.sourceAddressMode != Ieee802154Address::AddressType::NONE)
         failure = Ieee802154MacStatus::INVALID_PARAMETER;
+    if (!failure && request.gtsTx) {
+        if (request.indirectTx)
+            failure = Ieee802154MacStatus::INVALID_PARAMETER;
+        else if (!superframe || !request.destinationAddress.isShort() || request.destinationAddress.isShortBroadcast() ||
+                request.sourceAddressMode != Ieee802154Address::AddressType::SHORT || request.destinationPanId != getInteger("macPanId"))
+            failure = Ieee802154MacStatus::INVALID_GTS;
+        else {
+            auto direction = panCoordinator ? Ieee802154GtsDirection::DEVICE_RECEIVE : Ieee802154GtsDirection::DEVICE_TRANSMIT;
+            auto shortAddress = panCoordinator ? request.destinationAddress.getShort() : uint16_t(getInteger("macShortAddress"));
+            bool context = panCoordinator ? periodicBeaconing && outgoingEpoch.has_value() :
+                    parentAssociated && synchronization && synchronization->installed && synchronization->request.trackBeacon &&
+                    request.destinationAddress.getShort() == getInteger("macCoordShortAddress");
+            if (context)
+                for (const auto& grant : gtsManager.getGrants())
+                    if (grant.key.panId == request.destinationPanId && grant.key.shortAddress == shortAddress && grant.key.direction == direction) {
+                        gtsKey = grant.key;
+                        break;
+                    }
+            if (!gtsKey)
+                failure = Ieee802154MacStatus::INVALID_GTS;
+        }
+    }
     if (frame->getSourceAddress().isNone() && request.destinationAddress.isNone())
         failure = Ieee802154MacStatus::INVALID_ADDRESS;
     frame->setPanCompression(!frame->getSourceAddress().isNone() && !request.destinationAddress.isNone() && frame->getSourcePanId() == request.destinationPanId);
@@ -276,6 +299,7 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitData(uint64_t id, Pac
     else {
         pib->set("macDsn", uint64_t((frame->getDsn() + 1) & 255));
         transaction = Transaction{id, packet, request.msduHandle, frame};
+        transaction->gtsKey = gtsKey;
         startData();
     }
     return Ieee802154MacServiceAdmission::ACCEPTED;
@@ -360,6 +384,7 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitSet(uint64_t id, cons
             if (status == Ieee802154MacStatus::SUCCESS && previousLocalIdentity && !(pib->get(request.attribute).value == previousLocalIdentity)) {
                 auto outerRetirement = retiringRequests;
                 retiringRequests = true;
+                clearCfp();
                 gtsManager.clear();
                 if (gtsRequest)
                     completeGts(Ieee802154MacServiceAbortReason::DISASSOCIATED);
@@ -394,6 +419,7 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitReset(uint64_t id, co
     auto admission = admit(id, true, true);
     if (admission == Ieee802154MacServiceAdmission::ACCEPTED) {
         resetRequest = ResetRequest{id, request.setDefaultPib};
+        clearCfp();
         constructedGtsCandidate.reset();
         retireReceives();
         incomingSuperframe.reset();
@@ -537,7 +563,7 @@ bool Ieee802154StandardMac::handleOperationStage(LifecycleOperation *operation, 
         if (stage == ModuleStartOperation::STAGE_LINK_LAYER)
         {
             started = true;
-            restoreIdle();
+            resumeAvailablePhy();
         }
     }
     else if (dynamic_cast<ModuleStopOperation *>(operation)) {
@@ -578,10 +604,10 @@ void Ieee802154StandardMac::requestState(PhyState state, PhyPurpose purpose)
 
 void Ieee802154StandardMac::restoreIdle()
 {
-    if (!started || !phyAvailable || resetRequest || retiringRequests || transaction || ackExchange || managementRequest || startRequest ||
+    if (!started || !phyAvailable || resetRequest || retiringRequests || (transaction && transaction->phase != Phase::WAIT_GTS) || ackExchange || managementRequest || startRequest ||
             (superframeStartRequest && ((superframeStartRequest->phase == SuperframeStartRequest::Phase::INITIAL && !superframeStartRequest->awaitingFirstBoundary) ||
                     superframeStartRequest->phase == SuperframeStartRequest::Phase::IMMEDIATE_ACTIVATION)) ||
-            interruptedSuperframeChannel || scanRequest || beaconPreparation || orphanResponseRequest || phyOperation || !phy)
+            interruptedSuperframeChannel || interruptedScanCcaDuration || scanRequest || beaconPreparation || orphanResponseRequest || phyOperation || !phy)
         return;
     if (beaconResponses && !beaconScheduleActive()) {
         --beaconResponses;
@@ -611,7 +637,7 @@ void Ieee802154StandardMac::restoreIdle()
     bool idleReceive = getBoolean("macRxOnWhenIdle");
     if (beaconScheduleActive())
         idleReceive = idleReceive && incomingCapEnd && *incomingCapEnd > superframe->getCurrentClockTime();
-    auto target = outgoingCapActive || (synchronization && synchronization->installed && synchronization->wantsRx) || idleReceive || getBoolean("macPromiscuousMode") || (pollRequest && pollRequest->waiting) || receiverWantsRx() || broadcastReceivePending ? PhyState::RECEIVE : PhyState::OFF;
+    auto target = cfpReceive || outgoingCapActive || (synchronization && synchronization->installed && synchronization->wantsRx) || idleReceive || getBoolean("macPromiscuousMode") || (pollRequest && pollRequest->waiting) || receiverWantsRx() || broadcastReceivePending ? PhyState::RECEIVE : PhyState::OFF;
     if (target != phyState)
         requestState(target, PhyPurpose::IDLE);
     if (receiverWantsRx() && phyState == PhyState::RECEIVE && !receiverWindow->startsAt) {
@@ -621,12 +647,128 @@ void Ieee802154StandardMac::restoreIdle()
     }
 }
 
+void Ieee802154StandardMac::clearCfp()
+{
+    if (superframe)
+        superframe->cancelCfpBoundary();
+    cfpWindows.clear();
+    cfpReceive = false;
+}
+
+void Ieee802154StandardMac::installCfpWindows(clocktime_t anchor, uint8_t superframeOrder, bool outgoing, const std::vector<Ieee802154GtsManager::Grant>& grants)
+{
+    clearCfp();
+    if (!superframe || superframeOrder >= 15 || scanRequest)
+        return;
+    auto slot = SimTime((int64_t(60) << superframeOrder) * 16,SIMTIME_US);
+    auto now = superframe->getCurrentClockTime();
+    for (const auto& grant : grants) {
+        auto start = anchor + SIMTIME_AS_CLOCKTIME(slot * grant.start);
+        auto end = anchor + SIMTIME_AS_CLOCKTIME(slot * (grant.start + grant.length));
+        if (start <= now || end <= now)
+            continue;
+        cfpWindows.push_back({grant.key,superframe->getFutureSimulationTime(start),
+                superframe->getFutureSimulationTime(end),outgoing ? grant.key.direction == Ieee802154GtsDirection::DEVICE_TRANSMIT :
+                grant.key.direction == Ieee802154GtsDirection::DEVICE_RECEIVE});
+    }
+    refreshCfp();
+}
+
+void Ieee802154StandardMac::refreshCfp()
+{
+    if (!superframe || !phy || !started || !phyAvailable || resetRequest) {
+        clearCfp();
+        return;
+    }
+    if (scanRequest) {
+        superframe->cancelCfpBoundary();
+        cfpReceive = false;
+        return;
+    }
+    superframe->cancelCfpBoundary();
+    cfpReceive = false;
+    const CfpWindow *tx = nullptr;
+    std::optional<simtime_t> nextPhysical;
+    auto matches = [](const Ieee802154GtsManager::Key& a, const Ieee802154GtsManager::Key& b) {
+        return a.panId == b.panId && a.extendedAddress == b.extendedAddress && a.shortAddress == b.shortAddress && a.direction == b.direction;
+    };
+    auto lead = phy->getTimingParameters().turnaroundTime;
+    for (const auto& window : cfpWindows) {
+        if (!gtsManager.findGrant(window.key))
+            continue;
+        bool wantedTx = !window.receive && transaction && transaction->gtsKey && matches(window.key,*transaction->gtsKey);
+        if (!window.receive && !wantedTx)
+            continue;
+        if (window.physicalEnd <= simTime())
+            continue;
+        auto wake = window.physicalStart - lead;
+        if (wake <= simTime()) {
+            if (window.receive)
+                cfpReceive = true;
+            else if (transaction->phase == Phase::WAIT_GTS)
+                tx = &window;
+            if (!nextPhysical || window.physicalEnd < *nextPhysical) nextPhysical = window.physicalEnd;
+        }
+        else if (!nextPhysical || wake < *nextPhysical) nextPhysical = wake;
+    }
+    if (nextPhysical)
+        superframe->scheduleCfpBoundary(*nextPhysical);
+    if (tx && !cfpReceive && transaction && transaction->phase == Phase::WAIT_GTS && !ackExchange && !phyOperation) {
+        auto duration = Ieee802154ExchangeTiming::exchangeDuration(transaction->frame->getChunkLength(),transaction->frame->getAckRequest(),
+                SimTime(par("maxPropagationDelay")),getInteger("macSifsPeriod"),getInteger("macLifsPeriod"),phy->getTimingParameters());
+        if (duration > tx->physicalEnd - tx->physicalStart) {
+            completeData(Ieee802154MacStatus::FRAME_TOO_LONG);
+            return;
+        }
+        auto start = std::max({tx->physicalStart,simTime() + lead,eligibleAt});
+        if (Ieee802154ExchangeTiming::fits(start,tx->physicalEnd,duration)) {
+            transaction->accessStartAt = start;
+            transaction->gtsEnd = tx->physicalEnd;
+            transaction->phase = Phase::WAIT_TX;
+            requestState(PhyState::TRANSMIT,PhyPurpose::TX_READY);
+            return;
+        }
+    }
+    restoreIdle();
+}
+
+void Ieee802154StandardMac::handleCfpBoundary()
+{
+    Enter_Method("handleCfpBoundary");
+    refreshCfp();
+}
+
+void Ieee802154StandardMac::retireInvalidGtsData()
+{
+    if (!transaction || !transaction->gtsKey || gtsManager.findGrant(*transaction->gtsKey))
+        return;
+    bool unstarted = transaction->phase == Phase::WAIT_GTS || transaction->phase == Phase::WAIT_TX ||
+            (transaction->phase == Phase::TRANSMIT && phyOperation && !phyOperation->transmitStarted);
+    if (!unstarted)
+        return;
+    auto outerRetirement = retiringRequests;
+    retiringRequests = true;
+    if (transaction->phase != Phase::WAIT_GTS)
+        retireDataRadio();
+    completeData(Ieee802154MacStatus::INVALID_GTS);
+    retiringRequests = outerRetirement;
+}
+
 void Ieee802154StandardMac::startData()
 {
     if (!transaction || resetRequest || !started || !phyAvailable || retiringRequests || ackExchange)
         return;
     if (!client) {
         completeData(Ieee802154MacServiceAbortReason::STOPPED);
+        return;
+    }
+    if (transaction->gtsKey) {
+        if (!gtsManager.findGrant(*transaction->gtsKey)) {
+            completeData(Ieee802154MacStatus::INVALID_GTS);
+            return;
+        }
+        transaction->phase = Phase::WAIT_GTS;
+        refreshCfp();
         return;
     }
     if (simTime() < eligibleAt) {
@@ -889,6 +1031,8 @@ void Ieee802154StandardMac::finishReset(const Ieee802154MacServiceResult& result
             panCoordinator = initialPanCoordinator;
             coordinator = initialPanCoordinator;
             parentAssociated = false;
+            interruptedSuperframeChannel.reset();
+            interruptedScanCcaDuration.reset();
         }
         if (request.defaults)
             associatedDevices.clear();
@@ -897,6 +1041,8 @@ void Ieee802154StandardMac::finishReset(const Ieee802154MacServiceResult& result
         eligibleAt = simTime();
     }
     resetRequest.reset();
+    if (interruptedScanCcaDuration)
+        resumeAvailablePhy();
     if (client)
         client->handleResetConfirm(request.id, Ieee802154MacResetConfirm(request.defaults, result));
     restoreIdle();
@@ -911,6 +1057,7 @@ void Ieee802154StandardMac::retireReceives()
 
 void Ieee802154StandardMac::stop()
 {
+    clearCfp();
     started = false;
     constructedGtsCandidate.reset();
     autoPollPending.reset();
@@ -1043,8 +1190,13 @@ void Ieee802154StandardMac::handleAvailabilityIndication(const physicallayer::Ie
     }
     bool outerRetirement = retiringRequests;
     retiringRequests = true;
+    clearCfp();
     constructedGtsCandidate.reset();
     autoPollPending.reset();
+    if (scanRequest && scanRequest->originalChannel)
+        interruptedSuperframeChannel = scanRequest->originalChannel;
+    if (scanRequest && scanRequest->originalCcaDuration)
+        interruptedScanCcaDuration = scanRequest->originalCcaDuration;
     phyOperation.reset();
     beaconAfterAck.reset();
     retireReceives();
@@ -1108,6 +1260,13 @@ void Ieee802154StandardMac::resumeAvailablePhy()
             interruptedSuperframeChannel.reset();
             retirePeriodicBeaconing(Ieee802154MacServiceAbortReason::STOPPED);
         }
+        return;
+    }
+    if (interruptedScanCcaDuration) {
+        auto id = allocatePhyId();
+        phyOperation = PhyOperation{id,PhyPurpose::SCAN_PHY_CCA_RESTORE};
+        if (phy->submitSet(id,{"phyCcaDuration",*interruptedScanCcaDuration}) != PhyAdmission::ACCEPTED)
+            phyOperation.reset();
         return;
     }
     if (outgoingCapEnd && *outgoingCapEnd > superframe->getCurrentClockTime()) {
@@ -1329,7 +1488,16 @@ void Ieee802154StandardMac::handleStateConfirm(uint64_t id, const physicallayer:
     else if (purpose == PhyPurpose::RX_FOR_ACCESS && transaction)
         startAccess();
     else if (purpose == PhyPurpose::TX_READY && transaction) {
+        if (transaction->gtsKey && (!gtsManager.findGrant(*transaction->gtsKey) || !transaction->gtsEnd)) {
+            completeData(Ieee802154MacStatus::INVALID_GTS);
+            return;
+        }
         if (transaction->accessStartAt && *transaction->accessStartAt < simTime()) {
+            if (transaction->gtsKey) {
+                transaction->phase = Phase::WAIT_GTS;
+                refreshCfp();
+                return;
+            }
             completeData(Ieee802154MacStatus::CHANNEL_ACCESS_FAILURE);
             return;
         }
@@ -1342,6 +1510,11 @@ void Ieee802154StandardMac::handleStateConfirm(uint64_t id, const physicallayer:
         emit(packetSentToLowerSignal, packet);
         if (!phyOperation || phyOperation->id != internalId || !transaction) {
             delete packet;
+            return;
+        }
+        if (transaction->gtsKey && !gtsManager.findGrant(*transaction->gtsKey)) {
+            delete packet;
+            retireInvalidGtsData();
             return;
         }
         physicallayer::Ieee802154PhyTransmitRequest request;
@@ -1466,10 +1639,15 @@ void Ieee802154StandardMac::handleTransmitStarted(uint64_t id, const physicallay
                 *periodicTarget += interval;
             scheduleNextPeriodicBeacon();
         }
+        if (phyOperation && phyOperation->id == id && panCoordinator && outgoingEpoch)
+            installCfpWindows(now,outgoingEpoch->superframeOrder,true,constructedCfpGrants);
         return;
     }
-    if (phyOperation && phyOperation->id == id && phyOperation->purpose == PhyPurpose::TRANSMIT && transaction && transaction->slotted)
-        transaction->transmittedInCap = true;
+    if (phyOperation && phyOperation->id == id && phyOperation->purpose == PhyPurpose::TRANSMIT && transaction) {
+        phyOperation->transmitStarted = true;
+        if (transaction->slotted)
+            transaction->transmittedInCap = true;
+    }
     if (!phyOperation || phyOperation->id != id || phyOperation->purpose != PhyPurpose::TRANSMIT || !transaction ||
             (transaction->kind != Transaction::Kind::BEACON && transaction->kind != Transaction::Kind::AUTO_BEACON))
         return;
@@ -1675,7 +1853,7 @@ void Ieee802154StandardMac::handleSuperframeBoundary(clocktime_t boundary)
             return;
     }
     bool deferredAccess = transaction && (transaction->phase == Phase::WAIT_IFS || transaction->phase == Phase::WAIT_RX ||
-            transaction->phase == Phase::WAIT_CAP ||
+            transaction->phase == Phase::WAIT_CAP || transaction->phase == Phase::WAIT_GTS ||
             (transaction->phase == Phase::ACCESS && transaction->slotted && transaction->accessPending));
     if (phyOperation || (transaction && !deferredAccess) || ackExchange || scanRequest || managementRequest) {
         if (firstBoundary && superframeStartRequest) {
@@ -2142,6 +2320,8 @@ void Ieee802154StandardMac::continueData()
     }
     else if (transaction->phase == Phase::WAIT_IFS || transaction->phase == Phase::WAIT_RX)
         startData();
+    else if (transaction->phase == Phase::WAIT_GTS)
+        refreshCfp();
 }
 
 void Ieee802154StandardMac::ackTimeout()
@@ -2525,6 +2705,7 @@ void Ieee802154StandardMac::handleSetConfirm(uint64_t id, const physicallayer::I
         phyOperation.reset();
         // A PHY confirmation proves this replacement was accepted; retire its old CAP before any callback can reenter.
         superframe->clearAccessWindow();
+        if (!panCoordinator) clearCfp();
         incomingSuperframe.reset();
         if (confirm.result != physicallayer::Ieee802154PhyServiceResult(PhyStatus::SUCCESS)) {
             retireSynchronization(macResult(confirm.result));
@@ -2545,6 +2726,14 @@ void Ieee802154StandardMac::handleSetConfirm(uint64_t id, const physicallayer::I
         if (confirm.result != physicallayer::Ieee802154PhyServiceResult(PhyStatus::SUCCESS))
             retirePeriodicBeaconing(Ieee802154MacServiceAbortReason::STOPPED);
         resumeAvailablePhy();
+        return;
+    }
+    if (phyOperation && phyOperation->id == id && phyOperation->purpose == PhyPurpose::SCAN_PHY_CCA_RESTORE) {
+        phyOperation.reset();
+        if (confirm.result == physicallayer::Ieee802154PhyServiceResult(PhyStatus::SUCCESS)) {
+            interruptedScanCcaDuration.reset();
+            resumeAvailablePhy();
+        }
         return;
     }
     if (phyOperation && phyOperation->id == id && phyOperation->purpose == PhyPurpose::SUPERFRAME_RESTORE && superframeStartRequest) {
@@ -2915,6 +3104,8 @@ void Ieee802154StandardMac::handleSyncDeadline()
         return;
     auto id = synchronization->id;
     auto misses = ++synchronization->misses;
+    if (!panCoordinator)
+        clearCfp();
     if (misses >= 4) {
         auto channel = synchronization->request.channel;
         auto pan = uint16_t(getInteger("macPanId"));
@@ -2924,6 +3115,10 @@ void Ieee802154StandardMac::handleSyncDeadline()
         auto outerNotifications = syncLossNotificationsActive;
         syncLossNotificationsActive = true;
         retireSynchronization(Ieee802154MacServiceAbortReason::STOPPED);
+        if (transaction && transaction->gtsKey) {
+            retireDataRadio();
+            completeData(Ieee802154MacServiceAbortReason::STOPPED);
+        }
         if (gtsRequest) {
             auto outerGtsRetirement = retiringRequests;
             retiringRequests = true;
@@ -3126,6 +3321,8 @@ bool Ieee802154StandardMac::commitSuperframeChannel()
 
 void Ieee802154StandardMac::retireParentContext(bool clearAssociation)
 {
+    if (!panCoordinator)
+        clearCfp();
     if (superframe)
         superframe->clearAccessWindow();
     incomingSuperframe.reset();
@@ -3143,7 +3340,7 @@ void Ieee802154StandardMac::retireParentContext(bool clearAssociation)
         auto epoch = receiveRetirementEpoch;
         auto outerRetirement = retiringRequests;
         retiringRequests = true;
-        if (transaction && transaction->kind == Transaction::Kind::GTS_REQUEST) {
+        if (transaction && (transaction->kind == Transaction::Kind::GTS_REQUEST || transaction->gtsKey)) {
             retireDataRadio();
             completeData(Ieee802154MacServiceAbortReason::STOPPED);
         }
@@ -3164,6 +3361,8 @@ void Ieee802154StandardMac::retireParentContext(bool clearAssociation)
 
 void Ieee802154StandardMac::retirePeriodicBeaconing(const Ieee802154MacServiceResult& result)
 {
+    if (panCoordinator)
+        clearCfp();
     auto requestId = superframeStartRequest ? superframeStartRequest->id : 0;
     bool ownedCommand = requestId && transaction && transaction->id == requestId &&
             transaction->kind == Transaction::Kind::SUPERFRAME_REALIGN;
@@ -3190,7 +3389,8 @@ void Ieee802154StandardMac::retirePeriodicBeaconing(const Ieee802154MacServiceRe
     childPhase.reset();
     outgoingCapEnd.reset();
     scheduleCapDutyEnd();
-    interruptedSuperframeChannel.reset();
+    if (!interruptedScanCcaDuration)
+        interruptedSuperframeChannel.reset();
     setOutgoingCapActive(false);
     if (ownedCommand) {
         retiringRequests = outerRetirement;
@@ -3468,6 +3668,7 @@ void Ieee802154StandardMac::sendPeriodicBeacon()
             uint32_t(getInteger("macBattLifeExtPeriods")),uint32_t(getInteger("macUnitBackoffPeriod")),
             uint8_t(frame->getPayload(1) & 15)};
     constructedGtsAdvertisements = ledger->getAdvertisements();
+    constructedCfpGrants = ledger->getGrants();
     auto packet = new Packet("IEEE802154-periodic-beacon");
     transmittedBeaconIfs = interframeSpacing(frame->getChunkLength());
     transmittedBeaconBroadcastPending = advertisedBroadcast;
@@ -3655,6 +3856,8 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitScan(uint64_t id, con
             return Ieee802154MacServiceAdmission::UNAVAILABLE;
     }
     scanRequest = ScanRequest{id, request, {request.type}, {}, 0, getBoolean("macAutoRequest")};
+    if (superframe) superframe->cancelCfpBoundary();
+    cfpReceive = false;
     auto& channels = scanRequest->parameters.channels;
     bool invalid = channels.empty() || std::any_of(channels.begin(),channels.end(),[](const auto& channel) {
         return channel.phy != physicallayer::Ieee802154PhyChannel::Phy::O_QPSK ||
@@ -3774,6 +3977,8 @@ void Ieee802154StandardMac::completeScan()
         managementClient->handleScanConfirm(completed.id, completed.confirm);
     if (resetRequest)
         beginResetPhy();
+    else if (superframe)
+        refreshCfp();
     else
         restoreIdle();
 }
@@ -4552,6 +4757,9 @@ bool Ieee802154StandardMac::receiveManagedBeacon(const Ptr<Ieee802154Frame>& fra
             auto grant = *current;
             if (!advertised.start) {
                 gtsManager.removeGrant(key);
+                retireInvalidGtsData();
+                if (receiveEpoch != receiveRetirementEpoch)
+                    return true;
                 if (managementClient)
                     managementClient->handleGtsIndication({Ieee802154Address::fromShort(shortAddress),{grant.length,grant.key.direction,false}});
                 if (receiveEpoch != receiveRetirementEpoch)
@@ -4642,6 +4850,8 @@ bool Ieee802154StandardMac::receiveManagedBeacon(const Ptr<Ieee802154Frame>& fra
                 publishAccessWindow(anchor->localStart, quality.timing.ppduEnd, interframeSpacing(frame->getChunkLength()),
                     geometry->beaconOrder, geometry->superframeOrder, (specification >> 8) & 15, (specification & 0x1000) != 0,
                     getInteger("macUnitBackoffPeriod"),getInteger("macBattLifeExtPeriods"),Ieee802154AccessWindowOrigin::INCOMING);
+            if (synchronization && synchronization->installed && synchronization->request.trackBeacon)
+                installCfpWindows(anchor->localStart,geometry->superframeOrder,false,gtsManager.getGrants());
         }
         if (receiveEpoch != receiveRetirementEpoch)
             return true;
@@ -4897,6 +5107,7 @@ void Ieee802154StandardMac::removeGtsGrant(const Ieee802154GtsManager::Key& key)
         return;
     auto length = grant->length;
     removeGtsFromLedger(gtsManager,key);
+    retireInvalidGtsData();
     if (managementClient)
         managementClient->handleGtsIndication({Ieee802154Address::fromShort(key.shortAddress),{length,key.direction,false}});
 }
