@@ -84,18 +84,6 @@ void LowpanIpv6::resolveMACAddressAndSendPacket(Packet *packet, int interfaceId,
         Ipv6::resolveMACAddressAndSendPacket(packet, interfaceId, nextHop, fromHL);
         return;
     }
-    auto nativeNd = dynamic_cast<LowpanIpv6NeighbourDiscovery *>(nd.get());
-    auto ipv6 = packet->peekAtFront<Ipv6Header>();
-    if (nativeNd && !nativeNd->isNativeSourceUsable(interface, ipv6->getSrcAddress())) {
-        if (!isNativeNdControl(packet)) {
-            PacketDropDetails details;
-            details.setReason(ADDRESS_RESOLUTION_FAILED);
-            emit(packetDroppedSignal, packet, &details);
-            numDropped++;
-            delete packet;
-            return;
-        }
-    }
     packet->addTagIfAbsent<NextHopAddressReq>()->setNextHopAddress(nextHop);
     numForwarded++;
     fragmentPostRouting(packet, interface, MacAddress::UNSPECIFIED_ADDRESS, fromHL);
@@ -134,6 +122,19 @@ void LowpanIpv6::localDeliverFinish(Packet *packet)
 
 void LowpanIpv6::fragmentAndSend(Packet *packet)
 {
+    auto interface = ift->getInterfaceById(packet->getTag<InterfaceReq>()->getInterfaceId());
+    if (interface->getProtocol() == &lowpanProtocol) {
+        auto nativeNd = dynamic_cast<LowpanIpv6NeighbourDiscovery *>(nd.get());
+        auto ipv6 = packet->peekAtFront<Ipv6Header>();
+        if (nativeNd && !nativeNd->isNativeSourceUsable(interface, ipv6->getSrcAddress()) && !isNativeNdControl(packet)) {
+            PacketDropDetails details;
+            details.setReason(ADDRESS_RESOLUTION_FAILED);
+            emit(packetDroppedSignal, packet, &details);
+            numDropped++;
+            delete packet;
+            return;
+        }
+    }
     // Source fragmentation creates new packets without copying request tags.
     // Save context here, including reinjection after a queued POST_ROUTING hook.
     auto previousNextHop = fragmentNextHop;

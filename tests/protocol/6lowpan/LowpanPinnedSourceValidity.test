@@ -1,0 +1,183 @@
+%description:
+Legacy native hosts cannot bypass registration source validity by pinning an
+IPv6 interface and valid native L2 tuple. Explicit and automatically selected
+sources drop before ordinary radio transmission; real ND remains usable, and
+actual legacy discovery/ARO registration enables the same pinned UDP traffic.
+
+%extraargs: -r 0..2
+
+%file: PinnedSourceCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/MemoryOutputStream.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/Simsignals_m.h"
+#include "inet/common/checksum/Checksum.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/common/InterfaceTag_m.h"
+#include "inet/linklayer/ieee802154/Ieee802154AddressTagBase_m.h"
+#include "inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.h"
+#include "inet/networklayer/common/L3AddressTag_m.h"
+#include "inet/networklayer/icmpv6/Icmpv6.h"
+#include "inet/networklayer/icmpv6/Ipv6NdMessage_m.h"
+#include "inet/networklayer/ipv6/Ipv6Header_m.h"
+#include "inet/networklayer/ipv6/Ipv6InterfaceData.h"
+#include <algorithm>
+#include <vector>
+
+namespace inet::protocoltest {
+using namespace lowpan;
+class PinnedSourceCheck : public cSimpleModule, public cListener
+{
+    enum Action { SEND_FIRST, SEND_SECOND, VERIFY, TIMEOUT };
+    NetworkInterface *host=nullptr,*router=nullptr;
+    LowpanIpv6NeighbourDiscovery *nd=nullptr;
+    cModule *hostIp=nullptr,*sink=nullptr;
+    std::vector<cMessage *> timers;
+    int scenario=0,rsSent=0,rsReceived=0,raSent=0,aroNs=0,aroNa=0,accepted=0,submitted=0;
+    int guardDrops=0,txUdp=0,rxUdp=0;
+    std::vector<uint8_t> delivered;
+    bool scheduled=false,autoFilledDrop=false;
+    const Ipv6Address a{"2001:db8:3::a"},hostLocal{"fe80::211:2233:4455:6601"},routerLocal{"fe80::211:2233:4455:6602"};
+    void step(simtime_t time,Action action) {auto event=new cMessage("pinned-source-check",action);timers.push_back(event);scheduleAt(time,event);}
+    void scheduleStimulus() {
+        if(scheduled)return;scheduled=true;step(simTime()+SimTime(0.02),SEND_FIRST);
+        if(scenario==2)step(simTime()+SimTime(0.04),SEND_SECOND);
+        step(simTime()+SimTime(1.2),VERIFY);
+    }
+    std::vector<uint8_t> udp(uint8_t marker) const {
+        std::vector<uint8_t> bytes{0x23,0x2a,0x23,0x29,0,9,0,0,marker};
+        MemoryOutputStream pseudo;pseudo.writeIpv6Address(a);pseudo.writeIpv6Address(routerLocal);pseudo.writeUint32Be(bytes.size());pseudo.writeUint32Be(17);pseudo.writeBytes(bytes);
+        auto checksum=internetChecksum(pseudo.getData());if(checksum==0)checksum=0xffff;bytes[6]=checksum>>8;bytes[7]=checksum;return bytes;
+    }
+    void sendPinned(bool automatic,uint8_t marker) {
+        auto data=host->getProtocolData<Ipv6InterfaceData>();ASSERT(data->hasValidAddress(a,simTime()) && !data->isTentativeAddress(a));
+        ASSERT(data->getPreferredAddress()==a && nd->isNativeSourceUsable(host,a)==(scenario==2));
+        auto packet=new Packet(automatic?"pinned-native-auto":"pinned-native-explicit",makeShared<BytesChunk>(udp(marker)));
+        packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::udp);auto addresses=packet->addTag<L3AddressReq>();
+        addresses->setSrcAddress(automatic?Ipv6Address::UNSPECIFIED_ADDRESS:a);addresses->setDestAddress(routerLocal);
+        packet->addTag<InterfaceReq>()->setInterfaceId(host->getInterfaceId());
+        auto native=packet->addTag<Ieee802154AddressReq>();native->setSrcAddress(Ieee802154Address("0011223344556601"));native->setDestAddress(Ieee802154Address("0011223344556602"));native->setSrcPanId(4660);native->setDestPanId(4660);
+        submitted++;sendDirect(packet,hostIp->gate("transportIn")->getPathStartGate());
+    }
+    bool validControl(const Packet *packet) const {
+        Packet copy(*packet);auto ip=copy.popAtFront<Ipv6Header>();auto addresses=copy.addTagIfAbsent<L3AddressInd>();addresses->setSrcAddress(ip->getSrcAddress());addresses->setDestAddress(ip->getDestAddress());return Icmpv6::verifyChecksum(&copy);
+    }
+    const Ipv6NdOption *aro(const Ipv6NdOptions& options) const {for(size_t i=0;i<options.getOptionArraySize();i++)if(int(options.getOption(i)->getType())==33)return options.getOption(i);return nullptr;}
+  protected:
+    int numInitStages() const override {return NUM_INIT_STAGES;}
+    void initialize(int stage) override {
+        if(stage!=INITSTAGE_LAST)return;scenario=getParentModule()->par("scenario");
+        host=check_and_cast<NetworkInterface *>(getModuleByPath("^.host.wlan[0]"));router=check_and_cast<NetworkInterface *>(getModuleByPath("^.router.wlan[0]"));
+        nd=check_and_cast<LowpanIpv6NeighbourDiscovery *>(getModuleByPath("^.host.ipv6.neighbourDiscovery"));hostIp=getModuleByPath("^.host.ipv6.ipv6");sink=getModuleByPath("^.router.app[0]");
+        host->getSubmodule("lowpan")->subscribe("datagramAccepted",this);host->getSubmodule("lowpan")->subscribe("datagramCompleted",this);
+        router->getSubmodule("lowpan")->subscribe("datagramAccepted",this);router->getSubmodule("lowpan")->subscribe("datagramCompleted",this);
+        hostIp->subscribe("packetDropped",this);nd->subscribe("nativeHostRegistrationSucceeded",this);sink->subscribe("packetReceived",this);
+        auto advertising=router->getProtocolDataForUpdate<Ipv6InterfaceData>();advertising->setAdvSendAdvertisements(scenario==2);advertising->setAdvDefaultLifetime(SimTime(120));
+        host->getProtocolDataForUpdate<Ipv6InterfaceData>()->assignAddress(a,false,SIMTIME_ZERO,SIMTIME_ZERO);step(SimTime(12),TIMEOUT);
+    }
+    void receiveSignal(cComponent *component,simsignal_t signal,cObject *object,cObject *details) override {
+        Enter_Method_Silent();auto packet=check_and_cast<Packet *>(object);
+        if(component==sink){auto bytes=packet->peekDataAsBytes()->getBytes();ASSERT(bytes.size()==1);delivered.push_back(bytes[0]);return;}
+        if(signal==registerSignal("nativeHostRegistrationSucceeded")){
+            if(packet->getTag<L3AddressInd>()->getDestAddress()==L3Address(a)){ASSERT(scenario==2 && nd->isNativeSourceUsable(host,a));accepted++;scheduleStimulus();}return;
+        }
+        if(component==hostIp){
+            auto ip=packet->peekAtFront<Ipv6Header>();if(ip->getProtocolId()!=IP_PROT_UDP)return;
+            ASSERT(check_and_cast<PacketDropDetails *>(details)->getReason()==ADDRESS_RESOLUTION_FAILED);
+            ASSERT(scenario<2 && ip->getSrcAddress()==a && ip->getDestAddress()==routerLocal && packet->getTag<InterfaceReq>()->getInterfaceId()==host->getInterfaceId());
+            guardDrops++;if(scenario==1)autoFilledDrop=true;return;
+        }
+        auto ip=packet->peekAtFront<Ipv6Header>();bool atHost=component==host->getSubmodule("lowpan"),outgoing=signal==registerSignal("datagramAccepted");
+        if(ip->getProtocolId()==IP_PROT_UDP){ASSERT(ip->getSrcAddress()==a && ip->getDestAddress()==routerLocal);
+            if(atHost && outgoing)txUdp++;
+            if(!atHost && !outgoing){ASSERT(packet->getTag<Ieee802154AddressInd>()->getSrcAddress()==Ieee802154Address("0011223344556601") && packet->getTag<Ieee802154AddressInd>()->getDestAddress()==Ieee802154Address("0011223344556602"));rxUdp++;}return;}
+        if(ip->getProtocolId()!=IP_PROT_IPv6_ICMP)return;ASSERT(validControl(packet));
+        auto header=packet->peekDataAt<Icmpv6Header>(B(40));
+        if(header->getType()==ICMPv6_ROUTER_SOL){ASSERT(ip->getSrcAddress()==hostLocal && ip->getDestAddress()==Ipv6Address::ALL_ROUTERS_2 && ip->getHopLimit()==255);if(atHost && outgoing)rsSent++;if(!atHost && !outgoing){rsReceived++;if(scenario<2)scheduleStimulus();}}
+        if(header->getType()==ICMPv6_ROUTER_AD && !atHost && outgoing)raSent++;
+        if(header->getType()==ICMPv6_NEIGHBOUR_SOL && atHost && outgoing){auto message=packet->peekDataAt<Ipv6NeighbourSolicitation>(B(40));if(aro(message->getOptions()))aroNs++;}
+        if(header->getType()==ICMPv6_NEIGHBOUR_AD && atHost && !outgoing){auto message=packet->peekDataAt<Ipv6NeighbourAdvertisement>(B(40));if(aro(message->getOptions()))aroNa++;}
+    }
+    void handleMessage(cMessage *message) override {
+        ASSERT(message->isSelfMessage());auto found=std::find(timers.begin(),timers.end(),message);ASSERT(found!=timers.end());timers.erase(found);auto action=static_cast<Action>(message->getKind());delete message;
+        if(action==SEND_FIRST)sendPinned(scenario==1,1);
+        else if(action==SEND_SECOND)sendPinned(true,2);
+        else if(action==VERIFY){
+            std::cout<<"case="<<scenario<<" submitted="<<submitted<<" usable="<<nd->isNativeSourceUsable(host,a)<<" guardDrops="<<guardDrops<<" autoFilledDrop="<<autoFilledDrop<<" txUDP="<<txUdp<<" rxUDP="<<rxUdp<<" sink="<<delivered.size()<<" RSreceived="<<rsReceived<<'\n';
+            ASSERT(rsSent>=1 && rsReceived>=1);
+            if(scenario<2){ASSERT(submitted==1 && guardDrops==1 && txUdp==0 && rxUdp==0 && delivered.empty() && raSent==0 && accepted==0 && aroNs==0 && !nd->isNativeSourceUsable(host,a));if(scenario==1)ASSERT(autoFilledDrop);}
+            else ASSERT(submitted==2 && guardDrops==0 && txUdp==2 && rxUdp==2 && delivered==std::vector<uint8_t>({1,2}) && accepted>=1 && aroNs>=2 && aroNa>=2 && raSent>=1 && nd->isNativeSourceUsable(host,a));
+            endSimulation();
+        }
+        else throw cRuntimeError("Pinned-source control did not reach real discovery/registration observations");
+    }
+    void finish() override {std::cout<<"Native pinned-interface source validity, automatic source fill and ND exemption verified\n";}
+  public:
+    ~PinnedSourceCheck() override {while(!timers.empty()){auto event=timers.back();timers.pop_back();cancelAndDelete(event);}}
+};
+Define_Module(PinnedSourceCheck);
+}
+
+%file: test.ned
+@namespace(inet::protocoltest);
+import inet.node.inet.StandardHost;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple PinnedSourceCheck { }
+network PinnedSourceNetwork {
+    parameters: int scenario;
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        domain: LowpanNativeLinkDomain;
+        host: StandardHost;
+        router: StandardHost;
+        check: PinnedSourceCheck;
+}
+
+%inifile: omnetpp.ini
+[General]
+network=PinnedSourceNetwork
+sim-time-limit=13s
+seed-set=0
+*.scenario=${case=0..2}
+**.vector-recording=false
+**.scalar-recording=false
+*.host.hasIpv4=false
+*.router.hasIpv4=false
+*.host.hasIpv6=true
+*.router.hasIpv6=true
+*.host.ipv6.typename="LowpanIpv6NetworkLayer"
+*.router.ipv6.typename="LowpanIpv6NetworkLayer"
+*.host.ipv6.neighbourDiscovery.nativeNdRole="host"
+*.router.ipv6.neighbourDiscovery.nativeNdRole="router"
+*.host.ipv6.neighbourDiscovery.extendedRegistration=false
+*.router.ipv6.neighbourDiscovery.extendedRegistration=false
+*.router.forwarding=true
+*.host.numWlanInterfaces=1
+*.router.numWlanInterfaces=1
+*.host.wlan[0].typename="Ieee802154NativeLowpanInterface"
+*.router.wlan[0].typename="Ieee802154NativeLowpanInterface"
+*.host.wlan[0].linkDomainModule="^.^.domain"
+*.router.wlan[0].linkDomainModule="^.^.domain"
+*.host.wlan[0].radio.antenna.mobilityModule="^.^.^.mobility"
+*.router.wlan[0].radio.antenna.mobilityModule="^.^.^.mobility"
+*.router.numApps=1
+*.router.app[0].typename="UdpSink"
+*.router.app[0].localPort=9001
+**.udp.checksumMode="computed"
+**.ipv6.neighbourDiscovery.hostBootupTime=0s
+**.ipv6.neighbourDiscovery.routerBootupTime=0s
+**.ipv6.neighbourDiscovery.dupAddrDetectTransmits=0
+**.ipv6.icmpv6.checksumMode="computed"
+*.domain.panId=4660
+*.domain.config=xml("<domain><peer interface='host.wlan[0]' native='0011223344556601'/><peer interface='router.wlan[0]' native='0011223344556602'/></domain>")
+**.lowpan.headerCompression="none"
+**.mobility.initialX=0m
+**.mobility.initialY=0m
+**.mobility.initialZ=0m
+**.mobility.initFromDisplayString=false
+**.mobility.updateFromDisplayString=false
+
+%contains: stdout
+Native pinned-interface source validity, automatic source fill and ND exemption verified

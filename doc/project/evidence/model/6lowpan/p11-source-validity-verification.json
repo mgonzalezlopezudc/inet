@@ -1,0 +1,380 @@
+{
+  "stage": "P11 prerequisite: common native host source validation",
+  "status": "verified isolated legacy-profile correction; automatic updated host separate",
+  "generated_utc": "2026-11-16T08:20:06.105262+00:00",
+  "cwd": "/home/miguel/workspace/.codex-artifacts/lowpan-moved-flags-20261116",
+  "shell_environment": "source .envrc in cwd",
+  "source_equivalent_parent": "a7e4c084eb",
+  "worktree_head": "777bd8cb2d",
+  "parent_source_equivalence": "All tracked src paths matched a7e4c084eb before applying this one-file move; detached worktree retains earlier Git head with reviewed sender patch.",
+  "source_sha256": {
+    "src/inet/linklayer/lowpan/LowpanIpv6.cc": "667675829f1885aace05489eff106e1114ceab78c07c1f70fded5273c2196945",
+    "tests/protocol/6lowpan/LowpanPinnedSourceValidity.test": "ec2c0070685e4c2b14cbda670374cc4c3223246fb0e25c6d64b3d137dc86ba46",
+    "tests/protocol/6lowpan/pinned-source-validity.md": "3b3155aa0002262471150999a0c05a8d7b1b5a0369a1c4ca68d80c89213882a3",
+    "doc/whatsnew/compatible/lowpan-native-source-validation.txt": "a6691f490b4924e079a012909eaa839750c07776fd514a62046c4af9b0fc5c1d"
+  },
+  "parent_inputs": {
+    "source_equivalent_parent": "a7e4c084eb",
+    "worktree_git_head": "777bd8cb2dd74a200ac144a7601dc87c841ffafe",
+    "source_diff_against_parent": [],
+    "library_sha256": "49146c1eb9888b6d5d8534aabdf72f634eef9cf43f6636ead5947a30b26655c6",
+    "library_resolved": "/home/miguel/workspace/.codex-artifacts/lowpan-moved-flags-20261116/src/libINET_dbg.so",
+    "fixture_sha256": "ec2c0070685e4c2b14cbda670374cc4c3223246fb0e25c6d64b3d137dc86ba46",
+    "build_reused": "Matching sender-fix debug library; all tracked src files equal a7e4c084eb, as verified before test.",
+    "protocol_exit_code": 1,
+    "failure_time_seconds": 1.204096,
+    "failure_event": 44,
+    "raw_error": "<!> Error: ASSERT: Condition 'submitted==1 && guardDrops==1 && txUdp==0 && rxUdp==0 && delivered.empty() && raSent==0 && accepted==0 && aroNs==0 && !nd->isNativeSourceUsable(host,a)' does not hold in function 'handleMessage' at PinnedSourceCheck.cc:100 -- in module (inet::protocoltest::PinnedSourceCheck) PinnedSourceNetwork.check (id=6), at t=1.204096s, event #44",
+    "observed_counters": [
+      "case=0 submitted=1 usable=0 guardDrops=0 autoFilledDrop=0 txUDP=1 rxUDP=1 sink=1 RSreceived=1"
+    ]
+  },
+  "debug_results": {
+    "fixtures": 3,
+    "simulations": 11,
+    "per_fixture": {
+      "LowpanPinnedSourceValidity": 3,
+      "LowpanHostRegistration": 6,
+      "LowpanNativeTagGuards": 2
+    },
+    "exit_code": 0,
+    "library_sha256": "d696b05877635d85b71b80a3dc91d63ab0528a279e2149b337e1245eee71e655"
+  },
+  "checks": [
+    {
+      "name": "parent-protocol",
+      "command": [
+        "opp_run_protocol_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-w",
+        "^tests/protocol/6lowpan$",
+        "-f",
+        "LowpanPinnedSourceValidity\\.test$"
+      ],
+      "exit_code": 1,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/parent-protocol-debug.log",
+      "mode": "debug",
+      "classification": "causal failing-parent observation; no expected-failure baseline changed",
+      "failing_run": 0,
+      "skipped_runs": [
+        1,
+        2
+      ],
+      "failure_time_seconds": 1.204096,
+      "failure_event": 44
+    },
+    {
+      "name": "fixed-debug-build",
+      "command": [
+        "make",
+        "MODE=debug",
+        "-j4"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-build-debug.log",
+      "mode": "debug"
+    },
+    {
+      "name": "fixed-debug-protocol",
+      "command": [
+        "opp_run_protocol_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-w",
+        "^tests/protocol/6lowpan$",
+        "-f",
+        "(LowpanPinnedSourceValidity|LowpanHostRegistration|LowpanNativeTagGuards)\\.test$"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-protocol-debug.log",
+      "mode": "debug",
+      "fixtures": 3,
+      "simulations": 11,
+      "per_fixture": {
+        "LowpanPinnedSourceValidity": 3,
+        "LowpanHostRegistration": 6,
+        "LowpanNativeTagGuards": 2
+      },
+      "seed_set": 0
+    },
+    {
+      "name": "fixed-release-build",
+      "command": [
+        "make",
+        "MODE=release",
+        "-j4"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-build-release.log",
+      "mode": "release"
+    },
+    {
+      "name": "fixed-release-protocol",
+      "command": [
+        "opp_run_protocol_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "release",
+        "--no-build",
+        "-w",
+        "^tests/protocol/6lowpan$",
+        "-f",
+        "LowpanPinnedSourceValidity\\.test$"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-protocol-release.log",
+      "mode": "release",
+      "fixtures": 1,
+      "simulations": 3,
+      "seed_set": 0,
+      "limit": "Normal completion and exact printed counters; ASSERT checks disabled"
+    },
+    {
+      "name": "architecture",
+      "command": [
+        "doc/project/enforcement/check-architecture.sh",
+        "src/inet/linklayer/lowpan"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/architecture.log"
+    },
+    {
+      "name": "naming",
+      "command": [
+        "doc/project/enforcement/check-naming.sh",
+        "src/inet/linklayer/lowpan"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/naming.log"
+    },
+    {
+      "name": "source-seals",
+      "command": [
+        "doc/project/enforcement/check-source-seals.sh",
+        "src/inet/linklayer/lowpan/LowpanIpv6.cc"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/source-seals.log"
+    },
+    {
+      "name": "diff-check",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/diff-check.log"
+    }
+  ],
+  "libraries": {
+    "fixed-libINET_dbg.so": {
+      "path": "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-libINET_dbg.so",
+      "sha256": "d696b05877635d85b71b80a3dc91d63ab0528a279e2149b337e1245eee71e655",
+      "original_path": "/home/miguel/workspace/.codex-artifacts/lowpan-moved-flags-20261116/src/libINET_dbg.so",
+      "original_resolved": "/home/miguel/workspace/.codex-artifacts/lowpan-moved-flags-20261116/src/libINET_dbg.so"
+    },
+    "fixed-libINET.so": {
+      "path": "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-libINET.so",
+      "sha256": "a9c3b5d095574f7a5f92e4332486d95112441cce08855524381e46c9b1a82473",
+      "original_path": "/home/miguel/workspace/.codex-artifacts/lowpan-moved-flags-20261116/src/libINET.so",
+      "original_resolved": "/home/miguel/workspace/.codex-artifacts/lowpan-moved-flags-20261116/src/libINET.so"
+    },
+    "libprotocoltest_dbg.so": {
+      "path": "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/libprotocoltest_dbg.so",
+      "sha256": "e69364dd4353784d1215dee941e500fd4c9841491884149cb6a8c5f40d0b7a7b",
+      "original_path": "/home/miguel/workspace/.codex-artifacts/lowpan-moved-flags-20261116/tests/protocol/lib/libprotocoltest_dbg.so",
+      "original_resolved": "/home/miguel/workspace/.codex-artifacts/lowpan-moved-flags-20261116/tests/protocol/lib/libprotocoltest_dbg.so"
+    },
+    "libprotocoltest.so": {
+      "path": "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/libprotocoltest.so",
+      "sha256": "984e3fdcbe3428f8b3cb43f0cc02c3956e1c9c525396ba5a6c54ac7494ad0a89",
+      "original_path": "/home/miguel/workspace/.codex-artifacts/lowpan-moved-flags-20261116/tests/protocol/lib/libprotocoltest.so",
+      "original_resolved": "/home/miguel/workspace/.codex-artifacts/lowpan-moved-flags-20261116/tests/protocol/lib/libprotocoltest.so"
+    },
+    "parent-libINET_dbg.so": {
+      "path": "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/parent-libINET_dbg.so",
+      "sha256": "49146c1eb9888b6d5d8534aabdf72f634eef9cf43f6636ead5947a30b26655c6"
+    }
+  },
+  "release_counter_comparison": {
+    "rows": {
+      "debug": [
+        "case=0 submitted=1 usable=0 guardDrops=1 autoFilledDrop=0 txUDP=0 rxUDP=0 sink=0 RSreceived=1",
+        "case=1 submitted=1 usable=0 guardDrops=1 autoFilledDrop=1 txUDP=0 rxUDP=0 sink=0 RSreceived=1",
+        "case=2 submitted=2 usable=1 guardDrops=0 autoFilledDrop=0 txUDP=2 rxUDP=2 sink=2 RSreceived=1"
+      ],
+      "release": [
+        "case=0 submitted=1 usable=0 guardDrops=1 autoFilledDrop=0 txUDP=0 rxUDP=0 sink=0 RSreceived=1",
+        "case=1 submitted=1 usable=0 guardDrops=1 autoFilledDrop=1 txUDP=0 rxUDP=0 sink=0 RSreceived=1",
+        "case=2 submitted=2 usable=1 guardDrops=0 autoFilledDrop=0 txUDP=2 rxUDP=2 sink=2 RSreceived=1"
+      ]
+    },
+    "exact_match": true
+  },
+  "limits": [
+    "Queued POST_ROUTING registration expiry is source-traced through the common continuation, not a dedicated executed queued-expiry scenario.",
+    "Debug supplies semantic assertions; release supplies normal completion and identical printed counters.",
+    "Parent comparison executes run0; runs1/2 skipped after its failure.",
+    "No updated-host history/API, fine-clock execution, feature-off matrix or baseline update claimed."
+  ],
+  "artifact_sha256": {
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/architecture.log": "21a5c76254de41eab0151b63d3351b6d4d0e242d9f8a2cdf3056b5b0f6ddee41",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/diff-check.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-build-debug.log": "6ac577ce04f3e624142288a893347be47f7ea4ae1186f6607e21cb9df187e59c",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-build-release.log": "23e291bba604dfa573a2fa78e0831061083b19e5245003c4dffd025b28514cb6",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/HostCheck.cc": "1c6e8c35f540d02000efd410ed71039010b7cbdfb490322940cb73658c284861",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/LowpanHostRegistration_dbg": "5051594fc0c402f931fec81eff86bf87ddd3c241a19988abaa59ef33313c24e5",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/Makefile": "2975df327a3f15fa6d4b81d504c55230c6655eda559cc1d2b7272c256a74b8bb",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/_defaults.ini": "971cad1cb7d426025e643349557688a1420fcd0274b6a9cfa907aa353ac73361",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/omnetpp.ini": "76f228d792520a09f2c62e8f7fe339d44d6876e283c0f931378470f531feda54",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/out/clang-debug/.last-copts": "55f753964ab0e0d84356d1152486c3b93c3e3f39c60d493147e25079c344b2e5",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/out/clang-debug/HostCheck.o": "9429ad0c9fcd00742edfe7d58b0866487b9915d453d67d8060a261e7c7e5b9ae",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/out/clang-debug/HostCheck.o.d": "b4097a652b5eaa830d52877345c4f5fc711f8e0d789af3bab764199f18dcc61d",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/out/clang-debug/LowpanHostRegistration_dbg": "5051594fc0c402f931fec81eff86bf87ddd3c241a19988abaa59ef33313c24e5",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/package.ned": "a41387d8ebf8a151be7f152dff94c3071768975fbf778e82cdaaf2567c949004",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/results/General-case=0-#0.sca": "6cb92628ca63c5044f3bd366cde69fd2d5d343a89109531a4a97750c3541fe04",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/results/General-case=0-#0.vci": "c6f450446b6d21cfd65f4d642a78db27a840fb38265d8e87f03cab45eef4f2a5",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/results/General-case=0-#0.vec": "71b98b4d524179d683129d37fb9e0d688cd7f0d71384ce3b5172bd7d3b8a3ed8",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/results/General-case=1-#0.sca": "1e91ed3f8d65a019bf4ee2745e252881ffb8768b1a004e8e2c38c5c3fb0f6957",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/results/General-case=1-#0.vci": "5bad5db2edffab6f36d45d790b4cafbd9afbb85c340166083448f48c5b028b4d",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/results/General-case=1-#0.vec": "7b5330875f95340c7e52da952013b028bf9023784c23c5f64ffbcfe5f58c9b15",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/results/General-case=2-#0.sca": "86101c606cb7efd87cbec3b1362d7fefbda2be143136ae2020cc3d964913985f",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/results/General-case=2-#0.vci": "10266ab10f6b8aee56d0db493f3695eb4c110a4038915557c30c33de345c96e9",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/results/General-case=2-#0.vec": "fcce9c5d444210bd377f5e5e9bb4e4654d02b714091326f3196b13ca8dad7ed8",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/results/General-case=3-#0.sca": "25cde89f5f2b3fddd01960872c057f7f331b56f332e20ed7ecc330d34421c01c",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/results/General-case=3-#0.vci": "29075f605412f50e5ce8371fb7389729dada178967265d79ecde9ef4591a9fec",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/results/General-case=3-#0.vec": "89e6c52b3b14396f65fa3a435e2babed28c72cabfe5805111065c920eb7eb183",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/results/General-case=4-#0.sca": "580c2bb1d3a168a457fbe0da358d99946ce53761835a3ae28121e20e689b97e1",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/results/General-case=4-#0.vci": "405c4d17c42ef13f3c881ece64070f235a6596340e05e33c328fdbb1b5fa8792",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/results/General-case=4-#0.vec": "f563a65fdea0d3fa52cfc959c63504eaef8965396c276e2d4717d79d8ad1e748",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/results/General-case=5-#0.sca": "7b4a8a2e4250497ed6bc2f87725ca134f81222c419e7b5bdbba141512d2ca79f",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/results/General-case=5-#0.vci": "71e81b56d0d20a08f483d3adb173fdfd14a81f1c598ce709f5a0278ac38d2fb5",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/results/General-case=5-#0.vec": "278b2de9facaf768701651dd56458fb36b2f9e01e907d75cfffc157bab6ae9a2",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/retest": "9d5526cc5889abd537f4100e795e95b59c1a3a7a407f2556ae59032e590baaaa",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/run": "f5fb887d4d3acbabc940bfb4c3a7bf01284b990359dc5058af82cf2538745fa2",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/test-contains(1).out": "1a3dc792503ed091121db6e4bc3fb326644065b9f6a3893e0465831b8741054d",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/test-contains(1).txt": "fbe36483ef719700e9157ad0329bf123a4c3e59fcf221dbdfe6f47d99e776eb1",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/test.ned": "e38e76a975e4ab4ef5ec140c4b171b796efe2561106d8522650368a53fd6e1ef",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanHostRegistration/test.out": "f96505802ebc864a864bc25931fc4ef13906f50f5c54e4c219e60c8da1d02e0e",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanNativeTagGuards/LowpanNativeTagGuards_dbg": "90cb66f60013c3a40046e04bdccfa8e6c9e3c1b4fe01a7b67efa171561fcdd46",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanNativeTagGuards/Makefile": "bd60181ff780dd1f05a8dccd9289dce94faec51f1de5a3de248a745b90795b39",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanNativeTagGuards/NativeTagGuardCheck.cc": "11e9a2dc71d874d942346f52ca28501846a56ec18c5e614d82a26eea8e0c0cf3",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanNativeTagGuards/_defaults.ini": "971cad1cb7d426025e643349557688a1420fcd0274b6a9cfa907aa353ac73361",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanNativeTagGuards/omnetpp.ini": "fe1e4b62d2a50a3e9c7337d9600846c34789a6880c0d9364cb456628a96b6012",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanNativeTagGuards/out/clang-debug/.last-copts": "55f753964ab0e0d84356d1152486c3b93c3e3f39c60d493147e25079c344b2e5",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanNativeTagGuards/out/clang-debug/LowpanNativeTagGuards_dbg": "90cb66f60013c3a40046e04bdccfa8e6c9e3c1b4fe01a7b67efa171561fcdd46",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanNativeTagGuards/out/clang-debug/NativeTagGuardCheck.o": "5941184400b0000b156cc4147cd47b705fe7d88e015391a12a7852cf9f6a6bb4",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanNativeTagGuards/out/clang-debug/NativeTagGuardCheck.o.d": "67855eb4eb13913d0554b4b168b332b40fbc67b76c81cb8e22a4ab16b4ae52f6",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanNativeTagGuards/package.ned": "fde2ac9aa58c0beadcdeb046064e44de125a2d0a49fc11731c22e685142fbc77",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanNativeTagGuards/results/General-operation=crash-#0.sca": "68f14c8660a841997cc01797f60a98a0d81b31f3fb16996caba1a78639af64ce",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanNativeTagGuards/results/General-operation=crash-#0.vci": "f62bf1ec9f5c8f2e92bb73c7dc61f7cb3016dc247b9b59834b9f46c8833e8de5",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanNativeTagGuards/results/General-operation=crash-#0.vec": "dd6c6f84f71eb0ad9a031f6bc2e6569960b5550e16ef141a94426a603b91fa96",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanNativeTagGuards/results/General-operation=shutdown-#0.sca": "c55d0c32d0af573fc8918e4d827467d03376dd78191efaa47e36763d68319f4f",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanNativeTagGuards/results/General-operation=shutdown-#0.vci": "f1ab8d5cc39491efcfdfab9726574263fdeaf61915794ac3b1dc8341bf982c1c",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanNativeTagGuards/results/General-operation=shutdown-#0.vec": "062781ae2777cf07866890d3b49bfc5131a085818fb96dbeb009218e9448e2ee",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanNativeTagGuards/retest": "d2cd2cb3cd574574fc9a1c21040765b075c7e947a07d1b870ebcae87e51dd684",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanNativeTagGuards/run": "8f181bf538b4932f8f93436d4fecbbcfe4c067cd5dfafe9bbf79ea92291989c5",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanNativeTagGuards/test-contains(1).out": "0aeb05f43e14091bba51b9cc4e8d54581f81595508f30a9ffb77698f39f1e493",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanNativeTagGuards/test-contains(1).txt": "e5ab9e8a1a5e5230abb085c4b81a75f75d753c4e803bde62d1cb4580d3bf4389",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanNativeTagGuards/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanNativeTagGuards/test.ned": "17613e4d90a3c06efffbb87a28a3813d6bad398dbdac1637897aed3ca79ecba7",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanNativeTagGuards/test.out": "0aeb05f43e14091bba51b9cc4e8d54581f81595508f30a9ffb77698f39f1e493",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanPinnedSourceValidity/LowpanPinnedSourceValidity_dbg": "6e524349a121ae49cfac1746724533489c37ef3d2923484cdaa818b15eac8c62",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanPinnedSourceValidity/Makefile": "09359ea4b14c77d563a5edc534588ccc14a3de28ef6ce0b478ab73807758f87b",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanPinnedSourceValidity/PinnedSourceCheck.cc": "3741d382a2b8edfd49d6efa4376dc930461b2a682d9c79d10b443bf491213ce3",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanPinnedSourceValidity/_defaults.ini": "971cad1cb7d426025e643349557688a1420fcd0274b6a9cfa907aa353ac73361",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanPinnedSourceValidity/omnetpp.ini": "d07dccb53b87fd7cb932f85f9f6a5a9032cc4ce986fc818fd57fc09f5b8043a2",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanPinnedSourceValidity/out/clang-debug/.last-copts": "55f753964ab0e0d84356d1152486c3b93c3e3f39c60d493147e25079c344b2e5",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanPinnedSourceValidity/out/clang-debug/LowpanPinnedSourceValidity_dbg": "6e524349a121ae49cfac1746724533489c37ef3d2923484cdaa818b15eac8c62",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanPinnedSourceValidity/out/clang-debug/PinnedSourceCheck.o": "25846b3d202e9c8dc074eda5962ce6b4dedbc5496dfc4fbfe379cdbef2b7a824",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanPinnedSourceValidity/out/clang-debug/PinnedSourceCheck.o.d": "5b1fc1db8e4d6de7a18a16e846b7fa7c7913c6977b14d6c2a7d53d4d1efb4320",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanPinnedSourceValidity/package.ned": "88f987f8a740e669486587c436e24e4034e7dedcf316d2c5cdaa6e44fd37a0b9",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanPinnedSourceValidity/results/General-case=0-#0.sca": "742827ae9f0cf1a69b3e1237377ff26be3715866e8483d126791e0c81e53e3e2",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanPinnedSourceValidity/results/General-case=0-#0.vci": "7af78262be98dee80846568ac2720c8e01d64d06f72013feae1786ae869f9a96",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanPinnedSourceValidity/results/General-case=0-#0.vec": "928eaeb3cd334fe84065d924b8f07326844f47b8a4e430f25508a13a29801518",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanPinnedSourceValidity/results/General-case=1-#0.sca": "cbbe058f3a3df9dedc0d36c9a6a427d2aa8dc1268c824abb043bce6d480b3863",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanPinnedSourceValidity/results/General-case=1-#0.vci": "8132455a39396cf19864f590f5be04642f42e4f37fdbd579ceb439351d45aa8f",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanPinnedSourceValidity/results/General-case=1-#0.vec": "d777fd2dc5c4a966b357558dcea2286caf414d36a0926e095fc1b2ec8f40c7cb",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanPinnedSourceValidity/results/General-case=2-#0.sca": "6b78dca134989f2f76d370f656bb1b773eb02dfb570c5b550e6893e6b97c084d",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanPinnedSourceValidity/results/General-case=2-#0.vci": "943f3c199eab69754f2987dc45228b6d40f552a71262d553150c9af1f648cc08",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanPinnedSourceValidity/results/General-case=2-#0.vec": "0085a485839443643d93ba58a626cf0a4801fd0466fd882aec857a169b1a091f",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanPinnedSourceValidity/retest": "7286ec1cb8a6119666d3b00bb74de0e56e137a747e3a03ae1413ca57385cc05f",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanPinnedSourceValidity/run": "6bb09ea086d365e99dc632e01084871695d81ac42d78bb4bfe9e886c00f9aca8",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanPinnedSourceValidity/test-contains(1).out": "af626402a137841b34ad41635e688e1a828845c2b83f626d4dee2141112e47b5",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanPinnedSourceValidity/test-contains(1).txt": "6e452693480072e7d2fbcccea8c16e77d75d9577347b90c482016dbd7929ee6f",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanPinnedSourceValidity/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanPinnedSourceValidity/test.ned": "d7cfad3565504a68dd751035e4e198093f5abc6379e77749035222be8a0453cf",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug/LowpanPinnedSourceValidity/test.out": "9b10f5c31d78cdd9c629b5d3cf5744ed2acdf392d2fde26f9c56bdee1f59727c",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-debug-summary.json": "c416a0fbbcf2257b7f16f6fa5028f15b7e329a942856137ead81909d11d2ad98",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-libINET.so": "a9c3b5d095574f7a5f92e4332486d95112441cce08855524381e46c9b1a82473",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-libINET_dbg.so": "d696b05877635d85b71b80a3dc91d63ab0528a279e2149b337e1245eee71e655",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-protocol-debug.log": "20847046dc2d24a0178a592601191a6bc3b5438cc81cd1e525f9a31dc434a041",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-protocol-release.log": "019e71c7842c6262c4e381c4bbff8f01819c3c1fb6af920f1fb72a09dd33fe65",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-release/LowpanPinnedSourceValidity/LowpanPinnedSourceValidity": "035aa71c20c42a936ab8948e79a99bcce0ea1139511482f32334c710a895689f",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-release/LowpanPinnedSourceValidity/Makefile": "7f8897d4a5de6711fb81fce72dec2355e2dcbce4b4bd95d4ccae7eba08cb727c",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-release/LowpanPinnedSourceValidity/PinnedSourceCheck.cc": "3741d382a2b8edfd49d6efa4376dc930461b2a682d9c79d10b443bf491213ce3",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-release/LowpanPinnedSourceValidity/_defaults.ini": "971cad1cb7d426025e643349557688a1420fcd0274b6a9cfa907aa353ac73361",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-release/LowpanPinnedSourceValidity/omnetpp.ini": "d07dccb53b87fd7cb932f85f9f6a5a9032cc4ce986fc818fd57fc09f5b8043a2",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-release/LowpanPinnedSourceValidity/out/clang-release/.last-copts": "1dd62a6c00de23ee84112ed335876dface4102f2700ba8bcff1bcda04aecde56",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-release/LowpanPinnedSourceValidity/out/clang-release/LowpanPinnedSourceValidity": "035aa71c20c42a936ab8948e79a99bcce0ea1139511482f32334c710a895689f",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-release/LowpanPinnedSourceValidity/out/clang-release/PinnedSourceCheck.o": "509492c409e0176c932379c821f453b339070ab99b1f19ed612fa95e23b81338",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-release/LowpanPinnedSourceValidity/out/clang-release/PinnedSourceCheck.o.d": "b91d8b560f258b691d97e914f3fa4e860deb9bd49fbad21912290698926a341e",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-release/LowpanPinnedSourceValidity/package.ned": "88f987f8a740e669486587c436e24e4034e7dedcf316d2c5cdaa6e44fd37a0b9",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-release/LowpanPinnedSourceValidity/results/General-case=0-#0.sca": "604d6a80f12fc0f85715555b1171dcb0e9e42c918bf1d5fba82115137771e7ab",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-release/LowpanPinnedSourceValidity/results/General-case=0-#0.vci": "03435a888f8df1a208471c0e56e1eb55e0383b998a2cad3b4f3e711e6f7431c0",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-release/LowpanPinnedSourceValidity/results/General-case=0-#0.vec": "6110f1bfdd10fc7fbb13be4431b0f59afb89dc6e98abd2ef23ab44614cccfc0c",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-release/LowpanPinnedSourceValidity/results/General-case=1-#0.sca": "35ccd885009475370eac1d521fa561fc47908a3ec1400faf41a19d6e4b4736e9",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-release/LowpanPinnedSourceValidity/results/General-case=1-#0.vci": "4a30045e5162cd7246c471ccc9408876afed0dc83eddfa4f6b413075fb5eb503",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-release/LowpanPinnedSourceValidity/results/General-case=1-#0.vec": "5aeb4d425561629b45ac73df8cd230100aec509bd1c0aad9dc0cec392c5ba33d",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-release/LowpanPinnedSourceValidity/results/General-case=2-#0.sca": "39758dc98a83eb3986e7d4de5fb0815fbd929d6a9b4334a6e28503107652f14a",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-release/LowpanPinnedSourceValidity/results/General-case=2-#0.vci": "0ee835eaef307e36c677ee493a8583cf45382e7f1fa6b9ae8886c94c37838410",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-release/LowpanPinnedSourceValidity/results/General-case=2-#0.vec": "9e072e4066b0b6e5d91b9e6eb75d3bf084d1048a20f211fc67d011728c738586",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-release/LowpanPinnedSourceValidity/retest": "7286ec1cb8a6119666d3b00bb74de0e56e137a747e3a03ae1413ca57385cc05f",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-release/LowpanPinnedSourceValidity/run": "45d2edbb809a4a654bd3340a1915b9d36837e2deb08edebcaf12251d9347d999",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-release/LowpanPinnedSourceValidity/test-contains(1).out": "5f4485809f31defa5e529648b0fc4bd23b39e0fa8e2e18bd6ee9cdad00cef34c",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-release/LowpanPinnedSourceValidity/test-contains(1).txt": "6e452693480072e7d2fbcccea8c16e77d75d9577347b90c482016dbd7929ee6f",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-release/LowpanPinnedSourceValidity/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-release/LowpanPinnedSourceValidity/test.ned": "d7cfad3565504a68dd751035e4e198093f5abc6379e77749035222be8a0453cf",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/fixed-release/LowpanPinnedSourceValidity/test.out": "438e0a3e7e491ebf42e1df8e955193903af83b8d995a599a0063197aaace2a60",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/libprotocoltest.so": "984e3fdcbe3428f8b3cb43f0cc02c3956e1c9c525396ba5a6c54ac7494ad0a89",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/libprotocoltest_dbg.so": "e69364dd4353784d1215dee941e500fd4c9841491884149cb6a8c5f40d0b7a7b",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/naming.log": "7b003bb1f254feabd4cac482b98f4c6d6cc171c5ae729375e7d97b1986105e05",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/parent-generated/LowpanPinnedSourceValidity_dbg": "6e524349a121ae49cfac1746724533489c37ef3d2923484cdaa818b15eac8c62",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/parent-generated/Makefile": "09359ea4b14c77d563a5edc534588ccc14a3de28ef6ce0b478ab73807758f87b",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/parent-generated/PinnedSourceCheck.cc": "3741d382a2b8edfd49d6efa4376dc930461b2a682d9c79d10b443bf491213ce3",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/parent-generated/_defaults.ini": "971cad1cb7d426025e643349557688a1420fcd0274b6a9cfa907aa353ac73361",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/parent-generated/omnetpp.ini": "d07dccb53b87fd7cb932f85f9f6a5a9032cc4ce986fc818fd57fc09f5b8043a2",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/parent-generated/out/clang-debug/.last-copts": "55f753964ab0e0d84356d1152486c3b93c3e3f39c60d493147e25079c344b2e5",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/parent-generated/out/clang-debug/LowpanPinnedSourceValidity_dbg": "6e524349a121ae49cfac1746724533489c37ef3d2923484cdaa818b15eac8c62",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/parent-generated/out/clang-debug/PinnedSourceCheck.o": "25846b3d202e9c8dc074eda5962ce6b4dedbc5496dfc4fbfe379cdbef2b7a824",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/parent-generated/out/clang-debug/PinnedSourceCheck.o.d": "5b1fc1db8e4d6de7a18a16e846b7fa7c7913c6977b14d6c2a7d53d4d1efb4320",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/parent-generated/package.ned": "88f987f8a740e669486587c436e24e4034e7dedcf316d2c5cdaa6e44fd37a0b9",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/parent-generated/results/General-case=0-#0.vci": "8948210e6878d9f78c0220208004612c835bb733acbf34a0e54121181ce59025",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/parent-generated/results/General-case=0-#0.vec": "564f9b85af9066d60918df9bef23cbe056454bee0d3e1e99063ceec3837042c9",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/parent-generated/test.err": "520f82ed162e7356f3c487d590da9c9124a1b12ecdf82d868065d50b457f9f44",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/parent-generated/test.ned": "d7cfad3565504a68dd751035e4e198093f5abc6379e77749035222be8a0453cf",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/parent-generated/test.out": "c4e1b7eb7e8b242ee80322a4496d26aa531643a092d310bc0cd23063f66f5704",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/parent-inputs.json": "2b856ee78fa58c28ceb84cda21e04ec24c7816ea000aed12d9b84b66eb7842fb",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/parent-libINET_dbg.so": "49146c1eb9888b6d5d8534aabdf72f634eef9cf43f6636ead5947a30b26655c6",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/parent-protocol-debug.log": "0196ca485511f6052add1984508abb18bace236bf3f068b8bb35127c80ca52a2",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/release-counter-comparison.json": "780dc1420d8f70039e869438a015af362a30dc33ec3909abb2edc58eb97b86ba",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/source-change.patch": "694d6a6a8d350e1329132a0a14639a11bc19b6406213a19c718c3fb6543f7679",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-pinned-source-evidence-20261116/source-seals.log": "4d5110553efecb3ef3b5837e2c26e345ad8bdd3edeeaf3aab5502dc60769dc16"
+  }
+}

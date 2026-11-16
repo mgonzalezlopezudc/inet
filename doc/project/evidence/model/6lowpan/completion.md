@@ -126,6 +126,12 @@ Matching debug/release builds pass. Debug verification passes eleven protocol fi
 
 Saved Moved notifications now clear the NA Solicited flag, while direct registration replies retain it. The existing native-wire fixture checks both forms. The [isolated comparison](p11-moved-flags-verification.json) uses the committed registrar implementation without automatic-host changes: the unchanged sender fails run 4 at 5.008832 seconds/event 399 on the unsolicited flag, and the minimal sender correction passes thirteen main plus seven race simulations in debug. Matching debug/release builds pass; twenty release simulations complete with matching printed counters, with assertion-based semantics still limited to debug. Scoped architecture, naming, explicit source-seal and whitespace checks pass. An early cancelled isolated-project setup build is retained separately from the causal protocol failure. No baseline is changed.
 
+## Native source validation at common egress
+
+Explicit-interface IPv6 output bypassed the native source check in route/MAC lookup. The check now runs at the common fragmentation/send entry, after source selection and before adaptation state changes. Ordinary and explicitly pinned native output use the same registration predicate; ND bootstrap control remains available.
+
+The [legacy-profile fixture](../../../../../tests/protocol/6lowpan/pinned-source-validity.md) reproduces actual delivery from an unregistered source on the parent, then verifies explicit and automatically selected source drops and both registered delivery controls. The [record](p11-source-validity-verification.json) retains matching debug/release builds, eleven debug simulations across three fixtures, three release completions with matching printed counters, and scoped gates. Debug assertions supply semantic checks; release assertions are disabled. Queued post-routing source expiry is source-traced, without a dedicated runtime scenario.
+
 ## Remaining packages
 
 P11 automatic updated-host transactions are next, followed by P12–P15 and the final feature matrix under the completion plan. Mesh-under, paging, virtual fragment forwarding and selective recovery are not inferred from optimized ND, header compression or the updated registrar path.
