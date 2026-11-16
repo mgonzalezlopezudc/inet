@@ -21,12 +21,16 @@
 namespace inet { namespace lowpan {
 class LowpanSourceFragmentation;
 class LowpanFragmentForwarding;
+class LowpanSelectiveRecovery;
+class LowpanRecoverySource;
 
 // IPv6 adaptation with optional mesh-under transit before endpoint reassembly.
 class INET_API LowpanLayer : public OperationalMixin<queueing::PacketProcessorBase>, public queueing::IActivePacketSource
 {
     friend class LowpanSourceFragmentation;
     friend class LowpanFragmentForwarding;
+    friend class LowpanSelectiveRecovery;
+    friend class LowpanRecoverySource;
   protected:
     queueing::PassivePacketSinkRef consumer;
     ILowpanLink *link = nullptr;
@@ -35,7 +39,8 @@ class INET_API LowpanLayer : public OperationalMixin<queueing::PacketProcessorBa
     LowpanDatagramTagAllocator tagAllocator;
     std::unique_ptr<LowpanSourceFragmentation> sourceFragments;
     std::unique_ptr<LowpanFragmentForwarding> fragmentForwarding;
-    struct ForwardedTransmission { int ownerModuleId; int64_t token; };
+    std::unique_ptr<LowpanSelectiveRecovery> selectiveRecovery;
+    struct ForwardedTransmission { int ownerModuleId; int64_t token; bool recovery; };
     std::map<int64_t, ForwardedTransmission> forwardedTransmissions;
     LowpanContextTable compressionContexts;
     std::array<bool, 16> configuredContexts{};
@@ -102,7 +107,7 @@ class INET_API LowpanLayer : public OperationalMixin<queueing::PacketProcessorBa
     PacketDropReason preparedRefusalReason() const;
     bool pushPreparedPacket(Packet *packet); // Consumes packet on both admission and refusal.
     std::optional<uint16_t> allocateDatagramTag(simtime_t now, simtime_t reuseAfter);
-    bool pushForwardedPacket(Packet *packet, int ownerModuleId, int64_t token);
+    bool pushForwardedPacket(Packet *packet, int ownerModuleId, int64_t token, bool recovery = false);
     void notifyForwardingUnavailable();
     bool isValidIpv6Packet(const Packet *packet) const;
     void dropLowpanPacket(Packet *packet, LowpanDropReason reason);

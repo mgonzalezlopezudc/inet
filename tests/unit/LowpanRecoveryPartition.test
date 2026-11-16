@@ -1,0 +1,26 @@
+%description:
+Feasible source-only RFC8931 bounds, including final sequence and first-header headroom.
+
+%includes:
+#include "inet/linklayer/lowpan/LowpanRecoverySource.h"
+using namespace inet::lowpan;
+
+%activity:
+for(int size=1;size<=2600;size++){
+    auto ranges=LowpanRecoverySource::partition(size,35,71,48,80,80);
+    if(ranges.empty())continue;
+    ASSERT(ranges.size()>=2&&ranges.size()<=32&&ranges.front().size<=71);
+    int end=0;for(auto range:ranges){ASSERT(range.offset==end&&range.size>=48&&range.size<=80);end+=range.size;}
+    ASSERT(end==size);
+}
+auto maximum=LowpanRecoverySource::partition(2551,35,71,48,80,80);
+ASSERT(maximum.size()==32);
+ASSERT(LowpanRecoverySource::partition(2552,35,71,48,80,80).empty());
+ASSERT(LowpanRecoverySource::partition(95,35,71,48,80,80).empty());
+auto shortFinal=LowpanRecoverySource::partition(160,35,71,48,80,80);
+ASSERT(shortFinal.size()==3&&shortFinal.back().size>=48);
+ASSERT(LowpanRecoverySource::partition(1000,72,71,48,80,80).empty());
+EV<<"Source partition includes final minimum and bounded first header\n";
+
+%contains: stdout
+Source partition includes final minimum and bounded first header

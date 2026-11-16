@@ -22,6 +22,8 @@ enum LowpanDropReason
     LOWPAN_UNSUPPORTED_EXTENSION = 14;
     LOWPAN_SOURCE_ABORTED = 15;
     LOWPAN_FORWARDING_ABORTED = 16;
+    LOWPAN_RECOVERY_ABORTED = 17;
+    LOWPAN_RECOVERY_ORPHAN = 18;
 }
 
 class LowpanPacketDropDetails extends inet::PacketDropDetails

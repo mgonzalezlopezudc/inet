@@ -243,6 +243,6 @@ P9 runtime regression exposed a shared IPv6 prerequisite: local delivery stored 
 - [x] P12 mesh-under forwarding and duplicate/hop bounds: [verification record](../../doc/project/evidence/model/6lowpan/p12-mesh-verification.json) and [production fixture](../../tests/protocol/6lowpan/mesh-forwarding.md).
 - [x] P13 page/ESC parsing and transit behavior: [verification record](../../doc/project/evidence/model/6lowpan/p13-paging-verification.json) and [production fixture](../../tests/protocol/6lowpan/paging-dispatch.md).
 - [x] P14 virtual fragment forwarding: [verification record](../../doc/project/evidence/model/6lowpan/p14-vrb-verification.json), [main cases](../../tests/protocol/6lowpan/fragment-forwarding.md) and [lifecycle cases](../../tests/protocol/6lowpan/fragment-forwarding-lifecycle.md).
-- [ ] P15 selective recovery/congestion behavior.
+- [x] P15 selective recovery/congestion behavior: [verification record](../../doc/project/evidence/model/6lowpan/p15-selective-recovery-verification.json), [main cases](../../tests/protocol/6lowpan/selective-recovery.md), [raw-data cases](../../tests/protocol/6lowpan/selective-recovery-no-udp.md) and [lifecycle cases](../../tests/protocol/6lowpan/selective-recovery-lifecycle.md).
 - [ ] P14 actual-egress-MTU follow-up after P15, before final naming and the combined feature matrix.
 - [ ] Full feature matrix, regression checks, evidence reconciliation, commit audit and final documentation.

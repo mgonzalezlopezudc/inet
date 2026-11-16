@@ -23,6 +23,8 @@ LowpanDispatchPrefix::Result LowpanDispatchPrefix::parse(const Packet& packet, i
     if ((dispatch & 0xc0) == 0x80) result.kind = MESH;
     else if ((dispatch & 0xf8) == 0xc0) result.kind = FRAG1;
     else if ((dispatch & 0xf8) == 0xe0) result.kind = FRAGN;
+    else if ((dispatch & 0xfe) == 0xe8) result.kind = RFRAG;
+    else if ((dispatch & 0xfe) == 0xea) result.kind = RFRAG_ACK;
     else if (dispatch == 0x50) result.kind = BROADCAST;
     else if (dispatch == 0x41) result.kind = IPV6;
     else if (dispatch == 0x40) result.kind = cursor + 1 < bytes.size() ? ESC : MALFORMED;

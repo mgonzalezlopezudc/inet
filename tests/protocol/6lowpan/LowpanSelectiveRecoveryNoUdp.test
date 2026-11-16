@@ -1,0 +1,290 @@
+%description:
+Core-NoUDP actual native selective recovery with raw IPv6 tails, byte-exact
+adaptation delivery and explicit incomplete/semantic transit rejection.
+
+%extraargs: -r 0..36
+
+%file: RecoveryRawCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/lifecycle/LifecycleController.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/TimeTag_m.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/networklayer/common/NextHopAddressTag_m.h"
+#include "inet/linklayer/lowpan/LowpanNativeMac.h"
+#include "inet/linklayer/lowpan/LowpanLayer.h"
+#include "inet/linklayer/lowpan/LowpanNativeBoundary.h"
+#include "inet/linklayer/lowpan/LowpanIphcCodec.h"
+#include "inet/linklayer/lowpan/LowpanRecoverySource.h"
+#include "inet/linklayer/lowpan/LowpanIpv6.h"
+#include "inet/linklayer/lowpan/LowpanPacketDropDetails_m.h"
+#include "inet/linklayer/lowpan/LowpanTransmissionReq_m.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
+#include "inet/networklayer/ipv6/Ipv6InterfaceData.h"
+#include "inet/networklayer/ipv6/Ipv6Header_m.h"
+#include "inet/networklayer/ipv6/Ipv6RoutingTable.h"
+namespace inet::protocoltest {
+class RecoveryRawLossMac : public lowpan::LowpanNativeMac {
+    int first=-1;
+    void handleLowerPacket(Packet*packet)override{
+        auto bytes=packet->peekDataAsBytes()->getBytes();
+        if(getSimulation()->getSystemModule()->getSubmodule("check")->par("scenario").intValue()==1&&getParentModule()->getParentModule()->getIndex()==1&&getParentModule()->getIndex()==0&&bytes.size()>29&&(bytes[0]&7)==1&&(bytes[21]&0xfe)==0xe8&&((bytes[23]>>2)&31)==2){
+            if(first<0)first=bytes[2];if(first==bytes[2]){emit(registerSignal("testRawRecoveryLoss"),1L);delete packet;return;}
+        }
+        LowpanNativeMac::handleLowerPacket(packet);
+    }
+};
+Define_Module(RecoveryRawLossMac);
+class RecoveryRawPolicy : public NetfilterBase::HookBase {
+  public:
+    Result datagramPreRoutingHook(Packet*)override{return ACCEPT;}
+    Result datagramForwardHook(Packet*)override{return ACCEPT;}
+    Result datagramPostRoutingHook(Packet*)override{return ACCEPT;}
+    Result datagramLocalInHook(Packet*)override{return ACCEPT;}
+    Result datagramLocalOutHook(Packet*)override{return ACCEPT;}
+};
+class RecoveryRawCheck : public cSimpleModule,public LifecycleController,public cListener {
+    NetworkInterface *nic[4]{};cModule*layer[4]{};
+    std::vector<uint8_t> expected;
+    int scenario=0,source=0,forwarded=0,received=0,losses=0;
+    int literalCount=0,nulls=0,marks=0,resource=0,ordinary=0;
+    bool resetScheduled=false;
+    int oldOutTag=-1;
+    simtime_t resetReceived,oldTerminal,manualNull;
+    int correlatedNull=0;
+    std::vector<uint8_t> firstInput;
+    std::vector<std::vector<uint8_t>> literals;
+    RecoveryRawPolicy policy;
+    bool followup=false;
+    int controlOrdinal=0,earlyForwarded=0;
+    int sideSource=0,sideReceived=0;
+    std::vector<uint8_t> sideExpected;
+    std::set<int> sharedTags;
+    std::set<int> resetTags;
+    int reusedTag=-1,returnedFull=0;
+    simtime_t sideTime;
+    void assertTimeTags(const Packet& packet,int offset,int length,simtime_t time){
+        auto tags=packet.getAllRegionTags<CreationTimeTag>(B(offset),B(length));
+        std::sort(tags.begin(),tags.end(),[](const auto& first,const auto& second){return first.getStartOffset()<second.getStartOffset();});
+        b covered=B(offset);for(const auto& tag:tags){ASSERT(tag.getTag()->getCreationTime()==time&&tag.getStartOffset()<=covered);covered=std::max(covered,tag.getEndOffset());}ASSERT(covered>=B(offset+length));
+    }
+    void nativeInput(const std::vector<uint8_t>& bytes,int from=0){
+        auto boundary=check_and_cast<lowpan::LowpanNativeBoundary*>(nic[from]->getSubmodule("boundary"));Ieee802154AddressReq request;
+        request.setSrcAddress(boundary->getLinkAddress());request.setDestAddress(Ieee802154Address(from==0?"0011223344556602":"0011223344556603"));request.setSrcPanId(boundary->getPanId());request.setDestPanId(boundary->getPanId());
+        auto packet=new Packet("literal-recovery",makeShared<BytesChunk>(bytes));
+        if(scenario==9&&(bytes[0]&0xfe)==0xe8){int sequence=(bytes[2]>>2)&31;packet->addRegionTag<CreationTimeTag>(B(6),B(bytes.size()-6))->setCreationTime(sequence==0&&literalCount>0?SimTime(.9):SimTime(.1*(sequence+1)));}
+        *packet->addTag<lowpan::LowpanTransmissionReq>()=*boundary->prepareTransmission(request);boundary->pushPacket(packet,boundary->gate("in"));literalCount++;
+    }
+    void later(double when,std::vector<uint8_t> bytes){literals.push_back(std::move(bytes));scheduleAt(SimTime(when),new cMessage("literal-recovery",100+literals.size()-1));}
+    std::vector<uint8_t> reset(bool request,int sequence=0,bool routing=false){
+        std::vector<uint8_t> result{0xe8,7,uint8_t((request?0x80:0)|(sequence<<2)),0,0,0};
+        if(routing){Packet first("routing-prefix",makeShared<BytesChunk>(std::vector<uint8_t>(firstInput.begin()+6,firstInput.end())));int length=first.peekAtFront<lowpan::LowpanIphcHeader>()->getChunkLength().get<B>();result.insert(result.end(),firstInput.begin()+6,firstInput.begin()+6+length);}
+        return result;
+    }
+    void script(Packet& packet){
+        auto header=lowpan::LowpanIphcCodec::encode(*packet.peekAtFront<Ipv6Header>(B(40)),Ieee802154Address("0011223344556601"),Ieee802154Address("0011223344556602"));
+        Packet encoded("encoded",header);encoded.insertAtBack(packet.peekDataAt(B(40),packet.getDataLength()-B(40)));auto bytes=encoded.peekDataAsBytes()->getBytes();
+        auto ranges=lowpan::LowpanRecoverySource::partition(bytes.size(),header->getChunkLength().get<B>(),71,48,80,80);
+        if(scenario==9||scenario==10)ranges={{0,71},{60,80},{140,79},{219,48},{267,48}};
+        if(scenario==29)ranges={{0,71},{36,80},{116,80},{196,72},{268,48}};
+        std::vector<std::vector<uint8_t>> frames;
+        for(size_t i=0;i<ranges.size();i++){auto range=ranges[i];int offset=i?range.offset:bytes.size();std::vector<uint8_t> wire{uint8_t(0xe8|((scenario==7||scenario==8)&&i==0)),7,uint8_t(0x80|(i<<2)|(range.size>>8)),uint8_t(range.size),uint8_t(offset>>8),uint8_t(offset)};wire.insert(wire.end(),bytes.begin()+range.offset,bytes.begin()+range.offset+range.size);frames.push_back(wire);}
+        firstInput=frames[0];
+        if(scenario==36){auto first=frames[0];first[2]&=0x7f;later(.1,first);scheduleAt(SimTime(.2),new cMessage("delete-ingress-owner",11));for(int i=0;i<255;i++)scheduleAt(SimTime(1+.02*i),new cMessage("reserve-other-egress-tag",12));scheduleAt(SimTime(166.5),new cMessage("reuse-freed-tag-new-owner",10));return;}
+        if(scenario==34){int size=89;std::vector<uint8_t> large{0xe8,7,0x80,uint8_t(size),uint8_t(bytes.size()>>8),uint8_t(bytes.size())};large.insert(large.end(),bytes.begin(),bytes.begin()+size);later(.1,large);later(1,frames[0]);later(119,frames[0]);for(size_t i=0;i<frames.size();i++)later(121.1+.2*i,frames[i]);return;}
+        if(scenario==28){later(.1,frames[0]);std::vector<uint8_t> tail{0xe8,7,0x84,48,0,1};tail.insert(tail.end(),bytes.begin()+1,bytes.begin()+49);later(.3,tail);return;}
+        if(scenario==10)frames[1][6]^=1;
+        if(scenario==11||scenario==22){later(.1,frames[0]);auto changed=frames[0];changed[5]++;later(.3,changed);if(scenario==22){later(119,frames[0]);for(size_t i=0;i<frames.size();i++)later(121.1+.2*i,frames[i]);}return;}
+        if(scenario==12||scenario==13){later(.1,frames[0]);auto other=frames[0];other[1]++;later(.15,other);for(size_t i=1;i<frames.size();i++)later(.1+.2*i,frames[i]);return;}
+        if(scenario==14){for(auto frame:frames)later(.1,frame);for(size_t i=1;i<frames.size();i++)later(.3+.2*i,frames[i]);return;}
+        if(scenario==15){later(.1,frames[0]);later(.11,frames[1]);auto changed=frames[1];changed[5]++;later(.12,changed);for(size_t i=0;i<frames.size();i++){auto fresh=frames[i];fresh[1]++;later(.3+.2*i,fresh);}return;}
+        if(scenario>=16&&scenario<=19){later(.1,reset(scenario==18||scenario==19,scenario==16?3:0,scenario==19));for(size_t i=0;i<frames.size();i++)later(.3+.2*i,frames[i]);return;}
+        if(scenario==20){later(.1,frames[0]);later(.3,reset(true,3));for(size_t i=0;i<frames.size();i++){auto fresh=frames[i];fresh[1]++;later(.5+.2*i,fresh);}return;}
+        for(size_t i=0;i<frames.size();i++)later(.1+.2*i,frames[i]);
+        if(scenario==9)later(.2,frames[0]); // Same bytes, deliberately different metadata: accepted provenance must survive.
+        if(scenario==8){auto duplicate=frames.back();duplicate[0]|=1;later(1.5,duplicate);}
+        if(scenario==21){later(31.2,frames.back());for(size_t i=0;i<frames.size();i++)later(121.1+.2*i,frames[i]);}
+    }
+  protected:
+    int numInitStages()const override{return NUM_INIT_STAGES;}
+    void initialize(int stage)override{
+        if(stage!=INITSTAGE_LAST)return;
+        scenario=par("scenario");auto root=getParentModule();
+        const char*addresses[]={"2001:db8:1::211:2233:4455:6601","2001:db8:1::211:2233:4455:6602","2001:db8:2::211:2233:4455:6603","2001:db8:2::211:2233:4455:6602"};
+        for(int i=0;i<4;i++){
+            nic[i]=check_and_cast<NetworkInterface*>(root->getSubmodule("node",i==0?0:i==3?2:1)->getSubmodule("wlan",i==2?1:0));
+            nic[i]->getProtocolDataForUpdate<Ipv6InterfaceData>()->assignAddress(Ipv6Address(addresses[i]),false,SIMTIME_ZERO,SIMTIME_ZERO);
+            layer[i]=nic[i]->getSubmodule("lowpan");for(auto name:{"fragmentSent","fragmentReceived","datagramCompleted","nativeFrameTransmissionFailed","packetDropped"})layer[i]->subscribe(name,this);
+        }
+        nic[1]->getSubmodule("mac")->subscribe("testRawRecoveryLoss",this);
+        for(int node=0;node<2;node++)check_and_cast<Ipv6RoutingTable*>(root->getSubmodule("node",node)->getSubmodule("ipv6")->getSubmodule("routingTable"))->addStaticRoute(Ipv6Address(addresses[3]),128,nic[node?2:0]->getInterfaceId(),nic[node?3:1]->getProtocolData<Ipv6InterfaceData>()->getLinkLocalAddress());
+        if(scenario==6||scenario==26)check_and_cast<physicallayer::IRadio*>(nic[3]->getSubmodule("radio"))->setRadioMode(physicallayer::IRadio::RADIO_MODE_OFF);
+        if(scenario==24)check_and_cast<lowpan::LowpanIpv6*>(root->getSubmodule("node",1)->getSubmodule("ipv6")->getSubmodule("ipv6"))->registerHook(10,&policy);
+        scheduleAt(SimTime(.1),new cMessage("raw-source"));
+        if(scenario==35)scheduleAt(SimTime(.13),new cMessage("local-source-on-shared-egress",10));
+    }
+    void handleMessage(cMessage*message)override{
+        int kind=message->getKind();delete message;
+        if(kind>=100){nativeInput(literals.at(kind-100));return;}
+        if(kind==11){ASSERT(oldOutTag>=0);layer[1]->deleteModule();layer[1]=nullptr;return;}
+        if(kind==12){nativeInput(reset(false,0,true),3);return;}
+        if(kind==1){auto bytes=reset(true,0,true);bytes[1]=firstInput[1];nativeInput(bytes);return;}
+        if(kind==2){check_and_cast<physicallayer::IRadio*>(nic[3]->getSubmodule("radio"))->setRadioMode(physicallayer::IRadio::RADIO_MODE_RECEIVER);return;}
+        if(kind==3){auto bytes=firstInput;bytes[1]++;nativeInput(bytes);return;}
+        if(kind==4){manualNull=simTime();nativeInput({0xea,uint8_t(oldOutTag),0,0,0,0},3);return;}
+        if(kind==5){check_and_cast<lowpan::LowpanIpv6*>(getParentModule()->getSubmodule("node",1)->getSubmodule("ipv6")->getSubmodule("ipv6"))->registerHook(10,&policy);return;}
+        if(kind==6)followup=true;
+        if(kind==9)controlOrdinal++;
+        if(kind==10){sideTime=simTime();auto header=makeShared<Ipv6Header>();header->setSrcAddress(Ipv6Address("2001:db8:2::211:2233:4455:6603"));header->setDestAddress(Ipv6Address("2001:db8:2::211:2233:4455:6602"));header->setProtocolId(IP_PROT_NONE);header->setHopLimit(64);header->setPayloadLength(B(280));auto packet=new Packet("simultaneous-local-source",header);packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>(280,0xab)));sideExpected=packet->peekDataAsBytes()->getBytes();packet->addRegionTag<CreationTimeTag>(B(40),B(280))->setCreationTime(sideTime);packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ipv6);packet->addTag<NextHopAddressReq>()->setNextHopAddress(nic[3]->getProtocolData<Ipv6InterfaceData>()->getLinkLocalAddress());sendDirect(packet,nic[2]->gate("upperLayerIn")->getPathStartGate());return;}
+        if(kind==7||kind==8){LifecycleOperation::StringMap parameters;LifecycleOperation*operation=kind==7?static_cast<LifecycleOperation*>(new ModuleStopOperation):static_cast<LifecycleOperation*>(new ModuleStartOperation);operation->initialize(layer[1],parameters);initiateOperation(operation);return;}
+        int payload=scenario==33?1360:280;
+        auto header=makeShared<Ipv6Header>();header->setSrcAddress(Ipv6Address("2001:db8:1::211:2233:4455:6601"));header->setDestAddress(Ipv6Address(scenario==33?"2001:db8:1::211:2233:4455:6602":"2001:db8:2::211:2233:4455:6602"));header->setHopLimit(scenario>=27&&scenario<=29?65:scenario==31&&!followup?255:64);header->setPayloadLength(B(payload));header->setProtocolId(!followup&&scenario==30?IP_PROT_IPv6EXT_FRAGMENT:!followup&&(scenario==31||scenario==32&&controlOrdinal%2==0)?IP_PROT_IPv6_ICMP:scenario==2||scenario==4||scenario==5||scenario==32&&!followup?IP_PROT_IPv6EXT_HOP:scenario==3?IP_PROT_IPv6:IP_PROT_NONE);
+        auto packet=new Packet("raw-recovery-data",header);std::vector<uint8_t> body(payload);for(int i=0;i<payload;i++)body[i]=i;
+        if(scenario==2||scenario==4||scenario==5){int length=scenario==5?64:8;std::fill(body.begin(),body.begin()+length,0);body[0]=59;body[1]=length/8-1;if(scenario==4){body[2]=5;body[3]=2;}}
+        if(scenario==3){auto inner=makeShared<Ipv6Header>(*header);inner->setProtocolId(IP_PROT_NONE);inner->setPayloadLength(B(240));Packet nested("inner",inner);auto bytes=nested.peekDataAsBytes()->getBytes();std::copy(bytes.begin(),bytes.end(),body.begin());}
+        if(!followup&&scenario==30){std::vector<uint8_t> fragment{58,0,0,8,0,0,0,1};std::copy(fragment.begin(),fragment.end(),body.begin());body[8]=135;}
+        if(!followup&&scenario==31){std::fill(body.begin(),body.end(),0);body[0]=135;Packet addresses("ns-target",header);auto bytes=addresses.peekDataAsBytes()->getBytes();std::copy(bytes.begin()+24,bytes.begin()+40,body.begin()+8);body[24]=99;body[25]=32;}
+        if(!followup&&scenario==32){int types[]={133,134,135,136,137,157,158};std::fill(body.begin(),body.end(),0);int start=controlOrdinal%2?8:0;if(start){body[0]=58;body[1]=0;}body[start]=types[controlOrdinal];}
+        packet->insertAtBack(makeShared<BytesChunk>(body));expected=packet->peekDataAsBytes()->getBytes();expected[7]=scenario==33||scenario>=27&&scenario<=29?64:scenario==31&&!followup?254:63;
+        if((scenario>=7&&scenario<=22)||scenario==28||scenario==29||scenario==33||scenario==34||scenario==36){script(*packet);delete packet;return;}
+        if(!followup&&(scenario==30||scenario==31))scheduleAt(SimTime(.5),new cMessage("eligible-source-after-ordinary",6));
+        if(!followup&&scenario==32)scheduleAt(SimTime(controlOrdinal<6?1.1+controlOrdinal:7.5),new cMessage("next-control-or-eligible",controlOrdinal<6?9:6));
+        packet->addRegionTag<CreationTimeTag>(B(40),B(payload))->setCreationTime(SimTime(.1));
+        packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ipv6);
+        packet->addTag<NextHopAddressReq>()->setNextHopAddress(nic[1]->getProtocolData<Ipv6InterfaceData>()->getLinkLocalAddress());
+        sendDirect(packet,nic[0]->gate("upperLayerIn")->getPathStartGate());
+    }
+    void receiveSignal(cComponent*,simsignal_t,long count,cObject*)override{losses+=count;}
+    void receiveSignal(cComponent*origin,simsignal_t signal,cObject*object,cObject*details)override{
+        Enter_Method_Silent();
+        auto packet=check_and_cast<Packet*>(object);
+        if(signal==registerSignal("packetDropped")){if(auto drop=dynamic_cast<lowpan::LowpanPacketDropDetails*>(details))if(drop->getLowpanReason()==lowpan::LOWPAN_RESOURCE_LIMIT)resource++;return;}
+        if(signal==registerSignal("datagramCompleted")){if(scenario==33&&origin==layer[1]){ASSERT(packet->getDataLength()==B(1400)&&packet->peekDataAsBytes()->getBytes()==expected);received++;return;}if(packet->getDataLength()==B(320)){if(origin==layer[3]){if((scenario==35||scenario==36)&&packet->peekAtFront<Ipv6Header>()->getSrcAddress()==Ipv6Address("2001:db8:2::211:2233:4455:6603")){ASSERT(packet->peekDataAsBytes()->getBytes()==sideExpected);assertTimeTags(*packet,40,280,sideTime);sideReceived++;return;}ASSERT(packet->peekDataAsBytes()->getBytes()==expected);if(scenario<7||(scenario>=23&&scenario!=28&&scenario!=29&&scenario!=34)){bool compressedExtension=(scenario==30&&!followup)||(scenario==32&&!followup&&controlOrdinal%2);assertTimeTags(*packet,compressedExtension?48:40,compressedExtension?272:280,SimTime(.1));}if(scenario==9){assertTimeTags(*packet,40,36,SimTime(.1));assertTimeTags(*packet,76,69,SimTime(.2));}received++;}else if(origin==layer[1])ordinary++;}return;}
+        auto bytes=packet->peekDataAsBytes()->getBytes();
+        if(signal==registerSignal("nativeFrameTransmissionFailed")){if(origin==layer[2]&&bytes.size()>=29){bytes=std::vector<uint8_t>(bytes.begin()+21,bytes.end()-2);if((bytes[0]&0xfe)==0xe8&&bytes[1]==oldOutTag)oldTerminal=simTime();}return;}
+        if(bytes.size()<6)return;
+        if(signal==registerSignal("fragmentReceived")){
+            if(scenario==36&&origin==layer[2]&&(bytes[0]&0xfe)==0xea&&bytes[1]==reusedTag&&bytes[2]==255&&bytes[3]==255&&bytes[4]==255&&bytes[5]==255)returnedFull++;
+            if(origin==layer[1]&&(bytes[0]&0xfe)==0xe8&&bytes[4]==0&&bytes[5]==0&&(bytes[2]&0x80)&&(scenario==6||scenario==26)&&resetReceived==SIMTIME_ZERO)resetReceived=simTime();
+            if(origin==layer[0]&&(bytes[0]&0xfe)==0xea){if(bytes[0]&1)marks++;if(bytes[2]==0&&bytes[3]==0&&bytes[4]==0&&bytes[5]==0){nulls++;if(manualNull!=SIMTIME_ZERO&&simTime()>=manualNull&&simTime()<manualNull+SimTime(.015))correlatedNull++;}}
+            return;
+        }
+        if(scenario==36&&origin==layer[2]&&(bytes[0]&0xfe)==0xe8&&bytes[4]==0&&bytes[5]==0){ASSERT(bytes[1]!=oldOutTag);auto inserted=resetTags.insert(bytes[1]);ASSERT(inserted.second);}
+        if((bytes[0]&0xfe)!=0xe8||(bytes[4]==0&&bytes[5]==0))return;
+        if(scenario==36&&((bytes[2]>>2)&31)==0){if(origin==layer[1])oldOutTag=bytes[1];else if(origin==layer[2])reusedTag=bytes[1];}
+        if(origin==layer[0])source++;else if(origin==layer[1]){forwarded++;if(simTime()<SimTime(120))earlyForwarded++;}
+        else if(origin==layer[2])sideSource++;
+        if(scenario==35&&(origin==layer[1]||origin==layer[2])&&((bytes[2]>>2)&31)==0)sharedTags.insert(bytes[1]);
+        if(origin==layer[0]&&((bytes[2]>>2)&31)==0)firstInput=bytes;
+        if(origin==layer[1]&&(scenario==6||scenario==26)&&!resetScheduled){oldOutTag=bytes[1];resetScheduled=true;for(int kind=1;kind<=4;kind++)scheduleAt(simTime()+SimTime(kind==1?.0002:kind==2?.07:kind==3?.1:.12),new cMessage("reset-flight",kind));if(scenario==26){scheduleAt(simTime()+SimTime(.015),new cMessage("stop-null-only-owner",7));scheduleAt(simTime()+SimTime(.035),new cMessage("restart-null-only-owner",8));}}
+        if(origin==layer[1]&&scenario==23&&!resetScheduled){resetScheduled=true;scheduleAt(simTime()+SimTime(.02),new cMessage("late-hook",5));}
+        ASSERT(!(bytes[6]&4)||((bytes[2]>>2)&31)!=0);
+    }
+    void finish()override{
+        int wanted=(scenario==4||scenario==5||scenario==6||scenario==10||scenario==11||scenario==23||scenario==24||scenario==26||scenario==28||scenario==36)?0:scenario==21||scenario==30||scenario==31?2:scenario==32?8:1;
+        std::cout<<"rawDiagnostic="<<scenario<<" source="<<source<<" forwarded="<<forwarded<<" received="<<received<<" literal="<<literalCount<<" null="<<nulls<<" mark="<<marks<<" reset="<<resetReceived<<" oldDone="<<oldTerminal<<std::endl;
+        ASSERT(received==wanted);
+        if(scenario<7||(scenario>=23&&scenario<25)||scenario==26||scenario==27||(scenario>=30&&scenario<=32))ASSERT(source>0);
+        if(scenario==1)ASSERT(losses==2&&source==6);else ASSERT(losses==0);
+        if(scenario==4||scenario==5||scenario==24)ASSERT(forwarded==0);
+        else if(scenario==6)ASSERT(forwarded==2&&resetReceived!=SIMTIME_ZERO&&oldTerminal>resetReceived&&correlatedNull>=1);
+        else if(scenario==26)ASSERT(forwarded==2&&resetReceived!=SIMTIME_ZERO&&oldTerminal>resetReceived&&correlatedNull==0);
+        else if(scenario==7)ASSERT(marks==1);
+        else if(scenario==8)ASSERT(marks==2&&forwarded==5);
+        else if(scenario==10)ASSERT(forwarded==2&&nulls>0);
+        else if(scenario==11)ASSERT(forwarded==1&&nulls==1);
+        else if(scenario==15)ASSERT(forwarded==6&&nulls>=1);
+        else if(scenario==16||scenario==18||scenario==20)ASSERT(nulls>=1);
+        else if(scenario==17||scenario==19)ASSERT(nulls==0);
+        else if(scenario==21||scenario==22)ASSERT(nulls>=1);
+        else if(scenario==23)ASSERT(forwarded==1&&nulls>0);
+        else if(scenario==25)ASSERT(source==0&&forwarded==0&&ordinary==1);
+        else if(scenario==28)ASSERT(forwarded==1&&nulls==1);
+        else if(scenario>=30&&scenario<=32)ASSERT(ordinary==(scenario==32?7:1)&&source==5&&forwarded==5);
+        else if(scenario==33)ASSERT(forwarded==0&&source==0&&literalCount==18);
+        else if(scenario==34)ASSERT(earlyForwarded==0&&forwarded==5&&nulls>=3&&resource==1);
+        else if(scenario==35)ASSERT(sideSource>=5&&sideReceived==1&&sharedTags.size()==2);
+        else if(scenario==36){auto processed=check_and_cast<lowpan::LowpanLayer*>(layer[2])->resolveDirective('p');std::cout<<"deletedOwnerTags="<<resetTags.size()<<" old="<<oldOutTag<<" reused="<<reusedTag<<" sideFrames="<<sideSource<<" full="<<returnedFull<<" processed="<<processed<<std::endl;ASSERT(resetTags.size()==255&&reusedTag==oldOutTag&&sideSource==5&&sideReceived==1&&returnedFull==1&&processed=="1"&&literalCount==256);}
+        else ASSERT(forwarded>=5);
+        if(scenario==12||scenario==13||scenario==14)ASSERT(resource>=1);
+        std::cout<<"rawCase="<<scenario<<" source="<<source<<" forwarded="<<forwarded<<" received="<<received<<" loss="<<losses<<" sideSource="<<sideSource<<" sideReceived="<<sideReceived<<" sharedTags="<<sharedTags.size()<<"\n";
+        std::cout<<"Core recovery raw-tail native proof verified\n";
+    }
+};
+Define_Module(RecoveryRawCheck);
+}
+
+%file: test.ned
+@namespace(inet::protocoltest);
+import inet.node.inet.StandardHost;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.linklayer.lowpan.LowpanNativeMac;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple RecoveryRawCheck {parameters:int scenario;}
+simple RecoveryRawLossMac extends LowpanNativeMac {@class(RecoveryRawLossMac);}
+network RecoveryRawNetwork {
+    submodules:
+        mediumLeft:Ieee802154NarrowbandScalarRadioMedium;
+        mediumRight:Ieee802154NarrowbandScalarRadioMedium;
+        domainLeft:LowpanNativeLinkDomain;
+        domainRight:LowpanNativeLinkDomain;
+        node[3]:StandardHost;
+        check:RecoveryRawCheck;
+}
+
+%inifile: omnetpp.ini
+[General]
+network=RecoveryRawNetwork
+sim-time-limit=${case}==36 ? 170s : (${case}==21 || ${case}==22 || ${case}==34) ? 124s : 10s
+seed-set=0
+*.check.scenario=${case=0..36}
+**.vector-recording=false
+**.scalar-recording=false
+*.node[*].hasIpv4=false
+*.node[*].hasIpv6=true
+*.node[*].hasUdp=false
+*.node[*].hasTcp=false
+*.node[*].ipv6.typename="LowpanIpv6NetworkLayer"
+*.node[1].forwarding=true
+*.node[1].numWlanInterfaces=2
+*.node[*].numWlanInterfaces=1
+*.node[*].wlan[*].typename="Ieee802154NativeLowpanInterface"
+*.node[0].wlan[0].linkDomainModule="^.^.domainLeft"
+*.node[1].wlan[0].linkDomainModule="^.^.domainLeft"
+*.node[1].wlan[1].linkDomainModule="^.^.domainRight"
+*.node[2].wlan[0].linkDomainModule="^.^.domainRight"
+*.node[0].wlan[0].radio.radioMediumModule="mediumLeft"
+*.node[1].wlan[0].radio.radioMediumModule="mediumLeft"
+*.node[1].wlan[1].radio.radioMediumModule="mediumRight"
+*.node[2].wlan[0].radio.radioMediumModule="mediumRight"
+**.lowpan.nativeSelectiveRecovery=${case}!=25
+*.node[1].wlan[0].lowpan.maxRecoveryBytes=(${case}==6 || ${case}==15 || ${case}==26) ? 260B : 32768B
+*.node[0].wlan[0].lowpan.maxRecoveryRecords=${case}>=30 ? 1 : 64
+*.node[2].wlan[0].lowpan.maxRecoveryRecords=${case}==12 ? 1 : 64
+*.node[2].wlan[0].lowpan.maxRecoveryBytes=${case}==13 ? 350B : 32768B
+*.node[1].wlan[0].lowpan.maxRecoveryPendingFrames=${case}==14 ? 1 : 4
+*.node[1].wlan[0].lowpan.recoveryPathPayloadLimit=${case}==34 ? 104B : 94B
+*.node[1].wlan[1].lowpan.recoveryPayloadLimit=${case}==34 ? 94B : 0B
+**.lowpan.routingTableModule="^.^.ipv6.routingTable"
+**.lowpan.icmpv6Module="^.^.ipv6.icmpv6"
+**.lowpan.ipv6Module="^.^.ipv6.ipv6"
+**.mac.typename="RecoveryRawLossMac"
+**.mac.macMinBE=(${case}>=14 && ${case}<=20) ? 3 : 0
+**.mac.macMaxBE=(${case}>=14 && ${case}<=20) ? 3 : 0
+**.mac.macMaxFrameRetries=1
+*.domainLeft.panId=4660
+*.domainRight.panId=9029
+*.domainLeft.radioMediumModule="mediumLeft"
+*.domainRight.radioMediumModule="mediumRight"
+*.domainLeft.config=xml("<domain><peer interface='node[0].wlan[0]' native='0011223344556601'/><peer interface='node[1].wlan[0]' native='0011223344556602'/><neighbor interface='node[0].wlan[0]' ipv6='fe80::211:2233:4455:6602' native='0011223344556602'/><neighbor interface='node[1].wlan[0]' ipv6='fe80::211:2233:4455:6601' native='0011223344556601'/></domain>")
+*.domainRight.config=xml("<domain><peer interface='node[1].wlan[1]' native='0011223344556603'/><peer interface='node[2].wlan[0]' native='0011223344556604'/><neighbor interface='node[1].wlan[1]' ipv6='fe80::211:2233:4455:6604' native='0011223344556604'/><neighbor interface='node[2].wlan[0]' ipv6='fe80::211:2233:4455:6603' native='0011223344556603'/></domain>")
+**.radio.antenna.mobilityModule="^.^.^.mobility"
+**.mobility.initialX=0m
+**.mobility.initialY=0m
+**.mobility.initialZ=0m
+**.mobility.initFromDisplayString=false
+**.mobility.updateFromDisplayString=false
+
+%contains: stdout
+Core recovery raw-tail native proof verified

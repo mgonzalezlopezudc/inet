@@ -8,7 +8,7 @@ namespace inet { namespace lowpan {
 class INET_API LowpanDispatchPrefix
 {
   public:
-    enum Kind { MALFORMED, UNSUPPORTED_PAGE, UNKNOWN, IPV6, IPHC, MESH, BROADCAST, FRAG1, FRAGN, ESC };
+    enum Kind { MALFORMED, UNSUPPORTED_PAGE, UNKNOWN, IPV6, IPHC, MESH, BROADCAST, FRAG1, FRAGN, ESC, RFRAG, RFRAG_ACK };
     struct State {
         uint8_t page;
         bool seenPageOne;

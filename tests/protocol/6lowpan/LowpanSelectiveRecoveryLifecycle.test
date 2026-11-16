@@ -1,0 +1,246 @@
+%description:
+Actual native selective-recovery source/relay lifecycle re-entry, borrowed signal
+snapshots, bounded byte release and fixed history across source restart.
+
+%extraargs: -r 0..3
+
+%file: RecoveryLifecycleCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/lifecycle/LifecycleController.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
+#include "inet/linklayer/lowpan/LowpanTransmissionReq_m.h"
+#include "inet/linklayer/lowpan/LowpanPacketDropDetails_m.h"
+#include "inet/networklayer/common/NetworkInterface.h"
+#include "inet/networklayer/ipv6/Ipv6InterfaceData.h"
+#include "inet/networklayer/ipv6/Ipv6RoutingTable.h"
+#include "inet/networklayer/ipv6/Ipv6Header_m.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmission.h"
+namespace inet::protocoltest {
+struct RecoveryLifecycleWire {
+    bool data=false,control=false;
+    int tag=0,sequence=0,size=0,offset=0;
+    explicit RecoveryLifecycleWire(const std::vector<uint8_t>& bytes){
+        if(bytes.size()<6)return;
+        if((bytes[0]&0xfe)==0xea){control=true;return;}
+        if((bytes[0]&0xfe)!=0xe8)return;
+        tag=bytes[1];sequence=(bytes[2]>>2)&31;size=((bytes[2]&3)<<8)|bytes[3];offset=(bytes[4]<<8)|bytes[5];
+        data=offset!=0&&size!=0;control=!data;
+        if(data)ASSERT(bytes.size()==size_t(size+6));
+    }
+};
+class RecoveryLifecycleLater : public cListener {
+  public:
+    cObject *borrowed=nullptr;
+    std::vector<uint8_t> frozen;
+    int reads=0;
+    void receiveSignal(cComponent*,simsignal_t,cObject*object,cObject*)override {
+        if(object!=borrowed)return;
+        auto packet=check_and_cast<Packet*>(object);
+        ASSERT(packet->peekDataAsBytes()->getBytes()==frozen);
+        ASSERT(packet->findTag<lowpan::LowpanTransmissionReq>()!=nullptr);
+        reads++;borrowed=nullptr;
+    }
+};
+class RecoveryLifecycleCheck : public cSimpleModule,public LifecycleController,public cListener {
+    NetworkInterface *nic[4]{};cModule *layer[4]{};
+    RecoveryLifecycleLater later;
+    int scenario=0,accepted=0,resource=0,delivered=0,complete=0,ordinaryB=0;
+    int fragments[2][3]{},air[2][3]{},success[2][3]{},controls=0;
+    int inputFirst=0,inputHeader=0,outputFirst=0,outputHeader=0;
+    bool stopped=false,restarted=false;
+    std::set<int> tags[2][3];
+    std::map<int,std::vector<uint8_t>> expected;
+    std::map<std::tuple<int,int,int>,std::vector<uint8_t>> snapshots;
+    int epoch()const{return simTime()<SimTime(10)?0:simTime()<SimTime(100)?1:2;}
+    cModule *target()const{return scenario<2?layer[0]:layer[1];}
+    void operation(bool start){
+        LifecycleOperation *op=start?static_cast<LifecycleOperation*>(new ModuleStartOperation):static_cast<LifecycleOperation*>(new ModuleStopOperation);
+        LifecycleOperation::StringMap params;op->initialize(target(),params);initiateOperation(op);
+    }
+    void stop(){ASSERT(!stopped);stopped=true;operation(false);}
+    void validatePeer(const Packet& packet,int direction){
+        auto req=packet.getTag<lowpan::LowpanTransmissionReq>();
+        ASSERT(req->getSrcAddress()==Ieee802154Address(direction?"0011223344556603":"0011223344556601"));
+        ASSERT(req->getDestAddress()==Ieee802154Address(direction?"0011223344556604":"0011223344556602"));
+        ASSERT(req->getSrcPanId()==(direction?9029:4660)&&req->getDestPanId()==req->getSrcPanId());
+    }
+    std::vector<uint8_t> nativePayload(const std::vector<uint8_t>& bytes,int direction){
+        ASSERT(bytes.size()>=29&&(bytes[0]|(bytes[1]<<8))==0xdc61);
+        int pan=direction?9029:4660;ASSERT((bytes[3]|(bytes[4]<<8))==pan);
+        uint64_t src=direction?0x0011223344556603ULL:0x0011223344556601ULL;
+        uint64_t dst=direction?0x0011223344556604ULL:0x0011223344556602ULL;
+        for(int i=0;i<8;i++){ASSERT(bytes[5+i]==uint8_t(dst>>(8*i)));ASSERT(bytes[13+i]==uint8_t(src>>(8*i)));}
+        return std::vector<uint8_t>(bytes.begin()+21,bytes.end()-2);
+    }
+  protected:
+    int numInitStages()const override{return NUM_INIT_STAGES;}
+    void initialize(int stage)override {
+        if(stage!=INITSTAGE_LAST)return;
+        scenario=par("scenario");auto root=getParentModule();auto a=root->getSubmodule("node",0),b=root->getSubmodule("node",1),c=root->getSubmodule("node",2);
+        nic[0]=check_and_cast<NetworkInterface*>(a->getSubmodule("wlan",0));nic[1]=check_and_cast<NetworkInterface*>(b->getSubmodule("wlan",0));nic[2]=check_and_cast<NetworkInterface*>(b->getSubmodule("wlan",1));nic[3]=check_and_cast<NetworkInterface*>(c->getSubmodule("wlan",0));
+        const char *address[]={"2001:db8:1::211:2233:4455:6601","2001:db8:1::211:2233:4455:6602","2001:db8:2::211:2233:4455:6603","2001:db8:2::211:2233:4455:6602"};
+        for(int i=0;i<4;i++){
+            nic[i]->getProtocolDataForUpdate<Ipv6InterfaceData>()->assignAddress(Ipv6Address(address[i]),false,SIMTIME_ZERO,SIMTIME_ZERO);layer[i]=nic[i]->getSubmodule("lowpan");
+            for(auto name:{"datagramAccepted","fragmentSent","datagramCompleted","nativeFrameTransmissionSucceeded","packetDropped"})layer[i]->subscribe(name,this);
+        }
+        auto route=[&](cModule*node,const char*dest,int interface,const char*next){check_and_cast<Ipv6RoutingTable*>(node->getSubmodule("ipv6")->getSubmodule("routingTable"))->addStaticRoute(Ipv6Address(dest),128,nic[interface]->getInterfaceId(),Ipv6Address(next));};
+        route(a,address[3],0,"fe80::211:2233:4455:6602");route(b,address[3],2,"fe80::211:2233:4455:6604");route(c,address[0],3,"fe80::211:2233:4455:6603");route(b,address[0],1,"fe80::211:2233:4455:6601");
+        if(scenario==0||scenario==2)target()->subscribe("fragmentSent",&later);
+        nic[0]->getSubmodule("radio")->subscribe("transmissionStarted",this);nic[2]->getSubmodule("radio")->subscribe("transmissionStarted",this);
+        c->getSubmodule("app",0)->subscribe("packetReceived",this);
+        scheduleAt(SimTime(11),new cMessage("restart"));
+    }
+    void handleMessage(cMessage*message)override {delete message;ASSERT(stopped&&!restarted);operation(true);restarted=true;}
+    void receiveSignal(cComponent*source,simsignal_t signal,cObject*object,cObject*details)override {
+        Enter_Method_Silent();int e=epoch();
+        if(signal==registerSignal("transmissionStarted")){
+            auto bytes=check_and_cast<physicallayer::ITransmission*>(object)->getPacket()->peekDataAsBytes()->getBytes();
+            if((bytes[0]&7)!=1)return;
+            int d=source==nic[0]->getSubmodule("radio")?0:1;
+            auto payload=nativePayload(bytes,d);RecoveryLifecycleWire h(payload);
+            if(h.control){controls++;return;}if(!h.data)return;
+            auto it=snapshots.find({d,h.tag,h.sequence});ASSERT(it!=snapshots.end()&&it->second==payload);
+            if(e==0&&stopped&&((scenario<2&&d==0)||(scenario>=2&&d==1)))ASSERT(false);
+            air[d][e]++;return;
+        }
+        auto packet=check_and_cast<Packet*>(object);
+        if(signal==registerSignal("packetReceived")){ASSERT(e>0&&restarted&&packet->getDataLength()==B(1232));delivered++;return;}
+        if(signal==registerSignal("packetDropped")){
+            auto drop=dynamic_cast<lowpan::LowpanPacketDropDetails*>(details);
+            if(source==layer[0]&&drop&&drop->getLowpanReason()==lowpan::LOWPAN_RESOURCE_LIMIT){ASSERT(scenario==0&&simTime()==SimTime(25.1));resource++;}
+            return;
+        }
+        if(signal==registerSignal("datagramAccepted")){
+            if(source==layer[0]){accepted++;auto bytes=packet->peekDataAsBytes()->getBytes();ASSERT(bytes.size()==1280&&bytes[7]==64);if(e>0){bytes[7]=63;expected[e]=bytes;}}
+            return;
+        }
+        if(signal==registerSignal("datagramCompleted")){
+            auto header=packet->peekAtFront<Ipv6Header>();if(header->getDestAddress()!=Ipv6Address("2001:db8:2::211:2233:4455:6602"))return;
+            if(source==layer[1]){ordinaryB++;ASSERT(false);}
+            if(source==layer[3]){ASSERT(e>0&&packet->peekDataAsBytes()->getBytes()==expected.at(e));complete++;}
+            return;
+        }
+        auto bytes=packet->peekDataAsBytes()->getBytes();
+        if(signal==registerSignal("nativeFrameTransmissionSucceeded")){
+            int d=source==layer[0]?0:source==layer[2]?1:-1;if(d<0)return;
+            validatePeer(*packet,d);bytes=nativePayload(bytes,d);
+        }
+        RecoveryLifecycleWire h(bytes);
+        if(h.control){controls++;return;}if(!h.data)return;
+        if(signal==registerSignal("nativeFrameTransmissionSucceeded")){
+            int d=source==layer[0]?0:source==layer[2]?1:-1;if(d<0)return;
+            validatePeer(*packet,d);auto it=snapshots.find({d,h.tag,h.sequence});ASSERT(it!=snapshots.end()&&it->second==bytes);success[d][e]++;
+            if(e==0&&!stopped&&((scenario==1&&d==0)||(scenario==3&&d==1)))stop();
+            return;
+        }
+        ASSERT(signal==registerSignal("fragmentSent"));int d=source==layer[0]?0:source==layer[1]?1:-1;if(d<0)return;
+        validatePeer(*packet,d);auto key=std::make_tuple(d,h.tag,h.sequence);auto it=snapshots.find(key);if(it!=snapshots.end())ASSERT(it->second==bytes);else snapshots[key]=bytes;
+        tags[d][e].insert(h.tag);fragments[d][e]++;
+        if(h.sequence==0){
+            if(d==0){inputFirst=h.size;inputHeader=h.offset-(1280-40);ASSERT(inputHeader>0&&inputHeader<=40);}
+            else {outputFirst=h.size;outputHeader=inputHeader+h.offset-(1280-40+inputHeader);ASSERT(outputHeader>0&&outputHeader<=40);}
+        }
+        if(e>0){ASSERT(restarted&&!tags[d][0].count(h.tag));if(e==2)ASSERT(!tags[d][1].count(h.tag));}
+        if(e==0&&!stopped&&((scenario==0&&d==0)||(scenario==2&&d==1))){later.borrowed=object;later.frozen=bytes;stop();ASSERT(packet->peekDataAsBytes()->getBytes()==bytes);}
+    }
+    void finish()override {
+        int deliveries=scenario==0?2:1;
+        int relayCharge=inputFirst+outputHeader+outputFirst,sourceCharge=1280+inputHeader;
+        std::cout<<"case="<<scenario<<" accepted="<<accepted<<" resource="<<resource<<" delivered="<<delivered<<" complete="<<complete<<" ordinaryB="<<ordinaryB<<" laterReads="<<later.reads<<" sourceCharge="<<sourceCharge<<" relayCharge="<<relayCharge<<" inputFirst="<<inputFirst<<" inputH="<<inputHeader<<" outputFirst="<<outputFirst<<" outputH="<<outputHeader<<" controls="<<controls;
+        for(int d=0;d<2;d++)for(int e=0;e<3;e++)std::cout<<" d"<<d<<"e"<<e<<'='<<fragments[d][e]<<','<<air[d][e]<<','<<success[d][e];std::cout<<std::endl;
+        ASSERT(stopped&&restarted&&accepted==(scenario==0?3:2)&&resource==(scenario==0?1:0));
+        ASSERT(delivered==deliveries&&complete==deliveries&&ordinaryB==0);
+        ASSERT(sourceCharge<=1400&&2*sourceCharge>1400);
+        if(scenario>=2)ASSERT(relayCharge<=260&&2*relayCharge>260);
+        ASSERT(later.reads==((scenario==0||scenario==2)?1:0));
+        ASSERT(fragments[scenario<2?0:1][0]==1);
+        ASSERT(air[scenario<2?0:1][0]==((scenario==0||scenario==2)?0:1));
+        ASSERT(success[scenario<2?0:1][0]==((scenario==0||scenario==2)?0:1));
+        for(int d=0;d<2;d++){ASSERT(tags[d][1].size()==1&&air[d][1]>1&&success[d][1]==air[d][1]);if(scenario==0)ASSERT(tags[d][2].size()==1&&air[d][2]>1&&success[d][2]==air[d][2]);}
+        std::cout<<"Native selective recovery lifecycle and fixed history verified\n";
+    }
+};
+Define_Module(RecoveryLifecycleCheck);
+}
+
+%file: test.ned
+@namespace(inet::protocoltest);
+import inet.node.inet.StandardHost;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple RecoveryLifecycleCheck {parameters:int scenario;}
+network RecoveryLifecycleNetwork {
+    submodules:
+        mediumLeft:Ieee802154NarrowbandScalarRadioMedium;
+        mediumRight:Ieee802154NarrowbandScalarRadioMedium;
+        domainLeft:LowpanNativeLinkDomain;
+        domainRight:LowpanNativeLinkDomain;
+        node[3]:StandardHost;
+        check:RecoveryLifecycleCheck;
+}
+
+%inifile: omnetpp.ini
+[General]
+network=RecoveryLifecycleNetwork
+sim-time-limit=${case}==0 ? 135s : 25s
+seed-set=0
+*.check.scenario=${case=0..3}
+**.vector-recording=false
+**.scalar-recording=false
+*.node[*].hasIpv4=false
+*.node[*].hasIpv6=true
+*.node[1].hasUdp=false
+*.node[*].ipv6.typename="LowpanIpv6NetworkLayer"
+*.node[1].forwarding=true
+*.node[1].numWlanInterfaces=2
+*.node[*].numWlanInterfaces=1
+*.node[*].wlan[*].typename="Ieee802154NativeLowpanInterface"
+*.node[0].wlan[0].linkDomainModule="^.^.domainLeft"
+*.node[1].wlan[0].linkDomainModule="^.^.domainLeft"
+*.node[1].wlan[1].linkDomainModule="^.^.domainRight"
+*.node[2].wlan[0].linkDomainModule="^.^.domainRight"
+*.node[0].wlan[0].radio.radioMediumModule="mediumLeft"
+*.node[1].wlan[0].radio.radioMediumModule="mediumLeft"
+*.node[1].wlan[1].radio.radioMediumModule="mediumRight"
+*.node[2].wlan[0].radio.radioMediumModule="mediumRight"
+**.lowpan.nativeSelectiveRecovery=true
+**.lowpan.recoveryWindow=1
+**.lowpan.recoveryOperationLifetime=5s
+**.lowpan.routingTableModule="^.^.ipv6.routingTable"
+**.lowpan.icmpv6Module="^.^.ipv6.icmpv6"
+**.lowpan.ipv6Module="^.^.ipv6.ipv6"
+*.node[0].wlan[0].lowpan.maxRecoveryRecords=${case}==0 ? 2 : 64
+*.node[0].wlan[0].lowpan.maxRecoveryBytes=1400B
+*.node[1].wlan[0].lowpan.maxRecoveryBytes=${case}>=2 ? 260B : 32768B
+**.mac.macMinBE=0
+**.mac.macMaxBE=0
+**.mac.macMaxFrameRetries=1
+*.node[0].numApps=1
+*.node[0].app[0].typename="UdpBasicApp"
+*.node[0].app[0].destAddresses="2001:db8:2::211:2233:4455:6602"
+*.node[0].app[0].destPort=61631
+*.node[0].app[0].localPort=61616
+*.node[0].app[0].timeToLive=64
+*.node[0].app[0].startTime=100ms
+*.node[0].app[0].stopTime=${case}==0 ? 121.2s : 12.2s
+*.node[0].app[0].sendInterval=${case}==0 ? (simTime()<1s ? 12s : (simTime()<13s ? 13s : 96s)) : 12s
+*.node[0].app[0].messageLength=1232B
+*.node[2].numApps=1
+*.node[2].app[0].typename="UdpSink"
+*.node[2].app[0].localPort=61631
+*.node[*].udp.checksumMode="computed"
+*.domainLeft.panId=4660
+*.domainRight.panId=9029
+*.domainLeft.radioMediumModule="mediumLeft"
+*.domainRight.radioMediumModule="mediumRight"
+*.domainLeft.config=xml("<domain><peer interface='node[0].wlan[0]' native='0011223344556601'/><peer interface='node[1].wlan[0]' native='0011223344556602'/><neighbor interface='node[0].wlan[0]' ipv6='fe80::211:2233:4455:6602' native='0011223344556602'/><neighbor interface='node[1].wlan[0]' ipv6='fe80::211:2233:4455:6601' native='0011223344556601'/></domain>")
+*.domainRight.config=xml("<domain><peer interface='node[1].wlan[1]' native='0011223344556603'/><peer interface='node[2].wlan[0]' native='0011223344556604'/><neighbor interface='node[1].wlan[1]' ipv6='fe80::211:2233:4455:6604' native='0011223344556604'/><neighbor interface='node[2].wlan[0]' ipv6='fe80::211:2233:4455:6603' native='0011223344556603'/></domain>")
+**.radio.antenna.mobilityModule="^.^.^.mobility"
+**.mobility.initialX=0m
+**.mobility.initialY=0m
+**.mobility.initialZ=0m
+**.mobility.initFromDisplayString=false
+**.mobility.updateFromDisplayString=false
+
+%contains: stdout
+Native selective recovery lifecycle and fixed history verified

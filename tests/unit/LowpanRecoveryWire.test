@@ -1,0 +1,82 @@
+%description:
+Independent RFC8931 six-byte fragment/ACK vectors, flags, field bounds and
+page-local dispatch. Payload bytes never become outer page selectors.
+
+%includes:
+#include "inet/linklayer/lowpan/LowpanRfragHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanRfragAckHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanDispatchPrefix.h"
+#include "inet/linklayer/lowpan/LowpanProtocolDissector.h"
+#include "inet/linklayer/lowpan/LowpanProtocolPrinter.h"
+#include "inet/linklayer/lowpan/LowpanProtocol.h"
+#include "inet/linklayer/lowpan/LowpanIphcHeader_m.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+using namespace inet;
+using namespace inet::lowpan;
+
+%global:
+class RecoveryWireObserver : public ProtocolDissector::ICallback {
+  public:
+    int bad=0;std::vector<std::string> visited;
+    void startProtocolDataUnit(const Protocol*)override{}
+    void endProtocolDataUnit(const Protocol*)override{}
+    void markIncorrect()override{bad++;}
+    void visitChunk(const Ptr<const Chunk>& chunk,const Protocol*)override{
+        if(dynamicPtrCast<const LowpanRfragHeader>(chunk))visited.push_back("fragment");
+        else if(dynamicPtrCast<const LowpanRfragAckHeader>(chunk))visited.push_back("ack");
+        else if(dynamicPtrCast<const LowpanIphcHeader>(chunk))visited.push_back("iphc");
+        else visited.push_back("opaque");
+    }
+    void dissectPacket(Packet*,const Protocol*)override{ASSERT(false);}
+};
+
+%activity:
+Packet input("independent-fragment",makeShared<BytesChunk>(std::vector<uint8_t>{0xe8,0x12,0x8c,0x50,0,0xa0}));
+auto fragment=input.peekAtFront<LowpanRfragHeader>();
+ASSERT(fragment->getDatagramTag()==0x12&&fragment->getAckRequested()&&fragment->getSequence()==3);
+ASSERT(fragment->getFragmentSize()==80&&fragment->getFragmentOffset()==160&&!fragment->getEcn());
+for(auto bytes:{std::vector<uint8_t>{0xeb,0x12,0xa0,0,0,0},{0xea,0x12,0xff,0xff,0xff,0xff},{0xea,0x12,0,0,0,0}}){
+    Packet wire("independent-ack",makeShared<BytesChunk>(bytes));auto header=wire.peekAtFront<LowpanRfragAckHeader>();
+    ASSERT(header->getEcn()==bool(bytes[0]&1));
+    auto copy=makeShared<LowpanRfragAckHeader>();copy->setEcn(header->getEcn());copy->setDatagramTag(header->getDatagramTag());copy->setBitmap(header->getBitmap());
+    Packet encoded("encoded",copy);ASSERT(encoded.peekDataAsBytes()->getBytes()==bytes);
+}
+for(int seq=0;seq<32;seq++)for(int flags=0;flags<4;flags++){
+    auto header=makeShared<LowpanRfragHeader>();header->setSequence(seq);header->setEcn(flags&1);header->setAckRequested(flags&2);header->setDatagramTag(255);header->setFragmentSize(1023);header->setFragmentOffset(65535);
+    Packet encoded("widths",header);auto bytes=encoded.peekDataAsBytes()->getBytes();ASSERT(bytes.size()==6&&bytes[0]==uint8_t(0xe8|(flags&1)));
+    Packet decode("literal-widths",makeShared<BytesChunk>(bytes));auto parsed=decode.peekAtFront<LowpanRfragHeader>();ASSERT(parsed->getSequence()==seq&&parsed->getFragmentSize()==1023&&parsed->getFragmentOffset()==65535);
+}
+for(auto bytes:{std::vector<uint8_t>{0xe8,1,0,0,0,0},{0xe8,1,0,8,0,0}}){Packet reset("reset",makeShared<BytesChunk>(bytes));ASSERT(reset.peekAtFront<LowpanRfragHeader>()->isCorrect());}
+for(auto bytes:{std::vector<uint8_t>{0xe8,1,0,0,0,1},{0xec,1,0,1,0,1}}){Packet bad("bad",makeShared<BytesChunk>(bytes));ASSERT(bad.peekAtFront<LowpanRfragHeader>(b(-1),Chunk::PF_ALLOW_INCORRECT)->isIncorrect());}
+for(int length=1;length<6;length++){
+    std::vector<uint8_t> bytes{0xe8,0,0,1,0,8};bytes.resize(length);
+    Packet shortInput("truncated",makeShared<BytesChunk>(bytes));
+    ASSERT(shortInput.peekAtFront<LowpanRfragHeader>(b(-1),Chunk::PF_ALLOW_INCOMPLETE|Chunk::PF_ALLOW_INCORRECT)->isIncomplete());
+}
+using Prefix=LowpanDispatchPrefix;
+for(auto bytes:{std::vector<uint8_t>{0xe8,0},{0xf0,0xe9,0},{0xf2,0xf0,0xe8,0},{0xf1,0xf0,0xe8,0}}){Packet packet("page0",makeShared<BytesChunk>(bytes));ASSERT(Prefix::parse(packet).kind==Prefix::RFRAG);}
+for(auto bytes:{std::vector<uint8_t>{0xea,0},{0xf0,0xeb,0}}){Packet packet("ack",makeShared<BytesChunk>(bytes));ASSERT(Prefix::parse(packet).kind==Prefix::RFRAG_ACK);}
+Packet page1("page1",makeShared<BytesChunk>(std::vector<uint8_t>{0xf1,0xe8,0}));ASSERT(Prefix::parse(page1).kind==Prefix::UNKNOWN);
+Packet unknown("page2",makeShared<BytesChunk>(std::vector<uint8_t>{0xf2,0xe8,0}));ASSERT(Prefix::parse(unknown).kind==Prefix::UNSUPPORTED_PAGE);
+LowpanProtocolDissector dissector;
+for(int mode=0;mode<5;mode++){
+    std::vector<uint8_t> bytes=mode==0?std::vector<uint8_t>{0xe8,9,0x04,4,0,80,0xf0,0xe8,0xea,0xf1}:
+        mode==1?std::vector<uint8_t>{0xea,9,255,255,255,255}:mode==2?std::vector<uint8_t>{0xe8,9,0,0,0,0,0x7a,0x33,59}:
+        mode==3?std::vector<uint8_t>{0xe8,9,0,1,0,80}:std::vector<uint8_t>{0xea,9,0};
+    Packet packet("introspection",makeShared<BytesChunk>(bytes));RecoveryWireObserver observer;dissector.dissect(&packet,&lowpanProtocol,observer);
+    ASSERT(packet.getDataLength()==B(0));
+    if(mode==0)ASSERT(observer.bad==0&&observer.visited==std::vector<std::string>({"fragment","opaque"}));
+    else if(mode==1)ASSERT(observer.bad==0&&observer.visited==std::vector<std::string>({"ack"}));
+    else if(mode==2)ASSERT(observer.bad==0&&observer.visited==std::vector<std::string>({"fragment","iphc"}));
+    else ASSERT(observer.bad>0);
+}
+LowpanProtocolPrinter printer;ProtocolPrinter::Context context;
+printer.print(fragment,&lowpanProtocol,nullptr,context);
+auto ack=makeShared<LowpanRfragAckHeader>();ack->setDatagramTag(18);ack->setBitmap(UINT32_MAX);
+printer.print(ack,&lowpanProtocol,nullptr,context);
+ASSERT(context.infoColumn.str().find("RFRAG tag=18 seq=3 size=80 offset=160 X=1 E=0")!=std::string::npos);
+ASSERT(context.infoColumn.str().find("RFRAG-ACK tag=18 bitmap=4294967295")!=std::string::npos);
+EV<<"Independent recovery wire fields and page dispatch verified\n";
+
+%contains: stdout
+Independent recovery wire fields and page dispatch verified
