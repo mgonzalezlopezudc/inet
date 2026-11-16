@@ -194,6 +194,14 @@ The [verification record](p15-selective-recovery-verification.json) retains 30 p
 
 Scoped architecture, naming, source-protection and whitespace checks pass. The 47-source C++ gate exits 1 with zero compiler errors and no source/feature drift. Independent triage establishes no new reachable defect in the handwritten bug-pattern diagnostics; its warning result remains recorded separately from that disposition. The two older constant names remain assigned to the final naming audit. No baseline changes are made.
 
+## P14 actual egress MTU follow-up
+
+Classic virtual forwarding now derives original IPv6 length from its existing decoded header and compares it with the actual selected egress MTU. Initial incompatibility retains sticky ordinary reassembly and normal IPv6 Packet Too Big handling. Every existing frozen-path continuation check applies the same condition; later incompatibility cancels pending output. The change adds no size cache, wire representation, parameter or public API.
+
+The [three-case native fixture](../../../../../tests/protocol/6lowpan/fragment-forwarding-mtu.md) uses raw NH59 traffic without UDP transport. It injects at the source adaptation input to emulate a paced foreign peer, explicitly bypassing that source's ordinary IPv6 MTU sizing. Original size 1281, despite compressed size 1276, now causes one ordinary relay reassembly, zero optimized output and a computed-checksum PTB advertising 1280. A 1200-byte control still forwards early and arrives byte-exactly with Hop Limit 63. A public runtime MTU change to 1000 is an incompatible-state stimulus: after one optimized frame the relay cancels, the destination cannot complete, and its partial context expires once.
+
+The [follow-up record](p14-mtu-verification.json) retains the same final checker/inputs/arguments with verified pre-fix and fixed libraries. Both defects reproduce on the pre-fix library; the compatible control passes. Matching debug/release builds and five protocol fixtures/90 simulations per mode pass, with three debug units and twenty native-completion runs per mode. All 108 unconditional primary rows match. The original P14 record remains a historical checkpoint. Actual UDP-disabled execution of the new fixture is explicitly assigned to the final combined campaign.
+
 ## Remaining packages
 
-The required actual-egress-MTU follow-up for classic virtual forwarding, final naming audit, combined feature matrix, evidence reconciliation and commit audit remain under the completion plan. The original P14 verification remains a historical checkpoint; its follow-up must select ordinary IPv6/PTB processing before optimized output for oversized input.
+The final naming audit, combined feature matrix, evidence reconciliation and commit audit remain under the completion plan.

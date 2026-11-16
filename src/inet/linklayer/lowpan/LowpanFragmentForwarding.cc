@@ -117,13 +117,16 @@ int LowpanFragmentForwarding::computeBufferedBytes() const
     for (const auto& item : records) for (const auto& range : item.second.pending) result += range.data->getDataLength().get<B>();
     return result;
 }
-bool LowpanFragmentForwarding::findPath(const Ipv6Address& source, const Ipv6Address& destination, Path& path) const
+bool LowpanFragmentForwarding::findPath(const Ipv6Header& header, Path& path) const
 {
+    const auto& source = header.getSrcAddress();
+    const auto& destination = header.getDestAddress();
     if (!routes || !ipv6 || ipv6->hasPolicyHooks() || !routes->isForwardingEnabled() || routes->isLocalAddress(destination)) return false;
     auto route = routes->doLongestPrefixMatch(destination);
     if (!route || (route->getExpiryTime() != SIMTIME_ZERO && route->getExpiryTime() <= simTime())) return false;
     auto nic = route->getInterface();
-    if (!nic || !nic->isUp() || getContainingNode(nic) != getContainingNode(&owner) || !ipv6->isNativeSourceUsable(nic, source)) return false;
+    if (!nic || !nic->isUp() || B(40) + header.getPayloadLength() > B(nic->getMtu()) ||
+            getContainingNode(nic) != getContainingNode(&owner) || !ipv6->isNativeSourceUsable(nic, source)) return false;
     LowpanLayer *layer = nullptr;
     for (cModule::SubmoduleIterator it(nic); !it.end(); ++it)
         if (auto candidate = dynamic_cast<LowpanLayer *>(*it)) layer = candidate;
@@ -139,7 +142,7 @@ bool LowpanFragmentForwarding::findPath(const Ipv6Address& source, const Ipv6Add
 bool LowpanFragmentForwarding::isPathValid(const Record& record) const
 {
     Path current;
-    return owner.isNativeTransmissionOperational() && record.header && findPath(record.header->getSrcAddress(), record.header->getDestAddress(), current) && current == record.path;
+    return owner.isNativeTransmissionOperational() && record.header && findPath(*record.header, current) && current == record.path;
 }
 bool LowpanFragmentForwarding::inspect(const Packet& packet, bool& control) const
 {
@@ -363,7 +366,7 @@ bool LowpanFragmentForwarding::process(Packet *packet, bool first, const Ieee802
         sendError(*original, header->getHopLimit() <= 1 ? ICMPv6_TIME_EXCEEDED : ICMPv6_DESTINATION_UNREACHABLE, 0);
         delete packet; schedule(); return true;
     }
-    if (!findPath(header->getSrcAddress(), header->getDestAddress(), record.path)) { records.emplace(key, std::move(record)); schedule(); return false; }
+    if (!findPath(*header, record.path)) { records.emplace(key, std::move(record)); schedule(); return false; }
     auto layer = check_and_cast<LowpanLayer *>(owner.getSimulation()->getModule(record.path.layerModuleId));
     auto envelope = layer->link->prepareTransmission(record.path.peer);
     int budget = emissionCap ? std::min(emissionCap, envelope->getPayloadLimit()) : envelope->getPayloadLimit();

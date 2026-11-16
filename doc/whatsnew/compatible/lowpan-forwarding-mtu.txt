@@ -1,0 +1,3 @@
+IPv6 MTU checks before virtual forwarding
+
+Native LoWPAN fragment forwarding now checks the original IPv6 size against the actual egress interface MTU. Oversized first fragments retain ordinary reassembly and IPv6 Packet Too Big handling; an incompatible MTU change after forwarding starts cancels the frozen operation before further output.
