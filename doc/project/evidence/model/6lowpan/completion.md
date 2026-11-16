@@ -71,3 +71,7 @@ The [registrar fixture](../../../../../tests/protocol/6lowpan/registrar-validity
 ## Remaining packages
 
 P10–P15 remain in execution order under the completion plan. Optimized/extended ND, mesh-under, paging, virtual fragment forwarding and selective recovery are not inferred from header compression support.
+
+## P10 — Routed authority lifetime conversion
+
+The routed authority compares received lifetime seconds with the remaining simulation clock range before constructing a duration. An unchanged literal Ethernet/transit fixture fails on parent `5b34aeb425` at 0.10003156 seconds, event 38, when 65535 minutes overflows the femtosecond-resolution duration. The isolated two-line repair passes eight DAR/DAC exchanges, matching-owner removal and replacement, with authority counts `1,0,1,0,1,0`. Four protocol fixtures/ten simulation runs, matching debug/release builds and scoped gates pass. The [standalone record](p10-authority-validity-verification.json) preserves both runs, commands and hashes. Native border admission is a subsequent behavior; release runtime assertions and the full matrix remain unexecuted.

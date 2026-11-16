@@ -1,0 +1,3 @@
+Bounded routed registration lifetimes
+
+The 6LoWPAN routed duplicate-address authority now bounds registration lifetimes before constructing a simulation duration, avoiding overflow when the requested minutes exceed the configured simulation clock horizon.
