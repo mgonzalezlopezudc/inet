@@ -35,6 +35,8 @@ class INET_API Ieee802154MacPib
         bool macBeaconAutoRespond = true;
         bool macAssociatedPanCoord = false;
         bool macAssociationPermit = false;
+        bool gtsSupported = false;
+        bool macGtsPermit = true;
         uint8_t macResponseWaitTime = 32; ///< Base-superframe periods.
         uint16_t macTransactionPersistenceTime = 0x01f4; ///< Base-superframe periods in the selected BO=15 profile.
         std::vector<uint8_t> macBeaconPayload;

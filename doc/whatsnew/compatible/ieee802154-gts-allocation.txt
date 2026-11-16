@@ -1,0 +1,5 @@
+IEEE 802.15.4 beacon-advertised GTS allocation
+
+The native IEEE 802.15.4 MAC supports CAP requests for GTS allocation and
+advertises coordinator decisions in periodic beacons. GTS DATA transmission
+and explicit deallocation remain unavailable.

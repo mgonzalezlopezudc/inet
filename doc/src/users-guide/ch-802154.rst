@@ -104,7 +104,15 @@ client. A device discovers a PAN, joins, sends DATA, sleeps, polls for a queued
 reply, leaves and repeats with a new allocation. Run both typed/raw-byte
 configurations and inspect the application's completion and MSDU scalars.
 
-Periodic beacon scheduling, slotted access, GTS/CFP, enhanced frames/IEs,
+The native profile also supports periodic beacons, tracking and slotted CAP
+access. An associated device tracking its PAN coordinator may request a GTS;
+the coordinator advertises its decision in subsequent beacons. GTS DATA and
+explicit GTS deallocation are not yet supported. With an external clock, this
+profile requires a fixed rate within ±40 ppm, an initial offset aligned to the
+scheduling grid, and a
+scheduling quantum that divides the 16 µs symbol. The supported
+``OscillatorBasedClock`` configuration uses ``clockGranularity = 0`` and an
+unchanged oscillator. Enhanced frames/IEs,
 cryptographic security, TSCH, DSME, ranging and modern UWB are separate future
 profiles. The retained :ned:`Ieee802154Mac` and :ned:`Ieee802154NarrowbandMac`
 continue to serve explicit legacy configurations.

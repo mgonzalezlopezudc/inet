@@ -188,6 +188,11 @@ ASSERT(boundaries.set("macPanId", uint64_t{0}) == Status::SUCCESS);
 ASSERT(boundaries.set("macPanId", uint64_t{0xffff}) == Status::SUCCESS);
 
 Ieee802154MacPib scheduled(identity, 3, 128, {}, 4, true);
+ASSERT(read(scheduled, "macGtsPermit") == Value(true));
+ASSERT(scheduled.set("macGtsPermit", false) == Status::SUCCESS);
+ASSERT(read(scheduled, "macGtsPermit") == Value(false));
+scheduled.reset(true,3,4);
+ASSERT(read(scheduled, "macGtsPermit") == Value(true));
 ASSERT(read(scheduled, "macSyncSymbolOffset") == Value(uint64_t{10}));
 ASSERT(scheduled.set("macSyncSymbolOffset", uint64_t{0}) == Status::READ_ONLY);
 ASSERT(scheduled.set("macBeaconOrder", uint64_t{0}) == Status::INVALID_PARAMETER);

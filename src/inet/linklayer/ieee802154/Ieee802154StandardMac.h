@@ -69,7 +69,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
         bool transmittedInCap = false;
         uint8_t capBeaconOrder = 15;
         std::optional<std::pair<uint16_t,Ieee802154Address>> pendingDevice; ///< Queue key retained across allocation changes.
-        enum class Kind { DATA, POLL, INDIRECT, BEACON, AUTO_BEACON, SCAN_REQUEST, ASSOCIATE_REQUEST, DISASSOCIATE, ORPHAN_RESPONSE, PAN_CONFLICT, SUPERFRAME_REALIGN } kind = Kind::DATA;
+        enum class Kind { DATA, POLL, INDIRECT, BEACON, AUTO_BEACON, SCAN_REQUEST, ASSOCIATE_REQUEST, DISASSOCIATE, ORPHAN_RESPONSE, PAN_CONFLICT, SUPERFRAME_REALIGN, GTS_REQUEST } kind = Kind::DATA;
     };
     struct AckExchange {
         Ptr<Ieee802154Frame> frame;
@@ -86,6 +86,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
         std::optional<uint8_t> disassociationReason;
         std::optional<Ieee802154CommandCodec::CoordinatorRealignment> realignment;
         std::optional<physicallayer::Ieee802154PhyChannel> panConflictChannel;
+        std::optional<std::pair<Ieee802154GtsManager::Key,Ieee802154GtsCharacteristics>> gtsCommand;
     };
     struct PhyOperation { uint64_t id; PhyPurpose purpose; bool transmitStarted = false; std::optional<simtime_t> expectedTransmitEnd; };
     struct ResetRequest {
@@ -127,8 +128,14 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
         bool batteryLifeExtension;
         uint32_t batteryLifePeriods;
         uint32_t backoffPeriod;
+        uint8_t finalCapSlot = 15;
     };
     std::optional<BeaconConfiguration> constructedBeacon;
+    std::vector<Ieee802154GtsManager::Advertisement> constructedGtsAdvertisements;
+    struct GtsCandidate { Ieee802154GtsManager ledger; std::vector<Ieee802154GtsManager::Grant> removed; bool agesImmediateEpoch = false; };
+    std::optional<GtsCandidate> constructedGtsCandidate;
+    std::optional<clocktime_t> lastGtsAgedBoundary;
+    void ageGtsEpoch(clocktime_t boundary);
     std::optional<BeaconConfiguration> outgoingEpoch;
     // The last located parent superframe outlives both its CAP and a one-shot SYNC.
     struct IncomingSuperframe {
@@ -143,6 +150,15 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
         physicallayer::Ieee802154PhyChannel channel;
     };
     std::optional<IncomingSuperframe> incomingSuperframe;
+    struct GtsRequestState { uint64_t id; Ieee802154MacGtsRequest request; bool waiting = false; };
+    std::optional<GtsRequestState> gtsRequest;
+    cMessage *gtsTimer = nullptr;
+    void completeGts(const Ieee802154MacServiceResult& result);
+    void decideGts(const Ieee802154GtsManager::Key& key, const Ieee802154GtsCharacteristics& characteristics);
+    void removeGtsGrant(const Ieee802154GtsManager::Key& key);
+    static void removeGtsFromLedger(Ieee802154GtsManager& ledger, const Ieee802154GtsManager::Key& key);
+    void maintainGtsCapacity(uint8_t superframeOrder);
+    simtime_t gtsPhysicalCapDuration(uint8_t superframeOrder, unsigned int slots, bool immediate = false, std::optional<clocktime_t> target = std::nullopt) const;
     std::optional<clocktime_t> childPhase; // Recurring local-clock phase from the parent beacon.
     std::optional<clocktime_t> transmittedBeaconAnchor;
     simtime_t transmittedBeaconIfs;
@@ -174,7 +190,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
             uint8_t beaconOrder, uint8_t superframeOrder, uint8_t finalCapSlot, bool batteryLifeExtension,
             uint32_t backoffPeriod, uint32_t batteryLifePeriods, Ieee802154AccessWindowOrigin origin);
     void resumeCapAccess();
-    Ptr<Ieee802154Frame> makeBeacon(uint16_t panId, uint8_t beaconOrder, uint8_t superframeOrder, bool batteryLifeExtension, bool consumeSequence = true);
+    Ptr<Ieee802154Frame> makeBeacon(uint16_t panId, uint8_t beaconOrder, uint8_t superframeOrder, bool batteryLifeExtension, bool consumeSequence = true, const Ieee802154GtsManager *ledger = nullptr);
     bool overlapsIncomingSuperframe(clocktime_t target, uint8_t beaconOrder, uint8_t superframeOrder, b psduLength) const;
     bool fitsBeaconPayload(const std::vector<uint8_t>& payload) const;
     struct Synchronization {
