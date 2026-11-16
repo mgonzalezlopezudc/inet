@@ -32,7 +32,10 @@ class GtsAdapterProvider : public SimpleModule, public IIeee802154MacServiceProv
         Enter_Method("submitData");
         ASSERT(id == options.size() + 1 && packet && !packet->findTag<Ieee802154MacDataReq>());
         take(packet); options.push_back(request.gtsTx); requests.push_back(request); delete packet;
-        client->handleDataConfirm(id,Ieee802154MacDataConfirm(request.msduHandle,Ieee802154MacStatus::SUCCESS));
+        Ieee802154MacDataConfirm confirm(request.msduHandle,Ieee802154MacStatus::SUCCESS);
+        if (id == 3) confirm.enhancedAckContent = Ieee802154EnhancedAckContent{{{0,{1,2,3}}},{{2,{4,5,6}}},{0xde,0xad}};
+        client->handleDataConfirm(id,confirm);
+        confirm.enhancedAckContent.reset();
         if (id == 3) {
             Ieee802154MacDataIndication indication;
             indication.headerIes = {{0,{0xaa,0xbb,0xcc}}};
@@ -98,6 +101,12 @@ class GtsAdapterExercise : public SimpleModule
         auto tag = packet->getTag<Ieee802154MacDataResultInd>();
         ASSERT(tag->requestId == uint64_t(confirms + 1) && tag->msduHandle == 10 + confirms && tag->confirm &&
                 tag->confirm->result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS));
+        ASSERT(tag->confirm->enhancedAckContent.has_value() == (confirms == 2));
+        if (confirms == 2) {
+            const auto& ack = *tag->confirm->enhancedAckContent;
+            ASSERT(ack.headerIes.size() == 1 && ack.headerIes[0].id == 0 && ack.headerIes[0].content == std::vector<uint8_t>({1,2,3}));
+            ASSERT(ack.payloadIes.size() == 1 && ack.payloadIes[0].group == 2 && ack.payloadIes[0].content == std::vector<uint8_t>({4,5,6}) && ack.payload == std::vector<uint8_t>({0xde,0xad}));
+        }
         delete packet;
         ++confirms; checkDone();
     }

@@ -1,0 +1,349 @@
+%description:
+Native version-2 DATA and enhanced ACK through explicitly enabled peers.
+
+%extraargs: -r 0..83
+
+%includes:
+#include "ProtocolTest.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/common/lifecycle/LifecycleController.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
+using namespace inet;
+using namespace inet::protocoltest;
+
+%global:
+Define_ProtocolTestProgram()
+{
+    ProtocolTest test("ieee802154_enhanced_ack");
+    int scenario = getSimulation()->getSystemModule()->par("scenario");
+    if (scenario == 41)
+        test.intercept(tap("radioMedium").from("host[0]").to("host[1]").filterPacket("Ieee802154Frame.frameType == 1").nth(0).mutate([](Packet *packet) {
+            auto bytes = packet->peekDataAsBytes()->getBytes(); auto frame = Ieee802154FrameCodec::decode(bytes);
+            ASSERT(frame->getDecodeStatus() == Ieee802154FrameCodec::OK && frame->getFcsValid() && frame->getAckRequest());
+            frame->setDestinationAddress(Ieee802154Address::fromExtended(0x0501123456789abcULL)); frame->setComputeFcs(true);
+            auto altered = Ieee802154FrameCodec::encode(*frame); ASSERT(altered.size() == bytes.size());
+            packet->eraseAll(); packet->insertAtBack(makeShared<BytesChunk>(altered));
+        }));
+    if (scenario == 4 || scenario == 5)
+        test.intercept(tap("radioMedium").from("host[1]").to("host[0]").filterPacket("Ieee802154Frame.frameType == 2").nth(scenario == 4 ? 1 : 0).drop());
+    if (((scenario >= 6 && scenario <= 14) && scenario != 11) || (scenario >= 27 && scenario <= 31))
+        test.intercept(tap("radioMedium").from("host[1]").to("host[0]").filterPacket("Ieee802154Frame.frameType == 2").nth(0).mutate([scenario](Packet *packet) {
+            auto bytes = packet->peekDataAsBytes()->getBytes();
+            if (scenario == 12) { bytes.back() ^= 1; packet->eraseAll(); packet->insertAtBack(makeShared<BytesChunk>(bytes)); return; }
+            if (scenario == 29) {
+                bytes[0] |= 0x20;
+                auto fcs = Ieee802154FrameCodec::calculateFcs(std::vector<uint8_t>(bytes.begin(),bytes.end() - 2));
+                bytes[bytes.size() - 2] = fcs; bytes.back() = fcs >> 8;
+                packet->eraseAll(); packet->insertAtBack(makeShared<BytesChunk>(bytes)); return;
+            }
+            if (scenario == 30) {
+                ASSERT(bytes.size() > 23); bytes[21] = 0x7f; // Header length exceeds its containing frame.
+                auto fcs = Ieee802154FrameCodec::calculateFcs(std::vector<uint8_t>(bytes.begin(),bytes.end() - 2));
+                bytes[bytes.size() - 2] = fcs; bytes.back() = fcs >> 8;
+                packet->eraseAll(); packet->insertAtBack(makeShared<BytesChunk>(bytes)); return;
+            }
+            auto frame = Ieee802154FrameCodec::decode(bytes);
+            ASSERT(frame->getDecodeStatus() == Ieee802154FrameCodec::OK && frame->getFcsValid() && frame->getFrameType() == 2);
+            if (scenario == 6 || scenario == 13) frame->setSourceAddress(Ieee802154Address::fromExtended(0x0601123456789abcULL));
+            if (scenario == 7) frame->setDsn(uint8_t(frame->getDsn() + 1));
+            if (scenario == 8) frame->setDestinationAddress(Ieee802154Address::fromExtended(0x0601123456789abcULL));
+            if (scenario == 9) frame->setDestinationPanId(0x2345);
+            if (scenario == 10) {
+                auto n = frame->getPayloadArraySize(); frame->setPayloadArraySize(n + 2);
+                frame->setPayload(n,0); frame->setPayload(n + 1,0); frame->setPanCompression(true);
+            }
+            if (scenario == 14) { ASSERT(frame->getPayloadArraySize() >= 10); frame->setPayload(8,3); frame->setPayload(9,0xb8); }
+            if (scenario == 27) {
+                frame->setSourceAddress(Ieee802154Address::fromShort(2));
+                frame->setSourcePanId(frame->getDestinationPanId());
+            }
+            if (scenario == 28) frame->setSequenceSuppressed(true);
+            if (scenario == 31) frame->setSourcePanId(0x2345);
+            frame->setComputeFcs(true);
+            auto altered = Ieee802154FrameCodec::encode(*frame);
+            if (scenario == 27 || scenario == 28) {
+                ASSERT(altered.size() < bytes.size()); auto n = frame->getPayloadArraySize();
+                frame->setPayloadArraySize(n + bytes.size() - altered.size());
+                for (size_t i = n; i < frame->getPayloadArraySize(); ++i) frame->setPayload(i,0);
+                altered = Ieee802154FrameCodec::encode(*frame);
+            }
+            ASSERT(altered.size() == bytes.size());
+            packet->eraseAll(); packet->insertAtBack(makeShared<BytesChunk>(altered));
+        }));
+    if (scenario == 11)
+        test.intercept(tap("radioMedium").from("host[1]").to("host[0]").filterPacket("Ieee802154Frame.frameType == 2").nth(0).mutate([](Packet *packet) {
+            auto bytes = packet->peekDataAsBytes()->getBytes(); auto frame = Ieee802154FrameCodec::decode(bytes);
+            ASSERT(frame->getInformationElementsPresent() && frame->getPayloadArraySize() >= 2);
+            frame->setPayload(0,4); frame->setPayload(1,9); frame->setComputeFcs(true); // Unknown Header ID 0x12, length 4.
+            auto altered = Ieee802154FrameCodec::encode(*frame); ASSERT(altered.size() == bytes.size());
+            packet->eraseAll(); packet->insertAtBack(makeShared<BytesChunk>(altered));
+        }));
+    return test.once(on("exercise").signal("verificationComplete").filterValue(1).within(0.1));
+}
+
+%activity:
+EV << "Enhanced ACK fixture compiled\n";
+
+%file: EnhancedAckExercise.cc
+#include <optional>
+#include "inet/common/lifecycle/LifecycleController.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/common/Simsignals.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
+#include "inet/linklayer/ieee802154/Ieee802154InformationElements.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceProvider.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceClient.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IReception.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmission.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
+namespace inet {
+class EnhancedAckExercise : public cSimpleModule, public cListener, public IIeee802154MacServiceClient, public LifecycleController
+{
+    class TrackedPacket : public Packet {
+        int *count;
+      public:
+        explicit TrackedPacket(int *value) : Packet("enhanced ACK MSDU"), count(value) {}
+        ~TrackedPacket() override { ++*count; }
+    };
+    ModuleRefByPar<IIeee802154MacServiceProvider> sender, receiver;
+    int confirms = 0, indications = 0, acks = 0, dataFrames = 0, scenario = 0, destroyed = 0, resets = 0, receivedAck = 0;
+    bool suppressed = false, content = false, interrupted = false, sourceShort = false, destinationShort = false, maxContent = false, inlineRestarted = false;
+    std::optional<simtime_t> dataTxEnd, dataRxEnd, ackTxStart, ackRxStart;
+  protected:
+    void initialize() override {
+        sender.reference(this,"serviceModule",true); receiver.reference(this,"receiverModule",true); suppressed = par("suppressed"); content = par("content"); scenario = par("scenario");
+        sourceShort = scenario == 21 || scenario == 22 || scenario == 24 || scenario == 25 || scenario == 31;
+        destinationShort = scenario == 21 || scenario == 23 || scenario == 24 || scenario == 26 || scenario == 31 || scenario == 40;
+        maxContent = scenario == 20;
+        getModuleByPath("^.host[1].nic.mac")->subscribe(packetSentToLowerSignal,this);
+        getModuleByPath("^.host[0].nic.mac")->subscribe(packetSentToLowerSignal,this);
+        if (scenario == 40 || scenario == 41) getModuleByPath("^.host[0].nic.mac")->subscribe(packetReceivedFromLowerSignal,this);
+        if ((scenario >= 15 && scenario <= 18) || (scenario >= 32 && scenario <= 34)) {
+            for (int i = 0; i < 2; ++i) {
+                auto radio = getModuleByPath((std::string("^.host[") + std::to_string(i) + "].nic.radio").c_str());
+                radio->subscribe(transmissionStartedSignal,this); radio->subscribe(receptionStartedSignal,this);
+            }
+        }
+    }
+    void activity() override {
+        wait(SimTime(1,SIMTIME_MS));
+        ASSERT(sender->submitSet(1,{"macMinBe",uint64_t(0)}) == Ieee802154MacServiceAdmission::ACCEPTED);
+        ASSERT(sender->submitSet(2,{"macMaxFrameRetries",uint64_t(scenario >= 32 && scenario <= 34 ? 0 : 2)}) == Ieee802154MacServiceAdmission::ACCEPTED);
+        ASSERT(sender->submitSet(3,{"macDsn",uint64_t(7)}) == Ieee802154MacServiceAdmission::ACCEPTED);
+        if (scenario == 41) ASSERT(receiver->submitSet(1,{"macGroupRxMode",true}) == Ieee802154MacServiceAdmission::ACCEPTED);
+        auto packet = new TrackedPacket(&destroyed); packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0x5a}));
+        Ieee802154MacDataRequest request; request.legacyTx = false; request.ackTx = true; request.sequenceSuppressed = suppressed;
+        request.sourceAddressMode = sourceShort ? Ieee802154Address::AddressType::SHORT : Ieee802154Address::AddressType::EXTENDED;
+        request.destinationAddress = destinationShort ? Ieee802154Address::fromShort(2) : Ieee802154Address::fromExtended(0x0401123456789abcULL); request.destinationPanId = scenario == 40 ? 0xffff : 0x1234;
+        if (scenario >= 35 && scenario <= 37) {
+            auto radio = check_and_cast<physicallayer::IRadio *>(getModuleByPath("^.host[0].nic.radio"));
+            ASSERT(radio->getRadioMode() == physicallayer::IRadio::RADIO_MODE_OFF);
+        }
+        ASSERT(sender->submitData(4,packet,request) == Ieee802154MacServiceAdmission::ACCEPTED);
+        if (scenario >= 35 && scenario <= 37) {
+            ASSERT(dataFrames == 0); interrupted = true;
+            if (scenario == 35) ASSERT(sender->submitReset(5,{false}) == Ieee802154MacServiceAdmission::ACCEPTED);
+            else {
+                auto stop = new ModuleStopOperation; LifecycleOperation::StringMap parameters;
+                stop->initialize(getModuleByPath(scenario == 36 ? "^.host[0].nic.mac" : "^.host[0].nic.phy"),parameters);
+                ASSERT(initiateOperation(stop));
+            }
+        }
+        if (scenario >= 16 && scenario <= 18) {
+            for (int i = 0; i < 80 && !dataTxEnd; ++i) wait(SimTime(100,SIMTIME_US));
+            ASSERT(dataTxEnd && *dataTxEnd + SimTime(100,SIMTIME_US) > simTime());
+            wait(*dataTxEnd + SimTime(100,SIMTIME_US) - simTime());
+            interrupted = true;
+            if (scenario == 16) ASSERT(sender->submitReset(5,{false}) == Ieee802154MacServiceAdmission::ACCEPTED);
+            else {
+                auto stop = new ModuleStopOperation; LifecycleOperation::StringMap parameters;
+                stop->initialize(getModuleByPath(scenario == 17 ? "^.host[0].nic.mac" : "^.host[0].nic.phy"),parameters);
+                ASSERT(initiateOperation(stop));
+            }
+        }
+        for (int i = 0; i < 80 && !confirms; ++i) wait(SimTime(1,SIMTIME_MS));
+        if ((scenario >= 16 && scenario <= 19) || (scenario >= 32 && scenario <= 39)) wait(SimTime(5,SIMTIME_MS));
+        int attempts = scenario == 4 ? 2 : scenario == 5 || (scenario >= 6 && scenario <= 10) || scenario == 12 || scenario == 13 || (scenario >= 27 && scenario <= 31) ? 3 : 1;
+        auto expectedIndications = scenario == 19 || scenario == 32 || scenario == 33 || (scenario >= 35 && scenario <= 39) ? 0 : attempts;
+        ASSERT(confirms == 1 && destroyed == 1 && indications == expectedIndications && acks == (scenario == 19 || (scenario >= 35 && scenario <= 39) ? 0 : attempts) && dataFrames == (scenario >= 35 && scenario <= 37 ? 0 : attempts));
+        if (scenario == 40 || scenario == 41) ASSERT(receivedAck == 1);
+        if (scenario >= 16 && scenario <= 19) ASSERT(interrupted && resets == (scenario == 16 || scenario == 19 ? 1 : 0));
+        if (scenario == 18) ASSERT(inlineRestarted);
+        if (scenario >= 32 && scenario <= 34) ASSERT(interrupted && resets == (scenario == 32 ? 1 : 0));
+        if (scenario >= 35 && scenario <= 37) ASSERT(interrupted && resets == (scenario == 35 ? 1 : 0));
+        if (scenario == 38 || scenario == 39) ASSERT(interrupted && resets == 0);
+        if (scenario == 15) {
+            ASSERT(dataTxEnd && dataRxEnd && ackTxStart && ackRxStart);
+            auto propagation = *dataRxEnd - *dataTxEnd;
+            ASSERT(propagation > SIMTIME_ZERO && propagation <= SimTime(1,SIMTIME_US));
+            ASSERT(*ackTxStart == *dataRxEnd + SimTime(192,SIMTIME_US) && *ackRxStart == *ackTxStart + propagation);
+            ASSERT(*ackRxStart <= *dataTxEnd + SimTime(192,SIMTIME_US) + SimTime(2,SIMTIME_US));
+        }
+        emit(registerSignal("verificationComplete"),1L);
+    }
+  public:
+    EnhancedAckExercise() : cSimpleModule(65536) {}
+    void receiveSignal(cComponent *source,simsignal_t signal,cObject *object,cObject *) override {
+        Enter_Method("receiveSignal");
+        if (signal == transmissionStartedSignal) {
+            auto tx = check_and_cast<const physicallayer::ITransmission *>(object);
+            auto name = std::string(tx->getPacket()->getName());
+            if (name == "IEEE802154-DATA") dataTxEnd = tx->getEndTime();
+            if (name == "IEEE802154-ACK") {
+                ackTxStart = tx->getStartTime();
+                if (scenario >= 32 && scenario <= 34 && !interrupted) {
+                    interrupted = true;
+                    if (scenario == 32) ASSERT(receiver->submitReset(5,{false}) == Ieee802154MacServiceAdmission::ACCEPTED);
+                    else {
+                        auto stop = new ModuleStopOperation; LifecycleOperation::StringMap parameters;
+                        stop->initialize(getModuleByPath(scenario == 33 ? "^.host[1].nic.mac" : "^.host[1].nic.phy"),parameters);
+                        ASSERT(initiateOperation(stop));
+                    }
+                }
+            }
+            return;
+        }
+        if (signal == receptionStartedSignal) {
+            auto rx = check_and_cast<const physicallayer::IReception *>(object);
+            auto name = std::string(rx->getTransmission()->getPacket()->getName());
+            if (name == "IEEE802154-DATA") dataRxEnd = rx->getEndTime();
+            if (name == "IEEE802154-ACK") ackRxStart = rx->getStartTime();
+            return;
+        }
+        auto packet = check_and_cast<Packet *>(object);
+        auto frame = Ieee802154FrameCodec::decode(packet->peekDataAsBytes()->getBytes());
+        if (signal == packetReceivedFromLowerSignal) {
+            ASSERT((scenario == 40 || scenario == 41) && frame->getDecodeStatus() == Ieee802154FrameCodec::OK && frame->getFcsValid() && frame->getFrameType() == 2);
+            if (scenario == 40) ASSERT(Ieee802154FrameCodec::sourcePanField(*frame) == uint16_t(0x1234) && Ieee802154FrameCodec::destinationPanField(*frame) == uint16_t(0xffff));
+            else ASSERT(frame->getSourceAddress() == Ieee802154Address::fromExtended(0x0401123456789abcULL));
+            ++receivedAck; return;
+        }
+        if (source == getModuleByPath("^.host[0].nic.mac")) {
+            ASSERT(frame->getFrameType() == 1 && frame->getFrameVersion() == 2 && frame->getSequenceSuppressed() == suppressed);
+            if (!suppressed) ASSERT(frame->getDsn() == 7);
+            ++dataFrames;
+            if ((scenario == 19 || scenario == 38 || scenario == 39) && !interrupted) {
+                interrupted = true;
+                if (scenario == 19) ASSERT(sender->submitReset(5,{false}) == Ieee802154MacServiceAdmission::ACCEPTED);
+                else {
+                    auto stop = new ModuleStopOperation; LifecycleOperation::StringMap parameters;
+                    stop->initialize(getModuleByPath(scenario == 38 ? "^.host[0].nic.mac" : "^.host[0].nic.phy"),parameters);
+                    ASSERT(initiateOperation(stop));
+                }
+            }
+            return;
+        }
+        ASSERT(frame->getDecodeStatus() == Ieee802154FrameCodec::OK && frame->getFcsValid() && frame->getFrameType() == 2 && frame->getFrameVersion() == 2);
+        ASSERT(!frame->getAckRequest() && frame->getSequenceSuppressed() == suppressed &&
+                frame->getSourceAddress() == (destinationShort ? Ieee802154Address::fromShort(2) : Ieee802154Address::fromExtended(0x0401123456789abcULL)) &&
+                frame->getDestinationAddress() == (sourceShort ? Ieee802154Address::fromShort(1) : Ieee802154Address::fromExtended(0x0201123456789abcULL))); ++acks;
+        auto view = std::get<Ieee802154InformationElements::View>(Ieee802154InformationElements::inspect(*frame));
+        ASSERT(view.headers.size() == size_t(content) && view.payloads.size() == size_t(content) && view.data.length == (maxContent ? 104 : content ? 2 : 0));
+        if (maxContent) ASSERT(packet->peekDataAsBytes()->getBytes().size() == 127);
+        if (content) ASSERT(view.headers[0].id == 0 && view.headers[0].content == std::vector<uint8_t>({1,2,3,4}) && view.payloads[0].group == 2 && view.payloads[0].content == std::vector<uint8_t>({5,6,7}));
+    }
+    void handleDataConfirm(uint64_t id,const Ieee802154MacDataConfirm& c) override {
+        Enter_Method("handleDataConfirm"); bool success = scenario <= 4 || scenario == 11 || scenario == 14 || scenario == 15 || (scenario >= 20 && scenario <= 26) || (scenario >= 32 && scenario <= 34) || scenario == 40 || scenario == 41;
+        auto expected = scenario == 16 || scenario == 19 || scenario == 35 ? Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::RESET) :
+                scenario == 17 || scenario == 18 || scenario == 36 || scenario == 37 || scenario == 38 || scenario == 39 ? Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::STOPPED) :
+                Ieee802154MacServiceResult(success ? Ieee802154MacStatus::SUCCESS : Ieee802154MacStatus::NO_ACK);
+        ASSERT(id == 4 && c.result == expected && destroyed == 1 && c.enhancedAckContent.has_value() == success);
+        if (!success) {
+            ASSERT(!c.numBackoffs && !c.ackFramePending); ++confirms;
+            if (scenario == 18) {
+                auto start = new ModuleStartOperation; LifecycleOperation::StringMap parameters;
+                start->initialize(getModuleByPath("^.host[0].nic.phy"),parameters); ASSERT(initiateOperation(start));
+                auto probe = new Packet("caller-owned restart probe");
+                Ieee802154MacDataRequest request;
+                ASSERT(sender->submitData(6,probe,request) == Ieee802154MacServiceAdmission::BUSY && probe->getOwner() == this);
+                delete probe; inlineRestarted = true;
+            }
+            return;
+        }
+        const auto& ack = *c.enhancedAckContent;
+        auto expectedPayload = maxContent ? std::vector<uint8_t>(104,0x42) : content ? std::vector<uint8_t>({0xde,0xad}) : std::vector<uint8_t>();
+        ASSERT(ack.headerIes.size() == size_t(content) && ack.payloadIes.size() == size_t(content) && ack.payload == expectedPayload);
+        if (content) ASSERT(ack.headerIes[0].id == (scenario == 11 ? 0x12 : 0) && ack.headerIes[0].content == std::vector<uint8_t>({1,2,3,4}) && ack.payloadIes[0].group == (scenario == 14 ? 7 : 2) && ack.payloadIes[0].content == std::vector<uint8_t>({5,6,7}));
+        ++confirms;
+    }
+    void handleDataIndication(Packet *p,const Ieee802154MacDataIndication& i) override { Enter_Method("handleDataIndication"); take(p); ASSERT(p->peekDataAsBytes()->getBytes() == std::vector<uint8_t>({0x5a}) && i.ackSent == (scenario != 34)); delete p; ++indications; }
+    void handleGetConfirm(uint64_t,const Ieee802154MacGetConfirm&) override { ASSERT(false); }
+    void handleSetConfirm(uint64_t,const Ieee802154MacSetConfirm& c) override { Enter_Method("handleSetConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS)); }
+    void handleResetConfirm(uint64_t id,const Ieee802154MacResetConfirm& c) override { Enter_Method("handleResetConfirm"); ASSERT(id == 5 && (scenario == 16 || scenario == 19 || scenario == 32 || scenario == 35) && (scenario == 32 || confirms == 1) && c.result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS)); ++resets; }
+    void handlePromiscuousIndication(Packet *p,const Ieee802154MacPromiscuousIndication&) override { take(p); delete p; ASSERT(false); }
+    void handleCommStatusIndication(Packet *p,const Ieee802154MacCommStatusIndication&) override { if (p) { take(p); delete p; } ASSERT(false); }
+};
+Define_Module(EnhancedAckExercise);
+}
+
+%file: EnhancedAckFixture.ned
+import inet.common.SimpleModule;
+import inet.mobility.static.StationaryMobility;
+import inet.protocoltest.TapRadioMedium;
+import inet.linklayer.ieee802154.Ieee802154StandardInterface;
+import inet.linklayer.ieee802154.contract.IIeee802154MacServiceClient;
+simple EnhancedAckExercise extends SimpleModule like IIeee802154MacServiceClient {
+    parameters: string serviceModule; string receiverModule; int scenario; bool suppressed; bool content; @class(::inet::EnhancedAckExercise); @signal[verificationComplete](type=long);
+}
+module EnhancedAckHost {
+    parameters: @networkNode;
+    submodules:
+        mobility: StationaryMobility;
+        nic: Ieee802154StandardInterface { panId = default(4660); rxOnWhenIdle = default(true); enableEnhancedFrames = true; mac.clientModule = "^.^.^.exercise"; }
+    connections allowunconnected:
+}
+network EnhancedAckTest {
+    parameters: int scenario;
+    submodules:
+        radioMedium: TapRadioMedium;
+        host[2]: EnhancedAckHost;
+        exercise: EnhancedAckExercise { serviceModule = "^.host[0].nic.mac"; receiverModule = "^.host[1].nic.mac"; scenario = parent.scenario; }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = EnhancedAckTest
+sim-time-limit = 100ms
+cmdenv-express-mode = true
+cmdenv-stop-batch-on-error = false
+*.scenario = ${scenario=0..41}
+*.exercise.suppressed = ${scenario} == 1 || ${scenario} == 3 || ${scenario} == 13 || ${scenario} == 22 || ${scenario} == 24 || ${scenario} == 26
+*.exercise.content = ${scenario} == 2 || ${scenario} == 3 || ${scenario} == 10 || ${scenario} == 11 || ${scenario} == 14 || ${scenario} == 30
+*.host[*].nic.radio.sendRawBytes = ${raw=false,true}
+*.host[*].nic.mac.maxPropagationDelay = 1us
+*.host[1].nic.enhancedAckHeaderIes = (${scenario} == 2 || ${scenario} == 3 || ${scenario} == 10 || ${scenario} == 11 || ${scenario} == 14 || ${scenario} == 30) ? [{id: 0, content: [1,2,3,4]}] : []
+*.host[1].nic.enhancedAckPayloadIes = (${scenario} == 2 || ${scenario} == 3 || ${scenario} == 10 || ${scenario} == 11 || ${scenario} == 14 || ${scenario} == 30) ? [{group: 2, content: [5,6,7]}] : []
+*.host[1].nic.enhancedAckPayload = ${scenario} == 20 ? [66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66,66] : (${scenario} == 2 || ${scenario} == 3 || ${scenario} == 10 || ${scenario} == 11 || ${scenario} == 14 || ${scenario} == 30) ? [222,173] : []
+*.host[0].nic.shortAddress = 1
+*.host[1].nic.shortAddress = 2
+*.host[0].nic.panId = ${scenario} == 40 ? 65535 : 4660
+*.host[0].nic.rxOnWhenIdle = ${scenario} != 35 && ${scenario} != 36 && ${scenario} != 37
+*.host[0].nic.extendedAddress = "extended:02-01-12-34-56-78-9A-BC"
+*.host[1].nic.extendedAddress = "extended:04-01-12-34-56-78-9A-BC"
+*.host[*].nic.radio.antenna.mobilityModule = "^.^.^.mobility"
+*.radioMedium.backgroundNoise.power = -110dBm
+*.radioMedium.signalAnalogRepresentation = "scalar"
+*.host[*].mobility.initFromDisplayString = false
+*.host[0].mobility.initialX = 0m
+*.host[1].mobility.initialX = ${scenario} == 15 ? 10m : 1m
+*.host[*].mobility.initialY = 0m
+*.host[*].mobility.initialZ = 0m
+*.host[*].mobility.constraintAreaMinX = 0m
+*.host[*].mobility.constraintAreaMinY = 0m
+*.host[*].mobility.constraintAreaMinZ = 0m
+*.host[*].mobility.constraintAreaMaxX = 100m
+*.host[*].mobility.constraintAreaMaxY = 100m
+*.host[*].mobility.constraintAreaMaxZ = 100m
+
+%contains: stdout
+PROTOCOLTEST ieee802154_enhanced_ack: PASS
+
+%not-contains: stdout
+PROTOCOLTEST ieee802154_enhanced_ack: FAIL
+
+%not-contains: stderr
+Error:

@@ -98,18 +98,41 @@ The auxiliary Security Control octet determines security level, key-ID mode, fra
 
 ## Sequence and ACK contract
 
+Enhanced ACK response content is explicit model configuration: default-empty typed NED
+Header/Payload lists and payload octets, copied into the existing MAC ACK owner at
+initialization. It is not an invented IEEE PIB. Object-valued interface forwarding clones
+the NED values before the child parameter owns them. Invalid descriptor/applicability/vendor
+content fails initialization. The encoded body is conservatively limited to104 octets so
+the largest selected fixed MHR21 plus FCS2 always fits127, even when the triggering address
+layout changes. Actual window-dependent optional-content omission remains scheduled integration.
+
+The native ACK producer supports vendor Header0, Payload Vendor2 or MLME1 with vendor short
+sub-ID0x40/long0x8, each vendor content carrying at least three identifier octets. ACK Header
+applicability is0/0x1a/0x1d/0x1e/0x26; applicable nonvendor formats are unimplemented. ESDU
+Payload group0 is forbidden in ACK. Short MLME ACK applicability is the discrete set
+0x37/0x38/0x39/0x40;0x3a–0x3f remain reserved. Configured ordinary lists exclude termination,
+which the MAC produces. This producer subset never becomes a filter that rejects a
+structurally valid received ACK merely because its IE is unrecognized.
+
 DSN serves DATA/Command generation with a sequence field, BSN serves legacy beacons, and EBSN serves enhanced beacons (6.6.1, PDF69). Allocate/increment only when the selected frame carries its sequence field; suppressed frames do not allocate a dummy number. Retries reuse the constructed bytes/counter value. Counters wrap at 255. EBSN is initialized randomly only in the enhanced-capable profile so default legacy RNG consumption remains unchanged; nondefault reset retains it, default reset redraws it under that profile.
 
 | Trigger / control | Response and matching rule |
 | --- | --- |
 | Legacy DATA/Command, unicast AR1 | Existing version0 immediate ACK path; legacy sequence behavior unchanged. |
 | Version2 addressed DATA/Command, unicast AR1, security success | Version2 enhanced ACK; AR0, destination mode/address copied from triggering source, source mode/address from actual responder. |
-| Trigger compression/suppression | Copy both control bits. Derive ACK PAN presence from its own reversed address modes and Table7-2. Carry the triggering sequence iff present. |
+| Trigger compression/suppression | Copy both control bits. Derive ACK PAN presence from its own address modes and Table7-2. Carry the triggering sequence iff present. A carried Source PAN identifies the actual responder; Destination PAN derives from the trigger's effective Source PAN. |
 | AR0 or all-ones broadcast destination | No ACK response; normal broadcast/group-addressed transmission never sets AR. Preserve the existing receive-side rule for an externally injected group-addressed AR1 frame instead of inferring a new ACK filter from the sender restriction. |
 | Suppressed sequence | Match explicit expected peer, destination, applicable PANs, suppression/compression, channel and arrival interval; do not compare a dummy DSN. Unsupported ambiguous contexts are refused locally. |
 | Wrong peer/sequence/control/PAN/channel, malformed ACK | Does not complete the outstanding exchange successfully. |
 | Valid unknown ACK IE | Ignore semantic content for ACK acceptance and complete SUCCESS; preserve actual received values for the service consumer. |
 | DATA.confirm after actual enhanced ACK | Optional copied Header IE list, Payload IE list and ACK payload, excluding termination IEs/FCS. Empty actual enhanced ACK differs from no enhanced ACK. |
+
+An exact pending peer identity needs no alias lookup. A different ACK source address form is
+accepted only when the existing committed parent/member binding proves that it identifies
+the same peer in the applicable local PAN. There is no new alias registry. A broadcast PAN
+in the triggering destination does not require a responder to claim PAN0xffff. These rules
+follow Figure7-16's continuation (physical PDF92), while the existing destination/control,
+sequence, channel and physical-interval checks still apply.
 
 The packet-level response policy remains AIFS=12 selected-PHY symbols after receive end. Accept a peer's additional permitted CAP backoff-boundary start up to AIFS plus one unit backoff period (6.6.3.3, PDF72). Wait for a conservative maximum-legal-PSDU ACK duration because the originator cannot know receiver-selected IEs. Reuse twice the existing one-way `maxPropagationDelay` in completion and permitted-arrival envelopes. Scheduled deadlines leave required IFS inside CAP/GTS; optional response IEs yield when necessary. Physical PPDU timestamps and durations remain simulation time. No second ACK owner/timer, packet pointer in confirmation, arbitrary timeout parameter or knowledge of a peer's actual receive timestamp is added.
 
@@ -153,6 +176,13 @@ Malformed/range-invalid PIB writes return INVALID_PARAMETER; a valid stored IE l
 
 Table8-22's prose names a combined `macEbIeList`, whereas Table8-39 defines separate Header/Payload attributes. This binding treats the prose as the combined applicable lists; it does not introduce an invented third PIB attribute or ignore the explicitly supplied list parameters. Periodic generation uses the two PIB lists plus actual scheduler/GTS producers. Reject conflicting upper-supplied copies of MAC-owned scheduled semantic elements rather than creating two authoritative schedules. Legacy frame controls, defaults and wire bytes remain unchanged. Unknown legal IE values remain structurally preservable without a semantic generator.
 
+For an explicitly empty enhanced-beacon IE list, compute IE Present as zero under
+7.3.1.1/Figure7-6 (physical PDF86). Table8-22's list-construction prose says to set
+that bit, but does not justify an IE-present frame with no descriptor bytes. This
+binding emits neither that malformed combination nor an invented capability IE.
+Requested zero-length EBR elements remain a separate request grammar under6.5.2;
+their IDs identify desired response content, rather than ordinary command producers.
+
 ### Operational DATA IE generation
 
 Structural preservation is broader than native emission. Tables7-7 through7-10 define
@@ -191,12 +221,12 @@ Generated `_m` outputs are rebuilt from MSG inputs rather than hand-edited. Gene
 
 ## Execution mapping
 
-| Obligations | Owning implementation / direct future fixtures | Executed outcome |
+| Obligations | Owning implementation / direct fixtures | Executed outcome |
 | --- | --- | --- |
-| ENHANCED-1,2 | E1-01; FrameLayout/FrameWire unit and EnhancedFrameGate protocol | NOT_RUN |
-| ENHANCED-4–7 | E1-02/03; InformationElements/NestedElements units, enhanced serializer, EnhancedFrameGate observations | NOT_RUN |
-| ENHANCED-1–3,8 | E1-04; EnhancedData protocol and native-gate/sequence controls | NOT_RUN |
-| ENHANCED-8–11 | E1-05; EnhancedAck protocol, ownership/lifecycle and nonzero-propagation cases | NOT_RUN |
+| ENHANCED-1,2 | E1-01; FrameLayout/FrameWire unit and EnhancedFrameGate protocol | PASS for the selected structural layouts; [executed evidence](followup-results.md#e1-01-version-aware-layouts). |
+| ENHANCED-4–7 | E1-02/03; InformationElements/NestedElements units, enhanced serializer, EnhancedFrameGate observations | PASS for bounded framing/FCS and unsupported-security policy; [IE evidence](followup-results.md#e1-02-bounded-ie-framing), [nested evidence](followup-results.md#e1-03-nested-mlme-framing). No cryptographic claim. |
+| ENHANCED-1–3,8 | E1-04; EnhancedData protocol and native-gate/sequence controls | PASS for selected AR0 DATA/DSN/service binding; [executed evidence](followup-results.md#e1-04-native-data-services). EBSN remains E1-06. |
+| ENHANCED-8–11 | E1-05; EnhancedAck/EnhancedAckTiming protocol, ownership/lifecycle and nonzero-propagation cases | PASS for the selected unscheduled ACK profile; repaired full acceptance and bounded C++ dispositions are in the [execution record](followup-results.md#e1-05-initial-enhanced-ack-diagnostic). Scheduled CAP/GTS extensions remain E1-07. |
 | ENHANCED-3,12–14,16–17 excluding periodic selection | E1-06; EnhancedBeacon protocol, native scan, PIB GET/SET/reset controls and managed application | NOT_RUN |
 | ENHANCED-15,16–17 periodic selection and scheduled ACK boundaries | E1-07; EnhancedSuperframe plus scheduled EnhancedAck extension, including macUseEnhancedBeacon exposure/selection | NOT_RUN |
 

@@ -15,6 +15,8 @@ class INET_API Ieee802154ExchangeTiming
     static simtime_t interframeSpacing(units::values::b psduLength, simtime_t symbolPeriod, uint32_t sifsSymbols, uint32_t lifsSymbols);
     static simtime_t ackDuration(const physicallayer::Ieee802154PhyTimingParameters& phy);
     static simtime_t ackWait(const physicallayer::Ieee802154PhyTimingParameters& phy);
+    static simtime_t enhancedAckWait(const physicallayer::Ieee802154PhyTimingParameters& phy,
+            simtime_t aifs, simtime_t backoffPeriod, simtime_t propagationBound, bool slotted);
     /** Physical deadline for a CAP ACK, including the permitted later grid boundary. */
     static simtime_t slottedAckWait(const physicallayer::Ieee802154PhyTimingParameters& phy,
             simtime_t aifs, simtime_t backoffPeriod, simtime_t propagationBound);

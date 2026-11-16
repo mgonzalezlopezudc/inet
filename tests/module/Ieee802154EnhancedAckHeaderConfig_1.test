@@ -1,0 +1,23 @@
+%description:
+Reject forbidden Header IEs and incomplete vendor identifiers in local ACK configuration.
+
+%extraargs: -r 0..1
+
+%file: test.ned
+import inet.linklayer.ieee802154.Ieee802154StandardInterface;
+module AckHeaderHost {
+    parameters: @networkNode;
+    submodules: nic: Ieee802154StandardInterface { enableRadio = false; enableEnhancedFrames = true; }
+    connections allowunconnected:
+}
+network AckHeaderConfigTest { submodules: host: AckHeaderHost; }
+
+%inifile: omnetpp.ini
+[General]
+network = AckHeaderConfigTest
+*.host.nic.enhancedAckHeaderIes = ${scenario=0,1} == 0 ? [{id: 35, content: [1,2,3]}] : [{id: 0, content: [1,2]}]
+
+%exitcode: 1
+
+%contains: stderr
+Only complete vendor Header IEs are supported in enhanced ACKs

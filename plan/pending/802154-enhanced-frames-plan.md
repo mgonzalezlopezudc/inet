@@ -174,6 +174,14 @@ Depends on E1-04. Implement the audited response format, field copying, peer/seq
 
 Keep the originator unaware of the receiver's optional IE choice in one case, so the test detects any invalid dependence on sender-side knowledge of the eventual ACK length. E1-07 owns the scheduled variants: optional-IE omission near window end, a peer's permitted later CAP response start and timeout/retry deferral without holding the radio into an unrelated reservation. They are required for scheduled integration, rather than conditional evidence that could be skipped by both branches.
 
+Use `tests/protocol/ieee802154/Ieee802154EnhancedAckTiming.test` for the independently scripted
+PHY start/completion/channel boundaries under this same unit and `enhanced-ack.md` companion.
+This separates the exact timing producer from the normal two-peer exchange fixture without
+adding a production owner. The before-earliest waveform remains an end-to-end negative if
+the originator PHY is not yet receive-ready; state that observation limit rather than forcing
+private state. Add `tests/module/Ieee802154EnhancedAck{HeaderConfig,NestedConfig,Oversize,PayloadConfig}_1.test`
+for invalid response configuration rejected at initialization before any accepted exchange.
+
 Include nonzero actual propagation and set the existing `maxPropagationDelay` to a valid one-way bound. Assert the resulting round-trip allowance and the response-start check using sender/receiver PPDU timestamps, so a valid ACK is not rejected merely because the link has propagation delay. Keep the zero-propagation control and exact-deadline boundary cases.
 
 Include Header IEs, Payload IEs and ACK payload in a real enhanced ACK and assert the native confirmation/tag contains exactly those received values, excluding terminators/FCS. Verify absence on failure/no ACK and distinguish a valid empty enhanced-ACK-content record. This tests the standard service consumer as well as wire parsing.
@@ -217,9 +225,9 @@ opp_run_protocol_tests --load . -p inet -m debug --no-build \
   -w '^tests/protocol/ieee802154$' -f 'Ieee802154EnhancedAck\.test$'
 ```
 
-Unit selectors use `opp_run_unit_tests --load . -p inet -m debug --no-build -f 'Ieee802154<exact-name>_1\.test$'`. From `tests/serializer`, the proposed serializer command is `opp_run_opp_tests --load ../.. -p inet -m debug --no-build -f 'serializer_ieee802154(_enhanced)?\.test$'`. The combined new protocol selector is `Ieee802154Enhanced(FrameGate|Data|Ack|Beacon|Superframe)\.test$`; omit only the explicitly unavailable scheduled target when closing core and record that limit.
+Unit selectors use `opp_run_unit_tests --load . -p inet -m debug --no-build -f 'Ieee802154<exact-name>_1\.test$'`. From `tests/serializer`, the proposed serializer command is `opp_run_opp_tests --load ../.. -p inet -m debug --no-build -f 'serializer_ieee802154(_enhanced)?\.test$'`. The combined new protocol selector is `Ieee802154Enhanced(FrameGate|Data|Ack(Timing)?|Beacon|Superframe)\.test$`; omit only the explicitly unavailable scheduled target when closing core and record that limit.
 
-Exact proposed protocol `-f` selectors are `Ieee802154EnhancedFrameGate\.test$` for E1-01/E1-02/E1-03, `Ieee802154EnhancedData\.test$` for E1-04, `Ieee802154EnhancedAck\.test$` for E1-05, `Ieee802154EnhancedBeacon\.test$` for E1-06 and `Ieee802154EnhancedSuperframe\.test$` for E1-07. Select only the implemented/extended cases of the shared gate fixture at each commit; its companions state which observations are new versus unchanged controls.
+Exact proposed protocol `-f` selectors are `Ieee802154EnhancedFrameGate\.test$` for E1-01/E1-02/E1-03, `Ieee802154EnhancedData\.test$` for E1-04, `Ieee802154EnhancedAck(Timing)?\.test$` for E1-05, `Ieee802154EnhancedBeacon\.test$` for E1-06 and `Ieee802154EnhancedSuperframe\.test$` for E1-07. Select only the implemented/extended cases of the shared gate fixture at each commit; its companions state which observations are new versus unchanged controls.
 
 The wire oracle is an independently written field/presence table and fixed octet vectors, not encode-then-decode alone. Cover every legal selected layout, every truncation offset in representative frames, terminator combinations, lengths at zero/max/enclosing-boundary, and malformed reserved combinations. This is a finite deterministic matrix; extra random seeds cannot establish parser correctness. An optional bounded property/fuzz campaign may supplement it but is not required for the claimed production exchanges and must not replace those cases.
 

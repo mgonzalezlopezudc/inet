@@ -25,6 +25,18 @@ using PhyAdmission = physicallayer::Ieee802154PhyServiceAdmission;
 using PhyState = physicallayer::Ieee802154PhyState;
 
 namespace {
+std::vector<uint8_t> ackOctets(cValueArray *array)
+{
+    std::vector<uint8_t> result;
+    for (int i = 0; i < array->size(); ++i) {
+        auto value = array->get(i).intValue();
+        if (value < 0 || value > 255)
+            throw cRuntimeError("Enhanced ACK content must contain octets");
+        result.push_back(value);
+    }
+    return result;
+}
+
 Ieee802154MacServiceResult macResult(const physicallayer::Ieee802154PhyServiceResult& result)
 {
     if (auto abort = std::get_if<physicallayer::Ieee802154PhyServiceAbortReason>(&result)) {
@@ -120,6 +132,40 @@ void Ieee802154StandardMac::initialize(int stage)
         pending = std::make_unique<Ieee802154PendingTransactions>(capacity);
         if (!std::isfinite(par("maxPropagationDelay").doubleValue()) || par("maxPropagationDelay").doubleValue() < 0)
             throw cRuntimeError("maxPropagationDelay must be a finite nonnegative bound");
+        auto headers = check_and_cast<cValueArray *>(par("enhancedAckHeaderIes").objectValue());
+        for (int i = 0; i < headers->size(); ++i) {
+            auto entry = check_and_cast<cValueMap *>(headers->get(i).objectValue());
+            auto id = entry->get("id").intValue();
+            auto content = ackOctets(check_and_cast<cValueArray *>(entry->get("content").objectValue()));
+            if (id != 0 || content.size() < 3)
+                throw cRuntimeError("Only complete vendor Header IEs are supported in enhanced ACKs");
+            enhancedAckResponse.headerIes.push_back({0,std::move(content)});
+        }
+        auto payloads = check_and_cast<cValueArray *>(par("enhancedAckPayloadIes").objectValue());
+        for (int i = 0; i < payloads->size(); ++i) {
+            auto entry = check_and_cast<cValueMap *>(payloads->get(i).objectValue());
+            auto group = entry->get("group").intValue();
+            auto content = ackOctets(check_and_cast<cValueArray *>(entry->get("content").objectValue()));
+            if (group != 1 && group != 2)
+                throw cRuntimeError("Unsupported enhanced ACK Payload IE group");
+            if (group == 2 && content.size() < 3)
+                throw cRuntimeError("Enhanced ACK vendor Payload IE requires an identifier");
+            Ieee802154InformationElements::Payload payload{uint8_t(group),std::move(content)};
+            if (group == 1) {
+                auto nested = Ieee802154InformationElements::inspectNested(payload);
+                auto elements = std::get_if<std::vector<Ieee802154InformationElements::Nested>>(&nested);
+                if (!elements)
+                    throw cRuntimeError("Malformed enhanced ACK MLME IE");
+                for (const auto& element : *elements)
+                    if (!(element.longForm ? element.id == 8 : element.id == 0x40) || element.content.size() < 3)
+                        throw cRuntimeError("Only complete vendor Nested IEs are supported in enhanced ACKs");
+            }
+            enhancedAckResponse.payloadIes.push_back(std::move(payload));
+        }
+        enhancedAckResponse.payload = ackOctets(check_and_cast<cValueArray *>(par("enhancedAckPayload").objectValue()));
+        // The largest selected fixed ACK MHR is 21 octets; FCS occupies two more.
+        if (Ieee802154InformationElements::encode(enhancedAckResponse.headerIes,enhancedAckResponse.payloadIes,enhancedAckResponse.payload).size() > 104)
+            throw cRuntimeError("Enhanced ACK content exceeds the common 127-octet PSDU bound");
         auto shortAddress = par("shortAddress").intValue();
         auto panId = par("panId").intValue();
         if (shortAddress < 0 || shortAddress > 65535 || panId < 0 || panId > 65535)
@@ -225,8 +271,8 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitData(uint64_t id, Pac
         failure = Ieee802154MacStatus::INVALID_PARAMETER;
     else if (request.security.securityLevel != 0)
         failure = Ieee802154MacStatus::UNSUPPORTED_SECURITY;
-    else if (!request.legacyTx && (request.ackTx || request.gtsTx))
-        failure = Ieee802154MacStatus::UNSUPPORTED_FEATURE; // Enhanced ACK and scheduled integration are later stages.
+    else if (!request.legacyTx && request.gtsTx)
+        failure = Ieee802154MacStatus::UNSUPPORTED_FEATURE; // Enhanced scheduled integration is a later stage.
     else if (request.destinationAddress.isShortUnallocated())
         failure = Ieee802154MacStatus::INVALID_ADDRESS;
     else if (request.sourceAddressMode == Ieee802154Address::AddressType::SHORT) {
@@ -1169,7 +1215,7 @@ void Ieee802154StandardMac::completeData(const Ieee802154MacServiceResult& resul
             pendingPolls.push_front({completed.pendingDevice->first,completed.pendingDevice->second,simTime()});
         if (result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS) || std::holds_alternative<Ieee802154MacServiceAbortReason>(result) ||
                 result == Ieee802154MacServiceResult(Ieee802154MacStatus::TRANSACTION_EXPIRED))
-            completePending(completed.id, result, completed.backoffs, completed.ackFramePending, completed.ackRssi);
+            completePending(completed.id, result, completed.backoffs, completed.ackFramePending, completed.ackRssi, completed.enhancedAckContent);
         else {
             // 6.6.3.4: a new poll after the failed attempt is required; no direct retry loop.
             pendingPolls.erase(std::remove_if(pendingPolls.begin(), pendingPolls.end(), [&](const auto& poll) {
@@ -1184,6 +1230,7 @@ void Ieee802154StandardMac::completeData(const Ieee802154MacServiceResult& resul
             confirm.numBackoffs = completed.backoffs;
         confirm.ackFramePending = completed.ackFramePending;
         confirm.ackRssi = completed.ackRssi;
+        confirm.enhancedAckContent = completed.enhancedAckContent;
         client->handleDataConfirm(completed.id, confirm);
     }
     startPendingResponse();
@@ -1944,7 +1991,10 @@ void Ieee802154StandardMac::handleTransmitConfirm(uint64_t id, const physicallay
         if (transaction->frame->getAckRequest()) {
             transaction->phase = Phase::WAIT_ACK;
             transaction->transmittedEnd = confirm.timing->ppduEnd;
-            auto ackWait = transaction->slotted ? Ieee802154ExchangeTiming::slottedAckWait(phy->getTimingParameters(),
+            auto ackWait = transaction->frame->getFrameVersion() == 2 ? Ieee802154ExchangeTiming::enhancedAckWait(phy->getTimingParameters(),
+                    phy->getTimingParameters().symbolPeriod * getInteger("macSifsPeriod"),
+                    phy->getTimingParameters().symbolPeriod * getInteger("macUnitBackoffPeriod"), SimTime(par("maxPropagationDelay")), transaction->slotted) :
+                    transaction->slotted ? Ieee802154ExchangeTiming::slottedAckWait(phy->getTimingParameters(),
                     phy->getTimingParameters().symbolPeriod * getInteger("macSifsPeriod"),
                     SimTime(16, SIMTIME_US) * getInteger("macUnitBackoffPeriod"), SimTime(par("maxPropagationDelay"))) :
                     2 * SimTime(par("maxPropagationDelay")) + Ieee802154ExchangeTiming::ackWait(phy->getTimingParameters());
@@ -2130,6 +2180,40 @@ void Ieee802154StandardMac::setOutgoingCapActive(bool active)
     }
 }
 
+bool Ieee802154StandardMac::matchesAck(const Ieee802154Frame& frame,
+        const physicallayer::Ieee802154PhyReceiveIndication& quality) const
+{
+    if (!transaction || transaction->phase != Phase::WAIT_ACK || frame.getFrameType() != 2 ||
+            quality.timing.ppduStart < transaction->transmittedEnd + phy->getTimingParameters().turnaroundTime ||
+            quality.timing.ppduEnd > transaction->ackDeadline)
+        return false;
+    const auto& sent = *transaction->frame;
+    if (sent.getFrameVersion() != 2)
+        return frame.getFrameVersion() < 2 && frame.getDsn() == sent.getDsn();
+    auto aifs = phy->getTimingParameters().symbolPeriod * getInteger("macSifsPeriod");
+    auto latestStart = transaction->ackDeadline - Ieee802154ExchangeTiming::ppduDuration(B(127),phy->getTimingParameters());
+    auto localPan = uint16_t(getInteger("macPanId"));
+    bool peerMatches = frame.getSourceAddress() == sent.getDestinationAddress();
+    if (!peerMatches && localPan != 0xffff && (sent.getDestinationPanId() == localPan || sent.getDestinationPanId() == 0xffff)) {
+        bool parentAliases = isAssociatedCoordinator(localPan,sent.getDestinationAddress()) && isAssociatedCoordinator(localPan,frame.getSourceAddress());
+        auto expectedPeer = canonicalAddress(localPan,sent.getDestinationAddress());
+        bool memberAliases = coordinator && associatedDevices.count({localPan,expectedPeer}) &&
+                expectedPeer == canonicalAddress(localPan,frame.getSourceAddress());
+        peerMatches = parentAliases || memberAliases;
+    }
+    auto expectedPeerPan = uint16_t(sent.getDestinationPanId());
+    if (expectedPeerPan == 0xffff && hasEnhancedPeerContext(localPan,sent.getDestinationAddress()))
+        expectedPeerPan = localPan;
+    return frame.getFrameVersion() == 2 && !frame.getAckRequest() &&
+            peerMatches && frame.getDestinationAddress() == sent.getSourceAddress() &&
+            (expectedPeerPan == 0xffff || frame.getSourcePanId() == expectedPeerPan) &&
+            frame.getDestinationPanId() == sent.getSourcePanId() &&
+            frame.getPanCompression() == sent.getPanCompression() &&
+            frame.getSequenceSuppressed() == sent.getSequenceSuppressed() &&
+            Ieee802154FrameCodec::sequenceNumber(frame) == Ieee802154FrameCodec::sequenceNumber(sent) &&
+            quality.timing.ppduStart >= transaction->transmittedEnd + aifs && quality.timing.ppduStart <= latestStart;
+}
+
 void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physicallayer::Ieee802154PhyReceiveIndication& quality,
         const std::optional<Ieee802154SuperframeReceptionAnchor>& anchor, uint64_t receiveEpoch)
 {
@@ -2153,8 +2237,9 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
         return;
     bool enhanced = frame->getFrameVersion() == 2;
     if (enhanced) {
-        if (!par("enableEnhancedFrames").boolValue() || frame->getFrameType() != 1 || frame->getAckRequest() || frame->getSecurityEnabled())
-            return; // Enhanced ACK/Command and security are not enabled by this stage.
+        if (!par("enableEnhancedFrames").boolValue() || (frame->getFrameType() != 1 && frame->getFrameType() != 2) ||
+                (frame->getFrameType() == 2 && frame->getAckRequest()) || frame->getSecurityEnabled())
+            return; // Enhanced commands and security are not enabled by this stage.
         if (frame->getSourceAddress().isNone() || frame->getDestinationAddress().isNone())
             return;
     }
@@ -2233,11 +2318,11 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
                     quality.timing.ppduStart >= window.physicalStart && quality.timing.ppduEnd <= window.physicalEnd &&
                     gtsManager.noteActivity(window.key))
                 observedActivity = *gtsManager.findGrant(window.key);
-    if (panCoordinator && frame->getFrameType() == 2 && transaction && transaction->gtsKey &&
+    bool promiscuous = getBoolean("macPromiscuousMode");
+    bool acceptedAck = frame->getFrameType() == 2 && matchesAck(*frame,quality);
+    if (panCoordinator && acceptedAck && transaction->gtsKey &&
             transaction->gtsKey->direction == Ieee802154GtsDirection::DEVICE_RECEIVE &&
-            transaction->phase == Phase::WAIT_ACK && frame->getDsn() == transaction->frame->getDsn() &&
-            quality.timing.ppduStart >= transaction->transmittedEnd + phy->getTimingParameters().turnaroundTime &&
-            quality.timing.ppduEnd <= transaction->ackDeadline)
+            transaction->phase == Phase::WAIT_ACK)
         for (const auto& window : cfpWindows)
             if (window.outgoing && window.key.panId == transaction->gtsKey->panId &&
                     window.key.extendedAddress == transaction->gtsKey->extendedAddress &&
@@ -2246,12 +2331,47 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
                     quality.timing.ppduStart >= window.physicalStart && quality.timing.ppduEnd <= window.physicalEnd &&
                     gtsManager.noteActivity(window.key))
                 observedActivity = *gtsManager.findGrant(window.key);
+    if (acceptedAck) {
+        cancelEvent(ackTimer);
+        transaction->ackFramePending = frame->getFramePending();
+        if (quality.meanPower)
+            transaction->ackRssi = receivedRssi(quality);
+        if (enhanced) {
+            auto view = std::get<Ieee802154InformationElements::View>(Ieee802154InformationElements::inspect(*frame));
+            Ieee802154EnhancedAckContent content{view.headers,view.payloads,{}};
+            auto offset = view.data.offset - view.fixedMhr.length;
+            for (size_t i = offset; i < frame->getPayloadArraySize(); ++i)
+                content.payload.push_back(frame->getPayload(i));
+            transaction->enhancedAckContent = std::move(content);
+        }
+        eligibleAt = std::max(eligibleAt, quality.timing.ppduEnd + interframeSpacing(transaction->frame->getChunkLength()));
+        auto outerNotifications = syncLossNotificationsActive;
+        syncLossNotificationsActive = true;
+        completeData(Ieee802154MacStatus::SUCCESS);
+        if (promiscuous && started && client) {
+            auto monitor = new Packet("MCPS-DATA.promiscuous");
+            monitor->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>(bytes.begin(), bytes.end() - 2)));
+            monitor->addTag<FcsInd>()->setHasFcs(false);
+            monitor->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee802154);
+            Ieee802154MacPromiscuousIndication indication;
+            indication.lqi = quality.lqi.value_or(0);
+            indication.rssi = receivedRssi(quality);
+            client->handlePromiscuousIndication(monitor, indication);
+        }
+        if (observedActivity)
+            emitGtsObservation(gtsActivitySignal,*observedActivity);
+        syncLossNotificationsActive = outerNotifications;
+        if (!outerNotifications && resetRequest && resetRequest->deferredResult) {
+            auto result = *resetRequest->deferredResult;
+            finishReset(result);
+        }
+        return;
+    }
     if (observedActivity) {
         emitGtsObservation(gtsActivitySignal,*observedActivity);
         if (receiveEpoch != receiveRetirementEpoch || !started || resetRequest || !client)
             return;
     }
-    bool promiscuous = getBoolean("macPromiscuousMode");
     if (promiscuous) {
         auto monitor = new Packet("MCPS-DATA.promiscuous");
         monitor->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>(bytes.begin(), bytes.end() - 2)));
@@ -2267,15 +2387,6 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
             return;
     }
     if (frame->getFrameType() == 2) {
-        if (transaction && transaction->phase == Phase::WAIT_ACK && frame->getDsn() == transaction->frame->getDsn() &&
-                quality.timing.ppduStart >= transaction->transmittedEnd + phy->getTimingParameters().turnaroundTime && quality.timing.ppduEnd <= transaction->ackDeadline) {
-            cancelEvent(ackTimer);
-            transaction->ackFramePending = frame->getFramePending();
-            if (quality.meanPower)
-                transaction->ackRssi = receivedRssi(quality);
-            eligibleAt = std::max(eligibleAt, quality.timing.ppduEnd + interframeSpacing(transaction->frame->getChunkLength()));
-            completeData(Ieee802154MacStatus::SUCCESS);
-        }
         return;
     }
     if (par("enableManagement").boolValue() && receiveManagedBeacon(frame,quality,anchor,receiveEpoch))
@@ -2425,10 +2536,32 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
     if (acknowledge && !ackExchange && !phyOperation) {
         auto ack = makeShared<Ieee802154Frame>();
         ack->setFrameType(2);
-        ack->setFrameVersion(0);
+        ack->setFrameVersion(enhanced ? 2 : 0);
         ack->setDsn(frame->getDsn());
+        if (enhanced) {
+            ack->setSequenceSuppressed(frame->getSequenceSuppressed());
+            ack->setPanCompression(frame->getPanCompression());
+            ack->setDestinationAddress(frame->getSourceAddress());
+            ack->setSourceAddress(frame->getDestinationAddress().isExtendedGroup() ?
+                    std::get<Ieee802154Address>(*pib->get("macExtendedAddress").value) : frame->getDestinationAddress());
+            ack->setDestinationPanId(frame->getSourcePanId());
+            ack->setSourcePanId(getInteger("macPanId"));
+            auto content = Ieee802154InformationElements::encode(enhancedAckResponse.headerIes,enhancedAckResponse.payloadIes,enhancedAckResponse.payload);
+            ack->setInformationElementsPresent(!enhancedAckResponse.headerIes.empty() || !enhancedAckResponse.payloadIes.empty());
+            ack->setPayloadArraySize(content.size());
+            for (size_t i = 0; i < content.size(); ++i)
+                ack->setPayload(i,content[i]);
+        }
         ack->setFramePending(received.polledDevice.has_value());
-        Ieee802154FrameCodec::finalize(*ack);
+        try {
+            Ieee802154FrameCodec::finalize(*ack);
+        }
+        catch (const cRuntimeError&) {
+            eligibleAt = std::max(eligibleAt, quality.timing.ppduEnd + interframeSpacing(received.receivedLength));
+            deliverReceived(received,false);
+            continueData();
+            return;
+        }
         received.frame = ack;
         received.target = quality.timing.ppduEnd + SimTime(16, SIMTIME_US) * getInteger("macSifsPeriod");
         ackExchange = received;
@@ -2524,7 +2657,7 @@ void Ieee802154StandardMac::startAck()
     auto boundary = nextBeaconBoundary();
     if (boundary) {
         auto timing = phy->getTimingParameters();
-        auto ackDuration = Ieee802154ExchangeTiming::ackDuration(timing);
+        auto ackDuration = Ieee802154ExchangeTiming::ppduDuration(ackExchange->frame->getChunkLength(),timing);
         if (*boundary <= superframe->getCurrentClockTime() ||
                 simTime() + ackDuration > superframe->getFutureSimulationTime(*boundary)) {
             finishAck(false);
@@ -2715,7 +2848,8 @@ void Ieee802154StandardMac::retireDataRadio()
 }
 
 void Ieee802154StandardMac::completePending(uint64_t token, const Ieee802154MacServiceResult& result,
-        std::optional<uint8_t> backoffs, std::optional<bool> ackFramePending, std::optional<uint8_t> ackRssi)
+        std::optional<uint8_t> backoffs, std::optional<bool> ackFramePending, std::optional<uint8_t> ackRssi,
+        std::optional<Ieee802154EnhancedAckContent> enhancedAckContent)
 {
     auto found = pendingOriginals.find(token);
     if (found == pendingOriginals.end())
@@ -2725,12 +2859,13 @@ void Ieee802154StandardMac::completePending(uint64_t token, const Ieee802154MacS
     pending->remove(token);
     schedulePendingExpiry();
     delete original.msdu;
-    reportPendingResult(token,original,result,backoffs,ackFramePending,ackRssi);
+    reportPendingResult(token,original,result,backoffs,ackFramePending,ackRssi,std::move(enhancedAckContent));
 }
 
 void Ieee802154StandardMac::reportPendingResult(uint64_t token, const PendingOriginal& original,
         const Ieee802154MacServiceResult& result, std::optional<uint8_t> backoffs,
-        std::optional<bool> ackFramePending, std::optional<uint8_t> ackRssi)
+        std::optional<bool> ackFramePending, std::optional<uint8_t> ackRssi,
+        std::optional<Ieee802154EnhancedAckContent> enhancedAckContent)
 {
     if (auto device = std::get_if<Ieee802154Address>(&original.command)) {
         if (managementClient)
@@ -2746,6 +2881,7 @@ void Ieee802154StandardMac::reportPendingResult(uint64_t token, const PendingOri
         }
         confirm.ackFramePending = ackFramePending;
         confirm.ackRssi = ackRssi;
+        confirm.enhancedAckContent = std::move(enhancedAckContent);
         client->handleDataConfirm(token, confirm);
     }
 }

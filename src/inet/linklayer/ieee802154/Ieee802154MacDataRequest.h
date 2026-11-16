@@ -51,6 +51,13 @@ struct Ieee802154MacDataRequest
     std::vector<Ieee802154InformationElements::Payload> payloadIes;
 };
 
+struct Ieee802154EnhancedAckContent
+{
+    std::vector<Ieee802154InformationElements::Header> headerIes;
+    std::vector<Ieee802154InformationElements::Payload> payloadIes;
+    std::vector<uint8_t> payload;
+};
+
 struct Ieee802154MacDataConfirm
 {
     uint8_t msduHandle;
@@ -59,6 +66,7 @@ struct Ieee802154MacDataConfirm
     std::optional<uint8_t> numBackoffs;
     std::optional<bool> ackFramePending;
     std::optional<uint8_t> ackRssi; ///< Numeric uint8 representation is a local choice; Table 8-31 calls this Boolean and gives no range.
+    std::optional<Ieee802154EnhancedAckContent> enhancedAckContent; ///< Present for an actual enhanced ACK, including an empty one.
 
     /**
      * Timestamp is an optional raw 24-bit value and is absent for M1.

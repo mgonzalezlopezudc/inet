@@ -7,7 +7,7 @@ suppression and information-element-presence controls. Use
 ``sourcePanField`` when the presence of a wire field matters: zero and
 ``0xffff`` are valid values, not absence markers. Structural decoding alone
 does not enable an operational feature; the separate enhanced DATA option
-selects the supported unsecured, unacknowledged native service.
+selects the supported unsecured native service and enhanced acknowledgements.
 
 ``Ieee802154InformationElements::inspect`` computes bounded fixed-prefix,
 auxiliary, IE, data and FCS regions from that frame's stored payload; it does
