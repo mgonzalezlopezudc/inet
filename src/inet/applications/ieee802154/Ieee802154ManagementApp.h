@@ -67,6 +67,8 @@ class INET_API Ieee802154ManagementApp : public SimpleModule,
     virtual void handleSyncLossIndication(const Ieee802154MacSyncLossIndication&) override;
     virtual void handleRxEnableConfirm(uint64_t, const Ieee802154MacRxEnableConfirm&) override;
     virtual void handleRxEnableIndication(const Ieee802154MacRxEnableIndication&) override;
+    void handleGtsConfirm(uint64_t, const Ieee802154MacGtsConfirm&) override;
+    void handleGtsIndication(const Ieee802154MacGtsIndication&) override;
     virtual void handlePromiscuousIndication(Packet *packet, const Ieee802154MacPromiscuousIndication&) override;
     virtual void handleCommStatusIndication(Packet *packet, const Ieee802154MacCommStatusIndication&) override;
 };

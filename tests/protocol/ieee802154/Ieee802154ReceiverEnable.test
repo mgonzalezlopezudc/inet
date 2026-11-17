@@ -195,6 +195,8 @@ class ReceiverEnableExercise : public cSimpleModule, public LifecycleController,
         if (scenario == 21 && confirms == 1) ASSERT(enable(0,1) == Admission::ACCEPTED);
         if (scenario == 22 && confirms == 1) ASSERT(receiver->submitReset(++nextId,{false}) == Admission::ACCEPTED);
     }
+    virtual void handleGtsConfirm(uint64_t, const Ieee802154MacGtsConfirm&) override { ASSERT(false); }
+    virtual void handleGtsIndication(const Ieee802154MacGtsIndication&) override { ASSERT(false); }
     virtual void handleRxEnableIndication(const Ieee802154MacRxEnableIndication& indication) override {
         Enter_Method("handleRxEnableIndication"); indications++; timestamps.push_back(indication.timestamp);
         if (scenario == 30) ASSERT(mode() == physicallayer::IRadio::RADIO_MODE_TRANSMITTER);

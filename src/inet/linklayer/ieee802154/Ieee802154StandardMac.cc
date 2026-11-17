@@ -1739,6 +1739,8 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
         if (orphanScanId && (!scanRequest || scanRequest->id != *orphanScanId))
             return;
     }
+    if (parsedCommand && std::holds_alternative<Ieee802154CommandCodec::GtsRequest>(*parsedCommand))
+        return; // GTS command handling and its ACK are introduced together in B3-02.
     if (frame->getFrameType() == 2) {
         if (transaction && transaction->phase == Phase::WAIT_ACK && frame->getDsn() == transaction->frame->getDsn() &&
                 quality.timing.ppduStart >= transaction->transmittedEnd + phy->getTimingParameters().turnaroundTime && quality.timing.ppduEnd <= transaction->ackDeadline) {
@@ -4452,6 +4454,13 @@ bool Ieee802154StandardMac::consumeReceiverWindow()
         return false;
     clearReceiverWindow();
     return true;
+}
+
+Ieee802154MacServiceAdmission Ieee802154StandardMac::submitGts(uint64_t id, const Ieee802154MacGtsRequest& request)
+{
+    Enter_Method("submitGts");
+    auto admission = admitRadio(id,true,true);
+    return admission == Ieee802154MacServiceAdmission::ACCEPTED ? Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION : admission;
 }
 
 Ieee802154MacServiceAdmission Ieee802154StandardMac::submitRxEnable(uint64_t id, const Ieee802154MacRxEnableRequest& request)

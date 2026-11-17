@@ -736,6 +736,8 @@ class ManagedBoundaryExercise : public cSimpleModule, public cListener, public I
     virtual void handleSyncLossIndication(const Ieee802154MacSyncLossIndication& i) override { Enter_Method("handleSyncLossIndication"); ASSERT(i.reason == Ieee802154SyncLossReason::BEACON_LOST); ++losses; }
     virtual void handleRxEnableConfirm(uint64_t,const Ieee802154MacRxEnableConfirm& c) override { Enter_Method("handleRxEnableConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(expectedRx)); ++rxConfirms; }
     virtual void handleRxEnableIndication(const Ieee802154MacRxEnableIndication&) override { Enter_Method("handleRxEnableIndication"); rxIndicatedAt = simTime(); ++rxIndications; }
+    virtual void handleGtsConfirm(uint64_t, const Ieee802154MacGtsConfirm&) override { ASSERT(false); }
+    virtual void handleGtsIndication(const Ieee802154MacGtsIndication&) override { ASSERT(false); }
 };
 Define_Module(ManagedBoundaryExercise);
 

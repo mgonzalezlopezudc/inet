@@ -1,0 +1,4 @@
+IEEE 802.15.4 GTS management service
+
+IEEE 802.15.4 native management providers and clients have new GTS request,
+confirmation, and indication methods. See the GTS management migration guide.

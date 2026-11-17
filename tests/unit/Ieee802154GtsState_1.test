@@ -1,0 +1,32 @@
+%description:
+GTS ledger union capacity, identity reservations, and separate grant and advertisement lifetimes.
+
+%includes:
+#include "inet/linklayer/ieee802154/Ieee802154GtsManager.h"
+using namespace inet;
+
+%activity:
+using M = Ieee802154GtsManager;
+using D = Ieee802154GtsDirection;
+M manager;
+for (uint16_t i = 0; i < 7; ++i) {
+    M::Key key{0x1234,uint64_t(i + 1),uint16_t(i + 1),D::DEVICE_TRANSMIT};
+    ASSERT(manager.putGrant({key,1,1}));
+    ASSERT(manager.advertise(key,1,1));
+}
+M::Key eighth{0x1234,8,8,D::DEVICE_TRANSMIT};
+ASSERT(!manager.putGrant({eighth,1,1}) && !manager.advertise(eighth,0,0));
+M::Key first{0x1234,1,1,D::DEVICE_TRANSMIT};
+ASSERT(manager.findGrant(first) && manager.findGrant(first)->length == 1);
+ASSERT(manager.removeGrant(first));
+ASSERT(!manager.findGrant(first));
+ASSERT(!manager.putGrant({{0x1234,8,1,D::DEVICE_TRANSMIT},1,1}));
+ASSERT(!manager.putGrant({{0x1234,1,8,D::DEVICE_TRANSMIT},1,1}));
+ASSERT(!manager.putGrant({{0x2345,8,1,D::DEVICE_TRANSMIT},1,1}));
+for (int i = 0; i < 4; ++i) manager.ageAdvertisements();
+ASSERT(manager.getAdvertisements().empty() && manager.getGrants().size() == 6);
+ASSERT(manager.putGrant({eighth,1,1}));
+ASSERT(!manager.putGrant({first,0,1}));
+ASSERT(!manager.advertise(eighth,15,2));
+manager.clear();
+ASSERT(manager.getGrants().empty() && manager.getAdvertisements().empty());

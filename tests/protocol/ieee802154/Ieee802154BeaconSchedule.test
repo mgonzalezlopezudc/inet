@@ -473,6 +473,8 @@ class BeaconScheduleExercise : public cSimpleModule, public cListener,
     virtual void handleSyncLossIndication(const Ieee802154MacSyncLossIndication&) override { ASSERT(false); }
     virtual void handleRxEnableConfirm(uint64_t, const Ieee802154MacRxEnableConfirm& confirm) override { ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); ++receiverConfirms; }
     virtual void handleRxEnableIndication(const Ieee802154MacRxEnableIndication&) override { ++receiverEnds; }
+    virtual void handleGtsConfirm(uint64_t, const Ieee802154MacGtsConfirm&) override { ASSERT(false); }
+    virtual void handleGtsIndication(const Ieee802154MacGtsIndication&) override { ASSERT(false); }
 };
 Define_Module(BeaconScheduleExercise);
 }
