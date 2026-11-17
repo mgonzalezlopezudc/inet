@@ -2,10 +2,12 @@
 
 > **Kind:** ledger · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [standards.md](../../protocol/dtls/standards.md)
 
-Publication association: C18. The retained execution statements refer to their original donor revisions. Fresh reconstructed results and exact-parent execution status are recorded separately; no historical PASS is attributed to this prefix.
+Publication association: C34. The retained execution statements refer to their original donor revisions. Fresh reconstructed results and exact-parent execution status are recorded separately; no historical PASS is attributed to this prefix.
 
 
 The selected behavioral profile and exclusions are in [scope.md](scope.md). Execution evidence is recorded in [results.md](results.md). A catalog entry or a planned test is not executed conformance evidence.
+
+The extension series is tracked in [extensions.md](extensions.md), which owns each implemented stage's exact selections, revisions, results and remaining gaps. New tests and configured capabilities widen achieved coverage only after their recorded execution. The table below preserves the original default-profile evidence; the extension ledger and its linked reviewer documents cover opt-in behavior.
 
 ## Initial selection
 
@@ -18,7 +20,8 @@ The selected behavioral profile and exclusions are in [scope.md](scope.md). Exec
 | Datagrams and overhead | The 23 C5 cases mapped in [protected-datagrams.md](../../../../../tests/protocol/dtls/protected-datagrams.md) | PASS for delivery, processing, capacity and record/padding boundaries |
 | Replay/invalid input | Rfc9147ReplayWindow, ReplayWindow8, InvalidRecord, MalformedInner and RecordSizeLimits | PASS within the documented truncated-number reconstruction scope |
 | Key updates | The 18 cases in [key-updates.md](../../../../../tests/protocol/dtls/key-updates.md) | PASS on the isolated update boundary |
-| Graceful closure | The 7 cases in [closure-and-lifecycle.md](https://github.com/mgonzalezlopezudc/inet/blob/5284847df92eea8451bf056d8722fabb0ddf65bd/tests/protocol/dtls/closure-and-lifecycle.md) | PASS for local completion, forced closure, alert disposition, shared peers and delivery boundaries |
+| Graceful closure | The 7 cases in [closure-and-lifecycle.md](../../../../../tests/protocol/dtls/closure-and-lifecycle.md) | PASS for local completion, forced closure, alert disposition, shared peers and delivery boundaries |
 | Lifecycle and processing | DtlsEngineLifecycle, DtlsProcessingQueue, DtlsRecoveryLifecycle, DtlsRestartLifecycle, sender/configuration cases | PASS for processing/recovery ownership, close preservation, crash and repeated restart |
+| Asynchronous raw-header rejection | Four cases in [malformed-handshake-records.md](../../../../../tests/protocol/dtls/malformed-handshake-records.md) | PASS after the narrow decode correction; both queued variants fail on the preserved parent while zero-cost controls pass |
 
-No achieved standards-test depth is claimed until the selected cases have executed and their observations have been examined. Cryptographic validation, protected-packet byte export, CID/migration and the omitted optional handshake modes are not supported claims.
+No achieved standards-test depth is claimed until the selected cases have executed and their observations have been examined. Cryptographic validation and protected-packet byte export remain excluded. Optional wire features are limited to the finite profiles and executed checks in the extension ledger.
