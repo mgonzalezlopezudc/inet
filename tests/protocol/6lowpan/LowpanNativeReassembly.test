@@ -121,7 +121,7 @@ class NativeReassemblyCheck : public cSimpleModule, public cListener
             elidedChecksum.insert(elidedChecksum.end(),encoding.begin()+1,encoding.end()-2);
             input(at++,elidedChecksum);
         }
-        input(at,{0x7e,0x33,0xe3,0x12,0xab,0xcd}); // Unsupported NHC identifier.
+        input(at,{0x7e,0x33,0xe3,0x12,0xab,0xcd}); // Truncated Routing NHC body.
         input(at+1,{0x7e,0x33}); // Compressed Next Header is signaled, but no NHC octet follows.
     }
     void receiveSignal(cComponent *, simsignal_t signal, cObject *, cObject *details) override {

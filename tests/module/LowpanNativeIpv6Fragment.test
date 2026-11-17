@@ -85,7 +85,7 @@ class ExchangeCheck : public cSimpleModule, public cListener
             ASSERT((dispatch & 0xf8) == 0xc0 || (dispatch & 0xf8) == 0xe0 || (dispatch & 0xe0) == 0x60);
             if ((dispatch & 0xf8) == 0xc0) {
                 auto bytes = packet->peekDataAt<BytesChunk>(B(25), B(4))->getBytes();
-                ASSERT(bytes == std::vector<uint8_t>({0x78, 0x33, 0x2c, 0x1e}));
+                ASSERT(bytes == std::vector<uint8_t>({0x7c, 0x33, 0x1e, 0xe4}));
             }
             tx++;
         }
