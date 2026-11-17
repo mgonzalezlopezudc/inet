@@ -1,0 +1,196 @@
+%description:
+Literal native NS/ARO input tests a finite local target before, at and after
+expiry while its address row remains assigned. A second run uses femtosecond
+resolution, grants lifetime65535 beyond the clock horizon and removes with zero.
+
+%extraargs: -r 0..1
+
+%file: ValidityCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/MemoryOutputStream.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/checksum/Checksum.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/ieee802154/Ieee802154AddressTagBase_m.h"
+#include "inet/linklayer/lowpan/LowpanNativeLinkDomain.h"
+#include "inet/linklayer/lowpan/LowpanPacketDropDetails_m.h"
+#include "inet/networklayer/common/L3AddressTag_m.h"
+#include "inet/networklayer/icmpv6/Icmpv6.h"
+#include "inet/networklayer/icmpv6/Ipv6NdMessage_m.h"
+#include "inet/networklayer/ipv6/Ipv6Header_m.h"
+#include "inet/networklayer/ipv6/Ipv6InterfaceData.h"
+#include "inet/networklayer/ipv6/Ipv6RoutingTable.h"
+
+namespace inet::protocoltest {
+using namespace lowpan;
+class ValidityCheck : public cSimpleModule, public cListener
+{
+    NetworkInterface *interface=nullptr;
+    LowpanNativeLinkDomain *domain=nullptr;
+    Ipv6RoutingTable *routes=nullptr;
+    cModule *nd=nullptr;
+    bool lateClock=false;
+    int injected=0,advertisements=0,drops=0;
+    std::vector<long> counts;
+    Ipv6Address registered{"2001:db8::a"},finiteTarget{"2001:db8:fe::1"},routerLocal{"fe80::211:2233:4455:6603"};
+    simtime_t start;
+
+    void step(simtime_t time,int kind) {scheduleAt(time,new cMessage("registrar-validity",kind));}
+    void input(int lifetime) {
+        auto target=lateClock?routerLocal:finiteTarget;
+        std::vector<uint8_t> bytes{135,0,0,0,0,0,0,0};MemoryOutputStream address;address.writeIpv6Address(target);
+        bytes.insert(bytes.end(),address.getData().begin(),address.getData().end());
+        bytes.insert(bytes.end(),{1,2,0,0x11,0x22,0x33,0x44,0x55,0x66,1,0,0,0,0,0,0,
+            33,2,0,0,0,0,uint8_t(lifetime>>8),uint8_t(lifetime),0,0x11,0x22,0x33,0x44,0x55,0x66,1});
+        MemoryOutputStream pseudo;pseudo.writeIpv6Address(registered);pseudo.writeIpv6Address(target);
+        pseudo.writeUint32Be(bytes.size());pseudo.writeUint32Be(58);pseudo.writeBytes(bytes);
+        auto checksum=internetChecksum(pseudo.getData());bytes[2]=checksum>>8;bytes[3]=checksum;
+        std::vector<uint8_t> payload{0x41,0x60,0,0,0,0,uint8_t(bytes.size()),58,255};
+        MemoryOutputStream addresses;addresses.writeIpv6Address(registered);addresses.writeIpv6Address(target);
+        payload.insert(payload.end(),addresses.getData().begin(),addresses.getData().end());payload.insert(payload.end(),bytes.begin(),bytes.end());
+        std::vector<uint8_t> frame{0x41,0xdc,uint8_t(injected),0x34,0x12,3,0x66,0x55,0x44,0x33,0x22,0x11,0,1,0x66,0x55,0x44,0x33,0x22,0x11,0};
+        frame.insert(frame.end(),payload.begin(),payload.end());auto crc=crc16_ccitt(frame);frame.push_back(crc);frame.push_back(crc>>8);
+        ASSERT(frame.size()<=127);
+        sendDirect(new Packet("literal-registrar-validity",makeShared<BytesChunk>(frame)),interface->getSubmodule("mac")->gate("lowerLayerIn")->getPathStartGate());injected++;
+    }
+    void verifyState(bool present,simtime_t deadline=SIMTIME_ZERO) {
+        auto binding=domain->resolveNeighbor(interface->getId(),registered);ASSERT(bool(binding)==present);
+        if (present) ASSERT(*binding==Ieee802154Address("0011223344556601"));
+        int found=0;
+        for (int i=0;i<routes->getNumRoutes();i++) {
+            auto route=routes->getRoute(i);
+            if (route->getSource()==nd && route->getPrefixLength()==128 && route->getDestPrefix()==registered) {
+                ASSERT(route->getInterface()==interface && route->getExpiryTime()==deadline);found++;
+            }
+        }
+        ASSERT(found==int(present));
+    }
+  protected:
+    int numInitStages() const override {return NUM_INIT_STAGES;}
+    void initialize(int stage) override {
+        if (stage!=INITSTAGE_LAST) return;
+        lateClock=par("lateClock");
+        interface=check_and_cast<NetworkInterface *>(getModuleByPath("^.router.wlan[0]"));
+        domain=check_and_cast<LowpanNativeLinkDomain *>(getModuleByPath("^.domain"));
+        routes=check_and_cast<Ipv6RoutingTable *>(getModuleByPath("^.router.ipv6.routingTable"));nd=getModuleByPath("^.router.ipv6.neighbourDiscovery");
+        nd->subscribe("packetDropped",this);nd->subscribe("registrationCountChanged",this);
+        verifyState(false);
+        if (lateClock) {
+            start=SimTime(900,SIMTIME_MS);
+            step(start,0);step(start+SimTime(80,SIMTIME_MS),1);step(start+SimTime(100,SIMTIME_MS),2);
+            step(start+SimTime(180,SIMTIME_MS),3);step(start+SimTime(200,SIMTIME_MS),4);
+        }
+        else {
+            interface->getProtocolDataForUpdate<Ipv6InterfaceData>()->assignAddress(finiteTarget,false,SimTime(1),SimTime(1));
+            step(SimTime(900,SIMTIME_MS),0);step(SimTime(980,SIMTIME_MS),1);
+            step(SimTime(1),2);step(SimTime(1100,SIMTIME_MS),3);step(SimTime(1200,SIMTIME_MS),4);
+        }
+    }
+    void receiveSignal(cComponent *,simsignal_t,long value,cObject *) override {counts.push_back(value);}
+    void receiveSignal(cComponent *,simsignal_t,cObject *,cObject *details) override {
+        auto drop=check_and_cast<LowpanPacketDropDetails *>(details);
+        ASSERT(drop->getReason()==OTHER_PACKET_DROP && drop->getLowpanReason()==LOWPAN_MALFORMED);drops++;
+    }
+    void handleMessage(cMessage *message) override {
+        if (message->isSelfMessage()) {
+            int kind=message->getKind();delete message;
+            if (lateClock) {
+                if (kind==0) input(65535);
+                else if (kind==1) {ASSERT(advertisements==1);verifyState(true,SIMTIME_MAX);}
+                else if (kind==2) input(0);
+                else if (kind==3) {ASSERT(advertisements==2);verifyState(false);}
+                else endSimulation();
+            }
+            else {
+                if (kind==0) input(1);
+                else if (kind==1) {ASSERT(advertisements==1);verifyState(true,SimTime(60900,SIMTIME_MS));}
+                else if (kind==2 || kind==3) {
+                    auto data=interface->getProtocolData<Ipv6InterfaceData>();
+                    ASSERT(data->hasAddress(finiteTarget) && !data->hasValidAddress(finiteTarget,simTime()));input(1);
+                }
+                else {ASSERT(advertisements==1 && drops==2);verifyState(true,SimTime(60900,SIMTIME_MS));endSimulation();}
+            }
+            return;
+        }
+        auto packet=check_and_cast<Packet *>(message);ASSERT(!packet->findTag<Ieee802154AddressReq>());
+        auto ip=packet->popAtFront<Ipv6Header>();auto target=lateClock?routerLocal:finiteTarget;
+        ASSERT(ip->getSrcAddress()==target && ip->getDestAddress()==registered && ip->getHopLimit()==255);
+        auto addresses=packet->addTag<L3AddressInd>();addresses->setSrcAddress(target);addresses->setDestAddress(registered);
+        ASSERT(Icmpv6::verifyChecksum(packet));auto na=packet->peekAtFront<Ipv6NeighbourAdvertisement>();
+        ASSERT(na->getTargetAddress()==target && na->getRouterFlag() && na->getSolicitedFlag() && na->getOptions().getOptionArraySize()==1);
+        auto aro=na->getOptions().getOption(0);ASSERT(int(aro->getType())==33 && aro->getOptionLength()==2 && uint8_t(aro->getPaddingBytes(0))==0);
+        int lifetime=(uint8_t(aro->getPaddingBytes(4))<<8)|uint8_t(aro->getPaddingBytes(5));
+        ASSERT(lifetime==(lateClock?(advertisements==0?65535:0):1));advertisements++;delete packet;
+    }
+    void finish() override {
+        if (lateClock) {ASSERT(injected==2 && advertisements==2 && drops==0 && counts==std::vector<long>({1,0}));verifyState(false);}
+        else {ASSERT(injected==3 && advertisements==1 && drops==2 && counts==std::vector<long>({1}));verifyState(true,SimTime(60900,SIMTIME_MS));}
+        std::cout << "late=" << int(lateClock) << " injected=" << injected << " NA=" << advertisements << " drops=" << drops << " counts=";
+        for (auto count:counts) std::cout << count << ',';std::cout << '\n';
+        std::cout << "Native registrar finite target and bounded lifetime verified\n";
+    }
+};
+Define_Module(ValidityCheck);
+}
+
+%file: test.ned
+@namespace(inet::protocoltest);
+import inet.node.inet.StandardHost;
+import inet.networklayer.common.InterfaceTable;
+import inet.mobility.static.StationaryMobility;
+import inet.linklayer.lowpan.Ieee802154NativeLowpanInterface;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple ValidityCheck { parameters: bool lateClock; gates: input in; }
+module ValidityPeer {
+    parameters: @networkNode;
+    gates: output out;
+    submodules:
+        interfaceTable: InterfaceTable;
+        mobility: StationaryMobility;
+        nic: Ieee802154NativeLowpanInterface { interfaceTableModule="^.interfaceTable";linkDomainModule="^.^.domain"; }
+    connections allowunconnected: nic.upperLayerOut --> out;
+}
+network ValidityNetwork {
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        domain: LowpanNativeLinkDomain;
+        router: StandardHost;
+        peer: ValidityPeer;
+        check: ValidityCheck;
+    connections allowunconnected: peer.out --> check.in;
+}
+
+%inifile: omnetpp.ini
+[General]
+network=ValidityNetwork
+simtime-resolution=fs
+sim-time-limit=2s
+seed-set=0
+**.vector-recording=false
+**.scalar-recording=false
+*.check.lateClock=(${case=0,1}==1)
+*.router.hasIpv4=false
+*.router.hasIpv6=true
+*.router.forwarding=true
+*.router.ipv6.typename="LowpanIpv6NetworkLayer"
+*.router.ipv6.neighbourDiscovery.nativeNdRole="router"
+*.router.ipv6.neighbourDiscovery.routerBootupTime=0s
+*.router.ipv6.neighbourDiscovery.dupAddrDetectTransmits=0
+*.router.numWlanInterfaces=1
+*.router.wlan[0].typename="Ieee802154NativeLowpanInterface"
+*.router.wlan[0].linkDomainModule="^.^.domain"
+*.router.wlan[0].radio.antenna.mobilityModule="^.^.^.mobility"
+*.peer.nic.radio.antenna.mobilityModule="^.^.^.mobility"
+*.domain.panId=4660
+*.domain.config=xml("<domain><peer interface='peer.nic' native='0011223344556601'/><peer interface='router.wlan[0]' native='0011223344556603'/></domain>")
+**.lowpan.headerCompression="none"
+**.mobility.initialX=0m
+**.mobility.initialY=0m
+**.mobility.initialZ=0m
+**.mobility.initFromDisplayString=false
+**.mobility.updateFromDisplayString=false
+
+%contains: stdout
+Native registrar finite target and bounded lifetime verified

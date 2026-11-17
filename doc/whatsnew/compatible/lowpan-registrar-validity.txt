@@ -1,0 +1,3 @@
+Native registrar address and lifetime checks
+
+Native 6LoWPAN registration now requires the local solicitation target to have a current valid lifetime, including its exact expiry boundary. Positive ARO lifetimes saturate at the simulation clock horizon without overflowing; zero lifetime continues to remove the matching registration immediately.
