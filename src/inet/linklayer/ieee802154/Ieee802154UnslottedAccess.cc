@@ -39,11 +39,19 @@ Ieee802154MacServiceAdmission Ieee802154UnslottedAccess::start(uint64_t id, cons
         return Admission::UNAVAILABLE;
     if (attempt)
         return Admission::BUSY;
+    if (request.window)
+        return Admission::UNSUPPORTED_OPERATION;
     if (request.minBe > request.maxBe || request.maxBe < 3 || request.maxBe > 8 || request.maxBackoffs > 5 || request.unitBackoffPeriod <= SIMTIME_ZERO)
         return Admission::INVALID_REQUEST;
     attempt = Attempt{id, request, 0, request.minBe};
     backoff();
     return Admission::ACCEPTED;
+}
+
+Ieee802154MacServiceAdmission Ieee802154UnslottedAccess::updateWindow(uint64_t, const Ieee802154AccessWindow&)
+{
+    Enter_Method("updateWindow");
+    return Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION;
 }
 
 void Ieee802154UnslottedAccess::backoff()
@@ -89,7 +97,7 @@ void Ieee802154UnslottedAccess::complete(const Ieee802154MacServiceResult& resul
     attempt.reset();
     cancelEvent(backoffTimer);
     if (client)
-        client->handleAccessConfirm(completed.id, result, completed.nb);
+        client->handleAccessConfirm(completed.id, result, completed.nb, {});
 }
 
 void Ieee802154UnslottedAccess::handleCcaResult(uint64_t id, bool idle)

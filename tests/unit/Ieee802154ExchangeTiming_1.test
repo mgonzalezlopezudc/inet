@@ -1,0 +1,34 @@
+%description:
+Physical legacy exchange timing, PHY-derived ACK and readiness, SIFS/LIFS
+boundary and exact-fit comparisons. This does not implement slotted access.
+
+%includes:
+#include "inet/linklayer/ieee802154/Ieee802154ExchangeTiming.h"
+using namespace inet;
+using namespace inet::units::values;
+
+%activity:
+using Timing = Ieee802154ExchangeTiming;
+physicallayer::Ieee802154PhyTimingParameters phy{SimTime(16,SIMTIME_US),SimTime(192,SIMTIME_US),
+        SimTime(160,SIMTIME_US),SimTime(32,SIMTIME_US),bps(250000),B(127),B(2)};
+ASSERT(Timing::ppduDuration(B(5),phy) == SimTime(352,SIMTIME_US));
+ASSERT(Timing::ppduDuration(B(18),phy) == SimTime(768,SIMTIME_US));
+ASSERT(Timing::ppduDuration(B(19),phy) == SimTime(800,SIMTIME_US));
+ASSERT(Timing::ppduDuration(B(127),phy) == SimTime(4256,SIMTIME_US));
+ASSERT(Timing::interframeSpacing(B(18),phy.symbolPeriod,12,40) == SimTime(192,SIMTIME_US));
+ASSERT(Timing::interframeSpacing(B(19),phy.symbolPeriod,12,40) == SimTime(640,SIMTIME_US));
+ASSERT(Timing::ackDuration(phy) == SimTime(352,SIMTIME_US));
+ASSERT(Timing::ackWait(phy) == SimTime(544,SIMTIME_US));
+ASSERT(Timing::ccaAndReadiness(SimTime(128,SIMTIME_US),phy) == SimTime(320,SIMTIME_US));
+ASSERT(Timing::exchangeDuration(B(19),false,SimTime(1,SIMTIME_US),12,40,phy) == SimTime(1440,SIMTIME_US));
+ASSERT(Timing::exchangeDuration(B(19),true,SimTime(1,SIMTIME_US),12,40,phy) == SimTime(1986,SIMTIME_US));
+auto boundary = SimTime(20,SIMTIME_MS);
+auto duration = SimTime(1986,SIMTIME_US);
+ASSERT(Timing::fits(boundary-duration,boundary,duration));
+ASSERT(Timing::fits(boundary-duration-SimTime::fromRaw(1),boundary,duration));
+ASSERT(!Timing::fits(boundary-duration+SimTime::fromRaw(1),boundary,duration));
+ASSERT(!Timing::fits(boundary,boundary,SimTime::fromRaw(1)));
+std::cout << "Physical exchange durations and fit boundaries verified.\n";
+
+%contains: stdout
+Physical exchange durations and fit boundaries verified.

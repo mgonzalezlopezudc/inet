@@ -8,6 +8,7 @@
 #include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
 #include "inet/linklayer/ieee802154/Ieee802154CommandCodec.h"
 #include "inet/linklayer/ieee802154/Ieee802154SuperframeTiming.h"
+#include "inet/linklayer/ieee802154/Ieee802154ExchangeTiming.h"
 #include "inet/common/ProtocolTag_m.h"
 #include "inet/common/Simsignals.h"
 #include "inet/common/packet/Packet.h"
@@ -560,6 +561,8 @@ void Ieee802154StandardMac::startAccess()
     transaction->accessId = ++accessId;
     Ieee802154AccessRequest request{uint8_t(getInteger("macMinBe")), uint8_t(getInteger("macMaxBe")),
             uint8_t(getInteger("macMaxCsmaBackoffs")), SimTime(16, SIMTIME_US) * getInteger("macUnitBackoffPeriod")};
+    request.exchangeDuration = Ieee802154ExchangeTiming::exchangeDuration(transaction->frame->getChunkLength(),
+            transaction->frame->getAckRequest(),SimTime(par("maxPropagationDelay")),getInteger("macSifsPeriod"),getInteger("macLifsPeriod"),phy->getTimingParameters());
     if (access->start(transaction->accessId, request) != Ieee802154MacServiceAdmission::ACCEPTED)
         completeData(Ieee802154MacStatus::CHANNEL_ACCESS_FAILURE);
 }
@@ -901,7 +904,7 @@ void Ieee802154StandardMac::performCca()
     }
 }
 
-void Ieee802154StandardMac::handleAccessConfirm(uint64_t id, const Ieee802154MacServiceResult& result, uint8_t count)
+void Ieee802154StandardMac::handleAccessConfirm(uint64_t id, const Ieee802154MacServiceResult& result, uint8_t count, std::optional<simtime_t> startAt)
 {
     Enter_Method("handleAccessConfirm");
     if (!transaction || transaction->accessId != id || transaction->phase != Phase::ACCESS)
@@ -909,7 +912,12 @@ void Ieee802154StandardMac::handleAccessConfirm(uint64_t id, const Ieee802154Mac
     if (result != Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS))
         completeData(result);
     else {
+        if (startAt && *startAt < simTime()) {
+            completeData(Ieee802154MacStatus::CHANNEL_ACCESS_FAILURE);
+            return;
+        }
         transaction->backoffs = std::min<int>(255, transaction->backoffs + count);
+        transaction->accessStartAt = startAt;
         transaction->phase = Phase::WAIT_TX;
         requestState(PhyState::TRANSMIT, PhyPurpose::TX_READY);
     }
@@ -1009,6 +1017,10 @@ void Ieee802154StandardMac::handleStateConfirm(uint64_t id, const physicallayer:
     else if (purpose == PhyPurpose::RX_FOR_ACCESS && transaction)
         startAccess();
     else if (purpose == PhyPurpose::TX_READY && transaction) {
+        if (transaction->accessStartAt && *transaction->accessStartAt < simTime()) {
+            completeData(Ieee802154MacStatus::CHANNEL_ACCESS_FAILURE);
+            return;
+        }
         auto packet = new Packet("IEEE802154-DATA");
         packet->insertAtBack(transaction->frame);
         packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee802154);
@@ -1022,6 +1034,7 @@ void Ieee802154StandardMac::handleStateConfirm(uint64_t id, const physicallayer:
         }
         physicallayer::Ieee802154PhyTransmitRequest request;
         request.destination = transaction->frame->getDestinationAddress();
+        request.startAt = transaction->accessStartAt;
         if (phy->submitTransmit(internalId, packet, request) != PhyAdmission::ACCEPTED) {
             delete packet;
             phyOperation.reset();
@@ -1140,7 +1153,7 @@ void Ieee802154StandardMac::handleTransmitConfirm(uint64_t id, const physicallay
         if (transaction->frame->getAckRequest()) {
             transaction->phase = Phase::WAIT_ACK;
             transaction->transmittedEnd = confirm.timing->ppduEnd;
-            transaction->ackDeadline = confirm.timing->ppduEnd + 2 * SimTime(par("maxPropagationDelay")) + SimTime(544, SIMTIME_US);
+            transaction->ackDeadline = confirm.timing->ppduEnd + 2 * SimTime(par("maxPropagationDelay")) + Ieee802154ExchangeTiming::ackWait(phy->getTimingParameters());
             scheduleAt(transaction->ackDeadline, ackTimer);
             requestState(PhyState::RECEIVE, PhyPurpose::ACK_LISTEN);
         }
@@ -1333,7 +1346,7 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
     }
     if (frame->getFrameType() == 2) {
         if (transaction && transaction->phase == Phase::WAIT_ACK && frame->getDsn() == transaction->frame->getDsn() &&
-                quality.timing.ppduStart >= transaction->transmittedEnd + SimTime(192, SIMTIME_US) && quality.timing.ppduEnd <= transaction->ackDeadline) {
+                quality.timing.ppduStart >= transaction->transmittedEnd + phy->getTimingParameters().turnaroundTime && quality.timing.ppduEnd <= transaction->ackDeadline) {
             cancelEvent(ackTimer);
             transaction->ackFramePending = frame->getFramePending();
             if (quality.meanPower)
@@ -1480,7 +1493,8 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
 
 simtime_t Ieee802154StandardMac::interframeSpacing(b length) const
 {
-    return SimTime(16, SIMTIME_US) * getInteger(length <= B(18) ? "macSifsPeriod" : "macLifsPeriod");
+    auto symbolPeriod = phy ? phy->getTimingParameters().symbolPeriod : SimTime(16,SIMTIME_US);
+    return Ieee802154ExchangeTiming::interframeSpacing(length,symbolPeriod,getInteger("macSifsPeriod"),getInteger("macLifsPeriod"));
 }
 
 uint8_t Ieee802154StandardMac::receivedRssi(const physicallayer::Ieee802154PhyReceiveIndication& indication)
@@ -1557,7 +1571,7 @@ void Ieee802154StandardMac::startAck()
     }
     if (periodicBeaconing && periodicTarget) {
         auto timing = phy->getTimingParameters();
-        auto ackDuration = timing.shrDuration + timing.phrDuration + SimTime(40.0 / timing.bitrate.get<units::values::bps>());
+        auto ackDuration = Ieee802154ExchangeTiming::ackDuration(timing);
         if (*periodicTarget <= superframe->getCurrentClockTime() ||
                 simTime() + ackDuration > superframe->getFutureSimulationTime(*periodicTarget)) {
             finishAck(false);

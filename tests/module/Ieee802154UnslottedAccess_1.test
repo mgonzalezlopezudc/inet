@@ -37,7 +37,8 @@ class AccessExercise : public cSimpleModule, public IIeee802154AccessClient, pub
         ASSERT(slots >= 0 && slots < (1 << be));
         ++requests;
     }
-    virtual void handleAccessConfirm(uint64_t id, const Ieee802154MacServiceResult& result, uint8_t count) override {
+    virtual void handleAccessConfirm(uint64_t id, const Ieee802154MacServiceResult& result, uint8_t count, std::optional<simtime_t> startAt) override {
+        ASSERT(!startAt);
         Enter_Method("handleAccessConfirm");
         ASSERT(!results.count(id));
         results.emplace(id, result);

@@ -2,6 +2,7 @@
 //
 #ifndef __INET_IIEEE802154ACCESSCLIENT_H
 #define __INET_IIEEE802154ACCESSCLIENT_H
+#include <optional>
 #include "inet/common/INETDefs.h"
 #include "inet/linklayer/ieee802154/Ieee802154MacServiceResult.h"
 
@@ -12,7 +13,8 @@ class INET_API IIeee802154AccessClient
   public:
     virtual ~IIeee802154AccessClient() = default;
     virtual void handleCcaRequest(uint64_t id) = 0;
-    virtual void handleAccessConfirm(uint64_t id, const Ieee802154MacServiceResult& result, uint8_t numBackoffs) = 0;
+    virtual void handleAccessConfirm(uint64_t id, const Ieee802154MacServiceResult& result, uint8_t numBackoffs,
+            std::optional<simtime_t> startAt) = 0;
 };
 }
 #endif
