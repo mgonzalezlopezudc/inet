@@ -1,0 +1,3 @@
+IEEE 802.15.4 explicit opaque payload boundaries
+
+IEEE 802.15.4 receive indications now include the destination address. An optional upperLayerProtocol selects one opaque payload protocol without using the legacy EtherType/PAN convention; the default legacy behavior is retained.
