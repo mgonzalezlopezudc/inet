@@ -1,0 +1,54 @@
+%description:
+RFC 6282 UDP NHC independent wire vectors, all port modes and compression boundaries,
+checksum preservation, inferred length, truncation and unsupported C=1.
+
+%includes:
+#include "inet/linklayer/lowpan/LowpanUdpNhcCodec.h"
+#include "inet/common/packet/Packet.h"
+using namespace inet;
+using namespace inet::lowpan;
+
+%activity:
+const std::vector<std::vector<uint8_t>> golden = {
+    {0xf0, 0x12, 0x34, 0x56, 0x78, 0xab, 0xcd},
+    {0xf1, 0x12, 0x34, 0xff, 0xab, 0xcd},
+    {0xf2, 0x00, 0x56, 0x78, 0xab, 0xcd},
+    {0xf3, 0x0f, 0xab, 0xcd}};
+const int sources[] = {0x1234, 0x1234, 0xf000, 0xf0b0};
+const int destinations[] = {0x5678, 0xf0ff, 0x5678, 0xf0bf};
+for (int mode = 0; mode < 4; mode++) {
+    std::vector<uint8_t> udp{uint8_t(sources[mode] >> 8), uint8_t(sources[mode]),
+        uint8_t(destinations[mode] >> 8), uint8_t(destinations[mode]), 0x04, 0xd8, 0xab, 0xcd};
+    auto encoded = LowpanUdpNhcCodec::encode(udp, 1240);
+    ASSERT(encoded && encoded->getPortMode() == mode);
+    Packet output("output", encoded);
+    ASSERT(output.peekDataAsBytes()->getBytes() == golden[mode]);
+    Packet input("independent", makeShared<BytesChunk>(golden[mode]));
+    auto decoded = LowpanUdpNhcCodec::decode(*input.peekAtFront<LowpanUdpNhcHeader>(), 1240);
+    ASSERT(decoded && decoded->getBytes() == udp);
+    for (size_t length = 1; length < golden[mode].size(); length++) {
+        Packet truncated("truncated", makeShared<BytesChunk>(std::vector<uint8_t>(golden[mode].begin(), golden[mode].begin() + length)));
+        auto header = truncated.peekAtFront<LowpanUdpNhcHeader>(b(-1), Chunk::PF_ALLOW_INCOMPLETE | Chunk::PF_ALLOW_INCORRECT);
+        ASSERT(!LowpanUdpNhcCodec::decode(*header, 1240));
+    }
+}
+for (int source : {0xefff, 0xf000, 0xf0af, 0xf0b0, 0xf0bf, 0xf0c0, 0xf0ff, 0xf100}) {
+    for (int destination : {0xefff, 0xf000, 0xf0af, 0xf0b0, 0xf0bf, 0xf0c0, 0xf0ff, 0xf100}) {
+        std::vector<uint8_t> udp{uint8_t(source >> 8), uint8_t(source), uint8_t(destination >> 8), uint8_t(destination), 0, 8, 0x12, 0x34};
+        auto header = LowpanUdpNhcCodec::encode(udp, 8);
+        bool bothFour = source >= 0xf0b0 && source <= 0xf0bf && destination >= 0xf0b0 && destination <= 0xf0bf;
+        int expected = bothFour ? 3 : destination >= 0xf000 && destination <= 0xf0ff ? 1 : source >= 0xf000 && source <= 0xf0ff ? 2 : 0;
+        ASSERT(header->getPortMode() == expected);
+        ASSERT(LowpanUdpNhcCodec::decode(*header, 8)->getBytes() == udp);
+    }
+}
+for (const auto& bytes : {std::vector<uint8_t>{0xf7, 0x12}, {0xe3, 0x12, 0xab, 0xcd}}) {
+    Packet input("unsupported", makeShared<BytesChunk>(bytes));
+    auto header = input.peekAtFront<LowpanUdpNhcHeader>(b(-1), Chunk::PF_ALLOW_INCORRECT);
+    ASSERT(!LowpanUdpNhcCodec::decode(*header, 8));
+}
+ASSERT(!LowpanUdpNhcCodec::encode(std::vector<uint8_t>(8, 0), 8));
+EV << "UDP NHC golden vectors and port boundaries verified\n";
+
+%contains: stdout
+UDP NHC golden vectors and port boundaries verified

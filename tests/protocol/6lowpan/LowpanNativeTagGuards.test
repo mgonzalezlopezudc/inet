@@ -1,0 +1,187 @@
+%description:
+The production adaptation sender exhausts all 65536 tags, retains guards across
+shutdown/crash, and reuses 0 then 1 at the exact deadline. A test PacketQueue drops
+accepted frames to keep the campaign finite; no radio delivery claim is made.
+
+%extraargs: -r 0..1
+
+%file: NativeTagGuardCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/lifecycle/NodeStatus.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/lowpan/LowpanPacketDropDetails_m.h"
+#include "inet/linklayer/lowpan/LowpanTransmissionReq_m.h"
+#include "inet/networklayer/common/NextHopAddressTag_m.h"
+#include "inet/queueing/queue/PacketQueue.h"
+
+namespace inet::protocoltest {
+using namespace lowpan;
+class TagLossQueue : public queueing::PacketQueue
+{
+  public:
+    void pushPacket(Packet *packet,const cGate *gate) override {
+        Enter_Method("pushPacket");
+        take(packet);
+        emit(registerSignal("testFrameDiscarded"),packet);
+        delete packet;
+    }
+};
+Define_Module(TagLossQueue);
+
+class NativeTagGuardCheck : public cSimpleModule, public cListener
+{
+    int burst=0,attempts=0,accepted=0,allocations=0,fragments=0,discarded=0,downChecks=0;
+    int currentTag=-1;
+    std::vector<simtime_t> refusals;
+    const simtime_t reuseAt=SimTime(61001,SIMTIME_MS);
+    const simtime_t tick=SimTime::fromRaw(1);
+    void sendDatagram() {
+        std::vector<uint8_t> bytes(104,0x42);
+        const std::vector<uint8_t> header{0x60,0,0,0,0,64,59,64,
+            0x20,1,0x0d,0xb8,0,0,0,0,0,0,0,0,0,0,0,1,
+            0x20,1,0x0d,0xb8,0,0,0,0,0,0,0,0,0,0,0,2};
+        std::copy(header.begin(),header.end(),bytes.begin());
+        auto packet=new Packet("tag-cycle-ipv6",makeShared<BytesChunk>(bytes));
+        packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ipv6);
+        packet->addTag<NextHopAddressReq>()->setNextHopAddress(Ipv6Address("2001:db8::2"));
+        send(packet,"out");attempts++;
+    }
+  protected:
+    int numInitStages() const override { return NUM_INIT_STAGES; }
+    void initialize(int stage) override {
+        if (stage != INITSTAGE_LAST) return;
+        auto nic=getModuleByPath("^.node[0].nic");
+        for (auto signal : {"fragmentSent","datagramAccepted","packetDropped"}) nic->getSubmodule("lowpan")->subscribe(signal,this);
+        nic->getSubmodule("queue")->subscribe("testFrameDiscarded",this);
+        nic->getSubmodule("mac")->subscribe("packetSentToLower",this);
+        scheduleAt(SimTime(1,SIMTIME_MS),new cMessage("fill-tag-cycle",0));
+        scheduleAt(SimTime(2500,SIMTIME_US),new cMessage("verify-down",5));
+        scheduleAt(SimTime(4,SIMTIME_MS),new cMessage("restart-guard",1));
+        scheduleAt(reuseAt-tick,new cMessage("before-reuse",2));
+        scheduleAt(reuseAt,new cMessage("exact-reuse",3));
+        scheduleAt(reuseAt+tick,new cMessage("after-reuse",4));
+    }
+    void receiveSignal(cComponent *,simsignal_t signal,cObject *object,cObject *details) override {
+        ASSERT(signal != registerSignal("packetSentToLower"));
+        if (signal==registerSignal("testFrameDiscarded")) { discarded++;return; }
+        if (signal==registerSignal("packetDropped")) {
+            ASSERT(check_and_cast<LowpanPacketDropDetails *>(details)->getLowpanReason()==LOWPAN_TAG_EXHAUSTED);
+            refusals.push_back(simTime());return;
+        }
+        if (signal==registerSignal("datagramAccepted")) {
+            ASSERT(simTime()==SimTime(1,SIMTIME_MS) || simTime()==reuseAt || simTime()==reuseAt+tick);
+            accepted++;return;
+        }
+        ASSERT(signal==registerSignal("fragmentSent"));
+        auto packet=check_and_cast<Packet *>(object);
+        auto bytes=packet->peekDataAsBytes()->getBytes();
+        auto prepared=packet->getTag<LowpanTransmissionReq>();
+        ASSERT(prepared->getProfile()==2 && prepared->getPayloadLimit()==104);
+        ASSERT(prepared->getDeliveryDeadline()==simTime()+SimTime(1));
+        ASSERT(bytes[1]==104 && (bytes[0]==0xc0 || bytes[0]==0xe0));
+        int tag=(int(bytes[2])<<8)|bytes[3];
+        if (bytes[0]==0xc0) {
+            ASSERT(tag==uint16_t(allocations));currentTag=tag;allocations++;
+            ASSERT(bytes.size()==101 && bytes[4]==0x41);
+        }
+        else { ASSERT(tag==currentTag && bytes.size()==13 && bytes[4]==12); }
+        fragments++;
+    }
+    void handleMessage(cMessage *message) override {
+        ASSERT(message->isSelfMessage());
+        if (message->getKind()==5) {
+            ASSERT(check_and_cast<NodeStatus *>(getModuleByPath("^.node[0].status"))->getState()==NodeStatus::DOWN);
+            downChecks++;
+        }
+        else {
+            ASSERT(check_and_cast<NodeStatus *>(getModuleByPath("^.node[0].status"))->getState()==NodeStatus::UP);
+            sendDatagram();
+            if (message->getKind()==0 && ++burst<=65536) scheduleAt(simTime(),new cMessage("fill-tag-cycle",0));
+        }
+        delete message;
+    }
+    void finish() override {
+        ASSERT(attempts==65541 && accepted==65538 && allocations==65538);
+        ASSERT(fragments==131076 && discarded==fragments && downChecks==1);
+        ASSERT(refusals==std::vector<simtime_t>({SimTime(1,SIMTIME_MS),SimTime(4,SIMTIME_MS),reuseAt-tick}));
+        std::cout << "Native sender tag wrap, exhaustion, restart retention and exact reuse verified\n";
+    }
+};
+Define_Module(NativeTagGuardCheck);
+}
+
+%file: test.ned
+@namespace(inet::protocoltest);
+import inet.common.lifecycle.NodeStatus;
+import inet.common.scenario.ScenarioManager;
+import inet.networklayer.common.InterfaceTable;
+import inet.mobility.static.StationaryMobility;
+import inet.linklayer.lowpan.Ieee802154NativeLowpanInterface;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+import inet.queueing.queue.PacketQueue;
+simple TagLossQueue extends PacketQueue
+{
+    parameters:
+        @class(TagLossQueue);
+        @signal[testFrameDiscarded](type=inet::Packet);
+}
+simple NativeTagGuardCheck
+{
+    gates:
+        output out;
+}
+module TagGuardNode
+{
+    parameters:
+        @networkNode;
+    gates:
+        input in;
+    submodules:
+        status: NodeStatus;
+        interfaceTable: InterfaceTable;
+        mobility: StationaryMobility;
+        nic: Ieee802154NativeLowpanInterface {
+            interfaceTableModule="^.interfaceTable";
+            linkDomainModule="^.^.domain";
+        }
+    connections allowunconnected:
+        in --> nic.upperLayerIn;
+}
+network NativeTagGuardNetwork
+{
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        domain: LowpanNativeLinkDomain;
+        scenarioManager: ScenarioManager;
+        node[2]: TagGuardNode;
+        check: NativeTagGuardCheck;
+    connections allowunconnected:
+        check.out --> node[0].in;
+}
+
+%inifile: omnetpp.ini
+[General]
+network=NativeTagGuardNetwork
+sim-time-limit=62s
+seed-set=0
+cmdenv-express-mode=true
+cmdenv-event-banners=false
+**.cmdenv-log-level=off
+**.lowpan.headerCompression="none"
+*.node[0].nic.queue.typename="TagLossQueue"
+*.node[0].nic.queue.packetCapacity=2
+*.scenarioManager.script=xml("<scenario><at t='0.002'><${operation=shutdown,crash} module='node[0]'/></at><at t='0.003'><startup module='node[0]'/></at></scenario>")
+*.domain.panId=4660
+*.domain.config=xml("<domain><peer interface='node[0].nic' native='0123456789abcdef'/><peer interface='node[1].nic' native='a123456789abcdef'/><neighbor interface='node[0].nic' ipv6='2001:db8::2' native='a123456789abcdef'/></domain>")
+**.radio.antenna.mobilityModule="^.^.^.mobility"
+**.mobility.initialX=0m
+**.mobility.initialY=0m
+**.mobility.initialZ=0m
+**.mobility.initFromDisplayString=false
+**.mobility.updateFromDisplayString=false
+
+%contains: stdout
+Native sender tag wrap, exhaustion, restart retention and exact reuse verified

@@ -1,0 +1,156 @@
+%description:
+Identical tag/size tuples remain independent across native senders, receiving
+interfaces/PANs and unicast/broadcast destinations. Literal frame bytes enter the
+real native MAC, boundary and reassembly path; only exact whole datagrams emerge.
+
+%file: NativeIdentityCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/checksum/Checksum.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+
+namespace inet::protocoltest {
+class NativeIdentityCheck : public cSimpleModule, public cListener
+{
+    std::vector<std::vector<uint8_t>> frames, expected;
+    std::vector<int> targets, outputs, times;
+    int injected = 0, delivered = 0, fragments = 0, completed = 0;
+    std::vector<uint8_t> datagram(uint8_t marker) {
+        std::vector<uint8_t> bytes(80,marker);
+        const std::vector<uint8_t> header{0x60,0,0,0,0,40,59,64,
+            0x20,1,0x0d,0xb8,0,0,0,0,0,0,0,0,0,0,0,1,
+            0x20,1,0x0d,0xb8,0,0,0,0,0,0,0,0,0,0,0,2};
+        std::copy(header.begin(),header.end(),bytes.begin());
+        return bytes;
+    }
+    void inject(int ms, int target, const std::vector<uint8_t>& bytes, bool first,
+                uint8_t sourceHigh=1, bool broadcast=false) {
+        uint16_t pan = target == 2 ? 0x5678 : 0x1234;
+        std::vector<uint8_t> frame{0x41,uint8_t(broadcast ? 0xd8 : 0xdc),uint8_t(frames.size()),uint8_t(pan),uint8_t(pan>>8)};
+        if (broadcast) frame.insert(frame.end(),{0xff,0xff});
+        else frame.insert(frame.end(),{0xef,0xcd,0xab,0x89,0x67,0x45,0x23,0xa1});
+        frame.insert(frame.end(),{0xef,0xcd,0xab,0x89,0x67,0x45,0x23,sourceHigh});
+        frame.insert(frame.end(),{uint8_t(first ? 0xc0 : 0xe0),80,0x12,0x34,uint8_t(first ? 0x41 : 5)});
+        frame.insert(frame.end(),bytes.begin()+(first ? 0 : 40),bytes.begin()+(first ? 40 : 80));
+        auto fcs=crc16_ccitt(frame);frame.push_back(fcs);frame.push_back(fcs>>8);
+        ASSERT(frame.size() <= 127);
+        frames.push_back(frame);targets.push_back(target);
+        scheduleAt(SimTime(ms,SIMTIME_MS),new cMessage("native-fragment",frames.size()-1));
+    }
+    void expect(int ms, int target, const std::vector<uint8_t>& bytes) {
+        times.push_back(ms);outputs.push_back(target);expected.push_back(bytes);
+    }
+  protected:
+    int numInitStages() const override { return NUM_INIT_STAGES; }
+    void initialize(int stage) override {
+        if (stage != INITSTAGE_LAST) return;
+        for (int i : {0,2}) {
+            auto layer=getParentModule()->getSubmodule("node",i)->getSubmodule("nic")->getSubmodule("lowpan");
+            for (auto signal : {"fragmentReceived","reassemblyCompleted","reassemblyExpired","packetDropped"})
+                layer->subscribe(signal,this);
+        }
+        auto a=datagram(0x11),b=datagram(0x22);
+        inject(1,0,a,false);inject(2,2,b,false);
+        inject(3,2,b,true);expect(3,2,b);
+        inject(4,0,a,true);expect(4,0,a);
+        inject(10,0,a,false);inject(11,0,b,false,0x11);
+        inject(12,0,b,true,0x11);expect(12,0,b);
+        inject(13,0,a,true);expect(13,0,a);
+        inject(20,0,a,false);inject(21,0,b,false,1,true);
+        inject(22,0,b,true,1,true);expect(22,0,b);
+        inject(23,0,a,true);expect(23,0,a);
+    }
+    void receiveSignal(cComponent *, simsignal_t signal, cObject *, cObject *) override {
+        ASSERT(signal != registerSignal("packetDropped"));
+        if (signal == registerSignal("fragmentReceived")) fragments++;
+        else { ASSERT(signal == registerSignal("reassemblyCompleted"));completed++; }
+    }
+    void receiveSignal(cComponent *, simsignal_t, long, cObject *) override { ASSERT(false); }
+    void handleMessage(cMessage *message) override {
+        if (message->isSelfMessage()) {
+            int index=message->getKind();
+            auto mac=getParentModule()->getSubmodule("node",targets.at(index))->getSubmodule("nic")->getSubmodule("mac");
+            auto packet=new Packet("independent-native-fragment",makeShared<BytesChunk>(frames.at(index)));
+            sendDirect(packet,mac->gate("lowerLayerIn")->getPathStartGate());
+            injected++;delete message;return;
+        }
+        auto packet=check_and_cast<Packet *>(message);
+        ASSERT(delivered < int(expected.size()));
+        ASSERT(message->getArrivalGate()->getIndex() == outputs[delivered]);
+        ASSERT(simTime() == SimTime(times[delivered],SIMTIME_MS));
+        ASSERT(packet->peekDataAsBytes()->getBytes() == expected[delivered]);
+        delivered++;delete packet;
+    }
+    void finish() override {
+        ASSERT(injected == 12 && fragments == 12 && completed == 6 && delivered == 6);
+        std::cout << "Native sender, interface/PAN and destination reassembly identities isolated\n";
+    }
+};
+Define_Module(NativeIdentityCheck);
+}
+
+%file: test.ned
+@namespace(inet::protocoltest);
+import inet.networklayer.common.InterfaceTable;
+import inet.mobility.static.StationaryMobility;
+import inet.linklayer.lowpan.Ieee802154NativeLowpanInterface;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple NativeIdentityCheck
+{
+    gates:
+        input in[5];
+}
+module IdentityNode
+{
+    parameters:
+        @networkNode;
+    gates:
+        output out;
+    submodules:
+        interfaceTable: InterfaceTable;
+        mobility: StationaryMobility;
+        nic: Ieee802154NativeLowpanInterface {
+            interfaceTableModule = "^.interfaceTable";
+            linkDomainModule = default("^.^.domain");
+        }
+    connections allowunconnected:
+        nic.upperLayerOut --> out;
+}
+network NativeIdentityNetwork
+{
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        otherMedium: Ieee802154NarrowbandScalarRadioMedium;
+        domain: LowpanNativeLinkDomain;
+        otherDomain: LowpanNativeLinkDomain;
+        node[5]: IdentityNode;
+        check: NativeIdentityCheck;
+    connections allowunconnected:
+        for i=0..4 { node[i].out --> check.in[i]; }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = NativeIdentityNetwork
+sim-time-limit = 50ms
+seed-set = 0
+**.lowpan.reassemblyTimeout = 20ms
+*.domain.panId = 4660
+*.domain.config = xml("<domain><peer interface='node[0].nic' native='a123456789abcdef'/><peer interface='node[1].nic' native='0123456789abcdef'/><peer interface='node[4].nic' native='1123456789abcdef'/></domain>")
+*.otherDomain.panId = 22136
+*.otherDomain.radioMediumModule = "^.otherMedium"
+*.otherDomain.config = xml("<domain><peer interface='node[2].nic' native='a123456789abcdef'/><peer interface='node[3].nic' native='0123456789abcdef'/></domain>")
+*.node[2].nic.linkDomainModule = "^.^.otherDomain"
+*.node[3].nic.linkDomainModule = "^.^.otherDomain"
+*.node[2].nic.radio.radioMediumModule = "otherMedium"
+*.node[3].nic.radio.radioMediumModule = "otherMedium"
+**.radio.antenna.mobilityModule = "^.^.^.mobility"
+**.mobility.initialX = 0m
+**.mobility.initialY = 0m
+**.mobility.initialZ = 0m
+**.mobility.initFromDisplayString = false
+**.mobility.updateFromDisplayString = false
+
+%contains: stdout
+Native sender, interface/PAN and destination reassembly identities isolated

@@ -1,0 +1,127 @@
+%description:
+One immutable alias domain validates its real radio participants and provides
+interface-scoped next-hop bindings. This does not claim an adaptation data plane.
+
+%file: DomainCheck.cc
+#include "inet/linklayer/lowpan/LowpanLinkDomain.h"
+#include "inet/linklayer/lowpan/LowpanCompatibilityMac.h"
+using namespace inet;
+using namespace inet::lowpan;
+namespace LowpanLinkDomain {
+class DomainCheck : public cSimpleModule
+{
+  protected:
+    virtual int numInitStages() const override { return NUM_INIT_STAGES; }
+    virtual void initialize(int stage) override
+    {
+        if (stage != INITSTAGE_LAST)
+            return;
+        auto domain = check_and_cast<inet::lowpan::LowpanLinkDomain *>(getParentModule()->getSubmodule("domain"));
+        auto first = check_and_cast<NetworkInterface *>(getParentModule()->getSubmodule("node", 0)->getSubmodule("nic"));
+        auto second = check_and_cast<NetworkInterface *>(getParentModule()->getSubmodule("node", 1)->getSubmodule("nic"));
+        ASSERT(domain->getPanId() == 0x1234);
+        ASSERT(first->getMtu() == 1280 && second->getMtu() == 1280);
+        ASSERT(Ipv6Address::formLinkLocalAddress(first->getInterfaceToken()) == Ipv6Address("fe80::323:4567:89ab:cdef"));
+        ASSERT(domain->getPeer(first).address == Ieee802154Address("0123456789abcdef"));
+        ASSERT(domain->getPeer(second).address == Ieee802154Address("a123456789abcdef"));
+        const auto& map = domain->getAddressMap();
+        ASSERT(*map.findNeighbor(first->getId(), Ipv6Address("fe80::1")) == domain->getPeer(second).address);
+        ASSERT(*map.findNeighbor(second->getId(), Ipv6Address("fe80::1")) == domain->getPeer(first).address);
+        auto mac = check_and_cast<LowpanCompatibilityMac *>(first->getSubmodule("mac"));
+        Ieee802154AddressReq request;
+        request.setSrcAddress(domain->getPeer(first).address);
+        request.setDestAddress(domain->getPeer(second).address);
+        request.setSrcPanId(domain->getPanId());
+        request.setDestPanId(domain->getPanId());
+        auto prepared = mac->prepareTransmission(request);
+        ASSERT(prepared->getPayloadLimit() == 104);
+        ASSERT(prepared->getDestAddress() == domain->getPeer(second).address);
+        request.setDestAddress(Ieee802154Address("ffff"));
+        ASSERT(mac->prepareTransmission(request)->getPayloadLimit() == 104);
+        request.setDestPanId(0x5678);
+        bool rejected = false;
+        try { mac->prepareTransmission(request); }
+        catch (const cRuntimeError&) { rejected = true; }
+        ASSERT(rejected);
+        std::cout << "Shared compatibility domain verified\n";
+    }
+};
+Define_Module(DomainCheck);
+}
+
+%file: test.ned
+import inet.linklayer.lowpan.LowpanCompatibilityMac;
+import inet.networklayer.common.NetworkInterface;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandRadio;
+import inet.queueing.queue.PacketQueue;
+import inet.linklayer.lowpan.LowpanLinkDomain;
+import inet.networklayer.common.InterfaceTable;
+import inet.mobility.static.StationaryMobility;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+
+simple DomainCheck
+{
+    parameters:
+        @display("i=block/app");
+}
+module DomainInterface extends NetworkInterface
+{
+    parameters:
+        string interfaceTableModule = "^.interfaceTable";
+    gates:
+        input upperLayerIn;
+        output upperLayerOut;
+        input radioIn;
+    submodules:
+        queue: PacketQueue { packetCapacity = 2; }
+        mac: LowpanCompatibilityMac {
+            interfaceTableModule = "^.^.interfaceTable";
+            linkDomainModule = "^.^.^.domain";
+        }
+        radio: Ieee802154NarrowbandRadio;
+    connections:
+        upperLayerIn --> queue.in;
+        queue.out --> mac.upperLayerIn;
+        mac.upperLayerOut --> upperLayerOut;
+        mac.lowerLayerOut --> radio.upperLayerIn;
+        radio.upperLayerOut --> mac.lowerLayerIn;
+        radioIn --> radio.radioIn;
+}
+module DomainNode
+{
+    parameters:
+        @networkNode;
+        @display("i=device/wifilaptop");
+    submodules:
+        interfaceTable: InterfaceTable;
+        mobility: StationaryMobility;
+        nic: DomainInterface;
+    connections allowunconnected:
+}
+network DomainNetwork
+{
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        domain: LowpanLinkDomain;
+        node[2]: DomainNode;
+        check: DomainCheck;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = DomainNetwork
+sim-time-limit = 1us
+*.domain.panId = 4660
+*.domain.radioMediumModule = "^.radioMedium"
+*.domain.config = xml("<domain><peer interface='node[0].nic' native='0123456789abcdef' alias='02:00:00:00:00:01'/><peer interface='node[1].nic' native='a123456789abcdef' alias='02:00:00:00:00:02'/><neighbor interface='node[0].nic' ipv6='fe80::1' native='a123456789abcdef'/><neighbor interface='node[1].nic' ipv6='fe80::1' native='0123456789abcdef'/></domain>")
+*.node[0].nic.mac.address = "02:00:00:00:00:01"
+*.node[1].nic.mac.address = "02:00:00:00:00:02"
+**.radio.antenna.mobilityModule = "^.^.^.mobility"
+**.mobility.initialX = 0m
+**.mobility.initialY = 0m
+**.mobility.initialZ = 0m
+**.mobility.initFromDisplayString = false
+**.mobility.updateFromDisplayString = false
+
+%contains: stdout
+Shared compatibility domain verified

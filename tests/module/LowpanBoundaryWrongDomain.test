@@ -1,0 +1,94 @@
+%file: test.ned
+import inet.linklayer.lowpan.LowpanCompatibilityMac;
+import inet.linklayer.lowpan.LowpanCompatibilityBoundary;
+import inet.networklayer.common.NetworkInterface;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandRadio;
+import inet.queueing.queue.PacketQueue;
+import inet.linklayer.lowpan.LowpanLinkDomain;
+import inet.networklayer.common.InterfaceTable;
+import inet.mobility.static.StationaryMobility;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+
+module DomainInterface extends NetworkInterface
+{
+    parameters:
+        string interfaceTableModule = "^.interfaceTable";
+    gates:
+        input upperLayerIn;
+        output upperLayerOut;
+        input radioIn;
+    submodules:
+        boundary: LowpanCompatibilityBoundary { linkDomainModule = default("^.^.^.domain"); }
+        queue: PacketQueue { packetCapacity = default(2); }
+        mac: LowpanCompatibilityMac {
+            interfaceTableModule = "^.^.interfaceTable";
+            linkDomainModule = default("^.^.^.domain");
+        }
+        radio: Ieee802154NarrowbandRadio;
+    connections:
+        upperLayerIn --> boundary.in;
+        boundary.out --> queue.in;
+        queue.out --> mac.upperLayerIn;
+        mac.upperLayerOut --> boundary.lowerLayerIn;
+        boundary.upperLayerOut --> upperLayerOut;
+        mac.lowerLayerOut --> radio.upperLayerIn;
+        radio.upperLayerOut --> mac.lowerLayerIn;
+        radioIn --> radio.radioIn;
+}
+module DomainNode
+{
+    parameters:
+        @networkNode;
+        @display("i=device/wifilaptop");
+    gates:
+        input in;
+        output out;
+    submodules:
+        interfaceTable: InterfaceTable;
+        mobility: StationaryMobility;
+        nic: DomainInterface;
+    connections allowunconnected:
+        in --> nic.upperLayerIn;
+        nic.upperLayerOut --> out;
+}
+network DomainNetwork
+{
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        domain: LowpanLinkDomain;
+        domain2: LowpanLinkDomain;
+        radioMedium2: Ieee802154NarrowbandScalarRadioMedium;
+        node[3]: DomainNode;
+    connections allowunconnected:
+}
+
+%inifile: omnetpp.ini
+[General]
+network = DomainNetwork
+sim-time-limit = 40ms
+**.queue.packetCapacity = 2
+*.domain.panId = 4660
+*.domain.radioMediumModule = "^.radioMedium"
+*.domain.config = xml("<domain><peer interface='node[0].nic' native='0123456789abcdef' alias='02:00:00:00:00:01'/><peer interface='node[1].nic' native='a123456789abcdef' alias='02:00:00:00:00:02'/><neighbor interface='node[0].nic' ipv6='fe80::1' native='a123456789abcdef'/><neighbor interface='node[1].nic' ipv6='fe80::1' native='0123456789abcdef'/></domain>")
+*.node[0].nic.mac.address = "02:00:00:00:00:01"
+*.node[1].nic.mac.address = "02:00:00:00:00:02"
+**.radio.antenna.mobilityModule = "^.^.^.mobility"
+**.mobility.initialX = 0m
+**.mobility.initialY = 0m
+**.mobility.initialZ = 0m
+**.mobility.initFromDisplayString = false
+**.mobility.updateFromDisplayString = false
+
+*.domain2.panId = 22136
+*.domain2.radioMediumModule = "^.radioMedium2"
+*.domain2.config = xml("<domain><peer interface='node[2].nic' native='123456789abcdef0' alias='02:00:00:00:00:01'/></domain>")
+*.node[2].nic.mac.address = "02:00:00:00:00:01"
+*.node[2].nic.mac.linkDomainModule = "^.^.^.domain2"
+*.node[2].nic.boundary.linkDomainModule = "^.^.^.domain2"
+*.node[2].nic.radio.radioMediumModule = "^.^.^.radioMedium2"
+*.node[0].nic.boundary.linkDomainModule = "^.^.^.domain2"
+
+%exitcode: 1
+
+%contains: stderr
+Interface is not a member of this LoWPAN domain

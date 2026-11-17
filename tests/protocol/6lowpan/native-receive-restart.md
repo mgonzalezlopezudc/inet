@@ -1,0 +1,22 @@
+# Native receive state across restart
+
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [publication plan C06](../../../plan/pending/6lowpan-publication-plan.md#c06), [historical data-plane checks](https://github.com/mgonzalezlopezudc/inet/blob/9908c007bdb1eda9d74f6ca1f99fe1cae33fbc61/doc/project/evidence/protocol/6lowpan/checks/data-plane.md)
+
+The P7 lifecycle row needs a native protocol sequence with pending RX state and late fragments. In the publication series, [`tests/protocol/6lowpan/LowpanNativeReceiveRestart.test`](LowpanNativeReceiveRestart.test) belongs to C06, `lowpan: add: the complete native IPv6 adaptation data plane`. C06 folds original test-only commit `a36e789a70` into the behavior owning the real adaptation module and its stop/crash reassembly cleanup. The original coverage commit repaired no production defect; its then-existing implementation already cleared the table and canceled its timer on both operations.
+
+The exact new parent C05 `445acdb630849eaaca4cd565b4dbf5f0a9efd1dd` has no tracked Lowpan package, feature declarations or native-MAC API. It cannot compile/run this unchanged fixture; this is missing implementation/API rather than an observed runtime behavior failure. Historical coverage passes remain separate from the new-prefix execution.
+
+**C06 prefix: debug PASS**, including both STOP/CRASH variants here, with fresh matching debug/release builds passing. No native release execution is claimed. The exact candidate/source/library hashes and commands are in `/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/c06-verification/record.json`: 11 unit fixtures, 65 module fixtures/87 runs (70 normal, 17 declared program errors), five native protocol fixtures/11 runs and two generic protocol controls/two runs pass debug expectations. `c06-minimal-features/record.json` additionally records 10 units, six modules and all five native fixtures under the exact mandatory core closure with UDP and other optionals absent, both leaf mandatory closures' Ping delivery and the example leaf's routed UDP. Exact feature/NED bytes and both full-profile library hashes restore. These finite checks do not extend the lifecycle guarantees or claim native release assertion execution.
+
+Two native interfaces share a static PAN and scalar medium. Literal frame bytes enter the first interface's native MAC, boundary and adaptation path. First ranges for two independent 80-byte datagrams arrive at 1 and 2 ms. `ScenarioManager` shuts down the receiver in run 0 or crashes it in run 1 at 5 ms, then starts it at 10 ms. A separate `NodeStatus` observation proves DOWN at 6 ms and UP at 10.5 ms; a missing lifecycle stimulus cannot pass as successful cleanup.
+
+An old tail at 11 ms must not complete the old first range. A newly injected matching first range permits byte-exact delivery at 12 ms. A fresh tag completes another datagram at 14 ms. The other old tail, arriving at 15 ms, must create an incomplete new context and expire at 115 ms. Its original pre-stop first range must neither cause delivery nor leave an expiry at 101/102 ms. Each run requires seven fragments observed by adaptation, exactly two completions/deliveries, only the 115 ms expiry, and no drops.
+
+This deliberately preserves the RFC limitation: a late fragment and fresh fragments with the same complete wire identity can be indistinguishable. Accepting the matching first range at 12 ms is valid; the test does not invent a generation field or claim immunity to all stale-fragment combinations. Static PAN membership and neighbors remain configured across restart. Association/disassociation remains outside the modeled profile. Injection isolates native receive cleanup; it does not measure radio loss or pending-TX behavior, which has separate lifecycle coverage.
+
+```sh
+opp_run_protocol_tests --load . -p inet -m debug --no-build \
+  -w '^tests/protocol/6lowpan$' -f 'LowpanNativeReceiveRestart\.test$'
+```
+
+Run from the INET root with a matching debug library. The single fixture executes both lifecycle variants with seed 0 and a 130 ms limit. Original exact hashes and results are in the [immutable closure record](https://github.com/mgonzalezlopezudc/inet/blob/9908c007bdb1eda9d74f6ca1f99fe1cae33fbc61/doc/project/evidence/model/6lowpan/p7-closure.json). The original test-only parent's unchanged production code passed the same assertions; this was added coverage. It does not establish a compatible runtime comparison with the new C05 parent or validation of the C06 prefix.

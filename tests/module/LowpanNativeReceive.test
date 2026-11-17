@@ -1,0 +1,114 @@
+%description:
+Byte-only native MAC receive without request tags: PAN/address/FCS/control filtering,
+broadcast, repeated DSNs and large sequence gaps. Valid retries are delivered.
+
+%file: ExchangeCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/common/checksum/Checksum.h"
+#include "inet/linklayer/ieee802154/Ieee802154AddressTagBase_m.h"
+#include "inet/linklayer/lowpan/LowpanTransmissionReq_m.h"
+using namespace inet;
+using namespace inet::lowpan;
+namespace LowpanNativeReceive {
+class ExchangeCheck : public cSimpleModule, public cListener
+{
+    cModule *receiver = nullptr;
+    int sent = 0, delivered = 0, dropped = 0;
+    std::vector<std::vector<uint8_t>> frames;
+    virtual int numInitStages() const override { return NUM_INIT_STAGES; }
+    virtual void initialize(int stage) override {
+        if (stage != INITSTAGE_LAST) return;
+        receiver = getParentModule()->getSubmodule("node", 0)->getSubmodule("wlan", 0)->getSubmodule("mac");
+        receiver->subscribe("packetSentToUpper", this);
+        receiver->subscribe("packetDropped", this);
+        const std::vector<uint8_t> valid{0x41,0xdc,0x01,0x34,0x12,0xef,0xcd,0xab,0x89,0x67,0x45,0x23,0x01,0xef,0xcd,0xab,0x89,0x67,0x45,0x23,0xa1,0x42};
+        auto frame = [&](std::vector<uint8_t> bytes) {
+            auto checksum = crc16_ccitt(bytes);
+            bytes.push_back(checksum); bytes.push_back(checksum >> 8);
+            frames.push_back(bytes);
+        };
+        frame(valid); // No sender-side tags are supplied.
+        auto bytes = valid; bytes[2] = 200; frame(bytes);
+        bytes[2] = 201; frame(bytes); frame(bytes); // A repeated DSN is not proof of duplicate identity.
+        bytes = valid; bytes[3] ^= 1; frame(bytes); // PAN mismatch.
+        bytes = valid; bytes[5] ^= 1; frame(bytes); // Native destination mismatch.
+        bytes = valid; bytes[13] ^= 1; frame(bytes); // Unknown source in static profile.
+        bytes = valid; bytes[0] |= 8; frame(bytes); // Unsupported security.
+        frame({0x41,0xdc,0}); // Truncated native header.
+        frame(valid); frames.back().back() ^= 1; // Bad FCS.
+        bytes = {0x41,0xd8,0x7f,0x34,0x12,0xff,0xff,0xef,0xcd,0xab,0x89,0x67,0x45,0x23,0xa1,0x42};
+        frame(bytes);
+        for (int sequence = 250; sequence < 260; sequence++) {
+            bytes = valid; bytes[2] = sequence; frame(bytes);
+        }
+        scheduleAt(SimTime(1, SIMTIME_MS), new cMessage("inject"));
+    }
+    virtual void handleMessage(cMessage *timer) override {
+        auto packet = new Packet("native-byte-input", makeShared<BytesChunk>(frames[sent++]));
+        sendDirect(packet, receiver->gate("lowerLayerIn")->getPathStartGate());
+        if (sent < (int)frames.size()) scheduleAfter(SimTime(2, SIMTIME_MS), timer);
+        else delete timer;
+    }
+    virtual void receiveSignal(cComponent *, simsignal_t signal, cObject *object, cObject *) override {
+        if (signal == registerSignal("packetDropped")) { dropped++; return; }
+        auto packet = check_and_cast<Packet *>(object);
+        ASSERT(packet->getDataLength() == B(1));
+        ASSERT(packet->peekDataAsBytes()->getBytes() == std::vector<uint8_t>({0x42}));
+        auto indication = packet->getTag<Ieee802154AddressInd>();
+        ASSERT(indication->getSrcAddress() == Ieee802154Address("a123456789abcdef"));
+        ASSERT(indication->getSrcPanId() == 0x1234 && indication->getDestPanId() == 0x1234);
+        ASSERT(!packet->findTag<LowpanTransmissionReq>());
+        delivered++;
+    }
+    virtual void finish() override {
+        ASSERT(delivered == 15 && dropped == 6);
+        std::cout << "Native byte filtering and DSN wrap/gaps verified\n";
+    }
+};
+Define_Module(ExchangeCheck);
+}
+
+%file: test.ned
+import inet.node.inet.StandardHost;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple ExchangeCheck
+{
+    parameters:
+        @display("i=block/app");
+}
+network ExchangeNetwork
+{
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        domain: LowpanNativeLinkDomain;
+        node[2]: StandardHost;
+        check: ExchangeCheck;
+}
+
+%inifile: omnetpp.ini
+[General]
+**.lowpan.headerCompression = "iphc"
+network = ExchangeNetwork
+sim-time-limit = 500ms
+*.node[*].hasIpv4 = false
+*.node[*].hasIpv6 = true
+*.node[*].ipv6.typename = "LowpanIpv6NetworkLayer"
+*.node[*].numWlanInterfaces = 1
+*.node[*].wlan[0].typename = "Ieee802154NativeLowpanInterface"
+*.node[*].wlan[0].linkDomainModule = "^.^.domain"
+*.node[*].ipv6.icmpv6.checksumMode = "computed"
+*.domain.panId = 4660
+*.domain.config = xml("<domain><peer interface='node[0].wlan[0]' native='0123456789abcdef'/><peer interface='node[1].wlan[0]' native='a123456789abcdef'/><neighbor interface='node[0].wlan[0]' ipv6='fe80::a323:4567:89ab:cdef' native='a123456789abcdef'/><neighbor interface='node[1].wlan[0]' ipv6='fe80::323:4567:89ab:cdef' native='0123456789abcdef'/></domain>")
+**.radio.antenna.mobilityModule = "^.^.^.mobility"
+**.mobility.initialX = 0m
+**.mobility.initialY = 0m
+**.mobility.initialZ = 0m
+**.mobility.initFromDisplayString = false
+**.mobility.updateFromDisplayString = false
+
+%contains: stdout
+Native byte filtering and DSN wrap/gaps verified
