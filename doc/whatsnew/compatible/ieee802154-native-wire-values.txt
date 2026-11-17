@@ -1,0 +1,3 @@
+IEEE 802.15.4 address and frame values
+
+Models can represent short and extended IEEE 802.15.4 addresses, full EUI-64 values and PAN identities. Selected data and ACK frame headers have wire serializers with explicit address and PAN fields. These reusable representations are available independently of the native MAC and IPv6 adaptation.
