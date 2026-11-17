@@ -3,6 +3,9 @@
 #include "inet/linklayer/lowpan/LowpanHeader_m.h"
 #include "inet/linklayer/lowpan/LowpanMeshHeader_m.h"
 #include "inet/linklayer/lowpan/LowpanBroadcastHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanDispatchPrefix.h"
+#include "inet/linklayer/lowpan/LowpanPageHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanExtendedDispatchHeader_m.h"
 #include "inet/linklayer/lowpan/LowpanFrag1Header_m.h"
 #include "inet/linklayer/lowpan/LowpanFragnHeader_m.h"
 #include "inet/linklayer/lowpan/LowpanProtocol.h"
@@ -61,24 +64,40 @@ void LowpanProtocolDissector::dissect(Packet *packet, const Protocol *protocol, 
         if (packet->getDataLength() > b(0))
             callback.visitChunk(packet->popAtFront(), &lowpanProtocol);
     };
+    using Prefix = LowpanDispatchPrefix;
+    Prefix::State state{0, false};
+    auto prefix = [&]() {
+        auto parsed = Prefix::parse(*packet, 0, state);
+        for (int i = 0; i < parsed.pagingLength; i++)
+            callback.visitChunk(packet->popAtFront<LowpanPageHeader>(B(1)), &lowpanProtocol);
+        state = parsed.state;
+        return parsed.kind;
+    };
+    auto dissectEsc = [&]() {
+        callback.visitChunk(packet->popAtFront<LowpanExtendedDispatchHeader>(B(2)), &lowpanProtocol);
+        callback.markIncorrect(); // No EET payload specification is implemented; never search its body.
+    };
+    Prefix::Kind kind = Prefix::MALFORMED;
     auto dissectOuter = [&]() {
         try {
-            auto dispatch = packet->peekAtFront<BytesChunk>(B(1))->getBytes()[0];
-            bool mesh = (dispatch & 0xc0) == 0x80;
+            kind = prefix();
+            bool mesh = kind == Prefix::MESH;
             if (mesh) {
+                auto dispatch = packet->peekAtFront<BytesChunk>(B(1))->getBytes()[0];
                 int length = 1 + ((dispatch & 15) == 15 ? 1 : 0) + (dispatch & 0x20 ? 2 : 8) + (dispatch & 0x10 ? 2 : 8);
                 if (packet->getDataLength() <= B(length)) return false;
                 auto header = packet->popAtFront<LowpanMeshHeader>(B(length), Chunk::PF_ALLOW_INCORRECT);
                 callback.visitChunk(header, &lowpanProtocol);
                 if (header->isIncorrect()) return false;
-                dispatch = packet->peekAtFront<BytesChunk>(B(1))->getBytes()[0];
+                kind = prefix();
             }
-            if (dispatch == 0x50) {
+            if (kind == Prefix::BROADCAST) {
                 if (!mesh || packet->getDataLength() <= B(2)) return false;
                 callback.visitChunk(packet->popAtFront<LowpanBroadcastHeader>(B(2)), &lowpanProtocol);
-                dispatch = packet->peekAtFront<BytesChunk>(B(1))->getBytes()[0];
+                kind = prefix();
             }
-            return (dispatch & 0xc0) != 0x80 && dispatch != 0x50;
+            return kind != Prefix::MESH && kind != Prefix::BROADCAST && kind != Prefix::MALFORMED &&
+                kind != Prefix::UNSUPPORTED_PAGE;
         }
         catch (const cRuntimeError&) { return false; }
     };
@@ -88,9 +107,8 @@ void LowpanProtocolDissector::dissect(Packet *packet, const Protocol *protocol, 
             callback.visitChunk(packet->popAtFront(), &lowpanProtocol);
     }
     else {
-        auto dispatch = packet->peekAtFront<BytesChunk>(B(1))->getBytes()[0];
-        if ((dispatch & 0xf8) == 0xc0 || (dispatch & 0xf8) == 0xe0) {
-            bool first = (dispatch & 0xf8) == 0xc0;
+        if (kind == Prefix::FRAG1 || kind == Prefix::FRAGN) {
+            bool first = kind == Prefix::FRAG1;
             int length = first ? 4 : 5;
             if (packet->getDataLength() <= B(length))
                 callback.markIncorrect();
@@ -103,18 +121,21 @@ void LowpanProtocolDissector::dissect(Packet *packet, const Protocol *protocol, 
                 if (header->isIncorrect())
                     callback.markIncorrect();
                 callback.visitChunk(header, &lowpanProtocol);
-                if (first && packet->peekAtFront<BytesChunk>(B(1))->getBytes()[0] == 0x41)
-                    callback.visitChunk(packet->popAtFront<LowpanHeader>(), &lowpanProtocol);
-                else if (first && (packet->peekAtFront<BytesChunk>(B(1))->getBytes()[0] & 0xe0) == 0x60)
-                    dissectIphc();
+                if (first) {
+                    auto inner = prefix();
+                    if (inner == Prefix::IPV6) callback.visitChunk(packet->popAtFront<LowpanHeader>(), &lowpanProtocol);
+                    else if (inner == Prefix::IPHC) dissectIphc();
+                    else if (inner == Prefix::ESC) dissectEsc();
+                    else callback.markIncorrect();
+                }
             }
             // Partial IPv6 and all FRAGN payloads remain opaque until reassembly.
             if (packet->getDataLength() > b(0))
                 callback.visitChunk(packet->popAtFront(), &lowpanProtocol);
         }
-        else if ((dispatch & 0xe0) == 0x60)
+        else if (kind == Prefix::IPHC)
             dissectIphc();
-        else if (dispatch == 0x41) {
+        else if (kind == Prefix::IPV6) {
             callback.visitChunk(packet->popAtFront<LowpanHeader>(), &lowpanProtocol);
             if (packet->getDataLength() < B(40)) {
                 callback.markIncorrect();
@@ -124,8 +145,11 @@ void LowpanProtocolDissector::dissect(Packet *packet, const Protocol *protocol, 
             else
                 callback.dissectPacket(packet, &Protocol::ipv6);
         }
-        else
+        else {
+            if (kind == Prefix::ESC) dissectEsc();
+            if (packet->getDataLength() > b(0))
             callback.visitChunk(packet->popAtFront(), &lowpanProtocol);
+        }
     }
     callback.endProtocolDataUnit(&lowpanProtocol);
 }

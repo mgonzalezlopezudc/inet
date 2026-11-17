@@ -3,6 +3,8 @@
 #include "inet/linklayer/lowpan/LowpanHeader_m.h"
 #include "inet/linklayer/lowpan/LowpanMeshHeader_m.h"
 #include "inet/linklayer/lowpan/LowpanBroadcastHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanPageHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanExtendedDispatchHeader_m.h"
 #include "inet/linklayer/lowpan/LowpanFrag1Header_m.h"
 #include "inet/linklayer/lowpan/LowpanFragnHeader_m.h"
 #include "inet/linklayer/lowpan/LowpanProtocol.h"
@@ -20,6 +22,10 @@ void LowpanProtocolPrinter::print(const Ptr<const Chunk>& chunk, const Protocol 
 {
     if (dynamicPtrCast<const LowpanHeader>(chunk))
         context.infoColumn << "LOWPAN_IPV6";
+    else if (auto header = dynamicPtrCast<const LowpanPageHeader>(chunk))
+        context.infoColumn << "Page " << int(header->getPage());
+    else if (auto header = dynamicPtrCast<const LowpanExtendedDispatchHeader>(chunk))
+        context.infoColumn << "ESC EET=" << int(header->getExtensionType());
     else if (auto header = dynamicPtrCast<const LowpanMeshHeader>(chunk))
         context.infoColumn << "Mesh " << header->getOriginator() << " > " << header->getFinalDestination()
                            << " hops=" << int(header->getHopsLeft()) << (header->getDeepHops() ? " deep" : "");

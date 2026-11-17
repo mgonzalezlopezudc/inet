@@ -1,0 +1,94 @@
+%description:
+RFC8025 packet-local prefix/page-one ordering and RFC8066 two-byte ESC vectors,
+including universal page recovery, no unknown-EET scan and local introspection.
+
+%includes:
+#include "inet/linklayer/lowpan/LowpanDispatchPrefix.h"
+#include "inet/linklayer/lowpan/LowpanPageHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanExtendedDispatchHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanProtocolDissector.h"
+#include "inet/linklayer/lowpan/LowpanProtocolPrinter.h"
+#include "inet/linklayer/lowpan/LowpanProtocol.h"
+#include "inet/linklayer/lowpan/LowpanMeshHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanBroadcastHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanFrag1Header_m.h"
+#include "inet/linklayer/lowpan/LowpanFragnHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanIphcHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanUdpNhcHeader_m.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+using namespace inet;
+using namespace inet::lowpan;
+
+%global:
+class PagingObserver : public ProtocolDissector::ICallback {
+  public:
+    int incorrect=0;std::vector<std::string> order;
+    void startProtocolDataUnit(const Protocol *) override {}
+    void endProtocolDataUnit(const Protocol *) override {}
+    void markIncorrect() override {incorrect++;}
+    void visitChunk(const Ptr<const Chunk>& chunk,const Protocol *) override {
+        if(auto page=dynamicPtrCast<const LowpanPageHeader>(chunk))order.push_back("page"+std::to_string(page->getPage()));
+        else if(dynamicPtrCast<const LowpanMeshHeader>(chunk))order.push_back("mesh");
+        else if(dynamicPtrCast<const LowpanBroadcastHeader>(chunk))order.push_back("bc0");
+        else if(dynamicPtrCast<const LowpanFrag1Header>(chunk))order.push_back("frag1");
+        else if(dynamicPtrCast<const LowpanFragnHeader>(chunk))order.push_back("fragn");
+        else if(dynamicPtrCast<const LowpanIphcHeader>(chunk))order.push_back("iphc");
+        else if(dynamicPtrCast<const LowpanUdpNhcHeader>(chunk))order.push_back("udp");
+        else if(dynamicPtrCast<const LowpanExtendedDispatchHeader>(chunk))order.push_back("esc");
+        else order.push_back("opaque");
+    }
+    void dissectPacket(Packet *packet,const Protocol *) override {packet->popAtFront();}
+};
+
+%activity:
+using P=LowpanDispatchPrefix;
+const std::vector<std::pair<std::vector<uint8_t>,P::Kind>> cases={
+    {{},P::MALFORMED},{{0xf0},P::MALFORMED},{{0xf1},P::MALFORMED},
+    {{0x7a,0x33,59},P::IPHC},{{0xf1,0x7a,0x33,59},P::IPHC},
+    {{0xf2,0xf0,0x41},P::IPV6},{{0xff,0xf1,0x7a,0x33,59},P::IPHC},
+    {{0xf2,0x7a,0x33,59},P::UNSUPPORTED_PAGE},{{0xf1,0x41},P::UNKNOWN},
+    {{0xf1,0xf0,0x41},P::IPV6},{{0xf0,0x80},P::MESH},{{0xf2,0x80},P::UNSUPPORTED_PAGE},
+    {{0xf1,0xf0,0x80},P::MALFORMED},{{0xf1,0xf0,0xc0},P::MALFORMED},
+    {{0x40},P::MALFORMED},{{0x40,0x7e,0xf0,0x41},P::ESC},{{0xf2,0x40,1},P::UNSUPPORTED_PAGE}};
+for(const auto& entry:cases){Packet packet("literal");if(!entry.first.empty())packet.insertAtBack(makeShared<BytesChunk>(entry.first));ASSERT(P::parse(packet).kind==entry.second);}
+for(int page=0;page<16;page++){
+    auto header=makeShared<LowpanPageHeader>();header->setPage(page);Packet packet("page",header);
+    ASSERT(packet.peekDataAsBytes()->getBytes()==std::vector<uint8_t>{uint8_t(0xf0|page)});
+    Packet input("literal",makeShared<BytesChunk>(std::vector<uint8_t>{uint8_t(0xf0|page)}));
+    ASSERT(input.peekAtFront<LowpanPageHeader>()->getPage()==page);
+}
+for(int eet:{0,1,0x7e,255}){
+    auto header=makeShared<LowpanExtendedDispatchHeader>();header->setExtensionType(eet);Packet packet("esc",header);
+    ASSERT(packet.peekDataAsBytes()->getBytes()==std::vector<uint8_t>({0x40,uint8_t(eet)}));
+    Packet input("literal",makeShared<BytesChunk>(std::vector<uint8_t>{0x40,uint8_t(eet),0xf0,0x41}));
+    ASSERT(input.popAtFront<LowpanExtendedDispatchHeader>()->getExtensionType()==eet);
+    ASSERT(input.peekDataAsBytes()->getBytes()==std::vector<uint8_t>({0xf0,0x41}));
+}
+Packet bc("bc0",makeShared<BytesChunk>(std::vector<uint8_t>{0xf1,0xf0,0x50,1,0xc0,80,0,1,0x41}));
+auto before=P::parse(bc);ASSERT(before.kind==P::BROADCAST && before.state.seenPageOne);
+ASSERT(P::parse(bc,4,before.state).kind==P::MALFORMED);
+LowpanProtocolDissector dissector;
+const std::vector<uint8_t> mesh{0x82,1,2,3,4,5,6,7,8,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18};
+for(int mode=0;mode<5;mode++){
+    std::vector<uint8_t> bytes;
+    if(mode==0){bytes={0xf0};bytes.insert(bytes.end(),mesh.begin(),mesh.end());bytes.insert(bytes.end(),{0xf1,0x7a,0x33,59});}
+    if(mode==1){bytes={0xf1,0xf0};bytes.insert(bytes.end(),mesh.begin(),mesh.end());}
+    if(mode==2){bytes={0xe0,80,0x12,0x34,1,0xf1,0xf0};}
+    if(mode==3){bytes=mesh;bytes.insert(bytes.end(),{0x40,0x7e,0xf0,0x41});}
+    if(mode==4){bytes={0xf1,0x7e,0x33,0xf0,0x12,0x34,0x56,0x78,0xab,0xcd,0x40,0xf1};}
+    Packet packet("tooling",makeShared<BytesChunk>(bytes));PagingObserver observer;dissector.dissect(&packet,&lowpanProtocol,observer);
+    ASSERT(packet.getDataLength()==B(0));
+    if(mode==0)ASSERT(observer.order==std::vector<std::string>({"page0","mesh","page1","iphc"}) && observer.incorrect==0);
+    if(mode==1)ASSERT(observer.incorrect==1 && observer.order==std::vector<std::string>({"page1","page0","opaque"}));
+    if(mode==2)ASSERT(observer.order==std::vector<std::string>({"fragn","opaque"}) && observer.incorrect==0);
+    if(mode==3)ASSERT(observer.order==std::vector<std::string>({"mesh","esc","opaque"}) && observer.incorrect==1);
+    if(mode==4)ASSERT(observer.order==std::vector<std::string>({"page1","iphc","udp","opaque"}) && observer.incorrect==0);
+}
+LowpanProtocolPrinter printer;ProtocolPrinter::Context context;
+auto page=makeShared<LowpanPageHeader>();page->setPage(1);auto esc=makeShared<LowpanExtendedDispatchHeader>();esc->setExtensionType(0x7e);
+printer.print(page,&lowpanProtocol,nullptr,context);printer.print(esc,&lowpanProtocol,nullptr,context);
+ASSERT(context.infoColumn.str()=="Page 1ESC EET=126");
+EV<<"Packet-local paging, ESC width, ordering and introspection verified\n";
+
+%contains: stdout
+Packet-local paging, ESC width, ordering and introspection verified

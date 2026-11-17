@@ -18,6 +18,8 @@ enum LowpanDropReason
     LOWPAN_MESH_HOP_EXHAUSTED = 10;
     LOWPAN_BROADCAST_DUPLICATE = 11;
     LOWPAN_BROADCAST_SEQUENCE_EXHAUSTED = 12;
+    LOWPAN_UNSUPPORTED_PAGE = 13;
+    LOWPAN_UNSUPPORTED_EXTENSION = 14;
 }
 
 class LowpanPacketDropDetails extends inet::PacketDropDetails
