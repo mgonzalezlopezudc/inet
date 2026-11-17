@@ -17,7 +17,7 @@ sequenceDiagram
     Note over R: Sample local clock at first symbol
     R->>U: Promiscuous indication
     U->>R: RESET or ordinary SET
-    Note over R: RESET retires the old frame; SET does not
+    Note over R: RESET retires the old frame, SET does not
     S->>R: Next beacon when RESET was requested
     R->>U: BEACON-NOTIFY for the valid current frame
 ```

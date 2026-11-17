@@ -19,7 +19,7 @@ void Ieee802154ManagementApp::initialize()
     gtsOperation = par("gtsOperation");
     if (par("panId").intValue() < 0 || par("panId").intValue() >= 65535 ||
             par("channelNumber").intValue() < 11 || par("channelNumber").intValue() > 26 || par("cycles").intValue() < 1 ||
-            (gtsOperation && !beaconOperation) || (beaconOperation && par("enhancedDiscovery").boolValue()) || par("gtsBatchSize").intValue() < 1 || SimTime(par("gtsBatchDelay")) <= SIMTIME_ZERO)
+            (gtsOperation && !beaconOperation) || (par("enhancedBeaconOperation").boolValue() && (!gtsOperation || par("cycles").intValue() != 1)) || (beaconOperation && par("enhancedDiscovery").boolValue()) || par("gtsBatchSize").intValue() < 1 || SimTime(par("gtsBatchDelay")) <= SIMTIME_ZERO)
         throw cRuntimeError("Invalid management example PAN/channel/cycle configuration");
     actionTimer = new cMessage("actionTimer");
     action = coordinator ? Action::START : Action::RESET;
@@ -120,7 +120,7 @@ void Ieee802154ManagementApp::handleScanConfirm(uint64_t, const Ieee802154MacSca
 {
     Enter_Method("handleScanConfirm"); succeeded(confirm.result);
     for (const auto& descriptor : confirm.panDescriptors)
-        if (descriptor.coordinatorPanId == par("panId").intValue() && (descriptor.contentAvailable || (par("enhancedDiscovery").boolValue() && descriptor.frameVersion == 2)) &&
+        if (descriptor.coordinatorPanId == par("panId").intValue() && (descriptor.contentAvailable || (beaconOperation && descriptor.enhancedSuperframe) || (par("enhancedDiscovery").boolValue() && descriptor.frameVersion == 2)) &&
                 !descriptor.coordinatorAddress.isNone() &&
                 descriptor.securityStatus == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS)) {
             selectedPan = descriptor;
@@ -129,7 +129,8 @@ void Ieee802154ManagementApp::handleScanConfirm(uint64_t, const Ieee802154MacSca
     if (!selectedPan)
         throw cRuntimeError("Requested PAN not discovered");
     if (beaconOperation) {
-        auto bo = selectedPan->beacon.superframeSpecification & 15;
+        auto specification = selectedPan->enhancedSuperframe ? selectedPan->enhancedSuperframe->specification : selectedPan->beacon.superframeSpecification;
+        auto bo = specification & 15;
         if (bo == 15)
             throw cRuntimeError("Beacon operation requires a periodic coordinator");
         set("macPanId",uint64_t(*selectedPan->coordinatorPanId));
@@ -149,7 +150,7 @@ void Ieee802154ManagementApp::handleScanConfirm(uint64_t, const Ieee802154MacSca
 void Ieee802154ManagementApp::associateSelectedPan()
 {
     Ieee802154MacAssociateRequest request{selectedPan->channel,*selectedPan->coordinatorPanId,selectedPan->coordinatorAddress};
-    request.coordinatorIsPanCoordinator = selectedPan->frameVersion == 2 ? par("enhancedCoordinatorIsPanCoordinator").boolValue() :
+    request.coordinatorIsPanCoordinator = selectedPan->enhancedSuperframe ? (selectedPan->enhancedSuperframe->specification & 0x4000) != 0 : selectedPan->frameVersion == 2 ? par("enhancedCoordinatorIsPanCoordinator").boolValue() :
             (selectedPan->beacon.superframeSpecification & 0x4000) != 0;
     accepted(management->submitAssociate(allocateId(),request));
 }
@@ -169,6 +170,7 @@ void Ieee802154ManagementApp::handleAssociateIndication(const Ieee802154MacAssoc
 void Ieee802154ManagementApp::handleAssociateResponseStatus(uint64_t, const Ieee802154MacAssociateResponseStatus& status)
 {
     Enter_Method("handleAssociateResponseStatus"); succeeded(status.result);
+    if (par("enhancedBeaconOperation").boolValue()) set("macUseEnhancedBeacon",true);
 }
 
 void Ieee802154ManagementApp::sendData(const Ieee802154Address& destination, uint16_t panId, bool indirect)
@@ -195,6 +197,11 @@ void Ieee802154ManagementApp::handleAssociateConfirm(uint64_t, const Ieee802154M
     Enter_Method("handleAssociateConfirm"); succeeded(confirm.result);
     if (confirm.associationStatus != 0)
         throw cRuntimeError("Example association rejected");
+    if (par("enhancedBeaconOperation").boolValue()) {
+        set("macAutoRequest",false);
+        awaitingEnhancedGtsBeacon = true;
+        return;
+    }
     if (beaconOperation)
         set("macAutoRequest",true);
     if (gtsOperation)
@@ -253,7 +260,7 @@ void Ieee802154ManagementApp::finish()
 void Ieee802154ManagementApp::handleSetConfirm(uint64_t id, const Ieee802154MacSetConfirm& confirm) { Enter_Method("handleSetConfirm"); if (permitRequest && *permitRequest == id) { permitRequest.reset(); return; } succeeded(confirm.result); }
 void Ieee802154ManagementApp::handleGetConfirm(uint64_t, const Ieee802154MacGetConfirm&) { throw cRuntimeError("Example did not issue GET"); }
 void Ieee802154ManagementApp::handlePurgeConfirm(uint64_t, const Ieee802154MacPurgeConfirm&) { throw cRuntimeError("Example did not issue PURGE"); }
-void Ieee802154ManagementApp::handleBeaconNotifyIndication(const Ieee802154PanDescriptor& descriptor) { Enter_Method("handleBeaconNotifyIndication"); if (awaitingAssociationBeacon && selectedPan && descriptor.coordinatorPanId == selectedPan->coordinatorPanId && descriptor.coordinatorAddress == selectedPan->coordinatorAddress) { awaitingAssociationBeacon = false; associateSelectedPan(); } }
+void Ieee802154ManagementApp::handleBeaconNotifyIndication(const Ieee802154PanDescriptor& descriptor) { Enter_Method("handleBeaconNotifyIndication"); if (!selectedPan || descriptor.coordinatorPanId != selectedPan->coordinatorPanId || descriptor.coordinatorAddress != selectedPan->coordinatorAddress) return; if (awaitingAssociationBeacon) { awaitingAssociationBeacon = false; associateSelectedPan(); } else if (awaitingEnhancedGtsBeacon && descriptor.enhancedSuperframe) { awaitingEnhancedGtsBeacon = false; requestGts(Ieee802154GtsDirection::DEVICE_TRANSMIT); } }
 void Ieee802154ManagementApp::handleBeaconConfirm(uint64_t, const Ieee802154MacBeaconConfirm&) { throw cRuntimeError("Example did not issue BEACON"); }
 void Ieee802154ManagementApp::handleBeaconRequestIndication(const Ieee802154MacBeaconRequestIndication&) { Enter_Method("handleBeaconRequestIndication"); }
 void Ieee802154ManagementApp::handleOrphanIndication(const Ieee802154MacOrphanIndication&) { Enter_Method("handleOrphanIndication"); }

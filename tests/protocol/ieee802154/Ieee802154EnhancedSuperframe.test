@@ -1,0 +1,373 @@
+%description:
+Production periodic enhanced beacons, synchronization, CAP and bidirectional GTS.
+
+%extraargs: -r 0..25
+
+%includes:
+#include "ProtocolTest.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
+#include "inet/linklayer/ieee802154/Ieee802154InformationElements.h"
+#include "inet/linklayer/ieee802154/Ieee802154EnhancedSuperframeCodec.h"
+using namespace inet;
+using namespace inet::protocoltest;
+
+%global:
+Define_ProtocolTestProgram()
+{
+    ProtocolTest test("ieee802154_enhanced_superframe");
+    auto scenario = getSimulation()->getSystemModule()->par("scenario").intValue();
+    if (scenario == 2 || scenario == 3)
+        test.intercept(tap("radioMedium").from("host[0]").to("host[1]").filterPacket("Ieee802154Frame.frameType == 0").nth(0).mutate([scenario](Packet *packet) {
+            auto original = packet->peekDataAsBytes()->getBytes(); auto frame = Ieee802154FrameCodec::decode(original);
+            if (frame->getFrameVersion() != 2) return;
+            auto view = std::get<Ieee802154InformationElements::View>(Ieee802154InformationElements::inspect(*frame));
+            auto headers = view.headers;
+            for (auto& header : headers) {
+                if (scenario == 2 && header.id == 0x23) header.content[5] |= 0xe0;
+                if (scenario == 2 && header.id == 0x24) header.content[0] |= 0x80;
+                if (scenario == 3 && header.id == 0) header.id = 0x12; // Forensic unknown value, not local emission.
+            }
+            auto body = Ieee802154InformationElements::encode(headers,view.payloads,{});
+            frame->setPayloadArraySize(body.size()); for (size_t i = 0; i < body.size(); ++i) frame->setPayload(i,body[i]);
+            frame->setComputeFcs(true); auto altered = Ieee802154FrameCodec::encode(*frame); ASSERT(altered.size() == original.size());
+            packet->eraseAll(); packet->insertAtBack(makeShared<BytesChunk>(altered));
+        }));
+    if (scenario == 5 || scenario == 6)
+        test.once(on("exercise").signal("faultArmed").filterValue(1).within(3))
+            .meanwhile(tap("radioMedium").from("host[0]").to("host[1]").filterPacket("Ieee802154Frame.frameType == 0").nth(0).mutate([done = false](Packet *packet) mutable {
+                if (done) return;
+                auto original = packet->peekDataAsBytes()->getBytes(); auto frame = Ieee802154FrameCodec::decode(original);
+                if (frame->getFrameVersion() != 2) return;
+                auto view = std::get<Ieee802154InformationElements::View>(Ieee802154InformationElements::inspect(*frame));
+                auto headers = view.headers; bool changed = false;
+                for (auto& header : headers) if (header.id == 0x24) {
+                    auto decoded = Ieee802154EnhancedSuperframeCodec::decodeGts(header); ASSERT(decoded);
+                    for (auto& descriptor : *decoded)
+                        if (descriptor.shortAddress == 2 && descriptor.direction == Ieee802154GtsDirection::DEVICE_TRANSMIT && descriptor.start) { descriptor.start = 1; changed = true; break; }
+                    if (changed) header = Ieee802154EnhancedSuperframeCodec::encodeGts(*decoded);
+                }
+                if (!changed) return;
+                auto body = Ieee802154InformationElements::encode(headers,view.payloads,{});
+                frame->setPayloadArraySize(body.size()); for (size_t i = 0; i < body.size(); ++i) frame->setPayload(i,body[i]);
+                frame->setComputeFcs(true); auto altered = Ieee802154FrameCodec::encode(*frame); ASSERT(altered.size() == original.size());
+                packet->eraseAll(); packet->insertAtBack(makeShared<BytesChunk>(altered)); done = true;
+            }));
+    if (scenario == 7)
+        test.once(on("exercise").signal("faultArmed").filterValue(1).within(3))
+            .meanwhile(tap("radioMedium").from("host[0]").to("host[1]").filterPacket("Ieee802154Frame.frameType == 1").nth(1).mutate([](Packet *packet) {
+                auto original = packet->peekDataAsBytes()->getBytes(); ASSERT(original.size() == 31);
+                auto frame = makeShared<Ieee802154Frame>(); frame->setFrameType(0); frame->setFrameVersion(2);
+                frame->setSourceAddress(Ieee802154Address::fromExtended(0x0201123456789abcULL));
+                frame->setDestinationAddress(Ieee802154Address::fromExtended(0x0401123456789abcULL));
+                frame->setSourcePanId(0x1234); frame->setDestinationPanId(0x1234);
+                auto header = Ieee802154EnhancedSuperframeCodec::encodeSuperframe({0,0x4f00,0,0,0,false});
+                auto body = Ieee802154InformationElements::encode({header},{},{}); frame->setInformationElementsPresent(true);
+                frame->setPayloadArraySize(body.size()); for (size_t i = 0; i < body.size(); ++i) frame->setPayload(i,body[i]);
+                auto altered = Ieee802154FrameCodec::encode(*frame); ASSERT(altered.size() == original.size());
+                packet->eraseAll(); packet->insertAtBack(makeShared<BytesChunk>(altered));
+            }));
+    if (scenario == 8)
+        test.once(on("exercise").signal("faultArmed").filterValue(1).within(3))
+            .meanwhile(tap("radioMedium").from("host[0]").to("host[1]").filterPacket("Ieee802154Frame.frameType == 0").nth(0).mutate([remaining = 4](Packet *packet) mutable {
+                if (!remaining) return; --remaining;
+                auto bytes = packet->peekDataAsBytes()->getBytes(); bytes.back() ^= 1;
+                packet->eraseAll(); packet->insertAtBack(makeShared<BytesChunk>(bytes));
+            }));
+    return test.once(on("exercise").signal("verificationComplete").filterValue(1).within(3));
+}
+
+%activity:
+EV << "Enhanced superframe fixture compiled\n";
+
+%file: EnhancedSuperframeExercise.cc
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/common/Simsignals.h"
+#include "inet/common/lifecycle/LifecycleController.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
+#include "inet/linklayer/ieee802154/Ieee802154EnhancedSuperframeCodec.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceProvider.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceProvider.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceClient.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmission.h"
+namespace inet {
+class EnhancedSuperframeExercise : public cSimpleModule, public cListener, public IIeee802154MacServiceClient, public IIeee802154ManagementServiceClient, public LifecycleController
+{
+    using Admission = Ieee802154MacServiceAdmission;
+    using Status = Ieee802154MacStatus;
+    ModuleRefByPar<IIeee802154MacServiceProvider> root, child;
+    ModuleRefByPar<IIeee802154ManagementServiceProvider> rootManagement, childManagement;
+    uint64_t nextId = 0, dataId = 0; int scenario = 0, associations = 0, starts = 0, syncs = 0, grants = 0, removals = 0, confirms = 0, deliveries = 0;
+    int legacyBeacons = 0, enhancedBeacons = 0, advertised = 0, unknownNotices = 0, payloadNotices = 0, payloadBeacons = 0, badNotices = 0, directedNotices = 0, capWindows = 0, losses = 0, enhancedNotices = 0, capacityRemovals = 0, deviceCapacityRemovals = 0;
+    bool capacityPayloadRestored = false, capacityRemovalAdvertised = false, legacyCapacityObserved = false, flipArmed = false, flipped = false;
+    bool stopCandidate = false, stoppedCandidate = false;
+    std::optional<Ieee802154MacPibValue> getValue;
+    std::optional<simtime_t> oldSnapshot;
+    int lastLegacySize = 0;
+    std::optional<simtime_t> lastBeaconStart, badBeaconStart;
+    physicallayer::Ieee802154PhyChannel channel() const { return {physicallayer::Ieee802154PhyChannel::Phy::O_QPSK,physicallayer::Ieee802154PhyChannel::Band::MHZ_2450,20}; }
+    void set(IIeee802154MacServiceProvider *provider,const char *name,const Ieee802154MacPibValue& value) { ASSERT(provider->submitSet(++nextId,{name,value}) == Admission::ACCEPTED); }
+    void submitData(IIeee802154MacServiceProvider *provider,uint16_t destination,bool gts,bool acknowledge = true,size_t length = 3) {
+        auto packet = new Packet("scheduled DATA"); packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>(length,1)));
+        Ieee802154MacDataRequest request; request.sourceAddressMode = Ieee802154Address::AddressType::SHORT;
+        request.destinationAddress = Ieee802154Address::fromShort(destination); request.destinationPanId = 0x1234; request.ackTx = acknowledge; request.gtsTx = gts;
+        dataId = ++nextId; ASSERT(provider->submitData(dataId,packet,request) == Admission::ACCEPTED);
+    }
+  protected:
+    void initialize() override {
+        root.reference(this,"rootModule",true); child.reference(this,"childModule",true);
+        rootManagement.reference(this,"rootModule",true); childManagement.reference(this,"childModule",true);
+        scenario = par("scenario"); getModuleByPath("^.host[0].nic.radio")->subscribe(transmissionStartedSignal,this);
+        if (scenario == 11 || scenario == 12) getModuleByPath("^.host[0].nic.mac")->subscribe(packetSentToLowerSignal,this);
+        if (scenario == 7) getModuleByPath("^.host[1].nic.mac")->subscribe("capWindowInstalled",this);
+        if (scenario == 5 || scenario == 6) getModuleByPath("^.host[1].nic.radio")->subscribe(transmissionStartedSignal,this);
+    }
+    void activity() override {
+        wait(SimTime(1,SIMTIME_MS)); set(root.get(),"macAssociationPermit",true); set(root.get(),"macMinBe",uint64_t(0));
+        set(child.get(),"macMinBe",uint64_t(0)); set(child.get(),"macResponseWaitTime",uint64_t(2));
+        ASSERT(childManagement->submitAssociate(++nextId,{channel(),0x1234,Ieee802154Address::fromShort(1)}) == Admission::ACCEPTED);
+        wait(SimTime(55,SIMTIME_MS)); ASSERT(associations == 1);
+        if (scenario == 3) set(root.get(),"macEbHeaderIeList",std::vector<Ieee802154InformationElements::Header>{{0,{1,2,3}}});
+        if (scenario == 4) set(root.get(),"macBeaconPayload",std::vector<uint8_t>{0x5a});
+        if (scenario != 1 && scenario != 10 && scenario != 11) set(root.get(),"macUseEnhancedBeacon",true);
+        Ieee802154MacStartSuperframeRequest start{0x1234,channel()}; start.beaconOrder = 3; start.superframeOrder = scenario == 9 || scenario == 10 || scenario == 11 ? 0 : 1;
+        ASSERT(rootManagement->submitStartSuperframe(++nextId,start) == Admission::ACCEPTED);
+        wait(SimTime(4,SIMTIME_MS)); ASSERT(starts == 1);
+        set(child.get(),"macBeaconOrder",uint64_t(3)); if (scenario != 4) set(child.get(),"macAutoRequest",false);
+        ASSERT(childManagement->submitSync(++nextId,{channel(),true}) == Admission::ACCEPTED);
+        wait(SimTime(130,SIMTIME_MS)); ASSERT(syncs == 1);
+        submitData(child.get(),1,false); for (int i = 0; i < 65 && confirms < 1; ++i) wait(SimTime(10,SIMTIME_MS)); ASSERT(confirms == 1 && deliveries == 1);
+        if (scenario == 6) {
+            emit(registerSignal("faultArmed"),1L);
+            ASSERT(childManagement->submitGts(++nextId,{{2,Ieee802154GtsDirection::DEVICE_TRANSMIT,true}}) == Admission::ACCEPTED);
+            for (int i = 0; i < 65 && !badNotices; ++i) wait(SimTime(10,SIMTIME_MS));
+            ASSERT(badNotices == 1);
+            ASSERT(badBeaconStart);
+            if (grants != 0) throw cRuntimeError("contradictory allocation: badNotices=%d grants=%d beacon=%s",badNotices,grants,badBeaconStart->str().c_str());
+            for (int i = 0; i < 65 && !grants; ++i) wait(SimTime(10,SIMTIME_MS)); ASSERT(grants == 1);
+            submitData(child.get(),1,true); for (int i = 0; i < 65 && confirms < 2; ++i) wait(SimTime(10,SIMTIME_MS));
+            ASSERT(confirms == 2 && deliveries == 2); emit(registerSignal("verificationComplete"),1L); return;
+        }
+        for (auto direction : {Ieee802154GtsDirection::DEVICE_TRANSMIT,Ieee802154GtsDirection::DEVICE_RECEIVE}) {
+            Ieee802154MacGtsRequest request{{uint8_t((scenario == 9 || scenario == 10 || scenario == 11 || scenario == 12) && direction == Ieee802154GtsDirection::DEVICE_TRANSMIT ? 3 : 2),direction,true}};
+            ASSERT(childManagement->submitGts(++nextId,request) == Admission::ACCEPTED);
+            auto expected = direction == Ieee802154GtsDirection::DEVICE_TRANSMIT ? 1 : 2;
+            for (int i = 0; i < 65 && grants < expected; ++i) wait(SimTime(10,SIMTIME_MS)); ASSERT(grants == expected);
+        }
+        if (scenario == 12) {
+            set(root.get(),"macBeaconPayload",std::vector<uint8_t>(88,0x42));
+            stopCandidate = true; start.superframeOrder = 0;
+            ASSERT(rootManagement->submitStartSuperframe(++nextId,start) == Admission::ACCEPTED);
+            for (int i = 0; i < 50 && starts < 2; ++i) wait(SimTime(10,SIMTIME_MS));
+            ASSERT(stoppedCandidate && starts == 2 && capacityRemovals == 0);
+            ASSERT(root->submitGet(++nextId,{"macSuperframeOrder"}) == Admission::ACCEPTED);
+            ASSERT(getValue && std::get<uint64_t>(*getValue) == 1);
+            auto restart = new ModuleStartOperation; LifecycleOperation::StringMap parameters;
+            restart->initialize(getModuleByPath("^.host[0].nic.phy"),parameters); ASSERT(initiateOperation(restart));
+            wait(SimTime(160,SIMTIME_MS)); ASSERT(capacityRemovals == 0);
+            submitData(child.get(),1,true); for (int i = 0; i < 65 && confirms < 2; ++i) wait(SimTime(10,SIMTIME_MS));
+            ASSERT(confirms == 2 && deliveries == 2); emit(registerSignal("verificationComplete"),1L); return;
+        }
+        if (scenario == 9 || scenario == 10 || scenario == 11) {
+            set(root.get(),"macBeaconPayload",std::vector<uint8_t>(scenario == 9 ? 104 : 88,0x42));
+            if (scenario == 10 || scenario == 11) {
+                for (int i = 0; i < 100 && !legacyCapacityObserved; ++i) wait(SimTime(10,SIMTIME_MS));
+                if (!(legacyCapacityObserved && capacityRemovals == 0 && deviceCapacityRemovals == 0)) throw cRuntimeError("legacy contrast observed=%d lastSize=%d legacyBeacons=%d grants=%d rootRemoval=%d deviceRemoval=%d",legacyCapacityObserved,lastLegacySize,legacyBeacons,grants,capacityRemovals,deviceCapacityRemovals);
+                if (scenario == 10) set(root.get(),"macUseEnhancedBeacon",true);
+                else {
+                    flipArmed = true;
+                    for (int i = 0; i < 150 && !oldSnapshot; ++i) wait(SimTime(1,SIMTIME_MS));
+                    ASSERT(flipped && oldSnapshot && capacityRemovals == 0);
+                    wait(SimTime(4,SIMTIME_MS)); submitData(root.get(),2,true);
+                    for (int i = 0; i < 100 && confirms < 2; ++i) wait(SimTime(1,SIMTIME_MS));
+                    ASSERT(confirms == 2 && deliveries == 2 && simTime() < *oldSnapshot + SimTime(122880,SIMTIME_US));
+                }
+            }
+            for (int i = 0; i < 80 && (!capacityPayloadRestored || !capacityRemovalAdvertised || !deviceCapacityRemovals); ++i) wait(SimTime(10,SIMTIME_MS));
+            if (!(capacityRemovals == 1 && deviceCapacityRemovals == 1 && capacityRemovalAdvertised && capacityPayloadRestored))
+                throw cRuntimeError("enhanced capacity rootRemoval=%d deviceRemoval=%d removalAdvertised=%d payloadRestored=%d",capacityRemovals,deviceCapacityRemovals,capacityRemovalAdvertised,capacityPayloadRestored);
+            auto expected = scenario == 11 ? 3 : 2;
+            submitData(child.get(),1,true); for (int i = 0; i < 65 && confirms < expected; ++i) wait(SimTime(10,SIMTIME_MS));
+            ASSERT(confirms == expected && deliveries == expected); emit(registerSignal("verificationComplete"),1L); return;
+        }
+        if (scenario == 1) { set(root.get(),"macUseEnhancedBeacon",true); wait(SimTime(140,SIMTIME_MS)); ASSERT(enhancedBeacons > 0); }
+        if (scenario == 7) {
+            auto oldWindows = capWindows; emit(registerSignal("faultArmed"),1L); submitData(root.get(),2,false,false,20);
+            for (int i = 0; i < 10 && (!directedNotices || confirms < 2); ++i) wait(SimTime(1,SIMTIME_MS));
+            ASSERT(directedNotices == 1 && confirms == 2 && deliveries == 1 && capWindows == oldWindows);
+            for (int i = 0; i < 30 && capWindows == oldWindows; ++i) wait(SimTime(10,SIMTIME_MS)); ASSERT(capWindows > oldWindows);
+        }
+        if (scenario == 8) {
+            emit(registerSignal("faultArmed"),1L);
+            for (int i = 0; i < 90 && !losses; ++i) wait(SimTime(10,SIMTIME_MS)); ASSERT(losses == 1);
+            auto beforeNotices = enhancedNotices;
+            ASSERT(childManagement->submitSync(++nextId,{channel(),true}) == Admission::ACCEPTED);
+            for (int i = 0; i < 65 && syncs < 2; ++i) wait(SimTime(10,SIMTIME_MS)); ASSERT(syncs == 2);
+            for (int i = 0; i < 30 && enhancedNotices == beforeNotices; ++i) wait(SimTime(10,SIMTIME_MS));
+            ASSERT(enhancedNotices > beforeNotices);
+            Ieee802154MacGtsRequest removal{{2,Ieee802154GtsDirection::DEVICE_TRANSMIT,false}};
+            removal.coordinatorDevice = 2;
+            ASSERT(rootManagement->submitGts(++nextId,removal) == Admission::ACCEPTED);
+            ASSERT(removals == 1);
+            // Allow the four retained removal advertisements to retire before reallocation.
+            wait(SimTime(650,SIMTIME_MS));
+            auto admission = childManagement->submitGts(++nextId,{{2,Ieee802154GtsDirection::DEVICE_TRANSMIT,true}});
+            if (admission != Admission::ACCEPTED) throw cRuntimeError("after reacquisition GTS admission=%d syncs=%d losses=%d newNotices=%d",int(admission),syncs,losses,enhancedNotices - beforeNotices);
+            for (int i = 0; i < 65 && grants < 3; ++i) wait(SimTime(10,SIMTIME_MS)); ASSERT(grants == 3);
+            submitData(child.get(),1,true); for (int i = 0; i < 65 && confirms < 2; ++i) wait(SimTime(10,SIMTIME_MS));
+            ASSERT(confirms == 2 && deliveries == 2); emit(registerSignal("verificationComplete"),1L); return;
+        }
+        if (scenario == 5) { emit(registerSignal("faultArmed"),1L); for (int i = 0; i < 65 && !badNotices; ++i) wait(SimTime(10,SIMTIME_MS)); ASSERT(badNotices == 1 && badBeaconStart); }
+        auto expectedFirst = scenario == 7 ? 3 : 2;
+        submitData(child.get(),1,true); for (int i = 0; i < 65 && confirms < expectedFirst; ++i) wait(SimTime(10,SIMTIME_MS)); ASSERT(confirms == expectedFirst && deliveries == 2);
+        submitData(root.get(),2,true); for (int i = 0; i < 65 && confirms < expectedFirst + 1; ++i) wait(SimTime(10,SIMTIME_MS)); ASSERT(confirms == expectedFirst + 1 && deliveries == 3);
+        if (scenario == 1) { auto before = legacyBeacons; set(root.get(),"macUseEnhancedBeacon",false); wait(SimTime(140,SIMTIME_MS)); ASSERT(legacyBeacons > before); }
+        ASSERT(enhancedBeacons > 0 && advertised > 0 && (scenario != 3 || unknownNotices > 0));
+        if (scenario == 4) { ASSERT(payloadBeacons > 0); ASSERT(payloadNotices > 0); }
+        emit(registerSignal("verificationComplete"),1L);
+    }
+  public:
+    EnhancedSuperframeExercise() : cSimpleModule(65536) {}
+    void receiveSignal(cComponent *,simsignal_t signal,long value,cObject *) override { if (signal == registerSignal("capWindowInstalled") && value == 1) ++capWindows; }
+    void receiveSignal(cComponent *,simsignal_t signal,cObject *object,cObject *) override {
+        Enter_Method("receiveSignal");
+        if (signal == packetSentToLowerSignal) {
+            auto frame = check_and_cast<Packet *>(object)->peekAtFront<Ieee802154Frame>();
+            if (scenario == 12 && stopCandidate && frame->getFrameType() == 0 && frame->getFrameVersion() == 2) {
+                auto view = std::get<Ieee802154InformationElements::View>(Ieee802154InformationElements::inspect(*frame));
+                bool candidate = false, removal = false;
+                for (const auto& header : view.headers) {
+                    if (header.id == 0x23) { auto schedule = Ieee802154EnhancedSuperframeCodec::decodeSuperframe(header); ASSERT(schedule); candidate = ((schedule->specification >> 4) & 15) == 0; }
+                    if (header.id == 0x24) { auto list = Ieee802154EnhancedSuperframeCodec::decodeGts(header); ASSERT(list); for (const auto& item : *list) removal |= item.shortAddress == 2 && item.direction == Ieee802154GtsDirection::DEVICE_RECEIVE && item.start == 0 && item.length == 2; }
+                }
+                if (candidate) { ASSERT(removal); stopCandidate = false; stoppedCandidate = true; auto stop = new ModuleStopOperation; LifecycleOperation::StringMap parameters; stop->initialize(getModuleByPath("^.host[0].nic.phy"),parameters); ASSERT(initiateOperation(stop)); }
+            }
+            if (flipArmed && frame->getFrameType() == 0 && frame->getFrameVersion() == 0) {
+                flipArmed = false; flipped = true; set(root.get(),"macUseEnhancedBeacon",true);
+                if (capacityRemovals != 0) throw cRuntimeError("constructed legacy beacon lost grants before RF: removals=%d",capacityRemovals);
+            }
+            return;
+        }
+        auto tx = check_and_cast<const physicallayer::ITransmission *>(object);
+        auto name = std::string(tx->getPacket()->getName());
+        if ((scenario == 5 || scenario == 6) && name == "IEEE802154-DATA" && badBeaconStart) {
+            ASSERT(tx->getStartTime() > *badBeaconStart + SimTime(122880,SIMTIME_US));
+            return;
+        }
+        if (name != "IEEE802154-periodic-beacon") return;
+        lastBeaconStart = tx->getStartTime();
+        auto frame = Ieee802154FrameCodec::decode(tx->getPacket()->peekDataAsBytes()->getBytes());
+        ASSERT(frame->getDecodeStatus() == Ieee802154FrameCodec::OK && frame->getFcsValid());
+        if (frame->getFrameVersion() == 0) { ++legacyBeacons; if (scenario == 10 || scenario == 11) { lastLegacySize = tx->getPacket()->getDataLength().get<B>(); if (lastLegacySize == 101) legacyCapacityObserved = true; if (scenario == 11 && flipped && !oldSnapshot) oldSnapshot = tx->getStartTime(); } return; }
+        ASSERT(frame->getFrameVersion() == 2 && frame->getDestinationAddress().isNone()); ++enhancedBeacons;
+        auto view = std::get<Ieee802154InformationElements::View>(Ieee802154InformationElements::inspect(*frame));
+        if (scenario == 4) { ASSERT(view.data.length == 1 && frame->getPayload(view.data.offset - view.fixedMhr.length) == 0x5a); ++payloadBeacons; }
+        bool schedule = false, gtsIe = false; for (const auto& header : view.headers) {
+            if (header.id == 0x23) { ASSERT(Ieee802154EnhancedSuperframeCodec::decodeSuperframe(header)); schedule = true; }
+            if (header.id == 0x24) { gtsIe = true; auto list = Ieee802154EnhancedSuperframeCodec::decodeGts(header); ASSERT(list); if (!list->empty()) ++advertised; if (scenario == 9 || scenario == 10 || scenario == 11) for (const auto& item : *list) if (item.shortAddress == 2 && item.direction == Ieee802154GtsDirection::DEVICE_RECEIVE && item.start == 0 && item.length == 2) capacityRemovalAdvertised = true; }
+        }
+        if (!gtsIe && ((scenario == 9 && view.data.length == 104) || ((scenario == 10 || scenario == 11) && view.data.length == 88))) { ASSERT(tx->getPacket()->getDataLength() == B(scenario == 9 ? 123 : 107)); capacityPayloadRestored = true; }
+        ASSERT(schedule);
+    }
+    void handleDataConfirm(uint64_t id,const Ieee802154MacDataConfirm& c) override { Enter_Method("handleDataConfirm"); ASSERT(id == dataId && c.result == Ieee802154MacServiceResult(Status::SUCCESS)); ++confirms; }
+    void handleDataIndication(Packet *p,const Ieee802154MacDataIndication&) override { Enter_Method("handleDataIndication"); take(p); delete p; ++deliveries; }
+    void handleSetConfirm(uint64_t,const Ieee802154MacSetConfirm& c) override { ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); }
+    void handleGetConfirm(uint64_t,const Ieee802154MacGetConfirm& c) override { ASSERT(scenario == 12 && c.result == Ieee802154MacServiceResult(Status::SUCCESS)); getValue = c.value; }
+    void handleResetConfirm(uint64_t,const Ieee802154MacResetConfirm&) override { ASSERT(false); }
+    void handlePromiscuousIndication(Packet *p,const Ieee802154MacPromiscuousIndication&) override { delete p; ASSERT(false); }
+    void handleCommStatusIndication(Packet *p,const Ieee802154MacCommStatusIndication&) override { if (p) delete p; ASSERT(false); }
+    void handlePollConfirm(uint64_t,const Ieee802154MacPollConfirm&) override { ASSERT(false); }
+    void handlePurgeConfirm(uint64_t,const Ieee802154MacPurgeConfirm&) override { ASSERT(false); }
+    void handleStartConfirm(uint64_t,const Ieee802154MacStartConfirm&) override { ASSERT(false); }
+    void handleStartSuperframeConfirm(uint64_t,const Ieee802154MacStartSuperframeConfirm& c) override { ASSERT(c.result == (scenario == 12 && starts == 1 ? Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::STOPPED) : Ieee802154MacServiceResult(Status::SUCCESS))); ++starts; }
+    void handleSyncConfirm(uint64_t,const Ieee802154MacSyncConfirm& c) override { ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); ++syncs; }
+    void handleScanConfirm(uint64_t,const Ieee802154MacScanConfirm&) override { ASSERT(false); }
+    void handleBeaconConfirm(uint64_t,const Ieee802154MacBeaconConfirm&) override { ASSERT(false); }
+    void handleBeaconRequestIndication(const Ieee802154MacBeaconRequestIndication&) override { ASSERT(false); }
+    void handleBeaconNotifyIndication(const Ieee802154PanDescriptor& d) override { if (d.frameVersion == 2) { ++enhancedNotices; ASSERT(!d.contentAvailable && d.enhancedSuperframe); if (scenario == 7 && d.enhancedSuperframe->specification == 0x4f00) ++directedNotices; if (scenario == 4) { ASSERT(d.enhancedPayload == std::vector<uint8_t>({0x5a})); ++payloadNotices; } for (const auto& header : d.headerIes) if (header.id == 0x12) ++unknownNotices; if ((scenario == 5 || scenario == 6) && d.enhancedGts) for (const auto& grant : *d.enhancedGts) if (grant.shortAddress == 2 && grant.direction == Ieee802154GtsDirection::DEVICE_TRANSMIT && grant.start == 1) { ++badNotices; badBeaconStart = lastBeaconStart; } } }
+    void handleAssociateResponseStatus(uint64_t,const Ieee802154MacAssociateResponseStatus& c) override { ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); }
+    void handleAssociateConfirm(uint64_t,const Ieee802154MacAssociateConfirm& c) override { ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); ++associations; }
+    void handleAssociateIndication(const Ieee802154MacAssociateIndication& i) override { ASSERT(rootManagement->submitAssociateResponse(++nextId,{i.deviceAddress,2,0}) == Admission::ACCEPTED); }
+    void handleDisassociateConfirm(uint64_t,const Ieee802154MacDisassociateConfirm&) override { ASSERT(false); }
+    void handleDisassociateIndication(const Ieee802154MacDisassociateIndication&) override { ASSERT(false); }
+    void handleOrphanIndication(const Ieee802154MacOrphanIndication&) override { ASSERT(false); }
+    void handleOrphanResponseStatus(uint64_t,const Ieee802154MacOrphanResponseStatus&) override { ASSERT(false); }
+    void handleSyncLossIndication(const Ieee802154MacSyncLossIndication& i) override { ASSERT(scenario == 8 && i.reason == Ieee802154SyncLossReason::BEACON_LOST); ++losses; }
+    void handleRxEnableConfirm(uint64_t,const Ieee802154MacRxEnableConfirm&) override { ASSERT(false); }
+    void handleRxEnableIndication(const Ieee802154MacRxEnableIndication&) override { ASSERT(false); }
+    void handleGtsConfirm(uint64_t,const Ieee802154MacGtsConfirm& c) override {
+        if (c.result != Ieee802154MacServiceResult(Status::SUCCESS))
+            throw cRuntimeError("GTS confirmation status=%d abort=%d scenario=%d grants=%d", std::get_if<Status>(&c.result) ? int(std::get<Status>(c.result)) : -1, std::get_if<Ieee802154MacServiceAbortReason>(&c.result) ? int(std::get<Ieee802154MacServiceAbortReason>(c.result)) : -1, scenario, grants);
+        if (c.characteristics.allocate) ++grants; else ++removals;
+    }
+    void handleGtsIndication(const Ieee802154MacGtsIndication& i) override { if ((scenario == 9 || scenario == 10 || scenario == 11 || scenario == 12) && !i.characteristics.allocate) { ASSERT(i.deviceAddress == Ieee802154Address::fromShort(2) && i.characteristics.direction == Ieee802154GtsDirection::DEVICE_RECEIVE && i.characteristics.length == 2); if (getSimulation()->getContextModule() == getModuleByPath(par("rootModule"))) ++capacityRemovals; else ++deviceCapacityRemovals; } }
+};
+Define_Module(EnhancedSuperframeExercise);
+}
+
+%file: EnhancedSuperframeFixture.ned
+import inet.common.SimpleModule;
+import inet.mobility.static.StationaryMobility;
+import inet.linklayer.ieee802154.Ieee802154StandardInterface;
+import inet.linklayer.ieee802154.contract.IIeee802154MacServiceClient;
+import inet.linklayer.ieee802154.contract.IIeee802154ManagementServiceClient;
+import inet.protocoltest.TapRadioMedium;
+simple EnhancedSuperframeExercise extends SimpleModule like IIeee802154MacServiceClient, IIeee802154ManagementServiceClient {
+    parameters: string serviceModule; string rootModule; string childModule; int scenario; @class(::inet::EnhancedSuperframeExercise); @signal[verificationComplete](type=long); @signal[faultArmed](type=long);
+}
+module EnhancedSuperframeHost {
+    parameters: @networkNode;
+    submodules:
+        mobility: StationaryMobility;
+        nic: Ieee802154StandardInterface { enableManagement = true; enableSuperframe = true; enableEnhancedFrames = true; mac.clientModule = "^.^.^.exercise"; mac.managementClientModule = "^.^.^.exercise"; }
+    connections allowunconnected:
+}
+network EnhancedSuperframeTest {
+    parameters: int scenario;
+    submodules:
+        radioMedium: TapRadioMedium;
+        host[2]: EnhancedSuperframeHost;
+        exercise: EnhancedSuperframeExercise { serviceModule = "^.host[1].nic.mac"; rootModule = "^.host[0].nic.mac"; childModule = "^.host[1].nic.mac"; scenario = parent.scenario; }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = EnhancedSuperframeTest
+*.scenario = ${scenario=0..12}
+sim-time-limit = 3s
+cmdenv-express-mode = true
+cmdenv-stop-batch-on-error = false
+*.**.radio.sendRawBytes = ${raw=false,true}
+*.radioMedium.backgroundNoise.power = -110dBm
+*.radioMedium.signalAnalogRepresentation = "scalar"
+*.host[0].nic.extendedAddress = "extended:02-01-12-34-56-78-9A-BC"
+*.host[1].nic.extendedAddress = "extended:04-01-12-34-56-78-9A-BC"
+*.host[0].nic.shortAddress = 1
+*.host[0].nic.panId = 4660
+*.host[0].nic.mac.isPanCoordinator = true
+*.host[*].nic.rxOnWhenIdle = true
+*.host[*].nic.radio.antenna.mobilityModule = "^.^.^.mobility"
+*.host[*].mobility.initFromDisplayString = false
+*.host[0].mobility.initialX = 0m
+*.host[1].mobility.initialX = 1m
+*.host[*].mobility.initialY = 0m
+*.host[*].mobility.initialZ = 0m
+*.host[*].mobility.constraintAreaMinX = 0m
+*.host[*].mobility.constraintAreaMinY = 0m
+*.host[*].mobility.constraintAreaMinZ = 0m
+*.host[*].mobility.constraintAreaMaxX = 100m
+*.host[*].mobility.constraintAreaMaxY = 100m
+*.host[*].mobility.constraintAreaMaxZ = 100m
+
+%contains: stdout
+PROTOCOLTEST ieee802154_enhanced_superframe: PASS
+
+%not-contains: stdout
+PROTOCOLTEST ieee802154_enhanced_superframe: FAIL
+
+%not-contains: stderr
+Error:

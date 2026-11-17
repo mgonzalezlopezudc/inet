@@ -148,6 +148,15 @@ cryptographic security, TSCH, DSME, ranging and modern UWB are separate future
 profiles. The retained :ned:`Ieee802154Mac` and :ned:`Ieee802154NarrowbandMac`
 continue to serve explicit legacy configurations.
 
+With the enhanced and superframe features enabled, ``macUseEnhancedBeacon``
+selects enhanced periodic beacons and defaults to false. The next constructed
+periodic beacon uses the current selector and carries the simplified schedule
+and, when needed, GTS advertisements. A receiver installs that schedule only
+from a valid matching periodic beacon; an addressed discovery response does
+not move the tracking epoch. Enhanced DATA may use an allocated GTS. Optional
+enhanced ACK content is omitted when the reservation permits only the
+mandatory ACK. CAP and GTS use their respective completion and IFS bounds.
+
 The native MAC exposes ``capWindowInstalled`` and ``cfpWindowInstalled``
 signals for physical reservation bounds. Their borrowed details distinguish
 incoming and outgoing windows and identify CFP direction and local radio role;

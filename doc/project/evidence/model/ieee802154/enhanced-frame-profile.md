@@ -119,7 +119,7 @@ DSN serves DATA/Command generation with a sequence field, BSN serves legacy beac
 | Trigger / control | Response and matching rule |
 | --- | --- |
 | Legacy DATA/Command, unicast AR1 | Existing version0 immediate ACK path; legacy sequence behavior unchanged. |
-| Version2 addressed DATA/Command, unicast AR1, security success | Version2 enhanced ACK; AR0, destination mode/address copied from triggering source, source mode/address from actual responder. |
+| Version2 addressed DATA, unicast AR1, unsecured selected profile | Version2 enhanced ACK; AR0, destination mode/address copied from triggering source, source mode/address from actual responder. IEEE also requires enhanced ACKs for applicable version2 Commands; native AR1 Command operation is outside this selected profile. |
 | Trigger compression/suppression | Copy both control bits. Derive ACK PAN presence from its own address modes and Table7-2. Carry the triggering sequence iff present. A carried Source PAN identifies the actual responder; Destination PAN derives from the trigger's effective Source PAN. |
 | AR0 or all-ones broadcast destination | No ACK response; normal broadcast/group-addressed transmission never sets AR. Preserve the existing receive-side rule for an externally injected group-addressed AR1 frame instead of inferring a new ACK filter from the sender restriction. |
 | Suppressed sequence | Match explicit expected peer, destination, applicable PANs, suppression/compression, channel and arrival interval; do not compare a dummy DSN. Unsupported ambiguous contexts are refused locally. |
@@ -134,7 +134,7 @@ in the triggering destination does not require a responder to claim PAN0xffff. T
 follow Figure7-16's continuation (physical PDF92), while the existing destination/control,
 sequence, channel and physical-interval checks still apply.
 
-The packet-level response policy remains AIFS=12 selected-PHY symbols after receive end. Accept a peer's additional permitted CAP backoff-boundary start up to AIFS plus one unit backoff period (6.6.3.3, PDF72). Wait for a conservative maximum-legal-PSDU ACK duration because the originator cannot know receiver-selected IEs. Reuse twice the existing one-way `maxPropagationDelay` in completion and permitted-arrival envelopes. Scheduled deadlines leave required IFS inside CAP/GTS; optional response IEs yield when necessary. Physical PPDU timestamps and durations remain simulation time. No second ACK owner/timer, packet pointer in confirmation, arbitrary timeout parameter or knowledge of a peer's actual receive timestamp is added.
+The packet-level response policy remains AIFS=12 selected-PHY symbols after receive end. Accept a peer's additional permitted CAP backoff-boundary start up to AIFS plus one unit backoff period (6.6.3.3, PDF72). Wait for a conservative maximum-legal-PSDU ACK duration because the originator cannot know receiver-selected IEs. Originator completion and permitted-arrival envelopes reserve twice the existing one-way `maxPropagationDelay`; responder remaining airtime starts at actual receive end and does not reserve that round trip again. Scheduled deadlines leave required IFS inside CAP/GTS; optional response IEs yield when necessary. Physical PPDU timestamps and durations remain simulation time. No second ACK owner/timer, packet pointer in confirmation, arbitrary timeout parameter or knowledge of a peer's actual receive timestamp is added.
 
 The GTS/ATI fit proof uses the minimum appropriate ACK and final SIFS under6.6.4 (physical
 PDF74), with the applicable guard. It does not substitute the unknown receiver's maximum
@@ -142,6 +142,22 @@ optional ACK body or the long-frame LIFS into that proof. Clause6.3.1 (PDF62–6
 constrains the same device's next transmission; retaining that LIFS eligibility does not
 extend the current reservation's RX duty. E1-07 must verify the shared legacy calculation
 before its bounded correction and clip scheduled waiting to the reservation allowance.
+
+For CAP,10.2.2.2 (PDF184) instead requires minimum appropriate ACK reception plus the
+original DATA's size-dependent IFS before CAP end. Admission includes the selected
+permitted latest CAP response start and remaining CSMA/readiness; maximum optional ACK
+length is a waiting allowance, not the minimum admission size. The CAP ACK RF-completion
+bound is `min(physicalCapEnd - DATA_IFS, latestCompletion when present)`: the latter
+already limits RF completion before preparation and is not charged IFS again.
+
+The originating reservation must survive asynchronous PHY readiness and exact-end event
+ordering. Copy the active CAP window or guarded CFP endpoint into the existing physical
+reception-start anchor keyed by transmission identity. A matching completed reception
+consumes that context and derives the existing ACK exchange's single completion deadline.
+An expired current-window lookup cannot turn that exchange into unconstrained operation;
+missing/mismatched scheduled identity cannot borrow another reception's bound. Existing
+anchor expiration, retirement and reset remain responsible for its lifetime. GTS uses
+guarded end minus SIFS; CAP uses the bound above, independently of legal ACK-start timing.
 
 ## Enhanced discovery and integration
 
@@ -213,6 +229,15 @@ and addressed discovery responses cannot update phase, windows, grants, advertis
 or loss counters. Their actual IE values can remain visible to scan/notification clients.
 This is a declared wire-profile boundary, not a universal claim about every enhanced beacon;
 no internal radio transmission-kind tag or additional clock/timer is used.
+
+The selected enhanced periodic body carries no legacy pending-address list. Its schedule
+normalization does not supply that separate feature. Tracked association's legacy
+pending-address-triggered response retrieval therefore requires a legacy beacon phase;
+enhanced periodic operation does not add an association or automatic pending-list service.
+The managed EnhancedGts example performs normal legacy association, switches the existing
+periodic selector after the coordinator's successful response status, and waits for an
+actual enhanced schedule before requesting GTS. It is a single-cycle policy. The separate
+EnhancedDiscovery example exercises the existing unscheduled enhanced discovery path.
 
 ## Enhanced PIB and service inputs
 
@@ -297,7 +322,7 @@ Generated `_m` outputs are rebuilt from MSG inputs rather than hand-edited. Gene
 | ENHANCED-4–7 | E1-02/03; InformationElements/NestedElements units, enhanced serializer, EnhancedFrameGate observations | PASS for bounded framing/FCS and unsupported-security policy; [IE evidence](followup-results.md#e1-02-bounded-ie-framing), [nested evidence](followup-results.md#e1-03-nested-mlme-framing). No cryptographic claim. |
 | ENHANCED-1–3,8 | E1-04; EnhancedData protocol and native-gate/sequence controls | PASS for selected AR0 DATA/DSN/service binding; [executed evidence](followup-results.md#e1-04-native-data-services). EBSN remains E1-06. |
 | ENHANCED-8–11 | E1-05; EnhancedAck/EnhancedAckTiming protocol, ownership/lifecycle and nonzero-propagation cases | PASS for the selected unscheduled ACK profile; repaired full acceptance and bounded C++ dispositions are in the [execution record](followup-results.md#e1-05-initial-enhanced-ack-diagnostic). Scheduled CAP/GTS extensions remain E1-07. |
-| ENHANCED-3,12–14,16–17 excluding periodic selection | E1-06; EnhancedBeacon protocol, native scan, PIB GET/SET/reset controls and managed application | NOT_RUN |
+| ENHANCED-3,12–14,16–17 excluding periodic selection | E1-06; EnhancedBeacon protocol, native scan, PIB GET/SET/reset controls and managed application | PASS for the selected discovery profile; [composed final evidence](followup-results.md#e1-06-final-closure). Periodic selection remains E1-07. |
 | ENHANCED-15,16–17 periodic selection and scheduled ACK boundaries | E1-07; EnhancedSuperframe plus scheduled EnhancedAck extension, including macUseEnhancedBeacon exposure/selection | NOT_RUN |
 
 New enum/code values are explicitly assigned while existing values retain meaning. All concrete client/serializer/dissector/printer/tag consumers change in their owning source commit. Codec success remains gated from operational dispatch until the corresponding behavior commit. Stop/reset/crash, PHY unavailability, accepted/refused packet ownership and inline callback reentry preserve the existing native exactly-once contract. E1-99 closes evidence only after actual DATA/ACK/EBR production paths and the separately required scheduled gate pass.

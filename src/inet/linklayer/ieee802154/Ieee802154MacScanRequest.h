@@ -6,6 +6,7 @@
 #include "inet/linklayer/ieee802154/Ieee802154MacStartRequest.h"
 #include "inet/linklayer/ieee802154/Ieee802154BeaconCodec.h"
 #include "inet/linklayer/ieee802154/Ieee802154InformationElements.h"
+#include "inet/linklayer/ieee802154/Ieee802154EnhancedSuperframeCodec.h"
 
 namespace inet {
 
@@ -60,6 +61,8 @@ struct Ieee802154PanDescriptor
     std::vector<Ieee802154InformationElements::Header> headerIes;
     std::vector<Ieee802154InformationElements::Payload> payloadIes;
     std::vector<uint8_t> enhancedPayload;
+    std::optional<Ieee802154EnhancedSuperframeCodec::Superframe> enhancedSuperframe;
+    std::optional<std::vector<Ieee802154GtsDescriptor>> enhancedGts;
 };
 
 struct Ieee802154MacScanConfirm

@@ -32,7 +32,8 @@ This record distinguishes source-audit closure, compilation, executed fixtures a
 | E1-04 | Repaired debug acceptance and independent closure complete | Fresh matching debug,9 units,5 modules,2 serializer fixtures and512/512 actual protocol cases PASS (`e104-acceptance1/`), including80 EnhancedData cases. Default and sequence-only managed examples pass. C++ gate FAIL retains one independently dispositioned validation clone. |
 | E1-05 | Repaired debug acceptance and independent source closure complete | Fresh debug284/284 expanded cases pass (`e105-responder-fix1/`). Its matching library passes10 units,9 modules,2 serializers and636/636 actual protocol cases (`e105-acceptance1/`), zero errors/skips/FAIL. Final C++ follow-up adds no unmatched diagnostic; the warning gate remains FAIL. Scheduled CAP/GTS extensions remain E1-07. |
 | E1-06 | Debug acceptance and independent source closure complete | Composed checkpoints below cover the address, lifecycle, broadcast and legacy controls. Final fresh debug, EnhancedPib unit, Discovery16 and EnhancedBeacon110/110 PASS (`e106-fp-fix5/`); final typed/raw example asserts12 scalars. Independent review23 PASS/11 N/A/0 FLAG/0 QUESTION. C++ warning gate remains FAIL with bounded dispositions. |
-| E1-07 through E1-99 | NOT_RUN | Scheduled integration and publication gates remain open. |
+| E1-07 | Debug acceptance and independent source closure complete | Coherent final fresh debug passes17 units,25 modules, two serializers and1864/1864 protocol simulations across44 fixtures (`final-acceptance2/`), zero errors/skips/FAIL. Independent source review23 PASS/11 N/A/0 FLAG/0 QUESTION; final release compilation passes. Publication gates remain E1-99. |
+| E1-99 | NOT_RUN | Final publication matrix and evidence closure remain open. |
 
 ## Baseline control run
 
@@ -1008,6 +1009,275 @@ checks and source review, rather than an asserted exact-final C++ pass. The mech
 warning gate remains FAIL. Exact final whole-plan C++ analysis, release/feature matrices,
 trajectory controls and publication gates remain required after scheduled integration.
 Mermaid rendering remains NOT_RUN.
+
+## E1-07 causal legacy timing check
+
+Before scheduled enhanced source changes, the E106 source/library is held fixed while
+`Ieee802154GtsData.test` adds scenario49, runs98–99 typed/raw. The fixture independently
+encodes a23-byte legacy PSDU, obtains a one-slot1920us DEVICE_TRANSMIT grant at SO1,
+and checks that the actual provider guard plus configured2P fit the256us allowance.
+The zero-propagation base through final SIFS is928+192+352+192=1664us; replacing that
+SIFS with LIFS gives2112us. `e107-legacy-fit-red1/` reaches the expected-SUCCESS terminal
+assertion in both runs; `e107-legacy-fit-red2/` retains the explicit actual status3
+(FRAME_TOO_LONG), abort−1, at0.330560003336s. Both checkpoints have two errors, zero
+successes/skips. This reproduces an omitted legacy boundary case; it is not a passing
+runtime result or an invalidation of the earlier, differently sized B3 fixtures.
+The intermediate repair passes a fresh debug build, EnhancedSuperframeWire/ExchangeTiming
+units and both actual GTS runs (`e107-codec-timing1/`), zero errors/skips/FAIL. It introduces
+the stateless simplified-IE codec and a separate final-SIFS ATI duration, preserving global
+next-transmission LIFS eligibility. This checkpoint has no exposed periodic selector or
+schedule DTO. Operational integration, explicit next-transmission LIFS and scheduled ACK
+boundary coverage remain open; no complete E1-07 result is implied.
+
+`e107-scheduled-path1/` subsequently passes fresh debug, EnhancedSuperframeWire,
+ExchangeTiming and EnhancedPib units, plus both typed/raw scenario50 runs. Actual
+enhanced periodic beacons carry the simplified schedule/GTS IEs and drive existing
+synchronization and both GTS directions. This is initial operational-path evidence,
+not completion of format-switch, malformed-input, capacity or scheduled ACK boundaries.
+
+Independent timing review then finds the forecast guard aged to the grant start,
+although completion is protected through its end. `e107-guard-red1/` retains a fresh
+build and three passing units, but two semantic protocol errors in BO8/SO8 typed/raw
+scenario51. A15-slot AR0 grant with coordinator+40ppm/child−40ppm admits a23-byte DATA
+PPDU starting11.851274100565s and ending11.852202100565s against independently converted
+parent end11.852199912005s. The PPDU itself overruns by2.18856us, before final SIFS and
+the configured propagation allowance. This is actual causal RF evidence, not a predicted
+clock error. The bounded correction ages the existing guard to the copied grant end and
+uses that guarded completion bound for fit and ACK duty. Fresh debug, the same three units
+and both unchanged clocked cases pass (`e107-guard-fix1/`), zero errors/skips/FAIL. The
+transaction uses its existing completion bound; no clock, timer or grant owner is added.
+
+The sibling source trace finds no uncertainty extension at a child's DEVICE_RECEIVE
+window end. `e107-downlink-guard-red1/` retains fresh debug and three passing units, but
+both typed/raw scenario53 runs expose the outgoing path's omitted guard: coordinator−40ppm,
+child+40ppm and idle reception disabled. DATA ends11.852831125726s against the child's
+independently converted receive end11.852827886886s, overrun3.23884us before final SIFS/2P.
+`e107-downlink-guard-fix1/` passes fresh debug, the same three units and both unchanged
+cases. The existing copied CFP window carries one transmit allowance computed at
+installation from its actual beacon anchor through its end. Fit and ACK completion reuse
+it, while receive/expiry endpoints retain their original meaning. Complete scheduled
+acceptance and independent final source closure remain open.
+
+The next complete fixture checkpoint (`e107-gts-beacon-full1/`) passes three units and
+220/224 protocol cases. EnhancedBeacon passes116/116, including calibrated nonsaturated
+LQI equality/one-above rejection and defined requested-attribute rejection. GtsData has
+four errors. `e107-gts-diagnostic1/` distinguishes them: the next-transmission LIFS term
+passes but a two-slot fixture cannot contain both complete exchanges in the same epoch.
+Giving that dedicated test four slots yields both cases PASS in `e107-gts-diagnostic2/`;
+the actual23-byte frames and received-ACK-end+640us oracle are retained.
+
+The remaining exact-fit pair exposes a responder-budget defect: first DATA is delivered,
+but no ACK is emitted, and a same-DSN retry later succeeds. Actual DATA TX end is
+0.454814003336s, coordinator RX end0.454814006672s and coordinator grant end0.455552s.
+ACK target plus352us ACK plus192us final SIFS is0.455550006672s, which fits. The responder's
+additional2us round-trip allowance instead rejects by6.672ns. Independent6.6.4/6.6.5 review
+confirms that native originator admission already reserves2P; responder remaining-airtime
+starts at actual RX end and must not add that round trip again. The bounded repair retains
+originator2P and clock guards. `e107-responder-fit-fix1/` passes fresh debug, three units
+and all four focused runs. The exact-fit pair now has one DATA/ACK/delivery without a
+retry; the four-slot pair proves actual same-grant spacing from ACK end. Full fixture
+and final scheduled acceptance remain separate.
+
+The restored complete GtsData108/EnhancedBeacon116 matrix then passes224/224 actual
+cases plus all three units on that matching library (`e107-gts-beacon-full2/`), zero
+errors/skips/FAIL. Scheduled optional-ACK, format/geometry/loss and final publication
+matrices remain open; this result does not substitute for those cases.
+
+The first standalone EnhancedSuperframe checkpoint passes three units and8/8 actual
+typed/raw cases (`e107-superframe-first1/`): production association, synchronization,
+CAP/both GTS directions, live legacy→enhanced→legacy switching and reserved/unknown IE
+controls. Independent review then finds that normalized periodic enhanced beacons bypass
+the enhanced-payload notification branch. `e107-periodic-payload-red2/` proves actual
+periodic RF with the configured byte before both cases fail the missing-notification
+assertion. Extending the existing final notification condition to actual enhancedPayload
+passes fresh debug, three units and the unchanged pair (`e107-periodic-payload-fix1/`).
+The public descriptor still has contentAvailable=false for legacy body fields.
+
+The joint Header23/24 geometry review finds a positive GTS descriptor placed inside the
+declared CAP can relocate an installed grant or complete a pending request. In
+`e107-geometry-red1/`, the installed-grant pair actually transmits in the invalid epoch.
+The separately clarified pending pair (`e107-geometry-red2/`) receives the raw contradictory
+descriptor and incorrectly reports one allocation confirmation in both representations.
+The stateless joint validator now precedes normalized renewal and grant mutation, retaining
+raw notification, independent counts and zero-start records. `e107-geometry-fix1/` passes
+fresh debug and three units, but its accidentally retained12–13 selector exercises only
+the pending pair. `e107-geometry-fix2/` restores10–13 and passes all four actual cases
+plus three units on the matching library, zero errors/skips/FAIL. Independent bounded
+review closes both periodic findings. Complete scheduled acceptance remains open.
+
+The next18-case standalone checkpoint (`e107-superframe-matrix1/`) passes16 cases and
+all three units. The directed matching-parent CAP response carries schedule IEs in a
+same-length31-byte waveform and produces notification without a new window; the following
+periodic beacon renews normally. The four-corrupt-beacon loss pair reaches BEACON_LOST,
+but initially requests GTS before observing a post-SYNC anchored beacon. Diagnostic1
+records UNSUPPORTED_OPERATION with two SYNC confirmations, one loss and no new notice.
+Waiting for the actual beacon establishes admission; diagnostics2/3 then reach NO_DATA
+because the coordinator still holds its old allocation. This is a fixture recovery
+assumption, not a demonstrated production regression or an automatic remote-ledger clear.
+
+`e107-loss-recovery1/` passes both cases and three units using explicit existing targeted
+coordinator deallocation, its successful confirmation, removal-advertisement retirement,
+then a fresh allocation and actual GTS DATA. This setup is part of the fixture's recovery
+policy. It preserves the distinct local synchronization and remote allocation lifetimes.
+
+The first scheduled enhanced-ACK omission attempt is refused before RF: status
+UNSUPPORTED_FEATURE, zero DATA/ACK/delivery. The parent E1-04 staging guard still blocks
+version2 GTS. Removing that guard, while retaining profile/metadata/short-address/grant
+validation and CFP ownership, passes fresh debug, three units and both actual omission
+cases (`e107-enhanced-gts-active1/`). Successful native confirmation carries a present
+but empty copied enhanced-ACK content after optional content yields to the mandatory ACK.
+
+An independent activity audit then finds the existing uplink renewal predicate still
+excludes every enhanced frame. `e107-gts-activity-red2/` records both typed/raw BO8 cases:
+one DATA confirmation, delivery and actual DATA/ACK RF exchange, zero activity observations,
+and expiry11.868032s instead of19.732352s. This proves a successfully delivered modern
+exchange fails to renew the old owner's inactivity state. The bounded qualified-predicate
+repair removes only the legacy-version restriction. Fresh debug, three units and both
+unchanged expiry cases pass (`e107-gts-activity-fix1/`): actual activity renews the existing
+grant, which expires at19.732352s after subsequent silence. Independent bounded review
+closes the finding with the same security, context, window and retirement guards.
+
+CAP probes distinguish calibration from defects. The first optional-content probe simply
+defers to a new CAP, where its full ACK fits. A2400us-before-end minimum probe also defers
+and is a passing control. At2560us before end, however, `e107-cap-minimum-red2/` transmits
+with1920us remaining. Actual16-byte DATA takes704us and the minimum enhanced ACK608us;
+the selected latest-start/IFS/2P budget is2018us, while the old five-byte-ACK budget is
+1762us. The shared FrameLayout-derived minimum repair passes fresh debug, three units
+and both unchanged cases (`e107-cap-minimum-fix1/`); independent source review closes
+ordinary and quick-pending admission without changing maximum-length waiting.
+
+`e107-cap-ack-boundary-red1/` passes both short-frame omission cases but exposes two
+long-frame failures: actual27-byte DATA takes1056us; a1376us ACK ends256us before CAP end,
+so final SIFS fits but the required640us LIFS does not. Optional content is incorrectly
+retained. Independently, `e107-cap-expired-bound-red1/` receives and delivers valid DATA
+ending100us before CAP end, then sends an ACK after asynchronous readiness has lost the
+live CAP lookup. The combined copied-reception-context repair passes fresh debug, three
+units, the controller module and all four causal cases (`e107-completion-bound-fix1/`).
+CAP RF completion uses min(CAP end minus DATA IFS, latestCompletion); GTS keeps guarded
+end minus SIFS. The existing transmission-ID anchor retains context through readiness.
+`e107-anchor-context1/` additionally passes the full controller module's keyed CAP/CFP,
+missing-ID and clear-context checks, with the unchanged unit scope and fresh warning-free
+compilation of the touched MAC. This is not a zero-warning C++ static-analysis verdict.
+
+The first exact-CAP-end probe observes only the planned waveform end at reception start:
+outgoing CAP duty closes before the equal-time radio completion, yielding no DATA/ACK.
+That is not an ACK-bound red. An explicit indefinite RX-ENABLE installed in supported
+nonbeacon mode before START preserves reception across the boundary; both cases then
+deliver DATA with ackSent=false and no ACK RF (`e107-cap-equality-rxduty2/`).
+
+Scheduled retry/duty counts initially pass except an unsubscribed DSN observer. After
+correcting that fixture subscription, `e107-gts-retry-duty3/` passes both cases: one
+transaction, two actual transmissions with the same present DSN in different grants,
+one success, no CAP access and PHY OFF1ms after the lost-ACK grant. `e107-gts-tick-boundary1/`
+passes all six typed/raw before/equal/after fit-budget cases; equality includes the declared
+2P allowance, while actual RF and final SIFS remain within the grant. The one-tick-late
+case defers. The actual slotted POLL→v2 quick DATA→enhanced ACK owner also passes both
+`e107-quick-pending2/` cases; its initial missing fixture include was a zero-simulation
+setup error, not production evidence.
+
+Enhanced capacity with a104-byte payload passes both `e107-enhanced-capacity1/` cases:
+ordinary123-byte PSDU, required removal, retained zero-start length/direction, payload
+restoration after advertisement retirement and a working survivor. The discriminating
+format contrast (`e107-format-capacity3/`) observes101-byte legacy and107-byte enhanced
+ordinary beacons for the same88-byte payload. Legacy retains five SO0 slots; enhanced
+removes the old two-slot grant. Earlier contrast failures were premature ordinary-size
+expectations while transient advertisement IEs were still present. The ordinary capacity
+values are446 versus434 symbols against the440-symbol bound.
+
+The prepared-beacon callback test reproduces premature removal before the old-format
+beacon transmits (`e107-constructed-capacity-red1/`, two errors). Capacity maintenance
+now runs at ordinary periodic construction. The callback test then passes; the complete
+legacy allocation regression and callback pair pass together with three units and
+86 protocol cases (`e107-capacity-allocation-regression2/`). This includes the repaired
+orphan-response ACK owner: a validated orphan scan retains its unslotted radio owner
+even while old synchronization state exists. Ordinary scheduled DATA retains its bounds.
+The public SET test now checks removal at the next construction rather than inside SET.
+
+`e107-candidate-rollback2/` passes both cases: stopping PHY from the lower callback
+discards the proposed SO0 capacity reduction, returns START STOPPED, retains SO1 and
+the old grants, and permits actual DATA after PHY restart. Its first run failed because
+the fixture lifecycle listener lacked Enter_Method; that setup failure is retained.
+
+`e107-cap-later-ack-clipped2/` passes both cases with an actual ACK starting160us later
+than the nominal start. Its completion and final IFS fit the CAP, while the unknown
+maximum-length waiting budget would exceed that CAP. Native ACK RF is suppressed only
+in the receiver's copied DATA waveform, preserving the sender's ACK request. This
+directly checks the independent latest-start and clipped-completion constraints.
+Earlier probes used an incorrect copied PAN-compression field, overlapped native ACK
+RF, or submitted too late for DATA admission; they do not establish a matcher defect.
+
+`e107-cap-retry-duty2/` reproduces a radio-duty defect after a real lost ACK: one DATA,
+one delivered frame and one ACK RF occur, but the radio remains receiving after CAP end
+while its slotted retry is deferred. `e107-cap-retry-duty-fix1/` passes fresh debug, three
+units and both unchanged cases. Idle-duty evaluation now permits a paused CAP attempt
+without replacing its access/backoff state or dispatching new work. Active beacon search,
+post-loss returned-parent recovery without another wake owner, outstanding CCA handback
+and PHY/ACK operations retain their receive obligations. This is a duty-owner repair;
+the required retry and same-present-DSN assertions remain in the fixture.
+
+The first whole-package publication campaign (`final-acceptance1/`) passes17 unit,
+25 module and two serializer fixtures. Its44 protocol fixtures produce1782 successful
+simulations, four errors and74 skipped runs. The failures are not a passing acceptance:
+EnhancedData still expects the removed version-2 GTS staging rejection; a clocked GTS
+receiver misses reception context for a valid peer transmission beginning just before
+its nominal slot start; BeaconSchedule's near-boundary ACK control also fails. These
+require focused closure and a coherent final campaign. The initial enhanced managed
+example additionally reproduces association NO_DATA: tracked association expects the
+legacy pending-address list, which the selected enhanced periodic profile does not carry.
+The existing nontracking acquisition/poll policy is being checked separately; legacy
+Beacon and Gts typed/raw examples already pass. Source snapshots taken after app-only
+changes during this first campaign cannot establish a single final source/library identity.
+
+The GTS diagnostic observes a valid clocked downlink at0.570731174091, about0.922us before
+the receiver's nominal slot start0.570732095654. Its existing turnaround prewake already
+owns reception, but the narrower anchor predicate drops CFP context, suppressing the first
+ACK and causing a third DATA/delivery. Extending capture to that existing opportunity makes
+the original positive pair pass. It also exposes a separate attribution issue: a different
+source's late CAP frame can borrow the neighboring receive grant. The external source-3
+control passes actual frame/delivery/PAN prerequisites, then fails both no-ACK assertions
+(`e107-cfp-owner-red1/`). The repaired anchor retains both CAP and bounded CFP candidates,
+then selects a CFP only after decoded identity, current grant/binding and callback continuity
+checks. `e107-cfp-owner-fix1/` passes fresh debug, three units, the controller module and
+94/94 protocol cases, including the original clocked positive and unrelated-source negative.
+
+BeaconSchedule27's old DATA placement makes ACK end156us before the boundary, leaving less
+than its required192us final SIFS. The CAP refusal is correct. Moving the positive stimulus
+64us earlier retains SUCCESS/actual ACK and adds an independent ACK-end-plus-SIFS bound;
+the separate negative case remains. EnhancedData8 now checks INVALID_GTS after the former
+version-2 staging rejection is removed; no grant is fabricated by the fixture.
+
+The enhanced managed example is deliberately one cycle: normal legacy association first,
+then the coordinator changes the periodic selector after its successful response status.
+The child retains tracking and waits for a matching actual enhanced schedule before GTS.
+Both typed/raw EnhancedGts, Beacon and Gts pass (`final-fixed4-examples-execution.json`);
+EnhancedGts completes one device cycle and one DATA confirmation/delivery in each direction.
+An explicit cycles=2 probe is rejected during initialization. Earlier attempted untracked
+ordering fails NO_ACK or UNSUPPORTED_OPERATION and is not retained as supported behavior.
+
+The corresponding early-uplink activity control (`e107-prewake-activity-red1/`) passes
+actual early-reception, DATA/ACK and SUCCESS prerequisites, but observes zero activity
+and expiry at11.86850374015 instead of19.733138325534. The repair shares the decoded
+candidate identity predicate, retains the original copied physical end for completed-DATA
+activity, and rechecks ownership after callbacks for guarded ACK completion. Activity still
+commits once at its existing pre-notification point; the strict fallback remains available
+without a matched reception anchor. `e107-prewake-activity-fix1/` passes fresh debug,
+three units, the controller module and94/94 protocol cases, including the unchanged red pair.
+Independent final source review finds23 PASS,11 N/A,0 FLAG,0 QUESTION. The full publication
+campaign remains separately recorded rather than inferred from these focused passes.
+
+## E1-07 final combined acceptance
+
+`final-acceptance2/` retains the coherent final native source/generated-header snapshot,
+debug-library hash, full fixture inputs, generated test source, stdout/stderr and category
+commands. The fresh matching debug build passes; all17 unit,25 module and two serializer
+fixtures pass. All44 explicitly selected protocol fixtures pass1864/1864 actual simulations
+and1864 protocol assertions, with zero errors, skipped runs or declared failures. All touched
+fixtures restore their complete typed/raw ranges, including54 GtsExpiry and126 GtsData runs.
+`publication-release-build.log` records a successful final release compilation. Source
+review confirms final MAC SHA-256 `d2ace33acb091c5c29a5115ede3da0688628cc81091398d8b99b81455f610d01`.
+The publication example campaign passes both representations of EnhancedGts, Beacon and Gts.
+Final C++ attribution, feature/clock isolation, trajectory and repository publication gates
+are still separate E1-99 work; this result does not label them as already passed.
 
 ## Publication gate
 

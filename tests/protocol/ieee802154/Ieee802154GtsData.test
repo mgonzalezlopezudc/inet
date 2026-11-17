@@ -1,7 +1,7 @@
 %description:
 Native GTS DATA exchanges in both directions over the real radio.
 
-%extraargs: -r 0..97
+%extraargs: -r 0..125
 
 %includes:
 #include "ProtocolTest.h"
@@ -13,13 +13,13 @@ Define_ProtocolTestProgram()
 {
     ProtocolTest test("ieee802154_gts_data");
     auto scenario = getSimulation()->getSystemModule()->par("scenario").intValue();
-    if (scenario == 16 || scenario == 17)
+    if (scenario == 16 || scenario == 17 || scenario == 58 || scenario == 62)
         test.once(on("exercise").signal("faultArmed").filterValue(1).within(5))
-            .meanwhile(tap("radioMedium").from("host[0]").to("host[1]").filterPacket("Ieee802154Frame.frameType == 2").nth(scenario == 16 ? 1 : 0).drop());
+            .meanwhile(tap("radioMedium").from("host[0]").to("host[1]").filterPacket("Ieee802154Frame.frameType == 2").nth(scenario == 16 || scenario == 58 || scenario == 62 ? 1 : 0).drop());
     if (scenario == 23)
         test.once(on("exercise").signal("faultArmed").filterValue(1).within(5))
             .meanwhile(tap("radioMedium").from("host[0]").to("host[1]").filterPacket("Ieee802154Frame.frameType == 0").nth(1).drop());
-    return test.once(on("exercise").signal("verificationComplete").filterValue(1).within(5));
+    return test.once(on("exercise").signal("verificationComplete").filterValue(1).within(25));
 }
 
 %activity:
@@ -41,8 +41,10 @@ EV << "GTS DATA fixture compiled\n";
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IReception.h"
 #include "inet/clock/contract/IClock.h"
 #include "inet/linklayer/ieee802154/Ieee802154Frame_m.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
 #include "inet/linklayer/ieee802154/Ieee802154BeaconCodec.h"
 #include "inet/linklayer/ieee802154/Ieee802154MacObservations.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154SuperframeProvider.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
 
 namespace inet {
@@ -59,15 +61,19 @@ class GtsDataExercise : public cSimpleModule, public cListener, public IIeee8021
     ModuleRefByPar<IIeee802154MacServiceProvider> root, child;
     ModuleRefByPar<IIeee802154ManagementServiceProvider> rootManagement, childManagement;
     uint64_t nextId = 0, dataId = 0;
-    int associations = 0, starts = 0, syncs = 0, grants = 0, confirms = 0, deliveries = 0, accesses = 0, dataFrames = 0, ackFrames = 0;
+    int associations = 0, starts = 0, syncs = 0, grants = 0, confirms = 0, deliveries = 0, accesses = 0, dataFrames = 0, ackFrames = 0, enhancedBeacons = 0, enhancedDescriptorBeacons = 0;
     int scenario = 0;
     int destroyedPackets = 0;
     Status expectedData = Status::SUCCESS;
     bool measuring = false, resetOnObservation = false;
     std::optional<simtime_t> rootAnchor, childAnchor;
     std::optional<simtime_t> rootSlotStart, rootSlotEnd;
+    std::optional<simtime_t> childLongSlotEnd;
     std::map<int,std::pair<simtime_t,simtime_t>> observedCfp;
     std::optional<simtime_t> firstDataStart;
+    std::optional<simtime_t> firstAckStart, firstAckEnd, firstDataAnchor, requestedCapEnd, secondDataStart;
+    std::optional<simtime_t> firstDataEnd, firstRootReceiveEnd;
+    std::optional<simtime_t> firstRootAnchor, firstChildAnchor;
     std::vector<uint8_t> dataDsns;
     std::optional<simtime_t> secondChildAnchor;
     bool rebindArmed = false, rebindOnData = false, rebindOnAck = false, rebound = false, oldLayoutObserved = false;
@@ -96,7 +102,9 @@ class GtsDataExercise : public cSimpleModule, public cListener, public IIeee8021
         Ieee802154MacDataRequest request;
         request.sourceAddressMode = Ieee802154Address::AddressType::SHORT;
         request.destinationAddress = scenario == 6 ? Ieee802154Address::fromExtended(0x0201123456789abcULL) : Ieee802154Address::fromShort(destination);
-        request.destinationPanId = 0x1234; request.ackTx = scenario != 5; if (scenario != 40) request.gtsTx = true; request.indirectTx = scenario == 3;
+        request.destinationPanId = 0x1234; request.ackTx = scenario != 5 && scenario != 51 && scenario != 53; if (scenario != 40) request.gtsTx = true; request.indirectTx = scenario == 3;
+        if (scenario >= 54 && scenario <= 62) request.legacyTx = false;
+        if ((scenario >= 55 && scenario <= 57) || scenario == 62) request.gtsTx = false;
         dataId = ++nextId;
         auto admission = p->submitData(dataId,packet,request);
         if (admission != Admission::ACCEPTED) delete packet;
@@ -120,11 +128,12 @@ class GtsDataExercise : public cSimpleModule, public cListener, public IIeee8021
             host->getSubmodule("nic")->getSubmodule("radio")->subscribe(transmissionStartedSignal,this);
         }
         getModuleByPath("^.host[1].nic.radio")->subscribe(receptionStartedSignal,this);
+        if (scenario == 14) getModuleByPath("^.host[0].nic.radio")->subscribe(receptionEndedSignal,this);
         if (scenario == 9 || scenario == 11 || (scenario >= 34 && scenario <= 36)) {
             if (scenario == 9) getModuleByPath("^.host[2].nic.radio")->subscribe(receptionStartedSignal,this);
             getModuleByPath("^.host[0].nic.mac")->subscribe(packetSentToLowerSignal,this);
         }
-        if (scenario >= 13 && scenario <= 18)
+        if ((scenario >= 13 && scenario <= 18) || scenario == 58 || scenario == 62)
             getModuleByPath("^.host[1].nic.mac")->subscribe(packetSentToLowerSignal,this);
         if (scenario == 23)
             getModuleByPath("^.host[1].nic.mac")->subscribe("syncMissed",this);
@@ -135,6 +144,8 @@ class GtsDataExercise : public cSimpleModule, public cListener, public IIeee8021
         set(child.get(),"macMinBe",uint64_t(0)); set(child.get(),"macResponseWaitTime",uint64_t(2));
         ASSERT(childManagement->submitAssociate(++nextId,{channel(),0x1234,Ieee802154Address::fromShort(1)}) == Admission::ACCEPTED);
         wait(SimTime(55,SIMTIME_MS)); ASSERT(associations == 1);
+        if (scenario == 53) set(child.get(),"macRxOnWhenIdle",false);
+        if (scenario == 50) set(root.get(),"macUseEnhancedBeacon",true);
         IIeee802154MacServiceProvider *second = nullptr;
         IIeee802154ManagementServiceProvider *secondManagement = nullptr;
         if (scenario == 9) {
@@ -145,33 +156,83 @@ class GtsDataExercise : public cSimpleModule, public cListener, public IIeee8021
             ASSERT(secondManagement->submitAssociate(++nextId,{channel(),0x1234,Ieee802154Address::fromShort(1)}) == Admission::ACCEPTED);
             wait(SimTime(55,SIMTIME_MS)); ASSERT(associations == 2);
         }
-        Ieee802154MacStartSuperframeRequest start{0x1234,channel()}; start.beaconOrder = 3; start.superframeOrder = 1;
+        Ieee802154MacStartSuperframeRequest start{0x1234,channel()}; start.beaconOrder = scenario == 51 || scenario == 53 ? 8 : 3; start.superframeOrder = scenario == 51 || scenario == 53 ? 8 : 1;
         ASSERT(rootManagement->submitStartSuperframe(++nextId,start) == Admission::ACCEPTED);
         wait(SimTime(4,SIMTIME_MS)); ASSERT(starts == 1);
-        set(child.get(),"macBeaconOrder",uint64_t(3)); set(child.get(),"macAutoRequest",false);
+        set(child.get(),"macBeaconOrder",uint64_t(scenario == 51 || scenario == 53 ? 8 : 3)); set(child.get(),"macAutoRequest",false);
         ASSERT(childManagement->submitSync(++nextId,{channel(),true}) == Admission::ACCEPTED);
         if (scenario == 9) {
             set(second,"macBeaconOrder",uint64_t(3)); set(second,"macAutoRequest",false);
             ASSERT(secondManagement->submitSync(++nextId,{channel(),true}) == Admission::ACCEPTED);
         }
-        wait(SimTime(130,SIMTIME_MS)); ASSERT(syncs == (scenario == 9 ? 2 : 1));
+        wait(scenario == 51 || scenario == 53 ? SimTime(3940,SIMTIME_MS) : SimTime(130,SIMTIME_MS)); ASSERT(syncs == (scenario == 9 ? 2 : 1));
         if (scenario == 2) {
             measuring = true; expectedData = Status::INVALID_GTS; submitGtsData(child.get(),1);
             ASSERT(confirms == 1 && dataFrames == 0 && accesses == 0);
             emit(registerSignal("verificationComplete"),1L); return;
         }
-        for (int i = 0; i < 2; ++i) {
-            auto direction = scenario == 10 ? (i ? Ieee802154GtsDirection::DEVICE_TRANSMIT : Ieee802154GtsDirection::DEVICE_RECEIVE) :
+        for (int i = 0; i < (scenario == 49 || scenario == 51 || scenario == 53 || scenario == 62 ? 1 : 2); ++i) {
+            auto direction = scenario == 53 ? Ieee802154GtsDirection::DEVICE_RECEIVE : scenario == 10 ? (i ? Ieee802154GtsDirection::DEVICE_TRANSMIT : Ieee802154GtsDirection::DEVICE_RECEIVE) :
                     (i && scenario != 9 ? Ieee802154GtsDirection::DEVICE_RECEIVE : Ieee802154GtsDirection::DEVICE_TRANSMIT);
-            Ieee802154MacGtsRequest request{{2,direction,true}};
+            Ieee802154MacGtsRequest request{{uint8_t(scenario == 49 ? 1 : scenario == 51 || scenario == 53 ? 15 : scenario == 52 ? 4 : 2),direction,true}};
             ASSERT((scenario == 9 && i ? secondManagement : childManagement.get())->submitGts(++nextId,request) == Admission::ACCEPTED);
-            for (int ticks = 0; ticks < 65 && grants <= i; ++ticks) wait(SimTime(10,SIMTIME_MS));
+            for (int ticks = 0; ticks < (scenario == 51 || scenario == 53 ? 500 : 65) && grants <= i; ++ticks) wait(SimTime(10,SIMTIME_MS));
             ASSERT(grants == i + 1);
             if (scenario == 38 && i == 0) {
                 measuring = true; expectedData = Status::INVALID_GTS; submitGtsData(root.get(),2);
                 ASSERT(confirms == 1 && dataFrames == 0 && accesses == 0);
                 emit(registerSignal("verificationComplete"),1L); return;
             }
+        }
+        if (scenario == 53) {
+            ASSERT(childLongSlotEnd && rootSlotEnd && *rootSlotEnd > *childLongSlotEnd);
+            auto submitted = *rootSlotEnd - SimTime(1432,SIMTIME_US);
+            ASSERT(submitted > simTime()); wait(submitted - simTime());
+            measuring = true; submitGtsData(root.get(),2,12);
+            auto previousEnd = *rootSlotEnd;
+            wait(previousEnd + SimTime(1,SIMTIME_MS) - simTime());
+            ASSERT(dataFrames == 0 && confirms == 0);
+            for (int ticks = 0; ticks < 500 && !confirms; ++ticks) wait(SimTime(10,SIMTIME_MS));
+            ASSERT(confirms == 1 && deliveries == 1 && dataFrames == 1 && ackFrames == 0 && accesses == 0 && firstDataStart && *firstDataStart > previousEnd);
+            emit(registerSignal("verificationComplete"),1L); return;
+        }
+        if (scenario == 51) {
+            ASSERT(childLongSlotEnd && rootSlotEnd && *childLongSlotEnd > *rootSlotEnd);
+            auto submitted = *childLongSlotEnd - SimTime(1432,SIMTIME_US);
+            ASSERT(submitted > simTime()); wait(submitted - simTime());
+            measuring = true; submitGtsData(child.get(),1,12);
+            auto previousEnd = *rootSlotEnd;
+            wait(previousEnd + SimTime(1,SIMTIME_MS) - simTime());
+            ASSERT(dataFrames == 0 && confirms == 0);
+            for (int ticks = 0; ticks < 500 && !confirms; ++ticks) wait(SimTime(10,SIMTIME_MS));
+            ASSERT(confirms == 1 && deliveries == 1 && dataFrames == 1 && ackFrames == 0 && accesses == 0 && firstDataStart && *firstDataStart > previousEnd);
+            emit(registerSignal("verificationComplete"),1L); return;
+        }
+        if (scenario == 49) {
+            // Independently establish the proposed short-addressed MAC PSDU length.
+            auto frame = makeShared<Ieee802154Frame>();
+            frame->setFrameType(1); frame->setFrameVersion(1); frame->setAckRequest(true);
+            frame->setSourceAddress(Ieee802154Address::fromShort(2)); frame->setDestinationAddress(Ieee802154Address::fromShort(1));
+            frame->setSourcePanId(0x1234); frame->setDestinationPanId(0x1234); frame->setPanCompression(true);
+            frame->setPayloadArraySize(12);
+            ASSERT(Ieee802154FrameCodec::encode(*frame).size() == 23);
+            auto provider = dynamic_cast<IIeee802154SuperframeProvider *>(getModuleByPath("^.host[1].nic.superframeController"));
+            ASSERT(provider);
+            auto propagation = SimTime(getModuleByPath("^.host[1].nic.mac")->par("maxPropagationDelay"));
+            auto guard = provider->getForecastUncertainty(SimTime(15 * 1920,SIMTIME_US),propagation);
+            ASSERT(guard == SIMTIME_ZERO && 2 * propagation + guard <= SimTime(256,SIMTIME_US));
+            ASSERT(SimTime(928 + 192 + 352 + 192,SIMTIME_US) == SimTime(1664,SIMTIME_US));
+            ASSERT(SimTime(1664,SIMTIME_US) + 2 * propagation + guard <= SimTime(1920,SIMTIME_US));
+            measuring = true; submitGtsData(child.get(),1,12);
+            for (int ticks = 0; ticks < 65 && !confirms; ++ticks) wait(SimTime(10,SIMTIME_MS));
+            ASSERT(confirms == 1 && deliveries == 1 && dataFrames == 1 && ackFrames == 1 && accesses == 0);
+            emit(registerSignal("verificationComplete"),1L); return;
+        }
+        if (scenario == 52) {
+            measuring = true; submitGtsData(child.get(),1,12);
+            for (int ticks = 0; ticks < 65 && confirms < 2; ++ticks) wait(SimTime(10,SIMTIME_MS));
+            ASSERT(confirms == 2 && deliveries == 2 && dataFrames == 2 && ackFrames == 2 && accesses == 0 && firstAckEnd && firstDataAnchor);
+            emit(registerSignal("verificationComplete"),1L); return;
         }
         if (scenario == 45 || scenario == 46) {
             resetOnObservation = true;
@@ -237,6 +298,74 @@ class GtsDataExercise : public cSimpleModule, public cListener, public IIeee8021
             ASSERT(confirms == 1 && dataFrames == 0);
             emit(registerSignal("verificationComplete"),1L); return;
         }
+        if (scenario >= 55 && scenario <= 57) {
+            ASSERT(childAnchor);
+            auto nextAnchor = *childAnchor + SimTime(122880,SIMTIME_US);
+            auto capEnd = nextAnchor + SimTime(12 * 1920,SIMTIME_US);
+            requestedCapEnd = capEnd;
+            auto submitted = capEnd - SimTime(scenario == 55 ? 2560 : scenario == 56 ? 2880 : 3520,SIMTIME_US);
+            ASSERT(submitted > simTime()); wait(submitted - simTime());
+            measuring = true; submitGtsData(child.get(),1,scenario == 57 ? 14 : 3);
+            for (int ticks = 0; ticks < 65 && !confirms; ++ticks) wait(SimTime(10,SIMTIME_MS));
+            ASSERT(confirms == 1 && deliveries == 1 && dataFrames == 1 && ackFrames == 1 && accesses > 0 && firstDataStart);
+            if (scenario == 55 && *firstDataStart <= capEnd) throw cRuntimeError("CAP DATA did not defer: dataStart=%s dataEnd=%s ackStart=%s ackEnd=%s capEnd=%s remaining=%s accesses=%d",firstDataStart->str().c_str(),firstDataEnd ? firstDataEnd->str().c_str() : "none",firstAckStart ? firstAckStart->str().c_str() : "none",firstAckEnd ? firstAckEnd->str().c_str() : "none",capEnd.str().c_str(),(capEnd - *firstDataStart).str().c_str(),accesses);
+            if (scenario >= 56) ASSERT(*firstDataStart < capEnd && firstAckEnd && *firstAckEnd + SimTime(scenario == 57 ? 640 : 192,SIMTIME_US) <= capEnd);
+            emit(registerSignal("verificationComplete"),1L); return;
+        }
+        if (scenario == 62) {
+            set(child.get(),"macRxOnWhenIdle",false); ASSERT(childAnchor);
+            auto capEnd = *childAnchor + SimTime(122880 + 14 * 1920,SIMTIME_US);
+            auto submitted = capEnd - SimTime(3200,SIMTIME_US);
+            ASSERT(submitted > simTime()); wait(submitted - simTime());
+            measuring = true; emit(registerSignal("faultArmed"),1L); submitGtsData(child.get(),1);
+            wait(capEnd + SimTime(1,SIMTIME_MS) - simTime());
+            auto radio = check_and_cast<physicallayer::IRadio *>(getModuleByPath("^.host[1].nic.radio"));
+            if (!(!confirms && dataFrames == 1 && radio->getRadioMode() == physicallayer::IRadio::RADIO_MODE_OFF)) throw cRuntimeError("CAP retry boundary confirms=%d dataRF=%d ackRF=%d deliveries=%d accesses=%d mode=%d capEnd=%s firstData=%s firstAck=%s",confirms,dataFrames,ackFrames,deliveries,accesses,int(radio->getRadioMode()),capEnd.str().c_str(),firstDataStart ? firstDataStart->str().c_str() : "none",firstAckStart ? firstAckStart->str().c_str() : "none");
+            for (int ticks = 0; ticks < 90 && !confirms; ++ticks) wait(SimTime(10,SIMTIME_MS));
+            if (!(confirms == 1 && deliveries == 2 && dataFrames == 2 && ackFrames == 2 && accesses > 0 && firstDataStart && secondDataStart && dataDsns.size() == 2)) throw cRuntimeError("CAP retry confirms=%d deliveries=%d dataRF=%d ackRF=%d accesses=%d first=%s second=%s capEnd=%s dsns=%lu",confirms,deliveries,dataFrames,ackFrames,accesses,firstDataStart ? firstDataStart->str().c_str() : "none",secondDataStart ? secondDataStart->str().c_str() : "none",capEnd.str().c_str(),(unsigned long)dataDsns.size());
+            ASSERT(*firstDataStart < capEnd && *secondDataStart > capEnd && dataDsns[0] == dataDsns[1]);
+            emit(registerSignal("verificationComplete"),1L); return;
+        }
+        if (scenario >= 59 && scenario <= 61) {
+            ASSERT(childAnchor);
+            auto slotEnd = *childAnchor + SimTime(16 * 1920,SIMTIME_US);
+            auto submitted = slotEnd - SimTime(1890,SIMTIME_US) + SimTime::fromRaw(scenario - 60);
+            ASSERT(submitted > simTime()); wait(submitted - simTime());
+            measuring = true; submitGtsData(child.get(),1);
+            wait(slotEnd + SimTime(1,SIMTIME_MS) - simTime());
+            if (scenario == 61) ASSERT(dataFrames == 0 && confirms == 0); else ASSERT(dataFrames == 1);
+            for (int ticks = 0; ticks < 65 && !confirms; ++ticks) wait(SimTime(10,SIMTIME_MS));
+            ASSERT(confirms == 1 && deliveries == 1 && dataFrames == 1 && ackFrames == 1 && accesses == 0 && firstDataStart && firstDataEnd && firstAckEnd);
+            if (scenario != 61) ASSERT(*firstDataStart < slotEnd && *firstAckEnd + SimTime(192,SIMTIME_US) <= slotEnd);
+            else ASSERT(*firstDataStart > slotEnd);
+            emit(registerSignal("verificationComplete"),1L); return;
+        }
+        if (scenario == 58) {
+            set(child.get(),"macRxOnWhenIdle",false);
+            ASSERT(childAnchor);
+            auto slotEnd = *childAnchor + SimTime(16 * 1920,SIMTIME_US);
+            auto submitted = slotEnd - SimTime(1930,SIMTIME_US);
+            ASSERT(submitted > simTime()); wait(submitted - simTime());
+            measuring = true; emit(registerSignal("faultArmed"),1L); submitGtsData(child.get(),1);
+            wait(slotEnd + SimTime(1,SIMTIME_MS) - simTime());
+            auto radio = check_and_cast<physicallayer::IRadio *>(getModuleByPath("^.host[1].nic.radio"));
+            ASSERT(!confirms && dataFrames == 1 && radio->getRadioMode() == physicallayer::IRadio::RADIO_MODE_OFF);
+            for (int ticks = 0; ticks < 90 && !confirms; ++ticks) wait(SimTime(10,SIMTIME_MS));
+            if (!(confirms == 1 && deliveries == 2 && dataFrames == 2 && ackFrames == 2 && accesses == 0 && firstDataStart && secondDataStart && dataDsns.size() == 2))
+                throw cRuntimeError("retry confirms=%d deliveries=%d dataRF=%d ackRF=%d accesses=%d first=%s second=%s ackStart=%s ackEnd=%s slotEnd=%s dsns=%lu firstDsn=%d secondDsn=%d",confirms,deliveries,dataFrames,ackFrames,accesses,firstDataStart ? firstDataStart->str().c_str() : "none",secondDataStart ? secondDataStart->str().c_str() : "none",firstAckStart ? firstAckStart->str().c_str() : "none",firstAckEnd ? firstAckEnd->str().c_str() : "none",slotEnd.str().c_str(),(unsigned long)dataDsns.size(),dataDsns.empty() ? -1 : int(dataDsns[0]),dataDsns.size() < 2 ? -1 : int(dataDsns[1]));
+            ASSERT(*firstDataStart < slotEnd && *secondDataStart > slotEnd && dataDsns[0] == dataDsns[1]);
+            emit(registerSignal("verificationComplete"),1L); return;
+        }
+        if (scenario == 54) {
+            ASSERT(childAnchor);
+            auto slotEnd = *childAnchor + SimTime(16 * 1920,SIMTIME_US);
+            auto submitted = slotEnd - SimTime(1930,SIMTIME_US);
+            ASSERT(submitted > simTime()); wait(submitted - simTime());
+            measuring = true; submitGtsData(child.get(),1);
+            for (int ticks = 0; ticks < 65 && !confirms; ++ticks) wait(SimTime(10,SIMTIME_MS));
+            ASSERT(confirms == 1 && deliveries == 1 && dataFrames == 1 && ackFrames == 1 && accesses == 0);
+            emit(registerSignal("verificationComplete"),1L); return;
+        }
         if (scenario >= 13 && scenario <= 15) {
             ASSERT(childAnchor);
             ASSERT(child->submitGet(++nextId,{"macDsn"}) == Admission::ACCEPTED);
@@ -254,7 +383,8 @@ class GtsDataExercise : public cSimpleModule, public cListener, public IIeee8021
                 ASSERT(!confirms && !dataFrames);
             }
             for (int ticks = 0; ticks < 65 && !confirms; ++ticks) wait(SimTime(10,SIMTIME_MS));
-            ASSERT(confirms == 1 && deliveries == 1 && dataFrames == 1 && ackFrames == 1 && accesses == 0 && firstDataStart && dataDsns.size() == 1 && dataDsns[0] == acceptedDsn);
+            if (!(confirms == 1 && deliveries == 1 && dataFrames == 1 && ackFrames == 1 && accesses == 0 && firstDataStart && dataDsns.size() == 1 && dataDsns[0] == acceptedDsn))
+                throw cRuntimeError("boundary scenario=%d confirms=%d deliveries=%d dataRF=%d ackRF=%d accesses=%d first=%s dataEnd=%s rootRxEnd=%s rootAnchor=%s childAnchor=%s dsnCount=%lu dsn=%d expectedDsn=%d",scenario,confirms,deliveries,dataFrames,ackFrames,accesses,firstDataStart ? firstDataStart->str().c_str() : "none",firstDataEnd ? firstDataEnd->str().c_str() : "none",firstRootReceiveEnd ? firstRootReceiveEnd->str().c_str() : "none",firstRootAnchor ? firstRootAnchor->str().c_str() : "none",firstChildAnchor ? firstChildAnchor->str().c_str() : "none",(unsigned long)dataDsns.size(),dataDsns.empty() ? -1 : int(dataDsns[0]),int(acceptedDsn));
             if (scenario == 14) ASSERT(*firstDataStart == slotEnd - SimTime(1378,SIMTIME_US));
             else ASSERT(*firstDataStart > originalAnchor + SimTime(122880,SIMTIME_US));
             emit(registerSignal("verificationComplete"),1L); return;
@@ -471,7 +601,8 @@ class GtsDataExercise : public cSimpleModule, public cListener, public IIeee8021
         ASSERT(confirms == 1 && deliveries == 1);
         submitGtsData(root.get(),2);
         for (int ticks = 0; ticks < 65 && confirms < 2; ++ticks) wait(SimTime(10,SIMTIME_MS));
-        ASSERT(confirms == 2 && deliveries == 2 && accesses == 0 && dataFrames == 2 && ackFrames == (scenario == 5 ? 0 : 2));
+        if (!(confirms == 2 && deliveries == 2 && accesses == 0 && dataFrames == 2 && ackFrames == (scenario == 5 ? 0 : 2))) throw cRuntimeError("GTS aggregate scenario=%d confirms=%d deliveries=%d accesses=%d dataRF=%d ackRF=%d firstData=%s secondData=%s firstAckStart=%s firstAckEnd=%s rootAnchor=%s childAnchor=%s",scenario,confirms,deliveries,accesses,dataFrames,ackFrames,firstDataStart ? firstDataStart->str().c_str() : "none",secondDataStart ? secondDataStart->str().c_str() : "none",firstAckStart ? firstAckStart->str().c_str() : "none",firstAckEnd ? firstAckEnd->str().c_str() : "none",rootAnchor ? rootAnchor->str().c_str() : "none",childAnchor ? childAnchor->str().c_str() : "none");
+        if (scenario == 50) ASSERT(enhancedBeacons > 0 && enhancedDescriptorBeacons > 0);
         emit(registerSignal("verificationComplete"),1L);
     }
   public:
@@ -479,6 +610,10 @@ class GtsDataExercise : public cSimpleModule, public cListener, public IIeee8021
     void receiveSignal(cComponent *,simsignal_t signal,long value,cObject *details) override { Enter_Method("receiveSignal"); if (signal == registerSignal("syncMissed")) misses = value; else if (signal == registerSignal("gtsActivity")) { auto grant = check_and_cast<Ieee802154MacGtsObservation *>(details); ASSERT(scenario == 48 && value == 1 && grant->shortAddress == 2 && grant->direction == Ieee802154GtsDirection::DEVICE_RECEIVE && resetOnObservation && confirms == 1 && destroyedPackets == 1); resetOnObservation = false; ASSERT(root->submitReset(++nextId,{false}) == Admission::ACCEPTED); } else if (signal == registerSignal("gtsDeallocated")) { auto grant = check_and_cast<Ieee802154MacGtsObservation *>(details); ASSERT(scenario == 47 && value == 1 && grant->shortAddress == 2 && grant->direction == Ieee802154GtsDirection::DEVICE_RECEIVE && resetOnObservation); resetOnObservation = false; ASSERT(root->submitReset(++nextId,{false}) == Admission::ACCEPTED); } else if (signal == registerSignal("cfpWindowInstalled") || signal == registerSignal("capWindowInstalled")) { auto window = check_and_cast<Ieee802154MacWindowObservation *>(details); ASSERT(value == 1 && window->outgoing); if (scenario == 0) { ASSERT(window->shortAddress == 2); observedCfp[int(window->direction)] = {window->start,window->end}; } if (resetOnObservation) { resetOnObservation = false; ASSERT(root->submitReset(++nextId,{false}) == Admission::ACCEPTED); } } else if (measuring) ++accesses; }
     void receiveSignal(cComponent *source,simsignal_t signal,cObject *object,cObject *) override {
         Enter_Method("receiveSignal");
+        if (signal == receptionEndedSignal && scenario == 14) {
+            if (measuring && !firstRootReceiveEnd) firstRootReceiveEnd = check_and_cast<const physicallayer::IReception *>(object)->getEndTime();
+            return;
+        }
         if (signal == packetSentToLowerSignal) {
             auto frame = check_and_cast<Packet *>(object)->peekAtFront<Ieee802154Frame>();
             if (scenario >= 34 && scenario <= 36 && lifecycleArmed && frame->getFrameType() == 2)
@@ -488,8 +623,10 @@ class GtsDataExercise : public cSimpleModule, public cListener, public IIeee8021
                 ASSERT(rootManagement->submitAssociateResponse(++nextId,{Ieee802154Address::fromExtended(0x0401123456789abcULL),4,0}) == Admission::ACCEPTED);
                 ASSERT(child->submitReset(++nextId,{false}) == Admission::ACCEPTED);
             }
-            if ((scenario >= 13 && scenario <= 17) && measuring && frame->getFrameType() == 1)
-                dataDsns.push_back(frame->getDsn());
+            if (((scenario >= 13 && scenario <= 17) || scenario == 58 || scenario == 62) && measuring && frame->getFrameType() == 1) {
+                auto dsn = Ieee802154FrameCodec::sequenceNumber(*frame);
+                ASSERT(dsn); dataDsns.push_back(*dsn);
+            }
             if (scenario == 11 && rebindOnData && frame->getFrameType() == 1) {
                 rebindOnData = false; rebound = true;
                 ASSERT(rootManagement->submitAssociateResponse(++nextId,{Ieee802154Address::fromExtended(0x0401123456789abcULL),4,0}) == Admission::ACCEPTED);
@@ -509,7 +646,13 @@ class GtsDataExercise : public cSimpleModule, public cListener, public IIeee8021
             auto reception = check_and_cast<const physicallayer::IReception *>(object);
             if (std::string(reception->getTransmission()->getPacket()->getName()) == "IEEE802154-periodic-beacon") {
                 if (scenario == 9 && source == getModuleByPath("^.host[2].nic.radio")) secondChildAnchor = reception->getStartTime();
-                else childAnchor = reception->getStartTime();
+                else {
+                    childAnchor = reception->getStartTime();
+                    if (scenario == 51 || scenario == 53) {
+                        auto clock = check_and_cast<IClock *>(getModuleByPath("^.childClock"));
+                        childLongSlotEnd = clock->computeSimTimeFromClockTime(clock->getClockTime() + SIMTIME_AS_CLOCKTIME(SimTime(16 * 245760,SIMTIME_US)));
+                    }
+                }
             }
             return;
         }
@@ -517,37 +660,68 @@ class GtsDataExercise : public cSimpleModule, public cListener, public IIeee8021
         std::string name = transmission->getPacket()->getName();
         if (source == getModuleByPath("^.host[0].nic.radio") && name == "IEEE802154-periodic-beacon") {
             rootAnchor = transmission->getStartTime();
-            if (scenario == 7 || scenario == 8) {
+            if (scenario == 50) {
+                auto frame = Ieee802154FrameCodec::decode(transmission->getPacket()->peekDataAsBytes()->getBytes());
+                ASSERT(frame->getDecodeStatus() == Ieee802154FrameCodec::OK && frame->getFcsValid() && frame->getFrameVersion() == 2 && frame->getDestinationAddress().isNone());
+                auto view = std::get<Ieee802154InformationElements::View>(Ieee802154InformationElements::inspect(*frame));
+                bool schedule = false;
+                for (const auto& header : view.headers) {
+                    if (header.id == 0x23) { ASSERT(Ieee802154EnhancedSuperframeCodec::decodeSuperframe(header)); schedule = true; }
+                    if (header.id == 0x24) { auto descriptors = Ieee802154EnhancedSuperframeCodec::decodeGts(header); ASSERT(descriptors); if (!descriptors->empty()) ++enhancedDescriptorBeacons; }
+                }
+                ASSERT(schedule); ++enhancedBeacons;
+            }
+            if (scenario == 7 || scenario == 8 || scenario == 51 || scenario == 53) {
                 auto clock = check_and_cast<IClock *>(getModuleByPath("^.rootClock"));
                 auto anchor = clock->getClockTime();
-                rootSlotStart = clock->computeSimTimeFromClockTime(anchor + SIMTIME_AS_CLOCKTIME(SimTime(12 * 1920,SIMTIME_US)));
-                rootSlotEnd = clock->computeSimTimeFromClockTime(anchor + SIMTIME_AS_CLOCKTIME(SimTime(14 * 1920,SIMTIME_US)));
+                rootSlotStart = clock->computeSimTimeFromClockTime(anchor + SIMTIME_AS_CLOCKTIME(SimTime(scenario == 51 || scenario == 53 ? 245760 : 12 * 1920,SIMTIME_US)));
+                rootSlotEnd = clock->computeSimTimeFromClockTime(anchor + SIMTIME_AS_CLOCKTIME(SimTime(scenario == 51 || scenario == 53 ? 16 * 245760 : 14 * 1920,SIMTIME_US)));
             }
         }
         if (!measuring) return;
         if (name == "IEEE802154-DATA") {
+            if ((scenario >= 55 && scenario <= 57) || scenario == 62) { if (!firstDataStart) { firstDataStart = transmission->getStartTime(); firstDataEnd = transmission->getEndTime(); } else if (!secondDataStart) secondDataStart = transmission->getStartTime(); ++dataFrames; return; }
+            if (scenario == 51 || scenario == 53) {
+                ASSERT(rootSlotStart && rootSlotEnd && childLongSlotEnd && transmission->getPacket()->getDataLength() == B(23));
+                auto protectedEnd = scenario == 51 ? *rootSlotEnd : *childLongSlotEnd;
+                if (transmission->getStartTime() < *rootSlotStart || transmission->getEndTime() + SimTime(194,SIMTIME_US) > protectedEnd)
+                    throw cRuntimeError("guarded DATA outside peer grant: start=%s end=%s peerEnd=%s",transmission->getStartTime().str().c_str(),transmission->getEndTime().str().c_str(),protectedEnd.str().c_str());
+                if (!firstDataStart) firstDataStart = transmission->getStartTime(); ++dataFrames; return;
+            }
             bool fromRoot = source == getModuleByPath("^.host[0].nic.radio");
             if (scenario == 47 && !fromRoot) return; // The child's CAP deallocation command shares this packet name.
             auto anchor = fromRoot ? rootAnchor : scenario == 9 ? secondChildAnchor : childAnchor;
             ASSERT(anchor);
-            auto firstSlot = scenario == 10 ? 14 : fromRoot || scenario == 9 ? 12 : 14;
+            if (scenario == 52) {
+                ASSERT(!fromRoot && transmission->getPacket()->getDataLength() == B(23));
+                if (!firstDataAnchor) firstDataAnchor = *anchor;
+                else if (!(*anchor == *firstDataAnchor && firstAckEnd && transmission->getStartTime() >= *firstAckEnd + SimTime(640,SIMTIME_US)))
+                    throw cRuntimeError("two-frame LIFS anchor=%s firstAnchor=%s secondStart=%s firstAckEnd=%s",anchor->str().c_str(),firstDataAnchor->str().c_str(),transmission->getStartTime().str().c_str(),firstAckEnd ? firstAckEnd->str().c_str() : "none");
+            }
+            auto firstSlot = scenario == 49 ? 15 : scenario == 52 ? (fromRoot ? 8 : 12) : scenario == 10 ? 14 : fromRoot || scenario == 9 ? 12 : 14;
             auto start = fromRoot && rootSlotStart ? *rootSlotStart : *anchor + SimTime(firstSlot * 1920,SIMTIME_US);
-            auto end = fromRoot && rootSlotEnd ? *rootSlotEnd : start + SimTime(2 * 1920,SIMTIME_US);
-            if (scenario != 40) ASSERT(transmission->getStartTime() >= start && transmission->getEndTime() + SimTime(736,SIMTIME_US) <= end);
+            auto end = fromRoot && rootSlotEnd ? *rootSlotEnd : start + SimTime((scenario == 49 ? 1 : scenario == 52 ? 4 : 2) * 1920,SIMTIME_US);
+            if (scenario == 49) {
+                ASSERT(transmission->getPacket()->getDataLength() == B(23));
+                ASSERT(transmission->getEndTime() - transmission->getStartTime() == SimTime(928,SIMTIME_US));
+                ASSERT(transmission->getStartTime() >= start && transmission->getEndTime() + SimTime(738,SIMTIME_US) <= end);
+            }
+            else if (scenario != 40) ASSERT(transmission->getStartTime() >= start && transmission->getEndTime() + SimTime(736,SIMTIME_US) <= end);
             if (scenario == 0) {
                 auto direction = fromRoot ? Ieee802154GtsDirection::DEVICE_RECEIVE : Ieee802154GtsDirection::DEVICE_TRANSMIT;
                 ASSERT(observedCfp.count(int(direction)));
                 auto window = observedCfp.at(int(direction));
                 ASSERT(transmission->getStartTime() >= window.first && transmission->getEndTime() <= window.second);
             }
-            if (!firstDataStart) firstDataStart = transmission->getStartTime();
+            if (!firstDataStart) { firstDataStart = transmission->getStartTime(); firstDataEnd = transmission->getEndTime(); firstRootAnchor = rootAnchor; firstChildAnchor = childAnchor; }
+            else if (!secondDataStart) secondDataStart = transmission->getStartTime();
             ++dataFrames;
             if (scenario >= 31 && scenario <= 33 && lifecycleArmed)
                 interruptGts();
         }
-        if (name == "IEEE802154-ACK") ++ackFrames;
+        if (name == "IEEE802154-ACK") { if (!firstAckEnd) { firstAckStart = transmission->getStartTime(); firstAckEnd = transmission->getEndTime(); } ++ackFrames; }
     }
-    void handleDataConfirm(uint64_t id,const Ieee802154MacDataConfirm& c) override { Enter_Method("handleDataConfirm"); ASSERT(id == dataId && c.result == (expectedAbort ? Ieee802154MacServiceResult(*expectedAbort) : Ieee802154MacServiceResult(expectedData))); ++confirms; }
+    void handleDataConfirm(uint64_t id,const Ieee802154MacDataConfirm& c) override { Enter_Method("handleDataConfirm"); if ((scenario == 54 || scenario == 55) && c.result != Ieee802154MacServiceResult(Status::SUCCESS)) throw cRuntimeError("enhanced scheduled status=%d abort=%d dataRF=%d ackRF=%d deliveries=%d dataStart=%s dataEnd=%s ackStart=%s ackEnd=%s childAnchor=%s rootAnchor=%s",std::get_if<Status>(&c.result) ? int(std::get<Status>(c.result)) : -1,std::get_if<Ieee802154MacServiceAbortReason>(&c.result) ? int(std::get<Ieee802154MacServiceAbortReason>(c.result)) : -1,dataFrames,ackFrames,deliveries,firstDataStart ? firstDataStart->str().c_str() : "none",firstDataEnd ? firstDataEnd->str().c_str() : "none",firstAckStart ? firstAckStart->str().c_str() : "none",firstAckEnd ? firstAckEnd->str().c_str() : "none",childAnchor ? childAnchor->str().c_str() : "none",rootAnchor ? rootAnchor->str().c_str() : "none"); if (scenario == 49 && c.result != Ieee802154MacServiceResult(Status::SUCCESS)) throw cRuntimeError("one-slot DATA terminal status=%d abort=%d",std::get_if<Status>(&c.result) ? int(std::get<Status>(c.result)) : -1,std::get_if<Ieee802154MacServiceAbortReason>(&c.result) ? int(std::get<Ieee802154MacServiceAbortReason>(c.result)) : -1); ASSERT(id == dataId && c.result == (expectedAbort ? Ieee802154MacServiceResult(*expectedAbort) : Ieee802154MacServiceResult(expectedData))); if (scenario == 54 || scenario == 56 || scenario == 57) { ASSERT(c.enhancedAckContent); if (!c.enhancedAckContent->headerIes.empty() || !c.enhancedAckContent->payloadIes.empty() || !c.enhancedAckContent->payload.empty()) throw cRuntimeError("optional ACK retained: scenario=%d dataStart=%s dataEnd=%s ackStart=%s ackEnd=%s capEnd=%s headers=%lu payload=%lu dataRF=%d ackRF=%d deliveries=%d",scenario,firstDataStart ? firstDataStart->str().c_str() : "none",firstDataEnd ? firstDataEnd->str().c_str() : "none",firstAckStart ? firstAckStart->str().c_str() : "none",firstAckEnd ? firstAckEnd->str().c_str() : "none",requestedCapEnd ? requestedCapEnd->str().c_str() : "none",(unsigned long)c.enhancedAckContent->headerIes.size(),(unsigned long)c.enhancedAckContent->payload.size(),dataFrames,ackFrames,deliveries); } ++confirms; if (scenario == 52 && confirms == 1) submitGtsData(child.get(),1,12); }
     void handleDataIndication(Packet *p,const Ieee802154MacDataIndication&) override { Enter_Method("handleDataIndication"); take(p); delete p; ++deliveries; }
     void handleGetConfirm(uint64_t,const Ieee802154MacGetConfirm& c) override { Enter_Method("handleGetConfirm"); ASSERT(((scenario >= 13 && scenario <= 15) || scenario == 22 || scenario == 24) && c.result == Ieee802154MacServiceResult(Status::SUCCESS)); phyChannelValue = c.value; }
     void handleSetConfirm(uint64_t,const Ieee802154MacSetConfirm& c) override { Enter_Method("handleSetConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); }
@@ -604,7 +778,8 @@ network GtsDataTest {
     parameters: int scenario;
     submodules:
         radioMedium: TapRadioMedium;
-        rootClock: OscillatorBasedClock if scenario == 7 || scenario == 8;
+        rootClock: OscillatorBasedClock if scenario == 7 || scenario == 8 || scenario == 51 || scenario == 53;
+        childClock: OscillatorBasedClock if scenario == 51 || scenario == 53;
         host[scenario == 9 ? 3 : 2]: GtsDataHost;
         exercise: GtsDataExercise { serviceModule = "^.host[1].nic.mac"; rootModule = "^.host[0].nic.mac"; childModule = "^.host[1].nic.mac"; scenario = parent.scenario; }
 }
@@ -612,8 +787,8 @@ network GtsDataTest {
 %inifile: omnetpp.ini
 [General]
 network = GtsDataTest
-*.scenario = ${scenario=0..48}
-sim-time-limit = 5s
+*.scenario = ${scenario=0..62}
+sim-time-limit = 25s
 cmdenv-express-mode = true
 cmdenv-stop-batch-on-error = false
 *.**.radio.sendRawBytes = ${raw=false,true}
@@ -625,11 +800,18 @@ cmdenv-stop-batch-on-error = false
 *.host[0].nic.shortAddress = 1
 *.host[0].nic.panId = 4660
 *.host[0].nic.mac.isPanCoordinator = true
-*.host[0].nic.clockModule = ${scenario} == 7 || ${scenario} == 8 ? "^.^.^.rootClock" : ""
+*.host[0].nic.clockModule = ${scenario} == 7 || ${scenario} == 8 || ${scenario} == 51 || ${scenario} == 53 ? "^.^.^.rootClock" : ""
+*.host[1].nic.clockModule = ${scenario} == 51 || ${scenario} == 53 ? "^.^.^.childClock" : ""
 *.rootClock.initialClockTime = 0.25s
 *.rootClock.oscillator.nominalTickLength = 1us
-*.rootClock.oscillator.driftRate = ${scenario} == 7 ? 40ppm : -40ppm
+*.rootClock.oscillator.driftRate = ${scenario} == 51 ? 40ppm : ${scenario} == 7 ? 40ppm : -40ppm
+*.childClock.initialClockTime = 0.25s
+*.childClock.oscillator.nominalTickLength = 1us
+*.childClock.oscillator.driftRate = ${scenario} == 53 ? 40ppm : -40ppm
 *.host[*].nic.rxOnWhenIdle = true
+*.host[*].nic.enableEnhancedFrames = ${scenario} == 50 || (${scenario} >= 54 && ${scenario} <= 62)
+*.host[0].nic.enhancedAckHeaderIes = ${scenario} >= 54 && ${scenario} <= 57 ? [{id: 0, content: [1,2,3,4]}] : []
+*.host[0].nic.enhancedAckPayload = ${scenario} == 55 || ${scenario} == 56 ? [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1] : ${scenario} == 57 ? [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1] : []
 *.host[*].nic.radio.antenna.mobilityModule = "^.^.^.mobility"
 *.host[*].mobility.initFromDisplayString = false
 *.host[0].mobility.initialX = 0m

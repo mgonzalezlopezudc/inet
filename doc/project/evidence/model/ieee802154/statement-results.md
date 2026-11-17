@@ -7,7 +7,8 @@ imported address definitions. The conventional superframe extension below adds
 twelve catalog entries with its own profile and execution record. These mappings supersede the initial extraction table's
 NOT_RUN snapshot for executed behavior. PASS is bounded by each catalog
 condition and the selected native service/model contract; it is not a complete
-IEEE device or waveform conformance verdict. The unindexed whole-value binding
+IEEE device or waveform conformance verdict. The enhanced extension has its own bounded
+mapping below. The unindexed whole-value binding
 has no hierarchical element-index operation, so PIB-8 is explicitly conditional,
 not a fabricated INVALID_INDEX runtime result. Protected auxiliary fields remain
 opaque; no cryptographic or complete security-codec claim follows.
@@ -136,3 +137,35 @@ source, library, configuration and raw-result identity. PASS applies to the boun
 | [IEEE802154-GTS-3](../../standard/ieee802154/catalog.md#ieee802154-gts-3) | [GtsDeallocation](../../../../../tests/protocol/ieee802154/Ieee802154GtsDeallocation.test), [GtsAllocation](../../../../../tests/protocol/ieee802154/Ieee802154GtsAllocation.test) | PASS: device/coordinator removal distinction, relocation and temporary descriptor persistence. Coordinator target selection is the documented native extension. |
 | [IEEE802154-GTS-4](../../standard/ieee802154/catalog.md#ieee802154-gts-4) | [GtsExpiry](../../../../../tests/protocol/ieee802154/Ieee802154GtsExpiry.test), [GtsState_1](../../../../../tests/unit/Ieee802154GtsState_1.test) | PASS: BO-dependent bounds, qualifying DATA/ACK renewal and unacknowledged-downlink suspension; publication/phase policies are explicit in the profile. |
 | [IEEE802154-GTS-5](../../standard/ieee802154/catalog.md#ieee802154-gts-5) | [GtsServiceContract_1](../../../../../tests/module/Ieee802154GtsServiceContract_1.test), [GtsData](../../../../../tests/protocol/ieee802154/Ieee802154GtsData.test) | PASS: INVALID_GTS and FRAME_TOO_LONG remain distinct from next-window deferral. |
+
+## Enhanced-frame extension
+
+These verdicts use the selected [enhanced profile](enhanced-frame-profile.md), rather than
+every operational combination allowed by the wire format. The [execution record](followup-results.md)
+retains the E1-01 through E1-06 checkpoints, including reproduced failures, repairs and
+composed acceptance. Scheduled integration and the final publication matrix remain open.
+References in the first column are to the [enhanced catalog](../../standard/ieee802154/enhanced-catalog.md).
+
+| Statement | Direct executable evidence | Current bounded verdict |
+| --- | --- | --- |
+| [ENHANCED-1](../../standard/ieee802154/enhanced-catalog.md#ieee802154-enhanced-1) | FrameLayout_1, FrameWire_1, EnhancedFrameGate, EnhancedData | PASS: structural presence matrix and selected operational PAN/identity contexts; literal pinned footnote interpretation retained. |
+| [ENHANCED-2](../../standard/ieee802154/enhanced-catalog.md#ieee802154-enhanced-2) | FrameLayout_1, FrameWire_1, EnhancedData, EnhancedAck | PASS: optional sequence distinguishes absence from zero; legacy gates retained. |
+| [ENHANCED-3](../../standard/ieee802154/enhanced-catalog.md#ieee802154-enhanced-3) | SequenceWrap, EnhancedData, EnhancedAck, EnhancedBeacon, EnhancedPib_1 | PASS: selected DSN/BSN/EBSN allocation, wrap, retry and reset/RNG controls. |
+| [ENHANCED-4](../../standard/ieee802154/enhanced-catalog.md#ieee802154-enhanced-4) | InformationElements_1, NestedElements_1, EnhancedFrameGate, EnhancedData | PASS: bounded Header/Payload/Nested grammar and applicability; no unknown-feature semantics. |
+| [ENHANCED-5](../../standard/ieee802154/enhanced-catalog.md#ieee802154-enhanced-5) | InformationElements_1, FrameWire_1, EnhancedFrameGate | PASS: termination and region boundaries, including explicit forensic empty forms. |
+| [ENHANCED-6](../../standard/ieee802154/enhanced-catalog.md#ieee802154-enhanced-6) | InformationElements_1, FrameWire_1, EnhancedFrameGate, ReceiveSecurity | PASS for structural auxiliary extent and unsupported-security handling; protected content remains opaque and cryptography is excluded. |
+| [ENHANCED-7](../../standard/ieee802154/enhanced-catalog.md#ieee802154-enhanced-7) | Fcs_1, Capture_1, EnhancedFrameGate, enhanced serializer, EnhancedBeacon | PASS: complete-frame FCS and actual PSDU/IE size bounds. Independent modern decoder support remains partial. |
+| [ENHANCED-8](../../standard/ieee802154/enhanced-catalog.md#ieee802154-enhanced-8) | EnhancedAck, EnhancedAckTiming, ReceiveSecurity | PASS for selected unsecured version-2 DATA; acknowledged version-2 Command operation is unsupported/unexecuted, and no protected-operation claim is made. |
+| [ENHANCED-9](../../standard/ieee802154/enhanced-catalog.md#ieee802154-enhanced-9) | EnhancedAck, EnhancedAckTiming | PASS: suppression, copied sequence, full identity and selected response address matrix. |
+| [ENHANCED-10](../../standard/ieee802154/enhanced-catalog.md#ieee802154-enhanced-10) | EnhancedAck, EnhancedAckTiming | PASS for unscheduled response timing and unknown well-formed content; scheduled CAP/GTS bounds remain NOT_RUN. |
+| [ENHANCED-11](../../standard/ieee802154/enhanced-catalog.md#ieee802154-enhanced-11) | EnhancedAck, EnhancedAckTiming, enhanced ACK configuration modules | PASS: copied confirmation content and lifetimes under selected unsecured exchanges. |
+| [ENHANCED-12](../../standard/ieee802154/enhanced-catalog.md#ieee802154-enhanced-12) | EnhancedBeacon, Discovery_1 | PASS: actual EBR command/version/content, copied requests and ignored receive FP. |
+| [ENHANCED-13](../../standard/ieee802154/enhanced-catalog.md#ieee802154-enhanced-13) | EnhancedBeacon | PASS for exercised joining/probability, reserved receive-bit handling, calibrated nonsaturated minimum-LQI equality/one-above and defined-attribute rejection. The expanded116-case fixture passes in `e107-gts-beacon-full1/`. |
+| [ENHANCED-14](../../standard/ieee802154/enhanced-catalog.md#ieee802154-enhanced-14) | EnhancedBeacon, managed EnhancedDiscovery example | PASS for selected supported producers and response address combinations; unavailable outputs receive no synthetic substitute. |
+| [ENHANCED-15](../../standard/ieee802154/enhanced-catalog.md#ieee802154-enhanced-15) | E1-07 fixtures proposed in the plan | NOT_RUN: operational simplified schedule/GTS integration remains open. |
+| [ENHANCED-16](../../standard/ieee802154/enhanced-catalog.md#ieee802154-enhanced-16) | EnhancedPib_1, EnhancedBeacon | PASS for E1-06 discovery PIBs; periodic macUseEnhancedBeacon exposure/consumer remains NOT_RUN. |
+| [ENHANCED-17](../../standard/ieee802154/enhanced-catalog.md#ieee802154-enhanced-17) | EnhancedBeacon, Discovery_1, Broadcast, managed EnhancedDiscovery example | PASS for selected active scan and one-shot generation, actual upper payload and pending-broadcast behavior; no periodic synchronization claim. |
+
+Unit fixtures are under `tests/unit/`, module fixtures under `tests/module/`, protocol
+fixtures and their reviewer documents under `tests/protocol/ieee802154/`; their exact
+category filters and retained source/library identities are recorded per checkpoint.

@@ -1,0 +1,52 @@
+%description:
+Simplified Superframe and GTS Header IE values and independent wire octets.
+
+%includes:
+#include "inet/linklayer/ieee802154/Ieee802154EnhancedSuperframeCodec.h"
+using namespace inet;
+
+%activity:
+using C = Ieee802154EnhancedSuperframeCodec;
+using D = Ieee802154GtsDirection;
+C::Superframe source{0x1234,0xabcd,7,9,15,true};
+auto header = C::encodeSuperframe(source);
+ASSERT(header.id == 0x23 && header.content == std::vector<uint8_t>({0x34,0x12,0xcd,0xab,0x97,0x1f}));
+auto wire = Ieee802154InformationElements::encode({header},{},{});
+ASSERT(wire == std::vector<uint8_t>({0x86,0x11,0x34,0x12,0xcd,0xab,0x97,0x1f}));
+header.content[5] |= 0xe0; // Reserved receive bits have no semantics.
+auto decoded = C::decodeSuperframe(header);
+ASSERT(decoded && decoded->timestamp == 0x1234 && decoded->specification == 0xabcd && decoded->allocated == 7 && decoded->firstSlot == 9 && decoded->lastSlot == 15 && decoded->permit);
+header.content[4] = (header.content[4] & 0xf0) | 8;
+ASSERT(!C::decodeSuperframe(header));
+for (size_t length = 0; length < 6; ++length) { auto shortHeader = header; shortHeader.content.resize(length); ASSERT(!C::decodeSuperframe(shortHeader)); }
+std::vector<Ieee802154GtsDescriptor> descriptors{{0x1234,1,2,D::DEVICE_TRANSMIT},{0xabcd,0,3,D::DEVICE_RECEIVE}};
+auto gts = C::encodeGts(descriptors);
+ASSERT(gts.id == 0x24 && gts.content == std::vector<uint8_t>({2,0x34,0x12,0x21,0xcd,0xab,0x30}));
+gts.content[0] |= 0x80;
+auto parsed = C::decodeGts(gts);
+ASSERT(parsed && parsed->size() == 2 && (*parsed)[1].shortAddress == 0xabcd && (*parsed)[1].start == 0 && (*parsed)[1].length == 3 && (*parsed)[1].direction == D::DEVICE_RECEIVE);
+for (int count = 0; count <= 7; ++count) {
+    std::vector<Ieee802154GtsDescriptor> values(count,{1,1,1,D::DEVICE_TRANSMIT});
+    auto roundTrip = C::decodeGts(C::encodeGts(values)); ASSERT(roundTrip && roundTrip->size() == size_t(count));
+}
+ASSERT(!C::decodeGts({0x24,{}}));
+ASSERT(!C::decodeGts({0x24,{0,1}}));
+ASSERT(!C::decodeGts({0x24,std::vector<uint8_t>(25,0)}));
+C::Superframe cfp{0,0x0d13,2,14,15,true};
+std::vector<Ieee802154GtsDescriptor> partial{{2,14,1,D::DEVICE_TRANSMIT},{3,0,2,D::DEVICE_RECEIVE}};
+ASSERT(C::validSchedule(cfp,partial)); // One live advertised grant, two allocated, plus retained removal.
+auto invalid = partial; invalid.push_back({2,0,1,D::DEVICE_TRANSMIT}); ASSERT(!C::validSchedule(cfp,invalid));
+invalid = {{2,14,2,D::DEVICE_TRANSMIT},{3,15,1,D::DEVICE_RECEIVE}}; ASSERT(!C::validSchedule(cfp,invalid));
+invalid = {{2,14,0,D::DEVICE_TRANSMIT}}; ASSERT(!C::validSchedule(cfp,invalid));
+invalid = {{2,13,1,D::DEVICE_TRANSMIT}}; ASSERT(!C::validSchedule(cfp,invalid));
+auto narrow = cfp; narrow.firstSlot = 15; narrow.specification = 0x0e13; ASSERT(!C::validSchedule(narrow,{}));
+C::Superframe noCfp{0,0x0ff3,0,0,0,false};
+ASSERT(C::validSchedule(noCfp,{{2,0,2,D::DEVICE_TRANSMIT}}));
+ASSERT(!C::validSchedule(noCfp,{{2,15,1,D::DEVICE_TRANSMIT}}));
+bool rejected = false;
+try { (void)C::encodeGts(std::vector<Ieee802154GtsDescriptor>(8)); } catch (const cRuntimeError&) { rejected = true; }
+ASSERT(rejected);
+std::cout << "Simplified superframe and GTS wire values verified.\n";
+
+%contains: stdout
+Simplified superframe and GTS wire values verified.

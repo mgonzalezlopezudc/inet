@@ -238,7 +238,7 @@ periodic renewal. No internal transmission-kind tag, clock mapping or new timer 
 
 **Write protocol tests:** `tests/protocol/ieee802154/Ieee802154EnhancedSuperframe.test`. Repeat actual synchronization, CAP DATA and both GTS directions with enhanced beacons, loss/reacquisition, descriptor changes and one foreign/unknown IE. Compare the required schedule with the legacy-beacon profile, while allowing the longer beacon to change actual CAP start and frame-fit decisions. Require real IE-derived schedule/grants, no legacy-body interpretation, correct ACK behavior and no scheduled state update from malformed/protected-unsupported content. Parent E1 core has only one-shot discovery, and the B1/B3 branch knows legacy beacon content; this integration supplies the missing semantic bridge.
 
-Extend `Ieee802154EnhancedAck.test` in this commit with the scheduled cases deferred by E1-05: variable-length ACKs and optional-IE omission at CAP/GTS boundaries, permitted later CAP response starts, lost ACK timeout/retry deferral and no receive duty extending into another reservation. Run its selector alongside EnhancedSuperframe and document these cases in `enhanced-superframe.md`. Both CAP and GTS cases are required by this commit's acceptance gate.
+Extend the existing reservation-owning fixtures with the scheduled cases deferred by E1-05: `Ieee802154GtsData.test` owns variable ACK lengths, CAP/GTS omission, later CAP starts and retry/duty boundaries; `Ieee802154GtsExpiry.test` owns externally received late-CAP frames and neighboring-grant attribution; `Ieee802154SlottedManagementBoundary.test` owns quick pending DATA. These topologies already expose the actual reservation and native management owner. Run their selectors alongside EnhancedSuperframe and the unchanged EnhancedAck/EnhancedAckTiming controls, and document the split in `enhanced-superframe.md` and `enhanced-ack.md`. This refines the originally proposed EnhancedAck file assignment without duplicating its topology or reducing either CAP or GTS acceptance.
 
 For GTS/ATI admission,6.6.4 (physical PDF74) uses DATA+AIFS+minimum appropriate ACK+SIFS,
 with its applicable guard. Optional response content must yield when only the mandatory ACK
@@ -254,6 +254,27 @@ guard; the positive fit requires those allowances together not to exceed256us.
 Verify the actual encoded length, RF exchange, applicable guard
 and subsequent LIFS eligibility; add final-SIFS equality and one tick either side. A reproduced
 failure requires the bounded shared fit correction in this unit, preserving global IFS policy.
+
+CAP follows10.2.2.2/PDF184: minimum appropriate ACK plus original DATA-dependent IFS;
+remaining CSMA/readiness and the permitted latest CAP ACK start also fit. Reuse actual
+FrameLayout-derived minimum ACK length in both ordinary and quick-pending admission.
+Unknown maximum ACK length remains a waiting allowance. The RF completion cutoff is
+min(CAP end minus DATA IFS, latestCompletion when present), with no second IFS charge
+against that separate preparation cutoff. GTS retains guarded end minus SIFS.
+
+Capture the originating CAP window and bounded overlapping receive-CFP candidates at
+actual reception start in the existing transmission-ID anchor. A CFP candidate copies its
+protocol grantee tuple and distinct original/guarded ends. Its existing turnaround prewake
+is part of the receive opportunity. After decoding, qualify it against the current grant,
+full peer binding, PAN and unicast destination; preserve CAP as the alternative. Recheck
+after callbacks before copying the derived completion deadline into the existing ACK
+exchange. The same pure identity predicate admits qualifying received DATA activity through
+the original end, while the guarded end bounds ACK completion. It must survive PHY readiness, expired-window lookup and
+exact-end ordering without a new map, timer or window owner. Validate matched physical
+start/end identity; scheduled missing/mismatched context cannot become unconstrained.
+Update affected provider declarations/callers and the migration contract. Direct external
+peer controls cover DATA ending100us before and exactly at CAP end, with actual reception,
+delivery policy and no off-CAP ACK observed separately.
 
 **Write reviewer document:** `tests/protocol/ieee802154/enhanced-superframe.md`, E1-07. Include shared schedule ownership and variable beacon-length timelines. Verify the new selector, B1–B3's applicable scheduled cases and the legacy controls. If B3 has not landed, leave E1-07 unstarted and all scheduled integration claims NOT_RUN.
 

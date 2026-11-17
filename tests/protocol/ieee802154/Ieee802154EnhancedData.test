@@ -205,7 +205,8 @@ class EnhancedDataExercise : public cSimpleModule, public cListener, public IIee
         }
         if (scenario == 34) request.payloadIes = {{2,{0xaa,0xbb,0xcc,0xdd}}};
         if (scenario == 38) request.headerIes[0].id = 0x12; // Reserved for local emission.
-        if (scenario == 8 || scenario == 10 || scenario == 15 || scenario == 18 || scenario == 21 || scenario == 23 || scenario == 29) expectedStatus = Ieee802154MacStatus::UNSUPPORTED_FEATURE;
+        if (scenario == 10 || scenario == 15 || scenario == 18 || scenario == 21 || scenario == 23 || scenario == 29) expectedStatus = Ieee802154MacStatus::UNSUPPORTED_FEATURE;
+        if (scenario == 8) expectedStatus = Ieee802154MacStatus::INVALID_GTS;
         if (scenario == 9 || scenario == 12 || scenario == 19 || scenario == 22 || scenario == 24 || scenario == 25 || scenario == 26 || scenario == 38 || (scenario >= 30 && scenario <= 33)) expectedStatus = Ieee802154MacStatus::INVALID_PARAMETER;
         if (scenario == 11) expectedStatus = Ieee802154MacStatus::UNSUPPORTED_SECURITY;
         if (scenario == 14) expectedStatus = Ieee802154MacStatus::FRAME_TOO_LONG;

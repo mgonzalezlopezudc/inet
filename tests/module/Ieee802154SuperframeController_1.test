@@ -116,10 +116,15 @@ class SuperframeControllerExercise : public cSimpleModule, public IIeee802154Phy
         controller->retireExpiredReceptionAnchors();
         ASSERT(!controller->takeReceptionAnchor(abandonedReception));
         auto now = simTime();
-        controller->recordReceptionStart({100001, now, now + SimTime(10, SIMTIME_US)});
-        controller->recordReceptionStart({100002, now, now + SimTime(10, SIMTIME_US)});
-        ASSERT(controller->takeReceptionAnchor(100001));
-        ASSERT(controller->takeReceptionAnchor(100002));
+        Ieee802154AccessWindow captured{}; captured.physicalCapStart = now; captured.physicalCapEnd = now + SimTime(100, SIMTIME_US);
+        captured.latestCompletion = now + SimTime(90, SIMTIME_US);
+        controller->recordReceptionStart({100001, now, now + SimTime(10, SIMTIME_US)},captured,{});
+        controller->recordReceptionStart({100002, now, now + SimTime(10, SIMTIME_US)},captured,{{0x1234,0x123456,2,Ieee802154GtsDirection::DEVICE_TRANSMIT,now + SimTime(85, SIMTIME_US),now + SimTime(80, SIMTIME_US)},{0x1234,0x456789,3,Ieee802154GtsDirection::DEVICE_TRANSMIT,now + SimTime(95, SIMTIME_US),now + SimTime(90, SIMTIME_US)}});
+        ASSERT(!controller->takeReceptionAnchor(100099));
+        auto capAnchor = controller->takeReceptionAnchor(100001);
+        ASSERT(capAnchor && capAnchor->capWindow && capAnchor->cfpCandidates.empty() && capAnchor->capWindow->physicalCapEnd == captured.physicalCapEnd && capAnchor->capWindow->latestCompletion == captured.latestCompletion);
+        auto cfpAnchor = controller->takeReceptionAnchor(100002);
+        ASSERT(cfpAnchor && cfpAnchor->capWindow && cfpAnchor->cfpCandidates.size() == 2 && cfpAnchor->cfpCandidates[0].panId == 0x1234 && cfpAnchor->cfpCandidates[0].deviceExtendedAddress == 0x123456 && cfpAnchor->cfpCandidates[0].deviceShortAddress == 2 && cfpAnchor->cfpCandidates[0].direction == Ieee802154GtsDirection::DEVICE_TRANSMIT && cfpAnchor->cfpCandidates[0].physicalEnd == now + SimTime(85, SIMTIME_US) && cfpAnchor->cfpCandidates[0].guardedEnd == now + SimTime(80, SIMTIME_US) && cfpAnchor->cfpCandidates[1].deviceShortAddress == 3);
         controller->recordReceptionStart({100003, now - SimTime(1, SIMTIME_US), now + SimTime(10, SIMTIME_US)});
         ASSERT(!controller->takeReceptionAnchor(100003));
         controller->recordReceptionStart({100004, now, now + SimTime(10, SIMTIME_US)});
@@ -131,7 +136,7 @@ class SuperframeControllerExercise : public cSimpleModule, public IIeee802154Phy
         controller->retireExpiredReceptionAnchors();
         ASSERT(!controller->takeReceptionAnchor(100005));
         now = simTime();
-        controller->recordReceptionStart({100006, now, now + SimTime(100, SIMTIME_US)});
+        controller->recordReceptionStart({100006, now, now + SimTime(100, SIMTIME_US)},captured,{});
         controller->clearReceptionAnchors();
         ASSERT(!controller->takeReceptionAnchor(100006));
         // The PHY-only shutdown notification clears an outstanding anchor, even

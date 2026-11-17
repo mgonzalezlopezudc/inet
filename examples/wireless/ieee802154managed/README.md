@@ -8,6 +8,7 @@ inet -u Cmdenv -c Beacon -r 0,1   # Sleeping BO3/SO1 beacon PAN
 inet -u Cmdenv -c Gts -r 0,1      # Bidirectional GTS DATA
 inet -u Cmdenv -c Enhanced -r 0,1 # Unacknowledged version-2 DATA
 inet -u Cmdenv -c EnhancedDiscovery -r 0,1 # Enhanced active discovery
+inet -u Cmdenv -c EnhancedGts -r 0,1 # Enhanced periodic beacon and GTS
 ```
 
 Each pair uses typed frames and raw bytes respectively. Both peers explicitly
@@ -57,6 +58,16 @@ the existing native procedures. The request carries the device's extended
 address, and the automatic response addresses that device with the coordinator
 PAN in the Destination PAN field. This example does not enable periodic
 enhanced superframes.
+
+`EnhancedGts` starts with legacy BO3/SO1 beacons for association and its pending
+response. After the association response succeeds, the coordinator switches to
+enhanced periodic beacons; the already tracking device waits for an actual
+matching enhanced schedule before requesting GTS. This example retains the
+legacy DATA request format; the protocol fixtures separately exercise
+version-2 scheduled DATA and ACKs. The enhanced beacon does not carry the
+legacy pending-address list, so this example does not claim association while
+already tracking enhanced periodic beacons.
+This example policy supports exactly one cycle.
 
 The default-off bidirectional GTS policy waits for transmit and receive
 allocation confirmations, then exchanges acknowledged DATA with the coordinator

@@ -1,0 +1,5 @@
+IEEE 802.15.4 scheduled enhanced frames
+
+Custom superframe providers must accept and preserve copied reception-start
+reservation context as described in the migration guide. Enhanced periodic
+beacons and scheduled enhanced DATA are available through the opt-in profile.

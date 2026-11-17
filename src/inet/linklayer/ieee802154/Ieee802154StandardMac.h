@@ -72,6 +72,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
         bool transmittedInCap = false;
         std::optional<Ieee802154GtsManager::Key> gtsKey;
         std::optional<simtime_t> gtsEnd;
+        std::optional<simtime_t> capEnd; ///< Copied reservation end for the current CAP exchange.
         uint8_t capBeaconOrder = 15;
         std::optional<std::pair<uint16_t,Ieee802154Address>> pendingDevice; ///< Queue key retained across allocation changes.
         enum class Kind { DATA, POLL, INDIRECT, BEACON, AUTO_BEACON, SCAN_REQUEST, ASSOCIATE_REQUEST, DISASSOCIATE, ORPHAN_RESPONSE, PAN_CONFLICT, SUPERFRAME_REALIGN, GTS_REQUEST } kind = Kind::DATA;
@@ -83,6 +84,8 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
         std::optional<Ieee802154MacStatus> securityError;
         simtime_t target;
         b receivedLength;
+        std::optional<simtime_t> completionDeadline;
+        std::optional<Ieee802154AccessWindow> capWindow;
         std::optional<std::pair<uint16_t, Ieee802154Address>> polledDevice;
         std::optional<uint64_t> receivedPollResponse;
         bool pollDataPresent = false;
@@ -161,6 +164,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
         Ieee802154GtsManager::Key key;
         simtime_t physicalStart;
         simtime_t physicalEnd;
+        simtime_t transmitGuard;
         bool receive;
         bool outgoing;
         bool activitySettled = false;
@@ -223,8 +227,9 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
             uint32_t backoffPeriod, uint32_t batteryLifePeriods, Ieee802154AccessWindowOrigin origin);
     void resumeCapAccess();
     Ptr<Ieee802154Frame> makeBeacon(uint16_t panId, uint8_t beaconOrder, uint8_t superframeOrder, bool batteryLifeExtension, bool consumeSequence = true, const Ieee802154GtsManager *ledger = nullptr);
+    Ptr<Ieee802154Frame> makeEnhancedPeriodicBeacon(uint16_t panId, uint8_t beaconOrder, uint8_t superframeOrder, bool batteryLifeExtension, bool consumeSequence, const Ieee802154GtsManager& ledger, const std::vector<uint8_t> *payloadOverride = nullptr, bool allowOmission = true);
     bool overlapsIncomingSuperframe(clocktime_t target, uint8_t beaconOrder, uint8_t superframeOrder, b psduLength) const;
-    bool fitsBeaconPayload(const std::vector<uint8_t>& payload) const;
+    bool fitsBeaconPayload(const std::vector<uint8_t>& payload);
     struct Synchronization {
         uint64_t id;
         Ieee802154MacSyncRequest request;
@@ -326,6 +331,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     void clearReceiverWindow();
     void finishReceiverWindow();
     bool consumeReceiverWindow();
+    bool matchesCfpReception(const Ieee802154CfpReceptionCandidate& candidate, const Ieee802154Frame& frame) const;
     void processReceivedPacket(Packet *packet, const physicallayer::Ieee802154PhyReceiveIndication& quality,
             const std::optional<Ieee802154SuperframeReceptionAnchor>& anchor, uint64_t receiveEpoch);
     void transmitPanConflict();

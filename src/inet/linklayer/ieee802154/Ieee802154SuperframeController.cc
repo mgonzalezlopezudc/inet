@@ -217,13 +217,14 @@ simtime_t Ieee802154SuperframeController::getForecastUncertainty(simtime_t elaps
     return SIMTIME_ZERO;
 }
 
-void Ieee802154SuperframeController::recordReceptionStart(const physicallayer::Ieee802154PhyReceiveStart& start)
+void Ieee802154SuperframeController::recordReceptionStart(const physicallayer::Ieee802154PhyReceiveStart& start,
+        std::optional<Ieee802154AccessWindow> capWindow, std::vector<Ieee802154CfpReceptionCandidate> cfpCandidates)
 {
     Enter_Method("recordReceptionStart");
     retireExpiredReceptionAnchors();
     if (started && start.ppduStart == simTime())
         receptionAnchors.emplace(start.transmissionId, Ieee802154SuperframeReceptionAnchor{
-                start.transmissionId, start.ppduStart, getClockTime(), start.expectedPpduEnd});
+                start.transmissionId, start.ppduStart, getClockTime(), start.expectedPpduEnd, capWindow, std::move(cfpCandidates)});
 }
 
 std::optional<Ieee802154SuperframeReceptionAnchor> Ieee802154SuperframeController::takeReceptionAnchor(int transmissionId)

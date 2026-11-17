@@ -46,6 +46,7 @@ Ieee802154MacStatus Ieee802154MacPib::getValue(const State& state, const std::st
     GET_INTEGER(macDsn)
     GET_INTEGER(macBsn)
     if (state.enhancedSupported) {
+        if (state.gtsSupported) { GET_BOOLEAN(macUseEnhancedBeacon) }
         GET_INTEGER(macEbsn)
         GET_INTEGER(macEbAutoSa)
         GET_BOOLEAN(macEbFilteringEnabled)
@@ -189,6 +190,12 @@ Ieee802154MacStatus Ieee802154MacPib::setValue(State& state, const std::string& 
         auto enabled = std::get_if<bool>(&value);
         if (!enabled) return Ieee802154MacStatus::INVALID_PARAMETER;
         state.macEbFilteringEnabled = *enabled;
+        return Ieee802154MacStatus::SUCCESS;
+    }
+    if (attribute == "macUseEnhancedBeacon") {
+        auto enabled = std::get_if<bool>(&value);
+        if (!enabled) return Ieee802154MacStatus::INVALID_PARAMETER;
+        state.macUseEnhancedBeacon = *enabled;
         return Ieee802154MacStatus::SUCCESS;
     }
     if (attribute == "macEbHeaderIeList") {

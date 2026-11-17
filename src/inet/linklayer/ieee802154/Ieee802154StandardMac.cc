@@ -10,6 +10,7 @@
 #include "inet/linklayer/ieee802154/Ieee802154CommandCodec.h"
 #include "inet/linklayer/ieee802154/Ieee802154SuperframeTiming.h"
 #include "inet/linklayer/ieee802154/Ieee802154ExchangeTiming.h"
+#include "inet/linklayer/ieee802154/Ieee802154EnhancedSuperframeCodec.h"
 #include "inet/common/ProtocolTag_m.h"
 #include "inet/common/Simsignals.h"
 #include "inet/common/packet/Packet.h"
@@ -26,6 +27,15 @@ using PhyAdmission = physicallayer::Ieee802154PhyServiceAdmission;
 using PhyState = physicallayer::Ieee802154PhyState;
 
 namespace {
+std::optional<units::values::b> minimumEnhancedAckLength(const Ieee802154Frame& frame)
+{
+    auto mode = [](const Ieee802154Address& address) { return address.isNone() ? 0 : address.isShort() ? 2 : 3; };
+    auto layout = Ieee802154FrameLayout::fromControl(2,mode(frame.getSourceAddress()),mode(frame.getDestinationAddress()),
+            frame.getPanCompression(),frame.getSequenceSuppressed());
+    if (!layout) return std::nullopt;
+    return B(layout->headerLength() + 2);
+}
+
 struct EnhancedBeaconRequestView {
     std::optional<Ieee802154EnhancedBeaconFilter> filter;
     std::vector<uint8_t> requestedHeaders;
@@ -414,8 +424,6 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitData(uint64_t id, Pac
         failure = Ieee802154MacStatus::INVALID_PARAMETER;
     else if (request.security.securityLevel != 0)
         failure = Ieee802154MacStatus::UNSUPPORTED_SECURITY;
-    else if (!request.legacyTx && request.gtsTx)
-        failure = Ieee802154MacStatus::UNSUPPORTED_FEATURE; // Enhanced scheduled integration is a later stage.
     else if (request.destinationAddress.isShortUnallocated())
         failure = Ieee802154MacStatus::INVALID_ADDRESS;
     else if (request.sourceAddressMode == Ieee802154Address::AddressType::SHORT) {
@@ -558,8 +566,6 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitData(uint64_t id, Pac
             if (!frame->getSequenceSuppressed())
                 pib->set("macDsn", uint64_t((frame->getDsn() + 1) & 255));
             expirePending();
-            if (panCoordinator && periodicBeaconing && outgoingEpoch && !constructedGtsCandidate && started && !resetRequest)
-                maintainGtsCapacity(outgoingEpoch->superframeOrder);
         }
     }
     else {
@@ -678,9 +684,6 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitSet(uint64_t id, cons
             Ieee802154MacSetConfirm confirm(request.attribute, status);
             publishIdentity();
             client->handleSetConfirm(id, confirm);
-            if (status == Ieee802154MacStatus::SUCCESS && request.attribute == "macBeaconPayload" &&
-                    panCoordinator && periodicBeaconing && outgoingEpoch && !constructedGtsCandidate && started && !resetRequest)
-                maintainGtsCapacity(outgoingEpoch->superframeOrder);
             restoreIdle();
         }
     }
@@ -878,18 +881,22 @@ void Ieee802154StandardMac::requestState(PhyState state, PhyPurpose purpose)
 
 void Ieee802154StandardMac::restoreIdle()
 {
-    if (!started || !phyAvailable || resetRequest || retiringRequests || (transaction && transaction->phase != Phase::WAIT_GTS) || ackExchange || managementRequest || startRequest ||
+    bool deferredOutsideCap = transaction && transaction->search != Transaction::Search::SEARCHING && !ccaDeferred &&
+            (!transaction->transmittedInCap || periodicBeaconing || (synchronization && synchronization->installed)) &&
+            (transaction->phase == Phase::WAIT_CAP || (transaction->phase == Phase::ACCESS && transaction->slotted && transaction->accessPending &&
+                    superframe && !superframe->getAccessWindow()));
+    if (!started || !phyAvailable || resetRequest || retiringRequests || (transaction && transaction->phase != Phase::WAIT_GTS && !deferredOutsideCap) || ackExchange || managementRequest || startRequest ||
             (superframeStartRequest && ((superframeStartRequest->phase == SuperframeStartRequest::Phase::INITIAL && !superframeStartRequest->awaitingFirstBoundary) ||
                     superframeStartRequest->phase == SuperframeStartRequest::Phase::IMMEDIATE_ACTIVATION)) ||
             interruptedSuperframeChannel || interruptedScanCcaDuration || scanRequest || beaconPreparation || orphanResponseRequest || phyOperation || !phy)
         return;
-    if (!beaconResponses.empty() && !beaconScheduleActive()) {
+    if (!deferredOutsideCap && !beaconResponses.empty() && !beaconScheduleActive()) {
         auto response = std::move(beaconResponses.front());
         beaconResponses.pop_front();
         transmitBeacon(0,true,response);
         return;
     }
-    if (autoPollPending && !pollRequest && !associationRequest && parentAssociated) {
+    if (!deferredOutsideCap && autoPollPending && !pollRequest && !associationRequest && parentAssociated) {
         auto advertisedSource = *autoPollPending;
         autoPollPending.reset();
         auto address = std::get<Ieee802154Address>(*pib->get("macCoordExtendedAddress").value);
@@ -901,7 +908,7 @@ void Ieee802154StandardMac::restoreIdle()
         startPoll();
         return;
     }
-    if (pendingPanConflict && (!beaconScheduleActive() || slottedAccess)) {
+    if (!deferredOutsideCap && pendingPanConflict && (!beaconScheduleActive() || slottedAccess)) {
         if (!panCoordinator && parentAssociated && getBoolean("macAssociatedPanCoord") && pendingPanConflict->panId == getInteger("macPanId") &&
                 pendingPanConflict->coordinator == std::get<Ieee802154Address>(*pib->get("macCoordExtendedAddress").value)) {
             transmitPanConflict();
@@ -946,8 +953,11 @@ void Ieee802154StandardMac::installCfpWindows(clocktime_t anchor, uint8_t superf
         auto end = anchor + SIMTIME_AS_CLOCKTIME(slot * (grant.start + grant.length));
         if (start <= now || end <= now)
             continue;
-        cfpWindows.push_back({grant.key,superframe->getFutureSimulationTime(start),
-                superframe->getFutureSimulationTime(end),outgoing ? grant.key.direction == Ieee802154GtsDirection::DEVICE_TRANSMIT :
+        auto physicalStart = superframe->getFutureSimulationTime(start);
+        auto physicalEnd = superframe->getFutureSimulationTime(end);
+        auto physicalAnchor = outgoing || !incomingSuperframe ? simTime() : incomingSuperframe->physicalStart;
+        auto guard = superframe->getForecastUncertainty(physicalEnd - physicalAnchor,SIMTIME_ZERO);
+        cfpWindows.push_back({grant.key,physicalStart,physicalEnd,guard,outgoing ? grant.key.direction == Ieee802154GtsDirection::DEVICE_TRANSMIT :
                 grant.key.direction == Ieee802154GtsDirection::DEVICE_RECEIVE,outgoing,false,
                 outgoing && outgoingEpoch ? outgoingEpoch->beaconOrder : uint8_t(15),CLOCKTIME_AS_SIMTIME(anchor).raw()});
     }
@@ -1016,16 +1026,26 @@ void Ieee802154StandardMac::refreshCfp()
     if (nextPhysical)
         superframe->scheduleCfpBoundary(*nextPhysical);
     if (tx && !cfpReceive && transaction && transaction->phase == Phase::WAIT_GTS && !ackExchange && !phyOperation) {
-        auto duration = Ieee802154ExchangeTiming::exchangeDuration(transaction->frame->getChunkLength(),transaction->frame->getAckRequest(),
-                SimTime(par("maxPropagationDelay")),getInteger("macSifsPeriod"),getInteger("macLifsPeriod"),phy->getTimingParameters());
-        if (duration > tx->physicalEnd - tx->physicalStart) {
+        b minimumAck = B(0);
+        if (transaction->frame->getAckRequest()) {
+            minimumAck = B(5);
+            if (transaction->frame->getFrameVersion() == 2) {
+                auto length = minimumEnhancedAckLength(*transaction->frame);
+                if (!length) { completeData(Ieee802154MacStatus::INVALID_PARAMETER); return; }
+                minimumAck = *length;
+            }
+        }
+        auto duration = Ieee802154ExchangeTiming::gtsExchangeDuration(transaction->frame->getChunkLength(),minimumAck,
+                SimTime(par("maxPropagationDelay")),getInteger("macSifsPeriod"),phy->getTimingParameters());
+        auto guardedEnd = tx->physicalEnd - tx->transmitGuard;
+        if (duration > guardedEnd - tx->physicalStart) {
             completeData(Ieee802154MacStatus::FRAME_TOO_LONG);
             return;
         }
         auto start = std::max({tx->physicalStart,simTime() + lead,eligibleAt});
-        if (Ieee802154ExchangeTiming::fits(start,tx->physicalEnd,duration)) {
+        if (Ieee802154ExchangeTiming::fits(start,guardedEnd,duration)) {
             transaction->accessStartAt = start;
-            transaction->gtsEnd = tx->physicalEnd;
+            transaction->gtsEnd = guardedEnd;
             transaction->phase = Phase::WAIT_TX;
             requestState(PhyState::TRANSMIT,PhyPurpose::TX_READY);
             return;
@@ -1205,6 +1225,9 @@ void Ieee802154StandardMac::startAccess()
         superframe->cancelAccessSearchDeadline();
         transaction->search = Transaction::Search::NONE;
     }
+    auto capCompletion = scheduled ? window->physicalCapEnd - interframeSpacing(transaction->frame->getChunkLength()) : SIMTIME_ZERO;
+    transaction->capEnd = scheduled ? std::optional<simtime_t>(window->latestCompletion ?
+            std::min(capCompletion,*window->latestCompletion) : capCompletion) : std::nullopt;
     transaction->phase = Phase::ACCESS;
     ccaDeferred = false;
     slottedCcaNeedsAlignment = false;
@@ -1235,6 +1258,12 @@ void Ieee802154StandardMac::startAccess()
             request.exchangeDuration += Ieee802154ExchangeTiming::slottedAckWait(phy->getTimingParameters(), aifs,
                     request.unitBackoffPeriod, SimTime(par("maxPropagationDelay"))) -
                     Ieee802154ExchangeTiming::ackWait(phy->getTimingParameters()) - 2 * SimTime(par("maxPropagationDelay"));
+            if (transaction->frame->getFrameVersion() == 2) {
+                auto length = minimumEnhancedAckLength(*transaction->frame);
+                if (!length) { completeData(Ieee802154MacStatus::INVALID_PARAMETER); return; }
+                request.exchangeDuration += Ieee802154ExchangeTiming::ppduDuration(*length,phy->getTimingParameters()) -
+                        Ieee802154ExchangeTiming::ackDuration(phy->getTimingParameters());
+            }
         }
     }
     transaction->slotted = scheduled;
@@ -2117,8 +2146,6 @@ void Ieee802154StandardMac::handleTransmitConfirm(uint64_t id, const physicallay
                 restoreIdle();
             }
         }
-        if (panCoordinator && periodicBeaconing && outgoingEpoch && started && !resetRequest)
-            maintainGtsCapacity(outgoingEpoch->superframeOrder);
         return;
     }
     if (purpose == PhyPurpose::ACK_TRANSMIT) {
@@ -2152,6 +2179,10 @@ void Ieee802154StandardMac::handleTransmitConfirm(uint64_t id, const physicallay
                     SimTime(16, SIMTIME_US) * getInteger("macUnitBackoffPeriod"), SimTime(par("maxPropagationDelay"))) :
                     2 * SimTime(par("maxPropagationDelay")) + Ieee802154ExchangeTiming::ackWait(phy->getTimingParameters());
             transaction->ackDeadline = confirm.timing->ppduEnd + ackWait;
+            if (transaction->gtsEnd)
+                transaction->ackDeadline = std::min(transaction->ackDeadline,*transaction->gtsEnd - phy->getTimingParameters().symbolPeriod * getInteger("macSifsPeriod"));
+            else if (transaction->capEnd)
+                transaction->ackDeadline = std::min(transaction->ackDeadline,*transaction->capEnd);
             scheduleAt(transaction->ackDeadline, ackTimer);
             requestState(PhyState::RECEIVE, PhyPurpose::ACK_LISTEN);
         }
@@ -2194,8 +2225,18 @@ void Ieee802154StandardMac::handleReceiveIndication(Packet *packet, const physic
 void Ieee802154StandardMac::handleReceiveStarted(const physicallayer::Ieee802154PhyReceiveStart& start)
 {
     Enter_Method("handleReceiveStarted");
-    if (started && phyAvailable && superframe)
-        superframe->recordReceptionStart(start);
+    if (started && phyAvailable && superframe) {
+        std::vector<Ieee802154CfpReceptionCandidate> candidates;
+        for (const auto& window : cfpWindows)
+            if (window.receive && gtsManager.findGrant(window.key) &&
+                    window.physicalStart - phy->getTimingParameters().turnaroundTime <= start.ppduStart && start.ppduStart <= window.physicalEnd) {
+                candidates.push_back({window.key.panId,window.key.extendedAddress,window.key.shortAddress,
+                        window.key.direction,window.physicalEnd,window.physicalEnd - window.transmitGuard});
+            }
+        auto cap = superframe->getAccessWindow();
+        if (cap && !(cap->physicalCapStart <= start.ppduStart && start.ppduStart <= cap->physicalCapEnd)) cap.reset();
+        superframe->recordReceptionStart(start,cap,std::move(candidates));
+    }
 }
 
 void Ieee802154StandardMac::handleSuperframeBoundary(clocktime_t boundary)
@@ -2344,7 +2385,9 @@ bool Ieee802154StandardMac::matchesAck(const Ieee802154Frame& frame,
     if (sent.getFrameVersion() != 2)
         return frame.getFrameVersion() < 2 && frame.getDsn() == sent.getDsn();
     auto aifs = phy->getTimingParameters().symbolPeriod * getInteger("macSifsPeriod");
-    auto latestStart = transaction->ackDeadline - Ieee802154ExchangeTiming::ppduDuration(B(127),phy->getTimingParameters());
+    auto latestStart = transaction->transmittedEnd + Ieee802154ExchangeTiming::enhancedAckWait(phy->getTimingParameters(),aifs,
+            phy->getTimingParameters().symbolPeriod * getInteger("macUnitBackoffPeriod"),SimTime(par("maxPropagationDelay")),transaction->slotted) -
+            Ieee802154ExchangeTiming::ppduDuration(B(127),phy->getTimingParameters());
     auto localPan = uint16_t(getInteger("macPanId"));
     bool peerMatches = frame.getSourceAddress() == sent.getDestinationAddress();
     if (!peerMatches && localPan != 0xffff && (sent.getDestinationPanId() == localPan || sent.getDestinationPanId() == 0xffff)) {
@@ -2365,6 +2408,28 @@ bool Ieee802154StandardMac::matchesAck(const Ieee802154Frame& frame,
             frame.getSequenceSuppressed() == sent.getSequenceSuppressed() &&
             Ieee802154FrameCodec::sequenceNumber(frame) == Ieee802154FrameCodec::sequenceNumber(sent) &&
             quality.timing.ppduStart >= transaction->transmittedEnd + aifs && quality.timing.ppduStart <= latestStart;
+}
+
+bool Ieee802154StandardMac::matchesCfpReception(const Ieee802154CfpReceptionCandidate& candidate, const Ieee802154Frame& frame) const
+{
+    if (frame.getFrameType() != 1 || frame.getSecurityEnabled()) return false;
+    Ieee802154GtsManager::Key key{candidate.panId,candidate.deviceExtendedAddress,candidate.deviceShortAddress,candidate.direction};
+    auto device = Ieee802154Address::fromExtended(candidate.deviceExtendedAddress);
+    auto destination = frame.getDestinationAddress();
+    bool localDestination = (destination.isShort() && destination.getShort() == getInteger("macShortAddress")) ||
+            destination == std::get<Ieee802154Address>(*pib->get("macExtendedAddress").value);
+    bool matching = false;
+    if (candidate.direction == Ieee802154GtsDirection::DEVICE_TRANSMIT && panCoordinator) {
+        auto member = associatedDevices.find({candidate.panId,device});
+        matching = member != associatedDevices.end() && member->second == candidate.deviceShortAddress &&
+                (frame.getSourceAddress() == Ieee802154Address::fromShort(candidate.deviceShortAddress) || frame.getSourceAddress() == device);
+    }
+    else if (candidate.direction == Ieee802154GtsDirection::DEVICE_RECEIVE && !panCoordinator)
+        matching = candidate.deviceShortAddress == getInteger("macShortAddress") &&
+                device == std::get<Ieee802154Address>(*pib->get("macExtendedAddress").value) &&
+                isAssociatedCoordinator(candidate.panId,frame.getSourceAddress());
+    return matching && localDestination && frame.getSourcePanId() == candidate.panId &&
+            frame.getDestinationPanId() == candidate.panId && gtsManager.findGrant(key);
 }
 
 void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physicallayer::Ieee802154PhyReceiveIndication& quality,
@@ -2523,7 +2588,16 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
         return;
     }
     std::optional<Ieee802154GtsManager::Grant> observedActivity;
-    if (!enhanced && panCoordinator && frame->getFrameType() == 1 && !frame->getSecurityEnabled() &&
+    bool matchingAnchor = anchor && anchor->physicalStart == quality.timing.ppduStart && anchor->expectedEnd == quality.timing.ppduEnd;
+    if (panCoordinator && matchingAnchor) {
+        for (const auto& candidate : anchor->cfpCandidates)
+            if (candidate.direction == Ieee802154GtsDirection::DEVICE_TRANSMIT && frame->getSourceAddress().isShort() && quality.timing.ppduEnd <= candidate.physicalEnd && matchesCfpReception(candidate,*frame)) {
+                Ieee802154GtsManager::Key key{candidate.panId,candidate.deviceExtendedAddress,candidate.deviceShortAddress,candidate.direction};
+                if (gtsManager.noteActivity(key)) observedActivity = *gtsManager.findGrant(key);
+                break;
+            }
+    }
+    else if (panCoordinator && frame->getFrameType() == 1 && !frame->getSecurityEnabled() &&
             frame->getSourcePanId() == getInteger("macPanId") && frame->getSourceAddress().isShort() &&
             frame->getDestinationPanId() == getInteger("macPanId") &&
             (frame->getDestinationAddress() == std::get<Ieee802154Address>(*pib->get("macExtendedAddress").value) ||
@@ -2689,6 +2763,24 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
     if (panConflict)
         received.panConflictChannel = quality.channel;
     received.receivedLength = B(bytes.size());
+    if (!orphanScanId && anchor && anchor->physicalStart == quality.timing.ppduStart && anchor->expectedEnd == quality.timing.ppduEnd) {
+        if (frame->getFrameType() == 1 && !frame->getSecurityEnabled())
+            for (const auto& candidate : anchor->cfpCandidates) {
+                if (matchesCfpReception(candidate,*frame)) {
+                    received.completionDeadline = candidate.guardedEnd - phy->getTimingParameters().symbolPeriod * getInteger("macSifsPeriod");
+                    break;
+                }
+            }
+        if (!received.completionDeadline && anchor->capWindow) {
+            received.capWindow = anchor->capWindow;
+            auto end = anchor->capWindow->physicalCapEnd - interframeSpacing(received.receivedLength);
+            received.completionDeadline = anchor->capWindow->latestCompletion ? std::min(end,*anchor->capWindow->latestCompletion) : end;
+        }
+        else if (!received.completionDeadline && (beaconScheduleActive() || (synchronization && synchronization->installed)))
+            received.completionDeadline = SIMTIME_ZERO;
+    }
+    else if (!orphanScanId && (beaconScheduleActive() || (synchronization && synchronization->installed)))
+        received.completionDeadline = SIMTIME_ZERO;
     auto& indication = received.indication;
     indication.sourceAddress = frame->getSourceAddress();
     indication.destinationAddress = destination;
@@ -2866,16 +2958,39 @@ void Ieee802154StandardMac::startAck()
 {
     if (!ackExchange)
         return;
-    if (simTime() != ackExchange->target) {
-        finishAck(false);
-        return;
+    auto timing = phy->getTimingParameters();
+    auto cap = ackExchange->capWindow;
+    bool inCap = cap.has_value();
+    if (simTime() > ackExchange->target) {
+        if (!inCap) { finishAck(false); return; }
+        auto period = SimTime(16,SIMTIME_US) * getInteger("macUnitBackoffPeriod");
+        auto unit = SIMTIME_AS_CLOCKTIME(period);
+        auto candidate = superframe->getFutureClockTime(simTime());
+        auto difference = CLOCKTIME_AS_SIMTIME(candidate - cap->backoffOrigin).raw();
+        auto count = difference > 0 ? (difference + period.raw() - 1) / period.raw() : 0;
+        candidate = cap->backoffOrigin + unit * count;
+        while (candidate < superframe->getCurrentClockTime() || superframe->getFutureSimulationTime(candidate) < simTime()) candidate += unit;
+        auto target = superframe->getFutureSimulationTime(candidate);
+        if (target > ackExchange->target + period) { finishAck(false); return; }
+        ackExchange->target = target;
+    }
+    if (ackExchange->completionDeadline) {
+        auto fits = [&](const Ptr<Ieee802154Frame>& ack) {
+            return ackExchange->target + Ieee802154ExchangeTiming::ppduDuration(ack->getChunkLength(),timing) <= *ackExchange->completionDeadline;
+        };
+        if (!fits(ackExchange->frame) && ackExchange->frame->getFrameVersion() == 2 && ackExchange->frame->getPayloadArraySize()) {
+            auto mandatory = makeShared<Ieee802154Frame>(*ackExchange->frame);
+            mandatory->setInformationElementsPresent(false); mandatory->setPayloadArraySize(0);
+            Ieee802154FrameCodec::finalize(*mandatory);
+            ackExchange->frame = mandatory;
+        }
+        if (!fits(ackExchange->frame)) { finishAck(false); return; }
     }
     auto boundary = nextBeaconBoundary();
     if (boundary) {
-        auto timing = phy->getTimingParameters();
         auto ackDuration = Ieee802154ExchangeTiming::ppduDuration(ackExchange->frame->getChunkLength(),timing);
         if (*boundary <= superframe->getCurrentClockTime() ||
-                simTime() + ackDuration > superframe->getFutureSimulationTime(*boundary)) {
+                ackExchange->target + ackDuration > superframe->getFutureSimulationTime(*boundary)) {
             finishAck(false);
             return;
         }
@@ -3196,9 +3311,16 @@ bool Ieee802154StandardMac::startQuickPendingResponse(simtime_t ackEnd)
     if (transaction->frame->getAckRequest())
         exchange += Ieee802154ExchangeTiming::slottedAckWait(timing,sifs,period,SimTime(par("maxPropagationDelay"))) -
                 Ieee802154ExchangeTiming::ackWait(timing) - 2 * SimTime(par("maxPropagationDelay"));
+    if (transaction->frame->getAckRequest() && transaction->frame->getFrameVersion() == 2) {
+        auto length = minimumEnhancedAckLength(*transaction->frame);
+        if (!length) return false;
+        exchange += Ieee802154ExchangeTiming::ppduDuration(*length,timing) - Ieee802154ExchangeTiming::ackDuration(timing);
+    }
     if (start + exchange > window->physicalCapEnd || (window->latestCompletion && start + exchange - ifs > *window->latestCompletion))
         return false;
     transaction->slotted = true;
+    auto capCompletion = window->physicalCapEnd - interframeSpacing(transaction->frame->getChunkLength());
+    transaction->capEnd = window->latestCompletion ? std::min(capCompletion,*window->latestCompletion) : capCompletion;
     transaction->accessStartAt = start;
     transaction->phase = Phase::WAIT_TX;
     requestState(PhyState::TRANSMIT,PhyPurpose::TX_READY);
@@ -3919,8 +4041,6 @@ void Ieee802154StandardMac::completeSuperframeStart(const Ieee802154MacServiceRe
     }
     if (managementClient)
         managementClient->handleStartSuperframeConfirm(id,{result});
-    if (panCoordinator && periodicBeaconing && outgoingEpoch && started && !resetRequest)
-        maintainGtsCapacity(outgoingEpoch->superframeOrder);
     restoreIdle();
 }
 
@@ -4283,14 +4403,17 @@ void Ieee802154StandardMac::sendPeriodicBeacon()
         }
         return;
     }
-    pib->set("macBsn",uint64_t((frame->getDsn() + 1) & 255));
+    pib->set(frame->getFrameVersion() == 2 ? "macEbsn" : "macBsn",uint64_t((frame->getDsn() + 1) & 255));
     if (superframeStartRequest && superframeStartRequest->phase == SuperframeStartRequest::Phase::WAIT_OLD_BEACON) {
         frame->setFramePending(true);
         Ieee802154FrameCodec::finalize(*frame);
     }
+    uint8_t finalCapSlot = 15;
+    if (initial ? superframeStartRequest->parameters.panCoordinator : panCoordinator)
+        for (const auto& grant : ledger->getGrants()) finalCapSlot = std::min(finalCapSlot,uint8_t(grant.start - 1));
     constructedBeacon = BeaconConfiguration{uint8_t(bo),uint8_t(so),ble,
             uint32_t(getInteger("macBattLifeExtPeriods")),uint32_t(getInteger("macUnitBackoffPeriod")),
-            uint8_t(frame->getPayload(1) & 15)};
+            finalCapSlot};
     constructedGtsAdvertisements = ledger->getAdvertisements();
     constructedCfpGrants = ledger->getGrants();
     auto packet = new Packet("IEEE802154-periodic-beacon");
@@ -4715,6 +4838,20 @@ std::optional<Ieee802154PanDescriptor> Ieee802154StandardMac::describeBeacon(con
         descriptor.contentAvailable = false; // No legacy superframe body exists in an enhanced beacon.
         descriptor.headerIes = view->headers;
         descriptor.payloadIes = view->payloads;
+        bool invalidSchedule = false, sawSuperframe = false, sawGts = false;
+        for (const auto& header : view->headers) {
+            if (header.id == 0x23) {
+                if (sawSuperframe) invalidSchedule = true;
+                sawSuperframe = true; descriptor.enhancedSuperframe = Ieee802154EnhancedSuperframeCodec::decodeSuperframe(header);
+                if (!descriptor.enhancedSuperframe) invalidSchedule = true;
+            }
+            else if (header.id == 0x24) {
+                if (sawGts) invalidSchedule = true;
+                sawGts = true; descriptor.enhancedGts = Ieee802154EnhancedSuperframeCodec::decodeGts(header);
+                if (!descriptor.enhancedGts) invalidSchedule = true;
+            }
+        }
+        if (invalidSchedule) { descriptor.enhancedSuperframe.reset(); descriptor.enhancedGts.reset(); }
         auto offset = view->data.offset - view->fixedMhr.length;
         for (size_t i = offset; i < frame->getPayloadArraySize(); ++i) descriptor.enhancedPayload.push_back(frame->getPayload(i));
     }
@@ -4900,6 +5037,8 @@ bool Ieee802154StandardMac::overlapsIncomingSuperframe(clocktime_t target, uint8
 Ptr<Ieee802154Frame> Ieee802154StandardMac::makeBeacon(uint16_t panId, uint8_t beaconOrder, uint8_t superframeOrder, bool batteryLifeExtension, bool consumeSequence, const Ieee802154GtsManager *ledger)
 {
     if (!ledger) ledger = &gtsManager;
+    if (beaconOrder < 15 && par("enableEnhancedFrames").boolValue() && superframe && getBoolean("macUseEnhancedBeacon"))
+        return makeEnhancedPeriodicBeacon(panId,beaconOrder,superframeOrder,batteryLifeExtension,consumeSequence,*ledger);
     auto frame = makeShared<Ieee802154Frame>();
     frame->setFrameType(0);
     frame->setFrameVersion(0);
@@ -4954,8 +5093,59 @@ Ptr<Ieee802154Frame> Ieee802154StandardMac::makeBeacon(uint16_t panId, uint8_t b
     return frame;
 }
 
-bool Ieee802154StandardMac::fitsBeaconPayload(const std::vector<uint8_t>& payload) const
+Ptr<Ieee802154Frame> Ieee802154StandardMac::makeEnhancedPeriodicBeacon(uint16_t panId, uint8_t beaconOrder, uint8_t superframeOrder,
+        bool batteryLifeExtension, bool consumeSequence, const Ieee802154GtsManager& ledger, const std::vector<uint8_t> *payloadOverride, bool allowOmission)
 {
+    auto frame = makeShared<Ieee802154Frame>();
+    frame->setFrameType(0); frame->setFrameVersion(2); frame->setDsn(getInteger("macEbsn"));
+    auto shortAddress = getInteger("macShortAddress");
+    frame->setSourceAddress(shortAddress < 0xfffe ? Ieee802154Address::fromShort(shortAddress) :
+            std::get<Ieee802154Address>(*pib->get("macExtendedAddress").value));
+    frame->setSourcePanId(panId);
+    frame->setFramePending(pending->count(panId,Ieee802154Address::fromShort(0xffff),simTime()) != 0);
+    bool beaconPanCoordinator = superframeStartRequest &&
+            ((superframeStartRequest->phase == SuperframeStartRequest::Phase::INITIAL && superframeStartRequest->preparingFirstBeacon) ||
+             superframeStartRequest->phase == SuperframeStartRequest::Phase::WAIT_ACTIVATION) ?
+            superframeStartRequest->parameters.panCoordinator : panCoordinator;
+    uint8_t finalCap = 15;
+    if (beaconPanCoordinator)
+        for (const auto& grant : ledger.getGrants()) finalCap = std::min(finalCap,uint8_t(grant.start - 1));
+    uint16_t specification = beaconOrder | (superframeOrder << 4) | (finalCap << 8) |
+            (batteryLifeExtension ? 0x1000 : 0) | (beaconPanCoordinator ? 0x4000 : 0) |
+            (getBoolean("macAssociationPermit") ? 0x8000 : 0);
+    auto count = beaconPanCoordinator ? ledger.getGrants().size() : 0;
+    Ieee802154EnhancedSuperframeCodec::Superframe schedule{uint16_t(simTime().inUnit(SIMTIME_US) / 16),specification,
+            uint8_t(count),uint8_t(count ? finalCap + 1 : 0),uint8_t(count ? 15 : 0),beaconPanCoordinator && getBoolean("macGtsPermit")};
+    std::vector<Ieee802154InformationElements::Header> headers{Ieee802154EnhancedSuperframeCodec::encodeSuperframe(schedule)};
+    std::vector<Ieee802154GtsDescriptor> advertisements;
+    if (beaconPanCoordinator)
+        for (const auto& item : ledger.getAdvertisements()) advertisements.push_back({item.key.shortAddress,item.start,item.length,item.key.direction});
+    if (!advertisements.empty()) headers.push_back(Ieee802154EnhancedSuperframeCodec::encodeGts(advertisements));
+    auto configuredHeaders = std::get<std::vector<Ieee802154InformationElements::Header>>(*pib->get("macEbHeaderIeList").value);
+    auto configuredPayloads = std::get<std::vector<Ieee802154InformationElements::Payload>>(*pib->get("macEbPayloadIeList").value);
+    if (!supportedBeaconIes(configuredHeaders,configuredPayloads)) return nullptr;
+    headers.insert(headers.end(),configuredHeaders.begin(),configuredHeaders.end());
+    auto payload = payloadOverride ? *payloadOverride : std::get<std::vector<uint8_t>>(*pib->get("macBeaconPayload").value);
+    auto bytes = Ieee802154InformationElements::encode(headers,configuredPayloads,payload);
+    auto layout = Ieee802154FrameLayout::fromControl(2,0,shortAddress < 0xfffe ? 2 : 3,false,false);
+    if (!layout) return nullptr;
+    if (allowOmission && layout->headerLength() + bytes.size() + 2 > 127 && !payload.empty())
+        bytes = Ieee802154InformationElements::encode(headers,configuredPayloads,{});
+    if (layout->headerLength() + bytes.size() + 2 > 127) return nullptr;
+    frame->setInformationElementsPresent(true); frame->setPayloadArraySize(bytes.size());
+    for (size_t i = 0; i < bytes.size(); ++i) frame->setPayload(i,bytes[i]);
+    Ieee802154FrameCodec::finalize(*frame);
+    if (consumeSequence) pib->set("macEbsn",uint64_t((frame->getDsn() + 1) & 255));
+    return frame;
+}
+
+bool Ieee802154StandardMac::fitsBeaconPayload(const std::vector<uint8_t>& payload)
+{
+    if (par("enableEnhancedFrames").boolValue() && superframe && getBoolean("macUseEnhancedBeacon") && getInteger("macBeaconOrder") < 15) {
+        auto ordinary = gtsManager; ordinary.clearAdvertisements();
+        return makeEnhancedPeriodicBeacon(getInteger("macPanId"),getInteger("macBeaconOrder"),
+                getInteger("macSuperframeOrder"),getBoolean("macBattLifeExt"),false,ordinary,&payload,false) != nullptr;
+    }
     auto sourceBytes = getInteger("macShortAddress") < 0xfffe ? 2 : 8;
     size_t overhead = 7 + sourceBytes + 4;
     auto addresses = pending->addresses(getInteger("macPanId"),simTime());
@@ -5484,6 +5674,7 @@ bool Ieee802154StandardMac::receiveManagedBeacon(const Ptr<Ieee802154Frame>& fra
     auto descriptor = describeBeacon(frame,quality,anchor);
     if (!descriptor)
         return true;
+    std::optional<Ieee802154PanDescriptor> normalized;
     if (descriptor->frameVersion == 2) {
         if (descriptor->coordinatorPanId && isAssociatedCoordinator(*descriptor->coordinatorPanId,descriptor->coordinatorAddress)) {
             broadcastReceivePending = frame->getFramePending();
@@ -5491,14 +5682,29 @@ bool Ieee802154StandardMac::receiveManagedBeacon(const Ptr<Ieee802154Frame>& fra
             if (receiveEpoch != receiveRetirementEpoch || !started || resetRequest)
                 return true;
         }
-        if (started && managementClient && (!getBoolean("macAutoRequest") || getBoolean("macNotifyAllBeacons") || !descriptor->enhancedPayload.empty()))
-            managementClient->handleBeaconNotifyIndication(*descriptor);
-        return true; // Enhanced discovery cannot renew a legacy tracking/superframe epoch.
+        if (frame->getDestinationAddress().isNone() && descriptor->enhancedSuperframe && anchor) {
+            const auto& schedule = *descriptor->enhancedSuperframe;
+            auto geometry = Ieee802154SuperframeTiming::geometry(schedule.specification & 15,(schedule.specification >> 4) & 15);
+            const std::vector<Ieee802154GtsDescriptor> empty;
+            if (geometry && geometry->beaconInterval && Ieee802154EnhancedSuperframeCodec::validSchedule(schedule,descriptor->enhancedGts ? *descriptor->enhancedGts : empty)) {
+                normalized = *descriptor;
+                normalized->beacon.superframeSpecification = schedule.specification;
+                normalized->beacon.gtsPermit = schedule.permit;
+                if (descriptor->enhancedGts) normalized->beacon.setGtsDescriptors(*descriptor->enhancedGts);
+                normalized->contentAvailable = true; // Private transient schedule view only.
+            }
+        }
+        if (!normalized) {
+            if (started && managementClient && (!getBoolean("macAutoRequest") || getBoolean("macNotifyAllBeacons") || !descriptor->enhancedPayload.empty()))
+                managementClient->handleBeaconNotifyIndication(*descriptor);
+            return true;
+        }
     }
+    auto& scheduleDescriptor = normalized ? *normalized : *descriptor;
     bool foreignSyncBeacon = synchronization && synchronization->installed && !matchesSyncCoordinator(*descriptor);
-    bool located = renewSynchronization(*descriptor,anchor,quality.timing.ppduEnd);
+    bool located = renewSynchronization(scheduleDescriptor,anchor,quality.timing.ppduEnd);
     bool awaitingCapRetry = transaction && transaction->transmittedInCap && transaction->phase == Phase::WAIT_CAP && !synchronization;
-    if (!located && transaction && (transaction->search == Transaction::Search::SEARCHING || awaitingCapRetry) && anchor && descriptor->contentAvailable &&
+    if (!located && transaction && (transaction->search == Transaction::Search::SEARCHING || awaitingCapRetry) && anchor && scheduleDescriptor.contentAvailable &&
             descriptor->coordinatorPanId == getInteger("macPanId")) {
         auto address = descriptor->coordinatorAddress;
         located = (address.isShort() && address.getShort() < 0xfffe && address.getShort() == getInteger("macCoordShortAddress")) ||
@@ -5506,10 +5712,10 @@ bool Ieee802154StandardMac::receiveManagedBeacon(const Ptr<Ieee802154Frame>& fra
     }
     if (receiveEpoch != receiveRetirementEpoch)
         return true;
-    if (located && descriptor->contentAvailable && parentAssociated) {
+    if (located && scheduleDescriptor.contentAvailable && parentAssociated) {
         auto shortAddress = uint16_t(getInteger("macShortAddress"));
         auto extended = std::get<Ieee802154Address>(*pib->get("macExtendedAddress").value).getExtended();
-        for (const auto& advertised : descriptor->beacon.getGtsDescriptors()) {
+        for (const auto& advertised : scheduleDescriptor.beacon.getGtsDescriptors()) {
             if (advertised.shortAddress != shortAddress)
                 continue;
             Ieee802154GtsManager::Key key{uint16_t(getInteger("macPanId")),extended,shortAddress,advertised.direction};
@@ -5533,11 +5739,11 @@ bool Ieee802154StandardMac::receiveManagedBeacon(const Ptr<Ieee802154Frame>& fra
             }
         }
     }
-    if (located && descriptor->contentAvailable && gtsRequest && gtsRequest->waiting &&
+    if (located && scheduleDescriptor.contentAvailable && gtsRequest && gtsRequest->waiting &&
             descriptor->coordinatorPanId == getInteger("macPanId")) {
         auto requested = gtsRequest->request.characteristics;
         auto shortAddress = uint16_t(getInteger("macShortAddress"));
-        for (const auto& grant : descriptor->beacon.getGtsDescriptors()) {
+        for (const auto& grant : scheduleDescriptor.beacon.getGtsDescriptors()) {
             if (grant.shortAddress != shortAddress || grant.direction != requested.direction)
                 continue;
             auto result = grant.start && grant.length == requested.length ? Ieee802154MacStatus::SUCCESS : Ieee802154MacStatus::DENIED;
@@ -5552,8 +5758,8 @@ bool Ieee802154StandardMac::receiveManagedBeacon(const Ptr<Ieee802154Frame>& fra
             break;
         }
     }
-    if (located && anchor && descriptor->contentAvailable) {
-        auto specification = descriptor->beacon.superframeSpecification;
+    if (located && anchor && scheduleDescriptor.contentAvailable) {
+        auto specification = scheduleDescriptor.beacon.superframeSpecification;
         auto geometry = Ieee802154SuperframeTiming::geometry(specification & 15, (specification >> 4) & 15);
         if (geometry && geometry->beaconInterval) {
             incomingSuperframe = IncomingSuperframe{anchor->localStart,geometry->beaconOrder,geometry->superframeOrder,
@@ -5661,7 +5867,7 @@ bool Ieee802154StandardMac::receiveManagedBeacon(const Ptr<Ieee802154Frame>& fra
     if (receiveEpoch != receiveRetirementEpoch)
         return true;
     if (started && managementClient && (foreignSyncBeacon || !getBoolean("macAutoRequest") || getBoolean("macNotifyAllBeacons") ||
-            (descriptor->contentAvailable && !descriptor->beacon.payload.empty())))
+            (descriptor->contentAvailable && !descriptor->beacon.payload.empty()) || !descriptor->enhancedPayload.empty()))
         managementClient->handleBeaconNotifyIndication(*descriptor);
     if (receiveEpoch == receiveRetirementEpoch)
         restoreIdle();

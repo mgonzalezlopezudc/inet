@@ -141,7 +141,7 @@ class GtsAllocationExercise : public cSimpleModule, public cListener, public IIe
     std::map<cModule *,bool> observedPermit;
     uint64_t raceIds[2] = {0,0};
     int raceSuccess = 0, raceNoData = 0;
-    int scenario = 0;
+    int scenario = 0, orphanRealignmentAttempts = 0, orphanChildAckRf = 0;
     Status expectedSet = Status::SUCCESS;
     Status expectedGts = Status::SUCCESS;
     std::optional<Ieee802154MacPibValue> value;
@@ -162,6 +162,7 @@ class GtsAllocationExercise : public cSimpleModule, public cListener, public IIe
             getModuleByPath("^.host[1].nic.radio")->subscribe(receptionStartedSignal,this);
         if (scenario == 15 || scenario == 25 || scenario == 26 || scenario == 29 || scenario == 31 || scenario == 33 || scenario == 36 || scenario == 37)
             getModuleByPath("^.host[0].nic.radio")->subscribe(transmissionStartedSignal,this);
+        if (scenario == 22 || scenario == 32) getModuleByPath("^.host[1].nic.radio")->subscribe(transmissionStartedSignal,this);
         if (scenario == 11 || scenario == 12)
             subscribe(registerSignal("gtsDescriptorStripped"),this);
         if (scenario == 32 || scenario == 35)
@@ -343,7 +344,9 @@ class GtsAllocationExercise : public cSimpleModule, public cListener, public IIe
             if (scenario == 13 || scenario == 14) {
                 boundaryPayload = scenario == 13 ? 91 : 92;
                 set(root.get(),"macBeaconPayload",std::vector<uint8_t>(boundaryPayload,0x42));
-                ASSERT(removed.size() == (scenario == 13 ? 0 : 1));
+                ASSERT(removed.empty());
+                if (scenario == 14) for (int ticks = 0; ticks < 30 && removed.empty(); ++ticks) wait(SimTime(10,SIMTIME_MS));
+                ASSERT(removed.size() == size_t(scenario == 13 ? 0 : 1));
                 if (scenario == 14) ASSERT(removed[0] == std::make_pair(uint16_t(4),Ieee802154GtsDirection::DEVICE_TRANSMIT));
                 wait(SimTime(650,SIMTIME_MS));
                 ASSERT(boundaryObserved && removed.size() == (scenario == 13 ? 0 : 1));
@@ -596,7 +599,7 @@ class GtsAllocationExercise : public cSimpleModule, public cListener, public IIe
             ASSERT(rootManagement->submitOrphanResponse(++nextId,{Ieee802154Address::fromExtended(0x0401123456789abcULL),3,true}) == Admission::ACCEPTED);
             for (int ticks = 0; ticks < 30 && !orphanResponses; ++ticks) wait(SimTime(10,SIMTIME_MS));
             ASSERT(orphanResponses == 1);
-            ASSERT(removed.size() == 1);
+            if (removed.size() != 1) throw cRuntimeError("orphan direct scenario=%d responses=%d removed=%lu grants=%d beacons=%lu lastBeacon=%s",scenario,orphanResponses,(unsigned long)removed.size(),gtsConfirms,(unsigned long)rootBeaconStarts.size(),rootBeaconStarts.empty() ? "none" : rootBeaconStarts.back().str().c_str());
             emit(registerSignal("verificationComplete"),1L);
             return;
         }
@@ -635,7 +638,7 @@ class GtsAllocationExercise : public cSimpleModule, public cListener, public IIe
             scan.channels = {channel()};
             ASSERT(childManagement->submitScan(++nextId,scan) == Admission::ACCEPTED);
             for (int ticks = 0; ticks < 30 && !scans; ++ticks) wait(SimTime(10,SIMTIME_MS));
-            ASSERT(scans == 1 && orphans == 1 && orphanResponses == 1 && orphanFrames == 1 && removed.size() == 1);
+            if (!(scans == 1 && orphans == 1 && orphanResponses == 1 && orphanFrames == 1 && removed.size() == 1)) throw cRuntimeError("orphan scan scenario=%d scans=%d orphans=%d responses=%d frames=%d removed=%lu grants=%d realignAttempts=%d childAckRF=%d",scenario,scans,orphans,orphanResponses,orphanFrames,(unsigned long)removed.size(),gtsConfirms,orphanRealignmentAttempts,orphanChildAckRf);
             ASSERT(child->submitGet(++nextId,{"macShortAddress"}) == Admission::ACCEPTED);
             ASSERT(value && std::get<uint64_t>(*value) == 3);
             ASSERT(childManagement->submitSync(++nextId,{channel(),true}) == Admission::ACCEPTED);
@@ -698,6 +701,7 @@ class GtsAllocationExercise : public cSimpleModule, public cListener, public IIe
         }
         if (signal == transmissionStartedSignal) {
             auto transmission = check_and_cast<const physicallayer::ITransmission *>(object);
+            if ((scenario == 22 || scenario == 32) && orphans && source == getModuleByPath("^.host[1].nic.radio") && std::string(transmission->getPacket()->getName()) == "IEEE802154-ACK") ++orphanChildAckRf;
             if (std::string(transmission->getPacket()->getName()) == "IEEE802154-periodic-beacon") {
                 rootBeaconStarts.push_back(transmission->getStartTime());
                 if (scenario == 37 && stopEpoch && epochBeaconDescriptor) {
@@ -736,6 +740,7 @@ class GtsAllocationExercise : public cSimpleModule, public cListener, public IIe
             return;
         }
         auto frame = check_and_cast<Packet *>(object)->peekAtFront<Ieee802154Frame>();
+        if ((scenario == 22 || scenario == 32) && orphans && source == getModuleByPath(par("rootModule")) && frame->getFrameType() == 3 && frame->getPayloadArraySize() && frame->getPayload(0) == 8) ++orphanRealignmentAttempts;
         if (scenario == 23 && rebindOnAck && source == getModuleByPath(par("rootModule")) && frame->getFrameType() == 2) {
             rebindOnAck = false; rebindTriggered = true;
             ASSERT(rootManagement->submitAssociateResponse(++nextId,{Ieee802154Address::fromExtended(0x0401123456789abcULL),3,0}) == Admission::ACCEPTED);
@@ -852,7 +857,7 @@ class GtsAllocationExercise : public cSimpleModule, public cListener, public IIe
     void handleDisassociateIndication(const Ieee802154MacDisassociateIndication& i) override { Enter_Method("handleDisassociateIndication"); ASSERT(scenario >= 7 && i.reason == 1); ++departures; }
     void handleOrphanIndication(const Ieee802154MacOrphanIndication& i) override { Enter_Method("handleOrphanIndication"); ASSERT(scenario == 22 || scenario == 32 || scenario == 35); ++orphans; ASSERT(rootManagement->submitOrphanResponse(++nextId,{i.orphanAddress,3,true}) == Admission::ACCEPTED); }
     void handleOrphanResponseStatus(uint64_t,const Ieee802154MacOrphanResponseStatus& c) override { Enter_Method("handleOrphanResponseStatus"); ASSERT((scenario == 20 || scenario == 22 || scenario == 32 || scenario == 35) && c.result == Ieee802154MacServiceResult(Status::SUCCESS)); ++orphanResponses; }
-    void handleSyncLossIndication(const Ieee802154MacSyncLossIndication& i) override { Enter_Method("handleSyncLossIndication"); ASSERT(((scenario == 20 || scenario == 35 || scenario == 36) && i.reason == Ieee802154SyncLossReason::REALIGNMENT) || ((scenario == 37 || scenario == 41) && i.reason == Ieee802154SyncLossReason::BEACON_LOST)); }
+    void handleSyncLossIndication(const Ieee802154MacSyncLossIndication& i) override { Enter_Method("handleSyncLossIndication"); if (!(((scenario == 20 || scenario == 35 || scenario == 36) && i.reason == Ieee802154SyncLossReason::REALIGNMENT) || ((scenario == 37 || scenario == 41) && i.reason == Ieee802154SyncLossReason::BEACON_LOST))) throw cRuntimeError("unexpected sync loss scenario=%d reason=%d removed=%lu realignAttempts=%d childAckRF=%d",scenario,int(i.reason),(unsigned long)removed.size(),orphanRealignmentAttempts,orphanChildAckRf); }
     void handleRxEnableConfirm(uint64_t,const Ieee802154MacRxEnableConfirm&) override { ASSERT(false); }
     void handleRxEnableIndication(const Ieee802154MacRxEnableIndication&) override { ASSERT(false); }
     void handleGtsConfirm(uint64_t id,const Ieee802154MacGtsConfirm& c) override { Enter_Method("handleGtsConfirm"); if (scenario >= 38 && scenario <= 41) { auto reason = scenario == 38 ? Ieee802154MacServiceAbortReason::CANCELLED : scenario == 39 ? Ieee802154MacServiceAbortReason::RESET : Ieee802154MacServiceAbortReason::STOPPED; ASSERT(id == gtsId && c.result == Ieee802154MacServiceResult(reason) && gtsConfirms == 0); ++gtsConfirms; return; } if (scenario == 34 && id == pressureClosingId) { ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); pressureClosingSuccess = true; return; } if (scenario == 34 && std::find(pressureIds.begin(),pressureIds.end(),id) != pressureIds.end()) { ASSERT(c.result == Ieee802154MacServiceResult(Status::NO_DATA)); ++pressureNoData; return; } if (scenario == 37) { ASSERT(std::find(denialIds.begin(),denialIds.end(),id) != denialIds.end()); ASSERT(c.result == Ieee802154MacServiceResult(Status::DENIED) || (epochStopped && (c.result == Ieee802154MacServiceResult(Status::NO_DATA) || c.result == Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::DISASSOCIATED)))); ++denialConfirms; return; } if (scenario == 3 && (id == raceIds[0] || id == raceIds[1])) { if (c.result == Ieee802154MacServiceResult(Status::SUCCESS)) ++raceSuccess; else { ASSERT(c.result == Ieee802154MacServiceResult(Status::NO_DATA)); ++raceNoData; } } else { auto status = (scenario == 8 && gtsConfirms == 7) || (scenario == 16 && gtsConfirms == 5) ? Status::DENIED : ((scenario == 2 || scenario == 9) && gtsConfirms == 7) || scenario == 12 || (scenario == 22 && gtsConfirms == 1) || (scenario == 23 && gtsConfirms == 0) ? Status::NO_DATA : scenario == 19 ? Status::NO_ACK : (scenario == 17 || scenario == 18) ? expectedGts : Status::SUCCESS; auto result = (scenario == 1 || scenario == 35) ? Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::DISASSOCIATED) : scenario == 24 ? Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::CANCELLED) : Ieee802154MacServiceResult(status); ASSERT(id == gtsId && c.result == result); if (scenario == 35) orphanResetOrder.push_back(1); if (scenario == 12) ASSERT(requestAckEnd && simTime() == *requestAckEnd + SimTime(4 * 122880,SIMTIME_US)); } ++gtsConfirms; }

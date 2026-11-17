@@ -78,6 +78,22 @@ after allocation ends. Reject unusable lengths/counts before partial schedule up
 while ignoring reserved field bits on reception. Observe actual longer-beacon CAP start,
 candidate rollback and ordinary-CAP capacity under descriptor pressure.
 
+Place a matching-parent directed discovery response carrying otherwise valid simplified
+schedule IEs between periodic boundaries. It may be reported to the upper client, but
+must not change phase, CAP bounds, grants, advertisement aging or beacon-loss counters.
+Then receive an eligible periodic beacon and observe actual renewal. Foreign, protected,
+malformed and lone-GTS-IE inputs must not partially install a schedule. The selected
+profile uses DestinationNONE periodic shape plus the existing identity/channel/window
+predicates; discovery does not supply a standardized phase offset.
+
+For scheduled exchanges, require final SIFS and the applicable end-aged clock guard to
+fit before the actual reservation end. Check opposite fixed clock drifts over a long grant,
+not only a zero-drift slot. Separately observe the length-dependent delay before the
+same device's next transmission within a sufficiently long grant. Optional enhanced-ACK
+content yields to the mandatory response at the boundary; its permitted start envelope
+is independent of clipped completion. Loss/retry must not extend receive duty into the
+next unrelated reservation or silently fall back from requested GTS to CAP.
+
 Before scheduled integration, require the periodic enhanced-selection attribute to be unavailable. Once implemented, write macUseEnhancedBeacon true/false and observe the corresponding actual periodic beacon formats, retaining the same schedule/grant owner. Default/nondefault reset must apply the selected default/retention behavior.
 
 Obligations: ENHANCED-15, ENHANCED-16 and ENHANCED-17 periodic selection.
