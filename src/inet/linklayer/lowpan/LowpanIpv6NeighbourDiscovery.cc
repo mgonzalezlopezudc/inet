@@ -5,6 +5,7 @@
 #include "inet/linklayer/lowpan/LowpanProtocol.h"
 #include "inet/linklayer/lowpan/LowpanNativeBoundary.h"
 #include "inet/linklayer/lowpan/LowpanHostRegistration.h"
+#include "inet/linklayer/lowpan/LowpanRegistrationAuthority.h"
 #include "inet/linklayer/ieee802154/Ieee802154AddressTagBase_m.h"
 #include "inet/linklayer/common/InterfaceTag_m.h"
 #include "inet/networklayer/common/HopLimitTag_m.h"
@@ -20,6 +21,7 @@ Define_Module(LowpanIpv6NeighbourDiscovery);
 simsignal_t LowpanIpv6NeighbourDiscovery::registrationCountChangedSignal = registerSignal("registrationCountChanged");
 simsignal_t LowpanIpv6NeighbourDiscovery::nativeRouterDiscoveredSignal = registerSignal("nativeRouterDiscovered");
 simsignal_t LowpanIpv6NeighbourDiscovery::nativeHostRegistrationSucceededSignal = registerSignal("nativeHostRegistrationSucceeded");
+simsignal_t LowpanIpv6NeighbourDiscovery::duplicateAddressEntryCountChangedSignal = registerSignal("duplicateAddressEntryCountChanged");
 
 namespace {
 uint32_t prefixLifetime(simtime_t configured)
@@ -36,6 +38,7 @@ LowpanIpv6NeighbourDiscovery::~LowpanIpv6NeighbourDiscovery()
 {
     updateHostAddressSubscription(false);
     hostRegistration.reset();
+    registrationAuthority.reset();
     cancelAndDelete(routerAdvertisementTimer);
     routerAdvertisementTimer = nullptr;
     cancelAndDelete(registrationExpiryTimer);
@@ -48,11 +51,13 @@ void LowpanIpv6NeighbourDiscovery::initialize(int stage)
     Ipv6NeighbourDiscovery::initialize(stage);
     if (stage == INITSTAGE_LOCAL) {
         std::string role = par("nativeNdRole").stdstringValue();
-        if (role != "static" && role != "router" && role != "host")
+        if (role != "static" && role != "router" && role != "host" && role != "borderRouter")
             throw cRuntimeError("Invalid native LoWPAN ND role");
         registrationRouter = role == "router";
         if (role == "host")
             hostRegistration = std::make_unique<LowpanHostRegistration>(*this);
+        if (role == "borderRouter")
+            registrationAuthority = std::make_unique<LowpanRegistrationAuthority>(*this);
         maxRegistrations = par("maxRegistrations");
         if (maxRegistrations <= 0)
             throw cRuntimeError("Native registration capacity must be positive");
@@ -65,12 +70,15 @@ void LowpanIpv6NeighbourDiscovery::initialize(int stage)
         WATCH_EXPR("numPendingRouterAdvertisements", pendingRouterAdvertisements.size());
         WATCH_EXPR("numNativeRouters", hostRegistration ? hostRegistration->getNumRouters() : 0);
         WATCH_EXPR("numNativeHostAddresses", hostRegistration ? hostRegistration->getNumAddresses() : 0);
+        WATCH_EXPR("numDuplicateAddressEntries", registrationAuthority ? registrationAuthority->getNumEntries() : 0);
     }
 }
 
 void LowpanIpv6NeighbourDiscovery::handleMessageWhenUp(cMessage *message)
 {
-    if (hostRegistration && hostRegistration->ownsTimer(message))
+    if (registrationAuthority && registrationAuthority->ownsTimer(message))
+        registrationAuthority->handleTimer();
+    else if (hostRegistration && hostRegistration->ownsTimer(message))
         hostRegistration->handleTimer();
     else if (message == routerAdvertisementTimer) {
         for (auto it = pendingRouterAdvertisements.begin(); it != pendingRouterAdvertisements.end();) {
@@ -97,6 +105,8 @@ void LowpanIpv6NeighbourDiscovery::stop()
     updateHostAddressSubscription(false);
     if (hostRegistration)
         hostRegistration->clear();
+    if (registrationAuthority)
+        registrationAuthority->clear();
     clearRouterAdvertisements();
     clearRegistrations(true);
     Ipv6NeighbourDiscovery::stop();
@@ -430,8 +440,8 @@ void LowpanIpv6NeighbourDiscovery::sendNativeRouterAdvertisement(const RouterAdv
 
 void LowpanIpv6NeighbourDiscovery::start()
 {
-    if (registrationRouter && !rt6->isRouter())
-        throw cRuntimeError("Native ND router role requires IPv6 forwarding to be enabled");
+    if ((registrationRouter || registrationAuthority) && !rt6->isRouter())
+        throw cRuntimeError("Native ND router and borderRouter roles require IPv6 forwarding to be enabled");
     Ipv6NeighbourDiscovery::start();
     if (hostRegistration)
         updateHostAddressSubscription(true);
@@ -564,6 +574,8 @@ void LowpanIpv6NeighbourDiscovery::processNativeNeighbourSolicitation(Packet *pa
 
 void LowpanIpv6NeighbourDiscovery::processNDMessage(Packet *packet, const Icmpv6Header *message)
 {
+    if (registrationAuthority && registrationAuthority->processPacket(packet, message))
+        return;
     auto indication = packet->findTag<InterfaceInd>();
     auto interface = indication != nullptr ? ift->getInterfaceById(indication->getInterfaceId()) : nullptr;
     auto boundary = interface != nullptr ? dynamic_cast<LowpanNativeBoundary *>(interface->getSubmodule("boundary")) : nullptr;

@@ -1,0 +1,3 @@
+Routed duplicate-address registration authority
+
+The 6LoWPAN Neighbor Discovery borderRouter role now supplies a bounded routed DAR/DAC registration authority on ordinary IPv6 interfaces, including Ethernet. It tracks address ownership and minute-based lifetimes, rejects conflicting owners or a full table, and clears its state on expiry and lifecycle transitions. This authority table creates no native neighbor bindings or host data routes.
