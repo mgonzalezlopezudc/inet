@@ -1,6 +1,6 @@
 # DTLS publication evidence
 
-> **Kind:** report · **Status:** snapshot 2026-11-17 · **Seal:** none · **Owns:** — · **Stands on:** [scope](scope.md), [publication plan](../../../../../plan/pending/dtls-publication-plan.md), [verification record](publication-verification.json), [history identities](publication-history.json)
+> **Kind:** report · **Status:** snapshot 2026-11-17 · **Seal:** none · **Owns:** — · **Stands on:** [scope](scope.md), [publication plan](../../../../../plan/done/dtls-publication-plan.md), [verification record](publication-verification.json), [history identities](publication-history.json)
 
 The complete modeled DTLS implementation is reconstructed as 53 commits in 18
 sequential INET review units. The 50 commits through the final code change have

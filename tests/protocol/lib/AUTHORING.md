@@ -11,7 +11,7 @@ delay, mutate, corrupt, duplicate), on wired and on wireless links. Tests are pl
 DSL, no parser.
 
 This guide is the authoring reference. For the design rationale see
-[`plan/pending/protocol-test-framework.md`](../../../plan/pending/protocol-test-framework.md).
+[`plan/done/protocol-test-framework.md`](../../../plan/done/protocol-test-framework.md).
 
 ---
 
@@ -573,11 +573,11 @@ library, one folder per subject:
 
 | Folder | Subject |
 | --- | --- |
-| [`../self/`](https://github.com/mgonzalezlopezudc/inet/blob/5284847df92eea8451bf056d8722fabb0ddf65bd/tests/protocol/self) | the framework itself: the matching engine, the combinators, injection, interception |
-| [`../tcp/`](https://github.com/mgonzalezlopezudc/inet/blob/5284847df92eea8451bf056d8722fabb0ddf65bd/tests/protocol/tcp) | TCP |
+| [`../self/`](https://github.com/mgonzalezlopezudc/inet/tree/5284847df92eea8451bf056d8722fabb0ddf65bd/tests/protocol/self) | the framework itself: the matching engine, the combinators, injection, interception |
+| [`../tcp/`](https://github.com/mgonzalezlopezudc/inet/tree/5284847df92eea8451bf056d8722fabb0ddf65bd/tests/protocol/tcp) | TCP |
 | [`../tcp/parameter/`](../tcp/parameter/README.md) | TCP: one test for each class of values of each NED parameter ([the procedure](../../../doc/project/guide/derive-tests-from-parameters.md)) |
-| [`../arp/`](https://github.com/mgonzalezlopezudc/inet/blob/5284847df92eea8451bf056d8722fabb0ddf65bd/tests/protocol/arp), [`../ipv4/`](https://github.com/mgonzalezlopezudc/inet/blob/5284847df92eea8451bf056d8722fabb0ddf65bd/tests/protocol/ipv4), [`../ipv6/`](https://github.com/mgonzalezlopezudc/inet/blob/5284847df92eea8451bf056d8722fabb0ddf65bd/tests/protocol/ipv6), [`../ethernet/`](https://github.com/mgonzalezlopezudc/inet/blob/5284847df92eea8451bf056d8722fabb0ddf65bd/tests/protocol/ethernet) | one folder per protocol |
-| [`../wifi/`](https://github.com/mgonzalezlopezudc/inet/blob/5284847df92eea8451bf056d8722fabb0ddf65bd/tests/protocol/wifi) | the IEEE 802.11 conformance suite (its own runner) |
+| [`../arp/`](https://github.com/mgonzalezlopezudc/inet/tree/5284847df92eea8451bf056d8722fabb0ddf65bd/tests/protocol/arp), [`../ipv4/`](https://github.com/mgonzalezlopezudc/inet/tree/5284847df92eea8451bf056d8722fabb0ddf65bd/tests/protocol/ipv4), [`../ipv6/`](https://github.com/mgonzalezlopezudc/inet/tree/5284847df92eea8451bf056d8722fabb0ddf65bd/tests/protocol/ipv6), [`../ethernet/`](https://github.com/mgonzalezlopezudc/inet/tree/5284847df92eea8451bf056d8722fabb0ddf65bd/tests/protocol/ethernet) | one folder per protocol |
+| [`../wifi/`](https://github.com/mgonzalezlopezudc/inet/tree/5284847df92eea8451bf056d8722fabb0ddf65bd/tests/protocol/wifi) | the IEEE 802.11 conformance suite (its own runner) |
 
 Before running, follow the
 [INET library freshness and build-mode guidance](../../../doc/project/guide/run-the-gates.md#keep-the-tested-library-current).
@@ -603,7 +603,7 @@ common ini settings via [`protocoltest-base.ini`](protocoltest-base.ini)
 A test does not need a `ProtocolTester` declared in its network. Define the program with
 `Define_ProtocolTestProgram()` (one per build, no name/selection) and the framework attaches
 a `ProtocolTester` to whatever network runs — so a test can target an **unmodified external
-network** just by pointing `network =` at it. Every test in [`../self/`](https://github.com/mgonzalezlopezudc/inet/blob/5284847df92eea8451bf056d8722fabb0ddf65bd/tests/protocol/self) is such
+network** just by pointing `network =` at it. Every test in [`../self/`](https://github.com/mgonzalezlopezudc/inet/tree/5284847df92eea8451bf056d8722fabb0ddf65bd/tests/protocol/self) is such
 an example: `Basic.test` is the smallest one, `ViolationDetected.test` asserts that the
 framework reports a violation, and `InterceptMutate.test` drives a fault into the wire.
 Each carries its program in `%global`, its (tester-less) network in `%file`, and asserts
