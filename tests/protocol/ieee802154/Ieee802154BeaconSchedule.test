@@ -276,8 +276,8 @@ class BeaconScheduleExercise : public cSimpleModule, public cListener,
                 }
                 if (scenario == 14) {
                     expectedSet = Status::INVALID_PARAMETER;
-                    set(sender.get(),"macBeaconOrder",uint64_t(15));
-                    set(sender.get(),"macBattLifeExt",true);
+                    set(sender.get(),"macBeaconOrder",uint64_t(16));
+                    set(sender.get(),"macBattLifeExt",uint64_t(1));
                     set(sender.get(),"macBattLifeExtPeriods",uint64_t(7));
                     set(sender.get(),"macPanId",uint64_t(0x2345));
                     set(sender.get(),"macShortAddress",uint64_t(7));

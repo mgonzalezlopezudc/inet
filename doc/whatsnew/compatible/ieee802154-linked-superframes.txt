@@ -1,0 +1,3 @@
+IEEE 802.15.4 linked coordinator superframes
+
+The optional native superframe composition supports a coordinator associated with another coordinator, with incoming and outgoing beacon timing, and the legacy coordinator realignment procedure. Beacon order and battery life extension can be changed during periodic beaconing; the next constructed beacon applies those values. Access windows identify their incoming or outgoing origin; custom providers should follow the IEEE 802.15.4 Dual-CAP Window Origin migration guide. The external-clock constraints remain those documented for the native beacon-tracking composition.

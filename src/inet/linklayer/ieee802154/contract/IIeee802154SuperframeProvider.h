@@ -41,6 +41,8 @@ class INET_API IIeee802154SuperframeProvider
     virtual void cancelAccessSearchDeadline() = 0;
     virtual simtime_t getFutureSimulationTime(clocktime_t target) const = 0;
     virtual clocktime_t getFutureClockTime(simtime_t target) const = 0;
+    /** Conservative physical phase uncertainty since an actual parent anchor. */
+    [[nodiscard]] virtual simtime_t getForecastUncertainty(simtime_t elapsed, simtime_t maxPropagationDelay) const = 0;
     virtual void recordReceptionStart(const physicallayer::Ieee802154PhyReceiveStart& start) = 0;
     virtual std::optional<Ieee802154SuperframeReceptionAnchor> takeReceptionAnchor(int transmissionId) = 0;
     virtual void retireExpiredReceptionAnchors() = 0;

@@ -2,6 +2,8 @@
 //
 #include "inet/linklayer/ieee802154/Ieee802154SuperframeController.h"
 
+#include <algorithm>
+
 #include "inet/common/InitStages.h"
 #include "inet/common/lifecycle/ModuleOperations.h"
 #include "inet/common/lifecycle/NodeStatus.h"
@@ -177,6 +179,19 @@ void Ieee802154SuperframeController::cancelAccessSearchDeadline()
     Enter_Method("cancelAccessSearchDeadline");
     if (isScheduledClockEvent(accessSearchDeadline))
         cancelClockEvent(accessSearchDeadline);
+}
+
+simtime_t Ieee802154SuperframeController::getForecastUncertainty(simtime_t elapsed, simtime_t maxPropagationDelay) const
+{
+#ifdef INET_WITH_CLOCK
+    if (clock) {
+        auto relativeGuard = [](int64_t ticks) { return (ticks / 1000000) * 81 + ((ticks % 1000000) * 81 + 999999) / 1000000; };
+        auto ticks = std::max<int64_t>(0,elapsed.raw());
+        auto base = 2 * SimTime(16,SIMTIME_US).raw() + std::max<int64_t>(0,maxPropagationDelay.raw()) + 2;
+        return SimTime::fromRaw(relativeGuard(ticks) + base + relativeGuard(base));
+    }
+#endif
+    return SIMTIME_ZERO;
 }
 
 void Ieee802154SuperframeController::recordReceptionStart(const physicallayer::Ieee802154PhyReceiveStart& start)

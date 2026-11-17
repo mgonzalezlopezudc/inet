@@ -17,6 +17,19 @@ std::optional<Ieee802154SuperframeGeometry> Ieee802154SuperframeTiming::geometry
             uint32_t(960) << superframeOrder, uint32_t(60) << superframeOrder};
 }
 
+uint64_t Ieee802154SuperframeTiming::roundStartTime(uint32_t symbols, uint32_t backoffPeriod)
+{
+    if (backoffPeriod == 0)
+        throw cRuntimeError("Backoff period must be positive");
+    return ((uint64_t(symbols) + backoffPeriod - 1) / backoffPeriod) * backoffPeriod;
+}
+
+bool Ieee802154SuperframeTiming::physicalIntervalsOverlap(simtime_t firstStart, simtime_t firstEnd,
+        simtime_t secondStart, simtime_t secondEnd)
+{
+    return firstStart < firstEnd && secondStart < secondEnd && firstStart < secondEnd && secondStart < firstEnd;
+}
+
 uint32_t Ieee802154SuperframeTiming::timestamp(clocktime_t localTime)
 {
     auto ticks = CLOCKTIME_AS_SIMTIME(localTime).raw();

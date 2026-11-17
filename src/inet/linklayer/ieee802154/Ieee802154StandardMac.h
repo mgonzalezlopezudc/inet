@@ -42,8 +42,9 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     bool phyAvailable = true;
     bool initialPanCoordinator = false;
     bool panCoordinator = false;
+    bool coordinator = false; // Coordinator services remain available without an outgoing superframe.
     enum class Phase { WAIT_IFS, WAIT_RX, WAIT_CAP, ACCESS, WAIT_TX, TRANSMIT, WAIT_ACK };
-    enum class PhyPurpose { IDLE, RX_FOR_ACCESS, CCA, TX_READY, TRANSMIT, ACK_LISTEN, ACK_READY, ACK_TRANSMIT, MANAGEMENT_GET, MANAGEMENT_SET, START_CHANNEL, BEACON_CHANNEL, ASSOCIATE_CHANNEL, ORPHAN_CHANNEL_GET, SCAN_GET, SCAN_CCA_GET, SCAN_OFF, SCAN_CHANNEL, SCAN_RX, SCAN_ED_DURATION, SCAN_ED, SCAN_RESTORE_OFF, SCAN_CCA_RESTORE, SCAN_RESTORE, SCAN_REALIGN_OFF, SCAN_REALIGN_CHANNEL, RESET, SUPERFRAME_GET, SUPERFRAME_CHANNEL, SUPERFRAME_RESTORE, SUPERFRAME_PHY_RESTORE, SUPERFRAME_READY, SUPERFRAME_TRANSMIT, SYNC_CHANNEL, SYNC_READY };
+    enum class PhyPurpose { IDLE, RX_FOR_ACCESS, CCA, TX_READY, TRANSMIT, ACK_LISTEN, ACK_READY, ACK_TRANSMIT, MANAGEMENT_GET, MANAGEMENT_SET, START_CHANNEL, BEACON_CHANNEL, ASSOCIATE_CHANNEL, ORPHAN_CHANNEL_GET, SCAN_GET, SCAN_CCA_GET, SCAN_OFF, SCAN_CHANNEL, SCAN_RX, SCAN_ED_DURATION, SCAN_ED, SCAN_RESTORE_OFF, SCAN_CCA_RESTORE, SCAN_RESTORE, SCAN_REALIGN_OFF, SCAN_REALIGN_CHANNEL, RESET, SUPERFRAME_GET, SUPERFRAME_CHANNEL, SUPERFRAME_RESTORE, SUPERFRAME_PHY_RESTORE, SUPERFRAME_READY, SUPERFRAME_ACTIVATION_READY, SUPERFRAME_RETUNE_OFF, SUPERFRAME_TRANSMIT, SYNC_CHANNEL, SYNC_READY };
     struct Transaction {
         uint64_t id;
         Packet *msdu;
@@ -64,7 +65,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
         bool transmittedInCap = false;
         uint8_t capBeaconOrder = 15;
         std::optional<std::pair<uint16_t,Ieee802154Address>> pendingDevice; ///< Queue key retained across allocation changes.
-        enum class Kind { DATA, POLL, INDIRECT, BEACON, AUTO_BEACON, SCAN_REQUEST, ASSOCIATE_REQUEST, DISASSOCIATE, ORPHAN_RESPONSE, PAN_CONFLICT } kind = Kind::DATA;
+        enum class Kind { DATA, POLL, INDIRECT, BEACON, AUTO_BEACON, SCAN_REQUEST, ASSOCIATE_REQUEST, DISASSOCIATE, ORPHAN_RESPONSE, PAN_CONFLICT, SUPERFRAME_REALIGN } kind = Kind::DATA;
     };
     struct AckExchange {
         Ptr<Ieee802154Frame> frame;
@@ -105,12 +106,36 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
         Ieee802154MacStartSuperframeRequest parameters;
         std::optional<physicallayer::Ieee802154PhyChannel> originalChannel;
         std::optional<Ieee802154MacServiceResult> failure;
+        bool awaitingFirstBoundary = false;
+        bool preparingFirstBeacon = true;
+        std::optional<clocktime_t> firstTarget;
+        bool awaitingShutdownBoundary = false;
+        enum class Phase { INITIAL, WAIT_OLD_BEACON, COMMAND, WAIT_ACTIVATION, IMMEDIATE_ACTIVATION } phase = Phase::INITIAL;
     };
     std::optional<SuperframeStartRequest> superframeStartRequest;
     std::optional<physicallayer::Ieee802154PhyChannel> interruptedSuperframeChannel;
     bool periodicBeaconing = false;
     std::optional<clocktime_t> periodicTarget;
     std::optional<clocktime_t> beaconAfterAck;
+    struct BeaconConfiguration {
+        uint8_t beaconOrder;
+        uint8_t superframeOrder;
+        bool batteryLifeExtension;
+        uint32_t batteryLifePeriods;
+        uint32_t backoffPeriod;
+    };
+    std::optional<BeaconConfiguration> constructedBeacon;
+    std::optional<BeaconConfiguration> outgoingEpoch;
+    // The last located parent superframe outlives both its CAP and a one-shot SYNC.
+    struct IncomingSuperframe {
+        clocktime_t anchor;
+        uint8_t beaconOrder;
+        uint8_t superframeOrder;
+        simtime_t physicalStart;
+        simtime_t physicalEnd;
+    };
+    std::optional<IncomingSuperframe> incomingSuperframe;
+    std::optional<clocktime_t> childPhase; // Recurring local-clock phase from the parent beacon.
     std::optional<clocktime_t> transmittedBeaconAnchor;
     simtime_t transmittedBeaconIfs;
     bool outgoingCapActive = false;
@@ -119,8 +144,15 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     simsignal_t outgoingCapActiveSignal = SIMSIGNAL_NULL;
     void setOutgoingCapActive(bool active);
     void completeSuperframeStart(const Ieee802154MacServiceResult& result);
+    void commitSuperframeChannel();
+    void retireParentContext(bool clearAssociation);
     void failSuperframeStart(const Ieee802154MacServiceResult& result);
     void preparePeriodicBeacon();
+    std::optional<clocktime_t> nextBeaconBoundary() const;
+    bool ownsBeaconBoundary(clocktime_t boundary) const;
+    clocktime_t firstChildBeaconTarget(const Ieee802154MacStartSuperframeRequest& request) const;
+    clocktime_t advanceChildBeaconTarget(const Ieee802154MacStartSuperframeRequest& request, clocktime_t target) const;
+    void transmitSuperframeRealignment();
     void sendPeriodicBeacon();
     void scheduleNextPeriodicBeacon();
     void skipPeriodicBeacon();
@@ -128,9 +160,11 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     void resumeAvailablePhy();
     void startOutgoingCap();
     void publishAccessWindow(clocktime_t anchor, simtime_t beaconEnd, simtime_t beaconIfs,
-            uint8_t beaconOrder, uint8_t superframeOrder, uint8_t finalCapSlot, bool batteryLifeExtension);
+            uint8_t beaconOrder, uint8_t superframeOrder, uint8_t finalCapSlot, bool batteryLifeExtension,
+            uint32_t backoffPeriod, uint32_t batteryLifePeriods, Ieee802154AccessWindowOrigin origin);
     void resumeCapAccess();
-    Ptr<Ieee802154Frame> makeBeacon(uint16_t panId, uint8_t beaconOrder, uint8_t superframeOrder, bool batteryLifeExtension);
+    Ptr<Ieee802154Frame> makeBeacon(uint16_t panId, uint8_t beaconOrder, uint8_t superframeOrder, bool batteryLifeExtension, bool consumeSequence = true);
+    bool overlapsIncomingSuperframe(clocktime_t target, uint8_t beaconOrder, uint8_t superframeOrder, b psduLength) const;
     bool fitsBeaconPayload(const std::vector<uint8_t>& payload) const;
     struct Synchronization {
         uint64_t id;
@@ -283,6 +317,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     std::deque<PendingPoll> pendingPolls;
     std::optional<PollRequest> pollRequest;
     bool pendingCallbacksActive = false;
+    bool syncLossNotificationsActive = false;
     cMessage *pendingTimer = nullptr;
     cMessage *pollTimer = nullptr;
     void completePending(uint64_t token, const Ieee802154MacServiceResult& result,

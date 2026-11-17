@@ -323,6 +323,11 @@ void Ieee802154MacPib::clearAssociation()
     // IEEE Std 802.15.4-2024, 10.21.3: disassociation restores these five defaults only.
     state.macPanId = 0xffff;
     state.macShortAddress = 0xffff;
+    clearParentAssociation();
+}
+
+void Ieee802154MacPib::clearParentAssociation()
+{
     state.macAssociatedPanCoord = false;
     state.macCoordShortAddress = 0xffff;
     state.macCoordExtendedAddress = Ieee802154Address::NONE_ADDRESS;
