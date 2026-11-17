@@ -4,7 +4,7 @@ package inet.linklayer.lowpan;
 import inet.common.SimpleModule;
 import inet.linklayer.lowpan.contract.ILowpanLayer;
 
-// IPv6 adaptation with RFC 4944 fragmentation; static native next-hop bindings.
+// IPv6 adaptation with RFC 4944 fragmentation and configured or registered native next-hop bindings.
 simple LowpanLayer extends SimpleModule like ILowpanLayer
 {
     parameters:

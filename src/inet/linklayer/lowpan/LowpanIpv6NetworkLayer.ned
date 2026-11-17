@@ -7,7 +7,7 @@ import inet.networklayer.contract.INetworkLayer;
 import inet.networklayer.icmpv6.Icmpv6;
 import inet.networklayer.ipv6.Ipv6RoutingTable;
 
-// Static LoWPAN profile. Mobility, IPsec and MLD are outside this composition.
+// LoWPAN composition with optional native registration; MIPv6, IPsec and MLD are outside this composition.
 module LowpanIpv6NetworkLayer like INetworkLayer
 {
     parameters:
