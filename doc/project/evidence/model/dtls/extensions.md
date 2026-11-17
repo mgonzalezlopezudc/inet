@@ -2,7 +2,7 @@
 
 > **Kind:** ledger · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [extension obligations](../../standard/rfc9147/extensions.md), [implementation plan](https://github.com/mgonzalezlopezudc/inet/blob/5284847df92eea8451bf056d8722fabb0ddf65bd/plan/pending/dtls-extensions.md)
 
-Publication association: C24. The retained execution statements refer to their original donor revisions. Fresh reconstructed results and exact-parent execution status are recorded separately; no historical PASS is attributed to this prefix.
+Publication association: C25. The retained execution statements refer to their original donor revisions. Fresh reconstructed results and exact-parent execution status are recorded separately; no historical PASS is attributed to this prefix.
 
 
 The user authorized execution of plan revision 5 on 2026-11-16. Base: `cb1691184444afa64b1819348d446d4cad610474`, branch `feat/dtls-extensions`. The unrelated local `AGENTS.md` edit is excluded. This record distinguishes selected future behavior from implemented and executed evidence. Existing baseline results remain valid only for their recorded revisions.
@@ -36,7 +36,7 @@ All named new tests below are **NOT_IMPLEMENTED / NOT_RUN** until their owning s
 | C3 | TICKET | Eight production ticket cases, session lifecycle module, five serializer/store/selection/reassembly units | DONE: fresh debug build; 8 ticket protocol, 5 unit, 5 module PASS; 7 existing protocol controls PASS before the final timeout-only adjustment |
 | C4 | EARLY, ADMISSION | Eleven explicit early-data protocol cases; store/offer units; engine lifecycle outcomes | DONE: fresh debug build; 24 combined protocol, 4 unit, 6 module PASS |
 | C5 | PROFILE | Eight profile/retry/hash/cost cases; extended negotiation/serializer/store units | DONE: fresh debug build; 37 combined protocol, 6 unit, 6 module PASS |
-| C6 | CID | Rfc9147ConnectionId; record units | NOT_STARTED |
+| C6 | CID | Eight negotiation/budget/isolation/lifecycle cases; record/dissector unit; allocator module | DONE: fresh debug build; 45 combined protocol, 6 unit, 7 module PASS |
 | C7 | CID-REQUEST, EXCHANGE | Rfc9147ConnectionIdUpdate | NOT_STARTED |
 | C8 | HEARTBEAT | Rfc9147Heartbeat; serializer units | NOT_STARTED |
 | C9 | PATH | Rfc9147Migration; routed/NAT fixtures | NOT_STARTED |
@@ -99,7 +99,7 @@ The final helper run passes four units, and the final module run passes six case
 
 ### C5 focused evidence
 
-A fresh debug library includes the finite catalog, ordered preferences, negotiated selection and sizes, independent initial-client signature selection, hash-filtered ticket cache, same-hash resumption, original-suite early admission and per-suite processing costs. Pre-negotiation ClientHello/HRR and detached-alert work use base costs; early protection uses its saved ticket suite. The [profile reviewer document](https://github.com/mgonzalezlopezudc/inet/blob/5284847df92eea8451bf056d8722fabb0ddf65bd/tests/protocol/dtls/algorithm-profiles.md) states the finite encodings, observations and limits.
+A fresh debug library includes the finite catalog, ordered preferences, negotiated selection and sizes, independent initial-client signature selection, hash-filtered ticket cache, same-hash resumption, original-suite early admission and per-suite processing costs. Pre-negotiation ClientHello/HRR and detached-alert work use base costs; early protection uses its saved ticket suite. The [profile reviewer document](../../../../../tests/protocol/dtls/algorithm-profiles.md) states the finite encodings, observations and limits.
 
 The final combined protocol run executes **37 cases, all PASS** with exit zero: eight new profile/retry/hash/cost cases plus 29 previous early-data/ticket/handshake/size/retry/cost controls. Every production fixture pins seed 0, declared checksums/FCS and a finite simulation limit. Exact selectors:
 
@@ -113,3 +113,20 @@ opp_run_module_tests --load . -p inet -m debug --no-build -f 'Dtls(EngineLifecyc
 Raw artifacts are `c5-build-debug.log` and `c5-final-{protocol,unit,module}-{runner,console}.log` under `audit/dtls-extensions/`. Scoped DTLS/TLS architecture/naming, source protection, document seals, release-note formatting and DTLS documentation links pass. The global link checker reports missing IEEE standards files in unchanged Wi-Fi evidence; the existing global interface gate also remains failing. These are not passing publication gates. Release execution, exact-parent comparison and baseline comparisons remain unrun; no stored expectation changed.
 
 The final helper run passes all six selected units and the final module run passes all six controls against the final debug library, after the retry-selection check was added. Both runners exit zero with nonzero selection.
+
+### C6 focused evidence
+
+The fresh debug library includes directional CID negotiation, actual header serialization/accounting, local lookup and cleanup, monotonic allocation and explicit changed-tuple refusal. Native outgoing dissection accepts a different peer CID length; raw receiving uses the local eight-byte profile. A queued early record whose header reservation changes finishes its sampled service and is rejected before handoff. The [CID reviewer document](https://github.com/mgonzalezlopezudc/inet/blob/5284847df92eea8451bf056d8722fabb0ddf65bd/tests/protocol/dtls/connection-ids.md) describes every fixture and the limits.
+
+The final combined protocol run passes **45 cases** with exit zero: eight new CID cases plus the 37 C5 cases. Five directional profiles include a SHA-384/RSA association with initial client authentication. Negative records reuse the rejected numbers to verify replay windows directly; restart and delayed old-CID cases check non-reuse. The final build also preserves the previous default printer text for records without a CID and keeps ticket-fragment budget subtraction signed.
+
+```sh
+make -j8 MODE=debug
+opp_run_protocol_tests --load . -p inet -m debug --no-build --no-concurrent -w '^tests/protocol/dtls$' -f 'Rfc9147(ConnectionId.*|Algorithm.*|Sha384.*|EarlyData.*|Resumption.*|PskResumption|Handshake|PskHandshake|ClientAuthentication|KeyUpdate|SharedPortClose|CookieKeyShareRetry|UnsupportedSuite|UnofferedSelection|FullDuplexCosts|KeyUpdateInputCost)\.test$' --log-file audit/dtls-extensions/c6-final-protocol-runner.log
+opp_run_unit_tests --load . -p inet -m debug --no-build -f '(TlsHandshakeParameters|TlsHandshakeSerializer|DtlsRecordSerializer|DtlsTicketSelection|DtlsSessionStore|TlsNewSessionTicket)_1\.test$' --log-file audit/dtls-extensions/c6-final-unit-runner.log
+opp_run_module_tests --load . -p inet -m debug --no-build -f 'Dtls(ConnectionIds|EngineLifecycle|SessionLifecycle|RecoveryLifecycle|RestartLifecycle|SenderState|PostHandshakeExchange)_1\.test$' --log-file audit/dtls-extensions/c6-final-module-runner.log
+```
+
+Artifacts are `c6-build-debug.log` and `c6-final-{protocol,unit,module}-{runner,console}.log` under `audit/dtls-extensions/`. Production cases pin seed 0, declared checksums/FCS and finite limits. Scoped architecture/naming, source protection, document seals, release formatting and DTLS documentation links pass. Existing global interface/link gate failures remain outside this change. Release, exact-parent and baseline comparisons remain unrun; no stored expectation changed. Migration remains unavailable until C9.
+
+The final six-unit and seven-module runs also pass with exit zero and nonzero selection against the final matching library. The allocator module is helper evidence; the real restart/close cases provide lifecycle and wire observations.
