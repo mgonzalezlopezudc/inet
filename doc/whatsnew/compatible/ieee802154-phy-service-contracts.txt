@@ -1,0 +1,5 @@
+Native IEEE 802.15.4 data services
+
+The selectable Ieee802154StandardInterface provides native short/EUI-64 addressing, complete legacy DATA/ACK frames and FCS, unslotted access, ACK retries, receive filtering and typed MCPS/MLME services over the packet-level O-QPSK radio. Timed PHY services expose actual transmission, readiness, CCA and energy observations. Payload delivery is opaque unless an upper protocol is explicitly configured.
+
+Enabling management adds indirect unicast/broadcast DATA, polling and purge with bounded queues, expiration and explicit packet ownership. Native management services provide non-beacon START, passive/ED/active/orphan scans, discovery beacons, association, disassociation, realignment, PAN-conflict notification and scheduled receiver control. A small higher-layer example selects a PAN, allocates addresses and completes two join/DATA/sleep/POLL/leave cycles. Periodic beacons, security transforms, enhanced frames and waveform fidelity are outside this selected profile. The explicit legacy narrowband and separate legacy UWB compositions are retained.
