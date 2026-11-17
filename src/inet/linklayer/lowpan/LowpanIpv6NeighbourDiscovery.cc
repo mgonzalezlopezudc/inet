@@ -16,6 +16,7 @@
 #include "inet/networklayer/ipv6/Ipv6InterfaceData.h"
 #include "inet/networklayer/ipv6/Ipv6RoutingTable.h"
 #include "inet/networklayer/ipv6/Ipv6Header_m.h"
+#include <cmath>
 
 namespace inet { namespace lowpan {
 
@@ -58,6 +59,13 @@ void LowpanIpv6NeighbourDiscovery::initialize(int stage)
         if (role != "static" && role != "router" && role != "host" && role != "borderRouter")
             throw cRuntimeError("Invalid native LoWPAN ND role");
         registrationRouter = role == "router" || role == "borderRouter";
+        extendedRegistration = par("extendedRegistration");
+        if (extendedRegistration && !registrationRouter)
+            throw cRuntimeError("Extended registration currently requires router or borderRouter role; updated host is not implemented");
+        maxRegistrationLocations = par("maxRegistrationLocations");
+        removalDelaySeconds = par("registrationRemovalDelay").doubleValue();
+        if (maxRegistrationLocations <= 0 || !std::isfinite(removalDelaySeconds) || removalDelaySeconds <= 0)
+            throw cRuntimeError("Invalid native registration location bound or removal delay");
         if (role == "host")
             hostRegistration = std::make_unique<LowpanHostRegistration>(*this);
         if (role == "borderRouter")
@@ -79,6 +87,8 @@ void LowpanIpv6NeighbourDiscovery::initialize(int stage)
         if (maxPendingRouterAdvertisements <= 0)
             throw cRuntimeError("Native pending RA capacity must be positive");
         WATCH_EXPR("numNativeRegistrations", registrations.size());
+        WATCH_EXPR("numNativeRegistrationRemovals", registrationRemovals.size());
+        WATCH_EXPR("numNativeRegistrationTransactions", registrationTransactions.size());
         WATCH_EXPR("numPendingRouterAdvertisements", pendingRouterAdvertisements.size());
         WATCH_EXPR("numNativeRouters", hostRegistration ? hostRegistration->getNumRouters() : 0);
         WATCH_EXPR("numNativeHostAddresses", hostRegistration ? hostRegistration->getNumAddresses() : 0);
@@ -166,26 +176,35 @@ void LowpanIpv6NeighbourDiscovery::clearRegistrations(bool notify)
         cancelEvent(registrationExpiryTimer);
     while (!registrations.empty())
         removeRegistration(registrations.begin()->first, notify);
+    registrationRemovals.clear();
+    registrationTransactions.clear();
 }
 
 void LowpanIpv6NeighbourDiscovery::expireRegistrations()
 {
+    for (auto it = registrationRemovals.begin(); it != registrationRemovals.end();)
+        if (it->second.validUntil <= simTime()) it = registrationRemovals.erase(it);
+        else ++it;
     for (auto it = registrations.begin(); it != registrations.end();) {
         auto current = it++;
         if (current->second.validUntil <= simTime())
             removeRegistration(current->first);
     }
+    pruneRegistrationTransactions();
 }
 
 void LowpanIpv6NeighbourDiscovery::scheduleRegistrationExpiry()
 {
+    pruneRegistrationTransactions();
     cancelEvent(registrationExpiryTimer);
-    if (registrations.empty())
+    if (registrations.empty() && registrationRemovals.empty())
         return;
     auto earliest = SIMTIME_MAX;
     for (const auto& entry : registrations)
         earliest = std::min(earliest, entry.second.validUntil);
-    scheduleAt(earliest, registrationExpiryTimer);
+    for (const auto& entry : registrationRemovals)
+        earliest = std::min(earliest, entry.second.validUntil);
+    if (earliest != SIMTIME_MAX || !extendedRegistration) scheduleAt(earliest, registrationExpiryTimer);
 }
 
 bool LowpanIpv6NeighbourDiscovery::readRegistration(const Packet *packet, const Ipv6NeighbourSolicitation *message,
@@ -232,11 +251,16 @@ bool LowpanIpv6NeighbourDiscovery::readRegistration(const Packet *packet, const 
         SIMTIME_MAX : simTime() + SimTime(seconds);
     requested = {Ieee802154Address(Ieee802154Address::EXTENDED, ownerValue), native->getSrcAddress(),
         domain, interface->getId(), deadline};
+    LowpanRegistrationInfo::parse(*aro, false, requested.info);
+    requested.peerSource = source->getSrcAddress().toIpv6();
+    requested.replySource = source->getDestAddress().toIpv6();
+    requested.lifetimeMinutes = lifetime;
     return true;
 }
 
 int LowpanIpv6NeighbourDiscovery::applyRegistration(const RegistrationKey& key, const Registration& requested)
 {
+    if (extendedRegistration) return applyExtendedRegistration(key, requested);
     auto existing = registrations.find(key);
     auto fixed = requested.domain->resolveStaticNeighbor(requested.interfaceModuleId, key.second);
     if (rt6->isLocalAddress(key.second) || (existing != registrations.end() && existing->second.owner != requested.owner) ||
@@ -281,6 +305,203 @@ int LowpanIpv6NeighbourDiscovery::applyRegistration(const RegistrationKey& key, 
     return 0;
 }
 
+int LowpanIpv6NeighbourDiscovery::readExtendedRegistration(const Packet *packet, const Ipv6NeighbourSolicitation *message,
+        NetworkInterface *interface, LowpanNativeLinkDomain *domain, Registration& requested, const Ipv6NdOption *&aro) const
+{
+    aro = nullptr;
+    int count = 0;
+    for (size_t i = 0; i < message->getOptions().getOptionArraySize(); i++)
+        if (int(message->getOptions().getOption(i)->getType()) == 33) { aro = message->getOptions().getOption(i); count++; }
+    if (count != 1 || message->isIncorrect() || message->isIncomplete() || message->getCode() != 0 ||
+            message->getChunkLength() != packet->getDataLength()) return -1;
+    auto parsed = LowpanRegistrationInfo::parse(*aro, true, requested.info);
+    if (parsed != LowpanRegistrationInfo::VALID) return parsed == LowpanRegistrationInfo::UNSUPPORTED ? -2 : -1;
+    if (!requested.info.tidKnown) return readRegistration(packet, message, interface, domain, requested, aro) ? 0 : -1;
+    auto addresses = packet->findTag<L3AddressInd>();
+    Ieee802154Address peer;
+    auto data = interface->getProtocolData<Ipv6InterfaceData>();
+    if (!addresses || addresses->getDestAddress().getType() != L3Address::IPv6 ||
+            !data->hasValidAddress(addresses->getDestAddress().toIpv6(), simTime()) ||
+            data->isTentativeAddress(addresses->getDestAddress().toIpv6()) ||
+            !message->getTargetAddress().isUnicast() || message->getTargetAddress().isUnspecified() ||
+            uint8_t(aro->getPaddingBytes(0)) != 0 || !readNativeSource(packet, message->getOptions(), domain, peer)) return -1;
+    requested.address = peer; requested.domain = domain; requested.interfaceModuleId = interface->getId();
+    requested.peerSource = addresses->getSrcAddress().toIpv6(); requested.replySource = addresses->getDestAddress().toIpv6();
+    requested.lifetimeMinutes = (uint8_t(aro->getPaddingBytes(4)) << 8) | uint8_t(aro->getPaddingBytes(5));
+    double seconds = 60.0 * requested.lifetimeMinutes;
+    requested.validUntil = seconds >= (SIMTIME_MAX - simTime()).dbl() ? SIMTIME_MAX : simTime() + SimTime(seconds);
+    if (!requested.peerSource.isLinkLocal()) return 7;
+    auto fixed = domain->resolveNeighbor(interface->getId(), requested.peerSource);
+    auto source = registrations.find({interface->getInterfaceId(), requested.peerSource});
+    if ((fixed && *fixed != peer) || (source != registrations.end() && source->second.validUntil > simTime() &&
+            source->second.address != peer)) return 6;
+    if (requested.peerSource != message->getTargetAddress() &&
+            (source == registrations.end() || source->second.validUntil <= simTime())) return -3;
+    return 0;
+}
+
+LowpanIpv6NeighbourDiscovery::RegistrationKey LowpanIpv6NeighbourDiscovery::registrationScope(const RegistrationKey& key) const
+{
+    return {key.second.isLinkLocal() ? key.first : -1, key.second};
+}
+
+void LowpanIpv6NeighbourDiscovery::pruneRegistrationTransactions()
+{
+    std::set<RegistrationKey> live;
+    for (const auto& entry : registrations)
+        if (entry.second.validUntil > simTime()) live.insert(registrationScope(entry.first));
+    for (const auto& entry : registrationRemovals)
+        if (entry.second.validUntil > simTime()) live.insert(registrationScope(entry.first));
+    if (registrationRelay)
+        for (const auto& entry : registrationRelay->pending)
+            if (entry.second.expiresAt > simTime()) live.insert(registrationScope(entry.first));
+    for (auto it = registrationTransactions.begin(); it != registrationTransactions.end();)
+        if (!live.count(it->first)) it = registrationTransactions.erase(it);
+        else ++it;
+}
+
+int LowpanIpv6NeighbourDiscovery::checkExtendedRegistration(const RegistrationKey& key, const Registration& requested)
+{
+    pruneRegistrationTransactions();
+    auto fixed = requested.domain->resolveStaticNeighbor(requested.interfaceModuleId, key.second);
+    if (rt6->isLocalAddress(key.second) || (fixed && *fixed != requested.address)) return 1;
+    struct Incumbent {const Registration *entry;bool removal;bool sameLocation;};
+    std::vector<Incumbent> incumbents;
+    bool global = !key.second.isLinkLocal();
+    for (const auto& entry : registrations)
+        if ((global ? entry.first.second == key.second : entry.first == key) && entry.second.validUntil > simTime())
+            incumbents.push_back({&entry.second, false, entry.first == key});
+    for (const auto& entry : registrationRemovals)
+        if ((global ? entry.first.second == key.second : entry.first == key) && entry.second.validUntil > simTime())
+            incumbents.push_back({&entry.second, true, entry.first == key});
+    if (registrationRelay)
+        for (const auto& entry : registrationRelay->pending)
+            if ((global ? entry.first.second == key.second : entry.first == key) && entry.second.expiresAt > simTime())
+                incumbents.push_back({&entry.second.requested, entry.second.lifetime == 0, entry.first == key});
+    for (const auto& item : incumbents)
+        if (!item.entry->info.sameOwner(requested.info)) return 1;
+    int authorityStatus = global && registrationAuthority ? registrationAuthority->checkExtended(key.second, requested.info,
+        {key.first, requested.peerSource}, requested.lifetimeMinutes == 0) : 0;
+    if (authorityStatus == 1) return 1;
+    auto current = registrationTransactions.find(registrationScope(key));
+    if (current != registrationTransactions.end()) {
+        const auto& info = current->second;
+        if (info.tidKnown && !requested.info.tidKnown) return 3; // Unknown recency, never numerical OLDER.
+        if (info.tidKnown && requested.info.tidKnown) {
+            auto comparison = LowpanRegistrationInfo::compare(requested.info.tid, info.tid);
+            if (comparison == LowpanRegistrationInfo::OLDER || comparison == LowpanRegistrationInfo::INCOMPARABLE) return 3;
+        }
+    }
+    if (authorityStatus != 0 && authorityStatus != 9) return authorityStatus;
+    for (const auto& item : incumbents) {
+        const auto& incumbent = *item.entry;
+        if (!item.sameLocation || !incumbent.info.sameTransaction(requested.info)) continue;
+        if (!incumbent.info.sameParameters(requested.info) || (item.removal && requested.lifetimeMinutes != 0)) return 3;
+        if (incumbent.info.tidKnown && (incumbent.address != requested.address || incumbent.peerSource != requested.peerSource)) return 2;
+    }
+    std::set<RegistrationKey> occupied;
+    for (const auto& entry : registrations) if (entry.second.validUntil > simTime()) occupied.insert(entry.first);
+    for (const auto& entry : registrationRemovals) if (entry.second.validUntil > simTime()) occupied.insert(entry.first);
+    if (registrationRelay)
+        for (const auto& entry : registrationRelay->pending) if (entry.second.expiresAt > simTime()) occupied.insert(entry.first);
+    if (!occupied.count(key)) {
+        size_t locations = 0;
+        for (const auto& entry : occupied) locations += entry.second == key.second;
+        if (occupied.size() >= size_t(maxRegistrations) || locations >= size_t(maxRegistrationLocations)) return 2;
+    }
+    return authorityStatus;
+}
+
+void LowpanIpv6NeighbourDiscovery::protectRemoval(const RegistrationKey& key, const Registration& requested, bool notify)
+{
+    auto previous = registrationRemovals.find(key);
+    bool repeated = previous != registrationRemovals.end() && previous->second.validUntil > simTime() &&
+        previous->second.info.sameTransaction(requested.info);
+    removeRegistration(key, notify);
+    if (!repeated) {
+        auto copy = requested;
+        copy.lifetimeMinutes = 0;
+        copy.validUntil = removalDelaySeconds >= (SIMTIME_MAX - simTime()).dbl() ? SIMTIME_MAX : simTime() + SimTime(removalDelaySeconds);
+        registrationRemovals[key] = copy;
+    }
+}
+
+int LowpanIpv6NeighbourDiscovery::applyExtendedRegistration(const RegistrationKey& key, const Registration& requested)
+{
+    int status = checkExtendedRegistration(key, requested);
+    if (status) return status;
+    std::vector<std::pair<RegistrationKey, Registration>> superseded;
+    if (!key.second.isLinkLocal() && requested.lifetimeMinutes != 0)
+        for (const auto& previous : registrations)
+            if (previous.first.second == key.second && previous.second.validUntil > simTime() &&
+                    !previous.second.info.sameTransaction(requested.info) &&
+                    (previous.first != key || previous.second.address != requested.address || previous.second.peerSource != requested.peerSource))
+                superseded.push_back(previous);
+    std::vector<std::pair<RegistrationKey, Registration>> supersededPending;
+    if (!key.second.isLinkLocal() && requested.lifetimeMinutes != 0 && registrationRelay)
+        for (const auto& previous : registrationRelay->pending)
+            if (previous.first.second == key.second && previous.second.expiresAt > simTime() &&
+                    !previous.second.requested.info.sameTransaction(requested.info))
+                supersededPending.emplace_back(previous.first, previous.second.requested);
+    bool global = !key.second.isLinkLocal();
+    LowpanRegistrationAuthority::LocationKey location{key.first, requested.peerSource};
+    if (global && registrationAuthority)
+        if (int result = registrationAuthority->checkExtended(key.second, requested.info, location, requested.lifetimeMinutes == 0)) return result;
+    if (requested.lifetimeMinutes != 0 && !requested.domain->installDynamicNeighbor(requested.interfaceModuleId,
+            key.second, requested.address, requested.validUntil, this)) return 1;
+    registrationTransactions[registrationScope(key)] = requested.info;
+    auto oldSize = registrations.size();
+    if (requested.lifetimeMinutes == 0) protectRemoval(key, requested);
+    else { registrationRemovals.erase(key); registrations[key] = requested; }
+    LowpanRegistrationAuthority::Notifications notifications;
+    if (global && registrationAuthority) {
+        LowpanRegistrationAuthority::Location value;
+        value.info = requested.info; value.nativePeer = requested.address; value.replySource = requested.replySource;
+        value.validUntil = requested.validUntil; value.lifetimeMinutes = requested.lifetimeMinutes;
+        value.interfaceModuleId = requested.interfaceModuleId;
+        notifications = registrationAuthority->commitExtended(key.second, requested.info, location, value);
+    }
+    removeRegistrationRoute(key);
+    if (requested.lifetimeMinutes != 0 && requested.info.reachability) {
+        auto route = new Ipv6Route(key.second, 128, IRoute::UNKNOWN);
+        route->setSource(this); route->setInterface(ift->getInterfaceById(key.first)); route->setExpiryTime(requested.validUntil);
+        route->setMetric(0); route->setAdminDist(Ipv6Route::dDirectlyConnected); rt6->addRoutingProtocolRoute(route);
+    }
+    if (global && registrationAuthority) registrationAuthority->publishEntryCount();
+    if (registrations.size() != oldSize) emit(registrationCountChangedSignal, long(registrations.size()));
+    if (global && registrationAuthority) registrationAuthority->notifyMoved(key.second, notifications);
+    if (!registrationAuthority)
+        for (const auto& previous : superseded) notifyNativeMoved(previous.first, previous.second);
+    if (registrationRelay)
+        for (const auto& previous : supersededPending) {
+            auto pending = registrationRelay->pending.find(previous.first);
+            if (pending != registrationRelay->pending.end() && pending->second.requested.info.sameTransaction(previous.second.info) &&
+                    pending->second.requested.address == previous.second.address && pending->second.requested.peerSource == previous.second.peerSource)
+                registrationRelay->pending.erase(pending);
+        }
+    return 0;
+}
+
+void LowpanIpv6NeighbourDiscovery::notifyNativeMoved(const RegistrationKey& key, const Registration& saved)
+{
+    auto current = registrations.find(key);
+    if (current != registrations.end() && current->second.info.sameTransaction(saved.info) &&
+            current->second.peerSource == saved.peerSource && current->second.address == saved.address)
+        protectRemoval(key, saved, true);
+    scheduleRegistrationExpiry();
+    if (saved.info.tidKnown && saved.domain) {
+        auto interface = ift->getInterfaceById(key.first);
+        auto boundary = interface ? dynamic_cast<LowpanNativeBoundary *>(interface->getSubmodule("boundary")) : nullptr;
+        auto data = interface ? interface->findProtocolData<Ipv6InterfaceData>() : nullptr;
+        if (boundary && boundary->getLinkDomain() == saved.domain.get() && interface->getId() == saved.interfaceModuleId &&
+                interface->isUp() && saved.domain->contains(saved.address) && data && data->hasValidAddress(saved.replySource, simTime()) &&
+                !data->isTentativeAddress(saved.replySource)) {
+            std::unique_ptr<Ipv6NdOption> option(saved.info.makeOption(3, saved.lifetimeMinutes, true));
+            sendRegistrationAdvertisement(key, saved, *option, 3, saved.replySource);
+        }
+    }
+}
+
 void LowpanIpv6NeighbourDiscovery::sendRegistrationAdvertisement(const RegistrationKey& key,
         const Registration& requested, const Ipv6NdOption& aro, int status, const Ipv6Address& routerAddress)
 {
@@ -290,24 +511,26 @@ void LowpanIpv6NeighbourDiscovery::sendRegistrationAdvertisement(const Registrat
     reply->setRouterFlag(true);
     reply->setSolicitedFlag(true);
     reply->setOverrideFlag(true);
-    reply->setTargetAddress(routerAddress);
-    auto response = new Ipv6NdOption(aro);
-    response->setPaddingBytes(0, status);
-    for (int i = 1; i <= 3; i++)
-        response->setPaddingBytes(i, 0);
+    reply->setTargetAddress(extendedRegistration && requested.info.tidKnown ? key.second : routerAddress);
+    auto response = extendedRegistration ? requested.info.makeOption(status, requested.lifetimeMinutes, true) : new Ipv6NdOption(aro);
+    if (!extendedRegistration) {
+        response->setPaddingBytes(0, status);
+        for (int i = 1; i <= 3; i++) response->setPaddingBytes(i, 0);
+    }
     reply->getOptionsForUpdate().appendOption(response);
-    reply->setChunkLength(B(40));
+    reply->setChunkLength(B(24 + response->getOptionLength() * 8));
     auto output = new Packet("native-registration-advertisement");
     // Native frames carry literal bytes, so declared checksum markers cannot cross the link.
     Icmpv6::insertChecksum(CHECKSUM_COMPUTED, reply, output);
     output->insertAtFront(reply);
     auto request = output->addTag<Ieee802154AddressReq>();
     request->setSrcAddress(domain->getPeer(interface).address);
-    request->setDestAddress(status == 0 ? requested.address : requested.owner);
+    request->setDestAddress(extendedRegistration && requested.info.tidKnown ? requested.address : status == 0 ? requested.address : requested.owner);
     request->setSrcPanId(domain->getPanId());
     request->setDestPanId(domain->getPanId());
     uint64_t iid = requested.owner.getInt() ^ UINT64_C(0x0200000000000000);
     Ipv6Address destination = status == 0 ? key.second : Ipv6Address(0xfe800000, 0, iid >> 32, uint32_t(iid));
+    if (extendedRegistration && requested.info.tidKnown) destination = requested.peerSource;
     sendPacketToIpv6Module(output, destination, routerAddress, key.first);
 }
 
@@ -316,25 +539,34 @@ void LowpanIpv6NeighbourDiscovery::processRegistration(Packet *packet, const Ipv
 {
     Registration requested;
     const Ipv6NdOption *aro = nullptr;
-    if (!readRegistration(packet, message, interface, domain, requested, aro)) {
+    int validation = extendedRegistration ? readExtendedRegistration(packet, message, interface, domain, requested, aro) :
+        readRegistration(packet, message, interface, domain, requested, aro) ? 0 : -1;
+    if (validation < 0) {
+        if (validation == -3) { delete packet; return; } // Missing registered LL source: selected silent disposition.
         LowpanPacketDropDetails details;
         details.setReason(OTHER_PACKET_DROP);
-        details.setLowpanReason(LOWPAN_MALFORMED);
+        details.setLowpanReason(validation == -2 ? LOWPAN_ND_UNSUPPORTED : LOWPAN_MALFORMED);
         emit(packetDroppedSignal, packet, &details);
         delete packet;
         return;
     }
     expireRegistrations();
-    RegistrationKey key{interface->getInterfaceId(), packet->getTag<L3AddressInd>()->getSrcAddress().toIpv6()};
-    if (registrationRelay) {
-        registrationRelay->processRegistration(key, requested, *aro, message->getTargetAddress());
+    RegistrationKey key{interface->getInterfaceId(), requested.info.tidKnown ? message->getTargetAddress() :
+        packet->getTag<L3AddressInd>()->getSrcAddress().toIpv6()};
+    if (validation > 0) { sendRegistrationAdvertisement(key, requested, *aro, validation, requested.replySource); delete packet; return; }
+    if (extendedRegistration)
+        if (int status = checkExtendedRegistration(key, requested)) {
+            sendRegistrationAdvertisement(key, requested, *aro, status, requested.replySource); delete packet; return;
+        }
+    if (registrationRelay && !(extendedRegistration && key.second.isLinkLocal())) {
+        registrationRelay->processRegistration(key, requested, *aro, requested.replySource);
         scheduleRegistrationExpiry();
         delete packet;
         return;
     }
     int status = applyRegistration(key, requested);
     scheduleRegistrationExpiry();
-    sendRegistrationAdvertisement(key, requested, *aro, status, message->getTargetAddress());
+    sendRegistrationAdvertisement(key, requested, *aro, status, requested.replySource);
     delete packet;
 }
 
@@ -376,13 +608,49 @@ Ipv6NdOption *LowpanIpv6NeighbourDiscovery::createNativeLinkOption(const Ieee802
     return option;
 }
 
+bool LowpanIpv6NeighbourDiscovery::readCapabilities(const Ipv6NdOptions& options, bool solicitation, int& flags) const
+{
+    flags = 0;
+    int count = 0;
+    for (size_t i = 0; i < options.getOptionArraySize(); i++) {
+        auto option = options.getOption(i);
+        if (int(option->getType()) != 36) continue;
+        if (++count != 1 || option->getOptionLength() != 1 || option->getPaddingBytesArraySize() != 6) return false;
+        flags = uint8_t(option->getPaddingBytes(1)) & 63;
+    }
+    return !solicitation || !(flags & 32);
+}
+
+bool LowpanIpv6NeighbourDiscovery::hasAuthorityExtendedCapability() const
+{
+    auto authority = par("registrationAuthorityAddress").stdstringValue();
+    return extendedRegistration && (par("registrationAuthoritySupportsExtended").boolValue() ||
+        (contextAdvertisements && !authority.empty() && contextAdvertisements->hasAuthorityCapability(Ipv6Address(authority.c_str()))));
+}
+
+void LowpanIpv6NeighbourDiscovery::appendCapabilities(Ipv6NdOptions& options, Ipv6NdMessage& message,
+        bool solicitation, bool authorityExtended) const
+{
+    if (!extendedRegistration) return;
+    auto option = new Ipv6NdOption();
+    option->setType(static_cast<Ipv6NdOptionTypes>(36)); option->setOptionLength(1); option->setPaddingBytesArraySize(6);
+    for (int i = 0; i < 6; i++) option->setPaddingBytes(i, 0);
+    int flags = 2 | 16 | 4; // EARO, 6LR and the implemented R1 routing-registrar service.
+    if (registrationAuthority) flags |= 8;
+    if (!solicitation && authorityExtended) flags |= 32;
+    option->setPaddingBytes(1, flags);
+    options.appendOption(option); message.addChunkLength(B(8));
+}
+
 void LowpanIpv6NeighbourDiscovery::processNativeRouterSolicitation(Packet *packet, const Ipv6RouterSolicitation *message,
         NetworkInterface *interface, LowpanNativeLinkDomain *domain)
 {
     Ieee802154Address requester;
+    int capabilities = 0;
     if (message->isIncorrect() || message->isIncomplete() || message->getCode() != 0 ||
             message->getChunkLength() != packet->getDataLength() ||
-            !readNativeSource(packet, message->getOptions(), domain, requester)) {
+            !readNativeSource(packet, message->getOptions(), domain, requester) ||
+            (extendedRegistration && !readCapabilities(message->getOptions(), true, capabilities))) {
         LowpanPacketDropDetails details;
         details.setReason(OTHER_PACKET_DROP);
         details.setLowpanReason(LOWPAN_MALFORMED);
@@ -409,6 +677,7 @@ void LowpanIpv6NeighbourDiscovery::processNativeRouterSolicitation(Packet *packe
         pendingRouterAdvertisements.emplace(key, simTime() + SimTime(uniform(0, 2)));
         scheduleRouterAdvertisements();
     }
+    if (extendedRegistration && (capabilities & 16)) routerAdvertisementNeedsAuthority.insert(key);
     delete packet;
 }
 
@@ -427,10 +696,12 @@ void LowpanIpv6NeighbourDiscovery::clearRouterAdvertisements()
 {
     cancelEvent(routerAdvertisementTimer);
     pendingRouterAdvertisements.clear();
+    routerAdvertisementNeedsAuthority.clear();
 }
 
 void LowpanIpv6NeighbourDiscovery::sendNativeRouterAdvertisement(const RouterAdvertisementKey& key)
 {
+    bool requiresAuthority = routerAdvertisementNeedsAuthority.erase(key) != 0;
     auto interface = ift->getInterfaceById(std::get<0>(key));
     auto boundary = interface ? dynamic_cast<LowpanNativeBoundary *>(interface->getSubmodule("boundary")) : nullptr;
     if (!boundary || !interface->isUp())
@@ -439,6 +710,7 @@ void LowpanIpv6NeighbourDiscovery::sendNativeRouterAdvertisement(const RouterAdv
         contextAdvertisements->sendAdvertisements(interface, std::get<1>(key), std::get<2>(key));
         return;
     }
+    if (requiresAuthority) return; // Router-capable RS cannot be answered without a real ABRO.
     auto domain = boundary->getLinkDomain();
     auto data = interface->getProtocolData<Ipv6InterfaceData>();
     if (!data->getAdvSendAdvertisements() || data->getLinkLocalAddress().isUnspecified())
@@ -455,6 +727,8 @@ void LowpanIpv6NeighbourDiscovery::sendNativeRouterAdvertisement(const RouterAdv
     advertisement->setRetransTimer(data->getAdvRetransTimer());
     advertisement->getOptionsForUpdate().appendOption(createNativeLinkOption(domain->getPeer(interface).address));
     advertisement->addChunkLength(B(16));
+    appendCapabilities(advertisement->getOptionsForUpdate(), *advertisement, false,
+        registrationAuthority != nullptr || hasAuthorityExtendedCapability());
     for (int i = 0; i < data->getNumAdvPrefixes(); i++) {
         auto prefix = data->getAdvPrefix(i);
         auto option = new Ipv6NdPrefixInformation();
@@ -660,8 +934,17 @@ void LowpanIpv6NeighbourDiscovery::processNDMessage(Packet *packet, const Icmpv6
     if ((hostRegistration || registrationRouter) && boundary)
         if (auto solicitation = dynamic_cast<const Ipv6NeighbourSolicitation *>(message)) {
             bool registration = false;
+            bool sourceOption = false;
             for (size_t i = 0; i < solicitation->getOptions().getOptionArraySize(); i++)
+            {
                 registration |= int(solicitation->getOptions().getOption(i)->getType()) == 33;
+                sourceOption |= solicitation->getOptions().getOption(i)->getType() == IPv6ND_SOURCE_LINK_LAYER_ADDR_OPTION;
+            }
+            if (extendedRegistration && registration && !sourceOption) {
+                LowpanPacketDropDetails details;
+                details.setReason(OTHER_PACKET_DROP); details.setLowpanReason(LOWPAN_ND_UNSUPPORTED);
+                emit(packetDroppedSignal, packet, &details); delete packet; return;
+            }
             if (registrationRouter && registration)
                 processRegistration(packet, solicitation, interface, boundary->getLinkDomain());
             else

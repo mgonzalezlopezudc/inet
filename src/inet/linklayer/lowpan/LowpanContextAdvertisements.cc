@@ -119,6 +119,10 @@ LowpanContextAdvertisements::Group LowpanContextAdvertisements::parse(const Ipv6
         bool& authoritative, Ipv6Address& authority) const
 {
     Group result;
+    int capabilities = 0;
+    if (owner.extendedRegistration && !owner.readCapabilities(message.getOptions(), false, capabilities))
+        throw cRuntimeError("Malformed or duplicate native capability option");
+    result.authorityExtended = capabilities & 32;
     authoritative = false;
     const auto& options = message.getOptions();
     // Parse ABRO first; option ordering has no association semantics.
@@ -324,6 +328,7 @@ void LowpanContextAdvertisements::updateOrigin()
     if (!origin) return;
     std::vector<uint8_t> snapshot;
     Group group;
+    group.authorityExtended = owner.extendedRegistration;
     bool first = true;
     for (auto interface : interfaces()) {
         auto data = interface->getProtocolData<Ipv6InterfaceData>();
@@ -382,7 +387,7 @@ void LowpanContextAdvertisements::updateOrigin()
             candidate.insert(candidate.end(), prefixSnapshot.begin(), prefixSnapshot.end());
         if (!first && candidate != snapshot)
             throw cRuntimeError("Native context origin requires identical configured contexts and prefixes on advertising interfaces");
-        if (first) { snapshot = candidate; group = candidateGroup; first = false; }
+        if (first) { snapshot = candidate; group = candidateGroup; group.authorityExtended = owner.extendedRegistration; first = false; }
     }
     if (first) return;
     bool changed = originSnapshotKnown && snapshot != originSnapshot;
@@ -468,6 +473,7 @@ void LowpanContextAdvertisements::sendAdvertisements(NetworkInterface *interface
         message->getOptionsForUpdate().appendOption(owner.createNativeLinkOption(boundary->getLinkAddress()));
         message->addChunkLength(B(16));
         appendOptions(*message, groups.at(key));
+        owner.appendCapabilities(message->getOptionsForUpdate(), *message, false, groups.at(key).authorityExtended);
         auto output = new Packet("native-context-advertisement");
         Icmpv6::insertChecksum(CHECKSUM_COMPUTED, message, output); output->insertAtFront(message);
         auto request = output->addTag<Ieee802154AddressReq>();
@@ -547,6 +553,7 @@ void LowpanContextAdvertisements::sendSolicitation(NetworkInterface *interface, 
             data->isTentativeAddress(source)) { discovery.active = false; discovery.next = SIMTIME_MAX; return; }
     auto message = makeShared<Ipv6RouterSolicitation>();
     message->getOptionsForUpdate().appendOption(owner.createNativeLinkOption(boundary->getLinkAddress())); message->addChunkLength(B(16));
+    owner.appendCapabilities(message->getOptionsForUpdate(), *message, true);
     auto packet = new Packet("native-context-solicitation");
     Icmpv6::insertChecksum(CHECKSUM_COMPUTED, message, packet); packet->insertAtFront(message);
     owner.sendPacketToIpv6Module(packet, Ipv6Address::ALL_ROUTERS_2, source, interface->getInterfaceId());
@@ -630,5 +637,11 @@ void LowpanContextAdvertisements::clear()
     }
     groups.clear(); discoveries.clear(); advertising.clear();
     // Static adaptation configuration and the origin semantic version survive restart.
+}
+
+bool LowpanContextAdvertisements::hasAuthorityCapability(const Ipv6Address& authority) const
+{
+    auto group = groups.find({-1, true, authority});
+    return group != groups.end() && group->second.validUntil > simTime() && group->second.authorityExtended;
 }
 } }

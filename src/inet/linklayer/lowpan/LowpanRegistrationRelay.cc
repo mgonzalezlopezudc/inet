@@ -71,7 +71,14 @@ bool LowpanRegistrationRelay::hasValidContext(const Key& key, const Pending& ent
         return false;
     auto domain = entry.requested.domain.get();
     auto data = interface->getProtocolData<Ipv6InterfaceData>();
-    return domain->contains(boundary->getLinkAddress()) && domain->contains(entry.requested.owner) &&
+    bool sourceValid = true;
+    if (owner.extendedRegistration && entry.requested.info.tidKnown && entry.lifetime != 0) {
+        auto source = owner.registrations.find({key.first, entry.requested.peerSource});
+        sourceValid = source != owner.registrations.end() && source->second.validUntil > simTime() &&
+            source->second.address == entry.requested.address;
+    }
+    return sourceValid && domain->contains(boundary->getLinkAddress()) &&
+        ((owner.extendedRegistration && entry.requested.info.tidKnown) || domain->contains(entry.requested.owner)) &&
         domain->contains(entry.requested.address) && data->hasValidAddress(entry.replyAddress, simTime()) &&
         !data->isTentativeAddress(entry.replyAddress);
 }
@@ -82,6 +89,8 @@ size_t LowpanRegistrationRelay::occupiedKeys() const
     for (const auto& entry : owner.registrations)
         if (entry.second.validUntil > simTime())
             keys.insert(entry.first);
+    for (const auto& entry : owner.registrationRemovals)
+        if (entry.second.validUntil > simTime()) keys.insert(entry.first);
     for (const auto& entry : pending)
         if (entry.second.expiresAt > simTime())
             keys.insert(entry.first);
@@ -90,6 +99,7 @@ size_t LowpanRegistrationRelay::occupiedKeys() const
 
 void LowpanRegistrationRelay::scheduleTimer()
 {
+    owner.pruneRegistrationTransactions();
     owner.cancelEvent(timer);
     auto next = SIMTIME_MAX;
     for (const auto& entry : pending)
@@ -119,9 +129,17 @@ void LowpanRegistrationRelay::sendRequest(const Key& key)
     request->setType(ICMPv6_DUPLICATE_ADDRESS_REQUEST);
     request->setRegisteredAddress(key.second);
     request->setRegistrationLifetime(entry.lifetime);
-    request->setRegistrationOwnershipVerifierArraySize(8);
-    for (int i = 0; i < 8; i++)
-        request->setRegistrationOwnershipVerifier(i, entry.requested.owner.getInt() >> (8 * (7 - i)));
+    if (owner.extendedRegistration) {
+        request->setCode(entry.requested.info.tidKnown ? entry.wireOwner.size() / 8 : 0);
+        request->setTransactionId(entry.requested.info.tidKnown ? entry.requested.info.tid : 0);
+        request->setRegistrationOwnershipVerifierArraySize(entry.wireOwner.size());
+        request->setChunkLength(B(24 + entry.wireOwner.size()));
+        for (size_t i = 0; i < entry.wireOwner.size(); i++) request->setRegistrationOwnershipVerifier(i, entry.wireOwner[i]);
+    }
+    else {
+        request->setRegistrationOwnershipVerifierArraySize(8);
+        for (int i = 0; i < 8; i++) request->setRegistrationOwnershipVerifier(i, entry.requested.owner.getInt() >> (8 * (7 - i)));
+    }
     auto packet = new Packet("native-duplicate-address-request");
     Icmpv6::insertChecksum(CHECKSUM_COMPUTED, request, packet);
     packet->insertAtFront(request);
@@ -139,6 +157,7 @@ void LowpanRegistrationRelay::sendRequest(const Key& key)
 void LowpanRegistrationRelay::processRegistration(const Key& key, const Registration& requested,
         const Ipv6NdOption& aro, const Ipv6Address& replyAddress)
 {
+    if (owner.extendedRegistration) { processExtendedRegistration(key, requested, aro, replyAddress); return; }
     int lifetime = (uint8_t(aro.getPaddingBytes(4)) << 8) | uint8_t(aro.getPaddingBytes(5));
     Pending incoming{requested, aro, replyAddress, lifetime, 0, deadline(20), simTime()};
     if (!hasValidContext(key, incoming))
@@ -188,10 +207,32 @@ void LowpanRegistrationRelay::complete(const Key& key, int status)
     if (found == pending.end())
         return;
     auto entry = found->second;
+    if (owner.extendedRegistration) {
+        auto current = owner.registrationTransactions.find(owner.registrationScope(key));
+        if (current == owner.registrationTransactions.end() || !current->second.sameTransaction(entry.requested.info)) {
+            pending.erase(found);
+            return;
+        }
+    }
     pending.erase(found); // Detach before route/counter/reply notifications.
     if (!hasValidContext(key, entry))
         return;
-    if (status != 0)
+    if (owner.extendedRegistration) {
+        if (status != 0 && entry.superseded) {
+            auto previous = owner.registrations.find(key);
+            const auto& saved = *entry.superseded;
+            if (previous != owner.registrations.end() && previous->second.info.sameTransaction(saved.info) &&
+                    previous->second.peerSource == saved.peerSource && previous->second.address == saved.address)
+                owner.protectRemoval(key, saved, true);
+        }
+        if (status == 0) {
+            entry.requested.validUntil = deadline(60 * entry.lifetime);
+            entry.requested.authorityWireOwner = entry.wireOwner;
+            entry.requested.authorityTidKnown = entry.requested.info.tidKnown && entry.authorityUpdated;
+            status = owner.applyRegistration(key, entry.requested);
+        }
+    }
+    else if (status != 0)
         removeMatchingRegistration(key, entry.requested.owner);
     else {
         entry.requested.validUntil = deadline(60 * entry.lifetime);
@@ -203,9 +244,11 @@ void LowpanRegistrationRelay::complete(const Key& key, int status)
 
 void LowpanRegistrationRelay::handleTimer()
 {
-    for (auto it = pending.begin(); it != pending.end();) {
-        auto current = it++;
-        auto key = current->first;
+    std::vector<Key> keys;
+    for (const auto& entry : pending) keys.push_back(entry.first);
+    for (const auto& key : keys) {
+        auto current = pending.find(key);
+        if (current == pending.end()) continue;
         if (!hasValidContext(key, current->second))
             pending.erase(current);
         else if (current->second.retryAt <= simTime()) {
@@ -242,6 +285,7 @@ bool LowpanRegistrationRelay::processPacket(Packet *packet, const Icmpv6Header *
         delete packet;
         return true;
     }
+    if (owner.extendedRegistration) return processExtendedConfirmation(packet, *reply);
     bool valid = !reply->isIncorrect() && !reply->isIncomplete() &&
         (reply->getCode() == 0 || reply->getCode() == 1) && reply->getRegistrationOwnershipVerifierArraySize() == 8 &&
         reply->getChunkLength() == B(32) && !reply->getRegisteredAddress().isMulticast() &&
@@ -263,6 +307,94 @@ bool LowpanRegistrationRelay::processPacket(Packet *packet, const Icmpv6Header *
         details.setLowpanReason((reply->getCode() != 0 && reply->getCode() != 1) ||
             reply->getRegistrationOwnershipVerifierArraySize() != 8 ? LOWPAN_ND_UNSUPPORTED : LOWPAN_MALFORMED);
         owner.emit(packetDroppedSignal, packet, &details);
+    }
+    delete packet;
+    scheduleTimer();
+    return true;
+}
+
+void LowpanRegistrationRelay::processExtendedRegistration(const Key& key, const Registration& requested,
+        const Ipv6NdOption& aro, const Ipv6Address& replyAddress)
+{
+    Pending incoming{requested, aro, replyAddress, requested.lifetimeMinutes, 0, deadline(20), simTime()};
+    incoming.authorityUpdated = owner.hasAuthorityExtendedCapability();
+    incoming.wireOwner = requested.info.rovr;
+    if (requested.info.tidKnown && !incoming.authorityUpdated) incoming.wireOwner.resize(8);
+    auto installed = owner.registrations.find(key);
+    if (installed != owner.registrations.end() && installed->second.validUntil > simTime()) incoming.superseded = installed->second;
+    if (!hasValidContext(key, incoming)) return;
+    for (auto it = pending.begin(); it != pending.end();)
+        if (it->second.expiresAt <= simTime()) it = pending.erase(it); else ++it;
+    auto previous = pending.find(key);
+    if (previous != pending.end()) {
+        auto& incumbent = previous->second;
+        int status = 0;
+        bool replace = !incumbent.requested.info.sameTransaction(requested.info);
+        if (!incumbent.requested.info.sameOwner(requested.info)) status = 1;
+        if (!status && !replace && (requested.address != incumbent.requested.address || requested.peerSource != incumbent.requested.peerSource)) status = 2;
+        if (!status && !replace && !requested.info.sameParameters(incumbent.requested.info)) status = 3;
+        if (status) { owner.sendRegistrationAdvertisement(key, requested, aro, status, replyAddress); return; }
+        if (replace) { pending.erase(previous); previous = pending.end(); }
+        else {
+            if (incumbent.lifetime == 0 && requested.lifetimeMinutes != 0) {
+                owner.sendRegistrationAdvertisement(key, requested, aro, 3, replyAddress); return;
+            }
+            bool zero = incumbent.lifetime != 0 && requested.lifetimeMinutes == 0;
+            incumbent.requested = requested; incumbent.aro = aro; incumbent.replyAddress = replyAddress;
+            incumbent.lifetime = requested.lifetimeMinutes;
+            owner.registrationTransactions[owner.registrationScope(key)] = requested.info;
+            if (zero) { owner.protectRemoval(key, requested, true); incumbent.attempts = 0; sendRequest(key); }
+            scheduleTimer(); return;
+        }
+    }
+    pending.emplace(key, incoming);
+    owner.registrationTransactions[owner.registrationScope(key)] = requested.info;
+    if (requested.lifetimeMinutes == 0) owner.protectRemoval(key, requested, true);
+    sendRequest(key);
+    scheduleTimer();
+}
+
+bool LowpanRegistrationRelay::processExtendedConfirmation(Packet *packet, const Ipv6DuplicateAddressHeader& reply)
+{
+    size_t width = reply.getRegistrationOwnershipVerifierArraySize();
+    bool shape = (reply.getCode() == 0 && width == 8) ||
+        (reply.getCode() >= 1 && reply.getCode() <= 4 && width == size_t(reply.getCode() * 8));
+    if (!shape || reply.getChunkLength() != B(24 + width) || !hasValidOptions(packet, reply.getChunkLength()) ||
+            reply.isIncorrect() || reply.isIncomplete() || !Icmpv6::verifyChecksum(packet)) {
+        LowpanPacketDropDetails details;
+        details.setReason(OTHER_PACKET_DROP); details.setLowpanReason(shape ? LOWPAN_MALFORMED : LOWPAN_ND_UNSUPPORTED);
+        owner.emit(packetDroppedSignal, packet, &details); delete packet; return true;
+    }
+    std::vector<uint8_t> wireOwner;
+    for (size_t i = 0; i < width; i++) wireOwner.push_back(reply.getRegistrationOwnershipVerifier(i));
+    std::vector<Key> matches;
+    for (const auto& item : pending) {
+        const auto& entry = item.second;
+        bool transaction = !entry.requested.info.tidKnown ? (reply.getCode() == 0 || reply.getCode() == 1) :
+            !entry.authorityUpdated ? (reply.getCode() == 0 || reply.getCode() == 1) :
+            reply.getCode() != 0 && reply.getTransactionId() == entry.requested.info.tid;
+        if (transaction && item.first.second == reply.getRegisteredAddress() && entry.wireOwner == wireOwner &&
+                entry.lifetime == reply.getRegistrationLifetime()) matches.push_back(item.first);
+    }
+    for (const auto& key : matches) complete(key, reply.getStatus());
+    if (reply.getStatus() == 3 && reply.getCode() != 0) {
+        // Unsolicited movement is a saved-location correlation, not a reply to
+        // the current lifetime proposal. Cancel it even if that proposal changed.
+        for (auto it = pending.begin(); it != pending.end();)
+            if (it->first.second == reply.getRegisteredAddress() && it->second.authorityUpdated &&
+                    it->second.requested.info.tidKnown && it->second.requested.info.tid == reply.getTransactionId() &&
+                    it->second.wireOwner == wireOwner)
+                it = pending.erase(it);
+            else ++it;
+        std::vector<Key> moved;
+        for (const auto& entry : owner.registrations)
+            if (entry.first.second == reply.getRegisteredAddress() && entry.second.authorityTidKnown &&
+                    entry.second.info.tidKnown && entry.second.info.tid == reply.getTransactionId() &&
+                    entry.second.authorityWireOwner == wireOwner) moved.push_back(entry.first);
+        for (const auto& key : moved) {
+            auto saved = owner.registrations.at(key);
+            owner.notifyNativeMoved(key, saved);
+        }
     }
     delete packet;
     scheduleTimer();

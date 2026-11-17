@@ -3,12 +3,14 @@
 #define __INET_LOWPANREGISTRATIONRELAY_H
 
 #include "inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.h"
+#include <optional>
 
 namespace inet { namespace lowpan {
 
 // Routed confirmation policy shares its ND owner's confirmed registrations.
 class INET_API LowpanRegistrationRelay
 {
+    friend class LowpanIpv6NeighbourDiscovery;
   protected:
     using Key = LowpanIpv6NeighbourDiscovery::RegistrationKey;
     using Registration = LowpanIpv6NeighbourDiscovery::Registration;
@@ -20,6 +22,9 @@ class INET_API LowpanRegistrationRelay
         int attempts = 0;
         simtime_t expiresAt;
         simtime_t retryAt;
+        std::vector<uint8_t> wireOwner;
+        bool authorityUpdated = false;
+        std::optional<Registration> superseded;
     };
     LowpanIpv6NeighbourDiscovery& owner;
     Ipv6Address authorityAddress;
@@ -34,6 +39,9 @@ class INET_API LowpanRegistrationRelay
     void complete(const Key& key, int status);
     void removeMatchingRegistration(const Key& key, const Ieee802154Address& requestedOwner);
     bool hasValidOptions(const Packet *packet, b offset) const;
+    void processExtendedRegistration(const Key& key, const Registration& requested, const Ipv6NdOption& aro,
+            const Ipv6Address& replyAddress);
+    bool processExtendedConfirmation(Packet *packet, const Ipv6DuplicateAddressHeader& reply);
 
   public:
     explicit LowpanRegistrationRelay(LowpanIpv6NeighbourDiscovery& owner);

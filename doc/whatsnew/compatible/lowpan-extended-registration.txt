@@ -1,0 +1,3 @@
+Extended native registrar and authority support
+
+LoWPAN native router and border-router roles can opt in to updated registration with full per-address ownership verifiers, transaction recency, bounded parallel locations/removal protection and discovery capabilities. Routed relays retain full local identity while interoperating with legacy authorities. Default legacy behavior is preserved; automatic updated host transactions are a later stage.

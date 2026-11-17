@@ -4,7 +4,9 @@
 
 #include "inet/networklayer/icmpv6/Ipv6NeighbourDiscovery.h"
 #include "inet/linklayer/lowpan/LowpanNativeLinkDomain.h"
+#include "inet/linklayer/lowpan/LowpanRegistrationInfo.h"
 #include <tuple>
+#include <set>
 
 namespace inet { namespace lowpan {
 class LowpanHostRegistration;
@@ -31,14 +33,26 @@ class INET_API LowpanIpv6NeighbourDiscovery : public Ipv6NeighbourDiscovery
         opp_component_ptr<LowpanNativeLinkDomain> domain;
         int interfaceModuleId = -1;
         simtime_t validUntil;
+        LowpanRegistrationInfo info;
+        Ipv6Address peerSource;
+        Ipv6Address replySource;
+        int lifetimeMinutes = 0;
+        std::vector<uint8_t> authorityWireOwner;
+        bool authorityTidKnown = false;
     };
     using RegistrationKey = std::pair<int, Ipv6Address>;
     std::map<RegistrationKey, Registration> registrations;
+    std::map<RegistrationKey, Registration> registrationRemovals;
+    std::map<RegistrationKey, LowpanRegistrationInfo> registrationTransactions;
     bool registrationRouter = false;
+    bool extendedRegistration = false;
+    int maxRegistrationLocations = 4;
+    double removalDelaySeconds = 5;
     int maxRegistrations = 0;
     cMessage *registrationExpiryTimer = nullptr;
     using RouterAdvertisementKey = std::tuple<int, Ipv6Address, Ieee802154Address>;
     std::map<RouterAdvertisementKey, simtime_t> pendingRouterAdvertisements;
+    std::set<RouterAdvertisementKey> routerAdvertisementNeedsAuthority;
     cMessage *routerAdvertisementTimer = nullptr;
     int maxPendingRouterAdvertisements = 0;
     static simsignal_t registrationCountChangedSignal;
@@ -65,6 +79,17 @@ class INET_API LowpanIpv6NeighbourDiscovery : public Ipv6NeighbourDiscovery
     bool readRegistration(const Packet *packet, const Ipv6NeighbourSolicitation *message, NetworkInterface *interface,
             LowpanNativeLinkDomain *domain, Registration& requested, const Ipv6NdOption *&aro) const;
     int applyRegistration(const RegistrationKey& key, const Registration& requested);
+    int checkExtendedRegistration(const RegistrationKey& key, const Registration& requested);
+    RegistrationKey registrationScope(const RegistrationKey& key) const;
+    void pruneRegistrationTransactions();
+    int applyExtendedRegistration(const RegistrationKey& key, const Registration& requested);
+    int readExtendedRegistration(const Packet *packet, const Ipv6NeighbourSolicitation *message, NetworkInterface *interface,
+            LowpanNativeLinkDomain *domain, Registration& requested, const Ipv6NdOption *&aro) const;
+    void protectRemoval(const RegistrationKey& key, const Registration& requested, bool notify = false);
+    void notifyNativeMoved(const RegistrationKey& key, const Registration& superseded);
+    bool hasAuthorityExtendedCapability() const;
+    void appendCapabilities(Ipv6NdOptions& options, Ipv6NdMessage& message, bool solicitation, bool authorityExtended = false) const;
+    bool readCapabilities(const Ipv6NdOptions& options, bool solicitation, int& flags) const;
     void sendRegistrationAdvertisement(const RegistrationKey& key, const Registration& requested,
             const Ipv6NdOption& aro, int status, const Ipv6Address& routerAddress);
     bool readNativeSource(const Packet *packet, const Ipv6NdOptions& options, LowpanNativeLinkDomain *domain,

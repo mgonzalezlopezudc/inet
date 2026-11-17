@@ -92,6 +92,7 @@ void LowpanHostRegistration::sendRouterSolicitation(NetworkInterface *interface,
     auto message = makeShared<Ipv6RouterSolicitation>();
     message->getOptionsForUpdate().appendOption(owner.createNativeLinkOption(boundary->getLinkAddress()));
     message->addChunkLength(B(16));
+    owner.appendCapabilities(message->getOptionsForUpdate(), *message, true);
     auto packet = new Packet("native-router-solicitation");
     Icmpv6::insertChecksum(CHECKSUM_COMPUTED, message, packet);
     packet->insertAtFront(message);

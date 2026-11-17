@@ -1,0 +1,39 @@
+%description:
+RFC8505 literal lollipop outcomes and length-preserving EARO metadata.
+Unknown legacy recency is separate from a genuine known TID zero.
+
+%includes:
+#include "inet/linklayer/lowpan/LowpanRegistrationInfo.h"
+using namespace inet;
+using namespace inet::lowpan;
+
+%activity:
+using Info=inet::lowpan::LowpanRegistrationInfo;
+struct Vector {int a,b;Info::Recency expected;};
+for(auto value:std::vector<Vector>{{240,5,Info::NEWER},{250,5,Info::OLDER},{250,240,Info::NEWER},
+        {127,0,Info::INCOMPARABLE},{0,127,Info::INCOMPARABLE},{10,27,Info::INCOMPARABLE},
+        {16,0,Info::NEWER},{17,0,Info::INCOMPARABLE},{0,16,Info::OLDER},{255,0,Info::OLDER},
+        {0,255,Info::NEWER},{240,0,Info::OLDER},{239,0,Info::NEWER},{0,0,Info::EQUAL},{255,255,Info::EQUAL}})
+    ASSERT(Info::compare(value.a,value.b)==value.expected);
+for(int width:{8,16,24,32}) {
+    Info original;original.tidKnown=true;original.tid=0;original.reachability=false;original.opaque=0x5b;
+    for(int i=0;i<width;i++)original.rovr.push_back(uint8_t(i*7));
+    std::unique_ptr<Ipv6NdOption> option(original.makeOption(0,65535,true));
+    ASSERT(option->getOptionLength()==1+width/8 && option->getPaddingBytes(2)==1 && option->getPaddingBytes(3)==0);
+    option->setPaddingBytes(2,0xf1); // Reserved bits ignored; I/R/T retain their defined positions.
+    Info decoded;ASSERT(Info::parse(*option,true,decoded)==Info::VALID);
+    ASSERT(decoded.sameParameters(original) && decoded.rovr.size()==size_t(width));
+    auto copy=decoded;copy.rovr.back()^=1;ASSERT(!copy.sameOwner(original));
+    option->setPaddingBytes(2,5);ASSERT(Info::parse(*option,true,decoded)==Info::UNSUPPORTED); // I=1
+    option->setPaddingBytes(2,0xfe);option->setPaddingBytes(3,0xa5);
+    ASSERT(Info::parse(*option,true,decoded)==(width==8?Info::VALID:Info::UNSUPPORTED));
+    if(width==8){ASSERT(!decoded.tidKnown && decoded.tid==0 && decoded.reachability && decoded.opaque==0);ASSERT(!decoded.sameTransaction(original));std::unique_ptr<Ipv6NdOption> reply(decoded.makeOption(3,0,true));ASSERT(reply->getPaddingBytes(2)==3 && reply->getPaddingBytes(3)==0);}
+}
+Info full;full.rovr.assign(32,0);full.rovr.back()=1;Info prefix;prefix.rovr.assign(8,0);ASSERT(!full.sameOwner(prefix));
+std::unique_ptr<Ipv6NdOption> legacy(prefix.makeOption(0,1,false));legacy->setPaddingBytes(2,3);legacy->setPaddingBytes(3,char(240));
+Info decoded;ASSERT(Info::parse(*legacy,false,decoded)==Info::VALID && !decoded.tidKnown && decoded.reachability);
+legacy->setPaddingBytesArraySize(13);ASSERT(Info::parse(*legacy,true,decoded)==Info::MALFORMED);
+std::cout<<"Literal TID comparison, full ROVR metadata and unknown-recency distinction verified\n";
+
+%contains: stdout
+Literal TID comparison, full ROVR metadata and unknown-recency distinction verified

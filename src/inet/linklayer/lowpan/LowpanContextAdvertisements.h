@@ -47,6 +47,7 @@ class INET_API LowpanContextAdvertisements
         bool preferredUnlimited = false;
     };
     struct Group {
+        bool authorityExtended = false;
         uint32_t version = 0;
         std::array<uint8_t, 22> abro{}; // Forward the received ABRO body unchanged.
         simtime_t validUntil = SIMTIME_MAX;
@@ -111,6 +112,7 @@ class INET_API LowpanContextAdvertisements
             const Ieee802154Address& nativeDestination);
     void sendPeriodic(cMessage *message);
     size_t getNumGroups() const { return groups.size(); }
+    bool hasAuthorityCapability(const Ipv6Address& authority) const;
 };
 } }
 #endif
