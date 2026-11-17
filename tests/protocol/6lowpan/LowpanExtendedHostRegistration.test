@@ -1,0 +1,248 @@
+%description:
+Automatic updated hosts use real native discovery/registration/data through two
+registrars and an Ethernet transit authority. Literal RA/NA controls exercise
+capability knowledge and authority cooldown without replacing the host consumer.
+
+%extraargs: -r 0..19
+
+%file: ExtendedHostCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/MemoryOutputStream.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/checksum/Checksum.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/common/InterfaceTag_m.h"
+#include "inet/linklayer/common/MacAddressTag_m.h"
+#include "inet/linklayer/ieee802154/Ieee802154AddressTagBase_m.h"
+#include "inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.h"
+#include "inet/networklayer/common/L3AddressTag_m.h"
+#include "inet/networklayer/common/HopLimitTag_m.h"
+#include "inet/networklayer/common/NextHopAddressTag_m.h"
+#include "inet/networklayer/icmpv6/Icmpv6.h"
+#include "inet/networklayer/ipv6/Ipv6Header_m.h"
+#include "inet/networklayer/ipv6/Ipv6InterfaceData.h"
+#include <set>
+namespace inet::protocoltest {
+using namespace lowpan;
+class ExtendedHostCheck : public cSimpleModule, public cListener
+{
+    struct Request {int interface;Ipv6Address target,source;int tid,lifetime;std::vector<uint8_t> rovr;simtime_t time;};
+    NetworkInterface *host[2]{},*router[2]{},*backbone=nullptr,*transit=nullptr;
+    LowpanIpv6NeighbourDiscovery *nd=nullptr;
+    std::vector<Request> requests;
+    std::map<std::pair<int,Ipv6Address>,int> accepted;
+    std::map<std::tuple<int,Ipv6Address,int>,int> copies;
+    int scenario=0,rs=0,na=0,dar=0,dac=0,hostData=0,routerData=0,full=0,checks=0;
+    bool injectedRenewal=false,injectedChange=false;
+    int heldSource=-1,queuedRefresh=-1,rejectedRefresh=-1,expiredCopy=-1,cycles=0;
+    int asyncRefresh=-1,initialCopy=-1;
+    bool ringDone=false;
+    simtime_t queuedAt;
+    std::vector<int> sequence;
+    Ipv6Address a{"2001:db8:10::a"},b{"2001:db8:10::b"},occupied{"2001:db8:10::cc"},authority{"2001:db8:3::30"};
+    const Ipv6Address automatic{"2001:db8:11:0:211:2233:4455:6601"};
+    Ieee802154Address native(int i,bool server=false) const {return Ieee802154Address(Ieee802154Address::EXTENDED,UINT64_C(0x0011223344556601)+2*i+(server?1:0));}
+    Ipv6Address local(int i,bool server=false) const {auto iid=native(i,server).getInt()^UINT64_C(0x0200000000000000);return Ipv6Address(0xfe800000,0,iid>>32,uint32_t(iid));}
+    std::vector<uint8_t> expected(int i,const Ipv6Address& target) const {std::vector<uint8_t> result;if(scenario==4 || scenario==10){auto n=native(scenario==4 || target.isLinkLocal()?i:0).getInt();for(int j=7;j>=0;j--)result.push_back(n>>(8*j));}else{int width=scenario<=3?(scenario+1)*8:32;for(int j=0;j<width;j++)result.push_back(j+1);}return result;}
+    std::vector<uint8_t> address(const Ipv6Address& value) const {MemoryOutputStream out;out.writeIpv6Address(value);return out.getData();}
+    std::vector<uint8_t> checksum(std::vector<uint8_t> body,const Ipv6Address& source,const Ipv6Address& destination,int protocol=58,int offset=2) const {MemoryOutputStream out;out.writeIpv6Address(source);out.writeIpv6Address(destination);out.writeUint32Be(body.size());out.writeUint32Be(protocol);out.writeBytes(body);auto sum=internetChecksum(out.getData());if(protocol==17 && sum==0)sum=0xffff;body[offset]=sum>>8;body[offset+1]=sum;return body;}
+    std::vector<uint8_t> ipv6(std::vector<uint8_t> body,const Ipv6Address& source,const Ipv6Address& destination,int hop=255) const {body=checksum(body,source,destination);std::vector<uint8_t> data{0x60,0,0,0,uint8_t(body.size()>>8),uint8_t(body.size()),58,uint8_t(hop)};auto s=address(source),d=address(destination);data.insert(data.end(),s.begin(),s.end());data.insert(data.end(),d.begin(),d.end());data.insert(data.end(),body.begin(),body.end());return data;}
+    void step(simtime_t when,int kind){scheduleAt(when,new cMessage("host-step",kind));}
+    void assign(){if(scenario==11)return;for(int i=0;i<(scenario==14 || (scenario==16 || scenario==17)?1:2);i++){auto data=host[i]->getProtocolDataForUpdate<Ipv6InterfaceData>();if(!data->hasAddress(a))data->assignAddress(a,false,SIMTIME_ZERO,SIMTIME_ZERO);if(scenario!=13 && scenario!=14 && scenario!=16 && scenario!=17 && !data->hasAddress(b))data->assignAddress(b,false,SIMTIME_ZERO,SIMTIME_ZERO);}}
+    void nativePacket(int i,std::vector<uint8_t> body,const char *name){auto packet=new Packet(name,makeShared<BytesChunk>(checksum(body,local(i,true),local(i))));packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::icmpv6);auto addresses=packet->addTag<L3AddressReq>();addresses->setSrcAddress(local(i,true));addresses->setDestAddress(local(i));packet->addTag<InterfaceReq>()->setInterfaceId(router[i]->getInterfaceId());packet->addTag<HopLimitReq>()->setHopLimit(255);auto req=packet->addTag<Ieee802154AddressReq>();req->setSrcAddress(native(i,true));req->setDestAddress(native(i));req->setSrcPanId(4660+i);req->setDestPanId(4660+i);sendDirect(packet,getModuleByPath(("^.lr["+std::to_string(i)+"].ipv6.ipv6").c_str())->gate("transportIn")->getPathStartGate());}
+    void advertisement(int i,bool updated=true,bool abro=false,int lifetime=120,bool second=false){std::vector<uint8_t> body{134,0,0,0,64,0,uint8_t(lifetime>>8),uint8_t(lifetime),0,0,0,0,0,0,0,0,1,2};auto n=native(i,true).getInt();for(int j=7;j>=0;j--)body.push_back(n>>(8*j));body.insert(body.end(),6,0);body.insert(body.end(),{36,1,0,uint8_t(updated?0x36:0),0,0,0,0});if(abro){body.insert(body.end(),{35,3,0,1,0,0,0,2});auto value=address(second?Ipv6Address("2001:db8:4::40"):authority);body.insert(body.end(),value.begin(),value.end());}nativePacket(i,body,"literal-host-capability-ra");}
+    void confirmation(const Request& request,int status=0,bool solicited=true){std::vector<uint8_t> body{136,0,0,0,uint8_t(solicited?0xe0:0xa0),0,0,0};auto target=address(request.target);body.insert(body.end(),target.begin(),target.end());body.insert(body.end(),{33,uint8_t(1+request.rovr.size()/8),uint8_t(status),0,3,uint8_t(request.tid),uint8_t(request.lifetime>>8),uint8_t(request.lifetime)});body.insert(body.end(),request.rovr.begin(),request.rovr.end());nativePacket(request.interface,body,"literal-old-host-confirmation");}
+    void prefill(){std::vector<uint8_t> body{157,1,0,0,0,240,0,2,0xa0,0xa1,0xa2,0xa3,0xa4,0xa5,0xa6,0xa7};auto target=address(scenario==11?automatic:occupied);body.insert(body.end(),target.begin(),target.end());auto packet=new Packet("literal-authority-occupancy",makeShared<BytesChunk>(ipv6(body,Ipv6Address("2001:db8:1::10"),authority,64)));packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ipv6);packet->addTag<InterfaceReq>()->setInterfaceId(backbone->getInterfaceId());auto mac=packet->addTag<MacAddressReq>();mac->setSrcAddress(backbone->getMacAddress());mac->setDestAddress(transit->getMacAddress());sendDirect(packet,getModuleByPath("^.lr[0].ethernet")->gate("upperLayerIn")->getPathStartGate());}
+    void solicit(){std::vector<uint8_t> body{133,0,0,0,0,0,0,0,1,2};auto value=native(0).getInt();for(int j=7;j>=0;j--)body.push_back(value>>(8*j));body.insert(body.end(),6,0);body.insert(body.end(),{36,1,0,2,0,0,0,0});auto packet=new Packet("literal-repeat-pio-rs",makeShared<BytesChunk>(checksum(body,local(0),Ipv6Address::ALL_ROUTERS_2)));packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::icmpv6);auto addresses=packet->addTag<L3AddressReq>();addresses->setSrcAddress(local(0));addresses->setDestAddress(Ipv6Address::ALL_ROUTERS_2);packet->addTag<InterfaceReq>()->setInterfaceId(host[0]->getInterfaceId());packet->addTag<HopLimitReq>()->setHopLimit(255);auto req=packet->addTag<Ieee802154AddressReq>();req->setSrcAddress(native(0));req->setDestAddress(Ieee802154Address("ffff"));req->setSrcPanId(4660);req->setDestPanId(4660);sendDirect(packet,getModuleByPath("^.host.ipv6.ipv6")->gate("transportIn")->getPathStartGate());}
+    void requestControl(const Request& request){
+        int index=requests.size()-1;
+        if(scenario==19 && request.target==a){if(request.tid==240 && initialCopy<0)initialCopy=index;if(request.tid==241 && asyncRefresh<0){asyncRefresh=index;step(simTime()+SimTime(.01),61);step(simTime()+SimTime(.2),62);step(simTime()+SimTime(.4),63);step(simTime()+SimTime(.6),64);}}
+        if(scenario==12 && request.target==a && request.tid==241 && rejectedRefresh<0){rejectedRefresh=index;step(simTime()+SimTime(.01),28);step(simTime()+SimTime(.2),29);}
+        if(scenario==13){
+            if(request.target.isLinkLocal() && request.interface==1 && request.tid==241 && heldSource<0){heldSource=index;return;}
+            if(request.target==a && request.interface==0 && request.tid>=242 && queuedRefresh<0){queuedRefresh=index;queuedAt=simTime();step(simTime()+SimTime(.02),23);step(simTime()+SimTime(.2),24);step(simTime()+SimTime(.4),25);return;}
+            step(simTime()+SimTime(.02),1000+index);
+        }
+        if(scenario==14 && request.target==a && (sequence.empty() || sequence.back()!=request.tid))sequence.push_back(request.tid);
+        if(scenario==15){
+            if(request.target.isLinkLocal())step(simTime()+SimTime(.02),1000+index);
+            else if(request.target==a && request.interface==0 && expiredCopy<0){expiredCopy=index;step(simTime()+SimTime(.1),26);step(simTime()+SimTime(1.5),27);}
+        }
+        if((scenario==16 || scenario==17)){int status=request.target==a && (request.tid==240 || (scenario==17 && request.tid==241))?9:0;step(simTime()+SimTime(.02),(status==9?2000:1000)+index);}
+    }
+    void data(int i,bool incoming){auto source=incoming?local(i,true):a,destination=incoming?a:local(i,true);auto body=checksum({0x23,0x2a,0x23,0x29,0,9,0,0,0x77},source,destination,17,6);auto packet=new Packet("extended-host-data",makeShared<BytesChunk>(body));packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::udp);auto req=packet->addTag<L3AddressReq>();req->setSrcAddress(source);req->setDestAddress(destination);if(!incoming){packet->addTag<InterfaceReq>()->setInterfaceId(host[i]->getInterfaceId());packet->addTag<NextHopAddressReq>()->setNextHopAddress(destination);}auto path=incoming?"^.lr["+std::to_string(i)+"].ipv6.ipv6":std::string("^.host.ipv6.ipv6");sendDirect(packet,getModuleByPath(path.c_str())->gate("transportIn")->getPathStartGate());}
+  protected:
+    int numInitStages() const override{return NUM_INIT_STAGES;}
+    void initialize(int stage) override{
+        if(stage!=INITSTAGE_LAST)return;scenario=par("scenario");nd=check_and_cast<LowpanIpv6NeighbourDiscovery *>(getModuleByPath("^.host.ipv6.neighbourDiscovery"));nd->subscribe("nativeHostRegistrationSucceeded",this);nd->subscribe("nativeHostRegistrationHistoryFull",this);getModuleByPath("^.host.app[0]")->subscribe("packetReceived",this);
+        for(int i=0;i<2;i++){host[i]=check_and_cast<NetworkInterface *>(getModuleByPath(("^.host.wlan["+std::to_string(i)+"]").c_str()));router[i]=check_and_cast<NetworkInterface *>(getModuleByPath(("^.lr["+std::to_string(i)+"].wlan[0]").c_str()));host[i]->getSubmodule("lowpan")->subscribe("datagramAccepted",this);router[i]->getSubmodule("lowpan")->subscribe("datagramAccepted",this);getModuleByPath(("^.lr["+std::to_string(i)+"].app[0]").c_str())->subscribe("packetReceived",this);auto info=router[i]->getProtocolDataForUpdate<Ipv6InterfaceData>();info->setAdvSendAdvertisements(true);info->setAdvDefaultLifetime(SimTime(120));while(info->getNumAdvPrefixes())info->removeAdvPrefix(0);}
+        backbone=check_and_cast<NetworkInterface *>(getModuleByPath("^.lr[0].eth[0]"));transit=check_and_cast<NetworkInterface *>(getModuleByPath("^.transit.eth[0]"));getModuleByPath("^.authority.ipv6.ipv6")->subscribe("packetReceivedFromLower",this);for(int i=0;i<2;i++)getModuleByPath(("^.lr["+std::to_string(i)+"].ipv6.ipv6").c_str())->subscribe("packetReceivedFromLower",this);
+        if(scenario==6 || scenario==7){step(SimTime(.1),1);if(scenario==7)step(SimTime(3),2);step(SimTime(4),3);step(SimTime(9),4);step(SimTime(16),5);step(SimTime(25),99);}
+        else if(scenario==11){step(SimTime(.1),1);step(SimTime(3),30);step(SimTime(7),31);step(SimTime(8),33);step(SimTime(9.5),32);step(SimTime(10.5),34);step(SimTime(13.5),31);step(SimTime(16),35);step(SimTime(18),99);}
+        else if(scenario==13){assign();step(SimTime(.1),11);step(SimTime(16),6);step(SimTime(18),99);}
+        else if(scenario==14){assign();step(SimTime(50),6);step(SimTime(52),99);}
+        else if(scenario==15){assign();step(SimTime(.1),11);step(SimTime(4),6);step(SimTime(6),99);}
+        else if((scenario==16 || scenario==17)){assign();step(SimTime(.1),11);step(SimTime(1),50);step(SimTime(2),51);step(SimTime(2.1),40);step(SimTime(2.2),41);step(SimTime(scenario==16?3:12),52);step(SimTime(scenario==16?12:23),53);step(SimTime(scenario==16?14:25),99);}
+        else if(scenario==18){assign();step(SimTime(3),60);step(SimTime(10.5),65);step(SimTime(11.5),99);}
+        else{assign();step(SimTime(scenario==12 || scenario==19?22:scenario==5 || scenario==9?12:8),6);step(SimTime(scenario==12 || scenario==19?24:scenario==5 || scenario==9?14:10),99);}
+        if(scenario==8)step(SimTime(.1),11);
+    }
+    void receiveSignal(cComponent *component,simsignal_t signal,cObject *object,cObject *) override{
+        Enter_Method_Silent();if(signal==registerSignal("nativeHostRegistrationHistoryFull")){full++;return;}if(signal==registerSignal("packetReceived")){if(component==getModuleByPath("^.host.app[0]"))hostData++;else routerData++;return;}auto packet=check_and_cast<Packet *>(object);
+        if(signal==registerSignal("nativeHostRegistrationSucceeded")){auto source=packet->getTag<L3AddressInd>()->getSrcAddress().toIpv6();int i=source==local(0,true)?0:1;auto reply=packet->peekAtFront<Ipv6NeighbourAdvertisement>();auto target=scenario==4?packet->getTag<L3AddressInd>()->getDestAddress().toIpv6():reply->getTargetAddress();accepted[{i,target}]++;if(scenario==14 && target==a){cycles++;int tid=uint8_t(reply->getOptions().getOption(0)->getPaddingBytes(3));if(cycles<=72){step(simTime()+SimTime(.15),40);step(simTime()+SimTime(.3),41);}else ringDone=cycles==73 && tid==1;}ASSERT(Icmpv6::verifyChecksum(packet));return;}
+        auto ip=packet->peekAtFront<Ipv6Header>();if(ip->getProtocolId()!=IP_PROT_IPv6_ICMP)return;auto header=packet->peekDataAt<Icmpv6Header>(B(40));if(signal==registerSignal("packetReceivedFromLower")){if(header->getType()==157)dar++;if(header->getType()==158)dac++;return;}
+        int index=-1;for(int i=0;i<2;i++)if(component==host[i]->getSubmodule("lowpan"))index=i;
+        if(index<0){if(header->getType()==136)na++;return;}
+        if(header->getType()==133){rs++;auto value=packet->peekDataAt<Ipv6RouterSolicitation>(B(40));const Ipv6NdOption *cio=nullptr;for(size_t n=0;n<value->getOptions().getOptionArraySize();n++)if(int(value->getOptions().getOption(n)->getType())==36)cio=value->getOptions().getOption(n);ASSERT(cio && uint8_t(cio->getPaddingBytes(1))==2);return;}
+        if(header->getType()!=135)return;auto value=packet->peekDataAt<Ipv6NeighbourSolicitation>(B(40));const Ipv6NdOption *aro=nullptr;for(size_t n=0;n<value->getOptions().getOptionArraySize();n++)if(int(value->getOptions().getOption(n)->getType())==33)aro=value->getOptions().getOption(n);if(!aro)return;std::vector<uint8_t> rovr;for(size_t n=6;n<aro->getPaddingBytesArraySize();n++)rovr.push_back(uint8_t(aro->getPaddingBytes(n)));ASSERT(uint8_t(aro->getPaddingBytes(2))==3);bool legacy=scenario==4 || (scenario==8 && rovr.size()==8);auto target=legacy?ip->getSrcAddress():value->getTargetAddress();Request request{index,target,ip->getSrcAddress(),uint8_t(aro->getPaddingBytes(3)),(uint8_t(aro->getPaddingBytes(4))<<8)|uint8_t(aro->getPaddingBytes(5)),rovr,simTime()};requests.push_back(request);copies[{index,target,request.tid}]++;if(legacy && scenario==8){auto eui=native(index).getInt();for(int n=0;n<8;n++)ASSERT(rovr[n]==uint8_t(eui>>(8*(7-n))));}else ASSERT(rovr==expected(index,target));ASSERT(ip->getDestAddress()==local(index,true));
+        if(scenario!=4 && !(scenario==8 && rovr.size()==8)){ASSERT(request.source.isLinkLocal());if(target.isLinkLocal())ASSERT(request.source==target);else ASSERT(accepted[std::make_pair(index,request.source)]>0);}else ASSERT(value->getTargetAddress()==local(index,true));if(scenario==8 && target.isLinkLocal() && rovr.size()==32)step(simTime()+SimTime(.02),1000+requests.size()-1);
+        if((scenario==8 || scenario==9) && target==a && !injectedRenewal){injectedRenewal=true;step(simTime()+SimTime(.2),scenario==8?8:9);step(simTime()+SimTime(.4),10);}requestControl(request);
+    }
+    void handleMessage(cMessage *message) override {
+        int kind=message->getKind();delete message;
+        if(kind>=2000){confirmation(requests.at(kind-2000),9);return;}
+        if(kind>=1000){confirmation(requests.at(kind-1000));return;}
+        if(kind==1)prefill();
+        if(kind==2){advertisement(0,true,true);advertisement(1,true,true);}
+        if(kind==3)assign();
+        if(kind==4){for(const auto& request:requests)if(request.target==a || request.target==b)ASSERT(request.tid==240);ASSERT(!nd->isNativeSourceUsable(host[0],a));checks++;}
+        if(kind==5){std::set<int> tids;for(const auto& request:requests)if(request.target==a)tids.insert(request.tid);ASSERT(tids.size()==2 && tids.count(240) && tids.count(241));checks++;}
+        if(kind==6){
+            if(scenario==8 || scenario==15)ASSERT(!nd->isNativeSourceUsable(host[0],a));
+            else if(scenario==13){ASSERT(queuedRefresh>=0 && heldSource>=0);bool deferred=false;for(const auto& request:requests)if(request.interface==1 && request.target==a && request.tid==requests[queuedRefresh].tid){ASSERT(request.time>=queuedAt+SimTime(10));deferred=true;}ASSERT(deferred);checks++;}
+            else{ASSERT(nd->isNativeSourceUsable(host[0],a));data(0,false);data(0,true);if(scenario!=4 && scenario!=12 && scenario!=14 && scenario!=19){ASSERT(nd->isNativeSourceUsable(host[1],a));data(1,false);data(1,true);}checks++;}
+        }
+        if(kind==8){advertisement(0,false);injectedChange=true;}
+        if(kind==9)advertisement(0,true);
+        if(kind==10){for(const auto& request:requests)if(request.target==a){confirmation(request);break;}}
+        if(kind==11){advertisement(0,true,scenario==13 || (scenario==16 || scenario==17));if(scenario<16)advertisement(1,true,scenario==13);}
+        if(kind==23)confirmation(requests.at(queuedRefresh),9);
+        if(kind==24){ASSERT(heldSource>=0);confirmation(requests.at(heldSource));}
+        if(kind==25){for(const auto& request:requests)ASSERT(!(request.interface==1 && request.target==a && request.tid==requests.at(queuedRefresh).tid));ASSERT(nd->isNativeSourceUsable(host[0],a) && nd->isNativeSourceUsable(host[1],a));checks++;}
+        if(kind==26)advertisement(0,true,false,1);
+        if(kind==27)confirmation(requests.at(expiredCopy));
+        if(kind==28)confirmation(requests.at(rejectedRefresh),3);
+        if(kind==29){ASSERT(!nd->isNativeSourceUsable(host[0],a) && nd->isNativeSourceUsable(host[0],b));data(0,false);data(0,true);checks++;}
+        if(kind==30){Ipv6InterfaceData::AdvPrefix prefix(Ipv6Address("2001:db8:11::"),64);prefix.advOnLinkFlag=false;prefix.advAutonomousFlag=true;prefix.advValidLifetime=SimTime(-200);prefix.advPreferredLifetime=SimTime(-100);router[0]->getProtocolDataForUpdate<Ipv6InterfaceData>()->addAdvPrefix(prefix);solicit();}
+        if(kind==31)solicit();
+        if(kind==32 || kind==35){int count=0;for(const auto& request:requests)if(request.target==automatic)count++;ASSERT(count==(kind==32?1:2));ASSERT(!host[0]->getProtocolData<Ipv6InterfaceData>()->hasAddress(automatic) && !nd->isNativeSourceUsable(host[0],automatic));ASSERT(nd->isNativeSourceUsable(host[0],b));checks++;}
+        if(kind==33)host[0]->getProtocolDataForUpdate<Ipv6InterfaceData>()->assignAddress(b,false,SIMTIME_ZERO,SIMTIME_ZERO);
+        if(kind==34)host[0]->getProtocolDataForUpdate<Ipv6InterfaceData>()->assignAddress(automatic,false,SIMTIME_ZERO,SIMTIME_ZERO);
+        if(kind==40)host[0]->getProtocolDataForUpdate<Ipv6InterfaceData>()->removeAddress(a);
+        if(kind==41)host[0]->getProtocolDataForUpdate<Ipv6InterfaceData>()->assignAddress(a,false,SIMTIME_ZERO,SIMTIME_ZERO);
+        if(kind==50)advertisement(0,true,true,120,true);
+        if(kind==51)advertisement(0,true,true);
+        if(kind==52){for(const auto& request:requests)if(request.target==a)ASSERT(request.tid!=242);ASSERT(!nd->isNativeSourceUsable(host[0],a));checks++;}
+        if(kind==53){std::vector<Request> values;for(const auto& request:requests)if(request.target==a)values.push_back(request);ASSERT(values.size()==3 && values[0].tid==240 && values[1].tid==241 && values[2].tid==242);ASSERT(values[2].time>=(scenario==16?values[0].time+SimTime(10):values[1].time+SimTime(20)));ASSERT(nd->isNativeSourceUsable(host[0],a));checks++;}
+        if(kind==60){auto data=host[0]->getProtocolDataForUpdate<Ipv6InterfaceData>();for(int i=0;i<data->getNumAddresses();i++)if(data->getAddress(i)==a){data->tentativelyAssign(i);break;}}
+        if(kind==61)confirmation(requests.at(asyncRefresh),3,false);
+        if(kind==62){ASSERT(nd->isNativeSourceUsable(host[0],a) && nd->isNativeSourceUsable(host[0],b));data(0,false);data(0,true);checks++;}
+        if(kind==63){ASSERT(initialCopy>=0);confirmation(requests.at(initialCopy),3,false);}
+        if(kind==64){ASSERT(!nd->isNativeSourceUsable(host[0],a) && nd->isNativeSourceUsable(host[0],b));data(0,false);data(0,true);checks++;}
+        if(kind==65){ASSERT(!nd->isNativeSourceUsable(host[0],a) && nd->isNativeSourceUsable(host[1],a));data(1,false);data(1,true);checks++;}
+        if(kind==99)endSimulation();
+    }
+    void finish() override {
+        ASSERT(rs>=2 && full==0);
+        if(scenario<=3 || scenario==5 || scenario==9 || scenario==10){ASSERT(hostData==2 && routerData==2);bool shared=false;for(const auto& entry:copies){auto [i,target,tid]=entry.first;if((target==a || target==b) && i==0 && copies.count({1,target,tid}))shared=true;}ASSERT(shared);}
+        if(scenario==4 || scenario==12 || scenario==14)ASSERT(hostData==1 && routerData==1);
+        if(scenario==6 || scenario==7)ASSERT(hostData==0 && checks==2);
+        if(scenario==8)ASSERT(injectedChange);
+        if(scenario==11)ASSERT(checks==2);
+        if(scenario==12)ASSERT(rejectedRefresh>=0 && checks==2);
+        if(scenario==13)ASSERT(checks==2);
+        if(scenario==14){std::vector<int> expected;for(int i=240;i<=255;i++)expected.push_back(i);for(int i=0;i<=127;i++)expected.push_back(i);expected.insert(expected.end(),{0,1});ASSERT(sequence==expected && ringDone);}
+        if(scenario==15){ASSERT(expiredCopy>=0);int count=0;for(const auto& request:requests)if(request.interface==0 && request.target==a){ASSERT(request.tid==240);count++;}ASSERT(count==2);}
+        if((scenario==16 || scenario==17))ASSERT(checks==2 && hostData==0 && routerData==0);
+        if(scenario==18){std::set<int> tids;for(const auto& request:requests)if(request.target==a){tids.insert(request.tid);ASSERT(request.interface!=0 || request.time<SimTime(3));}ASSERT(tids.size()==3 && tids.count(240) && tids.count(241) && tids.count(242));ASSERT(hostData==1 && routerData==1 && checks==1);}
+        if(scenario==19)ASSERT(asyncRefresh>=0 && hostData==2 && routerData==2 && checks==3);
+        std::cout<<"case="<<scenario<<" RS="<<rs<<" NS="<<requests.size()<<" NA="<<na<<" DAR="<<dar<<" DAC="<<dac<<" hostData="<<hostData<<" routerData="<<routerData<<" checks="<<checks<<'\n';
+        std::cout<<"Automatic updated host identity, transaction, discovery and data paths verified\n";
+    }
+};
+Define_Module(ExtendedHostCheck);
+}
+
+%file: test.ned
+@namespace(inet::protocoltest);
+import inet.node.inet.StandardHost;
+import inet.node.inet.Router;
+import inet.networklayer.configurator.ipv6.Ipv6NetworkConfigurator;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple ExtendedHostCheck {parameters:int scenario;}
+network ExtendedHostNetwork {types:channel Backbone extends ned.DatarateChannel {delay=10ms;datarate=100Mbps;}submodules:configurator:Ipv6NetworkConfigurator;medium[2]:Ieee802154NarrowbandScalarRadioMedium;domain[2]:LowpanNativeLinkDomain;host:StandardHost;lr[2]:StandardHost;authority:StandardHost;transit:Router;check:ExtendedHostCheck;connections allowunconnected:lr[0].ethg++ <--> Backbone <--> transit.ethg++;lr[1].ethg++ <--> Backbone <--> transit.ethg++;authority.ethg++ <--> Backbone <--> transit.ethg++;}
+
+%inifile: omnetpp.ini
+[General]
+network=ExtendedHostNetwork
+sim-time-limit=56s
+seed-set=0
+*.check.scenario=${case=0..19}
+**.vector-recording=false
+**.scalar-recording=false
+**.hasIpv4=false
+**.hasIpv6=true
+*.host.ipv6.typename="LowpanIpv6NetworkLayer"
+*.lr[*].ipv6.typename="LowpanIpv6NetworkLayer"
+*.authority.ipv6.typename="LowpanIpv6NetworkLayer"
+*.host.ipv6.neighbourDiscovery.nativeNdRole="host"
+*.host.ipv6.neighbourDiscovery.extendedRegistration=true
+*.host.ipv6.neighbourDiscovery.nativeRegistrationOwnershipVerifier=(${case}==10 ? "" : ${case}==0 ? "0102030405060708" : ${case}==1 ? "0102030405060708090a0b0c0d0e0f10" : ${case}==2 ? "0102030405060708090a0b0c0d0e0f101112131415161718" : "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20")
+*.host.numWlanInterfaces=2
+*.lr[*].numWlanInterfaces=1
+*.lr[*].forwarding=true
+*.authority.forwarding=true
+*.lr[0].ipv6.neighbourDiscovery.nativeNdRole=(${case}==8 || ${case}==13 || (${case}>=15 && ${case}<=17) ? "static" : "router")
+*.lr[1].ipv6.neighbourDiscovery.nativeNdRole=(${case}==4 || ${case}==8 || (${case}>=11 && ${case}<=17) || ${case}==19 ? "static" : "router")
+*.lr[0].ipv6.neighbourDiscovery.extendedRegistration=(${case}!=4 && ${case}!=8 && ${case}!=13 && !(${case}>=15 && ${case}<=17))
+*.lr[1].ipv6.neighbourDiscovery.extendedRegistration=(${case}!=4 && ${case}!=8 && !(${case}>=11 && ${case}<=17) && ${case}!=19)
+*.authority.ipv6.neighbourDiscovery.nativeNdRole=(${case}==5 || ${case}==8 || ${case}==9 ? "static" : "borderRouter")
+*.authority.ipv6.neighbourDiscovery.extendedRegistration=(${case}!=4 && ${case}!=5 && ${case}!=8 && ${case}!=9)
+*.authority.ipv6.neighbourDiscovery.maxDuplicateAddressEntries=(${case}==6 || ${case}==7 ? 1 : 64)
+*.lr[0].ipv6.neighbourDiscovery.registrationAuthorityAddress=(${case}==8 || ${case}==13 || (${case}>=15 && ${case}<=17) ? "" : "2001:db8:3::30")
+*.lr[1].ipv6.neighbourDiscovery.registrationAuthorityAddress=(${case}==4 || ${case}==8 || (${case}>=11 && ${case}<=17) || ${case}==19 ? "" : "2001:db8:3::30")
+*.lr[0].ipv6.neighbourDiscovery.registrationSourceAddress=(${case}==8 || ${case}==13 || (${case}>=15 && ${case}<=17) ? "" : "2001:db8:1::10")
+*.lr[1].ipv6.neighbourDiscovery.registrationSourceAddress=(${case}==4 || ${case}==8 || (${case}>=11 && ${case}<=17) || ${case}==19 ? "" : "2001:db8:2::20")
+*.host.ipv6.neighbourDiscovery.maxCandidateRouters=(${case}==17 ? 1 : 4)
+*.host.ipv6.neighbourDiscovery.nativeRegistrationRefreshFraction=(${case}==12 || ${case}==18 || ${case}==19 ? 0.1 : ${case}==13 ? 0.05 : 0.8)
+*.lr[*].ipv6.neighbourDiscovery.registrationAuthoritySupportsExtended=true
+*.host.numApps=1
+*.lr[*].numApps=1
+*.host.app[0].typename="UdpSink"
+*.lr[*].app[0].typename="UdpSink"
+*.host.app[0].localPort=9001
+*.lr[*].app[0].localPort=9001
+**.wlan[*].typename="Ieee802154NativeLowpanInterface"
+*.host.wlan[0].linkDomainModule="^.^.domain[0]"
+*.host.wlan[1].linkDomainModule="^.^.domain[1]"
+*.lr[0].wlan[0].linkDomainModule="^.^.domain[0]"
+*.lr[1].wlan[0].linkDomainModule="^.^.domain[1]"
+*.host.wlan[0].radio.radioMediumModule="medium[0]"
+*.host.wlan[1].radio.radioMediumModule="medium[1]"
+*.lr[0].wlan[0].radio.radioMediumModule="medium[0]"
+*.lr[1].wlan[0].radio.radioMediumModule="medium[1]"
+**.wlan[*].radio.antenna.mobilityModule="^.^.^.mobility"
+*.domain[0].panId=4660
+*.domain[1].panId=4661
+*.domain[0].radioMediumModule="medium[0]"
+*.domain[1].radioMediumModule="medium[1]"
+*.domain[0].config=xml("<domain><peer interface='host.wlan[0]' native='0011223344556601'/><peer interface='lr[0].wlan[0]' native='0011223344556602'/></domain>")
+*.domain[1].config=xml("<domain><peer interface='host.wlan[1]' native='0011223344556603'/><peer interface='lr[1].wlan[0]' native='0011223344556604'/></domain>")
+**.ipv6.configurator.networkConfiguratorModule="configurator"
+*.configurator.assignAddressesToHosts=false
+*.configurator.config=xml("<config><interface hosts='lr[0]' names='eth0' address='2001:db8:1::10'/><interface hosts='lr[1]' names='eth0' address='2001:db8:2::20'/><interface hosts='transit' names='eth0' address='2001:db8:1::1'/><interface hosts='transit' names='eth1' address='2001:db8:2::1'/><interface hosts='transit' names='eth2' address='2001:db8:3::1'/><interface hosts='authority' names='eth0' address='2001:db8:3::30'/></config>")
+**.ipv6.neighbourDiscovery.dupAddrDetectTransmits=0
+**.ipv6.neighbourDiscovery.routerBootupTime=0s
+**.ipv6.neighbourDiscovery.hostBootupTime=0s
+**.ipv6.icmpv6.checksumMode="computed"
+**.lowpan.headerCompression="iphc"
+**.mobility.initialX=0m
+**.mobility.initialY=0m
+**.mobility.initialZ=0m
+**.mobility.initFromDisplayString=false
+**.mobility.updateFromDisplayString=false
+
+%contains: stdout
+Automatic updated host identity, transaction, discovery and data paths verified

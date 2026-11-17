@@ -1,0 +1,3 @@
+Extended native host registration
+
+Native LoWPAN hosts can opt in to updated registration with retained per-address ownership and transaction history, LL-source bootstrap, correlated parallel registrar copies and explicit legacy wire fallback. Default legacy behavior is preserved. History and cooldown storage are bounded and survive ordinary restart; module recreation does not restore transaction history.

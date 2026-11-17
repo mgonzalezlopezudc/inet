@@ -58,6 +58,7 @@ class INET_API LowpanIpv6NeighbourDiscovery : public Ipv6NeighbourDiscovery
     static simsignal_t registrationCountChangedSignal;
     static simsignal_t nativeRouterDiscoveredSignal;
     static simsignal_t nativeHostRegistrationSucceededSignal;
+    static simsignal_t nativeHostRegistrationHistoryFullSignal;
     static simsignal_t duplicateAddressEntryCountChangedSignal;
     virtual void initialize(int stage) override;
     virtual void handleMessageWhenUp(cMessage *message) override;
@@ -111,6 +112,7 @@ class INET_API LowpanIpv6NeighbourDiscovery : public Ipv6NeighbourDiscovery
     virtual ~LowpanIpv6NeighbourDiscovery();
     bool isNativeSourceUsable(NetworkInterface *interface, const Ipv6Address& address) const;
     bool usesNativeHostRegistration() const { return hostRegistration != nullptr; }
+    size_t getNumNativeHostRegistrationHistories() const;
     virtual void sendRedirect(Packet *redirectedPacket, const Ipv6Address& targetAddr,
             const Ipv6Address& destAddr, NetworkInterface *ie) override;
 };
