@@ -4,11 +4,24 @@
 #define __INET_IIEEE802154SUPERFRAMEPROVIDER_H
 
 #include <optional>
+#include <vector>
 #include "inet/clock/contract/ClockTime.h"
+#include "inet/linklayer/ieee802154/Ieee802154GtsValues.h"
 #include "inet/linklayer/ieee802154/contract/IIeee802154AccessProvider.h"
 #include "inet/physicallayer/wireless/ieee802154/contract/Ieee802154PhyServicePrimitives.h"
 
 namespace inet {
+
+/** A possible receive grant copied at the actual first-symbol event. */
+struct Ieee802154CfpReceptionCandidate
+{
+    uint16_t panId;
+    uint64_t deviceExtendedAddress;
+    uint16_t deviceShortAddress;
+    Ieee802154GtsDirection direction;
+    simtime_t physicalEnd;
+    simtime_t guardedEnd;
+};
 
 /** Values copied at the actual first-symbol reception event. */
 struct Ieee802154SuperframeReceptionAnchor
@@ -17,6 +30,8 @@ struct Ieee802154SuperframeReceptionAnchor
     simtime_t physicalStart;
     clocktime_t localStart;
     simtime_t expectedEnd;
+    std::optional<Ieee802154AccessWindow> capWindow;
+    std::vector<Ieee802154CfpReceptionCandidate> cfpCandidates;
 };
 
 class INET_API IIeee802154SuperframeProvider
@@ -46,7 +61,8 @@ class INET_API IIeee802154SuperframeProvider
     virtual clocktime_t getFutureClockTime(simtime_t target) const = 0;
     /** Conservative physical phase uncertainty since an actual parent anchor. */
     [[nodiscard]] virtual simtime_t getForecastUncertainty(simtime_t elapsed, simtime_t maxPropagationDelay) const = 0;
-    virtual void recordReceptionStart(const physicallayer::Ieee802154PhyReceiveStart& start) = 0;
+    virtual void recordReceptionStart(const physicallayer::Ieee802154PhyReceiveStart& start,
+            std::optional<Ieee802154AccessWindow> capWindow = {}, std::vector<Ieee802154CfpReceptionCandidate> cfpCandidates = {}) = 0;
     virtual std::optional<Ieee802154SuperframeReceptionAnchor> takeReceptionAnchor(int transmissionId) = 0;
     virtual void retireExpiredReceptionAnchors() = 0;
     virtual void clearReceptionAnchors() = 0;

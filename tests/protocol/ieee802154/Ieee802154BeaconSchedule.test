@@ -54,6 +54,7 @@ class BeaconScheduleExercise : public cSimpleModule, public cListener,
     bool deliveredAckSent = false;
     simtime_t dataPpduEnd;
     simtime_t dataTestBoundary;
+    simtime_t ackPpduEnd;
     int scanConfirms = 0;
     Status expectedSet = Status::SUCCESS;
     std::optional<Ieee802154MacServiceResult> superframeResult;
@@ -251,7 +252,7 @@ class BeaconScheduleExercise : public cSimpleModule, public cListener,
                 if (scenario == 24 || scenario == 27) {
                     auto nextBoundary = clock->computeSimTimeFromClockTime(transmitClockTimes.front() + SIMTIME_AS_CLOCKTIME(SimTime(960 * 16,SIMTIME_US)));
                     dataTestBoundary = nextBoundary;
-                    until(nextBoundary - SimTime(scenario == 24 ? 1188 : 1596,SIMTIME_US));
+                    until(nextBoundary - SimTime(scenario == 24 ? 1188 : 1660,SIMTIME_US));
                     auto packet = new Packet("late-acknowledged-data");
                     packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0x55}));
                     Ieee802154MacDataRequest data;
@@ -317,6 +318,7 @@ class BeaconScheduleExercise : public cSimpleModule, public cListener,
                         ASSERT(dataPpduEnd > boundary - SimTime(800,SIMTIME_US) && dataPpduEnd < boundary - SimTime(600,SIMTIME_US));
                     ASSERT(dataIndications == 1 && deliveredAckSent == (scenario == 27) && dataConfirms == 1);
                     ASSERT(ackStarts == (scenario == 27 ? 1 : 0));
+                    if (scenario == 27) ASSERT(ackPpduEnd + SimTime(192,SIMTIME_US) <= boundary);
                 }
                 if (scenario == 19) ASSERT(receiverEnds == 1);
                 ASSERT(accessBackoffs == 0);
@@ -353,6 +355,7 @@ class BeaconScheduleExercise : public cSimpleModule, public cListener,
             }
             if ((scenario == 24 || scenario == 27) && transmitClockTimes.size() == beaconStartValues.size()) {
                 ++ackStarts;
+                ackPpduEnd = transmission->getEndTime();
                 return;
             }
             transmitClockTimes.push_back(clock->getClockTime());
@@ -389,7 +392,7 @@ class BeaconScheduleExercise : public cSimpleModule, public cListener,
     }
   public:
     BeaconScheduleExercise() : cSimpleModule(65536) {}
-    virtual void handleDataConfirm(uint64_t, const Ieee802154MacDataConfirm& confirm) override { ASSERT((scenario == 24 || scenario == 27 || scenario == 29) && confirm.result == Ieee802154MacServiceResult(scenario == 24 ? Status::NO_ACK : Status::SUCCESS)); ++dataConfirms; }
+    virtual void handleDataConfirm(uint64_t, const Ieee802154MacDataConfirm& confirm) override { if (!((scenario == 24 || scenario == 27 || scenario == 29) && confirm.result == Ieee802154MacServiceResult(scenario == 24 ? Status::NO_ACK : Status::SUCCESS))) throw cRuntimeError("beacon DATA terminal scenario=%d status=%d abort=%d dataEnd=%s boundary=%s ackRF=%d indications=%d",scenario,std::get_if<Status>(&confirm.result) ? int(std::get<Status>(confirm.result)) : -1,std::get_if<Ieee802154MacServiceAbortReason>(&confirm.result) ? int(std::get<Ieee802154MacServiceAbortReason>(confirm.result)) : -1,dataPpduEnd.str().c_str(),dataTestBoundary.str().c_str(),ackStarts,dataIndications); ++dataConfirms; }
     virtual void handleGetConfirm(uint64_t, const Ieee802154MacGetConfirm& confirm) override {
         Enter_Method("handleGetConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); value = confirm.value;
     }

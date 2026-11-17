@@ -13,6 +13,7 @@ simple Ieee802154ManagementApp extends SimpleModule like IIeee802154MacServiceCl
         string serviceModule = default("^.nic.mac");
         bool coordinator = default(false);
         bool beaconOperation = default(false); // Explicit opt-in to a BO3/SO1 managed PAN.
+        bool enhancedBeaconOperation = default(false); // Use enhanced periodic beacons for one GTS cycle.
         bool gtsOperation = default(false); // Opt in to a bidirectional GTS exchange.
         bool enhancedData = default(false); // Select unacknowledged version-2 DATA.
         bool enhancedDiscovery = default(false); // Use an Enhanced Beacon Request in active scans.

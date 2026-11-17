@@ -20,10 +20,15 @@ The conventional beacon/slotted/GTS extension is tracked separately in
 [twelve-statement mapping](statement-results.md#conventional-superframe-extension).
 It adds periodic/linked schedules, acquisition/loss, slotted access, both CFP
 directions, deallocation and activity expiry under the
-[bounded profile](beacon-profile.md). Its per-unit behavioral gates are complete;
-the full package regression and stored trajectory controls are being closed for
-B-99. Enhanced-frame source decisions are in [enhanced-frame-profile.md](https://github.com/mgonzalezlopezudc/inet/blob/ec1ee66b1b/doc/project/evidence/model/ieee802154/enhanced-frame-profile.md);
-their structural/operational/scheduled execution remains separate.
+[bounded profile](beacon-profile.md). B-99's package regression and stored trajectory
+controls pass. Enhanced-frame source decisions are in
+[enhanced-frame-profile.md](enhanced-frame-profile.md); structural, unsecured DATA/ACK
+and one-shot discovery stages have executed evidence in the
+[enhanced statement mapping](statement-results.md#enhanced-frame-extension).
+Scheduled enhanced integration also passes the final combined matrix:17 unit fixtures,
+25 module fixtures, two serializers and1864 protocol simulations, with zero errors or
+skipped runs. Final source, controls and mechanical-gate limits are recorded in
+[followup-results.md](followup-results.md#e1-99-publication-closure).
 The step-0 table below preserves its initial extraction verdicts; the current executable
 support table distinguishes subsequent evidence from remaining obligations. Successful
 corpus retrieval validates tooling, not simulation behavior.

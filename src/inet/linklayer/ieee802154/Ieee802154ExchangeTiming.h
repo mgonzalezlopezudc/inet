@@ -23,6 +23,9 @@ class INET_API Ieee802154ExchangeTiming
     static simtime_t ccaAndReadiness(simtime_t ccaDuration, const physicallayer::Ieee802154PhyTimingParameters& phy);
     static simtime_t exchangeDuration(units::values::b psduLength, bool acknowledged, simtime_t propagationBound,
             uint32_t sifsSymbols, uint32_t lifsSymbols, const physicallayer::Ieee802154PhyTimingParameters& phy);
+    /** ATI occupancy through final SIFS, with zero ACK length for unacknowledged DATA. */
+    static simtime_t gtsExchangeDuration(units::values::b psduLength, units::values::b minimumAckLength,
+            simtime_t propagationBound, uint32_t sifsSymbols, const physicallayer::Ieee802154PhyTimingParameters& phy);
     /** A complete exchange ending exactly at the boundary fits. */
     static bool fits(simtime_t start, simtime_t end, simtime_t duration);
 };

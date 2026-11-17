@@ -29,6 +29,7 @@ class INET_API Ieee802154ManagementApp : public SimpleModule,
     std::optional<uint64_t> permitRequest;
     Ieee802154GtsDirection pendingGtsDirection = Ieee802154GtsDirection::DEVICE_TRANSMIT;
     bool awaitingAssociationBeacon = false;
+    bool awaitingEnhancedGtsBeacon = false;
     int completedCycles = 0, receivedMsdus = 0, confirmedMsdus = 0;
     uint16_t nextShortAddress = 0x40;
     std::map<Ieee802154Address,uint16_t> allocations;

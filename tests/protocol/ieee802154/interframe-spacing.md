@@ -20,7 +20,7 @@ sequenceDiagram
     end
     A->>A: SIFS or LIFS eligibility
     Note over A: RX readiness overlaps eligibility wait
-    A->>A: CCA 128 us; TX readiness 192 us
+    A->>A: CCA 128 us, TX readiness 192 us
     A->>B: Second DATA
 ```
 

@@ -20,7 +20,7 @@ sequenceDiagram
     C->>M: Interrupt selected asynchronous state
     M-->>C: One CANCELLED / RESET / STOPPED
     C->>M: Callback admission probe
-    C->>M: Restart when required; new DATA, DSN 8
+    C->>M: Restart when required, new DATA, DSN 8
     M-->>C: One SUCCESS after actual ACK
     Note over M: No old DSN 7 transmission for a further 90 ms
 ```

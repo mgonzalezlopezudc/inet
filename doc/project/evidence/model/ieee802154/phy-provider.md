@@ -1,6 +1,6 @@
 # IEEE 802.15.4 — O-QPSK PHY provider
 
-> **Kind:** design · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [phy-services.md](phy-services.md), [energy-observation.md](https://github.com/mgonzalezlopezudc/inet/blob/ec1ee66b1b/doc/project/evidence/model/ieee802154/energy-observation.md)
+> **Kind:** design · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [phy-services.md](phy-services.md), [energy-observation.md](energy-observation.md)
 
 Pre-write implementation contract for the remaining step-4 work: `Ieee802154PhyService`
 implements the paired PHY role over `Ieee802154StandardRadio`. The existing narrowband radio

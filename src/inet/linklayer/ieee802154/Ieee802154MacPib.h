@@ -31,6 +31,7 @@ class INET_API Ieee802154MacPib
         uint8_t macDsn = 0;
         uint8_t macBsn = 0; ///< Deterministic helper injection; randomized by the operational owner.
         bool enhancedSupported = false;
+        bool macUseEnhancedBeacon = false;
         uint8_t macEbsn = 0;
         uint8_t macEbAutoSa = 2; // FULL, as selected by Table 8-39.
         bool macEbFilteringEnabled = true;

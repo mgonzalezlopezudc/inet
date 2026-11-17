@@ -1,7 +1,7 @@
 %description:
 Native beacon scan suspension and superframe-relative RX-ENABLE boundaries.
 
-%extraargs: -r 0..87
+%extraargs: -r 0..89
 
 %includes:
 #include "ProtocolTest.h"
@@ -43,6 +43,7 @@ Define_ProtocolTestProgram()
 EV << "managed boundary fixture compiled\n";
 
 %file: ManagedBoundaryExercise.cc
+#include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
 #include "inet/common/ModuleRefByPar.h"
 #include "inet/common/packet/Packet.h"
 #include "inet/common/packet/chunk/BytesChunk.h"
@@ -79,7 +80,7 @@ class ManagedBoundaryExercise : public cSimpleModule, public cListener, public I
     bool observingQuick = false;
     bool stopOnPendingBeacon = false, stoppedOnPendingBeacon = false, observeAutoPoll = false;
     int childPollCommands = 0;
-    bool longPollObserved = false, faultFired = false, autoPollExtended = false, controllerStopped = false;
+    bool longPollObserved = false, faultFired = false, autoPollExtended = false, controllerStopped = false, quickEnhanced = false;
     std::optional<simtime_t> pollAckEnd, quickDataStart;
     std::optional<clocktime_t> beaconClockAnchor;
     std::optional<simtime_t> rxIndicatedAt;
@@ -132,7 +133,7 @@ class ManagedBoundaryExercise : public cSimpleModule, public cListener, public I
             emit(registerSignal("verificationComplete"),1L);
             return;
         }
-        if ((scenario >= 6 && scenario <= 8) || (scenario >= 15 && scenario <= 18) || (scenario >= 22 && scenario <= 24) || (scenario >= 29 && scenario <= 36) || scenario == 38 || scenario == 40) {
+        if ((scenario >= 6 && scenario <= 8) || (scenario >= 15 && scenario <= 18) || (scenario >= 22 && scenario <= 24) || (scenario >= 29 && scenario <= 36) || scenario == 38 || scenario == 40 || scenario == 44) {
             set(root.get(),"macAssociationPermit",true);
             set(child.get(),"macResponseWaitTime",uint64_t(2));
             set(leaf.get(),"macResponseWaitTime",uint64_t(2));
@@ -218,7 +219,7 @@ class ManagedBoundaryExercise : public cSimpleModule, public cListener, public I
         }
         ASSERT(rootManagement->submitStartSuperframe(++nextId,start) == Admission::ACCEPTED);
         wait(SimTime(4,SIMTIME_MS));
-        ASSERT(starts == (((scenario >= 6 && scenario <= 8) || (scenario >= 15 && scenario <= 18) || scenario == 24 || (scenario >= 29 && scenario <= 36) || scenario == 38 || scenario == 40) ? 2 : 1) && beacons.size() == 1);
+        ASSERT(starts == (((scenario >= 6 && scenario <= 8) || (scenario >= 15 && scenario <= 18) || scenario == 24 || (scenario >= 29 && scenario <= 36) || scenario == 38 || scenario == 40 || scenario == 44) ? 2 : 1) && beacons.size() == 1);
         auto anchor = beacons.front();
         if (scenario == 43) {
             wait(SimTime(30,SIMTIME_MS));
@@ -402,7 +403,7 @@ class ManagedBoundaryExercise : public cSimpleModule, public cListener, public I
             wait(SimTime(160,SIMTIME_MS));
             ASSERT(scans == 2 && scanNotices >= 1);
         }
-        else if (scenario == 8 || (scenario >= 15 && scenario <= 18) || (scenario >= 30 && scenario <= 32)) {
+        else if (scenario == 8 || scenario == 44 || (scenario >= 15 && scenario <= 18) || (scenario >= 30 && scenario <= 32)) {
             set(child.get(),"macBeaconOrder",uint64_t(3));
             set(child.get(),"macAutoRequest",false);
             set(child.get(),"macShortAddress",uint64_t(0xfffe));
@@ -415,10 +416,11 @@ class ManagedBoundaryExercise : public cSimpleModule, public cListener, public I
             request.sourceAddressMode = Ieee802154Address::AddressType::SHORT;
             request.destinationAddress = Ieee802154Address::fromExtended(0x0401123456789abcULL);
             request.destinationPanId = 0x1234; request.ackTx = true; request.indirectTx = true;
+            if (scenario == 44) request.legacyTx = false;
             auto pendingId = ++nextId;
             ASSERT(root->submitData(pendingId,data,request) == Admission::ACCEPTED);
             observingQuick = true;
-            if (scenario >= 30)
+            if (scenario >= 30 && scenario <= 32)
                 emit(registerSignal("quickArmed"),long(pendingId));
             if (scenario == 17) {
                 auto target = beacons.back() + SimTime(28000,SIMTIME_US);
@@ -429,7 +431,7 @@ class ManagedBoundaryExercise : public cSimpleModule, public cListener, public I
             auto pollPeer = scenario == 17 ? Ieee802154Address::fromShort(1) : Ieee802154Address::fromExtended(0x0201123456789abcULL);
             ASSERT(childManagement->submitPoll(++nextId,{0x1234,pollPeer}) == Admission::ACCEPTED);
             wait(SimTime(scenario == 17 ? 110 : 100,SIMTIME_MS));
-            if (scenario >= 30) {
+            if (scenario >= 30 && scenario <= 32) {
                 ASSERT(faultFired && dataConfirms == 1 && !quickDataStart && longPollObserved);
                 emit(registerSignal("verificationComplete"),1L);
                 return;
@@ -446,7 +448,8 @@ class ManagedBoundaryExercise : public cSimpleModule, public cListener, public I
                 ASSERT(polls == 1 && received == 1 && dataConfirms == 1 && rootDraws == 0 && pollAckEnd && quickDataStart);
             if (scenario != 17) ASSERT(*quickDataStart >= *pollAckEnd + SimTime(192,SIMTIME_US) && *quickDataStart <= *pollAckEnd + SimTime(512,SIMTIME_US));
             if (scenario != 17) ASSERT(longPollObserved);
-            if (scenario == 8 || scenario == 18) {
+            if (scenario == 44) ASSERT(quickEnhanced);
+            if (scenario == 8 || scenario == 18 || scenario == 44) {
                 auto boundary = std::upper_bound(beacons.begin(),beacons.end(),*quickDataStart);
                 ASSERT(boundary != beacons.begin());
                 auto origin = *std::prev(boundary);
@@ -672,6 +675,9 @@ class ManagedBoundaryExercise : public cSimpleModule, public cListener, public I
             }
             else if (frame->getFrameType() == 1 && frame->getDestinationAddress().isShortBroadcast())
                 broadcastFrames.push_back(simTime());
+            else if (scenario == 44 && observingQuick && frame->getFrameType() == 1) {
+                quickEnhanced = frame->getFrameVersion() == 2 && Ieee802154FrameCodec::sequenceNumber(*frame).has_value();
+            }
             else if (scenario >= 15 && scenario <= 18 && observingQuick && frame->getFrameType() == 1) {
                 quickDsns.push_back(frame->getDsn());
                 if (scenario >= 17)
@@ -700,7 +706,7 @@ class ManagedBoundaryExercise : public cSimpleModule, public cListener, public I
             stop->initialize(getModuleByPath("^.host[0].nic.superframeController"),parameters);
             ASSERT(initiateOperation(stop));
         }
-        if ((scenario == 8 || (scenario >= 15 && scenario <= 18) || (scenario >= 30 && scenario <= 32)) && observingQuick) {
+        if ((scenario == 8 || scenario == 44 || (scenario >= 15 && scenario <= 18) || (scenario >= 30 && scenario <= 32)) && observingQuick) {
             auto name = std::string(tx->getPacket()->getName());
             if (name == "IEEE802154-ACK") pollAckEnd = tx->getEndTime();
             else if (name == "IEEE802154-DATA") quickDataStart = tx->getStartTime();
@@ -710,14 +716,14 @@ class ManagedBoundaryExercise : public cSimpleModule, public cListener, public I
             if (scenario >= 9 && scenario <= 16) beaconClockAnchor = check_and_cast<IClock *>(getModuleByPath("^.rootClock"))->getClockTime();
         }
     }
-    virtual void handleDataConfirm(uint64_t id,const Ieee802154MacDataConfirm& c) override { Enter_Method("handleDataConfirm"); ASSERT(((scenario == 3 || scenario == 8 || scenario == 33 || scenario == 35 || scenario == 36 || scenario == 38 || (scenario >= 15 && scenario <= 18)) && c.result == Ieee802154MacServiceResult(Status::SUCCESS)) || ((scenario == 4 || scenario == 9 || scenario == 10 || scenario == 13) && c.result == Ieee802154MacServiceResult(Status::TRANSACTION_EXPIRED)) || ((scenario == 28 || ((scenario == 29 || scenario == 34) && id != primaryId) || scenario == 30) && c.result == Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::CANCELLED)) || ((((scenario == 29 || scenario == 34) && id == primaryId) || scenario == 32) && c.result == Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::STOPPED)) || (scenario == 31 && c.result == Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::RESET))); ++dataConfirms; if (scenario == 36 && dataConfirms == 1) set(root.get(),"macMinBe",uint64_t(0)); }
+    virtual void handleDataConfirm(uint64_t id,const Ieee802154MacDataConfirm& c) override { Enter_Method("handleDataConfirm"); ASSERT(((scenario == 3 || scenario == 8 || scenario == 44 || scenario == 33 || scenario == 35 || scenario == 36 || scenario == 38 || (scenario >= 15 && scenario <= 18)) && c.result == Ieee802154MacServiceResult(Status::SUCCESS)) || ((scenario == 4 || scenario == 9 || scenario == 10 || scenario == 13) && c.result == Ieee802154MacServiceResult(Status::TRANSACTION_EXPIRED)) || ((scenario == 28 || ((scenario == 29 || scenario == 34) && id != primaryId) || scenario == 30) && c.result == Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::CANCELLED)) || ((((scenario == 29 || scenario == 34) && id == primaryId) || scenario == 32) && c.result == Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::STOPPED)) || (scenario == 31 && c.result == Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::RESET))); if (scenario == 44) ASSERT(c.enhancedAckContent); ++dataConfirms; if (scenario == 36 && dataConfirms == 1) set(root.get(),"macMinBe",uint64_t(0)); }
     virtual void handleDataIndication(Packet *packet,const Ieee802154MacDataIndication&) override { Enter_Method("handleDataIndication"); take(packet); delete packet; ++received; }
     virtual void handleGetConfirm(uint64_t,const Ieee802154MacGetConfirm& c) override { Enter_Method("handleGetConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); value = c.value; }
     virtual void handleSetConfirm(uint64_t,const Ieee802154MacSetConfirm& c) override { Enter_Method("handleSetConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); }
     virtual void handleResetConfirm(uint64_t,const Ieee802154MacResetConfirm& c) override { Enter_Method("handleResetConfirm"); ASSERT((scenario == 23 || scenario == 24 || scenario == 25 || scenario == 31 || scenario == 43) && c.result == Ieee802154MacServiceResult(Status::SUCCESS)); ++resets; }
     virtual void handlePromiscuousIndication(Packet *packet,const Ieee802154MacPromiscuousIndication&) override { Enter_Method("handlePromiscuousIndication"); take(packet); delete packet; }
     virtual void handleCommStatusIndication(Packet *packet,const Ieee802154MacCommStatusIndication&) override { Enter_Method("handleCommStatusIndication"); if (packet) { take(packet); delete packet; } }
-    virtual void handlePollConfirm(uint64_t,const Ieee802154MacPollConfirm& c) override { Enter_Method("handlePollConfirm"); ASSERT((scenario == 38 && c.result == Ieee802154MacServiceResult(Status::NO_DATA)) || ((scenario == 8 || (scenario >= 15 && scenario <= 18)) && c.result == Ieee802154MacServiceResult(Status::SUCCESS))); ++polls; }
+    virtual void handlePollConfirm(uint64_t,const Ieee802154MacPollConfirm& c) override { Enter_Method("handlePollConfirm"); ASSERT((scenario == 38 && c.result == Ieee802154MacServiceResult(Status::NO_DATA)) || ((scenario == 8 || scenario == 44 || (scenario >= 15 && scenario <= 18)) && c.result == Ieee802154MacServiceResult(Status::SUCCESS))); ++polls; }
     virtual void handlePurgeConfirm(uint64_t,const Ieee802154MacPurgeConfirm&) override { ASSERT(false); }
     virtual void handleStartConfirm(uint64_t,const Ieee802154MacStartConfirm&) override { ASSERT(false); }
     virtual void handleStartSuperframeConfirm(uint64_t id,const Ieee802154MacStartSuperframeConfirm& c) override { Enter_Method("handleStartSuperframeConfirm"); auto expected = expectingDepartureAbort ? Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::DISASSOCIATED) : Ieee802154MacServiceResult((scenario == 6 && starts == 2) || scenario == 21 ? Status::INVALID_PARAMETER : Status::SUCCESS); ASSERT(c.result == expected); ++starts; if (expectingDepartureAbort) { ASSERT(child->cancel(id) == Ieee802154MacServiceCancelResult::NOT_PENDING); resetWasBusy = child->submitReset(++nextId,{false}) == Admission::BUSY; expectingDepartureAbort = false; } }
@@ -826,7 +832,7 @@ network = ManagedBoundaryTest
 sim-time-limit = 1.5s
 cmdenv-express-mode = true
 cmdenv-stop-batch-on-error = false
-*.scenario = ${scenario=0..43}
+*.scenario = ${scenario=0..44}
 *.**.radio.sendRawBytes = ${raw=false,true}
 *.radioMedium.backgroundNoise.power = -110dBm
 *.radioMedium.signalAnalogRepresentation = "scalar"
@@ -836,10 +842,11 @@ cmdenv-stop-batch-on-error = false
 *.host[0].nic.shortAddress = 1
 *.host[0].nic.panId = 4660
 *.host[0].nic.mac.isPanCoordinator = true
-*.host[0].nic.rxOnWhenIdle = (${scenario} >= 6 && ${scenario} <= 8) || (${scenario} >= 15 && ${scenario} <= 18) || (${scenario} >= 21 && ${scenario} <= 24) || (${scenario} >= 29 && ${scenario} <= 36) || (${scenario} >= 38 && ${scenario} <= 40)
-*.host[1].nic.rxOnWhenIdle = (${scenario} >= 6 && ${scenario} <= 8) || (${scenario} >= 15 && ${scenario} <= 18) || (${scenario} >= 21 && ${scenario} <= 24) || (${scenario} >= 29 && ${scenario} <= 36) || ${scenario} == 38 || ${scenario} == 40
-*.host[2].nic.rxOnWhenIdle = (${scenario} >= 6 && ${scenario} <= 8) || (${scenario} >= 15 && ${scenario} <= 18) || (${scenario} >= 21 && ${scenario} <= 24) || (${scenario} >= 29 && ${scenario} <= 36) || ${scenario} == 38 || ${scenario} == 40
+*.host[0].nic.rxOnWhenIdle = (${scenario} >= 6 && ${scenario} <= 8) || (${scenario} >= 15 && ${scenario} <= 18) || (${scenario} >= 21 && ${scenario} <= 24) || (${scenario} >= 29 && ${scenario} <= 36) || (${scenario} >= 38 && ${scenario} <= 40) || ${scenario} == 44
+*.host[1].nic.rxOnWhenIdle = (${scenario} >= 6 && ${scenario} <= 8) || (${scenario} >= 15 && ${scenario} <= 18) || (${scenario} >= 21 && ${scenario} <= 24) || (${scenario} >= 29 && ${scenario} <= 36) || ${scenario} == 38 || ${scenario} == 40 || ${scenario} == 44
+*.host[2].nic.rxOnWhenIdle = (${scenario} >= 6 && ${scenario} <= 8) || (${scenario} >= 15 && ${scenario} <= 18) || (${scenario} >= 21 && ${scenario} <= 24) || (${scenario} >= 29 && ${scenario} <= 36) || ${scenario} == 38 || ${scenario} == 40 || ${scenario} == 44
 *.host[1].nic.mac.pollResponseWait = ${scenario} == 38 ? 200ms : 2s
+*.host[*].nic.enableEnhancedFrames = ${scenario} == 44
 *.host[0].nic.clockModule = ${scenario} >= 9 && ${scenario} <= 16 ? "^.^.^.rootClock" : ""
 *.rootClock.initialClockTime = 0.25s
 *.rootClock.oscillator.nominalTickLength = 1us

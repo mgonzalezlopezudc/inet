@@ -305,24 +305,24 @@ steps 2–10 and the final execution record close their then-pending production 
 Package 1a is complete: the standalone native address value and paired MAC service contracts have
 passing focused unit/module cases and independent reviews. See the
 [value evidence](../../doc/project/evidence/model/ieee802154/results.md#step-1a-native-address-value) and
-[service-contract evidence](https://github.com/mgonzalezlopezudc/inet/blob/ec1ee66b1b/doc/project/evidence/model/ieee802154/results.md#step-1a-mac-service-contracts).
+[service-contract evidence](../../doc/project/evidence/model/ieee802154/results.md#step-1a-mac-service-contracts).
 The module fixture uses a test-local provider. The selected PIB store is implemented in 1b;
 operational service integration, the real interface fixture (1d), and wire-codec
 checks were still owed at that checkpoint. Those gates are now closed by steps 2–10.
 
 Package 1b is complete at the store boundary: the selected 43-attribute MAC PIB has a passing
 focused unit case and independent review. The
-[selected MAC PIB contract](https://github.com/mgonzalezlopezudc/inet/blob/ec1ee66b1b/doc/project/evidence/model/ieee802154/pib.md) records access,
-mutation, startup and reset semantics; [results](https://github.com/mgonzalezlopezudc/inet/blob/ec1ee66b1b/doc/project/evidence/model/ieee802154/results.md#step-1b-selected-mac-pib)
+[selected MAC PIB contract](../../doc/project/evidence/model/ieee802154/pib.md) records access,
+mutation, startup and reset semantics; [results](../../doc/project/evidence/model/ieee802154/results.md#step-1b-selected-mac-pib)
 record the evidence and operational integration limits.
 
 Package 1c is complete at the structural contract boundary: paired PHY roles, typed operation
-values and the [event/timer ownership contract](https://github.com/mgonzalezlopezudc/inet/blob/ec1ee66b1b/doc/project/evidence/model/ieee802154/phy-services.md)
+values and the [event/timer ownership contract](../../doc/project/evidence/model/ieee802154/phy-services.md)
 have a passing test-local module case. Production PHY timing/measurements, radio adaptation,
 runtime PHY-to-MAC PIB context refresh and propagation-bound validation remain steps 4–6 work.
 The contract uses the 2024 source's undefined PD/PLME-SAP boundary; its methods and local statuses
 do not claim standardized primitive signatures. See the
-[execution evidence](https://github.com/mgonzalezlopezudc/inet/blob/ec1ee66b1b/doc/project/evidence/model/ieee802154/results.md#step-1c-phy-service-contracts).
+[execution evidence](../../doc/project/evidence/model/ieee802154/results.md#step-1c-phy-service-contracts).
 
 #### IEEE802154-1C — paired PHY services and timing ownership
 
@@ -371,7 +371,7 @@ pass `Ieee802154NativeInterface_1.test`, including distinct high address bits an
 payload dispatch. Package 1e's replacement composition passes `Ieee802154Composition_1.test`.
 Existing-default initialization and operational radio/access wiring remain gates; replacement
 DATA explicitly refuses unsupported operation at this stage. The
-[integration contract](https://github.com/mgonzalezlopezudc/inet/blob/ec1ee66b1b/doc/project/evidence/model/ieee802154/integration.md) records the
+[integration contract](../../doc/project/evidence/model/ieee802154/integration.md) records the
 compatibility matrix and exact public type names. No default cutover has occurred.
 
 Series entries for these additions are `IEEE802154-1D` (`ieee802154: add: integrate native MAC
@@ -400,7 +400,7 @@ Typed-to-bytes and bytes-to-typed checks agree on consumed length and field pres
 
 Codec work is implemented behind the new complete `Ieee802154Frame` representation and its
 registered serializer. `Ieee802154FrameWire_1.test` and `Ieee802154Fcs_1.test` pass in debug mode;
-the [codec contract](https://github.com/mgonzalezlopezudc/inet/blob/ec1ee66b1b/doc/project/evidence/model/ieee802154/frame-codec.md) records source
+the [codec contract](../../doc/project/evidence/model/ieee802154/frame-codec.md) records source
 locators and the independent CRC oracle. Production byte injection and observations now live
 in `Ieee802154ReceiveSecurity.test`, `Ieee802154DataAck.test` and their reviewer companions,
 under `tests/protocol/ieee802154/`. These actual artifact names supersede the planned
@@ -427,7 +427,7 @@ required to decode captured payload boundaries. Core capture defects are isolate
 
 The direct production capture fixture `Ieee802154Capture_1.test` passes complete and truncated
 records in both FCS modes. The user-approved
-[bounded reader repair](https://github.com/mgonzalezlopezudc/inet/blob/ec1ee66b1b/doc/project/evidence/model/ieee802154/capture-reader-repair.md)
+[bounded reader repair](../../doc/project/evidence/model/ieee802154/capture-reader-repair.md)
 preserves actual captured bytes and checks stripped-header offsets. The admitted
 `serializer_ieee802154.test` passes four frames from two independently generated captures,
 also decoded with Scapy 2.8.0. Existing radiotap and receiver-copy module checks pass. The
@@ -458,7 +458,7 @@ once 1c is defined, before complete MPDU integration.
 CCA threshold/time boundaries, ED bounds and LQI delivery. A PHY timing oracle matches
 generated transmissions. PER claims await the separate validation gate in step 10.
 
-The [scalar energy observation design](https://github.com/mgonzalezlopezudc/inet/blob/ec1ee66b1b/doc/project/evidence/model/ieee802154/energy-observation.md)
+The [scalar energy observation design](../../doc/project/evidence/model/ieee802154/energy-observation.md)
 and production helper have a passing feasibility module fixture with real scalar radios/medium:
 background energy and two undecodable BPSK transmissions contribute to peak/mean power without
 packet delivery. Production timed PHY/PIB/lifecycle fixtures also pass; ED/LQI saturation,
@@ -511,9 +511,9 @@ Current execution: selected legacy command and beacon codecs pass independent ve
 checks. The shared immutable pending store is connected to production indirect DATA, POLL,
 PURGE and lifecycle barriers, with 62 passing indirect typed/raw protocol runs plus
 24 broadcast and 76 receiver-enable runs. See
-[indirect transactions](https://github.com/mgonzalezlopezudc/inet/blob/ec1ee66b1b/doc/project/evidence/model/ieee802154/indirect-transactions.md),
-[polling](https://github.com/mgonzalezlopezudc/inet/blob/ec1ee66b1b/doc/project/evidence/model/ieee802154/polling.md) and the
-[managed applicability extension](https://github.com/mgonzalezlopezudc/inet/blob/ec1ee66b1b/doc/project/evidence/model/ieee802154/managed-applicability.md).
+[indirect transactions](../../doc/project/evidence/model/ieee802154/indirect-transactions.md),
+[polling](../../doc/project/evidence/model/ieee802154/polling.md) and the
+[managed applicability extension](../../doc/project/evidence/model/ieee802154/managed-applicability.md).
 Association-response integration, broadcast release, active-extraction interruption
 and scheduled receiver control now have focused production evidence in the
 [results ledger](../../doc/project/evidence/model/ieee802154/results.md).
@@ -597,14 +597,14 @@ to the corresponding claim, even if the broad regression suite passes.
 These are scoped follow-on packages, not promises hidden inside M1/M2. Before starting one,
 repeat step 0 for its requirements and expand it into PR-sized tasks.
 
-The approved [B1–B3 plan](https://github.com/mgonzalezlopezudc/inet/blob/ec1ee66b1b/plan/pending/802154-superframe-gts-plan.md) and [E1 plan](https://github.com/mgonzalezlopezudc/inet/blob/ec1ee66b1b/plan/pending/802154-enhanced-frames-plan.md) are implemented and verified for their selected profiles. The [execution record](https://github.com/mgonzalezlopezudc/inet/blob/ec1ee66b1b/doc/project/evidence/model/ieee802154/followup-results.md#e1-99-publication-closure) distinguishes protocol passes, source review and mechanical-gate limits. Scheduled enhanced operation reuses the B1–B3 epoch and grant owners. S1, T1, D1, P1 and A1 below remain separate, unexecuted packages.
+The approved [B1–B3 plan](802154-superframe-gts-plan.md) and [E1 plan](802154-enhanced-frames-plan.md) are implemented and verified for their selected profiles. The [execution record](../../doc/project/evidence/model/ieee802154/followup-results.md#e1-99-publication-closure) distinguishes protocol passes, source review and mechanical-gate limits. Scheduled enhanced operation reuses the B1–B3 epoch and grant owners. S1, T1, D1, P1 and A1 below remain separate, unexecuted packages.
 
 | Package | Prerequisites | Work and acceptance gate |
 | --- | --- | --- |
-| [B1: beacon scheduler](https://github.com/mgonzalezlopezudc/inet/blob/ec1ee66b1b/plan/pending/802154-superframe-gts-plan.md) | M2; B2 CAP backend for complete managed operation | Periodic beacons, BO/SO, active/inactive intervals, synchronization/loss, linked coordinator timing and realignment; direct radio/clock and lifecycle checks |
-| [B2: slotted access](https://github.com/mgonzalezlopezudc/inet/blob/ec1ee66b1b/plan/pending/802154-superframe-gts-plan.md) | B1 timing/tracking core | Slotted NB/BE/CW, BLE, CAP fit and distinct pause/resample rules; actual managed exchanges and boundary/lifecycle checks |
-| [B3: GTS/CFP](https://github.com/mgonzalezlopezudc/inet/blob/ec1ee66b1b/plan/pending/802154-superframe-gts-plan.md) | Complete B1/B2 | Request/allocation, both CFP data directions, descriptor persistence, deallocation/repacking and inactivity expiration; real beacon/command/DATA/ACK evidence |
-| [E1: modern frame machinery](https://github.com/mgonzalezlopezudc/inet/blob/ec1ee66b1b/plan/pending/802154-enhanced-frames-plan.md) | M1/M2 for core; B1–B3 for scheduled integration | Version-2 PAN/sequence presence, Header/Payload/Nested IEs, enhanced ACK and beacon exchanges; separate structural, operational and scheduled gates |
+| [B1: beacon scheduler](802154-superframe-gts-plan.md) | M2; B2 CAP backend for complete managed operation | Periodic beacons, BO/SO, active/inactive intervals, synchronization/loss, linked coordinator timing and realignment; direct radio/clock and lifecycle checks |
+| [B2: slotted access](802154-superframe-gts-plan.md) | B1 timing/tracking core | Slotted NB/BE/CW, BLE, CAP fit and distinct pause/resample rules; actual managed exchanges and boundary/lifecycle checks |
+| [B3: GTS/CFP](802154-superframe-gts-plan.md) | Complete B1/B2 | Request/allocation, both CFP data directions, descriptor persistence, deallocation/repacking and inactivity expiration; real beacon/command/DATA/ACK evidence |
+| [E1: modern frame machinery](802154-enhanced-frames-plan.md) | M1/M2 for core; B1–B3 for scheduled integration | Version-2 PAN/sequence presence, Header/Payload/Nested IEs, enhanced ACK and beacon exchanges; separate structural, operational and scheduled gates |
 | S1: base MAC security | M1; E1 for enhanced-frame claims | Auxiliary header, key/device/security-level state, AES-based operations, authenticated fields, nonce/counter rules, replay protection and status handling; independent crypto vectors plus secured exchanges, tampering, counter exhaustion and reset/persistence tests |
 | T1: TSCH | E1, PHY switching/timing, selected S1 joining policy | ASN, slotframes/links, templates, hopping, shared/dedicated links, enhanced beacons, synchronization/drift and keepalive; fixed schedule first, pluggable scheduling policy later; test slot/channel oracles and synchronization loss |
 | D1: DSME | E1 and relevant beacon/security services | Separate scheduler, multi-superframes, allocation commands and conflict recovery; test simultaneous allocation, expiration and channel use |
@@ -730,7 +730,7 @@ Apply [PR-SERIES-BUILDS](../../doc/project/rule/pull-request.md#pr-series-builds
 
 Before each reconstructed commit's tests, build a matching debug library; before publication compile release and run the applicable scoped/release checks. Use the current runners' documented exact-file selectors, with selected and executed counts recorded. Run each row's direct checks and existing compatibility controls; for N06/N07 derive the exact selectors from the allocation above and confirm they select every named fixture. At PR05 run the native migration/examples and legacy trajectory controls; at PR08 run the combined conventional campaign; at PR12 run the combined conventional/enhanced campaign, feature-disabled and Clock-disabled checks. No baseline updates are planned. Record exact old/new parent identities and any fixture adaptation in the PR evidence.
 
-Existing results in [results.md](../../doc/project/evidence/model/ieee802154/results.md) and [followup-results.md](https://github.com/mgonzalezlopezudc/inet/blob/ec1ee66b1b/doc/project/evidence/model/ieee802154/followup-results.md#e1-99-publication-closure) establish their recorded revisions only. Reconstructed-parent comparisons, intermediate builds and final tree-equivalence checks remain NOT_RUN. Preserve the failed C++ warning gate and repository-wide gate dispositions as failures with their evidence; neither historical focused passes nor an unchanged final tree establishes passing intermediate commits.
+Existing results in [results.md](../../doc/project/evidence/model/ieee802154/results.md) and [followup-results.md](../../doc/project/evidence/model/ieee802154/followup-results.md#e1-99-publication-closure) establish their recorded revisions only. Reconstructed-parent comparisons, intermediate builds and final tree-equivalence checks remain NOT_RUN. Preserve the failed C++ warning gate and repository-wide gate dispositions as failures with their evidence; neither historical focused passes nor an unchanged final tree establishes passing intermediate commits.
 
 #### Accelerated execution contract
 
@@ -898,7 +898,7 @@ trajectories are verified without baseline changes.
 The source/test manifest, exact commands, per-statement mapping, parent controls,
 review scope, model limits and inherited failures are linked from the
 [results ledger](../../doc/project/evidence/model/ieee802154/results.md) and
-[machine-readable record](https://github.com/mgonzalezlopezudc/inet/blob/ec1ee66b1b/doc/project/evidence/model/ieee802154/verification-20261115.json).
+[machine-readable record](../../doc/project/evidence/model/ieee802154/verification-20261115.json).
 The matched-object reuse for the example/cutover checks is explicitly recorded;
 it is not reported as independent recompilation of every translation unit.
 Future feature packages in section 6 require their own applicability and

@@ -56,7 +56,8 @@ class INET_API Ieee802154SuperframeController : public ClockUserModuleMixin<Simp
     virtual simtime_t getFutureSimulationTime(clocktime_t target) const override { return computeSimTimeFromClockTime(target); }
     virtual clocktime_t getFutureClockTime(simtime_t target) const override { return computeClockTimeFromSimTime(target); }
     simtime_t getForecastUncertainty(simtime_t elapsed, simtime_t maxPropagationDelay) const override;
-    virtual void recordReceptionStart(const physicallayer::Ieee802154PhyReceiveStart& start) override;
+    virtual void recordReceptionStart(const physicallayer::Ieee802154PhyReceiveStart& start,
+            std::optional<Ieee802154AccessWindow> capWindow = {}, std::vector<Ieee802154CfpReceptionCandidate> cfpCandidates = {}) override;
     virtual std::optional<Ieee802154SuperframeReceptionAnchor> takeReceptionAnchor(int transmissionId) override;
     virtual void retireExpiredReceptionAnchors() override;
     virtual void clearReceptionAnchors() override;

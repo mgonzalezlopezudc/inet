@@ -14,7 +14,7 @@ The API reuses `Ieee802154MacSetRequest` for startup overrides and
 IEEE status alternatives; local admission and abort outcomes belong to the provider.
 
 The selected set contains the original 43 attributes plus nine managed-service attributes
-identified in the [managed applicability audit](https://github.com/mgonzalezlopezudc/inet/blob/ec1ee66b1b/doc/project/evidence/model/ieee802154/managed-applicability.md), for 52 total.
+identified in the [managed applicability audit](managed-applicability.md), for 52 total.
 GET preserves the exact requested name. Integer values use the
 `uint64_t` variant; SET accepts that representation or nonnegative `int64_t`, never an implicit
 Boolean conversion. Boolean values require the Boolean variant. Extended addresses use the

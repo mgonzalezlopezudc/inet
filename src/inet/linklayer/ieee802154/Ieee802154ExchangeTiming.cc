@@ -55,6 +55,14 @@ simtime_t Ieee802154ExchangeTiming::exchangeDuration(units::values::b psduLength
             (acknowledged ? ackWait(phy) + 2 * propagationBound : SIMTIME_ZERO);
 }
 
+simtime_t Ieee802154ExchangeTiming::gtsExchangeDuration(units::values::b psduLength, units::values::b minimumAckLength,
+        simtime_t propagationBound, uint32_t sifsSymbols, const physicallayer::Ieee802154PhyTimingParameters& phy)
+{
+    auto sifs = phy.symbolPeriod * sifsSymbols;
+    return ppduDuration(psduLength,phy) + sifs +
+            (minimumAckLength > units::values::b(0) ? sifs + ppduDuration(minimumAckLength,phy) + 2 * propagationBound : SIMTIME_ZERO);
+}
+
 bool Ieee802154ExchangeTiming::fits(simtime_t start, simtime_t end, simtime_t duration)
 {
     return duration >= SIMTIME_ZERO && start <= end && duration <= end - start;

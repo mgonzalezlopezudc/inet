@@ -29,6 +29,9 @@ ASSERT(Timing::enhancedAckWait(phy,SimTime(192,SIMTIME_US),SimTime(320,SIMTIME_U
 ASSERT(Timing::ccaAndReadiness(SimTime(128,SIMTIME_US),phy) == SimTime(320,SIMTIME_US));
 ASSERT(Timing::exchangeDuration(B(19),false,SimTime(1,SIMTIME_US),12,40,phy) == SimTime(1440,SIMTIME_US));
 ASSERT(Timing::exchangeDuration(B(19),true,SimTime(1,SIMTIME_US),12,40,phy) == SimTime(1986,SIMTIME_US));
+ASSERT(Timing::gtsExchangeDuration(B(23),B(5),SimTime(1,SIMTIME_US),12,phy) == SimTime(1666,SIMTIME_US));
+ASSERT(Timing::gtsExchangeDuration(B(23),B(0),SimTime(1,SIMTIME_US),12,phy) == SimTime(1120,SIMTIME_US));
+ASSERT(Timing::interframeSpacing(B(23),phy.symbolPeriod,12,40) == SimTime(640,SIMTIME_US));
 auto boundary = SimTime(20,SIMTIME_MS);
 auto duration = SimTime(1986,SIMTIME_US);
 ASSERT(Timing::fits(boundary-duration,boundary,duration));

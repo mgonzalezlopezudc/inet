@@ -80,3 +80,8 @@ exchange. The subsequent combined acceptance passed all 636 protocol runs,
 ten unit fixtures, nine module fixtures and both serializer fixtures against
 the matching library. The scoped C++ warning gate remains FAIL with no new
 diagnostics in the final comparison.
+# Scheduled reservation controls
+
+Scheduled CAP and GTS ACK boundary cases use the real reservation topology in
+[enhanced-superframe.md](enhanced-superframe.md), in addition to the
+unscheduled enhanced ACK controls below.
