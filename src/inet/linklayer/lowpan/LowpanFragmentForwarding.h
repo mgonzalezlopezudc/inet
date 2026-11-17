@@ -58,7 +58,7 @@ class INET_API LowpanFragmentForwarding : public cListener
     cMessage *timer = nullptr;
     int maxRecords, maxRanges, maxPendingBytes, maxCarry, maxBytes, emissionCap, maxHops;
     simtime_t residence, gap, activeLifetime, historyLifetime;
-    bool findPath(const Ipv6Address& source, const Ipv6Address& destination, Path& path) const;
+    bool findPath(const Ipv6Header& header, Path& path) const;
     bool isPathValid(const Record& record) const;
     bool inspect(const Packet& packet, bool& control) const;
     bool decodeFirst(const Packet& packet, int size, const Ieee802154Address& source,

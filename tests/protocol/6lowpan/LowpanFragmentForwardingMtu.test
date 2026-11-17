@@ -1,0 +1,273 @@
+%description:
+Actual native paced foreign IPv6 input exercises original-size egress MTU
+fallback, compatible early forwarding and runtime frozen-path invalidation.
+
+%extraargs: -r 0..2
+
+%file: ForwardingMtuCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/lowpan/LowpanLayer.h"
+#include "inet/linklayer/lowpan/LowpanIphcHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanTransmissionReq_m.h"
+#include "inet/networklayer/common/NextHopAddressTag_m.h"
+#include "inet/networklayer/ipv6/Ipv6InterfaceData.h"
+#include "inet/networklayer/ipv6/Ipv6Header_m.h"
+#include "inet/networklayer/ipv6/Ipv6RoutingTable.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmission.h"
+
+namespace inet::protocoltest {
+using namespace lowpan;
+
+class ForwardingMtuCheck : public cSimpleModule, public cListener
+{
+    NetworkInterface *nic[4]{};
+    LowpanLayer *layer[4]{};
+    int scenario = 0, originalSize = 0, encodedSize = 0;
+    int sourceFrames = 0, sourceAcks = 0, optimizedFrames = 0, ordinaryOutput = 0;
+    int sourceAir = 0, routerAir = 0, routerReassembled = 0, received = 0;
+    int ptb = 0, advertisedMtu = 0, checksums = 0, expired = 0;
+    bool changedMtu = false;
+    simtime_t lastSourceAck, firstOptimized, lastSource;
+    std::set<int64_t> sourceIds, optimizedIds;
+    std::vector<uint8_t> expected;
+
+    bool isOriginalFragment(const std::vector<uint8_t>& bytes) const
+    {
+        return bytes.size() >= 5 && ((bytes[0] & 0xf8) == 0xc0 || (bytes[0] & 0xf8) == 0xe0) &&
+            (((bytes[0] & 7) << 8) | bytes[1]) == originalSize;
+    }
+
+    bool hasValidChecksum(const std::vector<uint8_t>& bytes) const
+    {
+        uint32_t sum = uint32_t(bytes.size() - 40) + 58;
+        for (size_t i = 8; i < 40; i += 2) sum += (bytes[i] << 8) | bytes[i + 1];
+        for (size_t i = 40; i < bytes.size(); i += 2)
+            sum += (bytes[i] << 8) | (i + 1 < bytes.size() ? bytes[i + 1] : 0);
+        while (sum >> 16) sum = (sum & 65535) + (sum >> 16);
+        return sum == 65535;
+    }
+
+  protected:
+    int numInitStages() const override { return NUM_INIT_STAGES; }
+
+    void initialize(int stage) override
+    {
+        if (stage != INITSTAGE_LAST) return;
+        scenario = par("scenario");
+        originalSize = scenario == 0 ? 1281 : 1200;
+        auto root = getParentModule();
+        const char *addresses[] = {"2001:db8:1::211:2233:4455:6601", "2001:db8:1::211:2233:4455:6602",
+            "2001:db8:2::211:2233:4455:6603", "2001:db8:2::211:2233:4455:6602"};
+        for (int i = 0; i < 4; i++) {
+            int node = i == 0 ? 0 : i == 3 ? 2 : 1;
+            nic[i] = check_and_cast<NetworkInterface *>(root->getSubmodule("node", node)->getSubmodule("wlan", i == 2 ? 1 : 0));
+            nic[i]->getProtocolDataForUpdate<Ipv6InterfaceData>()->assignAddress(Ipv6Address(addresses[i]), false, SIMTIME_ZERO, SIMTIME_ZERO);
+            layer[i] = check_and_cast<LowpanLayer *>(nic[i]->getSubmodule("lowpan"));
+            for (auto signal : {"fragmentSent", "datagramCompleted", "nativeFrameTransmissionSucceeded"})
+                layer[i]->subscribe(signal, this);
+        }
+        layer[3]->subscribe("reassemblyExpired", this);
+        nic[0]->getSubmodule("radio")->subscribe("transmissionStarted", this);
+        nic[2]->getSubmodule("radio")->subscribe("transmissionStarted", this);
+        auto route = [&](int node, const char *destination, int index, const char *nextHop) {
+            auto table = check_and_cast<Ipv6RoutingTable *>(root->getSubmodule("node", node)->getSubmodule("ipv6")->getSubmodule("routingTable"));
+            table->addStaticRoute(Ipv6Address(destination), 128, nic[index]->getInterfaceId(), Ipv6Address(nextHop));
+        };
+        route(0, addresses[3], 0, "fe80::211:2233:4455:6602");
+        route(1, addresses[3], 2, "fe80::211:2233:4455:6604");
+        route(1, addresses[0], 1, "fe80::211:2233:4455:6601");
+        route(2, addresses[0], 3, "fe80::211:2233:4455:6603");
+        ASSERT(nic[2]->getMtu() == 1280);
+        scheduleAt(SimTime(.1), new cMessage("foreign-paced-source"));
+    }
+
+    void handleMessage(cMessage *message) override
+    {
+        delete message;
+        auto header = makeShared<Ipv6Header>();
+        header->setSrcAddress(Ipv6Address("2001:db8:1::211:2233:4455:6601"));
+        header->setDestAddress(Ipv6Address("2001:db8:2::211:2233:4455:6602"));
+        header->setProtocolId(IP_PROT_NONE);
+        header->setHopLimit(64);
+        header->setPayloadLength(B(originalSize - 40));
+        auto packet = new Packet("foreign-mtu-data", header);
+        std::vector<uint8_t> body(originalSize - 40);
+        for (size_t i = 0; i < body.size(); i++) body[i] = uint8_t(i * 37 + 11);
+        packet->insertAtBack(makeShared<BytesChunk>(body));
+        expected = packet->peekDataAsBytes()->getBytes();
+        expected[7] = 63;
+        packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ipv6);
+        packet->addTag<NextHopAddressReq>()->setNextHopAddress(nic[1]->getProtocolData<Ipv6InterfaceData>()->getLinkLocalAddress());
+        // This public adaptation boundary represents a foreign peer; it deliberately bypasses A's IPv6 MTU check.
+        sendDirect(packet, nic[0]->gate("upperLayerIn")->getPathStartGate());
+    }
+
+    void receiveSignal(cComponent *, simsignal_t, long count, cObject *) override { expired += count; }
+
+    void receiveSignal(cComponent *origin, simsignal_t signal, cObject *object, cObject *) override
+    {
+        Enter_Method_Silent();
+        if (signal == registerSignal("transmissionStarted")) {
+            auto packet = check_and_cast<physicallayer::ITransmission *>(object)->getPacket();
+            auto bytes = packet->peekDataAsBytes()->getBytes();
+            if (bytes.size() < 28 || bytes[0] != 0x61 || bytes[1] != 0xdc) return;
+            std::vector<uint8_t> payload(bytes.begin() + 21, bytes.end() - 2);
+            if (isOriginalFragment(payload)) {
+                if (origin == nic[0]->getSubmodule("radio")) sourceAir++;
+                else routerAir++;
+            }
+            return;
+        }
+        auto packet = check_and_cast<Packet *>(object);
+        if (signal == registerSignal("nativeFrameTransmissionSucceeded")) {
+            if (origin == layer[0] && sourceIds.count(packet->getId())) {
+                sourceAcks++;
+                lastSourceAck = simTime();
+            }
+            if (origin == layer[2] && optimizedIds.count(packet->getId()) && scenario == 2 && !changedMtu) {
+                changedMtu = true;
+                nic[2]->setMtu(1000);
+            }
+            return;
+        }
+        if (signal == registerSignal("fragmentSent")) {
+            auto bytes = packet->peekDataAsBytes()->getBytes();
+            if (!isOriginalFragment(bytes)) return;
+            if (origin == layer[0]) {
+                if (sourceFrames != 0) ASSERT(sourceAcks == sourceFrames && simTime() >= lastSourceAck + SimTime(.5));
+                if ((bytes[0] & 0xf8) == 0xc0) {
+                    auto compressed = packet->peekDataAt<LowpanIphcHeader>(B(4));
+                    ASSERT(!compressed->getNh());
+                    encodedSize = originalSize - 40 + compressed->getChunkLength().get<B>();
+                }
+                sourceIds.insert(packet->getId());
+                sourceFrames++;
+                lastSource = simTime();
+            }
+            else if (packet->getTag<LowpanTransmissionReq>()->getDestAddress() == Ieee802154Address("0011223344556604")) {
+                if (origin == layer[1]) {
+                    if (optimizedFrames == 0) firstOptimized = simTime();
+                    optimizedFrames++;
+                    optimizedIds.insert(packet->getId());
+                }
+                else if (origin == layer[2]) ordinaryOutput++;
+            }
+            return;
+        }
+        ASSERT(signal == registerSignal("datagramCompleted"));
+        auto header = packet->peekAtFront<Ipv6Header>();
+        if (header->getProtocolId() == IP_PROT_NONE && header->getDestAddress() == Ipv6Address("2001:db8:2::211:2233:4455:6602")) {
+            ASSERT(packet->getDataLength() == B(originalSize));
+            if (origin == layer[1]) routerReassembled++;
+            else if (origin == layer[3]) {
+                ASSERT(packet->peekDataAsBytes()->getBytes() == expected);
+                received++;
+            }
+        }
+        else if (origin == layer[0] && header->getProtocolId() == IP_PROT_IPv6_ICMP) {
+            auto bytes = packet->peekDataAsBytes()->getBytes();
+            if (bytes.size() < 88 || bytes[40] != 2) return;
+            ASSERT(bytes[41] == 0);
+            advertisedMtu = uint32_t(bytes[44]) << 24 | uint32_t(bytes[45]) << 16 | uint32_t(bytes[46]) << 8 | bytes[47];
+            bool valid = hasValidChecksum(bytes);
+            checksums += valid;
+            ASSERT(valid && bytes.size() - 48 <= expected.size());
+            ASSERT(std::equal(bytes.begin() + 48, bytes.end(), expected.begin()));
+            ptb++;
+        }
+    }
+
+    void finish() override
+    {
+        auto completed = layer[0]->resolveDirective('p');
+        std::cout << "case=" << scenario << " original=" << originalSize << " encoded=" << encodedSize
+            << " source=" << sourceFrames << " sourceAck=" << sourceAcks << " sourceAir=" << sourceAir
+            << " optimized=" << optimizedFrames << " ordinaryOutput=" << ordinaryOutput << " routerAir=" << routerAir
+            << " routerReassembled=" << routerReassembled << " received=" << received << " ptb=" << ptb
+            << " mtu=" << advertisedMtu << " checksums=" << checksums << " expired=" << expired
+            << " changed=" << changedMtu << " processed=" << completed << std::endl;
+        ASSERT(sourceFrames > 10 && sourceAcks == sourceFrames && sourceAir == sourceFrames && completed == "1");
+        ASSERT(ordinaryOutput == 0 && routerAir == optimizedFrames);
+        if (scenario == 0) {
+            ASSERT(originalSize == 1281 && encodedSize == 1276 && routerReassembled == 1);
+            ASSERT(optimizedFrames == 0 && received == 0 && ptb == 1 && advertisedMtu == 1280 && checksums == 1 && expired == 0);
+        }
+        else if (scenario == 1) {
+            ASSERT(routerReassembled == 0 && optimizedFrames > 10 && firstOptimized < lastSource && received == 1 && ptb == 0 && expired == 0);
+        }
+        else {
+            ASSERT(changedMtu && optimizedFrames == 1 && routerReassembled == 0 && received == 0 && ptb == 0 && expired == 1);
+        }
+        std::cout << "Native forwarding MTU boundary and continuation verified\n";
+    }
+};
+Define_Module(ForwardingMtuCheck);
+}
+
+%file: test.ned
+@namespace(inet::protocoltest);
+import inet.node.inet.StandardHost;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple ForwardingMtuCheck {parameters: int scenario;}
+network ForwardingMtuNetwork {
+    submodules:
+        mediumLeft: Ieee802154NarrowbandScalarRadioMedium;
+        mediumRight: Ieee802154NarrowbandScalarRadioMedium;
+        domainLeft: LowpanNativeLinkDomain;
+        domainRight: LowpanNativeLinkDomain;
+        node[3]: StandardHost;
+        check: ForwardingMtuCheck;
+}
+
+%inifile: omnetpp.ini
+[General]
+network=ForwardingMtuNetwork
+sim-time-limit=75s
+seed-set=0
+*.check.scenario=${case=0..2}
+**.vector-recording=false
+**.scalar-recording=false
+*.node[*].hasIpv4=false
+*.node[*].hasIpv6=true
+*.node[*].hasUdp=false
+*.node[*].hasTcp=false
+*.node[*].ipv6.typename="LowpanIpv6NetworkLayer"
+*.node[*].ipv6.icmpv6.checksumMode="computed"
+*.node[1].forwarding=true
+*.node[1].numWlanInterfaces=2
+*.node[*].numWlanInterfaces=1
+*.node[*].wlan[*].typename="Ieee802154NativeLowpanInterface"
+*.node[0].wlan[0].linkDomainModule="^.^.domainLeft"
+*.node[1].wlan[0].linkDomainModule="^.^.domainLeft"
+*.node[1].wlan[1].linkDomainModule="^.^.domainRight"
+*.node[2].wlan[0].linkDomainModule="^.^.domainRight"
+*.node[0].wlan[0].radio.radioMediumModule="mediumLeft"
+*.node[1].wlan[0].radio.radioMediumModule="mediumLeft"
+*.node[1].wlan[1].radio.radioMediumModule="mediumRight"
+*.node[2].wlan[0].radio.radioMediumModule="mediumRight"
+**.lowpan.nativeFragmentPacing=true
+*.node[1].wlan[*].lowpan.nativeFragmentForwarding=true
+**.lowpan.routingTableModule="^.^.ipv6.routingTable"
+**.lowpan.icmpv6Module="^.^.ipv6.icmpv6"
+**.lowpan.ipv6Module="^.^.ipv6.ipv6"
+*.node[1].wlan[0].lowpan.fragmentForwardingPeers=xml("<peers><peer native='0011223344556601'/></peers>")
+**.mac.macMinBE=3
+**.mac.macMaxBE=3
+*.domainLeft.panId=4660
+*.domainRight.panId=9029
+*.domainLeft.radioMediumModule="mediumLeft"
+*.domainRight.radioMediumModule="mediumRight"
+*.domainLeft.config=xml("<domain><peer interface='node[0].wlan[0]' native='0011223344556601'/><peer interface='node[1].wlan[0]' native='0011223344556602'/><neighbor interface='node[0].wlan[0]' ipv6='fe80::211:2233:4455:6602' native='0011223344556602'/><neighbor interface='node[1].wlan[0]' ipv6='fe80::211:2233:4455:6601' native='0011223344556601'/></domain>")
+*.domainRight.config=xml("<domain><peer interface='node[1].wlan[1]' native='0011223344556603'/><peer interface='node[2].wlan[0]' native='0011223344556604'/><neighbor interface='node[1].wlan[1]' ipv6='fe80::211:2233:4455:6604' native='0011223344556604'/><neighbor interface='node[2].wlan[0]' ipv6='fe80::211:2233:4455:6603' native='0011223344556603'/></domain>")
+**.radio.antenna.mobilityModule="^.^.^.mobility"
+**.mobility.initialX=0m
+**.mobility.initialY=0m
+**.mobility.initialZ=0m
+**.mobility.initFromDisplayString=false
+**.mobility.updateFromDisplayString=false
+
+%contains: stdout
+Native forwarding MTU boundary and continuation verified
