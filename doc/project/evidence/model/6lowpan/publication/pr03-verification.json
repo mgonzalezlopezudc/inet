@@ -11350,7 +11350,7 @@
   },
   "baseline_modified": false,
   "status": "PASS_SELECTED_INET_SCOPE_WITH_EXTERNAL_ELIDED_ADDRESS_DISAGREEMENT",
-  "plan": "plan/pending/6lowpan-publication-plan.md",
+  "plan": "plan/done/6lowpan-publication-plan.md",
   "leaf_launcher_correction": {
     "original_attempt": "INVALID_FOR_LEAF_RUNTIME_SCOPE_WRONG_CHECKOUT_LIBRARY_AND_NED_INPUTS",
     "original_record": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/c06-minimal-features/record.json",
@@ -12067,5 +12067,8 @@
     "src_executable_tests_features_identical": true,
     "test_metadata_only_paths": [],
     "original_execution_record": "/home/miguel/workspace/inet-6lowpan-publication/doc/project/evidence/model/6lowpan/publication/pr03-verification.json"
-  }
+  },
+  "base": "445acdb630849eaaca4cd565b4dbf5f0a9efd1dd",
+  "review_base": "445acdb630849eaaca4cd565b4dbf5f0a9efd1dd",
+  "review_tip": "104426698510e6eebbfddc7af9105a04ca0a2c4b"
 }

@@ -1,7 +1,7 @@
 {
   "schema": "inet-6lowpan-publication-v1",
   "status": "PASS_SELECTED_PROFILES_WITH_DISCLOSED_INHERITED_FINDINGS",
-  "plan": "plan/pending/6lowpan-publication-plan.md",
+  "plan": "plan/done/6lowpan-publication-plan.md",
   "base": "91219b0fa7d2794ee67ac8a3dd45c3a09cfc45b0",
   "original_input": "9908c007bdb1eda9d74f6ca1f99fe1cae33fbc61",
   "source_oracle": "1853c49ba0c29edeb2cfed5378c01305beb519ba",
@@ -35758,7 +35758,9 @@
         "9908c007bd"
       ],
       "approved_scope": "Subject: `doc: add: complete 6LoWPAN publication verification`. Sources: final acceptance/overview/provenance portions of `4d4f211590`, `071ece0758`, `32bf7b81d7` and the historical plan/document snapshots listed below. Dependency: C40. Reconcile current user-facing configuration, selected-profile limits, standards source provenance and every new PR tip's result records. Retain original completed plans and historical evidence unchanged in meaning, identifying their original source/library cohorts. The original archive operations are provenance for these historical snapshots; they are not proof that the new series has run.\n\nPerform the final whole-series acceptance in the verification section, record expected-error cases separately and compare printed release observations without enabling assertions by implication. Preserve inherited global architecture/naming/interface findings, the actual C++ warning exit and the historical ns-3 elided-EUI disagreement. No new external-peer or broad conformance result is inferred. User documentation must reflect implemented features only; no ns-3 runtime dependency is introduced. Record every old-source-to-new-commit mapping and every allowed extra test/document path before closing this entry.",
-      "status": "METADATA_VALIDATED_COMMIT_HASH_RECORDED_AFTER_COMMIT"
+      "status": "SAFE_POINT",
+      "commit": "d8807f22ef52a653ec65b3f053da84166fdbdc08",
+      "evidence": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/c41-document-checks.json"
     },
     {
       "id": "G042",
@@ -35767,7 +35769,9 @@
       "subject": "plan: location: archive the completed publication plan",
       "source_commits": [],
       "approved_scope": "Subject: `plan: location: archive the completed publication plan`. Dependency: C41 and successful new-series acceptance. This is a **new** archive of this publication plan, not a replay of either original implementation-plan archive. First complete its execution checklist and required evidence in C41. Then move `plan/pending/6lowpan-publication-plan.md` to `plan/done/6lowpan-publication-plan.md` with exactly the same Git blob in a separate location-only commit. Preserve a content hash and verify no other path is staged. The `Plan:` trailer must resolve at its new path.",
-      "status": "PREPARED_LOCATION_ONLY"
+      "status": "SAFE_POINT",
+      "commit": "626a8ffbd1f3dd7d44f0981bb55da7bea3ec55f3",
+      "evidence": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/c42-archive-proof.json"
     },
     {
       "id": "G043",
@@ -35776,7 +35780,7 @@
       "subject": "doc: change: link 6LoWPAN publication evidence to its archived plan",
       "source_commits": [],
       "approved_scope": "Subject: `doc: change: link 6LoWPAN publication evidence to its archived plan`. Dependency: C42. Update only current incoming links and the new publication record associations. Keep historical original commit trailers, source hashes and archived input records historical. Validate every relative target/anchor, exact user-edit preservation, the final source/test projection and the complete new commit series. This documentation-only commit needs mechanical/link checks, not another simulation campaign when executable inputs are unchanged.",
-      "status": "PREPARED_INCOMING_LINKS_ONLY"
+      "status": "FINAL_METADATA_COMMIT_SELF_HASH_IN_EXTERNAL_DELIVERY_INDEX"
     }
   ],
   "review_units": [
@@ -35793,7 +35797,8 @@
       "tip": "b6f7199521d43479379ef666251a0a17755e3994",
       "evidence": "/home/miguel/workspace/inet-6lowpan-publication/doc/project/evidence/model/6lowpan/publication/pr01-verification.json",
       "original_tested_tip": "b6f7199521d43479379ef666251a0a17755e3994",
-      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json"
+      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json",
+      "base": "91219b0fa7d2794ee67ac8a3dd45c3a09cfc45b0"
     },
     {
       "pr": "PR02",
@@ -35806,7 +35811,8 @@
       "tip": "445acdb630849eaaca4cd565b4dbf5f0a9efd1dd",
       "evidence": "/home/miguel/workspace/inet-6lowpan-publication/doc/project/evidence/model/6lowpan/publication/pr02-verification.json",
       "original_tested_tip": "445acdb630849eaaca4cd565b4dbf5f0a9efd1dd",
-      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json"
+      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json",
+      "base": "b6f7199521d43479379ef666251a0a17755e3994"
     },
     {
       "pr": "PR03",
@@ -35818,7 +35824,8 @@
       "status": "VALIDATED_LOCAL_REVIEW_TIP",
       "tip": "104426698510e6eebbfddc7af9105a04ca0a2c4b",
       "original_tested_tip": "55362acffd5c83e57f531616b224c7aa88f6ffb6",
-      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json"
+      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json",
+      "base": "445acdb630849eaaca4cd565b4dbf5f0a9efd1dd"
     },
     {
       "pr": "PR04",
@@ -35830,7 +35837,8 @@
       "tip": "0cdfd4611a43dd4e2e99efe707bff6eacff307fc",
       "evidence": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr04-combined/record.json",
       "original_tested_tip": "df33b2c2cbb378350b24b56c810794f50ad1da73",
-      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json"
+      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json",
+      "base": "104426698510e6eebbfddc7af9105a04ca0a2c4b"
     },
     {
       "pr": "PR05",
@@ -35845,7 +35853,8 @@
       "tip": "59c2eee6090d1bdf1078da84fcecc4f2ade65a5e",
       "evidence": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr05-combined/record.json",
       "original_tested_tip": "baa11c82c9f3b2604a18ed3325b1df64f58c1108",
-      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json"
+      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json",
+      "base": "0cdfd4611a43dd4e2e99efe707bff6eacff307fc"
     },
     {
       "pr": "PR06",
@@ -35858,7 +35867,8 @@
       "tip": "31aeb7b60c23821674c3e08559aed005f39a905a",
       "evidence": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr06-combined/record.json",
       "original_tested_tip": "1bd303fa7b1082fe083051165f54e2dff9043143",
-      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json"
+      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json",
+      "base": "59c2eee6090d1bdf1078da84fcecc4f2ade65a5e"
     },
     {
       "pr": "PR07",
@@ -35876,7 +35886,8 @@
       "tip": "81c29da22214eb94e20119cdfbfd4cc74c920bda",
       "evidence": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr07-combined/record.json",
       "original_tested_tip": "92938ac7e11bbcca55307bce4238bafe48101f48",
-      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json"
+      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json",
+      "base": "31aeb7b60c23821674c3e08559aed005f39a905a"
     },
     {
       "pr": "PR08",
@@ -35889,7 +35900,8 @@
       "tip": "06208d627ea375e3abcc4c2b44d41e1e88d386aa",
       "evidence": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr08-combined/record.json",
       "original_tested_tip": "b784c5dfce59cfb9f060ced6660cf71f5a6ae32b",
-      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json"
+      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json",
+      "base": "81c29da22214eb94e20119cdfbfd4cc74c920bda"
     },
     {
       "pr": "PR09",
@@ -35904,7 +35916,8 @@
       "tip": "09075b16e5e40428789c58beb7adaff07d2b1800",
       "evidence": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr09-combined/record.json",
       "original_tested_tip": "5c2fa2f7085df3459346f6e606ec0ec5d24b60bc",
-      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json"
+      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json",
+      "base": "06208d627ea375e3abcc4c2b44d41e1e88d386aa"
     },
     {
       "pr": "PR10",
@@ -35917,7 +35930,8 @@
       "tip": "f3abee829c30f597832a877f27bdeff08947804f",
       "evidence": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr10-combined/record.json",
       "original_tested_tip": "253c762debdfaf9b3b61840f37891c6759e70829",
-      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json"
+      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json",
+      "base": "09075b16e5e40428789c58beb7adaff07d2b1800"
     },
     {
       "pr": "PR11",
@@ -35930,7 +35944,8 @@
       "tip": "fea42f6a0569a5a7f161cf6965560eda7a79206d",
       "evidence": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr11-combined/record.json",
       "original_tested_tip": "c5ce6525ec9b724f426a225aeeb1aafaa7f542e9",
-      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json"
+      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json",
+      "base": "f3abee829c30f597832a877f27bdeff08947804f"
     },
     {
       "pr": "PR12",
@@ -35943,7 +35958,8 @@
       "tip": "fe5f02125a88d9df9ceda7045dcb563540e10ecf",
       "evidence": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr12-combined/record.json",
       "original_tested_tip": "3bb08a2e04b42f855c9fbf35ca37da7ea4e2141d",
-      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json"
+      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json",
+      "base": "fea42f6a0569a5a7f161cf6965560eda7a79206d"
     },
     {
       "pr": "PR13",
@@ -35955,7 +35971,8 @@
       "tip": "0b80292a29f48c21b70d2b09b5c14dea3dcec519",
       "evidence": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr13-combined/record.json",
       "original_tested_tip": "71e4768c1ff4668240fff55e130a762eda5db353",
-      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json"
+      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json",
+      "base": "fe5f02125a88d9df9ceda7045dcb563540e10ecf"
     },
     {
       "pr": "PR14",
@@ -35967,7 +35984,8 @@
       "tip": "4b218a64c4126760583c3c23d3a89c59dd5f9fe5",
       "evidence": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr14-combined/record.json",
       "original_tested_tip": "e070824cccccc2300a5ef14e1a845d941fc97be4",
-      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json"
+      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json",
+      "base": "0b80292a29f48c21b70d2b09b5c14dea3dcec519"
     },
     {
       "pr": "PR15",
@@ -35980,7 +35998,8 @@
       "tip": "f40ca9a3bf95b332e662e2604cf65a88a95563c0",
       "evidence": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr15-combined/record.json",
       "original_tested_tip": "3c9d32a3c9f6e2e6241811f76e883fc4e0c8b282",
-      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json"
+      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json",
+      "base": "4b218a64c4126760583c3c23d3a89c59dd5f9fe5"
     },
     {
       "pr": "PR16",
@@ -35993,7 +36012,8 @@
       "tip": "418ebbb9817d2ed668c158c56350d37cf98f8aba",
       "evidence": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr16-combined/record.json",
       "original_tested_tip": "0401f3bf7c21533dbad4f481ff2db428f53ccb0c",
-      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json"
+      "metadata_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json",
+      "base": "f40ca9a3bf95b332e662e2604cf65a88a95563c0"
     },
     {
       "pr": "PR17",
@@ -36004,8 +36024,10 @@
         "C42",
         "C43"
       ],
-      "status": "NOT_CREATED",
-      "tip": null
+      "status": "FINAL_SELF_HASH_IN_EXTERNAL_DELIVERY_INDEX",
+      "tip": null,
+      "evidence": "/home/miguel/workspace/inet-6lowpan-publication/doc/project/evidence/model/6lowpan/publication/pr17-verification.json",
+      "base": "418ebbb9817d2ed668c158c56350d37cf98f8aba"
     }
   ],
   "inherited_findings": {
@@ -36451,5 +36473,14 @@
     "new_global_broken_links": 0,
     "document_seals": "PASS",
     "source_git_tree": "aa561a5b563038201777b313a982ae971d35b7a5"
-  }
+  },
+  "archive_certificate": {
+    "commit": "626a8ffbd1f3dd7d44f0981bb55da7bea3ec55f3",
+    "old_path": "plan/pending/6lowpan-publication-plan.md",
+    "new_path": "plan/done/6lowpan-publication-plan.md",
+    "blob": "69bada639f5b249c1936acc7cfbea85728cc619f",
+    "byte_identical": true,
+    "only_path_rename": "R100\tplan/pending/6lowpan-publication-plan.md\tplan/done/6lowpan-publication-plan.md"
+  },
+  "final_metadata_inputs_unchanged": true
 }

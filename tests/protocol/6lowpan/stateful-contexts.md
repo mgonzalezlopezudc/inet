@@ -1,8 +1,8 @@
 # Stateful IPHC contexts
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/pending/6lowpan-publication-plan.md), [RFC 6282 catalog](../../../doc/project/evidence/standard/rfc6282/catalog.md)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/done/6lowpan-publication-plan.md), [RFC 6282 catalog](../../../doc/project/evidence/standard/rfc6282/catalog.md)
 
-Publication association: [C08](../../../plan/pending/6lowpan-publication-plan.md#c08); donor `58b446708d`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
+Publication association: [C08](../../../plan/done/6lowpan-publication-plan.md#c08); donor `58b446708d`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
 
 
 P8 adds RFC 6282 sections 3.1.1–3.2.4 context-based address compression. The parent codec explicitly rejects stateful source/destination forms and has no context owner. The adaptation module now owns a bounded table of canonical prefixes and validity deadlines. Compression permission is independent from decompression eligibility: a retiring context may still decode in-flight input. Empty tables retain the existing stateless behavior. Context ID 0 is implicit; nonzero and unequal source/destination IDs use the extension octet.

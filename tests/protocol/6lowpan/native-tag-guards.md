@@ -1,6 +1,6 @@
 # Native sender tag guards
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [publication plan C06](../../../plan/pending/6lowpan-publication-plan.md#c06), [historical data-plane checks](https://github.com/mgonzalezlopezudc/inet/blob/9908c007bdb1eda9d74f6ca1f99fe1cae33fbc61/doc/project/evidence/protocol/6lowpan/checks/data-plane.md)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [publication plan C06](../../../plan/done/6lowpan-publication-plan.md#c06), [historical data-plane checks](https://github.com/mgonzalezlopezudc/inet/blob/9908c007bdb1eda9d74f6ca1f99fe1cae33fbc61/doc/project/evidence/protocol/6lowpan/checks/data-plane.md)
 
 The P7 sender row needs the real adaptation sender, not only an allocator helper. [`tests/protocol/6lowpan/LowpanNativeTagGuards.test`](LowpanNativeTagGuards.test) drives that path through an entire 16-bit tag cycle, restart, and the exact reuse deadline. It belongs to publication C06, `lowpan: add: the complete native IPv6 adaptation data plane`, folding original test-only commit `52407824e6` into its production behavior. That original commit added a control for existing behavior and made no bug-repair claim.
 

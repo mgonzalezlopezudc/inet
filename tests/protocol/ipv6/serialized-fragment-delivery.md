@@ -1,6 +1,6 @@
 # Serialized fragments through normal IPv6 delivery
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [publication plan C03](../../../plan/pending/6lowpan-publication-plan.md#c03)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [publication plan C03](../../../plan/done/6lowpan-publication-plan.md#c03)
 
 Publication commit C03: `ipv6: fix: retain decoded Fragment header during local delivery`. Test: [Ipv6SerializedFragmentDelivery.test](Ipv6SerializedFragmentDelivery.test).
 

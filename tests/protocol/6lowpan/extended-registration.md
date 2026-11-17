@@ -1,8 +1,8 @@
 # Updated native and routed registrars
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/pending/6lowpan-publication-plan.md), [RFC 8505](https://www.rfc-editor.org/rfc/rfc8505.html), [RFC 6775](https://www.rfc-editor.org/rfc/rfc6775.html)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/done/6lowpan-publication-plan.md), [RFC 8505](https://www.rfc-editor.org/rfc/rfc8505.html), [RFC 6775](https://www.rfc-editor.org/rfc/rfc6775.html)
 
-Publication association: [C33](../../../plan/pending/6lowpan-publication-plan.md#c33); donor `389090ca3e`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
+Publication association: [C33](../../../plan/done/6lowpan-publication-plan.md#c33); donor `389090ca3e`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
 
 
 This registrar fixture covers opt-in updated registrar, relay and authority behavior. Default automatic native hosts continue to send legacy registrations; the separately implemented [updated automatic-host consumer](extended-host-registration.md) has its own production fixture. The configuration declarations belong to [LowpanIpv6NeighbourDiscovery.ned](../../../src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.ned); their capacities cover confirmed, pending and removal protection rather than silently evicting protected state.

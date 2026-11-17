@@ -1,6 +1,6 @@
 # 6LoWPAN implementation coverage
 
-> **Kind:** ledger · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [publication plan](../../../../../plan/pending/6lowpan-publication-plan.md), [standards capabilities](../../protocol/6lowpan/features.md)
+> **Kind:** ledger · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [publication plan](../../../../../plan/done/6lowpan-publication-plan.md), [standards capabilities](../../protocol/6lowpan/features.md)
 
 The selected implementation covers original P0–P15 through the publication cuts below. [Publication verification](publication/manifest.json) identifies every actual commit/review tip, its original source commitments, focused and combined checks, final acceptance and preserved limitations. Historical input records retain their original source/library identities; they are not executions of the reconstructed series.
 

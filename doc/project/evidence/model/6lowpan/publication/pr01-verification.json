@@ -426,6 +426,9 @@
   "recorded": "2026-11-17T02:17:31.315093+01:00",
   "review_unit": "PR01",
   "original_tested_tip": "b6f7199521d43479379ef666251a0a17755e3994",
-  "plan": "plan/pending/6lowpan-publication-plan.md",
-  "executable_identity_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json"
+  "plan": "plan/done/6lowpan-publication-plan.md",
+  "executable_identity_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json",
+  "original_tested_base": "91219b0fa7d2794ee67ac8a3dd45c3a09cfc45b0",
+  "review_base": "91219b0fa7d2794ee67ac8a3dd45c3a09cfc45b0",
+  "review_tip": "b6f7199521d43479379ef666251a0a17755e3994"
 }

@@ -1,6 +1,6 @@
 # 6LoWPAN adaptation and link integration contracts
 
-> **Kind:** design · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [publication plan](../../../../../plan/pending/6lowpan-publication-plan.md), [encoding profile](encoding-profile.md)
+> **Kind:** design · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [publication plan](../../../../../plan/done/6lowpan-publication-plan.md), [encoding profile](encoding-profile.md)
 
 These are implementation contracts. They do not claim an implemented feature.
 

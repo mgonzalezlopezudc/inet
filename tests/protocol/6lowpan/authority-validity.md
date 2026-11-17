@@ -1,8 +1,8 @@
 # Routed authority lifetime at the clock horizon
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/pending/6lowpan-publication-plan.md), [RFC 6775 §8.2.4](https://www.rfc-editor.org/rfc/rfc6775.html#section-8.2.4)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/done/6lowpan-publication-plan.md), [RFC 6775 §8.2.4](https://www.rfc-editor.org/rfc/rfc6775.html#section-8.2.4)
 
-Publication association: [C25](../../../plan/pending/6lowpan-publication-plan.md#c25); donor `d865f9f6bd`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
+Publication association: [C25](../../../plan/done/6lowpan-publication-plan.md#c25); donor `d865f9f6bd`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
 
 
 **Execution status: debug PASS, one run.** This fixture tests the ordinary-interface routed authority independently of native admission, a 6LN client or a 6LR relay. It uses no authority-helper private API.

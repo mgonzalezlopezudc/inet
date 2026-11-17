@@ -1,6 +1,6 @@
 # Native reassembly identity isolation
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [publication plan C06](../../../plan/pending/6lowpan-publication-plan.md#c06), [historical data-plane checks](https://github.com/mgonzalezlopezudc/inet/blob/9908c007bdb1eda9d74f6ca1f99fe1cae33fbc61/doc/project/evidence/protocol/6lowpan/checks/data-plane.md)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [publication plan C06](../../../plan/done/6lowpan-publication-plan.md#c06), [historical data-plane checks](https://github.com/mgonzalezlopezudc/inet/blob/9908c007bdb1eda9d74f6ca1f99fe1cae33fbc61/doc/project/evidence/protocol/6lowpan/checks/data-plane.md)
 
 The P7 identity row needs evidence that identical tag/size values cannot mix native datagrams from different senders, receiving interfaces/PANs or destinations. In the publication series, [`tests/protocol/6lowpan/LowpanNativeIdentityIsolation.test`](LowpanNativeIdentityIsolation.test) belongs to C06, `lowpan: add: the complete native IPv6 adaptation data plane`. It folds the coverage from original test-only commit `9332039b2d` into the complete production implementation. That original test-only parent already had the correct behavior; its pass was a control, not a bug repair.
 

@@ -1,14 +1,14 @@
 # Native authoritative context advertisements
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [publication plan](../../../plan/pending/6lowpan-publication-plan.md)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [publication plan](../../../plan/done/6lowpan-publication-plan.md)
 
-Publication association: [C29](../../../plan/pending/6lowpan-publication-plan.md#c29); donor `15656097de`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
+Publication association: [C29](../../../plan/done/6lowpan-publication-plan.md#c29); donor `15656097de`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
 
 
 This fixture checks the optional RFC 6775 context-distribution path through native
 IEEE 802.15.4 radio interfaces. It is a protocol test, rather than a test of a
 private authority-table API. The selected profile and remaining work belong to
-[the completion plan](../../../plan/pending/6lowpan-publication-plan.md).
+[the completion plan](../../../plan/done/6lowpan-publication-plan.md).
 
 ```mermaid
 flowchart LR

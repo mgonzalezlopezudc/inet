@@ -1,8 +1,8 @@
 # Routed registration authority
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/pending/6lowpan-publication-plan.md), [RFC 6775 §4.4](https://www.rfc-editor.org/rfc/rfc6775.html#section-4.4), [RFC 6775 §8.2](https://www.rfc-editor.org/rfc/rfc6775.html#section-8.2)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/done/6lowpan-publication-plan.md), [RFC 6775 §4.4](https://www.rfc-editor.org/rfc/rfc6775.html#section-4.4), [RFC 6775 §8.2](https://www.rfc-editor.org/rfc/rfc6775.html#section-8.2)
 
-Publication association: [C24](../../../plan/pending/6lowpan-publication-plan.md#c24); donor `112b8db04d`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
+Publication association: [C24](../../../plan/done/6lowpan-publication-plan.md#c24); donor `112b8db04d`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
 
 
 `LowpanRegistrationAuthority.test` passes both fixed-seed priority runs through the production registration authority and routed Ethernet path. It validates the authority independently of a 6LR registration relay.

@@ -1,8 +1,8 @@
 # Extended registration race controls
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [publication plan](../../../plan/pending/6lowpan-publication-plan.md)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [publication plan](../../../plan/done/6lowpan-publication-plan.md)
 
-Publication association: [C30](../../../plan/pending/6lowpan-publication-plan.md#c30); donor `4c573e0ffc`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
+Publication association: [C30](../../../plan/done/6lowpan-publication-plan.md#c30); donor `4c573e0ffc`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
 
 
 This fixture checks P11 ownership, transaction-history and pending-completion

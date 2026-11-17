@@ -1,8 +1,8 @@
 # Paging and extended dispatch
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/pending/6lowpan-publication-plan.md), [RFC 8025](https://www.rfc-editor.org/rfc/rfc8025.html), [RFC 8066](https://www.rfc-editor.org/rfc/rfc8066.html)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/done/6lowpan-publication-plan.md), [RFC 8025](https://www.rfc-editor.org/rfc/rfc8025.html), [RFC 8066](https://www.rfc-editor.org/rfc/rfc8066.html)
 
-Publication association: [C35](../../../plan/pending/6lowpan-publication-plan.md#c35); donor `ad2f88d50d`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
+Publication association: [C35](../../../plan/done/6lowpan-publication-plan.md#c35); donor `ad2f88d50d`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
 
 
 The adaptation owner recognizes RFC 8025 paging and RFC 8066 ESC selectors

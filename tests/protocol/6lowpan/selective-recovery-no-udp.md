@@ -2,7 +2,7 @@
 
 > **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [native recovery report](selective-recovery.md)
 
-Publication association: [C40](../../../plan/pending/6lowpan-publication-plan.md#c40); donor `66192266b8`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
+Publication association: [C40](../../../plan/done/6lowpan-publication-plan.md#c40); donor `66192266b8`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
 
 
 `LowpanSelectiveRecoveryNoUdp.test` uses three ordinary IPv6 hosts with UDP and

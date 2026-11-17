@@ -1,6 +1,6 @@
 {
   "review_unit": "PR10",
-  "base": "5c2fa2f7085df3459346f6e606ec0ec5d24b60bc",
+  "base": "09075b16e5e40428789c58beb7adaff07d2b1800",
   "tip": "f3abee829c30f597832a877f27bdeff08947804f",
   "publication_commits": [
     "C28",
@@ -205,6 +205,9 @@
     "release": "cb1b537e25bc50bca22a6e592dae7a04b4eae13863258d0f12ec7d6d16c20e95"
   },
   "original_tested_tip": "253c762debdfaf9b3b61840f37891c6759e70829",
-  "plan": "plan/pending/6lowpan-publication-plan.md",
-  "executable_identity_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json"
+  "plan": "plan/done/6lowpan-publication-plan.md",
+  "executable_identity_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json",
+  "original_tested_base": "5c2fa2f7085df3459346f6e606ec0ec5d24b60bc",
+  "review_base": "09075b16e5e40428789c58beb7adaff07d2b1800",
+  "review_tip": "f3abee829c30f597832a877f27bdeff08947804f"
 }

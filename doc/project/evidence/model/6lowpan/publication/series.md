@@ -1,6 +1,6 @@
 # 6LoWPAN review series
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [publication plan](../../../../../../plan/pending/6lowpan-publication-plan.md), [actual commit and verification map](manifest.json)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [publication plan](../../../../../../plan/done/6lowpan-publication-plan.md), [actual commit and verification map](manifest.json)
 
 P0–P15 remain the original implementation contracts. PR01–PR17 are review boundaries, and C00–C43 are publication commits. The table connects them without renumbering the original work. The local branches form a linear stack in the listed order; semantic prerequisites are documented in the plan.
 

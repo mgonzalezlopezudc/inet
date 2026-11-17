@@ -1,8 +1,8 @@
 # Native mesh-under forwarding
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/pending/6lowpan-publication-plan.md), [RFC 4944](https://www.rfc-editor.org/rfc/rfc4944.html)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/done/6lowpan-publication-plan.md), [RFC 4944](https://www.rfc-editor.org/rfc/rfc4944.html)
 
-Publication association: [C34](../../../plan/pending/6lowpan-publication-plan.md#c34); donor `c1ecdf38d6`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
+Publication association: [C34](../../../plan/done/6lowpan-publication-plan.md#c34); donor `c1ecdf38d6`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
 
 
 The native adaptation layer can forward outer Mesh/BC0 frames before interpreting

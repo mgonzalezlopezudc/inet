@@ -1,8 +1,8 @@
 # Native host registration response timing
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/pending/6lowpan-publication-plan.md), [RFC 4861 §6.3.4](https://www.rfc-editor.org/rfc/rfc4861.html#section-6.3.4), [RFC 6775 §8.2.6](https://www.rfc-editor.org/rfc/rfc6775.html#section-8.2.6)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/done/6lowpan-publication-plan.md), [RFC 4861 §6.3.4](https://www.rfc-editor.org/rfc/rfc4861.html#section-6.3.4), [RFC 6775 §8.2.6](https://www.rfc-editor.org/rfc/rfc6775.html#section-8.2.6)
 
-Publication association: [C23](../../../plan/pending/6lowpan-publication-plan.md#c23); donor `53b126d2a9`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
+Publication association: [C23](../../../plan/done/6lowpan-publication-plan.md#c23); donor `53b126d2a9`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
 
 
 **Execution status: debug PASS, eight protocol simulations plus three supplementary fine-clock simulations.** The host uses its existing per-interface RetransTimer in milliseconds. A structurally valid, checksum-valid, Hop-Limit-255 native M=0 RA copies a nonzero Retrans Timer before router-capacity, discovery-backoff or zero-router-lifetime handling. Zero retains the previous value. Unsupported M=1 and malformed messages leave it unchanged.

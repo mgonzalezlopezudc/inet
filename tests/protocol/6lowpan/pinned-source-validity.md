@@ -1,8 +1,8 @@
 # Native source validity with an explicit IPv6 interface
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [publication plan](../../../plan/pending/6lowpan-publication-plan.md)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [publication plan](../../../plan/done/6lowpan-publication-plan.md)
 
-Publication association: [C32](../../../plan/pending/6lowpan-publication-plan.md#c32); donor `4663b7ca3d`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
+Publication association: [C32](../../../plan/done/6lowpan-publication-plan.md#c32); donor `4663b7ca3d`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
 
 
 This prerequisite fixture uses the committed legacy native-host profile:

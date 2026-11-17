@@ -1,8 +1,8 @@
 # Native border-router registration and routed ownership
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/pending/6lowpan-publication-plan.md), [RFC 6775 §6.5](https://www.rfc-editor.org/rfc/rfc6775.html#section-6.5), [RFC 6775 §8.2.4](https://www.rfc-editor.org/rfc/rfc6775.html#section-8.2.4)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/done/6lowpan-publication-plan.md), [RFC 6775 §6.5](https://www.rfc-editor.org/rfc/rfc6775.html#section-6.5), [RFC 6775 §8.2.4](https://www.rfc-editor.org/rfc/rfc6775.html#section-8.2.4)
 
-Publication association: [C26](../../../plan/pending/6lowpan-publication-plan.md#c26); donor `250cbcb68d`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
+Publication association: [C26](../../../plan/done/6lowpan-publication-plan.md#c26); donor `250cbcb68d`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
 
 
 **Execution status: debug PASS, three runs.** This stage couples a border router's local native registrations with its duplicate-address authority. It does not implement a separate 6LR's asynchronous DAR relay, ABRO distribution or compression-context distribution.

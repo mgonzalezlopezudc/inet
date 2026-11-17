@@ -1,8 +1,8 @@
 # Neighbor Discovery option byte values
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/pending/6lowpan-publication-plan.md), [C++ enum value rules](https://eel.is/c++draft/dcl.enum#8)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/done/6lowpan-publication-plan.md), [C++ enum value rules](https://eel.is/c++draft/dcl.enum#8)
 
-Publication association: [C13](../../../plan/pending/6lowpan-publication-plan.md#c13); donor `79f0762b95`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
+Publication association: [C13](../../../plan/done/6lowpan-publication-plan.md#c13); donor `79f0762b95`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
 
 
 This document accompanies the generic ICMPv6 representation prerequisite. It reuses the existing wire unit, ordinary ND receive fixture and native registration protocol fixture; it introduces no new registration policy or optional LoWPAN dependency in generic ICMPv6.

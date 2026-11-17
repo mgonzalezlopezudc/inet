@@ -1,8 +1,8 @@
 # Native registrar target and lifetime validity
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/pending/6lowpan-publication-plan.md), [RFC 4862 §2](https://www.rfc-editor.org/rfc/rfc4862.html#section-2), [RFC 6775 §6.5](https://www.rfc-editor.org/rfc/rfc6775.html#section-6.5)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/done/6lowpan-publication-plan.md), [RFC 4862 §2](https://www.rfc-editor.org/rfc/rfc4862.html#section-2), [RFC 6775 §6.5](https://www.rfc-editor.org/rfc/rfc6775.html#section-6.5)
 
-Publication association: [C20](../../../plan/pending/6lowpan-publication-plan.md#c20); donor `d2565ce9f5`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
+Publication association: [C20](../../../plan/done/6lowpan-publication-plan.md#c20); donor `d2565ce9f5`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
 
 
 **Execution status: debug PASS, two runs.** `LowpanRegistrarValidity.test` directly tests the existing local registration server. It does not require border-router admission or a routed DAR relay.

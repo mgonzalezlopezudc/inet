@@ -1,8 +1,8 @@
 # ICMPv6 registration wire prerequisite
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../../../plan/pending/6lowpan-publication-plan.md), [RFC 6775](../../standard/rfc6775/rfc6775.txt), [RFC 8505](../../standard/rfc8505/rfc8505.txt)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../../../plan/done/6lowpan-publication-plan.md), [RFC 6775](../../standard/rfc6775/rfc6775.txt), [RFC 8505](../../standard/rfc8505/rfc8505.txt)
 
-Publication association: [C13](../../../../../plan/pending/6lowpan-publication-plan.md#c13); donor `9e670b6fd4`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
+Publication association: [C13](../../../../../plan/done/6lowpan-publication-plan.md#c13); donor `9e670b6fd4`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
 
 
 `Ipv6DuplicateAddressHeader` represents DAR/DAC as an ND packet header. Base code 0 carries an eight-byte owner identifier. Extended code suffixes 1–4 carry 8/16/24/32 ownership-verifier bytes. The serializer writes the reserved Code Prefix as zero; the decoder ignores it. Base messages write a zero reserved transaction byte and ignore that byte on reception. The registered IPv6 address follows the verifier. Named ICMPv6 types 157/158 and generic decoding allow an ND owner to receive these messages without a dependency on LoWPAN.

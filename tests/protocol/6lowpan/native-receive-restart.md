@@ -1,6 +1,6 @@
 # Native receive state across restart
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [publication plan C06](../../../plan/pending/6lowpan-publication-plan.md#c06), [historical data-plane checks](https://github.com/mgonzalezlopezudc/inet/blob/9908c007bdb1eda9d74f6ca1f99fe1cae33fbc61/doc/project/evidence/protocol/6lowpan/checks/data-plane.md)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [publication plan C06](../../../plan/done/6lowpan-publication-plan.md#c06), [historical data-plane checks](https://github.com/mgonzalezlopezudc/inet/blob/9908c007bdb1eda9d74f6ca1f99fe1cae33fbc61/doc/project/evidence/protocol/6lowpan/checks/data-plane.md)
 
 The P7 lifecycle row needs a native protocol sequence with pending RX state and late fragments. In the publication series, [`tests/protocol/6lowpan/LowpanNativeReceiveRestart.test`](LowpanNativeReceiveRestart.test) belongs to C06, `lowpan: add: the complete native IPv6 adaptation data plane`. C06 folds original test-only commit `a36e789a70` into the behavior owning the real adaptation module and its stop/crash reassembly cleanup. The original coverage commit repaired no production defect; its then-existing implementation already cleared the table and canceled its timer on both operations.
 

@@ -1,8 +1,8 @@
 # Discovery compression without prior context knowledge
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/pending/6lowpan-publication-plan.md), [RFC 6282 §3](https://www.rfc-editor.org/rfc/rfc6282.html#section-3), [RFC 6775 §6.3](https://www.rfc-editor.org/rfc/rfc6775.html#section-6.3)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/done/6lowpan-publication-plan.md), [RFC 6282 §3](https://www.rfc-editor.org/rfc/rfc6282.html#section-3), [RFC 6775 §6.3](https://www.rfc-editor.org/rfc/rfc6775.html#section-6.3)
 
-Publication association: [C28](../../../plan/pending/6lowpan-publication-plan.md#c28); donor `d995bfefb8`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
+Publication association: [C28](../../../plan/done/6lowpan-publication-plan.md#c28); donor `d995bfefb8`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
 
 
 **Execution status: debug PASS, two simulations.** The adaptation layer keeps outgoing outer ICMPv6 Router Solicitations and Router Advertisements independent of its compression-context table. Stateless IPHC remains enabled. This prevents a unicast RA to a valid global RS source from requiring a context the requester has not learned yet.

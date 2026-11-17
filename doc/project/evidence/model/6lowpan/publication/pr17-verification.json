@@ -34083,9 +34083,12 @@
       "finished": "2026-11-17T10:01:44.806582+01:00"
     }
   },
-  "plan": "plan/pending/6lowpan-publication-plan.md",
+  "plan": "plan/done/6lowpan-publication-plan.md",
   "metadata_equivalence": true,
   "baseline_modified": false,
+  "base": "418ebbb9817d2ed668c158c56350d37cf98f8aba",
+  "review_base": "418ebbb9817d2ed668c158c56350d37cf98f8aba",
+  "review_tip_association": "FINAL_SELF_HASH_IN_EXTERNAL_DELIVERY_INDEX",
   "negative_controls": {
     "tested_revision": "41cf4bcfe4cd453b52fb53c90014774f9ca6492c",
     "source_git_tree": "aa561a5b563038201777b313a982ae971d35b7a5",

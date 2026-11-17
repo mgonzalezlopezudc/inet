@@ -1,6 +1,6 @@
 # 6LoWPAN source and evidence provenance
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [standards map](../../protocol/6lowpan/standards.md), [publication plan](../../../../../plan/pending/6lowpan-publication-plan.md)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [standards map](../../protocol/6lowpan/standards.md), [publication plan](../../../../../plan/done/6lowpan-publication-plan.md)
 
 The original implementation input is `9908c007bdb1eda9d74f6ca1f99fe1cae33fbc61`. The pinned upstream base is `91219b0fa7d2794ee67ac8a3dd45c3a09cfc45b0`. The source oracle `1853c49ba0c29edeb2cfed5378c01305beb519ba` retains the selected implementation, excludes the specified unrelated Wi-Fi changes and adds only the approved feature requirements and two generic protocol fixtures. The publication model tree equals that oracle exactly.
 

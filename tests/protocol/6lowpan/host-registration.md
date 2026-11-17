@@ -1,8 +1,8 @@
 # Native host discovery and address registration
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/pending/6lowpan-publication-plan.md), [RFC 6775](../../../doc/project/evidence/standard/rfc6775/rfc6775.txt), [RFC 4862 §5.5.3](https://www.rfc-editor.org/rfc/rfc4862.html#section-5.5.3)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [6lowpan-completion.md](../../../plan/done/6lowpan-publication-plan.md), [RFC 6775](../../../doc/project/evidence/standard/rfc6775/rfc6775.txt), [RFC 4862 §5.5.3](https://www.rfc-editor.org/rfc/rfc4862.html#section-5.5.3)
 
-Publication association: [C22](../../../plan/pending/6lowpan-publication-plan.md#c22); donor `bced36c7d3`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
+Publication association: [C22](../../../plan/done/6lowpan-publication-plan.md#c22); donor `bced36c7d3`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
 
 
 `LowpanHostRegistration.test` exercises the native `host` role against the production native `router` role. Discovery, registration and subsequent UDP data cross the actual IEEE 802.15.4 radio, adaptation and IPv6 paths. Neither learned endpoint has an XML `<neighbor>` mapping.

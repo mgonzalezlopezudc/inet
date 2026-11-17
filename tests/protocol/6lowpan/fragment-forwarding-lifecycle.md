@@ -1,8 +1,8 @@
 # Native fragment forwarding lifecycle
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [publication plan](../../../plan/pending/6lowpan-publication-plan.md)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [publication plan](../../../plan/done/6lowpan-publication-plan.md)
 
-Publication association: [C38](../../../plan/pending/6lowpan-publication-plan.md#c38); donor `063659d694`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
+Publication association: [C38](../../../plan/done/6lowpan-publication-plan.md#c38); donor `063659d694`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
 
 
 Execution status: **final debug PASS, five runs; matching release normal completion, five runs with identical printed counters**. This companion to `LowpanFragmentForwarding.test` covers cancellation, synchronous observer re-entry and history expiry while the owner remains stopped. Debug supplies the semantic assertion proof; release ASSERT is disabled. The parent comparison remains **NOT_RUN**.

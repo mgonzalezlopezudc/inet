@@ -1,6 +1,6 @@
 # Computed ICMPv6 on an IPv6 route
 
-> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [publication plan C02](../../../plan/pending/6lowpan-publication-plan.md#c02)
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [publication plan C02](../../../plan/done/6lowpan-publication-plan.md#c02)
 
 Publication commit C02: `icmpv6: fix: compute checksums with final IPv6 addresses and bound error size`. Test: [Ipv6ComputedIcmp.test](Ipv6ComputedIcmp.test).
 
