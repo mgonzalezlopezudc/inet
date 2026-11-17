@@ -2,6 +2,9 @@
 #ifndef __INET_LOWPANLAYER_H
 #define __INET_LOWPANLAYER_H
 
+#include <bitset>
+#include <map>
+
 #include "inet/common/lifecycle/ModuleOperations.h"
 #include "inet/common/lifecycle/OperationalMixin.h"
 #include "inet/linklayer/lowpan/LowpanPacketDropDetails_m.h"
@@ -15,7 +18,7 @@
 
 namespace inet { namespace lowpan {
 
-// Per-hop IPv6 adaptation; reassembly always precedes IPv6 delivery.
+// IPv6 adaptation with optional mesh-under transit before endpoint reassembly.
 class INET_API LowpanLayer : public OperationalMixin<queueing::PacketProcessorBase>, public queueing::IActivePacketSource
 {
   protected:
@@ -29,6 +32,22 @@ class INET_API LowpanLayer : public OperationalMixin<queueing::PacketProcessorBa
     simtime_t reassemblyTimeout;
     bool useIphc = false;
     cMessage *expiryTimer = nullptr;
+    bool meshUnder = false;
+    uint8_t meshHops = 8;
+    simtime_t meshResidence; // Effective per-hop duration after simulation-clock quantization.
+    simtime_t broadcastRetention; // Effective first-arrival retention, shared by cache and source guard.
+    int maxBroadcastDatagrams = 256;
+    std::map<Ieee802154Address, Ieee802154Address> meshRoutes;
+    struct BroadcastRecord {
+        simtime_t expires;
+        bool fragmented;
+        uint16_t size;
+        uint16_t tag;
+        std::bitset<256> offsets;
+    };
+    std::map<std::pair<Ieee802154Address, uint8_t>, BroadcastRecord> broadcasts;
+    std::array<simtime_t, 256> sequenceReservations{};
+    uint8_t nextBroadcastSequence = 0;
     static simsignal_t datagramAcceptedSignal;
     static simsignal_t datagramCompletedSignal;
     static simsignal_t fragmentSentSignal;
@@ -36,10 +55,11 @@ class INET_API LowpanLayer : public OperationalMixin<queueing::PacketProcessorBa
     static simsignal_t reassemblyCompletedSignal;
     static simsignal_t reassemblyExpiredSignal;
     static simsignal_t reassemblyInvalidatedSignal;
+    static simsignal_t meshForwardedSignal;
     virtual void initialize(int stage) override;
     virtual void handleMessageWhenUp(cMessage *message) override;
     virtual void handleMessageWhenDown(cMessage *message) override;
-    virtual void handleStartOperation(LifecycleOperation *operation) override {}
+    virtual void handleStartOperation(LifecycleOperation *operation) override { expireBroadcasts(); }
     virtual void handleStopOperation(LifecycleOperation *operation) override;
     virtual void handleCrashOperation(LifecycleOperation *operation) override;
     virtual bool isInitializeStage(int stage) const override { return stage == INITSTAGE_LINK_LAYER; }
@@ -47,9 +67,16 @@ class INET_API LowpanLayer : public OperationalMixin<queueing::PacketProcessorBa
     virtual bool isModuleStopStage(int stage) const override { return stage == ModuleStopOperation::STAGE_LINK_LAYER; }
     void processUpperPacket(Packet *packet);
     void processLowerPacket(Packet *packet);
-    void processFragment(Packet *packet, bool first);
+    void processInnerPacket(Packet *packet, const Ieee802154Address& source, const Ieee802154Address& destination);
+    void processMeshPacket(Packet *packet);
+    void processFragment(Packet *packet, bool first, const Ieee802154Address& source, const Ieee802154Address& destination);
     void deliverIpv6(Packet *packet);
-    bool decompressHeader(Packet *packet, int originalSize);
+    bool decompressHeader(Packet *packet, int originalSize, const Ieee802154Address& source, const Ieee802154Address& destination);
+    void expireBroadcasts();
+    bool acceptBroadcast(Packet *packet, const Ieee802154Address& originator, uint8_t sequence);
+    void forwardMesh(Packet *packet, const Ptr<const Chunk>& header, const Ieee802154Address& destination);
+    simtime_t meshDeadline(simtime_t duration) const;
+    simtime_t meshReservation(uint8_t hops, simtime_t retention) const;
     void scheduleExpiry();
     void clearTransientState();
     bool isValidIpv6Packet(const Packet *packet) const;

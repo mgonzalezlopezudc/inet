@@ -1,0 +1,91 @@
+%description:
+Independent RFC4944 Mesh/BC0 bytes, all V/F widths, direct/deep hop forms,
+canonical address octets, retained deep form and every positive truncation.
+
+%includes:
+#include "inet/linklayer/lowpan/LowpanMeshHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanBroadcastHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanProtocolDissector.h"
+#include "inet/linklayer/lowpan/LowpanProtocolPrinter.h"
+#include "inet/linklayer/lowpan/LowpanProtocol.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+using namespace inet;
+using namespace inet::lowpan;
+
+%global:
+class MeshObserver : public ProtocolDissector::ICallback {
+  public:
+    int incorrect=0,starts=0,ends=0;std::vector<std::string> visited;
+    void startProtocolDataUnit(const Protocol *) override {starts++;}
+    void endProtocolDataUnit(const Protocol *) override {ends++;}
+    void markIncorrect() override {incorrect++;}
+    void visitChunk(const Ptr<const Chunk>& chunk,const Protocol *) override {
+        if(dynamicPtrCast<const LowpanMeshHeader>(chunk))visited.push_back("Mesh");
+        else if(dynamicPtrCast<const LowpanBroadcastHeader>(chunk))visited.push_back("BC0");
+        else visited.push_back("opaque");
+    }
+    void dissectPacket(Packet *,const Protocol *) override {ASSERT(false);}
+};
+
+%activity:
+const std::vector<std::vector<uint8_t>> vectors{
+    {0xb2,0x12,0x34,0xab,0xcd},
+    {0xa2,0x12,0x34,0xa1,0xa2,0xa3,0xa4,0xa5,0xa6,0xa7,0xa8},
+    {0x92,1,2,3,4,5,6,7,8,0xab,0xcd},
+    {0x82,1,2,3,4,5,6,7,8,0xa1,0xa2,0xa3,0xa4,0xa5,0xa6,0xa7,0xa8},
+    {0x8f,255,1,2,3,4,5,6,7,8,0xa1,0xa2,0xa3,0xa4,0xa5,0xa6,0xa7,0xa8},
+    {0x9f,14,1,2,3,4,5,6,7,8,0xff,0xff}};
+for (const auto& bytes : vectors) {
+    Packet input("literal", makeShared<BytesChunk>(bytes));
+    auto header = input.peekAtFront<LowpanMeshHeader>();
+    bool shortSource = bytes[0] & 0x20, shortFinal = bytes[0] & 0x10;
+    ASSERT(header->getOriginator() == Ieee802154Address(shortSource ? "1234" : "0102030405060708"));
+    ASSERT(header->getFinalDestination() == Ieee802154Address(shortFinal ?
+        (bytes.back() == 0xff ? "ffff" : "abcd") : "a1a2a3a4a5a6a7a8"));
+    ASSERT(header->getDeepHops() == ((bytes[0] & 15) == 15));
+    ASSERT(header->getHopsLeft() == (header->getDeepHops() ? bytes[1] : 2));
+    auto fresh = makeShared<LowpanMeshHeader>();
+    fresh->setOriginator(header->getOriginator()); fresh->setFinalDestination(header->getFinalDestination());
+    fresh->setHopsLeft(header->getHopsLeft()); fresh->setDeepHops(header->getDeepHops()); fresh->setChunkLength(B(bytes.size()));
+    Packet output("fresh", fresh);
+    ASSERT(output.peekDataAsBytes()->getBytes() == bytes);
+    for (size_t n = 1; n < bytes.size(); n++) {
+        Packet truncated("truncated", makeShared<BytesChunk>(std::vector<uint8_t>(bytes.begin(), bytes.begin()+n)));
+        auto partial = truncated.peekAtFront<LowpanMeshHeader>(b(-1), Chunk::PF_ALLOW_INCOMPLETE | Chunk::PF_ALLOW_INCORRECT);
+        ASSERT(partial->isIncomplete() || partial->isIncorrect());
+    }
+}
+for (int sequence : {0,127,255}) {
+    auto header = makeShared<LowpanBroadcastHeader>(); header->setSequenceNumber(sequence);
+    Packet output("BC0",header);
+    ASSERT(output.peekDataAsBytes()->getBytes() == std::vector<uint8_t>({0x50,uint8_t(sequence)}));
+    Packet input("literal",makeShared<BytesChunk>(std::vector<uint8_t>{0x50,uint8_t(sequence)}));
+    ASSERT(input.peekAtFront<LowpanBroadcastHeader>()->getSequenceNumber()==sequence);
+}
+Packet bad("dispatch",makeShared<BytesChunk>(std::vector<uint8_t>{0x51,0}));
+ASSERT(bad.peekAtFront<LowpanBroadcastHeader>(B(2),Chunk::PF_ALLOW_INCORRECT)->isIncorrect());
+Packet shortBc("short",makeShared<BytesChunk>(std::vector<uint8_t>{0x50}));
+ASSERT(shortBc.peekAtFront<LowpanBroadcastHeader>(b(-1),Chunk::PF_ALLOW_INCOMPLETE)->isIncomplete());
+LowpanProtocolDissector dissector;
+for(int mode=0;mode<3;mode++){
+    auto bytes=vectors[5];
+    if(mode==0)bytes.insert(bytes.end(),{0x50,9,0xe0,80,0x12,0x34,1,0x50,0x80}); // FRAGN body stays opaque.
+    else if(mode==1)bytes.insert(bytes.end(),{0x50});
+    else bytes={0x8f,255,1};
+    Packet packet("introspection",makeShared<BytesChunk>(bytes));MeshObserver observer;
+    dissector.dissect(&packet,&lowpanProtocol,observer);
+    ASSERT(observer.starts==1 && observer.ends==1 && packet.getDataLength()==B(0));
+    if(mode==0)ASSERT(observer.visited==std::vector<std::string>({"Mesh","BC0","opaque","opaque"}) && observer.incorrect==0);
+    else ASSERT(observer.incorrect==1);
+}
+LowpanProtocolPrinter printer;ProtocolPrinter::Context context;
+Packet meshPrint("mesh",makeShared<BytesChunk>(vectors[5]));
+printer.print(meshPrint.peekAtFront<LowpanMeshHeader>(),&lowpanProtocol,nullptr,context);
+printer.print(makeShared<LowpanBroadcastHeader>(),&lowpanProtocol,nullptr,context);
+ASSERT(context.infoColumn.str().find("Mesh 0102030405060708 > ffff hops=14 deep")!=std::string::npos);
+ASSERT(context.infoColumn.str().find("BC0 sequence=0")!=std::string::npos);
+EV << "Mesh and BC0 independent width, hop and truncation vectors verified\n";
+
+%contains: stdout
+Mesh and BC0 independent width, hop and truncation vectors verified
