@@ -1,0 +1,3 @@
+Native host source registration checks
+
+Native hosts validate source registration after egress and source selection, including explicitly interface-pinned output and post-routing reinjection. Neighbor Discovery bootstrap control remains available before registration.
