@@ -41,6 +41,7 @@ class INET_API Ieee802154ManagementApp : public SimpleModule,
   public:
     virtual ~Ieee802154ManagementApp();
     virtual void handleResetConfirm(uint64_t, const Ieee802154MacResetConfirm& confirm) override;
+    virtual void handleSyncConfirm(uint64_t, const Ieee802154MacSyncConfirm&) override { throw cRuntimeError("Unexpected SYNC installation confirmation"); }
     virtual void handleStartSuperframeConfirm(uint64_t, const Ieee802154MacStartSuperframeConfirm&) override { throw cRuntimeError("Unexpected START-SUPERFRAME confirmation"); }
     virtual void handleStartConfirm(uint64_t, const Ieee802154MacStartConfirm& confirm) override;
     virtual void handleScanConfirm(uint64_t, const Ieee802154MacScanConfirm& confirm) override;

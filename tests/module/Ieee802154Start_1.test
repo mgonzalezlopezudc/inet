@@ -102,6 +102,7 @@ class StartClient : public SimpleModule, public IIeee802154MacServiceClient, pub
         std::cout << "Production non-beacon START and RESET policy verified.\n";
     }
   public:
+    virtual void handleSyncConfirm(uint64_t, const Ieee802154MacSyncConfirm&) override { ASSERT(false); }
     virtual void handleStartSuperframeConfirm(uint64_t, const Ieee802154MacStartSuperframeConfirm&) override { ASSERT(false); }
     virtual void handleStartConfirm(uint64_t, const Ieee802154MacStartConfirm& confirm) override {
         Enter_Method("handleStartConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(expectedStart)); starts++;

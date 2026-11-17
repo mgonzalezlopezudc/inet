@@ -43,7 +43,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     bool initialPanCoordinator = false;
     bool panCoordinator = false;
     enum class Phase { WAIT_IFS, WAIT_RX, ACCESS, WAIT_TX, TRANSMIT, WAIT_ACK };
-    enum class PhyPurpose { IDLE, RX_FOR_ACCESS, CCA, TX_READY, TRANSMIT, ACK_LISTEN, ACK_READY, ACK_TRANSMIT, MANAGEMENT_GET, MANAGEMENT_SET, START_CHANNEL, BEACON_CHANNEL, ASSOCIATE_CHANNEL, ORPHAN_CHANNEL_GET, SCAN_GET, SCAN_CCA_GET, SCAN_OFF, SCAN_CHANNEL, SCAN_RX, SCAN_ED_DURATION, SCAN_ED, SCAN_RESTORE_OFF, SCAN_CCA_RESTORE, SCAN_RESTORE, SCAN_REALIGN_OFF, SCAN_REALIGN_CHANNEL, RESET, SUPERFRAME_GET, SUPERFRAME_CHANNEL, SUPERFRAME_RESTORE, SUPERFRAME_PHY_RESTORE, SUPERFRAME_READY, SUPERFRAME_TRANSMIT };
+    enum class PhyPurpose { IDLE, RX_FOR_ACCESS, CCA, TX_READY, TRANSMIT, ACK_LISTEN, ACK_READY, ACK_TRANSMIT, MANAGEMENT_GET, MANAGEMENT_SET, START_CHANNEL, BEACON_CHANNEL, ASSOCIATE_CHANNEL, ORPHAN_CHANNEL_GET, SCAN_GET, SCAN_CCA_GET, SCAN_OFF, SCAN_CHANNEL, SCAN_RX, SCAN_ED_DURATION, SCAN_ED, SCAN_RESTORE_OFF, SCAN_CCA_RESTORE, SCAN_RESTORE, SCAN_REALIGN_OFF, SCAN_REALIGN_CHANNEL, RESET, SUPERFRAME_GET, SUPERFRAME_CHANNEL, SUPERFRAME_RESTORE, SUPERFRAME_PHY_RESTORE, SUPERFRAME_READY, SUPERFRAME_TRANSMIT, SYNC_CHANNEL, SYNC_READY };
     struct Transaction {
         uint64_t id;
         Packet *msdu;
@@ -123,6 +123,29 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     void startOutgoingCap();
     Ptr<Ieee802154Frame> makeBeacon(uint16_t panId, uint8_t beaconOrder, uint8_t superframeOrder, bool batteryLifeExtension);
     bool fitsBeaconPayload(const std::vector<uint8_t>& payload) const;
+    struct Synchronization {
+        uint64_t id;
+        Ieee802154MacSyncRequest request;
+        bool installed = false;
+        bool wantsRx = false;
+        bool anchored = false;
+        uint8_t misses = 0;
+        uint8_t beaconOrder = 15;
+        clocktime_t anchor;
+        clocktime_t windowStart;
+        clocktime_t deadline;
+        simtime_t physicalDeadline;
+    };
+    std::optional<Synchronization> synchronization;
+    bool beaconScheduleActive() const { return periodicBeaconing || (synchronization && synchronization->installed) || (superframe && getInteger("macBeaconOrder") < 15); }
+    simsignal_t syncMissedSignal = SIMSIGNAL_NULL;
+    simsignal_t syncLostSignal = SIMSIGNAL_NULL;
+    void retireSynchronization(const Ieee802154MacServiceResult& pendingResult);
+    void completeSyncInstallation(const Ieee802154MacServiceResult& result);
+    void scheduleAcquisitionWindow();
+    void scheduleTrackingWindow();
+    bool matchesSyncCoordinator(const Ieee802154PanDescriptor& descriptor) const;
+    bool renewSynchronization(const Ieee802154PanDescriptor& descriptor, const std::optional<Ieee802154SuperframeReceptionAnchor>& anchor, simtime_t physicalEnd);
     struct ScanRequest {
         uint64_t id;
         Ieee802154MacScanRequest parameters;
@@ -297,6 +320,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     virtual Ieee802154MacServiceAdmission submitPurge(uint64_t id, uint8_t msduHandle) override;
     virtual Ieee802154MacServiceAdmission submitStart(uint64_t id, const Ieee802154MacStartRequest& request) override;
     virtual Ieee802154MacServiceAdmission submitStartSuperframe(uint64_t id, const Ieee802154MacStartSuperframeRequest& request) override;
+    virtual Ieee802154MacServiceAdmission submitSync(uint64_t id, const Ieee802154MacSyncRequest& request) override;
     virtual Ieee802154MacServiceAdmission submitScan(uint64_t id, const Ieee802154MacScanRequest& request) override;
     virtual Ieee802154MacServiceAdmission submitBeacon(uint64_t id, const Ieee802154MacBeaconRequest& request) override;
     virtual Ieee802154MacServiceAdmission submitAssociateResponse(uint64_t id, const Ieee802154MacAssociateResponse& response) override;
@@ -312,6 +336,8 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     virtual void handleReceiveStarted(const physicallayer::Ieee802154PhyReceiveStart& start) override;
     virtual void handleSuperframeBoundary(clocktime_t boundary) override;
     virtual void handleSuperframeCapEnd() override;
+    virtual void handleSyncWake() override;
+    virtual void handleSyncDeadline() override;
     virtual void handleAvailabilityIndication(const physicallayer::Ieee802154PhyAvailabilityIndication& indication) override;
     virtual void handleTransmitConfirm(uint64_t id, const physicallayer::Ieee802154PhyTransmitConfirm& confirm) override;
     virtual void handleCcaConfirm(uint64_t id, const physicallayer::Ieee802154PhyCcaConfirm& confirm) override;

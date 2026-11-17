@@ -93,6 +93,7 @@ class DiscoveryExercise : public cSimpleModule, public cListener,
     virtual void handleBeaconConfirm(uint64_t, const Ieee802154MacBeaconConfirm& confirm) override {
         Enter_Method("handleBeaconConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(expectedBeacon)); confirms++;
     }
+    virtual void handleSyncConfirm(uint64_t, const Ieee802154MacSyncConfirm&) override { ASSERT(false); }
     virtual void handleStartSuperframeConfirm(uint64_t, const Ieee802154MacStartSuperframeConfirm&) override { ASSERT(false); }
     virtual void handleStartConfirm(uint64_t, const Ieee802154MacStartConfirm& confirm) override {
         Enter_Method("handleStartConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS));

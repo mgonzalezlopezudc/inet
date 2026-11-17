@@ -1,0 +1,3 @@
+IEEE 802.15.4 beacon acquisition and tracking
+
+The native managed interface can acquire and track configured coordinator beacons with a superframe controller. Acquisition and tracking use the first-symbol local-clock anchor, guarded receive windows and beacon-loss indication. The fixed-rate external-clock profile and its symbol-grid constraints are described in the beacon synchronization migration guide. Slotted contention and GTS services remain separate capabilities.

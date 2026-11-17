@@ -1,0 +1,550 @@
+%description:
+Native coordinator and child synchronization over real O-QPSK radios, exercising
+installation, acquisition, tracking, missed beacons and lifecycle recovery.
+
+%extraargs: -r 0..81
+
+%includes:
+#include "ProtocolTest.h"
+
+%global:
+using namespace inet;
+using namespace inet::protocoltest;
+Define_ProtocolTestProgram()
+{
+    ProtocolTest test("ieee802154_beacon_sync");
+    return test.once(on("exercise").signal("verificationComplete").filterValue(1).within(0.25));
+}
+
+%activity:
+EV << "ieee802154_beacon_sync compiled\n";
+
+%file: BeaconSynchronizationExercise.cc
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/clock/contract/IClock.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
+#include "inet/linklayer/ieee802154/Ieee802154BeaconCodec.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceProvider.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceProvider.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IReception.h"
+#include "inet/physicallayer/wireless/ieee802154/contract/IIeee802154PhyServiceClient.h"
+#include "inet/physicallayer/wireless/ieee802154/contract/IIeee802154PhyServiceProvider.h"
+#include "inet/common/Simsignals.h"
+
+namespace inet {
+class BeaconSynchronizationExercise : public cSimpleModule, public cListener,
+        public IIeee802154MacServiceClient, public IIeee802154ManagementServiceClient, public physicallayer::IIeee802154PhyServiceClient
+{
+    using Status = Ieee802154MacStatus;
+    using Admission = Ieee802154MacServiceAdmission;
+    ModuleRefByPar<IIeee802154MacServiceProvider> coordinator, child, foreign;
+    ModuleRefByPar<IIeee802154ManagementServiceProvider> coordinatorManagement, childManagement, foreignManagement;
+    ModuleRefByPar<IClock> childClock;
+    ModuleRefByPar<physicallayer::IIeee802154PhyServiceProvider> scriptedPhy;
+    uint64_t nextId = 0, syncId = 0;
+    uint64_t scriptedId = 0;
+    int scenario = 0, startConfirms = 0, notices = 0, losses = 0, lostSignals = 0, monitors = 0, foreignConfirms = 0, resets = 0, replacementRefusals = 0;
+    int protectedConfirms = 0;
+    std::vector<long> misses;
+    std::vector<Ieee802154MacServiceResult> syncResults;
+    Status expectedSet = Status::SUCCESS;
+    std::optional<Ieee802154MacPibValue> value;
+    simtime_t finalAcquisitionDeadline;
+    std::optional<clocktime_t> firstParentAnchor;
+    simtime_t latestBeaconStart;
+    physicallayer::Ieee802154PhyChannel channel() const {
+        return {physicallayer::Ieee802154PhyChannel::Phy::O_QPSK,physicallayer::Ieee802154PhyChannel::Band::MHZ_2450,20};
+    }
+    void until(simtime_t t) { ASSERT(t >= simTime()); if (t > simTime()) wait(t - simTime()); }
+    void set(IIeee802154MacServiceProvider *provider, const char *name, const Ieee802154MacPibValue& v) {
+        ASSERT(provider->submitSet(++nextId,{name,v}) == Admission::ACCEPTED);
+    }
+    void sync(bool tracking) {
+        syncId = ++nextId;
+        ASSERT(childManagement->submitSync(syncId,{channel(),tracking}) == Admission::ACCEPTED);
+    }
+    void scriptedBeacon(bool protectedFrame, size_t payloadLength = 0) {
+        auto frame = makeShared<Ieee802154Frame>();
+        frame->setFrameType(0);
+        frame->setSourceAddress(Ieee802154Address::fromShort(1));
+        frame->setSourcePanId(0x1234);
+        Ieee802154BeaconCodec::Content beacon;
+        beacon.superframeSpecification = 0x4f00; // PAN coordinator, BO=SO=0, final CAP slot 15.
+        beacon.payload.assign(payloadLength,0x66);
+        auto body = Ieee802154BeaconCodec::encode(beacon);
+        frame->setPayloadArraySize(body.size());
+        for (size_t i = 0; i < body.size(); i++) frame->setPayload(i,body[i]);
+        Ieee802154FrameCodec::finalize(*frame);
+        auto packet = new Packet(protectedFrame ? "protected-beacon" : "scripted-beacon");
+        if (protectedFrame) {
+            auto bytes = Ieee802154FrameCodec::encode(*frame);
+            bytes[0] |= 8;
+            bytes.resize(7);
+            bytes.insert(bytes.end(),{0xee,0x19,0xa7,0x46,0x33,0x5a});
+            auto fcs = Ieee802154FrameCodec::calculateFcs(bytes);
+            bytes.push_back(fcs & 255); bytes.push_back(fcs >> 8);
+            packet->insertAtBack(makeShared<BytesChunk>(bytes));
+        }
+        else
+            packet->insertAtBack(frame);
+        packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee802154);
+        ASSERT(scriptedPhy->submitTransmit(++scriptedId,packet,{}) == physicallayer::Ieee802154PhyServiceAdmission::ACCEPTED);
+    }
+    physicallayer::IRadio::RadioMode childMode() const {
+        return check_and_cast<physicallayer::IRadio *>(getModuleByPath(par("childRadioModule")))->getRadioMode();
+    }
+  protected:
+    virtual void initialize() override {
+        coordinator.reference(this,"coordinatorModule",true);
+        coordinatorManagement.reference(this,"coordinatorModule",true);
+        child.reference(this,"childModule",true);
+        childManagement.reference(this,"childModule",true);
+        foreign.reference(this,"foreignModule",true);
+        foreignManagement.reference(this,"foreignModule",true);
+        childClock.reference(this,"childClockModule",true);
+        scriptedPhy.reference(this,"providerModule",true);
+        scenario = par("scenario");
+        auto module = getModuleByPath(par("childModule"));
+        module->subscribe(registerSignal("syncMissed"),this);
+        module->subscribe(registerSignal("syncLost"),this);
+        if (scenario == 19 || scenario == 20 || scenario == 30 || scenario == 36)
+            getModuleByPath(par("childRadioModule"))->subscribe(receptionStartedSignal,this);
+        if (scenario == 21)
+            getModuleByPath(par("childRadioModule"))->subscribe(physicallayer::IRadio::receptionStateChangedSignal,this);
+    }
+    virtual void activity() override {
+        until(SimTime(300,SIMTIME_US));
+        set(child.get(),"macPanId",uint64_t(scenario == 8 ? 0xffff : 0x1234));
+        set(child.get(),"macCoordShortAddress",uint64_t(1));
+        set(child.get(),"macBeaconOrder",uint64_t(0));
+        set(child.get(),"macAutoRequest",scenario == 15 || scenario == 33);
+        if (scenario == 15 || scenario == 19 || scenario == 20 || scenario == 21 || scenario == 30 || scenario == 33 || scenario == 36) {
+            if (scenario == 15 || scenario == 21 || scenario == 33)
+            set(child.get(),"macRxOnWhenIdle",true);
+            if (scenario == 15) {
+                set(foreign.get(),"macMinBe",uint64_t(0));
+                set(foreign.get(),"macMaxCsmaBackoffs",uint64_t(0));
+            }
+        }
+        if (scenario == 19 || scenario == 20 || scenario == 30 || scenario == 36)
+            set(coordinator.get(),"phyTxPower",int64_t(20));
+        if (scenario == 19 || scenario == 20 || scenario == 30 || scenario == 33 || scenario == 36)
+            ASSERT(scriptedPhy->submitState(++scriptedId,physicallayer::Ieee802154PhyState::TRANSMIT) == physicallayer::Ieee802154PhyServiceAdmission::ACCEPTED);
+        Ieee802154MacStartSuperframeRequest start;
+        start.panId = 0x1234; start.channel = channel(); start.beaconOrder = 0; start.superframeOrder = 0;
+        ASSERT(coordinatorManagement->submitStartSuperframe(++nextId,start) == Admission::ACCEPTED);
+        until(SimTime(1,SIMTIME_MS));
+        if (scenario == 15 || scenario == 21 || scenario == 33) until(SimTime(1500,SIMTIME_US));
+        sync(scenario != 0 && scenario != 5 && scenario != 8 && scenario != 40);
+        if (scenario == 5)
+            ASSERT(child->cancel(syncId) == Ieee802154MacServiceCancelResult::CANCELLED);
+        until(SimTime(5,SIMTIME_MS));
+        ASSERT(startConfirms == 1 && syncResults.size() == (scenario == 18 ? 2 : 1));
+        if (scenario == 5) ASSERT(syncResults[0] == Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::CANCELLED));
+        else if (scenario == 8) ASSERT(syncResults[0] == Ieee802154MacServiceResult(Status::INVALID_PARAMETER));
+        else if (scenario == 11) ASSERT(syncResults[0] == Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::STOPPED));
+        else ASSERT(syncResults[0] == Ieee802154MacServiceResult(Status::SUCCESS));
+        ASSERT(child->cancel(syncId) == Ieee802154MacServiceCancelResult::NOT_PENDING);
+        if (scenario == 11) { until(SimTime(6,SIMTIME_MS)); sync(true); }
+        if (scenario == 10) set(child.get(),"macPromiscuousMode",true);
+        if (scenario == 7) set(child.get(),"macBeaconOrder",uint64_t(3));
+        if (scenario == 14) {
+            set(child.get(),"macBeaconOrder",uint64_t(15));
+            ASSERT(child->submitGet(++nextId,{"macBeaconOrder"}) == Admission::ACCEPTED);
+            ASSERT(value && std::get<uint64_t>(*value) == 15);
+            auto packet = new Packet("unsupported-unslotted-data");
+            Ieee802154MacDataRequest data;
+            data.destinationAddress = Ieee802154Address::fromShort(1);
+            data.destinationPanId = 0x1234;
+            ASSERT(child->submitData(++nextId,packet,data) == Admission::UNSUPPORTED_OPERATION);
+            ASSERT(packet->getOwner() == this);
+            delete packet;
+        }
+        if (scenario == 35) {
+            expectedSet = Status::INVALID_PARAMETER;
+            set(child.get(),"macBeaconOrder",uint64_t(16));
+            set(child.get(),"macBeaconOrder",int64_t(-1));
+            expectedSet = Status::SUCCESS;
+            ASSERT(child->submitGet(++nextId,{"macBeaconOrder"}) == Admission::ACCEPTED);
+            ASSERT(value && std::get<uint64_t>(*value) == 0);
+        }
+        until(SimTime(20,SIMTIME_MS));
+        if (scenario == 34) {
+            set(child.get(),"macBeaconOrder",uint64_t(15));
+            sync(true);
+            ASSERT(syncResults.size() == 2 && syncResults.back() == Ieee802154MacServiceResult(Status::INVALID_PARAMETER));
+        }
+        if (scenario == 37) {
+            sync(true);
+            ASSERT(child->cancel(syncId) == Ieee802154MacServiceCancelResult::CANCELLED);
+            ASSERT(syncResults.size() == 2 && syncResults.back() == Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::CANCELLED));
+            until(SimTime(60,SIMTIME_MS));
+            ASSERT(notices == 1 && losses == 0);
+            sync(true);
+            until(SimTime(85,SIMTIME_MS));
+            ASSERT(syncResults.size() == 3 && notices >= 3 && losses == 0);
+            emit(registerSignal("verificationComplete"),1L);
+            endSimulation();
+            return;
+        }
+        if (scenario == 33) {
+            for (int time : {30,45,60,75}) {
+                until(SimTime(time,SIMTIME_MS));
+                scriptedBeacon(true);
+            }
+            until(SimTime(100,SIMTIME_MS));
+            ASSERT(protectedConfirms == 4 && notices == 0 && misses.size() == 4 && losses == 1);
+            emit(registerSignal("verificationComplete"),1L);
+            endSimulation();
+            return;
+        }
+        if (scenario == 30) {
+            ASSERT(firstParentAnchor && notices == 1);
+            auto expected = *firstParentAnchor + SIMTIME_AS_CLOCKTIME(SimTime(960 * 16 + 48,SIMTIME_US));
+            latestBeaconStart = childClock->computeSimTimeFromClockTime(expected);
+            until(latestBeaconStart - SimTime(1,SIMTIME_US));
+            scriptedBeacon(false,114);
+            until(SimTime(42,SIMTIME_MS));
+            ASSERT(protectedConfirms == 1 && notices == 2 && misses.empty() && losses == 0);
+            emit(registerSignal("verificationComplete"),1L);
+            endSimulation();
+            return;
+        }
+        if (scenario == 19 || scenario == 20 || scenario == 36) {
+            auto oneTick = SimTime::fromRaw(scenario == 20 || scenario == 36 ? 1 : 0);
+            until(finalAcquisitionDeadline - SimTime(609,SIMTIME_US) + oneTick);
+            scriptedBeacon(false);
+            until(finalAcquisitionDeadline + SimTime(3,SIMTIME_MS));
+            ASSERT(protectedConfirms == 1);
+            if (scenario == 19) ASSERT(notices == 1 && losses == 0 && misses.size() == 3);
+            else if (scenario == 36) ASSERT(notices == 1 && losses == 0 && misses.size() == 1);
+            else ASSERT(notices == 0 && losses == 1 && misses.size() == 4);
+            emit(registerSignal("verificationComplete"),1L);
+            endSimulation();
+            return;
+        }
+        if (scenario == 15) {
+            for (int time : {30,45,60,75}) {
+                until(SimTime(time,SIMTIME_MS));
+                ASSERT(foreignManagement->submitBeacon(++nextId,{channel()}) == Admission::ACCEPTED);
+            }
+            until(SimTime(100,SIMTIME_MS));
+            ASSERT(foreignConfirms == 4 && notices == 4 && misses.size() == 4 && losses == 1);
+            emit(registerSignal("verificationComplete"),1L);
+            endSimulation();
+            return;
+        }
+        if (scenario == 0) ASSERT(notices == 1 && childMode() == physicallayer::IRadio::RADIO_MODE_OFF);
+        if (scenario == 6) sync(false);
+        if (scenario == 10) ASSERT(notices == 0 && syncResults.size() == 2);
+        if (scenario == 7) {
+            until(SimTime(40,SIMTIME_MS));
+            ASSERT(misses.size() == 1 && misses[0] == 1);
+            ASSERT(child->submitGet(++nextId,{"macBeaconOrder"}) == Admission::ACCEPTED);
+            ASSERT(value && std::get<uint64_t>(*value) == 3);
+            sync(true);
+            until(SimTime(80,SIMTIME_MS));
+            ASSERT(misses.size() == 1 && losses == 0);
+        }
+        else {
+            until(SimTime(scenario == 38 || scenario == 39 ? 115 : scenario == 4 || scenario == 13 ? 100 : scenario == 3 ? 85 : 55,SIMTIME_MS));
+            if (scenario == 0) ASSERT(notices == 1 && losses == 0 && misses.empty());
+            if (scenario == 1) ASSERT(notices >= 3 && losses == 0 && misses.empty());
+            if (scenario == 14) ASSERT(notices >= 3 && losses == 0 && misses.empty());
+            if (scenario == 2 || scenario == 12) ASSERT(notices >= 2 && misses.size() == 1 && losses == 0);
+            if (scenario == 3) ASSERT(notices >= 2 && misses.size() == 3 && losses == 0);
+            if (scenario == 4 || scenario == 13) ASSERT(notices == 1 && misses.size() == 4 && losses == 1 && lostSignals == 1);
+            if (scenario == 5 || scenario == 8) ASSERT(notices == 0 && losses == 0);
+            if (scenario == 6 || scenario == 9) ASSERT(notices == 2 && syncResults.size() == 2 && losses == 0);
+            if (scenario == 10) ASSERT(notices >= 1 && losses == 0);
+            if (scenario == 11) ASSERT(syncResults.size() == 2 && notices >= 2 && losses == 0);
+            if (scenario == 16 || scenario == 17) {
+                ASSERT(notices == 1 && losses == 0);
+                sync(true);
+                until(SimTime(85,SIMTIME_MS));
+                ASSERT(syncResults.size() == 2 && notices >= 3 && losses == 0);
+            }
+            if (scenario == 18) ASSERT(resets == 1 && syncResults.size() == 2 && notices >= 3 && losses == 0);
+            if (scenario == 21) ASSERT(replacementRefusals == 1 && syncResults.size() == 1 && misses.size() == 1 && losses == 0);
+            if (scenario >= 22 && scenario <= 35) ASSERT(notices >= 3 && losses == 0 && misses.empty());
+            if (scenario == 40) ASSERT(notices == 1 && losses == 0);
+            if (scenario == 38 || scenario == 39) ASSERT(losses == 1 && syncResults.size() == 2 && notices >= 2 && misses.size() == 4);
+            if (scenario == 34) ASSERT(syncResults.size() == 2);
+        }
+        emit(registerSignal("verificationComplete"),1L);
+        endSimulation();
+    }
+    virtual void receiveSignal(cComponent *, simsignal_t signal, long v, cObject *) override {
+        Enter_Method("receiveSignal");
+        if (signal == physicallayer::IRadio::receptionStateChangedSignal) {
+            if (v == physicallayer::IRadio::RECEPTION_STATE_RECEIVING && syncResults.size() == 1 && replacementRefusals == 0) {
+                auto id = ++nextId;
+                ASSERT(childManagement->submitSync(id,{channel(),false}) == Admission::BUSY);
+                ++replacementRefusals;
+            }
+            return;
+        }
+        if (signal == registerSignal("syncMissed")) misses.push_back(v);
+        else { ASSERT(signal == registerSignal("syncLost")); ++lostSignals; }
+        if ((scenario == 38 && signal == registerSignal("syncLost")) || (scenario == 39 && signal == registerSignal("syncMissed") && v == 4))
+            sync(true);
+    }
+    virtual void receiveSignal(cComponent *, simsignal_t, cObject *object, cObject *) override {
+        Enter_Method("receiveSignal");
+        if (scenario == 19 || scenario == 20 || scenario == 36) {
+            auto reception = check_and_cast<const physicallayer::IReception *>(object);
+            ASSERT(reception->getEndTime() == finalAcquisitionDeadline + SimTime::fromRaw(scenario == 20 || scenario == 36 ? 1 : 0));
+        }
+        if (scenario == 30 && syncResults.size() == 1) {
+            auto reception = check_and_cast<const physicallayer::IReception *>(object);
+            if (!firstParentAnchor) firstParentAnchor = childClock->getClockTime();
+            else {
+                ASSERT(simTime() == latestBeaconStart);
+                ASSERT(reception->getTransmission()->getPacket()->getDataLength() == B(127));
+            }
+        }
+    }
+  public:
+    BeaconSynchronizationExercise() : cSimpleModule(65536) {}
+    virtual void handleSyncConfirm(uint64_t, const Ieee802154MacSyncConfirm& confirm) override {
+        Enter_Method("handleSyncConfirm"); syncResults.push_back(confirm.result);
+        if ((scenario == 19 || scenario == 20 || scenario == 36) && syncResults.size() == 1) {
+            auto deadline = childClock->getClockTime() + SIMTIME_AS_CLOCKTIME(SimTime((scenario == 36 ? 1 : 4) * 960 * 2 * 16,SIMTIME_US));
+            finalAcquisitionDeadline = childClock->computeSimTimeFromClockTime(deadline);
+        }
+        if (scenario == 18 && syncResults.size() == 1)
+            ASSERT(child->submitReset(++nextId,{false}) == Admission::ACCEPTED);
+    }
+    virtual void handleStartSuperframeConfirm(uint64_t, const Ieee802154MacStartSuperframeConfirm& confirm) override { Enter_Method("handleStartSuperframeConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); ++startConfirms; }
+    virtual void handleBeaconNotifyIndication(const Ieee802154PanDescriptor& descriptor) override {
+        auto caller = getSimulation()->getContextModule();
+        Enter_Method("handleBeaconNotifyIndication");
+        ASSERT(caller == getModuleByPath(par("childModule")));
+        ASSERT(descriptor.coordinatorPanId == (scenario == 15 ? 0x4321 : 0x1234)); ++notices;
+        if (scenario == 19 || scenario == 20 || scenario == 30 || scenario == 36) {
+            ASSERT((descriptor.beacon.superframeSpecification & 0xff) == 0);
+            if (scenario == 30) ASSERT(descriptor.beacon.payload.size() == (notices == 1 ? 0 : 114));
+        }
+        if (scenario == 9 && notices == 1) sync(false);
+        if (scenario == 40 && notices == 1) {
+            auto packet = new Packet("one-shot-unslotted-probe");
+            Ieee802154MacDataRequest data;
+            data.destinationAddress = Ieee802154Address::fromShort(1);
+            data.destinationPanId = 0x1234;
+            ASSERT(child->submitData(++nextId,packet,data) == Admission::UNSUPPORTED_OPERATION);
+            ASSERT(packet->getOwner() == this);
+            delete packet;
+            ASSERT(childManagement->submitPoll(++nextId,{0x1234,Ieee802154Address::fromShort(1)}) == Admission::UNSUPPORTED_OPERATION);
+        }
+    }
+    virtual void handleSyncLossIndication(const Ieee802154MacSyncLossIndication& indication) override {
+        Enter_Method("handleSyncLossIndication"); ASSERT(indication.reason == Ieee802154SyncLossReason::BEACON_LOST); ++losses;
+    }
+    virtual void handlePromiscuousIndication(Packet *packet, const Ieee802154MacPromiscuousIndication&) override {
+        Enter_Method("handlePromiscuousIndication"); take(packet); delete packet; ++monitors;
+        if (scenario == 10 && syncResults.size() == 1) sync(false);
+    }
+    virtual void handleGetConfirm(uint64_t, const Ieee802154MacGetConfirm& c) override { Enter_Method("handleGetConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); value = c.value; }
+    virtual void handleSetConfirm(uint64_t, const Ieee802154MacSetConfirm& c) override { Enter_Method("handleSetConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(expectedSet)); }
+    virtual void handleDataConfirm(uint64_t, const Ieee802154MacDataConfirm&) override { ASSERT(false); }
+    virtual void handleResetConfirm(uint64_t, const Ieee802154MacResetConfirm& confirm) override {
+        Enter_Method("handleResetConfirm"); ASSERT(scenario == 18 && confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); ++resets; sync(true);
+    }
+    virtual void handleDataIndication(Packet *, const Ieee802154MacDataIndication&) override { ASSERT(false); }
+    virtual void handleCommStatusIndication(Packet *, const Ieee802154MacCommStatusIndication&) override { ASSERT(false); }
+    virtual void handlePollConfirm(uint64_t, const Ieee802154MacPollConfirm&) override { ASSERT(false); }
+    virtual void handlePurgeConfirm(uint64_t, const Ieee802154MacPurgeConfirm&) override { ASSERT(false); }
+    virtual void handleStartConfirm(uint64_t, const Ieee802154MacStartConfirm&) override { ASSERT(false); }
+    virtual void handleScanConfirm(uint64_t, const Ieee802154MacScanConfirm&) override { ASSERT(false); }
+    virtual void handleBeaconConfirm(uint64_t, const Ieee802154MacBeaconConfirm& confirm) override { Enter_Method("handleBeaconConfirm"); ASSERT((scenario == 15 || scenario == 19 || scenario == 20 || scenario == 30 || scenario == 36) && confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); ++foreignConfirms; }
+    virtual void handleBeaconRequestIndication(const Ieee802154MacBeaconRequestIndication&) override { ASSERT(false); }
+    virtual void handleAssociateResponseStatus(uint64_t, const Ieee802154MacAssociateResponseStatus&) override { ASSERT(false); }
+    virtual void handleAssociateConfirm(uint64_t, const Ieee802154MacAssociateConfirm&) override { ASSERT(false); }
+    virtual void handleAssociateIndication(const Ieee802154MacAssociateIndication&) override { ASSERT(false); }
+    virtual void handleDisassociateConfirm(uint64_t, const Ieee802154MacDisassociateConfirm&) override { ASSERT(false); }
+    virtual void handleDisassociateIndication(const Ieee802154MacDisassociateIndication&) override { ASSERT(false); }
+    virtual void handleOrphanIndication(const Ieee802154MacOrphanIndication&) override { ASSERT(false); }
+    virtual void handleOrphanResponseStatus(uint64_t, const Ieee802154MacOrphanResponseStatus&) override { ASSERT(false); }
+    virtual void handleRxEnableConfirm(uint64_t, const Ieee802154MacRxEnableConfirm&) override { ASSERT(false); }
+    virtual void handleRxEnableIndication(const Ieee802154MacRxEnableIndication&) override { ASSERT(false); }
+    virtual void handleAvailabilityIndication(const physicallayer::Ieee802154PhyAvailabilityIndication&) override {}
+    virtual void handleReceiveStarted(const physicallayer::Ieee802154PhyReceiveStart&) override { ASSERT(false); }
+    virtual void handleTransmitStarted(uint64_t, const physicallayer::Ieee802154PhyTransmitStart&) override {}
+    virtual void handleTransmitConfirm(uint64_t, const physicallayer::Ieee802154PhyTransmitConfirm& confirm) override { Enter_Method("handleTransmitConfirm"); ASSERT(confirm.result == physicallayer::Ieee802154PhyServiceResult(physicallayer::Ieee802154PhyServiceStatus::SUCCESS)); ++protectedConfirms; }
+    virtual void handleStateConfirm(uint64_t, const physicallayer::Ieee802154PhyStateConfirm& confirm) override { Enter_Method("handleStateConfirm"); ASSERT(confirm.result == physicallayer::Ieee802154PhyServiceResult(physicallayer::Ieee802154PhyServiceStatus::SUCCESS)); }
+    virtual void handleCcaConfirm(uint64_t, const physicallayer::Ieee802154PhyCcaConfirm&) override { ASSERT(false); }
+    virtual void handleEdConfirm(uint64_t, const physicallayer::Ieee802154PhyEdConfirm&) override { ASSERT(false); }
+    virtual void handleGetConfirm(uint64_t, const physicallayer::Ieee802154PhyGetConfirm&) override { ASSERT(false); }
+    virtual void handleSetConfirm(uint64_t, const physicallayer::Ieee802154PhySetConfirm&) override { ASSERT(false); }
+    virtual void handleResetConfirm(uint64_t, const physicallayer::Ieee802154PhyResetConfirm&) override { ASSERT(false); }
+    virtual void handleReceiveIndication(Packet *packet, const physicallayer::Ieee802154PhyReceiveIndication&) override { Enter_Method("handleReceiveIndication"); take(packet); delete packet; }
+};
+Define_Module(BeaconSynchronizationExercise);
+}
+
+%file: BeaconSynchronizationFixture.ned
+import inet.common.SimpleModule;
+import inet.common.scenario.ScenarioManager;
+import inet.mobility.static.StationaryMobility;
+import inet.clock.model.OscillatorBasedClock;
+import inet.linklayer.ieee802154.Ieee802154StandardInterface;
+import inet.linklayer.ieee802154.contract.IIeee802154MacServiceClient;
+import inet.linklayer.ieee802154.contract.IIeee802154ManagementServiceClient;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154StandardRadio;
+import inet.physicallayer.wireless.ieee802154.Ieee802154PhyService;
+import inet.physicallayer.wireless.ieee802154.contract.IIeee802154PhyServiceClient;
+
+simple BeaconSynchronizationExercise extends SimpleModule like IIeee802154MacServiceClient, IIeee802154ManagementServiceClient, IIeee802154PhyServiceClient
+{
+    parameters:
+        string coordinatorModule;
+        string childModule;
+        string foreignModule;
+        string serviceModule;
+        string childRadioModule;
+        string childClockModule;
+        string providerModule;
+        int scenario;
+        @class(::inet::BeaconSynchronizationExercise);
+        @signal[verificationComplete](type=long);
+}
+module BeaconSynchronizationHost
+{
+    parameters:
+        @networkNode;
+    submodules:
+        mobility: StationaryMobility;
+        nic: Ieee802154StandardInterface {
+            enableManagement = true;
+            enableSuperframe = true;
+            mac.clientModule = "^.^.^.exercise";
+            mac.managementClientModule = "^.^.^.exercise";
+        }
+    connections allowunconnected:
+}
+module BeaconSynchronizationScript
+{
+    parameters: @networkNode;
+    submodules:
+        mobility: StationaryMobility;
+        phy: Ieee802154PhyService { clientModule = "^.^.exercise"; radioModule = "^.radio"; }
+        radio: Ieee802154StandardRadio;
+    connections allowunconnected:
+        radio.upperLayerOut --> phy.lowerLayerIn;
+}
+network BeaconSynchronizationTest
+{
+    parameters:
+        int scenario;
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        scenarioManager: ScenarioManager;
+        coordinatorClock: OscillatorBasedClock;
+        childClock: OscillatorBasedClock;
+        host[3]: BeaconSynchronizationHost;
+        script: BeaconSynchronizationScript;
+        exercise: BeaconSynchronizationExercise {
+            coordinatorModule = "^.host[0].nic.mac";
+            childModule = "^.host[1].nic.mac";
+            foreignModule = "^.host[2].nic.mac";
+            serviceModule = "^.host[1].nic.mac";
+            childRadioModule = "^.host[1].nic.radio";
+            childClockModule = "^.childClock";
+            providerModule = "^.script.phy";
+            scenario = parent.scenario;
+        }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = BeaconSynchronizationTest
+sim-time-limit = 250ms
+seed-set = 0
+cmdenv-express-mode = true
+record-vector-results = false
+record-scalar-results = false
+*.scenario = ${scenario=0..40}
+*.**.radio.sendRawBytes = ${raw=false,true}
+*.coordinatorClock.initialClockTime = 0.25s
+*.coordinatorClock.oscillator.nominalTickLength = 1us
+*.coordinatorClock.oscillator.driftRate = ${scenario} >= 22 && ${scenario} <= 25 ? -40ppm : 40ppm
+*.childClock.initialClockTime = ${scenario} >= 22 ? 0.250001s : 0.25s
+*.childClock.oscillator.nominalTickLength = 1us
+*.childClock.oscillator.driftRate = ${scenario} >= 22 && ${scenario} <= 25 ? 40ppm : -40ppm
+*.childClock.roundingMode = ${scenario} == 23 || ${scenario} == 27 ? "down" : ${scenario} == 24 || ${scenario} == 28 ? "closer" : ${scenario} == 25 || ${scenario} == 29 ? "none" : "up"
+*.radioMedium.backgroundNoise.power = -110dBm
+*.radioMedium.propagation.propagationSpeed = ${scenario} == 19 || ${scenario} == 20 || ${scenario} == 30 || ${scenario} == 36 ? 1000000mps : 299792458mps
+*.host[0].nic.extendedAddress = "extended:02-01-12-34-56-78-9A-BC"
+*.host[0].nic.shortAddress = 1
+*.host[0].nic.panId = 4660
+*.host[0].nic.mac.isPanCoordinator = true
+*.host[0].nic.clockModule = ${scenario} == 32 ? "" : "^.^.^.coordinatorClock"
+*.host[1].nic.extendedAddress = "extended:04-01-12-34-56-78-9A-BC"
+*.host[1].nic.shortAddress = 2
+*.host[1].nic.panId = 4660
+*.host[1].nic.clockModule = ${scenario} == 31 ? "" : "^.^.^.childClock"
+*.host[2].nic.extendedAddress = "extended:06-01-12-34-56-78-9A-BC"
+*.host[2].nic.shortAddress = ${scenario} == 19 || ${scenario} == 20 || ${scenario} == 30 || ${scenario} == 36 ? 1 : 3
+*.host[2].nic.panId = ${scenario} == 19 || ${scenario} == 20 || ${scenario} == 30 || ${scenario} == 36 ? 4660 : 17185
+*.host[2].nic.mac.isPanCoordinator = ${scenario} != 19 && ${scenario} != 20 && ${scenario} != 30 && ${scenario} != 36
+*.host[*].nic.radio.antenna.mobilityModule = "^.^.^.mobility"
+*.script.radio.antenna.mobilityModule = "^.^.mobility"
+*.script.mobility.initFromDisplayString = false
+*.script.mobility.initialX = 2m
+*.script.mobility.initialY = 0m
+*.script.mobility.initialZ = 0m
+*.script.mobility.constraintAreaMinX = 0m
+*.script.mobility.constraintAreaMinY = 0m
+*.script.mobility.constraintAreaMinZ = 0m
+*.script.mobility.constraintAreaMaxX = 100m
+*.script.mobility.constraintAreaMaxY = 100m
+*.script.mobility.constraintAreaMaxZ = 100m
+*.host[*].mobility.initFromDisplayString = false
+*.host[0].mobility.initialX = 0m
+*.host[1].mobility.initialX = 1m
+*.host[2].mobility.initialX = 2m
+*.host[*].mobility.initialY = 0m
+*.host[*].mobility.initialZ = 0m
+*.host[*].mobility.constraintAreaMinX = 0m
+*.host[*].mobility.constraintAreaMinY = 0m
+*.host[*].mobility.constraintAreaMinZ = 0m
+*.host[*].mobility.constraintAreaMaxX = 100m
+*.host[*].mobility.constraintAreaMaxY = 100m
+*.host[*].mobility.constraintAreaMaxZ = 100m
+*.scenarioManager.script = xmldoc(${scenario} == 2 || ${scenario} == 21 ? "one-miss.xml" : ${scenario} == 3 ? "three-miss.xml" : ${scenario} == 4 || ${scenario} == 15 || ${scenario} == 30 || ${scenario} == 33 || ${scenario} == 38 || ${scenario} == 39 ? "four-miss.xml" : ${scenario} == 7 ? "acquisition-gap.xml" : ${scenario} == 19 || ${scenario} == 20 || ${scenario} == 36 ? "deadline-gap.xml" : ${scenario} == 11 ? "pending-child.xml" : ${scenario} == 12 ? "child-one-miss.xml" : ${scenario} == 13 ? "child-four-miss.xml" : ${scenario} == 16 ? "child-stop.xml" : ${scenario} == 17 ? "child-crash.xml" : "no-events.xml")
+
+%file: no-events.xml
+<scenario/>
+%file: one-miss.xml
+<scenario><at t="20ms"><shutdown module="host[0].nic.phy"/></at><at t="35ms"><startup module="host[0].nic.phy"/></at></scenario>
+%file: three-miss.xml
+<scenario><at t="20ms"><shutdown module="host[0].nic.phy"/></at><at t="70ms"><startup module="host[0].nic.phy"/></at></scenario>
+%file: four-miss.xml
+<scenario><at t="20ms"><shutdown module="host[0].nic.phy"/></at><at t="85ms"><startup module="host[0].nic.phy"/></at></scenario>
+%file: acquisition-gap.xml
+<scenario><at t="2ms"><shutdown module="host[0].nic.phy"/></at><at t="90ms"><startup module="host[0].nic.phy"/></at></scenario>
+%file: deadline-gap.xml
+<scenario><at t="2ms"><shutdown module="host[0].nic.phy"/></at><at t="200ms"><startup module="host[0].nic.phy"/></at></scenario>
+%file: pending-child.xml
+<scenario><at t="1.1ms"><shutdown module="host[1].nic.phy"/></at><at t="3ms"><startup module="host[1].nic.phy"/></at></scenario>
+%file: child-one-miss.xml
+<scenario><at t="20ms"><shutdown module="host[1].nic.phy"/></at><at t="35ms"><startup module="host[1].nic.phy"/></at></scenario>
+%file: child-four-miss.xml
+<scenario><at t="20ms"><shutdown module="host[1].nic.phy"/></at><at t="85ms"><startup module="host[1].nic.phy"/></at></scenario>
+%file: child-stop.xml
+<scenario><at t="20ms"><shutdown module="host[1].nic.mac"/></at><at t="35ms"><startup module="host[1].nic.mac"/></at></scenario>
+%file: child-crash.xml
+<scenario><at t="20ms"><crash module="host[1].nic.mac"/></at><at t="35ms"><startup module="host[1].nic.mac"/></at></scenario>
+
+%contains: stdout
+PROTOCOLTEST ieee802154_beacon_sync: PASS
+
+%not-contains: stdout
+PROTOCOLTEST ieee802154_beacon_sync: FAIL

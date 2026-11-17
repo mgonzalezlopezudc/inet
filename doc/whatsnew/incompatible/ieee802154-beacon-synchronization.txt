@@ -1,0 +1,3 @@
+IEEE 802.15.4 beacon synchronization service
+
+Custom IEEE 802.15.4 management and superframe service implementations must implement the new SYNC installation and wake/deadline methods and rebuild. The native confirmation reports installation, while later beacon loss is an indication. See the IEEE 802.15.4 Beacon Synchronization migration guide.

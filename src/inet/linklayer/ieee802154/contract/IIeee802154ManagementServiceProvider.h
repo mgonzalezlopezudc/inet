@@ -6,6 +6,7 @@
 #include "inet/linklayer/ieee802154/Ieee802154MacPollRequest.h"
 #include "inet/linklayer/ieee802154/Ieee802154MacStartRequest.h"
 #include "inet/linklayer/ieee802154/Ieee802154MacStartSuperframeRequest.h"
+#include "inet/linklayer/ieee802154/Ieee802154MacSyncRequest.h"
 #include "inet/linklayer/ieee802154/Ieee802154MacScanRequest.h"
 #include "inet/linklayer/ieee802154/Ieee802154MacBeaconRequest.h"
 #include "inet/linklayer/ieee802154/Ieee802154MacAssociateResponse.h"
@@ -25,6 +26,7 @@ class INET_API IIeee802154ManagementServiceProvider
     virtual Ieee802154MacServiceAdmission submitPurge(uint64_t id, uint8_t msduHandle) = 0;
     virtual Ieee802154MacServiceAdmission submitStart(uint64_t id, const Ieee802154MacStartRequest& request) = 0;
     virtual Ieee802154MacServiceAdmission submitStartSuperframe(uint64_t id, const Ieee802154MacStartSuperframeRequest& request) = 0;
+    virtual Ieee802154MacServiceAdmission submitSync(uint64_t id, const Ieee802154MacSyncRequest& request) = 0;
     virtual Ieee802154MacServiceAdmission submitScan(uint64_t id, const Ieee802154MacScanRequest& request) = 0;
     virtual Ieee802154MacServiceAdmission submitBeacon(uint64_t id, const Ieee802154MacBeaconRequest& request) = 0;
     virtual Ieee802154MacServiceAdmission submitAssociateResponse(uint64_t id, const Ieee802154MacAssociateResponse& response) = 0;

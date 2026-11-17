@@ -21,6 +21,8 @@ class INET_API Ieee802154SuperframeController : public ClockUserModuleMixin<Simp
     std::map<int, Ieee802154SuperframeReceptionAnchor> receptionAnchors;
     ClockEvent *beaconPreparation = nullptr;
     ClockEvent *capEnd = nullptr;
+    ClockEvent *syncWake = nullptr;
+    ClockEvent *syncDeadline = nullptr;
     clocktime_t beaconBoundary;
     bool started = true;
 
@@ -36,6 +38,9 @@ class INET_API Ieee802154SuperframeController : public ClockUserModuleMixin<Simp
     virtual void cancelBeaconPreparation() override;
     virtual bool scheduleCapEnd(clocktime_t boundary) override;
     virtual void cancelCapEnd() override;
+    virtual void scheduleSyncWake(clocktime_t when) override;
+    virtual void scheduleSyncDeadline(clocktime_t when) override;
+    virtual void cancelSyncEvents() override;
     virtual simtime_t getFutureSimulationTime(clocktime_t target) const override { return computeSimTimeFromClockTime(target); }
     virtual clocktime_t getFutureClockTime(simtime_t target) const override { return computeClockTimeFromSimTime(target); }
     virtual void recordReceptionStart(const physicallayer::Ieee802154PhyReceiveStart& start) override;

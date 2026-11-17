@@ -14,6 +14,8 @@ class INET_API IIeee802154SuperframeClient
     virtual ~IIeee802154SuperframeClient() = default;
     virtual void handleSuperframeBoundary(clocktime_t boundary) = 0;
     virtual void handleSuperframeCapEnd() = 0;
+    virtual void handleSyncWake() = 0;
+    virtual void handleSyncDeadline() = 0;
 };
 
 } // namespace inet

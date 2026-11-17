@@ -29,6 +29,9 @@ class INET_API IIeee802154SuperframeProvider
     virtual void cancelBeaconPreparation() = 0;
     virtual bool scheduleCapEnd(clocktime_t boundary) = 0;
     virtual void cancelCapEnd() = 0;
+    virtual void scheduleSyncWake(clocktime_t when) = 0;
+    virtual void scheduleSyncDeadline(clocktime_t when) = 0;
+    virtual void cancelSyncEvents() = 0;
     virtual simtime_t getFutureSimulationTime(clocktime_t target) const = 0;
     virtual clocktime_t getFutureClockTime(simtime_t target) const = 0;
     virtual void recordReceptionStart(const physicallayer::Ieee802154PhyReceiveStart& start) = 0;

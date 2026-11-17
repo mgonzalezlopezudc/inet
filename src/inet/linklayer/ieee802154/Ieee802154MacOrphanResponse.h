@@ -25,7 +25,7 @@ struct Ieee802154MacOrphanResponseStatus
     Ieee802154MacServiceResult result;
 };
 
-enum class Ieee802154SyncLossReason { PAN_ID_CONFLICT, REALIGNMENT };
+enum class Ieee802154SyncLossReason { PAN_ID_CONFLICT = 0, REALIGNMENT = 1, BEACON_LOST = 2 };
 
 struct Ieee802154MacSyncLossIndication
 {
