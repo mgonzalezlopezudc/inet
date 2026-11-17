@@ -42,6 +42,79 @@ const Ieee802154GtsManager::Grant *Ieee802154GtsManager::findGrant(const Key& ke
     return it == grants.end() ? nullptr : &*it;
 }
 
+unsigned int Ieee802154GtsManager::inactivityLimit(uint8_t beaconOrder)
+{
+    return beaconOrder <= 8 ? 2u << (8 - beaconOrder) : 2u;
+}
+
+void Ieee802154GtsManager::armActivity(const Key& key, int64_t previousEpoch, bool rebaseline)
+{
+    for (auto& grant : grants)
+        if (sameKey(grant.key,key) && (!grant.activityArmed || rebaseline)) {
+            grant.activityArmed = true;
+            grant.inactive = 0;
+            grant.activeInOpportunity = false;
+            grant.lastOpportunity = previousEpoch;
+        }
+}
+
+void Ieee802154GtsManager::noteActivity(const Key& key)
+{
+    for (auto& grant : grants)
+        if (sameKey(grant.key,key) && grant.activityArmed && !grant.activitySuspended) {
+            grant.inactive = 0;
+            grant.activeInOpportunity = true;
+        }
+}
+
+void Ieee802154GtsManager::rephaseActivity(const Key& key, int64_t previousEpoch)
+{
+    for (auto& grant : grants)
+        if (sameKey(grant.key,key) && grant.activityArmed) {
+            grant.lastOpportunity = previousEpoch;
+            grant.activeInOpportunity = false;
+        }
+}
+
+void Ieee802154GtsManager::setActivitySuspended(const Key& key, bool suspended)
+{
+    for (auto& grant : grants)
+        if (sameKey(grant.key,key) && grant.activityArmed) {
+            if (grant.activitySuspended && !suspended) {
+                grant.inactive = 0;
+                grant.activeInOpportunity = false;
+            }
+            grant.activitySuspended = suspended;
+        }
+}
+
+bool Ieee802154GtsManager::finishOpportunity(const Key& key, uint8_t beaconOrder, int64_t epoch)
+{
+    for (auto& grant : grants)
+        if (sameKey(grant.key,key) && grant.activityArmed && (!grant.lastOpportunity || epoch > *grant.lastOpportunity)) {
+            grant.lastOpportunity = epoch;
+            if (grant.activitySuspended)
+                return false;
+            if (grant.activeInOpportunity)
+                grant.activeInOpportunity = false;
+            else if (++grant.inactive >= inactivityLimit(beaconOrder))
+                return true;
+        }
+    return false;
+}
+
+void Ieee802154GtsManager::copyActivityFrom(const Ieee802154GtsManager& source)
+{
+    for (auto& grant : grants)
+        if (auto current = source.findGrant(grant.key)) {
+            grant.inactive = current->inactive;
+            grant.activityArmed = current->activityArmed;
+            grant.activitySuspended = current->activitySuspended;
+            grant.activeInOpportunity = current->activeInOpportunity;
+            grant.lastOpportunity = current->lastOpportunity;
+        }
+}
+
 size_t Ieee802154GtsManager::reservedCount() const
 {
     std::vector<Key> keys;

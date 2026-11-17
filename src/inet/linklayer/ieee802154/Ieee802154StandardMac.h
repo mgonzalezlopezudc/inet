@@ -159,6 +159,11 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
         simtime_t physicalStart;
         simtime_t physicalEnd;
         bool receive;
+        bool outgoing;
+        bool activitySettled = false;
+        uint8_t beaconOrder;
+        int64_t epoch;
+        std::optional<int64_t> rephaseAfter;
     };
     std::vector<CfpWindow> cfpWindows;
     bool cfpReceive = false;
@@ -166,6 +171,8 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     void refreshCfp();
     void clearCfp();
     void retireInvalidGtsData();
+    void expireGtsGrant(const Ieee802154GtsManager::Key& key);
+    bool settleSkippedGtsOpportunities();
     struct GtsRequestState { uint64_t id; Ieee802154MacGtsRequest request; bool waiting = false; };
     std::optional<GtsRequestState> gtsRequest;
     cMessage *gtsTimer = nullptr;
