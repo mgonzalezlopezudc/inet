@@ -46,6 +46,11 @@ DTLS_TEST_CHECK(sequences.take(1).body == std::vector<uint8_t>({3, 4, 5, 6}));
 DTLS_TEST_CHECK(sequences.getEntryCount() == 1);
 DTLS_TEST_CHECK(sequences.hasEntry(0) && !sequences.hasEntry(1));
 DTLS_TEST_CHECK(!sequences.isComplete(0));
+DTLS_TEST_CHECK(sequences.insert(4, 2, 4, 0, {7}) == Result::INCOMPLETE);
+sequences.discard(0);
+DTLS_TEST_CHECK(!sequences.hasEntry(0) && sequences.hasEntry(2));
+DTLS_TEST_CHECK(sequences.getEntryCount() == 1 && sequences.getReservedBytes() == 4);
+sequences.discard(0); // an already released sequence is harmless
 EV << "DTLS handshake reassembly PASS\n";
 
 %contains: stdout
