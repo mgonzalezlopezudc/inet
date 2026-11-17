@@ -2,6 +2,7 @@
 //
 #include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
 #include "inet/linklayer/ieee802154/Ieee802154FrameLayout.h"
+#include "inet/linklayer/ieee802154/Ieee802154InformationElements.h"
 
 namespace inet {
 
@@ -65,14 +66,19 @@ std::vector<uint8_t> Ieee802154FrameCodec::encode(const Ieee802154Frame& frame)
         throw cRuntimeError("Invalid legacy IEEE 802.15.4 PAN compression");
     if (frame.getSecurityEnabled() && frame.getComputeFcs())
         throw cRuntimeError("Security transformation is unavailable for generated IEEE 802.15.4 frames");
-    if (frame.getFrameType() == 3 && !frame.getPayloadArraySize() &&
-            (frame.getFrameVersion() < 2 || (!frame.getInformationElementsPresent() && !frame.getSecurityEnabled())))
+    if (frame.getFrameVersion() < 2 && frame.getFrameType() == 3 && !frame.getPayloadArraySize())
         throw cRuntimeError("IEEE 802.15.4 command needs a Command ID");
     if (frame.getFrameVersion() < 2 && frame.getFrameType() == 0 && (hasDestination || !hasSource || frame.getAckRequest() || frame.getPanCompression() ||
             (!frame.getSecurityEnabled() && frame.getPayloadArraySize() < 4)))
         throw cRuntimeError("Invalid legacy IEEE 802.15.4 beacon fields");
     if (frame.getFrameVersion() < 2 && frame.getFrameType() == 2 && (hasDestination || hasSource || frame.getAckRequest() || frame.getSecurityEnabled() || frame.getPanCompression() || frame.getPayloadArraySize()))
         throw cRuntimeError("Invalid immediate ACK fields");
+    if (frame.getFrameVersion() == 2) {
+        auto inspected = Ieee802154InformationElements::inspect(frame);
+        auto view = std::get_if<Ieee802154InformationElements::View>(&inspected);
+        if (!view)
+            throw cRuntimeError("Invalid IEEE 802.15.4 version-2 IE or auxiliary security framing");
+    }
     uint16_t control = frame.getFrameType() | (frame.getFramePending() ? 0x10 : 0) |
             (frame.getSecurityEnabled() ? 8 : 0) | (frame.getReservedBit7() ? 0x80 : 0) |
             (frame.getSequenceSuppressed() ? 0x100 : 0) | (frame.getInformationElementsPresent() ? 0x200 : 0) |
@@ -169,7 +175,7 @@ Ptr<Ieee802154Frame> Ieee802154FrameCodec::decode(const std::vector<uint8_t>& by
     };
     unsigned int destinationLength = layout->destinationAddressLength;
     unsigned int sourceLength = layout->sourceAddressLength;
-    if (type == 3 && limit == layout->headerLength() && (version < 2 || (!informationElementsPresent && !(control & 8))))
+    if (version < 2 && type == 3 && limit == layout->headerLength())
         return failure(TRUNCATED);
     if (version < 2 && type == 0 && !(control & 8) && limit < layout->headerLength() + 4)
         return failure(TRUNCATED);
@@ -190,6 +196,11 @@ Ptr<Ieee802154Frame> Ieee802154FrameCodec::decode(const std::vector<uint8_t>& by
     frame->setPayloadArraySize(limit - position);
     for (size_t i = 0; position < limit; ++i)
         frame->setPayload(i, bytes[position++]);
+    if (version == 2) {
+        auto inspected = Ieee802154InformationElements::inspect(*frame);
+        if (auto error = std::get_if<Ieee802154InformationElements::Error>(&inspected))
+            return failure(*error == Ieee802154InformationElements::Error::TRUNCATED ? TRUNCATED : MALFORMED);
+    }
     if (fcsPresent) {
         auto fcs = uint16_t(bytes[limit]) | uint16_t(bytes[limit + 1]) << 8;
         frame->setFcs(fcs);

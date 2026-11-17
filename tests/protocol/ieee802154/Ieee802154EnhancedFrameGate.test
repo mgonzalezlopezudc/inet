@@ -1,9 +1,10 @@
 %description:
 Structurally valid version-2 frames reach the native receiver but cannot activate enhanced operation.
 
-%extraargs: -r 0..9
+%extraargs: -r 0..21
 
 %includes:
+#include <algorithm>
 #include "ProtocolTest.h"
 #include "inet/common/packet/chunk/BytesChunk.h"
 #include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
@@ -19,13 +20,31 @@ Define_ProtocolTestProgram()
         auto bytes = packet->peekDataAsBytes()->getBytes();
         ASSERT(bytes.size() > 8);
         bytes.resize(bytes.size() - 2);
-        int type = scenario == 4 ? 1 : scenario;
+        int type = scenario >= 4 ? 1 : scenario;
         bytes[0] = (bytes[0] & 0x98) | type | ((type == 1 || type == 3) ? 0x20 : 0);
         bytes[1] = (bytes[1] & 0xcf) | 0x20;
-        if (scenario == 4) {
+        if (scenario == 4 || scenario == 7 || scenario == 9) {
             bytes[1] |= 1; // Suppress DSN without changing the on-air PSDU length.
             bytes.erase(bytes.begin() + 2);
             bytes.push_back(0x55);
+        }
+        if (scenario >= 5) {
+            auto payload = size_t((scenario == 7 || scenario == 9) ? 20 : 21);
+            if (scenario == 10) {
+                bytes[1] |= 2;
+                const std::vector<uint8_t> ieAndData{0x01,0x09,0xaa,0x00,0x3f,0x02,0x90,0xbb,0xcc,0x00,0xf8,0xde,0xad};
+                std::copy(ieAndData.begin(),ieAndData.end(),bytes.begin() + payload);
+            }
+            else if (scenario == 5 || scenario == 6) {
+                bytes[1] |= 2;
+                const std::vector<uint8_t> ie = scenario == 5 ? std::vector<uint8_t>{0x02,0x09,0xaa,0xbb} : std::vector<uint8_t>{0x03,0x09,0xaa,0xbb};
+                std::copy(ie.begin(),ie.end(),bytes.begin() + payload);
+            }
+            else {
+                bytes[0] |= 8;
+                if (scenario == 8) bytes[1] |= 2;
+                bytes[payload] = scenario == 7 ? 0x21 : scenario == 8 ? 0x24 : 0x23;
+            }
         }
         auto fcs = Ieee802154FrameCodec::calculateFcs(bytes);
         bytes.push_back(fcs & 0xff); bytes.push_back(fcs >> 8);
@@ -46,11 +65,48 @@ EV << "Enhanced frame gate fixture compiled\n";
 #include "inet/common/packet/Packet.h"
 #include "inet/common/packet/chunk/BytesChunk.h"
 #include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
+#include "inet/linklayer/ieee802154/Ieee802154InformationElements.h"
+#include "inet/linklayer/ieee802154/Ieee802154ProtocolDissector.h"
 #include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceClient.h"
 #include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceProvider.h"
 namespace inet {
 class EnhancedFrameGateClient : public cSimpleModule, public cListener, public IIeee802154MacServiceClient
 {
+    class Dissection : public ProtocolDissector::ICallback {
+      public:
+        int scenario; bool incorrect = false, visited = false;
+        explicit Dissection(int scenario) : scenario(scenario) {}
+        void startProtocolDataUnit(const Protocol *) override {}
+        void endProtocolDataUnit(const Protocol *) override {}
+        void markIncorrect() override { incorrect = true; }
+        void visitChunk(const Ptr<const Chunk>& chunk,const Protocol *) override {
+            auto frame = dynamicPtrCast<const Ieee802154Frame>(chunk); ASSERT(frame); visited = true;
+            if (scenario == 5 || scenario == 7 || scenario == 8 || scenario == 10) {
+                auto parsed = Ieee802154InformationElements::inspect(*frame);
+                ASSERT(std::holds_alternative<Ieee802154InformationElements::View>(parsed));
+                auto view = std::get<Ieee802154InformationElements::View>(parsed);
+                ASSERT(view.fixedMhr.length == (scenario == 7 ? 20 : 21));
+                if (scenario == 10) {
+                    ASSERT(view.headerIes.offset == 21 && view.headerIes.length == 5 && view.headers.size() == 1);
+                    ASSERT(view.payloadIes.offset == 26 && view.payloadIes.length == 6 && view.payloads.size() == 1);
+                    ASSERT(view.data.offset == 32 && view.data.length == 2 && view.fcs.offset == 34 && view.fcs.length == 2);
+                    auto bytes = Ieee802154FrameCodec::encode(*frame);
+                    ASSERT(std::vector<uint8_t>(bytes.begin() + view.data.offset,bytes.begin() + view.data.offset + view.data.length) == std::vector<uint8_t>({0xde,0xad}));
+                }
+                else if (scenario == 5) {
+                    ASSERT(view.headerIes.offset == 21 && view.headerIes.length == 4 && view.headers.size() == 1);
+                    ASSERT(view.headers[0].id == 0x12 && view.headers[0].content == std::vector<uint8_t>({0xaa,0xbb}));
+                    ASSERT(view.payloadIes.length == 0 && view.data.length == 0);
+                }
+                else {
+                    ASSERT(view.auxiliary.length == 1 && view.protectedRemainder && view.payloads.empty());
+                    ASSERT(view.securityLevelReserved == (scenario == 8));
+                    if (scenario == 7) ASSERT(view.micLength == 4 && view.data.length == 4);
+                }
+            }
+        }
+        void dissectPacket(Packet *,const Protocol *) override { ASSERT(false); }
+    };
     ModuleRefByPar<IIeee802154MacServiceProvider> service;
     int scenario = 0, forensic = 0, confirmed = 0;
   protected:
@@ -64,7 +120,7 @@ class EnhancedFrameGateClient : public cSimpleModule, public cListener, public I
         ASSERT(service->submitSet(1,{"macMinBe",uint64_t(0)}) == Ieee802154MacServiceAdmission::ACCEPTED);
         ASSERT(service->submitSet(2,{"macMaxFrameRetries",uint64_t(0)}) == Ieee802154MacServiceAdmission::ACCEPTED);
         auto packet = new Packet("enhanced-gate-input");
-        packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0xde,0xad,0xbe,0xef}));
+        packet->insertAtBack(makeShared<BytesChunk>(scenario == 10 ? std::vector<uint8_t>(13,0x55) : std::vector<uint8_t>{0xde,0xad,0xbe,0xef}));
         Ieee802154MacDataRequest request;
         request.sourceAddressMode = Ieee802154Address::AddressType::EXTENDED;
         request.destinationAddress = Ieee802154Address::fromExtended(0x0401123456789abcULL);
@@ -79,8 +135,14 @@ class EnhancedFrameGateClient : public cSimpleModule, public cListener, public I
         ASSERT(bytes.size() >= 4);
         auto fcs = uint16_t(bytes[bytes.size() - 2]) | uint16_t(bytes.back()) << 8;
         ASSERT(Ieee802154FrameCodec::calculateFcs(std::vector<uint8_t>(bytes.begin(),bytes.end() - 2)) == fcs);
-        ASSERT(((bytes[1] >> 4) & 3) == 2 && (bytes[0] & 7) == (scenario == 4 ? 1 : scenario));
-        ASSERT(bool(bytes[1] & 1) == (scenario == 4));
+        ASSERT(((bytes[1] >> 4) & 3) == 2 && (bytes[0] & 7) == (scenario >= 4 ? 1 : scenario));
+        ASSERT(bool(bytes[1] & 1) == (scenario == 4 || scenario == 7 || scenario == 9));
+        if (scenario >= 5) {
+            auto copy = packet->dup();
+            Ieee802154ProtocolDissector dissector; Dissection callback(scenario);
+            dissector.dissect(copy,&Protocol::ieee802154,callback); delete copy;
+            ASSERT(callback.visited && callback.incorrect == (scenario == 6 || scenario == 9));
+        }
         ASSERT(++forensic == 1); emit(registerSignal("forensic"),1L);
     }
     void handleDataConfirm(uint64_t id,const Ieee802154MacDataConfirm& c) override {
@@ -125,7 +187,7 @@ network EnhancedFrameGateTest {
 network = EnhancedFrameGateTest
 sim-time-limit = 10ms
 cmdenv-express-mode = true
-*.scenario = ${scenario=0..4}
+*.scenario = ${scenario=0..10}
 *.host[*].app.scenario = ${scenario}
 *.host[*].nic.radio.sendRawBytes = ${raw=false,true}
 *.host[0].app.sender = true

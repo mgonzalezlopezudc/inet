@@ -12,6 +12,7 @@
 #include "inet/common/FcsInd_m.h"
 #include "inet/common/packet/dissector/ProtocolDissectorRegistry.h"
 #include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
+#include "inet/linklayer/ieee802154/Ieee802154InformationElements.h"
 #include "inet/linklayer/ieee802154/Ieee802154MacHeader_m.h"
 
 namespace inet {
@@ -34,7 +35,9 @@ void Ieee802154ProtocolDissector::dissect(Packet *packet, const Protocol *protoc
             frame = Ieee802154FrameCodec::decode(bytes->getBytes(), !fcs || fcs->getHasFcs());
         }
         packet->popAtFront(packet->getDataLength(), Chunk::PF_ALLOW_ALL);
-        if (frame->getDecodeStatus() != Ieee802154FrameCodec::OK || (frame->getFcsPresent() && !frame->getComputeFcs() && !frame->getFcsValid()))
+        bool invalidEnhanced = frame->getFrameVersion() == 2 &&
+                std::holds_alternative<Ieee802154InformationElements::Error>(Ieee802154InformationElements::inspect(*frame));
+        if (frame->getDecodeStatus() != Ieee802154FrameCodec::OK || invalidEnhanced || (frame->getFcsPresent() && !frame->getComputeFcs() && !frame->getFcsValid()))
             callback.markIncorrect();
         callback.visitChunk(frame, &Protocol::ieee802154);
         callback.endProtocolDataUnit(&Protocol::ieee802154);

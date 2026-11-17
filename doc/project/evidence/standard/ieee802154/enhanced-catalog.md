@@ -36,9 +36,9 @@ Source: `clause:7.4.2.4`, `clause:7.4.2.5`, `clause:7.4.3.4`; 100–102.
 
 ## IEEE802154-ENHANCED-6
 
-The auxiliary security header precedes Header IEs. Its control/key/counter fields determine its structural extent; security processing governs whether protected bytes can be interpreted or delivered.
+The auxiliary security header precedes Header IEs. Its control/key/counter fields determine its structural extent; security processing governs whether protected bytes can be interpreted or delivered. Table9-6 defines MIC lengths0/4/8/16 for levels0/(1,5)/(2,6)/(3,7); level4 is reserved and receiving devices discard it.
 
-Source: `clause:7.2.8`, `clause:9.2`, `clause:9.4`; 83, 160–180.
+Source: `clause:7.2.8`, `clause:9.2`, `clause:9.4`, `clause:9.4.2.2`, `table:9-6`; 83, 160–180, including Table9-6's continuation on174.
 
 ## IEEE802154-ENHANCED-7
 
