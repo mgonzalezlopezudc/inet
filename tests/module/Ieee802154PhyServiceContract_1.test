@@ -503,6 +503,7 @@ class PhyContractClient : public SimpleModule, public IIeee802154PhyServiceClien
     void handleResetConfirm(Ieee802154PhyServiceRequestId id, const Ieee802154PhyResetConfirm& confirmation) override
     { Enter_Method("handleResetConfirm"); record(id, confirmation.result, "reset"); }
     void handleAvailabilityIndication(const inet::physicallayer::Ieee802154PhyAvailabilityIndication&) override {}
+    void handleReceiveStarted(const inet::physicallayer::Ieee802154PhyReceiveStart&) override {}
 void handleReceiveIndication(Packet *packet, const Ieee802154PhyReceiveIndication& indication) override
     {
         Enter_Method("handleReceiveIndication");

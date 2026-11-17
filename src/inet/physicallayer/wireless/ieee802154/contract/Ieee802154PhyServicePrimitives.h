@@ -81,6 +81,14 @@ struct Ieee802154PhyTransmitStart
     simtime_t expectedPpduEnd;
 };
 
+/** Reception identity and physical timing, copied at the radio's reception-start event. */
+struct Ieee802154PhyReceiveStart
+{
+    int transmissionId;
+    simtime_t ppduStart;
+    simtime_t expectedPpduEnd;
+};
+
 struct Ieee802154PhyMeasurementTiming
 {
     simtime_t start;
@@ -194,6 +202,7 @@ struct Ieee802154PhyReceiveIndication
     units::values::B fcsLength;
     std::optional<uint8_t> lqi;
     std::optional<units::values::W> meanPower; ///< Mean desired-signal power over the PPDU, excluding noise/interference.
+    std::optional<int> transmissionId; ///< Present when the radio supplied a reception-end identity.
 };
 
 } // namespace physicallayer

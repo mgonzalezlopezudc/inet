@@ -44,7 +44,8 @@ class INET_API Ieee802154PhyService : public SimpleModule, public IIeee802154Phy
     simtime_t ccaDuration;
     int64_t txPower = 0, broadcastPower = 0, unicastPower = 0;
     std::vector<Ieee802154PhyPeerPower> peerPowers;
-    std::map<int64_t, W> receivedPowers; ///< Copied scalar signal power, consumed by packet ID at gate delivery.
+    struct ReceivedQuality { W power; int transmissionId; };
+    std::map<int64_t, ReceivedQuality> receivedPowers; ///< Copied reception data, consumed by packet ID at gate delivery.
     Ieee802154EnergyObservation observation;
     virtual int numInitStages() const override;
     virtual void initialize(int stage) override;

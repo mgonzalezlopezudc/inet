@@ -100,6 +100,7 @@ class MeasurementsExercise : public cSimpleModule, public IIeee802154PhyServiceC
         ASSERT(std::abs(confirm.meanPower->get<W>() - expectedEdPower) <= std::max(expectedEdPower * 1e-10,1e-30));
     }
     void handleAvailabilityIndication(const inet::physicallayer::Ieee802154PhyAvailabilityIndication&) override {}
+    void handleReceiveStarted(const inet::physicallayer::Ieee802154PhyReceiveStart&) override {}
 virtual void handleReceiveIndication(Packet *packet, const Ieee802154PhyReceiveIndication& indication) override {
         Enter_Method("handleReceiveIndication"); take(packet);
         ASSERT(sampleIndex < samples.size() && indication.lqi == samples[sampleIndex].lqi && indication.meanPower);

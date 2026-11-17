@@ -65,6 +65,9 @@ Ieee802154MacStatus Ieee802154MacPib::getValue(const State& state, const std::st
     GET_BOOLEAN(macGroupRxMode)
     GET_BOOLEAN(macSecurityEnabled)
     GET_INTEGER(macBeaconOrder)
+    GET_INTEGER(macSuperframeOrder)
+    GET_BOOLEAN(macBattLifeExt)
+    GET_INTEGER(macBattLifeExtPeriods)
     GET_BOOLEAN(macTimestampSupported)
     GET_INTEGER(macSyncSymbolOffset)
     GET_BOOLEAN(macPromiscuousMode)
@@ -100,7 +103,7 @@ static bool isReadOnlyAttribute(const std::string& attribute)
 {
     return attribute == "macExtendedAddress" || attribute == "macSifsPeriod" ||
             attribute == "macLifsPeriod" || attribute == "macTimestampSupported" ||
-            attribute == "macSyncSymbolOffset" || attribute == "macDsmeCapable" ||
+            attribute == "macSyncSymbolOffset" || attribute == "macSuperframeOrder" || attribute == "macDsmeCapable" ||
             attribute == "macDaCapable" || attribute == "macExtendedDsmeCapable" ||
             attribute == "macHoppingCapable" || attribute == "macLeCapable" ||
             attribute == "macMetricsCapable" || attribute == "macRccnCapable" ||
@@ -138,6 +141,19 @@ Ieee802154MacStatus Ieee802154MacPib::setValue(State& state, const std::string& 
     }
 
     uint64_t integerValue = 0;
+    if (attribute == "macBattLifeExtPeriods") {
+        if (!getNonnegativeInteger(value, integerValue) || integerValue < 6 || integerValue > 41)
+            return Ieee802154MacStatus::INVALID_PARAMETER;
+        state.macBattLifeExtPeriods = static_cast<uint8_t>(integerValue);
+        return Ieee802154MacStatus::SUCCESS;
+    }
+    if (attribute == "macBattLifeExt") {
+        const auto *booleanValue = std::get_if<bool>(&value);
+        if (!booleanValue)
+            return Ieee802154MacStatus::INVALID_PARAMETER;
+        state.macBattLifeExt = *booleanValue;
+        return Ieee802154MacStatus::SUCCESS;
+    }
     if (attribute == "macShortAddress" || attribute == "macCoordShortAddress" || attribute == "macPanId") {
         if (!getNonnegativeInteger(value, integerValue) || integerValue > 0xffff)
             return Ieee802154MacStatus::INVALID_PARAMETER;
@@ -252,10 +268,11 @@ Ieee802154MacStatus Ieee802154MacPib::setValue(State& state, const std::string& 
 }
 
 Ieee802154MacPib::Ieee802154MacPib(Ieee802154Address deviceExtendedAddress, uint8_t injectedDsn,
-        uint32_t ccaDurationUs, const std::vector<Ieee802154MacSetRequest>& startupOverrides, uint8_t injectedBsn) :
+        uint32_t ccaDurationUs, const std::vector<Ieee802154MacSetRequest>& startupOverrides, uint8_t injectedBsn, bool superframeEnabled) :
     state(makeDefaultState(deviceExtendedAddress, injectedDsn, ccaDurationUs, injectedBsn)),
     ccaDurationUs(ccaDurationUs)
 {
+    state.macSyncSymbolOffset = superframeEnabled ? 10 : 0;
     if (!isIndividualExtendedAddress(deviceExtendedAddress))
         throw cRuntimeError("macExtendedAddress must be an individual extended address");
 
@@ -293,8 +310,11 @@ Ieee802154MacStatus Ieee802154MacPib::set(const std::string& attribute, const Ie
 
 void Ieee802154MacPib::reset(bool setDefaultPib, uint8_t injectedDsn, uint8_t injectedBsn)
 {
-    if (setDefaultPib)
+    if (setDefaultPib) {
+        auto syncSymbolOffset = state.macSyncSymbolOffset;
         state = makeDefaultState(state.macExtendedAddress, injectedDsn, ccaDurationUs, injectedBsn);
+        state.macSyncSymbolOffset = syncSymbolOffset;
+    }
 }
 
 void Ieee802154MacPib::clearAssociation()

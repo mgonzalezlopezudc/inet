@@ -28,6 +28,9 @@ class INET_API IIeee802154PhyServiceClient
     virtual ~IIeee802154PhyServiceClient() = default;
     virtual void handleAvailabilityIndication(const Ieee802154PhyAvailabilityIndication& indication) = 0;
 
+    /** Call-scoped notification; the client must copy any values it retains. */
+    virtual void handleReceiveStarted(const Ieee802154PhyReceiveStart& start) = 0;
+
     virtual void handleTransmitStarted(Ieee802154PhyServiceRequestId requestId,
             const Ieee802154PhyTransmitStart& start) = 0;
     virtual void handleTransmitConfirm(Ieee802154PhyServiceRequestId requestId,

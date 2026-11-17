@@ -7,6 +7,7 @@
 #include "inet/linklayer/ieee802154/Ieee802154InterfaceData.h"
 #include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
 #include "inet/linklayer/ieee802154/Ieee802154CommandCodec.h"
+#include "inet/linklayer/ieee802154/Ieee802154SuperframeTiming.h"
 #include "inet/common/ProtocolTag_m.h"
 #include "inet/common/Simsignals.h"
 #include "inet/common/packet/Packet.h"
@@ -78,6 +79,9 @@ void Ieee802154StandardMac::initialize(int stage)
         networkInterface.reference(this, "interfaceModule", true);
         access.reference(this, "accessModule", false);
         phy.reference(this, "providerModule", false);
+        superframe.reference(this, "superframeModule", false);
+        if (superframe && (!phy || !par("enableManagement").boolValue()))
+            throw cRuntimeError("Superframe preparation requires the PHY and management services");
         dataTimer = new cMessage("dataTimer");
         ackTimer = new cMessage("ackTimer");
         ackTimer->setSchedulingPriority(1);
@@ -114,7 +118,7 @@ void Ieee802154StandardMac::initialize(int stage)
         auto initialBsn = par("enableManagement").boolValue() ? intuniform(0, 255, par("dsnRng")) : 0;
         pib = std::make_unique<Ieee802154MacPib>(Ieee802154Address(par("extendedAddress")),
                 initialDsn, ccaUs,
-                std::vector<Ieee802154MacSetRequest>{{"macShortAddress", uint64_t(shortAddress)}, {"macPanId", uint64_t(panId)}, {"macRxOnWhenIdle", bool(par("rxOnWhenIdle"))}}, initialBsn);
+                std::vector<Ieee802154MacSetRequest>{{"macShortAddress", uint64_t(shortAddress)}, {"macPanId", uint64_t(panId)}, {"macRxOnWhenIdle", bool(par("rxOnWhenIdle"))}}, initialBsn, bool(superframe));
     }
     else if (stage == INITSTAGE_LINK_LAYER) {
         auto node = findContainingNode(this);
@@ -309,6 +313,7 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitReset(uint64_t id, co
     auto admission = admit(id, true, true);
     if (admission == Ieee802154MacServiceAdmission::ACCEPTED) {
         resetRequest = ResetRequest{id, request.setDefaultPib};
+        retireReceives();
         broadcastReceivePending = false;
         clearReceiverWindow();
         if (rxEnableRequest) {
@@ -641,9 +646,17 @@ void Ieee802154StandardMac::finishReset(const Ieee802154MacServiceResult& result
     restoreIdle();
 }
 
+void Ieee802154StandardMac::retireReceives()
+{
+    ++receiveRetirementEpoch;
+    if (superframe)
+        superframe->clearReceptionAnchors();
+}
+
 void Ieee802154StandardMac::stop()
 {
     started = false;
+    retireReceives();
     broadcastReceivePending = false;
     clearReceiverWindow();
     if (rxEnableRequest) {
@@ -704,6 +717,8 @@ void Ieee802154StandardMac::handleMessage(cMessage *message)
         return;
     }
     if (message == scanTimer) {
+        if (superframe)
+            superframe->retireExpiredReceptionAnchors();
         if (scanRequest) {
             scanRequest->index++;
             beginScanChannel();
@@ -744,6 +759,8 @@ void Ieee802154StandardMac::handleAvailabilityIndication(const physicallayer::Ie
     Enter_Method("handleAvailabilityIndication");
     phyAvailable = indication.available;
     phyState = indication.state;
+    if (!phyAvailable)
+        retireReceives();
     if (!started)
         return;
     if (phyAvailable) {
@@ -969,16 +986,38 @@ void Ieee802154StandardMac::handleReceiveIndication(Packet *packet, const physic
 {
     Enter_Method("handleReceiveIndication");
     take(packet);
+    auto receiveEpoch = receiveRetirementEpoch;
+    std::optional<Ieee802154SuperframeReceptionAnchor> anchor;
+    if (superframe) {
+        if (quality.transmissionId)
+            anchor = superframe->takeReceptionAnchor(*quality.transmissionId);
+        else
+            superframe->retireExpiredReceptionAnchors();
+    }
     bool consumed = consumeReceiverWindow();
-    processReceivedPacket(packet,quality);
-    if (consumed)
+    processReceivedPacket(packet,quality,anchor,receiveEpoch);
+    if (consumed && receiveEpoch == receiveRetirementEpoch)
         restoreIdle();
 }
 
-void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physicallayer::Ieee802154PhyReceiveIndication& quality)
+void Ieee802154StandardMac::handleReceiveStarted(const physicallayer::Ieee802154PhyReceiveStart& start)
+{
+    Enter_Method("handleReceiveStarted");
+    if (started && phyAvailable && superframe)
+        superframe->recordReceptionStart(start);
+}
+
+void Ieee802154StandardMac::handleSuperframeBoundary(clocktime_t)
+{
+    Enter_Method("handleSuperframeBoundary");
+    throw cRuntimeError("Periodic superframe boundaries are not enabled");
+}
+
+void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physicallayer::Ieee802154PhyReceiveIndication& quality,
+        const std::optional<Ieee802154SuperframeReceptionAnchor>& anchor, uint64_t receiveEpoch)
 {
     emit(packetReceivedFromLowerSignal, packet);
-    if (!started || !client || packet->hasBitError()) {
+    if (receiveEpoch != receiveRetirementEpoch || !started || !client || packet->hasBitError()) {
         delete packet;
         return;
     }
@@ -999,7 +1038,7 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
         return; // 6.3.2.1 permits discarding frames during CCA; beacon observation does not preempt the PHY.
     if (par("enableManagement").boolValue()) {
         expirePending(); // Equality at a persistence deadline precedes every managed receive decision.
-        if (!started || resetRequest || !client)
+        if (receiveEpoch != receiveRetirementEpoch || !started || resetRequest || !client)
             return;
     }
     std::optional<Ieee802154CommandCodec::Command> parsedCommand;
@@ -1018,7 +1057,7 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
     std::optional<uint64_t> orphanScanId;
     if (scanRequest) {
         if (scanRequest->parameters.type != Ieee802154ScanType::ORPHAN) {
-            receiveScanBeacon(frame, quality);
+            receiveScanBeacon(frame, quality, anchor);
             return;
         }
         if (!validRealignment || scanRequest->closing || !scanTimer->isScheduled() ||
@@ -1059,7 +1098,7 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
         indication.lqi = quality.lqi.value_or(0);
         indication.rssi = receivedRssi(quality);
         client->handlePromiscuousIndication(monitor, indication);
-        if (!started || !client)
+        if (receiveEpoch != receiveRetirementEpoch || !started || !client)
             return;
         if (orphanScanId && (!scanRequest || scanRequest->id != *orphanScanId))
             return;
@@ -1076,7 +1115,7 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
         }
         return;
     }
-    if (par("enableManagement").boolValue() && receiveManagedBeacon(frame,quality))
+    if (par("enableManagement").boolValue() && receiveManagedBeacon(frame,quality,anchor,receiveEpoch))
         return;
     bool dataRequest = false;
     bool associationResponse = false;
@@ -1939,6 +1978,8 @@ void Ieee802154StandardMac::completeScan()
 {
     auto completed = std::move(*scanRequest);
     scanRequest.reset();
+    if (superframe)
+        superframe->clearReceptionAnchors();
     if (managementClient)
         managementClient->handleScanConfirm(completed.id, completed.confirm);
     if (resetRequest)
@@ -1948,13 +1989,14 @@ void Ieee802154StandardMac::completeScan()
 }
 
 void Ieee802154StandardMac::receiveScanBeacon(const Ptr<Ieee802154Frame>& frame,
-        const physicallayer::Ieee802154PhyReceiveIndication& quality)
+        const physicallayer::Ieee802154PhyReceiveIndication& quality,
+        const std::optional<Ieee802154SuperframeReceptionAnchor>& anchor)
 {
     if (scanRequest->closing || !scanTimer->isScheduled() || simTime() > scanTimer->getArrivalTime() ||
             quality.timing.ppduStart < scanRequest->listeningSince || frame->getFrameType() != 0 ||
             frame->getSourceAddress().isNone())
         return;
-    auto description = describeBeacon(frame,quality);
+    auto description = describeBeacon(frame,quality,anchor);
     if (!description)
         return;
     auto descriptor = *description;
@@ -1980,11 +2022,14 @@ void Ieee802154StandardMac::receiveScanBeacon(const Ptr<Ieee802154Frame>& frame,
 }
 
 std::optional<Ieee802154PanDescriptor> Ieee802154StandardMac::describeBeacon(const Ptr<Ieee802154Frame>& frame,
-        const physicallayer::Ieee802154PhyReceiveIndication& quality)
+        const physicallayer::Ieee802154PhyReceiveIndication& quality,
+        const std::optional<Ieee802154SuperframeReceptionAnchor>& anchor) const
 {
     const auto& source = frame->getSourceAddress();
     if (frame->getFrameType() != 0 || source.isNone() || source.isBroadcast() || source.isExtendedGroup() || source.isShortUnallocated())
         return {};
+    if (superframe && !anchor)
+        return {}; // No first-symbol clock sample is available for this reception.
     std::vector<uint8_t> payload(frame->getPayloadArraySize());
     for (size_t i = 0; i < payload.size(); i++)
         payload[i] = frame->getPayload(i);
@@ -1995,7 +2040,8 @@ std::optional<Ieee802154PanDescriptor> Ieee802154StandardMac::describeBeacon(con
             return {};
         content = std::get<Ieee802154BeaconCodec::Content>(decoded);
     }
-    auto timestamp = uint32_t((quality.timing.ppduStart + SimTime(160,SIMTIME_US)).inUnit(SIMTIME_US) / 16) & 0xffffff;
+    auto timestamp = anchor ? Ieee802154SuperframeTiming::timestamp(anchor->localStart) :
+            uint32_t((quality.timing.ppduStart + SimTime(160,SIMTIME_US)).inUnit(SIMTIME_US) / 16) & 0xffffff;
     Ieee802154PanDescriptor descriptor{frame->getSourcePanId(),frame->getSourceAddress(),
             quality.channel,content,quality.lqi.value_or(0),timestamp};
     descriptor.sequenceNumber = frame->getDsn();
@@ -2493,16 +2539,19 @@ void Ieee802154StandardMac::commitOrphanRealignment(const Ieee802154CommandCodec
 }
 
 bool Ieee802154StandardMac::receiveManagedBeacon(const Ptr<Ieee802154Frame>& frame,
-        const physicallayer::Ieee802154PhyReceiveIndication& quality)
+        const physicallayer::Ieee802154PhyReceiveIndication& quality,
+        const std::optional<Ieee802154SuperframeReceptionAnchor>& anchor, uint64_t receiveEpoch)
 {
     if (frame->getFrameType() != 0)
         return false;
-    auto descriptor = describeBeacon(frame,quality);
+    auto descriptor = describeBeacon(frame,quality,anchor);
     if (!descriptor)
         return true;
     if (descriptor->contentAvailable && isAssociatedCoordinator(descriptor->coordinatorPanId,descriptor->coordinatorAddress)) {
         broadcastReceivePending = frame->getFramePending();
         restoreIdle();
+        if (receiveEpoch != receiveRetirementEpoch)
+            return true;
     }
     bool conflict = descriptor->contentAvailable && (descriptor->beacon.superframeSpecification & 0x4000) &&
             descriptor->coordinatorPanId == getInteger("macPanId");
@@ -2516,6 +2565,8 @@ bool Ieee802154StandardMac::receiveManagedBeacon(const Ptr<Ieee802154Frame>& fra
         pendingPanConflict = PanConflict{descriptor->coordinatorPanId,coordinator,descriptor->channel};
         restoreIdle();
     }
+    if (receiveEpoch != receiveRetirementEpoch)
+        return true;
     if (started && managementClient && (!getBoolean("macAutoRequest") || getBoolean("macNotifyAllBeacons") ||
             (descriptor->contentAvailable && !descriptor->beacon.payload.empty())))
         managementClient->handleBeaconNotifyIndication(*descriptor);

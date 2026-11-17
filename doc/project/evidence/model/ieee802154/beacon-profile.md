@@ -28,10 +28,10 @@ Table 8-36 and Table 10-5 use `†` for upper-layer read-only and `*` for option
 | --- | --- | --- |
 | `macBeaconOrder` | 0–15; 15 | Optional, read/write; B-01 retains the existing BO 15-only gate until the scheduling service lands. |
 | `macSuperframeOrder` | 0–15; 15 | Optional, read-only; coordinator service updates it. BO 15 forces 15. |
-| `macBeaconTxTime` | 24-bit symbol value; zero | Optional, read-only; update only from actual beacon transmit start at the selected symbol boundary. |
+| `macBeaconTxTime` | 24-bit symbol value; zero before the first actual beacon | Optional, read-only; expose in B1-02 with its actual-transmit consumer and update for both existing one-shot discovery beacons and new periodic beacons. Leave GET unsupported in B-01 rather than report a fictitious zero after an existing one-shot TX. |
 | `macBattLifeExt` | Boolean; false | Read/write; affects beacon BLE and reception/backoff policy only in a superframe. |
 | `macBattLifeExtPeriods` | 6–41; PHY dependent | Read/write; selected default is six periods: three BLE backoff periods plus two CCA-window periods plus one 20-symbol period covering the ten-symbol SHR. |
-| `macGtsPermit` | Boolean; true | Optional, read/write; authoritative admission indication. The selected seven-key pressure policy is in the plan and must not discard an already admitted decision. |
+| `macGtsPermit` | Boolean; true when the GTS consumer is implemented | Optional, read/write; authoritative admission indication. Leave it unsupported in B-01 and expose it in B3-02 with operational GTS requests, so a readable true value never contradicts the legacy beacon's false bit or promises an unfinished service. The selected seven-key pressure policy is in the plan and must not discard an already admitted decision. |
 | `macSyncSymbolOffset` | 0–256 symbols for 2.4 GHz; implementation chosen | Read-only. Disabled superframe composition retains M1/M2 value zero and existing post-SFD timestamp; enabled composition selects first PPDU symbol and distance ten. Table 8-36 specifies the distance without an explicit directional sign. |
 | `macRxOnWhenIdle` | Boolean; false | Read/write. In a superframe it applies to incoming CAP idle time; outside superframe it retains the M1/M2 meaning. |
 
