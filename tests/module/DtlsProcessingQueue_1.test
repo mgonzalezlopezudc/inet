@@ -36,7 +36,7 @@ class ProcessingQueueFixture : public cSimpleModule
   protected:
     virtual void initialize() override {
         input = std::make_unique<DtlsProcessingQueue>(this, "input", 3);
-        output = std::make_unique<DtlsProcessingQueue>(this, "output", 3);
+        output = std::make_unique<DtlsProcessingQueue>(this, "output", 4);
         bool synchronous = false;
         DTLS_TEST_CHECK(output->enqueue(1, 0, SIMTIME_ZERO, [&] { synchronous = true; }));
         DTLS_TEST_CHECK(synchronous && output->getOccupiedBytes() == 0);
@@ -69,7 +69,11 @@ class ProcessingQueueFixture : public cSimpleModule
             output->handleTimer();
         else {
             DTLS_TEST_CHECK(message == finishTimer);
-            output->cancel(5);
+            bool kept = false;
+            DTLS_TEST_CHECK(output->enqueue(11, 1, SIMTIME_ZERO, [] { throw cRuntimeError("batch-cancelled operation ran"); }));
+            DTLS_TEST_CHECK(output->enqueue(10, 1, SIMTIME_ZERO, [&] { kept = true; }));
+            output->cancelExcept({6, 10});
+            DTLS_TEST_CHECK(kept);
             DTLS_TEST_CHECK(completed == 4);
             DTLS_TEST_CHECK(continuationOrder == std::vector<int>({1, 2}));
             DTLS_TEST_CHECK(input->getOccupiedBytes() == 0 && output->getOccupiedBytes() == 0);
