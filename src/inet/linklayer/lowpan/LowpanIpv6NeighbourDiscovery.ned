@@ -7,7 +7,7 @@ simple LowpanIpv6NeighbourDiscovery extends Ipv6NeighbourDiscovery
 {
     parameters:
         @class(LowpanIpv6NeighbourDiscovery);
-        string nativeNdRole @enum("static", "router", "host", "borderRouter") = default("static"); // Router enables native registration/RA; borderRouter supplies the routed DAD authority on ordinary interfaces. Both require forwarding. Host uses M=0 discovery/SLAAC/registration and drops ordinary data until registered. Static retains configured bindings. Native ND always computes wire checksums; checksumMode governs ordinary interfaces.
+        string nativeNdRole @enum("static", "router", "host", "borderRouter") = default("static"); // Router enables native registration/RA; borderRouter additionally couples native admission to the routed DAD authority. Both require forwarding. Host uses M=0 discovery/SLAAC/registration and drops ordinary data until registered. Static retains configured bindings. Native ND always computes wire checksums; checksumMode governs ordinary interfaces.
         int maxDuplicateAddressEntries = default(64); // Positive module-wide capacity of the borderRouter DAD table; no native binding or data route is created by this table.
         int maxRegistrations = default(64); // Positive module-wide registration limit across native interfaces.
         int maxPendingRouterAdvertisements = default(64); // Positive module-wide bound for delayed unicast RA responses; identical pending requester tuples are coalesced.

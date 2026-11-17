@@ -53,7 +53,7 @@ void LowpanIpv6NeighbourDiscovery::initialize(int stage)
         std::string role = par("nativeNdRole").stdstringValue();
         if (role != "static" && role != "router" && role != "host" && role != "borderRouter")
             throw cRuntimeError("Invalid native LoWPAN ND role");
-        registrationRouter = role == "router";
+        registrationRouter = role == "router" || role == "borderRouter";
         if (role == "host")
             hostRegistration = std::make_unique<LowpanHostRegistration>(*this);
         if (role == "borderRouter")
@@ -217,34 +217,46 @@ int LowpanIpv6NeighbourDiscovery::applyRegistration(const RegistrationKey& key, 
 {
     auto existing = registrations.find(key);
     auto fixed = requested.domain->resolveStaticNeighbor(requested.interfaceModuleId, key.second);
-    int status = 0;
     if (rt6->isLocalAddress(key.second) || (existing != registrations.end() && existing->second.owner != requested.owner) ||
             (fixed != nullptr && *fixed != requested.address))
-        status = 1;
-    else if (requested.validUntil == simTime())
-        removeRegistration(key);
-    else if (existing == registrations.end() && int(registrations.size()) >= maxRegistrations)
-        status = 2;
-    else {
-        if (!requested.domain->installDynamicNeighbor(requested.interfaceModuleId, key.second,
-                requested.address, requested.validUntil, this))
-            status = 1;
-        else {
-            bool created = existing == registrations.end();
-            registrations[key] = requested;
-            removeRegistrationRoute(key);
-            auto route = new Ipv6Route(key.second, 128, IRoute::UNKNOWN);
-            route->setSource(this);
-            route->setInterface(ift->getInterfaceById(key.first));
-            route->setExpiryTime(requested.validUntil);
-            route->setMetric(0);
-            route->setAdminDist(Ipv6Route::dDirectlyConnected);
-            rt6->addRoutingProtocolRoute(route);
-            if (created)
-                emit(registrationCountChangedSignal, long(registrations.size()));
-        }
+        return 1;
+    bool remove = requested.validUntil == simTime();
+    std::array<uint8_t, 8> authorityOwner;
+    for (int i = 0; i < 8; i++)
+        authorityOwner[i] = requested.owner.getInt() >> (8 * (7 - i));
+    if (registrationAuthority) {
+        int status = registrationAuthority->checkRegistration(key.second, authorityOwner, remove);
+        if (status != 0)
+            return status;
     }
-    return status;
+    if (!remove && existing == registrations.end() && int(registrations.size()) >= maxRegistrations)
+        return 2;
+    // Domain refusal is non-mutating and does not publish an authority reservation.
+    if (!remove && !requested.domain->installDynamicNeighbor(requested.interfaceModuleId, key.second,
+            requested.address, requested.validUntil, this))
+        return 1;
+    auto oldSize = registrations.size();
+    if (remove)
+        removeRegistration(key, false);
+    else
+        registrations[key] = requested;
+    bool authorityChanged = registrationAuthority &&
+        registrationAuthority->commitRegistration(key.second, authorityOwner, requested.validUntil);
+    if (!remove) {
+        removeRegistrationRoute(key);
+        auto route = new Ipv6Route(key.second, 128, IRoute::UNKNOWN);
+        route->setSource(this);
+        route->setInterface(ift->getInterfaceById(key.first));
+        route->setExpiryTime(requested.validUntil);
+        route->setMetric(0);
+        route->setAdminDist(Ipv6Route::dDirectlyConnected);
+        rt6->addRoutingProtocolRoute(route);
+    }
+    if (authorityChanged)
+        registrationAuthority->publishEntryCount();
+    if (registrations.size() != oldSize)
+        emit(registrationCountChangedSignal, long(registrations.size()));
+    return 0;
 }
 
 void LowpanIpv6NeighbourDiscovery::sendRegistrationAdvertisement(const RegistrationKey& key,

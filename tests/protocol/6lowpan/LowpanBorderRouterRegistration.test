@@ -1,0 +1,304 @@
+%description:
+Native border-router registrations share authority ownership and capacity with
+routed DAR requests. Native replies and learned-route data cross the real radio;
+DAR/DAC cross an Ethernet transit router. A final run uses a real native 6LN.
+
+%extraargs: -r 0..2
+
+%file: BorderCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/MemoryOutputStream.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/checksum/Checksum.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/common/InterfaceTag_m.h"
+#include "inet/linklayer/common/MacAddressTag_m.h"
+#include "inet/linklayer/ieee802154/Ieee802154AddressTagBase_m.h"
+#include "inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.h"
+#include "inet/linklayer/lowpan/LowpanNativeLinkDomain.h"
+#include "inet/networklayer/common/L3AddressTag_m.h"
+#include "inet/networklayer/common/HopLimitTag_m.h"
+#include "inet/networklayer/icmpv6/Icmpv6.h"
+#include "inet/networklayer/ipv6/Ipv6Header_m.h"
+#include "inet/networklayer/ipv6/Ipv6InterfaceData.h"
+#include "inet/networklayer/ipv6/Ipv6RoutingTable.h"
+#include <deque>
+
+namespace inet::protocoltest {
+using namespace lowpan;
+class BorderCheck : public cSimpleModule, public cListener
+{
+    struct Request { Ipv6Address address; int owner,lifetime,status; bool native; int interfaceIndex=0; };
+    std::vector<Request> requests;
+    std::deque<Request> nativeReplies,routedReplies;
+    NetworkInterface *native=nullptr,*secondNative=nullptr,*requesterInterface=nullptr,*transitInterface=nullptr,*backbone=nullptr,*host=nullptr;
+    LowpanNativeLinkDomain *domain=nullptr;
+    LowpanIpv6NeighbourDiscovery *nd=nullptr,*hostNd=nullptr;
+    Ipv6RoutingTable *routes=nullptr;
+    cModule *borderIp=nullptr,*requesterIp=nullptr,*transitIp=nullptr;
+    int scenario=0,sequence=0,ns=0,na=0,rs=0,ra=0,dar=0,dac=0,transitDar=0,transitDac=0,dataReceived=0,success=0,ordinaryNa=0;
+    bool boundaryScheduled=false;
+    Ipv6Address a{"2001:db8:99::a"},b{"2001:db8:99::b"},c{"2001:db8:99::c"};
+    Ipv6Address routerLocal{"fe80::211:2233:4455:6603"},peerLocal{"fe80::211:2233:4455:6601"};
+    Ipv6Address requesterAddress{"2001:db8:1::10"},borderAddress{"2001:db8:2::20"};
+    Ipv6Address automatic{"2001:db8:3:0:211:2233:4455:6604"};
+    Ieee802154Address ownerAddress(int owner) const {return Ieee802154Address(Ieee802154Address::EXTENDED,UINT64_C(0x0011223344556600)+owner);}
+    NetworkInterface *nativeInterface(int index) const {return index==0?native:secondNative;}
+    Ipv6Address routerAddress(int index) const {return nativeInterface(index)->getProtocolData<Ipv6InterfaceData>()->getLinkLocalAddress();}
+    void step(simtime_t time,int kind,int priority=0) {auto event=new cMessage("border-check",kind);event->setSchedulingPriority(priority);scheduleAt(time,event);}
+    void add(simtime_t time,Request request,bool direct=false) {
+        requests.push_back(request);auto event=new cMessage(direct?"boundary-dar":"registration-input",100+requests.size()-1);
+        if (direct) event->setSchedulingPriority(par("expiryPriority"));scheduleAt(time,event);
+    }
+    std::vector<uint8_t> checksum(std::vector<uint8_t> bytes,const Ipv6Address& source,const Ipv6Address& destination,int protocol=58,int offset=2) {
+        MemoryOutputStream pseudo;pseudo.writeIpv6Address(source);pseudo.writeIpv6Address(destination);pseudo.writeUint32Be(bytes.size());pseudo.writeUint32Be(protocol);pseudo.writeBytes(bytes);
+        auto value=internetChecksum(pseudo.getData());if (protocol==17 && value==0)value=0xffff;bytes[offset]=value>>8;bytes[offset+1]=value;return bytes;
+    }
+    std::vector<uint8_t> ipv6(const std::vector<uint8_t>& bytes,const Ipv6Address& source,const Ipv6Address& destination,int hop=255) {
+        std::vector<uint8_t> result{0x60,0,0,0,uint8_t(bytes.size()>>8),uint8_t(bytes.size()),58,uint8_t(hop)};
+        MemoryOutputStream addresses;addresses.writeIpv6Address(source);addresses.writeIpv6Address(destination);result.insert(result.end(),addresses.getData().begin(),addresses.getData().end());result.insert(result.end(),bytes.begin(),bytes.end());return result;
+    }
+    void nativeInput(std::vector<uint8_t> bytes,const Ipv6Address& source,const Ipv6Address& destination,int owner=1,bool multicast=false,int interfaceIndex=0) {
+        auto payload=ipv6(checksum(bytes,source,destination),source,destination);payload.insert(payload.begin(),0x41);
+        std::vector<uint8_t> frame{0x41,uint8_t(multicast?0xd8:0xdc),uint8_t(sequence++),0x34,0x12};
+        if (multicast)frame.insert(frame.end(),{0xff,0xff});else frame.insert(frame.end(),{uint8_t(interfaceIndex==0?3:5),0x66,0x55,0x44,0x33,0x22,0x11,0});
+        frame.insert(frame.end(),{uint8_t(owner),0x66,0x55,0x44,0x33,0x22,0x11,0});frame.insert(frame.end(),payload.begin(),payload.end());
+        auto crc=crc16_ccitt(frame);frame.push_back(crc);frame.push_back(crc>>8);ASSERT(frame.size()<=127);
+        sendDirect(new Packet("literal-native-border",makeShared<BytesChunk>(frame)),nativeInterface(interfaceIndex)->getSubmodule("mac")->gate("lowerLayerIn")->getPathStartGate());
+    }
+    void inject(const Request& request,bool direct) {
+        if (request.native) {
+            auto router=routerAddress(request.interfaceIndex);nativeReplies.push_back(request);std::vector<uint8_t> bytes{135,0,0,0,0,0,0,0};MemoryOutputStream target;target.writeIpv6Address(router);bytes.insert(bytes.end(),target.getData().begin(),target.getData().end());
+            bytes.insert(bytes.end(),{1,2,0,0x11,0x22,0x33,0x44,0x55,0x66,uint8_t(request.owner),0,0,0,0,0,0,
+                33,2,0,0,0,0,uint8_t(request.lifetime>>8),uint8_t(request.lifetime),0,0x11,0x22,0x33,0x44,0x55,0x66,uint8_t(request.owner)});
+            nativeInput(bytes,request.address,router,request.owner,false,request.interfaceIndex);ns++;return;
+        }
+        routedReplies.push_back(request);std::vector<uint8_t> bytes{157,0,0,0,0,0,uint8_t(request.lifetime>>8),uint8_t(request.lifetime),0,0x11,0x22,0x33,0x44,0x55,0x66,uint8_t(request.owner)};
+        MemoryOutputStream registered;registered.writeIpv6Address(request.address);bytes.insert(bytes.end(),registered.getData().begin(),registered.getData().end());
+        auto packet=new Packet("literal-border-dar",makeShared<BytesChunk>(ipv6(checksum(bytes,requesterAddress,borderAddress),requesterAddress,borderAddress,direct?63:64)));
+        packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ipv6);
+        if (direct) {packet->setSchedulingPriority(par("expiryPriority"));packet->addTag<InterfaceInd>()->setInterfaceId(backbone->getInterfaceId());sendDirect(packet,borderIp->gate("queueIn")->getPathStartGate());}
+        else {auto mac=packet->addTag<MacAddressReq>();mac->setSrcAddress(requesterInterface->getMacAddress());mac->setDestAddress(transitInterface->getMacAddress());packet->addTag<InterfaceReq>()->setInterfaceId(requesterInterface->getInterfaceId());sendDirect(packet,getModuleByPath("^.requester.ethernet")->gate("upperLayerIn")->getPathStartGate());}
+        dar++;
+    }
+    bool hasRoute(const Ipv6Address& address,int interfaceIndex=-1) const {
+        bool found=false;for(int i=0;i<routes->getNumRoutes();i++){auto route=routes->getRoute(i);if(route->getSource()==nd && route->getPrefixLength()==128 && route->getDestPrefix()==address && (interfaceIndex<0 || route->getInterface()==nativeInterface(interfaceIndex)))found=true;}return found;
+    }
+    simtime_t routeDeadline(const Ipv6Address& address) const {
+        for(int i=0;i<routes->getNumRoutes();i++){auto route=routes->getRoute(i);if(route->getSource()==nd && route->getDestPrefix()==address && route->getInterface()==native)return route->getExpiryTime();}throw cRuntimeError("Missing native route");
+    }
+    void binding(const Ipv6Address& address,bool present,int owner=1,int interfaceIndex=0) {
+        auto result=domain->resolveNeighbor(nativeInterface(interfaceIndex)->getId(),address);ASSERT(bool(result)==present);if(present)ASSERT(*result==ownerAddress(owner));
+    }
+    void data(bool fromHost=false) {
+        auto source=fromHost?automatic:routerLocal,destination=fromHost?routerLocal:scenario==2?automatic:a;
+        auto packet=new Packet("learned-border-data",makeShared<BytesChunk>(checksum({0x23,0x2a,0x23,0x29,0,9,0,0,0x77},source,destination,17,6)));
+        packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::udp);auto addresses=packet->addTag<L3AddressReq>();addresses->setSrcAddress(source);addresses->setDestAddress(destination);
+        sendDirect(packet,getModuleByPath(fromHost?"^.host.ipv6.ipv6":"^.border.ipv6.ipv6")->gate("transportIn")->getPathStartGate());
+    }
+  protected:
+    int numInitStages() const override {return NUM_INIT_STAGES;}
+    void initialize(int stage) override {
+        if(stage!=INITSTAGE_LAST)return;scenario=par("scenario");
+        native=check_and_cast<NetworkInterface *>(getModuleByPath("^.border.wlan[0]"));if(scenario!=2)secondNative=check_and_cast<NetworkInterface *>(getModuleByPath("^.border.wlan[1]"));backbone=check_and_cast<NetworkInterface *>(getModuleByPath("^.border.eth[0]"));
+        host=check_and_cast<NetworkInterface *>(getModuleByPath("^.host.wlan[0]"));domain=check_and_cast<LowpanNativeLinkDomain *>(getModuleByPath("^.domain"));
+        nd=check_and_cast<LowpanIpv6NeighbourDiscovery *>(getModuleByPath("^.border.ipv6.neighbourDiscovery"));hostNd=check_and_cast<LowpanIpv6NeighbourDiscovery *>(getModuleByPath("^.host.ipv6.neighbourDiscovery"));
+        routes=check_and_cast<Ipv6RoutingTable *>(getModuleByPath("^.border.ipv6.routingTable"));borderIp=getModuleByPath("^.border.ipv6.ipv6");requesterIp=getModuleByPath("^.requester.ipv6.ipv6");transitIp=getModuleByPath("^.transit.ipv6.ipv6");
+        requesterInterface=check_and_cast<NetworkInterface *>(getModuleByPath("^.requester.eth[0]"));transitInterface=check_and_cast<NetworkInterface *>(getModuleByPath("^.transit.eth[0]"));
+        for(auto module:{requesterIp,transitIp,borderIp})module->subscribe("packetReceivedFromLower",this);
+        native->getSubmodule("lowpan")->subscribe("datagramAccepted",this);host->getSubmodule("lowpan")->subscribe("datagramAccepted",this);
+        hostNd->subscribe("nativeHostRegistrationSucceeded",this);getModuleByPath("^.border.app[0]")->subscribe("packetReceived",this);getModuleByPath("^.host.app[0]")->subscribe("packetReceived",this);
+        nd->subscribe("registrationCountChanged",this);
+        configure();
+        if(scenario==2){step(SimTime(4),20);step(SimTime(4500,SIMTIME_MS),21);step(SimTime(6),22);return;}
+        step(SimTime(100,SIMTIME_MS),0);step(SimTime(2500,SIMTIME_MS),1);
+        add(SimTime(3),{a,1,1,0,true});add(SimTime(4),{a,1,1,0,true,1});
+        add(SimTime(5),{b,2,1,0,false});add(SimTime(5500,SIMTIME_MS),{c,1,1,2,true});
+        add(SimTime(6),{b,1,1,1,true});
+        add(SimTime(7),{a,1,0,0,true,1});step(SimTime(7200,SIMTIME_MS),2);
+        add(SimTime(8),{a,2,1,1,false});add(SimTime(9),{a,1,1,0,false});add(SimTime(10),{c,1,1,2,true});
+        add(SimTime(11),{a,1,2,0,true});step(SimTime(11200,SIMTIME_MS),3);
+        add(SimTime(12),{a,1,0,0,false});step(SimTime(12200,SIMTIME_MS),3);
+        add(SimTime(13),{a,2,1,1,false});add(SimTime(14),{a,1,1,0,false});step(SimTime(14200,SIMTIME_MS),3);
+        add(SimTime(15),{b,2,0,0,false});add(SimTime(16),{b,2,1,0,true});
+        add(SimTime(17),{b,1,0,1,true});add(SimTime(18),{b,2,0,0,true});
+        add(SimTime(19),{a,1,0,0,true});add(SimTime(20),{a,2,1,0,false});add(SimTime(21),{a,2,0,0,false});
+        step(SimTime(22),4);add(SimTime(22100,SIMTIME_MS),{c,1,1,1,true});
+        add(SimTime(23),{c,2,1,0,false});add(SimTime(24),{c,2,0,0,false});step(SimTime(24200,SIMTIME_MS),5);
+        add(SimTime(25),{c,1,1,0,true});step(SimTime(85200,SIMTIME_MS),6);
+        add(SimTime(27),{b,1,1,0,true});add(SimTime(28),{b,1,2,0,false});
+        add(SimTime(87100,SIMTIME_MS),{b,2,1,1,false});step(SimTime(87200,SIMTIME_MS),8);
+        add(SimTime(89200,SIMTIME_MS),{c,1,1,0,false});add(SimTime(89300,SIMTIME_MS),{c,1,0,0,false});
+        add(SimTime(90),{a,1,1,0,true});add(SimTime(90100,SIMTIME_MS),{a,2,1,1,false});
+        add(SimTime(91),{a,1,1,0,true});add(SimTime(92),{a,2,1,1,false});step(SimTime(92700,SIMTIME_MS),7);
+    }
+    void configure() {
+        auto info=native->getProtocolDataForUpdate<Ipv6InterfaceData>();info->setAdvSendAdvertisements(true);info->setAdvDefaultLifetime(SimTime(120));
+        if(scenario==2){Ipv6InterfaceData::AdvPrefix prefix(Ipv6Address("2001:db8:3::"),64);prefix.advOnLinkFlag=true;prefix.advAutonomousFlag=true;prefix.advValidLifetime=SimTime(-200);prefix.advPreferredLifetime=SimTime(-100);info->addAdvPrefix(prefix);}
+    }
+    void receiveSignal(cComponent *,simsignal_t,long count,cObject *) override {
+        Enter_Method_Silent();int routeCount=0;
+        for(int i=0;i<routes->getNumRoutes();i++){auto route=routes->getRoute(i);if(route->getSource()==nd && route->getPrefixLength()==128){routeCount++;ASSERT(domain->resolveNeighbor(route->getInterface()->getId(),route->getDestPrefix()));}}
+        ASSERT(routeCount==count); // Addition/removal is published only after route and binding changes.
+    }
+    void receiveSignal(cComponent *component,simsignal_t signal,cObject *object,cObject *) override {
+        Enter_Method_Silent();
+        if(signal==registerSignal("packetReceived")){dataReceived++;return;}
+        if(signal==registerSignal("nativeHostRegistrationSucceeded")){success++;return;}
+        auto packet=check_and_cast<Packet *>(object);
+        if(signal==registerSignal("datagramAccepted")) {
+            auto ip=packet->peekAtFront<Ipv6Header>();if(ip->getProtocolId()!=IP_PROT_IPv6_ICMP)return;
+            int type=packet->peekDataAt<BytesChunk>(B(40),B(1))->getBytes()[0];if(scenario==2){if(type==133)rs++;if(type==134)ra++;if(type==135)ns++;if(type==136)na++;}
+            if(scenario!=2 && type==136 && ip->getDestAddress()==c && !boundaryScheduled && routeDeadline(c)>simTime()){
+                boundaryScheduled=true;auto expiry=routeDeadline(c);add(expiry,{c,2,1,0,false},true);add(expiry+SimTime(100,SIMTIME_MS),{c,1,1,1,false});
+            }return;
+        }
+        auto ip=packet->peekAtFront<Ipv6Header>();if(ip->getProtocolId()!=IP_PROT_IPv6_ICMP)return;
+        auto type=packet->peekDataAt<BytesChunk>(B(40),B(1))->getBytes()[0];
+        if(type==157){if(component==transitIp){ASSERT(ip->getHopLimit()==64);transitDar++;}if(component==borderIp)ASSERT(ip->getHopLimit()==63);return;}
+        if(type!=158)return;
+        ASSERT(ip->getSrcAddress()==borderAddress && ip->getDestAddress()==requesterAddress);
+        if(component==transitIp){ASSERT(ip->getHopLimit()==64);transitDac++;return;}
+        ASSERT(component==requesterIp && ip->getHopLimit()==63 && !routedReplies.empty());auto wanted=routedReplies.front();routedReplies.pop_front();
+        Packet copy(*packet);copy.popAtFront<Ipv6Header>();auto addresses=copy.addTagIfAbsent<L3AddressInd>();addresses->setSrcAddress(borderAddress);addresses->setDestAddress(requesterAddress);ASSERT(Icmpv6::verifyChecksum(&copy));
+        auto reply=copy.peekAtFront<Ipv6DuplicateAddressHeader>();ASSERT(reply->getCode()==0 && reply->getStatus()==wanted.status && reply->getRegistrationLifetime()==wanted.lifetime && reply->getRegisteredAddress()==wanted.address);
+        for(int i=0;i<8;i++)ASSERT(uint8_t(reply->getRegistrationOwnershipVerifier(i))==uint8_t(ownerAddress(wanted.owner).getInt()>>(8*(7-i))));dac++;
+    }
+    void handleMessage(cMessage *message) override {
+        if(message->isSelfMessage()) {int kind=message->getKind();bool direct=std::string(message->getName())=="boundary-dar";delete message;
+            if(kind>=100){inject(requests.at(kind-100),direct);return;}
+            if(kind==0){nativeInput({133,0,0,0,0,0,0,0,1,2,0,0x11,0x22,0x33,0x44,0x55,0x66,1,0,0,0,0,0,0},peerLocal,Ipv6Address::ALL_ROUTERS_2,1,true);rs++;}
+            if(kind==1){std::vector<uint8_t> bytes{135,0,0,0,0,0,0,0};MemoryOutputStream target;target.writeIpv6Address(routerLocal);bytes.insert(bytes.end(),target.getData().begin(),target.getData().end());nativeInput(bytes,peerLocal,routerLocal);}
+            if(kind==2){binding(a,true);binding(a,false,1,1);ASSERT(hasRoute(a,0) && !hasRoute(a,1));data();}
+            if(kind==3){binding(a,true);ASSERT(routeDeadline(a)==SimTime(131));data();}
+            if(kind==4){ASSERT(domain->installDynamicNeighbor(native->getId(),c,ownerAddress(2),SimTime(1000),this));ASSERT(!hasRoute(c));}
+            if(kind==5){binding(c,true,2);ASSERT(!hasRoute(c));ASSERT(domain->removeDynamicNeighbor(native->getId(),c,this));}
+            if(kind==6){binding(c,false);ASSERT(!hasRoute(c));}
+            if(kind==8){binding(b,false);ASSERT(!hasRoute(b));}
+            if(kind==7){ASSERT(ra==1 && ordinaryNa==1 && boundaryScheduled && dataReceived==4);endSimulation();}
+            if(kind==20){ASSERT(success>=2 && hostNd->isNativeSourceUsable(host,automatic) && hasRoute(automatic));data(true);}
+            if(kind==21)data();
+            if(kind==22){ASSERT(dataReceived==2);endSimulation();}return;
+        }
+        if(scenario==2){delete message;return;} // Bare peers hear the real host's multicast RS and remain passive.
+        auto packet=check_and_cast<Packet *>(message);ASSERT(!packet->findTag<Ieee802154AddressReq>());auto ip=packet->popAtFront<Ipv6Header>();
+        if(ip->getProtocolId()==IP_PROT_UDP){ASSERT(ip->getSrcAddress()==routerLocal && ip->getDestAddress()==a);ASSERT(packet->peekDataAsBytes()->getBytes()==checksum({0x23,0x2a,0x23,0x29,0,9,0,0,0x77},routerLocal,a,17,6));dataReceived++;delete packet;return;}
+        auto addresses=packet->addTag<L3AddressInd>();addresses->setSrcAddress(ip->getSrcAddress());addresses->setDestAddress(ip->getDestAddress());ASSERT(Icmpv6::verifyChecksum(packet));
+        if(auto reply=dynamicPtrCast<const Ipv6RouterAdvertisement>(packet->peekAtFront<Icmpv6Header>())){ASSERT(ip->getSrcAddress()==routerLocal && ip->getDestAddress()==peerLocal && ip->getHopLimit()==255 && reply->getRouterLifetime()==120);ASSERT(!domain->resolveNeighbor(native->getId(),peerLocal));ra++;delete packet;return;}
+        auto reply=packet->peekAtFront<Ipv6NeighbourAdvertisement>();
+        if(reply->getOptions().getOptionArraySize()==0){ASSERT(ip->getDestAddress()==peerLocal && reply->getRouterFlag() && reply->getSolicitedFlag() && !reply->getOverrideFlag());ordinaryNa++;delete packet;return;}
+        ASSERT(!nativeReplies.empty());auto wanted=nativeReplies.front();nativeReplies.pop_front();auto target=routerAddress(wanted.interfaceIndex);
+        ASSERT(ip->getSrcAddress()==target && ip->getHopLimit()==255 && reply->getTargetAddress()==target && reply->getRouterFlag() && reply->getSolicitedFlag());
+        auto aro=reply->getOptions().getOption(0);ASSERT(int(aro->getType())==33 && uint8_t(aro->getPaddingBytes(0))==wanted.status);ASSERT(((uint8_t(aro->getPaddingBytes(4))<<8)|uint8_t(aro->getPaddingBytes(5)))==wanted.lifetime);
+        auto iid=ownerAddress(wanted.owner).getInt()^UINT64_C(0x0200000000000000);auto errorDestination=Ipv6Address(0xfe800000,0,iid>>32,uint32_t(iid));
+        ASSERT(ip->getDestAddress()==(wanted.status==0?wanted.address:errorDestination));ASSERT(packet->getTag<Ieee802154AddressInd>()->getDestAddress()==ownerAddress(wanted.owner));
+        for(int i=0;i<8;i++)ASSERT(uint8_t(aro->getPaddingBytes(6+i))==uint8_t(ownerAddress(wanted.owner).getInt()>>(8*(7-i))));
+        for(int i=1;i<4;i++)ASSERT(uint8_t(aro->getPaddingBytes(i))==0);
+        if(wanted.status==0 && wanted.lifetime>0){binding(wanted.address,true,wanted.owner,wanted.interfaceIndex);ASSERT(hasRoute(wanted.address,wanted.interfaceIndex));}
+        if(wanted.status==0 && wanted.lifetime==0){binding(wanted.address,false,wanted.owner,wanted.interfaceIndex);ASSERT(!hasRoute(wanted.address,wanted.interfaceIndex));}
+        na++;delete packet;
+    }
+    void finish() override {
+        ASSERT(nativeReplies.empty() && routedReplies.empty());
+        if(scenario==2)ASSERT(rs>=1 && ra>=1 && ns>=2 && na>=2 && success>=2 && dataReceived==2);
+        else ASSERT(rs==1 && ra==1 && ns==16 && na==16 && dar==19 && dac==19 && transitDar==18 && transitDac==19 && ordinaryNa==1 && dataReceived==4 && boundaryScheduled);
+        std::cout<<"scenario="<<scenario<<" RS="<<rs<<" RA="<<ra<<" NS="<<ns<<" NA="<<na<<" DAR="<<dar<<" DAC="<<dac<<" transitDAR="<<transitDar<<" transitDAC="<<transitDac<<" data="<<dataReceived<<" success="<<success<<'\n';
+        std::cout<<"Native border-router coupled admission and routed ownership verified\n";
+    }
+};
+Define_Module(BorderCheck);
+}
+
+%file: test.ned
+@namespace(inet::protocoltest);
+import inet.common.scenario.ScenarioManager;
+import inet.networklayer.configurator.ipv6.Ipv6NetworkConfigurator;
+import inet.node.ethernet.Eth100M;
+import inet.node.inet.Router;
+import inet.node.inet.StandardHost;
+import inet.networklayer.common.InterfaceTable;
+import inet.mobility.static.StationaryMobility;
+import inet.linklayer.lowpan.Ieee802154NativeLowpanInterface;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple BorderCheck { parameters: int scenario; int expiryPriority; gates: input in[]; }
+module BorderPeer {
+    parameters: @networkNode;
+    gates: output out;
+    submodules:
+        interfaceTable: InterfaceTable;
+        mobility: StationaryMobility;
+        nic: Ieee802154NativeLowpanInterface { interfaceTableModule="^.interfaceTable";linkDomainModule="^.^.domain"; }
+    connections allowunconnected: nic.upperLayerOut --> out;
+}
+network BorderNetwork {
+    submodules:
+        configurator: Ipv6NetworkConfigurator;
+        scenarioManager: ScenarioManager;
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        domain: LowpanNativeLinkDomain;
+        requester: StandardHost;
+        transit: Router;
+        border: StandardHost;
+        host: StandardHost;
+        peer[2]: BorderPeer;
+        check: BorderCheck;
+    connections allowunconnected:
+        requester.ethg++ <--> Eth100M <--> transit.ethg++;
+        transit.ethg++ <--> Eth100M <--> border.ethg++;
+        for i=0..1 {peer[i].out --> check.in++;}
+}
+
+%inifile: omnetpp.ini
+[General]
+network=BorderNetwork
+sim-time-limit=94s
+seed-set=0
+**.vector-recording=false
+**.scalar-recording=false
+*.check.scenario=${case=0,1,2}
+*.check.expiryPriority=(${case}==0 ? -10 : 10)
+**.hasIpv4=false
+**.hasIpv6=true
+*.border.hasStatus=true
+*.border.forwarding=true
+*.border.ipv6.typename="LowpanIpv6NetworkLayer"
+*.border.ipv6.neighbourDiscovery.nativeNdRole="borderRouter"
+*.border.ipv6.neighbourDiscovery.maxDuplicateAddressEntries=(${case}==2 ? 64 : 2)
+*.border.ipv6.neighbourDiscovery.maxRegistrations=2
+*.border.numWlanInterfaces=(${case}==2 ? 1 : 2)
+*.host.numWlanInterfaces=1
+*.host.ipv6.typename="LowpanIpv6NetworkLayer"
+*.host.ipv6.neighbourDiscovery.nativeNdRole=(${case}==2 ? "host" : "static")
+*.border.wlan[*].typename="Ieee802154NativeLowpanInterface"
+*.host.wlan[*].typename="Ieee802154NativeLowpanInterface"
+*.border.wlan[*].linkDomainModule="^.^.domain"
+*.host.wlan[*].linkDomainModule="^.^.domain"
+*.border.wlan[*].radio.antenna.mobilityModule="^.^.^.mobility"
+*.host.wlan[*].radio.antenna.mobilityModule="^.^.^.mobility"
+*.peer[*].nic.radio.antenna.mobilityModule="^.^.^.mobility"
+**.ipv6.configurator.networkConfiguratorModule="configurator"
+**.ipv6.neighbourDiscovery.hostBootupTime=0s
+**.ipv6.neighbourDiscovery.routerBootupTime=0s
+**.ipv6.neighbourDiscovery.dupAddrDetectTransmits=0
+**.ipv6.icmpv6.checksumMode="computed"
+*.border.numApps=1
+*.host.numApps=1
+*.border.app[0].typename="UdpSink"
+*.host.app[0].typename="UdpSink"
+*.border.app[0].localPort=9001
+*.host.app[0].localPort=9001
+*.configurator.config=xml("<config><interface hosts='requester' names='eth0' address='2001:db8:1::10'/><interface hosts='transit' names='eth0' address='2001:db8:1::1'/><interface hosts='transit' names='eth1' address='2001:db8:2::1'/><interface hosts='border' names='eth0' address='2001:db8:2::20'/></config>")
+*.scenarioManager.script=xml(${case}==2 ? "<scenario/>" : "<scenario><at t='88'><crash module='border'/></at><at t='89'><startup module='border'/></at><at t='90.3'><shutdown module='border'/></at><at t='90.6'><startup module='border'/></at></scenario>")
+*.domain.panId=4660
+*.domain.config=xml(${case}==2 ? "<domain><peer interface='peer[0].nic' native='0011223344556601'/><peer interface='peer[1].nic' native='0011223344556602'/><peer interface='border.wlan[0]' native='0011223344556603'/><peer interface='host.wlan[0]' native='0011223344556604'/></domain>" : "<domain><peer interface='peer[0].nic' native='0011223344556601'/><peer interface='peer[1].nic' native='0011223344556602'/><peer interface='border.wlan[0]' native='0011223344556603'/><peer interface='host.wlan[0]' native='0011223344556604'/><peer interface='border.wlan[1]' native='0011223344556605'/></domain>")
+**.lowpan.headerCompression="none"
+**.mobility.initialX=0m
+**.mobility.initialY=0m
+**.mobility.initialZ=0m
+**.mobility.initFromDisplayString=false
+**.mobility.updateFromDisplayString=false
+
+%contains: stdout
+Native border-router coupled admission and routed ownership verified

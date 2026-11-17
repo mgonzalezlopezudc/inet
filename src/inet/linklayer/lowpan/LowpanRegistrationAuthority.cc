@@ -66,7 +66,7 @@ bool LowpanRegistrationAuthority::hasValidOptions(const Packet *packet, b offset
     return true;
 }
 
-void LowpanRegistrationAuthority::expireEntries()
+void LowpanRegistrationAuthority::expireEntries(bool notify)
 {
     bool changed = false;
     for (auto it = entries.begin(); it != entries.end();)
@@ -76,8 +76,53 @@ void LowpanRegistrationAuthority::expireEntries()
         }
         else
             ++it;
-    if (changed)
-        owner.emit(owner.duplicateAddressEntryCountChangedSignal, long(entries.size()));
+    if (changed && notify)
+        publishEntryCount();
+}
+
+int LowpanRegistrationAuthority::checkRegistration(const Ipv6Address& address,
+        const std::array<uint8_t, 8>& requestedOwner, bool remove) const
+{
+    uint64_t ownerValue = 0;
+    for (auto byte : requestedOwner)
+        ownerValue = (ownerValue << 8) | byte;
+    auto nativeOwner = Ieee802154Address(Ieee802154Address::EXTENDED, ownerValue);
+    // In the combined 6LBR model, a withdrawn DAD lease does not invalidate an
+    // independently live local NCE. Consult it without changing it from DAR.
+    for (const auto& registration : owner.registrations)
+        if (registration.first.second == address && registration.second.validUntil > simTime() &&
+                registration.second.owner != nativeOwner)
+            return 1;
+    auto existing = entries.find(address);
+    bool live = existing != entries.end() && existing->second.validUntil > simTime();
+    if (live && existing->second.owner != requestedOwner)
+        return 1;
+    if (!live && !remove) {
+        size_t used = 0;
+        for (const auto& entry : entries)
+            used += entry.second.validUntil > simTime();
+        if (used >= capacity)
+            return 2;
+    }
+    return 0;
+}
+
+bool LowpanRegistrationAuthority::commitRegistration(const Ipv6Address& address,
+        const std::array<uint8_t, 8>& requestedOwner, simtime_t validUntil)
+{
+    auto oldSize = entries.size();
+    expireEntries(false);
+    if (validUntil <= simTime())
+        entries.erase(address);
+    else
+        entries[address] = {requestedOwner, validUntil};
+    scheduleExpiry();
+    return entries.size() != oldSize;
+}
+
+void LowpanRegistrationAuthority::publishEntryCount()
+{
+    owner.emit(owner.duplicateAddressEntryCountChangedSignal, long(entries.size()));
 }
 
 void LowpanRegistrationAuthority::scheduleExpiry()
@@ -156,26 +201,17 @@ bool LowpanRegistrationAuthority::processPacket(Packet *packet, const Icmpv6Head
     }
     expireEntries();
     auto address = request->getRegisteredAddress();
-    auto existing = entries.find(address);
     std::array<uint8_t, 8> requestedOwner;
     for (int i = 0; i < 8; i++)
         requestedOwner[i] = request->getRegistrationOwnershipVerifier(i);
-    int status = 0;
-    auto oldSize = entries.size();
     // RFC 6775 section 8.2.4: a different owner cannot refresh or remove the incumbent.
-    if (existing != entries.end() && existing->second.owner != requestedOwner)
-        status = 1;
-    else if (request->getRegistrationLifetime() == 0)
-        entries.erase(address);
-    else if (existing == entries.end() && entries.size() >= capacity)
-        status = 2;
-    else {
+    int status = checkRegistration(address, requestedOwner, request->getRegistrationLifetime() == 0);
+    if (status == 0) {
         int seconds = 60 * int(request->getRegistrationLifetime());
         auto deadline = double(seconds) >= (SIMTIME_MAX - simTime()).dbl() ? SIMTIME_MAX : simTime() + SimTime(seconds);
-        entries[address] = {requestedOwner, deadline};
+        if (commitRegistration(address, requestedOwner, deadline))
+            publishEntryCount();
     }
-    if (entries.size() != oldSize)
-        owner.emit(owner.duplicateAddressEntryCountChangedSignal, long(entries.size()));
     scheduleExpiry();
     sendConfirmation(*request, addresses->getDestAddress().toIpv6(), addresses->getSrcAddress().toIpv6(), status);
     delete packet;

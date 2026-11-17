@@ -1,0 +1,3 @@
+Native border-router registration
+
+Native 6LoWPAN border routers now admit local address registrations through the same duplicate-address ownership and capacity checks used by routed DAR requests. Successful admission creates the native binding and route together with authority state; refused bindings do not reserve an address in the authority table.
