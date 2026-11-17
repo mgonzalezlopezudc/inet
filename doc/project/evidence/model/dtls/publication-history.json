@@ -1,0 +1,3395 @@
+{
+  "base": "476ab0f2fa019c0bcf36d23d9f99ec884ee9393c",
+  "original_inputs": {
+    "topic": "feat/dtls-extensions",
+    "head": "5284847df92eea8451bf056d8722fabb0ddf65bd",
+    "original_base": "980f5c3f9eb903fd9155dd8d24216a1c265d5f55",
+    "target": "476ab0f2fa019c0bcf36d23d9f99ec884ee9393c",
+    "changed_files": [
+      ".oppfeatures",
+      "doc/project/audit/seal-list.md",
+      "doc/project/design/decisions.md",
+      "doc/project/evidence/model/dtls/categories.md",
+      "doc/project/evidence/model/dtls/coverage.md",
+      "doc/project/evidence/model/dtls/extensions.md",
+      "doc/project/evidence/model/dtls/results.md",
+      "doc/project/evidence/model/dtls/scope.md",
+      "doc/project/evidence/protocol/dtls/checks.md",
+      "doc/project/evidence/protocol/dtls/checks/handshake.md",
+      "doc/project/evidence/protocol/dtls/checks/records.md",
+      "doc/project/evidence/protocol/dtls/extensions.md",
+      "doc/project/evidence/protocol/dtls/features.md",
+      "doc/project/evidence/protocol/dtls/standards.md",
+      "doc/project/evidence/standard/rfc8446/catalog.md",
+      "doc/project/evidence/standard/rfc9147/catalog.md",
+      "doc/project/evidence/standard/rfc9147/extensions.md",
+      "doc/src/migration-guide/development/dtls-connection-id-updates.rst",
+      "doc/src/migration-guide/development/dtls-early-data.rst",
+      "doc/src/migration-guide/development/dtls-extension-profiles.rst",
+      "doc/src/migration-guide/development/dtls-path-mtu.rst",
+      "doc/src/migration-guide/development/dtls-post-handshake-authentication.rst",
+      "doc/src/migration-guide/development/dtls-session-resumption.rst",
+      "doc/src/migration-guide/development/dtls-validated-migration.rst",
+      "doc/src/users-guide/ch-dtls.rst",
+      "doc/src/users-guide/index.rst",
+      "doc/whatsnew/compatible/dtls-algorithm-profiles.txt",
+      "doc/whatsnew/compatible/dtls-connection-identifiers.txt",
+      "doc/whatsnew/compatible/dtls-extension-examples.txt",
+      "doc/whatsnew/compatible/dtls-heartbeat-probes.txt",
+      "doc/whatsnew/compatible/dtls-path-mtu-minimum-base.txt",
+      "doc/whatsnew/compatible/dtls-protocol-model.txt",
+      "doc/whatsnew/compatible/dtls-scenario-actions.txt",
+      "doc/whatsnew/compatible/dtls-session-resumption.txt",
+      "doc/whatsnew/compatible/dtls12-associations.txt",
+      "doc/whatsnew/compatible/dtls12-paths.txt",
+      "doc/whatsnew/compatible/dtls12-record-foundation.txt",
+      "doc/whatsnew/compatible/dtls12-session-resumption.txt",
+      "doc/whatsnew/compatible/ipv6-dont-fragment-request.txt",
+      "doc/whatsnew/incompatible/dtls-connection-id-updates.txt",
+      "doc/whatsnew/incompatible/dtls-early-data.txt",
+      "doc/whatsnew/incompatible/dtls-path-mtu.txt",
+      "doc/whatsnew/incompatible/dtls-post-handshake-authentication.txt",
+      "doc/whatsnew/incompatible/dtls-validated-migration.txt",
+      "examples/dtls/DtlsNetwork.ned",
+      "examples/dtls/DtlsRoutedNetwork.ned",
+      "examples/dtls/DtlsScenarioNetwork.ned",
+      "examples/dtls/README.md",
+      "examples/dtls/omnetpp.ini",
+      "examples/dtls/package.ned",
+      "examples/dtls/verify.py",
+      "inet.opp",
+      "plan/done/dtls-summary.md",
+      "plan/done/dtls.md",
+      "plan/pending/dtls-extensions.md",
+      "src/inet/applications/dtlsapp/DtlsApp.ned",
+      "src/inet/applications/dtlsapp/DtlsSocketIo.cc",
+      "src/inet/applications/dtlsapp/DtlsSocketIo.h",
+      "src/inet/applications/dtlsapp/DtlsSocketIo.ned",
+      "src/inet/applications/dtlsapp/package.ned",
+      "src/inet/networklayer/ipv6/Ipv6.cc",
+      "src/inet/transportlayer/contract/IDtls.ned",
+      "src/inet/transportlayer/contract/dtls/DtlsSocket.h",
+      "src/inet/transportlayer/contract/dtls/IDtls.h",
+      "src/inet/transportlayer/contract/dtls/package.ned",
+      "src/inet/transportlayer/dtls/Dtls.cc",
+      "src/inet/transportlayer/dtls/Dtls.h",
+      "src/inet/transportlayer/dtls/Dtls.ned",
+      "src/inet/transportlayer/dtls/Dtls12CidHeader.msg",
+      "src/inet/transportlayer/dtls/Dtls12Handshake.cc",
+      "src/inet/transportlayer/dtls/Dtls12HelloVerifyRequest.msg",
+      "src/inet/transportlayer/dtls/Dtls12Negotiation.cc",
+      "src/inet/transportlayer/dtls/Dtls12PacketSerializer.cc",
+      "src/inet/transportlayer/dtls/Dtls12PacketSerializer.h",
+      "src/inet/transportlayer/dtls/Dtls12Record.cc",
+      "src/inet/transportlayer/dtls/Dtls12RecordProtection.cc",
+      "src/inet/transportlayer/dtls/Dtls12RecordProtection.h",
+      "src/inet/transportlayer/dtls/Dtls12Session.cc",
+      "src/inet/transportlayer/dtls/DtlsAssociation.cc",
+      "src/inet/transportlayer/dtls/DtlsAssociation.h",
+      "src/inet/transportlayer/dtls/DtlsAuthentication.cc",
+      "src/inet/transportlayer/dtls/DtlsConnectionIds.cc",
+      "src/inet/transportlayer/dtls/DtlsEarlyData.cc",
+      "src/inet/transportlayer/dtls/DtlsHandshakeFlight.cc",
+      "src/inet/transportlayer/dtls/DtlsHandshakeFlight.h",
+      "src/inet/transportlayer/dtls/DtlsHandshakeReassembly.cc",
+      "src/inet/transportlayer/dtls/DtlsHandshakeReassembly.h",
+      "src/inet/transportlayer/dtls/DtlsHeartbeat.cc",
+      "src/inet/transportlayer/dtls/DtlsPacketSerializer.cc",
+      "src/inet/transportlayer/dtls/DtlsPacketSerializer.h",
+      "src/inet/transportlayer/dtls/DtlsPathMtu.cc",
+      "src/inet/transportlayer/dtls/DtlsPathMtuState.cc",
+      "src/inet/transportlayer/dtls/DtlsPathMtuState.h",
+      "src/inet/transportlayer/dtls/DtlsPaths.cc",
+      "src/inet/transportlayer/dtls/DtlsPlaintextHeader.msg",
+      "src/inet/transportlayer/dtls/DtlsPostHandshakeExchange.cc",
+      "src/inet/transportlayer/dtls/DtlsPostHandshakeExchange.h",
+      "src/inet/transportlayer/dtls/DtlsProcessingQueue.cc",
+      "src/inet/transportlayer/dtls/DtlsProcessingQueue.h",
+      "src/inet/transportlayer/dtls/DtlsProtocolDissector.cc",
+      "src/inet/transportlayer/dtls/DtlsProtocolDissector.h",
+      "src/inet/transportlayer/dtls/DtlsProtocolPrinter.cc",
+      "src/inet/transportlayer/dtls/DtlsProtocolPrinter.h",
+      "src/inet/transportlayer/dtls/DtlsRecordProtection.cc",
+      "src/inet/transportlayer/dtls/DtlsRecordProtection.h",
+      "src/inet/transportlayer/dtls/DtlsRecordState.cc",
+      "src/inet/transportlayer/dtls/DtlsRecordState.h",
+      "src/inet/transportlayer/dtls/DtlsSession.cc",
+      "src/inet/transportlayer/dtls/DtlsSessionStore.cc",
+      "src/inet/transportlayer/dtls/DtlsSessionStore.h",
+      "src/inet/transportlayer/dtls/package.ned",
+      "src/inet/transportlayer/tls/TlsClientHello.msg",
+      "src/inet/transportlayer/tls/TlsHandshakeParameters.cc",
+      "src/inet/transportlayer/tls/TlsHandshakeParameters.h",
+      "src/inet/transportlayer/tls/TlsHandshakeSerializer.cc",
+      "src/inet/transportlayer/tls/TlsHandshakeSerializer.h",
+      "src/inet/transportlayer/tls/package.ned",
+      "tests/DtlsTestAssertions.h",
+      "tests/module/Dtls12CidProtection_1.test",
+      "tests/module/Dtls12RecordProtection_1.test",
+      "tests/module/DtlsConnectionIds_1.test",
+      "tests/module/DtlsEngineLifecycle_1.test",
+      "tests/module/DtlsPathMtuConfigBase_1.test",
+      "tests/module/DtlsPathMtuConfigCeiling_1.test",
+      "tests/module/DtlsPathMtuConfigTimeout_1.test",
+      "tests/module/DtlsPathMtuConfigTimerResolution_1.test",
+      "tests/module/DtlsPathMtuLegacyBaseCidLow_1.test",
+      "tests/module/DtlsPathMtuLegacyBaseLow_1.test",
+      "tests/module/DtlsPathMtuLegacyBaseNegative_1.test",
+      "tests/module/DtlsPathMtuMixedBaseCidLow_1.test",
+      "tests/module/DtlsPathMtuMixedBaseLow_1.test",
+      "tests/module/DtlsPathMtuState_1.test",
+      "tests/module/DtlsPostHandshakeExchange_1.test",
+      "tests/module/DtlsProcessingQueue_1.test",
+      "tests/module/DtlsRecoveryLifecycle_1.test",
+      "tests/module/DtlsRekeyConfigHigh_1.test",
+      "tests/module/DtlsRekeyConfigLow_1.test",
+      "tests/module/DtlsRekeyConfigMin_1.test",
+      "tests/module/DtlsRestartLifecycle_1.test",
+      "tests/module/DtlsSenderState_1.test",
+      "tests/module/DtlsSessionLifecycle_1.test",
+      "tests/module/DtlsVersionConfigDuplicate_1.test",
+      "tests/module/DtlsVersionConfigEmpty_1.test",
+      "tests/module/DtlsVersionConfigUnknown_1.test",
+      "tests/protocol/dtls/DtlsFragmentTestUtils.h",
+      "tests/protocol/dtls/DtlsHeartbeatTestApp.ned",
+      "tests/protocol/dtls/DtlsHeartbeatTestUtils.h",
+      "tests/protocol/dtls/DtlsMigrationNetwork.ned",
+      "tests/protocol/dtls/DtlsMigrationRoutedNetwork.ned",
+      "tests/protocol/dtls/DtlsMultihomedNetwork.ned",
+      "tests/protocol/dtls/DtlsPathMtuNetwork.ned",
+      "tests/protocol/dtls/DtlsTestApp.h",
+      "tests/protocol/dtls/DtlsTestApp.ned",
+      "tests/protocol/dtls/DtlsTestUtils.h",
+      "tests/protocol/dtls/Rfc6347ApiBounds.test",
+      "tests/protocol/dtls/Rfc6347AssociationLimit.test",
+      "tests/protocol/dtls/Rfc6347CallbackClose.test",
+      "tests/protocol/dtls/Rfc6347Close.test",
+      "tests/protocol/dtls/Rfc6347Coalesced.test",
+      "tests/protocol/dtls/Rfc6347Datagrams.test",
+      "tests/protocol/dtls/Rfc6347DeadlineBeforeHandoff.test",
+      "tests/protocol/dtls/Rfc6347FinalRetention.test",
+      "tests/protocol/dtls/Rfc6347FirstArrivalDeadline.test",
+      "tests/protocol/dtls/Rfc6347Handshake.test",
+      "tests/protocol/dtls/Rfc6347HandshakeCertificate.test",
+      "tests/protocol/dtls/Rfc6347HandshakeMutual.test",
+      "tests/protocol/dtls/Rfc6347Heartbeat.test",
+      "tests/protocol/dtls/Rfc6347HeartbeatCid.test",
+      "tests/protocol/dtls/Rfc6347HeartbeatMalformedLength.test",
+      "tests/protocol/dtls/Rfc6347HeartbeatPermissions.test",
+      "tests/protocol/dtls/Rfc6347HeartbeatTimeout.test",
+      "tests/protocol/dtls/Rfc6347HeartbeatWrongResponse.test",
+      "tests/protocol/dtls/Rfc6347Lifecycle.test",
+      "tests/protocol/dtls/Rfc6347MalformedCcs.test",
+      "tests/protocol/dtls/Rfc6347MalformedCertificate.test",
+      "tests/protocol/dtls/Rfc6347MalformedFinished.test",
+      "tests/protocol/dtls/Rfc6347PathMtu.test",
+      "tests/protocol/dtls/Rfc6347PathMtuBlackhole.test",
+      "tests/protocol/dtls/Rfc6347PathMtuIpv4Hint.test",
+      "tests/protocol/dtls/Rfc6347PathMtuIpv6.test",
+      "tests/protocol/dtls/Rfc6347PathMtuIsolation.test",
+      "tests/protocol/dtls/Rfc6347PathMtuLifecycle.test",
+      "tests/protocol/dtls/Rfc6347PathMtuMigration.test",
+      "tests/protocol/dtls/Rfc6347PathMtuMigrationIpv6.test",
+      "tests/protocol/dtls/Rfc6347PathMtuMinimumBase.test",
+      "tests/protocol/dtls/Rfc6347PathMtuNoCid.test",
+      "tests/protocol/dtls/Rfc6347PathMtuShortQuote.test",
+      "tests/protocol/dtls/Rfc6347PathMtuStaleQuote.test",
+      "tests/protocol/dtls/Rfc6347ReassemblyLimit.test",
+      "tests/protocol/dtls/Rfc6347Recovery.test",
+      "tests/protocol/dtls/Rfc6347RecoveryCcsReorder.test",
+      "tests/protocol/dtls/Rfc6347RecoveryCertificate.test",
+      "tests/protocol/dtls/Rfc6347RecoveryCertificateNoCookie.test",
+      "tests/protocol/dtls/Rfc6347RecoveryServerFlight.test",
+      "tests/protocol/dtls/Rfc6347Renegotiation.test",
+      "tests/protocol/dtls/Rfc6347Replay.test",
+      "tests/protocol/dtls/Rfc6347Resumption.test",
+      "tests/protocol/dtls/Rfc6347ResumptionCacheAfterFinished.test",
+      "tests/protocol/dtls/Rfc6347ResumptionCertificate.test",
+      "tests/protocol/dtls/Rfc6347ResumptionCertificateSessionId.test",
+      "tests/protocol/dtls/Rfc6347ResumptionClientCrash.test",
+      "tests/protocol/dtls/Rfc6347ResumptionClientStop.test",
+      "tests/protocol/dtls/Rfc6347ResumptionCrossVersionLegacyTicket.test",
+      "tests/protocol/dtls/Rfc6347ResumptionCrossVersionModernTicket.test",
+      "tests/protocol/dtls/Rfc6347ResumptionEarlyRefused.test",
+      "tests/protocol/dtls/Rfc6347ResumptionEviction.test",
+      "tests/protocol/dtls/Rfc6347ResumptionExpiry.test",
+      "tests/protocol/dtls/Rfc6347ResumptionFinalRetention.test",
+      "tests/protocol/dtls/Rfc6347ResumptionIncompatibleOffer.test",
+      "tests/protocol/dtls/Rfc6347ResumptionInvalidTicketWithSessionId.test",
+      "tests/protocol/dtls/Rfc6347ResumptionLoss.test",
+      "tests/protocol/dtls/Rfc6347ResumptionMalformedTicket.test",
+      "tests/protocol/dtls/Rfc6347ResumptionServerLifecycle.test",
+      "tests/protocol/dtls/Rfc6347ResumptionSessionId.test",
+      "tests/protocol/dtls/Rfc6347ResumptionSessionIdExpiry.test",
+      "tests/protocol/dtls/Rfc6347ResumptionSharedVersions.test",
+      "tests/protocol/dtls/Rfc6347ResumptionUnknownTicket.test",
+      "tests/protocol/dtls/Rfc6347ResumptionUnsupportedExtension.test",
+      "tests/protocol/dtls/Rfc6347SharedVersions.test",
+      "tests/protocol/dtls/Rfc9146ConnectionId.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdApiBounds.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdCertificate.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdClose.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdEmptyClient.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdEmptyServer.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdExhaustion.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdFatal.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdInnerLimit.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdInnerType.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdLifecycle.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdMissing.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdPeerLength.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdRenegotiation.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdResumption.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdTags.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdUnknown.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdWrongVersion.test",
+      "tests/protocol/dtls/Rfc9146Migration.test",
+      "tests/protocol/dtls/Rfc9146MigrationCompeting.test",
+      "tests/protocol/dtls/Rfc9146MigrationFreshResponse.test",
+      "tests/protocol/dtls/Rfc9146MigrationIpv6.test",
+      "tests/protocol/dtls/Rfc9146MigrationNoPermission.test",
+      "tests/protocol/dtls/Rfc9146MigrationOldRecord.test",
+      "tests/protocol/dtls/Rfc9146MigrationRebind.test",
+      "tests/protocol/dtls/Rfc9146MigrationRebindTimeout.test",
+      "tests/protocol/dtls/Rfc9146MigrationRouted.test",
+      "tests/protocol/dtls/Rfc9147AckQueuedReceive.test",
+      "tests/protocol/dtls/Rfc9147AggregateReassembly.test",
+      "tests/protocol/dtls/Rfc9147AlertDisposition.test",
+      "tests/protocol/dtls/Rfc9147AlgorithmFragmentation.test",
+      "tests/protocol/dtls/Rfc9147AlgorithmProfileCosts.test",
+      "tests/protocol/dtls/Rfc9147AlgorithmProfiles.test",
+      "tests/protocol/dtls/Rfc9147AlgorithmRetrySelection.test",
+      "tests/protocol/dtls/Rfc9147AlgorithmUpdateCosts.test",
+      "tests/protocol/dtls/Rfc9147AmplificationIsolation.test",
+      "tests/protocol/dtls/Rfc9147AmplificationLimit.test",
+      "tests/protocol/dtls/Rfc9147ApplicationDatagrams.test",
+      "tests/protocol/dtls/Rfc9147ApplicationReordering.test",
+      "tests/protocol/dtls/Rfc9147AssociationIsolation.test",
+      "tests/protocol/dtls/Rfc9147AssociationLimit.test",
+      "tests/protocol/dtls/Rfc9147ClientAuthentication.test",
+      "tests/protocol/dtls/Rfc9147ClientHello.test",
+      "tests/protocol/dtls/Rfc9147ClientHelloCompression.test",
+      "tests/protocol/dtls/Rfc9147Close.test",
+      "tests/protocol/dtls/Rfc9147CloseBoundary.test",
+      "tests/protocol/dtls/Rfc9147CloseDeadline.test",
+      "tests/protocol/dtls/Rfc9147CloseDelivered.test",
+      "tests/protocol/dtls/Rfc9147CoalescedAmplification.test",
+      "tests/protocol/dtls/Rfc9147ConnectionId.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdEarlyBudget.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdEarlyData.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdInvalid.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdLifecycle.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdMalformedOffer.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdReuse.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUnsolicited.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUpdate.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUpdateConflict.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUpdateExcessive.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUpdateFragments.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUpdateInputCost.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUpdateInvalidUsage.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUpdateLateFulfillment.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUpdateMalformedVector.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUpdateOverlap.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUpdateRequestTimeout.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUpdateTimeout.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUpdateUnfulfilled.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUpdateUnnegotiated.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUpdateZeroResponse.test",
+      "tests/protocol/dtls/Rfc9147CookieExpired.test",
+      "tests/protocol/dtls/Rfc9147CookieKeyShareRetry.test",
+      "tests/protocol/dtls/Rfc9147CookieMissing.test",
+      "tests/protocol/dtls/Rfc9147CookieRetry.test",
+      "tests/protocol/dtls/Rfc9147CookieWrongRandom.test",
+      "tests/protocol/dtls/Rfc9147CookieWrongSource.test",
+      "tests/protocol/dtls/Rfc9147DeadlineBeforeHandoff.test",
+      "tests/protocol/dtls/Rfc9147DuplicatePlaintextCost.test",
+      "tests/protocol/dtls/Rfc9147EarlyData.test",
+      "tests/protocol/dtls/Rfc9147EarlyDataBeforeHello.test",
+      "tests/protocol/dtls/Rfc9147EarlyDataChangedSuite.test",
+      "tests/protocol/dtls/Rfc9147EarlyDataExpired.test",
+      "tests/protocol/dtls/Rfc9147EarlyDataFailedAttempt.test",
+      "tests/protocol/dtls/Rfc9147EarlyDataHrr.test",
+      "tests/protocol/dtls/Rfc9147EarlyDataLate.test",
+      "tests/protocol/dtls/Rfc9147EarlyDataLoss.test",
+      "tests/protocol/dtls/Rfc9147EarlyDataNoAllowance.test",
+      "tests/protocol/dtls/Rfc9147EarlyDataPeerLimit.test",
+      "tests/protocol/dtls/Rfc9147EarlyDataQueuedBoundary.test",
+      "tests/protocol/dtls/Rfc9147EarlyDataReplay.test",
+      "tests/protocol/dtls/Rfc9147EarlyPeerFinished.test",
+      "tests/protocol/dtls/Rfc9147EmptyCookieExtension.test",
+      "tests/protocol/dtls/Rfc9147EpochAliasFinalAck.test",
+      "tests/protocol/dtls/Rfc9147EstablishmentReassemblyRelease.test",
+      "tests/protocol/dtls/Rfc9147FatalDuringClose.test",
+      "tests/protocol/dtls/Rfc9147FinalAckLoss.test",
+      "tests/protocol/dtls/Rfc9147FinalAckRetention.test",
+      "tests/protocol/dtls/Rfc9147FinishedLength.test",
+      "tests/protocol/dtls/Rfc9147FinishedUpdateOverlap.test",
+      "tests/protocol/dtls/Rfc9147FirstArrivalDeadline.test",
+      "tests/protocol/dtls/Rfc9147ForbiddenRetryPsk.test",
+      "tests/protocol/dtls/Rfc9147FragmentConflict.test",
+      "tests/protocol/dtls/Rfc9147FragmentInconsistentLength.test",
+      "tests/protocol/dtls/Rfc9147FragmentOutOfRange.test",
+      "tests/protocol/dtls/Rfc9147FragmentReassembly.test",
+      "tests/protocol/dtls/Rfc9147FullDuplexCosts.test",
+      "tests/protocol/dtls/Rfc9147HalfOpenFragmentConflict.test",
+      "tests/protocol/dtls/Rfc9147HalfOpenFragmentNumbers.test",
+      "tests/protocol/dtls/Rfc9147HalfOpenLimit.test",
+      "tests/protocol/dtls/Rfc9147Handshake.test",
+      "tests/protocol/dtls/Rfc9147HandshakeBackoff.test",
+      "tests/protocol/dtls/Rfc9147HandshakeDeadline.test",
+      "tests/protocol/dtls/Rfc9147HandshakeLoss.test",
+      "tests/protocol/dtls/Rfc9147Heartbeat.test",
+      "tests/protocol/dtls/Rfc9147HeartbeatAdmission.test",
+      "tests/protocol/dtls/Rfc9147HeartbeatInvalidOffer.test",
+      "tests/protocol/dtls/Rfc9147HeartbeatInvalidSelection.test",
+      "tests/protocol/dtls/Rfc9147HeartbeatIsolation.test",
+      "tests/protocol/dtls/Rfc9147HeartbeatLifecycle.test",
+      "tests/protocol/dtls/Rfc9147HeartbeatMalformedLength.test",
+      "tests/protocol/dtls/Rfc9147HeartbeatPermissions.test",
+      "tests/protocol/dtls/Rfc9147HeartbeatQueuedExpiry.test",
+      "tests/protocol/dtls/Rfc9147HeartbeatResumption.test",
+      "tests/protocol/dtls/Rfc9147HeartbeatTimeout.test",
+      "tests/protocol/dtls/Rfc9147HeartbeatUnsolicited.test",
+      "tests/protocol/dtls/Rfc9147HeartbeatWrongResponse.test",
+      "tests/protocol/dtls/Rfc9147HeldFinished.test",
+      "tests/protocol/dtls/Rfc9147IdenticalOverlap.test",
+      "tests/protocol/dtls/Rfc9147ImplicitLength.test",
+      "tests/protocol/dtls/Rfc9147InflatedClientHello.test",
+      "tests/protocol/dtls/Rfc9147InnerPadding.test",
+      "tests/protocol/dtls/Rfc9147InputQueueLimit.test",
+      "tests/protocol/dtls/Rfc9147InvalidRecord.test",
+      "tests/protocol/dtls/Rfc9147InvalidRecordTimer.test",
+      "tests/protocol/dtls/Rfc9147Ipv6.test",
+      "tests/protocol/dtls/Rfc9147KeyUpdate.test",
+      "tests/protocol/dtls/Rfc9147KeyUpdateAutomatic.test",
+      "tests/protocol/dtls/Rfc9147KeyUpdateBusy.test",
+      "tests/protocol/dtls/Rfc9147KeyUpdateEmptyFragment.test",
+      "tests/protocol/dtls/Rfc9147KeyUpdateImpossibleLength.test",
+      "tests/protocol/dtls/Rfc9147KeyUpdateImpossibleOffset.test",
+      "tests/protocol/dtls/Rfc9147KeyUpdateInputCost.test",
+      "tests/protocol/dtls/Rfc9147KeyUpdateInvalidFlag.test",
+      "tests/protocol/dtls/Rfc9147KeyUpdateOldEpoch.test",
+      "tests/protocol/dtls/Rfc9147LargeFlight.test",
+      "tests/protocol/dtls/Rfc9147LargeRecordHandshake.test",
+      "tests/protocol/dtls/Rfc9147LaterResponseImplicitAck.test",
+      "tests/protocol/dtls/Rfc9147LegacyCookie.test",
+      "tests/protocol/dtls/Rfc9147MalformedCurrentHandshakeQueued.test",
+      "tests/protocol/dtls/Rfc9147MalformedCurrentHandshakeSync.test",
+      "tests/protocol/dtls/Rfc9147MalformedInner.test",
+      "tests/protocol/dtls/Rfc9147MalformedRetainedHandshakeQueued.test",
+      "tests/protocol/dtls/Rfc9147MalformedRetainedHandshakeSync.test",
+      "tests/protocol/dtls/Rfc9147MalformedRetryShare.test",
+      "tests/protocol/dtls/Rfc9147Migration.test",
+      "tests/protocol/dtls/Rfc9147MigrationCompeting.test",
+      "tests/protocol/dtls/Rfc9147MigrationFreshResponse.test",
+      "tests/protocol/dtls/Rfc9147MigrationIpv6.test",
+      "tests/protocol/dtls/Rfc9147MigrationKeyUpdate.test",
+      "tests/protocol/dtls/Rfc9147MigrationMalformedRecord.test",
+      "tests/protocol/dtls/Rfc9147MigrationMultihomed.test",
+      "tests/protocol/dtls/Rfc9147MigrationNoPermission.test",
+      "tests/protocol/dtls/Rfc9147MigrationOccupiedPort.test",
+      "tests/protocol/dtls/Rfc9147MigrationOldRecord.test",
+      "tests/protocol/dtls/Rfc9147MigrationRebind.test",
+      "tests/protocol/dtls/Rfc9147MigrationRebindMultiple.test",
+      "tests/protocol/dtls/Rfc9147MigrationRebindProbe.test",
+      "tests/protocol/dtls/Rfc9147MigrationRebindTimeout.test",
+      "tests/protocol/dtls/Rfc9147MigrationRouted.test",
+      "tests/protocol/dtls/Rfc9147MigrationTimeout.test",
+      "tests/protocol/dtls/Rfc9147MigrationUnidirectional.test",
+      "tests/protocol/dtls/Rfc9147MinimumBudgetHandshake.test",
+      "tests/protocol/dtls/Rfc9147MissingCertificateExtensions.test",
+      "tests/protocol/dtls/Rfc9147MissingKeyShareExtension.test",
+      "tests/protocol/dtls/Rfc9147ModeledCorruption.test",
+      "tests/protocol/dtls/Rfc9147Multihomed.test",
+      "tests/protocol/dtls/Rfc9147NegotiationFailure.test",
+      "tests/protocol/dtls/Rfc9147ObsoletePlainAlert.test",
+      "tests/protocol/dtls/Rfc9147PackedClientHello.test",
+      "tests/protocol/dtls/Rfc9147PackedClientHelloConflict.test",
+      "tests/protocol/dtls/Rfc9147PackedClientHelloMalformed.test",
+      "tests/protocol/dtls/Rfc9147PackedProtectedHandshake.test",
+      "tests/protocol/dtls/Rfc9147PackedProtectedMalformed.test",
+      "tests/protocol/dtls/Rfc9147PartialRetryImplicitAck.test",
+      "tests/protocol/dtls/Rfc9147PathMtu.test",
+      "tests/protocol/dtls/Rfc9147PathMtuAuthPause.test",
+      "tests/protocol/dtls/Rfc9147PathMtuBlackhole.test",
+      "tests/protocol/dtls/Rfc9147PathMtuIpv4Hint.test",
+      "tests/protocol/dtls/Rfc9147PathMtuIpv4HintOptions.test",
+      "tests/protocol/dtls/Rfc9147PathMtuIpv6.test",
+      "tests/protocol/dtls/Rfc9147PathMtuIsolation.test",
+      "tests/protocol/dtls/Rfc9147PathMtuLateAck.test",
+      "tests/protocol/dtls/Rfc9147PathMtuLifecycle.test",
+      "tests/protocol/dtls/Rfc9147PathMtuMigration.test",
+      "tests/protocol/dtls/Rfc9147PathMtuOrdinaryQuote.test",
+      "tests/protocol/dtls/Rfc9147PathMtuRaise.test",
+      "tests/protocol/dtls/Rfc9147PathMtuRouted.test",
+      "tests/protocol/dtls/Rfc9147PathMtuSearchLoss.test",
+      "tests/protocol/dtls/Rfc9147PathMtuShortQuote.test",
+      "tests/protocol/dtls/Rfc9147PathMtuStaleQuote.test",
+      "tests/protocol/dtls/Rfc9147PathMtuUnsupported.test",
+      "tests/protocol/dtls/Rfc9147PeerRequestActiveProtection.test",
+      "tests/protocol/dtls/Rfc9147PeerRequestedUpdate.test",
+      "tests/protocol/dtls/Rfc9147PendingQueueLimit.test",
+      "tests/protocol/dtls/Rfc9147PlainAlertLocalIdentity.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuth.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthAbsentCapability.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthAckLoss.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthClose.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthDeadline.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthDisabledServer.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthDuplicateContext.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthEmptyCertificate.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthEpochSix.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthExternalPsk.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthIsolation.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthMigration.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthMutualSnapshot.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthOrdering.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthOverlap.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthProbePause.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthPskTicket.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthRequestBudget.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthResponseBudget.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthTicketSnapshot.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthWrongContext.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthWrongIdentity.test",
+      "tests/protocol/dtls/Rfc9147PrevalidationProcessingExpiry.test",
+      "tests/protocol/dtls/Rfc9147ProcessingQueueLimit.test",
+      "tests/protocol/dtls/Rfc9147ProtectedAlertBeforeHello.test",
+      "tests/protocol/dtls/Rfc9147ProtectedBeforeHello.test",
+      "tests/protocol/dtls/Rfc9147ProtectionBeforeRetry.test",
+      "tests/protocol/dtls/Rfc9147PskHandshake.test",
+      "tests/protocol/dtls/Rfc9147PskResumption.test",
+      "tests/protocol/dtls/Rfc9147QueuedApplication.test",
+      "tests/protocol/dtls/Rfc9147QueuedEpochTransition.test",
+      "tests/protocol/dtls/Rfc9147QueuedFlightBudget.test",
+      "tests/protocol/dtls/Rfc9147QueuedRetryDeadline.test",
+      "tests/protocol/dtls/Rfc9147ReassemblyLimit.test",
+      "tests/protocol/dtls/Rfc9147RecordOverhead.test",
+      "tests/protocol/dtls/Rfc9147RecordParsing.test",
+      "tests/protocol/dtls/Rfc9147RecordSizeLimits.test",
+      "tests/protocol/dtls/Rfc9147ReplayWindow.test",
+      "tests/protocol/dtls/Rfc9147ReplayWindow8.test",
+      "tests/protocol/dtls/Rfc9147ReservedAck.test",
+      "tests/protocol/dtls/Rfc9147Resumption.test",
+      "tests/protocol/dtls/Rfc9147ResumptionExpired.test",
+      "tests/protocol/dtls/Rfc9147ResumptionIssuerIsolation.test",
+      "tests/protocol/dtls/Rfc9147ResumptionReceiveDeadline.test",
+      "tests/protocol/dtls/Rfc9147ResumptionServerLifecycle.test",
+      "tests/protocol/dtls/Rfc9147ResumptionTimeout.test",
+      "tests/protocol/dtls/Rfc9147ResumptionUnknown.test",
+      "tests/protocol/dtls/Rfc9147RttTimeout.test",
+      "tests/protocol/dtls/Rfc9147SameTupleReplacement.test",
+      "tests/protocol/dtls/Rfc9147SecondRetrySequence.test",
+      "tests/protocol/dtls/Rfc9147SelectiveAck.test",
+      "tests/protocol/dtls/Rfc9147Sha384EarlyData.test",
+      "tests/protocol/dtls/Rfc9147Sha384Resumption.test",
+      "tests/protocol/dtls/Rfc9147SharedPortClose.test",
+      "tests/protocol/dtls/Rfc9147ShortSequence.test",
+      "tests/protocol/dtls/Rfc9147ShortSequenceWrap.test",
+      "tests/protocol/dtls/Rfc9147SimultaneousUpdates.test",
+      "tests/protocol/dtls/Rfc9147SmallDatagramLimit.test",
+      "tests/protocol/dtls/Rfc9147TrailingClientHello.test",
+      "tests/protocol/dtls/Rfc9147UnexpectedHandshakeType.test",
+      "tests/protocol/dtls/Rfc9147UnofferedSelection.test",
+      "tests/protocol/dtls/Rfc9147UnsentAck.test",
+      "tests/protocol/dtls/Rfc9147UnsupportedSuite.test",
+      "tests/protocol/dtls/Rfc9147UnsupportedVersion.test",
+      "tests/protocol/dtls/Rfc9147UpdateDeadline.test",
+      "tests/protocol/dtls/Rfc9147UpdatePeerIsolation.test",
+      "tests/protocol/dtls/Rfc9147UpdateRequestGuard.test",
+      "tests/protocol/dtls/Rfc9147VersionNegotiation.test",
+      "tests/protocol/dtls/Rfc9147VersionNegotiationCertificateFallback.test",
+      "tests/protocol/dtls/Rfc9147VersionNegotiationDowngrade.test",
+      "tests/protocol/dtls/Rfc9147VersionNegotiationFallback.test",
+      "tests/protocol/dtls/Rfc9147VersionNegotiationFragmented.test",
+      "tests/protocol/dtls/Rfc9147VersionNegotiationLargeHello.test",
+      "tests/protocol/dtls/Rfc9147VersionNegotiationLegacyClient.test",
+      "tests/protocol/dtls/Rfc9147VersionNegotiationNoCookie.test",
+      "tests/protocol/dtls/Rfc9147VersionNegotiationOnly13.test",
+      "tests/protocol/dtls/Rfc9147VersionNegotiationReject12.test",
+      "tests/protocol/dtls/Rfc9147VersionNegotiationReject13.test",
+      "tests/protocol/dtls/Rfc9147VersionNegotiationTimeout.test",
+      "tests/protocol/dtls/Rfc9147VersionNegotiationUnoffered.test",
+      "tests/protocol/dtls/Rfc9147WrongSequenceImplicitAck.test",
+      "tests/protocol/dtls/algorithm-profiles.md",
+      "tests/protocol/dtls/association-establishment.md",
+      "tests/protocol/dtls/closure-and-lifecycle.md",
+      "tests/protocol/dtls/connection-id-updates.md",
+      "tests/protocol/dtls/connection-ids.md",
+      "tests/protocol/dtls/dtls12-associations.md",
+      "tests/protocol/dtls/dtls12-paths.md",
+      "tests/protocol/dtls/dtls12-record-foundation.md",
+      "tests/protocol/dtls/dtls12-resumption.md",
+      "tests/protocol/dtls/early-data.md",
+      "tests/protocol/dtls/handshake-recovery.md",
+      "tests/protocol/dtls/heartbeat-probes.md",
+      "tests/protocol/dtls/key-updates.md",
+      "tests/protocol/dtls/malformed-handshake-records.md",
+      "tests/protocol/dtls/migration.md",
+      "tests/protocol/dtls/package.ned",
+      "tests/protocol/dtls/path-mtu-minimum-base.md",
+      "tests/protocol/dtls/path-mtu.md",
+      "tests/protocol/dtls/post-handshake-authentication.md",
+      "tests/protocol/dtls/post-handshake-recovery.md",
+      "tests/protocol/dtls/protected-datagrams.md",
+      "tests/protocol/dtls/record-foundation.md",
+      "tests/protocol/dtls/resumption.md",
+      "tests/protocol/ipv6/Ipv6DontFragmentRequest.test",
+      "tests/protocol/ipv6/Ipv6DontFragmentRequestDelayed.test",
+      "tests/protocol/ipv6/Rfc8200SourceFragmentation.test",
+      "tests/protocol/ipv6/dont-fragment-request.md",
+      "tests/protocol/lib/AUTHORING.md",
+      "tests/protocol/lib/InterceptionRules.cc",
+      "tests/protocol/lib/ProtocolTest.h",
+      "tests/protocol/udp/TypedTapPredicate.test",
+      "tests/protocol/udp/typed-tap-predicate.md",
+      "tests/unit/Dtls12CidSerializer_1.test",
+      "tests/unit/Dtls12HandshakeSerializer_1.test",
+      "tests/unit/Dtls12RecordSerializer_1.test",
+      "tests/unit/Dtls12SessionStore_1.test",
+      "tests/unit/DtlsConnectionIdUpdateSerializer_1.test",
+      "tests/unit/DtlsHandshakeFlight_1.test",
+      "tests/unit/DtlsHandshakeReassembly_1.test",
+      "tests/unit/DtlsHeartbeatSerializer_1.test",
+      "tests/unit/DtlsRecordSerializer_1.test",
+      "tests/unit/DtlsRecordState_1.test",
+      "tests/unit/DtlsSessionStore_1.test",
+      "tests/unit/DtlsTicketSelection_1.test",
+      "tests/unit/TlsHandshakeParameters_1.test",
+      "tests/unit/TlsHandshakeSerializer_1.test",
+      "tests/unit/TlsNewSessionTicket_1.test"
+    ],
+    "target_overlap": [
+      "doc/project/audit/seal-list.md"
+    ],
+    "dirty_agents_sha256": "4405182693b0fa0b0b5c41b8d7c9ff59eb5014e433f3b133ccbed1512a939a82",
+    "test_inventory": [
+      "tests/module/Dtls12CidProtection_1.test",
+      "tests/module/Dtls12RecordProtection_1.test",
+      "tests/module/DtlsConnectionIds_1.test",
+      "tests/module/DtlsEngineLifecycle_1.test",
+      "tests/module/DtlsPathMtuConfigBase_1.test",
+      "tests/module/DtlsPathMtuConfigCeiling_1.test",
+      "tests/module/DtlsPathMtuConfigTimeout_1.test",
+      "tests/module/DtlsPathMtuConfigTimerResolution_1.test",
+      "tests/module/DtlsPathMtuLegacyBaseCidLow_1.test",
+      "tests/module/DtlsPathMtuLegacyBaseLow_1.test",
+      "tests/module/DtlsPathMtuLegacyBaseNegative_1.test",
+      "tests/module/DtlsPathMtuMixedBaseCidLow_1.test",
+      "tests/module/DtlsPathMtuMixedBaseLow_1.test",
+      "tests/module/DtlsPathMtuState_1.test",
+      "tests/module/DtlsPostHandshakeExchange_1.test",
+      "tests/module/DtlsProcessingQueue_1.test",
+      "tests/module/DtlsRecoveryLifecycle_1.test",
+      "tests/module/DtlsRekeyConfigHigh_1.test",
+      "tests/module/DtlsRekeyConfigLow_1.test",
+      "tests/module/DtlsRekeyConfigMin_1.test",
+      "tests/module/DtlsRestartLifecycle_1.test",
+      "tests/module/DtlsSenderState_1.test",
+      "tests/module/DtlsSessionLifecycle_1.test",
+      "tests/module/DtlsVersionConfigDuplicate_1.test",
+      "tests/module/DtlsVersionConfigEmpty_1.test",
+      "tests/module/DtlsVersionConfigUnknown_1.test",
+      "tests/protocol/dtls/Rfc6347ApiBounds.test",
+      "tests/protocol/dtls/Rfc6347AssociationLimit.test",
+      "tests/protocol/dtls/Rfc6347CallbackClose.test",
+      "tests/protocol/dtls/Rfc6347Close.test",
+      "tests/protocol/dtls/Rfc6347Coalesced.test",
+      "tests/protocol/dtls/Rfc6347Datagrams.test",
+      "tests/protocol/dtls/Rfc6347DeadlineBeforeHandoff.test",
+      "tests/protocol/dtls/Rfc6347FinalRetention.test",
+      "tests/protocol/dtls/Rfc6347FirstArrivalDeadline.test",
+      "tests/protocol/dtls/Rfc6347Handshake.test",
+      "tests/protocol/dtls/Rfc6347HandshakeCertificate.test",
+      "tests/protocol/dtls/Rfc6347HandshakeMutual.test",
+      "tests/protocol/dtls/Rfc6347Heartbeat.test",
+      "tests/protocol/dtls/Rfc6347HeartbeatCid.test",
+      "tests/protocol/dtls/Rfc6347HeartbeatMalformedLength.test",
+      "tests/protocol/dtls/Rfc6347HeartbeatPermissions.test",
+      "tests/protocol/dtls/Rfc6347HeartbeatTimeout.test",
+      "tests/protocol/dtls/Rfc6347HeartbeatWrongResponse.test",
+      "tests/protocol/dtls/Rfc6347Lifecycle.test",
+      "tests/protocol/dtls/Rfc6347MalformedCcs.test",
+      "tests/protocol/dtls/Rfc6347MalformedCertificate.test",
+      "tests/protocol/dtls/Rfc6347MalformedFinished.test",
+      "tests/protocol/dtls/Rfc6347PathMtu.test",
+      "tests/protocol/dtls/Rfc6347PathMtuBlackhole.test",
+      "tests/protocol/dtls/Rfc6347PathMtuIpv4Hint.test",
+      "tests/protocol/dtls/Rfc6347PathMtuIpv6.test",
+      "tests/protocol/dtls/Rfc6347PathMtuIsolation.test",
+      "tests/protocol/dtls/Rfc6347PathMtuLifecycle.test",
+      "tests/protocol/dtls/Rfc6347PathMtuMigration.test",
+      "tests/protocol/dtls/Rfc6347PathMtuMigrationIpv6.test",
+      "tests/protocol/dtls/Rfc6347PathMtuMinimumBase.test",
+      "tests/protocol/dtls/Rfc6347PathMtuNoCid.test",
+      "tests/protocol/dtls/Rfc6347PathMtuShortQuote.test",
+      "tests/protocol/dtls/Rfc6347PathMtuStaleQuote.test",
+      "tests/protocol/dtls/Rfc6347ReassemblyLimit.test",
+      "tests/protocol/dtls/Rfc6347Recovery.test",
+      "tests/protocol/dtls/Rfc6347RecoveryCcsReorder.test",
+      "tests/protocol/dtls/Rfc6347RecoveryCertificate.test",
+      "tests/protocol/dtls/Rfc6347RecoveryCertificateNoCookie.test",
+      "tests/protocol/dtls/Rfc6347RecoveryServerFlight.test",
+      "tests/protocol/dtls/Rfc6347Renegotiation.test",
+      "tests/protocol/dtls/Rfc6347Replay.test",
+      "tests/protocol/dtls/Rfc6347Resumption.test",
+      "tests/protocol/dtls/Rfc6347ResumptionCacheAfterFinished.test",
+      "tests/protocol/dtls/Rfc6347ResumptionCertificate.test",
+      "tests/protocol/dtls/Rfc6347ResumptionCertificateSessionId.test",
+      "tests/protocol/dtls/Rfc6347ResumptionClientCrash.test",
+      "tests/protocol/dtls/Rfc6347ResumptionClientStop.test",
+      "tests/protocol/dtls/Rfc6347ResumptionCrossVersionLegacyTicket.test",
+      "tests/protocol/dtls/Rfc6347ResumptionCrossVersionModernTicket.test",
+      "tests/protocol/dtls/Rfc6347ResumptionEarlyRefused.test",
+      "tests/protocol/dtls/Rfc6347ResumptionEviction.test",
+      "tests/protocol/dtls/Rfc6347ResumptionExpiry.test",
+      "tests/protocol/dtls/Rfc6347ResumptionFinalRetention.test",
+      "tests/protocol/dtls/Rfc6347ResumptionIncompatibleOffer.test",
+      "tests/protocol/dtls/Rfc6347ResumptionInvalidTicketWithSessionId.test",
+      "tests/protocol/dtls/Rfc6347ResumptionLoss.test",
+      "tests/protocol/dtls/Rfc6347ResumptionMalformedTicket.test",
+      "tests/protocol/dtls/Rfc6347ResumptionServerLifecycle.test",
+      "tests/protocol/dtls/Rfc6347ResumptionSessionId.test",
+      "tests/protocol/dtls/Rfc6347ResumptionSessionIdExpiry.test",
+      "tests/protocol/dtls/Rfc6347ResumptionSharedVersions.test",
+      "tests/protocol/dtls/Rfc6347ResumptionUnknownTicket.test",
+      "tests/protocol/dtls/Rfc6347ResumptionUnsupportedExtension.test",
+      "tests/protocol/dtls/Rfc6347SharedVersions.test",
+      "tests/protocol/dtls/Rfc9146ConnectionId.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdApiBounds.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdCertificate.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdClose.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdEmptyClient.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdEmptyServer.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdExhaustion.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdFatal.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdInnerLimit.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdInnerType.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdLifecycle.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdMissing.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdPeerLength.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdRenegotiation.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdResumption.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdTags.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdUnknown.test",
+      "tests/protocol/dtls/Rfc9146ConnectionIdWrongVersion.test",
+      "tests/protocol/dtls/Rfc9146Migration.test",
+      "tests/protocol/dtls/Rfc9146MigrationCompeting.test",
+      "tests/protocol/dtls/Rfc9146MigrationFreshResponse.test",
+      "tests/protocol/dtls/Rfc9146MigrationIpv6.test",
+      "tests/protocol/dtls/Rfc9146MigrationNoPermission.test",
+      "tests/protocol/dtls/Rfc9146MigrationOldRecord.test",
+      "tests/protocol/dtls/Rfc9146MigrationRebind.test",
+      "tests/protocol/dtls/Rfc9146MigrationRebindTimeout.test",
+      "tests/protocol/dtls/Rfc9146MigrationRouted.test",
+      "tests/protocol/dtls/Rfc9147AckQueuedReceive.test",
+      "tests/protocol/dtls/Rfc9147AggregateReassembly.test",
+      "tests/protocol/dtls/Rfc9147AlertDisposition.test",
+      "tests/protocol/dtls/Rfc9147AlgorithmFragmentation.test",
+      "tests/protocol/dtls/Rfc9147AlgorithmProfileCosts.test",
+      "tests/protocol/dtls/Rfc9147AlgorithmProfiles.test",
+      "tests/protocol/dtls/Rfc9147AlgorithmRetrySelection.test",
+      "tests/protocol/dtls/Rfc9147AlgorithmUpdateCosts.test",
+      "tests/protocol/dtls/Rfc9147AmplificationIsolation.test",
+      "tests/protocol/dtls/Rfc9147AmplificationLimit.test",
+      "tests/protocol/dtls/Rfc9147ApplicationDatagrams.test",
+      "tests/protocol/dtls/Rfc9147ApplicationReordering.test",
+      "tests/protocol/dtls/Rfc9147AssociationIsolation.test",
+      "tests/protocol/dtls/Rfc9147AssociationLimit.test",
+      "tests/protocol/dtls/Rfc9147ClientAuthentication.test",
+      "tests/protocol/dtls/Rfc9147ClientHello.test",
+      "tests/protocol/dtls/Rfc9147ClientHelloCompression.test",
+      "tests/protocol/dtls/Rfc9147Close.test",
+      "tests/protocol/dtls/Rfc9147CloseBoundary.test",
+      "tests/protocol/dtls/Rfc9147CloseDeadline.test",
+      "tests/protocol/dtls/Rfc9147CloseDelivered.test",
+      "tests/protocol/dtls/Rfc9147CoalescedAmplification.test",
+      "tests/protocol/dtls/Rfc9147ConnectionId.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdEarlyBudget.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdEarlyData.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdInvalid.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdLifecycle.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdMalformedOffer.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdReuse.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUnsolicited.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUpdate.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUpdateConflict.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUpdateExcessive.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUpdateFragments.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUpdateInputCost.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUpdateInvalidUsage.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUpdateLateFulfillment.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUpdateMalformedVector.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUpdateOverlap.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUpdateRequestTimeout.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUpdateTimeout.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUpdateUnfulfilled.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUpdateUnnegotiated.test",
+      "tests/protocol/dtls/Rfc9147ConnectionIdUpdateZeroResponse.test",
+      "tests/protocol/dtls/Rfc9147CookieExpired.test",
+      "tests/protocol/dtls/Rfc9147CookieKeyShareRetry.test",
+      "tests/protocol/dtls/Rfc9147CookieMissing.test",
+      "tests/protocol/dtls/Rfc9147CookieRetry.test",
+      "tests/protocol/dtls/Rfc9147CookieWrongRandom.test",
+      "tests/protocol/dtls/Rfc9147CookieWrongSource.test",
+      "tests/protocol/dtls/Rfc9147DeadlineBeforeHandoff.test",
+      "tests/protocol/dtls/Rfc9147DuplicatePlaintextCost.test",
+      "tests/protocol/dtls/Rfc9147EarlyData.test",
+      "tests/protocol/dtls/Rfc9147EarlyDataBeforeHello.test",
+      "tests/protocol/dtls/Rfc9147EarlyDataChangedSuite.test",
+      "tests/protocol/dtls/Rfc9147EarlyDataExpired.test",
+      "tests/protocol/dtls/Rfc9147EarlyDataFailedAttempt.test",
+      "tests/protocol/dtls/Rfc9147EarlyDataHrr.test",
+      "tests/protocol/dtls/Rfc9147EarlyDataLate.test",
+      "tests/protocol/dtls/Rfc9147EarlyDataLoss.test",
+      "tests/protocol/dtls/Rfc9147EarlyDataNoAllowance.test",
+      "tests/protocol/dtls/Rfc9147EarlyDataPeerLimit.test",
+      "tests/protocol/dtls/Rfc9147EarlyDataQueuedBoundary.test",
+      "tests/protocol/dtls/Rfc9147EarlyDataReplay.test",
+      "tests/protocol/dtls/Rfc9147EarlyPeerFinished.test",
+      "tests/protocol/dtls/Rfc9147EmptyCookieExtension.test",
+      "tests/protocol/dtls/Rfc9147EpochAliasFinalAck.test",
+      "tests/protocol/dtls/Rfc9147EstablishmentReassemblyRelease.test",
+      "tests/protocol/dtls/Rfc9147FatalDuringClose.test",
+      "tests/protocol/dtls/Rfc9147FinalAckLoss.test",
+      "tests/protocol/dtls/Rfc9147FinalAckRetention.test",
+      "tests/protocol/dtls/Rfc9147FinishedLength.test",
+      "tests/protocol/dtls/Rfc9147FinishedUpdateOverlap.test",
+      "tests/protocol/dtls/Rfc9147FirstArrivalDeadline.test",
+      "tests/protocol/dtls/Rfc9147ForbiddenRetryPsk.test",
+      "tests/protocol/dtls/Rfc9147FragmentConflict.test",
+      "tests/protocol/dtls/Rfc9147FragmentInconsistentLength.test",
+      "tests/protocol/dtls/Rfc9147FragmentOutOfRange.test",
+      "tests/protocol/dtls/Rfc9147FragmentReassembly.test",
+      "tests/protocol/dtls/Rfc9147FullDuplexCosts.test",
+      "tests/protocol/dtls/Rfc9147HalfOpenFragmentConflict.test",
+      "tests/protocol/dtls/Rfc9147HalfOpenFragmentNumbers.test",
+      "tests/protocol/dtls/Rfc9147HalfOpenLimit.test",
+      "tests/protocol/dtls/Rfc9147Handshake.test",
+      "tests/protocol/dtls/Rfc9147HandshakeBackoff.test",
+      "tests/protocol/dtls/Rfc9147HandshakeDeadline.test",
+      "tests/protocol/dtls/Rfc9147HandshakeLoss.test",
+      "tests/protocol/dtls/Rfc9147Heartbeat.test",
+      "tests/protocol/dtls/Rfc9147HeartbeatAdmission.test",
+      "tests/protocol/dtls/Rfc9147HeartbeatInvalidOffer.test",
+      "tests/protocol/dtls/Rfc9147HeartbeatInvalidSelection.test",
+      "tests/protocol/dtls/Rfc9147HeartbeatIsolation.test",
+      "tests/protocol/dtls/Rfc9147HeartbeatLifecycle.test",
+      "tests/protocol/dtls/Rfc9147HeartbeatMalformedLength.test",
+      "tests/protocol/dtls/Rfc9147HeartbeatPermissions.test",
+      "tests/protocol/dtls/Rfc9147HeartbeatQueuedExpiry.test",
+      "tests/protocol/dtls/Rfc9147HeartbeatResumption.test",
+      "tests/protocol/dtls/Rfc9147HeartbeatTimeout.test",
+      "tests/protocol/dtls/Rfc9147HeartbeatUnsolicited.test",
+      "tests/protocol/dtls/Rfc9147HeartbeatWrongResponse.test",
+      "tests/protocol/dtls/Rfc9147HeldFinished.test",
+      "tests/protocol/dtls/Rfc9147IdenticalOverlap.test",
+      "tests/protocol/dtls/Rfc9147ImplicitLength.test",
+      "tests/protocol/dtls/Rfc9147InflatedClientHello.test",
+      "tests/protocol/dtls/Rfc9147InnerPadding.test",
+      "tests/protocol/dtls/Rfc9147InputQueueLimit.test",
+      "tests/protocol/dtls/Rfc9147InvalidRecord.test",
+      "tests/protocol/dtls/Rfc9147InvalidRecordTimer.test",
+      "tests/protocol/dtls/Rfc9147Ipv6.test",
+      "tests/protocol/dtls/Rfc9147KeyUpdate.test",
+      "tests/protocol/dtls/Rfc9147KeyUpdateAutomatic.test",
+      "tests/protocol/dtls/Rfc9147KeyUpdateBusy.test",
+      "tests/protocol/dtls/Rfc9147KeyUpdateEmptyFragment.test",
+      "tests/protocol/dtls/Rfc9147KeyUpdateImpossibleLength.test",
+      "tests/protocol/dtls/Rfc9147KeyUpdateImpossibleOffset.test",
+      "tests/protocol/dtls/Rfc9147KeyUpdateInputCost.test",
+      "tests/protocol/dtls/Rfc9147KeyUpdateInvalidFlag.test",
+      "tests/protocol/dtls/Rfc9147KeyUpdateOldEpoch.test",
+      "tests/protocol/dtls/Rfc9147LargeFlight.test",
+      "tests/protocol/dtls/Rfc9147LargeRecordHandshake.test",
+      "tests/protocol/dtls/Rfc9147LaterResponseImplicitAck.test",
+      "tests/protocol/dtls/Rfc9147LegacyCookie.test",
+      "tests/protocol/dtls/Rfc9147MalformedCurrentHandshakeQueued.test",
+      "tests/protocol/dtls/Rfc9147MalformedCurrentHandshakeSync.test",
+      "tests/protocol/dtls/Rfc9147MalformedInner.test",
+      "tests/protocol/dtls/Rfc9147MalformedRetainedHandshakeQueued.test",
+      "tests/protocol/dtls/Rfc9147MalformedRetainedHandshakeSync.test",
+      "tests/protocol/dtls/Rfc9147MalformedRetryShare.test",
+      "tests/protocol/dtls/Rfc9147Migration.test",
+      "tests/protocol/dtls/Rfc9147MigrationCompeting.test",
+      "tests/protocol/dtls/Rfc9147MigrationFreshResponse.test",
+      "tests/protocol/dtls/Rfc9147MigrationIpv6.test",
+      "tests/protocol/dtls/Rfc9147MigrationKeyUpdate.test",
+      "tests/protocol/dtls/Rfc9147MigrationMalformedRecord.test",
+      "tests/protocol/dtls/Rfc9147MigrationMultihomed.test",
+      "tests/protocol/dtls/Rfc9147MigrationNoPermission.test",
+      "tests/protocol/dtls/Rfc9147MigrationOccupiedPort.test",
+      "tests/protocol/dtls/Rfc9147MigrationOldRecord.test",
+      "tests/protocol/dtls/Rfc9147MigrationRebind.test",
+      "tests/protocol/dtls/Rfc9147MigrationRebindMultiple.test",
+      "tests/protocol/dtls/Rfc9147MigrationRebindProbe.test",
+      "tests/protocol/dtls/Rfc9147MigrationRebindTimeout.test",
+      "tests/protocol/dtls/Rfc9147MigrationRouted.test",
+      "tests/protocol/dtls/Rfc9147MigrationTimeout.test",
+      "tests/protocol/dtls/Rfc9147MigrationUnidirectional.test",
+      "tests/protocol/dtls/Rfc9147MinimumBudgetHandshake.test",
+      "tests/protocol/dtls/Rfc9147MissingCertificateExtensions.test",
+      "tests/protocol/dtls/Rfc9147MissingKeyShareExtension.test",
+      "tests/protocol/dtls/Rfc9147ModeledCorruption.test",
+      "tests/protocol/dtls/Rfc9147Multihomed.test",
+      "tests/protocol/dtls/Rfc9147NegotiationFailure.test",
+      "tests/protocol/dtls/Rfc9147ObsoletePlainAlert.test",
+      "tests/protocol/dtls/Rfc9147PackedClientHello.test",
+      "tests/protocol/dtls/Rfc9147PackedClientHelloConflict.test",
+      "tests/protocol/dtls/Rfc9147PackedClientHelloMalformed.test",
+      "tests/protocol/dtls/Rfc9147PackedProtectedHandshake.test",
+      "tests/protocol/dtls/Rfc9147PackedProtectedMalformed.test",
+      "tests/protocol/dtls/Rfc9147PartialRetryImplicitAck.test",
+      "tests/protocol/dtls/Rfc9147PathMtu.test",
+      "tests/protocol/dtls/Rfc9147PathMtuAuthPause.test",
+      "tests/protocol/dtls/Rfc9147PathMtuBlackhole.test",
+      "tests/protocol/dtls/Rfc9147PathMtuIpv4Hint.test",
+      "tests/protocol/dtls/Rfc9147PathMtuIpv4HintOptions.test",
+      "tests/protocol/dtls/Rfc9147PathMtuIpv6.test",
+      "tests/protocol/dtls/Rfc9147PathMtuIsolation.test",
+      "tests/protocol/dtls/Rfc9147PathMtuLateAck.test",
+      "tests/protocol/dtls/Rfc9147PathMtuLifecycle.test",
+      "tests/protocol/dtls/Rfc9147PathMtuMigration.test",
+      "tests/protocol/dtls/Rfc9147PathMtuOrdinaryQuote.test",
+      "tests/protocol/dtls/Rfc9147PathMtuRaise.test",
+      "tests/protocol/dtls/Rfc9147PathMtuRouted.test",
+      "tests/protocol/dtls/Rfc9147PathMtuSearchLoss.test",
+      "tests/protocol/dtls/Rfc9147PathMtuShortQuote.test",
+      "tests/protocol/dtls/Rfc9147PathMtuStaleQuote.test",
+      "tests/protocol/dtls/Rfc9147PathMtuUnsupported.test",
+      "tests/protocol/dtls/Rfc9147PeerRequestActiveProtection.test",
+      "tests/protocol/dtls/Rfc9147PeerRequestedUpdate.test",
+      "tests/protocol/dtls/Rfc9147PendingQueueLimit.test",
+      "tests/protocol/dtls/Rfc9147PlainAlertLocalIdentity.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuth.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthAbsentCapability.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthAckLoss.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthClose.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthDeadline.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthDisabledServer.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthDuplicateContext.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthEmptyCertificate.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthEpochSix.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthExternalPsk.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthIsolation.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthMigration.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthMutualSnapshot.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthOrdering.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthOverlap.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthProbePause.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthPskTicket.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthRequestBudget.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthResponseBudget.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthTicketSnapshot.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthWrongContext.test",
+      "tests/protocol/dtls/Rfc9147PostHandshakeAuthWrongIdentity.test",
+      "tests/protocol/dtls/Rfc9147PrevalidationProcessingExpiry.test",
+      "tests/protocol/dtls/Rfc9147ProcessingQueueLimit.test",
+      "tests/protocol/dtls/Rfc9147ProtectedAlertBeforeHello.test",
+      "tests/protocol/dtls/Rfc9147ProtectedBeforeHello.test",
+      "tests/protocol/dtls/Rfc9147ProtectionBeforeRetry.test",
+      "tests/protocol/dtls/Rfc9147PskHandshake.test",
+      "tests/protocol/dtls/Rfc9147PskResumption.test",
+      "tests/protocol/dtls/Rfc9147QueuedApplication.test",
+      "tests/protocol/dtls/Rfc9147QueuedEpochTransition.test",
+      "tests/protocol/dtls/Rfc9147QueuedFlightBudget.test",
+      "tests/protocol/dtls/Rfc9147QueuedRetryDeadline.test",
+      "tests/protocol/dtls/Rfc9147ReassemblyLimit.test",
+      "tests/protocol/dtls/Rfc9147RecordOverhead.test",
+      "tests/protocol/dtls/Rfc9147RecordParsing.test",
+      "tests/protocol/dtls/Rfc9147RecordSizeLimits.test",
+      "tests/protocol/dtls/Rfc9147ReplayWindow.test",
+      "tests/protocol/dtls/Rfc9147ReplayWindow8.test",
+      "tests/protocol/dtls/Rfc9147ReservedAck.test",
+      "tests/protocol/dtls/Rfc9147Resumption.test",
+      "tests/protocol/dtls/Rfc9147ResumptionExpired.test",
+      "tests/protocol/dtls/Rfc9147ResumptionIssuerIsolation.test",
+      "tests/protocol/dtls/Rfc9147ResumptionReceiveDeadline.test",
+      "tests/protocol/dtls/Rfc9147ResumptionServerLifecycle.test",
+      "tests/protocol/dtls/Rfc9147ResumptionTimeout.test",
+      "tests/protocol/dtls/Rfc9147ResumptionUnknown.test",
+      "tests/protocol/dtls/Rfc9147RttTimeout.test",
+      "tests/protocol/dtls/Rfc9147SameTupleReplacement.test",
+      "tests/protocol/dtls/Rfc9147SecondRetrySequence.test",
+      "tests/protocol/dtls/Rfc9147SelectiveAck.test",
+      "tests/protocol/dtls/Rfc9147Sha384EarlyData.test",
+      "tests/protocol/dtls/Rfc9147Sha384Resumption.test",
+      "tests/protocol/dtls/Rfc9147SharedPortClose.test",
+      "tests/protocol/dtls/Rfc9147ShortSequence.test",
+      "tests/protocol/dtls/Rfc9147ShortSequenceWrap.test",
+      "tests/protocol/dtls/Rfc9147SimultaneousUpdates.test",
+      "tests/protocol/dtls/Rfc9147SmallDatagramLimit.test",
+      "tests/protocol/dtls/Rfc9147TrailingClientHello.test",
+      "tests/protocol/dtls/Rfc9147UnexpectedHandshakeType.test",
+      "tests/protocol/dtls/Rfc9147UnofferedSelection.test",
+      "tests/protocol/dtls/Rfc9147UnsentAck.test",
+      "tests/protocol/dtls/Rfc9147UnsupportedSuite.test",
+      "tests/protocol/dtls/Rfc9147UnsupportedVersion.test",
+      "tests/protocol/dtls/Rfc9147UpdateDeadline.test",
+      "tests/protocol/dtls/Rfc9147UpdatePeerIsolation.test",
+      "tests/protocol/dtls/Rfc9147UpdateRequestGuard.test",
+      "tests/protocol/dtls/Rfc9147VersionNegotiation.test",
+      "tests/protocol/dtls/Rfc9147VersionNegotiationCertificateFallback.test",
+      "tests/protocol/dtls/Rfc9147VersionNegotiationDowngrade.test",
+      "tests/protocol/dtls/Rfc9147VersionNegotiationFallback.test",
+      "tests/protocol/dtls/Rfc9147VersionNegotiationFragmented.test",
+      "tests/protocol/dtls/Rfc9147VersionNegotiationLargeHello.test",
+      "tests/protocol/dtls/Rfc9147VersionNegotiationLegacyClient.test",
+      "tests/protocol/dtls/Rfc9147VersionNegotiationNoCookie.test",
+      "tests/protocol/dtls/Rfc9147VersionNegotiationOnly13.test",
+      "tests/protocol/dtls/Rfc9147VersionNegotiationReject12.test",
+      "tests/protocol/dtls/Rfc9147VersionNegotiationReject13.test",
+      "tests/protocol/dtls/Rfc9147VersionNegotiationTimeout.test",
+      "tests/protocol/dtls/Rfc9147VersionNegotiationUnoffered.test",
+      "tests/protocol/dtls/Rfc9147WrongSequenceImplicitAck.test",
+      "tests/unit/Dtls12CidSerializer_1.test",
+      "tests/unit/Dtls12HandshakeSerializer_1.test",
+      "tests/unit/Dtls12RecordSerializer_1.test",
+      "tests/unit/Dtls12SessionStore_1.test",
+      "tests/unit/DtlsConnectionIdUpdateSerializer_1.test",
+      "tests/unit/DtlsHandshakeFlight_1.test",
+      "tests/unit/DtlsHandshakeReassembly_1.test",
+      "tests/unit/DtlsHeartbeatSerializer_1.test",
+      "tests/unit/DtlsRecordSerializer_1.test",
+      "tests/unit/DtlsRecordState_1.test",
+      "tests/unit/DtlsSessionStore_1.test",
+      "tests/unit/DtlsTicketSelection_1.test",
+      "tests/unit/TlsHandshakeParameters_1.test",
+      "tests/unit/TlsHandshakeSerializer_1.test",
+      "tests/unit/TlsNewSessionTicket_1.test"
+    ],
+    "baseline_changes": "diff --git a/inet.opp b/inet.opp\nindex 473d2efcb9..10e5e32e52 100644\n--- a/inet.opp\n+++ b/inet.opp\n@@ -39,7 +39,7 @@ SimulationProject(\n         \"smoke\":       {\"defaults\": {\"run_number\": 0}},\n         \"sanitizer\":   {\"defaults\": {\"run_number\": 0}},\n         \"statistical\": {\"defaults\": {\"run_number\": 0, \"mode\": \"release\"},\n-                        \"baseline\": {\"repository\": \"inet-framework/statistics\", \"ref\": \"f76ce96731278d64727065b5669e4f1cab431da5\", \"folder\": \"statistics\"}},\n+                        \"baseline\": {\"repository\": \"inet-framework/statistics\", \"ref\": \"3d3a8995a00d75f2f21ccd42a648db591974611c\", \"folder\": \"statistics\"}},\n         \"speed\":       {\"defaults\": {\"run_number\": 0}, \"store\": \"tests/speed/store.json\"},\n         \"fingerprint\": {\"store\": \"tests/fingerprint/store.json\", \"defaults\": {\"stored_only\": True, \"select_fingerprint\": \"shortest\",\n                         \"ingredients_list\": [\"tplx\", \"~tNl\", \"~tND\"], \"cpu_time_limit\": \"600s\"}},"
+  },
+  "final_input": {
+    "created": "2026-11-17T09:23:19.900826+01:00",
+    "target": "476ab0f2fa019c0bcf36d23d9f99ec884ee9393c",
+    "topic": "5284847df92eea8451bf056d8722fabb0ddf65bd",
+    "prepared_commit": "89285a8cdbc9777f9531a2ea354d6a30ea154654",
+    "tree": "359b1b0ab4b20a501b00a0bdd549ed5399ad6730",
+    "projection": "PASS",
+    "seal_index": "Canonical check-seals.sh --write PASS, regenerated for original DTLS design decision",
+    "baseline_exceptions": [],
+    "initial_input_snapshot": "5e1fb4b91b1ff67adc061dd884fa51e7034bfb29",
+    "verified": "2026-11-17T09:31:02.642013+01:00",
+    "previous_verified_input": "57d4826ae81354b3c95416beaeed8b726bb99484",
+    "corrected_input_ref": "input/dtls-publication-20261117-serializer-corrected",
+    "correction_approval": "User: Approve the correction",
+    "correction_patch": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/serialization-correction-proposal/correction.patch",
+    "corrected": "2026-11-17T14:40:08.201324+01:00",
+    "previous_baseline_input": "f1bf0104b4aa9fe322a56eabb3a3b401089e0414",
+    "statistics_pin": "411462a19e67dda7438213bfa3dec4d1257dd05e",
+    "statistics_tree": "82b351fe0f8ca918862fb94fd4ec73f6c48f4a67",
+    "baseline_record_approval": "User: Approve provenance correction",
+    "baseline_values_changed": false
+  },
+  "code_prefix": [
+    {
+      "id": "C00",
+      "commit": "a028e229adf578f2c595d860d765a120f00901f3",
+      "status": "SAFE_POINT",
+      "checks": "Plan structure, coverage, dependency and immutable-link checks from preparation. Documentation-only executable-input identity verified.",
+      "checkpoint": "cleanup/dtls-publication-checkpoint-20261117T092723",
+      "metadata_paths": [
+        "doc/project/design/decisions.md",
+        "doc/project/evidence/model/dtls/coverage.md",
+        "doc/project/evidence/model/dtls/results.md",
+        "doc/project/evidence/model/dtls/scope.md",
+        "doc/project/evidence/protocol/dtls/checks.md",
+        "doc/project/evidence/protocol/dtls/checks/handshake.md",
+        "doc/project/evidence/protocol/dtls/checks/records.md",
+        "doc/project/evidence/protocol/dtls/features.md",
+        "doc/project/evidence/protocol/dtls/standards.md",
+        "doc/project/evidence/standard/rfc8446/catalog.md",
+        "doc/project/evidence/standard/rfc9147/catalog.md",
+        "doc/project/evidence/model/dtls/extensions.md",
+        "doc/project/evidence/protocol/dtls/extensions.md",
+        "doc/project/evidence/standard/rfc9147/extensions.md",
+        "doc/project/audit/seal-list.md"
+      ],
+      "gates": {
+        "commits": "PASS",
+        "classification": "PASS",
+        "new_dtls_links": "PASS",
+        "global_links": "181 missing standards references outside changed DTLS docs",
+        "document_seals": "PASS"
+      },
+      "tested_commit": "1f32d7abf453d7473d244929ae56537f8f7074e6",
+      "pre_baseline_record_commit": "be60f0f23ada0845ce68e73cbce76fef6c12d5e6",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C01",
+      "commit": "cf9d866712df29fa086cbbc0d5c7cac0b28ffbf0",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c01-verification/record.json",
+      "tested_commit": "3843c4c60bad247a0b285909a45336644b45c73e",
+      "pre_baseline_record_commit": "1b413a0043b445ac8641fe17917730b557600e39",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C02",
+      "commit": "d7f55fbeeea4e5bc99b461b8143336b2850da2db",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c02-verification/record.json",
+      "tested_commit": "a762a10b5c14219ee0b49b99194f4b871cbd4e42",
+      "pre_baseline_record_commit": "d78b2c81cc0352a7a73e10b4714b8df92bf5f253",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C03",
+      "commit": "0117ea60c4e35204434c166cf0415f37f9a9f08b",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c03-verification-embedded-include/record.json",
+      "tested_commit": "98c0ccf6f8c64ffdf1c96cf946accee889a826fe",
+      "pre_baseline_record_commit": "029ccd8c80106e6874a597b0728869cbd2361b06",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C04",
+      "commit": "b5c0b0313663cea436600ac8904e594e1812c4e7",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c04-verification/record.json",
+      "tested_commit": "2d6fe7607c78532644ef65d88c09bfa8785166a7",
+      "pre_baseline_record_commit": "6871557e2c87e9a7de63552473bc99a5c9cb369a",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C05",
+      "commit": "782d794918b0c37640204aeb7bbfe8ad4be614e2",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c05-clean-generated-verification/record.json",
+      "tested_commit": "85f019781fd06c0d1194a3a5c99099ab43a6fb91",
+      "previous_record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c05-verification/record.json",
+      "pre_baseline_record_commit": "487b0f1e41351e50ed71388fb6e5f48bbea3dae7",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C06",
+      "commit": "3ae608f1a92547715cdd2791bce3da0d012ec920",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c06-verification/record.json",
+      "tested_commit": "8d3ec0b63c665c98fed913dcd7bc18716df3657a",
+      "pre_baseline_record_commit": "d54f9744cea539c68ecca488042d80f413c7ac65",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C07",
+      "commit": "8b985d986d5410ccb2aa00bda9328b860b115af8",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c07-verification/record.json",
+      "tested_commit": "8c9940f899620da245f67fdc94bea3ed85c609a4",
+      "pre_baseline_record_commit": "76298d3005230ce493412f60590b5b869c9b0817",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C08",
+      "commit": "72009f8bec59de67e7499059686486d85561e274",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c08-verification/record.json",
+      "tested_commit": "8cfbf003d79c53254aebeef09b6e26f1962fb080",
+      "pre_baseline_record_commit": "c11689ebb89d402efbce74edd7eaf6804cfb9030",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C09",
+      "commit": "ff91aad80506a532cfdd17ff68b326fdd7d4e1f8",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c09-verification/record.json",
+      "tested_commit": "d84a86264d003d275fedff1a3d584ab9f3bb5931",
+      "pre_baseline_record_commit": "d2a49e2e56193c9ffece1aaaa710b0a0453e9f13",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C10",
+      "commit": "d2fa0568e844fb6643249495b98e16f2799262da",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c10-verification/record.json",
+      "tested_commit": "ed80b0142c693548372580694670d2d2b2ea5c52",
+      "pre_baseline_record_commit": "681b20141bcfac3097da86e9f0b97ba8cce0620d",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C11",
+      "commit": "e69f98b00dafc4da1295d17af762c772946005f7",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c11-verification/record.json",
+      "tested_commit": "6283370f80eb4a5f9828cdf4ec1ef18da6641a60",
+      "pre_baseline_record_commit": "0e701c55baa4e92f9e3beced74bd4741104334e6",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C12",
+      "commit": "de11af9ab864ee3b23de6ead7c182c66f8db8e77",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c12-verification/record.json",
+      "tested_commit": "5bc5b593ca137fb47e6958ea401456217be2fcce",
+      "pre_baseline_record_commit": "606fb05dade2d5b5cbd8f9382e72351ef11067c4",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C13a",
+      "commit": "4bd70c44945bfbfe5e0d793996dd50e149cc987e",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c13a-verification/record.json",
+      "tested_commit": "549b413ae1641b88a3534a52cb7f41792d454ab7",
+      "pre_baseline_record_commit": "4b92c4997b450d473ef9a2ea95672a1ee9b4496f",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C13",
+      "commit": "1422efc7816a8720c54428042fa384e10d1715de",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c13-verification/record.json",
+      "tested_commit": "b1266c0a426efe4df54b05715dba1860bb9a4342",
+      "pre_baseline_record_commit": "029335f3164ec51f61d05517506ad2d0c0237d3a",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C14a",
+      "commit": "e94b87555e9ef2c9d2495ee6550e1b4830bec871",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c14a-verification/record.json",
+      "tested_commit": "447ca93b9e237ee7dd07f57d42db9c82d8747ecc",
+      "pre_baseline_record_commit": "d58369c0ad6779cdd308a778ce040f8769a627f7",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C14",
+      "commit": "c543557d8883b8fa4c1f54e17c52395974b90710",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c14-verification/record.json",
+      "tested_commit": "34f4af57d1866a9d7d1ecfa9bc0ccf955ca03fd4",
+      "pre_baseline_record_commit": "7bbfac7fe72a3bb58c88579123b5ccf0f4bf1396",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C15",
+      "commit": "fb2195e771284f0b1e077084c9323ae8869a92aa",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c15-verification/record.json",
+      "tested_commit": "1ebbe33d01d54b51e02213f21b48629039df5d55",
+      "pre_baseline_record_commit": "997e2ce0a1eb07c9d2991435b60b1183a216d85b",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C16",
+      "commit": "956a63b2644dee75839323bb3d597446f3e769d0",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c16-verification/record.json",
+      "tested_commit": "aa40c2a5bff71f3dcc6deda20c9d49ff247ae456",
+      "pre_baseline_record_commit": "c5a2cf3e981de6912e9a52e92dde28eb34ca68a3",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C17",
+      "commit": "9a42d202888b3c6b5768b0d08297a29ca49929d0",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c17-verification/record.json",
+      "tested_commit": "8b4deade589a13679d83498853d61a913aa62972",
+      "pre_baseline_record_commit": "f2804e650f2624d2f4d08f27884a834459bbdeb3",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C18",
+      "commit": "b8a27f40dbf70ab8ff8229d1d1cfb101ac2f3078",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c18-verification/record.json",
+      "tested_commit": "c650e076ed307ef0e6df9a1b27174ee15bb4cbc9",
+      "pre_baseline_record_commit": "cea487ef3b25bf487b5e9549d40383d4ad3ed8d8",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C19",
+      "commit": "f19d44102c36e0d04b503c637fefd84c8997fecb",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c19-verification/record.json",
+      "tested_commit": "f6d0f8a481b335d9ea4e9c1e51fcb58bdcd35f86",
+      "pre_baseline_record_commit": "9a0c7f8e7e9b1d4b89e9b2ea48a43dee2f5b0149",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C20",
+      "commit": "a64247061683288140d5910e6aaab84d04d570dd",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c20-verification/record.json",
+      "tested_commit": "4e790fde3a63b6e2bcaf9c807fae7c1684804227",
+      "pre_baseline_record_commit": "b7a3f754765d1300bd67edfe26cb5b570728b088",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C21a",
+      "commit": "3a996a0c33c12f6ec4cd61b97f4db048466906a9",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c21a-classification-corrected/record.json",
+      "tested_commit": "cce785e918b01b714f4bb61b97f24ce7513519b4",
+      "pre_baseline_record_commit": "9190a27dcab290192d83484893e55f09c884a695",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C21b",
+      "commit": "b6499a486e73740397ea3c46eb553facc1794f51",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c21b-verification/record.json",
+      "tested_commit": "86fd5e2c5f76c0f4cd42372da949b229377f3648",
+      "pre_baseline_record_commit": "d874dc349409aafb23d50289164a3ac52b6e3e6d",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C21c",
+      "commit": "d711cbb2f7e61f81ebd15582adf57708d959a942",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c21c-verification/record.json",
+      "tested_commit": "78bf1c9f39528afc2cd8e0fec842a6b262487e12",
+      "pre_baseline_record_commit": "b2a56ebb5febecffaa3955500a3b89ecb9304b74",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C21d",
+      "commit": "0357462790501f6fb29a8e1a7e8623258e8ef1d1",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c21d-verification/record.json",
+      "tested_commit": "72eb9f75244ca2ff687eb3a781cc45fb36f53da4",
+      "pre_baseline_record_commit": "26c750df6177a25273a22a980a4d42d6e7775dc5",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C21",
+      "commit": "709316843956c8b582c57a2384c40db7749c923a",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c21-verification/record.json",
+      "tested_commit": "2722e6d5064a60defcdabbc002576f46725fad56",
+      "pre_baseline_record_commit": "19d6992473ffee620aaff121754822cce5bdf356",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C22a",
+      "commit": "cd2e9f24ee886f02c92fb134e5803c6d8342601c",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c22a-verification/record.json",
+      "tested_commit": "acd63c250f8b7be9794e6854d84ac3a68cd05ec7",
+      "pre_baseline_record_commit": "f383ea55044479977bd54133bca3ea37f8a6aee1",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C22",
+      "commit": "38851efc8f88ee9fe818e2956dcc2553aa3ee0d3",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c22-verification/record.json",
+      "tested_commit": "3144925b923a011e320d71d9997ffb1160a28066",
+      "pre_baseline_record_commit": "21665b6a7ac364aeff0e1a8a74c396b8fc9d70a9",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C23",
+      "commit": "d2f78cf35f5f2f0679eaafc9d442af33fb1ec085",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c23-verification/record.json",
+      "tested_commit": "000d289573dcdd44a45d81577926987b6b582945",
+      "pre_baseline_record_commit": "d486ceb69d04f3c2efce5f373bf44cb9d180aa99",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C24a",
+      "commit": "db1ef8288cb299c3c3ca45cf0c77dddb8e1e5363",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c24a-verification/record.json",
+      "tested_commit": "b115daf92cdee0ffd7c796984927d95040e2905a",
+      "pre_baseline_record_commit": "d61f8f63c09cf6432d950329e1319b6a2d26b55f",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C24",
+      "commit": "f36ac6a380c705040448dcc361bfffb362574bbf",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c24-verification/record.json",
+      "tested_commit": "d8abc874875032189bcb68552eed28cca962279d",
+      "pre_baseline_record_commit": "1a2ddc8230e9ad8c87f09e7f7d43ef280e709718",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C25",
+      "commit": "38e7c2030c09974da854943ca45019d322e79b73",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c25-verification/record.json",
+      "tested_commit": "13b7411fc1fa7e92e616a719520e559f7037a5b9",
+      "pre_baseline_record_commit": "e1707e8750d15de6321fb2cf36d8e5245c268ab6",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C26",
+      "commit": "e001d4312d4a6fcecb9cc6033fe734d2ee74f6c0",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c26-verification/record.json",
+      "tested_commit": "1f6c9a1d5552d78223cc020ac7fd0fb92a150a67",
+      "pre_baseline_record_commit": "c8170e7cfddff3d1b3ae6feeede39fb3ca2af58f",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C27",
+      "commit": "d8c4bdf7befbc56661fcf721cf7a2b92440156ac",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c27-verification/record.json",
+      "tested_commit": "406aaa6bc262d9914cb59997c4d27e382f4416ef",
+      "pre_baseline_record_commit": "42c9a62cac1d617dc72a5c8996c77e12cf6becfb",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C28",
+      "commit": "609dd3c589992cc7577859d3241e0cd1ef84ec3c",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c28-verification/record.json",
+      "tested_commit": "7d72f9a1b267fc60d345c7570ee3fce1beb90086",
+      "pre_baseline_record_commit": "768375acebd3f296a329b0c7f543d9aca7ec461c",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C29",
+      "commit": "d7c77395b064811f7c70cf9db4644865f3a86061",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c29-verification/record.json",
+      "tested_commit": "5dc61870c1ea760d1439ed1ad3adc622660d68db",
+      "pre_baseline_record_commit": "f139ec60b5cc03d8dc88421f56540eba57ed7c57",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C30",
+      "commit": "53dbc97ea2cff8b740c8e5cc04d7b12b9f68c51b",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c30-verification/record.json",
+      "tested_commit": "07f9d6ab418fc15a7026618acb63753822b110eb",
+      "pre_baseline_record_commit": "d9581b8470b655d8373486e0dec90ff02e551b3f",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C31",
+      "commit": "06d72baf026b8ddd68669c10c374ca76634aeb37",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c31-verification/record.json",
+      "tested_commit": "d9d8de30030b3a9337d92353210a0ce7af1b9205",
+      "pre_baseline_record_commit": "918511c0fc8c44b69dd99e43ebcd7ba70c798a8d",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C32",
+      "commit": "bdde07f3497671f125375b1d4bd4f6a2bbcac3b2",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c32-verification/record.json",
+      "tested_commit": "6ad9dded449768ceadd24a5d07ce1ac2266b7480",
+      "pre_baseline_record_commit": "330a7527c0e61fc2a74cfbecbd82144d1d81a362",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C33",
+      "commit": "1b4a68a01f17d17334fc5b5989ce29782a5e642e",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c33-verification/record.json",
+      "tested_commit": "b0667ca337b813fd5881ec95b42e22f09c6441f5",
+      "pre_baseline_record_commit": "5d68e51ee635b7810bb884321188cf5581727109",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C34a",
+      "commit": "319ff94b79bfb9adf79a3ca805f96d39eb303d8a",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c34a-verification/record.json",
+      "tested_commit": "679c476349d74bdca3dac55e37c9f88dac49fe5b",
+      "pre_baseline_record_commit": "e03f261a251c1ce33cbc4d47a6cd472391b6ab42",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C34",
+      "commit": "fc1f5067a0ad3664dae4426067c474a98ee9e417",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c34-verification/record.json",
+      "tested_commit": "cae9718efecce1a5e9379b3d5b2ae40d6848d11b",
+      "pre_baseline_record_commit": "c36d2c00d238095c39c3797a1f4a0ab86537af9d",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C35a",
+      "commit": "7d7d36a28a446af7b75973609a003768d0890f16",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c35a-verification/record.json",
+      "tested_commit": "9758a692d371b1b5fc069a3ae0b2e7468b8b78b1",
+      "pre_baseline_record_commit": "58fe77d4d7674d024c09411814d985022d85eaa8",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C35b",
+      "commit": "494d9f0da616c2e8237cfb282b4978cd07d19509",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c35b-verification/record.json",
+      "tested_commit": "46d09461c76dc832cc96b944d89a6cbec4b424d3",
+      "pre_baseline_record_commit": "e674de87709d7c9c6431e85254743b6a37890fcf",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C35",
+      "commit": "28d7bd42ac70cfe148f22dd03d0d50009211d0c1",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c35-verification/record.json",
+      "tested_commit": "092aaeee7cc1ebffbe62e90305244d4a23ec7029",
+      "pre_baseline_record_commit": "1c5c87017a47830a526a975a0b90654ec066e3b5",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C36a",
+      "commit": "f945d2cd12b6261c4fee99707fdc2050589bbd21",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c36a-verification/record.json",
+      "tested_commit": "66a1d065f3f5fb6a69a4cb648c868f32e53092ca",
+      "pre_baseline_record_commit": "eb2cae3de3e1f374fcc550494c9ef12f48947d78",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C36",
+      "commit": "fbaef0bda87fad37a5b34cf225f261cc61cfcd82",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c36-verification/record.json",
+      "tested_commit": "0c0ca71d3953018e77490b141b568716bb670ab1",
+      "pre_baseline_record_commit": "a403f14272848415a68a39f3795aa6c77487d4ee",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "id": "C37",
+      "commit": "6b4faa9061e57031f76668690bc897c259152810",
+      "status": "SAFE_POINT",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/c37-verification-scenarios/record.json",
+      "tested_commit": "96e8d353c0a858526851801d15d4511ff3fe7f16",
+      "pre_baseline_record_commit": "809c5f89d1e7c6daf97d0187b7e66e4e3fc189eb",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    }
+  ],
+  "review_refs": [
+    {
+      "pr": "PR01",
+      "ref": "review/dtls-01-shared-prerequisites",
+      "base": "476ab0f2fa019c0bcf36d23d9f99ec884ee9393c",
+      "tip": "d7f55fbeeea4e5bc99b461b8143336b2850da2db",
+      "status": "VALIDATED_LOCAL_REVIEW_TIP",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/pr01-combined/record.json",
+      "tested_tip": "a762a10b5c14219ee0b49b99194f4b871cbd4e42",
+      "message_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/history-message-rewrite.json",
+      "pre_baseline_record_tip": "d78b2c81cc0352a7a73e10b4714b8df92bf5f253",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "pr": "PR02",
+      "ref": "review/dtls-02-foundations",
+      "base": "d7f55fbeeea4e5bc99b461b8143336b2850da2db",
+      "tip": "ff91aad80506a532cfdd17ff68b326fdd7d4e1f8",
+      "status": "VALIDATED_LOCAL_REVIEW_TIP",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/pr02-combined/record.json",
+      "tested_tip": "d84a86264d003d275fedff1a3d584ab9f3bb5931",
+      "message_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/history-message-rewrite.json",
+      "pre_baseline_record_tip": "d2a49e2e56193c9ffece1aaaa710b0a0453e9f13",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "pr": "PR03",
+      "ref": "review/dtls-03-handshake-recovery",
+      "base": "ff91aad80506a532cfdd17ff68b326fdd7d4e1f8",
+      "tip": "1422efc7816a8720c54428042fa384e10d1715de",
+      "status": "VALIDATED_LOCAL_REVIEW_TIP",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/pr03-combined/record.json",
+      "tested_tip": "b1266c0a426efe4df54b05715dba1860bb9a4342",
+      "message_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/history-message-rewrite.json",
+      "pre_baseline_record_tip": "029335f3164ec51f61d05517506ad2d0c0237d3a",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "pr": "PR04",
+      "ref": "review/dtls-04-protected-datagrams",
+      "base": "1422efc7816a8720c54428042fa384e10d1715de",
+      "tip": "c543557d8883b8fa4c1f54e17c52395974b90710",
+      "status": "VALIDATED_LOCAL_REVIEW_TIP",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/pr04-combined/record.json",
+      "tested_tip": "34f4af57d1866a9d7d1ecfa9bc0ccf955ca03fd4",
+      "message_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/history-message-rewrite.json",
+      "pre_baseline_record_tip": "7bbfac7fe72a3bb58c88579123b5ccf0f4bf1396",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "pr": "PR05",
+      "ref": "review/dtls-05-key-update",
+      "base": "c543557d8883b8fa4c1f54e17c52395974b90710",
+      "tip": "956a63b2644dee75839323bb3d597446f3e769d0",
+      "status": "VALIDATED_LOCAL_REVIEW_TIP",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/pr05-combined/record.json",
+      "tested_tip": "aa40c2a5bff71f3dcc6deda20c9d49ff247ae456",
+      "message_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/history-message-rewrite.json",
+      "pre_baseline_record_tip": "c5a2cf3e981de6912e9a52e92dde28eb34ca68a3",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "pr": "PR06",
+      "ref": "review/dtls-06-closure-and-core-examples",
+      "base": "956a63b2644dee75839323bb3d597446f3e769d0",
+      "tip": "f19d44102c36e0d04b503c637fefd84c8997fecb",
+      "status": "VALIDATED_LOCAL_REVIEW_TIP",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/pr06-combined/record.json",
+      "tested_tip": "f6d0f8a481b335d9ea4e9c1e51fcb58bdcd35f86",
+      "message_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/history-message-rewrite.json",
+      "pre_baseline_record_tip": "9a0c7f8e7e9b1d4b89e9b2ea48a43dee2f5b0149",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "pr": "PR07",
+      "ref": "review/dtls-07-resumption",
+      "base": "f19d44102c36e0d04b503c637fefd84c8997fecb",
+      "tip": "709316843956c8b582c57a2384c40db7749c923a",
+      "status": "VALIDATED_LOCAL_REVIEW_TIP",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/pr07-combined/record.json",
+      "tested_tip": "2722e6d5064a60defcdabbc002576f46725fad56",
+      "message_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/history-message-rewrite.json",
+      "pre_baseline_record_tip": "19d6992473ffee620aaff121754822cce5bdf356",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "pr": "PR08",
+      "ref": "review/dtls-08-early-data",
+      "base": "709316843956c8b582c57a2384c40db7749c923a",
+      "tip": "38851efc8f88ee9fe818e2956dcc2553aa3ee0d3",
+      "status": "VALIDATED_LOCAL_REVIEW_TIP",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/pr08-combined/record.json",
+      "tested_tip": "3144925b923a011e320d71d9997ffb1160a28066",
+      "message_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/history-message-rewrite.json",
+      "pre_baseline_record_tip": "21665b6a7ac364aeff0e1a8a74c396b8fc9d70a9",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "pr": "PR09",
+      "ref": "review/dtls-09-algorithm-profiles",
+      "base": "38851efc8f88ee9fe818e2956dcc2553aa3ee0d3",
+      "tip": "f36ac6a380c705040448dcc361bfffb362574bbf",
+      "status": "VALIDATED_LOCAL_REVIEW_TIP",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/pr09-combined/record.json",
+      "tested_tip": "d8abc874875032189bcb68552eed28cca962279d",
+      "message_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/history-message-rewrite.json",
+      "pre_baseline_record_tip": "1a2ddc8230e9ad8c87f09e7f7d43ef280e709718",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "pr": "PR10",
+      "ref": "review/dtls-10-connection-identifiers",
+      "base": "f36ac6a380c705040448dcc361bfffb362574bbf",
+      "tip": "38e7c2030c09974da854943ca45019d322e79b73",
+      "status": "VALIDATED_LOCAL_REVIEW_TIP",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/pr10-combined/record.json",
+      "tested_tip": "13b7411fc1fa7e92e616a719520e559f7037a5b9",
+      "message_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/history-message-rewrite.json",
+      "pre_baseline_record_tip": "e1707e8750d15de6321fb2cf36d8e5245c268ab6",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "pr": "PR11",
+      "ref": "review/dtls-11-cid-updates",
+      "base": "38e7c2030c09974da854943ca45019d322e79b73",
+      "tip": "e001d4312d4a6fcecb9cc6033fe734d2ee74f6c0",
+      "status": "VALIDATED_LOCAL_REVIEW_TIP",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/pr11-combined/record.json",
+      "tested_tip": "1f6c9a1d5552d78223cc020ac7fd0fb92a150a67",
+      "message_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/history-message-rewrite.json",
+      "pre_baseline_record_tip": "c8170e7cfddff3d1b3ae6feeede39fb3ca2af58f",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "pr": "PR12",
+      "ref": "review/dtls-12-mobility",
+      "base": "e001d4312d4a6fcecb9cc6033fe734d2ee74f6c0",
+      "tip": "609dd3c589992cc7577859d3241e0cd1ef84ec3c",
+      "status": "VALIDATED_LOCAL_REVIEW_TIP",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/pr12-combined/record.json",
+      "tested_tip": "7d72f9a1b267fc60d345c7570ee3fce1beb90086",
+      "message_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/history-message-rewrite.json",
+      "pre_baseline_record_tip": "768375acebd3f296a329b0c7f543d9aca7ec461c",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "pr": "PR13",
+      "ref": "review/dtls-13-client-authentication",
+      "base": "609dd3c589992cc7577859d3241e0cd1ef84ec3c",
+      "tip": "d7c77395b064811f7c70cf9db4644865f3a86061",
+      "status": "VALIDATED_LOCAL_REVIEW_TIP",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/pr13-combined/record.json",
+      "tested_tip": "5dc61870c1ea760d1439ed1ad3adc622660d68db",
+      "message_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/history-message-rewrite.json",
+      "pre_baseline_record_tip": "f139ec60b5cc03d8dc88421f56540eba57ed7c57",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "pr": "PR14",
+      "ref": "review/dtls-14-path-mtu",
+      "base": "d7c77395b064811f7c70cf9db4644865f3a86061",
+      "tip": "bdde07f3497671f125375b1d4bd4f6a2bbcac3b2",
+      "status": "VALIDATED_LOCAL_REVIEW_TIP",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/pr14-combined/record.json",
+      "tested_tip": "6ad9dded449768ceadd24a5d07ce1ac2266b7480",
+      "message_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/history-message-rewrite.json",
+      "pre_baseline_record_tip": "330a7527c0e61fc2a74cfbecbd82144d1d81a362",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "pr": "PR15",
+      "ref": "review/dtls-15-dtls12-foundation",
+      "base": "bdde07f3497671f125375b1d4bd4f6a2bbcac3b2",
+      "tip": "fc1f5067a0ad3664dae4426067c474a98ee9e417",
+      "status": "VALIDATED_LOCAL_REVIEW_TIP",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/pr15-combined/record.json",
+      "tested_tip": "cae9718efecce1a5e9379b3d5b2ae40d6848d11b",
+      "message_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/history-message-rewrite.json",
+      "pre_baseline_record_tip": "c36d2c00d238095c39c3797a1f4a0ab86537af9d",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "pr": "PR16",
+      "ref": "review/dtls-16-dtls12-resumption",
+      "base": "fc1f5067a0ad3664dae4426067c474a98ee9e417",
+      "tip": "28d7bd42ac70cfe148f22dd03d0d50009211d0c1",
+      "status": "VALIDATED_LOCAL_REVIEW_TIP",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/pr16-combined/record.json",
+      "tested_tip": "092aaeee7cc1ebffbe62e90305244d4a23ec7029",
+      "message_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/history-message-rewrite.json",
+      "pre_baseline_record_tip": "1c5c87017a47830a526a975a0b90654ec066e3b5",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    },
+    {
+      "pr": "PR17",
+      "ref": "review/dtls-17-dtls12-paths",
+      "base": "28d7bd42ac70cfe148f22dd03d0d50009211d0c1",
+      "tip": "fbaef0bda87fad37a5b34cf225f261cc61cfcd82",
+      "status": "VALIDATED_LOCAL_REVIEW_TIP",
+      "record": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/pr17-combined/record.json",
+      "tested_tip": "0c0ca71d3953018e77490b141b568716bb670ab1",
+      "message_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/history-message-rewrite.json",
+      "pre_baseline_record_tip": "a403f14272848415a68a39f3795aa6c77487d4ee",
+      "baseline_record_identity_proof": "/home/miguel/workspace/.codex-artifacts/dtls-publication-20261117/baseline-record-proposal/publication-proof.json"
+    }
+  ],
+  "original_donor_dispositions": [
+    {
+      "donor": "8b79b19bfa0e6e85ff9b5396a82aed31eec99445",
+      "subject": "plan: add: DTLS 1.3 implementation plan and illustrated summary",
+      "owners": [
+        "C00",
+        "C38"
+      ]
+    },
+    {
+      "donor": "62636d476e4d7691edd7ab845321ac8505d75beb",
+      "subject": "doc: add: define the DTLS 1.3 simulation profile",
+      "owners": [
+        "C00",
+        "C38"
+      ]
+    },
+    {
+      "donor": "1094a1446201bfc98fefac9ed4e170c4c82a97ad",
+      "subject": "tests: add: select interception targets with typed predicates",
+      "owners": [
+        "C00",
+        "C01",
+        "C38"
+      ]
+    },
+    {
+      "donor": "5d83a169b8572364554c1564fa5d433d6a93e3e0",
+      "subject": "dtls: add: prepare bounded directional processing",
+      "owners": [
+        "C03"
+      ]
+    },
+    {
+      "donor": "933754a4bd498bfe35d95c6afca0091d6b41dc08",
+      "subject": "dtls: add: prepare record reconstruction and replay state",
+      "owners": [
+        "C04"
+      ]
+    },
+    {
+      "donor": "1d8c95330ad387304750b1b539c6d611bd54c29d",
+      "subject": "dtls: add: record types and the UDP-backed engine contract",
+      "owners": [
+        "C00",
+        "C03",
+        "C05",
+        "C06",
+        "C07",
+        "C08",
+        "C38"
+      ]
+    },
+    {
+      "donor": "95d9557110652f94124e9bea1c7098a9ea00aca2",
+      "subject": "tls: add: prepare modeled handshake parameter selection",
+      "owners": [
+        "C09"
+      ]
+    },
+    {
+      "donor": "cc5f0afbb6ed28b56d7641d726617fe6b3da8490",
+      "subject": "dtls: add: establish modeled client and server associations",
+      "owners": [
+        "C00",
+        "C10",
+        "C38"
+      ]
+    },
+    {
+      "donor": "eec80dc73219d8ce981e3b33b21933d7c6e4946f",
+      "subject": "dtls: add: prepare handshake flight accounting",
+      "owners": [
+        "C11"
+      ]
+    },
+    {
+      "donor": "ec4e1a9b78eff011f6b8c2ebc53ce4b8153b95c6",
+      "subject": "dtls: add: prepare bounded handshake reassembly",
+      "owners": [
+        "C12"
+      ]
+    },
+    {
+      "donor": "4bea908d4ca67389dbb38d16a2f5025d4e84bce3",
+      "subject": "dtls: add: recover fragmented handshakes over lossy UDP",
+      "owners": [
+        "C00",
+        "C13",
+        "C13a",
+        "C38"
+      ]
+    },
+    {
+      "donor": "27cfb518f0797f632f73e20459fe13c8579a32b8",
+      "subject": "dtls: add: deliver protected datagrams with epoch and replay checks",
+      "owners": [
+        "C00",
+        "C14",
+        "C14a",
+        "C38"
+      ]
+    },
+    {
+      "donor": "bfe3b7561c2253a13b22b2d5b3e27171434bea7c",
+      "subject": "plan: change: separate DTLS updates from graceful closure",
+      "owners": [
+        "C00",
+        "C38"
+      ]
+    },
+    {
+      "donor": "0144fcc3815ac0ae471cd32e8e5549d055e081be",
+      "subject": "dtls: refactor: allow consecutive input processing stages",
+      "owners": [
+        "C15"
+      ]
+    },
+    {
+      "donor": "6f93b927e5faabcea157c74ab38753492580bf38",
+      "subject": "dtls: add: update association protection epochs",
+      "owners": [
+        "C16"
+      ]
+    },
+    {
+      "donor": "448ef4ffa77a242a591575dc8c6ca6735feee3ed",
+      "subject": "dtls: fix: contain handshake decode errors after processing delays",
+      "owners": [
+        "C16"
+      ]
+    },
+    {
+      "donor": "31b014b147315a2ebeadf8459ab2b2ea189d9364",
+      "subject": "dtls: refactor: cancel queued work while preserving selected owners",
+      "owners": [
+        "C17"
+      ]
+    },
+    {
+      "donor": "a23804a1e88e6c739ce457ede3f63bd9e694aace",
+      "subject": "dtls: add: close associations without disrupting other peers",
+      "owners": [
+        "C18"
+      ]
+    },
+    {
+      "donor": "790954468a75ed7158f14f35396c52d0998e976c",
+      "subject": "dtls: add: demonstrate the supported simulation profile",
+      "owners": [
+        "C19"
+      ]
+    },
+    {
+      "donor": "efe6354a04294fa71d51d6f25f350142717858e3",
+      "subject": "plan: location: archive the completed DTLS design",
+      "owners": [
+        "C00",
+        "C38"
+      ]
+    },
+    {
+      "donor": "dc9f2274ecb613d7a7aed49b68e8380f8fc95240",
+      "subject": "doc: change: record DTLS verification and link the completed plan",
+      "owners": [
+        "C00",
+        "C01",
+        "C08",
+        "C10",
+        "C13",
+        "C14",
+        "C16",
+        "C18",
+        "C38"
+      ]
+    },
+    {
+      "donor": "cb1691184444afa64b1819348d446d4cad610474",
+      "subject": "dtls: refactor: scope helper queries to their callers",
+      "owners": [
+        "C03",
+        "C04",
+        "C13"
+      ]
+    },
+    {
+      "donor": "5255586578795f43f45b5a29325881c97c9981d2",
+      "subject": "doc: comment.add: specify DTLS extension profiles and requirements",
+      "owners": [
+        "C00",
+        "C38"
+      ]
+    },
+    {
+      "donor": "5345cf5809b642e3f0d25b224c90753a348279dd",
+      "subject": "dtls: refactor: share post-handshake exchange recovery",
+      "owners": [
+        "C00",
+        "C20",
+        "C38"
+      ]
+    },
+    {
+      "donor": "289dfc1cf218168dd975e6b17eaa03e390cb1fed",
+      "subject": "dtls: add: resume associations with modeled session tickets",
+      "owners": [
+        "C00",
+        "C21",
+        "C21a",
+        "C21b",
+        "C21c",
+        "C21d",
+        "C38"
+      ]
+    },
+    {
+      "donor": "6aad92248b56480931a60f057fac9bec4915ec65",
+      "subject": "dtls: add: exchange explicitly admitted early datagrams",
+      "owners": [
+        "C00",
+        "C22",
+        "C22a",
+        "C38"
+      ]
+    },
+    {
+      "donor": "08a766315478ee13cf68e629d2ab9d5ebe94f5a3",
+      "subject": "dtls: add: negotiate additional modeled algorithm profiles",
+      "owners": [
+        "C23",
+        "C24",
+        "C24a"
+      ]
+    },
+    {
+      "donor": "a3197c8bf98cc6582f6164080e93abda84f89892",
+      "subject": "dtls: add: negotiate connection identifiers",
+      "owners": [
+        "C25"
+      ]
+    },
+    {
+      "donor": "6db30c64b6b2b9847b00490a8f406343c56ac2b4",
+      "subject": "dtls: add: recover connection identifier updates",
+      "owners": [
+        "C00",
+        "C26",
+        "C38"
+      ]
+    },
+    {
+      "donor": "ff9243db291fa92e2093eaf9985e5a6de63414d3",
+      "subject": "dtls: add: exchange correlated heartbeat probes",
+      "owners": [
+        "C27"
+      ]
+    },
+    {
+      "donor": "7a704cfa634d8510ab54e93cce2c1fbf6174e32b",
+      "subject": "dtls: add: preserve associations across path changes",
+      "owners": [
+        "C00",
+        "C28",
+        "C38"
+      ]
+    },
+    {
+      "donor": "8ddcd393c26df6c3b09c793b8f0e4cc3125ddc4b",
+      "subject": "dtls: add: authenticate clients after establishment",
+      "owners": [
+        "C29"
+      ]
+    },
+    {
+      "donor": "6937353895bc362d6791a2faefe80c4f5a4aa53c",
+      "subject": "ipv6: add: honor requests to suppress source fragmentation",
+      "owners": [
+        "C02"
+      ]
+    },
+    {
+      "donor": "305cb39a08b75c6fc782320f7634e48879cd2813",
+      "subject": "dtls: add: discover and adapt per-path payload budgets",
+      "owners": [
+        "C00",
+        "C30",
+        "C31",
+        "C32",
+        "C38"
+      ]
+    },
+    {
+      "donor": "654a6509b273578573fac5173adc156b0dbabb05",
+      "subject": "dtls: add: represent version-specific DTLS 1.2 records",
+      "owners": [
+        "C33"
+      ]
+    },
+    {
+      "donor": "b7ba9d9a89f9b53169596440ef0752667c197539",
+      "subject": "dtls: add: negotiate and exchange DTLS 1.2 associations",
+      "owners": [
+        "C34",
+        "C34a"
+      ]
+    },
+    {
+      "donor": "c3bd545bc47166692586c9b2279685f4df32fdd2",
+      "subject": "dtls: add: resume modeled DTLS 1.2 sessions",
+      "owners": [
+        "C35",
+        "C35a",
+        "C35b"
+      ]
+    },
+    {
+      "donor": "79acb507fe808de663d35b1e90f8c8c46f4f3821",
+      "subject": "dtls: add: support DTLS 1.2 path mobility and discovery",
+      "owners": [
+        "C36",
+        "C36a"
+      ]
+    },
+    {
+      "donor": "d68e67176af4371cd49fe7ffb870f10b8bcd7744",
+      "subject": "dtlsapp: add: script socket actions in scenarios",
+      "owners": [
+        "C00",
+        "C37",
+        "C38"
+      ]
+    },
+    {
+      "donor": "ed08865cc985b4391ae0acbc960eb65ee81978a8",
+      "subject": "dtls: fix: refuse exhausted legacy CID admissions",
+      "owners": [
+        "C00",
+        "C36",
+        "C38"
+      ]
+    },
+    {
+      "donor": "1ad1d32de4e4ddb9ad1fc5cc4e3b0e05f3e78a73",
+      "subject": "tests: fix: evaluate DTLS helper checks in release",
+      "owners": [
+        "C00",
+        "C03",
+        "C04",
+        "C05",
+        "C06",
+        "C08",
+        "C09",
+        "C11",
+        "C12",
+        "C13",
+        "C16",
+        "C18",
+        "C20",
+        "C21",
+        "C21b",
+        "C21c",
+        "C25",
+        "C26",
+        "C27",
+        "C30",
+        "C33",
+        "C35b",
+        "C36a",
+        "C38"
+      ]
+    },
+    {
+      "donor": "d8790ea9337027c09a464e66f88e136004fa3a05",
+      "subject": "doc: comment.add: describe extended DTLS simulation profiles",
+      "owners": [
+        "C00",
+        "C38"
+      ]
+    },
+    {
+      "donor": "5284847df92eea8451bf056d8722fabb0ddf65bd",
+      "subject": "dtls: fix: reject path bases below the enabled heartbeat minimum",
+      "owners": [
+        "C00",
+        "C36",
+        "C38"
+      ]
+    }
+  ],
+  "groups": [
+    {
+      "id": "G00",
+      "status": "APPROVED",
+      "publication_commit": "C00",
+      "subject": "plan: add: traceable DTLS publication sequence",
+      "type": "documentation"
+    },
+    {
+      "id": "G01",
+      "status": "APPROVED",
+      "publication_commit": "C01",
+      "subject": "tests: add: select interception targets with typed predicates",
+      "type": "feature"
+    },
+    {
+      "id": "G02",
+      "status": "APPROVED",
+      "publication_commit": "C02",
+      "subject": "ipv6: add: honor requests to suppress source fragmentation",
+      "type": "feature"
+    },
+    {
+      "id": "G03",
+      "status": "APPROVED",
+      "publication_commit": "C03",
+      "subject": "dtls: add: bounded directional processing",
+      "type": "feature"
+    },
+    {
+      "id": "G04",
+      "status": "APPROVED",
+      "publication_commit": "C04",
+      "subject": "dtls: add: record reconstruction and replay state",
+      "type": "feature"
+    },
+    {
+      "id": "G05",
+      "status": "APPROVED",
+      "publication_commit": "C05",
+      "subject": "tls: add: modeled handshake content serialization",
+      "type": "feature"
+    },
+    {
+      "id": "G06",
+      "status": "APPROVED",
+      "publication_commit": "C06",
+      "subject": "dtls: add: record representation and modeled protection",
+      "type": "feature"
+    },
+    {
+      "id": "G07",
+      "status": "APPROVED",
+      "publication_commit": "C07",
+      "subject": "dtls: add: local datagram engine contract",
+      "type": "feature"
+    },
+    {
+      "id": "G08",
+      "status": "APPROVED",
+      "publication_commit": "C08",
+      "subject": "dtls: add: UDP-backed engine lifecycle",
+      "type": "feature"
+    },
+    {
+      "id": "G09",
+      "status": "APPROVED",
+      "publication_commit": "C09",
+      "subject": "tls: add: modeled handshake parameter selection",
+      "type": "feature"
+    },
+    {
+      "id": "G10",
+      "status": "APPROVED",
+      "publication_commit": "C10",
+      "subject": "dtls: add: establish modeled client and server associations",
+      "type": "feature"
+    },
+    {
+      "id": "G11",
+      "status": "APPROVED",
+      "publication_commit": "C11",
+      "subject": "dtls: add: handshake flight accounting",
+      "type": "feature"
+    },
+    {
+      "id": "G12",
+      "status": "APPROVED",
+      "publication_commit": "C12",
+      "subject": "dtls: add: bounded handshake reassembly",
+      "type": "feature"
+    },
+    {
+      "id": "G41",
+      "status": "APPROVED",
+      "publication_commit": "C13a",
+      "subject": "dtls: add: queue eligibility and handoff callbacks",
+      "type": "mechanism"
+    },
+    {
+      "id": "G13",
+      "status": "SUPERSEDED",
+      "superseded_by": [
+        "G42"
+      ],
+      "publication_commit": "C13"
+    },
+    {
+      "id": "G42",
+      "status": "APPROVED",
+      "publication_commit": "C13",
+      "subject": "dtls: add: recover fragmented handshakes over lossy UDP",
+      "type": "feature"
+    },
+    {
+      "id": "G43",
+      "status": "APPROVED",
+      "publication_commit": "C14a",
+      "subject": "dtls: fix: validate retained plaintext bounds and padding",
+      "type": "fix"
+    },
+    {
+      "id": "G14",
+      "status": "SUPERSEDED",
+      "superseded_by": [
+        "G44"
+      ],
+      "publication_commit": "C14"
+    },
+    {
+      "id": "G44",
+      "status": "APPROVED",
+      "publication_commit": "C14",
+      "subject": "dtls: add: protected application datagrams",
+      "type": "feature"
+    },
+    {
+      "id": "G15",
+      "status": "APPROVED",
+      "publication_commit": "C15",
+      "subject": "dtls: refactor: allow consecutive input processing stages",
+      "type": "refactor"
+    },
+    {
+      "id": "G16",
+      "status": "APPROVED",
+      "publication_commit": "C16",
+      "subject": "dtls: add: update association protection epochs",
+      "type": "feature"
+    },
+    {
+      "id": "G17",
+      "status": "APPROVED",
+      "publication_commit": "C17",
+      "subject": "dtls: refactor: cancel queued work while preserving selected owners",
+      "type": "refactor"
+    },
+    {
+      "id": "G18",
+      "status": "APPROVED",
+      "publication_commit": "C18",
+      "subject": "dtls: add: close associations without disrupting other peers",
+      "type": "feature"
+    },
+    {
+      "id": "G19",
+      "status": "APPROVED",
+      "publication_commit": "C19",
+      "subject": "dtls: add: demonstrate the supported simulation profile",
+      "type": "feature"
+    },
+    {
+      "id": "G20",
+      "status": "APPROVED",
+      "publication_commit": "C20",
+      "subject": "dtls: refactor: share post-handshake exchange recovery",
+      "type": "refactor"
+    },
+    {
+      "id": "G45",
+      "status": "APPROVED",
+      "publication_commit": "C21a",
+      "subject": "tls: refactor: represent the selected authentication mode explicitly",
+      "type": "authentication-mode"
+    },
+    {
+      "id": "G46",
+      "status": "APPROVED",
+      "publication_commit": "C21b",
+      "subject": "tls: add: NewSessionTicket content serialization",
+      "type": "mechanism"
+    },
+    {
+      "id": "G47",
+      "status": "APPROVED",
+      "publication_commit": "C21c",
+      "subject": "dtls: add: bounded session ticket storage",
+      "type": "mechanism"
+    },
+    {
+      "id": "G48",
+      "status": "APPROVED",
+      "publication_commit": "C21d",
+      "subject": "dtls: add: discard one retained handshake message",
+      "type": "mechanism"
+    },
+    {
+      "id": "G21",
+      "status": "SUPERSEDED",
+      "superseded_by": [
+        "G49"
+      ],
+      "publication_commit": "C21"
+    },
+    {
+      "id": "G49",
+      "status": "APPROVED",
+      "publication_commit": "C21",
+      "subject": "dtls: add: resume associations with modeled session tickets",
+      "type": "feature"
+    },
+    {
+      "id": "G50",
+      "status": "APPROVED",
+      "publication_commit": "C22a",
+      "subject": "dtls: add: consume ticket early-data eligibility once",
+      "type": "mechanism"
+    },
+    {
+      "id": "G22",
+      "status": "SUPERSEDED",
+      "superseded_by": [
+        "G51"
+      ],
+      "publication_commit": "C22"
+    },
+    {
+      "id": "G51",
+      "status": "APPROVED",
+      "publication_commit": "C22",
+      "subject": "dtls: add: exchange explicitly admitted early datagrams",
+      "type": "feature"
+    },
+    {
+      "id": "G23",
+      "status": "APPROVED",
+      "publication_commit": "C23",
+      "subject": "tls: add: modeled algorithm profile catalog",
+      "type": "feature"
+    },
+    {
+      "id": "G52",
+      "status": "APPROVED",
+      "publication_commit": "C24a",
+      "subject": "dtls: add: filter cached sessions by allowed hashes",
+      "type": "mechanism"
+    },
+    {
+      "id": "G24",
+      "status": "SUPERSEDED",
+      "superseded_by": [
+        "G53"
+      ],
+      "publication_commit": "C24"
+    },
+    {
+      "id": "G53",
+      "status": "APPROVED",
+      "publication_commit": "C24",
+      "subject": "dtls: add: negotiate additional modeled algorithm profiles",
+      "type": "feature"
+    },
+    {
+      "id": "G25",
+      "status": "APPROVED",
+      "publication_commit": "C25",
+      "subject": "dtls: add: negotiate connection identifiers",
+      "type": "feature"
+    },
+    {
+      "id": "G26",
+      "status": "APPROVED",
+      "publication_commit": "C26",
+      "subject": "dtls: add: recover connection identifier updates",
+      "type": "feature"
+    },
+    {
+      "id": "G27",
+      "status": "APPROVED",
+      "publication_commit": "C27",
+      "subject": "dtls: add: correlated heartbeat probes",
+      "type": "feature"
+    },
+    {
+      "id": "G28",
+      "status": "APPROVED",
+      "publication_commit": "C28",
+      "subject": "dtls: add: preserve associations across validated path changes",
+      "type": "feature"
+    },
+    {
+      "id": "G29",
+      "status": "APPROVED",
+      "publication_commit": "C29",
+      "subject": "dtls: add: authenticate clients after establishment",
+      "type": "feature"
+    },
+    {
+      "id": "G30",
+      "status": "APPROVED",
+      "publication_commit": "C30",
+      "subject": "dtls: add: bounded path MTU search state",
+      "type": "feature"
+    },
+    {
+      "id": "G31",
+      "status": "APPROVED",
+      "publication_commit": "C31",
+      "subject": "dtls: add: account for refragmented handshake flight ranges",
+      "type": "feature"
+    },
+    {
+      "id": "G32",
+      "status": "APPROVED",
+      "publication_commit": "C32",
+      "subject": "dtls: add: discover and adapt per-path payload budgets",
+      "type": "feature"
+    },
+    {
+      "id": "G33",
+      "status": "APPROVED",
+      "publication_commit": "C33",
+      "subject": "dtls: add: version-specific DTLS 1.2 record representation",
+      "type": "feature"
+    },
+    {
+      "id": "G54",
+      "status": "APPROVED",
+      "publication_commit": "C34a",
+      "subject": "dtls: add: bounded empty-message reassembly and prefix access",
+      "type": "mechanism"
+    },
+    {
+      "id": "G34",
+      "status": "SUPERSEDED",
+      "superseded_by": [
+        "G55"
+      ],
+      "publication_commit": "C34"
+    },
+    {
+      "id": "G55",
+      "status": "APPROVED",
+      "publication_commit": "C34",
+      "subject": "dtls: add: establish DTLS 1.2 associations",
+      "type": "feature"
+    },
+    {
+      "id": "G56",
+      "status": "APPROVED",
+      "publication_commit": "C35a",
+      "subject": "dtls: add: DTLS 1.2 session ticket representation",
+      "type": "mechanism"
+    },
+    {
+      "id": "G57",
+      "status": "APPROVED",
+      "publication_commit": "C35b",
+      "subject": "dtls: add: version-bound session ID storage",
+      "type": "mechanism"
+    },
+    {
+      "id": "G35",
+      "status": "SUPERSEDED",
+      "superseded_by": [
+        "G58"
+      ],
+      "publication_commit": "C35"
+    },
+    {
+      "id": "G58",
+      "status": "APPROVED",
+      "publication_commit": "C35",
+      "subject": "dtls: add: resume modeled DTLS 1.2 sessions",
+      "type": "feature"
+    },
+    {
+      "id": "G59",
+      "status": "APPROVED",
+      "publication_commit": "C36a",
+      "subject": "dtls: add: DTLS 1.2 CID record representation",
+      "type": "mechanism"
+    },
+    {
+      "id": "G36",
+      "status": "SUPERSEDED",
+      "superseded_by": [
+        "G60"
+      ],
+      "publication_commit": "C36"
+    },
+    {
+      "id": "G60",
+      "status": "APPROVED",
+      "publication_commit": "C36",
+      "subject": "dtls: add: DTLS 1.2 path mobility and discovery",
+      "type": "feature"
+    },
+    {
+      "id": "G37",
+      "status": "APPROVED",
+      "publication_commit": "C37",
+      "subject": "dtlsapp: add: script socket actions in scenarios",
+      "type": "feature"
+    },
+    {
+      "id": "G38",
+      "status": "APPROVED",
+      "publication_commit": "C38",
+      "subject": "doc: add: complete DTLS examples and acceptance evidence",
+      "type": "feature"
+    },
+    {
+      "id": "G39",
+      "status": "APPROVED",
+      "publication_commit": "C39",
+      "subject": "plan: location: archive the completed DTLS publication plan",
+      "type": "documentation"
+    },
+    {
+      "id": "G40",
+      "status": "APPROVED",
+      "publication_commit": "C40",
+      "subject": "doc: change: link the completed DTLS publication plan",
+      "type": "documentation"
+    }
+  ],
+  "message_tree_identity": {
+    "checkpoint": "cleanup/dtls-publication-checkpoint-20261117-before-message-audit",
+    "old_head": "96e8d353c0a858526851801d15d4511ff3fe7f16",
+    "new_head": "809c5f89d1e7c6daf97d0187b7e66e4e3fc189eb",
+    "commits": [
+      {
+        "id": "C00",
+        "old": "1f32d7abf453d7473d244929ae56537f8f7074e6",
+        "new": "be60f0f23ada0845ce68e73cbce76fef6c12d5e6",
+        "tree": "00e31c077adddeb3a342fc57ee7de0a013136657",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C01",
+        "old": "3843c4c60bad247a0b285909a45336644b45c73e",
+        "new": "1b413a0043b445ac8641fe17917730b557600e39",
+        "tree": "0d9e531e6dae9f1eb8adaf418a508b6f520b9265",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C02",
+        "old": "a762a10b5c14219ee0b49b99194f4b871cbd4e42",
+        "new": "d78b2c81cc0352a7a73e10b4714b8df92bf5f253",
+        "tree": "f53748f732ca809fba30aef4b83ea39ee816640d",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C03",
+        "old": "98c0ccf6f8c64ffdf1c96cf946accee889a826fe",
+        "new": "029ccd8c80106e6874a597b0728869cbd2361b06",
+        "tree": "7e53b5e65b217bb50ea0f97015be8830f1e53e27",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C04",
+        "old": "2d6fe7607c78532644ef65d88c09bfa8785166a7",
+        "new": "6871557e2c87e9a7de63552473bc99a5c9cb369a",
+        "tree": "e8373bf895f0017f849c419a600c3e7a805b7fb8",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C05",
+        "old": "85f019781fd06c0d1194a3a5c99099ab43a6fb91",
+        "new": "487b0f1e41351e50ed71388fb6e5f48bbea3dae7",
+        "tree": "1866579b45414820c3e967140e77cd70874960e6",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C06",
+        "old": "8d3ec0b63c665c98fed913dcd7bc18716df3657a",
+        "new": "d54f9744cea539c68ecca488042d80f413c7ac65",
+        "tree": "e0e5d9a827983d3ea1ea2d90f32e4858c2204ef2",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C07",
+        "old": "8c9940f899620da245f67fdc94bea3ed85c609a4",
+        "new": "76298d3005230ce493412f60590b5b869c9b0817",
+        "tree": "6738bd3d48a8d836949cf34c5f6198fb7d96bb19",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C08",
+        "old": "8cfbf003d79c53254aebeef09b6e26f1962fb080",
+        "new": "c11689ebb89d402efbce74edd7eaf6804cfb9030",
+        "tree": "26a2c1601c6696d5496669de32aba1a2a24dd0a9",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C09",
+        "old": "d84a86264d003d275fedff1a3d584ab9f3bb5931",
+        "new": "d2a49e2e56193c9ffece1aaaa710b0a0453e9f13",
+        "tree": "8fd5fb50a9700852c4474219deeb696f10a2529c",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C10",
+        "old": "ed80b0142c693548372580694670d2d2b2ea5c52",
+        "new": "681b20141bcfac3097da86e9f0b97ba8cce0620d",
+        "tree": "6555a02eef5cfc1d6d6473aa6036785ab7f17c63",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C11",
+        "old": "6283370f80eb4a5f9828cdf4ec1ef18da6641a60",
+        "new": "0e701c55baa4e92f9e3beced74bd4741104334e6",
+        "tree": "f10841314da58381df57406b70f0ca758fb2e588",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C12",
+        "old": "5bc5b593ca137fb47e6958ea401456217be2fcce",
+        "new": "606fb05dade2d5b5cbd8f9382e72351ef11067c4",
+        "tree": "a91e19b7a8c7108e9dd3754864935eae00562205",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C13a",
+        "old": "549b413ae1641b88a3534a52cb7f41792d454ab7",
+        "new": "4b92c4997b450d473ef9a2ea95672a1ee9b4496f",
+        "tree": "a667ffd271c9c42b6bd6be57c97f612455aa8fa7",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C13",
+        "old": "b1266c0a426efe4df54b05715dba1860bb9a4342",
+        "new": "029335f3164ec51f61d05517506ad2d0c0237d3a",
+        "tree": "60961729521054f2bcf87a79fe05bc4d6a67ce7c",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C14a",
+        "old": "447ca93b9e237ee7dd07f57d42db9c82d8747ecc",
+        "new": "d58369c0ad6779cdd308a778ce040f8769a627f7",
+        "tree": "61a8a5b52a75e2abf6ce988813e26f99f28c73ad",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C14",
+        "old": "34f4af57d1866a9d7d1ecfa9bc0ccf955ca03fd4",
+        "new": "7bbfac7fe72a3bb58c88579123b5ccf0f4bf1396",
+        "tree": "620a3ae3e07dc3f959d6d9737d97d0e0f5388d28",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C15",
+        "old": "1ebbe33d01d54b51e02213f21b48629039df5d55",
+        "new": "997e2ce0a1eb07c9d2991435b60b1183a216d85b",
+        "tree": "c60f83f1c8004fb783c2ac7bed818f63306bae12",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C16",
+        "old": "aa40c2a5bff71f3dcc6deda20c9d49ff247ae456",
+        "new": "c5a2cf3e981de6912e9a52e92dde28eb34ca68a3",
+        "tree": "93095c521373bfeeb1b22f7f22fcb03a66e84518",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C17",
+        "old": "8b4deade589a13679d83498853d61a913aa62972",
+        "new": "f2804e650f2624d2f4d08f27884a834459bbdeb3",
+        "tree": "ae3810fcf5f4183193f617cf90cd03238e7c3d25",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C18",
+        "old": "c650e076ed307ef0e6df9a1b27174ee15bb4cbc9",
+        "new": "cea487ef3b25bf487b5e9549d40383d4ad3ed8d8",
+        "tree": "28af2eab914473b40bb127c637807d3b9c7c446a",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C19",
+        "old": "f6d0f8a481b335d9ea4e9c1e51fcb58bdcd35f86",
+        "new": "9a0c7f8e7e9b1d4b89e9b2ea48a43dee2f5b0149",
+        "tree": "42629f4a949003b5494ea844224a6663d7656243",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C20",
+        "old": "4e790fde3a63b6e2bcaf9c807fae7c1684804227",
+        "new": "b7a3f754765d1300bd67edfe26cb5b570728b088",
+        "tree": "48f086a4b7a9e28040740ff3f1ba4662078761ed",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C21a",
+        "old": "cce785e918b01b714f4bb61b97f24ce7513519b4",
+        "new": "9190a27dcab290192d83484893e55f09c884a695",
+        "tree": "fab355ea838ce6295fb5c883f98cf737509ac781",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C21b",
+        "old": "86fd5e2c5f76c0f4cd42372da949b229377f3648",
+        "new": "d874dc349409aafb23d50289164a3ac52b6e3e6d",
+        "tree": "34b5c765b02eec71e99876e2a5a1cb4f1579a057",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C21c",
+        "old": "78bf1c9f39528afc2cd8e0fec842a6b262487e12",
+        "new": "b2a56ebb5febecffaa3955500a3b89ecb9304b74",
+        "tree": "076928a0b621c980b780ca67af61117079e1e2b0",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C21d",
+        "old": "72eb9f75244ca2ff687eb3a781cc45fb36f53da4",
+        "new": "26c750df6177a25273a22a980a4d42d6e7775dc5",
+        "tree": "65b9c9f8c758354ad59d75249878714c6fae521f",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C21",
+        "old": "2722e6d5064a60defcdabbc002576f46725fad56",
+        "new": "19d6992473ffee620aaff121754822cce5bdf356",
+        "tree": "fb374338ad71e44e85fe6ebe8e7fd923ffd949eb",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C22a",
+        "old": "acd63c250f8b7be9794e6854d84ac3a68cd05ec7",
+        "new": "f383ea55044479977bd54133bca3ea37f8a6aee1",
+        "tree": "646d02d39d76153787a2653937b213f63050583e",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C22",
+        "old": "3144925b923a011e320d71d9997ffb1160a28066",
+        "new": "21665b6a7ac364aeff0e1a8a74c396b8fc9d70a9",
+        "tree": "d44b870ed1d172d8c77194ee9cfd05392abce05a",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C23",
+        "old": "000d289573dcdd44a45d81577926987b6b582945",
+        "new": "d486ceb69d04f3c2efce5f373bf44cb9d180aa99",
+        "tree": "f25039ac3585390c44c5905f7eb33aa1340fb5ca",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C24a",
+        "old": "b115daf92cdee0ffd7c796984927d95040e2905a",
+        "new": "d61f8f63c09cf6432d950329e1319b6a2d26b55f",
+        "tree": "cfd980670e18fa77c5123d25c57fd9866b01ead9",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C24",
+        "old": "d8abc874875032189bcb68552eed28cca962279d",
+        "new": "1a2ddc8230e9ad8c87f09e7f7d43ef280e709718",
+        "tree": "608b111b21f5065b913c134cc6c3cfcfc775cdd8",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C25",
+        "old": "13b7411fc1fa7e92e616a719520e559f7037a5b9",
+        "new": "e1707e8750d15de6321fb2cf36d8e5245c268ab6",
+        "tree": "d5d95fd6403518385bb5979387a21ee3ae4dd349",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C26",
+        "old": "1f6c9a1d5552d78223cc020ac7fd0fb92a150a67",
+        "new": "c8170e7cfddff3d1b3ae6feeede39fb3ca2af58f",
+        "tree": "89824ecdbdc537f0457def03cfaa7443bf170aa5",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C27",
+        "old": "406aaa6bc262d9914cb59997c4d27e382f4416ef",
+        "new": "42c9a62cac1d617dc72a5c8996c77e12cf6becfb",
+        "tree": "f67fc5b91da636e7e8395631a2aee01a3eb8c1b6",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C28",
+        "old": "7d72f9a1b267fc60d345c7570ee3fce1beb90086",
+        "new": "768375acebd3f296a329b0c7f543d9aca7ec461c",
+        "tree": "75e13d89d6139eb3f20e5f6b3f3f4676141716d3",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C29",
+        "old": "5dc61870c1ea760d1439ed1ad3adc622660d68db",
+        "new": "f139ec60b5cc03d8dc88421f56540eba57ed7c57",
+        "tree": "c9d95fe5b76c9a4396d9a4dbe8e1ffea01ec6a35",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C30",
+        "old": "07f9d6ab418fc15a7026618acb63753822b110eb",
+        "new": "d9581b8470b655d8373486e0dec90ff02e551b3f",
+        "tree": "bb4becce7b554c3e1dc8f54ffc68eea8c1ab2f28",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C31",
+        "old": "d9d8de30030b3a9337d92353210a0ce7af1b9205",
+        "new": "918511c0fc8c44b69dd99e43ebcd7ba70c798a8d",
+        "tree": "45ad8b0c64f7755f1fc21f4b7de572c2ace41c41",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C32",
+        "old": "6ad9dded449768ceadd24a5d07ce1ac2266b7480",
+        "new": "330a7527c0e61fc2a74cfbecbd82144d1d81a362",
+        "tree": "2b2cc0c1262f4dbf783848d156ede06d78c70fe8",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C33",
+        "old": "b0667ca337b813fd5881ec95b42e22f09c6441f5",
+        "new": "5d68e51ee635b7810bb884321188cf5581727109",
+        "tree": "3e5961f1c6cda3b77a59e43977d9999c79d24393",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C34a",
+        "old": "679c476349d74bdca3dac55e37c9f88dac49fe5b",
+        "new": "e03f261a251c1ce33cbc4d47a6cd472391b6ab42",
+        "tree": "edb9ebc9802641708f6fd86434789d3b21a01952",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C34",
+        "old": "cae9718efecce1a5e9379b3d5b2ae40d6848d11b",
+        "new": "c36d2c00d238095c39c3797a1f4a0ab86537af9d",
+        "tree": "cc315b994edd1025f3885afccd8859873a6bafde",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C35a",
+        "old": "9758a692d371b1b5fc069a3ae0b2e7468b8b78b1",
+        "new": "58fe77d4d7674d024c09411814d985022d85eaa8",
+        "tree": "2830ff89b6fb09639179b0e744422c97e0974c1d",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C35b",
+        "old": "46d09461c76dc832cc96b944d89a6cbec4b424d3",
+        "new": "e674de87709d7c9c6431e85254743b6a37890fcf",
+        "tree": "0ded978d49dc2c4dc3120e46847b0a1092733ebe",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C35",
+        "old": "092aaeee7cc1ebffbe62e90305244d4a23ec7029",
+        "new": "1c5c87017a47830a526a975a0b90654ec066e3b5",
+        "tree": "20584aa42846faa28b1391a055ee86c02dd5ff87",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C36a",
+        "old": "66a1d065f3f5fb6a69a4cb648c868f32e53092ca",
+        "new": "eb2cae3de3e1f374fcc550494c9ef12f48947d78",
+        "tree": "dfbd4ca2ed98a84dbdf3dd710f5f3900a454c8ab",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C36",
+        "old": "0c0ca71d3953018e77490b141b568716bb670ab1",
+        "new": "a403f14272848415a68a39f3795aa6c77487d4ee",
+        "tree": "bc26e1ddfb1fe2f1d906eda79c184772f08d5481",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      },
+      {
+        "id": "C37",
+        "old": "96e8d353c0a858526851801d15d4511ff3fe7f16",
+        "new": "809c5f89d1e7c6daf97d0187b7e66e4e3fc189eb",
+        "tree": "175d96b6e1704632f57251ab0025dd97e740a5d7",
+        "whole_tree_equal": true,
+        "runtime_reuse": "Exact source, fixtures, configuration and metadata tree; only message/parent identity differs"
+      }
+    ],
+    "all_whole_trees_identical": true
+  },
+  "baseline_pin_identity": {
+    "candidate_branch": "candidate/dtls-publication-baseline-provenance",
+    "candidate_tip": "6b4faa9061e57031f76668690bc897c259152810",
+    "active_cleanup_tip": "809c5f89d1e7c6daf97d0187b7e66e4e3fc189eb",
+    "active_cleanup_unchanged": true,
+    "active_staged_tree": "83a6b9a90bca8389b7134527e804d5abf8059619",
+    "steps": [
+      {
+        "id": "C00",
+        "old": "be60f0f23ada0845ce68e73cbce76fef6c12d5e6",
+        "proposed": "a028e229adf578f2c595d860d765a120f00901f3",
+        "changed_paths": [],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C01",
+        "old": "1b413a0043b445ac8641fe17917730b557600e39",
+        "proposed": "cf9d866712df29fa086cbbc0d5c7cac0b28ffbf0",
+        "changed_paths": [],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C02",
+        "old": "d78b2c81cc0352a7a73e10b4714b8df92bf5f253",
+        "proposed": "d7f55fbeeea4e5bc99b461b8143336b2850da2db",
+        "changed_paths": [],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C03",
+        "old": "029ccd8c80106e6874a597b0728869cbd2361b06",
+        "proposed": "0117ea60c4e35204434c166cf0415f37f9a9f08b",
+        "changed_paths": [],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C04",
+        "old": "6871557e2c87e9a7de63552473bc99a5c9cb369a",
+        "proposed": "b5c0b0313663cea436600ac8904e594e1812c4e7",
+        "changed_paths": [],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C05",
+        "old": "487b0f1e41351e50ed71388fb6e5f48bbea3dae7",
+        "proposed": "782d794918b0c37640204aeb7bbfe8ad4be614e2",
+        "changed_paths": [],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C06",
+        "old": "d54f9744cea539c68ecca488042d80f413c7ac65",
+        "proposed": "3ae608f1a92547715cdd2791bce3da0d012ec920",
+        "changed_paths": [],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C07",
+        "old": "76298d3005230ce493412f60590b5b869c9b0817",
+        "proposed": "8b985d986d5410ccb2aa00bda9328b860b115af8",
+        "changed_paths": [],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C08",
+        "old": "c11689ebb89d402efbce74edd7eaf6804cfb9030",
+        "proposed": "72009f8bec59de67e7499059686486d85561e274",
+        "changed_paths": [],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C09",
+        "old": "d2a49e2e56193c9ffece1aaaa710b0a0453e9f13",
+        "proposed": "ff91aad80506a532cfdd17ff68b326fdd7d4e1f8",
+        "changed_paths": [],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C10",
+        "old": "681b20141bcfac3097da86e9f0b97ba8cce0620d",
+        "proposed": "d2fa0568e844fb6643249495b98e16f2799262da",
+        "changed_paths": [],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C11",
+        "old": "0e701c55baa4e92f9e3beced74bd4741104334e6",
+        "proposed": "e69f98b00dafc4da1295d17af762c772946005f7",
+        "changed_paths": [],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C12",
+        "old": "606fb05dade2d5b5cbd8f9382e72351ef11067c4",
+        "proposed": "de11af9ab864ee3b23de6ead7c182c66f8db8e77",
+        "changed_paths": [],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C13a",
+        "old": "4b92c4997b450d473ef9a2ea95672a1ee9b4496f",
+        "proposed": "4bd70c44945bfbfe5e0d793996dd50e149cc987e",
+        "changed_paths": [],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C13",
+        "old": "029335f3164ec51f61d05517506ad2d0c0237d3a",
+        "proposed": "1422efc7816a8720c54428042fa384e10d1715de",
+        "changed_paths": [],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C14a",
+        "old": "d58369c0ad6779cdd308a778ce040f8769a627f7",
+        "proposed": "e94b87555e9ef2c9d2495ee6550e1b4830bec871",
+        "changed_paths": [],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C14",
+        "old": "7bbfac7fe72a3bb58c88579123b5ccf0f4bf1396",
+        "proposed": "c543557d8883b8fa4c1f54e17c52395974b90710",
+        "changed_paths": [],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C15",
+        "old": "997e2ce0a1eb07c9d2991435b60b1183a216d85b",
+        "proposed": "fb2195e771284f0b1e077084c9323ae8869a92aa",
+        "changed_paths": [],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C16",
+        "old": "c5a2cf3e981de6912e9a52e92dde28eb34ca68a3",
+        "proposed": "956a63b2644dee75839323bb3d597446f3e769d0",
+        "changed_paths": [],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C17",
+        "old": "f2804e650f2624d2f4d08f27884a834459bbdeb3",
+        "proposed": "9a42d202888b3c6b5768b0d08297a29ca49929d0",
+        "changed_paths": [],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C18",
+        "old": "cea487ef3b25bf487b5e9549d40383d4ad3ed8d8",
+        "proposed": "b8a27f40dbf70ab8ff8229d1d1cfb101ac2f3078",
+        "changed_paths": [],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C19",
+        "old": "9a0c7f8e7e9b1d4b89e9b2ea48a43dee2f5b0149",
+        "proposed": "f19d44102c36e0d04b503c637fefd84c8997fecb",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C20",
+        "old": "b7a3f754765d1300bd67edfe26cb5b570728b088",
+        "proposed": "a64247061683288140d5910e6aaab84d04d570dd",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C21a",
+        "old": "9190a27dcab290192d83484893e55f09c884a695",
+        "proposed": "3a996a0c33c12f6ec4cd61b97f4db048466906a9",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C21b",
+        "old": "d874dc349409aafb23d50289164a3ac52b6e3e6d",
+        "proposed": "b6499a486e73740397ea3c46eb553facc1794f51",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C21c",
+        "old": "b2a56ebb5febecffaa3955500a3b89ecb9304b74",
+        "proposed": "d711cbb2f7e61f81ebd15582adf57708d959a942",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C21d",
+        "old": "26c750df6177a25273a22a980a4d42d6e7775dc5",
+        "proposed": "0357462790501f6fb29a8e1a7e8623258e8ef1d1",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C21",
+        "old": "19d6992473ffee620aaff121754822cce5bdf356",
+        "proposed": "709316843956c8b582c57a2384c40db7749c923a",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C22a",
+        "old": "f383ea55044479977bd54133bca3ea37f8a6aee1",
+        "proposed": "cd2e9f24ee886f02c92fb134e5803c6d8342601c",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C22",
+        "old": "21665b6a7ac364aeff0e1a8a74c396b8fc9d70a9",
+        "proposed": "38851efc8f88ee9fe818e2956dcc2553aa3ee0d3",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C23",
+        "old": "d486ceb69d04f3c2efce5f373bf44cb9d180aa99",
+        "proposed": "d2f78cf35f5f2f0679eaafc9d442af33fb1ec085",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C24a",
+        "old": "d61f8f63c09cf6432d950329e1319b6a2d26b55f",
+        "proposed": "db1ef8288cb299c3c3ca45cf0c77dddb8e1e5363",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C24",
+        "old": "1a2ddc8230e9ad8c87f09e7f7d43ef280e709718",
+        "proposed": "f36ac6a380c705040448dcc361bfffb362574bbf",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C25",
+        "old": "e1707e8750d15de6321fb2cf36d8e5245c268ab6",
+        "proposed": "38e7c2030c09974da854943ca45019d322e79b73",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C26",
+        "old": "c8170e7cfddff3d1b3ae6feeede39fb3ca2af58f",
+        "proposed": "e001d4312d4a6fcecb9cc6033fe734d2ee74f6c0",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C27",
+        "old": "42c9a62cac1d617dc72a5c8996c77e12cf6becfb",
+        "proposed": "d8c4bdf7befbc56661fcf721cf7a2b92440156ac",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C28",
+        "old": "768375acebd3f296a329b0c7f543d9aca7ec461c",
+        "proposed": "609dd3c589992cc7577859d3241e0cd1ef84ec3c",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C29",
+        "old": "f139ec60b5cc03d8dc88421f56540eba57ed7c57",
+        "proposed": "d7c77395b064811f7c70cf9db4644865f3a86061",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C30",
+        "old": "d9581b8470b655d8373486e0dec90ff02e551b3f",
+        "proposed": "53dbc97ea2cff8b740c8e5cc04d7b12b9f68c51b",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C31",
+        "old": "918511c0fc8c44b69dd99e43ebcd7ba70c798a8d",
+        "proposed": "06d72baf026b8ddd68669c10c374ca76634aeb37",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C32",
+        "old": "330a7527c0e61fc2a74cfbecbd82144d1d81a362",
+        "proposed": "bdde07f3497671f125375b1d4bd4f6a2bbcac3b2",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C33",
+        "old": "5d68e51ee635b7810bb884321188cf5581727109",
+        "proposed": "1b4a68a01f17d17334fc5b5989ce29782a5e642e",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C34a",
+        "old": "e03f261a251c1ce33cbc4d47a6cd472391b6ab42",
+        "proposed": "319ff94b79bfb9adf79a3ca805f96d39eb303d8a",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C34",
+        "old": "c36d2c00d238095c39c3797a1f4a0ab86537af9d",
+        "proposed": "fc1f5067a0ad3664dae4426067c474a98ee9e417",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C35a",
+        "old": "58fe77d4d7674d024c09411814d985022d85eaa8",
+        "proposed": "7d7d36a28a446af7b75973609a003768d0890f16",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C35b",
+        "old": "e674de87709d7c9c6431e85254743b6a37890fcf",
+        "proposed": "494d9f0da616c2e8237cfb282b4978cd07d19509",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C35",
+        "old": "1c5c87017a47830a526a975a0b90654ec066e3b5",
+        "proposed": "28d7bd42ac70cfe148f22dd03d0d50009211d0c1",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C36a",
+        "old": "eb2cae3de3e1f374fcc550494c9ef12f48947d78",
+        "proposed": "f945d2cd12b6261c4fee99707fdc2050589bbd21",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C36",
+        "old": "a403f14272848415a68a39f3795aa6c77487d4ee",
+        "proposed": "fbaef0bda87fad37a5b34cf225f261cc61cfcd82",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      },
+      {
+        "id": "C37",
+        "old": "809c5f89d1e7c6daf97d0187b7e66e4e3fc189eb",
+        "proposed": "6b4faa9061e57031f76668690bc897c259152810",
+        "changed_paths": [
+          "inet.opp"
+        ],
+        "model_source_configuration_and_fixtures_equal": true
+      }
+    ],
+    "commits": 53,
+    "inet_prs": 18,
+    "baseline_prs_required": 1,
+    "baseline_gate": "PASS",
+    "baseline_gate_argv": [
+      "doc/project/enforcement/check-baselines.sh",
+      "476ab0f2fa019c0bcf36d23d9f99ec884ee9393c..HEAD",
+      "--baseline-repository",
+      "statistical=/home/miguel/workspace/inet-dtls-publication/statistics"
+    ],
+    "canonical_pin_rewrite_argv": [
+      "python3",
+      "doc/project/enforcement/baseline_pins.py",
+      "rebase",
+      "476ab0f2fa019c0bcf36d23d9f99ec884ee9393c",
+      "--baseline",
+      "statistical=411462a19e67dda7438213bfa3dec4d1257dd05e",
+      "--baseline-repository",
+      "statistical=/home/miguel/workspace/inet-dtls-publication/statistics"
+    ],
+    "original_statistics_pr": "https://github.com/inet-framework/statistics/pull/1",
+    "original_pr_unchanged": true,
+    "proposed_baseline_branch": "review/dtls-06-closure-and-core-examples"
+  },
+  "baseline_tree_identity": {
+    "old_commit": "3d3a8995a00d75f2f21ccd42a648db591974611c",
+    "new_commit": "411462a19e67dda7438213bfa3dec4d1257dd05e",
+    "parent": "f76ce96731278d64727065b5669e4f1cab431da5",
+    "tree": "82b351fe0f8ca918862fb94fd4ec73f6c48f4a67",
+    "entire_tree_byte_identical": true,
+    "changed_result_files": [],
+    "changed_values": [],
+    "local_branch": "review/dtls-06-closure-and-core-examples",
+    "original_head_unchanged": true,
+    "original_feat_dtls_unchanged": true,
+    "pushed": false
+  },
+  "approved_baseline_revision": {
+    "approved": true,
+    "source": "User: Approve provenance correction",
+    "timestamp": "2026-11-17T17:44:34.682129+01:00",
+    "old_input": "f1bf0104b4aa9fe322a56eabb3a3b401089e0414",
+    "new_input": "89285a8cdbc9777f9531a2ea354d6a30ea154654",
+    "old_pin": "3d3a8995a00d75f2f21ccd42a648db591974611c",
+    "new_pin": "411462a19e67dda7438213bfa3dec4d1257dd05e",
+    "baseline_tree": "82b351fe0f8ca918862fb94fd4ec73f6c48f4a67",
+    "baseline_values_changed": false,
+    "commits": 53,
+    "inet_prs": 18,
+    "paired_statistics_pr_authorized": true,
+    "staged_c38_tree": "939f58834ff93785c0e9e102c882eec1fda0f3a6"
+  },
+  "approved_serializer_revision": {
+    "approved": true,
+    "source": "User: Approve the correction",
+    "timestamp": "2026-11-17T14:40:08.201324+01:00",
+    "old_input": "57d4826ae81354b3c95416beaeed8b726bb99484",
+    "new_input": "f1bf0104b4aa9fe322a56eabb3a3b401089e0414",
+    "checkpoint": "cleanup/dtls-publication-checkpoint-20261117-before-serializer-correction",
+    "owners": [
+      "C05",
+      "C06"
+    ],
+    "commits": 53,
+    "prs": 18,
+    "original_branches_unchanged": true,
+    "baseline_values_changed": false
+  },
+  "runtime_commit_identity": "Message rewrites preserve whole trees. Later repinning preserves all model/configuration/fixture content and the entire statistics tree. Source runtime records retain their actual tested commit and library IDs.",
+  "mechanical_metadata_sequence": [
+    "C38 acceptance publication",
+    "C39 pure plan move",
+    "C40 incoming links"
+  ],
+  "snapshot_boundary": "Code/runtime acceptance at C38. Archive/link commit identities and their mechanical results are reported in the final PR descriptions and repository history."
+}

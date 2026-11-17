@@ -2,14 +2,11 @@
 
 > **Kind:** report · **Status:** snapshot 2026-11-17 · **Seal:** none · **Owns:** — · **Stands on:** [coverage.md](coverage.md)
 
-Publication association: C36. The retained execution statements refer to their original donor revisions. Fresh reconstructed results and exact-parent execution status are recorded separately; no historical PASS is attributed to this prefix.
-
-
 The selected model now includes the opt-in extensions described in [scope.md](scope.md). Their stage-specific executed evidence is in [extensions.md](extensions.md), including legacy full/abbreviated exchanges, CID/heartbeat/path support and their limits. The historical initial-profile results below retain their original source boundaries and counts; they are not a claim that the current extension union was run by those earlier commands.
 
 ## Minimum path-budget correction
 
-C17 of the [plan](https://github.com/mgonzalezlopezudc/inet/blob/5284847df92eea8451bf056d8722fabb0ddf65bd/plan/pending/dtls-extensions.md) rejects a PMTU base that cannot carry a heartbeat for every enabled version and configured CID profile. The [reviewer document](https://github.com/mgonzalezlopezudc/inet/blob/5284847df92eea8451bf056d8722fabb0ddf65bd/tests/protocol/dtls/path-mtu-minimum-base.md) explains the byte boundary, six real peer pairs and four expected configuration-error cases.
+C17 of the [plan](../../../../../plan/pending/dtls-extensions.md) rejects a PMTU base that cannot carry a heartbeat for every enabled version and configured CID profile. The [reviewer document](../../../../../tests/protocol/dtls/path-mtu-minimum-base.md) explains the byte boundary, six real peer pairs and four expected configuration-error cases.
 
 The unchanged rejection fixtures were executed on `c95450bb5648`: all four fail because the parent accepts the invalid configuration, binds UDP and exits normally at its cutoff instead of reporting the required error. The six-profile protocol fixture already passes on that parent and is a preservation control. An earlier real-UDP diagnostic also establishes both legacy peers at a 50-byte base but fails the required confirmation; its 64-byte control passes. These are measured parent observations, not fixture compilation failures.
 

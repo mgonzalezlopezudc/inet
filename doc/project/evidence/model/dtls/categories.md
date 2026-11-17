@@ -2,9 +2,6 @@
 
 > **Kind:** decision · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [checks.md](../../protocol/dtls/checks.md), [test-anatomy.md](../../../design/test-anatomy.md)
 
-Publication association: C19. The retained execution statements refer to their original donor revisions. Fresh reconstructed results and exact-parent execution status are recorded separately; no historical PASS is attributed to this prefix.
-
-
 The selected checks combine local tests, protocol exchanges and runnable examples. Execution status belongs to [results.md](results.md); category selection alone establishes no behavior.
 
 | Observation | Category | Reason |

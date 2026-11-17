@@ -1,6 +1,6 @@
 # DTLS selected features
 
-> **Kind:** what · **Status:** current · **Seal:** none · **Owns:** `DTLS-F-*` · **Stands on:** [standards.md](https://github.com/mgonzalezlopezudc/inet/blob/5284847df92eea8451bf056d8722fabb0ddf65bd/doc/project/evidence/protocol/dtls/standards.md)
+> **Kind:** what · **Status:** current · **Seal:** none · **Owns:** `DTLS-F-*` · **Stands on:** [standards.md](standards.md)
 
 These features describe the selected protocol mechanisms, independent of any implementation or test verdict.
 
@@ -16,4 +16,4 @@ These features describe the selected protocol mechanisms, independent of any imp
 | DTLS-F-UPDATE | Reliable directional epoch update | RFC9147-UPDATE; RFC8446-UPDATE |
 | DTLS-F-CLOSE | Alerts and closure | RFC9147-CLOSE; RFC8446-ALERT |
 
-The per-document statements live in the [DTLS catalog](https://github.com/mgonzalezlopezudc/inet/blob/5284847df92eea8451bf056d8722fabb0ddf65bd/doc/project/evidence/standard/rfc9147/catalog.md) and [TLS content catalog](https://github.com/mgonzalezlopezudc/inet/blob/5284847df92eea8451bf056d8722fabb0ddf65bd/doc/project/evidence/standard/rfc8446/catalog.md). Coverage belongs to the separate model ledger.
+The per-document statements live in the [DTLS catalog](../../standard/rfc9147/catalog.md) and [TLS content catalog](../../standard/rfc8446/catalog.md). Coverage belongs to the separate model ledger.

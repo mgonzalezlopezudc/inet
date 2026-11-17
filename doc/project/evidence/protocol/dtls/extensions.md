@@ -1,6 +1,6 @@
 # Selected DTLS extension mechanisms
 
-> **Kind:** what · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [extension obligations](https://github.com/mgonzalezlopezudc/inet/blob/5284847df92eea8451bf056d8722fabb0ddf65bd/doc/project/evidence/standard/rfc9147/extensions.md)
+> **Kind:** what · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [extension obligations](../../standard/rfc9147/extensions.md)
 
 The selected extension profile adds ticket resumption, explicit early datagrams, CID-based peer movement, post-handshake certificate authentication, alternative algorithm representations, path-size discovery and finite DTLS 1.2 compatibility. These are behavioral mechanisms with abstract protection; no real keys, signatures, certificate chains, binders or ciphertext authentication are computed.
 
