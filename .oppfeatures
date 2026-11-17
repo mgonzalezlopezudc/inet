@@ -225,7 +225,7 @@
         requires = "Queueing TlsCommon"
         recommended = ""
         labels = "transport security"
-        nedPackages = "inet.transportlayer.dtls"
+        nedPackages = "inet.transportlayer.dtls inet.transportlayer.contract.dtls"
         extraSourceFolders = ""
         compileFlags = "-DINET_WITH_DTLS"
         linkerFlags = ""
