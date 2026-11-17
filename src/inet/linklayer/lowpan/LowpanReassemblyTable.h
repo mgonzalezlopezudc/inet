@@ -4,6 +4,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <tuple>
 #include "inet/common/packet/Packet.h"
 #include "inet/linklayer/ieee802154/Ieee802154Address.h"
@@ -49,6 +50,8 @@ class INET_API LowpanReassemblyTable
     Result accept(const Key& key, int offset, bool first, const Packet& rangePacket, simtime_t now);
     int expire(simtime_t now);
     void clear();
+    std::optional<simtime_t> getExpiry(const Key& key) const;
+    bool remove(const Key& key);
     simtime_t getNextExpiry() const;
     int getNumContexts() const { return contexts.size(); }
     int getReservedBytes() const { return reservedBytes; }

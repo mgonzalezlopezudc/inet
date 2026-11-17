@@ -18,6 +18,8 @@ class INET_API LowpanDatagramTagAllocator
   public:
     explicit LowpanDatagramTagAllocator(uint16_t initialTag = 0) : nextTag(initialTag) {}
     std::optional<uint16_t> allocate(simtime_t now, simtime_t reuseAfter);
+    // Profile callers share this namespace and search rather than blocking on a live cursor.
+    std::optional<uint16_t> allocate(simtime_t now, simtime_t reuseAfter, uint16_t preferred);
 };
 
 } } // namespace inet::lowpan

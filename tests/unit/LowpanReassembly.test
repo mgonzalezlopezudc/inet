@@ -25,6 +25,18 @@ ASSERT(done.status == Table::COMPLETED && done.packet->getDataLength() == B(80))
 auto bytes = done.packet->peekDataAsBytes()->getBytes();
 ASSERT(bytes[0] == 0x60 && bytes[39] == 0x60 && bytes[40] == 0x61 && bytes[79] == 0x61);
 ASSERT(table.getNumContexts() == 0 && table.getReservedBytes() == 0);
+// Disposition maintenance queries the actual retained context deadline and can
+// cancel a key without leaking reserved bytes, including quarantined keys.
+ASSERT(!table.getExpiry(key));
+ASSERT(table.accept(key, 0, true, a, SimTime(1)).status == Table::STORED);
+ASSERT(table.getExpiry(key) == SimTime(61));
+ASSERT(table.remove(key) && !table.getExpiry(key));
+ASSERT(table.getNumContexts() == 0 && table.getReservedBytes() == 0);
+ASSERT(!table.remove(key));
+ASSERT(table.accept(key, 0, true, a, SimTime(2)).status == Table::STORED);
+ASSERT(table.accept(key, 0, true, b, SimTime(3)).status == Table::CONFLICT);
+ASSERT(table.getReservedBytes() == 0 && table.getExpiry(key) == SimTime(62));
+ASSERT(table.remove(key) && table.getNumContexts() == 0 && table.getReservedBytes() == 0);
 ASSERT(table.accept(key, 0, true, a, SimTime(30)).status == Table::STORED);
 ASSERT(table.accept(key, 0, true, b, SimTime(31)).status == Table::CONFLICT);
 ASSERT(table.getNumContexts() == 1 && table.getReservedBytes() == 0);

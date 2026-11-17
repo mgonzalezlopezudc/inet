@@ -1,0 +1,3 @@
+Native virtual fragment forwarding
+
+Native LoWPAN can opt into bounded route-over fragment forwarding for explicitly configured compatible peers. The model preserves original offsets, decrements the outer IPv6 Hop Limit, swaps local tags and paces output after native ACKs. Ordinary reassembly remains available for control and ineligible paths; fixed identity histories, route checks and lifecycle cancellation bound retained state. Forwarding honors ordinary IPv6 hooks and native host source eligibility.

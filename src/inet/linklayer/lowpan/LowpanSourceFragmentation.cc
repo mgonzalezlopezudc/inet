@@ -93,7 +93,7 @@ void LowpanSourceFragmentation::admit(Packet *packet, const Ptr<const Chunk>& he
     if ((int)flows.size() >= maxDatagrams || bytes > maxBytes - retainedBytes) {
         owner.dropLowpanPacket(packet, LOWPAN_RESOURCE_LIMIT); return;
     }
-    auto tag = owner.tagAllocator.allocate(simTime(), deadline(simTime(), protection));
+    auto tag = owner.allocateDatagramTag(simTime(), deadline(simTime(), protection));
     if (!tag) { owner.dropLowpanPacket(packet, LOWPAN_TAG_EXHAUSTED); return; }
     int64_t token = packet->getId();
     Flow flow;
