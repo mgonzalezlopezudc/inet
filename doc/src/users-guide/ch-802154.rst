@@ -22,62 +22,89 @@ Alternatively, it can be used with :protocol:`6LoWPAN`, the technology used to
 deliver IPv6 over WPANs, in order to define the upper layers. (Thread is also
 6LoWPAN-based.)
 
-A basic implementation of the IEEE 802.15.4
-protocol is provided by the INET Framework.
+INET provides a selected unsecured legacy-frame O-QPSK profile derived from
+IEEE Std 802.15.4-2024, alongside explicitly retained legacy narrowband and UWB
+models. This profile is not whole-standard support.
 
 .. _ug:sec:802154:network-interfaces:
 
 Network Interfaces
 ------------------
 
-Two network interfaces differing in the type of radio are available:
-
-- :ned:`Ieee802154NarrowbandInterface` is for use with narrowband radios.
-
-- :ned:`Ieee802154UwbIrInterface` is for use with the UWB-IR radio.
-
-In order to create a wireless node with an 802.15.4 interface, use a node type that has a
-wireless interface and set the interface type to the appropriate type. For
-example, :ned:`WirelessHost` is a node type that is preconfigured to have one
-wireless interface, ``wlan[0]``. ``wlan[0]`` is of parametric type, so it allows configuring of all the nodes
-to use 802.15.4 with the following line in the ini file:
+The native :ned:`Ieee802154NarrowbandInterface` and its explicit equivalent
+:ned:`Ieee802154StandardInterface` use full EUI-64 or short addresses, a typed
+MCPS/MLME service surface, complete MPDUs and FCS, and a packet-level O-QPSK PHY.
+Each interface supplies a unique locally administered EUI-64 from its simulator
+component ID. Set an explicit identity when it must remain stable across topology
+changes:
 
 .. code-block:: ini
 
    **.wlan[0].typename = "Ieee802154NarrowbandInterface"
+   *.device.wlan[0].extendedAddress = "extended:02-01-12-34-56-78-9A-BC"
+
+Call the native service provider or attach an ``Ieee802154MacDataReq`` packet
+tag before sending an opaque MSDU to the upper gate. The adapter returns native
+admission, confirmation and receive tags. It does not adapt generic 48-bit
+``MacAddress``/ARP traffic, so an ordinary IP application needs an explicit
+upper-layer adaptation. Receiver-side ``upperProtocol`` can select one known
+protocol; no protocol identifier is carried in the MAC frame.
+
+The complete MPDU must fit 127 bytes, including its variable native header and
+FCS. There is no fixed MSDU MTU or automatic fragmentation. Idle reception is
+disabled by default; enable ``rxOnWhenIdle`` or request scheduled receiver
+windows through management when the device must listen.
+
+:ned:`Ieee802154LegacyNarrowbandInterface` retains the old narrowband queue,
+48-bit upper-layer contract and wire representation. Existing IPv4 showcases
+select it explicitly. It is deprecated for the INET 5.0 cutover and retained
+until at least 6.0. :ned:`Ieee802154UwbIrInterface` retains the separate legacy
+UWB-IR model. Legacy and native narrowband frames are wire-incompatible.
 
 .. _ug:sec:802154:physical-layer:
 
 Physical Layer
 --------------
 
-The IEEE 802.15.4 standard defines several alternative PHYs. Various frequency bands, modulation schemes (DSSS, O-QPSK, MPSK, GFSK BPSK, etc.), and  narrowband radios are deployed. The standard also includes a Direct Sequence ultra-wideband (UWB) radio and one using chirp spread spectrum (CSS).
+The native composition uses :ned:`Ieee802154StandardRadio` and
+:ned:`Ieee802154PhyService` with scalar signal representation, 2.4-GHz channels
+11 through 26, 250 kbit/s and 16-us symbols. PHY services own turnaround,
+timed CCA Mode 1, ED and transmit completion. ED and LQI mappings are documented
+simulation choices with saturation, not hardware RSSI/LQI calibration.
 
-INET provides the following radios:
+The inherited BER curve and independent-bit error model are calculation
+abstractions. Preamble acquisition probability, chip waveforms, oscillator
+effects and calibrated hardware PER are not modeled. A locally canceled
+transmission cannot retract a waveform already emitted by the shared medium.
 
-- :ned:`Ieee802154NarrowbandScalarRadio` is currently a partially parameterized
-  version of the APSK radio. Before using this radio, the radio's parameters must be checked
-  and ensure their correspondence to the specification of the
-  narrowband PHY being simulated.
-
-- :ned:`Ieee802154UwbIrRadio` models the 802.14.5 UWB radio.
-
-To match the radios, a relevant medium model should be chosen. For instance,
-:ned:`Ieee802154UwbIrRadioMedium` for :ned:`Ieee802154UwbIrRadio`, and
-:ned:`Ieee802154NarrowbandScalarRadioMedium` for
-:ned:`Ieee802154NarrowbandScalarRadio`.
+Legacy narrowband radio types remain available for legacy compositions.
+:ned:`Ieee802154UwbIrRadio` uses :ned:`Ieee802154UwbIrRadioMedium`; retention of
+that model does not imply modern UWB support in the native profile.
 
 .. _ug:sec:802154:mac-protocol:
 
 MAC Protocol
 ------------
 
-The 802.15.4 MAC is based on collision avoidance via CSMA/CA. Other important
-features include real-time suitability by reservation of guaranteed time slots
-and integrated support for secure communications. Devices also include power
-management functions such as link quality and energy detection.
+:ned:`Ieee802154StandardMac` owns the native PIB, unslotted CSMA/CA, receive
+filtering, real immediate ACKs, direct retries, device-wide DSN and interframe
+spacing. Retries retain their DSN. Duplicate suppression is disabled. Security
+transforms are unsupported; protected input never becomes plaintext DATA.
 
-The :ned:`Ieee802154Mac` type in INET is currently a parameterized version of a
-generic CSMA/CA protocol model with ACK support.
+With ``enableManagement=true`` and a bound management client, the profile adds
+non-beacon START, active/passive/ED/orphan scans, discovery-response beacons,
+association and disassociation, indirect DATA/POLL/PURGE, orphan realignment,
+PAN-conflict notifications and scheduled receiver control. PAN selection and
+address allocation belong to higher-layer policy. Scanning records descriptors
+without automatically polling their pending-address list. ``ScanDuration`` is
+a 2024 symbol count, not the older exponent encoding.
 
-There is also a :ned:`Ieee802154NarrowbandMac`.
+``examples/wireless/ieee802154managed`` supplies a small native higher-layer
+client. A device discovers a PAN, joins, sends DATA, sleeps, polls for a queued
+reply, leaves and repeats with a new allocation. Run both typed/raw-byte
+configurations and inspect the application's completion and MSDU scalars.
+
+Periodic beacon scheduling, slotted access, GTS/CFP, enhanced frames/IEs,
+cryptographic security, TSCH, DSME, ranging and modern UWB are separate future
+profiles. The retained :ned:`Ieee802154Mac` and :ned:`Ieee802154NarrowbandMac`
+continue to serve explicit legacy configurations.

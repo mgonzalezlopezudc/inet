@@ -2,10 +2,22 @@
 
 > **Kind:** ledger · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [conformance.md](conformance.md), [derive-tests-from-a-standard.md](../../../guide/derive-tests-from-a-standard.md)
 
-Level reached: **1 (Survey)** for the model families named in the claim survey. The initial survey ran no checks. The step-0 pass below adds draft English checks,
-but no protocol check has run and no higher achieved level is claimed. The separate step-1a
-value test below establishes only the standalone address API. No protocol conformance verdict is
-recorded; successful corpus retrieval validates tooling, not the simulation model.
+The legacy model-family survey remains at **1 (Survey)**. The replacement has executed
+native integration, codec, PHY/access and production protocol evidence recorded in
+[results.md](results.md). The current per-statement mapping is
+[statement-results.md](statement-results.md), with explicit native-binding limits.
+These results do not assert whole-standard or waveform conformance.
+The selected M1/M2 execution closes steps 0–10: 17 production protocol fixtures
+pass 564 simulations, 14 module fixtures and eight unit fixtures pass, and the
+native wire/capture, external PHY, managed example and migration gates have
+executed results. [verification-20261115.json](verification-20261115.json)
+records counts, exact test selectors, source identity and explicit limits.
+PIB-8 is conditional on an indexed service absent from this whole-value binding;
+all other verdicts retain their catalog predicates. Later feature packages remain
+outside these selected milestones.
+The step-0 table below preserves its initial extraction verdicts; the current executable
+support table distinguishes subsequent evidence from remaining obligations. Successful
+corpus retrieval validates tooling, not simulation behavior.
 
 | Area | Survey evidence | Next evidence needed |
 | --- | --- | --- |
@@ -22,19 +34,21 @@ Initial baseline: `fd6f800222`; latest continuation baseline: `5f3845f055`, 2026
 [results.md](results.md). The [catalog](../../standard/ieee802154/catalog.md),
 [feature map](../../protocol/ieee802154/features.md) and
 [English checks](../../protocol/ieee802154/checks.md) define the bounded engineering audit. **Step 0 passed independent review on 2026-09-19;
-implementation and executable verification remain owed.**
+this verdict covered the applicability audit, not implementation.**
 
 There are 87 extracted statements (85 base-standard statements and two imported address definitions): 84 selected for the M1 engineering subset and 3 deferred
 selected-profile obligations. These are counts of the current extraction, not the denominator
-of a complete profile. No executable tests exist for these new check IDs; all run verdicts are
-`NOT_RUN`. Existing survey claims are not promoted to support claims by writing English checks.
+of a complete profile. At that extraction baseline all executable verdicts were `NOT_RUN`.
+Subsequent results are recorded below. Existing survey claims are not promoted merely by
+writing English checks, and per-statement release closure still requires its direct mapping.
 
-### M1 engineering subset and deferred obligations
+### Initial M1 engineering subset and deferred obligations
 
-`selected` means intended for M1 implementation and verification, not implemented. `later` means
-owed by a later selected profile; neither status is a justified applicability exclusion.
+This is the 2026-09-19 extraction snapshot, before the replacement implementation.
+`selected` meant intended for M1; `later` meant owed by a subsequent selected profile.
+Neither selection is an applicability exclusion or a current execution verdict.
 
-| Statement | Selection | Delivery | English check | Executable / verdict |
+| Statement | Initial selection | Delivery | English check | Initial executable / verdict |
 | --- | --- | --- | --- | --- |
 | [IEEE802154-ADDRESS-1](../../standard/ieee802154/catalog.md#ieee802154-address-1) | selected; owed | 1a, 1d, 2 | [IEEE802154-C-WIRE](../../protocol/ieee802154/checks.md#ieee802154-c-wire) | None / `NOT_RUN` |
 | [IEEE802154-ADDRESS-2](../../standard/ieee802154/catalog.md#ieee802154-address-2) | selected; owed | 1a, 1d, 2 | [IEEE802154-C-WIRE](../../protocol/ieee802154/checks.md#ieee802154-c-wire) | None / `NOT_RUN` |
@@ -124,22 +138,26 @@ owed by a later selected profile; neither status is a justified applicability ex
 | [IEEE802154-SERVICE-9](../../standard/ieee802154/catalog.md#ieee802154-service-9) | selected; owed | 1a, 1b | [IEEE802154-C-SERVICE](../../protocol/ieee802154/checks.md#ieee802154-c-service) | None / `NOT_RUN` |
 | [IEEE802154-ACCESS-3](../../standard/ieee802154/catalog.md#ieee802154-access-3) | selected; owed | 1c, 6 | [IEEE802154-C-ACK](../../protocol/ieee802154/checks.md#ieee802154-c-ack) | None / `NOT_RUN` |
 
-### Planned evidence categories
+### Current executable support
 
 | Check | Intended evidence | Current support evidence |
 | --- | --- | --- |
-| IEEE802154-C-WIRE | Unit/serializer plus native-interface production fixture and independent octets | None; no executable check |
-| IEEE802154-C-ACCESS | Module plus protocol trace reaching actual transmit/no-transmit outcome | None; no executable check |
-| IEEE802154-C-SEQUENCE | Protocol exchange through serialization and receiver indication | None; no executable check |
-| IEEE802154-C-RECEIVE | Protocol injection plus upper indication and ACK observation | None; no executable check |
-| IEEE802154-C-ACK | Protocol loss injection and PHY timing; indirect variant deferred to M2 | None; no executable check |
-| IEEE802154-C-SECURITY | Protocol/service fixture separating status, ACK and delivery | None; no executable check |
-| IEEE802154-C-PHY | Module timing/energy observations; separate external validation | None; no executable check |
-| IEEE802154-C-SERVICE | Module PIB/reset plus production request capacity tests | None; no executable check |
-| IEEE802154-C-SCAN | Module/protocol scan evidence, deferred to M2 | None; no executable check |
+| IEEE802154-C-WIRE | Unit/serializer plus native-interface production fixture and independent octets | Address/FrameWire/Fcs/Commands/Beacons and Capture unit fixtures, native-interface module and admitted four-frame serializer fixture pass. Scapy independently checks fields/CRCs. The authorized protected-reader repair preserves truncated captures. |
+| IEEE802154-C-ACCESS | Module plus protocol trace reaching actual transmit/no-transmit outcome | Production UnslottedAccess module and protocol fixture pass; 20-seed contention campaign passes. |
+| IEEE802154-C-SEQUENCE | Protocol exchange through serialization and receiver indication | SequenceWrap protocol fixture passes 260-request exchanges across peers, wrap, retry and restart. |
+| IEEE802154-C-RECEIVE | Protocol injection plus upper indication and ACK observation | ReceiveSecurity protocol fixture passes its selected PAN/address/security/monitor cases. Uncovered predicates remain owed; this is not a blanket statement verdict. |
+| IEEE802154-C-ACK | Protocol loss injection and PHY timing | DataAck and InterframeSpacing pass wrong-DSN, corrupt, unsupported-version, exact-deadline and late ACK cases. Indirect verifies retry only after a new poll; Broadcast verifies actual unacknowledged beacon release. |
+| IEEE802154-C-SECURITY | Protocol/service fixture separating status, ACK and delivery | Secured version-0/1 common framing, actual ACK and distinct COMM-STATUS/no-plaintext paths pass. No cryptographic processing is implemented. |
+| IEEE802154-C-PHY | Module timing/energy observations; separate external validation | PhyServices, Measurements, EnergyObservation and PhyPib pass. ExternalPhy observes encoded SHR/PHR/PSDU views, exact airtime and BER/PER calculations against a pinned external reference. Hardware PER, chip/pulse waveforms and acquisition probability are outside this packet-level model. |
+| IEEE802154-C-SERVICE | Module PIB/reset plus production request capacity tests | MacPib and production lifecycle/PHY-delegation/indirect paths pass. Admission checks actual maximum/oversize/empty/non-octet MSDUs, invalid requests, packet ownership and DSN preservation. NativeGate proves the public default interface's actual DATA/ACK and receiver-owned dispatch. |
+| IEEE802154-C-SCAN | Production START, passive/ED/active/orphan scan and beacon cases | Sorting, descriptor identity, peaks, notifications, restoration, zero-duration ED, exact-deadline/late beacons, all-unscanned active failure, orphan realignment and PAN conflict have production evidence. |
 
-All nine feature groups remain without executable support evidence. Category assignments are
-provisional until actual fixtures demonstrate that they reach the claimed observation boundary.
+Commands, build modes, exact executed counts and artifacts are in [results.md](results.md).
+Supporting cases do not automatically close every statement within a feature group. The
+[statement mapping](statement-results.md) gives each extracted statement its direct cases
+and limits. M2's procedure inventory and source decisions are in
+[managed-applicability.md](managed-applicability.md). Release build/regression status remains
+separate in [results.md](results.md), including inherited failures and expected-error checks.
 
 ## Pass log
 
@@ -191,3 +209,18 @@ IEEE802154-C-SERVICE, not execution of that protocol check: no production servic
 NED import, radio mutation, notifications or full MLME reset is exercised. The normative
 check verdicts remain NOT_RUN. Commands and limitations are in
 [results.md](results.md#step-1b-selected-mac-pib).
+
+## Step-1c PHY contract evidence
+
+The paired PHY service roles and [timing/ownership contract](phy-services.md) have one passing
+debug [module case](../../../../../tests/module/Ieee802154PhyServiceContract_1.test), fixed run
+and seed 0. It covers accepted/refused PSDU ownership, inline status results, copied native
+identity, channel descriptor validation, actual versus predicted timestamps, CCA/ED result
+validity, exact requested transmit start, cancellation, reset/stop barriers, restart, stale IDs,
+deadline event precedence and deleted-client cleanup.
+
+This closes package 1c's structural contract boundary. Its provider is test-local: no existing
+radio is adapted, no actual channel energy is measured and no full MAC exchange executes.
+The normative C-PHY/C-ACK verdicts remain NOT_RUN. Runtime PHY PIB context refresh and validation
+of real propagation/ACK timing assumptions remain production work. Commands, primary-source
+retrieval and limitations are in [results.md](results.md#step-1c-phy-service-contracts).

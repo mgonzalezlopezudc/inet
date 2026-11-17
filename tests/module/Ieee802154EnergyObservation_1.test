@@ -1,0 +1,216 @@
+%description:
+Exercise the production scalar energy observer against a real O-QPSK radio
+and scalar medium. Background energy is measured with no decodable frame.
+This is the step-4 feasibility gate, not a complete PHY service provider.
+
+%file: EnergyFixture.cc
+#include <cmath>
+#include "inet/common/SimpleModule.h"
+#include "inet/common/Protocol.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IRadioMedium.h"
+#include "inet/physicallayer/wireless/ieee802154/Ieee802154EnergyObservation.h"
+#include "inet/networklayer/common/NetworkInterface.h"
+
+namespace inet {
+class Ieee802154EnergyObserver : public SimpleModule, public cListener
+{
+    physicallayer::Ieee802154EnergyObservation observation;
+    bool observed = false;
+    bool pulseObserved = false;
+    physicallayer::IRadio *radio = nullptr;
+  protected:
+    virtual void initialize() override {
+        scheduleAt(SimTime(1, SIMTIME_US), new cMessage("observe", 0));
+        getParentModule()->getSubmodule("radioMedium")->subscribe(physicallayer::IRadioMedium::signalArrivalStartedSignal, this);
+    }
+    virtual void receiveSignal(cComponent *, simsignal_t, cObject *object, cObject *) override {
+        if (auto reception = dynamic_cast<const physicallayer::IReception *>(object))
+            observation.include(reception);
+    }
+    virtual void handleMessage(cMessage *message) override {
+        ASSERT(message->isSelfMessage()); // No packet delivery is part of this scenario.
+        radio = check_and_cast<physicallayer::IRadio *>(getParentModule()->getSubmodule("host")->getSubmodule("radio"));
+        if (message->getKind() == 0) {
+            ASSERT(radio->getReceptionState() != physicallayer::IRadio::RECEPTION_STATE_RECEIVING);
+            observation.begin(radio, simTime(), simTime() + SimTime(128, SIMTIME_US));
+            message->setKind(1);
+            scheduleAfter(SimTime(128, SIMTIME_US), message);
+        }
+        else if (message->getKind() == 1) {
+            auto result = observation.finish();
+            ASSERT(std::abs(result.peakPower.get<W>() - 1e-10) < 1e-20);
+            ASSERT(std::abs(result.meanPower.get<W>() - 1e-10) < 1e-20);
+            ASSERT(result.peakPower > W(1e-12)); // Mode-1 threshold example: energy despite no PPDU.
+            ASSERT(radio->getReceptionState() != physicallayer::IRadio::RECEPTION_STATE_RECEIVING);
+            observed = true;
+            message->setKind(2);
+            scheduleAfter(SimTime(1, SIMTIME_US), message);
+        }
+        else if (message->getKind() == 2) {
+            observation.begin(radio, simTime(), simTime() + SimTime(2, SIMTIME_MS));
+            scheduleAfter(SimTime(10, SIMTIME_US), new cMessage("pulse1", 3));
+            scheduleAfter(SimTime(900, SIMTIME_US), new cMessage("pulse2", 3));
+            message->setKind(4);
+            scheduleAfter(SimTime(2, SIMTIME_MS), message);
+        }
+        else if (message->getKind() == 3) {
+            auto packet = new Packet("undecodable-BPSK");
+            packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee802154);
+            packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>(20, 0)));
+            send(packet, "txOut");
+            delete message;
+        }
+        else {
+            auto result = observation.finish();
+            ASSERT(result.peakPower > W(2e-10));
+            ASSERT(result.meanPower > W(1e-10) && result.meanPower < result.peakPower);
+            // Two 832-us rectangles in the 2-ms window, above constant background.
+            double expected = 1e-10 + (result.peakPower.get<W>() - 1e-10) * 0.832;
+            ASSERT(std::abs(result.meanPower.get<W>() - expected) < result.peakPower.get<W>() * 1e-7);
+            ASSERT(radio->getReceptionState() != physicallayer::IRadio::RECEPTION_STATE_RECEIVING);
+            pulseObserved = true;
+            delete message;
+        }
+    }
+    virtual void finish() override {
+        ASSERT(observed && pulseObserved);
+        for (int i = 0; i < 1; ++i) {
+            auto interface = check_and_cast<NetworkInterface *>(getParentModule()->getSubmodule("legacy", i)->getSubmodule("nic"));
+            ASSERT(!interface->getMacAddress().isUnspecified());
+        }
+        std::cout << "Scalar medium energy is observable without a decodable frame.\n";
+    }
+};
+Define_Module(Ieee802154EnergyObserver);
+}
+
+%file: EnergyFixture.ned
+import inet.common.SimpleModule;
+import inet.mobility.static.StationaryMobility;
+import inet.physicallayer.wireless.common.medium.RadioMedium;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandRadio;
+import inet.physicallayer.wireless.apsk.packetlevel.ApskRadio;
+import inet.physicallayer.wireless.common.contract.packetlevel.IRadio;
+import inet.linklayer.ieee802154.Ieee802154LegacyNarrowbandInterface;
+import inet.linklayer.contract.IWirelessInterface;
+
+simple Ieee802154EnergyObserver extends SimpleModule
+{
+    parameters:
+        @class(::inet::Ieee802154EnergyObserver);
+    gates:
+        output txOut;
+        input rxIn;
+}
+module EnergyHost
+{
+    parameters:
+        @networkNode;
+        string radioType = default("Ieee802154NarrowbandRadio");
+    gates:
+        input upperIn;
+        output upperOut;
+    submodules:
+        mobility: StationaryMobility;
+        radio: <radioType> like IRadio;
+    connections allowunconnected:
+        upperIn --> radio.upperLayerIn;
+        radio.upperLayerOut --> upperOut;
+}
+network EnergyTest
+{
+    submodules:
+        radioMedium: RadioMedium;
+        host: EnergyHost;
+        interferer: EnergyHost {
+            radioType = "ApskRadio";
+        }
+        legacy[1]: EnergyLegacyHost;
+        observer: Ieee802154EnergyObserver;
+    connections allowunconnected:
+        observer.txOut --> interferer.upperIn;
+        host.upperOut --> observer.rxIn;
+}
+
+module EnergyLegacyHost
+{
+    parameters:
+        @networkNode;
+        string interfaceType;
+    submodules:
+        mobility: StationaryMobility;
+        nic: <interfaceType> like IWirelessInterface {
+            interfaceTableModule = "";
+        }
+    connections allowunconnected:
+}
+
+%inifile: omnetpp.ini
+[General]
+network = EnergyTest
+ned-path = .;../../../../src;../../lib
+sim-time-limit = 3ms
+seed-set = 0
+cmdenv-express-mode = true
+record-vector-results = false
+record-scalar-results = false
+*.radioMedium.signalAnalogRepresentation = "scalar"
+*.radioMedium.backgroundNoise.power = -70dBm
+*.legacy[0].interfaceType = "Ieee802154LegacyNarrowbandInterface"
+*.legacy[*].nic.radio.antenna.mobilityModule = "^.^.^.mobility"
+*.legacy[*].nic.radio.receiver.energyDetection = -60dBm
+*.legacy[*].mobility.initFromDisplayString = false
+*.legacy[*].mobility.initialX = 50m
+*.legacy[*].mobility.initialY = 0m
+*.legacy[*].mobility.initialZ = 0m
+*.legacy[*].mobility.constraintAreaMinX = 0m
+*.legacy[*].mobility.constraintAreaMinY = 0m
+*.legacy[*].mobility.constraintAreaMinZ = 0m
+*.legacy[*].mobility.constraintAreaMaxX = 100m
+*.legacy[*].mobility.constraintAreaMaxY = 100m
+*.legacy[*].mobility.constraintAreaMaxZ = 100m
+*.host.radio.initialRadioMode = "receiver"
+*.host.radio.receiver.energyDetection = -60dBm
+*.host.radio.antenna.mobilityModule = "^.^.mobility"
+*.interferer.radio.initialRadioMode = "transmitter"
+*.interferer.radio.antenna.mobilityModule = "^.^.mobility"
+*.interferer.radio.centerFrequency = 2450MHz
+*.interferer.radio.bandwidth = 2.8MHz
+*.interferer.radio.transmitter.modulation = "BPSK"
+*.interferer.radio.transmitter.bitrate = 250kbps
+*.interferer.radio.transmitter.headerLength = 16b
+*.interferer.radio.transmitter.preambleDuration = 128us
+*.interferer.radio.transmitter.power = 1mW
+*.interferer.radio.receiver.modulation = "BPSK"
+*.interferer.radio.receiver.bitrate = 250kbps
+*.interferer.radio.receiver.headerLength = 16b
+*.interferer.radio.receiver.sensitivity = -100dBm
+*.interferer.radio.receiver.energyDetection = -60dBm
+*.interferer.radio.receiver.snirThreshold = -8dB
+*.interferer.mobility.initFromDisplayString = false
+*.interferer.mobility.initialX = 1m
+*.interferer.mobility.initialY = 0m
+*.interferer.mobility.initialZ = 0m
+*.interferer.mobility.constraintAreaMinX = 0m
+*.interferer.mobility.constraintAreaMinY = 0m
+*.interferer.mobility.constraintAreaMinZ = 0m
+*.interferer.mobility.constraintAreaMaxX = 100m
+*.interferer.mobility.constraintAreaMaxY = 100m
+*.interferer.mobility.constraintAreaMaxZ = 100m
+*.host.mobility.initFromDisplayString = false
+*.host.mobility.initialX = 0m
+*.host.mobility.initialY = 0m
+*.host.mobility.initialZ = 0m
+*.host.mobility.constraintAreaMinX = 0m
+*.host.mobility.constraintAreaMinY = 0m
+*.host.mobility.constraintAreaMinZ = 0m
+*.host.mobility.constraintAreaMaxX = 100m
+*.host.mobility.constraintAreaMaxY = 100m
+*.host.mobility.constraintAreaMaxZ = 100m
+
+%contains: stdout
+Scalar medium energy is observable without a decodable frame.

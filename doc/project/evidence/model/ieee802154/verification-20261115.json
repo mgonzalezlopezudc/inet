@@ -1,0 +1,109 @@
+{
+  "date": "2026-11-15",
+  "profile": "IEEE 802.15.4-2024 M1/M2 unsecured nonbeacon legacy-frame O-QPSK",
+  "source_manifest_sha256": "a6eadfad9fa3bb632fcf1f03c6f8d442fdba5b5e9d612f9f148b3597658a26f6",
+  "source_commit": "dffdddb416b6f50270dd1439e64dcda3e567c544",
+  "artifact_root": "/home/miguel/workspace/.codex-artifacts/ieee802154-plan-20261115-root",
+  "builds": {
+    "debug": "PASS",
+    "release": "PASS",
+    "feature_disabled_debug": "PASS"
+  },
+  "protocol": {
+    "fixtures": 17,
+    "simulations": 564,
+    "pass": 564,
+    "fail": 0,
+    "exit_code": 0
+  },
+  "module": {
+    "fixtures": 14,
+    "pass": 14,
+    "completed_simulations": 72,
+    "expected_initialization_errors": 1,
+    "exit_code": 0
+  },
+  "unit": {
+    "fixtures": 8,
+    "pass": 8,
+    "exit_code": 0
+  },
+  "serializer": {
+    "native": "PASS",
+    "generic_failures": 2,
+    "generic_failure_signatures_match_parent": true,
+    "generic_exit_code": 1
+  },
+  "independent_decoder": "PASS",
+  "external_phy_points": 25,
+  "managed_example": {
+    "runs": 2,
+    "checked_scalars": 12,
+    "result": "PASS"
+  },
+  "fingerprint": {
+    "configurations": 2,
+    "stored_ingredient_comparisons": 4,
+    "result": "PASS",
+    "baseline_updates": 0
+  },
+  "visual_fingerprint": {
+    "configurations": 1,
+    "ingredient": "tyf",
+    "fake_gui": true,
+    "result": "PASS"
+  },
+  "review": {
+    "scope": "native lifecycle, reentry and configuration correction",
+    "pass": 24,
+    "not_applicable": 10,
+    "flags": 0,
+    "questions": 0
+  },
+  "limitations": [
+    "PIB-8 conditional: no hierarchical index service",
+    "Inherited generic serializer failures and global architecture/naming/interface findings remain",
+    "Legacy UWB expected initialization error remains",
+    "PHY-only crash is source-traced, not separately executed in its focused fixture",
+    "Packet-medium abort does not retract already emitted waveforms",
+    "No security transforms, periodic beacons, slotted MAC, GTS, TSCH, DSME or modern UWB claim"
+  ],
+  "commands": {
+    "final-protocol": {
+      "runner": "opp_repl",
+      "command": "opp_run_protocol_tests --load . -p inet -m debug --no-build -w '^tests/protocol/ieee802154$' -f 'Ieee802154.*\\.test$'",
+      "selector": "Ieee802154.*.test",
+      "exit_code": 0
+    },
+    "final-module": {
+      "runner": "opp_repl",
+      "command": "opp_run_module_tests --load . -p inet -m debug --no-build -f 'Ieee802154.*_1\\.test$'",
+      "selector": "Ieee802154.*_1.test",
+      "exit_code": 0
+    },
+    "final-unit": {
+      "runner": "opp_repl",
+      "command": "opp_run_unit_tests --load . -p inet -m debug --no-build -f 'Ieee802154.*_1\\.test$'",
+      "selector": "Ieee802154.*_1.test",
+      "exit_code": 0
+    },
+    "final-fingerprint": {
+      "runner": "opp_repl",
+      "command": "opp_run_fingerprint_tests --load . -p inet -m debug --no-build -w '^showcases/wireless/(ieee802154|coexistence)$' -c '^(Ieee802154Power|Coexistence)$' -r '^0$' --stored-only",
+      "selector": "Ieee802154Power|Coexistence run0",
+      "exit_code": 0
+    },
+    "final-visual": {
+      "runner": "opp_repl",
+      "command": "opp_run_fingerprint_tests --load . -p inet -m debug --no-build -w '^showcases/wireless/ieee802154$' -c '^Ieee802154Power$' -r '^0$' --stored-only --ingredients tyf --append-args --cmdenv-fake-gui=true",
+      "selector": "Ieee802154Power run0 tyf fakeGUI",
+      "exit_code": 0
+    },
+    "final-serializer": {
+      "runner": "opp_repl",
+      "command": "opp_run_opp_tests --load ../.. -p inet -m debug --no-build -f 'serializer_(pcap(_known_failures)?|ieee802154)\\.test$'",
+      "selector": "three selected serializer fixtures",
+      "exit_code": 1
+    }
+  }
+}

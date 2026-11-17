@@ -1,0 +1,96 @@
+%description:
+Retained legacy UWB initialization baseline. The unchanged receiver C++ requires
+ignoreInterference, absent from its NED type. Preserve this specific inherited
+initialization error; no successful UWB transmission is claimed.
+
+%file: UwbRetentionApp.cc
+#include "inet/common/SimpleModule.h"
+#include "inet/common/Protocol.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/common/MacAddressTag_m.h"
+
+namespace inet {
+class UwbRetentionApp : public SimpleModule
+{
+    int received = 0;
+    virtual void initialize() override {
+        if (par("sender")) scheduleAt(SimTime(1,SIMTIME_MS),new cMessage("send"));
+    }
+    virtual void handleMessage(cMessage *message) override {
+        if (message->isSelfMessage()) {
+            delete message;
+            auto packet = new Packet("retained UWB payload");
+            packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0x12,0x34}));
+            packet->addTag<MacAddressReq>()->setDestAddress(MacAddress::BROADCAST_ADDRESS);
+            packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ipv4);
+            send(packet,"out");
+        }
+        else {
+            auto packet = check_and_cast<Packet *>(message);
+            ASSERT(packet->peekDataAsBytes()->getBytes() == std::vector<uint8_t>({0x12,0x34}));
+            ASSERT(packet->getTag<PacketProtocolTag>()->getProtocol() == &Protocol::ipv4);
+            received++; delete packet;
+        }
+    }
+    virtual void finish() override {
+        ASSERT(received == (par("sender").boolValue() ? 0 : 1));
+        std::cout << "Retained UWB endpoint " << (par("sender").boolValue() ? "sender" : "receiver") << " received " << received << " packets.\n";
+    }
+};
+Define_Module(UwbRetentionApp);
+}
+
+%file: UwbRetentionFixture.ned
+import inet.common.SimpleModule;
+import inet.linklayer.ieee802154.Ieee802154UwbIrInterface;
+import inet.mobility.static.StationaryMobility;
+import inet.physicallayer.wireless.ieee802154.bitlevel.Ieee802154UwbIrRadioMedium;
+simple UwbRetentionApp extends SimpleModule
+{
+    parameters: @class(::inet::UwbRetentionApp); bool sender;
+    gates: input in; output out;
+}
+module UwbRetentionHost
+{
+    parameters: bool sender; @networkNode;
+    submodules:
+        mobility: StationaryMobility;
+        nic: Ieee802154UwbIrInterface { interfaceTableModule = ""; }
+        app: UwbRetentionApp { sender = parent.sender; }
+    connections allowunconnected:
+        app.out --> nic.upperLayerIn;
+        nic.upperLayerOut --> app.in;
+}
+network UwbRetentionTest
+{
+    submodules:
+        radioMedium: Ieee802154UwbIrRadioMedium;
+        host[2]: UwbRetentionHost { sender = index == 0; }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = UwbRetentionTest
+sim-time-limit = 10ms
+cmdenv-express-mode = true
+*.host[*].nic.mac.bitrate = 850kbps
+*.host[*].nic.mac.useAck = false
+*.host[*].nic.radio.antenna.mobilityModule = "^.^.^.mobility"
+*.host[*].mobility.initFromDisplayString = false
+*.host[0].mobility.initialX = 0m
+*.host[1].mobility.initialX = 1m
+*.host[*].mobility.initialY = 0m
+*.host[*].mobility.initialZ = 0m
+*.host[*].mobility.constraintAreaMinX = 0m
+*.host[*].mobility.constraintAreaMinY = 0m
+*.host[*].mobility.constraintAreaMinZ = 0m
+*.host[*].mobility.constraintAreaMaxX = 100m
+*.host[*].mobility.constraintAreaMaxY = 100m
+*.host[*].mobility.constraintAreaMaxZ = 100m
+
+%exitcode: 1
+
+%contains: stderr
+Unknown parameter 'ignoreInterference'
