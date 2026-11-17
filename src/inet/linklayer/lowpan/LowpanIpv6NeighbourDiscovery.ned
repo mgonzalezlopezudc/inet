@@ -10,6 +10,8 @@ simple LowpanIpv6NeighbourDiscovery extends Ipv6NeighbourDiscovery
         string nativeNdRole @enum("static", "router", "host", "borderRouter") = default("static"); // Router enables native registration/RA; borderRouter additionally couples native admission to the routed DAD authority. Both require forwarding. Host uses M=0 discovery/SLAAC/registration and drops ordinary data until registered. Static retains configured bindings. Native ND always computes wire checksums; checksumMode governs ordinary interfaces.
         int maxDuplicateAddressEntries = default(64); // Positive module-wide capacity of the borderRouter DAD table; no native binding or data route is created by this table.
         int maxRegistrations = default(64); // Positive module-wide registration limit across native interfaces.
+        string registrationAuthorityAddress = default(""); // Router role: one non-link-local routed DAD authority; empty retains local registration.
+        string registrationSourceAddress = default(""); // Assigned valid non-tentative non-loopback non-link-local DAR source; required with authority. Pending+confirmed keys share maxRegistrations.
         int maxPendingRouterAdvertisements = default(64); // Positive module-wide bound for delayed unicast RA responses; identical pending requester tuples are coalesced.
         int maxCandidateRouters = default(4); // Positive module-wide host router bound.
         int maxHostAddresses = default(16); // Positive module-wide host address inventory bound, including configured, autonomous and rejected addresses.
