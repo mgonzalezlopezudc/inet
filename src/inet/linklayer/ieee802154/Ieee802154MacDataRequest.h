@@ -11,6 +11,7 @@
 
 #include "inet/linklayer/ieee802154/Ieee802154Address.h"
 #include "inet/linklayer/ieee802154/Ieee802154MacServiceResult.h"
+#include "inet/linklayer/ieee802154/Ieee802154InformationElements.h"
 
 namespace inet {
 
@@ -30,8 +31,8 @@ struct Ieee802154MacSecurityParameters
 
 /**
  * Selected MCPS-DATA.request metadata. Source identity comes from the
- * authoritative MAC PIB. The service fixes LegacyTx=true and DataRate=0;
- * Ranging, IE, and multipurpose options are outside this API.
+ * authoritative MAC PIB. DataRate=0; ranging and multipurpose are outside
+ * this API. Enhanced options are explicit and copied at admission.
  */
 struct Ieee802154MacDataRequest
 {
@@ -43,6 +44,11 @@ struct Ieee802154MacDataRequest
     bool indirectTx = false; ///< Coordinator queues for polling; ignored for a non-coordinator or omitted destination (Table 8-30).
     Ieee802154MacSecurityParameters security;
     bool gtsTx = false; ///< Use the matching GTS instead of contention access.
+    bool legacyTx = true; ///< False selects the version-2 format when enabled.
+    bool sequenceSuppressed = false;
+    bool panIdSuppressed = false;
+    std::vector<Ieee802154InformationElements::Header> headerIes;
+    std::vector<Ieee802154InformationElements::Payload> payloadIes;
 };
 
 struct Ieee802154MacDataConfirm
@@ -86,6 +92,8 @@ struct Ieee802154MacDataIndication
     uint8_t lqi = 0; ///< Table 8-32, 0x00..0xff.
     uint8_t rssi = 0; ///< Local numeric 8-bit representation of the Table 8-32 RSSI.
     std::optional<uint32_t> timestamp; ///< Optional future-profile raw 24-bit value; absent for M1.
+    std::vector<Ieee802154InformationElements::Header> headerIes; ///< Copied without termination descriptors.
+    std::vector<Ieee802154InformationElements::Payload> payloadIes; ///< Copied without termination descriptors.
 };
 
 /**

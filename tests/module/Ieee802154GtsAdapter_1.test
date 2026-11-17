@@ -1,5 +1,5 @@
 %description:
-The native packet adapter forwards the default and explicitly enabled GTS DATA option.
+The native packet adapter forwards GTS and enhanced DATA options, with legacy defaults.
 This is an adapter contract test; its provider is a mock, not a radio.
 
 %file: GtsAdapterContract.cc
@@ -26,12 +26,20 @@ class GtsAdapterProvider : public SimpleModule, public IIeee802154MacServiceProv
     ModuleRefByPar<IIeee802154MacServiceClient> client;
   public:
     std::vector<bool> options;
+    std::vector<Ieee802154MacDataRequest> requests;
     void initialize() override { client.reference(this,"clientModule",true); }
     Ieee802154MacServiceAdmission submitData(uint64_t id,Packet *packet,const Ieee802154MacDataRequest& request) override {
         Enter_Method("submitData");
         ASSERT(id == options.size() + 1 && packet && !packet->findTag<Ieee802154MacDataReq>());
-        take(packet); options.push_back(request.gtsTx); delete packet;
+        take(packet); options.push_back(request.gtsTx); requests.push_back(request); delete packet;
         client->handleDataConfirm(id,Ieee802154MacDataConfirm(request.msduHandle,Ieee802154MacStatus::SUCCESS));
+        if (id == 3) {
+            Ieee802154MacDataIndication indication;
+            indication.headerIes = {{0,{0xaa,0xbb,0xcc}}};
+            indication.payloadIes = {{0,{0xdd}}};
+            client->handleDataIndication(new Packet("received MSDU"),indication);
+            indication.headerIes.clear(); indication.payloadIes.clear();
+        }
         return Ieee802154MacServiceAdmission::ACCEPTED;
     }
     Ieee802154MacServiceAdmission submitGet(uint64_t,const Ieee802154MacGetRequest&) override { return Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION; }
@@ -44,7 +52,18 @@ Define_Module(GtsAdapterProvider);
 class GtsAdapterExercise : public SimpleModule
 {
     GtsAdapterProvider *provider = nullptr;
-    int confirms = 0;
+    int confirms = 0, indications = 0;
+    void checkDone() {
+        if (confirms != 3 || indications != 1) return;
+        ASSERT(provider->options == std::vector<bool>({false,true,false}) && GtsAdapterPacket::destroyed == 3);
+        const auto& legacy = provider->requests[0];
+        const auto& enhanced = provider->requests[2];
+        ASSERT(legacy.legacyTx && !legacy.sequenceSuppressed && !legacy.panIdSuppressed && legacy.headerIes.empty() && legacy.payloadIes.empty());
+        ASSERT(!enhanced.legacyTx && enhanced.sequenceSuppressed && enhanced.panIdSuppressed &&
+                enhanced.headerIes.size() == 1 && enhanced.headerIes[0].id == 0x12 && enhanced.headerIes[0].content == std::vector<uint8_t>({0xaa}) &&
+                enhanced.payloadIes.size() == 1 && enhanced.payloadIes[0].group == 2 && enhanced.payloadIes[0].content == std::vector<uint8_t>({0xbb}));
+        std::cout << "GTS adapter option and packet ownership verified.\n";
+    }
   protected:
     void initialize() override {
         provider = check_and_cast<GtsAdapterProvider *>(getModuleByPath("^.provider"));
@@ -53,24 +72,34 @@ class GtsAdapterExercise : public SimpleModule
     void handleMessage(cMessage *message) override {
         if (message->isSelfMessage()) {
             delete message;
-            for (int i = 0; i < 2; ++i) {
+            for (int i = 0; i < 3; ++i) {
                 auto packet = new GtsAdapterPacket;
                 auto tag = packet->addTag<Ieee802154MacDataReq>();
                 tag->request.msduHandle = 10 + i;
                 if (i == 1) tag->request.gtsTx = true;
+                if (i == 2) {
+                    tag->request.legacyTx = false;
+                    tag->request.sequenceSuppressed = true;
+                    tag->request.panIdSuppressed = true;
+                    tag->request.headerIes = {{0x12,{0xaa}}};
+                    tag->request.payloadIes = {{2,{0xbb}}};
+                }
                 send(packet,"out");
             }
             return;
         }
         auto packet = check_and_cast<Packet *>(message);
+        if (auto tag = packet->findTag<Ieee802154MacDataInd>()) {
+            const auto& indication = tag->indication;
+            ASSERT(indication.headerIes.size() == 1 && indication.headerIes[0].id == 0 && indication.headerIes[0].content == std::vector<uint8_t>({0xaa,0xbb,0xcc}));
+            ASSERT(indication.payloadIes.size() == 1 && indication.payloadIes[0].group == 0 && indication.payloadIes[0].content == std::vector<uint8_t>({0xdd}));
+            ++indications; delete packet; checkDone(); return;
+        }
         auto tag = packet->getTag<Ieee802154MacDataResultInd>();
         ASSERT(tag->requestId == uint64_t(confirms + 1) && tag->msduHandle == 10 + confirms && tag->confirm &&
                 tag->confirm->result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS));
         delete packet;
-        if (++confirms == 2) {
-            ASSERT(provider->options == std::vector<bool>({false,true}) && GtsAdapterPacket::destroyed == 2);
-            std::cout << "GTS adapter option and packet ownership verified.\n";
-        }
+        ++confirms; checkDone();
     }
 };
 Define_Module(GtsAdapterExercise);

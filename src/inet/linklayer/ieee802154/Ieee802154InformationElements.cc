@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //
 #include "inet/linklayer/ieee802154/Ieee802154InformationElements.h"
+#include "inet/linklayer/ieee802154/Ieee802154Frame_m.h"
 #include "inet/linklayer/ieee802154/Ieee802154FrameLayout.h"
 
 namespace inet {

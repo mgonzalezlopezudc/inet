@@ -14,6 +14,9 @@ simple Ieee802154ManagementApp extends SimpleModule like IIeee802154MacServiceCl
         bool coordinator = default(false);
         bool beaconOperation = default(false); // Explicit opt-in to a BO3/SO1 managed PAN.
         bool gtsOperation = default(false); // Opt in to a bidirectional GTS exchange.
+        bool enhancedData = default(false); // Select unacknowledged version-2 DATA.
+        bool enhancedSequenceSuppressed = default(false);
+        bool enhancedPanIdSuppressed = default(false);
         int gtsBatchSize = default(2); // Reopen permit once after each batch of grants.
         double gtsBatchDelay @unit(s) = default(0.5s);
         int panId = default(4660);

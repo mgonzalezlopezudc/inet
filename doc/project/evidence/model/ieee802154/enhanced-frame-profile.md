@@ -35,7 +35,27 @@ for raw decoding, generation and typed dissection. A complete IE list without th
 is truncated Command structure; an empty Beacon/DATA region is not subjected to the Command
 rule. Protected remainder stays opaque rather than acquiring an invented Command ID.
 
+For operational version-2 DATA, the receiver requires both endpoint identities. A carried
+destination PAN is interpreted literally, including0xffff. If it is omitted, require a
+configured nonbroadcast local PAN and an existing full-identity parent or coordinator-member
+binding for the peer; no new peer registry is introduced. That proven local PAN supplies the
+effective destination. A carried source PAN remains the optional wire value; when omitted,
+its effective value is the carried destination PAN or the same proven local context when both
+PAN fields are absent. Sender validation rejects unsupported unbound/no-address combinations
+instead of emitting an unreceivable context. Full EUI comparison never aliases low48 bits.
+This declared binding permits interpretation of omitted fields; it does not authenticate a
+sender or infer an unobservable foreign PAN. Foreign-context tests must use an observable
+wire PAN or peer-identity mismatch.
+
 The existing indication's optional DSN/source-PAN fields and separate effective source PAN are reused. An omitted value never becomes zero/0xffff, and no DSN is added to DATA.confirm. A legal but unsupported local operating combination uses `UNSUPPORTED_FEATURE` after accepted semantic validation; local provider/profile absence uses `UNSUPPORTED_OPERATION` refusal with caller ownership retained. Invalid controls/ranges use `INVALID_PARAMETER`, invalid identities use `INVALID_ADDRESS`, oversize uses `FRAME_TOO_LONG`, and nonzero security retains the existing security outcomes.
+
+The native indication packet carries only the original MSDU bytes after IE termination;
+copied Header/Payload IE values travel separately in the indication and its result tag.
+Table8-32 (PDF149–150) describes its `Msdu` octets as including Payload IEs as well as
+providing separate IE-list parameters. This binding exposes those components separately,
+rather than silently discarding them or claiming that the packet alone is a byte-for-byte
+copy of that standard service parameter. Lists exclude termination/FCS, and legacy lists
+remain empty. The raw/promiscuous path retains physical wire inspection separately.
 
 ## IE grammar and boundaries
 
@@ -118,6 +138,10 @@ Malformed/range-invalid PIB writes return INVALID_PARAMETER; a valid stored IE l
 
 | Standard service inputs | Additive native mapping and defaults | Consumer |
 | --- | --- | --- |
+| Table8-29/8-30 LegacyTx | Copied Boolean `legacyTx=true` preserves native version1 transmission; false selects the enabled version2 DATA profile. No version0 transmit selector is added. | Existing DATA construction and admission owner. |
+| Table8-29 PanIdSuppressed/SeqNumSuppressed | Copied Boolean `panIdSuppressed=false` and sequence-suppression false defaults; modern controls must satisfy Table7-2 and the pinned encoder footnote. Both-extended addressing can omit both PAN fields only with applicable peer/local context. A structurally valid but nonrepresentable requested PAN context is UNSUPPORTED_FEATURE, not a fabricated field. | DATA presence calculation, DSN allocation and optional receive metadata. |
+| Table8-30 HeaderIeList/PayloadIeList | Copied typed values excluding termination, empty defaults. Validate descriptor/content/parent bounds and complete MPDU length before packet generation; exceptions from malformed local values must become native accepted-service error terminals. | Existing DATA packet/confirmation owner and shared IE/frame codecs. |
+| Table8-32 HeaderIeList/PayloadIeList | Empty-default copied received lists excluding termination/FCS. Populate from the received view, including uninterpreted values, and copy through the native indication tag. | Existing DATA indication callback/adapter; source request metadata is not a substitute. |
 | Table8-18 ScanType | Add explicitly assigned ENHANCED_ACTIVE_SCAN while preserving ED/ACTIVE/PASSIVE/ORPHAN values and PASSIVE default. RIT/MPM scan remain explicitly unsupported. | Existing scan owner sends version2 EBR and uses the same channel/dwell/capacity/restore path. |
 | Table8-18 PanIdSuppressed/SeqNumSuppressed | Copied Boolean request values, false defaults. Reject incompatible legacy combinations; omitted PAN retains its presence distinction. | EBR frame layout and sequence allocation. |
 | Table8-18 copied HeaderIeList/PayloadIeList | Copied values excluding termination; empty defaults. | EBR request body and actual native scan descriptor/notification. |
@@ -128,6 +152,25 @@ Malformed/range-invalid PIB writes return INVALID_PARAMETER; a valid stored IE l
 | Table8-22 copied Header/Payload lists and generated Header/Nested IDs | Copied request values, empty defaults. Explicit empty one-shot lists mean no supplied IEs. Generated requested IDs use only actual supported feature owners. | Manual one-shot generation; automatic EBR responses use the authoritative configured PIB lists instead. |
 
 Table8-22's prose names a combined `macEbIeList`, whereas Table8-39 defines separate Header/Payload attributes. This binding treats the prose as the combined applicable lists; it does not introduce an invented third PIB attribute or ignore the explicitly supplied list parameters. Periodic generation uses the two PIB lists plus actual scheduler/GTS producers. Reject conflicting upper-supplied copies of MAC-owned scheduled semantic elements rather than creating two authoritative schedules. Legacy frame controls, defaults and wire bytes remain unchanged. Unknown legal IE values remain structurally preservable without a semantic generator.
+
+### Operational DATA IE generation
+
+Structural preservation is broader than native emission. Tables7-7 through7-10 define
+frame-type applicability; a descriptor fitting its bit width does not authorize its use in DATA.
+The bounded DATA producer supports HeaderID0 Vendor Specific, Payload group0 ESDU, group2
+Vendor Specific, and group1 MLME containing vendor short sub-ID0x40 or long sub-ID0x8.
+Each vendor content carries at least three octets for its caller-supplied assigned OUI/CID;
+the MAC checks that structural minimum without an OUI registry. ESDU content is opaque
+higher-layer octets and has no vendor prefix.
+
+DATA-applicable HeaderIDs0x1a/0x1b/0x25/0x26/0x27/0x2c and other DATA-applicable MLME
+features are valid but unimplemented here, giving UNSUPPORTED_FEATURE. Reserved IDs,
+allocated elements without DATA applicability, malformed vendor content and caller-supplied
+termination elements give INVALID_PARAMETER. HeaderID0x2a is externally assigned with no
+established DATA applicability in the pinned table and is explicitly unsupported, rather
+than relabelled reserved. Termination is generated by the MAC. Classification uses the
+Nested descriptor's form and ID together. Unknown/reserved forensic parsing and replay
+remain unchanged; these restrictions govern the selected native producer.
 
 ## Concrete affected-consumer inventory
 

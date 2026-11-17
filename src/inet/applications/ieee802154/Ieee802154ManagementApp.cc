@@ -177,6 +177,11 @@ void Ieee802154ManagementApp::sendData(const Ieee802154Address& destination, uin
     request.destinationAddress = destination; request.destinationPanId = panId;
     request.sourceAddressMode = coordinator && !gtsOperation ? Ieee802154Address::AddressType::EXTENDED : Ieee802154Address::AddressType::SHORT;
     request.ackTx = true; request.indirectTx = indirect; request.gtsTx = gtsOperation;
+    if (par("enhancedData").boolValue()) {
+        request.legacyTx = false; request.ackTx = false;
+        request.sequenceSuppressed = par("enhancedSequenceSuppressed").boolValue();
+        request.panIdSuppressed = par("enhancedPanIdSuppressed").boolValue();
+    }
     auto admission = service->submitData(allocateId(),packet,request);
     if (admission != Ieee802154MacServiceAdmission::ACCEPTED)
         delete packet;

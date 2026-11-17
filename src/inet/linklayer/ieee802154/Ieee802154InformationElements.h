@@ -6,9 +6,10 @@
 #include <variant>
 #include <vector>
 #include "inet/common/INETDefs.h"
-#include "inet/linklayer/ieee802154/Ieee802154Frame_m.h"
 
 namespace inet {
+
+class Ieee802154Frame;
 
 /** Stateless views over the one stored frame payload; offsets include the fixed MHR prefix. */
 class INET_API Ieee802154InformationElements

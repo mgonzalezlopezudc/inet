@@ -20,6 +20,11 @@ Obligations: ENHANCED-2, ENHANCED-3.
 
 Use all eight Header/Payload/data presence combinations with independent bytes. Include unknown identifiers, both nested formats, zero/maximum length and every truncation point in representative frames. Require exact MSDU extraction, termination semantics, unknown ordering and bounded rejection of malformed extents.
 
+For emission, distinguish frame-applicable elements from reserved or wrong-frame types.
+Exercise a legal vendor-specific element with its three-octet identifier, a forbidden known
+type and an applicable but unsupported feature. Do not infer emission eligibility from
+successful forensic decoding of an unknown descriptor.
+
 Obligations: ENHANCED-4, ENHANCED-5.
 
 ## IEEE802154-C-ENHANCED-SECURITY

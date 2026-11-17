@@ -29,7 +29,8 @@ This record distinguishes source-audit closure, compilation, executed fixtures a
 | E1-01 | Debug acceptance complete; independent findings repaired | Fresh debug,6 units,legacy serializer and188/188 protocol cases PASS (`e101-acceptance1/`). Structural version2 layouts are enabled; native enhanced operation remains gated. C++ follow-up adds no unmatched diagnostic; inherited warning gate remains FAIL. |
 | E1-02 | Repaired debug acceptance complete; independent findings source-closed | Fresh debug,8 units,2 serializer fixtures and200/200 actual protocol cases PASS (`e102-acceptance2/`). C++ follow-up adds no unmatched diagnostic; inherited warning gate remains FAIL. IE/security structural inspection does not enable enhanced MAC operation. |
 | E1-03 | Debug acceptance complete; independent source pass finds no actionable defect | Fresh debug,9 units,2 serializer fixtures and202/202 actual protocol cases PASS (`e103-first/`). Nested framing adds no feature-specific MLME operation. C++ follow-up adds no unmatched diagnostic; inherited warning gate remains FAIL. |
-| E1-04 through E1-99 | NOT_RUN | Operational enhanced implementation/runtime gates remain open. |
+| E1-04 | Repaired debug acceptance and independent closure complete | Fresh matching debug,9 units,5 modules,2 serializer fixtures and512/512 actual protocol cases PASS (`e104-acceptance1/`), including80 EnhancedData cases. Default and sequence-only managed examples pass. C++ gate FAIL retains one independently dispositioned validation clone. |
+| E1-05 through E1-99 | NOT_RUN | ACK, discovery, scheduled integration and publication gates remain open. |
 
 ## Baseline control run
 
@@ -729,6 +730,73 @@ Independent final closure reports23 PASS/11 N/A/0 FLAG/0 QUESTION with source ha
 `e103-first/checkpoint.json`; interface/document-seal/release/model-link checks also pass.
 The reviewer visually checks the pinned PDF101 container/descriptor definitions before
 closing the bounded empty-list interpretation. No new protection or exception is introduced.
+
+## E1-04 initial native DATA diagnostic
+
+The first small native checkpoint passes a fresh debug build and4/4 actual ProtocolTest
+cases (`e104-first/`): explicitly enabled peers exchange unacknowledged version2 DATA with
+present/suppressed sequence in typed/raw representations. Observations check actual MSDU,
+wire-versus-effective PAN metadata, full EUI, one SUCCESS and no ACK. This establishes initial
+service/receive plumbing, not the full E1-04 acceptance. Operational Header-IE applicability
+must be checked against Table7-7 rather than inferred from structural codec success; the
+initial unknown-ID vector does not establish that eligibility. Tag/application/example work
+and the complete context, security, size, rollover and ownership matrix remain open.
+
+The explicit PAN-suppression option is grounded in Table8-29 and its continuation, with
+Table8-30's DATA/IE inputs (`e104-tx-options-source.json`, `e104-data-service-source.json`).
+The [profile](enhanced-frame-profile.md) records the accepted service defaults, literal
+compression policy and exact existing-binding condition used to interpret omitted PANs.
+No enhanced ACK/Command operation or additional peer registry is introduced by this checkpoint.
+
+The expanded diagnostic rebuilds debug and passes the public adapter module, then reaches40
+successful protocol cases before its association setup asserts at0.056s (`e104-diagnostic1/`).
+The fixture had neither started the coordinator on channel20 nor shortened the standard32-
+base-superframe response wait to fit its55ms observation. Real START/SUCCESS and the existing
+association fixture's two-superframe wait repair that setup. A same-library rerun passes72/72
+(`e104-association-fixture2/`), including legacy/suppressed/present rollover, IE-inclusive127/128
+limits and a foreign full-EUI source with omitted PANs. These are diagnostic outcomes, not
+the final source acceptance.
+
+Independent source review finds two P2 defects. First, normal DATA indications discard the
+received IE values; Table8-32 requires copied lists. The repair appends empty-default owned
+Header/Payload lists and carries them through the existing whole-value tag. Actual client
+assertions and a mock that clears its source values before queued tag delivery verify the
+copy; an RF observer alone cannot prove that service boundary. The earlier API cannot expose
+these fields, so no invented before-state runtime comparison is claimed.
+
+Second, omitted-PAN binding is proved before pending expiry. A same-time indirect-disassociation
+expiry removes the member without retiring the whole receive epoch, leaving stale effective
+PAN context. The first composite boundary assertion is ambiguous (`e104-context-red/`) and
+is not accepted as causal proof. Splitting RF-end, expiry-terminal and DATA-count assertions
+passes both one-tick-earlier controls (`e104-context-before1/`), then reproduces unwanted
+DATA delivery at exact expiry, with its final assertion at0.07236 (`e104-context-equality-red2/`).
+The repair resolves context after expiry and the existing retirement guard, before protocol
+state updates, without another generation or cache. Fresh debug, the adapter and all80
+EnhancedData cases pass (`e104-review-fix1/`), including both equality/earlier representations.
+
+Complete stage acceptance uses that byte-identical matching library:9 units,5 modules,2
+serializer fixtures and13 protocol fixtures pass512/512 runs and512 actual ProtocolTest PASS,
+zero errors/skips/FAIL (`e104-acceptance1/`). Exact selection is in
+`e104-acceptance-selection.json`; source/library identity is retained in both checkpoints.
+The production Enhanced example also passes both300ms typed/raw runs in default and sequence-
+suppressed configurations, each with two device cycles, zero coordinator cycles and two
+received/confirmed MSDUs per role. Twelve scalars per pair are exported and checked in
+`e104-example-execution.json`. The extra combined PAN/sequence-suppression override stops at
+a generic application primitive error: source analysis identifies the deliberately unsupported
+SHORT-source PAN-suppression combination. Its enum was not printed by that run; the source-
+derived UNSUPPORTED_FEATURE classification and example limitation are explicit. Native bound
+full-EUI PAN-suppression positives pass in the protocol fixture.
+
+Initial MAC/application/IE C++ analysis reports1819 warning rows, zero errors and327 unique
+native diagnostics:325 unchanged matches and two branch clones. The bounded arm merges leave
+one unmatched validation clone in the final MAC follow-up (1770 rows, zero errors,285 unique,
+284 unchanged matches). Independent review confirms that merging it across the intervening
+indirect-feature refusal changes status precedence. No wrapper, suppression or ledger entry
+is justified; retain the mechanical FAIL and that explicit disposition. Scoped MAC/application
+architecture/naming, eight interfaces, source/document seals, release and model/protocol/plan
+links pass. Independent final closure reports23 PASS/11 N/A/0 FLAG/0 QUESTION on matching
+source hashes. No baseline is changed. Enhanced ACK/discovery/scheduled integration remain
+the next units; this acceptance does not establish those services or cryptography.
 
 ## Publication gate
 
