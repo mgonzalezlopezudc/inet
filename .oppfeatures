@@ -222,10 +222,14 @@
         name = "DTLS 1.3"
         description = "Datagram transport security simulation model."
         initiallyEnabled = "true"
-        requires = "Queueing TlsCommon"
+        requires = "Queueing TlsCommon Udp"
         recommended = ""
         labels = "transport security"
-        nedPackages = "inet.transportlayer.dtls inet.transportlayer.contract.dtls"
+        nedPackages = "
+                       inet.applications.dtlsapp
+                       inet.transportlayer.contract.dtls
+                       inet.transportlayer.dtls
+                      "
         extraSourceFolders = ""
         compileFlags = "-DINET_WITH_DTLS"
         linkerFlags = ""
