@@ -325,6 +325,7 @@ class IndirectClient : public cSimpleModule, public cListener, public LifecycleC
         if (scenario == 17) ASSERT(simTime() == SimTime(16904,SIMTIME_US) + SimTime(10,SIMTIME_NS));
         ++pollConfirms;
     }
+    virtual void handleStartSuperframeConfirm(uint64_t, const Ieee802154MacStartSuperframeConfirm&) override { ASSERT(false); }
     virtual void handleStartConfirm(uint64_t, const Ieee802154MacStartConfirm&) override { throw cRuntimeError("Unexpected START confirmation"); }
     virtual void handleScanConfirm(uint64_t, const Ieee802154MacScanConfirm&) override { throw cRuntimeError("Unexpected SCAN"); }
     virtual void handleBeaconNotifyIndication(const Ieee802154PanDescriptor&) override { throw cRuntimeError("Unexpected beacon"); }

@@ -1,0 +1,3 @@
+IEEE 802.15.4 periodic coordinator beacons
+
+The native managed interface can schedule periodic PAN coordinator beacons with an enabled superframe controller. The service reports success at the first actual beacon transmission and records the beacon transmission timestamp. An oversized beacon payload SET is rejected without changing the PIB. Slotted contention and GTS services are not yet included.

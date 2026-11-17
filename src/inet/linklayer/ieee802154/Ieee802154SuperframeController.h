@@ -13,12 +13,15 @@
 
 namespace inet {
 
-/** Owns superframe clock anchors; no periodic transmission is enabled by this component. */
+/** Owns superframe clock anchors and the beacon preparation event. */
 class INET_API Ieee802154SuperframeController : public ClockUserModuleMixin<SimpleModule>, public IIeee802154SuperframeProvider, public ILifecycle
 {
   private:
     ModuleRefByPar<IIeee802154SuperframeClient> client;
     std::map<int, Ieee802154SuperframeReceptionAnchor> receptionAnchors;
+    ClockEvent *beaconPreparation = nullptr;
+    ClockEvent *capEnd = nullptr;
+    clocktime_t beaconBoundary;
     bool started = true;
 
   protected:
@@ -27,6 +30,14 @@ class INET_API Ieee802154SuperframeController : public ClockUserModuleMixin<Simp
     virtual void handleMessage(cMessage *message) override;
 
   public:
+    virtual ~Ieee802154SuperframeController();
+    virtual clocktime_t getCurrentClockTime() const override { return getClockTime(); }
+    virtual bool scheduleBeaconPreparation(clocktime_t boundary, simtime_t readinessLead) override;
+    virtual void cancelBeaconPreparation() override;
+    virtual bool scheduleCapEnd(clocktime_t boundary) override;
+    virtual void cancelCapEnd() override;
+    virtual simtime_t getFutureSimulationTime(clocktime_t target) const override { return computeSimTimeFromClockTime(target); }
+    virtual clocktime_t getFutureClockTime(simtime_t target) const override { return computeClockTimeFromSimTime(target); }
     virtual void recordReceptionStart(const physicallayer::Ieee802154PhyReceiveStart& start) override;
     virtual std::optional<Ieee802154SuperframeReceptionAnchor> takeReceptionAnchor(int transmissionId) override;
     virtual void retireExpiredReceptionAnchors() override;

@@ -36,4 +36,6 @@ simple Ieee802154StandardMac extends SimpleModule like IIeee802154MacServiceProv
         @display("i=block/rxtx");
         @signal[packetSentToLower](type=inet::Packet);
         @signal[packetReceivedFromLower](type=inet::Packet);
+        @signal[periodicBeaconStart](type=long); // Actual first-symbol local time, low 24 bits in symbols.
+        @signal[outgoingCapActive](type=bool); // Outgoing CAP receive duty starts/ends.
 }

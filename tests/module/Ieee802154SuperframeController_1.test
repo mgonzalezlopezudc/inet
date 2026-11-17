@@ -53,6 +53,7 @@ class SuperframeControllerExercise : public cSimpleModule, public IIeee802154Phy
         clock.reference(this, "clockModule", true);
     }
     virtual void handleSuperframeBoundary(clocktime_t) override { throw cRuntimeError("Unexpected scheduled boundary"); }
+    virtual void handleSuperframeCapEnd() override { throw cRuntimeError("Unexpected CAP end"); }
     virtual void handleAvailabilityIndication(const Ieee802154PhyAvailabilityIndication& indication) override {
         Enter_Method("handleAvailabilityIndication");
         if (!indication.available) controller->clearReceptionAnchors();

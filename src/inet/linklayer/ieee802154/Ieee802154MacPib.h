@@ -50,6 +50,7 @@ class INET_API Ieee802154MacPib
         bool macGroupRxMode = false;
         bool macSecurityEnabled = false;
         uint8_t macBeaconOrder = 15;
+        uint32_t macBeaconTxTime = 0;
         uint8_t macSuperframeOrder = 15;
         bool macBattLifeExt = false;
         uint8_t macBattLifeExtPeriods = 6;
@@ -125,6 +126,15 @@ class INET_API Ieee802154MacPib
     void clearAssociation();
     /** Refresh PHY context for future defaults; the current writable backoff period is retained. */
     void updateCcaDuration(uint32_t durationUs);
+    /** Called at an actual beacon transmission start, in the selected 24-bit symbol timebase. */
+    void updateBeaconTxTime(uint32_t timestamp) { state.macBeaconTxTime = timestamp & 0xffffff; }
+    /** Atomically install the validated coordinator service configuration. */
+    void updateSuperframeConfiguration(uint16_t panId, uint8_t beaconOrder, uint8_t superframeOrder, bool batteryLifeExtension) {
+        state.macPanId = panId;
+        state.macBeaconOrder = beaconOrder;
+        state.macSuperframeOrder = superframeOrder;
+        state.macBattLifeExt = batteryLifeExtension;
+    }
 };
 
 } // namespace inet

@@ -4,6 +4,7 @@
 #define __INET_IEEE802154PENDINGTRANSACTIONS_H
 
 #include <list>
+#include <limits>
 #include <optional>
 #include <vector>
 
@@ -32,7 +33,7 @@ class INET_API Ieee802154PendingTransactions
     bool insert(const Entry& entry);
     std::optional<Entry> first(uint16_t panId, const Ieee802154Address& destination, simtime_t now) const;
     size_t count(uint16_t panId, const Ieee802154Address& destination, simtime_t now) const;
-    std::vector<Ieee802154Address> addresses(uint16_t panId, simtime_t now) const;
+    std::vector<Ieee802154Address> addresses(uint16_t panId, simtime_t now, size_t byteBudget = std::numeric_limits<size_t>::max()) const;
     std::optional<Entry> remove(uint64_t token);
     std::vector<Entry> expire(simtime_t now);
     std::vector<Entry> clear();

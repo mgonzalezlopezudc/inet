@@ -65,6 +65,7 @@ Ieee802154MacStatus Ieee802154MacPib::getValue(const State& state, const std::st
     GET_BOOLEAN(macGroupRxMode)
     GET_BOOLEAN(macSecurityEnabled)
     GET_INTEGER(macBeaconOrder)
+    GET_INTEGER(macBeaconTxTime)
     GET_INTEGER(macSuperframeOrder)
     GET_BOOLEAN(macBattLifeExt)
     GET_INTEGER(macBattLifeExtPeriods)
@@ -103,7 +104,7 @@ static bool isReadOnlyAttribute(const std::string& attribute)
 {
     return attribute == "macExtendedAddress" || attribute == "macSifsPeriod" ||
             attribute == "macLifsPeriod" || attribute == "macTimestampSupported" ||
-            attribute == "macSyncSymbolOffset" || attribute == "macSuperframeOrder" || attribute == "macDsmeCapable" ||
+            attribute == "macSyncSymbolOffset" || attribute == "macSuperframeOrder" || attribute == "macBeaconTxTime" || attribute == "macDsmeCapable" ||
             attribute == "macDaCapable" || attribute == "macExtendedDsmeCapable" ||
             attribute == "macHoppingCapable" || attribute == "macLeCapable" ||
             attribute == "macMetricsCapable" || attribute == "macRccnCapable" ||

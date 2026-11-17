@@ -25,6 +25,7 @@ class DiscoveryExercise : public cSimpleModule, public cListener,
     uint64_t nextId = 0;
     int scenario = 0, scans = 0, notices = 0, requests = 0, beacons = 0, confirms = 0, resets = 0;
     Status expectedBeacon = Status::SUCCESS;
+    Status expectedSet = Status::SUCCESS;
     std::optional<Ieee802154MacPibValue> value;
     physicallayer::Ieee802154PhyChannel channel(int number) {
         return {physicallayer::Ieee802154PhyChannel::Phy::O_QPSK,physicallayer::Ieee802154PhyChannel::Band::MHZ_2450,number};
@@ -92,6 +93,7 @@ class DiscoveryExercise : public cSimpleModule, public cListener,
     virtual void handleBeaconConfirm(uint64_t, const Ieee802154MacBeaconConfirm& confirm) override {
         Enter_Method("handleBeaconConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(expectedBeacon)); confirms++;
     }
+    virtual void handleStartSuperframeConfirm(uint64_t, const Ieee802154MacStartSuperframeConfirm&) override { ASSERT(false); }
     virtual void handleStartConfirm(uint64_t, const Ieee802154MacStartConfirm& confirm) override {
         Enter_Method("handleStartConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS));
     }
@@ -99,7 +101,7 @@ class DiscoveryExercise : public cSimpleModule, public cListener,
         Enter_Method("handleGetConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); value = confirm.value;
     }
     virtual void handleSetConfirm(uint64_t, const Ieee802154MacSetConfirm& confirm) override {
-        Enter_Method("handleSetConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS));
+        Enter_Method("handleSetConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(expectedSet));
     }
     virtual void handleResetConfirm(uint64_t, const Ieee802154MacResetConfirm& confirm) override {
         Enter_Method("handleResetConfirm"); ASSERT(scans == 1 && confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); resets++;
@@ -128,12 +130,15 @@ class DiscoveryExercise : public cSimpleModule, public cListener,
         set(coordinator.get(),"macAssociationPermit",true);
         set(coordinator.get(),"macMinBe",uint64_t(0));
         set(scanner.get(),"macMinBe",uint64_t(0));
+        if (scenario == 4) expectedSet = Status::INVALID_PARAMETER;
         set(coordinator.get(),"macBeaconPayload",std::vector<uint8_t>(scenario == 4 ? 200 : 1,42));
+        expectedSet = Status::SUCCESS;
+        if (scenario == 4) check(coordinator.get(),"macBeaconPayload",std::vector<uint8_t>{});
         if (scenario != 3)
             ASSERT(coordinatorManagement->submitStart(++nextId,{0x1234,channel(11)}) == Admission::ACCEPTED);
         else
             set(coordinator.get(),"phyCurrentChannelInfo",channel(11));
-        if (scenario == 1 || scenario == 2) set(coordinator.get(),"macBeaconAutoRespond",false);
+        if (scenario == 1 || scenario == 2 || scenario == 4) set(coordinator.get(),"macBeaconAutoRespond",false);
         until(1000);
         Ieee802154MacScanRequest scan;
         scan.type = Ieee802154ScanType::ACTIVE;
@@ -152,7 +157,7 @@ class DiscoveryExercise : public cSimpleModule, public cListener,
         until(12000);
         ASSERT(scans == 1 && resets == (scenario == 6 ? 1 : 0));
         ASSERT(notices == (scenario == 0 || scenario == 2 ? 1 : 0));
-        ASSERT(requests == (scenario == 1 || scenario == 2 ? 1 : 0));
+        ASSERT(requests == (scenario == 1 || scenario == 2 || scenario == 4 ? 1 : 0));
         check(scanner.get(),"phyCurrentChannelInfo",channel(20));
         if (scenario == 0 || scenario == 2) {
             ASSERT(beacons == 1);
@@ -164,12 +169,13 @@ class DiscoveryExercise : public cSimpleModule, public cListener,
             auto secured = Ieee802154MacBeaconRequest{channel(11)};
             secured.security.securityLevel = 1;
             beacon(secured,Status::UNSUPPORTED_SECURITY);
+            expectedSet = Status::INVALID_PARAMETER;
             set(coordinator.get(),"macBeaconPayload",std::vector<uint8_t>(200,42));
-            beacon({channel(11)},Status::FRAME_TOO_LONG);
-            set(coordinator.get(),"macBeaconPayload",std::vector<uint8_t>{42});
+            expectedSet = Status::SUCCESS;
+            check(coordinator.get(),"macBeaconPayload",std::vector<uint8_t>{42});
             beacon({channel(11)},Status::SUCCESS);
             until(16000);
-            ASSERT(beacons == 2 && confirms == (scenario == 2 ? 6 : 5));
+            ASSERT(beacons == 2 && confirms == (scenario == 2 ? 5 : 4));
             check(coordinator.get(),"macBsn",uint64_t(1));
             check(coordinator.get(),"macDsn",uint64_t(7));
         }

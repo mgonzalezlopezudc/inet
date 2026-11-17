@@ -43,7 +43,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     bool initialPanCoordinator = false;
     bool panCoordinator = false;
     enum class Phase { WAIT_IFS, WAIT_RX, ACCESS, WAIT_TX, TRANSMIT, WAIT_ACK };
-    enum class PhyPurpose { IDLE, RX_FOR_ACCESS, CCA, TX_READY, TRANSMIT, ACK_LISTEN, ACK_READY, ACK_TRANSMIT, MANAGEMENT_GET, MANAGEMENT_SET, START_CHANNEL, BEACON_CHANNEL, ASSOCIATE_CHANNEL, ORPHAN_CHANNEL_GET, SCAN_GET, SCAN_CCA_GET, SCAN_OFF, SCAN_CHANNEL, SCAN_RX, SCAN_ED_DURATION, SCAN_ED, SCAN_RESTORE_OFF, SCAN_CCA_RESTORE, SCAN_RESTORE, SCAN_REALIGN_OFF, SCAN_REALIGN_CHANNEL, RESET };
+    enum class PhyPurpose { IDLE, RX_FOR_ACCESS, CCA, TX_READY, TRANSMIT, ACK_LISTEN, ACK_READY, ACK_TRANSMIT, MANAGEMENT_GET, MANAGEMENT_SET, START_CHANNEL, BEACON_CHANNEL, ASSOCIATE_CHANNEL, ORPHAN_CHANNEL_GET, SCAN_GET, SCAN_CCA_GET, SCAN_OFF, SCAN_CHANNEL, SCAN_RX, SCAN_ED_DURATION, SCAN_ED, SCAN_RESTORE_OFF, SCAN_CCA_RESTORE, SCAN_RESTORE, SCAN_REALIGN_OFF, SCAN_REALIGN_CHANNEL, RESET, SUPERFRAME_GET, SUPERFRAME_CHANNEL, SUPERFRAME_RESTORE, SUPERFRAME_PHY_RESTORE, SUPERFRAME_READY, SUPERFRAME_TRANSMIT };
     struct Transaction {
         uint64_t id;
         Packet *msdu;
@@ -76,7 +76,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
         std::optional<Ieee802154CommandCodec::CoordinatorRealignment> realignment;
         std::optional<physicallayer::Ieee802154PhyChannel> panConflictChannel;
     };
-    struct PhyOperation { uint64_t id; PhyPurpose purpose; };
+    struct PhyOperation { uint64_t id; PhyPurpose purpose; bool transmitStarted = false; std::optional<simtime_t> expectedTransmitEnd; };
     struct ResetRequest {
         uint64_t id;
         bool defaults;
@@ -94,6 +94,35 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     std::optional<ManagementRequest> managementRequest;
     struct StartRequest { uint64_t id; Ieee802154MacStartRequest parameters; };
     std::optional<StartRequest> startRequest;
+    struct SuperframeStartRequest {
+        uint64_t id;
+        Ieee802154MacStartSuperframeRequest parameters;
+        std::optional<physicallayer::Ieee802154PhyChannel> originalChannel;
+        std::optional<Ieee802154MacServiceResult> failure;
+    };
+    std::optional<SuperframeStartRequest> superframeStartRequest;
+    std::optional<physicallayer::Ieee802154PhyChannel> interruptedSuperframeChannel;
+    bool periodicBeaconing = false;
+    std::optional<clocktime_t> periodicTarget;
+    std::optional<clocktime_t> beaconAfterAck;
+    std::optional<clocktime_t> transmittedBeaconAnchor;
+    simtime_t transmittedBeaconIfs;
+    bool outgoingCapActive = false;
+    std::optional<clocktime_t> outgoingCapEnd;
+    simsignal_t periodicBeaconStartSignal = SIMSIGNAL_NULL;
+    simsignal_t outgoingCapActiveSignal = SIMSIGNAL_NULL;
+    void setOutgoingCapActive(bool active);
+    void completeSuperframeStart(const Ieee802154MacServiceResult& result);
+    void failSuperframeStart(const Ieee802154MacServiceResult& result);
+    void preparePeriodicBeacon();
+    void sendPeriodicBeacon();
+    void scheduleNextPeriodicBeacon();
+    void skipPeriodicBeacon();
+    void retirePeriodicBeaconing(const Ieee802154MacServiceResult& result);
+    void resumeAvailablePhy();
+    void startOutgoingCap();
+    Ptr<Ieee802154Frame> makeBeacon(uint16_t panId, uint8_t beaconOrder, uint8_t superframeOrder, bool batteryLifeExtension);
+    bool fitsBeaconPayload(const std::vector<uint8_t>& payload) const;
     struct ScanRequest {
         uint64_t id;
         Ieee802154MacScanRequest parameters;
@@ -267,6 +296,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     virtual Ieee802154MacServiceAdmission submitPoll(uint64_t id, const Ieee802154MacPollRequest& request) override;
     virtual Ieee802154MacServiceAdmission submitPurge(uint64_t id, uint8_t msduHandle) override;
     virtual Ieee802154MacServiceAdmission submitStart(uint64_t id, const Ieee802154MacStartRequest& request) override;
+    virtual Ieee802154MacServiceAdmission submitStartSuperframe(uint64_t id, const Ieee802154MacStartSuperframeRequest& request) override;
     virtual Ieee802154MacServiceAdmission submitScan(uint64_t id, const Ieee802154MacScanRequest& request) override;
     virtual Ieee802154MacServiceAdmission submitBeacon(uint64_t id, const Ieee802154MacBeaconRequest& request) override;
     virtual Ieee802154MacServiceAdmission submitAssociateResponse(uint64_t id, const Ieee802154MacAssociateResponse& response) override;
@@ -281,6 +311,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     virtual void handleTransmitStarted(uint64_t id, const physicallayer::Ieee802154PhyTransmitStart& start) override;
     virtual void handleReceiveStarted(const physicallayer::Ieee802154PhyReceiveStart& start) override;
     virtual void handleSuperframeBoundary(clocktime_t boundary) override;
+    virtual void handleSuperframeCapEnd() override;
     virtual void handleAvailabilityIndication(const physicallayer::Ieee802154PhyAvailabilityIndication& indication) override;
     virtual void handleTransmitConfirm(uint64_t id, const physicallayer::Ieee802154PhyTransmitConfirm& confirm) override;
     virtual void handleCcaConfirm(uint64_t id, const physicallayer::Ieee802154PhyCcaConfirm& confirm) override;

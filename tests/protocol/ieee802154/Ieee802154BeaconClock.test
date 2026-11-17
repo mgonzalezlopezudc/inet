@@ -31,6 +31,7 @@ EV << "ieee802154_beacon_clock compiled\n";
 #include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceClient.h"
 #include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceProvider.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IReception.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmission.h"
 
 namespace inet {
 class BeaconClockExercise : public cSimpleModule, public cListener,
@@ -43,6 +44,7 @@ class BeaconClockExercise : public cSimpleModule, public cListener,
     ModuleRefByPar<IClock> clock;
     uint64_t nextId = 0;
     int scenario = 0, starts = 0, notices = 0, monitors = 0, resets = 0, beaconConfirms = 0;
+    uint32_t expectedTransmitTimestamp = 0;
     std::vector<uint32_t> expectedTimestamps;
     std::optional<Ieee802154MacPibValue> value;
     void until(simtime_t t) { ASSERT(t >= simTime()); if (t > simTime()) wait(t - simTime()); }
@@ -63,6 +65,7 @@ class BeaconClockExercise : public cSimpleModule, public cListener,
         clock.reference(this,"clockModule",true);
         scenario = par("scenario");
         getModuleByPath(par("radioModule"))->subscribe(receptionStartedSignal,this);
+        getModuleByPath(par("senderRadioModule"))->subscribe(transmissionStartedSignal,this);
     }
     virtual void activity() override {
         until(SimTime(500,SIMTIME_US));
@@ -81,8 +84,14 @@ class BeaconClockExercise : public cSimpleModule, public cListener,
         ASSERT(monitors == (scenario == 1 || scenario == 3 ? 2 : scenario == 2 ? 1 : 0));
         emit(registerSignal("verificationComplete"),1L);
     }
-    virtual void receiveSignal(cComponent *, simsignal_t, cObject *object, cObject *) override {
+    virtual void receiveSignal(cComponent *, simsignal_t signal, cObject *object, cObject *) override {
         Enter_Method("receiveSignal");
+        if (signal == transmissionStartedSignal) {
+            auto transmission = check_and_cast<const physicallayer::ITransmission *>(object);
+            ASSERT(transmission->getStartTime() == simTime());
+            expectedTransmitTimestamp = uint32_t((simTime() + SimTime(160,SIMTIME_US)).inUnit(SIMTIME_US) / 16) & 0xffffff;
+            return;
+        }
         auto reception = check_and_cast<const physicallayer::IReception *>(object);
         ASSERT(reception->getStartTime() == simTime());
         auto localUs = scenario == 3 ? (simTime() + SimTime(160,SIMTIME_US)).inUnit(SIMTIME_US) :
@@ -114,6 +123,7 @@ class BeaconClockExercise : public cSimpleModule, public cListener,
     virtual void handleCommStatusIndication(Packet *, const Ieee802154MacCommStatusIndication&) override { ASSERT(false); }
     virtual void handlePollConfirm(uint64_t, const Ieee802154MacPollConfirm&) override { ASSERT(false); }
     virtual void handlePurgeConfirm(uint64_t, const Ieee802154MacPurgeConfirm&) override { ASSERT(false); }
+    virtual void handleStartSuperframeConfirm(uint64_t, const Ieee802154MacStartSuperframeConfirm&) override { ASSERT(false); }
     virtual void handleStartConfirm(uint64_t, const Ieee802154MacStartConfirm&) override { ASSERT(false); }
     virtual void handleScanConfirm(uint64_t, const Ieee802154MacScanConfirm&) override { ASSERT(false); }
     virtual void handleBeaconNotifyIndication(const Ieee802154PanDescriptor& descriptor) override {
@@ -124,6 +134,8 @@ class BeaconClockExercise : public cSimpleModule, public cListener,
     }
     virtual void handleBeaconConfirm(uint64_t, const Ieee802154MacBeaconConfirm& confirm) override {
         Enter_Method("handleBeaconConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); ++beaconConfirms;
+        ASSERT(sender->submitGet(++nextId,{"macBeaconTxTime"}) == Admission::ACCEPTED);
+        ASSERT(value && std::get<uint64_t>(*value) == expectedTransmitTimestamp && expectedTransmitTimestamp != 0);
     }
     virtual void handleBeaconRequestIndication(const Ieee802154MacBeaconRequestIndication&) override { ASSERT(false); }
     virtual void handleAssociateResponseStatus(uint64_t, const Ieee802154MacAssociateResponseStatus&) override { ASSERT(false); }
@@ -157,6 +169,7 @@ simple BeaconClockExercise extends SimpleModule like IIeee802154MacServiceClient
         string serviceModule;
         string clockModule;
         string radioModule;
+        string senderRadioModule;
         int scenario;
         @class(::inet::BeaconClockExercise);
         @signal[verificationComplete](type=long);
@@ -187,6 +200,7 @@ network BeaconClockTest
             serviceModule = "^.host[1].nic.mac";
             clockModule = "^.clock";
             radioModule = "^.host[1].nic.radio";
+            senderRadioModule = "^.host[0].nic.radio";
             scenario = parent.scenario;
         }
 }

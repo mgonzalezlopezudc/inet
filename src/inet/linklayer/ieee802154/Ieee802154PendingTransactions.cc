@@ -44,17 +44,20 @@ size_t Ieee802154PendingTransactions::count(uint16_t panId, const Ieee802154Addr
     return result;
 }
 
-std::vector<Ieee802154Address> Ieee802154PendingTransactions::addresses(uint16_t panId, simtime_t now) const
+std::vector<Ieee802154Address> Ieee802154PendingTransactions::addresses(uint16_t panId, simtime_t now, size_t byteBudget) const
 {
     std::vector<Ieee802154Address> result;
     for (const auto& entry : entries)
         if (entry.panId == panId && now < entry.expiresAt && !entry.destination.isBroadcast() &&
-                !entry.destination.isExtendedGroup() && std::find(result.begin(),result.end(),entry.destination) == result.end())
+                !entry.destination.isExtendedGroup() && std::find(result.begin(),result.end(),entry.destination) == result.end()) {
+            size_t length = entry.destination.isShort() ? 2 : 8;
+            if (result.size() == 7 || length > byteBudget)
+                break;
             result.push_back(entry.destination);
+            byteBudget -= length;
+        }
     // IEEE Std 802.15.4-2024, 7.3.1.6: short addresses precede extended addresses.
     std::stable_partition(result.begin(),result.end(),[](const auto& address) { return address.isShort(); });
-    if (result.size() > 7)
-        result.resize(7);
     return result;
 }
 

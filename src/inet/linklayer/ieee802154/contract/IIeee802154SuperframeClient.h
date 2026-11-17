@@ -7,12 +7,13 @@
 
 namespace inet {
 
-/** Direct notification at a controller-owned superframe boundary. */
+/** Notification before the boundary, with the future local-clock target. */
 class INET_API IIeee802154SuperframeClient
 {
   public:
     virtual ~IIeee802154SuperframeClient() = default;
     virtual void handleSuperframeBoundary(clocktime_t boundary) = 0;
+    virtual void handleSuperframeCapEnd() = 0;
 };
 
 } // namespace inet
