@@ -12,6 +12,7 @@
 #include "inet/linklayer/lowpan/LowpanIphcCodec.h"
 #include "inet/linklayer/lowpan/LowpanNhcCodec.h"
 #include "inet/linklayer/lowpan/LowpanProtocol.h"
+#include "inet/linklayer/lowpan/LowpanNativeBoundary.h"
 #include "inet/linklayer/common/InterfaceTag_m.h"
 #include "inet/networklayer/common/NextHopAddressTag_m.h"
 #include "inet/networklayer/ipv6/Ipv6Header_m.h"
@@ -193,7 +194,19 @@ void LowpanLayer::processUpperPacket(Packet *packet)
         return;
     }
     Ieee802154Address destination;
-    if (packet->peekAtFront<Ipv6Header>()->getDestAddress().isMulticast())
+    auto explicitRequest = packet->findTag<Ieee802154AddressReq>();
+    auto native = dynamic_cast<LowpanNativeBoundary *>(link);
+    bool multicast = packet->peekAtFront<Ipv6Header>()->getDestAddress().isMulticast();
+    if (explicitRequest != nullptr && native != nullptr) {
+        destination = explicitRequest->getDestAddress();
+        if (explicitRequest->getSrcAddress() != link->getLinkAddress() ||
+                explicitRequest->getSrcPanId() != link->getPanId() || explicitRequest->getDestPanId() != link->getPanId() ||
+                (multicast ? !destination.isBroadcast() : !native->getLinkDomain()->contains(destination))) {
+            dropLowpanPacket(packet, LOWPAN_MALFORMED);
+            return;
+        }
+    }
+    else if (multicast)
         destination = Ieee802154Address("ffff");
     else {
         auto nextHop = packet->findTag<NextHopAddressReq>();

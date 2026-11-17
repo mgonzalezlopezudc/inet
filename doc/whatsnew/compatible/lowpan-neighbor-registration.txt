@@ -1,0 +1,3 @@
+Native address-registration server
+
+The native LoWPAN IPv6 neighbor-discovery owner supports a bounded local RFC 6775 address-registration server with nativeNdRole="router" and IPv6 forwarding enabled. ARO registrations install expiring native bindings and owned host routes, report duplicate/cache-full results, and clean up on deregistration, expiry, stop or crash. Native ND replies compute real wire checksums. The default static role is preserved; host discovery, context advertisements and multihop duplicate-address exchanges remain separate implementation stages.
