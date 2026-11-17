@@ -139,8 +139,10 @@ class SlottedSearchExercise : public cSimpleModule, public cListener, public IIe
                 return;
             }
             if (scenario == 4) {
+                set(child.get(),"macPromiscuousMode",true); // Keep the receiver available while testing an expired, untracked CAP.
                 operateCoordinator(false);
                 operateCoordinator(true);
+                set(coordinator.get(),"macBeaconOrder",uint64_t(15)); // This restarted peer intentionally remains nonbeaconing.
                 wait(anchor + SimTime(16000,SIMTIME_US) - simTime());
                 ASSERT(check_and_cast<physicallayer::IRadio *>(childRadio)->getRadioMode() == physicallayer::IRadio::RADIO_MODE_RECEIVER);
                 auto submitted = simTime();
@@ -173,6 +175,7 @@ class SlottedSearchExercise : public cSimpleModule, public cListener, public IIe
             ASSERT(slottedDraws >= 1 && transmissions == (unsent ? 0 : 1));
             operateCoordinator(false);
             operateCoordinator(true);
+            set(coordinator.get(),"macBeaconOrder",uint64_t(15)); // Restarted peer is intentionally nonbeaconing while it receives fallback DATA.
             wait(SimTime(160,SIMTIME_MS) - simTime());
             ASSERT(losses == 1 && syncLossAt > SIMTIME_ZERO);
             ASSERT(dataDsns.size() == 1 && dataDsns[0] == 7);
@@ -283,7 +286,7 @@ class SlottedSearchExercise : public cSimpleModule, public cListener, public IIe
     virtual void handleBeaconNotifyIndication(const Ieee802154PanDescriptor&) override { Enter_Method("handleBeaconNotifyIndication"); }
     virtual void handleGetConfirm(uint64_t, const Ieee802154MacGetConfirm&) override { ASSERT(false); }
     virtual void handleResetConfirm(uint64_t, const Ieee802154MacResetConfirm&) override { ASSERT(false); }
-    virtual void handlePromiscuousIndication(Packet *, const Ieee802154MacPromiscuousIndication&) override { ASSERT(false); }
+    virtual void handlePromiscuousIndication(Packet *packet, const Ieee802154MacPromiscuousIndication&) override { Enter_Method("handlePromiscuousIndication"); ASSERT(scenario == 4); take(packet); delete packet; }
     virtual void handleCommStatusIndication(Packet *, const Ieee802154MacCommStatusIndication&) override { ASSERT(false); }
     virtual void handlePollConfirm(uint64_t, const Ieee802154MacPollConfirm&) override { ASSERT(false); }
     virtual void handlePurgeConfirm(uint64_t, const Ieee802154MacPurgeConfirm&) override { ASSERT(false); }

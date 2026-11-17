@@ -15,5 +15,11 @@ After 300 ms, the device's `completedCycles`, `receivedMsdus` and `confirmedMsdu
 scalars should each be 2. The coordinator should report two received and two
 confirmed MSDUs. These counts demonstrate this configured exchange; protocol
 edge cases and failures have separate fixtures under `tests/protocol/ieee802154`.
-Periodic beaconing, security transforms, enhanced frames and waveform fidelity
-are outside this selected legacy unsecured profile.
+To run the optional beacon-mode policy, use `inet -u Cmdenv -c Beacon -r 0,1`.
+The coordinator uses BO3/SO1; the device passively scans, synchronizes to an
+actual beacon, and associates before its DATA, poll, leave and rejoin cycles.
+This configuration explicitly enables the superframe composition on the same
+`Ieee802154StandardInterface`. Its two runs each completed two device cycles
+with two received replies and two confirmed device MSDUs in the diagnostic
+campaign. Security transforms, enhanced frames and waveform fidelity are
+outside this selected legacy unsecured profile.

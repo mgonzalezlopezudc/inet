@@ -30,6 +30,10 @@ equality and one tick on each side. The fixture also injects a waveform ending
 one tick before, at, and one tick after preparation: beacon priority permits
 preemption, and the last case observes local radio OFF before the propagated
 waveform ends, followed by the actual on-time beacon.
+Explicit RX-ENABLE windows establish receive duty for these injected waveforms,
+including the old-channel reception immediately before a realignment retune.
+The earlier combined campaign passed 128 of 132 runs. After this fixture
+adjustment, all eight affected typed and raw runs passed.
 
 Two direct DATA cases submit child-to-parent traffic during the child's CAP and
 child-to-leaf traffic during the parent's CAP. An additional transaction starts
@@ -53,6 +57,11 @@ must retire the pending command and START before any child beacon. A second
 case retains an active child schedule and checks that the old command is no
 longer cancelable when its START termination callback runs.
 
+The active-command loss case uses an isolated backoff RNG and a 160-symbol
+backoff period configured on both parent and child. This keeps the real
+command deferred across four missed beacons without relying on unrelated
+PAN-conflict traffic; its terminal and ownership checks remain active.
+
 For coordinator realignment, the fixture observes the old beacon's pending
 bit, old-channel RF frequency, broadcast command with AR clear, and the actual
 new-channel beacon observed by a tuned receiver after confirmation. Other cases
@@ -60,8 +69,8 @@ exercise nonbeaconing and BO15 target operation, a controlled fourth-radio CCA
 failure with old-channel retention, RESET-confirm reentry, PHY stop/restart,
 active replacement commit/cancel, and an incoming AR=1 frame whose ACK must
 yield to an earlier pending beacon. The initial zero-backoff diagnostic also
-exposed an unrelated leaf PAN Conflict command caused by the existing
-parent/principal metadata gap; that gap is assigned to B2-03. The successful
+exposed an unrelated leaf PAN Conflict command caused by a parent/principal
+metadata gap. B2-03 separates those roles. The successful
 realignment case retains normal reception and uses bounded CSMA retries.
 
 ```mermaid

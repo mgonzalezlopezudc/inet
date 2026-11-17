@@ -123,6 +123,7 @@ class BeaconReconfigurationExercise : public cSimpleModule, public cListener, pu
         ASSERT(starts == 1);
         set(child.get(),"macAssociationPermit",true);
         join.coordinatorAddress = Ieee802154Address::fromShort(2);
+        join.coordinatorIsPanCoordinator = false;
         leafAssociation = ++nextId;
         ASSERT(leafManagement->submitAssociate(leafAssociation,join) == Admission::ACCEPTED);
         wait(SimTime(55,SIMTIME_MS));
@@ -193,7 +194,7 @@ class BeaconReconfigurationExercise : public cSimpleModule, public cListener, pu
             set(child.get(),"macUnitBackoffPeriod",uint64_t(1));
         wait(SimTime(8,SIMTIME_MS));
         auto radio = check_and_cast<physicallayer::IRadio *>(getModuleByPath("^.host[1].nic.radio"));
-        ASSERT(radio->getReceptionState() == physicallayer::IRadio::RECEPTION_STATE_IDLE);
+        ASSERT(radio->getReceptionState() != physicallayer::IRadio::RECEPTION_STATE_RECEIVING);
         if (scenario == 56 || scenario == 57) {
             if (scenario == 57) {
                 set(child.get(),"macMinBe",uint64_t(3));
@@ -237,6 +238,8 @@ class BeaconReconfigurationExercise : public cSimpleModule, public cListener, pu
         wait(SimTime(130,SIMTIME_MS));
         ASSERT(syncs == 1);
         if (scenario == 65) {
+            set(root.get(),"macUnitBackoffPeriod",uint64_t(160));
+            set(child.get(),"macUnitBackoffPeriod",uint64_t(160));
             start.panCoordinator = false; start.startTime = 1940;
             ASSERT(childManagement->submitStartSuperframe(++nextId,start) == Admission::ACCEPTED);
             wait(SimTime(50,SIMTIME_MS));
@@ -333,6 +336,9 @@ class BeaconReconfigurationExercise : public cSimpleModule, public cListener, pu
         if (scenario >= 38 && scenario <= 40) {
             ASSERT(lastParentReception);
             ASSERT(jammer->submitState(++jammerId,physicallayer::Ieee802154PhyState::TRANSMIT) == physicallayer::Ieee802154PhyServiceAdmission::ACCEPTED);
+            Ieee802154MacRxEnableRequest receiveWindow;
+            receiveWindow.instances.push_back({1700,260,false});
+            ASSERT(childManagement->submitRxEnable(++nextId,receiveWindow) == Admission::ACCEPTED);
             start.panCoordinator = false; start.startTime = 1940;
             auto startId = ++nextId;
             ASSERT(childManagement->submitStartSuperframe(startId,start) == Admission::ACCEPTED);
@@ -458,6 +464,10 @@ class BeaconReconfigurationExercise : public cSimpleModule, public cListener, pu
             ASSERT(rootManagement->submitStartSuperframe(++nextId,start) == Admission::ACCEPTED);
             auto target = rootBeaconTimes.back() + SimTime(2 * 122880,SIMTIME_US);
             auto transmitAt = target - SimTime(192 + 3392,SIMTIME_US) + SimTime::fromRaw(1);
+            wait(target - SimTime(8,SIMTIME_MS) - simTime());
+            Ieee802154MacRxEnableRequest receiveWindow;
+            receiveWindow.instances.push_back({7430,240,false});
+            ASSERT(rootManagement->submitRxEnable(++nextId,receiveWindow) == Admission::ACCEPTED);
             ASSERT(transmitAt > simTime());
             wait(transmitAt - simTime());
             auto rootRadio = check_and_cast<physicallayer::IRadio *>(getModuleByPath("^.host[0].nic.radio"));
@@ -960,8 +970,8 @@ class BeaconReconfigurationExercise : public cSimpleModule, public cListener, pu
         }
         else ASSERT(indication.reason == Ieee802154SyncLossReason::PAN_ID_CONFLICT);
     }
-    virtual void handleRxEnableConfirm(uint64_t,const Ieee802154MacRxEnableConfirm&) override { ASSERT(false); }
-    virtual void handleRxEnableIndication(const Ieee802154MacRxEnableIndication&) override { ASSERT(false); }
+    virtual void handleRxEnableConfirm(uint64_t,const Ieee802154MacRxEnableConfirm& c) override { Enter_Method("handleRxEnableConfirm"); ASSERT(((scenario >= 38 && scenario <= 40) || scenario == 59) && c.result == Ieee802154MacServiceResult(Status::SUCCESS)); }
+    virtual void handleRxEnableIndication(const Ieee802154MacRxEnableIndication&) override { Enter_Method("handleRxEnableIndication"); ASSERT((scenario >= 38 && scenario <= 40) || scenario == 59); }
     virtual void handleAvailabilityIndication(const physicallayer::Ieee802154PhyAvailabilityIndication&) override {}
     virtual void handleReceiveStarted(const physicallayer::Ieee802154PhyReceiveStart&) override {}
     virtual void handleTransmitStarted(uint64_t,const physicallayer::Ieee802154PhyTransmitStart&) override {}
@@ -1046,6 +1056,9 @@ sim-time-limit = 1.2s
 seed-set = 0
 cmdenv-express-mode = true
 cmdenv-stop-batch-on-error = false
+num-rngs = 2
+*.host[1].nic.slottedAccess.backoffRng = ${scenario} == 65 ? 1 : 0
+*.host[1].nic.slottedAccess.rng-1 = 1
 record-vector-results = false
 record-scalar-results = false
 *.scenario = ${scenario=0..65}

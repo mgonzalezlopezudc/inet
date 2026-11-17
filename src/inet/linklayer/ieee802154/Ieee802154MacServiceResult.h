@@ -97,6 +97,7 @@ enum class Ieee802154MacStatus : uint8_t {
     RANGING_NOT_SUPPORTED,
     TRACKING_OFF,
     SUPERFRAME_OVERLAP,
+    ON_TIME_TOO_LONG,
 };
 
 /**

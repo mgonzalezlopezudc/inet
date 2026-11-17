@@ -15,6 +15,7 @@ struct Ieee802154MacAssociateRequest
     Ieee802154Address coordinatorAddress;
     uint8_t capabilityInformation = 0x80; ///< Selected ordinary association; request short-address allocation.
     Ieee802154MacSecurityParameters security;
+    bool coordinatorIsPanCoordinator = true; ///< Caller declaration; discovery supplies the advertised role.
 };
 
 struct Ieee802154MacAssociateIndication

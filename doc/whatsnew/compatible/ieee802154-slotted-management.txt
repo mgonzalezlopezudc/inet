@@ -1,0 +1,3 @@
+IEEE 802.15.4 managed beacon CAP exchanges
+
+The optional superframe composition supports managed association, pending-address polling, indirect data and scans with beacon timing. The managed example provides an explicit beacon-operation configuration.

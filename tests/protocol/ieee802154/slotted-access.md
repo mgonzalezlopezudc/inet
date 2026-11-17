@@ -27,6 +27,11 @@ fixture observes an actual coordinator beacon after a deferred DATA and tests AC
 timeout equality with the scheduled preparation event on simulation time and both
 oscillator event backends. No test substitutes a helper result for the radio path.
 
+The expired-CAP search control explicitly enables promiscuous receive duty on
+the searching device. Its restarted, intentionally nonbeaconing peer sets
+BO15, so its configured idle receive duty can accept fallback DATA. The search
+deadline and actual transmission assertions remain unchanged.
+
 The assumed parent has beacon timing and unslotted access but refuses beacon-mode DATA;
 it cannot produce these two-CCA, slotted PPDU and cross-CAP observations. This is a
 source-based parent expectation, not an executed parent comparison.

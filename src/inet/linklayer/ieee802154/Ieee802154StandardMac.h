@@ -43,6 +43,8 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     bool initialPanCoordinator = false;
     bool panCoordinator = false;
     bool coordinator = false; // Coordinator services remain available without an outgoing superframe.
+    bool parentAssociated = false; // Committed association, independent of the parent's PAN-coordinator role.
+    simtime_t transactionPersistence() const;
     enum class Phase { WAIT_IFS, WAIT_RX, WAIT_CAP, ACCESS, WAIT_TX, TRANSMIT, WAIT_ACK };
     enum class PhyPurpose { IDLE, RX_FOR_ACCESS, CCA, TX_READY, TRANSMIT, ACK_LISTEN, ACK_READY, ACK_TRANSMIT, MANAGEMENT_GET, MANAGEMENT_SET, START_CHANNEL, BEACON_CHANNEL, ASSOCIATE_CHANNEL, ORPHAN_CHANNEL_GET, SCAN_GET, SCAN_CCA_GET, SCAN_OFF, SCAN_CHANNEL, SCAN_RX, SCAN_ED_DURATION, SCAN_ED, SCAN_RESTORE_OFF, SCAN_CCA_RESTORE, SCAN_RESTORE, SCAN_REALIGN_OFF, SCAN_REALIGN_CHANNEL, RESET, SUPERFRAME_GET, SUPERFRAME_CHANNEL, SUPERFRAME_RESTORE, SUPERFRAME_PHY_RESTORE, SUPERFRAME_READY, SUPERFRAME_ACTIVATION_READY, SUPERFRAME_RETUNE_OFF, SUPERFRAME_TRANSMIT, SYNC_CHANNEL, SYNC_READY };
     struct Transaction {
@@ -133,18 +135,25 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
         uint8_t superframeOrder;
         simtime_t physicalStart;
         simtime_t physicalEnd;
+        bool panCoordinator;
+        uint16_t panId;
+        Ieee802154Address coordinator;
+        physicallayer::Ieee802154PhyChannel channel;
     };
     std::optional<IncomingSuperframe> incomingSuperframe;
     std::optional<clocktime_t> childPhase; // Recurring local-clock phase from the parent beacon.
     std::optional<clocktime_t> transmittedBeaconAnchor;
     simtime_t transmittedBeaconIfs;
+    bool transmittedBeaconBroadcastPending = false;
     bool outgoingCapActive = false;
     std::optional<clocktime_t> outgoingCapEnd;
+    std::optional<clocktime_t> incomingCapEnd;
     simsignal_t periodicBeaconStartSignal = SIMSIGNAL_NULL;
     simsignal_t outgoingCapActiveSignal = SIMSIGNAL_NULL;
     void setOutgoingCapActive(bool active);
+    bool scheduleCapDutyEnd();
     void completeSuperframeStart(const Ieee802154MacServiceResult& result);
-    void commitSuperframeChannel();
+    bool commitSuperframeChannel();
     void retireParentContext(bool clearAssociation);
     void failSuperframeStart(const Ieee802154MacServiceResult& result);
     void preparePeriodicBeacon();
@@ -226,6 +235,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
         Ieee802154MacAssociateRequest parameters;
         std::optional<Ieee802154CommandCodec::AssociationResponse> response;
         Ieee802154Address coordinatorExtendedAddress;
+        bool waitingBeacon = false;
     };
     std::optional<AssociationRequest> associationRequest;
     cMessage *associationTimer = nullptr;
@@ -252,6 +262,8 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
         simtime_t prepareAt;
         uint32_t duration;
         bool autoOff;
+        std::optional<simtime_t> endsAt;
+        std::optional<uint32_t> endTimestamp;
     };
     std::optional<ReceiverWindow> receiverWindow;
     std::optional<uint64_t> rxEnableRequest;
@@ -308,6 +320,8 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
         bool waiting = false;
         simtime_t deadline;
         bool association = false;
+        bool automatic = false;
+        std::optional<Ieee802154Address> advertisedSource;
     };
     struct PendingPoll { uint16_t panId; Ieee802154Address device; simtime_t receivedAt; };
     std::unique_ptr<Ieee802154PendingTransactions> pending;
@@ -316,6 +330,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     Ieee802154Address canonicalAddress(uint16_t panId, const Ieee802154Address& address) const;
     std::deque<PendingPoll> pendingPolls;
     std::optional<PollRequest> pollRequest;
+    std::optional<Ieee802154Address> autoPollPending;
     bool pendingCallbacksActive = false;
     bool syncLossNotificationsActive = false;
     cMessage *pendingTimer = nullptr;
@@ -326,6 +341,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     void schedulePendingExpiry();
     void clearPending(const Ieee802154MacServiceResult& result);
     void startPendingResponse();
+    bool startQuickPendingResponse(simtime_t ackEnd);
     void completePoll(const Ieee802154MacServiceResult& result);
     void retireDataRadio();
     virtual void handleMessage(cMessage *message) override;

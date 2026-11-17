@@ -23,6 +23,8 @@ class INET_API Ieee802154ManagementApp : public SimpleModule,
     cMessage *actionTimer = nullptr;
     uint64_t nextId = 0;
     bool coordinator = false;
+    bool beaconOperation = false;
+    bool awaitingAssociationBeacon = false;
     int completedCycles = 0, receivedMsdus = 0, confirmedMsdus = 0;
     uint16_t nextShortAddress = 0x40;
     std::map<Ieee802154Address,uint16_t> allocations;
@@ -33,6 +35,7 @@ class INET_API Ieee802154ManagementApp : public SimpleModule,
     void succeeded(const Ieee802154MacServiceResult& result) const;
     void set(const char *name, const Ieee802154MacPibValue& value);
     void sendData(const Ieee802154Address& destination, uint16_t panId, bool indirect);
+    void associateSelectedPan();
     physicallayer::Ieee802154PhyChannel channel() const;
     virtual void initialize() override;
     virtual void handleMessage(cMessage *message) override;
@@ -41,8 +44,8 @@ class INET_API Ieee802154ManagementApp : public SimpleModule,
   public:
     virtual ~Ieee802154ManagementApp();
     virtual void handleResetConfirm(uint64_t, const Ieee802154MacResetConfirm& confirm) override;
-    virtual void handleSyncConfirm(uint64_t, const Ieee802154MacSyncConfirm&) override { throw cRuntimeError("Unexpected SYNC installation confirmation"); }
-    virtual void handleStartSuperframeConfirm(uint64_t, const Ieee802154MacStartSuperframeConfirm&) override { throw cRuntimeError("Unexpected START-SUPERFRAME confirmation"); }
+    void handleSyncConfirm(uint64_t, const Ieee802154MacSyncConfirm& confirm) override;
+    void handleStartSuperframeConfirm(uint64_t, const Ieee802154MacStartSuperframeConfirm& confirm) override;
     virtual void handleStartConfirm(uint64_t, const Ieee802154MacStartConfirm& confirm) override;
     virtual void handleScanConfirm(uint64_t, const Ieee802154MacScanConfirm& confirm) override;
     virtual void handleAssociateIndication(const Ieee802154MacAssociateIndication& indication) override;
