@@ -50,6 +50,7 @@ Ieee802154MacStatus Ieee802154MacPib::getValue(const State& state, const std::st
     GET_BOOLEAN(macBeaconAutoRespond)
     GET_BOOLEAN(macAssociatedPanCoord)
     GET_BOOLEAN(macAssociationPermit)
+    if (attribute == "macGtsPermit" && state.gtsSupported) { value = state.macGtsPermit; return Ieee802154MacStatus::SUCCESS; }
     GET_INTEGER(macResponseWaitTime)
     GET_INTEGER(macTransactionPersistenceTime)
     if (attribute == "macBeaconPayload") { value = state.macBeaconPayload; return Ieee802154MacStatus::SUCCESS; }
@@ -224,7 +225,7 @@ Ieee802154MacStatus Ieee802154MacPib::setValue(State& state, const std::string& 
     if (attribute == "macRxOnWhenIdle" || attribute == "macImplicitBroadcast" ||
             attribute == "macGroupRxMode" || attribute == "macPromiscuousMode" ||
             attribute == "macAutoRequest" || attribute == "macNotifyAllBeacons" || attribute == "macBeaconAutoRespond" ||
-            attribute == "macAssociatedPanCoord" || attribute == "macAssociationPermit") {
+            attribute == "macAssociatedPanCoord" || attribute == "macAssociationPermit" || attribute == "macGtsPermit") {
         const auto *booleanValue = std::get_if<bool>(&value);
         if (booleanValue == nullptr)
             return Ieee802154MacStatus::INVALID_PARAMETER;
@@ -236,7 +237,8 @@ Ieee802154MacStatus Ieee802154MacPib::setValue(State& state, const std::string& 
         else if (attribute == "macNotifyAllBeacons") state.macNotifyAllBeacons = *booleanValue;
         else if (attribute == "macBeaconAutoRespond") state.macBeaconAutoRespond = *booleanValue;
         else if (attribute == "macAssociatedPanCoord") state.macAssociatedPanCoord = *booleanValue;
-        else state.macAssociationPermit = *booleanValue;
+        else if (attribute == "macAssociationPermit") state.macAssociationPermit = *booleanValue;
+        else state.macGtsPermit = *booleanValue;
         return Ieee802154MacStatus::SUCCESS;
     }
     if (attribute == "macSecurityEnabled" || attribute == "macDsmeEnabled" || attribute == "macDaEnabled" ||
@@ -274,6 +276,7 @@ Ieee802154MacPib::Ieee802154MacPib(Ieee802154Address deviceExtendedAddress, uint
     ccaDurationUs(ccaDurationUs)
 {
     state.macSyncSymbolOffset = superframeEnabled ? 10 : 0;
+    state.gtsSupported = superframeEnabled;
     if (!isIndividualExtendedAddress(deviceExtendedAddress))
         throw cRuntimeError("macExtendedAddress must be an individual extended address");
 
@@ -313,8 +316,10 @@ void Ieee802154MacPib::reset(bool setDefaultPib, uint8_t injectedDsn, uint8_t in
 {
     if (setDefaultPib) {
         auto syncSymbolOffset = state.macSyncSymbolOffset;
+        auto gtsSupported = state.gtsSupported;
         state = makeDefaultState(state.macExtendedAddress, injectedDsn, ccaDurationUs, injectedBsn);
         state.macSyncSymbolOffset = syncSymbolOffset;
+        state.gtsSupported = gtsSupported;
     }
 }
 

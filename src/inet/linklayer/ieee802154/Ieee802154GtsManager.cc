@@ -42,6 +42,18 @@ const Ieee802154GtsManager::Grant *Ieee802154GtsManager::findGrant(const Key& ke
     return it == grants.end() ? nullptr : &*it;
 }
 
+size_t Ieee802154GtsManager::reservedCount() const
+{
+    std::vector<Key> keys;
+    auto add = [&](const Key& key) {
+        if (std::none_of(keys.begin(),keys.end(),[&](const Key& existing) { return sameKey(existing,key); }))
+            keys.push_back(key);
+    };
+    for (const auto& grant : grants) add(grant.key);
+    for (const auto& advertisement : advertisements) add(advertisement.key);
+    return keys.size();
+}
+
 bool Ieee802154GtsManager::putGrant(const Grant& grant)
 {
     if (!grant.start || !grant.length || grant.start > 15 || grant.length > 15 || grant.start + grant.length > 16 ||
@@ -67,15 +79,27 @@ bool Ieee802154GtsManager::advertise(const Key& key, uint8_t start, uint8_t leng
             key.shortAddress >= 0xfffe || uint8_t(key.direction) > 1 || !available(key))
         return false;
     auto it = std::find_if(advertisements.begin(),advertisements.end(),[&](const Advertisement& value) { return sameKey(value.key,key); });
-    Advertisement value{key,start,length,4};
+    if (nextRevision == UINT64_MAX)
+        throw cRuntimeError("IEEE 802.15.4 GTS advertisement revision exhausted");
+    Advertisement value{key,start,length,4,++nextRevision,false};
     if (it == advertisements.end()) advertisements.push_back(value);
     else *it = value;
     return true;
 }
 
+void Ieee802154GtsManager::markPublished(const std::vector<Advertisement>& snapshot)
+{
+    for (const auto& sent : snapshot)
+        for (auto& current : advertisements)
+            if (sent.revision == current.revision)
+                current.published = true;
+}
+
 void Ieee802154GtsManager::ageAdvertisements()
 {
-    for (auto& advertisement : advertisements) --advertisement.remaining;
+    for (auto& advertisement : advertisements)
+        if (advertisement.published)
+            --advertisement.remaining;
     advertisements.erase(std::remove_if(advertisements.begin(),advertisements.end(),[](const Advertisement& value) { return value.remaining == 0; }),advertisements.end());
 }
 

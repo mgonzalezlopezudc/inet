@@ -23,6 +23,13 @@ ASSERT(!manager.findGrant(first));
 ASSERT(!manager.putGrant({{0x1234,8,1,D::DEVICE_TRANSMIT},1,1}));
 ASSERT(!manager.putGrant({{0x1234,1,8,D::DEVICE_TRANSMIT},1,1}));
 ASSERT(!manager.putGrant({{0x2345,8,1,D::DEVICE_TRANSMIT},1,1}));
+manager.ageAdvertisements(); // No advertisement has reached a beacon yet.
+ASSERT(manager.getAdvertisements().size() == 7);
+auto oldSnapshot = manager.getAdvertisements();
+ASSERT(manager.advertise(first,0,0)); // An in-flight old snapshot cannot publish this replacement.
+manager.markPublished(oldSnapshot);
+ASSERT(!manager.getAdvertisements().front().published);
+manager.markPublished(manager.getAdvertisements());
 for (int i = 0; i < 4; ++i) manager.ageAdvertisements();
 ASSERT(manager.getAdvertisements().empty() && manager.getGrants().size() == 6);
 ASSERT(manager.putGrant({eighth,1,1}));
@@ -30,3 +37,16 @@ ASSERT(!manager.putGrant({first,0,1}));
 ASSERT(!manager.advertise(eighth,15,2));
 manager.clear();
 ASSERT(manager.getGrants().empty() && manager.getAdvertisements().empty());
+for (uint16_t i = 0; i < 7; ++i) {
+    M::Key key{0x1234,uint64_t(i + 1),uint16_t(i + 1),D::DEVICE_RECEIVE};
+    ASSERT(manager.putGrant({key,1,1}) && manager.advertise(key,1,1));
+}
+manager.markPublished(manager.getAdvertisements());
+for (int i = 0; i < 4; ++i) manager.ageAdvertisements();
+ASSERT(manager.getAdvertisements().empty() && manager.reservedCount() == 7);
+M::Key retained{0x1234,1,1,D::DEVICE_RECEIVE};
+ASSERT(manager.removeGrant(retained) && manager.advertise(retained,0,0));
+ASSERT(!manager.putGrant({{0x1234,8,8,D::DEVICE_RECEIVE},1,1}));
+manager.markPublished(manager.getAdvertisements());
+for (int i = 0; i < 4; ++i) manager.ageAdvertisements();
+ASSERT(manager.putGrant({{0x1234,8,8,D::DEVICE_RECEIVE},1,1}));

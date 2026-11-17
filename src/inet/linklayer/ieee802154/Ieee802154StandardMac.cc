@@ -59,6 +59,7 @@ Ieee802154StandardMac::~Ieee802154StandardMac()
     cancelAndDelete(pollTimer);
     cancelAndDelete(scanTimer);
     cancelAndDelete(associationTimer);
+    cancelAndDelete(gtsTimer);
     cancelAndDelete(receiverPrepareTimer);
     cancelAndDelete(receiverEndTimer);
     for (const auto& [token, original] : pendingOriginals)
@@ -99,6 +100,8 @@ void Ieee802154StandardMac::initialize(int stage)
         scanTimer->setSchedulingPriority(1);
         associationTimer = new cMessage("associationTimer");
         associationTimer->setSchedulingPriority(1);
+        gtsTimer = new cMessage("gtsTimer");
+        gtsTimer->setSchedulingPriority(1);
         receiverPrepareTimer = new cMessage("receiverPrepareTimer");
         receiverPrepareTimer->setSchedulingPriority(1);
         receiverEndTimer = new cMessage("receiverEndTimer");
@@ -266,6 +269,8 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitData(uint64_t id, Pac
             pendingOriginals.emplace(id, PendingOriginal{packet, request.msduHandle});
             pib->set("macDsn", uint64_t((frame->getDsn() + 1) & 255));
             expirePending();
+            if (panCoordinator && periodicBeaconing && outgoingEpoch && !constructedGtsCandidate && started && !resetRequest)
+                maintainGtsCapacity(outgoingEpoch->superframeOrder);
         }
     }
     else {
@@ -324,10 +329,15 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitSet(uint64_t id, cons
             bool parentReference = request.attribute == "macPanId" || request.attribute == "macCoordShortAddress" ||
                     request.attribute == "macCoordExtendedAddress";
             auto previousReference = parentReference && parentAssociated ? pib->get(request.attribute).value : std::nullopt;
+            auto previousLocalIdentity = request.attribute == "macPanId" || request.attribute == "macShortAddress" ?
+                    pib->get(request.attribute).value : std::nullopt;
             auto payload = std::get_if<std::vector<uint8_t>>(&request.value);
             bool oversizedBeacon = request.attribute == "macBeaconPayload" && payload && !fitsBeaconPayload(*payload);
             auto status = Ieee802154MacStatus::SUCCESS;
-            if (request.attribute == "macBeaconOrder" && superframe) {
+            if (request.attribute == "macGtsPermit" && superframe && std::get_if<bool>(&request.value) &&
+                    std::get<bool>(request.value) && gtsManager.reservedCount() >= 7)
+                status = Ieee802154MacStatus::INVALID_PARAMETER;
+            else if (request.attribute == "macBeaconOrder" && superframe) {
                 auto unsignedValue = std::get_if<uint64_t>(&request.value);
                 auto signedValue = std::get_if<int64_t>(&request.value);
                 std::optional<uint8_t> value;
@@ -347,6 +357,14 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitSet(uint64_t id, cons
             else
                 status = oversizedBeacon || (periodicBeaconing && (request.attribute == "macBattLifeExtPeriods" || request.attribute == "macPanId" || request.attribute == "macShortAddress")) ?
                         Ieee802154MacStatus::INVALID_PARAMETER : pib->set(request.attribute, request.value);
+            if (status == Ieee802154MacStatus::SUCCESS && previousLocalIdentity && !(pib->get(request.attribute).value == previousLocalIdentity)) {
+                auto outerRetirement = retiringRequests;
+                retiringRequests = true;
+                gtsManager.clear();
+                if (gtsRequest)
+                    completeGts(Ieee802154MacServiceAbortReason::DISASSOCIATED);
+                retiringRequests = outerRetirement;
+            }
             if (status == Ieee802154MacStatus::SUCCESS && previousReference && !(pib->get(request.attribute).value == previousReference)) {
                 parentAssociated = false;
                 pib->set("macAssociatedPanCoord",false);
@@ -361,6 +379,9 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitSet(uint64_t id, cons
             Ieee802154MacSetConfirm confirm(request.attribute, status);
             publishIdentity();
             client->handleSetConfirm(id, confirm);
+            if (status == Ieee802154MacStatus::SUCCESS && request.attribute == "macBeaconPayload" &&
+                    panCoordinator && periodicBeaconing && outgoingEpoch && !constructedGtsCandidate && started && !resetRequest)
+                maintainGtsCapacity(outgoingEpoch->superframeOrder);
             restoreIdle();
         }
     }
@@ -373,6 +394,7 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitReset(uint64_t id, co
     auto admission = admit(id, true, true);
     if (admission == Ieee802154MacServiceAdmission::ACCEPTED) {
         resetRequest = ResetRequest{id, request.setDefaultPib};
+        constructedGtsCandidate.reset();
         retireReceives();
         incomingSuperframe.reset();
         incomingCapEnd.reset();
@@ -406,6 +428,9 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitReset(uint64_t id, co
             completeManagement(Ieee802154MacServiceAbortReason::RESET);
         if (transaction && transaction->kind != Transaction::Kind::SCAN_REQUEST)
             completeData(Ieee802154MacServiceAbortReason::RESET);
+        if (gtsRequest)
+            completeGts(Ieee802154MacServiceAbortReason::RESET);
+        gtsManager.clear();
         if (pollRequest)
             completePoll(Ieee802154MacServiceAbortReason::RESET);
         clearPending(Ieee802154MacServiceAbortReason::RESET);
@@ -485,6 +510,12 @@ Ieee802154MacServiceCancelResult Ieee802154StandardMac::cancel(uint64_t id)
     }
     if (pollRequest && pollRequest->id == id && !transaction) {
         completePoll(Ieee802154MacServiceAbortReason::CANCELLED);
+        return Ieee802154MacServiceCancelResult::CANCELLED;
+    }
+    if (gtsRequest && gtsRequest->id == id && (!transaction || transaction->id != id)) {
+        if (resetRequest || !started || retiringRequests)
+            return Ieee802154MacServiceCancelResult::NOT_CANCELLABLE;
+        completeGts(Ieee802154MacServiceAbortReason::CANCELLED);
         return Ieee802154MacServiceCancelResult::CANCELLED;
     }
     if (pendingOriginals.count(id) && (!transaction || transaction->id != id)) {
@@ -623,10 +654,10 @@ void Ieee802154StandardMac::startAccess()
     if (periodicBeaconing && !panCoordinator && parentAssociated) {
         const auto& destination = transaction->frame->getDestinationAddress();
         auto parentExtended = std::get<Ieee802154Address>(*pib->get("macCoordExtendedAddress").value);
-        toParent = transaction->kind != Transaction::Kind::SUPERFRAME_REALIGN &&
+        toParent = transaction->kind == Transaction::Kind::GTS_REQUEST || (transaction->kind != Transaction::Kind::SUPERFRAME_REALIGN &&
                 transaction->frame->getDestinationPanId() == getInteger("macPanId") &&
                 ((destination.isShort() && destination.getShort() < 0xfffe && destination.getShort() == getInteger("macCoordShortAddress")) ||
-                 (destination.isExtended() && !destination.isExtendedGroup() && destination == parentExtended));
+                 (destination.isExtended() && !destination.isExtendedGroup() && destination == parentExtended)));
         auto required = toParent ? Ieee802154AccessWindowOrigin::INCOMING : Ieee802154AccessWindowOrigin::OUTGOING;
         if (window && window->origin != required) {
             if (transaction->accessPending) {
@@ -642,7 +673,7 @@ void Ieee802154StandardMac::startAccess()
         transaction->capBeaconOrder = synchronization->beaconOrder;
     else if (transaction->capBeaconOrder == 15 && getInteger("macBeaconOrder") < 15)
         transaction->capBeaconOrder = getInteger("macBeaconOrder");
-    bool scheduled = slottedAccess && superframe && (window || periodicBeaconing ||
+    bool scheduled = transaction->kind != Transaction::Kind::SCAN_REQUEST && slottedAccess && superframe && (window || periodicBeaconing ||
             (synchronization && synchronization->installed) || transaction->capBeaconOrder < 15 || transaction->transmittedInCap);
     if (transaction->search == Transaction::Search::FALLBACK && !transaction->transmittedInCap)
         scheduled = false;
@@ -769,6 +800,19 @@ void Ieee802154StandardMac::completeData(const Ieee802154MacServiceResult& resul
                 completeAssociate(result);
         }
     }
+    else if (completed.kind == Transaction::Kind::GTS_REQUEST) {
+        if (gtsRequest && gtsRequest->id == completed.id) {
+            if (result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS) && synchronization && superframe) {
+                gtsRequest->waiting = true;
+                auto symbols = int64_t(4 * 960) << synchronization->beaconOrder;
+                auto deadline = superframe->getCurrentClockTime() + SIMTIME_AS_CLOCKTIME(SimTime(symbols * 16,SIMTIME_US));
+                scheduleAt(superframe->getFutureSimulationTime(deadline),gtsTimer);
+            }
+            else
+                completeGts(result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS) ?
+                        Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::STOPPED) : result);
+        }
+    }
     else if (completed.kind == Transaction::Kind::BEACON) {
         if (managementClient)
             managementClient->handleBeaconConfirm(completed.id,{result});
@@ -868,6 +912,7 @@ void Ieee802154StandardMac::retireReceives()
 void Ieee802154StandardMac::stop()
 {
     started = false;
+    constructedGtsCandidate.reset();
     autoPollPending.reset();
     retireReceives();
     incomingSuperframe.reset();
@@ -901,6 +946,9 @@ void Ieee802154StandardMac::stop()
         completeManagement(Ieee802154MacServiceAbortReason::STOPPED);
     if (transaction && transaction->kind != Transaction::Kind::SCAN_REQUEST)
         completeData(Ieee802154MacServiceAbortReason::STOPPED);
+    if (gtsRequest)
+        completeGts(Ieee802154MacServiceAbortReason::STOPPED);
+    gtsManager.clear();
     if (pollRequest)
         completePoll(Ieee802154MacServiceAbortReason::STOPPED);
     clearPending(Ieee802154MacServiceAbortReason::STOPPED);
@@ -958,6 +1006,10 @@ void Ieee802154StandardMac::handleMessage(cMessage *message)
         completePoll(Ieee802154MacStatus::NO_DATA);
         return;
     }
+    if (message == gtsTimer) {
+        completeGts(Ieee802154MacStatus::NO_DATA);
+        return;
+    }
     if (message == ackTimer) {
         ackTimeout();
         return;
@@ -991,6 +1043,7 @@ void Ieee802154StandardMac::handleAvailabilityIndication(const physicallayer::Ie
     }
     bool outerRetirement = retiringRequests;
     retiringRequests = true;
+    constructedGtsCandidate.reset();
     autoPollPending.reset();
     phyOperation.reset();
     beaconAfterAck.reset();
@@ -1032,6 +1085,8 @@ void Ieee802154StandardMac::handleAvailabilityIndication(const physicallayer::Ie
         completeManagement(Ieee802154MacServiceAbortReason::STOPPED);
     if (transaction)
         completeData(Ieee802154MacServiceAbortReason::STOPPED);
+    if (gtsRequest)
+        completeGts(Ieee802154MacServiceAbortReason::STOPPED);
     if (pollRequest)
         completePoll(Ieee802154MacServiceAbortReason::STOPPED);
     if (scanRequest)
@@ -1327,13 +1382,39 @@ void Ieee802154StandardMac::handleTransmitStarted(uint64_t id, const physicallay
     }
     if (phyOperation && phyOperation->id == id && phyOperation->purpose == PhyPurpose::SUPERFRAME_TRANSMIT) {
         phyOperation->transmitStarted = true;
+        auto candidate = std::move(constructedGtsCandidate);
+        constructedGtsCandidate.reset();
+        if (candidate)
+            gtsManager = std::move(candidate->ledger);
+        gtsManager.markPublished(constructedGtsAdvertisements);
         auto now = superframe->getCurrentClockTime();
+        if (candidate && candidate->agesImmediateEpoch)
+            lastGtsAgedBoundary = now;
         transmittedBeaconAnchor = now;
         auto previousEpoch = outgoingEpoch;
         outgoingEpoch = constructedBeacon;
         auto timestamp = Ieee802154SuperframeTiming::timestamp(now);
         pib->updateBeaconTxTime(timestamp);
-        emit(periodicBeaconStartSignal,long(timestamp));
+        auto outerNotifications = syncLossNotificationsActive;
+        if (candidate)
+            syncLossNotificationsActive = true;
+        auto publishStart = [&]() {
+            if (candidate) {
+                for (const auto& grant : candidate->removed)
+                    if (managementClient)
+                        managementClient->handleGtsIndication({Ieee802154Address::fromShort(grant.key.shortAddress),{grant.length,grant.key.direction,false}});
+            }
+            emit(periodicBeaconStartSignal,long(timestamp));
+            if (candidate) {
+                syncLossNotificationsActive = outerNotifications;
+                if (!outerNotifications && resetRequest && resetRequest->deferredResult) {
+                    auto result = *resetRequest->deferredResult;
+                    finishReset(result);
+                }
+            }
+        };
+        if (!candidate)
+            publishStart();
         if (!phyOperation || phyOperation->id != id || phyOperation->purpose != PhyPurpose::SUPERFRAME_TRANSMIT)
             return;
         if (superframeStartRequest && ((superframeStartRequest->phase == SuperframeStartRequest::Phase::INITIAL && superframeStartRequest->preparingFirstBeacon) ||
@@ -1341,8 +1422,10 @@ void Ieee802154StandardMac::handleTransmitStarted(uint64_t id, const physicallay
             auto request = superframeStartRequest->parameters;
             auto requestId = superframeStartRequest->id;
             auto geometry = Ieee802154SuperframeTiming::geometry(request.beaconOrder,request.superframeOrder);
-            if (!commitSuperframeChannel() || !phyOperation || phyOperation->id != id)
+            if (!commitSuperframeChannel() || !phyOperation || phyOperation->id != id) {
+                if (candidate) publishStart();
                 return;
+            }
             pib->updateSuperframeConfiguration(request.panId,request.beaconOrder,geometry->superframeOrder,request.batteryLifeExtension);
             panCoordinator = request.panCoordinator;
             coordinator = true;
@@ -1358,6 +1441,7 @@ void Ieee802154StandardMac::handleTransmitStarted(uint64_t id, const physicallay
                 childPhase = SIMTIME_AS_CLOCKTIME(SimTime::fromRaw(raw));
             }
             publishIdentity();
+            if (candidate) publishStart();
             if (!superframeStartRequest || superframeStartRequest->id != requestId || !phyOperation || phyOperation->id != id)
                 return;
             periodicBeaconing = true;
@@ -1440,6 +1524,8 @@ void Ieee802154StandardMac::handleTransmitConfirm(uint64_t id, const physicallay
                 restoreIdle();
             }
         }
+        if (panCoordinator && periodicBeaconing && outgoingEpoch && started && !resetRequest)
+            maintainGtsCapacity(outgoingEpoch->superframeOrder);
         return;
     }
     if (purpose == PhyPurpose::ACK_TRANSMIT) {
@@ -1523,6 +1609,8 @@ void Ieee802154StandardMac::handleSuperframeBoundary(clocktime_t boundary)
         return;
     bool firstBoundary = superframeStartRequest && superframeStartRequest->awaitingFirstBoundary && superframeStartRequest->firstTarget &&
             *superframeStartRequest->firstTarget == boundary && started && phyAvailable;
+    if (!firstBoundary && periodicBeaconing && periodicTarget && *periodicTarget == boundary)
+        ageGtsEpoch(boundary);
     if (firstBoundary) {
         superframeStartRequest->awaitingFirstBoundary = false;
         superframeStartRequest->preparingFirstBeacon = true;
@@ -1739,8 +1827,6 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
         if (orphanScanId && (!scanRequest || scanRequest->id != *orphanScanId))
             return;
     }
-    if (parsedCommand && std::holds_alternative<Ieee802154CommandCodec::GtsRequest>(*parsedCommand))
-        return; // GTS command handling and its ACK are introduced together in B3-02.
     if (frame->getFrameType() == 2) {
         if (transaction && transaction->phase == Phase::WAIT_ACK && frame->getDsn() == transaction->frame->getDsn() &&
                 quality.timing.ppduStart >= transaction->transmittedEnd + phy->getTimingParameters().turnaroundTime && quality.timing.ppduEnd <= transaction->ackDeadline) {
@@ -1761,10 +1847,24 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
     std::optional<Ieee802154CommandCodec::AssociationResponse> responseContent;
     std::optional<uint8_t> disassociationReason;
     bool panConflict = false;
+    std::optional<std::pair<Ieee802154GtsManager::Key,Ieee802154GtsCharacteristics>> gtsCommand;
     bool acceptRealignment = validRealignment && (orphanScanId || (parentAssociated &&
             frame->getSourceAddress() == std::get<Ieee802154Address>(*pib->get("macCoordExtendedAddress").value)));
     if (parsedCommand && !frame->getSourceAddress().isNone()) {
         auto command = &*parsedCommand;
+            if (auto gts = std::get_if<Ieee802154CommandCodec::GtsRequest>(command)) {
+                if (!panCoordinator || !periodicBeaconing || !superframe || !frame->getSourceAddress().isShort() ||
+                        !frame->getDestinationAddress().isNone() || frame->getSourcePanId() != getInteger("macPanId") ||
+                        !frame->getAckRequest() || !gts->characteristics.allocate || !gts->characteristics.length)
+                    return;
+                for (const auto& [peer,shortAddress] : associatedDevices)
+                    if (peer.first == frame->getSourcePanId() && shortAddress == frame->getSourceAddress().getShort() && peer.second.isExtended()) {
+                        gtsCommand = std::make_pair(Ieee802154GtsManager::Key{peer.first,peer.second.getExtended(),shortAddress,gts->characteristics.direction},gts->characteristics);
+                        break;
+                    }
+                if (!gtsCommand)
+                    return;
+            }
             panConflict = panCoordinator && std::holds_alternative<Ieee802154CommandCodec::PanConflictNotification>(*command) &&
                     frame->getSourceAddress().isExtended() && frame->getDestinationAddress().isExtended() && frame->getPanCompression() &&
                     frame->getSourcePanId() == getInteger("macPanId") &&
@@ -1795,7 +1895,7 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
             }
     }
     bool securedCommand = frame->getFrameType() == 3 && frame->getSecurityEnabled() && par("enableManagement").boolValue();
-    if (frame->getFrameType() != 1 && !dataRequest && !securedCommand && !associationResponse && !associationCapability && !disassociationReason && !acceptRealignment && !panConflict)
+    if (frame->getFrameType() != 1 && !dataRequest && !securedCommand && !associationResponse && !associationCapability && !disassociationReason && !acceptRealignment && !panConflict && !gtsCommand)
         return;
     auto pan = uint16_t(getInteger("macPanId"));
     const auto& destination = frame->getDestinationAddress();
@@ -1815,6 +1915,7 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
             isAssociatedCoordinator(frame->getSourcePanId(),frame->getSourceAddress()))
         broadcastReceivePending = frame->getFramePending();
     AckExchange received;
+    received.gtsCommand = gtsCommand;
     received.associationCapability = associationCapability;
     received.disassociationReason = disassociationReason;
     if (acceptRealignment)
@@ -1864,7 +1965,7 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
     }
     if (frame->getSecurityEnabled())
         received.securityError = frame->getFrameVersion() == 0 ? Ieee802154MacStatus::UNSUPPORTED_LEGACY : Ieee802154MacStatus::UNSUPPORTED_SECURITY;
-    else if (!promiscuous && !dataRequest && !associationResponse && !associationCapability && !disassociationReason && !acceptRealignment && !panConflict && !(received.receivedPollResponse && !frame->getPayloadArraySize())) {
+    else if (!promiscuous && !dataRequest && !associationResponse && !associationCapability && !disassociationReason && !acceptRealignment && !panConflict && !gtsCommand && !(received.receivedPollResponse && !frame->getPayloadArraySize())) {
         std::vector<uint8_t> payload;
         for (size_t i = 0; i < frame->getPayloadArraySize(); ++i)
             payload.push_back(frame->getPayload(i));
@@ -1917,6 +2018,8 @@ void Ieee802154StandardMac::deliverReceived(AckExchange& exchange, bool ackSent)
     }
     if (exchange.associationCapability && ackSent && managementClient)
         managementClient->handleAssociateIndication({exchange.indication.sourceAddress,*exchange.associationCapability});
+    if (exchange.gtsCommand && ackSent)
+        decideGts(exchange.gtsCommand->first,exchange.gtsCommand->second);
     if (exchange.associationResponse && associationRequest && exchange.receivedPollResponse && pollRequest && pollRequest->association) {
         associationRequest->response = exchange.associationResponse;
         associationRequest->coordinatorExtendedAddress = exchange.indication.sourceAddress;
@@ -2524,13 +2627,34 @@ void Ieee802154StandardMac::handleSetConfirm(uint64_t id, const physicallayer::I
         else {
             auto id = scanRequest->id;
             const auto recovered = *scanRequest->realignment;
+            bool changedBinding = getInteger("macPanId") != recovered.first.panId ||
+                    getInteger("macShortAddress") != recovered.first.shortAddress ||
+                    getInteger("macCoordShortAddress") != recovered.first.coordinatorShortAddress ||
+                    std::get<Ieee802154Address>(*pib->get("macCoordExtendedAddress").value) != recovered.second ||
+                    (scanRequest->originalChannel && scanRequest->originalChannel->channel != recovered.first.channelNumber);
+            std::optional<GtsRequestState> retiredGts;
+            if (changedBinding) {
+                gtsManager.clear();
+                retiredGts = std::move(gtsRequest);
+                gtsRequest.reset();
+                cancelEvent(gtsTimer);
+            }
             pib->set("macPanId",uint64_t(recovered.first.panId));
             pib->set("macShortAddress",uint64_t(recovered.first.shortAddress));
             pib->set("macCoordShortAddress",uint64_t(recovered.first.coordinatorShortAddress));
             pib->set("macCoordExtendedAddress",recovered.second);
             parentAssociated = true;
             scanRequest->originalChannel.reset(); // The accepted recovered channel is the new operating configuration.
+            auto outerNotifications = syncLossNotificationsActive;
+            syncLossNotificationsActive = true;
             publishIdentity();
+            if (retiredGts && managementClient)
+                managementClient->handleGtsConfirm(retiredGts->id,{retiredGts->request.characteristics,Ieee802154MacServiceAbortReason::DISASSOCIATED});
+            syncLossNotificationsActive = outerNotifications;
+            if (!outerNotifications && resetRequest && resetRequest->deferredResult) {
+                auto result = *resetRequest->deferredResult;
+                finishReset(result);
+            }
             if (scanRequest && scanRequest->id == id) {
                 scanRequest->index++; // The channel which supplied the realignment was scanned successfully.
                 finishScan(Ieee802154MacStatus::SUCCESS);
@@ -2800,6 +2924,18 @@ void Ieee802154StandardMac::handleSyncDeadline()
         auto outerNotifications = syncLossNotificationsActive;
         syncLossNotificationsActive = true;
         retireSynchronization(Ieee802154MacServiceAbortReason::STOPPED);
+        if (gtsRequest) {
+            auto outerGtsRetirement = retiringRequests;
+            retiringRequests = true;
+            if (transaction && transaction->kind == Transaction::Kind::GTS_REQUEST) {
+                retireDataRadio();
+                completeData(Ieee802154MacServiceAbortReason::STOPPED);
+            }
+            if (gtsRequest)
+                completeGts(Ieee802154MacServiceAbortReason::STOPPED);
+            retiringRequests = outerGtsRetirement;
+        }
+        gtsManager.clear();
         auto dependentStart = superframeStartRequest && (childPhase || (!superframeStartRequest->parameters.panCoordinator &&
                 superframeStartRequest->parameters.beaconOrder < 15 && superframeStartRequest->parameters.startTime)) ?
                 superframeStartRequest->id : IEEE802154_INVALID_REQUEST_ID;
@@ -2956,6 +3092,7 @@ void Ieee802154StandardMac::completeSuperframeStart(const Ieee802154MacServiceRe
 {
     if (!superframeStartRequest)
         return;
+    constructedGtsCandidate.reset();
     auto id = superframeStartRequest->id;
     bool awaitingBoundary = superframeStartRequest->awaitingFirstBoundary;
     superframeStartRequest.reset();
@@ -2965,6 +3102,8 @@ void Ieee802154StandardMac::completeSuperframeStart(const Ieee802154MacServiceRe
     }
     if (managementClient)
         managementClient->handleStartSuperframeConfirm(id,{result});
+    if (panCoordinator && periodicBeaconing && outgoingEpoch && started && !resetRequest)
+        maintainGtsCapacity(outgoingEpoch->superframeOrder);
     restoreIdle();
 }
 
@@ -2999,6 +3138,21 @@ void Ieee802154StandardMac::retireParentContext(bool clearAssociation)
     childPhase.reset();
     retireSynchronization(Ieee802154MacServiceAbortReason::STOPPED);
     retireReceives();
+    if (!panCoordinator) {
+        gtsManager.clear();
+        auto epoch = receiveRetirementEpoch;
+        auto outerRetirement = retiringRequests;
+        retiringRequests = true;
+        if (transaction && transaction->kind == Transaction::Kind::GTS_REQUEST) {
+            retireDataRadio();
+            completeData(Ieee802154MacServiceAbortReason::STOPPED);
+        }
+        if (gtsRequest)
+            completeGts(Ieee802154MacServiceAbortReason::STOPPED);
+        retiringRequests = outerRetirement;
+        if (epoch != receiveRetirementEpoch)
+            return;
+    }
     if (clearAssociation) {
         pendingPanConflict.reset();
         broadcastReceivePending = false;
@@ -3124,6 +3278,16 @@ void Ieee802154StandardMac::scheduleNextPeriodicBeacon()
             auto delta = CLOCKTIME_AS_SIMTIME(earliest - target).raw();
             auto ticks = CLOCKTIME_AS_SIMTIME(interval).raw();
             auto missed = (delta + ticks - 1) / ticks;
+            if (&target == (periodicTarget ? &*periodicTarget : nullptr)) {
+                int64_t first = 0;
+                if (lastGtsAgedBoundary && *lastGtsAgedBoundary >= target)
+                    first = CLOCKTIME_AS_SIMTIME(*lastGtsAgedBoundary - target).raw() / ticks + 1;
+                for (int64_t i = first; i < missed && i - first < 4; ++i)
+                    ageGtsEpoch(target + interval * i);
+                auto last = target + interval * (missed - 1);
+                if (!lastGtsAgedBoundary || last > *lastGtsAgedBoundary)
+                    lastGtsAgedBoundary = last;
+            }
             target += interval * missed;
         }
     };
@@ -3209,7 +3373,63 @@ void Ieee802154StandardMac::sendPeriodicBeacon()
     auto bo = initial ? superframeStartRequest->parameters.beaconOrder : getInteger("macBeaconOrder");
     auto so = initial ? superframeStartRequest->parameters.superframeOrder : getInteger("macSuperframeOrder");
     auto ble = initial ? superframeStartRequest->parameters.batteryLifeExtension : getBoolean("macBattLifeExt");
-    auto frame = makeBeacon(panId,bo,so,ble,false);
+    if (!initial && panCoordinator && periodicBeaconing && !gtsManager.getGrants().empty()) {
+        auto target = periodicTarget;
+        auto epoch = receiveRetirementEpoch;
+        auto reservationId = allocatePhyId();
+        phyOperation = PhyOperation{reservationId,PhyPurpose::SUPERFRAME_READY};
+        maintainGtsCapacity(so);
+        if (!started || !phyAvailable || resetRequest || !phyOperation || phyOperation->id != reservationId || !periodicBeaconing || periodicTarget != target || epoch != receiveRetirementEpoch) {
+            if (phyOperation && phyOperation->id == reservationId) {
+                phyOperation.reset();
+                restoreIdle();
+            }
+            return;
+        }
+        phyOperation.reset();
+        panId = getInteger("macPanId");
+        bo = getInteger("macBeaconOrder");
+        so = getInteger("macSuperframeOrder");
+        ble = getBoolean("macBattLifeExt");
+    }
+    constructedGtsCandidate.reset();
+    if (initial && superframeStartRequest->parameters.panCoordinator &&
+            (!gtsManager.getGrants().empty() || !gtsManager.getAdvertisements().empty())) {
+        GtsCandidate candidate{gtsManager,{}};
+        bool replacesPan = panId != getInteger("macPanId") || (!panCoordinator && parentAssociated);
+        bool immediateReplacement = periodicBeaconing && superframeStartRequest->phase == SuperframeStartRequest::Phase::INITIAL &&
+                !superframeStartRequest->firstTarget && transmittedBeaconAnchor.has_value();
+        if (immediateReplacement) {
+            candidate.ledger.ageAdvertisements();
+            candidate.agesImmediateEpoch = true;
+        }
+        if (replacesPan) {
+            for (const auto& grant : candidate.ledger.getGrants()) candidate.removed.push_back(grant);
+            candidate.ledger.clear();
+        }
+        while (!candidate.ledger.getGrants().empty()) {
+            auto ordinaryLedger = candidate.ledger;
+            ordinaryLedger.clearAdvertisements();
+            auto preview = makeBeacon(panId,bo,so,ble,false,&ordinaryLedger);
+            if (!preview)
+                break;
+            auto ordinary = Ieee802154ExchangeTiming::ppduDuration(preview->getChunkLength(),phy->getTimingParameters());
+            unsigned int used = 0;
+            for (const auto& grant : candidate.ledger.getGrants()) used += grant.length;
+            auto target = superframeStartRequest->firstTarget ? superframeStartRequest->firstTarget : periodicTarget;
+            bool scheduled = target && (superframeStartRequest->phase == SuperframeStartRequest::Phase::WAIT_ACTIVATION ||
+                    (!superframeStartRequest->parameters.panCoordinator && superframeStartRequest->parameters.startTime));
+            if (gtsPhysicalCapDuration(so,16 - used,!scheduled,scheduled ? target : std::nullopt) - ordinary >= SimTime(440 * 16,SIMTIME_US))
+                break;
+            auto grant = candidate.ledger.getGrants().back();
+            removeGtsFromLedger(candidate.ledger,grant.key);
+            candidate.removed.push_back(grant);
+        }
+        if (replacesPan || immediateReplacement || !candidate.removed.empty())
+            constructedGtsCandidate = std::move(candidate);
+    }
+    auto ledger = constructedGtsCandidate ? &constructedGtsCandidate->ledger : &gtsManager;
+    auto frame = makeBeacon(panId,bo,so,ble,false,ledger);
     if (!frame) {
         if (initial)
             failSuperframeStart(Ieee802154MacStatus::FRAME_TOO_LONG);
@@ -3245,7 +3465,9 @@ void Ieee802154StandardMac::sendPeriodicBeacon()
         Ieee802154FrameCodec::finalize(*frame);
     }
     constructedBeacon = BeaconConfiguration{uint8_t(bo),uint8_t(so),ble,
-            uint32_t(getInteger("macBattLifeExtPeriods")),uint32_t(getInteger("macUnitBackoffPeriod"))};
+            uint32_t(getInteger("macBattLifeExtPeriods")),uint32_t(getInteger("macUnitBackoffPeriod")),
+            uint8_t(frame->getPayload(1) & 15)};
+    constructedGtsAdvertisements = ledger->getAdvertisements();
     auto packet = new Packet("IEEE802154-periodic-beacon");
     transmittedBeaconIfs = interframeSpacing(frame->getChunkLength());
     transmittedBeaconBroadcastPending = advertisedBroadcast;
@@ -3298,13 +3520,13 @@ void Ieee802154StandardMac::startOutgoingCap()
         end = afterIfs + SIMTIME_AS_CLOCKTIME(SimTime(int64_t(epoch.batteryLifePeriods) * int64_t(epoch.backoffPeriod) * 16,SIMTIME_US));
     }
     else
-        end = *transmittedBeaconAnchor + SIMTIME_AS_CLOCKTIME(SimTime(int64_t(*geometry->activeDuration) * 16,SIMTIME_US));
+        end = *transmittedBeaconAnchor + SIMTIME_AS_CLOCKTIME(SimTime((int64_t(60) << epoch.superframeOrder) * (epoch.finalCapSlot + 1) * 16,SIMTIME_US));
     outgoingCapEnd = end > superframe->getCurrentClockTime() ? std::optional<clocktime_t>(end) : std::nullopt;
     auto anchor = *transmittedBeaconAnchor;
     bool scheduled = scheduleCapDutyEnd();
     setOutgoingCapActive(scheduled);
     if (periodicBeaconing && transmittedBeaconAnchor && *transmittedBeaconAnchor == anchor)
-        publishAccessWindow(anchor, simTime(), transmittedBeaconIfs, epoch.beaconOrder, epoch.superframeOrder, 15,
+        publishAccessWindow(anchor, simTime(), transmittedBeaconIfs, epoch.beaconOrder, epoch.superframeOrder, epoch.finalCapSlot,
                 epoch.batteryLifeExtension, epoch.backoffPeriod, epoch.batteryLifePeriods, Ieee802154AccessWindowOrigin::OUTGOING);
 }
 
@@ -3741,8 +3963,9 @@ bool Ieee802154StandardMac::overlapsIncomingSuperframe(clocktime_t target, uint8
     return false;
 }
 
-Ptr<Ieee802154Frame> Ieee802154StandardMac::makeBeacon(uint16_t panId, uint8_t beaconOrder, uint8_t superframeOrder, bool batteryLifeExtension, bool consumeSequence)
+Ptr<Ieee802154Frame> Ieee802154StandardMac::makeBeacon(uint16_t panId, uint8_t beaconOrder, uint8_t superframeOrder, bool batteryLifeExtension, bool consumeSequence, const Ieee802154GtsManager *ledger)
 {
+    if (!ledger) ledger = &gtsManager;
     auto frame = makeShared<Ieee802154Frame>();
     frame->setFrameType(0);
     frame->setFrameVersion(0);
@@ -3753,15 +3976,38 @@ Ptr<Ieee802154Frame> Ieee802154StandardMac::makeBeacon(uint16_t panId, uint8_t b
     frame->setSourcePanId(panId);
     frame->setFramePending(pending->count(frame->getSourcePanId(),Ieee802154Address::fromShort(0xffff),simTime()) != 0);
     Ieee802154BeaconCodec::Content content;
-    content.superframeSpecification = beaconOrder | (superframeOrder << 4) | 0x0f00 |
-            (batteryLifeExtension ? 0x1000 : 0) | ((superframeStartRequest &&
+    bool beaconPanCoordinator = superframeStartRequest &&
                     ((superframeStartRequest->phase == SuperframeStartRequest::Phase::INITIAL && superframeStartRequest->preparingFirstBeacon) || superframeStartRequest->phase == SuperframeStartRequest::Phase::WAIT_ACTIVATION) ?
-                    superframeStartRequest->parameters.panCoordinator : panCoordinator) ? 0x4000 : 0) |
+                    superframeStartRequest->parameters.panCoordinator : panCoordinator;
+    uint8_t finalCapSlot = 15;
+    if (beaconPanCoordinator && beaconOrder < 15 && superframeOrder < 15)
+        for (const auto& grant : ledger->getGrants())
+            finalCapSlot = std::min(finalCapSlot,uint8_t(grant.start - 1));
+    content.superframeSpecification = beaconOrder | (superframeOrder << 4) | (finalCapSlot << 8) |
+            (batteryLifeExtension ? 0x1000 : 0) | (beaconPanCoordinator ? 0x4000 : 0) |
             (getBoolean("macAssociationPermit") ? 0x8000 : 0);
+    if (beaconPanCoordinator && beaconOrder < 15) {
+        content.gtsPermit = getBoolean("macGtsPermit");
+        std::vector<Ieee802154GtsDescriptor> descriptors;
+        for (const auto& advertisement : ledger->getAdvertisements())
+            descriptors.push_back({advertisement.key.shortAddress,advertisement.start,advertisement.length,advertisement.key.direction});
+        content.setGtsDescriptors(descriptors);
+    }
     content.payload = std::get<std::vector<uint8_t>>(*pib->get("macBeaconPayload").value);
-    auto overhead = size_t(7 + (frame->getSourceAddress().isShort() ? 2 : 8) + 4);
-    if (content.payload.size() > 127 - overhead)
-        return nullptr;
+    auto overhead = size_t(7 + (frame->getSourceAddress().isShort() ? 2 : 8) + 4 +
+            (content.gtsDescriptors.empty() ? 0 : 1 + content.gtsDescriptors.size()));
+    if (!content.gtsDescriptors.empty()) {
+        size_t pendingBytes = 0;
+        for (const auto& address : pending->addresses(frame->getSourcePanId(),simTime()))
+            pendingBytes += address.isShort() ? 2 : 8;
+        if (overhead + content.payload.size() + pendingBytes > 127)
+            content.payload.clear();
+    }
+    if (content.payload.size() > 127 - overhead) {
+        if (content.gtsDescriptors.empty())
+            return nullptr;
+        content.payload.clear(); // Mandatory GTS records take precedence over optional beacon payload.
+    }
     content.pendingAddresses = pending->addresses(frame->getSourcePanId(),simTime(),127 - overhead - content.payload.size());
     auto bytes = Ieee802154BeaconCodec::encode(content);
     if (bytes.size() + 7 + (frame->getSourceAddress().isShort() ? 2 : 8) > 127)
@@ -3825,6 +4071,13 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitAssociateResponse(uin
     else if (response.security.securityLevel != 0)
         failure = Ieee802154MacStatus::UNSUPPORTED_SECURITY;
     auto pan = uint16_t(getInteger("macPanId"));
+    auto previous = associatedDevices.find({pan,response.deviceAddress});
+    bool changesBinding = previous != associatedDevices.end() &&
+            (response.associationStatus != 0 || response.shortAddress != previous->second);
+    bool ownsGts = changesBinding && response.deviceAddress.isExtended() &&
+            std::any_of(gtsManager.getGrants().begin(),gtsManager.getGrants().end(),[&](const auto& grant) {
+                return grant.key.panId == pan && grant.key.extendedAddress == response.deviceAddress.getExtended();
+            });
     if (!failure && response.associationStatus == 0 && response.shortAddress < 0xfffe) {
         for (const auto& [peer,shortAddress] : associatedDevices)
             if (peer.first == pan && shortAddress == response.shortAddress && peer.second != response.deviceAddress)
@@ -3834,6 +4087,9 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitAssociateResponse(uin
         managementClient->handleAssociateResponseStatus(id,{response.deviceAddress,*failure});
         return admission;
     }
+    if (constructedGtsCandidate && phyOperation && phyOperation->purpose == PhyPurpose::SUPERFRAME_TRANSMIT &&
+            !phyOperation->transmitStarted && ownsGts)
+        return Ieee802154MacServiceAdmission::BUSY;
     auto frame = makeShared<Ieee802154Frame>();
     frame->setFrameType(3);
     frame->setFrameVersion(1);
@@ -3859,6 +4115,15 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitAssociateResponse(uin
     else
         associatedDevices.erase({pan,response.deviceAddress});
     pib->set("macDsn",uint64_t((frame->getDsn() + 1) & 255));
+    if (ownsGts) {
+        auto grants = gtsManager.getGrants();
+        for (const auto& grant : grants) {
+            if (grant.key.panId == pan && grant.key.extendedAddress == response.deviceAddress.getExtended())
+                removeGtsGrant(grant.key);
+            if (!pendingOriginals.count(id))
+                return admission;
+        }
+    }
     expirePending();
     return admission;
 }
@@ -4087,6 +4352,17 @@ void Ieee802154StandardMac::cleanupAssociation(uint16_t panId, const std::option
 {
     bool outerRetirement = retiringRequests;
     retiringRequests = true;
+    bool affectsCandidate = constructedGtsCandidate && (!peer || (peer->isExtended() &&
+            std::any_of(gtsManager.getGrants().begin(),gtsManager.getGrants().end(),[&](const auto& grant) {
+                return grant.key.panId == panId && grant.key.extendedAddress == peer->getExtended();
+            })));
+    if (affectsCandidate && phyOperation && phyOperation->purpose == PhyPurpose::SUPERFRAME_TRANSMIT && !phyOperation->transmitStarted) {
+        auto operationId = phyOperation->id;
+        phyOperation.reset();
+        constructedGtsCandidate.reset();
+        phy->cancel(operationId);
+        failSuperframeStart(Ieee802154MacServiceAbortReason::STOPPED);
+    }
     bool active = transaction && (!peer || (transaction->pendingDevice ?
             *transaction->pendingDevice == std::make_pair(panId,*peer) :
             transaction->frame->getDestinationPanId() == panId && canonicalAddress(panId,transaction->frame->getDestinationAddress()) == *peer));
@@ -4102,9 +4378,16 @@ void Ieee802154StandardMac::cleanupAssociation(uint16_t panId, const std::option
     schedulePendingExpiry();
     for (const auto& [token,original] : originals)
         delete original.msdu;
+    if (peer && peer->isExtended()) {
+        auto grants = gtsManager.getGrants();
+        for (const auto& grant : grants)
+            if (grant.key.panId == panId && grant.key.extendedAddress == peer->getExtended())
+                removeGtsGrant(grant.key);
+    }
     if (peer)
         associatedDevices.erase({panId,*peer});
     else {
+        gtsManager.clear();
         pendingPanConflict.reset();
         broadcastReceivePending = false;
         autoPollPending.reset();
@@ -4125,6 +4408,8 @@ void Ieee802154StandardMac::cleanupAssociation(uint16_t panId, const std::option
         else
             completePoll(Ieee802154MacServiceAbortReason::DISASSOCIATED);
     }
+    if (!peer && gtsRequest)
+        completeGts(Ieee802154MacServiceAbortReason::DISASSOCIATED);
     for (const auto& [token,original] : originals)
         reportPendingResult(token,original,started ? Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::DISASSOCIATED) :
                 Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::STOPPED));
@@ -4173,7 +4458,8 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitOrphanResponse(uint64
 
 void Ieee802154StandardMac::transmitOrphanResponse(const physicallayer::Ieee802154PhyChannel& channel)
 {
-    const auto& request = orphanResponseRequest->parameters;
+    auto requestId = orphanResponseRequest->id;
+    auto request = orphanResponseRequest->parameters;
     auto pan = uint16_t(getInteger("macPanId"));
     auto frame = makeShared<Ieee802154Frame>();
     frame->setFrameType(3);
@@ -4189,9 +4475,20 @@ void Ieee802154StandardMac::transmitOrphanResponse(const physicallayer::Ieee8021
     frame->setPayloadArraySize(content.size());
     for (size_t i = 0; i < content.size(); ++i) frame->setPayload(i,content[i]);
     Ieee802154FrameCodec::finalize(*frame);
+    auto oldBinding = associatedDevices.find({pan,request.orphanAddress});
+    bool changedBinding = oldBinding != associatedDevices.end() && oldBinding->second != request.shortAddress;
     associatedDevices[{pan,request.orphanAddress}] = request.shortAddress;
     pib->set("macDsn",uint64_t((frame->getDsn() + 1) & 255));
-    transaction = Transaction{orphanResponseRequest->id,nullptr,0,frame};
+    if (changedBinding) {
+        auto grants = gtsManager.getGrants();
+        for (const auto& grant : grants) {
+            if (grant.key.panId == pan && grant.key.extendedAddress == request.orphanAddress.getExtended())
+                removeGtsGrant(grant.key);
+            if (!orphanResponseRequest || orphanResponseRequest->id != requestId || !started || resetRequest)
+                return;
+        }
+    }
+    transaction = Transaction{requestId,nullptr,0,frame};
     transaction->kind = Transaction::Kind::ORPHAN_RESPONSE;
     startData();
 }
@@ -4242,6 +4539,49 @@ bool Ieee802154StandardMac::receiveManagedBeacon(const Ptr<Ieee802154Frame>& fra
     }
     if (receiveEpoch != receiveRetirementEpoch)
         return true;
+    if (located && descriptor->contentAvailable && parentAssociated) {
+        auto shortAddress = uint16_t(getInteger("macShortAddress"));
+        auto extended = std::get<Ieee802154Address>(*pib->get("macExtendedAddress").value).getExtended();
+        for (const auto& advertised : descriptor->beacon.getGtsDescriptors()) {
+            if (advertised.shortAddress != shortAddress)
+                continue;
+            Ieee802154GtsManager::Key key{uint16_t(getInteger("macPanId")),extended,shortAddress,advertised.direction};
+            auto current = gtsManager.findGrant(key);
+            if (!current)
+                continue;
+            auto grant = *current;
+            if (!advertised.start) {
+                gtsManager.removeGrant(key);
+                if (managementClient)
+                    managementClient->handleGtsIndication({Ieee802154Address::fromShort(shortAddress),{grant.length,grant.key.direction,false}});
+                if (receiveEpoch != receiveRetirementEpoch)
+                    return true;
+            }
+            else if (advertised.length == grant.length && advertised.start + advertised.length <= 16 && advertised.start != grant.start) {
+                grant.start = advertised.start;
+                gtsManager.putGrant(grant);
+            }
+        }
+    }
+    if (located && descriptor->contentAvailable && gtsRequest && gtsRequest->waiting &&
+            descriptor->coordinatorPanId == getInteger("macPanId")) {
+        auto requested = gtsRequest->request.characteristics;
+        auto shortAddress = uint16_t(getInteger("macShortAddress"));
+        for (const auto& grant : descriptor->beacon.getGtsDescriptors()) {
+            if (grant.shortAddress != shortAddress || grant.direction != requested.direction)
+                continue;
+            auto result = grant.start && grant.length == requested.length ? Ieee802154MacStatus::SUCCESS : Ieee802154MacStatus::DENIED;
+            if (result == Ieee802154MacStatus::SUCCESS) {
+                auto extended = std::get<Ieee802154Address>(*pib->get("macExtendedAddress").value).getExtended();
+                if (!gtsManager.putGrant({{uint16_t(getInteger("macPanId")),extended,shortAddress,grant.direction},grant.start,grant.length}))
+                    result = Ieee802154MacStatus::DENIED;
+            }
+            completeGts(result);
+            if (receiveEpoch != receiveRetirementEpoch)
+                return true;
+            break;
+        }
+    }
     if (located && anchor && descriptor->contentAvailable) {
         auto specification = descriptor->beacon.superframeSpecification;
         auto geometry = Ieee802154SuperframeTiming::geometry(specification & 15, (specification >> 4) & 15);
@@ -4459,8 +4799,178 @@ bool Ieee802154StandardMac::consumeReceiverWindow()
 Ieee802154MacServiceAdmission Ieee802154StandardMac::submitGts(uint64_t id, const Ieee802154MacGtsRequest& request)
 {
     Enter_Method("submitGts");
-    auto admission = admitRadio(id,true,true);
-    return admission == Ieee802154MacServiceAdmission::ACCEPTED ? Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION : admission;
+    auto admission = admitRadio(id);
+    if (admission != Ieee802154MacServiceAdmission::ACCEPTED)
+        return admission;
+    if (!par("enableManagement").boolValue() || !managementClient || !superframe || !slottedAccess || !phy || !request.characteristics.allocate)
+        return Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION;
+    if (gtsRequest)
+        return Ieee802154MacServiceAdmission::BUSY;
+    auto shortAddress = getInteger("macShortAddress");
+    auto result = Ieee802154MacStatus::SUCCESS;
+    if (shortAddress >= 0xfffe)
+        result = Ieee802154MacStatus::NO_SHORT_ADDRESS;
+    else if (!request.characteristics.length || request.characteristics.length > 15 || uint8_t(request.characteristics.direction) > 1)
+        result = Ieee802154MacStatus::INVALID_PARAMETER;
+    else if (request.security.securityLevel)
+        result = Ieee802154MacStatus::UNSUPPORTED_SECURITY;
+    if (result != Ieee802154MacStatus::SUCCESS) {
+        managementClient->handleGtsConfirm(id,{request.characteristics,result});
+        return admission;
+    }
+    if (!parentAssociated || !getBoolean("macAssociatedPanCoord") || !synchronization || !synchronization->installed ||
+            !synchronization->request.trackBeacon || !synchronization->anchored || !incomingSuperframe || !incomingSuperframe->panCoordinator)
+        return Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION;
+    auto frame = makeShared<Ieee802154Frame>();
+    frame->setFrameType(3);
+    frame->setFrameVersion(0);
+    frame->setDsn(getInteger("macDsn"));
+    frame->setSourceAddress(Ieee802154Address::fromShort(shortAddress));
+    frame->setSourcePanId(getInteger("macPanId"));
+    frame->setAckRequest(true);
+    auto content = Ieee802154CommandCodec::encode(Ieee802154CommandCodec::GtsRequest{request.characteristics});
+    frame->setPayloadArraySize(content.size());
+    for (size_t i = 0; i < content.size(); ++i) frame->setPayload(i,content[i]);
+    Ieee802154FrameCodec::finalize(*frame);
+    pib->set("macDsn",uint64_t((frame->getDsn() + 1) & 255));
+    gtsRequest = GtsRequestState{id,request};
+    transaction = Transaction{id,nullptr,0,frame};
+    transaction->kind = Transaction::Kind::GTS_REQUEST;
+    startData();
+    return admission;
+}
+
+void Ieee802154StandardMac::completeGts(const Ieee802154MacServiceResult& result)
+{
+    if (!gtsRequest)
+        return;
+    auto completed = *gtsRequest;
+    gtsRequest.reset();
+    cancelEvent(gtsTimer);
+    if (managementClient)
+        managementClient->handleGtsConfirm(completed.id,{completed.request.characteristics,result});
+}
+
+void Ieee802154StandardMac::decideGts(const Ieee802154GtsManager::Key& key, const Ieee802154GtsCharacteristics& characteristics)
+{
+    auto membership = associatedDevices.find({key.panId,Ieee802154Address::fromExtended(key.extendedAddress)});
+    if (!panCoordinator || !periodicBeaconing || !outgoingEpoch || outgoingEpoch->superframeOrder >= 15 ||
+            key.panId != getInteger("macPanId") || membership == associatedDevices.end() || membership->second != key.shortAddress ||
+            !getBoolean("macGtsPermit") || gtsManager.findGrant(key) || !gtsManager.canReserve(key))
+        return;
+    unsigned int used = 0;
+    for (const auto& grant : gtsManager.getGrants()) used += grant.length;
+    uint8_t maximum = 0;
+    for (unsigned int length = 1; length + used < 16; ++length) {
+        auto candidate = gtsManager;
+        auto start = uint8_t(16 - used - length);
+        if (!candidate.putGrant({key,start,uint8_t(length)}) || !candidate.advertise(key,start,length))
+            break;
+        candidate.clearAdvertisements();
+        auto beacon = makeBeacon(getInteger("macPanId"),outgoingEpoch->beaconOrder,outgoingEpoch->superframeOrder,
+                outgoingEpoch->batteryLifeExtension,false,&candidate);
+        if (!beacon)
+            break;
+        auto ordinaryDuration = Ieee802154ExchangeTiming::ppduDuration(beacon->getChunkLength(),phy->getTimingParameters());
+        if (gtsPhysicalCapDuration(outgoingEpoch->superframeOrder,16 - used - length) - ordinaryDuration >= SimTime(440 * 16,SIMTIME_US))
+            maximum = length;
+    }
+    bool granted = characteristics.length <= maximum;
+    auto start = granted ? uint8_t(16 - used - characteristics.length) : uint8_t(0);
+    auto length = granted ? characteristics.length : maximum;
+    if (granted && !gtsManager.putGrant({key,start,length}))
+        return;
+    if (!gtsManager.advertise(key,start,length)) {
+        if (granted) gtsManager.removeGrant(key);
+        return;
+    }
+    if (gtsManager.reservedCount() >= 7)
+        pib->set("macGtsPermit",false);
+    if (granted && managementClient)
+        managementClient->handleGtsIndication({Ieee802154Address::fromShort(key.shortAddress),characteristics});
+}
+
+void Ieee802154StandardMac::removeGtsGrant(const Ieee802154GtsManager::Key& key)
+{
+    auto grant = gtsManager.findGrant(key);
+    if (!grant)
+        return;
+    auto length = grant->length;
+    removeGtsFromLedger(gtsManager,key);
+    if (managementClient)
+        managementClient->handleGtsIndication({Ieee802154Address::fromShort(key.shortAddress),{length,key.direction,false}});
+}
+
+void Ieee802154StandardMac::removeGtsFromLedger(Ieee802154GtsManager& ledger, const Ieee802154GtsManager::Key& key)
+{
+    auto grant = ledger.findGrant(key);
+    if (!grant)
+        return;
+    auto length = grant->length;
+    ledger.removeGrant(key);
+    if (!ledger.advertise(key,0,length))
+        throw cRuntimeError("Cannot retain IEEE 802.15.4 GTS removal descriptor");
+    unsigned int used = 0;
+    auto grants = ledger.getGrants();
+    for (auto grant : grants) {
+        used += grant.length;
+        auto start = uint8_t(16 - used);
+        if (start != grant.start) {
+            grant.start = start;
+            if (!ledger.putGrant(grant) || !ledger.advertise(grant.key,grant.start,grant.length))
+                throw cRuntimeError("Cannot retain IEEE 802.15.4 GTS relocation descriptor");
+        }
+    }
+}
+
+void Ieee802154StandardMac::maintainGtsCapacity(uint8_t superframeOrder)
+{
+    while (!gtsManager.getGrants().empty()) {
+        auto ordinaryLedger = gtsManager;
+        ordinaryLedger.clearAdvertisements();
+        auto beacon = makeBeacon(getInteger("macPanId"),getInteger("macBeaconOrder"),superframeOrder,
+                getBoolean("macBattLifeExt"),false,&ordinaryLedger);
+        if (!beacon)
+            return;
+        auto ordinaryDuration = Ieee802154ExchangeTiming::ppduDuration(beacon->getChunkLength(),phy->getTimingParameters());
+        unsigned int used = 0;
+        for (const auto& grant : gtsManager.getGrants()) used += grant.length;
+        if (gtsPhysicalCapDuration(superframeOrder,16 - used) - ordinaryDuration >= SimTime(440 * 16,SIMTIME_US))
+            return;
+        auto key = gtsManager.getGrants().back().key;
+        auto epoch = receiveRetirementEpoch;
+        removeGtsGrant(key);
+        if (!started || resetRequest || !periodicBeaconing || !panCoordinator || epoch != receiveRetirementEpoch)
+            return;
+    }
+}
+
+void Ieee802154StandardMac::ageGtsEpoch(clocktime_t boundary)
+{
+    if (!lastGtsAgedBoundary || boundary > *lastGtsAgedBoundary) {
+        gtsManager.ageAdvertisements();
+        lastGtsAgedBoundary = boundary;
+    }
+}
+
+simtime_t Ieee802154StandardMac::gtsPhysicalCapDuration(uint8_t superframeOrder, unsigned int slots, bool immediate, std::optional<clocktime_t> target) const
+{
+    if (superframeOrder >= 15)
+        return SIMTIME_ZERO;
+    auto now = superframe->getCurrentClockTime();
+    auto anchor = target.value_or(now);
+    if (!target && !immediate && periodicTarget && outgoingEpoch) {
+        anchor = *periodicTarget;
+        if (anchor <= now) {
+            auto interval = SIMTIME_AS_CLOCKTIME(SimTime((int64_t(960) << outgoingEpoch->beaconOrder) * 16,SIMTIME_US));
+            auto elapsed = CLOCKTIME_AS_SIMTIME(now - anchor).raw();
+            auto period = CLOCKTIME_AS_SIMTIME(interval).raw();
+            anchor += interval * (elapsed / period + 1);
+        }
+    }
+    auto physicalStart = anchor > now ? superframe->getFutureSimulationTime(anchor) : simTime();
+    auto duration = SimTime((int64_t(60) << superframeOrder) * slots * 16,SIMTIME_US);
+    return superframe->getFutureSimulationTime(anchor + SIMTIME_AS_CLOCKTIME(duration)) - physicalStart;
 }
 
 Ieee802154MacServiceAdmission Ieee802154StandardMac::submitRxEnable(uint64_t id, const Ieee802154MacRxEnableRequest& request)
