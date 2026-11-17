@@ -1,0 +1,93 @@
+%description:
+TLS handshake content encodings and malformed-length rejection.
+
+%includes:
+#include "../DtlsTestAssertions.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/transportlayer/tls/TlsClientHello_m.h"
+
+using namespace inet;
+using namespace inet::tls;
+
+%activity:
+auto tls = makeShared<TlsClientHello>();
+tls->setCipherSuitesArraySize(1);
+tls->setCipherSuites(0, 0x1301);
+tls->setCompressionMethodsArraySize(1);
+tls->setCompressionMethods(0, 0);
+tls->setChunkLength(B(43));
+Packet tlsPacket("tls", tls);
+auto tlsBytes = tlsPacket.peekAtFront<BytesChunk>(B(43));
+DTLS_TEST_CHECK(tlsBytes->getByte(34) == 0);
+DTLS_TEST_CHECK(tlsBytes->getByte(35) == 0);
+DTLS_TEST_CHECK(tlsBytes->getByte(36) == 2);
+auto inconsistentHello = makeShared<TlsClientHello>();
+inconsistentHello->setCipherSuitesArraySize(1);
+inconsistentHello->setCipherSuites(0, 0x1301);
+inconsistentHello->setCompressionMethodsArraySize(1);
+inconsistentHello->setCompressionMethods(0, 0);
+inconsistentHello->setChunkLength(B(44));
+Packet inconsistentHelloPacket("inconsistent native ClientHello", inconsistentHello);
+bool nativeHelloRejected = false;
+try { inconsistentHelloPacket.peekAtFront<BytesChunk>(B(44)); }
+catch (const cRuntimeError&) { nativeHelloRejected = true; }
+// Keep this check active under NDEBUG: release serialization must reject it too.
+if (!nativeHelloRejected)
+    throw cRuntimeError("Native TLS body length mismatch was accepted");
+nativeHelloRejected = false;
+try { inconsistentHelloPacket.peekAtFront<BytesChunk>(B(44)); }
+catch (const cRuntimeError&) { nativeHelloRejected = true; }
+if (!nativeHelloRejected)
+    throw cRuntimeError("Repeated native TLS body length mismatch was accepted");
+
+// An empty CertificateRequest extensions vector has a two-byte zero length.
+auto request = makeShared<TlsCertificateRequest>();
+request->setChunkLength(B(3));
+Packet requestPacket("request", request);
+auto requestBytes = requestPacket.peekAtFront<BytesChunk>(B(3));
+DTLS_TEST_CHECK(requestBytes->getByte(0) == 0);
+DTLS_TEST_CHECK(requestBytes->getByte(1) == 0);
+DTLS_TEST_CHECK(requestBytes->getByte(2) == 0);
+Packet requestInput("request input", requestBytes);
+auto decodedRequest = requestInput.popAtFront<TlsCertificateRequest>(B(3));
+DTLS_TEST_CHECK(decodedRequest->getExtensionsArraySize() == 0);
+auto server = makeShared<TlsServerHello>();
+server->setChunkLength(B(40));
+Packet serverPacket("ServerHello", server);
+auto serverBytes = serverPacket.peekAtFront<BytesChunk>(B(40));
+DTLS_TEST_CHECK(serverBytes->getByte(34) == 0);
+DTLS_TEST_CHECK(serverBytes->getByte(35) == 0x13 && serverBytes->getByte(36) == 1);
+DTLS_TEST_CHECK(serverBytes->getByte(37) == 0 && serverBytes->getByte(39) == 0);
+auto certificate = makeShared<TlsCertificate>();
+certificate->setCertificateListArraySize(3);
+certificate->setCertificateList(0, 0x11);
+certificate->setCertificateList(1, 0x22);
+certificate->setCertificateList(2, 0x33);
+certificate->setChunkLength(B(7));
+Packet certificatePacket("Certificate", certificate);
+auto certificateBytes = certificatePacket.peekAtFront<BytesChunk>(B(7));
+DTLS_TEST_CHECK(certificateBytes->getBytes() == std::vector<uint8_t>({0, 0, 0, 3, 0x11, 0x22, 0x33}));
+Packet certificateInput("Certificate input", certificateBytes);
+DTLS_TEST_CHECK(certificateInput.popAtFront<TlsCertificate>(B(7))->getCertificateList(2) == 0x33);
+auto signature = makeShared<TlsCertificateVerify>();
+signature->setSignatureScheme(0x0403);
+signature->setSignatureArraySize(1);
+signature->setSignature(0, 0xa5);
+signature->setChunkLength(B(5));
+Packet signaturePacket("CertificateVerify", signature);
+DTLS_TEST_CHECK(signaturePacket.peekAtFront<BytesChunk>(B(5))->getBytes() == std::vector<uint8_t>({4, 3, 0, 1, 0xa5}));
+auto update = makeShared<TlsKeyUpdate>();
+update->setRequestUpdate(1);
+Packet updatePacket("KeyUpdate", update);
+DTLS_TEST_CHECK(updatePacket.peekAtFront<BytesChunk>(B(1))->getByte(0) == 1);
+const std::vector<uint8_t> truncatedRequest = {0, 0, 1};
+Packet malformedRequest("truncated extensions", makeShared<BytesChunk>(truncatedRequest));
+bool rejected = false;
+try { malformedRequest.popAtFront<TlsCertificateRequest>(B(3)); }
+catch (const cRuntimeError&) { rejected = true; }
+DTLS_TEST_CHECK(rejected);
+EV << "TLS handshake content PASS\n";
+
+%contains: stdout
+TLS handshake content PASS
