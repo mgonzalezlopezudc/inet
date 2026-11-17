@@ -19,16 +19,19 @@
 #include "inet/queueing/contract/IActivePacketSource.h"
 
 namespace inet { namespace lowpan {
+class LowpanSourceFragmentation;
 
 // IPv6 adaptation with optional mesh-under transit before endpoint reassembly.
 class INET_API LowpanLayer : public OperationalMixin<queueing::PacketProcessorBase>, public queueing::IActivePacketSource
 {
+    friend class LowpanSourceFragmentation;
   protected:
     queueing::PassivePacketSinkRef consumer;
     ILowpanLink *link = nullptr;
     NetworkInterface *networkInterface = nullptr;
     std::unique_ptr<LowpanReassemblyTable> reassembly;
     LowpanDatagramTagAllocator tagAllocator;
+    std::unique_ptr<LowpanSourceFragmentation> sourceFragments;
     LowpanContextTable compressionContexts;
     std::array<bool, 16> configuredContexts{};
     simtime_t reassemblyTimeout;
@@ -99,6 +102,7 @@ class INET_API LowpanLayer : public OperationalMixin<queueing::PacketProcessorBa
             bool allowCompression, simtime_t compressionUntil, simtime_t validUntil);
 
   public:
+    LowpanLayer();
     virtual ~LowpanLayer();
     // Prefix replacement invalidates partial RX; refresh of the same prefix
     // changes future lookup eligibility without changing reconstructed bytes.

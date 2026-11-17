@@ -1,0 +1,236 @@
+%description:
+Native source pacing through real boundary, queue, MAC and radio. Actual matched
+ACKs gate continuation; retained originals are bounded and exact bytes reassemble.
+Control/broadcast keep immediate timing. The ACK-loss case uses a test-only MAC
+receive filter after real ACK reception; it changes no production retry behavior.
+
+%extraargs: -r 0..27
+
+%file: PacedCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/checksum/Checksum.h"
+#include "inet/common/lifecycle/LifecycleController.h"
+#include "inet/common/lifecycle/NodeStatus.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/lowpan/LowpanLayer.h"
+#include "inet/linklayer/lowpan/LowpanNativeMac.h"
+#include "inet/linklayer/lowpan/LowpanPacketDropDetails_m.h"
+#include "inet/linklayer/lowpan/LowpanTransmissionReq_m.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameHeader_m.h"
+#include "inet/networklayer/common/NextHopAddressTag_m.h"
+#include "inet/networklayer/ipv6/Ipv6Header_m.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmission.h"
+namespace inet::protocoltest {
+using namespace lowpan;
+class AdmissionPacket : public Packet {
+  public:
+    static std::set<const Packet *> alive;
+    explicit AdmissionPacket(const char *name):Packet(name){alive.insert(this);}
+    AdmissionPacket(const AdmissionPacket& other):Packet(other){alive.insert(this);}
+    AdmissionPacket *dup()const override{return new AdmissionPacket(*this);}
+    ~AdmissionPacket(){alive.erase(this);}
+};
+std::set<const Packet *> AdmissionPacket::alive;
+class AdmissionReader : public cListener {
+  public:
+    int reads=0;
+    int *priorReads=nullptr;
+    void receiveSignal(cComponent*,simsignal_t,cObject*object,cObject*)override {
+        auto packet=static_cast<Packet *>(object); // No dynamic_cast dereference before the lifetime check.
+        ASSERT(AdmissionPacket::alive.count(packet));
+        ASSERT(priorReads&&*priorReads==reads+1);
+        ASSERT(packet->getDataLength()==B(1280)&&packet->peekDataAsBytes()->getBytes()[0]==0x60);
+        reads++;
+    }
+};
+class PacedLossMac : public LowpanNativeMac {
+    void handleLowerPacket(Packet *packet) override {
+        auto bytes=packet->peekDataAsBytes()->getBytes();
+        auto check=getSimulation()->getSystemModule()->getSubmodule("check");
+        if(check->par("scenario").intValue()==2 && getContainingNode(this)->getIndex()==0 && bytes.size()==5 && bytes[0]==2){
+            emit(registerSignal("testAckDropped"),1L);delete packet;return;
+        }
+        LowpanNativeMac::handleLowerPacket(packet);
+    }
+};
+Define_Module(PacedLossMac);
+class PacedCheck : public cSimpleModule, public LifecycleController, public cListener {
+    cModule *node=nullptr,*layer=nullptr,*receiver=nullptr;
+    int scenario=0,delivered=0,accepted=0,resource=0,failed=0,wire=0,ackDrops=0;
+    int nhcFirst=0,udpFirstEnd=0;
+    std::vector<simtime_t> sent,completed,failTimes;
+    std::map<int64_t,uint16_t> frames;
+    std::map<uint16_t,simtime_t> lastCompletion;
+    std::map<uint16_t,int> offsets;
+    std::set<uint16_t> tags;
+    std::vector<std::vector<uint8_t>> expected;
+    bool immediate()const{return (scenario>=9 && scenario<=16)||scenario==25;}
+    bool restart()const{return scenario==6||scenario==7||scenario==19||(scenario>=20&&scenario<=24)||scenario==27;}
+    bool observerStopped=false;
+    AdmissionReader laterAdmissionReader;
+    opp_component_ptr<cModule> admissionPublisher;
+    int admissionReads=0;
+    int control()const {switch(scenario){case 9:return 135;case 12:return 134;case 13:return 136;case 14:return 157;case 15:return 158;case 16:return 137;case 25:return 133;default:return 0;}}
+    uint16_t udpChecksum(const std::vector<uint8_t>& bytes)const{
+        std::vector<uint8_t> pseudo(bytes.begin()+8,bytes.begin()+40);int length=bytes.size()-40;
+        pseudo.insert(pseudo.end(),{0,0,uint8_t(length>>8),uint8_t(length),0,0,0,17});
+        pseudo.insert(pseudo.end(),bytes.begin()+40,bytes.end());return internetChecksum(pseudo.data(),pseudo.size());
+    }
+    std::vector<uint8_t> original(int marker){
+        int size=scenario==17?2047:((scenario==3||scenario==4)?320:1280);
+        std::vector<uint8_t> bytes(size,uint8_t(marker));
+        bytes[0]=0x60;bytes[1]=bytes[2]=bytes[3]=0;bytes[4]=(size-40)>>8;bytes[5]=size-40;
+        bytes[6]=control()?(scenario==16?0:58):59;bytes[7]=64;
+        std::fill(bytes.begin()+8,bytes.begin()+40,0);
+        const uint8_t prefix[]={0x20,1,0x0d,0xb8,0,1,0,0};
+        std::copy(prefix,prefix+8,bytes.begin()+8);std::copy(prefix,prefix+8,bytes.begin()+24);
+        bytes[23]=1;bytes[39]=2;
+        if(scenario==10){std::fill(bytes.begin()+24,bytes.begin()+40,0);bytes[24]=0xff;bytes[25]=2;bytes[39]=1;}
+        if(control()){
+            if(scenario==16){const uint8_t hbh[]={58,0,1,4,0,0,0,0};std::copy(hbh,hbh+8,bytes.begin()+40);bytes[48]=control();}
+            else bytes[40]=control();
+        }
+        if(scenario==26){
+            bytes[6]=17;bytes[40]=0xf0;bytes[41]=0xb1;bytes[42]=0xf0;bytes[43]=0xb2;
+            bytes[44]=(size-40)>>8;bytes[45]=size-40;bytes[46]=bytes[47]=0;
+            for(int i=48;i<size;i++)bytes[i]=uint8_t(37*i+11);
+            auto checksum=udpChecksum(bytes);if(checksum==0)checksum=0xffff;
+            bytes[46]=checksum>>8;bytes[47]=checksum;ASSERT(udpChecksum(bytes)==0);
+        }
+        return bytes;
+    }
+    void offer(int marker){auto bytes=original(marker);expected.push_back(bytes);auto name="paced-data-"+std::to_string(marker);Packet *packet=scenario==27?new AdmissionPacket(name.c_str()):new Packet(name.c_str());packet->insertAtBack(makeShared<BytesChunk>(bytes));
+        packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ipv6);
+        packet->addTag<NextHopAddressReq>()->setNextHopAddress(Ipv6Address("2001:db8:1::2"));
+        sendDirect(packet,node->getSubmodule("nic")->gate("upperLayerIn"));}
+    void operation(bool start,bool crash=false){LifecycleOperation *op=start?static_cast<LifecycleOperation *>(new ModuleStartOperation):crash?static_cast<LifecycleOperation *>(new ModuleCrashOperation):static_cast<LifecycleOperation *>(new ModuleStopOperation);LifecycleOperation::StringMap params;op->initialize((scenario>=20&&scenario<=24)?node->getSubmodule("nic")->getSubmodule("mac"):node,params);initiateOperation(op);}
+  protected:
+    ~PacedCheck(){if(admissionPublisher)admissionPublisher->unsubscribe("datagramAccepted",&laterAdmissionReader);}
+    int numInitStages()const override{return NUM_INIT_STAGES;}
+    void initialize(int stage)override {
+        if(stage!=INITSTAGE_LAST)return;scenario=par("scenario");node=getModuleByPath("^.node[0]");layer=node->getSubmodule("nic")->getSubmodule("lowpan");receiver=getModuleByPath("^.node[1].nic.lowpan");
+        for(auto name:{"fragmentSent","nativeFrameTransmissionSucceeded","nativeFrameTransmissionFailed","packetDropped","datagramAccepted"})layer->subscribe(name,this);
+        if(scenario==27){admissionPublisher=layer;laterAdmissionReader.priorReads=&admissionReads;admissionPublisher->subscribe("datagramAccepted",&laterAdmissionReader);}
+        node->getSubmodule("nic")->getSubmodule("radio")->subscribe("transmissionStarted",this);
+        node->getSubmodule("nic")->getSubmodule("mac")->subscribe("testAckDropped",this);
+        if(scenario==1)check_and_cast<physicallayer::IRadio *>(getModuleByPath("^.node[1].nic.radio"))->setRadioMode(physicallayer::IRadio::RADIO_MODE_OFF);
+        scheduleAt(SimTime(.1),new cMessage("offer",0));
+        if(restart()){if(scenario!=19&&scenario!=22&&scenario!=27)scheduleAt(SimTime(scenario>=23?.2:scenario>=20?.1001:.25),new cMessage("stop",1));scheduleAt(SimTime(.4),new cMessage("start",2));scheduleAt(SimTime(.5),new cMessage("fresh",3));}
+        scheduleAt(SimTime(scenario==17?15:8),new cMessage("finish",4));
+    }
+    void receiveSignal(cComponent*,simsignal_t,long,cObject*)override {ackDrops++;}
+    void receiveSignal(cComponent*,simsignal_t signal,cObject*object,cObject*details)override {
+        Enter_Method_Silent();
+        if(signal==registerSignal("transmissionStarted")){auto packet=check_and_cast<physicallayer::ITransmission*>(object)->getPacket();auto bytes=packet->peekDataAsBytes()->getBytes();if((bytes[0]&7)==1){wire++;int fcf=bytes[0]|(bytes[1]<<8);int start=((fcf>>10)&3)==3?21:15;ASSERT(bytes.size()>size_t(start+5));if(!immediate()&&(bytes[start]&0xf8)==0xe0){auto tag=uint16_t((bytes[start+2]<<8)|bytes[start+3]);ASSERT(lastCompletion.count(tag));ASSERT(simTime()>=lastCompletion.at(tag)+SimTime(.5));}
+            if(scenario==26&&(bytes[start]&0xf8)==0xc0){
+                // Independent fixed wire vector: TF=11,NH=1,HLIM=64; full stateless addresses; UDP P=11,C=0.
+                ASSERT(bytes[start+4]==0x7e&&bytes[start+5]==0&&bytes[start+38]==0xf3&&bytes[start+39]==0x12);
+                const auto& original=expected.front();ASSERT(std::equal(original.begin()+8,original.begin()+40,bytes.begin()+start+6));
+                ASSERT(bytes[start+40]==original[46]&&bytes[start+41]==original[47]);
+                int payload=bytes.size()-2-(start+42);ASSERT(payload>0);
+                ASSERT(std::equal(bytes.begin()+start+42,bytes.end()-2,original.begin()+48));
+                udpFirstEnd=48+payload;ASSERT(udpFirstEnd%8==0);nhcFirst++;
+            }}return;}
+        if(signal==registerSignal("datagramAccepted")){accepted++;if(scenario==27){auto packet=static_cast<Packet *>(object);ASSERT(AdmissionPacket::alive.count(packet));if(!observerStopped){observerStopped=true;operation(false);}ASSERT(AdmissionPacket::alive.count(packet));ASSERT(packet->peekDataAsBytes()->getBytes()==expected.back());admissionReads++;}return;}
+        if(signal==registerSignal("packetDropped")){auto detail=dynamic_cast<LowpanPacketDropDetails*>(details);if(!detail){ASSERT(scenario==18);return;}if(detail->getLowpanReason()==LOWPAN_RESOURCE_LIMIT)resource++;else {ASSERT(detail->getLowpanReason()==(scenario==5?LOWPAN_LOWER_LIFETIME_EXPIRED:LOWPAN_SOURCE_ABORTED));failed++;failTimes.push_back(simTime());}return;}
+        auto packet=check_and_cast<Packet*>(object);
+        if(signal==registerSignal("fragmentSent")){
+            auto bytes=packet->peekDataAsBytes()->getBytes();ASSERT(bytes.size()>5 && (bytes[0]&0xd8)==0xc0);
+            auto tag=uint16_t((bytes[2]<<8)|bytes[3]);bool first=(bytes[0]&0xf8)==0xc0;int offset=first?0:8*bytes[4];
+            if(!immediate() && offset!=0){ASSERT(lastCompletion.count(tag));ASSERT(simTime()>=lastCompletion.at(tag)+SimTime(.5));}
+            if(first)ASSERT(!tags.count(tag));else ASSERT(offset>offsets.at(tag));
+            if(scenario==26&&offset!=0&&offsets.at(tag)==0)ASSERT(udpFirstEnd==offset);
+            offsets[tag]=offset;tags.insert(tag);frames[packet->getId()]=tag;sent.push_back(simTime());
+            if(scenario==5)ASSERT(packet->getTag<LowpanTransmissionReq>()->getDeliveryDeadline()<=SimTime(.9));
+            if(scenario==19&&!observerStopped){observerStopped=true;operation(false);}
+            return;
+        }
+        if(signal==registerSignal("nativeFrameTransmissionSucceeded")){ASSERT(frames.count(packet->getId()));lastCompletion[frames.at(packet->getId())]=simTime();completed.push_back(simTime());if(scenario==22&&!observerStopped){observerStopped=true;operation(false);}}
+        else ASSERT(signal==registerSignal("nativeFrameTransmissionFailed"));
+    }
+    void handleMessage(cMessage*message)override {
+        if(message->isSelfMessage()){int kind=message->getKind();delete message;if(kind==4){endSimulation();return;}if(kind==1){if(scenario>=23)ASSERT(completed.size()==1 && sent.size()==1);operation(false,scenario==7||scenario==21||scenario==24);return;}if(kind==2){operation(true);return;}offer(kind==3?2:1);if(kind==0&&(scenario==3||scenario==4))offer(3);return;}
+        auto packet=check_and_cast<Packet*>(message);auto bytes=packet->peekDataAsBytes()->getBytes();ASSERT(std::find(expected.begin(),expected.end(),bytes)!=expected.end());
+        if(scenario==26)ASSERT(bytes[6]==17&&udpChecksum(bytes)==0);
+        if(restart())ASSERT(bytes.back()==2);delivered++;delete packet;
+    }
+    void finish()override {
+        if(scenario==1||scenario==2){ASSERT(delivered==0&&sent.size()==1&&failed==1&&wire==2);if(scenario==2)ASSERT(ackDrops==2);}
+        else if(scenario==5){ASSERT(delivered==0&&sent.size()==2&&failed==1&&failTimes==std::vector<simtime_t>{SimTime(.9)});}
+        else if(scenario==3||scenario==4){ASSERT(delivered==1&&accepted==1&&resource==1&&failed==0);}
+        else if(scenario==27){ASSERT(delivered==1&&accepted==2&&tags==std::set<uint16_t>{1}&&resource==0&&failed==0&&admissionReads==2&&laterAdmissionReader.reads==2&&AdmissionPacket::alive.empty());}
+        else if(restart()){ASSERT(delivered==1&&accepted==2&&tags.size()==2&&resource==0&&failed==((scenario==20||scenario==21)?1:0));if(scenario==20||scenario==21)ASSERT(failTimes.front()<SimTime(.2));}
+        else if(scenario==18){ASSERT(delivered==0&&accepted==1&&sent.size()==1&&failed==1&&wire==0);}
+        else {ASSERT(delivered==1&&accepted==1&&resource==0&&failed==0);}
+        if(immediate())ASSERT(sent.back()-sent.front()<SimTime(.1));
+        else if(scenario==0||scenario==8||scenario==17||scenario==26){ASSERT(sent.size()>10 && sent.back()-sent.front()>SimTime(5));}
+        if(scenario==26)ASSERT(nhcFirst==1&&udpFirstEnd>48&&completed.size()==sent.size());
+        std::cout<<"case="<<scenario<<" admitted="<<accepted<<" fragments="<<sent.size()<<" completed="<<completed.size()<<" delivered="<<delivered<<" resource="<<resource<<" failed="<<failed<<" wire="<<wire<<" ackDrops="<<ackDrops<<" tags="<<tags.size()<<'\n';
+        if(scenario==26)std::cout<<"udp-nhc-first="<<nhcFirst<<" original-header=48 first-original-end="<<udpFirstEnd<<'\n';
+        if(scenario==27)std::cout<<"admission-first-reader="<<admissionReads<<" later-reader="<<laterAdmissionReader.reads<<" live-packets="<<AdmissionPacket::alive.size()<<'\n';
+        std::cout<<"Paced source ACK barriers, bounded ownership and native byte delivery verified\n";
+    }
+};
+Define_Module(PacedCheck);
+}
+
+%file: test.ned
+@namespace(inet::protocoltest);
+import inet.common.lifecycle.NodeStatus;
+import inet.networklayer.common.InterfaceTable;
+import inet.mobility.static.StationaryMobility;
+import inet.linklayer.lowpan.Ieee802154NativeLowpanInterface;
+import inet.linklayer.lowpan.LowpanNativeMac;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple PacedLossMac extends LowpanNativeMac {@class(PacedLossMac);@lifecycleSupport;}
+simple PacedCheck {parameters:int scenario;gates:input in[2];}
+module PacedNode {
+    parameters:@networkNode;
+    gates:output out;
+    submodules:
+        status:NodeStatus;
+        interfaceTable:InterfaceTable;
+        mobility:StationaryMobility;
+        nic:Ieee802154NativeLowpanInterface {interfaceTableModule="^.interfaceTable";linkDomainModule="^.^.domain";}
+    connections allowunconnected:nic.upperLayerOut --> out;
+}
+network PacedNetwork {
+    submodules:
+        radioMedium:Ieee802154NarrowbandScalarRadioMedium;
+        domain:LowpanNativeLinkDomain;
+        node[2]:PacedNode;
+        check:PacedCheck;
+    connections allowunconnected:node[0].out --> check.in[0];node[1].out --> check.in[1];
+}
+
+%inifile: omnetpp.ini
+[General]
+network=PacedNetwork
+seed-set=0
+*.check.scenario=${case=0..27}
+**.vector-recording=false
+**.scalar-recording=false
+**.lowpan.headerCompression="iphc"
+*.node[0].nic.lowpan.nativeFragmentPacing=${case}!=11
+*.node[0].nic.lowpan.maxPacedSourceDatagrams=(${case}==3 || ${case}>=20) ? 1 : 64
+*.node[0].nic.lowpan.maxPacedSourceBytes=${case}==4 ? 500B : (${case}>=20 ? 1280B : 32768B)
+*.node[0].nic.lowpan.sourceFragmentResidence=${case}==5 ? 0.8s : 20s
+*.node[0].nic.mac.typename="PacedLossMac"
+**.mac.macMinBE=0
+**.mac.macMaxBE=0
+**.mac.macMaxFrameRetries=1
+*.node[0].nic.queue.packetCapacity=${case}==18 ? 0 : 64
+*.domain.panId=4660
+*.domain.config=xml("<domain><peer interface='node[0].nic' native='0011223344556601'/><peer interface='node[1].nic' native='0011223344556602'/><neighbor interface='node[0].nic' ipv6='2001:db8:1::2' native='0011223344556602'/></domain>")
+**.lowpan.compressionContexts=xml(${case}==8 ? "<contexts><context id='5' prefix='2001:db8:1::' prefixLength='64' validUntil='0.2s'/></contexts>" : "<contexts/>")
+**.radio.antenna.mobilityModule="^.^.^.mobility"
+**.mobility.initialX=0m
+**.mobility.initialY=0m
+**.mobility.initialZ=0m
+**.mobility.initFromDisplayString=false
+**.mobility.updateFromDisplayString=false
+
+%contains: stdout
+Paced source ACK barriers, bounded ownership and native byte delivery verified

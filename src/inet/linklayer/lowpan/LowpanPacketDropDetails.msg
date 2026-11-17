@@ -20,6 +20,7 @@ enum LowpanDropReason
     LOWPAN_BROADCAST_SEQUENCE_EXHAUSTED = 12;
     LOWPAN_UNSUPPORTED_PAGE = 13;
     LOWPAN_UNSUPPORTED_EXTENSION = 14;
+    LOWPAN_SOURCE_ABORTED = 15;
 }
 
 class LowpanPacketDropDetails extends inet::PacketDropDetails
