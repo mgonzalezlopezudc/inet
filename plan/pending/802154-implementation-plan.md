@@ -597,7 +597,7 @@ to the corresponding claim, even if the broad regression suite passes.
 These are scoped follow-on packages, not promises hidden inside M1/M2. Before starting one,
 repeat step 0 for its requirements and expand it into PR-sized tasks.
 
-Approved execution plans cover [B1–B3: beacons, slotted access and GTS](802154-superframe-gts-plan.md) and [E1: version-2 frames and Information Elements](802154-enhanced-frames-plan.md). B1–B3 are implemented and their conventional-profile regression is retained in the [execution record](../../doc/project/evidence/model/ieee802154/followup-results.md#b-99-conventional-profile-closure). E1 is executing; that record distinguishes completed structural stages from pending operational services. The plans define source-grounded ownership, ordered commits, exact tests/reviewer documents and acceptance gates. Scheduled enhanced-beacon/GTS integration reuses the completed B1–B3 owners.
+The approved [B1–B3 plan](802154-superframe-gts-plan.md) and [E1 plan](802154-enhanced-frames-plan.md) are implemented and verified for their selected profiles. The [execution record](../../doc/project/evidence/model/ieee802154/followup-results.md#e1-99-publication-closure) distinguishes protocol passes, source review and mechanical-gate limits. Scheduled enhanced operation reuses the B1–B3 epoch and grant owners. S1, T1, D1, P1 and A1 below remain separate, unexecuted packages.
 
 | Package | Prerequisites | Work and acceptance gate |
 | --- | --- | --- |

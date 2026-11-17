@@ -1,0 +1,1246 @@
+{
+  "kind": "generated verification record; do not edit by hand",
+  "scope": "Selected B1/B2/B3 and E1 profiles",
+  "source_commit": "480c71eaaedf55b8147c20e2e44ac15ed2d2990c",
+  "source_mac_sha256": "d2ace33acb091c5c29a5115ede3da0688628cc81091398d8b99b81455f610d01",
+  "debug_library_sha256": "077f5e8092ce172ffb04f0812a6ff1cd336aae9b64eecb075a54a70d891490af",
+  "retained_artifact_root": "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116",
+  "native_source_and_fixture_sha256": {
+    "src/inet/linklayer/ieee802154/CSMA-FSM.png": "515f410f3c8431424a33e5fb8cccf2d36eee9aa57ace216be1ee9ee29d28b696",
+    "src/inet/linklayer/ieee802154/Ieee802154Address.cc": "0e2b9ca0bb0fc089f25a2bd42d283445c73257a7d55c0647787d034935862e15",
+    "src/inet/linklayer/ieee802154/Ieee802154Address.h": "f032bf1afa3f679d0b999021f9570ecd6823bb05721ea8f901c40d99984f4290",
+    "src/inet/linklayer/ieee802154/Ieee802154Address.msg": "599a79d4e46fde675a2be5bfab8d977338f015ca9362755db3998b7aac4bd820",
+    "src/inet/linklayer/ieee802154/Ieee802154Address_m.cc": "1b706f7394cd8453c9e8ce8fa5a20c0542dca2527fb8a91f8da5a7aa8fa4fda7",
+    "src/inet/linklayer/ieee802154/Ieee802154Address_m.h": "d46904ee0eefbe2203a638672593eabc0daf7d0c4611a4d0ed88ca2c55d72676",
+    "src/inet/linklayer/ieee802154/Ieee802154BeaconCodec.cc": "8899faa314a3215e39e6ed06f3222dda671f94e7e21cdbde59a87b57dee5757c",
+    "src/inet/linklayer/ieee802154/Ieee802154BeaconCodec.h": "5513b969872ad14e2456305f6a4f9045083d54be169b45a3df04068b5577efa3",
+    "src/inet/linklayer/ieee802154/Ieee802154CommandCodec.cc": "60540302780a4d58ebe96a3558cd17aacc6b75b762e494423adffc6cd8210e61",
+    "src/inet/linklayer/ieee802154/Ieee802154CommandCodec.h": "b1e6bbb8f4d57ae07e76ea965b2d8d8412d808deb899ceed12486fe480593314",
+    "src/inet/linklayer/ieee802154/Ieee802154EnhancedSuperframeCodec.cc": "15ae9f8fbb71069ba0acaaf11114559b0cc8bf2d63f65489de348d8e5c3b765a",
+    "src/inet/linklayer/ieee802154/Ieee802154EnhancedSuperframeCodec.h": "d858fcf5aa9d50c467c2c2ccb9a94f89446d62f8e12cf4d10fd2cc8c76e4e6fd",
+    "src/inet/linklayer/ieee802154/Ieee802154ExchangeTiming.cc": "726d8ef94021c4f046b3a7d50f4b8584f2930decacc3ec157b7542acf757c6b2",
+    "src/inet/linklayer/ieee802154/Ieee802154ExchangeTiming.h": "bb7975669d56df80f0ab59b73380bfee480b33fe1b73d5ca81fd3127b9f187fc",
+    "src/inet/linklayer/ieee802154/Ieee802154Frame.msg": "605717c35db7f5bcbf1855a7a36a3d888d657ddaed3581c3d7bd542c79199383",
+    "src/inet/linklayer/ieee802154/Ieee802154FrameCodec.cc": "54874d3cd0cc21fec02aa7c075a932b556216c41762fb7ad2db7ddfd97f85fa3",
+    "src/inet/linklayer/ieee802154/Ieee802154FrameCodec.h": "58a3c86e88784049b247573d3923a0abe6dbe2d652b68d3dd03bae80ff70dff2",
+    "src/inet/linklayer/ieee802154/Ieee802154FrameLayout.h": "5accce34821775b009c5f066974f2194e197d0bc1a9aceba5e5550efe1ebaa35",
+    "src/inet/linklayer/ieee802154/Ieee802154FrameSerializer.cc": "3c75ae057a3beba786d7d639998b5cd0531cc7c7ce96cc44c1683b1d836d5b5a",
+    "src/inet/linklayer/ieee802154/Ieee802154FrameSerializer.h": "be1e79fe37356ecab9a77ee911b07f261e8a21487fa46196837f0e3da0dfe065",
+    "src/inet/linklayer/ieee802154/Ieee802154Frame_m.cc": "2147191f1e01a9011fe3cd985e1c497d56baeabd619b9afeb04d2562206dcb1e",
+    "src/inet/linklayer/ieee802154/Ieee802154Frame_m.h": "426dba299125f7a8e56b76acfa7c3b2f145b8371c547408962c966d3e2163020",
+    "src/inet/linklayer/ieee802154/Ieee802154GtsManager.cc": "27cbffbdd8cdaf3c8971726233502688d958b6b076f389377ce10a5cfb76d36f",
+    "src/inet/linklayer/ieee802154/Ieee802154GtsManager.h": "1422cde08cb45bbe3823246521f3e4b29f7872dc06e5fff4270e92b629403520",
+    "src/inet/linklayer/ieee802154/Ieee802154GtsValues.h": "a0d5969e282037f6f85d24c2c84ed29e90c127b4ba2a1777d11ebe19cd3b27d8",
+    "src/inet/linklayer/ieee802154/Ieee802154InformationElements.cc": "cb06eb510b734e27ef2c759d4ce1fff36f452ee52be72e227ae4d04ca2dbb67c",
+    "src/inet/linklayer/ieee802154/Ieee802154InformationElements.h": "dc7659d6f6790b50fc9ef74a6c3bb99d3a36d52be58332d45c28d5a1f05d0430",
+    "src/inet/linklayer/ieee802154/Ieee802154InterfaceData.cc": "206fe3ffef95facd55b691631d49b953889a7fef330a92dc081d3afeb71a787b",
+    "src/inet/linklayer/ieee802154/Ieee802154InterfaceData.h": "7ee7fedefd78d8461e92446ff6557352a50ad7a4935a2ff7823979b06c20c1b6",
+    "src/inet/linklayer/ieee802154/Ieee802154LegacyNarrowbandInterface.ned": "3982c7ec15123601a9012f5117c34f41981a9b99d9f73efa0c69bd0f4f9f8507",
+    "src/inet/linklayer/ieee802154/Ieee802154Mac.cc": "0c360c39d3ec123694b69a7e2f989335a22eef657ad302b111751c9910b9222f",
+    "src/inet/linklayer/ieee802154/Ieee802154Mac.h": "cddd7f24afb4ff3bea4feb039b7ac0e98b1f0d2061b899c0c352e67d3d8797b8",
+    "src/inet/linklayer/ieee802154/Ieee802154Mac.ned": "05cd8d72bbfeb573d50ea1eefe0712488db6df8bdf340d18f057f754e4e1e214",
+    "src/inet/linklayer/ieee802154/Ieee802154MacAssociateRequest.h": "d350313bd4e051d8e0303f8c76bad2444e4a5e2665eb455f3a2d22bfe3e9f7e9",
+    "src/inet/linklayer/ieee802154/Ieee802154MacAssociateResponse.h": "216be12fc3f247a01838872f2aed4171a1bd6d0e295baa4eaddc8977e382a898",
+    "src/inet/linklayer/ieee802154/Ieee802154MacBeaconRequest.h": "1a8955d66c77708892302e08bb07c8eb7f6670382301d63ca53166dabf87914d",
+    "src/inet/linklayer/ieee802154/Ieee802154MacDataRequest.h": "8abd39dda149d60c6ca0ea544aed6c3502579524524cfdfa5f9cea232cb1ed8f",
+    "src/inet/linklayer/ieee802154/Ieee802154MacDisassociateRequest.h": "544f0eaea32135d09668cb03a39241d1486bbb748fd3ba90f166f5604b8b3c0a",
+    "src/inet/linklayer/ieee802154/Ieee802154MacGetRequest.h": "71926f85bfec011f0f44025a6d22055ecc57b6eba1263b9ab519c3c2e32849e3",
+    "src/inet/linklayer/ieee802154/Ieee802154MacGtsRequest.h": "523fba21f944f66f7c0feeae4a24a62d6b6734316ffdd5c8ba177aea5637b39d",
+    "src/inet/linklayer/ieee802154/Ieee802154MacHeader.msg": "82b379cf4863c6d85ec7a59b1fd6fe9a88797e30ec908748b0c39c057bccd6ca",
+    "src/inet/linklayer/ieee802154/Ieee802154MacHeaderSerializer.cc": "147d758978594cee74e0b2f03b0c013312aa4471fcd71f3937680ddca84a2723",
+    "src/inet/linklayer/ieee802154/Ieee802154MacHeaderSerializer.h": "2007c4d41ae29cba183661fa16a480ac41c2c90ac5565a29557de52304ddfdf2",
+    "src/inet/linklayer/ieee802154/Ieee802154MacHeader_m.cc": "8568d01766706d96644d4ba49327dcb969e6e1b29dc0f82e9370b0d583b58a6d",
+    "src/inet/linklayer/ieee802154/Ieee802154MacHeader_m.h": "32645b04e092752404fa6be41c358ac258f5d6a5d2811b3e2444fbe3a6b7ed51",
+    "src/inet/linklayer/ieee802154/Ieee802154MacObservations.h": "fcf1bb7c773539387d5dd9d962f32331c8a24ef0e231bdaade39a00f37a13583",
+    "src/inet/linklayer/ieee802154/Ieee802154MacOrphanResponse.h": "abefa2ddacc8a94227d4fb24c3ae14a0b3f7b3a9479140432819ec31bb38448a",
+    "src/inet/linklayer/ieee802154/Ieee802154MacPib.cc": "662c15301d5703414b090e6646d50303e5058e9bf7ba6b8afa8212eb86cc3de1",
+    "src/inet/linklayer/ieee802154/Ieee802154MacPib.h": "7a55682a34df21beadfeb607a0efcda5b02745045fdaed28c6f9cc5a01efb3fc",
+    "src/inet/linklayer/ieee802154/Ieee802154MacPollRequest.h": "6efc7cf14b76c7df5b1cf764a49fadea4ce5075436f1f1586a76f653a54f4acd",
+    "src/inet/linklayer/ieee802154/Ieee802154MacRxEnableRequest.h": "39eb79422b8ac167d42a4ba5cf92119a4bd9f283522127abcd091abaf4760a43",
+    "src/inet/linklayer/ieee802154/Ieee802154MacScanRequest.h": "9b95bc721057addccdf1804de90a501c58e474ca5dce17fe480842aba15da200",
+    "src/inet/linklayer/ieee802154/Ieee802154MacServiceAdapter.cc": "8ceec297e4313f4c4b17027e121486064c006bb0c3d868c20d00b75eaa6ebe5f",
+    "src/inet/linklayer/ieee802154/Ieee802154MacServiceAdapter.h": "35e50ebe37e4b0be6e129e986e1a2764bb54a72fad205d3cbdfa01337ad0557b",
+    "src/inet/linklayer/ieee802154/Ieee802154MacServiceAdapter.ned": "0e9f5d7bfea63b8f413e5b4e23c41bd3f9ef030e8487e4482ae62f1b71af6532",
+    "src/inet/linklayer/ieee802154/Ieee802154MacServiceResult.h": "0b443cbbd011e287fb7eaa3afb000ecc15fb7b8b9d797acf8c2959ea4d0fd5f9",
+    "src/inet/linklayer/ieee802154/Ieee802154MacServiceTag.cc": "cb0874dd7871fc5a73f5b987d0cf047874fd0a1753ad1e1bb16a43ebd424be39",
+    "src/inet/linklayer/ieee802154/Ieee802154MacServiceTag.h": "04d8489e08d14d5b0a283375ff4a6d114d90291086053ba2e91b728f975d3383",
+    "src/inet/linklayer/ieee802154/Ieee802154MacStartRequest.h": "5e6451ccb12f41c95088fa1e234a36b3de9e9daa6783ab283f48eabd9569bb3a",
+    "src/inet/linklayer/ieee802154/Ieee802154MacStartSuperframeRequest.h": "35652c02b68cb3038b406ae175506ebb1e315634d0de946714c13838352a29d3",
+    "src/inet/linklayer/ieee802154/Ieee802154MacSyncRequest.h": "339e3cc4565e855f9fda9d347b7a44a9dd33bf655238c21bb456aeb1411e6a52",
+    "src/inet/linklayer/ieee802154/Ieee802154NarrowbandInterface.ned": "b5b89b0400c40568a2237b72b7cefdaa2925f5166b8b3883332f5e8347a81a56",
+    "src/inet/linklayer/ieee802154/Ieee802154NarrowbandMac.ned": "58d042033ff1561a3c71c212672659d1b5453f0d03c07d64e92e1beeca68a649",
+    "src/inet/linklayer/ieee802154/Ieee802154NedFunctions.cc": "1e5f4ae430d9b29f0d56cc901bbc85c3139c9f71b377eb676c5558bd1e5bfde1",
+    "src/inet/linklayer/ieee802154/Ieee802154PendingTransactions.cc": "ea8d35bc692fd55a86cdeeb4abed30afad8aa8eb881a4a5d7de355fc1a403b40",
+    "src/inet/linklayer/ieee802154/Ieee802154PendingTransactions.h": "46db2974320d7ac9073a4e258ce61983a523d5022f933d9d30cafbf3a0e5d44f",
+    "src/inet/linklayer/ieee802154/Ieee802154ProtocolDissector.cc": "c368de5935700f88989965206be22a13866971e5f8490e3ea1dd20e2abd3f94e",
+    "src/inet/linklayer/ieee802154/Ieee802154ProtocolDissector.h": "83c3ccff3f47c8db293ff81be7cc58a2a3d04db1f17580168245aa8f4fa7511e",
+    "src/inet/linklayer/ieee802154/Ieee802154ProtocolPrinter.cc": "60f8c5bf61be932cf31382c79ee73df3ca1a96aabedc4402c6696647a3b87990",
+    "src/inet/linklayer/ieee802154/Ieee802154SlottedAccess.cc": "640e72e1dd330d9f9f708e436bee99d9a700c263bfc538ac24abb9b42ca1763b",
+    "src/inet/linklayer/ieee802154/Ieee802154SlottedAccess.h": "e351829a29108108eb98adbe4e03e3fde22ffe75b8acb12b989cea18429d8b39",
+    "src/inet/linklayer/ieee802154/Ieee802154SlottedAccess.ned": "9cc2acf5401baa2020eea9bd462e8d4e7165f8b8241339b13ab17969529fbb4a",
+    "src/inet/linklayer/ieee802154/Ieee802154StandardInterface.ned": "c6fe5ca0c9d0627c65cb247199e1775a85137d5e0a1b5bb3535748c34c99ffcb",
+    "src/inet/linklayer/ieee802154/Ieee802154StandardMac.cc": "d2ace33acb091c5c29a5115ede3da0688628cc81091398d8b99b81455f610d01",
+    "src/inet/linklayer/ieee802154/Ieee802154StandardMac.h": "de368d360767ed3205c7411626be10516c6db391364e8b6794b929ef4a69efb1",
+    "src/inet/linklayer/ieee802154/Ieee802154StandardMac.ned": "16b9bc1c507f8aa048b8a9990de21ec8a6da84a389a916e519f9058a1eece078",
+    "src/inet/linklayer/ieee802154/Ieee802154SuperframeController.cc": "afb507ff13a250367c67ea63e01592d9e952d1f56d259aa31d41954815995224",
+    "src/inet/linklayer/ieee802154/Ieee802154SuperframeController.h": "f93c0d6240d021fe1154572f1aa9177b7b4e90536157184a43b86f4e480f0bc9",
+    "src/inet/linklayer/ieee802154/Ieee802154SuperframeController.ned": "13564ff80661fbd7abf8213cf32508b81d3a886755eb4fd4d6a00d2263c1de28",
+    "src/inet/linklayer/ieee802154/Ieee802154SuperframeTiming.cc": "d8b7d7195ef8be3a983d475ba403626e6da173eeba2614a1e1df79c30fcf013f",
+    "src/inet/linklayer/ieee802154/Ieee802154SuperframeTiming.h": "a39469f13c50725e7f10eaac4e62257348b86be8b7f0fd621ae4a0d267c38bc3",
+    "src/inet/linklayer/ieee802154/Ieee802154UnslottedAccess.cc": "9971e1e382ace10bc41452c0c053687a785ab0e47899abab666b98b626738f34",
+    "src/inet/linklayer/ieee802154/Ieee802154UnslottedAccess.h": "3b626a13e645d6a883be0936573c116a4208e7ebb2067f870d9b098874913f9d",
+    "src/inet/linklayer/ieee802154/Ieee802154UnslottedAccess.ned": "429098fb1a11a5cc47980f0fa7bf191eb2d7e18d6f16bdc96d68e4b9f7dc5509",
+    "src/inet/linklayer/ieee802154/Ieee802154UwbIrInterface.ned": "422ccdc98c9ed63f004ed96cb34e799b93b27fb50d87a0f24f76b52b3569f892",
+    "src/inet/linklayer/ieee802154/contract/IIeee802154AccessClient.h": "68de29cb2c583b01374086f60b6011a52337af7d47b379092ef0232d07bee83b",
+    "src/inet/linklayer/ieee802154/contract/IIeee802154AccessClient.ned": "9cd3c13754f8d217dffec7cf9f73f1374448a55fa2118f16a8e9cca3e1c5a169",
+    "src/inet/linklayer/ieee802154/contract/IIeee802154AccessProvider.h": "909f4d8e2a447e30079e73b73f8f82e7f694064f8865907547a00717de807e03",
+    "src/inet/linklayer/ieee802154/contract/IIeee802154AccessProvider.ned": "ec99bff03a6a44f3445cd8e96987b187fdc86365eaf96a7940d1c097b0fd7ea1",
+    "src/inet/linklayer/ieee802154/contract/IIeee802154MacServiceClient.h": "700826988fd9018b700b27844f657aaa003c644ad52d94fc93633a02969f9260",
+    "src/inet/linklayer/ieee802154/contract/IIeee802154MacServiceClient.ned": "d031f005d60ab1d914a3c414c5c199d6d90f88b756806ec28f7ab24a5a07e01d",
+    "src/inet/linklayer/ieee802154/contract/IIeee802154MacServiceProvider.h": "b9251680824e579193f2a4e866fef242a35aaf83493a514ffbc2c5a379b34463",
+    "src/inet/linklayer/ieee802154/contract/IIeee802154MacServiceProvider.ned": "a1d013ecc3cac17b472ec7a030940765e00198f8267c8b7ce7efad8e9346133f",
+    "src/inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceClient.h": "31db7bfa6051ae2e7ae60ebe63efc11ca9f6aca49f894a80ac1423186daf3025",
+    "src/inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceClient.ned": "068ee1b57d6c941ea1e33106a314643362b08296526354eacc39f0674d467643",
+    "src/inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceProvider.h": "953f3920f00c8153d0a1b3b0dc3821d3180b45e771ecf90f04736481f21f250a",
+    "src/inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceProvider.ned": "93a1ecc5d2317f5177194fbab0753db7fa9880675122f11e49be1f4ff89c930c",
+    "src/inet/linklayer/ieee802154/contract/IIeee802154SuperframeClient.h": "2a1712bbc12b10de624250c110c20691b23d0ed250bb49e3a5d14dc2e00cae16",
+    "src/inet/linklayer/ieee802154/contract/IIeee802154SuperframeClient.ned": "dcf747a4216f7f9fc2c9336499927f851daa362ad91bcf126c9cf1d3c90a2ecd",
+    "src/inet/linklayer/ieee802154/contract/IIeee802154SuperframeProvider.h": "0a0bcbc635a7470eef66eea3107c08cbad895191a06bf8ec1bad4ea1cbaf5505",
+    "src/inet/linklayer/ieee802154/contract/IIeee802154SuperframeProvider.ned": "b5078e9711ec21fa5b88e367d840eb7cea98f92f9359d76cd7fe7336bdbc6a7c",
+    "src/inet/physicallayer/wireless/ieee802154/Ieee802154EnergyObservation.cc": "ebb1046b7e21bcfebef1938124d811d6eaad69fd6aed05276cd668c1b5aabfe2",
+    "src/inet/physicallayer/wireless/ieee802154/Ieee802154EnergyObservation.h": "5c0efce6a8e27d82998ae1d8261aef08b3cd4a76cad31441a929b10d57ee3ed1",
+    "src/inet/physicallayer/wireless/ieee802154/Ieee802154PhyService.cc": "4271ac79aae6e01fb4333fa918480e08968f89d8e01b778b1caab3fdf2bc309f",
+    "src/inet/physicallayer/wireless/ieee802154/Ieee802154PhyService.h": "647c4ef0c141845a3d184836e8a2d74c352db28be5ae77ca44f7c41c471ffdaa",
+    "src/inet/physicallayer/wireless/ieee802154/Ieee802154PhyService.ned": "79523ac051014c4c2c370b99e35f7fa86382a4e756eed8d3a9009f41531630af",
+    "src/inet/physicallayer/wireless/ieee802154/bitlevel/Ieee802154UwbIrMode.cc": "343c34c481cba77c002eba9e15e6f914dc92bf2c608d2aa6579df19e732d4f93",
+    "src/inet/physicallayer/wireless/ieee802154/bitlevel/Ieee802154UwbIrMode.h": "1afda7b09e9900ffe5ff358425fe20bb7d9530dcbe28de4efe7567b79dc3cbe7",
+    "src/inet/physicallayer/wireless/ieee802154/bitlevel/Ieee802154UwbIrRadio.ned": "228f2d32c79fe76b07be49cadef7ab9f292b12dd6ee7b24d2f5bd7942a0251ed",
+    "src/inet/physicallayer/wireless/ieee802154/bitlevel/Ieee802154UwbIrRadioMedium.ned": "a4f4b37199d1b34b40940b3c86a969eb546d5a0b98be140a7762392c3c5de5ce",
+    "src/inet/physicallayer/wireless/ieee802154/bitlevel/Ieee802154UwbIrReceiver.cc": "ac93dfb62fa223cda1755600f992342894a7c41c849ef71e43d2a60ba5cc2e1b",
+    "src/inet/physicallayer/wireless/ieee802154/bitlevel/Ieee802154UwbIrReceiver.h": "b1738dc8beba0d879ab2b97aeebee9dbf33e9cb6a97181d3d8eab95f96736f6e",
+    "src/inet/physicallayer/wireless/ieee802154/bitlevel/Ieee802154UwbIrReceiver.ned": "2328057b3aa24de8d58a4e65749370900f76b0eb4d1b0074c82b8bc1ccc466a0",
+    "src/inet/physicallayer/wireless/ieee802154/bitlevel/Ieee802154UwbIrTransmitter.cc": "2f471556b43cd4a2f3b00addda0f776b942396fa622a8ed7be8f94a6d333d97e",
+    "src/inet/physicallayer/wireless/ieee802154/bitlevel/Ieee802154UwbIrTransmitter.h": "f8742f23cc59de30bdd5f0d464776f2b1c6225fffe23ac9c1e3a3e1ac8315bb3",
+    "src/inet/physicallayer/wireless/ieee802154/bitlevel/Ieee802154UwbIrTransmitter.ned": "8c72bcb05405ea22a4c1882a1dcf72fdf90054359553a7a3f5229ef44a980d96",
+    "src/inet/physicallayer/wireless/ieee802154/contract/IIeee802154PhyServiceClient.h": "6ad8379e1e31dd94b16def8d84d5d155a6d998e8133bb1a8d8fadbbfa951d486",
+    "src/inet/physicallayer/wireless/ieee802154/contract/IIeee802154PhyServiceClient.ned": "83390572cb994e270460b424f36e73ba5b19cccf58094572433cbf5abd040262",
+    "src/inet/physicallayer/wireless/ieee802154/contract/IIeee802154PhyServiceProvider.h": "649738518cc4cd2bf94cf19fe96e581873cd2bc0a548579f1a82e5f267a1660b",
+    "src/inet/physicallayer/wireless/ieee802154/contract/IIeee802154PhyServiceProvider.ned": "628258602d233bbb916d02c0cee0feb3dc17622c7dfea622d0eee7f555c3def4",
+    "src/inet/physicallayer/wireless/ieee802154/contract/Ieee802154PhyServicePrimitives.h": "1f6836e626039f9a5084528e079f9a238d71b74321f4cd8127a1b2a9bc5ffeed",
+    "src/inet/physicallayer/wireless/ieee802154/contract/Ieee802154PhyServiceResult.h": "67fb6e45ac42c3ea9e050ee4d58a0de254e0a9128b825104bdbf00060f93c780",
+    "src/inet/physicallayer/wireless/ieee802154/packetlevel/Ieee802154NarrowbandDimensionalRadio.ned": "c485a808e278f8645aa8f38679013dcfb1b240a391748537f27cc252a23656ea",
+    "src/inet/physicallayer/wireless/ieee802154/packetlevel/Ieee802154NarrowbandDimensionalRadioMedium.ned": "0e3ac4c859b631ce55cd445d8c8e2215cc980516606933a3127f89d411318ca9",
+    "src/inet/physicallayer/wireless/ieee802154/packetlevel/Ieee802154NarrowbandRadio.ned": "300d03259d73694c8a91b9a45fae8c6438844ea14f4b7612932835701f23a432",
+    "src/inet/physicallayer/wireless/ieee802154/packetlevel/Ieee802154NarrowbandReceiver.cc": "a4a30fdef6f93cabd0f3306fac2c8a504a58022dd31da095c3295e1e40e8efb7",
+    "src/inet/physicallayer/wireless/ieee802154/packetlevel/Ieee802154NarrowbandReceiver.h": "da7a5e236e7c774af3defbf6e52db7b90ca9518d27e05e9eb16315f0bb6f2b9a",
+    "src/inet/physicallayer/wireless/ieee802154/packetlevel/Ieee802154NarrowbandReceiver.ned": "95822c81606f6e612ec44b5c2d4abaf8de813f3c56e6e9764a48a37123cddf3b",
+    "src/inet/physicallayer/wireless/ieee802154/packetlevel/Ieee802154NarrowbandScalarRadio.ned": "d452a9aafc9772e603e8a1e224c9d929c0f66f08569af3ebfb3db87fb80eedc9",
+    "src/inet/physicallayer/wireless/ieee802154/packetlevel/Ieee802154NarrowbandScalarRadioMedium.ned": "10eb4d60a43678fe4c6fd0d5cfe06f4cbeaeec4dfbddf0f5a9fd29b9c0ab903b",
+    "src/inet/physicallayer/wireless/ieee802154/packetlevel/Ieee802154NarrowbandTransmitter.cc": "e13fc305b11eac977d2a8b112fca060187d0ee0e4fa7f6898972fd15700a90b8",
+    "src/inet/physicallayer/wireless/ieee802154/packetlevel/Ieee802154NarrowbandTransmitter.h": "1992f763fff7e32e88a6d2bdad8de5967e91f89ceb7f53e39b3e72343f5d837b",
+    "src/inet/physicallayer/wireless/ieee802154/packetlevel/Ieee802154NarrowbandTransmitter.ned": "d78ff4f74b0cfb852abf20c80d873b9908317433943a9701529b5ae7cdeb0a61",
+    "src/inet/physicallayer/wireless/ieee802154/packetlevel/Ieee802154NarrowbandUnitDiskRadio.ned": "3d566ab4835bd95fbd0e26769d4591db346b00ca1e493ee3a504e9db0dabeeb8",
+    "src/inet/physicallayer/wireless/ieee802154/packetlevel/Ieee802154StandardRadio.cc": "635b672bf2dd21ba627eaeffae00dd73a6b47359f8a31d1c29919e362de6ed49",
+    "src/inet/physicallayer/wireless/ieee802154/packetlevel/Ieee802154StandardRadio.h": "f0e206eb32c00bdb7549fc4bb89e6d2bd4a662c9f2ca04d9dca0adb3591ab17b",
+    "src/inet/physicallayer/wireless/ieee802154/packetlevel/Ieee802154StandardRadio.ned": "9cdca2bb732b639b789dfc4587aa1d1274a52befa3b6d08c035e777183cba960",
+    "src/inet/physicallayer/wireless/ieee802154/packetlevel/Ieee802154StandardTransmission.cc": "f6464142b00606d429a0b902f1206945c9b4ea4a66e3b43745849709aaeea4c3",
+    "src/inet/physicallayer/wireless/ieee802154/packetlevel/Ieee802154StandardTransmission.h": "cc51034bc75fdebc4d568cf32f72878791cac2f0faf3905cae7bedb09f2c28a9",
+    "src/inet/physicallayer/wireless/ieee802154/packetlevel/Ieee802154StandardTransmitter.cc": "d681761e593d5558bf90854c815e341fc9a9791b7218da3ae22d87741e4165c8",
+    "src/inet/physicallayer/wireless/ieee802154/packetlevel/Ieee802154StandardTransmitter.h": "ef0d291d2cac8910bc559de4deca2524a087113b35e9b6a85f9075e7c547c947",
+    "src/inet/physicallayer/wireless/ieee802154/packetlevel/Ieee802154StandardTransmitter.ned": "ab9286e1260186aab899667371e469b4e1e5114ff87e017315a4c5cc71815437",
+    "src/inet/physicallayer/wireless/ieee802154/packetlevel/Ieee802154Transmission.cc": "9a602bdf6e62f4369c2807ca4f26bde18516244928dc91c7a946e14a724aaf21",
+    "src/inet/physicallayer/wireless/ieee802154/packetlevel/Ieee802154Transmission.h": "30c697759f1787982588ca211d28e8c1c86f45916e8b8c710e861d9e0d1856f1",
+    "src/inet/physicallayer/wireless/ieee802154/packetlevel/errormodel/Ieee802154ErrorModel.cc": "445f048865eed9f20dbcaf008e7698c07ec1e23de0fdaa3e8223f0de8c09ab71",
+    "src/inet/physicallayer/wireless/ieee802154/packetlevel/errormodel/Ieee802154ErrorModel.h": "df2c4062e2a1a59ee63a83f1ae6fd3c7837f4e712a1be42fe1d5e055fd7f4932",
+    "src/inet/physicallayer/wireless/ieee802154/packetlevel/errormodel/Ieee802154ErrorModel.ned": "bfdeaa1e313a30d8c13a48bcef3249c4e6a517896db161bf63206a49b4d118ff",
+    "src/inet/applications/ieee802154/Ieee802154ManagementApp.cc": "8e9d55da92ef6e4927c881dbbab43f358e81311be754a0b12ba7b258a6a58e23",
+    "src/inet/applications/ieee802154/Ieee802154ManagementApp.h": "8d5c990123dd710effa600e48f6b4efec46077900d65129803b4e32b46e1ef90",
+    "src/inet/applications/ieee802154/Ieee802154ManagementApp.ned": "196af16cf56be19f618ccc88f0f65199469f2c66ee50ae52d573b304cd03bad9",
+    "tests/unit/Ieee802154Address_1.test": "11c53e6a83d84bebb621e2fb5abba897b3e29242d073720f26c9a4459b146a51",
+    "tests/unit/Ieee802154Beacons_1.test": "9544af1cbd9e24fdc6819cba64238c9edfce572a17d1bdac07b2a73b87c7d0dd",
+    "tests/unit/Ieee802154Capture_1.test": "1eb6f5d8ea0946d92b99c61bbac03604a6c1294c79194b4b38b03a013cc71e0c",
+    "tests/unit/Ieee802154Commands_1.test": "4b6131efca85a19f1580c8721c8d95dd5b5bd0e1bc800c977f95ef93ce4b895e",
+    "tests/unit/Ieee802154EnhancedPib_1.test": "990cd1e3728b1671dedbe708986151b9b2ba588410d315235a09b06e2a5ebbe8",
+    "tests/unit/Ieee802154ExchangeTiming_1.test": "ae7573cec3e92e959a31f8e8586028354f735ec86e2c016d90c955914c59dfba",
+    "tests/unit/Ieee802154Fcs_1.test": "ca6cfcfd6c9c85179d952bf0b0e5e9b835fa9d5a0771bcceae4e6d98bd966d37",
+    "tests/unit/Ieee802154FrameLayout_1.test": "8cee3ddfcb2c02278549a6a01cf6b8b1c72ec1b98a658be8348f301b3c61eb5d",
+    "tests/unit/Ieee802154FrameWire_1.test": "48bf4f73120329807d9e207cc183043ed92fbd532c9c9eea2941999e75453950",
+    "tests/unit/Ieee802154GtsState_1.test": "7ae63c04f2294754d6b569f9e67447a71e95c46ad5aad9bed2903de6168aedc0",
+    "tests/unit/Ieee802154GtsWire_1.test": "1ab167ed5078d298706cc3df29f71ea89cbd8c37146567c0b0e3a8808fce1289",
+    "tests/unit/Ieee802154InformationElements_1.test": "a0f94506fa881874b161c9de5d26b5b1b7d30cce16f7f406fa03cd68a6e06e58",
+    "tests/unit/Ieee802154MacPib_1.test": "dd91c1211546511925de85e8c8f16da30048e0c2ce110b5a19dc3fa8f4bbd85a",
+    "tests/unit/Ieee802154NestedElements_1.test": "0ca705dc84891d4595aa7cdf69c8dcd00498152912a0010a384bbf58c11d76ec",
+    "tests/unit/Ieee802154PendingTransactions_1.test": "17eedcf9c9a5a7bcfa889e0c19407b218f3fa76a6e50cbd113dcc2509e6f89f3",
+    "tests/unit/Ieee802154SuperframeTiming_1.test": "3dfe33b2e046e2eee5eb5b5f461f4a94416466472244482b688b5d622e16ed6e",
+    "tests/unit/Ieee802154EnhancedSuperframeWire_1.test": "4b007f8ed3077f16a833a317284515f8f7545492b27868278ff93dabc3962619",
+    "tests/module/Ieee802154AccessWindowContract_1.test": "20210965862c9281f3677ca26f4d3d68b12f8ca37f444d9e5945999d1c2c5224",
+    "tests/module/Ieee802154Composition_1.test": "d7eb21573e59ddcf0e81db8833cd54ee6129ce4f8f3a3912c2abf4ce60a010ce",
+    "tests/module/Ieee802154Discovery_1.test": "99ba59429547231b5b1828f4b35cf95f66795f3cd388a3bec8d61df95fd45961",
+    "tests/module/Ieee802154EnergyObservation_1.test": "b1968ba13dad1a550be33ef7b4ecdd92c2a653eab4a0eb6f6690cfcf583f2b1e",
+    "tests/module/Ieee802154EnhancedAckHeaderConfig_1.test": "37c19515579c437c830e046b96c88a097a82ff68b0f1a39ee84d5506556bee4c",
+    "tests/module/Ieee802154EnhancedAckNestedConfig_1.test": "aa0b08fe962556995e9d3968243c1a50099d8a43f7177a8e708bd64467c4bf07",
+    "tests/module/Ieee802154EnhancedAckOversize_1.test": "62ff13be9345747b013023de9115d928669f2da78d98b94a32337ce0c7a1a760",
+    "tests/module/Ieee802154EnhancedAckPayloadConfig_1.test": "83a76353fd4f9ca70a66a464120c7ed341e4e85379879b9421108f34e7cfb0b6",
+    "tests/module/Ieee802154ExternalPhy_1.test": "ba47ee82374f9a5477108ba8fffd742ed50710387166243d92cec59f35228705",
+    "tests/module/Ieee802154GtsAdapter_1.test": "081fd93452323680eb4e2c776a6f797330653575329a09cebad2571748624fbf",
+    "tests/module/Ieee802154GtsServiceContract_1.test": "9ce278f40172b22f36786d657ada438ab4efdd26beb4c6c61a5ca01d802f65b5",
+    "tests/module/Ieee802154LegacyUwb_1.test": "a724db6157b7e11339ab8f09fa193a5956172f2eb67bd0b7f3b8837935a41459",
+    "tests/module/Ieee802154MacServiceContract_1.test": "6523a89aa6fc21b2d417f4361903afaaffc230195dc200836d972a08892c7dd2",
+    "tests/module/Ieee802154Measurements_1.test": "eabb2c2e3eff495701bf4dfd80c30ef038dba56cb8f402cc6eadc4fa5360987c",
+    "tests/module/Ieee802154NativeGate_1.test": "f87d9c3ac222e49a8986d310bf43faa75f46bc1c09b3b9f77a7995b9dcaa830d",
+    "tests/module/Ieee802154NativeInterface_1.test": "081e6385d765e2666f008e19933956e81086a9e1d9a19a499ee3bcfcdcef38e5",
+    "tests/module/Ieee802154PassiveScan_1.test": "6bb48dda9c08083bd6509c413caa903fb6ae04c132ad045409c52dd14a082458",
+    "tests/module/Ieee802154PhyServiceContract_1.test": "66c099adee5a8750dbe333a7a29dec2c0a35e28f43d2cd5bbbb422a9b343a77a",
+    "tests/module/Ieee802154PhyServices_1.test": "6eb9f42af10dad77dbcd2c273b7dac80eff3fac2e29bf29cfac3b6cca253b3d9",
+    "tests/module/Ieee802154SlottedAccess_1.test": "64cc987800d6610ae3f10bb5745eb578010a47bb5f93da560fa52957101dcd76",
+    "tests/module/Ieee802154SlottedBoundaries_1.test": "bc145613d20654b0d071550d3a1277d88692f6a82e3d1be1195600312a2d3aa4",
+    "tests/module/Ieee802154SlottedDeferral_1.test": "70f81e21dbfa78b3025516c18bef7df951d06111557163935b8b9073f195f11f",
+    "tests/module/Ieee802154Start_1.test": "f1b2a5b307bec116621510641c0ce2fc1a5cd449050c43eda74f20d52127ef17",
+    "tests/module/Ieee802154SuperframeController_1.test": "39b9a8be2b248c9d859368ad4a91dc8be9ef25d44ad6a7520bb5d566afb068ec",
+    "tests/module/Ieee802154UnslottedAccess_1.test": "0ee0f77ed24cd8602692cb4056d1799f4eb6baa75d9448f0d3dd30e24b008ea5",
+    "tests/protocol/ieee802154/Ieee802154Admission.test": "052812667dfc767354652ec7a0bac0e75b74efa27cdb67b0ef44eb5f79c79cd3",
+    "tests/protocol/ieee802154/Ieee802154Association.test": "036fd0d6e66a17a5aac84aa00a0cd1cecd62d89718e3f641a7c7bfa3b10b4e51",
+    "tests/protocol/ieee802154/Ieee802154BeaconClock.test": "3e691a116649ae558f0b20217840dc50397d963f6dc18ef31f8b9ea20f71a336",
+    "tests/protocol/ieee802154/Ieee802154BeaconReconfiguration.test": "4837b45b298587a133f42134efa5913d54065608ebc14e5d9d266be32e980d96",
+    "tests/protocol/ieee802154/Ieee802154BeaconSchedule.test": "44934dd65969bc66402d31f14fe487f4b2653a1054317c40e272b088acad3052",
+    "tests/protocol/ieee802154/Ieee802154BeaconSynchronization.test": "6c5aa85aa6057d8c3f9c512d6511e54ad6d6535c4e68d1a8b67c635bc7e1b8fe",
+    "tests/protocol/ieee802154/Ieee802154Broadcast.test": "995c1d9dbb7708ee05113abc83f6988db3c223a85e477cebbe5af6567dc62032",
+    "tests/protocol/ieee802154/Ieee802154Contention.test": "0b3991d5f79908443cdda8042e6691248fb3d16014184a2c2cfe428600257dbc",
+    "tests/protocol/ieee802154/Ieee802154DataAck.test": "73cfebbef087fb1d11719cab38885a3396af0d7a46d620fc6ddb115ee95c588c",
+    "tests/protocol/ieee802154/Ieee802154EnhancedAck.test": "244761a215764b5034db6c67fcad4c38a8fe4dc7fe639eed827cc8bf2c789b15",
+    "tests/protocol/ieee802154/Ieee802154EnhancedAckTiming.test": "310a95cefb78307d92692168982bc7110a20011545b83ef5eae3f4f7e98cb88f",
+    "tests/protocol/ieee802154/Ieee802154EnhancedBeacon.test": "dade3e8cacf531dc853634248ff655ab6d1b2298a251759b49c32484278451d4",
+    "tests/protocol/ieee802154/Ieee802154EnhancedData.test": "32655b6a7e815b2dd03f73d1e7dae79de100a486182ff5cb491cd4ab3c567f53",
+    "tests/protocol/ieee802154/Ieee802154EnhancedFrameGate.test": "eeb8222d9f16cc6ce019cb3d586e8aeceb5fbbd7d53a5046d8e064f36fdbc0fd",
+    "tests/protocol/ieee802154/Ieee802154GtsAllocation.test": "3e7737d9f635d67f8ac1794a6ec00460f89f45159fc8174506e8dcf0086d8cba",
+    "tests/protocol/ieee802154/Ieee802154GtsData.test": "bce4569e2f7315632e0aebc1c329e1f637ee9bf1174d8513dc6290d3bb881b53",
+    "tests/protocol/ieee802154/Ieee802154GtsDeallocation.test": "af479a0a87723c99f82392e5855cda32e876b76a9a6c9e0c208ebf6c2e99afa8",
+    "tests/protocol/ieee802154/Ieee802154GtsExpiry.test": "faff5751995798a22244a9d271f427147f1cddd67f512f4d585c9606ac1e3f4e",
+    "tests/protocol/ieee802154/Ieee802154Indirect.test": "492e333e935f972f02ddbf8b55b830af32c0ff7fd2542592d4db0d6d371a8869",
+    "tests/protocol/ieee802154/Ieee802154InterframeSpacing.test": "06c04637e06427121a8333cfdc917dcf47b92c481e968e89f57058a83756c4c0",
+    "tests/protocol/ieee802154/Ieee802154Lifecycle.test": "814069c03b2af9b21dbc8be82e6d76f1ca074cc4de77ee1cb250e96ec2b65c91",
+    "tests/protocol/ieee802154/Ieee802154Orphan.test": "2df88e010f9292d2c4e79f8d7a4a60d97c29aef7cbfdd70b80f776fc78f4a4dd",
+    "tests/protocol/ieee802154/Ieee802154PanConflict.test": "df83fe8b9f320f56c8f61576a47da8b1b52587dc004698a27c768ea120ae6424",
+    "tests/protocol/ieee802154/Ieee802154PhyLifecycle.test": "20e6693490d537f488c1c40eed23179eadff80d9161caf57e71fd1d5f359f3fb",
+    "tests/protocol/ieee802154/Ieee802154PhyPib.test": "6bb013134bb4e6ea5f1199072393432a572daea3145bc30d40fbb1c7382cdcc6",
+    "tests/protocol/ieee802154/Ieee802154Reassociation.test": "9109299cdb241dba0c07a4545b564ec08b912fb03e2ab3860b437ec885cf99e0",
+    "tests/protocol/ieee802154/Ieee802154ReceiveSecurity.test": "1b8714a64bb0a19ef2721dc654ef30ff033a2670865c404545e8368d0899d9e9",
+    "tests/protocol/ieee802154/Ieee802154ReceiverEnable.test": "9bc47f91206e2e8befe7a8f29da3a4dc0a0e6b5628f62eb1b6f94b23d8aa8e8b",
+    "tests/protocol/ieee802154/Ieee802154SequenceWrap.test": "d64ce1f89a775ef9d2f7bd534a830770504d53826598c04402ef3026d75fbaca",
+    "tests/protocol/ieee802154/Ieee802154SlottedAccess.test": "52c396194cc5cdbe11693e6ec82cf824bdfd48133e8371cbd803351dc0002259",
+    "tests/protocol/ieee802154/Ieee802154SlottedBusy.test": "bfdef0cba1d0f0b0554c5cdd3815808c6cd8957b20462fad07d5f24f153b9f8b",
+    "tests/protocol/ieee802154/Ieee802154SlottedClock.test": "6f38feb9423f818f6253d38905b3c7837130c6f0cada464ace07bc4b3d774a11",
+    "tests/protocol/ieee802154/Ieee802154SlottedFit.test": "ba800fd4272dca3e27cc7dd283bb50060018b2f9847dfbb22c42a3d9d06526c5",
+    "tests/protocol/ieee802154/Ieee802154SlottedIfs.test": "1cb02a24d12e4b2e212de5cf4ffa3e3174bd8ca774d2eb742397f319c14eabcf",
+    "tests/protocol/ieee802154/Ieee802154SlottedLateAck.test": "781471fc1b3952cc2d21187a64272fa852ae758bf38a994c74e8b13b5ecf6aec",
+    "tests/protocol/ieee802154/Ieee802154SlottedLifecycle.test": "0c9d1190f19fdcbed8729f45f5683b5381e8e19b539a4350bb66087cb8524b2d",
+    "tests/protocol/ieee802154/Ieee802154SlottedManagement.test": "f4222fba0f3762c91ced9f67e99e21a1eb9a9e720390308b9947bab86c668454",
+    "tests/protocol/ieee802154/Ieee802154SlottedManagementBoundary.test": "000ca5d73bcb4da4c6b5ab6ce521b4ca0bd1713ee32d13d90aca3a0f0a4911aa",
+    "tests/protocol/ieee802154/Ieee802154SlottedPriority.test": "43a61cb4ba24feb86740f9cc4664e8dd6524620a553700d7f2fb07b5f77075d2",
+    "tests/protocol/ieee802154/Ieee802154SlottedRetry.test": "dff854bce830e95a03713679b0f62b266334ef254421b004cb3163b8046e0b63",
+    "tests/protocol/ieee802154/Ieee802154SlottedSearch.test": "e1208b294a0d76f169f3e06c06324a4f0fde60f8d48d22be6460d790290a1553",
+    "tests/protocol/ieee802154/Ieee802154SlottedTooLong.test": "08945133028ccf6178445d141fcf1edb1c199056bd99d3677189b7508e8c45ee",
+    "tests/protocol/ieee802154/Ieee802154UnslottedAccess.test": "600010010a7ec165a2f8f4b2f36a4769b9e5adcce05daae7d89cd101a8aef1dc",
+    "tests/protocol/ieee802154/Ieee802154EnhancedSuperframe.test": "d2631cba5a5ebcf91df4f1bbbcd8970f86d8333cdfc05675a81954d32e568c42",
+    "tests/serializer/serializer_ieee802154.test": "2b208c2c3c87c8ec179f43281a261911a482c919b75082d6a88809716e6d5421",
+    "tests/serializer/serializer_ieee802154_enhanced.test": "b73bcd71fbc811cf335cad509ad026aaf56996011dcf1db54f0299aa69c06a61"
+  },
+  "acceptance": {
+    "mode": "debug",
+    "unit_fixtures": 17,
+    "module_fixtures": 25,
+    "serializer_fixtures": 2,
+    "protocol_fixtures": 44,
+    "protocol_simulations": 1864,
+    "errors": 0,
+    "skipped": 0,
+    "execution": {
+      "commands": {
+        "build": {
+          "argv": [
+            "make",
+            "MODE=debug",
+            "-j16"
+          ],
+          "cwd": "/home/miguel/workspace/inet-ieee802154-standard"
+        },
+        "unit": {
+          "argv": [
+            "opp_run_unit_tests",
+            "--load",
+            ".",
+            "-p",
+            "inet",
+            "-m",
+            "debug",
+            "--no-build",
+            "-f",
+            "(Ieee802154Address_1|Ieee802154Beacons_1|Ieee802154Capture_1|Ieee802154Commands_1|Ieee802154EnhancedPib_1|Ieee802154ExchangeTiming_1|Ieee802154Fcs_1|Ieee802154FrameLayout_1|Ieee802154FrameWire_1|Ieee802154GtsState_1|Ieee802154GtsWire_1|Ieee802154InformationElements_1|Ieee802154MacPib_1|Ieee802154NestedElements_1|Ieee802154PendingTransactions_1|Ieee802154SuperframeTiming_1|Ieee802154EnhancedSuperframeWire_1)[.]test$"
+          ],
+          "cwd": "/home/miguel/workspace/inet-ieee802154-standard"
+        },
+        "module": {
+          "argv": [
+            "opp_run_module_tests",
+            "--load",
+            ".",
+            "-p",
+            "inet",
+            "-m",
+            "debug",
+            "--no-build",
+            "-f",
+            "(Ieee802154AccessWindowContract_1|Ieee802154Composition_1|Ieee802154Discovery_1|Ieee802154EnergyObservation_1|Ieee802154EnhancedAckHeaderConfig_1|Ieee802154EnhancedAckNestedConfig_1|Ieee802154EnhancedAckOversize_1|Ieee802154EnhancedAckPayloadConfig_1|Ieee802154ExternalPhy_1|Ieee802154GtsAdapter_1|Ieee802154GtsServiceContract_1|Ieee802154LegacyUwb_1|Ieee802154MacServiceContract_1|Ieee802154Measurements_1|Ieee802154NativeGate_1|Ieee802154NativeInterface_1|Ieee802154PassiveScan_1|Ieee802154PhyServiceContract_1|Ieee802154PhyServices_1|Ieee802154SlottedAccess_1|Ieee802154SlottedBoundaries_1|Ieee802154SlottedDeferral_1|Ieee802154Start_1|Ieee802154SuperframeController_1|Ieee802154UnslottedAccess_1)[.]test$"
+          ],
+          "cwd": "/home/miguel/workspace/inet-ieee802154-standard"
+        },
+        "protocol": {
+          "argv": [
+            "opp_run_protocol_tests",
+            "--load",
+            ".",
+            "-p",
+            "inet",
+            "-m",
+            "debug",
+            "--no-build",
+            "-f",
+            "(Ieee802154Admission|Ieee802154Association|Ieee802154BeaconClock|Ieee802154BeaconReconfiguration|Ieee802154BeaconSchedule|Ieee802154BeaconSynchronization|Ieee802154Broadcast|Ieee802154Contention|Ieee802154DataAck|Ieee802154EnhancedAck|Ieee802154EnhancedAckTiming|Ieee802154EnhancedBeacon|Ieee802154EnhancedData|Ieee802154EnhancedFrameGate|Ieee802154GtsAllocation|Ieee802154GtsData|Ieee802154GtsDeallocation|Ieee802154GtsExpiry|Ieee802154Indirect|Ieee802154InterframeSpacing|Ieee802154Lifecycle|Ieee802154Orphan|Ieee802154PanConflict|Ieee802154PhyLifecycle|Ieee802154PhyPib|Ieee802154Reassociation|Ieee802154ReceiveSecurity|Ieee802154ReceiverEnable|Ieee802154SequenceWrap|Ieee802154SlottedAccess|Ieee802154SlottedBusy|Ieee802154SlottedClock|Ieee802154SlottedFit|Ieee802154SlottedIfs|Ieee802154SlottedLateAck|Ieee802154SlottedLifecycle|Ieee802154SlottedManagement|Ieee802154SlottedManagementBoundary|Ieee802154SlottedPriority|Ieee802154SlottedRetry|Ieee802154SlottedSearch|Ieee802154SlottedTooLong|Ieee802154UnslottedAccess|Ieee802154EnhancedSuperframe)[.]test$",
+            "-w",
+            "^tests/protocol/ieee802154$",
+            "--concurrent"
+          ],
+          "cwd": "/home/miguel/workspace/inet-ieee802154-standard"
+        },
+        "opp": {
+          "argv": [
+            "opp_run_opp_tests",
+            "--load",
+            ".",
+            "-p",
+            "inet",
+            "-m",
+            "debug",
+            "--no-build",
+            "-f",
+            "serializer_ieee802154(_enhanced)?[.]test$"
+          ],
+          "cwd": "/home/miguel/workspace/inet-ieee802154-standard"
+        }
+      },
+      "exits": {
+        "build": 0,
+        "unit": 0,
+        "module": 0,
+        "protocol": 0,
+        "opp": 0
+      },
+      "category_workers": 1
+    },
+    "per_protocol": {
+      "Ieee802154Admission.test": {
+        "run_statistics": [
+          "Run statistics: total 2, successful 2"
+        ],
+        "protocol_pass": 2,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154Association.test": {
+        "run_statistics": [
+          "Run statistics: total 68, successful 68"
+        ],
+        "protocol_pass": 68,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154BeaconClock.test": {
+        "run_statistics": [
+          "Run statistics: total 8, successful 8"
+        ],
+        "protocol_pass": 8,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154BeaconReconfiguration.test": {
+        "run_statistics": [
+          "Run statistics: total 132, successful 132"
+        ],
+        "protocol_pass": 132,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154BeaconSchedule.test": {
+        "run_statistics": [
+          "Run statistics: total 62, successful 62"
+        ],
+        "protocol_pass": 62,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154BeaconSynchronization.test": {
+        "run_statistics": [
+          "Run statistics: total 82, successful 82"
+        ],
+        "protocol_pass": 82,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154Broadcast.test": {
+        "run_statistics": [
+          "Run statistics: total 28, successful 28"
+        ],
+        "protocol_pass": 28,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154Contention.test": {
+        "run_statistics": [
+          "Run statistics: total 80, successful 80"
+        ],
+        "protocol_pass": 80,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154DataAck.test": {
+        "run_statistics": [
+          "Run statistics: total 16, successful 16"
+        ],
+        "protocol_pass": 16,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154EnhancedAck.test": {
+        "run_statistics": [
+          "Run statistics: total 84, successful 84"
+        ],
+        "protocol_pass": 84,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154EnhancedAckTiming.test": {
+        "run_statistics": [
+          "Run statistics: total 18, successful 18"
+        ],
+        "protocol_pass": 18,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154EnhancedBeacon.test": {
+        "run_statistics": [
+          "Run statistics: total 116, successful 116"
+        ],
+        "protocol_pass": 116,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154EnhancedData.test": {
+        "run_statistics": [
+          "Run statistics: total 84, successful 84"
+        ],
+        "protocol_pass": 84,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154EnhancedFrameGate.test": {
+        "run_statistics": [
+          "Run statistics: total 24, successful 24"
+        ],
+        "protocol_pass": 24,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154EnhancedSuperframe.test": {
+        "run_statistics": [
+          "Run statistics: total 26, successful 26"
+        ],
+        "protocol_pass": 26,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154GtsAllocation.test": {
+        "run_statistics": [
+          "Run statistics: total 84, successful 84"
+        ],
+        "protocol_pass": 84,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154GtsData.test": {
+        "run_statistics": [
+          "Run statistics: total 126, successful 126"
+        ],
+        "protocol_pass": 126,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154GtsDeallocation.test": {
+        "run_statistics": [
+          "Run statistics: total 24, successful 24"
+        ],
+        "protocol_pass": 24,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154GtsExpiry.test": {
+        "run_statistics": [
+          "Run statistics: total 54, successful 54"
+        ],
+        "protocol_pass": 54,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154Indirect.test": {
+        "run_statistics": [
+          "Run statistics: total 62, successful 62"
+        ],
+        "protocol_pass": 62,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154InterframeSpacing.test": {
+        "run_statistics": [
+          "Run statistics: total 16, successful 16"
+        ],
+        "protocol_pass": 16,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154Lifecycle.test": {
+        "run_statistics": [
+          "Run statistics: total 42, successful 42"
+        ],
+        "protocol_pass": 42,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154Orphan.test": {
+        "run_statistics": [
+          "Run statistics: total 32, successful 32"
+        ],
+        "protocol_pass": 32,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154PanConflict.test": {
+        "run_statistics": [
+          "Run statistics: total 30, successful 30"
+        ],
+        "protocol_pass": 30,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154PhyLifecycle.test": {
+        "run_statistics": [
+          "Run statistics: total 20, successful 20"
+        ],
+        "protocol_pass": 20,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154PhyPib.test": {
+        "run_statistics": [
+          "Run statistics: total 16, successful 16"
+        ],
+        "protocol_pass": 16,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154Reassociation.test": {
+        "run_statistics": [
+          "Run statistics: total 8, successful 8"
+        ],
+        "protocol_pass": 8,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154ReceiveSecurity.test": {
+        "run_statistics": [
+          "Run statistics: total 66, successful 66"
+        ],
+        "protocol_pass": 66,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154ReceiverEnable.test": {
+        "run_statistics": [
+          "Run statistics: total 76, successful 76"
+        ],
+        "protocol_pass": 76,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154SequenceWrap.test": {
+        "run_statistics": [
+          "Run statistics: total 4, successful 4"
+        ],
+        "protocol_pass": 4,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154SlottedAccess.test": {
+        "run_statistics": [
+          "Run statistics: total 160, successful 160"
+        ],
+        "protocol_pass": 160,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154SlottedBusy.test": {
+        "run_statistics": [
+          "Run statistics: total 12, successful 12"
+        ],
+        "protocol_pass": 12,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154SlottedClock.test": {
+        "run_statistics": [
+          "Run statistics: total 16, successful 16"
+        ],
+        "protocol_pass": 16,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154SlottedFit.test": {
+        "run_statistics": [
+          "Run statistics: total 6, successful 6"
+        ],
+        "protocol_pass": 6,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154SlottedIfs.test": {
+        "run_statistics": [
+          "Run statistics: total 2, successful 2"
+        ],
+        "protocol_pass": 2,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154SlottedLateAck.test": {
+        "run_statistics": [
+          "Run statistics: total 12, successful 12"
+        ],
+        "protocol_pass": 12,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154SlottedLifecycle.test": {
+        "run_statistics": [
+          "Run statistics: total 26, successful 26"
+        ],
+        "protocol_pass": 26,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154SlottedManagement.test": {
+        "run_statistics": [
+          "Run statistics: total 4, successful 4"
+        ],
+        "protocol_pass": 4,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154SlottedManagementBoundary.test": {
+        "run_statistics": [
+          "Run statistics: total 90, successful 90"
+        ],
+        "protocol_pass": 90,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154SlottedPriority.test": {
+        "run_statistics": [
+          "Run statistics: total 12, successful 12"
+        ],
+        "protocol_pass": 12,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154SlottedRetry.test": {
+        "run_statistics": [
+          "Run statistics: total 6, successful 6"
+        ],
+        "protocol_pass": 6,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154SlottedSearch.test": {
+        "run_statistics": [
+          "Run statistics: total 20, successful 20"
+        ],
+        "protocol_pass": 20,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154SlottedTooLong.test": {
+        "run_statistics": [
+          "Run statistics: total 4, successful 4"
+        ],
+        "protocol_pass": 4,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      },
+      "Ieee802154UnslottedAccess.test": {
+        "run_statistics": [
+          "Run statistics: total 4, successful 4"
+        ],
+        "protocol_pass": 4,
+        "protocol_fail": 0,
+        "stderr_bytes": 0
+      }
+    }
+  },
+  "release_build": {
+    "argv": [
+      "make",
+      "MODE=release",
+      "-j12"
+    ],
+    "exit": 0,
+    "log": "publication-release-build.log"
+  },
+  "examples": {
+    "execution": {
+      "EnhancedGts": {
+        "argv": [
+          "inet",
+          "--debug",
+          "-u",
+          "Cmdenv",
+          "-f",
+          "omnetpp.ini",
+          "-c",
+          "EnhancedGts",
+          "-r",
+          "0,1",
+          "--result-dir=/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-example-EnhancedGts"
+        ],
+        "exit": 0,
+        "artifacts": "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-example-EnhancedGts",
+        "library_sha256": "077f5e8092ce172ffb04f0812a6ff1cd336aae9b64eecb075a54a70d891490af",
+        "ini_sha256": "370d5e3b20f7046f9980bb5ccd68b67c5f53fc5d1b72364465df052a0a0cc657"
+      },
+      "Beacon": {
+        "argv": [
+          "inet",
+          "--debug",
+          "-u",
+          "Cmdenv",
+          "-f",
+          "omnetpp.ini",
+          "-c",
+          "Beacon",
+          "-r",
+          "0,1",
+          "--result-dir=/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-example-Beacon"
+        ],
+        "exit": 0,
+        "artifacts": "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-example-Beacon",
+        "library_sha256": "077f5e8092ce172ffb04f0812a6ff1cd336aae9b64eecb075a54a70d891490af",
+        "ini_sha256": "370d5e3b20f7046f9980bb5ccd68b67c5f53fc5d1b72364465df052a0a0cc657"
+      },
+      "Gts": {
+        "argv": [
+          "inet",
+          "--debug",
+          "-u",
+          "Cmdenv",
+          "-f",
+          "omnetpp.ini",
+          "-c",
+          "Gts",
+          "-r",
+          "0,1",
+          "--result-dir=/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-example-Gts"
+        ],
+        "exit": 0,
+        "artifacts": "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-example-Gts",
+        "library_sha256": "077f5e8092ce172ffb04f0812a6ff1cd336aae9b64eecb075a54a70d891490af",
+        "ini_sha256": "370d5e3b20f7046f9980bb5ccd68b67c5f53fc5d1b72364465df052a0a0cc657"
+      }
+    },
+    "scalar_assertions": 36,
+    "unsupported_multi_cycle": "Rejected during initialization; example-rejected-multicycle.log"
+  },
+  "isolation": {
+    "execution": {
+      "head": "e132912f67ac3b9ef8e1d66bd5562a21ab352aa9",
+      "runs": {
+        "featureoff-smoke": {
+          "argv": [
+            "bash",
+            "-c",
+            "set -e\nsource \"$1/setenv\" -q\nshift\nexec \"$@\"",
+            "bash",
+            "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-featureoff-20261116",
+            "inet",
+            "--debug",
+            "-u",
+            "Cmdenv",
+            "-f",
+            "omnetpp.ini",
+            "-n",
+            "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/featureoff-smoke",
+            "--result-dir=/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-featureoff-results"
+          ],
+          "cwd": "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/featureoff-smoke",
+          "exit": 0
+        },
+        "clockoff-Beacon": {
+          "argv": [
+            "bash",
+            "-c",
+            "set -e\nsource \"$1/setenv\" -q\nshift\nexec \"$@\"",
+            "bash",
+            "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-clockoff-20261116",
+            "inet",
+            "--debug",
+            "-u",
+            "Cmdenv",
+            "-f",
+            "omnetpp.ini",
+            "-n",
+            "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-clockoff-smoke",
+            "-c",
+            "Beacon",
+            "-r",
+            "0,1",
+            "--result-dir=/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-clockoff-smoke/Beacon"
+          ],
+          "cwd": "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-clockoff-smoke",
+          "exit": 0
+        },
+        "clockoff-Gts": {
+          "argv": [
+            "bash",
+            "-c",
+            "set -e\nsource \"$1/setenv\" -q\nshift\nexec \"$@\"",
+            "bash",
+            "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-clockoff-20261116",
+            "inet",
+            "--debug",
+            "-u",
+            "Cmdenv",
+            "-f",
+            "omnetpp.ini",
+            "-n",
+            "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-clockoff-smoke",
+            "-c",
+            "Gts",
+            "-r",
+            "0,1",
+            "--result-dir=/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-clockoff-smoke/Gts"
+          ],
+          "cwd": "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-clockoff-smoke",
+          "exit": 0
+        },
+        "clockoff-EnhancedGts": {
+          "argv": [
+            "bash",
+            "-c",
+            "set -e\nsource \"$1/setenv\" -q\nshift\nexec \"$@\"",
+            "bash",
+            "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-clockoff-20261116",
+            "inet",
+            "--debug",
+            "-u",
+            "Cmdenv",
+            "-f",
+            "omnetpp.ini",
+            "-n",
+            "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-clockoff-smoke",
+            "-c",
+            "EnhancedGts",
+            "-r",
+            "0,1",
+            "--result-dir=/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-clockoff-smoke/EnhancedGts"
+          ],
+          "cwd": "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-clockoff-smoke",
+          "exit": 0
+        },
+        "clockoff-export": {
+          "argv": [
+            "bash",
+            "-c",
+            "set -e\nsource \"$1/setenv\" -q\nshift\nexec \"$@\"",
+            "bash",
+            "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-clockoff-20261116",
+            "opp_scavetool",
+            "export",
+            "-T",
+            "s",
+            "-F",
+            "CSV-S",
+            "-o",
+            "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-clockoff-smoke/scalars.csv",
+            "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-clockoff-smoke/Beacon/Beacon-raw=true-#0.sca",
+            "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-clockoff-smoke/Beacon/Beacon-raw=false-#0.sca",
+            "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-clockoff-smoke/Gts/Gts-raw=false-#0.sca",
+            "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-clockoff-smoke/Gts/Gts-raw=true-#0.sca",
+            "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-clockoff-smoke/EnhancedGts/EnhancedGts-raw=false-#0.sca",
+            "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-clockoff-smoke/EnhancedGts/EnhancedGts-raw=true-#0.sca"
+          ],
+          "cwd": "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-clockoff-smoke",
+          "exit": 0
+        },
+        "clockoff-assertions": {
+          "argv": [
+            "bash",
+            "-c",
+            "set -e\nsource \"$1/setenv\" -q\nshift\nexec \"$@\"",
+            "bash",
+            "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-clockoff-20261116",
+            "python3",
+            "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/check_example_scalars.py",
+            "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-clockoff-smoke/scalars.csv"
+          ],
+          "cwd": "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-clockoff-smoke",
+          "exit": 0
+        }
+      },
+      "trees": {
+        "featureoff": {
+          "head": "e132912f67ac3b9ef8e1d66bd5562a21ab352aa9",
+          "native_symbol_count": 0,
+          "library_sha256": "f99d98cfbf04a094a5c70587b9e215cb09502853ddad2a20bea10ed528074f76",
+          "features_h_sha256": "98fdf28a925943a9e7757701ddf3ae08e164030dc0bf119bc1bae05b69fb2cfa"
+        },
+        "clockoff": {
+          "head": "e132912f67ac3b9ef8e1d66bd5562a21ab352aa9",
+          "native_symbol_count": 3292,
+          "library_sha256": "4bf9099ee01cdfec157684d7b61ff1e42362f3c5206aed5a5700a1ebb566487d",
+          "features_h_sha256": "665e24753065866400e3c088664a50f00fc227b6817dd076299d9f19004d2c5b"
+        }
+      },
+      "wrapper": {
+        "source": "/home/miguel/workspace/inet-ieee802154-standard/examples/wireless/ieee802154managed/ManagedPan.ned",
+        "source_sha256": "a86c1c8a1d80f938b0687ae2b8b5164e5f40653b2b584e3b72cadf030e18ffd6",
+        "only_change": "Remove the example package declaration excluded transitively with Clock.",
+        "wrapper_sha256": "519ec23eabd6d6ba300c0f52aadc34e40ace05234268b3670e31df064ce83be5"
+      }
+    },
+    "source_tree_equivalence": {
+      "src": "ef6c1370d74bd26ed77a72cbc6db5ebb34c84a03",
+      "tests": "9ce9627d1c530f8f59e3b8385b25e405a7f16cf9",
+      "examples": "a47c30b69edc581c9900fb3ea63159d8a860c112",
+      ".oppfeatures": "94a4294af2c400e614ed344c2946b7cc739d61be"
+    },
+    "clockoff_scalar_assertions": 36
+  },
+  "fingerprints": {
+    "baseline_before_sha256": "cdfe39a1bbed90892542faaab9692d681828557de1dfdcac6a91e78e2829fbe0",
+    "commands": {
+      "power": [
+        "opp_run_fingerprint_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-r",
+        "^0$",
+        "--stored-only",
+        "-w",
+        "^showcases/wireless/ieee802154$",
+        "-c",
+        "^Ieee802154Power$",
+        "--ingredients",
+        "tplx",
+        "--ingredients",
+        "~tNl",
+        "--result-file",
+        "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-fingerprint-power.json"
+      ],
+      "coexistence": [
+        "opp_run_fingerprint_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-r",
+        "^0$",
+        "--stored-only",
+        "-w",
+        "^showcases/wireless/coexistence$",
+        "-c",
+        "^Coexistence$",
+        "--ingredients",
+        "tplx",
+        "--ingredients",
+        "~tNl",
+        "--result-file",
+        "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-fingerprint-coexistence.json"
+      ],
+      "visual": [
+        "opp_run_fingerprint_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-r",
+        "^0$",
+        "--stored-only",
+        "-w",
+        "^showcases/wireless/ieee802154$",
+        "-c",
+        "^Ieee802154Power$",
+        "--ingredients",
+        "tyf",
+        "--result-file",
+        "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-fingerprint-visual.json",
+        "--append-args",
+        "--cmdenv-fake-gui=true"
+      ]
+    },
+    "exits": {
+      "power": 0,
+      "coexistence": 0,
+      "visual": 0
+    },
+    "source_snapshot": "publication-cpp-source",
+    "library_sha256": "077f5e8092ce172ffb04f0812a6ff1cd336aae9b64eecb075a54a70d891490af",
+    "baseline_after_sha256": "cdfe39a1bbed90892542faaab9692d681828557de1dfdcac6a91e78e2829fbe0"
+  },
+  "scoped_gates": {
+    "architecture-mac": {
+      "argv": [
+        "doc/project/enforcement/check-architecture.sh",
+        "src/inet/linklayer/ieee802154"
+      ],
+      "exit": 0
+    },
+    "naming-mac": {
+      "argv": [
+        "doc/project/enforcement/check-naming.sh",
+        "src/inet/linklayer/ieee802154"
+      ],
+      "exit": 0
+    },
+    "architecture-phy": {
+      "argv": [
+        "doc/project/enforcement/check-architecture.sh",
+        "src/inet/physicallayer/wireless/ieee802154"
+      ],
+      "exit": 0
+    },
+    "naming-phy": {
+      "argv": [
+        "doc/project/enforcement/check-naming.sh",
+        "src/inet/physicallayer/wireless/ieee802154"
+      ],
+      "exit": 0
+    },
+    "architecture-app": {
+      "argv": [
+        "doc/project/enforcement/check-architecture.sh",
+        "src/inet/applications/ieee802154"
+      ],
+      "exit": 0
+    },
+    "naming-app": {
+      "argv": [
+        "doc/project/enforcement/check-naming.sh",
+        "src/inet/applications/ieee802154"
+      ],
+      "exit": 0
+    },
+    "interfaces": {
+      "argv": [
+        "doc/project/enforcement/check-interfaces.sh",
+        "src/inet/linklayer/ieee802154"
+      ],
+      "exit": 0
+    },
+    "source-seals-task": {
+      "argv": [
+        "doc/project/enforcement/check-source-seals.sh",
+        "--base",
+        "efced47d1f952dc0094c09a4b17696c58365e4a8",
+        "--head",
+        "HEAD"
+      ],
+      "exit": 0
+    },
+    "links-model": {
+      "argv": [
+        "python3",
+        "doc/project/enforcement/check_links.py",
+        "doc/project/evidence/model/ieee802154"
+      ],
+      "exit": 0
+    },
+    "links-protocol": {
+      "argv": [
+        "python3",
+        "doc/project/enforcement/check_links.py",
+        "tests/protocol/ieee802154"
+      ],
+      "exit": 0
+    },
+    "links-plan": {
+      "argv": [
+        "python3",
+        "doc/project/enforcement/check_links.py",
+        "plan/pending"
+      ],
+      "exit": 0
+    }
+  },
+  "inherited_global_provenance": {
+    "baseline": "efced47d1f952dc0094c09a4b17696c58365e4a8",
+    "files": {
+      ".github/workflows/site.yml": true,
+      "images/maps/europe-er.png": true,
+      "images/maps/world-er.png": true,
+      "images/misc/signal_arrival.png": true,
+      "images/misc/signal_departure.png": true,
+      "images/misc/signal_power_0.png": true,
+      "images/misc/signal_power_1.png": true,
+      "images/misc/signal_power_2.png": true,
+      "images/misc/signal_power_3.png": true,
+      "images/misc/voipPhone.png": true,
+      "src/inet/applications/rtpapp/RtpApplication.cc": true,
+      "src/inet/applications/sctpapp/SctpClient.cc": true,
+      "src/inet/applications/sctpapp/SctpNatPeer.cc": true,
+      "src/inet/applications/sctpapp/SctpNatPeer.h": true,
+      "src/inet/applications/sctpapp/SctpNatServer.cc": true,
+      "src/inet/applications/sctpapp/SctpNatServer.h": true,
+      "src/inet/applications/sctpapp/SctpPeer.cc": true,
+      "src/inet/applications/sctpapp/SctpPeer.h": true,
+      "src/inet/applications/sctpapp/SctpServer.cc": true,
+      "src/inet/applications/sctpapp/SctpServer.h": true,
+      "src/inet/common/FingerprintCalculator.cc": true,
+      "src/inet/common/IInterfaceRegistrationListener.h": true,
+      "src/inet/common/IPrintableObject.h": true,
+      "src/inet/common/MessageDispatcher.cc": true,
+      "src/inet/common/MessageDispatcher.h": true,
+      "src/inet/common/ResultFilters.cc": true,
+      "src/inet/common/StringFormat.h": true,
+      "src/inet/common/clock/ClockUserModuleMixinImpl.cc": true,
+      "src/inet/common/figures/IIndicatorFigure.h": true,
+      "src/inet/common/lifecycle/InterfaceOperations.cc": true,
+      "src/inet/common/lifecycle/LifecycleController.cc": true,
+      "src/inet/common/math/IFunction.h": true,
+      "src/inet/common/packet/printer/PacketPrinter.h": true,
+      "src/inet/common/packet/recorder/IPcapWriter.h": true,
+      "src/inet/common/packet/recorder/PcapRecorder.cc": true,
+      "src/inet/common/packet/recorder/PcapngWriter.h": true,
+      "src/inet/common/socket/SocketMap.cc": true,
+      "src/inet/environment/ground/OsgEarthGround.cc": true,
+      "src/inet/linklayer/ieee80211/mac/contract/IFrameSequence.h": true,
+      "src/inet/mobility/base/MobilityBase.cc": true,
+      "src/inet/networklayer/ipv4/headers": true,
+      "src/inet/networklayer/ipv6/headers": true,
+      "src/inet/physicallayer/wireless/common/contract/bitlevel/IScrambler.h": true,
+      "src/inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h": true,
+      "src/inet/physicallayer/wireless/common/contract/packetlevel/ITransmission.h": true,
+      "src/inet/routing/eigrp/messages": true,
+      "src/inet/routing/eigrp/tables": true,
+      "src/inet/routing/ospf_common": true,
+      "src/inet/routing/ospfv2/messagehandler/IMessageHandler.h": true,
+      "src/inet/routing/pim/modes": true,
+      "src/inet/routing/pim/tables": true,
+      "src/inet/transportlayer/contract/quic/QuicSocket.h": true,
+      "src/inet/transportlayer/contract/sctp/SctpSocket.h": true,
+      "src/inet/transportlayer/contract/tcp/TcpSocket.h": true,
+      "src/inet/transportlayer/quic/congestioncontrol/ICongestionController.h": true,
+      "src/inet/transportlayer/quic/scheduler/IScheduler.h": true,
+      "src/inet/transportlayer/rtp/profiles": true,
+      "src/inet/transportlayer/sctp/headers": true,
+      "src/inet/transportlayer/tcp/flavours": true,
+      "src/inet/transportlayer/tcp_common": true,
+      "src/inet/transportlayer/tcp_common/headers": true,
+      "src/inet/transportlayer/tcp_lwip": true,
+      "src/inet/transportlayer/udp/headers": true
+    },
+    "classification_commits": {
+      "5766ad4fa": "ancestor of task baseline",
+      "53b484991": "ancestor of task baseline",
+      "8f925e3f4": "ancestor of task baseline",
+      "0e68fc8b2": "ancestor of task baseline"
+    },
+    "approved_sealed_path": "src/inet/common/packet/recorder/PcapReader.cc",
+    "sealed_path_unchanged_since_task_baseline": true
+  },
+  "cpp": {
+    "actual_wrappers": {
+      "mac": {
+        "argv": [
+          "doc/project/enforcement/check-cpp.sh",
+          "src/inet/linklayer/ieee802154"
+        ],
+        "exit": 1,
+        "log": "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-cpp-mac.log"
+      },
+      "phy": {
+        "argv": [
+          "doc/project/enforcement/check-cpp.sh",
+          "src/inet/physicallayer/wireless/ieee802154"
+        ],
+        "exit": 1,
+        "log": "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-cpp-phy.log"
+      },
+      "app": {
+        "argv": [
+          "doc/project/enforcement/check-cpp.sh",
+          "src/inet/applications/ieee802154"
+        ],
+        "exit": 1,
+        "log": "/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/publication-cpp-app.log"
+      }
+    },
+    "status": "FAIL",
+    "compiler_errors": 0,
+    "native_unique_diagnostics": 614,
+    "prior_exact_line_matches": 611,
+    "remaining_reviewed_accesses": [
+      [
+        "src/inet/applications/ieee802154/Ieee802154ManagementApp.cc",
+        153,
+        "warning",
+        "unchecked access to optional value [bugprone-unchecked-optional-access]"
+      ],
+      [
+        "src/inet/linklayer/ieee802154/Ieee802154StandardMac.cc",
+        2420,
+        "warning",
+        "unchecked access to optional value [bugprone-unchecked-optional-access]"
+      ],
+      [
+        "src/inet/linklayer/ieee802154/Ieee802154StandardMac.cc",
+        2429,
+        "warning",
+        "unchecked access to optional value [bugprone-unchecked-optional-access]"
+      ]
+    ],
+    "review": "No actionable defect; selectedPan presence/guarded ternary and mandatory typed macExtendedAddress PIB reads."
+  },
+  "source_review": {
+    "pass": 23,
+    "not_applicable": 11,
+    "flag": 0,
+    "question": 0
+  },
+  "diagrams": {
+    "rendered": 26,
+    "failed": 0,
+    "record": "diagram-renders/execution.json"
+  },
+  "limits": [
+    "No whole-standard or waveform conformance claim.",
+    "Security, TSCH, DSME, other PHYs, ranging and amendments excluded.",
+    "Enhanced periodic pending-address association is excluded; EnhancedGts associates through a legacy phase.",
+    "C++ warnings and inherited global failures remain reported; no baseline or exception-ledger change.",
+    "No PR requested; PR description check NOT_RUN."
+  ]
+}

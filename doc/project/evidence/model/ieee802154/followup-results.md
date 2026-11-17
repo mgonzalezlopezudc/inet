@@ -33,7 +33,7 @@ This record distinguishes source-audit closure, compilation, executed fixtures a
 | E1-05 | Repaired debug acceptance and independent source closure complete | Fresh debug284/284 expanded cases pass (`e105-responder-fix1/`). Its matching library passes10 units,9 modules,2 serializers and636/636 actual protocol cases (`e105-acceptance1/`), zero errors/skips/FAIL. Final C++ follow-up adds no unmatched diagnostic; the warning gate remains FAIL. Scheduled CAP/GTS extensions remain E1-07. |
 | E1-06 | Debug acceptance and independent source closure complete | Composed checkpoints below cover the address, lifecycle, broadcast and legacy controls. Final fresh debug, EnhancedPib unit, Discovery16 and EnhancedBeacon110/110 PASS (`e106-fp-fix5/`); final typed/raw example asserts12 scalars. Independent review23 PASS/11 N/A/0 FLAG/0 QUESTION. C++ warning gate remains FAIL with bounded dispositions. |
 | E1-07 | Debug acceptance and independent source closure complete | Coherent final fresh debug passes17 units,25 modules, two serializers and1864/1864 protocol simulations across44 fixtures (`final-acceptance2/`), zero errors/skips/FAIL. Independent source review23 PASS/11 N/A/0 FLAG/0 QUESTION; final release compilation passes. Publication gates remain E1-99. |
-| E1-99 | NOT_RUN | Final publication matrix and evidence closure remain open. |
+| E1-99 | Selected implementation and verification complete | Final combined acceptance, both compilation modes, source review, stored trajectory controls, feature/clock isolation and examples pass. Mechanical warning/inherited-global outcomes remain explicit in the publication closure below. |
 
 ## Baseline control run
 
@@ -1271,7 +1271,7 @@ campaign remains separately recorded rather than inferred from these focused pas
 debug-library hash, full fixture inputs, generated test source, stdout/stderr and category
 commands. The fresh matching debug build passes; all17 unit,25 module and two serializer
 fixtures pass. All44 explicitly selected protocol fixtures pass1864/1864 actual simulations
-and1864 protocol assertions, with zero errors, skipped runs or declared failures. All touched
+and1864 protocol PASS results, with zero errors, skipped runs or declared failures. All touched
 fixtures restore their complete typed/raw ranges, including54 GtsExpiry and126 GtsData runs.
 `publication-release-build.log` records a successful final release compilation. Source
 review confirms final MAC SHA-256 `d2ace33acb091c5c29a5115ede3da0688628cc81091398d8b99b81455f610d01`.
@@ -1279,7 +1279,44 @@ The publication example campaign passes both representations of EnhancedGts, Bea
 Final C++ attribution, feature/clock isolation, trajectory and repository publication gates
 are still separate E1-99 work; this result does not label them as already passed.
 
-## Publication gate
+## E1-99 publication closure
+
+The selected B1/B2/B3 and E1 profiles are implemented through source commit `480c71eaae`.
+The final documentation commit consolidates these results without adding protocol behavior.
+The plans remain under pending until master landing. Security, TSCH, DSME, additional PHYs,
+ranging and later amendments remain outside this completed scope; the enhanced periodic
+pending-address/association limitation above also remains explicit.
+
+Retained raw artifacts are under
+`/home/miguel/workspace/.codex-artifacts/ieee802154-followup-execution-20261116/`.
+The portable [verification record](verification-followup-20261117.json) identifies the
+source, library, category selections, outcomes and retained records.
+
+| Final check | Actual outcome |
+| --- | --- |
+| Matching debug and release compilation | PASS; `final-acceptance2-build.log`, `publication-release-build.log`. |
+| Complete explicit category selection | PASS:17 unit,25 module, two serializer fixtures;44 protocol fixtures/1864 actual simulations, zero errors/skips/FAIL. |
+| Independent source review |23 PASS/11 N/A/0 FLAG/0 QUESTION, final MAC SHA above. |
+| Managed examples | PASS: Beacon, Gts and EnhancedGts, typed/raw; official scalar export checks36 application outcomes. The unsupported enhanced multi-cycle policy is rejected at initialization. |
+| Feature disabled | PASS: refreshed isolated source, debug build, empty-network smoke and zero native MAC/PHY/application symbols. |
+| Clock disabled | PASS: refreshed isolated source/debug build plus both representations of the three scheduled examples and36 scalar assertions. The external wrapper removes only the transitively excluded example package declaration; topology/INI stay unchanged. Real-clock drift/boundary cases also pass in the main matrix. |
+| Stored trajectory controls | PASS: Power100s and Coexistence5s with tplx/~tNl; Power100s with tyf/fake-GUI, run0/seed0. Baseline SHA stays `cdfe39a1bbed90892542faaab9692d681828557de1dfdcac6a91e78e2829fbe0`; no update operation. |
+| Scoped architecture/naming/interfaces/source seals | PASS for native MAC, PHY and application scopes; eight MAC role interfaces. Task-baseline source-seal comparison passes. Model/protocol/plan link checks pass. |
+| Complete37-TU C++ warning gate | FAIL, zero compiler errors.614 unique native diagnostics:611 exact unchanged-line matches against previously analyzed coherent stages; three remaining optional-access diagnostics have independent invariant dispositions. This is not a claim that all614 are master-inherited or that the warning gate passed. |
+| Repository-wide architecture/naming/interfaces | FAIL on existing paths. Object-ID comparison proves all63 finding-bearing files/directories unchanged since the task baseline. The interface inventory reports16 violations,230 conforming and nine requiring review. No unrelated source or exception ledger is changed. |
+| Repository-wide source protection | The checker flags the previously approved bounded PcapReader repair, unchanged since the task baseline. No new sealed-source edit is introduced. |
+| Repository-wide historical series | Six classification violations belong to four ancestor commits already in the task baseline. The new E107 migration underline defect was repaired in its owning unpublished commit; its release gate then passes. Task-series checks are rerun for the final documentation tip. PR description is NOT_RUN because no PR was requested. |
+
+The three final unmatched C++ accesses are ManagementApp153 (both callers establish a
+copied selected PAN and its enhanced option is guarded) and StandardMac2420/2429 (mandatory
+typed macExtendedAddress PIB reads). None spans a callback or retains a borrowed temporary.
+Independent review finds no additional defect; no suppression, generic guard or ledger
+entry is added to manufacture a mechanical PASS. Earlier diagnostic dispositions remain
+in their stage records. Source/library identities in the final acceptance and C++ snapshots
+match the committed native tree. The documentation-only migration underline amendment
+does not change those source or behavioral results.
+
+## Earlier publication checkpoints
 
 Publication tooling is prepared outside the checkout: Ubuntu clang-tidy21.1.8 is extracted under the execution artifact directory, with its downloaded package SHA-256 verified against the package index. Its configuration verification passes. `make_compile_database.py` generates a scoped compilation database from actual make dry-run commands; the first inventory contains34 native MAC/PHY/application translation units. Regenerate it after all new source files land and run the required C++ gate against the final tree. Tool/configuration readiness is not a C++ source-check result.
 
@@ -1289,4 +1326,6 @@ A separate clang-tidy run over the archived9617b20039 native sources, using the 
 
 Independent review establishes no additional defect in those39 unmatched diagnostics. The optional accesses follow transaction-guarded callers, registered PIB keys, successful PHY-state contracts, validated BO<15 geometry, or pending-owner/target branches without intervening client callbacks. The commit/parent-retirement helpers cannot complete a pending SYNC installation because admission excludes that state. Reset/stop/PHY retirement invalidates the post-signal PHY identity; the separately reproduced pre-submit BO15 leak is stale scheduling, not an absent initial request. The three adjacent-parameter consumers preserve BO/SO, backoff/BLE and beacon-field order. These are bounded source-invariant dispositions, not universal optional-access safety or a mechanical PASS. No generic guards, wrapper types, exception ledger or checker configuration changes are justified by these diagnostics alone. Recheck the final repaired candidate; the six behavioral defects and forecast reservation remain independent open work.
 
-Final debug and release compilation, every planned direct fixture, independent source review, architecture/naming/interface/source-seal/series checks, required trajectory controls, feature/clock isolation and release documentation remain open. No new baseline is approved or refreshed by this record. Final push is authorized after those gates complete with their actual outcomes recorded.
+Those first-checkpoint open items are superseded by the final publication closure above.
+No new baseline is approved or refreshed by this record. Publication reports the actual
+warning and inherited-global failures alongside the completed behavioral evidence.

@@ -25,7 +25,10 @@ controls pass. Enhanced-frame source decisions are in
 [enhanced-frame-profile.md](enhanced-frame-profile.md); structural, unsecured DATA/ACK
 and one-shot discovery stages have executed evidence in the
 [enhanced statement mapping](statement-results.md#enhanced-frame-extension).
-Scheduled enhanced integration and the final combined publication matrix remain open.
+Scheduled enhanced integration also passes the final combined matrix:17 unit fixtures,
+25 module fixtures, two serializers and1864 protocol simulations, with zero errors or
+skipped runs. Final source, controls and mechanical-gate limits are recorded in
+[followup-results.md](followup-results.md#e1-99-publication-closure).
 The step-0 table below preserves its initial extraction verdicts; the current executable
 support table distinguishes subsequent evidence from remaining obligations. Successful
 corpus retrieval validates tooling, not simulation behavior.
