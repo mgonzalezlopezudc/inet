@@ -1024,9 +1024,9 @@ void DtlsAssociation::processServerHello(uint16_t messageSequence, Packet *body,
     if (messageSequence != serverMessageBase)
         return;
     Parameters::Selection selection;
-    selection.usePsk = !certificateProfile;
+    selection.authenticationMode = (!certificateProfile) ? inet::tls::TlsHandshakeParameters::AuthenticationMode::EXTERNAL_PSK : inet::tls::TlsHandshakeParameters::AuthenticationMode::CERTIFICATE;
     selection.signature = certificateProfile ? Parameters::ECDSA_P256_SHA256 : 0;
-    if (!version || !share || pskPresent != selection.usePsk || (pskPresent && !psk) || !Parameters::wasOffered(offer, selection)) {
+    if (!version || !share || pskPresent != selection.usesPsk() || (pskPresent && !psk) || !Parameters::wasOffered(offer, selection)) {
         owner.failAssociation(handle, "invalid or unoffered server selection", 47);
         return;
     }
