@@ -20,6 +20,8 @@ def main():
         "0123003f0290bbcc00f8",  # Optional Payload Termination.
         "092121a1a2a3a4",       # Security level 1, suppressed counter, 4-byte MIC.
         "092124010203",         # Reserved level 4: opaque forensic remainder.
+        "0123003f06880122aa0198bb00f8dead",  # MLME: unknown short/long, then MSDU.
+        "0123003f04880001009000f8beef",      # Empty short/long, then MSDU.
     ]
     output = Path(__file__).resolve().parents[1] / "pcap" / "generated"
     for has_fcs, link_type in [(True, 195), (False, 230)]:

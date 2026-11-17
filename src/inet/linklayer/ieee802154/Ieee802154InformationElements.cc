@@ -78,7 +78,12 @@ Ieee802154InformationElements::Result Ieee802154InformationElements::inspect(con
                 break;
             }
             if (length > clearEnd - position) return Error::TRUNCATED;
-            view.payloads.push_back({group,{bytes.begin() + position,bytes.begin() + position + length}});
+            Payload payload{group,{bytes.begin() + position,bytes.begin() + position + length}};
+            if (group == 1) {
+                auto nested = inspectNested(payload);
+                if (auto error = std::get_if<Error>(&nested)) return *error;
+            }
+            view.payloads.push_back(std::move(payload));
             position += length;
         }
     }
@@ -112,6 +117,41 @@ std::vector<uint8_t> Ieee802154InformationElements::encode(const std::vector<Hea
     else if (optionalPayloadTermination && payloads.empty())
         throw cRuntimeError("Payload Termination requires a Payload IE list");
     result.insert(result.end(),data.begin(),data.end());
+    return result;
+}
+
+Ieee802154InformationElements::NestedResult Ieee802154InformationElements::inspectNested(const Payload& payload)
+{
+    if (payload.group != 1 || payload.content.size() > 2047) return Error::MALFORMED;
+    std::vector<Nested> result;
+    size_t position = 0;
+    while (position < payload.content.size()) {
+        if (payload.content.size() - position < 2) return Error::TRUNCATED;
+        auto descriptor = uint16_t(payload.content[position]) | uint16_t(payload.content[position + 1]) << 8;
+        bool longForm = descriptor & 0x8000;
+        auto length = size_t(descriptor & (longForm ? 0x7ff : 0xff));
+        auto id = uint8_t(longForm ? (descriptor >> 11) & 15 : (descriptor >> 8) & 127);
+        position += 2;
+        if (length > payload.content.size() - position) return Error::TRUNCATED;
+        result.push_back({longForm,id,{payload.content.begin() + position,payload.content.begin() + position + length}});
+        position += length;
+    }
+    return result;
+}
+
+std::vector<uint8_t> Ieee802154InformationElements::encodeNested(const std::vector<Nested>& elements)
+{
+    std::vector<uint8_t> result;
+    for (const auto& element : elements) {
+        if ((element.longForm && (element.id > 15 || element.content.size() > 2045)) ||
+                (!element.longForm && (element.id > 127 || element.content.size() > 255)) ||
+                result.size() + 2 + element.content.size() > 2047)
+            throw cRuntimeError("Invalid IEEE 802.15.4 Nested IE");
+        auto descriptor = element.longForm ? uint16_t(0x8000 | uint16_t(element.id) << 11 | element.content.size()) :
+                uint16_t(uint16_t(element.id) << 8 | element.content.size());
+        result.push_back(descriptor & 0xff); result.push_back(descriptor >> 8);
+        result.insert(result.end(),element.content.begin(),element.content.end());
+    }
     return result;
 }
 

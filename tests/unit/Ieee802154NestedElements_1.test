@@ -1,0 +1,74 @@
+%description:
+Bounded short and long Nested IEs inside an MLME Payload IE.
+
+%includes:
+#include "inet/linklayer/ieee802154/Ieee802154InformationElements.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
+#include <vector>
+using namespace inet;
+
+%activity:
+using IE = Ieee802154InformationElements;
+const std::vector<uint8_t> nested{0x01,0x22,0xaa,0x01,0x98,0xbb,0x00,0x22};
+const std::vector<IE::Nested> elements{{false,0x22,{0xaa}},{true,3,{0xbb}},{false,0x22,{}}};
+ASSERT(IE::encodeNested(elements) == nested);
+auto parsed = IE::inspectNested({1,nested});
+ASSERT(std::holds_alternative<std::vector<IE::Nested>>(parsed));
+auto values = std::get<std::vector<IE::Nested>>(parsed);
+ASSERT(values.size() == 3 && !values[0].longForm && values[0].id == 0x22 && values[0].content == std::vector<uint8_t>({0xaa}));
+ASSERT(values[1].longForm && values[1].id == 3 && values[1].content == std::vector<uint8_t>({0xbb}));
+ASSERT(!values[2].longForm && values[2].id == 0x22 && values[2].content.empty());
+ASSERT(IE::encodeNested(values) == nested);
+ASSERT(std::get<std::vector<IE::Nested>>(IE::inspectNested({1,{}})).empty());
+ASSERT(std::get<IE::Error>(IE::inspectNested({2,nested})) == IE::Error::MALFORMED);
+
+// Each strict prefix of a single length-five descriptor cuts its header or content.
+for (const auto& complete : std::vector<std::vector<uint8_t>>{
+        {0x05,0x22,1,2,3,4,5}, {0x05,0x98,1,2,3,4,5}}) {
+    for (size_t n = 1; n < complete.size(); ++n) {
+        IE::Payload parent{1,{complete.begin(),complete.begin() + n}};
+        ASSERT(std::get<IE::Error>(IE::inspectNested(parent)) == IE::Error::TRUNCATED);
+    }
+}
+auto shortMaximum = IE::encodeNested({{false,127,std::vector<uint8_t>(255,0x55)}});
+ASSERT(shortMaximum.size() == 257 && std::holds_alternative<std::vector<IE::Nested>>(IE::inspectNested({1,shortMaximum})));
+auto longMaximum = IE::encodeNested({{true,15,std::vector<uint8_t>(2045,0xaa)}});
+ASSERT(longMaximum.size() == 2047 && std::holds_alternative<std::vector<IE::Nested>>(IE::inspectNested({1,longMaximum})));
+for (const auto& invalid : std::vector<IE::Nested>{{false,128,{}},{true,16,{}},{false,1,std::vector<uint8_t>(256)},{true,1,std::vector<uint8_t>(2046)}}) {
+    bool rejected = false; try { IE::encodeNested({invalid}); } catch (const cRuntimeError&) { rejected = true; }
+    ASSERT(rejected);
+}
+bool overflow = false;
+try { IE::encodeNested({{true,1,std::vector<uint8_t>(2045)},{false,1,{}}}); } catch (const cRuntimeError&) { overflow = true; }
+ASSERT(overflow && std::get<IE::Error>(IE::inspectNested({1,std::vector<uint8_t>(2048)})) == IE::Error::MALFORMED);
+
+const std::vector<uint8_t> completeFrame{0x01,0x23,0x00,0x3f,0x06,0x88,0x01,0x22,0xaa,0x01,0x98,0xbb,0x00,0xf8,0xde,0xad};
+auto frame = Ieee802154FrameCodec::decode(completeFrame,false);
+ASSERT(frame->getDecodeStatus() == Ieee802154FrameCodec::OK && Ieee802154FrameCodec::encode(*frame) == completeFrame);
+auto view = std::get<IE::View>(IE::inspect(*frame));
+ASSERT(view.payloads.size() == 1 && view.payloads[0].group == 1 && view.data.offset == 14 && view.data.length == 2);
+ASSERT(std::get<std::vector<IE::Nested>>(IE::inspectNested(view.payloads[0])).size() == 2);
+auto overrun = completeFrame; overrun[6] = 0x07; // Nested content exceeds its immediate MLME parent.
+auto rejected = Ieee802154FrameCodec::decode(overrun,false);
+ASSERT(rejected->getDecodeStatus() == Ieee802154FrameCodec::TRUNCATED && Ieee802154FrameCodec::encode(*rejected) == overrun);
+auto parentShort = completeFrame; parentShort[4] = 5;
+ASSERT(Ieee802154FrameCodec::decode(parentShort,false)->getDecodeStatus() == Ieee802154FrameCodec::TRUNCATED);
+auto parentLong = completeFrame; parentLong[4] = 7;
+ASSERT(Ieee802154FrameCodec::decode(parentLong,false)->getDecodeStatus() == Ieee802154FrameCodec::TRUNCATED);
+for (size_t n = 0; n < completeFrame.size(); ++n) {
+    std::vector<uint8_t> prefix(completeFrame.begin(),completeFrame.begin() + n);
+    auto value = Ieee802154FrameCodec::decode(prefix,false);
+    bool completeAlternative = n == 4 || n == 12 || n == 14 || n == 15;
+    ASSERT(value->getDecodeStatus() == (completeAlternative ? Ieee802154FrameCodec::OK : Ieee802154FrameCodec::TRUNCATED));
+    ASSERT(Ieee802154FrameCodec::encode(*value) == prefix);
+}
+auto selectedMaximum = makeShared<Ieee802154Frame>();
+selectedMaximum->setFrameVersion(2); selectedMaximum->setSequenceSuppressed(true); selectedMaximum->setInformationElementsPresent(true);
+auto maximumBody = IE::encode({},{{1,IE::encodeNested({{false,7,std::vector<uint8_t>(117,0x55)}})}},{});
+selectedMaximum->setPayloadArraySize(maximumBody.size()); for (size_t i = 0; i < maximumBody.size(); ++i) selectedMaximum->setPayload(i,maximumBody[i]);
+auto wire = Ieee802154FrameCodec::encode(*selectedMaximum);
+ASSERT(wire.size() == 127 && Ieee802154FrameCodec::decode(wire,true)->getFcsValid());
+std::cout << "Nested IE framing and enclosing bounds verified.\n";
+
+%contains: stdout
+Nested IE framing and enclosing bounds verified.

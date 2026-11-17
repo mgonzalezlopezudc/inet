@@ -65,6 +65,15 @@ Descriptors are little-endian 16-bit words. Header IEs use length bits0–6, ID7
 
 The registered dissector retains one typed Frame callback and invokes shared codec inspection even on its typed fast path. A computed view exposes ordered values and nonoverlapping byte regions from the MPDU start; offsets are not stored again in MSG. The initial region is the fixed MHR prefix, followed by auxiliary/Header-IE regions where present, since these also belong to the complete MHR. This preserves existing frame serialization and consumer behavior without packet-region classes or core callback changes. Independent value-encoding tests complement the registered serializer and real dissector callback observations.
 
+Nested inspection is confined to MLME Payload group1 and bounded by that immediate content
+region. Preserve short/long form, unknown IDs, duplicates and order without recursive feature
+interpretation. An empty MLME content region is retained as a structural empty list:
+7.4.3.1 permits length0..2047, while7.4.3.3/7.4.4.1 (PDF101) define the container and
+descriptors without an explicit nonempty-list minimum or receive-discard rule. This selected
+structural policy does not establish a feature-valid MLME operation or an IEEE requirement
+to emit/accept an empty feature exchange. The2047-byte helper enclosing limit is distinct
+from the selected PHY's127-byte complete MPDU; descriptor bytes consume that enclosing limit.
+
 The auxiliary Security Control octet determines security level, key-ID mode, frame-counter suppression and ASN-in-nonce selection. A nonsuppressed counter occupies four octets; key modes0/1/2/3 occupy 0/1/5/9 key-identifier octets (9.4.1, PDF173). The structural decoder establishes those extents before Header IEs. Table9-6 and its continuation (PDF173–174) give MIC lengths0/4/8/16 for levels0/(1,5)/(2,6)/(3,7). Reserve the known MIC extent when bounding clear Header IEs and reject a missing required extent; this is a structural minimum, not authentication. Protected payload and MIC remain one opaque remainder under the unsupported-security outcome; E1 never authenticates, interprets protected Payload IEs or creates keys/counters/replay state. Level4 is reserved/deprecated in this edition: a structurally inspectable frame may expose that reserved level, with its post-auxiliary remainder opaque and no assumed MIC extent, while native operation discards it as unsupported security. Structural OK is not security validity or an encryption-only capability. HT/IE parsing and FCS verification never consume beyond the enclosing MPDU.
 
 ## Sequence and ACK contract

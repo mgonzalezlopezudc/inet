@@ -28,7 +28,8 @@ This record distinguishes source-audit closure, compilation, executed fixtures a
 | E1-00 | Source/layout/service audit complete; independent review confirmed closure | Enhanced catalog/checks/profile contain complete PAN-presence and termination matrices, enhanced PIB/service inputs, concrete consumers and selected service/filter boundaries. No new runtime result is implied. |
 | E1-01 | Debug acceptance complete; independent findings repaired | Fresh debug,6 units,legacy serializer and188/188 protocol cases PASS (`e101-acceptance1/`). Structural version2 layouts are enabled; native enhanced operation remains gated. C++ follow-up adds no unmatched diagnostic; inherited warning gate remains FAIL. |
 | E1-02 | Repaired debug acceptance complete; independent findings source-closed | Fresh debug,8 units,2 serializer fixtures and200/200 actual protocol cases PASS (`e102-acceptance2/`). C++ follow-up adds no unmatched diagnostic; inherited warning gate remains FAIL. IE/security structural inspection does not enable enhanced MAC operation. |
-| E1-03 through E1-99 | NOT_RUN | Nested IE and operational implementation/runtime gates remain open. |
+| E1-03 | Debug acceptance complete; independent source pass finds no actionable defect | Fresh debug,9 units,2 serializer fixtures and202/202 actual protocol cases PASS (`e103-first/`). Nested framing adds no feature-specific MLME operation. C++ follow-up adds no unmatched diagnostic; inherited warning gate remains FAIL. |
+| E1-04 through E1-99 | NOT_RUN | Operational enhanced implementation/runtime gates remain open. |
 
 ## Baseline control run
 
@@ -696,6 +697,38 @@ Independent final closure reports23 PASS/11 N/A/0 FLAG/0 QUESTION on source hash
 `e102-acceptance2/checkpoint.json`. Both the shared Command-ID validation and the independent
 region/extraction proof are closed. No architecture/naming exception or protection change
 is introduced; Nested IE and operational enhanced services remain the next units.
+
+## E1-03 Nested MLME framing
+
+Fresh matching-source debug acceptance passes nine units, both serializer fixtures and
+202/202 protocol cases with202 actual ProtocolTest PASS, zero errors/skips/FAIL (`e103-first/`).
+EnhancedFrameGate contributes24 typed/raw cases; the178 existing controls remain.
+The enhanced serializer reproduces26 independently generated capture frames across both FCS
+modes, including unknown short/long Nested values and zero-length entries followed by a
+separate terminated MSDU; the legacy serializer retains its four-frame control. The earlier
+22-frame E1-02 inputs remain under their own retained source identities. Updated capture
+inputs, generator, provenance, selected fixtures, exact commands and source/library hashes
+are retained. The Scapy2.8 probe is refreshed for all26 records with its same partial-FCF
+limitation; no complete modern decoder result is inferred.
+
+The stateless nested grammar preserves descriptor form, unknown ID/order/duplicates and
+immediate enclosing bounds. Unit vectors distinguish the2047-byte parent helper limit from
+the127-byte PHY MPDU, include representative every-offset truncation and parent under/overrun,
+and independently check actual-radio MLME values and the separate MSDU region. Protected
+content remains opaque. Source review finds no actionable defect. The selected structural
+empty-list policy and normative limits are recorded in the [profile](enhanced-frame-profile.md#ie-grammar-and-boundaries);
+it does not claim TSCH/DSME or other MLME semantics.
+
+The two-TU IE/unchanged-printer control reports1148 warning rows, zero errors and32 unique
+native diagnostics, all matching baseline lines with zero unmatched warnings. Exact comparison
+and logs are retained; the inherited warning gate remains FAIL. No printer feature or new
+packet representation is added by this stage. Scoped architecture/naming, source seals and
+protocol links pass; no baseline is changed.
+
+Independent final closure reports23 PASS/11 N/A/0 FLAG/0 QUESTION with source hashes matching
+`e103-first/checkpoint.json`; interface/document-seal/release/model-link checks also pass.
+The reviewer visually checks the pinned PDF101 container/descriptor definitions before
+closing the bounded empty-list interpretation. No new protection or exception is introduced.
 
 ## Publication gate
 

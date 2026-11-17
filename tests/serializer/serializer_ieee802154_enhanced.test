@@ -17,7 +17,7 @@ reportSerializerCoverage();
 Files:  2 tested, 2 clean, 0 with differences
 
 %contains: stdout
-Frames: 22 total, 22 same, 0 differ, 0 error, 0 truncated
+Frames: 26 total, 26 same, 0 differ, 0 error, 0 truncated
 
 %contains: stdout
 USED inet::Ieee802154Frame

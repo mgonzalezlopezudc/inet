@@ -13,3 +13,7 @@ auxiliary, IE, data and FCS regions from that frame's stored payload; it does
 not own a second copy of the frame. Its returned ordered element values can be
 used for inspection or explicit IE encoding. Protected payload and MIC stay
 opaque, and a reserved security level remains unsupported operationally.
+``inspectNested`` and ``encodeNested`` operate on short and long Nested IEs
+inside an MLME Payload IE; the enclosing payload length remains the bound.
+Unknown sub-IDs retain their form, order and contents without enabling their
+feature-specific semantics.

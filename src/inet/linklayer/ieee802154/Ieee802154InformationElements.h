@@ -17,6 +17,7 @@ class INET_API Ieee802154InformationElements
     struct Region { size_t offset = 0; size_t length = 0; };
     struct Header { uint8_t id; std::vector<uint8_t> content; };
     struct Payload { uint8_t group; std::vector<uint8_t> content; };
+    struct Nested { bool longForm; uint8_t id; std::vector<uint8_t> content; };
     struct View {
         Region fixedMhr, auxiliary, headerIes, payloadIes, data, fcs;
         std::vector<Header> headers;
@@ -31,11 +32,14 @@ class INET_API Ieee802154InformationElements
     };
     enum class Error { TRUNCATED = 1, MALFORMED = 2 };
     using Result = std::variant<View,Error>;
+    using NestedResult = std::variant<std::vector<Nested>,Error>;
 
     static Result inspect(const Ieee802154Frame& frame);
     static std::vector<uint8_t> encode(const std::vector<Header>& headers,
             const std::vector<Payload>& payloads, const std::vector<uint8_t>& data,
             bool optionalPayloadTermination = false);
+    static NestedResult inspectNested(const Payload& payload);
+    static std::vector<uint8_t> encodeNested(const std::vector<Nested>& elements);
 };
 
 } // namespace inet
