@@ -11,7 +11,7 @@ Model applicability and execution evidence live in the [model ledger](../../mode
 
 ## Index
 
-Version-2 frame, IE, enhanced-ACK and enhanced-discovery obligations are owned by the separate [enhanced-frame catalog](https://github.com/mgonzalezlopezudc/inet/blob/ec1ee66b1b/doc/project/evidence/standard/ieee802154/enhanced-catalog.md), using `IEEE802154-ENHANCED-*` identifiers.
+Version-2 frame, IE, enhanced-ACK and enhanced-discovery obligations are owned by the separate [enhanced-frame catalog](enhanced-catalog.md), using `IEEE802154-ENHANCED-*` identifiers.
 
 | ID | Statement |
 | --- | --- |
@@ -1107,7 +1107,7 @@ upper-layer read-only access. An unspecified default is not an implicit FALSE.
 
 ## IEEE802154-SUPERFRAME-7
 
-**CAP deferral.** Clauses 10.2.2.2 and 10.11, physical PDF pp. 183–184 and 319–321, `ieee802154-2024:clause:10.2.2.2` and `ieee802154-2024:clause:10.11`. With BLE disabled, a countdown that runs out of available backoff periods retains its remaining count for the next superframe. When the countdown has completed but the exchange cannot fit in the remaining CAP, the procedure selects another backoff in the next CAP. With BLE enabled, inability to finish the countdown within its first permitted full periods, or to fit the remaining operation/start conditions, requires a further random delay next CAP rather than residual carry. DATA/command, required acknowledgment and applicable IFS must complete within the applicable contention period.
+**CAP deferral.** Clauses 10.2.2.2 and 10.11, physical PDF pp. 183–184 and 319–321, `ieee802154-2024:clause:10.2.2.2` and `ieee802154-2024:clause:10.11`. A countdown that runs out of available backoff periods retains its remaining count for the next superframe. When the countdown has completed but the exchange cannot fit in the remaining CAP, the procedure selects another backoff in the next CAP. DATA/command, required acknowledgment and applicable IFS must complete within the applicable contention period.
 
 ## IEEE802154-GTS-1
 

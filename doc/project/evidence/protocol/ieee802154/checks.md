@@ -16,7 +16,7 @@ upper client U -> device A <---- radio link ----> device B -> upper observer
 
 ## Index
 
-The separate [enhanced-frame checks](https://github.com/mgonzalezlopezudc/inet/blob/ec1ee66b1b/doc/project/evidence/protocol/ieee802154/enhanced-checks.md) own `IEEE802154-C-ENHANCED-*`; the legacy and conventional-superframe checks below keep their existing identifiers.
+The separate [enhanced-frame checks](enhanced-checks.md) own `IEEE802154-C-ENHANCED-*`; the legacy and conventional-superframe checks below keep their existing identifiers.
 
 - [IEEE802154-C-WIRE](#ieee802154-c-wire) — Native address and legacy data/ACK encoding.
 - [IEEE802154-C-ACCESS](#ieee802154-c-access) — Unslotted channel access.
@@ -380,7 +380,7 @@ An associated child and coordinator use the selected symbol duration; an observe
 
 **CAP contention.** Checks [IEEE802154-SUPERFRAME-6](../../standard/ieee802154/catalog.md#ieee802154-superframe-6), [IEEE802154-SUPERFRAME-7](../../standard/ieee802154/catalog.md#ieee802154-superframe-7), and [IEEE802154-GTS-5](../../standard/ieee802154/catalog.md#ieee802154-gts-5).
 
-Two synchronized peers contend while an independent energy source controls each CCA. Record actual beacon starts, CCA windows, backoff draws and PPDU starts. Require beacon-grid alignment, two clear CCAs, busy reset and the BLE exponent rule. With BLE disabled, separately force an unfinished countdown across CAP end and a completed countdown whose exchange is too late; observe retained versus renewed backoff. With BLE enabled, exhaust the early countdown window and require a further random draw in the next CAP. Probe full-exchange completion immediately before, at and after CAP end. A transaction too large for the entire CAP returns FRAME_TOO_LONG; a transaction that only misses the current remainder defers. The clock and simulation-time resolutions are part of the observation.
+Two synchronized peers contend while an independent energy source controls each CCA. Record actual beacon starts, CCA windows, backoff draws and PPDU starts. Require beacon-grid alignment, two clear CCAs, busy reset and the BLE exponent rule. Separately force an unfinished countdown across CAP end and a completed countdown whose exchange is too late; observe retained versus renewed backoff. Probe full-exchange completion immediately before, at and after CAP end. A transaction too large for the entire CAP returns FRAME_TOO_LONG; a transaction that only misses the current remainder defers. The clock and simulation-time resolutions are part of the observation.
 
 ## IEEE802154-C-GTS
 
