@@ -2,9 +2,7 @@
 
 > **Kind:** design · **Status:** draft · **Seal:** none · **Owns:** — · **Stands on:** [RFC 6282 catalog](../../standard/rfc6282/catalog.md)
 
-This is the P0 implementation selection, not evidence of implemented behavior. Inline
-fields follow RFC 6282 order. Decode accepts legal supported encodings even when encode
-would choose a smaller representation. Missing bytes fail before any read beyond input.
+This records the P0 stateless selection and the optional P8 context extension. Execution evidence is kept separately from this encoding contract. Inline fields follow RFC 6282 order. Decode accepts legal supported encodings even when encode would choose a smaller representation. Missing bytes fail before any read beyond input.
 
 | Field | Encoder selection | Decoder acceptance |
 | --- | --- | --- |
@@ -16,8 +14,8 @@ would choose a smaller representation. Missing bytes fail before any read beyond
 | HLIM=01/10/11 | Hop limit 1/64/255 respectively | Same fixed values |
 | NH=0 | P4: every next header; P5: every non-UDP or fallback header | Inline next-header octet, including extension headers |
 | NH=1 | P5: supported UDP NHC that fits FRAG1 | P5: UDP NHC only; other NHC rejected as unsupported |
-| CID=0 | Always | Accept with supported address combinations |
-| CID=1 | Never in first release | Consume extension byte; accept when no address requires context, ignore unused selectors; reject context-dependent forms |
+| CID=0 | Default when both selected context IDs are zero or unused | Use context 0 only for context-dependent fields; ignore unused selectors |
+| CID=1 | P8: nonzero selected SCI and/or DCI | Consume the extension byte; source and destination lookups are independent; missing/expired required contexts reject |
 
 For source SAC=0 and unicast destination M=0,DAC=0, use the following table.
 Select the shortest valid mode, trying 11, 10, 01, 00 in that order.
@@ -31,8 +29,7 @@ Select the shortest valid mode, trying 11, 10, 01, 00 in that order.
 
 Extended IID derivation flips the EUI-64 U/L bit; short IID derivation uses
 0000:00ff:fe00:XXXX. Compatibility alias bits never participate.
-SAC=1,SAM=00 encodes/decodes :: without a context. Other SAC=1 modes are unsupported.
-M=0,DAC=1,DAM=00 is reserved; other M=0,DAC=1 modes require unsupported contexts.
+SAC=1,SAM=00 encodes/decodes :: without a context. P8 enables SAC=1 modes 01/10/11 and unicast DAC=1 modes 01/10/11 when the required context is valid. Context bits take precedence over inline or link-derived IID bits; remaining uncovered bits are zero. The encoder selects a context only when compression is permitted and its representation is shorter than the stateless form. Unicast DAC=1,DAM=00 remains reserved.
 
 | Multicast M=1,DAC=0,DAM | Encode condition, shortest valid first | Inline bytes |
 | --- | --- | ---: |
@@ -41,8 +38,7 @@ M=0,DAC=1,DAM=00 is reserved; other M=0,DAC=1 modes require unsupported contexts
 | 01 | ffXX::00XX:XXXX:XXXX | 6 |
 | 00 | Any remaining multicast destination | 16 |
 
-Decoder accepts each of these forms. M=1,DAC=1,DAM=00 requires a context and is
-unsupported; DAM=01/10/11 are reserved. No stateful mode is emitted.
+Decoder accepts each of these forms. P8 enables M=1,DAC=1,DAM=00 for prefix-based multicast using a valid context with at most 64 prefix bits; six inline octets carry flags/scope, RIID/reserved and group ID. DAM=01/10/11 remain reserved. Context permission controls emission only, not decoding.
 
 UDP NHC emits C=0 only. Choose P=11 when both ports are in 0xf0b0..0xf0bf,
 otherwise P=01 when destination is in 0xf000..0xf0ff, otherwise P=10 when source

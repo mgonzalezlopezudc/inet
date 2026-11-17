@@ -27,6 +27,7 @@ simsignal_t LowpanLayer::fragmentSentSignal = registerSignal("fragmentSent");
 simsignal_t LowpanLayer::fragmentReceivedSignal = registerSignal("fragmentReceived");
 simsignal_t LowpanLayer::reassemblyCompletedSignal = registerSignal("reassemblyCompleted");
 simsignal_t LowpanLayer::reassemblyExpiredSignal = registerSignal("reassemblyExpired");
+simsignal_t LowpanLayer::reassemblyInvalidatedSignal = registerSignal("reassemblyInvalidated");
 
 LowpanLayer::~LowpanLayer()
 {
@@ -47,6 +48,32 @@ void LowpanLayer::initialize(int stage)
         useIphc = compression == "iphc";
         reassembly = std::make_unique<LowpanReassemblyTable>(par("maxReassemblyDatagrams"), par("maxReassemblyBytes"), reassemblyTimeout);
         expiryTimer = new cMessage("lowpanReassemblyExpiry");
+        std::array<bool, 16> seen{};
+        auto integer = [](cXMLElement *element, const char *attribute, int maximum) {
+            auto text = element->getAttribute(attribute);
+            if (text == nullptr || *text == '\0')
+                throw cRuntimeError("LoWPAN context requires attribute '%s'", attribute);
+            char *end = nullptr;
+            long value = std::strtol(text, &end, 10);
+            if (*end != '\0' || value < 0 || value > maximum)
+                throw cRuntimeError("Invalid LoWPAN context attribute '%s'", attribute);
+            return int(value);
+        };
+        for (auto element : par("compressionContexts").xmlValue()->getChildren()) {
+            if (strcmp(element->getTagName(), "context") != 0)
+                throw cRuntimeError("Unknown LoWPAN compression context element");
+            int id = integer(element, "id", 15);
+            int prefixLength = integer(element, "prefixLength", 128);
+            auto prefix = element->getAttribute("prefix");
+            auto permission = element->getAttribute("compress");
+            auto until = element->getAttribute("validUntil");
+            if (seen[id] || prefix == nullptr ||
+                (permission != nullptr && strcmp(permission, "true") != 0 && strcmp(permission, "false") != 0))
+                throw cRuntimeError("Invalid or duplicate LoWPAN compression context");
+            compressionContexts.install(id, Ipv6Address(prefix), prefixLength,
+                permission == nullptr || strcmp(permission, "true") == 0, until ? SimTime::parse(until) : SimTime::getMaxTime());
+            seen[id] = true;
+        }
     }
     else if (stage == INITSTAGE_LINK_LAYER) {
         if (networkInterface->getMtu() != 1280 || networkInterface->getProtocol() != &lowpanProtocol)
@@ -57,6 +84,19 @@ void LowpanLayer::initialize(int stage)
         for (auto gate = this->gate("lowerLayerIn")->getPathStartGate(); gate != nullptr; gate = gate->getNextGate())
             if (gate->getChannel() != nullptr)
                 throw cRuntimeError("LoWPAN deadline profile requires an undelayed receive boundary");
+    }
+}
+
+void LowpanLayer::setCompressionContext(int id, const Ipv6Address& prefix, int prefixLength,
+        bool allowCompression, simtime_t validUntil)
+{
+    Enter_Method("setCompressionContext");
+    if (compressionContexts.install(id, prefix, prefixLength, allowCompression, validUntil)) {
+        long count = reassembly->getNumContexts();
+        reassembly->clear();
+        cancelEvent(expiryTimer);
+        if (count != 0)
+            emit(reassemblyInvalidatedSignal, count);
     }
 }
 
@@ -176,7 +216,7 @@ void LowpanLayer::processUpperPacket(Packet *packet)
     Ptr<const Chunk> encodedHeader = makeShared<LowpanHeader>();
     int originalHeaderLength = 0;
     if (useIphc) {
-        auto iphc = LowpanIphcCodec::encode(*packet->peekAtFront<Ipv6Header>(), request.getSrcAddress(), request.getDestAddress());
+        auto iphc = LowpanIphcCodec::encode(*packet->peekAtFront<Ipv6Header>(), request.getSrcAddress(), request.getDestAddress(), false, &compressionContexts, simTime());
         if (iphc != nullptr) {
             int length = iphc->getChunkLength().get<B>();
             // RFC 6282 section 4: compressed headers must fit wholly in FRAG1.
@@ -192,7 +232,7 @@ void LowpanLayer::processUpperPacket(Packet *packet)
         try {
             auto nhc = LowpanUdpNhcCodec::encode(packet->peekDataAt<BytesChunk>(B(40), B(8))->getBytes(), size - 40);
             if (nhc != nullptr) {
-                auto iphc = LowpanIphcCodec::encode(*packet->peekAtFront<Ipv6Header>(), request.getSrcAddress(), request.getDestAddress(), true);
+                auto iphc = LowpanIphcCodec::encode(*packet->peekAtFront<Ipv6Header>(), request.getSrcAddress(), request.getDestAddress(), true, &compressionContexts, simTime());
                 int length = (iphc->getChunkLength() + nhc->getChunkLength()).get<B>();
                 if (size - 48 + length <= prepared->getPayloadLimit() || length + 4 <= prepared->getPayloadLimit()) {
                     auto chain = makeShared<SequenceChunk>();
@@ -395,7 +435,7 @@ bool LowpanLayer::decompressHeader(Packet *packet, int originalSize)
         if (originalSize < 0)
             originalSize = (nhc ? 48 : 40) + (packet->getDataLength() - encodedLength).get<B>();
         auto indication = packet->getTag<Ieee802154AddressInd>();
-        auto ipv6 = LowpanIphcCodec::decode(*header, originalSize, indication->getSrcAddress(), indication->getDestAddress(), nhc != nullptr);
+        auto ipv6 = LowpanIphcCodec::decode(*header, originalSize, indication->getSrcAddress(), indication->getDestAddress(), nhc != nullptr, &compressionContexts, simTime());
         if (ipv6 == nullptr)
             return false;
         auto udp = nhc ? LowpanUdpNhcCodec::decode(*nhc, originalSize - 40) : nullptr;

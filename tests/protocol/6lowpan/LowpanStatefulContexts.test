@@ -1,0 +1,190 @@
+%description:
+Stateful CID 0/unequal SCI/DCI unicast and multicast enter as native frame bytes.
+Missing/expired contexts reject; FRAG1 snapshots survive expiry, prefix replacement
+invalidates pending RX, and a real sender respects receive-only context permission.
+
+%file: StatefulContextCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/checksum/Checksum.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/lowpan/LowpanLayer.h"
+#include "inet/linklayer/lowpan/LowpanPacketDropDetails_m.h"
+#include "inet/networklayer/common/NextHopAddressTag_m.h"
+
+namespace inet::protocoltest {
+using namespace lowpan;
+class StatefulContextCheck : public cSimpleModule, public cListener
+{
+    std::vector<std::vector<uint8_t>> frames, expected;
+    std::vector<int> times, outputs;
+    int injected=0,delivered=0,dropped=0,invalidated=0,completed=0,fragments=0,tx=0;
+    std::vector<uint8_t> original(int size,int sourcePrefix,int destinationPrefix,bool multicast=false,bool reverse=false) {
+        std::vector<uint8_t> bytes{0x60,0,0,0,uint8_t((size-40)>>8),uint8_t(size-40),59,64,
+            0x20,1,0x0d,0xb8,0,uint8_t(sourcePrefix),0,0,2,0x11,0x22,0x33,0x44,0x55,0x66,uint8_t(reverse ? 2 : 1)};
+        std::vector<uint8_t> destination{0x20,1,0x0d,0xb8,0,uint8_t(destinationPrefix),0,0,2,0x11,0x22,0x33,0x44,0x55,0x66,uint8_t(reverse ? 1 : 2)};
+        if (multicast) destination={0xff,0x3e,0,64,0x20,1,0x0d,0xb8,0,2,0,0,0,0,0,1};
+        bytes.insert(bytes.end(),destination.begin(),destination.end());
+        for (int i=40;i<size;i++) bytes.push_back(i-40);
+        return bytes;
+    }
+    void input(int ms,const std::vector<uint8_t>& payload,bool broadcast=false) {
+        std::vector<uint8_t> frame{0x41,uint8_t(broadcast ? 0xd8 : 0xdc),uint8_t(frames.size()),0x34,0x12};
+        if (broadcast) frame.insert(frame.end(),{0xff,0xff});
+        else frame.insert(frame.end(),{2,0x66,0x55,0x44,0x33,0x22,0x11,0});
+        frame.insert(frame.end(),{1,0x66,0x55,0x44,0x33,0x22,0x11,0});
+        frame.insert(frame.end(),payload.begin(),payload.end());
+        auto fcs=crc16_ccitt(frame);frame.push_back(fcs);frame.push_back(fcs>>8);
+        ASSERT(frame.size()<=127);frames.push_back(frame);
+        scheduleAt(SimTime(ms,SIMTIME_MS),new cMessage("literal-stateful-frame",frames.size()-1));
+    }
+    std::vector<uint8_t> literal(uint8_t flags,uint8_t context,int count) {
+        std::vector<uint8_t> bytes{0x7a,flags,context,59};
+        for (int i=0;i<count;i++) bytes.push_back(i);
+        return bytes;
+    }
+    void expect(int ms,int size,int sourcePrefix,int destinationPrefix,bool multicast=false,int output=0,bool reverse=false) {
+        times.push_back(ms);outputs.push_back(output);expected.push_back(original(size,sourcePrefix,destinationPrefix,multicast,reverse));
+    }
+    LowpanLayer *layer(int node=0) {
+        return check_and_cast<LowpanLayer *>(getParentModule()->getSubmodule("node",node)->getSubmodule("nic")->getSubmodule("lowpan"));
+    }
+  protected:
+    int numInitStages() const override { return NUM_INIT_STAGES; }
+    void initialize(int stage) override {
+        if (stage!=INITSTAGE_LAST) return;
+        for (auto signal : {"packetDropped","reassemblyInvalidated","reassemblyCompleted","fragmentReceived","reassemblyExpired"}) layer()->subscribe(signal,this);
+        getModuleByPath("^.node[0].nic.mac")->subscribe("packetSentToLower",this);
+        input(1,literal(0xf7,0x35,8));expect(1,48,1,2);
+        auto zero=literal(0x77,0,8);zero.erase(zero.begin()+2);
+        input(2,zero);expect(2,48,0,0);
+        input(3,literal(0xf7,0x95,8)); // Source context 9 is missing.
+        input(6,literal(0xf7,0x35,8)); // Context 3 expires exactly at 6ms.
+        auto first=literal(0xf7,0x35,8);first.insert(first.begin(),{0xc0,80,0x12,0x34});input(8,first);
+        std::vector<uint8_t> last{0xe0,80,0x12,0x34,6};
+        for (int i=8;i<40;i++) last.push_back(i);
+        input(9,last);expect(9,80,1,2); // Snapshot survives 8.5ms context expiry.
+        last[2]=0x43;last[3]=0x21;input(11,last);
+        first[2]=0x43;first[3]=0x21;input(13,first);
+        input(14,last);expect(14,80,3,2); // Tail from before replacement cannot complete at 13ms.
+        std::vector<uint8_t> multicast{0x7a,0xfc,0x35,59,0x3e,0,0,0,0,1};
+        for (int i=0;i<8;i++) multicast.push_back(i);
+        input(15,multicast,true);expect(15,48,3,2,true);
+        expect(17,48,2,3,false,1,true);
+        for (auto pair : {std::pair<int,int>{7,-1},{10,-2},{12,-3},{16,-4},{17,-5}})
+            scheduleAt(SimTime(pair.first,SIMTIME_MS),new cMessage("context-operation",pair.second));
+    }
+    void receiveSignal(cComponent *,simsignal_t signal,long count,cObject *) override {
+        ASSERT(signal==registerSignal("reassemblyInvalidated") && count==1 && simTime()==SimTime(12,SIMTIME_MS));invalidated++;
+    }
+    void receiveSignal(cComponent *,simsignal_t signal,cObject *object,cObject *details) override {
+        if (signal==registerSignal("packetDropped")) {
+            ASSERT(check_and_cast<LowpanPacketDropDetails *>(details)->getLowpanReason()==LOWPAN_MALFORMED);dropped++;return;
+        }
+        if (signal==registerSignal("fragmentReceived")) {fragments++;return;}
+        if (signal==registerSignal("reassemblyCompleted")) {completed++;return;}
+        ASSERT(signal==registerSignal("packetSentToLower"));
+        auto bytes=check_and_cast<Packet *>(object)->peekDataAsBytes()->getBytes();
+        auto sent=original(48,2,3,false,true);
+        std::vector<uint8_t> expectedWire{0x7a,0x87,0x03,59}; // Source context 5 is valid but receive-only.
+        expectedWire.insert(expectedWire.end(),sent.begin()+8,sent.begin()+24);
+        expectedWire.insert(expectedWire.end(),sent.begin()+40,sent.end());
+        ASSERT(bytes.size()==23+expectedWire.size());
+        ASSERT(std::equal(expectedWire.begin(),expectedWire.end(),bytes.begin()+21));tx++;
+    }
+    void handleMessage(cMessage *message) override {
+        if (message->isSelfMessage()) {
+            int kind=message->getKind();
+            if (kind>=0) {
+                auto packet=new Packet("stateful-native-input",makeShared<BytesChunk>(frames.at(kind)));
+                auto mac=getModuleByPath("^.node[0].nic.mac");
+                sendDirect(packet,mac->gate("lowerLayerIn")->getPathStartGate());injected++;
+            }
+            else if (kind==-1) layer()->setCompressionContext(3,Ipv6Address("2001:db8:1::"),64,false,SimTime(8500,SIMTIME_US));
+            else if (kind==-2) layer()->setCompressionContext(3,Ipv6Address("2001:db8:1::"),64,true,SimTime(1));
+            else if (kind==-3) layer()->setCompressionContext(3,Ipv6Address("2001:db8:3::"),64,true,SimTime(1));
+            else if (kind==-4) layer(1)->setCompressionContext(3,Ipv6Address("2001:db8:3::"),64,true,SimTime(1));
+            else {
+                auto packet=new Packet("stateful-production-tx",makeShared<BytesChunk>(original(48,2,3,false,true)));
+                packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ipv6);
+                packet->addTag<NextHopAddressReq>()->setNextHopAddress(Ipv6Address("2001:db8:3:0:211:2233:4455:6601"));
+                send(packet,"out");
+            }
+            delete message;return;
+        }
+        auto packet=check_and_cast<Packet *>(message);
+        ASSERT(delivered<int(expected.size()) && message->getArrivalGate()->getIndex()==outputs[delivered]);
+        if (outputs[delivered]==0) ASSERT(simTime()==SimTime(times[delivered],SIMTIME_MS));
+        else ASSERT(simTime()>SimTime(17,SIMTIME_MS));
+        ASSERT(packet->peekDataAsBytes()->getBytes()==expected[delivered]);delivered++;delete packet;
+    }
+    void finish() override {
+        ASSERT(injected==10 && delivered==6 && dropped==2 && invalidated==1 && completed==2 && fragments==5 && tx==1);
+        std::cout << "Native stateful contexts, snapshot expiry, replacement and compression permission verified\n";
+    }
+};
+Define_Module(StatefulContextCheck);
+}
+
+%file: test.ned
+@namespace(inet::protocoltest);
+import inet.networklayer.common.InterfaceTable;
+import inet.mobility.static.StationaryMobility;
+import inet.linklayer.lowpan.Ieee802154NativeLowpanInterface;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple StatefulContextCheck
+{
+    gates:
+        output out;
+        input in[2];
+}
+module ContextNode
+{
+    parameters:
+        @networkNode;
+    gates:
+        input in;
+        output out;
+    submodules:
+        interfaceTable: InterfaceTable;
+        mobility: StationaryMobility;
+        nic: Ieee802154NativeLowpanInterface {
+            interfaceTableModule="^.interfaceTable";
+            linkDomainModule="^.^.domain";
+        }
+    connections allowunconnected:
+        in --> nic.upperLayerIn;
+        nic.upperLayerOut --> out;
+}
+network StatefulContextNetwork
+{
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        domain: LowpanNativeLinkDomain;
+        node[2]: ContextNode;
+        check: StatefulContextCheck;
+    connections allowunconnected:
+        check.out --> node[0].in;
+        node[0].out --> check.in[0];
+        node[1].out --> check.in[1];
+}
+
+%inifile: omnetpp.ini
+[General]
+network=StatefulContextNetwork
+sim-time-limit=50ms
+seed-set=0
+*.node[*].nic.lowpan.compressionContexts=xml("<contexts><context id='0' prefix='2001:db8::' prefixLength='64'/><context id='3' prefix='2001:db8:1::' prefixLength='64' compress='false' validUntil='6ms'/><context id='5' prefix='2001:db8:2::' prefixLength='64' compress='false'/></contexts>")
+*.domain.panId=4660
+*.domain.config=xml("<domain><peer interface='node[0].nic' native='0011223344556602'/><peer interface='node[1].nic' native='0011223344556601'/><neighbor interface='node[0].nic' ipv6='2001:db8:3:0:211:2233:4455:6601' native='0011223344556601'/></domain>")
+**.radio.antenna.mobilityModule="^.^.^.mobility"
+**.mobility.initialX=0m
+**.mobility.initialY=0m
+**.mobility.initialZ=0m
+**.mobility.initFromDisplayString=false
+**.mobility.updateFromDisplayString=false
+
+%contains: stdout
+Native stateful contexts, snapshot expiry, replacement and compression permission verified
