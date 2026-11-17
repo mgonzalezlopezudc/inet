@@ -15,10 +15,12 @@ class INET_API LowpanIphcCodec
     static int getInlineLength(const LowpanIphcHeader& header);
     static Ptr<const LowpanIphcHeader> encode(const Ipv6Header& ipv6,
             const Ieee802154Address& source, const Ieee802154Address& destination, bool udpNhc = false,
-            const LowpanContextTable *contexts = nullptr, simtime_t now = SIMTIME_ZERO);
+            const LowpanContextTable *contexts = nullptr, simtime_t now = SIMTIME_ZERO,
+            const Ipv6Header *encapsulating = nullptr);
     static Ptr<Ipv6Header> decode(const LowpanIphcHeader& header, int originalSize,
             const Ieee802154Address& source, const Ieee802154Address& destination, bool udpNhc = false,
-            const LowpanContextTable *contexts = nullptr, simtime_t now = SIMTIME_ZERO);
+            const LowpanContextTable *contexts = nullptr, simtime_t now = SIMTIME_ZERO,
+            const Ipv6Header *encapsulating = nullptr);
 };
 
 } } // namespace inet::lowpan
