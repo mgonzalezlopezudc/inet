@@ -1,0 +1,3 @@
+Native selective fragment recovery
+
+LoWPAN adds opt-in native RFC8931 selective recovery with bounded source batches, compressed-coordinate forwarding, end-to-end acknowledgments and fixed identity protection. It supports the declared unicast route-over profile with stateless outer IPHC and raw transport/extension tails; ordinary unfragmented, broadcast and ND paths remain available. Unsupported transit processing is refused rather than bypassing IPv6 policy. Actual-wire exercises use computed transport and ICMPv6 checksums. See the selective-recovery protocol reports for tested bounds and the distinction between native ACK, fragmentation-endpoint recovery and application delivery.

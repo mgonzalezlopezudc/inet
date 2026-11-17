@@ -2,6 +2,7 @@
 #include "inet/linklayer/lowpan/LowpanLayer.h"
 #include "inet/linklayer/lowpan/LowpanSourceFragmentation.h"
 #include "inet/linklayer/lowpan/LowpanFragmentForwarding.h"
+#include "inet/linklayer/lowpan/LowpanSelectiveRecovery.h"
 
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/ProtocolTag_m.h"
@@ -96,6 +97,29 @@ bool isRouterDiscovery(const Packet *packet, bool includeOtherNdControl = false)
         return false; // Inspection must not replace the existing malformed-packet handling.
     }
 }
+
+bool isRecoveryData(const Packet *packet)
+{
+    // Admission requires positive classification; inability to inspect is not evidence of non-ND data.
+    try {
+        auto next = packet->peekAtFront<Ipv6Header>(B(40))->getProtocolId();
+        b offset = B(40);
+        while (isIpv6ExtensionHeader(next)) {
+            if (packet->getDataLength() - offset < B(8)) return false;
+            auto extension = peekIpv6ExtensionHeaderAt(packet, offset, next);
+            if (!extension->isCorrect() || extension->getChunkLength() < B(8) ||
+                    extension->getChunkLength() > packet->getDataLength() - offset) return false;
+            if (auto fragment = dynamicPtrCast<const Ipv6FragmentHeader>(extension))
+                if (fragment->getFragmentOffset() != 0) return false;
+            next = extension->getNextHeaderProtocol(); offset += extension->getChunkLength();
+        }
+        if (next != IP_PROT_IPv6_ICMP) return true;
+        if (offset >= packet->getDataLength()) return false;
+        auto type = packet->peekDataAt<BytesChunk>(offset, B(1))->getBytes()[0];
+        return !((type >= 133 && type <= 137) || type == 157 || type == 158);
+    }
+    catch (const cRuntimeError&) { return false; }
+}
 }
 
 Define_Module(LowpanLayer);
@@ -130,6 +154,13 @@ void LowpanLayer::initialize(int stage)
             throw cRuntimeError("Unsupported LoWPAN headerCompression profile");
         useIphc = compression == "iphc";
         meshUnder = par("meshUnder");
+        if (par("nativeSelectiveRecovery").boolValue()) {
+            if (!useIphc || meshUnder || dynamic_cast<LowpanNativeBoundary *>(link) == nullptr)
+                throw cRuntimeError("Native selective recovery requires IPHC and a native boundary without Mesh");
+            selectiveRecovery = std::make_unique<LowpanSelectiveRecovery>(*this);
+            WATCH_EXPR("numRecoveryRecords", selectiveRecovery->getNumRecords());
+            WATCH_EXPR("recoveryRetainedBytes", selectiveRecovery->getRetainedBytes());
+        }
         if (par("nativeFragmentPacing").boolValue()) {
             if (meshUnder || dynamic_cast<LowpanNativeBoundary *>(link) == nullptr)
                 throw cRuntimeError("Paced source fragmentation requires a native boundary without Mesh");
@@ -313,12 +344,12 @@ std::optional<uint16_t> LowpanLayer::allocateDatagramTag(simtime_t now, simtime_
     return fragmentForwarding ? tagAllocator.allocate(now, reuseAfter, uint16_t(intrand(65536))) : tagAllocator.allocate(now, reuseAfter);
 }
 
-bool LowpanLayer::pushForwardedPacket(Packet *packet, int ownerModuleId, int64_t token)
+bool LowpanLayer::pushForwardedPacket(Packet *packet, int ownerModuleId, int64_t token, bool recovery)
 {
     Enter_Method("pushForwardedPacket");
     take(packet);
     auto id = packet->getId();
-    forwardedTransmissions.emplace(id, ForwardedTransmission{ownerModuleId, token});
+    forwardedTransmissions.emplace(id, ForwardedTransmission{ownerModuleId, token, recovery});
     bool accepted = pushPreparedPacket(packet);
     if (!accepted) forwardedTransmissions.erase(id);
     return accepted; // The original may have been deleted synchronously.
@@ -326,15 +357,17 @@ bool LowpanLayer::pushForwardedPacket(Packet *packet, int ownerModuleId, int64_t
 
 void LowpanLayer::notifyForwardingUnavailable()
 {
-    if (!fragmentForwarding) return;
+    if (!fragmentForwarding && !selectiveRecovery) return;
     std::vector<int> layers;
     auto table = networkInterface->getInterfaceTable();
     for (int i = 0; i < table->getNumInterfaces(); i++)
         for (cModule::SubmoduleIterator it(table->getInterface(i)); !it.end(); ++it)
             if (auto layer = dynamic_cast<LowpanLayer *>(*it)) layers.push_back(layer->getId());
     for (auto id : layers)
-        if (auto layer = dynamic_cast<LowpanLayer *>(getSimulation()->getModule(id)))
+        if (auto layer = dynamic_cast<LowpanLayer *>(getSimulation()->getModule(id))) {
             if (layer->fragmentForwarding) layer->fragmentForwarding->handleInterfaceUnavailable(networkInterface->getId());
+            if (layer->selectiveRecovery) layer->selectiveRecovery->handleInterfaceUnavailable(networkInterface->getId());
+        }
 }
 
 void LowpanLayer::handlePushPacketProcessed(Packet *packet, const cGate *, bool successful)
@@ -351,15 +384,23 @@ void LowpanLayer::handlePushPacketProcessed(Packet *packet, const cGate *, bool 
     if (!isNativeTransmissionOperational()) {
         if (sourceFragments) sourceFragments->completed(id, false);
         if (forwarded)
-            if (auto layer = dynamic_cast<LowpanLayer *>(getSimulation()->getModule(forwarded->ownerModuleId)))
-                if (layer->fragmentForwarding) layer->fragmentForwarding->handleTransmissionCompleted(forwarded->token, id, false);
+            if (auto layer = dynamic_cast<LowpanLayer *>(getSimulation()->getModule(forwarded->ownerModuleId))) {
+                if (forwarded->recovery) {
+                    if (layer->selectiveRecovery) layer->selectiveRecovery->handleTransmissionCompleted(forwarded->token, id, false);
+                }
+                else if (layer->fragmentForwarding) layer->fragmentForwarding->handleTransmissionCompleted(forwarded->token, id, false);
+            }
         return;
     }
     emit(successful ? nativeFrameTransmissionSucceededSignal : nativeFrameTransmissionFailedSignal, packet);
     if (sourceFragments) sourceFragments->completed(id, successful && isNativeTransmissionOperational());
     if (forwarded)
-        if (auto layer = dynamic_cast<LowpanLayer *>(getSimulation()->getModule(forwarded->ownerModuleId)))
-            if (layer->fragmentForwarding) layer->fragmentForwarding->handleTransmissionCompleted(forwarded->token, id, successful && isNativeTransmissionOperational());
+        if (auto layer = dynamic_cast<LowpanLayer *>(getSimulation()->getModule(forwarded->ownerModuleId))) {
+            if (forwarded->recovery) {
+                if (layer->selectiveRecovery) layer->selectiveRecovery->handleTransmissionCompleted(forwarded->token, id, successful && isNativeTransmissionOperational());
+            }
+            else if (layer->fragmentForwarding) layer->fragmentForwarding->handleTransmissionCompleted(forwarded->token, id, successful && isNativeTransmissionOperational());
+        }
 }
 
 void LowpanLayer::handleStopOperation(LifecycleOperation *operation)
@@ -388,12 +429,14 @@ void LowpanLayer::expireReassembly()
 
 void LowpanLayer::handleMessageWhenDown(cMessage *message)
 {
+    if (selectiveRecovery && selectiveRecovery->isTimer(message)) { selectiveRecovery->handleTimer(); return; }
     if (fragmentForwarding && fragmentForwarding->isTimer(message)) { fragmentForwarding->handleTimer(); return; }
     dropPacket(check_and_cast<Packet *>(message), INTERFACE_DOWN);
 }
 
 void LowpanLayer::handleMessageWhenUp(cMessage *message)
 {
+    if (selectiveRecovery && selectiveRecovery->isTimer(message)) { selectiveRecovery->handleTimer(); return; }
     if (fragmentForwarding && fragmentForwarding->isTimer(message)) { fragmentForwarding->handleTimer(); return; }
     if (sourceFragments && sourceFragments->isTimer(message)) { sourceFragments->handleTimer(); return; }
     if (message == expiryTimer) {
@@ -541,6 +584,11 @@ void LowpanLayer::processUpperPacket(Packet *packet)
         }
     }
     int encodedLength = encodedHeader->getChunkLength().get<B>();
+    if (selectiveRecovery && !destination.isBroadcast() && isRecoveryData(packet) &&
+            size - originalHeaderLength + encodedLength > frameBudget) {
+        selectiveRecovery->admit(packet, request, prepared->getPayloadLimit());
+        return;
+    }
     auto ranges = LowpanFragmenter::plan(size, frameBudget, frameBudget, encodedLength, originalHeaderLength);
     if (ranges.empty()) {
         dropLowpanPacket(packet, LOWPAN_RESOURCE_LIMIT);
@@ -801,6 +849,11 @@ void LowpanLayer::processInnerPacket(Packet *packet, const Ieee802154Address& so
     if (prefix.kind == Prefix::ESC) {
         auto type = packet->peekAtFront<LowpanExtendedDispatchHeader>(B(2))->getExtensionType();
         dropLowpanPacket(packet, type == 0 || type == 255 ? LOWPAN_MALFORMED : LOWPAN_UNSUPPORTED_EXTENSION); return;
+    }
+    if (prefix.kind == Prefix::RFRAG || prefix.kind == Prefix::RFRAG_ACK) {
+        if (selectiveRecovery) selectiveRecovery->process(packet, prefix.kind == Prefix::RFRAG_ACK);
+        else dropLowpanPacket(packet, LOWPAN_UNSUPPORTED_DISPATCH);
+        return;
     }
     if (prefix.kind == Prefix::FRAG1 || prefix.kind == Prefix::FRAGN) {
         processFragment(packet, prefix.kind == Prefix::FRAG1, source, destination, prefix.state);

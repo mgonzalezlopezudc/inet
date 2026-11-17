@@ -1,0 +1,20 @@
+%description:
+One 256-tag namespace coordinates source and swapped tags, bounded collision
+search, exhaustion, and exact guard reuse independently of incoming numeric tags.
+
+%includes:
+#include "inet/linklayer/lowpan/LowpanRecoveryTagAllocator.h"
+using namespace inet;
+using namespace inet::lowpan;
+
+%activity:
+LowpanRecoveryTagAllocator pool;
+ASSERT(pool.allocate(SIMTIME_ZERO,SimTime(166),0)==0);
+ASSERT(pool.allocate(SIMTIME_ZERO,SimTime(166),0)==1);
+for(int i=2;i<256;i++)ASSERT(pool.allocate(SIMTIME_ZERO,SimTime(166),0)==i);
+ASSERT(!pool.allocate(SimTime(165),SimTime(332),37));
+ASSERT(pool.allocate(SimTime(166),SimTime(332),37)==37);
+EV<<"Coordinated recovery tag exhaustion and exact expiry verified\n";
+
+%contains: stdout
+Coordinated recovery tag exhaustion and exact expiry verified

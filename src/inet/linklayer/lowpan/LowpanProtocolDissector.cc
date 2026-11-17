@@ -8,6 +8,8 @@
 #include "inet/linklayer/lowpan/LowpanExtendedDispatchHeader_m.h"
 #include "inet/linklayer/lowpan/LowpanFrag1Header_m.h"
 #include "inet/linklayer/lowpan/LowpanFragnHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanRfragHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanRfragAckHeader_m.h"
 #include "inet/linklayer/lowpan/LowpanProtocol.h"
 #include "inet/linklayer/lowpan/LowpanIphcHeader_m.h"
 #include "inet/linklayer/lowpan/LowpanUdpNhcHeader_m.h"
@@ -107,7 +109,28 @@ void LowpanProtocolDissector::dissect(Packet *packet, const Protocol *protocol, 
             callback.visitChunk(packet->popAtFront(), &lowpanProtocol);
     }
     else {
-        if (kind == Prefix::FRAG1 || kind == Prefix::FRAGN) {
+        if (kind == Prefix::RFRAG_ACK) {
+            if (packet->getDataLength() != B(6)) callback.markIncorrect();
+            if (packet->getDataLength() >= B(6)) {
+                auto header = packet->popAtFront<LowpanRfragAckHeader>(B(6), Chunk::PF_ALLOW_INCORRECT);
+                callback.visitChunk(header, &lowpanProtocol);
+                if (header->isIncorrect()) callback.markIncorrect();
+            }
+            if (packet->getDataLength() > b(0)) callback.visitChunk(packet->popAtFront(), &lowpanProtocol);
+        }
+        else if (kind == Prefix::RFRAG) {
+            if (packet->getDataLength() < B(6)) callback.markIncorrect();
+            else {
+                auto header = packet->popAtFront<LowpanRfragHeader>(B(6), Chunk::PF_ALLOW_INCORRECT);
+                callback.visitChunk(header, &lowpanProtocol);
+                if (header->isIncorrect() || (header->getFragmentOffset() != 0 && packet->getDataLength() != B(header->getFragmentSize())))
+                    callback.markIncorrect();
+                if (header->getSequence() == 0 && packet->getDataLength() > b(0) && Prefix::parse(*packet).kind == Prefix::IPHC)
+                    dissectIphc();
+            }
+            if (packet->getDataLength() > b(0)) callback.visitChunk(packet->popAtFront(), &lowpanProtocol);
+        }
+        else if (kind == Prefix::FRAG1 || kind == Prefix::FRAGN) {
             bool first = kind == Prefix::FRAG1;
             int length = first ? 4 : 5;
             if (packet->getDataLength() <= B(length))

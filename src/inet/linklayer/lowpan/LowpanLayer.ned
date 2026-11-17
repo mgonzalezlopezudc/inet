@@ -17,10 +17,32 @@ simple LowpanLayer extends SimpleModule like ILowpanLayer
         bool meshUnder = default(false); // Native-only configured L2 mesh; optimized ND remains one-hop.
         bool nativeFragmentPacing = default(false); // Native unicast data only; Mesh unsupported. Control/broadcast remain immediate.
         bool nativeFragmentForwarding = default(false); // Requires native pacing, no Mesh, and declared <=8-hop compatible data deployment.
+        bool nativeSelectiveRecovery = default(false); // RFC8931 native unicast, requires IPHC/no Mesh; ND/broadcast stay ordinary.
+        int maxRecoveryRecords = default(64); // Combined source, receiver, relay and protection records; no live eviction.
+        int maxRecoveryBytes @unit(B) = default(32768B); // All distinct retained original/encoded data, receiver reservation and queued relay/control bytes.
+        int maxRecoveryControls = default(64);
+        int maxRecoveryPendingFrames = default(4);
+        int maxRecoveryPendingBytes @unit(B) = default(512B);
+        int recoveryPayloadLimit @unit(B) = default(0B); // Optional smaller adaptation cap; native envelope remains unchanged.
+        int recoveryPathPayloadLimit @unit(B) = default(94B); // Declared minimum across <=8 links, never inferred remotely.
+        int recoveryWindow = default(32); // 1..32, frozen ascending batches.
+        int recoveryMinFragmentSize @unit(B) = default(48B);
+        int recoveryOptFragmentSize @unit(B) = default(80B);
+        int recoveryMaxFragmentSize @unit(B) = default(80B); // Source-only tuning, includes final fragment.
+        double recoveryResidence @unit(s) = default(50ms); // Ingress-to-delivery budget, including queue/MAC; <=50ms.
+        double recoveryGap @unit(s) = default(150ms); // After matched lower terminal result; controls bypass data gap.
+        double recoveryOperationLifetime @unit(s) = default(45s); // Fixed source horizon, independent of terminal callbacks.
+        double recoveryInitialRto @unit(s) = default(2.4s);
+        double recoveryMinRto @unit(s) = default(850ms);
+        double recoveryMaxRto @unit(s) = default(9.6s);
+        double recoveryIncompleteLifetime @unit(s) = default(60s);
+        double recoveryFullLifetime @unit(s) = default(30s);
+        double recoveryHistoryLifetime @unit(s) = default(120s); // Fixed first-seen ceiling, never renewed by duplicates/reset.
+        double recoveryTagProtection @unit(s) = default(166s); // Covers source horizon, both declared8-link paths and identity history.
         xml fragmentForwardingPeers = default(xml("<peers/>")); // Administrative actual-native peer allowlist, scoped by this interface/PAN. Empty keeps ingress ordinary.
         string routingTableModule = default("");
         string icmpv6Module = default("");
-        string ipv6Module = default(""); // Same-node LowpanIpv6; registered policy hooks force ordinary fallback.
+        string ipv6Module = default(""); // Same-node LowpanIpv6; forwarding/recovery apply their policy-hook eligibility rules.
         int maxForwardingRecords = default(64); // 1..64, including ordinary dispositions and closed identities.
         int maxForwardingRanges = default(4); // 1..4 pending input ranges; carry is additional.
         int maxForwardingPendingBytes @unit(B) = default(512B);

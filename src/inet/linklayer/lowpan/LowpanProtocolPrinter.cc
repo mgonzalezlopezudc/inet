@@ -7,6 +7,8 @@
 #include "inet/linklayer/lowpan/LowpanExtendedDispatchHeader_m.h"
 #include "inet/linklayer/lowpan/LowpanFrag1Header_m.h"
 #include "inet/linklayer/lowpan/LowpanFragnHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanRfragHeader_m.h"
+#include "inet/linklayer/lowpan/LowpanRfragAckHeader_m.h"
 #include "inet/linklayer/lowpan/LowpanProtocol.h"
 #include "inet/linklayer/ieee802154/Ieee802154FrameHeader_m.h"
 #include "inet/linklayer/lowpan/LowpanIphcHeader_m.h"
@@ -36,6 +38,12 @@ void LowpanProtocolPrinter::print(const Ptr<const Chunk>& chunk, const Protocol 
     else if (auto header = dynamicPtrCast<const LowpanFragnHeader>(chunk))
         context.infoColumn << "FRAGN size=" << header->getDatagramSize() << " tag=" << header->getDatagramTag()
                            << " offset=" << 8 * header->getDatagramOffset();
+    else if (auto header = dynamicPtrCast<const LowpanRfragHeader>(chunk))
+        context.infoColumn << "RFRAG tag=" << int(header->getDatagramTag()) << " seq=" << int(header->getSequence())
+                           << " size=" << header->getFragmentSize() << " offset=" << header->getFragmentOffset()
+                           << " X=" << header->getAckRequested() << " E=" << header->getEcn();
+    else if (auto header = dynamicPtrCast<const LowpanRfragAckHeader>(chunk))
+        context.infoColumn << "RFRAG-ACK tag=" << int(header->getDatagramTag()) << " bitmap=" << header->getBitmap() << " E=" << header->getEcn();
     else if (auto header = dynamicPtrCast<const LowpanIphcHeader>(chunk))
         context.infoColumn << "IPHC TF=" << int(header->getTf()) << " SAM=" << int(header->getSam())
                            << " DAM=" << int(header->getDam()) << " M=" << header->getM();
