@@ -2,7 +2,7 @@
 
 > **Kind:** ledger · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [extension obligations](../../standard/rfc9147/extensions.md), [implementation plan](https://github.com/mgonzalezlopezudc/inet/blob/5284847df92eea8451bf056d8722fabb0ddf65bd/plan/pending/dtls-extensions.md)
 
-Publication association: C29. The retained execution statements refer to their original donor revisions. Fresh reconstructed results and exact-parent execution status are recorded separately; no historical PASS is attributed to this prefix.
+Publication association: C32. The retained execution statements refer to their original donor revisions. Fresh reconstructed results and exact-parent execution status are recorded separately; no historical PASS is attributed to this prefix.
 
 
 The user authorized execution of plan revision 5 on 2026-11-16. Base: `cb1691184444afa64b1819348d446d4cad610474`, branch `feat/dtls-extensions`. The unrelated local `AGENTS.md` edit is excluded. This record distinguishes selected future behavior from implemented and executed evidence. Existing baseline results remain valid only for their recorded revisions.
@@ -41,8 +41,8 @@ All named new tests below are **NOT_IMPLEMENTED / NOT_RUN** until their owning s
 | C8 | HEARTBEAT | Thirteen heartbeat protocol cases; serializer unit; selected existing controls | DONE: fresh debug build; 22 combined protocol, 8 unit, 7 module PASS |
 | C9 | PATH | Seventeen migration cases; NAT translation, switched/routed IPv4 and routed IPv6, rebind/error checks | DONE: 60 protocol, eight unit and seven module cases pass in debug |
 | C10 | PHA | Twenty-two PHA cases; contextual serializers, offer/store units and existing controls | DONE: full 230-case debug suite passes; final byte-bound correction passes 31 focused cases |
-| C11a | Existing fragmentation-request API | tests/protocol/ipv6/Ipv6DontFragmentRequest; source-fragmentation control | NOT_STARTED |
-| C11 | PMTU | Rfc9147PathMtu; flight/path units | NOT_STARTED |
+| C11a | Existing fragmentation-request API | Immediate/delayed Ipv6DontFragmentRequest; source-fragmentation control | DONE: parent reproduces both defects; fresh debug child passes all three cases |
+| C11 | PMTU | Rfc9147PathMtu and routed/interaction cases; flight/path units | DONE: 247 debug protocol cases pass before final startup guard; final 22 protocol controls and 16 module cases pass; 11 units pass |
 | C12 | 12-RECORD | Dtls12RecordSerializer_1, Dtls12HandshakeSerializer_1; unsupported-version control | NOT_STARTED |
 | C13 | VERSION, 12-RECOVERY | Rfc6347Handshake, Recovery, Datagrams; Rfc9147VersionNegotiation | NOT_STARTED |
 | C14 | 12-SESSION | Rfc6347Resumption | NOT_STARTED |
@@ -186,7 +186,7 @@ The source trace covers all callback implementations, both processing queues, AC
 
 ### C10 execution and evidence
 
-Implemented the contract above. The [reviewer document](https://github.com/mgonzalezlopezudc/inet/blob/5284847df92eea8451bf056d8722fabb0ddf65bd/tests/protocol/dtls/post-handshake-authentication.md) owns the finite policy, API, topology and per-case observations. Contextual certificate construction and request parsing are shared with initial authentication. Separate response owners permit repeated requests during old response ACK recovery; the output fence covers first-transmission service/handoff and releases deferred work per association. Heartbeat deadlines retain their remaining duration while paused. Ticket entries retain immutable peer-authentication snapshots.
+Implemented the contract above. The [reviewer document](../../../../../tests/protocol/dtls/post-handshake-authentication.md) owns the finite policy, API, topology and per-case observations. Contextual certificate construction and request parsing are shared with initial authentication. Separate response owners permit repeated requests during old response ACK recovery; the output fence covers first-transmission service/handoff and releases deferred work per association. Heartbeat deadlines retain their remaining duration while paused. Ticket entries retain immutable peer-authentication snapshots.
 
 A fresh debug library passes the **full 230-case DTLS protocol suite**, including all 22 new authentication cases, with exit zero. Ten helper units and seven module controls pass. A final source audit then added the missing 13-byte KeyUpdate admission check to the enabled shared retained-byte bound. After rebuilding, **31 focused protocol cases** pass: all 22 authentication cases and nine handshake/update/CID/ticket controls. The request-budget case now directly checks KeyUpdate refusal too. Two engine/sender module controls pass against this final library. The final serializer rerun also includes the contextual empty-Certificate encoding added after the initial ten-unit run. This distinguishes the broad pre-correction run from the final directly affected checks.
 
@@ -202,3 +202,60 @@ opp_run_module_tests --load . -p inet -m debug --no-build -f 'Dtls(SenderState|E
 ```
 
 Build logs are `c10-build-debug.log` and `c10-budget-build-debug.log`; runner/console pairs use the above prefixes under `audit/dtls-extensions/`. The earlier sequential full-suite attempt was interrupted deliberately to switch to the supported concurrent mode; its partial logs are `c10-partial-sequential-*` and are not a complete run. Only one protocol runner used a suite work directory at a time. Scoped engine/TLS/contract/application architecture, DTLS/TLS naming, source protection, document seals, release formatting and selected documentation links pass. The global interface gate still fails on the same 16 unchanged classes, with no `IDtls` finding (`c10-interfaces.log`). The C++ checker remains unavailable without `clang-tidy`; prior global link failures, release, exact-parent, fingerprint and active-authentication stop/crash execution remain unrun. No stored expectation changed.
+
+## C11a implementation contract
+
+Validated before the source edit: `Ipv6::fragmentAndSend()` receives the selected interface and next hop after routing/neighbor resolution, distinguishes local from forwarded traffic using `InterfaceInd`, sends fitting packets directly, and reports Packet Too Big for oversized forwarded packets. It currently fragments oversized local packets without reading `FragmentationReq`. Add the existing tag check after the fitting/forwarded branches and before creating fragments. For an explicit true request, count and emit `PACKET_TOO_BIG`, delete the owned packet and return. Absent/false tags, fitting output and forwarding keep their existing branches. No new tag, socket API or ICMP wire behavior is introduced. Source protection and scoped IPv6 architecture checks pass.
+
+The proposed direct checks send a first oversized tagged packet, a small tagged packet and an oversized untagged control over a 1280-byte source link with static IPv6 addresses. Repeat with delayed neighbor advertisement so the tag must survive the pending-resolution queue. Require one local drop, no forbidden output/delivery, small unfragmented delivery and exactly two fragments/reassembled delivery for the untagged control. Exercise the same fixtures on parent `7bbb8784c2` before the fix and retain raw evidence. The existing source-fragmentation control will also run. These are local API checks rather than a newly claimed IPv6 wire requirement.
+
+### C11a execution and evidence
+
+Implemented the existing tag check in `Ipv6::fragmentAndSend()` after fitting/forwarded output and before local fragmentation. The [reviewer document](../../../../../tests/protocol/ipv6/dont-fragment-request.md) owns topology, parameters, stimuli, packet sizes, observations and limits. No DTLS policy or new generic interface is included.
+
+On parent `7bbb8784c2`, both new cases compile and reach their final runtime assertion but fail: no requested local drop occurs, each log shows two fragmentation operations, and UDP delivers to ports 5001, 5000 and 5002. The delayed case records the actual 300 ms Neighbor Advertisement delay. Parent raw logs are saved under `audit/dtls-extensions/c11a-parent/`; `c11a-parent-fixtures.sha256` verifies that both causal runs used byte-for-byte identical fixtures. One trailing-space-only blank line was trimmed from the immediate fixture afterward. An earlier NED work-package exclusion setup error was corrected before these causal runs. The parent source-fragmentation control passes with explicit `dontFragment = false`.
+
+A fresh matching debug child library passes **all three protocol cases** with exit zero and nonzero selection: the immediate/delayed request checks and the existing routed source-fragmentation control. The new cases observe exactly one local drop, no forbidden output/delivery, one small unfragmented datagram, and exactly two untagged fragments with successful reassembly. Exact commands:
+
+```sh
+# Parent library, before the IPv6 source edit:
+opp_run_protocol_tests --load . -p inet -m debug --no-build --concurrent -w '^tests/protocol/ipv6$' -f 'Ipv6DontFragmentRequest.*\.test$' --log-file audit/dtls-extensions/c11a-parent-runner.log
+opp_run_protocol_tests --load . -p inet -m debug --no-build --no-concurrent -w '^tests/protocol/ipv6$' -f 'Rfc8200SourceFragmentation\.test$' --log-file audit/dtls-extensions/c11a-parent-control-runner.log
+# Changed library:
+make -j8 MODE=debug
+opp_run_protocol_tests --load . -p inet -m debug --no-build --concurrent -w '^tests/protocol/ipv6$' -f '(Ipv6DontFragmentRequest.*|Rfc8200SourceFragmentation)\.test$' --log-file audit/dtls-extensions/c11a-child-runner.log
+```
+
+Build and runner/console logs use those prefixes under `audit/dtls-extensions/`. Scoped IPv6 architecture, source protection, document seals, release formatting and reviewer-document links pass. The scoped IPv6 naming gate fails on the unchanged `headers` directory and `Ipv6ExtHeaderTag.msg`/`Ipv6ExtensionHeaders.msg` file-stem findings; these are not introduced or resolved here. The previously recorded global interface/link and missing-C++-checker limitations remain. Release execution and fingerprints remain unrun. No stored expectation changed.
+
+## C11 implementation contract
+
+Validated from the current source and RFC 8899 §§5.1–5.3 before implementation. `DtlsAssociation` owns lazy per-path discovery state, one scheduling timer and the existing shared heartbeat slot. Size probes use three actual handoffs with a per-attempt timeout (default 16 s, minimum 1 s) and bounded exponential backoff on the heartbeat retry timer. They do not nest three complete diagnostic heartbeat exchanges. A 128-byte increasing search preserves the confirmed budget; periodic confirmation detects black holes, failed base confirmation suspends ordinary output, and bounded base attempts can recover. Migration cancels size probing, then resets the new path to the configured base. PHA pauses the remaining size-probe timer. Unsupported heartbeat permission reports unsupported discovery and keeps the base fixed. The 512-byte profile base also departs from RFC 8899's IPv6 minimum; the plan now states that limit explicitly.
+
+`DtlsHandshakeFlight` maps handed-off records to epoch/message byte ranges. Re-fragmentation appends replacement fragments without reusing queued indices, preserves ACK coverage/history and propagates completion of a retained logical-generation task to replacement fragments. Superseded queued work is rejected by existing per-operation eligibility; active service finishes its sampled cost before skipping. Replacement ranges share immutable body storage and pay record service separately, without another logical handshake charge. Retained-body bounds remain enforced after fragment expansion. ACK/CID work and other associations survive; association-wide queue cancellation is excluded for resizing.
+
+`Dtls` exposes maximum-datagram query/outcome, uses the base before establishment and marks discovery output nonfragmenting through the existing tag. Typed UDP PTB hints are accepted only for the outstanding size probe's latest tuple, record and token, with sufficient quoted content. Subtract the quote's consumed IP/UDP front offset from the reported IP MTU. Native retained chunk metadata supplies modeled prefix correlation; real serialized ciphertext cannot. No separate packet history or generic UDP change is needed. Conservative rejection of incomplete quotes and IPv6 extension-header indications lost below UDP remains explicit. ERROR suspends application output while small control recovery and heartbeat replies remain available at base.
+
+### C11 implementation and verification
+
+Final pre-write boundary check: startup validation owns the conversion from configured seconds to simulation time. A positive double can round to zero ticks, so validate the confirmation and raise ordering again after `SimTime` conversion. This prevents a zero-time scheduling loop without adding runtime state. The existing finite/range checks short-circuit before converting nonfinite inputs. Four configuration module cases cover clock resolution, minimum base, ceiling and minimum attempt timeout. This bounded addition does not affect valid-profile protocol behavior.
+
+The [reviewer document](https://github.com/mgonzalezlopezudc/inet/blob/5284847df92eea8451bf056d8722fabb0ddf65bd/tests/protocol/dtls/path-mtu.md) records the finite profile, real routed IPv4/IPv6 topology, exact size accounting, stimuli, observations and limits. Seventeen new protocol fixtures cover growth, loss, real hints, truncated/stale/ordinary quotes, base failure/recovery, shared-engine isolation, late range ACKs during active service, queued oversized-send rejection, raise, migration, PHA suspension and stop/crash cleanup. The late-ACK fixture observes four logical-generation charges and exactly two paid but suppressed record operations; pending CID work and authentication complete.
+
+A matching debug build completed with exit zero (`c11-verified-build-debug.log`; implementation builds also include `c11-order-build-debug.log`). Eight DTLS units, three TLS units and twelve DTLS module cases pass with nonzero selection and exit zero (`c11-unit-console.log`, `c11-tls-unit-console.log`, `c11-module-console.log`). The flight unit includes repeated splitting before generation completes, old range ACK coverage and first-message ordering; the new module case tests path-state transitions. All **247 DTLS protocol cases pass** (`c11-full-dtls-*`), including the seventeen new cases. The PHA fixture correctly uses a 490-byte maximum without CID. The IPv6 fixture respects Ethernet's payload ceiling and the IPv4-options fixture updates its enclosing signal length.
+
+The clock-resolution fixture reproduces missing startup rejection on the pre-guard library; the other three configuration checks already pass. Raw evidence and the unchanged fixture hash are in `c11-config-before/`. After the bounded startup guard and another successful debug build (`c11-timer-build-debug.log`), **all sixteen DTLS module cases and twenty-two focused protocol cases pass** with exit zero (`c11-final-module-console.log`, `c11-final-controls-*`). The protocol selection includes all seventeen PMTU fixtures plus application datagrams, KeyUpdate, PHA, PHA probe suspension and routed migration controls. The earlier 247-case result describes the library before this final startup-only correction, not a repeated whole-suite run afterward.
+
+Exact commands, run from this checkout:
+
+```sh
+make -j8 MODE=debug
+opp_run_unit_tests --load . -p inet -m debug --no-build -f 'Dtls.*'
+opp_run_unit_tests --load . -p inet -m debug --no-build -f 'Tls.*'
+opp_run_protocol_tests --load . -p inet -m debug --no-build --concurrent -w '^tests/protocol/dtls$' --log-file audit/dtls-extensions/c11-full-dtls-runner.log
+# After the final startup guard and matching build:
+opp_run_module_tests --load . -p inet -m debug --no-build -f 'Dtls.*'
+opp_run_protocol_tests --load . -p inet -m debug --no-build --concurrent -w '^tests/protocol/dtls$' -f 'Rfc9147(PathMtu.*|ApplicationDatagrams|KeyUpdate|PostHandshakeAuth|PostHandshakeAuthProbePause|MigrationRouted)\.test$' --log-file audit/dtls-extensions/c11-final-controls-runner.log
+```
+
+Scoped engine/contract/application architecture, DTLS naming, source protection, document seals, release formatting and reviewer links pass. The global interface gate has the same sixteen unrelated findings and no `IDtls` finding; the C++ checker remains unavailable without clang-tidy. Release-mode execution, exact-parent comparisons and fingerprints have not run for C11. No stored baseline changed.
