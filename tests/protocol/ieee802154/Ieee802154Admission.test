@@ -1,0 +1,215 @@
+%description:
+Production MCPS boundaries for independent legacy address/header-size vectors:
+maximum/oversize/empty MSDUs, malformed requests, ownership, DSN and refusals.
+
+%extraargs: -r 0..1
+
+%includes:
+#include "ProtocolTest.h"
+
+%global:
+using namespace inet;
+using namespace inet::protocoltest;
+Define_ProtocolTestProgram()
+{
+    return ProtocolTest("ieee802154_admission").unordered({on("exercise").signal("verificationComplete").filterValue(1).within(0.079)});
+}
+
+%activity:
+EV << "ieee802154_admission compiled\n";
+
+%file: AdmissionExercise.cc
+#include <array>
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/common/packet/chunk/BitsChunk.h"
+#include "inet/linklayer/ieee802154/Ieee802154Frame_m.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceProvider.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceClient.h"
+
+namespace inet {
+static int destroyedAdmissionPackets = 0;
+class AdmissionPacket : public Packet
+{
+  public:
+    AdmissionPacket() : Packet("MCPS boundary probe") {}
+    virtual ~AdmissionPacket() { destroyedAdmissionPackets++; }
+};
+class AdmissionExercise : public cSimpleModule, public cListener, public IIeee802154MacServiceClient
+{
+    using Mode = Ieee802154Address::AddressType;
+    using Status = Ieee802154MacStatus;
+    using Admission = Ieee802154MacServiceAdmission;
+    ModuleRefByPar<IIeee802154MacServiceProvider> sender;
+    uint64_t nextId = 0, expectedId = 0;
+    Status expectedStatus = Status::SUCCESS;
+    int confirmations = 0, indications = 0, transmissions = 0, expectedDestructions = 0;
+    uint64_t expectedDsn = 250;
+    std::optional<Ieee802154MacPibValue> value;
+    Ieee802154MacDataRequest parameters;
+    std::vector<uint8_t> expectedPayload;
+    void set(const char *name, const Ieee802154MacPibValue& value) { ASSERT(sender->submitSet(++nextId,{name,value}) == Admission::ACCEPTED); }
+    void checkDsn() {
+        value.reset(); ASSERT(sender->submitGet(++nextId,{"macDsn"}) == Admission::ACCEPTED);
+        ASSERT(value && std::get<uint64_t>(*value) == expectedDsn);
+    }
+    void submit(size_t length, Status status, bool bits = false) {
+        auto packet = new AdmissionPacket;
+        if (bits) packet->insertAtBack(makeShared<BitsChunk>(std::vector<bool>{true,false,true}));
+        else if (length) packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>(length,0x42)));
+        expectedId = ++nextId; expectedStatus = status;
+        expectedDestructions = destroyedAdmissionPackets + 1;
+        ASSERT(sender->submitData(expectedId,packet,parameters) == Admission::ACCEPTED);
+        if (status == Status::SUCCESS) {
+            expectedPayload = std::vector<uint8_t>(length,0x42);
+            expectedDsn = (expectedDsn+1)&255;
+            auto refused = new AdmissionPacket;
+            int previous = confirmations;
+            ASSERT(sender->submitData(++nextId,refused,parameters) == Admission::BUSY);
+            ASSERT(confirmations == previous && destroyedAdmissionPackets == expectedDestructions-1);
+            delete refused; expectedDestructions++;
+            wait(SimTime(6,SIMTIME_MS));
+        }
+        ASSERT(destroyedAdmissionPackets == expectedDestructions);
+        checkDsn();
+    }
+  public:
+    AdmissionExercise() : cSimpleModule(65536) {}
+    virtual void initialize() override {
+        sender.reference(this,"serviceModule",true);
+        getModuleByPath(par("serviceModule"))->subscribe("packetSentToLower",this);
+        destroyedAdmissionPackets = 0;
+    }
+  protected:
+    virtual void activity() override {
+        wait(SimTime(1,SIMTIME_MS));
+        set("macMinBe",uint64_t(0)); set("macDsn",expectedDsn);
+        auto none = Ieee802154Address::NONE_ADDRESS;
+        auto shortAddress = Ieee802154Address::fromShort(1);
+        auto extended = Ieee802154Address::fromExtended(0x0401123456789abcULL);
+        struct Row { Mode source; Ieee802154Address destination; uint16_t pan; size_t header; };
+        const std::array<Row,9> rows = {{{Mode::NONE,shortAddress,0x1234,9}, {Mode::NONE,extended,0x1234,15},
+            {Mode::SHORT,none,0x1234,9}, {Mode::EXTENDED,none,0x1234,15},
+            {Mode::SHORT,shortAddress,0x1234,11}, {Mode::SHORT,extended,0x1234,17},
+            {Mode::EXTENDED,shortAddress,0x1234,17}, {Mode::EXTENDED,extended,0x1234,23},
+            {Mode::EXTENDED,extended,0xffff,25}}};
+        for (const auto& row : rows) {
+            parameters = {}; parameters.sourceAddressMode = row.source;
+            parameters.destinationAddress = row.destination; parameters.destinationPanId = row.pan;
+            submit(128-row.header,Status::FRAME_TOO_LONG);
+            submit(127-row.header,Status::SUCCESS);
+        }
+        parameters = {}; parameters.destinationAddress = shortAddress; parameters.destinationPanId = 0x1234;
+        submit(0,Status::SUCCESS);
+        submit(0,Status::INVALID_PARAMETER,true);
+        parameters.destinationAddress = none;
+        submit(1,Status::INVALID_ADDRESS);
+        parameters.destinationAddress = Ieee802154Address::fromShort(0xfffe);
+        submit(1,Status::INVALID_ADDRESS);
+        parameters.destinationAddress = shortAddress; parameters.sourceAddressMode = Mode::SHORT;
+        set("macShortAddress",uint64_t(0xffff)); submit(1,Status::INVALID_ADDRESS);
+        set("macShortAddress",uint64_t(0xfffe)); submit(1,Status::INVALID_ADDRESS);
+        set("macShortAddress",uint64_t(42));
+        parameters.sourceAddressMode = static_cast<Mode>(255); submit(1,Status::INVALID_PARAMETER);
+        parameters.sourceAddressMode = Mode::EXTENDED; parameters.security.securityLevel = 8; submit(1,Status::INVALID_PARAMETER);
+        parameters.security.securityLevel = 1; submit(1,Status::UNSUPPORTED_SECURITY);
+        int previous = confirmations;
+        ASSERT(sender->submitData(++nextId,nullptr,parameters) == Admission::INVALID_REQUEST);
+        for (auto id : {uint64_t(0),nextId,nextId-1}) {
+            auto refused = new AdmissionPacket;
+            ASSERT(sender->submitData(id,refused,parameters) == Admission::INVALID_REQUEST);
+            delete refused;
+        }
+        ASSERT(confirmations == previous && confirmations == 27 && indications == 10 && transmissions == 10);
+        checkDsn();
+        emit(registerSignal("verificationComplete"),1L);
+    }
+  public:
+    virtual void receiveSignal(cComponent *, simsignal_t, cObject *object, cObject *) override {
+        Enter_Method_Silent(); auto packet = check_and_cast<Packet *>(object);
+        ASSERT(packet->getDataLength() == (transmissions < 9 ? B(127) : B(9)));
+        auto frame = packet->peekAtFront<Ieee802154Frame>(); ASSERT(frame->getFrameVersion() == 1 && !frame->getAckRequest());
+        transmissions++;
+    }
+    virtual void handleDataConfirm(uint64_t id, const Ieee802154MacDataConfirm& confirm) override {
+        Enter_Method("handleDataConfirm"); ASSERT(id == expectedId && confirm.result == Ieee802154MacServiceResult(expectedStatus));
+        ASSERT(destroyedAdmissionPackets == expectedDestructions);
+        ASSERT(confirm.numBackoffs.has_value() == (expectedStatus == Status::SUCCESS)); confirmations++;
+    }
+    virtual void handleDataIndication(Packet *packet, const Ieee802154MacDataIndication& indication) override {
+        Enter_Method("handleDataIndication"); take(packet); ASSERT(!indication.ackSent);
+        ASSERT(packet->getDataLength() == B(expectedPayload.size()));
+        if (!expectedPayload.empty()) ASSERT(packet->peekDataAsBytes()->getBytes() == expectedPayload);
+        indications++; delete packet;
+    }
+    virtual void handleGetConfirm(uint64_t, const Ieee802154MacGetConfirm& confirm) override { Enter_Method("handleGetConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); value=confirm.value; }
+    virtual void handleSetConfirm(uint64_t, const Ieee802154MacSetConfirm& confirm) override { Enter_Method("handleSetConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); }
+    virtual void handleResetConfirm(uint64_t, const Ieee802154MacResetConfirm&) override { ASSERT(false); }
+    virtual void handlePromiscuousIndication(Packet *, const Ieee802154MacPromiscuousIndication&) override { ASSERT(false); }
+    virtual void handleCommStatusIndication(Packet *, const Ieee802154MacCommStatusIndication&) override { ASSERT(false); }
+};
+Define_Module(AdmissionExercise);
+}
+
+%file: AdmissionFixture.ned
+import inet.common.SimpleModule;
+import inet.linklayer.ieee802154.Ieee802154StandardInterface;
+import inet.linklayer.ieee802154.contract.IIeee802154MacServiceClient;
+import inet.mobility.static.StationaryMobility;
+import inet.protocoltest.TapRadioMedium;
+simple AdmissionExercise extends SimpleModule like IIeee802154MacServiceClient
+{
+    parameters: @class(::inet::AdmissionExercise); string serviceModule;
+        @signal[verificationComplete](type=long);
+}
+module AdmissionHost
+{
+    parameters: @networkNode;
+    submodules:
+        mobility: StationaryMobility;
+        nic: Ieee802154StandardInterface {
+            panId = 4660; rxOnWhenIdle = true;
+            mac.clientModule = "^.^.^.exercise";
+        }
+    connections allowunconnected:
+}
+network AdmissionTest
+{
+    submodules:
+        radioMedium: TapRadioMedium;
+        host[2]: AdmissionHost;
+        exercise: AdmissionExercise { serviceModule = "^.host[0].nic.mac"; }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = AdmissionTest
+sim-time-limit = 80ms
+cmdenv-express-mode = true
+*.host[*].nic.radio.sendRawBytes = ${raw=false,true}
+*.radioMedium.signalAnalogRepresentation = "scalar"
+*.radioMedium.backgroundNoise.power = -110dBm
+*.host[0].nic.shortAddress = 42
+*.host[1].nic.shortAddress = 1
+*.host[1].nic.mac.isPanCoordinator = true
+*.host[0].nic.extendedAddress = "extended:02-01-12-34-56-78-9A-BC"
+*.host[1].nic.extendedAddress = "extended:04-01-12-34-56-78-9A-BC"
+*.host[*].nic.radio.antenna.mobilityModule = "^.^.^.mobility"
+*.host[0].mobility.initialX = 0m
+*.host[1].mobility.initialX = 1m
+**.mobility.initFromDisplayString = false
+**.mobility.initialY = 0m
+**.mobility.initialZ = 0m
+**.mobility.constraintAreaMinX = 0m
+**.mobility.constraintAreaMinY = 0m
+**.mobility.constraintAreaMinZ = 0m
+**.mobility.constraintAreaMaxX = 100m
+**.mobility.constraintAreaMaxY = 100m
+**.mobility.constraintAreaMaxZ = 100m
+
+%contains: stdout
+PROTOCOLTEST ieee802154_admission: PASS
+
+%not-contains: stdout
+PROTOCOLTEST ieee802154_admission: FAIL

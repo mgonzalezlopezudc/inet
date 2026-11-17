@@ -1,0 +1,244 @@
+%description:
+Interrupt production direct DATA in backoff, CCA, TX readiness, on-air TX and
+ACK waiting. Cross cancel/reset/stop/crash with typed/raw frames. Check one abort,
+packet destruction, barrier admission, restart and a succeeding replacement request.
+Also check initially down nodes. Already emitted radio signals remain packet-level objects.
+
+%extraargs: -r 0..41
+
+%includes:
+#include "ProtocolTest.h"
+
+%global:
+using namespace inet;
+using namespace inet::protocoltest;
+
+Define_ProtocolTestProgram()
+{
+    int scenario = getSimulation()->getSystemModule()->par("scenario");
+    ProtocolTest test("ieee802154_lifecycle");
+    if (scenario < 20) {
+        if (scenario / 4 < 3)
+            test.meanwhile(never(on("host[0].nic.mac").signal("packetSentToLower")
+                 .filterPacket("Ieee802154Frame.frameType == 1 && Ieee802154Frame.dsn == 7").within(0.12)));
+        test.once(on("host[0].app").signal("firstAborted").filterValue(1).within(0.004));
+    }
+    else
+        test.once(on("host[0].app").signal("nodeStarted").filterValue(1).within(0.002));
+    return test.once(on("host[0].nic.mac").signal("packetSentToLower")
+                     .filterPacket("Ieee802154Frame.frameType == 1 && Ieee802154Frame.dsn == 8").within(0.01))
+        .once(on("host[0].app").signal("replacementDone").filterValue(1).within(0.01))
+        .never(on("host[0].nic.mac").signal("packetSentToLower")
+               .filterPacket("Ieee802154Frame.frameType == 1 && Ieee802154Frame.dsn == 7")
+               .describe("a retired backoff/CCA/TX timer cannot send the old request").within(0.09));
+}
+
+%activity:
+EV << "ieee802154_lifecycle compiled\n";
+
+%file: LifecycleClient.cc
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/common/lifecycle/LifecycleController.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceProvider.h"
+
+namespace inet {
+class LifecycleMsdu : public Packet
+{
+  public:
+    static int destroyed;
+    LifecycleMsdu() : Packet("tracked-msdu") {}
+    virtual ~LifecycleMsdu() { ++destroyed; }
+};
+int LifecycleMsdu::destroyed = 0;
+
+class NativeLifecycleClient : public cSimpleModule, public IIeee802154MacServiceClient, public LifecycleController
+{
+    ModuleRefByPar<IIeee802154MacServiceProvider> service;
+    uint64_t nextId = 0, firstId = 0, secondId = 0, resetId = 0;
+    int scenario = 0, abortCount = 0, resetCount = 0, successCount = 0;
+    simsignal_t abortedSignal, doneSignal, startedSignal;
+    void operate(bool start, bool crash = false, bool wholeNode = false) {
+        auto module = wholeNode ? getParentModule() : getParentModule()->getSubmodule("nic")->getSubmodule("mac");
+        LifecycleOperation *operation = start ? static_cast<LifecycleOperation *>(new ModuleStartOperation) :
+                crash ? static_cast<LifecycleOperation *>(new ModuleCrashOperation) : new ModuleStopOperation;
+        LifecycleOperation::StringMap parameters;
+        operation->initialize(module,parameters);
+        ASSERT(initiateOperation(operation));
+    }
+    void set(const char *name, uint64_t value) {
+        ASSERT(service->submitSet(++nextId,{name,value}) == Ieee802154MacServiceAdmission::ACCEPTED);
+    }
+    void sendMsdu(bool first) {
+        auto packet = new LifecycleMsdu;
+        packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{1,2,3,4}));
+        Ieee802154MacDataRequest request;
+        request.sourceAddressMode = Ieee802154Address::AddressType::EXTENDED;
+        request.destinationAddress = Ieee802154Address::fromExtended(0x0401123456789abcULL);
+        request.destinationPanId = 0x1234; request.ackTx = true; request.msduHandle = first ? 7 : 8;
+        auto id = ++nextId;
+        (first ? firstId : secondId) = id;
+        ASSERT(service->submitData(id,packet,request) == Ieee802154MacServiceAdmission::ACCEPTED);
+        if (first) {
+            auto refused = new Packet("caller-owned-refusal");
+            ASSERT(service->submitData(++nextId,refused,request) == Ieee802154MacServiceAdmission::BUSY);
+            ASSERT(refused->getOwner() == this); delete refused;
+        }
+    }
+  protected:
+    virtual void initialize() override {
+        service.reference(this,"serviceModule",true);
+        scenario = par("scenario");
+        abortedSignal = registerSignal("firstAborted"); doneSignal = registerSignal("replacementDone"); startedSignal = registerSignal("nodeStarted");
+        if (par("sender").boolValue()) {
+            LifecycleMsdu::destroyed = 0;
+            scheduleAt(SimTime(1,SIMTIME_MS),new cMessage("first",0));
+        }
+    }
+    virtual void handleMessage(cMessage *message) override {
+        int kind = message->getKind(); delete message;
+        if (kind == 0) {
+            if (scenario == 20) {
+                ASSERT(service->submitGet(++nextId,{"macDsn"}) == Ieee802154MacServiceAdmission::UNAVAILABLE);
+                operate(true,false,true); emit(startedSignal,1L);
+                scheduleAfter(SimTime(500,SIMTIME_US),new cMessage("replacement",2));
+                return;
+            }
+            int phase = scenario / 4;
+            set("macMaxBe",phase == 0 ? 8 : 3); set("macMinBe",phase == 0 ? 8 : 0);
+            set("macMaxFrameRetries",0); set("macDsn",7);
+            sendMsdu(true);
+            const int interruptUs[] = {1001,1001,1129,1321,2600};
+            scheduleAt(SimTime(interruptUs[phase],SIMTIME_US),new cMessage("interrupt",1));
+        }
+        else if (kind == 1) {
+            int operation = scenario % 4;
+            if (operation == 0)
+                ASSERT(service->cancel(firstId) == Ieee802154MacServiceCancelResult::CANCELLED);
+            else if (operation == 1) {
+                resetId = ++nextId;
+                ASSERT(service->submitReset(resetId,{false}) == Ieee802154MacServiceAdmission::ACCEPTED);
+            }
+            else
+                operate(false,operation == 3);
+            ASSERT(abortCount == 1 && LifecycleMsdu::destroyed == 1);
+            scheduleAfter(SimTime(2,SIMTIME_MS),new cMessage("replacement",2));
+        }
+        else {
+            if (scenario < 20 && scenario % 4 >= 2) operate(true);
+            set("macMinBe",0); set("macMaxFrameRetries",0); set("macDsn",8);
+            sendMsdu(false);
+        }
+    }
+    virtual void finish() override {
+        if (!par("sender").boolValue()) return;
+        ASSERT(successCount == 1 && abortCount == (scenario == 20 ? 0 : 1));
+        ASSERT(resetCount == (scenario < 20 && scenario % 4 == 1 ? 1 : 0));
+        ASSERT(LifecycleMsdu::destroyed == (scenario == 20 ? 1 : 2));
+    }
+  public:
+    virtual void handleDataConfirm(uint64_t id,const Ieee802154MacDataConfirm& confirm) override {
+        Enter_Method("handleDataConfirm");
+        if (id == firstId) {
+            int operation = scenario % 4;
+            auto reason = operation == 0 ? Ieee802154MacServiceAbortReason::CANCELLED : operation == 1 ? Ieee802154MacServiceAbortReason::RESET : Ieee802154MacServiceAbortReason::STOPPED;
+            ASSERT(confirm.result == Ieee802154MacServiceResult(reason) && !confirm.numBackoffs && LifecycleMsdu::destroyed == 1);
+            ASSERT(++abortCount == 1);
+            auto probe = service->submitGet(++nextId,{"macDsn"});
+            ASSERT(probe == (operation == 0 ? Ieee802154MacServiceAdmission::ACCEPTED : operation == 1 ? Ieee802154MacServiceAdmission::BUSY : Ieee802154MacServiceAdmission::UNAVAILABLE));
+            emit(abortedSignal,1L);
+        }
+        else {
+            ASSERT(id == secondId && confirm.msduHandle == 8 && confirm.result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS));
+            ASSERT(++successCount == 1 && LifecycleMsdu::destroyed == (scenario == 20 ? 1 : 2));
+            emit(doneSignal,1L);
+        }
+    }
+    virtual void handleGetConfirm(uint64_t,const Ieee802154MacGetConfirm& confirm) override { Enter_Method("handleGetConfirm"); ASSERT(confirm.value && std::get<uint64_t>(*confirm.value) == 8); }
+    virtual void handleSetConfirm(uint64_t,const Ieee802154MacSetConfirm& confirm) override { Enter_Method("handleSetConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS)); }
+    virtual void handleResetConfirm(uint64_t id,const Ieee802154MacResetConfirm& confirm) override { Enter_Method("handleResetConfirm"); ASSERT(id == resetId && !confirm.setDefaultPib && confirm.result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS)); ASSERT(++resetCount == 1); }
+    virtual void handleDataIndication(Packet *packet,const Ieee802154MacDataIndication&) override { Enter_Method("handleDataIndication"); take(packet); delete packet; }
+    virtual void handlePromiscuousIndication(Packet *,const Ieee802154MacPromiscuousIndication&) override { ASSERT(false); }
+    virtual void handleCommStatusIndication(Packet *,const Ieee802154MacCommStatusIndication&) override { ASSERT(false); }
+};
+Define_Module(NativeLifecycleClient);
+}
+
+%file: test.ned
+import inet.common.SimpleModule;
+import inet.common.lifecycle.NodeStatus;
+import inet.mobility.static.StationaryMobility;
+import inet.physicallayer.wireless.common.medium.RadioMedium;
+import inet.linklayer.ieee802154.Ieee802154StandardInterface;
+import inet.linklayer.ieee802154.contract.IIeee802154MacServiceClient;
+simple NativeLifecycleClient extends SimpleModule like IIeee802154MacServiceClient
+{
+    parameters:
+        @class(::inet::NativeLifecycleClient);
+        string serviceModule;
+        bool sender;
+        int scenario;
+        @signal[firstAborted](type=long);
+        @signal[nodeStarted](type=long);
+        @signal[replacementDone](type=long);
+}
+module NativeLifecycleHost
+{
+    parameters:
+        @networkNode;
+        bool initiallyDown = default(false);
+    submodules:
+        status: NodeStatus { initialStatus = parent.initiallyDown ? "DOWN" : "UP"; }
+        mobility: StationaryMobility;
+        nic: Ieee802154StandardInterface {
+            panId = 4660; rxOnWhenIdle = true; mac.clientModule = "^.^.app";
+        }
+        app: NativeLifecycleClient { serviceModule = "^.nic.mac"; }
+    connections allowunconnected:
+}
+network NativeLifecycleTest
+{
+    parameters:
+        int scenario;
+    submodules:
+        radioMedium: RadioMedium;
+        host[2]: NativeLifecycleHost;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = NativeLifecycleTest
+sim-time-limit = 120ms
+seed-set = 0
+cmdenv-express-mode = true
+*.scenario = ${scenario=0..20}
+*.host[*].app.scenario = ${scenario}
+*.host[0].initiallyDown = ${scenario} == 20
+*.host[*].nic.radio.sendRawBytes = ${raw=false,true}
+*.host[0].app.sender = true
+*.host[1].app.sender = false
+*.host[0].nic.extendedAddress = "extended:02-01-12-34-56-78-9A-BC"
+*.host[1].nic.extendedAddress = "extended:04-01-12-34-56-78-9A-BC"
+*.host[*].nic.radio.antenna.mobilityModule = "^.^.^.mobility"
+*.radioMedium.signalAnalogRepresentation = "scalar"
+*.radioMedium.backgroundNoise.power = -110dBm
+*.host[*].mobility.initFromDisplayString = false
+*.host[0].mobility.initialX = 0m
+*.host[1].mobility.initialX = 1m
+*.host[*].mobility.initialY = 0m
+*.host[*].mobility.initialZ = 0m
+*.host[*].mobility.constraintAreaMinX = 0m
+*.host[*].mobility.constraintAreaMinY = 0m
+*.host[*].mobility.constraintAreaMinZ = 0m
+*.host[*].mobility.constraintAreaMaxX = 100m
+*.host[*].mobility.constraintAreaMaxY = 100m
+*.host[*].mobility.constraintAreaMaxZ = 100m
+
+%contains: stdout
+PROTOCOLTEST ieee802154_lifecycle: PASS
+
+%not-contains: stdout
+PROTOCOLTEST ieee802154_lifecycle: FAIL

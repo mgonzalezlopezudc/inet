@@ -48,6 +48,9 @@ enum class Ieee802154MacServiceAbortReason : uint8_t {
     CANCELLED,
     RESET,
     STOPPED,
+    PURGED, ///< Local retirement of an accepted DATA request by a successful PURGE.
+    DISASSOCIATED, ///< Local retirement when a peer/PAN association is removed.
+    IGNORED, ///< An explicitly ignored management response emits no frame or IEEE success status.
 };
 
 /**
@@ -83,6 +86,15 @@ enum class Ieee802154MacStatus : uint8_t {
     UNAVAILABLE_SECURITY_LEVEL,
     UNSUPPORTED_ALGORITHM,
     UNSUPPORTED_LEGACY,
+    NO_DATA,
+    INVALID_HANDLE,
+    UNSUPPORTED_FEATURE,
+    NO_SHORT_ADDRESS,
+    LIMIT_REACHED,
+    BAD_CHANNEL,
+    NO_BEACON,
+    PAST_TIME,
+    RANGING_NOT_SUPPORTED,
 };
 
 /**

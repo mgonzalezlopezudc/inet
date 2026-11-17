@@ -698,8 +698,10 @@ Retain and, where necessary, adapt the following existing fixtures and write/upd
 
 | Owner | Existing protocol tests, each prefixed `Ieee802154` and suffixed `.test` | Reviewer documents to retain/update in that commit |
 | --- | --- | --- |
-| N06 | Admission, UnslottedAccess, DataAck, Broadcast, Contention, InterframeSpacing, SequenceWrap, ReceiveSecurity, Lifecycle, PhyLifecycle, PhyPib | `admission.md`, `unslotted-access.md`, `data-ack.md`, `broadcast.md`, `contention.md`, `interframe-spacing.md`, `sequence-wrap.md`, `receive-security.md`, `lifecycle.md`, `phy-lifecycle.md`, `phy-pib.md` |
-| N07 | Indirect, Association, Reassociation, Orphan, PanConflict, ReceiverEnable | `indirect.md`, `association.md`, `reassociation.md`, `orphan.md`, `pan-conflict.md`, `receiver-enable.md` |
+| N06 | Admission, UnslottedAccess, DataAck, Contention, InterframeSpacing, SequenceWrap, ReceiveSecurity, Lifecycle, PhyLifecycle cases 0–7, PhyPib | `admission.md`, `unslotted-access.md`, `data-ack.md`, `contention.md`, `interframe-spacing.md`, `sequence-wrap.md`, `receive-security.md`, `lifecycle.md`, `phy-lifecycle.md`, `phy-pib.md` |
+| N07 | Indirect, Association, Reassociation, Orphan, PanConflict, ReceiverEnable, Broadcast, PhyLifecycle extension for cases 8–9 | `indirect.md`, `association.md`, `reassociation.md`, `orphan.md`, `pan-conflict.md`, `receiver-enable.md`, `broadcast.md`, management extension of `phy-lifecycle.md` |
+
+Execution preflight resolved two fixture assignments without changing the feature boundary: Broadcast exercises queued beacon release and therefore belongs entirely to N07. PhyLifecycle cases 8–9 combine reset with managed queued data; N06 retains cases 0–7 and their assertions, and N07 restores the full original fixture. Direct broadcast receive/filter controls remain in N06's ReceiveSecurity cases. Source-based broadcast emission reasoning is not a claim that the managed Broadcast fixture ran at N06.
 
 For N06, preserve the NativeInterface and UnslottedAccess module checks and the core portions of MacPib/PendingTransactions-independent coverage. For N07, include the PendingTransactions unit, Start/Discovery/PassiveScan module fixtures, and the management-dependent extensions to earlier fixtures. Common test support in `fixtures/ReceiveCases.h` lands with its first actual consumer; later extensions accompany their consumer. These tests establish the selected unsecured O-QPSK profile, not successful security transforms or scheduled operation.
 
@@ -784,7 +786,7 @@ After each commit, recompute `git diff <clean-head> <snapshot-sha> --` and updat
 
 #### 5. Handle failures and checkpoint validated progress
 
-Compare a failure against the pinned base, snapshot and previous safe point to locate the first causal divergence. Before rewriting a validated cleanup commit, preserve its tip as an immutable `cleanup/ieee802154-pr-series/checkpoint-<timestamp>` branch and append the failed attempt and evidence to the logbook. Keep checkpoint branches rather than deleting or repointing them. Revise the group/commit mapping and use the cleanup workflow's approval rules when order, boundaries, behavior classification or verification exceptions change. The proposed N06/N07 fallback requires an explicit plan revision; it must not silently alter PR numbering or dependencies.
+Compare a failure against the pinned base, snapshot and previous safe point to locate the first causal divergence. Before rewriting a validated cleanup commit, preserve its tip as an immutable `cleanup/ieee802154-pr-series-checkpoint-<timestamp>` branch and append the failed attempt and evidence to the logbook. Use a sibling ref name because Git cannot create a child ref below the existing `cleanup/ieee802154-pr-series` branch. Keep checkpoint branches rather than deleting or repointing them. Revise the group/commit mapping and use the cleanup workflow's approval rules when order, boundaries, behavior classification or verification exceptions change. The proposed N06/N07 fallback requires an explicit plan revision; it must not silently alter PR numbering or dependencies.
 
 #### 6. Prove completion before preparing delivery
 
