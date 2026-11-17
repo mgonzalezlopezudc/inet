@@ -1,0 +1,5 @@
+IEEE 802.15.4 enhanced acknowledgements
+
+The optional enhanced profile supports acknowledged version-2 DATA and
+returns copied enhanced ACK content with the native DATA confirmation.
+Legacy immediate ACK behavior remains the default.

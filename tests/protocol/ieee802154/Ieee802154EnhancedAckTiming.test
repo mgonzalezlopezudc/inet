@@ -1,0 +1,215 @@
+%description:
+Scripted physical enhanced ACK arrival at the native sender's start and
+maximum-length completion boundaries; the peer's normal ACK is dropped.
+
+%extraargs: -r 0..17
+
+%includes:
+#include "ProtocolTest.h"
+using namespace inet::protocoltest;
+
+%global:
+Define_ProtocolTestProgram()
+{
+    ProtocolTest test("ieee802154_enhanced_ack_timing");
+    test.intercept(tap("radioMedium").from("host[1]").to("host[0]").filterPacket("Ieee802154Frame.frameType == 2").nth(0).drop());
+    return test.once(on("exercise").signal("verificationComplete").filterValue(1).within(0.1));
+}
+
+%activity:
+EV << "Enhanced ACK timing fixture compiled\n";
+
+%file: EnhancedAckTimingExercise.cc
+#include <optional>
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/common/Protocol.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/Simsignals.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceProvider.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceClient.h"
+#include "inet/physicallayer/wireless/ieee802154/contract/IIeee802154PhyServiceProvider.h"
+#include "inet/physicallayer/wireless/ieee802154/contract/IIeee802154PhyServiceClient.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IReception.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmission.h"
+namespace inet {
+class EnhancedAckTimingExercise : public cSimpleModule, public cListener, public IIeee802154MacServiceClient, public physicallayer::IIeee802154PhyServiceClient
+{
+    ModuleRefByPar<IIeee802154MacServiceProvider> sender;
+    ModuleRefByPar<physicallayer::IIeee802154PhyServiceProvider> script;
+    int scenario = 0, confirms = 0, indications = 0;
+    uint64_t phyId = 0;
+    std::optional<simtime_t> dataEnd, scriptStart, receivedStart, receivedEnd;
+  protected:
+    void initialize() override {
+        sender.reference(this,"serviceModule",true); script.reference(this,"providerModule",true); scenario = par("scenario");
+        getModuleByPath("^.host[0].nic.radio")->subscribe(transmissionStartedSignal,this);
+        getModuleByPath("^.host[0].nic.radio")->subscribe(receptionStartedSignal,this);
+        getModuleByPath("^.script.radio")->subscribe(transmissionStartedSignal,this);
+    }
+    void activity() override {
+        wait(SimTime(1,SIMTIME_MS));
+        ASSERT(script->submitState(++phyId,physicallayer::Ieee802154PhyState::TRANSMIT) == physicallayer::Ieee802154PhyServiceAdmission::ACCEPTED);
+        wait(SimTime(300,SIMTIME_US));
+        ASSERT(sender->submitSet(1,{"macMinBe",uint64_t(0)}) == Ieee802154MacServiceAdmission::ACCEPTED);
+        ASSERT(sender->submitSet(2,{"macMaxFrameRetries",uint64_t(0)}) == Ieee802154MacServiceAdmission::ACCEPTED);
+        ASSERT(sender->submitSet(3,{"macDsn",uint64_t(7)}) == Ieee802154MacServiceAdmission::ACCEPTED);
+        auto data = new Packet("timing DATA"); data->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0x5a}));
+        Ieee802154MacDataRequest request; request.legacyTx = false; request.ackTx = true;
+        request.sourceAddressMode = Ieee802154Address::AddressType::EXTENDED;
+        request.destinationAddress = Ieee802154Address::fromExtended(0x0401123456789abcULL); request.destinationPanId = 0x1234;
+        ASSERT(sender->submitData(4,data,request) == Ieee802154MacServiceAdmission::ACCEPTED);
+        for (int i = 0; i < 500 && !dataEnd; ++i) wait(SimTime(10,SIMTIME_US));
+        ASSERT(dataEnd);
+        auto ack = makeShared<Ieee802154Frame>(); ack->setFrameType(2); ack->setFrameVersion(2); ack->setDsn(7);
+        ack->setDestinationAddress(Ieee802154Address::fromExtended(0x0201123456789abcULL));
+        ack->setSourceAddress(Ieee802154Address::fromExtended(0x0401123456789abcULL));
+        ack->setDestinationPanId(0x1234); ack->setSourcePanId(0x1234);
+        if (scenario >= 5 && scenario <= 7) {
+            ack->setPayloadArraySize(104);
+            for (int i = 0; i < 104; ++i) ack->setPayload(i,0x42);
+        }
+        Ieee802154FrameCodec::finalize(*ack);
+        auto propagation = SimTime(1.0 / 299792458.0);
+        auto earliest = *dataEnd + SimTime(192,SIMTIME_US);
+        auto latest = earliest + SimTime(2,SIMTIME_US);
+        auto expectedStart = scenario <= 1 ? earliest : latest;
+        if (scenario == 0 || scenario == 2 || scenario == 5) expectedStart -= SimTime::fromRaw(1);
+        if (scenario == 4 || scenario == 7) expectedStart += SimTime::fromRaw(1);
+        auto txAt = expectedStart - propagation;
+        ASSERT(txAt > simTime());
+        auto packet = new Packet("scripted enhanced ACK"); packet->insertAtBack(ack);
+        packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee802154);
+        physicallayer::Ieee802154PhyTransmitRequest transmit; transmit.startAt = txAt;
+        ASSERT(script->submitTransmit(++phyId,packet,transmit) == physicallayer::Ieee802154PhyServiceAdmission::ACCEPTED);
+        for (int i = 0; i < 80 && !confirms; ++i) wait(SimTime(1,SIMTIME_MS));
+        ASSERT(confirms == 1 && indications == 1 && scriptStart && *scriptStart == txAt);
+        if (scenario != 0 && scenario != 8) {
+            ASSERT(receivedStart && receivedEnd && *receivedStart == expectedStart);
+            auto duration = SimTime((6 + Ieee802154FrameCodec::encode(*ack).size()) * 32,SIMTIME_US);
+            ASSERT(*receivedEnd == expectedStart + duration);
+        }
+        emit(registerSignal("verificationComplete"),1L);
+    }
+  public:
+    EnhancedAckTimingExercise() : cSimpleModule(65536) {}
+    void receiveSignal(cComponent *source,simsignal_t signal,cObject *object,cObject *) override {
+        Enter_Method("receiveSignal");
+        if (signal == transmissionStartedSignal) {
+            auto tx = check_and_cast<const physicallayer::ITransmission *>(object);
+            auto name = std::string(tx->getPacket()->getName());
+            if (source == getModuleByPath("^.host[0].nic.radio") && name == "IEEE802154-DATA") dataEnd = tx->getEndTime();
+            if (source == getModuleByPath("^.script.radio") && name == "scripted enhanced ACK") scriptStart = tx->getStartTime();
+        }
+        else if (signal == receptionStartedSignal) {
+            auto rx = check_and_cast<const physicallayer::IReception *>(object);
+            if (std::string(rx->getTransmission()->getPacket()->getName()) == "scripted enhanced ACK") { receivedStart = rx->getStartTime(); receivedEnd = rx->getEndTime(); }
+        }
+    }
+    void handleDataConfirm(uint64_t id,const Ieee802154MacDataConfirm& c) override {
+        Enter_Method("handleDataConfirm"); bool success = scenario == 1 || scenario == 2 || scenario == 3 || scenario == 5 || scenario == 6;
+        ASSERT(id == 4 && c.result == Ieee802154MacServiceResult(success ? Ieee802154MacStatus::SUCCESS : Ieee802154MacStatus::NO_ACK));
+        ASSERT(c.enhancedAckContent.has_value() == success);
+        if (success) ASSERT(c.enhancedAckContent->payload == (scenario >= 5 ? std::vector<uint8_t>(104,0x42) : std::vector<uint8_t>()));
+        ++confirms;
+    }
+    void handleDataIndication(Packet *p,const Ieee802154MacDataIndication&) override { Enter_Method("handleDataIndication"); take(p); delete p; ++indications; }
+    void handleGetConfirm(uint64_t,const Ieee802154MacGetConfirm&) override { ASSERT(false); }
+    void handleSetConfirm(uint64_t,const Ieee802154MacSetConfirm& c) override { Enter_Method("handleSetConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS)); }
+    void handleResetConfirm(uint64_t,const Ieee802154MacResetConfirm&) override { ASSERT(false); }
+    void handlePromiscuousIndication(Packet *p,const Ieee802154MacPromiscuousIndication&) override { take(p); delete p; ASSERT(false); }
+    void handleCommStatusIndication(Packet *p,const Ieee802154MacCommStatusIndication&) override { if (p) { take(p); delete p; } ASSERT(false); }
+    void handleAvailabilityIndication(const physicallayer::Ieee802154PhyAvailabilityIndication&) override {}
+    void handleReceiveStarted(const physicallayer::Ieee802154PhyReceiveStart&) override {}
+    void handleTransmitStarted(uint64_t,const physicallayer::Ieee802154PhyTransmitStart&) override {}
+    void handleTransmitConfirm(uint64_t,const physicallayer::Ieee802154PhyTransmitConfirm& c) override { Enter_Method("handleTransmitConfirm"); ASSERT(c.result == physicallayer::Ieee802154PhyServiceResult(physicallayer::Ieee802154PhyServiceStatus::SUCCESS)); }
+    void handleStateConfirm(uint64_t,const physicallayer::Ieee802154PhyStateConfirm& c) override { Enter_Method("handleStateConfirm"); ASSERT(c.result == physicallayer::Ieee802154PhyServiceResult(physicallayer::Ieee802154PhyServiceStatus::SUCCESS)); }
+    void handleCcaConfirm(uint64_t,const physicallayer::Ieee802154PhyCcaConfirm&) override { ASSERT(false); }
+    void handleEdConfirm(uint64_t,const physicallayer::Ieee802154PhyEdConfirm&) override { ASSERT(false); }
+    void handleGetConfirm(uint64_t,const physicallayer::Ieee802154PhyGetConfirm&) override { ASSERT(false); }
+    void handleSetConfirm(uint64_t,const physicallayer::Ieee802154PhySetConfirm&) override { ASSERT(false); }
+    void handleResetConfirm(uint64_t,const physicallayer::Ieee802154PhyResetConfirm&) override { ASSERT(false); }
+    void handleReceiveIndication(Packet *p,const physicallayer::Ieee802154PhyReceiveIndication&) override { Enter_Method("handleReceiveIndication"); take(p); delete p; }
+};
+Define_Module(EnhancedAckTimingExercise);
+}
+
+%file: EnhancedAckTimingFixture.ned
+import inet.common.SimpleModule;
+import inet.mobility.static.StationaryMobility;
+import inet.protocoltest.TapRadioMedium;
+import inet.linklayer.ieee802154.Ieee802154StandardInterface;
+import inet.linklayer.ieee802154.contract.IIeee802154MacServiceClient;
+import inet.physicallayer.wireless.ieee802154.Ieee802154PhyService;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154StandardRadio;
+import inet.physicallayer.wireless.ieee802154.contract.IIeee802154PhyServiceClient;
+simple EnhancedAckTimingExercise extends SimpleModule like IIeee802154MacServiceClient, IIeee802154PhyServiceClient {
+    parameters: string serviceModule; string providerModule; int scenario; @class(::inet::EnhancedAckTimingExercise); @signal[verificationComplete](type=long);
+}
+module EnhancedAckTimingHost {
+    parameters: @networkNode;
+    submodules:
+        mobility: StationaryMobility;
+        nic: Ieee802154StandardInterface { panId = 4660; rxOnWhenIdle = true; enableEnhancedFrames = true; mac.clientModule = "^.^.^.exercise"; }
+    connections allowunconnected:
+}
+module EnhancedAckTimingScript {
+    parameters: @networkNode;
+    submodules:
+        mobility: StationaryMobility;
+        phy: Ieee802154PhyService { clientModule = "^.^.exercise"; radioModule = "^.radio"; }
+        radio: Ieee802154StandardRadio;
+    connections allowunconnected: radio.upperLayerOut --> phy.lowerLayerIn;
+}
+network EnhancedAckTimingTest {
+    parameters: int scenario;
+    submodules:
+        radioMedium: TapRadioMedium;
+        host[2]: EnhancedAckTimingHost;
+        script: EnhancedAckTimingScript;
+        exercise: EnhancedAckTimingExercise { serviceModule = "^.host[0].nic.mac"; providerModule = "^.script.phy"; scenario = parent.scenario; }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = EnhancedAckTimingTest
+sim-time-limit = 100ms
+cmdenv-express-mode = true
+cmdenv-stop-batch-on-error = false
+*.scenario = ${scenario=0..8}
+*.host[*].nic.radio.sendRawBytes = ${raw=false,true}
+*.script.radio.sendRawBytes = ${raw}
+*.host[0].nic.mac.maxPropagationDelay = 1us
+*.script.phy.channelNumber = ${scenario} == 8 ? 11 : 20
+*.host[0].nic.extendedAddress = "extended:02-01-12-34-56-78-9A-BC"
+*.host[1].nic.extendedAddress = "extended:04-01-12-34-56-78-9A-BC"
+*.host[*].nic.radio.antenna.mobilityModule = "^.^.^.mobility"
+*.script.radio.antenna.mobilityModule = "^.^.mobility"
+*.radioMedium.backgroundNoise.power = -110dBm
+*.radioMedium.signalAnalogRepresentation = "scalar"
+*.host[*].mobility.initFromDisplayString = false
+*.host[0].mobility.initialX = 0m
+*.host[1].mobility.initialX = 1m
+*.host[*].mobility.initialY = 0m
+*.host[*].mobility.initialZ = 0m
+*.script.mobility.initFromDisplayString = false
+*.script.mobility.initialX = 1m
+*.script.mobility.initialY = 0m
+*.script.mobility.initialZ = 0m
+*.host[*].mobility.constraintAreaMinX = 0m
+*.host[*].mobility.constraintAreaMinY = 0m
+*.host[*].mobility.constraintAreaMinZ = 0m
+*.host[*].mobility.constraintAreaMaxX = 100m
+*.host[*].mobility.constraintAreaMaxY = 100m
+*.host[*].mobility.constraintAreaMaxZ = 100m
+
+%contains: stdout
+PROTOCOLTEST ieee802154_enhanced_ack_timing: PASS
+
+%not-contains: stdout
+PROTOCOLTEST ieee802154_enhanced_ack_timing: FAIL
+
+%not-contains: stderr
+Error:

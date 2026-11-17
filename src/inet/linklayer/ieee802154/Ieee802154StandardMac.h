@@ -40,6 +40,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     ModuleRefByPar<NetworkInterface> networkInterface;
     std::unique_ptr<Ieee802154MacPib> pib;
     Ieee802154GtsManager gtsManager;
+    Ieee802154EnhancedAckContent enhancedAckResponse;
     uint64_t lastRequestId = 0;
     bool started = true;
     bool phyAvailable = true;
@@ -63,6 +64,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
         simtime_t ackDeadline;
         std::optional<bool> ackFramePending;
         std::optional<uint8_t> ackRssi;
+        std::optional<Ieee802154EnhancedAckContent> enhancedAckContent;
         std::optional<simtime_t> accessStartAt;
         enum class Search { NONE, SEARCHING, FALLBACK } search = Search::NONE;
         bool slotted = false;
@@ -362,7 +364,8 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     void cleanupAssociation(uint16_t panId, const std::optional<Ieee802154Address>& peer,
             const std::optional<uint64_t>& receivedPoll = {});
     void reportPendingResult(uint64_t token, const PendingOriginal& original, const Ieee802154MacServiceResult& result,
-            std::optional<uint8_t> backoffs = {}, std::optional<bool> ackFramePending = {}, std::optional<uint8_t> ackRssi = {});
+            std::optional<uint8_t> backoffs = {}, std::optional<bool> ackFramePending = {}, std::optional<uint8_t> ackRssi = {},
+            std::optional<Ieee802154EnhancedAckContent> enhancedAckContent = {});
     struct PollRequest {
         uint64_t id;
         Ieee802154MacPollRequest request;
@@ -385,7 +388,8 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     cMessage *pendingTimer = nullptr;
     cMessage *pollTimer = nullptr;
     void completePending(uint64_t token, const Ieee802154MacServiceResult& result,
-            std::optional<uint8_t> backoffs = {}, std::optional<bool> ackFramePending = {}, std::optional<uint8_t> ackRssi = {});
+            std::optional<uint8_t> backoffs = {}, std::optional<bool> ackFramePending = {}, std::optional<uint8_t> ackRssi = {},
+            std::optional<Ieee802154EnhancedAckContent> enhancedAckContent = {});
     void expirePending();
     void schedulePendingExpiry();
     void clearPending(const Ieee802154MacServiceResult& result);
@@ -406,6 +410,7 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     void requestState(physicallayer::Ieee802154PhyState state, PhyPurpose purpose);
     void restoreIdle();
     void completeData(const Ieee802154MacServiceResult& result);
+    bool matchesAck(const Ieee802154Frame& frame, const physicallayer::Ieee802154PhyReceiveIndication& quality) const;
     void finishReset(const Ieee802154MacServiceResult& result);
     void stop();
     void continueData();

@@ -30,7 +30,8 @@ This record distinguishes source-audit closure, compilation, executed fixtures a
 | E1-02 | Repaired debug acceptance complete; independent findings source-closed | Fresh debug,8 units,2 serializer fixtures and200/200 actual protocol cases PASS (`e102-acceptance2/`). C++ follow-up adds no unmatched diagnostic; inherited warning gate remains FAIL. IE/security structural inspection does not enable enhanced MAC operation. |
 | E1-03 | Debug acceptance complete; independent source pass finds no actionable defect | Fresh debug,9 units,2 serializer fixtures and202/202 actual protocol cases PASS (`e103-first/`). Nested framing adds no feature-specific MLME operation. C++ follow-up adds no unmatched diagnostic; inherited warning gate remains FAIL. |
 | E1-04 | Repaired debug acceptance and independent closure complete | Fresh matching debug,9 units,5 modules,2 serializer fixtures and512/512 actual protocol cases PASS (`e104-acceptance1/`), including80 EnhancedData cases. Default and sequence-only managed examples pass. C++ gate FAIL retains one independently dispositioned validation clone. |
-| E1-05 through E1-99 | NOT_RUN | ACK, discovery, scheduled integration and publication gates remain open. |
+| E1-05 | Repaired debug acceptance and independent source closure complete | Fresh debug284/284 expanded cases pass (`e105-responder-fix1/`). Its matching library passes10 units,9 modules,2 serializers and636/636 actual protocol cases (`e105-acceptance1/`), zero errors/skips/FAIL. Final C++ follow-up adds no unmatched diagnostic; the warning gate remains FAIL. Scheduled CAP/GTS extensions remain E1-07. |
+| E1-06 through E1-99 | NOT_RUN | Discovery, scheduled integration and publication gates remain open. |
 
 ## Baseline control run
 
@@ -731,7 +732,7 @@ Independent final closure reports23 PASS/11 N/A/0 FLAG/0 QUESTION with source ha
 The reviewer visually checks the pinned PDF101 container/descriptor definitions before
 closing the bounded empty-list interpretation. No new protection or exception is introduced.
 
-## E1-04 initial native DATA diagnostic
+## E1-04 native DATA services
 
 The first small native checkpoint passes a fresh debug build and4/4 actual ProtocolTest
 cases (`e104-first/`): explicitly enabled peers exchange unacknowledged version2 DATA with
@@ -797,6 +798,85 @@ architecture/naming, eight interfaces, source/document seals, release and model/
 links pass. Independent final closure reports23 PASS/11 N/A/0 FLAG/0 QUESTION on matching
 source hashes. No baseline is changed. Enhanced ACK/discovery/scheduled integration remain
 the next units; this acceptance does not establish those services or cryptography.
+
+## E1-05 initial enhanced ACK diagnostic
+
+The first small native checkpoint passes a fresh debug build and4/4 actual ProtocolTest
+cases (`e105-first/`): direct two-peer version2 acknowledged DATA with present/suppressed
+sequence, typed/raw representations and a copied actual-empty enhanced-ACK content record.
+This establishes the initial shared transaction path, not complete E1-05 acceptance.
+Configured response IE/payload production, PAN/peer/control/timing adversaries, propagation,
+retry/lifecycle and reentrant terminal ordering remain open. The E1-04 AR-refusal control
+must be updated for the newly introduced operation before broad combined acceptance.
+
+The approved generation subset follows ACK-specific Tables7-7 through7-10, rather than
+reusing DATA eligibility: ESDU Payload group0 is forbidden in ACK. The [profile](enhanced-frame-profile.md)
+owns the selected response content, timing and matching decisions; structurally valid unknown
+received ACK IEs are not subjected to the native producer whitelist. Scheduled CAP/GTS
+content fitting/omission and later-start controls remain E1-07's required integration work.
+
+The first configured-content checkpoint builds debug and passes the adapter module, but all
+three protocol fixtures stop during network setup before completing any case (`e105-content1/`).
+The interface forwards a `cValueArray` already owned by its parent parameter into a second
+object parameter. The environment's registered NED `dup(object)` function supplies the bounded
+repair for all three forwarded values. With C++ unchanged, the matching no-build rerun passes
+the adapter and104/104 protocol cases: EnhancedAck8, EnhancedData80 and legacy DataAck16
+(`e105-content-owned2/`), zero errors/skips/FAIL. Empty and configured actual ACK content reaches
+native confirmations/tags as copied values. This remains a partial diagnostic: the complete
+adversarial, PAN-context, propagation, lifecycle and reentrant-GTS matrix is still open.
+
+The expanded frozen candidate builds debug and passes the ExchangeTiming unit and five
+adapter/configuration modules. Its four protocol fixtures complete272/278 cases, with six
+runtime assertion errors and no ProtocolTest FAIL (`e105-full-diagnostic1/`). The errors are
+the receiver RESET/MAC-stop/PHY-stop scenarios after ACK transmission starts. A fixture-only
+diagnostic retains all six errors while the other198 selected cases pass
+(`e105-lifecycle-diagnostic2/`): the sender reports SUCCESS, destroys the original once and
+receives actual ACK content despite the receiver operation. This observation requires an
+explicit physical-transmission/lifecycle interpretation before acceptance. Independent review
+also identifies incorrect responder SourcePAN construction/matching for admitted broadcast-PAN
+DATA. Neither diagnostic closes E1-05; the source repair and matching RF control remain open.
+
+The actual broadcast-PAN RF control reproduces the incorrect ACK SourcePAN in both
+representations (`e105-responder-red1/`, `e105-responder-red2/`). The first alias fixture
+stops on an unintended legacy association ACK; after restricting its mutation to version2,
+the associated alternate-short-source ACK reaches the sender but fails its SUCCESS assertion
+(`e105-responder-red2/`: four total, three errors, one skipped, zero successful).
+These are pre-repair regressions, separate from the earlier lifecycle expectation errors.
+
+Initial two-translation-unit C++ analysis reports1773 warning rows and zero errors. Exact
+unchanged-line attribution finds284/285 native MAC diagnostics in the E1-04 snapshot and
+two/three ExchangeTiming diagnostics in its unchanged9617b20039 predecessor. The unmatched
+items are an optional timing access in the new ACK-wait expression and adjacent duration
+parameters in the new timing helper. Their invariant review and repaired-candidate follow-up
+remain open; the warning gate is FAIL regardless of the analyzer's zero exit status.
+
+The bounded responder correction uses the local PIB PAN and actual local EUI for an
+accepted group-addressed trigger. Matching permits a proven existing parent/member alias
+and interprets a broadcast requested PAN without requiring a false responder PAN0xffff.
+Fresh debug, the timing unit, five modules and284/284 actual protocol cases pass
+(`e105-responder-fix1/`). The full combined checkpoint uses that byte-identical library:
+ten units, nine modules, two serializers and636/636 actual protocol cases across16 fixtures
+pass with zero errors/skips/FAIL (`e105-acceptance1/`). Independent repair review confirms
+matching source/library hashes and no remaining actionable source finding. No baseline
+changes are made.
+
+The receiver ACK-TX RESET/stop controls now assert the observed already-committed waveform
+and sender SUCCESS, while checking receiver operation/indication outcomes. They do not
+claim those operations retract an RF transmission already distributed by the medium.
+The exact selectors, source/library hashes and generated test outputs are retained per
+checkpoint. Scheduled CAP/GTS omission, later-start and timeout/duty bounds remain E1-07.
+
+Final C++ analysis runs on the immutable repaired snapshot with the actual compilation
+flags and native snapshot headers taking include precedence. It reports1773 warning rows,
+zero errors and288 unique native diagnostics, all288 matching unchanged lines in the initial
+candidate; no unmatched diagnostic is added by the repair. The initial optional access is
+protected by the transaction guard and SUCCESS/ACK branch; intervening timing/PIB queries
+cannot retire it, and the first behavioral PHY request follows those accesses. The adjacent
+AIFS/backoff parameters are supplied distinctly from the SIFS/unit-backoff PIB values at the
+sole production call; the192us/320us unit controls verify slotted-only backoff inclusion.
+Independent review finds no unsafe access or swapped consumer. Keep the warning gate FAIL
+with these bounded dispositions; no wrapper, suppression, waiver or ledger entry is added.
+Scoped architecture/naming, eight interfaces, source/document seals, release and links pass.
 
 ## Publication gate
 

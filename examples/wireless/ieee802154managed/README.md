@@ -37,7 +37,8 @@ legacy unsecured profile.
 The optional Enhanced configuration explicitly enables version-2 DATA at both
 interfaces. The application sends it without requesting an acknowledgement;
 association, polling and departure continue to use their existing procedures.
-This is an unsecured DATA example, not enhanced management or ACK support.
+This is an unsecured DATA example; it does not request an enhanced ACK or use
+enhanced management frames.
 Its device sends with a short source address, so enabling
 `enhancedPanIdSuppressed` is not supported by this example's address layout;
 the PAN-omitted native profile requires both extended addresses and an

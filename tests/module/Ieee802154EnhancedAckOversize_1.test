@@ -1,0 +1,24 @@
+%description:
+The selected ACK producer rejects content that cannot fit the largest supported
+fixed ACK header and FCS before a receive exchange is accepted.
+
+%file: test.ned
+import inet.linklayer.ieee802154.Ieee802154StandardInterface;
+module AckOversizeHost {
+    parameters: @networkNode;
+    submodules:
+        nic: Ieee802154StandardInterface { enableRadio = false; enableEnhancedFrames = true; }
+    connections allowunconnected:
+}
+network AckOversizeTest { submodules: host: AckOversizeHost; }
+
+%inifile: omnetpp.ini
+[General]
+network = AckOversizeTest
+sim-time-limit = 1ms
+*.host.nic.enhancedAckPayload = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+
+%exitcode: 1
+
+%contains: stderr
+Enhanced ACK content exceeds the common 127-octet PSDU bound

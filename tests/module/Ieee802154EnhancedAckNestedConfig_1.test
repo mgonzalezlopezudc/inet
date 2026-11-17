@@ -1,0 +1,21 @@
+%description:
+Reject an MLME vendor Nested IE with an incomplete identifier.
+
+%file: test.ned
+import inet.linklayer.ieee802154.Ieee802154StandardInterface;
+module AckNestedHost {
+    parameters: @networkNode;
+    submodules: nic: Ieee802154StandardInterface { enableRadio = false; enableEnhancedFrames = true; }
+    connections allowunconnected:
+}
+network AckNestedConfigTest { submodules: host: AckNestedHost; }
+
+%inifile: omnetpp.ini
+[General]
+network = AckNestedConfigTest
+*.host.nic.enhancedAckPayloadIes = [{group: 1, content: [2,64,1,2]}]
+
+%exitcode: 1
+
+%contains: stderr
+Only complete vendor Nested IEs are supported in enhanced ACKs

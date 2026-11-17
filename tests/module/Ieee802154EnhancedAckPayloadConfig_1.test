@@ -1,0 +1,21 @@
+%description:
+Reject an ESDU Payload IE in local enhanced ACK configuration.
+
+%file: test.ned
+import inet.linklayer.ieee802154.Ieee802154StandardInterface;
+module AckPayloadHost {
+    parameters: @networkNode;
+    submodules: nic: Ieee802154StandardInterface { enableRadio = false; enableEnhancedFrames = true; }
+    connections allowunconnected:
+}
+network AckPayloadConfigTest { submodules: host: AckPayloadHost; }
+
+%inifile: omnetpp.ini
+[General]
+network = AckPayloadConfigTest
+*.host.nic.enhancedAckPayloadIes = [{group: 0, content: [1]}]
+
+%exitcode: 1
+
+%contains: stderr
+Unsupported enhanced ACK Payload IE group

@@ -20,6 +20,9 @@ module Ieee802154StandardInterface extends NetworkInterface like IWirelessInterf
         bool enableRadio = default(true);
         bool enableManagement = default(false);
         bool enableEnhancedFrames = default(false); // Explicit opt-in to the enhanced-frame profile.
+        object enhancedAckHeaderIes = default([]);
+        object enhancedAckPayloadIes = default([]);
+        object enhancedAckPayload = default([]);
         bool enableSuperframe = default(false); // Requires radio and management.
         string clockModule = default(""); // Empty selects simulation time.
         bool rxOnWhenIdle = default(false);
@@ -47,6 +50,9 @@ module Ieee802154StandardInterface extends NetworkInterface like IWirelessInterf
             initialCcaDuration = parent.ccaDuration;
             enableManagement = parent.enableManagement;
             enableEnhancedFrames = parent.enableEnhancedFrames;
+            enhancedAckHeaderIes = dup(parent.enhancedAckHeaderIes);
+            enhancedAckPayloadIes = dup(parent.enhancedAckPayloadIes);
+            enhancedAckPayload = dup(parent.enhancedAckPayload);
         }
         access: Ieee802154UnslottedAccess if enableRadio {
             clientModule = "^.mac";
