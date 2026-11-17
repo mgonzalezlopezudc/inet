@@ -33,6 +33,13 @@ ASSERT(Timing::fits(boundary-duration,boundary,duration));
 ASSERT(Timing::fits(boundary-duration-SimTime::fromRaw(1),boundary,duration));
 ASSERT(!Timing::fits(boundary-duration+SimTime::fromRaw(1),boundary,duration));
 ASSERT(!Timing::fits(boundary,boundary,SimTime::fromRaw(1)));
+// A two-slot SO1 GTS, with a 14-byte DATA PSDU, ACK and final IFS.
+auto gtsDuration = Timing::exchangeDuration(B(14),true,SimTime(1,SIMTIME_US),12,40,phy);
+auto gtsEnd = SimTime(3840,SIMTIME_US);
+ASSERT(gtsDuration == SimTime(1378,SIMTIME_US));
+ASSERT(Timing::fits(gtsEnd-gtsDuration,gtsEnd,gtsDuration));
+ASSERT(!Timing::fits(gtsEnd-gtsDuration+SimTime::fromRaw(1),gtsEnd,gtsDuration));
+ASSERT(!Timing::fits(SIMTIME_ZERO,gtsEnd,Timing::exchangeDuration(B(127),true,SimTime(1,SIMTIME_US),12,40,phy)));
 std::cout << "Physical exchange durations and fit boundaries verified.\n";
 
 %contains: stdout

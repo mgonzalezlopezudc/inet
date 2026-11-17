@@ -21,6 +21,7 @@ Ieee802154SuperframeController::~Ieee802154SuperframeController()
     if (capEnd && isScheduledClockEvent(capEnd))
         cancelClockEvent(capEnd);
     delete capEnd;
+    cancelAndDelete(cfpBoundaryEvent);
     if (syncWake && isScheduledClockEvent(syncWake)) cancelClockEvent(syncWake);
     if (syncDeadline && isScheduledClockEvent(syncDeadline)) cancelClockEvent(syncDeadline);
     delete syncWake;
@@ -40,6 +41,7 @@ void Ieee802154SuperframeController::initialize(int stage)
         beaconDispatch = new cMessage("beaconDispatch");
         beaconDispatch->setSchedulingPriority(2); // Packet delivery and ACK expiry settle first at equality.
         capEnd = new ClockEvent("capEnd");
+        cfpBoundaryEvent = new cMessage("cfpBoundary");
         syncWake = new ClockEvent("syncWake");
         syncDeadline = new ClockEvent("syncDeadline");
         accessSearchDeadline = new ClockEvent("accessSearchDeadline");
@@ -65,6 +67,10 @@ void Ieee802154SuperframeController::handleMessage(cMessage *message)
     }
     if (message == capEnd) {
         client->handleSuperframeCapEnd();
+        return;
+    }
+    if (message == cfpBoundaryEvent) {
+        client->handleCfpBoundary();
         return;
     }
     if (message == syncWake) {
@@ -123,6 +129,22 @@ void Ieee802154SuperframeController::cancelCapEnd()
     Enter_Method("cancelCapEnd");
     if (isScheduledClockEvent(capEnd))
         cancelClockEvent(capEnd);
+}
+
+bool Ieee802154SuperframeController::scheduleCfpBoundary(simtime_t when)
+{
+    Enter_Method("scheduleCfpBoundary");
+    cancelCfpBoundary();
+    if (!started || when < simTime())
+        return false;
+    scheduleAt(when,cfpBoundaryEvent);
+    return true;
+}
+
+void Ieee802154SuperframeController::cancelCfpBoundary()
+{
+    Enter_Method("cancelCfpBoundary");
+    if (cfpBoundaryEvent->isScheduled()) cancelEvent(cfpBoundaryEvent);
 }
 
 void Ieee802154SuperframeController::scheduleSyncWake(clocktime_t when)
@@ -250,6 +272,7 @@ bool Ieee802154SuperframeController::handleOperationStage(LifecycleOperation *op
                 cancelClockEvent(capEnd);
             cancelSyncEvents();
             cancelAccessSearchDeadline();
+            cancelCfpBoundary();
             accessWindow.reset();
             receptionAnchors.clear();
         }
@@ -264,6 +287,7 @@ bool Ieee802154SuperframeController::handleOperationStage(LifecycleOperation *op
             cancelClockEvent(capEnd);
         cancelSyncEvents();
         cancelAccessSearchDeadline();
+        cancelCfpBoundary();
         accessWindow.reset();
         receptionAnchors.clear();
     }

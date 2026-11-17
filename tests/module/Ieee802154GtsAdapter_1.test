@@ -1,0 +1,105 @@
+%description:
+The native packet adapter forwards the default and explicitly enabled GTS DATA option.
+This is an adapter contract test; its provider is a mock, not a radio.
+
+%file: GtsAdapterContract.cc
+#include <vector>
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/common/SimpleModule.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/linklayer/ieee802154/Ieee802154MacServiceTag.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceProvider.h"
+
+namespace inet {
+class GtsAdapterPacket : public Packet
+{
+  public:
+    static int destroyed;
+    GtsAdapterPacket() : Packet("GTS adapter MSDU") {}
+    ~GtsAdapterPacket() override { ++destroyed; }
+};
+int GtsAdapterPacket::destroyed = 0;
+
+class GtsAdapterProvider : public SimpleModule, public IIeee802154MacServiceProvider
+{
+    ModuleRefByPar<IIeee802154MacServiceClient> client;
+  public:
+    std::vector<bool> options;
+    void initialize() override { client.reference(this,"clientModule",true); }
+    Ieee802154MacServiceAdmission submitData(uint64_t id,Packet *packet,const Ieee802154MacDataRequest& request) override {
+        Enter_Method("submitData");
+        ASSERT(id == options.size() + 1 && packet && !packet->findTag<Ieee802154MacDataReq>());
+        take(packet); options.push_back(request.gtsTx); delete packet;
+        client->handleDataConfirm(id,Ieee802154MacDataConfirm(request.msduHandle,Ieee802154MacStatus::SUCCESS));
+        return Ieee802154MacServiceAdmission::ACCEPTED;
+    }
+    Ieee802154MacServiceAdmission submitGet(uint64_t,const Ieee802154MacGetRequest&) override { return Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION; }
+    Ieee802154MacServiceAdmission submitSet(uint64_t,const Ieee802154MacSetRequest&) override { return Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION; }
+    Ieee802154MacServiceAdmission submitReset(uint64_t,const Ieee802154MacResetRequest&) override { return Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION; }
+    Ieee802154MacServiceCancelResult cancel(uint64_t) override { return Ieee802154MacServiceCancelResult::NOT_PENDING; }
+};
+Define_Module(GtsAdapterProvider);
+
+class GtsAdapterExercise : public SimpleModule
+{
+    GtsAdapterProvider *provider = nullptr;
+    int confirms = 0;
+  protected:
+    void initialize() override {
+        provider = check_and_cast<GtsAdapterProvider *>(getModuleByPath("^.provider"));
+        scheduleAt(SimTime(1,SIMTIME_US),new cMessage("start"));
+    }
+    void handleMessage(cMessage *message) override {
+        if (message->isSelfMessage()) {
+            delete message;
+            for (int i = 0; i < 2; ++i) {
+                auto packet = new GtsAdapterPacket;
+                auto tag = packet->addTag<Ieee802154MacDataReq>();
+                tag->request.msduHandle = 10 + i;
+                if (i == 1) tag->request.gtsTx = true;
+                send(packet,"out");
+            }
+            return;
+        }
+        auto packet = check_and_cast<Packet *>(message);
+        auto tag = packet->getTag<Ieee802154MacDataResultInd>();
+        ASSERT(tag->requestId == uint64_t(confirms + 1) && tag->msduHandle == 10 + confirms && tag->confirm &&
+                tag->confirm->result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS));
+        delete packet;
+        if (++confirms == 2) {
+            ASSERT(provider->options == std::vector<bool>({false,true}) && GtsAdapterPacket::destroyed == 2);
+            std::cout << "GTS adapter option and packet ownership verified.\n";
+        }
+    }
+};
+Define_Module(GtsAdapterExercise);
+}
+
+%file: test.ned
+import inet.common.SimpleModule;
+import inet.linklayer.ieee802154.Ieee802154MacServiceAdapter;
+import inet.linklayer.ieee802154.contract.IIeee802154MacServiceProvider;
+simple GtsAdapterProvider like IIeee802154MacServiceProvider { parameters: string clientModule; @class(::inet::GtsAdapterProvider); }
+simple GtsAdapterExercise extends SimpleModule { parameters: @class(::inet::GtsAdapterExercise); gates: input in; output out; }
+network GtsAdapterContractTest {
+    submodules:
+        provider: GtsAdapterProvider { clientModule = "^.adapter"; }
+        adapter: Ieee802154MacServiceAdapter { serviceModule = "^.provider"; }
+        exercise: GtsAdapterExercise;
+    connections:
+        exercise.out --> adapter.upperLayerIn;
+        adapter.upperLayerOut --> exercise.in;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = GtsAdapterContractTest
+sim-time-limit = 10us
+cmdenv-express-mode = true
+
+%contains: stdout
+GTS adapter option and packet ownership verified.
+
+%not-contains: stderr
+Error:

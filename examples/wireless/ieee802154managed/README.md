@@ -23,3 +23,12 @@ This configuration explicitly enables the superframe composition on the same
 with two received replies and two confirmed device MSDUs in the diagnostic
 campaign. Security transforms, enhanced frames and waveform fidelity are
 outside this selected legacy unsecured profile.
+
+Run `inet -u Cmdenv -c Gts -r 0,1` for the default-off bidirectional GTS
+policy. The device waits for transmit and receive allocation confirmations,
+then exchanges acknowledged DATA with the coordinator in those reservations.
+Each run completes one device cycle and one DATA delivery and confirmation per
+role. The coordinator's policy timer attempts to reopen permit after each
+configured grant batch; a refused attempt waits for a later batch. These
+application scalars show the completed exchange; the protocol fixture also
+checks the actual radio transmission times against the advertised slots.

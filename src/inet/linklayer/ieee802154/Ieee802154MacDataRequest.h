@@ -31,7 +31,7 @@ struct Ieee802154MacSecurityParameters
 /**
  * Selected MCPS-DATA.request metadata. Source identity comes from the
  * authoritative MAC PIB. The service fixes LegacyTx=true and DataRate=0;
- * GTS, ranging, IE, and multipurpose options are outside this API.
+ * Ranging, IE, and multipurpose options are outside this API.
  */
 struct Ieee802154MacDataRequest
 {
@@ -42,6 +42,7 @@ struct Ieee802154MacDataRequest
     bool ackTx = false; ///< Direct acknowledged transmission selection.
     bool indirectTx = false; ///< Coordinator queues for polling; ignored for a non-coordinator or omitted destination (Table 8-30).
     Ieee802154MacSecurityParameters security;
+    bool gtsTx = false; ///< Use the matching GTS instead of contention access.
 };
 
 struct Ieee802154MacDataConfirm

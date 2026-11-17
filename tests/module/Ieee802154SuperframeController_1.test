@@ -54,6 +54,7 @@ class SuperframeControllerExercise : public cSimpleModule, public IIeee802154Phy
     }
     virtual void handleSuperframeBoundary(clocktime_t) override { throw cRuntimeError("Unexpected scheduled boundary"); }
     virtual void handleSuperframeCapEnd() override { throw cRuntimeError("Unexpected CAP end"); }
+    virtual void handleCfpBoundary() override { throw cRuntimeError("Unexpected CFP boundary"); }
     virtual void handleSyncWake() override { throw cRuntimeError("Unexpected synchronization wake"); }
     virtual void handleSyncDeadline() override { throw cRuntimeError("Unexpected synchronization deadline"); }
     virtual void handleAccessSearchDeadline() override { throw cRuntimeError("Unexpected access search deadline"); }

@@ -1,0 +1,5 @@
+IEEE 802.15.4 scheduled GTS DATA
+
+The native IEEE 802.15.4 MAC supports an explicit GTS DATA request in matching
+advertised reservations. The managed example offers a default-off bidirectional
+GTS policy. Contention remains the default for existing DATA callers.

@@ -9,17 +9,102 @@ using namespace inet::protocoltest;
 Define_ProtocolTestProgram()
 {
     ProtocolTest test("ieee802154_slotted_management");
-    return test.once(on("device.app").signal("completedCycle").filterValue(2).within(4));
+    auto gts = getSimulation()->getSystemModule()->par("gts").boolValue();
+    return gts ? test.once(on("observer").signal("verificationComplete").filterValue(1).within(4)) :
+                 test.once(on("device.app").signal("completedCycle").filterValue(2).within(4));
 }
 
 %activity:
 EV << "slotted management fixture compiled\n";
+
+%file: GtsManagementObserver.cc
+#include <optional>
+#include <string>
+#include <vector>
+#include "inet/common/SimpleModule.h"
+#include "inet/common/Simsignals.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/linklayer/ieee802154/Ieee802154Frame_m.h"
+#include "inet/linklayer/ieee802154/Ieee802154BeaconCodec.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmission.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IReception.h"
+namespace inet {
+class GtsManagementObserver : public SimpleModule, public cListener
+{
+    std::optional<simtime_t> rootAnchor, childAnchor;
+    std::optional<uint8_t> transmitSlot, receiveSlot;
+    int data = 0, accesses = 0;
+    bool measuring = false, complete = false;
+  protected:
+    void initialize() override {
+        getModuleByPath("^.coordinator.nic.mac")->subscribe(packetSentToLowerSignal,this);
+        for (const char *name : {"coordinator","device"}) {
+            auto nic = getModuleByPath((std::string("^.") + name + ".nic").c_str());
+            nic->getSubmodule("radio")->subscribe(transmissionStartedSignal,this);
+            nic->getSubmodule("slottedAccess")->subscribe("backoffSlots",this);
+            nic->getSubmodule("slottedAccess")->subscribe("contentionWindow",this);
+            nic->getSubmodule("access")->subscribe("backoffSlots",this);
+        }
+        getModuleByPath("^.device.nic.radio")->subscribe(receptionStartedSignal,this);
+        getModuleByPath("^.device.app")->subscribe("completedCycle",this);
+    }
+  public:
+    void receiveSignal(cComponent *,simsignal_t signal,long value,cObject *) override {
+        Enter_Method("receiveSignal");
+        if (signal == registerSignal("completedCycle")) {
+            ASSERT(value == 1 && data == 2 && accesses == 0);
+            emit(registerSignal("verificationComplete"),1L);
+        }
+        else if (measuring && !complete)
+            ++accesses;
+    }
+    void receiveSignal(cComponent *source,simsignal_t signal,cObject *object,cObject *) override {
+        Enter_Method("receiveSignal");
+        if (signal == packetSentToLowerSignal) {
+            auto frame = check_and_cast<Packet *>(object)->peekAtFront<Ieee802154Frame>();
+            if (frame->getFrameType() != 0) return;
+            std::vector<uint8_t> bytes(frame->getPayloadArraySize());
+            for (size_t i = 0; i < bytes.size(); ++i) bytes[i] = frame->getPayload(i);
+            auto decoded = Ieee802154BeaconCodec::decode(bytes);
+            auto content = std::get_if<Ieee802154BeaconCodec::Content>(&decoded);
+            ASSERT(content);
+            for (const auto& descriptor : content->getGtsDescriptors())
+                if (descriptor.shortAddress == 0x40 && descriptor.start) {
+                    if (descriptor.direction == Ieee802154GtsDirection::DEVICE_TRANSMIT) transmitSlot = descriptor.start;
+                    else receiveSlot = descriptor.start;
+                }
+            if (transmitSlot && receiveSlot) measuring = true;
+            return;
+        }
+        if (signal == receptionStartedSignal) {
+            auto reception = check_and_cast<const physicallayer::IReception *>(object);
+            if (std::string(reception->getTransmission()->getPacket()->getName()) == "IEEE802154-periodic-beacon")
+                childAnchor = reception->getStartTime();
+            return;
+        }
+        auto transmission = check_and_cast<const physicallayer::ITransmission *>(object);
+        auto name = std::string(transmission->getPacket()->getName());
+        bool fromRoot = source == getModuleByPath("^.coordinator.nic.radio");
+        if (fromRoot && name == "IEEE802154-periodic-beacon") rootAnchor = transmission->getStartTime();
+        if (measuring && !complete && name == "IEEE802154-DATA") {
+            auto anchor = fromRoot ? rootAnchor : childAnchor;
+            auto slot = fromRoot ? receiveSlot : transmitSlot;
+            ASSERT(anchor && slot);
+            auto start = *anchor + SimTime(*slot * 1920,SIMTIME_US);
+            ASSERT(transmission->getStartTime() >= start && transmission->getEndTime() <= start + SimTime(3840,SIMTIME_US));
+            if (++data == 2) complete = true;
+        }
+    }
+};
+Define_Module(GtsManagementObserver);
+}
 
 %file: SlottedManagementFixture.ned
 import inet.applications.ieee802154.Ieee802154ManagementApp;
 import inet.linklayer.ieee802154.Ieee802154StandardInterface;
 import inet.mobility.static.StationaryMobility;
 import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple GtsManagementObserver extends inet.common.SimpleModule { parameters: @class(::inet::GtsManagementObserver); @signal[verificationComplete](type=long); }
 
 module SlottedManagementHost
 {
@@ -49,10 +134,12 @@ module SlottedManagementHost
 
 network SlottedManagementTest
 {
+    parameters: bool gts = default(false);
     submodules:
         radioMedium: Ieee802154NarrowbandScalarRadioMedium;
         coordinator: SlottedManagementHost { coordinator = true; extendedAddress = "extended:02-01-12-34-56-78-9A-BC"; }
         device: SlottedManagementHost { coordinator = false; extendedAddress = "extended:04-01-12-34-56-78-9A-BC"; }
+        observer: GtsManagementObserver if gts;
 }
 
 %inifile: omnetpp.ini
@@ -61,6 +148,9 @@ network = SlottedManagementTest
 sim-time-limit = 4s
 cmdenv-express-mode = true
 *.**.radio.sendRawBytes = ${raw=false,true}
+*.**.app.gtsOperation = ${gts=false,true}
+*.gts = ${gts}
+*.**.app.cycles = ${gts} ? 1 : 2
 *.radioMedium.backgroundNoise.power = -110dBm
 **.nic.radio.antenna.mobilityModule = "^.^.^.mobility"
 *.coordinator.mobility.initialX = 0m
