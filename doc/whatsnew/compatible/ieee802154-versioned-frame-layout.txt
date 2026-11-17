@@ -1,0 +1,4 @@
+IEEE 802.15.4 version-aware frame layout
+
+Decode and encode the selected version-2 MAC field-presence layouts while
+keeping enhanced MAC operations disabled until their operational support lands.

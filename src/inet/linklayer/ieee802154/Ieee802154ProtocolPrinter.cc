@@ -2,6 +2,7 @@
 //
 #include "inet/common/packet/printer/ProtocolPrinterRegistry.h"
 #include "inet/linklayer/ieee802154/Ieee802154Frame_m.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
 #include "inet/linklayer/ieee802154/Ieee802154MacHeader_m.h"
 
 namespace inet {
@@ -16,8 +17,11 @@ class Ieee802154ProtocolPrinter : public ProtocolPrinter
             context.sourceColumn << frame->getSourceAddress();
             context.destinationColumn << frame->getDestinationAddress();
             context.infoColumn << (frame->getFrameType() == 0 ? "BEACON" : frame->getFrameType() == 2 ? "ACK" : frame->getFrameType() == 3 ? "COMMAND" : "DATA")
-                    << " version=" << frame->getFrameVersion() << " DSN=" << int(frame->getDsn())
-                    << " parse=" << frame->getDecodeStatus() << " FCS="
+                    << " version=" << frame->getFrameVersion() << " DSN=";
+            auto sequence = Ieee802154FrameCodec::sequenceNumber(*frame);
+            if (sequence) context.infoColumn << int(*sequence);
+            else context.infoColumn << "absent";
+            context.infoColumn << " parse=" << frame->getDecodeStatus() << " FCS="
                     << (!frame->getFcsPresent() ? "absent" : frame->getComputeFcs() ? "computed" : frame->getFcsValid() ? "valid" : "invalid");
         }
         else if (auto legacy = dynamicPtrCast<const Ieee802154MacHeader>(chunk)) {

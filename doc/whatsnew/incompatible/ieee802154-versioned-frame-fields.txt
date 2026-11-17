@@ -1,0 +1,4 @@
+IEEE 802.15.4 frame control fields
+
+Rebuild custom users of Ieee802154Frame after the additive sequence-suppression
+and information-element-presence fields are generated.

@@ -100,15 +100,29 @@ for (auto bytes : std::vector<std::vector<uint8_t>>{{0x01, 0x04, 0}, {0x01, 0x30
     ASSERT(Codec::encode(*rejected) == bytes);
 }
 ASSERT(Codec::decode({0x03, 0, 0}, false)->getDecodeStatus() == Codec::TRUNCATED);
-for (auto bytes : std::vector<std::vector<uint8_t>>{{0x01, 0x20, 0}}) {
-    auto unsupported = Codec::decode(bytes, false);
-    ASSERT(unsupported->getDecodeStatus() == Codec::UNSUPPORTED);
-    ASSERT(Codec::encode(*unsupported) == bytes);
-}
+auto enhanced = Codec::decode({0x01, 0x20, 0}, false);
+ASSERT(enhanced->getDecodeStatus() == Codec::OK && enhanced->getFrameVersion() == 2);
+ASSERT(Codec::encode(*enhanced) == std::vector<uint8_t>({0x01, 0x20, 0}));
 auto ack = Codec::decode({0x12, 0, 0xff}, false);
 ASSERT(ack->getDecodeStatus() == Codec::OK && ack->getFrameType() == 2 && ack->getFramePending());
 ASSERT(ack->getDestinationAddress().isNone() && ack->getSourceAddress().isNone());
 ASSERT(Codec::decode({2, 0, 0, 0}, false)->getDecodeStatus() == Codec::MALFORMED);
+for (auto bytes : std::vector<std::vector<uint8_t>>{{0x01,0x04},{0x05,0x00}}) {
+    for (bool fcsPresent : {false,true}) {
+        auto input = bytes;
+        if (fcsPresent) { input.push_back(0); input.push_back(0); }
+        auto prefix = Codec::decode(input,fcsPresent);
+        ASSERT(prefix->getDecodeStatus() == Codec::TRUNCATED && !prefix->isComplete() && prefix->isProperlyRepresented());
+        ASSERT(Codec::encode(*prefix) == input);
+    }
+}
+for (const auto& bytes : std::vector<std::vector<uint8_t>>{{0x02,0x08,0x00},{0x00,0x08,0x00}}) {
+    auto malformed = Codec::decode(bytes,false);
+    ASSERT(malformed->getDecodeStatus() == Codec::MALFORMED && !malformed->isProperlyRepresented());
+    ASSERT(malformed->isComplete() && Codec::encode(*malformed) == bytes);
+}
+auto ackPrefix = Codec::decode({0x02,0x00},false);
+ASSERT(ackPrefix->getDecodeStatus() == Codec::TRUNCATED && !ackPrefix->isComplete() && ackPrefix->isProperlyRepresented());
 auto reserved = shortGolden;
 reserved[0] |= 0x80;
 auto ignored = Codec::decode(reserved, false);

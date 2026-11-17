@@ -2,7 +2,7 @@
 
 > **Kind:** design · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [../../standard/ieee802154/enhanced-catalog.md](../../standard/ieee802154/enhanced-catalog.md), [../../protocol/ieee802154/enhanced-checks.md](../../protocol/ieee802154/enhanced-checks.md), [../../../../../plan/pending/802154-enhanced-frames-plan.md](../../../../../plan/pending/802154-enhanced-frames-plan.md)
 
-E1-00 source audit, 2026-11-16. User authorization covers implementation and final push of the reviewed plan. This record closes the source/design decisions before dependent code; all new builds, fixtures and protocol outcomes remain NOT_RUN. The source is IEEE Std 802.15.4-2024, hash pinned in the standard catalog. Canonical nodes, physical PDF pages and their continuation tables were retrieved from the local corpus; its four unresolved references and extraction warnings remain visible in the plan. No subsequent amendment or unverified erratum is used.
+E1-00 source audit, 2026-11-16. User authorization covers implementation and final push of the reviewed plan. This record owns the source/design decisions; current implementation and executed outcomes are recorded separately in the [execution record](followup-results.md). A closed structural stage does not enable later operational services. The source is IEEE Std 802.15.4-2024, hash pinned in the standard catalog. Canonical nodes, physical PDF pages and their continuation tables were retrieved from the local corpus; its four unresolved references and extraction warnings remain visible in the plan. No subsequent amendment or unverified erratum is used.
 
 ## Presence and encoder decisions
 
