@@ -170,8 +170,8 @@ bool LowpanRegistrationAuthority::processPacket(Packet *packet, const Icmpv6Head
     else if (existing == entries.end() && entries.size() >= capacity)
         status = 2;
     else {
-        auto duration = SimTime(60 * int(request->getRegistrationLifetime()));
-        auto deadline = duration >= SIMTIME_MAX - simTime() ? SIMTIME_MAX : simTime() + duration;
+        int seconds = 60 * int(request->getRegistrationLifetime());
+        auto deadline = double(seconds) >= (SIMTIME_MAX - simTime()).dbl() ? SIMTIME_MAX : simTime() + SimTime(seconds);
         entries[address] = {requestedOwner, deadline};
     }
     if (entries.size() != oldSize)
