@@ -20,9 +20,13 @@ class INET_API Ieee802154SuperframeController : public ClockUserModuleMixin<Simp
     ModuleRefByPar<IIeee802154SuperframeClient> client;
     std::map<int, Ieee802154SuperframeReceptionAnchor> receptionAnchors;
     ClockEvent *beaconPreparation = nullptr;
+    cMessage *beaconDispatch = nullptr;
     ClockEvent *capEnd = nullptr;
     ClockEvent *syncWake = nullptr;
     ClockEvent *syncDeadline = nullptr;
+    ClockEvent *accessSearchDeadline = nullptr;
+    std::optional<Ieee802154AccessWindow> accessWindow;
+    uint64_t accessEpoch = 0;
     clocktime_t beaconBoundary;
     bool started = true;
 
@@ -41,6 +45,11 @@ class INET_API Ieee802154SuperframeController : public ClockUserModuleMixin<Simp
     virtual void scheduleSyncWake(clocktime_t when) override;
     virtual void scheduleSyncDeadline(clocktime_t when) override;
     virtual void cancelSyncEvents() override;
+    virtual Ieee802154AccessWindow publishAccessWindow(const Ieee802154AccessWindow& window) override;
+    virtual std::optional<Ieee802154AccessWindow> getAccessWindow() const override;
+    virtual void clearAccessWindow() override;
+    virtual void scheduleAccessSearchDeadline(clocktime_t when) override;
+    virtual void cancelAccessSearchDeadline() override;
     virtual simtime_t getFutureSimulationTime(clocktime_t target) const override { return computeSimTimeFromClockTime(target); }
     virtual clocktime_t getFutureClockTime(simtime_t target) const override { return computeClockTimeFromSimTime(target); }
     virtual void recordReceptionStart(const physicallayer::Ieee802154PhyReceiveStart& start) override;

@@ -1,0 +1,99 @@
+%description:
+Exercise the actual slotted provider with physical-duration CCA callbacks. This
+isolated role test does not establish MAC selection or radio integration.
+
+%file: SlottedAccessFixture.cc
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154AccessClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154AccessProvider.h"
+
+namespace inet {
+class SlottedAccessExercise : public cSimpleModule, public IIeee802154AccessClient
+{
+    ModuleRefByPar<IIeee802154AccessProvider> access;
+    cMessage *step = nullptr;
+    int requests = 0;
+    int confirms = 0;
+    uint64_t current = 0;
+    bool done = false;
+
+    Ieee802154AccessRequest parameters() const {
+        Ieee802154AccessRequest request{0, 3, 2, SimTime(320, SIMTIME_US)};
+        request.window = Ieee802154AccessWindow{1, SIMTIME_AS_CLOCKTIME(SIMTIME_ZERO),
+                SIMTIME_AS_CLOCKTIME(SimTime(10, SIMTIME_MS)), SIMTIME_AS_CLOCKTIME(SIMTIME_ZERO), {}};
+        request.window->physicalCapEnd = SimTime(10, SIMTIME_MS);
+        request.exchangeDuration = SimTime(500, SIMTIME_US);
+        request.ccaDuration = SimTime(128, SIMTIME_US);
+        request.turnaroundTime = SimTime(192, SIMTIME_US);
+        return request;
+    }
+
+  protected:
+    virtual void initialize() override {
+        access.reference(this, "accessModule", true);
+        step = new cMessage("step");
+        scheduleAt(SIMTIME_ZERO, step);
+    }
+    virtual void handleMessage(cMessage *message) override {
+        ASSERT(message == step);
+        if (!current) {
+            current = 1;
+            ASSERT(access->start(current, parameters()) == Ieee802154MacServiceAdmission::ACCEPTED);
+        }
+        else
+            access->handleCcaResult(current, true);
+    }
+    virtual void finish() override {
+        ASSERT(done && requests == 2 && confirms == 1);
+        std::cout << "Slotted access performed two CCAs and selected the physical-ready grid boundary.\n";
+    }
+
+  public:
+    virtual ~SlottedAccessExercise() { cancelAndDelete(step); }
+    virtual void handleCcaRequest(uint64_t id) override {
+        Enter_Method("handleCcaRequest");
+        ASSERT(id == current && ++requests <= 2);
+        ASSERT(simTime() == (requests == 1 ? SIMTIME_ZERO : SimTime(320, SIMTIME_US)));
+        scheduleAt(simTime() + SimTime(128, SIMTIME_US), step);
+    }
+    virtual void handleAccessConfirm(uint64_t id, const Ieee802154MacServiceResult& result,
+            uint8_t backoffs, std::optional<simtime_t> startAt) override {
+        Enter_Method("handleAccessConfirm");
+        ASSERT(id == current && ++confirms == 1 && backoffs == 0);
+        ASSERT(result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS));
+        ASSERT(startAt && *startAt == SimTime(640, SIMTIME_US));
+        done = true;
+    }
+};
+Define_Module(SlottedAccessExercise);
+}
+
+%file: SlottedAccessFixture.ned
+import inet.common.SimpleModule;
+import inet.linklayer.ieee802154.Ieee802154SlottedAccess;
+import inet.linklayer.ieee802154.contract.IIeee802154AccessClient;
+
+simple SlottedAccessExercise extends SimpleModule like IIeee802154AccessClient
+{
+    parameters:
+        @class(::inet::SlottedAccessExercise);
+        string accessModule;
+}
+network SlottedAccessTest
+{
+    submodules:
+        access: Ieee802154SlottedAccess { clientModule = "^.exercise"; }
+        exercise: SlottedAccessExercise { accessModule = "^.access"; }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = SlottedAccessTest
+ned-path = .;../../../../src;../../lib
+sim-time-limit = 2ms
+cmdenv-express-mode = true
+record-vector-results = false
+record-scalar-results = false
+
+%contains: stdout
+Slotted access performed two CCAs and selected the physical-ready grid boundary.

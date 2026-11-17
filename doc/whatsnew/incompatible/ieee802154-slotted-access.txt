@@ -1,0 +1,3 @@
+IEEE 802.15.4 slotted access roles
+
+Custom access and superframe providers and superframe clients must implement the new CCA handback, actual CAP window and access-search methods and rebuild. See the IEEE 802.15.4 Slotted Access Roles migration guide.

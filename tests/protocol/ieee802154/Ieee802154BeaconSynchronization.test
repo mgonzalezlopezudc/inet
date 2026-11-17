@@ -51,6 +51,7 @@ class BeaconSynchronizationExercise : public cSimpleModule, public cListener,
     uint64_t scriptedId = 0;
     int scenario = 0, startConfirms = 0, notices = 0, losses = 0, lostSignals = 0, monitors = 0, foreignConfirms = 0, resets = 0, replacementRefusals = 0;
     int protectedConfirms = 0;
+    int cancelledData = 0, cancelledPoll = 0;
     std::vector<long> misses;
     std::vector<Ieee802154MacServiceResult> syncResults;
     Status expectedSet = Status::SUCCESS;
@@ -158,13 +159,14 @@ class BeaconSynchronizationExercise : public cSimpleModule, public cListener,
             set(child.get(),"macBeaconOrder",uint64_t(15));
             ASSERT(child->submitGet(++nextId,{"macBeaconOrder"}) == Admission::ACCEPTED);
             ASSERT(value && std::get<uint64_t>(*value) == 15);
-            auto packet = new Packet("unsupported-unslotted-data");
+            auto packet = new Packet("tracked-data");
             Ieee802154MacDataRequest data;
             data.destinationAddress = Ieee802154Address::fromShort(1);
             data.destinationPanId = 0x1234;
-            ASSERT(child->submitData(++nextId,packet,data) == Admission::UNSUPPORTED_OPERATION);
-            ASSERT(packet->getOwner() == this);
-            delete packet;
+            auto dataId = ++nextId;
+            ASSERT(child->submitData(dataId,packet,data) == Admission::ACCEPTED);
+            ASSERT(child->cancel(dataId) == Ieee802154MacServiceCancelResult::CANCELLED);
+            ASSERT(cancelledData == 1);
         }
         if (scenario == 35) {
             expectedSet = Status::INVALID_PARAMETER;
@@ -337,10 +339,13 @@ class BeaconSynchronizationExercise : public cSimpleModule, public cListener,
             Ieee802154MacDataRequest data;
             data.destinationAddress = Ieee802154Address::fromShort(1);
             data.destinationPanId = 0x1234;
-            ASSERT(child->submitData(++nextId,packet,data) == Admission::UNSUPPORTED_OPERATION);
-            ASSERT(packet->getOwner() == this);
-            delete packet;
-            ASSERT(childManagement->submitPoll(++nextId,{0x1234,Ieee802154Address::fromShort(1)}) == Admission::UNSUPPORTED_OPERATION);
+            auto dataId = ++nextId;
+            ASSERT(child->submitData(dataId,packet,data) == Admission::ACCEPTED);
+            ASSERT(child->cancel(dataId) == Ieee802154MacServiceCancelResult::CANCELLED);
+            auto pollId = ++nextId;
+            ASSERT(childManagement->submitPoll(pollId,{0x1234,Ieee802154Address::fromShort(1)}) == Admission::ACCEPTED);
+            ASSERT(child->cancel(pollId) == Ieee802154MacServiceCancelResult::CANCELLED);
+            ASSERT(cancelledData == 1 && cancelledPoll == 1);
         }
     }
     virtual void handleSyncLossIndication(const Ieee802154MacSyncLossIndication& indication) override {
@@ -352,13 +357,21 @@ class BeaconSynchronizationExercise : public cSimpleModule, public cListener,
     }
     virtual void handleGetConfirm(uint64_t, const Ieee802154MacGetConfirm& c) override { Enter_Method("handleGetConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); value = c.value; }
     virtual void handleSetConfirm(uint64_t, const Ieee802154MacSetConfirm& c) override { Enter_Method("handleSetConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(expectedSet)); }
-    virtual void handleDataConfirm(uint64_t, const Ieee802154MacDataConfirm&) override { ASSERT(false); }
+    virtual void handleDataConfirm(uint64_t, const Ieee802154MacDataConfirm& confirm) override {
+        Enter_Method("handleDataConfirm");
+        ASSERT((scenario == 14 || scenario == 40) && confirm.result == Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::CANCELLED));
+        ++cancelledData;
+    }
     virtual void handleResetConfirm(uint64_t, const Ieee802154MacResetConfirm& confirm) override {
         Enter_Method("handleResetConfirm"); ASSERT(scenario == 18 && confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); ++resets; sync(true);
     }
     virtual void handleDataIndication(Packet *, const Ieee802154MacDataIndication&) override { ASSERT(false); }
     virtual void handleCommStatusIndication(Packet *, const Ieee802154MacCommStatusIndication&) override { ASSERT(false); }
-    virtual void handlePollConfirm(uint64_t, const Ieee802154MacPollConfirm&) override { ASSERT(false); }
+    virtual void handlePollConfirm(uint64_t, const Ieee802154MacPollConfirm& confirm) override {
+        Enter_Method("handlePollConfirm");
+        ASSERT(scenario == 40 && confirm.result == Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::CANCELLED));
+        ++cancelledPoll;
+    }
     virtual void handlePurgeConfirm(uint64_t, const Ieee802154MacPurgeConfirm&) override { ASSERT(false); }
     virtual void handleStartConfirm(uint64_t, const Ieee802154MacStartConfirm&) override { ASSERT(false); }
     virtual void handleScanConfirm(uint64_t, const Ieee802154MacScanConfirm&) override { ASSERT(false); }

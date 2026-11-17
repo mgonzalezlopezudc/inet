@@ -1,0 +1,135 @@
+%description:
+Test the copied full-CAP size boundary and a locally postponed CCA using the
+production slotted provider and independently timed scripted PHY confirmations.
+
+%extraargs: -r 0..4
+
+%file: SlottedBoundaryFixture.cc
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154AccessClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154AccessProvider.h"
+
+namespace inet {
+class SlottedBoundaryExercise : public cSimpleModule, public cListener, public IIeee802154AccessClient
+{
+    ModuleRefByPar<IIeee802154AccessProvider> access;
+    cMessage *timer = nullptr;
+    int scenario = 0, draws = 0, requests = 0, terminals = 0;
+    bool finished = false;
+    std::vector<long> windows;
+
+  protected:
+    virtual void initialize() override {
+        access.reference(this,"accessModule",true);
+        scenario = par("scenario");
+        auto module = getModuleByPath(par("accessModule"));
+        module->subscribe("backoffSlots",this);
+        module->subscribe("contentionWindow",this);
+        timer = new cMessage("step");
+        scheduleAt(SIMTIME_ZERO,timer);
+    }
+    virtual void handleMessage(cMessage *message) override {
+        ASSERT(message == timer);
+        if (simTime() == SIMTIME_ZERO) {
+            auto end = SimTime(scenario < 3 ? 704 : 10000,SIMTIME_US);
+            Ieee802154AccessRequest request{0,3,2,SimTime(320,SIMTIME_US)};
+            request.window = Ieee802154AccessWindow{1,SIMTIME_AS_CLOCKTIME(SIMTIME_ZERO),
+                    SIMTIME_AS_CLOCKTIME(end),SIMTIME_AS_CLOCKTIME(SIMTIME_ZERO),{}};
+            request.window->physicalCapEnd = end;
+            request.ccaDuration = SimTime(128,SIMTIME_US);
+            request.turnaroundTime = SimTime(192,SIMTIME_US);
+            request.exchangeDuration = scenario < 3 ? end + SimTime::fromRaw(scenario-1) : SimTime(100,SIMTIME_US);
+            ASSERT(access->start(1,request) == Ieee802154MacServiceAdmission::ACCEPTED);
+            if (scenario < 2) scheduleAt(SimTime(1,SIMTIME_MS),timer);
+        }
+        else if (scenario < 2) {
+            ASSERT(access->cancel(1,Ieee802154MacServiceAbortReason::CANCELLED) == Ieee802154MacServiceCancelResult::CANCELLED);
+        }
+        else if (timer->getKind() == 1) {
+            timer->setKind(0);
+            auto before = draws;
+            access->deferCca(1,simTime());
+            ASSERT(draws == before);
+        }
+        else
+            access->handleCcaResult(1,scenario != 4 || requests != 3);
+    }
+    virtual void finish() override { ASSERT(finished && terminals == 1); std::cout << "Slotted size and CCA handback boundaries verified.\n"; }
+  public:
+    using cListener::finish;
+    virtual ~SlottedBoundaryExercise() { cancelAndDelete(timer); }
+    virtual void receiveSignal(cComponent *, simsignal_t signal, long value, cObject *) override {
+        if (signal == registerSignal("backoffSlots")) ++draws;
+        else windows.push_back(value);
+    }
+    virtual void handleCcaRequest(uint64_t id) override {
+        Enter_Method("handleCcaRequest");
+        ASSERT(id == 1 && scenario >= 3);
+        ++requests;
+        if (requests == 1) ASSERT(simTime() == SIMTIME_ZERO);
+        if (requests == 2) {
+            ASSERT(simTime() == SimTime(320,SIMTIME_US));
+            timer->setKind(1);
+            scheduleAt(simTime() + SimTime(50,SIMTIME_US),timer);
+        }
+        else {
+            if (requests == 3) ASSERT(simTime() == SimTime(640,SIMTIME_US));
+            scheduleAt(simTime() + SimTime(128,SIMTIME_US),timer);
+        }
+    }
+    virtual void handleAccessConfirm(uint64_t id, const Ieee802154MacServiceResult& result,
+            uint8_t nb, std::optional<simtime_t> startAt) override {
+        Enter_Method("handleAccessConfirm");
+        ASSERT(id == 1 && ++terminals == 1);
+        if (scenario < 2) {
+            ASSERT(result == Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::CANCELLED));
+            ASSERT(draws == 1 && requests == 0);
+        }
+        else if (scenario == 2) {
+            ASSERT(result == Ieee802154MacServiceResult(Ieee802154MacStatus::FRAME_TOO_LONG));
+            ASSERT(draws == 0 && requests == 0);
+        }
+        else {
+            ASSERT(result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS) && startAt);
+            ASSERT(nb == (scenario == 4 ? 1 : 0));
+            ASSERT(draws == (scenario == 4 ? 2 : 1));
+            ASSERT(windows.size() >= 3 && windows[0] == 2 && windows[1] == 1);
+            if (scenario == 3) ASSERT(*startAt == SimTime(960,SIMTIME_US));
+        }
+        finished = true;
+    }
+};
+Define_Module(SlottedBoundaryExercise);
+}
+
+%file: SlottedBoundaryFixture.ned
+import inet.common.SimpleModule;
+import inet.linklayer.ieee802154.Ieee802154SlottedAccess;
+import inet.linklayer.ieee802154.contract.IIeee802154AccessClient;
+simple SlottedBoundaryExercise extends SimpleModule like IIeee802154AccessClient
+{
+    parameters:
+        @class(::inet::SlottedBoundaryExercise);
+        string accessModule;
+        int scenario;
+}
+network SlottedBoundaryTest
+{
+    submodules:
+        access: Ieee802154SlottedAccess { clientModule = "^.exercise"; }
+        exercise: SlottedBoundaryExercise { accessModule = "^.access"; }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = SlottedBoundaryTest
+ned-path = .;../../../../src;../../lib
+*.exercise.scenario = ${scenario=0..4}
+sim-time-limit = 20ms
+seed-set = 0
+cmdenv-express-mode = true
+record-vector-results = false
+record-scalar-results = false
+
+%contains: stdout
+Slotted size and CCA handback boundaries verified.

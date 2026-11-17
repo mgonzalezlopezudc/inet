@@ -118,6 +118,12 @@ void Ieee802154UnslottedAccess::handleCcaResult(uint64_t id, bool idle)
     }
 }
 
+void Ieee802154UnslottedAccess::deferCca(uint64_t, simtime_t)
+{
+    Enter_Method("deferCca");
+    throw cRuntimeError("CCA handback is only supported by slotted access");
+}
+
 Ieee802154MacServiceCancelResult Ieee802154UnslottedAccess::cancel(uint64_t id, Ieee802154MacServiceAbortReason reason)
 {
     Enter_Method("cancel");

@@ -1,0 +1,280 @@
+%description:
+An actual scripted beacon supplies a CAP, then a real timed PHY transmission
+makes the first or second CCA busy, with BLE disabled and enabled.
+
+%extraargs: -r 0..11
+
+%includes:
+#include "ProtocolTest.h"
+
+%global:
+using namespace inet;
+using namespace inet::protocoltest;
+Define_ProtocolTestProgram()
+{
+    ProtocolTest test("ieee802154_slotted_busy");
+    return test.once(on("exercise").signal("verificationComplete").filterValue(1).within(0.1));
+}
+
+%activity:
+EV << "ieee802154_slotted_busy compiled\n";
+
+%file: SlottedTooLongExercise.cc
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/common/Simsignals.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/ieee802154/Ieee802154BeaconCodec.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceProvider.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceProvider.h"
+#include "inet/physicallayer/wireless/ieee802154/contract/IIeee802154PhyServiceClient.h"
+#include "inet/physicallayer/wireless/ieee802154/contract/IIeee802154PhyServiceProvider.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IReception.h"
+
+namespace inet {
+class SlottedTooLongExercise : public cSimpleModule, public cListener, public IIeee802154MacServiceClient,
+        public IIeee802154ManagementServiceClient, public physicallayer::IIeee802154PhyServiceClient
+{
+    using Status = Ieee802154MacStatus;
+    using Admission = Ieee802154MacServiceAdmission;
+    ModuleRefByPar<IIeee802154MacServiceProvider> child;
+    ModuleRefByPar<IIeee802154ManagementServiceProvider> management;
+    ModuleRefByPar<physicallayer::IIeee802154PhyServiceProvider> script;
+    uint64_t nextId = 0, phyId = 0, dataId = 0, jamId = 0;
+    int scenario = 0, syncs = 0, notices = 0, confirms = 0, dataStarts = 0, jamStarts = 0;
+    bool ble = false;
+    simtime_t anchor, jamTarget;
+    std::vector<long> cw, nb;
+    physicallayer::Ieee802154PhyChannel channel() const {
+        return {physicallayer::Ieee802154PhyChannel::Phy::O_QPSK,physicallayer::Ieee802154PhyChannel::Band::MHZ_2450,20};
+    }
+    void set(const char *name, const Ieee802154MacPibValue& value) { ASSERT(child->submitSet(++nextId,{name,value}) == Admission::ACCEPTED); }
+    void beacon() {
+        auto frame = makeShared<Ieee802154Frame>();
+        frame->setFrameType(0); frame->setSourceAddress(Ieee802154Address::fromShort(1)); frame->setSourcePanId(0x1234);
+        Ieee802154BeaconCodec::Content content;
+        content.superframeSpecification = 0x4f00 | (ble ? 0x1000 : 0);
+        auto body = Ieee802154BeaconCodec::encode(content);
+        frame->setPayloadArraySize(body.size());
+        for (size_t i = 0; i < body.size(); ++i) frame->setPayload(i,body[i]);
+        Ieee802154FrameCodec::finalize(*frame);
+        auto packet = new Packet("short-cap-beacon"); packet->insertAtBack(frame);
+        packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee802154);
+        ASSERT(script->submitTransmit(++phyId,packet,{}) == physicallayer::Ieee802154PhyServiceAdmission::ACCEPTED);
+    }
+    void interfere(simtime_t when) {
+        auto packet = new Packet("timed-energy");
+        packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>(127,0x55)));
+        packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee802154);
+        physicallayer::Ieee802154PhyTransmitRequest request; request.startAt = when;
+        jamId = ++phyId; jamTarget = when;
+        ASSERT(script->submitTransmit(jamId,packet,request) == physicallayer::Ieee802154PhyServiceAdmission::ACCEPTED);
+    }
+  protected:
+    virtual void initialize() override {
+        child.reference(this,"childModule",true); management.reference(this,"childModule",true);
+        script.reference(this,"providerModule",true); scenario = par("scenario"); ble = par("ble").boolValue();
+        auto radio = getModuleByPath("^.host.nic.radio");
+        radio->subscribe(transmissionStartedSignal,this);
+        radio->subscribe(receptionStartedSignal,this);
+        auto access = getModuleByPath("^.host.nic.slottedAccess");
+        access->subscribe("contentionWindow",this);
+        access->subscribe("backoffCount",this);
+    }
+    virtual void activity() override {
+        wait(SimTime(300,SIMTIME_US));
+        set("macCoordShortAddress",uint64_t(1)); set("macBeaconOrder",uint64_t(0)); set("macAutoRequest",false);
+        set("macRxOnWhenIdle",true); set("macMinBe",uint64_t(0)); set("macMaxCsmaBackoffs",uint64_t(1));
+        ASSERT(script->submitState(++phyId,physicallayer::Ieee802154PhyState::TRANSMIT) == physicallayer::Ieee802154PhyServiceAdmission::ACCEPTED);
+        wait(SimTime(700,SIMTIME_US));
+        ASSERT(management->submitSync(++nextId,{channel(),false}) == Admission::ACCEPTED);
+        wait(SimTime(1,SIMTIME_MS)); beacon();
+        wait(SimTime(800,SIMTIME_US));
+        ASSERT(syncs == 1 && notices == 1 && anchor > SIMTIME_ZERO);
+        auto firstCca = anchor + SimTime(960,SIMTIME_US);
+        if (scenario != 0)
+            interfere(firstCca + SimTime(scenario == 1 ? 64 : 384,SIMTIME_US));
+        auto packet = new Packet("busy-cca-data");
+        packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>(8,0x71)));
+        Ieee802154MacDataRequest data;
+        data.sourceAddressMode = Ieee802154Address::AddressType::SHORT;
+        data.destinationAddress = Ieee802154Address::fromShort(1); data.destinationPanId = 0x1234;
+        dataId = ++nextId;
+        ASSERT(child->submitData(dataId,packet,data) == Admission::ACCEPTED);
+        wait(SimTime(20,SIMTIME_MS));
+        ASSERT(confirms == 1 && dataStarts == int(scenario == 0) && jamStarts == int(scenario != 0));
+        ASSERT(!cw.empty() && cw.front() == 2 && !nb.empty() && nb.front() == 0);
+        if (scenario == 1) ASSERT(nb.size() >= 2 && nb[1] == 1 && cw.size() >= 2 && cw[1] == 2);
+        if (scenario == 2) ASSERT(nb.size() >= 2 && nb[1] == 1 && cw.size() >= 3 && cw[1] == 1 && cw[2] == 2);
+        emit(registerSignal("verificationComplete"),1L);
+    }
+  public:
+    SlottedTooLongExercise() : cSimpleModule(65536) {}
+    virtual void receiveSignal(cComponent *, simsignal_t signal, long value, cObject *) override {
+        if (signal == registerSignal("contentionWindow")) {
+            cw.push_back(value);
+            if (scenario == 2 && value == 1 && cw.size() == 2)
+                ASSERT(simTime() == anchor + SimTime(1088,SIMTIME_US));
+        }
+        else {
+            nb.push_back(value);
+            if (scenario != 0 && value == 1)
+                ASSERT(simTime() == anchor + SimTime(scenario == 1 ? 1088 : 1408,SIMTIME_US));
+        }
+    }
+    virtual void receiveSignal(cComponent *, simsignal_t signal, cObject *object, cObject *) override {
+        if (signal == receptionStartedSignal) {
+            auto reception = check_and_cast<const physicallayer::IReception *>(object);
+            if (anchor == SIMTIME_ZERO) anchor = reception->getStartTime();
+        }
+        else ++dataStarts;
+    }
+    virtual void handleSetConfirm(uint64_t, const Ieee802154MacSetConfirm& c) override { Enter_Method("handleSetConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); }
+    virtual void handleDataConfirm(uint64_t id, const Ieee802154MacDataConfirm& c) override {
+        Enter_Method("handleDataConfirm"); ASSERT(id == dataId && ++confirms == 1);
+        ASSERT(c.result == Ieee802154MacServiceResult(scenario == 0 ? Status::SUCCESS : Status::CHANNEL_ACCESS_FAILURE));
+    }
+    virtual void handleSyncConfirm(uint64_t, const Ieee802154MacSyncConfirm& c) override { Enter_Method("handleSyncConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); ++syncs; }
+    virtual void handleBeaconNotifyIndication(const Ieee802154PanDescriptor& d) override { Enter_Method("handleBeaconNotifyIndication"); ASSERT(((d.beacon.superframeSpecification >> 8) & 15) == 15); ++notices; }
+    virtual void handleGetConfirm(uint64_t, const Ieee802154MacGetConfirm&) override { ASSERT(false); }
+    virtual void handleResetConfirm(uint64_t, const Ieee802154MacResetConfirm&) override { ASSERT(false); }
+    virtual void handleDataIndication(Packet *, const Ieee802154MacDataIndication&) override { ASSERT(false); }
+    virtual void handlePromiscuousIndication(Packet *, const Ieee802154MacPromiscuousIndication&) override { ASSERT(false); }
+    virtual void handleCommStatusIndication(Packet *, const Ieee802154MacCommStatusIndication&) override { ASSERT(false); }
+    virtual void handlePollConfirm(uint64_t, const Ieee802154MacPollConfirm&) override { ASSERT(false); }
+    virtual void handlePurgeConfirm(uint64_t, const Ieee802154MacPurgeConfirm&) override { ASSERT(false); }
+    virtual void handleStartConfirm(uint64_t, const Ieee802154MacStartConfirm&) override { ASSERT(false); }
+    virtual void handleStartSuperframeConfirm(uint64_t, const Ieee802154MacStartSuperframeConfirm&) override { ASSERT(false); }
+    virtual void handleScanConfirm(uint64_t, const Ieee802154MacScanConfirm&) override { ASSERT(false); }
+    virtual void handleBeaconConfirm(uint64_t, const Ieee802154MacBeaconConfirm&) override { ASSERT(false); }
+    virtual void handleBeaconRequestIndication(const Ieee802154MacBeaconRequestIndication&) override { ASSERT(false); }
+    virtual void handleSyncLossIndication(const Ieee802154MacSyncLossIndication&) override { ASSERT(false); }
+    virtual void handleAssociateResponseStatus(uint64_t, const Ieee802154MacAssociateResponseStatus&) override { ASSERT(false); }
+    virtual void handleAssociateConfirm(uint64_t, const Ieee802154MacAssociateConfirm&) override { ASSERT(false); }
+    virtual void handleAssociateIndication(const Ieee802154MacAssociateIndication&) override { ASSERT(false); }
+    virtual void handleDisassociateConfirm(uint64_t, const Ieee802154MacDisassociateConfirm&) override { ASSERT(false); }
+    virtual void handleDisassociateIndication(const Ieee802154MacDisassociateIndication&) override { ASSERT(false); }
+    virtual void handleOrphanIndication(const Ieee802154MacOrphanIndication&) override { ASSERT(false); }
+    virtual void handleOrphanResponseStatus(uint64_t, const Ieee802154MacOrphanResponseStatus&) override { ASSERT(false); }
+    virtual void handleRxEnableConfirm(uint64_t, const Ieee802154MacRxEnableConfirm&) override { ASSERT(false); }
+    virtual void handleRxEnableIndication(const Ieee802154MacRxEnableIndication&) override { ASSERT(false); }
+    virtual void handleAvailabilityIndication(const physicallayer::Ieee802154PhyAvailabilityIndication&) override {}
+    virtual void handleReceiveStarted(const physicallayer::Ieee802154PhyReceiveStart&) override {}
+    virtual void handleTransmitStarted(uint64_t id, const physicallayer::Ieee802154PhyTransmitStart& start) override {
+        Enter_Method("handleTransmitStarted");
+        if (id == jamId) { ASSERT(start.ppduStart == jamTarget); ++jamStarts; }
+    }
+    virtual void handleTransmitConfirm(uint64_t, const physicallayer::Ieee802154PhyTransmitConfirm& c) override { Enter_Method("handleTransmitConfirm"); ASSERT(c.result == physicallayer::Ieee802154PhyServiceResult(physicallayer::Ieee802154PhyServiceStatus::SUCCESS)); }
+    virtual void handleStateConfirm(uint64_t, const physicallayer::Ieee802154PhyStateConfirm& c) override { Enter_Method("handleStateConfirm"); ASSERT(c.result == physicallayer::Ieee802154PhyServiceResult(physicallayer::Ieee802154PhyServiceStatus::SUCCESS)); }
+    virtual void handleCcaConfirm(uint64_t, const physicallayer::Ieee802154PhyCcaConfirm&) override { ASSERT(false); }
+    virtual void handleEdConfirm(uint64_t, const physicallayer::Ieee802154PhyEdConfirm&) override { ASSERT(false); }
+    virtual void handleGetConfirm(uint64_t, const physicallayer::Ieee802154PhyGetConfirm&) override { ASSERT(false); }
+    virtual void handleSetConfirm(uint64_t, const physicallayer::Ieee802154PhySetConfirm&) override { ASSERT(false); }
+    virtual void handleResetConfirm(uint64_t, const physicallayer::Ieee802154PhyResetConfirm&) override { ASSERT(false); }
+    virtual void handleReceiveIndication(Packet *packet, const physicallayer::Ieee802154PhyReceiveIndication&) override { Enter_Method("handleReceiveIndication"); take(packet); delete packet; }
+};
+Define_Module(SlottedTooLongExercise);
+}
+
+%file: SlottedTooLongFixture.ned
+import inet.common.SimpleModule;
+import inet.mobility.static.StationaryMobility;
+import inet.linklayer.ieee802154.Ieee802154StandardInterface;
+import inet.linklayer.ieee802154.contract.IIeee802154MacServiceClient;
+import inet.linklayer.ieee802154.contract.IIeee802154ManagementServiceClient;
+import inet.physicallayer.wireless.ieee802154.Ieee802154PhyService;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154StandardRadio;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+import inet.physicallayer.wireless.ieee802154.contract.IIeee802154PhyServiceClient;
+simple SlottedTooLongExercise extends SimpleModule like IIeee802154MacServiceClient, IIeee802154ManagementServiceClient, IIeee802154PhyServiceClient
+{
+    parameters:
+        string childModule;
+        string serviceModule;
+        string providerModule;
+        int scenario;
+        bool ble;
+        @class(::inet::SlottedTooLongExercise);
+        @signal[verificationComplete](type=long);
+}
+module SlottedTooLongHost
+{
+    parameters: @networkNode;
+    submodules:
+        mobility: StationaryMobility;
+        nic: Ieee802154StandardInterface {
+            enableManagement = true; enableSuperframe = true;
+            mac.clientModule = "^.^.^.exercise"; mac.managementClientModule = "^.^.^.exercise";
+        }
+    connections allowunconnected:
+}
+module SlottedTooLongScript
+{
+    parameters: @networkNode;
+    submodules:
+        mobility: StationaryMobility;
+        phy: Ieee802154PhyService { clientModule = "^.^.exercise"; radioModule = "^.radio"; }
+        radio: Ieee802154StandardRadio;
+    connections allowunconnected:
+        radio.upperLayerOut --> phy.lowerLayerIn;
+}
+network SlottedTooLongTest
+{
+    parameters: int scenario; bool ble;
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        host: SlottedTooLongHost;
+        script: SlottedTooLongScript;
+        exercise: SlottedTooLongExercise {
+            childModule = "^.host.nic.mac"; serviceModule = "^.host.nic.mac";
+            providerModule = "^.script.phy"; scenario = parent.scenario; ble = parent.ble;
+        }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = SlottedTooLongTest
+sim-time-limit = 100ms
+*.scenario = ${scenario=0..2}
+*.ble = ${ble=false,true}
+*.**.radio.sendRawBytes = ${raw=false,true}
+cmdenv-express-mode = true
+seed-set = 0
+record-vector-results = false
+record-scalar-results = false
+*.radioMedium.backgroundNoise.power = -110dBm
+*.host.nic.extendedAddress = "extended:04-01-12-34-56-78-9A-BC"
+*.host.nic.shortAddress = 2
+*.host.nic.panId = 4660
+*.host.nic.radio.antenna.mobilityModule = "^.^.^.mobility"
+*.script.radio.antenna.mobilityModule = "^.^.mobility"
+*.host.mobility.initFromDisplayString = false
+*.script.mobility.initFromDisplayString = false
+*.host.mobility.initialX = 1m
+*.script.mobility.initialX = 0m
+*.host.mobility.initialY = 0m
+*.script.mobility.initialY = 0m
+*.host.mobility.initialZ = 0m
+*.script.mobility.initialZ = 0m
+*.host.mobility.constraintAreaMinX = 0m
+*.host.mobility.constraintAreaMinY = 0m
+*.host.mobility.constraintAreaMinZ = 0m
+*.host.mobility.constraintAreaMaxX = 100m
+*.host.mobility.constraintAreaMaxY = 100m
+*.host.mobility.constraintAreaMaxZ = 100m
+*.script.mobility.constraintAreaMinX = 0m
+*.script.mobility.constraintAreaMinY = 0m
+*.script.mobility.constraintAreaMinZ = 0m
+*.script.mobility.constraintAreaMaxX = 100m
+*.script.mobility.constraintAreaMaxY = 100m
+*.script.mobility.constraintAreaMaxZ = 100m
+
+%contains: stdout
+PROTOCOLTEST ieee802154_slotted_busy: PASS
+
+%not-contains: stdout
+PROTOCOLTEST ieee802154_slotted_busy: FAIL

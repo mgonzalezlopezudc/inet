@@ -126,6 +126,7 @@ class INET_API Ieee802154MacPib
     void clearAssociation();
     /** Refresh PHY context for future defaults; the current writable backoff period is retained. */
     void updateCcaDuration(uint32_t durationUs);
+    simtime_t getCcaDuration() const { return SimTime(ccaDurationUs, SIMTIME_US); }
     /** Called at an actual beacon transmission start, in the selected 24-bit symbol timebase. */
     void updateBeaconTxTime(uint32_t timestamp) { state.macBeaconTxTime = timestamp & 0xffffff; }
     void setSynchronizationBeaconOrder(uint8_t beaconOrder) { state.macBeaconOrder = beaconOrder; }

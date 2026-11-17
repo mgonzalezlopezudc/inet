@@ -37,6 +37,7 @@ class ScriptedWindowProvider : public SimpleModule, public IIeee802154AccessProv
         request->window = window; return Ieee802154MacServiceAdmission::ACCEPTED;
     }
     virtual void handleCcaResult(uint64_t, bool) override { ASSERT(false); }
+    virtual void deferCca(uint64_t, simtime_t) override { ASSERT(false); }
     virtual Ieee802154MacServiceCancelResult cancel(uint64_t id, Ieee802154MacServiceAbortReason reason) override {
         Enter_Method("cancel"); if (id != activeId) return Ieee802154MacServiceCancelResult::NOT_PENDING;
         activeId = 0; request.reset(); client->handleAccessConfirm(id,reason,0,{}); return Ieee802154MacServiceCancelResult::CANCELLED;
@@ -66,6 +67,7 @@ class ScriptedNativeAccess : public SimpleModule, public IIeee802154AccessProvid
     }
     virtual Ieee802154MacServiceAdmission updateWindow(uint64_t, const Ieee802154AccessWindow&) override { return Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION; }
     virtual void handleCcaResult(uint64_t, bool) override { ASSERT(false); }
+    virtual void deferCca(uint64_t, simtime_t) override { ASSERT(false); }
     virtual Ieee802154MacServiceCancelResult cancel(uint64_t, Ieee802154MacServiceAbortReason) override { return Ieee802154MacServiceCancelResult::NOT_PENDING; }
     simtime_t getTarget() const { return target; }
 };

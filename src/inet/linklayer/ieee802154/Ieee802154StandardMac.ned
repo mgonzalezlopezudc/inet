@@ -21,6 +21,7 @@ simple Ieee802154StandardMac extends SimpleModule like IIeee802154MacServiceProv
         double pollResponseWait @unit(s) = default(2s); // Model bound for the selected peer's response access delay.
         string interfaceModule = default("^");
         string accessModule = default("");
+        string slottedAccessModule = default("");
         string providerModule = default("");
         string superframeModule = default("");
         string extendedAddress = default(ieee802154LocalAddress());
