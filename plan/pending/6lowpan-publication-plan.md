@@ -69,6 +69,19 @@ The existing two-file constant rename is split between C12 and C21 so each publi
 
 ## Commit and evidence conventions
 
+### Approved execution revision, 2026-11-17
+
+The user authorized the faster validation approach with “proceed” after the explanation of per-commit, per-PR and final checks. This revision supersedes repeated execution requirements below; it does not alter the 44 commit boundaries, 17 review units, P0–P15 behavior obligations, source projection, original-branch preservation or baseline restrictions. Completed C00–C06 evidence remains valid and is not rerun merely to fit the new procedure.
+
+- Each code commit receives an incremental debug build and focused tests for its changed contract. Existing fixture assertions and behavior-owned reviewer documents travel with the commit. Token-only commits receive a reverse-token proof and relevant control. Documentation-only commits receive content/link checks and an executable-input identity proof, without another model build or simulation campaign.
+- Each PR tip receives both-mode compilation and the union of directly assigned tests plus controls for shared owners it changes. Identical executable inputs may reuse an immediately preceding recorded execution, explicitly identified by source/configuration/fixture/library hashes. A reused result is not labelled a fresh execution.
+- Exact-parent executions target defect demonstrations where a compatible fixture supplies useful evidence. Other parent comparisons are source-based and labelled unexecuted; missing APIs remain compatibility gaps. No failing-parent observation is inferred from source inspection.
+- Feature-off and core-without-UDP matrices run when the relevant feature declarations, shared compiled owners or profile integration change, and once in final acceptance. Unchanged closures and generic controls reuse identified evidence; every newly introduced affected feature receives its focused test. External reference comparisons run at C07 and are reused unless their encoding inputs or adapter change.
+- One complete final campaign at C41 retains the existing final acceptance scope. C42/C43 need no repeated campaign when executable inputs are unchanged. Release scenarios remain required for mode-sensitive contracts.
+- Staging, selection, command/result capture, donor maps, ledger updates and mechanical checks may be automated. A failure stops the sequence for diagnosis. Builds and tests in a shared checkout stay serial; independent work must not race its feature state or generated outputs.
+
+This is the explicit relaxation allowed by the cleanup contract. C41 restores full combined acceptance coverage. Source, tests, observations, original provenance and unresolved failures must not be rewritten to make the faster process appear more comprehensive than it is.
+
 Each C entry below is a future commit, not a claim that a corresponding tree has already been built. The source SHA identifies the original delta and artifact versions. Port that delta onto its proposed parent; do not copy an entire later source file containing future features. Preserve subsequent changes to shared fixtures only in their responsible C entries.
 
 Every entry inherits these tasks:

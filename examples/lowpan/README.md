@@ -21,12 +21,11 @@ are outside this profile.
 
 The legacy compatibility interface remains available as
 `Ieee802154LowpanInterface`, with `LowpanLinkDomain` and explicit collision-checked
-48-bit aliases. It is not a native wire format. The original donor records native capture decoding and a pinned external
-exchange of fragmented global-address UDP vectors. Those historical results
-do not establish acceptance of this reconstructed prefix; C07 owns its fresh byte checks.
+48-bit aliases. It is not a native wire format. Native capture decoding and a
+pinned ns-3 exchange of fragmented global-address UDP vectors pass independently.
 The peer reconstructs fully elided EUI addresses differently; broader interoperability
-and release gates remain open. See the
-[peer evidence](https://github.com/mgonzalezlopezudc/inet/blob/9908c007bdb1eda9d74f6ca1f99fe1cae33fbc61/doc/project/evidence/protocol/6lowpan/checks/peer/README.md).
+remain outside that exchange's evidence. See the
+[peer evidence](../../doc/project/evidence/protocol/6lowpan/checks/peer/README.md).
 
 The two-PAN route-over example uses explicit IPv6 addresses and routes in
 `route.xml` and distinct native neighbor tables on each PAN:
