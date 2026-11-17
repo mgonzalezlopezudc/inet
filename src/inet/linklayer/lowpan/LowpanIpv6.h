@@ -14,6 +14,7 @@ class INET_API LowpanIpv6 : public Ipv6
     virtual void resolveMACAddressAndSendPacket(Packet *packet, int interfaceId, Ipv6Address nextHop, bool fromHL) override;
     virtual void fragmentAndSend(Packet *packet) override;
     virtual void sendDatagramToOutput(Packet *packet, const NetworkInterface *destIE, const MacAddress& macAddr) override;
+    virtual void handleReceivedIcmp(Packet *packet) override;
 };
 
 } } // namespace inet::lowpan

@@ -1,0 +1,3 @@
+Malformed native Neighbor Discovery rejection
+
+LoWPAN IPv6 now drops malformed Neighbor Discovery wire messages before ordinary ND dispatch, including zero-length or truncated options, unknown DAR/DAC Code suffixes and truncated headers. Valid message dispatch and other ICMPv6 types retain their ordinary handling.
