@@ -1,0 +1,3 @@
+ICMPv6 registration wire representations
+
+ICMPv6 preserves raw Neighbor Discovery options and variable-length link-layer addresses, including native EUI-64 options. Duplicate Address Request and Confirmation messages support base and extended ownership-verifier wire forms.

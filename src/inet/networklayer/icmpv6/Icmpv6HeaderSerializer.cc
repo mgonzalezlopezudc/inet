@@ -28,6 +28,7 @@ Register_Serializer(Ipv6NeighbourAdvertisement, Icmpv6HeaderSerializer);
 Register_Serializer(Ipv6RouterSolicitation, Icmpv6HeaderSerializer);
 Register_Serializer(Ipv6RouterAdvertisement, Icmpv6HeaderSerializer);
 Register_Serializer(Ipv6Redirect, Icmpv6HeaderSerializer);
+Register_Serializer(Ipv6DuplicateAddressHeader, Icmpv6HeaderSerializer);
 
 void serializeIpv6NdOptions(MemoryOutputStream& stream, const Ipv6NdOptions& options)
 {
@@ -38,7 +39,12 @@ void serializeIpv6NdOptions(MemoryOutputStream& stream, const Ipv6NdOptions& opt
         switch (option->getType()) {
             case IPv6ND_SOURCE_LINK_LAYER_ADDR_OPTION:
             case IPv6ND_TARGET_LINK_LAYER_ADDR_OPTION: {
-                stream.writeMacAddress(check_and_cast<const Ipv6NdSourceTargetLinkLayerAddress *>(option)->getLinkLayerAddress());
+                auto address = dynamic_cast<const Ipv6NdSourceTargetLinkLayerAddress *>(option);
+                if (address != nullptr)
+                    stream.writeMacAddress(address->getLinkLayerAddress());
+                else if (option->getOptionLength() < 1 || option->getOptionLength() > 255 ||
+                        option->getPaddingBytesArraySize() != size_t(8 * option->getOptionLength() - 2))
+                    throw cRuntimeError("Invalid raw IPv6ND link-layer address option length");
                 break;
             }
             case IPv6ND_PREFIX_INFORMATION: {
@@ -75,7 +81,10 @@ void serializeIpv6NdOptions(MemoryOutputStream& stream, const Ipv6NdOptions& opt
                 break;
             }
             default:
-                throw cRuntimeError("Unknown IPv6ND option type=%i", option->getType());
+                if (option->getOptionLength() < 1 || option->getOptionLength() > 255 ||
+                        option->getPaddingBytesArraySize() != size_t(8 * option->getOptionLength() - 2))
+                    throw cRuntimeError("Invalid raw IPv6ND option length");
+                break;
         }
         for (size_t j = 0; j < option->getPaddingBytesArraySize(); j++)
             stream.writeByte(option->getPaddingBytes(j));
@@ -91,6 +100,20 @@ void deserializeIpv6NdOptions(Ipv6NdMessage& msg, Ipv6NdOptions& options, Memory
         if (length == 0) {
             msg.markIncorrect();
             break;
+        }
+        auto readRawOption = [&]() {
+            auto option = new Ipv6NdOption();
+            option->setType(static_cast<Ipv6NdOptionTypes>(type));
+            option->setOptionLength(length);
+            option->setPaddingBytesArraySize(8 * length - 2);
+            for (int i = 0; i < 8 * length - 2; i++)
+                option->setPaddingBytes(i, stream.readByte());
+            options.appendOption(option);
+        };
+        // A link-layer address is not inherently a six-octet Ethernet address.
+        if ((type == IPv6ND_SOURCE_LINK_LAYER_ADDR_OPTION || type == IPv6ND_TARGET_LINK_LAYER_ADDR_OPTION) && length != 1) {
+            readRawOption();
+            continue;
         }
         switch (type) {
             case IPv6ND_SOURCE_LINK_LAYER_ADDR_OPTION: {
@@ -179,13 +202,7 @@ void deserializeIpv6NdOptions(Ipv6NdMessage& msg, Ipv6NdOptions& options, Memory
                 break;
             }
             default: {
-                auto option = new Ipv6NdOption();
-                option->setType(static_cast<Ipv6NdOptionTypes>(type));
-                option->setOptionLength(length);
-                option->setPaddingBytesArraySize(8 * length - 2);
-                for (int i = 0; i < 8 * length - 2; i++)
-                    option->setPaddingBytes(i, stream.readByte());
-                options.appendOption(option);
+                readRawOption();
             }
         }
     }
@@ -311,6 +328,28 @@ void Icmpv6HeaderSerializer::serializeFields(MemoryOutputStream& stream, const P
             stream.writeIpv6Address(frame->getTargetAddress());
             stream.writeIpv6Address(frame->getDestinationAddress());
             serializeIpv6NdOptions(stream, frame->getOptions());
+            break;
+        }
+
+        case ICMPv6_DUPLICATE_ADDRESS_REQUEST:
+        case ICMPv6_DUPLICATE_ADDRESS_CONFIRMATION: {
+            auto frame = check_and_cast<const Ipv6DuplicateAddressHeader *>(pkt.get());
+            int code = frame->getCode();
+            if (code < 0 || code > 4)
+                throw cRuntimeError("Invalid duplicate-address message code");
+            int ownershipLength = code == 0 ? 8 : 8 * code;
+            if (frame->getRegistrationOwnershipVerifierArraySize() != size_t(ownershipLength) ||
+                    frame->getChunkLength() != B(24 + ownershipLength) || (code == 0 && frame->getTransactionId() != 0))
+                throw cRuntimeError("Invalid duplicate-address message code or length");
+            stream.writeByte(pkt->getType());
+            stream.writeByte(code);
+            stream.writeUint16Be(frame->getChksum());
+            stream.writeByte(frame->getStatus());
+            stream.writeByte(frame->getTransactionId());
+            stream.writeUint16Be(frame->getRegistrationLifetime());
+            for (int i = 0; i < ownershipLength; i++)
+                stream.writeByte(frame->getRegistrationOwnershipVerifier(i));
+            stream.writeIpv6Address(frame->getRegisteredAddress());
             break;
         }
 
@@ -444,6 +483,30 @@ const Ptr<Chunk> Icmpv6HeaderSerializer::deserializeFields(MemoryInputStream& st
             redirect->setTargetAddress(stream.readIpv6Address());
             redirect->setDestinationAddress(stream.readIpv6Address());
             deserializeIpv6NdOptions(*redirect, redirect->getOptionsForUpdate(), stream);
+            break;
+        }
+
+        case ICMPv6_DUPLICATE_ADDRESS_REQUEST:
+        case ICMPv6_DUPLICATE_ADDRESS_CONFIRMATION: {
+            auto duplicateAddress = makeShared<Ipv6DuplicateAddressHeader>();
+            icmpv6Header = duplicateAddress;
+            duplicateAddress->setType(type);
+            // RFC 8505 section 4.2: the receiver ignores the Code Prefix.
+            int code = subcode & 0x0f;
+            duplicateAddress->setCode(code);
+            if (code > 4) {
+                duplicateAddress->markIncorrect();
+                break;
+            }
+            duplicateAddress->setStatus(stream.readByte());
+            int transactionId = stream.readByte();
+            duplicateAddress->setTransactionId(code == 0 ? 0 : transactionId);
+            duplicateAddress->setRegistrationLifetime(stream.readUint16Be());
+            int ownershipLength = code == 0 ? 8 : 8 * code;
+            duplicateAddress->setRegistrationOwnershipVerifierArraySize(ownershipLength);
+            for (int i = 0; i < ownershipLength; i++)
+                duplicateAddress->setRegistrationOwnershipVerifier(i, stream.readByte());
+            duplicateAddress->setRegisteredAddress(stream.readIpv6Address());
             break;
         }
 

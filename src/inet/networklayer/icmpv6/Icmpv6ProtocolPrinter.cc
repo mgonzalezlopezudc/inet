@@ -10,6 +10,7 @@
 #include "inet/common/packet/printer/PacketPrinter.h"
 #include "inet/common/packet/printer/ProtocolPrinterRegistry.h"
 #include "inet/networklayer/icmpv6/Icmpv6Header_m.h"
+#include "inet/networklayer/icmpv6/Ipv6NdMessage_m.h"
 
 namespace inet {
 
@@ -80,6 +81,14 @@ void Icmpv6ProtocolPrinter::print(const Ptr<const Chunk>& chunk, const Protocol 
             case ICMPv6_REDIRECT:
                 context.infoColumn << "ICMPv6-NEIGHBOUR-REDIR";
                 break;
+            case ICMPv6_DUPLICATE_ADDRESS_REQUEST:
+            case ICMPv6_DUPLICATE_ADDRESS_CONFIRMATION: {
+                auto registration = CHK(dynamicPtrCast<const Ipv6DuplicateAddressHeader>(header));
+                context.infoColumn << (header->getType() == ICMPv6_DUPLICATE_ADDRESS_REQUEST ? "DAR" : "DAC")
+                                   << " code=" << registration->getCode() << " status=" << int(registration->getStatus())
+                                   << " address=" << registration->getRegisteredAddress();
+                break;
+            }
             case ICMPv6_MLDv2_REPORT:
                 context.infoColumn << "ICMPv6-MLDv2-REPORT";
                 // TODO

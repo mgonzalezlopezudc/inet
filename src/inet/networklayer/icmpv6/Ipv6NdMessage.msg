@@ -25,6 +25,7 @@ const B IPv6ND_MTU_OPTION_LENGTH = B(8);                   // RFC 2461, Section 
 // TLB options (type, length, bytes), length must be divisible by eight, max value is 8*255
 // Type codes:          // RFC 2461
 enum Ipv6NdOptionTypes {
+    @baseType(uint8_t);
     IPv6ND_SOURCE_LINK_LAYER_ADDR_OPTION = 1;
     IPv6ND_TARGET_LINK_LAYER_ADDR_OPTION = 2;
     IPv6ND_PREFIX_INFORMATION = 3;
@@ -135,6 +136,19 @@ cplusplus(Ipv6NdOptions) {{
 class Ipv6NdMessage extends Icmpv6Header
 {
     int code = 0;
+}
+
+// RFC 6775 sections 4.4/4.5 and RFC 8505 section 4.2.
+// Code 0 carries an eight-octet EUI-64; codes 1..4 carry 8*code ROVR octets.
+class Ipv6DuplicateAddressHeader extends Ipv6NdMessage
+{
+    chunkLength = B(32);
+    type = ICMPv6_DUPLICATE_ADDRESS_REQUEST;
+    uint8_t status = 0;
+    uint8_t transactionId = 0; // reserved and zero in the base (code 0) format
+    uint16_t registrationLifetime = 0; // units of 60 seconds
+    uint8_t registrationOwnershipVerifier[];
+    Ipv6Address registeredAddress;
 }
 
 //
