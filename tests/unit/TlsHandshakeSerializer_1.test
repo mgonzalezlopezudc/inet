@@ -1,14 +1,16 @@
 %description:
-TLS handshake content encodings and malformed-length rejection.
+TLS and DTLS ClientHello body encodings and the DTLS legacy cookie field.
 
 %includes:
 #include "../DtlsTestAssertions.h"
 #include "inet/common/packet/Packet.h"
 #include "inet/common/packet/chunk/BytesChunk.h"
 #include "inet/transportlayer/tls/TlsClientHello_m.h"
+#include "inet/transportlayer/dtls/DtlsPlaintextHeader_m.h"
 
 using namespace inet;
 using namespace inet::tls;
+using namespace inet::dtls;
 
 %activity:
 auto tls = makeShared<TlsClientHello>();
@@ -41,6 +43,37 @@ catch (const cRuntimeError&) { nativeHelloRejected = true; }
 if (!nativeHelloRejected)
     throw cRuntimeError("Repeated native TLS body length mismatch was accepted");
 
+auto dtls = makeShared<DtlsClientHello>();
+dtls->setCipherSuitesArraySize(1);
+dtls->setCipherSuites(0, 0x1301);
+dtls->setCompressionMethodsArraySize(1);
+dtls->setCompressionMethods(0, 0);
+dtls->setLegacyCookieArraySize(1);
+dtls->setLegacyCookie(0, 0x5a);
+dtls->setChunkLength(B(45));
+Packet dtlsPacket("dtls", dtls);
+auto dtlsBytes = dtlsPacket.peekAtFront<BytesChunk>(B(45));
+DTLS_TEST_CHECK(dtlsBytes->getByte(34) == 0);
+DTLS_TEST_CHECK(dtlsBytes->getByte(35) == 1);
+DTLS_TEST_CHECK(dtlsBytes->getByte(36) == 0x5a);
+DTLS_TEST_CHECK(dtlsBytes->getByte(37) == 0);
+DTLS_TEST_CHECK(dtlsBytes->getByte(38) == 2);
+Packet decoded("decoded", dtlsBytes);
+auto body = decoded.popAtFront<DtlsClientHello>(B(45));
+DTLS_TEST_CHECK(body->getLegacyCookieArraySize() == 1);
+DTLS_TEST_CHECK(body->getLegacyCookie(0) == 0x5a);
+DTLS_TEST_CHECK(body->getCipherSuites(0) == 0x1301);
+auto envelope = makeShared<DtlsHandshakeHeader>();
+envelope->setMessageType(1);
+envelope->setMessageLength(45);
+envelope->setFragmentLength(45);
+Packet wire("DTLS handshake", dtls);
+wire.insertAtFront(envelope);
+auto wireBytes = wire.peekAtFront<BytesChunk>(B(57));
+DTLS_TEST_CHECK(wireBytes->getByte(0) == 1);
+DTLS_TEST_CHECK(wireBytes->getByte(11) == 45);
+DTLS_TEST_CHECK(wireBytes->getByte(12) == 0xfe); // DTLS ClientHello legacy_version
+DTLS_TEST_CHECK(wireBytes->getByte(13) == 0xfd);
 // An empty CertificateRequest extensions vector has a two-byte zero length.
 auto request = makeShared<TlsCertificateRequest>();
 request->setChunkLength(B(3));
@@ -87,7 +120,7 @@ bool rejected = false;
 try { malformedRequest.popAtFront<TlsCertificateRequest>(B(3)); }
 catch (const cRuntimeError&) { rejected = true; }
 DTLS_TEST_CHECK(rejected);
-EV << "TLS handshake content PASS\n";
+EV << "TLS and DTLS ClientHello bodies PASS\n";
 
 %contains: stdout
-TLS handshake content PASS
+TLS and DTLS ClientHello bodies PASS
