@@ -23,8 +23,8 @@ This record distinguishes source-audit closure, compilation, executed fixtures a
 | B3-03 | Completed | Fresh debug;6 units,15 modules and1392/1392 protocol cases across36 fixtures PASS (`b303-acceptance1/`). Independent source closure23 PASS/11 N/A/0 FLAG/0 QUESTION. Full C++ gate FAIL with bounded invariant dispositions; final3-TU follow-up adds no unmatched diagnostics. |
 | B3-04 | Completed | Fresh debug,3 unit/2 module fixtures and248/248 protocol cases PASS (`b304-acceptance1/`). Independent source closure23 PASS/11 N/A/0 FLAG/0 QUESTION; native captures independently decoded. C++ follow-up FAIL retains one new mandatory-PIB lookup disposition. |
 | B3-05 | Completed | Fresh debug,3 unit/3 module fixtures and236/236 protocol cases PASS (`b305-acceptance1/`). Independent source closure23 PASS/11 N/A/0 FLAG/0 QUESTION and finite19-case oracle audit complete. C++ gate FAIL with bounded dispositions; final2-TU follow-up adds no unmatched diagnostics. |
-| B3-06 | NOT_RUN | Execution split for section6's existing CAP/CFP-bound and GTS allocation/removal/activity observation obligation. Minimal signals/statistics and passive-observer evidence precede B-99. |
-| B-99 | NOT_RUN | Final package documentation/configuration and publication evidence remain open. |
+| B3-06 | Completed | Fresh debug,3 unit/3 module fixtures and250/250 protocol cases PASS (`b306-acceptance1/`). Independent source closure23 PASS/11 N/A/0 FLAG/0 QUESTION. C++ follow-up1771 rows/zero errors/286 unique adds no unmatched diagnostic. |
+| B-99 | Conventional package closure complete | Fresh debug,6 units,15 modules and1464/1464 protocol cases across38 fixtures PASS; stored Power/coexistence trajectories and Power fake-GUI visual fingerprint PASS without baseline changes. Final combined B/E publication matrix remains separate. |
 | E1-00 | Source/layout/service audit complete; independent review confirmed closure | Enhanced catalog/checks/profile contain complete PAN-presence and termination matrices, enhanced PIB/service inputs, concrete consumers and selected service/filter boundaries. No new runtime result is implied. |
 | E1-01 through E1-99 | NOT_RUN | All implementation and direct runtime acceptance gates remain open. |
 
@@ -556,6 +556,43 @@ The boundary fixture initially has a missing required PHY-client NED parameter a
 The final two-translation-unit follow-up reports1771 warning rows, zero errors and286 unique native diagnostics, all matching unchanged lines from the reviewed three-TU repair (`b305-phase-equality-fix1/clang-tidy.log`, `cpp-comparison.json`). It adds no unmatched warning and does not turn the full C++ gate into PASS.
 
 Final combined acceptance rebuilds debug and passes all3 units,3 modules and236/236 protocol cases (`b305-acceptance1/`):38 expiry cases plus198 allocation/DATA/deallocation controls, with236 actual ProtocolTest PASS and zero errors/skips/FAIL. The repeated-already-monitored AR1 unit control preserves a consumed opportunity and closes the finite oracle audit's one isolated gap. All19 logical native stimuli/deadlines were independently derived and checked after the two oracle corrections. Exact selections, commands, fixtures, source and library identities are retained. Scoped architecture/naming/interfaces, source/document seals and model/protocol/plan links pass. The one-line release-note format finding is corrected before the final release check. No baseline update is made.
+
+B3-05 is committed as `9eb0c3df7e`. New-series gates through that commit pass with zero violations and15 advisory notes; no PR description was supplied. The separate observation step below allocates section6's existing obligation to source work before B-99's documentation closure.
+
+## B3-06 direct observations
+
+The MAC publishes atomic CAP/CFP installation facts with borrowed typed details holding exact physical bounds and origin/role. These are installed reservations, not claims of actual RF transmission. Coordinator allocation, individual deallocation and qualifying DATA/ACK activity use separate count events with typed short-address/direction/length details; there is no packed public numeric code. Lifecycle-wide RESET/stop/context invalidation is separate from protocol deallocation, so these counts are not an active-grant gauge. Details are call-scoped snapshots, not another authoritative store or control role.
+
+The first fresh debug checkpoint passes all six selected expiry cases (`b306-first/`): passive observers compare CAP start with actual beacon PPDU end, copied CFP intervals with actual DATA RF and grant/activity counts with lost-uplink-ACK, lost-downlink-ACK and successful matching-ACK outcomes. Staged-removal, reentry and production-application observers remain pending; no full observation-stage acceptance is claimed.
+
+The next four-fixture checkpoint passes22/22 actual ProtocolTest cases (`b306-reentry1/`): actual DATA/window containment, CAP/CFP-triggered RESET, staged removals and all four production-app modes, plus activity/deallocation observation checks. Independent source review nevertheless identifies two owed-fact regressions: allocation observation can RESET away a mandatory coordinator indication, and deallocation observation can RESET still-owned waiting DATA before its already-owed INVALID_GTS terminal.
+
+The allocation pair reproduces the missing indication in `b306-signal-reset-red/`; the DATA pair first hits an overly broad radio assertion counting the child's CAP deallocation command as coordinator DATA. Restricting that observer to the pending coordinator transmission reaches the intended DATA-result assertion in both modes at0.432000006672 (`b306-data-reset-red2/`). The bounded source repair preserves the committed allocation indication independently of ledger survival and retires matching invalid DATA before emitting deallocation. Fresh debug and all four causal cases pass (`b306-signal-reset-fix1/`), and independent review closes both findings with23 PASS/11 N/A/0 FLAG/0 QUESTION. No new owner or callback queue is introduced.
+
+The two-TU C++ follow-up reports1771 warning rows, zero errors and286 unique native diagnostics, all matching unchanged lines from B3-05 with zero unmatched warnings (`b306-signal-reset-fix1/clang-tidy.log`, `cpp-comparison.json`). The full warning gate remains FAIL with its prior bounded dispositions.
+
+Final matching-source acceptance passes a fresh debug build,3 units,3 modules and250/250 protocol cases across allocation, DATA, deallocation, expiry and managed application (`b306-acceptance1/`), with250 actual ProtocolTest PASS and zero errors/skips/FAIL. Source/library/fixture identities and exact commands are retained. All scoped architecture/naming/interfaces, source/document seals, release-note and model/protocol/plan link gates pass. Companion results preserve the separate earlier-stage counts. The observation events are additive; no baseline is rewritten.
+
+## B-99 conventional profile closure
+
+The complete conventional source at `f684867902c93a0fe3e59fbdc58613c90ca4e54f`
+passes a fresh debug build, all six selected units, fifteen modules and thirty-eight protocol
+fixtures:1464/1464 successful runs and1464 actual ProtocolTest PASS, zero errors/skips/FAIL.
+`b99-acceptance1/` retains source/library hashes, fixtures, generated work, exact commands and
+raw logs; `b99-acceptance-selection.json` is the exact selection. The twelve new selected
+obligations are mapped in the [statement ledger](statement-results.md#conventional-superframe-extension).
+The user guide and managed-example README explain beacon duty cycling, both GTS directions,
+explicit removal, inactivity and the boundary between installed windows and actual RF.
+The existing Beacon/Gts normal/raw configurations already exercise the intended application;
+this documentation closure changes no source or INI behavior.
+
+Stored run0/seed0 trajectory controls also pass: `Ieee802154Power`100s and `Coexistence`5s
+each match `tplx` and `~tNl`, and Power100s matches `tyf` with fake GUI enabled.
+Commands, result JSON, logs, baseline hash and unchanged-baseline assertion are retained in
+`b99-fingerprint-execution.json` and `b99-fingerprint-{power,coexistence,visual}.*` under
+the execution artifact directory. These five comparisons detect trajectory changes; they
+do not replace the direct protocol evidence. Enhanced-frame implementation and final
+release/feature-isolation/publication gates remain open.
 
 ## Publication gate
 

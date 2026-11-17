@@ -41,4 +41,12 @@ simple Ieee802154StandardMac extends SimpleModule like IIeee802154MacServiceProv
         @signal[outgoingCapActive](type=bool); // Outgoing CAP receive duty starts/ends.
         @signal[syncMissed](type=long); // Consecutive acquisition or tracking failures.
         @signal[syncLost](type=long); // BEACON_LOST after four failures.
+        @signal[capWindowInstalled](type=long); // Borrowed Ieee802154MacWindowObservation: physical CAP bounds and origin.
+        @signal[cfpWindowInstalled](type=long); // Borrowed Ieee802154MacWindowObservation: physical CFP bounds and role.
+        @signal[gtsAllocated](type=long); // Coordinator ledger allocation; borrowed Ieee802154MacGtsObservation.
+        @signal[gtsDeallocated](type=long); // Individual coordinator deallocation, excluding lifecycle-wide clears.
+        @signal[gtsActivity](type=long); // Qualifying received DATA or matching ACK, not mode/configuration changes.
+        @statistic[gtsAllocations](source=gtsAllocated; record=count; interpolationmode=none);
+        @statistic[gtsDeallocations](source=gtsDeallocated; record=count; interpolationmode=none);
+        @statistic[gtsActivities](source=gtsActivity; record=count; interpolationmode=none);
 }

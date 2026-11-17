@@ -87,8 +87,12 @@ reconfiguration fixture failures, subsequently addressed by explicit receive
 windows and verified in the eight affected runs; it was not rerun in full.
 The B3-03 extension runs the production application with GTS disabled and
 enabled in typed and raw modes. Its observer checks actual DATA radio intervals
-against the two advertised slots and requires no access-provider activity
-during those exchanges. All four focused runs passed. The allocated-device
+against the two advertised slots and requires no access-provider activity.
+The B3-06 observer also compares those intervals with the coordinator's
+installed CFP signal details and checks the CAP signal's physical start
+against the transmitted beacon's actual PPDU end. Window observations describe
+reservations, while the radio supplies RF proof. All four original focused
+runs and the later B3-06 combined acceptance passed. The allocated-device
 scan, cancellation, missed-beacon and PHY-outage cases are owned by the native
 [GTS DATA fixture](gts-data.md). Mermaid rendering is **NOT_RUN**. These tests
 do not claim security transforms, enhanced frames, or network-layer forwarding.

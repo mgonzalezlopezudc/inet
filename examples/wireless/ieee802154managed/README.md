@@ -1,8 +1,17 @@
 # Managed native IEEE 802.15.4 PAN
 
-Run `inet -u Cmdenv -r 0,1` from this directory. The two runs use typed frames
-and raw bytes respectively. Both explicitly instantiate Ieee802154StandardInterface
-with explicit full EUI-64 identities over the scalar O-QPSK medium.
+After setting up the INET environment, run these commands from this directory:
+
+```sh
+inet -u Cmdenv -r 0,1             # Non-beacon association and polling
+inet -u Cmdenv -c Beacon -r 0,1   # Sleeping BO3/SO1 beacon PAN
+inet -u Cmdenv -c Gts -r 0,1      # Bidirectional GTS DATA
+```
+
+Each pair uses typed frames and raw bytes respectively. Both peers explicitly
+instantiate `Ieee802154StandardInterface` with full EUI-64 identities over the
+scalar O-QPSK medium. The default configuration runs for 300 ms; Beacon and
+Gts each run for four simulated seconds.
 
 The coordinator starts PAN 0x1234 on channel 20. The device resets, actively
 scans channels 11 and 20, chooses that PAN and associates. It sends acknowledged
@@ -15,18 +24,18 @@ After 300 ms, the device's `completedCycles`, `receivedMsdus` and `confirmedMsdu
 scalars should each be 2. The coordinator should report two received and two
 confirmed MSDUs. These counts demonstrate this configured exchange; protocol
 edge cases and failures have separate fixtures under `tests/protocol/ieee802154`.
-To run the optional beacon-mode policy, use `inet -u Cmdenv -c Beacon -r 0,1`.
-The coordinator uses BO3/SO1; the device passively scans, synchronizes to an
-actual beacon, and associates before its DATA, poll, leave and rejoin cycles.
+In the optional beacon-mode policy, the coordinator uses BO3/SO1; the device
+passively scans, synchronizes to an actual beacon, and associates before its
+DATA, poll, leave and rejoin cycles.
 This configuration explicitly enables the superframe composition on the same
 `Ieee802154StandardInterface`. Its two runs each completed two device cycles
 with two received replies and two confirmed device MSDUs in the diagnostic
 campaign. Security transforms, enhanced frames and waveform fidelity are
 outside this selected legacy unsecured profile.
 
-Run `inet -u Cmdenv -c Gts -r 0,1` for the default-off bidirectional GTS
-policy. The device waits for transmit and receive allocation confirmations,
-then exchanges acknowledged DATA with the coordinator in those reservations.
+The default-off bidirectional GTS policy waits for transmit and receive
+allocation confirmations, then exchanges acknowledged DATA with the coordinator
+in those reservations.
 Each run completes one device cycle and one DATA delivery and confirmation per
 role. The coordinator's policy timer attempts to reopen permit after each
 configured grant batch; a refused attempt waits for a later batch. These

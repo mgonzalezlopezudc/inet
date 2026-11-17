@@ -8,6 +8,7 @@ advertised descriptor over the PHY. Typed and raw packet modes are exercised.
 #include "ProtocolTest.h"
 #include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
 #include "inet/linklayer/ieee802154/Ieee802154BeaconCodec.h"
+#include "inet/linklayer/ieee802154/Ieee802154MacObservations.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IReception.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmission.h"
 #include "inet/clock/contract/IClock.h"
@@ -65,6 +66,7 @@ Define_ProtocolTestProgram()
 EV << "GTS allocation fixture compiled\n";
 
 %file: GtsAllocationExercise.cc
+#include "inet/linklayer/ieee802154/Ieee802154MacObservations.h"
 #include <algorithm>
 #include <map>
 #include "inet/common/ModuleRefByPar.h"
@@ -112,6 +114,7 @@ class GtsAllocationExercise : public cSimpleModule, public cListener, public IIe
     int deviceRemovals = 0;
     std::vector<int> epochDescriptorCounts;
     bool resetOnRemoval = false;
+    int stagedRemovalEvents = 0;
     bool interfaceReentryArmed = false, interfaceCancelledScan = false, freshGtsAccepted = false;
     std::vector<int> orphanResetOrder;
     uint64_t reentryScanId = 0;
@@ -152,6 +155,7 @@ class GtsAllocationExercise : public cSimpleModule, public cListener, public IIe
         root.reference(this,"rootModule",true); child.reference(this,"childModule",true);
         rootManagement.reference(this,"rootModule",true); childManagement.reference(this,"childModule",true);
         scenario = par("scenario");
+        if (scenario == 4 || scenario == 6) getModuleByPath("^.host[0].nic.mac")->subscribe("gtsDeallocated",this);
         for (int i = 0; i < (scenario == 34 ? 13 : 6); ++i)
             getModuleByPath((std::string("^.host[") + std::to_string(i) + "].nic.mac").c_str())->subscribe(packetSentToLowerSignal,this);
         if (scenario == 12 || scenario == 24 || scenario == 35 || (scenario >= 38 && scenario <= 41))
@@ -359,7 +363,7 @@ class GtsAllocationExercise : public cSimpleModule, public cListener, public IIe
                 }
                 wait(SimTime(690,SIMTIME_MS));
                 ASSERT(syncs == 8);
-                ASSERT(starts == 2 && removed.size() == 3 && deviceRemovals == 3 && omittedPayload && restoredPayload);
+                ASSERT(starts == 2 && removed.size() == 3 && stagedRemovalEvents == 3 && deviceRemovals == 3 && omittedPayload && restoredPayload);
                 ASSERT(removed[0] == std::make_pair(uint16_t(5),Ieee802154GtsDirection::DEVICE_TRANSMIT));
                 ASSERT(removed[1] == std::make_pair(uint16_t(4),Ieee802154GtsDirection::DEVICE_RECEIVE));
                 ASSERT(removed[2] == std::make_pair(uint16_t(4),Ieee802154GtsDirection::DEVICE_TRANSMIT));
@@ -390,7 +394,7 @@ class GtsAllocationExercise : public cSimpleModule, public cListener, public IIe
                 start.superframeOrder = 0;
                 ASSERT(rootManagement->submitStartSuperframe(++nextId,start) == Admission::ACCEPTED);
                 wait(SimTime(150,SIMTIME_MS));
-                ASSERT(!resetOnRemoval && resets == 1 && starts == 2 && removed.size() == 3);
+                ASSERT(!resetOnRemoval && resets == 1 && starts == 2 && removed.size() == 3 && stagedRemovalEvents == 3);
                 emit(registerSignal("verificationComplete"),1L);
                 return;
             }
@@ -679,7 +683,7 @@ class GtsAllocationExercise : public cSimpleModule, public cListener, public IIe
     }
   public:
     GtsAllocationExercise() : cSimpleModule(65536) {}
-    void receiveSignal(cComponent *,simsignal_t,long,cObject *) override { Enter_Method("receiveSignal"); ++strippedDescriptors; }
+    void receiveSignal(cComponent *,simsignal_t signal,long value,cObject *details) override { Enter_Method("receiveSignal"); if (signal == registerSignal("gtsDeallocated")) { auto grant = check_and_cast<Ieee802154MacGtsObservation *>(details); ASSERT(value == 1 && grant->length == 1 && grant->shortAddress >= 2); ++stagedRemovalEvents; } else ++strippedDescriptors; }
     void receiveSignal(cComponent *source,simsignal_t signal,cObject *object,cObject *) override {
         Enter_Method("receiveSignal");
         if (signal == interfaceConfigChangedSignal) {

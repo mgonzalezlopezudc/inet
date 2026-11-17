@@ -68,6 +68,12 @@ the retained status diagnostic checked frame lengths and FCS and parsed five
 positive descriptors and a zero-start denial. Capture records identify MAC
 events; actual RF timing is established by radio transmission observations.
 
+The B3-06 observer checks three individual coordinator deallocation signals
+when a proposed SO change commits its staged removals, including the existing
+RESET-from-removal callback case. Signal details are borrowed snapshots of the
+committed short address, direction and length; they are not another ledger.
+These observer cases passed in the B3-06 combined acceptance.
+
 For the selected unsecured, short-source beacon, omitting payload leaves at
 most 91 bytes with seven descriptors and seven extended pending addresses.
 The pending-content case therefore proves payload-first omission and retention

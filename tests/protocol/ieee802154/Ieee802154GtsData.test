@@ -1,7 +1,7 @@
 %description:
 Native GTS DATA exchanges in both directions over the real radio.
 
-%extraargs: -r 0..89
+%extraargs: -r 0..95
 
 %includes:
 #include "ProtocolTest.h"
@@ -26,6 +26,7 @@ Define_ProtocolTestProgram()
 EV << "GTS DATA fixture compiled\n";
 
 %file: GtsDataExercise.cc
+#include <map>
 #include "inet/common/ModuleRefByPar.h"
 #include "inet/common/Simsignals.h"
 #include "inet/common/packet/Packet.h"
@@ -41,6 +42,7 @@ EV << "GTS DATA fixture compiled\n";
 #include "inet/clock/contract/IClock.h"
 #include "inet/linklayer/ieee802154/Ieee802154Frame_m.h"
 #include "inet/linklayer/ieee802154/Ieee802154BeaconCodec.h"
+#include "inet/linklayer/ieee802154/Ieee802154MacObservations.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
 
 namespace inet {
@@ -61,9 +63,10 @@ class GtsDataExercise : public cSimpleModule, public cListener, public IIeee8021
     int scenario = 0;
     int destroyedPackets = 0;
     Status expectedData = Status::SUCCESS;
-    bool measuring = false;
+    bool measuring = false, resetOnObservation = false;
     std::optional<simtime_t> rootAnchor, childAnchor;
     std::optional<simtime_t> rootSlotStart, rootSlotEnd;
+    std::map<int,std::pair<simtime_t,simtime_t>> observedCfp;
     std::optional<simtime_t> firstDataStart;
     std::vector<uint8_t> dataDsns;
     std::optional<simtime_t> secondChildAnchor;
@@ -104,6 +107,10 @@ class GtsDataExercise : public cSimpleModule, public cListener, public IIeee8021
         root.reference(this,"rootModule",true); child.reference(this,"childModule",true);
         rootManagement.reference(this,"rootModule",true); childManagement.reference(this,"childModule",true);
         scenario = par("scenario");
+        if (scenario == 0) getModuleByPath("^.host[0].nic.mac")->subscribe("cfpWindowInstalled",this);
+        if (scenario == 45 || scenario == 46)
+            getModuleByPath("^.host[0].nic.mac")->subscribe(scenario == 45 ? "capWindowInstalled" : "cfpWindowInstalled",this);
+        if (scenario == 47) getModuleByPath("^.host[0].nic.mac")->subscribe("gtsDeallocated",this);
         for (int i = 0; i < (scenario == 9 ? 3 : 2); ++i) {
             auto host = getModuleByPath((std::string("^.host[") + std::to_string(i) + "]").c_str());
             host->getSubmodule("nic")->getSubmodule("slottedAccess")->subscribe("backoffSlots",this);
@@ -164,6 +171,24 @@ class GtsDataExercise : public cSimpleModule, public cListener, public IIeee8021
                 ASSERT(confirms == 1 && dataFrames == 0 && accesses == 0);
                 emit(registerSignal("verificationComplete"),1L); return;
             }
+        }
+        if (scenario == 45 || scenario == 46) {
+            resetOnObservation = true;
+            for (int ticks = 0; ticks < 40 && !resets; ++ticks) wait(SimTime(10,SIMTIME_MS));
+            ASSERT(!resetOnObservation && resets == 1 && dataFrames == 0);
+            wait(SimTime(150,SIMTIME_MS)); ASSERT(resets == 1 && dataFrames == 0);
+            emit(registerSignal("verificationComplete"),1L); return;
+        }
+        if (scenario == 47) {
+            measuring = true; expectedData = Status::INVALID_GTS;
+            submitGtsData(root.get(),2);
+            resetOnObservation = true;
+            Ieee802154MacGtsRequest removal{{2,Ieee802154GtsDirection::DEVICE_RECEIVE,false}};
+            ASSERT(childManagement->submitGts(++nextId,removal) == Admission::ACCEPTED);
+            for (int ticks = 0; ticks < 65 && !resets; ++ticks) wait(SimTime(10,SIMTIME_MS));
+            ASSERT(!resetOnObservation && confirms == 1 && resets == 1 && dataFrames == 0);
+            wait(SimTime(150,SIMTIME_MS)); ASSERT(confirms == 1 && resets == 1 && dataFrames == 0);
+            emit(registerSignal("verificationComplete"),1L); return;
         }
         if (scenario == 9) {
             rebindArmed = true;
@@ -443,7 +468,7 @@ class GtsDataExercise : public cSimpleModule, public cListener, public IIeee8021
     }
   public:
     GtsDataExercise() : cSimpleModule(65536) {}
-    void receiveSignal(cComponent *,simsignal_t signal,long value,cObject *) override { Enter_Method("receiveSignal"); if (signal == registerSignal("syncMissed")) misses = value; else if (measuring) ++accesses; }
+    void receiveSignal(cComponent *,simsignal_t signal,long value,cObject *details) override { Enter_Method("receiveSignal"); if (signal == registerSignal("syncMissed")) misses = value; else if (signal == registerSignal("gtsDeallocated")) { auto grant = check_and_cast<Ieee802154MacGtsObservation *>(details); ASSERT(scenario == 47 && value == 1 && grant->shortAddress == 2 && grant->direction == Ieee802154GtsDirection::DEVICE_RECEIVE && resetOnObservation); resetOnObservation = false; ASSERT(root->submitReset(++nextId,{false}) == Admission::ACCEPTED); } else if (signal == registerSignal("cfpWindowInstalled") || signal == registerSignal("capWindowInstalled")) { auto window = check_and_cast<Ieee802154MacWindowObservation *>(details); ASSERT(value == 1 && window->outgoing); if (scenario == 0) { ASSERT(window->shortAddress == 2); observedCfp[int(window->direction)] = {window->start,window->end}; } if (resetOnObservation) { resetOnObservation = false; ASSERT(root->submitReset(++nextId,{false}) == Admission::ACCEPTED); } } else if (measuring) ++accesses; }
     void receiveSignal(cComponent *source,simsignal_t signal,cObject *object,cObject *) override {
         Enter_Method("receiveSignal");
         if (signal == packetSentToLowerSignal) {
@@ -494,12 +519,19 @@ class GtsDataExercise : public cSimpleModule, public cListener, public IIeee8021
         if (!measuring) return;
         if (name == "IEEE802154-DATA") {
             bool fromRoot = source == getModuleByPath("^.host[0].nic.radio");
+            if (scenario == 47 && !fromRoot) return; // The child's CAP deallocation command shares this packet name.
             auto anchor = fromRoot ? rootAnchor : scenario == 9 ? secondChildAnchor : childAnchor;
             ASSERT(anchor);
             auto firstSlot = scenario == 10 ? 14 : fromRoot || scenario == 9 ? 12 : 14;
             auto start = fromRoot && rootSlotStart ? *rootSlotStart : *anchor + SimTime(firstSlot * 1920,SIMTIME_US);
             auto end = fromRoot && rootSlotEnd ? *rootSlotEnd : start + SimTime(2 * 1920,SIMTIME_US);
             if (scenario != 40) ASSERT(transmission->getStartTime() >= start && transmission->getEndTime() + SimTime(736,SIMTIME_US) <= end);
+            if (scenario == 0) {
+                auto direction = fromRoot ? Ieee802154GtsDirection::DEVICE_RECEIVE : Ieee802154GtsDirection::DEVICE_TRANSMIT;
+                ASSERT(observedCfp.count(int(direction)));
+                auto window = observedCfp.at(int(direction));
+                ASSERT(transmission->getStartTime() >= window.first && transmission->getEndTime() <= window.second);
+            }
             if (!firstDataStart) firstDataStart = transmission->getStartTime();
             ++dataFrames;
             if (scenario >= 31 && scenario <= 33 && lifecycleArmed)
@@ -511,7 +543,7 @@ class GtsDataExercise : public cSimpleModule, public cListener, public IIeee8021
     void handleDataIndication(Packet *p,const Ieee802154MacDataIndication&) override { Enter_Method("handleDataIndication"); take(p); delete p; ++deliveries; }
     void handleGetConfirm(uint64_t,const Ieee802154MacGetConfirm& c) override { Enter_Method("handleGetConfirm"); ASSERT(((scenario >= 13 && scenario <= 15) || scenario == 22 || scenario == 24) && c.result == Ieee802154MacServiceResult(Status::SUCCESS)); phyChannelValue = c.value; }
     void handleSetConfirm(uint64_t,const Ieee802154MacSetConfirm& c) override { Enter_Method("handleSetConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(Status::SUCCESS)); }
-    void handleResetConfirm(uint64_t,const Ieee802154MacResetConfirm& c) override { Enter_Method("handleResetConfirm"); ASSERT((scenario == 18 || scenario == 41 || (scenario >= 25 && scenario <= 36 && (scenario - 25) % 3 == 0 && confirms == 1)) && c.result == Ieee802154MacServiceResult(Status::SUCCESS)); ++resets; }
+    void handleResetConfirm(uint64_t,const Ieee802154MacResetConfirm& c) override { Enter_Method("handleResetConfirm"); ASSERT((scenario == 18 || scenario == 41 || scenario == 45 || scenario == 46 || (scenario == 47 && confirms == 1) || (scenario >= 25 && scenario <= 36 && (scenario - 25) % 3 == 0 && confirms == 1)) && c.result == Ieee802154MacServiceResult(Status::SUCCESS)); ++resets; }
     void handlePromiscuousIndication(Packet *p,const Ieee802154MacPromiscuousIndication&) override { delete p; ASSERT(false); }
     void handleCommStatusIndication(Packet *p,const Ieee802154MacCommStatusIndication&) override { delete p; ASSERT(false); }
     void handlePollConfirm(uint64_t,const Ieee802154MacPollConfirm&) override { ASSERT(false); }
@@ -572,7 +604,7 @@ network GtsDataTest {
 %inifile: omnetpp.ini
 [General]
 network = GtsDataTest
-*.scenario = ${scenario=0..44}
+*.scenario = ${scenario=0..47}
 sim-time-limit = 5s
 cmdenv-express-mode = true
 cmdenv-stop-batch-on-error = false

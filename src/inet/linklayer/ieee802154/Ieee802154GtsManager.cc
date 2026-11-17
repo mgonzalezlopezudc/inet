@@ -58,13 +58,15 @@ void Ieee802154GtsManager::armActivity(const Key& key, int64_t previousEpoch, bo
         }
 }
 
-void Ieee802154GtsManager::noteActivity(const Key& key)
+bool Ieee802154GtsManager::noteActivity(const Key& key)
 {
     for (auto& grant : grants)
         if (sameKey(grant.key,key) && grant.activityArmed && !grant.activitySuspended) {
             grant.inactive = 0;
             grant.activeInOpportunity = true;
+            return true;
         }
+    return false;
 }
 
 void Ieee802154GtsManager::rephaseActivity(const Key& key, int64_t previousEpoch)

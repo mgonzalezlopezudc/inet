@@ -19,6 +19,7 @@ EV << "slotted management fixture compiled\n";
 
 %file: GtsManagementObserver.cc
 #include <optional>
+#include <map>
 #include <string>
 #include <vector>
 #include "inet/common/SimpleModule.h"
@@ -26,18 +27,24 @@ EV << "slotted management fixture compiled\n";
 #include "inet/common/packet/Packet.h"
 #include "inet/linklayer/ieee802154/Ieee802154Frame_m.h"
 #include "inet/linklayer/ieee802154/Ieee802154BeaconCodec.h"
+#include "inet/linklayer/ieee802154/Ieee802154MacObservations.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmission.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IReception.h"
 namespace inet {
 class GtsManagementObserver : public SimpleModule, public cListener
 {
     std::optional<simtime_t> rootAnchor, childAnchor;
+    std::optional<simtime_t> rootBeaconEnd;
+    std::map<int,std::pair<simtime_t,simtime_t>> rootCfp;
+    int capWindows = 0, cfpWindows = 0;
     std::optional<uint8_t> transmitSlot, receiveSlot;
     int data = 0, accesses = 0;
     bool measuring = false, complete = false;
   protected:
     void initialize() override {
         getModuleByPath("^.coordinator.nic.mac")->subscribe(packetSentToLowerSignal,this);
+        getModuleByPath("^.coordinator.nic.mac")->subscribe("capWindowInstalled",this);
+        getModuleByPath("^.coordinator.nic.mac")->subscribe("cfpWindowInstalled",this);
         for (const char *name : {"coordinator","device"}) {
             auto nic = getModuleByPath((std::string("^.") + name + ".nic").c_str());
             nic->getSubmodule("radio")->subscribe(transmissionStartedSignal,this);
@@ -49,10 +56,20 @@ class GtsManagementObserver : public SimpleModule, public cListener
         getModuleByPath("^.device.app")->subscribe("completedCycle",this);
     }
   public:
-    void receiveSignal(cComponent *,simsignal_t signal,long value,cObject *) override {
+    void receiveSignal(cComponent *,simsignal_t signal,long value,cObject *details) override {
         Enter_Method("receiveSignal");
-        if (signal == registerSignal("completedCycle")) {
-            ASSERT(value == 1 && data == 2 && accesses == 0);
+        if (signal == registerSignal("capWindowInstalled")) {
+            auto window = check_and_cast<Ieee802154MacWindowObservation *>(details);
+            ASSERT(value == 1 && window->outgoing && rootBeaconEnd && window->start == *rootBeaconEnd && window->start < window->end);
+            ++capWindows;
+        }
+        else if (signal == registerSignal("cfpWindowInstalled")) {
+            auto window = check_and_cast<Ieee802154MacWindowObservation *>(details);
+            ASSERT(value == 1 && window->outgoing && window->shortAddress == 0x40 && window->start < window->end);
+            rootCfp[int(window->direction)] = {window->start,window->end}; ++cfpWindows;
+        }
+        else if (signal == registerSignal("completedCycle")) {
+            ASSERT(value == 1 && data == 2 && accesses == 0 && capWindows > 0 && cfpWindows >= 2);
             emit(registerSignal("verificationComplete"),1L);
         }
         else if (measuring && !complete)
@@ -85,13 +102,17 @@ class GtsManagementObserver : public SimpleModule, public cListener
         auto transmission = check_and_cast<const physicallayer::ITransmission *>(object);
         auto name = std::string(transmission->getPacket()->getName());
         bool fromRoot = source == getModuleByPath("^.coordinator.nic.radio");
-        if (fromRoot && name == "IEEE802154-periodic-beacon") rootAnchor = transmission->getStartTime();
+        if (fromRoot && name == "IEEE802154-periodic-beacon") { rootAnchor = transmission->getStartTime(); rootBeaconEnd = transmission->getEndTime(); }
         if (measuring && !complete && name == "IEEE802154-DATA") {
             auto anchor = fromRoot ? rootAnchor : childAnchor;
             auto slot = fromRoot ? receiveSlot : transmitSlot;
             ASSERT(anchor && slot);
             auto start = *anchor + SimTime(*slot * 1920,SIMTIME_US);
             ASSERT(transmission->getStartTime() >= start && transmission->getEndTime() <= start + SimTime(3840,SIMTIME_US));
+            auto direction = fromRoot ? Ieee802154GtsDirection::DEVICE_RECEIVE : Ieee802154GtsDirection::DEVICE_TRANSMIT;
+            ASSERT(rootCfp.count(int(direction)));
+            auto window = rootCfp.at(int(direction));
+            ASSERT(transmission->getStartTime() >= window.first && transmission->getEndTime() <= window.second);
             if (++data == 2) complete = true;
         }
     }

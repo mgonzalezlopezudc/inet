@@ -2,8 +2,9 @@
 
 > **Kind:** ledger · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [coverage.md](coverage.md), [results.md](results.md)
 
-This is the current direct mapping for the 85 base-standard statements and two
-imported address definitions. It supersedes the initial extraction table's
+The first table maps the selected M1/M2's 85 base-standard statements and two
+imported address definitions. The conventional superframe extension below adds
+twelve catalog entries with its own profile and execution record. These mappings supersede the initial extraction table's
 NOT_RUN snapshot for executed behavior. PASS is bounded by each catalog
 condition and the selected native service/model contract; it is not a complete
 IEEE device or waveform conformance verdict. The unindexed whole-value binding
@@ -111,3 +112,27 @@ cutover commits receive fresh isolated checks; compiled C++ inputs are unchanged
 | [IEEE802154-RECEIVE-16](../../standard/ieee802154/catalog.md#ieee802154-receive-16) | [ReceiveSecurity](../../../../../tests/protocol/ieee802154/Ieee802154ReceiveSecurity.test) | PASS under the selected condition. |
 | [IEEE802-ADDRESS-1](../../standard/ieee802/catalog.md#ieee802-address-1) | [Address_1](../../../../../tests/unit/Ieee802154Address_1.test), [FrameWire_1](../../../../../tests/unit/Ieee802154FrameWire_1.test), [ReceiveSecurity](../../../../../tests/protocol/ieee802154/Ieee802154ReceiveSecurity.test), [NativeGate_1](../../../../../tests/module/Ieee802154NativeGate_1.test) | PASS for native full-width identity, group/broadcast classification and octet order. |
 | [IEEE802-ADDRESS-2](../../standard/ieee802/catalog.md#ieee802-address-2) | [Address_1](../../../../../tests/unit/Ieee802154Address_1.test), [FrameWire_1](../../../../../tests/unit/Ieee802154FrameWire_1.test), [ReceiveSecurity](../../../../../tests/protocol/ieee802154/Ieee802154ReceiveSecurity.test), [NativeGate_1](../../../../../tests/module/Ieee802154NativeGate_1.test) | PASS for native full-width identity, group/broadcast classification and octet order. |
+
+## Conventional superframe extension
+
+These twelve selected obligations extend the initial ledger above. The matching-source B-99
+checkpoint at `f684867902` passes a fresh debug build, six units, fifteen modules and all
+1464 protocol cases across 38 fixtures, with zero errors, skips or ProtocolTest failures.
+The [execution record](followup-results.md#b-99-conventional-profile-closure) retains the
+source, library, configuration and raw-result identity. PASS applies to the bounded unsecured
+[conventional profile](beacon-profile.md); it does not cover enhanced frames or other scheduled modes.
+
+| Statement | Direct executable evidence | Result and boundary |
+| --- | --- | --- |
+| [IEEE802154-SUPERFRAME-1](../../standard/ieee802154/catalog.md#ieee802154-superframe-1) | [SuperframeTiming_1](../../../../../tests/unit/Ieee802154SuperframeTiming_1.test), [BeaconSchedule](../../../../../tests/protocol/ieee802154/Ieee802154BeaconSchedule.test) | PASS: BO/SO geometry, actual RF epochs, inactive intervals and distinct BO15/SO15 cases. |
+| [IEEE802154-SUPERFRAME-2](../../standard/ieee802154/catalog.md#ieee802154-superframe-2) | [BeaconReconfiguration](../../../../../tests/protocol/ieee802154/Ieee802154BeaconReconfiguration.test) | PASS: START configuration, linked incoming/outgoing timing and overlap retirement. |
+| [IEEE802154-SUPERFRAME-3](../../standard/ieee802154/catalog.md#ieee802154-superframe-3) | [BeaconReconfiguration](../../../../../tests/protocol/ieee802154/Ieee802154BeaconReconfiguration.test), [SlottedManagementBoundary](../../../../../tests/protocol/ieee802154/Ieee802154SlottedManagementBoundary.test) | PASS: old-channel pending beacon/realignment, activation and failure boundaries. |
+| [IEEE802154-SUPERFRAME-4](../../standard/ieee802154/catalog.md#ieee802154-superframe-4) | [BeaconSynchronization](../../../../../tests/protocol/ieee802154/Ieee802154BeaconSynchronization.test), [SlottedSearch](../../../../../tests/protocol/ieee802154/Ieee802154SlottedSearch.test) | PASS: acquisition, tracking, four-miss loss and bounded search fallback. |
+| [IEEE802154-SUPERFRAME-5](../../standard/ieee802154/catalog.md#ieee802154-superframe-5) | [BeaconClock](../../../../../tests/protocol/ieee802154/Ieee802154BeaconClock.test), [BeaconSchedule](../../../../../tests/protocol/ieee802154/Ieee802154BeaconSchedule.test), [BeaconSynchronization](../../../../../tests/protocol/ieee802154/Ieee802154BeaconSynchronization.test) | PASS: selected symbol boundary and local-clock transmit/receive observations, including RESET reentry. |
+| [IEEE802154-SUPERFRAME-6](../../standard/ieee802154/catalog.md#ieee802154-superframe-6) | [SlottedAccess](../../../../../tests/protocol/ieee802154/Ieee802154SlottedAccess.test), [SlottedBusy](../../../../../tests/protocol/ieee802154/Ieee802154SlottedBusy.test), [SlottedClock](../../../../../tests/protocol/ieee802154/Ieee802154SlottedClock.test) | PASS: boundary alignment, two clear CCAs, busy NB/BE/CW and BLE initialization. |
+| [IEEE802154-SUPERFRAME-7](../../standard/ieee802154/catalog.md#ieee802154-superframe-7) | [SlottedDeferral_1](../../../../../tests/module/Ieee802154SlottedDeferral_1.test), [SlottedFit](../../../../../tests/protocol/ieee802154/Ieee802154SlottedFit.test), [SlottedTooLong](../../../../../tests/protocol/ieee802154/Ieee802154SlottedTooLong.test), [SlottedIfs](../../../../../tests/protocol/ieee802154/Ieee802154SlottedIfs.test) | PASS: residual carry versus resampling and complete DATA/ACK/IFS fit. |
+| [IEEE802154-GTS-1](../../standard/ieee802154/catalog.md#ieee802154-gts-1) | [GtsState_1](../../../../../tests/unit/Ieee802154GtsState_1.test), [GtsAllocation](../../../../../tests/protocol/ieee802154/Ieee802154GtsAllocation.test) | PASS: capacity, order, descriptor persistence, denial and ACK-versus-grant distinction. |
+| [IEEE802154-GTS-2](../../standard/ieee802154/catalog.md#ieee802154-gts-2) | [GtsData](../../../../../tests/protocol/ieee802154/Ieee802154GtsData.test) | PASS: both directions without CSMA, receiver windows, fit/defer, missed beacon and loss. |
+| [IEEE802154-GTS-3](../../standard/ieee802154/catalog.md#ieee802154-gts-3) | [GtsDeallocation](../../../../../tests/protocol/ieee802154/Ieee802154GtsDeallocation.test), [GtsAllocation](../../../../../tests/protocol/ieee802154/Ieee802154GtsAllocation.test) | PASS: device/coordinator removal distinction, relocation and temporary descriptor persistence. Coordinator target selection is the documented native extension. |
+| [IEEE802154-GTS-4](../../standard/ieee802154/catalog.md#ieee802154-gts-4) | [GtsExpiry](../../../../../tests/protocol/ieee802154/Ieee802154GtsExpiry.test), [GtsState_1](../../../../../tests/unit/Ieee802154GtsState_1.test) | PASS: BO-dependent bounds, qualifying DATA/ACK renewal and unacknowledged-downlink suspension; publication/phase policies are explicit in the profile. |
+| [IEEE802154-GTS-5](../../standard/ieee802154/catalog.md#ieee802154-gts-5) | [GtsServiceContract_1](../../../../../tests/module/Ieee802154GtsServiceContract_1.test), [GtsData](../../../../../tests/protocol/ieee802154/Ieee802154GtsData.test) | PASS: INVALID_GTS and FRAME_TOO_LONG remain distinct from next-window deferral. |

@@ -44,6 +44,7 @@ opp_run_protocol_tests --load . -p inet -m debug --no-build -w '^tests/protocol/
 | 14–16 | Valid owner DATA ends one simulation tick before, exactly at, or one tick after the last grant edge. The first two renew; the late waveform cannot renew. The observed physical waveform end, owner address and native indication are checked. |
 | 17 | An immediate same-BO START begins RF exactly at the old grant end. The complete old opportunity settles before the new phase's first completed opportunity expires the grant. |
 | 18 | A matching ACK to actual coordinator DATA in the last allowed receive opportunity renews that grant; two subsequent silent opportunities expire it. |
+| 19–20 | RESET from a deallocation or allocation signal. Already-owed native indications precede RESET confirmation, and the child's accepted request retires once. |
 
 Unacknowledged coordinator DATA supplies no missing-ACK evidence. This model
 suspends receive-grant monitoring on actual AR0 RF start and re-arms a fresh
@@ -58,3 +59,12 @@ and all 236 protocol cases: these 38 typed/raw runs and 198 existing controls.
 There were no errors, skips or ProtocolTest failures. Mermaid rendering is
 **NOT_RUN**. PHY waveform and MAC callback observations are distinct; the
 scripted boundary cases do not claim an application-generated last-tick frame.
+
+For B3-06, passive observers additionally check coordinator allocation,
+individual deallocation and qualifying-activity event counts and details, as
+well as copied CAP/CFP bounds. A lost uplink ACK still has one received-DATA
+activity event; a lost downlink ACK has none; the received matching ACK has
+one. Signal-triggered RESET cases exercise the existing terminal barrier.
+The B3-06 combined acceptance passed all 250 protocol cases across five
+fixtures and three unit and three module fixtures, with no protocol errors,
+skips or failures.
