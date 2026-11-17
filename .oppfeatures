@@ -218,6 +218,19 @@
         linkerFlags = ""
         />
     <feature
+        id = "Dtls"
+        name = "DTLS 1.3"
+        description = "Datagram transport security simulation model."
+        initiallyEnabled = "true"
+        requires = "Queueing"
+        recommended = ""
+        labels = "transport security"
+        nedPackages = "inet.transportlayer.dtls"
+        extraSourceFolders = ""
+        compileFlags = "-DINET_WITH_DTLS"
+        linkerFlags = ""
+        />
+    <feature
         id = "DiffServ"
         name = "DiffServ"
         description = "Components for implementing Differentiated Services."
