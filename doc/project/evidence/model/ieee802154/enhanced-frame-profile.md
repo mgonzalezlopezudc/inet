@@ -136,6 +136,13 @@ sequence, channel and physical-interval checks still apply.
 
 The packet-level response policy remains AIFS=12 selected-PHY symbols after receive end. Accept a peer's additional permitted CAP backoff-boundary start up to AIFS plus one unit backoff period (6.6.3.3, PDF72). Wait for a conservative maximum-legal-PSDU ACK duration because the originator cannot know receiver-selected IEs. Reuse twice the existing one-way `maxPropagationDelay` in completion and permitted-arrival envelopes. Scheduled deadlines leave required IFS inside CAP/GTS; optional response IEs yield when necessary. Physical PPDU timestamps and durations remain simulation time. No second ACK owner/timer, packet pointer in confirmation, arbitrary timeout parameter or knowledge of a peer's actual receive timestamp is added.
 
+The GTS/ATI fit proof uses the minimum appropriate ACK and final SIFS under6.6.4 (physical
+PDF74), with the applicable guard. It does not substitute the unknown receiver's maximum
+optional ACK body or the long-frame LIFS into that proof. Clause6.3.1 (PDF62–63) separately
+constrains the same device's next transmission; retaining that LIFS eligibility does not
+extend the current reservation's RX duty. E1-07 must verify the shared legacy calculation
+before its bounded correction and clip scheduled waiting to the reservation allowance.
+
 ## Enhanced discovery and integration
 
 Enhanced Beacon Request is command7 with frame version2, no command content, FP0 and AR0. Requested Header/Payload/Nested elements are sent with zero-length content in their correct descriptor grammar (6.5.2 and7.5.3, PDF67–68,108–109). At most one Enhanced Beacon Filter IE, short Nested sub-ID0x1e inside the MLME group, is permitted (Table7-9, PDF102). Its content control bits select Permit Joining, an optional unsigned minimum-LQI byte, an optional 0–100 percent-response byte and a zero-to-three-octet requested-attribute bitmap (7.4.4.2 andFigure7-28, PDF106). Unsupported feature-specific requested attributes cannot create TSCH/DSME/security capability. A zero/100 percent filter is deterministic; intermediate values use one configured MAC RNG draw per applicable request after deterministic filters pass.
@@ -143,6 +150,69 @@ Enhanced Beacon Request is command7 with frame version2, no command content, FP0
 The request's PAN and destination select either a specific coordinator or broadcast short destination. With `macBeaconAutoRespond=false`, deliver the actual filter/IE request to the upper management client; a later explicit beacon request carries the chosen supported values. The native active-scan service receives an additive legacy-default request-format/IE/filter selection, so discovery is runnable through production services. Received enhanced-beacon lists belong in native notifications/scan descriptors, not an invented legacy beacon body. E1-07 requires completed B1/B2/B3 and maps Header IE0x23 (Simplified Superframe) and0x24 (Simplified GTS) to the existing schedule/grant owners; it adds no parallel database or generic IE registry.
 
 Table6-1 (PDF68) maps requested attribute bits0–6 to TRLE, TSCH, DSME, low energy, hopping, deterministic access and coexistence features respectively; bits7–23 are reserved. None of those semantic features is selected by E1 core, so a filter requiring one cannot be satisfied by manufacturing its feature IEs or a success-valued PIB entry. Preserve its raw request/upper notification, and do not emit an automatic response claiming that capability. Supported arbitrary IE values come from the explicit native upper configuration; the MAC builds only the selected structural/filter elements and, in E1-07, its real simplified schedule/GTS IEs. Unknown IE semantics do not create a producer. Native generation rejects reserved filter bits/ranges; raw forensic reception preserves uninterpreted values without enabling a feature.
+
+Operational filter reception ignores reserved control bits5–7 and requested-attribute
+bits7–23 under4.6 (PDF51–52); neither6.5.2 nor7.4.4.2 overrides that rule. Preserve
+the actual received IE/request values for upper notification while applying only defined
+bits to automatic-response decisions. Structural errors, duplicate filters and invalid
+defined values remain invalid. Strict local generation and tolerant reception are separate.
+
+Outside scans, apply6.6.2's carried destination PAN/address and beacon source PAN validity
+before8.2.4.3's native-notification policy. Resolve an omitted Source PAN from an actually
+carried Destination PAN where applicable without inventing wire presence. Scan collection
+under6.4.1.2 remains broad across PANs; do not impose the ordinary local-PAN predicate before
+that scan branch. These rules are separate from promiscuous observation.
+
+### EBR response address binding
+
+Clause7.3.1.2 (PDF87) requires copying a present requester source address into the response
+destination, using `macPanId` for any required Destination PAN, omitting Source PAN and
+following Table7-2. The selected literal equal-PAN footnote remains applicable. Native
+enhanced EBRs therefore carry the existing local EUI; legacy requests retain their format.
+Request compression follows the actual local/requested PAN relationship, independently of
+the false-default all-PAN-suppression control: equal PANs use0, different PANs use1. With
+SHORT destination and EUI source, the selected request always carries Destination PAN.
+`PanIdSuppressed=true` yields one accepted SCAN.confirm INVALID_PARAMETER before RF/channel
+preparation under8.2.2/Table8-19; profile absence remains a provider refusal.
+
+| Requester source | Configured automatic source | Selected response |
+| --- | --- | --- |
+| EUI | FULL | Copy EUI destination, full local source, PC0 and Destination PAN only. |
+| EUI or SHORT | NONE | Copy destination, omit source addressing, PC0 and Destination PAN only; no fabricated join identity. |
+| EUI | SHORT | Suppress automatic response: Source PAN omission needs PC1, conflicting with the pinned equal-PAN short-address footnote. |
+| SHORT | FULL or SHORT | Suppress automatic response for the same unrepresentable layout. |
+| Absent | NONE | Retain Table8-25's short-broadcast fallback, PC0 and Destination PAN only. |
+| Absent | FULL or SHORT | Suppress the unrepresentable fallback response. |
+
+Valid PIB values remain readable/writable; an unsupported automatic response has no accepted
+native request requiring a confirmation. AutoRespond=false still delivers actual request
+values to the upper client. Do not substitute another configured source mode or introduce a
+second anonymous-response policy. These limitations concern EBR responses; explicit one-shot
+beacons use their own valid layouts. Table8-25 (PDF135–136) supplies the received-request
+address context;7.5.3 does not waive the response destination-copy rule.
+
+### Scheduled-beacon eligibility in E1-07
+
+Periodic slot0 begins with its beacon's first PPDU symbol and uses boundary priority without
+CSMA (10.2.2.1/10.2.4, PDF182–183/187–188). Conventional Beacon-PAN EBR responses instead use
+slotted CSMA in the next CAP under10.19/Table10-98 (PDF351–352). Header0x23's16-bit Timestamp
+has implementation-dependent initial value, resolution and accuracy; it is not a standardized
+phase-offset/remote-clock map. An arbitrary response receive start cannot become an epoch.
+
+The selected E1-07 producer generates operational0x23/0x24 only through the existing periodic
+snapshot at actual boundary TX, using DestinationNONE as the periodic wire profile. One-shot
+raw/generated schedule copies are INVALID_PARAMETER under8.2.2/Table8-22; automatic EBR
+requests for those outputs are outside the selected response profile. Preserve them for
+AutoRespond=false and never send an empty substitute or call a deferred boundary beacon a
+Table10-98 CAP response. Other one-shot discovery remains independent.
+
+Receive normalization requires valid unsecured periodic shape/geometry, configured PAN,
+channel/coordinator identity and existing acquisition/tracking-window eligibility. Only that
+beacon's copied first-PPDU-start sample establishes/renews the shared epoch. Header0x24 alone
+and addressed discovery responses cannot update phase, windows, grants, advertisement aging
+or loss counters. Their actual IE values can remain visible to scan/notification clients.
+This is a declared wire-profile boundary, not a universal claim about every enhanced beacon;
+no internal radio transmission-kind tag or additional clock/timer is used.
 
 ## Enhanced PIB and service inputs
 

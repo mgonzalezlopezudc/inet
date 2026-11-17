@@ -10,7 +10,7 @@ no pending PHY request from which to obtain a corrective callback.
 The native PHY owner will issue a direct availability indication with actual
 availability and transceiver state after lifecycle changes. MAC local lifecycle
 and PHY availability are distinct: a down PHY does not stop the MAC or erase
-its PIB/queued frames. The MAC caches the declared dependency availability,
+its PIB/buffered indirect frames. The MAC caches the declared dependency availability,
 refuses new radio-dependent requests while down and restores idle receive policy
 when it returns. Local attribute access and queued indirect admission remain
 available. Normal PHY state/measurement/transmit timing does not change.
@@ -24,6 +24,13 @@ admission barrier becomes a general synchronous retirement barrier, preserving
 an outer barrier during nested callbacks. Availability-up can be observed during
 callbacks; physical continuation waits until retirement finishes. No generation,
 polling timer or replacement state machine is introduced.
+
+Copied automatic beacon-response obligations are transient radio work, rather than
+buffered indirect MSDUs or installed schedule configuration. Availability-down clears
+that response FIFO before notifications or terminal callbacks, including inline recovery.
+An old received request cannot revive an automatic response after its radio context is
+retired. Dropping an obligation before construction consumes no EBSN; fresh post-recovery
+requests use the normal response path. This distinction preserves the retained owners above.
 
 Re-review found a nested reset ordering case: stopping only the PHY from an
 active DATA's RESET callback could confirm RESET before queued DATA was retired.

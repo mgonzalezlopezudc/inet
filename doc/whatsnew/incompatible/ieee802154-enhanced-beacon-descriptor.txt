@@ -1,0 +1,9 @@
+IEEE 802.15.4 beacon descriptor presence
+
+Native beacon descriptors now represent coordinator PAN and sequence number
+as optional values because enhanced beacon layouts can omit them. Clients
+must check presence rather than treating zero or 0xffff as an absence marker.
+Beacon request indications also represent the destination PAN as optional;
+clients must check whether it was carried on wire.
+The MAC PIB value variant also includes typed Header-IE and Payload-IE
+vectors, so exhaustive custom visitors must handle those alternatives.

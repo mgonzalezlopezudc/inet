@@ -7,6 +7,7 @@ inet -u Cmdenv -r 0,1             # Non-beacon association and polling
 inet -u Cmdenv -c Beacon -r 0,1   # Sleeping BO3/SO1 beacon PAN
 inet -u Cmdenv -c Gts -r 0,1      # Bidirectional GTS DATA
 inet -u Cmdenv -c Enhanced -r 0,1 # Unacknowledged version-2 DATA
+inet -u Cmdenv -c EnhancedDiscovery -r 0,1 # Enhanced active discovery
 ```
 
 Each pair uses typed frames and raw bytes respectively. Both peers explicitly
@@ -46,6 +47,16 @@ established peer context. The default Enhanced setting keeps PAN suppression
 off. Both the default and sequence-suppressed Enhanced configurations completed
 two device cycles and two DATA deliveries and confirmations per role in each
 300 ms typed/raw E1-04 acceptance run.
+
+`EnhancedDiscovery` selects an enhanced active scan at the device and enables
+enhanced frames at both interfaces. Since an enhanced discovery beacon does not
+itself supply the legacy PAN-coordinator flag, the app's
+`enhancedCoordinatorIsPanCoordinator` parameter supplies that role as an
+explicit example policy. The remainder of the association and exchange uses
+the existing native procedures. The request carries the device's extended
+address, and the automatic response addresses that device with the coordinator
+PAN in the Destination PAN field. This example does not enable periodic
+enhanced superframes.
 
 The default-off bidirectional GTS policy waits for transmit and receive
 allocation confirmations, then exchanges acknowledged DATA with the coordinator

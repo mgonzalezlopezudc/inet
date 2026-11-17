@@ -167,7 +167,11 @@ class DiscoveryExercise : public cSimpleModule, public cListener,
             check(coordinator.get(),"macBsn",uint64_t(0));
             check(coordinator.get(),"macDsn",uint64_t(7));
             // Explicit errors do not consume BSN or begin a waveform.
-            beacon({channel(11),true},Status::INVALID_PARAMETER);
+            // Enhanced frames are a separately enabled profile; refusal has no terminal or RF.
+            ASSERT(!getModuleByPath(par("coordinatorModule"))->par("enableEnhancedFrames").boolValue());
+            Ieee802154MacBeaconRequest enhanced{channel(11)}; enhanced.enhanced = true;
+            ASSERT(coordinatorManagement->submitBeacon(++nextId,enhanced) == Admission::UNSUPPORTED_OPERATION);
+            ASSERT(beacons == 1 && confirms == (scenario == 2 ? 1 : 0));
             beacon({channel(10)},Status::INVALID_PARAMETER);
             auto secured = Ieee802154MacBeaconRequest{channel(11)};
             secured.security.securityLevel = 1;
@@ -178,7 +182,7 @@ class DiscoveryExercise : public cSimpleModule, public cListener,
             check(coordinator.get(),"macBeaconPayload",std::vector<uint8_t>{42});
             beacon({channel(11)},Status::SUCCESS);
             until(16000);
-            ASSERT(beacons == 2 && confirms == (scenario == 2 ? 5 : 4));
+            ASSERT(beacons == 2 && confirms == (scenario == 2 ? 4 : 3));
             check(coordinator.get(),"macBsn",uint64_t(1));
             check(coordinator.get(),"macDsn",uint64_t(7));
         }

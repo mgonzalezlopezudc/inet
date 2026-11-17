@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "inet/linklayer/ieee802154/Ieee802154Address.h"
+#include "inet/linklayer/ieee802154/Ieee802154InformationElements.h"
 #include "inet/linklayer/ieee802154/Ieee802154MacServiceResult.h"
 #include "inet/physicallayer/wireless/ieee802154/contract/Ieee802154PhyServicePrimitives.h"
 
@@ -20,7 +21,8 @@ namespace inet {
 /** Typed MLME PIB representation, including delegated PHY attributes; no string fallback. */
 using Ieee802154MacPibValue = std::variant<bool, int64_t, uint64_t, Ieee802154Address, simtime_t,
         units::values::W, physicallayer::Ieee802154PhyCcaMode, physicallayer::Ieee802154PhyChannel,
-        std::vector<physicallayer::Ieee802154PhyPeerPower>, std::vector<uint8_t>>;
+        std::vector<physicallayer::Ieee802154PhyPeerPower>, std::vector<uint8_t>,
+        std::vector<Ieee802154InformationElements::Header>, std::vector<Ieee802154InformationElements::Payload>>;
 
 /**
  * String identifiers are preserved verbatim, including unknown names. The

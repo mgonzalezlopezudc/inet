@@ -77,7 +77,9 @@ Source: `table:8-31`; 146–148.
 
 ## IEEE802154-ENHANCED-12
 
-An Enhanced Beacon Request uses the existing Beacon Request command with frame version 2 and no command content; FP and AR are zero. Requested IEs use zero-length requests in their applicable IE grammar.
+An Enhanced Beacon Request uses the existing Beacon Request command with frame version2
+and no command content. Transmission sets FP and AR to zero; reception ignores FP under
+7.5.3. Requested IEs use zero-length requests in their applicable IE grammar.
 
 Source: `clause:6.5.2`, `clause:7.5.3`; 67–68, 108–109.
 
@@ -85,19 +87,47 @@ Source: `clause:6.5.2`, `clause:7.5.3`; 67–68, 108–109.
 
 At most one Enhanced Beacon Filter IE occurs per request. Joining, minimum LQI, response probability and requested-attribute bitmap govern the response under their stated conditions.
 
-Source: `clause:7.4.4.2`, `figure:7-28`, `table:6-1`; 67–68, 106.
+Control bits5–7 and requested-attribute bits7–23 are reserved: transmit them as zero
+and ignore them on reception under4.6. Neither filter-specific clause overrides
+that receive rule. Reserved bits alone cannot become an unsupported capability
+request or a reason to discard an otherwise valid request.
+
+Source: `clause:7.4.4.2`, `figure:7-28`, `table:6-1`, `clause:4.6`; 67–68,106,51–52.
 
 ## IEEE802154-ENHANCED-14
 
 With automatic response disabled, Enhanced Beacon Request IEs/filter are delivered to the next higher layer. Otherwise a matching request obtains the applicable requested supported IEs in the enhanced beacon.
 
-Source: `clause:6.5.2`; 67–68.
+The response copies a present requester source address into its destination, puts
+macPANId in any required Destination PAN field and omits Source PAN, following
+Table7-2's compression rules. Requested top-level Payload groups require fulfillment
+as well as Header and Nested requests; an absent producer cannot be replaced by an
+empty response lacking the requested element.
+
+Source: `clause:6.5.2`, `clause:7.3.1.2`, `table:8-25`; 67–68,87,135–136.
 
 ## IEEE802154-ENHANCED-15
 
 Simplified Superframe and Simplified GTS IEs carry the applicable scheduled information in enhanced beacons; their presence does not supply unrelated TSCH/DSME semantics.
 
-Source: `clause:10.2.8.1`, `clause:10.25.8.1`; 190–191, 389–390.
+Header IE0x23 has exactly six content octets:16-bit Timestamp,16-bit Superframe
+Specification and16-bit CFP Specification. CFP bits0–3 give allocated GTS count,
+4–7 first CFP slot,8–11 last CFP slot,12 allocation permit and13–15 reserved.
+Timestamp resolution, initial value and accuracy are implementation-dependent;
+the value is updated between transmissions.
+
+Header IE0x24 contains a directions octet followed by the referenced three-octet
+GTS descriptors:16-bit device short address and four-bit starting slot/length.
+Direction bits0–6 correspond to list order; bit7 is reserved. At most seven records
+give content length1+3m≤22 octets. The four-bit allocated count does not expand the
+seven-allocation limit and need not equal the advertised record count, whose
+publication lifetime differs from allocation lifetime. Reserved fields are zero
+on transmission and ignored on reception under4.6; a set reserved bit alone does
+not invalidate otherwise usable information. Both IEs are Enhanced-Beacon-only.
+
+Source: `clause:10.2.8.1`, `clause:10.25.8.1`, `clause:10.25.1`,
+`clause:7.3.1.4`, `clause:7.3.1.5`, `clause:4.6`, `table:7-7`;
+190–191,389–390,383–384,88–89,51–52,98–99.
 
 ## IEEE802154-ENHANCED-16
 
@@ -109,6 +139,11 @@ Source: `table:8-39`; 158–160.
 
 Enhanced active scan and one-shot beacon generation carry their specified suppression, address and copied/generated IE inputs; unsupported or out-of-range beacon parameters report INVALID_PARAMETER, and an oversized beacon reports FRAME_TOO_LONG.
 
-Source: `table:8-18`, `table:8-22`; 128–129, 133–134.
+The enhanced Beacon Payload is separate from its IE lists and carries the upper-set
+macBeaconPayload. A nonempty payload triggers applicable scan notification. Frame Pending
+advertises queued broadcast traffic in enhanced as well as legacy beacons.
+
+Source: `table:8-18`, `table:8-22`, `clause:7.3.1.1`, `clause:7.3.1.2`,
+`clause:7.3.1.7`, `clause:8.2.4.3`; 128–129,133–134,86–87,90,116.
 
 The Table 7-2 continuation's footnote is included in the interpretation record; the selected edition's literal encoder rule is not replaced with an older edition. The complete field-presence and termination matrices are recorded in the model decision document, separately from these normative statements.

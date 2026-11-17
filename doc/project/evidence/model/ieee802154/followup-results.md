@@ -31,7 +31,8 @@ This record distinguishes source-audit closure, compilation, executed fixtures a
 | E1-03 | Debug acceptance complete; independent source pass finds no actionable defect | Fresh debug,9 units,2 serializer fixtures and202/202 actual protocol cases PASS (`e103-first/`). Nested framing adds no feature-specific MLME operation. C++ follow-up adds no unmatched diagnostic; inherited warning gate remains FAIL. |
 | E1-04 | Repaired debug acceptance and independent closure complete | Fresh matching debug,9 units,5 modules,2 serializer fixtures and512/512 actual protocol cases PASS (`e104-acceptance1/`), including80 EnhancedData cases. Default and sequence-only managed examples pass. C++ gate FAIL retains one independently dispositioned validation clone. |
 | E1-05 | Repaired debug acceptance and independent source closure complete | Fresh debug284/284 expanded cases pass (`e105-responder-fix1/`). Its matching library passes10 units,9 modules,2 serializers and636/636 actual protocol cases (`e105-acceptance1/`), zero errors/skips/FAIL. Final C++ follow-up adds no unmatched diagnostic; the warning gate remains FAIL. Scheduled CAP/GTS extensions remain E1-07. |
-| E1-06 through E1-99 | NOT_RUN | Discovery, scheduled integration and publication gates remain open. |
+| E1-06 | Debug acceptance and independent source closure complete | Composed checkpoints below cover the address, lifecycle, broadcast and legacy controls. Final fresh debug, EnhancedPib unit, Discovery16 and EnhancedBeacon110/110 PASS (`e106-fp-fix5/`); final typed/raw example asserts12 scalars. Independent review23 PASS/11 N/A/0 FLAG/0 QUESTION. C++ warning gate remains FAIL with bounded dispositions. |
+| E1-07 through E1-99 | NOT_RUN | Scheduled integration and publication gates remain open. |
 
 ## Baseline control run
 
@@ -877,6 +878,136 @@ sole production call; the192us/320us unit controls verify slotted-only backoff i
 Independent review finds no unsafe access or swapped consumer. Keep the warning gate FAIL
 with these bounded dispositions; no wrapper, suppression, waiver or ledger entry is added.
 Scoped architecture/naming, eight interfaces, source/document seals, release and links pass.
+
+## E1-06 initial enhanced-beacon diagnostic
+
+The first producer checkpoint builds debug, passes the new EnhancedPib unit and4/4 actual
+EnhancedBeacon cases (`e106-first/`). A real one-shot version2 beacon carries the selected IE
+values without a legacy beacon-body prefix; typed/raw and present/suppressed sequence cases
+check native notification presence and EBSN rollover/retention. The PIB unit covers profile
+gating, copied values and reset behavior. These observations do not establish actual enhanced
+active scanning, EBR filters, automatic/upper-directed responses, default-reset RNG consumption,
+the complete counter/lifecycle matrix or the production application. Those remain open with
+the final legacy controls and independent review. No E1-06 commit or publication is implied.
+
+The next fresh checkpoint passes the PIB unit and both real enhanced-active scan/automatic
+response cases (`e106-active-scan1/`). A fixture-only extension using its byte-identical native
+sources/library passes26/26 cases plus the unit (`e106-filters1/`): joining filters,
+zero/100/intermediate probability with dedicated MAC RNG counts, filtering-disabled policy,
+allocated-unimplemented versus configured vendor IE requests, invalid percent and actual
+upper notification followed by explicit response. This is still partial unit evidence.
+
+Receive-path audit identifies three mechanisms requiring repair: a carried Destination PAN
+is not used for a beacon's omitted Source PAN; non-scan beacons bypass ordinary destination/
+source-PAN validity filtering; and reserved filter bits are rejected instead of ignored on
+reception. Four actual-radio scenarios reproduce them in both representations on the
+unchanged26-case library (`e106-receive-red1/`): eight assertion errors, zero successful/skipped
+cases, PIB unit PASS. Actual received FCS/field prerequisites pass before native assertions.
+Primary4.6/6.6.2/6.4.1.2 and the [profile](enhanced-frame-profile.md) distinguish strict local
+generation, tolerant reserved-field reception, non-scan validity and broad scan discovery.
+The bounded joint repair passes a fresh debug build, the PIB unit and40/40 actual beacon
+cases (`e106-receive-fix1/`), zero errors/skips/FAIL. The same checkpoint also rejects reserved
+locally requested Header0x12, short Nested0x3a and long Nested3, while the allocated
+unimplemented Header0x2b request remains valid. Full E1-06 acceptance remains open.
+
+The production EnhancedDiscovery example runs300ms in typed/raw modes against that matching
+library and passes twelve exported scalar assertions: device cycles2/coordinator0, received
+and confirmed MSDUs2 per role per run. `e106-discovery-example1-execution.json` records exact
+command, source/NED/configuration/library hashes and result identity. This is an intermediate
+application check; rerun it after subsequent compiled E1-06 changes before closure.
+
+The interleaved-counter fixture initially stops on beacon admission between operations
+(`e106-counters1/`, `e106-counters2/`: two errors each). Allowing the post-confirm PHY idle
+transition to finish makes its unchanged RF/counter assertions pass in both representations
+(`e106-counters3/`, PIB unit also PASS). Actual RF observes legacy BSN255, enhanced EBSN255,
+a suppressed enhanced sequence and legacy DATA DSN255; nondefault RESET and public GET retain
+all three rollover values0. The earlier errors establish fixture coordination, not a counter
+defect. Default-reset redraw and legacy-only RNG-consumption evidence remain open.
+
+Provisional independent source review then finds four mechanisms requiring correction:
+requested top-level Payload groups are dropped during automatic response fulfillment;
+existing macBeaconPayload is omitted from enhanced generation and scan notification;
+ordinary EBR dispatch runs before scan-specific discard; and enhanced beacons omit pending
+broadcast FP. Initial causal attempts include fixture prerequisites that must not be counted
+as source failures. `e106-review-red2/` retains22 total,8 successful,14 errors and zero skips:
+the corrected effective profile/RNG, size and security controls pass, while Payload fulfillment,
+scan dispatch and four FP controls reach their failing semantic assertions. The remaining
+payload receive/generator attempts still stop on fixture length/admission errors there.
+
+`e106-payload-red3/` subsequently reaches the missing scan-notification assertion in both
+representations; its generator pair still violates monotonically increasing request IDs.
+Correcting the IDs yields `e106-generator-red4/`: two actual RF missing-payload assertions,
+zero successful/skipped cases, PIB unit PASS. The equal-length receive mutation accounts
+for the required termination bytes; it does not change the physical waveform duration.
+All four findings have bounded causal evidence before source repair.
+
+The joint repair also adopts the source-grounded [EBR address binding](enhanced-frame-profile.md#ebr-response-address-binding):
+native EUI request, copied response destination, omitted response Source PAN and explicit
+unsupported unrepresentable automatic combinations under the pinned footnote. It reuses
+the existing payload, scan, response and broadcast owners. Its first fresh checkpoint passes
+88/96 cases (`e106-review-fix1/`). Focused traces show sender broadcast DATA RF1/confirm1 but
+delivery0 and receiver mode0; the enhanced early return bypasses the existing associated-parent
+FP receive duty. The scan pair separately expects the wrong empty-passive-scan result:
+SUCCESS/empty is the existing contract, with child NO_BEACON/no-response checked independently.
+Those eight assertions are retained in `e106-followup-diagnostic2/`.
+
+The bounded receive-duty repair and corrected passive-root expectation pass fresh debug,
+the PIB unit and96/96 actual cases (`e106-broadcast-duty-fix2/`), zero errors/skips/FAIL.
+Broadcast includes all28 legacy/enhanced cases: FP1, one successful-beacon release and no
+release after a failed beacon. The effective enabled/disabled profile controls also prove
+initial/default-reset draws3/2, no nondefault-reset draw and corresponding public EBSN
+availability. Earlier draw-count failures were fixture configuration, not an EBSN defect.
+Six additional matching-library bad-request cases pass (`e106-bad-requests1/`): bad FCS,
+valid-FCS malformed Header IE and protected requests reach lower reception but produce no
+automatic response. Independent repaired-source review closes the four original findings
+and the receive-duty sibling, but identifies one overly broad layout guard: a SHORT requester
+with AutoSA NONE is representable and must receive the source-less response. Its causal pair
+and final repair remain open alongside the remaining full-unit matrix.
+
+Initial immutable core C++ analysis reports1833 warning rows, zero errors and339 unique native
+diagnostics. Cumulative exact attribution against coherent E105, initial PIB, E104 application
+and B2 snapshots matches319;20 remain unmatched. Independent guard/caller/lifetime review
+establishes no further defect in those20, and supports direct optional-to-optional assignment
+at the PHY delegation owner. The earlier new adjacent PIB-reset parameter diagnostic retains
+its separate DSN/BSN/EBSN consumer-order disposition; matching a previous E106 checkpoint does
+not make it pre-task inheritance. Keep the mechanical warning gate FAIL. The repaired-source
+follow-up and final complete acceptance remain separate pending results.
+
+## E1-06 final closure
+
+The SHORT-requester/AutoSA NONE repair passes its causal pair and the complete112-case
+beacon/broadcast checkpoint (`e106-none-short-fix3/`). Subsequent matching-library request
+forms pass10 cases. Lifecycle controls distinguish a response already submitted to the PHY
+from a queued response. The queued-PHY trace reproduces an obsolete response after recovery;
+retiring the transient response FIFO before callbacks repairs it. Fresh debug, the PIB unit
+and130 beacon/broadcast cases pass (`e106-queued-phy-fix4/`), including a fresh post-recovery
+request and EBSN255 to0 allocation. Installed schedules, indirect MSDUs and PIB values retain
+their existing lifetimes.
+
+The broad matching-library checkpoint `e106-acceptance1/` passes12 unit fixtures,2 serializers,
+1056/1056 protocol cases across22 fixtures and10 module fixtures. The remaining Discovery
+module stops at its obsolete disabled-profile enhanced-request expectation. Its corrected
+oracle retains the legacy assertions and checks explicit UNSUPPORTED_OPERATION refusal
+without a terminal event or RF transmission; all16 module cases subsequently pass. This is
+composed evidence, not one all-green combined invocation.
+
+Final independent review identifies the receive-side EBR Frame Pending predicate:7.5.3
+requires ignoring that bit. `e106-fp-red1/` passes the four FP0 controls and reproduces four
+FP1 failures. Removing that predicate yields fresh debug, EnhancedPib unit, Discovery16 and
+110/110 EnhancedBeacon cases PASS (`e106-fp-fix5/`), zero errors/skips/FAIL. Final MAC SHA-256
+is `766be2d7f4222c1ed9d0ac6803434e32030829a58fec3033ae93375123d86936`;
+debug library SHA-256 is `e3626a5431b12e9f220cf331e644360005ffe79b9cdd5c2ddad728a9471a14ab`.
+`e106-final-example-execution.json` records both EnhancedDiscovery300ms runs, typed/raw,
+with12 asserted scalars: two device cycles and two received/confirmed exchanges per role.
+Independent final review closes23 PASS/11 N/A/0 FLAG/0 QUESTION with no remaining finding.
+
+The immutable queued-PHY-repair C++ follow-up (`e106-final-cpp.log`) reports1782 warning
+rows, zero errors and295 unique native diagnostics, all matched to the preceding coherent
+checkpoint. It precedes the final FP-predicate removal; that small delta has fresh functional
+checks and source review, rather than an asserted exact-final C++ pass. The mechanical
+warning gate remains FAIL. Exact final whole-plan C++ analysis, release/feature matrices,
+trajectory controls and publication gates remain required after scheduled integration.
+Mermaid rendering remains NOT_RUN.
 
 ## Publication gate
 
