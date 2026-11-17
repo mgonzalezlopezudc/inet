@@ -1,0 +1,317 @@
+%description:
+Actual native queue/MAC/radio completion through Boundary to IActivePacketSource.
+Borrowed original IDs, synchronous envelope/refusal, ACK/retry/CCA/deadline,
+reentry, STOP/CRASH/destruction and actual Layer terminal observations are checked.
+The instrumented Layer reenters its production upper entry during a real MAC-only
+shutdown callback, while Layer remains OPERATING and the interface still UP.
+Compatibility data has no native completion capability. No VRB behavior is claimed.
+
+%extraargs: -r 0..19
+
+%file: CompletionCheck.cc
+#include "inet/common/InitStages.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/lifecycle/LifecycleController.h"
+#include "inet/common/lifecycle/NodeStatus.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/lowpan/LowpanLayer.h"
+#include "inet/linklayer/lowpan/LowpanNativeBoundary.h"
+#include "inet/linklayer/lowpan/LowpanNativeMac.h"
+#include "inet/linklayer/lowpan/LowpanProtocol.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameHeader_m.h"
+#include "inet/networklayer/common/NextHopAddressTag_m.h"
+#include "inet/networklayer/ipv6/Ipv6Header_m.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmission.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
+using namespace inet;
+using namespace inet::lowpan;
+namespace inet::completiontest {
+class CompletionPacket : public Packet {
+  public:
+    static std::set<int64_t> deleted;
+    CompletionPacket(const char *name):Packet(name){}
+    CompletionPacket(const CompletionPacket& other):Packet(other){}
+    ~CompletionPacket(){deleted.insert(getId());}
+    CompletionPacket *dup() const override {return new CompletionPacket(*this);}
+};
+std::set<int64_t> CompletionPacket::deleted;
+
+class CompletionCheck;
+class CompletionLayer : public LowpanLayer {
+  public:
+    void handlePushPacketProcessed(Packet *packet,const cGate *gate,bool successful) override;
+};
+Define_Module(CompletionLayer);
+
+class CompletionCheck : public cSimpleModule, public LifecycleController, public queueing::IActivePacketSource, public cListener
+{
+    struct Offered {bool success;int node;};
+    std::map<int64_t,Offered> offered;
+    std::map<int64_t,int> results;
+    std::set<int64_t> layerResults,fragmentIds;
+    int callbacks=0,good=0,bad=0,pulled=0,layerGood=0,layerBad=0,layerDrops=0,reentrant=0;
+    int transmitted[3]{},received[3]{},nativeDrops=0,boundaryDrops=0;
+    int64_t layerOriginal=-1,restartOriginal=-1;
+    bool replayQueued=false,drainAttempted=false;
+    cModule *nic[3]{};
+    std::vector<uint8_t> expectedIpv6;
+    std::set<uint8_t> sequences;
+    std::vector<int> sourceDropReasons,sourceLowpanReasons;
+    Ieee802154Address address[3]{Ieee802154Address("0102030405060708"),Ieee802154Address("1112131415161718"),Ieee802154Address("2122232425262728")};
+    void step(double time,int action){scheduleAt(SimTime(time),new cMessage("action",action));}
+    bool adapted() const {return (scenario>=8 && scenario<=12)||scenario==15||scenario==16||scenario==17||scenario==18;}
+    cModule *node(int index) const {return getParentModule()->getSubmodule(scenario==15?"compat":"node",index);}
+    void operate(bool start,bool macOnly=false){
+        LifecycleOperation::StringMap parameters;
+        LifecycleOperation *operation=start?static_cast<LifecycleOperation *>(new ModuleStartOperation()):
+            scenario>=16?static_cast<LifecycleOperation *>(new ModuleCrashOperation()):new ModuleStopOperation();
+        operation->initialize(macOnly?nic[0]->getSubmodule("mac"):node(0),parameters);initiateOperation(operation);
+    }
+    void raw(int source=0,bool broadcast=false,int size=8,bool success=true,bool invalid=false,bool tight=false){
+        auto boundary=dynamic_cast<LowpanNativeBoundary *>(nic[source]->getSubmodule("boundary"));
+        Ieee802154AddressReq request;request.setSrcAddress(address[source]);request.setDestAddress(broadcast?Ieee802154Address("ffff"):address[1]);request.setSrcPanId(4660);request.setDestPanId(4660);
+        auto packet=new CompletionPacket("original-frame");packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>(size,0x41)));
+        auto prepared=boundary?boundary->prepareTransmission(request):check_and_cast<LowpanNativeMac *>(nic[source]->getSubmodule("mac"))->prepareTransmission(request);
+        *packet->addTag<LowpanTransmissionReq>()=*prepared;packet->addTag<PacketProtocolTag>()->setProtocol(&lowpanProtocol);
+        if(invalid)packet->addTag<SignalBitrateReq>(); // Presence alone invalidates the prepared native envelope.
+        if(tight)packet->getTagForUpdate<LowpanTransmissionReq>()->setDeliveryDeadline(simTime()+SimTime(100,SIMTIME_US));
+        int64_t id=packet->getId();offered[id]={success,source};
+        if(boundary)boundary->pushPacket(packet,boundary->gate("in"));
+        else check_and_cast<queueing::IPassivePacketSink *>(nic[source]->getSubmodule("queue"))->pushPacket(packet,nic[source]->getSubmodule("queue")->gate("in"));
+        // The packet may have completed/deleted synchronously; use the saved ID only.
+        if(invalid || scenario==7 || (scenario==14 && drainAttempted && !boundary->isTransmissionOperational())){
+            ASSERT(results.count(id)==1 && CompletionPacket::deleted.count(id)==1);
+        }
+    }
+    void upper(int size,bool restart=false){
+        auto packet=makeIpv6(size);auto id=packet->getId();if(restart)restartOriginal=id;else layerOriginal=id;
+        send(packet,"out",0);
+    }
+    int sourceIndex(cComponent *source) const {for(int i=0;i<3;i++)for(auto at=dynamic_cast<cModule *>(source);at;at=at->getParentModule())if(at==nic[i])return i;throw cRuntimeError("Unknown source");}
+  public:
+    int scenario=0;
+    bool probed=false;
+    int64_t probeId=-1;
+    Packet *makeIpv6(int size){
+        auto header=makeShared<Ipv6Header>();header->setSrcAddress(Ipv6Address("fe80::302:304:506:708"));header->setDestAddress(Ipv6Address("fe80::1312:1314:1516:1718"));header->setProtocolId(IP_PROT_NONE);header->setHopLimit(37);header->setPayloadLength(B(size-40));
+        auto packet=new CompletionPacket("adapted-original");packet->insertAtBack(header);packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>(size-40,0x55)));
+        packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ipv6);packet->addTag<NextHopAddressReq>()->setNextHopAddress(Ipv6Address("fe80::1312:1314:1516:1718"));
+        expectedIpv6=packet->peekDataAsBytes()->getBytes();return packet;
+    }
+    queueing::IPassivePacketSink *getConsumer(const cGate *gate) override {
+        auto target=node(gate->getIndex());if(!target)return nullptr;auto interface=target->getSubmodule("nic");
+        return dynamic_cast<queueing::IPassivePacketSink *>(interface->getSubmodule(interface->getSubmodule("boundary")?"boundary":"queue"));
+    }
+    void handleCanPushPacketChanged(const cGate *) override {}
+    void handlePushPacketProcessed(Packet *packet,const cGate *gate,bool successful) override {
+        Enter_Method("handlePushPacketProcessed");auto id=packet->getId();ASSERT(offered.count(id));
+        ASSERT(gate->getOwnerModule()==this && gate->getIndex()==offered.at(id).node);
+        ASSERT(successful==offered.at(id).success && !CompletionPacket::deleted.count(id));
+        ASSERT(dynamic_cast<LowpanNativeMac *>(packet->getOwner()) || dynamic_cast<LowpanNativeBoundary *>(packet->getOwner()));
+        results[id]++;ASSERT(results[id]==1);callbacks++;if(successful)good++;else bad++;
+        if(scenario==6 && !replayQueued){replayQueued=true;int before=pulled;raw();ASSERT(pulled==before);reentrant++;}
+        if(scenario==14 && !drainAttempted){
+            drainAttempted=true;auto boundary=check_and_cast<LowpanNativeBoundary *>(nic[0]->getSubmodule("boundary"));
+            ASSERT(check_and_cast<NetworkInterface *>(nic[0])->isUp() && !boundary->isTransmissionOperational());
+            int before=pulled;raw(0,false,8,false);ASSERT(pulled==before);reentrant++;
+        }
+    }
+  protected:
+    int numInitStages() const override {return NUM_INIT_STAGES;}
+    void initialize(int stage) override {
+        if(stage==INITSTAGE_LOCAL){scenario=par("scenario");CompletionPacket::deleted.clear();}
+        if(stage!=INITSTAGE_LAST)return;
+        for(int i=0;i<3;i++){
+            nic[i]=node(i)->getSubmodule("nic");
+            nic[i]->getSubmodule("mac")->subscribe("packetReceivedFromUpper",this);nic[i]->getSubmodule("mac")->subscribe("packetDropped",this);
+            if(auto boundary=nic[i]->getSubmodule("boundary"))boundary->subscribe("packetDropped",this);
+            nic[i]->getSubmodule("radio")->subscribe("transmissionStarted",this);
+            if(auto layer=nic[i]->getSubmodule("lowpan"))for(auto name:{"nativeFrameTransmissionSucceeded","nativeFrameTransmissionFailed","fragmentSent","packetDropped"})layer->subscribe(name,this);
+        }
+        if(scenario==1 || scenario==4 || scenario==18)for(int i=1;i<3;i++)check_and_cast<physicallayer::IRadio *>(nic[i]->getSubmodule("radio"))->setRadioMode(physicallayer::IRadio::RADIO_MODE_OFF);
+        if(scenario==5)step(.099,1);
+        step(.1,0);
+        if(scenario==11 || scenario==12 || scenario==14 || scenario==16 || scenario==17){step(.1001,2);if(scenario!=14){step(.2,3);step(.21,4);}}
+        if(scenario==13)step(.1001,5);
+        step(.8,99);
+    }
+    void handleMessage(cMessage *message) override {
+        if(message->isSelfMessage()){
+            int action=message->getKind();delete message;
+            if(action==0){
+                if(adapted())upper(scenario==9||scenario==11||scenario==12||scenario==16||scenario==17?1280:48);
+                else {raw(0,scenario==1,8,scenario==0||scenario==1||scenario==6||scenario==19,scenario==2,scenario==3);if(scenario==13||scenario==14)raw(0,false,8,false);}
+            }
+            if(action==1)raw(2,true,110,true);
+            if(action==2)operate(false,scenario==12||scenario==14||scenario==17);
+            if(action==3)operate(true,scenario==12||scenario==17);
+            if(action==4)upper(48,true);
+            if(action==5)node(0)->deleteModule();
+            if(action==99)endSimulation();
+            return;
+        }
+        auto packet=check_and_cast<Packet *>(message);int index=message->getArrivalGate()->getIndex();received[index]++;
+        if(adapted())ASSERT(index==1 && packet->peekDataAsBytes()->getBytes()==expectedIpv6);
+        delete packet;
+    }
+    void receiveSignal(cComponent *source,simsignal_t signal,cObject *object,cObject *details) override {
+        int index=sourceIndex(source);
+        if(signal==registerSignal("packetReceivedFromUpper")){if(index==0)pulled++;return;}
+        if(signal==registerSignal("fragmentSent")){if(index==0)fragmentIds.insert(check_and_cast<Packet *>(object)->getId());return;}
+        if(signal==registerSignal("packetDropped")){
+            auto name=source->getName();if(!strcmp(name,"lowpan")){layerDrops++;if(scenario==12||scenario==17){ASSERT(check_and_cast<PacketDropDetails *>(details)->getReason()==INTERFACE_DOWN);ASSERT(check_and_cast<Packet *>(object)->getId()==probeId);}}
+            else if(!strcmp(name,"mac")){
+                nativeDrops++;
+                if(index==0){sourceDropReasons.push_back(check_and_cast<PacketDropDetails *>(details)->getReason());if(auto lowpan=dynamic_cast<LowpanPacketDropDetails *>(details))sourceLowpanReasons.push_back(lowpan->getLowpanReason());}
+            }
+            else boundaryDrops++;return;
+        }
+        if(signal==registerSignal("nativeFrameTransmissionSucceeded") || signal==registerSignal("nativeFrameTransmissionFailed")){
+            ASSERT(index==0);auto id=check_and_cast<Packet *>(object)->getId();ASSERT(!layerResults.count(id));layerResults.insert(id);
+            ASSERT(!CompletionPacket::deleted.count(id));
+            if(signal==registerSignal("nativeFrameTransmissionSucceeded"))layerGood++;else layerBad++;return;
+        }
+        auto packet=check_and_cast<physicallayer::ITransmission *>(object)->getPacket();
+        if(scenario==15){transmitted[index]++;return;}
+        auto header=packet->peekAtFront<Ieee802154FrameHeader>();if(header->getFrameControl()==2)return;transmitted[index]++;if(index==0)sequences.insert(header->getSequenceNumber());
+    }
+    void finish() override {
+        if(!adapted() && scenario!=13 && scenario!=19){ASSERT(results.size()==offered.size());for(const auto& item:offered)ASSERT(results.at(item.first)==1 && CompletionPacket::deleted.count(item.first));}
+        if(scenario==0)ASSERT(callbacks==1 && good==1 && transmitted[0]==1 && received[1]==1);
+        if(scenario==1)ASSERT(callbacks==1 && good==1 && transmitted[0]==1 && received[1]+received[2]==0);
+        if(scenario==2)ASSERT(callbacks==1 && bad==1 && transmitted[0]==0 && sourceLowpanReasons==std::vector<int>{LOWPAN_ENVELOPE_INVALIDATED});
+        if(scenario==3)ASSERT(callbacks==1 && bad==1 && transmitted[0]==0 && nativeDrops==1 && sourceLowpanReasons==std::vector<int>{LOWPAN_LOWER_LIFETIME_EXPIRED});
+        if(scenario==4)ASSERT(callbacks==1 && bad==1 && transmitted[0]==2 && sequences.size()==1 && sourceDropReasons==std::vector<int>{RETRY_LIMIT_REACHED});
+        if(scenario==5)ASSERT(callbacks==2 && bad==1 && good==1 && transmitted[0]==0 && transmitted[2]==1 && sourceDropReasons==std::vector<int>{CONGESTION});
+        if(scenario==6)ASSERT(callbacks==2 && good==2 && reentrant==1 && transmitted[0]==2);
+        if(scenario==7)ASSERT(callbacks==1 && bad==1 && boundaryDrops==1 && pulled==0);
+        if(scenario==8)ASSERT(callbacks==0 && layerGood==1 && layerBad==0 && layerResults==std::set<int64_t>{layerOriginal} && received[1]==1);
+        if(scenario==9)ASSERT(callbacks==0 && fragmentIds.size()>2 && layerResults==fragmentIds && layerGood==int(fragmentIds.size()) && layerBad==0 && received[1]==1);
+        if(scenario==10)ASSERT(layerGood+layerBad==0 && layerDrops==1 && pulled==0);
+        if(scenario==11 || scenario==12 || scenario==16 || scenario==17)ASSERT(layerResults==std::set<int64_t>{restartOriginal} && layerGood==1 && layerBad==0 && received[1]==1 && fragmentIds.size()>2 && (scenario==11||scenario==16||probed));
+        if(scenario==13){ASSERT(callbacks==0 && offered.size()==2 && transmitted[0]==0);for(const auto& item:offered)ASSERT(CompletionPacket::deleted.count(item.first));}
+        if(scenario==14)ASSERT(callbacks==3 && bad==3 && reentrant==1 && transmitted[0]==0);
+        if(scenario==15)ASSERT(layerGood+layerBad==0 && callbacks==0 && received[1]==1 && transmitted[0]>=1);
+        if(scenario==18)ASSERT(callbacks==0 && layerGood==0 && layerBad==1 && layerResults==std::set<int64_t>{layerOriginal} && received[1]+received[2]==0 && transmitted[0]==2 && sourceDropReasons==std::vector<int>{RETRY_LIMIT_REACHED} && CompletionPacket::deleted.count(layerOriginal));
+        if(scenario==19){ASSERT(callbacks==0 && offered.size()==1 && transmitted[0]==1 && received[1]==1);for(const auto& item:offered)ASSERT(CompletionPacket::deleted.count(item.first));}
+        std::cout<<"case="<<scenario<<" callbacks="<<callbacks<<" good="<<good<<" bad="<<bad<<" layerGood="<<layerGood<<" layerBad="<<layerBad<<" layerDrops="<<layerDrops<<" tx="<<transmitted[0]<<','<<transmitted[2]<<" received="<<received[1]<<" reentrant="<<reentrant<<" probe="<<probed<<'\n';
+        std::cout<<"Native borrowed-original completions, guarded reentry and lifecycle cancellation verified\n";
+    }
+};
+Define_Module(CompletionCheck);
+
+void CompletionLayer::handlePushPacketProcessed(Packet *packet,const cGate *gate,bool successful)
+{
+    auto check=check_and_cast<CompletionCheck *>(getSimulation()->getSystemModule()->getSubmodule("check"));
+    LowpanLayer::handlePushPacketProcessed(packet,gate,successful);
+    if((check->scenario==12||check->scenario==17) && !successful && !check->probed){
+        check->probed=true;
+        ASSERT(operationalState==OPERATING && networkInterface->isUp());
+        ASSERT(!check_and_cast<LowpanNativeBoundary *>(link)->isTransmissionOperational());
+        auto probe=check->makeIpv6(48);check->probeId=probe->getId();
+        processUpperPacket(probe); // Existing production entry, no private correlation mutation.
+        ASSERT(CompletionPacket::deleted.count(check->probeId));
+    }
+}
+}
+
+%file: test.ned
+@namespace(inet::completiontest);
+import inet.common.lifecycle.NodeStatus;
+import inet.networklayer.common.NetworkInterface;
+import inet.networklayer.common.InterfaceTable;
+import inet.mobility.static.StationaryMobility;
+import inet.linklayer.lowpan.LowpanLayer;
+import inet.linklayer.lowpan.LowpanNativeMac;
+import inet.linklayer.lowpan.LowpanNativeBoundary;
+import inet.linklayer.lowpan.LowpanNativeLinkDomain;
+import inet.linklayer.lowpan.LowpanLinkDomain;
+import inet.linklayer.lowpan.Ieee802154LowpanInterface;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandRadio;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+import inet.queueing.queue.PacketQueue;
+simple CompletionCheck {parameters:int scenario;gates:output out[3];input in[3];}
+simple CompletionLayer extends LowpanLayer {parameters:@class(CompletionLayer);}
+// The test subtype declares direct lifecycle entry; the production C++ MAC is unchanged.
+simple CompletionMac extends LowpanNativeMac {parameters:@lifecycleSupport;}
+module CompletionInterface extends NetworkInterface {
+    parameters:string interfaceTableModule="^.interfaceTable";bool withAdaptation=default(false);bool withBoundary=default(true);
+    gates:input upperLayerIn;output upperLayerOut;input radioIn;
+    submodules:
+        lowpan: CompletionLayer if withAdaptation;
+        boundary: LowpanNativeBoundary if withBoundary {linkDomainModule="^.^.^.domainNative";}
+        queue: PacketQueue {packetCapacity=default(64);}
+        mac: CompletionMac {interfaceTableModule="^.^.interfaceTable";linkDomainModule="^.^.^.domainNative";}
+        radio: Ieee802154NarrowbandRadio;
+    connections:
+        upperLayerIn --> lowpan.upperLayerIn if withAdaptation;
+        lowpan.lowerLayerOut --> boundary.in if withAdaptation;
+        upperLayerIn --> boundary.in if !withAdaptation && withBoundary;
+        upperLayerIn --> queue.in if !withBoundary;
+        boundary.out --> queue.in if withBoundary;queue.out --> mac.upperLayerIn;
+        mac.upperLayerOut --> boundary.lowerLayerIn if withBoundary;
+        mac.upperLayerOut --> upperLayerOut if !withBoundary;
+        boundary.upperLayerOut --> lowpan.lowerLayerIn if withAdaptation;
+        lowpan.upperLayerOut --> upperLayerOut if withAdaptation;
+        boundary.upperLayerOut --> upperLayerOut if !withAdaptation && withBoundary;
+        mac.lowerLayerOut --> radio.upperLayerIn;radio.upperLayerOut --> mac.lowerLayerIn;radioIn --> radio.radioIn;
+}
+module CompletionNode {
+    parameters:@networkNode;
+    gates:input in;output out;
+    submodules:status:NodeStatus;interfaceTable:InterfaceTable;mobility:StationaryMobility;nic:CompletionInterface;
+    connections allowunconnected:in --> nic.upperLayerIn;nic.upperLayerOut --> out;
+}
+module CompatibilityNode {
+    parameters:@networkNode;
+    gates:input in;output out;
+    submodules:
+        status:NodeStatus;interfaceTable:InterfaceTable;mobility:StationaryMobility;
+        nic:Ieee802154LowpanInterface {interfaceTableModule="^.interfaceTable";linkDomainModule="^.^.domainCompat";}
+    connections allowunconnected:in --> nic.upperLayerIn;nic.upperLayerOut --> out;
+}
+network CompletionNetwork {
+    parameters:int scenario;
+    submodules:
+        radioMedium:Ieee802154NarrowbandScalarRadioMedium;
+        domainNative:LowpanNativeLinkDomain if scenario!=15;
+        domainCompat:LowpanLinkDomain if scenario==15;
+        node[3]:CompletionNode if scenario!=15;
+        compat[3]:CompatibilityNode if scenario==15;
+        check:CompletionCheck {scenario=parent.scenario;}
+    connections allowunconnected:
+        for i=0..2 {check.out[i] --> node[i].in if scenario!=15;node[i].out --> check.in[i] if scenario!=15;}
+        for i=0..2 {check.out[i] --> compat[i].in if scenario==15;compat[i].out --> check.in[i] if scenario==15;}
+}
+
+%inifile: omnetpp.ini
+[General]
+network=CompletionNetwork
+*.scenario=${case=0..19}
+sim-time-limit=1s
+seed-set=0
+**.vector-recording=false
+**.scalar-recording=false
+*.node[*].nic.withAdaptation=(${case}>=8 && ${case}<=12) || (${case}>=16 && ${case}<=18)
+*.node[*].nic.withBoundary=${case}!=19
+*.node[0].nic.queue.packetCapacity=(${case}==7 || ${case}==10) ? 0 : 64
+*.node[*].nic.mac.macMinBE=0
+*.node[*].nic.mac.macMaxBE=0
+*.node[*].nic.mac.macMaxFrameRetries=1
+*.node[*].nic.mac.macMaxCSMABackoffs=${case}==5 ? 0 : 4
+*.domainNative.panId=4660
+*.domainNative.config=xml("<domain><peer interface='node[0].nic' native='0102030405060708'/><peer interface='node[1].nic' native='1112131415161718'/><peer interface='node[2].nic' native='2122232425262728'/><neighbor interface='node[0].nic' ipv6='fe80::1312:1314:1516:1718' native='1112131415161718'/></domain>")
+*.compat[0].nic.mac.address="02:00:00:00:00:01"
+*.compat[1].nic.mac.address="02:00:00:00:00:02"
+*.compat[2].nic.mac.address="02:00:00:00:00:03"
+*.domainCompat.panId=4660
+*.domainCompat.config=xml("<domain><peer interface='compat[0].nic' native='0102030405060708' alias='02:00:00:00:00:01'/><peer interface='compat[1].nic' native='1112131415161718' alias='02:00:00:00:00:02'/><peer interface='compat[2].nic' native='2122232425262728' alias='02:00:00:00:00:03'/><neighbor interface='compat[0].nic' ipv6='fe80::1312:1314:1516:1718' native='1112131415161718'/></domain>")
+**.radio.antenna.mobilityModule="^.^.^.mobility"
+**.mobility.initialX=0m
+**.mobility.initialY=0m
+**.mobility.initialZ=0m
+**.mobility.initFromDisplayString=false
+**.mobility.updateFromDisplayString=false
+
+%contains: stdout
+Native borrowed-original completions, guarded reentry and lifecycle cancellation verified

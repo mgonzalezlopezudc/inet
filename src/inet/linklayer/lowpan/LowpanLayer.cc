@@ -103,6 +103,8 @@ simsignal_t LowpanLayer::reassemblyCompletedSignal = registerSignal("reassemblyC
 simsignal_t LowpanLayer::reassemblyExpiredSignal = registerSignal("reassemblyExpired");
 simsignal_t LowpanLayer::reassemblyInvalidatedSignal = registerSignal("reassemblyInvalidated");
 simsignal_t LowpanLayer::meshForwardedSignal = registerSignal("meshForwarded");
+simsignal_t LowpanLayer::nativeFrameTransmissionSucceededSignal = registerSignal("nativeFrameTransmissionSucceeded");
+simsignal_t LowpanLayer::nativeFrameTransmissionFailedSignal = registerSignal("nativeFrameTransmissionFailed");
 
 LowpanLayer::~LowpanLayer()
 {
@@ -140,6 +142,7 @@ void LowpanLayer::initialize(int stage)
                 throw cRuntimeError("Invalid or duplicate LoWPAN mesh route");
         }
         WATCH_EXPR("numBroadcastDatagrams", broadcasts.size());
+        WATCH_EXPR("numPendingNativeTransmissions", pendingNativeTransmissions.size());
         reassembly = std::make_unique<LowpanReassemblyTable>(par("maxReassemblyDatagrams"), par("maxReassemblyBytes"), reassemblyTimeout);
         expiryTimer = new cMessage("lowpanReassemblyExpiry");
         std::array<bool, 16> seen{};
@@ -246,9 +249,50 @@ void LowpanLayer::removeLearnedContext(int id)
 
 void LowpanLayer::clearTransientState()
 {
+    pendingNativeTransmissions.clear();
     cancelEvent(expiryTimer);
     reassembly->clear();
     // Tag guards deliberately outlive interface teardown.
+}
+
+bool LowpanLayer::isNativeTransmissionOperational() const
+{
+    auto native = dynamic_cast<const LowpanNativeBoundary *>(link);
+    return !native || (operationalState == OPERATING && native->isTransmissionOperational());
+}
+
+bool LowpanLayer::canPushPreparedPacket(Packet *packet) const
+{
+    return isNativeTransmissionOperational() && consumer.canPushPacket(packet);
+}
+
+PacketDropReason LowpanLayer::preparedRefusalReason() const
+{
+    return isNativeTransmissionOperational() ? QUEUE_OVERFLOW : INTERFACE_DOWN;
+}
+
+bool LowpanLayer::pushPreparedPacket(Packet *packet)
+{
+    if (!canPushPreparedPacket(packet)) {
+        dropPacket(packet, preparedRefusalReason());
+        return false;
+    }
+    if (dynamic_cast<LowpanNativeBoundary *>(link))
+        pendingNativeTransmissions.insert(packet->getId());
+    // Queue pull and terminal failure can synchronously delete this original.
+    consumer.pushPacket(packet);
+    return true;
+}
+
+void LowpanLayer::handlePushPacketProcessed(Packet *packet, const cGate *, bool successful)
+{
+    Enter_Method("handlePushPacketProcessed");
+    auto found = pendingNativeTransmissions.find(packet->getId());
+    if (found == pendingNativeTransmissions.end()) return;
+    pendingNativeTransmissions.erase(found);
+    // STOPPING/CRASHING still satisfy isUp(); neither side may continue during drain.
+    if (!isNativeTransmissionOperational()) return;
+    emit(successful ? nativeFrameTransmissionSucceededSignal : nativeFrameTransmissionFailedSignal, packet);
 }
 
 void LowpanLayer::handleStopOperation(LifecycleOperation *operation)
@@ -477,9 +521,9 @@ void LowpanLayer::processUpperPacket(Packet *packet)
             prependOuter(fragment);
             *fragment->addTag<LowpanTransmissionReq>() = *prepared;
             fragment->addTag<PacketProtocolTag>()->setProtocol(&lowpanProtocol);
-            if (!consumer.canPushPacket(fragment)) {
+            if (!canPushPreparedPacket(fragment)) {
                 delete fragment;
-                dropPacket(packet, QUEUE_OVERFLOW);
+                dropPacket(packet, preparedRefusalReason());
                 return;
             }
             if (!accepted) {
@@ -487,7 +531,7 @@ void LowpanLayer::processUpperPacket(Packet *packet)
                 accepted = true;
             }
             emit(fragmentSentSignal, fragment);
-            consumer.pushPacket(fragment);
+            if (!pushPreparedPacket(fragment)) { delete packet; return; }
         }
         handlePacketProcessed(packet);
         delete packet;
@@ -503,13 +547,13 @@ void LowpanLayer::processUpperPacket(Packet *packet)
     packet->insertAtFront(encodedHeader);
     prependOuter(packet);
     packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&lowpanProtocol);
-    if (!consumer.canPushPacket(packet)) {
-        dropPacket(packet, QUEUE_OVERFLOW);
+    if (!canPushPreparedPacket(packet)) {
+        dropPacket(packet, preparedRefusalReason());
         return;
     }
     emit(datagramAcceptedSignal, acceptedDatagram.get());
     handlePacketProcessed(packet);
-    consumer.pushPacket(packet);
+    pushPreparedPacket(packet);
 }
 
 void LowpanLayer::processLowerPacket(Packet *packet)
@@ -600,9 +644,9 @@ void LowpanLayer::forwardMesh(Packet *packet, const Ptr<const Chunk>& header, co
     if (packet->getDataLength() > B(envelope->getPayloadLimit())) {
         dropLowpanPacket(packet, LOWPAN_RESOURCE_LIMIT); return;
     }
-    if (!consumer.canPushPacket(packet)) { dropPacket(packet, QUEUE_OVERFLOW); return; }
+    if (!canPushPreparedPacket(packet)) { dropPacket(packet, preparedRefusalReason()); return; }
     emit(meshForwardedSignal, packet);
-    consumer.pushPacket(packet);
+    pushPreparedPacket(packet);
 }
 
 void LowpanLayer::processMeshPacket(Packet *packet, LowpanDispatchPrefix::State state,
@@ -657,7 +701,10 @@ void LowpanLayer::processMeshPacket(Packet *packet, LowpanDispatchPrefix::State 
     if (bc0) transit->insertAtFront(bc0);
     if (beforeBc0) transit->insertAtFront(beforeBc0);
     forwardMesh(transit, forwarded, destination, leadingPages);
-    if (broadcast) processInnerPacket(packet, originator, final, state);
+    if (broadcast) {
+        if (isNativeTransmissionOperational()) processInnerPacket(packet, originator, final, state);
+        else dropPacket(packet, INTERFACE_DOWN);
+    }
 }
 
 void LowpanLayer::processInnerPacket(Packet *packet, const Ieee802154Address& source, const Ieee802154Address& destination,

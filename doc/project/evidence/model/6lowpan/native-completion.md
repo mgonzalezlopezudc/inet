@@ -1,0 +1,13 @@
+# Native transmission completion
+
+> **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [publication plan](../../../../../plan/pending/6lowpan-publication-plan.md)
+
+Publication association: [C36](../../../../../plan/pending/6lowpan-publication-plan.md#c36); donor `f09c571a4a`. The retained setup, assertions and parent explanation below describe this behavior. Original run counts, PASS statements and temporary artifact locations refer to the donor cohort. New-prefix results are recorded separately in the publication verification manifest; none is inferred from those historical statements. Exact-parent runtime execution is not claimed unless that manifest records it.
+
+
+
+Validated native-boundary compositions now report terminal results through the existing borrowed-original packet-push callback. Layer registers IDs before pushing, removes tracking before notification and exposes native success/failure observations. The MAC detaches originals before callback/deletion, guards reentry and drains current/queued ownership before generic lifecycle cleanup. Exact operating-state checks at both ends suppress continuation regardless of module stop order. Compatibility and standalone native compositions retain their prior behavior; standalone MACs do not acquire completion capability.
+
+The [direct module fixture](../../../../../tests/module/LowpanNativeTransmissionCompletion.test) supplies twenty cases for ACK/broadcast results, synchronous failure/deletion, envelope/deadline/retry/CCA reasons, actual Layer success/failure, refusal, reentrant queueing, stop/crash ordering, destruction and both excluded compositions. MAC-only lifecycle probes observe Layer still operating and its interface up while native readiness rejects new work. Broadcast success means local transmission completion.
+
+The [record](https://github.com/mgonzalezlopezudc/inet/blob/9908c007bdb1eda9d74f6ca1f99fe1cae33fbc61/doc/project/evidence/model/6lowpan/p14-native-completion-verification.json) retains matching debug/release builds and fourteen module fixtures in each mode: 38 completed simulations plus one expected initialization diagnostic. Debug passes nineteen protocol fixtures/119 simulations; five release protocol fixtures complete 45 simulations. Twenty direct and forty-three protocol counter rows match independently; assertions remain debug-only. Scoped gates pass. The initial mandatory-boundary regression and fixture setup attempts remain separately classified; final matching runs include the unchanged propagation diagnostic and actual standalone data control. This completes the notification prerequisite; source pacing, VRB forwarding and selective recovery remain separate work.

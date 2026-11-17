@@ -50,13 +50,18 @@ void LowpanBoundaryBase::pushPacket(Packet *packet, const cGate *gate)
         request->getDeliveryDeadline() < SIMTIME_ZERO || request->getDeliveryDeadline() > prepared->getDeliveryDeadline() ||
         packet->getDataLength() > B(prepared->getPayloadLimit()))
         throw cRuntimeError("Invalid LoWPAN prepared frame at compatibility boundary");
-    if (!consumer.canPushPacket(packet)) {
-        dropPacket(packet, QUEUE_OVERFLOW);
+    if (!canPushPacket(packet, gate)) {
+        dropRefusedPacket(packet);
         return;
     }
     packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&lowpanProtocol);
     handlePacketProcessed(packet);
     consumer.pushPacket(packet);
+}
+
+void LowpanBoundaryBase::dropRefusedPacket(Packet *packet)
+{
+    dropPacket(packet, QUEUE_OVERFLOW);
 }
 
 } }

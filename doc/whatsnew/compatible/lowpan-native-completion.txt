@@ -1,0 +1,3 @@
+Native frame completion observations
+
+Native LoWPAN boundaries report terminal frame completion using the borrowed original packet. The adaptation layer exposes success and failure observations; unicast success requires an ACK, while broadcast success means local transmission. Lifecycle draining cancels pending work without restarting transmission. Standalone native MAC and compatibility compositions retain their existing behavior.

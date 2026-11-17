@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "inet/linklayer/lowpan/LowpanNativeMac.h"
+#include "inet/linklayer/lowpan/LowpanNativeBoundary.h"
 #include "inet/linklayer/lowpan/LowpanRadioProfile.h"
 #include "inet/linklayer/lowpan/LowpanProtocol.h"
 #include "inet/linklayer/lowpan/LowpanPacketDropDetails_m.h"
@@ -43,6 +44,15 @@ void LowpanNativeMac::initialize(int stage)
         WATCH(state);
         WATCH(backoffs);
         WATCH(retries);
+    }
+    else if (stage == INITSTAGE_QUEUEING) {
+        auto queue = check_and_cast<cModule *>(txQueue.get());
+        auto boundary = dynamic_cast<LowpanNativeBoundary *>(queue->gate("in")->getPathStartGate()->getOwnerModule());
+        if (boundary) {
+            if (boundary->getParentModule() != networkInterface || boundary->getLinkDomain() != domain)
+                throw cRuntimeError("Native completion requires the same-interface native boundary and bounded queue");
+            completionProducer.reference(queue->gate("in"), true, -1);
+        }
     }
     else if (stage == INITSTAGE_LAST) {
         auto tail = LowpanRadioProfile::transmissionTail(radio.get(), SimTime(192, SIMTIME_US), domain->getMaximumPropagationDelay(networkInterface));
@@ -131,15 +141,12 @@ void LowpanNativeMac::dropEnvelope(bool expired)
     LowpanPacketDropDetails details;
     details.setReason(OTHER_PACKET_DROP);
     details.setLowpanReason(expired ? LOWPAN_LOWER_LIFETIME_EXPIRED : LOWPAN_ENVELOPE_INVALIDATED);
-    dropCurrentTxFrame(details);
-    state = IDLE;
-    radio->setRadioMode(IRadio::RADIO_MODE_RECEIVER);
-    startNextFrame();
+    completeCurrentFrame(false, &details);
 }
 
 void LowpanNativeMac::startNextFrame()
 {
-    if (isDown() || state != IDLE) return;
+    if (!isTransmissionOperational() || completing || state != IDLE) return;
     if (!currentTxFrame && canDequeuePacket()) {
         // Set state before the pull, which may notify the active sink synchronously.
         state = BACKOFF;
@@ -171,16 +178,44 @@ void LowpanNativeMac::startBackoff()
 
 void LowpanNativeMac::finishData(bool successful, PacketDropReason reason)
 {
-    if (successful) deleteCurrentTxFrame();
-    else {
-        PacketDropDetails details;
-        details.setReason(reason);
-        dropCurrentTxFrame(details);
-    }
-    state = IDLE;
     nextAccessTime = simTime() + SimTime(640, SIMTIME_US);
+    PacketDropDetails details;
+    details.setReason(reason);
+    completeCurrentFrame(successful, successful ? nullptr : &details);
+}
+
+void LowpanNativeMac::completeCurrentFrame(bool successful, PacketDropDetails *details)
+{
+    auto packet = currentTxFrame;
+    currentTxFrame = nullptr;
+    bool previousCompleting = completing;
+    completing = true;
+    state = IDLE;
     radio->setRadioMode(IRadio::RADIO_MODE_RECEIVER);
+    if (details) emit(packetDroppedSignal, packet, details);
+    if (completionProducer) completionProducer.handlePushPacketProcessed(packet, successful);
+    delete packet;
+    completing = previousCompleting;
     startNextFrame();
+}
+
+void LowpanNativeMac::failPendingFrames()
+{
+    draining = true;
+    bool previousCompleting = completing;
+    completing = true;
+    std::vector<Packet *> frames;
+    if (currentTxFrame) { frames.push_back(currentTxFrame); currentTxFrame = nullptr; }
+    // Take every original before callbacks; native readiness rejects reentrant admission.
+    while (canDequeuePacket()) frames.push_back(dequeuePacket());
+    PacketDropDetails details;
+    details.setReason(INTERFACE_DOWN);
+    for (auto packet : frames) {
+        emit(packetDroppedSignal, packet, &details);
+        if (completionProducer) completionProducer.handlePushPacketProcessed(packet, false);
+        delete packet;
+    }
+    completing = previousCompleting;
 }
 
 void LowpanNativeMac::handleSelfMessage(cMessage *message)
@@ -347,6 +382,7 @@ void LowpanNativeMac::clearTransientState()
 }
 void LowpanNativeMac::handleStartOperation(LifecycleOperation *operation)
 {
+    draining = false;
     MacProtocolBase::handleStartOperation(operation);
     check_and_cast<cModule *>(radio.get())->subscribe(IRadio::transmissionStateChangedSignal, this);
     check_and_cast<cModule *>(radio.get())->subscribe(IRadio::receptionStateChangedSignal, this);
@@ -354,17 +390,21 @@ void LowpanNativeMac::handleStartOperation(LifecycleOperation *operation)
 }
 void LowpanNativeMac::handleStopOperation(LifecycleOperation *operation)
 {
+    draining = true;
     clearTransientState();
     check_and_cast<cModule *>(radio.get())->unsubscribe(IRadio::transmissionStateChangedSignal, this);
     check_and_cast<cModule *>(radio.get())->unsubscribe(IRadio::receptionStateChangedSignal, this);
+    failPendingFrames();
     MacProtocolBase::handleStopOperation(operation);
     radio->setRadioMode(IRadio::RADIO_MODE_OFF);
 }
 void LowpanNativeMac::handleCrashOperation(LifecycleOperation *operation)
 {
+    draining = true;
     clearTransientState();
     check_and_cast<cModule *>(radio.get())->unsubscribe(IRadio::transmissionStateChangedSignal, this);
     check_and_cast<cModule *>(radio.get())->unsubscribe(IRadio::receptionStateChangedSignal, this);
+    failPendingFrames();
     MacProtocolBase::handleCrashOperation(operation);
     radio->setRadioMode(IRadio::RADIO_MODE_OFF);
 }
