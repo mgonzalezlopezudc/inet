@@ -1,0 +1,79 @@
+%description:
+Indirect transaction store: complete PAN/native identity keys, shared capacity,
+per-device FIFO, stable retry frame, expiration boundary and ownership removal.
+This does not claim production polling integration.
+
+%includes:
+#include "inet/linklayer/ieee802154/Ieee802154PendingTransactions.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
+using namespace inet;
+
+%activity:
+using Store = Ieee802154PendingTransactions;
+using Address = Ieee802154Address;
+Store store(4);
+auto a = Address::fromExtended(0x0201123456789abcULL);
+auto b = Address::fromExtended(0x0401123456789abcULL);
+auto frame = makeShared<Ieee802154Frame>();
+frame->setDsn(255);
+Ieee802154FrameCodec::finalize(*frame);
+const auto original = Ieee802154FrameCodec::encode(*frame);
+auto at = [](int seconds) { return SimTime(seconds); };
+ASSERT(store.insert({1, 0x1234, a, frame, at(10)}));
+ASSERT(store.insert({2, 0x1234, b, frame, at(20)}));
+ASSERT(store.insert({3, 0x5678, a, frame, at(30)}));
+ASSERT(store.insert({4, 0x1234, a, frame, at(40)}));
+ASSERT(!store.insert({5, 0x1234, a, frame, at(50)}));
+ASSERT(store.size() == 4);
+ASSERT(store.count(0x1234, a, at(0)) == 2);
+ASSERT(store.count(0x1234, b, at(0)) == 1);
+ASSERT(!store.first(0xabcd, a, at(0)));
+ASSERT(!store.first(0x1234, Address::fromShort(0x9abc), at(0)));
+ASSERT(store.first(0x1234, b, at(0))->token == 2);
+ASSERT(store.first(0x5678, a, at(0))->token == 3);
+ASSERT(store.addresses(0x1234,at(0)) == std::vector<Address>({a,b}));
+ASSERT(store.addresses(0x5678,at(0)) == std::vector<Address>({a}));
+// Poll retries select the same immutable frame and DSN until extraction succeeds.
+for (int attempt = 0; attempt < 3; ++attempt) {
+    auto selected = store.first(0x1234, a, at(attempt));
+    ASSERT(selected->token == 1 && selected->frame->getDsn() == 255);
+    ASSERT(Ieee802154FrameCodec::encode(*selected->frame) == original);
+}
+// A poll at the expiry boundary cannot see the expired transaction even before expire().
+ASSERT(store.first(0x1234, a, at(10))->token == 4);
+ASSERT(store.count(0x1234, a, at(10)) == 1);
+auto expired = store.expire(at(10));
+ASSERT(expired.size() == 1 && expired[0].token == 1);
+ASSERT(store.expire(at(10)).empty());
+ASSERT(!store.remove(1));
+ASSERT(store.remove(4)->token == 4);
+ASSERT(!store.first(0x1234, a, at(10)));
+ASSERT(store.insert({5, 0x1234, a, frame, at(50)}));
+auto cleared = store.clear();
+ASSERT(cleared.size() == 3 && cleared[0].token == 2 && cleared[2].token == 5);
+ASSERT(store.size() == 0 && store.clear().empty());
+Store addressStore(12);
+for (int i = 0; i < 8; i++)
+    ASSERT(addressStore.insert({uint64_t(i+1),0x1234,Address::fromExtended(0x0200000000000000ULL+i),frame,at(10)}));
+ASSERT(addressStore.insert({9,0x1234,Address::fromShort(7),frame,at(10)}));
+ASSERT(addressStore.insert({10,0x1234,Address::SHORT_BROADCAST_ADDRESS,frame,at(10)}));
+auto advertised = addressStore.addresses(0x1234,at(0));
+ASSERT(advertised.size() == 7 && advertised[0] == Address::fromShort(7));
+ASSERT(advertised[1] == Address::fromExtended(0x0200000000000000ULL));
+ASSERT(addressStore.addresses(0x1234,at(10)).empty());
+Store peers(4);
+ASSERT(peers.insert({1,0x1234,a,frame,at(10)}));
+ASSERT(peers.insert({2,0x1234,b,frame,at(10)}));
+ASSERT(peers.insert({3,0x1234,a,frame,at(10)}));
+ASSERT(peers.insert({4,0x5678,a,frame,at(10)}));
+auto retired = peers.removeFor(0x1234,a);
+ASSERT(retired.size() == 2 && retired[0].token == 1 && retired[1].token == 3);
+ASSERT(peers.removeFor(0x1234,a).empty() && peers.size() == 2);
+ASSERT(peers.count(0x1234,b,at(0)) == 1 && peers.count(0x5678,a,at(0)) == 1);
+bool rejected = false;
+try { Store invalid(0); } catch (const cRuntimeError&) { rejected = true; }
+ASSERT(rejected);
+std::cout << "Indirect FIFO, full identity, retry retention and expiry verified.\n";
+
+%contains: stdout
+Indirect FIFO, full identity, retry retention and expiry verified.

@@ -1,0 +1,264 @@
+%description:
+Repeated reset/scan/join after leave or canceled admission, with address replacement
+and stale same-/foreign-PAN response input that must not change a completed join.
+
+%extraargs: -r 0..7
+
+%includes:
+#include "ProtocolTest.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+
+%global:
+using namespace inet;
+using namespace inet::protocoltest;
+Define_ProtocolTestProgram()
+{
+    ProtocolTest test("ieee802154_reassociation");
+    int scenario = getSimulation()->getSystemModule()->par("scenario");
+    if (scenario == 2 || scenario == 3)
+        test.intercept(tap("radioMedium").from("host[0]").to("host[1]")
+            .filterPacket("Ieee802154Frame.frameType == 1")
+            .mutate([scenario](Packet *packet) {
+                auto raw = packet->peekDataAsBytes(); auto bytes = raw->getBytes(); ASSERT(bytes.size() == 27); bytes.resize(25);
+                bytes[0] = (bytes[0] & ~7) | 3;
+                bytes[21] = 2; bytes[22] = 0x66; bytes[23] = 0; bytes[24] = 0;
+                if (scenario == 3) { bytes[3] = 0x34; bytes[4] = 0x12; }
+                auto fcs = Ieee802154FrameCodec::calculateFcs(bytes); bytes.push_back(fcs & 255); bytes.push_back(fcs >> 8);
+                packet->eraseAll(); packet->insertAtBack(makeShared<BytesChunk>(bytes));
+            }).describe("late response outside association context; preserve physical length"));
+    return test.unordered({on("exercise").signal("verificationComplete").filterValue(1).within(0.199)});
+}
+
+%activity:
+EV << "ieee802154_reassociation compiled\n";
+
+%file: ReassociationExercise.cc
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceProvider.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceProvider.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceClient.h"
+
+namespace inet {
+class ReassociationExercise : public cSimpleModule,
+        public IIeee802154MacServiceClient, public IIeee802154ManagementServiceClient
+{
+    using Status = Ieee802154MacStatus;
+    using Abort = Ieee802154MacServiceAbortReason;
+    using Admission = Ieee802154MacServiceAdmission;
+    ModuleRefByPar<IIeee802154MacServiceProvider> coordinator, device;
+    ModuleRefByPar<IIeee802154ManagementServiceProvider> coordinatorManagement, deviceManagement;
+    uint64_t nextId = 0, associationIds[2] = {}, responseIds[2] = {};
+    int phase = 0, scenario = 0, scans = 0, resets = 0, indications = 0;
+    int associationConfirms[2] = {}, responseStatuses[2] = {}, dataConfirms = 0, dataIndications = 0;
+    int disassociationConfirms = 0, disassociationIndications = 0, staleConfirms = 0;
+    Ieee802154Address selectedCoordinator;
+    std::optional<Ieee802154MacPibValue> value;
+    uint16_t pan() const { return scenario == 3 && phase == 1 ? 0x2345 : 0x1234; }
+    physicallayer::Ieee802154PhyChannel channel() {
+        return {physicallayer::Ieee802154PhyChannel::Phy::O_QPSK,physicallayer::Ieee802154PhyChannel::Band::MHZ_2450,20};
+    }
+    Ieee802154Address coordinatorAddress() { return Ieee802154Address::fromExtended(0x0201123456789abcULL); }
+    Ieee802154Address deviceAddress() { return Ieee802154Address::fromExtended(0x0401123456789abcULL); }
+    void set(IIeee802154MacServiceProvider *provider, const char *name, const Ieee802154MacPibValue& data) {
+        ASSERT(provider->submitSet(++nextId,{name,data}) == Admission::ACCEPTED);
+    }
+    void check(const char *name, const Ieee802154MacPibValue& expected) {
+        value.reset(); ASSERT(device->submitGet(++nextId,{name}) == Admission::ACCEPTED);
+        ASSERT(value && *value == expected);
+    }
+    void sendDeviceData() {
+        auto packet = new Packet("DATA in current association episode");
+        packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{uint8_t(phase),0xde,0xad}));
+        Ieee802154MacDataRequest request;
+        request.sourceAddressMode = Ieee802154Address::AddressType::SHORT;
+        request.destinationPanId = pan(); request.destinationAddress = coordinatorAddress(); request.ackTx = true;
+        ASSERT(device->submitData(++nextId,packet,request) == Admission::ACCEPTED);
+    }
+  public:
+    ReassociationExercise() : cSimpleModule(65536) {}
+    virtual void initialize() override {
+        coordinator.reference(this,"coordinatorModule",true); coordinatorManagement.reference(this,"coordinatorModule",true);
+        device.reference(this,"serviceModule",true); deviceManagement.reference(this,"serviceModule",true);
+        scenario = par("scenario");
+    }
+  protected:
+    virtual void activity() override {
+        wait(SimTime(500,SIMTIME_US));
+        set(coordinator.get(),"macMinBe",uint64_t(0)); set(coordinator.get(),"macMaxFrameRetries",uint64_t(2));
+        set(coordinator.get(),"macDsn",uint64_t(7)); set(coordinator.get(),"macAssociationPermit",true);
+        set(coordinator.get(),"macTransactionPersistenceTime",uint64_t(10));
+        ASSERT(coordinatorManagement->submitStart(++nextId,{0x1234,channel()}) == Admission::ACCEPTED);
+        for (phase = 0; phase < 2; ++phase) {
+            if (phase == 1 && scenario == 3)
+                ASSERT(coordinatorManagement->submitStart(++nextId,{pan(),channel()}) == Admission::ACCEPTED);
+            ASSERT(device->submitReset(++nextId,{true}) == Admission::ACCEPTED);
+            set(device.get(),"macMinBe",uint64_t(0)); set(device.get(),"macMaxFrameRetries",uint64_t(2));
+            set(device.get(),"macResponseWaitTime",uint64_t(2));
+            Ieee802154MacScanRequest scan; scan.type = Ieee802154ScanType::ACTIVE; scan.channels = {channel()}; scan.duration = 128;
+            ASSERT(deviceManagement->submitScan(++nextId,scan) == Admission::ACCEPTED);
+            wait(SimTime(5,SIMTIME_MS)); ASSERT(scans == phase + 1);
+            set(device.get(),"macDsn",uint64_t(7)); // Deliberate same wire DSN in distinct reset episodes.
+            associationIds[phase] = ++nextId;
+            ASSERT(deviceManagement->submitAssociate(associationIds[phase],{channel(),pan(),selectedCoordinator}) == Admission::ACCEPTED);
+            if (phase == 0 && scenario == 1) {
+                wait(SimTime(10,SIMTIME_MS));
+                ASSERT(device->cancel(associationIds[0]) == Ieee802154MacServiceCancelResult::CANCELLED);
+                ASSERT(coordinator->cancel(responseIds[0]) == Ieee802154MacServiceCancelResult::CANCELLED);
+                ASSERT(associationConfirms[0] == 1 && responseStatuses[0] == 1);
+                wait(SimTime(1,SIMTIME_MS));
+                continue;
+            }
+            wait(SimTime(45,SIMTIME_MS));
+            ASSERT(associationConfirms[phase] == 1 && responseStatuses[phase] == 1);
+            check("macAssociatedPanCoord",true); check("macPanId",uint64_t(pan()));
+            check("macShortAddress",uint64_t(0x42 + phase)); check("macCoordExtendedAddress",coordinatorAddress());
+            sendDeviceData(); wait(SimTime(5,SIMTIME_MS));
+            if (phase == 0) {
+                ASSERT(deviceManagement->submitDisassociate(++nextId,{pan(),selectedCoordinator,2,true}) == Admission::ACCEPTED);
+                wait(SimTime(5,SIMTIME_MS));
+                ASSERT(disassociationConfirms == 1 && disassociationIndications == 1);
+                check("macAssociatedPanCoord",false); check("macPanId",uint64_t(0xffff)); check("macShortAddress",uint64_t(0xffff));
+                ASSERT(coordinator->cancel(responseIds[0]) == Ieee802154MacServiceCancelResult::NOT_PENDING);
+            }
+        }
+        phase = 1;
+        if (scenario == 2 || scenario == 3) {
+            set(device.get(),"macRxOnWhenIdle",true); wait(SimTime(1,SIMTIME_MS));
+            auto packet = new Packet("carrier for late Association Response input");
+            packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>(4,0)));
+            Ieee802154MacDataRequest request;
+            request.sourceAddressMode = Ieee802154Address::AddressType::EXTENDED;
+            request.destinationAddress = deviceAddress(); request.destinationPanId = pan(); request.ackTx = true; request.msduHandle = 99;
+            ASSERT(coordinator->submitData(++nextId,packet,request) == Admission::ACCEPTED);
+            wait(SimTime(12,SIMTIME_MS)); ASSERT(staleConfirms == 1);
+            check("macShortAddress",uint64_t(0x43)); check("macPanId",uint64_t(pan())); check("macAssociatedPanCoord",true);
+        }
+        ASSERT(scans == 2 && resets == 2 && indications == 2);
+        ASSERT(associationConfirms[0] == 1 && associationConfirms[1] == 1 && responseStatuses[0] == 1 && responseStatuses[1] == 1);
+        ASSERT(dataConfirms == (scenario == 1 ? 1 : 2) && dataIndications == dataConfirms);
+        emit(registerSignal("verificationComplete"),1L);
+    }
+  public:
+    virtual void handleAssociateIndication(const Ieee802154MacAssociateIndication& indication) override {
+        Enter_Method("handleAssociateIndication"); ASSERT(indication.deviceAddress == deviceAddress()); indications++;
+        responseIds[phase] = ++nextId;
+        ASSERT(coordinatorManagement->submitAssociateResponse(responseIds[phase],{deviceAddress(),uint16_t(0x42+phase),0}) == Admission::ACCEPTED);
+    }
+    virtual void handleAssociateConfirm(uint64_t id, const Ieee802154MacAssociateConfirm& confirm) override {
+        Enter_Method("handleAssociateConfirm"); ASSERT(id == associationIds[phase] && ++associationConfirms[phase] == 1);
+        if (phase == 0 && scenario == 1) ASSERT(confirm.result == Ieee802154MacServiceResult(Abort::CANCELLED) && !confirm.associationStatus);
+        else ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS) && confirm.associationStatus == 0 && confirm.shortAddress == 0x42+phase);
+    }
+    virtual void handleAssociateResponseStatus(uint64_t id, const Ieee802154MacAssociateResponseStatus& status) override {
+        Enter_Method("handleAssociateResponseStatus"); ASSERT(id == responseIds[phase] && ++responseStatuses[phase] == 1);
+        ASSERT(status.result == (phase == 0 && scenario == 1 ? Ieee802154MacServiceResult(Abort::CANCELLED) : Ieee802154MacServiceResult(Status::SUCCESS)));
+    }
+    virtual void handleScanConfirm(uint64_t, const Ieee802154MacScanConfirm& confirm) override {
+        Enter_Method("handleScanConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS) && confirm.panDescriptors.size() == 1);
+        ASSERT(confirm.panDescriptors[0].coordinatorPanId == pan()); selectedCoordinator = confirm.panDescriptors[0].coordinatorAddress; scans++;
+    }
+    virtual void handleDataConfirm(uint64_t, const Ieee802154MacDataConfirm& confirm) override {
+        Enter_Method("handleDataConfirm");
+        if (confirm.msduHandle == 99) {
+            ASSERT(confirm.result == Ieee802154MacServiceResult(scenario == 3 ? Status::NO_ACK : Status::SUCCESS)); staleConfirms++;
+        }
+        else { ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); dataConfirms++; }
+    }
+    virtual void handleDataIndication(Packet *packet, const Ieee802154MacDataIndication& indication) override {
+        Enter_Method("handleDataIndication"); take(packet);
+        ASSERT(indication.sourceAddress == Ieee802154Address::fromShort(0x42+phase) && indication.destinationPanId == pan() && indication.ackSent);
+        auto bytes = packet->peekDataAsBytes(); ASSERT(bytes->getBytes() == std::vector<uint8_t>({uint8_t(phase),0xde,0xad})); dataIndications++; delete packet;
+    }
+    virtual void handleDisassociateConfirm(uint64_t, const Ieee802154MacDisassociateConfirm& confirm) override { Enter_Method("handleDisassociateConfirm"); ASSERT(phase == 0 && confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); disassociationConfirms++; }
+    virtual void handleDisassociateIndication(const Ieee802154MacDisassociateIndication& indication) override { Enter_Method("handleDisassociateIndication"); ASSERT(indication.deviceAddress == deviceAddress() && indication.reason == 2); disassociationIndications++; }
+    virtual void handleStartConfirm(uint64_t, const Ieee802154MacStartConfirm& confirm) override { Enter_Method("handleStartConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); }
+    virtual void handleResetConfirm(uint64_t, const Ieee802154MacResetConfirm& confirm) override { Enter_Method("handleResetConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); resets++; }
+    virtual void handleGetConfirm(uint64_t, const Ieee802154MacGetConfirm& confirm) override { Enter_Method("handleGetConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); value = confirm.value; }
+    virtual void handleSetConfirm(uint64_t, const Ieee802154MacSetConfirm& confirm) override { Enter_Method("handleSetConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); }
+    virtual void handleBeaconNotifyIndication(const Ieee802154PanDescriptor&) override {}
+    virtual void handleBeaconConfirm(uint64_t, const Ieee802154MacBeaconConfirm&) override { ASSERT(false); }
+    virtual void handleBeaconRequestIndication(const Ieee802154MacBeaconRequestIndication&) override { ASSERT(false); }
+    virtual void handleOrphanIndication(const Ieee802154MacOrphanIndication&) override { ASSERT(false); }
+    virtual void handleOrphanResponseStatus(uint64_t, const Ieee802154MacOrphanResponseStatus&) override { ASSERT(false); }
+    virtual void handleSyncLossIndication(const Ieee802154MacSyncLossIndication&) override { ASSERT(false); }
+    virtual void handleRxEnableConfirm(uint64_t, const Ieee802154MacRxEnableConfirm&) override { ASSERT(false); }
+    virtual void handleRxEnableIndication(const Ieee802154MacRxEnableIndication&) override { ASSERT(false); }
+    virtual void handlePollConfirm(uint64_t, const Ieee802154MacPollConfirm&) override { ASSERT(false); }
+    virtual void handlePurgeConfirm(uint64_t, const Ieee802154MacPurgeConfirm&) override { ASSERT(false); }
+    virtual void handlePromiscuousIndication(Packet *, const Ieee802154MacPromiscuousIndication&) override { ASSERT(false); }
+    virtual void handleCommStatusIndication(Packet *, const Ieee802154MacCommStatusIndication&) override { ASSERT(false); }
+};
+Define_Module(ReassociationExercise);
+}
+
+%file: ReassociationFixture.ned
+import inet.common.SimpleModule;
+import inet.mobility.static.StationaryMobility;
+import inet.linklayer.ieee802154.Ieee802154StandardInterface;
+import inet.linklayer.ieee802154.contract.IIeee802154MacServiceClient;
+import inet.linklayer.ieee802154.contract.IIeee802154ManagementServiceClient;
+import inet.protocoltest.TapRadioMedium;
+simple ReassociationExercise extends SimpleModule like IIeee802154MacServiceClient, IIeee802154ManagementServiceClient
+{
+    parameters:
+        @class(::inet::ReassociationExercise);
+        string coordinatorModule;
+        string serviceModule;
+        int scenario;
+        @signal[verificationComplete](type=long);
+}
+module ReassociationHost
+{
+    parameters: @networkNode;
+    submodules:
+        mobility: StationaryMobility;
+        nic: Ieee802154StandardInterface {
+            enableManagement = true;
+            mac.clientModule = "^.^.^.exercise"; mac.managementClientModule = "^.^.^.exercise";
+        }
+    connections allowunconnected:
+}
+network ReassociationTest
+{
+    parameters: int scenario;
+    submodules:
+        radioMedium: TapRadioMedium;
+        host[2]: ReassociationHost;
+        exercise: ReassociationExercise { coordinatorModule = "^.host[0].nic.mac"; serviceModule = "^.host[1].nic.mac"; scenario = parent.scenario; }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = ReassociationTest
+sim-time-limit = 200ms
+cmdenv-express-mode = true
+*.scenario = ${scenario=0..3}
+*.host[*].nic.radio.sendRawBytes = ${raw=false,true}
+*.radioMedium.signalAnalogRepresentation = "scalar"
+*.radioMedium.backgroundNoise.power = -110dBm
+*.host[0].nic.rxOnWhenIdle = true
+*.host[0].nic.shortAddress = 1
+*.host[0].nic.extendedAddress = "extended:02-01-12-34-56-78-9A-BC"
+*.host[1].nic.extendedAddress = "extended:04-01-12-34-56-78-9A-BC"
+*.host[*].nic.radio.antenna.mobilityModule = "^.^.^.mobility"
+*.host[0].mobility.initialX = 0m
+*.host[1].mobility.initialX = 1m
+**.mobility.initFromDisplayString = false
+**.mobility.initialY = 0m
+**.mobility.initialZ = 0m
+**.mobility.constraintAreaMinX = 0m
+**.mobility.constraintAreaMinY = 0m
+**.mobility.constraintAreaMinZ = 0m
+**.mobility.constraintAreaMaxX = 100m
+**.mobility.constraintAreaMaxY = 100m
+**.mobility.constraintAreaMaxZ = 100m
+
+%contains: stdout
+PROTOCOLTEST ieee802154_reassociation: PASS
+
+%not-contains: stdout
+PROTOCOLTEST ieee802154_reassociation: FAIL

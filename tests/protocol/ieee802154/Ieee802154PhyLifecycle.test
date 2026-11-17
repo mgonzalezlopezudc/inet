@@ -4,7 +4,7 @@ ACK waiting, initial RX readiness and backoff. Exercise callback restart too.
 Require local STOPPED, caller ownership on refusal, automatic RX recovery and
 actual replacement DATA/ACK, with both typed and raw radio representations.
 
-%extraargs: -r 0..15
+%extraargs: -r 0..19
 
 %includes:
 #include "ProtocolTest.h"
@@ -203,8 +203,9 @@ network = PhyLifecycleTest
 sim-time-limit = 25ms
 seed-set = 0
 cmdenv-express-mode = true
-*.host[*].app.scenario = ${scenario=0..7}
+*.host[*].app.scenario = ${scenario=0..9}
 *.host[0].nic.mac.isPanCoordinator = ${scenario} >= 8
+*.host[0].nic.enableManagement = ${scenario} >= 8
 *.host[0].nic.rxOnWhenIdle = ${scenario} != 5
 *.host[*].nic.radio.sendRawBytes = ${raw=false,true}
 *.host[0].app.sender = true

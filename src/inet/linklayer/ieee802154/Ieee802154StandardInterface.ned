@@ -18,6 +18,7 @@ module Ieee802154StandardInterface extends NetworkInterface like IWirelessInterf
         int panId = default(65535);
         string upperProtocol = default("");
         bool enableRadio = default(true);
+        bool enableManagement = default(false);
         bool rxOnWhenIdle = default(false);
         double ccaDuration @unit(s) = default(128us);
         @class(NetworkInterface);
@@ -39,6 +40,7 @@ module Ieee802154StandardInterface extends NetworkInterface like IWirelessInterf
             providerModule = parent.enableRadio ? "^.phy" : "";
             rxOnWhenIdle = parent.rxOnWhenIdle;
             initialCcaDuration = parent.ccaDuration;
+            enableManagement = parent.enableManagement;
         }
         access: Ieee802154UnslottedAccess if enableRadio {
             clientModule = "^.mac";

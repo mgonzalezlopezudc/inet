@@ -1,0 +1,252 @@
+%description:
+Two production MAC/PHY interfaces perform active discovery, automatic and explicit
+beacon response, non-coordinator silence, BSN progression, parameter failures,
+and scan cancellation/reset with native terminal assertions.
+
+%extraargs: -r 0..15
+
+%file: DiscoveryFixture.cc
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceProvider.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceProvider.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceClient.h"
+
+namespace inet {
+class DiscoveryExercise : public cSimpleModule, public cListener,
+        public IIeee802154MacServiceClient, public IIeee802154ManagementServiceClient
+{
+    using Status = Ieee802154MacStatus;
+    using Admission = Ieee802154MacServiceAdmission;
+    ModuleRefByPar<IIeee802154MacServiceProvider> coordinator, scanner;
+    ModuleRefByPar<IIeee802154ManagementServiceProvider> coordinatorManagement, scannerManagement;
+    uint64_t nextId = 0;
+    int scenario = 0, scans = 0, notices = 0, requests = 0, beacons = 0, confirms = 0, resets = 0;
+    Status expectedBeacon = Status::SUCCESS;
+    std::optional<Ieee802154MacPibValue> value;
+    physicallayer::Ieee802154PhyChannel channel(int number) {
+        return {physicallayer::Ieee802154PhyChannel::Phy::O_QPSK,physicallayer::Ieee802154PhyChannel::Band::MHZ_2450,number};
+    }
+    void until(int microseconds) { wait(SimTime(microseconds,SIMTIME_US) - simTime()); }
+    void set(IIeee802154MacServiceProvider *provider, const char *name, const Ieee802154MacPibValue& data) {
+        ASSERT(provider->submitSet(++nextId,{name,data}) == Admission::ACCEPTED);
+    }
+    void check(IIeee802154MacServiceProvider *provider, const char *name, const Ieee802154MacPibValue& expected) {
+        value.reset();
+        ASSERT(provider->submitGet(++nextId,{name}) == Admission::ACCEPTED);
+        ASSERT(value && *value == expected);
+    }
+    void beacon(const Ieee802154MacBeaconRequest& request, Status expected) {
+        expectedBeacon = expected;
+        ASSERT(coordinatorManagement->submitBeacon(++nextId,request) == Admission::ACCEPTED);
+    }
+  public:
+    DiscoveryExercise() : cSimpleModule(65536) {}
+    virtual void initialize() override {
+        coordinator.reference(this,"coordinatorModule",true);
+        coordinatorManagement.reference(this,"coordinatorModule",true);
+        scanner.reference(this,"scannerModule",true);
+        scannerManagement.reference(this,"scannerModule",true);
+        scenario = par("scenario");
+        check_and_cast<cModule *>(getModuleByPath(par("coordinatorModule")))->subscribe("packetSentToLower",this);
+    }
+    virtual void receiveSignal(cComponent *, simsignal_t, cObject *object, cObject *) override {
+        auto packet = check_and_cast<Packet *>(object);
+        auto frame = packet->peekAtFront<Ieee802154Frame>();
+        ASSERT(frame->getFrameType() == 0 && frame->getFrameVersion() == 0 && !frame->getAckRequest());
+        ASSERT(frame->getSourceAddress() == Ieee802154Address::fromExtended(0x0201123456789abcULL));
+        ASSERT(frame->getSourcePanId() == 0x1234 && frame->getDestinationAddress().isNone());
+        ASSERT(frame->getDsn() == uint8_t(255 + beacons));
+        auto bytes = packet->peekDataAsBytes();
+        ASSERT(Ieee802154FrameCodec::decode(bytes->getBytes())->getFcsValid());
+        std::vector<uint8_t> body(frame->getPayloadArraySize());
+        for (size_t i = 0; i < body.size(); i++) body[i] = frame->getPayload(i);
+        auto decoded = Ieee802154BeaconCodec::decode(body);
+        ASSERT(std::holds_alternative<Ieee802154BeaconCodec::Content>(decoded));
+        ASSERT(std::get<Ieee802154BeaconCodec::Content>(decoded).superframeSpecification == 0xcfff);
+        beacons++;
+    }
+    virtual void handleScanConfirm(uint64_t, const Ieee802154MacScanConfirm& confirm) override {
+        Enter_Method("handleScanConfirm"); ASSERT(++scans == 1);
+        auto expected = Ieee802154MacServiceResult(Status::SUCCESS);
+        if (scenario == 1 || scenario == 3 || scenario == 4) expected = Status::NO_BEACON;
+        if (scenario == 5) expected = Ieee802154MacServiceAbortReason::CANCELLED;
+        if (scenario == 6) expected = Ieee802154MacServiceAbortReason::RESET;
+        ASSERT(confirm.result == expected);
+        if (scenario == 7) ASSERT(confirm.unscannedChannels == std::vector<physicallayer::Ieee802154PhyChannel>({channel(11),channel(12)}));
+        ASSERT(confirm.panDescriptors.size() == (scenario == 0 || scenario == 2 ? 1 : 0));
+        if (!confirm.panDescriptors.empty()) {
+            ASSERT(confirm.panDescriptors[0].channel == channel(11));
+            ASSERT(confirm.panDescriptors[0].coordinatorPanId == 0x1234);
+            ASSERT(confirm.panDescriptors[0].beacon.payload == std::vector<uint8_t>({42}));
+        }
+    }
+    virtual void handleBeaconNotifyIndication(const Ieee802154PanDescriptor&) override { Enter_Method("handleBeaconNotifyIndication"); notices++; }
+    virtual void handleBeaconRequestIndication(const Ieee802154MacBeaconRequestIndication& indication) override {
+        Enter_Method("handleBeaconRequestIndication"); requests++;
+        ASSERT(indication.sourceAddress.isNone() && indication.destinationPanId == 0xffff);
+        if (scenario == 2) beacon({channel(11)},Status::SUCCESS);
+    }
+    virtual void handleBeaconConfirm(uint64_t, const Ieee802154MacBeaconConfirm& confirm) override {
+        Enter_Method("handleBeaconConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(expectedBeacon)); confirms++;
+    }
+    virtual void handleStartConfirm(uint64_t, const Ieee802154MacStartConfirm& confirm) override {
+        Enter_Method("handleStartConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS));
+    }
+    virtual void handleGetConfirm(uint64_t, const Ieee802154MacGetConfirm& confirm) override {
+        Enter_Method("handleGetConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); value = confirm.value;
+    }
+    virtual void handleSetConfirm(uint64_t, const Ieee802154MacSetConfirm& confirm) override {
+        Enter_Method("handleSetConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS));
+    }
+    virtual void handleResetConfirm(uint64_t, const Ieee802154MacResetConfirm& confirm) override {
+        Enter_Method("handleResetConfirm"); ASSERT(scans == 1 && confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); resets++;
+    }
+    virtual void handleDataConfirm(uint64_t, const Ieee802154MacDataConfirm&) override { ASSERT(false); }
+    virtual void handleAssociateResponseStatus(uint64_t, const Ieee802154MacAssociateResponseStatus&) override { ASSERT(false); }
+    virtual void handleAssociateConfirm(uint64_t, const Ieee802154MacAssociateConfirm&) override { ASSERT(false); }
+    virtual void handleAssociateIndication(const Ieee802154MacAssociateIndication&) override { ASSERT(false); }
+    virtual void handleDisassociateConfirm(uint64_t, const Ieee802154MacDisassociateConfirm&) override { ASSERT(false); }
+    virtual void handleDisassociateIndication(const Ieee802154MacDisassociateIndication&) override { ASSERT(false); }
+    virtual void handleOrphanIndication(const Ieee802154MacOrphanIndication&) override { ASSERT(false); }
+    virtual void handleOrphanResponseStatus(uint64_t, const Ieee802154MacOrphanResponseStatus&) override { ASSERT(false); }
+    virtual void handleSyncLossIndication(const Ieee802154MacSyncLossIndication&) override { ASSERT(false); }
+    virtual void handleRxEnableConfirm(uint64_t, const Ieee802154MacRxEnableConfirm&) override { ASSERT(false); }
+    virtual void handleRxEnableIndication(const Ieee802154MacRxEnableIndication&) override { ASSERT(false); }
+    virtual void handleDataIndication(Packet *, const Ieee802154MacDataIndication&) override { ASSERT(false); }
+    virtual void handlePromiscuousIndication(Packet *, const Ieee802154MacPromiscuousIndication&) override { ASSERT(false); }
+    virtual void handleCommStatusIndication(Packet *, const Ieee802154MacCommStatusIndication&) override { ASSERT(false); }
+    virtual void handlePollConfirm(uint64_t, const Ieee802154MacPollConfirm&) override { ASSERT(false); }
+    virtual void handlePurgeConfirm(uint64_t, const Ieee802154MacPurgeConfirm&) override { ASSERT(false); }
+  protected:
+    virtual void activity() override {
+        until(300);
+        set(coordinator.get(),"macBsn",uint64_t(255));
+        set(coordinator.get(),"macDsn",uint64_t(7));
+        set(coordinator.get(),"macAssociationPermit",true);
+        set(coordinator.get(),"macMinBe",uint64_t(0));
+        set(scanner.get(),"macMinBe",uint64_t(0));
+        set(coordinator.get(),"macBeaconPayload",std::vector<uint8_t>(scenario == 4 ? 200 : 1,42));
+        if (scenario != 3)
+            ASSERT(coordinatorManagement->submitStart(++nextId,{0x1234,channel(11)}) == Admission::ACCEPTED);
+        else
+            set(coordinator.get(),"phyCurrentChannelInfo",channel(11));
+        if (scenario == 1 || scenario == 2) set(coordinator.get(),"macBeaconAutoRespond",false);
+        until(1000);
+        Ieee802154MacScanRequest scan;
+        scan.type = Ieee802154ScanType::ACTIVE;
+        scan.channels = {channel(11)};
+        scan.duration = 500;
+        if (scenario == 7) {
+            scan.channels = {channel(12),channel(11)};
+            set(scanner.get(),"phyCcaEdThreshold",W(0));
+            set(scanner.get(),"macMaxCsmaBackoffs",uint64_t(0));
+        }
+        auto scanId = ++nextId;
+        ASSERT(scannerManagement->submitScan(scanId,scan) == Admission::ACCEPTED);
+        until(scenario == 6 ? 1600 : 1100);
+        if (scenario == 5) ASSERT(scanner->cancel(scanId) == Ieee802154MacServiceCancelResult::CANCELLED);
+        if (scenario == 6) ASSERT(scanner->submitReset(++nextId,{false}) == Admission::ACCEPTED);
+        until(12000);
+        ASSERT(scans == 1 && resets == (scenario == 6 ? 1 : 0));
+        ASSERT(notices == (scenario == 0 || scenario == 2 ? 1 : 0));
+        ASSERT(requests == (scenario == 1 || scenario == 2 ? 1 : 0));
+        check(scanner.get(),"phyCurrentChannelInfo",channel(20));
+        if (scenario == 0 || scenario == 2) {
+            ASSERT(beacons == 1);
+            check(coordinator.get(),"macBsn",uint64_t(0));
+            check(coordinator.get(),"macDsn",uint64_t(7));
+            // Explicit errors do not consume BSN or begin a waveform.
+            beacon({channel(11),true},Status::INVALID_PARAMETER);
+            beacon({channel(10)},Status::INVALID_PARAMETER);
+            auto secured = Ieee802154MacBeaconRequest{channel(11)};
+            secured.security.securityLevel = 1;
+            beacon(secured,Status::UNSUPPORTED_SECURITY);
+            set(coordinator.get(),"macBeaconPayload",std::vector<uint8_t>(200,42));
+            beacon({channel(11)},Status::FRAME_TOO_LONG);
+            set(coordinator.get(),"macBeaconPayload",std::vector<uint8_t>{42});
+            beacon({channel(11)},Status::SUCCESS);
+            until(16000);
+            ASSERT(beacons == 2 && confirms == (scenario == 2 ? 6 : 5));
+            check(coordinator.get(),"macBsn",uint64_t(1));
+            check(coordinator.get(),"macDsn",uint64_t(7));
+        }
+        std::cout << "Production active discovery and beacon services verified.\n";
+    }
+};
+Define_Module(DiscoveryExercise);
+}
+
+%file: DiscoveryFixture.ned
+import inet.common.SimpleModule;
+import inet.mobility.static.StationaryMobility;
+import inet.linklayer.ieee802154.Ieee802154StandardInterface;
+import inet.linklayer.ieee802154.contract.IIeee802154MacServiceClient;
+import inet.linklayer.ieee802154.contract.IIeee802154ManagementServiceClient;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple DiscoveryExercise extends SimpleModule like IIeee802154MacServiceClient, IIeee802154ManagementServiceClient
+{
+    parameters:
+        @class(::inet::DiscoveryExercise);
+        string coordinatorModule;
+        string scannerModule;
+        string serviceModule = default(scannerModule);
+        int scenario;
+}
+module DiscoveryHost
+{
+    parameters: @networkNode;
+    submodules:
+        mobility: StationaryMobility;
+        nic: Ieee802154StandardInterface {
+            enableManagement = true;
+            shortAddress = 65534;
+            mac.clientModule = "^.^.^.exercise";
+            mac.managementClientModule = "^.^.^.exercise";
+        }
+    connections allowunconnected:
+}
+network DiscoveryTest
+{
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        host[2]: DiscoveryHost;
+        exercise: DiscoveryExercise {
+            coordinatorModule = "^.host[0].nic.mac";
+            scannerModule = "^.host[1].nic.mac";
+        }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = DiscoveryTest
+ned-path = .;../../../../src;../../lib
+sim-time-limit = 17ms
+cmdenv-express-mode = true
+record-vector-results = false
+record-scalar-results = false
+*.exercise.scenario = ${scenario=0..7}
+*.host[*].nic.radio.sendRawBytes = ${raw=false,true}
+*.host[0].nic.rxOnWhenIdle = true
+*.host[0].nic.extendedAddress = "extended:02-01-12-34-56-78-9A-BC"
+*.host[1].nic.extendedAddress = "extended:04-01-12-34-56-78-9A-BC"
+*.host[*].nic.radio.antenna.mobilityModule = "^.^.^.mobility"
+*.host[0].mobility.initialX = 0m
+*.host[1].mobility.initialX = 1m
+**.mobility.initFromDisplayString = false
+**.mobility.initialY = 0m
+**.mobility.initialZ = 0m
+**.mobility.constraintAreaMinX = 0m
+**.mobility.constraintAreaMinY = 0m
+**.mobility.constraintAreaMinZ = 0m
+**.mobility.constraintAreaMaxX = 100m
+**.mobility.constraintAreaMaxY = 100m
+**.mobility.constraintAreaMaxZ = 100m
+
+%contains: stdout
+Production active discovery and beacon services verified.
+
+%not-contains: stderr
+Error:

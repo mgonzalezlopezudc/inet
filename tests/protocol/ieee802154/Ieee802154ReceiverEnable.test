@@ -1,0 +1,307 @@
+%description:
+Native scheduled receiver control against the production PHY: finite, absolute,
+ASAP, AutoOff, replacement, validation, rollover and lifecycle reentry.
+
+%extraargs: -r 0..75
+
+%includes:
+#include "ProtocolTest.h"
+
+%global:
+using namespace inet;
+using namespace inet::protocoltest;
+Define_ProtocolTestProgram()
+{
+    ProtocolTest test("ieee802154_receiver_enable");
+    return test.unordered({on("exercise").signal("verificationComplete").filterValue(1).within(300)});
+}
+
+%activity:
+EV << "ieee802154_receiver_enable compiled\n";
+
+%file: ReceiverEnableExercise.cc
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/common/lifecycle/LifecycleController.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceProvider.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceProvider.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceClient.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
+
+namespace inet {
+class ReceiverEnableExercise : public cSimpleModule, public LifecycleController,
+        public IIeee802154MacServiceClient, public IIeee802154ManagementServiceClient
+{
+    using Status = Ieee802154MacStatus;
+    using Admission = Ieee802154MacServiceAdmission;
+    ModuleRefByPar<IIeee802154MacServiceProvider> sender, receiver;
+    ModuleRefByPar<IIeee802154ManagementServiceProvider> management;
+    uint64_t nextId = 0;
+    int scenario = 0, confirms = 0, indications = 0, packets = 0, dataConfirms = 0, resets = 0;
+    int ownConfirms = 0, ownPackets = 0, pollConfirms = 0, scanConfirms = 0;
+    std::vector<uint32_t> timestamps;
+    std::vector<Ieee802154MacServiceResult> results;
+    void until(simtime_t target) { ASSERT(target >= simTime()); if (target > simTime()) wait(target-simTime()); }
+    void set(IIeee802154MacServiceProvider *provider, const char *name, const Ieee802154MacPibValue& value) {
+        ASSERT(provider->submitSet(++nextId,{name,value}) == Admission::ACCEPTED);
+    }
+    Admission enable(uint32_t on, uint32_t duration, bool autoOff = false, bool defer = false, bool ranging = false) {
+        return management->submitRxEnable(++nextId,{{{on,duration,autoOff}},defer,ranging});
+    }
+    void sendData(bool foreign = false) {
+        auto packet = new Packet("receiver window probe");
+        packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{1,2,3}));
+        Ieee802154MacDataRequest request;
+        request.sourceAddressMode = Ieee802154Address::AddressType::EXTENDED;
+        request.destinationPanId = 0x1234;
+        request.destinationAddress = Ieee802154Address::fromExtended(foreign ? 0x0601123456789abcULL : 0x0401123456789abcULL);
+        request.ackTx = scenario == 35 || scenario == 36;
+        ASSERT(sender->submitData(++nextId,packet,request) == Admission::ACCEPTED);
+    }
+    int mode() {
+        return check_and_cast<physicallayer::IRadio *>(getModuleByPath("^.host[1].nic.radio"))->getRadioMode();
+    }
+    void stopReceiver() {
+        auto operation = new ModuleStopOperation;
+        LifecycleOperation::StringMap parameters;
+        operation->initialize(getModuleByPath(par("serviceModule")),parameters);
+        ASSERT(initiateOperation(operation));
+    }
+    void ownData() {
+        auto packet = new Packet("primary DATA across receive window");
+        packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>(100,9)));
+        Ieee802154MacDataRequest request;
+        request.sourceAddressMode = Ieee802154Address::AddressType::EXTENDED;
+        request.destinationPanId = 0x1234;
+        request.destinationAddress = Ieee802154Address::fromExtended(0x0201123456789abcULL);
+        request.ackTx = true; request.msduHandle = 98;
+        ASSERT(receiver->submitData(++nextId,packet,request) == Admission::ACCEPTED);
+    }
+  public:
+    ReceiverEnableExercise() : cSimpleModule(65536) {}
+    virtual void initialize() override {
+        sender.reference(this,"senderModule",true); receiver.reference(this,"serviceModule",true);
+        management.reference(this,"serviceModule",true); scenario = par("scenario");
+    }
+  protected:
+    virtual void activity() override {
+        until(SimTime(500,SIMTIME_US));
+        set(sender.get(),"macMinBe",uint64_t(0));
+        set(receiver.get(),"macMinBe",uint64_t(0));
+        if (scenario >= 35) {
+            set(sender.get(),"macMaxFrameRetries",uint64_t(0));
+            set(receiver.get(),"phyCcaDuration",SimTime(2,SIMTIME_MS));
+            set(receiver.get(),"macMaxCsmaBackoffs",uint64_t(scenario == 36 ? 0 : 3));
+        }
+        if (scenario == 19) set(receiver.get(),"macRxOnWhenIdle",true);
+        until(SimTime(1,SIMTIME_MS));
+        int expectedPackets = 2, expectedIndications = 1, expectedConfirms = 1;
+        uint32_t timestamp = 699;
+        bool longRun = false;
+        Admission admitted = Admission::ACCEPTED;
+        switch (scenario) {
+            case 1: admitted=enable(250,250); expectedPackets=1; timestamp=500; break;
+            case 2: admitted=enable(0,625,true); expectedPackets=1; expectedIndications=0; break;
+            case 3: admitted=enable(100,25,true); expectedPackets=0; timestamp=125; break;
+            case 4: admitted=enable(0,0xffffff); expectedPackets=3; expectedConfirms=2; timestamp=1250; break;
+            case 5: admitted=enable(0,0xffffff); expectedPackets=1; expectedConfirms=2; timestamp=750; break;
+            case 7: admitted=enable(10,1,false,true); expectedPackets=0; timestamp=11; longRun=true; break;
+            case 8: admitted=enable((62+0x800000)&0xffffff,1); expectedPackets=0; timestamp=(63+0x800000)&0xffffff; longRun=true; break;
+            case 9: admitted=enable((63+0x800000)&0xffffff,1); expectedPackets=0; expectedIndications=0; break;
+            case 15: admitted=enable(63,10); expectedPackets=0; expectedIndications=0; expectedConfirms=0; break;
+            case 16: admitted=enable(0,0xfffffe); expectedPackets=3; timestamp=72; longRun=true; break;
+            case 17: admitted=enable(0,1); expectedPackets=0; timestamp=75; break;
+            case 18:
+                until(SimTime(int64_t(0x1000000-32)*16,SIMTIME_US));
+                admitted=enable(0xfffffe,4); expectedPackets=0; timestamp=2; longRun=true; break;
+            case 19: admitted=enable(0,625); expectedPackets=3; timestamp=687; break;
+            case 21: admitted=enable(0,0xffffff); expectedPackets=0; expectedConfirms=2; timestamp=75; break;
+            case 22: admitted=enable(250,500); expectedPackets=0; expectedIndications=0; break;
+            case 23: admitted=enable(0,625,true); expectedPackets=0; expectedIndications=0; break;
+            case 24: admitted=enable(250,500,true); expectedPackets=1; expectedIndications=0; break;
+            case 25: admitted=enable(0,0); expectedPackets=0; timestamp=62; break;
+            case 26: admitted=enable(250,0); expectedPackets=0; timestamp=250; break;
+            case 27: admitted=management->submitRxEnable(++nextId,{}); expectedPackets=0; expectedIndications=0; break;
+            case 29: admitted=enable(0,1250); expectedPackets=3; timestamp=1324; break;
+            case 31: admitted=enable(0,1250,true); expectedPackets=1; expectedIndications=0; break;
+            case 32: admitted=enable(0,625); expectedPackets=1; break;
+            case 33: admitted=enable(0,625); expectedPackets=1; expectedIndications=0; break;
+            case 35: case 36: case 37: admitted=enable(0,625); expectedPackets=0; break;
+            default: admitted=enable(0,625); break;
+        }
+        ASSERT(admitted == (scenario == 15 ? Admission::BUSY : Admission::ACCEPTED));
+        ASSERT(receiver->cancel(nextId) == Ieee802154MacServiceCancelResult::NOT_PENDING);
+        if (scenario == 9) ASSERT(results == std::vector<Ieee802154MacServiceResult>({Status::PAST_TIME}));
+        if (scenario != 18) {
+            until(SimTime(1500,SIMTIME_US));
+            bool ready = scenario == 0 || scenario == 2 || scenario == 4 || scenario == 5 || scenario == 6 ||
+                    (scenario >= 10 && scenario <= 14) || scenario == 16 || scenario == 19 || scenario == 20 || scenario == 23 || scenario >= 28;
+            ASSERT(mode() == (ready ? physicallayer::IRadio::RADIO_MODE_RECEIVER : physicallayer::IRadio::RADIO_MODE_OFF));
+            until(SimTime(2,SIMTIME_MS));
+            if (scenario == 31) {
+                auto packet = new Packet("indirect POLL response");
+                packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{1,2,3}));
+                Ieee802154MacDataRequest request;
+                request.sourceAddressMode = Ieee802154Address::AddressType::EXTENDED;
+                request.destinationPanId = 0x1234; request.destinationAddress = Ieee802154Address::fromExtended(0x0401123456789abcULL);
+                request.indirectTx = true; request.ackTx = true;
+                ASSERT(sender->submitData(++nextId,packet,request) == Admission::ACCEPTED);
+            }
+            else sendData(scenario == 23);
+            if (scenario >= 35) { until(SimTime(2500,SIMTIME_US)); ownData(); }
+            until(SimTime(5,SIMTIME_MS));
+            if (scenario == 4) {} // Disable after all three probes.
+            else if (scenario == 5) ASSERT(enable(625,125) == Admission::ACCEPTED);
+            else if (scenario == 6) { ASSERT(enable(1,10) == Admission::ACCEPTED); expectedConfirms=2; ASSERT(results.back() == Ieee802154MacServiceResult(Status::PAST_TIME)); }
+            else if (scenario == 10 || scenario == 11) { ASSERT(enable(scenario == 10 ? 0x1000000 : 0,scenario == 11 ? 0x1000000 : 10) == Admission::ACCEPTED); expectedConfirms=2; ASSERT(results.back() == Ieee802154MacServiceResult(Status::INVALID_PARAMETER)); }
+            else if (scenario == 12) { ASSERT(enable(0,10,false,false,true) == Admission::ACCEPTED); expectedConfirms=2; ASSERT(results.back() == Ieee802154MacServiceResult(Status::RANGING_NOT_SUPPORTED)); }
+            else if (scenario == 13) { ASSERT(management->submitRxEnable(++nextId,{{{0,1,false},{0,1,false}},false,false}) == Admission::ACCEPTED); expectedConfirms=2; ASSERT(results.back() == Ieee802154MacServiceResult(Status::INVALID_PARAMETER)); }
+            else if (scenario == 14) { ASSERT(management->submitRxEnable(++nextId,{}) == Admission::ACCEPTED); expectedConfirms=2; expectedPackets=1; expectedIndications=0; }
+            else if (scenario == 20) { ASSERT(receiver->submitReset(++nextId,{false}) == Admission::ACCEPTED); expectedPackets=1; expectedIndications=0; }
+            else if (scenario == 28) { ASSERT(enable(0,0) == Admission::ACCEPTED); expectedPackets=1; expectedConfirms=2; timestamp=312; }
+            else if (scenario == 29) ownData();
+            else if (scenario == 31) { ASSERT(management->submitPoll(++nextId,{0x1234,Ieee802154Address::fromExtended(0x0201123456789abcULL)}) == Admission::ACCEPTED); }
+            else if (scenario == 32) {
+                Ieee802154MacScanRequest scan;
+                scan.type = Ieee802154ScanType::PASSIVE; scan.duration = 1250;
+                scan.channels = {{physicallayer::Ieee802154PhyChannel::Phy::O_QPSK,physicallayer::Ieee802154PhyChannel::Band::MHZ_2450,20}};
+                ASSERT(management->submitScan(++nextId,scan) == Admission::ACCEPTED);
+            }
+            else if (scenario == 33) stopReceiver();
+            until(SimTime(scenario == 29 ? 10500 : 6000,SIMTIME_US)); if (scenario != 31 && scenario < 35) sendData();
+            if (scenario == 30) { until(SimTime(10,SIMTIME_MS)); ownData(); }
+            until(SimTime(scenario == 30 ? 18000 : 13000,SIMTIME_US)); if (scenario != 31 && scenario < 35) sendData();
+            until(SimTime(20,SIMTIME_MS));
+            if (scenario == 4) ASSERT(enable(0,0) == Admission::ACCEPTED);
+        }
+        until(longRun ? SimTime(270) : SimTime(30,SIMTIME_MS));
+        if (confirms != expectedConfirms || indications != expectedIndications || packets != expectedPackets)
+            throw cRuntimeError("scenario %d: confirms %d/%d, indications %d/%d, packets %d/%d",scenario,confirms,expectedConfirms,indications,expectedIndications,packets,expectedPackets);
+        ASSERT(dataConfirms == (scenario == 18 ? 0 : scenario == 31 || scenario >= 35 ? 1 : 3));
+        if (expectedIndications) ASSERT(timestamps == std::vector<uint32_t>({timestamp}));
+        ASSERT(mode() == (scenario == 19 ? physicallayer::IRadio::RADIO_MODE_RECEIVER : physicallayer::IRadio::RADIO_MODE_OFF));
+        ASSERT(resets == (scenario == 20 || scenario == 22 ? 1 : 0));
+        ASSERT(ownConfirms == (scenario == 29 || scenario == 30 || scenario >= 35 ? 1 : 0));
+        ASSERT(ownPackets == (scenario == 36 ? 0 : ownConfirms));
+        ASSERT(pollConfirms == (scenario == 31 ? 1 : 0) && scanConfirms == (scenario == 32 ? 1 : 0));
+        emit(registerSignal("verificationComplete"),1L);
+    }
+  public:
+    virtual void handleRxEnableConfirm(uint64_t, const Ieee802154MacRxEnableConfirm& confirm) override {
+        Enter_Method("handleRxEnableConfirm"); confirms++; results.push_back(confirm.result);
+        if (scenario == 21 && confirms == 1) ASSERT(enable(0,1) == Admission::ACCEPTED);
+        if (scenario == 22 && confirms == 1) ASSERT(receiver->submitReset(++nextId,{false}) == Admission::ACCEPTED);
+    }
+    virtual void handleRxEnableIndication(const Ieee802154MacRxEnableIndication& indication) override {
+        Enter_Method("handleRxEnableIndication"); indications++; timestamps.push_back(indication.timestamp);
+        if (scenario == 30) ASSERT(mode() == physicallayer::IRadio::RADIO_MODE_TRANSMITTER);
+        if (scenario == 32) ASSERT(mode() == physicallayer::IRadio::RADIO_MODE_RECEIVER);
+        if (scenario == 34) stopReceiver();
+    }
+    virtual void handleDataConfirm(uint64_t, const Ieee802154MacDataConfirm& confirm) override {
+        Enter_Method("handleDataConfirm");
+        auto expected = scenario == 36 && confirm.msduHandle == 98 ? Status::CHANNEL_ACCESS_FAILURE :
+                (scenario == 35 || scenario == 36) && confirm.msduHandle != 98 ? Status::NO_ACK : Status::SUCCESS;
+        ASSERT(confirm.result == Ieee802154MacServiceResult(expected));
+        if (confirm.msduHandle == 98) ownConfirms++; else dataConfirms++;
+    }
+    virtual void handleDataIndication(Packet *packet, const Ieee802154MacDataIndication& indication) override {
+        Enter_Method("handleDataIndication"); take(packet);
+        if (packet->getByteLength() == 100) { ASSERT(indication.ackSent); ownPackets++; } else packets++;
+        delete packet;
+    }
+    virtual void handleResetConfirm(uint64_t, const Ieee802154MacResetConfirm& confirm) override { Enter_Method("handleResetConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); resets++; }
+    virtual void handleGetConfirm(uint64_t, const Ieee802154MacGetConfirm&) override { ASSERT(false); }
+    virtual void handleSetConfirm(uint64_t, const Ieee802154MacSetConfirm& confirm) override { Enter_Method("handleSetConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); }
+    virtual void handleBeaconNotifyIndication(const Ieee802154PanDescriptor&) override { ASSERT(false); }
+    virtual void handleStartConfirm(uint64_t, const Ieee802154MacStartConfirm&) override { ASSERT(false); }
+    virtual void handleScanConfirm(uint64_t, const Ieee802154MacScanConfirm& confirm) override { Enter_Method("handleScanConfirm"); ASSERT(scenario == 32 && confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); scanConfirms++; }
+    virtual void handleBeaconConfirm(uint64_t, const Ieee802154MacBeaconConfirm&) override { ASSERT(false); }
+    virtual void handleBeaconRequestIndication(const Ieee802154MacBeaconRequestIndication&) override { ASSERT(false); }
+    virtual void handleAssociateConfirm(uint64_t, const Ieee802154MacAssociateConfirm&) override { ASSERT(false); }
+    virtual void handleAssociateIndication(const Ieee802154MacAssociateIndication&) override { ASSERT(false); }
+    virtual void handleAssociateResponseStatus(uint64_t, const Ieee802154MacAssociateResponseStatus&) override { ASSERT(false); }
+    virtual void handleDisassociateConfirm(uint64_t, const Ieee802154MacDisassociateConfirm&) override { ASSERT(false); }
+    virtual void handleDisassociateIndication(const Ieee802154MacDisassociateIndication&) override { ASSERT(false); }
+    virtual void handleOrphanIndication(const Ieee802154MacOrphanIndication&) override { ASSERT(false); }
+    virtual void handleOrphanResponseStatus(uint64_t, const Ieee802154MacOrphanResponseStatus&) override { ASSERT(false); }
+    virtual void handleSyncLossIndication(const Ieee802154MacSyncLossIndication&) override { ASSERT(false); }
+    virtual void handlePollConfirm(uint64_t, const Ieee802154MacPollConfirm& confirm) override { Enter_Method("handlePollConfirm"); ASSERT(scenario == 31 && confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); pollConfirms++; }
+    virtual void handlePurgeConfirm(uint64_t, const Ieee802154MacPurgeConfirm&) override { ASSERT(false); }
+    virtual void handlePromiscuousIndication(Packet *, const Ieee802154MacPromiscuousIndication&) override { ASSERT(false); }
+    virtual void handleCommStatusIndication(Packet *, const Ieee802154MacCommStatusIndication&) override { ASSERT(false); }
+};
+Define_Module(ReceiverEnableExercise);
+}
+
+%file: ReceiverEnableFixture.ned
+import inet.common.SimpleModule;
+import inet.mobility.static.StationaryMobility;
+import inet.linklayer.ieee802154.Ieee802154StandardInterface;
+import inet.linklayer.ieee802154.contract.IIeee802154MacServiceClient;
+import inet.linklayer.ieee802154.contract.IIeee802154ManagementServiceClient;
+import inet.protocoltest.TapRadioMedium;
+simple ReceiverEnableExercise extends SimpleModule like IIeee802154MacServiceClient, IIeee802154ManagementServiceClient
+{
+    parameters:
+        @class(::inet::ReceiverEnableExercise);
+        string senderModule;
+        string serviceModule;
+        int scenario;
+        @signal[verificationComplete](type=long);
+}
+module ReceiverEnableHost
+{
+    parameters: @networkNode;
+    submodules:
+        mobility: StationaryMobility;
+        nic: Ieee802154StandardInterface {
+            enableManagement = true;
+            mac.clientModule = "^.^.^.exercise"; mac.managementClientModule = "^.^.^.exercise";
+        }
+    connections allowunconnected:
+}
+network ReceiverEnableTest
+{
+    parameters: int scenario;
+    submodules:
+        radioMedium: TapRadioMedium;
+        host[2]: ReceiverEnableHost;
+        exercise: ReceiverEnableExercise { senderModule = "^.host[0].nic.mac"; serviceModule = "^.host[1].nic.mac"; scenario = parent.scenario; }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = ReceiverEnableTest
+sim-time-limit = 301s
+cmdenv-express-mode = true
+*.scenario = ${scenario=0..37}
+*.host[*].nic.radio.sendRawBytes = ${raw=false,true}
+*.radioMedium.signalAnalogRepresentation = "scalar"
+*.radioMedium.backgroundNoise.power = -110dBm
+*.host[0].nic.rxOnWhenIdle = true
+*.host[0].nic.mac.isPanCoordinator = ${scenario} == 31
+*.host[*].nic.panId = 4660
+*.host[0].nic.extendedAddress = "extended:02-01-12-34-56-78-9A-BC"
+*.host[1].nic.extendedAddress = "extended:04-01-12-34-56-78-9A-BC"
+*.host[*].nic.radio.antenna.mobilityModule = "^.^.^.mobility"
+*.host[0].mobility.initialX = 0m
+*.host[1].mobility.initialX = 1m
+**.mobility.initFromDisplayString = false
+**.mobility.initialY = 0m
+**.mobility.initialZ = 0m
+**.mobility.constraintAreaMinX = 0m
+**.mobility.constraintAreaMinY = 0m
+**.mobility.constraintAreaMinZ = 0m
+**.mobility.constraintAreaMaxX = 100m
+**.mobility.constraintAreaMaxY = 100m
+**.mobility.constraintAreaMaxZ = 100m
+
+%contains: stdout
+PROTOCOLTEST ieee802154_receiver_enable: PASS
+
+%not-contains: stdout
+PROTOCOLTEST ieee802154_receiver_enable: FAIL

@@ -1,0 +1,499 @@
+%description:
+Production reset/active-scan/select/associate, delayed indirect response, native
+short/extended-only DATA, rejection, loss, expiry, cancellation and reset.
+
+%extraargs: -r 0..67
+
+%includes:
+#include "ProtocolTest.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+
+%global:
+using namespace inet;
+using namespace inet::protocoltest;
+Define_ProtocolTestProgram()
+{
+    ProtocolTest test("ieee802154_association");
+    int scenario = getSimulation()->getSystemModule()->par("scenario");
+    if (scenario == 10)
+        test.intercept(tap("radioMedium").to("host[1]")
+            .filterPacket("Ieee802154Frame.frameType == 2 && Ieee802154Frame.dsn == 7")
+            .nth(1).drop().describe("lose first Association Request ACK"));
+    if (scenario == 11)
+        test.intercept(tap("radioMedium").to("host[0]")
+            .filterPacket("Ieee802154Frame.frameType == 2 && Ieee802154Frame.dsn == 7")
+            .nth(1).drop().describe("lose Association Response ACK"));
+    if (scenario == 19)
+        test.intercept(tap("radioMedium").to("host[1]")
+            .filterPacket("Ieee802154Frame.frameType == 2 && Ieee802154Frame.dsn == 10")
+            .drop().describe("lose every device-leave ACK"));
+    if (scenario == 27 || scenario == 28 || scenario == 29)
+        test.intercept(tap("radioMedium").from("host[0]").to("host[1]")
+            .filterPacket("Ieee802154Frame.frameType == 3 && Ieee802154Frame.dsn == 8")
+            .mutate([scenario](Packet *packet) {
+                auto raw = packet->peekDataAsBytes(); auto bytes = raw->getBytes();
+                ASSERT(bytes.size() == 25); bytes.resize(bytes.size()-2);
+                if (scenario == 27) bytes[20] = 6; // Different coordinator EUI, same low 48 bits.
+                if (scenario == 28) { bytes[3] = 0x78; bytes[4] = 0x56; }
+                if (scenario == 29) bytes[0] |= 0x10; // This command's received Frame Pending is ignored.
+                auto fcs = Ieee802154FrameCodec::calculateFcs(bytes);
+                bytes.push_back(fcs & 255); bytes.push_back(fcs >> 8);
+                packet->eraseAll(); packet->insertAtBack(makeShared<BytesChunk>(bytes));
+            }).describe("disassociation source/PAN rejection or ignored Frame Pending"));
+    return test.unordered({on("exercise").signal("verificationComplete").filterValue(1).within(0.114)});
+}
+
+%activity:
+EV << "ieee802154_association compiled\n";
+
+%file: AssociationExercise.cc
+#include <set>
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/common/lifecycle/LifecycleController.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceProvider.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceProvider.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceClient.h"
+
+namespace inet {
+static std::set<int> destroyedDisassociationPackets;
+class DisassociationPacket : public Packet
+{
+    int handle;
+  public:
+    explicit DisassociationPacket(int handle) : Packet("queued during peer removal"), handle(handle) {}
+    virtual ~DisassociationPacket() { destroyedDisassociationPackets.insert(handle); }
+};
+class AssociationExercise : public cSimpleModule, public cListener, public LifecycleController,
+        public IIeee802154MacServiceClient, public IIeee802154ManagementServiceClient
+{
+    using Status = Ieee802154MacStatus;
+    using Abort = Ieee802154MacServiceAbortReason;
+    using Admission = Ieee802154MacServiceAdmission;
+    ModuleRefByPar<IIeee802154MacServiceProvider> coordinator, device;
+    ModuleRefByPar<IIeee802154ManagementServiceProvider> coordinatorManagement, deviceManagement;
+    uint64_t nextId = 0, associationId = 0, responseId = 0;
+    uint64_t disassociationId = 0;
+    int scenario = 0, scans = 0, associations = 0, responses = 0, indications = 0, resets = 0;
+    int dataConfirms = 0, dataIndications = 0, requestsSent = 0, pollsSent = 0, responseFrames = 0;
+    int disassociationConfirms = 0, disassociationIndications = 0;
+    uint64_t peerDataId = 0;
+    uint64_t orphanResponseId = 0;
+    int orphanResponses = 0, orphanNotifications = 0;
+    simtime_t lastRequestAck;
+    bool selected = false, abortScheduled = false;
+    std::optional<Ieee802154MacPibValue> value;
+    Ieee802154Address coordinatorAddress;
+    physicallayer::Ieee802154PhyChannel channel(int number = 11) {
+        return {physicallayer::Ieee802154PhyChannel::Phy::O_QPSK,physicallayer::Ieee802154PhyChannel::Band::MHZ_2450,number};
+    }
+    Ieee802154Address coordinatorExtended() { return Ieee802154Address::fromExtended(0x0201123456789abcULL); }
+    Ieee802154Address deviceExtended() { return Ieee802154Address::fromExtended(0x0401123456789abcULL); }
+    void set(IIeee802154MacServiceProvider *provider, const char *name, const Ieee802154MacPibValue& data) {
+        ASSERT(provider->submitSet(++nextId,{name,data}) == Admission::ACCEPTED);
+    }
+    void check(IIeee802154MacServiceProvider *provider, const char *name, const Ieee802154MacPibValue& expected) {
+        value.reset(); ASSERT(provider->submitGet(++nextId,{name}) == Admission::ACCEPTED);
+        ASSERT(value && *value == expected);
+    }
+    void queuePeerData(int handle, const Ieee802154Address& peer) {
+        auto packet = new DisassociationPacket(handle);
+        packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0xba,uint8_t(handle)}));
+        Ieee802154MacDataRequest request;
+        request.sourceAddressMode = Ieee802154Address::AddressType::EXTENDED;
+        request.destinationAddress = peer; request.destinationPanId = 0x1234;
+        request.msduHandle = handle; request.indirectTx = true; request.ackTx = true;
+        peerDataId = ++nextId;
+        ASSERT(coordinator->submitData(peerDataId,packet,request) == Admission::ACCEPTED);
+    }
+    bool joined() const { return scenario == 0 || scenario == 1 || scenario == 9 || scenario == 10 || scenario == 11 || scenario >= 13; }
+    bool left() const { return scenario == 14 || scenario == 15 || scenario == 16 || scenario == 17 || scenario == 19 || (scenario >= 29 && scenario <= 32); }
+    bool extendedOnly() const { return scenario == 1 || scenario == 17; }
+    void verify() {
+        ASSERT(scans == (scenario == 33 ? 2 : 1) && associations == 1);
+        ASSERT(resets == (scenario == 6 || scenario == 12 || scenario == 26 ? 2 : 1));
+        ASSERT(dataConfirms == (scenario == 32 ? 3 : scenario == 13 || scenario == 30 || scenario == 31 || scenario == 33 ? 2 : int(joined())));
+        ASSERT(dataIndications == (scenario == 13 || scenario == 33 ? 2 : int(joined())));
+        ASSERT(responses == (scenario == 3 || scenario == 4 || scenario == 7 ? 0 : 1));
+        check(device.get(),"macAssociatedPanCoord",joined() && !left());
+        check(device.get(),"macPanId",uint64_t(scenario == 33 ? 0x2345 : joined() && !left() ? 0x1234 : 0xffff));
+        if (joined()) {
+            check(device.get(),"macShortAddress",uint64_t(scenario == 33 ? 0x44 : left() ? 0xffff : extendedOnly() ? 0xfffe : 0x42));
+            check(device.get(),"macCoordExtendedAddress",left() ? Ieee802154Address() : coordinatorExtended());
+            if (left()) check(device.get(),"macCoordShortAddress",uint64_t(0xffff));
+            ASSERT(pollsSent == (scenario == 13 || scenario == 16 || scenario == 30 || scenario == 32 ? 2 : 1) && responseFrames == 1);
+        }
+        ASSERT(disassociationConfirms == (scenario >= 14 && scenario <= 32 ? 1 : 0));
+        ASSERT(disassociationIndications == (left() ? 1 : 0));
+        if (scenario == 33) {
+            ASSERT(orphanResponses == 1 && orphanNotifications == 2);
+            check(device.get(),"phyCurrentChannelInfo",channel(12));
+            check(device.get(),"macCoordShortAddress",uint64_t(1));
+        }
+        if (scenario == 10) ASSERT(requestsSent == 2 && indications == 2);
+        emit(registerSignal("verificationComplete"),1L);
+    }
+  protected:
+    virtual void initialize() override {
+        destroyedDisassociationPackets.clear();
+        coordinator.reference(this,"coordinatorModule",true);
+        coordinatorManagement.reference(this,"coordinatorModule",true);
+        device.reference(this,"serviceModule",true);
+        deviceManagement.reference(this,"serviceModule",true);
+        scenario = par("scenario");
+        getModuleByPath(par("coordinatorModule"))->subscribe("packetSentToLower",this);
+        getModuleByPath(par("serviceModule"))->subscribe("packetSentToLower",this);
+        getModuleByPath(par("serviceModule"))->subscribe("packetReceivedFromLower",this);
+        scheduleAt(SimTime(500,SIMTIME_US),new cMessage("configure",0));
+        scheduleAt(SimTime(1,SIMTIME_MS),new cMessage("scan",1));
+        scheduleAt(SimTime(12,SIMTIME_MS),new cMessage("associate",2));
+        if (scenario == 5 || scenario == 6) scheduleAt(SimTime(20,SIMTIME_MS),new cMessage("abort",3));
+        if (scenario == 5 || scenario == 6 || scenario == 11 || scenario == 12)
+            scheduleAt(SimTime(65,SIMTIME_MS),new cMessage("retire response",4));
+        if (scenario == 13) scheduleAt(SimTime(65,SIMTIME_MS),new cMessage("associated short poll",6));
+        if (scenario >= 14 && scenario <= 32) scheduleAt(SimTime(55,SIMTIME_MS),new cMessage("disassociation setup",7));
+        if (scenario >= 14 && scenario <= 32) scheduleAt(SimTime(60,SIMTIME_MS),new cMessage("disassociate",8));
+        if (scenario == 16 || scenario == 30 || scenario == 32) scheduleAt(SimTime(65,SIMTIME_MS),new cMessage("poll removal command",6));
+        if (scenario == 25 || scenario == 26) scheduleAt(SimTime(61,SIMTIME_MS),new cMessage("abort queued removal",9));
+        if (scenario == 31) scheduleAt(SimTime(100,SIMTIME_MS),new cMessage("cancel other peer DATA",10));
+        if (scenario == 33) {
+            scheduleAt(SimTime(55,SIMTIME_MS),new cMessage("move coordinator PAN/channel",11));
+            scheduleAt(SimTime(60,SIMTIME_MS),new cMessage("recover joined device",12));
+        }
+        scheduleAt(SimTime(110,SIMTIME_MS),new cMessage("verify",5));
+    }
+    virtual void handleMessage(cMessage *message) override {
+        int kind = message->getKind(); delete message;
+        if (kind == 0) {
+            ASSERT(device->submitReset(++nextId,{true}) == Admission::ACCEPTED);
+            for (auto provider : {coordinator.get(),device.get()}) {
+                set(provider,"macMinBe",uint64_t(0));
+                set(provider,"macMaxCsmaBackoffs",uint64_t(0));
+                set(provider,"macMaxFrameRetries",uint64_t(2));
+                set(provider,"macResponseWaitTime",uint64_t(2));
+                set(provider,"macTransactionPersistenceTime",uint64_t(scenario == 8 ? 1 : 10));
+            }
+            set(coordinator.get(),"macAssociationPermit",scenario != 3);
+            set(coordinator.get(),"macShortAddress",uint64_t(scenario == 9 ? 1 : 0xfffe));
+            set(coordinator.get(),"macDsn",uint64_t(7));
+            ASSERT(coordinatorManagement->submitStart(++nextId,{0x1234,channel()}) == Admission::ACCEPTED);
+        }
+        else if (kind == 1) {
+            Ieee802154MacScanRequest request;
+            request.type = Ieee802154ScanType::ACTIVE; request.channels = {channel()}; request.duration = 500;
+            ASSERT(deviceManagement->submitScan(++nextId,request) == Admission::ACCEPTED);
+        }
+        else if (kind == 2) {
+            ASSERT(selected);
+            set(device.get(),"macDsn",uint64_t(7));
+            Ieee802154MacAssociateRequest request{channel(scenario == 7 ? 10 : 11),0x1234,coordinatorAddress};
+            request.capabilityInformation = extendedOnly() ? 0 : 0x80;
+            associationId = ++nextId;
+            ASSERT(deviceManagement->submitAssociate(associationId,request) == Admission::ACCEPTED);
+        }
+        else if (kind == 3) {
+            if (scenario == 5) ASSERT(device->cancel(associationId) == Ieee802154MacServiceCancelResult::CANCELLED);
+            else ASSERT(device->submitReset(++nextId,{false}) == Admission::ACCEPTED);
+        }
+        else if (kind == 4) ASSERT(coordinator->cancel(responseId) == Ieee802154MacServiceCancelResult::CANCELLED);
+        else if (kind == 6) {
+            Ieee802154MacPollRequest request; request.coordinatorPanId = 0x1234; request.coordinatorAddress = coordinatorAddress;
+            ASSERT(deviceManagement->submitPoll(++nextId,request) == Admission::ACCEPTED);
+        }
+        else if (kind == 7) {
+            if (scenario == 15 || (scenario >= 27 && scenario <= 29) || scenario == 31) set(device.get(),"macRxOnWhenIdle",true);
+            if (scenario == 18) set(coordinator.get(),"macTransactionPersistenceTime",uint64_t(1));
+            if (scenario == 20) set(coordinator.get(),"phyCcaEdThreshold",W(0));
+        }
+        else if (kind == 8) {
+            if (scenario == 31) queuePeerData(99,Ieee802154Address::fromExtended(0x0601123456789abcULL));
+            bool leaving = scenario == 14 || scenario == 17 || scenario == 19;
+            Ieee802154MacDisassociateRequest request{0x1234,leaving ? coordinatorAddress : deviceExtended(),uint8_t(leaving ? 2 : 1)};
+            request.indirectTx = leaving || scenario == 16 || scenario == 18 || scenario == 25 || scenario == 26 || scenario == 30 || scenario == 32;
+            if (scenario == 21) request.devicePanId = 0x5678;
+            if (scenario == 22) request.deviceAddress = Ieee802154Address::fromExtended(0x0601123456789abcULL);
+            if (scenario == 23) request.reason = 3;
+            if (scenario == 24) request.security.securityLevel = 1;
+            disassociationId = ++nextId;
+            ASSERT((leaving ? deviceManagement : coordinatorManagement)->submitDisassociate(disassociationId,request) == Admission::ACCEPTED);
+            if (scenario == 30 || scenario == 32) queuePeerData(99,deviceExtended());
+            if (scenario == 32) queuePeerData(100,deviceExtended());
+        }
+        else if (kind == 9) {
+            if (scenario == 25) ASSERT(coordinator->cancel(disassociationId) == Ieee802154MacServiceCancelResult::CANCELLED);
+            else ASSERT(coordinator->submitReset(++nextId,{false}) == Admission::ACCEPTED);
+        }
+        else if (kind == 10) {
+            ASSERT(!destroyedDisassociationPackets.count(99));
+            ASSERT(coordinator->cancel(peerDataId) == Ieee802154MacServiceCancelResult::CANCELLED);
+        }
+        else if (kind == 11) {
+            set(coordinator.get(),"macShortAddress",uint64_t(1));
+            ASSERT(coordinatorManagement->submitStart(++nextId,{0x2345,channel(12)}) == Admission::ACCEPTED);
+        }
+        else if (kind == 12) {
+            Ieee802154MacScanRequest request;
+            request.type = Ieee802154ScanType::ORPHAN; request.channels = {channel(12),channel(11)};
+            ASSERT(deviceManagement->submitScan(++nextId,request) == Admission::ACCEPTED);
+        }
+        else verify();
+    }
+  public:
+    virtual void receiveSignal(cComponent *source, simsignal_t signal, cObject *object, cObject *) override {
+        Enter_Method_Silent();
+        auto packet = check_and_cast<Packet *>(object);
+        auto bytes = packet->peekDataAsBytes(); auto frame = Ieee802154FrameCodec::decode(bytes->getBytes());
+        bool fromDevice = source == getModuleByPath(par("serviceModule"));
+        if (signal == registerSignal("packetReceivedFromLower")) {
+            if (frame->getFrameType() == 2 && frame->getDsn() == 7) lastRequestAck = simTime();
+            return;
+        }
+        if (frame->getFrameType() != 3) return;
+        if (fromDevice && frame->getPayload(0) == 1) {
+            ASSERT(frame->getDsn() == 7 && frame->getSourceAddress() == deviceExtended() && frame->getSourcePanId() == 0xffff);
+            ASSERT(frame->getDestinationAddress() == coordinatorAddress && frame->getAckRequest()); requestsSent++;
+        }
+        if (fromDevice && frame->getPayload(0) == 4) {
+            ASSERT(simTime() >= lastRequestAck + SimTime(30720,SIMTIME_US)); pollsSent++;
+            if (scenario == 12 && !abortScheduled) {
+                abortScheduled = true; scheduleAt(simTime() + SimTime(100,SIMTIME_US),new cMessage("reset during poll",3));
+            }
+        }
+        if (!fromDevice && frame->getPayload(0) == 2) {
+            ASSERT(frame->getDsn() == 7 && !frame->getFramePending()); responseFrames++;
+        }
+        if (fromDevice && frame->getPayload(0) == 6) {
+            ASSERT(scenario == 33 && frame->getDsn() == 10 + orphanNotifications);
+            ASSERT(frame->getSourceAddress() == deviceExtended() && frame->getPanCompression() && !frame->getAckRequest());
+            orphanNotifications++;
+        }
+    }
+    virtual void handleScanConfirm(uint64_t, const Ieee802154MacScanConfirm& confirm) override {
+        Enter_Method("handleScanConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS));
+        if (confirm.type == Ieee802154ScanType::ORPHAN) {
+            ASSERT(scenario == 33 && confirm.panDescriptors.empty() && confirm.unscannedChannels.empty()); scans++;
+            auto packet = new Packet("DATA after real join and orphan recovery");
+            packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0xca,0xfe}));
+            Ieee802154MacDataRequest request;
+            request.sourceAddressMode = Ieee802154Address::AddressType::SHORT;
+            request.destinationAddress = coordinatorExtended(); request.destinationPanId = 0x2345; request.ackTx = true;
+            ASSERT(device->submitData(++nextId,packet,request) == Admission::ACCEPTED);
+            return;
+        }
+        ASSERT(confirm.panDescriptors.size() == 1); coordinatorAddress = confirm.panDescriptors[0].coordinatorAddress;
+        selected = true; scans++;
+    }
+    virtual void handleAssociateIndication(const Ieee802154MacAssociateIndication& indication) override {
+        Enter_Method("handleAssociateIndication"); ASSERT(indication.deviceAddress == deviceExtended()); indications++;
+        ASSERT(indication.capabilityInformation == (extendedOnly() ? 0 : 0x80));
+        if (scenario == 4 || responseId) return; // Higher-layer duplicate/admission policy.
+        Ieee802154MacAssociateResponse response;
+        response.deviceAddress = indication.deviceAddress;
+        response.shortAddress = scenario == 2 ? 0xffff : extendedOnly() ? 0xfffe : 0x42;
+        response.associationStatus = scenario == 2 ? 2 : 0;
+        responseId = ++nextId;
+        ASSERT(coordinatorManagement->submitAssociateResponse(responseId,response) == Admission::ACCEPTED);
+        ASSERT(responses == 0); // An acknowledged request does not directly transmit its response.
+    }
+    virtual void handleAssociateConfirm(uint64_t id, const Ieee802154MacAssociateConfirm& confirm) override {
+        Enter_Method("handleAssociateConfirm"); ASSERT(id == associationId && ++associations == 1);
+        Ieee802154MacServiceResult expected = Status::SUCCESS;
+        if (scenario == 3) expected = Status::NO_ACK;
+        if (scenario == 4 || scenario == 8) expected = Status::NO_DATA;
+        if (scenario == 5) expected = Abort::CANCELLED;
+        if (scenario == 6 || scenario == 12) expected = Abort::RESET;
+        if (scenario == 7) expected = Status::INVALID_PARAMETER;
+        ASSERT(confirm.result == expected);
+        if (joined() || scenario == 2) {
+            ASSERT(confirm.associationStatus == (scenario == 2 ? 2 : 0));
+            ASSERT(simTime() >= lastRequestAck + SimTime(30720,SIMTIME_US));
+        }
+        else ASSERT(!confirm.associationStatus);
+        ASSERT(confirm.shortAddress == (joined() ? extendedOnly() ? 0xfffe : 0x42 : 0xffff));
+        if (joined()) {
+            auto packet = new Packet("after association");
+            packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0xde,0xad}));
+            Ieee802154MacDataRequest request;
+            request.sourceAddressMode = extendedOnly() ? Ieee802154Address::AddressType::EXTENDED : Ieee802154Address::AddressType::SHORT;
+            request.destinationAddress = coordinatorAddress; request.destinationPanId = 0x1234; request.ackTx = true;
+            ASSERT(device->submitData(++nextId,packet,request) == Admission::ACCEPTED);
+        }
+    }
+    virtual void handleAssociateResponseStatus(uint64_t id, const Ieee802154MacAssociateResponseStatus& status) override {
+        Enter_Method("handleAssociateResponseStatus"); ASSERT(id == responseId && ++responses == 1 && status.deviceAddress == deviceExtended());
+        Ieee802154MacServiceResult expected = Status::SUCCESS;
+        if (scenario == 8) expected = Status::TRANSACTION_EXPIRED;
+        if (scenario == 5 || scenario == 6 || scenario == 11 || scenario == 12) expected = Abort::CANCELLED;
+        ASSERT(status.result == expected);
+    }
+    virtual void handleDataConfirm(uint64_t, const Ieee802154MacDataConfirm& confirm) override {
+        Enter_Method("handleDataConfirm");
+        if (confirm.msduHandle >= 99) {
+            ASSERT(destroyedDisassociationPackets.count(confirm.msduHandle));
+            if (scenario == 32) ASSERT(destroyedDisassociationPackets.count(99) && destroyedDisassociationPackets.count(100));
+            auto expected = scenario == 31 ? Abort::CANCELLED : scenario == 32 && confirm.msduHandle == 100 ? Abort::STOPPED : Abort::DISASSOCIATED;
+            ASSERT(confirm.result == Ieee802154MacServiceResult(expected)); dataConfirms++;
+            if (scenario == 32 && confirm.msduHandle == 99) {
+                ASSERT(coordinator->submitReset(++nextId,{false}) == Admission::BUSY);
+                auto operation = new ModuleStopOperation;
+                LifecycleOperation::StringMap parameters;
+                operation->initialize(getModuleByPath(par("coordinatorModule")),parameters);
+                ASSERT(initiateOperation(operation));
+            }
+            return;
+        }
+        ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); dataConfirms++;
+    }
+    virtual void handleDataIndication(Packet *packet, const Ieee802154MacDataIndication& indication) override {
+        Enter_Method("handleDataIndication"); take(packet);
+        if (scenario == 33 && indication.sourceAddress == Ieee802154Address::fromShort(0x44)) {
+            ASSERT(indication.destinationPanId == 0x2345 && indication.ackSent);
+            auto bytes = packet->peekDataAsBytes(); ASSERT(bytes->getBytes() == std::vector<uint8_t>({0xca,0xfe}));
+            dataIndications++; delete packet; return;
+        }
+        if (scenario == 13 && indication.sourceAddress == coordinatorExtended()) {
+            ASSERT(indication.destinationAddress == deviceExtended() && indication.ackSent);
+            auto bytes = packet->peekDataAsBytes(); ASSERT(bytes->getBytes() == std::vector<uint8_t>({0xca,0xfe}));
+            dataIndications++; delete packet; return;
+        }
+        ASSERT(indication.sourceAddress == (extendedOnly() ? deviceExtended() : Ieee802154Address::fromShort(0x42)) && indication.ackSent);
+        auto bytes = packet->peekDataAsBytes(); ASSERT(bytes->getBytes() == std::vector<uint8_t>({0xde,0xad}));
+        dataIndications++; delete packet;
+        if (scenario == 13) {
+            auto pending = new Packet("queued by full EUI after short allocation");
+            pending->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0xca,0xfe}));
+            Ieee802154MacDataRequest request;
+            request.sourceAddressMode = Ieee802154Address::AddressType::EXTENDED;
+            request.destinationAddress = deviceExtended(); request.destinationPanId = 0x1234;
+            request.indirectTx = true; request.ackTx = true;
+            ASSERT(coordinator->submitData(++nextId,pending,request) == Admission::ACCEPTED);
+        }
+    }
+    virtual void handleStartConfirm(uint64_t, const Ieee802154MacStartConfirm& confirm) override { Enter_Method("handleStartConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); }
+    virtual void handleGetConfirm(uint64_t, const Ieee802154MacGetConfirm& confirm) override { Enter_Method("handleGetConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); value = confirm.value; }
+    virtual void handleSetConfirm(uint64_t, const Ieee802154MacSetConfirm& confirm) override { Enter_Method("handleSetConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); }
+    virtual void handleResetConfirm(uint64_t, const Ieee802154MacResetConfirm& confirm) override { Enter_Method("handleResetConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); resets++; }
+    virtual void handleBeaconNotifyIndication(const Ieee802154PanDescriptor&) override {}
+    virtual void handleBeaconConfirm(uint64_t, const Ieee802154MacBeaconConfirm&) override { ASSERT(false); }
+    virtual void handleDisassociateConfirm(uint64_t id, const Ieee802154MacDisassociateConfirm& confirm) override {
+        Enter_Method("handleDisassociateConfirm"); ASSERT(id == disassociationId && ++disassociationConfirms == 1);
+        Ieee802154MacServiceResult expected = Status::SUCCESS;
+        if (scenario == 18) expected = Status::TRANSACTION_EXPIRED;
+        if (scenario == 19) expected = Status::NO_ACK;
+        if (scenario == 20) expected = Status::CHANNEL_ACCESS_FAILURE;
+        if (scenario >= 21 && scenario <= 23) expected = Status::INVALID_PARAMETER;
+        if (scenario == 24) expected = Status::UNSUPPORTED_SECURITY;
+        if (scenario == 25) expected = Abort::CANCELLED;
+        if (scenario == 26) expected = Abort::RESET;
+        if (scenario == 27 || scenario == 28) expected = Status::NO_ACK;
+        if (scenario == 32) expected = Abort::STOPPED;
+        ASSERT(confirm.result == expected && confirm.peerPanId == (scenario == 21 ? 0x5678 : 0x1234));
+        ASSERT(confirm.peerAddress == (scenario == 22 ? Ieee802154Address::fromExtended(0x0601123456789abcULL) :
+                scenario == 14 || scenario == 17 || scenario == 19 ? coordinatorAddress : deviceExtended()));
+    }
+    virtual void handleDisassociateIndication(const Ieee802154MacDisassociateIndication& indication) override {
+        Enter_Method("handleDisassociateIndication"); disassociationIndications++;
+        bool leaving = scenario == 14 || scenario == 17 || scenario == 19;
+        ASSERT(indication.deviceAddress == (leaving ? deviceExtended() : coordinatorExtended()) && indication.reason == (leaving ? 2 : 1));
+    }
+    virtual void handleOrphanIndication(const Ieee802154MacOrphanIndication& indication) override {
+        Enter_Method("handleOrphanIndication"); ASSERT(scenario == 33 && indication.orphanAddress == deviceExtended() && responseId);
+        Ieee802154MacOrphanResponse response{deviceExtended(),0x44,true};
+        orphanResponseId = ++nextId;
+        ASSERT(coordinatorManagement->submitOrphanResponse(orphanResponseId,response) == Admission::ACCEPTED);
+    }
+    virtual void handleOrphanResponseStatus(uint64_t id, const Ieee802154MacOrphanResponseStatus& status) override {
+        Enter_Method("handleOrphanResponseStatus"); ASSERT(scenario == 33 && id == orphanResponseId && ++orphanResponses == 1);
+        ASSERT(status.result == Ieee802154MacServiceResult(Status::SUCCESS));
+    }
+    virtual void handleSyncLossIndication(const Ieee802154MacSyncLossIndication&) override { ASSERT(false); }
+    virtual void handleRxEnableConfirm(uint64_t, const Ieee802154MacRxEnableConfirm&) override { ASSERT(false); }
+    virtual void handleRxEnableIndication(const Ieee802154MacRxEnableIndication&) override { ASSERT(false); }
+    virtual void handleBeaconRequestIndication(const Ieee802154MacBeaconRequestIndication&) override { ASSERT(false); }
+    virtual void handlePollConfirm(uint64_t, const Ieee802154MacPollConfirm& confirm) override {
+        Enter_Method("handlePollConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(scenario == 13 ? Status::SUCCESS : Status::NO_DATA));
+        ASSERT(scenario == 13 || scenario == 16 || scenario == 30 || scenario == 32);
+    }
+    virtual void handlePurgeConfirm(uint64_t, const Ieee802154MacPurgeConfirm&) override { ASSERT(false); }
+    virtual void handlePromiscuousIndication(Packet *, const Ieee802154MacPromiscuousIndication&) override { ASSERT(false); }
+    virtual void handleCommStatusIndication(Packet *, const Ieee802154MacCommStatusIndication&) override { ASSERT(false); }
+};
+Define_Module(AssociationExercise);
+}
+
+%file: AssociationFixture.ned
+import inet.common.SimpleModule;
+import inet.mobility.static.StationaryMobility;
+import inet.linklayer.ieee802154.Ieee802154StandardInterface;
+import inet.linklayer.ieee802154.contract.IIeee802154MacServiceClient;
+import inet.linklayer.ieee802154.contract.IIeee802154ManagementServiceClient;
+import inet.protocoltest.TapRadioMedium;
+simple AssociationExercise extends SimpleModule like IIeee802154MacServiceClient, IIeee802154ManagementServiceClient
+{
+    parameters:
+        @class(::inet::AssociationExercise);
+        string coordinatorModule;
+        string serviceModule;
+        int scenario;
+        @signal[verificationComplete](type=long);
+}
+module AssociationHost
+{
+    parameters: @networkNode;
+    submodules:
+        mobility: StationaryMobility;
+        nic: Ieee802154StandardInterface {
+            enableManagement = true;
+            mac.clientModule = "^.^.^.exercise";
+            mac.managementClientModule = "^.^.^.exercise";
+        }
+    connections allowunconnected:
+}
+network AssociationTest
+{
+    parameters: int scenario;
+    submodules:
+        radioMedium: TapRadioMedium;
+        host[2]: AssociationHost;
+        exercise: AssociationExercise {
+            coordinatorModule = "^.host[0].nic.mac";
+            serviceModule = "^.host[1].nic.mac";
+            scenario = parent.scenario;
+        }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = AssociationTest
+sim-time-limit = 115ms
+cmdenv-express-mode = true
+*.scenario = ${scenario=0..33}
+*.host[*].nic.radio.sendRawBytes = ${raw=false,true}
+*.radioMedium.signalAnalogRepresentation = "scalar"
+*.radioMedium.backgroundNoise.power = -110dBm
+*.host[0].nic.rxOnWhenIdle = true
+*.host[0].nic.extendedAddress = "extended:02-01-12-34-56-78-9A-BC"
+*.host[1].nic.extendedAddress = "extended:04-01-12-34-56-78-9A-BC"
+*.host[*].nic.radio.antenna.mobilityModule = "^.^.^.mobility"
+*.host[0].mobility.initialX = 0m
+*.host[1].mobility.initialX = 1m
+**.mobility.initFromDisplayString = false
+**.mobility.initialY = 0m
+**.mobility.initialZ = 0m
+**.mobility.constraintAreaMinX = 0m
+**.mobility.constraintAreaMinY = 0m
+**.mobility.constraintAreaMinZ = 0m
+**.mobility.constraintAreaMaxX = 100m
+**.mobility.constraintAreaMaxY = 100m
+**.mobility.constraintAreaMaxZ = 100m
+
+%contains: stdout
+PROTOCOLTEST ieee802154_association: PASS
+
+%not-contains: stdout
+PROTOCOLTEST ieee802154_association: FAIL

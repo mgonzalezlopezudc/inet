@@ -1,0 +1,201 @@
+%description:
+Production non-beacon START: preconfigured short address, atomic invalid channel,
+PAN publication, coordinator activation, queued-work admission, and RESET role policy.
+
+%file: StartFixture.cc
+#include "inet/common/SimpleModule.h"
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/ieee802154/Ieee802154InterfaceData.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceProvider.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceProvider.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceClient.h"
+
+namespace inet {
+class StartClient : public SimpleModule, public IIeee802154MacServiceClient, public IIeee802154ManagementServiceClient
+{
+    using Status = Ieee802154MacStatus;
+    using Admission = Ieee802154MacServiceAdmission;
+    using Abort = Ieee802154MacServiceAbortReason;
+    ModuleRefByPar<IIeee802154MacServiceProvider> service;
+    ModuleRefByPar<IIeee802154ManagementServiceProvider> management;
+    uint64_t id = 0;
+    int starts = 0, sets = 0, resets = 0, gets = 0, dataConfirms = 0;
+    Status expectedStart = Status::SUCCESS;
+    std::optional<Ieee802154MacPibValue> readValue;
+    physicallayer::Ieee802154PhyChannel channel(int number) {
+        return {physicallayer::Ieee802154PhyChannel::Phy::O_QPSK,
+                physicallayer::Ieee802154PhyChannel::Band::MHZ_2450, number};
+    }
+    void start(int number, Status status) {
+        expectedStart = status;
+        int before = starts;
+        ASSERT(management->submitStart(++id, {0x1234, channel(number)}) == Admission::ACCEPTED);
+        ASSERT(starts == before + 1);
+    }
+    void check(const char *attribute, const Ieee802154MacPibValue& value) {
+        readValue.reset();
+        ASSERT(service->submitGet(++id, {attribute}) == Admission::ACCEPTED);
+        ASSERT(readValue && *readValue == value);
+    }
+    void set(const char *attribute, const Ieee802154MacPibValue& value) {
+        int before = sets;
+        ASSERT(service->submitSet(++id, {attribute, value}) == Admission::ACCEPTED);
+        ASSERT(sets == before + 1);
+    }
+    uint64_t queue() {
+        auto packet = new Packet("pending after START");
+        packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{42}));
+        Ieee802154MacDataRequest request;
+        request.sourceAddressMode = Ieee802154Address::AddressType::EXTENDED;
+        request.destinationAddress = Ieee802154Address::fromShort(7);
+        request.destinationPanId = 0x1234;
+        request.indirectTx = true;
+        auto token = ++id;
+        ASSERT(service->submitData(token, packet, request) == Admission::ACCEPTED);
+        return token;
+    }
+  protected:
+    virtual void initialize() override {
+        service.reference(this, "serviceModule", true);
+        management.reference(this, "serviceModule", true);
+        scheduleAt(SimTime(1,SIMTIME_MS), new cMessage("verify"));
+    }
+    virtual void handleMessage(cMessage *message) override {
+        delete message;
+        start(20, Status::NO_SHORT_ADDRESS);
+        check("macPanId", uint64_t(0x5678));
+        check("phyCurrentChannelInfo", channel(11));
+        set("macShortAddress", uint64_t(1));
+        start(10, Status::INVALID_PARAMETER);
+        check("macPanId", uint64_t(0x5678));
+        check("phyCurrentChannelInfo", channel(11));
+        start(20, Status::SUCCESS);
+        check("macPanId", uint64_t(0x1234));
+        check("phyCurrentChannelInfo", channel(20));
+        auto nic = check_and_cast<NetworkInterface *>(getParentModule()->getSubmodule("nic"));
+        ASSERT(nic->getProtocolData<Ieee802154InterfaceData>()->getPanId() == 0x1234);
+        auto token = queue();
+        ASSERT(dataConfirms == 0); // Coordinator queues instead of transmitting immediately.
+        check("macPanId", uint64_t(0x1234)); // Queued DATA does not occupy the active exchange owner.
+        ASSERT(management->submitStart(++id, {0x9999,channel(21)}) == Admission::BUSY);
+        ASSERT(service->cancel(token) == Ieee802154MacServiceCancelResult::CANCELLED);
+        ASSERT(dataConfirms == 1);
+        ASSERT(service->submitReset(++id, {false}) == Admission::ACCEPTED);
+        ASSERT(resets == 1);
+        check("macPanId", uint64_t(0x1234));
+        token = queue();
+        ASSERT(dataConfirms == 1);
+        check("macPanId", uint64_t(0x1234));
+        ASSERT(service->cancel(token) == Ieee802154MacServiceCancelResult::CANCELLED);
+        ASSERT(service->submitReset(++id, {true}) == Admission::ACCEPTED);
+        ASSERT(resets == 2);
+        check("macPanId", uint64_t(0xffff));
+        check("phyCurrentChannelInfo", channel(20)); // MAC RESET retains PHY configuration.
+        start(21, Status::NO_SHORT_ADDRESS);
+        token = queue(); // Default RESET restores the initial non-coordinator role.
+        ASSERT(service->submitGet(++id, {"macPanId"}) == Admission::BUSY);
+        ASSERT(service->cancel(token) == Ieee802154MacServiceCancelResult::CANCELLED);
+        ASSERT(starts == 4 && dataConfirms == 3);
+        std::cout << "Production non-beacon START and RESET policy verified.\n";
+    }
+  public:
+    virtual void handleStartConfirm(uint64_t, const Ieee802154MacStartConfirm& confirm) override {
+        Enter_Method("handleStartConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(expectedStart)); starts++;
+    }
+    virtual void handleScanConfirm(uint64_t, const Ieee802154MacScanConfirm&) override { throw cRuntimeError("Unexpected SCAN"); }
+    virtual void handleBeaconNotifyIndication(const Ieee802154PanDescriptor&) override { throw cRuntimeError("Unexpected beacon"); }
+    virtual void handleBeaconConfirm(uint64_t, const Ieee802154MacBeaconConfirm&) override { ASSERT(false); }
+    virtual void handleAssociateResponseStatus(uint64_t, const Ieee802154MacAssociateResponseStatus&) override { ASSERT(false); }
+    virtual void handleAssociateConfirm(uint64_t, const Ieee802154MacAssociateConfirm&) override { ASSERT(false); }
+    virtual void handleAssociateIndication(const Ieee802154MacAssociateIndication&) override { ASSERT(false); }
+    virtual void handleDisassociateConfirm(uint64_t, const Ieee802154MacDisassociateConfirm&) override { ASSERT(false); }
+    virtual void handleDisassociateIndication(const Ieee802154MacDisassociateIndication&) override { ASSERT(false); }
+    virtual void handleOrphanIndication(const Ieee802154MacOrphanIndication&) override { ASSERT(false); }
+    virtual void handleOrphanResponseStatus(uint64_t, const Ieee802154MacOrphanResponseStatus&) override { ASSERT(false); }
+    virtual void handleSyncLossIndication(const Ieee802154MacSyncLossIndication&) override { ASSERT(false); }
+    virtual void handleRxEnableConfirm(uint64_t, const Ieee802154MacRxEnableConfirm&) override { ASSERT(false); }
+    virtual void handleRxEnableIndication(const Ieee802154MacRxEnableIndication&) override { ASSERT(false); }
+    virtual void handleBeaconRequestIndication(const Ieee802154MacBeaconRequestIndication&) override { ASSERT(false); }
+    virtual void handleGetConfirm(uint64_t, const Ieee802154MacGetConfirm& confirm) override {
+        Enter_Method("handleGetConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); readValue = confirm.value; gets++;
+    }
+    virtual void handleSetConfirm(uint64_t, const Ieee802154MacSetConfirm& confirm) override {
+        Enter_Method("handleSetConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); sets++;
+    }
+    virtual void handleResetConfirm(uint64_t, const Ieee802154MacResetConfirm& confirm) override {
+        Enter_Method("handleResetConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Status::SUCCESS)); resets++;
+    }
+    virtual void handleDataConfirm(uint64_t, const Ieee802154MacDataConfirm& confirm) override {
+        Enter_Method("handleDataConfirm"); ASSERT(confirm.result == Ieee802154MacServiceResult(Abort::CANCELLED)); dataConfirms++;
+    }
+    virtual void handleDataIndication(Packet *packet, const Ieee802154MacDataIndication&) override { delete packet; throw cRuntimeError("Unexpected DATA"); }
+    virtual void handlePromiscuousIndication(Packet *packet, const Ieee802154MacPromiscuousIndication&) override { delete packet; throw cRuntimeError("Unexpected monitor frame"); }
+    virtual void handleCommStatusIndication(Packet *packet, const Ieee802154MacCommStatusIndication&) override { delete packet; throw cRuntimeError("Unexpected COMM-STATUS"); }
+    virtual void handlePollConfirm(uint64_t, const Ieee802154MacPollConfirm&) override { throw cRuntimeError("Unexpected POLL"); }
+    virtual void handlePurgeConfirm(uint64_t, const Ieee802154MacPurgeConfirm&) override { throw cRuntimeError("Unexpected PURGE"); }
+};
+Define_Module(StartClient);
+}
+
+%file: StartFixture.ned
+import inet.common.SimpleModule;
+import inet.mobility.static.StationaryMobility;
+import inet.linklayer.ieee802154.Ieee802154StandardInterface;
+import inet.linklayer.ieee802154.contract.IIeee802154MacServiceClient;
+import inet.linklayer.ieee802154.contract.IIeee802154ManagementServiceClient;
+import inet.physicallayer.wireless.ieee802154.packetlevel.Ieee802154NarrowbandScalarRadioMedium;
+simple StartClient extends SimpleModule like IIeee802154MacServiceClient, IIeee802154ManagementServiceClient
+{
+    parameters:
+        @class(::inet::StartClient);
+        string serviceModule;
+}
+module StartHost
+{
+    parameters:
+        @networkNode;
+    submodules:
+        mobility: StationaryMobility;
+        nic: Ieee802154StandardInterface {
+            extendedAddress = "extended:02-01-12-34-56-78-9A-BC";
+            panId = 22136;
+            enableManagement = true;
+            mac.clientModule = "^.^.app";
+            mac.managementClientModule = "^.^.app";
+        }
+        app: StartClient { serviceModule = "^.nic.mac"; }
+    connections allowunconnected:
+}
+network StartTest
+{
+    submodules:
+        radioMedium: Ieee802154NarrowbandScalarRadioMedium;
+        host: StartHost;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = StartTest
+ned-path = .;../../../../src;../../lib
+sim-time-limit = 2ms
+cmdenv-express-mode = true
+record-vector-results = false
+record-scalar-results = false
+*.host.nic.radio.antenna.mobilityModule = "^.^.^.mobility"
+*.host.nic.phy.channelNumber = 11
+*.host.mobility.initFromDisplayString = false
+*.host.mobility.initialX = 0m
+*.host.mobility.initialY = 0m
+*.host.mobility.initialZ = 0m
+*.host.mobility.constraintAreaMinX = 0m
+*.host.mobility.constraintAreaMinY = 0m
+*.host.mobility.constraintAreaMinZ = 0m
+*.host.mobility.constraintAreaMaxX = 100m
+*.host.mobility.constraintAreaMaxY = 100m
+*.host.mobility.constraintAreaMaxZ = 100m
+
+%contains: stdout
+Production non-beacon START and RESET policy verified.
