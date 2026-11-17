@@ -1,0 +1,3 @@
+Unsolicited Moved advertisement flags
+
+Native registrars clear the Solicited flag on asynchronous Moved advertisements. Direct address-registration replies retain their solicited flag.

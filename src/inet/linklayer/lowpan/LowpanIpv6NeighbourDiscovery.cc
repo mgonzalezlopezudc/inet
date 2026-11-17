@@ -497,19 +497,19 @@ void LowpanIpv6NeighbourDiscovery::notifyNativeMoved(const RegistrationKey& key,
                 interface->isUp() && saved.domain->contains(saved.address) && data && data->hasValidAddress(saved.replySource, simTime()) &&
                 !data->isTentativeAddress(saved.replySource)) {
             std::unique_ptr<Ipv6NdOption> option(saved.info.makeOption(3, saved.lifetimeMinutes, true));
-            sendRegistrationAdvertisement(key, saved, *option, 3, saved.replySource);
+            sendRegistrationAdvertisement(key, saved, *option, 3, saved.replySource, false);
         }
     }
 }
 
 void LowpanIpv6NeighbourDiscovery::sendRegistrationAdvertisement(const RegistrationKey& key,
-        const Registration& requested, const Ipv6NdOption& aro, int status, const Ipv6Address& routerAddress)
+        const Registration& requested, const Ipv6NdOption& aro, int status, const Ipv6Address& routerAddress, bool solicited)
 {
     auto domain = requested.domain.get();
     auto interface = ift->getInterfaceById(key.first);
     auto reply = makeShared<Ipv6NeighbourAdvertisement>();
     reply->setRouterFlag(true);
-    reply->setSolicitedFlag(true);
+    reply->setSolicitedFlag(solicited);
     reply->setOverrideFlag(true);
     reply->setTargetAddress(extendedRegistration && requested.info.tidKnown ? key.second : routerAddress);
     auto response = extendedRegistration ? requested.info.makeOption(status, requested.lifetimeMinutes, true) : new Ipv6NdOption(aro);
