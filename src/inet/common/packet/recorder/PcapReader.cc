@@ -157,7 +157,9 @@ std::pair<PcapRecordTime, Packet *> PcapReader::readPacket()
         }
         case 204: protocol = &Protocol::ppp; break;
     }
-    bytes.resize(packetHeader.orig_len - offset);
+    if (static_cast<uint32_t>(offset) > packetHeader.incl_len)
+        throw cRuntimeError("PCAP link header length %d exceeds captured length %u", offset, packetHeader.incl_len);
+    bytes.resize(packetHeader.incl_len - offset);
     for (size_t i = 0; i < bytes.size(); i++)
         bytes[i] = buffer[i + offset];
     const auto& data = makeShared<BytesChunk>(bytes);
