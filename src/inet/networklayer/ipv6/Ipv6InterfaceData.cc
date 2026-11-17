@@ -341,6 +341,12 @@ const Ipv6Address& Ipv6InterfaceData::getAddress(int i) const
     return addresses[i].address;
 }
 
+simtime_t Ipv6InterfaceData::getAddressExpiryTime(int i) const
+{
+    ASSERT(i >= 0 && i < (int)addresses.size());
+    return addresses[i].expiryTime;
+}
+
 const Ipv6Address& Ipv6InterfaceData::getGlblAddress() const
 {
     for (const auto& elem : addresses)
@@ -370,6 +376,14 @@ Ipv6InterfaceData::AddressType Ipv6InterfaceData::getAddressType(const Ipv6Addre
 bool Ipv6InterfaceData::hasAddress(const Ipv6Address& addr) const
 {
     return findAddress(addr) != -1;
+}
+
+bool Ipv6InterfaceData::hasValidAddress(const Ipv6Address& addr, simtime_t now) const
+{
+    for (const auto& address : addresses)
+        if (address.address == addr && (address.expiryTime == SIMTIME_ZERO || address.expiryTime > now))
+            return true;
+    return false;
 }
 
 bool Ipv6InterfaceData::matchesSolicitedNodeMulticastAddress(const Ipv6Address& solNodeAddr) const
