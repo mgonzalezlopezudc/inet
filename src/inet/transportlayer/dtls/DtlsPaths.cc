@@ -45,16 +45,23 @@ const std::vector<uint8_t>& DtlsAssociation::cidForPath(const DtlsPath& path) co
 
 bool DtlsAssociation::hasMigrationCid() const
 {
+    if (isDtls12())
+        return !peerCid.empty() &&
+               minimumHeartbeatBytes(true, std::max(peerCid.size(), localCid.size())) <= uint64_t(engine.initialPayloadBudget());
     // 22 fixed record bytes, 3 heartbeat header bytes, 8 token bytes and 16 padding bytes.
     return std::any_of(sparePeerCids.begin(), sparePeerCids.end(), [this](const auto& cid) {
-        return !cid.empty() && 49 + std::max(cid.size(), localCid.size()) <= uint64_t(engine.initialPayloadBudget());
+        return !cid.empty() &&
+               minimumHeartbeatBytes(false, std::max(cid.size(), localCid.size())) <= uint64_t(engine.initialPayloadBudget());
     });
 }
 
 std::vector<uint8_t> DtlsAssociation::takeMigrationCid()
 {
+    if (isDtls12())
+        return peerCid;
     auto it = std::find_if(sparePeerCids.begin(), sparePeerCids.end(), [this](const auto& cid) {
-        return !cid.empty() && 49 + std::max(cid.size(), localCid.size()) <= uint64_t(engine.initialPayloadBudget());
+        return !cid.empty() &&
+               minimumHeartbeatBytes(false, std::max(cid.size(), localCid.size())) <= uint64_t(engine.initialPayloadBudget());
     });
     ASSERT(it != sparePeerCids.end());
     auto cid = std::move(*it);
@@ -149,7 +156,8 @@ void DtlsAssociation::finishPathValidation(bool success)
     it = owner.associations.find(handle);
     if (it == owner.associations.end())
         return;
-    if (it->second->flight && !it->second->flight->isComplete()) {
+    if (it->second->flight && !it->second->flight->isComplete() &&
+        (!it->second->isDtls12() || it->second->state != HandshakeState::ESTABLISHED)) {
         it->second->flight->requestRetransmission();
         it->second->burstLimit = it->second->burstQueued;
         it->second->pumpFlight();

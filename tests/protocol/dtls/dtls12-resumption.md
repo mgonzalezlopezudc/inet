@@ -2,7 +2,7 @@
 
 > **Kind:** report · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [extension profile](../../../doc/project/evidence/standard/rfc9147/extensions.md), [execution ledger](../../../doc/project/evidence/model/dtls/extensions.md)
 
-Publication association: C35. The retained execution statements refer to their original donor revisions. Fresh reconstructed results and exact-parent execution status are recorded separately; no historical PASS is attributed to this prefix.
+Publication association: C36. The retained execution statements refer to their original donor revisions. Fresh reconstructed results and exact-parent execution status are recorded separately; no historical PASS is attributed to this prefix.
 
 
 This is C14, `dtls: add: resume modeled DTLS 1.2 sessions`, in the [implementation plan](https://github.com/mgonzalezlopezudc/inet/blob/5284847df92eea8451bf056d8722fabb0ddf65bd/plan/pending/dtls-extensions.md). It extends the [legacy association](dtls12-associations.md) with the abbreviated exchange and uses the existing bounded engine store. The [execution ledger](../../../doc/project/evidence/model/dtls/extensions.md) owns actual commands, results and limits; the diagrams below have not been render-checked.
@@ -70,4 +70,4 @@ The extended independent-octet handshake unit covers the legacy ticket body, emp
 
 ## Evidence limits
 
-C13 has no successful 1.2 resumption path. The new preference and successful cases are unavailable there; no executed parent interoperability comparison is claimed. Runtime-incompatible saved state is covered by cross-version fallback and an unoffered saved suite; arbitrary live profile mutation is outside the public API. Static CID, heartbeat and legacy path-budget integration remain the subsequent stage. Sized signatures, Finished and retained encrypted payloads provide no cryptographic, security or arbitrary real-endpoint interoperability proof. The executed checks above use IPv4; no resumption-specific IPv6 path claim follows from them.
+C13 has no successful 1.2 resumption path. The new preference and successful cases are unavailable there; no executed parent interoperability comparison is claimed. Runtime-incompatible saved state is covered by cross-version fallback and an unoffered saved suite; arbitrary live profile mutation is outside the public API. [Legacy paths](dtls12-paths.md) covers static CID, heartbeat and path-budget integration. Sized signatures, Finished and retained encrypted payloads provide no cryptographic, security or arbitrary real-endpoint interoperability proof. The executed checks above use IPv4; no resumption-specific IPv6 path claim follows from them.

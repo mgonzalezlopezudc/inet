@@ -61,7 +61,7 @@ This matrix selects requirements from the linked primary sources. It describes p
 
 [RFC 6520 §§2–4](https://www.rfc-editor.org/rfc/rfc6520.html#section-2): respect directional permissions and one outstanding request; validate body length, echo payload and include at least 16 padding bytes. [IANA](https://www.iana.org/assignments/tls-extensiontype-values/) places the 1.3 response extension in EncryptedExtensions.
 
-The selected model retransmits requests with a one-second initial interval, doubling to 60 seconds, within a finite probe deadline. Expiry reports probe failure while preserving ordinary data. This is a deliberate profile choice relative to RFC 6520 §3's connection-termination recommendation: later candidate-path and size-discovery failure must preserve a usable confirmed path. The [heartbeat reviewer document](../../../../../tests/protocol/dtls/heartbeat-probes.md) records the implemented bounds and evidence; [PHA suspension](https://github.com/mgonzalezlopezudc/inet/blob/5284847df92eea8451bf056d8722fabb0ddf65bd/tests/protocol/dtls/post-handshake-authentication.md) pauses and resumes the remaining probe deadline.
+The selected model retransmits requests with a one-second initial interval, doubling to 60 seconds, within a finite probe deadline. Expiry reports probe failure while preserving ordinary data. This is a deliberate profile choice relative to RFC 6520 §3's connection-termination recommendation: later candidate-path and size-discovery failure must preserve a usable confirmed path. The [heartbeat reviewer document](../../../../../tests/protocol/dtls/heartbeat-probes.md) records the implemented bounds and evidence; [PHA suspension](../../../../../tests/protocol/dtls/post-handshake-authentication.md) pauses and resumes the remaining probe deadline.
 
 ### DTLS-EXT-PHA
 
@@ -90,6 +90,8 @@ The selected model retransmits requests with a one-second initial interval, doub
 ### DTLS-EXT-12-PATH
 
 [RFC 9146 §§3–6](https://www.rfc-editor.org/rfc/rfc9146.html#section-3): static 1.2 CID uses content type 25 and its own inner plaintext/accounting. It does not acquire 1.3 CID-update messages.
+
+The CID precedes the record length and has no length octet in that record. Each endpoint chooses its receive length; it must still send other peer-chosen lengths. Nonempty negotiated directions require the CID record form once protection starts. The complete inner plaintext, including real type and padding, is at most 2^14 bytes under §5. A resumed handshake negotiates fresh CIDs.
 
 ## Errata disposition
 
