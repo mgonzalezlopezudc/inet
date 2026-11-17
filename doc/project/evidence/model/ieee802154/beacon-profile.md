@@ -1,0 +1,63 @@
+# IEEE 802.15.4 conventional superframe and GTS profile
+
+> **Kind:** design · **Status:** draft · **Seal:** none · **Owns:** — · **Stands on:** [source.md](../../standard/ieee802154/source.md), [catalog.md](../../standard/ieee802154/catalog.md), [checks.md](../../protocol/ieee802154/checks.md), [802154-superframe-gts-plan.md](../../../../../plan/pending/802154-superframe-gts-plan.md)
+
+This record closes the source and service mapping for B-00. It selects unsecured legacy frames over the existing 2450-MHz O-QPSK packet-level PHY, page 0 channels 11–26, conventional beacon superframes and conventional GTSs. It does not claim that the planned implementation or any new test has run. Enhanced beacons, cryptography, TSCH, DSME, alternative access mechanisms and other PHYs are outside this profile. The source is IEEE Std 802.15.4-2024 without amendments, PDF SHA-256 `851d81127297f898c956fdd1ce92929324d68cd696fd338d1e876f6a372f22d3`. IDs below are prefixed `ieee802154-2024:`; pages are one-based physical PDF pages.
+
+## Applicable sources and conditions
+
+| Source | Pages | Selected obligation or interpretation |
+| --- | --- | --- |
+| `clause:10.2.1`, `clause:10.2.2.1`, `clause:10.2.2.2` | 182–184 | Beacon PPDU starts slot zero. BI is `960 × 2^BO` symbols; SD is `960 × 2^SO` symbols for `0 ≤ SO ≤ BO ≤ 14`; 16 slots each last `60 × 2^SO` symbols. BO 15 disables periodic beacons and sets SO 15. SO 15 with BO below 15 is beacon-only. CAP starts after the actual beacon and ends at the advertised final CAP slot. |
+| `clause:10.2.2.5`, `clause:10.2.2.6`, `table:10-1` | 184–185, 192–193 | An associated child coordinator keeps incoming and outgoing superframes distinct. StartTime is rounded to a backoff boundary relative to its incoming coordinator beacon; it is ignored for a PAN coordinator or BO 15. A new incoming configuration causing overlap stops outgoing beacons and indicates SUPERFRAME_OVERLAP. |
+| `clause:10.2.3.1`, `clause:10.2.3.2`, `figure:10-3`, `clause:7.5.4` | 185–187, 109 | A beaconing realignment emits the next old beacon with Frame Pending, followed immediately by an old-channel broadcast Coordinator Realignment command using CSMA-CA. Its AR is zero. Success activates at the next scheduled beacon; channel-access failure reports CHANNEL_ACCESS_FAILURE and retains old configuration. If not beaconing, send immediately on the old channel and activate after success. |
+| `clause:10.2.4`, `clause:10.2.5`, `clause:10.2.6`, `clause:10.2.7` | 187–190 | Beaconing has priority. A child coordinator tracks its parent for nonzero StartTime, continues for the first three misses and stops at loss. Tracking only acquires a nonbroadcast configured PAN; four missed beacons report BEACON_LOST. A transmitter without a beacon searches `960 × (2^BO + 1)` symbols before permitted unslotted fallback. |
+| `clause:6.5.3`, `table:8-36`, `table:10-5` | 68–69, 154–155, 196–197 | Timestamp symbols represent the same chosen boundary for RX and TX. The offset is the symbol distance from that boundary to the first symbol after SFD; it is not a simulation-time clock. Selected `macSyncSymbolOffset` is ten for first-PPDU-symbol timestamps with the enabled controller. The standard describes an unsigned distance, without explicitly assigning direction. |
+| `clause:6.3.2.1`, `clause:10.11`, `figure:10-127` | 62–64, 319–321 | Slotted backoff grid is beacon-aligned; NB/BE/CW belong to one attempt, CW starts at two, and BLE initially limits BE to two. A countdown interrupted at CAP end retains the remainder; a completed countdown whose exchange does not fit draws another backoff next CAP. The selected immediate ACK starts at the permitted AIFS boundary; an originator accepts the other permitted CAP ACK start range. |
+| `clause:6.4.1.1`, `clause:10.2.6` | 64–65, 188–189 | Scan suspends coordinator beaconing. Scanning uses the existing channel-restore owner; tracked-beacon loss accounting continues over scan time. A scan descriptor does not itself restore synchronization or a grant. |
+| `clause:10.25.1`–`clause:10.25.7`, `figure:7-10`, `figure:10-167`, `table:10-121` | 88–89, 383–393 | Seven active grants and seven advertised descriptors are separate bounds. Grant direction is relative to the device. DATA uses short addresses and no CSMA. Device versus coordinator removal has distinct advertisement behavior; relocation closes gaps. A descriptor persists four superframes; only temporary maintenance descriptors may shorten CAP below 440 symbols. |
+| `table:8-31`, `table:10-118`, `table:10-119`, `table:10-120` | 146–148, 391–392 | DATA with no valid GTS reports INVALID_GTS; a transaction too large for its whole applicable CAP/GTS reports FRAME_TOO_LONG. GTS.confirm returns SUCCESS, DENIED, NO_SHORT_ADDRESS or NO_DATA as applicable; GTS.indication carries the short device and characteristics. |
+
+The processor's extraction for Figure 10-3 and Figure 10-167 includes normative continuation after each figure caption; the table and figure continuations were checked rather than treating caption text alone as an algorithm. The corpus linter retains four unresolved references outside the selected procedures and other extraction warnings. The retained raw source records are under `/home/miguel/workspace/.codex-artifacts/ieee802154-followup-plans-20261115/`; the current corpus is ignored output, not publication evidence.
+
+## PIB and constants
+
+Table 8-36 and Table 10-5 use `†` for upper-layer read-only and `*` for optional attributes; all other supported attributes are writable. Reset with SetDefaultPib false retains values; true restores defaults, and randomized sequence defaults remain owned by the MAC. The controller owns event state, not a second PIB. `START-SUPERFRAME` applies BO/SO/role/channel together after validation. Before B1-02, scheduled configuration is refused; no writable PIB value may silently turn on an incomplete scheduler.
+
+| Attribute | Domain/default | Upper access and selected behavior |
+| --- | --- | --- |
+| `macBeaconOrder` | 0–15; 15 | Optional, read/write; B-01 retains the existing BO 15-only gate until the scheduling service lands. |
+| `macSuperframeOrder` | 0–15; 15 | Optional, read-only; coordinator service updates it. BO 15 forces 15. |
+| `macBeaconTxTime` | 24-bit symbol value; zero | Optional, read-only; update only from actual beacon transmit start at the selected symbol boundary. |
+| `macBattLifeExt` | Boolean; false | Read/write; affects beacon BLE and reception/backoff policy only in a superframe. |
+| `macBattLifeExtPeriods` | 6–41; PHY dependent | Read/write; selected default is six periods: three BLE backoff periods plus two CCA-window periods plus one 20-symbol period covering the ten-symbol SHR. |
+| `macGtsPermit` | Boolean; true | Optional, read/write; authoritative admission indication. The selected seven-key pressure policy is in the plan and must not discard an already admitted decision. |
+| `macSyncSymbolOffset` | 0–256 symbols for 2.4 GHz; implementation chosen | Read-only. Disabled superframe composition retains M1/M2 value zero and existing post-SFD timestamp; enabled composition selects first PPDU symbol and distance ten. Table 8-36 specifies the distance without an explicit directional sign. |
+| `macRxOnWhenIdle` | Boolean; false | Read/write. In a superframe it applies to incoming CAP idle time; outside superframe it retains the M1/M2 meaning. |
+
+`aBaseSuperframeDuration=960`, `aBaseSlotDuration=60`, `aNumSuperframeSlots=16`, `aMinCapLength=440`, and `aMaxLostBeacons=4` are symbols/slots/counts from Table 8-35. `aGtsDescPersistenceTime=4` is superframes from Table 10-121. For BO 0–8, inactivity expires at `2 × 2^(8−BO)` superframes; for BO 9–14 it expires at two. The PHY's ten-symbol SHR is 160 microseconds and its symbol period is 16 microseconds. Superframe origins and CAP backoff grid use the selected device clock; physical airtime/CCA/turnaround and PHY `startAt` use simulation time. Conversion applies only to current/future clock targets; fixed-rate ±40-ppm clocks are in scope and midattempt clock modifications are not.
+
+## Native service mapping
+
+Native admission remains separate from accepted IEEE completion: zero/nonmonotonic IDs are INVALID_REQUEST, an unavailable client/module is UNAVAILABLE, conflicting active work is BUSY, and a not-yet-enabled service is UNSUPPORTED_OPERATION. PHY-only unavailability refuses radio-dependent operations through `admitRadio()` while local PIB access and queued indirect admission remain available through their existing paths; it does not make the MAC itself stopped. A local refusal retains packet ownership and has no IEEE confirmation. An accepted semantic error gives one terminal confirmation; cancellation, RESET and STOPPED remain local abort results, not invented IEEE status codes. In stop/reset/PHY loss, detach affected work, cancel owner events and release packets before callbacks, with pending completions delivered before RESET confirmation.
+
+| Procedure or condition | Terminal result / notification | Timing and limitations |
+| --- | --- | --- |
+| START-SUPERFRAME success | SUCCESS | Initial periodic start requires an actual first beacon anchor. BO 15 shutdown completes after retirement; nonbeaconing realignment completes after successful command and actual new-channel readiness. |
+| `macShortAddress == 0xffff` | NO_SHORT_ADDRESS | Table 10-2; 0xfffe instead selects the extended beacon source address under 10.2.4. |
+| Nonzero child StartTime without tracking | TRACKING_OFF | Table 10-2; append the missing local enum without renumbering existing values. |
+| Incoming/outgoing overlap | SUPERFRAME_OVERLAP | Table 10-2 for start validation and Table 10-4 for the later synchronization-loss indication; stop outgoing beaconing on received realignment overlap. |
+| Invalid range/combination or PHY channel | INVALID_PARAMETER / BAD_CHANNEL as applicable | Preserve existing M2 validation and channel mapping; do not install a partial schedule. |
+| Unsupported security requested | UNSUPPORTED_SECURITY | Preserve the unsecured-profile refusal before any schedule/command mutation; incoming protected beacon follows existing communication-status policy and cannot update synchronization. |
+| Realignment CSMA exhaustion | CHANNEL_ACCESS_FAILURE | No broadcast ACK is requested; actual PHY unavailability is the local STOPPED abort, not a fabricated IEEE ACK failure. |
+| SYNC accepted | Local configuration-installed completion | IEEE SYNC has no confirm. Continue acquisition/tracking as ongoing work and issue BEACON-NOTIFY/SYNC-LOSS separately. Replacing a tracking request installs the new request. |
+| Lost beacon / received realignment | BEACON_LOST / REALIGNMENT | SYNC-LOSS reason, carrying the relevant PAN/channel. Four misses are required for BEACON_LOST. |
+| DATA requested without matching valid GTS | INVALID_GTS | Table 8-31; append the missing enum, preserving existing ordinals. Wrong peer/direction or absent valid short-address reservation belongs here; invalid mutually exclusive request options retain INVALID_PARAMETER. |
+| Whole CAP/GTS cannot fit a requested exchange | FRAME_TOO_LONG | Table 8-31; a PHY-valid transaction that only misses the remaining portion defers instead. |
+| GTS allocation positive / denied descriptor | SUCCESS / DENIED | Table 10-119; DENIED includes zero start or a length different from the requested length. Append the missing DENIED enum. |
+| GTS request with short address 0xfffe or 0xffff | NO_SHORT_ADDRESS | Table 10-119. |
+| GTS request ACK received but no matching descriptor in four superframes | NO_DATA | The ACK is not a grant. A pressure-closed or stale-permit request is ACKed as appropriate but not admitted as a new allocation procedure; the same descriptor wait yields NO_DATA. |
+| Deallocation, relocation or expiry | GTS.confirm and/or GTS.indication | Device request stops local use immediately, receives SUCCESS on ACK, and adds no removed descriptor at the coordinator. Coordinator removal/expiry advertises a zero-start descriptor; relocated grants get their new positions. |
+| Scan while idle but tracking/beaconing | Existing scan terminal | Suspend beacon/CAP/CFP radio duties, preserve schedule phase and restore channel. Existing conflicting work remains BUSY. Loss accounting continues; after loss a fresh SYNC/START and GTS allocation are required. |
+
+No runtime verdict is attached to this table. The per-commit test and reviewer-document tasks in the [plan](../../../../../plan/pending/802154-superframe-gts-plan.md) are the evidence gates for implementation.

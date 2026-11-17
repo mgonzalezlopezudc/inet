@@ -1,6 +1,6 @@
 # IEEE 802.15.4 — selected base-standard statements
 
-> **Kind:** what · **Status:** draft · **Seal:** none · **Owns:** IEEE802154-ADDRESS-*, IEEE802154-WIRE-*, IEEE802154-ACCESS-*, IEEE802154-SEQUENCE-*, IEEE802154-RECEIVE-*, IEEE802154-ACK-*, IEEE802154-SECURITY-*, IEEE802154-PHY-*, IEEE802154-SERVICE-*, IEEE802154-PIB-*, IEEE802154-SCAN-* · **Stands on:** [source.md](source.md)
+> **Kind:** what · **Status:** draft · **Seal:** none · **Owns:** IEEE802154-ADDRESS-*, IEEE802154-WIRE-*, IEEE802154-ACCESS-*, IEEE802154-SEQUENCE-*, IEEE802154-RECEIVE-*, IEEE802154-ACK-*, IEEE802154-SECURITY-*, IEEE802154-PHY-*, IEEE802154-SERVICE-*, IEEE802154-PIB-*, IEEE802154-SCAN-*, IEEE802154-SUPERFRAME-*, IEEE802154-GTS-* · **Stands on:** [source.md](source.md)
 
 Edition: **IEEE Std 802.15.4-2024**, without amendments. Entries below are a bounded extraction,
 not an exhaustive mandatory-statement inventory. Source excerpts retain normative wording;
@@ -13,6 +13,18 @@ Model applicability and execution evidence live in the [model ledger](../../mode
 
 | ID | Statement |
 | --- | --- |
+| [IEEE802154-SUPERFRAME-1](#ieee802154-superframe-1) | BO and SO define the beacon interval and active duration. |
+| [IEEE802154-SUPERFRAME-2](#ieee802154-superframe-2) | START updates the configuration and observes the special BO/SO cases. |
+| [IEEE802154-SUPERFRAME-3](#ieee802154-superframe-3) | Coordinator realignment uses an old-configuration beacon and broadcast command before activation. |
+| [IEEE802154-SUPERFRAME-4](#ieee802154-superframe-4) | Beacon tracking uses the local clock and reports synchronization loss. |
+| [IEEE802154-SUPERFRAME-5](#ieee802154-superframe-5) | Beacon timestamps use the specified common symbol boundary. |
+| [IEEE802154-SUPERFRAME-6](#ieee802154-superframe-6) | Slotted access uses a beacon-aligned grid and two-clear-CCA contention window. |
+| [IEEE802154-SUPERFRAME-7](#ieee802154-superframe-7) | CAP-fit deferral distinguishes remaining backoff from an exchange that cannot fit. |
+| [IEEE802154-GTS-1](#ieee802154-gts-1) | Allocation is coordinator-owned and advertised in beacons. |
+| [IEEE802154-GTS-2](#ieee802154-gts-2) | GTS DATA and ACK/IFS fit in the matching reserved interval. |
+| [IEEE802154-GTS-3](#ieee802154-gts-3) | Removal, relocation and descriptor persistence follow the initiating party. |
+| [IEEE802154-GTS-4](#ieee802154-gts-4) | Inactivity expiry uses the BO-dependent bound and observable evidence. |
+| [IEEE802154-GTS-5](#ieee802154-gts-5) | An entire CAP/GTS cannot fit the requested transaction reports FRAME_TOO_LONG. |
 | [IEEE802154-ACCESS-3](#ieee802154-access-3) | Interframe spacing depends on the preceding MPDU length. |
 | [IEEE802154-SERVICE-9](#ieee802154-service-9) | Unsupported or out-of-range MLME request parameters report INVALID_PARAMETER. |
 | [IEEE802154-SERVICE-8](#ieee802154-service-8) | Incoming security errors generate a communication-status indication. |
@@ -1067,6 +1079,54 @@ upper-layer read-only access. An unspecified default is not an implicit FALSE.
 | `macTschCapable` | Boolean | TRUE, FALSE | Unspecified | † |
 | `macTschEnabled` | Boolean | TRUE, FALSE | Unspecified | — |
 
+## IEEE802154-SUPERFRAME-1
+
+**Superframe geometry.** Clauses 10.2.1 and 10.2.2.1, physical PDF pp. 182–183, `ieee802154-2024:clause:10.2.1` and `ieee802154-2024:clause:10.2.2.1`. For BO 0–14, the beacon interval is `aBaseSuperframeDuration × 2^BO`; for SO 0–BO, the active duration is `aBaseSuperframeDuration × 2^SO` in 16 equal slots. The beacon transmission begins the first slot. BO 15 suppresses periodic beacons; SO 15 means no active interval after a beacon. These are distinct cases.
+
+## IEEE802154-SUPERFRAME-2
+
+**Superframe configuration.** Clauses 10.2.2.5–10.2.2.6 and Table 10-1, physical PDF pp. 184–185 and 192–193, `ieee802154-2024:clause:10.2.2.5`, `ieee802154-2024:clause:10.2.2.6`, and `ieee802154-2024:table:10-1`. START assigns BO, SO, PAN and channel; BO 15 also sets SO 15. A non-PAN coordinator maintains both incoming and outgoing timing. When a coordinator realignment would make these overlap, it stops its own beacons and indicates SUPERFRAME_OVERLAP.
+
+## IEEE802154-SUPERFRAME-3
+
+**Coordinator realignment.** Clause 10.2.3.2 and the continuation after Figure 10-3, physical PDF pp. 185–187, `ieee802154-2024:clause:10.2.3.2` and `ieee802154-2024:figure:10-3`. An already beaconing coordinator first transmits its next old-configuration beacon with Frame Pending set, followed immediately by the realignment command using CSMA-CA on the old channel. Successful transmission activates the new configuration at the subsequent scheduled beacon. A nonbeaconing coordinator sends the command immediately on the current channel and activates the new configuration after success. Channel access failure reports CHANNEL_ACCESS_FAILURE. The broadcast command has AR clear under 7.5.4.
+
+## IEEE802154-SUPERFRAME-4
+
+**Acquisition, tracking and loss.** Clauses 10.2.4, 10.2.6 and 10.2.7, physical PDF pp. 187–190, `ieee802154-2024:clause:10.2.4`, `ieee802154-2024:clause:10.2.6`, and `ieee802154-2024:clause:10.2.7`. Devices acquire a beacon matching their nonbroadcast PAN and, when requested, prewake and track it. Four consecutive missed beacons cause BEACON_LOST; an outgoing child coordinator stops its own beacons on loss. A device seeking to transmit without a located beacon searches for the specified interval and may then use unslotted CSMA-CA.
+
+## IEEE802154-SUPERFRAME-5
+
+**Timestamp boundary.** Clause 6.5.3, Table 8-36 and clauses 10.2.4 and 10.2.6, physical PDF pp. 68–69, 154–155 and 187–189, `ieee802154-2024:clause:6.5.3`, `ieee802154-2024:table:8-36`, `ieee802154-2024:clause:10.2.4`, and `ieee802154-2024:clause:10.2.6`. The timestamp is a local-clock value at the implementation-selected symbol boundary, consistent for transmitted and received beacons. `macSyncSymbolOffset` gives the symbol distance between this boundary and the onset of the first symbol past the SFD. Non-ERDEV timestamps use symbol periods and at least 24 bits.
+
+## IEEE802154-SUPERFRAME-6
+
+**Slotted CSMA-CA.** Clause 10.11 and Figure 10-127, physical PDF pp. 319–320, `ieee802154-2024:clause:10.11` and `ieee802154-2024:figure:10-127`. Backoff periods align with the coordinator's beacon-transmission boundary, and transmission begins on a backoff boundary. Initialize NB to zero and CW to two; a busy CCA increments NB, resets CW and increases BE to its cap. A successful CCA decrements CW; access succeeds after two clear CCAs. BLE initializes BE to the lesser of two and macMinBE.
+
+## IEEE802154-SUPERFRAME-7
+
+**CAP deferral.** Clauses 10.2.2.2 and 10.11, physical PDF pp. 183–184 and 319–321, `ieee802154-2024:clause:10.2.2.2` and `ieee802154-2024:clause:10.11`. A countdown that runs out of available backoff periods retains its remaining count for the next superframe. When the countdown has completed but the exchange cannot fit in the remaining CAP, the procedure selects another backoff in the next CAP. DATA/command, required acknowledgment and applicable IFS must complete within the applicable contention period.
+
+## IEEE802154-GTS-1
+
+**Allocation and representation.** Clauses 10.25.1–10.25.3 and 7.3.1.5, physical PDF pp. 88–89 and 383–385, `ieee802154-2024:clause:10.25.1`, `ieee802154-2024:clause:10.25.2`, and `ieee802154-2024:clause:10.25.3`. The PAN coordinator allocates up to seven contiguous end-of-superframe reservations to associated devices, first come first served while preserving `aMinCapLength`. A descriptor identifies the short address, direction, start and length; it is advertised for `aGtsDescPersistenceTime` superframes. A start slot of zero denotes denial, with the largest currently supportable length. An ACK to a request alone does not establish a grant.
+
+## IEEE802154-GTS-2
+
+**Reservation use.** Clause 10.25.4, physical PDF p. 386, `ieee802154-2024:clause:10.25.4`. GTS DATA uses short addressing and no CSMA-CA. The matching sender must fit DATA, any required ACK and IFS within the reservation; otherwise it waits for the matching GTS in the next superframe. The receiver is enabled for its assigned GTS. A device that misses a beacon does not use its GTS until a subsequent beacon is correctly received; loss of synchronization removes all its GTSs.
+
+## IEEE802154-GTS-3
+
+**Removal and relocation.** Clauses 10.25.5–10.25.6 and the continuation after Figure 10-167, physical PDF pp. 386–389, `ieee802154-2024:clause:10.25.5`, `ieee802154-2024:clause:10.25.6`, and `ieee802154-2024:figure:10-167`. A device ceases using its grant when it requests removal; a received matching device request removes it without a removed-grant descriptor. A coordinator-initiated removal advertises a zero-start descriptor. Grants moved to close a gap are advertised with their new start. Each descriptor remains for four superframes; the temporary beacon growth may shorten CAP below `aMinCapLength`.
+
+## IEEE802154-GTS-4
+
+**Inactivity expiry.** Clause 10.25.7 and Table 10-121, physical PDF pp. 389 and 392–393, `ieee802154-2024:clause:10.25.7` and `ieee802154-2024:table:10-121`. The coordinator observes DATA in a device-transmit GTS and ACKs in a device-receive GTS. The inactivity bound is `2 × 2^(8−BO)` superframes for BO 0–8, and two superframes for BO 9–14. When downlink DATA does not request ACK, absence of ACK cannot establish inactivity.
+
+## IEEE802154-GTS-5
+
+**Unusable or oversized GTS transaction.** Table 8-31, physical PDF pp. 146–148, `ieee802154-2024:table:8-31`. When no valid requested GTS exists, DATA.confirm reports INVALID_GTS. When the requested transaction cannot fit an entire applicable CAP or GTS, the frame is discarded and DATA.confirm reports FRAME_TOO_LONG. This is separate from late arrival within a period that could fit the transaction in full.
+
 ## Extraction boundary
 
 This catalog extracts selected legacy data/ACK, unslotted access, unsecured-policy, O-QPSK,
@@ -1075,9 +1135,11 @@ PIB tables and references for later enabled features require further audit. The 
 reference closure is recorded in the [dependency ledger](../../model/ieee802154/dependencies.md).
 Concrete local service error precedence and reset semantics remain implementation contracts for
 packages 1a–1b. The field domains above cover Tables 8-36, 8-37 and 12-2, not every PIB table in the standard.
-Beacon scheduling, indirect delivery beyond the retry distinction, association, security transforms,
-enhanced formats, scheduled access, other PHYs and amendment requirements are outside this
-extraction. Their absence does not assert that they are optional for a particular device role.
+The superframe/slotted/GTS entries above are a bounded extraction for the conventional unsecured
+profile, not an assertion that all optional scheduled modes are covered. Indirect delivery beyond
+the retry distinction, association, security transforms, enhanced formats, other PHYs and
+amendment requirements remain outside this extraction. Their absence does not assert that they
+are optional for a particular device role.
 
 The group-address definition imported by 6.6.2 is recorded separately in the
 [IEEE Std 802 address catalog](../ieee802/catalog.md); it is not a statement owned by this document.

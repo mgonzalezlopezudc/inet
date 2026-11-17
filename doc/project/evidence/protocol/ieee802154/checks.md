@@ -25,6 +25,9 @@ upper client U -> device A <---- radio link ----> device B -> upper observer
 - [IEEE802154-C-PHY](#ieee802154-c-phy) — O-QPSK timing, CCA, ED and LQI.
 - [IEEE802154-C-SERVICE](#ieee802154-c-service) — PIB access, reset and request capacity.
 - [IEEE802154-C-SCAN](#ieee802154-c-scan) — Passive scan obligation and channel order.
+- [IEEE802154-C-SUPERFRAME](#ieee802154-c-superframe) — Beacon geometry, configuration and synchronization.
+- [IEEE802154-C-SLOTTED](#ieee802154-c-slotted) — Slotted contention and CAP deferral.
+- [IEEE802154-C-GTS](#ieee802154-c-gts) — Allocation, reservation use, removal and expiry.
 
 ## IEEE802154-C-WIRE
 
@@ -364,6 +367,24 @@ Expected observations:
 2. Visits proceed from lowest to highest selected channel; discovered descriptors are returned on completion.
 
 Arithmetic and scope: This check covers the universal capability and order only. Duration, result limits, cancellation, invalid-channel handling and state restoration need the passive-scan and MLME-SCAN child clauses before full scan acceptance.
+
+## IEEE802154-C-SUPERFRAME
+
+**Periodic beacon and tracking.** Checks [IEEE802154-SUPERFRAME-1](../../standard/ieee802154/catalog.md#ieee802154-superframe-1), [IEEE802154-SUPERFRAME-2](../../standard/ieee802154/catalog.md#ieee802154-superframe-2), [IEEE802154-SUPERFRAME-3](../../standard/ieee802154/catalog.md#ieee802154-superframe-3), [IEEE802154-SUPERFRAME-4](../../standard/ieee802154/catalog.md#ieee802154-superframe-4), and [IEEE802154-SUPERFRAME-5](../../standard/ieee802154/catalog.md#ieee802154-superframe-5).
+
+An associated child and coordinator use the selected symbol duration; an observer records actual beacon PPDU boundaries. Request BO/SO configurations including ordinary, BO 15 and SO 15 cases. Compare actual intervals and active-slot bounds to the source formula, and observe a realignment's old beacon, broadcast command and later activation. Request tracking and independently suppress one through four expected beacons. Require loss only at the applicable boundary, correct native loss indication and no use of stale scheduled activity. Compare transmitted and received local timestamps at the declared symbol boundary, including nonzero clock offset, drift and rollover. This check does not infer emitted beacons from configured PIB values.
+
+## IEEE802154-C-SLOTTED
+
+**CAP contention.** Checks [IEEE802154-SUPERFRAME-6](../../standard/ieee802154/catalog.md#ieee802154-superframe-6), [IEEE802154-SUPERFRAME-7](../../standard/ieee802154/catalog.md#ieee802154-superframe-7), and [IEEE802154-GTS-5](../../standard/ieee802154/catalog.md#ieee802154-gts-5).
+
+Two synchronized peers contend while an independent energy source controls each CCA. Record actual beacon starts, CCA windows, backoff draws and PPDU starts. Require beacon-grid alignment, two clear CCAs, busy reset and the BLE exponent rule. Separately force an unfinished countdown across CAP end and a completed countdown whose exchange is too late; observe retained versus renewed backoff. Probe full-exchange completion immediately before, at and after CAP end. A transaction too large for the entire CAP returns FRAME_TOO_LONG; a transaction that only misses the current remainder defers. The clock and simulation-time resolutions are part of the observation.
+
+## IEEE802154-C-GTS
+
+**Allocation, reservation and lifecycle.** Checks [IEEE802154-GTS-1](../../standard/ieee802154/catalog.md#ieee802154-gts-1), [IEEE802154-GTS-2](../../standard/ieee802154/catalog.md#ieee802154-gts-2), [IEEE802154-GTS-3](../../standard/ieee802154/catalog.md#ieee802154-gts-3), [IEEE802154-GTS-4](../../standard/ieee802154/catalog.md#ieee802154-gts-4), and [IEEE802154-GTS-5](../../standard/ieee802154/catalog.md#ieee802154-gts-5).
+
+An associated device requests a transmit or receive reservation and the observer records the command, ACK, following beacons and native confirmation. Require a matching positive descriptor before device grant use, and exercise denial, descriptor timeout and capacity. Exchange real DATA in both directions inside the advertised slots without CCA; probe fit/deferral and missed-beacon suppression. Initiate removal separately from device and coordinator, capture removed and relocated descriptors across their four-superframe lifetime, and verify the appropriate native indications. Stop the evidence used by the inactivity rule at the BO 0/8/9 boundaries and observe removal. Unacknowledged downlink cannot prove receive-GTS inactivity. No helper-only ledger observation substitutes for on-air evidence.
 
 ## Statements without a procedure
 
