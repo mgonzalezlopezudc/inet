@@ -50,3 +50,8 @@ ASSERT(!manager.putGrant({{0x1234,8,8,D::DEVICE_RECEIVE},1,1}));
 manager.markPublished(manager.getAdvertisements());
 for (int i = 0; i < 4; ++i) manager.ageAdvertisements();
 ASSERT(manager.putGrant({{0x1234,8,8,D::DEVICE_RECEIVE},1,1}));
+M removal;
+ASSERT(removal.putGrant({first,14,2}) && removal.advertise(first,14,2));
+ASSERT(removal.removeGrant(first) && removal.removeAdvertisement(first));
+ASSERT(removal.getAdvertisements().empty() && removal.reservedCount() == 0);
+ASSERT(!removal.removeAdvertisement(first));

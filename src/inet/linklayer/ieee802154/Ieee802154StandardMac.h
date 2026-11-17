@@ -171,8 +171,8 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
     cMessage *gtsTimer = nullptr;
     void completeGts(const Ieee802154MacServiceResult& result);
     void decideGts(const Ieee802154GtsManager::Key& key, const Ieee802154GtsCharacteristics& characteristics);
-    void removeGtsGrant(const Ieee802154GtsManager::Key& key);
-    static void removeGtsFromLedger(Ieee802154GtsManager& ledger, const Ieee802154GtsManager::Key& key);
+    void removeGtsGrant(const Ieee802154GtsManager::Key& key, bool advertiseRemoval = true, bool notify = true);
+    static void removeGtsFromLedger(Ieee802154GtsManager& ledger, const Ieee802154GtsManager::Key& key, bool advertiseRemoval = true);
     void maintainGtsCapacity(uint8_t superframeOrder);
     simtime_t gtsPhysicalCapDuration(uint8_t superframeOrder, unsigned int slots, bool immediate = false, std::optional<clocktime_t> target = std::nullopt) const;
     std::optional<clocktime_t> childPhase; // Recurring local-clock phase from the parent beacon.

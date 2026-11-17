@@ -1,0 +1,5 @@
+IEEE 802.15.4 GTS deallocation
+
+Devices and PAN coordinators can explicitly remove GTS allocations. The native
+MAC repacks remaining slots and advertises the applicable removal and relocation
+descriptors in subsequent beacons.

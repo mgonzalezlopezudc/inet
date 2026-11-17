@@ -73,6 +73,14 @@ bool Ieee802154GtsManager::removeGrant(const Key& key)
     return true;
 }
 
+bool Ieee802154GtsManager::removeAdvertisement(const Key& key)
+{
+    auto it = std::find_if(advertisements.begin(),advertisements.end(),[&](const Advertisement& value) { return sameKey(value.key,key); });
+    if (it == advertisements.end()) return false;
+    advertisements.erase(it);
+    return true;
+}
+
 bool Ieee802154GtsManager::advertise(const Key& key, uint8_t start, uint8_t length)
 {
     if (start > 15 || length > 15 || (start && (!length || start + length > 16)) ||
