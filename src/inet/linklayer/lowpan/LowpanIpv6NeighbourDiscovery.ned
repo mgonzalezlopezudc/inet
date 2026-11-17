@@ -18,6 +18,11 @@ simple LowpanIpv6NeighbourDiscovery extends Ipv6NeighbourDiscovery
         int nativeRegistrationLifetime = default(1); // Host ARO lifetime in minutes, range 1..65535.
         double nativeRegistrationRetryInterval @unit(s) = default(1s); // At least one second; floor for the advertised per-interface RetransTimer. Three requests per attempt, with twice the effective interval to await the final response.
         double nativeRegistrationRefreshFraction = default(0.8); // Strictly between zero and one; fraction of accepted lifetime before refresh.
+        bool contextDistribution = default(false); // Native ABRO/6CO learning and distribution. Reuses inherited RA intervals; learned CIDs must be disjoint from configured slots.
+        string contextAuthorityAddress = default(""); // borderRouter origin: explicit non-link-local unicast authority identity.
+        int contextInitialVersion = default(0); // Origin unsigned 32-bit version, preserved across restart; semantic updates at UINT32_MAX are rejected.
+        int contextAuthorityLifetime = default(0); // Origin ABRO lifetime in minutes, 0..65535; zero means the RFC default 10000 minutes.
+        int maxContextAuthorityGroups = default(4); // Positive module-wide bound; separate from candidate-default-router capacity.
         @signal[packetDropped](type=inet::Packet);
         @statistic[packetDropped](record=count);
         @signal[registrationCountChanged](type=long);

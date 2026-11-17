@@ -17,3 +17,7 @@ Both compilation modes pass; native protocol executions above use debug. Expecte
 The native profile is unsecured same-PAN IEEE 802.15.4 at 250 kbit/s, extended unicast and short broadcast, stationary radios and a dedicated medium, static IPv6 neighbors, and MTU 1280. See [encoding choices](encoding-profile.md) and [link contract](link-contract.md). Contexts, extension NHC, optimized ND, mesh, paging and recovery belong to later review units.
 
 Capture decoding and serialized global-address vectors are bounded evidence. They do not establish live external-radio interoperability or every standardized encoding. The external fully elided-EUI comparison fails at the two IID U/L-bit positions; the normative INET mapping is retained.
+
+## Publication through C29
+
+At the PR10/C29 checkpoint, P8 stateful contexts, P9 extension/nested-IPv6 NHC and the selected P10 legacy registration/discovery/authority/relay/context-distribution profile are implemented. Their fixtures and companion explanations ship with their owning commits C08–C29. The publication verification manifest identifies each exact review tip and its executed scope; no later updated-host, mesh, paging or recovery behavior is inferred for this checkpoint. The first-release tables above remain the bounded C06/P0–P7 acceptance account.

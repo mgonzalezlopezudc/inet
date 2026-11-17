@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "inet/linklayer/lowpan/LowpanHostRegistration.h"
 #include "inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.h"
+#include "inet/linklayer/lowpan/LowpanContextAdvertisements.h"
 #include "inet/linklayer/lowpan/LowpanNativeBoundary.h"
 #include "inet/common/ProtocolTag_m.h"
 #include "inet/linklayer/ieee802154/Ieee802154AddressTagBase_m.h"
@@ -241,21 +242,33 @@ void LowpanHostRegistration::processAdvertisement(Packet *packet, const Ipv6Rout
         drop(packet, LOWPAN_ND_UNSUPPORTED); // Selected native host profile uses M=0 address assignment.
         return;
     }
+    if (owner.contextAdvertisements && !owner.contextAdvertisements->accept(*message, interface, source->getSrcAddress().toIpv6())) {
+        drop(packet, LOWPAN_ND_UNSUPPORTED);
+        return;
+    }
     if (message->getRetransTimer() != 0)
         interface->getProtocolDataForUpdate<Ipv6InterfaceData>()->setRetransTimer(message->getRetransTimer());
+    if (owner.contextAdvertisements) {
+        expireAddresses();
+        collectAddresses(interface);
+        processPrefixes(interface, message->getOptions());
+    }
     auto& discovery = discoveries[interface->getInterfaceId()];
     if (discovery.blockedUntil > simTime()) {
         delete packet;
+        scheduleTimer();
         return;
     }
     RouterKey key{interface->getInterfaceId(), source->getSrcAddress().toIpv6()};
     if (routers.count(key) == 0 && int(routers.size()) >= maxRouters) {
         drop(packet, LOWPAN_RESOURCE_LIMIT);
+        scheduleTimer();
         return;
     }
     expireAddresses();
     collectAddresses(interface);
-    processPrefixes(interface, message->getOptions());
+    if (!owner.contextAdvertisements)
+        processPrefixes(interface, message->getOptions());
     discovery.active = false;
     discovery.next = SIMTIME_MAX;
     if (message->getRouterLifetime() == 0) {
@@ -480,6 +493,9 @@ void LowpanHostRegistration::expireAddresses()
 void LowpanHostRegistration::handleTimer()
 {
     expireAddresses();
+    if (owner.contextAdvertisements)
+        for (int id : owner.contextAdvertisements->consumeHostRefresh())
+            if (auto interface = owner.ift->getInterfaceById(id)) startDiscovery(interface);
     for (auto it = routers.begin(); it != routers.end();) {
         auto current = it++;
         auto key = current->first;
@@ -509,6 +525,10 @@ void LowpanHostRegistration::scheduleTimer()
     owner.cancelEvent(hostTimer);
     auto next = SIMTIME_MAX;
     auto include = [&](simtime_t time) { if (time > simTime()) next = std::min(next, time); };
+    if (owner.contextAdvertisements) {
+        auto refresh = owner.contextAdvertisements->nextHostRefresh();
+        if (refresh != SIMTIME_MAX) next = std::min(next, std::max(simTime(), refresh));
+    }
     for (const auto& entry : discoveries) if (entry.second.active) include(entry.second.next);
     for (const auto& entry : routers) {
         include(entry.second.validUntil);

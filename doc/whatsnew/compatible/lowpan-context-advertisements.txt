@@ -1,0 +1,3 @@
+Authoritative 6LoWPAN context advertisements
+
+6LoWPAN optionally learns and distributes RFC 6775 authoritative contexts and prefixes through native Router Advertisements. Origins export configured adaptation contexts and advertised prefixes; routers retain separate authority groups, forward aged finite lifetimes, and install contexts before advertising downstream. Hosts learn accepted context updates independently of registration backoff and default-router capacity. Compression and receive-only context lifetimes have separate exact cutoffs. Distribution is disabled by default.

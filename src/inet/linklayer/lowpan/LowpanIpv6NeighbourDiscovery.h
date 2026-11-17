@@ -10,6 +10,7 @@ namespace inet { namespace lowpan {
 class LowpanHostRegistration;
 class LowpanRegistrationAuthority;
 class LowpanRegistrationRelay;
+class LowpanContextAdvertisements;
 
 // Native registration ownership is separate from the ordinary 48-bit ND cache.
 class INET_API LowpanIpv6NeighbourDiscovery : public Ipv6NeighbourDiscovery
@@ -17,10 +18,12 @@ class INET_API LowpanIpv6NeighbourDiscovery : public Ipv6NeighbourDiscovery
     friend class LowpanHostRegistration;
     friend class LowpanRegistrationAuthority;
     friend class LowpanRegistrationRelay;
+    friend class LowpanContextAdvertisements;
   protected:
     std::unique_ptr<LowpanHostRegistration> hostRegistration;
     std::unique_ptr<LowpanRegistrationAuthority> registrationAuthority;
     std::unique_ptr<LowpanRegistrationRelay> registrationRelay;
+    std::unique_ptr<LowpanContextAdvertisements> contextAdvertisements;
     bool hostAddressSubscription = false;
     struct Registration {
         Ieee802154Address owner;
@@ -50,6 +53,9 @@ class INET_API LowpanIpv6NeighbourDiscovery : public Ipv6NeighbourDiscovery
     virtual void initiateDad(const Ipv6Address& tentativeAddr, NetworkInterface *ie) override;
     virtual void startRouterDiscovery(NetworkInterface *ie) override;
     virtual void createRaTimer(NetworkInterface *ie) override;
+    virtual void assignLinkLocalAddress(cMessage *message) override;
+    virtual void createAndSendRaPacket(const Ipv6Address& destination, NetworkInterface *ie) override;
+    virtual void sendPeriodicRa(cMessage *message) override;
     virtual void processNDMessage(Packet *packet, const Icmpv6Header *message) override;
     virtual void processIpv6Datagram(Packet *packet) override;
     void processRegistration(Packet *packet, const Ipv6NeighbourSolicitation *message, NetworkInterface *interface,
